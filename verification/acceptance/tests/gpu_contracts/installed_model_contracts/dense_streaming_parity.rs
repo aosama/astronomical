@@ -13,11 +13,11 @@
 
 use std::time::Duration;
 
-use astronomical_model_serving::{
+use model_serving::{
     LayerProbeShape, Qwen3_5ArtifactValidator, Qwen3_5Config, Qwen3_5ResidentModel,
     Qwen3_5StreamingModel,
 };
-use astronomical_runtime_integration::MlxRuntime;
+use runtime_integration::MlxRuntime;
 use serial_test::serial;
 use tokio::time::timeout;
 
@@ -47,7 +47,7 @@ async fn assert_dense_streaming_logit_parity() {
     // own limit rather than a configured one that might not fit 16 layers.
     let machine_mlx_memory_ceiling_bytes =
         crate::common::sample_machine_mlx_memory_ceiling_bytes().await;
-    let mlx_memory_limits = astronomical_runtime_integration::MlxMemoryLimits::new(
+    let mlx_memory_limits = runtime_integration::MlxMemoryLimits::new(
         machine_mlx_memory_ceiling_bytes,
         machine_mlx_memory_ceiling_bytes,
     )
@@ -151,8 +151,8 @@ trait DenseForward {
         &self,
         token_ids: &[u32],
         starting_position_tokens: u32,
-        request_decoder_state: &mut astronomical_model_serving::RequestDecoderStateStack,
-    ) -> Result<mlx_bridge::MlxArray, astronomical_model_serving::Qwen3_5ExecutionError>;
+        request_decoder_state: &mut model_serving::RequestDecoderStateStack,
+    ) -> Result<mlx_bridge::MlxArray, model_serving::Qwen3_5ExecutionError>;
 
     /// Materializes the model as its engine would and reads MLX active memory.
     fn materialized_active_bytes(&self) -> u64;
@@ -166,8 +166,8 @@ impl DenseForward for StreamingForward<'_> {
         &self,
         token_ids: &[u32],
         starting_position_tokens: u32,
-        request_decoder_state: &mut astronomical_model_serving::RequestDecoderStateStack,
-    ) -> Result<mlx_bridge::MlxArray, astronomical_model_serving::Qwen3_5ExecutionError> {
+        request_decoder_state: &mut model_serving::RequestDecoderStateStack,
+    ) -> Result<mlx_bridge::MlxArray, model_serving::Qwen3_5ExecutionError> {
         self.0
             .forward_chunk(token_ids, starting_position_tokens, request_decoder_state)
     }
@@ -189,8 +189,8 @@ impl DenseForward for ResidentForward<'_> {
         &self,
         token_ids: &[u32],
         starting_position_tokens: u32,
-        request_decoder_state: &mut astronomical_model_serving::RequestDecoderStateStack,
-    ) -> Result<mlx_bridge::MlxArray, astronomical_model_serving::Qwen3_5ExecutionError> {
+        request_decoder_state: &mut model_serving::RequestDecoderStateStack,
+    ) -> Result<mlx_bridge::MlxArray, model_serving::Qwen3_5ExecutionError> {
         self.0
             .forward_chunk(token_ids, starting_position_tokens, request_decoder_state)
     }
@@ -245,10 +245,7 @@ fn embedding_table_payload_bytes(model_directory: &std::path::Path) -> u64 {
 }
 fn validated_dense_artifact(
     model_directory: &std::path::Path,
-) -> (
-    astronomical_model_serving::ValidatedQwen3_5Artifact,
-    Qwen3_5Config,
-) {
+) -> (model_serving::ValidatedQwen3_5Artifact, Qwen3_5Config) {
     let validated_artifact = Qwen3_5ArtifactValidator::new()
         .validate(model_directory, OUTPUT_TOKEN_COUNT)
         .expect("the streamed dense artifact should validate");
@@ -319,7 +316,7 @@ fn greedy_answer(
 fn greedy_decode(
     prompt_token_count: usize,
     prefill_logits: Vec<f32>,
-    request_decoder_state: &mut astronomical_model_serving::RequestDecoderStateStack,
+    request_decoder_state: &mut model_serving::RequestDecoderStateStack,
     dense_forward: &dyn DenseForward,
 ) -> GreedyAnswer {
     let mut final_logits = prefill_logits;
@@ -341,7 +338,7 @@ fn greedy_decode(
 }
 
 fn logits_of(
-    forward_result: Result<mlx_bridge::MlxArray, astronomical_model_serving::Qwen3_5ExecutionError>,
+    forward_result: Result<mlx_bridge::MlxArray, model_serving::Qwen3_5ExecutionError>,
 ) -> Vec<f32> {
     let final_logits = forward_result
         .expect("the forward should run")

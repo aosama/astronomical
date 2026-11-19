@@ -1,7 +1,7 @@
-use astronomical_model_serving::{
+use model_serving::{
     ExpertPagingError, InferenceEngineError, Qwen3_5ExecutionError, WorkerRuntimeError,
 };
-use astronomical_runtime_integration::MlxRuntimeError;
+use runtime_integration::MlxRuntimeError;
 
 #[test]
 fn should_include_underlying_mlx_operation_in_worker_fatal_error_text() {

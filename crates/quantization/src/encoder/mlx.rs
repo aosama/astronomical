@@ -21,8 +21,8 @@
 //!
 //! Ported from OptiQ's `quantize_best`, `_search_affine`, and `_pack_affine_codes` (`optiq/core/lowbit.py`).
 
-use astronomical_runtime_integration::MlxRuntime;
 use mlx_bridge::{MlxArray, MlxDtype};
+use runtime_integration::MlxRuntime;
 
 use crate::bit_width::{BitWidth, GroupSize};
 use crate::error::QuantizationError;

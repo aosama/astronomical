@@ -9,9 +9,7 @@ use std::fs::{self, File, OpenOptions};
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
 
-use astronomical_runtime_integration::{
-    MlxRuntime, MlxSafetensorsWriteOutcome, MlxSafetensorsWriterError,
-};
+use runtime_integration::{MlxRuntime, MlxSafetensorsWriteOutcome, MlxSafetensorsWriterError};
 
 use crate::{PerformanceAttribution, PerformanceOperation};
 
@@ -348,7 +346,7 @@ pub fn read_file_size_bytes(file_path: &Path) -> Result<u64, AstroSsdPromptCache
 pub(super) fn parse_astro_ssd_prompt_cache_file_hash_from_path(
     entry_path: &Path,
 ) -> Option<[u8; 32]> {
-    astronomical_lowercase_hex::decode_lowercase_hex::<32>(entry_path.file_stem()?.to_str()?)
+    lowercase_hex::decode_lowercase_hex::<32>(entry_path.file_stem()?.to_str()?)
 }
 
 pub fn open_without_following_symlinks(path: &Path) -> Result<File, std::io::Error> {

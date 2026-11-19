@@ -16,11 +16,11 @@ const DAEMON_STDERR_FILE_NAME: &str = "daemon-stderr.txt";
 
 #[tokio::test]
 async fn should_persist_the_exact_worker_stderr_when_the_worker_becomes_unavailable() {
-    let daemon_executable_path = astronomical_test_harness::workspace_binary("astronomicald")
+    let daemon_executable_path = test_harness::workspace_binary("astronomicald")
         .to_string_lossy()
         .into_owned();
     let worker_executable_path =
-        astronomical_test_harness::workspace_binary("astronomical-daemon-stderr-probe-worker")
+        test_harness::workspace_binary("astronomical-daemon-stderr-probe-worker")
             .to_string_lossy()
             .into_owned();
     let development_state_directory = tempfile::tempdir().expect("state should be created");

@@ -8,7 +8,7 @@
 //! kept and which give way is decided exactly as before; only how the bytes
 //! arrive changes.
 
-use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
+use runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use super::AstroExpertCache;
 use super::insert_planning::{
@@ -63,7 +63,7 @@ impl AstroExpertCache {
             return Ok(None);
         }
         let candidate_decode_step_epoch = (self.decode_astro_expert_cache_policy
-            == astronomical_ipc_protocol::WorkerDecodeAstroExpertCachePolicy::Candidate)
+            == ipc_protocol::WorkerDecodeAstroExpertCachePolicy::Candidate)
             .then_some(self.decode_step_epoch);
         let (layer_prefetched_unconsumed_expert_ids, historically_hot_expert_ids) =
             snapshot_insert_planning_inputs(self, layer_index, missing_expert_ids);

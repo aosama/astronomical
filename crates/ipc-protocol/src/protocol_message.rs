@@ -1,9 +1,7 @@
-use astronomical_decision_contract::decision_training_job::{
-    DecisionTrainingOutcome, DecisionTrainingStage,
-};
-use astronomical_decision_contract::{DecisionFailure, QuestionOutcome};
-use astronomical_speech_contract::SpeechFailure;
+use decision_contract::decision_training_job::{DecisionTrainingOutcome, DecisionTrainingStage};
+use decision_contract::{DecisionFailure, QuestionOutcome};
 use serde::{Deserialize, Serialize};
+use speech_contract::SpeechFailure;
 
 use crate::expert_layer_seating::ExpertLayerSeatingCounts;
 use crate::worker_memory_ledger_snapshot::WorkerMemoryLedgerSnapshot;
@@ -19,10 +17,10 @@ use crate::{
 /// Maximum serialized payload accepted inside one length-delimited worker frame.
 ///
 /// Aligned with the portable HTTP request body budget in
-/// `astronomical-rest-contract` so one validated local request always stays one
+/// `rest-contract` so one validated local request always stays one
 /// IPC message: the budget module in `rest-contract` is the single source of
 /// every ceiling value, its sources, and its retrieval date.
-pub const MAX_IPC_FRAME_BYTES: usize = astronomical_rest_contract::MAX_REQUEST_BODY_BYTES;
+pub const MAX_IPC_FRAME_BYTES: usize = rest_contract::MAX_REQUEST_BODY_BYTES;
 
 /// Daemon-local correlation identifier for one generation request.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]

@@ -9,8 +9,8 @@
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
-use astronomical_ipc_protocol::{NeuralEnginePrefillStatus, WorkerChunkingConfiguration};
-use astronomical_neural_engine::core_ml::CoreMlProgram;
+use ipc_protocol::{NeuralEnginePrefillStatus, WorkerChunkingConfiguration};
+use neural_engine::core_ml::CoreMlProgram;
 
 use super::astro_neural_engine_program_cache::CoreMlProgramBuilder;
 use super::model::Qwen3_5ResidentModel;

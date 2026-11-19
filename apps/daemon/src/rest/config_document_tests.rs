@@ -3,7 +3,7 @@
 
 use std::path::PathBuf;
 
-use astronomical_config::{AstronomicalInstancePaths, AstronomicalRuntimeInstance};
+use config::{AstronomicalInstancePaths, AstronomicalRuntimeInstance};
 
 use super::unavailable_settings;
 

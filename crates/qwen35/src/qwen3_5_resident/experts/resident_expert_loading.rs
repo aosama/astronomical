@@ -2,7 +2,7 @@ use std::collections::{BTreeSet, HashMap};
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use astronomical_runtime_integration::{MlxRuntime, MlxSafetensors, PositionalFileReadMetrics};
+use runtime_integration::{MlxRuntime, MlxSafetensors, PositionalFileReadMetrics};
 
 use crate::qwen3_5_core::artifacts::{
     QuantizationMode, QuantizedExpertLayerPlan, QuantizedTensorSource, SafetensorsDtype,

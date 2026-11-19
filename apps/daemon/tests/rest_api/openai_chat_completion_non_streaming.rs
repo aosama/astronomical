@@ -4,13 +4,13 @@ use astronomical_daemon::{
     ChatGenerationExecutor, ChatGenerationStreamErrorCode, ChatGenerationStreamEvent,
     GenerationStartError, WorkerHealthSnapshot, build_application,
 };
-use astronomical_ipc_protocol::{
-    ChatGenerationCommand, ChatGenerationCompletionReason, ChatGenerationFailureReason,
-    ChatModelCapabilities,
-};
 use axum::{
     body::{Body, to_bytes},
     http::{Request, StatusCode, header},
+};
+use ipc_protocol::{
+    ChatGenerationCommand, ChatGenerationCompletionReason, ChatGenerationFailureReason,
+    ChatModelCapabilities,
 };
 use tokio::sync::mpsc;
 use tower::ServiceExt;

@@ -3,8 +3,8 @@
 
 use std::path::Path;
 
-use astronomical_model_serving::{SpeechEngine, SpeechEngineStep};
-use astronomical_speech_contract::{SpeechRequest, wav_bytes};
+use model_serving::{SpeechEngine, SpeechEngineStep};
+use speech_contract::{SpeechRequest, wav_bytes};
 
 pub(crate) const TEST_MLX_MEMORY_CEILING_BYTES: usize = 4 * 1024 * 1024 * 1024;
 pub(crate) const TEST_MLX_BUFFER_CACHE_LIMIT_BYTES: usize = 512 * 1024 * 1024;

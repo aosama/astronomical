@@ -1,4 +1,4 @@
-use astronomical_ipc_protocol::WorkerPromptProcessingPhase;
+use ipc_protocol::WorkerPromptProcessingPhase;
 
 use super::{can_use_astro_ssd_prompt_cache, initial_prompt_processing_phase};
 

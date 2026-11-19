@@ -4,14 +4,12 @@ use astronomical_daemon::{
     ChatGenerationExecutor, ChatGenerationStreamEvent, GenerationStartError, WorkerHealthSnapshot,
     build_application,
 };
-use astronomical_ipc_protocol::{
-    ChatGenerationCommand, ChatGenerationCompletionReason, ChatModelCapabilities,
-};
-use astronomical_rest_contract::UNENFORCED_RESPONSE_FORMAT_WARNING;
 use axum::{
     body::{Body, to_bytes},
     http::{Request, StatusCode, header},
 };
+use ipc_protocol::{ChatGenerationCommand, ChatGenerationCompletionReason, ChatModelCapabilities};
+use rest_contract::UNENFORCED_RESPONSE_FORMAT_WARNING;
 use tokio::sync::mpsc;
 use tower::ServiceExt;
 
@@ -168,11 +166,9 @@ async fn should_forward_enforced_regex_constraint_to_the_worker() {
         .clone();
     assert_eq!(
         received_constraint,
-        Some(
-            astronomical_ipc_protocol::StructuredGenerationConstraint::Regex {
-                pattern: "Romeo|Juliet".to_owned(),
-            }
-        )
+        Some(ipc_protocol::StructuredGenerationConstraint::Regex {
+            pattern: "Romeo|Juliet".to_owned(),
+        })
     );
     let warning_header = chat_response.headers().get(header::WARNING);
     assert!(
@@ -184,9 +180,8 @@ async fn should_forward_enforced_regex_constraint_to_the_worker() {
 struct ScriptedExecutor {
     health_snapshot: WorkerHealthSnapshot,
     stream_events: Vec<ChatGenerationStreamEvent>,
-    received_structured_constraint: std::sync::Arc<
-        std::sync::Mutex<Option<astronomical_ipc_protocol::StructuredGenerationConstraint>>,
-    >,
+    received_structured_constraint:
+        std::sync::Arc<std::sync::Mutex<Option<ipc_protocol::StructuredGenerationConstraint>>>,
 }
 
 impl ScriptedExecutor {
@@ -210,9 +205,8 @@ impl ScriptedExecutor {
 
     fn received_structured_constraint_handle(
         &self,
-    ) -> std::sync::Arc<
-        std::sync::Mutex<Option<astronomical_ipc_protocol::StructuredGenerationConstraint>>,
-    > {
+    ) -> std::sync::Arc<std::sync::Mutex<Option<ipc_protocol::StructuredGenerationConstraint>>>
+    {
         std::sync::Arc::clone(&self.received_structured_constraint)
     }
 }

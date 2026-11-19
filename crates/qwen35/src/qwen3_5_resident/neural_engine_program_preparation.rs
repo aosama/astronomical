@@ -15,7 +15,7 @@ use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
-use astronomical_neural_engine::program_shape::ProgramShape;
+use neural_engine::program_shape::ProgramShape;
 
 /// A program's first run wires its weights outside the memory ceiling, and this only
 /// tops up between requests. So this also bounds what a request starting now can find

@@ -3,7 +3,7 @@ pub mod tests;
 
 use std::sync::Arc;
 
-use astronomical_ipc_protocol::ChatGenerationCommand;
+use ipc_protocol::ChatGenerationCommand;
 use sha2::{Digest, Sha256};
 use tokenizers::Tokenizer;
 
@@ -211,9 +211,9 @@ impl Qwen3_5Tokenizer {
 
     fn encoded_choice_token_sequences(
         &self,
-        structured_generation: &astronomical_ipc_protocol::StructuredGenerationConstraint,
+        structured_generation: &ipc_protocol::StructuredGenerationConstraint,
     ) -> Vec<Vec<u32>> {
-        let astronomical_ipc_protocol::StructuredGenerationConstraint::Choice { choices } =
+        let ipc_protocol::StructuredGenerationConstraint::Choice { choices } =
             structured_generation
         else {
             return Vec::new();
@@ -485,7 +485,7 @@ impl Qwen3_5Tokenizer {
     fn attach_structured_generation_constraint(
         &self,
         inference_request: Qwen3_5InferenceRequest,
-        structured_generation: &astronomical_ipc_protocol::StructuredGenerationConstraint,
+        structured_generation: &ipc_protocol::StructuredGenerationConstraint,
     ) -> Result<Qwen3_5InferenceRequest, Qwen3_5TokenizerError> {
         let structured_token_constraint =
             crate::structured_generation::StructuredTokenConstraint::compile(
@@ -519,7 +519,7 @@ fn reject_mismatched_model_id(
     loaded_model_id: &str,
 ) -> Result<(), Qwen3_5TokenizerError> {
     let resolved_requested_model_id =
-        astronomical_config::resolve_model_id(requested_model_id, &[loaded_model_id]);
+        config::resolve_model_id(requested_model_id, &[loaded_model_id]);
     if resolved_requested_model_id != loaded_model_id {
         return Err(Qwen3_5TokenizerError::ModelIdMismatch {
             actual_model_id: requested_model_id.to_owned(),

@@ -40,10 +40,7 @@ pub(in crate::worker) fn worker_event_reaction_to_failure(
 /// Mirrors the inlined `worker_process.next_event()` branch.
 pub(in crate::worker) async fn react_to_worker_event_outcome(
     runtime: &mut WorkerLoopRuntime,
-    worker_event_outcome: Result<
-        Option<astronomical_ipc_protocol::WorkerEvent>,
-        WorkerControlError,
-    >,
+    worker_event_outcome: Result<Option<ipc_protocol::WorkerEvent>, WorkerControlError>,
 ) {
     match worker_event_outcome {
         Ok(Some(worker_event)) => {
@@ -166,7 +163,7 @@ fn send_speech_deadline_exceeded(active_generation: &Option<ActiveWorkerRequest>
     if let Some(ActiveWorkerRequest::Speech(active_speech)) = active_generation.as_ref() {
         let speech_error = if active_speech.has_exceeded_audio_limit {
             crate::SpeechExecutionError::WorkerFailure(
-                astronomical_speech_contract::SpeechFailure::invalid_request(
+                speech_contract::SpeechFailure::invalid_request(
                     crate::worker::speech_event::AUDIO_TOO_LONG_REASON,
                 ),
             )

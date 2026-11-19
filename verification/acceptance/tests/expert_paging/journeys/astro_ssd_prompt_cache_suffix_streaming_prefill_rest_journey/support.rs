@@ -6,7 +6,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use astronomical_config::{AstronomicalInstancePaths, AstronomicalRuntimeInstance};
+use config::{AstronomicalInstancePaths, AstronomicalRuntimeInstance};
 use serde_json::{Value, json};
 
 use super::{

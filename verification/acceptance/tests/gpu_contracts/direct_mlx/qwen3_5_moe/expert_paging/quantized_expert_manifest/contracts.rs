@@ -4,7 +4,7 @@
 //! `build_quantized_expert_page_manifest_from_plan` from the expert_paging module.
 
 use super::support;
-use astronomical_model_serving::{
+use model_serving::{
     ExpertManifestError, QuantizationMode, QuantizedTensorSource, SafetensorsDtype,
     build_quantized_expert_page_manifest_from_plan, validate_expert_ids,
     validate_quantization_contract, validate_source_intervals, validate_virtual_intervals,

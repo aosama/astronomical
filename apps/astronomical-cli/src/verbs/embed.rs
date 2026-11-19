@@ -12,9 +12,9 @@ use std::{
     time::Duration,
 };
 
-use astronomical_config::AstronomicalRuntimeInstance;
+use config::AstronomicalRuntimeInstance;
 
-use astronomical_ipc_protocol::{DaemonRequest, DaemonResponse, EmbeddingsFailureReason};
+use ipc_protocol::{DaemonRequest, DaemonResponse, EmbeddingsFailureReason};
 use serde_json::json;
 use tokio::time::timeout;
 

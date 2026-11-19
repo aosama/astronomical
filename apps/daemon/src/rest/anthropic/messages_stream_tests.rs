@@ -1,5 +1,5 @@
-use astronomical_ipc_protocol::{ChatGenerationCompletionReason, ChatGenerationFailureReason};
-use astronomical_rest_contract::{
+use ipc_protocol::{ChatGenerationCompletionReason, ChatGenerationFailureReason};
+use rest_contract::{
     AnthropicContentBlockDelta, AnthropicErrorType, AnthropicMessageStreamEvent,
     AnthropicOutputContentBlock, AnthropicStopReason,
 };

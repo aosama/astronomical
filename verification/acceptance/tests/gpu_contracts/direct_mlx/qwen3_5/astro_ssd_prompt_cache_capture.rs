@@ -1,4 +1,4 @@
-use astronomical_model_serving::{
+use model_serving::{
     AstroSsdPromptCachePublicationOutcome, astro_ssd_prompt_cache_publication_advances_parent_chain,
 };
 

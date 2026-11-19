@@ -2,7 +2,7 @@
 
 use std::{future::Future, pin::Pin, time::Duration};
 
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     GeneratedImage, ImageGenerationCommand, ImageGenerationFailureReason,
     ImageGenerationResultMetadata,
 };
@@ -96,7 +96,7 @@ pub trait ImageGenerationExecutor: ChatGenerationExecutor {
     /// executors compiling without an embeddings impl.
     fn start_embeddings_generation(
         &self,
-        _embeddings_command: astronomical_ipc_protocol::EmbeddingsCommand,
+        _embeddings_command: ipc_protocol::EmbeddingsCommand,
     ) -> GenerationOutcomeStartFuture<'_, EmbeddingsOutput, EmbeddingsExecutionError> {
         Box::pin(async { Err(GenerationStartError::WorkerUnavailable) })
     }
@@ -104,7 +104,7 @@ pub trait ImageGenerationExecutor: ChatGenerationExecutor {
     /// Signals once an embeddings request owns a place in the immutable FIFO queue.
     fn start_embeddings_generation_with_admission_signal(
         &self,
-        embeddings_command: astronomical_ipc_protocol::EmbeddingsCommand,
+        embeddings_command: ipc_protocol::EmbeddingsCommand,
         admission_sender: tokio::sync::oneshot::Sender<()>,
     ) -> GenerationOutcomeStartFuture<'_, EmbeddingsOutput, EmbeddingsExecutionError> {
         let _admission_signal_result = admission_sender.send(());
@@ -117,7 +117,7 @@ pub trait ImageGenerationExecutor: ChatGenerationExecutor {
     /// default leaves test executors compiling without a decisions impl.
     fn start_decisions_generation(
         &self,
-        _decisions_command: astronomical_ipc_protocol::DecisionsCommand,
+        _decisions_command: ipc_protocol::DecisionsCommand,
     ) -> GenerationOutcomeStartFuture<'_, DecisionsOutput, DecisionsExecutionError> {
         Box::pin(async { Err(GenerationStartError::WorkerUnavailable) })
     }
@@ -127,7 +127,7 @@ pub trait ImageGenerationExecutor: ChatGenerationExecutor {
     /// leaves test executors compiling without a training impl.
     fn start_training(
         &self,
-        _training_command: astronomical_ipc_protocol::DecisionTrainingCommand,
+        _training_command: ipc_protocol::DecisionTrainingCommand,
     ) -> GenerationOutcomeStartFuture<'_, DecisionsOutput, DecisionsExecutionError> {
         Box::pin(async { Err(GenerationStartError::WorkerUnavailable) })
     }
@@ -135,7 +135,7 @@ pub trait ImageGenerationExecutor: ChatGenerationExecutor {
     /// Signals once a decisions request owns a place in the immutable FIFO queue.
     fn start_decisions_generation_with_admission_signal(
         &self,
-        decisions_command: astronomical_ipc_protocol::DecisionsCommand,
+        decisions_command: ipc_protocol::DecisionsCommand,
         admission_sender: tokio::sync::oneshot::Sender<()>,
     ) -> GenerationOutcomeStartFuture<'_, DecisionsOutput, DecisionsExecutionError> {
         let _admission_signal_result = admission_sender.send(());
@@ -148,7 +148,7 @@ pub trait ImageGenerationExecutor: ChatGenerationExecutor {
     /// do; the default leaves test executors compiling without a speech impl.
     fn start_speech_generation(
         &self,
-        _speech_command: astronomical_ipc_protocol::SpeechCommand,
+        _speech_command: ipc_protocol::SpeechCommand,
     ) -> GenerationOutcomeStartFuture<'_, SpeechOutput, SpeechExecutionError> {
         Box::pin(async { Err(GenerationStartError::WorkerUnavailable) })
     }
@@ -156,7 +156,7 @@ pub trait ImageGenerationExecutor: ChatGenerationExecutor {
     /// Signals once a speech request owns a place in the immutable FIFO queue.
     fn start_speech_generation_with_admission_signal(
         &self,
-        speech_command: astronomical_ipc_protocol::SpeechCommand,
+        speech_command: ipc_protocol::SpeechCommand,
         admission_sender: tokio::sync::oneshot::Sender<()>,
     ) -> GenerationOutcomeStartFuture<'_, SpeechOutput, SpeechExecutionError> {
         let _admission_signal_result = admission_sender.send(());

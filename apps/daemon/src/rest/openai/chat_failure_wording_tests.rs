@@ -1,7 +1,7 @@
 //! Unit tests for `crate::rest::openai::chat_failure_wording`: the one table
 //! of sentences and codes the OpenAI-shaped surfaces share.
 
-use astronomical_ipc_protocol::{ChatGenerationFailureReason, OUT_OF_GRAPHICS_MEMORY_ADVICE};
+use ipc_protocol::{ChatGenerationFailureReason, OUT_OF_GRAPHICS_MEMORY_ADVICE};
 
 use super::chat_failure_wording::{OUT_OF_GRAPHICS_MEMORY_CODE, chat_failure_wording};
 

@@ -1,4 +1,4 @@
-use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
+use runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use crate::{PerformanceAttribution, PerformanceOperation};
 
@@ -315,7 +315,7 @@ impl Qwen3_5ResidentModel {
         // Multi-token prefill may submit completed layer groups so macOS can
         // schedule other graphics work between command buffers.
         let graph_submission_layer_interval =
-            usize::try_from(astronomical_ipc_protocol::graph_submission_layer_interval(
+            usize::try_from(ipc_protocol::graph_submission_layer_interval(
                 token_count,
                 false,
                 self.chunking.prefill_graph_submission_layer_interval,

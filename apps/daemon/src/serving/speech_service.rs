@@ -5,9 +5,9 @@
 //! reaches and which seed it uses, so those choices are made here once and
 //! each surface only translates the outcome into its own response.
 
-use astronomical_config::{DiscoveredModel, ModelCapabilities};
-use astronomical_ipc_protocol::{RequestId, SpeechCommand};
-use astronomical_speech_contract::{NATURAL_PACE_ONLY_REASON, unknown_voice_reason};
+use config::{DiscoveredModel, ModelCapabilities};
+use ipc_protocol::{RequestId, SpeechCommand};
+use speech_contract::{NATURAL_PACE_ONLY_REASON, unknown_voice_reason};
 use thiserror::Error;
 
 use crate::serving::helper_model_resolution::{
@@ -17,7 +17,7 @@ use crate::serving::request_seed::generated_seed;
 
 const SPEECH_MODEL_KIND: HelperModelKind = HelperModelKind {
     is_of_kind: is_speech_model,
-    builtin_default_model_id: astronomical_config::BUILTIN_DEFAULT_SPEECH_MODEL_ID,
+    builtin_default_model_id: config::BUILTIN_DEFAULT_SPEECH_MODEL_ID,
 };
 
 /// Why no model can be chosen for a speech request.
@@ -72,7 +72,7 @@ pub(crate) fn resolve_speech_model(
 pub(crate) fn speech_capabilities_of<'model>(
     discovered_models: &'model [DiscoveredModel],
     model_id: &str,
-) -> Option<&'model astronomical_config::SpeechModelCapabilities> {
+) -> Option<&'model config::SpeechModelCapabilities> {
     discovered_models
         .iter()
         .find(|discovered_model| discovered_model.model_id == model_id)
@@ -103,7 +103,7 @@ impl VoiceOrPaceRefusal {
 /// before the request can make that model resident; the engine checks the
 /// same again once loaded. A model discovery knows nothing more about passes.
 pub(crate) fn refuse_voice_or_pace_before_swap(
-    speech_capabilities: Option<&astronomical_config::SpeechModelCapabilities>,
+    speech_capabilities: Option<&config::SpeechModelCapabilities>,
     voice_name: Option<&str>,
     speed: f32,
 ) -> Result<(), VoiceOrPaceRefusal> {

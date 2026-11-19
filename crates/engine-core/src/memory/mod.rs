@@ -8,7 +8,7 @@
 //!
 //! Family modules (`qwen3_5`, `qwen3_5_streaming`) measure byte facts from
 //! MLX and the artifact, hand them to the pure arithmetic in
-//! `astronomical-memory-policy` (re-exported below) and to the MLX-facing
+//! `memory-policy` (re-exported below) and to the MLX-facing
 //! owners in this package, and enact the typed decisions they receive. This
 //! package imports nothing from any family; the dependency edge physically
 //! cannot point back. A family that re-derives arithmetic owned here is a
@@ -19,12 +19,12 @@
 //! - **3 modes** — where expert payload lives right now (`Resident`,
 //!   `Hybrid`, `Paged`; classified by `residency/ownership_mode.rs`).
 //!   These names are wire-visible and must never gain a second answer.
-//! - **1 lifecycle phase** — `MemoryPhase` (in `astronomical-memory-policy`,
+//! - **1 lifecycle phase** — `MemoryPhase` (in `memory-policy`,
 //!   re-exported here): `Prefill`, `GenerationPreparation`, `Decode`,
 //!   `Idle`. The residency planner treats `GenerationPreparation` like
 //!   `Decode`.
 //! - **1 owner of the limit** — the memory governor
-//!   (`astronomical-memory-policy::ledger`). Each engine opens one, tells
+//!   (`memory_policy::ledger`). Each engine opens one, tells
 //!   it what happens and applies the capacity it answers with.
 //! - **3 layer states** — when a reply begins, `residency` plans one
 //!   `ExpertLayerState` per sparse decoder layer: `Kept`, `Hot` or
@@ -79,7 +79,7 @@ pub use reply_expert_route_record::SessionExpertRouteSample;
 // The telemetry and ceiling-utilization records are plain values, so they
 // live in the memory policy crate (issue #2340) where engines below this
 // crate can fill them in; the alias keeps `crate::memory::telemetry` paths.
-pub use astronomical_memory_policy::telemetry;
+pub use memory_policy::telemetry;
 
 pub use admission::{
     AllocationAdmissionDecision, AllocationAdmissionObservation, CompleteResidencyDecision,
@@ -89,9 +89,6 @@ pub use admission::{
     rotating_committed_token_count, rotating_prefill_transient_token_count,
     safe_minimum_active_memory_ceiling_bytes,
 };
-pub use astronomical_memory_policy::ceiling::{
-    MemoryCeilingChangeDecision, MemoryCeilingChangeRequirements,
-};
 pub use budget::{
     MeasuredExpertLayerPayload, MemoryReserveSnapshot, ModelMemoryFacts, ModelMemoryFactsError,
     ModelMemoryGeometry, ModelMemoryGeometryError, model_memory_geometry_from_measured_layer_facts,
@@ -100,6 +97,7 @@ pub use budget::{
 pub use budget::{MlxAllocationAdmission, MlxAllocationAdmissionError};
 #[cfg(feature = "direct-mlx")]
 pub use dense_resident::dense_resident_safe_minimum_mlx_memory_ceiling_bytes;
+pub use memory_policy::ceiling::{MemoryCeilingChangeDecision, MemoryCeilingChangeRequirements};
 // Byte-arithmetic page-peaking is pure planning over validated shapes; the
 // direct-MLX admission callers and the serving crate's artifact-contract
 // unit tests share it.
@@ -112,25 +110,25 @@ pub use astro_expert_cache_arithmetic::{
     expert_layer_topology_from_residency, no_astro_expert_cache_route_source_bytes,
     record_streamed_page_source_plan_in_both_ledgers,
 };
-pub use astronomical_memory_policy::forward_admission::{
+pub use memory_policy::forward_admission::{
     ResidentForwardAdmissionDecision, ResidentForwardAdmissionRejection, StreamingEngineRequirement,
 };
-pub use astronomical_memory_policy::geometry_floor::geometry_safe_minimum_mlx_memory_ceiling_bytes;
-pub use astronomical_memory_policy::phase::MemoryPhase;
-pub use astronomical_memory_policy::placement::{
+pub use memory_policy::geometry_floor::geometry_safe_minimum_mlx_memory_ceiling_bytes;
+pub use memory_policy::phase::MemoryPhase;
+pub use memory_policy::placement::{
     EnginePlacement, ResidentPromotionBlocker, ResidentPromotionDecision,
     should_promote_demoted_streaming_engine_to_resident,
 };
-pub use astronomical_memory_policy::reclamation::ExpertMemoryAdmissionError;
-pub use astronomical_memory_policy::residency::seated_complete_layer_count;
+pub use memory_policy::reclamation::ExpertMemoryAdmissionError;
+pub use memory_policy::residency::seated_complete_layer_count;
 // The direct-MLX streaming planner (qwen3_5_streaming's gated
 // phase_aware_expert_residency) imports residency by module path
 // (`crate::memory::residency::ExpertLayerGeometry`), so the module stays
 // nameable here under the same feature gate, without widening the crate's
 // public surface.
 #[cfg(feature = "direct-mlx")]
-pub use astronomical_memory_policy::residency;
-pub use astronomical_memory_policy::residency::{
+pub use memory_policy::residency;
+pub use memory_policy::residency::{
     CompleteResidencyHeadroomBoundary, CurrentExpertLayerResidency, ExpertLayerState,
     ExpertResidencyPlan, ExpertResidencyPlanError, RetainedExpertPageClass,
     StreamingStartupResidencyFacts, classify_expert_memory_mode, complete_layers_beyond_keep_count,
@@ -140,9 +138,9 @@ pub use astronomical_memory_policy::residency::{
     should_commit_mandatory_routed_page, should_commit_multi_token_union_as_complete_layer,
     should_complete_partial_layer_on_prefill_read, should_seed_partial_layer_on_prefill_read,
 };
-pub use astronomical_memory_policy::serving_ceiling::{
+pub use memory_policy::serving_ceiling::{
     effective_mlx_memory_ceiling_after_wired_claim, effective_mlx_memory_ceiling_bytes,
     floor_raise_limit_bytes, floor_raised_ceiling_bytes, machine_ceiling_from_physical_ram_bytes,
 };
-pub use astronomical_memory_policy::utilization::MemoryCeilingUtilization;
-pub use astronomical_memory_policy::vocabulary::MemoryBoundary;
+pub use memory_policy::utilization::MemoryCeilingUtilization;
+pub use memory_policy::vocabulary::MemoryBoundary;

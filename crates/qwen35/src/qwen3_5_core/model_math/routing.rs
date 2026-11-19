@@ -1,4 +1,4 @@
-use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
+use runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use crate::PerformanceAttribution;
 use crate::sparse_experts::{
@@ -115,7 +115,7 @@ pub fn qwen3_5_moe_unsorted_expert_weighted_sum(
 }
 
 pub fn qwen3_5_moe_sorted_expert_weighted_sum_kernel()
--> Result<MlxMetalKernel, astronomical_runtime_integration::MlxRuntimeError> {
+-> Result<MlxMetalKernel, runtime_integration::MlxRuntimeError> {
     sorted_expert_weighted_sum_kernel()
 }
 

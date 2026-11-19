@@ -6,7 +6,7 @@
 //! `mlx_slice` plus `mlx_slice_update` graph operation. The cursor makes the
 //! splice correct when prefill chunk boundaries split one image's pad run.
 
-use astronomical_runtime_integration::MlxRuntime;
+use runtime_integration::MlxRuntime;
 
 use super::Qwen3_5ExecutionError;
 use mlx_bridge::MlxArray;

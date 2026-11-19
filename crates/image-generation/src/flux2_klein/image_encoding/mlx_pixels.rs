@@ -1,10 +1,8 @@
 //! One contiguous float32 host transfer followed by the exact reference pixel conversion.
 
-use astronomical_runtime_integration::MlxRuntime;
+use runtime_integration::MlxRuntime;
 
-use astronomical_model_primitives::performance_attribution::{
-    PerformanceAttribution, PerformanceOperation,
-};
+use model_primitives::performance_attribution::{PerformanceAttribution, PerformanceOperation};
 
 use super::{
     Flux2KleinImageEncodingError, Flux2KleinPngEncoder, reference_pixels::normalized_rgb_u8,

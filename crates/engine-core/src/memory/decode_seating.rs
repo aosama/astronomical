@@ -1,4 +1,4 @@
-use astronomical_memory_policy::residency::{
+use memory_policy::residency::{
     CurrentExpertLayerResidency, ExpertLayerGeometry, RetainedExpertPageClass,
     minimum_decode_warm_slot_count,
 };

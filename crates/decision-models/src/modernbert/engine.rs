@@ -9,10 +9,8 @@
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
-use astronomical_ipc_protocol::{
-    EmbeddingsCommand, EmbeddingsFailureReason, WorkerEmbeddingCapabilities,
-};
-use astronomical_runtime_integration::{
+use ipc_protocol::{EmbeddingsCommand, EmbeddingsFailureReason, WorkerEmbeddingCapabilities};
+use runtime_integration::{
     MlxMemoryLimits, MlxMemorySnapshot, MlxRuntime, MlxRuntimeError, MlxSafetensors,
 };
 use tokenizers::Tokenizer;
@@ -31,7 +29,7 @@ use crate::performance_attribution::{
 use crate::{
     EmbeddingEngine, EmbeddingEngineLoadResult, EmbeddingEngineOutput, MemoryCeilingUtilization,
 };
-use astronomical_memory_policy::forward_pass_utilization;
+use memory_policy::forward_pass_utilization;
 
 /// Loaded ModernBERT runtime bound to one artifact directory.
 pub struct ModernBertEmbeddingEngine {

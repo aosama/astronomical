@@ -1,7 +1,7 @@
 //! Unit contracts for how a discovered decision model is named to the worker.
 
-use astronomical_config::ModelFamily;
-use astronomical_ipc_protocol::WorkerDecisionModelFamily;
+use config::ModelFamily;
+use ipc_protocol::WorkerDecisionModelFamily;
 
 use super::worker_decision_family;
 

@@ -12,9 +12,9 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use astronomical_ipc_protocol::WorkerEvent;
-use astronomical_runtime_integration::MlxRuntime;
+use ipc_protocol::WorkerEvent;
 use mlx_bridge::MlxArray;
+use runtime_integration::MlxRuntime;
 
 use crate::astro_ssd_prompt_cache::AstroSsdPromptCacheCounters;
 use crate::astro_ssd_prompt_cache::prefix_lookup::AstroSsdPromptCachePrefixLookup;

@@ -374,16 +374,16 @@ async fn should_not_acknowledge_an_existing_block_after_its_state_is_corrupted()
 
     assert!(matches!(
         republish_error,
-        astronomical_model_serving::AstroSsdPromptCacheDiskStoreError::ValidateBlock { .. }
+        model_serving::AstroSsdPromptCacheDiskStoreError::ValidateBlock { .. }
     ));
 }
 
 fn save_three_block_chain(
-    astro_ssd_prompt_cache: &astronomical_model_serving::AstroSsdPromptCacheDiskStore,
-    runtime: &astronomical_runtime_integration::MlxRuntime,
-    root_block_key: &astronomical_model_serving::AstroSsdPromptCacheBlockKey,
-    child_block_key: &astronomical_model_serving::AstroSsdPromptCacheBlockKey,
-    grandchild_block_key: &astronomical_model_serving::AstroSsdPromptCacheBlockKey,
+    astro_ssd_prompt_cache: &model_serving::AstroSsdPromptCacheDiskStore,
+    runtime: &runtime_integration::MlxRuntime,
+    root_block_key: &model_serving::AstroSsdPromptCacheBlockKey,
+    child_block_key: &model_serving::AstroSsdPromptCacheBlockKey,
+    grandchild_block_key: &model_serving::AstroSsdPromptCacheBlockKey,
     sequence_state_tensors: &std::collections::HashMap<String, mlx_bridge::MlxArray>,
     boundary_state_tensors: &std::collections::HashMap<String, mlx_bridge::MlxArray>,
 ) {
@@ -406,7 +406,7 @@ fn save_three_block_chain(
 
 fn block_directory_path(
     astro_ssd_prompt_cache_directory: &tempfile::TempDir,
-    block_key: &astronomical_model_serving::AstroSsdPromptCacheBlockKey,
+    block_key: &model_serving::AstroSsdPromptCacheBlockKey,
 ) -> std::path::PathBuf {
     astro_ssd_prompt_cache_directory
         .path()

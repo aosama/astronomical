@@ -2,8 +2,8 @@
 
 use super::{SpanLayout, averaging_matrix};
 use crate::decision_models::clef::prompt::{ClefQuestionLayout, ClefSequence, TokenSpan};
-use astronomical_decision_contract::clef_rendering::clef_question_text;
-use astronomical_decision_contract::{OrderedJsonValue, parse_system_one_questions};
+use decision_contract::clef_rendering::clef_question_text;
+use decision_contract::{OrderedJsonValue, parse_system_one_questions};
 
 #[test]
 fn should_average_each_span_and_leave_other_columns_zero() {

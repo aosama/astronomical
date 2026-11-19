@@ -14,8 +14,8 @@ use std::collections::HashMap;
 use super::persistent_state_bridge::AstroSsdPromptCacheStateBridgeError;
 use super::request_state::RequestDecoderStateStack;
 use crate::astro_decoder_state_cache::AstroDecoderStateCacheState;
-use astronomical_runtime_integration::MlxRuntime;
 use mlx_bridge::MlxArray;
+use runtime_integration::MlxRuntime;
 
 const FULL_ATTENTION_TOKEN_AXIS: usize = 2;
 
@@ -190,7 +190,7 @@ fn materialize_restored_full_attention_tensors(
         .evaluate_arrays(&restored_tensors)
         .map_err(|captured_error| {
             AstroSsdPromptCacheStateBridgeError::EvaluateRestoredAstroSsdPromptCacheState(
-                astronomical_runtime_integration::MlxRuntimeError::from(captured_error),
+                runtime_integration::MlxRuntimeError::from(captured_error),
             )
         })
 }

@@ -1,4 +1,4 @@
-use astronomical_ipc_protocol::ChatToolDefinition;
+use ipc_protocol::ChatToolDefinition;
 
 use crate::model_generation_processor::MalformedModelOutputDiagnostic;
 use crate::qwen3_5_core::text::Qwen3_5RequestOutputError;

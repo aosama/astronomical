@@ -14,7 +14,7 @@
 //! matrix built on the host, rather than one slice per span: a request may
 //! ask about hundreds of options, and one product keeps the graph small.
 
-use astronomical_decision_contract::{DecisionFailure, HeadInputRequest};
+use decision_contract::{DecisionFailure, HeadInputRequest};
 use mlx_bridge::MlxArray;
 
 use super::head_layers::{ClefHeadLayers, head_math};
@@ -55,7 +55,7 @@ impl OptionTermArrays {
     /// what the residual scorer reads.
     pub fn residual_features(
         &self,
-        runtime: &astronomical_runtime_integration::MlxRuntime,
+        runtime: &runtime_integration::MlxRuntime,
     ) -> Result<MlxArray, DecisionFailure> {
         let (field_per_option, options) = (&self.field_per_option, &self.options);
         let product = runtime

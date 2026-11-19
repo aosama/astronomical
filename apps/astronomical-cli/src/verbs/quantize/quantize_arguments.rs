@@ -22,8 +22,8 @@
 use std::ffi::OsString;
 use std::path::PathBuf;
 
-use astronomical_quantization::bit_width::{BitWidth, GroupSize};
-use astronomical_quantization::evaluation::{
+use quantization::bit_width::{BitWidth, GroupSize};
+use quantization::evaluation::{
     DEFAULT_EVALUATION_PROMPT_COUNT, DEFAULT_EVALUATION_SEQUENCE_LENGTH_TOKENS,
 };
 

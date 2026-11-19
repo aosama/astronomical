@@ -6,9 +6,9 @@
 //! `Mlx` prefix is deliberate: these types exist because the numbers come from
 //! the MLX runtime, not from policy arithmetic.
 
-use astronomical_ipc_protocol::ExpertMemoryMode;
+use ipc_protocol::ExpertMemoryMode;
 
-use astronomical_ipc_protocol::ExpertLayerSeatingCounts;
+use ipc_protocol::ExpertLayerSeatingCounts;
 
 use crate::utilization::MemoryCeilingUtilization;
 
@@ -28,7 +28,7 @@ pub struct ExpertResidencyTelemetry {
     /// no map yet, so Observatory keeps the end-of-reply topology.
     pub layer_seating: ExpertLayerSeatingCounts,
     /// A dense model's kept and streamed decoder layers (issue #1985).
-    pub dense_layers: Option<astronomical_ipc_protocol::WorkerDenseLayerResidency>,
+    pub dense_layers: Option<ipc_protocol::WorkerDenseLayerResidency>,
 }
 
 /// Reconciled ownership view of one MLX active-memory measurement.

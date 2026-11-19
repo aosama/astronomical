@@ -27,7 +27,7 @@ const MANIFEST_SCHEMA_VERSION: u32 = 2;
 
 /// Source-identity pathspecs: every input that determines the native
 /// artifact's bytes. The Rust build-orchestration sources (the
-/// `astronomical-native-build-orchestration` crate's executor modules and
+/// `native-build-orchestration` crate's executor modules and
 /// runtime-integration's `build.rs`) and the `xtask` CLI executor are
 /// deliberately excluded because they are executors, not policy: edits to
 /// progress logging, parallelism resolution, or store plumbing must not

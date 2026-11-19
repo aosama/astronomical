@@ -2,12 +2,12 @@
 
 use std::time::{Duration, Instant};
 
-use astronomical_quantization::bit_width::{BitWidth, GroupSize};
-use astronomical_quantization::encoder::RangeSearchPolicy;
-use astronomical_quantization::module_inventory::ModuleInventory;
-use astronomical_quantization::progress::{ProgressReporter, StageProgress};
-use astronomical_quantization::requantize::driver::run_requantize;
-use astronomical_quantization::requantize::{
+use quantization::bit_width::{BitWidth, GroupSize};
+use quantization::encoder::RangeSearchPolicy;
+use quantization::module_inventory::ModuleInventory;
+use quantization::progress::{ProgressReporter, StageProgress};
+use quantization::requantize::driver::run_requantize;
+use quantization::requantize::{
     BitPolicy, DEFAULT_SHARD_BYTES, RequantizeTensorPlan, TensorPlanEntry,
 };
 use serial_test::serial;

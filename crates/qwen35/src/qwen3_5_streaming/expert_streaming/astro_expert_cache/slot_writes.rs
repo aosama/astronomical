@@ -3,7 +3,7 @@
 //! `slice_update` donates the destination buffer when the row is uniquely held,
 //! so only that expert row is copied instead of the whole packed page.
 
-use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
+use runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights;
 use crate::qwen3_5_streaming::expert_streaming::expert_pager::Qwen3_5PagedExpertWeights;
@@ -148,11 +148,9 @@ pub(super) fn materialize_and_detach_table_weights(
     weights.append_array_references(&mut array_references);
     runtime.evaluate_arrays(&array_references)?;
     for array in array_references {
-        astronomical_mlx_c_fork::detach_array(array).map_err(|error| {
-            MlxRuntimeError::RuntimeOperation {
-                operation: "detach a warm table from its lazy graph",
-                description: error.to_string(),
-            }
+        mlx_c_fork::detach_array(array).map_err(|error| MlxRuntimeError::RuntimeOperation {
+            operation: "detach a warm table from its lazy graph",
+            description: error.to_string(),
         })?;
     }
     Ok(())

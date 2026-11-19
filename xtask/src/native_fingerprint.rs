@@ -8,8 +8,8 @@ use std::process::Command;
 
 use crate::native_store_paths::{native_store_entry_directory, native_store_schema_version};
 
-use astronomical_native_identity::probes::{ProbeValue, ToolchainOverrides};
-use astronomical_native_identity::{
+use native_identity::probes::{ProbeValue, ToolchainOverrides};
+use native_identity::{
     FingerprintRequest, IdentityScope, NativeBuildProfile, native_build_identity_with_probe_values,
 };
 

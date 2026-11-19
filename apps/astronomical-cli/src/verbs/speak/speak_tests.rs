@@ -4,8 +4,8 @@
 
 use std::path::PathBuf;
 
-use astronomical_ipc_protocol::{DaemonResponse, SpeechResultMetadata};
-use astronomical_speech_contract::{AudioFormat, SpeechFailure};
+use ipc_protocol::{DaemonResponse, SpeechResultMetadata};
+use speech_contract::{AudioFormat, SpeechFailure};
 
 use super::speak_exchange::take_frame;
 use super::speak_output::{reserve_audio_output, write_audio};

@@ -19,10 +19,10 @@
 
 use std::time::Instant;
 
-use astronomical_runtime_integration::{
+use mlx_bridge::{MlxArray, MlxDtype};
+use runtime_integration::{
     MlxMemoryLimits, MlxRuntime, maximum_recommended_gpu_working_set_size_bytes,
 };
-use mlx_bridge::{MlxArray, MlxDtype};
 
 const BYTES_PER_GIGABYTE: f64 = 1_073_741_824.0;
 /// One table is 32,768 rows of 4,096 single-precision values: half a

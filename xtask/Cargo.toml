@@ -15,10 +15,10 @@ autotests = false
 workspace = true
 
 [dependencies]
-astronomical-memory-policy = { path = "../crates/memory-policy" }
-astronomical-native-identity = { path = "../crates/native-identity" }
-astronomical-test-harness = { path = "../crates/test-harness" }
-astronomical-lowercase-hex = { path = "../crates/lowercase-hex" }
+memory-policy = { path = "../crates/memory-policy" }
+native-identity = { path = "../crates/native-identity" }
+test-harness = { path = "../crates/test-harness" }
+lowercase-hex = { path = "../crates/lowercase-hex" }
 # Signal handlers, process-group signaling, access(2), and localtime_r for
 # the disposable-target lifecycle runner: the one sanctioned unsafe edge.
 libc.workspace = true

@@ -10,7 +10,7 @@
 //! the rest. `decode_whole_layer_keep_count` sets the number; the layers kept
 //! are the ones the requests routed to most.
 
-use astronomical_ipc_protocol::RequestId;
+use ipc_protocol::RequestId;
 
 use crate::RetainedExpertPageClass;
 use crate::qwen3_5_streaming::model::Qwen3_5Model;

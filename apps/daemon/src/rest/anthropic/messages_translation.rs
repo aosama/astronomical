@@ -2,12 +2,12 @@
 //! worker's chat-generation command, the same command the OpenAI surfaces
 //! build, so both protocols share one generation path.
 
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     ChatAssistantToolCall, ChatAssistantToolFunction, ChatGenerationCommand,
     ChatGenerationSettings, ChatGenerationValidationError, ChatImageInput, ChatMessage,
     ChatToolChoice, ChatToolDefinition, RequestId,
 };
-use astronomical_rest_contract::{
+use rest_contract::{
     AnthropicMessageParts, AnthropicMessagesRequestParts, AnthropicToolChoiceParts,
     AnthropicToolDefinitionParts, AnthropicToolUseParts, AnthropicUserSegmentParts,
 };

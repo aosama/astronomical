@@ -19,22 +19,22 @@
 use std::path::PathBuf;
 use std::time::Instant;
 
-use astronomical_ipc_protocol::RequestId;
-use astronomical_model_serving::speculative_decoding::dflash2_drafter::{
+use ipc_protocol::RequestId;
+use mlx_bridge::MlxArray;
+use model_serving::speculative_decoding::dflash2_drafter::{
     DFlash2DraftTarget, DFlash2DrafterConfiguration, DFlash2DrafterWeights, DrafterContextStates,
     PathChoice, bind_drafter_weights, drafted_hidden_rows, select_path,
 };
-use astronomical_model_serving::speculative_decoding::verification_decision::{
+use model_serving::speculative_decoding::verification_decision::{
     DraftedSlot, TargetDistribution, VerificationDecision, decide_by_rejection_sampling,
     decide_by_token_equality,
 };
-use astronomical_model_serving::{
+use model_serving::{
     PerformanceAttribution, Qwen3_5ArtifactValidator, Qwen3_5DraftedRowsVerification,
     Qwen3_5ModelChunkingConfiguration, Qwen3_5ResidentModel, Qwen3_5Tokenizer,
     RequestDecoderStateStack, VerificationLogitsMode,
 };
-use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime, MlxSafetensors};
-use mlx_bridge::MlxArray;
+use runtime_integration::{MlxMemoryLimits, MlxRuntime, MlxSafetensors};
 use serial_test::serial;
 
 use super::dflash2_journey_support::{
@@ -203,7 +203,7 @@ fn should_keep_as_many_drafted_tokens_per_round_as_z_labs_reference() {
 /// same journeys measure any paired target, otherwise the 27B pair from the
 /// Hugging Face hub folder.
 fn pair_directories() -> (PathBuf, PathBuf, String) {
-    let configured_target = astronomical_test_harness::test_run::TestRunContext::current()
+    let configured_target = test_harness::test_run::TestRunContext::current()
         .configuration
         .model_directory;
     match configured_target {
@@ -308,16 +308,16 @@ pub(crate) fn completion_token_ids(pair: &JourneyPair, prompt: &str) -> Vec<u32>
 }
 
 pub(crate) fn prompt_token_ids(pair: &JourneyPair, prompt: &str) -> Vec<u32> {
-    let command = astronomical_ipc_protocol::ChatGenerationCommand {
+    let command = ipc_protocol::ChatGenerationCommand {
         request_id: RequestId::new(0),
         model: pair.target_model_id.clone(),
-        messages: vec![astronomical_ipc_protocol::ChatMessage::User {
+        messages: vec![ipc_protocol::ChatMessage::User {
             content: prompt.to_owned(),
             images: Vec::new(),
         }],
         tools: Vec::new(),
-        tool_choice: astronomical_ipc_protocol::ChatToolChoice::None,
-        settings: astronomical_ipc_protocol::ChatGenerationSettings {
+        tool_choice: ipc_protocol::ChatToolChoice::None,
+        settings: ipc_protocol::ChatGenerationSettings {
             max_output_tokens: OUTPUT_TOKENS as u16,
             temperature_thousandths: Some(0),
             top_p_thousandths: None,

@@ -43,7 +43,7 @@ const TEMPERATURE_THOUSANDTHS: u16 = 1_000;
 const JOURNEY_TIMEOUT: Duration = Duration::from_secs(600);
 
 fn target_directory() -> PathBuf {
-    astronomical_test_harness::test_run::TestRunContext::current().required_model_directory()
+    test_harness::test_run::TestRunContext::current().required_model_directory()
 }
 
 /// The memory limit the worker serves under: the machine's default, or the
@@ -51,12 +51,11 @@ fn target_directory() -> PathBuf {
 /// sets one other than that field's own default. A limit below the model's
 /// size is how serving is measured while the model streams from storage.
 fn configured_memory_limit_bytes() -> Option<u64> {
-    let paging_experiment = astronomical_test_harness::test_run::TestRunContext::current()
+    let paging_experiment = test_harness::test_run::TestRunContext::current()
         .configuration
         .paging_experiment;
     if paging_experiment.maximum_mlx_memory_gigabytes
-        == astronomical_test_harness::test_run::PagingExperimentCase::default()
-            .maximum_mlx_memory_gigabytes
+        == test_harness::test_run::PagingExperimentCase::default().maximum_mlx_memory_gigabytes
     {
         return None;
     }

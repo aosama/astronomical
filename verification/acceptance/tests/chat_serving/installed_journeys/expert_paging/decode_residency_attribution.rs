@@ -25,11 +25,11 @@
 use std::path::Path;
 use std::time::Duration;
 
-use astronomical_ipc_protocol::RequestId;
-use astronomical_runtime_integration::MlxMemoryLimits;
-use astronomical_test_harness::test_run::TestRunContext;
+use ipc_protocol::RequestId;
+use runtime_integration::MlxMemoryLimits;
 use serde_json::Value;
 use serial_test::serial;
+use test_harness::test_run::TestRunContext;
 use tokio::time::timeout;
 
 use super::cold_macos_file_cache::ColdMacosFileCache;
@@ -288,7 +288,7 @@ async fn attribute_decode_token_time(
 /// token: straight into the table, or the copying path and why.
 fn print_direct_expert_fetch_counts(
     phase_name: &str,
-    counts: astronomical_model_serving::DirectExpertFetchCounts,
+    counts: model_serving::DirectExpertFetchCounts,
     reply_token_count: usize,
 ) {
     let reply_token_count = reply_token_count.max(1) as f64;

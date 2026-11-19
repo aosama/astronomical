@@ -5,7 +5,7 @@
 //! owner, and the question the engine asks before each forward would be
 //! answered from wrong figures.
 
-use astronomical_model_serving::Qwen3_5ResidentEngine;
+use model_serving::Qwen3_5ResidentEngine;
 
 /// The most the ledger may fail to account for, as a share of the limit.
 const MAXIMUM_UNACCOUNTED_PERMILLE_OF_LIMIT: u64 = 20;

@@ -7,7 +7,7 @@
 
 use std::path::Path;
 
-use astronomical_decision_contract::training_record::{
+use decision_contract::training_record::{
     DECISION_TRAINING_RECORD_FILE_NAME, MAXIMUM_DECISION_TRAINING_RECORD_FILE_BYTES,
     TrainingRecord, parse_training_record,
 };

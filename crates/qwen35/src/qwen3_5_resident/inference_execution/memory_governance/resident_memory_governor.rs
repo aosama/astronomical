@@ -7,9 +7,7 @@
 //! each forward (`forward_memory`), for the MLX working buffers it measures, and
 //! for comparing its accounts with what MLX reports.
 
-use astronomical_memory_policy::ledger::{
-    KeptWeightCapacity, LedgerPhase, MemoryGovernor, ModelMemoryShape,
-};
+use memory_policy::ledger::{KeptWeightCapacity, LedgerPhase, MemoryGovernor, ModelMemoryShape};
 
 use crate::qwen3_5_resident::model::Qwen3_5ResidentModel;
 

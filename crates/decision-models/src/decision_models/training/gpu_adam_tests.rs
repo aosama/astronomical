@@ -1,13 +1,11 @@
 //! The GPU optimizer against the CPU optimizer it mirrors.
 
-use astronomical_decision_training::anchored_adam::{
-    AdamSettings, AnchoredAdam, TRAINING_ADAM_SETTINGS,
-};
+use decision_training::anchored_adam::{AdamSettings, AnchoredAdam, TRAINING_ADAM_SETTINGS};
 use serial_test::serial;
 
 use super::super::gpu_test_support::assert_all_close;
 use super::*;
-use astronomical_model_primitives::synthetic_weights_test_support::initialize_test_runtime;
+use model_primitives::synthetic_weights_test_support::initialize_test_runtime;
 
 fn settings() -> AdamSettings {
     AdamSettings {

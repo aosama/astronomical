@@ -1,21 +1,21 @@
 //! OpenAI-compatible native embeddings with complete validation before shared queue admission.
 
 use crate::rest::worker_replacement_wait::lock_configuration_transition_for_generation;
-use astronomical_config::ModelCapabilities;
-use astronomical_ipc_protocol::{
-    EmbeddingEncodingFormat, EmbeddingsCommand, EmbeddingsFailureReason, RequestId,
-};
-use astronomical_rest_contract::{
-    OpenAiEmbedding, OpenAiEmbeddingEncodingFormat as RestEncodingFormat, OpenAiEmbeddingVector,
-    OpenAiEmbeddingsRequest, OpenAiEmbeddingsRequestParts, OpenAiEmbeddingsResponse,
-    OpenAiEmbeddingsValidationError,
-};
 use axum::{
     Json,
     extract::State,
     response::{IntoResponse, Response},
 };
 use base64::{Engine as _, engine::general_purpose::STANDARD};
+use config::ModelCapabilities;
+use ipc_protocol::{
+    EmbeddingEncodingFormat, EmbeddingsCommand, EmbeddingsFailureReason, RequestId,
+};
+use rest_contract::{
+    OpenAiEmbedding, OpenAiEmbeddingEncodingFormat as RestEncodingFormat, OpenAiEmbeddingVector,
+    OpenAiEmbeddingsRequest, OpenAiEmbeddingsRequestParts, OpenAiEmbeddingsResponse,
+    OpenAiEmbeddingsValidationError,
+};
 
 use crate::{
     EmbeddingsExecutionError, EmbeddingsOutput, GenerationStartError,
@@ -132,8 +132,7 @@ fn resolve_embeddings_target_model(
         .iter()
         .map(|discovered_model| discovered_model.model_id.as_str())
         .collect::<Vec<_>>();
-    let resolved_model_id =
-        astronomical_config::resolve_model_id(requested_model, &known_model_ids);
+    let resolved_model_id = config::resolve_model_id(requested_model, &known_model_ids);
     let Some(discovered_model) = discovered_models
         .iter()
         .find(|discovered_model| discovered_model.model_id == resolved_model_id)
@@ -211,9 +210,7 @@ async fn respond_with_embeddings_completion(
         .input_token_counts
         .iter()
         .fold(0u32, |total, count| total.saturating_add(*count));
-    let Some(usage) =
-        astronomical_rest_contract::OpenAiTokenUsage::new(aggregate_input_token_count, 0)
-    else {
+    let Some(usage) = rest_contract::OpenAiTokenUsage::new(aggregate_input_token_count, 0) else {
         return worker_unavailable_response();
     };
     let embedding_rows = embeddings_output
@@ -293,11 +290,9 @@ fn embeddings_execution_error_response(
         ),
         EmbeddingsExecutionError::WorkerFailure(EmbeddingsFailureReason::EngineBusy) => (
             axum::http::StatusCode::TOO_MANY_REQUESTS,
-            Json(
-                astronomical_rest_contract::OpenAiErrorResponse::capacity_unavailable(
-                    "the embedding engine is busy",
-                ),
-            ),
+            Json(rest_contract::OpenAiErrorResponse::capacity_unavailable(
+                "the embedding engine is busy",
+            )),
         )
             .into_response(),
         EmbeddingsExecutionError::WorkerFailure(EmbeddingsFailureReason::FatalExecution {
@@ -324,12 +319,10 @@ fn embeddings_execution_error_response(
 fn embeddings_worker_failure_response() -> Response {
     (
         axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-        Json(
-            astronomical_rest_contract::OpenAiErrorResponse::service_unavailable(
-                "embedding generation failed in the local worker",
-                Some("embeddings_failed"),
-            ),
-        ),
+        Json(rest_contract::OpenAiErrorResponse::service_unavailable(
+            "embedding generation failed in the local worker",
+            Some("embeddings_failed"),
+        )),
     )
         .into_response()
 }

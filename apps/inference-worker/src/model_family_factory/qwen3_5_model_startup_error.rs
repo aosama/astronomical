@@ -6,7 +6,7 @@
 use std::io;
 use std::path::PathBuf;
 
-use astronomical_model_serving::{
+use model_serving::{
     ExpertMemoryAdmissionError, InferenceEngineError, Qwen3_5ArtifactValidationError,
     Qwen3_5MemoryGeometryError, Qwen3_5ResidentPromptProcessingChunkSizerError,
     Qwen3_5StreamingPromptProcessingChunkSizerError, Qwen3_5TokenizerError,

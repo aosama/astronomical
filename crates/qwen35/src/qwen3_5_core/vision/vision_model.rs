@@ -11,7 +11,7 @@
 //! MLX-C entry points in `mlx-c/mlx/c/ops.h` or `mlx-c/mlx/c/fast.h`; this code
 //! owns only model-specific graph assembly and image-boundary segmentation.
 
-use astronomical_runtime_integration::MlxRuntime;
+use runtime_integration::MlxRuntime;
 use std::cell::Cell;
 
 use super::vision_attention;
@@ -74,7 +74,7 @@ impl Qwen3_5VisionModel {
     /// Loads vision weights embedded in the model shard files, read through
     /// `model_shard_files` in model-shard order.
     pub fn load_from_model_shard_files(
-        runtime: &astronomical_runtime_integration::MlxRuntime,
+        runtime: &runtime_integration::MlxRuntime,
         vision_config: &Qwen3_5VisionConfig,
         qwen3_5_config: &crate::qwen3_5_core::configuration::Qwen3_5Config,
         model_shard_files: Vec<std::fs::File>,

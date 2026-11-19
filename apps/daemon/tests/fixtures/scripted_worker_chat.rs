@@ -1,4 +1,4 @@
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     ChatGenerationCompletionReason, ChatGenerationOutput, ProtocolWriter, RequestId,
     WorkerAstroSsdPromptCacheExpectedBlockHashPrefix, WorkerAstroSsdPromptCacheLookupOutcome,
     WorkerAstroSsdPromptCacheMissReason, WorkerAstroSsdPromptCacheRequestDiagnostics,
@@ -12,8 +12,8 @@ use astronomical_ipc_protocol::{
 /// reset). The split is the contract the daemon-side accumulation depends on.
 pub(super) fn expert_streaming_session_stats_snapshot(
     session_request_index: u64,
-) -> astronomical_ipc_protocol::WorkerExpertStreamingStats {
-    use astronomical_ipc_protocol::{
+) -> ipc_protocol::WorkerExpertStreamingStats {
+    use ipc_protocol::{
         ExpertMemoryMode, WorkerExpertResidencySnapshot, WorkerExpertStreamingStats,
     };
     WorkerExpertStreamingStats {
@@ -28,7 +28,7 @@ pub(super) fn expert_streaming_session_stats_snapshot(
             resident_expert_payload_bytes: 2_000_000_000,
             complete_expert_payload_byte_count: 8_000_000_000,
             expert_capacity: 256,
-            layer_seating: astronomical_ipc_protocol::ExpertLayerSeatingCounts::default(),
+            layer_seating: ipc_protocol::ExpertLayerSeatingCounts::default(),
         },
         layer_topology: Vec::new(),
         retained_route_assignment_count: 800 * session_request_index,
@@ -54,7 +54,7 @@ pub(super) fn expert_streaming_session_stats_snapshot(
 pub(super) async fn send_accepted_chat<WriteTransport>(
     request_id: RequestId,
     event_writer: &mut ProtocolWriter<WriteTransport>,
-) -> Result<(), astronomical_ipc_protocol::ProtocolError>
+) -> Result<(), ipc_protocol::ProtocolError>
 where
     WriteTransport: tokio::io::AsyncWrite + Unpin,
 {
@@ -120,7 +120,7 @@ pub(super) async fn send_expert_streaming_session_chat<WriteTransport>(
     request_id: RequestId,
     event_writer: &mut ProtocolWriter<WriteTransport>,
     session_request_index: u64,
-) -> Result<(), astronomical_ipc_protocol::ProtocolError>
+) -> Result<(), ipc_protocol::ProtocolError>
 where
     WriteTransport: tokio::io::AsyncWrite + Unpin,
 {
@@ -160,7 +160,7 @@ where
 pub(super) async fn send_structured_json_reply<WriteTransport>(
     request_id: RequestId,
     event_writer: &mut ProtocolWriter<WriteTransport>,
-) -> Result<(), astronomical_ipc_protocol::ProtocolError>
+) -> Result<(), ipc_protocol::ProtocolError>
 where
     WriteTransport: tokio::io::AsyncWrite + Unpin,
 {
@@ -196,7 +196,7 @@ where
 pub(super) async fn send_simple_completion<WriteTransport>(
     request_id: RequestId,
     event_writer: &mut ProtocolWriter<WriteTransport>,
-) -> Result<(), astronomical_ipc_protocol::ProtocolError>
+) -> Result<(), ipc_protocol::ProtocolError>
 where
     WriteTransport: tokio::io::AsyncWrite + Unpin,
 {
@@ -216,7 +216,7 @@ where
 pub(super) async fn send_activity_transition<WriteTransport>(
     request_id: RequestId,
     event_writer: &mut ProtocolWriter<WriteTransport>,
-) -> Result<(), astronomical_ipc_protocol::ProtocolError>
+) -> Result<(), ipc_protocol::ProtocolError>
 where
     WriteTransport: tokio::io::AsyncWrite + Unpin,
 {

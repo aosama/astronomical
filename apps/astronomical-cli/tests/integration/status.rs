@@ -5,8 +5,8 @@
 use std::{io::Write, path::PathBuf};
 
 use astronomical_cli::StatusDependencies;
-use astronomical_config::AstronomicalRuntimeInstance;
-use astronomical_ipc_protocol::{DaemonWorkerStatus, ModelLoadInFlight, NeuralEnginePrefillStatus};
+use config::AstronomicalRuntimeInstance;
+use ipc_protocol::{DaemonWorkerStatus, ModelLoadInFlight, NeuralEnginePrefillStatus};
 use tokio::time::timeout;
 
 use crate::integration::support::environment;

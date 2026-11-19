@@ -12,11 +12,6 @@ use std::{
     time::Duration,
 };
 
-use astronomical_config::{
-    AstroSsdPromptCacheConfig, AstronomicalInstancePaths, AstronomicalRuntimeInstance,
-    ChatModelCapabilities as DiscoveredChatModelCapabilities, DiscoveredModel,
-    ImageGenerationCapabilities, LogLevel, LoggingConfig, ModelCapabilities, ModelFamily,
-};
 use astronomical_daemon::{
     ChatGenerationExecutor, ChatGenerationStreamEvent, DaemonIpcGenerationContext,
     DaemonIpcService, DaemonPerformanceAttributionLog, DecisionsExecutionError, DecisionsOutput,
@@ -25,7 +20,12 @@ use astronomical_daemon::{
     ResolvedRuntimeConfig, RuntimeModelGenerationDefaults, RuntimeModelPolicy,
     SpeechExecutionError, SpeechOutput, WorkerHealthSnapshot, start_daemon_ipc_service,
 };
-use astronomical_ipc_protocol::{
+use config::{
+    AstroSsdPromptCacheConfig, AstronomicalInstancePaths, AstronomicalRuntimeInstance,
+    ChatModelCapabilities as DiscoveredChatModelCapabilities, DiscoveredModel,
+    ImageGenerationCapabilities, LogLevel, LoggingConfig, ModelCapabilities, ModelFamily,
+};
+use ipc_protocol::{
     ChatGenerationCommand, ChatGenerationCompletionReason, ChatGenerationSettings, ChatMessage,
     ChatModelCapabilities, DaemonRequest, DecisionsCommand, EmbeddingsCommand,
     ImageGenerationCommand, SpeechCommand, WorkerAutoregressiveModelConfiguration,
@@ -516,7 +516,7 @@ pub(crate) fn ipc_speech_discovered_model(model_id: &str) -> DiscoveredModel {
         model_family: ModelFamily::Kokoro,
         revision: "ipc-speech-test-revision".to_owned(),
         model_directory: PathBuf::from(format!("/tmp/models/{model_id}")),
-        capabilities: ModelCapabilities::Speech(astronomical_config::SpeechModelCapabilities {
+        capabilities: ModelCapabilities::Speech(config::SpeechModelCapabilities {
             model_family: ModelFamily::Kokoro,
             sample_rate_hertz: 24_000,
             voice_names: vec!["af_heart".to_owned()],
@@ -536,11 +536,9 @@ pub(crate) fn ipc_decision_discovered_model(model_id: &str) -> DiscoveredModel {
         model_family: ModelFamily::Laya,
         revision: "ipc-decision-test-revision".to_owned(),
         model_directory: PathBuf::from(format!("/tmp/models/{model_id}")),
-        capabilities: ModelCapabilities::Decisions(
-            astronomical_config::DecisionModelCapabilities {
-                maximum_tokens_per_question: 512,
-            },
-        ),
+        capabilities: ModelCapabilities::Decisions(config::DecisionModelCapabilities {
+            maximum_tokens_per_question: 512,
+        }),
         license: None,
         model_size_bytes: 500_000_000,
     }

@@ -7,13 +7,13 @@
 use std::future::Future;
 use std::time::{Duration, Instant};
 
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     ChatGenerationCommand, ChatGenerationSettings, ChatMessage, ChatToolChoice, RequestId,
 };
-use astronomical_model_serving::{
+use model_serving::{
     Qwen3_5ArtifactValidator, Qwen3_5MoEPagedExecutionMode, Qwen3_5StreamingModel, Qwen3_5Tokenizer,
 };
-use astronomical_runtime_integration::MlxRuntime;
+use runtime_integration::MlxRuntime;
 use serial_test::serial;
 use tokio::time::{MissedTickBehavior, interval, sleep};
 

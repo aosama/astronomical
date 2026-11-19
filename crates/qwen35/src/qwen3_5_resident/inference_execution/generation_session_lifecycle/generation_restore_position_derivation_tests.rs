@@ -1,5 +1,5 @@
-use astronomical_ipc_protocol::WorkerAstroSsdPromptCacheLookupOutcome;
-use astronomical_ipc_protocol::WorkerAstroSsdPromptCacheRequestDiagnostics;
+use ipc_protocol::WorkerAstroSsdPromptCacheLookupOutcome;
+use ipc_protocol::WorkerAstroSsdPromptCacheRequestDiagnostics;
 
 use super::super::decoder_state_reuse::AstroSsdPromptCacheRestoreOutcome;
 use super::derive_generation_session_position;

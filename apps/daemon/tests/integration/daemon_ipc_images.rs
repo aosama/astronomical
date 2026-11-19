@@ -10,7 +10,7 @@ use std::{
 use astronomical_daemon::{
     ImageGenerationExecutionError, ImageGenerationOutput, WorkerHealthSnapshot, WorkerHealthStatus,
 };
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     DaemonIpcClient, DaemonListedModel, DaemonRequest, DaemonResponse, GeneratedImage,
     ImageGenerateRequest, ImageGenerationFailureReason, ImageGenerationResultMetadata, RequestId,
 };
@@ -410,11 +410,11 @@ fn listed_model_image_flag(listed_model: &DaemonListedModel) -> (&str, bool) {
 fn should_ship_the_builtin_default_image_model_in_the_release_catalog() {
     let release_catalog = astronomical_daemon::DownloadCatalog::load_bundled()
         .expect("the bundled release catalog should load");
-    let default_model_id = astronomical_config::BUILTIN_DEFAULT_IMAGE_MODEL_ID;
+    let default_model_id = config::BUILTIN_DEFAULT_IMAGE_MODEL_ID;
 
     let mut default_catalog_entry = None;
     for catalog_entry in release_catalog.entries() {
-        if astronomical_config::leaf_model_id(catalog_entry.huggingface_id()) == default_model_id {
+        if config::leaf_model_id(catalog_entry.huggingface_id()) == default_model_id {
             default_catalog_entry = Some(catalog_entry);
         }
     }

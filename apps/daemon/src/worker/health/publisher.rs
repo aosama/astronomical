@@ -2,7 +2,7 @@
 
 use std::sync::{Arc, RwLock};
 
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     ExpertMemoryMode, WorkerEvent, WorkerExpertResidencySnapshot, WorkerMlxMemorySnapshot,
     WorkerPromptWorkReuse,
 };
@@ -89,7 +89,7 @@ pub(crate) fn clear_active_request_progress(health_snapshot: &Arc<RwLock<WorkerH
 
 pub(crate) fn publish_neural_engine_prefill(
     health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
-    neural_engine_prefill: Option<astronomical_ipc_protocol::NeuralEnginePrefillStatus>,
+    neural_engine_prefill: Option<ipc_protocol::NeuralEnginePrefillStatus>,
 ) {
     if let Ok(mut worker_health_snapshot) = health_snapshot.write() {
         worker_health_snapshot
@@ -102,7 +102,7 @@ pub(crate) fn publish_neural_engine_prefill(
 
 pub(crate) fn record_neural_engine_chunk(
     health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
-    report: astronomical_ipc_protocol::NeuralEngineChunkReport,
+    report: ipc_protocol::NeuralEngineChunkReport,
 ) {
     if let Ok(mut worker_health_snapshot) = health_snapshot.write() {
         worker_health_snapshot
@@ -114,7 +114,7 @@ pub(crate) fn record_neural_engine_chunk(
 
 pub(crate) fn publish_model_load_in_flight(
     health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
-    model_load_in_flight: Option<astronomical_ipc_protocol::ModelLoadInFlight>,
+    model_load_in_flight: Option<ipc_protocol::ModelLoadInFlight>,
 ) {
     if let Ok(mut worker_health_snapshot) = health_snapshot.write() {
         worker_health_snapshot.model_load_in_flight = model_load_in_flight;

@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 
-use astronomical_config::{ChatModelCapabilities, DiscoveredModel, ModelCapabilities, ModelFamily};
-use astronomical_ipc_protocol::ModelLoadInFlight;
+use config::{ChatModelCapabilities, DiscoveredModel, ModelCapabilities, ModelFamily};
+use ipc_protocol::ModelLoadInFlight;
 
 use super::{ModelFolderBusy, model_folder_busy_reason, model_ids_served_from_folder};
 

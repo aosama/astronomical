@@ -103,6 +103,6 @@ fn should_build_an_empty_reply_memory_record_for_a_reply_without_tokens() {
 
     assert_eq!(
         reply_memory_record,
-        astronomical_ipc_protocol::ReplyMemoryRecord::default()
+        ipc_protocol::ReplyMemoryRecord::default()
     );
 }

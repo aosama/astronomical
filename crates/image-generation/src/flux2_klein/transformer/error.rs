@@ -1,6 +1,6 @@
 //! Typed transformer failures safe to propagate through the image engine.
 
-use astronomical_runtime_integration::MlxRuntimeError;
+use runtime_integration::MlxRuntimeError;
 use thiserror::Error;
 
 #[derive(Clone, Debug, Error, Eq, PartialEq)]

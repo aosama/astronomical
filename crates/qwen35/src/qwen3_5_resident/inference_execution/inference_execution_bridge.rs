@@ -1,6 +1,6 @@
 //! Trait bridge from the engine-neutral execution contract onto the state methods.
 
-use astronomical_ipc_protocol::{RequestId, WorkerEvent};
+use ipc_protocol::{RequestId, WorkerEvent};
 
 use crate::inference_engine::load_result::EngineLoadResult;
 use crate::{
@@ -56,7 +56,7 @@ impl MlxInferenceExecution for Qwen3_5InferenceExecution {
 
     fn advance_neural_engine_preparation(
         &mut self,
-    ) -> Option<astronomical_ipc_protocol::NeuralEnginePrefillStatus> {
+    ) -> Option<ipc_protocol::NeuralEnginePrefillStatus> {
         Qwen3_5EngineState::advance_neural_engine_preparation(self)
     }
 

@@ -91,7 +91,7 @@ pub struct Qwen3_5StreamingModel {
     /// without codebook experts or when the capability probe or compilation failed.
     /// Without it decode tokens decode a transient bfloat16 page like prefill.
     pub fused_jangtq2_gathered_projection_kernel: Option<
-        astronomical_jangtq2_qwen35::fused_gathered_projection::FusedJangtq2GatheredProjectionKernel,
+        jangtq2_qwen35::fused_gathered_projection::FusedJangtq2GatheredProjectionKernel,
     >,
 }
 

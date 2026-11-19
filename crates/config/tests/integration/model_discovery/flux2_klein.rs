@@ -2,7 +2,7 @@ use std::collections::BTreeSet;
 use std::fs;
 use std::path::Path;
 
-use astronomical_config::{
+use config::{
     DiscoveredModelError, Flux2KleinDirectoryVerificationError, ModelCapabilities, ModelFamily,
     ModelLicense, verify_flux2_klein_model_directory,
 };
@@ -244,7 +244,7 @@ fn should_reject_two_flux_artifacts_that_share_the_canonical_serving_identity() 
     write_executable_flux2_klein_artifact(&first_root.join("first-local-name"));
     write_executable_flux2_klein_artifact(&second_root.join("second-local-name"));
 
-    let discovery_error = astronomical_config::discover_models(&[first_root, second_root])
+    let discovery_error = config::discover_models(&[first_root, second_root])
         .expect_err("duplicate canonical FLUX identities should be rejected");
 
     assert!(matches!(

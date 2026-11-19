@@ -4,11 +4,11 @@
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
-use astronomical_config::{
+use config::{
     DiscoveredModel, ModelCapabilities, leaf_model_id, near_model_matches, resolve_model_id,
     write_default_model,
 };
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     DaemonCatalogEntry, DaemonDownloadJob, DaemonListedModel, DaemonResponse, DaemonTransportError,
     StreamingResponseWriter,
 };

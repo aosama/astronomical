@@ -7,8 +7,8 @@
 use std::{path::PathBuf, time::Duration};
 
 use astronomical_cli::{ModelsCommand, ModelsDependencies, ModelsError};
-use astronomical_config::AstronomicalRuntimeInstance;
-use astronomical_ipc_protocol::DaemonDownloadJob;
+use config::AstronomicalRuntimeInstance;
+use ipc_protocol::DaemonDownloadJob;
 use tokio::time::timeout;
 
 use crate::integration::support::environment::{

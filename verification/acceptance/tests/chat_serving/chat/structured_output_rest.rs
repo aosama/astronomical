@@ -1,9 +1,7 @@
 //! GPU acceptance for OpenAI structured output on a live chat model.
 
-use astronomical_config::DiscoveredModel;
-use astronomical_rest_contract::{
-    UNENFORCED_RESPONSE_FORMAT_WARNING, extract_json_value_from_text,
-};
+use config::DiscoveredModel;
+use rest_contract::{UNENFORCED_RESPONSE_FORMAT_WARNING, extract_json_value_from_text};
 use serde_json::{Value, json};
 
 use super::openai_rest::{
@@ -154,7 +152,7 @@ fn configured_structured_output_chat_model() -> DiscoveredModel {
                 "{STRUCTURED_OUTPUT_MODEL_LEAF_ID} must be a chat model for structured-output acceptance"
             )
         });
-    astronomical_model_serving::Qwen3_5ArtifactValidator::new()
+    model_serving::Qwen3_5ArtifactValidator::new()
         .validate(
             &selected_model.model_directory,
             chat_capabilities.max_output_tokens,

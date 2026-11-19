@@ -1,10 +1,10 @@
 //! Shared helpers for the GPU training tests: deterministic values, and
 //! small inputs for each family with questions of 2, 3 and 4 options.
 
-use astronomical_decision_contract::head_tuning_file::TunableHeadFamily;
-use astronomical_decision_contract::{FloatVector, HeadInputs};
-use astronomical_decision_training::kev_trainable::KevTrainableHead;
-use astronomical_decision_training::trainable_head::TrainableHead;
+use decision_contract::head_tuning_file::TunableHeadFamily;
+use decision_contract::{FloatVector, HeadInputs};
+use decision_training::kev_trainable::KevTrainableHead;
+use decision_training::trainable_head::TrainableHead;
 use mlx_bridge::MlxArray;
 
 use super::gpu_math::GpuMath;
@@ -103,11 +103,11 @@ fn ranked_question(question_seed: u64) -> (HeadInputs, usize) {
             best_lead = option_state[0];
             best_option = option_index as usize;
         }
-        option_states.push(astronomical_decision_contract::FloatVector(option_state));
+        option_states.push(decision_contract::FloatVector(option_state));
     }
     (
         HeadInputs::Kev {
-            decision_state: astronomical_decision_contract::FloatVector(sequence_values(
+            decision_state: decision_contract::FloatVector(sequence_values(
                 RANKED_HIDDEN_SIZE,
                 question_seed + 7_000,
             )),

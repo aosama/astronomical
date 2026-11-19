@@ -3,12 +3,12 @@
 //! and its real MLX conversion are recognized as one base. Revisions are pinned, so
 //! a later upload to those repositories cannot change the answer.
 
-use astronomical_vision_tower::{
+use serial_test::serial;
+use vision_tower::{
     ArtifactReference, ArtifactSource, BaseMatchProgress, BaseMatchVerdict, TowerAdditionProgress,
     TowerAdditionRequest, TowerAdditionStage, TowerStatus, VisionTowerError, add_tower,
     inspect_artifact, match_tower_to_text,
 };
-use serial_test::serial;
 
 const TEXT_ONLY_MLX: &str =
     "ornith-ai/Ornith-1.5-9B-MLX-4bit@a48173b246ac705be75c05bedf1a0666db522d53";

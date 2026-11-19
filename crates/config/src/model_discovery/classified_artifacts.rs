@@ -148,8 +148,7 @@ pub(super) fn immutable_model_provenance(model_directory: &Path) -> Option<(Stri
     }
     let provenance_bytes = fs::read(provenance_file_path).ok()?;
     let provenance: LibraryModelProvenance = serde_json::from_slice(&provenance_bytes).ok()?;
-    let has_valid_revision =
-        astronomical_lowercase_hex::is_lowercase_hex_of_length(&provenance.revision, 40);
+    let has_valid_revision = lowercase_hex::is_lowercase_hex_of_length(&provenance.revision, 40);
     if provenance.schema_version != 1
         || !has_valid_revision
         || !is_valid_provider_model_id(&provenance.provider_model_id)

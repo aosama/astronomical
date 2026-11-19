@@ -177,7 +177,7 @@ fn should_judge_a_directory_whose_manifest_names_its_own_hash_a_candidate() {
     let block_key = root_block_key();
     let block_directory_path = create_manifest_directory(
         blocks_directory.path(),
-        &astronomical_lowercase_hex::encode_lowercase_hex(&block_key.block_hash()),
+        &lowercase_hex::encode_lowercase_hex(&block_key.block_hash()),
         &block_key,
     );
     let verdict = classify_block_directory(&block_directory_path, &test_model_contract())
@@ -201,7 +201,7 @@ fn should_judge_a_manifest_naming_another_hash_corrupt() {
     let misnamed_directory =
         create_manifest_directory(blocks_directory.path(), BLOCK_HASH_HEX, &block_key);
     assert_ne!(
-        astronomical_lowercase_hex::encode_lowercase_hex(&block_key.block_hash()),
+        lowercase_hex::encode_lowercase_hex(&block_key.block_hash()),
         BLOCK_HASH_HEX
     );
     let verdict = classify_block_directory(&misnamed_directory, &test_model_contract())

@@ -7,7 +7,7 @@
 //! would be changing process-global state with its runtime threads running, and
 //! could lose the race with the first Metal call.
 
-use astronomical_ipc_protocol::WorkerStartupConfiguration;
+use ipc_protocol::WorkerStartupConfiguration;
 use tokio::process::Command;
 
 const MLX_RESIDENCY_REFRESH_VARIABLE: &str = "MLX_METAL_RESIDENCY_REFRESH_INTERVAL_MS";

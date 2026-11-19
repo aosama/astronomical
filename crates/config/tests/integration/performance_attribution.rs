@@ -1,4 +1,4 @@
-use astronomical_config::AstronomicalConfig;
+use config::AstronomicalConfig;
 
 #[test]
 fn should_disable_performance_attribution_when_explicitly_configured_as_false() {

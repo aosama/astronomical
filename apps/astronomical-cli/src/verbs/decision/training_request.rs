@@ -9,10 +9,10 @@
 use std::io::Write;
 use std::time::Duration;
 
-use astronomical_decision_contract::decision_training_job::{
+use decision_contract::decision_training_job::{
     DecisionTrainingJob, DecisionTrainingOutcome, DecisionTrainingStage,
 };
-use astronomical_ipc_protocol::{DaemonRequest, DaemonResponse};
+use ipc_protocol::{DaemonRequest, DaemonResponse};
 use tokio::time::timeout;
 
 use super::decision_tool::{DecisionToolDependencies, DecisionToolError};

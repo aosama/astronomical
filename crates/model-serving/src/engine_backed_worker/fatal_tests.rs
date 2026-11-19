@@ -1,4 +1,4 @@
-use astronomical_ipc_protocol::ChatGenerationFailureReason;
+use ipc_protocol::ChatGenerationFailureReason;
 
 use super::public_fatal_failure_reason;
 
@@ -67,7 +67,7 @@ fn should_agree_with_the_mlx_runtime_about_what_out_of_memory_looks_like() {
         "Insufficient Memory",
         "kIOGPUCommandBufferCallbackErrorOutOfMemory",
     ] {
-        let runtime_error = astronomical_runtime_integration::MlxRuntimeError::RuntimeOperation {
+        let runtime_error = runtime_integration::MlxRuntimeError::RuntimeOperation {
             operation: "evaluate an MLX array group",
             description: runtime_description.to_owned(),
         };

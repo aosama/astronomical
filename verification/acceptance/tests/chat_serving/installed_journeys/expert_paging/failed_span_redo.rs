@@ -3,7 +3,7 @@
 //! could not fit, and these helpers count what the engine did about it
 //! (issue #2221).
 
-use astronomical_model_serving::Qwen3_5StreamingEngine;
+use model_serving::Qwen3_5StreamingEngine;
 
 /// What the engine had counted and kept before a span was failed on purpose.
 pub(super) struct RedoBaseline {

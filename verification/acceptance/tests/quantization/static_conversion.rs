@@ -2,9 +2,9 @@
 
 use std::path::Path;
 
-use astronomical_quantization::bit_width::GroupSize;
-use astronomical_quantization::error::QuantizationError;
-use astronomical_quantization::pipeline::{
+use quantization::bit_width::GroupSize;
+use quantization::error::QuantizationError;
+use quantization::pipeline::{
     PipelineMethod, ProbeModelHandle, ProbeModelLoader, QuantizationPipelineRequest, ReferenceMode,
     run_quantization_pipeline,
 };

@@ -2,7 +2,7 @@ use std::path::Path;
 use std::time::Duration;
 
 use astronomical_daemon::ChatGenerationExecutor;
-use astronomical_ipc_protocol::WorkerDecodeAstroExpertCachePolicy;
+use ipc_protocol::WorkerDecodeAstroExpertCachePolicy;
 use serde_json::Value;
 
 use super::*;

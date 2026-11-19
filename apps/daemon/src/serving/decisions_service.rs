@@ -5,11 +5,9 @@
 //! model it reaches, so that choice is made here once and each surface only
 //! translates the outcome into its own response.
 
-use astronomical_config::{DiscoveredModel, ModelCapabilities};
-use astronomical_decision_contract::{
-    OrderedJsonValue, QuestionDefinitionError, parse_system_one_questions,
-};
-use astronomical_ipc_protocol::{DecisionsCommand, RequestId};
+use config::{DiscoveredModel, ModelCapabilities};
+use decision_contract::{OrderedJsonValue, QuestionDefinitionError, parse_system_one_questions};
+use ipc_protocol::{DecisionsCommand, RequestId};
 use thiserror::Error;
 
 use crate::serving::helper_model_resolution::{
@@ -51,7 +49,7 @@ pub(crate) fn resolve_decisions_model(
 
 const DECISION_MODEL_KIND: HelperModelKind = HelperModelKind {
     is_of_kind: is_decision_model,
-    builtin_default_model_id: astronomical_config::BUILTIN_DEFAULT_DECISION_MODEL_ID,
+    builtin_default_model_id: config::BUILTIN_DEFAULT_DECISION_MODEL_ID,
 };
 
 fn is_decision_model(model_capabilities: &ModelCapabilities) -> bool {

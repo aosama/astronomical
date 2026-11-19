@@ -4,7 +4,7 @@
 
 use std::path::PathBuf;
 
-use astronomical_ipc_protocol::MAXIMUM_CHAT_SCHEMA_JSON_BYTES;
+use ipc_protocol::MAXIMUM_CHAT_SCHEMA_JSON_BYTES;
 
 use crate::verbs::respond::RespondError;
 use crate::verbs::respond::schema as respond_schema;

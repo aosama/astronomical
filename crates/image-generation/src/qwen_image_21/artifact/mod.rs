@@ -11,13 +11,11 @@ use std::path::Path;
 
 use serde::Deserialize;
 
-use astronomical_artifact_validation::{
+use artifact_validation::{
     RawSafetensorsInventory, RequiredFileProfile, ValidatedRequiredFile, ValidatedWeightsFile,
     read_bounded_required_file_bytes, validate_required_file,
 };
-use astronomical_model_primitives::performance_attribution::{
-    PerformanceAttribution, PerformanceOperation,
-};
+use model_primitives::performance_attribution::{PerformanceAttribution, PerformanceOperation};
 
 use super::configuration::{
     QwenImage21PipelineConfig, QwenImage21SchedulerConfig, QwenImage21TextEncoderConfig,

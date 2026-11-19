@@ -7,7 +7,7 @@ use axum::http::StatusCode;
 
 use super::{chat_validation_rejection_response, generation_start_rejection_response};
 use crate::GenerationStartError;
-use astronomical_rest_contract::OpenAiChatCompletionValidationError;
+use rest_contract::OpenAiChatCompletionValidationError;
 
 #[test]
 fn should_map_capacity_unavailability_to_http_429() {

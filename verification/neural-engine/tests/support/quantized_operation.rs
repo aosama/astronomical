@@ -1,13 +1,13 @@
 //! One dense operation in the artifact's quantized form, prepared for both
 //! engines, shared by the whole-model and hand-off journeys.
 
-use astronomical_neural_engine::program_shape::ProgramShape;
-use astronomical_neural_engine::weights::half_precision::f32_slice_to_f16_bits;
-use astronomical_runtime_integration::MlxRuntime;
-use astronomical_test_harness::deterministic_values::{
+use mlx_bridge::{MlxArray, MlxDtype};
+use neural_engine::program_shape::ProgramShape;
+use neural_engine::weights::half_precision::f32_slice_to_f16_bits;
+use runtime_integration::MlxRuntime;
+use test_harness::deterministic_values::{
     PROJECTION_WEIGHT_STANDARD_DEVIATION, bell_shaped_values,
 };
-use mlx_bridge::{MlxArray, MlxDtype};
 
 use super::journey_constants::PREFILL_CHUNK_TOKEN_COUNT;
 use super::mlx_projection::{

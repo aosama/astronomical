@@ -20,7 +20,7 @@ mod streaming_stats;
 #[cfg(test)]
 mod streaming_stats_tests;
 #[cfg(feature = "direct-mlx")]
-pub use astronomical_model_primitives::performance_attribution::StreamedPageSourcePlan;
+pub use model_primitives::performance_attribution::StreamedPageSourcePlan;
 pub use page_materialization::expert_page_peak_allocation_bytes;
 #[cfg(feature = "direct-mlx")]
 pub use page_materialization::source_expert_page_payload_bytes;

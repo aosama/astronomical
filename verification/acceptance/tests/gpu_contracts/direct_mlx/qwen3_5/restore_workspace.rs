@@ -1,4 +1,4 @@
-use astronomical_model_serving::persistent_context_restore_workspace_bytes;
+use model_serving::persistent_context_restore_workspace_bytes;
 
 #[test]
 fn should_size_the_restore_workspace_by_one_block_for_incremental_restore() {

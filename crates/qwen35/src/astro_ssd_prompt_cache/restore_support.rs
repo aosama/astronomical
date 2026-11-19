@@ -10,14 +10,14 @@
 
 use std::collections::HashMap;
 
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     RequestId, WorkerAstroSsdPromptCacheExpectedBlockHashPrefix,
     WorkerAstroSsdPromptCacheLookupOutcome, WorkerAstroSsdPromptCacheMissReason,
     WorkerAstroSsdPromptCacheRequestDiagnostics, WorkerAstroSsdPromptCacheStartupCleanupCategory,
     WorkerAstroSsdPromptCacheStartupCleanupEvidence,
 };
-use astronomical_runtime_integration::MlxRuntime;
 use mlx_bridge::MlxArray;
+use runtime_integration::MlxRuntime;
 
 use crate::astro_ssd_prompt_cache::block_causal_input::AstroSsdPromptCacheBlockCausalInput;
 use crate::astro_ssd_prompt_cache::block_key::AstroSsdPromptCacheBlockKey;

@@ -9,7 +9,7 @@
 
 use std::collections::BTreeMap;
 
-use astronomical_runtime_integration::BoundedReadInterval;
+use runtime_integration::BoundedReadInterval;
 
 /// One tensor of a dense layer: its canonical name, stored form and absolute
 /// byte range in its shard.

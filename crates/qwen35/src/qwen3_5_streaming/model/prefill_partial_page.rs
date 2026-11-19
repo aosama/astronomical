@@ -99,7 +99,7 @@ impl Qwen3_5Model {
 }
 
 fn select_streamed_prefill_experts(
-    runtime: &astronomical_runtime_integration::MlxRuntime,
+    runtime: &runtime_integration::MlxRuntime,
     streamed_weights: &Qwen3_5PagedExpertWeights,
     streamed_manifest: &QuantizedExpertPageManifest,
     expert_ids: &[usize],

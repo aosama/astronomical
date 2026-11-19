@@ -7,8 +7,8 @@
 //! register order when this GPU has proven the register-ordered matmul, as
 //! the target's projections are.
 
-use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 use mlx_bridge::MlxArray;
+use runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use crate::row_batched_matmul::{
     RegisterOrderedWeight, RowBatchedMatmulKernels, RowBatchedProjectionError,

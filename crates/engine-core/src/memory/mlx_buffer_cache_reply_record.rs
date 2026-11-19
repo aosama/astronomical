@@ -70,9 +70,9 @@ impl MlxBufferCacheReplyRecord {
     pub fn reply_memory_record(
         &self,
         reply_expert_route_record: crate::memory::reply_expert_route_record::ReplyExpertRouteRecord,
-    ) -> astronomical_ipc_protocol::ReplyMemoryRecord {
+    ) -> ipc_protocol::ReplyMemoryRecord {
         let reply_totals = reply_expert_route_record.reply_totals();
-        astronomical_ipc_protocol::ReplyMemoryRecord {
+        ipc_protocol::ReplyMemoryRecord {
             routed_expert_count_per_token: reply_expert_route_record
                 .routed_expert_count_per_token(),
             expert_hit_count: reply_totals.memory_served_expert_count,

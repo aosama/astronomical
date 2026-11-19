@@ -1,7 +1,7 @@
 use std::future::Future;
 
 use crate::InferenceEngineError;
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     ExpertMemoryMode, NeuralEnginePrefillStatus, RequestId,
     WorkerAstroSsdPromptCacheRequestDiagnostics, WorkerEvent, WorkerPromptProcessingPhase,
     WorkerPromptWorkReuse,
@@ -10,7 +10,7 @@ use astronomical_ipc_protocol::{
 use super::EngineLoadResult;
 use crate::memory::telemetry::MlxMemoryLimitAdjustment;
 use crate::memory::telemetry::MlxMemoryTelemetry;
-pub use astronomical_memory_policy::telemetry::ExpertResidencyTelemetry;
+pub use memory_policy::telemetry::ExpertResidencyTelemetry;
 
 /// Asynchronous inference-engine contract that keeps runtime-affine work off Tokio threads.
 pub trait InferenceEngine {
@@ -340,7 +340,7 @@ pub struct ExpertStreamingStats {
     pub prompt_token_count: u64,
     pub generated_token_count: u64,
     /// How the reply that just finished used the caches, token by token.
-    pub last_reply_memory_record: Option<astronomical_ipc_protocol::ReplyMemoryRecord>,
+    pub last_reply_memory_record: Option<ipc_protocol::ReplyMemoryRecord>,
 }
 
 impl Default for ExpertStreamingStats {
@@ -427,7 +427,7 @@ impl GenerationFinalization {
     #[must_use]
     pub fn with_reply_memory_record(
         mut self,
-        reply_memory_record: astronomical_ipc_protocol::ReplyMemoryRecord,
+        reply_memory_record: ipc_protocol::ReplyMemoryRecord,
     ) -> Self {
         if let Some(expert_streaming_stats) = self.expert_streaming_stats.as_mut() {
             expert_streaming_stats.last_reply_memory_record = Some(reply_memory_record);
@@ -512,10 +512,10 @@ pub enum GeneratedToken {
         prompt_work_reuse: WorkerPromptWorkReuse,
         astro_ssd_prompt_cache_diagnostics: Option<WorkerAstroSsdPromptCacheRequestDiagnostics>,
         /// Where this chunk ran, when the model has Neural Engine programs attached.
-        neural_engine_chunk: Option<astronomical_ipc_protocol::NeuralEngineChunkReport>,
+        neural_engine_chunk: Option<ipc_protocol::NeuralEngineChunkReport>,
         /// Present while a prompt is read one layer at a time: how many
         /// layers are done. Such an event reports no finished tokens.
-        prompt_layer_progress: Option<astronomical_ipc_protocol::WorkerPromptLayerProgress>,
+        prompt_layer_progress: Option<ipc_protocol::WorkerPromptLayerProgress>,
     },
     /// A confirmed prompt phase is about to begin before its blocking model work.
     PromptProcessingPhaseStarted {

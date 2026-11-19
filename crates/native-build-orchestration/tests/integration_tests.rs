@@ -3,7 +3,7 @@
 //! this target. The modules' exhaustive coverage lives in their
 //! `#[cfg(test)]` submodules; this canary keeps the lane observable.
 
-use astronomical_native_build_orchestration::native_parallelism::resolve_native_parallel_job_count;
+use native_build_orchestration::native_parallelism::resolve_native_parallel_job_count;
 
 #[test]
 fn should_run_the_native_build_orchestration_integration_smoke_contract() {

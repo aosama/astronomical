@@ -15,10 +15,10 @@
 //! from attribution reports: their `decode_advance_span` counts chunk spans
 //! rather than wall-clock decode time and under-reports the rate.
 
-use astronomical_test_harness::test_run::TestRunContext;
 use serde_json::Value;
 use serde_json::json;
 use serial_test::serial;
+use test_harness::test_run::TestRunContext;
 use tokio::time::timeout;
 
 use crate::serving_acceptance::chat::openai_rest::{

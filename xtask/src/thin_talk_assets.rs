@@ -14,7 +14,7 @@ mod pinned_assets;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use astronomical_native_identity::digest_bytes;
+use native_identity::digest_bytes;
 
 pub(crate) use pinned_assets::{PINNED_ASSETS, PINNED_FONTS, PINNED_LICENSES};
 

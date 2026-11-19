@@ -1,6 +1,6 @@
 //! PyTorch-compatible GroupNorm expressed through MLX's fused non-affine LayerNorm.
 
-use astronomical_runtime_integration::MlxRuntime;
+use runtime_integration::MlxRuntime;
 
 use crate::flux2_klein::tensor_store::Flux2KleinTensorStore;
 

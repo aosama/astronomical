@@ -19,11 +19,11 @@ harness = true
 workspace = true
 
 [dev-dependencies]
-astronomical-config = { path = "../../crates/config" }
+config = { path = "../../crates/config" }
 astronomical-daemon = { path = "../../apps/daemon" }
-astronomical-ipc-protocol = { path = "../../crates/ipc-protocol" }
-astronomical-rest-contract = { path = "../../crates/rest-contract" }
-astronomical-test-harness = { path = "../../crates/test-harness", features = ["test-fixtures"] }
+ipc-protocol = { path = "../../crates/ipc-protocol" }
+rest-contract = { path = "../../crates/rest-contract" }
+test-harness = { path = "../../crates/test-harness", features = ["test-fixtures"] }
 base64.workspace = true
 image.workspace = true
 serde_json.workspace = true

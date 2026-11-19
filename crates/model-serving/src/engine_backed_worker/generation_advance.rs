@@ -1,6 +1,6 @@
 use std::time::Instant;
 
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     ChatGenerationCompletionReason, ChatGenerationOutput, ProtocolWriter, RequestId, WorkerEvent,
 };
 use tokio::io::AsyncWrite;
@@ -600,8 +600,7 @@ where
         active_generation.required_prompt_processing_token_count = active_generation
             .prompt_token_count
             .saturating_sub(generation_start.restored_prompt_prefix_token_count());
-        active_generation.prompt_work_reuse =
-            astronomical_ipc_protocol::WorkerPromptWorkReuse::default();
+        active_generation.prompt_work_reuse = ipc_protocol::WorkerPromptWorkReuse::default();
         active_generation.prefill_processed_tokens = 0;
         active_generation.prefill_elapsed_millis = 0;
         active_generation.generation_started_at = None;

@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 
-use astronomical_model_serving::{
+use model_serving::{
     Flux2KleinBlockGroupEvent, Flux2KleinTransformer, Flux2KleinTransformerGeometry,
     Flux2KleinTransformerInputs, Flux2KleinTransformerWeights, apply_rope_for_component_oracle,
 };
@@ -57,7 +57,7 @@ fn adjacent_pair_rope_scalar_oracle(
         })
         .collect()
 }
-use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
+use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
 use crate::common::{
     DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_MLX_BUFFER_CACHE_LIMIT_BYTES,

@@ -152,8 +152,8 @@ fn should_describe_decision_verdicts_and_state_no_minimum_amount_of_data() {
     // The numbers the help quotes are the ones the splits use.
     assert!(help.contains(&format!(
         "calibrate holds texts back from {}, train from {}",
-        astronomical_decision_training::holdout_split::HOLDOUT_EVERY_NTH_STATE,
-        astronomical_decision_training::training_split::HOLD_BACK_STATE_COUNT
+        decision_training::holdout_split::HOLDOUT_EVERY_NTH_STATE,
+        decision_training::training_split::HOLD_BACK_STATE_COUNT
     )));
     assert!(!help.contains("at least 200"));
     assert!(!help.contains("writes nothing unless"));

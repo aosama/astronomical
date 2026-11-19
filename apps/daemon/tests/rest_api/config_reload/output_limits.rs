@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use astronomical_daemon::{RuntimeModelGenerationDefaults, RuntimeModelPolicy};
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     WorkerAutoregressiveModelConfiguration, WorkerChunkingConfiguration, WorkerModelConfiguration,
 };
 
@@ -186,7 +186,7 @@ fn application_with_model_defaults<const MODEL_COUNT: usize>(
     model_defaults: [(&str, RuntimeModelGenerationDefaults); MODEL_COUNT],
 ) -> (
     axum::Router,
-    Arc<std::sync::Mutex<Vec<astronomical_ipc_protocol::ChatGenerationCommand>>>,
+    Arc<std::sync::Mutex<Vec<ipc_protocol::ChatGenerationCommand>>>,
 ) {
     let config_home_directory = tempfile::tempdir()
         .expect("a config home should be created")
@@ -265,23 +265,21 @@ fn runtime_model_policy(
     }
 }
 
-fn discovered_model(model_id: &str) -> astronomical_config::DiscoveredModel {
-    astronomical_config::DiscoveredModel {
+fn discovered_model(model_id: &str) -> config::DiscoveredModel {
+    config::DiscoveredModel {
         model_id: model_id.to_owned(),
         provider_model_id: None,
-        model_family: astronomical_config::ModelFamily::Qwen3_5,
+        model_family: config::ModelFamily::Qwen3_5,
         revision: "test-revision".to_owned(),
         model_directory: PathBuf::from(format!("/fictional/models/{model_id}")),
-        capabilities: astronomical_config::ModelCapabilities::Chat(
-            astronomical_config::ChatModelCapabilities {
-                context_window: 262_144,
-                max_input_tokens: 262_143,
-                max_output_tokens: u32::from(u16::MAX),
-                supports_vision: false,
-                supports_reasoning: true,
-                supports_tool_calls: true,
-            },
-        ),
+        capabilities: config::ModelCapabilities::Chat(config::ChatModelCapabilities {
+            context_window: 262_144,
+            max_input_tokens: 262_143,
+            max_output_tokens: u32::from(u16::MAX),
+            supports_vision: false,
+            supports_reasoning: true,
+            supports_tool_calls: true,
+        }),
         license: None,
         model_size_bytes: 1,
     }

@@ -6,7 +6,7 @@ use crate::qwen3_5_core::configuration::Qwen3_5FeedForwardArchitecture;
 use crate::qwen3_5_core::configuration::config_validation::{
     Qwen3_5ConfigError, validate_exact_value,
 };
-use astronomical_jangtq2_qwen35::configuration::Jangtq2WeightOverrideEntry;
+use jangtq2_qwen35::configuration::Jangtq2WeightOverrideEntry;
 
 const EXPECTED_QUANTIZATION_MODE: &str = "affine";
 
@@ -39,7 +39,7 @@ pub enum ModuleWeightCodec {
     /// `float16` scale per expert row and an activation-side rotation.
     Jangtq2CodebookQuantized {
         /// The rotation the decode path must apply to activations.
-        rotation: astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookRotation,
+        rotation: jangtq2_qwen35::configuration::Jangtq2CodebookRotation,
     },
 }
 
@@ -100,7 +100,7 @@ impl ModuleQuantizationProfile {
     #[must_use]
     pub const fn jangtq2_codebook(
         bits: u32,
-        rotation: astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookRotation,
+        rotation: jangtq2_qwen35::configuration::Jangtq2CodebookRotation,
     ) -> Self {
         Self {
             bits,

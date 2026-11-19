@@ -13,7 +13,7 @@
 //!    `(a, b)` is `(oc * factor + (factor_t - 1) * 4 + a * 2 + b) // repeats`. That mapping is
 //!    derived from the loaded channel counts at load time, not hardcoded.
 
-use astronomical_runtime_integration::{MlxRuntime, MlxSafetensors};
+use runtime_integration::{MlxRuntime, MlxSafetensors};
 
 use super::QwenImage21VaeError;
 use super::convolution::QwenImage21VaeSpatialConv;

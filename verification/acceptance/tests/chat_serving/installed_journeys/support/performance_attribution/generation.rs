@@ -1,6 +1,6 @@
 use super::{IMAGE_PAD_TOKEN_ID, PROGRESS_INTERVAL};
-use astronomical_ipc_protocol::RequestId;
-use astronomical_model_serving::{
+use ipc_protocol::RequestId;
+use model_serving::{
     GeneratedToken, InferenceEngine, PerformanceAttribution, Qwen3_5InferenceRequest,
     Qwen3_5StreamingEngine,
 };

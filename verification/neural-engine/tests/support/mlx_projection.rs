@@ -3,11 +3,11 @@
 
 use std::time::{Duration, Instant};
 
-use astronomical_neural_engine::weights::half_precision::f16_bits_slice_to_f32;
 use astronomical_neural_engine_research::numerical_comparison::compare_values;
 use astronomical_neural_engine_research::timing_summary::TimingSummary;
-use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use mlx_bridge::{MlxArray, MlxDtype};
+use neural_engine::weights::half_precision::f16_bits_slice_to_f32;
+use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
 use super::measured_projection::{
     MEASURED_CALL_COUNT, MINIMUM_WARM_UP_CALL_COUNT, MINIMUM_WARM_UP_DURATION, report_progress,

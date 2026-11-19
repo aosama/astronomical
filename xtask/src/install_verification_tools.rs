@@ -10,7 +10,7 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use astronomical_native_identity::digest_bytes;
+use native_identity::digest_bytes;
 
 use crate::tool_pins::read_tool_pin;
 

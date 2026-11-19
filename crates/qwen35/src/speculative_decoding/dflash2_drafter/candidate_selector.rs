@@ -8,8 +8,8 @@
 //! sampled decoding draws from `q = softmax(scores / temperature)` over the
 //! candidates and keeps `q`, which lossless rejection sampling needs.
 
-use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 use mlx_bridge::MlxArray;
+use runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use super::drafter_configuration::DFlash2DrafterConfiguration;
 use super::drafter_weights::CandidateSelectorWeights;
@@ -114,7 +114,7 @@ pub(super) fn kept_candidate_ids(
 }
 
 fn top_k_failure(
-    top_k_error: astronomical_model_primitives::gpu_token_sampling::TokenSamplingError,
+    top_k_error: model_primitives::gpu_token_sampling::TokenSamplingError,
 ) -> MlxRuntimeError {
     MlxRuntimeError::RuntimeOperation {
         operation: "keep the drafter's candidates at each slot",

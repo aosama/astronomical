@@ -13,12 +13,12 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
-use astronomical_config::AstronomicalConfig;
-use astronomical_ipc_protocol::NeuralEnginePrefillStatus;
-use astronomical_model_serving::Qwen3_5ResidentModel;
 use astronomical_neural_engine_research::process_memory::{
     MemorySnapshot, system_reclaimable_bytes,
 };
+use config::AstronomicalConfig;
+use ipc_protocol::NeuralEnginePrefillStatus;
+use model_serving::Qwen3_5ResidentModel;
 use serial_test::serial;
 use tokio::time::timeout;
 

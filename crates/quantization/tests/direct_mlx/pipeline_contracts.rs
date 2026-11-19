@@ -4,19 +4,17 @@
 
 use std::path::Path;
 
-use astronomical_quantization::bit_width::GroupSize;
-use astronomical_quantization::error::QuantizationError;
-use astronomical_quantization::pipeline::{
+use mlx_bridge::{MlxArray, MlxDtype};
+use quantization::bit_width::GroupSize;
+use quantization::error::QuantizationError;
+use quantization::pipeline::{
     PipelineMethod, ProbeModelHandle, ProbeModelLoader, QuantizationPipelineRequest, ReferenceMode,
     run_quantization_pipeline,
 };
-use astronomical_quantization::progress::SilentProgressReporter;
-use astronomical_quantization::sensitivity::exact_sweep::ExactSweepRequest;
-use astronomical_quantization::sensitivity::{
-    SensitivityMethod, SensitivityResult, SensitivityTable,
-};
-use astronomical_runtime_integration::MlxRuntime;
-use mlx_bridge::{MlxArray, MlxDtype};
+use quantization::progress::SilentProgressReporter;
+use quantization::sensitivity::exact_sweep::ExactSweepRequest;
+use quantization::sensitivity::{SensitivityMethod, SensitivityResult, SensitivityTable};
+use runtime_integration::MlxRuntime;
 use serial_test::parallel;
 
 use super::support::{contract_runtime, outlier_heavy_weights};

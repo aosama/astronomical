@@ -1,4 +1,4 @@
-use astronomical_runtime_integration::MlxRuntime;
+use runtime_integration::MlxRuntime;
 
 use super::decoder_layer_weights::Qwen3_5AffineWeights;
 use super::error::Qwen3_5ExecutionError;

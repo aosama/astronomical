@@ -8,20 +8,20 @@ use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use astronomical_config::{
+use config::{
     AstronomicalInstancePaths, AstronomicalRuntimeInstance, is_discoverable_model_folder,
 };
-use astronomical_decision_contract::training_record::TrainingRecord;
-use astronomical_decision_training::calibrated_model_folder::{
+use decision_contract::training_record::TrainingRecord;
+use decision_training::calibrated_model_folder::{
     CalibratedFolderError, FolderAdditions, SourceModelFolder, canonical_output_path,
     check_output_location, write_calibrated_model_folder,
 };
-use astronomical_decision_training::calibration_plan::CalibrationPlanError;
-use astronomical_decision_training::labelled_example::{
+use decision_training::calibration_plan::CalibrationPlanError;
+use decision_training::labelled_example::{
     LabelledExample, LabelledExampleError, parse_labelled_examples,
 };
-use astronomical_decision_training::scored_question::ScoredQuestionError;
-use astronomical_decision_training::training_record_file::read_training_record_file;
+use decision_training::scored_question::ScoredQuestionError;
+use decision_training::training_record_file::read_training_record_file;
 use thiserror::Error;
 
 use super::model_folder_lookup::{ModelFolderLookup, ModelFolderLookupError};

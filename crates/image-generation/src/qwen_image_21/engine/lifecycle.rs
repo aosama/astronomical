@@ -5,7 +5,7 @@
 use std::path::PathBuf;
 use std::time::Instant;
 
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     GeneratedImage, ImageGenerationCommand, ImageGenerationFailureReason, ImageGenerationPhase,
     ImageGenerationResultMetadata, RequestId,
 };
@@ -22,9 +22,9 @@ use crate::{
     qwen_image_21::official_profile::QWEN_IMAGE_21_GUIDANCE_THOUSANDTHS,
     qwen_image_21::render_contract::QwenImage21RenderAdvance,
 };
-use astronomical_memory_policy::telemetry::MlxMemoryLimitAdjustment;
-use astronomical_memory_policy::telemetry::MlxMemoryTelemetry;
-use astronomical_model_primitives::performance_attribution::PerformanceAttributionOutcome;
+use memory_policy::telemetry::MlxMemoryLimitAdjustment;
+use memory_policy::telemetry::MlxMemoryTelemetry;
+use model_primitives::performance_attribution::PerformanceAttributionOutcome;
 
 /// Official Qwen-Image-2.1 engine composed behind the architecture-neutral worker contract.
 pub struct QwenImage21ImageEngine {

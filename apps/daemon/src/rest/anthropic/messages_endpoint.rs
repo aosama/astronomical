@@ -5,17 +5,15 @@
 //! the OpenAI surfaces and differs only in the wire protocol at both ends.
 
 use crate::rest::worker_replacement_wait::lock_configuration_transition_for_generation;
-use astronomical_config::ModelCapabilities;
-use astronomical_ipc_protocol::{ChatGenerationCommand, RequestId};
-use astronomical_rest_contract::{
-    AnthropicError, AnthropicMessagesRequest, AnthropicMessagesRequestParts,
-};
 use axum::{
     Json,
     body::Bytes,
     extract::State,
     response::{IntoResponse, Response},
 };
+use config::ModelCapabilities;
+use ipc_protocol::{ChatGenerationCommand, RequestId};
+use rest_contract::{AnthropicError, AnthropicMessagesRequest, AnthropicMessagesRequestParts};
 use tokio::sync::mpsc::Receiver;
 
 use super::messages_assembly::{AnthropicMessageCollector, WorkerTokenCounts};

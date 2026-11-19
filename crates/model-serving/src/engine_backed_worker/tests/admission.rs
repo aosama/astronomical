@@ -6,7 +6,7 @@ use crate::{
     ModelGenerationOutputError, ModelGenerationProcessor, PreparedInferenceRequest,
     PreparedModelGeneration,
 };
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     ChatGenerationCommand, ChatGenerationFailureReason, ChatGenerationOutput,
     ChatGenerationSettings, ChatMessage, ChatModelCapabilities, ChatToolChoice,
     MAX_IPC_FRAME_BYTES, ProtocolReader, ProtocolWriter, RequestId, WorkerCommand, WorkerEvent,

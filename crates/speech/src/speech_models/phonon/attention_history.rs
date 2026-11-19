@@ -6,8 +6,8 @@
 //! the attention only ever see the stored keys. Keeping them apart is what
 //! lets the Mimi decoder drop keys that have left its window.
 
-use astronomical_runtime_integration::MlxRuntime;
 use mlx_bridge::MlxArray;
+use runtime_integration::MlxRuntime;
 
 use crate::speech_models::speech_model_error::SpeechModelError;
 

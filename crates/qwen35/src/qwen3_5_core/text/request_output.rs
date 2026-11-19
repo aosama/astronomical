@@ -1,4 +1,4 @@
-use astronomical_ipc_protocol::ChatToolDefinition;
+use ipc_protocol::ChatToolDefinition;
 use thiserror::Error;
 
 use super::{

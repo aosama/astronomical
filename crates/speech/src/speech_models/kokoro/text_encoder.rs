@@ -2,8 +2,8 @@
 //! decoder turns into sound, through an embedding, three convolution stages
 //! and a bidirectional LSTM.
 
-use astronomical_runtime_integration::MlxRuntime;
 use mlx_bridge::MlxArray;
+use runtime_integration::MlxRuntime;
 
 use super::bidirectional_lstm::BidirectionalLstm;
 use super::convolutions::{ConvolutionGeometry, KokoroConv1d};

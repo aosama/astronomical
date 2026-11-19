@@ -1,10 +1,10 @@
 use std::time::Duration;
 
-use astronomical_model_serving::{
+use model_serving::{
     AstroSsdPromptCacheBlockKey, AstroSsdPromptCachePublicationOutcome, PerformanceAttribution,
     PerformanceOperation,
 };
-use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
+use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
 use super::astro_ssd_prompt_cache_disk_store_support::{
     astro_ssd_prompt_cache_block_key_for_seed, block_tokens_for_seed,

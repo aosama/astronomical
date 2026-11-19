@@ -21,12 +21,10 @@
 //! temperature can never change which option is most probable. If one ever
 //! does, the scoring code is wrong and nothing is written.
 
-use astronomical_decision_contract::DecisionQuestionKind;
-use astronomical_decision_contract::calibration::{
-    OPTION_COUNT_RANGE_NAMES, option_count_range_name,
-};
-use astronomical_decision_contract::calibration_file::{CalibrationOverride, KindCalibration};
-use astronomical_decision_contract::training_record::RecordedVerdict;
+use decision_contract::DecisionQuestionKind;
+use decision_contract::calibration::{OPTION_COUNT_RANGE_NAMES, option_count_range_name};
+use decision_contract::calibration_file::{CalibrationOverride, KindCalibration};
+use decision_contract::training_record::RecordedVerdict;
 use thiserror::Error;
 
 use crate::calibration_metrics::{CalibrationMetrics, ScoringTemperature, calibration_metrics};

@@ -2,8 +2,8 @@
 
 use std::path::PathBuf;
 
-use astronomical_ipc_protocol::WorkerChunkingConfiguration;
-use astronomical_runtime_integration::MlxMemoryLimits;
+use ipc_protocol::WorkerChunkingConfiguration;
+use runtime_integration::MlxMemoryLimits;
 
 use crate::astro_ssd_prompt_cache::counters::AstroSsdPromptCacheCounters;
 use crate::{
@@ -139,7 +139,7 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
             astro_ssd_prompt_cache: None,
             prompt_processing_chunk_sizer,
             chunking,
-            neural_engine_prefill_status: astronomical_ipc_protocol::NeuralEnginePrefillStatus::Off,
+            neural_engine_prefill_status: ipc_protocol::NeuralEnginePrefillStatus::Off,
             neural_engine_prefill_preparation: None,
             astro_neural_engine_program_cache_directory,
             retained_live_prefix: None,

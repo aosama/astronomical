@@ -1,12 +1,12 @@
 //! Architecture-neutral lifecycle contract implemented by a concrete image runtime such as FLUX.
 
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     GeneratedImage, ImageGenerationCapabilities, ImageGenerationCommand,
     ImageGenerationFailureReason, ImageGenerationPhase, ImageGenerationResultMetadata, RequestId,
 };
 
-use astronomical_memory_policy::telemetry::MlxMemoryLimitAdjustment;
-use astronomical_memory_policy::telemetry::MlxMemoryTelemetry;
+use memory_policy::telemetry::MlxMemoryLimitAdjustment;
+use memory_policy::telemetry::MlxMemoryTelemetry;
 
 /// A loaded image runtime advanced through bounded, independently cancellable steps.
 ///

@@ -3,7 +3,7 @@
 //! States are lines from Romeo and Juliet, the repository's standard text
 //! fixture, so no test depends on random text.
 
-use astronomical_decision_contract::DecisionQuestionKind;
+use decision_contract::DecisionQuestionKind;
 
 use crate::scored_question::ScoredQuestion;
 
@@ -111,7 +111,7 @@ fn weighted_logit_sum(logits: &[f32], logit_weights: &[f32]) -> f64 {
 pub(crate) fn assert_gradient_matches_finite_differences(
     trainable_head: &dyn crate::trainable_head::TrainableHead,
     parameters: &[f32],
-    head_inputs: &astronomical_decision_contract::HeadInputs,
+    head_inputs: &decision_contract::HeadInputs,
     logit_weights: &[f32],
 ) {
     let mut analytic_gradient = vec![0.0_f32; parameters.len()];

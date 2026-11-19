@@ -7,7 +7,7 @@
 //! `batched_kernel_row_exactness` measures each kernel alone below this.
 //! It reports; it asserts nothing.
 
-use astronomical_model_serving::{PerformanceAttribution, VerificationLogitsMode};
+use model_serving::{PerformanceAttribution, VerificationLogitsMode};
 use serial_test::serial;
 
 use super::dflash2_journey_support::host_values;

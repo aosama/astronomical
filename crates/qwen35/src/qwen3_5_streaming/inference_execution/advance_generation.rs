@@ -6,7 +6,7 @@
 use crate::qwen3_5_core::model::memory_breakdown::Qwen3_5MemoryOwnership;
 use std::time::Instant;
 
-use astronomical_ipc_protocol::RequestId;
+use ipc_protocol::RequestId;
 use mlx_bridge::MlxArray;
 
 use crate::{

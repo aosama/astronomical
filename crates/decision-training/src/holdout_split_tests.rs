@@ -1,6 +1,6 @@
 //! Unit tests for the split by state.
 
-use astronomical_decision_contract::{DecisionQuestionKind, OrderedJsonValue};
+use decision_contract::{DecisionQuestionKind, OrderedJsonValue};
 
 use super::*;
 use crate::test_support::{ROMEO_AND_JULIET_LINES, scored_question};

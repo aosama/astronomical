@@ -10,17 +10,15 @@
 use std::fs;
 use std::path::Path;
 
-use astronomical_neural_engine::core_ml::{CoreMlComputeUnits, CoreMlProgram};
-use astronomical_neural_engine::documents::projection::MlProgramWeights;
-use astronomical_neural_engine::program_shape::ProgramShape;
-use astronomical_neural_engine::weights::half_precision::{
-    f16_bits_slice_to_f32, f32_slice_to_f16_bits,
-};
 use astronomical_neural_engine_research::numerical_comparison::compare_values;
-use astronomical_test_harness::deterministic_values::{
+use neural_engine::core_ml::{CoreMlComputeUnits, CoreMlProgram};
+use neural_engine::documents::projection::MlProgramWeights;
+use neural_engine::program_shape::ProgramShape;
+use neural_engine::weights::half_precision::{f16_bits_slice_to_f32, f32_slice_to_f16_bits};
+use serial_test::serial;
+use test_harness::deterministic_values::{
     PROJECTION_WEIGHT_STANDARD_DEVIATION, bell_shaped_values,
 };
-use serial_test::serial;
 
 use crate::support::journey_constants::MINIMUM_COSINE_SIMILARITY;
 use crate::support::program_loading::{compile_ml_program_to, load_ml_program};

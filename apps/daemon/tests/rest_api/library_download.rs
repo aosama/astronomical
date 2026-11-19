@@ -416,8 +416,7 @@ impl DownloadPublicationRefresh for ValidatingDiscoveryRefresh {
             .parent()
             .and_then(Path::parent)
             .ok_or_else(|| io::Error::other("published fixture should have a models ancestor"))?;
-        let discovered_models =
-            astronomical_config::discover_models(&[models_directory.to_path_buf()])?;
+        let discovered_models = config::discover_models(&[models_directory.to_path_buf()])?;
         if discovered_models.iter().any(|directory_scan| {
             directory_scan
                 .discovered_models
@@ -624,7 +623,7 @@ fn git_blob_sha1_hex(payload: &[u8]) -> String {
     let mut digest = Sha1::new();
     digest.update(format!("blob {}\0", payload.len()).as_bytes());
     digest.update(payload);
-    astronomical_lowercase_hex::encode_lowercase_hex(&digest.finalize())
+    lowercase_hex::encode_lowercase_hex(&digest.finalize())
 }
 
 async fn response_json(response: axum::response::Response) -> serde_json::Value {

@@ -74,7 +74,7 @@ pub fn build_application_with_library_download_and_trash(
     model_folder_trash: Arc<dyn ModelFolderTrash>,
 ) -> Router {
     library_download_coordinator.start_queue_driver();
-    let discovered_models = astronomical_config::discover_models(&[library_download_coordinator
+    let discovered_models = config::discover_models(&[library_download_coordinator
         .models_directory()
         .to_path_buf()])
     .map(|directory_scans| {

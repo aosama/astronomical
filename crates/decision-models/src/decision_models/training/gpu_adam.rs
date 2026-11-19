@@ -1,14 +1,14 @@
 //! Anchored Adam on the GPU: Adam whose weight decay pulls toward the
 //! shipped weights instead of toward zero, with gradient clipping.
 //!
-//! The rules are `astronomical-decision-training`'s `anchored_adam`, which
+//! The rules are `decision-training`'s `anchored_adam`, which
 //! explains them and is the oracle these steps are tested against. Every
 //! element-wise update stays on the GPU; the one value read back per step is
 //! the gradient's length, because a step whose gradient holds a non-finite
 //! number must be refused before any optimizer state changes, and that
 //! decision is the host's.
 
-use astronomical_decision_training::anchored_adam::AdamSettings;
+use decision_training::anchored_adam::AdamSettings;
 use mlx_bridge::MlxArray;
 
 use super::gpu_math::{GpuMath, GpuResult};

@@ -4,12 +4,12 @@
 //! full lifecycle without MLX) while production retains one concrete owner. It deliberately has
 //! no `Send` bound because MLX component state is runtime-thread-affine.
 
-use astronomical_ipc_protocol::{ImageGenerationCapabilities, RequestId};
+use ipc_protocol::{ImageGenerationCapabilities, RequestId};
 
 use crate::qwen_image_21::render_contract::QwenImage21RenderAdvance;
-use astronomical_memory_policy::telemetry::MlxMemoryLimitAdjustment;
-use astronomical_memory_policy::telemetry::MlxMemoryTelemetry;
-use astronomical_model_primitives::performance_attribution::PerformanceAttributionOutcome;
+use memory_policy::telemetry::MlxMemoryLimitAdjustment;
+use memory_policy::telemetry::MlxMemoryTelemetry;
+use model_primitives::performance_attribution::PerformanceAttributionOutcome;
 
 /// Loaded identity supplied by either the native components or an scripted lifecycle fake.
 pub struct QwenImage21ComponentLoad {

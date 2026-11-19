@@ -6,7 +6,7 @@
 
 use std::collections::BTreeSet;
 
-use astronomical_config::DiscoveredModel;
+use config::DiscoveredModel;
 
 use crate::library::{
     DownloadCatalog, DownloadCatalogCapabilities, DownloadCatalogEntry, DownloadJob,
@@ -67,5 +67,5 @@ pub(crate) fn project_catalog_entries<'a>(
 /// Discovery publishes Library models under their leaf directory name, so "org/Model-Name"
 /// becomes requestable as "Model-Name".
 pub(crate) fn requestable_model_id_from_huggingface_id(huggingface_id: &str) -> String {
-    astronomical_config::leaf_model_id(huggingface_id).to_owned()
+    config::leaf_model_id(huggingface_id).to_owned()
 }

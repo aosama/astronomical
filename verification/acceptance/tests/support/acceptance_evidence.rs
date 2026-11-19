@@ -2,7 +2,7 @@
 
 use std::path::PathBuf;
 
-use astronomical_test_harness::test_run::TestRunContext;
+use test_harness::test_run::TestRunContext;
 
 /// Resolves the durable evidence root for one journey's lane so worker logs
 /// and performance reports survive a timeout or panic (tempdir drops them).

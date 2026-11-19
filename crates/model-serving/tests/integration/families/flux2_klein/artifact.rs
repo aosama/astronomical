@@ -1,6 +1,6 @@
 use std::fs;
 
-use astronomical_model_serving::{
+use model_serving::{
     FLUX2_KLEIN_OFFICIAL_MODEL_ID, FLUX2_KLEIN_OFFICIAL_REVISION, FLUX2_KLEIN_PROVIDER_MODEL_ID,
     Flux2KleinArtifactError, Flux2KleinArtifactProvenance, Flux2KleinArtifactValidator,
 };

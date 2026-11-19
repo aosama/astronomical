@@ -2,7 +2,7 @@ use crate::astro_decoder_state_cache::{
     AstroDecoderStateCacheLayerLayout, AstroDecoderStateCacheState, ConvolutionState,
     FullAttentionKeyValueState, GatedDeltaRecurrentState,
 };
-use astronomical_runtime_integration::MlxRuntimeError;
+use runtime_integration::MlxRuntimeError;
 
 pub(super) fn astro_decoder_state_cache_layout_projection_error(
     astro_decoder_state_cache_layout_error: crate::astro_decoder_state_cache::AstroDecoderStateCacheLayoutError,

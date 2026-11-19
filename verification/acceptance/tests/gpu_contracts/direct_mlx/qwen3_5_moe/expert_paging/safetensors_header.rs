@@ -7,9 +7,7 @@
 use std::io::Write;
 use std::path::PathBuf;
 
-use astronomical_model_serving::{
-    SafetensorsDtype, SafetensorsHeaderError, parse_safetensors_header,
-};
+use model_serving::{SafetensorsDtype, SafetensorsHeaderError, parse_safetensors_header};
 
 /// Creates a minimal valid safetensors file at the given path.
 /// The file contains a single BF16 tensor named `test_tensor` with shape [2, 3].

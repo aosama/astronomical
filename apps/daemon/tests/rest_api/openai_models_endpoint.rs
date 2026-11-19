@@ -1,14 +1,14 @@
 use std::{fs, path::PathBuf};
 
-use astronomical_config::{
-    ChatModelCapabilities as DiscoveredChatModelCapabilities, DiscoveredModel,
-    ImageGenerationCapabilities, ModelCapabilities,
-};
-use astronomical_ipc_protocol::{ChatModelCapabilities, WorkerModelCapabilities};
 use axum::{
     body::{Body, to_bytes},
     http::{Request, StatusCode},
 };
+use config::{
+    ChatModelCapabilities as DiscoveredChatModelCapabilities, DiscoveredModel,
+    ImageGenerationCapabilities, ModelCapabilities,
+};
+use ipc_protocol::{ChatModelCapabilities, WorkerModelCapabilities};
 use tower::ServiceExt;
 
 use crate::support::{MODEL_ID, ScriptedExecutor};
@@ -32,12 +32,11 @@ async fn should_list_the_independent_token_limits_produced_by_model_discovery() 
         r#"{"metadata":{"total_size":0},"weight_map":{}}"#,
     )
     .expect("the model index should be written");
-    let discovered_models =
-        astronomical_config::discover_models(&[model_root.path().to_path_buf()])
-            .expect("production model discovery should complete")
-            .into_iter()
-            .flat_map(|directory_scan| directory_scan.discovered_models)
-            .collect();
+    let discovered_models = config::discover_models(&[model_root.path().to_path_buf()])
+        .expect("production model discovery should complete")
+        .into_iter()
+        .flat_map(|directory_scan| directory_scan.discovered_models)
+        .collect();
     let application = astronomical_daemon::build_application_with_discovered_models(
         ScriptedExecutor::ready(Vec::new()),
         discovered_models,
@@ -495,7 +494,7 @@ fn discovered_model_with_vision_support(has_vision: bool) -> DiscoveredModel {
     DiscoveredModel {
         model_id: DISCOVERED_VISION_MODEL_ID.to_owned(),
         provider_model_id: None,
-        model_family: astronomical_config::ModelFamily::Qwen3_5,
+        model_family: config::ModelFamily::Qwen3_5,
         revision: "test-revision".to_owned(),
         model_directory: PathBuf::from("/tmp/astronomical-discovered-vision-model"),
         capabilities: ModelCapabilities::Chat(DiscoveredChatModelCapabilities {
@@ -515,15 +514,13 @@ fn discovered_decision_model() -> DiscoveredModel {
     DiscoveredModel {
         model_id: "laya-MLX-8bit".to_owned(),
         provider_model_id: Some("cavi-ai/laya-MLX-8bit".to_owned()),
-        model_family: astronomical_config::ModelFamily::Laya,
+        model_family: config::ModelFamily::Laya,
         revision: "reviewed-revision".to_owned(),
         model_directory: PathBuf::from("/tmp/fictional-laya-model"),
-        capabilities: ModelCapabilities::Decisions(
-            astronomical_config::DecisionModelCapabilities {
-                maximum_tokens_per_question: 512,
-            },
-        ),
-        license: Some(astronomical_config::ModelLicense::Apache20),
+        capabilities: ModelCapabilities::Decisions(config::DecisionModelCapabilities {
+            maximum_tokens_per_question: 512,
+        }),
+        license: Some(config::ModelLicense::Apache20),
         model_size_bytes: 0,
     }
 }
@@ -532,11 +529,11 @@ fn discovered_speech_model() -> DiscoveredModel {
     DiscoveredModel {
         model_id: "Kokoro-82M-bf16".to_owned(),
         provider_model_id: Some("mlx-community/Kokoro-82M-bf16".to_owned()),
-        model_family: astronomical_config::ModelFamily::Kokoro,
+        model_family: config::ModelFamily::Kokoro,
         revision: "fixture-revision".to_owned(),
         model_directory: PathBuf::from("fixtures/models/kokoro"),
-        capabilities: ModelCapabilities::Speech(astronomical_config::SpeechModelCapabilities {
-            model_family: astronomical_config::ModelFamily::Kokoro,
+        capabilities: ModelCapabilities::Speech(config::SpeechModelCapabilities {
+            model_family: config::ModelFamily::Kokoro,
             sample_rate_hertz: 24_000,
             voice_names: vec!["af_heart".to_owned(), "am_michael".to_owned()],
             default_voice_name: "af_heart".to_owned(),
@@ -551,7 +548,7 @@ fn discovered_image_model() -> DiscoveredModel {
     DiscoveredModel {
         model_id: "FLUX.2-klein-4B".to_owned(),
         provider_model_id: Some("black-forest-labs/FLUX.2-klein-4B".to_owned()),
-        model_family: astronomical_config::ModelFamily::Flux2Klein,
+        model_family: config::ModelFamily::Flux2Klein,
         revision: "reviewed-revision".to_owned(),
         model_directory: PathBuf::from("/tmp/fictional-flux-model"),
         capabilities: ModelCapabilities::ImageGeneration(ImageGenerationCapabilities {
@@ -563,7 +560,7 @@ fn discovered_image_model() -> DiscoveredModel {
             maximum_dimension_pixels: 1_024,
             dimension_multiple_pixels: 16,
         }),
-        license: Some(astronomical_config::ModelLicense::Apache20),
+        license: Some(config::ModelLicense::Apache20),
         model_size_bytes: 0,
     }
 }

@@ -9,7 +9,7 @@
 //! are not GPU code; they live here because the kernels and layers report through them,
 //! and putting them higher up would make the kernels and layers depend on the engine.
 //!
-//! Every model family in `astronomical-model-serving` builds on these pieces,
+//! Every model family in `model-serving` builds on these pieces,
 //! and none of them knows about a family, so the dependency runs one way: this
 //! crate never depends on the serving crate, which `cargo xtask
 //! check-architecture` enforces. A change here rebuilds and retests this crate

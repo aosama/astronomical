@@ -2,11 +2,11 @@ use astronomical_daemon::{
     ActiveRequestProgress, ExpertResidencySnapshot, WorkerActivity, WorkerHealthSnapshot,
     build_application, parse_macos_memory_pressure_level,
 };
-use astronomical_ipc_protocol::ChatModelCapabilities;
 use axum::{
     body::{Body, to_bytes},
     http::{Request, StatusCode},
 };
+use ipc_protocol::ChatModelCapabilities;
 use tokio::time::{Duration, Instant};
 use tower::ServiceExt;
 
@@ -71,7 +71,7 @@ async fn should_expose_prefill_progress_with_processed_and_total_tokens_when_act
     let mut health_snapshot = ready_health_snapshot_with_model();
     health_snapshot.activity = WorkerActivity::PromptProcessing;
     health_snapshot.active_request_progress = Some(ActiveRequestProgress::Prefill {
-        prompt_processing_phase: astronomical_ipc_protocol::WorkerPromptProcessingPhase::Target,
+        prompt_processing_phase: ipc_protocol::WorkerPromptProcessingPhase::Target,
         processed_tokens: 1_024,
         total_tokens: 8_192,
         elapsed_millis: 800,
@@ -111,7 +111,7 @@ async fn should_advance_live_prefill_elapsed_time_before_the_first_completed_for
     let mut health_snapshot = ready_health_snapshot_with_model();
     health_snapshot.activity = WorkerActivity::PromptProcessing;
     health_snapshot.active_request_progress = Some(ActiveRequestProgress::Prefill {
-        prompt_processing_phase: astronomical_ipc_protocol::WorkerPromptProcessingPhase::Target,
+        prompt_processing_phase: ipc_protocol::WorkerPromptProcessingPhase::Target,
         processed_tokens: 0,
         total_tokens: 8_192,
         elapsed_millis: 0,
@@ -198,7 +198,7 @@ async fn should_expose_generation_preparation_without_inventing_token_progress()
         resident_expert_payload_bytes: 13_000_000_000,
         complete_expert_payload_byte_count: 21_000_000_000,
         expert_capacity: 256,
-        layer_seating: astronomical_ipc_protocol::ExpertLayerSeatingCounts::default(),
+        layer_seating: ipc_protocol::ExpertLayerSeatingCounts::default(),
     });
     health_snapshot.active_request_progress = Some(ActiveRequestProgress::GenerationPreparation {
         request_started_at,
@@ -248,7 +248,7 @@ async fn should_expose_generation_preparation_announced_before_residency_is_reco
         resident_expert_payload_bytes: 9_000_000_000,
         complete_expert_payload_byte_count: 21_000_000_000,
         expert_capacity: 256,
-        layer_seating: astronomical_ipc_protocol::ExpertLayerSeatingCounts::default(),
+        layer_seating: ipc_protocol::ExpertLayerSeatingCounts::default(),
     };
     health_snapshot.activity = WorkerActivity::GenerationPreparation;
     health_snapshot.expert_residency = Some(last_observed_residency);
@@ -452,7 +452,7 @@ impl ContractScriptedExecutor {
 impl astronomical_daemon::ChatGenerationExecutor for ContractScriptedExecutor {
     fn start_chat_generation(
         &self,
-        _generation_command: astronomical_ipc_protocol::ChatGenerationCommand,
+        _generation_command: ipc_protocol::ChatGenerationCommand,
     ) -> std::pin::Pin<
         Box<
             dyn std::future::Future<

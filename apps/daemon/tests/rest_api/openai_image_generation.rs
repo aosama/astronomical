@@ -2,9 +2,6 @@
 
 use std::{io::Cursor, path::PathBuf};
 
-use astronomical_config::{
-    DiscoveredModel, ImageGenerationCapabilities, ModelCapabilities, ModelFamily, ModelLicense,
-};
 use astronomical_daemon::{
     ImageGenerationExecutionError, build_application_with_discovered_models,
 };
@@ -13,6 +10,9 @@ use axum::{
     http::{Request, StatusCode},
 };
 use base64::{Engine as _, engine::general_purpose::STANDARD};
+use config::{
+    DiscoveredModel, ImageGenerationCapabilities, ModelCapabilities, ModelFamily, ModelLicense,
+};
 use image::{ColorType, ImageDecoder, codecs::png::PngDecoder};
 use tower::ServiceExt;
 
@@ -293,7 +293,7 @@ async fn should_reject_an_image_only_model_from_responses_before_queue_admission
 async fn should_return_no_partial_image_when_worker_execution_fails() {
     let mut executor = ScriptedExecutor::ready(Vec::new());
     executor.image_generation_outcome = Err(ImageGenerationExecutionError::WorkerFailure(
-        astronomical_ipc_protocol::ImageGenerationFailureReason::EncodingFailed {
+        ipc_protocol::ImageGenerationFailureReason::EncodingFailed {
             reason: "PNG encoder rejected the completed RGB payload".to_owned(),
         },
     ));
@@ -318,7 +318,7 @@ async fn should_not_expose_worker_image_failure_reasons_or_local_paths() {
     let fictional_private_path = "/Users/fictional-person/private-model/decoder.safetensors";
     let failure_cases = [
         (
-            astronomical_ipc_protocol::ImageGenerationFailureReason::InvalidRequest {
+            ipc_protocol::ImageGenerationFailureReason::InvalidRequest {
                 reason: format!("could not read {fictional_private_path}"),
             },
             StatusCode::BAD_REQUEST,
@@ -326,7 +326,7 @@ async fn should_not_expose_worker_image_failure_reasons_or_local_paths() {
             "the image request was rejected by the local worker",
         ),
         (
-            astronomical_ipc_protocol::ImageGenerationFailureReason::EncodingFailed {
+            ipc_protocol::ImageGenerationFailureReason::EncodingFailed {
                 reason: format!("PNG encoding failed near {fictional_private_path}"),
             },
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -334,7 +334,7 @@ async fn should_not_expose_worker_image_failure_reasons_or_local_paths() {
             "image generation failed in the local worker",
         ),
         (
-            astronomical_ipc_protocol::ImageGenerationFailureReason::FatalExecution {
+            ipc_protocol::ImageGenerationFailureReason::FatalExecution {
                 reason: format!("native execution failed while mapping {fictional_private_path}"),
             },
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -514,7 +514,7 @@ fn chat_model() -> DiscoveredModel {
         model_family: ModelFamily::Qwen3_5,
         revision: "fixture-revision".to_owned(),
         model_directory: PathBuf::from("fixtures/models/chat-only"),
-        capabilities: ModelCapabilities::Chat(astronomical_config::ChatModelCapabilities {
+        capabilities: ModelCapabilities::Chat(config::ChatModelCapabilities {
             context_window: 2_048,
             max_input_tokens: 1_024,
             max_output_tokens: 128,

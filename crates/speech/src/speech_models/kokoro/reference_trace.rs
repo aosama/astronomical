@@ -2,7 +2,7 @@
 //! for the journey that holds this port against the PyTorch reference
 //! (`kokoro_reference_speech`).
 
-use astronomical_runtime_integration::MlxRuntime;
+use runtime_integration::MlxRuntime;
 
 use super::speech_model::KokoroForwardPass;
 use crate::speech_models::speech_model_error::SpeechModelError;

@@ -19,7 +19,7 @@
 //!   destinations are the slots of tables MLX already owns, so the bytes land
 //!   once, where they are multiplied and kept, with no hand-off and no copy.
 //! - **The native reader**: the same read into the tables through
-//!   `astronomical-expert-record-reader`, whose threads are already running,
+//!   `expert-record-reader`, whose threads are already running,
 //!   with each record read whole or as two overlapping halves.
 //! - **The table copy**: writing the page's rows into table slots, the second
 //!   pass over the bytes that keeping an expert costs today.
@@ -28,9 +28,9 @@
 
 use std::time::{Duration, Instant};
 
-use astronomical_expert_record_reader::ExpertRecordReader;
-use astronomical_runtime_integration::MlxRuntime;
+use expert_record_reader::ExpertRecordReader;
 use mlx_bridge::MlxArray;
+use runtime_integration::MlxRuntime;
 
 use super::atlas_conversion::AtlasTestFile;
 use super::cold_page_plan::{PlannedPage, ResidencyChecker};

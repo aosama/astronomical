@@ -1,4 +1,4 @@
-use astronomical_speech_contract::{SpeechFailure, SpeechRequest};
+use speech_contract::{SpeechFailure, SpeechRequest};
 
 use super::{SpeechEngine, SpeechUnavailableEngine};
 

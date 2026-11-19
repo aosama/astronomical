@@ -20,8 +20,8 @@
 
 use std::time::Duration;
 
-use astronomical_neural_engine::weights::half_precision::f16_bits_slice_to_f32;
-use astronomical_runtime_integration::MlxRuntime;
+use neural_engine::weights::half_precision::f16_bits_slice_to_f32;
+use runtime_integration::MlxRuntime;
 use serial_test::serial;
 
 use crate::support::engine_split::{

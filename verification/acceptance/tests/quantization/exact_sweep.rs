@@ -3,21 +3,21 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use astronomical_quantization::bit_width::{BitWidth, CandidateBitWidths, GroupSize};
-use astronomical_quantization::error::QuantizationError;
-use astronomical_quantization::module_inventory::QuantizableModuleDescriptor;
-use astronomical_quantization::pipeline::probe_source_view::loadable_model_directory;
-use astronomical_quantization::pipeline::{
+use mlx_bridge::MlxArray;
+use quantization::bit_width::{BitWidth, CandidateBitWidths, GroupSize};
+use quantization::error::QuantizationError;
+use quantization::module_inventory::QuantizableModuleDescriptor;
+use quantization::pipeline::probe_source_view::loadable_model_directory;
+use quantization::pipeline::{
     PipelineMethod, ProbeModelHandle, ProbeModelLoader, ProbeModelSweeper,
     QuantizationPipelineRequest, ReferenceMode, run_quantization_pipeline,
 };
-use astronomical_quantization::sensitivity::exact_sweep::{ExactSweepRequest, run_exact_sweep};
-use astronomical_quantization::sensitivity::{
+use quantization::sensitivity::exact_sweep::{ExactSweepRequest, run_exact_sweep};
+use quantization::sensitivity::{
     CalibrationForwardSample, ModuleRestoreToken, SensitivityMethod, SensitivityProbeModel,
     SensitivityTable,
 };
-use astronomical_qwen35_quantization_probe::{Qwen3_5SensitivityProbe, load_qwen3_5_probe_model};
-use mlx_bridge::MlxArray;
+use qwen35_quantization_probe::{Qwen3_5SensitivityProbe, load_qwen3_5_probe_model};
 use serial_test::serial;
 
 use super::served_generation::{generate_greedy_continuation, romeo_and_juliet_prompt};

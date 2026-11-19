@@ -12,10 +12,8 @@
 
 use std::time::Duration;
 
-use astronomical_model_serving::{
-    LayerProbeShape, Qwen3_5ArtifactValidator, Qwen3_5StreamingModel,
-};
-use astronomical_runtime_integration::MlxRuntime;
+use model_serving::{LayerProbeShape, Qwen3_5ArtifactValidator, Qwen3_5StreamingModel};
+use runtime_integration::MlxRuntime;
 use serial_test::serial;
 use tokio::time::timeout;
 
@@ -55,7 +53,7 @@ async fn assert_checkpoint_parity() {
     );
     let machine_mlx_memory_ceiling_bytes =
         crate::common::sample_machine_mlx_memory_ceiling_bytes().await;
-    let mlx_memory_limits = astronomical_runtime_integration::MlxMemoryLimits::new(
+    let mlx_memory_limits = runtime_integration::MlxMemoryLimits::new(
         machine_mlx_memory_ceiling_bytes,
         machine_mlx_memory_ceiling_bytes,
     )

@@ -58,8 +58,7 @@ pub(super) struct EnabledPerformanceAttribution {
     pub(super) expert_streaming_source_summaries:
         Vec<Option<expert_streaming_source::ExpertStreamingSourceSummary>>,
     #[cfg(feature = "direct-mlx")]
-    pub(super) positional_file_read_metrics:
-        Arc<astronomical_runtime_integration::PositionalFileReadMetrics>,
+    pub(super) positional_file_read_metrics: Arc<runtime_integration::PositionalFileReadMetrics>,
     #[cfg(feature = "direct-mlx")]
     // Capture cumulative process I/O at the same boundary as the monotonic report
     // clock. Keeping the Result preserves sampling failure as explicit evidence;
@@ -102,7 +101,7 @@ impl PerformanceAttribution {
                 expert_streaming_source_summaries: Vec::new(),
                 #[cfg(feature = "direct-mlx")]
                 positional_file_read_metrics: Arc::new(
-                    astronomical_runtime_integration::PositionalFileReadMetrics::default(),
+                    runtime_integration::PositionalFileReadMetrics::default(),
                 ),
                 #[cfg(feature = "direct-mlx")]
                 process_io_start: macos_process_io::sample_current_process_io(),
@@ -166,7 +165,7 @@ impl PerformanceAttribution {
     #[cfg(feature = "direct-mlx")]
     pub fn positional_file_read_metrics(
         &self,
-    ) -> Option<Arc<astronomical_runtime_integration::PositionalFileReadMetrics>> {
+    ) -> Option<Arc<runtime_integration::PositionalFileReadMetrics>> {
         self.enabled_attribution
             .as_ref()
             .map(|enabled_attribution| {

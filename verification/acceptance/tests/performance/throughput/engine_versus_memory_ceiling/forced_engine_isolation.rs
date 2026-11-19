@@ -13,7 +13,7 @@
 //! from an automatic one at the same ceiling. Compare forced cells from the
 //! printed record or the evidence directory of the same run.
 
-use astronomical_ipc_protocol::WorkerDiagnosticQwen3_5EngineOverride;
+use ipc_protocol::WorkerDiagnosticQwen3_5EngineOverride;
 use serial_test::serial;
 
 use super::summarization_journey::measure_summarization_throughput;

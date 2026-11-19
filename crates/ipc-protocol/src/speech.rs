@@ -6,8 +6,8 @@
 //! little-endian mono PCM in base64, the precision both response formats
 //! keep, at a fifth of the size of floats written as JSON numbers.
 
-use astronomical_speech_contract::{SpeechFailure, SpeechRequest};
 use serde::{Deserialize, Serialize};
+use speech_contract::{SpeechFailure, SpeechRequest};
 
 use crate::{RequestId, WorkerModelCapabilitiesValidationError};
 

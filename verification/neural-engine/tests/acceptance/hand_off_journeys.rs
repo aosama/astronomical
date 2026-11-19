@@ -13,20 +13,20 @@
 //! 4. the Neural Engine's surface becomes an MLX array and the slices merge.
 //!
 //! The hand-off steps themselves are serving code, in
-//! `astronomical_neural_engine::mlx_hand_off`. The baseline is the same activation through MLX's
+//! `neural_engine::mlx_hand_off`. The baseline is the same activation through MLX's
 //! 4-bit matrix multiply. Both arms evaluate once per operation. Serving batches operations into
 //! larger graphs, so these figures do not yet include the synchronization
 //! points a hand-off would force on it.
 
 use std::time::{Duration, Instant};
 
-use astronomical_neural_engine::core_ml::{CoreMlComputeUnits, CoreMlProgram};
-use astronomical_neural_engine::mlx_hand_off::{
+use mlx_bridge::{MlxArray, MlxDtype, raw};
+use neural_engine::core_ml::{CoreMlComputeUnits, CoreMlProgram};
+use neural_engine::mlx_hand_off::{
     OutputHandOff, SplitAxis, channel_major_fp16, merge_surface_with_gpu_slice, surface_as_array,
     write_prepared_input,
 };
-use astronomical_runtime_integration::MlxRuntime;
-use mlx_bridge::{MlxArray, MlxDtype, raw};
+use runtime_integration::MlxRuntime;
 use serial_test::serial;
 
 use crate::support::engine_split::{
@@ -44,7 +44,7 @@ use crate::support::quantized_operation::{
     DenseOperation, QuantizedOperation, channel_major_values, prepare_quantized_operation,
     quantized_form, trailing_rows,
 };
-use astronomical_neural_engine::documents::projection::MlProgramWeights;
+use neural_engine::documents::projection::MlProgramWeights;
 
 const CONTRACTION_PART_WIDTH: usize = 2048;
 // Shares in sixteenths of the output channels, bracketing the 44 percent the

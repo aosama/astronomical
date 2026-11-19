@@ -5,18 +5,16 @@
 
 use std::path::Path;
 
-use astronomical_quantization::bit_width::{BitWidth, GroupSize};
-use astronomical_quantization::encoder::RangeSearchPolicy;
-use astronomical_quantization::module_inventory::ModuleInventory;
-use astronomical_quantization::progress::SilentProgressReporter;
-use astronomical_quantization::requantize::bit_policy::{
-    BitPolicy, StructuralMixtureOfExpertsPolicy,
-};
-use astronomical_quantization::requantize::driver::{VISION_SIDECAR_FILE_NAME, run_requantize};
-use astronomical_quantization::requantize::tensor_plan::RequantizeTensorPlan;
-use astronomical_quantization::requantize::{MTP_SIDECAR_RELATIVE_PATH, RequantizeOutcome};
-use astronomical_runtime_integration::MlxRuntime;
 use mlx_bridge::{MlxArray, MlxDtype};
+use quantization::bit_width::{BitWidth, GroupSize};
+use quantization::encoder::RangeSearchPolicy;
+use quantization::module_inventory::ModuleInventory;
+use quantization::progress::SilentProgressReporter;
+use quantization::requantize::bit_policy::{BitPolicy, StructuralMixtureOfExpertsPolicy};
+use quantization::requantize::driver::{VISION_SIDECAR_FILE_NAME, run_requantize};
+use quantization::requantize::tensor_plan::RequantizeTensorPlan;
+use quantization::requantize::{MTP_SIDECAR_RELATIVE_PATH, RequantizeOutcome};
+use runtime_integration::MlxRuntime;
 use serial_test::parallel;
 
 use super::requantize_layout_contracts::{bfloat16_weight, save_source};

@@ -5,7 +5,7 @@
 //! single array, while the layout still knows which slice is which tensor so
 //! the result can be written under the shipped names.
 
-use astronomical_decision_contract::head_tuning_file::{HeadTuning, TunedTensor};
+use decision_contract::head_tuning_file::{HeadTuning, TunedTensor};
 
 /// One named tensor's place in the flat vector.
 #[derive(Clone, Debug, Eq, PartialEq)]

@@ -6,15 +6,13 @@
 
 use std::collections::VecDeque;
 
-use astronomical_runtime_integration::MlxRuntime;
+use runtime_integration::MlxRuntime;
 
 use crate::flux2_klein::tensor_store::{
     Flux2KleinTensorStore, Flux2KleinWeight, map_component_weight_files,
 };
 use crate::flux2_klein::weight_layout::Flux2KleinComponentWeightFiles;
-use astronomical_model_primitives::performance_attribution::{
-    PerformanceAttribution, PerformanceOperation,
-};
+use model_primitives::performance_attribution::{PerformanceAttribution, PerformanceOperation};
 
 use super::super::Flux2KleinResidencyMode;
 use super::error::Flux2KleinTextConditioningError;

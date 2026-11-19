@@ -14,7 +14,7 @@ use astronomical_daemon::{
     ChatGenerationExecutor, GenerationPerformanceLog, RuntimeModelPolicy, WorkerHandle,
     WorkerHealthSnapshot,
 };
-use astronomical_ipc_protocol::{ChatImageInput, RequestId, WorkerStartupConfiguration};
+use ipc_protocol::{ChatImageInput, RequestId, WorkerStartupConfiguration};
 use tokio::time::sleep;
 
 use super::{
@@ -133,7 +133,7 @@ pub(super) async fn launch_servable_worker(
         if matches!(journey.journey_kind, ThroughputJourneyKind::DecodeFullFit) {
             assert_eq!(
                 effective_mlx_memory_ceiling_bytes,
-                astronomical_test_harness::sparse_decode_full_fit::MEMORY_CEILING_BYTES,
+                test_harness::sparse_decode_full_fit::MEMORY_CEILING_BYTES,
                 "the full-fit diagnostic must exercise 37 GB, not a clamped streaming cell",
             );
         } else {

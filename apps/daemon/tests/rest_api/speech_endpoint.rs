@@ -2,15 +2,15 @@
 
 use std::path::PathBuf;
 
-use astronomical_config::{
-    DiscoveredModel, ModelCapabilities, ModelFamily, ModelLicense, SpeechModelCapabilities,
-};
 use astronomical_daemon::SpeechExecutionError;
-use astronomical_speech_contract::SpeechFailure;
 use axum::{
     body::{Body, to_bytes},
     http::{Request, StatusCode},
 };
+use config::{
+    DiscoveredModel, ModelCapabilities, ModelFamily, ModelLicense, SpeechModelCapabilities,
+};
+use speech_contract::SpeechFailure;
 use tower::ServiceExt;
 
 use crate::support::ScriptedExecutor;

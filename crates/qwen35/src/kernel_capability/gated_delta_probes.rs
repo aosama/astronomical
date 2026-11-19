@@ -7,7 +7,7 @@
 //! geometry is bounded by the sequence contract: a 128 key dimension, a
 //! 32-divisible value dimension, one key head, and one value head.
 
-use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
+use runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use super::{CustomMetalKernelFamily, CustomMetalKernelProbe, KernelCapabilityError};
 use crate::qwen3_5_core::model_math::gated_delta_boundary_checkpoints::{

@@ -7,8 +7,8 @@
 
 use std::collections::{HashMap, HashSet};
 
-use astronomical_ipc_protocol::WorkerDecodeAstroExpertCachePolicy;
-use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
+use ipc_protocol::WorkerDecodeAstroExpertCachePolicy;
+use runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use crate::expert_paging::{
     ExpertWeightPage, QuantizedExpertPageManifest, RetainedExpertReclamation,

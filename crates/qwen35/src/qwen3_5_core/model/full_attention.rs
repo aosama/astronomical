@@ -36,8 +36,8 @@
 
 // MlxArray is an MLX tensor handle. These methods normally build a lazy MLX
 // graph; actual graphics-processor evaluation happens at a later boundary.
-use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 use mlx_bridge::{MlxArray, MlxCompiledElementwiseGraphs};
+use runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use super::base::Qwen3_5ModelBase;
 use super::differentiable_attention::{Qwen3_5AttentionKernel, plain_operation_attention};

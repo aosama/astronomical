@@ -1,4 +1,4 @@
-use astronomical_model_serving::AstroSsdPromptCachePublicationOutcome;
+use model_serving::AstroSsdPromptCachePublicationOutcome;
 
 use super::astro_ssd_prompt_cache_disk_store_support::*;
 use crate::common::qwen3_5_moe;
@@ -316,15 +316,13 @@ fn tail_tokens_for_count(tail_token_count: usize) -> Vec<u32> {
         .collect()
 }
 
-fn sequence_tensor_layouts()
--> Vec<astronomical_model_serving::AstroDecoderStateCachePersistedTensorLayout> {
+fn sequence_tensor_layouts() -> Vec<model_serving::AstroDecoderStateCachePersistedTensorLayout> {
     qwen3_5_moe::astro_ssd_prompt_cache_model_contract()
         .astro_decoder_state_cache_layout()
         .sequence_tensor_layouts()
 }
 
-fn boundary_tensor_layouts()
--> Vec<astronomical_model_serving::AstroDecoderStateCachePersistedTensorLayout> {
+fn boundary_tensor_layouts() -> Vec<model_serving::AstroDecoderStateCachePersistedTensorLayout> {
     qwen3_5_moe::astro_ssd_prompt_cache_model_contract()
         .astro_decoder_state_cache_layout()
         .boundary_tensor_layouts()

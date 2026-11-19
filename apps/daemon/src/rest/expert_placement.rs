@@ -9,7 +9,7 @@
 //! the request-scoped memory mode. Clients print these strings. They do not
 //! keep a second phrase table.
 
-use astronomical_ipc_protocol::{ExpertMemoryMode, WorkerDenseLayerResidency};
+use ipc_protocol::{ExpertMemoryMode, WorkerDenseLayerResidency};
 
 use crate::{ExpertResidencySnapshot, WorkerActivity, WorkerHealthSnapshot};
 

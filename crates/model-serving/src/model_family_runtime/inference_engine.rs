@@ -1,4 +1,4 @@
-use astronomical_ipc_protocol::{RequestId, WorkerEvent};
+use ipc_protocol::{RequestId, WorkerEvent};
 
 use crate::inference_engine::load_result::EngineLoadResult;
 use crate::{
@@ -28,8 +28,7 @@ impl InferenceEngine for ModelFamilyInferenceEngine {
 
     async fn advance_neural_engine_preparation(
         &mut self,
-    ) -> Result<Option<astronomical_ipc_protocol::NeuralEnginePrefillStatus>, InferenceEngineError>
-    {
+    ) -> Result<Option<ipc_protocol::NeuralEnginePrefillStatus>, InferenceEngineError> {
         match self {
             Self::Qwen3_5(engine) => engine.advance_neural_engine_preparation().await,
             Self::Qwen3_5Streaming(_) | Self::PrismHadamardQwen35(_) => Ok(None),

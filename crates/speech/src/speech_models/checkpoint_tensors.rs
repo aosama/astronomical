@@ -10,8 +10,8 @@
 use std::fs::File;
 use std::path::Path;
 
-use astronomical_runtime_integration::{MlxRuntime, MlxSafetensors};
 use mlx_bridge::{MlxArray, MlxDtype};
+use runtime_integration::{MlxRuntime, MlxSafetensors};
 
 use super::speech_model_error::SpeechModelError;
 

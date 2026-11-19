@@ -1,5 +1,5 @@
 [package]
-name = "astronomical-speech-contract"
+name = "speech-contract"
 description = "The text-to-speech contract shared by the worker, daemon and CLI: the request and its model-independent checks, the failure reasons, and PCM and WAV audio encoding."
 edition.workspace = true
 license.workspace = true

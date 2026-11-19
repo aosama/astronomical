@@ -7,11 +7,11 @@ use crate::{
     QwenImage21EngineRequest, QwenImage21ImageEngine, QwenImage21RenderAdvance,
     QwenImage21Rendered, qwen_image_21_image_generation_capabilities,
 };
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     ImageGenerationCapabilities, ImageGenerationCommand, ImageGenerationSettings, RequestId,
 };
-use astronomical_memory_policy::telemetry::{MlxActiveMemoryBreakdown, MlxMemoryTelemetry};
-use astronomical_model_primitives::performance_attribution::PerformanceAttributionOutcome;
+use memory_policy::telemetry::{MlxActiveMemoryBreakdown, MlxMemoryTelemetry};
+use model_primitives::performance_attribution::PerformanceAttributionOutcome;
 
 /// The revision the scripted artifact claims; distinct from any real Hub SHA on purpose so a
 /// leaked real identity could never satisfy the fake.

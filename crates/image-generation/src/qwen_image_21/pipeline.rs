@@ -16,7 +16,7 @@
 use std::fs::File;
 use std::path::Path;
 
-use astronomical_runtime_integration::MlxRuntime;
+use runtime_integration::MlxRuntime;
 use tokenizers::Tokenizer;
 
 use crate::qwen_image_21::engine_error::QwenImage21EngineError;

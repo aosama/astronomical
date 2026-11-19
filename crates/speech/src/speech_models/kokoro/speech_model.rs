@@ -8,8 +8,8 @@
 
 use std::path::Path;
 
-use astronomical_runtime_integration::MlxRuntime;
 use mlx_bridge::MlxArray;
+use runtime_integration::MlxRuntime;
 
 use super::acoustic_decoder::{AcousticDecoder, DecoderInputs};
 use super::albert_encoder::AlbertEncoder;

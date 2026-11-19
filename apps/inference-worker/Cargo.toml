@@ -28,10 +28,10 @@ performance_throughput = []
 serving-acceptance = []
 
 [dependencies]
-astronomical-config = { path = "../../crates/config" }
-astronomical-ipc-protocol = { path = "../../crates/ipc-protocol" }
-astronomical-model-serving = { path = "../../crates/model-serving", features = ["direct-mlx"] }
-astronomical-runtime-integration = { path = "../../crates/runtime-integration", features = ["mlx"] }
+config = { path = "../../crates/config" }
+ipc-protocol = { path = "../../crates/ipc-protocol" }
+model-serving = { path = "../../crates/model-serving", features = ["direct-mlx"] }
+runtime-integration = { path = "../../crates/runtime-integration", features = ["mlx"] }
 mlx-bridge.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
@@ -41,7 +41,7 @@ tracing-subscriber.workspace = true
 
 [dev-dependencies]
 astronomical-daemon = { path = "../daemon" }
-astronomical-test-harness = { path = "../../crates/test-harness", features = ["flux-reference-oracle"] }
+test-harness = { path = "../../crates/test-harness", features = ["flux-reference-oracle"] }
 serde_json.workspace = true
 serial_test.workspace = true
 tempfile = "=3.27.0"

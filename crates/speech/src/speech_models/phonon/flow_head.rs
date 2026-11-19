@@ -4,8 +4,8 @@
 //! Phonon samples with Lagrangian self-distillation in a single step: the
 //! latent is the noise plus one prediction of the flow from time 0 to 1.
 
-use astronomical_runtime_integration::MlxRuntime;
 use mlx_bridge::MlxArray;
+use runtime_integration::MlxRuntime;
 
 use super::time_embedding::single_step_time_embedding;
 use crate::speech_models::checkpoint_tensors::CheckpointTensors;

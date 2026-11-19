@@ -1,7 +1,7 @@
 //! Unit tests for the quality numbers.
 
-use astronomical_decision_contract::DecisionQuestionKind;
-use astronomical_decision_contract::calibration_file::KindCalibration;
+use decision_contract::DecisionQuestionKind;
+use decision_contract::calibration_file::KindCalibration;
 
 use super::*;
 use crate::test_support::{

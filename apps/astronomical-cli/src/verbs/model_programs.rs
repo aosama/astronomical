@@ -6,7 +6,7 @@ use std::collections::BTreeSet;
 use std::io::{self, Write};
 use std::path::Path;
 
-use astronomical_config::ListedNeuralEngineProgramSet;
+use config::ListedNeuralEngineProgramSet;
 
 use crate::formatting::format_gigabytes;
 

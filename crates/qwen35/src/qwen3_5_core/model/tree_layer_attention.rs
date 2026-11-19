@@ -12,8 +12,8 @@
 //! recurrence over those rows for DeltaNet, and the kept keys and values written
 //! back in order for attention.
 
-use astronomical_runtime_integration::MlxRuntime;
 use mlx_bridge::{MlxArray, MlxMetalKernel};
+use runtime_integration::MlxRuntime;
 
 use super::Qwen3_5DecoderLayerAttentionOutput;
 use super::base::Qwen3_5ModelBase;

@@ -18,9 +18,9 @@
 //! that never needs a local-attention mask, one just past the local window,
 //! and a long one.
 
-use astronomical_ipc_protocol::{EmbeddingEncodingFormat, EmbeddingsCommand, RequestId};
-use astronomical_model_serving::{EmbeddingEngine, ModernBertEmbeddingEngine};
-use astronomical_test_harness::test_run::TestRunContext;
+use ipc_protocol::{EmbeddingEncodingFormat, EmbeddingsCommand, RequestId};
+use model_serving::{EmbeddingEngine, ModernBertEmbeddingEngine};
+use test_harness::test_run::TestRunContext;
 
 #[path = "../../support/romeo_and_juliet.rs"]
 #[allow(dead_code)]

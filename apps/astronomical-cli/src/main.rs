@@ -13,7 +13,7 @@ use astronomical_cli::{
     CliCommand, LaunchDependencies, candidate_instances, help_text, parse_command, prepare_launch,
     run_schema, run_validate_config, runtime_instance_from_executable_path,
 };
-use astronomical_config::AstronomicalRuntimeInstance;
+use config::AstronomicalRuntimeInstance;
 use std::os::unix::process::CommandExt;
 
 #[path = "main/file_output_verbs.rs"]
@@ -70,16 +70,15 @@ fn main() -> ExitCode {
 fn run_validate_config_verb(
     validate_arguments: astronomical_cli::ValidateConfigArguments,
 ) -> ExitCode {
-    let instance_paths =
-        match astronomical_config::AstronomicalInstancePaths::default_location_instance_paths(
-            validate_arguments.runtime_instance,
-        ) {
-            Ok(instance_paths) => instance_paths,
-            Err(config_error) => {
-                eprintln!("astronomical: {config_error}");
-                return ExitCode::FAILURE;
-            }
-        };
+    let instance_paths = match config::AstronomicalInstancePaths::default_location_instance_paths(
+        validate_arguments.runtime_instance,
+    ) {
+        Ok(instance_paths) => instance_paths,
+        Err(config_error) => {
+            eprintln!("astronomical: {config_error}");
+            return ExitCode::FAILURE;
+        }
+    };
     let mut stdout = io::stdout();
     let mut stderr = io::stderr();
     let mut validate_dependencies = astronomical_cli::ValidateConfigDependencies {
@@ -121,16 +120,15 @@ fn run_disk_models_command(disk_models_command: &CliCommand) -> ExitCode {
 
 fn run_convert_atlas_verb(convert_arguments: &astronomical_cli::ConvertAtlasArguments) -> ExitCode {
     let (runtime_instance, _) = own_runtime_instance_and_ipc_socket_paths();
-    let instance_paths =
-        match astronomical_config::AstronomicalInstancePaths::default_location_instance_paths(
-            runtime_instance,
-        ) {
-            Ok(instance_paths) => instance_paths,
-            Err(instance_error) => {
-                eprintln!("astronomical: {instance_error}");
-                return ExitCode::FAILURE;
-            }
-        };
+    let instance_paths = match config::AstronomicalInstancePaths::default_location_instance_paths(
+        runtime_instance,
+    ) {
+        Ok(instance_paths) => instance_paths,
+        Err(instance_error) => {
+            eprintln!("astronomical: {instance_error}");
+            return ExitCode::FAILURE;
+        }
+    };
     let conversion_outcome = astronomical_cli::run_convert_atlas(
         convert_arguments,
         astronomical_cli::ConvertAtlasDependencies {
@@ -153,15 +151,12 @@ fn render_model_programs_for(
     runtime_instance: AstronomicalRuntimeInstance,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let instance_paths =
-        astronomical_config::AstronomicalInstancePaths::default_location_instance_paths(
-            runtime_instance,
-        )?;
-    let config =
-        astronomical_config::AstronomicalConfig::load_from_instance_paths(instance_paths.clone())?;
+        config::AstronomicalInstancePaths::default_location_instance_paths(runtime_instance)?;
+    let config = config::AstronomicalConfig::load_from_instance_paths(instance_paths.clone())?;
     let program_directory = config.neural_engine_program_directory();
-    let program_sets = astronomical_config::list_neural_engine_program_sets(&program_directory);
+    let program_sets = config::list_neural_engine_program_sets(&program_directory);
     let mut installed_model_ids = std::collections::BTreeSet::new();
-    let discovery = astronomical_config::discover_effective_models(
+    let discovery = config::discover_effective_models(
         &instance_paths.models_directory(),
         config.model_directories(),
     );
@@ -263,15 +258,15 @@ fn run_vision_verb(vision_command: &astronomical_cli::VisionCommand) -> ExitCode
     }
 }
 
-fn exit_code_for_inspection(_status: astronomical_vision_tower::TowerStatus) -> ExitCode {
+fn exit_code_for_inspection(_status: vision_tower::TowerStatus) -> ExitCode {
     ExitCode::SUCCESS
 }
 
-fn exit_code_for_addition(_report: astronomical_vision_tower::TowerAdditionReport) -> ExitCode {
+fn exit_code_for_addition(_report: vision_tower::TowerAdditionReport) -> ExitCode {
     ExitCode::SUCCESS
 }
 
-fn exit_code_for_match(verdict: astronomical_vision_tower::BaseMatchVerdict) -> ExitCode {
+fn exit_code_for_match(verdict: vision_tower::BaseMatchVerdict) -> ExitCode {
     if verdict.allows_adding() {
         ExitCode::SUCCESS
     } else {
@@ -365,10 +360,8 @@ fn own_runtime_instance_and_ipc_socket_paths()
     let candidate_socket_paths = candidate_instances(preferred_instance)
         .into_iter()
         .filter_map(|runtime_instance| {
-            astronomical_config::AstronomicalInstancePaths::default_location_instance_paths(
-                runtime_instance,
-            )
-            .ok()
+            config::AstronomicalInstancePaths::default_location_instance_paths(runtime_instance)
+                .ok()
         })
         .map(|instance_paths| instance_paths.ipc_socket_file_path())
         .collect();
@@ -581,9 +574,7 @@ fn run_doctor_verb() -> ExitCode {
         AstronomicalRuntimeInstance::Stable,
         AstronomicalRuntimeInstance::Development,
     ] {
-        match astronomical_config::AstronomicalInstancePaths::default_location_instance_paths(
-            runtime_instance,
-        ) {
+        match config::AstronomicalInstancePaths::default_location_instance_paths(runtime_instance) {
             Ok(instance_paths) => {
                 channel_socket_paths.push((runtime_instance, instance_paths.ipc_socket_file_path()))
             }

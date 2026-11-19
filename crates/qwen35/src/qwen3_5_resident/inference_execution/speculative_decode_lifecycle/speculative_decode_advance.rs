@@ -14,7 +14,7 @@
 //! (a fall-through would re-forward a stale token at the wrong position;
 //! the serving journey locks this contract end to end).
 
-use astronomical_ipc_protocol::RequestId;
+use ipc_protocol::RequestId;
 
 use crate::GeneratedToken;
 use crate::qwen3_5_resident::inference_execution::decode_lifecycle::advance_generation::ActiveRequestAdvance;

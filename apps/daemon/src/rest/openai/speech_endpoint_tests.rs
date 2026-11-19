@@ -1,11 +1,11 @@
 //! Unit contracts for what the speech endpoint refuses before a model swap
 //! and for the audio response it builds.
 
-use astronomical_config::{ModelFamily, SpeechModelCapabilities};
-use astronomical_ipc_protocol::SpeechResultMetadata;
-use astronomical_rest_contract::OpenAiSpeechRequestParts;
-use astronomical_speech_contract::AudioFormat;
 use axum::http::StatusCode;
+use config::{ModelFamily, SpeechModelCapabilities};
+use ipc_protocol::SpeechResultMetadata;
+use rest_contract::OpenAiSpeechRequestParts;
+use speech_contract::AudioFormat;
 
 use super::{audio_response, refusal_before_swap};
 use crate::SpeechOutput;

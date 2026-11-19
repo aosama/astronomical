@@ -26,29 +26,21 @@ fn metadata_document_for(packages: &[(&str, Vec<&str>, &str)]) -> String {
 #[test]
 fn should_pass_when_no_rule_crate_reaches_the_forbidden_crate() {
     let metadata_json_text = metadata_document_for(&[
-        ("astronomical-memory-policy", vec!["serde_json"], "normal"),
+        ("memory-policy", vec!["serde_json"], "normal"),
         ("mlx-bridge", Vec::new(), "normal"),
-        ("astronomical-mlx-c-fork", Vec::new(), "normal"),
-        (
-            "astronomical-image-generation",
-            vec!["mlx-bridge"],
-            "normal",
-        ),
-        ("astronomical-artifact-validation", Vec::new(), "normal"),
-        ("astronomical-engine-core", vec!["mlx-bridge"], "normal"),
-        ("astronomical-qwen35", vec!["mlx-bridge"], "normal"),
-        ("astronomical-decision-models", vec!["mlx-bridge"], "normal"),
-        ("astronomical-quantization", Vec::new(), "normal"),
-        ("astronomical-speech", vec!["mlx-bridge"], "normal"),
-        (
-            "astronomical-model-primitives",
-            vec!["mlx-bridge"],
-            "normal",
-        ),
-        ("astronomical-model-serving", vec!["mlx-bridge"], "normal"),
+        ("mlx-c-fork", Vec::new(), "normal"),
+        ("image-generation", vec!["mlx-bridge"], "normal"),
+        ("artifact-validation", Vec::new(), "normal"),
+        ("engine-core", vec!["mlx-bridge"], "normal"),
+        ("qwen35", vec!["mlx-bridge"], "normal"),
+        ("decision-models", vec!["mlx-bridge"], "normal"),
+        ("quantization", Vec::new(), "normal"),
+        ("speech", vec!["mlx-bridge"], "normal"),
+        ("model-primitives", vec!["mlx-bridge"], "normal"),
+        ("model-serving", vec!["mlx-bridge"], "normal"),
         // The jangtq2 family crate clean of the serving crate: the one-way
         // edge the family-crate rule exists to hold.
-        ("astronomical-jangtq2-qwen35", vec!["mlx-bridge"], "normal"),
+        ("jangtq2-qwen35", vec!["mlx-bridge"], "normal"),
     ]);
     let violations = architecture_violations(&metadata_json_text).unwrap();
     assert!(violations.is_empty());
@@ -59,42 +51,30 @@ fn should_detect_a_direct_family_to_serving_dependency() {
     // The family crate depending back on the serving crate would rebuild the
     // serving crate on every family edit, defeating the extraction.
     let metadata_json_text = metadata_document_for(&[
-        ("astronomical-memory-policy", vec!["serde_json"], "normal"),
+        ("memory-policy", vec!["serde_json"], "normal"),
         ("mlx-bridge", Vec::new(), "normal"),
-        ("astronomical-mlx-c-fork", Vec::new(), "normal"),
+        ("mlx-c-fork", Vec::new(), "normal"),
+        ("image-generation", vec!["mlx-bridge"], "normal"),
+        ("artifact-validation", Vec::new(), "normal"),
+        ("engine-core", vec!["mlx-bridge"], "normal"),
+        ("qwen35", vec!["mlx-bridge"], "normal"),
+        ("decision-models", vec!["mlx-bridge"], "normal"),
+        ("quantization", Vec::new(), "normal"),
+        ("speech", vec!["mlx-bridge"], "normal"),
+        ("model-primitives", vec!["mlx-bridge"], "normal"),
         (
-            "astronomical-image-generation",
-            vec!["mlx-bridge"],
+            "model-serving",
+            vec!["mlx-bridge", "jangtq2-qwen35"],
             "normal",
         ),
-        ("astronomical-artifact-validation", Vec::new(), "normal"),
-        ("astronomical-engine-core", vec!["mlx-bridge"], "normal"),
-        ("astronomical-qwen35", vec!["mlx-bridge"], "normal"),
-        ("astronomical-decision-models", vec!["mlx-bridge"], "normal"),
-        ("astronomical-quantization", Vec::new(), "normal"),
-        ("astronomical-speech", vec!["mlx-bridge"], "normal"),
-        (
-            "astronomical-model-primitives",
-            vec!["mlx-bridge"],
-            "normal",
-        ),
-        (
-            "astronomical-model-serving",
-            vec!["mlx-bridge", "astronomical-jangtq2-qwen35"],
-            "normal",
-        ),
-        (
-            "astronomical-jangtq2-qwen35",
-            vec!["astronomical-model-serving"],
-            "normal",
-        ),
+        ("jangtq2-qwen35", vec!["model-serving"], "normal"),
     ]);
     let violations = architecture_violations(&metadata_json_text).unwrap();
     assert_eq!(violations.len(), 1);
     assert_eq!(violations[0].rule_name, "family-crate-without-serving");
     assert_eq!(
         violations[0].dependency_chain,
-        vec!["astronomical-jangtq2-qwen35", "astronomical-model-serving"]
+        vec!["jangtq2-qwen35", "model-serving"]
     );
 }
 
@@ -103,41 +83,30 @@ fn should_detect_a_model_primitives_to_serving_dependency() {
     // The model primitives sit under every family; an edge back to the
     // serving crate would let a shared kernel reach into one family.
     let metadata_json_text = metadata_document_for(&[
-        ("astronomical-memory-policy", vec!["serde_json"], "normal"),
+        ("memory-policy", vec!["serde_json"], "normal"),
         ("mlx-bridge", Vec::new(), "normal"),
-        ("astronomical-mlx-c-fork", Vec::new(), "normal"),
+        ("mlx-c-fork", Vec::new(), "normal"),
+        ("image-generation", vec!["mlx-bridge"], "normal"),
+        ("artifact-validation", Vec::new(), "normal"),
+        ("engine-core", vec!["mlx-bridge"], "normal"),
+        ("qwen35", vec!["mlx-bridge"], "normal"),
+        ("decision-models", vec!["mlx-bridge"], "normal"),
+        ("quantization", Vec::new(), "normal"),
+        ("speech", vec!["mlx-bridge"], "normal"),
         (
-            "astronomical-image-generation",
-            vec!["mlx-bridge"],
+            "model-primitives",
+            vec!["mlx-bridge", "model-serving"],
             "normal",
         ),
-        ("astronomical-artifact-validation", Vec::new(), "normal"),
-        ("astronomical-engine-core", vec!["mlx-bridge"], "normal"),
-        ("astronomical-qwen35", vec!["mlx-bridge"], "normal"),
-        ("astronomical-decision-models", vec!["mlx-bridge"], "normal"),
-        ("astronomical-quantization", Vec::new(), "normal"),
-        ("astronomical-speech", vec!["mlx-bridge"], "normal"),
-        (
-            "astronomical-model-primitives",
-            vec!["mlx-bridge", "astronomical-model-serving"],
-            "normal",
-        ),
-        (
-            "astronomical-model-serving",
-            vec!["astronomical-model-primitives"],
-            "normal",
-        ),
-        ("astronomical-jangtq2-qwen35", vec!["mlx-bridge"], "normal"),
+        ("model-serving", vec!["model-primitives"], "normal"),
+        ("jangtq2-qwen35", vec!["mlx-bridge"], "normal"),
     ]);
     let violations = architecture_violations(&metadata_json_text).unwrap();
     assert_eq!(violations.len(), 1);
     assert_eq!(violations[0].rule_name, "model-primitives-without-serving");
     assert_eq!(
         violations[0].dependency_chain,
-        vec![
-            "astronomical-model-primitives",
-            "astronomical-model-serving"
-        ]
+        vec!["model-primitives", "model-serving"]
     );
 }
 
@@ -146,42 +115,26 @@ fn should_detect_a_speech_to_serving_dependency() {
     // The serving crate's worker drives the speech engines; an edge back
     // would rebuild the serving crate on every speech edit.
     let metadata_json_text = metadata_document_for(&[
-        ("astronomical-memory-policy", vec!["serde_json"], "normal"),
+        ("memory-policy", vec!["serde_json"], "normal"),
         ("mlx-bridge", Vec::new(), "normal"),
-        ("astronomical-mlx-c-fork", Vec::new(), "normal"),
-        (
-            "astronomical-image-generation",
-            vec!["mlx-bridge"],
-            "normal",
-        ),
-        ("astronomical-artifact-validation", Vec::new(), "normal"),
-        ("astronomical-engine-core", vec!["mlx-bridge"], "normal"),
-        ("astronomical-qwen35", vec!["mlx-bridge"], "normal"),
-        ("astronomical-decision-models", vec!["mlx-bridge"], "normal"),
-        ("astronomical-quantization", Vec::new(), "normal"),
-        (
-            "astronomical-model-primitives",
-            vec!["mlx-bridge"],
-            "normal",
-        ),
-        (
-            "astronomical-speech",
-            vec!["mlx-bridge", "astronomical-model-serving"],
-            "normal",
-        ),
-        (
-            "astronomical-model-serving",
-            vec!["astronomical-speech"],
-            "normal",
-        ),
-        ("astronomical-jangtq2-qwen35", vec!["mlx-bridge"], "normal"),
+        ("mlx-c-fork", Vec::new(), "normal"),
+        ("image-generation", vec!["mlx-bridge"], "normal"),
+        ("artifact-validation", Vec::new(), "normal"),
+        ("engine-core", vec!["mlx-bridge"], "normal"),
+        ("qwen35", vec!["mlx-bridge"], "normal"),
+        ("decision-models", vec!["mlx-bridge"], "normal"),
+        ("quantization", Vec::new(), "normal"),
+        ("model-primitives", vec!["mlx-bridge"], "normal"),
+        ("speech", vec!["mlx-bridge", "model-serving"], "normal"),
+        ("model-serving", vec!["speech"], "normal"),
+        ("jangtq2-qwen35", vec!["mlx-bridge"], "normal"),
     ]);
     let violations = architecture_violations(&metadata_json_text).unwrap();
     assert_eq!(violations.len(), 1);
     assert_eq!(violations[0].rule_name, "speech-without-serving");
     assert_eq!(
         violations[0].dependency_chain,
-        vec!["astronomical-speech", "astronomical-model-serving"]
+        vec!["speech", "model-serving"]
     );
 }
 
@@ -190,41 +143,26 @@ fn should_detect_a_image_generation_to_serving_dependency() {
     // The serving crate's worker drives the image engines; an edge back
     // would rebuild the serving crate on every image edit.
     let metadata_json_text = metadata_document_for(&[
-        ("astronomical-memory-policy", vec!["serde_json"], "normal"),
+        ("memory-policy", vec!["serde_json"], "normal"),
         ("mlx-bridge", Vec::new(), "normal"),
-        ("astronomical-mlx-c-fork", Vec::new(), "normal"),
-        (
-            "astronomical-model-primitives",
-            vec!["mlx-bridge"],
-            "normal",
-        ),
-        ("astronomical-speech", vec!["mlx-bridge"], "normal"),
-        (
-            "astronomical-image-generation",
-            vec!["astronomical-model-serving"],
-            "normal",
-        ),
-        ("astronomical-artifact-validation", Vec::new(), "normal"),
-        ("astronomical-engine-core", vec!["mlx-bridge"], "normal"),
-        ("astronomical-qwen35", vec!["mlx-bridge"], "normal"),
-        ("astronomical-decision-models", vec!["mlx-bridge"], "normal"),
-        ("astronomical-quantization", Vec::new(), "normal"),
-        ("astronomical-jangtq2-qwen35", vec!["mlx-bridge"], "normal"),
-        (
-            "astronomical-model-serving",
-            vec!["astronomical-image-generation"],
-            "normal",
-        ),
+        ("mlx-c-fork", Vec::new(), "normal"),
+        ("model-primitives", vec!["mlx-bridge"], "normal"),
+        ("speech", vec!["mlx-bridge"], "normal"),
+        ("image-generation", vec!["model-serving"], "normal"),
+        ("artifact-validation", Vec::new(), "normal"),
+        ("engine-core", vec!["mlx-bridge"], "normal"),
+        ("qwen35", vec!["mlx-bridge"], "normal"),
+        ("decision-models", vec!["mlx-bridge"], "normal"),
+        ("quantization", Vec::new(), "normal"),
+        ("jangtq2-qwen35", vec!["mlx-bridge"], "normal"),
+        ("model-serving", vec!["image-generation"], "normal"),
     ]);
     let violations = architecture_violations(&metadata_json_text).unwrap();
     assert_eq!(violations.len(), 1);
     assert_eq!(violations[0].rule_name, "image-generation-without-serving");
     assert_eq!(
         violations[0].dependency_chain,
-        vec![
-            "astronomical-image-generation",
-            "astronomical-model-serving"
-        ]
+        vec!["image-generation", "model-serving"]
     );
 }
 
@@ -233,35 +171,19 @@ fn should_detect_a_artifact_validation_to_serving_dependency() {
     // Every family validates through this crate; an edge to the serving
     // crate would make each family depend on the engine.
     let metadata_json_text = metadata_document_for(&[
-        ("astronomical-memory-policy", vec!["serde_json"], "normal"),
+        ("memory-policy", vec!["serde_json"], "normal"),
         ("mlx-bridge", Vec::new(), "normal"),
-        ("astronomical-mlx-c-fork", Vec::new(), "normal"),
-        (
-            "astronomical-model-primitives",
-            vec!["mlx-bridge"],
-            "normal",
-        ),
-        ("astronomical-speech", vec!["mlx-bridge"], "normal"),
-        (
-            "astronomical-image-generation",
-            vec!["mlx-bridge"],
-            "normal",
-        ),
-        (
-            "astronomical-artifact-validation",
-            vec!["astronomical-model-serving"],
-            "normal",
-        ),
-        ("astronomical-jangtq2-qwen35", vec!["mlx-bridge"], "normal"),
-        ("astronomical-engine-core", vec!["mlx-bridge"], "normal"),
-        ("astronomical-qwen35", vec!["mlx-bridge"], "normal"),
-        ("astronomical-decision-models", vec!["mlx-bridge"], "normal"),
-        ("astronomical-quantization", Vec::new(), "normal"),
-        (
-            "astronomical-model-serving",
-            vec!["astronomical-artifact-validation"],
-            "normal",
-        ),
+        ("mlx-c-fork", Vec::new(), "normal"),
+        ("model-primitives", vec!["mlx-bridge"], "normal"),
+        ("speech", vec!["mlx-bridge"], "normal"),
+        ("image-generation", vec!["mlx-bridge"], "normal"),
+        ("artifact-validation", vec!["model-serving"], "normal"),
+        ("jangtq2-qwen35", vec!["mlx-bridge"], "normal"),
+        ("engine-core", vec!["mlx-bridge"], "normal"),
+        ("qwen35", vec!["mlx-bridge"], "normal"),
+        ("decision-models", vec!["mlx-bridge"], "normal"),
+        ("quantization", Vec::new(), "normal"),
+        ("model-serving", vec!["artifact-validation"], "normal"),
     ]);
     let violations = architecture_violations(&metadata_json_text).unwrap();
     assert_eq!(violations.len(), 1);
@@ -271,10 +193,7 @@ fn should_detect_a_artifact_validation_to_serving_dependency() {
     );
     assert_eq!(
         violations[0].dependency_chain,
-        vec![
-            "astronomical-artifact-validation",
-            "astronomical-model-serving"
-        ]
+        vec!["artifact-validation", "model-serving"]
     );
 }
 
@@ -283,42 +202,26 @@ fn should_detect_an_engine_core_to_serving_dependency() {
     // Every family implements the engine core's contract; an edge back to
     // the serving crate would make the split circular.
     let metadata_json_text = metadata_document_for(&[
-        ("astronomical-memory-policy", vec!["serde_json"], "normal"),
+        ("memory-policy", vec!["serde_json"], "normal"),
         ("mlx-bridge", Vec::new(), "normal"),
-        ("astronomical-mlx-c-fork", Vec::new(), "normal"),
-        (
-            "astronomical-model-primitives",
-            vec!["mlx-bridge"],
-            "normal",
-        ),
-        ("astronomical-speech", vec!["mlx-bridge"], "normal"),
-        (
-            "astronomical-image-generation",
-            vec!["mlx-bridge"],
-            "normal",
-        ),
-        ("astronomical-artifact-validation", Vec::new(), "normal"),
-        ("astronomical-jangtq2-qwen35", vec!["mlx-bridge"], "normal"),
-        ("astronomical-qwen35", vec!["mlx-bridge"], "normal"),
-        ("astronomical-decision-models", vec!["mlx-bridge"], "normal"),
-        ("astronomical-quantization", Vec::new(), "normal"),
-        (
-            "astronomical-engine-core",
-            vec!["astronomical-model-serving"],
-            "normal",
-        ),
-        (
-            "astronomical-model-serving",
-            vec!["astronomical-engine-core"],
-            "normal",
-        ),
+        ("mlx-c-fork", Vec::new(), "normal"),
+        ("model-primitives", vec!["mlx-bridge"], "normal"),
+        ("speech", vec!["mlx-bridge"], "normal"),
+        ("image-generation", vec!["mlx-bridge"], "normal"),
+        ("artifact-validation", Vec::new(), "normal"),
+        ("jangtq2-qwen35", vec!["mlx-bridge"], "normal"),
+        ("qwen35", vec!["mlx-bridge"], "normal"),
+        ("decision-models", vec!["mlx-bridge"], "normal"),
+        ("quantization", Vec::new(), "normal"),
+        ("engine-core", vec!["model-serving"], "normal"),
+        ("model-serving", vec!["engine-core"], "normal"),
     ]);
     let violations = architecture_violations(&metadata_json_text).unwrap();
     assert_eq!(violations.len(), 1);
     assert_eq!(violations[0].rule_name, "engine-core-without-serving");
     assert_eq!(
         violations[0].dependency_chain,
-        vec!["astronomical-engine-core", "astronomical-model-serving"]
+        vec!["engine-core", "model-serving"]
     );
 }
 
@@ -327,42 +230,26 @@ fn should_detect_a_qwen35_to_serving_dependency() {
     // The serving crate's worker drives the Qwen 3.5 engines; an edge back
     // would make the split circular.
     let metadata_json_text = metadata_document_for(&[
-        ("astronomical-memory-policy", vec!["serde_json"], "normal"),
+        ("memory-policy", vec!["serde_json"], "normal"),
         ("mlx-bridge", Vec::new(), "normal"),
-        ("astronomical-mlx-c-fork", Vec::new(), "normal"),
-        (
-            "astronomical-model-primitives",
-            vec!["mlx-bridge"],
-            "normal",
-        ),
-        ("astronomical-speech", vec!["mlx-bridge"], "normal"),
-        (
-            "astronomical-image-generation",
-            vec!["mlx-bridge"],
-            "normal",
-        ),
-        ("astronomical-artifact-validation", Vec::new(), "normal"),
-        ("astronomical-engine-core", vec!["mlx-bridge"], "normal"),
-        ("astronomical-jangtq2-qwen35", vec!["mlx-bridge"], "normal"),
-        ("astronomical-decision-models", vec!["mlx-bridge"], "normal"),
-        ("astronomical-quantization", Vec::new(), "normal"),
-        (
-            "astronomical-qwen35",
-            vec!["astronomical-model-serving"],
-            "normal",
-        ),
-        (
-            "astronomical-model-serving",
-            vec!["astronomical-qwen35"],
-            "normal",
-        ),
+        ("mlx-c-fork", Vec::new(), "normal"),
+        ("model-primitives", vec!["mlx-bridge"], "normal"),
+        ("speech", vec!["mlx-bridge"], "normal"),
+        ("image-generation", vec!["mlx-bridge"], "normal"),
+        ("artifact-validation", Vec::new(), "normal"),
+        ("engine-core", vec!["mlx-bridge"], "normal"),
+        ("jangtq2-qwen35", vec!["mlx-bridge"], "normal"),
+        ("decision-models", vec!["mlx-bridge"], "normal"),
+        ("quantization", Vec::new(), "normal"),
+        ("qwen35", vec!["model-serving"], "normal"),
+        ("model-serving", vec!["qwen35"], "normal"),
     ]);
     let violations = architecture_violations(&metadata_json_text).unwrap();
     assert_eq!(violations.len(), 1);
     assert_eq!(violations[0].rule_name, "qwen35-without-serving");
     assert_eq!(
         violations[0].dependency_chain,
-        vec!["astronomical-qwen35", "astronomical-model-serving"]
+        vec!["qwen35", "model-serving"]
     );
 }
 
@@ -371,42 +258,26 @@ fn should_detect_a_decision_models_to_serving_dependency() {
     // The serving crate's worker drives the decision engines; an edge back
     // would make the split circular.
     let metadata_json_text = metadata_document_for(&[
-        ("astronomical-memory-policy", vec!["serde_json"], "normal"),
+        ("memory-policy", vec!["serde_json"], "normal"),
         ("mlx-bridge", Vec::new(), "normal"),
-        ("astronomical-mlx-c-fork", Vec::new(), "normal"),
-        (
-            "astronomical-model-primitives",
-            vec!["mlx-bridge"],
-            "normal",
-        ),
-        ("astronomical-speech", vec!["mlx-bridge"], "normal"),
-        (
-            "astronomical-image-generation",
-            vec!["mlx-bridge"],
-            "normal",
-        ),
-        ("astronomical-artifact-validation", Vec::new(), "normal"),
-        ("astronomical-engine-core", vec!["mlx-bridge"], "normal"),
-        ("astronomical-qwen35", vec!["mlx-bridge"], "normal"),
-        ("astronomical-jangtq2-qwen35", vec!["mlx-bridge"], "normal"),
-        ("astronomical-quantization", Vec::new(), "normal"),
-        (
-            "astronomical-decision-models",
-            vec!["astronomical-model-serving"],
-            "normal",
-        ),
-        (
-            "astronomical-model-serving",
-            vec!["astronomical-decision-models"],
-            "normal",
-        ),
+        ("mlx-c-fork", Vec::new(), "normal"),
+        ("model-primitives", vec!["mlx-bridge"], "normal"),
+        ("speech", vec!["mlx-bridge"], "normal"),
+        ("image-generation", vec!["mlx-bridge"], "normal"),
+        ("artifact-validation", Vec::new(), "normal"),
+        ("engine-core", vec!["mlx-bridge"], "normal"),
+        ("qwen35", vec!["mlx-bridge"], "normal"),
+        ("jangtq2-qwen35", vec!["mlx-bridge"], "normal"),
+        ("quantization", Vec::new(), "normal"),
+        ("decision-models", vec!["model-serving"], "normal"),
+        ("model-serving", vec!["decision-models"], "normal"),
     ]);
     let violations = architecture_violations(&metadata_json_text).unwrap();
     assert_eq!(violations.len(), 1);
     assert_eq!(violations[0].rule_name, "decision-models-without-serving");
     assert_eq!(
         violations[0].dependency_chain,
-        vec!["astronomical-decision-models", "astronomical-model-serving"]
+        vec!["decision-models", "model-serving"]
     );
 }
 
@@ -415,38 +286,26 @@ fn should_detect_a_qwen35_to_quantizer_dependency() {
     // The worker and daemon build on the Qwen 3.5 family; the quantizer must
     // reach it only through the probe crate above it.
     let metadata_json_text = metadata_document_for(&[
-        ("astronomical-memory-policy", vec!["serde_json"], "normal"),
+        ("memory-policy", vec!["serde_json"], "normal"),
         ("mlx-bridge", Vec::new(), "normal"),
-        ("astronomical-mlx-c-fork", Vec::new(), "normal"),
-        (
-            "astronomical-model-primitives",
-            vec!["mlx-bridge"],
-            "normal",
-        ),
-        ("astronomical-speech", vec!["mlx-bridge"], "normal"),
-        (
-            "astronomical-image-generation",
-            vec!["mlx-bridge"],
-            "normal",
-        ),
-        ("astronomical-artifact-validation", Vec::new(), "normal"),
-        ("astronomical-engine-core", vec!["mlx-bridge"], "normal"),
-        ("astronomical-decision-models", vec!["mlx-bridge"], "normal"),
-        (
-            "astronomical-qwen35",
-            vec!["mlx-bridge", "astronomical-quantization"],
-            "normal",
-        ),
-        ("astronomical-quantization", Vec::new(), "normal"),
-        ("astronomical-model-serving", Vec::new(), "normal"),
-        ("astronomical-jangtq2-qwen35", vec!["mlx-bridge"], "normal"),
+        ("mlx-c-fork", Vec::new(), "normal"),
+        ("model-primitives", vec!["mlx-bridge"], "normal"),
+        ("speech", vec!["mlx-bridge"], "normal"),
+        ("image-generation", vec!["mlx-bridge"], "normal"),
+        ("artifact-validation", Vec::new(), "normal"),
+        ("engine-core", vec!["mlx-bridge"], "normal"),
+        ("decision-models", vec!["mlx-bridge"], "normal"),
+        ("qwen35", vec!["mlx-bridge", "quantization"], "normal"),
+        ("quantization", Vec::new(), "normal"),
+        ("model-serving", Vec::new(), "normal"),
+        ("jangtq2-qwen35", vec!["mlx-bridge"], "normal"),
     ]);
     let violations = architecture_violations(&metadata_json_text).unwrap();
     assert_eq!(violations.len(), 1);
     assert_eq!(violations[0].rule_name, "qwen35-without-quantizer");
     assert_eq!(
         violations[0].dependency_chain,
-        vec!["astronomical-qwen35", "astronomical-quantization"]
+        vec!["qwen35", "quantization"]
     );
 }
 
@@ -455,38 +314,26 @@ fn should_detect_a_direct_forbidden_fork_dependency() {
     // The fork crate carries the same graphics-processor linkage as the
     // stock bridge, so the memory policy crate must stay free of it too.
     let metadata_json_text = metadata_document_for(&[
-        (
-            "astronomical-memory-policy",
-            vec!["astronomical-mlx-c-fork"],
-            "normal",
-        ),
+        ("memory-policy", vec!["mlx-c-fork"], "normal"),
         ("mlx-bridge", Vec::new(), "normal"),
-        ("astronomical-mlx-c-fork", Vec::new(), "normal"),
-        (
-            "astronomical-image-generation",
-            vec!["mlx-bridge"],
-            "normal",
-        ),
-        ("astronomical-artifact-validation", Vec::new(), "normal"),
-        ("astronomical-engine-core", vec!["mlx-bridge"], "normal"),
-        ("astronomical-qwen35", vec!["mlx-bridge"], "normal"),
-        ("astronomical-decision-models", vec!["mlx-bridge"], "normal"),
-        ("astronomical-quantization", Vec::new(), "normal"),
-        ("astronomical-speech", vec!["mlx-bridge"], "normal"),
-        (
-            "astronomical-model-primitives",
-            vec!["mlx-bridge"],
-            "normal",
-        ),
-        ("astronomical-model-serving", Vec::new(), "normal"),
-        ("astronomical-jangtq2-qwen35", Vec::new(), "normal"),
+        ("mlx-c-fork", Vec::new(), "normal"),
+        ("image-generation", vec!["mlx-bridge"], "normal"),
+        ("artifact-validation", Vec::new(), "normal"),
+        ("engine-core", vec!["mlx-bridge"], "normal"),
+        ("qwen35", vec!["mlx-bridge"], "normal"),
+        ("decision-models", vec!["mlx-bridge"], "normal"),
+        ("quantization", Vec::new(), "normal"),
+        ("speech", vec!["mlx-bridge"], "normal"),
+        ("model-primitives", vec!["mlx-bridge"], "normal"),
+        ("model-serving", Vec::new(), "normal"),
+        ("jangtq2-qwen35", Vec::new(), "normal"),
     ]);
     let violations = architecture_violations(&metadata_json_text).unwrap();
     assert_eq!(violations.len(), 1);
     assert_eq!(violations[0].rule_name, "policy-without-mlx-fork-bindings");
     assert_eq!(
         violations[0].dependency_chain,
-        vec!["astronomical-memory-policy", "astronomical-mlx-c-fork"]
+        vec!["memory-policy", "mlx-c-fork"]
     );
 }
 
@@ -495,33 +342,25 @@ fn should_detect_a_direct_forbidden_dependency() {
     // Detector self-check carried over from the shell contract: a known MLX
     // declaration must be caught so the check can never pass vacuously.
     let metadata_json_text = metadata_document_for(&[
-        ("astronomical-memory-policy", vec!["mlx-bridge"], "normal"),
+        ("memory-policy", vec!["mlx-bridge"], "normal"),
         ("mlx-bridge", Vec::new(), "normal"),
-        ("astronomical-mlx-c-fork", Vec::new(), "normal"),
-        (
-            "astronomical-image-generation",
-            vec!["mlx-bridge"],
-            "normal",
-        ),
-        ("astronomical-artifact-validation", Vec::new(), "normal"),
-        ("astronomical-engine-core", vec!["mlx-bridge"], "normal"),
-        ("astronomical-qwen35", vec!["mlx-bridge"], "normal"),
-        ("astronomical-decision-models", vec!["mlx-bridge"], "normal"),
-        ("astronomical-quantization", Vec::new(), "normal"),
-        ("astronomical-speech", vec!["mlx-bridge"], "normal"),
-        (
-            "astronomical-model-primitives",
-            vec!["mlx-bridge"],
-            "normal",
-        ),
-        ("astronomical-model-serving", Vec::new(), "normal"),
-        ("astronomical-jangtq2-qwen35", Vec::new(), "normal"),
+        ("mlx-c-fork", Vec::new(), "normal"),
+        ("image-generation", vec!["mlx-bridge"], "normal"),
+        ("artifact-validation", Vec::new(), "normal"),
+        ("engine-core", vec!["mlx-bridge"], "normal"),
+        ("qwen35", vec!["mlx-bridge"], "normal"),
+        ("decision-models", vec!["mlx-bridge"], "normal"),
+        ("quantization", Vec::new(), "normal"),
+        ("speech", vec!["mlx-bridge"], "normal"),
+        ("model-primitives", vec!["mlx-bridge"], "normal"),
+        ("model-serving", Vec::new(), "normal"),
+        ("jangtq2-qwen35", Vec::new(), "normal"),
     ]);
     let violations = architecture_violations(&metadata_json_text).unwrap();
     assert_eq!(violations.len(), 1);
     assert_eq!(
         violations[0].dependency_chain,
-        vec!["astronomical-memory-policy", "mlx-bridge"]
+        vec!["memory-policy", "mlx-bridge"]
     );
 }
 
@@ -531,7 +370,7 @@ fn should_detect_a_transitive_forbidden_dependency() {
     // breach arrives through an intermediate crate, not a direct line.
     let metadata_json_text = metadata_document_for(&[
         (
-            "astronomical-memory-policy",
+            "memory-policy",
             vec!["astronomical-new-intermediate"],
             "normal",
         ),
@@ -541,32 +380,24 @@ fn should_detect_a_transitive_forbidden_dependency() {
             "normal",
         ),
         ("mlx-bridge", Vec::new(), "normal"),
-        ("astronomical-mlx-c-fork", Vec::new(), "normal"),
-        (
-            "astronomical-image-generation",
-            vec!["mlx-bridge"],
-            "normal",
-        ),
-        ("astronomical-artifact-validation", Vec::new(), "normal"),
-        ("astronomical-engine-core", vec!["mlx-bridge"], "normal"),
-        ("astronomical-qwen35", vec!["mlx-bridge"], "normal"),
-        ("astronomical-decision-models", vec!["mlx-bridge"], "normal"),
-        ("astronomical-quantization", Vec::new(), "normal"),
-        ("astronomical-speech", vec!["mlx-bridge"], "normal"),
-        (
-            "astronomical-model-primitives",
-            vec!["mlx-bridge"],
-            "normal",
-        ),
-        ("astronomical-model-serving", Vec::new(), "normal"),
-        ("astronomical-jangtq2-qwen35", Vec::new(), "normal"),
+        ("mlx-c-fork", Vec::new(), "normal"),
+        ("image-generation", vec!["mlx-bridge"], "normal"),
+        ("artifact-validation", Vec::new(), "normal"),
+        ("engine-core", vec!["mlx-bridge"], "normal"),
+        ("qwen35", vec!["mlx-bridge"], "normal"),
+        ("decision-models", vec!["mlx-bridge"], "normal"),
+        ("quantization", Vec::new(), "normal"),
+        ("speech", vec!["mlx-bridge"], "normal"),
+        ("model-primitives", vec!["mlx-bridge"], "normal"),
+        ("model-serving", Vec::new(), "normal"),
+        ("jangtq2-qwen35", Vec::new(), "normal"),
     ]);
     let violations = architecture_violations(&metadata_json_text).unwrap();
     assert_eq!(violations.len(), 1);
     assert_eq!(
         violations[0].dependency_chain,
         vec![
-            "astronomical-memory-policy",
+            "memory-policy",
             "astronomical-new-intermediate",
             "mlx-bridge"
         ]
@@ -577,31 +408,19 @@ fn should_detect_a_transitive_forbidden_dependency() {
 fn should_count_dev_and_build_dependencies_as_reachability_edges() {
     for breach_kind in ["dev", "build"] {
         let metadata_json_text = metadata_document_for(&[
-            (
-                "astronomical-memory-policy",
-                vec!["mlx-bridge"],
-                breach_kind,
-            ),
+            ("memory-policy", vec!["mlx-bridge"], breach_kind),
             ("mlx-bridge", Vec::new(), "normal"),
-            ("astronomical-mlx-c-fork", Vec::new(), "normal"),
-            (
-                "astronomical-image-generation",
-                vec!["mlx-bridge"],
-                "normal",
-            ),
-            ("astronomical-artifact-validation", Vec::new(), "normal"),
-            ("astronomical-engine-core", vec!["mlx-bridge"], "normal"),
-            ("astronomical-qwen35", vec!["mlx-bridge"], "normal"),
-            ("astronomical-decision-models", vec!["mlx-bridge"], "normal"),
-            ("astronomical-quantization", Vec::new(), "normal"),
-            ("astronomical-speech", vec!["mlx-bridge"], "normal"),
-            (
-                "astronomical-model-primitives",
-                vec!["mlx-bridge"],
-                "normal",
-            ),
-            ("astronomical-model-serving", Vec::new(), "normal"),
-            ("astronomical-jangtq2-qwen35", Vec::new(), "normal"),
+            ("mlx-c-fork", Vec::new(), "normal"),
+            ("image-generation", vec!["mlx-bridge"], "normal"),
+            ("artifact-validation", Vec::new(), "normal"),
+            ("engine-core", vec!["mlx-bridge"], "normal"),
+            ("qwen35", vec!["mlx-bridge"], "normal"),
+            ("decision-models", vec!["mlx-bridge"], "normal"),
+            ("quantization", Vec::new(), "normal"),
+            ("speech", vec!["mlx-bridge"], "normal"),
+            ("model-primitives", vec!["mlx-bridge"], "normal"),
+            ("model-serving", Vec::new(), "normal"),
+            ("jangtq2-qwen35", Vec::new(), "normal"),
         ]);
         let violations = architecture_violations(&metadata_json_text).unwrap();
         assert_eq!(
@@ -621,7 +440,7 @@ fn should_fail_closed_when_a_rule_source_crate_is_absent() {
     assert!(
         check_outcome
             .unwrap_err()
-            .contains("unknown source crate astronomical-memory-policy")
+            .contains("unknown source crate memory-policy")
     );
 }
 
@@ -629,8 +448,7 @@ fn should_fail_closed_when_a_rule_source_crate_is_absent() {
 fn should_fail_closed_when_the_forbidden_crate_is_absent() {
     // A renamed forbidden crate would make the rule pass vacuously forever;
     // rename drift must surface as a hard error instead.
-    let metadata_json_text =
-        metadata_document_for(&[("astronomical-memory-policy", Vec::new(), "normal")]);
+    let metadata_json_text = metadata_document_for(&[("memory-policy", Vec::new(), "normal")]);
     let check_outcome = architecture_violations(&metadata_json_text);
     assert!(check_outcome.is_err());
     assert!(

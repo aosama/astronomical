@@ -3,7 +3,7 @@
 //! subjects. PATH is replaced with the shim directory, so the real network and
 //! the real CMake pins are unreachable (issue #1250).
 
-use astronomical_native_identity::digest_bytes;
+use native_identity::digest_bytes;
 use std::path::PathBuf;
 use std::process::Command;
 

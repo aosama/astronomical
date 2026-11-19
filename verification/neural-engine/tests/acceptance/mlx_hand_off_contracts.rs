@@ -9,16 +9,16 @@
 //! beside the test executable, and the archive CI runs tests from does not carry
 //! it. Run them with `cargo test-neural-engine-journeys --filter mlx_hand_off`.
 
-use astronomical_neural_engine::core_ml::{CoreMlComputeUnits, CoreMlProgram};
-use astronomical_neural_engine::documents::projection::MlProgramWeights;
-use astronomical_neural_engine::mlx_hand_off::{
+use mlx_bridge::{MlxArray, MlxDtype};
+use neural_engine::core_ml::{CoreMlComputeUnits, CoreMlProgram};
+use neural_engine::documents::projection::MlProgramWeights;
+use neural_engine::mlx_hand_off::{
     MlxHandOffError, OutputHandOff, SplitAxis, channel_major_fp16, merge_surface_with_gpu_slice,
     surface_as_token_major, write_prepared_input,
 };
-use astronomical_neural_engine::program_shape::ProgramShape;
-use astronomical_neural_engine::weights::half_precision::f32_to_f16_bits;
-use astronomical_runtime_integration::MlxRuntime;
-use mlx_bridge::{MlxArray, MlxDtype};
+use neural_engine::program_shape::ProgramShape;
+use neural_engine::weights::half_precision::f32_to_f16_bits;
+use runtime_integration::MlxRuntime;
 use serial_test::serial;
 
 use crate::support::mlx_projection::{initialize_runtime, upload};

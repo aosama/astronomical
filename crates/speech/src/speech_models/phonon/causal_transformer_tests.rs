@@ -2,8 +2,8 @@
 //! what one call over the whole sequence gives: frame by frame for the flow
 //! model, block by block (with old keys forgotten) for the Mimi decoder.
 
-use astronomical_runtime_integration::MlxRuntime;
 use mlx_bridge::MlxArray;
+use runtime_integration::MlxRuntime;
 use serial_test::serial;
 
 use super::{CausalTransformer, TransformerShape};

@@ -56,7 +56,7 @@ pub(in crate::library) fn validate_tree_page_url(
 
 /// The canonical repository path check, shared with the catalog's included
 /// paths so both refuse the same paths.
-pub(in crate::library) use astronomical_download_catalog::is_canonical_ascii_path;
+pub(in crate::library) use download_catalog::is_canonical_ascii_path;
 
 pub(in crate::library) fn has_ancestor_path(
     file_paths: &BTreeSet<String>,

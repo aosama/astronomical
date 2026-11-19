@@ -103,7 +103,7 @@ fn archive_aliases_carry_the_selections_the_compile_step_builds() {
         selection_tail(&archive_selection),
         "the nextest-archive-integration alias must carry the identical selection as test-integration"
     );
-    assert!(compile_selection.contains("-p astronomical-memory-policy "));
+    assert!(compile_selection.contains("-p memory-policy "));
     assert!(compile_selection.contains("--lib --test integration_tests"));
 }
 
@@ -378,7 +378,7 @@ fn assert_nextest_configuration_keeps_archive_budgets() {
 #[test]
 fn should_compile_and_archive_every_lane_with_one_package_list() {
     let compile_selection = package_list_of_alias("test-integration = ");
-    assert!(compile_selection.contains("-p astronomical-rest-contract"));
+    assert!(compile_selection.contains("-p rest-contract"));
     assert!(compile_selection.contains("-p astronomical-e2e"));
     for archive_alias in [
         "nextest-archive-integration = ",

@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 use std::io::Write;
 
-use astronomical_model_serving::{
+use model_serving::{
     ArtifactValidationError, RequiredFileProfile, TensorDtype, TensorProfile, ValidatedWeightsFile,
     validate_bounded_safetensors_with_partial_profiles, validate_required_file_for_tests,
 };

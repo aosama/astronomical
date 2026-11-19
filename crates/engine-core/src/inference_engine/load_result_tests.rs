@@ -1,4 +1,4 @@
-use astronomical_ipc_protocol::{NeuralEnginePrefillStatus, WorkerEvent};
+use ipc_protocol::{NeuralEnginePrefillStatus, WorkerEvent};
 
 use super::EngineLoadResult;
 

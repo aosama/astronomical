@@ -19,9 +19,9 @@ use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use astronomical_config::AstronomicalRuntimeInstance;
-use astronomical_ipc_protocol::{DaemonRequest, SpeakGenerateRequest};
-use astronomical_speech_contract::SpeechFailure;
+use config::AstronomicalRuntimeInstance;
+use ipc_protocol::{DaemonRequest, SpeakGenerateRequest};
+use speech_contract::SpeechFailure;
 use thiserror::Error;
 
 use crate::transport::ipc::DaemonProbeError;

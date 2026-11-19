@@ -5,10 +5,10 @@
 //! reads for prompts and one-row decode steps serve this kernel too, so a
 //! model that drafts holds no second layout and no extra memory.
 
-use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 use mlx_bridge::{
     MlxArray, MlxDtype, MlxMetalKernel, MlxMetalKernelOutput, MlxMetalKernelTemplateArgument,
 };
+use runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use super::dispatch_plan::{
     OUTPUT_COLUMNS_PER_SIMDGROUP, QUANTIZATION_GROUP_SIZE, RowBatchedDispatchPlan,

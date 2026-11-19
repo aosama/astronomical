@@ -4,7 +4,7 @@
 
 use std::collections::BTreeSet;
 
-use astronomical_memory_policy::astro_expert_cache_model::{ReplayCase, SavedReplayCase};
+use memory_policy::astro_expert_cache_model::{ReplayCase, SavedReplayCase};
 
 /// The way today's engine divides it: layers held whole when the reply began
 /// stay whole, layers that held nothing at either end of the reply keep

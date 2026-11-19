@@ -2,7 +2,7 @@
 
 use std::sync::{Arc, RwLock};
 
-use astronomical_ipc_protocol::{MlxMemorySnapshotSource, WorkerEvent, WorkerMlxMemorySnapshot};
+use ipc_protocol::{MlxMemorySnapshotSource, WorkerEvent, WorkerMlxMemorySnapshot};
 
 use crate::{
     ActiveRequestProgress, GenerationPerformanceLog, ImageGenerationExecutionError,
@@ -77,8 +77,8 @@ pub(super) fn handle_worker_image_event(
 fn apply_image_generation_progress(
     active_worker_request: &mut Option<ActiveWorkerRequest>,
     health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
-    request_id: astronomical_ipc_protocol::RequestId,
-    phase: astronomical_ipc_protocol::ImageGenerationPhase,
+    request_id: ipc_protocol::RequestId,
+    phase: ipc_protocol::ImageGenerationPhase,
     completed_steps: u16,
     total_steps: u16,
     elapsed_millis: u64,
@@ -125,7 +125,7 @@ fn apply_image_generation_progress(
 /// guard expression and its operand order are the original inline check.
 fn validate_image_generation_progress(
     active_image: &ActiveImageGeneration,
-    phase: astronomical_ipc_protocol::ImageGenerationPhase,
+    phase: ipc_protocol::ImageGenerationPhase,
     completed_steps: u16,
     total_steps: u16,
     elapsed_millis: u64,
@@ -151,9 +151,9 @@ fn validate_image_generation_progress(
 /// partial success escape.
 fn apply_image_generation_completed(
     active_worker_request: &mut Option<ActiveWorkerRequest>,
-    request_id: astronomical_ipc_protocol::RequestId,
-    generated_image: astronomical_ipc_protocol::GeneratedImage,
-    result_metadata: astronomical_ipc_protocol::ImageGenerationResultMetadata,
+    request_id: ipc_protocol::RequestId,
+    generated_image: ipc_protocol::GeneratedImage,
+    result_metadata: ipc_protocol::ImageGenerationResultMetadata,
 ) -> Result<(), WorkerControlError> {
     let active_image = matching_active_image(active_worker_request, request_id)?;
     validate_image_completed_result(active_image, &generated_image, &result_metadata)?;
@@ -173,8 +173,8 @@ fn apply_image_generation_completed(
 /// order are the original inline check.
 fn validate_image_completed_result(
     active_image: &ActiveImageGeneration,
-    generated_image: &astronomical_ipc_protocol::GeneratedImage,
-    result_metadata: &astronomical_ipc_protocol::ImageGenerationResultMetadata,
+    generated_image: &ipc_protocol::GeneratedImage,
+    result_metadata: &ipc_protocol::ImageGenerationResultMetadata,
 ) -> Result<(), WorkerControlError> {
     if active_image.terminal_outcome.is_some()
         || result_metadata.width_pixels != active_image.settings.width_pixels
@@ -194,8 +194,8 @@ fn validate_image_completed_result(
 /// Records a request-scoped failure as the request's terminal outcome.
 fn apply_image_generation_failed(
     active_worker_request: &mut Option<ActiveWorkerRequest>,
-    request_id: astronomical_ipc_protocol::RequestId,
-    reason: astronomical_ipc_protocol::ImageGenerationFailureReason,
+    request_id: ipc_protocol::RequestId,
+    reason: ipc_protocol::ImageGenerationFailureReason,
 ) -> Result<(), WorkerControlError> {
     let active_image = matching_active_image(active_worker_request, request_id)?;
     if active_image.terminal_outcome.is_some() {
@@ -213,7 +213,7 @@ fn apply_image_generation_finalized(
     active_worker_request: &mut Option<ActiveWorkerRequest>,
     health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
     performance_log: &mut GenerationPerformanceLog,
-    request_id: astronomical_ipc_protocol::RequestId,
+    request_id: ipc_protocol::RequestId,
     worker_reported_elapsed_millis: u64,
     mlx_memory_snapshot: Option<WorkerMlxMemorySnapshot>,
 ) -> Result<(), WorkerControlError> {
@@ -327,8 +327,8 @@ fn image_finalization_durations(
     })
 }
 
-fn image_phase_rank(phase: astronomical_ipc_protocol::ImageGenerationPhase) -> u8 {
-    use astronomical_ipc_protocol::ImageGenerationPhase;
+fn image_phase_rank(phase: ipc_protocol::ImageGenerationPhase) -> u8 {
+    use ipc_protocol::ImageGenerationPhase;
     match phase {
         ImageGenerationPhase::Preparing => 0,
         ImageGenerationPhase::EncodingPrompt => 1,
@@ -378,7 +378,7 @@ pub(super) fn publish_image_finalized_memory_snapshot(
 
 fn matching_active_image(
     active_worker_request: &mut Option<ActiveWorkerRequest>,
-    request_id: astronomical_ipc_protocol::RequestId,
+    request_id: ipc_protocol::RequestId,
 ) -> Result<&mut ActiveImageGeneration, WorkerControlError> {
     let active_image = active_worker_request
         .as_mut()

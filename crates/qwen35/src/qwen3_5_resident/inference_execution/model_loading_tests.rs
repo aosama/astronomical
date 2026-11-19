@@ -3,7 +3,7 @@
 //! engine lane against real artifacts.
 
 use super::resolve_model_chunking_configuration;
-use astronomical_ipc_protocol::WorkerChunkingConfiguration;
+use ipc_protocol::WorkerChunkingConfiguration;
 
 fn worker_chunking_configuration_with(growth_tokens: u32) -> WorkerChunkingConfiguration {
     WorkerChunkingConfiguration {

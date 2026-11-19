@@ -1,12 +1,12 @@
 //! Unit tests for `crate::rest::openai::chat_translation`: how an
 //! OpenAI chat completion request lowers into the worker's chat command.
 
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     ChatAssistantToolCall, ChatAssistantToolFunction, ChatGenerationCommand,
     ChatGenerationSettings, ChatMessage, ChatToolChoice, ChatToolDefinition, RequestId,
     StructuredGenerationConstraint,
 };
-use astronomical_rest_contract::OpenAiChatCompletionRequest;
+use rest_contract::OpenAiChatCompletionRequest;
 
 #[test]
 fn should_lower_a_later_system_message_to_a_chronological_user_update() {

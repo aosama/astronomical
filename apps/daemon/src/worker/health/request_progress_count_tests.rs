@@ -2,7 +2,7 @@
 
 use std::sync::{Arc, RwLock};
 
-use astronomical_ipc_protocol::ImageGenerationPhase;
+use ipc_protocol::ImageGenerationPhase;
 
 use super::{
     ActiveRequestProgress, WorkerHealthSnapshot, WorkerHealthStatus, clear_active_request_progress,
@@ -87,8 +87,8 @@ fn should_forget_the_last_chunk_placement_when_a_request_ends_however_it_ended()
     let health_snapshot = fresh_snapshot();
     crate::worker::health::record_neural_engine_chunk(
         &health_snapshot,
-        astronomical_ipc_protocol::NeuralEngineChunkReport {
-            placement: astronomical_ipc_protocol::NeuralEngineChunkPlacement::GpuMemoryTight,
+        ipc_protocol::NeuralEngineChunkReport {
+            placement: ipc_protocol::NeuralEngineChunkPlacement::GpuMemoryTight,
             chunk_token_count: 2_048,
             neural_engine_token_count: 0,
             elapsed_millis: 350,

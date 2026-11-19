@@ -149,19 +149,19 @@ async fn should_keep_reporting_restart_required_until_server_is_restarted() {
         // These reload tests write config files that omit the span, so the
         // live fixture holds the default the reload will resolve; any other
         // value would make every reload report a span change.
-        idle_model_unload_seconds: astronomical_config::DEFAULT_IDLE_MODEL_UNLOAD_SECONDS,
+        idle_model_unload_seconds: config::DEFAULT_IDLE_MODEL_UNLOAD_SECONDS,
         configured_astro_ssd_prompt_cache_maximum_size_bytes: None,
         performance_attribution_enabled: false,
-        astro_ssd_prompt_cache_config: astronomical_config::AstroSsdPromptCacheConfig::new(
+        astro_ssd_prompt_cache_config: config::AstroSsdPromptCacheConfig::new(
             config_home_directory
                 .join(".astronomical-dev")
                 .join("cache"),
             50_000_000_000,
         ),
         bind_address: "127.0.0.1:6733".to_owned(),
-        logging_config: astronomical_config::LoggingConfig::new(
+        logging_config: config::LoggingConfig::new(
             config_home_directory.join(".astronomical-dev").join("logs"),
-            astronomical_config::LogLevel::Warn,
+            config::LogLevel::Warn,
             7,
         ),
     }));
@@ -302,9 +302,9 @@ async fn should_keep_worker_and_logging_fields_unchanged_when_application_restar
         }"#,
     );
     let mut initial_resolved_config = sample_resolved_config();
-    initial_resolved_config.logging_config = astronomical_config::LoggingConfig::new(
+    initial_resolved_config.logging_config = config::LoggingConfig::new(
         config_home_directory.join(".astronomical-dev").join("logs"),
-        astronomical_config::LogLevel::Warn,
+        config::LogLevel::Warn,
         7,
     );
     let reloadable_config = Arc::new(RwLock::new(initial_resolved_config));
@@ -332,10 +332,7 @@ async fn should_keep_worker_and_logging_fields_unchanged_when_application_restar
         .read()
         .expect("the reloadable config should remain readable");
     assert_eq!(live_config.bind_address, "127.0.0.1:6733");
-    assert_eq!(
-        live_config.logging_config.level(),
-        astronomical_config::LogLevel::Warn
-    );
+    assert_eq!(live_config.logging_config.level(), config::LogLevel::Warn);
 }
 
 #[tokio::test]
@@ -439,7 +436,7 @@ async fn should_use_the_same_reloaded_discovery_snapshot_for_listing_and_routing
         config_home_directory,
     );
     let mut reloaded_model = discovered_model_for(RELOADED_MODEL_ID);
-    reloaded_model.model_family = astronomical_config::ModelFamily::Qwen3_5;
+    reloaded_model.model_family = config::ModelFamily::Qwen3_5;
     reloadable_config
         .write()
         .expect("the reloadable config should remain writable")
@@ -482,23 +479,21 @@ async fn should_use_the_same_reloaded_discovery_snapshot_for_listing_and_routing
     assert_eq!(received_generation_commands[0].model, RELOADED_MODEL_ID);
 }
 
-fn discovered_model_for(model_id: &str) -> astronomical_config::DiscoveredModel {
-    astronomical_config::DiscoveredModel {
+fn discovered_model_for(model_id: &str) -> config::DiscoveredModel {
+    config::DiscoveredModel {
         model_id: model_id.to_owned(),
         provider_model_id: None,
-        model_family: astronomical_config::ModelFamily::Qwen3_5,
+        model_family: config::ModelFamily::Qwen3_5,
         revision: "test-revision".to_owned(),
         model_directory: PathBuf::from(format!("/fictional/models/{model_id}")),
-        capabilities: astronomical_config::ModelCapabilities::Chat(
-            astronomical_config::ChatModelCapabilities {
-                context_window: 2_048,
-                max_input_tokens: 1_024,
-                max_output_tokens: 128,
-                supports_vision: false,
-                supports_reasoning: true,
-                supports_tool_calls: true,
-            },
-        ),
+        capabilities: config::ModelCapabilities::Chat(config::ChatModelCapabilities {
+            context_window: 2_048,
+            max_input_tokens: 1_024,
+            max_output_tokens: 128,
+            supports_vision: false,
+            supports_reasoning: true,
+            supports_tool_calls: true,
+        }),
         license: None,
         model_size_bytes: 0,
     }
@@ -516,9 +511,9 @@ async fn should_reject_astro_ssd_prompt_cache_reload_when_worker_replacement_is_
         }"#,
     );
     let mut initial_resolved_config = sample_resolved_config();
-    initial_resolved_config.logging_config = astronomical_config::LoggingConfig::new(
+    initial_resolved_config.logging_config = config::LoggingConfig::new(
         config_home_directory.join(".astronomical-dev").join("logs"),
-        astronomical_config::LogLevel::Warn,
+        config::LogLevel::Warn,
         7,
     );
     let application = build_development_application_with_reload(

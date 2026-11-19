@@ -3,8 +3,8 @@
 
 use std::path::PathBuf;
 
-use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
-use astronomical_test_harness::test_run::TestRunContext;
+use runtime_integration::{MlxMemoryLimits, MlxRuntime};
+use test_harness::test_run::TestRunContext;
 
 /// Generous for a small base plus the encoder's working copies, far below
 /// any laptop ceiling.
@@ -58,8 +58,8 @@ pub(crate) fn fresh_output_directory(journey_name: &str) -> PathBuf {
 /// Progress lines on standard error, so a long journey shows its ETA.
 pub(crate) struct StandardErrorProgress;
 
-impl astronomical_quantization::progress::ProgressReporter for StandardErrorProgress {
-    fn report(&mut self, progress: &astronomical_quantization::progress::StageProgress) {
+impl quantization::progress::ProgressReporter for StandardErrorProgress {
+    fn report(&mut self, progress: &quantization::progress::StageProgress) {
         eprintln!(
             "[{}] {}/{} ({:.0}%) elapsed {}s {:?} {}",
             progress.stage_name,
@@ -92,30 +92,28 @@ pub(crate) fn bfloat16_copy_of(
         return source.to_path_buf();
     }
     config.remove("quantization_config");
-    let inventory =
-        astronomical_quantization::module_inventory::ModuleInventory::from_source_directory(
-            source,
-            astronomical_quantization::bit_width::GroupSize::new(64).expect("valid"),
-        )
-        .expect("the source inventories");
-    let mut plan = astronomical_quantization::requantize::RequantizeTensorPlan::from_inventory(
+    let inventory = quantization::module_inventory::ModuleInventory::from_source_directory(
+        source,
+        quantization::bit_width::GroupSize::new(64).expect("valid"),
+    )
+    .expect("the source inventories");
+    let mut plan = quantization::requantize::RequantizeTensorPlan::from_inventory(
         &inventory,
-        &astronomical_quantization::requantize::BitPolicy::Uniform {
-            bit_width: astronomical_quantization::bit_width::BitWidth::new(4).expect("valid"),
-            group_size: astronomical_quantization::bit_width::GroupSize::new(64).expect("valid"),
+        &quantization::requantize::BitPolicy::Uniform {
+            bit_width: quantization::bit_width::BitWidth::new(4).expect("valid"),
+            group_size: quantization::bit_width::GroupSize::new(64).expect("valid"),
         },
     );
     for entry in &mut plan.entries {
-        entry.decision =
-            astronomical_quantization::requantize::bit_policy::TensorEncodingDecision::PassThrough;
+        entry.decision = quantization::requantize::bit_policy::TensorEncodingDecision::PassThrough;
     }
-    astronomical_quantization::requantize::driver::run_requantize(
+    quantization::requantize::driver::run_requantize(
         runtime,
         source,
         destination,
         &plan,
-        astronomical_quantization::encoder::RangeSearchPolicy::default_policy(),
-        astronomical_quantization::requantize::DEFAULT_SHARD_BYTES,
+        quantization::encoder::RangeSearchPolicy::default_policy(),
+        quantization::requantize::DEFAULT_SHARD_BYTES,
         &mut StandardErrorProgress,
     )
     .expect("the bf16 copy should be written");
@@ -124,10 +122,10 @@ pub(crate) fn bfloat16_copy_of(
         serde_json::to_string_pretty(&config).expect("the config serializes"),
     )
     .expect("the bf16 config is writable");
-    astronomical_quantization::pipeline::artifact_files::copy_source_files(
+    quantization::pipeline::artifact_files::copy_source_files(
         source,
         destination,
-        astronomical_quantization::requantize::DEFAULT_COPY_PATTERNS,
+        quantization::requantize::DEFAULT_COPY_PATTERNS,
     )
     .expect("the tokenizer copies");
     destination.to_path_buf()

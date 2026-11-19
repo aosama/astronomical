@@ -6,10 +6,8 @@
 //! oversized, unparseable, or non-object schema is rejected here with a
 //! clear reason instead of reaching the worker or failing mid-generation.
 
-use astronomical_ipc_protocol::{MAXIMUM_CHAT_SCHEMA_JSON_BYTES, StructuredGenerationConstraint};
-use astronomical_rest_contract::{
-    OpenAiStructuredOutputsValidationError, enforced_generation_from_json_schema,
-};
+use ipc_protocol::{MAXIMUM_CHAT_SCHEMA_JSON_BYTES, StructuredGenerationConstraint};
+use rest_contract::{OpenAiStructuredOutputsValidationError, enforced_generation_from_json_schema};
 
 use crate::serving::structured_output;
 

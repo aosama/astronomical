@@ -14,7 +14,7 @@
 //!   fixed and stated here: 15 equal-width bins of the top probability,
 //!   weighted by how many questions fall in each.
 
-use astronomical_decision_contract::calibration::clamp_temperature;
+use decision_contract::calibration::clamp_temperature;
 
 use crate::scored_question::ScoredQuestion;
 use crate::temperature_softmax::{first_largest_index, log_probabilities_at};
@@ -28,7 +28,7 @@ pub enum ScoringTemperature<'calibration> {
     /// What the model applied when it served the answer.
     Shipped,
     /// A kind calibration, applied as an engine applies it.
-    Calibrated(&'calibration astronomical_decision_contract::calibration_file::KindCalibration),
+    Calibrated(&'calibration decision_contract::calibration_file::KindCalibration),
 }
 
 impl ScoringTemperature<'_> {

@@ -1,6 +1,6 @@
 //! The add-on path of a linear layer, on small known values.
 
-use astronomical_decision_contract::decision_adapters_file::{DecisionAdapters, LinearAdapter};
+use decision_contract::decision_adapters_file::{DecisionAdapters, LinearAdapter};
 use serial_test::serial;
 
 use super::*;

@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::Path;
 
-use astronomical_config::{
+use config::{
     ModelCapabilities, ModelFamily, QwenImage21DirectoryVerificationError,
     classify_pipeline_index_bytes, verify_qwen_image_21_model_directory,
 };
@@ -37,10 +37,7 @@ fn should_verify_complete_qwen_image_21_profile_evidence() {
     assert_eq!(evidence.canonical_model_id, CANONICAL_MODEL_ID);
     assert_eq!(evidence.provider_model_id, PROVIDER_MODEL_ID);
     assert_eq!(evidence.revision, REVIEWED_REVISION);
-    assert_eq!(
-        evidence.license,
-        astronomical_config::ModelLicense::QwenResearch
-    );
+    assert_eq!(evidence.license, config::ModelLicense::QwenResearch);
     assert!(evidence.capabilities.supports_text_to_image);
     assert!(!evidence.capabilities.supports_image_editing);
     assert_eq!(evidence.capabilities.default_steps, 40);

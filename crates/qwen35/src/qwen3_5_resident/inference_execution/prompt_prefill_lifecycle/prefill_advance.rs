@@ -28,10 +28,8 @@ use crate::{
     GeneratedToken, InferenceEngineError, MemoryPhase, PerformanceCounter, PerformanceOperation,
     ResidentForwardAdmissionRejection, StreamingEngineRequirement,
 };
-use astronomical_ipc_protocol::RequestId;
-use astronomical_runtime_integration::{
-    MLX_BUFFER_CACHE_RECLAIM_THRESHOLD_BYTES, MlxMemorySnapshot,
-};
+use ipc_protocol::RequestId;
+use runtime_integration::{MLX_BUFFER_CACHE_RECLAIM_THRESHOLD_BYTES, MlxMemorySnapshot};
 
 use super::super::engine_request::Qwen3_5EngineRequest;
 use super::super::generation_session_lifecycle::generation_error_constructors::completed_prefill_chunk_tokens_exceed_u32_range_error;
@@ -123,7 +121,7 @@ impl Qwen3_5EngineState {
         prefill_start: usize,
         prefill_end: usize,
         forward_chunk_elapsed_millis: u64,
-    ) -> Option<astronomical_ipc_protocol::NeuralEngineChunkReport> {
+    ) -> Option<ipc_protocol::NeuralEngineChunkReport> {
         self.model.as_ref()?.note_neural_engine_chunk_finished(
             prefill_start,
             prefill_end - prefill_start,
@@ -490,7 +488,7 @@ impl Qwen3_5EngineState {
         prefill_end: usize,
         forward_chunk_started_at: Instant,
         forward_chunk_elapsed_millis: u64,
-        neural_engine_chunk: Option<astronomical_ipc_protocol::NeuralEngineChunkReport>,
+        neural_engine_chunk: Option<ipc_protocol::NeuralEngineChunkReport>,
     ) -> Result<GeneratedToken, InferenceEngineError> {
         let model = self
             .model

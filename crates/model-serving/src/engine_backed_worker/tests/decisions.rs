@@ -5,11 +5,11 @@
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 
-use astronomical_decision_contract::{
+use decision_contract::{
     DecisionAnswer, DecisionFailure, DecisionQuestion, FloatVector, HeadInputRequest, HeadInputs,
     NoulAnswer, OrderedJsonValue, QuestionInputCoverage, QuestionOutcome,
 };
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     DecisionsCommand, MAX_IPC_FRAME_BYTES, MlxMemorySnapshotSource, ProtocolReader, ProtocolWriter,
     RequestId, WorkerCommand, WorkerDecisionModelConfiguration, WorkerDecisionModelFamily,
     WorkerEvent, WorkerModelConfiguration,
@@ -24,7 +24,7 @@ use crate::{
     EngineBackedWorker, ImageGenerationUnavailableEngine, MlxActiveMemoryBreakdown,
     MlxMemoryTelemetry, ModelFactory, ModelFactoryRuntime, WorkerRuntimeError,
 };
-use astronomical_decision_contract::decision_training_job::DecisionTrainingJob;
+use decision_contract::decision_training_job::DecisionTrainingJob;
 
 pub(super) const DECISION_MODEL_ID: &str = "scripted-decision-model";
 const MAXIMUM_TOKENS_PER_QUESTION: u32 = 512;

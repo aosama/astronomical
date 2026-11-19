@@ -20,9 +20,9 @@ pub use program_loading::{
 use std::cell::{Cell, RefCell};
 use std::time::{Duration, Instant};
 
-use astronomical_ipc_protocol::{NeuralEngineChunkPlacement, NeuralEngineChunkReport};
-use astronomical_memory_policy::neural_engine_admission::chunk_fits_beside_programs;
-use astronomical_neural_engine::core_ml::CoreMlProgram;
+use ipc_protocol::{NeuralEngineChunkPlacement, NeuralEngineChunkReport};
+use memory_policy::neural_engine_admission::chunk_fits_beside_programs;
+use neural_engine::core_ml::CoreMlProgram;
 
 use super::model::Qwen3_5ResidentModel;
 use super::neural_engine_chunk_comparison::{ChunkComparison, ChunkEngines};

@@ -5,12 +5,10 @@
 use std::error::Error;
 use std::path::Path;
 
-use astronomical_neural_engine::core_ml::{CoreMlComputeUnits, CoreMlProgram, compile_model_to};
-use astronomical_neural_engine::documents::package_layout::write_ml_package;
-use astronomical_neural_engine::documents::projection::{
-    MlProgramWeights, encode_ml_program_projection,
-};
-use astronomical_neural_engine::program_shape::ProgramShape;
+use neural_engine::core_ml::{CoreMlComputeUnits, CoreMlProgram, compile_model_to};
+use neural_engine::documents::package_layout::write_ml_package;
+use neural_engine::documents::projection::{MlProgramWeights, encode_ml_program_projection};
+use neural_engine::program_shape::ProgramShape;
 
 pub(crate) fn load_ml_program(
     shape: ProgramShape,
@@ -43,12 +41,12 @@ pub(crate) fn compile_ml_program_to(
 pub(crate) fn load_ml_program_mlp(
     shape: ProgramShape,
     intermediate_channels: usize,
-    weights: astronomical_neural_engine::documents::mlp::MlpFp16Weights<'_>,
+    weights: neural_engine::documents::mlp::MlpFp16Weights<'_>,
     contraction_part_width: usize,
     compute_units: CoreMlComputeUnits,
     model_directory: &Path,
 ) -> Result<CoreMlProgram, Box<dyn Error>> {
-    let package_contents = astronomical_neural_engine::documents::mlp::encode_ml_program_mlp(
+    let package_contents = neural_engine::documents::mlp::encode_ml_program_mlp(
         shape,
         intermediate_channels,
         weights,
@@ -63,15 +61,13 @@ pub(crate) fn load_ml_program_mlp(
 }
 
 pub(crate) fn load_ml_program_rotated_mlp(
-    layout: astronomical_neural_engine::documents::rotated_mlp::RotatedMlpLayout,
-    weights: astronomical_neural_engine::documents::rotated_mlp::RotatedMlpWeights<'_>,
+    layout: neural_engine::documents::rotated_mlp::RotatedMlpLayout,
+    weights: neural_engine::documents::rotated_mlp::RotatedMlpWeights<'_>,
     compute_units: CoreMlComputeUnits,
     model_directory: &Path,
 ) -> Result<CoreMlProgram, Box<dyn Error>> {
     let package_contents =
-        astronomical_neural_engine::documents::rotated_mlp::encode_ml_program_rotated_mlp(
-            layout, weights,
-        )?;
+        neural_engine::documents::rotated_mlp::encode_ml_program_rotated_mlp(layout, weights)?;
     let package_path = write_ml_package(model_directory, &package_contents)?;
     Ok(CoreMlProgram::load_from_path(
         &package_path,

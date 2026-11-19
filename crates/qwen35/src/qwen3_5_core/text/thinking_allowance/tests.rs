@@ -1,7 +1,7 @@
 //! Thinking-allowance resolution contracts against the caller's output budget.
 
 use crate::{Qwen3_5Tokenizer, Qwen3_5TokenizerError};
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     ChatGenerationCommand, ChatGenerationSettings, ChatMessage, ChatToolChoice, RequestId,
 };
 

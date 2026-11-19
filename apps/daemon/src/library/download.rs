@@ -19,7 +19,6 @@ mod manifest_preflight_tests;
 pub(crate) mod job;
 pub(crate) mod transfer;
 
-pub use astronomical_download_catalog::DownloadPathSelection;
 pub use coordinator::installed_model_removal::InstalledModelRemovalError;
 pub use coordinator::queue_controls::DownloadEnqueueOutcome;
 pub use coordinator::{LibraryDownloadCoordinator, LibraryDownloadCoordinatorError};
@@ -27,6 +26,7 @@ pub use disk_preflight::{
     DiskCapacityQuery, DownloadDiskCapacityCheck, DownloadDiskPreflight,
     DownloadDiskPreflightError, Fs4DiskCapacityQuery,
 };
+pub use download_catalog::DownloadPathSelection;
 pub(crate) use endpoint::library_download_routes;
 pub use executable_preflight::{DownloadExecutablePreflight, DownloadExecutablePreflightError};
 pub use manifest_preflight::{DownloadManifestPreflight, DownloadManifestPreflightError};

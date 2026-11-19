@@ -5,11 +5,9 @@
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
-use astronomical_model_serving::{
-    QuantizedExpertPageManifest, SafetensorsDtype, load_quantized_expert_page,
-};
-use astronomical_runtime_integration::{BoundedReadInterval, MlxRuntime};
 use mlx_bridge::{MlxArray, MlxDtype};
+use model_serving::{QuantizedExpertPageManifest, SafetensorsDtype, load_quantized_expert_page};
+use runtime_integration::{BoundedReadInterval, MlxRuntime};
 
 use super::atlas_conversion::{AtlasTestFile, tensor_name_suffix};
 use super::macos_file_cache_bypassing_io::{

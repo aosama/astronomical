@@ -1,6 +1,6 @@
 //! The `DownloadStatus` answer a stub daemon scripts for its Nth poll.
 
-use astronomical_ipc_protocol::DaemonResponse;
+use ipc_protocol::DaemonResponse;
 
 use super::stub_daemon::StubDaemonConfig;
 

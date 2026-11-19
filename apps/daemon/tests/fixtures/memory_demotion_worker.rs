@@ -21,7 +21,7 @@ use std::{
     process::ExitCode,
 };
 
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     ChatGenerationCompletionReason, ChatModelCapabilities, ExpertMemoryMode,
     ImageGenerationCapabilities, MlxMemorySnapshotSource, ProtocolError, ProtocolReader,
     ProtocolWriter, WorkerAutoregressiveModelConfiguration, WorkerCommand, WorkerEvent,

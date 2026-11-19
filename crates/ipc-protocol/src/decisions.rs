@@ -6,8 +6,8 @@
 //! of object members is part of the text the model reads, and it must
 //! survive both process boundaries exactly as the caller wrote it.
 
-use astronomical_decision_contract::decision_training_job::DecisionTrainingJob;
-use astronomical_decision_contract::{
+use decision_contract::decision_training_job::DecisionTrainingJob;
+use decision_contract::{
     DecisionQuestion, OrderedJsonValue, QuestionDefinitionError, parse_system_one_questions,
 };
 use serde::{Deserialize, Serialize};

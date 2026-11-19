@@ -3,7 +3,7 @@
 //! channel (issue #1391).
 
 use astronomical_cli::DoctorDependencies;
-use astronomical_config::AstronomicalRuntimeInstance;
+use config::AstronomicalRuntimeInstance;
 use tokio::time::timeout;
 
 use crate::integration::support::environment::{

@@ -97,7 +97,7 @@ pub(crate) async fn launch_real_model_rest_server_for_models(
     maximum_mlx_memory_bytes: u64,
 ) -> RealModelRestServer {
     let production_worker_executable_path =
-        astronomical_test_harness::workspace_binary("astronomical-inference-worker");
+        test_harness::workspace_binary("astronomical-inference-worker");
     // Resolve the same standard configuration used by production, but rooted in
     // the journey's temporary home. The explicit byte ceiling below is repeated
     // in startup IPC so the test cannot accidentally exercise a machine default.
@@ -388,13 +388,13 @@ pub(crate) async fn launch_serving_rest_server_for_embedding_model(
 }
 
 pub(crate) async fn launch_serving_rest_server_for_artifact_with_memory_limit(
-    discovered_model_artifact: astronomical_config::DiscoveredModel,
+    discovered_model_artifact: config::DiscoveredModel,
     isolated_worker_home_directory: Option<&Path>,
     performance_log_directory: Option<&Path>,
     maximum_mlx_memory_bytes: Option<u64>,
 ) -> ServingRestServer {
     let production_worker_executable_path =
-        astronomical_test_harness::workspace_binary("astronomical-inference-worker");
+        test_harness::workspace_binary("astronomical-inference-worker");
     let owned_isolated_development_home = isolated_worker_home_directory
         .is_none()
         .then(super::isolated_development_home_from_user_config);

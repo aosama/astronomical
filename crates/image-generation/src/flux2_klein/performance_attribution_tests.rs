@@ -3,7 +3,7 @@
 use std::time::Duration;
 
 use crate::flux2_klein::{FLUX2_KLEIN_OFFICIAL_MODEL_ID, FLUX2_KLEIN_OFFICIAL_REVISION};
-use astronomical_model_primitives::performance_attribution::*;
+use model_primitives::performance_attribution::*;
 
 #[test]
 fn should_serialize_image_identity_controls_memory_and_success_outcome() {

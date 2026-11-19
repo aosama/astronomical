@@ -281,14 +281,14 @@ pub(super) fn multi_file_paused_job(file_payloads: &[(&str, &[u8])]) -> Download
 }
 
 pub(super) fn sha256_hex(payload: &[u8]) -> String {
-    astronomical_lowercase_hex::encode_lowercase_hex(Sha256::digest(payload).as_ref())
+    lowercase_hex::encode_lowercase_hex(Sha256::digest(payload).as_ref())
 }
 
 pub(super) fn git_blob_sha1_hex(payload: &[u8]) -> String {
     let mut digest = Sha1::new();
     digest.update(format!("blob {}\0", payload.len()).as_bytes());
     digest.update(payload);
-    astronomical_lowercase_hex::encode_lowercase_hex(digest.finalize().as_ref())
+    lowercase_hex::encode_lowercase_hex(digest.finalize().as_ref())
 }
 
 pub(super) fn staged_file_path(models_directory: &Path) -> std::path::PathBuf {

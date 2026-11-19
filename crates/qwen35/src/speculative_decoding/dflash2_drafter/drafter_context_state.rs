@@ -7,8 +7,8 @@
 //! every round. A sliding-window layer keeps at most `sliding_window - 1`
 //! rows, so with the block's rows a query never sees more than the window.
 
-use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 use mlx_bridge::MlxArray;
+use runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use super::drafter_configuration::{DFlash2DrafterConfiguration, DrafterLayerAttention};
 

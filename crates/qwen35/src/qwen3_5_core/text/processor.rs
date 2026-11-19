@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests;
 
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     ChatGenerationCommand, ChatGenerationFailureReason, ChatGenerationOutput, ChatMessage,
     ChatModelCapabilities, WorkerEvent,
 };

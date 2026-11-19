@@ -9,11 +9,9 @@
 
 use std::time::Instant;
 
-use astronomical_config::AstronomicalConfig;
-use astronomical_ipc_protocol::NeuralEnginePrefillStatus;
-use astronomical_model_serving::{
-    Qwen3_5ArtifactValidator, Qwen3_5ResidentModel, Qwen3_5Tokenizer,
-};
+use config::AstronomicalConfig;
+use ipc_protocol::NeuralEnginePrefillStatus;
+use model_serving::{Qwen3_5ArtifactValidator, Qwen3_5ResidentModel, Qwen3_5Tokenizer};
 use serial_test::serial;
 use tokio::time::timeout;
 

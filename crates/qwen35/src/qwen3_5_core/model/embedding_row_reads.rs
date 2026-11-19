@@ -7,7 +7,7 @@
 //! the arithmetic of that read: which distinct rows, in which order, and
 //! which byte intervals of the shard they occupy. It reads nothing itself.
 
-use astronomical_runtime_integration::BoundedReadInterval;
+use runtime_integration::BoundedReadInterval;
 
 /// Where one row-major table lives in its shard: the absolute offset of row
 /// zero and the bytes of one row.

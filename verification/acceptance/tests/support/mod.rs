@@ -29,7 +29,7 @@ pub(crate) mod serving_rest;
 pub(crate) mod worker_process_observation;
 
 #[allow(unused_imports)]
-pub(crate) use astronomical_test_harness::fixtures::{
+pub(crate) use test_harness::fixtures::{
     dense_vision_model_id, e2e_test_model_ids, flux2_klein_4bit_model_id, flux2_klein_model_id,
     large_sparse_moe_streaming_model_id, largest_sparse_moe_streaming_model_id,
     required_e2e_test_model_ids, resident_sparse_moe_model_id, small_dense_model_id,
@@ -41,9 +41,8 @@ pub(crate) use astronomical_test_harness::fixtures::{
 // shared surface.
 #[allow(dead_code)]
 pub(crate) fn isolated_development_home_from_user_config() -> tempfile::TempDir {
-    let development_config =
-        astronomical_config::AstronomicalConfig::load_from_development_location()
-            .expect("Development configuration should load for isolated acceptance");
+    let development_config = config::AstronomicalConfig::load_from_development_location()
+        .expect("Development configuration should load for isolated acceptance");
     let isolated_development_home =
         tempfile::tempdir().expect("isolated Development home should be created");
     let isolated_state_directory = isolated_development_home.path().join(".astronomical-dev");
@@ -105,24 +104,22 @@ pub(crate) fn discovered_model_artifact(
     model_id: &str,
     model_directory: &std::path::Path,
     max_output_tokens: u32,
-) -> astronomical_config::DiscoveredModel {
+) -> config::DiscoveredModel {
     const CONTEXT_WINDOW: u32 = 262_144;
-    astronomical_config::DiscoveredModel {
+    config::DiscoveredModel {
         model_id: model_id.to_owned(),
         provider_model_id: None,
-        model_family: astronomical_config::ModelFamily::Qwen3_5,
+        model_family: config::ModelFamily::Qwen3_5,
         revision: "local-model-artifact-test".to_owned(),
         model_directory: model_directory.to_path_buf(),
-        capabilities: astronomical_config::ModelCapabilities::Chat(
-            astronomical_config::ChatModelCapabilities {
-                context_window: CONTEXT_WINDOW,
-                max_input_tokens: CONTEXT_WINDOW.saturating_sub(1),
-                max_output_tokens,
-                supports_vision: true,
-                supports_reasoning: true,
-                supports_tool_calls: true,
-            },
-        ),
+        capabilities: config::ModelCapabilities::Chat(config::ChatModelCapabilities {
+            context_window: CONTEXT_WINDOW,
+            max_input_tokens: CONTEXT_WINDOW.saturating_sub(1),
+            max_output_tokens,
+            supports_vision: true,
+            supports_reasoning: true,
+            supports_tool_calls: true,
+        }),
         license: None,
         model_size_bytes: 0,
     }
@@ -135,19 +132,17 @@ pub(crate) fn discovered_embedding_model_artifact(
     model_directory: &std::path::Path,
     vector_width: u32,
     max_input_tokens: u32,
-) -> astronomical_config::DiscoveredModel {
-    astronomical_config::DiscoveredModel {
+) -> config::DiscoveredModel {
+    config::DiscoveredModel {
         model_id: model_id.to_owned(),
         provider_model_id: None,
-        model_family: astronomical_config::ModelFamily::ModernBert,
+        model_family: config::ModelFamily::ModernBert,
         revision: "local-model-artifact-test".to_owned(),
         model_directory: model_directory.to_path_buf(),
-        capabilities: astronomical_config::ModelCapabilities::Embeddings(
-            astronomical_config::EmbeddingModelCapabilities {
-                vector_width,
-                max_input_tokens,
-            },
-        ),
+        capabilities: config::ModelCapabilities::Embeddings(config::EmbeddingModelCapabilities {
+            vector_width,
+            max_input_tokens,
+        }),
         license: None,
         model_size_bytes: 0,
     }
@@ -155,24 +150,23 @@ pub(crate) fn discovered_embedding_model_artifact(
 
 #[allow(dead_code)]
 pub(crate) fn chat_capabilities(
-    discovered_model: &astronomical_config::DiscoveredModel,
-) -> Option<&astronomical_config::ChatModelCapabilities> {
+    discovered_model: &config::DiscoveredModel,
+) -> Option<&config::ChatModelCapabilities> {
     match &discovered_model.capabilities {
-        astronomical_config::ModelCapabilities::Chat(chat_capabilities) => Some(chat_capabilities),
-        astronomical_config::ModelCapabilities::ImageGeneration(_)
-        | astronomical_config::ModelCapabilities::Embeddings(_)
-        | astronomical_config::ModelCapabilities::Decisions(_)
-        | astronomical_config::ModelCapabilities::Speech(_) => None,
+        config::ModelCapabilities::Chat(chat_capabilities) => Some(chat_capabilities),
+        config::ModelCapabilities::ImageGeneration(_)
+        | config::ModelCapabilities::Embeddings(_)
+        | config::ModelCapabilities::Decisions(_)
+        | config::ModelCapabilities::Speech(_) => None,
     }
 }
 
 #[allow(dead_code)]
-pub(crate) fn configured_discovered_models() -> Vec<astronomical_config::DiscoveredModel> {
-    let astronomical_config =
-        astronomical_config::AstronomicalConfig::load_from_development_location().expect(
-            "the Development Astronomical configuration should load for installed-model lookup",
-        );
-    astronomical_config::discover_models(astronomical_config.model_directories())
+pub(crate) fn configured_discovered_models() -> Vec<config::DiscoveredModel> {
+    let astronomical_config = config::AstronomicalConfig::load_from_development_location().expect(
+        "the Development Astronomical configuration should load for installed-model lookup",
+    );
+    config::discover_models(astronomical_config.model_directories())
         .expect("configured model-directory discovery should complete")
         .into_iter()
         .flat_map(|configured_model_directory_scan| {
@@ -187,18 +181,15 @@ pub(crate) fn configured_discovered_models() -> Vec<astronomical_config::Discove
 /// only when it scans from a root, and by the snapshot hash otherwise.
 #[allow(dead_code)]
 pub(crate) fn configured_model_directory_roots() -> Vec<PathBuf> {
-    let astronomical_config =
-        astronomical_config::AstronomicalConfig::load_from_development_location().expect(
-            "the Development Astronomical configuration should load for model-directory roots",
-        );
+    let astronomical_config = config::AstronomicalConfig::load_from_development_location()
+        .expect("the Development Astronomical configuration should load for model-directory roots");
     astronomical_config.model_directories().to_vec()
 }
 
 pub(crate) fn configured_installed_model_directory_by_id(model_id: &str) -> PathBuf {
-    let astronomical_config =
-        astronomical_config::AstronomicalConfig::load_from_development_location().expect(
-            "the Development Astronomical configuration should load for installed-model lookup",
-        );
+    let astronomical_config = config::AstronomicalConfig::load_from_development_location().expect(
+        "the Development Astronomical configuration should load for installed-model lookup",
+    );
     match astronomical_config.find_configured_model_directory_by_id(model_id) {
         Ok(Some(model_directory)) => model_directory,
         Ok(None) => panic!(
@@ -214,7 +205,7 @@ pub(crate) fn configured_installed_model_directory_by_id(model_id: &str) -> Path
 }
 
 fn first_configured_model_directory_by_id(
-    astronomical_config: &astronomical_config::AstronomicalConfig,
+    astronomical_config: &config::AstronomicalConfig,
     model_id: &str,
 ) -> Option<PathBuf> {
     for model_root in astronomical_config.model_directories() {

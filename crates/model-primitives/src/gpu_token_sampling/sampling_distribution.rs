@@ -3,8 +3,8 @@
 //! drafter's proposals against exactly this law, so a drafted reply is
 //! distributed as an undrafted one. Keep it in step with the sampler.
 
-use astronomical_runtime_integration::MlxRuntime;
 use mlx_bridge::{MlxArray, MlxDtype};
+use runtime_integration::MlxRuntime;
 
 use super::vocabulary_top_k::MAXIMUM_TOP_K;
 use super::{

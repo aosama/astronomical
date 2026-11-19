@@ -1,12 +1,12 @@
 //! Architecture-neutral component contract behind the FLUX lifecycle owner.
 
-use astronomical_ipc_protocol::{ImageGenerationCapabilities, RequestId};
+use ipc_protocol::{ImageGenerationCapabilities, RequestId};
 
-use astronomical_model_primitives::performance_attribution::PerformanceAttributionOutcome;
+use model_primitives::performance_attribution::PerformanceAttributionOutcome;
 
 use super::super::{Flux2KleinFlowSchedule, Flux2KleinFlowStep, Flux2KleinImageDimensions};
-use astronomical_memory_policy::telemetry::MlxMemoryLimitAdjustment;
-use astronomical_memory_policy::telemetry::MlxMemoryTelemetry;
+use memory_policy::telemetry::MlxMemoryLimitAdjustment;
+use memory_policy::telemetry::MlxMemoryTelemetry;
 
 /// Loaded identity supplied by either native components or an scripted lifecycle fake.
 #[doc(hidden)]

@@ -152,7 +152,7 @@ async fn run_thinking_controls_gpu_journey() {
     );
 }
 
-fn configured_thinking_controls_chat_model() -> astronomical_config::DiscoveredModel {
+fn configured_thinking_controls_chat_model() -> config::DiscoveredModel {
     let discovered_models = crate::support::configured_discovered_models();
     let selected_model = discovered_models
         .into_iter()
@@ -176,7 +176,7 @@ fn configured_thinking_controls_chat_model() -> astronomical_config::DiscoveredM
                 "{THINKING_CONTROLS_MODEL_LEAF_ID} must be a chat model for thinking-controls acceptance"
             )
         });
-    astronomical_model_serving::Qwen3_5ArtifactValidator::new()
+    model_serving::Qwen3_5ArtifactValidator::new()
         .validate(
             &selected_model.model_directory,
             chat_capabilities.max_output_tokens,

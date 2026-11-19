@@ -15,11 +15,11 @@
 use std::fs::File;
 use std::time::Duration;
 
-use astronomical_model_serving::{
+use model_serving::{
     QWEN_IMAGE_21_TEXT_EMBEDDING_WIDTH, QwenImage21TextEncoder, normalize_empty_prompt,
     render_t2i_prompt_template,
 };
-use astronomical_runtime_integration::MlxRuntime;
+use runtime_integration::MlxRuntime;
 use tokenizers::Tokenizer;
 
 use crate::common::qwen_image_21;

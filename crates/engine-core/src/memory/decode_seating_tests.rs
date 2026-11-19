@@ -2,7 +2,7 @@ use super::decode_seating::{
     DecodeExpertSeating, complete_layers_within_decode_warm_budget,
     seat_and_materialize_complete_layers,
 };
-use astronomical_memory_policy::residency::{
+use memory_policy::residency::{
     CurrentExpertLayerResidency, ExpertLayerGeometry, RetainedExpertPageClass,
     kept_layer_indexes_to_seat_before_reply, plan_expert_residency,
 };

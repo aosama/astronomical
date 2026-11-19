@@ -1,7 +1,7 @@
 use std::fs;
 use std::os::unix::fs::symlink;
 
-use astronomical_model_serving::{
+use model_serving::{
     AstroSsdPromptCacheDiskStore, AstroSsdPromptCacheDiskStoreConfig,
     AstroSsdPromptCacheDiskStoreError,
 };

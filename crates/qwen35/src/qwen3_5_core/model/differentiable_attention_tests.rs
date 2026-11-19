@@ -4,10 +4,10 @@
 use serial_test::serial;
 
 use super::*;
-use astronomical_model_primitives::synthetic_weights_test_support::{
+use model_primitives::synthetic_weights_test_support::{
     initialize_test_runtime, shakespeare_values,
 };
-use astronomical_runtime_integration::MlxRuntime;
+use runtime_integration::MlxRuntime;
 
 const QUERY_HEAD_COUNT: i32 = 4;
 const KEY_VALUE_HEAD_COUNT: i32 = 2;

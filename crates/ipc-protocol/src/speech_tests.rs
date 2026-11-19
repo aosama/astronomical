@@ -1,4 +1,4 @@
-use astronomical_speech_contract::SpeechFailure;
+use speech_contract::SpeechFailure;
 
 use super::{SpeechCommand, SpokenAudioSegment, WorkerSpeechCapabilities};
 use crate::{RequestId, WorkerModelCapabilitiesValidationError};

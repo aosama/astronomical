@@ -4,7 +4,7 @@
 
 use std::path::Path;
 
-use astronomical_model_serving::{
+use model_serving::{
     Qwen3_5ArtifactValidator, Qwen3_5ModelChunkingConfiguration, Qwen3_5ResidentModel,
     Qwen3_5Tokenizer,
 };

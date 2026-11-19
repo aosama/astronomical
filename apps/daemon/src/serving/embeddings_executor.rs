@@ -4,7 +4,7 @@
 //! holds one executor trait object for chat, image, and embeddings. A second
 //! embeddings trait would force every test executor to grow another impl.
 
-use astronomical_ipc_protocol::EmbeddingsFailureReason;
+use ipc_protocol::EmbeddingsFailureReason;
 use tokio::sync::mpsc;
 
 /// One completed native embeddings computation.

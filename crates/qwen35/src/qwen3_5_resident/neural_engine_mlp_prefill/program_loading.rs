@@ -4,20 +4,20 @@
 use std::cell::{Cell, RefCell};
 use std::path::{Path, PathBuf};
 
-use astronomical_ipc_protocol::{NeuralEnginePrefillStatus, WorkerChunkingConfiguration};
-use astronomical_memory_policy::neural_engine_admission::{
+use ipc_protocol::{NeuralEnginePrefillStatus, WorkerChunkingConfiguration};
+use memory_policy::neural_engine_admission::{
     NeuralEnginePrefillAdmission, NeuralEnginePrefillMemoryRequirements,
 };
-use astronomical_neural_engine::core_ml::CoreMlProgram;
-use astronomical_neural_engine::core_ml::compute_device_report::report_compute_devices;
-use astronomical_neural_engine::documents::contraction_split::contraction_part_width;
-use astronomical_neural_engine::documents::mlp::{MlpFp16Weights, encode_ml_program_mlp};
-use astronomical_neural_engine::documents::package_layout::write_ml_package;
-use astronomical_neural_engine::program_shape::ProgramShape;
+use neural_engine::core_ml::CoreMlProgram;
+use neural_engine::core_ml::compute_device_report::report_compute_devices;
+use neural_engine::documents::contraction_split::contraction_part_width;
+use neural_engine::documents::mlp::{MlpFp16Weights, encode_ml_program_mlp};
+use neural_engine::documents::package_layout::write_ml_package;
+use neural_engine::program_shape::ProgramShape;
 
 use crate::qwen3_5_core::model_math::dense_projection::Qwen3_5DenseProjection;
-use astronomical_runtime_integration::MlxRuntime;
 use mlx_bridge::MlxDtype;
+use runtime_integration::MlxRuntime;
 
 use super::{NeuralEngineMlpPrefill, neural_engine_tokens_for_chunk};
 use crate::qwen3_5_core::dense::mlp::Qwen3_5DenseMlpWeights;
@@ -448,9 +448,7 @@ pub fn weight_as_fp16_bits(
     half_precision.to_vec_f16_bits().map_err(read_failure)
 }
 
-fn runtime_read_failure(
-    _runtime_error: astronomical_runtime_integration::MlxRuntimeError,
-) -> &'static str {
+fn runtime_read_failure(_runtime_error: runtime_integration::MlxRuntimeError) -> &'static str {
     WEIGHT_READ_FAILURE
 }
 

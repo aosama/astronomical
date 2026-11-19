@@ -27,9 +27,9 @@
 //! training examples themselves; the verdict is then "not judged", since
 //! doing well on what it learned from says nothing about new questions.
 
-use astronomical_decision_contract::DecisionQuestionKind;
-use astronomical_decision_contract::calibration_file::CalibrationOverride;
-use astronomical_decision_contract::training_record::RecordedVerdict;
+use decision_contract::DecisionQuestionKind;
+use decision_contract::calibration_file::CalibrationOverride;
+use decision_contract::training_record::RecordedVerdict;
 
 use crate::calibration_metrics::{CalibrationMetrics, ScoringTemperature, calibration_metrics};
 use crate::calibration_plan::{

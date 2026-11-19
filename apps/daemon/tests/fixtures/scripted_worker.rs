@@ -1,6 +1,6 @@
 use std::{error::Error, process::ExitCode, time::Duration};
 
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     ChatGenerationCompletionReason, ChatGenerationFailureReason, ChatGenerationOutput,
     ChatModelCapabilities, ExpertMemoryMode, MlxMemorySnapshotSource, ProtocolReader,
     ProtocolWriter, RequestId, WorkerCommand, WorkerEvent, WorkerMlxMemorySnapshot,
@@ -53,7 +53,7 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
     event_writer
         .send_event(&WorkerEvent::Ready {
             model_id: ready_model_id,
-            capabilities: astronomical_ipc_protocol::WorkerModelCapabilities::chat_and_image(
+            capabilities: ipc_protocol::WorkerModelCapabilities::chat_and_image(
                 ChatModelCapabilities {
                     supports_reasoning: true,
                     supports_tool_calls: true,
@@ -262,7 +262,7 @@ async fn send_accepted_or_expert_streaming_session_chat(
 /// cancellation state; returns true when the worker should exit.
 #[expect(clippy::too_many_lines)]
 async fn dispatch_unstructured_chat(
-    generation_command: astronomical_ipc_protocol::ChatGenerationCommand,
+    generation_command: ipc_protocol::ChatGenerationCommand,
     request_id: RequestId,
     event_writer: &mut ProtocolWriter<impl tokio::io::AsyncWrite + Unpin>,
     cancellation_fixture_state: CancellationFixtureState<'_>,
@@ -370,14 +370,14 @@ async fn dispatch_unstructured_chat(
         "astronomical/duplicate-generation-preparation-fixture" => {
             let generation_preparation_event = WorkerEvent::GenerationPreparationStarted {
                 request_id,
-                expert_residency: Some(astronomical_ipc_protocol::WorkerExpertResidencySnapshot {
+                expert_residency: Some(ipc_protocol::WorkerExpertResidencySnapshot {
                     dense_layers: None,
                     total_layer_count: 40,
                     resident_expert_count: 40,
                     resident_expert_payload_bytes: 23_073_914_880,
                     complete_expert_payload_byte_count: 23_073_914_880,
                     expert_capacity: 256,
-                    layer_seating: astronomical_ipc_protocol::ExpertLayerSeatingCounts::default(),
+                    layer_seating: ipc_protocol::ExpertLayerSeatingCounts::default(),
                 }),
                 mlx_memory_snapshot: None,
             };

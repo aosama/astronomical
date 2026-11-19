@@ -14,14 +14,14 @@
 use std::io::Write;
 use std::time::Duration;
 
-use astronomical_quantization::allocation::AllocationConstraints;
-use astronomical_quantization::artifact::json_file::read_json;
-use astronomical_quantization::artifact::{
+use quantization::allocation::AllocationConstraints;
+use quantization::artifact::json_file::read_json;
+use quantization::artifact::{
     OptiQArtifactMetadata, OptiQSensitivityDocument, resolve_metadata_path,
 };
-use astronomical_quantization::bit_width::{CandidateBitWidths, GroupSize};
-use astronomical_quantization::pipeline::plan_from_sensitivity_table;
-use astronomical_quantization::progress::{EtaEstimate, ProgressReporter, StageProgress};
+use quantization::bit_width::{CandidateBitWidths, GroupSize};
+use quantization::pipeline::plan_from_sensitivity_table;
+use quantization::progress::{EtaEstimate, ProgressReporter, StageProgress};
 
 mod quantize_arguments;
 #[cfg(feature = "quantize-convert")]
@@ -46,7 +46,7 @@ pub use quantize_evaluate::run_quantize_evaluate;
 #[derive(Debug, thiserror::Error)]
 pub enum QuantizeError {
     #[error("{0}")]
-    Quantization(#[from] astronomical_quantization::QuantizationError),
+    Quantization(#[from] quantization::QuantizationError),
     #[error("could not write the quantize report to standard output: {cause}")]
     StdoutUnwritable { cause: String },
     #[error(

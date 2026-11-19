@@ -9,8 +9,8 @@ use std::{
 };
 
 use astronomical_cli::{ImageArguments, ImageDependencies, ImageError};
-use astronomical_config::AstronomicalRuntimeInstance;
-use astronomical_ipc_protocol::{DaemonRequest, ImageGenerationFailureReason};
+use config::AstronomicalRuntimeInstance;
+use ipc_protocol::{DaemonRequest, ImageGenerationFailureReason};
 use tokio::time::timeout;
 
 use crate::integration::support::environment::{
@@ -24,7 +24,7 @@ use crate::integration::support::stub_daemon::{
 /// The built-in image model's id, which an unflagged run must ask for.
 /// Read from the config crate, not retyped, so changing the default cannot
 /// silently break these journeys.
-const BUILTIN_IMAGE_MODEL_ID: &str = astronomical_config::BUILTIN_DEFAULT_IMAGE_MODEL_ID;
+const BUILTIN_IMAGE_MODEL_ID: &str = config::BUILTIN_DEFAULT_IMAGE_MODEL_ID;
 const CHAT_MODEL_ID: &str = "test/local-chatter";
 
 /// A PNG signature and a few bytes. The CLI checks only the signature: the

@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
-use astronomical_ipc_protocol::{EmbeddingsCommand, RequestId};
+use ipc_protocol::{EmbeddingsCommand, RequestId};
 use tokio::time::Instant;
 
 use crate::worker::request_admission::{

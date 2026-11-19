@@ -6,11 +6,11 @@
 use std::collections::VecDeque;
 use std::sync::Mutex;
 
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     MAX_IPC_FRAME_BYTES, ProtocolReader, ProtocolWriter, RequestId, SpeechCommand, WorkerCommand,
     WorkerEvent, WorkerModelConfiguration, WorkerSpeechModelConfiguration, WorkerSpeechModelFamily,
 };
-use astronomical_speech_contract::{SpeechFailure, SpeechRequest};
+use speech_contract::{SpeechFailure, SpeechRequest};
 use tokio::io::{duplex, split};
 use tokio::task::JoinHandle;
 

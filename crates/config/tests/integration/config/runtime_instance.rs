@@ -1,5 +1,5 @@
 use super::*;
-use astronomical_config::{AstronomicalInstancePaths, AstronomicalRuntimeInstance};
+use config::{AstronomicalInstancePaths, AstronomicalRuntimeInstance};
 
 #[test]
 fn should_keep_stable_and_development_state_and_endpoints_separate() {

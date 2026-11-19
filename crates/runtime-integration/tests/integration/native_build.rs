@@ -163,7 +163,7 @@ fn check_pinned_archives(
         .expect("the archive verification function should be complete")
         .0;
     let archive_digest =
-        astronomical_lowercase_hex::encode_lowercase_hex(&Sha256::digest(PINNED_ARCHIVE_CONTENTS));
+        lowercase_hex::encode_lowercase_hex(&Sha256::digest(PINNED_ARCHIVE_CONTENTS));
     let mut check_script = format!(
         "set(ASTRONOMICAL_NATIVE_DEPENDENCY_CACHE_DIR \"{}\")\n{archive_function}endfunction()\n",
         astro_native_build_cache_directory.display()

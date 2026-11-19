@@ -9,12 +9,12 @@ use std::path::Path;
 use std::process::Command;
 use std::time::{Duration, Instant};
 
-use astronomical_neural_engine::core_ml::{CoreMlComputeUnits, CoreMlProgram};
-use astronomical_neural_engine::documents::mlp_stages::StageWeightEncoding;
 use astronomical_neural_engine_research::process_memory::{
     MemoryGrowth, MemorySnapshot, mebibytes,
 };
 use astronomical_neural_engine_research::timing_summary::TimingSummary;
+use neural_engine::core_ml::{CoreMlComputeUnits, CoreMlProgram};
+use neural_engine::documents::mlp_stages::StageWeightEncoding;
 use serial_test::serial;
 
 use crate::support::engine_split::milliseconds;

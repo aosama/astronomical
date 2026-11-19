@@ -44,17 +44,17 @@
 //! `cargo test-jangtq2-decode-throughput` (the filter matches this module's
 //! `..._throughput` names).
 
-use astronomical_runtime_integration::MlxRuntime;
 use mlx_bridge::{MlxArray, MlxDtype, MlxMetalKernel};
+use runtime_integration::MlxRuntime;
 use serial_test::serial;
 
-use astronomical_jangtq2_qwen35::codebook;
-use astronomical_jangtq2_qwen35::mlx_decode;
-use astronomical_jangtq2_qwen35::mlx_decode::decode_expert_weight_rows;
 use fixtures::{
     deterministic_packed_words, deterministic_row_scales, deterministic_token_activations,
     expert_sorted_assignments, median_duration_millis, prototype_runtime,
 };
+use jangtq2_qwen35::codebook;
+use jangtq2_qwen35::mlx_decode;
+use jangtq2_qwen35::mlx_decode::decode_expert_weight_rows;
 use kernel::{
     PREFILL_GATHERED_DEQUANT_KERNEL_SOURCE, PrefillGatheredDequantInputs,
     launch_prefill_gathered_dequant,

@@ -4,7 +4,7 @@
 //! argument-parsing coverage (7 tests) lives in the lib unit tests beside
 //! `parse_arguments`.
 
-use astronomical_native_build_tool::parse_arguments;
+use native_build_tool::parse_arguments;
 
 #[test]
 fn should_run_the_native_build_tool_integration_smoke_contract() {

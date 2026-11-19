@@ -1,5 +1,5 @@
-use astronomical_ipc_protocol::{WorkerChunkingConfiguration, WorkerDecodeAstroExpertCachePolicy};
-use astronomical_runtime_integration::MlxRuntime;
+use ipc_protocol::{WorkerChunkingConfiguration, WorkerDecodeAstroExpertCachePolicy};
+use runtime_integration::MlxRuntime;
 use std::sync::Arc;
 
 use crate::inference_engine::load_result::EngineLoadResult;
@@ -293,7 +293,7 @@ fn with_loaded_sequence_state_rate(
 /// weights load keeps stale residency from competing during first-request
 /// paging.
 fn initialize_mlx_runtime_with_cleanup(
-    memory_limits: astronomical_runtime_integration::MlxMemoryLimits,
+    memory_limits: runtime_integration::MlxMemoryLimits,
     model_loading_performance_attribution: &mut PerformanceAttribution,
 ) -> Result<MlxRuntime, InferenceEngineError> {
     let runtime = model_loading_performance_attribution

@@ -1,6 +1,6 @@
 //! Pure admission decisions for one Qwen3.5 generation session.
 
-use astronomical_ipc_protocol::WorkerPromptProcessingPhase;
+use ipc_protocol::WorkerPromptProcessingPhase;
 
 /// Persistent snapshots contain target decoder state only, so target-only
 /// execution is preferred whenever the astro SSD prompt cache is available; precomputed visual

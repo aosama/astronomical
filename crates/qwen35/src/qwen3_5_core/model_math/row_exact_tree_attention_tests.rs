@@ -4,8 +4,8 @@
 //! arithmetic is held to the one-row step and to float32 attention by
 //! `cargo measure-row-exact-tree-attention`.
 
-use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use mlx_bridge::{MlxArray, MlxDtype};
+use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use serial_test::serial;
 
 use super::gated_delta_tree::TreeRowChains;

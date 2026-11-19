@@ -45,7 +45,7 @@ impl PreparedInferenceRequest for ModelFamilyInferenceRequest {
 
 #[cfg(test)]
 mod tests {
-    use astronomical_ipc_protocol::RequestId;
+    use ipc_protocol::RequestId;
 
     use super::{ModelFamilyInferenceRequest, PreparedInferenceRequest};
     use crate::Qwen3_5InferenceRequest;

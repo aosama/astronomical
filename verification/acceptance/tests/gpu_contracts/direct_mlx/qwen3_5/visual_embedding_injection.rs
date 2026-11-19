@@ -1,4 +1,4 @@
-use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
+use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
 use crate::common::{
     DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_MLX_BUFFER_CACHE_LIMIT_BYTES,
@@ -32,7 +32,7 @@ async fn should_replace_chunk_image_pad_runs_with_the_matching_visual_embedding_
     let chunk_token_ids = [10, 248_056, 248_056, 11, 248_056, 12];
 
     let (injected_embeddings, injected_visual_embedding_count) =
-        astronomical_model_serving::qwen3_5_inject_visual_embeddings(
+        model_serving::qwen3_5_inject_visual_embeddings(
             &runtime,
             &text_embeddings,
             &chunk_token_ids,
@@ -77,7 +77,7 @@ async fn should_continue_the_visual_embedding_cursor_across_two_prefill_chunks()
         .array_from_f32(&[0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0], &[1, 4, 2])
         .expect("the first chunk text embeddings should be valid");
     let (first_injected_embeddings, first_injected_count) =
-        astronomical_model_serving::qwen3_5_inject_visual_embeddings(
+        model_serving::qwen3_5_inject_visual_embeddings(
             &runtime,
             &first_chunk_text_embeddings,
             &first_chunk_token_ids,
@@ -94,7 +94,7 @@ async fn should_continue_the_visual_embedding_cursor_across_two_prefill_chunks()
         )
         .expect("the second chunk text embeddings should be valid");
     let (second_injected_embeddings, second_injected_count) =
-        astronomical_model_serving::qwen3_5_inject_visual_embeddings(
+        model_serving::qwen3_5_inject_visual_embeddings(
             &runtime,
             &second_chunk_text_embeddings,
             &second_chunk_token_ids,

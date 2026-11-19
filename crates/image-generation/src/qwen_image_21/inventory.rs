@@ -8,7 +8,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use ::safetensors::Dtype;
 
-use astronomical_artifact_validation::{RawSafetensorsInventory, RawSafetensorsTensorDescriptor};
+use artifact_validation::{RawSafetensorsInventory, RawSafetensorsTensorDescriptor};
 
 use super::artifact::QwenImage21ArtifactError;
 use super::configuration::{

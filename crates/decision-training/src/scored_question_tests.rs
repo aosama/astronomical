@@ -1,6 +1,6 @@
 //! Unit tests for checking a model outcome before it is used.
 
-use astronomical_decision_contract::{QuestionInputCoverage, answer_from_probabilities};
+use decision_contract::{QuestionInputCoverage, answer_from_probabilities};
 
 use super::*;
 use crate::labelled_example::parse_labelled_example;

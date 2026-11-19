@@ -1,6 +1,6 @@
 use std::fs::{self, File};
 
-use astronomical_model_serving::{
+use model_serving::{
     ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID, ORNITH_1_0_35B_OPTIQ_4BIT_REVISION,
     PERSISTENT_VISUAL_EMBEDDING_FORMAT_VERSION, PersistentVisualEmbeddingFileHeader,
     PersistentVisualEmbeddingKey,
@@ -20,9 +20,7 @@ fn should_accept_a_well_formed_bfloat16_visual_embedding_file() {
     );
     let visual_embedding_file_path = temporary_directory.path().join(format!(
         "{}.safetensors",
-        astronomical_lowercase_hex::encode_lowercase_hex(
-            &visual_embedding_key.visual_embedding_hash()
-        )
+        lowercase_hex::encode_lowercase_hex(&visual_embedding_key.visual_embedding_hash())
     ));
     write_visual_embedding_file(&visual_embedding_file_path, encoded_image_sha256, 2);
 
@@ -87,8 +85,7 @@ fn write_visual_embedding_file(
     visual_token_count: usize,
 ) {
     let expected_payload_byte_count = visual_token_count * 2_048 * 2;
-    let encoded_image_sha256_hex =
-        astronomical_lowercase_hex::encode_lowercase_hex(&encoded_image_sha256);
+    let encoded_image_sha256_hex = lowercase_hex::encode_lowercase_hex(&encoded_image_sha256);
     let mut header_json = serde_json::to_vec(&json!({
         "__metadata__": {
             "format_version": PERSISTENT_VISUAL_EMBEDDING_FORMAT_VERSION,

@@ -1,5 +1,5 @@
-use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 use mlx_bridge::MlxArray;
+use runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 const CONVOLUTION_STATE_OPERATION: &str = "roll the in-memory convolution rolling buffer";
 

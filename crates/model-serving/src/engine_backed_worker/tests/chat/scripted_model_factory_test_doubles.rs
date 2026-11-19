@@ -2,7 +2,7 @@
 
 use super::scripted_chat_test_doubles::{ScriptedChatEngine, ScriptedChatProcessor};
 use crate::{EnginePlacement, MlxMemoryTelemetry, ModelFactory, ModelFactoryRuntime};
-use astronomical_ipc_protocol::{ExpertMemoryMode, WorkerModelConfiguration};
+use ipc_protocol::{ExpertMemoryMode, WorkerModelConfiguration};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 

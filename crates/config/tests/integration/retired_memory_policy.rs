@@ -1,4 +1,4 @@
-use astronomical_config::{AstronomicalConfig, AstronomicalConfigError};
+use config::{AstronomicalConfig, AstronomicalConfigError};
 
 #[test]
 fn should_reject_retired_expert_paging_enabled_field() {

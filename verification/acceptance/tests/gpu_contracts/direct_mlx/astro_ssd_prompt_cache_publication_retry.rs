@@ -1,7 +1,7 @@
 use std::{io, path::PathBuf};
 
-use astronomical_model_serving::AstroSsdPromptCacheDiskStoreError;
-use astronomical_runtime_integration::MlxRuntimeError;
+use model_serving::AstroSsdPromptCacheDiskStoreError;
+use runtime_integration::MlxRuntimeError;
 
 #[test]
 fn should_report_the_exact_active_memory_deficit_as_retryable_publication_pressure() {

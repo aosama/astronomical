@@ -1,7 +1,7 @@
 //! What the Neural Engine has done since the daemon started, for people asking whether
 //! it is earning its memory.
 
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     NeuralEngineChunkPlacement, NeuralEngineChunkReport, NeuralEnginePrefillStatus,
 };
 

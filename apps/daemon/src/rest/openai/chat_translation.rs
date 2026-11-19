@@ -1,9 +1,9 @@
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     ChatAssistantToolCall, ChatAssistantToolFunction, ChatGenerationCommand,
     ChatGenerationSettings, ChatGenerationValidationError, ChatImageInput, ChatMessage,
     ChatToolChoice, ChatToolDefinition, RequestId,
 };
-use astronomical_rest_contract::{
+use rest_contract::{
     OpenAiChatCompletionRequest, OpenAiChatCompletionRequestParts,
     OpenAiChatCompletionValidationError, OpenAiChatMessageParts, OpenAiToolChoiceMode,
     OpenAiToolDefinitionParts,
@@ -195,9 +195,7 @@ fn append_escaped_chronological_system_update(
     chronological_user_update_content.push_str(CHRONOLOGICAL_SYSTEM_UPDATE_CLOSING_TAG);
 }
 
-fn translate_images(
-    images: Vec<astronomical_rest_contract::DecodedImageInput>,
-) -> Vec<ChatImageInput> {
+fn translate_images(images: Vec<rest_contract::DecodedImageInput>) -> Vec<ChatImageInput> {
     images.iter().map(chat_image_input).collect()
 }
 

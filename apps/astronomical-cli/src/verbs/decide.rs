@@ -19,11 +19,9 @@ mod input;
 pub use input::ASK_QUESTION_NAME;
 use input::{resolve_questions, resolve_state};
 
-use astronomical_config::AstronomicalRuntimeInstance;
-use astronomical_decision_contract::{
-    DecisionFailure, OrderedJsonValue, QuestionOutcome, system_one_response,
-};
-use astronomical_ipc_protocol::{DaemonRequest, DaemonResponse};
+use config::AstronomicalRuntimeInstance;
+use decision_contract::{DecisionFailure, OrderedJsonValue, QuestionOutcome, system_one_response};
+use ipc_protocol::{DaemonRequest, DaemonResponse};
 use thiserror::Error;
 use tokio::time::timeout;
 

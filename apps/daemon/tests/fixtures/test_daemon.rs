@@ -16,15 +16,15 @@ use std::{
     time::Duration,
 };
 
-use astronomical_config::{
-    AstroSsdPromptCacheConfig, AstronomicalInstancePaths, AstronomicalRuntimeInstance,
-    DiscoveredModel, ImageGenerationCapabilities, LogLevel, LoggingConfig, ModelCapabilities,
-    ModelFamily, ModelLicense,
-};
 use astronomical_daemon::{
     DaemonIpcGenerationContext, DaemonPerformanceAttributionLog, DownloadCatalog,
     GenerationPerformanceLog, ResolvedRuntimeConfig, WorkerHandle, build_application,
     build_application_with_discovered_models, start_daemon_ipc_service,
+};
+use config::{
+    AstroSsdPromptCacheConfig, AstronomicalInstancePaths, AstronomicalRuntimeInstance,
+    DiscoveredModel, ImageGenerationCapabilities, LogLevel, LoggingConfig, ModelCapabilities,
+    ModelFamily, ModelLicense,
 };
 use tokio::net::TcpListener;
 

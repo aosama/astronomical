@@ -1,4 +1,4 @@
-use astronomical_speech_contract::AudioFormat;
+use speech_contract::AudioFormat;
 
 use super::{OpenAiSpeechRequest, OpenAiSpeechValidationError};
 

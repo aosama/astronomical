@@ -1,4 +1,4 @@
-use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
+use runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use super::append_only_attention_state_operations::{
     active_view, build_updated_storage, full_attention_error, projected_capacity_tokens,

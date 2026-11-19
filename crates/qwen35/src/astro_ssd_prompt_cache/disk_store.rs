@@ -22,8 +22,8 @@ use super::disk_store_index::AstroSsdPromptCacheDiskStoreIndex;
 use super::disk_store_scan;
 use super::model_contract::AstroSsdPromptCacheModelContract;
 use super::startup_cleanup_evidence::AstroSsdPromptCacheStartupCleanupEvidence;
-use astronomical_runtime_integration::{MlxRuntime, PositionalFileReadMetrics};
 use mlx_bridge::MlxArray;
+use runtime_integration::{MlxRuntime, PositionalFileReadMetrics};
 use std::collections::HashMap;
 
 const BLOCKS_DIRECTORY_NAME: &str = "blocks";

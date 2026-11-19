@@ -1,9 +1,9 @@
 //! A separate 37-gigabyte diagnostic cell, not a change to the 36-gigabyte sweep.
 
-use astronomical_ipc_protocol::WorkerDecodeAstroExpertCachePolicy;
-use astronomical_test_harness::{sparse_decode_full_fit, test_run::TestRunContext};
+use ipc_protocol::WorkerDecodeAstroExpertCachePolicy;
 use serde_json::json;
 use serial_test::serial;
+use test_harness::{sparse_decode_full_fit, test_run::TestRunContext};
 use tokio::time::{Duration, timeout};
 
 use super::{
@@ -45,7 +45,7 @@ async fn should_complete_decode_residency_at_37_gigabytes_after_multi_chunk_pref
         journey_timeout: Duration::from_secs(110),
         model_directory: Some(model_directory),
         diagnostic_qwen3_5_engine_override:
-            astronomical_ipc_protocol::WorkerDiagnosticQwen3_5EngineOverride::Automatic,
+            ipc_protocol::WorkerDiagnosticQwen3_5EngineOverride::Automatic,
     };
     let outcome = timeout(
         Duration::from_secs(115),

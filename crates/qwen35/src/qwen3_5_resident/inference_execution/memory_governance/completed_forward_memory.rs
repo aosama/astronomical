@@ -1,6 +1,6 @@
 //! The MLX sample taken after a forward.
 
-use astronomical_runtime_integration::MlxMemorySnapshot;
+use runtime_integration::MlxMemorySnapshot;
 
 use crate::InferenceEngineError;
 use crate::qwen3_5_resident::model::Qwen3_5ResidentModel;

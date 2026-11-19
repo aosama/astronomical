@@ -6,8 +6,8 @@
 //! together. The mixer output split measured 1.27× against an ideal of 1.43×,
 //! so the ideal is an upper bound, not a forecast.
 
-use astronomical_neural_engine::core_ml::CoreMlComputeUnits;
 use mlx_bridge::MlxDtype;
+use neural_engine::core_ml::CoreMlComputeUnits;
 use serial_test::serial;
 
 use crate::support::measured_projection::{measure_projection, print_evidence};

@@ -36,8 +36,7 @@ pub(super) struct ProjectionPlanInputs<'a> {
 pub(super) struct ProjectionSourceCollection {
     pub(super) tensor_sources: Vec<QuantizedTensorSource>,
     pub(super) quantization_mode: QuantizationMode,
-    pub(super) jangtq2_rotation:
-        Option<astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookRotation>,
+    pub(super) jangtq2_rotation: Option<jangtq2_qwen35::configuration::Jangtq2CodebookRotation>,
 }
 
 /// Plans one projection: storage contract, shard sources, and geometry.
@@ -247,7 +246,7 @@ pub(super) fn assemble_expert_layer_plan(
     projection_quantization_modes: Vec<QuantizationMode>,
     jangtq2_projection_rotations: Vec<(
         String,
-        astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookRotation,
+        jangtq2_qwen35::configuration::Jangtq2CodebookRotation,
     )>,
 ) -> Result<QuantizedExpertLayerPlan, ExpertManifestError> {
     let expert_capacities: std::collections::HashSet<usize> =

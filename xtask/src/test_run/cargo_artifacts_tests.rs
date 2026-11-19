@@ -31,8 +31,8 @@ fn should_build_the_selected_profile_and_features_without_executing_tests() {
 
 #[test]
 fn should_not_build_model_workers_for_library_only_tooling_contracts() {
-    let request = TestRunRequest::parse(&arguments("--package astronomical-test-harness --lib"))
-        .expect("library request");
+    let request =
+        TestRunRequest::parse(&arguments("--package test-harness --lib")).expect("library request");
     assert!(workspace_binary_build_arguments(&request).is_none());
 }
 

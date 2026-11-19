@@ -1,11 +1,9 @@
 //! Unit tests for building the training job and reading its outcome.
 
-use astronomical_decision_contract::decision_training_job::{RunEnding, RunSummary, TrainingScope};
-use astronomical_decision_contract::{
-    DecisionQuestion, QuestionInputCoverage, answer_from_probabilities,
-};
-use astronomical_decision_training::labelled_example::parse_labelled_example;
-use astronomical_decision_training::temperature_softmax::probabilities_at;
+use decision_contract::decision_training_job::{RunEnding, RunSummary, TrainingScope};
+use decision_contract::{DecisionQuestion, QuestionInputCoverage, answer_from_probabilities};
+use decision_training::labelled_example::parse_labelled_example;
+use decision_training::temperature_softmax::probabilities_at;
 
 use super::*;
 use crate::verbs::decision::check_set::built_in_check_examples;

@@ -4,10 +4,8 @@
 //! contracts, so this chain pins the Metal path to the Python tool through a
 //! CPU oracle that runs on every host.
 
-use astronomical_quantization::bit_width::{BitWidth, GroupSize};
-use astronomical_quantization::encoder::reference::{
-    encode_slab, pack_affine_codes, unpack_affine_codes,
-};
+use quantization::bit_width::{BitWidth, GroupSize};
+use quantization::encoder::reference::{encode_slab, pack_affine_codes, unpack_affine_codes};
 
 use super::fixtures;
 

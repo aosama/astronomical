@@ -9,7 +9,7 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use astronomical_native_identity::digest_bytes;
+use native_identity::digest_bytes;
 
 use super::build_identity::BuildIdentity;
 use super::channel_profile::{AGENT_EXECUTABLE_NAME, ChannelProfile};

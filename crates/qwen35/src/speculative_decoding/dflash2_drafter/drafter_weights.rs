@@ -1,8 +1,8 @@
 //! The DFlash2 drafter's tensors, bound by their checkpoint names with every
 //! shape checked against the configuration before any is used.
 
-use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError, MlxSafetensors};
 use mlx_bridge::MlxArray;
+use runtime_integration::{MlxRuntime, MlxRuntimeError, MlxSafetensors};
 use thiserror::Error;
 
 use super::drafter_configuration::DFlash2DrafterConfiguration;

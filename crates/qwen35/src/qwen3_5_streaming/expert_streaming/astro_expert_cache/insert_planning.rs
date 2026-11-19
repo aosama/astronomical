@@ -4,7 +4,7 @@
 //! payloads; every `astro_expert_cache`-wide counter write stays with the caller that owns
 //! the mutable table borrow.
 
-use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
+use runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use super::decode_astro_expert_cache_policy::{
     DecodeExpertSlotState, MAXIMUM_CANDIDATE_SLOT_REPLACEMENTS_PER_DECODE_STEP,

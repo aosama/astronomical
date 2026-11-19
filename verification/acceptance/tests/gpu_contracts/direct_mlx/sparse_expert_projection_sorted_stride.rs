@@ -5,11 +5,11 @@
 //! against an MLX regression that previously read later activation rows from the
 //! singleton axis stride instead of the contracted input width.
 
-use astronomical_model_serving::{
+use model_serving::{
     ExpertAssignmentOrder, PerformanceAttribution, StackedExpertProjection,
     gather_expert_projection,
 };
-use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
+use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
 use crate::common::{
     DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_MLX_BUFFER_CACHE_LIMIT_BYTES,

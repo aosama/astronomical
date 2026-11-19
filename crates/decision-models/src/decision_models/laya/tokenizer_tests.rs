@@ -1,6 +1,6 @@
 //! Unit tests for resolving a Laya tokenizer's special tokens.
 
-use astronomical_decision_contract::DecisionTokenEncoder;
+use decision_contract::DecisionTokenEncoder;
 
 use super::{LayaTokenizer, LayaTokenizerError};
 

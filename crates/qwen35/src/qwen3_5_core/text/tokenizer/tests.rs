@@ -1,6 +1,6 @@
 use super::super::validate_context_token_count;
 use crate::qwen3_5_core::frozen_config_test_support::*;
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     ChatGenerationCommand, ChatGenerationSettings, ChatMessage, ChatToolChoice, RequestId,
 };
 

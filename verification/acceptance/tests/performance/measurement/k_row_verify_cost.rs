@@ -14,12 +14,12 @@
 
 use std::time::{Duration, Instant};
 
-use astronomical_model_serving::row_batched_matmul::{
+use mlx_bridge::{MlxArray, MlxDtype};
+use model_serving::row_batched_matmul::{
     RegisterOrderedWeight, RowBatchedMatmulKernels, register_ordered_matmul,
     row_batched_quantized_matmul, row_batched_quantized_matmul_accepts,
 };
-use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
-use mlx_bridge::{MlxArray, MlxDtype};
+use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use serial_test::serial;
 
 pub(super) const HIDDEN_WIDTH: i32 = 5120;

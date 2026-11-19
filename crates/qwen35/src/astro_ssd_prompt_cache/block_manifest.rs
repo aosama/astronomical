@@ -44,12 +44,12 @@ impl AstroSsdPromptCacheBlockManifest {
     ) -> Self {
         Self {
             format_version: ASTRO_SSD_PROMPT_CACHE_FORMAT_VERSION.to_owned(),
-            block_hash: astronomical_lowercase_hex::encode_lowercase_hex(
+            block_hash: lowercase_hex::encode_lowercase_hex(
                 &astro_ssd_prompt_cache_block_key.block_hash(),
             ),
             block_index: astro_ssd_prompt_cache_block_key.block_index(),
             parent_block_hash: parent_astro_ssd_prompt_cache_block_key.map(|parent_block_key| {
-                astronomical_lowercase_hex::encode_lowercase_hex(&parent_block_key.block_hash())
+                lowercase_hex::encode_lowercase_hex(&parent_block_key.block_hash())
             }),
             storage_contract_fingerprint: astro_ssd_prompt_cache_model_contract
                 .storage_contract_fingerprint_hex(),
@@ -233,5 +233,5 @@ fn invalid_manifest(
 fn parse_block_hash_hex(block_hash_hex: &str) -> Option<[u8; 32]> {
     // The writer emits a canonical 64-character lowercase representation; a
     // manifest holding anything else is corrupt and its block is discarded.
-    astronomical_lowercase_hex::decode_lowercase_hex::<32>(block_hash_hex)
+    lowercase_hex::decode_lowercase_hex::<32>(block_hash_hex)
 }

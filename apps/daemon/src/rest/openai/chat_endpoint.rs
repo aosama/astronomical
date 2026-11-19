@@ -1,12 +1,6 @@
 use crate::rest::worker_replacement_wait::lock_configuration_transition_for_generation;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use astronomical_config::ModelCapabilities;
-use astronomical_ipc_protocol::RequestId;
-use astronomical_rest_contract::{
-    OpenAiChatCompletionRequest, OpenAiChatCompletionRequestParts,
-    OpenAiChatCompletionValidationError, OpenAiErrorResponse,
-};
 use axum::{
     Json,
     body::Bytes,
@@ -14,7 +8,13 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response, sse::Sse},
 };
+use config::ModelCapabilities;
 use futures_util::stream;
+use ipc_protocol::RequestId;
+use rest_contract::{
+    OpenAiChatCompletionRequest, OpenAiChatCompletionRequestParts,
+    OpenAiChatCompletionValidationError, OpenAiErrorResponse,
+};
 
 use crate::{
     GenerationStartError, OpenAiChatRequestDiagnosticSnapshot,
@@ -166,7 +166,7 @@ async fn respond_with_chat_completion(
     created_at_unix_seconds: u64,
     model_id: String,
     reasoning_excluded: bool,
-    structured_output: &Option<astronomical_rest_contract::OpenAiStructuredOutput>,
+    structured_output: &Option<rest_contract::OpenAiStructuredOutput>,
 ) -> Response {
     let completion_id = format!("chatcmpl-{completion_id_namespace}-{request_id}");
     if !should_stream_response {
@@ -344,7 +344,7 @@ fn translate_openai_chat_request(
     request_parts: OpenAiChatCompletionRequestParts,
     request_diagnostic_snapshot: &OpenAiChatRequestDiagnosticSnapshot,
     request_info_diagnostic_snapshot: &OpenAiChatRequestInfoDiagnosticSnapshot,
-) -> Result<astronomical_ipc_protocol::ChatGenerationCommand, Response> {
+) -> Result<ipc_protocol::ChatGenerationCommand, Response> {
     match crate::rest::openai::chat_translation::translate_openai_chat_completion_request_parts(
         RequestId::new(request_id),
         request_parts,
@@ -378,12 +378,12 @@ fn translate_openai_chat_request(
 /// logs the acceptance with the request-correlation diagnostics.
 fn finalize_chat_generation_command(
     application_state: &ApplicationState,
-    mut chat_generation_command: astronomical_ipc_protocol::ChatGenerationCommand,
+    mut chat_generation_command: ipc_protocol::ChatGenerationCommand,
     resolved_model_id: String,
     request_id: u64,
     settings_presence: crate::config::request_generation_defaults::RequestGenerationSettingsPresence,
     request_info_diagnostic_snapshot: &OpenAiChatRequestInfoDiagnosticSnapshot,
-) -> astronomical_ipc_protocol::ChatGenerationCommand {
+) -> ipc_protocol::ChatGenerationCommand {
     chat_generation_command.model = resolved_model_id;
     crate::config::request_generation_defaults::apply_generation_defaults(
         application_state.reloadable_config.as_ref(),

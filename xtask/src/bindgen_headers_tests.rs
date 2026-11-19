@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use astronomical_native_identity::{NativeBuildProfile, digest_bytes};
+use native_identity::{NativeBuildProfile, digest_bytes};
 
 use super::command::run;
 use super::hash_manifest::{manifest_differences, tree_hash_manifest};

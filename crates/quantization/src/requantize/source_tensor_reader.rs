@@ -14,8 +14,8 @@ use std::collections::BTreeMap;
 use std::fs::File;
 use std::path::{Path, PathBuf};
 
-use astronomical_runtime_integration::{MlxRuntime, MlxSafetensors};
 use mlx_bridge::{MlxArray, MlxDtype};
+use runtime_integration::{MlxRuntime, MlxSafetensors};
 
 use crate::error::QuantizationError;
 use crate::module_inventory::{ModuleWeightSource, QuantizableModuleDescriptor, SourceTensorDtype};

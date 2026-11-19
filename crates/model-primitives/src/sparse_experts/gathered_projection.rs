@@ -11,7 +11,7 @@
 //! decision to sort assignments. This module receives already-canonical arrays
 //! and owns only the shared dense-versus-affine dispatch and ordering contract.
 
-use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
+use runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use crate::performance_attribution::{PerformanceAttribution, PerformanceOperation};
 use mlx_bridge::{MlxArray, MlxCError};

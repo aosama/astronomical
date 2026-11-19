@@ -1,5 +1,5 @@
 use super::{ReferenceProjectionError, reference_projection};
-use astronomical_neural_engine::program_shape::ProgramShape;
+use neural_engine::program_shape::ProgramShape;
 
 #[test]
 fn should_project_channels_by_tokens_like_a_hand_computed_product() {

@@ -14,7 +14,7 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use astronomical_expert_atlas::{AtlasExpertLayer, AtlasManifest};
+use expert_atlas::{AtlasExpertLayer, AtlasManifest};
 
 use super::quantized_expert_layer_plan::build_quantized_expert_layer_plan_with_stored_names_and_safetensors_header_cache;
 use crate::expert_paging::quantized_expert_manifest::{

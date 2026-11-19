@@ -14,8 +14,8 @@
 use std::fs::File;
 use std::path::Path;
 
-use astronomical_runtime_integration::MlxRuntime;
 use mlx_bridge::{MlxArray, MlxDtype};
+use runtime_integration::MlxRuntime;
 
 use crate::error::QuantizationError;
 

@@ -13,7 +13,7 @@ use super::safetensors_dtype::{
     checked_safetensors_payload_bytes, dtype_bits_per_element, parse_safetensors_dtype,
 };
 use super::{ArtifactValidationError, TensorDtype, TensorProfile};
-use astronomical_memory_policy::safetensors::{
+use memory_policy::safetensors::{
     BoundedSafetensorsHeaderError, SafetensorsTensorView, read_bounded_safetensors_json_header,
 };
 

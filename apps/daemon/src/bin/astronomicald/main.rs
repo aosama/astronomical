@@ -9,9 +9,6 @@ use std::{
     time::Duration,
 };
 
-use astronomical_config::{
-    AstronomicalConfig, AstronomicalConfigError, AstronomicalInstancePaths, LoggingConfig,
-};
 use astronomical_daemon::{
     ApplicationBuildIdentity, AstronomicalInstanceLock, CompletionAttributionLog,
     DaemonIpcGenerationContext, DaemonPerformanceAttributionLog, DaemonPerformanceMeasurement,
@@ -23,7 +20,10 @@ use astronomical_daemon::{
     build_application_with_full_control_and_library_download, read_instance_lock_holder,
     record_startup_failure, start_daemon_ipc_service,
 };
-use astronomical_ipc_protocol::DaemonTransportError;
+use config::{
+    AstronomicalConfig, AstronomicalConfigError, AstronomicalInstancePaths, LoggingConfig,
+};
+use ipc_protocol::DaemonTransportError;
 use thiserror::Error;
 use tokio::{net::TcpListener, signal};
 use tracing_subscriber::{EnvFilter, fmt};
@@ -326,7 +326,7 @@ async fn bind_daemon_listener(
         bind_address = %bound_daemon_address,
         channel = instance_paths
             .runtime_instance()
-            .map_or("explicit", astronomical_config::AstronomicalRuntimeInstance::as_str),
+            .map_or("explicit", config::AstronomicalRuntimeInstance::as_str),
         version = ApplicationBuildIdentity::current().version,
         commit = ApplicationBuildIdentity::current().commit,
         configuration_generation = %resolved_runtime_config.configuration_generation,

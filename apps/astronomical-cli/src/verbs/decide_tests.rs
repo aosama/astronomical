@@ -1,10 +1,10 @@
 //! Unit contracts for turning the daemon's one terminal frame into the
 //! printed document, and for which failures count as usage mistakes.
 
-use astronomical_decision_contract::DecisionFailure;
-use astronomical_ipc_protocol::DaemonResponse;
+use decision_contract::DecisionFailure;
+use ipc_protocol::DaemonResponse;
 
-use astronomical_decision_contract::system_one_response;
+use decision_contract::system_one_response;
 
 use super::{DecideError, decisions_answered, write_json_document};
 

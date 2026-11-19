@@ -5,8 +5,8 @@
 use std::io::Write;
 use std::time::{Duration, Instant};
 
-use astronomical_decision_training::calibrated_model_folder::FolderCopyProgress;
-use astronomical_decision_training::progress_line::progress_line;
+use decision_training::calibrated_model_folder::FolderCopyProgress;
+use decision_training::progress_line::progress_line;
 
 pub(super) const BYTES_PER_MEGABYTE: u64 = 1024 * 1024;
 

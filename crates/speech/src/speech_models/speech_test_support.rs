@@ -1,8 +1,8 @@
 //! What the speech models' MLX tests share: a small runtime, uploads,
 //! read-backs, a checkpoint built from named arrays, and a tolerance check.
 
-use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime, MlxSafetensors};
 use mlx_bridge::MlxArray;
+use runtime_integration::{MlxMemoryLimits, MlxRuntime, MlxSafetensors};
 
 pub const ROMEO_AND_JULIET_SOURCE: &str = include_str!(
     "../../../../verification/acceptance/tests/fixtures/model_metrics_5000_romeo_and_juliet_words.txt"

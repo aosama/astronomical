@@ -1,8 +1,8 @@
 //! Arithmetic with one scalar broadcast over an array, which the bridge
 //! offers for multiplication only.
 
-use astronomical_runtime_integration::MlxRuntime;
 use mlx_bridge::MlxArray;
+use runtime_integration::MlxRuntime;
 
 use crate::speech_models::speech_model_error::SpeechModelError;
 

@@ -11,7 +11,7 @@ use astronomical_daemon::{
     GenerationPerformanceLog, ResolvedRuntimeConfigResolver, RuntimeModelPolicy, WorkerHandle,
     WorkerHealthStatus,
 };
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     ChatGenerationCommand, ChatGenerationSettings, ChatMessage, ChatToolChoice, RequestId,
     WorkerStartupConfiguration,
 };
@@ -163,7 +163,7 @@ pub(super) fn astro_ssd_prompt_cache_enabled_worker_configuration(
     WorkerStartupConfiguration,
 ) {
     let production_worker_executable_path =
-        astronomical_test_harness::workspace_binary("astronomical-inference-worker");
+        test_harness::workspace_binary("astronomical-inference-worker");
     let isolated_worker_home = tempfile::tempdir()
         .expect("the persistent astro-ssd-prompt-cache worker home should be created");
     let configuration_directory = isolated_worker_home.path().join(".astronomical-dev");

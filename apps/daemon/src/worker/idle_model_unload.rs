@@ -47,10 +47,10 @@ impl NeuralEnginePreparationProgress {
     /// The progress a published status describes, or `None` when the status
     /// is not a preparation under way.
     pub(crate) fn from_status(
-        neural_engine_prefill: Option<&astronomical_ipc_protocol::NeuralEnginePrefillStatus>,
+        neural_engine_prefill: Option<&ipc_protocol::NeuralEnginePrefillStatus>,
     ) -> Option<Self> {
         match neural_engine_prefill {
-            Some(astronomical_ipc_protocol::NeuralEnginePrefillStatus::Preparing {
+            Some(ipc_protocol::NeuralEnginePrefillStatus::Preparing {
                 completed_program_count,
                 is_waiting_to_measure,
                 ..

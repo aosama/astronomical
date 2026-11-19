@@ -7,7 +7,7 @@ use super::support::{
 use crate::{
     EngineBackedWorker, MemoryCeilingUtilization, MlxActiveMemoryBreakdown, MlxMemoryTelemetry,
 };
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     ExpertMemoryMode, MAX_IPC_FRAME_BYTES, MlxMemorySnapshotSource, ProtocolReader, ProtocolWriter,
     WorkerCommand, WorkerEvent, WorkerExpertResidencySnapshot, WorkerRuntimeFeatureConfiguration,
 };
@@ -26,7 +26,7 @@ async fn should_wait_for_a_swap_command_before_loading_an_idle_worker_model() {
             mlx_memory_limits: (0, 0),
             model_creation_memory_limits: Arc::new(Mutex::new(Vec::new())),
             model_configurations: Arc::clone(&model_configurations),
-            expert_memory_mode: Some(astronomical_ipc_protocol::ExpertMemoryMode::Resident),
+            expert_memory_mode: Some(ipc_protocol::ExpertMemoryMode::Resident),
             created_engine_idle_mlx_memory_telemetry: None,
             scripted_replacement_required_reason: None,
         },
@@ -65,7 +65,7 @@ async fn should_wait_for_a_swap_command_before_loading_an_idle_worker_model() {
     assert!(matches!(
         next_event(&mut daemon_reader).await,
         WorkerEvent::ModelSwapped {
-            expert_memory_mode: Some(astronomical_ipc_protocol::ExpertMemoryMode::Resident),
+            expert_memory_mode: Some(ipc_protocol::ExpertMemoryMode::Resident),
             ..
         }
     ));
@@ -91,7 +91,7 @@ async fn should_apply_a_live_ceiling_within_the_machine_bound_to_the_next_model(
             mlx_memory_limits: (32_000_000_000, 32_000_000_000),
             model_creation_memory_limits: Arc::clone(&model_creation_memory_limits),
             model_configurations: Arc::new(Mutex::new(Vec::new())),
-            expert_memory_mode: Some(astronomical_ipc_protocol::ExpertMemoryMode::Paged),
+            expert_memory_mode: Some(ipc_protocol::ExpertMemoryMode::Paged),
             created_engine_idle_mlx_memory_telemetry: None,
             scripted_replacement_required_reason: None,
         },
@@ -190,7 +190,7 @@ async fn should_apply_live_memory_updates_to_the_idle_worker_up_to_the_machine_b
             mlx_memory_limits: (35_000_000_000, 35_000_000_000),
             model_creation_memory_limits: Arc::clone(&model_creation_memory_limits),
             model_configurations: Arc::new(Mutex::new(Vec::new())),
-            expert_memory_mode: Some(astronomical_ipc_protocol::ExpertMemoryMode::Resident),
+            expert_memory_mode: Some(ipc_protocol::ExpertMemoryMode::Resident),
             created_engine_idle_mlx_memory_telemetry: None,
             scripted_replacement_required_reason: None,
         },

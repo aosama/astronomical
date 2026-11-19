@@ -9,11 +9,11 @@
 //! before queue admission, the diffusion step count is the family's own) so a
 //! request that would fail late fails here, early and with a named reason.
 
-use astronomical_config::{
+use config::{
     DiscoveredModel, ImageGenerationCapabilities, ModelCapabilities, near_model_matches,
     resolve_model_id,
 };
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     DaemonResponse, DaemonTransportError, ImageGenerateRequest, ImageGenerationCommand,
     ImageGenerationFailureReason, ImageGenerationSettings, RequestId, StreamingResponseWriter,
 };

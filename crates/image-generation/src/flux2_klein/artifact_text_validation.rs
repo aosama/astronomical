@@ -6,11 +6,11 @@ use std::path::Path;
 use ::safetensors::Dtype;
 use serde::Deserialize;
 
-use astronomical_artifact_validation::{
+use artifact_validation::{
     RawSafetensorsInventory, RequiredFileProfile, ValidatedRequiredFile, ValidatedWeightsFile,
     read_bounded_required_file_bytes, validate_required_file,
 };
-use astronomical_memory_policy::strict_json::DuplicateAwareJsonValue;
+use memory_policy::strict_json::DuplicateAwareJsonValue;
 
 use super::Flux2KleinTensorInventory;
 use super::artifact::{Flux2KleinArtifactError, is_safe_weight_shard_path};

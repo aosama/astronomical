@@ -2,7 +2,7 @@
 
 use std::sync::{Arc, RwLock};
 
-use astronomical_ipc_protocol::RequestId;
+use ipc_protocol::RequestId;
 use tokio::time::Instant;
 
 use crate::{

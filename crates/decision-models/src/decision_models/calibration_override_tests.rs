@@ -1,6 +1,6 @@
 //! Unit tests for reading a folder's calibration file.
 
-use astronomical_decision_contract::DecisionQuestionKind;
+use decision_contract::DecisionQuestionKind;
 
 use super::*;
 

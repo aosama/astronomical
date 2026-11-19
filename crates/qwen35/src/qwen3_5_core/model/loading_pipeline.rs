@@ -5,8 +5,8 @@
 
 use std::collections::HashMap;
 
-use astronomical_runtime_integration::MlxRuntime;
 use mlx_bridge::{MlxDtype, MlxMetalKernel};
+use runtime_integration::MlxRuntime;
 
 use crate::kernel_capability;
 use crate::kernel_capability::CustomMetalKernelFamily;

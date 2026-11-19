@@ -1,4 +1,4 @@
-use astronomical_memory_policy::ledger::{
+use memory_policy::ledger::{
     HeldMemory, LedgerPhase, LedgerReading, MeasuredStep, MemoryGovernor, ModelMemoryShape,
 };
 

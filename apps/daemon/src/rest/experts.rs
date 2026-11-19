@@ -131,7 +131,7 @@ pub(crate) fn expert_stats_document(
 /// time-saved estimate are optional evidence — `null` reads as "not measured
 /// yet" rather than a fabricated zero (issue #1715).
 fn expert_value_section(
-    latest_stats: &astronomical_ipc_protocol::WorkerExpertStreamingStats,
+    latest_stats: &ipc_protocol::WorkerExpertStreamingStats,
     storage_time_saved_estimate_nanoseconds: &Option<u64>,
     expert_streaming_observatory: &ExpertStreamingObservatory,
 ) -> Value {
@@ -178,9 +178,7 @@ fn expert_value_section(
 }
 
 /// Pure: topology rows for the observatory memory map.
-fn layer_topology_entries(
-    latest_stats: &astronomical_ipc_protocol::WorkerExpertStreamingStats,
-) -> Vec<Value> {
+fn layer_topology_entries(latest_stats: &ipc_protocol::WorkerExpertStreamingStats) -> Vec<Value> {
     latest_stats
         .layer_topology
         .iter()

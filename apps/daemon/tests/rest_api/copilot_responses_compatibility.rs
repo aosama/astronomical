@@ -4,12 +4,12 @@ use astronomical_daemon::{
     ChatGenerationExecutor, ChatGenerationStreamEvent, GenerationStartError, WorkerHealthSnapshot,
     build_application,
 };
-use astronomical_ipc_protocol::{
-    ChatGenerationCommand, ChatGenerationCompletionReason, ChatMessage, ChatModelCapabilities,
-};
 use axum::{
     body::{Body, to_bytes},
     http::{Request, StatusCode, header},
+};
+use ipc_protocol::{
+    ChatGenerationCommand, ChatGenerationCompletionReason, ChatMessage, ChatModelCapabilities,
 };
 use serde_json::{Value, json};
 use tokio::sync::mpsc;

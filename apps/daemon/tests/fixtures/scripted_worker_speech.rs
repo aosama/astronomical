@@ -2,7 +2,7 @@
 //! then completion and finalization, in the real worker's event order. No
 //! model runs, so the samples are a fixed ramp, not speech.
 
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     ProtocolError, ProtocolWriter, SpeechResultMetadata, SpokenAudioSegment, WorkerCommand,
     WorkerEvent,
 };

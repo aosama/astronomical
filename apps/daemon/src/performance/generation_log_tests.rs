@@ -1,7 +1,7 @@
 use std::fs;
 
 use crate::{GenerationPerformanceLog, GenerationPerformanceRecord};
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     WorkerAstroSsdPromptCacheExpectedBlockHashPrefix, WorkerAstroSsdPromptCacheLookupOutcome,
     WorkerAstroSsdPromptCacheMissReason, WorkerAstroSsdPromptCacheRequestDiagnostics,
     WorkerAstroSsdPromptCacheStartupCleanupCategory,

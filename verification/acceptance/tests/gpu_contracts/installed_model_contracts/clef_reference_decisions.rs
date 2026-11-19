@@ -19,12 +19,12 @@
 //! Run it with `cargo test-clef-reference-decisions --configuration PATH`,
 //! where the configuration's `model_directory` is the build's folder.
 
-use astronomical_decision_contract::{
+use decision_contract::{
     DecisionQuestion, DecisionQuestionBody, HeadInputRequest, OrderedJsonValue, QuestionOutcome,
     parse_system_one_questions,
 };
-use astronomical_model_serving::{ClefDecisionEngine, DecisionEngine};
-use astronomical_test_harness::test_run::TestRunContext;
+use model_serving::{ClefDecisionEngine, DecisionEngine};
+use test_harness::test_run::TestRunContext;
 
 use super::decision_reference_fixture::{
     answer_probabilities, most_probable_index, reference_array, reference_field, reference_number,

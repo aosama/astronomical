@@ -1,9 +1,9 @@
 //! The pure admission decisions (allocation, complete residency, context
 //! sizes, retained-prefix, rotating) live in
-//! `astronomical-memory-policy::admission` and are re-exported here so
+//! `memory_policy::admission` and are re-exported here so
 //! consumer paths stay stable.
 
-pub use astronomical_memory_policy::admission::{
+pub use memory_policy::admission::{
     AllocationAdmissionDecision, AllocationAdmissionObservation, CompleteResidencyDecision,
     CompleteResidencyRequirements, RetainedPrefixRetentionDecision,
     RetainedPrefixRetentionRequirements, RotatingAdmissionError, VISIBLE_ANSWER_RESERVE_TOKENS,

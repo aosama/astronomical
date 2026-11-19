@@ -7,7 +7,7 @@
 //! becomes the observatory decision feed. All methods are pure state
 //! transitions — timestamps arrive as arguments so tests stay deterministic.
 
-use astronomical_ipc_protocol::{ExpertMemoryMode, WorkerEvent, WorkerExpertStreamingStats};
+use ipc_protocol::{ExpertMemoryMode, WorkerEvent, WorkerExpertStreamingStats};
 
 /// Transitions kept for the observatory decision feed before the oldest
 /// is dropped. Twenty-four covers a long interactive session's promotions

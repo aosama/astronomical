@@ -12,11 +12,11 @@ use crate::{
     ConfigReloadDecision, ConfigReloadDiff, ResolvedConfigurationGeneration, ResolvedRuntimeConfig,
     RuntimeModelPolicy,
 };
-use astronomical_config::{
+use config::{
     AstroSsdPromptCacheConfig, ChatModelCapabilities, ImageGenerationCapabilities, LogLevel,
     LoggingConfig, ModelCapabilities,
 };
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     WorkerAutoregressiveModelConfiguration, WorkerChunkingConfiguration,
     WorkerFlux2KleinModelConfiguration, WorkerImageGenerationModelFamily, WorkerModelConfiguration,
 };
@@ -74,10 +74,10 @@ fn should_classify_no_changes_as_no_worker_restart() {
 fn should_change_resolved_generation_when_artifact_revision_changes() {
     let model_policy_catalog =
         HashMap::from([("default".to_owned(), sample_runtime_model_policy())]);
-    let mut discovered_model = astronomical_config::DiscoveredModel {
+    let mut discovered_model = config::DiscoveredModel {
         model_id: "default".to_owned(),
         provider_model_id: None,
-        model_family: astronomical_config::ModelFamily::Qwen3_5,
+        model_family: config::ModelFamily::Qwen3_5,
         revision: "revision-a".to_owned(),
         model_directory: PathBuf::from("/fictional/models/default"),
         capabilities: ModelCapabilities::Chat(ChatModelCapabilities {
@@ -568,11 +568,11 @@ pub(super) fn sample_runtime_model_policy() -> RuntimeModelPolicy {
     }
 }
 
-fn sample_discovered_model(revision: &str) -> astronomical_config::DiscoveredModel {
-    astronomical_config::DiscoveredModel {
+fn sample_discovered_model(revision: &str) -> config::DiscoveredModel {
+    config::DiscoveredModel {
         model_id: "default".to_owned(),
         provider_model_id: None,
-        model_family: astronomical_config::ModelFamily::Qwen3_5,
+        model_family: config::ModelFamily::Qwen3_5,
         revision: revision.to_owned(),
         model_directory: PathBuf::from("/fictional/models/default"),
         capabilities: ModelCapabilities::Chat(ChatModelCapabilities {
@@ -588,14 +588,11 @@ fn sample_discovered_model(revision: &str) -> astronomical_config::DiscoveredMod
     }
 }
 
-fn image_discovered_model(
-    revision: &str,
-    supports_image_editing: bool,
-) -> astronomical_config::DiscoveredModel {
-    astronomical_config::DiscoveredModel {
+fn image_discovered_model(revision: &str, supports_image_editing: bool) -> config::DiscoveredModel {
+    config::DiscoveredModel {
         model_id: "FLUX.2-klein-4B".to_owned(),
         provider_model_id: Some("black-forest-labs/FLUX.2-klein-4B".to_owned()),
-        model_family: astronomical_config::ModelFamily::Flux2Klein,
+        model_family: config::ModelFamily::Flux2Klein,
         revision: revision.to_owned(),
         model_directory: PathBuf::from("/fictional/models/FLUX.2-klein-4B"),
         capabilities: ModelCapabilities::ImageGeneration(ImageGenerationCapabilities {
@@ -607,7 +604,7 @@ fn image_discovered_model(
             maximum_dimension_pixels: 1_024,
             dimension_multiple_pixels: 16,
         }),
-        license: Some(astronomical_config::ModelLicense::Apache20),
+        license: Some(config::ModelLicense::Apache20),
         model_size_bytes: 4_000,
     }
 }

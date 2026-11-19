@@ -1,6 +1,6 @@
 //! Shape-polymorphism contracts for every retained elementwise MLX compilation.
 
-use astronomical_runtime_integration::MlxRuntime;
+use runtime_integration::MlxRuntime;
 
 use crate::common::runtime_test_support::{
     assert_bfloat16_arrays_match, assert_f32_close, runtime, stable_softplus_reference,

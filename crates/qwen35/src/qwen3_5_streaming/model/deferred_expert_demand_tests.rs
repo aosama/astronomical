@@ -3,8 +3,8 @@
 //! discard or take leaves the collector empty for the next forward.
 
 use super::DeferredExpertDemandCollector;
-use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use mlx_bridge::MlxArray;
+use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use serial_test::serial;
 
 const EXPERT_CAPACITY: usize = 256;

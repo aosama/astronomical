@@ -2,8 +2,8 @@
 //! plus the stop-reason, identifier, and tool-input mappings the stream
 //! encoder shares.
 
-use astronomical_ipc_protocol::{ChatGenerationCompletionReason, ChatGenerationFailureReason};
-use astronomical_rest_contract::{
+use ipc_protocol::{ChatGenerationCompletionReason, ChatGenerationFailureReason};
+use rest_contract::{
     AnthropicMessage, AnthropicOutputContentBlock, AnthropicStopReason, AnthropicUsage,
 };
 use serde_json::Value;

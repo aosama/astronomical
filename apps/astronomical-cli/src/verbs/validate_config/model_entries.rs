@@ -8,7 +8,7 @@
 
 use std::path::PathBuf;
 
-use astronomical_config::{
+use config::{
     AstronomicalConfig, DiscoveredModelError, EffectiveModelDiscoveryError,
     ModelConfigEntryOutcome, ModelConfigEntryReport, SettingsFreeModelKind,
 };
@@ -32,10 +32,7 @@ fn check_model_entries(loaded_config: &AstronomicalConfig) -> ModelEntriesCheck 
         return ModelEntriesCheck::NoEntries;
     }
     let models_directory = loaded_config.instance_paths().models_directory();
-    match astronomical_config::discover_effective_models(
-        &models_directory,
-        loaded_config.model_directories(),
-    ) {
+    match config::discover_effective_models(&models_directory, loaded_config.model_directories()) {
         Ok(effective_discovery) => ModelEntriesCheck::Checked(
             loaded_config.model_config_entry_reports(&effective_discovery.discovered_models),
         ),

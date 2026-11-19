@@ -1,4 +1,4 @@
-use astronomical_test_harness::test_run::TestRunConfiguration;
+use test_harness::test_run::TestRunConfiguration;
 
 use super::require_large_wired_memory_probe_permission;
 

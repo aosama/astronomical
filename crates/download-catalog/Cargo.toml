@@ -1,5 +1,5 @@
 [package]
-name = "astronomical-download-catalog"
+name = "download-catalog"
 description = "The release-bundled model download catalog and its validating parser, kept free of the engine's native build so a catalog edit can be checked on its own."
 edition.workspace = true
 license.workspace = true
@@ -10,8 +10,8 @@ version.workspace = true
 
 [dependencies]
 # leaf_model_id and the exhaustive_table macro; pure Rust, no native build.
-astronomical-config = { path = "../config" }
-astronomical-lowercase-hex = { path = "../lowercase-hex" }
+config = { path = "../config" }
+lowercase-hex = { path = "../lowercase-hex" }
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true

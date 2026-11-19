@@ -2,8 +2,8 @@
 
 use std::path::PathBuf;
 
-use astronomical_config::ResolvedModelConfig;
-use astronomical_ipc_protocol::{WorkerChunkingConfiguration, WorkerModelConfiguration};
+use config::ResolvedModelConfig;
+use ipc_protocol::{WorkerChunkingConfiguration, WorkerModelConfiguration};
 
 /// Request defaults resolved from one model's configuration.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -22,7 +22,7 @@ pub struct RuntimeModelPolicy {
     pub generation_defaults: RuntimeModelGenerationDefaults,
     pub configured_maximum_context_tokens: Option<u32>,
     pub default_maximum_context_tokens: u32,
-    pub configured_chunking_fields: astronomical_config::ConfiguredChunkingFields,
+    pub configured_chunking_fields: config::ConfiguredChunkingFields,
     pub worker_model_configuration: WorkerModelConfiguration,
 }
 
@@ -52,7 +52,7 @@ fn sampling_parameter_thousandths(sampling_parameter: f32) -> u16 {
 }
 
 pub(crate) fn worker_chunking_configuration(
-    chunking: &astronomical_config::ChunkingConfig,
+    chunking: &config::ChunkingConfig,
 ) -> WorkerChunkingConfiguration {
     WorkerChunkingConfiguration {
         fixed_prompt_processing_chunk_size_tokens: chunking

@@ -4,8 +4,8 @@
 //! chunk that keeps the materializing path.
 
 use super::paged_execution::decode_token_activation_rows;
-use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use mlx_bridge::MlxArray;
+use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use serial_test::serial;
 
 const INPUT_WIDTH: usize = 64;

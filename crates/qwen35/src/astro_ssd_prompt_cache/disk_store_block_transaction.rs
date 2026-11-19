@@ -15,7 +15,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use astronomical_runtime_integration::MlxRuntime;
+use runtime_integration::MlxRuntime;
 
 use crate::{PerformanceAttribution, PerformanceOperation};
 
@@ -48,8 +48,7 @@ impl AstroSsdPromptCacheDiskStore {
     ) -> Result<(), AstroSsdPromptCacheDiskStoreError> {
         // The final name is deterministic, but staging must be unique so a
         // crashed writer cannot be mistaken for a committed block on restart.
-        let block_directory_name =
-            astronomical_lowercase_hex::encode_lowercase_hex(&block_key.block_hash());
+        let block_directory_name = lowercase_hex::encode_lowercase_hex(&block_key.block_hash());
         let final_block_directory = self.blocks_directory.join(&block_directory_name);
         let staging_block_directory =
             unique_staging_block_directory(&self.blocks_directory, &block_directory_name);
@@ -119,7 +118,7 @@ impl AstroSsdPromptCacheDiskStore {
             &self.blocks_directory,
             &format!(
                 "{}-boundary",
-                astronomical_lowercase_hex::encode_lowercase_hex(&block_hash)
+                lowercase_hex::encode_lowercase_hex(&block_hash)
             ),
         );
         create_staging_directory(&staging_directory)?;

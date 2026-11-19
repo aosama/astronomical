@@ -1,6 +1,6 @@
 //! The GPU objective against the CPU losses it mirrors.
 
-use astronomical_decision_training::training_losses::{
+use decision_training::training_losses::{
     LABEL_SMOOTHING, negative_log_likelihood, shipped_agreement_loss, smoothed_cross_entropy,
 };
 use serial_test::serial;
@@ -8,7 +8,7 @@ use serial_test::serial;
 use super::super::gpu_test_support::assert_all_close;
 use super::super::question_batch::OptionLayout;
 use super::*;
-use astronomical_model_primitives::synthetic_weights_test_support::initialize_test_runtime;
+use model_primitives::synthetic_weights_test_support::initialize_test_runtime;
 
 #[test]
 #[serial]

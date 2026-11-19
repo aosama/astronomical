@@ -13,14 +13,14 @@ use astronomical_daemon::{
     ImageGenerationExecutionError, ImageGenerationOutput, SpeechExecutionError, SpeechOutput,
     WorkerActivity, WorkerHealthSnapshot, WorkerHealthStatus,
 };
-use astronomical_ipc_protocol::{
-    ChatGenerationCommand, ChatModelCapabilities, DecisionsCommand, EmbeddingsCommand,
-    GeneratedImage, ImageGenerationCapabilities, ImageGenerationCommand,
-    ImageGenerationResultMetadata, SpeechCommand, SpeechResultMetadata, WorkerModelCapabilities,
-};
 use image::{
     ExtendedColorType, ImageEncoder,
     codecs::png::{CompressionType, FilterType, PngEncoder},
+};
+use ipc_protocol::{
+    ChatGenerationCommand, ChatModelCapabilities, DecisionsCommand, EmbeddingsCommand,
+    GeneratedImage, ImageGenerationCapabilities, ImageGenerationCommand,
+    ImageGenerationResultMetadata, SpeechCommand, SpeechResultMetadata, WorkerModelCapabilities,
 };
 use tokio::sync::mpsc;
 

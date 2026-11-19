@@ -947,7 +947,7 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
       - name: Test the catalog and its parser
-        run: cargo test --locked -p astronomical-download-catalog
+        run: cargo test --locked -p download-catalog
         timeout-minutes: 8
 
   # The OpenCode plugin, on Linux. It is a standalone npm package that

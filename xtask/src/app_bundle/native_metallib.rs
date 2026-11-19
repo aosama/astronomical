@@ -8,8 +8,8 @@
 
 use std::path::{Path, PathBuf};
 
-use astronomical_native_identity::probes::ToolchainOverrides;
-use astronomical_native_identity::{
+use native_identity::probes::ToolchainOverrides;
+use native_identity::{
     FingerprintRequest, IdentityScope, NativeBuildProfile, native_build_identity,
 };
 

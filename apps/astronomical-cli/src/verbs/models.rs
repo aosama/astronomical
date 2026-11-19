@@ -6,9 +6,9 @@
 
 use std::{fmt::Write as _, io::Write, path::PathBuf, time::Duration};
 
-use astronomical_config::AstronomicalRuntimeInstance;
+use config::AstronomicalRuntimeInstance;
 
-use astronomical_ipc_protocol::{DaemonCatalogEntry, DaemonListedModel};
+use ipc_protocol::{DaemonCatalogEntry, DaemonListedModel};
 
 use crate::transport::ipc::DaemonProbeError;
 use crate::{DaemonProbe, formatting::format_gigabytes, model_lifecycle::ModelLifecycle};

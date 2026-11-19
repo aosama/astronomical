@@ -2,7 +2,7 @@
 
 use std::fs;
 
-use astronomical_model_serving::{
+use model_serving::{
     Flux2KleinArtifactError, Flux2KleinArtifactProvenance, Flux2KleinArtifactValidator,
     Flux2KleinWeightLayout,
 };

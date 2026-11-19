@@ -1,5 +1,5 @@
 use crate::*;
-use astronomical_runtime_integration::MlxRuntimeError;
+use runtime_integration::MlxRuntimeError;
 
 #[test]
 fn should_classify_direct_and_paged_native_capacity_errors_as_the_same_recoverable_pressure() {

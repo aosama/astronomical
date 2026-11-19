@@ -4,7 +4,7 @@
 use std::fs;
 use std::path::Path;
 
-use astronomical_config::ModelFamily;
+use config::ModelFamily;
 
 /// Writes the smallest executable folded pack: config, Hadamard contract,
 /// tokenizer, and single-file weights.
@@ -40,10 +40,9 @@ fn should_classify_a_complete_folded_pack() {
         .join("fcba37d2117a7077eac6b613b2668d14d9779edd");
     write_folded_pack(&snapshot);
 
-    let artifacts = astronomical_config::discover_classified_model_artifacts(&[configured_root
-        .path()
-        .to_path_buf()])
-    .expect("classified artifact discovery should complete");
+    let artifacts =
+        config::discover_classified_model_artifacts(&[configured_root.path().to_path_buf()])
+            .expect("classified artifact discovery should complete");
 
     assert_eq!(artifacts.len(), 1);
     assert_eq!(artifacts[0].model_family, ModelFamily::PrismHadamardQwen35);
@@ -66,9 +65,8 @@ fn should_skip_a_folded_pack_missing_its_hadamard_contract() {
     fs::remove_file(snapshot.join("hadamard.json"))
         .expect("the Hadamard contract stub should be removable");
 
-    let directory_scans =
-        astronomical_config::discover_models(&[configured_root.path().to_path_buf()])
-            .expect("executable model discovery should complete");
+    let directory_scans = config::discover_models(&[configured_root.path().to_path_buf()])
+        .expect("executable model discovery should complete");
 
     assert!(
         directory_scans
@@ -89,10 +87,9 @@ fn should_refuse_an_unknown_model_type() {
     )
     .expect("the unrelated config should be written");
 
-    let artifacts = astronomical_config::discover_classified_model_artifacts(&[configured_root
-        .path()
-        .to_path_buf()])
-    .expect("classified artifact discovery should complete");
+    let artifacts =
+        config::discover_classified_model_artifacts(&[configured_root.path().to_path_buf()])
+            .expect("classified artifact discovery should complete");
 
     assert!(artifacts.is_empty());
 }

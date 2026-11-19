@@ -9,18 +9,18 @@
 
 use std::path::PathBuf;
 
-use astronomical_config::{
+use config::{
     AstroSsdPromptCacheConfig, ModelFamily, classify_model_directory,
     verify_flux2_klein_model_directory, verify_qwen_image_21_model_directory,
 };
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     WorkerAutoregressiveModelConfiguration, WorkerDecisionModelConfiguration,
     WorkerDecodeAstroExpertCachePolicy, WorkerDiagnosticQwen3_5EngineOverride,
     WorkerEmbeddingModelConfiguration, WorkerFlux2KleinModelConfiguration,
     WorkerImageGenerationModelFamily, WorkerModelConfiguration,
     WorkerQwenImage21ModelConfiguration,
 };
-use astronomical_model_serving::{
+use model_serving::{
     ClefDecisionEngine, DecisionEngine, EngineBackedWorker, Flux2KleinArtifactProvenance,
     Flux2KleinImageEngine, KevDecisionEngine, LayaDecisionEngine, ModelFactory,
     ModelFactoryRuntime, ModelFamilyGenerationProcessor, ModelFamilyImageEngine,
@@ -186,9 +186,9 @@ impl ModelFamilyFactory {
         engine_selection: Qwen3_5EngineSelection,
     ) -> Result<
         (
-            astronomical_model_serving::Qwen3_5GenerationProcessor,
+            model_serving::Qwen3_5GenerationProcessor,
             ModelFamilyInferenceEngine,
-            Option<astronomical_model_serving::EnginePlacement>,
+            Option<model_serving::EnginePlacement>,
         ),
         String,
     > {
@@ -560,7 +560,7 @@ impl ModelFamilyFactory {
         Ok(ModelFactoryRuntime::autoregressive(
             ModelFamilyGenerationProcessor::PrismHadamardQwen35(generation_processor),
             ModelFamilyInferenceEngine::PrismHadamardQwen35(prism_engine),
-            astronomical_model_serving::EnginePlacement::CompleteResidencyFits,
+            model_serving::EnginePlacement::CompleteResidencyFits,
         ))
     }
 

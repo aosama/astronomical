@@ -1,6 +1,6 @@
 //! Unit tests for reading a folder's trained head.
 
-use astronomical_decision_contract::head_tuning_file::head_tuning_bytes;
+use decision_contract::head_tuning_file::head_tuning_bytes;
 
 use super::*;
 

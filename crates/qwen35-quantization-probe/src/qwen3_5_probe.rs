@@ -5,22 +5,20 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use astronomical_quantization::bit_width::{BitWidth, GroupSize};
-use astronomical_quantization::error::QuantizationError;
-use astronomical_quantization::module_inventory::{ModuleInventory, QuantizableModuleDescriptor};
-use astronomical_quantization::requantize::source_tensor_reader::{
-    SourceShardMaps, read_module_weight,
-};
-use astronomical_quantization::sensitivity::{
+use mlx_bridge::MlxArray;
+use quantization::bit_width::{BitWidth, GroupSize};
+use quantization::error::QuantizationError;
+use quantization::module_inventory::{ModuleInventory, QuantizableModuleDescriptor};
+use quantization::requantize::source_tensor_reader::{SourceShardMaps, read_module_weight};
+use quantization::sensitivity::{
     CalibrationForwardSample, ModuleRestoreToken, SensitivityProbeModel,
 };
-use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
-use mlx_bridge::MlxArray;
+use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
-use astronomical_qwen35::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights;
-use astronomical_qwen35::qwen3_5_core::model_math::dense_projection::Qwen3_5ProjectionStorage;
-use astronomical_qwen35::qwen3_5_resident::{Qwen3_5ResidentModel, RecordedDecoderLayerInput};
-use astronomical_qwen35::{Qwen3_5ArtifactValidator, Qwen3_5ModelChunkingConfiguration};
+use qwen35::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights;
+use qwen35::qwen3_5_core::model_math::dense_projection::Qwen3_5ProjectionStorage;
+use qwen35::qwen3_5_resident::{Qwen3_5ResidentModel, RecordedDecoderLayerInput};
+use qwen35::{Qwen3_5ArtifactValidator, Qwen3_5ModelChunkingConfiguration};
 
 use super::expert_swaps::SwappedOutWeights;
 use super::module_locations::{FeedForwardProjection, ModuleLocation, module_location_for};
@@ -254,10 +252,7 @@ impl Qwen3_5SensitivityProbe {
     /// A fresh decoder state for one forward from position zero.
     fn empty_probe_decoder_state(
         &self,
-    ) -> Result<
-        astronomical_qwen35::qwen3_5_core::decoder::RequestDecoderStateStack,
-        QuantizationError,
-    > {
+    ) -> Result<qwen35::qwen3_5_core::decoder::RequestDecoderStateStack, QuantizationError> {
         mlx_step(
             self.model
                 .empty_request_decoder_state_matching_loaded_weights(
@@ -412,7 +407,7 @@ impl SensitivityProbeModel for Qwen3_5SensitivityProbe {
 /// public reason carries the config field or file behind it, which is what
 /// someone converting a new base needs to see.
 fn probe_validation_failure(
-    validation_error: astronomical_qwen35::Qwen3_5ArtifactValidationError,
+    validation_error: qwen35::Qwen3_5ArtifactValidationError,
 ) -> QuantizationError {
     QuantizationError::ProbeModelFailure {
         description: validation_error.public_failure_reason(),

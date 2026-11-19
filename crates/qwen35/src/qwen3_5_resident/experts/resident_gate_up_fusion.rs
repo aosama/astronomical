@@ -8,7 +8,7 @@
 #[cfg(test)]
 mod tests;
 
-use astronomical_runtime_integration::MlxRuntime;
+use runtime_integration::MlxRuntime;
 
 use crate::qwen3_5_core::artifacts::expert_gate_up_fusion_plan::{
     ExpertGateUpFusionPlan, ExpertGateUpFusionPlanError,

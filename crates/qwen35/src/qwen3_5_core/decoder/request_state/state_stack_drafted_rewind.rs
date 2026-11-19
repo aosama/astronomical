@@ -11,8 +11,8 @@
 
 use std::collections::HashMap;
 
-use astronomical_runtime_integration::MlxRuntimeError;
 use mlx_bridge::MlxArray;
+use runtime_integration::MlxRuntimeError;
 
 use super::state_stack::RequestDecoderStateStack;
 use crate::astro_decoder_state_cache::AstroDecoderStateCacheState;

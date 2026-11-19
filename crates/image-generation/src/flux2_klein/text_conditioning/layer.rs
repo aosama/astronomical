@@ -1,6 +1,6 @@
 //! Exact Qwen3 decoder layer using native MLX fused attention and RoPE.
 
-use astronomical_runtime_integration::MlxRuntime;
+use runtime_integration::MlxRuntime;
 
 use super::Flux2KleinTextConditioningError;
 use super::weights::{

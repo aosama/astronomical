@@ -25,7 +25,7 @@ use crate::row_batched_matmul::{
     RegisterOrderedWeight, RowBatchedMatmulKernels, RowBatchedProjectionError,
     register_ordered_matmul_any_rows,
 };
-use astronomical_runtime_integration::MlxRuntimeError;
+use runtime_integration::MlxRuntimeError;
 
 impl Qwen3_5ModelBase {
     /// Converts every dense 4-bit, group-64 projection with bf16 scales, and
@@ -120,7 +120,7 @@ fn layer_projections<'layer>(
 /// reads its packing and shape: 1 when converted, 0 when left as it was (the
 /// 48-wide DeltaNet gates, 8-bit or group-32 modules, bf16 weights).
 fn convert_one(
-    runtime: &astronomical_runtime_integration::MlxRuntime,
+    runtime: &runtime_integration::MlxRuntime,
     kernels: &RowBatchedMatmulKernels,
     projection: &mut Qwen3_5DenseProjection,
 ) -> Result<usize, Qwen3_5ExecutionError> {

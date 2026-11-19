@@ -4,7 +4,7 @@ use crate::{
     EngineBackedWorker, ExpertResidencyTelemetry, GeneratedToken, MlxActiveMemoryBreakdown,
     MlxMemoryTelemetry,
 };
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     MAX_IPC_FRAME_BYTES, MlxMemorySnapshotSource, ProtocolReader, ProtocolWriter, RequestId,
     WorkerCommand, WorkerEvent, WorkerExpertResidencySnapshot, WorkerMlxMemorySnapshot,
     WorkerPromptWorkReuse,
@@ -34,8 +34,7 @@ async fn should_exclude_the_complete_restored_prompt_prefix_from_progress_withou
                         resident_expert_payload_bytes: 3_375_366_144,
                         complete_expert_payload_byte_count: 21_000_000_000,
                         expert_capacity: 256,
-                        layer_seating: astronomical_ipc_protocol::ExpertLayerSeatingCounts::default(
-                        ),
+                        layer_seating: ipc_protocol::ExpertLayerSeatingCounts::default(),
                     }),
                     mlx_memory_telemetry: Some(MlxMemoryTelemetry::new(
                         11_000,
@@ -160,7 +159,7 @@ async fn should_exclude_the_complete_restored_prompt_prefix_from_progress_withou
                     resident_expert_payload_bytes: 3_375_366_144,
                     complete_expert_payload_byte_count: 21_000_000_000,
                     expert_capacity: 256,
-                    layer_seating: astronomical_ipc_protocol::ExpertLayerSeatingCounts::default(),
+                    layer_seating: ipc_protocol::ExpertLayerSeatingCounts::default(),
                 })
             );
             assert_eq!(
@@ -228,8 +227,8 @@ async fn should_exclude_the_complete_restored_prompt_prefix_from_progress_withou
 
 #[tokio::test]
 async fn should_report_where_a_chunk_ran_when_the_model_has_programs() {
-    let chunk_report = astronomical_ipc_protocol::NeuralEngineChunkReport {
-        placement: astronomical_ipc_protocol::NeuralEngineChunkPlacement::BothEngines,
+    let chunk_report = ipc_protocol::NeuralEngineChunkReport {
+        placement: ipc_protocol::NeuralEngineChunkPlacement::BothEngines,
         chunk_token_count: 2_048,
         neural_engine_token_count: 960,
         elapsed_millis: 350,

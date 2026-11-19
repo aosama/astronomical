@@ -9,7 +9,7 @@
 
 use std::collections::BTreeMap;
 
-use astronomical_ipc_protocol::ChatToolDefinition;
+use ipc_protocol::ChatToolDefinition;
 use serde_json::Value;
 
 use super::output_parser_error::Qwen3_5OutputParserError;

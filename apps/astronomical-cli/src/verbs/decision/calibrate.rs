@@ -10,16 +10,14 @@
 
 use std::io::Write;
 
-use astronomical_decision_contract::QuestionOutcome;
-use astronomical_decision_contract::calibration_file::CalibrationOverride;
-use astronomical_decision_contract::training_record::TrainingRecord;
-use astronomical_decision_training::calibrated_model_folder::FolderAdditions;
-use astronomical_decision_training::calibration_plan::plan_calibration;
-use astronomical_decision_training::holdout_split::{split_by_state, state_group_key};
-use astronomical_decision_training::labelled_example::{LabelledExample, labelled_data_counts};
-use astronomical_decision_training::scored_question::{
-    ScoredQuestion, scored_question_from_outcome,
-};
+use decision_contract::QuestionOutcome;
+use decision_contract::calibration_file::CalibrationOverride;
+use decision_contract::training_record::TrainingRecord;
+use decision_training::calibrated_model_folder::FolderAdditions;
+use decision_training::calibration_plan::plan_calibration;
+use decision_training::holdout_split::{split_by_state, state_group_key};
+use decision_training::labelled_example::{LabelledExample, labelled_data_counts};
+use decision_training::scored_question::{ScoredQuestion, scored_question_from_outcome};
 
 use super::calibration_report::{CalibrationCounts, calibration_report_text, calibration_warnings};
 use super::decision_arguments::DecisionToolArguments;

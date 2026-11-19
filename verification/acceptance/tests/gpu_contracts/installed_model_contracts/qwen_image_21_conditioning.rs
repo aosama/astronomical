@@ -14,7 +14,7 @@
 //! developer path is hardcoded; the artifact is not registered in the Development model
 //! directory, so it cannot be found by ordinary discovery.
 
-use astronomical_model_serving::{
+use model_serving::{
     build_prompt_conditioning, render_t2i_prompt_template, render_ti2i_prompt_template,
     render_ti2i_prompt_template_with_image_count, special_tokens,
 };
@@ -24,8 +24,7 @@ use tokenizers::Tokenizer;
 
 use crate::common::qwen_image_21;
 
-const ORACLE_FIXTURE_JSON: &str =
-    astronomical_test_harness::fixtures::QWEN_IMAGE_21_CONDITIONING_ORACLE_JSON;
+const ORACLE_FIXTURE_JSON: &str = test_harness::fixtures::QWEN_IMAGE_21_CONDITIONING_ORACLE_JSON;
 
 /// The Qwen chat special tokens that must each encode to exactly one id in the real tokenizer.
 const SPECIAL_TOKEN_IDS: [(u32, &str); 5] = [

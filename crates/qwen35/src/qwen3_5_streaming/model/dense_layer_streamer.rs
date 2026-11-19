@@ -13,8 +13,8 @@ use std::collections::{BTreeMap, HashMap};
 use std::fs::File;
 use std::rc::Rc;
 
-use astronomical_runtime_integration::MlxRuntime;
 use mlx_bridge::MlxArray;
+use runtime_integration::MlxRuntime;
 
 use super::dense_layer_counts::{kept_layer_count_after_release, streaming_slot_count_in_use};
 use super::dense_layer_reads::{

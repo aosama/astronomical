@@ -1,6 +1,6 @@
 //! Model-load and request attribution report finalization for the folded-ternary engine.
 
-use astronomical_ipc_protocol::RequestId;
+use ipc_protocol::RequestId;
 
 use crate::{
     GenerationPerformanceAttributionMetadata, ModelLoadingPerformanceAttributionMetadata,

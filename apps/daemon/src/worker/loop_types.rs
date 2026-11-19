@@ -5,7 +5,7 @@ use std::{
     time::Duration,
 };
 
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     ChatGenerationCommand, EmbeddingsFailureReason, ImageGenerationCommand,
     ImageGenerationFailureReason, ImageGenerationPhase, RequestId,
     WorkerRuntimeFeatureConfiguration, WorkerStartupConfiguration,
@@ -80,7 +80,7 @@ pub(crate) enum WorkerLoopCommand {
     },
     GenerateEmbeddings {
         active_generation_permit: OwnedSemaphorePermit,
-        embeddings_command: astronomical_ipc_protocol::EmbeddingsCommand,
+        embeddings_command: ipc_protocol::EmbeddingsCommand,
         start_sender: oneshot::Sender<Result<(), GenerationStartError>>,
         embeddings_result_sender: mpsc::Sender<Result<EmbeddingsOutput, EmbeddingsExecutionError>>,
         admitted_at: Instant,
@@ -94,7 +94,7 @@ pub(crate) enum WorkerLoopCommand {
     },
     GenerateSpeech {
         active_generation_permit: OwnedSemaphorePermit,
-        speech_command: astronomical_ipc_protocol::SpeechCommand,
+        speech_command: ipc_protocol::SpeechCommand,
         start_sender: oneshot::Sender<Result<(), GenerationStartError>>,
         speech_result_sender: SpeechResultSender,
     },
@@ -143,7 +143,7 @@ pub(crate) enum ActiveWorkerRequest {
 
 impl ActiveWorkerRequest {
     pub(crate) fn request_id(&self) -> RequestId {
-        astronomical_config::exhaustive_table!(
+        config::exhaustive_table!(
             self,
             request => request.request_id,
             [
@@ -285,7 +285,7 @@ pub(crate) struct ActiveSpeechGeneration {
     pub(crate) terminal_received_at: Option<Instant>,
     pub(crate) speech_result_sender: SpeechResultSender,
     pub(crate) terminal_outcome:
-        Option<Result<crate::SpeechOutput, astronomical_speech_contract::SpeechFailure>>,
+        Option<Result<crate::SpeechOutput, speech_contract::SpeechFailure>>,
 }
 
 pub(crate) struct ActiveDecisionsGeneration {
@@ -295,14 +295,14 @@ pub(crate) struct ActiveDecisionsGeneration {
     pub(crate) execution_deadline: Instant,
     pub(crate) decisions_result_sender: DecisionsResultSender,
     pub(crate) terminal_outcome:
-        Option<Result<DecisionsOutput, astronomical_decision_contract::DecisionFailure>>,
+        Option<Result<DecisionsOutput, decision_contract::DecisionFailure>>,
 }
 
 pub(crate) struct ActiveImageGeneration {
     pub(crate) _active_generation_permit: OwnedSemaphorePermit,
     pub(crate) request_id: RequestId,
     pub(crate) model_id: String,
-    pub(crate) settings: astronomical_ipc_protocol::ImageGenerationSettings,
+    pub(crate) settings: ipc_protocol::ImageGenerationSettings,
     pub(crate) admitted_at: Instant,
     pub(crate) queue_wait_elapsed: std::time::Duration,
     pub(crate) swap_load_elapsed: std::time::Duration,

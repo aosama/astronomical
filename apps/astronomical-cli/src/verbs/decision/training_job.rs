@@ -10,18 +10,16 @@
 
 use std::collections::HashMap;
 
-use astronomical_decision_contract::decision_training_job::{
+use decision_contract::decision_training_job::{
     DecisionTrainingJob, DecisionTrainingOutcome, QuestionRole, TrainedQuestion, TrainingExample,
     TrainingScope,
 };
-use astronomical_decision_contract::{QuestionOutcome, parse_system_one_questions};
-use astronomical_decision_training::holdout_split::state_group_key;
-use astronomical_decision_training::labelled_example::LabelledExample;
-use astronomical_decision_training::training_losses::tempered_probabilities;
-use astronomical_decision_training::training_split::{SplitPart, split_parts_by_state};
-use astronomical_decision_training::training_verdict::{
-    CheckPair, JudgedOn, ScoredPair, TrainingScores,
-};
+use decision_contract::{QuestionOutcome, parse_system_one_questions};
+use decision_training::holdout_split::state_group_key;
+use decision_training::labelled_example::LabelledExample;
+use decision_training::training_losses::tempered_probabilities;
+use decision_training::training_split::{SplitPart, split_parts_by_state};
+use decision_training::training_verdict::{CheckPair, JudgedOn, ScoredPair, TrainingScores};
 
 use super::calibrate::scored_example;
 use super::check_set::CheckExample;

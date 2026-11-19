@@ -9,8 +9,8 @@
 //! output is a small integer bf16 stores exactly. The expected values come from
 //! the host, independent of MLX.
 
-use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 use mlx_bridge::{MlxArray, MlxDtype};
+use runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use super::{
     CustomMetalKernelFamily, CustomMetalKernelProbe, KernelCapabilityError, validate_probe_outputs,

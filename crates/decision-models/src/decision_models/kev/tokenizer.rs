@@ -6,8 +6,8 @@
 
 use std::path::Path;
 
-use astronomical_decision_contract::DecisionFailure;
-use astronomical_decision_contract::kev_rendering::kev_escape_control_tokens;
+use decision_contract::DecisionFailure;
+use decision_contract::kev_rendering::kev_escape_control_tokens;
 use tokenizers::Tokenizer;
 
 /// The state token, question token, option opening and closing tokens, and

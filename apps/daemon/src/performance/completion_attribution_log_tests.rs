@@ -206,5 +206,5 @@ fn should_never_leak_local_paths_into_completion_rows() {
 
 fn sha256_hex(bytes: &[u8]) -> String {
     use sha2::{Digest, Sha256};
-    astronomical_lowercase_hex::encode_lowercase_hex(&Sha256::digest(bytes))
+    lowercase_hex::encode_lowercase_hex(&Sha256::digest(bytes))
 }

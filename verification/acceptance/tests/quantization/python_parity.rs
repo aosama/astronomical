@@ -14,18 +14,18 @@
 
 use std::path::Path;
 
-use astronomical_quantization::artifact::OptiQSensitivityDocument;
-use astronomical_quantization::calibration::mix::DEFAULT_SHUFFLE_SEED;
-use astronomical_quantization::calibration::{CalibrationMix, HuggingFaceCalibrationTokenizer};
-use astronomical_quantization::evaluation::{
+use quantization::artifact::OptiQSensitivityDocument;
+use quantization::calibration::mix::DEFAULT_SHUFFLE_SEED;
+use quantization::calibration::{CalibrationMix, HuggingFaceCalibrationTokenizer};
+use quantization::evaluation::{
     KlEvaluationRequest, bundled_evaluation_prompts, evaluate_kl_divergence,
     tokenized_evaluation_prompts,
 };
-use astronomical_quantization::pipeline::probe_source_view::loadable_model_directory;
-use astronomical_quantization::pipeline::{
+use quantization::pipeline::probe_source_view::loadable_model_directory;
+use quantization::pipeline::{
     PipelineMethod, plan_from_sensitivity_table, run_quantization_pipeline,
 };
-use astronomical_qwen35_quantization_probe::Qwen3_5KlDivergenceEngine;
+use qwen35_quantization_probe::Qwen3_5KlDivergenceEngine;
 use serial_test::serial;
 
 use super::artifact_comparison::{

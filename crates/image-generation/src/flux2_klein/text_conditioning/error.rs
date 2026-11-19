@@ -41,12 +41,12 @@ pub enum Flux2KleinTextConditioningError {
     TensorStore(#[from] crate::flux2_klein::tensor_store::Flux2KleinTensorStoreError),
     #[cfg(feature = "direct-mlx")]
     #[error("native MLX text conditioning failed")]
-    Mlx(#[from] astronomical_runtime_integration::MlxRuntimeError),
+    Mlx(#[from] runtime_integration::MlxRuntimeError),
 }
 
 #[cfg(feature = "direct-mlx")]
 impl From<mlx_bridge::MlxCError> for Flux2KleinTextConditioningError {
     fn from(captured_error: mlx_bridge::MlxCError) -> Self {
-        astronomical_runtime_integration::MlxRuntimeError::from(captured_error).into()
+        runtime_integration::MlxRuntimeError::from(captured_error).into()
     }
 }

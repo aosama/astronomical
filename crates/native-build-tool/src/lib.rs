@@ -8,7 +8,7 @@
 //!
 //! # Why this crate stays tiny
 //!
-//! The orchestration it runs lives in `astronomical-native-build-orchestration`
+//! The orchestration it runs lives in `native-build-orchestration`
 //! — a dependency whose tree is exactly fs4, sha2, and native-identity — so
 //! `cargo run` builds only this tiny crate plus that small orchestration
 //! tree, never the runtime-integration dependency tree. The pre-warm tool
@@ -21,7 +21,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use astronomical_native_build_orchestration::{
+use native_build_orchestration::{
     NativeBuildProgress, NativeBuildStore, NativeRuntimeBuildInputs, build_pinned_native_runtime,
     detect_host_target_triple, native_build_store_directory, native_parallel_job_count,
     resolve_native_build_identity, write_native_build_status,
@@ -30,7 +30,7 @@ use astronomical_native_build_orchestration::{
 /// Re-exported because [`NativeBuildToolArguments::native_build_profile`]
 /// exposes the profile type on this crate's public surface; the orchestration
 /// crate is the type's home.
-pub use astronomical_native_build_orchestration::NativeBuildProfile;
+pub use native_build_orchestration::NativeBuildProfile;
 
 pub const NATIVE_BUILD_TOOL_PREFIX: &str = "[native-build-tool]";
 

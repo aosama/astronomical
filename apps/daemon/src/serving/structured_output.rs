@@ -1,11 +1,11 @@
 //! Applies OpenAI structured-output fallback while grammar masking is unavailable.
 
-use astronomical_ipc_protocol::{ChatMessage, StructuredGenerationConstraint};
-use astronomical_rest_contract::{EnforcedStructuredGeneration, OpenAiStructuredOutput};
 use axum::{
     http::{HeaderValue, header::WARNING},
     response::Response,
 };
+use ipc_protocol::{ChatMessage, StructuredGenerationConstraint};
+use rest_contract::{EnforcedStructuredGeneration, OpenAiStructuredOutput};
 
 /// Inserts the JSON-output prompt instruction ahead of the chat messages,
 /// reusing the template convention that the first system message is the root

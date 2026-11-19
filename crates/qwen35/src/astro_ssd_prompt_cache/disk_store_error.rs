@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use astronomical_runtime_integration::MlxRuntimeError;
+use runtime_integration::MlxRuntimeError;
 
 use super::block_format_error::AstroSsdPromptCacheBlockError;
 use super::model_contract_error::AstroSsdPromptCacheModelContractError;

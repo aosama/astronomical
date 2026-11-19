@@ -4,9 +4,7 @@
 //! the image runtime there is no step loop and no mid-request cancellation:
 //! one command either returns complete vectors or a bounded failure.
 
-use astronomical_ipc_protocol::{
-    EmbeddingsCommand, EmbeddingsFailureReason, WorkerEmbeddingCapabilities,
-};
+use ipc_protocol::{EmbeddingsCommand, EmbeddingsFailureReason, WorkerEmbeddingCapabilities};
 
 use crate::memory::telemetry::MlxMemoryTelemetry;
 

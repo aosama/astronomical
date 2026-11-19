@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
-use astronomical_config::ModelFamily;
-use astronomical_ipc_protocol::{
+use config::ModelFamily;
+use ipc_protocol::{
     WorkerDecisionModelConfiguration, WorkerDecisionModelFamily, WorkerModelConfiguration,
     WorkerSpeechModelConfiguration, WorkerSpeechModelFamily,
 };

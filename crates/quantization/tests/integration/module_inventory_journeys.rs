@@ -3,11 +3,9 @@
 
 use std::path::Path;
 
-use astronomical_quantization::bit_width::GroupSize;
-use astronomical_quantization::module_inventory::{
-    ModuleInventory, ModuleWeightSource, SourceTensorDtype,
-};
-use astronomical_quantization::module_taxonomy::ModuleRole;
+use quantization::bit_width::GroupSize;
+use quantization::module_inventory::{ModuleInventory, ModuleWeightSource, SourceTensorDtype};
+use quantization::module_taxonomy::ModuleRole;
 
 /// Writes one shard holding bf16 tensors of the given shapes (all zeros; the
 /// inventory never reads the data) and a minimal Qwen3.5-style config.
@@ -384,7 +382,7 @@ fn should_refuse_a_config_that_is_not_json() {
 
     assert!(matches!(
         inventory_outcome,
-        Err(astronomical_quantization::QuantizationError::ModelConfigUnreadable { .. })
+        Err(quantization::QuantizationError::ModelConfigUnreadable { .. })
     ));
 }
 

@@ -4,7 +4,7 @@ use serial_test::serial;
 
 use super::super::gpu_test_support::sequence_values;
 use super::*;
-use astronomical_model_primitives::synthetic_weights_test_support::initialize_test_runtime;
+use model_primitives::synthetic_weights_test_support::initialize_test_runtime;
 
 /// `[rows, inner] · [inner, columns]` in float64, the reference.
 fn host_product(left: &[f32], right: &[f32], shape: (usize, usize, usize)) -> Vec<f64> {

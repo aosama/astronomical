@@ -1,5 +1,5 @@
 use crate::{AstroExpertCacheStatistics, InferenceEngineError};
-use astronomical_ipc_protocol::{ExpertMemoryMode, RequestId};
+use ipc_protocol::{ExpertMemoryMode, RequestId};
 
 use crate::MlxInferenceEngine;
 
@@ -43,7 +43,7 @@ impl Qwen3_5EngineState {
     fn prompt_work_reuse_for_tests(
         &self,
         request_id: RequestId,
-    ) -> Result<astronomical_ipc_protocol::WorkerPromptWorkReuse, InferenceEngineError> {
+    ) -> Result<ipc_protocol::WorkerPromptWorkReuse, InferenceEngineError> {
         let active_request = self.active_request.as_ref().ok_or_else(|| {
             fatal_engine_error("cannot inspect prompt work reuse without an active request")
         })?;
@@ -80,8 +80,7 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
     #[doc(hidden)]
     pub async fn memory_ledger_reading_for_tests(
         &self,
-    ) -> Result<Option<astronomical_memory_policy::ledger::LedgerReading>, InferenceEngineError>
-    {
+    ) -> Result<Option<memory_policy::ledger::LedgerReading>, InferenceEngineError> {
         let (ledger_reading_sender, ledger_reading_receiver) = std::sync::mpsc::sync_channel(1);
         self.run_owner_test_operation(move |qwen_inference_execution| {
             let latest_ledger_reading = qwen_inference_execution
@@ -146,7 +145,7 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
     pub async fn prompt_work_reuse_for_tests(
         &self,
         request_id: RequestId,
-    ) -> Result<astronomical_ipc_protocol::WorkerPromptWorkReuse, InferenceEngineError> {
+    ) -> Result<ipc_protocol::WorkerPromptWorkReuse, InferenceEngineError> {
         let (prompt_work_reuse_sender, prompt_work_reuse_receiver) =
             std::sync::mpsc::sync_channel(1);
         self.run_owner_test_operation(move |qwen_inference_execution| {

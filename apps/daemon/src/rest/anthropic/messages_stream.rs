@@ -6,8 +6,8 @@
 
 use std::collections::VecDeque;
 
-use astronomical_ipc_protocol::ChatGenerationCompletionReason;
-use astronomical_rest_contract::{
+use ipc_protocol::ChatGenerationCompletionReason;
+use rest_contract::{
     AnthropicContentBlockDelta, AnthropicError, AnthropicMessage, AnthropicMessageDeltaBody,
     AnthropicMessageStreamEvent, AnthropicOutputContentBlock,
 };

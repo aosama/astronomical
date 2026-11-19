@@ -1,7 +1,5 @@
-use astronomical_runtime_integration::{
-    MlxMemoryLimits, MlxMemorySnapshot, MlxRuntime, MlxRuntimeError,
-};
 use mlx_bridge::MlxDtype;
+use runtime_integration::{MlxMemoryLimits, MlxMemorySnapshot, MlxRuntime, MlxRuntimeError};
 
 const GRAPH_DIMENSION: i32 = 4096;
 const ACTIVE_MEMORY_ENFORCEMENT_LIMIT_BYTES: usize = 32 * 1024 * 1024;
@@ -10,9 +8,9 @@ const MLX_BUFFER_CACHE_LIMIT_BYTES: usize = 0;
 #[test]
 #[ignore = "allocates and evaluates real MLX GPU arrays through the Rust MLX-C boundary"]
 fn should_preserve_native_memory_transitions_through_the_mlx_c_boundary() {
-    astronomical_test_harness::run_with_timeout(
+    test_harness::run_with_timeout(
         "should_preserve_native_memory_transitions_through_the_mlx_c_boundary",
-        astronomical_test_harness::DEFAULT_TEST_TIMEOUT_SECONDS,
+        test_harness::DEFAULT_TEST_TIMEOUT_SECONDS,
         run_native_memory_transitions_contract,
     );
 }
@@ -149,9 +147,9 @@ fn run_native_memory_transitions_contract() {
 #[test]
 #[ignore = "allocates and rejects real MLX GPU arrays through the Rust MLX-C boundary"]
 fn should_map_new_and_mlx_buffer_cache_reuse_capacity_rejections_to_typed_errors() {
-    astronomical_test_harness::run_with_timeout(
+    test_harness::run_with_timeout(
         "should_map_new_and_mlx_buffer_cache_reuse_capacity_rejections_to_typed_errors",
-        astronomical_test_harness::DEFAULT_TEST_TIMEOUT_SECONDS,
+        test_harness::DEFAULT_TEST_TIMEOUT_SECONDS,
         run_typed_capacity_rejections_contract,
     );
 }
@@ -210,9 +208,9 @@ fn run_typed_capacity_rejections_contract() {
 #[test]
 #[ignore = "constructs a real MLX host-backed array through the Rust MLX-C boundary"]
 fn should_preserve_host_backed_capacity_rejection_error_details() {
-    astronomical_test_harness::run_with_timeout(
+    test_harness::run_with_timeout(
         "should_preserve_host_backed_capacity_rejection_error_details",
-        astronomical_test_harness::DEFAULT_TEST_TIMEOUT_SECONDS,
+        test_harness::DEFAULT_TEST_TIMEOUT_SECONDS,
         run_host_backed_capacity_rejection_contract,
     );
 }

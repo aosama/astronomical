@@ -5,9 +5,9 @@
 
 use std::time::{Duration, Instant};
 
-use astronomical_expert_record_reader::{ExpertRecordReader, RecordRead};
-use astronomical_runtime_integration::MlxRuntime;
+use expert_record_reader::{ExpertRecordReader, RecordRead};
 use mlx_bridge::MlxArray;
+use runtime_integration::MlxRuntime;
 
 use super::atlas_conversion::AtlasTestFile;
 use super::cold_page_plan::PlannedPage;

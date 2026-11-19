@@ -1,4 +1,4 @@
-use astronomical_ipc_protocol::WorkerDecodeAstroExpertCachePolicy;
+use ipc_protocol::WorkerDecodeAstroExpertCachePolicy;
 use std::time::Instant;
 
 use crate::performance_throughput::completion::ThroughputMeasurement;

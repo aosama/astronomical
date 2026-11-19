@@ -2,10 +2,8 @@ use std::fs;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use astronomical_model_serving::{
-    AstroSsdPromptCacheDiskStoreError, AstroSsdPromptCachePublicationOutcome,
-};
-use astronomical_runtime_integration::PositionalFileReadMetrics;
+use model_serving::{AstroSsdPromptCacheDiskStoreError, AstroSsdPromptCachePublicationOutcome};
+use runtime_integration::PositionalFileReadMetrics;
 
 use super::astro_ssd_prompt_cache_disk_store_support::*;
 use crate::common::qwen3_5_moe;

@@ -22,10 +22,10 @@
 //! debug-build numbers understate every ratio and must not be recorded. Every
 //! test is `#[serial]` because these are throughput measurements.
 
-use astronomical_jangtq2_qwen35::codebook;
-use astronomical_jangtq2_qwen35::mlx_decode;
-use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
+use jangtq2_qwen35::codebook;
+use jangtq2_qwen35::mlx_decode;
 use mlx_bridge::{MlxArray, MlxDtype};
+use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use serial_test::serial;
 
 /// Routed experts serving one decode token (Qwen3.5 `num_experts_per_tok`).
@@ -367,7 +367,7 @@ fn measure_fused_gathered_projection_throughput(
     packed_shape: &[i32],
     bit_width: u32,
 ) {
-    use astronomical_jangtq2_qwen35::fused_gathered_projection::FusedJangtq2GatheredProjectionKernel;
+    use jangtq2_qwen35::fused_gathered_projection::FusedJangtq2GatheredProjectionKernel;
 
     let runtime = test_runtime();
     let fused_kernel = FusedJangtq2GatheredProjectionKernel::new()

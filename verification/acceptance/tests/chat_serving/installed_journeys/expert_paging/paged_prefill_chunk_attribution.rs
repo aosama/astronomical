@@ -18,12 +18,12 @@
 
 use std::time::Duration;
 
-use astronomical_model_serving::{
+use model_serving::{
     CompleteResidencyHeadroomBoundary, PerformanceAttribution, PerformanceCounter,
     PerformanceOperation, Qwen3_5ArtifactValidator, Qwen3_5StreamingModel,
     model_memory_geometry_from_validated_artifact,
 };
-use astronomical_runtime_integration::MlxRuntime;
+use runtime_integration::MlxRuntime;
 use serial_test::serial;
 use tokio::time::timeout;
 
@@ -77,7 +77,7 @@ async fn attribute_paged_prefill_chunks() {
     );
 
     let runtime = MlxRuntime::initialize(
-        astronomical_runtime_integration::MlxMemoryLimits::new(
+        runtime_integration::MlxMemoryLimits::new(
             usize::try_from(paging_ceiling_bytes).expect("the paging ceiling should fit usize"),
             usize::try_from(paging_ceiling_bytes).expect("the paging ceiling should fit usize"),
         )
@@ -100,7 +100,7 @@ async fn attribute_paged_prefill_chunks() {
     let mut request_open_attribution = PerformanceAttribution::enabled();
     qwen3_5_model
         .enter_memory_phase_for_tests(
-            astronomical_model_serving::MemoryPhase::Prefill,
+            model_serving::MemoryPhase::Prefill,
             u64::try_from(prompt_token_ids.len()).unwrap_or(u64::MAX),
             u64::try_from(PREFILL_CHUNK_TOKENS).unwrap_or(u64::MAX),
             &mut request_open_attribution,
@@ -126,7 +126,7 @@ async fn attribute_paged_prefill_chunks() {
         // here keeps the probe faithful to serving behavior.
         qwen3_5_model
             .enter_memory_phase_for_tests(
-                astronomical_model_serving::MemoryPhase::Prefill,
+                model_serving::MemoryPhase::Prefill,
                 u64::try_from(prompt_token_ids.len()).unwrap_or(u64::MAX),
                 u64::try_from(chunk_end - chunk_start).unwrap_or(u64::MAX),
                 &mut PerformanceAttribution::enabled(),

@@ -7,7 +7,7 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use astronomical_runtime_integration::MlxRuntime;
+use runtime_integration::MlxRuntime;
 
 use crate::allocation::{AllocationResult, QuantizationPredicate, optimize_mixed_precision};
 use crate::artifact::QuantizationConfigDocument;

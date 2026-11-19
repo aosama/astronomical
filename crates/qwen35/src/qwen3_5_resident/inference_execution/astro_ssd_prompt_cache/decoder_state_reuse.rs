@@ -10,7 +10,7 @@
 //! `crate::astro_ssd_prompt_cache::restore_support`; this module keeps the resident
 //! engine's in-memory prefix adoption.
 
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     RequestId, WorkerAstroSsdPromptCacheRequestDiagnostics, WorkerInMemoryPrefixAdoptionOutcome,
 };
 

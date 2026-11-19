@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
-use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use mlx_bridge::{MlxArray, MlxDtype};
+use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
 const ACTIVE_MEMORY_LIMIT_BYTES: usize = 2 * 1024 * 1024 * 1024;
 const MLX_BUFFER_CACHE_LIMIT_BYTES: usize = 256 * 1024 * 1024;

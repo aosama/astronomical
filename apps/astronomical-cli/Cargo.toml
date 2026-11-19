@@ -35,25 +35,25 @@ default = []
 # in only with this feature, and without it the verb explains how to build
 # a CLI that has it.
 quantize-convert = [
-    "astronomical-quantization/direct-mlx",
-    "dep:astronomical-qwen35-quantization-probe",
-    "dep:astronomical-memory-policy",
-    "dep:astronomical-runtime-integration",
+    "quantization/direct-mlx",
+    "dep:qwen35-quantization-probe",
+    "dep:memory-policy",
+    "dep:runtime-integration",
 ]
 
 [dependencies]
-astronomical-config = { path = "../../crates/config" }
-astronomical-expert-atlas = { path = "../../crates/expert-atlas" }
-astronomical-decision-contract = { path = "../../crates/decision-contract" }
-astronomical-decision-training = { path = "../../crates/decision-training" }
-astronomical-ipc-protocol = { path = "../../crates/ipc-protocol" }
-astronomical-speech-contract = { path = "../../crates/speech-contract" }
-astronomical-qwen35-quantization-probe = { path = "../../crates/qwen35-quantization-probe", optional = true }
+config = { path = "../../crates/config" }
+expert-atlas = { path = "../../crates/expert-atlas" }
+decision-contract = { path = "../../crates/decision-contract" }
+decision-training = { path = "../../crates/decision-training" }
+ipc-protocol = { path = "../../crates/ipc-protocol" }
+speech-contract = { path = "../../crates/speech-contract" }
+qwen35-quantization-probe = { path = "../../crates/qwen35-quantization-probe", optional = true }
 # The machine's memory ceiling the convert and evaluate verbs size MLX by.
-astronomical-memory-policy = { path = "../../crates/memory-policy", optional = true }
-astronomical-quantization = { path = "../../crates/quantization" }
-astronomical-runtime-integration = { path = "../../crates/runtime-integration", features = ["mlx"], optional = true }
-astronomical-vision-tower = { path = "../../crates/vision-tower" }
+memory-policy = { path = "../../crates/memory-policy", optional = true }
+quantization = { path = "../../crates/quantization" }
+runtime-integration = { path = "../../crates/runtime-integration", features = ["mlx"], optional = true }
+vision-tower = { path = "../../crates/vision-tower" }
 serde.workspace = true
 serde_json.workspace = true
 tempfile = "=3.27.0"

@@ -4,7 +4,7 @@
 use std::sync::{Arc, Mutex};
 
 use astronomical_daemon::{EmbeddingsOutput, WorkerHealthSnapshot};
-use astronomical_ipc_protocol::{DaemonIpcClient, DaemonRequest, DaemonResponse, RequestId};
+use ipc_protocol::{DaemonIpcClient, DaemonRequest, DaemonResponse, RequestId};
 use tokio::time::timeout;
 
 use crate::support::daemon_ipc::{

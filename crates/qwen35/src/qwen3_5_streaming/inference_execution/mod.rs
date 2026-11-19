@@ -30,10 +30,10 @@ mod test_controls;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     RequestId, WorkerChunkingConfiguration, WorkerDecodeAstroExpertCachePolicy, WorkerEvent,
 };
-use astronomical_runtime_integration::MlxMemoryLimits;
+use runtime_integration::MlxMemoryLimits;
 
 use crate::astro_ssd_prompt_cache::counters::AstroSsdPromptCacheCounters;
 use crate::inference_engine::load_result::EngineLoadResult;

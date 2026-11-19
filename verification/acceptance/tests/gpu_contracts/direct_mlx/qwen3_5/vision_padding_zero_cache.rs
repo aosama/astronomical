@@ -14,8 +14,8 @@
 
 use std::time::Duration;
 
-use astronomical_model_serving::Qwen3_5VisionPaddingZeroCache;
-use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
+use model_serving::Qwen3_5VisionPaddingZeroCache;
+use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use tokio::time::timeout;
 
 use crate::common::{

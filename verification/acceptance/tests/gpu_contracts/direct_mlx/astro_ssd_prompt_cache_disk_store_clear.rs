@@ -26,7 +26,7 @@ async fn should_clear_every_model_astro_ssd_prompt_cache_from_the_global_root() 
         );
 
         eprintln!("[astro-ssd-prompt-cache-clear]clearing the global astro SSD prompt cache root");
-        let clear_outcome = astronomical_model_serving::clear_astro_ssd_prompt_cache_directory(
+        let clear_outcome = model_serving::clear_astro_ssd_prompt_cache_directory(
             astro_ssd_prompt_cache_root.path(),
             None,
         )
@@ -61,7 +61,7 @@ async fn should_clear_only_the_requested_model_and_preserve_other_models() {
             7,
         );
 
-        let clear_outcome = astronomical_model_serving::clear_astro_ssd_prompt_cache_directory(
+        let clear_outcome = model_serving::clear_astro_ssd_prompt_cache_directory(
             astro_ssd_prompt_cache_root.path(),
             Some("publisher/model-a"),
         )
@@ -92,7 +92,7 @@ async fn should_treat_a_missing_model_astro_ssd_prompt_cache_as_an_idempotent_cl
         let astro_ssd_prompt_cache_root =
             tempfile::tempdir().expect("astro SSD prompt cache root should be created");
 
-        let clear_outcome = astronomical_model_serving::clear_astro_ssd_prompt_cache_directory(
+        let clear_outcome = model_serving::clear_astro_ssd_prompt_cache_directory(
             astro_ssd_prompt_cache_root.path(),
             Some("publisher/missing-model"),
         )
@@ -113,7 +113,7 @@ async fn should_reject_model_paths_that_can_escape_the_astro_ssd_prompt_cache_ro
         fs::write(&preserved_file, b"preserved").expect("preserved fixture should be written");
 
         for unsafe_model_id in ["../outside", "publisher/../outside", "/outside", "."] {
-            let clear_error = astronomical_model_serving::clear_astro_ssd_prompt_cache_directory(
+            let clear_error = model_serving::clear_astro_ssd_prompt_cache_directory(
                 astro_ssd_prompt_cache_root.path(),
                 Some(unsafe_model_id),
             )
@@ -144,7 +144,7 @@ async fn should_reject_an_intermediate_symlink_without_deleting_its_target() {
         )
         .expect("astro SSD prompt cache namespace symlink should be created");
 
-        astronomical_model_serving::clear_astro_ssd_prompt_cache_directory(
+        model_serving::clear_astro_ssd_prompt_cache_directory(
             astro_ssd_prompt_cache_root.path(),
             Some("publisher/model"),
         )
@@ -170,11 +170,8 @@ async fn should_reject_a_global_root_with_parent_directory_components() {
             .join("..")
             .join("preserved-astro-ssd-prompt-cache");
 
-        astronomical_model_serving::clear_astro_ssd_prompt_cache_directory(
-            &unsafe_global_root,
-            None,
-        )
-        .expect_err("global root with parent components should be rejected");
+        model_serving::clear_astro_ssd_prompt_cache_directory(&unsafe_global_root, None)
+            .expect_err("global root with parent components should be rejected");
 
         assert!(preserved_file.exists());
     })
@@ -197,7 +194,7 @@ async fn should_unlink_a_global_astro_ssd_prompt_cache_symlink_without_following
         symlink(external_directory.path(), &astro_ssd_prompt_cache_symlink)
             .expect("astro SSD prompt cache symlink should be created");
 
-        let clear_outcome = astronomical_model_serving::clear_astro_ssd_prompt_cache_directory(
+        let clear_outcome = model_serving::clear_astro_ssd_prompt_cache_directory(
             astro_ssd_prompt_cache_root.path(),
             None,
         )

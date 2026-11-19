@@ -4,9 +4,9 @@
 //! reference's `EvidenceRoutingLayer`, and `TransformerDecoderLayer` with
 //! `norm_first=True` and exact GELU.
 
-use astronomical_decision_contract::DecisionFailure;
-use astronomical_runtime_integration::MlxRuntime;
+use decision_contract::DecisionFailure;
 use mlx_bridge::{MlxArray, MlxCError};
+use runtime_integration::MlxRuntime;
 
 use super::head_weights::ClefHeadWeights;
 

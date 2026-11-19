@@ -10,8 +10,8 @@
 //! machinery (chunked prefill boundaries, fused decode prework, expert
 //! paging), which the parity milestone does not exercise.
 
-use astronomical_runtime_integration::MlxRuntimeError;
 use mlx_bridge::MlxArray;
+use runtime_integration::MlxRuntimeError;
 
 use crate::{ConvolutionState, FullAttentionKeyValueState, GatedDeltaRecurrentState};
 

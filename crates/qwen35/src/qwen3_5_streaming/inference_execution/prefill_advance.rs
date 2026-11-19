@@ -29,10 +29,8 @@ use crate::qwen3_5_core::astro_ssd_prompt_cache_capture::{
 use crate::qwen3_5_core::model::memory_breakdown::Qwen3_5MemoryOwnership;
 use std::time::Instant;
 
-use astronomical_ipc_protocol::RequestId;
-use astronomical_runtime_integration::{
-    MLX_BUFFER_CACHE_RECLAIM_THRESHOLD_BYTES, MlxMemorySnapshot,
-};
+use ipc_protocol::RequestId;
+use runtime_integration::{MLX_BUFFER_CACHE_RECLAIM_THRESHOLD_BYTES, MlxMemorySnapshot};
 
 use crate::{
     GeneratedToken, InferenceEngineError, PerformanceOperation, last_prefill_chunk_demand_weight,

@@ -9,12 +9,12 @@
 //! page shape, the pair it replaces on the decode path; the contracts run in
 //! parallel on small synthetic tensors.
 
-use astronomical_runtime_integration::MlxRuntime;
 use mlx_bridge::{MlxArray, MlxDtype};
+use runtime_integration::MlxRuntime;
 
-use astronomical_jangtq2_qwen35::codebook;
-use astronomical_jangtq2_qwen35::fused_gathered_projection::FusedJangtq2GatheredProjectionKernel;
-use astronomical_jangtq2_qwen35::mlx_decode;
+use jangtq2_qwen35::codebook;
+use jangtq2_qwen35::fused_gathered_projection::FusedJangtq2GatheredProjectionKernel;
+use jangtq2_qwen35::mlx_decode;
 
 use super::support::contract_runtime;
 

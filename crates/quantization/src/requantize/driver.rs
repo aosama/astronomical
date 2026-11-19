@@ -6,8 +6,8 @@ use std::collections::BTreeMap;
 use std::fs::File;
 use std::path::Path;
 
-use astronomical_runtime_integration::MlxRuntime;
 use mlx_bridge::{MlxArray, MlxDtype};
+use runtime_integration::MlxRuntime;
 
 use crate::bit_width::{BitWidth, GroupSize};
 use crate::encoder::RangeSearchPolicy;

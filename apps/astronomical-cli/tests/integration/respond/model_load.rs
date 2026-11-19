@@ -6,7 +6,7 @@
 use std::time::Duration;
 
 use astronomical_cli::RespondError;
-use astronomical_ipc_protocol::ModelLoadInFlight;
+use ipc_protocol::ModelLoadInFlight;
 
 use super::daemon_wait_support::{
     run_respond_against, run_respond_with_silence_bound, run_respond_with_stall_bound,

@@ -284,7 +284,7 @@ impl AstroSsdPromptCacheModelContract {
 
     #[must_use]
     pub fn storage_contract_fingerprint_hex(&self) -> String {
-        astronomical_lowercase_hex::encode_lowercase_hex(&self.storage_contract_fingerprint)
+        lowercase_hex::encode_lowercase_hex(&self.storage_contract_fingerprint)
     }
 }
 

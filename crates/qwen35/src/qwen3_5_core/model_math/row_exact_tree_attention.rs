@@ -36,10 +36,10 @@
 //! fragments ran 105 ms for four rows, their multiplies waiting on each
 //! other and their fragments rebuilt element by element.
 
-use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 use mlx_bridge::{
     MlxArray, MlxDtype, MlxMetalKernel, MlxMetalKernelOutput, MlxMetalKernelTemplateArgument,
 };
+use runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use super::gated_delta_tree::UploadedTreeRowChains;
 use crate::row_batched_matmul::kernel_source::ROW_BATCHED_MATMUL_HEADER;

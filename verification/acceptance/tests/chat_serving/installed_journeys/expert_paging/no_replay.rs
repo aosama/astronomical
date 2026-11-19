@@ -2,9 +2,9 @@
 
 use std::time::{Duration, Instant};
 
-use astronomical_ipc_protocol::RequestId;
-use astronomical_model_serving::Qwen3_5ArtifactValidator;
-use astronomical_runtime_integration::MlxMemoryLimits;
+use ipc_protocol::RequestId;
+use model_serving::Qwen3_5ArtifactValidator;
+use runtime_integration::MlxMemoryLimits;
 use serial_test::serial;
 use tokio::time::timeout;
 

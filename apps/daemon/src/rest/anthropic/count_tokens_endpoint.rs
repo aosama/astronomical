@@ -4,14 +4,14 @@
 //! the count matches what `POST /v1/messages` would prefill. Anthropic
 //! clients use it to decide when to compact a conversation.
 
-use astronomical_rest_contract::{
-    AnthropicCountTokensRequest, AnthropicMessagesRequestParts, AnthropicTokenCount,
-};
 use axum::{
     Json,
     body::Bytes,
     extract::State,
     response::{IntoResponse, Response},
+};
+use rest_contract::{
+    AnthropicCountTokensRequest, AnthropicMessagesRequestParts, AnthropicTokenCount,
 };
 use tokio::sync::mpsc::Receiver;
 

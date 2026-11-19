@@ -1,4 +1,4 @@
-use astronomical_neural_engine::weights::half_precision::f32_to_f16_bits;
+use neural_engine::weights::half_precision::f32_to_f16_bits;
 
 use super::{
     BLOCK_INPUT_COLUMNS, TernaryProjection, little_endian_f32s, little_endian_u16s,

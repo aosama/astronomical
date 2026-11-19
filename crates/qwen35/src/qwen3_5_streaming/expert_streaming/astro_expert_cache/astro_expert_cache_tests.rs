@@ -6,7 +6,7 @@ use super::*;
 use crate::memory::RetainedExpertPageClass;
 use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights;
 use crate::qwen3_5_streaming::expert_streaming::PersistedExpertUsage;
-use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
+use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use serial_test::serial;
 
 pub(super) const WARM_SLOT_COUNT: usize = 8;
@@ -54,11 +54,10 @@ pub(super) fn streamed_weights_for_expert_count(
             weight: projection(3.0),
         },
         gate_activation_rotation:
-            astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookRotation::NoRotation,
-        up_activation_rotation:
-            astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookRotation::NoRotation,
+            jangtq2_qwen35::configuration::Jangtq2CodebookRotation::NoRotation,
+        up_activation_rotation: jangtq2_qwen35::configuration::Jangtq2CodebookRotation::NoRotation,
         down_activation_rotation:
-            astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookRotation::NoRotation,
+            jangtq2_qwen35::configuration::Jangtq2CodebookRotation::NoRotation,
     }
 }
 

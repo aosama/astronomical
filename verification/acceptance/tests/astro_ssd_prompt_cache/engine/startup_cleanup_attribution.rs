@@ -1,11 +1,11 @@
 use std::{fs, time::Duration};
 
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     ChatGenerationCommand, ChatGenerationSettings, ChatMessage, ChatToolChoice, RequestId,
     WorkerAstroSsdPromptCacheLookupOutcome, WorkerAstroSsdPromptCacheMissReason,
     WorkerAstroSsdPromptCacheStartupCleanupEvidence,
 };
-use astronomical_model_serving::{
+use model_serving::{
     InferenceEngine, Qwen3_5ArtifactValidator, Qwen3_5InferenceRequest, Qwen3_5Tokenizer,
 };
 use tokio::time::timeout;

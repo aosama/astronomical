@@ -1,4 +1,4 @@
-use astronomical_ipc_protocol::ExpertMemoryMode;
+use ipc_protocol::ExpertMemoryMode;
 
 use super::streaming_model::Qwen3_5StreamingModel;
 use crate::inference_engine::contract::ExpertResidencyTelemetry;
@@ -42,11 +42,11 @@ impl Qwen3_5StreamingModel {
         let layer_seating = match self.astro_expert_cache.as_ref() {
             Some(astro_expert_cache) => {
                 let retained_expert_counts = astro_expert_cache.borrow().retained_expert_counts();
-                astronomical_ipc_protocol::ExpertLayerSeatingCounts::from_retained_counts(
+                ipc_protocol::ExpertLayerSeatingCounts::from_retained_counts(
                     &retained_expert_counts,
                 )
             }
-            None => astronomical_ipc_protocol::ExpertLayerSeatingCounts::default(),
+            None => ipc_protocol::ExpertLayerSeatingCounts::default(),
         };
         ExpertResidencyTelemetry {
             total_layer_count: u32::try_from(total_layer_count).unwrap_or(u32::MAX),

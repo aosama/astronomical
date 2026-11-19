@@ -3,11 +3,11 @@
 //! finalization; a model that cannot train refuses; a failing step ends
 //! the training and drops its state.
 
-use astronomical_decision_contract::DecisionFailure;
-use astronomical_decision_contract::decision_training_job::{
+use decision_contract::DecisionFailure;
+use decision_contract::decision_training_job::{
     DecisionTrainingJob, DecisionTrainingOutcome, DecisionTrainingStage, RunEnding, RunSummary,
 };
-use astronomical_ipc_protocol::{DecisionTrainingCommand, RequestId, WorkerCommand, WorkerEvent};
+use ipc_protocol::{DecisionTrainingCommand, RequestId, WorkerCommand, WorkerEvent};
 
 use super::decisions::{
     DECISION_MODEL_ID, DecisionsWorkerHarness, close, next_event,

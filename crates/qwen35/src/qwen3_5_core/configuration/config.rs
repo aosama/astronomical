@@ -4,7 +4,7 @@ use super::config_document::{Qwen3_5ConfigDocument, Qwen3_5TextConfig};
 use super::config_validation;
 use super::config_validation::{QWEN_CHAT_EOS_TOKEN_ID, Qwen3_5ConfigError};
 use super::quantizations::mlx_quantization::ModuleQuantizationProfile;
-use astronomical_jangtq2_qwen35::configuration::Jangtq2RmsNormConvention;
+use jangtq2_qwen35::configuration::Jangtq2RmsNormConvention;
 
 #[cfg(test)]
 mod tests;

@@ -47,13 +47,13 @@
 
 use std::{fs, path::Path};
 
-use astronomical_test_harness::{
-    sparse_decode_full_fit,
-    test_run::{PagingExperimentCase, TestRunContext},
-};
 use futures_util::StreamExt;
 use serde_json::{Value, json};
 use serial_test::serial;
+use test_harness::{
+    sparse_decode_full_fit,
+    test_run::{PagingExperimentCase, TestRunContext},
+};
 use tokio::time::{Duration, Instant, timeout};
 
 use crate::support::{

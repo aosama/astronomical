@@ -8,7 +8,7 @@ mod regex_mask;
 
 use std::sync::Arc;
 
-use astronomical_ipc_protocol::StructuredGenerationConstraint;
+use ipc_protocol::StructuredGenerationConstraint;
 
 use json_prefix::JsonPrefixStatus;
 use regex_mask::RegexTokenMask;
@@ -192,7 +192,7 @@ pub fn normalize_token_piece(token_piece: &str) -> String {
 #[cfg(test)]
 mod tests {
 
-    use astronomical_ipc_protocol::StructuredGenerationConstraint;
+    use ipc_protocol::StructuredGenerationConstraint;
 
     fn compile_regex(
         pattern: &str,

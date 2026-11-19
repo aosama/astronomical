@@ -7,11 +7,11 @@
 
 use std::time::Instant;
 
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     MlxMemorySnapshotSource, ProtocolWriter, RequestId, SpeechCommand, SpeechResultMetadata,
     SpokenAudioSegment, WorkerEvent, WorkerModelCapabilities, WorkerSpeechCapabilities,
 };
-use astronomical_speech_contract::{SpeechFailure, pcm16_bytes};
+use speech_contract::{SpeechFailure, pcm16_bytes};
 use tokio::io::AsyncWrite;
 
 use super::support::{ModelFactory, WorkerRuntimeError};
@@ -345,9 +345,7 @@ where
         Ok(())
     }
 
-    fn speech_memory_snapshot(
-        &mut self,
-    ) -> Option<astronomical_ipc_protocol::WorkerMlxMemorySnapshot> {
+    fn speech_memory_snapshot(&mut self) -> Option<ipc_protocol::WorkerMlxMemorySnapshot> {
         let mlx_memory_telemetry = self
             .loaded_speech_engine()?
             .collect_mlx_memory_telemetry()?;

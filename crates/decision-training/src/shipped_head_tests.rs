@@ -1,6 +1,6 @@
 //! Unit tests for reading a folder's trainable part as it serves today.
 
-use astronomical_decision_contract::head_tuning_file::{TunedTensor, head_tuning_bytes};
+use decision_contract::head_tuning_file::{TunedTensor, head_tuning_bytes};
 use safetensors::Dtype;
 use safetensors::tensor::TensorView;
 

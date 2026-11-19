@@ -29,8 +29,8 @@
 use std::path::PathBuf;
 use std::time::Duration;
 
-use astronomical_test_harness::test_run::TestRunContext;
 use serial_test::serial;
+use test_harness::test_run::TestRunContext;
 
 use crate::performance_throughput::historical_record::ThroughputJourneyKind;
 use crate::performance_throughput::support::{self as throughput_support, ThroughputJourney};

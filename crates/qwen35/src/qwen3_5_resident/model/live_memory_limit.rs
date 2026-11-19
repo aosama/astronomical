@@ -6,7 +6,7 @@
 //! larger budget and attempts complete residency. A failed raise restores both
 //! native and Rust ceilings.
 
-use astronomical_runtime_integration::MlxMemoryLimits;
+use runtime_integration::MlxMemoryLimits;
 
 use crate::{
     InferenceEngineError, MemoryCeilingChangeDecision, MemoryCeilingChangeRequirements,

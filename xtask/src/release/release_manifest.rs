@@ -5,7 +5,7 @@
 
 use std::path::Path;
 
-use astronomical_native_identity::digest_bytes;
+use native_identity::digest_bytes;
 
 pub(crate) const MANIFEST_FILE_NAME: &str = "release-manifest.json";
 

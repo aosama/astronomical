@@ -2,15 +2,15 @@
 
 use std::{io::Cursor, time::Duration};
 
-use astronomical_ipc_protocol::{
+use image::{
+    ExtendedColorType, ImageEncoder,
+    codecs::png::{CompressionType, FilterType, PngEncoder},
+};
+use ipc_protocol::{
     GeneratedImage, ImageGenerationCapabilities, ImageGenerationCommand,
     ImageGenerationFailureReason, ImageGenerationPhase, ImageGenerationResultMetadata,
     MlxMemorySnapshotSource, ProtocolError, ProtocolWriter, RequestId, WorkerEvent,
     WorkerMlxMemorySnapshot,
-};
-use image::{
-    ExtendedColorType, ImageEncoder,
-    codecs::png::{CompressionType, FilterType, PngEncoder},
 };
 
 pub(super) fn image_capabilities() -> ImageGenerationCapabilities {

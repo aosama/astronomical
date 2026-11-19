@@ -2,7 +2,7 @@
 
 use std::path::Path;
 
-use astronomical_runtime_integration::MlxRuntime;
+use runtime_integration::MlxRuntime;
 
 use crate::qwen3_5_core::artifacts::QuantizedExpertLayerPlan;
 use crate::qwen3_5_core::model::loading_pipeline::{
@@ -173,7 +173,7 @@ fn load_resident_expert_layer_plans(
     config: &crate::Qwen3_5Config,
     shard_index: &super::Qwen3_5ShardIndex,
     tensor_inventory: &crate::TensorInventory,
-    expert_atlas: Option<&astronomical_expert_atlas::AtlasManifest>,
+    expert_atlas: Option<&expert_atlas::AtlasManifest>,
     performance_attribution: &mut PerformanceAttribution,
 ) -> Result<ResidentExpertLayerPlans, Qwen3_5ExecutionError> {
     let tensor_name_to_shard_file_name: std::collections::HashMap<String, String> = shard_index

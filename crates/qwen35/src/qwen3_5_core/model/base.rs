@@ -6,8 +6,8 @@
 //! (`Qwen3_5StreamingModel` and, after the fork, the resident model), which
 //! deref to this base for every shared field and method.
 
-use astronomical_runtime_integration::MlxRuntime;
 use mlx_bridge::{MlxArray, MlxCompiledElementwiseGraphs, MlxCompiledSwiGlu, MlxMetalKernel};
+use runtime_integration::MlxRuntime;
 
 use std::cell::RefCell;
 

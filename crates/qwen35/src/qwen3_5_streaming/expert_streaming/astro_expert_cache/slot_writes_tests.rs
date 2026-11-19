@@ -7,8 +7,8 @@ use super::astro_expert_cache_tests::test_runtime;
 use super::slot_writes::{create_warm_table_weights, write_expert_into_slot};
 use super::*;
 use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights;
-use astronomical_runtime_integration::MlxRuntime;
 use mlx_bridge::{MlxArray, MlxDtype};
+use runtime_integration::MlxRuntime;
 use serial_test::serial;
 
 const OUTPUT_ROWS: usize = 2;
@@ -29,11 +29,10 @@ fn packed_codebook_page(
         up_projection: tagged_codebook_projection(runtime, expert_count, codebook_bit_width, 2),
         down_projection: tagged_codebook_projection(runtime, expert_count, codebook_bit_width, 3),
         gate_activation_rotation:
-            astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookRotation::Hadamard32,
-        up_activation_rotation:
-            astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookRotation::Hadamard32,
+            jangtq2_qwen35::configuration::Jangtq2CodebookRotation::Hadamard32,
+        up_activation_rotation: jangtq2_qwen35::configuration::Jangtq2CodebookRotation::Hadamard32,
         down_activation_rotation:
-            astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookRotation::Hadamard32,
+            jangtq2_qwen35::configuration::Jangtq2CodebookRotation::Hadamard32,
     }
 }
 

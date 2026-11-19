@@ -13,17 +13,15 @@
 
 use std::time::{Duration, Instant};
 
-use astronomical_config::{AstronomicalConfig, ModelCapabilities};
-use astronomical_ipc_protocol::NeuralEnginePrefillStatus;
-use astronomical_memory_policy::serving_ceiling::machine_ceiling_from_physical_ram_bytes;
-use astronomical_model_serving::{
-    Qwen3_5ArtifactValidator, Qwen3_5ResidentModel, Qwen3_5Tokenizer,
-};
 use astronomical_neural_engine_research::process_memory::{
     MemoryGrowth, MemorySnapshot, mebibytes, physical_memory_bytes,
 };
-use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
+use config::{AstronomicalConfig, ModelCapabilities};
+use ipc_protocol::NeuralEnginePrefillStatus;
+use memory_policy::serving_ceiling::machine_ceiling_from_physical_ram_bytes;
 use mlx_bridge::{MlxArray, MlxDtype};
+use model_serving::{Qwen3_5ArtifactValidator, Qwen3_5ResidentModel, Qwen3_5Tokenizer};
+use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use serial_test::serial;
 use tokio::time::timeout;
 
@@ -185,7 +183,7 @@ fn run_arm(model: &Qwen3_5ResidentModel, prompt_token_ids: &[u32], label: &str) 
 pub(super) fn greedy_continuation(
     model: &Qwen3_5ResidentModel,
     final_logits: &[f32],
-    decoder_state: &mut astronomical_model_serving::RequestDecoderStateStack,
+    decoder_state: &mut model_serving::RequestDecoderStateStack,
     first_position: usize,
     token_count: usize,
 ) -> Vec<u32> {

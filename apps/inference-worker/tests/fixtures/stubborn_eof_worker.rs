@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use astronomical_inference_worker::worker_process_runtime;
-use astronomical_ipc_protocol::{ChatModelCapabilities, ProtocolWriter, WorkerEvent};
+use ipc_protocol::{ChatModelCapabilities, ProtocolWriter, WorkerEvent};
 use tokio::io::AsyncReadExt;
 
 fn main() {

@@ -8,16 +8,16 @@
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use astronomical_memory_policy::serving_ceiling::machine_ceiling_from_physical_ram_bytes;
-use astronomical_quantization::calibration::HuggingFaceCalibrationTokenizer;
-use astronomical_quantization::error::QuantizationError;
-use astronomical_quantization::evaluation::{
+use memory_policy::serving_ceiling::machine_ceiling_from_physical_ram_bytes;
+use quantization::calibration::HuggingFaceCalibrationTokenizer;
+use quantization::error::QuantizationError;
+use quantization::evaluation::{
     KlEvaluationRequest, KlEvaluationSummary, bundled_evaluation_prompts, evaluate_kl_divergence,
     tokenized_evaluation_prompts,
 };
-use astronomical_quantization::pipeline::probe_source_view::loadable_model_directory;
-use astronomical_qwen35_quantization_probe::Qwen3_5KlDivergenceEngine;
-use astronomical_runtime_integration::MlxRuntime;
+use quantization::pipeline::probe_source_view::loadable_model_directory;
+use qwen35_quantization_probe::Qwen3_5KlDivergenceEngine;
+use runtime_integration::MlxRuntime;
 
 use super::quantize_convert::{memory_limits_for, sample_physical_ram_bytes};
 use super::{

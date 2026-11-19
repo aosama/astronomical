@@ -1,6 +1,6 @@
 use std::sync::{Arc, RwLock};
 
-use astronomical_ipc_protocol::ChatGenerationSettings;
+use ipc_protocol::ChatGenerationSettings;
 
 use crate::ResolvedRuntimeConfig;
 

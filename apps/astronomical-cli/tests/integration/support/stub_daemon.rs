@@ -14,8 +14,8 @@ use std::{
     time::Duration,
 };
 
-use astronomical_decision_contract::{DecisionFailure, QuestionOutcome};
-use astronomical_ipc_protocol::{
+use decision_contract::{DecisionFailure, QuestionOutcome};
+use ipc_protocol::{
     ChatGenerationSettings, ChatImageInput, ChatMessage, DAEMON_APPLICATION_NAME,
     DAEMON_PROTOCOL_VERSION, DaemonCatalogEntry, DaemonDownloadJob, DaemonListedModel,
     DaemonRequest, DaemonResponse, DaemonWorkerStatus, EmbeddingsFailureReason, GeneratedImage,
@@ -58,7 +58,7 @@ pub enum StubSpeechOutcome {
     /// The daemon answers with these samples, split over two audio frames.
     Completed(Vec<u8>),
     /// The worker fails the request after admission.
-    Failed(astronomical_speech_contract::SpeechFailure),
+    Failed(speech_contract::SpeechFailure),
 }
 
 /// Scripted behaviour of the stub daemon for one test.
@@ -84,7 +84,7 @@ pub struct StubDaemonConfig {
     /// Which `Status` requests, counted from zero across every connection, are read
     /// and never answered.
     pub hung_status_requests: std::ops::Range<usize>,
-    pub neural_engine_prefill: Option<astronomical_ipc_protocol::NeuralEnginePrefillStatus>,
+    pub neural_engine_prefill: Option<ipc_protocol::NeuralEnginePrefillStatus>,
     pub embeddings_outcome: StubEmbeddingsOutcome,
     /// How long an `EmbedGenerate` stays silent before its one frame, standing in for
     /// a queue or a model load inside the real daemon.
@@ -345,10 +345,9 @@ pub fn spawn_stub_daemon(
                             let entries: Vec<DaemonCatalogEntry> = catalog_entries
                                 .into_iter()
                                 .map(|catalog_entry| {
-                                    let model_id = astronomical_config::leaf_model_id(
-                                        &catalog_entry.huggingface_id,
-                                    )
-                                    .to_owned();
+                                    let model_id =
+                                        config::leaf_model_id(&catalog_entry.huggingface_id)
+                                            .to_owned();
                                     DaemonCatalogEntry {
                                         huggingface_id: catalog_entry.huggingface_id,
                                         model_id,
@@ -451,16 +450,14 @@ pub fn spawn_stub_daemon(
                                     .expect("the stub fragment should transmit");
                             }
                             protocol_writer
-                                .send_daemon_response(
-                                    &DaemonResponse::ChatGenerationCompleted {
-                                        prompt_token_count: 7,
-                                        generated_token_count: 2,
-                                        reasoning_token_count: 0,
-                                        astro_ssd_prompt_cache_restored_token_count: 0,
-                                        reason:
-                                            astronomical_ipc_protocol::ChatGenerationCompletionReason::EndOfSequence,
-                                    },
-                                )
+                                .send_daemon_response(&DaemonResponse::ChatGenerationCompleted {
+                                    prompt_token_count: 7,
+                                    generated_token_count: 2,
+                                    reasoning_token_count: 0,
+                                    astro_ssd_prompt_cache_restored_token_count: 0,
+                                    reason:
+                                        ipc_protocol::ChatGenerationCompletionReason::EndOfSequence,
+                                })
                                 .await
                                 .expect("the stub completion frame should transmit");
                             let _ = protocol_writer.close().await;
@@ -592,7 +589,7 @@ fn scripted_speech_frames(
         },
         DaemonResponse::SpeechCompleted {
             model: answering_model_id,
-            metadata: astronomical_ipc_protocol::SpeechResultMetadata {
+            metadata: ipc_protocol::SpeechResultMetadata {
                 sample_rate_hertz: 24_000,
                 sample_count: (pcm16_bytes.len() / 2) as u64,
                 segment_count: 1,

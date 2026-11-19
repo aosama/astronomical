@@ -2,8 +2,8 @@
 //! pitch (F0) and energy (N) curves over those frames, all conditioned on the
 //! voice's 128-wide prosody style.
 
-use astronomical_runtime_integration::MlxRuntime;
 use mlx_bridge::MlxArray;
+use runtime_integration::MlxRuntime;
 
 use super::bidirectional_lstm::BidirectionalLstm;
 use super::convolutions::{ConvolutionGeometry, KokoroConv1d};

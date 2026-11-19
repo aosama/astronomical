@@ -1,7 +1,7 @@
 use std::collections::VecDeque;
 
-use astronomical_ipc_protocol::{ChatGenerationCompletionReason, ChatGenerationFailureReason};
-use astronomical_rest_contract::{
+use ipc_protocol::{ChatGenerationCompletionReason, ChatGenerationFailureReason};
+use rest_contract::{
     OpenAiResponse, OpenAiResponseOutputContent, OpenAiResponseOutputItem,
     OpenAiResponseRequestConfiguration, OpenAiResponseStreamEvent,
 };

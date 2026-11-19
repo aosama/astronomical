@@ -1,6 +1,6 @@
 #![forbid(unsafe_code)]
 
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     ChatGenerationCompletionReason, ChatModelCapabilities, ImageGenerationCapabilities,
     ProtocolReader, ProtocolWriter, RequestId, WorkerEvent, WorkerFlux2KleinModelConfiguration,
     WorkerImageGenerationModelFamily, WorkerLoadedModelRuntimeConfiguration,
@@ -29,7 +29,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     )
     .await
     {
-        Ok(Ok(Some(astronomical_ipc_protocol::WorkerCommand::InitializeWorker(configuration)))) => {
+        Ok(Ok(Some(ipc_protocol::WorkerCommand::InitializeWorker(configuration)))) => {
             Some(configuration)
         }
         Ok(Ok(Some(_))) => return Err("unexpected first worker command".into()),
@@ -156,9 +156,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
 async fn send_runtime_configuration<WriteTransport>(
     event_writer: &mut ProtocolWriter<WriteTransport>,
-    startup_configuration: &astronomical_ipc_protocol::WorkerStartupConfiguration,
+    startup_configuration: &ipc_protocol::WorkerStartupConfiguration,
     acknowledged_generation: &str,
-) -> Result<(), astronomical_ipc_protocol::ProtocolError>
+) -> Result<(), ipc_protocol::ProtocolError>
 where
     WriteTransport: tokio::io::AsyncWrite + Unpin,
 {

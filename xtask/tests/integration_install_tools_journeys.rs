@@ -3,7 +3,7 @@
 //! shim directory (plus a symlinked `uname`), so the real network is
 //! unreachable and no unpinned installer path can hide (issue #1250).
 
-use astronomical_native_identity::digest_bytes;
+use native_identity::digest_bytes;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 

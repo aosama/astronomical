@@ -7,8 +7,8 @@ use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use astronomical_test_harness::test_run::TestRunContext;
 use serde_json::Value;
+use test_harness::test_run::TestRunContext;
 
 use crate::serving_acceptance::chat::openai_rest::{
     get_endpoint, launch_serving_rest_server_for_model, stop_serving_rest_server,
@@ -84,9 +84,8 @@ fn isolated_home(
     performance_attribution_enabled: bool,
     astro_ssd_prompt_cache_enabled: Option<bool>,
 ) -> tempfile::TempDir {
-    let development_config =
-        astronomical_config::AstronomicalConfig::load_from_development_location()
-            .expect("Development configuration should load");
+    let development_config = config::AstronomicalConfig::load_from_development_location()
+        .expect("Development configuration should load");
     // Forensic mode: keep the isolated home so the worker log can be
     // inspected after a failing journey instead of being deleted on unwind.
     let run_configuration = TestRunContext::current().configuration;

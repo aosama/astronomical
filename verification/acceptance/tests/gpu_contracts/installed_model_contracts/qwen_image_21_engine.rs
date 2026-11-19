@@ -11,8 +11,8 @@
 
 use std::time::Duration;
 
-use astronomical_ipc_protocol::{ImageGenerationCommand, ImageGenerationSettings, RequestId};
-use astronomical_model_serving::{
+use ipc_protocol::{ImageGenerationCommand, ImageGenerationSettings, RequestId};
+use model_serving::{
     ImageGenerationEngine, ImageGenerationEngineStep, QWEN_IMAGE_21_LICENSE_IDENTIFIER,
     QWEN_IMAGE_21_OFFICIAL_MODEL_ID, QWEN_IMAGE_21_PROVIDER_MODEL_ID,
     QwenImage21ArtifactProvenance, QwenImage21ImageEngine,
@@ -157,8 +157,8 @@ async fn should_serve_two_image_generation_requests_through_the_engine() {
 }
 
 struct CompletedRequest {
-    generated_image: astronomical_ipc_protocol::GeneratedImage,
-    result_metadata: astronomical_ipc_protocol::ImageGenerationResultMetadata,
+    generated_image: ipc_protocol::GeneratedImage,
+    result_metadata: ipc_protocol::ImageGenerationResultMetadata,
 }
 
 fn image_generation_command(request_id: u64, seed: u64) -> ImageGenerationCommand {

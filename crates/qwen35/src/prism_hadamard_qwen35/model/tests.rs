@@ -5,7 +5,7 @@
 
 use std::collections::HashMap;
 
-use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
+use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use serial_test::serial;
 
 use super::forward::StraightGenerationState;

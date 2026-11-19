@@ -5,7 +5,7 @@ use crate::{
     InferenceEngineError, PerformanceAttribution, PerformanceAttributionOutcome,
     StreamingEngineRequirement,
 };
-use astronomical_ipc_protocol::RequestId;
+use ipc_protocol::RequestId;
 
 use super::Qwen3_5EngineState;
 use super::forward_memory::fixed_weight_bytes;

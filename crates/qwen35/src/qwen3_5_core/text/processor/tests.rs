@@ -4,7 +4,7 @@ use crate::qwen3_5_core::text::output_parser_error::Qwen3_5OutputParserError;
 use crate::qwen3_5_core::text::request_output::Qwen3_5RequestOutputError;
 use crate::qwen3_5_core::text::tokenizer_error::Qwen3_5TokenizerError;
 use crate::qwen3_5_core::vision::image_processor::Qwen3_5ImageProcessingError;
-use astronomical_ipc_protocol::ChatGenerationFailureReason;
+use ipc_protocol::ChatGenerationFailureReason;
 
 use super::{
     qwen3_5_request_enables_thinking, translate_qwen3_5_preparation_error,

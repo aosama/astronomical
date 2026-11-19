@@ -2,8 +2,8 @@
 //! waveform generator's input features out, conditioned on the voice's
 //! 128-wide timbre style.
 
-use astronomical_runtime_integration::MlxRuntime;
 use mlx_bridge::MlxArray;
+use runtime_integration::MlxRuntime;
 
 use super::convolutions::{ConvolutionGeometry, KokoroConv1d};
 use super::style_residual_block::{StyleBlockShape, StyleResidualBlock};

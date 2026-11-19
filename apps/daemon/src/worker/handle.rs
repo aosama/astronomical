@@ -19,7 +19,7 @@ use crate::{
     ImageGenerationTimeouts, RuntimeModelPolicy, WorkerControlError, WorkerHealthSnapshot,
     WorkerHealthStatus, WorkerProcess, WorkerTerminationOutcome,
 };
-use astronomical_ipc_protocol::{WorkerRuntimeFeatureConfiguration, WorkerStartupConfiguration};
+use ipc_protocol::{WorkerRuntimeFeatureConfiguration, WorkerStartupConfiguration};
 use tokio::sync::{Semaphore, mpsc, oneshot};
 
 use crate::worker;

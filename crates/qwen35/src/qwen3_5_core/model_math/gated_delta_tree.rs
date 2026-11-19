@@ -11,8 +11,8 @@
 //! kernel's step, operation for operation (`gated_delta_pipelined_kernel`),
 //! so a row's output is bit-identical to feeding its chain alone.
 
-use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 use mlx_bridge::{MlxArray, MlxMetalKernel, MlxMetalKernelOutput, MlxMetalKernelTemplateArgument};
+use runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use super::gated_delta_pipelined_kernel::{THREADGROUP_THREAD_COUNT, VALUE_ROW_BLOCK_SIZE};
 use super::gated_delta_sequence_contract::{

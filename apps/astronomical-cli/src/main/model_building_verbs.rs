@@ -37,16 +37,15 @@ fn run_decision_verb(decision_command: &astronomical_cli::DecisionCommand) -> Ex
         }
     };
     let (runtime_instance, candidate_socket_paths) = own_runtime_instance_and_ipc_socket_paths();
-    let instance_paths =
-        match astronomical_config::AstronomicalInstancePaths::default_location_instance_paths(
-            runtime_instance,
-        ) {
-            Ok(instance_paths) => instance_paths,
-            Err(instance_error) => {
-                eprintln!("astronomical: {instance_error}");
-                return ExitCode::FAILURE;
-            }
-        };
+    let instance_paths = match config::AstronomicalInstancePaths::default_location_instance_paths(
+        runtime_instance,
+    ) {
+        Ok(instance_paths) => instance_paths,
+        Err(instance_error) => {
+            eprintln!("astronomical: {instance_error}");
+            return ExitCode::FAILURE;
+        }
+    };
     let mut stdout = io::stdout();
     let mut stderr = io::stderr();
     let mut dependencies = astronomical_cli::DecisionToolDependencies {

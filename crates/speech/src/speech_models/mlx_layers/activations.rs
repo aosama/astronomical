@@ -1,7 +1,7 @@
 //! Element-wise activations the bridge does not provide.
 
-use astronomical_runtime_integration::MlxRuntime;
 use mlx_bridge::MlxArray;
+use runtime_integration::MlxRuntime;
 
 use super::scalar_arithmetic::add_scalar;
 use crate::speech_models::speech_model_error::SpeechModelError;

@@ -1,6 +1,6 @@
 //! Unit tests for the built-in check set.
 
-use astronomical_decision_contract::{DecisionQuestionBody, parse_system_one_questions};
+use decision_contract::{DecisionQuestionBody, parse_system_one_questions};
 
 use super::*;
 

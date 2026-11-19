@@ -3,7 +3,7 @@
 //! Admission remains shared with image generation; this module owns only the
 //! chat-facing trait boundary and health projection.
 
-use astronomical_ipc_protocol::ChatGenerationCommand;
+use ipc_protocol::ChatGenerationCommand;
 use tokio::sync::oneshot;
 
 use crate::serving::ChatGenerationStartFuture;

@@ -92,17 +92,17 @@ pub(super) fn sample_resolved_config() -> ResolvedRuntimeConfig {
         // These reload tests write config files that omit the span, so the
         // live fixture holds the default the reload will resolve; any other
         // value would make every reload report a span change.
-        idle_model_unload_seconds: astronomical_config::DEFAULT_IDLE_MODEL_UNLOAD_SECONDS,
+        idle_model_unload_seconds: config::DEFAULT_IDLE_MODEL_UNLOAD_SECONDS,
         configured_astro_ssd_prompt_cache_maximum_size_bytes: None,
         performance_attribution_enabled: false,
-        astro_ssd_prompt_cache_config: astronomical_config::AstroSsdPromptCacheConfig::new(
+        astro_ssd_prompt_cache_config: config::AstroSsdPromptCacheConfig::new(
             PathBuf::from("/tmp/astro-ssd-prompt-cache"),
             50_000_000_000,
         ),
         bind_address: "127.0.0.1:6733".to_owned(),
-        logging_config: astronomical_config::LoggingConfig::new(
+        logging_config: config::LoggingConfig::new(
             PathBuf::from("/tmp/astronomical-logs"),
-            astronomical_config::LogLevel::Warn,
+            config::LogLevel::Warn,
             7,
         ),
     }

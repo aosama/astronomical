@@ -32,7 +32,7 @@ use crate::artifact_validation::{
 };
 use crate::expert_paging::SafetensorsHeader;
 use crate::qwen3_5_core::vision::vision_tensor_spec;
-use astronomical_expert_atlas::{RESIDENT_BUNDLE_FILE_NAME, VISION_BUNDLE_FILE_NAME};
+use expert_atlas::{RESIDENT_BUNDLE_FILE_NAME, VISION_BUNDLE_FILE_NAME};
 
 impl Qwen3_5ArtifactValidator {
     /// Validates an Expert Atlas model (see the module documentation).
@@ -109,7 +109,7 @@ fn collect_atlas_required_files(
 
 /// The routed-expert payload the layer files hold, excluding record padding.
 fn atlas_expert_payload_bytes(
-    expert_atlas: &astronomical_expert_atlas::AtlasManifest,
+    expert_atlas: &expert_atlas::AtlasManifest,
 ) -> Result<u64, Qwen3_5ArtifactValidationError> {
     expert_atlas
         .expert_layers
@@ -129,13 +129,12 @@ fn atlas_expert_payload_bytes(
 /// wrote them; serving binds to the declared sizes and record layout.
 fn review_atlas_manifest(
     model_directory: &Path,
-) -> Result<astronomical_expert_atlas::AtlasManifest, Qwen3_5ArtifactValidationError> {
-    let expert_atlas =
-        astronomical_expert_atlas::AtlasManifest::read_from_directory(model_directory).map_err(
-            |manifest_error| ArtifactValidationError::InvalidAtlasManifest {
-                description: manifest_error.to_string(),
-            },
-        )?;
+) -> Result<expert_atlas::AtlasManifest, Qwen3_5ArtifactValidationError> {
+    let expert_atlas = expert_atlas::AtlasManifest::read_from_directory(model_directory).map_err(
+        |manifest_error| ArtifactValidationError::InvalidAtlasManifest {
+            description: manifest_error.to_string(),
+        },
+    )?;
     for declared_file in expert_atlas
         .resident_files
         .iter()

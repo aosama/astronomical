@@ -3,8 +3,8 @@
 
 use std::time::Duration;
 
-use astronomical_ipc_protocol::{ExpertMemoryMode, RequestId};
-use astronomical_model_serving::{
+use ipc_protocol::{ExpertMemoryMode, RequestId};
+use model_serving::{
     CompleteResidencyHeadroomBoundary, InferenceEngine,
     model_memory_geometry_from_validated_artifact,
 };
@@ -24,7 +24,7 @@ async fn should_not_claim_complete_residency_when_activation_headroom_does_not_f
         let request_id = RequestId::new(1_041);
         let model_directory =
             crate::common::configured_large_sparse_moe_streaming_model_directory();
-        let validated_artifact = astronomical_model_serving::Qwen3_5ArtifactValidator::new()
+        let validated_artifact = model_serving::Qwen3_5ArtifactValidator::new()
             .validate(&model_directory, 20_480)
             .expect("the configured sparse artifact should validate");
         let (model_geometry, required_headroom_bytes) =

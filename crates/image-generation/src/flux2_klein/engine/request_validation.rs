@@ -1,6 +1,6 @@
 //! Canonical serving-identity and official generation-profile validation.
 
-use astronomical_ipc_protocol::{ImageGenerationCommand, ImageGenerationFailureReason};
+use ipc_protocol::{ImageGenerationCommand, ImageGenerationFailureReason};
 
 use super::super::Flux2KleinOfficialProfile;
 

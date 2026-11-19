@@ -10,7 +10,7 @@ mod input_injection;
 mod prefill_chunk;
 mod sampling;
 
-use astronomical_ipc_protocol::RequestId;
+use ipc_protocol::RequestId;
 use mlx_bridge::MlxArray;
 
 use crate::AstroSsdPromptCacheBlockKey;

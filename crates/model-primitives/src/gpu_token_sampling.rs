@@ -5,7 +5,7 @@
 //! silently argmax. The ops match the already-proven Qwen3.5 pipeline rather than a
 //! host-side sampler.
 
-use astronomical_runtime_integration::MlxRuntime;
+use runtime_integration::MlxRuntime;
 
 use mlx_bridge::MlxArray;
 

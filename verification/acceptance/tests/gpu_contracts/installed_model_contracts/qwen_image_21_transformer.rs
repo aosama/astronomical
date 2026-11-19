@@ -20,11 +20,11 @@
 use std::fs::File;
 use std::time::Duration;
 
-use astronomical_model_serving::{
+use model_serving::{
     QWEN_IMAGE_21_LATENT_CHANNEL_COUNT, QWEN_IMAGE_21_TEXT_EMBEDDING_WIDTH, QwenImage21Transformer,
     QwenImage21TransformerRequest,
 };
-use astronomical_runtime_integration::MlxRuntime;
+use runtime_integration::MlxRuntime;
 
 use crate::common::qwen_image_21;
 use mlx_bridge::MlxDtype;

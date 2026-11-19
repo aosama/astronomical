@@ -2,8 +2,8 @@
 
 use std::time::Duration;
 
-use astronomical_ipc_protocol::{ExpertMemoryMode, RequestId};
-use astronomical_model_serving::{
+use ipc_protocol::{ExpertMemoryMode, RequestId};
+use model_serving::{
     CompleteResidencyHeadroomBoundary, InferenceEngine,
     model_memory_geometry_from_validated_artifact,
 };
@@ -27,7 +27,7 @@ async fn should_keep_serving_on_streaming_after_the_memory_ceiling_rises() {
                 .expect("the machine MLX ceiling should fit u64");
         let model_directory =
             crate::serving_acceptance::support::configured_resident_sparse_moe_model_directory();
-        let validated_artifact = astronomical_model_serving::Qwen3_5ArtifactValidator::new()
+        let validated_artifact = model_serving::Qwen3_5ArtifactValidator::new()
             .validate(&model_directory, 20_480)
             .expect("the resident sparse artifact should validate");
         let (model_geometry, required_headroom_bytes) =

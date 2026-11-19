@@ -9,7 +9,7 @@
 //! `crate::astro_ssd_prompt_cache::restore_support`; this module keeps the streaming
 //! engine's memory-admission and expert-retention policy.
 
-use astronomical_ipc_protocol::{RequestId, WorkerAstroSsdPromptCacheRequestDiagnostics};
+use ipc_protocol::{RequestId, WorkerAstroSsdPromptCacheRequestDiagnostics};
 
 use crate::astro_ssd_prompt_cache::block_causal_input::AstroSsdPromptCacheBlockCausalInput;
 use crate::astro_ssd_prompt_cache::prefix_lookup::AstroSsdPromptCachePrefixLookup;

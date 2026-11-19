@@ -10,7 +10,7 @@ use astronomical_cli::{
     VisionAddArguments, VisionDependencies, VisionError, VisionInspectArguments,
     VisionMatchArguments, run_vision_add, run_vision_inspect, run_vision_match,
 };
-use astronomical_vision_tower::{BaseMatchVerdict, TowerStatus};
+use vision_tower::{BaseMatchVerdict, TowerStatus};
 
 use crate::integration::support::environment::fresh_test_directory;
 

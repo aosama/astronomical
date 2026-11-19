@@ -1,8 +1,8 @@
 //! Checks resident Qwen weight binding against the artifact's own config
 //! and shard index rather than one quantization package's exact counts.
 
-use astronomical_model_serving::{Qwen3_5ArtifactValidator, Qwen3_5Weights};
-use astronomical_runtime_integration::MlxRuntime;
+use model_serving::{Qwen3_5ArtifactValidator, Qwen3_5Weights};
+use runtime_integration::MlxRuntime;
 
 #[tokio::test]
 #[ignore = "requires model_directories to discover the Ornith 1.5 acceptance artifact"]

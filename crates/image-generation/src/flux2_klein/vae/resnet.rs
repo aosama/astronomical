@@ -1,6 +1,6 @@
 //! FLUX.2 decoder residual block with explicit optional channel projection.
 
-use astronomical_runtime_integration::MlxRuntime;
+use runtime_integration::MlxRuntime;
 
 use crate::flux2_klein::tensor_store::Flux2KleinTensorStore;
 

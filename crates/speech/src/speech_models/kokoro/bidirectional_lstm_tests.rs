@@ -1,8 +1,8 @@
 //! The LSTM against a hand-computed step, and its two directions against
 //! each other.
 
-use astronomical_runtime_integration::MlxRuntime;
 use mlx_bridge::MlxArray;
+use runtime_integration::MlxRuntime;
 use serial_test::serial;
 
 use super::BidirectionalLstm;

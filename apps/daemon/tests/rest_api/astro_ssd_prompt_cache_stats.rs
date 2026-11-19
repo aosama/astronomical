@@ -1,9 +1,9 @@
 use astronomical_daemon::{WorkerHealthSnapshot, WorkerHealthStatus};
-use astronomical_ipc_protocol::{ChatModelCapabilities, WorkerEvent};
 use axum::{
     body::{Body, to_bytes},
     http::{Request, StatusCode},
 };
+use ipc_protocol::{ChatModelCapabilities, WorkerEvent};
 use tower::ServiceExt;
 
 const MODEL_ID: &str = "astronomical/astro-ssd-prompt-cache-stats-test-model";
@@ -243,7 +243,7 @@ impl StatsScriptedExecutor {
 impl astronomical_daemon::ChatGenerationExecutor for StatsScriptedExecutor {
     fn start_chat_generation(
         &self,
-        _generation_command: astronomical_ipc_protocol::ChatGenerationCommand,
+        _generation_command: ipc_protocol::ChatGenerationCommand,
     ) -> std::pin::Pin<
         Box<
             dyn std::future::Future<

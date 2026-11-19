@@ -4,8 +4,8 @@
 //! The dense scorer at the very end is trained whole instead, as the final
 //! layers are; norms and embeddings stay as shipped.
 
-use astronomical_decision_contract::DecisionFailure;
-use astronomical_runtime_integration::MlxSafetensors;
+use decision_contract::DecisionFailure;
+use runtime_integration::MlxSafetensors;
 
 use crate::decision_models::decision_adapters::AdapterTarget;
 use crate::decision_models::laya::configuration::LayaConfiguration;

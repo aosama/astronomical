@@ -7,12 +7,12 @@
 //! with the order the engines declare, so an MLX upgrade that moves that rule fails here
 //! instead of silently changing seeded answers (issue #1679).
 
-use astronomical_model_serving::{
+use mlx_bridge::{MlxArray, MlxDtype};
+use model_serving::{
     ExpertAssignmentOrder, PerformanceAttribution, StackedExpertProjection,
     expert_assignment_order, gather_expert_projection,
 };
-use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
-use mlx_bridge::{MlxArray, MlxDtype};
+use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
 use crate::common::{
     DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_MLX_BUFFER_CACHE_LIMIT_BYTES,

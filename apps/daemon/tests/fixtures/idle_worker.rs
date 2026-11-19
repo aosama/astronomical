@@ -6,7 +6,7 @@
 
 use std::{error::Error, process::ExitCode, time::Duration};
 
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     ChatGenerationCompletionReason, ChatModelCapabilities, ExpertMemoryMode,
     MlxMemorySnapshotSource, ProtocolReader, ProtocolWriter, RequestId, WorkerCommand, WorkerEvent,
     WorkerMlxMemorySnapshot, WorkerRuntimeFeatureConfiguration,
@@ -178,10 +178,13 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
                                     max_input_tokens: autoregressive_configuration
                                         .maximum_context_tokens
                                         .saturating_sub(1),
-                                    max_output_tokens: autoregressive_configuration.maximum_output_tokens,
-                                    context_window: autoregressive_configuration.maximum_context_tokens,
-                                }.into(),
-                                None => astronomical_ipc_protocol::WorkerModelCapabilities::image_generation(
+                                    max_output_tokens: autoregressive_configuration
+                                        .maximum_output_tokens,
+                                    context_window: autoregressive_configuration
+                                        .maximum_context_tokens,
+                                }
+                                .into(),
+                                None => ipc_protocol::WorkerModelCapabilities::image_generation(
                                     scripted_worker_image::image_capabilities(),
                                 ),
                             },
@@ -278,7 +281,7 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
                     .send_event(&WorkerEvent::MlxMemoryLimitChanged {
                         effective_mlx_memory_ceiling_bytes,
                         minimum_mlx_memory_ceiling_bytes: 1,
-                        expert_memory_mode: astronomical_ipc_protocol::ExpertMemoryMode::Resident,
+                        expert_memory_mode: ipc_protocol::ExpertMemoryMode::Resident,
                         mlx_memory_snapshot: None,
                         expert_residency: None,
                     })
@@ -311,7 +314,7 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
 async fn emit_memory_snapshot<WriteTransport>(
     event_writer: &mut ProtocolWriter<WriteTransport>,
     mlx_memory_snapshot_source: MlxMemorySnapshotSource,
-) -> Result<(), astronomical_ipc_protocol::ProtocolError>
+) -> Result<(), ipc_protocol::ProtocolError>
 where
     WriteTransport: tokio::io::AsyncWrite + Unpin,
 {
@@ -335,7 +338,7 @@ where
 
 async fn emit_astro_ssd_prompt_cache_stats_after_clear<WriteTransport>(
     event_writer: &mut ProtocolWriter<WriteTransport>,
-) -> Result<(), astronomical_ipc_protocol::ProtocolError>
+) -> Result<(), ipc_protocol::ProtocolError>
 where
     WriteTransport: tokio::io::AsyncWrite + Unpin,
 {

@@ -4,7 +4,7 @@
 
 use std::sync::{Arc, RwLock};
 
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     ChatGenerationCommand, ChatGenerationFailureReason, ChatGenerationSettings, ChatMessage,
     ChatToolChoice, DaemonResponse, DaemonTransportError, RequestId, StreamingResponseWriter,
 };
@@ -157,7 +157,7 @@ pub(super) fn catalog_model_id_or_requested(
         .keys()
         .map(String::as_str)
         .collect();
-    astronomical_config::resolve_model_id(requested_model_id, &known_model_ids).to_owned()
+    config::resolve_model_id(requested_model_id, &known_model_ids).to_owned()
 }
 
 /// Admits a generation the daemon can serve and names the model to dispatch, or returns the
@@ -187,13 +187,11 @@ fn admitted_catalog_model_id(
         .keys()
         .map(String::as_str)
         .collect();
-    let catalog_model_id =
-        astronomical_config::resolve_model_id(requested_model_id, &known_model_ids);
+    let catalog_model_id = config::resolve_model_id(requested_model_id, &known_model_ids);
     if known_model_ids.contains(&catalog_model_id) {
         return Ok(catalog_model_id.to_owned());
     }
-    let suggested_model_ids =
-        astronomical_config::near_model_matches(requested_model_id, &known_model_ids);
+    let suggested_model_ids = config::near_model_matches(requested_model_id, &known_model_ids);
     Err(unknown_model_rejection_reason(
         requested_model_id,
         &suggested_model_ids,

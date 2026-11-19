@@ -24,13 +24,13 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
-use astronomical_config::{
+use config::{
     NEURAL_ENGINE_PROGRAM_MANIFEST_FILE_NAME, NeuralEngineProgramSetManifest, directory_byte_count,
 };
-use astronomical_neural_engine::core_ml::{
+use neural_engine::core_ml::{
     ComputePlacement, CoreMlComputeUnits, CoreMlProgram, compile_model_to,
 };
-use astronomical_neural_engine::program_shape::ProgramShape;
+use neural_engine::program_shape::ProgramShape;
 
 use super::host_description::{current_host_environment, macos_product_version};
 use super::neural_engine_mlp_prefill::NEURAL_ENGINE_FINISH_TIMEOUT;

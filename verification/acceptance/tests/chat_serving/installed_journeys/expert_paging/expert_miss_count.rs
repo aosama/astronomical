@@ -15,7 +15,7 @@
 //! on, which is what makes the engine copy each decode token's route to the
 //! host, and save the reply's routes and the `astro_expert_cache`'s state when
 //! it began to `evidence_directory`, for the replay lab in
-//! `astronomical-memory-policy`. Attribution slows decode, so their speed is
+//! `memory-policy`. Attribution slows decode, so their speed is
 //! not a measurement; the speed case serves the Shakespeare reply with
 //! attribution off and is the one to read tokens per second from.
 //!
@@ -28,17 +28,17 @@
 use std::path::Path;
 use std::time::Duration;
 
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     ChatGenerationCommand, ChatGenerationSettings, ChatMessage, ChatToolChoice, RequestId,
 };
-use astronomical_memory_policy::astro_expert_cache_model::RoutedReply;
-use astronomical_model_serving::{
+use memory_policy::astro_expert_cache_model::RoutedReply;
+use model_serving::{
     Qwen3_5ArtifactValidator, Qwen3_5StreamingEngine, Qwen3_5Tokenizer, RoutedReplyRecording,
     SessionExpertRouteSample,
 };
-use astronomical_runtime_integration::MlxMemoryLimits;
-use astronomical_test_harness::test_run::TestRunContext;
+use runtime_integration::MlxMemoryLimits;
 use serial_test::serial;
+use test_harness::test_run::TestRunContext;
 use tokio::time::timeout;
 
 use super::cold_macos_file_cache::ColdMacosFileCache;

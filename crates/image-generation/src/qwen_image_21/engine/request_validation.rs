@@ -6,7 +6,7 @@
 //! guidance scale — Qwen-Image-2.1 samples without classifier-free guidance, so any other
 //! value would be silently ignored and then misreported in completion metadata.
 
-use astronomical_ipc_protocol::{ImageGenerationCommand, ImageGenerationFailureReason};
+use ipc_protocol::{ImageGenerationCommand, ImageGenerationFailureReason};
 
 use crate::qwen_image_21::official_profile::{
     QWEN_IMAGE_21_GUIDANCE_THOUSANDTHS, QWEN_IMAGE_21_IMAGE_DIMENSION_MULTIPLE_PIXELS,

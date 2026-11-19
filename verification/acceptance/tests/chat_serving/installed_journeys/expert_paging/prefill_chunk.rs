@@ -1,7 +1,7 @@
 use std::time::Duration;
 
-use astronomical_model_serving::{Qwen3_5ArtifactValidator, Qwen3_5StreamingModel};
-use astronomical_runtime_integration::MlxRuntime;
+use model_serving::{Qwen3_5ArtifactValidator, Qwen3_5StreamingModel};
+use runtime_integration::MlxRuntime;
 use serial_test::serial;
 use tokio::time::timeout;
 
@@ -83,7 +83,7 @@ async fn assert_exact_final_prefill_logit_parity() {
 
 fn final_prefill_logits_for_chunk_size(
     qwen3_5_model: &Qwen3_5StreamingModel,
-    qwen3_5_config: &astronomical_model_serving::Qwen3_5Config,
+    qwen3_5_config: &model_serving::Qwen3_5Config,
     prompt_token_ids: &[u32],
     prefill_chunk_tokens: usize,
 ) -> (u32, Vec<f32>) {

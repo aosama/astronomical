@@ -1,6 +1,6 @@
 use std::fs;
 
-use astronomical_config::ModelFamily;
+use config::ModelFamily;
 
 #[test]
 fn should_find_local_and_hugging_face_classified_artifacts_without_advertising_execution() {
@@ -27,10 +27,9 @@ fn should_find_local_and_hugging_face_classified_artifacts_without_advertising_e
         .expect("the Hugging Face hub cache snapshot should be created");
     super::write_minimal_model_config(&huggingface_hub_cache_snapshot, "qwen3_5", 4_096);
 
-    let artifacts = astronomical_config::discover_classified_model_artifacts(&[configured_root
-        .path()
-        .to_path_buf()])
-    .expect("classified artifact discovery should complete");
+    let artifacts =
+        config::discover_classified_model_artifacts(&[configured_root.path().to_path_buf()])
+            .expect("classified artifact discovery should complete");
 
     assert_eq!(artifacts.len(), 2);
     assert!(artifacts.iter().any(|artifact| {

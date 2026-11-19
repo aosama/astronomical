@@ -1,5 +1,5 @@
 use super::{Qwen3_5InferenceRequest, Qwen3_5SamplingStrategy};
-use astronomical_ipc_protocol::RequestId;
+use ipc_protocol::RequestId;
 
 #[test]
 fn should_preserve_bounded_qwen3_5_moe_sampling_settings_in_the_inference_request() {

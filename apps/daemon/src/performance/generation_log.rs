@@ -3,7 +3,7 @@ use std::io::{BufWriter, Write};
 use std::path::Path;
 use std::time::SystemTime;
 
-use astronomical_ipc_protocol::WorkerAstroSsdPromptCacheRequestDiagnostics;
+use ipc_protocol::WorkerAstroSsdPromptCacheRequestDiagnostics;
 use serde::Serialize;
 
 /// One row in the generation performance log.

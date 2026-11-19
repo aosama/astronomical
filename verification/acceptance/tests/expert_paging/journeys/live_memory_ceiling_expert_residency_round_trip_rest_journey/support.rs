@@ -2,7 +2,7 @@
 
 use std::{fs, net::SocketAddr, path::Path};
 
-use astronomical_config::{AstronomicalInstancePaths, AstronomicalRuntimeInstance};
+use config::{AstronomicalInstancePaths, AstronomicalRuntimeInstance};
 use serde_json::{Value, json};
 use tokio::time::{Duration, Instant, sleep};
 

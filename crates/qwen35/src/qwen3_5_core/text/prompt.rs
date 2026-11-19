@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests;
 
-use astronomical_ipc_protocol::{ChatAssistantToolCall, ChatMessage, ChatToolDefinition};
+use ipc_protocol::{ChatAssistantToolCall, ChatMessage, ChatToolDefinition};
 use serde_json::Value;
 use thiserror::Error;
 

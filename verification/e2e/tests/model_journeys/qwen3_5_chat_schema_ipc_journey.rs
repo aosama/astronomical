@@ -22,11 +22,11 @@ use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::time::Duration;
 
-use astronomical_config::AstronomicalConfig;
-use astronomical_ipc_protocol::{
+use config::AstronomicalConfig;
+use ipc_protocol::{
     ChatGenerationSettings, ChatMessage, DaemonIpcClient, DaemonRequest, DaemonResponse,
 };
-use astronomical_rest_contract::extract_json_value_from_text;
+use rest_contract::extract_json_value_from_text;
 use serial_test::serial;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::{Child, Command};
@@ -180,10 +180,9 @@ async fn spawn_daemon(
 ) -> (Child, tokio::task::JoinHandle<Vec<String>>) {
     let daemon_executable_path = match fidelity {
         ModelFidelity::Real => {
-            let daemon_executable_path =
-                astronomical_test_harness::workspace_binary("astronomicald")
-                    .to_string_lossy()
-                    .into_owned();
+            let daemon_executable_path = test_harness::workspace_binary("astronomicald")
+                .to_string_lossy()
+                .into_owned();
             let daemon_directory = Path::new(&daemon_executable_path)
                 .parent()
                 .expect("the daemon executable should have a parent directory");
@@ -197,7 +196,7 @@ async fn spawn_daemon(
             daemon_executable_path
         }
         ModelFidelity::Scripted => {
-            astronomical_test_harness::workspace_binary("astronomical-daemon-test-daemon")
+            test_harness::workspace_binary("astronomical-daemon-test-daemon")
                 .to_string_lossy()
                 .into_owned()
         }
@@ -217,7 +216,7 @@ async fn spawn_daemon(
         daemon_spawn_command
             .env(
                 "ASTRONOMICAL_TEST_WORKER_EXECUTABLE_PATH",
-                astronomical_test_harness::workspace_binary("astronomical-daemon-test-worker"),
+                test_harness::workspace_binary("astronomical-daemon-test-worker"),
             )
             .env("ASTRONOMICAL_TEST_WORKER_READY_MODEL_ID", CHAT_MODEL_ID);
     }

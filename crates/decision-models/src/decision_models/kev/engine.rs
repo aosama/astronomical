@@ -10,16 +10,16 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::time::Instant;
 
-use astronomical_decision_contract::calibration_file::CalibrationOverride;
-use astronomical_decision_contract::decision_training_job::{DecisionTrainingJob, TrainingExample};
-use astronomical_decision_contract::head_tuning_file::TunableHeadFamily;
-use astronomical_decision_contract::kev_answers::kev_answer_from_probabilities;
-use astronomical_decision_contract::{
+use decision_contract::calibration_file::CalibrationOverride;
+use decision_contract::decision_training_job::{DecisionTrainingJob, TrainingExample};
+use decision_contract::head_tuning_file::TunableHeadFamily;
+use decision_contract::kev_answers::kev_answer_from_probabilities;
+use decision_contract::{
     DecisionFailure, DecisionQuestion, FloatVector, HeadInputRequest, HeadInputs, OrderedJsonValue,
     QuestionInputCoverage, QuestionOutcome, calibrated_probabilities,
 };
-use astronomical_decision_training::head_parameters::ParameterLayout;
-use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
+use decision_training::head_parameters::ParameterLayout;
+use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
 use super::pointer_head::{KevPointerHead, kev_probabilities};
 use super::sequence::{KEV_MAXIMUM_ROW_TOKENS, KevQuestionRow, KevRowLayout, build_kev_sequence};
@@ -38,7 +38,7 @@ use crate::decision_models::training::training_session::{
     read_through_decide, start_session,
 };
 use crate::memory::telemetry::MlxMemoryTelemetry;
-use astronomical_model_primitives::forward_pass_memory::forward_pass_memory_telemetry;
+use model_primitives::forward_pass_memory::forward_pass_memory_telemetry;
 
 /// A Kev runtime bound to one converted folder.
 pub struct KevDecisionEngine {

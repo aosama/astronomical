@@ -1,4 +1,4 @@
-use astronomical_model_serving::{
+use model_serving::{
     ModelLoadingPerformanceAttributionMetadata, PerformanceAttribution, PerformanceAttributionLog,
     PerformanceAttributionOutcome, PerformanceOperation,
 };

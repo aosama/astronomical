@@ -211,7 +211,7 @@ pub fn plan_from_sensitivity_table(
 /// copy; for the requantizer, one tensor plus its working copy.
 #[cfg(feature = "direct-mlx")]
 pub fn run_quantization_pipeline(
-    runtime: &astronomical_runtime_integration::MlxRuntime,
+    runtime: &runtime_integration::MlxRuntime,
     request: &QuantizationPipelineRequest,
     available_memory_bytes: u64,
     probe_model_loader: &mut dyn ProbeModelLoader,

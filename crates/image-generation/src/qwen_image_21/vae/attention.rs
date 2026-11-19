@@ -4,7 +4,7 @@
 //! convolution, attend across the `H*W` positions of the (single) frame with one head, project
 //! back with a second 1×1 convolution, and add the identity.
 
-use astronomical_runtime_integration::{MlxRuntime, MlxSafetensors};
+use runtime_integration::{MlxRuntime, MlxSafetensors};
 
 use super::QwenImage21VaeError;
 use super::convolution::QwenImage21VaeSpatialConv;

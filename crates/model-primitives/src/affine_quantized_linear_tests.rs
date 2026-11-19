@@ -2,8 +2,8 @@
 //! packing, projection matches the dense form, and an embedding gathers only
 //! the rows it needs. Values come from the Romeo and Juliet fixture.
 
-use astronomical_runtime_integration::MlxRuntime;
 use mlx_bridge::{MlxArray, MlxDtype};
+use runtime_integration::MlxRuntime;
 use serial_test::serial;
 
 use crate::synthetic_weights_test_support::initialize_test_runtime;

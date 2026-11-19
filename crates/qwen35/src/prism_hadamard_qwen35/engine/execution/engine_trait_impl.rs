@@ -6,8 +6,8 @@
 
 use std::time::Instant;
 
-use astronomical_ipc_protocol::{ExpertMemoryMode, RequestId, WorkerPromptWorkReuse};
-use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
+use ipc_protocol::{ExpertMemoryMode, RequestId, WorkerPromptWorkReuse};
+use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
 use mlx_bridge::MlxArray;
 
@@ -39,7 +39,7 @@ use crate::prism_hadamard_qwen35::model::PrismHadamardTextModel;
 use crate::prism_hadamard_qwen35::model::StraightGenerationState;
 use crate::sampling_seed;
 use crate::sampling_seed::current_time_millis_since_unix_epoch;
-use astronomical_ipc_protocol::WorkerEvent;
+use ipc_protocol::WorkerEvent;
 
 impl MlxInferenceExecution for PrismHadamardQwen35InferenceExecution {
     type Request = crate::Qwen3_5InferenceRequest;

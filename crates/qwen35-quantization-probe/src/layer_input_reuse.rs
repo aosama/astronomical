@@ -10,8 +10,8 @@
 //! of a probe's time, a 24-sequence sweep went from 1,178 to 811 seconds with
 //! a byte-identical artifact.
 
-use astronomical_quantization::error::QuantizationError;
 use mlx_bridge::MlxArray;
+use quantization::error::QuantizationError;
 
 use super::super::layer_input_reuse_plan::{
     first_affected_decoder_layer, recording_layer_stride, resume_record_position,

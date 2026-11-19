@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 
-use astronomical_config::{DiscoveredModel, ModelCapabilities, ModelFamily};
+use config::{DiscoveredModel, ModelCapabilities, ModelFamily};
 use sha2::{Digest, Sha256};
 
 use crate::RuntimeModelPolicy;
@@ -37,7 +37,7 @@ impl ResolvedConfigurationGeneration {
                 &mut generation_digest,
                 discovered_model
                     .license
-                    .map(astronomical_config::ModelLicense::spdx_identifier),
+                    .map(config::ModelLicense::spdx_identifier),
             );
             update_model_capabilities(&mut generation_digest, &discovered_model.capabilities);
             update_number(&mut generation_digest, discovered_model.model_size_bytes);
@@ -72,7 +72,7 @@ impl ResolvedConfigurationGeneration {
         for unmatched_model_id in unmatched_model_config_ids {
             update_text(&mut generation_digest, unmatched_model_id);
         }
-        Ok(astronomical_lowercase_hex::encode_lowercase_hex(
+        Ok(lowercase_hex::encode_lowercase_hex(
             &generation_digest.finalize(),
         ))
     }
@@ -89,7 +89,7 @@ impl ResolvedConfigurationGeneration {
         );
         update_text(&mut generation_digest, prior_resolved_generation);
         update_optional_number(&mut generation_digest, maximum_mlx_memory_bytes);
-        astronomical_lowercase_hex::encode_lowercase_hex(&generation_digest.finalize())
+        lowercase_hex::encode_lowercase_hex(&generation_digest.finalize())
     }
 }
 

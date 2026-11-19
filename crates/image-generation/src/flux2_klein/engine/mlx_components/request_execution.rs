@@ -277,7 +277,7 @@ impl Flux2KleinMlxComponents {
                 snapshot.active_memory_bytes() as u64,
                 snapshot.mlx_buffer_cache_bytes() as u64,
                 snapshot.peak_memory_bytes() as u64,
-                astronomical_memory_policy::telemetry::MlxActiveMemoryBreakdown::default(),
+                memory_policy::telemetry::MlxActiveMemoryBreakdown::default(),
             );
             if let Some(memory_ceiling_utilization) =
                 self.memory_ceiling_utilization(snapshot.active_memory_bytes() as u64)
@@ -336,7 +336,7 @@ fn build_keyed_initial_latents(
     seed: u64,
     shape: &[i32],
     initial_sigma: f64,
-) -> Result<MlxArray, astronomical_runtime_integration::MlxRuntimeError> {
+) -> Result<MlxArray, runtime_integration::MlxRuntimeError> {
     let key = runtime.random_key(seed)?;
     let noise = runtime.random_normal(shape, MlxDtype::BFloat16, 0.0, 1.0, &key)?;
     Ok(runtime.multiply_scalar(&noise, initial_sigma as f32)?)
@@ -368,7 +368,7 @@ pub fn flux2_klein_keyed_noise_and_euler_for_tests(
     seed: u64,
     shape: &[i32],
     delta_sigma: f32,
-) -> Result<MlxArray, astronomical_runtime_integration::MlxRuntimeError> {
+) -> Result<MlxArray, runtime_integration::MlxRuntimeError> {
     let noise = build_keyed_initial_latents(runtime, seed, shape, 1.0)?;
     let unit_velocity = runtime.full(shape, 1.0, MlxDtype::BFloat16)?;
     let updated = flux2_klein_euler_update(runtime, &noise, &unit_velocity, delta_sigma)?;
@@ -382,7 +382,7 @@ pub fn flux2_klein_euler_update_for_tests(
     sample: &MlxArray,
     model_output: &MlxArray,
     delta_sigma: f32,
-) -> Result<MlxArray, astronomical_runtime_integration::MlxRuntimeError> {
+) -> Result<MlxArray, runtime_integration::MlxRuntimeError> {
     flux2_klein_euler_update(runtime, sample, model_output, delta_sigma)
 }
 
@@ -391,7 +391,7 @@ fn flux2_klein_euler_update(
     sample: &MlxArray,
     model_output: &MlxArray,
     delta_sigma: f32,
-) -> Result<MlxArray, astronomical_runtime_integration::MlxRuntimeError> {
+) -> Result<MlxArray, runtime_integration::MlxRuntimeError> {
     let float32_sample = runtime.astype(sample, MlxDtype::Float32)?;
     let float32_model_output = runtime.astype(model_output, MlxDtype::Float32)?;
     let scaled_model_output = runtime.multiply_scalar(&float32_model_output, delta_sigma)?;

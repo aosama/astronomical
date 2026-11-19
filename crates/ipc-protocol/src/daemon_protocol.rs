@@ -1,7 +1,7 @@
-use astronomical_decision_contract::decision_training_job::{
+use decision_contract::decision_training_job::{
     DecisionTrainingJob, DecisionTrainingOutcome, DecisionTrainingStage,
 };
-use astronomical_decision_contract::{DecisionFailure, OrderedJsonValue, QuestionOutcome};
+use decision_contract::{DecisionFailure, OrderedJsonValue, QuestionOutcome};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -276,7 +276,7 @@ pub enum DaemonResponse {
     },
     /// Terminal frame for a speech request the worker failed after admission.
     SpeechFailed {
-        reason: astronomical_speech_contract::SpeechFailure,
+        reason: speech_contract::SpeechFailure,
     },
 }
 

@@ -1,9 +1,7 @@
 //! Unit tests for Kev's request layout: the rows, their readout offsets, and
 //! the state and row limits.
 
-use astronomical_decision_contract::{
-    DecisionQuestion, OrderedJsonValue, parse_system_one_questions,
-};
+use decision_contract::{DecisionQuestion, OrderedJsonValue, parse_system_one_questions};
 
 use super::{KEV_MAXIMUM_ROW_TOKENS, KEV_MAXIMUM_STATE_TOKENS, build_kev_sequence};
 use crate::decision_models::kev::test_tokenizer::{

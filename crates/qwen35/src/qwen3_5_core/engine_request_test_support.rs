@@ -2,7 +2,7 @@
 //! from the frozen Ornith layout, disabled attribution, greedy sampling and
 //! no thinking budget, so request logic is testable without MLX work.
 
-use astronomical_ipc_protocol::{RequestId, WorkerPromptWorkReuse};
+use ipc_protocol::{RequestId, WorkerPromptWorkReuse};
 
 use crate::astro_decoder_state_cache::AstroDecoderStateCacheTensorDtype;
 use crate::qwen3_5_core::decoder::RequestDecoderStateStack;

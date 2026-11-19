@@ -17,7 +17,12 @@ use std::time::{Duration, Instant};
 
 const LEGACY_DIRECTORY_NAME: &str = "mlx-c-runtime-build";
 const REMOVAL_DIRECTORY_PREFIX: &str = ".mlx-c-runtime-build.astronomical-removing-";
-const RUNTIME_BUILD_PREFIX: &str = "astronomical-runtime-integration-";
+/// Cargo names a build-script generation after its package. The package was
+/// `astronomical-runtime-integration` until the crate names lost their
+/// prefix, and generations under the old name linger in existing targets
+/// until they are cleaned, so the probe recognises both.
+const RUNTIME_BUILD_PREFIXES: [&str; 2] =
+    ["runtime-integration-", "astronomical-runtime-integration-"];
 const PROGRESS_INTERVAL: Duration = Duration::from_secs(5);
 /// A filesystem root can never be a Cargo target worth scanning; refusing
 /// it keeps a misconfigured `--target-directory /` from walking the disk.
@@ -85,7 +90,8 @@ pub(crate) fn parse_scan_arguments(arguments: &[String]) -> ScanArguments {
 /// Classifies one directory entry structurally: a retired candidate is a
 /// directory whose own name is the legacy name (or the interrupted-removal
 /// prefix), whose parent is `out/`, whose grandparent is a
-/// `astronomical-runtime-integration-*` build-script generation, and whose
+/// `runtime-integration-*` build-script generation (or its pre-rename
+/// `astronomical-runtime-integration-*` spelling), and whose
 /// great-grandparent is `build/`. Component-based matching keeps the rule
 /// readable without glob translation.
 pub(crate) fn is_retired_candidate_directory(parent_directory: &Path, entry_name: &OsStr) -> bool {
@@ -104,9 +110,10 @@ pub(crate) fn is_retired_candidate_directory(parent_directory: &Path, entry_name
     let generation_matches = generation_directory
         .file_name()
         .is_some_and(|generation_name| {
-            generation_name
-                .to_string_lossy()
-                .starts_with(RUNTIME_BUILD_PREFIX)
+            let generation_text = generation_name.to_string_lossy();
+            RUNTIME_BUILD_PREFIXES
+                .iter()
+                .any(|build_prefix| generation_text.starts_with(build_prefix))
         });
     if !generation_matches {
         return false;

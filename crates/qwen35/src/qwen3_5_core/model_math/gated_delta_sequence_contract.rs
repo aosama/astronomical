@@ -5,8 +5,8 @@
 //! compiles or submits Metal work; otherwise checkpointing with the `astro_ssd_prompt_cache` enabled could
 //! accept a graph that ordinary prompt processing rejects, or vice versa.
 
-use astronomical_runtime_integration::MlxRuntimeError;
 use mlx_bridge::{MlxArray, MlxDtype, MlxMetalKernelTemplateArgument};
+use runtime_integration::MlxRuntimeError;
 
 use super::gated_delta_input_rules::{
     GatedDeltaDtypeViolation, GatedDeltaHeadGeometry, GatedDeltaHeadGeometryViolation,

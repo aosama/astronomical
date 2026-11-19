@@ -21,12 +21,12 @@
 //! it once with a quantized build and once with a bfloat16 one: their
 //! output projections are read along different paths.
 
-use astronomical_model_serving::{
+use model_serving::{
     Qwen3_5ArtifactValidator, Qwen3_5ModelChunkingConfiguration, Qwen3_5ResidentModel,
     Qwen3_5Tokenizer, RequestDecoderStateStack,
 };
-use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
-use astronomical_test_harness::test_run::TestRunContext;
+use runtime_integration::{MlxMemoryLimits, MlxRuntime};
+use test_harness::test_run::TestRunContext;
 
 #[path = "../../support/romeo_and_juliet.rs"]
 #[allow(dead_code)]

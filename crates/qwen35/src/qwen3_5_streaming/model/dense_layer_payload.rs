@@ -27,11 +27,9 @@ impl Qwen3_5Model {
 
     /// Where this model's decoder layers live, for status; `None` for a
     /// sparse model.
-    pub fn dense_layer_residency_report(
-        &self,
-    ) -> Option<astronomical_ipc_protocol::WorkerDenseLayerResidency> {
+    pub fn dense_layer_residency_report(&self) -> Option<ipc_protocol::WorkerDenseLayerResidency> {
         let dense_layer_streamer = self.dense_layer_streamer.as_ref()?;
-        Some(astronomical_ipc_protocol::WorkerDenseLayerResidency {
+        Some(ipc_protocol::WorkerDenseLayerResidency {
             decoder_layer_count: u32::try_from(dense_layer_streamer.layer_payload_bytes().len())
                 .unwrap_or(u32::MAX),
             kept_layer_count: u32::try_from(dense_layer_streamer.kept_layer_count())

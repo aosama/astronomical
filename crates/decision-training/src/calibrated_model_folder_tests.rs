@@ -1,11 +1,9 @@
 //! Unit tests for the proven copy of a model folder.
 
-use astronomical_decision_contract::DecisionQuestionKind;
-use astronomical_decision_contract::calibration_file::{
-    KindCalibration, parse_calibration_document,
-};
-use astronomical_decision_contract::decision_adapters_file::LinearAdapter;
-use astronomical_decision_contract::head_tuning_file::TunedTensor;
+use decision_contract::DecisionQuestionKind;
+use decision_contract::calibration_file::{KindCalibration, parse_calibration_document};
+use decision_contract::decision_adapters_file::LinearAdapter;
+use decision_contract::head_tuning_file::TunedTensor;
 
 use super::*;
 use crate::test_support::ROMEO_AND_JULIET_LINES;
@@ -573,7 +571,7 @@ fn should_replace_earlier_add_ons_and_keep_them_when_only_calibrating() {
 
 fn not_judged_record() -> TrainingRecord {
     TrainingRecord {
-        verdict: astronomical_decision_contract::training_record::RecordedVerdict::NotJudged,
+        verdict: decision_contract::training_record::RecordedVerdict::NotJudged,
         labelled_question_count: 1,
         distinct_state_count: 1,
         warnings: vec!["compared only on the examples it learned from".to_owned()],
@@ -598,8 +596,7 @@ fn should_write_the_training_record_beside_the_calibration() {
     .unwrap();
     let record_bytes = fs::read(output_directory.join(DECISION_TRAINING_RECORD_FILE_NAME)).unwrap();
     assert_eq!(
-        astronomical_decision_contract::training_record::parse_training_record(&record_bytes)
-            .unwrap(),
+        decision_contract::training_record::parse_training_record(&record_bytes).unwrap(),
         training_record
     );
 }

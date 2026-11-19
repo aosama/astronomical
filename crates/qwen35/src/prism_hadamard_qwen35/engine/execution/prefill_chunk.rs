@@ -4,7 +4,7 @@
 //! budget; the measured regions (`measure_operation` spans) keep their exact
 //! original boundaries because performance attribution depends on them.
 
-use astronomical_ipc_protocol::{ExpertMemoryMode, WorkerPromptWorkReuse};
+use ipc_protocol::{ExpertMemoryMode, WorkerPromptWorkReuse};
 
 use mlx_bridge::MlxArray;
 

@@ -1,6 +1,6 @@
 //! Unit contract for the observatory expert stats document assembly.
 
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     ExpertMemoryMode, WorkerExpertLayerTopology, WorkerExpertResidencySnapshot,
     WorkerExpertStreamingStats,
 };
@@ -22,7 +22,7 @@ fn populated_stats_snapshot() -> WorkerExpertStreamingStats {
             resident_expert_payload_bytes: 38_000_000_000,
             complete_expert_payload_byte_count: 120_000_000_000,
             expert_capacity: 256,
-            layer_seating: astronomical_ipc_protocol::ExpertLayerSeatingCounts::default(),
+            layer_seating: ipc_protocol::ExpertLayerSeatingCounts::default(),
         },
         layer_topology: vec![
             WorkerExpertLayerTopology {
@@ -244,17 +244,16 @@ fn should_saturate_left_on_ssd_when_resident_bytes_exceed_the_library() {
 #[test]
 fn should_publish_the_last_reply_memory_record_in_the_document() {
     let mut replied_snapshot = populated_stats_snapshot();
-    replied_snapshot.last_reply_memory_record =
-        Some(astronomical_ipc_protocol::ReplyMemoryRecord {
-            storage_read_expert_counts_by_token: vec![12, 0, 3],
-            expert_hit_count: 945,
-            expert_miss_count: 15,
-            storage_read_bytes: 48_000_000,
-            storage_read_wait_nanoseconds: 4_500_000,
-            mlx_buffer_cache_sampled_token_count: 3,
-            mlx_buffer_cache_empty_token_count: 1,
-            ..astronomical_ipc_protocol::ReplyMemoryRecord::default()
-        });
+    replied_snapshot.last_reply_memory_record = Some(ipc_protocol::ReplyMemoryRecord {
+        storage_read_expert_counts_by_token: vec![12, 0, 3],
+        expert_hit_count: 945,
+        expert_miss_count: 15,
+        storage_read_bytes: 48_000_000,
+        storage_read_wait_nanoseconds: 4_500_000,
+        mlx_buffer_cache_sampled_token_count: 3,
+        mlx_buffer_cache_empty_token_count: 1,
+        ..ipc_protocol::ReplyMemoryRecord::default()
+    });
     let mut observatory = ExpertStreamingObservatory::empty();
     observatory.record_stats(replied_snapshot, 1_000);
     let document = expert_stats_document(&observatory);

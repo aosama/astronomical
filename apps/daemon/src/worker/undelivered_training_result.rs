@@ -9,7 +9,7 @@
 
 use std::path::Path;
 
-use astronomical_decision_contract::trained_tensors_file::handover_file_path;
+use decision_contract::trained_tensors_file::handover_file_path;
 
 use crate::serving::decisions_executor::DecisionsOutput;
 

@@ -4,7 +4,7 @@
 use std::io::Write;
 
 use crate::formatting::BYTES_PER_GIGABYTE;
-use astronomical_vision_tower::{
+use vision_tower::{
     BaseMatchReport, BaseMatchVerdict, TensorAgreement, TowerAdditionReport, TowerInspection,
     TowerStatus, TowerSummary,
 };

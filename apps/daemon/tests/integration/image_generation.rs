@@ -7,7 +7,7 @@ use astronomical_daemon::{
     GenerationStartError, ImageGenerationExecutionError, ImageGenerationExecutor,
     ImageGenerationTimeouts, MlxMemoryLimitUpdateOutcome, WorkerControlError, WorkerHealthStatus,
 };
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     ChatGenerationCommand, ChatGenerationSettings, ChatMessage, ChatToolChoice,
     ImageGenerationCommand, ImageGenerationSettings, RequestId,
 };

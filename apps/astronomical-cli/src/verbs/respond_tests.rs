@@ -1,7 +1,7 @@
 //! Unit contracts for the words `respond` prints when the worker reports that
 //! a generation failed.
 
-use astronomical_ipc_protocol::{ChatGenerationFailureReason, OUT_OF_GRAPHICS_MEMORY_ADVICE};
+use ipc_protocol::{ChatGenerationFailureReason, OUT_OF_GRAPHICS_MEMORY_ADVICE};
 
 use super::chat_generation_failure_reason_text;
 

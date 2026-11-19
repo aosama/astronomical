@@ -1,7 +1,7 @@
 //! Deterministic MLX fixtures shared by the resident gate/up acceptance test.
 
-use astronomical_runtime_integration::MlxRuntime;
 use mlx_bridge::{MlxArray, MlxCompiledSwiGlu, MlxDtype};
+use runtime_integration::MlxRuntime;
 
 pub(super) const EXPERT_COUNT: i32 = 4;
 const HIDDEN_DIMENSION: i32 = 64;
@@ -59,7 +59,7 @@ pub(super) fn route_cases(runtime: &MlxRuntime) -> [RouteCase; 2] {
         )
         .expect("multi-token expert indices should allocate");
     let (sorted_activations, sorted_indices, _inverse_order) =
-        astronomical_model_serving::qwen3_5_moe_sort_expert_assignments(
+        model_serving::qwen3_5_moe_sort_expert_assignments(
             runtime,
             &expanded_sorted_states,
             &unsorted_indices,

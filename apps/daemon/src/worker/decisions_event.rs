@@ -2,8 +2,8 @@
 
 use std::sync::{Arc, RwLock};
 
-use astronomical_decision_contract::DecisionFailure;
-use astronomical_ipc_protocol::{RequestId, WorkerEvent, WorkerMlxMemorySnapshot};
+use decision_contract::DecisionFailure;
+use ipc_protocol::{RequestId, WorkerEvent, WorkerMlxMemorySnapshot};
 
 use crate::worker::request_admission::SINGLE_SHOT_EXECUTION_TIMEOUT;
 use crate::worker::undelivered_training_result::discard_undelivered_handover_file;

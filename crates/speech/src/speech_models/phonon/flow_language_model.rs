@@ -3,8 +3,8 @@
 //! frame, each conditioned on the frames before it, together with a logit
 //! that says when speech has ended.
 
-use astronomical_runtime_integration::MlxRuntime;
 use mlx_bridge::MlxArray;
+use runtime_integration::MlxRuntime;
 
 use super::attention_history::AttentionHistory;
 use super::causal_transformer::{CausalTransformer, TransformerShape};

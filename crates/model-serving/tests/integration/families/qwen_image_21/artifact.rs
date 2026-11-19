@@ -6,7 +6,7 @@
 
 use std::path::Path;
 
-use astronomical_model_serving::{
+use model_serving::{
     QwenImage21ArtifactError, QwenImage21ArtifactProvenance, QwenImage21ArtifactValidator,
 };
 

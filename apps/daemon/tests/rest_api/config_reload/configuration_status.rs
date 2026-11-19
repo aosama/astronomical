@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use astronomical_daemon::{RuntimeModelGenerationDefaults, RuntimeModelPolicy};
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     WorkerAutoregressiveModelConfiguration, WorkerChunkingConfiguration, WorkerModelConfiguration,
     WorkerRuntimeFeatureConfiguration,
 };
@@ -16,12 +16,11 @@ async fn should_expose_configured_and_worker_effective_generation_with_path_free
     let mut resolved_config = sample_resolved_config();
     resolved_config.configuration_generation = configured_generation.to_owned();
     resolved_config.unmatched_model_config_ids = vec!["fictional/dormant-model".to_owned()];
-    resolved_config.model_discovery_diagnostics = vec![
-        astronomical_config::ModelDiscoveryDiagnostic::ambiguous_model_identity(
+    resolved_config.model_discovery_diagnostics =
+        vec![config::ModelDiscoveryDiagnostic::ambiguous_model_identity(
             "ambiguous-model",
             vec![1, 3],
-        ),
-    ];
+        )];
     let configured_worker_model_configuration = worker_model_configuration();
     let effective_worker_model_configuration = worker_model_configuration();
     resolved_config.model_policy_catalog = Arc::new(HashMap::from([(
@@ -37,7 +36,7 @@ async fn should_expose_configured_and_worker_effective_generation_with_path_free
             },
             configured_maximum_context_tokens: Some(16_384),
             default_maximum_context_tokens: 32_768,
-            configured_chunking_fields: astronomical_config::ConfiguredChunkingFields {
+            configured_chunking_fields: config::ConfiguredChunkingFields {
                 fixed_prompt_processing_chunk_size_tokens: true,
                 ..Default::default()
             },
@@ -125,7 +124,7 @@ async fn should_expose_configured_and_worker_effective_generation_with_path_free
 async fn should_expose_unavailable_model_directory_diagnostics_without_paths() {
     let mut resolved_config = sample_resolved_config();
     resolved_config.model_discovery_diagnostics =
-        vec![astronomical_config::ModelDiscoveryDiagnostic::unavailable_model_directory(4)];
+        vec![config::ModelDiscoveryDiagnostic::unavailable_model_directory(4)];
     let temporary_home = tempfile::tempdir().expect("status config home should exist");
     let application = build_development_application_with_reload(
         ScriptedExecutor::ready(Vec::new()),

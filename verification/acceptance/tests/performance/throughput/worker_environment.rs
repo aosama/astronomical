@@ -16,8 +16,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use astronomical_daemon::{ResolvedRuntimeConfigResolver, RuntimeModelPolicy};
-use astronomical_ipc_protocol::WorkerStartupConfiguration;
-use astronomical_test_harness::test_run::TestRunContext;
+use ipc_protocol::WorkerStartupConfiguration;
+use test_harness::test_run::TestRunContext;
 
 /// Resolves the directory to advertise as the configuration's
 /// `model_directories` entry for `model_directory`.
@@ -94,7 +94,7 @@ pub(crate) fn perf_worker_environment(
 ) {
     super::historical_record::recorded_worker_build_identity();
     let production_worker_executable_path =
-        astronomical_test_harness::workspace_binary("astronomical-inference-worker");
+        test_harness::workspace_binary("astronomical-inference-worker");
     let mut isolated_home_builder = tempfile::Builder::new();
     isolated_home_builder
         .disable_cleanup(TestRunContext::current().configuration.retain_isolated_home);

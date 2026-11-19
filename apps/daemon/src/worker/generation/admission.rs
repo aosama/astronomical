@@ -5,7 +5,7 @@
 
 use std::sync::Arc;
 
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     ChatGenerationCommand, EmbeddingsCommand, ImageGenerationCommand, SpeechCommand,
 };
 use tokio::sync::{mpsc, oneshot};

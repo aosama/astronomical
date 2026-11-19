@@ -5,11 +5,11 @@
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     RequestId, SpeechResultMetadata, SpokenAudioSegment, WorkerEvent, WorkerModelCapabilities,
     WorkerSpeechCapabilities,
 };
-use astronomical_speech_contract::SpeechFailure;
+use speech_contract::SpeechFailure;
 use tokio::sync::{Semaphore, mpsc};
 
 use super::handle_worker_speech_event;

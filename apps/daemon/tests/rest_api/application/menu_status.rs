@@ -10,15 +10,15 @@ use std::{
 use astronomical_daemon::{
     ResolvedRuntimeConfig, build_application, build_development_application_with_reload,
 };
-use astronomical_ipc_protocol::{
-    ModelLoadInFlight, WorkerChunkingConfiguration, WorkerFlux2KleinModelConfiguration,
-    WorkerImageGenerationModelFamily, WorkerLoadedAutoregressiveModelRuntimeConfiguration,
-    WorkerLoadedModelRuntimeConfiguration, WorkerRuntimeFeatureConfiguration,
-};
 use axum::{
     Router,
     body::{Body, to_bytes},
     http::Request,
+};
+use ipc_protocol::{
+    ModelLoadInFlight, WorkerChunkingConfiguration, WorkerFlux2KleinModelConfiguration,
+    WorkerImageGenerationModelFamily, WorkerLoadedAutoregressiveModelRuntimeConfiguration,
+    WorkerLoadedModelRuntimeConfiguration, WorkerRuntimeFeatureConfiguration,
 };
 use serde_json::Value;
 use tower::ServiceExt;
@@ -97,14 +97,14 @@ fn development_resolved_config() -> ResolvedRuntimeConfig {
         idle_model_unload_seconds: 0,
         configured_astro_ssd_prompt_cache_maximum_size_bytes: None,
         performance_attribution_enabled: false,
-        astro_ssd_prompt_cache_config: astronomical_config::AstroSsdPromptCacheConfig::new(
+        astro_ssd_prompt_cache_config: config::AstroSsdPromptCacheConfig::new(
             PathBuf::from("/fictional/astro-ssd-prompt-cache"),
             50_000_000_000,
         ),
         bind_address: "127.0.0.1:6733".to_owned(),
-        logging_config: astronomical_config::LoggingConfig::new(
+        logging_config: config::LoggingConfig::new(
             PathBuf::from("/fictional/astronomical-logs"),
-            astronomical_config::LogLevel::Warn,
+            config::LogLevel::Warn,
             7,
         ),
     }

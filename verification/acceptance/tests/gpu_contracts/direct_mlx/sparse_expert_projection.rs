@@ -5,12 +5,12 @@
 //! operations, and compare sorted, unsorted, dense, and affine paths. This proves
 //! that the neutral layer shares math without silently sharing family policy.
 
-use astronomical_model_serving::{
+use model_serving::{
     ExpertAssignmentOrder, PerformanceAttribution, PerformanceOperation, StackedExpertProjection,
     gather_expert_projection, restore_expert_assignment_order, sort_expert_assignments,
     sorted_expert_weighted_sum, sorted_expert_weighted_sum_kernel, unsorted_expert_weighted_sum,
 };
-use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
+use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
 use crate::common::{
     DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_MLX_BUFFER_CACHE_LIMIT_BYTES,

@@ -122,7 +122,7 @@ pub fn model_weights_fingerprint(model_directory: &Path) -> Option<String> {
     }
     shard_descriptions.sort_unstable();
     let digest = Sha256::digest(shard_descriptions.join("\n").as_bytes());
-    Some(astronomical_lowercase_hex::encode_lowercase_hex(
+    Some(lowercase_hex::encode_lowercase_hex(
         &digest[..WEIGHTS_FINGERPRINT_BYTES],
     ))
 }

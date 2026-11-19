@@ -3,7 +3,7 @@
 //! chunk's routed assignments in expert-sorted compressed sparse row order,
 //! and the shared measurement helpers.
 
-use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
+use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
 pub(super) fn prototype_runtime() -> MlxRuntime {
     MlxRuntime::initialize(

@@ -100,7 +100,7 @@ pub fn hash_file(file_path: &Path) -> Result<(String, u64), VisionTowerError> {
         byte_count += read_count as u64;
     }
     Ok((
-        astronomical_lowercase_hex::encode_lowercase_hex(&hasher.finalize()),
+        lowercase_hex::encode_lowercase_hex(&hasher.finalize()),
         byte_count,
     ))
 }

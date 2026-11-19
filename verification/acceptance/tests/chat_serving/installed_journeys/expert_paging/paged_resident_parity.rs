@@ -26,13 +26,13 @@
 use super::in_memory_ledger_reconciliation::assert_the_in_memory_ledger_matches_mlx;
 use std::{path::Path, process::Stdio, time::Duration};
 
-use astronomical_ipc_protocol::{ExpertMemoryMode, RequestId};
-use astronomical_model_serving::{
+use ipc_protocol::{ExpertMemoryMode, RequestId};
+use model_serving::{
     CompleteResidencyHeadroomBoundary, GeneratedToken, InferenceEngine, Qwen3_5ArtifactValidator,
     Qwen3_5InferenceRequest, Qwen3_5ResidentEngine, Qwen3_5ResidentPromptProcessingChunkSizer,
     Qwen3_5StreamingEngine, model_memory_geometry_from_validated_artifact,
 };
-use astronomical_runtime_integration::MlxMemoryLimits;
+use runtime_integration::MlxMemoryLimits;
 use serial_test::serial;
 use tokio::{process::Command, time::timeout};
 

@@ -2,12 +2,12 @@
 //! against the loss's own change along a direction (a directional
 //! derivative), which needs no hand-written backward pass to compare with.
 
-use astronomical_runtime_integration::MlxRuntime;
 use mlx_bridge::{MlxArray, MlxBindingsContext, MlxCError, MlxDtype};
+use runtime_integration::MlxRuntime;
 use serial_test::serial;
 
 use super::{TrainableLoss, loss_gradients};
-use astronomical_model_primitives::synthetic_weights_test_support::{
+use model_primitives::synthetic_weights_test_support::{
     SYNTHETIC_QUANTIZATION_BITS, SYNTHETIC_QUANTIZATION_GROUP_SIZE, initialize_test_runtime,
     shakespeare_values,
 };

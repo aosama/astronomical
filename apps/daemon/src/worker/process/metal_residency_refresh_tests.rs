@@ -1,7 +1,7 @@
 use std::ffi::OsStr;
 use std::path::PathBuf;
 
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     WorkerDecodeAstroExpertCachePolicy, WorkerDiagnosticQwen3_5EngineOverride, WorkerLogLevel,
     WorkerStartupConfiguration,
 };

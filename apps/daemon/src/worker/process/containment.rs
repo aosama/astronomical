@@ -1,7 +1,7 @@
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     ExpertMemoryMode, RequestId, WorkerEvent, WorkerExpertResidencySnapshot,
     WorkerMlxMemorySnapshot, WorkerRuntimeFeatureConfiguration,
 };

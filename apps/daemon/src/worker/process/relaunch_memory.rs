@@ -7,7 +7,7 @@
 //! applied ceiling here is what makes the replacement boot at the ceiling the
 //! user already asked for.
 
-use astronomical_ipc_protocol::WorkerStartupConfiguration;
+use ipc_protocol::WorkerStartupConfiguration;
 
 /// Returns the launch snapshot a replacement process should boot from after a
 /// live ceiling was adopted.

@@ -1,5 +1,5 @@
-use astronomical_ipc_protocol::ChatGenerationFailureReason;
-use astronomical_rest_contract::{AnthropicError, AnthropicErrorType};
+use ipc_protocol::ChatGenerationFailureReason;
+use rest_contract::{AnthropicError, AnthropicErrorType};
 
 use super::messages_errors::{
     failure_error, generation_start_error, unknown_model_error, worker_unavailable_error,

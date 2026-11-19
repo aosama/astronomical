@@ -14,11 +14,11 @@ use std::path::PathBuf;
 use std::time::Instant;
 
 use crate::flux2_klein::weight_layout::Flux2KleinComponentWeightFiles;
-use astronomical_ipc_protocol::RequestId;
-use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
+use ipc_protocol::RequestId;
+use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
-use astronomical_memory_policy::utilization::MemoryCeilingUtilization;
-use astronomical_model_primitives::performance_attribution::{
+use memory_policy::utilization::MemoryCeilingUtilization;
+use model_primitives::performance_attribution::{
     ModelLoadingPerformanceAttributionMetadata, PerformanceAttribution, PerformanceAttributionLog,
     PerformanceAttributionOutcome, PerformanceOperation,
 };
@@ -278,4 +278,4 @@ impl Flux2KleinMlxComponents {
     }
 }
 
-use astronomical_memory_policy::telemetry::MlxMemoryTelemetry;
+use memory_policy::telemetry::MlxMemoryTelemetry;

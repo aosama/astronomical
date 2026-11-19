@@ -8,13 +8,13 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use astronomical_config::{
+use config::{
     AstroSsdPromptCacheConfig, AstronomicalConfig, AstronomicalConfigError,
     AstronomicalInstancePaths, AstronomicalRuntimeInstance, DiscoveredModel, DiscoveredModelError,
     EffectiveModelDiscoveryError, LogLevel, LoggingConfig, ModelCapabilities,
     ModelDiscoveryDiagnostic, ModelDiscoveryDiagnosticCode, ResolvedModelConfig,
 };
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     WorkerDecodeAstroExpertCachePolicy, WorkerLogLevel, WorkerStartupConfiguration,
 };
 use thiserror::Error;
@@ -200,7 +200,7 @@ impl ResolvedRuntimeConfigResolver {
         configured_model_directories: &[PathBuf],
     ) -> Result<(Vec<DiscoveredModel>, Vec<ModelDiscoveryDiagnostic>), ResolvedRuntimeConfigError>
     {
-        let effective_discovery = astronomical_config::discover_effective_models(
+        let effective_discovery = config::discover_effective_models(
             &self.instance_paths.models_directory(),
             configured_model_directories,
         )
@@ -242,7 +242,7 @@ impl ResolvedRuntimeConfig {
             performance_attribution_enabled: self.performance_attribution_enabled,
             decode_astro_expert_cache_policy: WorkerDecodeAstroExpertCachePolicy::Baseline,
             diagnostic_qwen3_5_engine_override:
-                astronomical_ipc_protocol::WorkerDiagnosticQwen3_5EngineOverride::Automatic,
+                ipc_protocol::WorkerDiagnosticQwen3_5EngineOverride::Automatic,
             logging_directory: self.logging_config.directory().to_path_buf(),
             logging_level: match self.logging_config.level() {
                 LogLevel::Error => WorkerLogLevel::Error,

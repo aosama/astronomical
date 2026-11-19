@@ -4,10 +4,10 @@
 //! options: no model runs, so the answers say nothing about the state, but
 //! the shape, order and lifecycle events are exactly the real worker's.
 
-use astronomical_decision_contract::{
+use decision_contract::{
     DecisionFailure, QuestionInputCoverage, QuestionOutcome, answer_from_probabilities,
 };
-use astronomical_ipc_protocol::{DecisionsCommand, ProtocolError, ProtocolWriter, WorkerEvent};
+use ipc_protocol::{DecisionsCommand, ProtocolError, ProtocolWriter, WorkerEvent};
 use tokio::io::AsyncWrite;
 
 /// Tokens the scripted worker reports having read per question.

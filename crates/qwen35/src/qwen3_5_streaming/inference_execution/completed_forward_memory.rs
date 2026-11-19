@@ -12,7 +12,7 @@
 //! 2. Tell the governor, which applies the capacity it answers with.
 //! 3. In the reply phase, resize the hot-expert tables to that capacity.
 
-use astronomical_runtime_integration::MlxMemorySnapshot;
+use runtime_integration::MlxMemorySnapshot;
 
 use crate::qwen3_5_streaming::model::Qwen3_5Model;
 use crate::qwen3_5_streaming::model::memory_governance::CompletedForwardMemoryReadings;

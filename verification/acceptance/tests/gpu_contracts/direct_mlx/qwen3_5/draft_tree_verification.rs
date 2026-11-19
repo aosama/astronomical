@@ -7,9 +7,9 @@
 //! sibling rows share a position, read different convolution windows and
 //! start their recurrence from different parents.
 
-use astronomical_model_serving::speculative_decoding::dflash2_drafter::DraftTree;
-use astronomical_model_serving::speculative_decoding::tree_rows::TreeRows;
 use mlx_bridge::MlxArray;
+use model_serving::speculative_decoding::dflash2_drafter::DraftTree;
+use model_serving::speculative_decoding::tree_rows::TreeRows;
 use serial_test::serial;
 
 use super::drafted_rewind::{

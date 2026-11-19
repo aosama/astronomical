@@ -4,8 +4,8 @@
 
 use std::io;
 
-use astronomical_ipc_protocol::ProtocolError;
-use astronomical_model_serving::WorkerRuntimeError;
+use ipc_protocol::ProtocolError;
+use model_serving::WorkerRuntimeError;
 use thiserror::Error;
 
 pub(crate) const MAXIMUM_PUBLIC_MODEL_LOAD_FAILURE_REASON_CHARACTER_COUNT: usize = 512;

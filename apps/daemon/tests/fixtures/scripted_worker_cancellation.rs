@@ -7,7 +7,7 @@
 
 use std::error::Error;
 
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     ExpertLayerSeatingCounts, ExpertMemoryMode, MlxMemorySnapshotSource, ProtocolWriter,
     WorkerEvent, WorkerExpertResidencySnapshot, WorkerExpertStreamingStats,
     WorkerMlxMemorySnapshot,

@@ -2,8 +2,8 @@
 //! outcome of a decide request, and its refusal to train, since the stub
 //! serves no model.
 
-use astronomical_decision_contract::DecisionFailure;
-use astronomical_ipc_protocol::DaemonResponse;
+use decision_contract::DecisionFailure;
+use ipc_protocol::DaemonResponse;
 
 use super::stub_daemon::StubDecisionsOutcome;
 

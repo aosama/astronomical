@@ -1,4 +1,4 @@
-use astronomical_ipc_protocol::WorkerEvent;
+use ipc_protocol::WorkerEvent;
 
 use crate::{EmbeddingUnavailableEngine, ImageGenerationUnavailableEngine};
 
@@ -39,7 +39,7 @@ pub struct EngineBackedWorker<
     /// floor an earlier model was raised to.
     pub(crate) factory_mlx_memory_ceiling_bytes: u64,
     pub(crate) worker_runtime_feature_configuration:
-        Option<astronomical_ipc_protocol::WorkerRuntimeFeatureConfiguration>,
+        Option<ipc_protocol::WorkerRuntimeFeatureConfiguration>,
     pub(crate) selected_model: Option<support::SelectedModel>,
     /// The typed placement lifecycle of the loaded autoregressive engine:
     /// produced by startup engine selection, demoted by a request's

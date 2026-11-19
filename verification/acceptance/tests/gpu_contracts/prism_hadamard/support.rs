@@ -9,10 +9,10 @@
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
-use astronomical_model_serving::prism_hadamard_qwen35::artifacts::FoldedPackValidator;
-use astronomical_model_serving::prism_hadamard_qwen35::model::PrismHadamardTextModel;
-use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use mlx_bridge::MlxArray;
+use model_serving::prism_hadamard_qwen35::artifacts::FoldedPackValidator;
+use model_serving::prism_hadamard_qwen35::model::PrismHadamardTextModel;
+use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
 /// Wired and allocator limits for one roughly 8 GB pack plus activations and
 /// a 10,000-token key-value prefix, far under the wired ceiling of a
@@ -44,13 +44,13 @@ const CONTINUATION_INSTRUCTION: &str =
 
 /// Resolves the installed pack root, refusing to guess a developer path.
 pub(crate) fn pack_directory() -> PathBuf {
-    astronomical_test_harness::test_run::TestRunContext::current().required_model_directory()
+    test_harness::test_run::TestRunContext::current().required_model_directory()
 }
 
 /// Resolves the upstream reference dump for the parity journey.
 pub(crate) fn parity_reference_path() -> PathBuf {
-    let reference_path = astronomical_test_harness::test_run::TestRunContext::current()
-        .required_reference_artifact_path();
+    let reference_path =
+        test_harness::test_run::TestRunContext::current().required_reference_artifact_path();
     assert!(
         reference_path.is_file(),
         "the parity reference artifact must be a file"

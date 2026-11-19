@@ -3,7 +3,7 @@
 //! Correlation is validated before any stream or health mutation so malformed
 //! worker events cannot leave externally visible state partially advanced.
 
-use astronomical_ipc_protocol::WorkerEvent;
+use ipc_protocol::WorkerEvent;
 use std::sync::{Arc, RwLock};
 use tokio::time::Instant;
 
@@ -94,10 +94,10 @@ struct ValidatedOutputBatch {
 /// request must fail rather than skip.
 fn validate_output_correlation_and_sequence(
     active_request: &ActiveGeneration,
-    request_id: astronomical_ipc_protocol::RequestId,
+    request_id: ipc_protocol::RequestId,
     sequence_number: u16,
     generated_token_count: u16,
-    outputs: &[astronomical_ipc_protocol::ChatGenerationOutput],
+    outputs: &[ipc_protocol::ChatGenerationOutput],
 ) -> Result<ValidatedOutputBatch, WorkerControlError> {
     let latest_known_generated_token_count = active_request
         .generated_token_count
@@ -133,11 +133,11 @@ fn validate_output_correlation_and_sequence(
 /// arguments are bounded at write time. Returns the next expected index.
 fn accumulate_ordered_tool_calls(
     active_request: &mut ActiveGeneration,
-    outputs: &[astronomical_ipc_protocol::ChatGenerationOutput],
+    outputs: &[ipc_protocol::ChatGenerationOutput],
 ) -> Result<u16, WorkerControlError> {
     let mut next_tool_call_index = active_request.next_tool_call_index;
     for output in outputs {
-        if let astronomical_ipc_protocol::ChatGenerationOutput::ToolCall {
+        if let ipc_protocol::ChatGenerationOutput::ToolCall {
             tool_call_index,
             function_name,
             arguments_json,

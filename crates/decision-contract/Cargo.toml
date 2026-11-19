@@ -1,5 +1,5 @@
 [package]
-name = "astronomical-decision-contract"
+name = "decision-contract"
 description = "The contract every decision model shares: typed questions, their validation, per-family prompt rendering, temperature calibration and typed answers, with no graphics-processor dependency."
 edition.workspace = true
 license.workspace = true

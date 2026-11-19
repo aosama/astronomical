@@ -1,8 +1,8 @@
-//! A number token's phonemes: the words `astronomical-english-number-words`
+//! A number token's phonemes: the words `english-number-words`
 //! says it with, each read from the lexicon, and the ending ("1990s") added
 //! to the last sound.
 
-use astronomical_english_number_words::{NumberEnding, spoken_number};
+use english_number_words::{NumberEnding, spoken_number};
 
 use crate::lexicon::Lexicon;
 use crate::word_endings::{with_ed_ending, with_ing_ending, with_s_ending};

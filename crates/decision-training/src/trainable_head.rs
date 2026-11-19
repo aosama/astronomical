@@ -8,7 +8,7 @@
 //! finite-difference check in the tests, which is the strongest guarantee
 //! that training moves the weights the way the loss says.
 
-use astronomical_decision_contract::HeadInputs;
+use decision_contract::HeadInputs;
 use thiserror::Error;
 
 use crate::head_parameters::ParameterLayout;

@@ -11,19 +11,19 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::time::Instant;
 
-use astronomical_decision_contract::calibration_file::CalibrationOverride;
-use astronomical_decision_contract::decision_adapters_file::DecisionAdapters;
-use astronomical_decision_contract::decision_training_job::{DecisionTrainingJob, TrainingExample};
-use astronomical_decision_contract::head_tuning_file::{HeadTuning, TunableHeadFamily};
-use astronomical_decision_contract::laya_sequence::LayaQuestionSequence;
-use astronomical_decision_contract::{
+use decision_contract::calibration_file::CalibrationOverride;
+use decision_contract::decision_adapters_file::DecisionAdapters;
+use decision_contract::decision_training_job::{DecisionTrainingJob, TrainingExample};
+use decision_contract::head_tuning_file::{HeadTuning, TunableHeadFamily};
+use decision_contract::laya_sequence::LayaQuestionSequence;
+use decision_contract::{
     DecisionFailure, DecisionQuestion, DecisionQuestionKind, FloatVector, HeadInputRequest,
     HeadInputs, OrderedJsonValue, QuestionInputCoverage, QuestionOutcome,
     answer_from_probabilities, calibrated_probabilities,
 };
-use astronomical_decision_training::head_parameters::ParameterLayout;
-use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime, MlxSafetensors};
+use decision_training::head_parameters::ParameterLayout;
 use mlx_bridge::MlxArray;
+use runtime_integration::{MlxMemoryLimits, MlxRuntime, MlxSafetensors};
 
 use crate::decision_engine::DecisionTrainingStep;
 use crate::decision_engine::{DecisionEngine, DecisionEngineLoadResult, DecisionEngineOutput};
@@ -49,7 +49,7 @@ use crate::decision_models::training::training_session::{
 use crate::linear_adapters::LinearAdapters;
 use crate::memory::telemetry::MlxMemoryTelemetry;
 use crate::modernbert::weight_layout::{ModernBertWeightLayout, TokenEmbeddingStorage};
-use astronomical_model_primitives::forward_pass_memory::forward_pass_memory_telemetry;
+use model_primitives::forward_pass_memory::forward_pass_memory_telemetry;
 
 /// The tensor-name prefix a Laya checkpoint keeps its encoder under.
 const ENCODER_TENSOR_PREFIX: &str = "encoder";

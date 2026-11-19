@@ -7,9 +7,9 @@
 //! With the feature enabled, the script:
 //!
 //! 1. resolves the **native build identity** through
-//!    `astronomical-native-identity` (sources + toolchain fingerprint);
+//!    `native-identity` (sources + toolchain fingerprint);
 //! 2. asks the **native build store** (the
-//!    `astronomical-native-build-orchestration` crate's `native_store`
+//!    `native-build-orchestration` crate's `native_store`
 //!    module) to reuse a published entry for that identity or build one
 //!    under an exclusive lock;
 //! 3. configures **Rust linking** against the published static archives and
@@ -22,9 +22,9 @@
 //! # The orchestration dependency
 //!
 //! The CMake invocation, store, linking, parallelism, and progress modules
-//! live in the `astronomical-native-build-orchestration` crate — their
+//! live in the `native-build-orchestration` crate — their
 //! single compilation home (issue #1628) — consumed here through
-//! `[build-dependencies]`. The standalone `astronomical-native-build-tool`
+//! `[build-dependencies]`. The standalone `native-build-tool`
 //! pre-warms the same store through the same crate as a normal dependency,
 //! so a pre-warmed out-of-Cargo build and the in-Cargo build execute
 //! byte-identical code because they compile one crate, not because files
@@ -37,7 +37,7 @@
 //! `OUT_DIR` of the published `mlx-bridge` crate's build script (resolved
 //! from the cargo registry), which preserves Cargo's ownership of generated
 //! source; this script never writes there. The native compilation itself
-//! lives in `astronomical-native-build-orchestration`'s `native_compile`
+//! lives in `native-build-orchestration`'s `native_compile`
 //! module, shared with the standalone native-build tool so pre-warmed
 //! builds and in-Cargo builds stay identical.
 //!
@@ -53,7 +53,7 @@
 
 use std::{env, error::Error, path::Path, time::Instant};
 
-use astronomical_native_build_orchestration::{
+use native_build_orchestration::{
     ASTRO_NATIVE_BUILD_CACHE_DEPENDENCIES_VARIABLE, NATIVE_BUILD_PROGRESS_FILE_VARIABLE,
     NATIVE_BUILD_STATUS_FILE_VARIABLE, NATIVE_BUILD_STORE_VARIABLE, NativeBuildProfile,
     NativeBuildProgress, NativeBuildStore, NativeRuntimeBuildInputs, RUSTC_WRAPPER_VARIABLE,
@@ -107,9 +107,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         native_build_started_at.elapsed(),
     );
 
-    astronomical_native_build_orchestration::native_linking::configure_rust_linking(
-        &native_build_artifacts,
-    )?;
+    native_build_orchestration::native_linking::configure_rust_linking(&native_build_artifacts)?;
     emit_native_source_rerun_contracts(
         &manifest_directory,
         &native_source_directory,

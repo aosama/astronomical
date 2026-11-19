@@ -8,9 +8,9 @@
 
 use std::time::Instant;
 
-use astronomical_model_serving::RequestDecoderStateStack;
-use astronomical_model_serving::speculative_decoding::tree_rows::TreeRows;
 use mlx_bridge::MlxArray;
+use model_serving::RequestDecoderStateStack;
+use model_serving::speculative_decoding::tree_rows::TreeRows;
 use serial_test::serial;
 
 use super::dflash2_kept_per_round::{Cell, JourneyPair, RoundState, load_pair};
@@ -142,7 +142,7 @@ fn should_measure_where_a_small_tree_round_spends_its_time_after_a_journey_promp
 #[ignore = "loads a real target and its DFlash2 drafter (the 27B pair unless configured); run through cargo measure-dflash2-tree-rounds"]
 #[serial]
 fn should_separate_a_long_contexts_attention_work_from_copies_of_its_keys() {
-    use astronomical_model_serving::speculative_decoding::dflash2_drafter::DraftTree;
+    use model_serving::speculative_decoding::dflash2_drafter::DraftTree;
     let mut pair = load_pair();
     pair.target
         .enable_draft_tree_verification()
@@ -312,7 +312,7 @@ fn evaluate_decoder_state(
     decoder_state: &mut RequestDecoderStateStack,
     pending_tap_rows: &MlxArray,
 ) {
-    use astronomical_model_serving::AstroDecoderStateCacheState;
+    use model_serving::AstroDecoderStateCacheState;
     let mut state_arrays: Vec<MlxArray> = Vec::new();
     for layer_index in 0..decoder_state.layer_count() {
         match decoder_state.layer_mut(layer_index) {
@@ -355,8 +355,8 @@ const CHAIN_COMPARISON_ROUNDS: usize = 12;
 #[ignore = "loads a real target and its DFlash2 drafter (the 27B pair unless configured); run through cargo measure-dflash2-tree-rounds"]
 #[serial]
 fn should_compare_a_chain_tree_verify_with_the_plain_forward_over_as_many_rows() {
-    use astronomical_model_serving::speculative_decoding::dflash2_drafter::DraftTree;
-    use astronomical_model_serving::{PerformanceAttribution, VerificationLogitsMode};
+    use model_serving::speculative_decoding::dflash2_drafter::DraftTree;
+    use model_serving::{PerformanceAttribution, VerificationLogitsMode};
     let mut pair = load_pair();
     pair.target
         .enable_draft_tree_verification()
@@ -432,9 +432,7 @@ fn should_compare_a_chain_tree_verify_with_the_plain_forward_over_as_many_rows()
 #[ignore = "loads a real target and its DFlash2 drafter (the 27B pair unless configured); run through cargo measure-dflash2-tree-rounds"]
 #[serial]
 fn should_attribute_a_sixteen_row_forward_to_its_layer_stages() {
-    use astronomical_model_serving::{
-        PerformanceAttribution, PerformanceOperation, VerificationLogitsMode,
-    };
+    use model_serving::{PerformanceAttribution, PerformanceOperation, VerificationLogitsMode};
     let pair = load_pair();
     let cell = &ORACLE_CELLS[3];
     let row_tokens: Vec<u32> = (1_000..1_016).collect();
@@ -515,7 +513,7 @@ fn should_attribute_a_sixteen_row_forward_to_its_layer_stages() {
 #[ignore = "loads a real target and its DFlash2 drafter (the 27B pair unless configured); run through cargo measure-dflash2-tree-rounds"]
 #[serial]
 fn should_leave_the_trained_rows_unchanged_when_the_block_is_longer() {
-    use astronomical_model_serving::speculative_decoding::dflash2_drafter::{
+    use model_serving::speculative_decoding::dflash2_drafter::{
         DFlash2DraftTarget, DrafterContextStates, drafted_hidden_rows,
     };
     let pair = load_pair();

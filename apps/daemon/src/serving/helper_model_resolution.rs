@@ -8,7 +8,7 @@
 //! the kind answers, and several are ambiguous: guessing would answer with a
 //! model the caller did not pick.
 
-use astronomical_config::{DiscoveredModel, ModelCapabilities};
+use config::{DiscoveredModel, ModelCapabilities};
 
 /// A kind of helper model: how to recognise one, and its built-in default.
 pub(crate) struct HelperModelKind {
@@ -50,8 +50,7 @@ fn resolve_named_helper_model(
         .iter()
         .map(|discovered_model| discovered_model.model_id.as_str())
         .collect();
-    let resolved_model_id =
-        astronomical_config::resolve_model_id(requested_model, &known_model_ids);
+    let resolved_model_id = config::resolve_model_id(requested_model, &known_model_ids);
     let Some(discovered_model) = discovered_models
         .iter()
         .find(|discovered_model| discovered_model.model_id == resolved_model_id)

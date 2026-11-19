@@ -131,7 +131,7 @@ impl Qwen3_5EngineState {
 /// counter is a usize in the runtime; a value beyond the u64 range means the
 /// accounting itself is broken, which is fatal rather than clampable.
 fn snapshot_memory_triple(
-    mlx_memory_snapshot: &astronomical_runtime_integration::MlxMemorySnapshot,
+    mlx_memory_snapshot: &runtime_integration::MlxMemorySnapshot,
 ) -> Result<(u64, u64, u64), InferenceEngineError> {
     let active_memory_bytes = u64::try_from(mlx_memory_snapshot.active_memory_bytes())
         .map_err(|_| super::fatal_engine_error("MLX active memory exceeds the u64 range"))?;

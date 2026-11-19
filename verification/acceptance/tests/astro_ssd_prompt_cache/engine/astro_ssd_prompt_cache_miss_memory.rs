@@ -1,16 +1,14 @@
 use std::path::Path;
 use std::time::Duration;
 
-use astronomical_ipc_protocol::{
-    ExpertMemoryMode, RequestId, WorkerAstroSsdPromptCacheLookupOutcome,
-};
-use astronomical_model_serving::{
+use ipc_protocol::{ExpertMemoryMode, RequestId, WorkerAstroSsdPromptCacheLookupOutcome};
+use model_serving::{
     AstroSsdPromptCacheDiskStoreConfig, AstroSsdPromptCacheModelContract, InferenceEngine,
     Qwen3_5ArtifactValidator, Qwen3_5InferenceRequest, Qwen3_5ResidentEngine,
     Qwen3_5ResidentPromptProcessingChunkSizer, Qwen3_5Tokenizer,
     qwen3_5_astro_decoder_state_cache_layout,
 };
-use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
+use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use tokio::time::{Instant, MissedTickBehavior, interval, sleep};
 
 use super::large_prefill_prompt;
@@ -332,7 +330,7 @@ async fn load_memory_acceptance_engine(
 }
 
 fn astro_ssd_prompt_cache_specific_workspace_bytes(
-    validated_artifact: &astronomical_model_serving::ValidatedQwen3_5Artifact,
+    validated_artifact: &model_serving::ValidatedQwen3_5Artifact,
     mlx_memory_limits: MlxMemoryLimits,
     context_growth_bytes: usize,
 ) -> usize {
@@ -359,12 +357,11 @@ fn astro_ssd_prompt_cache_specific_workspace_bytes(
         .config()
         .context_memory_reservation_bytes(1)
         .expect("the model should reserve context memory per token");
-    let restore_workspace_bytes =
-        astronomical_model_serving::persistent_context_restore_workspace_bytes(
-            context_memory_reservation_bytes_per_token,
-            astro_ssd_prompt_cache_model_contract.block_token_count(),
-        )
-        .expect("the one-block restore workspace should fit usize");
+    let restore_workspace_bytes = model_serving::persistent_context_restore_workspace_bytes(
+        context_memory_reservation_bytes_per_token,
+        astro_ssd_prompt_cache_model_contract.block_token_count(),
+    )
+    .expect("the one-block restore workspace should fit usize");
     astro_ssd_prompt_cache_model_contract
         .direct_publication_workspace_bytes()
         .checked_add(restore_workspace_bytes.saturating_sub(context_growth_bytes))

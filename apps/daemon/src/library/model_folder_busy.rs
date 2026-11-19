@@ -10,8 +10,8 @@
 
 use std::path::Path;
 
-use astronomical_config::DiscoveredModel;
-use astronomical_ipc_protocol::ModelLoadInFlight;
+use config::DiscoveredModel;
+use ipc_protocol::ModelLoadInFlight;
 
 use crate::application::ApplicationState;
 use crate::library::requestable_model_id_from_huggingface_id;

@@ -28,27 +28,27 @@ warnings = "deny"
 # The package list here, in nextest-archive-integration, -rest-api and -e2e must stay
 # identical: cargo unifies features per command, so a different list recompiles what
 # the CI build step just compiled (49 crates and about 36 seconds when they differed).
-test-integration = "test --no-fail-fast -p astronomical-config -p astronomical-cli -p astronomical-ipc-protocol -p astronomical-lowercase-hex -p astronomical-download-catalog -p astronomical-decision-contract -p astronomical-decision-training -p astronomical-expert-atlas -p astronomical-native-identity -p astronomical-memory-policy -p astronomical-jangtq2-qwen35 -p astronomical-native-build-orchestration -p astronomical-native-build-tool -p astronomical-runtime-integration -p astronomical-model-primitives -p astronomical-speech -p astronomical-artifact-validation -p astronomical-image-generation -p astronomical-engine-core -p astronomical-qwen35 -p astronomical-decision-models -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-daemon -p astronomical-quantization -p astronomical-vision-tower -p astronomical-neural-engine-research -p astronomical-rest-contract -p astronomical-e2e --lib --test integration_tests --test hardware_journeys"
+test-integration = "test --no-fail-fast -p config -p astronomical-cli -p ipc-protocol -p lowercase-hex -p download-catalog -p decision-contract -p decision-training -p expert-atlas -p native-identity -p memory-policy -p jangtq2-qwen35 -p native-build-orchestration -p native-build-tool -p runtime-integration -p model-primitives -p speech -p artifact-validation -p image-generation -p engine-core -p qwen35 -p decision-models -p model-serving -p astronomical-inference-worker -p astronomical-daemon -p quantization -p vision-tower -p astronomical-neural-engine-research -p rest-contract -p astronomical-e2e --lib --test integration_tests --test hardware_journeys"
 
 # Most of that selection through cargo-nextest (one process per test, so process-global
 # state cannot leak between tests), for local runs; it leaves out the REST contract,
 # E2E and Neural Engine research packages. CI uses the archives below instead.
-nextest-integration = "nextest run --no-fail-fast -p astronomical-config -p astronomical-cli -p astronomical-ipc-protocol -p astronomical-lowercase-hex -p astronomical-download-catalog -p astronomical-decision-contract -p astronomical-decision-training -p astronomical-expert-atlas -p astronomical-native-identity -p astronomical-memory-policy -p astronomical-jangtq2-qwen35 -p astronomical-native-build-orchestration -p astronomical-native-build-tool -p astronomical-runtime-integration -p astronomical-model-primitives -p astronomical-speech -p astronomical-artifact-validation -p astronomical-image-generation -p astronomical-engine-core -p astronomical-qwen35 -p astronomical-decision-models -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-daemon -p astronomical-quantization -p astronomical-vision-tower --lib --test integration_tests"
+nextest-integration = "nextest run --no-fail-fast -p config -p astronomical-cli -p ipc-protocol -p lowercase-hex -p download-catalog -p decision-contract -p decision-training -p expert-atlas -p native-identity -p memory-policy -p jangtq2-qwen35 -p native-build-orchestration -p native-build-tool -p runtime-integration -p model-primitives -p speech -p artifact-validation -p image-generation -p engine-core -p qwen35 -p decision-models -p model-serving -p astronomical-inference-worker -p astronomical-daemon -p quantization -p vision-tower --lib --test integration_tests"
 
 # Portable nextest archives for the CI build/test split; each selection must
 # stay identical to the selection the compile step builds through the cargo
 # aliases above (the workflow lane contract pins that equality).
-nextest-archive-integration = "nextest archive --profile ci --archive-file target/nextest-archives/integration.tar.zst -p astronomical-config -p astronomical-cli -p astronomical-ipc-protocol -p astronomical-lowercase-hex -p astronomical-download-catalog -p astronomical-decision-contract -p astronomical-decision-training -p astronomical-expert-atlas -p astronomical-native-identity -p astronomical-memory-policy -p astronomical-jangtq2-qwen35 -p astronomical-native-build-orchestration -p astronomical-native-build-tool -p astronomical-runtime-integration -p astronomical-model-primitives -p astronomical-speech -p astronomical-artifact-validation -p astronomical-image-generation -p astronomical-engine-core -p astronomical-qwen35 -p astronomical-decision-models -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-daemon -p astronomical-quantization -p astronomical-vision-tower -p astronomical-neural-engine-research -p astronomical-rest-contract -p astronomical-e2e --lib --test integration_tests --test hardware_journeys"
-nextest-archive-rest-api = "nextest archive --profile ci --archive-file target/nextest-archives/rest-api.tar.zst -p astronomical-config -p astronomical-cli -p astronomical-ipc-protocol -p astronomical-lowercase-hex -p astronomical-download-catalog -p astronomical-decision-contract -p astronomical-decision-training -p astronomical-expert-atlas -p astronomical-native-identity -p astronomical-memory-policy -p astronomical-jangtq2-qwen35 -p astronomical-native-build-orchestration -p astronomical-native-build-tool -p astronomical-runtime-integration -p astronomical-model-primitives -p astronomical-speech -p astronomical-artifact-validation -p astronomical-image-generation -p astronomical-engine-core -p astronomical-qwen35 -p astronomical-decision-models -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-daemon -p astronomical-quantization -p astronomical-vision-tower -p astronomical-neural-engine-research -p astronomical-rest-contract -p astronomical-e2e --test rest_api_tests"
-nextest-archive-e2e = "nextest archive --profile ci --archive-file target/nextest-archives/e2e.tar.zst -p astronomical-config -p astronomical-cli -p astronomical-ipc-protocol -p astronomical-lowercase-hex -p astronomical-download-catalog -p astronomical-decision-contract -p astronomical-decision-training -p astronomical-expert-atlas -p astronomical-native-identity -p astronomical-memory-policy -p astronomical-jangtq2-qwen35 -p astronomical-native-build-orchestration -p astronomical-native-build-tool -p astronomical-runtime-integration -p astronomical-model-primitives -p astronomical-speech -p astronomical-artifact-validation -p astronomical-image-generation -p astronomical-engine-core -p astronomical-qwen35 -p astronomical-decision-models -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-daemon -p astronomical-quantization -p astronomical-vision-tower -p astronomical-neural-engine-research -p astronomical-rest-contract -p astronomical-e2e --test e2e"
+nextest-archive-integration = "nextest archive --profile ci --archive-file target/nextest-archives/integration.tar.zst -p config -p astronomical-cli -p ipc-protocol -p lowercase-hex -p download-catalog -p decision-contract -p decision-training -p expert-atlas -p native-identity -p memory-policy -p jangtq2-qwen35 -p native-build-orchestration -p native-build-tool -p runtime-integration -p model-primitives -p speech -p artifact-validation -p image-generation -p engine-core -p qwen35 -p decision-models -p model-serving -p astronomical-inference-worker -p astronomical-daemon -p quantization -p vision-tower -p astronomical-neural-engine-research -p rest-contract -p astronomical-e2e --lib --test integration_tests --test hardware_journeys"
+nextest-archive-rest-api = "nextest archive --profile ci --archive-file target/nextest-archives/rest-api.tar.zst -p config -p astronomical-cli -p ipc-protocol -p lowercase-hex -p download-catalog -p decision-contract -p decision-training -p expert-atlas -p native-identity -p memory-policy -p jangtq2-qwen35 -p native-build-orchestration -p native-build-tool -p runtime-integration -p model-primitives -p speech -p artifact-validation -p image-generation -p engine-core -p qwen35 -p decision-models -p model-serving -p astronomical-inference-worker -p astronomical-daemon -p quantization -p vision-tower -p astronomical-neural-engine-research -p rest-contract -p astronomical-e2e --test rest_api_tests"
+nextest-archive-e2e = "nextest archive --profile ci --archive-file target/nextest-archives/e2e.tar.zst -p config -p astronomical-cli -p ipc-protocol -p lowercase-hex -p download-catalog -p decision-contract -p decision-training -p expert-atlas -p native-identity -p memory-policy -p jangtq2-qwen35 -p native-build-orchestration -p native-build-tool -p runtime-integration -p model-primitives -p speech -p artifact-validation -p image-generation -p engine-core -p qwen35 -p decision-models -p model-serving -p astronomical-inference-worker -p astronomical-daemon -p quantization -p vision-tower -p astronomical-neural-engine-research -p rest-contract -p astronomical-e2e --test e2e"
 
 # The shared fixture registry and leaf-id contracts (test-fixtures), plus the
 # independent FLUX reference-oracle unit coverage (flux-reference-oracle), which
 # pulls in base64/image/sha2 only for this lib build.
-test-test-harness-fixtures = "test --no-fail-fast -p astronomical-test-harness --features test-fixtures,flux-reference-oracle --lib"
+test-test-harness-fixtures = "test --no-fail-fast -p test-harness --features test-fixtures,flux-reference-oracle --lib"
 
 # The REST contract and daemon rest_api_tests binaries.
-test-rest-api = "test --no-fail-fast -p astronomical-rest-contract -p astronomical-daemon --test rest_api_tests"
+test-rest-api = "test --no-fail-fast -p rest-contract -p astronomical-daemon --test rest_api_tests"
 
 # The root whole-product journeys (verification/e2e) that spawn the real
 # astronomicald binary; build the daemon first:
@@ -63,7 +63,7 @@ test-e2e = "test --no-fail-fast -p astronomical-e2e --test e2e"
 test-app-builder = "test -p xtask --bin xtask app_package"
 
 # Both lanes together; run this before committing.
-test-integration-and-rest = "test --no-fail-fast -p astronomical-config -p astronomical-cli -p astronomical-ipc-protocol -p astronomical-lowercase-hex -p astronomical-download-catalog -p astronomical-decision-contract -p astronomical-decision-training -p astronomical-expert-atlas -p astronomical-native-identity -p astronomical-memory-policy -p astronomical-jangtq2-qwen35 -p astronomical-native-build-orchestration -p astronomical-native-build-tool -p astronomical-runtime-integration -p astronomical-model-primitives -p astronomical-speech -p astronomical-artifact-validation -p astronomical-image-generation -p astronomical-engine-core -p astronomical-qwen35 -p astronomical-decision-models -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-daemon -p astronomical-quantization -p astronomical-vision-tower -p astronomical-neural-engine-research -p astronomical-rest-contract --lib --test integration_tests --test hardware_journeys --test rest_api_tests"
+test-integration-and-rest = "test --no-fail-fast -p config -p astronomical-cli -p ipc-protocol -p lowercase-hex -p download-catalog -p decision-contract -p decision-training -p expert-atlas -p native-identity -p memory-policy -p jangtq2-qwen35 -p native-build-orchestration -p native-build-tool -p runtime-integration -p model-primitives -p speech -p artifact-validation -p image-generation -p engine-core -p qwen35 -p decision-models -p model-serving -p astronomical-inference-worker -p astronomical-daemon -p quantization -p vision-tower -p astronomical-neural-engine-research -p rest-contract --lib --test integration_tests --test hardware_journeys --test rest_api_tests"
 
 # The decision-model contract crate on its own: typed questions, validation,
 # calibration, typed answers and the Laya prompt layout, pinned to the
@@ -72,7 +72,7 @@ test-integration-and-rest = "test --no-fail-fast -p astronomical-config -p astro
 # also run in the integration lanes above. The golden vectors are regenerated
 # with crates/decision-contract/tests/fixtures/generate_laya_golden_reference_vectors.py
 # under a Python environment that has the reference package installed.
-test-decision-contract = "test -p astronomical-decision-contract"
+test-decision-contract = "test -p decision-contract"
 # Decision-model calibration and head training on a person's own labelled
 # examples: the examples format, the split by state, temperature fitting,
 # judging each fit and training, the CPU heads that serve as the GPU trainer's
@@ -80,7 +80,7 @@ test-decision-contract = "test -p astronomical-decision-contract"
 # no model or graphics processor; a second or two to run. The
 # `astronomical decision calibrate` and `decision train` verbs drive it end
 # to end.
-test-decision-training = "test -p astronomical-decision-training"
+test-decision-training = "test -p decision-training"
 # The GPU training loop that runs inside the inference worker: the stepped
 # job (check, train, score), runs and early stopping, each family's final
 # layers' forward and backward pass, the precise (TF32-safe) matrix product,
@@ -89,7 +89,7 @@ test-decision-training = "test -p astronomical-decision-training"
 # tests are #[serial]); under a second once built. The whole journey runs
 # live with `astronomical decision train EXAMPLES --output DIR --model ID`
 # against the Development instance.
-test-decision-gpu-training = "test -p astronomical-decision-models --features direct-mlx --lib decision_models::training"
+test-decision-gpu-training = "test -p decision-models --features direct-mlx --lib decision_models::training"
 # Whole-model training (`decision train --whole-model`): MLX's own gradients
 # through every operation Laya's forward pass uses (an 8-bit projection with
 # an add-on, rotary embedding, masked attention, exact GELU), the micro-batch
@@ -102,9 +102,9 @@ test-decision-gpu-training = "test -p astronomical-decision-models --features di
 # The whole journey runs live with `astronomical decision train EXAMPLES
 # --whole-model --output DIR --model laya-MLX-8bit` against Development, on
 # at least 1000 labelled questions about 100 states.
-# The linear add-on tests live in astronomical-model-primitives (issue
+# The linear add-on tests live in model-primitives (issue
 # #2340), so both packages run with their direct-MLX feature.
-test-decision-whole-model-training = "test -p astronomical-decision-models -p astronomical-model-primitives --features astronomical-decision-models/direct-mlx,astronomical-model-primitives/direct-mlx --lib -- adapter_training linear_adapters decision_adapters laya::served_batches laya::batching"
+test-decision-whole-model-training = "test -p decision-models -p model-primitives --features decision-models/direct-mlx,model-primitives/direct-mlx --lib -- adapter_training linear_adapters decision_adapters laya::served_batches laya::batching"
 
 # Vision tower journeys against real public Hugging Face repositories: whether a
 # repository has a tower, and whether a tower shares a text model's base. They
@@ -114,7 +114,7 @@ test-decision-whole-model-training = "test -p astronomical-decision-models -p as
 # Try it by hand with `astronomical vision inspect organization/name`,
 # `astronomical vision match TEXT_MODEL TOWER_MODEL`, and
 # `astronomical vision add TEXT_FOLDER --tower TOWER_MODEL --output DIR`.
-test-vision-tower-hub = "test -p astronomical-vision-tower --test integration_tests -- --ignored"
+test-vision-tower-hub = "test -p vision-tower --test integration_tests -- --ignored"
 
 # Dense placement contracts on installed models (issue #1985): the text
 # weights startup placement compares with the MLX limit, on the streamed_dense
@@ -163,7 +163,7 @@ test-dense-prompt-forward-memory = "run -p xtask -- test-run --package astronomi
 # compares every component against vectors recorded before the trunk was
 # restructured; pass `--configuration PATH` naming a JSON file whose
 # `model_directory` is the nomicai-modernbert-embed-base-8bit folder.
-test-modernbert = "test -p astronomical-decision-models --features direct-mlx --lib modernbert"
+test-modernbert = "test -p decision-models --features direct-mlx --lib modernbert"
 test-modernbert-embedding-vectors = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter should_reproduce_the_embedding_vectors_recorded_before_the_trunk_was_restructured"
 
 # The Laya decision-model backend (issue #2032). `test-laya` runs its lib
@@ -198,7 +198,7 @@ test-modernbert-embedding-vectors = "run -p xtask -- test-run --package astronom
 # text longer than the pass budget twice, recomputing each layer and keeping
 # every activation, and requires the same weights and a lower peak: about a
 # minute on Kev 0.8B.
-test-laya = "test -p astronomical-decision-models --features direct-mlx --lib decision_models"
+test-laya = "test -p decision-models --features direct-mlx --lib decision_models"
 test-laya-reference-decisions = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter laya_reference_decisions"
 test-laya-engine-requests = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter laya_engine_requests"
 test-laya-whole-model-training = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter whole_model_training::should_serve_shipped_scores_with_zero_add_ons_and_trained_scores_with_trained_ones_on_laya"
@@ -216,7 +216,7 @@ test-kev-whole-model-layer-recomputation = "run -p xtask -- test-run --package a
 test-clef-whole-model-layer-recomputation = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter whole_model_layer_recomputation::should_train_a_text_over_the_pass_budget_to_the_same_weights_in_less_memory_on_clef"
 # Text to speech: Kokoro-82M and Phonon 31M on MLX. `test-speech` runs the
 # speech lib tests (shared layers, both families' layers on small weights from
-# the Shakespeare fixture, the engines' request checks) in astronomical-speech,
+# the Shakespeare fixture, the engines' request checks) in the speech crate,
 # and the worker's speech tests in the serving crate; about a second, no
 # installed model. `test-english-speech-text` runs the pure crates that turn
 # text into what the models read: Kokoro's phonemes and spoken numbers, and
@@ -244,8 +244,8 @@ test-clef-whole-model-layer-recomputation = "run -p xtask -- test-run --package 
 # That suite runs with a 1 GB heap limit (run-tests.mjs): it peaks near 600 MB,
 # so `heap out of memory` there means one test is broken, usually a failing
 # assert that was handed a DOM node, never that the limit is too low.
-test-speech = "test -p astronomical-speech -p astronomical-model-serving --features astronomical-speech/direct-mlx,astronomical-model-serving/direct-mlx --lib speech"
-test-english-speech-text = "test -p astronomical-english-phonemes -p astronomical-english-number-words -p astronomical-speech-contract"
+test-speech = "test -p speech -p model-serving --features speech/direct-mlx,model-serving/direct-mlx --lib speech"
+test-english-speech-text = "test -p english-phonemes -p english-number-words -p speech-contract"
 test-kokoro-speech = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter kokoro_speech"
 test-kokoro-reference-speech = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter kokoro_reference_speech"
 test-phonon-speech = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter phonon_speech"
@@ -305,8 +305,8 @@ test-clef-reference-decisions = "run -p xtask -- test-run --package astronomical
 # to run just this lane while working on it.
 test-decide-verb = "test -p astronomical-cli decide"
 test-decisions-daemon = "test -p astronomical-daemon --lib --test integration_tests --test rest_api_tests -- decisions system_one decision_model"
-test-decisions-worker = "test -p astronomical-model-serving --lib engine_backed_worker::tests::decisions"
-test-laya-discovery = "test -p astronomical-config --test integration_tests model_discovery::laya"
+test-decisions-worker = "test -p model-serving --lib engine_backed_worker::tests::decisions"
+test-laya-discovery = "test -p config --test integration_tests model_discovery::laya"
 
 # Dense streaming speed ladder (issue #1985), on an optimized build with the
 # weight files kept out of the macOS file cache: the raw layer read rate, one
@@ -323,7 +323,7 @@ measure-dense-streaming-speed = "run -p xtask -- test-run --package astronomical
 # FP8); seconds, no model artifacts. Contracts are #[parallel] except the
 # peak-memory one, which is #[serial] because MLX peak memory is
 # process-global.
-test-quantization-direct-mlx = "test --no-fail-fast -p astronomical-quantization -p astronomical-vision-tower --features direct-mlx --test direct_mlx"
+test-quantization-direct-mlx = "test --no-fail-fast -p quantization -p vision-tower --features direct-mlx --test direct_mlx"
 
 # Real-model conversion, parity, and throughput journeys; append
 # --configuration PATH containing model_directory and, for parity,
@@ -501,7 +501,7 @@ audit-unused-public-workspace = "workspace-unused-pub"
 
 # The model-serving direct-MLX contract suite plus the runtime-integration
 # MLX-C coverage bridge contract (CPU-only) so bridge drift fails the lane.
-test-direct-mlx = "test --no-fail-fast -p astronomical-acceptance --features astronomical-acceptance/direct-mlx -p astronomical-runtime-integration --features astronomical-runtime-integration/mlx -p astronomical-model-primitives --features astronomical-model-primitives/direct-mlx -p astronomical-speech --features astronomical-speech/direct-mlx -p astronomical-image-generation --features astronomical-image-generation/direct-mlx -p astronomical-engine-core --features astronomical-engine-core/direct-mlx -p astronomical-qwen35 --features astronomical-qwen35/direct-mlx -p astronomical-decision-models --features astronomical-decision-models/direct-mlx -p astronomical-qwen35-quantization-probe -p astronomical-model-serving --features astronomical-model-serving/direct-mlx --lib --test direct_mlx --test mlx_c_coverage_contract_tests -- --test-threads=1"
+test-direct-mlx = "test --no-fail-fast -p astronomical-acceptance --features astronomical-acceptance/direct-mlx -p runtime-integration --features runtime-integration/mlx -p model-primitives --features model-primitives/direct-mlx -p speech --features speech/direct-mlx -p image-generation --features image-generation/direct-mlx -p engine-core --features engine-core/direct-mlx -p qwen35 --features qwen35/direct-mlx -p decision-models --features decision-models/direct-mlx -p qwen35-quantization-probe -p model-serving --features model-serving/direct-mlx --lib --test direct_mlx --test mlx_c_coverage_contract_tests -- --test-threads=1"
 
 # Every native memory-contract phase in one bounded invocation; the probe
 # binary must exist first (see check-mlx-memory-contract).
@@ -522,7 +522,7 @@ test-mlx-memory = "test --no-fail-fast -p astronomical-acceptance --features dir
 # Compile-only drift gate for the mlx-memory-contract-probe feature world,
 # which sits off every routine graph; API moves under it are caught here in
 # seconds instead of silently drifting.
-check-mlx-memory-contract = "check -p astronomical-runtime-integration --features mlx-memory-contract-probe --all-targets"
+check-mlx-memory-contract = "check -p runtime-integration --features mlx-memory-contract-probe --all-targets"
 
 # The whole real-model acceptance package, one selected case per process;
 # append --configuration PATH for explicit model/evidence inputs and
@@ -806,9 +806,9 @@ test-claude-code-launch = "run -p xtask -- test-run --package astronomical-accep
 # by rule), correctness contracts, and serving throughput over the daemon
 # IPC boundary persisted to the durable throughput history; append
 # --configuration PATH containing model_directory.
-test-jangtq2-plan = "run -p xtask -- test-run --package astronomical-qwen35 --features direct-mlx --lib --filter quantized_expert_layer_plan --ignored"
-test-jangtq2-decode-throughput = "test --release --no-fail-fast -p astronomical-jangtq2-qwen35 --features direct-mlx --test direct_mlx throughput -- --ignored --nocapture --test-threads=1"
-test-jangtq2-direct-mlx = "test --no-fail-fast -p astronomical-jangtq2-qwen35 --features direct-mlx --lib --test direct_mlx -- --test-threads=1"
+test-jangtq2-plan = "run -p xtask -- test-run --package qwen35 --features direct-mlx --lib --filter quantized_expert_layer_plan --ignored"
+test-jangtq2-decode-throughput = "test --release --no-fail-fast -p jangtq2-qwen35 --features direct-mlx --test direct_mlx throughput -- --ignored --nocapture --test-threads=1"
+test-jangtq2-direct-mlx = "test --no-fail-fast -p jangtq2-qwen35 --features direct-mlx --lib --test direct_mlx -- --test-threads=1"
 test-jangtq2-serving-throughput = "run -p xtask -- test-run --package astronomical-acceptance --features performance_throughput --test performance_throughput --release --filter jangtq2 --ignored"
 
 # Neural Engine hardware journeys (issue #161), verification/neural-engine: real
@@ -845,7 +845,7 @@ test-neural-engine-real-model = "test --release --no-fail-fast -p astronomical-a
 # tests, in seconds and with no native MLX build. The research crate is in the
 # integration lane instead, because its journeys link MLX: CI compiles them and
 # runs only what is not #[ignore]d.
-test-neural-engine = "test --no-fail-fast -p astronomical-neural-engine --all-targets"
+test-neural-engine = "test --no-fail-fast -p neural-engine --all-targets"
 
 # Engine-versus-memory-ceiling isolation on the resident 35B sparse-MoE
 # model; narrow with --filter, add --configuration PATH with

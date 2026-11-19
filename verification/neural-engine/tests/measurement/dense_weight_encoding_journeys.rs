@@ -16,23 +16,19 @@ use std::error::Error;
 use std::path::Path;
 use std::time::Instant;
 
-use astronomical_neural_engine::core_ml::{
+use neural_engine::core_ml::{
     ComputePlacement, CoreMlComputeUnits, CoreMlProgram, compile_model_to,
 };
-use astronomical_neural_engine::documents::mlp::{
-    MlpFp16Weights, encode_ml_program_mlp_with_encoding,
-};
-use astronomical_neural_engine::documents::mlp_stages::StageWeightEncoding;
-use astronomical_neural_engine::documents::package_layout::write_ml_package;
-use astronomical_neural_engine::program_shape::ProgramShape;
-use astronomical_neural_engine::weights::half_precision::{f16_bits_to_f32, f32_slice_to_f16_bits};
-use astronomical_neural_engine::weights::shared_lookup_tables::{
-    LOOKUP_TABLE_ENTRY_COUNT, SharedLookupTables,
-};
-use astronomical_test_harness::deterministic_values::{
+use neural_engine::documents::mlp::{MlpFp16Weights, encode_ml_program_mlp_with_encoding};
+use neural_engine::documents::mlp_stages::StageWeightEncoding;
+use neural_engine::documents::package_layout::write_ml_package;
+use neural_engine::program_shape::ProgramShape;
+use neural_engine::weights::half_precision::{f16_bits_to_f32, f32_slice_to_f16_bits};
+use neural_engine::weights::shared_lookup_tables::{LOOKUP_TABLE_ENTRY_COUNT, SharedLookupTables};
+use serial_test::serial;
+use test_harness::deterministic_values::{
     PROJECTION_WEIGHT_STANDARD_DEVIATION, bell_shaped_values,
 };
-use serial_test::serial;
 
 /// The dense MLP of Ornith-1.5-9B, for the slice of a chunk serving gives the Neural
 /// Engine.

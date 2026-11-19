@@ -1,6 +1,6 @@
 use std::time::Instant;
 
-use astronomical_runtime_integration::MlxRuntime;
+use runtime_integration::MlxRuntime;
 
 use crate::common::runtime_test_support;
 use mlx_bridge::{MlxArray, MlxDtype};

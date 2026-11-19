@@ -7,8 +7,8 @@
 //! sublayer, its second half the sublayer's output. The model card credits
 //! these convolutions with keeping late block positions from decaying.
 
-use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 use mlx_bridge::MlxArray;
+use runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use super::drafter_configuration::DFlash2DrafterConfiguration;
 use super::drafter_weights::GroupedConvolutionWeights;

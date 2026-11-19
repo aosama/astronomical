@@ -1,8 +1,6 @@
-use astronomical_decision_contract::FloatVector;
-use astronomical_decision_contract::decision_training_job::TrainedTensor;
-use astronomical_decision_contract::trained_tensors_file::{
-    handover_file_name, trained_tensors_file_bytes,
-};
+use decision_contract::FloatVector;
+use decision_contract::decision_training_job::TrainedTensor;
+use decision_contract::trained_tensors_file::{handover_file_name, trained_tensors_file_bytes};
 
 use super::*;
 

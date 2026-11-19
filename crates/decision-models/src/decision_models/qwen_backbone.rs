@@ -16,9 +16,9 @@
 use std::path::Path;
 use std::rc::Rc;
 
-use astronomical_decision_contract::DecisionFailure;
-use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
+use decision_contract::DecisionFailure;
 use mlx_bridge::MlxArray;
+use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
 use crate::decision_models::decision_adapters::{
     check_adapter_targets, read_decision_adapters, unusable_adapters,

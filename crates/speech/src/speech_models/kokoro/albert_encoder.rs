@@ -7,8 +7,8 @@
 //! times. Every sequence here is one unpadded utterance, so no attention mask
 //! is needed. Activation is ALBERT's default `gelu_new`, the tanh form.
 
-use astronomical_runtime_integration::MlxRuntime;
 use mlx_bridge::MlxArray;
+use runtime_integration::MlxRuntime;
 
 use crate::speech_models::checkpoint_tensors::CheckpointTensors;
 use crate::speech_models::mlx_layers::layer_norm::LayerNorm;

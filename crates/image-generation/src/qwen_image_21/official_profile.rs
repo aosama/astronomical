@@ -7,7 +7,7 @@
 //! reference's own default of 40, both exercised end to end by the family's acceptance
 //! journeys. Widening them is a one-constant change plus a journey that proves the new bound.
 
-use astronomical_ipc_protocol::ImageGenerationCapabilities;
+use ipc_protocol::ImageGenerationCapabilities;
 
 use crate::qwen_image_21::QWEN_IMAGE_21_OFFICIAL_MODEL_ID;
 

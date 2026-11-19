@@ -4,21 +4,19 @@
 //! Core ML itself refuses would pass them. Limiting these to CPU compute units
 //! keeps the contract independent of the Neural Engine, so it holds on any Mac.
 
-use astronomical_neural_engine::core_ml::{CoreMlComputeUnits, CoreMlProgram};
-use astronomical_neural_engine::documents::mlp::MlpFp16Weights;
-use astronomical_neural_engine::documents::mlp_stages::StageWeightEncoding;
-use astronomical_neural_engine::documents::projection::MlProgramWeights;
-use astronomical_neural_engine::documents::rotated_mlp::{RotatedMlpLayout, RotatedMlpWeights};
-use astronomical_neural_engine::program_shape::ProgramShape;
-use astronomical_neural_engine::weights::affine_quantized::{
-    AffineQuantizedWeights, QuantizationLayout,
-};
-use astronomical_neural_engine::weights::half_precision::{
-    f16_bits_slice_to_f32, f32_slice_to_f16_bits, f32_to_f16_bits,
-};
 use astronomical_neural_engine_research::accelerate_reference::reference_projection;
 use astronomical_neural_engine_research::numerical_comparison::compare_values;
-use astronomical_test_harness::deterministic_values::{
+use neural_engine::core_ml::{CoreMlComputeUnits, CoreMlProgram};
+use neural_engine::documents::mlp::MlpFp16Weights;
+use neural_engine::documents::mlp_stages::StageWeightEncoding;
+use neural_engine::documents::projection::MlProgramWeights;
+use neural_engine::documents::rotated_mlp::{RotatedMlpLayout, RotatedMlpWeights};
+use neural_engine::program_shape::ProgramShape;
+use neural_engine::weights::affine_quantized::{AffineQuantizedWeights, QuantizationLayout};
+use neural_engine::weights::half_precision::{
+    f16_bits_slice_to_f32, f32_slice_to_f16_bits, f32_to_f16_bits,
+};
+use test_harness::deterministic_values::{
     PROJECTION_WEIGHT_STANDARD_DEVIATION, bell_shaped_values,
 };
 

@@ -1,6 +1,6 @@
 //! Unit tests for the log-softmax at a temperature.
 
-use astronomical_decision_contract::calibrated_probabilities;
+use decision_contract::calibrated_probabilities;
 
 use super::*;
 use crate::test_support::assert_close;

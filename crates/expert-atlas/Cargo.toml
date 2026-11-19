@@ -1,5 +1,5 @@
 [package]
-name = "astronomical-expert-atlas"
+name = "expert-atlas"
 description = "The Expert Atlas model format: an expert-major re-layout of a mixture-of-experts checkpoint, its conversion, and its manifest."
 edition.workspace = true
 license.workspace = true
@@ -12,7 +12,7 @@ version.workspace = true
 workspace = true
 
 [dependencies]
-astronomical-lowercase-hex = { path = "../lowercase-hex" }
+lowercase-hex = { path = "../lowercase-hex" }
 libc.workspace = true
 serde.workspace = true
 serde_json.workspace = true

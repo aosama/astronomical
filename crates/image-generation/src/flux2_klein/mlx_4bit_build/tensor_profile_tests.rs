@@ -7,7 +7,7 @@ use crate::flux2_klein::artifact::Flux2KleinArtifactError;
 use crate::flux2_klein::inventory::Flux2KleinTensorDescriptor;
 use crate::flux2_klein::mlx_4bit_build::shard_index::Mlx4BitShardIndex;
 use crate::flux2_klein::weight_layout::Flux2KleinComponent;
-use astronomical_artifact_validation::{RawSafetensorsInventory, RawSafetensorsTensorDescriptor};
+use artifact_validation::{RawSafetensorsInventory, RawSafetensorsTensorDescriptor};
 
 const SHARD_FILE_NAME: &str = "0.safetensors";
 

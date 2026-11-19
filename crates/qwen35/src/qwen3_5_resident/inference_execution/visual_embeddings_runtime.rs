@@ -4,7 +4,7 @@ use crate::InferenceEngineError;
 use crate::PerformanceAttribution;
 use crate::qwen3_5_core::vision::VisualEmbeddingEngineContext;
 use crate::qwen3_5_core::vision::resolve_visual_embeddings_for_processed_images as resolve_shared_visual_embeddings;
-use astronomical_ipc_protocol::RequestId;
+use ipc_protocol::RequestId;
 use mlx_bridge::MlxArray;
 
 use super::Qwen3_5EngineState;

@@ -1,7 +1,7 @@
 //! Unit tests for reading a Laya artifact's `config.json`.
 
-use astronomical_decision_contract::DecisionQuestionKind;
-use astronomical_decision_contract::calibration::MINIMUM_APPLIED_TEMPERATURE;
+use decision_contract::DecisionQuestionKind;
+use decision_contract::calibration::MINIMUM_APPLIED_TEMPERATURE;
 
 use super::{LayaConfiguration, LayaConfigurationError};
 use crate::modernbert::configuration::ModernBertConfigurationError;

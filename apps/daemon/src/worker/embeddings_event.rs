@@ -2,7 +2,7 @@
 
 use std::sync::{Arc, RwLock};
 
-use astronomical_ipc_protocol::{MlxMemorySnapshotSource, WorkerEvent};
+use ipc_protocol::{MlxMemorySnapshotSource, WorkerEvent};
 
 use crate::{
     WorkerControlError, WorkerHealthSnapshot,
@@ -80,7 +80,7 @@ pub(super) fn handle_worker_embeddings_event(
 /// violation.
 pub(super) fn publish_single_shot_finalized_memory_snapshot(
     health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
-    mlx_memory_snapshot: Option<astronomical_ipc_protocol::WorkerMlxMemorySnapshot>,
+    mlx_memory_snapshot: Option<ipc_protocol::WorkerMlxMemorySnapshot>,
 ) -> Result<(), WorkerControlError> {
     let Some(mlx_memory_snapshot) = mlx_memory_snapshot else {
         return Ok(());
@@ -113,7 +113,7 @@ pub(super) fn publish_single_shot_finalized_memory_snapshot(
 
 fn matching_active_embeddings(
     active_worker_request: &mut Option<ActiveWorkerRequest>,
-    request_id: astronomical_ipc_protocol::RequestId,
+    request_id: ipc_protocol::RequestId,
 ) -> Result<&mut crate::worker::loop_types::ActiveEmbeddingsGeneration, WorkerControlError> {
     let Some(active_request) = active_worker_request else {
         return Err(protocol_violation(

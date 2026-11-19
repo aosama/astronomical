@@ -9,7 +9,7 @@
 //! keeping those answers, and the gate refuses a head that changes more than
 //! one in twenty of them.
 
-use astronomical_decision_contract::OrderedJsonValue;
+use decision_contract::OrderedJsonValue;
 
 /// One check-set line: a state and its unlabelled questions.
 pub(super) struct CheckExample {

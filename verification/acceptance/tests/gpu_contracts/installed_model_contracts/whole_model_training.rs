@@ -25,22 +25,20 @@
 
 use std::path::Path;
 
-use astronomical_decision_contract::decision_adapters_file::DecisionAdapters;
-use astronomical_decision_contract::decision_training_job::{
+use decision_contract::decision_adapters_file::DecisionAdapters;
+use decision_contract::decision_training_job::{
     DecisionTrainingJob, DecisionTrainingOutcome, QuestionRole, TrainingExample, TrainingScope,
 };
-use astronomical_decision_contract::head_tuning_file::{HeadTuning, TunableHeadFamily};
-use astronomical_decision_contract::trained_tensors::{decision_adapters_of, head_tuning_of};
-use astronomical_decision_contract::{
-    HeadInputRequest, OrderedJsonValue, parse_system_one_questions,
-};
-use astronomical_decision_training::calibrated_model_folder::{
+use decision_contract::head_tuning_file::{HeadTuning, TunableHeadFamily};
+use decision_contract::trained_tensors::{decision_adapters_of, head_tuning_of};
+use decision_contract::{HeadInputRequest, OrderedJsonValue, parse_system_one_questions};
+use decision_training::calibrated_model_folder::{
     FolderAdditions, FolderCopyProgress, SourceModelFolder, write_calibrated_model_folder,
 };
-use astronomical_model_serving::{
+use model_serving::{
     ClefDecisionEngine, DecisionEngine, DecisionTrainingStep, KevDecisionEngine, LayaDecisionEngine,
 };
-use astronomical_test_harness::test_run::TestRunContext;
+use test_harness::test_run::TestRunContext;
 
 #[path = "../../support/romeo_and_juliet.rs"]
 #[allow(dead_code)]

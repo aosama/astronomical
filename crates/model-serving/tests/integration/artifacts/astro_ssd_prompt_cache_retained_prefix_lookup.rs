@@ -1,4 +1,4 @@
-use astronomical_model_serving::{AstroSsdPromptCacheBlockKey, AstroSsdPromptCachePrefixLookup};
+use model_serving::{AstroSsdPromptCacheBlockKey, AstroSsdPromptCachePrefixLookup};
 
 use super::frozen_ornith_1_0_fixtures::astro_ssd_prompt_cache_model_contract;
 

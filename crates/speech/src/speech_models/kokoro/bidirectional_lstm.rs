@@ -7,8 +7,8 @@
 //! halves the number of steps the graph holds. Gate order is PyTorch's:
 //! input, forget, cell, output.
 
-use astronomical_runtime_integration::MlxRuntime;
 use mlx_bridge::{MlxArray, MlxDtype};
+use runtime_integration::MlxRuntime;
 
 use crate::speech_models::checkpoint_tensors::CheckpointTensors;
 use crate::speech_models::speech_model_error::SpeechModelError;

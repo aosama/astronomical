@@ -10,7 +10,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
-use astronomical_ipc_protocol::{ProtocolError, RequestId};
+use ipc_protocol::{ProtocolError, RequestId};
 use tokio::sync::mpsc;
 use tokio::time::{Instant, timeout};
 

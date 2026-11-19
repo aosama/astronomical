@@ -42,7 +42,7 @@
 use crate::performance_throughput::decode_astro_expert_cache_experiment::{
     MeasuredShapeWindow, PAIRED_TRIAL_COUNT, run_paired_decode_astro_expert_cache_trials,
 };
-use astronomical_ipc_protocol::WorkerDecodeAstroExpertCachePolicy;
+use ipc_protocol::WorkerDecodeAstroExpertCachePolicy;
 
 use super::decode_astro_expert_cache_experiment::{
     report_attributed_policy_comparison, report_clean_policy_comparison,
@@ -413,7 +413,7 @@ async fn run_two_turn_streaming_journey(
     astro_ssd_prompt_cache_enabled: bool,
 ) -> TwoTurnEvidence {
     use astronomical_daemon::{ChatGenerationExecutor, GenerationPerformanceLog, WorkerHandle};
-    use astronomical_ipc_protocol::RequestId;
+    use ipc_protocol::RequestId;
     use tokio::time::timeout;
 
     let model_id = support::large_sparse_moe_streaming_model_id();

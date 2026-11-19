@@ -16,7 +16,7 @@
 
 use std::time::Duration;
 
-use astronomical_model_serving::machine_ceiling_from_physical_ram_bytes;
+use model_serving::machine_ceiling_from_physical_ram_bytes;
 use tokio::{process::Command, time::timeout};
 
 use super::error::WorkerStartupError;

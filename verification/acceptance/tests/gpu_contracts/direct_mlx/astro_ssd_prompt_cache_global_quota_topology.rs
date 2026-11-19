@@ -5,9 +5,7 @@
 
 use std::{fs, path::Path, time::UNIX_EPOCH};
 
-use astronomical_model_serving::{
-    AstroSsdPromptCacheDiskStore, AstroSsdPromptCacheDiskStoreConfig,
-};
+use model_serving::{AstroSsdPromptCacheDiskStore, AstroSsdPromptCacheDiskStoreConfig};
 
 use super::astro_ssd_prompt_cache_disk_store_support::*;
 use crate::common::qwen3_5_moe;

@@ -2,7 +2,7 @@
 //! events encode into the Responses SSE wire format.
 
 use crate::{ChatGenerationStreamEvent, OpenAiResponsesStreamEncoder};
-use astronomical_ipc_protocol::{ChatGenerationCompletionReason, ChatGenerationFailureReason};
+use ipc_protocol::{ChatGenerationCompletionReason, ChatGenerationFailureReason};
 
 #[test]
 fn should_emit_the_exact_fragmented_text_lifecycle_and_skip_prefill_telemetry() {
@@ -381,9 +381,7 @@ fn should_withhold_reasoning_items_but_keep_reasoning_usage_when_excluded() {
 }
 
 fn assert_no_response_id_fields(
-    encoded_events: &std::collections::VecDeque<
-        astronomical_rest_contract::OpenAiResponseStreamEvent,
-    >,
+    encoded_events: &std::collections::VecDeque<rest_contract::OpenAiResponseStreamEvent>,
 ) {
     for encoded_event in encoded_events {
         let event_document = serde_json::to_value(encoded_event).expect("event should serialize");

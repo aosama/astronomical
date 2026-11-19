@@ -1,7 +1,7 @@
 //! Sending examples to the daemon one at a time and collecting the answers,
 //! with a progress line every interval.
 
-use astronomical_decision_contract::{OrderedJsonValue, QuestionOutcome};
+use decision_contract::{OrderedJsonValue, QuestionOutcome};
 
 use super::decision_tool::{DecisionToolDependencies, DecisionToolError};
 use super::progress_reporting::TimedProgress;

@@ -2,12 +2,12 @@
 //! delta-math contracts live beside the owner in
 //! crates/model-primitives/src/performance_attribution.
 
-use astronomical_model_serving::MacosProcessIoError;
+use model_serving::MacosProcessIoError;
 
 #[cfg(target_os = "macos")]
 #[test]
 fn should_sample_current_macos_process_io() {
-    let process_io_snapshot = astronomical_model_serving::sample_current_process_io()
+    let process_io_snapshot = model_serving::sample_current_process_io()
         .expect("the current macOS process should expose resource usage");
 
     let unchanged_delta = process_io_snapshot
@@ -22,11 +22,10 @@ fn should_sample_current_macos_process_io() {
 fn should_sample_another_process_id_with_the_same_cumulative_counters() {
     let self_process_id = std::process::id();
 
-    let self_sampled = astronomical_model_serving::sample_current_process_io()
-        .expect("self-sampling should succeed on macOS");
-    let externally_sampled =
-        astronomical_model_serving::sample_process_io_for_process_id(self_process_id)
-            .expect("sampling this same process through its id should succeed");
+    let self_sampled =
+        model_serving::sample_current_process_io().expect("self-sampling should succeed on macOS");
+    let externally_sampled = model_serving::sample_process_io_for_process_id(self_process_id)
+        .expect("sampling this same process through its id should succeed");
 
     let equivalence_delta = externally_sampled
         .delta_since(self_sampled)
@@ -41,7 +40,7 @@ fn should_sample_another_process_id_with_the_same_cumulative_counters() {
 fn should_fail_typed_when_sampling_a_process_id_that_does_not_exist() {
     // Process id 0 is reserved for the kernel pager and is never a sampleable
     // user process; macOS reports it as an invalid identifier.
-    let sampling_error = astronomical_model_serving::sample_process_io_for_process_id(0)
+    let sampling_error = model_serving::sample_process_io_for_process_id(0)
         .expect_err("the reserved kernel process id must not be sampleable");
 
     assert!(matches!(

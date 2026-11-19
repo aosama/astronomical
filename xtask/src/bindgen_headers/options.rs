@@ -2,7 +2,7 @@
 //! flag-for-flag with the retired shell entry point so documented commands
 //! and CI steps keep working.
 
-use astronomical_native_identity::NativeBuildProfile;
+use native_identity::NativeBuildProfile;
 
 pub(crate) const PROVISION_USAGE: &str = "usage: cargo xtask provision-bindgen-headers [--cache-dir ABSOLUTE_PATH] [--native-build-store-dir PATH] [--manifest FILE] [--patch-list FILE] [--profile core|core+memory-contract] [--target TARGET_TRIPLE] [--verify-headers | --print-patch-list]";
 

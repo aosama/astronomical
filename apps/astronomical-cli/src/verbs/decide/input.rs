@@ -7,7 +7,7 @@
 
 use std::io::Read;
 
-use astronomical_decision_contract::{OrderedJsonMember, OrderedJsonValue};
+use decision_contract::{OrderedJsonMember, OrderedJsonValue};
 
 use super::{DecideArguments, DecideError, DecideQuestionsSource};
 

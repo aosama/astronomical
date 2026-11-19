@@ -6,7 +6,7 @@
 
 use std::path::Path;
 
-use astronomical_ipc_protocol::EmbeddingsFailureReason;
+use ipc_protocol::EmbeddingsFailureReason;
 use thiserror::Error;
 
 use crate::modernbert::configuration::ModernBertConfiguration;

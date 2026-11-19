@@ -1,6 +1,6 @@
 use std::fs;
 
-use astronomical_config::{ModelFamilyClassificationError, classify_model_directory};
+use config::{ModelFamilyClassificationError, classify_model_directory};
 
 #[test]
 fn should_reject_malformed_duplicate_or_oversized_pipeline_family_markers() {

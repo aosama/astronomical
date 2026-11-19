@@ -126,5 +126,5 @@ fn extract_text_from_openai_content_value(content_json_value: &Value) -> Option<
 }
 
 fn sha256_hex(bytes: &[u8]) -> String {
-    astronomical_lowercase_hex::encode_lowercase_hex(&Sha256::digest(bytes))
+    lowercase_hex::encode_lowercase_hex(&Sha256::digest(bytes))
 }

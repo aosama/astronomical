@@ -19,25 +19,19 @@
 
 use std::path::Path;
 
-use astronomical_config::ModelFamily;
-use astronomical_decision_contract::calibration_file::{
+use config::ModelFamily;
+use decision_contract::calibration_file::{
     CalibrationOverride, DECISION_CALIBRATION_FILE_NAME, parse_calibration_document,
 };
-use astronomical_decision_contract::decision_adapters_file::DecisionAdapters;
-use astronomical_decision_contract::decision_training_job::{
-    DecisionTrainingOutcome, TrainingScope,
-};
-use astronomical_decision_contract::head_tuning_file::{HeadTuning, TunableHeadFamily};
-use astronomical_decision_contract::trained_tensors::{
-    UnpairedAddOns, decision_adapters_of, head_tuning_of,
-};
-use astronomical_decision_contract::training_record::TrainingRecord;
-use astronomical_decision_training::calibrated_model_folder::FolderAdditions;
-use astronomical_decision_training::labelled_example::{LabelledExample, labelled_data_counts};
-use astronomical_decision_training::training_split::SplitPart;
-use astronomical_decision_training::training_verdict::{
-    JudgedOn, ScoredPair, TrainingVerdict, judge_training,
-};
+use decision_contract::decision_adapters_file::DecisionAdapters;
+use decision_contract::decision_training_job::{DecisionTrainingOutcome, TrainingScope};
+use decision_contract::head_tuning_file::{HeadTuning, TunableHeadFamily};
+use decision_contract::trained_tensors::{UnpairedAddOns, decision_adapters_of, head_tuning_of};
+use decision_contract::training_record::TrainingRecord;
+use decision_training::calibrated_model_folder::FolderAdditions;
+use decision_training::labelled_example::{LabelledExample, labelled_data_counts};
+use decision_training::training_split::SplitPart;
+use decision_training::training_verdict::{JudgedOn, ScoredPair, TrainingVerdict, judge_training};
 
 use super::check_set::built_in_check_examples;
 use super::decision_arguments::DecisionToolArguments;
@@ -364,9 +358,9 @@ fn merged_calibration(
 ) -> Option<CalibrationOverride> {
     let mut merged = earlier_calibration.clone();
     for kind in [
-        astronomical_decision_contract::DecisionQuestionKind::Choice,
-        astronomical_decision_contract::DecisionQuestionKind::Score,
-        astronomical_decision_contract::DecisionQuestionKind::Noul,
+        decision_contract::DecisionQuestionKind::Choice,
+        decision_contract::DecisionQuestionKind::Score,
+        decision_contract::DecisionQuestionKind::Noul,
     ] {
         if let Some(kind_calibration) = trained_calibration.kind_calibration(kind) {
             merged.set_kind_calibration(kind, kind_calibration.clone());

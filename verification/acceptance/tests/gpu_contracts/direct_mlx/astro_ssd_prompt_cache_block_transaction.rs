@@ -6,7 +6,7 @@
 
 use std::{collections::HashMap, fs, path::Path};
 
-use astronomical_model_serving::AstroSsdPromptCacheDiskStoreError;
+use model_serving::AstroSsdPromptCacheDiskStoreError;
 
 use serde_json::Value;
 
@@ -222,7 +222,7 @@ async fn should_keep_state_file_metadata_bounded_to_the_storage_contract() {
 }
 
 fn replace_one_tensor_with_invalid_shape(
-    runtime: &astronomical_runtime_integration::MlxRuntime,
+    runtime: &runtime_integration::MlxRuntime,
     tensors: &mut HashMap<String, MlxArray>,
 ) {
     let tensor_name = tensors

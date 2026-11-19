@@ -5,7 +5,7 @@
 //! active request. Model-swap waiting delegates here so both loops enforce the
 //! same protocol rules instead of maintaining competing event allowlists.
 
-use astronomical_ipc_protocol::WorkerEvent;
+use ipc_protocol::WorkerEvent;
 use std::sync::{Arc, RwLock};
 
 use crate::worker::request_event_dispatch::{

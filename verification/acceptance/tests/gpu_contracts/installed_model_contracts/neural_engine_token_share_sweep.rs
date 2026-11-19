@@ -6,9 +6,9 @@
 
 use std::time::Instant;
 
-use astronomical_config::AstronomicalConfig;
-use astronomical_ipc_protocol::NeuralEnginePrefillStatus;
-use astronomical_model_serving::Qwen3_5ResidentModel;
+use config::AstronomicalConfig;
+use ipc_protocol::NeuralEnginePrefillStatus;
+use model_serving::Qwen3_5ResidentModel;
 use serial_test::serial;
 
 use super::neural_engine_mlp_prefill::{load_named_dense_model, prefill_only_tokens_per_second};

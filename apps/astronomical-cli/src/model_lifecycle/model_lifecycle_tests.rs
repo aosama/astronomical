@@ -1,14 +1,14 @@
 //! Unit tests for `crate::model_lifecycle`: catalog matching, download
 //! progress rendering, and unknown-model guidance.
 
-use astronomical_ipc_protocol::{DaemonCatalogEntry, DaemonDownloadJob, DaemonListedModel};
+use ipc_protocol::{DaemonCatalogEntry, DaemonDownloadJob, DaemonListedModel};
 
 use crate::model_lifecycle::{self, RequiredCapability};
 
 fn catalog_entry(huggingface_id: &str, requestable_model_id: Option<&str>) -> DaemonCatalogEntry {
     DaemonCatalogEntry {
         huggingface_id: huggingface_id.to_owned(),
-        model_id: astronomical_config::leaf_model_id(huggingface_id).to_owned(),
+        model_id: config::leaf_model_id(huggingface_id).to_owned(),
         family: "qwen".to_owned(),
         approximate_size_bytes: 1_000_000_000,
         ready_on_this_mac: false,

@@ -6,7 +6,7 @@ use std::time::Duration;
 use crate::{
     EngineBackedWorker, EnginePlacement, FLUX2_KLEIN_OFFICIAL_MODEL_ID, WorkerRuntimeError,
 };
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     ImageGenerationFailureReason, MlxMemorySnapshotSource, RequestId, WorkerCommand, WorkerEvent,
     WorkerLoadedModelRuntimeConfiguration, WorkerRuntimeFeatureConfiguration,
 };
@@ -587,8 +587,8 @@ async fn should_keep_a_floor_served_model_at_its_floor_when_the_user_asks_for_th
 /// Swaps in the next scripted chat model and waits for its announcement, by
 /// which point any raise to its floor has already happened.
 async fn swap_in_scripted_chat_model<ReadTransport, WriteTransport>(
-    events: &mut astronomical_ipc_protocol::ProtocolReader<ReadTransport>,
-    commands: &mut astronomical_ipc_protocol::ProtocolWriter<WriteTransport>,
+    events: &mut ipc_protocol::ProtocolReader<ReadTransport>,
+    commands: &mut ipc_protocol::ProtocolWriter<WriteTransport>,
 ) where
     ReadTransport: tokio::io::AsyncRead + Unpin,
     WriteTransport: tokio::io::AsyncWrite + Unpin,

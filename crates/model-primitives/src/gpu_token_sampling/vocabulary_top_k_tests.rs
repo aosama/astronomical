@@ -1,7 +1,7 @@
 //! The top-k kernel against a full sort on the host.
 
-use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use mlx_bridge::MlxDtype;
+use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use serial_test::serial;
 
 use super::vocabulary_top_k;

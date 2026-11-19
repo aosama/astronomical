@@ -3,7 +3,7 @@
 use std::net::TcpListener;
 use std::time::Duration;
 
-use astronomical_config::AstronomicalRuntimeInstance;
+use config::AstronomicalRuntimeInstance;
 
 use super::*;
 

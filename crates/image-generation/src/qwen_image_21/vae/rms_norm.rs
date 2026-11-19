@@ -8,7 +8,7 @@
 //! encoder's zero-centered RMSNorm (`qwen_image_21::norm` on the CPU, `mlx_math::fp32_zero_center_rms_norm`
 //! on the runtime path), which divides by the root-mean-square and scales by `weight + 1`.
 
-use astronomical_runtime_integration::{MlxRuntime, MlxSafetensors};
+use runtime_integration::{MlxRuntime, MlxSafetensors};
 
 use super::QwenImage21VaeError;
 use super::tensor_shape;

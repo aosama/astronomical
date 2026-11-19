@@ -9,7 +9,7 @@
 
 use std::collections::BTreeSet;
 
-use astronomical_config::{
+use config::{
     FLUX2_KLEIN_MLX_4BIT_TRANSFORMER_INDEX_FILE_NAME, KOKORO_WEIGHTS_FILE_NAME,
     MINIMUM_SERVABLE_CONTEXT_WINDOW_TOKENS, ModelFamily, PHONON_DEFAULT_VOICE_FILE_NAME,
     PHONON_TOKENIZER_FILE_NAME, PHONON_WEIGHTS_FILE_NAME, classify_mflux_transformer_index_bytes,

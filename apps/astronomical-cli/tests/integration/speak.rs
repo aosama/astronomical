@@ -5,9 +5,9 @@
 use std::path::PathBuf;
 
 use astronomical_cli::{SpeakArguments, SpeakDependencies, SpeakError};
-use astronomical_config::AstronomicalRuntimeInstance;
-use astronomical_ipc_protocol::DaemonRequest;
-use astronomical_speech_contract::SpeechFailure;
+use config::AstronomicalRuntimeInstance;
+use ipc_protocol::DaemonRequest;
+use speech_contract::SpeechFailure;
 use tokio::time::timeout;
 
 use crate::integration::support::environment::{
@@ -18,7 +18,7 @@ use crate::integration::support::stub_daemon::{
 };
 
 /// The built-in speech model's id, which an unflagged run must ask for.
-const BUILTIN_SPEECH_MODEL_ID: &str = astronomical_config::BUILTIN_DEFAULT_SPEECH_MODEL_ID;
+const BUILTIN_SPEECH_MODEL_ID: &str = config::BUILTIN_DEFAULT_SPEECH_MODEL_ID;
 const CHAT_MODEL_ID: &str = "test/local-chatter";
 const ROMEO_LINE: &str = "But soft, what light through yonder window breaks?";
 

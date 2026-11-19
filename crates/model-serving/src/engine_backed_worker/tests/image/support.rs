@@ -10,14 +10,14 @@ use crate::{
     MlxActiveMemoryBreakdown, MlxMemoryLimitAdjustment, MlxMemoryTelemetry, ModelFactory,
     ModelFactoryRuntime, WorkerRuntimeError,
 };
-use astronomical_ipc_protocol::{
+use image::ImageEncoder;
+use ipc_protocol::{
     GeneratedImage, ImageGenerationCapabilities, ImageGenerationCommand,
     ImageGenerationFailureReason, ImageGenerationPhase, ImageGenerationResultMetadata,
     ImageGenerationSettings, MAX_IPC_FRAME_BYTES, MlxMemorySnapshotSource, ProtocolReader,
     ProtocolWriter, RequestId, WorkerCommand, WorkerEvent, WorkerFlux2KleinModelConfiguration,
     WorkerImageGenerationModelFamily, WorkerModelConfiguration,
 };
-use image::ImageEncoder;
 use tokio::io::{AsyncWrite, duplex, split};
 use tokio::task::JoinHandle;
 use tokio::time::timeout;
@@ -175,7 +175,7 @@ impl ImageGenerationEngine for ScriptedImageEngine {
             requested_mlx_memory_ceiling_bytes,
             requested_mlx_memory_ceiling_bytes,
             1_000,
-            astronomical_ipc_protocol::ExpertMemoryMode::Resident,
+            ipc_protocol::ExpertMemoryMode::Resident,
             Some(finalized_memory_telemetry()),
         ))
     }

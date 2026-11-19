@@ -3,8 +3,8 @@
 //! The Qwen 3.5 backbone lists its targets and decision training fills them,
 //! so the type sits here, below both (issue #2340).
 
-use astronomical_decision_contract::DecisionFailure;
-use astronomical_runtime_integration::MlxSafetensors;
+use decision_contract::DecisionFailure;
+use runtime_integration::MlxSafetensors;
 
 /// A linear layer that may carry an add-on, with its widths.
 #[derive(Clone, Debug, Eq, PartialEq)]

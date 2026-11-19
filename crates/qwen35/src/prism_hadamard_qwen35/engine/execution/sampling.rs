@@ -140,7 +140,7 @@ fn structured_logit_bias_values_if_visible(
 
 #[cfg(test)]
 mod tests {
-    use astronomical_ipc_protocol::StructuredGenerationConstraint;
+    use ipc_protocol::StructuredGenerationConstraint;
 
     use super::{SamplingPlan, sampling_plan, structured_logit_bias_values_if_visible};
     use crate::Qwen3_5SamplingStrategy;

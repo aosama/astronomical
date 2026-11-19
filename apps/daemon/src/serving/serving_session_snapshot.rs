@@ -1,4 +1,4 @@
-use astronomical_ipc_protocol::WorkerPromptWorkReuse;
+use ipc_protocol::WorkerPromptWorkReuse;
 
 use super::neural_engine_session_totals::NeuralEngineSessionTotals;
 

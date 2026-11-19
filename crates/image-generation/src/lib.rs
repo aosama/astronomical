@@ -5,7 +5,7 @@
 //! The families sit beside the other model families rather than inside the
 //! serving crate, so an image change rebuilds and retests only this crate.
 //! The edge is one way: this crate never depends on
-//! `astronomical-model-serving`, which `cargo xtask check-architecture`
+//! `model-serving`, which `cargo xtask check-architecture`
 //! enforces; the worker there drives these engines through the seam.
 //!
 //! The serving crate re-exports this crate's root with a glob, and a name it

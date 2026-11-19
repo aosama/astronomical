@@ -17,11 +17,11 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use astronomical_model_serving::{
+use model_serving::{
     build_quantized_expert_layer_plan, build_quantized_expert_page_manifest_from_plan,
     load_quantized_expert_page,
 };
-use astronomical_runtime_integration::{MlxRuntime, PositionalFileReadMetrics};
+use runtime_integration::{MlxRuntime, PositionalFileReadMetrics};
 use serial_test::serial;
 
 use super::large_sparse_moe_fixture::{
@@ -172,8 +172,7 @@ fn load_page_tensors_for_hold(
         .evaluate_arrays(&array_references)
         .expect("the held page should materialize");
     for array in array_references {
-        astronomical_mlx_c_fork::detach_array(&array)
-            .expect("the held page should detach from its lazy graph");
+        mlx_c_fork::detach_array(&array).expect("the held page should detach from its lazy graph");
     }
     loaded_tensors
 }

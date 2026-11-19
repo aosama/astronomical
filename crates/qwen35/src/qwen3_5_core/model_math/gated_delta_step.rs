@@ -1,5 +1,5 @@
-use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 use mlx_bridge::{MlxArray, MlxDtype};
+use runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use super::gated_delta_input_rules::{
     GatedDeltaDtypeViolation, GatedDeltaHeadGeometry, check_gated_delta_dtypes,

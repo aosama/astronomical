@@ -3,7 +3,7 @@
 //! found are never evicted for them, and a fetch that cannot complete leaves
 //! the table without the experts it could not read.
 
-use astronomical_runtime_integration::MlxRuntime;
+use runtime_integration::MlxRuntime;
 use serial_test::serial;
 
 use super::*;
@@ -31,8 +31,7 @@ fn tagged_page(runtime: &MlxRuntime, expert_ids: &[usize]) -> Qwen3_5PagedExpert
         );
     }
     let mut table_arrays = table_arrays.into_iter();
-    let no_rotation =
-        astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookRotation::NoRotation;
+    let no_rotation = jangtq2_qwen35::configuration::Jangtq2CodebookRotation::NoRotation;
     Qwen3_5PagedExpertWeights {
         gate_projection: next_projection(&mut table_arrays),
         up_projection: next_projection(&mut table_arrays),

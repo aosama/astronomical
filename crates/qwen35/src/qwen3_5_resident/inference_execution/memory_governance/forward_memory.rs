@@ -8,7 +8,7 @@
 //! streaming engine. After the forward the engine reports what MLX
 //! measured, which is where the MLX working-buffer figure comes from.
 
-use astronomical_memory_policy::ledger::{
+use memory_policy::ledger::{
     HeldMemory, LedgerAccounts, LedgerPhase, MeasuredStep, MemoryGovernor,
 };
 

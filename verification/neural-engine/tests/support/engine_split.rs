@@ -3,10 +3,10 @@
 
 use std::time::{Duration, Instant};
 
-use astronomical_neural_engine::core_ml::{ComputePlacement, CoreMlComputeUnits, CoreMlProgram};
 use astronomical_neural_engine_research::numerical_comparison::compare_values;
 use astronomical_neural_engine_research::timing_summary::TimingSummary;
-use astronomical_runtime_integration::MlxRuntime;
+use neural_engine::core_ml::{ComputePlacement, CoreMlComputeUnits, CoreMlProgram};
+use runtime_integration::MlxRuntime;
 
 use super::measured_projection::{
     MEASURED_CALL_COUNT, MINIMUM_WARM_UP_CALL_COUNT, MINIMUM_WARM_UP_DURATION, report_progress,
@@ -16,7 +16,7 @@ use super::projection_fixture::ProjectionFixture;
 use crate::support::journey_constants::NEURAL_ENGINE_FINISH_TIMEOUT;
 use crate::support::mlx_projection::build_projection;
 use crate::support::program_loading::load_ml_program;
-use astronomical_neural_engine::documents::projection::MlProgramWeights;
+use neural_engine::documents::projection::MlProgramWeights;
 
 pub(crate) enum MeasuredEngines {
     GpuAlone,

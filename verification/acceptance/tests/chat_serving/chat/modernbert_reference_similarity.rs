@@ -52,7 +52,7 @@ async fn run_reference_similarity_journey() {
     // ── discovery ──────────────────────────────────────────────
     let selected_model = configured_modernbert_model();
     let maximum_input_tokens = match &selected_model.capabilities {
-        astronomical_config::ModelCapabilities::Embeddings(cap) => cap.max_input_tokens,
+        config::ModelCapabilities::Embeddings(cap) => cap.max_input_tokens,
         other => panic!("expected embedding capability, got {other:?}"),
     };
     eprintln!(
@@ -188,7 +188,7 @@ async fn run_reference_similarity_journey() {
 
 // ── helpers (copied/adapted from openai_rest + embeddings_rest) ──
 
-fn configured_modernbert_model() -> astronomical_config::DiscoveredModel {
+fn configured_modernbert_model() -> config::DiscoveredModel {
     let discovered_models = crate::support::configured_discovered_models();
     let model_id = "nomicai-modernbert-embed-base-8bit";
     let selected_model = discovered_models

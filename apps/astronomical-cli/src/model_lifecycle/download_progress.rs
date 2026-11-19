@@ -15,7 +15,7 @@
 use std::collections::VecDeque;
 use std::time::Duration;
 
-use astronomical_ipc_protocol::DaemonDownloadJob;
+use ipc_protocol::DaemonDownloadJob;
 
 use super::render_download_progress;
 

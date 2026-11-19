@@ -1,5 +1,5 @@
 [package]
-name = "astronomical-native-build-tool"
+name = "native-build-tool"
 description = "Builds Astronomical's pinned native runtime ahead of Cargo so native and Rust compilation never overlap"
 edition.workspace = true
 license.workspace = true
@@ -15,4 +15,4 @@ workspace = true
 # The orchestration this tool runs: CMake invocation, store, progress (the
 # modules' single compilation home; issue #1628). Its tree is exactly fs4,
 # sha2, and native-identity, so the tool stays cheap to build.
-astronomical-native-build-orchestration = { path = "../native-build-orchestration" }
+native-build-orchestration = { path = "../native-build-orchestration" }

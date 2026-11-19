@@ -34,6 +34,6 @@ pub mod frozen_config_test_support;
 pub mod model;
 pub mod model_math;
 pub mod quantizations;
-pub use astronomical_model_primitives::route_observation;
+pub use model_primitives::route_observation;
 pub mod text;
 pub mod vision;

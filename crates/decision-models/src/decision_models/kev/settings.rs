@@ -3,7 +3,7 @@
 
 use std::path::Path;
 
-use astronomical_decision_contract::DecisionFailure;
+use decision_contract::DecisionFailure;
 
 /// The settings file that marks a folder as a Kev decision model.
 pub const KEV_SETTINGS_FILE_NAME: &str = "kev_decision.json";

@@ -1,5 +1,5 @@
 [package]
-name = "astronomical-image-generation"
+name = "image-generation"
 edition.workspace = true
 license.workspace = true
 publish.workspace = true
@@ -12,18 +12,18 @@ workspace = true
 
 [features]
 default = []
-direct-mlx = ["dep:astronomical-runtime-integration", "dep:mlx-bridge", "astronomical-model-primitives/direct-mlx", "astronomical-artifact-validation/direct-mlx"]
+direct-mlx = ["dep:runtime-integration", "dep:mlx-bridge", "model-primitives/direct-mlx", "artifact-validation/direct-mlx"]
 
 # The image generation families (FLUX.2 klein, Qwen-Image-2.1) and the
 # worker-facing seam they implement (issue #2340). One-way edge: nothing here
-# may depend on astronomical-model-serving; `cargo xtask check-architecture`
+# may depend on model-serving; `cargo xtask check-architecture`
 # enforces it.
 [dependencies]
-astronomical-artifact-validation = { path = "../artifact-validation" }
-astronomical-model-primitives = { path = "../model-primitives" }
-astronomical-ipc-protocol = { path = "../ipc-protocol" }
-astronomical-memory-policy = { path = "../memory-policy" }
-astronomical-runtime-integration = { path = "../runtime-integration", features = ["mlx"], optional = true }
+artifact-validation = { path = "../artifact-validation" }
+model-primitives = { path = "../model-primitives" }
+ipc-protocol = { path = "../ipc-protocol" }
+memory-policy = { path = "../memory-policy" }
+runtime-integration = { path = "../runtime-integration", features = ["mlx"], optional = true }
 mlx-bridge = { workspace = true, optional = true }
 image.workspace = true
 safetensors.workspace = true
@@ -34,7 +34,7 @@ tokenizers.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
-astronomical-test-harness = { path = "../test-harness", features = ["test-fixtures"] }
+test-harness = { path = "../test-harness", features = ["test-fixtures"] }
 # The GPU tests sample the process-global MLX allocator, so they serialize.
 serial_test.workspace = true
 tempfile = "=3.27.0"

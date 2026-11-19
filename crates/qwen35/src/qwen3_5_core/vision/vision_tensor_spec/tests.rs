@@ -424,7 +424,7 @@ fn should_reject_codebook_quantized_module_during_block_profile_append() {
         "vision_tower.blocks.0.attn.qkv".to_owned(),
         ModuleQuantizationProfile::jangtq2_codebook(
             2,
-            astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookRotation::Hadamard32,
+            jangtq2_qwen35::configuration::Jangtq2CodebookRotation::Hadamard32,
         ),
     );
     let profile_result = append_transformer_block_tensor_profiles(
@@ -510,7 +510,7 @@ fn should_reject_codebook_quantized_merger_module() {
         "vision_tower.merger.linear_fc2".to_owned(),
         ModuleQuantizationProfile::jangtq2_codebook(
             2,
-            astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookRotation::NoRotation,
+            jangtq2_qwen35::configuration::Jangtq2CodebookRotation::NoRotation,
         ),
     );
     let profile_result = append_merger_tensor_profiles(

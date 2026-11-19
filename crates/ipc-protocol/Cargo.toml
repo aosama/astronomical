@@ -1,5 +1,5 @@
 [package]
-name = "astronomical-ipc-protocol"
+name = "ipc-protocol"
 edition.workspace = true
 license.workspace = true
 publish.workspace = true
@@ -15,12 +15,12 @@ workspace = true
 # request and its outcome are made of. It is pure Rust with no
 # graphics-processor dependency, so carrying its types here costs the daemon
 # and the command-line tool nothing extra to build.
-astronomical-decision-contract = { path = "../decision-contract" }
-astronomical-lowercase-hex = { path = "../lowercase-hex" }
-astronomical-rest-contract = { path = "../../crates/rest-contract" }
+decision-contract = { path = "../decision-contract" }
+lowercase-hex = { path = "../lowercase-hex" }
+rest-contract = { path = "../../crates/rest-contract" }
 # The speech request, its failures and its voice-name rule, shared with the
 # worker and the daemon. Pure Rust, like the decision contract.
-astronomical-speech-contract = { path = "../speech-contract" }
+speech-contract = { path = "../speech-contract" }
 base64.workspace = true
 bytes.workspace = true
 crc32fast.workspace = true

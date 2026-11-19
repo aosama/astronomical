@@ -7,15 +7,13 @@
 //! memory-ceiling sampling (`gpu_memory`), rolling diagnostics (`logging`), and
 //! the Metal wired-residency claim (`wired_claim`).
 
-use astronomical_config::AstroSsdPromptCacheConfig;
-use astronomical_ipc_protocol::{
+use config::AstroSsdPromptCacheConfig;
+use ipc_protocol::{
     ProtocolReader, ProtocolWriter, WorkerCommand, WorkerRuntimeFeatureConfiguration,
     WorkerStartupConfiguration,
 };
-use astronomical_model_serving::effective_mlx_memory_ceiling_bytes;
-use astronomical_model_serving::{
-    effective_mlx_memory_ceiling_after_wired_claim, floor_raise_limit_bytes,
-};
+use model_serving::effective_mlx_memory_ceiling_bytes;
+use model_serving::{effective_mlx_memory_ceiling_after_wired_claim, floor_raise_limit_bytes};
 use tokio::io::{AsyncRead, AsyncWrite};
 
 pub(crate) mod error;

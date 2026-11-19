@@ -3,7 +3,7 @@
 use serial_test::serial;
 
 use super::*;
-use astronomical_model_primitives::synthetic_weights_test_support::initialize_test_runtime;
+use model_primitives::synthetic_weights_test_support::initialize_test_runtime;
 
 #[test]
 fn should_number_each_batch_option_by_its_dataset_row_and_batch_question() {

@@ -7,7 +7,7 @@
 //! the arithmetic identical to the single-page path, so mixed serving cannot
 //! change generated tokens through floating-point reassociation.
 
-use astronomical_runtime_integration::MlxRuntime;
+use runtime_integration::MlxRuntime;
 
 use super::paged_execution::RoutedExpertAssignmentOutputs;
 use crate::expert_paging::ExpertPageRoutePartition;

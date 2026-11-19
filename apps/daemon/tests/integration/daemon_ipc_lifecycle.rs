@@ -1,9 +1,9 @@
 //! Daemon IPC service lifecycle journeys: handshake identity, socket file
 //! hygiene, and single-listener enforcement on the instance socket.
 
-use astronomical_config::{AstronomicalInstancePaths, AstronomicalRuntimeInstance};
 use astronomical_daemon::DaemonIpcService;
-use astronomical_ipc_protocol::{
+use config::{AstronomicalInstancePaths, AstronomicalRuntimeInstance};
+use ipc_protocol::{
     DAEMON_APPLICATION_NAME, DAEMON_PROTOCOL_VERSION, DaemonIpcClient, DaemonRequest,
     DaemonResponse,
 };

@@ -2,7 +2,7 @@
 //! target model, dispatches one embeddings command to the worker executor,
 //! and answers with a single terminal frame.
 
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     DaemonResponse, DaemonTransportError, EmbeddingEncodingFormat, EmbeddingsCommand,
     EmbeddingsFailureReason, RequestId, StreamingResponseWriter,
 };

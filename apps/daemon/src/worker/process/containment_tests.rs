@@ -1,6 +1,6 @@
 use std::sync::{Arc, RwLock};
 
-use astronomical_ipc_protocol::{NeuralEnginePrefillStatus, RequestId, WorkerEvent};
+use ipc_protocol::{NeuralEnginePrefillStatus, RequestId, WorkerEvent};
 
 use super::{CancellationEventReaction, is_progress_of_request, react_to_cancellation_event};
 use crate::worker::health::{WorkerHealthSnapshot, WorkerHealthStatus};
@@ -79,8 +79,8 @@ fn should_count_a_chunk_that_finishes_during_a_cancellation() {
     let reaction = react_to_cancellation_event(
         &health_snapshot,
         WorkerEvent::NeuralEngineChunkFinished {
-            report: astronomical_ipc_protocol::NeuralEngineChunkReport {
-                placement: astronomical_ipc_protocol::NeuralEngineChunkPlacement::BothEngines,
+            report: ipc_protocol::NeuralEngineChunkReport {
+                placement: ipc_protocol::NeuralEngineChunkPlacement::BothEngines,
                 chunk_token_count: 2_048,
                 neural_engine_token_count: 960,
                 elapsed_millis: 350,
@@ -129,8 +129,7 @@ fn idle_health_snapshot() -> Arc<RwLock<WorkerHealthSnapshot>> {
 fn training_progress_of(request_number: u64) -> WorkerEvent {
     WorkerEvent::DecisionTrainingProgress {
         request_id: RequestId::new(request_number),
-        stage:
-            astronomical_decision_contract::decision_training_job::DecisionTrainingStage::Training,
+        stage: decision_contract::decision_training_job::DecisionTrainingStage::Training,
         completed: 3,
         total: 36,
     }
@@ -144,7 +143,7 @@ fn should_drain_a_cancelled_trainings_progress_and_failure_then_take_its_finaliz
         training_progress_of(7),
         WorkerEvent::DecisionsFailed {
             request_id: cancelled_request,
-            reason: astronomical_decision_contract::DecisionFailure::invalid_request(
+            reason: decision_contract::DecisionFailure::invalid_request(
                 "the training was cancelled",
             ),
         },

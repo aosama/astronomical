@@ -17,10 +17,10 @@
 
 use std::time::{Duration, Instant};
 
-use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
-use astronomical_test_harness::test_run::TestRunContext;
 use mlx_bridge::{MlxArray, MlxDtype};
+use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use serial_test::serial;
+use test_harness::test_run::TestRunContext;
 
 /// The plateau the incident session sat at through both degraded decodes.
 const INCIDENT_ACTIVE_MEMORY_PLATEAU_BYTES: u64 = 36_827_991_686;

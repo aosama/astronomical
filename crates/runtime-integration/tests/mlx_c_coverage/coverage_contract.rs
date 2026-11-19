@@ -31,13 +31,13 @@ fn resolve_header_directory() -> Result<PathBuf, String> {
         .canonicalize()
         .map_err(|error| format!("repository root resolution failed: {error}"))?;
     // Override-free by construction, mirroring the build script discipline.
-    let identity_request = astronomical_native_identity::FingerprintRequest {
+    let identity_request = native_identity::FingerprintRequest {
         repository_root: &repository_root,
-        profile: astronomical_native_identity::NativeBuildProfile::Core,
-        scope: astronomical_native_identity::IdentityScope::SourceOnly,
-        overrides: astronomical_native_identity::probes::ToolchainOverrides::none(),
+        profile: native_identity::NativeBuildProfile::Core,
+        scope: native_identity::IdentityScope::SourceOnly,
+        overrides: native_identity::probes::ToolchainOverrides::none(),
     };
-    let identity = astronomical_native_identity::native_build_identity(&identity_request)
+    let identity = native_identity::native_build_identity(&identity_request)
         .map_err(|error| format!("native identity fingerprint failed: {error}"))?;
     let astro_native_build_cache_directory =
         std::env::var_os("ASTRONOMICAL_NATIVE_DEPENDENCY_CACHE_DIR")
@@ -90,14 +90,14 @@ fn parse_pinned_surface(header_directory: &std::path::Path) -> Result<HeaderSurf
 
 /// The bridge inventory the published stock crate emitted at build time,
 /// merged with the Astronomical fork symbols bridged by
-/// `astronomical-mlx-c-fork` — the provisioned patched headers declare the
+/// `mlx-c-fork` — the provisioned patched headers declare the
 /// fork additions, so the completeness proof must span both crates.
 fn compiled_bridge_inventory() -> BridgeInventory {
     BridgeInventory {
         functions: mlx_bridge::raw::BRIDGED_FUNCTIONS
             .iter()
             .copied()
-            .chain(astronomical_mlx_c_fork::FORK_BRIDGED_FUNCTIONS)
+            .chain(mlx_c_fork::FORK_BRIDGED_FUNCTIONS)
             .map(str::to_owned)
             .collect(),
         types: mlx_bridge::raw::BRIDGED_TYPES
@@ -211,7 +211,7 @@ fn should_keep_the_committed_coverage_inventory_current() {
     let rendered_inventory = render_inventory(&surface, &bridged);
 
     let artifact_path = inventory_artifact_path();
-    if let Some(output_path) = astronomical_test_harness::test_run::TestRunContext::current()
+    if let Some(output_path) = test_harness::test_run::TestRunContext::current()
         .configuration
         .coverage_inventory_output
     {

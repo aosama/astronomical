@@ -7,14 +7,14 @@
 
 use std::path::{Path, PathBuf};
 
-use astronomical_model_serving::{
+use model_serving::{
     QuantizedExpertLayerPlan, Qwen3_5ArtifactValidator, ValidatedQwen3_5Artifact,
     build_quantized_expert_page_manifest_from_plan, expert_layer_plans_for_validated_artifact,
     load_quantized_expert_page, model_memory_geometry_from_validated_artifact,
 };
-use astronomical_runtime_integration::MlxRuntime;
-use astronomical_test_harness::test_run::TestRunContext;
+use runtime_integration::MlxRuntime;
 use serial_test::serial;
+use test_harness::test_run::TestRunContext;
 
 use super::large_sparse_moe_fixture::probe_runtime;
 

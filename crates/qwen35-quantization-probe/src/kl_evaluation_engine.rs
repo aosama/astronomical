@@ -8,12 +8,12 @@
 
 use std::path::Path;
 
-use astronomical_quantization::error::QuantizationError;
-use astronomical_quantization::evaluation::{KlDivergenceEngine, KlEvaluationRequest};
-use astronomical_quantization::progress::{ProgressReporter, StageProgressTracker};
-use astronomical_quantization::sensitivity::{CalibrationForwardSample, SensitivityProbeModel};
-use astronomical_runtime_integration::MlxMemoryLimits;
 use mlx_bridge::MlxArray;
+use quantization::error::QuantizationError;
+use quantization::evaluation::{KlDivergenceEngine, KlEvaluationRequest};
+use quantization::progress::{ProgressReporter, StageProgressTracker};
+use quantization::sensitivity::{CalibrationForwardSample, SensitivityProbeModel};
+use runtime_integration::MlxMemoryLimits;
 
 use super::qwen3_5_probe::{Qwen3_5SensitivityProbe, load_qwen3_5_probe_model};
 

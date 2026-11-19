@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use astronomical_test_harness::test_run::{TestRunConfiguration, TestRunContext};
+use test_harness::test_run::{TestRunConfiguration, TestRunContext};
 
 use crate::process_signals::SignalPipe;
 use arguments::{TestRunRequest, TestTarget};
@@ -54,7 +54,7 @@ pub(crate) fn refresh_coverage_inventory(repository_root: &Path, arguments: &[St
         BUILD_BUDGET.as_secs()
     );
     let request = TestRunRequest {
-        package: "astronomical-runtime-integration".to_owned(),
+        package: "runtime-integration".to_owned(),
         target: TestTarget::Integration("mlx_c_coverage_contract_tests".to_owned()),
         features: Some("mlx".to_owned()),
         profile: None,

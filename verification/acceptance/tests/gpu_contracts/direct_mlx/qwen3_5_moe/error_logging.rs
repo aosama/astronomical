@@ -1,8 +1,8 @@
-use astronomical_model_serving::{
+use model_serving::{
     ExpertPagingError, InferenceEngineError, MemoryBoundary, MlxAllocationAdmissionError,
     Qwen3_5ExecutionError,
 };
-use astronomical_runtime_integration::MlxRuntimeError;
+use runtime_integration::MlxRuntimeError;
 
 #[test]
 fn should_translate_expert_page_memory_budget_rejection_to_an_invalid_request() {

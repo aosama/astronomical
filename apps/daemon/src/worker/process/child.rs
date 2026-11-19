@@ -4,7 +4,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     ChatGenerationCommand, EmbeddingsCommand, ImageGenerationCommand, ProtocolReader,
     ProtocolWriter, RequestId, WorkerCommand, WorkerEvent, WorkerStartupConfiguration,
 };
@@ -306,7 +306,7 @@ impl WorkerProcess {
 
     pub async fn start_speech_generation(
         &mut self,
-        speech_command: astronomical_ipc_protocol::SpeechCommand,
+        speech_command: ipc_protocol::SpeechCommand,
     ) -> Result<(), WorkerControlError> {
         self.send_command_with_timeout(&WorkerCommand::GenerateSpeech(speech_command))
             .await
@@ -361,7 +361,7 @@ impl WorkerProcess {
     pub async fn swap_model(
         &mut self,
         model_directory: String,
-        model_configuration: astronomical_ipc_protocol::WorkerModelConfiguration,
+        model_configuration: ipc_protocol::WorkerModelConfiguration,
     ) -> Result<(), WorkerControlError> {
         self.send_command_with_timeout(&WorkerCommand::SwapModel {
             model_directory,

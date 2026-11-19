@@ -6,7 +6,7 @@
 //! composition is read-only over model state and performs no MLX work, so it
 //! stays safe to call at every generation finalization.
 
-use astronomical_ipc_protocol::ExpertMemoryMode;
+use ipc_protocol::ExpertMemoryMode;
 
 use crate::inference_engine::contract::{
     ExpertResidencyTelemetry, ExpertStreamingStats, GenerationFinalization,

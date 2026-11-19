@@ -11,7 +11,7 @@ pub enum Flux2KleinVaeError {
     InvalidTilingGeometry { reason: String },
     #[cfg(feature = "direct-mlx")]
     #[error("FLUX.2 Klein VAE MLX execution failed")]
-    Mlx(#[from] astronomical_runtime_integration::MlxRuntimeError),
+    Mlx(#[from] runtime_integration::MlxRuntimeError),
     #[cfg(feature = "direct-mlx")]
     #[error(transparent)]
     TensorStore(#[from] crate::flux2_klein::tensor_store::Flux2KleinTensorStoreError),
@@ -34,6 +34,6 @@ impl Flux2KleinVaeError {
 #[cfg(feature = "direct-mlx")]
 impl From<mlx_bridge::MlxCError> for Flux2KleinVaeError {
     fn from(captured_error: mlx_bridge::MlxCError) -> Self {
-        astronomical_runtime_integration::MlxRuntimeError::from(captured_error).into()
+        runtime_integration::MlxRuntimeError::from(captured_error).into()
     }
 }

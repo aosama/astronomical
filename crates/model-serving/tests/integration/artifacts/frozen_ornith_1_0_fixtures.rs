@@ -3,8 +3,8 @@
 //! fixtures in-crate; the acceptance tier keeps its own typed copy beside the
 //! GPU contracts. All three express the identical frozen model contract.
 
-use astronomical_model_serving::AstroSsdPromptCacheModelContract;
-use astronomical_model_serving::{
+use model_serving::AstroSsdPromptCacheModelContract;
+use model_serving::{
     AstroDecoderStateCacheTensorDtype, ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID,
     ORNITH_1_0_35B_OPTIQ_4BIT_REVISION, PersistentVisualEmbeddingModelContract,
     Qwen3_5AstroDecoderStateCacheLayerDtypes, Qwen3_5Config, Qwen3_5ImageProcessor,
@@ -32,7 +32,7 @@ pub fn astro_ssd_prompt_cache_model_contract() -> AstroSsdPromptCacheModelContra
     AstroSsdPromptCacheModelContract::resolve(
         ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID.to_owned(),
         ORNITH_1_0_35B_OPTIQ_4BIT_REVISION.to_owned(),
-        astronomical_model_serving::qwen3_5_astro_decoder_state_cache_layout(
+        model_serving::qwen3_5_astro_decoder_state_cache_layout(
             &frozen_ornith_1_0_config,
             256,
             &astro_decoder_state_cache_layer_dtypes,

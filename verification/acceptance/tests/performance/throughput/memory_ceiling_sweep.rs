@@ -32,9 +32,9 @@
 use std::fs;
 use std::time::Duration;
 
-use astronomical_ipc_protocol::{ChatImageInput, WorkerDecodeAstroExpertCachePolicy};
-use astronomical_test_harness::test_run::TestRunContext;
+use ipc_protocol::{ChatImageInput, WorkerDecodeAstroExpertCachePolicy};
 use serial_test::serial;
+use test_harness::test_run::TestRunContext;
 
 use crate::performance_throughput::historical_record::{
     MemoryCellBudgetExhaustedStage, MemoryCellRecord, ThroughputJourneyKind, ThroughputRecord,
@@ -316,7 +316,7 @@ fn cell_journey(configured_maximum_mlx_memory_bytes: u64) -> ThroughputJourney {
         journey_timeout: MEMORY_CELL_SERVING_BUDGET,
         model_directory: None,
         diagnostic_qwen3_5_engine_override:
-            astronomical_ipc_protocol::WorkerDiagnosticQwen3_5EngineOverride::Automatic,
+            ipc_protocol::WorkerDiagnosticQwen3_5EngineOverride::Automatic,
     }
 }
 

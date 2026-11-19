@@ -12,21 +12,19 @@
 
 use std::path::{Path, PathBuf};
 
-use astronomical_quantization::artifact::converted_config::normalize_converted_config;
-use astronomical_quantization::bit_width::GroupSize;
-use astronomical_quantization::encoder::RangeSearchPolicy;
-use astronomical_quantization::module_inventory::ModuleInventory;
-use astronomical_quantization::pipeline::artifact_files::copy_source_files;
-use astronomical_quantization::pipeline::{
-    PipelineMethod, ReferenceMode, run_quantization_pipeline,
-};
-use astronomical_quantization::requantize::driver::run_requantize;
-use astronomical_quantization::requantize::{
+use quantization::artifact::converted_config::normalize_converted_config;
+use quantization::bit_width::GroupSize;
+use quantization::encoder::RangeSearchPolicy;
+use quantization::module_inventory::ModuleInventory;
+use quantization::pipeline::artifact_files::copy_source_files;
+use quantization::pipeline::{PipelineMethod, ReferenceMode, run_quantization_pipeline};
+use quantization::requantize::driver::run_requantize;
+use quantization::requantize::{
     BitPolicy, DEFAULT_COPY_PATTERNS, DEFAULT_SHARD_BYTES, RequantizeTensorPlan,
 };
-use astronomical_quantization::sensitivity::SensitivityProbeModel;
-use astronomical_qwen35_quantization_probe::load_qwen3_5_probe_model;
-use astronomical_runtime_integration::MlxRuntime;
+use quantization::sensitivity::SensitivityProbeModel;
+use qwen35_quantization_probe::load_qwen3_5_probe_model;
+use runtime_integration::MlxRuntime;
 use serial_test::serial;
 
 use super::artifact_comparison::read_json_document;

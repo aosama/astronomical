@@ -1,4 +1,4 @@
-use astronomical_model_serving::machine_ceiling_from_physical_ram_bytes;
+use model_serving::machine_ceiling_from_physical_ram_bytes;
 
 const BYTES_PER_MARKETED_GIGABYTE: u64 = 1_073_741_824;
 

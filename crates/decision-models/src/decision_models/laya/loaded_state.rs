@@ -8,17 +8,15 @@
 
 use std::collections::BTreeMap;
 
-use astronomical_decision_contract::laya_rendering::{
+use decision_contract::laya_rendering::{
     laya_question_type_index, laya_truncates_state_from_the_left,
 };
-use astronomical_decision_contract::laya_sequence::{
+use decision_contract::laya_sequence::{
     LayaQuestionSequence, LayaSequenceError, build_laya_question_sequence, encode_laya_state,
 };
-use astronomical_decision_contract::{
-    DecisionFailure, DecisionQuestion, HeadInputRequest, OrderedJsonValue,
-};
-use astronomical_runtime_integration::{MlxRuntime, MlxSafetensors};
+use decision_contract::{DecisionFailure, DecisionQuestion, HeadInputRequest, OrderedJsonValue};
 use mlx_bridge::MlxArray;
+use runtime_integration::{MlxRuntime, MlxSafetensors};
 
 use crate::decision_models::forward_pass_planning::{
     LAYA_SERVING_PADDED_TOKENS_PER_PASS, plan_forward_passes,

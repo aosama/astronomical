@@ -5,13 +5,9 @@
 //! kind of request, and a second trait would force every test executor to
 //! grow another impl.
 
-use astronomical_decision_contract::decision_training_job::{
-    DecisionTrainingOutcome, DecisionTrainingStage,
-};
-use astronomical_decision_contract::{DecisionFailure, QuestionOutcome};
-use astronomical_ipc_protocol::{
-    DecisionTrainingCommand, DecisionsCommand, RequestId, WorkerCommand,
-};
+use decision_contract::decision_training_job::{DecisionTrainingOutcome, DecisionTrainingStage};
+use decision_contract::{DecisionFailure, QuestionOutcome};
+use ipc_protocol::{DecisionTrainingCommand, DecisionsCommand, RequestId, WorkerCommand};
 use tokio::sync::mpsc;
 
 /// What a decisions request delivers: its answers, or for a training,

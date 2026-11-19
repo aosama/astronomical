@@ -2,9 +2,7 @@
 //! any throughput difference between cells comes from the ceiling or the
 //! engine and never from the prompt.
 
-use astronomical_ipc_protocol::{
-    WorkerDecodeAstroExpertCachePolicy, WorkerDiagnosticQwen3_5EngineOverride,
-};
+use ipc_protocol::{WorkerDecodeAstroExpertCachePolicy, WorkerDiagnosticQwen3_5EngineOverride};
 
 use crate::performance_throughput::historical_record::ThroughputJourneyKind;
 use crate::performance_throughput::support::{self as throughput_support, ThroughputJourney};

@@ -1,4 +1,4 @@
-use astronomical_model_serving::Qwen3_5Config;
+use model_serving::Qwen3_5Config;
 use serde_json::{Value, json};
 
 use super::qwen3_5_moe;

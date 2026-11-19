@@ -8,13 +8,11 @@
 
 use std::sync::Arc;
 
-use astronomical_runtime_integration::{
-    MlxRuntime, MlxRuntimeError, MlxSafetensors, PositionalFileReadMetrics,
-};
 use mlx_bridge::MlxArray;
+use runtime_integration::{MlxRuntime, MlxRuntimeError, MlxSafetensors, PositionalFileReadMetrics};
 use thiserror::Error;
 
-use astronomical_model_primitives::affine_quantized_linear::{
+use model_primitives::affine_quantized_linear::{
     AFFINE_QUANTIZATION_BITS, AFFINE_QUANTIZATION_GROUP_SIZE, AffineQuantizedLinear,
     AffineQuantizedLinearError,
 };

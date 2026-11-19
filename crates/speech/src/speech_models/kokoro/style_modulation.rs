@@ -3,8 +3,8 @@
 //! StyleTTS2's AdaIN normalises each channel over the length (instance norm);
 //! its AdaLayerNorm normalises each step over the channels.
 
-use astronomical_runtime_integration::MlxRuntime;
 use mlx_bridge::MlxArray;
+use runtime_integration::MlxRuntime;
 
 use crate::speech_models::checkpoint_tensors::CheckpointTensors;
 use crate::speech_models::mlx_layers::activations::modulate;

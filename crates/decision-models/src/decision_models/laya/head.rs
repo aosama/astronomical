@@ -12,9 +12,9 @@
 
 use std::collections::BTreeMap;
 
-use astronomical_decision_contract::HeadInputRequest;
-use astronomical_runtime_integration::{MlxRuntime, MlxSafetensors};
+use decision_contract::HeadInputRequest;
 use mlx_bridge::{MlxArray, MlxDtype};
+use runtime_integration::{MlxRuntime, MlxSafetensors};
 
 use crate::decision_models::laya::configuration::LayaConfiguration;
 use crate::linear_adapters::{LinearAdapters, adapted_layer_output};

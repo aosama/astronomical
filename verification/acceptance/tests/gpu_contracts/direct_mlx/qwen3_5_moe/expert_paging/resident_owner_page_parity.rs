@@ -18,12 +18,12 @@ use std::fs::File;
 use std::io::Write;
 use std::path::Path;
 
-use astronomical_model_serving::{
+use model_serving::{
     QuantizationMode, QuantizedExpertLayerPlan, ResidentProjectionArraysForTests,
     build_quantized_expert_layer_plan, build_quantized_expert_page_manifest_from_plan,
     load_quantized_expert_page, resident_layer_arrays_for_tests,
 };
-use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime, MlxSafetensors};
+use runtime_integration::{MlxMemoryLimits, MlxRuntime, MlxSafetensors};
 use serde_json::json;
 
 use crate::common::{
@@ -127,7 +127,7 @@ fn write_fixture(model_directory: &Path) -> HashMap<String, String> {
 fn parity_layer_plan(model_directory: &Path) -> QuantizedExpertLayerPlan {
     let weight_map = write_fixture(model_directory);
     let config_bytes = frozen_ornith_1_0_config_bytes();
-    let configuration = astronomical_model_serving::Qwen3_5Config::from_json_bytes(&config_bytes)
+    let configuration = model_serving::Qwen3_5Config::from_json_bytes(&config_bytes)
         .expect("the frozen Ornith configuration should parse");
     build_quantized_expert_layer_plan(model_directory, &weight_map, LAYER_PREFIX, &configuration)
         .expect("the parity layer plan should build from the validated header")

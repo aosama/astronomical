@@ -1,10 +1,10 @@
 //! Unit tests for replacing Clef head tensors with trained ones.
 
-use astronomical_decision_contract::head_tuning_file::TunedTensor;
+use decision_contract::head_tuning_file::TunedTensor;
 use serial_test::serial;
 
 use super::*;
-use astronomical_model_primitives::synthetic_weights_test_support::initialize_test_runtime;
+use model_primitives::synthetic_weights_test_support::initialize_test_runtime;
 
 /// A head holding only the final mix's gate and a small residual bias.
 fn small_head() -> ClefHeadWeights {

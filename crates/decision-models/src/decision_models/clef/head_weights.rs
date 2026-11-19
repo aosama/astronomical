@@ -11,10 +11,10 @@ use std::collections::BTreeMap;
 use std::fs::File;
 use std::path::Path;
 
-use astronomical_decision_contract::DecisionFailure;
-use astronomical_decision_contract::head_tuning_file::HeadTuning;
-use astronomical_runtime_integration::MlxRuntime;
+use decision_contract::DecisionFailure;
+use decision_contract::head_tuning_file::HeadTuning;
 use mlx_bridge::{MlxArray, MlxDtype};
+use runtime_integration::MlxRuntime;
 
 use super::head_settings::ClefHeadSettings;
 use crate::decision_models::head_tuning::{check_tuned_shape, unusable_tuning};

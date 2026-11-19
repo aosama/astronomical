@@ -1,6 +1,6 @@
 //! Unit contract for daemon-side expert-streaming observatory accumulation.
 
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     ExpertMemoryMode, WorkerEvent, WorkerExpertLayerTopology, WorkerExpertResidencySnapshot,
     WorkerExpertStreamingStats,
 };
@@ -24,7 +24,7 @@ fn stats_snapshot(
             resident_expert_payload_bytes: 40_000_000_000,
             complete_expert_payload_byte_count: 90_000_000_000,
             expert_capacity: 256,
-            layer_seating: astronomical_ipc_protocol::ExpertLayerSeatingCounts::default(),
+            layer_seating: ipc_protocol::ExpertLayerSeatingCounts::default(),
         },
         layer_topology: vec![WorkerExpertLayerTopology {
             layer_index: 0,
@@ -197,7 +197,7 @@ fn should_extract_stats_only_from_the_matching_event() {
 fn should_carry_the_observatory_across_replacement_for_the_same_model() {
     use std::sync::{Arc, RwLock};
 
-    use astronomical_ipc_protocol::WorkerModelCapabilities;
+    use ipc_protocol::WorkerModelCapabilities;
 
     use crate::worker::health::{WorkerHealthSnapshot, publish_health};
 
@@ -249,7 +249,7 @@ fn should_carry_the_observatory_across_replacement_for_the_same_model() {
 fn should_carry_the_observatory_across_a_model_less_idle_replacement() {
     use std::sync::{Arc, RwLock};
 
-    use astronomical_ipc_protocol::WorkerModelCapabilities;
+    use ipc_protocol::WorkerModelCapabilities;
 
     use crate::worker::health::{WorkerHealthSnapshot, publish_health};
 
@@ -293,7 +293,7 @@ fn should_carry_the_observatory_across_a_model_less_idle_replacement() {
 fn should_carry_the_observatory_across_a_re_ready_without_a_published_model_claim() {
     use std::sync::{Arc, RwLock};
 
-    use astronomical_ipc_protocol::WorkerModelCapabilities;
+    use ipc_protocol::WorkerModelCapabilities;
 
     use crate::worker::health::{WorkerHealthSnapshot, publish_health};
 
@@ -336,7 +336,7 @@ fn should_carry_the_observatory_across_a_re_ready_without_a_published_model_clai
 fn should_reset_the_observatory_when_the_replacement_changes_the_model() {
     use std::sync::{Arc, RwLock};
 
-    use astronomical_ipc_protocol::WorkerModelCapabilities;
+    use ipc_protocol::WorkerModelCapabilities;
 
     use crate::worker::health::{WorkerHealthSnapshot, publish_health};
 

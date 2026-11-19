@@ -9,7 +9,7 @@
 use std::io;
 use std::path::{Path, PathBuf};
 
-use astronomical_config::{
+use config::{
     AstronomicalConfig, AstronomicalInstancePaths, ModelFamily, discover_effective_models,
 };
 use thiserror::Error;

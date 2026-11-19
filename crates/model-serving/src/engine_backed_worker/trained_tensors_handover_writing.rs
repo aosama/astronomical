@@ -16,8 +16,8 @@ use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use astronomical_decision_contract::decision_training_job::DecisionTrainingOutcome;
-use astronomical_decision_contract::trained_tensors_file::{
+use decision_contract::decision_training_job::DecisionTrainingOutcome;
+use decision_contract::trained_tensors_file::{
     HANDOVER_FILE_PREFIX, HandedOverTensors, handover_file_name, handover_file_path,
     trained_tensors_file_bytes,
 };

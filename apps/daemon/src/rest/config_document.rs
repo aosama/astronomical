@@ -44,7 +44,7 @@ const FOLDER_SETTINGS: [&str; 3] = [
 ];
 
 fn unavailable_settings(
-    instance_paths: &astronomical_config::AstronomicalInstancePaths,
+    instance_paths: &config::AstronomicalInstancePaths,
 ) -> &'static [&'static str] {
     if instance_paths.keeps_state_in_app_container() {
         &FOLDER_SETTINGS
@@ -89,10 +89,8 @@ fn refusal(status_code: StatusCode, status: &'static str, message: String) -> Re
     (status_code, Json(ConfigWriteRefusal { status, message })).into_response()
 }
 
-fn write_error_response(
-    configuration_error: astronomical_config::AstronomicalConfigError,
-) -> Response {
-    use astronomical_config::AstronomicalConfigError as ConfigError;
+fn write_error_response(configuration_error: config::AstronomicalConfigError) -> Response {
+    use config::AstronomicalConfigError as ConfigError;
     match configuration_error {
         ConfigError::ConfigChangedDuringUpdate => refusal(
             StatusCode::CONFLICT,
@@ -129,13 +127,11 @@ pub(crate) async fn read_config_document(
     let Some(runtime_config_resolver) = application_state.runtime_config_resolver.as_ref() else {
         return unavailable_response();
     };
-    let snapshot = match astronomical_config::read_config_document(
-        runtime_config_resolver.state_directory(),
-    ) {
+    let snapshot = match config::read_config_document(runtime_config_resolver.state_directory()) {
         Ok(snapshot) => snapshot,
         Err(configuration_error) => return write_error_response(configuration_error),
     };
-    let schema = match serde_json::from_slice(astronomical_config::config_schema_bytes()) {
+    let schema = match serde_json::from_slice(config::config_schema_bytes()) {
         Ok(schema) => schema,
         Err(schema_error) => {
             tracing::error!(error = %schema_error, "the bundled configuration schema is invalid");
@@ -163,14 +159,14 @@ fn validate_candidate_resolves(
     runtime_config_resolver: &ResolvedRuntimeConfigResolver,
     candidate_document: &serde_json::Value,
 ) -> Result<(), Box<Response>> {
-    if let Err(configuration_error) = astronomical_config::validate_config_document(
+    if let Err(configuration_error) = config::validate_config_document(
         runtime_config_resolver.state_directory(),
         candidate_document,
     ) {
         return Err(Box::new(write_error_response(configuration_error)));
     }
     let candidate_bytes = candidate_document.to_string().into_bytes();
-    let candidate_config = match astronomical_config::AstronomicalConfig::load_v1_bytes(
+    let candidate_config = match config::AstronomicalConfig::load_v1_bytes(
         runtime_config_resolver.instance_paths().clone(),
         &candidate_bytes,
     ) {
@@ -231,7 +227,7 @@ pub(crate) async fn save_config_document(
         {
             return *refusal_response;
         }
-        match astronomical_config::save_config_document(
+        match config::save_config_document(
             runtime_config_resolver.state_directory(),
             save_request.expected_document_digest.as_deref(),
             &save_request.document,
@@ -258,7 +254,7 @@ pub(crate) async fn reset_config_document(
     let document_digest = {
         let _configuration_transition_guard =
             application_state.configuration_transition_lock.lock().await;
-        match astronomical_config::reset_config_document(
+        match config::reset_config_document(
             runtime_config_resolver.state_directory(),
             reset_request.expected_document_digest.as_deref(),
         ) {

@@ -7,9 +7,7 @@ use std::{
     time::Duration,
 };
 
-use astronomical_ipc_protocol::{
-    WorkerEvent, WorkerRuntimeFeatureConfiguration, WorkerStartupConfiguration,
-};
+use ipc_protocol::{WorkerEvent, WorkerRuntimeFeatureConfiguration, WorkerStartupConfiguration};
 use tokio::time::{Instant, timeout};
 
 use crate::{

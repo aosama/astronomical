@@ -8,13 +8,13 @@ use astronomical_daemon::{
     ResolvedRuntimeConfigResolver, RuntimeModelPolicy, ShutdownController, WorkerHandle,
     WorkerHealthStatus, build_application, build_application_with_full_control,
 };
-use astronomical_ipc_protocol::{
-    ChatGenerationCommand, ChatGenerationSettings, ChatMessage, ChatToolChoice, RequestId,
-    WorkerAutoregressiveModelConfiguration, WorkerChunkingConfiguration, WorkerModelConfiguration,
-};
 use axum::{
     body::{Body, to_bytes},
     http::{Method, Request, StatusCode},
+};
+use ipc_protocol::{
+    ChatGenerationCommand, ChatGenerationSettings, ChatMessage, ChatToolChoice, RequestId,
+    WorkerAutoregressiveModelConfiguration, WorkerChunkingConfiguration, WorkerModelConfiguration,
 };
 use tokio::time::{Instant, sleep, timeout};
 use tower::ServiceExt;
@@ -280,14 +280,14 @@ async fn launch_astro_ssd_prompt_cache_clear_application() -> AstroSsdPromptCach
         idle_model_unload_seconds: 0,
         configured_astro_ssd_prompt_cache_maximum_size_bytes: None,
         performance_attribution_enabled: false,
-        astro_ssd_prompt_cache_config: astronomical_config::AstroSsdPromptCacheConfig::new(
+        astro_ssd_prompt_cache_config: config::AstroSsdPromptCacheConfig::new(
             temporary_directory.path().join("cache"),
             50_000_000_000,
         ),
         bind_address: "127.0.0.1:6733".to_owned(),
-        logging_config: astronomical_config::LoggingConfig::new(
+        logging_config: config::LoggingConfig::new(
             temporary_directory.path().join("logs"),
-            astronomical_config::LogLevel::Warn,
+            config::LogLevel::Warn,
             2,
         ),
     };

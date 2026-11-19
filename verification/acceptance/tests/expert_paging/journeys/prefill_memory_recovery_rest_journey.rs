@@ -22,10 +22,10 @@
 
 use std::{fs, path::Path};
 
-use astronomical_test_harness::{sparse_decode_full_fit, test_run::TestRunContext};
 use futures_util::StreamExt;
 use serde_json::json;
 use serial_test::serial;
+use test_harness::{sparse_decode_full_fit, test_run::TestRunContext};
 use tokio::time::{Duration, Instant, sleep, timeout};
 
 use crate::support::{

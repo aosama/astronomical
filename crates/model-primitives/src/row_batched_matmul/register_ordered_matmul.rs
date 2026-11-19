@@ -7,8 +7,8 @@
 //! as MLX's two arrays. A model that converts a weight serves every row count
 //! of it through this kernel.
 
-use astronomical_runtime_integration::MlxRuntime;
 use mlx_bridge::{MlxArray, MlxDtype, MlxMetalKernelOutput};
+use runtime_integration::MlxRuntime;
 
 use super::dispatch_plan::{OUTPUT_COLUMNS_PER_SIMDGROUP, QUANTIZATION_GROUP_SIZE};
 use super::register_ordered_plan::{

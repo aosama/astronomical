@@ -4,8 +4,8 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 
-use astronomical_config::{AstroSsdPromptCacheConfig, LogLevel, LoggingConfig};
-use astronomical_ipc_protocol::{
+use config::{AstroSsdPromptCacheConfig, LogLevel, LoggingConfig};
+use ipc_protocol::{
     WorkerEmbeddingModelConfiguration, WorkerEmbeddingModelFamily, WorkerModelConfiguration,
 };
 

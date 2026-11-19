@@ -3,11 +3,11 @@
 
 use std::path::PathBuf;
 
-use astronomical_config::{
+use config::{
     ChatModelCapabilities, DecisionModelCapabilities, DiscoveredModel, ModelCapabilities,
     ModelFamily,
 };
-use astronomical_decision_contract::OrderedJsonValue;
+use decision_contract::OrderedJsonValue;
 
 use super::{DecisionsModelResolutionError, build_decisions_command, resolve_decisions_model};
 
@@ -120,7 +120,7 @@ fn should_refuse_to_guess_between_several_decision_models() {
 
 #[test]
 fn should_prefer_the_default_decision_model_when_several_are_installed() {
-    let default_model_id = astronomical_config::BUILTIN_DEFAULT_DECISION_MODEL_ID;
+    let default_model_id = config::BUILTIN_DEFAULT_DECISION_MODEL_ID;
     let bundled_model_id = format!("{default_model_id}-multilingual");
     let discovered_models = [
         decision_model(&bundled_model_id),
@@ -134,7 +134,7 @@ fn should_prefer_the_default_decision_model_when_several_are_installed() {
 
 #[test]
 fn should_keep_a_resident_decision_model_over_the_default_one() {
-    let default_model_id = astronomical_config::BUILTIN_DEFAULT_DECISION_MODEL_ID;
+    let default_model_id = config::BUILTIN_DEFAULT_DECISION_MODEL_ID;
     let bundled_model_id = format!("{default_model_id}-multilingual");
     let discovered_models = [
         decision_model(default_model_id),
@@ -180,7 +180,7 @@ fn should_build_a_command_that_carries_the_request_as_written() {
 
     assert_eq!(
         decisions_command.request_id,
-        astronomical_ipc_protocol::RequestId::new(7)
+        ipc_protocol::RequestId::new(7)
     );
     assert_eq!(decisions_command.model, "decider-a");
     assert_eq!(decisions_command.state, state);

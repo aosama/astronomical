@@ -2,9 +2,9 @@
 //! model, queues the training like any decisions request, and streams its
 //! progress frames, then exactly one terminal frame.
 
-use astronomical_decision_contract::DecisionFailure;
-use astronomical_decision_contract::decision_training_job::DecisionTrainingJob;
-use astronomical_ipc_protocol::{
+use decision_contract::DecisionFailure;
+use decision_contract::decision_training_job::DecisionTrainingJob;
+use ipc_protocol::{
     DaemonResponse, DaemonTransportError, DecisionTrainingCommand, RequestId,
     StreamingResponseWriter,
 };

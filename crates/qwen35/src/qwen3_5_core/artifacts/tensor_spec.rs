@@ -434,7 +434,7 @@ fn append_jangtq2_codebook_tensor_profiles(
             return Err(Qwen3_5ArtifactError::Jangtq2TensorContract {
                 module_name: tensor_prefix.to_owned(),
                 source:
-                    astronomical_jangtq2_qwen35::configuration::Jangtq2ConfigurationError::InputWidthNotPackingAligned {
+                    jangtq2_qwen35::configuration::Jangtq2ConfigurationError::InputWidthNotPackingAligned {
                         actual_input_width: input_dimension as u32,
                         required_alignment_multiple: 1,
                     },
@@ -450,41 +450,40 @@ fn append_jangtq2_codebook_tensor_profiles(
         return Ok(());
     };
     let codebook_override_entry =
-        astronomical_jangtq2_qwen35::configuration::Jangtq2WeightOverrideEntry::Codebook {
-            mode: astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookMode,
+        jangtq2_qwen35::configuration::Jangtq2WeightOverrideEntry::Codebook {
+            mode: jangtq2_qwen35::configuration::Jangtq2CodebookMode,
             bits: quantization_profile.bits,
             rotation,
         };
     // The affine group size is an affine-arm concern only; the codebook
     // contract never consults it.
-    let codebook_module_geometry = astronomical_jangtq2_qwen35::artifacts::Jangtq2ModuleGeometry {
+    let codebook_module_geometry = jangtq2_qwen35::artifacts::Jangtq2ModuleGeometry {
         input_width: input_dimension as u32,
         output_width: codebook_output_dimension,
         expert_count: codebook_expert_count,
         affine_group_size: 64,
     };
-    let codebook_tensor_inventory =
-        astronomical_jangtq2_qwen35::artifacts::tensor_inventory_for_module(
-            tensor_prefix,
-            &codebook_override_entry,
-            &codebook_module_geometry,
-        )
-        .map_err(|source| Qwen3_5ArtifactError::Jangtq2TensorContract {
-            module_name: tensor_prefix.to_owned(),
-            source,
-        })?;
+    let codebook_tensor_inventory = jangtq2_qwen35::artifacts::tensor_inventory_for_module(
+        tensor_prefix,
+        &codebook_override_entry,
+        &codebook_module_geometry,
+    )
+    .map_err(|source| Qwen3_5ArtifactError::Jangtq2TensorContract {
+        module_name: tensor_prefix.to_owned(),
+        source,
+    })?;
     for codebook_tensor_expectation in codebook_tensor_inventory.expected_tensors {
         let contract_dtype = match codebook_tensor_expectation.element_kind {
-            astronomical_jangtq2_qwen35::artifacts::ContractTensorElementKind::PackedUnsignedInteger32 => {
+            jangtq2_qwen35::artifacts::ContractTensorElementKind::PackedUnsignedInteger32 => {
                 TensorDtype::UInt32
             }
-            astronomical_jangtq2_qwen35::artifacts::ContractTensorElementKind::CodebookScaleFloat16 => {
+            jangtq2_qwen35::artifacts::ContractTensorElementKind::CodebookScaleFloat16 => {
                 TensorDtype::Float16
             }
-            astronomical_jangtq2_qwen35::artifacts::ContractTensorElementKind::AffineCompanionBfloat16 => {
+            jangtq2_qwen35::artifacts::ContractTensorElementKind::AffineCompanionBfloat16 => {
                 TensorDtype::AffineQuantizationFloat
             }
-            astronomical_jangtq2_qwen35::artifacts::ContractTensorElementKind::NativeWeightBfloat16 => {
+            jangtq2_qwen35::artifacts::ContractTensorElementKind::NativeWeightBfloat16 => {
                 TensorDtype::ModelFloat
             }
         };

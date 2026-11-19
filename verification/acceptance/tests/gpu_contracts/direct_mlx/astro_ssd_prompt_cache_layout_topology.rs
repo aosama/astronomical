@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use astronomical_model_serving::{
+use model_serving::{
     AstroDecoderStateCacheLayerLayout, AstroDecoderStateCacheLayout,
     AstroDecoderStateCacheTensorDtype, AstroDecoderStateCacheTensorLayout,
     AstroSsdPromptCacheBlockKey, AstroSsdPromptCacheModelContract,
@@ -110,8 +110,8 @@ async fn should_reopen_every_boundary_only_block_without_invalid_compaction() {
 }
 
 fn publish_complete_chain(
-    astro_ssd_prompt_cache: &astronomical_model_serving::AstroSsdPromptCacheDiskStore,
-    runtime: &astronomical_runtime_integration::MlxRuntime,
+    astro_ssd_prompt_cache: &model_serving::AstroSsdPromptCacheDiskStore,
+    runtime: &runtime_integration::MlxRuntime,
     model_contract: &AstroSsdPromptCacheModelContract,
     complete_block_count: usize,
     sequence_state_tensors: &HashMap<String, mlx_bridge::MlxArray>,

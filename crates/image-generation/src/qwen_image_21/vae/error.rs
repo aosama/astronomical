@@ -15,7 +15,7 @@ pub enum QwenImage21VaeError {
     InvalidGeometry { description: String },
     #[cfg(feature = "direct-mlx")]
     #[error("Qwen-Image-2.1 VAE MLX execution failed")]
-    Mlx(#[from] astronomical_runtime_integration::MlxRuntimeError),
+    Mlx(#[from] runtime_integration::MlxRuntimeError),
 }
 
 impl QwenImage21VaeError {
@@ -32,6 +32,6 @@ impl QwenImage21VaeError {
 #[cfg(feature = "direct-mlx")]
 impl From<mlx_bridge::MlxCError> for QwenImage21VaeError {
     fn from(captured_error: mlx_bridge::MlxCError) -> Self {
-        astronomical_runtime_integration::MlxRuntimeError::from(captured_error).into()
+        runtime_integration::MlxRuntimeError::from(captured_error).into()
     }
 }

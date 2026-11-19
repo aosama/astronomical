@@ -1,10 +1,8 @@
 //! Request-scoped VAE advancement bounds complete-decoder graph construction.
 
-use astronomical_runtime_integration::MlxRuntime;
+use runtime_integration::MlxRuntime;
 
-use astronomical_model_primitives::performance_attribution::{
-    PerformanceAttribution, PerformanceOperation,
-};
+use model_primitives::performance_attribution::{PerformanceAttribution, PerformanceOperation};
 
 use super::convolution;
 use super::decoder::BATCH_NORM_EPSILON;

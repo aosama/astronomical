@@ -2,7 +2,7 @@
 //! contiguous expert rows. Inverse order maps original token/top-K slots back
 //! onto the sorted axis.
 
-use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
+use runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use super::error::SparseExpertError;
 use crate::performance_attribution::{PerformanceAttribution, PerformanceOperation};

@@ -3,11 +3,9 @@
 //! to the checked-in golden vectors and to the format's host arithmetic;
 //! they run in parallel on small synthetic tensors.
 
-use astronomical_jangtq2_qwen35::codebook;
-use astronomical_jangtq2_qwen35::hadamard32;
-use astronomical_jangtq2_qwen35::mlx_decode::{
-    decode_expert_weight_rows, rotate_activations_hadamard32,
-};
+use jangtq2_qwen35::codebook;
+use jangtq2_qwen35::hadamard32;
+use jangtq2_qwen35::mlx_decode::{decode_expert_weight_rows, rotate_activations_hadamard32};
 use mlx_bridge::{MlxArray, MlxDtype};
 
 use super::support::contract_runtime;

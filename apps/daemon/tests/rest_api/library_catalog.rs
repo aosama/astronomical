@@ -325,7 +325,7 @@ async fn should_publish_every_shipped_catalog_entry_to_the_library_catalog_endpo
                 .as_str()
                 .unwrap_or_else(|| panic!("published entry {published_entry_index} must carry a string revision"));
             assert!(
-                astronomical_lowercase_hex::is_lowercase_hex_of_length(revision, 40),
+                lowercase_hex::is_lowercase_hex_of_length(revision, 40),
                 "published entry {published_entry_index} revision must be 40 lowercase hex digits"
             );
             assert_named_only_by_its_model_id(published_entry, huggingface_id, published_entry_index);

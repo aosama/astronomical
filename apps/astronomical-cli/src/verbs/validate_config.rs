@@ -8,7 +8,7 @@ use std::io;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 
-use astronomical_config::{
+use config::{
     AstronomicalConfig, AstronomicalConfigError, AstronomicalInstancePaths,
     AstronomicalRuntimeInstance,
 };

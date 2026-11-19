@@ -12,10 +12,10 @@
 //! reference's margin between its two best tokens, so a flip on a near tie
 //! is told apart from drift on a clear pick. It reports; it asserts nothing.
 
-use astronomical_model_serving::speculative_decoding::dflash2_drafter::DraftTree;
-use astronomical_model_serving::speculative_decoding::tree_rows::TreeRows;
-use astronomical_model_serving::{PerformanceAttribution, VerificationLogitsMode};
 use mlx_bridge::MlxArray;
+use model_serving::speculative_decoding::dflash2_drafter::DraftTree;
+use model_serving::speculative_decoding::tree_rows::TreeRows;
+use model_serving::{PerformanceAttribution, VerificationLogitsMode};
 use serial_test::serial;
 
 use super::dflash2_journey_support::host_values;

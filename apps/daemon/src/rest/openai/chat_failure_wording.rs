@@ -7,7 +7,7 @@
 //! each surface only decides how to frame the pair (an SSE error chunk, an
 //! HTTP error body, a failed response).
 
-use astronomical_ipc_protocol::{ChatGenerationFailureReason, OUT_OF_GRAPHICS_MEMORY_ADVICE};
+use ipc_protocol::{ChatGenerationFailureReason, OUT_OF_GRAPHICS_MEMORY_ADVICE};
 
 /// The public code for a generation that ran out of graphics memory. It is
 /// its own code so a client can tell this failure from an engine that is

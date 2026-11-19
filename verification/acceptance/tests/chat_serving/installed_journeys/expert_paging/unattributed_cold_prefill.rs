@@ -15,10 +15,10 @@
 use std::path::Path;
 use std::time::{Duration, Instant};
 
-use astronomical_ipc_protocol::RequestId;
-use astronomical_runtime_integration::MlxMemoryLimits;
-use astronomical_test_harness::test_run::TestRunContext;
+use ipc_protocol::RequestId;
+use runtime_integration::MlxMemoryLimits;
 use serial_test::serial;
+use test_harness::test_run::TestRunContext;
 use tokio::time::timeout;
 
 use super::cold_macos_file_cache::ColdMacosFileCache;

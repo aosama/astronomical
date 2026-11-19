@@ -3,7 +3,7 @@
 
 use std::sync::Arc;
 
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     GeneratedImage, ImageGenerationFailureReason, ImageGenerationPhase,
     ImageGenerationResultMetadata, ImageGenerationSettings, RequestId,
 };

@@ -2,8 +2,8 @@
 //! borrows its embedding rows and output head, so it has no vocabulary of its
 //! own and its logits are the target's.
 
-use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 use mlx_bridge::{MlxArray, MlxDtype};
+use runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use crate::InferenceEngineError;
 use crate::gpu_token_sampling::sampling_distribution_rows;

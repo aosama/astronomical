@@ -195,11 +195,10 @@ fn wide_streamed_native_weights(
             weight: wide_native_program(runtime, expert_count, 3.0),
         },
         gate_activation_rotation:
-            astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookRotation::NoRotation,
-        up_activation_rotation:
-            astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookRotation::NoRotation,
+            jangtq2_qwen35::configuration::Jangtq2CodebookRotation::NoRotation,
+        up_activation_rotation: jangtq2_qwen35::configuration::Jangtq2CodebookRotation::NoRotation,
         down_activation_rotation:
-            astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookRotation::NoRotation,
+            jangtq2_qwen35::configuration::Jangtq2CodebookRotation::NoRotation,
     }
 }
 

@@ -2,11 +2,11 @@
 //! each cross-language progress shape remains small and directly reviewable.
 
 use astronomical_daemon::{ActiveRequestProgress, WorkerActivity};
-use astronomical_ipc_protocol::ImageGenerationPhase;
 use axum::{
     body::{Body, to_bytes},
     http::Request,
 };
+use ipc_protocol::ImageGenerationPhase;
 use tower::ServiceExt;
 
 use super::observatory_contracts;

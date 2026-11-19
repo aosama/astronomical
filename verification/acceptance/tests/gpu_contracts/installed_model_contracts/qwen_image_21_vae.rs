@@ -17,11 +17,11 @@
 use std::fs::File;
 use std::time::Duration;
 
-use astronomical_model_serving::{
+use model_serving::{
     QWEN_IMAGE_21_LATENT_CHANNEL_COUNT, QWEN_IMAGE_21_OUTPUT_CHANNEL_COUNT, QwenImage21VaeDecoder,
     decoded_pixel_dimensions,
 };
-use astronomical_runtime_integration::MlxRuntime;
+use runtime_integration::MlxRuntime;
 
 use crate::common::qwen_image_21;
 

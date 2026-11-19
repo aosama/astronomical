@@ -12,7 +12,7 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, UNIX_EPOCH};
 
-use astronomical_model_serving::{
+use model_serving::{
     AstroSsdPromptCacheDiskStore, AstroSsdPromptCacheDiskStoreConfig,
     AstroSsdPromptCacheDiskStoreError,
 };

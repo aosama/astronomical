@@ -13,12 +13,12 @@
 
 use std::time::Instant;
 
-use astronomical_model_serving::{
+use mlx_bridge::{MlxArray, MlxDtype};
+use model_serving::{
     RowExactTreeAttentionInputs, RowExactTreeAttentionKernels, TreeRowChains,
     row_exact_tree_attention,
 };
-use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
-use mlx_bridge::{MlxArray, MlxDtype};
+use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use serial_test::serial;
 
 use crate::common::{

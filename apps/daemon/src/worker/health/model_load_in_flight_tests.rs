@@ -2,7 +2,7 @@
 
 use std::sync::{Arc, RwLock};
 
-use astronomical_ipc_protocol::{ModelLoadInFlight, WorkerModelCapabilities};
+use ipc_protocol::{ModelLoadInFlight, WorkerModelCapabilities};
 
 use super::{
     WorkerHealthSnapshot, WorkerHealthStatus, publish_health, publish_model_load_in_flight,

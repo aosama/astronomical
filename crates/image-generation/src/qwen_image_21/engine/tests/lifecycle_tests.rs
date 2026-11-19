@@ -7,7 +7,7 @@ use crate::{
     ImageGenerationEngine, ImageGenerationEngineStep, QWEN_IMAGE_21_OFFICIAL_MODEL_ID,
     QWEN_IMAGE_21_PROVIDER_MODEL_ID, QwenImage21RenderAdvance,
 };
-use astronomical_ipc_protocol::{ImageGenerationFailureReason, ImageGenerationPhase, RequestId};
+use ipc_protocol::{ImageGenerationFailureReason, ImageGenerationPhase, RequestId};
 
 use super::lifecycle_support::{
     assert_final_cleanup_memory, cloned_events, fake_engine, scripted_advances_engine,

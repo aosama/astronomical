@@ -4,10 +4,10 @@
 //! malformed or hostile artifact fails at startup and never reaches the
 //! graphics processor.
 
-use astronomical_decision_contract::calibration::{
+use decision_contract::calibration::{
     BucketTemperature, KindTemperatures, NEUTRAL_TEMPERATURE, TemperatureTable,
 };
-use astronomical_decision_contract::laya_sequence::LayaSequenceLimits;
+use decision_contract::laya_sequence::LayaSequenceLimits;
 use thiserror::Error;
 
 use crate::modernbert::configuration::{ModernBertConfiguration, ModernBertConfigurationError};

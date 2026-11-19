@@ -11,11 +11,9 @@
 
 use std::collections::BTreeMap;
 
-use astronomical_speech_contract::{
-    AudioFormat, FASTEST_SPEED, MAXIMUM_SPEECH_INPUT_CHARACTERS, SLOWEST_SPEED,
-};
 use serde::Deserialize;
 use serde_json::Value;
+use speech_contract::{AudioFormat, FASTEST_SPEED, MAXIMUM_SPEECH_INPUT_CHARACTERS, SLOWEST_SPEED};
 use thiserror::Error;
 
 /// The only `stream_format` offered: the audio itself, not server-sent events.

@@ -2,8 +2,8 @@
 //! through every layer beside the fused target context, and the rows after the
 //! anchor come out normalized, ready for the target's head.
 
-use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 use mlx_bridge::MlxArray;
+use runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use super::drafter_attention::attend_block_to_context;
 use super::drafter_configuration::DFlash2DrafterConfiguration;

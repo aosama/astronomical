@@ -12,7 +12,7 @@
 //! which scatters them independently of file order, and every fifth one is
 //! held out.
 
-use astronomical_decision_contract::OrderedJsonValue;
+use decision_contract::OrderedJsonValue;
 
 use crate::scored_question::ScoredQuestion;
 

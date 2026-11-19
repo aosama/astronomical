@@ -1,12 +1,12 @@
 //! Integration contracts for selecting a runtime without loading model artifacts.
 
-use astronomical_config::AstroSsdPromptCacheConfig;
 use astronomical_inference_worker::model_family_factory::ModelFamilyFactory;
-use astronomical_ipc_protocol::{
+use config::AstroSsdPromptCacheConfig;
+use ipc_protocol::{
     WorkerAutoregressiveModelConfiguration, WorkerChunkingConfiguration,
     WorkerFlux2KleinModelConfiguration, WorkerImageGenerationModelFamily, WorkerModelConfiguration,
 };
-use astronomical_model_serving::{ModelFactory, ModelFactoryRuntime, ModelFamilyImageEngine};
+use model_serving::{ModelFactory, ModelFactoryRuntime, ModelFamilyImageEngine};
 use serde_json::json;
 
 use super::flux2_klein_fixture::{
@@ -115,12 +115,11 @@ async fn should_reject_changed_evidence_between_daemon_discovery_and_worker_load
         ),
     ] {
         let model_directory = flux_model_directory();
-        let discovered_model =
-            astronomical_config::discover_models(&[model_directory.path().to_path_buf()])
-                .expect("daemon discovery should complete")
-                .remove(0)
-                .discovered_models
-                .remove(0);
+        let discovered_model = config::discover_models(&[model_directory.path().to_path_buf()])
+            .expect("daemon discovery should complete")
+            .remove(0)
+            .discovered_models
+            .remove(0);
         mutate_discovered_artifact(model_directory.path());
 
         let factory_outcome = model_family_factory(model_directory.path())
@@ -156,7 +155,7 @@ fn model_family_factory(fixture_directory: &std::path::Path) -> ModelFamilyFacto
             1_000_000_000,
         ),
         true,
-        astronomical_ipc_protocol::WorkerDecodeAstroExpertCachePolicy::Baseline,
+        ipc_protocol::WorkerDecodeAstroExpertCachePolicy::Baseline,
         fixture_directory.join("performance-attribution.jsonl"),
         true,
     )

@@ -11,7 +11,7 @@ use astronomical_daemon::{
     ResolvedRuntimeConfigResolver, WorkerHandle, WorkerHealthStatus,
 };
 use astronomical_inference_worker::worker_startup;
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     ChatGenerationCommand, ChatGenerationSettings, ChatMessage, ChatToolChoice, RequestId,
 };
 use serde_json::json;
@@ -129,7 +129,7 @@ async fn should_measure_paged_prefill_with_a_cold_macos_file_cache_at_fifty_thou
 async fn run_cold_prefill_measurement(measurement_case: ColdPrefillMeasurementCase) {
     let configured_model_directory = configured_model_directory_from_user_config();
     let production_worker_executable_path =
-        astronomical_test_harness::workspace_binary("astronomical-inference-worker");
+        test_harness::workspace_binary("astronomical-inference-worker");
     let (isolated_worker_home, worker_executable_path) =
         isolated_astro_ssd_prompt_cache_worker_launcher(
             Path::new(&production_worker_executable_path),

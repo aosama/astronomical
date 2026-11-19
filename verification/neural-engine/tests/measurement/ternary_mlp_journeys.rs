@@ -22,13 +22,6 @@
 
 use std::time::{Duration, Instant};
 
-use astronomical_neural_engine::core_ml::{ComputePlacement, CoreMlProgram};
-use astronomical_neural_engine::documents::mlp_stages::StageWeightEncoding;
-use astronomical_neural_engine::mlx_hand_off::{
-    OutputHandOff, SplitAxis, channel_major_fp16, merge_surface_with_gpu_slice,
-    write_prepared_input,
-};
-use astronomical_neural_engine::weights::half_precision::f16_bits_slice_to_f32;
 use astronomical_neural_engine_research::numerical_comparison::{
     NumericalComparison, compare_values,
 };
@@ -36,10 +29,17 @@ use astronomical_neural_engine_research::process_memory::{
     MemoryGrowth, MemorySnapshot, mebibytes,
 };
 use astronomical_neural_engine_research::timing_summary::TimingSummary;
-use astronomical_runtime_integration::MlxRuntime;
-use astronomical_test_harness::deterministic_values::bell_shaped_values;
 use mlx_bridge::{MlxArray, MlxCompiledSwiGlu, MlxDtype};
+use neural_engine::core_ml::{ComputePlacement, CoreMlProgram};
+use neural_engine::documents::mlp_stages::StageWeightEncoding;
+use neural_engine::mlx_hand_off::{
+    OutputHandOff, SplitAxis, channel_major_fp16, merge_surface_with_gpu_slice,
+    write_prepared_input,
+};
+use neural_engine::weights::half_precision::f16_bits_slice_to_f32;
+use runtime_integration::MlxRuntime;
 use serial_test::serial;
+use test_harness::deterministic_values::bell_shaped_values;
 
 use crate::support::engine_split::milliseconds;
 use crate::support::hand_off_stage_timing::{StageDurations, summarize_stages};

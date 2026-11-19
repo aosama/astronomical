@@ -1,6 +1,6 @@
 //! A small runtime for the contracts and a deterministic weight generator.
 
-use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
+use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
 /// Two gigabytes is far more than any contract tensor needs and far below
 /// any Apple Silicon laptop's ceiling.

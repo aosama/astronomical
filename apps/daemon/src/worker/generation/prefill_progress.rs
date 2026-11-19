@@ -1,6 +1,6 @@
 use std::sync::{Arc, RwLock};
 
-use astronomical_ipc_protocol::WorkerEvent;
+use ipc_protocol::WorkerEvent;
 
 use crate::{
     ActiveRequestProgress, ChatGenerationStreamEvent, WorkerControlError, WorkerHealthSnapshot,

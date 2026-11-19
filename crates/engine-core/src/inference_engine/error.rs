@@ -81,12 +81,8 @@ mod error_tests;
 /// Token sampling sits below the engine and reports its own error; every
 /// sampling failure is fatal to the request, with the reason kept word for word.
 #[cfg(feature = "direct-mlx")]
-impl From<astronomical_model_primitives::gpu_token_sampling::TokenSamplingError>
-    for InferenceEngineError
-{
-    fn from(
-        sampling_error: astronomical_model_primitives::gpu_token_sampling::TokenSamplingError,
-    ) -> Self {
+impl From<model_primitives::gpu_token_sampling::TokenSamplingError> for InferenceEngineError {
+    fn from(sampling_error: model_primitives::gpu_token_sampling::TokenSamplingError) -> Self {
         Self::Fatal {
             reason: sampling_error.reason,
         }

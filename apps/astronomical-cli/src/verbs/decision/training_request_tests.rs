@@ -1,7 +1,7 @@
 //! Unit tests for following a training's frames.
 
-use astronomical_decision_contract::DecisionFailure;
-use astronomical_decision_contract::decision_training_job::{RunEnding, RunSummary};
+use decision_contract::DecisionFailure;
+use decision_contract::decision_training_job::{RunEnding, RunSummary};
 
 use super::*;
 

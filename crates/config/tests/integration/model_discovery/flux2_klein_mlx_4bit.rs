@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::Path;
 
-use astronomical_config::{
+use config::{
     Flux2KleinDirectoryVerificationError, ModelCapabilities, ModelFamily, ModelLicense,
     classify_model_directory, verify_flux2_klein_model_directory,
 };

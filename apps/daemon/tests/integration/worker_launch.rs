@@ -5,7 +5,7 @@ use astronomical_daemon::{
     GenerationStartError, MlxMemoryLimitUpdateOutcome, RuntimeModelGenerationDefaults,
     RuntimeModelPolicy, WorkerHandle, WorkerHealthSnapshot, WorkerHealthStatus, WorkerProcess,
 };
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     ChatGenerationCommand, ChatGenerationCompletionReason, ChatGenerationSettings, ChatImageInput,
     ChatMessage, ChatToolChoice, ExpertMemoryMode, MAX_IPC_FRAME_BYTES, RequestId,
     WorkerAutoregressiveModelConfiguration, WorkerChunkingConfiguration, WorkerModelConfiguration,

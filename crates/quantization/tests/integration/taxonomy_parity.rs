@@ -3,11 +3,11 @@
 
 use std::collections::BTreeSet;
 
-use astronomical_quantization::module_taxonomy::{
+use quantization::module_taxonomy::{
     ModuleRole, boundary_block_modules, classify_module, is_attention_component,
     transformer_block_index,
 };
-use astronomical_quantization::requantize::bit_policy::is_router_tensor_key;
+use quantization::requantize::bit_policy::is_router_tensor_key;
 
 use super::fixtures;
 

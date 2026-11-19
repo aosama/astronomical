@@ -20,7 +20,7 @@ fn should_default_validate_config_to_development_instance() {
     let validate_arguments = parsed_validate_config(&[]);
     assert_eq!(
         validate_arguments.runtime_instance,
-        astronomical_config::AstronomicalRuntimeInstance::Development
+        config::AstronomicalRuntimeInstance::Development
     );
     assert!(!validate_arguments.render_json);
 }
@@ -30,7 +30,7 @@ fn should_parse_stable_instance_flag() {
     let validate_arguments = parsed_validate_config(&["--instance", "stable"]);
     assert_eq!(
         validate_arguments.runtime_instance,
-        astronomical_config::AstronomicalRuntimeInstance::Stable
+        config::AstronomicalRuntimeInstance::Stable
     );
 }
 

@@ -69,30 +69,28 @@ pub(crate) async fn status_check(State(application_state): State<ApplicationStat
 /// custom directory, which no installed application accepts as its own.
 fn reported_instance_identity(
     application_state: &ApplicationState,
-) -> (astronomical_config::AstronomicalRuntimeInstance, String) {
+) -> (config::AstronomicalRuntimeInstance, String) {
     let Some(runtime_config_resolver) = application_state.runtime_config_resolver.as_ref() else {
         return (
-            astronomical_config::AstronomicalRuntimeInstance::Development,
-            astronomical_config::CUSTOM_STATE_DIRECTORY_LABEL.to_owned(),
+            config::AstronomicalRuntimeInstance::Development,
+            config::CUSTOM_STATE_DIRECTORY_LABEL.to_owned(),
         );
     };
     let instance_paths = runtime_config_resolver.instance_paths();
     (
         instance_paths
             .runtime_instance()
-            .unwrap_or(astronomical_config::AstronomicalRuntimeInstance::Development),
+            .unwrap_or(config::AstronomicalRuntimeInstance::Development),
         instance_paths.state_directory_label().to_owned(),
     )
 }
 
 /// Pure: the client-facing expert-memory mode labels.
-fn expert_memory_mode_label(
-    expert_memory_mode: astronomical_ipc_protocol::ExpertMemoryMode,
-) -> &'static str {
+fn expert_memory_mode_label(expert_memory_mode: ipc_protocol::ExpertMemoryMode) -> &'static str {
     match expert_memory_mode {
-        astronomical_ipc_protocol::ExpertMemoryMode::Resident => "resident",
-        astronomical_ipc_protocol::ExpertMemoryMode::Hybrid => "hybrid",
-        astronomical_ipc_protocol::ExpertMemoryMode::Paged => "paged",
+        ipc_protocol::ExpertMemoryMode::Resident => "resident",
+        ipc_protocol::ExpertMemoryMode::Hybrid => "hybrid",
+        ipc_protocol::ExpertMemoryMode::Paged => "paged",
     }
 }
 
@@ -291,7 +289,7 @@ fn prompt_progress_elapsed_millis(
 /// alone would show no progress.
 fn attach_prompt_layer_progress(
     status_json: &mut serde_json::Value,
-    prompt_layer_progress: Option<astronomical_ipc_protocol::WorkerPromptLayerProgress>,
+    prompt_layer_progress: Option<ipc_protocol::WorkerPromptLayerProgress>,
 ) {
     let Some(prompt_layer_progress) = prompt_layer_progress else {
         return;

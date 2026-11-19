@@ -15,12 +15,12 @@ pub enum Flux2KleinImageEncodingError {
     Png(#[source] image::ImageError),
     #[cfg(feature = "direct-mlx")]
     #[error("copying generated pixels from MLX failed")]
-    Mlx(#[from] astronomical_runtime_integration::MlxRuntimeError),
+    Mlx(#[from] runtime_integration::MlxRuntimeError),
 }
 
 #[cfg(feature = "direct-mlx")]
 impl From<mlx_bridge::MlxCError> for Flux2KleinImageEncodingError {
     fn from(captured_error: mlx_bridge::MlxCError) -> Self {
-        astronomical_runtime_integration::MlxRuntimeError::from(captured_error).into()
+        runtime_integration::MlxRuntimeError::from(captured_error).into()
     }
 }

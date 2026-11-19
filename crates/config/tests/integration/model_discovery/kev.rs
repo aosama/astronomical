@@ -4,9 +4,7 @@
 use std::fs;
 use std::path::Path;
 
-use astronomical_config::{
-    DecisionModelCapabilities, DiscoveredModel, ModelCapabilities, ModelFamily,
-};
+use config::{DecisionModelCapabilities, DiscoveredModel, ModelCapabilities, ModelFamily};
 
 const BACKBONE_SHARD_NAME: &str = "model.safetensors-00001-of-00001.safetensors";
 

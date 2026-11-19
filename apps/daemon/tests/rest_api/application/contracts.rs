@@ -1,13 +1,13 @@
-use astronomical_config::DiscoveredModel;
 use astronomical_daemon::{
     ActiveRequestProgress, ChatGenerationStreamEvent, WorkerActivity, build_application,
     build_application_with_discovered_models,
 };
-use astronomical_ipc_protocol::{ChatGenerationCompletionReason, ChatGenerationFailureReason};
 use axum::{
     body::{Body, to_bytes},
     http::{Request, StatusCode, header},
 };
+use config::DiscoveredModel;
+use ipc_protocol::{ChatGenerationCompletionReason, ChatGenerationFailureReason};
 use tower::ServiceExt;
 
 use super::support;
@@ -282,19 +282,17 @@ async fn should_report_ready_status_idle_activity_and_model_id_for_a_ready_worke
         vec![DiscoveredModel {
             model_id: MODEL_ID.to_owned(),
             provider_model_id: None,
-            model_family: astronomical_config::ModelFamily::Qwen3_5,
+            model_family: config::ModelFamily::Qwen3_5,
             revision: "test".to_owned(),
             model_directory: "/models/test".into(),
-            capabilities: astronomical_config::ModelCapabilities::Chat(
-                astronomical_config::ChatModelCapabilities {
-                    context_window: 262_144,
-                    max_input_tokens: 241_664,
-                    max_output_tokens: 20_480,
-                    supports_vision: true,
-                    supports_reasoning: true,
-                    supports_tool_calls: true,
-                },
-            ),
+            capabilities: config::ModelCapabilities::Chat(config::ChatModelCapabilities {
+                context_window: 262_144,
+                max_input_tokens: 241_664,
+                max_output_tokens: 20_480,
+                supports_vision: true,
+                supports_reasoning: true,
+                supports_tool_calls: true,
+            }),
             license: None,
             model_size_bytes: 18_420_000_000,
         }],
@@ -399,7 +397,7 @@ async fn should_report_completed_prefill_chunk_tokens_for_prompt_processing_prog
     let mut executor = ScriptedExecutor::ready(Vec::new());
     executor.health_snapshot.activity = WorkerActivity::PromptProcessing;
     executor.health_snapshot.active_request_progress = Some(ActiveRequestProgress::Prefill {
-        prompt_processing_phase: astronomical_ipc_protocol::WorkerPromptProcessingPhase::Target,
+        prompt_processing_phase: ipc_protocol::WorkerPromptProcessingPhase::Target,
         processed_tokens: 0,
         total_tokens: 2_200,
         elapsed_millis: 0,
@@ -437,13 +435,13 @@ async fn should_report_layers_done_while_a_prompt_is_read_one_layer_at_a_time() 
     let mut executor = ScriptedExecutor::ready(Vec::new());
     executor.health_snapshot.activity = WorkerActivity::PromptProcessing;
     executor.health_snapshot.active_request_progress = Some(ActiveRequestProgress::Prefill {
-        prompt_processing_phase: astronomical_ipc_protocol::WorkerPromptProcessingPhase::Target,
+        prompt_processing_phase: ipc_protocol::WorkerPromptProcessingPhase::Target,
         processed_tokens: 0,
         total_tokens: 10_240,
         elapsed_millis: 0,
         request_started_at: tokio::time::Instant::now(),
         completed_prefill_chunk_tokens: None,
-        prompt_layer_progress: Some(astronomical_ipc_protocol::WorkerPromptLayerProgress {
+        prompt_layer_progress: Some(ipc_protocol::WorkerPromptLayerProgress {
             completed_layer_count: 22,
             layer_count: 40,
         }),
@@ -475,7 +473,7 @@ async fn should_omit_completed_prefill_chunk_tokens_before_the_first_measurement
     let mut executor = ScriptedExecutor::ready(Vec::new());
     executor.health_snapshot.activity = WorkerActivity::PromptProcessing;
     executor.health_snapshot.active_request_progress = Some(ActiveRequestProgress::Prefill {
-        prompt_processing_phase: astronomical_ipc_protocol::WorkerPromptProcessingPhase::Target,
+        prompt_processing_phase: ipc_protocol::WorkerPromptProcessingPhase::Target,
         processed_tokens: 0,
         total_tokens: 2_200,
         elapsed_millis: 0,

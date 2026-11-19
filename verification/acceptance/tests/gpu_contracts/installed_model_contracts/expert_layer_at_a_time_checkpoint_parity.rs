@@ -14,10 +14,10 @@
 
 use std::time::Duration;
 
-use astronomical_model_serving::{
+use model_serving::{
     MemoryPhase, PerformanceAttribution, Qwen3_5ArtifactValidator, Qwen3_5StreamingModel,
 };
-use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
+use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use serial_test::serial;
 use tokio::time::timeout;
 
@@ -111,7 +111,7 @@ async fn assert_checkpoint_parity() {
 /// images, or the rows were never put in.
 fn assert_parity_with_image_embeddings(
     streaming_model: &Qwen3_5StreamingModel,
-    qwen3_5_config: &astronomical_model_serving::Qwen3_5Config,
+    qwen3_5_config: &model_serving::Qwen3_5Config,
     prompt_token_ids: &[u32],
     boundaries_without_images: &PublishedBoundaries,
 ) {
@@ -174,7 +174,7 @@ fn assert_parity_with_image_embeddings(
 /// only experts read twice are the failed layer's.
 fn assert_parity_after_a_span_is_run_again(
     streaming_model: &Qwen3_5StreamingModel,
-    qwen3_5_config: &astronomical_model_serving::Qwen3_5Config,
+    qwen3_5_config: &model_serving::Qwen3_5Config,
     prompt_token_ids: &[u32],
     streamed_boundaries: &PublishedBoundaries,
 ) {
@@ -230,7 +230,7 @@ type PublishedBoundaries = Vec<(usize, std::collections::BTreeMap<String, Vec<f3
 /// boundaries for the second half to compare against.
 fn assert_parity_with_every_layer_streamed(
     streaming_model: &Qwen3_5StreamingModel,
-    qwen3_5_config: &astronomical_model_serving::Qwen3_5Config,
+    qwen3_5_config: &model_serving::Qwen3_5Config,
     prompt_token_ids: &[u32],
 ) -> PublishedBoundaries {
     let chunk_path_reads = ExpertReadCount::starting(streaming_model);
@@ -287,7 +287,7 @@ fn assert_parity_with_every_layer_streamed(
 /// publishes it.
 fn assert_parity_with_planned_layers_kept(
     streaming_model: &Qwen3_5StreamingModel,
-    qwen3_5_config: &astronomical_model_serving::Qwen3_5Config,
+    qwen3_5_config: &model_serving::Qwen3_5Config,
     prompt_token_ids: &[u32],
     streamed_boundaries: &PublishedBoundaries,
 ) {

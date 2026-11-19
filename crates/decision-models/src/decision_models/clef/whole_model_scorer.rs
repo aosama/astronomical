@@ -18,12 +18,12 @@
 
 use std::rc::Rc;
 
-use astronomical_decision_contract::decision_training_job::TrainingExample;
-use astronomical_decision_contract::head_tuning_file::{HeadTuning, TunedTensor};
-use astronomical_decision_contract::{
+use decision_contract::decision_training_job::TrainingExample;
+use decision_contract::head_tuning_file::{HeadTuning, TunedTensor};
+use decision_contract::{
     DecisionFailure, DecisionQuestion, HeadInputRequest, parse_system_one_questions,
 };
-use astronomical_decision_training::head_parameters::ParameterLayout;
+use decision_training::head_parameters::ParameterLayout;
 use mlx_bridge::{MlxArray, MlxBindingsContext, MlxCError};
 
 use super::engine::{LoadedClefState, answer_every_question};

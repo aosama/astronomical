@@ -3,14 +3,14 @@
 use std::{fs, path::Path};
 use std::{net::SocketAddr, time::Duration};
 
-use astronomical_config::{DiscoveredModel, ModelCapabilities, ModelFamily, ModelLicense};
-use astronomical_model_serving::{
+use base64::{Engine as _, engine::general_purpose::STANDARD};
+use config::{DiscoveredModel, ModelCapabilities, ModelFamily, ModelLicense};
+use image::{GenericImageView, ImageFormat};
+use model_serving::{
     FLUX2_KLEIN_OFFICIAL_REVISION, FLUX2_KLEIN_PROVIDER_MODEL_ID, Flux2KleinImageDimensions,
     flux2_klein_initial_latents_for_tests,
 };
-use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
-use base64::{Engine as _, engine::general_purpose::STANDARD};
-use image::{GenericImageView, ImageFormat};
+use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use serde_json::{Value, json};
 use tokio::{
     task::JoinHandle,
@@ -25,11 +25,11 @@ use super::flux2_klein_rest_support::{
 use crate::serving_acceptance::chat::openai_rest::{
     assert_successful_streaming_chat_response, post_chat_completion,
 };
-use astronomical_test_harness::flux_reference_oracle::{
+use mlx_bridge::MlxDtype;
+use test_harness::flux_reference_oracle::{
     BFL_SOURCE_REVISION, DIFFUSERS_SOURCE_REVISION, ExpectedFluxReference, FluxReferenceOracle,
     sha256_hex,
 };
-use mlx_bridge::MlxDtype;
 
 const JOURNEY_TIMEOUT: Duration = Duration::from_secs(115);
 const STATUS_POLL_INTERVAL: Duration = Duration::from_millis(100);
@@ -250,7 +250,7 @@ fn read_reference_oracle(
 }
 
 fn optional_reference_oracle(acceptance_prompt: &str) -> Option<FluxReferenceOracle> {
-    let Some(bundle_path) = astronomical_test_harness::test_run::TestRunContext::current()
+    let Some(bundle_path) = test_harness::test_run::TestRunContext::current()
         .configuration
         .reference_artifact_path
     else {

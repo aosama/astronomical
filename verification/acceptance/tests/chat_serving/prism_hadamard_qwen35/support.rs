@@ -9,7 +9,7 @@ use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use astronomical_config::{
+use config::{
     ChatModelCapabilities, DiscoveredModel, ModelCapabilities, ModelFamily, ModelLicense,
 };
 
@@ -26,7 +26,7 @@ pub(super) fn public_model_id() -> &'static str {
 
 /// Resolves the installed snapshot directory, refusing to guess a path.
 fn pack_snapshot_directory() -> PathBuf {
-    astronomical_test_harness::test_run::TestRunContext::current().required_model_directory()
+    test_harness::test_run::TestRunContext::current().required_model_directory()
 }
 
 /// The `huggingface_hub_cache` directory holding the pack's `models--` tree: the

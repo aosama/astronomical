@@ -8,7 +8,7 @@
 //! every request before it, so the value after the last request of a journey
 //! is the most the whole journey needed.
 
-use astronomical_model_serving::DecisionEngine;
+use model_serving::DecisionEngine;
 
 const BYTES_PER_GIBIBYTE: f64 = 1024.0 * 1024.0 * 1024.0;
 

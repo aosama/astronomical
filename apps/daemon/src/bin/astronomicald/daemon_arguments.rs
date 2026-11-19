@@ -1,8 +1,6 @@
 use std::{ffi::OsString, path::PathBuf};
 
-use astronomical_config::{
-    AstronomicalConfigError, AstronomicalInstancePaths, AstronomicalRuntimeInstance,
-};
+use config::{AstronomicalConfigError, AstronomicalInstancePaths, AstronomicalRuntimeInstance};
 
 const HELP_TEXT: &str = "Astronomical local model runner\n\nUsage: astronomicald [--instance stable|development] [--state-directory PATH | --application-group-container PATH]\n       astronomicald --help\n       astronomicald --version\n\nOptions:\n  --instance INSTANCE                  Runtime instance (default: development)\n  --state-directory PATH               Absolute writable state root for this invocation\n  --application-group-container PATH   Absolute app group container holding the instance's standard state\n  -h, --help                           Show this help\n  --version                            Show exact build identity\n";
 const STATE_DIRECTORY_FLAG: &str = "--state-directory";

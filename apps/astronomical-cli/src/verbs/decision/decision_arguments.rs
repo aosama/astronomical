@@ -11,7 +11,7 @@
 use std::ffi::OsString;
 use std::path::PathBuf;
 
-use astronomical_decision_contract::decision_training_job::TrainingScope;
+use decision_contract::decision_training_job::TrainingScope;
 
 use crate::arguments::UsageError;
 

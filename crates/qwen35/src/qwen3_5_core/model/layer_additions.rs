@@ -31,7 +31,7 @@ use crate::qwen3_5_core::model_math::dense_projection::{
 };
 use crate::qwen3_5_core::model_math::differentiable_gated_delta::DifferentiableGatedDelta;
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
-use astronomical_model_primitives::adapter_target::AdapterTarget;
+use model_primitives::adapter_target::AdapterTarget;
 
 /// What a decision model adds to the forward pass.
 pub struct Qwen3_5LayerAdditions {

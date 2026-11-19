@@ -4,9 +4,9 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use astronomical_english_phonemes::{english_phoneme_chunks, prepare_english_lexicon};
-use astronomical_runtime_integration::MlxRuntime;
-use astronomical_speech_contract::{SpeechFailure, SpeechRequest};
+use english_phonemes::{english_phoneme_chunks, prepare_english_lexicon};
+use runtime_integration::MlxRuntime;
+use speech_contract::{SpeechFailure, SpeechRequest};
 
 use super::artifact_files::{KOKORO_WEIGHTS_FILE_NAME, voice_file_path};
 use super::reference_trace::KokoroSpeechTrace;
@@ -20,7 +20,7 @@ use crate::speech_models::speech_memory::SpeechMemoryAccount;
 use crate::speech_models::speech_request_slot::{
     SegmentSpeaker, SpeechRequestSlot, SpokenSegment, ends_request, voice_for_checked_request,
 };
-use astronomical_memory_policy::telemetry::MlxMemoryTelemetry;
+use memory_policy::telemetry::MlxMemoryTelemetry;
 
 pub struct KokoroSpeechEngine {
     settings: SpeechEngineSettings,
@@ -108,7 +108,7 @@ impl SpeechEngine for KokoroSpeechEngine {
         let model = KokoroSpeechModel::load(&runtime, &model_directory)?;
         prepare_english_lexicon();
         let load_result = self.settings.load_result(
-            astronomical_config::kokoro_speech_capabilities(&model_directory),
+            config::kokoro_speech_capabilities(&model_directory),
             KOKORO_SAMPLE_RATE_HERTZ,
         )?;
         let memory_account = self.settings.memory_account(weights_file_bytes(

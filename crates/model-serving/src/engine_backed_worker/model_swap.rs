@@ -1,6 +1,6 @@
 //! Transactional typed runtime replacement for autoregressive and image models.
 
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     ImageGenerationFailureReason, MlxMemorySnapshotSource, ProtocolWriter,
     WorkerDecisionCapabilities, WorkerEvent, WorkerModelCapabilities, WorkerModelConfiguration,
 };
@@ -107,8 +107,7 @@ pub(super) struct LoadedReplacement<
     >,
     pub(super) model_swapped_event: WorkerEvent,
     pub(super) minimum_mlx_memory_ceiling_bytes: u64,
-    pub(super) runtime_configuration:
-        astronomical_ipc_protocol::WorkerLoadedModelRuntimeConfiguration,
+    pub(super) runtime_configuration: ipc_protocol::WorkerLoadedModelRuntimeConfiguration,
     pub(super) engine_placement: Option<EnginePlacement>,
     pub(super) startup_residency_facts: Option<crate::StreamingStartupResidencyFacts>,
     pub(super) neural_engine_prefill_event: Option<WorkerEvent>,
@@ -547,7 +546,7 @@ where
 
 /// A load failure cut to the length the model-swap event carries.
 fn bounded_decision_engine_load_failure(
-    load_failure: &astronomical_decision_contract::DecisionFailure,
+    load_failure: &decision_contract::DecisionFailure,
 ) -> String {
     load_failure.to_string().chars().take(256).collect()
 }
@@ -570,21 +569,21 @@ fn bounded_image_engine_load_failure(failure_reason: ImageGenerationFailureReaso
 }
 
 fn bounded_embedding_engine_load_failure(
-    failure_reason: astronomical_ipc_protocol::EmbeddingsFailureReason,
+    failure_reason: ipc_protocol::EmbeddingsFailureReason,
 ) -> String {
     let failure_detail = match failure_reason {
-        astronomical_ipc_protocol::EmbeddingsFailureReason::InvalidRequest { reason }
-        | astronomical_ipc_protocol::EmbeddingsFailureReason::FatalExecution { reason } => reason,
-        astronomical_ipc_protocol::EmbeddingsFailureReason::MalformedModelOutput => {
+        ipc_protocol::EmbeddingsFailureReason::InvalidRequest { reason }
+        | ipc_protocol::EmbeddingsFailureReason::FatalExecution { reason } => reason,
+        ipc_protocol::EmbeddingsFailureReason::MalformedModelOutput => {
             "the embedding engine produced a malformed output".to_owned()
         }
-        astronomical_ipc_protocol::EmbeddingsFailureReason::ContextLengthExceeded {
+        ipc_protocol::EmbeddingsFailureReason::ContextLengthExceeded {
             actual_total_context_tokens,
             maximum_context_tokens,
         } => format!(
             "embedding input has {actual_total_context_tokens} tokens, exceeding the {maximum_context_tokens}-token encoder context"
         ),
-        astronomical_ipc_protocol::EmbeddingsFailureReason::EngineBusy => {
+        ipc_protocol::EmbeddingsFailureReason::EngineBusy => {
             "the embedding engine is busy".to_owned()
         }
     };
@@ -614,7 +613,7 @@ pub(super) fn factory_runtime_matches_configuration<
 ) -> bool {
     // Exhaustive on the runtime, so a new model kind cannot be forgotten
     // here the way the speech pair once was.
-    astronomical_config::exhaustive_table!(factory_runtime, {
+    config::exhaustive_table!(factory_runtime, {
         ModelFactoryRuntime::Autoregressive =>
             matches!(model_configuration, WorkerModelConfiguration::Autoregressive(_)),
         ModelFactoryRuntime::Image => matches!(
@@ -632,7 +631,7 @@ pub(super) fn factory_runtime_matches_configuration<
 
 pub(super) fn model_swapped_from_ready_event(
     ready_event: WorkerEvent,
-    expert_memory_mode: Option<astronomical_ipc_protocol::ExpertMemoryMode>,
+    expert_memory_mode: Option<ipc_protocol::ExpertMemoryMode>,
     minimum_mlx_memory_ceiling_bytes: u64,
 ) -> Result<WorkerEvent, WorkerRuntimeError> {
     match ready_event {

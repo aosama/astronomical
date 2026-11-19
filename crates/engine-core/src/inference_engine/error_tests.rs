@@ -1,7 +1,7 @@
 //! The sampling failure crosses into the engine error with its reason intact,
 //! so the text a client sees is the same as before sampling had its own type.
 
-use astronomical_model_primitives::gpu_token_sampling::TokenSamplingError;
+use model_primitives::gpu_token_sampling::TokenSamplingError;
 
 use super::InferenceEngineError;
 

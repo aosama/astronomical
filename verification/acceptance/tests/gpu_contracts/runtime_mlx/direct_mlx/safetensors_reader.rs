@@ -7,11 +7,11 @@ use std::{
     time::Instant,
 };
 
-use astronomical_runtime_integration::{
+use mlx_bridge::MlxDtype;
+use runtime_integration::{
     BoundedReadInterval, MlxMemoryLimits, MlxRuntime, MlxRuntimeError, PositionalFileReadMetrics,
     PositionalFileReadMetricsSnapshot,
 };
-use mlx_bridge::MlxDtype;
 
 const ACTIVE_MEMORY_LIMIT_BYTES: usize = 2 * 1024 * 1024 * 1024;
 const MLX_BUFFER_CACHE_LIMIT_BYTES: usize = 256 * 1024 * 1024;

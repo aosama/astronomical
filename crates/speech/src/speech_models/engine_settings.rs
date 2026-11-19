@@ -3,9 +3,9 @@
 
 use std::path::PathBuf;
 
-use astronomical_config::SpeechModelCapabilities;
-use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
-use astronomical_speech_contract::SpeechFailure;
+use config::SpeechModelCapabilities;
+use runtime_integration::{MlxMemoryLimits, MlxRuntime};
+use speech_contract::SpeechFailure;
 
 use super::speech_memory::SpeechMemoryAccount;
 use crate::speech_engine::SpeechEngineLoadResult;

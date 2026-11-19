@@ -607,7 +607,7 @@ impl Qwen3_5EngineState {
             image_pad_token_id: prompt_identity.image_pad_token_id,
             thinking_budget_state,
             performance_attribution,
-            prompt_work_reuse: astronomical_ipc_protocol::WorkerPromptWorkReuse {
+            prompt_work_reuse: ipc_protocol::WorkerPromptWorkReuse {
                 target_eligible_token_count: target_eligible_prompt_work_token_count,
                 target_restored_token_count: generation_position.restored_target_work_token_count,
             },
@@ -641,11 +641,9 @@ impl Qwen3_5EngineState {
     fn build_generation_start_contract(
         &self,
         restored_prompt_prefix_token_count: u32,
-        initial_prompt_processing_phase: Option<
-            astronomical_ipc_protocol::WorkerPromptProcessingPhase,
-        >,
+        initial_prompt_processing_phase: Option<ipc_protocol::WorkerPromptProcessingPhase>,
         astro_ssd_prompt_cache_diagnostics: Option<
-            astronomical_ipc_protocol::WorkerAstroSsdPromptCacheRequestDiagnostics,
+            ipc_protocol::WorkerAstroSsdPromptCacheRequestDiagnostics,
         >,
     ) -> Result<EngineGenerationStart, InferenceEngineError> {
         Ok(EngineGenerationStart::with_expert_memory_mode(

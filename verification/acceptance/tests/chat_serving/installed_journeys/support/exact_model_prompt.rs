@@ -1,11 +1,9 @@
 use std::path::Path;
 
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     ChatGenerationCommand, ChatGenerationSettings, ChatMessage, ChatToolChoice, RequestId,
 };
-use astronomical_model_serving::{
-    Qwen3_5ArtifactValidator, Qwen3_5PromptRenderer, Qwen3_5Tokenizer,
-};
+use model_serving::{Qwen3_5ArtifactValidator, Qwen3_5PromptRenderer, Qwen3_5Tokenizer};
 
 pub(crate) fn prepare_reproduced_long_prompt_token_ids_for_model(
     model_directory: &Path,

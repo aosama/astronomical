@@ -1,9 +1,9 @@
 use std::path::Path;
 
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     ChatGenerationCommand, ChatGenerationSettings, ChatMessage, ChatToolChoice, RequestId,
 };
-use astronomical_model_serving::{Qwen3_5ArtifactValidator, Qwen3_5Tokenizer};
+use model_serving::{Qwen3_5ArtifactValidator, Qwen3_5Tokenizer};
 
 const REPRESENTATIVE_SOURCE_TEXT: &str = include_str!(
     "../../../../../../verification/acceptance/tests/fixtures/model_metrics_5000_romeo_and_juliet_words.txt"

@@ -6,7 +6,7 @@ use crate::{
     EngineBackedWorker, EngineGenerationStart, EngineLoadResult, GeneratedToken,
     GenerationFinalization, InferenceEngine, InferenceEngineError,
 };
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     ChatGenerationCompletionReason, MAX_IPC_FRAME_BYTES, ProtocolReader, ProtocolWriter, RequestId,
     WorkerCommand, WorkerEvent,
 };
