@@ -16,7 +16,7 @@ use crate::expert_paging::{
 };
 use crate::memory::{StreamedPageSourcePlan, record_streamed_page_source_plan_in_both_ledgers};
 use crate::qwen3_5_streaming::expert_streaming::paged_expert_weights;
-use astronomical_gpu_building_blocks::serving_phase::SessionStreamingPhase;
+use astronomical_model_primitives::serving_phase::SessionStreamingPhase;
 
 /// Request dimensions needed to attribute one source plan without retaining routes.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

@@ -12,7 +12,7 @@ workspace = true
 
 [features]
 default = []
-direct-mlx = ["dep:astronomical-runtime-integration", "dep:mlx-bridge", "dep:astronomical-gpu-building-blocks", "astronomical-gpu-building-blocks/direct-mlx", "dep:astronomical-english-phonemes", "dep:astronomical-config", "dep:tokenizers", "dep:serde_json", "dep:thiserror"]
+direct-mlx = ["dep:astronomical-runtime-integration", "dep:mlx-bridge", "dep:astronomical-model-primitives", "astronomical-model-primitives/direct-mlx", "dep:astronomical-english-phonemes", "dep:astronomical-config", "dep:tokenizers", "dep:serde_json", "dep:thiserror"]
 
 # The text-to-speech families (Kokoro, Phonon) and the worker-facing seam
 # they implement (issue #2340). One-way edge: nothing here may depend on
@@ -25,7 +25,7 @@ astronomical-memory-policy = { path = "../memory-policy" }
 # The rest serve only the direct-MLX engines.
 astronomical-config = { path = "../config", optional = true }
 astronomical-english-phonemes = { path = "../english-phonemes", optional = true }
-astronomical-gpu-building-blocks = { path = "../gpu-building-blocks", optional = true }
+astronomical-model-primitives = { path = "../model-primitives", optional = true }
 astronomical-runtime-integration = { path = "../runtime-integration", features = ["mlx"], optional = true }
 mlx-bridge = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }

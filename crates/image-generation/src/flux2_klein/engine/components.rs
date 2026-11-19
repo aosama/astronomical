@@ -2,7 +2,7 @@
 
 use astronomical_ipc_protocol::{ImageGenerationCapabilities, RequestId};
 
-use astronomical_gpu_building_blocks::performance_attribution::PerformanceAttributionOutcome;
+use astronomical_model_primitives::performance_attribution::PerformanceAttributionOutcome;
 
 use super::super::{Flux2KleinFlowSchedule, Flux2KleinFlowStep, Flux2KleinImageDimensions};
 use astronomical_memory_policy::telemetry::MlxMemoryLimitAdjustment;

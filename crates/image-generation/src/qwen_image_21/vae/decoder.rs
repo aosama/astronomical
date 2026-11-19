@@ -9,7 +9,7 @@ use std::fs::File;
 
 use astronomical_runtime_integration::{MlxRuntime, MlxSafetensors};
 
-use astronomical_gpu_building_blocks::performance_attribution::{
+use astronomical_model_primitives::performance_attribution::{
     PerformanceAttribution, PerformanceOperation,
 };
 

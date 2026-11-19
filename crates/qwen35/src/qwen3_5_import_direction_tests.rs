@@ -70,7 +70,7 @@ async fn should_keep_qwen3_5_imports_directed_through_shared_core() {
             &["mod qwen3_5;", "pub use qwen3_5::"],
         );
         // Performance attribution and the routed-expert values it records live in
-        // astronomical-gpu-building-blocks (issue #2340), which cannot depend on
+        // astronomical-model-primitives (issue #2340), which cannot depend on
         // this crate, so Cargo now enforces that attribution never reaches the
         // Qwen3.5 streaming engine.
         assert_source_excludes_source_fragments(

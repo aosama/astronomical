@@ -7,7 +7,7 @@ use crate::memory::decode_seating::{DecodeExpertSeating, seat_and_materialize_co
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_streaming::model::Qwen3_5Model;
 use crate::{PerformanceAttribution, PerformanceCounter, kept_layer_indexes_to_seat_before_reply};
-use astronomical_gpu_building_blocks::serving_phase::SessionStreamingPhase;
+use astronomical_model_primitives::serving_phase::SessionStreamingPhase;
 
 impl Qwen3_5Model {
     /// Layers the reply's plan keeps whole that the astro expert cache does not hold

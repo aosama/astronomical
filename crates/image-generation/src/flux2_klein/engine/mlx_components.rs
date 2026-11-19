@@ -17,11 +17,11 @@ use crate::flux2_klein::weight_layout::Flux2KleinComponentWeightFiles;
 use astronomical_ipc_protocol::RequestId;
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
-use astronomical_gpu_building_blocks::performance_attribution::{
+use astronomical_memory_policy::utilization::MemoryCeilingUtilization;
+use astronomical_model_primitives::performance_attribution::{
     ModelLoadingPerformanceAttributionMetadata, PerformanceAttribution, PerformanceAttributionLog,
     PerformanceAttributionOutcome, PerformanceOperation,
 };
-use astronomical_memory_policy::utilization::MemoryCeilingUtilization;
 
 use super::super::memory_utilization::{
     Flux2KleinMemoryPhase, compose_flux2_klein_memory_ceiling_utilization,

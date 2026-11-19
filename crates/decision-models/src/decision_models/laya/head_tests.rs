@@ -17,7 +17,7 @@ use super::{HeadPassRows, LayaDecisionHead};
 use crate::decision_models::laya::configuration::LayaConfiguration;
 use crate::modernbert::token_batch::PaddedTokenBatch;
 use crate::modernbert::trunk::ModernBertTrunkError;
-use astronomical_gpu_building_blocks::synthetic_weights_test_support::{
+use astronomical_model_primitives::synthetic_weights_test_support::{
     SYNTHETIC_QUANTIZATION_BITS, SYNTHETIC_QUANTIZATION_GROUP_SIZE, SyntheticWeights,
     initialize_test_runtime, largest_difference, load_synthetic_weights, shakespeare_values,
 };

@@ -12,7 +12,7 @@ workspace = true
 
 [features]
 default = []
-direct-mlx = ["dep:astronomical-runtime-integration", "dep:mlx-bridge", "astronomical-gpu-building-blocks/direct-mlx", "astronomical-artifact-validation/direct-mlx"]
+direct-mlx = ["dep:astronomical-runtime-integration", "dep:mlx-bridge", "astronomical-model-primitives/direct-mlx", "astronomical-artifact-validation/direct-mlx"]
 
 # The image generation families (FLUX.2 klein, Qwen-Image-2.1) and the
 # worker-facing seam they implement (issue #2340). One-way edge: nothing here
@@ -20,7 +20,7 @@ direct-mlx = ["dep:astronomical-runtime-integration", "dep:mlx-bridge", "astrono
 # enforces it.
 [dependencies]
 astronomical-artifact-validation = { path = "../artifact-validation" }
-astronomical-gpu-building-blocks = { path = "../gpu-building-blocks" }
+astronomical-model-primitives = { path = "../model-primitives" }
 astronomical-ipc-protocol = { path = "../ipc-protocol" }
 astronomical-memory-policy = { path = "../memory-policy" }
 astronomical-runtime-integration = { path = "../runtime-integration", features = ["mlx"], optional = true }

@@ -27,13 +27,13 @@ impl AstroExpertCache {
     /// under the phase the engine is actually in (issue #1715).
     pub fn current_serving_phase(
         &self,
-    ) -> astronomical_gpu_building_blocks::serving_phase::SessionStreamingPhase {
+    ) -> astronomical_model_primitives::serving_phase::SessionStreamingPhase {
         match self.demand_phase {
             ExpertDemandPhase::Prefill => {
-                astronomical_gpu_building_blocks::serving_phase::SessionStreamingPhase::Prefill
+                astronomical_model_primitives::serving_phase::SessionStreamingPhase::Prefill
             }
             ExpertDemandPhase::Decode => {
-                astronomical_gpu_building_blocks::serving_phase::SessionStreamingPhase::Decode
+                astronomical_model_primitives::serving_phase::SessionStreamingPhase::Decode
             }
         }
     }

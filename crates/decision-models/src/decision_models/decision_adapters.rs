@@ -15,7 +15,7 @@ use astronomical_decision_contract::decision_adapters_file::{
     parse_decision_adapters,
 };
 
-pub use astronomical_gpu_building_blocks::adapter_target::AdapterTarget;
+pub use astronomical_model_primitives::adapter_target::AdapterTarget;
 
 /// The folder's add-ons, or none when the folder has no file.
 pub fn read_decision_adapters(model_directory: &Path) -> Result<DecisionAdapters, DecisionFailure> {

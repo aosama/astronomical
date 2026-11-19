@@ -4,14 +4,14 @@
 //! loads the family a model folder belongs to.
 //!
 //! The families and everything they share live in crates below this one:
-//! the GPU building blocks, artifact validation, the engine core, the Qwen 3.5
+//! the model primitives, artifact validation, the engine core, the Qwen 3.5
 //! family, the decision and embedding models, image generation and speech.
 //! This crate re-exports each of their public surfaces whole, so the worker
 //! binaries and the acceptance tests reach every engine through one crate.
 
 // Unsafe is denied workspace-wide, and this crate has none of its own. The one
 // exception, the macOS accounting syscall behind performance attribution,
-// lives in astronomical-gpu-building-blocks.
+// lives in astronomical-model-primitives.
 
 // Artifact validation is shared by every model family and lives in its own
 // crate (issue #2340); the alias keeps `crate::artifact_validation` paths.
@@ -41,9 +41,9 @@ pub use astronomical_engine_core::*;
 // `crate::flux2_klein` paths and the acceptance tests keep resolving.
 pub use astronomical_image_generation::*;
 
-// The GPU building blocks every model family shares (issue #2340); their
+// The model primitives every model family shares (issue #2340); their
 // public surface, modules included, is re-exported whole.
-pub use astronomical_gpu_building_blocks::*;
+pub use astronomical_model_primitives::*;
 
 // The Qwen 3.5 family (issue #2340): the core, the resident and streaming
 // engines, Prism Hadamard, speculative decoding, expert paging, the kernel

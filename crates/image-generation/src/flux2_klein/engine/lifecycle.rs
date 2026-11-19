@@ -11,7 +11,7 @@ use astronomical_ipc_protocol::{
 
 use crate::image_generation_engine::ImageGenerationEngineLoadResult;
 use crate::{ImageGenerationEngine, ImageGenerationEngineStep};
-use astronomical_gpu_building_blocks::performance_attribution::PerformanceAttributionOutcome;
+use astronomical_model_primitives::performance_attribution::PerformanceAttributionOutcome;
 
 #[cfg(feature = "direct-mlx")]
 use super::super::Flux2KleinArtifactProvenance;

@@ -41,7 +41,7 @@ fn should_pass_when_no_rule_crate_reaches_the_forbidden_crate() {
         ("astronomical-quantization", Vec::new(), "normal"),
         ("astronomical-speech", vec!["mlx-bridge"], "normal"),
         (
-            "astronomical-gpu-building-blocks",
+            "astronomical-model-primitives",
             vec!["mlx-bridge"],
             "normal",
         ),
@@ -74,7 +74,7 @@ fn should_detect_a_direct_family_to_serving_dependency() {
         ("astronomical-quantization", Vec::new(), "normal"),
         ("astronomical-speech", vec!["mlx-bridge"], "normal"),
         (
-            "astronomical-gpu-building-blocks",
+            "astronomical-model-primitives",
             vec!["mlx-bridge"],
             "normal",
         ),
@@ -99,8 +99,8 @@ fn should_detect_a_direct_family_to_serving_dependency() {
 }
 
 #[test]
-fn should_detect_a_building_blocks_to_serving_dependency() {
-    // The building blocks sit under every family; an edge back to the
+fn should_detect_a_model_primitives_to_serving_dependency() {
+    // The model primitives sit under every family; an edge back to the
     // serving crate would let a shared kernel reach into one family.
     let metadata_json_text = metadata_document_for(&[
         ("astronomical-memory-policy", vec!["serde_json"], "normal"),
@@ -118,24 +118,24 @@ fn should_detect_a_building_blocks_to_serving_dependency() {
         ("astronomical-quantization", Vec::new(), "normal"),
         ("astronomical-speech", vec!["mlx-bridge"], "normal"),
         (
-            "astronomical-gpu-building-blocks",
+            "astronomical-model-primitives",
             vec!["mlx-bridge", "astronomical-model-serving"],
             "normal",
         ),
         (
             "astronomical-model-serving",
-            vec!["astronomical-gpu-building-blocks"],
+            vec!["astronomical-model-primitives"],
             "normal",
         ),
         ("astronomical-jangtq2-qwen35", vec!["mlx-bridge"], "normal"),
     ]);
     let violations = architecture_violations(&metadata_json_text).unwrap();
     assert_eq!(violations.len(), 1);
-    assert_eq!(violations[0].rule_name, "building-blocks-without-serving");
+    assert_eq!(violations[0].rule_name, "model-primitives-without-serving");
     assert_eq!(
         violations[0].dependency_chain,
         vec![
-            "astronomical-gpu-building-blocks",
+            "astronomical-model-primitives",
             "astronomical-model-serving"
         ]
     );
@@ -160,7 +160,7 @@ fn should_detect_a_speech_to_serving_dependency() {
         ("astronomical-decision-models", vec!["mlx-bridge"], "normal"),
         ("astronomical-quantization", Vec::new(), "normal"),
         (
-            "astronomical-gpu-building-blocks",
+            "astronomical-model-primitives",
             vec!["mlx-bridge"],
             "normal",
         ),
@@ -194,7 +194,7 @@ fn should_detect_a_image_generation_to_serving_dependency() {
         ("mlx-bridge", Vec::new(), "normal"),
         ("astronomical-mlx-c-fork", Vec::new(), "normal"),
         (
-            "astronomical-gpu-building-blocks",
+            "astronomical-model-primitives",
             vec!["mlx-bridge"],
             "normal",
         ),
@@ -237,7 +237,7 @@ fn should_detect_a_artifact_validation_to_serving_dependency() {
         ("mlx-bridge", Vec::new(), "normal"),
         ("astronomical-mlx-c-fork", Vec::new(), "normal"),
         (
-            "astronomical-gpu-building-blocks",
+            "astronomical-model-primitives",
             vec!["mlx-bridge"],
             "normal",
         ),
@@ -287,7 +287,7 @@ fn should_detect_an_engine_core_to_serving_dependency() {
         ("mlx-bridge", Vec::new(), "normal"),
         ("astronomical-mlx-c-fork", Vec::new(), "normal"),
         (
-            "astronomical-gpu-building-blocks",
+            "astronomical-model-primitives",
             vec!["mlx-bridge"],
             "normal",
         ),
@@ -331,7 +331,7 @@ fn should_detect_a_qwen35_to_serving_dependency() {
         ("mlx-bridge", Vec::new(), "normal"),
         ("astronomical-mlx-c-fork", Vec::new(), "normal"),
         (
-            "astronomical-gpu-building-blocks",
+            "astronomical-model-primitives",
             vec!["mlx-bridge"],
             "normal",
         ),
@@ -375,7 +375,7 @@ fn should_detect_a_decision_models_to_serving_dependency() {
         ("mlx-bridge", Vec::new(), "normal"),
         ("astronomical-mlx-c-fork", Vec::new(), "normal"),
         (
-            "astronomical-gpu-building-blocks",
+            "astronomical-model-primitives",
             vec!["mlx-bridge"],
             "normal",
         ),
@@ -419,7 +419,7 @@ fn should_detect_a_qwen35_to_quantizer_dependency() {
         ("mlx-bridge", Vec::new(), "normal"),
         ("astronomical-mlx-c-fork", Vec::new(), "normal"),
         (
-            "astronomical-gpu-building-blocks",
+            "astronomical-model-primitives",
             vec!["mlx-bridge"],
             "normal",
         ),
@@ -474,7 +474,7 @@ fn should_detect_a_direct_forbidden_fork_dependency() {
         ("astronomical-quantization", Vec::new(), "normal"),
         ("astronomical-speech", vec!["mlx-bridge"], "normal"),
         (
-            "astronomical-gpu-building-blocks",
+            "astronomical-model-primitives",
             vec!["mlx-bridge"],
             "normal",
         ),
@@ -510,7 +510,7 @@ fn should_detect_a_direct_forbidden_dependency() {
         ("astronomical-quantization", Vec::new(), "normal"),
         ("astronomical-speech", vec!["mlx-bridge"], "normal"),
         (
-            "astronomical-gpu-building-blocks",
+            "astronomical-model-primitives",
             vec!["mlx-bridge"],
             "normal",
         ),
@@ -554,7 +554,7 @@ fn should_detect_a_transitive_forbidden_dependency() {
         ("astronomical-quantization", Vec::new(), "normal"),
         ("astronomical-speech", vec!["mlx-bridge"], "normal"),
         (
-            "astronomical-gpu-building-blocks",
+            "astronomical-model-primitives",
             vec!["mlx-bridge"],
             "normal",
         ),
@@ -596,7 +596,7 @@ fn should_count_dev_and_build_dependencies_as_reachability_edges() {
             ("astronomical-quantization", Vec::new(), "normal"),
             ("astronomical-speech", vec!["mlx-bridge"], "normal"),
             (
-                "astronomical-gpu-building-blocks",
+                "astronomical-model-primitives",
                 vec!["mlx-bridge"],
                 "normal",
             ),

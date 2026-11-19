@@ -12,7 +12,7 @@ workspace = true
 
 [features]
 default = []
-direct-mlx = ["dep:astronomical-neural-engine", "dep:astronomical-runtime-integration", "dep:mlx-bridge", "dep:astronomical-mlx-c-fork", "astronomical-jangtq2-qwen35/direct-mlx", "astronomical-engine-core/direct-mlx", "astronomical-gpu-building-blocks/direct-mlx", "astronomical-artifact-validation/direct-mlx"]
+direct-mlx = ["dep:astronomical-neural-engine", "dep:astronomical-runtime-integration", "dep:mlx-bridge", "dep:astronomical-mlx-c-fork", "astronomical-jangtq2-qwen35/direct-mlx", "astronomical-engine-core/direct-mlx", "astronomical-model-primitives/direct-mlx", "astronomical-artifact-validation/direct-mlx"]
 
 # The Qwen 3.5 family (issue #2340). One-way edge: nothing here may depend on
 # astronomical-model-serving or on the decision models above it;
@@ -23,7 +23,7 @@ astronomical-config = { path = "../config" }
 astronomical-engine-core = { path = "../engine-core" }
 astronomical-expert-atlas = { path = "../expert-atlas" }
 astronomical-expert-record-reader = { path = "../expert-record-reader" }
-astronomical-gpu-building-blocks = { path = "../gpu-building-blocks" }
+astronomical-model-primitives = { path = "../model-primitives" }
 astronomical-ipc-protocol = { path = "../ipc-protocol" }
 # The jangtq2 weight family (issue #1427), consumed one way.
 astronomical-jangtq2-qwen35 = { path = "../jangtq2-qwen35" }
@@ -45,7 +45,7 @@ tokio.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
-astronomical-gpu-building-blocks = { path = "../gpu-building-blocks", features = ["test-support"] }
+astronomical-model-primitives = { path = "../model-primitives", features = ["test-support"] }
 astronomical-test-harness = { path = "../test-harness", features = ["test-fixtures"] }
 libc.workspace = true
 # start_paused virtual time for #[tokio::test(start_paused = true)] bodies.

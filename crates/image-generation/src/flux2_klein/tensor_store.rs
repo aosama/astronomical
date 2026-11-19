@@ -14,7 +14,7 @@ use astronomical_runtime_integration::{
 use mlx_bridge::MlxArray;
 use thiserror::Error;
 
-use astronomical_gpu_building_blocks::affine_quantized_linear::{
+use astronomical_model_primitives::affine_quantized_linear::{
     AFFINE_QUANTIZATION_BITS, AFFINE_QUANTIZATION_GROUP_SIZE, AffineQuantizedLinear,
     AffineQuantizedLinearError,
 };

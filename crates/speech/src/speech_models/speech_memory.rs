@@ -7,8 +7,8 @@
 
 use astronomical_runtime_integration::MlxRuntime;
 
-use astronomical_gpu_building_blocks::forward_pass_memory::forward_pass_memory_telemetry;
 use astronomical_memory_policy::telemetry::MlxMemoryTelemetry;
+use astronomical_model_primitives::forward_pass_memory::forward_pass_memory_telemetry;
 
 pub struct SpeechMemoryAccount {
     effective_mlx_memory_ceiling_bytes: u64,
