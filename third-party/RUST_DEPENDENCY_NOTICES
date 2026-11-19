@@ -4560,7 +4560,7 @@ Used by:
 - base64 0.23.1
 - bitflags 2.13.1
 - bumpalo 3.20.3
-- cc 1.11.1
+- cc 1.11.2
 - cexpr 0.6.0
 - cfg-if 1.0.4
 - core-foundation-sys 0.8.7
