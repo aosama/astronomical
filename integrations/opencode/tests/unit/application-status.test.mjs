@@ -7,7 +7,7 @@ import { describe, it } from "node:test";
 import {
   fetchApplicationVersion,
   readApplicationVersion,
-} from "../../dist/application-status.js";
+} from "../../src/application-status.ts";
 import { STABLE } from "../support/test-helpers.mjs";
 
 describe("readApplicationVersion", () => {

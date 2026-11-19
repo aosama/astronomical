@@ -1,17 +1,18 @@
-// One discovery pass: is the provider switched on, which channels answer,
-// and which provider definitions they produce. The result is a plain state
+// One discovery pass: which channels answer, and which provider definitions
+// they produce. The result is a plain state
 // value; deciding what to reload or log about it is provider-refresh.ts's job.
 
-import { resolveAstronomicalChannels } from "./channels.js";
+import { resolveAstronomicalChannels } from "./channels.ts";
 import {
   fetchChannelChatModels,
   type ChannelChatModels,
-} from "./channel-chat-models.js";
-import { describeError } from "./error-message.js";
+} from "./channel-chat-models.ts";
+import { describeError } from "./error-message.ts";
+import type { AstronomicalPluginOptions } from "./plugin-options.ts";
 import {
   buildAstronomicalProviderDefinition,
   type AstronomicalProviderDefinition,
-} from "./provider-definition.js";
+} from "./provider-definition.ts";
 
 // One row per channel in the audit trail, so "which daemon answered with how
 // many models" is answerable from the log alone.
@@ -21,7 +22,6 @@ export interface AstronomicalChannelSummary {
 }
 
 export type ProviderRefreshState =
-  | { readonly kind: "disabled" }
   | { readonly kind: "unavailable"; readonly reason: string }
   | { readonly kind: "empty"; readonly reason: string }
   | {
@@ -32,17 +32,14 @@ export type ProviderRefreshState =
   | { readonly kind: "failed"; readonly reason: string };
 
 export interface ProviderDiscoveryInput {
-  readonly environment: NodeJS.ProcessEnv;
+  readonly options: AstronomicalPluginOptions;
   readonly fetchImpl?: typeof fetch;
-  readonly readEnabled: () => Promise<boolean>;
   readonly onDiagnostic?: (message: string) => void;
 }
 
 /** A sentence for the log saying why no provider is registered. */
 export function describeProviderState(state: ProviderRefreshState): string {
   switch (state.kind) {
-    case "disabled":
-      return "terminal toggle is off";
     case "unavailable":
     case "empty":
     case "failed":
@@ -95,9 +92,8 @@ export async function discoverProviderState(
     }
   };
   try {
-    if (!(await input.readEnabled())) return { kind: "disabled" };
     const channelChatModels = await fetchChannelChatModels({
-      channels: resolveAstronomicalChannels(input.environment),
+      channels: resolveAstronomicalChannels(input.options),
       fetchImpl: input.fetchImpl,
       onDiagnostic: reportDiagnostic,
     });

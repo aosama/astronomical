@@ -10,7 +10,7 @@
 // decision models omit the two limits, so they fall through as rejected here
 // rather than registering as bogus chat models.
 
-import { isRecord } from "./wire-values.js";
+import { isRecord } from "./wire-values.ts";
 
 // Every field the plugin reads is required and already resolved, so
 // downstream code never re-applies a fallback or invents a default. Fields the

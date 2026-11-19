@@ -4,7 +4,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { fetchModelListPayload } from "../../dist/model-list-transport.js";
+import { fetchModelListPayload } from "../../src/model-list-transport.ts";
 import { STABLE } from "../support/test-helpers.mjs";
 
 function fetchReturning(body, status = 200) {

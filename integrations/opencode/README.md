@@ -6,19 +6,11 @@ This plugin puts the models of [Astronomical](https://getastronomical.com/) in O
 
 - Astronomical, running on an Apple silicon Mac. The menu-bar item shows it is running.
 - At least one chat model downloaded in Astronomical.
-- OpenCode 2.
+- OpenCode 2.3 or later.
 
 ## Install
 
-The plugin is not on npm yet. Until it is, build it from this repository and point OpenCode at the folder:
-
-```bash
-cd integrations/opencode
-npm ci
-npm run build
-```
-
-Then add the folder to `plugins` in `~/.config/opencode/opencode.json`, using the folder's full path:
+The plugin is not on npm yet. Until it is, add this folder to `plugins` in `~/.config/opencode/opencode.json`, using the folder's full path:
 
 ```jsonc
 {
@@ -27,7 +19,7 @@ Then add the folder to `plugins` in `~/.config/opencode/opencode.json`, using th
 }
 ```
 
-Once it is published, one command will replace both steps:
+OpenCode loads the plugin's TypeScript sources directly, so there is nothing to build. Once the plugin is published, one command will replace this step:
 
 ```bash
 opencode plugin add opencode-astronomical
@@ -41,10 +33,11 @@ Start Astronomical, then OpenCode. Open the model picker with `/models`: your As
 opencode run -m "astronomical/<model id>" "Say hello in one short sentence."
 ```
 
-Two commands are added to OpenCode's terminal:
+`/astronomical-status` in OpenCode's terminal shows whether Astronomical is reachable, its version, and how many chat models it serves.
 
-- `/astronomical-status` shows whether Astronomical is reachable, its version, and how many chat models it serves.
-- `/astronomical-toggle` hides Astronomical's models from the picker, or shows them again.
+To switch the plugin off without uninstalling it, add `"-astronomical"` after it in `plugins`.
+
+`astronomical launch opencode` works with or without the plugin: both use the provider name `astronomical`, and OpenCode lists each model once.
 
 ## What it does
 
@@ -54,31 +47,42 @@ Two commands are added to OpenCode's terminal:
 - If Astronomical is not running, its models are simply absent. Nothing old is shown in their place.
 - The first reply from a model that is not yet loaded can take a while. The plugin allows up to ten minutes for it.
 
-## Stable and Development
+## Settings
 
-Astronomical's published app is the Stable instance, on port 6732. People building Astronomical from source also have a Development instance on port 6733. When both are running, the plugin lists them separately, as **Astronomical** and **Astronomical Development**, so a request always goes to the instance that serves the model.
+Settings go in the plugin's entry in `plugins`. Both are optional.
 
-Two settings change which instance the plugin uses. They are read from the environment of the OpenCode process:
+```jsonc
+{
+  "plugins": [
+    {
+      "package": "opencode-astronomical",
+      "options": { "channels": ["stable", "development"] },
+    },
+  ],
+}
+```
 
-- `ASTRONOMICAL_INSTANCE=stable` or `dev` uses only that instance.
-- `ASTRONOMICAL_BASE_URL` points the plugin at one specific address instead, such as a proxy. A missing `/v1` at the end is added.
+- **`channels`**: which Astronomical instances to list models from. The published app is the Stable instance, on port 6732, and that is the default. People building Astronomical from source also have a Development instance on port 6733; add `"development"` to list it too. Each instance gets its own provider, **Astronomical** and **Astronomical Development**, so a request always goes to the instance that serves the model.
+- **`baseUrl`**: one address to use instead, such as a proxy, for example `"http://127.0.0.1:6732/v1"`. A missing `/v1` at the end is added. Its models are listed under **Astronomical**.
+
+A misspelled setting stops the plugin, and OpenCode's log names the setting and what it accepts.
 
 ## Privacy
 
-The plugin talks only to Astronomical on your own Mac, at `127.0.0.1`. It sends nothing anywhere else. It writes two small files in OpenCode's state folder (`~/.local/state/opencode`, or `$XDG_STATE_HOME/opencode`): `astronomical-plugin-state.json`, which remembers the toggle, and `astronomical-plugin.log`, a record of what the plugin did that never grows past 1 MB.
+The plugin talks only to the Astronomical address it is set to, `127.0.0.1` unless you set `baseUrl`. It sends nothing anywhere else. It writes one file, `astronomical-plugin.log`, in OpenCode's state folder (`~/.local/state/opencode`, or `$XDG_STATE_HOME/opencode`): a record of what the plugin did that never grows past 1 MB.
 
 ## Develop
 
-The plugin is a standalone npm package in this folder, with its own lockfile.
+The plugin is a standalone npm package in this folder, with its own lockfile. It ships its TypeScript sources; OpenCode and Node 23.6 or later run them by removing the types, so the sources use only syntax that can be removed that way (`erasableSyntaxOnly`).
 
 ```bash
-npm ci          # install the pinned toolchain
-npm run build   # compile src/ into dist/
-npm test        # build, then run the tests
-npm run verify  # formatting check, build and tests
+npm ci            # install the pinned toolchain
+npm run typecheck # check the types
+npm test          # run the tests
+npm run verify    # formatting, types and tests
 ```
 
-The build is plain TypeScript (`tsc`). `solid-js` is a development dependency only because OpenCode's terminal plugin SDK loads it; inside OpenCode the host supplies its own copy.
+`solid-js` is a development dependency only because OpenCode's terminal plugin SDK loads it; inside OpenCode the host supplies its own copy.
 
 The tests use stand-ins for OpenCode and for the app, so they need neither running. `tests/unit` covers single modules; `tests/component` runs the whole plugin against a stand-in OpenCode. Both read the app's model listing from `crates/rest-contract/fixtures/openai_model_list.json`, which a Rust test keeps identical to what the app serves.
 

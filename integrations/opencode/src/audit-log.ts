@@ -5,8 +5,8 @@
 import { appendFile, mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
-import { ASTRONOMICAL_PLUGIN_ID } from "./constants.js";
-import { resolveOpenCodeStateDirectory } from "./opencode-state-directory.js";
+import { ASTRONOMICAL_PLUGIN_ID } from "./constants.ts";
+import { resolveOpenCodeStateDirectory } from "./opencode-state-directory.ts";
 
 // Beyond this size the log is trimmed rather than grown without bound.
 const AUDIT_LOG_MAX_BYTES = 1_000_000;
@@ -23,8 +23,7 @@ export type AstronomicalAuditEvent =
   | "provider-refreshed"
   | "provider-removed"
   | "diagnostic"
-  | "status-command"
-  | "toggle-command";
+  | "status-command";
 
 export type AstronomicalAuditLogger = (
   event: AstronomicalAuditEvent,

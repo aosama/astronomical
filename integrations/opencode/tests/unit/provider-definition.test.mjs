@@ -1,13 +1,13 @@
-// Provider-definition tests cover the V2 source shape, advertised capabilities,
+// Provider-definition tests cover the source shape, advertised capabilities,
 // the keyless local runtime settings, and the per-channel provider identity.
 
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { buildAstronomicalProviderDefinition } from "../../dist/provider-definition.js";
+import { buildAstronomicalProviderDefinition } from "../../src/provider-definition.ts";
 import { STABLE, representativeModels } from "../support/test-helpers.mjs";
 
-describe("the V2 provider definition reflects the live catalogue", () => {
+describe("the provider definition reflects the live model list", () => {
   it("should_use_the_native_openai_compatible_runtime_and_have_no_credential_fields", () => {
     const definition = buildAstronomicalProviderDefinition({
       instance: "stable",
@@ -34,7 +34,7 @@ describe("the V2 provider definition reflects the live catalogue", () => {
       models: representativeModels,
     });
     const devDefinition = buildAstronomicalProviderDefinition({
-      instance: "dev",
+      instance: "development",
       baseUrl: "http://127.0.0.1:6733/v1",
       models: representativeModels,
     });
@@ -47,7 +47,7 @@ describe("the V2 provider definition reflects the live catalogue", () => {
   });
 
   it("should_map_a_custom_base_url_override_onto_the_primary_provider_identity", () => {
-    // An ASTRONOMICAL_BASE_URL override replaces stable as "the" Astronomical
+    // A "baseUrl" option replaces stable as "the" Astronomical
     // endpoint, so it inherits the primary id rather than inventing a third.
     const definition = buildAstronomicalProviderDefinition({
       instance: "custom",
@@ -72,7 +72,7 @@ describe("the V2 provider definition reflects the live catalogue", () => {
     );
   });
 
-  it("should_map_vision_reasoning_tools_zero_cost_and_limits_into_v2_fields", () => {
+  it("should_map_vision_reasoning_tools_zero_cost_and_limits_into_opencode_fields", () => {
     const definition = buildAstronomicalProviderDefinition({
       instance: "stable",
       baseUrl: STABLE,

@@ -5,21 +5,25 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { createAstronomicalPlugin } from "../../dist/index.js";
+import { createAstronomicalPlugin } from "../../src/index.ts";
 import {
   STABLE,
   DEV,
-  catalogueFetch,
+  modelListFetch,
   perUrlFetch,
   representativeModels,
   noOpAudit,
 } from "../support/test-helpers.mjs";
 
-// A dev-only model id so tests can prove the two channels' catalogues stay
+// A dev-only model id so tests can prove the two channels' model lists stay
 // separate instead of one overwriting the other.
 const devOnlyModel = { ...representativeModels[0], id: "dev-only-model" };
 
-function createProviderDomain() {
+// Both instances, as a user who builds Astronomical from source configures it;
+// tests of the default pass `null`, which the plugin reads as "no options".
+const BOTH_CHANNELS = { channels: ["stable", "development"] };
+
+function createProviderDomain(pluginOptions = BOTH_CHANNELS) {
   const providers = [];
   const transforms = [];
   let reloadCount = 0;
@@ -33,6 +37,7 @@ function createProviderDomain() {
 
   return {
     context: {
+      options: pluginOptions,
       provider: {
         async transform(transform) {
           transforms.push(transform);
@@ -54,19 +59,17 @@ function createProviderDomain() {
 
 function bothChannelsFetch() {
   return perUrlFetch({
-    [STABLE]: catalogueFetch(representativeModels),
-    [DEV]: catalogueFetch([devOnlyModel]),
+    [STABLE]: modelListFetch(representativeModels),
+    [DEV]: modelListFetch([devOnlyModel]),
   });
 }
 
-describe("the V2 provider transform registers one provider per live channel", () => {
+describe("the provider transform registers one provider per live channel", () => {
   it("should_register_stable_and_dev_providers_side_by_side_when_both_channels_answer", async () => {
-    // The reported bug: dev models never appeared because the old catalogue
+    // The reported bug: dev models never appeared because the old model list fetch
     // stopped at the first reachable channel. Both channels must now register.
     const plugin = createAstronomicalPlugin({
-      env: {},
       fetchImpl: bothChannelsFetch(),
-      readEnabled: async () => true,
       audit: noOpAudit,
       scheduleRefresh: () => () => {},
     });
@@ -97,14 +100,12 @@ describe("the V2 provider transform registers one provider per live channel", ()
 
   it("should_register_only_dev_when_stable_is_unavailable", async () => {
     const plugin = createAstronomicalPlugin({
-      env: {},
       fetchImpl: perUrlFetch({
         [STABLE]: () => {
           throw new Error("ECONNREFUSED");
         },
-        [DEV]: catalogueFetch([devOnlyModel]),
+        [DEV]: modelListFetch([devOnlyModel]),
       }),
-      readEnabled: async () => true,
       audit: noOpAudit,
       scheduleRefresh: () => () => {},
     });
@@ -119,14 +120,12 @@ describe("the V2 provider transform registers one provider per live channel", ()
 
   it("should_register_only_stable_when_dev_is_unavailable", async () => {
     const plugin = createAstronomicalPlugin({
-      env: {},
       fetchImpl: perUrlFetch({
-        [STABLE]: catalogueFetch(representativeModels),
+        [STABLE]: modelListFetch(representativeModels),
         [DEV]: () => {
           throw new Error("ECONNREFUSED");
         },
       }),
-      readEnabled: async () => true,
       audit: noOpAudit,
       scheduleRefresh: () => () => {},
     });
@@ -139,53 +138,70 @@ describe("the V2 provider transform registers one provider per live channel", ()
     cleanup();
   });
 
-  it("should_honor_ASTRONOMICAL_INSTANCE_dev_by_probing_only_the_dev_channel", async () => {
+  it("should_probe_only_the_development_channel_when_the_options_name_only_it", async () => {
     const plugin = createAstronomicalPlugin({
-      env: { ASTRONOMICAL_INSTANCE: "dev" },
       fetchImpl: bothChannelsFetch(),
-      readEnabled: async () => true,
       audit: noOpAudit,
       scheduleRefresh: () => () => {},
     });
-    const domain = createProviderDomain();
+    const domain = createProviderDomain({ channels: ["development"] });
     const cleanup = await plugin.setup(domain.context);
 
     assert.equal(domain.providers.length, 1);
     assert.equal(domain.providers[0].info.id, "astronomical-development");
     cleanup();
   });
+
+  it("should_list_only_stable_when_no_options_are_given", async () => {
+    const requestedUrls = [];
+    const plugin = createAstronomicalPlugin({
+      fetchImpl: async (url) => {
+        requestedUrls.push(url);
+        return bothChannelsFetch()(url);
+      },
+      audit: noOpAudit,
+      scheduleRefresh: () => () => {},
+    });
+    const domain = createProviderDomain(null);
+    const cleanup = await plugin.setup(domain.context);
+
+    assert.deepEqual(
+      domain.providers.map((provider) => provider.info.id),
+      ["astronomical"],
+    );
+    assert.deepEqual(requestedUrls, [`${STABLE}/models`]);
+    cleanup();
+  });
 });
 
-describe("the provider transform fails closed and follows the terminal toggle", () => {
-  it("should_not_probe_or_register_when_disabled", async () => {
+describe("the provider transform fails closed", () => {
+  it("should_stop_setup_with_a_message_naming_a_wrong_option", async () => {
     let requestCount = 0;
     const plugin = createAstronomicalPlugin({
-      env: {},
       fetchImpl: async () => {
         requestCount += 1;
         return new Response("{}", { status: 200 });
       },
-      readEnabled: async () => false,
       audit: noOpAudit,
       scheduleRefresh: () => () => {},
     });
-    const domain = createProviderDomain();
-    const cleanup = await plugin.setup(domain.context);
+    const domain = createProviderDomain({ channels: ["beta"] });
 
+    await assert.rejects(
+      plugin.setup(domain.context),
+      /"channels" must be a list/,
+    );
     assert.equal(domain.providers.length, 0);
     assert.equal(requestCount, 0);
-    cleanup();
   });
 
   it("should_leave_providers_absent_and_record_a_diagnostic_when_all_channels_fail", async () => {
     const diagnostics = [];
     const auditEvents = [];
     const plugin = createAstronomicalPlugin({
-      env: {},
       fetchImpl: async () => {
         throw new Error("ECONNREFUSED");
       },
-      readEnabled: async () => true,
       audit: async (event, detail) => auditEvents.push({ event, ...detail }),
       onDiagnostic: (message) => diagnostics.push(message),
       scheduleRefresh: () => () => {},
@@ -206,12 +222,10 @@ describe("the provider transform fails closed and follows the terminal toggle", 
       (model) => !model.supported_endpoints.includes("/v1/chat/completions"),
     );
     const plugin = createAstronomicalPlugin({
-      env: {},
       fetchImpl: perUrlFetch({
-        [STABLE]: catalogueFetch(onlyNonChatModels),
-        [DEV]: catalogueFetch([devOnlyModel]),
+        [STABLE]: modelListFetch(onlyNonChatModels),
+        [DEV]: modelListFetch([devOnlyModel]),
       }),
-      readEnabled: async () => true,
       audit: noOpAudit,
       scheduleRefresh: () => () => {},
     });
@@ -223,19 +237,21 @@ describe("the provider transform fails closed and follows the terminal toggle", 
     cleanup();
   });
 
-  it("should_remove_restore_and_refresh_providers_as_shared_state_and_catalogues_change", async () => {
-    let isEnabled = true;
+  it("should_remove_restore_and_refresh_providers_as_channels_and_models_change", async () => {
+    let isStableUp = true;
     let stableModels = representativeModels;
     let scheduledRefresh;
     let isSchedulerStopped = false;
     const plugin = createAstronomicalPlugin({
-      env: {},
       fetchImpl: perUrlFetch({
-        [STABLE]: async () =>
-          new Response(JSON.stringify({ data: stableModels }), { status: 200 }),
-        [DEV]: catalogueFetch([devOnlyModel]),
+        [STABLE]: async () => {
+          if (!isStableUp) throw new Error("ECONNREFUSED");
+          return new Response(JSON.stringify({ data: stableModels }), {
+            status: 200,
+          });
+        },
+        [DEV]: modelListFetch([devOnlyModel]),
       }),
-      readEnabled: async () => isEnabled,
       audit: noOpAudit,
       scheduleRefresh: (refresh) => {
         scheduledRefresh = refresh;
@@ -251,12 +267,15 @@ describe("the provider transform fails closed and follows the terminal toggle", 
     assert.equal(domain.providers[0].models.length, 2);
     assert.equal(domain.providers[1].models.length, 1);
 
-    isEnabled = false;
+    isStableUp = false;
     await scheduledRefresh();
-    assert.equal(domain.providers.length, 0);
+    assert.deepEqual(
+      domain.providers.map((provider) => provider.info.id),
+      ["astronomical-development"],
+    );
     assert.equal(domain.reloadCount, 1);
 
-    isEnabled = true;
+    isStableUp = true;
     stableModels = [representativeModels[1]];
     await scheduledRefresh();
     assert.equal(domain.providers.length, 2);

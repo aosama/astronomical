@@ -4,7 +4,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { parseAstronomicalModelRow } from "../../dist/model-row.js";
+import { parseAstronomicalModelRow } from "../../src/model-row.ts";
 
 function row(overrides = {}) {
   return {

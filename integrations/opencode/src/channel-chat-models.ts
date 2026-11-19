@@ -6,17 +6,17 @@
 // when every channel fails the result is a failure rather than an empty or
 // stale list, so OpenCode simply omits the providers until one answers.
 
-import type { AstronomicalChannel } from "./channels.js";
-import { selectChatModels } from "./chat-models.js";
+import type { AstronomicalChannel } from "./channels.ts";
+import { selectChatModels } from "./chat-models.ts";
 import {
-  ASTRONOMICAL_MODEL_LIST_TIMEOUT_MS,
+  ASTRONOMICAL_PROBE_TIMEOUT_MS,
   type AstronomicalChannelInstance,
-} from "./constants.js";
-import type { AstronomicalModelRow } from "./model-row.js";
+} from "./constants.ts";
+import type { AstronomicalModelRow } from "./model-row.ts";
 import {
   fetchModelListPayload,
   type ModelListPayloadResult,
-} from "./model-list-transport.js";
+} from "./model-list-transport.ts";
 
 export type FetchChannelChatModelsOptions = {
   readonly channels: readonly AstronomicalChannel[];
@@ -49,8 +49,7 @@ export async function fetchChannelChatModels(
   options: FetchChannelChatModelsOptions,
 ): Promise<FetchChannelChatModelsResult> {
   const fetchImpl: typeof fetch = options.fetchImpl ?? fetch;
-  const timeoutMs: number =
-    options.timeoutMs ?? ASTRONOMICAL_MODEL_LIST_TIMEOUT_MS;
+  const timeoutMs: number = options.timeoutMs ?? ASTRONOMICAL_PROBE_TIMEOUT_MS;
   const pendingProbes: Promise<ModelListPayloadResult>[] = [];
   for (const channel of options.channels) {
     pendingProbes.push(

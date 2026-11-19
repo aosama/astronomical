@@ -3,15 +3,15 @@
 // cannot publish a non-chat model even if a caller skips discovery.
 
 import { Model, Provider } from "@opencode/plugin";
-import { acceptsImageInput, servesChatCompletions } from "./chat-models.js";
+import { acceptsImageInput, servesChatCompletions } from "./chat-models.ts";
 import {
   ASTRONOMICAL_CHANNEL_PROVIDER_IDS,
   ASTRONOMICAL_CHANNEL_PROVIDER_NAMES,
   ASTRONOMICAL_INFERENCE_TIMEOUT_MS,
   ASTRONOMICAL_OPENAI_COMPATIBLE_PACKAGE,
   type AstronomicalChannelInstance,
-} from "./constants.js";
-import type { AstronomicalModelRow } from "./model-row.js";
+} from "./constants.ts";
+import type { AstronomicalModelRow } from "./model-row.ts";
 
 export interface AstronomicalProviderDefinition {
   readonly info: Provider.Info;

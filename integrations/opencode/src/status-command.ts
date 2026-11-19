@@ -2,20 +2,21 @@
 // "Astronomical 0.2.118: 8 chat models", shown as a terminal toast.
 
 import type { Context as TuiPluginContext } from "@opencode/plugin/tui/context";
-import { recordAuditEvent, type AstronomicalAuditLogger } from "./audit-log.js";
-import { resolveAstronomicalChannels } from "./channels.js";
+import { recordAuditEvent, type AstronomicalAuditLogger } from "./audit-log.ts";
+import { resolveAstronomicalChannels } from "./channels.ts";
 import {
   fetchChannelChatModels,
   type ChannelChatModels,
-} from "./channel-chat-models.js";
-import { fetchApplicationVersion } from "./application-status.js";
+} from "./channel-chat-models.ts";
+import { fetchApplicationVersion } from "./application-status.ts";
+import type { AstronomicalPluginOptions } from "./plugin-options.ts";
 import {
   ASTRONOMICAL_CHANNEL_PROVIDER_NAMES,
   ASTRONOMICAL_PROVIDER_NAME,
-} from "./constants.js";
+} from "./constants.ts";
 
 export interface StatusCommandInput {
-  readonly environment: NodeJS.ProcessEnv;
+  readonly options: AstronomicalPluginOptions;
   readonly fetchImpl: typeof fetch;
   readonly audit: AstronomicalAuditLogger;
 }
@@ -41,7 +42,7 @@ export async function showAstronomicalStatus(
   await recordAuditEvent(input.audit, "status-command");
   let latestDiagnostic: string | undefined;
   const channelChatModels = await fetchChannelChatModels({
-    channels: resolveAstronomicalChannels(input.environment),
+    channels: resolveAstronomicalChannels(input.options),
     fetchImpl: input.fetchImpl,
     onDiagnostic: (message: string): void => {
       latestDiagnostic = message;
