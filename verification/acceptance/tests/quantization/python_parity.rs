@@ -14,7 +14,6 @@
 
 use std::path::Path;
 
-use astronomical_model_serving::quantization_probe::Qwen3_5KlDivergenceEngine;
 use astronomical_quantization::artifact::OptiQSensitivityDocument;
 use astronomical_quantization::calibration::mix::DEFAULT_SHUFFLE_SEED;
 use astronomical_quantization::calibration::{CalibrationMix, HuggingFaceCalibrationTokenizer};
@@ -26,6 +25,7 @@ use astronomical_quantization::pipeline::probe_source_view::loadable_model_direc
 use astronomical_quantization::pipeline::{
     PipelineMethod, plan_from_sensitivity_table, run_quantization_pipeline,
 };
+use astronomical_qwen35_quantization_probe::Qwen3_5KlDivergenceEngine;
 use serial_test::serial;
 
 use super::artifact_comparison::{

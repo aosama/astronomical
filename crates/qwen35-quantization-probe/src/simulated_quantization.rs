@@ -14,7 +14,7 @@ use astronomical_quantization::error::QuantizationError;
 use astronomical_runtime_integration::MlxRuntime;
 use mlx_bridge::{MlxArray, MlxDtype};
 
-use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights;
+use astronomical_qwen35::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights;
 
 /// Turns any MLX failure into the probe error the sweep understands.
 pub fn mlx_step<Value, Failure: std::fmt::Display>(

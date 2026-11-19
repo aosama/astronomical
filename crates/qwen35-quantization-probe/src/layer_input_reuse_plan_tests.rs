@@ -1,7 +1,7 @@
 //! Unit tests for the layer-input reuse arithmetic.
 
 use super::*;
-use crate::quantization_probe::module_locations::{AttentionProjection, FeedForwardProjection};
+use crate::module_locations::{AttentionProjection, FeedForwardProjection};
 
 #[test]
 fn should_keep_every_layer_input_for_a_small_base() {

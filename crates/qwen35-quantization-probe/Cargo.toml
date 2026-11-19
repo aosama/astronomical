@@ -1,0 +1,22 @@
+[package]
+name = "astronomical-qwen35-quantization-probe"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+[lints]
+workspace = true
+
+# The Qwen 3.5 sensitivity probe for the quantizer (issue #2340). It is the one
+# place a model family meets the 17,000-line quantizer, so it lives apart from
+# both: the Qwen crate, the worker and the daemon never compile the quantizer,
+# and only the CLI's `quantize-convert` feature and the acceptance tests pull
+# this crate in. It runs on MLX, so it has no default-features build.
+[dependencies]
+astronomical-quantization = { path = "../quantization", features = ["direct-mlx"] }
+astronomical-qwen35 = { path = "../qwen35", features = ["direct-mlx"] }
+astronomical-runtime-integration = { path = "../runtime-integration", features = ["mlx"] }
+mlx-bridge.workspace = true

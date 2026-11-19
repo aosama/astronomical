@@ -56,6 +56,7 @@ dependencies = [
  "astronomical-native-identity",
  "astronomical-neural-engine-research",
  "astronomical-quantization",
+ "astronomical-qwen35-quantization-probe",
  "astronomical-rest-contract",
  "astronomical-runtime-integration",
  "astronomical-speech-contract",
@@ -102,8 +103,9 @@ dependencies = [
  "astronomical-decision-training",
  "astronomical-expert-atlas",
  "astronomical-ipc-protocol",
- "astronomical-model-serving",
+ "astronomical-memory-policy",
  "astronomical-quantization",
+ "astronomical-qwen35-quantization-probe",
  "astronomical-runtime-integration",
  "astronomical-speech-contract",
  "astronomical-vision-tower",
@@ -518,7 +520,6 @@ dependencies = [
  "astronomical-memory-policy",
  "astronomical-mlx-c-fork",
  "astronomical-neural-engine",
- "astronomical-quantization",
  "astronomical-runtime-integration",
  "astronomical-test-harness",
  "image",
@@ -534,6 +535,16 @@ dependencies = [
  "tokenizers",
  "tokio",
  "tracing",
+]
+
+[[package]]
+name = "astronomical-qwen35-quantization-probe"
+version = "0.2.118"
+dependencies = [
+ "astronomical-quantization",
+ "astronomical-qwen35",
+ "astronomical-runtime-integration",
+ "mlx-bridge",
 ]
 
 [[package]]

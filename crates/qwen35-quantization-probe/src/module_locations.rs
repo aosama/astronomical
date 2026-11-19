@@ -2,10 +2,10 @@
 //! Qwen3.5 weights, resolved once from the artifact's canonical module
 //! names so a probe swap never string-matches on the hot path.
 
-use crate::qwen3_5_core::model_math::decoder_layer_weights::{
+use astronomical_qwen35::qwen3_5_core::model_math::decoder_layer_weights::{
     Qwen3_5AffineWeights, Qwen3_5AttentionWeights, Qwen3_5DecoderFeedForwardWeights,
 };
-use crate::qwen3_5_core::model_math::weights::Qwen3_5Weights;
+use astronomical_qwen35::qwen3_5_core::model_math::weights::Qwen3_5Weights;
 
 #[cfg(test)]
 #[path = "module_locations_tests.rs"]

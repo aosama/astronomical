@@ -491,7 +491,7 @@ incorporates, as source translations from mlx-optiq 0.6.5 and 0.7.9:
   guard, the structural fallback, the bf16 layer index (module inventory),
   the bf16 and block-scaled FP8 weight loading (the requantizer's source
   reader), the swap-forward-restore probe cycle (the Qwen3.5 probe in
-  crates/qwen35/src/quantization_probe), the KL formula, the
+  crates/qwen35-quantization-probe/src), the KL formula, the
   sensitivity checkpoint, and the sensitivity report
   (optiq/core/sensitivity.py).
 - The greedy knapsack allocator with the block-aware floor and block-run

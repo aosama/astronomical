@@ -3,7 +3,9 @@
 //! streaming engines, the Prism Hadamard ternary build, speculative decoding,
 //! expert paging, the custom kernel capability probes, the
 //! astro_ssd_prompt_cache the family's engines publish to, the owner-thread
-//! engine they run on, and the quantization sensitivity probe.
+//! engine they run on. The quantizer's sensitivity probe for this family lives
+//! in `astronomical-qwen35-quantization-probe`, so this crate never compiles
+//! the quantizer.
 //!
 //! It sits above the engine core, whose contract it implements, and below the
 //! decision models (Kev and Clef score on a Qwen 3.5 backbone) and the
@@ -24,13 +26,6 @@ pub mod mlx_inference_engine;
 // crate API ahead of the serving-path integration; the acceptance crate
 // exercises it through this public surface.
 pub mod prism_hadamard_qwen35;
-
-// The sensitivity probe adapter for the quantization crate (the OptiQ port):
-// swaps one Qwen3.5 module at a time between its bf16 weight and a
-// simulate-quantized copy and reports KL divergence, using this crate's
-// resident model and weights.
-#[cfg(feature = "direct-mlx")]
-pub mod quantization_probe;
 
 // The jangtq2 weight family lives in its own crate,
 // `astronomical-jangtq2-qwen35` (issue #1427); the streaming integration

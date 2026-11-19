@@ -7,8 +7,7 @@ use std::io::Write;
 use std::path::Path;
 use std::process::Command;
 
-use astronomical_model_serving::machine_ceiling_from_physical_ram_bytes;
-use astronomical_model_serving::quantization_probe::load_qwen3_5_probe_model;
+use astronomical_memory_policy::serving_ceiling::machine_ceiling_from_physical_ram_bytes;
 use astronomical_quantization::bit_width::GroupSize;
 use astronomical_quantization::error::QuantizationError;
 use astronomical_quantization::pipeline::{
@@ -16,6 +15,7 @@ use astronomical_quantization::pipeline::{
     QuantizationPipelineOutcome, QuantizationPipelineRequest, ReferenceMode,
     run_quantization_pipeline,
 };
+use astronomical_qwen35_quantization_probe::load_qwen3_5_probe_model;
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
 use super::{

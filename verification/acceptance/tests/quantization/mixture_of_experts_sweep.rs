@@ -12,7 +12,6 @@
 
 use std::path::{Path, PathBuf};
 
-use astronomical_model_serving::quantization_probe::load_qwen3_5_probe_model;
 use astronomical_quantization::artifact::converted_config::normalize_converted_config;
 use astronomical_quantization::bit_width::GroupSize;
 use astronomical_quantization::encoder::RangeSearchPolicy;
@@ -26,6 +25,7 @@ use astronomical_quantization::requantize::{
     BitPolicy, DEFAULT_COPY_PATTERNS, DEFAULT_SHARD_BYTES, RequantizeTensorPlan,
 };
 use astronomical_quantization::sensitivity::SensitivityProbeModel;
+use astronomical_qwen35_quantization_probe::load_qwen3_5_probe_model;
 use astronomical_runtime_integration::MlxRuntime;
 use serial_test::serial;
 
