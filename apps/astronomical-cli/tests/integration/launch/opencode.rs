@@ -194,9 +194,22 @@ fn should_use_the_only_chat_model_without_prompting() {
     assert!(!stderr_text.contains("Select a model"));
     let config_document = config_from_prepared_launch(&prepared_launch);
     assert_eq!(config_document["model"], "astronomical/library-chat-model");
+    let provider = &config_document["providers"]["astronomical"];
     assert_eq!(
-        config_document["provider"]["astronomical"]["options"]["baseURL"],
+        provider["settings"]["baseURL"],
         format!("http://{}/v1", stub_server.bind_address)
+    );
+    assert_eq!(
+        provider["package"],
+        "@opencode/ai/providers/openai-compatible"
+    );
+    assert_eq!(
+        provider["models"]["library-chat-model"]["limit"]["context"], 131_072,
+        "the session declares the model's real context window"
+    );
+    assert!(
+        config_document.get("provider").is_none(),
+        "the earlier provider shape is gone"
     );
 }
 
