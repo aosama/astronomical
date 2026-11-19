@@ -174,4 +174,29 @@ describe("the V2 terminal plugin", () => {
     assert.equal(writeCount, 0);
     assert.equal(tui.toasts.length, 0);
   });
+
+  it("should_show_an_error_and_record_it_when_the_toggle_cannot_be_saved", async () => {
+    const tui = createTuiContext("disabled");
+    const auditEvents = [];
+    const plugin = createAstronomicalTuiPlugin({
+      readEnabled: async () => true,
+      writeEnabled: async () => {
+        throw new Error("read-only file system");
+      },
+      audit: async (event, detail) => auditEvents.push({ event, detail }),
+    });
+
+    await plugin.setup(tui.context);
+    const toggleCommand = tui.commands.find(
+      (command) => command.id === "astronomical.toggle",
+    );
+    await toggleCommand.run();
+
+    assert.equal(tui.toasts[0].variant, "error");
+    assert.match(tui.toasts[0].message, /read-only file system/);
+    assert.deepEqual(auditEvents.at(-1), {
+      event: "diagnostic",
+      detail: { stage: "toggle-command", reason: "read-only file system" },
+    });
+  });
 });

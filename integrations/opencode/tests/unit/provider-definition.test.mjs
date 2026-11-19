@@ -4,7 +4,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { buildAstronomicalProviderDefinition } from "../../dist/astronomer-provider-config.js";
+import { buildAstronomicalProviderDefinition } from "../../dist/provider-definition.js";
 import { STABLE, representativeModels } from "../support/test-helpers.mjs";
 
 describe("the V2 provider definition reflects the live catalogue", () => {

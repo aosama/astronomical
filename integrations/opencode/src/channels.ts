@@ -3,7 +3,7 @@
 // installations with independent model sets, so every resolved channel is
 // probed and served — one is not a failover mirror of the other. Neither
 // channel is up all the time, so an unreachable channel is simply skipped by
-// the catalogue fetch rather than blocking the other.
+// the model list fetch rather than blocking the other.
 
 import {
   ASTRONOMICAL_API_BASE_PATH,
@@ -59,7 +59,7 @@ export function resolveAstronomicalChannels(
   }
 
   // Default: both channels, stable first. Order only fixes display order; the
-  // catalogue fetch serves every channel that answers.
+  // model list fetch serves every channel that answers.
   return [
     { instance: "stable", baseUrl: STABLE_BASE_URL },
     { instance: "dev", baseUrl: DEV_BASE_URL },

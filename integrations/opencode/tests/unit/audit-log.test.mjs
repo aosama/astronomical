@@ -16,8 +16,9 @@ import { describe, it } from "node:test";
 
 import {
   createAstronomicalAuditLogger,
+  newestLinesWithin,
   resolveAstronomicalAuditLogPath,
-} from "../../dist/astronomer-audit-log.js";
+} from "../../dist/audit-log.js";
 
 describe("the audit log records the V2 plugin lifecycle as JSONL", () => {
   it("appends one parseable entry per event, with detail fields merged in", async () => {
@@ -104,5 +105,36 @@ describe("the audit log lives in opencode's state directory", () => {
       resolveAstronomicalAuditLogPath({}, "/home/tester"),
       "/home/tester/.local/state/opencode/astronomical-plugin.log",
     );
+  });
+});
+
+describe("trimming keeps the newest complete lines", () => {
+  it("should_keep_the_newest_lines_that_fit_and_drop_the_oldest", () => {
+    assert.equal(newestLinesWithin("one\ntwo\nthree\n", 12), "two\nthree\n");
+  });
+
+  it("should_keep_a_line_that_fits_exactly_and_never_a_partial_line", () => {
+    assert.equal(newestLinesWithin("aaaa\nbbbb\n", 5), "bbbb\n");
+    assert.equal(newestLinesWithin("aaaa\nbbbb\n", 4), "");
+  });
+
+  it("should_keep_recent_entries_when_a_log_of_many_lines_passes_the_ceiling", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "astronomical-audit-trim-"));
+    const logPath = join(directory, "astronomical-plugin.log");
+    const oldLines = [];
+    for (let lineNumber = 0; lineNumber < 30_000; lineNumber += 1) {
+      oldLines.push(JSON.stringify({ event: "diagnostic", lineNumber }));
+    }
+    await writeFile(logPath, `${oldLines.join("\n")}\n`, "utf8");
+
+    await createAstronomicalAuditLogger({ logPath })("status-command");
+
+    const keptLines = (await readFile(logPath, "utf8")).trim().split("\n");
+    const logStats = await stat(logPath);
+    assert.ok(logStats.size <= 500_100, "trimmed to about half the ceiling");
+    assert.equal(JSON.parse(keptLines.at(-2)).lineNumber, 29_999);
+    assert.equal(JSON.parse(keptLines.at(-1)).event, "status-command");
+    assert.ok(JSON.parse(keptLines[0]).lineNumber > 0, "the oldest lines went");
+    await rm(directory, { recursive: true, force: true });
   });
 });

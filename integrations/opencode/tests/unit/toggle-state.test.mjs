@@ -11,7 +11,7 @@ import {
   readAstronomicalPluginEnabled,
   resolveAstronomicalPluginStateFilePath,
   writeAstronomicalPluginEnabled,
-} from "../../dist/astronomer-plugin-state.js";
+} from "../../dist/toggle-state.js";
 
 describe("the shared Astronomical provider toggle", () => {
   it("defaults to enabled when neither new nor legacy state exists", async () => {
