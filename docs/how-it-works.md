@@ -104,6 +104,8 @@ To start a coding agent already pointed at the running app for one session:
     astronomical launch codex
     astronomical launch opencode
 
+For OpenCode there is also a plugin that keeps every model the app serves in OpenCode's picker: `opencode plugin add opencode-astronomical`. Its source is in [integrations/opencode](../integrations/opencode/README.md).
+
 Settings for other apps are on the [local API page](https://getastronomical.com/local-api.html).
 
 ## Linking to a model

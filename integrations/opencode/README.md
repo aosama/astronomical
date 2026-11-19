@@ -10,19 +10,17 @@ This plugin puts the models of [Astronomical](https://getastronomical.com/) in O
 
 ## Install
 
-The plugin is not on npm yet. Until it is, add this folder to `plugins` in `~/.config/opencode/opencode.json`, using the folder's full path:
+```bash
+opencode plugin add opencode-astronomical
+```
+
+To try a change from this repository instead, add this folder to `plugins` in `~/.config/opencode/opencode.json`, using the folder's full path. OpenCode loads the plugin's TypeScript sources directly, so there is nothing to build:
 
 ```jsonc
 {
   "$schema": "https://opencode.ai/config.json",
   "plugins": ["/path/to/astronomical/integrations/opencode"],
 }
-```
-
-OpenCode loads the plugin's TypeScript sources directly, so there is nothing to build. Once the plugin is published, one command will replace this step:
-
-```bash
-opencode plugin add opencode-astronomical
 ```
 
 ## Use it

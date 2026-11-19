@@ -36,6 +36,8 @@ First, add the `astronomical` command to Terminal: click the menu-bar item, clic
     astronomical launch codex
     astronomical launch opencode
 
+To keep your models in OpenCode's model picker every day, install the plugin: `opencode plugin add opencode-astronomical` ([details](integrations/opencode/README.md)).
+
 For any other tool, point it at `http://127.0.0.1:6732/`. The [local API page](https://getastronomical.com/local-api.html) has the settings for each client.
 
 ## Use it from Terminal

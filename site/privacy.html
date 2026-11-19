@@ -52,6 +52,9 @@
           <h2>Coding agents you launch</h2>
           <p><code>astronomical launch</code> starts a coding agent you installed yourself, such as Claude Code, Codex, or OpenCode, and points its model requests at the local API above, so the prompts and code it sends to the model are answered on this Mac. The agent remains its own program: anything it does over the network beyond those model requests, such as checking for its own updates or sending its maker's telemetry, is governed by that agent's settings and its maker's privacy policy, not by Astronomical. The launcher itself only asks the local app, over loopback, which models it serves; it sends nothing off this Mac and changes none of the agent's saved settings.</p>
 
+          <h2>The OpenCode plugin</h2>
+          <p>The Astronomical plugin for OpenCode, if you install it, asks the app on this Mac, over loopback, which models it serves, about every 30 seconds, and lists them in OpenCode. It sends nothing off this Mac. It writes one file, a log of what it did that never grows past 1 MB, in OpenCode's own state folder. What OpenCode itself does over the network is governed by OpenCode's settings and its maker's privacy policy, not by Astronomical.</p>
+
           <h2>Diagnostics and crash reports</h2>
           <p>The app itself contains no crash reporting and no usage analytics.</p>
           <ul>
