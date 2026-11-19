@@ -13,7 +13,7 @@ import {
   perUrlFetch,
   representativeModels,
   noOpAudit,
-} from "./test-helpers.mjs";
+} from "../support/test-helpers.mjs";
 
 // A dev-only model id so tests can prove the two channels' catalogues stay
 // separate instead of one overwriting the other.

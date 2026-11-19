@@ -10,7 +10,7 @@ import {
   perUrlFetch,
   representativeModels,
   noOpAudit,
-} from "./test-helpers.mjs";
+} from "../support/test-helpers.mjs";
 
 function createTuiContext(choice) {
   const commands = [];

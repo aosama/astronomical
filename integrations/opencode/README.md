@@ -78,7 +78,7 @@ npm test        # build, then run the tests
 npm run verify  # formatting check, build and tests
 ```
 
-The tests use stand-ins for OpenCode and for the app, so they need neither running.
+The tests use stand-ins for OpenCode and for the app, so they need neither running. `tests/unit` covers single modules; `tests/component` runs the whole plugin against a stand-in OpenCode. Both read the app's model listing from `crates/rest-contract/fixtures/openai_model_list.json`, which a Rust test keeps identical to what the app serves.
 
 ## License
 

@@ -1,0 +1,168 @@
+{
+  "data": [
+    {
+      "context_window": 262144,
+      "created": 1784231803,
+      "created_at": "2026-07-16T19:56:43Z",
+      "display_name": "text-only-model",
+      "id": "text-only-model",
+      "input_modalities": [
+        "text"
+      ],
+      "max_input_tokens": 196608,
+      "max_output_tokens": 65535,
+      "object": "model",
+      "output_modalities": [
+        "text"
+      ],
+      "owned_by": "astronomical",
+      "reasoning_format": "openai_chat_reasoning_content_and_responses_reasoning_summary_text",
+      "structured_output_enforcement": "logits_mask",
+      "supported_endpoints": [
+        "/v1/chat/completions",
+        "/v1/responses",
+        "/v1/messages"
+      ],
+      "supports_reasoning": true,
+      "supports_streaming": true,
+      "supports_structured_outputs": true,
+      "supports_tool_calls": true,
+      "tool_call_format": "openai_function_call",
+      "type": "model"
+    },
+    {
+      "context_window": 131072,
+      "created": 1784231803,
+      "created_at": "2026-07-16T19:56:43Z",
+      "display_name": "vision-model",
+      "id": "vision-model",
+      "input_modalities": [
+        "text",
+        "image"
+      ],
+      "max_input_tokens": 65536,
+      "max_output_tokens": 65535,
+      "object": "model",
+      "output_modalities": [
+        "text"
+      ],
+      "owned_by": "astronomical",
+      "reasoning_format": "openai_chat_reasoning_content_and_responses_reasoning_summary_text",
+      "structured_output_enforcement": "logits_mask",
+      "supported_endpoints": [
+        "/v1/chat/completions",
+        "/v1/responses",
+        "/v1/messages"
+      ],
+      "supports_reasoning": true,
+      "supports_streaming": true,
+      "supports_structured_outputs": true,
+      "supports_tool_calls": true,
+      "tool_call_format": "openai_function_call",
+      "type": "model"
+    },
+    {
+      "created": 1784231803,
+      "created_at": "2026-07-16T19:56:43Z",
+      "display_name": "image-gen-model",
+      "id": "image-gen-model",
+      "input_modalities": [
+        "text"
+      ],
+      "object": "model",
+      "output_modalities": [
+        "image"
+      ],
+      "owned_by": "astronomical",
+      "supported_endpoints": [
+        "/v1/images/generations"
+      ],
+      "supports_reasoning": false,
+      "supports_streaming": false,
+      "supports_structured_outputs": false,
+      "supports_tool_calls": false,
+      "type": "model"
+    },
+    {
+      "created": 1784231803,
+      "created_at": "2026-07-16T19:56:43Z",
+      "display_name": "embedding-model",
+      "id": "embedding-model",
+      "input_modalities": [
+        "text"
+      ],
+      "object": "model",
+      "output_modalities": [
+        "embedding"
+      ],
+      "owned_by": "astronomical",
+      "supported_endpoints": [
+        "/v1/embeddings"
+      ],
+      "supports_reasoning": false,
+      "supports_streaming": false,
+      "supports_structured_outputs": false,
+      "supports_tool_calls": false,
+      "type": "model"
+    },
+    {
+      "created": 1784231803,
+      "created_at": "2026-07-16T19:56:43Z",
+      "default_voice": "af_heart",
+      "display_name": "speech-model",
+      "id": "speech-model",
+      "input_modalities": [
+        "text"
+      ],
+      "object": "model",
+      "output_modalities": [
+        "audio"
+      ],
+      "owned_by": "astronomical",
+      "response_formats": [
+        "wav",
+        "pcm"
+      ],
+      "sample_rate_hertz": 24000,
+      "supported_endpoints": [
+        "/v1/audio/speech"
+      ],
+      "supports_reasoning": false,
+      "supports_speed": true,
+      "supports_streaming": false,
+      "supports_structured_outputs": false,
+      "supports_tool_calls": false,
+      "type": "model",
+      "voices": [
+        "af_heart"
+      ]
+    },
+    {
+      "created": 1784231803,
+      "created_at": "2026-07-16T19:56:43Z",
+      "display_name": "decision-model",
+      "id": "decision-model",
+      "input_modalities": [
+        "text"
+      ],
+      "max_input_tokens": 512,
+      "object": "model",
+      "output_modalities": [
+        "decision"
+      ],
+      "owned_by": "astronomical",
+      "supported_endpoints": [
+        "/v1/systemone"
+      ],
+      "supports_reasoning": false,
+      "supports_streaming": false,
+      "supports_structured_outputs": false,
+      "supports_tool_calls": false,
+      "type": "model"
+    }
+  ],
+  "first_id": "text-only-model",
+  "has_more": false,
+  "last_id": "decision-model",
+  "object": "list"
+}

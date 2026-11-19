@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import { buildAstronomicalProviderDefinition } from "../../dist/astronomer-provider-config.js";
-import { STABLE, representativeModels } from "./test-helpers.mjs";
+import { STABLE, representativeModels } from "../support/test-helpers.mjs";
 
 describe("the V2 provider definition reflects the live catalogue", () => {
   it("should_use_the_native_openai_compatible_runtime_and_have_no_credential_fields", () => {

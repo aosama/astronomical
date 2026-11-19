@@ -14,7 +14,7 @@ import {
   catalogueFetch,
   perUrlFetch,
   representativeModels,
-} from "./test-helpers.mjs";
+} from "../support/test-helpers.mjs";
 
 describe("the catalogue keeps only chat-capable models", () => {
   it("should_keep_chat_and_vision_models_and_drop_image_generation_and_embeddings", async () => {

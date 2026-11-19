@@ -4,7 +4,12 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import { resolveAstronomicalChannels } from "../../dist/astronomer-base-url.js";
-import { STABLE, DEV, STABLE_CHANNEL, DEV_CHANNEL } from "./test-helpers.mjs";
+import {
+  STABLE,
+  DEV,
+  STABLE_CHANNEL,
+  DEV_CHANNEL,
+} from "../support/test-helpers.mjs";
 
 describe("channel resolution", () => {
   it("should_probe_both_channels_stable_first_by_default", () => {

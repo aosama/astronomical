@@ -1,55 +1,23 @@
+import { readFileSync } from "node:fs";
+
 // Shared fetch fakes and a representative /v1/models payload for the tests.
 // Free functions and plain-object fakes are used (rather than a helper class)
 // because every neighbouring test in the repo is written that way.
 
-// One model of each class so tests can assert the chat-only filter and the
-// capability mapping without inventing data:
-//   - text-only reasoning/tool model
-//   - vision reasoning/tool model
-//   - image-generation model (no chat limits, no chat endpoint)
-//   - embeddings model (no chat limits, no chat endpoint)
-export const representativeModels = [
-  {
-    id: "text-only-model",
-    object: "model",
-    context_window: 262_144,
-    max_output_tokens: 65_535,
-    input_modalities: ["text"],
-    output_modalities: ["text"],
-    supports_reasoning: true,
-    supports_tool_calls: true,
-    supported_endpoints: ["/v1/chat/completions", "/v1/responses"],
-  },
-  {
-    id: "vision-model",
-    object: "model",
-    context_window: 131_072,
-    max_output_tokens: 65_535,
-    input_modalities: ["text", "image"],
-    output_modalities: ["text"],
-    supports_reasoning: true,
-    supports_tool_calls: true,
-    supported_endpoints: ["/v1/chat/completions"],
-  },
-  {
-    id: "image-gen-model",
-    object: "model",
-    input_modalities: ["text"],
-    output_modalities: ["image"],
-    supports_reasoning: false,
-    supports_tool_calls: false,
-    supported_endpoints: ["/v1/images/generations"],
-  },
-  {
-    id: "embedding-model",
-    object: "model",
-    input_modalities: ["text"],
-    output_modalities: ["embedding"],
-    supports_reasoning: false,
-    supports_tool_calls: false,
-    supported_endpoints: ["/v1/embeddings"],
-  },
-];
+// The shared /v1/models sample, read from the file a rest-contract test holds
+// to what the app serializes. Using the app's own listing instead of a
+// hand-written one means a field the app renames or retypes breaks these
+// tests until the plugin follows. It carries two chat models first
+// ("text-only-model", then "vision-model"), then one image, embedding, speech
+// and decision model, which the chat-only filter must drop.
+const MODEL_LIST_FIXTURE_URL = new URL(
+  "../../../../crates/rest-contract/fixtures/openai_model_list.json",
+  import.meta.url,
+);
+
+export const representativeModels = JSON.parse(
+  readFileSync(MODEL_LIST_FIXTURE_URL, "utf8"),
+).data;
 
 // A fetch stub returning the given catalogue (or any status) for any URL.
 export function catalogueFetch(models, status = 200) {

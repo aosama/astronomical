@@ -56,6 +56,22 @@ updates:
         applies-to: version-updates
         patterns:
           - "*"
+  # The OpenCode plugin's npm toolchain. A new @opencode/plugin release is the
+  # one dependency that can break the plugin for users, so it should arrive as
+  # a pull request the plugin lane tests rather than be found by a user. One
+  # grouped weekly pull request, with a week's cooldown on fresh releases.
+  - package-ecosystem: npm
+    directory: /integrations/opencode
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 2
+    groups:
+      opencode-plugin-dependencies:
+        applies-to: version-updates
+        patterns:
+          - "*"
   - package-ecosystem: github-actions
     directory: /
     schedule:
