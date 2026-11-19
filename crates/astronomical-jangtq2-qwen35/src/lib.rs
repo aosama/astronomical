@@ -37,6 +37,9 @@
 
 pub mod artifacts;
 pub mod codebook;
+// Metal source the page decoder and the fused projection share.
+#[cfg(feature = "direct-mlx")]
+mod codebook_kernel_fragments;
 pub mod configuration;
 #[cfg(feature = "direct-mlx")]
 pub mod fused_gathered_projection;
