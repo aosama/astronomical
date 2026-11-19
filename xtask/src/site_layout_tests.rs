@@ -2,9 +2,10 @@ use std::fs;
 use std::path::Path;
 
 use super::site_layout::{
-    SITE_DIRECTORY, SITE_LINKS, SiteLink, apply_shared_layout, current_marker, list_site_pages,
-    render_site_footer, render_site_header, run,
+    SITE_LINKS, SiteLink, apply_shared_layout, current_marker, render_site_footer,
+    render_site_header, run,
 };
+use super::site_pages::{SITE_DIRECTORY, list_site_pages};
 
 const HAND_WRITTEN_PAGE: &str = "<body>\n    <header class=\"site-header\">\n      <nav><a href=\"./index.html\">Home</a></nav>\n    </header>\n    <main>Kept as written</main>\n    <footer class=\"site-footer\"><p>old</p></footer>\n</body>\n";
 

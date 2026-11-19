@@ -10,17 +10,16 @@
 
 mod site_header_and_footer;
 
-use std::ffi::OsStr;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
+use crate::site_pages::{SITE_DIRECTORY, list_site_pages};
 use crate::step_log::log_line;
 
 #[cfg(test)]
 pub(crate) use site_header_and_footer::{SITE_LINKS, SiteLink, current_marker};
 pub(crate) use site_header_and_footer::{render_site_footer, render_site_header};
 
-pub(crate) const SITE_DIRECTORY: &str = "site";
 const USAGE: &str = "usage: cargo xtask site-layout [--check]";
 
 /// One element of the shared layout: how a page opens and closes it, and
@@ -95,59 +94,6 @@ fn report_outcome(
         "[site-layout] these pages differ from the shared header and footer: {}; run `cargo xtask site-layout` and commit the result",
         drifted_page_paths.join(", ")
     ))
-}
-
-/// Every `.html` file under the site, as `/`-separated paths from the site
-/// root, sorted so output and errors read the same on every machine.
-pub(crate) fn list_site_pages(site_directory: &Path) -> Result<Vec<String>, String> {
-    let mut page_paths = Vec::new();
-    collect_site_pages(site_directory, site_directory, &mut page_paths)?;
-    page_paths.sort();
-    if page_paths.is_empty() {
-        return Err(format!(
-            "[site-layout] no pages found under {}",
-            site_directory.display()
-        ));
-    }
-    Ok(page_paths)
-}
-
-fn collect_site_pages(
-    site_directory: &Path,
-    folder: &Path,
-    page_paths: &mut Vec<String>,
-) -> Result<(), String> {
-    let folder_entries = fs::read_dir(folder).map_err(|read_error| {
-        format!(
-            "[site-layout] cannot list {}: {read_error}",
-            folder.display()
-        )
-    })?;
-    for folder_entry in folder_entries {
-        let entry_path: PathBuf = folder_entry
-            .map_err(|read_error| {
-                format!(
-                    "[site-layout] cannot list {}: {read_error}",
-                    folder.display()
-                )
-            })?
-            .path();
-        if entry_path.is_dir() {
-            collect_site_pages(site_directory, &entry_path, page_paths)?;
-        } else if entry_path.extension() == Some(OsStr::new("html")) {
-            page_paths.push(site_relative_path(site_directory, &entry_path));
-        }
-    }
-    Ok(())
-}
-
-fn site_relative_path(site_directory: &Path, page_file: &Path) -> String {
-    let relative_path = page_file.strip_prefix(site_directory).unwrap_or(page_file);
-    let path_parts: Vec<String> = relative_path
-        .components()
-        .map(|component| component.as_os_str().to_string_lossy().into_owned())
-        .collect();
-    path_parts.join("/")
 }
 
 /// The page with its header and footer replaced by the shared ones.
