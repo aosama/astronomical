@@ -62,9 +62,6 @@ mod decode_seating_tests;
 mod astro_expert_cache_arithmetic;
 #[cfg(feature = "direct-mlx")]
 mod dense_resident;
-// Only the direct-MLX decision and speech engines report through it.
-#[cfg(feature = "direct-mlx")]
-pub(crate) mod forward_pass_telemetry;
 // Only the direct-MLX streaming engine reads it; the unit tests read it
 // without the graphics-processor runtime.
 #[cfg(any(feature = "direct-mlx", test))]
@@ -79,11 +76,10 @@ pub(crate) mod mlx_buffer_cache_reply_record;
 pub(crate) mod reply_expert_route_record;
 #[cfg(feature = "direct-mlx")]
 pub use reply_expert_route_record::SessionExpertRouteSample;
-pub(crate) mod telemetry;
-mod utilization;
-
-#[cfg(test)]
-mod telemetry_tests;
+// The telemetry and ceiling-utilization records are plain values, so they
+// live in the memory policy crate (issue #2340) where engines below this
+// crate can fill them in; the alias keeps `crate::memory::telemetry` paths.
+pub(crate) use astronomical_memory_policy::telemetry;
 
 pub use admission::{
     AllocationAdmissionDecision, AllocationAdmissionObservation, CompleteResidencyDecision,
@@ -149,5 +145,5 @@ pub use astronomical_memory_policy::serving_ceiling::{
     effective_mlx_memory_ceiling_after_wired_claim, effective_mlx_memory_ceiling_bytes,
     floor_raise_limit_bytes, floor_raised_ceiling_bytes, machine_ceiling_from_physical_ram_bytes,
 };
+pub use astronomical_memory_policy::utilization::MemoryCeilingUtilization;
 pub use astronomical_memory_policy::vocabulary::MemoryBoundary;
-pub use utilization::MemoryCeilingUtilization;

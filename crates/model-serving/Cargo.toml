@@ -12,7 +12,7 @@ workspace = true
 
 [features]
 default = []
-direct-mlx = ["astronomical-gpu-building-blocks/direct-mlx", "dep:astronomical-neural-engine", "dep:astronomical-runtime-integration", "dep:mlx-bridge", "dep:astronomical-mlx-c-fork", "dep:astronomical-quantization", "astronomical-quantization/direct-mlx", "astronomical-jangtq2-qwen35/direct-mlx"]
+direct-mlx = ["astronomical-gpu-building-blocks/direct-mlx", "astronomical-speech/direct-mlx", "dep:astronomical-neural-engine", "dep:astronomical-runtime-integration", "dep:mlx-bridge", "dep:astronomical-mlx-c-fork", "dep:astronomical-quantization", "astronomical-quantization/direct-mlx", "astronomical-jangtq2-qwen35/direct-mlx"]
 
 [dependencies]
 astronomical-expert-atlas = { path = "../expert-atlas" }
@@ -20,6 +20,9 @@ astronomical-expert-atlas = { path = "../expert-atlas" }
 # the building-blocks crate never depends back on this crate, enforced by
 # `cargo xtask check-architecture`.
 astronomical-gpu-building-blocks = { path = "../gpu-building-blocks" }
+# The text-to-speech families and their worker seam (issue #2340), one way:
+# the speech crate never depends back on this crate.
+astronomical-speech = { path = "../speech" }
 astronomical-expert-record-reader = { path = "../expert-record-reader" }
 astronomical-config = { path = "../config" }
 # The decision-model contract: typed questions, calibration, typed answers and
@@ -27,9 +30,8 @@ astronomical-config = { path = "../config" }
 # decision backends in this crate add the forward pass.
 astronomical-decision-contract = { path = "../decision-contract" }
 astronomical-decision-training = { path = "../decision-training" }
-# English text to Kokoro phonemes, and the speech request, failures and audio
-# encoding every side of a speech request shares.
-astronomical-english-phonemes = { path = "../english-phonemes" }
+# The speech request, failures and audio encoding the worker passes to and
+# from the speech engines.
 astronomical-speech-contract = { path = "../speech-contract" }
 astronomical-ipc-protocol = { path = "../ipc-protocol" }
 # Pure memory policy and expert-paging arithmetic (budget composition, page

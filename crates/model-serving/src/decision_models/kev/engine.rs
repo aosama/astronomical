@@ -37,8 +37,8 @@ use crate::decision_models::training::training_session::{
     DecisionTrainingHost, DecisionTrainingSession, WholeModelScorer, keep_session_if_running,
     read_through_decide, start_session,
 };
-use crate::memory::forward_pass_telemetry::forward_pass_memory_telemetry;
 use crate::memory::telemetry::MlxMemoryTelemetry;
+use astronomical_gpu_building_blocks::forward_pass_memory::forward_pass_memory_telemetry;
 
 /// A Kev runtime bound to one converted folder.
 pub struct KevDecisionEngine {

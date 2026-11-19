@@ -47,9 +47,9 @@ use crate::decision_models::training::training_session::{
     read_through_decide, start_session,
 };
 use crate::linear_adapters::LinearAdapters;
-use crate::memory::forward_pass_telemetry::forward_pass_memory_telemetry;
 use crate::memory::telemetry::MlxMemoryTelemetry;
 use crate::modernbert::weight_layout::{ModernBertWeightLayout, TokenEmbeddingStorage};
+use astronomical_gpu_building_blocks::forward_pass_memory::forward_pass_memory_telemetry;
 
 /// The tensor-name prefix a Laya checkpoint keeps its encoder under.
 const ENCODER_TENSOR_PREFIX: &str = "encoder";

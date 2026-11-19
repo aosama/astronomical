@@ -62,6 +62,15 @@ const FORBIDDEN_DEPENDENCY_RULES: &[ForbiddenDependencyRule] = &[
         forbidden_crate: "astronomical-model-serving",
         rationale: "the GPU building-blocks crate must build and test without pulling in the serving crate, which consumes the blocks through a one-way edge",
     },
+    // The speech families (issue #2340) implement a seam the serving
+    // crate's worker drives. An edge back would rebuild the serving crate on
+    // every speech edit and let a family reach into the engine.
+    ForbiddenDependencyRule {
+        rule_name: "speech-without-serving",
+        source_crate: "astronomical-speech",
+        forbidden_crate: "astronomical-model-serving",
+        rationale: "the speech crate must build and test without pulling in the serving crate, which drives the speech engines through a one-way edge",
+    },
 ];
 
 /// One detected violation with the offending dependency chain, source crate

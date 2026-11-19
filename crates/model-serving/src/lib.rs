@@ -41,7 +41,9 @@ pub(crate) mod model_generation_processor;
 
 pub(crate) mod decision_engine;
 
-pub(crate) mod speech_engine;
+// Speech lives in its own crate (issue #2340); the aliases keep each
+// `crate::speech_*` path in this crate resolving.
+pub(crate) use astronomical_speech::speech_engine;
 
 #[cfg(all(test, feature = "direct-mlx"))]
 pub(crate) mod synthetic_weights_test_support;
@@ -56,7 +58,7 @@ pub(crate) use astronomical_gpu_building_blocks::linear_adapters;
 pub(crate) mod modernbert;
 
 #[cfg(feature = "direct-mlx")]
-pub(crate) mod speech_models;
+pub(crate) use astronomical_speech::speech_models;
 
 pub(crate) use astronomical_gpu_building_blocks::performance_attribution;
 

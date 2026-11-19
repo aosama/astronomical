@@ -242,6 +242,7 @@ name = "astronomical-gpu-building-blocks"
 version = "0.2.118"
 dependencies = [
  "astronomical-decision-contract",
+ "astronomical-memory-policy",
  "astronomical-runtime-integration",
  "libc",
  "mlx-bridge",
@@ -335,7 +336,6 @@ dependencies = [
  "astronomical-config",
  "astronomical-decision-contract",
  "astronomical-decision-training",
- "astronomical-english-phonemes",
  "astronomical-expert-atlas",
  "astronomical-expert-record-reader",
  "astronomical-gpu-building-blocks",
@@ -347,6 +347,7 @@ dependencies = [
  "astronomical-neural-engine",
  "astronomical-quantization",
  "astronomical-runtime-integration",
+ "astronomical-speech",
  "astronomical-speech-contract",
  "astronomical-test-harness",
  "image",
@@ -458,6 +459,24 @@ dependencies = [
  "sha2",
  "tempfile",
  "thiserror",
+]
+
+[[package]]
+name = "astronomical-speech"
+version = "0.2.118"
+dependencies = [
+ "astronomical-config",
+ "astronomical-english-phonemes",
+ "astronomical-gpu-building-blocks",
+ "astronomical-memory-policy",
+ "astronomical-runtime-integration",
+ "astronomical-speech-contract",
+ "mlx-bridge",
+ "serde_json",
+ "serial_test",
+ "tempfile",
+ "thiserror",
+ "tokenizers",
 ]
 
 [[package]]

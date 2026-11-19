@@ -2,7 +2,7 @@ use std::future::Future;
 
 use crate::InferenceEngineError;
 use astronomical_ipc_protocol::{
-    ExpertLayerSeatingCounts, ExpertMemoryMode, NeuralEnginePrefillStatus, RequestId,
+    ExpertMemoryMode, NeuralEnginePrefillStatus, RequestId,
     WorkerAstroSsdPromptCacheRequestDiagnostics, WorkerEvent, WorkerPromptProcessingPhase,
     WorkerPromptWorkReuse,
 };
@@ -10,6 +10,7 @@ use astronomical_ipc_protocol::{
 use super::EngineLoadResult;
 use crate::memory::telemetry::MlxMemoryLimitAdjustment;
 use crate::memory::telemetry::MlxMemoryTelemetry;
+pub use astronomical_memory_policy::telemetry::ExpertResidencyTelemetry;
 
 /// Asynchronous inference-engine contract that keeps runtime-affine work off Tokio threads.
 pub trait InferenceEngine {
@@ -285,24 +286,6 @@ impl EngineGenerationStart {
     ) -> Option<&WorkerAstroSsdPromptCacheRequestDiagnostics> {
         self.astro_ssd_prompt_cache_diagnostics.as_ref()
     }
-}
-
-/// Final engine state available after a generation ends or is cancelled.
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub struct ExpertResidencyTelemetry {
-    pub total_layer_count: u32,
-    pub resident_expert_count: u32,
-    pub resident_expert_payload_bytes: u64,
-    /// Expert-library bytes if every sparse expert were resident. Zero means
-    /// unmeasured; Observatory hides the SSD remainder in that case.
-    pub complete_expert_payload_byte_count: u64,
-    /// Experts in one sparse layer. Uniform across the loaded model's layers.
-    pub expert_capacity: u32,
-    /// Per-layer retained counts. Zero seated layers means this sample has
-    /// no map yet, so Observatory keeps the end-of-reply topology.
-    pub layer_seating: ExpertLayerSeatingCounts,
-    /// A dense model's kept and streamed decoder layers (issue #1985).
-    pub dense_layers: Option<astronomical_ipc_protocol::WorkerDenseLayerResidency>,
 }
 
 /// One decoder layer's retained expert identities captured for observatory.
