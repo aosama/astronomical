@@ -8,10 +8,10 @@
 //! first layer's SwiGLU intermediate for the intermediate-width transform
 //! and down projection.
 
-use astronomical_model_serving::prism_hadamard_qwen35::model::{
+use mlx_bridge::MlxArray;
+use model_serving::prism_hadamard_qwen35::model::{
     PrismHadamardProbeProjection, PrismHadamardTextModel,
 };
-use mlx_bridge::MlxArray;
 use serial_test::serial;
 
 use super::support::{

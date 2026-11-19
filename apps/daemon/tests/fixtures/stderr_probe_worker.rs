@@ -2,7 +2,7 @@
 
 use std::{error::Error, os::unix::fs::MetadataExt, process::ExitCode};
 
-use astronomical_ipc_protocol::{ProtocolWriter, WorkerEvent};
+use ipc_protocol::{ProtocolWriter, WorkerEvent};
 
 #[tokio::main]
 async fn main() -> ExitCode {

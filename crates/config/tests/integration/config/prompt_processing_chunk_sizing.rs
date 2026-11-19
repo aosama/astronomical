@@ -228,7 +228,7 @@ fn should_keep_a_deliberate_ssd_streaming_chunk_value() {
 
 #[test]
 fn should_materialize_the_ssd_streaming_chunk_only_when_absent_or_retired() {
-    use astronomical_config::should_materialize_ssd_streaming_chunk_default;
+    use config::should_materialize_ssd_streaming_chunk_default;
     assert!(should_materialize_ssd_streaming_chunk_default(None));
     assert!(should_materialize_ssd_streaming_chunk_default(Some(2_048)));
     assert!(!should_materialize_ssd_streaming_chunk_default(Some(4_096)));

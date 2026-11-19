@@ -1,4 +1,4 @@
-use astronomical_model_serving::{Qwen3_5ArtifactValidator, Qwen3_5FeedForwardArchitecture};
+use model_serving::{Qwen3_5ArtifactValidator, Qwen3_5FeedForwardArchitecture};
 use tokio::time::timeout;
 
 use crate::serving_acceptance::chat::openai_rest::{
@@ -47,10 +47,8 @@ fn assert_streamed_model_text_mentions_red(streamed_model_text: &str) -> &'stati
     panic!("model output did not identify the synthetic image as red: {streamed_model_text:?}");
 }
 
-fn configured_dense_qwen3_5_vision_artifact() -> Option<(
-    std::path::PathBuf,
-    astronomical_model_serving::ValidatedQwen3_5Artifact,
-)> {
+fn configured_dense_qwen3_5_vision_artifact()
+-> Option<(std::path::PathBuf, model_serving::ValidatedQwen3_5Artifact)> {
     crate::support::configured_discovered_models()
         .into_iter()
         .find_map(|discovered_model| {

@@ -9,10 +9,10 @@ impl SparseExpertError {
     pub(super) fn into_runtime_error(
         self,
         operation: &'static str,
-    ) -> astronomical_runtime_integration::MlxRuntimeError {
+    ) -> runtime_integration::MlxRuntimeError {
         match self {
             Self::InvalidAssignmentGeometry { description } => {
-                astronomical_runtime_integration::MlxRuntimeError::RuntimeOperation {
+                runtime_integration::MlxRuntimeError::RuntimeOperation {
                     operation,
                     description: description.to_owned(),
                 }

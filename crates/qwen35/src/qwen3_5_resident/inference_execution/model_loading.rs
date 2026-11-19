@@ -1,5 +1,5 @@
-use astronomical_ipc_protocol::WorkerChunkingConfiguration;
-use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
+use ipc_protocol::WorkerChunkingConfiguration;
+use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use std::sync::Arc;
 
 use crate::inference_engine::load_result::EngineLoadResult;
@@ -56,7 +56,7 @@ impl Qwen3_5EngineState {
     /// ever called while no request is active, which is when programs can be released.
     pub(super) fn advance_neural_engine_preparation(
         &mut self,
-    ) -> Option<astronomical_ipc_protocol::NeuralEnginePrefillStatus> {
+    ) -> Option<ipc_protocol::NeuralEnginePrefillStatus> {
         let model = self.model.as_mut()?;
         let Some(preparation) = self.neural_engine_prefill_preparation.as_mut() else {
             let settled_status =

@@ -1,6 +1,6 @@
 //! Display formatting shared by the CLI verbs.
 
-use astronomical_ipc_protocol::NeuralEnginePrefillStatus;
+use ipc_protocol::NeuralEnginePrefillStatus;
 
 /// The gigabyte every Astronomical screen and message uses: 2³⁰ bytes, the
 /// one Apple means when it describes a Mac's memory. A figure printed here

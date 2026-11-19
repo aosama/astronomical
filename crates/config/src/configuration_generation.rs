@@ -19,5 +19,5 @@ pub(crate) fn configuration_generation(
         }
     })?;
     let digest = Sha256::digest(canonical_config_bytes);
-    Ok(astronomical_lowercase_hex::encode_lowercase_hex(&digest))
+    Ok(lowercase_hex::encode_lowercase_hex(&digest))
 }

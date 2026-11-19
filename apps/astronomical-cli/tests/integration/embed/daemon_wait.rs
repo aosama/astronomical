@@ -5,8 +5,8 @@
 use std::{io::Write, time::Duration};
 
 use astronomical_cli::{EmbedDependencies, EmbedError};
-use astronomical_config::AstronomicalRuntimeInstance;
-use astronomical_ipc_protocol::ModelLoadInFlight;
+use config::AstronomicalRuntimeInstance;
+use ipc_protocol::ModelLoadInFlight;
 use tokio::time::timeout;
 
 use super::{embed_arguments, resident_default_stub_config};

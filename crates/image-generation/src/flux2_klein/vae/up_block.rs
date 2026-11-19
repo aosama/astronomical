@@ -1,6 +1,6 @@
 //! Three residual layers followed by optional nearest-neighbor upsampling and convolution.
 
-use astronomical_runtime_integration::MlxRuntime;
+use runtime_integration::MlxRuntime;
 
 use crate::flux2_klein::tensor_store::Flux2KleinTensorStore;
 

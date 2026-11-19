@@ -11,9 +11,7 @@
 //! range would be clamped at serving time, so the search must optimise the
 //! value that will actually be served, not one that will be cut down later.
 
-use astronomical_decision_contract::calibration::{
-    MAXIMUM_APPLIED_TEMPERATURE, MINIMUM_APPLIED_TEMPERATURE,
-};
+use decision_contract::calibration::{MAXIMUM_APPLIED_TEMPERATURE, MINIMUM_APPLIED_TEMPERATURE};
 
 use crate::scored_question::ScoredQuestion;
 use crate::temperature_softmax::log_probabilities_at;

@@ -7,7 +7,7 @@
 //! repacking. The affine `biases` are dequantization offsets, not layer biases — the reference
 //! model has no projection biases anywhere.
 
-use astronomical_runtime_integration::MlxSafetensors;
+use runtime_integration::MlxSafetensors;
 
 use crate::qwen_image_21::QwenImage21EngineError;
 use crate::qwen_image_21::mlx_math;

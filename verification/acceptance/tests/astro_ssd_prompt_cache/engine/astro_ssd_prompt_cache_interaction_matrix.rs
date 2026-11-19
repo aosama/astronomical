@@ -8,8 +8,8 @@
 
 use std::{fs, path::Path, time::Duration};
 
-use astronomical_ipc_protocol::RequestId;
-use astronomical_model_serving::{
+use ipc_protocol::RequestId;
+use model_serving::{
     InferenceEngine, Qwen3_5ArtifactValidator, Qwen3_5InferenceRequest, Qwen3_5ResidentEngine,
     Qwen3_5Tokenizer,
 };

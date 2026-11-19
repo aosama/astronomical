@@ -3,7 +3,7 @@
 
 use std::time::Duration;
 
-use astronomical_ipc_protocol::DaemonDownloadJob;
+use ipc_protocol::DaemonDownloadJob;
 
 use super::{
     DownloadProgressTracker, StallVerdict, StallWatch, format_rate, format_time_remaining,

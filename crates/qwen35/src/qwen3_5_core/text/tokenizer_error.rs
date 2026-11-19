@@ -1,4 +1,4 @@
-use astronomical_ipc_protocol::ChatGenerationValidationError;
+use ipc_protocol::ChatGenerationValidationError;
 use thiserror::Error;
 
 use super::{

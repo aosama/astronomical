@@ -7,7 +7,7 @@
 
 use std::path::Path;
 
-use astronomical_decision_contract::DecisionFailure;
+use decision_contract::DecisionFailure;
 use tokenizers::Tokenizer;
 
 /// A Qwen3.5 tokenizer is about 20 MB; this leaves room for a larger vocabulary.

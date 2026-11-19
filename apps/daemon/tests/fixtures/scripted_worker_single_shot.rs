@@ -4,7 +4,7 @@
 //! Both follow the same completed-then-finalized event order and leave
 //! nothing active behind them, so the fixtures answer them through one arm.
 
-use astronomical_ipc_protocol::{ProtocolError, ProtocolWriter, WorkerCommand, WorkerEvent};
+use ipc_protocol::{ProtocolError, ProtocolWriter, WorkerCommand, WorkerEvent};
 use tokio::io::AsyncWrite;
 
 use super::scripted_worker_decisions;
@@ -29,7 +29,7 @@ where
             event_writer
                 .send_event(&WorkerEvent::DecisionsFailed {
                     request_id: training_command.request_id,
-                    reason: astronomical_decision_contract::DecisionFailure::invalid_request(
+                    reason: decision_contract::DecisionFailure::invalid_request(
                         "the scripted worker does not train",
                     ),
                 })

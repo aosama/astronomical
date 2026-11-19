@@ -6,8 +6,8 @@
 
 use std::time::Duration;
 
-use astronomical_ipc_protocol::SpeechResultMetadata;
-use astronomical_speech_contract::SpeechFailure;
+use ipc_protocol::SpeechResultMetadata;
+use speech_contract::SpeechFailure;
 use tokio::sync::mpsc;
 
 /// One request's whole audio, as 16-bit little-endian mono samples, and how

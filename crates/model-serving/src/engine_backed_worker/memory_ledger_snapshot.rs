@@ -1,7 +1,7 @@
 //! The memory ledger's reading as the worker publishes it (issue #2221).
 
-use astronomical_ipc_protocol::WorkerMemoryLedgerSnapshot;
-use astronomical_memory_policy::ledger::LedgerReading;
+use ipc_protocol::WorkerMemoryLedgerSnapshot;
+use memory_policy::ledger::LedgerReading;
 
 /// Flattens one ledger reading into the protocol's snapshot.
 pub(crate) const fn worker_memory_ledger_snapshot(

@@ -5,17 +5,17 @@
 
 use std::collections::BTreeMap;
 
-use astronomical_quantization::bit_width::{BitWidth, GroupSize};
-use astronomical_quantization::encoder::RangeSearchPolicy;
-use astronomical_quantization::module_inventory::ModuleInventory;
-use astronomical_quantization::progress::SilentProgressReporter;
-use astronomical_quantization::requantize::bit_policy::BitPolicy;
-use astronomical_quantization::requantize::driver::run_requantize;
-use astronomical_quantization::requantize::tensor_plan::RequantizeTensorPlan;
+use quantization::bit_width::{BitWidth, GroupSize};
+use quantization::encoder::RangeSearchPolicy;
+use quantization::module_inventory::ModuleInventory;
+use quantization::progress::SilentProgressReporter;
+use quantization::requantize::bit_policy::BitPolicy;
+use quantization::requantize::driver::run_requantize;
+use quantization::requantize::tensor_plan::RequantizeTensorPlan;
 
-use astronomical_quantization::encoder::reference::encode_slab;
-use astronomical_quantization::error::QuantizationError;
-use astronomical_quantization::requantize::tensor_plan::TensorPlanEntry;
+use quantization::encoder::reference::encode_slab;
+use quantization::error::QuantizationError;
+use quantization::requantize::tensor_plan::TensorPlanEntry;
 use serial_test::{parallel, serial};
 
 use super::support::{contract_runtime, outlier_heavy_weights};

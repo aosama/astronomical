@@ -1,7 +1,7 @@
 use std::{collections::HashMap, fs, path::PathBuf, sync::Arc};
 
 use astronomical_daemon::{ResolvedRuntimeConfigResolver, RuntimeModelPolicy};
-use astronomical_ipc_protocol::WorkerStartupConfiguration;
+use ipc_protocol::WorkerStartupConfiguration;
 
 pub(super) fn create_astro_ssd_prompt_cache_stats_worker_configuration() -> (
     tempfile::TempDir,
@@ -17,7 +17,7 @@ pub(super) fn create_astro_ssd_prompt_cache_stats_worker_configuration() -> (
     let configured_astro_ssd_prompt_cache_maximum_size_gb =
         configured_astro_ssd_prompt_cache_maximum_size_gb();
     let production_worker_executable_path =
-        astronomical_test_harness::workspace_binary("astronomical-inference-worker");
+        test_harness::workspace_binary("astronomical-inference-worker");
     let isolated_worker_home = tempfile::tempdir()
         .expect("the astro SSD prompt cache stats worker home should be created");
     let isolated_configuration_directory = isolated_worker_home.path().join(".astronomical-dev");
@@ -72,5 +72,5 @@ fn configured_astro_ssd_prompt_cache_maximum_size_gb() -> u64 {
     config_document
         .get("prompt_cache_max_size_gb")
         .and_then(serde_json::Value::as_u64)
-        .unwrap_or(astronomical_config::DEFAULT_ASTRO_SSD_PROMPT_CACHE_MAXIMUM_SIZE_GB)
+        .unwrap_or(config::DEFAULT_ASTRO_SSD_PROMPT_CACHE_MAXIMUM_SIZE_GB)
 }

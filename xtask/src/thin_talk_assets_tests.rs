@@ -1,7 +1,7 @@
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
-use astronomical_native_identity::digest_bytes;
+use native_identity::digest_bytes;
 
 use super::thin_talk_assets::{
     PinnedAsset, VENDOR_DIRECTORY, asset_problem, ensure_asset, every_pinned_asset,
@@ -24,7 +24,7 @@ fn should_pin_every_asset_once_with_a_lowercase_sha256() {
         );
         if let Some(pinned_digest) = pinned_asset.sha256 {
             assert!(
-                astronomical_lowercase_hex::is_lowercase_hex_of_length(pinned_digest, 64),
+                lowercase_hex::is_lowercase_hex_of_length(pinned_digest, 64),
                 "{}",
                 pinned_asset.vendored_name
             );

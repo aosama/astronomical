@@ -27,8 +27,7 @@ pub enum ArtifactValidationError {
     #[error("Expert Atlas resident weight bundle is not a valid safetensors file: {source}")]
     InvalidResidentBundle {
         /// safetensors header failure.
-        source:
-            astronomical_memory_policy::expert_paging::safetensors_header::SafetensorsHeaderError,
+        source: memory_policy::expert_paging::safetensors_header::SafetensorsHeaderError,
     },
 
     /// An Expert Atlas manifest declares a file that is missing on disk.

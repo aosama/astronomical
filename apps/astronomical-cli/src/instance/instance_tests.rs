@@ -3,7 +3,7 @@
 
 use std::path::Path;
 
-use astronomical_config::AstronomicalRuntimeInstance;
+use config::AstronomicalRuntimeInstance;
 
 use crate::instance;
 

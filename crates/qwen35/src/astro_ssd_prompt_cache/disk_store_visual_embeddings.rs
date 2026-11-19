@@ -2,7 +2,7 @@ use std::fs::{self, OpenOptions};
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
 
-use astronomical_runtime_integration::MlxRuntime;
+use runtime_integration::MlxRuntime;
 
 use super::disk_store::AstroSsdPromptCacheDiskStore;
 use super::disk_store_error::AstroSsdPromptCacheDiskStoreError;
@@ -180,7 +180,7 @@ fn save_visual_embedding_safetensors_file(
     let visual_embeddings_shape = visual_embeddings.shape();
     let visual_token_count = usize::try_from(visual_embeddings_shape[0]).map_err(|_| {
         AstroSsdPromptCacheDiskStoreError::SaveSafetensors {
-            source: astronomical_runtime_integration::MlxRuntimeError::RuntimeOperation {
+            source: runtime_integration::MlxRuntimeError::RuntimeOperation {
                 operation: "save visual embedding",
                 description: "visual embedding row count overflowed usize".to_owned(),
             },
@@ -188,14 +188,13 @@ fn save_visual_embedding_safetensors_file(
     })?;
     let file_name = format!(
         "{}.safetensors",
-        astronomical_lowercase_hex::encode_lowercase_hex(&visual_embedding_hash)
+        lowercase_hex::encode_lowercase_hex(&visual_embedding_hash)
     );
     let file_path = visual_embeddings_directory.join(&file_name);
     let temp_file_path = visual_embeddings_directory.join(format!("{file_name}.tmp"));
     remove_astro_ssd_prompt_cache_owned_file_or_confirm_absent(&temp_file_path)?;
     let named_array = ("visual_embeddings", visual_embeddings);
-    let encoded_image_sha256_text =
-        astronomical_lowercase_hex::encode_lowercase_hex(&encoded_image_sha256);
+    let encoded_image_sha256_text = lowercase_hex::encode_lowercase_hex(&encoded_image_sha256);
     let visual_token_count_text = visual_token_count.to_string();
     let metadata_entries: [(&str, &str); 5] = [
         (

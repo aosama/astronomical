@@ -1,6 +1,6 @@
 //! Builds the path-free configured, resolved, and worker-effective status contract.
 
-use astronomical_ipc_protocol::WorkerLoadedModelRuntimeConfiguration;
+use ipc_protocol::WorkerLoadedModelRuntimeConfiguration;
 use serde::Serialize;
 
 use crate::application::ApplicationState;
@@ -199,7 +199,7 @@ fn ready_model_summary(
                     .map(u32::from)
             }),
             default: configured_policy.map(|policy| {
-                astronomical_config::DEFAULT_MAXIMUM_OUTPUT_TOKENS.min(
+                config::DEFAULT_MAXIMUM_OUTPUT_TOKENS.min(
                     policy
                         .configured_maximum_context_tokens
                         .unwrap_or(policy.default_maximum_context_tokens)
@@ -244,45 +244,44 @@ fn chunking_summary(
         fixed_prompt_processing_chunk_size_tokens: reported_chunking_configuration_value(
             configured_fields.fixed_prompt_processing_chunk_size_tokens,
             configured_chunking.map(|chunking| chunking.fixed_prompt_processing_chunk_size_tokens),
-            astronomical_config::DEFAULT_FIXED_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS,
+            config::DEFAULT_FIXED_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS,
             effective_chunking.map(|chunking| chunking.fixed_prompt_processing_chunk_size_tokens),
         ),
-        fixed_ssd_streaming_prompt_processing_chunk_size_tokens: reported_chunking_configuration_value(
-            configured_fields.fixed_ssd_streaming_prompt_processing_chunk_size_tokens,
-            configured_chunking.map(|chunking| {
-                chunking.fixed_ssd_streaming_prompt_processing_chunk_size_tokens
-            }),
-            astronomical_config::DEFAULT_FIXED_SSD_STREAMING_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS,
-            effective_chunking.map(|chunking| {
-                chunking.fixed_ssd_streaming_prompt_processing_chunk_size_tokens
-            }),
-        ),
+        fixed_ssd_streaming_prompt_processing_chunk_size_tokens:
+            reported_chunking_configuration_value(
+                configured_fields.fixed_ssd_streaming_prompt_processing_chunk_size_tokens,
+                configured_chunking.map(|chunking| {
+                    chunking.fixed_ssd_streaming_prompt_processing_chunk_size_tokens
+                }),
+                config::DEFAULT_FIXED_SSD_STREAMING_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS,
+                effective_chunking.map(|chunking| {
+                    chunking.fixed_ssd_streaming_prompt_processing_chunk_size_tokens
+                }),
+            ),
         full_attention_key_value_growth_tokens: reported_chunking_configuration_value(
             configured_fields.full_attention_key_value_growth_tokens,
-            configured_chunking
-                .map(|chunking| chunking.full_attention_key_value_growth_tokens),
-            astronomical_config::DEFAULT_FULL_ATTENTION_KEY_VALUE_GROWTH_TOKENS,
-            effective_chunking
-                .map(|chunking| chunking.full_attention_key_value_growth_tokens),
+            configured_chunking.map(|chunking| chunking.full_attention_key_value_growth_tokens),
+            config::DEFAULT_FULL_ATTENTION_KEY_VALUE_GROWTH_TOKENS,
+            effective_chunking.map(|chunking| chunking.full_attention_key_value_growth_tokens),
         ),
         prefill_graph_submission_layer_interval: reported_chunking_configuration_value(
             configured_fields.prefill_graph_submission_layer_interval,
-            configured_chunking
-                .map(|chunking| chunking.prefill_graph_submission_layer_interval),
-            astronomical_config::DEFAULT_PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL,
-            effective_chunking
-                .map(|chunking| chunking.prefill_graph_submission_layer_interval),
+            configured_chunking.map(|chunking| chunking.prefill_graph_submission_layer_interval),
+            config::DEFAULT_PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL,
+            effective_chunking.map(|chunking| chunking.prefill_graph_submission_layer_interval),
         ),
-        experimental_ssd_paging_generation_graph_submission_layer_interval: reported_chunking_configuration_value(
-            configured_fields.experimental_ssd_paging_generation_graph_submission_layer_interval,
-            configured_chunking.map(|chunking| {
-                chunking.experimental_ssd_paging_generation_graph_submission_layer_interval
-            }),
-            astronomical_config::DEFAULT_EXPERIMENTAL_SSD_PAGING_GENERATION_GRAPH_SUBMISSION_LAYER_INTERVAL,
-            effective_chunking.map(|chunking| {
-                chunking.experimental_ssd_paging_generation_graph_submission_layer_interval
-            }),
-        ),
+        experimental_ssd_paging_generation_graph_submission_layer_interval:
+            reported_chunking_configuration_value(
+                configured_fields
+                    .experimental_ssd_paging_generation_graph_submission_layer_interval,
+                configured_chunking.map(|chunking| {
+                    chunking.experimental_ssd_paging_generation_graph_submission_layer_interval
+                }),
+                config::DEFAULT_EXPERIMENTAL_SSD_PAGING_GENERATION_GRAPH_SUBMISSION_LAYER_INTERVAL,
+                effective_chunking.map(|chunking| {
+                    chunking.experimental_ssd_paging_generation_graph_submission_layer_interval
+                }),
+            ),
         ssd_prompt_cache_block_tokens: reported_nullable_chunking_configuration_value(
             configured_fields.ssd_prompt_cache_block_tokens,
             configured_chunking.and_then(|chunking| chunking.ssd_prompt_cache_block_tokens),
@@ -292,7 +291,7 @@ fn chunking_summary(
             configured_fields.ssd_prompt_cache_common_prefix_stride_blocks,
             configured_chunking
                 .map(|chunking| chunking.ssd_prompt_cache_common_prefix_stride_blocks),
-            astronomical_config::DEFAULT_ASTRO_SSD_PROMPT_CACHE_COMMON_PREFIX_STRIDE_BLOCKS,
+            config::DEFAULT_ASTRO_SSD_PROMPT_CACHE_COMMON_PREFIX_STRIDE_BLOCKS,
             effective_chunking
                 .map(|chunking| chunking.ssd_prompt_cache_common_prefix_stride_blocks),
         ),
@@ -349,7 +348,7 @@ fn sampling_value(
 
 fn astro_ssd_prompt_cache_summary(
     configured: Option<&ResolvedRuntimeConfig>,
-    effective: Option<&astronomical_ipc_protocol::WorkerRuntimeFeatureConfiguration>,
+    effective: Option<&ipc_protocol::WorkerRuntimeFeatureConfiguration>,
 ) -> AstroSsdPromptCacheConfigurationSummary {
     AstroSsdPromptCacheConfigurationSummary {
         enabled: ConfigurationValue {
@@ -361,7 +360,7 @@ fn astro_ssd_prompt_cache_summary(
         capacity_bytes: ConfigurationValue {
             configured: configured
                 .and_then(|config| config.configured_astro_ssd_prompt_cache_maximum_size_bytes),
-            default: Some(astronomical_config::DEFAULT_ASTRO_SSD_PROMPT_CACHE_MAXIMUM_SIZE_BYTES),
+            default: Some(config::DEFAULT_ASTRO_SSD_PROMPT_CACHE_MAXIMUM_SIZE_BYTES),
             effective: effective
                 .map(|configuration| configuration.astro_ssd_prompt_cache_maximum_size_bytes),
         },

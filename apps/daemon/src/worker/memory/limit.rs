@@ -3,7 +3,7 @@ use std::{
     time::Duration,
 };
 
-use astronomical_ipc_protocol::WorkerEvent;
+use ipc_protocol::WorkerEvent;
 use tokio::time::{Instant, timeout};
 
 use crate::worker::event_handler;

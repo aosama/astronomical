@@ -8,13 +8,11 @@
 
 use std::time::Duration;
 
-use astronomical_config::{
+use config::{
     BUILTIN_DEFAULT_DECISION_MODEL_ID, BUILTIN_DEFAULT_IMAGE_MODEL_ID, BUILTIN_DEFAULT_MODEL_ID,
     BUILTIN_DEFAULT_SPEECH_MODEL_ID,
 };
-use astronomical_ipc_protocol::{
-    DaemonCatalogEntry, DaemonDownloadJob, DaemonListedModel, DaemonWorkerStatus,
-};
+use ipc_protocol::{DaemonCatalogEntry, DaemonDownloadJob, DaemonListedModel, DaemonWorkerStatus};
 
 use crate::formatting;
 use crate::transport::ipc::{DaemonProbe, DaemonProbeError, DaemonStatusSnapshot};
@@ -112,7 +110,7 @@ struct ServedCapabilities {
 
 impl RequiredCapability {
     fn profile(self) -> CapabilityProfile {
-        let (article, capability_word, own_default_model_id) = astronomical_config::exhaustive_table!(self, {
+        let (article, capability_word, own_default_model_id) = config::exhaustive_table!(self, {
             RequiredCapability::Chat => ("a", "chat", None),
             RequiredCapability::Embeddings => ("an", "embeddings", None),
             RequiredCapability::ImageGeneration =>
@@ -139,7 +137,7 @@ impl RequiredCapability {
     }
 
     fn is_among(self, served_capabilities: &ServedCapabilities) -> bool {
-        astronomical_config::exhaustive_table!(self, {
+        config::exhaustive_table!(self, {
             RequiredCapability::Chat => served_capabilities.chat,
             RequiredCapability::Embeddings => served_capabilities.embeddings,
             RequiredCapability::ImageGeneration => served_capabilities.image_generation,
@@ -583,8 +581,8 @@ pub(crate) fn catalog_entry_matches(
     requested_model_id: &str,
 ) -> bool {
     catalog_entry.huggingface_id == requested_model_id
-        || astronomical_config::leaf_model_id(&catalog_entry.huggingface_id)
-            == astronomical_config::leaf_model_id(requested_model_id)
+        || config::leaf_model_id(&catalog_entry.huggingface_id)
+            == config::leaf_model_id(requested_model_id)
 }
 
 /// Usage-grade rejection for a model neither installed nor downloadable:
@@ -599,7 +597,7 @@ pub(crate) fn unknown_model_reason(
         .iter()
         .map(|listed_model| listed_model.model_id.as_str())
         .collect();
-    let near_matches = astronomical_config::near_model_matches(requested_model_id, &installed_ids);
+    let near_matches = config::near_model_matches(requested_model_id, &installed_ids);
     let (_, capability) = required_capability.capability_text();
     let mut reason = format!(
         "model {requested_model_id} is not installed on this Mac and is not in the release \
@@ -644,7 +642,7 @@ pub(crate) fn installed_model_id_for(
     installed_models: &[DaemonListedModel],
     requested_model_id: String,
 ) -> String {
-    let requested_leaf_model_id = astronomical_config::leaf_model_id(&requested_model_id);
+    let requested_leaf_model_id = config::leaf_model_id(&requested_model_id);
     for listed_model in installed_models {
         if listed_model.model_id == requested_model_id
             || listed_model.model_id == requested_leaf_model_id

@@ -5,7 +5,7 @@
 
 use std::path::PathBuf;
 
-use astronomical_config::AstronomicalRuntimeInstance;
+use config::AstronomicalRuntimeInstance;
 
 use crate::transport::ipc::daemon_not_running_disclosure;
 

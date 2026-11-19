@@ -1,5 +1,5 @@
 use crate::serving::serving_session_snapshot::ServingSessionSnapshot;
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     DaemonWorkerStatus, ExpertLayerSeatingCounts, ExpertMemoryMode, WorkerEvent,
     WorkerExpertResidencySnapshot, WorkerMlxMemorySnapshot, WorkerModelCapabilities,
     WorkerPromptProcessingPhase, WorkerRuntimeFeatureConfiguration,
@@ -94,7 +94,7 @@ impl WorkerActivity {
     /// Stable text used by the status endpoint and menu bar display.
     #[must_use]
     pub const fn as_str(self) -> &'static str {
-        astronomical_config::exhaustive_table!(self, {
+        config::exhaustive_table!(self, {
             Self::Idle => "idle",
             Self::PromptProcessing => "prompt_processing",
             Self::GenerationPreparation => "generation_preparation",
@@ -139,7 +139,7 @@ pub enum ActiveRequestProgress {
         completed_prefill_chunk_tokens: Option<u32>,
         /// Present while the prompt is read one layer at a time: no token
         /// is finished until the last layer, so progress is in layers.
-        prompt_layer_progress: Option<astronomical_ipc_protocol::WorkerPromptLayerProgress>,
+        prompt_layer_progress: Option<ipc_protocol::WorkerPromptLayerProgress>,
     },
     /// Prefill completed and the worker is preparing the first decode forward.
     GenerationPreparation {
@@ -157,7 +157,7 @@ pub enum ActiveRequestProgress {
     },
     /// Current phase and denoising progress for one image request.
     ImageGeneration {
-        phase: astronomical_ipc_protocol::ImageGenerationPhase,
+        phase: ipc_protocol::ImageGenerationPhase,
         completed_steps: u16,
         total_steps: u16,
         elapsed_millis: u64,
@@ -174,7 +174,7 @@ pub struct ExpertResidencySnapshot {
     pub expert_capacity: u32,
     pub layer_seating: ExpertLayerSeatingCounts,
     /// A dense model's kept and streamed decoder layers (issue #1985).
-    pub dense_layers: Option<astronomical_ipc_protocol::WorkerDenseLayerResidency>,
+    pub dense_layers: Option<ipc_protocol::WorkerDenseLayerResidency>,
 }
 
 impl From<WorkerExpertResidencySnapshot> for ExpertResidencySnapshot {
@@ -282,11 +282,11 @@ pub struct WorkerHealthSnapshot {
     pub expert_memory_mode: Option<ExpertMemoryMode>,
     /// What the loaded model's opt-in Neural Engine prefill is doing; `None`
     /// when the setting is off or no model is loaded.
-    pub neural_engine_prefill: Option<astronomical_ipc_protocol::NeuralEnginePrefillStatus>,
+    pub neural_engine_prefill: Option<ipc_protocol::NeuralEnginePrefillStatus>,
     /// Which model is loading. Every wholesale health replacement (ready, idle,
     /// unavailable) rebuilds this as `None`, so a finished or failed load never leaves
     /// a stale report behind.
-    pub model_load_in_flight: Option<astronomical_ipc_protocol::ModelLoadInFlight>,
+    pub model_load_in_flight: Option<ipc_protocol::ModelLoadInFlight>,
     /// Advances with every progress report from a chat or image request, so a caller
     /// waiting on its own silent connection can see that the worker is still moving. A
     /// wholesale health replacement restarts it, which reads as one more change.

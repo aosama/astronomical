@@ -4,8 +4,8 @@
 
 use std::time::{Duration, Instant};
 
-use astronomical_runtime_integration::MlxRuntime;
 use mlx_bridge::{MlxArray, MlxDtype};
+use runtime_integration::MlxRuntime;
 
 use super::fetching_layer_stages::{median, milliseconds};
 

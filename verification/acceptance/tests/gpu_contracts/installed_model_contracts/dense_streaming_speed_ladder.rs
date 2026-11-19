@@ -16,10 +16,10 @@
 
 use std::time::{Duration, Instant};
 
-use astronomical_model_serving::{
+use model_serving::{
     LayerProbeShape, Qwen3_5ArtifactValidator, Qwen3_5Config, Qwen3_5StreamingModel,
 };
-use astronomical_runtime_integration::MlxRuntime;
+use runtime_integration::MlxRuntime;
 use serial_test::serial;
 
 #[path = "../../support/romeo_and_juliet.rs"]
@@ -94,7 +94,7 @@ fn load_streaming_model(
     model_directory: &std::path::Path,
     machine_mlx_memory_ceiling_bytes: usize,
 ) -> (Qwen3_5StreamingModel, Qwen3_5Config) {
-    let mlx_memory_limits = astronomical_runtime_integration::MlxMemoryLimits::new(
+    let mlx_memory_limits = runtime_integration::MlxMemoryLimits::new(
         machine_mlx_memory_ceiling_bytes,
         machine_mlx_memory_ceiling_bytes,
     )

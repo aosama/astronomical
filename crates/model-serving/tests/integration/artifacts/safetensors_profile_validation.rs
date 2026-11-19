@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 use std::io::Write;
 
-use astronomical_model_serving::{
+use model_serving::{
     TensorDtype, TensorProfile, validate_bounded_safetensors_with_partial_profiles,
 };
 

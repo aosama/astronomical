@@ -2,13 +2,13 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use astronomical_ipc_protocol::RequestId;
-use astronomical_model_serving::{
+use ipc_protocol::RequestId;
+use model_serving::{
     AstroSsdPromptCacheDiskStoreConfig, GeneratedToken, InferenceEngine, Qwen3_5ArtifactValidator,
     Qwen3_5InferenceRequest, Qwen3_5ResidentEngine, Qwen3_5ResidentPromptProcessingChunkSizer,
     Qwen3_5Tokenizer,
 };
-use astronomical_runtime_integration::MlxRuntime;
+use runtime_integration::MlxRuntime;
 use tokio::time::timeout;
 
 use super::engine_astro_ssd_prompt_cache::{

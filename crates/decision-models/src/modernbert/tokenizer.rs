@@ -6,7 +6,7 @@
 #[cfg(test)]
 mod tests;
 
-use astronomical_ipc_protocol::EmbeddingsFailureReason;
+use ipc_protocol::EmbeddingsFailureReason;
 use tokenizers::Tokenizer;
 
 use crate::modernbert::configuration::ModernBertConfiguration;

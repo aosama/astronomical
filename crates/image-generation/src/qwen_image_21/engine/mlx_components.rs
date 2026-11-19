@@ -14,8 +14,8 @@
 
 use std::path::PathBuf;
 
-use astronomical_ipc_protocol::{ExpertMemoryMode, RequestId};
-use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
+use ipc_protocol::{ExpertMemoryMode, RequestId};
+use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
 use crate::qwen_image_21::artifact::{QwenImage21ArtifactProvenance, QwenImage21ArtifactValidator};
 use crate::qwen_image_21::official_profile::{
@@ -25,8 +25,8 @@ use crate::qwen_image_21::official_profile::{
 use crate::qwen_image_21::pipeline::QwenImage21Pipeline;
 use crate::qwen_image_21::render_contract::{QwenImage21RenderAdvance, QwenImage21RenderRequest};
 use crate::qwen_image_21::render_session::QwenImage21RenderSession;
-use astronomical_memory_policy::telemetry::MlxActiveMemoryBreakdown;
-use astronomical_model_primitives::performance_attribution::{
+use memory_policy::telemetry::MlxActiveMemoryBreakdown;
+use model_primitives::performance_attribution::{
     ModelLoadingPerformanceAttributionMetadata, PerformanceAttribution, PerformanceAttributionLog,
     PerformanceAttributionOutcome, PerformanceOperation,
 };
@@ -107,7 +107,7 @@ impl QwenImage21MlxComponents {
     /// refused, which keeps the load honest about that choice.
     fn admit_load_ceiling(&mut self, minimum_mlx_memory_ceiling_bytes: u64) -> Result<(), String> {
         if let Some(floor_ceiling_bytes) =
-            astronomical_memory_policy::serving_ceiling::floor_raised_ceiling_bytes(
+            memory_policy::serving_ceiling::floor_raised_ceiling_bytes(
                 self.effective_mlx_memory_ceiling_bytes as u64,
                 minimum_mlx_memory_ceiling_bytes,
                 self.floor_raise_limit_bytes,
@@ -483,4 +483,4 @@ impl QwenImage21EngineComponents for QwenImage21MlxComponents {
     }
 }
 
-use astronomical_memory_policy::telemetry::{MlxMemoryLimitAdjustment, MlxMemoryTelemetry};
+use memory_policy::telemetry::{MlxMemoryLimitAdjustment, MlxMemoryTelemetry};

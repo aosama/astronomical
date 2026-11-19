@@ -5,7 +5,7 @@
 use std::sync::{Arc, RwLock};
 
 use astronomical_daemon::DownloadCatalog;
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     DaemonIpcClient, DaemonRequest, DaemonResponse, DaemonWorkerStatus, ModelLoadInFlight,
 };
 use tokio::time::timeout;
@@ -53,7 +53,7 @@ async fn should_list_discovered_models_over_daemon_ipc() {
     assert_eq!(
         list_response,
         DaemonResponse::ModelsList {
-            models: vec![astronomical_ipc_protocol::DaemonListedModel {
+            models: vec![ipc_protocol::DaemonListedModel {
                 model_id: "test/local-chatter".to_owned(),
                 family: "qwen3_5".to_owned(),
                 context_window: Some(2_048),
@@ -105,7 +105,7 @@ async fn should_list_a_decision_model_with_its_capability_and_no_context_window(
     assert_eq!(
         list_response,
         DaemonResponse::ModelsList {
-            models: vec![astronomical_ipc_protocol::DaemonListedModel {
+            models: vec![ipc_protocol::DaemonListedModel {
                 model_id: "test-local-decider".to_owned(),
                 family: "laya".to_owned(),
                 context_window: None,
@@ -322,7 +322,7 @@ async fn should_set_and_report_the_default_model_over_daemon_ipc() {
         DownloadCatalog::load_bundled().expect("the bundled release catalog should load in tests");
     let first_catalog_entry = &bundled_catalog.entries()[0];
     let requestable_model_id =
-        astronomical_config::leaf_model_id(first_catalog_entry.huggingface_id()).to_owned();
+        config::leaf_model_id(first_catalog_entry.huggingface_id()).to_owned();
 
     // A requestable leaf id is accepted and normalized to the catalog entry's
     // requestable id.

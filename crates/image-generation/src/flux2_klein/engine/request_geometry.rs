@@ -2,8 +2,8 @@
 
 use std::collections::BTreeMap;
 
-use astronomical_ipc_protocol::ImageGenerationCapabilities;
-use astronomical_runtime_integration::MlxRuntime;
+use ipc_protocol::ImageGenerationCapabilities;
+use runtime_integration::MlxRuntime;
 
 use super::super::{
     Flux2KleinMemoryGeometry, Flux2KleinPackedLatentLayout, ValidatedFlux2KleinArtifact,

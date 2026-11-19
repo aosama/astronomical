@@ -1,8 +1,8 @@
 use std::os::unix::fs::PermissionsExt;
 
-use astronomical_decision_contract::FloatVector;
-use astronomical_decision_contract::decision_training_job::TrainedTensor;
-use astronomical_decision_contract::trained_tensors_file::read_trained_tensors_file;
+use decision_contract::FloatVector;
+use decision_contract::decision_training_job::TrainedTensor;
+use decision_contract::trained_tensors_file::read_trained_tensors_file;
 
 use super::*;
 

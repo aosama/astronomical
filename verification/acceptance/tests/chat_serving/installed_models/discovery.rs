@@ -35,7 +35,7 @@ fn should_discover_required_installed_models() {
 }
 
 fn report_optional_discovered_model(
-    discovered_models: &[astronomical_config::DiscoveredModel],
+    discovered_models: &[config::DiscoveredModel],
     optional_model_id: &str,
 ) {
     let optional_model_is_discovered = discovered_models

@@ -5,7 +5,7 @@
 //! tensor work is delegated to MLX-C `mlx_cos` and `mlx_sin` from
 //! `mlx-c/mlx/c/ops.h`.
 
-use astronomical_runtime_integration::MlxRuntime;
+use runtime_integration::MlxRuntime;
 
 use super::{Qwen3_5ExecutionError, Qwen3_5VisionConfig, Qwen3_5VisionInputPlan};
 use mlx_bridge::MlxArray;

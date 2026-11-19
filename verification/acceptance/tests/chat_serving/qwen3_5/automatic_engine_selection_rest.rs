@@ -2,11 +2,11 @@
 
 use std::{fs, path::Path, time::Duration};
 
-use astronomical_model_serving::{
+use futures_util::StreamExt;
+use model_serving::{
     CompleteResidencyHeadroomBoundary, ModelMemoryGeometry, Qwen3_5ArtifactValidator,
     model_memory_geometry_from_validated_artifact,
 };
-use futures_util::StreamExt;
 use serde_json::{Value, json};
 use serial_test::serial;
 use tokio::time::timeout;

@@ -259,7 +259,7 @@ impl Flux2KleinMlxComponents {
         else {
             return effective_ceiling_bytes;
         };
-        astronomical_memory_policy::serving_ceiling::floor_raised_ceiling_bytes(
+        memory_policy::serving_ceiling::floor_raised_ceiling_bytes(
             effective_ceiling_bytes,
             model_floor_bytes,
             self.floor_raise_limit_bytes,

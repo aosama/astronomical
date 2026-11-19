@@ -14,8 +14,8 @@
 
 use std::collections::BTreeMap;
 
-use astronomical_runtime_integration::{MlxRuntime, MlxSafetensors};
 use mlx_bridge::{MlxArray, MlxCError, MlxCompiledElementwiseGraphs, MlxMetalKernel};
+use runtime_integration::{MlxRuntime, MlxSafetensors};
 
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_core::model_math::tensor_slicing;

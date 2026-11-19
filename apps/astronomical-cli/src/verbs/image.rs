@@ -18,8 +18,8 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use astronomical_config::AstronomicalRuntimeInstance;
-use astronomical_ipc_protocol::{
+use config::AstronomicalRuntimeInstance;
+use ipc_protocol::{
     DaemonRequest, DaemonResponse, GeneratedImage, ImageGenerateRequest,
     ImageGenerationFailureReason, ImageGenerationResultMetadata,
 };

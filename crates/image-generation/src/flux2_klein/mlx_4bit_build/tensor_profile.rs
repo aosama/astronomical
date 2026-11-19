@@ -18,8 +18,8 @@ use std::collections::BTreeMap;
 
 use ::safetensors::Dtype;
 
-use astronomical_artifact_validation::{RawSafetensorsInventory, RawSafetensorsTensorDescriptor};
-use astronomical_model_primitives::affine_quantization_scheme::{
+use artifact_validation::{RawSafetensorsInventory, RawSafetensorsTensorDescriptor};
+use model_primitives::affine_quantization_scheme::{
     AFFINE_QUANTIZATION_GROUP_SIZE, AFFINE_QUANTIZED_VALUES_PER_WORD,
 };
 

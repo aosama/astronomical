@@ -33,7 +33,7 @@ impl Qwen3_5EngineState {
         total_artifact_payload_bytes: Option<u64>,
         resident_model_payload_bytes: Option<u64>,
         model_shard_count: Option<usize>,
-        mlx_memory_snapshot: Option<astronomical_runtime_integration::MlxMemorySnapshot>,
+        mlx_memory_snapshot: Option<runtime_integration::MlxMemorySnapshot>,
         failure_description: Option<String>,
     ) -> Result<(), InferenceEngineError> {
         let Some(performance_attribution_report) = model_loading_performance_attribution

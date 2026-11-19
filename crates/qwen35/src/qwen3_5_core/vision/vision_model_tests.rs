@@ -18,7 +18,7 @@ const RELEASED_TENSOR_ELEMENT_COUNT: usize = 4 * 1024 * 1024;
 
 /// A vision model over a one-tensor sidecar, marked used or not.
 fn vision_model_over(
-    runtime: &astronomical_runtime_integration::MlxRuntime,
+    runtime: &runtime_integration::MlxRuntime,
     shard_path: &std::path::Path,
     weights_have_been_used: bool,
 ) -> Qwen3_5VisionModel {

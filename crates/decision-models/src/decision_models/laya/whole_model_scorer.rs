@@ -14,9 +14,9 @@
 use std::collections::BTreeMap;
 use std::rc::Rc;
 
-use astronomical_decision_contract::DecisionFailure;
-use astronomical_decision_contract::decision_training_job::TrainingExample;
-use astronomical_decision_training::head_parameters::ParameterLayout;
+use decision_contract::DecisionFailure;
+use decision_contract::decision_training_job::TrainingExample;
+use decision_training::head_parameters::ParameterLayout;
 use mlx_bridge::{MlxArray, MlxBindingsContext, MlxCError};
 
 use crate::decision_models::adapter_training::loss_gradient::{TrainableLoss, loss_gradients};

@@ -9,14 +9,14 @@
 
 use std::time::{Duration, Instant};
 
-use astronomical_model_serving::speculative_decoding::dflash2_drafter::{
+use mlx_bridge::MlxArray;
+use model_serving::speculative_decoding::dflash2_drafter::{
     DFlash2DraftTarget, DrafterContextStates, PathChoice, drafted_hidden_rows, select_path,
 };
-use astronomical_model_serving::{
+use model_serving::{
     PerformanceAttribution, Qwen3_5SpeculativeVerificationOutput, RequestDecoderStateStack,
     VerificationLogitsMode,
 };
-use mlx_bridge::MlxArray;
 use serial_test::serial;
 
 use super::dflash2_journey_support::{host_values, tap_rows};
@@ -300,7 +300,7 @@ fn time_verify_and_rewind(
     [verify_eight_rows, verify_logits_readback, started.elapsed()]
 }
 
-fn evaluate(runtime: &astronomical_runtime_integration::MlxRuntime, arrays: &[&MlxArray]) {
+fn evaluate(runtime: &runtime_integration::MlxRuntime, arrays: &[&MlxArray]) {
     runtime
         .evaluate_arrays(arrays)
         .expect("the stage evaluates");

@@ -2,7 +2,7 @@
 
 use std::time::Duration;
 
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     ChatGenerationCompletionReason, ChatModelCapabilities, ProtocolReader, ProtocolWriter,
     WorkerCommand, WorkerEvent,
 };
@@ -86,7 +86,7 @@ async fn main() {
                     .send_event(&WorkerEvent::MlxMemoryLimitChanged {
                         effective_mlx_memory_ceiling_bytes,
                         minimum_mlx_memory_ceiling_bytes: 1,
-                        expert_memory_mode: astronomical_ipc_protocol::ExpertMemoryMode::Resident,
+                        expert_memory_mode: ipc_protocol::ExpertMemoryMode::Resident,
                         mlx_memory_snapshot: None,
                         expert_residency: None,
                     })

@@ -13,10 +13,10 @@
 //! lists the same way. The result is exact and sorted best first; equal
 //! logits go to the lower token id.
 
-use astronomical_runtime_integration::MlxRuntime;
 use mlx_bridge::{
     MlxArray, MlxDtype, MlxMetalKernel, MlxMetalKernelOutput, MlxMetalKernelTemplateArgument,
 };
+use runtime_integration::MlxRuntime;
 
 use super::{sampling_failure, sampling_runtime_error};
 use crate::gpu_token_sampling::TokenSamplingError;

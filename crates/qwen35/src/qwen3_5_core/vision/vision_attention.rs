@@ -7,7 +7,7 @@
 
 use std::cell::RefCell;
 
-use astronomical_runtime_integration::MlxRuntime;
+use runtime_integration::MlxRuntime;
 
 use super::{Qwen3_5ExecutionError, Qwen3_5VisionConfig, Qwen3_5VisionWeights};
 use mlx_bridge::{MlxArray, MlxCompiledElementwiseGraphs, MlxDtype};

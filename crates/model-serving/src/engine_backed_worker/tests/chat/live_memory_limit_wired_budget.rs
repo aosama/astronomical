@@ -3,7 +3,7 @@
 use super::scripted_model_factory_test_doubles::LazyScriptedModelFactory;
 use super::support::{close_worker_transport, next_event};
 use crate::EngineBackedWorker;
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     MAX_IPC_FRAME_BYTES, ProtocolReader, ProtocolWriter, WorkerCommand, WorkerEvent,
 };
 use std::sync::atomic::AtomicUsize;
@@ -29,7 +29,7 @@ async fn applied_live_mlx_memory_ceiling_bytes(
             ),
             model_creation_memory_limits: Arc::new(Mutex::new(Vec::new())),
             model_configurations: Arc::new(Mutex::new(Vec::new())),
-            expert_memory_mode: Some(astronomical_ipc_protocol::ExpertMemoryMode::Resident),
+            expert_memory_mode: Some(ipc_protocol::ExpertMemoryMode::Resident),
             created_engine_idle_mlx_memory_telemetry: None,
             scripted_replacement_required_reason: None,
         },

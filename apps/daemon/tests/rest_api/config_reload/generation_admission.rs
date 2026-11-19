@@ -63,7 +63,7 @@ struct DelayedAdmissionExecutor {
 impl ChatGenerationExecutor for DelayedAdmissionExecutor {
     fn start_chat_generation(
         &self,
-        generation_command: astronomical_ipc_protocol::ChatGenerationCommand,
+        generation_command: ipc_protocol::ChatGenerationCommand,
     ) -> std::pin::Pin<
         Box<
             dyn std::future::Future<

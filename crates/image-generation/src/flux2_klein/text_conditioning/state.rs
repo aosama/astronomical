@@ -1,10 +1,8 @@
 //! Request-scoped Qwen layer state that yields after one bounded layer group.
 
-use astronomical_runtime_integration::MlxRuntime;
+use runtime_integration::MlxRuntime;
 
-use astronomical_model_primitives::performance_attribution::{
-    PerformanceAttribution, PerformanceOperation,
-};
+use model_primitives::performance_attribution::{PerformanceAttribution, PerformanceOperation};
 
 use super::batch::{FLUX2_KLEIN_CONDITIONING_SEQUENCE_LENGTH, Flux2KleinPreparedTextBatch};
 use super::error::Flux2KleinTextConditioningError;

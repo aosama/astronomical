@@ -4,7 +4,7 @@
 //! stays inside the source-size budget; as a child module it can reach the
 //! component set's private fields and the parent's imports directly.
 
-use astronomical_ipc_protocol::ExpertMemoryMode;
+use ipc_protocol::ExpertMemoryMode;
 
 use super::*;
 
@@ -229,7 +229,7 @@ impl Flux2KleinEngineComponents for Flux2KleinMlxComponents {
                     snapshot.active_memory_bytes() as u64,
                     snapshot.mlx_buffer_cache_bytes() as u64,
                     snapshot.peak_memory_bytes() as u64,
-                    astronomical_memory_policy::telemetry::MlxActiveMemoryBreakdown::default(),
+                    memory_policy::telemetry::MlxActiveMemoryBreakdown::default(),
                 );
                 if let Some(memory_ceiling_utilization) =
                     self.memory_ceiling_utilization(snapshot.active_memory_bytes() as u64)
@@ -294,4 +294,4 @@ fn mlx_buffer_cache_limit_for_ceiling(
     original_mlx_buffer_cache_limit_bytes.min(requested_mlx_memory_ceiling_bytes)
 }
 
-use astronomical_memory_policy::telemetry::MlxMemoryLimitAdjustment;
+use memory_policy::telemetry::MlxMemoryLimitAdjustment;

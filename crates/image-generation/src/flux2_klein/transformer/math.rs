@@ -1,6 +1,6 @@
 //! Precision boundaries and dense primitives matching the official reference.
 
-use astronomical_runtime_integration::MlxRuntime;
+use runtime_integration::MlxRuntime;
 
 use super::{Flux2KleinTransformerError, Flux2KleinTransformerGeometry};
 use crate::flux2_klein::tensor_store::Flux2KleinWeight;

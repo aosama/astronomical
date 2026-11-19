@@ -14,20 +14,18 @@
 //! weights. The footprint journeys rely on the runner giving each one its own
 //! process, because loads earlier in the same process blur later deltas.
 
-use astronomical_neural_engine::core_ml::{ComputePlacement, CoreMlComputeUnits};
-use astronomical_neural_engine::documents::projection::MlProgramWeights;
-use astronomical_neural_engine::program_shape::ProgramShape;
-use astronomical_neural_engine::weights::affine_quantized::{
-    AffineQuantizedWeights, QuantizationLayout,
-};
-use astronomical_neural_engine::weights::half_precision::f16_bits_slice_to_f32;
 use astronomical_neural_engine_research::numerical_comparison::{
     NumericalComparison, compare_values,
 };
-use astronomical_test_harness::deterministic_values::{
+use neural_engine::core_ml::{ComputePlacement, CoreMlComputeUnits};
+use neural_engine::documents::projection::MlProgramWeights;
+use neural_engine::program_shape::ProgramShape;
+use neural_engine::weights::affine_quantized::{AffineQuantizedWeights, QuantizationLayout};
+use neural_engine::weights::half_precision::f16_bits_slice_to_f32;
+use serial_test::serial;
+use test_harness::deterministic_values::{
     PROJECTION_WEIGHT_STANDARD_DEVIATION, bell_shaped_values,
 };
-use serial_test::serial;
 
 use crate::support::journey_constants::{MINIMUM_COSINE_SIMILARITY, PREFILL_CHUNK_TOKEN_COUNT};
 use crate::support::measured_projection::{

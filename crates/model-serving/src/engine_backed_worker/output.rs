@@ -1,4 +1,4 @@
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     ChatGenerationCompletionReason, ChatGenerationFailureReason, ChatGenerationOutput,
     MlxMemorySnapshotSource, NeuralEnginePrefillStatus, ProtocolWriter, RequestId, WorkerEvent,
     WorkerMlxMemorySnapshot,
@@ -517,8 +517,8 @@ fn worker_memory_observation(
     mlx_memory_snapshot_source: MlxMemorySnapshotSource,
     mlx_memory_telemetry: MlxMemoryTelemetry,
 ) -> (
-    astronomical_ipc_protocol::WorkerMlxMemorySnapshot,
-    Option<astronomical_ipc_protocol::WorkerExpertResidencySnapshot>,
+    ipc_protocol::WorkerMlxMemorySnapshot,
+    Option<ipc_protocol::WorkerExpertResidencySnapshot>,
 ) {
     let expert_residency = mlx_memory_telemetry
         .expert_residency_telemetry()
@@ -542,8 +542,8 @@ fn active_memory_bytes_of_worker_snapshot(snapshot: &WorkerMlxMemorySnapshot) ->
 /// Converts engine-owned residency telemetry into the public worker snapshot.
 pub(super) fn worker_expert_residency_snapshot(
     expert_residency: crate::inference_engine::contract::ExpertResidencyTelemetry,
-) -> astronomical_ipc_protocol::WorkerExpertResidencySnapshot {
-    astronomical_ipc_protocol::WorkerExpertResidencySnapshot {
+) -> ipc_protocol::WorkerExpertResidencySnapshot {
+    ipc_protocol::WorkerExpertResidencySnapshot {
         total_layer_count: expert_residency.total_layer_count,
         resident_expert_count: expert_residency.resident_expert_count,
         resident_expert_payload_bytes: expert_residency.resident_expert_payload_bytes,
@@ -559,11 +559,11 @@ pub(super) fn worker_expert_residency_snapshot(
 /// the worker measured.
 pub(super) fn worker_expert_streaming_stats(
     expert_streaming_stats: &crate::inference_engine::contract::ExpertStreamingStats,
-) -> astronomical_ipc_protocol::WorkerExpertStreamingStats {
-    astronomical_ipc_protocol::WorkerExpertStreamingStats {
+) -> ipc_protocol::WorkerExpertStreamingStats {
+    ipc_protocol::WorkerExpertStreamingStats {
         model_id: expert_streaming_stats.model_id.clone(),
         expert_memory_mode: expert_streaming_stats.expert_memory_mode,
-        expert_residency: astronomical_ipc_protocol::WorkerExpertResidencySnapshot {
+        expert_residency: ipc_protocol::WorkerExpertResidencySnapshot {
             total_layer_count: expert_streaming_stats.total_layer_count,
             resident_expert_count: expert_streaming_stats.resident_expert_count,
             resident_expert_payload_bytes: expert_streaming_stats.resident_expert_payload_bytes,
@@ -572,7 +572,7 @@ pub(super) fn worker_expert_streaming_stats(
             expert_capacity: expert_streaming_stats.expert_capacity,
             // Session totals stay end-of-reply. The live layer map rides the
             // residency sample, which already carries the seating counts.
-            layer_seating: astronomical_ipc_protocol::ExpertLayerSeatingCounts::default(),
+            layer_seating: ipc_protocol::ExpertLayerSeatingCounts::default(),
             // Only a sparse model's pager reports session stats.
             dense_layers: None,
         },
@@ -612,8 +612,8 @@ pub(super) fn worker_expert_streaming_stats(
 /// Converts one layer's topology row into the IPC payload.
 fn worker_expert_layer_topology(
     layer_topology: &crate::inference_engine::contract::ExpertLayerTopology,
-) -> astronomical_ipc_protocol::WorkerExpertLayerTopology {
-    astronomical_ipc_protocol::WorkerExpertLayerTopology {
+) -> ipc_protocol::WorkerExpertLayerTopology {
+    ipc_protocol::WorkerExpertLayerTopology {
         layer_index: layer_topology.layer_index,
         retained_expert_ids: layer_topology.retained_expert_ids.clone(),
         retained_payload_bytes: layer_topology.retained_payload_bytes,
@@ -636,7 +636,7 @@ pub(crate) fn worker_memory_snapshot(
         model_core_payload_bytes: mlx_active_memory_breakdown.model_core_payload_bytes,
         context_state_payload_bytes: mlx_active_memory_breakdown.context_state_payload_bytes,
         memory_ceiling_utilization: mlx_memory_telemetry.memory_ceiling_utilization.map(
-            |utilization| astronomical_ipc_protocol::WorkerMemoryCeilingUtilizationSnapshot {
+            |utilization| ipc_protocol::WorkerMemoryCeilingUtilizationSnapshot {
                 unused_headroom_bytes: utilization.unused_headroom_bytes,
                 reserved_model_core_slack_bytes: utilization.reserved_model_core_slack_bytes,
                 reserved_context_growth_bytes: utilization.reserved_context_growth_bytes,

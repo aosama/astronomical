@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
+use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use tokio::time::timeout;
 
 use super::resident_gate_up_fusion_support::*;

@@ -4,7 +4,7 @@ use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use astronomical_neural_engine::program_shape::ProgramShape;
+use neural_engine::program_shape::ProgramShape;
 
 use super::{
     NeuralEngineProgramFamily, PlannedProgram, ProgramBuildJob, ProgramBuildOutcome,

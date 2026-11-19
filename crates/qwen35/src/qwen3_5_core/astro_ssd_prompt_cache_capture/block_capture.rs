@@ -13,8 +13,8 @@ use crate::{
     AstroSsdPromptCachePublicationOutcome, InferenceEngineError, PerformanceAttribution,
     PerformanceOperation, Qwen3_5AstroSsdPromptCacheBoundaryCheckpoint,
 };
-use astronomical_runtime_integration::MlxMemorySnapshot;
 use mlx_bridge::MlxArray;
+use runtime_integration::MlxMemorySnapshot;
 use std::collections::HashMap;
 
 use super::capture_hook::Qwen3_5AstroSsdPromptCacheCapture;

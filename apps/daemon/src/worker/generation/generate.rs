@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use astronomical_ipc_protocol::ProtocolError;
+use ipc_protocol::ProtocolError;
 use tokio::time::{Instant, timeout};
 
 use crate::worker::loop_types::WorkerLoopState;
@@ -152,7 +152,7 @@ pub(in crate::worker) async fn handle_generate_command(
 async fn wait_for_model_swap_within_budget(
     worker_loop_state: &mut WorkerLoopState<'_>,
     expected_configuration_generation: Option<&str>,
-    expected_model_runtime_configuration: &astronomical_ipc_protocol::WorkerLoadedModelRuntimeConfiguration,
+    expected_model_runtime_configuration: &ipc_protocol::WorkerLoadedModelRuntimeConfiguration,
 ) -> Result<ModelSwapWaitOutcome, WorkerControlError> {
     let model_load_budget = worker_loop_state.model_load_timeout;
     let timed_swap_wait = timeout(
@@ -279,8 +279,8 @@ async fn ensure_requested_model_loaded(
 /// `Failed` outcomes carry what the caller answers and contains.
 async fn start_worker_generation_or_reject(
     worker_loop_state: &mut WorkerLoopState<'_>,
-    request_id: astronomical_ipc_protocol::RequestId,
-    generation_command: astronomical_ipc_protocol::ChatGenerationCommand,
+    request_id: ipc_protocol::RequestId,
+    generation_command: ipc_protocol::ChatGenerationCommand,
     chat_work: crate::worker::loop_types::ChatWork,
 ) -> Result<GenerationStartOutcome, WorkerControlError> {
     tracing::info!(
@@ -322,7 +322,7 @@ async fn start_worker_generation_or_reject(
 /// a prompt-token count that runs only the generation preparation.
 async fn dispatch_chat_work(
     worker_process: &mut crate::WorkerProcess,
-    generation_command: astronomical_ipc_protocol::ChatGenerationCommand,
+    generation_command: ipc_protocol::ChatGenerationCommand,
     chat_work: crate::worker::loop_types::ChatWork,
 ) -> Result<(), WorkerControlError> {
     match chat_work {
@@ -339,7 +339,7 @@ async fn dispatch_chat_work(
 /// for its whole lifetime.
 fn assemble_active_chat_generation(
     active_generation_permit: tokio::sync::OwnedSemaphorePermit,
-    request_id: astronomical_ipc_protocol::RequestId,
+    request_id: ipc_protocol::RequestId,
     request_max_output_tokens: u16,
     stream_event_sender: tokio::sync::mpsc::Sender<crate::ChatGenerationStreamEvent>,
     chat_work: crate::worker::loop_types::ChatWork,

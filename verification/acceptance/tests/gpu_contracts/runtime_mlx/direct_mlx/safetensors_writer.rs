@@ -1,8 +1,8 @@
 use std::fs::{self, File, OpenOptions};
 use std::io::Write;
 
-use astronomical_runtime_integration::{MlxRuntimeError, MlxSafetensorsWriterError};
 use mlx_bridge::MlxDtype;
+use runtime_integration::{MlxRuntimeError, MlxSafetensorsWriterError};
 
 #[test]
 fn should_save_multiple_arrays_and_metadata_through_a_retained_file_descriptor() {

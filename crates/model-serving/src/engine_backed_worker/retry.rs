@@ -1,4 +1,4 @@
-use astronomical_ipc_protocol::RequestId;
+use ipc_protocol::RequestId;
 
 use super::model_swap::factory_runtime_matches_configuration;
 use super::support::{ModelFactory, ModelFactoryRuntime, SelectedModel};

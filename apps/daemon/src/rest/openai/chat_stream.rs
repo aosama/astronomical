@@ -1,10 +1,10 @@
 use std::collections::VecDeque;
 
-use astronomical_ipc_protocol::ChatGenerationCompletionReason;
-use astronomical_rest_contract::{
+use axum::response::sse::Event;
+use ipc_protocol::ChatGenerationCompletionReason;
+use rest_contract::{
     OpenAiChatCompletionChunk, OpenAiErrorResponse, OpenAiFinishReason, OpenAiTokenUsage,
 };
-use axum::response::sse::Event;
 use serde::Serialize;
 
 use super::chat_failure_wording::chat_failure_wording;

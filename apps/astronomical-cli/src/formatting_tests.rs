@@ -1,4 +1,4 @@
-use astronomical_ipc_protocol::NeuralEnginePrefillStatus;
+use ipc_protocol::NeuralEnginePrefillStatus;
 
 use super::render_neural_engine_prefill;
 

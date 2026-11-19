@@ -1,11 +1,11 @@
 //! The Metal encoder against the pure reference, plus the invariants the
 //! encoder must hold regardless of implementation.
 
-use astronomical_quantization::bit_width::{BitWidth, GroupSize};
-use astronomical_quantization::encoder::RangeSearchPolicy;
-use astronomical_quantization::encoder::mlx::quantize_best;
-use astronomical_quantization::encoder::reference::{dequantize_slab, encode_slab};
-use astronomical_quantization::error::QuantizationError;
+use quantization::bit_width::{BitWidth, GroupSize};
+use quantization::encoder::RangeSearchPolicy;
+use quantization::encoder::mlx::quantize_best;
+use quantization::encoder::reference::{dequantize_slab, encode_slab};
+use quantization::error::QuantizationError;
 
 use serial_test::parallel;
 
@@ -289,10 +289,7 @@ fn should_refuse_a_last_axis_that_does_not_divide_into_groups() {
     ));
 }
 
-fn to_f32(
-    runtime: &astronomical_runtime_integration::MlxRuntime,
-    array: &mlx_bridge::MlxArray,
-) -> Vec<f32> {
+fn to_f32(runtime: &runtime_integration::MlxRuntime, array: &mlx_bridge::MlxArray) -> Vec<f32> {
     runtime
         .astype(array, mlx_bridge::MlxDtype::Float32)
         .expect("cast")

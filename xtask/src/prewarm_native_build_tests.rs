@@ -1,4 +1,4 @@
-use astronomical_native_identity::NativeBuildProfile;
+use native_identity::NativeBuildProfile;
 
 use super::prewarm_native_build::{ProgressRelay, parse_profiles};
 

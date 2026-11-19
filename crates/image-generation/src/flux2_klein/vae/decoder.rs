@@ -1,13 +1,11 @@
 //! Complete native MLX FLUX.2 Klein decoder.
 
-use astronomical_runtime_integration::MlxRuntime;
+use runtime_integration::MlxRuntime;
 
 use crate::flux2_klein::tensor_store::{Flux2KleinTensorStore, map_component_weight_files};
 use crate::flux2_klein::weight_layout::Flux2KleinComponentWeightFiles;
 
-use astronomical_model_primitives::performance_attribution::{
-    PerformanceAttribution, PerformanceOperation,
-};
+use model_primitives::performance_attribution::{PerformanceAttribution, PerformanceOperation};
 
 use super::convolution;
 use super::{

@@ -16,11 +16,11 @@
 //! parity alone is therefore necessary but not sufficient: the trajectory
 //! replay remains the deciding gate.
 
-use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use mlx_bridge::{
     MlxArray, MlxCompiledDualHeadNorm, MlxCompiledElementwiseGraphs,
     MlxCompiledGatedDeltaRateActivation, MlxDtype,
 };
+use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use serial_test::serial;
 
 const RMS_NORM_EPSILON: f32 = 1.0e-6;

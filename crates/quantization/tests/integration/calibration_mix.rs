@@ -1,8 +1,8 @@
 //! The bundled mix loads end to end with a fake tokenizer.
 
-use astronomical_quantization::calibration::{CalibrationMix, CalibrationTokenizer};
-use astronomical_quantization::error::QuantizationError;
-use astronomical_quantization::progress::{ProgressReporter, StageProgress};
+use quantization::calibration::{CalibrationMix, CalibrationTokenizer};
+use quantization::error::QuantizationError;
+use quantization::progress::{ProgressReporter, StageProgress};
 
 struct WhitespaceTokenizer;
 

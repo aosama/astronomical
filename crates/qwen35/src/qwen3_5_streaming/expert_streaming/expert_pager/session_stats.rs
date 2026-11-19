@@ -8,7 +8,7 @@
 
 use std::sync::Arc;
 
-use astronomical_runtime_integration::PositionalFileReadMetrics;
+use runtime_integration::PositionalFileReadMetrics;
 
 use crate::inference_engine::contract::ExpertLayerTopology;
 use crate::memory::{
@@ -109,7 +109,7 @@ impl Qwen3_5ExpertPager {
     /// Maps astro expert cache layer residencies onto observatory topology rows.
     pub fn session_layer_topology(
         &self,
-        layer_residencies: &[astronomical_memory_policy::residency::CurrentExpertLayerResidency],
+        layer_residencies: &[memory_policy::residency::CurrentExpertLayerResidency],
     ) -> Vec<ExpertLayerTopology> {
         layer_residencies
             .iter()

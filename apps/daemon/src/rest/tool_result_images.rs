@@ -12,8 +12,8 @@
 //! `tool_result` block's images into a following user message, but per result
 //! and without the label; one placement for all three endpoints is #2320.
 
-use astronomical_ipc_protocol::{ChatImageInput, ChatMessage};
-use astronomical_rest_contract::DecodedImageInput;
+use ipc_protocol::{ChatImageInput, ChatMessage};
+use rest_contract::DecodedImageInput;
 
 /// The text of the user message that carries a tool run's images.
 pub(crate) const TOOL_RESULT_IMAGES_LABEL: &str = "Images returned by the tool calls above.";

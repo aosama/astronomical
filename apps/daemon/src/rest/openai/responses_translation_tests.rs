@@ -1,11 +1,11 @@
 //! Unit tests for `crate::rest::openai::responses_translation`: how an
 //! OpenAI Responses request lowers into the worker's chat command.
 
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     ChatAssistantToolCall, ChatAssistantToolFunction, ChatGenerationCommand,
     ChatGenerationSettings, ChatMessage, ChatToolChoice, ChatToolDefinition, RequestId,
 };
-use astronomical_rest_contract::OpenAiResponsesRequest;
+use rest_contract::OpenAiResponsesRequest;
 
 #[test]
 fn should_translate_string_input_into_one_user_chat_message() {

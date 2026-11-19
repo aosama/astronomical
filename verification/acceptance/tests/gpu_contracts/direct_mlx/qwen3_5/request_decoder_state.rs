@@ -1,9 +1,9 @@
-use astronomical_model_serving::{
+use model_serving::{
     AstroDecoderStateCacheLayerLayout, AstroDecoderStateCacheState,
     AstroDecoderStateCacheTensorDtype, AstroDecoderStateCacheTensorLayout, ConvolutionState,
     FullAttentionKeyValueState, GatedDeltaRecurrentState, RequestDecoderStateStack,
 };
-use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
+use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use tokio::sync::MutexGuard;
 
 use crate::common::qwen3_5_moe::{astro_ssd_prompt_cache_model_contract, frozen_ornith_1_0_config};
@@ -186,26 +186,25 @@ async fn should_restore_full_attention_allocation_checkpoint_after_failed_growth
 
 #[test]
 fn should_project_first_use_composite_state_from_validated_tensor_layout() {
-    let astro_decoder_state_cache_layout =
-        astronomical_model_serving::AstroDecoderStateCacheLayout::new(vec![
-            AstroDecoderStateCacheLayerLayout::composite(vec![
-                AstroDecoderStateCacheLayerLayout::recurrent_tensor(
-                    AstroDecoderStateCacheTensorLayout::fixed(
-                        "linear.convolution",
-                        AstroDecoderStateCacheTensorDtype::BFloat16,
-                        vec![1, 3, 2],
-                    ),
+    let astro_decoder_state_cache_layout = model_serving::AstroDecoderStateCacheLayout::new(vec![
+        AstroDecoderStateCacheLayerLayout::composite(vec![
+            AstroDecoderStateCacheLayerLayout::recurrent_tensor(
+                AstroDecoderStateCacheTensorLayout::fixed(
+                    "linear.convolution",
+                    AstroDecoderStateCacheTensorDtype::BFloat16,
+                    vec![1, 3, 2],
                 ),
-                AstroDecoderStateCacheLayerLayout::recurrent_tensor(
-                    AstroDecoderStateCacheTensorLayout::fixed(
-                        "linear.gated_delta_recurrent",
-                        AstroDecoderStateCacheTensorDtype::Float32,
-                        vec![1, 2, 2, 3],
-                    ),
+            ),
+            AstroDecoderStateCacheLayerLayout::recurrent_tensor(
+                AstroDecoderStateCacheTensorLayout::fixed(
+                    "linear.gated_delta_recurrent",
+                    AstroDecoderStateCacheTensorDtype::Float32,
+                    vec![1, 2, 2, 3],
                 ),
-            ]),
-        ])
-        .expect("the synthetic composite astro decoder state cache layout should validate");
+            ),
+        ]),
+    ])
+    .expect("the synthetic composite astro decoder state cache layout should validate");
     let request_decoder_state =
         RequestDecoderStateStack::empty_from_astro_decoder_state_cache_layout(
             &astro_decoder_state_cache_layout,
@@ -221,26 +220,25 @@ fn should_project_first_use_composite_state_from_validated_tensor_layout() {
 
 #[test]
 fn should_project_zero_fixed_state_growth_after_composite_state_is_materialized() {
-    let astro_decoder_state_cache_layout =
-        astronomical_model_serving::AstroDecoderStateCacheLayout::new(vec![
-            AstroDecoderStateCacheLayerLayout::composite(vec![
-                AstroDecoderStateCacheLayerLayout::recurrent_tensor(
-                    AstroDecoderStateCacheTensorLayout::fixed(
-                        "linear.convolution",
-                        AstroDecoderStateCacheTensorDtype::BFloat16,
-                        vec![1, 3, 2],
-                    ),
+    let astro_decoder_state_cache_layout = model_serving::AstroDecoderStateCacheLayout::new(vec![
+        AstroDecoderStateCacheLayerLayout::composite(vec![
+            AstroDecoderStateCacheLayerLayout::recurrent_tensor(
+                AstroDecoderStateCacheTensorLayout::fixed(
+                    "linear.convolution",
+                    AstroDecoderStateCacheTensorDtype::BFloat16,
+                    vec![1, 3, 2],
                 ),
-                AstroDecoderStateCacheLayerLayout::recurrent_tensor(
-                    AstroDecoderStateCacheTensorLayout::fixed(
-                        "linear.gated_delta_recurrent",
-                        AstroDecoderStateCacheTensorDtype::Float32,
-                        vec![1, 2, 2, 3],
-                    ),
+            ),
+            AstroDecoderStateCacheLayerLayout::recurrent_tensor(
+                AstroDecoderStateCacheTensorLayout::fixed(
+                    "linear.gated_delta_recurrent",
+                    AstroDecoderStateCacheTensorDtype::Float32,
+                    vec![1, 2, 2, 3],
                 ),
-            ]),
-        ])
-        .expect("the synthetic composite astro decoder state cache layout should validate");
+            ),
+        ]),
+    ])
+    .expect("the synthetic composite astro decoder state cache layout should validate");
     let request_decoder_state =
         RequestDecoderStateStack::empty_from_astro_decoder_state_cache_layout(
             &astro_decoder_state_cache_layout,

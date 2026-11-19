@@ -1,4 +1,4 @@
-use astronomical_ipc_protocol::{ModelLoadInFlight, ProtocolReader, ProtocolWriter, WorkerEvent};
+use ipc_protocol::{ModelLoadInFlight, ProtocolReader, ProtocolWriter, WorkerEvent};
 use tokio::io::duplex;
 
 use super::announce_load_started;

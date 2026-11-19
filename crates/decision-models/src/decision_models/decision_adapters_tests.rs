@@ -1,12 +1,10 @@
 //! Unit tests for reading a folder's add-ons and checking them against the model.
 
-use astronomical_decision_contract::decision_adapters_file::{
-    LinearAdapter, decision_adapters_bytes,
-};
+use decision_contract::decision_adapters_file::{LinearAdapter, decision_adapters_bytes};
 use serial_test::serial;
 
 use super::*;
-use astronomical_model_primitives::synthetic_weights_test_support::{
+use model_primitives::synthetic_weights_test_support::{
     SYNTHETIC_QUANTIZATION_GROUP_SIZE, SyntheticWeights, initialize_test_runtime,
     load_synthetic_weights,
 };

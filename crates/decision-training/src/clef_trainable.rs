@@ -8,7 +8,7 @@
 //! decoder layers; the residual scorer and the three scalars train, about
 //! 4.2 million numbers.
 
-use astronomical_decision_contract::HeadInputs;
+use decision_contract::HeadInputs;
 
 use crate::dense_math::{dot, linear_forward, linear_parameter_gradients};
 use crate::gelu::{gelu, gelu_derivative};

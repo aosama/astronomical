@@ -7,13 +7,11 @@
 
 use std::fs::File;
 
-use astronomical_runtime_integration::MlxRuntime;
+use runtime_integration::MlxRuntime;
 
 use crate::qwen_image_21::QwenImage21EngineError;
 use crate::qwen_image_21::rope::QwenImage21Rope;
-use astronomical_model_primitives::performance_attribution::{
-    PerformanceAttribution, PerformanceOperation,
-};
+use model_primitives::performance_attribution::{PerformanceAttribution, PerformanceOperation};
 
 use super::blocks;
 use super::blocks::BlockContext;

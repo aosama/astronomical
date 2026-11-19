@@ -4,7 +4,7 @@
 //! request only leaves this to do: it notes a failure or finishes a comparison, and the
 //! worker settles it when it next goes idle.
 
-use astronomical_ipc_protocol::NeuralEnginePrefillStatus;
+use ipc_protocol::NeuralEnginePrefillStatus;
 
 use super::model::Qwen3_5ResidentModel;
 use super::neural_engine_chunk_comparison::{ChunkComparisonVerdict, not_worthwhile_reason};

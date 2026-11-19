@@ -15,13 +15,13 @@
 //! `QuantizedSwitchLinear` (`optiq/core/sensitivity.py`); mlx-lm keeps the
 //! three projections apart, so it has no fused case.
 
-use astronomical_quantization::error::QuantizationError;
-use astronomical_runtime_integration::MlxRuntime;
 use mlx_bridge::MlxArray;
+use quantization::error::QuantizationError;
+use runtime_integration::MlxRuntime;
 
-use astronomical_qwen35::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights;
-use astronomical_qwen35::qwen3_5_core::model_math::feed_forward_weights::Qwen3_5MoERouterGateWeights;
-use astronomical_qwen35::qwen3_5_resident::experts::Qwen3_5ResidentGateUpWeights;
+use qwen35::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights;
+use qwen35::qwen3_5_core::model_math::feed_forward_weights::Qwen3_5MoERouterGateWeights;
+use qwen35::qwen3_5_resident::experts::Qwen3_5ResidentGateUpWeights;
 
 use super::simulated_quantization::mlx_step;
 

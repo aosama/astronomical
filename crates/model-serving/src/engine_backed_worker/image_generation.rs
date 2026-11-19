@@ -1,6 +1,6 @@
 //! Serializes one bounded image request and publishes cleanup after its private outcome.
 
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     ImageGenerationCommand, ImageGenerationFailureReason, MlxMemorySnapshotSource, ProtocolWriter,
     RequestId, WorkerEvent,
 };

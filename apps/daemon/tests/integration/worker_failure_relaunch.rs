@@ -8,7 +8,7 @@ use astronomical_daemon::{
     ChatGenerationExecutor, ChatGenerationStreamErrorCode, ChatGenerationStreamEvent,
     GenerationStartError, WorkerControlError, WorkerHandle, WorkerHealthStatus,
 };
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     ChatGenerationCommand, ChatGenerationSettings, ChatMessage, ChatToolChoice, RequestId,
 };
 use tokio::time::{Instant, sleep, timeout};

@@ -5,7 +5,7 @@
 use std::ffi::OsString;
 use std::path::PathBuf;
 
-use astronomical_ipc_protocol::ImageGenerationFailureReason;
+use ipc_protocol::ImageGenerationFailureReason;
 
 use super::image_arguments::{DEFAULT_IMAGE_SIDE_PIXELS, parse_image_arguments, parse_image_size};
 use super::image_output::{discard_reserved_output, reserve_output_file, write_png};

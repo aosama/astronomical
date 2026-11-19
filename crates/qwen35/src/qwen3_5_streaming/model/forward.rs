@@ -37,7 +37,7 @@
 //! The warm tables themselves live in
 //! `expert_streaming/astro_expert_cache.rs`; the byte plans and the
 //! bounded SSD reader are family-neutral under `crate::expert_paging` and
-//! `astronomical-runtime-integration`'s safetensors module.
+//! `runtime-integration`'s safetensors module.
 
 use mlx_bridge::MlxArray;
 

@@ -2,10 +2,8 @@
 //! command building, and outcome mapping. The journeys that cross the real
 //! socket live in `tests/integration/daemon_ipc_images.rs`.
 
-use astronomical_config::{
-    DiscoveredModel, ImageGenerationCapabilities, ModelCapabilities, ModelFamily,
-};
-use astronomical_ipc_protocol::{
+use config::{DiscoveredModel, ImageGenerationCapabilities, ModelCapabilities, ModelFamily};
+use ipc_protocol::{
     DaemonResponse, GeneratedImage, ImageGenerateRequest, ImageGenerationFailureReason,
     ImageGenerationResultMetadata,
 };

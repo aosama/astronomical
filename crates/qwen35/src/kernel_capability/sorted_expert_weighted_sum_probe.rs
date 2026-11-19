@@ -6,7 +6,7 @@
 //! including the all-zeros signature of a silently dropped dispatch — each
 //! map to a distinct typed capability error.
 
-use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
+use runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use super::{
     CustomMetalKernelFamily, CustomMetalKernelProbe, KernelCapabilityError, validate_probe_outputs,

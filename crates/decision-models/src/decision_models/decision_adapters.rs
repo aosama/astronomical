@@ -9,13 +9,13 @@
 
 use std::path::Path;
 
-use astronomical_decision_contract::DecisionFailure;
-use astronomical_decision_contract::decision_adapters_file::{
+use decision_contract::DecisionFailure;
+use decision_contract::decision_adapters_file::{
     DECISION_ADAPTERS_FILE_NAME, DecisionAdapters, MAXIMUM_DECISION_ADAPTERS_FILE_BYTES,
     parse_decision_adapters,
 };
 
-pub use astronomical_model_primitives::adapter_target::AdapterTarget;
+pub use model_primitives::adapter_target::AdapterTarget;
 
 /// The folder's add-ons, or none when the folder has no file.
 pub fn read_decision_adapters(model_directory: &Path) -> Result<DecisionAdapters, DecisionFailure> {

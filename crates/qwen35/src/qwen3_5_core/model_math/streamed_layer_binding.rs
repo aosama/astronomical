@@ -8,8 +8,8 @@
 
 use std::collections::HashMap;
 
-use astronomical_runtime_integration::MlxRuntime;
 use mlx_bridge::MlxArray;
+use runtime_integration::MlxRuntime;
 
 use super::decoder_layer_weights::Qwen3_5DecoderLayerWeights;
 use super::error::Qwen3_5ExecutionError;

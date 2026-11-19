@@ -29,8 +29,7 @@ pub struct Qwen3_5ResidentModel {
         Option<crate::qwen3_5_resident::neural_engine_mlp_prefill::NeuralEngineMlpPrefill>,
     /// The owner of this model's memory ledger, opened once the model has
     /// loaded and its MLX working buffers have been measured.
-    pub memory_governor:
-        std::cell::RefCell<Option<astronomical_memory_policy::ledger::MemoryGovernor>>,
+    pub memory_governor: std::cell::RefCell<Option<memory_policy::ledger::MemoryGovernor>>,
 }
 
 impl std::ops::Deref for Qwen3_5ResidentModel {
@@ -74,13 +73,11 @@ impl crate::qwen3_5_core::model::memory_breakdown::Qwen3_5MemoryOwnership for Qw
 impl Qwen3_5ResidentModel {
     /// The memory governor's view after the last measured forward, with its
     /// accounts compared against what MLX reported; `None` before the first.
-    pub fn latest_memory_ledger_reading(
-        &self,
-    ) -> Option<astronomical_memory_policy::ledger::LedgerReading> {
+    pub fn latest_memory_ledger_reading(&self) -> Option<memory_policy::ledger::LedgerReading> {
         self.memory_governor
             .borrow()
             .as_ref()
-            .and_then(astronomical_memory_policy::ledger::MemoryGovernor::latest_reading)
+            .and_then(memory_policy::ledger::MemoryGovernor::latest_reading)
     }
 }
 
@@ -119,22 +116,20 @@ fn resident_expert_library_facts(expert_layer_plans: &[QuantizedExpertLayerPlan]
 fn resident_layer_seating(
     expert_layer_plans: &[QuantizedExpertLayerPlan],
     expert_capacity: u32,
-) -> astronomical_ipc_protocol::ExpertLayerSeatingCounts {
+) -> ipc_protocol::ExpertLayerSeatingCounts {
     if expert_capacity == 0 || expert_layer_plans.is_empty() {
-        return astronomical_ipc_protocol::ExpertLayerSeatingCounts::default();
+        return ipc_protocol::ExpertLayerSeatingCounts::default();
     }
     let seated_layer_count = expert_layer_plans
         .len()
-        .min(astronomical_ipc_protocol::EXPERT_LAYER_SEATING_LIMIT);
+        .min(ipc_protocol::EXPERT_LAYER_SEATING_LIMIT);
     let mut retained_expert_counts = Vec::with_capacity(seated_layer_count);
     let mut layer_index = 0;
     while layer_index < seated_layer_count {
         retained_expert_counts.push(expert_capacity);
         layer_index += 1;
     }
-    astronomical_ipc_protocol::ExpertLayerSeatingCounts::from_retained_counts(
-        &retained_expert_counts,
-    )
+    ipc_protocol::ExpertLayerSeatingCounts::from_retained_counts(&retained_expert_counts)
 }
 
 impl Qwen3_5ResidentModel {
@@ -149,8 +144,8 @@ impl Qwen3_5ResidentModel {
 
 impl Qwen3_5ResidentModel {
     #[must_use]
-    pub fn expert_memory_mode(&self) -> astronomical_ipc_protocol::ExpertMemoryMode {
-        astronomical_ipc_protocol::ExpertMemoryMode::Resident
+    pub fn expert_memory_mode(&self) -> ipc_protocol::ExpertMemoryMode {
+        ipc_protocol::ExpertMemoryMode::Resident
     }
 
     /// Creates an empty per-request decoder state whose per-layer
@@ -166,7 +161,7 @@ impl Qwen3_5ResidentModel {
     pub fn empty_request_decoder_state_matching_loaded_weights(
         &self,
         full_attention_kv_state_growth_tokens: i32,
-    ) -> Result<RequestDecoderStateStack, astronomical_runtime_integration::MlxRuntimeError> {
+    ) -> Result<RequestDecoderStateStack, runtime_integration::MlxRuntimeError> {
         let astro_decoder_state_cache_layout = self.base.astro_decoder_state_cache_layout().clone();
         RequestDecoderStateStack::
             empty_from_astro_decoder_state_cache_layout_with_full_attention_kv_state_growth_tokens(
@@ -180,9 +175,9 @@ impl Qwen3_5ResidentModel {
     #[cfg(feature = "direct-mlx")]
     pub fn prepare_neural_engine_prefill_matching_production(
         &mut self,
-        chunking: &astronomical_ipc_protocol::WorkerChunkingConfiguration,
+        chunking: &ipc_protocol::WorkerChunkingConfiguration,
         astro_neural_engine_program_cache_directory: Option<&std::path::Path>,
-    ) -> astronomical_ipc_protocol::NeuralEnginePrefillStatus {
+    ) -> ipc_protocol::NeuralEnginePrefillStatus {
         crate::qwen3_5_resident::neural_engine_prefill_loading::prepare_neural_engine_prefill(
             self,
             chunking,
@@ -195,9 +190,9 @@ impl Qwen3_5ResidentModel {
     #[cfg(feature = "direct-mlx")]
     pub fn prepare_neural_engine_prefill_with_token_count(
         &mut self,
-        chunking: &astronomical_ipc_protocol::WorkerChunkingConfiguration,
+        chunking: &ipc_protocol::WorkerChunkingConfiguration,
         neural_engine_token_count: u32,
-    ) -> astronomical_ipc_protocol::NeuralEnginePrefillStatus {
+    ) -> ipc_protocol::NeuralEnginePrefillStatus {
         crate::qwen3_5_resident::neural_engine_prefill_loading::prepare_neural_engine_prefill(
             self,
             chunking,

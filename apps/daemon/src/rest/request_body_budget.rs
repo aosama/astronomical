@@ -1,4 +1,3 @@
-use astronomical_rest_contract::{AnthropicError, MAX_REQUEST_BODY_BYTES, OpenAiErrorResponse};
 use axum::{
     Json,
     body::{Body, to_bytes},
@@ -7,6 +6,7 @@ use axum::{
     middleware::Next,
     response::{IntoResponse, Response},
 };
+use rest_contract::{AnthropicError, MAX_REQUEST_BODY_BYTES, OpenAiErrorResponse};
 
 /// The mainstream ceiling the body budget mirrors, named in rejections so the
 /// message satisfies the OpenAI-compatible fidelity contract: the caller learns
@@ -40,7 +40,7 @@ pub(crate) fn rejection_envelope_for_path(request_path: &str) -> RejectionEnvelo
 /// with a 413 before the request reaches an endpoint, written in the error
 /// envelope of the protocol the route speaks.
 ///
-/// The value comes from the single budget module in `astronomical-rest-contract`
+/// The value comes from the single budget module in `rest-contract`
 /// and mirrors the 32 MB standard-endpoint request size limit Anthropic
 /// documents (retrieved 2026-10-22). A declared `Content-Length` over the
 /// budget is rejected before any body byte is read; a streamed body without the

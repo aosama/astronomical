@@ -5,7 +5,7 @@ use crate::astro_decoder_state_cache::{
     GatedDeltaRecurrentState,
 };
 use crate::qwen3_5_core::configuration::Qwen3_5Config;
-use astronomical_runtime_integration::MlxRuntimeError;
+use runtime_integration::MlxRuntimeError;
 
 use super::state_stack_layout::{
     astro_decoder_state_cache_layout_projection_error, request_decoder_layer_state_from_layout,

@@ -445,11 +445,9 @@ fn executor_with_worker(
     let mut executor = ScriptedExecutor::unavailable();
     executor.health_snapshot.ready_model_id = ready_model_id.map(str::to_owned);
     executor.health_snapshot.model_load_in_flight =
-        loading_model.map(
-            |loading_model_id| astronomical_ipc_protocol::ModelLoadInFlight {
-                model_id: loading_model_id.map(str::to_owned),
-            },
-        );
+        loading_model.map(|loading_model_id| ipc_protocol::ModelLoadInFlight {
+            model_id: loading_model_id.map(str::to_owned),
+        });
     executor
 }
 

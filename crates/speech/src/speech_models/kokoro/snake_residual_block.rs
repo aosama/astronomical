@@ -2,8 +2,8 @@
 //! Kokoro's waveform generator: three stages of AdaIN, Snake, dilated
 //! convolution, AdaIN, Snake, convolution, each added back to its input.
 
-use astronomical_runtime_integration::MlxRuntime;
 use mlx_bridge::MlxArray;
+use runtime_integration::MlxRuntime;
 
 use super::convolutions::{ConvolutionGeometry, KokoroConv1d};
 use super::style_modulation::StyleModulation;

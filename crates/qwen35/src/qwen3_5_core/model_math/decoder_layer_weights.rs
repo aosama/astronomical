@@ -1,4 +1,4 @@
-use astronomical_runtime_integration::MlxRuntimeError;
+use runtime_integration::MlxRuntimeError;
 
 use super::dense_projection::Qwen3_5DenseProjection;
 use super::feed_forward_weights::Qwen3_5MoEFeedForwardWeights;
@@ -91,7 +91,7 @@ impl Qwen3_5AffineWeights {
     /// materializes with whatever consumes it.
     pub fn select_experts(
         &self,
-        runtime: &astronomical_runtime_integration::MlxRuntime,
+        runtime: &runtime_integration::MlxRuntime,
         expert_axis_indices: &MlxArray,
     ) -> Result<Self, MlxRuntimeError> {
         Ok(match self {
@@ -140,7 +140,7 @@ impl Qwen3_5AffineWeights {
     /// representation; a mixed quantization would not gather as one expert axis.
     pub fn concatenate_experts(
         &self,
-        runtime: &astronomical_runtime_integration::MlxRuntime,
+        runtime: &runtime_integration::MlxRuntime,
         appended: &Self,
     ) -> Result<Self, MlxRuntimeError> {
         const CONCATENATE_EXPERT_PROJECTIONS: &str = "concatenate Qwen3.5 expert projections";

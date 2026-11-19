@@ -4,7 +4,7 @@
 //! mapping before any protocol event is emitted, so they are covered as
 //! pure units here.
 
-use astronomical_ipc_protocol::ImageGenerationFailureReason;
+use ipc_protocol::ImageGenerationFailureReason;
 
 use super::{
     effective_requested_ceiling_after_wired_claim, is_mlx_memory_limit_request_out_of_bounds,

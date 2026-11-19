@@ -1,7 +1,7 @@
 //! Unit contracts for the model-swap acknowledgement staging steps of the
 //! swap wait.
 
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     ChatModelCapabilities, WorkerChunkingConfiguration, WorkerEvent,
     WorkerLoadedAutoregressiveModelRuntimeConfiguration, WorkerLoadedModelRuntimeConfiguration,
     WorkerModelCapabilities, WorkerRuntimeFeatureConfiguration,
@@ -370,17 +370,15 @@ fn should_reject_a_duplicate_runtime_policy_acknowledgement() {
 }
 
 fn speech_runtime_configuration() -> WorkerLoadedModelRuntimeConfiguration {
-    WorkerLoadedModelRuntimeConfiguration::Speech(
-        astronomical_ipc_protocol::WorkerSpeechModelConfiguration {
-            model_id: SAMPLE_MODEL_ID.to_owned(),
-            model_family: astronomical_ipc_protocol::WorkerSpeechModelFamily::Kokoro,
-            artifact_revision: "sample-revision".to_owned(),
-        },
-    )
+    WorkerLoadedModelRuntimeConfiguration::Speech(ipc_protocol::WorkerSpeechModelConfiguration {
+        model_id: SAMPLE_MODEL_ID.to_owned(),
+        model_family: ipc_protocol::WorkerSpeechModelFamily::Kokoro,
+        artifact_revision: "sample-revision".to_owned(),
+    })
 }
 
 fn speech_capabilities() -> WorkerModelCapabilities {
-    WorkerModelCapabilities::speech(astronomical_ipc_protocol::WorkerSpeechCapabilities {
+    WorkerModelCapabilities::speech(ipc_protocol::WorkerSpeechCapabilities {
         sample_rate_hertz: 24_000,
         voice_names: vec!["af_heart".to_owned()],
         default_voice_name: "af_heart".to_owned(),
@@ -413,7 +411,7 @@ fn should_reject_a_speech_swap_with_the_wrong_surfaces() {
     let expected_configuration = speech_runtime_configuration();
     let expected_swap = expected_model_swap(None, &expected_configuration);
     let mut speech_and_decisions = speech_capabilities();
-    speech_and_decisions.decisions = Some(astronomical_ipc_protocol::WorkerDecisionCapabilities {
+    speech_and_decisions.decisions = Some(ipc_protocol::WorkerDecisionCapabilities {
         maximum_tokens_per_question: 512,
     });
     for wrong_capabilities in [matching_autoregressive_capabilities(), speech_and_decisions] {

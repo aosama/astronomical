@@ -1,7 +1,7 @@
 //! Session position derivation from one persistent astro SSD prompt cache restore outcome.
 
 use crate::AstroSsdPromptCacheBlockKey;
-use astronomical_ipc_protocol::WorkerAstroSsdPromptCacheRequestDiagnostics;
+use ipc_protocol::WorkerAstroSsdPromptCacheRequestDiagnostics;
 
 use super::decoder_state_reuse::AstroSsdPromptCacheRestoreOutcome;
 

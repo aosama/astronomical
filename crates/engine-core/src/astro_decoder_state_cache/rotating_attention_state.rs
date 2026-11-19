@@ -3,12 +3,10 @@
 //! Multi-token prefill exposes at most `window + chunk - 1` chronological tokens,
 //! then commits only the final window. One-token decode updates one physical slot.
 
-use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
+use runtime_integration::{MlxRuntime, MlxRuntimeError};
 
-use astronomical_model_primitives::performance_attribution::{
-    PerformanceAttribution, PerformanceOperation,
-};
 use mlx_bridge::MlxArray;
+use model_primitives::performance_attribution::{PerformanceAttribution, PerformanceOperation};
 
 const TOKEN_AXIS: usize = 2;
 const OPERATION: &str = "update the in-memory rotating key/value state";

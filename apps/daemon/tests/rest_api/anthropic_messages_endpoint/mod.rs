@@ -4,11 +4,11 @@
 //! counts, and Anthropic-shaped rejections.
 
 use astronomical_daemon::{ChatGenerationStreamEvent, GenerationStartError, build_application};
-use astronomical_ipc_protocol::{ChatGenerationCompletionReason, ChatGenerationFailureReason};
 use axum::{
     body::{Body, to_bytes},
     http::{Request, StatusCode, header},
 };
+use ipc_protocol::{ChatGenerationCompletionReason, ChatGenerationFailureReason};
 use serde_json::Value;
 use tower::ServiceExt;
 

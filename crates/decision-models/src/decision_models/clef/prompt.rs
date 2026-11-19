@@ -12,10 +12,8 @@
 //! The whole sequence may be at most 16,384 tokens. A longer state is cut
 //! from its end to fit, as the reference cuts it, and the answers say so.
 
-use astronomical_decision_contract::clef_rendering::{
-    ClefQuestionText, clef_question_text, clef_render,
-};
-use astronomical_decision_contract::{DecisionFailure, DecisionQuestion, OrderedJsonValue};
+use decision_contract::clef_rendering::{ClefQuestionText, clef_question_text, clef_render};
+use decision_contract::{DecisionFailure, DecisionQuestion, OrderedJsonValue};
 
 use super::tokenizer::ClefTokenizer;
 

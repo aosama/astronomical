@@ -7,11 +7,11 @@
 //! which is what lets a drafted verify pass keep exactly the tokens plain
 //! decoding would.
 
-use astronomical_model_serving::row_batched_matmul::{
+use mlx_bridge::{MlxArray, MlxDtype};
+use model_serving::row_batched_matmul::{
     RowBatchedMatmulKernels, RowBatchedProjectionError, row_batched_quantized_matmul,
 };
-use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
-use mlx_bridge::{MlxArray, MlxDtype};
+use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use serial_test::serial;
 
 const ACTIVE_MEMORY_LIMIT_BYTES: usize = 4 * 1024 * 1024 * 1024;

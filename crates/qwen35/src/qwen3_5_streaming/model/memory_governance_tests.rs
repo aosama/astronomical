@@ -1,4 +1,4 @@
-use astronomical_memory_policy::ledger::LedgerPhase;
+use memory_policy::ledger::LedgerPhase;
 
 use super::{
     dense_model_memory_shape, larger_of_what_was_measured, ledger_phase_for,

@@ -11,8 +11,8 @@ use std::{
 
 use astronomical_cli::EmbedError;
 use astronomical_cli::{EmbedArguments, EmbedDependencies};
-use astronomical_config::AstronomicalRuntimeInstance;
-use astronomical_ipc_protocol::EmbeddingsFailureReason;
+use config::AstronomicalRuntimeInstance;
+use ipc_protocol::EmbeddingsFailureReason;
 use tokio::time::timeout;
 
 use crate::integration::support::environment::{

@@ -30,17 +30,17 @@ use std::fs;
 use std::io::{self, Read};
 use std::path::{Path, PathBuf};
 
-use astronomical_decision_contract::calibration_file::{
+use decision_contract::calibration_file::{
     CalibrationOverride, DECISION_CALIBRATION_FILE_NAME, calibration_document_text,
 };
-use astronomical_decision_contract::decision_adapters_file::{
+use decision_contract::decision_adapters_file::{
     DECISION_ADAPTERS_FILE_NAME, DecisionAdapters, decision_adapters_bytes, parse_decision_adapters,
 };
-use astronomical_decision_contract::head_tuning_file::{
+use decision_contract::head_tuning_file::{
     DECISION_HEAD_TUNING_FILE_NAME, HeadTuning, TunableHeadFamily, head_tuning_bytes,
     parse_head_tuning,
 };
-use astronomical_decision_contract::training_record::{
+use decision_contract::training_record::{
     DECISION_TRAINING_RECORD_FILE_NAME, TrainingRecord, training_record_document,
 };
 use thiserror::Error;
@@ -383,15 +383,15 @@ fn sorted_tuning(head_tuning: &HeadTuning) -> HeadTuning {
 }
 
 fn compare_tensor_names(
-    left_tensor: &astronomical_decision_contract::head_tuning_file::TunedTensor,
-    right_tensor: &astronomical_decision_contract::head_tuning_file::TunedTensor,
+    left_tensor: &decision_contract::head_tuning_file::TunedTensor,
+    right_tensor: &decision_contract::head_tuning_file::TunedTensor,
 ) -> std::cmp::Ordering {
     left_tensor.name.cmp(&right_tensor.name)
 }
 
 fn compare_adapter_targets(
-    left_adapter: &astronomical_decision_contract::decision_adapters_file::LinearAdapter,
-    right_adapter: &astronomical_decision_contract::decision_adapters_file::LinearAdapter,
+    left_adapter: &decision_contract::decision_adapters_file::LinearAdapter,
+    right_adapter: &decision_contract::decision_adapters_file::LinearAdapter,
 ) -> std::cmp::Ordering {
     left_adapter.target.cmp(&right_adapter.target)
 }

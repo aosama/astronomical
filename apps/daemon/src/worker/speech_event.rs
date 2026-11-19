@@ -4,7 +4,7 @@
 
 use std::sync::{Arc, RwLock};
 
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     RequestId, SpeechResultMetadata, SpokenAudioSegment, WorkerEvent, WorkerMlxMemorySnapshot,
 };
 
@@ -14,7 +14,7 @@ use crate::worker::health::{
     clear_active_request_progress, publish_activity, publish_latest_mlx_memory_snapshot,
 };
 use crate::worker::loop_types::{ActiveSpeechGeneration, ActiveWorkerRequest};
-use astronomical_speech_contract::SpeechFailure;
+use speech_contract::SpeechFailure;
 
 use crate::{SpeechExecutionError, SpeechOutput, WorkerControlError, WorkerHealthSnapshot};
 

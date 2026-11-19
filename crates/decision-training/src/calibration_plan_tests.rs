@@ -169,7 +169,7 @@ fn should_keep_per_range_temperatures_only_when_they_beat_one_temperature() {
 }
 
 const MINIMUM_APPLIED_TEMPERATURE_FOR_TESTS: f64 =
-    astronomical_decision_contract::calibration::MINIMUM_APPLIED_TEMPERATURE;
+    decision_contract::calibration::MINIMUM_APPLIED_TEMPERATURE;
 
 #[test]
 fn should_stop_when_a_temperature_would_change_the_most_probable_answer() {

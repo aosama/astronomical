@@ -18,8 +18,8 @@
 //! (`signed_rotation_kernel.rs`), the forward transform runs as that single
 //! launch instead of the composed three; both routes produce the same bits.
 
-use astronomical_runtime_integration::MlxRuntime;
 use mlx_bridge::{MlxArray, MlxCError, MlxCompiledElementwiseGraphs, MlxDtype, MlxMetalKernel};
+use runtime_integration::MlxRuntime;
 
 use super::super::configuration::FOLDED_MODULE_DTYPE;
 use super::signed_rotation_kernel::apply_signed_rotation;

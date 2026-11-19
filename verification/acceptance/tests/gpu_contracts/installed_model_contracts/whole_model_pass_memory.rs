@@ -16,15 +16,13 @@
 //! Run with `cargo test-clef-whole-model-pass-memory` and
 //! `--configuration PATH` naming Clef's `model_directory`.
 
-use astronomical_decision_contract::OrderedJsonValue;
-use astronomical_decision_contract::decision_training_job::{
+use decision_contract::OrderedJsonValue;
+use decision_contract::decision_training_job::{
     DecisionTrainingJob, DecisionTrainingStage, QuestionRole, TrainingExample, TrainingScope,
 };
-use astronomical_decision_contract::head_tuning_file::TunableHeadFamily;
-use astronomical_model_serving::{
-    ClefDecisionEngine, DecisionEngine, DecisionTrainingStep, KevDecisionEngine,
-};
-use astronomical_test_harness::test_run::TestRunContext;
+use decision_contract::head_tuning_file::TunableHeadFamily;
+use model_serving::{ClefDecisionEngine, DecisionEngine, DecisionTrainingStep, KevDecisionEngine};
+use test_harness::test_run::TestRunContext;
 
 #[path = "../../support/romeo_and_juliet.rs"]
 #[allow(dead_code)]

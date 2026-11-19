@@ -14,9 +14,9 @@ use std::fs::File;
 use std::os::fd::AsFd;
 use std::path::PathBuf;
 
-use astronomical_expert_record_reader::{ExpertRecordReader, RecordRead, open_for_direct_reads};
-use astronomical_runtime_integration::{MlxRuntimeError, evaluated_array_storage_mut};
+use expert_record_reader::{ExpertRecordReader, RecordRead, open_for_direct_reads};
 use mlx_bridge::MlxArray;
+use runtime_integration::{MlxRuntimeError, evaluated_array_storage_mut};
 
 use super::record_read_plan::{StorageSlice, plan_record_reads};
 use crate::expert_paging::QuantizedExpertLayerPlan;

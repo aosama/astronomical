@@ -1,11 +1,9 @@
 //! A projection's inputs and its fp32 reference result.
 
-use astronomical_neural_engine::program_shape::ProgramShape;
-use astronomical_neural_engine::weights::half_precision::{
-    f16_bits_slice_to_f32, f32_slice_to_f16_bits,
-};
 use astronomical_neural_engine_research::accelerate_reference::reference_projection;
-use astronomical_test_harness::deterministic_values::{
+use neural_engine::program_shape::ProgramShape;
+use neural_engine::weights::half_precision::{f16_bits_slice_to_f32, f32_slice_to_f16_bits};
+use test_harness::deterministic_values::{
     PROJECTION_WEIGHT_STANDARD_DEVIATION, bell_shaped_values,
 };
 

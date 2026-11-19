@@ -9,12 +9,12 @@
 //!
 //! The quantize-dequantize swap and the KL are ported from OptiQ's `_exact_with_bf16_reference` and `_kl_from_ref` (`optiq/core/sensitivity.py`).
 
-use astronomical_quantization::bit_width::{BitWidth, GroupSize};
-use astronomical_quantization::error::QuantizationError;
-use astronomical_runtime_integration::MlxRuntime;
 use mlx_bridge::{MlxArray, MlxDtype};
+use quantization::bit_width::{BitWidth, GroupSize};
+use quantization::error::QuantizationError;
+use runtime_integration::MlxRuntime;
 
-use astronomical_qwen35::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights;
+use qwen35::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights;
 
 /// Turns any MLX failure into the probe error the sweep understands.
 pub fn mlx_step<Value, Failure: std::fmt::Display>(

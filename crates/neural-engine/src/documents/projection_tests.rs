@@ -2,7 +2,7 @@ use super::{MlProgramWeights, encode_ml_program_projection};
 use crate::documents::model_interface::ModelDocumentError;
 use crate::program_shape::ProgramShape;
 use crate::weights::affine_quantized::{AffineQuantizedWeights, QuantizationLayout};
-use astronomical_test_harness::deterministic_values::{
+use test_harness::deterministic_values::{
     PROJECTION_WEIGHT_STANDARD_DEVIATION, bell_shaped_values,
 };
 

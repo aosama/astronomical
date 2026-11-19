@@ -1,6 +1,6 @@
 //! Serializes one synchronous embeddings request and publishes its cleanup event.
 
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     EmbeddingsCommand, EmbeddingsFailureReason, MlxMemorySnapshotSource, ProtocolWriter, RequestId,
     WorkerEvent,
 };

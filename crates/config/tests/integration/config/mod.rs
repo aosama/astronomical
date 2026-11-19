@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use astronomical_config::{
+use config::{
     AstroSsdPromptCacheConfig, AstronomicalConfig, AstronomicalConfigError, LogLevel,
     LoggingConfig, write_default_model, write_maximum_mlx_memory_gb,
 };

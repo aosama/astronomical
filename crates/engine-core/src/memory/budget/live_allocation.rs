@@ -5,7 +5,7 @@
 
 use std::cell::Cell;
 
-use astronomical_runtime_integration::MlxRuntime;
+use runtime_integration::MlxRuntime;
 use thiserror::Error;
 
 use crate::memory::{AllocationAdmissionDecision, AllocationAdmissionObservation, MemoryBoundary};
@@ -25,7 +25,7 @@ pub enum MlxAllocationAdmissionError {
         active_memory_ceiling_bytes: u64,
     },
     #[error("failed to read MLX memory counters: {0}")]
-    MlxRuntime(#[from] astronomical_runtime_integration::MlxRuntimeError),
+    MlxRuntime(#[from] runtime_integration::MlxRuntimeError),
 }
 
 /// Runtime-backed policy state shared by expert allocation boundaries.

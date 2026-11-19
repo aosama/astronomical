@@ -3,9 +3,9 @@
 //! The engine boundary turns these into the request-facing failures: an
 //! `Input` error is the caller's to fix, the others are the server's.
 
-use astronomical_runtime_integration::MlxRuntimeError;
-use astronomical_speech_contract::SpeechFailure;
 use mlx_bridge::MlxCError;
+use runtime_integration::MlxRuntimeError;
+use speech_contract::SpeechFailure;
 use thiserror::Error;
 
 #[derive(Debug, Error)]

@@ -27,7 +27,7 @@
 
 use std::{collections::HashMap, sync::Arc};
 
-use astronomical_runtime_integration::PositionalFileReadMetrics;
+use runtime_integration::PositionalFileReadMetrics;
 
 use super::quantized_expert_manifest::{
     ExpertManifestError, QuantizedExpertPageManifest, QuantizedExpertShardManifest,
@@ -39,7 +39,7 @@ use mlx_bridge::MlxArray;
 /// This is public so architecture-neutral acceptance tools can compare the
 /// production bounded-reader baseline with alternative expert-pack layouts.
 pub fn load_quantized_expert_page(
-    runtime: &astronomical_runtime_integration::MlxRuntime,
+    runtime: &runtime_integration::MlxRuntime,
     page_manifest: &QuantizedExpertPageManifest,
     expert_file_read_metrics: Option<Arc<PositionalFileReadMetrics>>,
 ) -> Result<HashMap<String, MlxArray>, ExpertManifestError> {
@@ -66,7 +66,7 @@ pub fn load_quantized_expert_page(
 }
 
 fn load_shard_manifest(
-    runtime: &astronomical_runtime_integration::MlxRuntime,
+    runtime: &runtime_integration::MlxRuntime,
     source_manifest: &QuantizedExpertShardManifest,
     expert_file_read_metrics: Option<Arc<PositionalFileReadMetrics>>,
 ) -> Result<HashMap<String, MlxArray>, ExpertManifestError> {
@@ -85,13 +85,11 @@ fn load_shard_manifest(
     let source_intervals = source_manifest
         .source_intervals
         .iter()
-        .map(
-            |source_interval| astronomical_runtime_integration::BoundedReadInterval {
-                virtual_payload_offset: source_interval.virtual_payload_offset,
-                source_file_offset: source_interval.source_file_offset,
-                source_byte_count: source_interval.source_byte_count,
-            },
-        )
+        .map(|source_interval| runtime_integration::BoundedReadInterval {
+            virtual_payload_offset: source_interval.virtual_payload_offset,
+            source_file_offset: source_interval.source_file_offset,
+            source_byte_count: source_interval.source_byte_count,
+        })
         .collect();
     let load_result = runtime
         .load_safetensors_from_bounded_ranges(

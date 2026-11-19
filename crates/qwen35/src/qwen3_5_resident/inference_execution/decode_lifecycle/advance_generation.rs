@@ -5,7 +5,7 @@
 
 use std::time::Instant;
 
-use astronomical_ipc_protocol::RequestId;
+use ipc_protocol::RequestId;
 use mlx_bridge::MlxArray;
 
 use crate::{

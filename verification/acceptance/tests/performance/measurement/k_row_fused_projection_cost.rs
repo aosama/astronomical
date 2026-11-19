@@ -10,11 +10,11 @@
 
 use std::time::{Duration, Instant};
 
-use astronomical_model_serving::row_batched_matmul::{
+use mlx_bridge::MlxArray;
+use model_serving::row_batched_matmul::{
     ProjectionInput, RegisterOrderedWeight, RowBatchedMatmulKernels, register_ordered_projection,
 };
-use astronomical_runtime_integration::MlxRuntime;
-use mlx_bridge::MlxArray;
+use runtime_integration::MlxRuntime;
 use serial_test::serial;
 
 use super::k_row_verify_cost::{

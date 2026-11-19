@@ -1,8 +1,6 @@
 use std::path::Path;
 
-use astronomical_memory_policy::astro_expert_cache_model::{
-    ReplayCase, RoutedReply, SavedReplayCase,
-};
+use memory_policy::astro_expert_cache_model::{ReplayCase, RoutedReply, SavedReplayCase};
 
 use super::capacity_divisions::{
     divided_by_demand, divided_like_todays_engine, shared_pinning_whole_layers,

@@ -9,7 +9,7 @@
 //! Filling is best-effort because missing routes remain correct through
 //! operation-local streaming.
 
-use astronomical_ipc_protocol::RequestId;
+use ipc_protocol::RequestId;
 
 use crate::{InferenceEngineError, PerformanceOperation};
 

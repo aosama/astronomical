@@ -14,9 +14,7 @@
 
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
-use astronomical_ipc_protocol::{
-    WorkerEvent, WorkerRuntimeFeatureConfiguration, WorkerStartupConfiguration,
-};
+use ipc_protocol::{WorkerEvent, WorkerRuntimeFeatureConfiguration, WorkerStartupConfiguration};
 use tokio::time::{Instant, timeout};
 
 use crate::worker::loop_types::WorkerLoopState;

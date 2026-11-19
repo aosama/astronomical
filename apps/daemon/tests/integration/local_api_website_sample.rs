@@ -9,11 +9,11 @@
 use std::{collections::BTreeSet, net::SocketAddr, path::PathBuf};
 
 use astronomical_daemon::ChatGenerationStreamEvent;
-use astronomical_ipc_protocol::ChatGenerationCompletionReason;
 use axum::{
     body::Body,
     http::{Request, StatusCode, header},
 };
+use ipc_protocol::ChatGenerationCompletionReason;
 use tokio::net::TcpListener;
 use tower::ServiceExt;
 

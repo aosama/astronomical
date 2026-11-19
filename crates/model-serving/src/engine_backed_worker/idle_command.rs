@@ -1,6 +1,4 @@
-use astronomical_ipc_protocol::{
-    MlxMemorySnapshotSource, ProtocolWriter, WorkerCommand, WorkerEvent,
-};
+use ipc_protocol::{MlxMemorySnapshotSource, ProtocolWriter, WorkerCommand, WorkerEvent};
 use tokio::io::AsyncWrite;
 
 use super::support::{ActiveWorkerRequest, ModelFactory, WorkerRuntimeError};
@@ -112,7 +110,7 @@ where
     async fn serve_swap_model_command<WriteTransport>(
         &mut self,
         model_directory: &str,
-        model_configuration: astronomical_ipc_protocol::WorkerModelConfiguration,
+        model_configuration: ipc_protocol::WorkerModelConfiguration,
         event_writer: &mut ProtocolWriter<WriteTransport>,
     ) -> Result<(), WorkerRuntimeError>
     where

@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     ChatGenerationSettings, ChatMessage, DaemonIpcClient, DaemonRequest, DaemonResponse,
     StructuredGenerationConstraint,
 };

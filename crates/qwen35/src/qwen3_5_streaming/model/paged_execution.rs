@@ -1,7 +1,7 @@
 //! MLX gathered execution against one Rust-streamed expert layer.
 
-use astronomical_runtime_integration::MlxRuntime;
 use mlx_bridge::MlxArray;
+use runtime_integration::MlxRuntime;
 
 use crate::expert_paging::QuantizedExpertPageManifest;
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
@@ -10,7 +10,7 @@ use crate::sparse_experts::{
     ExpertAssignmentOrder, StackedExpertProjection, gather_expert_projection,
 };
 use crate::{PerformanceAttribution, PerformanceCounter, PerformanceOperation};
-use astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookRotation;
+use jangtq2_qwen35::configuration::Jangtq2CodebookRotation;
 
 use super::super::expert_streaming::expert_pager::Qwen3_5PagedExpertWeights;
 use super::astro_expert_cache_plus_streamed_page_route;
@@ -195,7 +195,7 @@ impl Qwen3_5Model {
             Some(performance_attribution.measure_operation(
                 PerformanceOperation::Jangtq2ActivationRotationHadamard32,
                 |_| {
-                    astronomical_jangtq2_qwen35::mlx_decode::rotate_activations_hadamard32(
+                    jangtq2_qwen35::mlx_decode::rotate_activations_hadamard32(
                         &self.runtime,
                         expert_inputs,
                     )
@@ -264,7 +264,7 @@ impl Qwen3_5Model {
         &self,
         activations: &MlxArray,
         affine_weights: &crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights,
-        activation_rotation: astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookRotation,
+        activation_rotation: jangtq2_qwen35::configuration::Jangtq2CodebookRotation,
         selected_expert_indices: &MlxArray,
         are_expert_indices_sorted: bool,
         performance_attribution: &mut PerformanceAttribution,
@@ -343,16 +343,16 @@ impl Qwen3_5Model {
     fn hadamard32_rotated_activations(
         &self,
         activations: &MlxArray,
-        activation_rotation: astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookRotation,
+        activation_rotation: jangtq2_qwen35::configuration::Jangtq2CodebookRotation,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<Option<MlxArray>, Qwen3_5ExecutionError> {
         let rotated_activation_owner = match activation_rotation {
-            astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookRotation::NoRotation => None,
-            astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookRotation::Hadamard32 => {
+            jangtq2_qwen35::configuration::Jangtq2CodebookRotation::NoRotation => None,
+            jangtq2_qwen35::configuration::Jangtq2CodebookRotation::Hadamard32 => {
                 Some(performance_attribution.measure_operation(
                     PerformanceOperation::Jangtq2ActivationRotationHadamard32,
                     |_| {
-                        astronomical_jangtq2_qwen35::mlx_decode::rotate_activations_hadamard32(
+                        jangtq2_qwen35::mlx_decode::rotate_activations_hadamard32(
                             &self.runtime,
                             activations,
                         )
@@ -445,7 +445,7 @@ impl Qwen3_5Model {
         let decoded_weight = performance_attribution.measure_operation(
             PerformanceOperation::Jangtq2CodebookPageDecode,
             |_| {
-                astronomical_jangtq2_qwen35::mlx_decode::decode_expert_weight_rows(
+                jangtq2_qwen35::mlx_decode::decode_expert_weight_rows(
                     &self.runtime,
                     codebook_slices.packed_code_words,
                     codebook_slices.row_scales,

@@ -7,7 +7,7 @@
 //!
 //! [`SpeechEngine`]: crate::speech_engine::SpeechEngine
 
-use astronomical_speech_contract::{
+use speech_contract::{
     NATURAL_PACE_ONLY_REASON, SpeechFailure, SpeechRequest, unknown_voice_reason,
 };
 

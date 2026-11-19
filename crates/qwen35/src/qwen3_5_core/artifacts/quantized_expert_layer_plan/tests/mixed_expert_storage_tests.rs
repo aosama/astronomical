@@ -182,7 +182,7 @@ fn should_plan_stacked_jangtq2_codebook_projections_from_float16_row_scales() {
         );
         assert_eq!(
             jangtq2_layer_plan.jangtq2_rotation_for_projection(projection_name),
-            Some(astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookRotation::Hadamard32)
+            Some(jangtq2_qwen35::configuration::Jangtq2CodebookRotation::Hadamard32)
         );
         assert_eq!(
             projection_parameter_names(&jangtq2_layer_plan, projection_name),
@@ -210,7 +210,7 @@ fn should_plan_stacked_jangtq2_codebook_projections_from_float16_row_scales() {
 #[ignore = "requires a JANGH2 model_directory selected through cargo xtask test-run"]
 fn should_plan_every_jangtq2_projection_from_the_real_artifact_headers() {
     let model_directory =
-        astronomical_test_harness::test_run::TestRunContext::current().required_model_directory();
+        test_harness::test_run::TestRunContext::current().required_model_directory();
     let config_bytes = std::fs::read(model_directory.join("config.json"))
         .expect("the JANGH2 config should be readable");
     let config = Qwen3_5Config::from_json_bytes(&config_bytes)

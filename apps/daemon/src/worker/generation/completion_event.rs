@@ -8,7 +8,7 @@
 
 use std::sync::{Arc, RwLock};
 
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     ChatGenerationCompletionReason, RequestId, WorkerAstroSsdPromptCacheRequestDiagnostics,
 };
 

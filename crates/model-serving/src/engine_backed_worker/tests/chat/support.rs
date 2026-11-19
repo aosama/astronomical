@@ -1,5 +1,5 @@
 use crate::{PreparedInferenceRequest, WorkerRuntimeError};
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     ChatGenerationCommand, ChatGenerationSettings, ChatMessage, ChatModelCapabilities,
     ChatToolChoice, ChatToolDefinition, ProtocolReader, ProtocolWriter, RequestId,
     WorkerAutoregressiveModelConfiguration, WorkerChunkingConfiguration, WorkerEvent,

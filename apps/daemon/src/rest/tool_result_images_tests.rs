@@ -1,10 +1,8 @@
 //! Unit tests for `crate::rest::tool_result_images`: holding a run of tool
 //! results' images and adding them as one user message after the run.
 
-use astronomical_ipc_protocol::ChatMessage;
-use astronomical_rest_contract::{
-    DecodedImageInput, OpenAiChatCompletionRequest, OpenAiChatMessageParts,
-};
+use ipc_protocol::ChatMessage;
+use rest_contract::{DecodedImageInput, OpenAiChatCompletionRequest, OpenAiChatMessageParts};
 
 use super::{PendingToolResultImages, TOOL_RESULT_IMAGES_LABEL, chat_image_input};
 

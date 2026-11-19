@@ -4,8 +4,8 @@
 //! production engine boundary. Memory ceilings and prompt lengths vary by test;
 //! artifact discovery, tokenization, chunking, and generation remain identical.
 
-use astronomical_ipc_protocol::RequestId;
-use astronomical_model_serving::{
+use ipc_protocol::RequestId;
+use model_serving::{
     GeneratedToken, GenerationFinalization, InferenceEngine, Qwen3_5ArtifactValidator,
     Qwen3_5InferenceRequest, Qwen3_5ResidentEngine, Qwen3_5ResidentPromptProcessingChunkSizer,
     Qwen3_5StreamingEngine, Qwen3_5StreamingPromptProcessingChunkSizer, Qwen3_5Tokenizer,
@@ -73,8 +73,8 @@ pub(super) fn construct_resident_engine(
             think_end_token_id,
             model_directory,
             crate::common::standard_worker_chunking_configuration(),
-            astronomical_model_serving::PerformanceAttribution::disabled(),
-            astronomical_model_serving::PerformanceAttributionLog::disabled(),
+            model_serving::PerformanceAttribution::disabled(),
+            model_serving::PerformanceAttributionLog::disabled(),
         )
         .expect("the resident expert engine settings should be valid");
     (
@@ -131,8 +131,8 @@ pub(super) fn construct_automatic_residency_engine(
             think_end_token_id,
             model_directory,
             crate::common::standard_worker_chunking_configuration(),
-            astronomical_model_serving::PerformanceAttribution::disabled(),
-            astronomical_model_serving::PerformanceAttributionLog::disabled(),
+            model_serving::PerformanceAttribution::disabled(),
+            model_serving::PerformanceAttributionLog::disabled(),
         )
         .expect("the automatic expert-residency engine settings should be valid");
     (

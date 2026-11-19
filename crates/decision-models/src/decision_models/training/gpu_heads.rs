@@ -1,7 +1,7 @@
 //! Each family's trainable part on the GPU: its option scores for a batch,
 //! and the gradient of a loss with respect to every trainable tensor.
 //!
-//! The formulas are the ones `astronomical-decision-training` implements on
+//! The formulas are the ones `decision-training` implements on
 //! the CPU and pins with finite differences; that CPU code is the oracle
 //! the GPU passes are tested against. Parameters are held in the order the
 //! family's `ParameterLayout` lays them out, so they write back under the

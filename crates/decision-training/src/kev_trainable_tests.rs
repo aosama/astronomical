@@ -1,6 +1,6 @@
 //! Unit tests for Kev's trainable pointer head.
 
-use astronomical_decision_contract::{FloatVector, HeadInputs};
+use decision_contract::{FloatVector, HeadInputs};
 
 use super::*;
 use crate::test_support::{assert_gradient_matches_finite_differences, sequence_values};

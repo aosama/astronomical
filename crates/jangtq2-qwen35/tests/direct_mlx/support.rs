@@ -9,7 +9,7 @@
 //! and therefore run in their own invocation through
 //! `cargo test-jangtq2-decode-throughput`, never together with these contracts.
 
-use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
+use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
 /// Large enough for the materializing reference decode on a quarter-height
 /// top-8 page (about four full-width uint32 temporaries per projection); the

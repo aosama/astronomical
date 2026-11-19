@@ -2,7 +2,7 @@
 
 use std::fs;
 
-use astronomical_config::{EmbeddingModelCapabilities, ModelCapabilities};
+use config::{EmbeddingModelCapabilities, ModelCapabilities};
 
 /// Writes the minimal ModernBERT embedding artifact accepted by shallow discovery.
 fn write_modernbert_model_files(model_directory: &std::path::Path) {
@@ -60,7 +60,7 @@ fn should_discover_an_executable_modernbert_embedding_model() {
     );
     assert_eq!(
         discovered_model.model_family,
-        astronomical_config::ModelFamily::ModernBert
+        config::ModelFamily::ModernBert
     );
     match &discovered_model.capabilities {
         ModelCapabilities::Embeddings(EmbeddingModelCapabilities {

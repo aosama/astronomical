@@ -1,4 +1,4 @@
-use astronomical_runtime_integration::MlxRuntime;
+use runtime_integration::MlxRuntime;
 
 use super::error::Qwen3_5ExecutionError;
 use mlx_bridge::MlxArray;

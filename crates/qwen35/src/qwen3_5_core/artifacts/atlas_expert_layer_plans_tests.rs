@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use astronomical_expert_atlas::{AtlasExpertLayer, AtlasRecordSlot};
+use expert_atlas::{AtlasExpertLayer, AtlasRecordSlot};
 
 use super::{apply_record_strides, synthesize_layer_header};
 use crate::expert_paging::quantized_expert_manifest::{

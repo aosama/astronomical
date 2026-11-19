@@ -7,7 +7,7 @@
 //! capacity, the kept weights give back what that displaces, and giving the
 //! lease back raises the capacity again.
 
-use astronomical_memory_policy::ledger::{LeasePurpose, MemoryGovernor};
+use memory_policy::ledger::{LeasePurpose, MemoryGovernor};
 
 use super::Qwen3_5Model;
 

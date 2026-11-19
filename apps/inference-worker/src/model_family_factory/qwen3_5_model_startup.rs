@@ -4,15 +4,15 @@
 
 use std::path::PathBuf;
 
-use astronomical_config::{
+use config::{
     AstroSsdPromptCacheConfig, astro_neural_engine_program_cache_directory_for_model,
     model_weights_fingerprint, remove_other_weights_of_model,
 };
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     WorkerChunkingConfiguration, WorkerDecodeAstroExpertCachePolicy,
     WorkerDiagnosticQwen3_5EngineOverride,
 };
-use astronomical_model_serving::{
+use model_serving::{
     AstroSsdPromptCacheDiskStoreConfig, CompleteResidencyRequirements, EnginePlacement,
     ModelFamilyInferenceEngine, ModelLoadingPerformanceAttributionMetadata, PerformanceAttribution,
     PerformanceAttributionLog, PerformanceAttributionOutcome, PerformanceOperation,
@@ -558,7 +558,7 @@ fn apply_diagnostic_engine_override(
 }
 
 fn select_qwen3_5_engine_from_artifact(
-    validated_artifact: &astronomical_model_serving::ValidatedQwen3_5Artifact,
+    validated_artifact: &model_serving::ValidatedQwen3_5Artifact,
     model_directory_path: &std::path::Path,
     active_memory_limit_bytes: usize,
 ) -> Result<(Qwen3_5SelectedEngine, EnginePlacement), Qwen3_5ModelStartupError> {

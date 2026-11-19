@@ -33,12 +33,12 @@
 use std::process::Command;
 use std::time::{Duration, Instant};
 
-use astronomical_runtime_integration::{
+use mlx_bridge::{MlxArray, MlxDtype, set_wired_limit};
+use runtime_integration::{
     MlxMemoryLimits, MlxRuntime, maximum_recommended_gpu_working_set_size_bytes,
 };
-use astronomical_test_harness::test_run::{TestRunConfiguration, TestRunContext};
-use mlx_bridge::{MlxArray, MlxDtype, set_wired_limit};
 use serial_test::serial;
+use test_harness::test_run::{TestRunConfiguration, TestRunContext};
 
 const SYSCTL_EXECUTABLE_PATH: &str = "/usr/sbin/sysctl";
 const PROBE_STEP_BYTES: usize = 512 * 1024 * 1024;

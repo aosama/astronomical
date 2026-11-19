@@ -4,8 +4,8 @@
 //! shift; [`normalized_over_axis`] is the parameter-free form both instance
 //! norm (over the length) and an unscaled layer norm (over channels) reduce to.
 
-use astronomical_runtime_integration::MlxRuntime;
 use mlx_bridge::{MlxArray, MlxDtype};
+use runtime_integration::MlxRuntime;
 
 use super::scalar_arithmetic::add_scalar;
 use crate::speech_models::checkpoint_tensors::CheckpointTensors;

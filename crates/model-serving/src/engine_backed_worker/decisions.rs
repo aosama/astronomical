@@ -1,7 +1,7 @@
 //! Serializes one synchronous decisions request and publishes its cleanup event.
 
-use astronomical_decision_contract::{DecisionFailure, HeadInputRequest};
-use astronomical_ipc_protocol::{
+use decision_contract::{DecisionFailure, HeadInputRequest};
+use ipc_protocol::{
     DecisionsCommand, MlxMemorySnapshotSource, ProtocolWriter, RequestId, WorkerEvent,
 };
 use tokio::io::AsyncWrite;
@@ -98,13 +98,13 @@ where
     /// active behind it: a decisions command or an embeddings command.
     pub(crate) async fn start_single_shot_request<WriteTransport>(
         &mut self,
-        single_shot_command: astronomical_ipc_protocol::WorkerCommand,
+        single_shot_command: ipc_protocol::WorkerCommand,
         event_writer: &mut ProtocolWriter<WriteTransport>,
     ) -> Result<(), WorkerRuntimeError>
     where
         WriteTransport: AsyncWrite + Unpin,
     {
-        use astronomical_ipc_protocol::WorkerCommand;
+        use ipc_protocol::WorkerCommand;
         match single_shot_command {
             WorkerCommand::GenerateDecisions(decisions_command) => {
                 self.start_decisions(decisions_command, event_writer).await

@@ -1,6 +1,6 @@
 use std::sync::{Arc, RwLock};
 
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     WorkerEvent, WorkerLoadedModelRuntimeConfiguration, WorkerRuntimeFeatureConfiguration,
 };
 
@@ -362,7 +362,7 @@ fn validate_model_swap_event(
 /// the ones its runtime configuration promised: the right surface, no other
 /// surface beside it, and the limits the policy set.
 fn capabilities_match_runtime_configuration(
-    capabilities: &astronomical_ipc_protocol::WorkerModelCapabilities,
+    capabilities: &ipc_protocol::WorkerModelCapabilities,
     expected_runtime_configuration: &WorkerLoadedModelRuntimeConfiguration,
 ) -> bool {
     match expected_runtime_configuration {
@@ -389,7 +389,7 @@ fn capabilities_match_runtime_configuration(
 /// The same check for a helper model (embeddings, decisions or speech): it
 /// offers its own surface and none of chat, images or the other helpers.
 fn helper_capabilities_match_runtime_configuration(
-    capabilities: &astronomical_ipc_protocol::WorkerModelCapabilities,
+    capabilities: &ipc_protocol::WorkerModelCapabilities,
     expected_runtime_configuration: &WorkerLoadedModelRuntimeConfiguration,
 ) -> bool {
     let offers_only_helper_surfaces =
@@ -405,7 +405,7 @@ fn helper_capabilities_match_runtime_configuration(
 /// Whether the one helper surface offered is the configured one, with the
 /// limits the policy set.
 fn helper_surface_matches(
-    capabilities: &astronomical_ipc_protocol::WorkerModelCapabilities,
+    capabilities: &ipc_protocol::WorkerModelCapabilities,
     expected_runtime_configuration: &WorkerLoadedModelRuntimeConfiguration,
 ) -> bool {
     match expected_runtime_configuration {

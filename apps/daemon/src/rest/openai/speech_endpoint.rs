@@ -7,15 +7,15 @@
 //! (the sample rate) without a second request.
 
 use crate::rest::worker_replacement_wait::lock_configuration_transition_for_generation;
-use astronomical_config::SpeechModelCapabilities;
-use astronomical_rest_contract::{OpenAiSpeechRequest, OpenAiSpeechRequestParts};
-use astronomical_speech_contract::{AudioFormat, SpeechFailure, wav_bytes_from_pcm16};
 use axum::{
     Json,
     extract::State,
     http::{HeaderName, HeaderValue, StatusCode, header},
     response::{IntoResponse, Response},
 };
+use config::SpeechModelCapabilities;
+use rest_contract::{OpenAiSpeechRequest, OpenAiSpeechRequestParts};
+use speech_contract::{AudioFormat, SpeechFailure, wav_bytes_from_pcm16};
 
 use crate::{
     GenerationStartError, SpeechExecutionError, SpeechOutput,
@@ -89,7 +89,7 @@ pub(crate) async fn create_speech(
 fn prepared_speech_command(
     application_state: &ApplicationState,
     speech_request_parts: OpenAiSpeechRequestParts,
-) -> Result<(astronomical_ipc_protocol::SpeechCommand, u64), Response> {
+) -> Result<(ipc_protocol::SpeechCommand, u64), Response> {
     let worker_health_snapshot = application_state
         .generation_executor
         .worker_health_snapshot();
@@ -245,21 +245,17 @@ fn speech_execution_error_response(
         }
         SpeechExecutionError::WorkerFailure(SpeechFailure::EngineBusy) => (
             StatusCode::TOO_MANY_REQUESTS,
-            Json(
-                astronomical_rest_contract::OpenAiErrorResponse::capacity_unavailable(
-                    "the speech engine is busy",
-                ),
-            ),
+            Json(rest_contract::OpenAiErrorResponse::capacity_unavailable(
+                "the speech engine is busy",
+            )),
         )
             .into_response(),
         SpeechExecutionError::DeadlineExceeded => (
             StatusCode::GATEWAY_TIMEOUT,
-            Json(
-                astronomical_rest_contract::OpenAiErrorResponse::service_unavailable(
-                    "the speech request stopped making progress in the local worker",
-                    Some("speech_timeout"),
-                ),
-            ),
+            Json(rest_contract::OpenAiErrorResponse::service_unavailable(
+                "the speech request stopped making progress in the local worker",
+                Some("speech_timeout"),
+            )),
         )
             .into_response(),
         SpeechExecutionError::WorkerFailure(
@@ -268,12 +264,10 @@ fn speech_execution_error_response(
             tracing::error!(request_identifier, reason = %failure, "speech worker execution failed");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(
-                    astronomical_rest_contract::OpenAiErrorResponse::service_unavailable(
-                        "the speech request failed in the local worker",
-                        Some("speech_failed"),
-                    ),
-                ),
+                Json(rest_contract::OpenAiErrorResponse::service_unavailable(
+                    "the speech request failed in the local worker",
+                    Some("speech_failed"),
+                )),
             )
                 .into_response()
         }
@@ -284,12 +278,10 @@ fn speech_execution_error_response(
 fn speech_failed_response() -> Response {
     (
         StatusCode::INTERNAL_SERVER_ERROR,
-        Json(
-            astronomical_rest_contract::OpenAiErrorResponse::service_unavailable(
-                "the speech request failed in the local worker",
-                Some("speech_failed"),
-            ),
-        ),
+        Json(rest_contract::OpenAiErrorResponse::service_unavailable(
+            "the speech request failed in the local worker",
+            Some("speech_failed"),
+        )),
     )
         .into_response()
 }

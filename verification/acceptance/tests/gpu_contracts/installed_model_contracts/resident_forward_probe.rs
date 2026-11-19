@@ -28,12 +28,12 @@
 
 use std::time::{Duration, Instant};
 
-use astronomical_config::AstronomicalConfig;
-use astronomical_model_serving::{
+use config::AstronomicalConfig;
+use model_serving::{
     Qwen3_5ArtifactValidator, Qwen3_5ModelChunkingConfiguration, Qwen3_5ResidentModel,
     Qwen3_5Tokenizer,
 };
-use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
+use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use serial_test::serial;
 use tokio::time::timeout;
 

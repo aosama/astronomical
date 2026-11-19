@@ -1,6 +1,6 @@
 use std::time::{Duration, Instant};
 
-use astronomical_runtime_integration::MlxRuntime;
+use runtime_integration::MlxRuntime;
 
 use crate::common::runtime_test_support::{
     assert_bfloat16_arrays_match, assert_f32_close, runtime, stable_softplus_reference,
@@ -184,7 +184,7 @@ fn should_measure_warmed_one_token_precise_swiglu_paths() {
                     &up_states,
                     &gate_states,
                 )
-                .map_err(astronomical_runtime_integration::MlxRuntimeError::from)
+                .map_err(runtime_integration::MlxRuntimeError::from)
         },
     );
 
@@ -360,7 +360,7 @@ fn should_match_uncompiled_bfloat16_gated_delta_decay_across_wide_intervals() {
 }
 
 fn bfloat16_array(
-    runtime: &astronomical_runtime_integration::MlxRuntime,
+    runtime: &runtime_integration::MlxRuntime,
     float32_values: &[f32],
     shape: &[i32],
 ) -> mlx_bridge::MlxArray {
@@ -374,7 +374,7 @@ fn apply_uncompiled_precise_swiglu(
     runtime: &MlxRuntime,
     up_states: &MlxArray,
     gate_states: &MlxArray,
-) -> Result<MlxArray, astronomical_runtime_integration::MlxRuntimeError> {
+) -> Result<MlxArray, runtime_integration::MlxRuntimeError> {
     let float32_gate_states = runtime.astype(gate_states, MlxDtype::Float32)?;
     let activated_gate_states = runtime.silu(&float32_gate_states)?;
     let float32_up_states = runtime.astype(up_states, MlxDtype::Float32)?;
@@ -386,8 +386,7 @@ fn measure_warmed_one_token_precise_swiglu_path(
     warmup_iteration_count: usize,
     measurement_iteration_count: usize,
     maximum_measurement_duration: Duration,
-    apply_precise_swiglu: impl Fn()
-        -> Result<MlxArray, astronomical_runtime_integration::MlxRuntimeError>,
+    apply_precise_swiglu: impl Fn() -> Result<MlxArray, runtime_integration::MlxRuntimeError>,
 ) -> Duration {
     for _warmup_iteration_index in 0..warmup_iteration_count {
         let output_states = apply_precise_swiglu().expect("the warmup SwiGLU graph should build");

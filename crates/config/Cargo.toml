@@ -1,5 +1,5 @@
 [package]
-name = "astronomical-config"
+name = "config"
 edition.workspace = true
 license.workspace = true
 publish.workspace = true
@@ -11,11 +11,11 @@ version.workspace = true
 workspace = true
 
 [dependencies]
-astronomical-expert-atlas = { path = "../expert-atlas" }
-astronomical-lowercase-hex = { path = "../lowercase-hex" }
+expert-atlas = { path = "../expert-atlas" }
+lowercase-hex = { path = "../lowercase-hex" }
 # The voice-name rule discovery lists speech voices by, shared with the
 # engines that load them; pure Rust with no further dependencies.
-astronomical-speech-contract = { path = "../speech-contract" }
+speech-contract = { path = "../speech-contract" }
 libc.workspace = true
 serde.workspace = true
 serde_json.workspace = true

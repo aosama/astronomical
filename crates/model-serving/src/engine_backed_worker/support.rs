@@ -3,7 +3,7 @@
 use std::path::Path;
 use std::time::Instant;
 
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     ChatGenerationCommand, ExpertMemoryMode, ProtocolError, RequestId,
     WorkerAstroSsdPromptCacheRequestDiagnostics, WorkerModelConfiguration, WorkerPromptWorkReuse,
 };

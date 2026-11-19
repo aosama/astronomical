@@ -8,7 +8,7 @@ use std::{
 };
 
 use astronomical_cli::{RespondDependencies, RespondError};
-use astronomical_config::AstronomicalRuntimeInstance;
+use config::AstronomicalRuntimeInstance;
 use tokio::time::timeout;
 
 use crate::integration::support::environment::{

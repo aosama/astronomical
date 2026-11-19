@@ -1,11 +1,11 @@
 use std::time::Duration;
 
-use astronomical_model_serving::{
+use model_serving::{
     ExpertPageRoutePartition, QuantizedExpertPageManifest,
     Qwen3_5MoEAstroExpertCachePlusStreamedPageRoute,
     qwen3_5_moe_combine_partial_route_outputs_for_tests, qwen3_5_moe_unsorted_expert_weighted_sum,
 };
-use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
+use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use tokio::time::timeout;
 
 use crate::common::{

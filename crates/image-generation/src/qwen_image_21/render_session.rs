@@ -11,7 +11,7 @@
 //! then owns the working set with only the VAE's weights resident. Dropping mid-sequence is what
 //! keeps a full-resolution decode inside the wired-memory ceiling.
 
-use astronomical_runtime_integration::MlxRuntime;
+use runtime_integration::MlxRuntime;
 use tokenizers::Tokenizer;
 
 use crate::qwen_image_21::pipeline::{QwenImage21Pipeline, TEXT_EMBEDDING_WIDTH};
@@ -330,9 +330,7 @@ impl QwenImage21RenderSession {
                 },
             })?;
         let pixel_values = pixels.to_vec_f32().map_err(|source| {
-            QwenImage21EngineError::Mlx(astronomical_runtime_integration::MlxRuntimeError::from(
-                source,
-            ))
+            QwenImage21EngineError::Mlx(runtime_integration::MlxRuntimeError::from(source))
         })?;
         self.pixel_values = Some(pixel_values);
         Ok(())

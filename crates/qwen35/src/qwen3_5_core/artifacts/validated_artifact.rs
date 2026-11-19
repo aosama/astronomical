@@ -27,7 +27,7 @@ pub struct ValidatedQwen3_5Artifact {
     pub(super) max_output_tokens: u32,
     /// Where an Expert Atlas model keeps its routed experts; `None` for a
     /// stock safetensors checkpoint.
-    pub(super) expert_atlas: Option<astronomical_expert_atlas::AtlasManifest>,
+    pub(super) expert_atlas: Option<expert_atlas::AtlasManifest>,
 }
 
 impl ValidatedQwen3_5Artifact {
@@ -46,7 +46,7 @@ impl ValidatedQwen3_5Artifact {
     /// The Atlas manifest when this model keeps its routed experts in Atlas
     /// layer files rather than in its shards.
     #[must_use]
-    pub const fn expert_atlas(&self) -> Option<&astronomical_expert_atlas::AtlasManifest> {
+    pub const fn expert_atlas(&self) -> Option<&expert_atlas::AtlasManifest> {
         self.expert_atlas.as_ref()
     }
     #[must_use]

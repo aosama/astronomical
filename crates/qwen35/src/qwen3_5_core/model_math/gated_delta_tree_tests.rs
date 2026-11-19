@@ -2,8 +2,8 @@
 //! bit: a row's output equals the sequence kernel's last output over that
 //! row's chain alone.
 
-use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use mlx_bridge::{MlxArray, MlxDtype};
+use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use serial_test::serial;
 
 use super::gated_delta_sequence::{qwen3_5_gated_delta_kernel, qwen3_5_gated_delta_sequence};

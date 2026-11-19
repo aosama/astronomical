@@ -10,7 +10,7 @@
 //! cannot disagree with what actually happened — and it works with
 //! performance attribution disabled, because the byte tally is always-on.
 
-use astronomical_ipc_protocol::ExpertMemoryMode;
+use ipc_protocol::ExpertMemoryMode;
 
 /// Classifies expert memory mode from the expert storage bytes actually read
 /// during one request.

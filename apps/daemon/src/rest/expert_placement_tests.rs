@@ -1,6 +1,6 @@
 //! Sentence contract for the shared expert placement copy.
 
-use astronomical_ipc_protocol::{ExpertLayerSeatingCounts, ExpertMemoryMode};
+use ipc_protocol::{ExpertLayerSeatingCounts, ExpertMemoryMode};
 
 use super::expert_placement::{
     ExpertPlacementCopy, MAXIMUM_STOCK_LABEL_CHARACTERS, expert_placement, expert_residency_json,
@@ -445,7 +445,7 @@ fn streaming_dense_residency(
     streamed_layer_payload_bytes: u64,
 ) -> ExpertResidencySnapshot {
     ExpertResidencySnapshot {
-        dense_layers: Some(astronomical_ipc_protocol::WorkerDenseLayerResidency {
+        dense_layers: Some(ipc_protocol::WorkerDenseLayerResidency {
             decoder_layer_count: 32,
             kept_layer_count,
             streamed_layer_payload_bytes,
@@ -581,7 +581,7 @@ fn should_call_more_kept_layers_than_the_model_has_all_in_ram() {
 #[test]
 fn should_not_count_layers_for_a_dense_report_with_no_layers() {
     let residency = ExpertResidencySnapshot {
-        dense_layers: Some(astronomical_ipc_protocol::WorkerDenseLayerResidency::default()),
+        dense_layers: Some(ipc_protocol::WorkerDenseLayerResidency::default()),
         ..dense_model_residency()
     };
 
@@ -593,8 +593,8 @@ fn should_not_count_layers_for_a_dense_report_with_no_layers() {
 
 #[test]
 fn should_keep_the_dense_layers_when_the_daemon_takes_a_worker_residency() {
-    let worker_residency = astronomical_ipc_protocol::WorkerExpertResidencySnapshot {
-        dense_layers: Some(astronomical_ipc_protocol::WorkerDenseLayerResidency {
+    let worker_residency = ipc_protocol::WorkerExpertResidencySnapshot {
+        dense_layers: Some(ipc_protocol::WorkerDenseLayerResidency {
             decoder_layer_count: 32,
             kept_layer_count: 7,
             streamed_layer_payload_bytes: 4_437_000_000,

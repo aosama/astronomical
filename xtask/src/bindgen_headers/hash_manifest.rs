@@ -6,7 +6,7 @@
 
 use std::path::Path;
 
-use astronomical_native_identity::digest_bytes;
+use native_identity::digest_bytes;
 
 /// One `"<sha256>  ./relative/path"` line per regular file, sorted by the
 /// path's bytes. Symlinks and directories are skipped, as `find -type f`

@@ -5,11 +5,11 @@
 use std::sync::{Arc, RwLock};
 
 use astronomical_daemon::{SpeechExecutionError, SpeechOutput};
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     DaemonIpcClient, DaemonRequest, DaemonResponse, MAXIMUM_SPEECH_AUDIO_FRAME_BYTES,
     SpeakGenerateRequest, SpeechResultMetadata,
 };
-use astronomical_speech_contract::SpeechFailure;
+use speech_contract::SpeechFailure;
 use tokio::time::timeout;
 
 use crate::support::daemon_ipc::{
@@ -50,7 +50,7 @@ fn spoken_output(sample_count: usize) -> SpeechOutput {
 async fn speak_once(
     test_name: &str,
     stub_executor: Arc<StubGenerationExecutor>,
-    discovered_models: Vec<astronomical_config::DiscoveredModel>,
+    discovered_models: Vec<config::DiscoveredModel>,
     speak_request: DaemonRequest,
 ) -> Vec<DaemonResponse> {
     let state_directory = fresh_instance_state_directory(test_name);
@@ -83,7 +83,7 @@ async fn speak_once(
     speech_frames
 }
 
-fn installed_models() -> Vec<astronomical_config::DiscoveredModel> {
+fn installed_models() -> Vec<config::DiscoveredModel> {
     vec![
         ipc_chat_discovered_model(CHAT_MODEL_ID),
         ipc_speech_discovered_model(SPEECH_MODEL_ID),

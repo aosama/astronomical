@@ -8,7 +8,7 @@
 
 use std::path::PathBuf;
 
-use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
+use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
 /// Activation headroom above the component weights. A render stages the components — the text
 /// encoder and transformer release before the VAE decodes — but a journey that loads all three
@@ -49,7 +49,7 @@ pub(crate) const JOURNEY_MLX_BUFFER_CACHE_LIMIT_BYTES: usize = MLX_BUFFER_CACHE_
 /// The selected directory contains component `model.safetensors` files and the
 /// `processor/` tokenizer.
 pub(crate) fn artifact_directory() -> PathBuf {
-    astronomical_test_harness::test_run::TestRunContext::current().required_model_directory()
+    test_harness::test_run::TestRunContext::current().required_model_directory()
 }
 
 /// The `model.safetensors` path of one artifact component (`"transformer"` or `"vae"`).

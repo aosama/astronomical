@@ -11,7 +11,7 @@
 use std::collections::{BTreeMap, HashMap};
 use std::fs::File;
 
-use astronomical_runtime_integration::{MlxRuntime, MlxSafetensors};
+use runtime_integration::{MlxRuntime, MlxSafetensors};
 
 use super::{Qwen3_5ExecutionError, VisionTensorLocation};
 

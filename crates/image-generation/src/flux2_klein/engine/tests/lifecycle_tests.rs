@@ -6,7 +6,7 @@ use crate::{
     FLUX2_KLEIN_OFFICIAL_MODEL_ID, FLUX2_KLEIN_PROVIDER_MODEL_ID, ImageGenerationEngine,
     ImageGenerationEngineStep,
 };
-use astronomical_ipc_protocol::{ImageGenerationFailureReason, ImageGenerationPhase, RequestId};
+use ipc_protocol::{ImageGenerationFailureReason, ImageGenerationPhase, RequestId};
 
 use super::lifecycle_support::{
     assert_final_cleanup_memory, bounded_conditioning_fake_engine, bounded_fake_engine,

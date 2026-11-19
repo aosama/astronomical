@@ -1,6 +1,6 @@
 //! Unit tests for decision commands at the worker boundary.
 
-use astronomical_decision_contract::{OrderedJsonValue, QuestionDefinitionError};
+use decision_contract::{OrderedJsonValue, QuestionDefinitionError};
 
 use crate::{
     DecisionsCommand, DecisionsValidationError, MINIMUM_DECISION_TOKENS_PER_QUESTION, RequestId,

@@ -2,7 +2,7 @@ use std::fs::File;
 use std::io::Write;
 use std::path::Path;
 
-use astronomical_model_serving::{
+use model_serving::{
     AstroSsdPromptCacheBlockError, AstroSsdPromptCacheBlockHeader, AstroSsdPromptCacheModelContract,
 };
 use serde_json::{Map, Value, json};

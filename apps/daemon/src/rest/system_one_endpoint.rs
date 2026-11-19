@@ -8,12 +8,12 @@
 //! clients expect.
 
 use crate::rest::worker_replacement_wait::lock_configuration_transition_for_generation;
-use astronomical_decision_contract::{DecisionFailure, OrderedJsonValue, system_one_response};
 use axum::{
     Json,
     extract::State,
     response::{IntoResponse, Response},
 };
+use decision_contract::{DecisionFailure, OrderedJsonValue, system_one_response};
 
 use crate::DecisionsOutput;
 use crate::{
@@ -205,11 +205,9 @@ fn decisions_execution_error_response(
         }
         DecisionsExecutionError::WorkerFailure(DecisionFailure::EngineBusy) => (
             axum::http::StatusCode::TOO_MANY_REQUESTS,
-            Json(
-                astronomical_rest_contract::OpenAiErrorResponse::capacity_unavailable(
-                    "the decision engine is busy",
-                ),
-            ),
+            Json(rest_contract::OpenAiErrorResponse::capacity_unavailable(
+                "the decision engine is busy",
+            )),
         )
             .into_response(),
         DecisionsExecutionError::WorkerFailure(DecisionFailure::FatalExecution { reason }) => {
@@ -220,12 +218,10 @@ fn decisions_execution_error_response(
             );
             (
                 axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-                Json(
-                    astronomical_rest_contract::OpenAiErrorResponse::service_unavailable(
-                        "the decision request failed in the local worker",
-                        Some("decisions_failed"),
-                    ),
-                ),
+                Json(rest_contract::OpenAiErrorResponse::service_unavailable(
+                    "the decision request failed in the local worker",
+                    Some("decisions_failed"),
+                )),
             )
                 .into_response()
         }

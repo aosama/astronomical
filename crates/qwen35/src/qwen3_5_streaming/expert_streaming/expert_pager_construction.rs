@@ -7,7 +7,7 @@ use std::mem::size_of;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use astronomical_runtime_integration::{MlxRuntime, PositionalFileReadMetrics};
+use runtime_integration::{MlxRuntime, PositionalFileReadMetrics};
 
 use super::expert_pager::{ExpertPagingError, Qwen3_5ExpertPager};
 use crate::MlxAllocationAdmission;
@@ -41,7 +41,7 @@ impl Qwen3_5ExpertPager {
         model_dir: PathBuf,
         weight_map: &HashMap<String, String>,
         stored_tensor_name_by_canonical_name: &HashMap<String, String>,
-        expert_atlas: Option<&astronomical_expert_atlas::AtlasManifest>,
+        expert_atlas: Option<&expert_atlas::AtlasManifest>,
         config: &Qwen3_5Config,
         configured_mlx_memory_cap_bytes: usize,
     ) -> Result<Self, ExpertPagingError> {

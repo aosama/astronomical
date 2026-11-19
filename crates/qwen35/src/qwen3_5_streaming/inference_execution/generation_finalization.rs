@@ -321,9 +321,9 @@ impl Qwen3_5EngineState {
         &mut self,
         performance_attribution: PerformanceAttribution,
         outcome: PerformanceAttributionOutcome,
-        request_id: astronomical_ipc_protocol::RequestId,
+        request_id: ipc_protocol::RequestId,
         configured_maximum_output_tokens: u16,
-        mlx_memory_snapshot: Option<astronomical_runtime_integration::MlxMemorySnapshot>,
+        mlx_memory_snapshot: Option<runtime_integration::MlxMemorySnapshot>,
         failure_description: Option<&'static str>,
     ) {
         if !performance_attribution.is_enabled() {
@@ -389,7 +389,7 @@ use crate::MlxMemoryTelemetry;
 /// person's own logs show the figure without performance attribution.
 fn log_astro_expert_cache_over_the_reply(
     request_id: u64,
-    reply_memory_record: &astronomical_ipc_protocol::ReplyMemoryRecord,
+    reply_memory_record: &ipc_protocol::ReplyMemoryRecord,
 ) {
     let reply_token_count = reply_memory_record
         .storage_read_expert_counts_by_token

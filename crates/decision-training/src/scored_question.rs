@@ -10,8 +10,8 @@
 //! are not, the logits are in a different order from the answer and any
 //! temperature fitted on them would be fitted to the wrong options.
 
-use astronomical_decision_contract::question::{NOUL_FALSE_INDEX, NOUL_TRUE_INDEX};
-use astronomical_decision_contract::{DecisionAnswer, DecisionQuestionKind, QuestionOutcome};
+use decision_contract::question::{NOUL_FALSE_INDEX, NOUL_TRUE_INDEX};
+use decision_contract::{DecisionAnswer, DecisionQuestionKind, QuestionOutcome};
 use thiserror::Error;
 
 use crate::labelled_example::LabelledQuestion;

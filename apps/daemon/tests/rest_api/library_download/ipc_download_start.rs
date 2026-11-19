@@ -5,12 +5,12 @@
 
 use std::path::Path;
 
-use astronomical_config::{AstronomicalInstancePaths, AstronomicalRuntimeInstance};
 use astronomical_daemon::{
     DaemonIpcGenerationContext, DaemonIpcService, DaemonPerformanceAttributionLog,
     ImageGenerationExecutor, start_daemon_ipc_service,
 };
-use astronomical_ipc_protocol::{DaemonIpcClient, DaemonRequest, DaemonResponse};
+use config::{AstronomicalInstancePaths, AstronomicalRuntimeInstance};
+use ipc_protocol::{DaemonIpcClient, DaemonRequest, DaemonResponse};
 use std::sync::atomic::AtomicU64;
 
 use super::*;

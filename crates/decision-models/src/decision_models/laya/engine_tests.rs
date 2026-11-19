@@ -2,14 +2,14 @@
 //! how logits become an outcome. Running a real checkpoint is the acceptance
 //! journeys' job.
 
-use astronomical_decision_contract::laya_rendering::LayaRenderingError;
-use astronomical_decision_contract::laya_sequence::{LayaQuestionSequence, LayaSequenceError};
-use astronomical_decision_contract::{
+use decision_contract::laya_rendering::LayaRenderingError;
+use decision_contract::laya_sequence::{LayaQuestionSequence, LayaSequenceError};
+use decision_contract::{
     DecisionAnswer, DecisionFailure, DecisionQuestion, OrderedJsonValue, TokenEncodingError,
     parse_system_one_questions,
 };
 
-use astronomical_decision_contract::calibration_file::{CalibrationOverride, KindCalibration};
+use decision_contract::calibration_file::{CalibrationOverride, KindCalibration};
 
 use super::{QuestionTemperatures, question_outcome, sequence_failure};
 use crate::decision_models::laya::configuration::LayaConfiguration;

@@ -15,13 +15,13 @@ fn should_measure_gaps_and_never_pass_a_length_mismatch_or_a_non_finite_logit() 
 }
 
 mod written_folder_answers {
-    use astronomical_decision_contract::calibration_file::{CalibrationOverride, KindCalibration};
-    use astronomical_decision_contract::{
+    use decision_contract::calibration_file::{CalibrationOverride, KindCalibration};
+    use decision_contract::{
         DecisionAnswer, DecisionQuestionKind, NoulAnswer, QuestionInputCoverage,
     };
-    use astronomical_decision_training::calibration_metrics::CalibrationMetrics;
-    use astronomical_decision_training::calibration_plan::{KindFit, KindVerdict};
-    use astronomical_decision_training::judged_on::JudgedOn;
+    use decision_training::calibration_metrics::CalibrationMetrics;
+    use decision_training::calibration_plan::{KindFit, KindVerdict};
+    use decision_training::judged_on::JudgedOn;
 
     use super::*;
 

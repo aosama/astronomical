@@ -3,8 +3,8 @@
 //! once when they are built, and decision readout reads a handful of output
 //! head rows. Neither is on a decode step, so restoring costs nothing there.
 
-use astronomical_runtime_integration::MlxRuntime;
 use mlx_bridge::{MlxArray, MlxDtype, MlxMetalKernel, MlxMetalKernelOutput};
+use runtime_integration::MlxRuntime;
 
 use super::dispatch_plan::{OUTPUT_COLUMNS_PER_SIMDGROUP, QUANTIZATION_GROUP_SIZE};
 use super::register_order_source::REGISTER_ORDER_RESTORATION_SOURCE;

@@ -1,7 +1,7 @@
 //! Tells the daemon a load has started, so its status can name the model during a
 //! wait that can otherwise read as nothing happening.
 
-use astronomical_ipc_protocol::{ModelLoadInFlight, ProtocolWriter, WorkerEvent};
+use ipc_protocol::{ModelLoadInFlight, ProtocolWriter, WorkerEvent};
 use tokio::io::AsyncWrite;
 
 use super::support::WorkerRuntimeError;

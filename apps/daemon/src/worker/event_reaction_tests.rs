@@ -1,7 +1,7 @@
 //! Unit contracts for the worker loop's non-command branch reactions: the
 //! event failure classification and the image-deadline terminal send.
 
-use astronomical_ipc_protocol::RequestId;
+use ipc_protocol::RequestId;
 use std::sync::Arc;
 use tokio::sync::{Semaphore, mpsc};
 
@@ -44,7 +44,7 @@ fn active_image_request(
         _active_generation_permit: active_generation_permit,
         request_id: RequestId::new(1),
         model_id: String::from("qwen-image"),
-        settings: astronomical_ipc_protocol::ImageGenerationSettings {
+        settings: ipc_protocol::ImageGenerationSettings {
             width_pixels: 512,
             height_pixels: 512,
             steps: 4,

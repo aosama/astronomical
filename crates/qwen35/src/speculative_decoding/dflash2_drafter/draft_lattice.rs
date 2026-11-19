@@ -7,8 +7,8 @@
 //! table holds every edge the search can ask for: 6 x 16 x 16 scores for the
 //! 27B's drafter, against walking the codebooks once per node on the host.
 
-use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 use mlx_bridge::{MlxArray, MlxDtype};
+use runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use super::candidate_selector::kept_candidate_ids;
 use super::draft_tree::DraftLattice;

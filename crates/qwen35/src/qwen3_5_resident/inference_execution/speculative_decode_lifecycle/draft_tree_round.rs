@@ -334,10 +334,8 @@ fn target_picks(
 }
 
 fn sampling_failure(sampling_error: crate::InferenceEngineError) -> Qwen3_5ExecutionError {
-    Qwen3_5ExecutionError::from(
-        astronomical_runtime_integration::MlxRuntimeError::RuntimeOperation {
-            operation: "read the target's sampling distribution for a draft tree",
-            description: sampling_error.to_string(),
-        },
-    )
+    Qwen3_5ExecutionError::from(runtime_integration::MlxRuntimeError::RuntimeOperation {
+        operation: "read the target's sampling distribution for a draft tree",
+        description: sampling_error.to_string(),
+    })
 }

@@ -4,9 +4,9 @@
 use std::collections::BTreeMap;
 use std::io::Write;
 
-use astronomical_quantization::allocation::AllocationResult;
-use astronomical_quantization::artifact::OptiQArtifactMetadata;
-use astronomical_quantization::artifact::metadata::PerLayerEntry;
+use quantization::allocation::AllocationResult;
+use quantization::artifact::OptiQArtifactMetadata;
+use quantization::artifact::metadata::PerLayerEntry;
 
 /// The `plan` table: one row per module sorted by name, then the summary
 /// and any overshoot note.
@@ -103,8 +103,8 @@ pub fn module_count_by_bits(per_layer: &BTreeMap<String, PerLayerEntry>) -> BTre
 }
 
 fn compare_decisions_by_module_name(
-    left: &astronomical_quantization::allocation::ModuleQuantizationDecision,
-    right: &astronomical_quantization::allocation::ModuleQuantizationDecision,
+    left: &quantization::allocation::ModuleQuantizationDecision,
+    right: &quantization::allocation::ModuleQuantizationDecision,
 ) -> std::cmp::Ordering {
     left.module_name.cmp(&right.module_name)
 }

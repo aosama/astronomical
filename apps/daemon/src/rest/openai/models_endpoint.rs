@@ -1,18 +1,18 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::application::ApplicationState;
-use astronomical_config::{DiscoveredModel, ModelCapabilities};
-use astronomical_ipc_protocol::WorkerModelCapabilities;
-use astronomical_rest_contract::{
-    OpenAiDecisionModelParts, OpenAiEmbeddingModelParts, OpenAiErrorResponse,
-    OpenAiImageModelParts, OpenAiModel, OpenAiModelList, OpenAiModelParts,
-    OpenAiModelValidationError, OpenAiSpeechModelParts, STRUCTURED_OUTPUT_ENFORCEMENT_LOGITS_MASK,
-};
 use axum::{
     Json,
     extract::{Path, State},
     http::StatusCode,
     response::{IntoResponse, Response},
+};
+use config::{DiscoveredModel, ModelCapabilities};
+use ipc_protocol::WorkerModelCapabilities;
+use rest_contract::{
+    OpenAiDecisionModelParts, OpenAiEmbeddingModelParts, OpenAiErrorResponse,
+    OpenAiImageModelParts, OpenAiModel, OpenAiModelList, OpenAiModelParts,
+    OpenAiModelValidationError, OpenAiSpeechModelParts, STRUCTURED_OUTPUT_ENFORCEMENT_LOGITS_MASK,
 };
 
 const ASTRONOMICAL_MODEL_OWNER: &str = "astronomical";
@@ -61,8 +61,7 @@ pub(crate) async fn retrieve_model(
         .iter()
         .map(OpenAiModel::id)
         .collect::<Vec<_>>();
-    let resolved_model_id =
-        astronomical_config::resolve_model_id(&requested_model_id, &known_model_ids);
+    let resolved_model_id = config::resolve_model_id(&requested_model_id, &known_model_ids);
 
     match advertised_models
         .into_iter()
@@ -186,8 +185,8 @@ fn openai_model_from_ready_helper_capabilities(
 fn openai_model_from_ready_embedding_or_image_capabilities(
     ready_model_id: String,
     model_advertisement_created_at_unix_seconds: u64,
-    embeddings: Option<astronomical_ipc_protocol::WorkerEmbeddingCapabilities>,
-    image_generation: Option<astronomical_ipc_protocol::ImageGenerationCapabilities>,
+    embeddings: Option<ipc_protocol::WorkerEmbeddingCapabilities>,
+    image_generation: Option<ipc_protocol::ImageGenerationCapabilities>,
 ) -> Result<OpenAiModel, OpenAiModelValidationError> {
     if let Some(embedding_capabilities) = embeddings {
         return OpenAiModel::from_embedding_parts(OpenAiEmbeddingModelParts {
@@ -317,7 +316,7 @@ fn openai_decision_model(
 
 fn openai_model_from_discovered_chat_model(
     discovered_model: &DiscoveredModel,
-    capabilities: &astronomical_config::ChatModelCapabilities,
+    capabilities: &config::ChatModelCapabilities,
     model_advertisement_created_at_unix_seconds: u64,
 ) -> Result<OpenAiModel, OpenAiModelValidationError> {
     OpenAiModel::from_parts(OpenAiModelParts {

@@ -16,7 +16,7 @@ use crate::expert_paging::{
 };
 use crate::memory::{StreamedPageSourcePlan, record_streamed_page_source_plan_in_both_ledgers};
 use crate::qwen3_5_streaming::expert_streaming::paged_expert_weights;
-use astronomical_model_primitives::serving_phase::SessionStreamingPhase;
+use model_primitives::serving_phase::SessionStreamingPhase;
 
 /// Request dimensions needed to attribute one source plan without retaining routes.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -33,7 +33,7 @@ impl Qwen3_5ExpertPager {
     /// decode forwards exist (issue #1715).
     pub fn stream_selected_expert_page_from_ssd(
         &self,
-        runtime: &astronomical_runtime_integration::MlxRuntime,
+        runtime: &runtime_integration::MlxRuntime,
         layer_index: usize,
         expert_ids: &[usize],
         request_shape: Qwen3_5ExpertStreamingRequestShape,
@@ -173,7 +173,7 @@ impl Qwen3_5ExpertPager {
     fn expert_read_metrics_for_streamed_page(
         &self,
         performance_attribution: &PerformanceAttribution,
-    ) -> std::sync::Arc<astronomical_runtime_integration::PositionalFileReadMetrics> {
+    ) -> std::sync::Arc<runtime_integration::PositionalFileReadMetrics> {
         match performance_attribution.positional_file_read_metrics() {
             Some(attribution_read_metrics) => {
                 attribution_read_metrics
@@ -217,7 +217,7 @@ fn pending_streamed_page_allocation_bytes(
 /// admission has already reclaimed experts for persistent and transient
 /// growth. Loading first would spend I/O on an unusable page.
 fn require_streamed_page_admission(
-    runtime: &astronomical_runtime_integration::MlxRuntime,
+    runtime: &runtime_integration::MlxRuntime,
     expert_pager: &Qwen3_5ExpertPager,
     layer_index: usize,
     pending_page_allocation_bytes: u64,

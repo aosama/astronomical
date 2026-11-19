@@ -3,11 +3,11 @@
 //! values against MLX's quantized matmul, a row's bits at every row count,
 //! and the restoration back to MLX's layout bit for bit.
 
-use astronomical_model_serving::row_batched_matmul::{
+use mlx_bridge::{MlxArray, MlxDtype};
+use model_serving::row_batched_matmul::{
     RegisterOrderedWeight, RowBatchedMatmulKernels, register_ordered_matmul,
 };
-use astronomical_runtime_integration::MlxRuntime;
-use mlx_bridge::{MlxArray, MlxDtype};
+use runtime_integration::MlxRuntime;
 use serial_test::serial;
 
 use super::row_batched_matmul::{

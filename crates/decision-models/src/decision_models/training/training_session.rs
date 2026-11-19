@@ -16,19 +16,17 @@
 use std::path::Path;
 use std::rc::Rc;
 
-use astronomical_decision_contract::decision_training_job::{
+use decision_contract::decision_training_job::{
     DecisionTrainingJob, DecisionTrainingStage, TrainingExample, TrainingScope,
 };
-use astronomical_decision_contract::head_tuning_file::TunableHeadFamily;
-use astronomical_decision_contract::{
-    DecisionFailure, HeadInputRequest, OrderedJsonValue, QuestionOutcome,
-};
-use astronomical_decision_training::head_parameters::ParameterLayout;
-use astronomical_decision_training::shipped_head::{ShippedHead, read_shipped_head};
-use astronomical_decision_training::training_settings::{
+use decision_contract::head_tuning_file::TunableHeadFamily;
+use decision_contract::{DecisionFailure, HeadInputRequest, OrderedJsonValue, QuestionOutcome};
+use decision_training::head_parameters::ParameterLayout;
+use decision_training::shipped_head::{ShippedHead, read_shipped_head};
+use decision_training::training_settings::{
     FINAL_LAYERS_TRAINING_SETTINGS, WHOLE_MODEL_TRAINING_SETTINGS,
 };
-use astronomical_runtime_integration::MlxRuntime;
+use runtime_integration::MlxRuntime;
 
 use crate::decision_engine::DecisionTrainingStep;
 use mlx_bridge::MlxArray;
@@ -291,15 +289,14 @@ pub fn read_through_decide(
     questions: &OrderedJsonValue,
     head_input_request: HeadInputRequest,
 ) -> Result<Vec<QuestionOutcome>, DecisionFailure> {
-    let parsed_questions =
-        match astronomical_decision_contract::parse_system_one_questions(questions) {
-            Ok(parsed_questions) => parsed_questions,
-            Err(question_error) => {
-                return Err(DecisionFailure::invalid_request(
-                    &question_error.to_string(),
-                ));
-            }
-        };
+    let parsed_questions = match decision_contract::parse_system_one_questions(questions) {
+        Ok(parsed_questions) => parsed_questions,
+        Err(question_error) => {
+            return Err(DecisionFailure::invalid_request(
+                &question_error.to_string(),
+            ));
+        }
+    };
     let engine_output = engine.decide(state, &parsed_questions, head_input_request)?;
     Ok(engine_output.question_outcomes)
 }

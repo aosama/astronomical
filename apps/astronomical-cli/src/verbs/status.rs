@@ -3,9 +3,9 @@
 
 use std::{fmt::Write as _, io::Write, path::PathBuf, time::Duration};
 
-use astronomical_config::AstronomicalRuntimeInstance;
+use config::AstronomicalRuntimeInstance;
 
-use astronomical_ipc_protocol::{DaemonDownloadJob, DaemonWorkerStatus};
+use ipc_protocol::{DaemonDownloadJob, DaemonWorkerStatus};
 
 use crate::transport::ipc::DaemonProbeError;
 use crate::{

@@ -1,6 +1,6 @@
 //! Structural priorities must match the Python values to float rounding.
 
-use astronomical_quantization::sensitivity::static_scorer::structural_priority;
+use quantization::sensitivity::static_scorer::structural_priority;
 
 use super::fixtures;
 

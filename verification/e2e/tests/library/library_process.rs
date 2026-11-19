@@ -14,7 +14,7 @@ use crate::common::daemon::{
 async fn should_serve_the_library_and_discover_instance_models_without_configured_roots() {
     timeout(Duration::from_secs(15), async {
         eprintln!("[library-process] preparing isolated instance");
-        let daemon_executable_path = astronomical_test_harness::workspace_binary("astronomicald")
+        let daemon_executable_path = test_harness::workspace_binary("astronomicald")
             .to_string_lossy()
             .into_owned();
         let instance_state_directory =
@@ -85,7 +85,7 @@ fn http_response_body(http_response: &str) -> &str {
 #[tokio::test]
 async fn should_record_the_startup_catalog_load_when_attribution_is_enabled() {
     timeout(Duration::from_secs(15), async {
-        let daemon_executable_path = astronomical_test_harness::workspace_binary("astronomicald")
+        let daemon_executable_path = test_harness::workspace_binary("astronomicald")
             .to_string_lossy()
             .into_owned();
         let instance_state_directory =
@@ -133,7 +133,7 @@ async fn should_record_the_startup_catalog_load_when_attribution_is_enabled() {
 #[tokio::test]
 async fn should_fail_before_binding_when_the_startup_attribution_file_cannot_open() {
     timeout(Duration::from_secs(10), async {
-        let daemon_executable_path = astronomical_test_harness::workspace_binary("astronomicald")
+        let daemon_executable_path = test_harness::workspace_binary("astronomicald")
             .to_string_lossy()
             .into_owned();
         let instance_state_directory =
@@ -204,7 +204,7 @@ fn write_fictional_model(instance_state_directory: &Path) {
 
 fn assert_fictional_model_is_structurally_discoverable(instance_state_directory: &Path) {
     let models_directory = instance_state_directory.join("models");
-    let directory_scans = astronomical_config::discover_models(&[models_directory])
+    let directory_scans = config::discover_models(&[models_directory])
         .expect("the fictional automatic library should be discoverable");
     let discovered_model = directory_scans
         .first()

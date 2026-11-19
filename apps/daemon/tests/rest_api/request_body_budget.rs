@@ -4,14 +4,14 @@ use astronomical_daemon::{
     ChatGenerationExecutor, ChatGenerationStreamEvent, GenerationStartError, WorkerHealthSnapshot,
     build_application,
 };
-use astronomical_ipc_protocol::ChatGenerationCommand;
-use astronomical_rest_contract::MAX_REQUEST_BODY_BYTES;
 use axum::{
     Router,
     body::{Body, to_bytes},
     http::{Request, StatusCode, header},
     response::Response,
 };
+use ipc_protocol::ChatGenerationCommand;
+use rest_contract::MAX_REQUEST_BODY_BYTES;
 use serde_json::Value;
 use tokio::sync::mpsc;
 use tower::ServiceExt;

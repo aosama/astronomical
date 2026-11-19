@@ -59,7 +59,7 @@
 //!
 //! The stock MLX-C surface is bound by the published `mlx-bridge` crate. The
 //! handful of Astronomical-specific native symbols added by the patch set
-//! under `third-party/patches` are bound by `astronomical-mlx-c-fork`. This
+//! under `third-party/patches` are bound by `mlx-c-fork`. This
 //! crate composes both: operations come through `MlxRuntime`'s dereference to
 //! `MlxBindingsContext`, Astronomical policy lives in the modules here.
 //!

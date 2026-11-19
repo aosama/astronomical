@@ -1,4 +1,4 @@
-use astronomical_ipc_protocol::ExpertMemoryMode;
+use ipc_protocol::ExpertMemoryMode;
 
 use crate::residency::observed_mode::observed_expert_memory_mode;
 

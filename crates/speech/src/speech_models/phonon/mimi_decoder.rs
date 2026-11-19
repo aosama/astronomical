@@ -7,8 +7,8 @@
 //! decoding a whole utterance at once gives the same samples a stream of
 //! frames would.
 
-use astronomical_runtime_integration::MlxRuntime;
 use mlx_bridge::MlxArray;
+use runtime_integration::MlxRuntime;
 
 use super::causal_convolutions::{CausalConv1d, CausalConvTranspose1d, CausalGeometry};
 use super::causal_transformer::{CausalTransformer, TransformerShape};

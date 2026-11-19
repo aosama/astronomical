@@ -1,5 +1,5 @@
-use astronomical_decision_contract::decision_training_job::DecisionTrainingOutcome;
-use astronomical_decision_contract::trained_tensors_file::handover_file_name;
+use decision_contract::decision_training_job::DecisionTrainingOutcome;
+use decision_contract::trained_tensors_file::handover_file_name;
 
 use super::*;
 
@@ -47,7 +47,7 @@ fn should_leave_files_alone_for_results_without_one_or_with_a_foreign_name() {
     );
     discard_undelivered_handover_file(
         &DecisionsOutput::TrainingProgress {
-            stage: astronomical_decision_contract::decision_training_job::DecisionTrainingStage::Training,
+            stage: decision_contract::decision_training_job::DecisionTrainingStage::Training,
             completed: 1,
             total: 2,
         },

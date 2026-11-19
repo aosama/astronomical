@@ -3,11 +3,11 @@
 //! comparison reported as context. Split from the measurement stages so each
 //! concern stays small enough for the source-size budget.
 
-use astronomical_runtime_integration::MlxRuntime;
 use mlx_bridge::{MlxArray, MlxMetalKernel};
+use runtime_integration::MlxRuntime;
 
-use astronomical_jangtq2_qwen35::codebook;
-use astronomical_jangtq2_qwen35::mlx_decode::decode_expert_weight_rows;
+use jangtq2_qwen35::codebook;
+use jangtq2_qwen35::mlx_decode::decode_expert_weight_rows;
 
 use super::kernel::{PrefillGatheredDequantInputs, launch_prefill_gathered_dequant};
 use super::{COMPLETE_LAYER_EXPERT_COUNT, PrefillFixtureTensors, PrefillHostFixture};
@@ -75,7 +75,7 @@ pub(super) fn assert_exact_host_parity(
     for &assignment_index in &sampled_assignments {
         let expert_index =
             host_fixture.assignments.assignment_expert_ids[assignment_index] as usize;
-        let rotated_row = astronomical_jangtq2_qwen35::hadamard32::reference_transform_vector(
+        let rotated_row = jangtq2_qwen35::hadamard32::reference_transform_vector(
             &host_fixture.unrotated_assignment_rows
                 [assignment_index * input_width..(assignment_index + 1) * input_width],
         )

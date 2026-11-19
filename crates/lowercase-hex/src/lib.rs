@@ -7,7 +7,7 @@
 //! different texts name one digest. That is also why this crate exists
 //! instead of the `hex` crate, which decodes uppercase digits.
 //!
-//! `astronomical-native-identity` and `astronomical-native-build-orchestration`
+//! `native-identity` and `native-build-orchestration`
 //! keep their own encoders on purpose: their sources are inputs to the native
 //! build identity, so editing them would force a cold native rebuild for no
 //! change in output.

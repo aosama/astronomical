@@ -11,13 +11,11 @@
 
 use std::fmt::Write as _;
 
-use astronomical_decision_contract::DecisionQuestionKind;
-use astronomical_decision_contract::calibration_file::KindCalibration;
-use astronomical_decision_contract::training_record::RecordedVerdict;
-use astronomical_decision_training::calibration_plan::{
-    CalibrationPlan, KindFit, KindOutcome, KindVerdict,
-};
-use astronomical_decision_training::judged_on::JudgedOn;
+use decision_contract::DecisionQuestionKind;
+use decision_contract::calibration_file::KindCalibration;
+use decision_contract::training_record::RecordedVerdict;
+use decision_training::calibration_plan::{CalibrationPlan, KindFit, KindOutcome, KindVerdict};
+use decision_training::judged_on::JudgedOn;
 
 use super::counted_noun::counted_noun;
 

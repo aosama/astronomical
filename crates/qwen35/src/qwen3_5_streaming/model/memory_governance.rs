@@ -6,7 +6,7 @@
 //! and applies the capacity each answer carries. `apply_kept_weight_capacity`
 //! is the only place the astro expert cache is told how much it may keep.
 
-use astronomical_memory_policy::ledger::{
+use memory_policy::ledger::{
     HeldMemory, KeptWeightCapacity, LedgerPhase, LedgerReading, MeasuredStep, MemoryGovernor,
     ModelMemoryShape,
 };
@@ -37,16 +37,13 @@ pub struct GovernedMemory {
     pub(super) governor: std::cell::RefCell<Option<MemoryGovernor>>,
     /// The redo a forward that hit the limit is being retried under, until
     /// the retried forward is measured or the request ends.
-    pub(super) pending_redo_attempt:
-        std::cell::RefCell<Option<astronomical_memory_policy::ledger::RedoAttempt>>,
+    pub(super) pending_redo_attempt: std::cell::RefCell<Option<memory_policy::ledger::RedoAttempt>>,
     /// Room leased for publishing astro SSD prompt cache blocks, until the next
     /// forward completes.
-    pub(super) publication_workspace_lease:
-        std::cell::Cell<Option<astronomical_memory_policy::ledger::LeaseId>>,
+    pub(super) publication_workspace_lease: std::cell::Cell<Option<memory_policy::ledger::LeaseId>>,
     /// Room leased for blocks read back from the `astro_ssd_prompt_cache`, until they
     /// have joined the request's stored state.
-    pub(super) restore_workspace_lease:
-        std::cell::Cell<Option<astronomical_memory_policy::ledger::LeaseId>>,
+    pub(super) restore_workspace_lease: std::cell::Cell<Option<memory_policy::ledger::LeaseId>>,
     /// What MLX held at the last layer boundary of a prompt that is being
     /// measured one layer at a time; `None` outside such a prompt.
     pub(super) prompt_layer_boundary_active_bytes: std::cell::Cell<Option<u64>>,
@@ -228,10 +225,7 @@ impl Qwen3_5Model {
     /// what it reports is the forward's peak.
     pub fn memory_snapshot_with_forward_peak(
         &self,
-    ) -> Result<
-        astronomical_runtime_integration::MlxMemorySnapshot,
-        astronomical_runtime_integration::MlxRuntimeError,
-    > {
+    ) -> Result<runtime_integration::MlxMemorySnapshot, runtime_integration::MlxRuntimeError> {
         Ok(self
             .runtime
             .memory_snapshot()?

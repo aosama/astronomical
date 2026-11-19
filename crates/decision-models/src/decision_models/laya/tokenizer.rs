@@ -5,8 +5,8 @@
 //! identifiers, but the checkpoints were trained with the tokenizer's, and
 //! for the multilingual checkpoint the two disagree.
 
-use astronomical_decision_contract::laya_sequence::LayaSpecialTokens;
-use astronomical_decision_contract::{DecisionTokenEncoder, TokenEncodingError};
+use decision_contract::laya_sequence::LayaSpecialTokens;
+use decision_contract::{DecisionTokenEncoder, TokenEncodingError};
 use thiserror::Error;
 use tokenizers::Tokenizer;
 

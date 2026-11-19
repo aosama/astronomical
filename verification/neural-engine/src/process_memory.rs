@@ -25,7 +25,7 @@ impl MemorySnapshot {
         unsafe {
             Self {
                 process_physical_footprint_bytes: astronomical_process_physical_footprint_bytes(),
-                system_wired_bytes: astronomical_neural_engine::core_ml::system_wired_bytes(),
+                system_wired_bytes: neural_engine::core_ml::system_wired_bytes(),
             }
         }
     }

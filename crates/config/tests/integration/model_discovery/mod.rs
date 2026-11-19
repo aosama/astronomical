@@ -58,8 +58,7 @@ pub(super) fn write_required_model_files(model_directory: &Path) {
 /// Runs discovery against one temporary configured root using the standard test output limit.
 fn discover_configured_models(
     temporary_directory: &tempfile::TempDir,
-) -> Vec<astronomical_config::ModelDiscoveryDirectoryScan> {
+) -> Vec<config::ModelDiscoveryDirectoryScan> {
     let configured_model_directories = vec![temporary_directory.path().to_path_buf()];
-    astronomical_config::discover_models(&configured_model_directories)
-        .expect("model discovery should complete")
+    config::discover_models(&configured_model_directories).expect("model discovery should complete")
 }

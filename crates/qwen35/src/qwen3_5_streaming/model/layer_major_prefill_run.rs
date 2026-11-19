@@ -2,8 +2,8 @@
 //! carries from one advance to the next, and how a failed layer is put back
 //! so only its failed span runs again (issue #2221).
 
-use astronomical_runtime_integration::MlxRuntimeError;
 use mlx_bridge::MlxArray;
+use runtime_integration::MlxRuntimeError;
 
 use super::layer_major_prefill::{LayerMajorCheckpointContract, LayerMajorSpan};
 use super::layer_major_span_redo::UnconfirmedSpans;

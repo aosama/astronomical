@@ -1,6 +1,6 @@
 use std::path::Path;
 
-// These spellings mirror the constants in the astronomical-quantization
+// These spellings mirror the constants in the quantization
 // crate's artifact module. That crate is an optional dependency of this one
 // (enabled only with direct-mlx), and artifact validation must locate the
 // metadata in every build, so the values are restated here rather than

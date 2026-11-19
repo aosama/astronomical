@@ -11,7 +11,7 @@
 //! tokens whose values come from `img_in(packed_latents)`, while text tokens copy their VLM
 //! embedding one-to-one.
 
-use astronomical_runtime_integration::MlxRuntime;
+use runtime_integration::MlxRuntime;
 
 use crate::qwen_image_21::QwenImage21EngineError;
 use crate::qwen_image_21::astro_image_prefix_key_value_cache;

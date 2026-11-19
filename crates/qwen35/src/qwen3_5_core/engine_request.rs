@@ -6,9 +6,7 @@
 //! than hidden in the model owner. State only one engine reads sits behind
 //! the `RequestExtension` parameter, so the shared request code compiles once.
 
-use astronomical_ipc_protocol::{
-    RequestId, WorkerAstroSsdPromptCacheRequestDiagnostics, WorkerPromptWorkReuse,
-};
+use ipc_protocol::{RequestId, WorkerAstroSsdPromptCacheRequestDiagnostics, WorkerPromptWorkReuse};
 use mlx_bridge::MlxArray;
 
 use crate::astro_ssd_prompt_cache::block_causal_input::AstroSsdPromptCacheBlockCausalInput;

@@ -7,12 +7,12 @@
 //! the n rows. A control that skips the rewind must differ, so the test
 //! cannot pass by comparing two states that never moved.
 
-use astronomical_model_serving::{
+use mlx_bridge::{MlxArray, MlxDtype};
+use model_serving::{
     PerformanceAttribution, Qwen3_5ArtifactValidator, Qwen3_5ModelChunkingConfiguration,
     Qwen3_5ResidentModel, Qwen3_5Tokenizer, RequestDecoderStateStack, VerificationLogitsMode,
 };
-use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
-use mlx_bridge::{MlxArray, MlxDtype};
+use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use serial_test::serial;
 
 use crate::common::{configured_installed_model_directory_by_id, small_dense_model_id};

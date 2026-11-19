@@ -2,11 +2,9 @@
 
 use std::time::Instant;
 
-use astronomical_runtime_integration::MlxRuntime;
+use runtime_integration::MlxRuntime;
 
-use astronomical_model_primitives::performance_attribution::{
-    PerformanceAttribution, PerformanceOperation,
-};
+use model_primitives::performance_attribution::{PerformanceAttribution, PerformanceOperation};
 
 use super::blocks::{
     DoubleStreamState, ModulationSet, double_stream_block, single_stream_block, split_modulation,

@@ -9,8 +9,8 @@
 
 use std::path::Path;
 
-use astronomical_decision_contract::decision_training_job::DecisionTrainingOutcome;
-use astronomical_decision_contract::trained_tensors_file::{
+use decision_contract::decision_training_job::DecisionTrainingOutcome;
+use decision_contract::trained_tensors_file::{
     HandedOverTensors, handover_file_path, read_trained_tensors_file,
 };
 

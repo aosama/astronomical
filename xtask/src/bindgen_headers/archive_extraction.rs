@@ -7,7 +7,7 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use astronomical_native_identity::digest_bytes;
+use native_identity::digest_bytes;
 
 use super::hash_manifest::count_regular_files;
 use super::patch_pipeline::{PatchStep, resolve_patch_path};

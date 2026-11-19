@@ -3,7 +3,7 @@
 //! These methods never evict an occupied warm slot. A miss that does not fit
 //! leftover capacity is dropped so the current native route keeps its pages.
 
-use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
+use runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use super::AstroExpertCache;
 use crate::qwen3_5_streaming::expert_streaming::astro_expert_cache::RoutedExpertCoverage;

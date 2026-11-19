@@ -8,8 +8,8 @@
 
 use std::path::Path;
 
-use astronomical_decision_contract::DecisionFailure;
-use astronomical_decision_contract::calibration_file::{
+use decision_contract::DecisionFailure;
+use decision_contract::calibration_file::{
     CalibrationOverride, DECISION_CALIBRATION_FILE_NAME, MAXIMUM_DECISION_CALIBRATION_FILE_BYTES,
     parse_calibration_document,
 };

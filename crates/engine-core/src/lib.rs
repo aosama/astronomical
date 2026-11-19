@@ -6,7 +6,7 @@
 //! It sits below the model families, which implement its contract, and above
 //! the model primitives and the memory policy. The edge is one way: this
 //! crate depends on no model family and never on
-//! `astronomical-model-serving`, which `cargo xtask check-architecture`
+//! `model-serving`, which `cargo xtask check-architecture`
 //! enforces. The serving crate re-exports this crate's root with a glob, so
 //! every name at this root stays unique across the crates it re-exports.
 

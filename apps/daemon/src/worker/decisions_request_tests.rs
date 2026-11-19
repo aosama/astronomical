@@ -2,7 +2,7 @@
 
 use std::sync::{Arc, RwLock};
 
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     MINIMUM_DECISION_TOKENS_PER_QUESTION, WorkerDecisionCapabilities, WorkerEmbeddingCapabilities,
     WorkerModelCapabilities,
 };

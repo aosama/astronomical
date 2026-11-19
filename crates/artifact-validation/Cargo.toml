@@ -1,5 +1,5 @@
 [package]
-name = "astronomical-artifact-validation"
+name = "artifact-validation"
 edition.workspace = true
 license.workspace = true
 publish.workspace = true
@@ -20,10 +20,10 @@ direct-mlx = []
 # none of them; `cargo xtask check-architecture` enforces the serving edge.
 [dependencies]
 # Bounded safetensors header parsing and the strict-JSON duplicate guard.
-astronomical-memory-policy = { path = "../memory-policy" }
+memory-policy = { path = "../memory-policy" }
 # Decodes Hugging Face snapshot folder names into model ids.
-astronomical-config = { path = "../config" }
-astronomical-lowercase-hex = { path = "../lowercase-hex" }
+config = { path = "../config" }
+lowercase-hex = { path = "../lowercase-hex" }
 libc.workspace = true
 safetensors.workspace = true
 serde_json.workspace = true

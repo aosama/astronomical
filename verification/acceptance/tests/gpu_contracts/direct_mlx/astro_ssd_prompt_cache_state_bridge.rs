@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
-use astronomical_model_serving::{AstroDecoderStateCacheState, RequestDecoderStateStack};
-use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
+use model_serving::{AstroDecoderStateCacheState, RequestDecoderStateStack};
+use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
 use crate::common::qwen3_5_moe::{astro_ssd_prompt_cache_model_contract, frozen_ornith_1_0_config};
 use crate::common::{

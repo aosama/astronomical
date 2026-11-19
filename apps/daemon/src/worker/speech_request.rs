@@ -10,7 +10,7 @@
 
 use std::sync::{Arc, RwLock};
 
-use astronomical_ipc_protocol::{RequestId, SpeechCommand};
+use ipc_protocol::{RequestId, SpeechCommand};
 use tokio::sync::{OwnedSemaphorePermit, oneshot};
 use tokio::time::Instant;
 
@@ -26,7 +26,7 @@ use crate::worker::request_admission::{
     RequestAdmissionContext, RequestAdmissionOutcome, classify_dispatch_result,
     make_requested_model_resident,
 };
-use astronomical_speech_contract::SLOWEST_SPEED;
+use speech_contract::SLOWEST_SPEED;
 
 use crate::{GenerationStartError, SpeechTimeouts, WorkerActivity, WorkerHealthSnapshot};
 

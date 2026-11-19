@@ -4,7 +4,7 @@
 //! no activation) as a 1×1 convolution only when the channel counts differ; dropout is an
 //! identity at inference.
 
-use astronomical_runtime_integration::{MlxRuntime, MlxSafetensors};
+use runtime_integration::{MlxRuntime, MlxSafetensors};
 
 use super::QwenImage21VaeError;
 use super::convolution::QwenImage21VaeSpatialConv;

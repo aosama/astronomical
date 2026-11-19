@@ -5,7 +5,7 @@
 use axum::http::StatusCode;
 
 use super::{image_validation_rejection_response, parse_image_generation_request};
-use astronomical_rest_contract::OpenAiImageGenerationValidationError;
+use rest_contract::OpenAiImageGenerationValidationError;
 
 #[test]
 fn should_parse_a_valid_image_generation_request_body() {

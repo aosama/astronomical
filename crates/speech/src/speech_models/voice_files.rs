@@ -3,11 +3,11 @@
 //!
 //! A voice name follows the contract's `is_plain_voice_name`, the rule
 //! discovery lists voices by, so a request can never name a path outside the
-//! folder. Listing the voices is discovery's job (`astronomical_config`).
+//! folder. Listing the voices is discovery's job (the `config` crate).
 
 use std::path::{Path, PathBuf};
 
-use astronomical_speech_contract::is_plain_voice_name;
+use speech_contract::is_plain_voice_name;
 
 use super::speech_model_error::SpeechModelError;
 

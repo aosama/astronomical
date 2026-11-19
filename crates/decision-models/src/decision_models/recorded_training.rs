@@ -12,12 +12,10 @@
 
 use std::path::Path;
 
-use astronomical_decision_contract::decision_training_job::DecisionTrainingJob;
-use astronomical_decision_contract::training_record::TrainingRecord;
-use astronomical_decision_contract::{
-    DecisionFailure, DecisionQuestion, HeadInputRequest, OrderedJsonValue,
-};
-use astronomical_decision_training::training_record_file::read_training_record_file;
+use decision_contract::decision_training_job::DecisionTrainingJob;
+use decision_contract::training_record::TrainingRecord;
+use decision_contract::{DecisionFailure, DecisionQuestion, HeadInputRequest, OrderedJsonValue};
+use decision_training::training_record_file::read_training_record_file;
 
 use crate::decision_engine::{
     DecisionEngine, DecisionEngineLoadResult, DecisionEngineOutput, DecisionTrainingStep,

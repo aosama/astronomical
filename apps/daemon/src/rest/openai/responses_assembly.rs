@@ -1,7 +1,7 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use astronomical_ipc_protocol::{ChatGenerationCompletionReason, ChatGenerationFailureReason};
-use astronomical_rest_contract::{
+use ipc_protocol::{ChatGenerationCompletionReason, ChatGenerationFailureReason};
+use rest_contract::{
     OpenAiResponse, OpenAiResponseOutputItem, OpenAiResponseRequestConfiguration,
     OpenAiResponseUsage, compact_extracted_json_text,
 };

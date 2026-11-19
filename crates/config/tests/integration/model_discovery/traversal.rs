@@ -1,6 +1,6 @@
 use std::fs;
 
-use astronomical_config::{AstronomicalConfig, DiscoveredModelError, ModelDiscoveryDiagnosticCode};
+use config::{AstronomicalConfig, DiscoveredModelError, ModelDiscoveryDiagnosticCode};
 
 use crate::integration;
 
@@ -54,9 +54,8 @@ fn should_reject_duplicate_model_ids_with_deterministic_directory_order() {
         super::write_required_model_files(model_directory);
     }
 
-    let discovery_error =
-        astronomical_config::discover_models(&[first_root_directory, second_root_directory])
-            .expect_err("duplicate model IDs should be rejected");
+    let discovery_error = config::discover_models(&[first_root_directory, second_root_directory])
+        .expect_err("duplicate model IDs should be rejected");
 
     let DiscoveredModelError::DuplicateModelId {
         model_id,
@@ -89,7 +88,7 @@ fn should_exclude_ambiguous_models_and_report_path_safe_configured_root_numbers(
         super::write_required_model_files(model_directory);
     }
 
-    let discovery_report = astronomical_config::discover_models_excluding_ambiguous_identities(&[
+    let discovery_report = config::discover_models_excluding_ambiguous_identities(&[
         first_root_directory,
         second_root_directory,
     ])
@@ -123,7 +122,7 @@ fn should_skip_an_unreadable_authored_root_and_keep_models_from_remaining_roots(
     super::write_minimal_model_config(&available_model_directory, "qwen3_5_moe", 262_144);
     super::write_required_model_files(&available_model_directory);
 
-    let discovery_report = astronomical_config::discover_models_excluding_ambiguous_identities(&[
+    let discovery_report = config::discover_models_excluding_ambiguous_identities(&[
         missing_root_directory,
         available_root_directory,
     ])
@@ -168,7 +167,7 @@ fn should_discover_an_organization_model_tree_and_skip_hidden_incomplete_staging
         super::write_required_model_files(model_directory);
     }
 
-    let directory_scans = astronomical_config::discover_models(&[models_root_directory])
+    let directory_scans = config::discover_models(&[models_root_directory])
         .expect("ordinary model discovery should complete");
     let discovered_models = &directory_scans[0].discovered_models;
 

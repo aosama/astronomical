@@ -5,7 +5,7 @@
 //! `(scale, gate)` pairs, so the gates are `tanh`-activated once in preparation and reused by
 //! all 32 blocks — mathematically identical to per-block `tanh` on the same values.
 
-use astronomical_runtime_integration::MlxRuntime;
+use runtime_integration::MlxRuntime;
 
 use crate::qwen_image_21::QwenImage21EngineError;
 use crate::qwen_image_21::mlx_math::{

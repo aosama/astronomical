@@ -1,7 +1,7 @@
 use super::RequestDecoderStateStack;
 use crate::AstroDecoderStateCacheState;
-use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 use mlx_bridge::MlxArray;
+use runtime_integration::{MlxRuntime, MlxRuntimeError};
 use std::collections::HashMap;
 /// Bridges persistent astro SSD prompt cache block tensors and the live in-memory
 /// request decoder state. The in-memory owners decide how restored tensors

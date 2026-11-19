@@ -1,4 +1,4 @@
-use astronomical_decision_contract::training_record::{RecordedVerdict, training_record_document};
+use decision_contract::training_record::{RecordedVerdict, training_record_document};
 
 use super::*;
 

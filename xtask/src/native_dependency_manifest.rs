@@ -87,7 +87,7 @@ fn validate_archive_url(archive_url: &str) -> Result<(), String> {
 }
 
 fn validate_archive_sha256(archive_sha256: &str) -> Result<(), String> {
-    if !astronomical_lowercase_hex::is_lowercase_hex_of_length(archive_sha256, 64) {
+    if !lowercase_hex::is_lowercase_hex_of_length(archive_sha256, 64) {
         return Err("native dependency manifest needs a 64-character lowercase SHA-256".to_owned());
     }
     Ok(())

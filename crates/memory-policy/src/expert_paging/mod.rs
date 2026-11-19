@@ -1,7 +1,7 @@
 //! Pure expert-paging support arithmetic: the safetensors header parsing
 //! (over `crate::safetensors` and `crate::strict_json`) and the expert
 //! weight `astro_expert_cache` statistics. The quantized expert manifests stay in
-//! `astronomical-model-serving` — they embed model-family configuration
+//! `model-serving` — they embed model-family configuration
 //! types, and the family boundary is a separate extraction step.
 
 pub mod astro_expert_cache_statistics;

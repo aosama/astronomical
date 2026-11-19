@@ -1,5 +1,5 @@
 [package]
-name = "astronomical-neural-engine"
+name = "neural-engine"
 build = "build.rs"
 description = "Prefill math on the Apple Neural Engine through public Core ML: the opt-in serving path (issue #161). Its hardware evidence lives in verification/neural-engine."
 edition.workspace = true
@@ -38,5 +38,5 @@ thiserror.workspace = true
 cc = "1.2"
 
 [dev-dependencies]
-astronomical-test-harness = { path = "../test-harness" }
+test-harness = { path = "../test-harness" }
 tempfile = "=3.27.0"

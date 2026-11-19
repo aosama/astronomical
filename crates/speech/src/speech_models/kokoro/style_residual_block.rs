@@ -2,8 +2,8 @@
 //! predictor and decoder: AdaIN, activation, (upsample), convolution, twice,
 //! plus a shortcut, the sum scaled by `1/sqrt(2)` to keep its variance.
 
-use astronomical_runtime_integration::MlxRuntime;
 use mlx_bridge::MlxArray;
+use runtime_integration::MlxRuntime;
 
 use super::convolutions::{ConvolutionGeometry, KokoroConv1d, KokoroConvTranspose1d};
 use super::style_modulation::StyleModulation;

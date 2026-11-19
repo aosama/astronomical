@@ -2,7 +2,7 @@
 //!
 //! Port of `QwenImage21MidBlock` with `num_layers = 1`, the artifact configuration.
 
-use astronomical_runtime_integration::{MlxRuntime, MlxSafetensors};
+use runtime_integration::{MlxRuntime, MlxSafetensors};
 
 use super::QwenImage21VaeError;
 use super::attention::QwenImage21VaeAttentionBlock;

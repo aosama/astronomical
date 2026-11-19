@@ -1,6 +1,6 @@
 //! The stage timings every hand-off call reports, shared by the hand-off and
 //! token-split journeys. The hand-off steps themselves are serving code, in
-//! `astronomical_neural_engine::mlx_hand_off`.
+//! `neural_engine::mlx_hand_off`.
 
 use std::time::Duration;
 

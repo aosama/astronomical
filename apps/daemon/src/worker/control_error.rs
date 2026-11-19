@@ -1,6 +1,6 @@
 use std::io;
 
-use astronomical_ipc_protocol::ProtocolError;
+use ipc_protocol::ProtocolError;
 use thiserror::Error;
 
 /// Errors raised while the daemon launches, communicates with, or reaps a worker process.

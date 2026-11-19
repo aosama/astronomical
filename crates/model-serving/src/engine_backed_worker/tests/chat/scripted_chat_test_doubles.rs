@@ -5,7 +5,7 @@ use crate::{
     MlxMemoryLimitAdjustment, MlxMemoryTelemetry, ModelGeneratedTokenTranslation,
     ModelGenerationOutputError, ModelGenerationProcessor, PreparedModelGeneration,
 };
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     ChatGenerationCommand, ChatGenerationFailureReason, ChatGenerationOutput, ExpertMemoryMode,
     RequestId, WorkerEvent,
 };
@@ -496,7 +496,7 @@ impl InferenceEngine for ScriptedChatEngine {
             resident_expert_payload_bytes: 8_000,
             complete_expert_payload_byte_count: 8_000,
             expert_capacity: 2,
-            layer_seating: astronomical_ipc_protocol::ExpertLayerSeatingCounts::default(),
+            layer_seating: ipc_protocol::ExpertLayerSeatingCounts::default(),
         }))
     }
 

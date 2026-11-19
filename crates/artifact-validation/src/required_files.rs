@@ -388,9 +388,8 @@ fn resolve_hugging_face_snapshot_blob_path(
 pub fn hugging_face_snapshot_model_id(model_directory: &Path) -> Option<String> {
     let huggingface_hub_model_directory = huggingface_hub_cache_directory(model_directory)?;
     let huggingface_hub_directory_name = huggingface_hub_model_directory.file_name()?.to_str()?;
-    let hub_repository_id = astronomical_config::decode_huggingface_hub_cache_directory_name(
-        huggingface_hub_directory_name,
-    )?;
+    let hub_repository_id =
+        config::decode_huggingface_hub_cache_directory_name(huggingface_hub_directory_name)?;
     Some(
         hub_repository_id
             .split_once('/')
@@ -411,9 +410,7 @@ fn huggingface_hub_cache_directory(model_directory: &Path) -> Option<&Path> {
     }
     let huggingface_hub_model_directory = snapshots_directory.parent()?;
     let huggingface_hub_directory_name = huggingface_hub_model_directory.file_name()?.to_str()?;
-    astronomical_config::decode_huggingface_hub_cache_directory_name(
-        huggingface_hub_directory_name,
-    )?;
+    config::decode_huggingface_hub_cache_directory_name(huggingface_hub_directory_name)?;
     Some(huggingface_hub_model_directory)
 }
 

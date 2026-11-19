@@ -7,20 +7,18 @@
 use std::cell::{Cell, RefCell};
 use std::path::{Path, PathBuf};
 
-use astronomical_ipc_protocol::WorkerChunkingConfiguration;
-use astronomical_neural_engine::core_ml::CoreMlProgram;
-use astronomical_neural_engine::documents::contraction_split::contraction_part_width;
-use astronomical_neural_engine::documents::package_layout::write_ml_package;
-use astronomical_neural_engine::documents::projection::{
-    MlProgramWeights, encode_ml_program_projection,
-};
-use astronomical_neural_engine::mlx_hand_off::{
+use ipc_protocol::WorkerChunkingConfiguration;
+use mlx_bridge::{MlxArray, MlxDtype};
+use neural_engine::core_ml::CoreMlProgram;
+use neural_engine::documents::contraction_split::contraction_part_width;
+use neural_engine::documents::package_layout::write_ml_package;
+use neural_engine::documents::projection::{MlProgramWeights, encode_ml_program_projection};
+use neural_engine::mlx_hand_off::{
     MlxHandOffError, OutputHandOff, channel_major_fp16, surface_as_token_major,
     write_prepared_input,
 };
-use astronomical_neural_engine::program_shape::ProgramShape;
-use astronomical_runtime_integration::MlxRuntime;
-use mlx_bridge::{MlxArray, MlxDtype};
+use neural_engine::program_shape::ProgramShape;
+use runtime_integration::MlxRuntime;
 
 use super::astro_neural_engine_program_cache::{
     AstroNeuralEngineProgramSetCache, kept_program_path,

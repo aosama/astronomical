@@ -27,11 +27,11 @@
 use std::path::Path;
 use std::time::Duration;
 
-use astronomical_config::{
+use base64::{Engine as _, engine::general_purpose::STANDARD};
+use config::{
     AstronomicalConfig, AstronomicalInstancePaths, AstronomicalRuntimeInstance, DiscoveredModel,
     ModelCapabilities, discover_effective_models,
 };
-use base64::{Engine as _, engine::general_purpose::STANDARD};
 use image::ImageFormat;
 use serde_json::json;
 use tokio::time::timeout;

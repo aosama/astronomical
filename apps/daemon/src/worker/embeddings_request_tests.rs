@@ -3,7 +3,7 @@
 
 use std::sync::{Arc, RwLock};
 
-use astronomical_ipc_protocol::{WorkerEmbeddingCapabilities, WorkerModelCapabilities};
+use ipc_protocol::{WorkerEmbeddingCapabilities, WorkerModelCapabilities};
 
 use super::embeddings_command_supported;
 use crate::WorkerHealthSnapshot;

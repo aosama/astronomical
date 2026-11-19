@@ -107,7 +107,7 @@ MLX-C patches (`mlx-c-0.8.0-*.patch`):
 - `expose-array-detach` — Astronomical feature. Adds `mlx_array_detach`, which
   drops an array's graph and siblings while keeping its realized buffer, so
   long-lived weights do not hold a whole graph alive. The Rust declaration
-  lives in the `astronomical-mlx-c-fork` crate. Retires when MLX-C exposes an
+  lives in the `mlx-c-fork` crate. Retires when MLX-C exposes an
   equivalent.
 
 - `gather-qmm-global-scale-compatibility` — retired at the v0.8.0 bump. MLX
@@ -261,5 +261,5 @@ it first. Verification afterwards needs no network and no model
 weights:
 
 ```bash
-cargo test -p astronomical-runtime-integration --test integration_tests
+cargo test -p runtime-integration --test integration_tests
 ```

@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use astronomical_ipc_protocol::{DaemonWorkerStatus, ModelLoadInFlight};
+use ipc_protocol::{DaemonWorkerStatus, ModelLoadInFlight};
 use tokio::time::Instant;
 
 use super::DaemonWorkWatch;

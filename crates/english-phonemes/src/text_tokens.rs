@@ -3,7 +3,7 @@
 //! stands in for spaCy's tokenizer in Misaki; it keeps only the distinctions
 //! the phonemes depend on.
 
-use astronomical_english_number_words::{number_span_end, starts_signed_number};
+use english_number_words::{number_span_end, starts_signed_number};
 
 /// Punctuation Kokoro reads as a pause or intonation mark, kept in the output.
 pub(crate) const SPOKEN_PUNCTUATION: &str = ";:,.!?—…\"“”()";

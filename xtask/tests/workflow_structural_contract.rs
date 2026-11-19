@@ -50,7 +50,7 @@ fn should_use_the_canonical_integration_package_selection_for_compile_and_execut
         .lines()
         .find(|line| line.starts_with("test-integration = "))
         .expect("the canonical integration alias should exist");
-    assert!(integration_alias.contains("-p astronomical-memory-policy "));
+    assert!(integration_alias.contains("-p memory-policy "));
     assert!(integration_alias.contains("--lib --test integration_tests"));
 }
 

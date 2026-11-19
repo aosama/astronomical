@@ -3,15 +3,15 @@
 
 use std::io::Cursor;
 
-use astronomical_ipc_protocol::{
+use image::{DynamicImage, ImageFormat, Rgb, RgbImage};
+use ipc_protocol::{
     ChatGenerationCommand, ChatGenerationSettings, ChatImageInput, ChatMessage, ChatToolChoice,
     RequestId,
 };
-use astronomical_model_serving::{
+use model_serving::{
     Qwen3_5ArtifactValidator, Qwen3_5OutputEvent, Qwen3_5RequestOutput, Qwen3_5SamplingStrategy,
     Qwen3_5Tokenizer,
 };
-use image::{DynamicImage, ImageFormat, Rgb, RgbImage};
 
 const ROMEO_AND_JULIET_SOURCE: &str = include_str!(
     "../../../../../verification/acceptance/tests/fixtures/model_metrics_5000_romeo_and_juliet_words.txt"

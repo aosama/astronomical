@@ -1,6 +1,6 @@
 //! Owns the internal reload response consumed by Astronomical's menu application.
 
-use astronomical_ipc_protocol::WorkerRuntimeFeatureConfiguration;
+use ipc_protocol::WorkerRuntimeFeatureConfiguration;
 use serde::Serialize;
 
 #[derive(Serialize)]

@@ -1,12 +1,12 @@
 use std::{fs, path::Path, time::Instant};
 
-use astronomical_ipc_protocol::RequestId;
-use astronomical_model_serving::{
+use ipc_protocol::RequestId;
+use model_serving::{
     GeneratedToken, InferenceEngine, PerformanceAttribution, PerformanceAttributionLog,
     Qwen3_5ArtifactValidator, Qwen3_5InferenceRequest, Qwen3_5StreamingEngine,
     Qwen3_5StreamingPromptProcessingChunkSizer,
 };
-use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
+use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use serde_json::Value;
 use tokio::time::{Duration as TokioDuration, MissedTickBehavior, interval, timeout};
 

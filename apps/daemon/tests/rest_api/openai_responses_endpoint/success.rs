@@ -164,7 +164,7 @@ async fn should_return_extracted_json_and_a_warning_for_text_format_json_schema(
         .expect("unenforced json_schema must disclose a Warning header");
     assert_eq!(
         warning_header,
-        astronomical_rest_contract::UNENFORCED_RESPONSE_FORMAT_WARNING
+        rest_contract::UNENFORCED_RESPONSE_FORMAT_WARNING
     );
     let response_body = to_bytes(http_response.into_body(), 16 * 1024)
         .await

@@ -1,7 +1,7 @@
 use super::scripted_chat_test_doubles::{ScriptedChatEngine, ScriptedChatProcessor};
 use super::support::{chat_command, close_worker_transport, next_event, ready_event};
 use crate::EngineBackedWorker;
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     MAX_IPC_FRAME_BYTES, ProtocolReader, ProtocolWriter, WorkerCommand, WorkerEvent,
 };
 use std::time::Duration;

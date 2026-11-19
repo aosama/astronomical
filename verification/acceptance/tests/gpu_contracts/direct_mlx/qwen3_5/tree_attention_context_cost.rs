@@ -10,8 +10,8 @@
 
 use std::time::Instant;
 
-use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use mlx_bridge::{MlxArray, MlxDtype};
+use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use serial_test::serial;
 
 use crate::common::{

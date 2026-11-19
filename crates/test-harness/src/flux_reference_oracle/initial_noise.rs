@@ -47,7 +47,7 @@ pub(super) fn parse_initial_noise(
     }
 
     let float32_sha256 = require_string(initial_noise, "float32_sha256", "initial_noise")?;
-    if !astronomical_lowercase_hex::is_lowercase_hex_of_length(float32_sha256, 64) {
+    if !lowercase_hex::is_lowercase_hex_of_length(float32_sha256, 64) {
         return Err("initial_noise float32_sha256 must be lowercase 64-character hex".to_owned());
     }
     Ok(float32_sha256.to_owned())

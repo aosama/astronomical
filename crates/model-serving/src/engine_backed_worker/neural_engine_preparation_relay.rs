@@ -8,7 +8,7 @@
 
 use std::time::Duration;
 
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     NeuralEnginePrefillStatus, ProtocolReader, ProtocolWriter, WorkerCommand, WorkerEvent,
 };
 use tokio::io::{AsyncRead, AsyncWrite};

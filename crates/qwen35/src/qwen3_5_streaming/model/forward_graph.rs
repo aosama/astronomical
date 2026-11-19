@@ -1,4 +1,4 @@
-use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
+use runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use crate::qwen3_5_streaming::Qwen3_5MoEPagedExecutionMode;
 use crate::{AstroDecoderStateCacheState, PerformanceAttribution, PerformanceOperation};
@@ -331,7 +331,7 @@ impl Qwen3_5Model {
         // (`LayerSubmission::PromptLayer`), so the interval resolved here
         // only ever paces a one-token forward's command buffers.
         let graph_submission_layer_interval =
-            usize::try_from(astronomical_ipc_protocol::graph_submission_layer_interval(
+            usize::try_from(ipc_protocol::graph_submission_layer_interval(
                 token_count,
                 true,
                 self.chunking.prefill_graph_submission_layer_interval,

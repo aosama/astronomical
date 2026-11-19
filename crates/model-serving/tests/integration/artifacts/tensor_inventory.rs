@@ -1,4 +1,4 @@
-use astronomical_model_serving::{
+use model_serving::{
     TensorDeclarationOrigin, TensorDtype, TensorInventory, TensorInventoryError, TensorLocation,
     TensorProfile, TensorSemanticRole, TensorSourceId,
     validate_safetensors_required_profiles_for_tests,

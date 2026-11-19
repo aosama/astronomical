@@ -4,9 +4,7 @@
 use std::fs;
 use std::path::Path;
 
-use astronomical_config::{
-    DecisionModelCapabilities, DiscoveredModel, ModelCapabilities, ModelFamily,
-};
+use config::{DecisionModelCapabilities, DiscoveredModel, ModelCapabilities, ModelFamily};
 
 const BACKBONE_SHARD_NAME: &str = "model-00001-of-00001.safetensors";
 const CLEF_HEAD_SETTINGS_JSON: &str = r#"{"hidden_size": 4096, "width": 1024, "routing_layers": 2, "layers": 4, "heads": 16, "feedforward": 4096}"#;

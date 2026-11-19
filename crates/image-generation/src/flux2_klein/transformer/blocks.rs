@@ -1,6 +1,6 @@
 //! Double-stream and fused single-stream FLUX.2 block equations.
 
-use astronomical_runtime_integration::MlxRuntime;
+use runtime_integration::MlxRuntime;
 
 use super::math;
 use super::weights::Flux2KleinBlockWeights;

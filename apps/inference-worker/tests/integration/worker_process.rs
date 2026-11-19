@@ -5,7 +5,7 @@ use std::{
 };
 
 use astronomical_daemon::{ResolvedRuntimeConfigResolver, WorkerProcess, WorkerTerminationOutcome};
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     ChatGenerationCommand, ChatGenerationCompletionReason, ChatGenerationSettings, ChatMessage,
     ChatToolChoice, ProtocolReader, ProtocolWriter, RequestId, WorkerCommand, WorkerEvent,
 };

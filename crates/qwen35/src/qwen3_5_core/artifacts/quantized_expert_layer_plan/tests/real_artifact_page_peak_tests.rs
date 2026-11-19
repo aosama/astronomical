@@ -18,7 +18,7 @@ use std::collections::HashMap;
 #[ignore = "loads real JANGH2 bundle headers; select model_directory through cargo xtask test-run"]
 fn should_keep_every_jangtq2_complete_layer_page_peak_under_six_gigabytes() {
     let model_directory =
-        astronomical_test_harness::test_run::TestRunContext::current().required_model_directory();
+        test_harness::test_run::TestRunContext::current().required_model_directory();
     let layer_plans = jangtq2_real_artifact_layer_plans(&model_directory);
 
     // The graph decoder reserved roughly 15.1 GB per complete layer of this

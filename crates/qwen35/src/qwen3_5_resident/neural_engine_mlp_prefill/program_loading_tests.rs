@@ -1,4 +1,4 @@
-use astronomical_neural_engine::program_shape::ProgramShape;
+use neural_engine::program_shape::ProgramShape;
 
 use super::{measured_for, program_surface_bytes};
 

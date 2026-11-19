@@ -1,6 +1,6 @@
 use std::fs;
 
-use astronomical_model_serving::{Qwen3_5ArtifactValidator, TensorSemanticRole};
+use model_serving::{Qwen3_5ArtifactValidator, TensorSemanticRole};
 
 /// Links or copies a regular file from source to target, falling back to copy
 /// when hard linking is not permitted (e.g. cross-volume or APFS restricted).

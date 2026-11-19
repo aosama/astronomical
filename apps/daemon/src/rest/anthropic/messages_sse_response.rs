@@ -3,9 +3,9 @@
 
 use std::collections::VecDeque;
 
-use astronomical_rest_contract::AnthropicMessageStreamEvent;
 use axum::response::{IntoResponse, Response, sse::Event, sse::Sse};
 use futures_util::stream;
+use rest_contract::AnthropicMessageStreamEvent;
 use tokio::sync::mpsc::Receiver;
 
 use super::messages_stream::AnthropicMessagesStreamEncoder;

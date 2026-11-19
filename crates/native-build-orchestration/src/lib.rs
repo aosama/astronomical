@@ -7,7 +7,7 @@
 //!
 //! This crate is the single home of the build-orchestration sources.
 //! `runtime-integration` consumes it from its build script through
-//! `[build-dependencies]`, the standalone `astronomical-native-build-tool`
+//! `[build-dependencies]`, the standalone `native-build-tool`
 //! pre-warms the same store through a normal dependency, and each module's
 //! tests live beside it as `#[cfg(test)]` submodules. Byte-identical
 //! execution between the pre-warm tool and the in-Cargo build follows from
@@ -21,7 +21,7 @@
 //! or store plumbing must not force a full CMake rebuild. The
 //! identity-relevant policy input beside them, `src/native-build-store-schema-version`,
 //! is fingerprinted through `SOURCE_IDENTITY_PATHSPECS` in
-//! `astronomical-native-identity`.
+//! `native-identity`.
 
 pub mod native_compile;
 pub mod native_linking;

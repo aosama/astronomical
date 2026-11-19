@@ -1,6 +1,6 @@
 //! Compact Machine Learning framework for Apple silicon arrays for one `astro_expert_cache`-plus-streamed expert route.
 
-use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
+use runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use crate::expert_paging::{ExpertPageRoutePartition, QuantizedExpertPageManifest};
 use mlx_bridge::MlxArray;

@@ -1,5 +1,5 @@
 [package]
-name = "astronomical-quantization"
+name = "quantization"
 description = "Sensitivity-driven mixed-precision affine quantization for MLX artifacts, a Rust port of the OptiQ quantization core"
 edition.workspace = true
 license.workspace = true
@@ -26,11 +26,11 @@ default = []
 # decoder state cache allocator, and the sensitivity sweep driver) is pure Rust so it
 # compiles, unit-tests, and runs on any host, including the CLI's `plan`
 # sub-verb.
-direct-mlx = ["dep:mlx-bridge", "dep:astronomical-runtime-integration"]
+direct-mlx = ["dep:mlx-bridge", "dep:runtime-integration"]
 
 [dependencies]
 mlx-bridge = { workspace = true, optional = true }
-astronomical-runtime-integration = { path = "../runtime-integration", features = ["mlx"], optional = true }
+runtime-integration = { path = "../runtime-integration", features = ["mlx"], optional = true }
 minijinja.workspace = true
 safetensors.workspace = true
 serde.workspace = true

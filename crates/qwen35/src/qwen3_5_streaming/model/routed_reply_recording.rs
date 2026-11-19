@@ -3,7 +3,7 @@
 //!
 //! Routing depends only on the model and the text, never on memory, so one
 //! recorded reply can be replayed against any capacity and any keeping rule
-//! (`astronomical_memory_policy::astro_expert_cache_model`). Replaying the
+//! (`memory_policy::astro_expert_cache_model`). Replaying the
 //! engine's own rule must reproduce the misses the engine counted, which needs
 //! the starting point too: the experts each layer held when the reply's first
 //! token ran, and the capacity the `astro_expert_cache` had.

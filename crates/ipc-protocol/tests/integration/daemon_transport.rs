@@ -5,7 +5,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     ChatGenerationCompletionReason, ChatGenerationSettings, ChatMessage, DAEMON_APPLICATION_NAME,
     DAEMON_PROTOCOL_VERSION, DaemonIpcClient, DaemonIpcListener, DaemonRequest, DaemonResponse,
     DaemonTransportError,

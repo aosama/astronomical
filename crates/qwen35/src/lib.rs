@@ -4,7 +4,7 @@
 //! expert paging, the custom kernel capability probes, the
 //! astro_ssd_prompt_cache the family's engines publish to, the owner-thread
 //! engine they run on. The quantizer's sensitivity probe for this family lives
-//! in `astronomical-qwen35-quantization-probe`, so this crate never compiles
+//! in `qwen35-quantization-probe`, so this crate never compiles
 //! the quantizer.
 //!
 //! It sits above the engine core, whose contract it implements, and below the
@@ -28,7 +28,7 @@ pub mod mlx_inference_engine;
 pub mod prism_hadamard_qwen35;
 
 // The jangtq2 weight family lives in its own crate,
-// `astronomical-jangtq2-qwen35` (issue #1427); the streaming integration
+// `jangtq2-qwen35` (issue #1427); the streaming integration
 // (page loading, slot writes, dispatch) stays here and consumes its types.
 pub mod qwen3_5_core;
 
@@ -46,11 +46,11 @@ pub mod speculative_decoding;
 
 // The crates below this family, imported at the root so the family's
 // `crate::...` paths into them read as they did inside the serving crate.
-use astronomical_artifact_validation as artifact_validation;
-use astronomical_artifact_validation::*;
-use astronomical_engine_core::*;
-use astronomical_memory_policy::safetensors;
-use astronomical_model_primitives::*;
+pub(crate) use ::artifact_validation;
+use artifact_validation::*;
+use engine_core::*;
+use memory_policy::safetensors;
+use model_primitives::*;
 
 pub use mlx_inference_engine::MlxInferenceEngine;
 

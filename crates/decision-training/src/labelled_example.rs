@@ -15,8 +15,8 @@
 //! question: a silently unlabelled question would shrink the evidence without
 //! anyone noticing, and a label for a misspelled question name would be lost.
 
-use astronomical_decision_contract::question::{NOUL_FALSE_INDEX, NOUL_TRUE_INDEX};
-use astronomical_decision_contract::{
+use decision_contract::question::{NOUL_FALSE_INDEX, NOUL_TRUE_INDEX};
+use decision_contract::{
     DecisionQuestion, DecisionQuestionBody, OrderedJsonValue, QuestionDefinitionError,
     parse_system_one_questions,
 };

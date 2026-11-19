@@ -1,5 +1,5 @@
-use astronomical_ipc_protocol::{ChatMessage, ChatToolChoice, RequestId};
-use astronomical_rest_contract::{AnthropicMessagesRequest, AnthropicMessagesRequestParts};
+use ipc_protocol::{ChatMessage, ChatToolChoice, RequestId};
+use rest_contract::{AnthropicMessagesRequest, AnthropicMessagesRequestParts};
 use serde_json::json;
 
 use super::messages_translation::{

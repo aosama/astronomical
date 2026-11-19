@@ -1,4 +1,4 @@
-use astronomical_ipc_protocol::{ChatGenerationFailureReason, ProtocolWriter, WorkerEvent};
+use ipc_protocol::{ChatGenerationFailureReason, ProtocolWriter, WorkerEvent};
 use tokio::io::AsyncWrite;
 
 use super::fatal;
@@ -39,7 +39,7 @@ where
 {
     pub(super) async fn start_generation<WriteTransport>(
         &mut self,
-        generation_command: astronomical_ipc_protocol::ChatGenerationCommand,
+        generation_command: ipc_protocol::ChatGenerationCommand,
         event_writer: &mut ProtocolWriter<WriteTransport>,
     ) -> Result<
         Option<ActiveEngineGeneration<Processor::RequestOutput, Processor::InferenceRequest>>,
@@ -158,8 +158,8 @@ where
     /// rejected to the client with its failure event.
     pub(super) async fn prepare_validated_chat_generation<WriteTransport>(
         &self,
-        generation_command: &astronomical_ipc_protocol::ChatGenerationCommand,
-        request_id: astronomical_ipc_protocol::RequestId,
+        generation_command: &ipc_protocol::ChatGenerationCommand,
+        request_id: ipc_protocol::RequestId,
         event_writer: &mut ProtocolWriter<WriteTransport>,
     ) -> Result<
         Option<PreparedModelGeneration<Processor::InferenceRequest, Processor::RequestOutput>>,
@@ -215,7 +215,7 @@ where
     /// never mid-generation upward.
     async fn maybe_promote_demoted_engine_before_generation<WriteTransport>(
         &mut self,
-        request_id: astronomical_ipc_protocol::RequestId,
+        request_id: ipc_protocol::RequestId,
         incoming_total_context_token_count: usize,
         event_writer: &mut ProtocolWriter<WriteTransport>,
     ) -> Result<(), WorkerRuntimeError>
@@ -290,7 +290,7 @@ where
     /// client; the raw retry error returns for the caller's fatal report.
     async fn retry_on_streaming_after_resident_fork<WriteTransport>(
         &mut self,
-        request_id: astronomical_ipc_protocol::RequestId,
+        request_id: ipc_protocol::RequestId,
         streaming_retry_request: &mut Option<Processor::InferenceRequest>,
         fork_cause: crate::StreamingEngineRequirement,
         fork_reason: String,
@@ -328,8 +328,8 @@ where
     #[allow(clippy::too_many_arguments)]
     async fn emit_startup_events_and_assemble_generation<WriteTransport>(
         &mut self,
-        request_id: astronomical_ipc_protocol::RequestId,
-        generation_command: &astronomical_ipc_protocol::ChatGenerationCommand,
+        request_id: ipc_protocol::RequestId,
+        generation_command: &ipc_protocol::ChatGenerationCommand,
         generation_start: EngineGenerationStart,
         prompt_token_count: u32,
         prepared_request_output: Processor::RequestOutput,

@@ -15,10 +15,10 @@
 
 use std::time::Duration;
 
-use astronomical_ipc_protocol::RequestId;
-use astronomical_runtime_integration::MlxMemoryLimits;
-use astronomical_test_harness::test_run::TestRunContext;
+use ipc_protocol::RequestId;
+use runtime_integration::MlxMemoryLimits;
 use serial_test::serial;
+use test_harness::test_run::TestRunContext;
 use tokio::time::timeout;
 
 use super::decode_residency_attribution::{MEASURED_REQUEST_ID, probe_requests};

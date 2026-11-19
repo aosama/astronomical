@@ -1,4 +1,4 @@
-use astronomical_runtime_integration::MlxRuntimeError;
+use runtime_integration::MlxRuntimeError;
 
 use super::{
     ConvolutionState, ConvolutionStateCheckpoint, FullAttentionKeyValueState,

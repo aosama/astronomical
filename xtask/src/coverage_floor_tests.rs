@@ -79,12 +79,12 @@ fn should_default_to_the_memory_policy_package_at_or_above_ninety_percent() {
 fn should_parse_an_override_package_and_floor() {
     let invocation = CoverageFloorInvocation::parse(&[
         "--package".to_owned(),
-        "astronomical-config".to_owned(),
+        "config".to_owned(),
         "--minimum-percent".to_owned(),
         "42.5".to_owned(),
     ])
     .expect("both overrides should parse");
-    assert_eq!(invocation.package_name, "astronomical-config");
+    assert_eq!(invocation.package_name, "config");
     assert_eq!(invocation.minimum_line_coverage_percent, 42.5);
 }
 

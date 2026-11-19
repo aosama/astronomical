@@ -12,10 +12,8 @@
 
 use std::time::Duration;
 
-use astronomical_model_serving::{
-    LayerProbeShape, Qwen3_5ArtifactValidator, Qwen3_5StreamingModel,
-};
-use astronomical_runtime_integration::MlxRuntime;
+use model_serving::{LayerProbeShape, Qwen3_5ArtifactValidator, Qwen3_5StreamingModel};
+use runtime_integration::MlxRuntime;
 use serial_test::serial;
 use tokio::time::timeout;
 
@@ -64,7 +62,7 @@ async fn assert_prompt_forwards_stay_within_reserve() {
     // limit rather than a configured one.
     let machine_mlx_memory_ceiling_bytes =
         crate::common::sample_machine_mlx_memory_ceiling_bytes().await;
-    let mlx_memory_limits = astronomical_runtime_integration::MlxMemoryLimits::new(
+    let mlx_memory_limits = runtime_integration::MlxMemoryLimits::new(
         machine_mlx_memory_ceiling_bytes,
         machine_mlx_memory_ceiling_bytes,
     )
@@ -127,7 +125,7 @@ async fn assert_prompt_forwards_stay_within_reserve() {
 /// one span's MLX working buffers plus every span's hidden states.
 fn assert_layer_major_prefill_stays_within_reserve(
     streaming_model: &Qwen3_5StreamingModel,
-    qwen3_5_config: &astronomical_model_serving::Qwen3_5Config,
+    qwen3_5_config: &model_serving::Qwen3_5Config,
     prompt_token_ids: &[u32],
     streamed_forward_reserve_bytes: u64,
     kept_layer_count: usize,
@@ -182,7 +180,7 @@ fn assert_layer_major_prefill_stays_within_reserve(
 /// run first, unmeasured, to fill that state.
 fn measure_chunk_forward_growth(
     streaming_model: &Qwen3_5StreamingModel,
-    qwen3_5_config: &astronomical_model_serving::Qwen3_5Config,
+    qwen3_5_config: &model_serving::Qwen3_5Config,
     prompt_token_ids: &[u32],
     preceding_token_count: usize,
 ) -> u64 {

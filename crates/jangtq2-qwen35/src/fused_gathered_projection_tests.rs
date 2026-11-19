@@ -23,7 +23,7 @@ fn supported_dtypes() -> FusedProjectionDtypes {
 }
 
 fn refusal_text<Accepted: std::fmt::Debug>(
-    validation_outcome: Result<Accepted, astronomical_runtime_integration::MlxRuntimeError>,
+    validation_outcome: Result<Accepted, runtime_integration::MlxRuntimeError>,
 ) -> String {
     validation_outcome
         .expect_err("the input must be refused")

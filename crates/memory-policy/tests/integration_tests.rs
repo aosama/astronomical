@@ -4,9 +4,9 @@
 //! guarantees nothing in this crate can reach the network or the MLX
 //! bindings, so these tests run anywhere the integration lane runs).
 
-use astronomical_memory_policy::ledger::{MemoryGovernor, ModelMemoryShape};
-use astronomical_memory_policy::phase::MemoryPhase;
-use astronomical_memory_policy::serving_ceiling::machine_ceiling_from_physical_ram_bytes;
+use memory_policy::ledger::{MemoryGovernor, ModelMemoryShape};
+use memory_policy::phase::MemoryPhase;
+use memory_policy::serving_ceiling::machine_ceiling_from_physical_ram_bytes;
 
 #[test]
 fn should_run_the_memory_policy_integration_smoke_contract() {

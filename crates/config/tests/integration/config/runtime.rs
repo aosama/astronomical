@@ -2,7 +2,7 @@
 
 use std::path::Path;
 
-use astronomical_config::{AstronomicalInstancePaths, AstronomicalRuntimeInstance};
+use config::{AstronomicalInstancePaths, AstronomicalRuntimeInstance};
 
 use super::*;
 
@@ -325,7 +325,7 @@ fn should_keep_configuration_generation_stable_across_formatting_only_changes() 
             .expect("formatted configuration should load");
 
     assert_eq!(compact_config.generation(), formatted_config.generation());
-    assert!(astronomical_lowercase_hex::is_lowercase_hex_of_length(
+    assert!(lowercase_hex::is_lowercase_hex_of_length(
         compact_config.generation(),
         64
     ));

@@ -1,4 +1,4 @@
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     NeuralEngineChunkPlacement, NeuralEngineChunkReport, NeuralEnginePrefillStatus,
 };
 

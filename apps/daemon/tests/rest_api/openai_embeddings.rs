@@ -2,13 +2,13 @@
 
 use std::path::PathBuf;
 
-use astronomical_config::{
-    DiscoveredModel, EmbeddingModelCapabilities, ModelCapabilities, ModelFamily, ModelLicense,
-};
 use astronomical_daemon::EmbeddingsExecutionError;
 use axum::{
     body::{Body, to_bytes},
     http::{Request, StatusCode},
+};
+use config::{
+    DiscoveredModel, EmbeddingModelCapabilities, ModelCapabilities, ModelFamily, ModelLicense,
 };
 use tower::ServiceExt;
 
@@ -116,7 +116,7 @@ async fn should_not_expose_worker_embeddings_failure_reasons_or_local_paths() {
     let fictional_private_path = "/Users/fictional-person/private-model/encoder.safetensors";
     let mut executor = ScriptedExecutor::ready(Vec::new());
     executor.embeddings_outcome = Err(EmbeddingsExecutionError::WorkerFailure(
-        astronomical_ipc_protocol::EmbeddingsFailureReason::FatalExecution {
+        ipc_protocol::EmbeddingsFailureReason::FatalExecution {
             reason: format!("native execution failed while mapping {fictional_private_path}"),
         },
     ));
@@ -190,7 +190,7 @@ fn chat_model() -> DiscoveredModel {
         model_family: ModelFamily::Qwen3_5,
         revision: "fixture-revision".to_owned(),
         model_directory: PathBuf::from("fixtures/models/chat-only"),
-        capabilities: ModelCapabilities::Chat(astronomical_config::ChatModelCapabilities {
+        capabilities: ModelCapabilities::Chat(config::ChatModelCapabilities {
             context_window: 2_048,
             max_input_tokens: 1_024,
             max_output_tokens: 128,

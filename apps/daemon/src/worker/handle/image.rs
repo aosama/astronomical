@@ -3,9 +3,7 @@
 //! Queue ownership remains in `WorkerHandle` so chat and image requests share
 //! one bounded FIFO admission path rather than drifting into modality-specific queues.
 
-use astronomical_ipc_protocol::{
-    DecisionsCommand, EmbeddingsCommand, ImageGenerationCommand, SpeechCommand,
-};
+use ipc_protocol::{DecisionsCommand, EmbeddingsCommand, ImageGenerationCommand, SpeechCommand};
 use tokio::sync::oneshot;
 
 use crate::serving::GenerationOutcomeStartFuture;
@@ -67,7 +65,7 @@ impl ImageGenerationExecutor for WorkerHandle {
 
     fn start_training(
         &self,
-        training_command: astronomical_ipc_protocol::DecisionTrainingCommand,
+        training_command: ipc_protocol::DecisionTrainingCommand,
     ) -> GenerationOutcomeStartFuture<'_, DecisionsOutput, DecisionsExecutionError> {
         self.start_decisions_generation_with_queue_admission(
             DecisionsWork::TrainHead(training_command),

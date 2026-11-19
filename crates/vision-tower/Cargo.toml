@@ -1,5 +1,5 @@
 [package]
-name = "astronomical-vision-tower"
+name = "vision-tower"
 description = "Inspects model artifacts for a vision tower and proves whether a tower shares a text model's base, reading safetensors headers rather than downloading weights."
 edition.workspace = true
 license.workspace = true
@@ -21,7 +21,7 @@ path = "tests/integration_tests.rs"
 workspace = true
 
 [dependencies]
-astronomical-lowercase-hex = { path = "../lowercase-hex" }
+lowercase-hex = { path = "../lowercase-hex" }
 reqwest.workspace = true
 rustls.workspace = true
 serde.workspace = true

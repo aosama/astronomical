@@ -5,8 +5,8 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use astronomical_runtime_integration::MlxRuntime;
-use astronomical_speech_contract::{SpeechFailure, SpeechRequest};
+use runtime_integration::MlxRuntime;
+use speech_contract::{SpeechFailure, SpeechRequest};
 
 use super::artifact_files::{PHONON_WEIGHTS_FILE_NAME, voice_file_path};
 use super::attention_history::AttentionHistory;
@@ -20,7 +20,7 @@ use crate::speech_models::speech_memory::SpeechMemoryAccount;
 use crate::speech_models::speech_request_slot::{
     SegmentSpeaker, SpeechRequestSlot, SpokenSegment, ends_request, voice_for_checked_request,
 };
-use astronomical_memory_policy::telemetry::MlxMemoryTelemetry;
+use memory_policy::telemetry::MlxMemoryTelemetry;
 
 pub struct PhononSpeechEngine {
     settings: SpeechEngineSettings,
@@ -78,7 +78,7 @@ impl SpeechEngine for PhononSpeechEngine {
         let model_directory = self.settings.model_directory.clone();
         let model = PhononSpeechModel::load(&runtime, &model_directory)?;
         let load_result = self.settings.load_result(
-            astronomical_config::phonon_speech_capabilities(&model_directory),
+            config::phonon_speech_capabilities(&model_directory),
             model.sample_rate_hertz(),
         )?;
         let memory_account = self.settings.memory_account(weights_file_bytes(

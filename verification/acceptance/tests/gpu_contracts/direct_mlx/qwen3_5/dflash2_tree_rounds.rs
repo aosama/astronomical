@@ -13,16 +13,14 @@
 
 use std::time::Instant;
 
-use astronomical_model_serving::RequestDecoderStateStack;
-use astronomical_model_serving::speculative_decoding::dflash2_drafter::DraftTreeOptions;
-use astronomical_model_serving::speculative_decoding::tree_rows::TreeRows;
-use astronomical_model_serving::{PerformanceAttribution, VerificationLogitsMode};
 use mlx_bridge::MlxArray;
+use model_serving::RequestDecoderStateStack;
+use model_serving::speculative_decoding::dflash2_drafter::DraftTreeOptions;
+use model_serving::speculative_decoding::tree_rows::TreeRows;
+use model_serving::{PerformanceAttribution, VerificationLogitsMode};
 use serial_test::serial;
 
-use astronomical_model_serving::speculative_decoding::context_copy::{
-    ContextCopier, ContextCopySettings,
-};
+use model_serving::speculative_decoding::context_copy::{ContextCopier, ContextCopySettings};
 
 use super::dflash2_kept_per_round::{
     Cell, ENGINE_CHILDREN_PER_NODE, ENGINE_NODE_BUDGET, JourneyPair, OUTPUT_TOKENS, RoundState,

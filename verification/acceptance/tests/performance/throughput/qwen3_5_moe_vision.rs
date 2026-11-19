@@ -35,8 +35,8 @@
 
 use std::io::Cursor;
 
-use astronomical_ipc_protocol::ChatImageInput;
 use image::{DynamicImage, ImageFormat, Rgb, RgbImage};
+use ipc_protocol::ChatImageInput;
 use serial_test::serial;
 
 use crate::performance_throughput::historical_record::ThroughputJourneyKind;

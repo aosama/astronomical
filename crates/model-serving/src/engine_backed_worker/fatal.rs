@@ -1,6 +1,4 @@
-use astronomical_ipc_protocol::{
-    ChatGenerationFailureReason, ProtocolWriter, RequestId, WorkerEvent,
-};
+use ipc_protocol::{ChatGenerationFailureReason, ProtocolWriter, RequestId, WorkerEvent};
 use tokio::io::AsyncWrite;
 
 use super::support;

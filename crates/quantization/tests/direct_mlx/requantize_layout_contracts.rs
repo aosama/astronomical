@@ -7,17 +7,15 @@
 
 use std::path::Path;
 
-use astronomical_quantization::bit_width::{BitWidth, GroupSize};
-use astronomical_quantization::encoder::RangeSearchPolicy;
-use astronomical_quantization::module_inventory::{ModuleInventory, ModuleWeightSource};
-use astronomical_quantization::progress::{
-    ProgressReporter, SilentProgressReporter, StageProgress,
-};
-use astronomical_quantization::requantize::bit_policy::BitPolicy;
-use astronomical_quantization::requantize::driver::run_requantize;
-use astronomical_quantization::requantize::tensor_plan::RequantizeTensorPlan;
-use astronomical_runtime_integration::MlxRuntime;
 use mlx_bridge::{MlxArray, MlxDtype};
+use quantization::bit_width::{BitWidth, GroupSize};
+use quantization::encoder::RangeSearchPolicy;
+use quantization::module_inventory::{ModuleInventory, ModuleWeightSource};
+use quantization::progress::{ProgressReporter, SilentProgressReporter, StageProgress};
+use quantization::requantize::bit_policy::BitPolicy;
+use quantization::requantize::driver::run_requantize;
+use quantization::requantize::tensor_plan::RequantizeTensorPlan;
+use runtime_integration::MlxRuntime;
 use serial_test::parallel;
 
 use super::support::{contract_runtime, outlier_heavy_weights};

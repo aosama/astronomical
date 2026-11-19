@@ -5,8 +5,8 @@
 //! then kept; the block's queries and keys sit just after the newest context
 //! row. Both follow z-lab's `DFlashAttention`.
 
-use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 use mlx_bridge::MlxArray;
+use runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use super::block_attention_mask::block_attention_visibility;
 use super::drafter_configuration::DFlash2DrafterConfiguration;

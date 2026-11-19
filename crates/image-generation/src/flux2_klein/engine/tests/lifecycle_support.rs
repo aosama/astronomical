@@ -7,11 +7,11 @@ use crate::{
     Flux2KleinEngineComponents, Flux2KleinFlowStep, Flux2KleinImageDimensions,
     Flux2KleinImageEngine,
 };
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     ImageGenerationCapabilities, ImageGenerationCommand, ImageGenerationSettings, RequestId,
 };
-use astronomical_memory_policy::telemetry::{MlxActiveMemoryBreakdown, MlxMemoryTelemetry};
-use astronomical_model_primitives::performance_attribution::PerformanceAttributionOutcome;
+use memory_policy::telemetry::{MlxActiveMemoryBreakdown, MlxMemoryTelemetry};
+use model_primitives::performance_attribution::PerformanceAttributionOutcome;
 
 pub(super) fn fake_engine(
     lifecycle_events: Arc<Mutex<Vec<String>>>,

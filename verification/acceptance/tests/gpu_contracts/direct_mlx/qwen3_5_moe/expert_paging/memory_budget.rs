@@ -1,4 +1,4 @@
-use astronomical_model_serving::{
+use model_serving::{
     AllocationAdmissionDecision, AllocationAdmissionObservation, MlxAllocationAdmission,
     safe_minimum_mlx_memory_ceiling_bytes,
 };

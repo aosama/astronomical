@@ -21,7 +21,7 @@
 use std::path::Path;
 use std::time::Instant;
 
-use astronomical_memory_policy::astro_expert_cache_model::{
+use memory_policy::astro_expert_cache_model::{
     BeladyMinimum, CappedReplacements, DecayedFrequency, FrequencyAdmittedRecency, KeepingRule,
     LeastFrequentlyUsed, LeastRecentlyUsed, LimitedLookaheadBelady, PriorSeededDecayedFrequency,
     ReplayCase, SavedReplayCase, SecondMostRecentUse, find_saved_case_documents,

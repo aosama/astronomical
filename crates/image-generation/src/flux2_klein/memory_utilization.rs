@@ -29,7 +29,7 @@
 //! all-or-nothing, and the streamed text encoder stays unattributed because
 //! its own phase reserve is what the plan promises for it.
 
-use astronomical_memory_policy::utilization::MemoryCeilingUtilization;
+use memory_policy::utilization::MemoryCeilingUtilization;
 
 use super::Flux2KleinMemoryGeometry;
 

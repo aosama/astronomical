@@ -25,7 +25,7 @@ fn should_select_a_named_test_and_explicit_configuration() {
 #[test]
 fn should_accept_library_and_all_test_targets_with_custom_profiles() {
     let library_request = TestRunRequest::parse(&arguments(
-        "--package astronomical-test-harness --lib --profile full-debug",
+        "--package test-harness --lib --profile full-debug",
     ))
     .expect("custom profile");
     assert_eq!(library_request.target, TestTarget::Library);

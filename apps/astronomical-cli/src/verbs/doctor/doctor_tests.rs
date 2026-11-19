@@ -5,7 +5,7 @@
 
 use std::{io::Write, path::Path, path::PathBuf, time::Duration};
 
-use astronomical_config::AstronomicalRuntimeInstance;
+use config::AstronomicalRuntimeInstance;
 
 use crate::verbs::doctor::{DoctorDependencies, run_doctor};
 

@@ -6,11 +6,11 @@
 
 use std::{collections::HashMap, sync::Arc};
 
-use astronomical_config::{
+use config::{
     AstronomicalConfig, AstronomicalConfigError, ChatModelCapabilities, DiscoveredModel,
     ModelCapabilities, ModelFamily, ResolvedModelConfig,
 };
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     WorkerAutoregressiveModelConfiguration, WorkerDecisionModelConfiguration,
     WorkerDecisionModelFamily, WorkerEmbeddingModelConfiguration, WorkerEmbeddingModelFamily,
     WorkerFlux2KleinModelConfiguration, WorkerImageGenerationModelFamily, WorkerModelConfiguration,
@@ -178,7 +178,7 @@ impl ResolvedModelPolicyCatalog {
 
     fn embeddings_policy(
         discovered_model: &DiscoveredModel,
-        embedding_capabilities: &astronomical_config::EmbeddingModelCapabilities,
+        embedding_capabilities: &config::EmbeddingModelCapabilities,
     ) -> RuntimeModelPolicy {
         RuntimeModelPolicy {
             model_directory: discovered_model.model_directory.clone(),
@@ -207,7 +207,7 @@ impl ResolvedModelPolicyCatalog {
 
     fn decisions_policy(
         discovered_model: &DiscoveredModel,
-        decision_capabilities: &astronomical_config::DecisionModelCapabilities,
+        decision_capabilities: &config::DecisionModelCapabilities,
     ) -> RuntimeModelPolicy {
         RuntimeModelPolicy {
             model_directory: discovered_model.model_directory.clone(),
@@ -239,7 +239,7 @@ impl ResolvedModelPolicyCatalog {
 /// reported as Laya, and the worker refuses it at load because the folder
 /// is not one.
 fn worker_decision_family(model_family: ModelFamily) -> WorkerDecisionModelFamily {
-    astronomical_config::exhaustive_table!(model_family, {
+    config::exhaustive_table!(model_family, {
         ModelFamily::Kev => WorkerDecisionModelFamily::Kev,
         ModelFamily::Clef => WorkerDecisionModelFamily::Clef,
         ModelFamily::Laya => WorkerDecisionModelFamily::Laya,
@@ -257,7 +257,7 @@ fn worker_decision_family(model_family: ModelFamily) -> WorkerDecisionModelFamil
 /// discovered on Kokoro and Phonon folders; any other family is reported as
 /// Kokoro, and the worker refuses it at load because the folder is not one.
 fn worker_speech_family(model_family: ModelFamily) -> WorkerSpeechModelFamily {
-    astronomical_config::exhaustive_table!(model_family, {
+    config::exhaustive_table!(model_family, {
         ModelFamily::Kokoro => WorkerSpeechModelFamily::Kokoro,
         ModelFamily::Phonon => WorkerSpeechModelFamily::Phonon,
         ModelFamily::Qwen3_5 => WorkerSpeechModelFamily::Kokoro,

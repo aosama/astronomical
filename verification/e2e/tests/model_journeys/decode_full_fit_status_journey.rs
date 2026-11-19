@@ -2,9 +2,9 @@
 
 use std::{fs, net::SocketAddr};
 
-use astronomical_test_harness::{sparse_decode_full_fit, test_run::TestRunContext};
 use serde_json::{Value, json};
 use serial_test::serial;
+use test_harness::{sparse_decode_full_fit, test_run::TestRunContext};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::TcpStream,
@@ -31,9 +31,9 @@ async fn run_full_fit_status_journey() {
         context.configuration.real_models,
         "this journey must not substitute a scripted worker"
     );
-    let model_id = astronomical_test_harness::fixtures::large_sparse_moe_streaming_model_id();
+    let model_id = test_harness::fixtures::large_sparse_moe_streaming_model_id();
     let model_directory = context.configuration.model_directory.unwrap_or_else(|| {
-        astronomical_config::AstronomicalConfig::load_from_development_location()
+        config::AstronomicalConfig::load_from_development_location()
             .expect("the Development configuration should load")
             .find_configured_model_directory_by_id(model_id)
             .expect("the model directories should be searchable")
@@ -56,7 +56,7 @@ async fn run_full_fit_status_journey() {
         .expect("the configuration should serialize"),
     )
     .expect("the configuration should persist");
-    let daemon_path = astronomical_test_harness::workspace_binary("astronomicald");
+    let daemon_path = test_harness::workspace_binary("astronomicald");
     let (mut daemon_process, address) = daemon::spawn_actual_instance_daemon(
         daemon_path
             .to_str()

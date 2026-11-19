@@ -1,5 +1,5 @@
 [package]
-name = "astronomical-english-number-words"
+name = "english-number-words"
 description = "English numbers as the words a speaker says: cardinals, ordinals, years, decimals, negatives and dollar amounts, and where numbers start and end in running text."
 edition.workspace = true
 license.workspace = true

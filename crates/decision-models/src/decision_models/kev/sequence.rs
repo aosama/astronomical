@@ -9,8 +9,8 @@
 
 use std::collections::HashSet;
 
-use astronomical_decision_contract::kev_rendering::{kev_question_text, kev_render};
-use astronomical_decision_contract::{DecisionFailure, DecisionQuestion, OrderedJsonValue};
+use decision_contract::kev_rendering::{kev_question_text, kev_render};
+use decision_contract::{DecisionFailure, DecisionQuestion, OrderedJsonValue};
 
 use super::tokenizer::KevTokenizer;
 

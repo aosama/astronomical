@@ -9,7 +9,7 @@
 //! length. This journey replays that user journey through the public Chat
 //! Completions TCP surface and requires both turns to complete.
 
-use astronomical_model_serving::Qwen3_5ArtifactValidator;
+use model_serving::Qwen3_5ArtifactValidator;
 use serde_json::json;
 use serial_test::serial;
 use std::fs;

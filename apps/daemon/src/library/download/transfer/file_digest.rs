@@ -17,14 +17,12 @@ impl DownloadFileDigest {
     #[must_use]
     pub fn is_valid(&self) -> bool {
         match self {
-            Self::Sha256(digest) => astronomical_lowercase_hex::is_lowercase_hex_of_length(
-                digest,
-                SHA256_HEX_CHARACTER_COUNT,
-            ),
-            Self::GitBlobSha1(digest) => astronomical_lowercase_hex::is_lowercase_hex_of_length(
-                digest,
-                GIT_BLOB_SHA1_HEX_CHARACTER_COUNT,
-            ),
+            Self::Sha256(digest) => {
+                lowercase_hex::is_lowercase_hex_of_length(digest, SHA256_HEX_CHARACTER_COUNT)
+            }
+            Self::GitBlobSha1(digest) => {
+                lowercase_hex::is_lowercase_hex_of_length(digest, GIT_BLOB_SHA1_HEX_CHARACTER_COUNT)
+            }
         }
     }
 

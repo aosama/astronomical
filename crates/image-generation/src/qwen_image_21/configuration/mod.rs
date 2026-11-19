@@ -21,7 +21,7 @@ pub use vae::QwenImage21VaeConfig;
 use serde::Deserialize;
 use thiserror::Error;
 
-use astronomical_memory_policy::strict_json::DuplicateAwareJsonValue;
+use memory_policy::strict_json::DuplicateAwareJsonValue;
 
 /// A rejected Qwen-Image-2.1 configuration before any weight descriptor reaches an engine.
 #[derive(Debug, Error)]

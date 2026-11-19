@@ -8,11 +8,11 @@ use crate::{
     Flux2KleinFlowStep, Flux2KleinImageDimensions, Flux2KleinImageEngine, ImageGenerationEngine,
     ImageGenerationEngineStep,
 };
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     ImageGenerationCapabilities, ImageGenerationCommand, ImageGenerationPhase,
     ImageGenerationSettings, RequestId,
 };
-use astronomical_model_primitives::performance_attribution::PerformanceAttributionOutcome;
+use model_primitives::performance_attribution::PerformanceAttributionOutcome;
 
 #[test]
 fn should_advance_one_complete_decoder_stage_per_call() {

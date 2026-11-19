@@ -5,8 +5,8 @@
 //! `[out, kernel, in / groups]`. Many checkpoints also store convolutions as a
 //! weight-norm pair, `weight_g` and `weight_v`, folded here once at load.
 
-use astronomical_runtime_integration::MlxRuntime;
 use mlx_bridge::MlxArray;
+use runtime_integration::MlxRuntime;
 
 use crate::speech_models::checkpoint_tensors::CheckpointTensors;
 use crate::speech_models::speech_model_error::SpeechModelError;

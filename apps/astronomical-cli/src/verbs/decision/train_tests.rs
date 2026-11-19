@@ -2,10 +2,8 @@
 //! tested in the training crate; the whole journey runs live on the
 //! Development instance.
 
-use astronomical_decision_contract::DecisionQuestionKind;
-use astronomical_decision_contract::calibration_file::{
-    KindCalibration, calibration_document_text,
-};
+use decision_contract::DecisionQuestionKind;
+use decision_contract::calibration_file::{KindCalibration, calibration_document_text};
 
 use super::*;
 

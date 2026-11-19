@@ -3,7 +3,7 @@
 //! Keeping both limits in one transition prevents the retained `astro_expert_cache` from exceeding
 //! the user's current memory grant.
 
-use astronomical_runtime_integration::MlxMemoryLimits;
+use runtime_integration::MlxMemoryLimits;
 
 use crate::{
     InferenceEngineError, MemoryCeilingChangeDecision, MemoryCeilingChangeRequirements,

@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests;
 
-use astronomical_runtime_integration::MlxRuntimeError;
+use runtime_integration::MlxRuntimeError;
 use thiserror::Error;
 
 use crate::{ArtifactValidationError, InferenceEngineError};

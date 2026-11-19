@@ -22,10 +22,10 @@
 use std::collections::BTreeMap;
 use std::rc::Rc;
 
-use astronomical_decision_contract::decision_training_job::TrainingExample;
-use astronomical_decision_contract::head_tuning_file::{HeadTuning, TunedTensor};
-use astronomical_decision_contract::{DecisionFailure, parse_system_one_questions};
-use astronomical_decision_training::head_parameters::ParameterLayout;
+use decision_contract::decision_training_job::TrainingExample;
+use decision_contract::head_tuning_file::{HeadTuning, TunedTensor};
+use decision_contract::{DecisionFailure, parse_system_one_questions};
+use decision_training::head_parameters::ParameterLayout;
 use mlx_bridge::{MlxArray, MlxBindingsContext, MlxCError};
 
 use super::engine::{LoadedKevState, question_scores};
@@ -213,7 +213,7 @@ impl KevWholeModelScorer {
                     &example.question_rows[question_index],
                     state_length,
                     &mut decoder_state,
-                    astronomical_decision_contract::HeadInputRequest::Omit,
+                    decision_contract::HeadInputRequest::Omit,
                 )
                 .map_err(scoring_failure)?;
                 scores_by_position.insert(batch_position, question_scores.option_logits);

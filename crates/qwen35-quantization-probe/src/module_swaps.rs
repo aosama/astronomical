@@ -3,16 +3,16 @@
 //! the mixture-of-experts router, and routed-expert projections held by the
 //! resident expert owner.
 
-use astronomical_quantization::bit_width::{BitWidth, GroupSize};
-use astronomical_quantization::error::QuantizationError;
+use quantization::bit_width::{BitWidth, GroupSize};
+use quantization::error::QuantizationError;
 
-use astronomical_qwen35::qwen3_5_core::model_math::decoder_layer_weights::{
+use qwen35::qwen3_5_core::model_math::decoder_layer_weights::{
     Qwen3_5AffineWeights, Qwen3_5DecoderFeedForwardWeights,
 };
-use astronomical_qwen35::qwen3_5_core::model_math::feed_forward_weights::{
+use qwen35::qwen3_5_core::model_math::feed_forward_weights::{
     Qwen3_5MoEFeedForwardWeights, Qwen3_5MoERouterGateWeights,
 };
-use astronomical_qwen35::qwen3_5_resident::experts::{
+use qwen35::qwen3_5_resident::experts::{
     Qwen3_5ResidentExpertLayerWeights, Qwen3_5ResidentGateUpWeights,
 };
 

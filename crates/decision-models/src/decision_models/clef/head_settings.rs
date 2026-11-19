@@ -2,7 +2,7 @@
 
 use std::path::Path;
 
-use astronomical_decision_contract::DecisionFailure;
+use decision_contract::DecisionFailure;
 
 /// The settings file that, beside `joint_head.safetensors`, marks a folder
 /// as a Clef decision model.

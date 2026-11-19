@@ -6,8 +6,8 @@
 //! `Qwen3_5AffineWeights`, which expert stacks share: code that only ever
 //! sees expert stacks never has to know a converted weight exists.
 
-use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 use mlx_bridge::MlxArray;
+use runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use super::decoder_layer_weights::Qwen3_5AffineWeights;
 use crate::row_batched_matmul::{RegisterOrderedWeight, RestoredMlxRows};

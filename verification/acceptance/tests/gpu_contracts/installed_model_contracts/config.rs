@@ -1,6 +1,4 @@
-use astronomical_model_serving::{
-    OptiQMetadata, Qwen3_5Config, resolve_optiq_metadata_relative_path,
-};
+use model_serving::{OptiQMetadata, Qwen3_5Config, resolve_optiq_metadata_relative_path};
 
 #[test]
 #[ignore = "requires model_directories to discover the large sparse MoE streaming installed model"]

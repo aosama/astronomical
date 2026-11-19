@@ -6,7 +6,7 @@
 //! helpers fail loudly on a malformed fixture, since a parity journey that
 //! silently compared nothing would prove nothing.
 
-use astronomical_decision_contract::{DecisionAnswer, OrderedJsonValue};
+use decision_contract::{DecisionAnswer, OrderedJsonValue};
 
 pub(super) fn reference_field<'a>(
     reference: &'a OrderedJsonValue,

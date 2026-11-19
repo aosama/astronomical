@@ -5,7 +5,7 @@
 //! (`*Requirements`) or runtime-sampled facts (`*Observation`); execution
 //! owners enact the decision and never re-derive it. See the package
 //! documentation for the decision-shape rule. The direct-MLX admission
-//! logging owner stays beside the bindings in `astronomical-model-serving`.
+//! logging owner stays beside the bindings in `model-serving`.
 
 pub mod allocation;
 pub mod complete_residency;

@@ -8,8 +8,8 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use astronomical_model_serving::Qwen3_5Config;
-use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
+use model_serving::Qwen3_5Config;
+use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
 /// Headroom for the complete-layer probe: one full 8-bit expert layer is
 /// roughly 0.8 GB, and evaluation may transiently hold copies.
@@ -27,7 +27,7 @@ pub(super) struct StreamingProbeFixture {
 /// `cargo xtask test-run --configuration` file names, else through the
 /// development configuration, so no developer path is embedded here.
 pub(super) fn installed_large_sparse_moe_streaming_fixture() -> StreamingProbeFixture {
-    let model_directory = astronomical_test_harness::test_run::TestRunContext::current()
+    let model_directory = test_harness::test_run::TestRunContext::current()
         .configuration
         .model_directory
         .unwrap_or_else(crate::common::configured_large_sparse_moe_streaming_model_directory);

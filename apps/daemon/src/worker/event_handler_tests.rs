@@ -3,7 +3,7 @@
 
 use std::sync::{Arc, RwLock};
 
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     MlxMemorySnapshotSource, RequestId, WorkerEvent, WorkerMlxMemorySnapshot,
     WorkerModelCapabilities,
 };
@@ -185,8 +185,7 @@ fn should_publish_a_load_in_flight_with_no_request_active() {
     let health_snapshot = Arc::new(RwLock::new(WorkerHealthSnapshot::unavailable(
         WorkerHealthStatus::Loading,
     )));
-    let model_load_in_flight =
-        astronomical_ipc_protocol::ModelLoadInFlight::for_model("next-model");
+    let model_load_in_flight = ipc_protocol::ModelLoadInFlight::for_model("next-model");
     let mut is_ready = false;
     let mut model_load_deadline = None;
     let mut active_request = None;
@@ -225,7 +224,7 @@ fn should_forget_the_previous_models_neural_engine_status_when_a_load_starts() {
     health_snapshot
         .write()
         .expect("the snapshot writes")
-        .neural_engine_prefill = Some(astronomical_ipc_protocol::NeuralEnginePrefillStatus::Off);
+        .neural_engine_prefill = Some(ipc_protocol::NeuralEnginePrefillStatus::Off);
     let mut is_ready = true;
     let mut model_load_deadline = None;
     let mut active_request = None;
@@ -235,9 +234,7 @@ fn should_forget_the_previous_models_neural_engine_status_when_a_load_starts() {
 
     handle_worker_event(
         WorkerEvent::ModelLoadInFlight {
-            model_load_in_flight: astronomical_ipc_protocol::ModelLoadInFlight::for_model(
-                "next-model",
-            ),
+            model_load_in_flight: ipc_protocol::ModelLoadInFlight::for_model("next-model"),
         },
         &health_snapshot,
         &mut is_ready,
@@ -269,8 +266,8 @@ fn should_count_a_neural_engine_chunk_with_no_request_active() {
 
     handle_worker_event(
         WorkerEvent::NeuralEngineChunkFinished {
-            report: astronomical_ipc_protocol::NeuralEngineChunkReport {
-                placement: astronomical_ipc_protocol::NeuralEngineChunkPlacement::GpuWakingPrograms,
+            report: ipc_protocol::NeuralEngineChunkReport {
+                placement: ipc_protocol::NeuralEngineChunkPlacement::GpuWakingPrograms,
                 chunk_token_count: 2_048,
                 neural_engine_token_count: 0,
                 elapsed_millis: 350,

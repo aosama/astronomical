@@ -5,8 +5,8 @@
 
 use std::time::Instant;
 
-use astronomical_decision_contract::DecisionFailure;
-use astronomical_ipc_protocol::{
+use decision_contract::DecisionFailure;
+use ipc_protocol::{
     DecisionTrainingCommand, ProtocolReader, ProtocolWriter, RequestId, WorkerEvent,
 };
 use tokio::io::{AsyncRead, AsyncWrite};

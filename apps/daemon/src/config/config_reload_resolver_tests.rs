@@ -279,7 +279,7 @@ fn should_keep_unrelated_models_available_and_report_duplicate_authored_identiti
     assert_eq!(resolved_config.model_discovery_diagnostics.len(), 1);
     assert_eq!(
         resolved_config.model_discovery_diagnostics[0].code,
-        astronomical_config::ModelDiscoveryDiagnosticCode::AmbiguousModelIdentity
+        config::ModelDiscoveryDiagnosticCode::AmbiguousModelIdentity
     );
     assert_eq!(
         resolved_config.model_discovery_diagnostics[0].model_id,
@@ -336,7 +336,7 @@ fn should_keep_remaining_models_when_an_authored_root_is_missing() {
     assert_eq!(resolved_config.model_discovery_diagnostics.len(), 1);
     assert_eq!(
         resolved_config.model_discovery_diagnostics[0].code,
-        astronomical_config::ModelDiscoveryDiagnosticCode::UnavailableModelDirectory
+        config::ModelDiscoveryDiagnosticCode::UnavailableModelDirectory
     );
     assert_eq!(
         resolved_config.model_discovery_diagnostics[0].configured_root_numbers,

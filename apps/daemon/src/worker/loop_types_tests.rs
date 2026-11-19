@@ -3,7 +3,7 @@
 
 use std::sync::Arc;
 
-use astronomical_ipc_protocol::{ImageGenerationSettings, RequestId};
+use ipc_protocol::{ImageGenerationSettings, RequestId};
 use tokio::sync::{Semaphore, mpsc};
 
 use crate::worker::loop_types::{

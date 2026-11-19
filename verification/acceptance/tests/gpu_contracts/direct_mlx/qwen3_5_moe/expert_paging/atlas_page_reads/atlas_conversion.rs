@@ -12,7 +12,7 @@ use std::os::unix::fs::FileExt;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
-use astronomical_model_serving::{
+use model_serving::{
     QuantizedExpertShardManifest, SafetensorsDtype, build_quantized_expert_layer_plan,
     build_quantized_expert_page_manifest_from_plan,
 };

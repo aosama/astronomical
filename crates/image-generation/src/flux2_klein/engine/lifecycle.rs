@@ -4,22 +4,22 @@
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     GeneratedImage, ImageGenerationCommand, ImageGenerationFailureReason, ImageGenerationPhase,
     ImageGenerationResultMetadata, RequestId,
 };
 
 use crate::image_generation_engine::ImageGenerationEngineLoadResult;
 use crate::{ImageGenerationEngine, ImageGenerationEngineStep};
-use astronomical_model_primitives::performance_attribution::PerformanceAttributionOutcome;
+use model_primitives::performance_attribution::PerformanceAttributionOutcome;
 
 #[cfg(feature = "direct-mlx")]
 use super::super::Flux2KleinArtifactProvenance;
 use super::super::{Flux2KleinFlowSchedule, Flux2KleinImageDimensions, Flux2KleinOfficialProfile};
 use super::components::Flux2KleinEngineComponents;
 use super::request_validation;
-use astronomical_memory_policy::telemetry::MlxMemoryLimitAdjustment;
-use astronomical_memory_policy::telemetry::MlxMemoryTelemetry;
+use memory_policy::telemetry::MlxMemoryLimitAdjustment;
+use memory_policy::telemetry::MlxMemoryTelemetry;
 
 const IMAGE_TRANSPORT_LIMIT_BYTES: u64 = 32 * 1024 * 1024;
 

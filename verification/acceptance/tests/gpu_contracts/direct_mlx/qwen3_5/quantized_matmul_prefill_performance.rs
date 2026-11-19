@@ -9,8 +9,8 @@
 
 use std::time::{Duration, Instant};
 
-use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use mlx_bridge::{MlxArray, MlxDtype};
+use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use tokio::time::timeout;
 
 const GROUP_SIZE: i32 = 64;

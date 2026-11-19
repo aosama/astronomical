@@ -3,7 +3,7 @@
 //! preparation start events. Split from generation_advance so each file stays
 //! within the repository's source-size limit.
 
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     MlxMemorySnapshotSource, ProtocolWriter, WorkerAstroSsdPromptCacheRequestDiagnostics,
     WorkerEvent, WorkerPromptProcessingPhase, WorkerPromptWorkReuse,
 };
@@ -66,8 +66,8 @@ where
         expert_memory_mode: Option<ExpertMemoryMode>,
         prompt_work_reuse: WorkerPromptWorkReuse,
         astro_ssd_prompt_cache_diagnostics: Option<WorkerAstroSsdPromptCacheRequestDiagnostics>,
-        neural_engine_chunk: Option<astronomical_ipc_protocol::NeuralEngineChunkReport>,
-        prompt_layer_progress: Option<astronomical_ipc_protocol::WorkerPromptLayerProgress>,
+        neural_engine_chunk: Option<ipc_protocol::NeuralEngineChunkReport>,
+        prompt_layer_progress: Option<ipc_protocol::WorkerPromptLayerProgress>,
         event_writer: &mut ProtocolWriter<WriteTransport>,
     ) -> Result<
         Option<ActiveEngineGeneration<Processor::RequestOutput, Processor::InferenceRequest>>,
@@ -164,7 +164,7 @@ where
 }
 
 async fn emit_neural_engine_chunk<WriteTransport>(
-    neural_engine_chunk: Option<astronomical_ipc_protocol::NeuralEngineChunkReport>,
+    neural_engine_chunk: Option<ipc_protocol::NeuralEngineChunkReport>,
     event_writer: &mut ProtocolWriter<WriteTransport>,
 ) -> Result<(), WorkerRuntimeError>
 where

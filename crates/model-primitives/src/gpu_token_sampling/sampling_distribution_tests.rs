@@ -1,8 +1,8 @@
 //! The top-k-only distribution against the sampler's full-vocabulary law it
 //! must agree with: same kept tokens, same probabilities.
 
-use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use mlx_bridge::MlxDtype;
+use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use serial_test::serial;
 
 use super::super::{masked_logits_after_top_k_and_top_p, softmax_last_axis};

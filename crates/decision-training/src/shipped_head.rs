@@ -8,7 +8,7 @@
 
 use std::path::Path;
 
-use astronomical_decision_contract::head_tuning_file::{
+use decision_contract::head_tuning_file::{
     DECISION_HEAD_TUNING_FILE_NAME, HeadTuning, MAXIMUM_HEAD_TUNING_FILE_BYTES, TunableHeadFamily,
     parse_head_tuning,
 };

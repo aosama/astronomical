@@ -9,8 +9,8 @@ use super::{
     build_embeddings_command, embeddings_validation_parameter,
     embeddings_validation_rejection_response, parse_embeddings_request,
 };
-use astronomical_ipc_protocol::{EmbeddingEncodingFormat, RequestId};
-use astronomical_rest_contract::{
+use ipc_protocol::{EmbeddingEncodingFormat, RequestId};
+use rest_contract::{
     OpenAiEmbeddingEncodingFormat as RestEncodingFormat, OpenAiEmbeddingsRequestParts,
     OpenAiEmbeddingsValidationError,
 };

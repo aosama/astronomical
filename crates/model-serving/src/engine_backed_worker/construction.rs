@@ -118,7 +118,7 @@ where
     #[must_use]
     pub fn with_worker_runtime_feature_configuration(
         mut self,
-        worker_runtime_feature_configuration: astronomical_ipc_protocol::WorkerRuntimeFeatureConfiguration,
+        worker_runtime_feature_configuration: ipc_protocol::WorkerRuntimeFeatureConfiguration,
     ) -> Self {
         self.worker_runtime_feature_configuration = Some(worker_runtime_feature_configuration);
         self

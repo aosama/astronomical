@@ -5,9 +5,9 @@
 
 use std::path::PathBuf;
 
-use astronomical_config::ModelFamily;
-use astronomical_ipc_protocol::WorkerModelConfiguration;
-use astronomical_model_serving::{KokoroSpeechEngine, PhononSpeechEngine, SpeechEngine};
+use config::ModelFamily;
+use ipc_protocol::WorkerModelConfiguration;
+use model_serving::{KokoroSpeechEngine, PhononSpeechEngine, SpeechEngine};
 
 /// The memory a speech engine is granted, as the factory holds it.
 pub(super) struct SpeechMemoryGrant {

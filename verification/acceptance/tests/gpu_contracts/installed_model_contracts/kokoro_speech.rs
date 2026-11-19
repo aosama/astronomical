@@ -14,9 +14,9 @@
 
 use std::time::Instant;
 
-use astronomical_model_serving::{KokoroSpeechEngine, SpeechEngine};
-use astronomical_speech_contract::SpeechRequest;
-use astronomical_test_harness::test_run::TestRunContext;
+use model_serving::{KokoroSpeechEngine, SpeechEngine};
+use speech_contract::SpeechRequest;
+use test_harness::test_run::TestRunContext;
 
 use super::speech_audio_checks::{
     ROMEO_PASSAGE, TEST_MLX_BUFFER_CACHE_LIMIT_BYTES, TEST_MLX_MEMORY_CEILING_BYTES,

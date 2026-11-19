@@ -7,7 +7,7 @@
 //! its normalized vector is computed once per option and only its scale and
 //! shift train.
 
-use astronomical_decision_contract::HeadInputs;
+use decision_contract::HeadInputs;
 
 use crate::dense_math::{dot, linear_forward, linear_input_gradient, linear_parameter_gradients};
 use crate::gelu::{gelu, gelu_derivative};

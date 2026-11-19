@@ -4,7 +4,7 @@ use crate::{
     Qwen3_5InferenceRequest, Qwen3_5SamplingStrategy, Qwen3_5ThinkingBudgetState,
 };
 
-use astronomical_ipc_protocol::WorkerAstroSsdPromptCacheRequestDiagnostics;
+use ipc_protocol::WorkerAstroSsdPromptCacheRequestDiagnostics;
 use mlx_bridge::MlxArray;
 
 use super::astro_ssd_prompt_cache_visual_identity::{
@@ -547,7 +547,7 @@ impl Qwen3_5EngineState {
         let prompt_prefill_end_exclusive = prompt_token_ids.len();
         let initial_prompt_processing_phase = (restored_prompt_prefix_session.prefill_cursor
             < prompt_prefill_end_exclusive)
-            .then_some(astronomical_ipc_protocol::WorkerPromptProcessingPhase::Target);
+            .then_some(ipc_protocol::WorkerPromptProcessingPhase::Target);
         self.active_request = Some(Qwen3_5EngineRequest {
             request_decoder_state,
             generated_token_count: 0,
@@ -571,7 +571,7 @@ impl Qwen3_5EngineState {
             image_pad_token_id,
             thinking_budget_state,
             performance_attribution,
-            prompt_work_reuse: astronomical_ipc_protocol::WorkerPromptWorkReuse {
+            prompt_work_reuse: ipc_protocol::WorkerPromptWorkReuse {
                 target_eligible_token_count: target_eligible_prompt_work_token_count,
                 target_restored_token_count: restored_prompt_prefix_session
                     .restored_target_work_token_count,
@@ -607,9 +607,7 @@ impl Qwen3_5EngineState {
     fn build_generation_start_contract(
         &self,
         restored_prompt_prefix_token_count: u32,
-        initial_prompt_processing_phase: Option<
-            astronomical_ipc_protocol::WorkerPromptProcessingPhase,
-        >,
+        initial_prompt_processing_phase: Option<ipc_protocol::WorkerPromptProcessingPhase>,
         astro_ssd_prompt_cache_diagnostics: Option<WorkerAstroSsdPromptCacheRequestDiagnostics>,
     ) -> Result<EngineGenerationStart, InferenceEngineError> {
         // No forward has run yet, so the freshly reset read tally carries

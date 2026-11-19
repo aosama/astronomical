@@ -1,9 +1,9 @@
-use astronomical_model_serving::{
+use model_serving::{
     PerformanceAttribution, PerformanceOperation, restore_expert_assignment_order,
     router_weighted_expert_inputs, sort_expert_assignments, sorted_expert_weighted_sum,
     sorted_expert_weighted_sum_kernel, unsorted_expert_weighted_sum,
 };
-use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
+use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
 use crate::common::{
     DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_MLX_BUFFER_CACHE_LIMIT_BYTES,

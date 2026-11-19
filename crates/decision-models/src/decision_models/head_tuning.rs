@@ -9,8 +9,8 @@
 
 use std::path::Path;
 
-use astronomical_decision_contract::DecisionFailure;
-use astronomical_decision_contract::head_tuning_file::{
+use decision_contract::DecisionFailure;
+use decision_contract::head_tuning_file::{
     DECISION_HEAD_TUNING_FILE_NAME, HeadTuning, MAXIMUM_HEAD_TUNING_FILE_BYTES, TunableHeadFamily,
     TunedTensor, parse_head_tuning,
 };

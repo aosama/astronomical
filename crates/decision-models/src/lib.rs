@@ -4,8 +4,8 @@
 //! embedding seams the worker drives.
 //!
 //! Kev and Clef score on a Qwen 3.5 backbone, so this crate sits above
-//! `astronomical-qwen35`. It is the one consumer of
-//! `astronomical-decision-training` among the model crates. The edge to the
+//! `qwen35`. It is the one consumer of
+//! `decision-training` among the model crates. The edge to the
 //! serving crate is one way, which `cargo xtask check-architecture`
 //! enforces. The serving crate re-exports this crate's root with a glob, so
 //! every name at this root stays unique across the crates it re-exports.
@@ -22,13 +22,13 @@ pub mod modernbert;
 
 // The crates below these families, imported at the root so the families'
 // `crate::...` paths into them read as they did inside the serving crate.
-use astronomical_engine_core::*;
+use engine_core::*;
 // Only the direct-MLX families reach the model primitives and the Qwen
 // backbone through these.
 #[cfg(feature = "direct-mlx")]
-use astronomical_model_primitives::*;
+use model_primitives::*;
 #[cfg(feature = "direct-mlx")]
-use astronomical_qwen35::*;
+use qwen35::*;
 
 pub use decision_engine::{
     DecisionEngine, DecisionEngineLoadResult, DecisionEngineOutput, DecisionTrainingStep,

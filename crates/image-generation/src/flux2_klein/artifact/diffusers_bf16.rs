@@ -5,7 +5,7 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use astronomical_artifact_validation::ValidatedRequiredFile;
+use artifact_validation::ValidatedRequiredFile;
 
 use super::super::artifact_text_validation::{
     TEXT_GENERATION_CONFIG_FILE_NAME, TEXT_INDEX_FILE_NAME, validate_text_artifacts,
@@ -120,7 +120,7 @@ fn parse_configs(
 
 fn bf16_weight_files(
     component: Flux2KleinComponent,
-    shard_files: Vec<astronomical_artifact_validation::ValidatedWeightsFile>,
+    shard_files: Vec<artifact_validation::ValidatedWeightsFile>,
 ) -> Flux2KleinComponentWeightFiles {
     Flux2KleinComponentWeightFiles::new(
         Flux2KleinWeightLayout::DiffusersBf16,

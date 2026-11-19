@@ -7,8 +7,8 @@ use super::gated_delta_boundary_checkpoints::{
     checkpoint_template_arguments, unpack_checkpoint_kernel_outputs,
 };
 use super::gated_delta_sequence_contract::{GatedDeltaSequenceShape, template_arguments};
-use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime, MlxRuntimeError};
 use mlx_bridge::{MlxArray, MlxDtype, MlxMetalKernelTemplateArgument};
+use runtime_integration::{MlxMemoryLimits, MlxRuntime, MlxRuntimeError};
 use serial_test::serial;
 
 fn test_sequence_shape() -> GatedDeltaSequenceShape {

@@ -6,7 +6,7 @@
 //! visible text, never an abort. Fixtures use the Romeo and Juliet literary
 //! tools per the workspace test-fixture mandate.
 
-use astronomical_ipc_protocol::ChatToolDefinition;
+use ipc_protocol::ChatToolDefinition;
 
 use super::Qwen3_5OutputParser;
 

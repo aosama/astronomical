@@ -6,7 +6,7 @@ use std::{
     time::Duration,
 };
 
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     ImageGenerationCapabilities, ImageGenerationCommand, ImageGenerationSettings, ProtocolError,
 };
 use tokio::time::{Instant, timeout};
@@ -367,7 +367,7 @@ async fn start_image_generation_or_reject(
 #[allow(clippy::too_many_arguments)]
 fn assemble_active_image_generation(
     active_generation_permit: tokio::sync::OwnedSemaphorePermit,
-    request_id: astronomical_ipc_protocol::RequestId,
+    request_id: ipc_protocol::RequestId,
     model_id: String,
     settings: ImageGenerationSettings,
     admitted_at: Instant,

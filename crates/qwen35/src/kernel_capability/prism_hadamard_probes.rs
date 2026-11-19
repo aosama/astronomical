@@ -8,8 +8,8 @@
 //! exact, not tolerance-based: the kernel exists to remove launches, never
 //! to change a bit, and the upstream parity journey depends on that.
 
-use astronomical_runtime_integration::MlxRuntime;
 use mlx_bridge::{MlxArray, MlxCError, MlxDtype};
+use runtime_integration::MlxRuntime;
 
 use super::{CustomMetalKernelFamily, CustomMetalKernelProbe, KernelCapabilityError};
 use crate::prism_hadamard_qwen35::model::signed_rotation_kernel::{

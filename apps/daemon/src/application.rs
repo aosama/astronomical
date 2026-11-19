@@ -11,8 +11,6 @@ use crate::{
     rest::openai::responses_endpoint,
     system_telemetry::system_telemetry_routes,
 };
-use astronomical_config::DiscoveredModel;
-use astronomical_rest_contract::MAX_REQUEST_BODY_BYTES;
 use axum::{
     Json, Router,
     extract::{DefaultBodyLimit, State},
@@ -20,6 +18,8 @@ use axum::{
     response::{IntoResponse, Response},
     routing::{delete, get, post, put},
 };
+use config::DiscoveredModel;
+use rest_contract::MAX_REQUEST_BODY_BYTES;
 use std::{
     path::PathBuf,
     sync::{
@@ -100,8 +100,7 @@ impl ApplicationState {
             .iter()
             .map(|discovered_model| discovered_model.model_id.as_str())
             .collect();
-        let resolved_model_id =
-            astronomical_config::resolve_model_id(requested_model_id, &known_model_ids);
+        let resolved_model_id = config::resolve_model_id(requested_model_id, &known_model_ids);
         let is_ready_model = ready_model_id == Some(resolved_model_id);
         let is_discovered_model = discovered_models
             .iter()
@@ -461,13 +460,13 @@ fn openai_generation_routes(router: Router<ApplicationState>) -> Router<Applicat
             .layer(axum::middleware::from_fn(enforce_request_body_budget)),
     );
     let router = router.route(
-        astronomical_rest_contract::SYSTEM_ONE_ENDPOINT_PATH,
+        rest_contract::SYSTEM_ONE_ENDPOINT_PATH,
         post(crate::rest::system_one_endpoint::create_decisions)
             .layer(DefaultBodyLimit::max(MAX_REQUEST_BODY_BYTES))
             .layer(axum::middleware::from_fn(enforce_request_body_budget)),
     );
     router.route(
-        astronomical_rest_contract::AUDIO_SPEECH_ENDPOINT_PATH,
+        rest_contract::AUDIO_SPEECH_ENDPOINT_PATH,
         post(crate::rest::openai::speech_endpoint::create_speech)
             .layer(DefaultBodyLimit::max(MAX_REQUEST_BODY_BYTES))
             .layer(axum::middleware::from_fn(enforce_request_body_budget)),

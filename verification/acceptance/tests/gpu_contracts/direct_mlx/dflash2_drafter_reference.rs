@@ -11,14 +11,12 @@
 use std::fs::File;
 use std::path::PathBuf;
 
-use astronomical_model_serving::speculative_decoding::dflash2_drafter::{
+use mlx_bridge::{MlxArray, MlxDtype};
+use model_serving::speculative_decoding::dflash2_drafter::{
     DFlash2DraftTarget, DFlash2DrafterConfiguration, DrafterContextStates, PathChoice,
     bind_drafter_weights, drafted_hidden_rows, select_path,
 };
-use astronomical_runtime_integration::{
-    MlxMemoryLimits, MlxRuntime, MlxRuntimeError, MlxSafetensors,
-};
-use mlx_bridge::{MlxArray, MlxDtype};
+use runtime_integration::{MlxMemoryLimits, MlxRuntime, MlxRuntimeError, MlxSafetensors};
 use serial_test::serial;
 
 /// Float32 sums in a different order: a few units in the last place of

@@ -1,6 +1,6 @@
 //! Channel-last MLX convolution with one-time PyTorch weight-layout conversion.
 
-use astronomical_runtime_integration::MlxRuntime;
+use runtime_integration::MlxRuntime;
 
 use crate::flux2_klein::tensor_store::Flux2KleinTensorStore;
 

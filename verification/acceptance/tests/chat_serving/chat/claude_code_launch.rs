@@ -19,7 +19,7 @@ use std::{
 };
 
 use astronomical_cli::{LaunchArguments, LaunchDependencies, PreparedLaunch, prepare_launch};
-use astronomical_config::{DiscoveredModel, ModelCapabilities};
+use config::{DiscoveredModel, ModelCapabilities};
 use serial_test::serial;
 use tokio::time::timeout;
 

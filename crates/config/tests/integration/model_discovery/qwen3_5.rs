@@ -1,6 +1,6 @@
 use std::fs;
 
-use astronomical_config::ModelCapabilities;
+use config::ModelCapabilities;
 
 const IMMUTABLE_PROVIDER_REVISION: &str = "0123456789abcdef0123456789abcdef01234567";
 

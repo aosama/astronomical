@@ -12,8 +12,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
-use astronomical_memory_policy::neural_engine_program_memory_watch::ProgramMemoryWatch;
-use astronomical_neural_engine::core_ml::{CoreMlProgram, system_wired_bytes, wired_growth_bytes};
+use memory_policy::neural_engine_program_memory_watch::ProgramMemoryWatch;
+use neural_engine::core_ml::{CoreMlProgram, system_wired_bytes, wired_growth_bytes};
 
 use super::neural_engine_mlp_prefill::NEURAL_ENGINE_FINISH_TIMEOUT;
 

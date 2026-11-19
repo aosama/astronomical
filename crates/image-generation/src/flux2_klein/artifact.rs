@@ -8,13 +8,11 @@ use std::collections::BTreeMap;
 use std::fs::File;
 use std::path::{Component, Path};
 
-use astronomical_artifact_validation::{
+use artifact_validation::{
     RawSafetensorsInventory, RequiredFileProfile, ValidatedRequiredFile, ValidatedWeightsFile,
     read_bounded_required_file_bytes, validate_required_file,
 };
-use astronomical_model_primitives::performance_attribution::{
-    PerformanceAttribution, PerformanceOperation,
-};
+use model_primitives::performance_attribution::{PerformanceAttribution, PerformanceOperation};
 
 use super::mlx_4bit_build::validate_mlx_4bit_artifact;
 use super::weight_layout::{Flux2KleinComponentWeightFiles, Flux2KleinWeightLayout};

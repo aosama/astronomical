@@ -37,7 +37,7 @@ pub fn config_schema_bytes() -> &'static [u8] {
 }
 
 fn lowercase_hex_digest(bytes: &[u8]) -> String {
-    astronomical_lowercase_hex::encode_lowercase_hex(&Sha256::digest(bytes))
+    lowercase_hex::encode_lowercase_hex(&Sha256::digest(bytes))
 }
 
 /// Reads the document without migrating or rewriting anything.

@@ -1,8 +1,8 @@
-use astronomical_model_serving::{
+use model_serving::{
     PerformanceAttribution, PerformanceOperation, compute_default_rope_frequency_denominators,
     compute_yarn_rope_frequency_denominators,
 };
-use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
+use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
 use crate::common::{
     DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_MLX_BUFFER_CACHE_LIMIT_BYTES,

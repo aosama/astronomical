@@ -5,7 +5,7 @@
 use std::fs::File;
 use std::path::Path;
 
-use astronomical_artifact_validation::validated_artifact::ValidatedWeightsFile;
+use artifact_validation::validated_artifact::ValidatedWeightsFile;
 
 use super::mlx_4bit_build::MLX_4BIT_TRANSFORMER_INDEX_FILE_NAME;
 

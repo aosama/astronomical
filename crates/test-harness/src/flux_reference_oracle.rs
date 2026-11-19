@@ -202,7 +202,7 @@ impl FluxReferenceOracle {
 }
 
 pub fn sha256_hex(bytes: &[u8]) -> String {
-    astronomical_lowercase_hex::encode_lowercase_hex(&Sha256::digest(bytes))
+    lowercase_hex::encode_lowercase_hex(&Sha256::digest(bytes))
 }
 
 fn parse_reference_rgb(
@@ -332,7 +332,7 @@ fn require_pinned_source_revision(
     expected_revision: &str,
 ) -> Result<String, String> {
     let revision = require_string(object, field_name, "reference bundle")?;
-    if !astronomical_lowercase_hex::is_lowercase_hex_of_length(revision, 40) {
+    if !lowercase_hex::is_lowercase_hex_of_length(revision, 40) {
         return Err(format!(
             "{field_name} must be a pinned lowercase 40-character commit hash"
         ));

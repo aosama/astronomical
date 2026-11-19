@@ -1,5 +1,5 @@
 #[allow(unused_imports)]
-pub(crate) use astronomical_test_harness::fixtures::{
+pub(crate) use test_harness::fixtures::{
     dense_vision_model_id, e2e_test_model_ids, flux2_klein_model_id,
     large_sparse_moe_streaming_model_id, required_e2e_test_model_ids, resident_sparse_moe_model_id,
     small_dense_model_id, small_sparse_moe_streaming_model_id, streamed_dense_model_id,
@@ -11,9 +11,9 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 #[cfg(feature = "direct-mlx")]
-use astronomical_config::AstronomicalConfig;
+use config::AstronomicalConfig;
 #[cfg(feature = "direct-mlx")]
-use astronomical_runtime_integration::MlxMemoryLimits;
+use runtime_integration::MlxMemoryLimits;
 #[cfg(feature = "direct-mlx")]
 use tokio::sync::{Mutex, MutexGuard};
 #[cfg(feature = "direct-mlx")]
@@ -33,11 +33,11 @@ pub(crate) mod qwen_image_21;
 #[cfg(feature = "direct-mlx")]
 #[allow(dead_code)]
 pub(crate) fn test_worker_kernel_capabilities(
-    runtime: &astronomical_runtime_integration::MlxRuntime,
-) -> &'static astronomical_model_serving::WorkerKernelCapabilities {
-    use astronomical_model_serving;
-    use astronomical_model_serving::PerformanceAttribution;
-    astronomical_model_serving::worker_process_kernel_capabilities(
+    runtime: &runtime_integration::MlxRuntime,
+) -> &'static model_serving::WorkerKernelCapabilities {
+    use model_serving;
+    use model_serving::PerformanceAttribution;
+    model_serving::worker_process_kernel_capabilities(
         runtime,
         &mut PerformanceAttribution::disabled(),
     )
@@ -46,33 +46,29 @@ pub(crate) fn test_worker_kernel_capabilities(
 #[cfg(feature = "direct-mlx")]
 #[allow(dead_code)]
 pub(crate) fn forced_unsupported_worker_kernel_capabilities()
--> astronomical_model_serving::WorkerKernelCapabilities {
+-> model_serving::WorkerKernelCapabilities {
     // Every family the Qwen3.5 loader consults is demoted with a distinct
     // unsupported reason so one serving request exercises each fallback
     // route.
-    use astronomical_model_serving::{CustomKernelVerdict, CustomMetalKernelFamily};
+    use model_serving::{CustomKernelVerdict, CustomMetalKernelFamily};
     let forced_demotion_description = "forced demotion for the serving fallback journey";
-    astronomical_model_serving::WorkerKernelCapabilities::with_forced_verdicts_for_tests([
+    model_serving::WorkerKernelCapabilities::with_forced_verdicts_for_tests([
         (
             CustomMetalKernelFamily::SORTED_EXPERT_WEIGHTED_SUM,
-            CustomKernelVerdict::Unsupported(
-                astronomical_model_serving::KernelUnsupportedReason::Compilation {
-                    description: forced_demotion_description.to_owned(),
-                },
-            ),
+            CustomKernelVerdict::Unsupported(model_serving::KernelUnsupportedReason::Compilation {
+                description: forced_demotion_description.to_owned(),
+            }),
         ),
         (
             CustomMetalKernelFamily::GATED_DELTA_SEQUENCE,
-            CustomKernelVerdict::Unsupported(
-                astronomical_model_serving::KernelUnsupportedReason::Execution {
-                    description: forced_demotion_description.to_owned(),
-                },
-            ),
+            CustomKernelVerdict::Unsupported(model_serving::KernelUnsupportedReason::Execution {
+                description: forced_demotion_description.to_owned(),
+            }),
         ),
         (
             CustomMetalKernelFamily::GATED_DELTA_BOUNDARY_CHECKPOINT,
             CustomKernelVerdict::Unsupported(
-                astronomical_model_serving::KernelUnsupportedReason::OutputMismatch {
+                model_serving::KernelUnsupportedReason::OutputMismatch {
                     description: forced_demotion_description.to_owned(),
                 },
             ),
@@ -82,9 +78,9 @@ pub(crate) fn forced_unsupported_worker_kernel_capabilities()
 
 #[cfg(feature = "direct-mlx")]
 #[allow(dead_code)]
-pub(crate) fn standard_worker_chunking_configuration()
--> astronomical_ipc_protocol::WorkerChunkingConfiguration {
-    astronomical_ipc_protocol::WorkerChunkingConfiguration {
+pub(crate) fn standard_worker_chunking_configuration() -> ipc_protocol::WorkerChunkingConfiguration
+{
+    ipc_protocol::WorkerChunkingConfiguration {
         fixed_prompt_processing_chunk_size_tokens: 2_048,
         fixed_ssd_streaming_prompt_processing_chunk_size_tokens: 2_048,
         full_attention_key_value_growth_tokens: 256,
@@ -102,17 +98,17 @@ pub(crate) fn standard_worker_chunking_configuration()
 #[cfg(feature = "direct-mlx")]
 #[allow(dead_code)]
 pub(crate) fn standard_qwen3_5_model_chunking_configuration()
--> astronomical_model_serving::Qwen3_5ModelChunkingConfiguration {
-    astronomical_model_serving::Qwen3_5ModelChunkingConfiguration::new(256, 0, 3)
+-> model_serving::Qwen3_5ModelChunkingConfiguration {
+    model_serving::Qwen3_5ModelChunkingConfiguration::new(256, 0, 3)
         .expect("the standard test model chunking configuration should be valid")
 }
 
 #[cfg(feature = "direct-mlx")]
 #[allow(dead_code)]
 pub(crate) fn standard_request_decoder_state(
-    qwen3_5_config: &astronomical_model_serving::Qwen3_5Config,
-) -> astronomical_model_serving::RequestDecoderStateStack {
-    astronomical_model_serving::RequestDecoderStateStack::empty_from_config_with_full_attention_kv_state_growth_tokens(
+    qwen3_5_config: &model_serving::Qwen3_5Config,
+) -> model_serving::RequestDecoderStateStack {
+    model_serving::RequestDecoderStateStack::empty_from_config_with_full_attention_kv_state_growth_tokens(
         qwen3_5_config,
         256,
     )
@@ -204,7 +200,7 @@ pub(crate) async fn sample_serving_acceptance_mlx_memory_limits() -> MlxMemoryLi
 #[cfg(feature = "direct-mlx")]
 #[allow(dead_code)]
 pub(crate) struct MlxMemoryPolicyGuard {
-    runtime: astronomical_runtime_integration::MlxRuntime,
+    runtime: runtime_integration::MlxRuntime,
     shared_memory_limits: MlxMemoryLimits,
 }
 
@@ -217,9 +213,8 @@ impl MlxMemoryPolicyGuard {
         shared_memory_limits: MlxMemoryLimits,
         temporary_memory_limits: MlxMemoryLimits,
     ) -> Self {
-        let mut runtime =
-            astronomical_runtime_integration::MlxRuntime::initialize(shared_memory_limits)
-                .expect("the shared MLX memory policy should initialize for the journey");
+        let mut runtime = runtime_integration::MlxRuntime::initialize(shared_memory_limits)
+            .expect("the shared MLX memory policy should initialize for the journey");
         runtime
             .update_memory_limits(temporary_memory_limits)
             .expect("the journey should transition to its temporary MLX memory policy");
@@ -295,7 +290,7 @@ pub(crate) async fn sample_machine_mlx_memory_ceiling_bytes() -> usize {
         .unwrap_or_else(|parse_error| {
             panic!("hw.memsize should be an unsigned integer: {parse_error}")
         });
-    astronomical_model_serving::machine_ceiling_from_physical_ram_bytes(physical_ram_bytes)
+    model_serving::machine_ceiling_from_physical_ram_bytes(physical_ram_bytes)
         .try_into()
         .expect("the machine MLX memory ceiling should fit in usize bytes")
 }
@@ -339,13 +334,12 @@ pub(crate) fn configured_resident_sparse_moe_model_directory() -> PathBuf {
 #[allow(dead_code)]
 pub(crate) fn effective_discovered_models(
     astronomical_config: &AstronomicalConfig,
-) -> Vec<astronomical_config::DiscoveredModel> {
-    let instance_paths =
-        astronomical_config::AstronomicalInstancePaths::default_location_instance_paths(
-            astronomical_config::AstronomicalRuntimeInstance::Development,
-        )
-        .expect("the standard Astronomical instance paths should resolve");
-    astronomical_config::discover_effective_models(
+) -> Vec<config::DiscoveredModel> {
+    let instance_paths = config::AstronomicalInstancePaths::default_location_instance_paths(
+        config::AstronomicalRuntimeInstance::Development,
+    )
+    .expect("the standard Astronomical instance paths should resolve");
+    config::discover_effective_models(
         &instance_paths.models_directory(),
         astronomical_config.model_directories(),
     )
@@ -358,7 +352,7 @@ pub(crate) fn effective_discovered_models(
 pub(crate) fn configured_discovered_model_by_id(
     astronomical_config: &AstronomicalConfig,
     model_id: &str,
-) -> astronomical_config::DiscoveredModel {
+) -> config::DiscoveredModel {
     effective_discovered_models(astronomical_config)
         .into_iter()
         .find(|discovered_model| discovered_model.model_id == model_id)
@@ -372,11 +366,9 @@ pub(crate) fn configured_discovered_model_by_id(
 #[cfg(feature = "direct-mlx")]
 #[allow(dead_code)]
 pub(crate) fn discovered_chat_capabilities(
-    discovered_model: &astronomical_config::DiscoveredModel,
-) -> &astronomical_config::ChatModelCapabilities {
-    let astronomical_config::ModelCapabilities::Chat(chat_capabilities) =
-        &discovered_model.capabilities
-    else {
+    discovered_model: &config::DiscoveredModel,
+) -> &config::ChatModelCapabilities {
+    let config::ModelCapabilities::Chat(chat_capabilities) = &discovered_model.capabilities else {
         panic!(
             "model ID {} should identify a discovered chat model",
             discovered_model.model_id

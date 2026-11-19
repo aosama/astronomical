@@ -9,15 +9,15 @@
 //! The central contract is that batching is invisible: a row of a padded
 //! batch gets the hidden states it gets when it is encoded alone.
 
-use astronomical_runtime_integration::{MlxRuntime, MlxSafetensors};
 use mlx_bridge::{MlxArray, MlxDtype};
+use runtime_integration::{MlxRuntime, MlxSafetensors};
 use serial_test::serial;
 
 use super::{ModernBertTrunk, ModernBertTrunkError};
 use crate::modernbert::configuration::ModernBertConfiguration;
 use crate::modernbert::token_batch::PaddedTokenBatch;
 use crate::modernbert::weight_layout::{ModernBertWeightLayout, TokenEmbeddingStorage};
-use astronomical_model_primitives::synthetic_weights_test_support::{
+use model_primitives::synthetic_weights_test_support::{
     SYNTHETIC_QUANTIZATION_BITS, SYNTHETIC_QUANTIZATION_GROUP_SIZE, SyntheticWeights,
     initialize_test_runtime, largest_difference, load_synthetic_weights,
 };

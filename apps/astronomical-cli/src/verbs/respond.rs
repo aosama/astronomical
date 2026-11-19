@@ -9,9 +9,9 @@
 
 use std::{io::Write, time::Duration};
 
-use astronomical_config::AstronomicalRuntimeInstance;
+use config::AstronomicalRuntimeInstance;
 
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     ChatGenerationFailureReason, ChatGenerationSettings, ChatImageInput, ChatMessage,
     DaemonIpcClient, DaemonRequest, DaemonResponse,
 };
@@ -272,7 +272,7 @@ fn chat_generation_failure_reason_text(reason: &ChatGenerationFailureReason) -> 
              ({actual_total_context_tokens} of {maximum_context_tokens} tokens)"
         ),
         ChatGenerationFailureReason::OutOfGraphicsMemory => {
-            astronomical_ipc_protocol::OUT_OF_GRAPHICS_MEMORY_ADVICE.to_owned()
+            ipc_protocol::OUT_OF_GRAPHICS_MEMORY_ADVICE.to_owned()
         }
         ChatGenerationFailureReason::EngineBusy => {
             "the engine is busy with another generation".to_owned()

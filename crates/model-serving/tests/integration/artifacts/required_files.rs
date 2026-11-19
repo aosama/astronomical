@@ -2,7 +2,7 @@ use std::io::Read;
 use std::os::unix::fs::symlink;
 use std::path::PathBuf;
 
-use astronomical_model_serving::{
+use model_serving::{
     ArtifactValidationError, RequiredFileProfile, validate_required_file_for_tests,
 };
 

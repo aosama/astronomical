@@ -3,9 +3,7 @@
 //! positive, boundary, and negative cases. These rules previously lived as
 //! untested copies inside both engines' restore functions.
 
-use astronomical_ipc_protocol::{
-    WorkerAstroSsdPromptCacheLookupOutcome, WorkerAstroSsdPromptCacheMissReason,
-};
+use ipc_protocol::{WorkerAstroSsdPromptCacheLookupOutcome, WorkerAstroSsdPromptCacheMissReason};
 
 use crate::astro_ssd_prompt_cache::block_causal_input::AstroSsdPromptCacheBlockCausalInput;
 use crate::astro_ssd_prompt_cache::restore_support::{

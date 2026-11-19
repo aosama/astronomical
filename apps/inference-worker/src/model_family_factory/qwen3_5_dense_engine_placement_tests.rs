@@ -1,7 +1,7 @@
 //! Boundaries of the dense startup placement: weights under, at, one byte
 //! over, and far over the effective MLX limit.
 
-use astronomical_model_serving::EnginePlacement;
+use model_serving::EnginePlacement;
 
 use super::qwen3_5_dense_engine_placement::place_dense_weights_under_ceiling;
 

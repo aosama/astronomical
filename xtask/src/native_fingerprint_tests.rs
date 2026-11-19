@@ -1,7 +1,7 @@
 use std::path::Path;
 
-use astronomical_native_identity::probes::ProbeValue;
-use astronomical_native_identity::{IdentityScope, NativeBuildProfile};
+use native_identity::probes::ProbeValue;
+use native_identity::{IdentityScope, NativeBuildProfile};
 
 use super::{
     FingerprintOptions, github_environment_lines, host_from_rustc_version, one_line_text,

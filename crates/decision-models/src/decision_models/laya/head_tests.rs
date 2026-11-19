@@ -9,15 +9,15 @@
 
 use std::collections::BTreeMap;
 
-use astronomical_runtime_integration::{MlxRuntime, MlxSafetensors};
 use mlx_bridge::MlxArray;
+use runtime_integration::{MlxRuntime, MlxSafetensors};
 use serial_test::serial;
 
 use super::{HeadPassRows, LayaDecisionHead};
 use crate::decision_models::laya::configuration::LayaConfiguration;
 use crate::modernbert::token_batch::PaddedTokenBatch;
 use crate::modernbert::trunk::ModernBertTrunkError;
-use astronomical_model_primitives::synthetic_weights_test_support::{
+use model_primitives::synthetic_weights_test_support::{
     SYNTHETIC_QUANTIZATION_BITS, SYNTHETIC_QUANTIZATION_GROUP_SIZE, SyntheticWeights,
     initialize_test_runtime, largest_difference, load_synthetic_weights, shakespeare_values,
 };

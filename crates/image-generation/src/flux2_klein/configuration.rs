@@ -8,7 +8,7 @@ use serde::de::DeserializeOwned;
 use thiserror::Error;
 
 use super::Flux2KleinOfficialProfile;
-use astronomical_memory_policy::strict_json::DuplicateAwareJsonValue;
+use memory_policy::strict_json::DuplicateAwareJsonValue;
 const HIDDEN_STATE_TAPS: [usize; 3] = [9, 18, 27];
 
 /// Configuration rejected before any weight descriptor reaches an engine.

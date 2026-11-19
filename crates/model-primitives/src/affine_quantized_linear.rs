@@ -8,8 +8,8 @@
 //! tensors load without repacking. The affine `biases` are dequantization
 //! offsets, not layer biases.
 
-use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 use mlx_bridge::MlxArray;
+use runtime_integration::{MlxRuntime, MlxRuntimeError};
 use thiserror::Error;
 
 pub use crate::affine_quantization_scheme::{

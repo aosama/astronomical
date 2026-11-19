@@ -1,8 +1,6 @@
 #![forbid(unsafe_code)]
 
-use astronomical_ipc_protocol::{
-    ChatModelCapabilities, ProtocolReader, ProtocolWriter, WorkerEvent,
-};
+use ipc_protocol::{ChatModelCapabilities, ProtocolReader, ProtocolWriter, WorkerEvent};
 
 #[tokio::main]
 async fn main() {

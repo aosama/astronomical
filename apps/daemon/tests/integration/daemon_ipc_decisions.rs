@@ -4,8 +4,8 @@
 use std::sync::{Arc, RwLock};
 
 use astronomical_daemon::{DecisionsExecutionError, DecisionsOutput};
-use astronomical_decision_contract::{DecisionFailure, OrderedJsonValue};
-use astronomical_ipc_protocol::{DaemonIpcClient, DaemonRequest, DaemonResponse};
+use decision_contract::{DecisionFailure, OrderedJsonValue};
+use ipc_protocol::{DaemonIpcClient, DaemonRequest, DaemonResponse};
 use tokio::time::timeout;
 
 use crate::support::daemon_ipc::{

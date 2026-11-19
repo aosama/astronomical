@@ -2,8 +2,8 @@
 //! rate, mixed with the harmonic excitation, then out as a short-time
 //! spectrum that the inverse transform turns into 24 kHz samples.
 
-use astronomical_runtime_integration::MlxRuntime;
 use mlx_bridge::MlxArray;
+use runtime_integration::MlxRuntime;
 
 use super::convolutions::{ConvolutionGeometry, KokoroConv1d, KokoroConvTranspose1d};
 use super::harmonic_source::HarmonicSource;

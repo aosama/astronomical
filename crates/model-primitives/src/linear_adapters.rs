@@ -13,7 +13,7 @@
 
 use std::collections::BTreeMap;
 
-use astronomical_decision_contract::decision_adapters_file::DecisionAdapters;
+use decision_contract::decision_adapters_file::DecisionAdapters;
 use mlx_bridge::{MlxArray, MlxBindingsContext, MlxCError};
 
 /// One layer's add-on on the GPU.

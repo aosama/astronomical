@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use astronomical_runtime_integration::{MlxRuntime, MlxSafetensors};
+use runtime_integration::{MlxRuntime, MlxSafetensors};
 
 use crate::qwen3_5_core::artifacts::{
     ValidatedQwen3_5Artifact, qwen3_5_resident_language_tensor_profiles,
@@ -460,7 +460,7 @@ fn apply_rms_norm_storage_convention(
 fn jangtq2_unit_scale_applies(qwen3_5_config: &Qwen3_5Config, tensor_name: &str) -> bool {
     matches!(
         qwen3_5_config.jangtq2_rms_norm_convention(),
-        Some(astronomical_jangtq2_qwen35::configuration::Jangtq2RmsNormConvention::LanguageMlxPlusOne)
+        Some(jangtq2_qwen35::configuration::Jangtq2RmsNormConvention::LanguageMlxPlusOne)
     ) && is_language_rms_norm_weight_tensor(tensor_name)
 }
 

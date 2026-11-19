@@ -9,8 +9,8 @@
 
 use std::path::Path;
 
-use astronomical_decision_contract::DecisionFailure;
-use astronomical_decision_contract::head_tuning_file::HeadTuning;
+use decision_contract::DecisionFailure;
+use decision_contract::head_tuning_file::HeadTuning;
 use safetensors::{Dtype, SafeTensors};
 
 use crate::decision_models::head_tuning::check_tuned_shape;

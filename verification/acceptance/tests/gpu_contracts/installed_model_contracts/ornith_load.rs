@@ -8,8 +8,8 @@
 
 use std::time::Duration;
 
-use astronomical_ipc_protocol::RequestId;
-use astronomical_model_serving::{
+use ipc_protocol::RequestId;
+use model_serving::{
     PerformanceAttribution, PerformanceAttributionLog, Qwen3_5ArtifactValidator,
     Qwen3_5StreamingEngine, Qwen3_5StreamingPromptProcessingChunkSizer, Qwen3_5Tokenizer,
 };
@@ -43,9 +43,8 @@ async fn should_load_the_configured_ornith_artifact_through_the_production_engin
 
 async fn load_and_generate_with_configured_ornith_artifact() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
-    let development_config =
-        astronomical_config::AstronomicalConfig::load_from_development_location()
-            .expect("the Development configuration should load for the Ornith journey");
+    let development_config = config::AstronomicalConfig::load_from_development_location()
+        .expect("the Development configuration should load for the Ornith journey");
     let model_directory = crate::common::configured_discovered_model_by_id(
         &development_config,
         ORNITH_ACCEPTANCE_MODEL_ID,

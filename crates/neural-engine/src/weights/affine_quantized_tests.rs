@@ -1,6 +1,6 @@
 use super::{AffineQuantizationError, AffineQuantizedWeights, QuantizationLayout};
 use crate::weights::half_precision::{f16_bits_slice_to_f32, f16_bits_to_f32, f32_to_f16_bits};
-use astronomical_test_harness::deterministic_values::{
+use test_harness::deterministic_values::{
     PROJECTION_WEIGHT_STANDARD_DEVIATION, bell_shaped_values,
 };
 

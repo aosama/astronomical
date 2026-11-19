@@ -6,11 +6,11 @@
 //! is applied unconditionally inside the packed projection types — there is
 //! no branch anywhere in this path that could skip it.
 
-use astronomical_runtime_integration::{MlxRuntime, MlxSafetensors};
 use mlx_bridge::{
     MlxArray, MlxCompiledDualHeadNorm, MlxCompiledElementwiseGraphs,
     MlxCompiledGatedDeltaRateActivation, MlxCompiledSwiGlu, MlxMetalKernel,
 };
+use runtime_integration::{MlxRuntime, MlxSafetensors};
 
 use crate::PerformanceAttribution;
 
@@ -296,23 +296,23 @@ pub enum PrismHadamardModelError {
     #[error("folded pack weight casting failed: {0}")]
     WeightCasting(#[source] mlx_bridge::MlxCError),
     #[error("folded pack safetensors loading failed: {0}")]
-    SafetensorsLoading(#[source] astronomical_runtime_integration::MlxRuntimeError),
+    SafetensorsLoading(#[source] runtime_integration::MlxRuntimeError),
     #[error("folded pack tensor lookup failed for {tensor_name:?}: {source}")]
     TensorLookup {
         tensor_name: String,
         #[source]
-        source: astronomical_runtime_integration::MlxRuntimeError,
+        source: runtime_integration::MlxRuntimeError,
     },
     #[error("folded pack weight slicing failed: {description}")]
     WeightSlicing { description: String },
     #[error("folded pack forward pass failed: {0}")]
     Forward(#[source] mlx_bridge::MlxCError),
     #[error("folded pack forward-pass runtime state failed: {0}")]
-    ForwardRuntime(#[source] astronomical_runtime_integration::MlxRuntimeError),
+    ForwardRuntime(#[source] runtime_integration::MlxRuntimeError),
     #[error("folded pack declares unsupported layer type {layer_type:?}")]
     UnsupportedLayerType { layer_type: String },
     #[error("the fused gated-delta kernel could not be retained: {0}")]
-    KernelRetention(#[source] astronomical_runtime_integration::MlxRuntimeError),
+    KernelRetention(#[source] runtime_integration::MlxRuntimeError),
     #[error("the generation pass produced no position to decode from")]
     EmptyGeneration,
     #[error("folded pack greedy generation request is invalid: {description}")]

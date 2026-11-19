@@ -14,9 +14,9 @@
 //! runs in the very pass serving ran it in, beside the same questions and
 //! nothing else. Gradient steps need no such care and use larger batches.
 
-use astronomical_decision_contract::decision_training_job::TrainingExample;
-use astronomical_decision_contract::laya_rendering::laya_question_type_index;
-use astronomical_decision_contract::{DecisionFailure, parse_system_one_questions};
+use decision_contract::decision_training_job::TrainingExample;
+use decision_contract::laya_rendering::laya_question_type_index;
+use decision_contract::{DecisionFailure, parse_system_one_questions};
 
 use crate::decision_models::forward_pass_planning::{
     LAYA_SERVING_PADDED_TOKENS_PER_PASS, plan_forward_passes,

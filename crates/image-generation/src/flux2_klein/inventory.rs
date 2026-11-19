@@ -4,7 +4,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use ::safetensors::Dtype;
 
-use astronomical_artifact_validation::{RawSafetensorsInventory, RawSafetensorsTensorDescriptor};
+use artifact_validation::{RawSafetensorsInventory, RawSafetensorsTensorDescriptor};
 
 use super::{Flux2KleinArtifactError, Flux2KleinTransformerConfig};
 

@@ -5,10 +5,10 @@
 //! (a Phonon voice's memoized state is the only thing kept, and it is a few
 //! megabytes), so it shares the decision engines' memory shape and report.
 
-use astronomical_runtime_integration::MlxRuntime;
+use runtime_integration::MlxRuntime;
 
-use astronomical_memory_policy::telemetry::MlxMemoryTelemetry;
-use astronomical_model_primitives::forward_pass_memory::forward_pass_memory_telemetry;
+use memory_policy::telemetry::MlxMemoryTelemetry;
+use model_primitives::forward_pass_memory::forward_pass_memory_telemetry;
 
 pub struct SpeechMemoryAccount {
     effective_mlx_memory_ceiling_bytes: u64,

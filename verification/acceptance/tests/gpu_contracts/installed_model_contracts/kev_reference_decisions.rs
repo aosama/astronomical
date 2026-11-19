@@ -20,11 +20,11 @@
 
 use std::path::Path;
 
-use astronomical_decision_contract::{
+use decision_contract::{
     HeadInputRequest, OrderedJsonValue, QuestionOutcome, parse_system_one_questions,
 };
-use astronomical_model_serving::{DecisionEngine, KevDecisionEngine, KevRowLayout};
-use astronomical_test_harness::test_run::TestRunContext;
+use model_serving::{DecisionEngine, KevDecisionEngine, KevRowLayout};
+use test_harness::test_run::TestRunContext;
 
 use super::decision_reference_fixture::{
     answer_probabilities, most_probable_index, reference_array, reference_field, reference_numbers,

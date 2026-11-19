@@ -1,14 +1,14 @@
 //! The GPU passes against the CPU oracle: the same scores and, for a loss
 //! whose score gradients are fixed weights, the same gradient for every
 //! parameter. The oracle's own gradients are pinned by finite differences
-//! in `astronomical-decision-training`.
+//! in `decision-training`.
 
-use astronomical_decision_contract::HeadInputs;
-use astronomical_decision_contract::head_tuning_file::TunableHeadFamily;
-use astronomical_decision_training::clef_trainable::ClefTrainableHead;
-use astronomical_decision_training::kev_trainable::KevTrainableHead;
-use astronomical_decision_training::laya_trainable::LayaTrainableHead;
-use astronomical_decision_training::trainable_head::TrainableHead;
+use decision_contract::HeadInputs;
+use decision_contract::head_tuning_file::TunableHeadFamily;
+use decision_training::clef_trainable::ClefTrainableHead;
+use decision_training::kev_trainable::KevTrainableHead;
+use decision_training::laya_trainable::LayaTrainableHead;
+use decision_training::trainable_head::TrainableHead;
 use serial_test::serial;
 
 use super::super::gpu_test_support::{
@@ -19,7 +19,7 @@ use super::super::gpu_upload::{
 };
 use super::super::question_batch::QuestionBatch;
 use super::*;
-use astronomical_model_primitives::synthetic_weights_test_support::initialize_test_runtime;
+use model_primitives::synthetic_weights_test_support::initialize_test_runtime;
 
 /// Scores and gradients from the GPU and from the CPU oracle, for one family.
 fn compare_with_oracle(

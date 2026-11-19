@@ -4,7 +4,7 @@
 
 use std::error::Error;
 
-use astronomical_ipc_protocol::{WorkerLogLevel, WorkerStartupConfiguration};
+use ipc_protocol::{WorkerLogLevel, WorkerStartupConfiguration};
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_subscriber::{EnvFilter, fmt};
 

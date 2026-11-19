@@ -13,21 +13,17 @@
 //! pair kept 5.95 and 6.2 (code completion, greedy and 0.7) and 4.2 and 3.46
 //! (chat, greedy and 1.0).
 
-use astronomical_model_serving::speculative_decoding::dflash2_drafter::{
+use mlx_bridge::MlxArray;
+use model_serving::speculative_decoding::dflash2_drafter::{
     DFlash2DraftTarget, DraftTree, DraftTreeOptions, DrafterContextStates, KeyedNoise,
     TENSORFOLD_TREE_BLOCK_ROW_COUNT, best_first_draft_tree, draft_lattice, drafted_hidden_rows,
     tree_block_row_count,
 };
-use astronomical_model_serving::speculative_decoding::keyed_sampling::{
-    RequestKeyedNoise, keyed_sample,
-};
-use astronomical_model_serving::speculative_decoding::verification_decision::{
+use model_serving::speculative_decoding::keyed_sampling::{RequestKeyedNoise, keyed_sample};
+use model_serving::speculative_decoding::verification_decision::{
     TargetDistribution, VerificationDecision,
 };
-use astronomical_model_serving::{
-    PerformanceAttribution, RequestDecoderStateStack, VerificationLogitsMode,
-};
-use mlx_bridge::MlxArray;
+use model_serving::{PerformanceAttribution, RequestDecoderStateStack, VerificationLogitsMode};
 use serial_test::serial;
 
 use super::dflash2_journey_support::{host_values, tap_rows};
@@ -433,7 +429,7 @@ fn search_tree(
     cell: &Cell,
     round: &RoundState,
     drafting: Drafting,
-    lattice: &astronomical_model_serving::speculative_decoding::dflash2_drafter::DraftLattice,
+    lattice: &model_serving::speculative_decoding::dflash2_drafter::DraftLattice,
 ) -> DraftTree {
     let mut options = DraftTreeOptions {
         sampling_temperature: f64::from(cell.temperature_thousandths) / 1_000.0,

@@ -2,7 +2,7 @@ use std::ffi::OsString;
 use std::path::Path;
 use std::time::{Duration, Instant};
 
-use astronomical_expert_atlas::{ConversionProgress, ConversionStage};
+use expert_atlas::{ConversionProgress, ConversionStage};
 
 use super::{
     ConvertAtlasArguments, ConvertAtlasDependencies, ConvertAtlasError, ResolvedSource,

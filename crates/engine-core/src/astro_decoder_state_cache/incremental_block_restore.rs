@@ -10,7 +10,7 @@
 //! costs handles rather than payload: the bytes cross disk → destination
 //! during the single concat materialization.
 
-use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
+use runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use super::append_only_attention_state::{FullAttentionKeyValueState, STATE_DIMENSION_TOKEN_AXIS};
 use mlx_bridge::MlxArray;

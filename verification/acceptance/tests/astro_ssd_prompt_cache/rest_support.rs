@@ -1,10 +1,10 @@
 use std::{fs, net::SocketAddr, path::Path};
 
-use astronomical_ipc_protocol::{
+use futures_util::StreamExt;
+use ipc_protocol::{
     ChatGenerationCommand, ChatGenerationSettings, ChatMessage, ChatToolChoice, RequestId,
 };
-use astronomical_model_serving::{Qwen3_5ArtifactValidator, Qwen3_5Tokenizer};
-use futures_util::StreamExt;
+use model_serving::{Qwen3_5ArtifactValidator, Qwen3_5Tokenizer};
 use serde_json::{Value, json};
 
 use crate::openai_rest;

@@ -1,4 +1,4 @@
-use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
+use runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use super::routing;
 use crate::PerformanceAttribution;

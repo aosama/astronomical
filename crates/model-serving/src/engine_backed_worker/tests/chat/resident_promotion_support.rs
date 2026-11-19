@@ -17,7 +17,7 @@ use crate::{
     ModelGenerationProcessor, PreparedInferenceRequest, PreparedModelGeneration,
     StreamingEngineRequirement, StreamingStartupResidencyFacts, WorkerRuntimeError,
 };
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     ChatGenerationCommand, ChatGenerationFailureReason, ChatGenerationOutput, ChatMessage,
     MAX_IPC_FRAME_BYTES, ProtocolReader, ProtocolWriter, RequestId, WorkerCommand, WorkerEvent,
     WorkerModelConfiguration,

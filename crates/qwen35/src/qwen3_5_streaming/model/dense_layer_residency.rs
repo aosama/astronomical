@@ -12,7 +12,7 @@
 //! idle capacity would have every request give layers back as it starts
 //! and read them from the drive again as it ends.
 
-use astronomical_memory_policy::ledger::KeptWeightCapacity;
+use memory_policy::ledger::KeptWeightCapacity;
 
 use super::Qwen3_5Model;
 use super::dense_layer_counts::leading_layer_count_within;

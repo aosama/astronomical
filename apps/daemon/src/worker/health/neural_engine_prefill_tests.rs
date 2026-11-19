@@ -2,7 +2,7 @@
 
 use std::sync::{Arc, RwLock};
 
-use astronomical_ipc_protocol::{NeuralEnginePrefillStatus, WorkerModelCapabilities};
+use ipc_protocol::{NeuralEnginePrefillStatus, WorkerModelCapabilities};
 
 use super::{WorkerHealthSnapshot, publish_neural_engine_prefill};
 

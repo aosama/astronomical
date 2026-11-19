@@ -2,7 +2,7 @@
 //! (hexgrad/kokoro, Apache-2.0): phonemes and a voice in, 24 kHz audio out.
 //!
 //! The model is StyleTTS2 with an iSTFTNet vocoder. Turning text into the
-//! phonemes it reads is the `astronomical-english-phonemes` crate's job.
+//! phonemes it reads is the `english-phonemes` crate's job.
 
 mod acoustic_decoder;
 mod albert_encoder;

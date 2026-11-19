@@ -16,8 +16,8 @@
 //! single sequence always built, so an unpadded forward pass is unchanged by
 //! batching. Only a batch that carries padding adds the padding masks.
 
-use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError, MlxSafetensors};
 use mlx_bridge::{MlxArray, MlxCError, MlxDtype};
+use runtime_integration::{MlxRuntime, MlxRuntimeError, MlxSafetensors};
 use thiserror::Error;
 
 use crate::linear_adapters::{LinearAdapters, adapted_layer_output};

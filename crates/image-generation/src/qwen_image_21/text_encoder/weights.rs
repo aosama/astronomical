@@ -8,7 +8,7 @@
 //! `lm_head` is deliberately absent: the encoder use only needs hidden states, never logits.
 //! The vision tower stays absent for the same reason — text-only prompts never touch it.
 
-use astronomical_runtime_integration::{MlxRuntime, MlxSafetensors};
+use runtime_integration::{MlxRuntime, MlxSafetensors};
 
 use crate::qwen_image_21::QwenImage21EngineError;
 use crate::qwen_image_21::mlx_math::{

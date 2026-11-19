@@ -1,4 +1,4 @@
-use astronomical_ipc_protocol::{ImageGenerationCommand, ImageGenerationFailureReason, RequestId};
+use ipc_protocol::{ImageGenerationCommand, ImageGenerationFailureReason, RequestId};
 
 use crate::image_generation_engine::ImageGenerationEngineLoadResult;
 use crate::memory::telemetry::MlxMemoryLimitAdjustment;

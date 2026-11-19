@@ -3,7 +3,7 @@ use crate::{
     EngineGenerationStart, EngineLoadResult, GeneratedToken, GenerationFinalization,
     InferenceEngine, InferenceEngineError,
 };
-use astronomical_ipc_protocol::RequestId;
+use ipc_protocol::RequestId;
 pub(super) struct TrackingChatEngine {
     is_active: bool,
 }

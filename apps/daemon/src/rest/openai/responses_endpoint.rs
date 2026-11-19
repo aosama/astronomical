@@ -2,12 +2,6 @@ use crate::rest::worker_replacement_wait::lock_configuration_transition_for_gene
 use std::collections::VecDeque;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use astronomical_config::ModelCapabilities;
-use astronomical_ipc_protocol::RequestId;
-use astronomical_rest_contract::{
-    OpenAiErrorResponse, OpenAiResponseRequestConfiguration, OpenAiResponseStreamEvent,
-    OpenAiResponsesRequest, OpenAiResponsesRequestParts, OpenAiResponsesValidationError,
-};
 use axum::{
     Json,
     body::Bytes,
@@ -15,7 +9,13 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response, sse::Event, sse::Sse},
 };
+use config::ModelCapabilities;
 use futures_util::stream;
+use ipc_protocol::RequestId;
+use rest_contract::{
+    OpenAiErrorResponse, OpenAiResponseRequestConfiguration, OpenAiResponseStreamEvent,
+    OpenAiResponsesRequest, OpenAiResponsesRequestParts, OpenAiResponsesValidationError,
+};
 
 use crate::application;
 use crate::application::ApplicationState;
@@ -219,7 +219,7 @@ fn allocate_responses_request_identifier(
 fn translate_responses_request(
     request_id: u64,
     request_parts: OpenAiResponsesRequestParts,
-) -> Result<astronomical_ipc_protocol::ChatGenerationCommand, Response> {
+) -> Result<ipc_protocol::ChatGenerationCommand, Response> {
     super::responses_translation::translate_openai_responses_request_parts(
         RequestId::new(request_id),
         request_parts,
@@ -235,13 +235,13 @@ fn translate_responses_request(
 #[allow(clippy::too_many_arguments)]
 fn finalize_responses_generation_command(
     application_state: &ApplicationState,
-    mut chat_generation_command: astronomical_ipc_protocol::ChatGenerationCommand,
+    mut chat_generation_command: ipc_protocol::ChatGenerationCommand,
     resolved_model_id: String,
     request_id: u64,
     should_stream_response: bool,
     request_body_bytes: usize,
     settings_presence: crate::config::request_generation_defaults::RequestGenerationSettingsPresence,
-) -> astronomical_ipc_protocol::ChatGenerationCommand {
+) -> ipc_protocol::ChatGenerationCommand {
     chat_generation_command.model = resolved_model_id;
     crate::config::request_generation_defaults::apply_generation_defaults(
         application_state.reloadable_config.as_ref(),
@@ -293,7 +293,7 @@ async fn respond_with_responses_completion(
     response_presentation: OpenAiResponsePresentation,
     should_stream_response: bool,
     reasoning_excluded: bool,
-    structured_output: &Option<astronomical_rest_contract::OpenAiStructuredOutput>,
+    structured_output: &Option<rest_contract::OpenAiStructuredOutput>,
 ) -> Response {
     if !should_stream_response {
         return crate::serving::structured_output::attach_unenforced_structured_output_warning(
@@ -343,7 +343,7 @@ async fn create_non_streaming_response(
     mut stream_event_receiver: tokio::sync::mpsc::Receiver<ChatGenerationStreamEvent>,
     response_presentation: OpenAiResponsePresentation,
     reasoning_excluded: bool,
-    structured_output: Option<&astronomical_rest_contract::OpenAiStructuredOutput>,
+    structured_output: Option<&rest_contract::OpenAiStructuredOutput>,
 ) -> Response {
     let OpenAiResponsePresentation {
         response_id,
@@ -362,7 +362,7 @@ async fn create_non_streaming_response(
     while let Some(stream_event) = stream_event_receiver.recv().await {
         if let ChatGenerationStreamEvent::Failed {
             reason:
-                astronomical_ipc_protocol::ChatGenerationFailureReason::ContextLengthExceeded {
+                ipc_protocol::ChatGenerationFailureReason::ContextLengthExceeded {
                     actual_total_context_tokens,
                     maximum_context_tokens,
                 },

@@ -16,14 +16,14 @@
 
 use std::time::Duration;
 
-use astronomical_ipc_protocol::RequestId;
-use astronomical_model_serving::{
+use ipc_protocol::RequestId;
+use model_serving::{
     CustomMetalKernelFamily, GeneratedToken, InferenceEngine, PerformanceAttribution,
     Qwen3_5ArtifactValidator, Qwen3_5InferenceRequest, Qwen3_5StreamingEngine,
     Qwen3_5StreamingPromptProcessingChunkSizer, install_forced_worker_verdicts_for_tests,
     worker_process_kernel_capabilities,
 };
-use astronomical_runtime_integration::MlxRuntime;
+use runtime_integration::MlxRuntime;
 use tokio::time::timeout;
 
 use crate::serving_acceptance::support::{IMAGE_PAD_TOKEN_ID, LOCAL_AI_PROMPT_TOKEN_IDS};

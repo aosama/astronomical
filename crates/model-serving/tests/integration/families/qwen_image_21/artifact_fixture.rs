@@ -11,7 +11,7 @@ use std::fs::{self, File};
 use std::io::Write;
 use std::path::Path;
 
-use astronomical_model_serving::{
+use model_serving::{
     QwenImage21TensorProfile, QwenImage21TextEncoderConfig, QwenImage21TransformerConfig,
     QwenImage21VaeConfig, text_encoder_tensor_profiles, transformer_tensor_profiles,
     vae_tensor_profiles,

@@ -4,7 +4,7 @@
 use std::{io::Write, path::PathBuf};
 
 use astronomical_cli::{ModelsCommand, ModelsDependencies};
-use astronomical_config::AstronomicalRuntimeInstance;
+use config::AstronomicalRuntimeInstance;
 use tokio::time::timeout;
 
 use crate::integration::support::environment::{

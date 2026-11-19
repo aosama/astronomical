@@ -6,7 +6,7 @@
 
 use std::path::Path;
 
-use astronomical_speech_contract::is_plain_voice_name;
+use speech_contract::is_plain_voice_name;
 
 const VOICE_FILE_EXTENSION: &str = "safetensors";
 /// More voice files than any published model ships; a folder past it is not

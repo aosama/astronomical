@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use astronomical_cli::{
     ValidateConfigArguments, ValidateConfigDependencies, ValidateConfigError, run_validate_config,
 };
-use astronomical_config::{AstronomicalInstancePaths, AstronomicalRuntimeInstance};
+use config::{AstronomicalInstancePaths, AstronomicalRuntimeInstance};
 
 struct SandboxStateDirectory {
     _temporary_directory: tempfile::TempDir,

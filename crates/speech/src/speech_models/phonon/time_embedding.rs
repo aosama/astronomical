@@ -5,8 +5,8 @@
 //! conditioning never changes and is computed once at load: the average of
 //! the start-time and end-time embeddings.
 
-use astronomical_runtime_integration::MlxRuntime;
 use mlx_bridge::MlxArray;
+use runtime_integration::MlxRuntime;
 
 use crate::speech_models::checkpoint_tensors::CheckpointTensors;
 use crate::speech_models::mlx_layers::linear::Linear;

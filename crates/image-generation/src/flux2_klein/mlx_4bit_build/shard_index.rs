@@ -6,8 +6,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use serde::Deserialize;
 
-use astronomical_memory_policy::strict_json::DuplicateAwareJsonValue;
-use astronomical_model_primitives::affine_quantization_scheme::{
+use memory_policy::strict_json::DuplicateAwareJsonValue;
+use model_primitives::affine_quantization_scheme::{
     AFFINE_QUANTIZATION_BITS, AFFINE_QUANTIZATION_GROUP_SIZE,
 };
 

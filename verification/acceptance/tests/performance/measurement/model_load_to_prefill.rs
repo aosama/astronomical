@@ -31,7 +31,7 @@ use astronomical_daemon::{
     ChatGenerationExecutor, ChatGenerationStreamEvent, GenerationPerformanceLog,
     ResolvedRuntimeConfigResolver, WorkerHandle, WorkerHealthStatus,
 };
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     ChatGenerationCommand, ChatGenerationSettings, ChatMessage, ChatToolChoice, RequestId,
 };
 use serde_json::json;
@@ -128,7 +128,7 @@ async fn run_load_to_prefill_measurement(journey_timeout: Duration) {
     let configured_model_directory =
         crate::support::configured_installed_model_directory_by_id(model_id);
     let production_worker_executable_path =
-        astronomical_test_harness::workspace_binary("astronomical-inference-worker");
+        test_harness::workspace_binary("astronomical-inference-worker");
     let (isolated_worker_home, worker_executable_path) = isolated_load_measurement_worker_launcher(
         Path::new(&production_worker_executable_path),
         &configured_model_directory,

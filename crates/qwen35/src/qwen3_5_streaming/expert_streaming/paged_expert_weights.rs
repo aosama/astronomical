@@ -49,7 +49,7 @@ fn take_projection(
 ) -> Result<
     (
         Qwen3_5AffineWeights,
-        astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookRotation,
+        jangtq2_qwen35::configuration::Jangtq2CodebookRotation,
     ),
     ExpertPagingError,
 > {
@@ -71,7 +71,7 @@ fn take_projection(
             let weight = take_tensor(loaded_tensors, &format!("{projection_name}.weight"))?;
             Ok((
                 Qwen3_5AffineWeights::NativeBfloat16 { weight },
-                astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookRotation::NoRotation,
+                jangtq2_qwen35::configuration::Jangtq2CodebookRotation::NoRotation,
             ))
         }
         QuantizationMode::Jangtq2Codebook => {
@@ -157,7 +157,7 @@ fn take_projection(
                     quantization_bits: affine_weight_source.quantization_bits,
                     quantization_group_size: affine_weight_source.quantization_group_size,
                 },
-                astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookRotation::NoRotation,
+                jangtq2_qwen35::configuration::Jangtq2CodebookRotation::NoRotation,
             ))
         }
     }

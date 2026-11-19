@@ -1,5 +1,5 @@
 [package]
-name = "astronomical-mlx-c-fork"
+name = "mlx-c-fork"
 edition.workspace = true
 license.workspace = true
 publish.workspace = true

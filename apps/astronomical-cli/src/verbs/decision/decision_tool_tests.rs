@@ -2,7 +2,7 @@
 
 use std::path::Path;
 
-use astronomical_config::ModelFamily;
+use config::ModelFamily;
 
 use super::*;
 
@@ -150,7 +150,7 @@ fn should_accept_an_output_named_through_a_link_to_the_models_folder() {
 
 #[test]
 fn should_read_the_record_a_source_folder_already_carries() {
-    use astronomical_decision_contract::training_record::{
+    use decision_contract::training_record::{
         DECISION_TRAINING_RECORD_FILE_NAME, RecordedVerdict, training_record_document,
     };
     let source_directory = tempfile::tempdir().unwrap();
@@ -188,9 +188,9 @@ fn should_find_no_earlier_record_in_a_folder_nobody_trained() {
 fn should_stop_on_an_earlier_record_that_cannot_be_read() {
     let source_directory = tempfile::tempdir().unwrap();
     std::fs::write(
-        source_directory.path().join(
-            astronomical_decision_contract::training_record::DECISION_TRAINING_RECORD_FILE_NAME,
-        ),
+        source_directory
+            .path()
+            .join(decision_contract::training_record::DECISION_TRAINING_RECORD_FILE_NAME),
         b"not a record",
     )
     .unwrap();

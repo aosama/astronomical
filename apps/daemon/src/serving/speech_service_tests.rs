@@ -3,7 +3,7 @@
 
 use std::path::PathBuf;
 
-use astronomical_config::{
+use config::{
     BUILTIN_DEFAULT_SPEECH_MODEL_ID, ChatModelCapabilities, DiscoveredModel, ModelCapabilities,
     ModelFamily, SpeechModelCapabilities,
 };

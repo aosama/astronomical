@@ -8,10 +8,10 @@
 //! cancelled between steps.
 
 use crate::memory::telemetry::MlxMemoryTelemetry;
-use astronomical_decision_contract::decision_training_job::{
+use decision_contract::decision_training_job::{
     DecisionTrainingJob, DecisionTrainingOutcome, DecisionTrainingStage,
 };
-use astronomical_decision_contract::{
+use decision_contract::{
     DecisionFailure, DecisionQuestion, HeadInputRequest, OrderedJsonValue, QuestionOutcome,
 };
 

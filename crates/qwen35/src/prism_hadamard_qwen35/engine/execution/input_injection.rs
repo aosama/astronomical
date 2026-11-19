@@ -1,6 +1,6 @@
 //! Model-visible correction tokens extend the active folded-ternary context.
 
-use astronomical_ipc_protocol::RequestId;
+use ipc_protocol::RequestId;
 
 use super::engine_trait_impl::gpu_error;
 use super::sampling::sample_token;

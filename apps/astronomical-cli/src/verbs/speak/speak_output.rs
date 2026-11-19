@@ -4,7 +4,7 @@
 
 use std::path::{Path, PathBuf};
 
-use astronomical_speech_contract::{AudioFormat, wav_bytes_from_pcm16};
+use speech_contract::{AudioFormat, wav_bytes_from_pcm16};
 
 use super::SpeakError;
 use crate::verbs::reserved_output_file::{

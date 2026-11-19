@@ -4,7 +4,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use astronomical_ipc_protocol::{ChatGenerationCompletionReason, RequestId};
+use ipc_protocol::{ChatGenerationCompletionReason, RequestId};
 use tokio::sync::{Semaphore, mpsc};
 
 use crate::worker::generation::completion_event::{

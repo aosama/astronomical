@@ -7,7 +7,7 @@ use super::{
     TensorProfile, TensorSourceId, ValidatedRequiredFile, ValidatedWeightsFile,
     validate_required_file,
 };
-use astronomical_memory_policy::safetensors::{
+use memory_policy::safetensors::{
     BoundedSafetensorsHeaderError, SafetensorsTensorView, read_bounded_safetensors_json_header,
 };
 

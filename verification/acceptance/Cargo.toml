@@ -111,26 +111,26 @@ too_many_lines = "deny"
 
 [dev-dependencies]
 astronomical-cli = { path = "../../apps/astronomical-cli" }
-astronomical-config = { path = "../../crates/config" }
-astronomical-decision-contract = { path = "../../crates/decision-contract" }
-astronomical-decision-training = { path = "../../crates/decision-training" }
+config = { path = "../../crates/config" }
+decision-contract = { path = "../../crates/decision-contract" }
+decision-training = { path = "../../crates/decision-training" }
 astronomical-daemon = { path = "../../apps/daemon" }
 astronomical-inference-worker = { path = "../../apps/inference-worker" }
-astronomical-ipc-protocol = { path = "../../crates/ipc-protocol" }
-astronomical-lowercase-hex = { path = "../../crates/lowercase-hex" }
-astronomical-memory-policy = { path = "../../crates/memory-policy" }
+ipc-protocol = { path = "../../crates/ipc-protocol" }
+lowercase-hex = { path = "../../crates/lowercase-hex" }
+memory-policy = { path = "../../crates/memory-policy" }
 astronomical-neural-engine-research = { path = "../neural-engine" }
-astronomical-model-serving = { path = "../../crates/model-serving", features = ["direct-mlx"] }
-astronomical-qwen35-quantization-probe = { path = "../../crates/qwen35-quantization-probe" }
-astronomical-mlx-c-fork = { path = "../../crates/mlx-c-fork" }
+model-serving = { path = "../../crates/model-serving", features = ["direct-mlx"] }
+qwen35-quantization-probe = { path = "../../crates/qwen35-quantization-probe" }
+mlx-c-fork = { path = "../../crates/mlx-c-fork" }
 mlx-bridge.workspace = true
-astronomical-native-identity = { path = "../../crates/native-identity" }
-astronomical-quantization = { path = "../../crates/quantization", features = ["direct-mlx"] }
-astronomical-rest-contract = { path = "../../crates/rest-contract" }
-astronomical-speech-contract = { path = "../../crates/speech-contract" }
-astronomical-runtime-integration = { path = "../../crates/runtime-integration", features = ["mlx"] }
-astronomical-expert-record-reader = { path = "../../crates/expert-record-reader" }
-astronomical-test-harness = { path = "../../crates/test-harness", features = ["flux-reference-oracle", "test-fixtures"] }
+native-identity = { path = "../../crates/native-identity" }
+quantization = { path = "../../crates/quantization", features = ["direct-mlx"] }
+rest-contract = { path = "../../crates/rest-contract" }
+speech-contract = { path = "../../crates/speech-contract" }
+runtime-integration = { path = "../../crates/runtime-integration", features = ["mlx"] }
+expert-record-reader = { path = "../../crates/expert-record-reader" }
+test-harness = { path = "../../crates/test-harness", features = ["flux-reference-oracle", "test-fixtures"] }
 axum.workspace = true
 base64.workspace = true
 futures-util.workspace = true

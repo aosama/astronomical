@@ -6,7 +6,7 @@
 //! the cells show the cost of the engine swap and then the cost of each
 //! gigabyte of paging, under the identical summarization workload.
 
-use astronomical_ipc_protocol::WorkerDiagnosticQwen3_5EngineOverride;
+use ipc_protocol::WorkerDiagnosticQwen3_5EngineOverride;
 use serial_test::serial;
 
 use super::summarization_journey::{BYTES_PER_GIGABYTE, measure_summarization_throughput};

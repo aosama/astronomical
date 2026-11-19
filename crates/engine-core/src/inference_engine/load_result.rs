@@ -1,4 +1,4 @@
-use astronomical_ipc_protocol::{ExpertMemoryMode, NeuralEnginePrefillStatus};
+use ipc_protocol::{ExpertMemoryMode, NeuralEnginePrefillStatus};
 
 use crate::StreamingStartupResidencyFacts;
 
@@ -96,15 +96,13 @@ impl EngineLoadResult {
     /// The event announcing a setting that was on, or `None` when it was off,
     /// so workers that never opt in publish exactly what they always did.
     #[must_use]
-    pub fn neural_engine_prefill_event(&self) -> Option<astronomical_ipc_protocol::WorkerEvent> {
+    pub fn neural_engine_prefill_event(&self) -> Option<ipc_protocol::WorkerEvent> {
         if self.neural_engine_prefill_status == NeuralEnginePrefillStatus::Off {
             return None;
         }
-        Some(
-            astronomical_ipc_protocol::WorkerEvent::NeuralEnginePrefillChanged {
-                neural_engine_prefill: self.neural_engine_prefill_status.clone(),
-            },
-        )
+        Some(ipc_protocol::WorkerEvent::NeuralEnginePrefillChanged {
+            neural_engine_prefill: self.neural_engine_prefill_status.clone(),
+        })
     }
 
     /// Returns the expert-memory mode selected before readiness.

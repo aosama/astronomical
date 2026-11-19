@@ -2,12 +2,10 @@
 //! judgement are tested in the training crate; scoring against a live model is
 //! an acceptance run on the Development instance.
 
-use astronomical_decision_contract::{
-    QuestionInputCoverage, QuestionOutcome, answer_from_probabilities,
-};
-use astronomical_decision_training::holdout_split::state_group_key;
-use astronomical_decision_training::labelled_example::parse_labelled_example;
-use astronomical_decision_training::temperature_softmax::probabilities_at;
+use decision_contract::{QuestionInputCoverage, QuestionOutcome, answer_from_probabilities};
+use decision_training::holdout_split::state_group_key;
+use decision_training::labelled_example::parse_labelled_example;
+use decision_training::temperature_softmax::probabilities_at;
 
 use super::*;
 

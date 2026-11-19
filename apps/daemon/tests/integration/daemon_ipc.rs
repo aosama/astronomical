@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex, RwLock};
 
 use astronomical_daemon::{WorkerHealthSnapshot, WorkerHealthStatus};
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     ChatGenerationCompletionReason, ChatGenerationSettings, ChatMessage, DaemonIpcClient,
     DaemonRequest, DaemonResponse, DaemonWorkerStatus, ModelLoadInFlight,
 };

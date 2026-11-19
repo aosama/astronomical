@@ -3,7 +3,7 @@
 
 use std::path::PathBuf;
 
-use astronomical_decision_contract::OrderedJsonValue;
+use decision_contract::OrderedJsonValue;
 
 use super::{ASK_QUESTION_NAME, resolve_questions, resolve_state};
 use crate::verbs::decide::{DecideArguments, DecideError, DecideQuestionsSource};

@@ -1,5 +1,5 @@
-use astronomical_neural_engine::core_ml::CoreMlProgramError;
-use astronomical_neural_engine::mlx_hand_off::MlxHandOffError;
+use neural_engine::core_ml::CoreMlProgramError;
+use neural_engine::mlx_hand_off::MlxHandOffError;
 
 use super::TokenSplitForwardError;
 

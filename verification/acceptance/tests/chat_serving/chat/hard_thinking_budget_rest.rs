@@ -1,6 +1,6 @@
 //! Public REST acceptance of Qwen's model-owned hard reasoning transition.
 
-use astronomical_model_serving::{Qwen3_5ArtifactValidator, Qwen3_5Tokenizer};
+use model_serving::{Qwen3_5ArtifactValidator, Qwen3_5Tokenizer};
 use serde_json::json;
 
 use super::openai_rest::{

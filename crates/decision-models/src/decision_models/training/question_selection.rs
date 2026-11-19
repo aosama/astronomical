@@ -7,10 +7,10 @@
 //! the final layers read for each question; a whole-model training runs the
 //! model from the question itself, so it needs only where the question is.
 
-use astronomical_decision_contract::decision_training_job::{DecisionTrainingJob, QuestionRole};
-use astronomical_decision_contract::{DecisionFailure, HeadInputs, QuestionOutcome};
-use astronomical_decision_training::trainable_head::TrainableHead;
-use astronomical_decision_training::training_losses::tempered_probabilities;
+use decision_contract::decision_training_job::{DecisionTrainingJob, QuestionRole};
+use decision_contract::{DecisionFailure, HeadInputs, QuestionOutcome};
+use decision_training::trainable_head::TrainableHead;
+use decision_training::training_losses::tempered_probabilities;
 
 use super::gpu_training::TrainingRow;
 

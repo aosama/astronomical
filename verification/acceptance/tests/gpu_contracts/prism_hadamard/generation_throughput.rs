@@ -8,7 +8,7 @@
 
 use std::time::Instant;
 
-use astronomical_model_serving::prism_hadamard_qwen35::model::PrismHadamardTextModel;
+use model_serving::prism_hadamard_qwen35::model::PrismHadamardTextModel;
 use serial_test::serial;
 
 use super::support::{

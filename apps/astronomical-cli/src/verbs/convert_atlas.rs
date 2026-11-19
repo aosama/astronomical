@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use crate::formatting::BYTES_PER_GIGABYTE;
-use astronomical_expert_atlas::{
+use expert_atlas::{
     AtlasConversionError, ConversionProgress, ConversionProgressObserver, ConversionRequest,
     ConversionStage, atlas_model_id_for, convert_to_atlas, organization_and_name,
 };
@@ -46,7 +46,7 @@ pub enum ConvertAtlasError {
         models_directory: String,
     },
     #[error("{0}")]
-    InvalidModelId(#[from] astronomical_expert_atlas::atlas_model_naming::ModelIdError),
+    InvalidModelId(#[from] expert_atlas::atlas_model_naming::ModelIdError),
     #[error(transparent)]
     Conversion(#[from] AtlasConversionError),
     #[error("could not write the conversion summary: {0}")]

@@ -10,8 +10,8 @@
 
 use std::f32::consts::PI;
 
-use astronomical_runtime_integration::MlxRuntime;
 use mlx_bridge::MlxArray;
+use runtime_integration::MlxRuntime;
 
 use crate::speech_models::speech_model_error::SpeechModelError;
 

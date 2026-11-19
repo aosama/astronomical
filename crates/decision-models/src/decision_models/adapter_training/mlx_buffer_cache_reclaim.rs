@@ -9,7 +9,7 @@
 //! therefore reclaims it after each pass once it holds more than the
 //! runtime's reclaim threshold.
 
-use astronomical_runtime_integration::MLX_BUFFER_CACHE_RECLAIM_THRESHOLD_BYTES;
+use runtime_integration::MLX_BUFFER_CACHE_RECLAIM_THRESHOLD_BYTES;
 
 use crate::decision_models::training::gpu_math::{GpuMath, GpuResult, GpuTrainingError};
 

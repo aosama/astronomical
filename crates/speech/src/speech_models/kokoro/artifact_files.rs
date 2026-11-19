@@ -3,8 +3,8 @@
 
 use std::path::{Path, PathBuf};
 
-use astronomical_config::KOKORO_VOICES_DIRECTORY_NAME;
-pub use astronomical_config::{KOKORO_CONFIGURATION_FILE_NAME, KOKORO_WEIGHTS_FILE_NAME};
+use config::KOKORO_VOICES_DIRECTORY_NAME;
+pub use config::{KOKORO_CONFIGURATION_FILE_NAME, KOKORO_WEIGHTS_FILE_NAME};
 
 use crate::speech_models::speech_model_error::SpeechModelError;
 use crate::speech_models::voice_files::catalog_voice_path;

@@ -4,7 +4,7 @@ use astronomical_daemon::{
     ChatGenerationExecutor, PendingAstroSsdPromptCacheClear, ServingSessionSnapshot,
     WorkerHealthSnapshot, WorkerHealthStatus,
 };
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     ChatModelCapabilities, ImageGenerationCapabilities, WorkerModelCapabilities,
     WorkerPromptWorkReuse,
 };

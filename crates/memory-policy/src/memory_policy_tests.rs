@@ -6,7 +6,7 @@ use crate::ceiling::{MemoryCeilingChangeDecision, MemoryCeilingChangeRequirement
 use crate::reclamation::complete_residency_exceeds_ceiling_with_activation_headroom;
 use crate::residency::classify_expert_memory_mode;
 use crate::vocabulary::MemoryBoundary;
-use astronomical_ipc_protocol::ExpertMemoryMode;
+use ipc_protocol::ExpertMemoryMode;
 
 #[test]
 fn should_identify_the_allocation_boundary_and_required_shortfall() {

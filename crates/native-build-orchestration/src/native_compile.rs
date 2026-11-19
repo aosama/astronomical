@@ -84,21 +84,20 @@ pub fn resolve_native_build_identity(
     native_build_profile: &str,
     target_triple: &str,
 ) -> Result<String, Box<dyn Error>> {
-    let profile =
-        astronomical_native_identity::NativeBuildProfile::from_profile_text(native_build_profile)
-            .map_err(|error| error.to_string())?;
+    let profile = native_identity::NativeBuildProfile::from_profile_text(native_build_profile)
+        .map_err(|error| error.to_string())?;
     // The standalone native-build tool states its triple here because it has
     // no Cargo context; the identity stays identical in both paths.
-    let identity_request = astronomical_native_identity::FingerprintRequest {
+    let identity_request = native_identity::FingerprintRequest {
         repository_root,
         profile,
-        scope: astronomical_native_identity::IdentityScope::Full,
-        overrides: astronomical_native_identity::probes::ToolchainOverrides {
+        scope: native_identity::IdentityScope::Full,
+        overrides: native_identity::probes::ToolchainOverrides {
             target_triple: Some(target_triple.to_owned()),
-            ..astronomical_native_identity::probes::ToolchainOverrides::none()
+            ..native_identity::probes::ToolchainOverrides::none()
         },
     };
-    astronomical_native_identity::native_build_identity(&identity_request)
+    native_identity::native_build_identity(&identity_request)
         .map_err(|error| format!("native build identity failed: {error}").into())
 }
 

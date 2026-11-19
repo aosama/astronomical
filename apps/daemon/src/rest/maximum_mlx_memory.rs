@@ -81,7 +81,7 @@ pub(crate) async fn update_maximum_mlx_memory(
     ) {
         return *commit_response;
     }
-    let astronomical_config::MaximumMlxMemoryConfigUpdate {
+    let config::MaximumMlxMemoryConfigUpdate {
         prior_config_bytes: _,
         candidate_config_bytes,
     } = config_update;
@@ -113,9 +113,7 @@ fn requested_ceiling_bytes(
 ) -> Result<u64, Box<Response>> {
     let requested_mlx_memory_ceiling_bytes = match maximum_mlx_memory_gb {
         Some(configured_maximum_mlx_memory_gb) => {
-            match astronomical_config::maximum_mlx_memory_gb_to_bytes(
-                configured_maximum_mlx_memory_gb,
-            ) {
+            match config::maximum_mlx_memory_gb_to_bytes(configured_maximum_mlx_memory_gb) {
                 Ok(requested_mlx_memory_ceiling_bytes) => requested_mlx_memory_ceiling_bytes,
                 Err(configuration_error) => {
                     return Err(Box::new(invalid_request_response(
@@ -153,7 +151,7 @@ fn prepare_and_resolve_candidate(
     (
         crate::ResolvedRuntimeConfig,
         Option<crate::ResolvedRuntimeConfig>,
-        astronomical_config::MaximumMlxMemoryConfigUpdate,
+        config::MaximumMlxMemoryConfigUpdate,
     ),
     Box<Response>,
 > {
@@ -166,7 +164,7 @@ fn prepare_and_resolve_candidate(
                 .ok()
                 .map(|resolved_config| resolved_config.clone())
         });
-    let config_update = match astronomical_config::prepare_maximum_mlx_memory_gb_update(
+    let config_update = match config::prepare_maximum_mlx_memory_gb_update(
         runtime_config_resolver.state_directory(),
         maximum_mlx_memory_gb,
     ) {
@@ -187,7 +185,7 @@ fn prepare_and_resolve_candidate(
             ));
         }
     };
-    let candidate_config = astronomical_config::AstronomicalConfig::load_v1_bytes(
+    let candidate_config = config::AstronomicalConfig::load_v1_bytes(
         runtime_config_resolver.instance_paths().clone(),
         &config_update.candidate_config_bytes,
     );
@@ -226,7 +224,7 @@ fn commit_candidate_if_memory_only(
     prior_resolved_config: Option<&crate::ResolvedRuntimeConfig>,
     candidate_resolved_config: &crate::ResolvedRuntimeConfig,
     runtime_config_resolver: &crate::config::config_reload::ResolvedRuntimeConfigResolver,
-    config_update: &astronomical_config::MaximumMlxMemoryConfigUpdate,
+    config_update: &config::MaximumMlxMemoryConfigUpdate,
     maximum_mlx_memory_gb: Option<u64>,
     worker_health_snapshot: &WorkerHealthSnapshot,
 ) -> Result<(), Box<Response>> {
@@ -258,13 +256,13 @@ fn commit_candidate_if_memory_only(
         )
             .into_response()));
     }
-    if let Err(commit_error) = astronomical_config::commit_maximum_mlx_memory_gb_update(
+    if let Err(commit_error) = config::commit_maximum_mlx_memory_gb_update(
         runtime_config_resolver.state_directory(),
         config_update,
     ) {
         let status_code = if matches!(
             commit_error,
-            astronomical_config::AstronomicalConfigError::ConfigChangedDuringUpdate
+            config::AstronomicalConfigError::ConfigChangedDuringUpdate
         ) {
             StatusCode::CONFLICT
         } else {

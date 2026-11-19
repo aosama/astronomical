@@ -9,12 +9,12 @@
 
 use std::time::Duration;
 
-use astronomical_ipc_protocol::{ExpertMemoryMode, RequestId};
-use astronomical_model_serving::{
+use ipc_protocol::{ExpertMemoryMode, RequestId};
+use model_serving::{
     CompleteResidencyHeadroomBoundary, Qwen3_5ArtifactValidator,
     model_memory_geometry_from_validated_artifact,
 };
-use astronomical_runtime_integration::MlxMemoryLimits;
+use runtime_integration::MlxMemoryLimits;
 use serial_test::serial;
 use tokio::time::timeout;
 

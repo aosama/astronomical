@@ -6,9 +6,9 @@
 
 use std::collections::BTreeMap;
 
-use astronomical_model_serving::OptiQMetadata;
-use astronomical_quantization::artifact::{OptiQArtifactMetadata, QuantizationConfigDocument};
-use astronomical_quantization::sensitivity::SensitivityMethod;
+use model_serving::OptiQMetadata;
+use quantization::artifact::{OptiQArtifactMetadata, QuantizationConfigDocument};
+use quantization::sensitivity::SensitivityMethod;
 
 use super::frozen_ornith_1_0_fixtures::frozen_ornith_1_0_optiq_config_bytes;
 
@@ -18,7 +18,7 @@ fn should_produce_metadata_the_strict_optiq_reader_accepts_and_validates_against
     // quantization crate's writer, then hand both documents to this crate's
     // readers: the metadata must parse strictly and match the config.
     let config_bytes = frozen_ornith_1_0_optiq_config_bytes();
-    let ornith_config = astronomical_model_serving::Qwen3_5Config::from_json_bytes(&config_bytes)
+    let ornith_config = model_serving::Qwen3_5Config::from_json_bytes(&config_bytes)
         .expect("the frozen Ornith 1.0 OptiQ config should parse");
     let written: BTreeMap<String, (u32, u32)> = ornith_config
         .quantized_module_profiles()
@@ -68,7 +68,7 @@ fn should_produce_a_quantization_document_the_config_parser_accepts() {
     config_value["quantization"] = document_value.clone();
     config_value["quantization_config"] = document_value;
     let config_bytes = serde_json::to_vec(&config_value).expect("the config should serialize");
-    let parsed_config = astronomical_model_serving::Qwen3_5Config::from_json_bytes(&config_bytes)
+    let parsed_config = model_serving::Qwen3_5Config::from_json_bytes(&config_bytes)
         .expect("the spliced config should parse");
 
     let profiles = parsed_config.quantized_module_profiles();

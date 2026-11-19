@@ -18,7 +18,7 @@ use std::mem::size_of;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use astronomical_runtime_integration::{MlxRuntimeError, PositionalFileReadMetrics};
+use runtime_integration::{MlxRuntimeError, PositionalFileReadMetrics};
 use thiserror::Error;
 
 use crate::expert_paging::{
@@ -116,11 +116,9 @@ pub struct Qwen3_5PagedExpertWeights {
     pub gate_projection: Qwen3_5AffineWeights,
     pub up_projection: Qwen3_5AffineWeights,
     pub down_projection: Qwen3_5AffineWeights,
-    pub gate_activation_rotation:
-        astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookRotation,
-    pub up_activation_rotation: astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookRotation,
-    pub down_activation_rotation:
-        astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookRotation,
+    pub gate_activation_rotation: jangtq2_qwen35::configuration::Jangtq2CodebookRotation,
+    pub up_activation_rotation: jangtq2_qwen35::configuration::Jangtq2CodebookRotation,
+    pub down_activation_rotation: jangtq2_qwen35::configuration::Jangtq2CodebookRotation,
 }
 
 impl ExpertWeightPage for Qwen3_5PagedExpertWeights {
@@ -139,7 +137,7 @@ impl Qwen3_5PagedExpertWeights {
     /// the gathers themselves stay lazy.
     pub fn select_experts(
         &self,
-        runtime: &astronomical_runtime_integration::MlxRuntime,
+        runtime: &runtime_integration::MlxRuntime,
         page_slots: &[usize],
     ) -> Result<Self, ExpertPagingError> {
         let page_expert_count = self.gate_projection.expert_count();
@@ -197,7 +195,7 @@ impl Qwen3_5PagedExpertWeights {
     /// whole page. A retained half and a streamed half from the same layer do.
     pub fn concatenate_expert_pages(
         &self,
-        runtime: &astronomical_runtime_integration::MlxRuntime,
+        runtime: &runtime_integration::MlxRuntime,
         appended: &Self,
     ) -> Result<Self, ExpertPagingError> {
         if self.gate_activation_rotation != appended.gate_activation_rotation

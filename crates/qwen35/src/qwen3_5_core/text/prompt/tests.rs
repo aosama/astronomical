@@ -1,5 +1,5 @@
 use super::Qwen3_5PromptRenderer;
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     ChatAssistantToolCall, ChatAssistantToolFunction, ChatImageInput, ChatMessage,
     ChatToolDefinition,
 };

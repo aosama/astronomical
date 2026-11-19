@@ -1,6 +1,6 @@
 //! Where the machine-wide native build store keeps one identity's entry.
 //!
-//! xtask has no dependency on `astronomical-native-build-orchestration`, which
+//! xtask has no dependency on `native-build-orchestration`, which
 //! owns the store, so it mirrors the two facts it needs: the default root
 //! under the user's `~/Library/Caches` folder, and the schema version file
 //! that names the store's layout generation. Packaging reads the MLX metallib

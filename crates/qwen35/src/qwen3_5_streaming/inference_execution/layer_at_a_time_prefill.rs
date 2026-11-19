@@ -12,7 +12,7 @@
 
 use std::time::Instant;
 
-use astronomical_ipc_protocol::WorkerPromptLayerProgress;
+use ipc_protocol::WorkerPromptLayerProgress;
 
 use super::Qwen3_5EngineState;
 use super::engine_request::Qwen3_5EngineRequest;
@@ -26,7 +26,7 @@ use crate::qwen3_5_streaming::model::layer_major_prefill::{
     LayerMajorVisualInputs,
 };
 use crate::{GeneratedToken, InferenceEngineError, PerformanceCounter};
-use astronomical_ipc_protocol::RequestId;
+use ipc_protocol::RequestId;
 
 /// A layer-at-a-time prompt between its first layer and its last.
 pub(in crate::qwen3_5_streaming) struct LayerAtATimePrefillInFlight {

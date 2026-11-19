@@ -1,17 +1,15 @@
 use std::{future::Future, path::PathBuf, pin::Pin};
 
-use astronomical_config::DiscoveredModel;
 use astronomical_daemon::{
     ChatGenerationExecutor, ChatGenerationStreamEvent, GenerationStartError, WorkerHealthSnapshot,
     build_application, build_application_with_discovered_models,
-};
-use astronomical_ipc_protocol::{
-    ChatGenerationCommand, ChatModelCapabilities, MAX_IPC_FRAME_BYTES,
 };
 use axum::{
     body::{Body, to_bytes},
     http::{Request, StatusCode, header},
 };
+use config::DiscoveredModel;
+use ipc_protocol::{ChatGenerationCommand, ChatModelCapabilities, MAX_IPC_FRAME_BYTES};
 use tokio::sync::mpsc;
 use tower::ServiceExt;
 
@@ -253,19 +251,17 @@ fn discovered_model() -> DiscoveredModel {
     DiscoveredModel {
         model_id: "requested-model".to_owned(),
         provider_model_id: None,
-        model_family: astronomical_config::ModelFamily::Qwen3_5,
+        model_family: config::ModelFamily::Qwen3_5,
         revision: "test-revision".to_owned(),
         model_directory: PathBuf::from("/models/requested-model"),
-        capabilities: astronomical_config::ModelCapabilities::Chat(
-            astronomical_config::ChatModelCapabilities {
-                context_window: 2_048,
-                max_input_tokens: 1_024,
-                max_output_tokens: 128,
-                supports_vision: false,
-                supports_reasoning: true,
-                supports_tool_calls: true,
-            },
-        ),
+        capabilities: config::ModelCapabilities::Chat(config::ChatModelCapabilities {
+            context_window: 2_048,
+            max_input_tokens: 1_024,
+            max_output_tokens: 128,
+            supports_vision: false,
+            supports_reasoning: true,
+            supports_tool_calls: true,
+        }),
         license: None,
         model_size_bytes: 0,
     }

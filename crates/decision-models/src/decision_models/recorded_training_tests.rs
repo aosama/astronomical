@@ -1,9 +1,7 @@
-use astronomical_decision_contract::training_record::{
+use decision_contract::training_record::{
     DECISION_TRAINING_RECORD_FILE_NAME, RecordedVerdict, training_record_document,
 };
-use astronomical_decision_contract::{
-    DecisionAnswer, NoulAnswer, QuestionInputCoverage, QuestionOutcome,
-};
+use decision_contract::{DecisionAnswer, NoulAnswer, QuestionInputCoverage, QuestionOutcome};
 
 use super::*;
 

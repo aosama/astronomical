@@ -24,12 +24,12 @@ pub enum QwenImage21EngineError {
     Execution { description: String },
     #[cfg(feature = "direct-mlx")]
     #[error(transparent)]
-    Mlx(#[from] astronomical_runtime_integration::MlxRuntimeError),
+    Mlx(#[from] runtime_integration::MlxRuntimeError),
 }
 
 #[cfg(feature = "direct-mlx")]
 impl From<mlx_bridge::MlxCError> for QwenImage21EngineError {
     fn from(captured_error: mlx_bridge::MlxCError) -> Self {
-        astronomical_runtime_integration::MlxRuntimeError::from(captured_error).into()
+        runtime_integration::MlxRuntimeError::from(captured_error).into()
     }
 }

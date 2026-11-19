@@ -4,8 +4,8 @@
 //! it; multiplying by a one-hot matrix only selects rows, so this port keeps
 //! the alignment as row indices and gathers.
 
-use astronomical_runtime_integration::MlxRuntime;
 use mlx_bridge::MlxArray;
+use runtime_integration::MlxRuntime;
 
 use crate::speech_models::speech_model_error::SpeechModelError;
 

@@ -1,6 +1,6 @@
 use std::{future::Future, pin::Pin};
 
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     ChatGenerationCommand, ChatGenerationCompletionReason, ChatGenerationFailureReason,
     ChatGenerationOutput,
 };

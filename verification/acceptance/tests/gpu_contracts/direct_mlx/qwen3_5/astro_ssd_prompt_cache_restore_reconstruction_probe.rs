@@ -19,8 +19,8 @@
 
 use std::time::{Duration, Instant};
 
-use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use mlx_bridge::{MlxArray, MlxDtype};
+use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use tokio::time::timeout;
 
 const KV_HEAD_COUNT: i32 = 16;

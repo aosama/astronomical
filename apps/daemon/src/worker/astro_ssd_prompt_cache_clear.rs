@@ -1,7 +1,7 @@
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
-use astronomical_ipc_protocol::WorkerEvent;
+use ipc_protocol::WorkerEvent;
 use tokio::sync::{Semaphore, oneshot};
 use tokio::time::{Instant, timeout};
 

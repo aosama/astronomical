@@ -12,8 +12,8 @@ use crate::config::request_generation_defaults::{
     RequestGenerationSettingsPresence, apply_generation_defaults,
 };
 use crate::{ResolvedRuntimeConfig, RuntimeModelGenerationDefaults, RuntimeModelPolicy};
-use astronomical_config::{AstroSsdPromptCacheConfig, LogLevel, LoggingConfig};
-use astronomical_ipc_protocol::{
+use config::{AstroSsdPromptCacheConfig, LogLevel, LoggingConfig};
+use ipc_protocol::{
     ChatGenerationSettings, WorkerEmbeddingModelConfiguration, WorkerEmbeddingModelFamily,
     WorkerModelConfiguration,
 };

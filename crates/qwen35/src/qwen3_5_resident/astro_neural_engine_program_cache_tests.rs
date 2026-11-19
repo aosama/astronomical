@@ -1,6 +1,6 @@
 use std::fs;
 
-use astronomical_neural_engine::program_shape::ProgramShape;
+use neural_engine::program_shape::ProgramShape;
 
 use super::{AstroNeuralEngineProgramSetCache, CoreMlProgramBuilder};
 use crate::qwen3_5_resident::neural_engine_program_placement_record::{
@@ -82,7 +82,7 @@ fn should_record_a_finished_set_with_its_identity_and_size() {
 
     let manifest_bytes = fs::read(revision_directory.join("mlp-v1-960-of-2048/programs.json"))
         .expect("the manifest exists");
-    let manifest: astronomical_config::NeuralEngineProgramSetManifest =
+    let manifest: config::NeuralEngineProgramSetManifest =
         serde_json::from_slice(&manifest_bytes).expect("the manifest parses");
     assert_eq!(manifest.model_id, "fictional-model");
     assert_eq!(manifest.model_revision, "revision-1");

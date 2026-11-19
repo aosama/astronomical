@@ -1,7 +1,7 @@
 use std::cell::{Cell, RefCell};
 use std::time::{Duration, Instant};
 
-use astronomical_ipc_protocol::NeuralEngineChunkPlacement;
+use ipc_protocol::NeuralEngineChunkPlacement;
 
 use super::{ChunkFitDecision, NeuralEngineMlpPrefill, neural_engine_tokens_for_chunk};
 use crate::qwen3_5_resident::neural_engine_chunk_comparison::{

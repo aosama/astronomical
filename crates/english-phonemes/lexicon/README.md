@@ -16,4 +16,4 @@ hand; "silver" entries fill gaps and are consulted after gold.
 | `us_silver.json` | `de8f67be911bb6c659187b4a65fd966b6a30e56350e0f790d763210b053ac475` |
 
 To update, copy both files from a newer Misaki commit, record the commit and
-digests here, and run `cargo test -p astronomical-english-phonemes`.
+digests here, and run `cargo test -p english-phonemes`.

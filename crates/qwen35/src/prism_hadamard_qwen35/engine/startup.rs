@@ -5,8 +5,8 @@ use std::path::Path;
 
 use thiserror::Error;
 
-use astronomical_config::AstroSsdPromptCacheConfig;
-use astronomical_ipc_protocol::WorkerChunkingConfiguration;
+use config::AstroSsdPromptCacheConfig;
+use ipc_protocol::WorkerChunkingConfiguration;
 
 use crate::AstroSsdPromptCacheDiskStoreConfig;
 use crate::MlxInferenceEngine;

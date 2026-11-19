@@ -2,11 +2,11 @@
 //! dispatches one speech command to the worker executor, and answers with
 //! the audio in bounded frames, then one terminal frame.
 
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     DaemonResponse, DaemonTransportError, MAXIMUM_SPEECH_AUDIO_FRAME_BYTES, SpeakGenerateRequest,
     StreamingResponseWriter,
 };
-use astronomical_speech_contract::SpeechFailure;
+use speech_contract::SpeechFailure;
 
 use crate::{
     DaemonIpcGenerationContext, GenerationStartError, SpeechExecutionError, SpeechOutput,
@@ -109,7 +109,7 @@ async fn speak(
 
 async fn await_speech(
     generation_context: &DaemonIpcGenerationContext,
-    speech_command: astronomical_ipc_protocol::SpeechCommand,
+    speech_command: ipc_protocol::SpeechCommand,
     resolved_model_id: String,
 ) -> SpeechOutcome {
     let mut speech_result_receiver = match generation_context

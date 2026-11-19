@@ -10,9 +10,9 @@
 
 use std::collections::BTreeMap;
 
-use astronomical_decision_contract::FloatVector;
-use astronomical_decision_contract::decision_training_job::TrainedTensor;
-use astronomical_decision_training::head_parameters::ParameterLayout;
+use decision_contract::FloatVector;
+use decision_contract::decision_training_job::TrainedTensor;
+use decision_training::head_parameters::ParameterLayout;
 use mlx_bridge::{MlxArray, MlxCError};
 
 use crate::decision_models::decision_adapters::AdapterTarget;

@@ -21,7 +21,7 @@
 
 use std::collections::HashMap;
 
-use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
+use runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use super::decode_astro_expert_cache_policy::{
     DecodeExpertSlotState, MAXIMUM_PROBATIONARY_EXPERT_SLOTS_PER_LAYER,

@@ -1,4 +1,4 @@
-use astronomical_ipc_protocol::ChatToolDefinition;
+use ipc_protocol::ChatToolDefinition;
 use serde_json::Value;
 
 use super::super::{Qwen3_5OutputEvent, Qwen3_5OutputParser, Qwen3_5ToolCall};

@@ -25,7 +25,7 @@ const DIGEST_RELATIVE_PATH: &str = "third-party/RUST_DEPENDENCY_NOTICES.digest";
 fn sha256_hex(bytes: &[u8]) -> String {
     let mut hasher = Sha256::new();
     hasher.update(bytes);
-    astronomical_lowercase_hex::encode_lowercase_hex(&hasher.finalize())
+    lowercase_hex::encode_lowercase_hex(&hasher.finalize())
 }
 
 fn read_pinned_cargo_about_version(repository_root: &Path) -> Result<String, String> {

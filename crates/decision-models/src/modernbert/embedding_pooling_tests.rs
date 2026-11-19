@@ -1,6 +1,6 @@
 //! Unit tests for how trunk failures are reported on the embeddings lane.
 
-use astronomical_ipc_protocol::EmbeddingsFailureReason;
+use ipc_protocol::EmbeddingsFailureReason;
 
 use super::{bounded_fatal_execution, trunk_failure};
 use crate::modernbert::trunk::ModernBertTrunkError;

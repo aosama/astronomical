@@ -1,4 +1,4 @@
-use astronomical_model_serving::{
+use model_serving::{
     QuantizationMode, QuantizedExpertLayerPlan, QuantizedExpertSourceInterval,
     QuantizedTensorSource, SafetensorsDtype,
 };

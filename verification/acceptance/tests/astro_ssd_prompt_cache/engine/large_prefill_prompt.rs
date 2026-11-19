@@ -1,7 +1,7 @@
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     ChatGenerationCommand, ChatGenerationSettings, ChatMessage, ChatToolChoice, RequestId,
 };
-use astronomical_model_serving::Qwen3_5Tokenizer;
+use model_serving::Qwen3_5Tokenizer;
 
 pub(super) const LARGE_PREFILL_ACCEPTANCE_OUTPUT_TOKEN_COUNT: usize = 1_024;
 const MINIMUM_LARGE_PREFILL_ACCEPTANCE_PROMPT_TOKEN_COUNT: usize = 16_384;

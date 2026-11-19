@@ -74,16 +74,14 @@ fn should_not_blame_the_programs_for_an_mlx_error_however_it_arrives() {
         description: "out of memory".to_owned(),
     };
     assert!(!super::is_about_the_programs(&bare_error));
-    let through_the_hand_off =
-        astronomical_neural_engine::mlx_hand_off::MlxHandOffError::Mlx(bare_error);
+    let through_the_hand_off = neural_engine::mlx_hand_off::MlxHandOffError::Mlx(bare_error);
     assert!(!super::is_about_the_programs(&through_the_hand_off));
 }
 
 #[test]
 fn should_blame_the_programs_for_any_other_error() {
-    let padded_surface =
-        astronomical_neural_engine::mlx_hand_off::MlxHandOffError::PaddedOutputSurface;
+    let padded_surface = neural_engine::mlx_hand_off::MlxHandOffError::PaddedOutputSurface;
     assert!(super::is_about_the_programs(&padded_surface));
-    let program_error = astronomical_neural_engine::core_ml::CoreMlProgramError::PredictionStart;
+    let program_error = neural_engine::core_ml::CoreMlProgramError::PredictionStart;
     assert!(super::is_about_the_programs(&program_error));
 }

@@ -2,17 +2,17 @@
 
 use std::path::PathBuf;
 
-use astronomical_config::{
-    DecisionModelCapabilities, DiscoveredModel, ModelCapabilities, ModelFamily, ModelLicense,
-};
 use astronomical_daemon::{DecisionsExecutionError, DecisionsOutput};
-use astronomical_decision_contract::{
-    ChoiceAnswer, DecisionAnswer, DecisionFailure, OptionProbability, OrderedJsonValue,
-    QuestionInputCoverage, QuestionOutcome,
-};
 use axum::{
     body::{Body, to_bytes},
     http::{Request, StatusCode},
+};
+use config::{
+    DecisionModelCapabilities, DiscoveredModel, ModelCapabilities, ModelFamily, ModelLicense,
+};
+use decision_contract::{
+    ChoiceAnswer, DecisionAnswer, DecisionFailure, OptionProbability, OrderedJsonValue,
+    QuestionInputCoverage, QuestionOutcome,
 };
 use tower::ServiceExt;
 
@@ -423,7 +423,7 @@ fn chat_model() -> DiscoveredModel {
         model_family: ModelFamily::Qwen3_5,
         revision: "fixture-revision".to_owned(),
         model_directory: PathBuf::from("fixtures/models/chat-only"),
-        capabilities: ModelCapabilities::Chat(astronomical_config::ChatModelCapabilities {
+        capabilities: ModelCapabilities::Chat(config::ChatModelCapabilities {
             context_window: 2_048,
             max_input_tokens: 1_024,
             max_output_tokens: 128,

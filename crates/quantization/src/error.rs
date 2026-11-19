@@ -139,8 +139,8 @@ impl From<mlx_bridge::MlxCError> for QuantizationError {
 /// engines) carry their context in the message rather than a separate
 /// operation field.
 #[cfg(feature = "direct-mlx")]
-impl From<astronomical_runtime_integration::MlxRuntimeError> for QuantizationError {
-    fn from(runtime_error: astronomical_runtime_integration::MlxRuntimeError) -> Self {
+impl From<runtime_integration::MlxRuntimeError> for QuantizationError {
+    fn from(runtime_error: runtime_integration::MlxRuntimeError) -> Self {
         Self::MlxRuntimeFailure {
             operation: "the MLX runtime policy",
             description: runtime_error.to_string(),

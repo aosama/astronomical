@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     MAX_IPC_FRAME_BYTES, NeuralEnginePrefillStatus, ProtocolReader, ProtocolWriter, RequestId,
     WorkerCommand, WorkerEvent,
 };

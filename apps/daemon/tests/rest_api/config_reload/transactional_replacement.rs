@@ -21,9 +21,9 @@ async fn should_reject_mismatched_candidate_without_changing_effective_serving_s
     std::fs::create_dir_all(&performance_log_directory)
         .expect("performance log directory should be created");
     let mut initial_config = sample_resolved_config();
-    initial_config.logging_config = astronomical_config::LoggingConfig::new(
+    initial_config.logging_config = config::LoggingConfig::new(
         config_home_directory.join(".astronomical-dev/logs"),
-        astronomical_config::LogLevel::Warn,
+        config::LogLevel::Warn,
         7,
     );
     let initial_generation = initial_config.configuration_generation.clone();

@@ -26,7 +26,7 @@ use std::sync::mpsc::RecvTimeoutError;
 use std::time::{Duration, Instant};
 
 use astronomical_daemon::{ChatGenerationExecutor, WorkerHealthSnapshot};
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     ChatImageInput, WorkerDecodeAstroExpertCachePolicy, WorkerDiagnosticQwen3_5EngineOverride,
 };
 

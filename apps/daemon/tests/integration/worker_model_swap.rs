@@ -11,7 +11,7 @@ use astronomical_daemon::{
     GenerationStartError, ImageGenerationExecutor, RuntimeModelPolicy, WorkerHandle,
     WorkerHealthStatus,
 };
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     ChatGenerationCommand, ChatGenerationCompletionReason, ChatGenerationSettings, ChatMessage,
     ChatToolChoice, ImageGenerationCommand, ImageGenerationSettings, RequestId,
     WorkerAutoregressiveModelConfiguration, WorkerChunkingConfiguration,
@@ -377,7 +377,7 @@ pub(super) async fn launch_idle_worker_fixture() -> WorkerHandle {
             performance_attribution_enabled: false,
             decode_astro_expert_cache_policy: WorkerDecodeAstroExpertCachePolicy::Baseline,
             diagnostic_qwen3_5_engine_override:
-                astronomical_ipc_protocol::WorkerDiagnosticQwen3_5EngineOverride::Automatic,
+                ipc_protocol::WorkerDiagnosticQwen3_5EngineOverride::Automatic,
             logging_directory: temporary_log_directory.path().to_path_buf(),
             logging_level: WorkerLogLevel::Warn,
             retained_log_file_count: 7,

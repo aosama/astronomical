@@ -38,7 +38,7 @@ const TEMPERATURE_THOUSANDTHS: u16 = 1_000;
 const JOURNEY_TIMEOUT: Duration = Duration::from_secs(600);
 
 fn pack_directory() -> PathBuf {
-    astronomical_test_harness::test_run::TestRunContext::current().required_model_directory()
+    test_harness::test_run::TestRunContext::current().required_model_directory()
 }
 
 /// Measures the folded ternary pack's serving prompt-processing and decode

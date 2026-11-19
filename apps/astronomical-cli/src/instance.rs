@@ -4,7 +4,7 @@
 
 use std::path::{Path, PathBuf};
 
-use astronomical_config::AstronomicalRuntimeInstance;
+use config::AstronomicalRuntimeInstance;
 
 /// Bundle folder names stamped by the macOS app assembler.
 const STABLE_APP_BUNDLE_NAME: &str = "Astronomical.app";

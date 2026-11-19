@@ -19,7 +19,7 @@
 
 use std::{future::Future, io::Write, time::Duration};
 
-use astronomical_ipc_protocol::ModelLoadInFlight;
+use ipc_protocol::ModelLoadInFlight;
 use tokio::time::Instant;
 
 use crate::{DaemonProbe, DaemonStatusSnapshot, formatting::MODEL_LOAD_LINE};

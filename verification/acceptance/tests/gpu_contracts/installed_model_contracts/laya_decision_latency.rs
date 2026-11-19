@@ -17,11 +17,11 @@
 use std::path::Path;
 use std::time::Instant;
 
-use astronomical_decision_contract::{
+use decision_contract::{
     DecisionQuestion, HeadInputRequest, OrderedJsonValue, parse_system_one_questions,
 };
-use astronomical_model_serving::{DecisionEngine, LayaDecisionEngine};
-use astronomical_test_harness::test_run::TestRunContext;
+use model_serving::{DecisionEngine, LayaDecisionEngine};
+use test_harness::test_run::TestRunContext;
 
 #[path = "../../support/romeo_and_juliet.rs"]
 #[allow(dead_code)]

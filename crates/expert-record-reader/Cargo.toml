@@ -1,5 +1,5 @@
 [package]
-name = "astronomical-expert-record-reader"
+name = "expert-record-reader"
 description = "Reads expert records from storage straight into memory the caller owns: one scatter read per record, issued from long-lived threads."
 edition.workspace = true
 license.workspace = true

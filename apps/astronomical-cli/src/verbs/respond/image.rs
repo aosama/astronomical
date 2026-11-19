@@ -6,7 +6,7 @@
 
 use std::path::Path;
 
-use astronomical_ipc_protocol::ChatImageInput;
+use ipc_protocol::ChatImageInput;
 
 use crate::verbs::respond::RespondError;
 

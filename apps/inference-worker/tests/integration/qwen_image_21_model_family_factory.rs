@@ -1,13 +1,13 @@
 //! Integration contracts for selecting the Qwen-Image-2.1 runtime without loading model artifacts.
 
-use astronomical_config::AstroSsdPromptCacheConfig;
 use astronomical_inference_worker::model_family_factory::ModelFamilyFactory;
-use astronomical_ipc_protocol::{
+use config::AstroSsdPromptCacheConfig;
+use ipc_protocol::{
     WorkerAutoregressiveModelConfiguration, WorkerChunkingConfiguration,
     WorkerImageGenerationModelFamily, WorkerModelConfiguration,
     WorkerQwenImage21ModelConfiguration,
 };
-use astronomical_model_serving::{ModelFactory, ModelFactoryRuntime, ModelFamilyImageEngine};
+use model_serving::{ModelFactory, ModelFactoryRuntime, ModelFamilyImageEngine};
 
 use super::flux2_klein_fixture::CANONICAL_MODEL_ID as FLUX_CANONICAL_MODEL_ID;
 use super::qwen_image_21_fixture::{
@@ -116,12 +116,11 @@ async fn should_reject_changed_evidence_between_daemon_discovery_and_worker_load
         ),
     ] {
         let model_directory = qwen_model_directory();
-        let discovered_model =
-            astronomical_config::discover_models(&[model_directory.path().to_path_buf()])
-                .expect("daemon discovery should complete")
-                .remove(0)
-                .discovered_models
-                .remove(0);
+        let discovered_model = config::discover_models(&[model_directory.path().to_path_buf()])
+            .expect("daemon discovery should complete")
+            .remove(0)
+            .discovered_models
+            .remove(0);
         assert_eq!(discovered_model.model_id, CANONICAL_MODEL_ID);
         mutate_discovered_artifact(model_directory.path());
 
@@ -162,7 +161,7 @@ fn model_family_factory(fixture_directory: &std::path::Path) -> ModelFamilyFacto
             1_000_000_000,
         ),
         true,
-        astronomical_ipc_protocol::WorkerDecodeAstroExpertCachePolicy::Baseline,
+        ipc_protocol::WorkerDecodeAstroExpertCachePolicy::Baseline,
         fixture_directory.join("performance-attribution.jsonl"),
         true,
     )

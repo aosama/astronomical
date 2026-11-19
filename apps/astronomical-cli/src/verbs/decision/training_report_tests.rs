@@ -1,8 +1,8 @@
 //! Unit tests for the training report.
 
-use astronomical_decision_contract::calibration_file::CalibrationOverride;
-use astronomical_decision_training::calibration_plan::CalibrationPlan;
-use astronomical_decision_training::training_verdict::{CheckAgreement, KindComparison};
+use decision_contract::calibration_file::CalibrationOverride;
+use decision_training::calibration_plan::CalibrationPlan;
+use decision_training::training_verdict::{CheckAgreement, KindComparison};
 
 use super::*;
 

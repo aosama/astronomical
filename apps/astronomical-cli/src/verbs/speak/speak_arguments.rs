@@ -4,7 +4,7 @@
 use std::ffi::OsString;
 use std::path::PathBuf;
 
-use astronomical_speech_contract::{FASTEST_SPEED, SLOWEST_SPEED};
+use speech_contract::{FASTEST_SPEED, SLOWEST_SPEED};
 
 use crate::arguments::{UsageError, flag_value};
 

@@ -7,8 +7,8 @@ use std::{
     time::Duration,
 };
 
-use astronomical_config::{AstronomicalConfig, AstronomicalInstancePaths};
-use astronomical_ipc_protocol::{
+use config::{AstronomicalConfig, AstronomicalInstancePaths};
+use ipc_protocol::{
     AcceptedDaemonConnection, DAEMON_APPLICATION_NAME, DAEMON_PROTOCOL_VERSION, DaemonIpcListener,
     DaemonRequest, DaemonResponse, DaemonTransportError, StreamingResponseWriter,
 };
@@ -25,7 +25,7 @@ use crate::{
 
 /// Built-in chat model used when the client sends no model and the user has
 /// configured no default; single source of truth lives in the config crate.
-use astronomical_config::BUILTIN_DEFAULT_MODEL_ID;
+use config::BUILTIN_DEFAULT_MODEL_ID;
 
 /// Long enough to ride out a brief shortage, short enough that clients barely notice.
 const ACCEPT_RETRY_DELAY: Duration = Duration::from_millis(100);

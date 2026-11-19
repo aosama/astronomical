@@ -1,8 +1,8 @@
 //! Unit contracts for reading a System One request body before any model,
 //! lock or queue is touched.
 
-use astronomical_decision_contract::OrderedJsonValue;
 use axum::http::StatusCode;
+use decision_contract::OrderedJsonValue;
 
 use super::parse_system_one_request;
 

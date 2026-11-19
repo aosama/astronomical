@@ -11,12 +11,12 @@
 //! the configuration's `model_directory` is a `cargo xtask convert-kev`
 //! output folder.
 
-use astronomical_decision_contract::{
+use decision_contract::{
     DecisionAnswer, DecisionFailure, DecisionQuestion, HeadInputRequest, OrderedJsonValue,
     parse_system_one_questions,
 };
-use astronomical_model_serving::{DecisionEngine, KevDecisionEngine};
-use astronomical_test_harness::test_run::TestRunContext;
+use model_serving::{DecisionEngine, KevDecisionEngine};
+use test_harness::test_run::TestRunContext;
 
 #[path = "../../support/romeo_and_juliet.rs"]
 #[allow(dead_code)]

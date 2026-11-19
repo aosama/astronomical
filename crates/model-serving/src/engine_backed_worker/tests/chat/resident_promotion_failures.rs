@@ -7,7 +7,7 @@ use super::resident_promotion_support::{
     DEMOTING_PROMPT_TOKEN_COUNT, PromotionEngineRole, PromotionJourney, PromotionScenario,
     SMALL_PROMPT_TOKEN_COUNT,
 };
-use astronomical_ipc_protocol::{ChatGenerationFailureReason, WorkerEvent};
+use ipc_protocol::{ChatGenerationFailureReason, WorkerEvent};
 use std::time::Duration;
 use tokio::time::timeout;
 

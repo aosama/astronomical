@@ -1,4 +1,4 @@
-use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
+use runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use super::append_only_attention_state::{FULL_ATTENTION_OPERATION, STATE_DIMENSION_TOKEN_AXIS};
 use mlx_bridge::MlxArray;

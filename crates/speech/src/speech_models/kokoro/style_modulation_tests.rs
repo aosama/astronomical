@@ -9,7 +9,7 @@ use crate::speech_models::speech_test_support::{
 /// A projection whose weights are zero, so its bias alone sets the scale
 /// (first channel) and shift (second channel) for a one-channel input.
 fn constant_style_modulation(
-    runtime: &astronomical_runtime_integration::MlxRuntime,
+    runtime: &runtime_integration::MlxRuntime,
     scale: f32,
     shift: f32,
 ) -> StyleModulation {

@@ -1,12 +1,12 @@
-use astronomical_ipc_protocol::{ChatGenerationCompletionReason, ChatGenerationFailureReason};
-use astronomical_rest_contract::{
-    OpenAiAssistantMessage, OpenAiChatCompletionResponse, OpenAiErrorResponse, OpenAiFinishReason,
-    OpenAiResponseToolCall, OpenAiStructuredOutput, OpenAiTokenUsage, compact_extracted_json_text,
-};
 use axum::{
     Json,
     http::StatusCode,
     response::{IntoResponse, Response},
+};
+use ipc_protocol::{ChatGenerationCompletionReason, ChatGenerationFailureReason};
+use rest_contract::{
+    OpenAiAssistantMessage, OpenAiChatCompletionResponse, OpenAiErrorResponse, OpenAiFinishReason,
+    OpenAiResponseToolCall, OpenAiStructuredOutput, OpenAiTokenUsage, compact_extracted_json_text,
 };
 use thiserror::Error;
 use tokio::sync::mpsc;

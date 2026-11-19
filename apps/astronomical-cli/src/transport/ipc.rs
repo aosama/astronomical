@@ -5,8 +5,8 @@
 
 use std::{path::PathBuf, time::Duration};
 
-use astronomical_config::AstronomicalRuntimeInstance;
-use astronomical_ipc_protocol::{
+use config::AstronomicalRuntimeInstance;
+use ipc_protocol::{
     DaemonCatalogEntry, DaemonDownloadJob, DaemonIpcClient, DaemonListedModel, DaemonRequest,
     DaemonResponse, DaemonWorkerStatus, ModelLoadInFlight, NeuralEnginePrefillStatus,
 };

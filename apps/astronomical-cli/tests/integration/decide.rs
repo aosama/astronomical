@@ -9,12 +9,12 @@ use std::{
 };
 
 use astronomical_cli::{DecideArguments, DecideDependencies, DecideError, DecideQuestionsSource};
-use astronomical_config::AstronomicalRuntimeInstance;
-use astronomical_decision_contract::{
+use config::AstronomicalRuntimeInstance;
+use decision_contract::{
     DecisionAnswer, DecisionFailure, NoulAnswer, OrderedJsonValue, QuestionInputCoverage,
     QuestionOutcome,
 };
-use astronomical_ipc_protocol::DaemonRequest;
+use ipc_protocol::DaemonRequest;
 use tokio::time::timeout;
 
 use crate::integration::support::environment::{
@@ -25,7 +25,7 @@ use crate::integration::support::stub_daemon::{
 };
 
 /// The model id `decide` uses when the invocation names none.
-const DEFAULT_DECISION_MODEL_ID: &str = astronomical_config::BUILTIN_DEFAULT_DECISION_MODEL_ID;
+const DEFAULT_DECISION_MODEL_ID: &str = config::BUILTIN_DEFAULT_DECISION_MODEL_ID;
 
 fn asked_decide_arguments(state_text: Option<&str>, model_id: Option<&str>) -> DecideArguments {
     DecideArguments {

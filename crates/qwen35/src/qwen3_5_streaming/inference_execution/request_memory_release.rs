@@ -1,7 +1,7 @@
 //! Final synchronized MLX allocator cleanup after request owners are dropped.
 
-use astronomical_ipc_protocol::RequestId;
-use astronomical_runtime_integration::MlxMemorySnapshot;
+use ipc_protocol::RequestId;
+use runtime_integration::MlxMemorySnapshot;
 
 use super::Qwen3_5EngineState;
 

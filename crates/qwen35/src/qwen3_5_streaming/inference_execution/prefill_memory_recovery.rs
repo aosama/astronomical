@@ -17,7 +17,7 @@
 //! The retry never shrinks the forward: smaller chunks re-pay
 //! complete-layer storage reads without changing the outcome.
 
-use astronomical_ipc_protocol::RequestId;
+use ipc_protocol::RequestId;
 
 use crate::qwen3_5_core::decoder::RequestDecoderStateStack;
 use crate::qwen3_5_streaming::model::request_refusal;

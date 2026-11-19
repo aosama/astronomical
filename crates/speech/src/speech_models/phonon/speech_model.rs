@@ -7,8 +7,8 @@
 
 use std::path::Path;
 
-use astronomical_runtime_integration::MlxRuntime;
 use mlx_bridge::{MlxArray, MlxDtype};
+use runtime_integration::MlxRuntime;
 
 use super::artifact_files::{
     PHONON_CONFIGURATION_FILE_NAME, PHONON_TOKENIZER_FILE_NAME, PHONON_WEIGHTS_FILE_NAME,

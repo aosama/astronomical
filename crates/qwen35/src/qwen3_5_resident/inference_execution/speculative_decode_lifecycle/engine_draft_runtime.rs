@@ -12,7 +12,7 @@
 
 use std::path::Path;
 
-use astronomical_runtime_integration::MlxSafetensors;
+use runtime_integration::MlxSafetensors;
 
 use crate::PerformanceAttribution;
 use crate::qwen3_5_resident::Qwen3_5ResidentModel;
@@ -176,7 +176,7 @@ pub enum Qwen3_5SpeculativeDraftLoadingError {
     #[error("the model library directory cannot be listed to find a DFlash2 drafter: {source}")]
     LibraryUnlistable { source: std::io::Error },
     #[error("the graphics-processor runtime rejected the DFlash2 drafter load: {0}")]
-    Runtime(#[source] astronomical_runtime_integration::MlxRuntimeError),
+    Runtime(#[source] runtime_integration::MlxRuntimeError),
     #[error("the target could not be prepared for drafting: {0}")]
     Target(#[source] crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError),
     #[error("the DFlash2 drafter's model.safetensors is unreadable: {source}")]

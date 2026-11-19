@@ -5,7 +5,7 @@ use std::fs;
 use std::path::Path;
 
 use astronomical_cli::{ModelProgramsReport, render_model_programs};
-use astronomical_config::list_neural_engine_program_sets;
+use config::list_neural_engine_program_sets;
 
 use crate::integration::support::environment::fresh_test_directory;
 

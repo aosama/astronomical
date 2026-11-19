@@ -1,10 +1,8 @@
 //! Text-encoder loader with request-scoped and convenience-complete entry points.
 
-use astronomical_runtime_integration::MlxRuntime;
+use runtime_integration::MlxRuntime;
 
-use astronomical_model_primitives::performance_attribution::{
-    PerformanceAttribution, PerformanceOperation,
-};
+use model_primitives::performance_attribution::{PerformanceAttribution, PerformanceOperation};
 
 use super::super::Flux2KleinResidencyMode;
 use super::batch::Flux2KleinPreparedTextBatch;

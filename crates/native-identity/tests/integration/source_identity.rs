@@ -3,8 +3,8 @@
 //! than a beside-source unit test (real filesystem, no network, no model
 //! artifacts).
 
-use astronomical_native_identity::probes::ToolchainOverrides;
-use astronomical_native_identity::{
+use native_identity::probes::ToolchainOverrides;
+use native_identity::{
     FingerprintRequest, IdentityScope, NativeBuildProfile, native_build_identity,
 };
 

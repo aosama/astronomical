@@ -12,7 +12,7 @@
 //! reintroduced here, so the boundary is enforced by the dependency graph
 //! instead of by convention. The MLX-facing owners live above this crate and
 //! depend on it, one way: the runtime-backed allocation admission and the
-//! direct-MLX admission logging in `astronomical-engine-core`, and the
+//! direct-MLX admission logging in `engine-core`, and the
 //! retained astro expert cache slot tables and streaming readers in the
 //! Qwen 3.5 streaming engine.
 //!
@@ -27,7 +27,7 @@
 //! - `expert_paging` — pure expert-paging support arithmetic: the
 //!   safetensors header parsing (`safetensors_header`, over `safetensors`
 //!   and `strict_json`) and the expert weight `astro_expert_cache` statistics. The
-//!   quantized expert manifests stay in `astronomical-model-serving` — they
+//!   quantized expert manifests stay in `model-serving` — they
 //!   embed model-family configuration types.
 //! - `phase` — the one lifecycle phase type (`MemoryPhase`).
 //! - `vocabulary` — the shared decision vocabulary (`MemoryBoundary`):

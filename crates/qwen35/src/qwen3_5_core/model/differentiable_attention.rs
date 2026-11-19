@@ -7,8 +7,8 @@
 //! fused kernel to float32 rounding (the tests pin it). Serving never takes
 //! this route.
 
-use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 use mlx_bridge::MlxArray;
+use runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 /// Which kernels compute the attention scores and their weighted values.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

@@ -1,4 +1,4 @@
-use astronomical_config::AstronomicalConfig;
+use config::AstronomicalConfig;
 
 #[test]
 fn should_disable_completion_attribution_by_default() {

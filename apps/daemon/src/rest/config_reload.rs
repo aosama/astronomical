@@ -182,8 +182,7 @@ fn ambiguous_model_identity_response(
             .model_discovery_diagnostics
             .iter()
             .find(|diagnostic| {
-                diagnostic.code
-                    == astronomical_config::ModelDiscoveryDiagnosticCode::AmbiguousModelIdentity
+                diagnostic.code == config::ModelDiscoveryDiagnosticCode::AmbiguousModelIdentity
             })?;
     let configured_root_numbers = discovery_diagnostic
         .configured_root_numbers

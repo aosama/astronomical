@@ -4,7 +4,7 @@ use crate::{
     EngineBackedWorker, GeneratedToken, GenerationFinalization, MlxActiveMemoryBreakdown,
     MlxMemoryTelemetry,
 };
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     ChatGenerationCompletionReason, ExpertMemoryMode, MAX_IPC_FRAME_BYTES, MlxMemorySnapshotSource,
     ProtocolReader, ProtocolWriter, RequestId, WorkerCommand, WorkerEvent, WorkerMlxMemorySnapshot,
 };

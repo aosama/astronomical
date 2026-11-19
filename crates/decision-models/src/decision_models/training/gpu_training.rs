@@ -1,6 +1,6 @@
 //! Training a family's final layers on the GPU, several runs over.
 //!
-//! The loop is `astronomical-decision-training`'s `training_settings`, run on
+//! The loop is `decision-training`'s `training_settings`, run on
 //! MLX arrays: each run starts from the served weights, walks the training
 //! questions in shuffled batches mixed with check-set questions, keeps the
 //! weights from its best pass on the choosing questions, and stops once
@@ -8,12 +8,10 @@
 //! numbers, builds each batch's small target matrix, and reads back one loss
 //! per pass and one gradient length per step.
 
-use astronomical_decision_training::training_losses::LABEL_SMOOTHING;
+use decision_training::training_losses::LABEL_SMOOTHING;
 #[cfg(test)]
-use astronomical_decision_training::training_settings::TrainingProgress;
-use astronomical_decision_training::training_settings::{
-    SeedEnding, TrainingSettings, shuffled_order,
-};
+use decision_training::training_settings::TrainingProgress;
+use decision_training::training_settings::{SeedEnding, TrainingSettings, shuffled_order};
 use std::time::{Duration, Instant};
 
 use mlx_bridge::MlxArray;

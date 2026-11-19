@@ -1,4 +1,4 @@
-use astronomical_memory_policy::ledger::{LedgerPhase, MemoryGovernor, ModelMemoryShape};
+use memory_policy::ledger::{LedgerPhase, MemoryGovernor, ModelMemoryShape};
 
 use super::{ForwardFit, ForwardShape};
 use crate::{ResidentForwardAdmissionDecision, StreamingEngineRequirement};

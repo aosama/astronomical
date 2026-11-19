@@ -24,10 +24,10 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 
-use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 use mlx_bridge::{
     MlxArray, MlxDtype, MlxMetalKernel, MlxMetalKernelOutput, MlxMetalKernelTemplateArgument,
 };
+use runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use super::codebook;
 use super::hadamard32;
@@ -290,11 +290,9 @@ fn materialize_and_detach_jangtq2_array(
     array: &MlxArray,
 ) -> Result<(), MlxRuntimeError> {
     runtime.evaluate_arrays(&[array])?;
-    astronomical_mlx_c_fork::detach_array(array).map_err(|error| {
-        MlxRuntimeError::RuntimeOperation {
-            operation: "detach a jangtq2 array",
-            description: error.to_string(),
-        }
+    mlx_c_fork::detach_array(array).map_err(|error| MlxRuntimeError::RuntimeOperation {
+        operation: "detach a jangtq2 array",
+        description: error.to_string(),
     })
 }
 

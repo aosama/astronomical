@@ -1,5 +1,5 @@
 [package]
-name = "astronomical-memory-policy"
+name = "memory-policy"
 edition.workspace = true
 license.workspace = true
 publish.workspace = true
@@ -11,7 +11,7 @@ version.workspace = true
 workspace = true
 
 [dependencies]
-astronomical-ipc-protocol = { path = "../ipc-protocol" }
+ipc-protocol = { path = "../ipc-protocol" }
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true

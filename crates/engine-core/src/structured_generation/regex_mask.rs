@@ -33,8 +33,7 @@ impl RegexTokenMask {
         regex_pattern: &str,
         vocabulary_pieces: Arc<Vec<String>>,
     ) -> Result<Self, String> {
-        let anchored_pattern =
-            astronomical_ipc_protocol::structured_regex_dfa_pattern(regex_pattern);
+        let anchored_pattern = ipc_protocol::structured_regex_dfa_pattern(regex_pattern);
         // MatchKind::All explores every viable continuation, so an alternative
         // that is a strict prefix of another keeps the longer path reachable
         // instead of losing it to leftmost match priority.

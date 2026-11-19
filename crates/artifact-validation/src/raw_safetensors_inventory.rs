@@ -9,8 +9,8 @@ use super::bounded_safetensors::{
 };
 use super::safetensors_dtype;
 use super::{ArtifactValidationError, ValidatedRequiredFile};
-use astronomical_memory_policy::safetensors;
-use astronomical_memory_policy::safetensors::SafetensorsTensorView;
+use memory_policy::safetensors;
+use memory_policy::safetensors::SafetensorsTensorView;
 
 /// A deterministic raw inventory produced before family normalization.
 #[derive(Debug)]

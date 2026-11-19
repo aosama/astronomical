@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 use std::{fmt::Write as _, io::Write};
 
-use astronomical_config::AstronomicalRuntimeInstance;
+use config::AstronomicalRuntimeInstance;
 
 use crate::instance::runtime_instance_from_executable_path;
 use crate::transport::ipc::{DaemonProbe, DaemonProbeError};

@@ -1,10 +1,10 @@
 //! Plan construction against written shards: decisions, pass-through, and
 //! output byte estimates, with no tensor data read.
 
-use astronomical_quantization::bit_width::{BitWidth, GroupSize};
-use astronomical_quantization::module_inventory::ModuleInventory;
-use astronomical_quantization::requantize::bit_policy::{BitPolicy, TensorEncodingDecision};
-use astronomical_quantization::requantize::tensor_plan::{RequantizeTensorPlan, TensorPlanEntry};
+use quantization::bit_width::{BitWidth, GroupSize};
+use quantization::module_inventory::ModuleInventory;
+use quantization::requantize::bit_policy::{BitPolicy, TensorEncodingDecision};
+use quantization::requantize::tensor_plan::{RequantizeTensorPlan, TensorPlanEntry};
 
 use super::module_inventory_journeys::write_bf16_source;
 

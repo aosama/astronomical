@@ -10,7 +10,7 @@
 mod tests;
 
 #[cfg(feature = "direct-mlx")]
-use astronomical_ipc_protocol::WorkerEvent;
+use ipc_protocol::WorkerEvent;
 
 /// Cumulative persistent astro SSD prompt cache hit/miss/token-saved counters.
 ///

@@ -6,14 +6,14 @@
 //! row scale, float64 dot product), so a wrong GPU result — including the
 //! all-zeros signature of a silently dropped dispatch — fails the verdict.
 
-use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 use mlx_bridge::{MlxArray, MlxDtype};
+use runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use super::{
     CustomMetalKernelFamily, CustomMetalKernelProbe, KernelCapabilityError, validate_probe_outputs,
 };
-use astronomical_jangtq2_qwen35::codebook;
-use astronomical_jangtq2_qwen35::fused_gathered_projection::FusedJangtq2GatheredProjectionKernel;
+use jangtq2_qwen35::codebook;
+use jangtq2_qwen35::fused_gathered_projection::FusedJangtq2GatheredProjectionKernel;
 
 const PROBE_BIT_WIDTH: u32 = 2;
 const PROBE_EXPERT_COUNT: usize = 2;

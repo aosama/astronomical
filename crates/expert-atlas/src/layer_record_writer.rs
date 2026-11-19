@@ -170,5 +170,5 @@ fn write_and_read_back(
 }
 
 pub(crate) fn hex_sha256(file_bytes: &[u8]) -> String {
-    astronomical_lowercase_hex::encode_lowercase_hex(&Sha256::digest(file_bytes))
+    lowercase_hex::encode_lowercase_hex(&Sha256::digest(file_bytes))
 }

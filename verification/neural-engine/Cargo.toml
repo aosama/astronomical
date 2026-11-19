@@ -24,16 +24,16 @@ all = { level = "warn", priority = -1 }
 too_many_lines = "deny"
 
 [dependencies]
-astronomical-neural-engine = { path = "../../crates/neural-engine" }
+neural-engine = { path = "../../crates/neural-engine" }
 thiserror.workspace = true
 
 [build-dependencies]
 cc = "1.2"
 
 [dev-dependencies]
-astronomical-neural-engine = { path = "../../crates/neural-engine", features = ["mlx-hand-off"] }
-astronomical-runtime-integration = { path = "../../crates/runtime-integration", features = ["mlx"] }
-astronomical-test-harness = { path = "../../crates/test-harness" }
+neural-engine = { path = "../../crates/neural-engine", features = ["mlx-hand-off"] }
+runtime-integration = { path = "../../crates/runtime-integration", features = ["mlx"] }
+test-harness = { path = "../../crates/test-harness" }
 mlx-bridge.workspace = true
 serde_json.workspace = true
 serial_test.workspace = true

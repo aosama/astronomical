@@ -9,7 +9,7 @@
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 
-use astronomical_config::AstronomicalRuntimeInstance;
+use config::AstronomicalRuntimeInstance;
 
 const LOCAL_API_PAGE_RELATIVE_PATH: &str = "../../site/local-api.html";
 const LOOPBACK_ORIGIN_PREFIX: &str = "http://127.0.0.1:";

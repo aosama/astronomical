@@ -1,6 +1,6 @@
 //! Feature-gated MLX builder for the CPU sliding-window visibility contract.
 
-use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
+use runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use crate::performance_attribution::{PerformanceAttribution, PerformanceOperation};
 use mlx_bridge::{MlxArray, MlxDtype};

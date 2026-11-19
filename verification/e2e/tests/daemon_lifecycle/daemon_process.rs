@@ -11,7 +11,7 @@ use tokio::{process::Command, time::timeout};
 
 #[tokio::test]
 async fn should_reject_a_second_daemon_for_the_same_instance_state() {
-    let daemon_executable_path = astronomical_test_harness::workspace_binary("astronomicald")
+    let daemon_executable_path = test_harness::workspace_binary("astronomicald")
         .to_string_lossy()
         .into_owned();
     let development_state_directory = tempfile::tempdir().expect("state should be created");
@@ -53,7 +53,7 @@ async fn should_reject_a_second_daemon_for_the_same_instance_state() {
 
 #[tokio::test]
 async fn should_reject_ambiguous_or_relative_instance_arguments_before_startup() {
-    let daemon_executable_path = astronomical_test_harness::workspace_binary("astronomicald")
+    let daemon_executable_path = test_harness::workspace_binary("astronomicald")
         .to_string_lossy()
         .into_owned();
     for invalid_arguments in [
@@ -80,7 +80,7 @@ async fn should_reject_ambiguous_or_relative_instance_arguments_before_startup()
 
 #[tokio::test]
 async fn should_keep_health_available_when_worker_startup_fails() {
-    let daemon_executable_path = astronomical_test_harness::workspace_binary("astronomicald")
+    let daemon_executable_path = test_harness::workspace_binary("astronomicald")
         .to_string_lossy()
         .into_owned();
     let isolated_daemon_directory =
@@ -124,14 +124,12 @@ async fn should_keep_worker_unready_when_the_loaded_model_is_unexpected() {
     // With config-driven discovery, the daemon no longer rejects models
     // based on a hardcoded expected model ID. This test now verifies that
     // the worker starts and becomes ready with whatever model it loads.
-    let daemon_executable_path =
-        astronomical_test_harness::workspace_binary("astronomical-daemon-test-daemon")
-            .to_string_lossy()
-            .into_owned();
-    let worker_executable_path =
-        astronomical_test_harness::workspace_binary("astronomical-daemon-test-worker")
-            .to_string_lossy()
-            .into_owned();
+    let daemon_executable_path = test_harness::workspace_binary("astronomical-daemon-test-daemon")
+        .to_string_lossy()
+        .into_owned();
+    let worker_executable_path = test_harness::workspace_binary("astronomical-daemon-test-worker")
+        .to_string_lossy()
+        .into_owned();
     let (mut daemon_process, daemon_address) = spawn_daemon_with_worker_ready_model(
         &daemon_executable_path,
         Some(&worker_executable_path),
@@ -164,14 +162,12 @@ async fn should_keep_worker_unready_when_the_loaded_model_is_unexpected() {
 
 #[tokio::test]
 async fn should_show_generation_progress_for_malformed_model_output_before_stream_failure() {
-    let daemon_executable_path =
-        astronomical_test_harness::workspace_binary("astronomical-daemon-test-daemon")
-            .to_string_lossy()
-            .into_owned();
-    let worker_executable_path =
-        astronomical_test_harness::workspace_binary("astronomical-daemon-test-worker")
-            .to_string_lossy()
-            .into_owned();
+    let daemon_executable_path = test_harness::workspace_binary("astronomical-daemon-test-daemon")
+        .to_string_lossy()
+        .into_owned();
+    let worker_executable_path = test_harness::workspace_binary("astronomical-daemon-test-worker")
+        .to_string_lossy()
+        .into_owned();
     let (mut daemon_process, daemon_address) = spawn_daemon_with_worker_ready_model(
         &daemon_executable_path,
         Some(&worker_executable_path),
@@ -238,7 +234,7 @@ async fn should_fail_startup_when_user_config_is_malformed() {
         temp_home.path(),
         r#"{"daemon":{"bind_address":"127.0.0.1:0"}"#,
     );
-    let daemon_executable_path = astronomical_test_harness::workspace_binary("astronomicald")
+    let daemon_executable_path = test_harness::workspace_binary("astronomicald")
         .to_string_lossy()
         .into_owned();
     let daemon_output = timeout(
@@ -277,7 +273,7 @@ async fn should_reject_retired_daemon_configuration_for_a_standard_instance() {
         r#"{"$schema":"./astronomical-config.schema.json","schema_version":1,"runtime":{"model_directories":[]},"daemon":{"bind_address":"127.0.0.1:6732"}}"#,
     )
     .expect("development config should be written");
-    let daemon_executable_path = astronomical_test_harness::workspace_binary("astronomicald")
+    let daemon_executable_path = test_harness::workspace_binary("astronomicald")
         .to_string_lossy()
         .into_owned();
 
@@ -307,14 +303,12 @@ async fn should_reject_retired_daemon_configuration_for_a_standard_instance() {
 
 #[tokio::test]
 async fn should_serve_responses_json_and_sse_through_the_daemon_process() {
-    let daemon_executable_path =
-        astronomical_test_harness::workspace_binary("astronomical-daemon-test-daemon")
-            .to_string_lossy()
-            .into_owned();
-    let worker_executable_path =
-        astronomical_test_harness::workspace_binary("astronomical-daemon-test-worker")
-            .to_string_lossy()
-            .into_owned();
+    let daemon_executable_path = test_harness::workspace_binary("astronomical-daemon-test-daemon")
+        .to_string_lossy()
+        .into_owned();
+    let worker_executable_path = test_harness::workspace_binary("astronomical-daemon-test-worker")
+        .to_string_lossy()
+        .into_owned();
     let (mut daemon_process, daemon_address) = spawn_daemon_with_worker_ready_model(
         &daemon_executable_path,
         Some(&worker_executable_path),

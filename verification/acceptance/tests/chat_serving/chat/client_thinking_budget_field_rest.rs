@@ -13,7 +13,7 @@
 //! never appears; that failing run is the recorded reproduction of the
 //! reported defect, and the same journey guards the fix afterwards.
 
-use astronomical_model_serving::{Qwen3_5ArtifactValidator, Qwen3_5Tokenizer};
+use model_serving::{Qwen3_5ArtifactValidator, Qwen3_5Tokenizer};
 use serde_json::json;
 
 use super::openai_rest::{

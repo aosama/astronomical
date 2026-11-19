@@ -8,9 +8,7 @@
 //! absorb the boundary snapshot from the disk store, because the retained
 //! recurrent state sits at the generation-end position, not at the boundary.
 
-use astronomical_ipc_protocol::{
-    WorkerAstroSsdPromptCacheLookupOutcome, WorkerInMemoryPrefixAdoptionOutcome,
-};
+use ipc_protocol::{WorkerAstroSsdPromptCacheLookupOutcome, WorkerInMemoryPrefixAdoptionOutcome};
 
 use crate::astro_decoder_state_cache::AstroDecoderStateCacheState;
 use crate::astro_ssd_prompt_cache::AstroSsdPromptCacheDiskStore;

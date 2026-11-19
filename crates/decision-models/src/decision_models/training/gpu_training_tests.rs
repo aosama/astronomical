@@ -2,15 +2,13 @@
 //! option is the one whose state starts highest. A poor starting head must
 //! train to at least 80% on questions it never saw.
 
-use astronomical_decision_training::anchored_adam::AdamSettings;
-use astronomical_decision_training::training_settings::{
-    FINAL_LAYERS_TRAINING_SETTINGS, TrainingSettings,
-};
+use decision_training::anchored_adam::AdamSettings;
+use decision_training::training_settings::{FINAL_LAYERS_TRAINING_SETTINGS, TrainingSettings};
 use serial_test::serial;
 
 use super::super::gpu_test_support::{RankedTask, ranked_task};
 use super::*;
-use astronomical_model_primitives::synthetic_weights_test_support::initialize_test_runtime;
+use model_primitives::synthetic_weights_test_support::initialize_test_runtime;
 
 struct SilentProgress;
 

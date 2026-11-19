@@ -4,8 +4,8 @@ use crate::qwen3_5_streaming::model::route_observation::RouteObservationCollecto
 use std::cell::RefCell;
 use std::path::Path;
 
-use astronomical_ipc_protocol::WorkerDecodeAstroExpertCachePolicy;
-use astronomical_runtime_integration::MlxRuntime;
+use ipc_protocol::WorkerDecodeAstroExpertCachePolicy;
+use runtime_integration::MlxRuntime;
 
 use crate::qwen3_5_core::model::disk_embedding_rows::Qwen3_5DiskEmbeddingRows;
 use crate::qwen3_5_core::model::loading_pipeline::{
@@ -329,7 +329,7 @@ fn load_streaming_expert_runtime(
     config: &crate::Qwen3_5Config,
     shard_index: &super::Qwen3_5ShardIndex,
     tensor_inventory: &crate::TensorInventory,
-    expert_atlas: Option<&astronomical_expert_atlas::AtlasManifest>,
+    expert_atlas: Option<&expert_atlas::AtlasManifest>,
     decode_astro_expert_cache_policy: WorkerDecodeAstroExpertCachePolicy,
     performance_attribution: &mut PerformanceAttribution,
 ) -> Result<StreamingExpertRuntimeTrio, Qwen3_5ExecutionError> {
@@ -419,9 +419,8 @@ fn load_streaming_expert_runtime(
 /// struct also carries.
 struct StreamingExpertBudgetOutcome {
     memory_facts: ModelMemoryFacts,
-    fused_jangtq2_gathered_projection_kernel: Option<
-        astronomical_jangtq2_qwen35::fused_gathered_projection::FusedJangtq2GatheredProjectionKernel,
-    >,
+    fused_jangtq2_gathered_projection_kernel:
+        Option<jangtq2_qwen35::fused_gathered_projection::FusedJangtq2GatheredProjectionKernel>,
 }
 
 /// Assembles the limit and geometry the streaming engine runs under. Mirrors the payload math,
@@ -526,9 +525,7 @@ fn fused_jangtq2_gathered_projection_kernel_for_pager(
     runtime: &MlxRuntime,
     expert_pager: &Qwen3_5ExpertPager,
     performance_attribution: &mut PerformanceAttribution,
-) -> Option<
-    astronomical_jangtq2_qwen35::fused_gathered_projection::FusedJangtq2GatheredProjectionKernel,
-> {
+) -> Option<jangtq2_qwen35::fused_gathered_projection::FusedJangtq2GatheredProjectionKernel> {
     let has_codebook_experts = expert_pager.layer_plans().iter().any(|layer_plan| {
         ["gate_proj", "up_proj", "down_proj"]
             .iter()
@@ -552,7 +549,7 @@ fn fused_jangtq2_gathered_projection_kernel_for_pager(
         );
         return None;
     }
-    match astronomical_jangtq2_qwen35::fused_gathered_projection::FusedJangtq2GatheredProjectionKernel::new() {
+    match jangtq2_qwen35::fused_gathered_projection::FusedJangtq2GatheredProjectionKernel::new() {
         Ok(kernel) => Some(kernel),
         Err(error) => {
             tracing::warn!(

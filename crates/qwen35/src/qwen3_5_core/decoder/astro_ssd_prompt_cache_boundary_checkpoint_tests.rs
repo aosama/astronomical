@@ -2,8 +2,8 @@
 //! a layer records once, and forgetting it lets a redone layer record again.
 
 use super::Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector;
-use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use mlx_bridge::MlxArray;
+use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use serial_test::serial;
 
 const BOUNDARY_TOKENS: [usize; 2] = [1_792, 3_584];

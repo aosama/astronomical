@@ -15,8 +15,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use serde::Serialize;
 use serde_json::Value;
 
-use astronomical_ipc_protocol::WorkerDecodeAstroExpertCachePolicy;
-use astronomical_test_harness::test_run::TestRunContext;
+use ipc_protocol::WorkerDecodeAstroExpertCachePolicy;
+use test_harness::test_run::TestRunContext;
 
 use crate::performance_throughput::machine_specs::MachineSpecs;
 

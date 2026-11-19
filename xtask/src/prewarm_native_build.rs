@@ -15,7 +15,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, Command};
 use std::time::{Duration, Instant};
 
-use astronomical_native_identity::NativeBuildProfile;
+use native_identity::NativeBuildProfile;
 
 const STATUS_PREFIX: &str = "[prewarm-native-build]";
 const NATIVE_BUILD_PROGRESS_FILE_VARIABLE: &str = "ASTRONOMICAL_NATIVE_BUILD_PROGRESS_FILE";
@@ -153,7 +153,7 @@ fn build_native_profile(
         .args([
             "run",
             "-p",
-            "astronomical-native-build-tool",
+            "native-build-tool",
             "--",
             "--profile",
             profile_name,

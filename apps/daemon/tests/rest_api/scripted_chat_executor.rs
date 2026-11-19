@@ -7,7 +7,7 @@ use std::{future::Future, pin::Pin};
 use astronomical_daemon::{
     ChatGenerationExecutor, ChatGenerationStreamEvent, GenerationStartError, WorkerHealthSnapshot,
 };
-use astronomical_ipc_protocol::{ChatGenerationCommand, ChatModelCapabilities};
+use ipc_protocol::{ChatGenerationCommand, ChatModelCapabilities};
 use tokio::sync::mpsc;
 
 /// The one model the scripted worker reports as ready.

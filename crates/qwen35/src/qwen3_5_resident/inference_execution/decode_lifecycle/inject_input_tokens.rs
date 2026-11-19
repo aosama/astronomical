@@ -1,4 +1,4 @@
-use astronomical_ipc_protocol::RequestId;
+use ipc_protocol::RequestId;
 
 use crate::{InferenceEngineError, PerformanceOperation};
 

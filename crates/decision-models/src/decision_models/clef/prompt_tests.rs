@@ -1,9 +1,7 @@
 //! Unit tests for Clef's sequence layout: spans, the state cut and the
 //! schema limit.
 
-use astronomical_decision_contract::{
-    DecisionQuestion, OrderedJsonValue, parse_system_one_questions,
-};
+use decision_contract::{DecisionQuestion, OrderedJsonValue, parse_system_one_questions};
 
 use super::{CLEF_MAXIMUM_SEQUENCE_TOKENS, build_clef_sequence};
 use crate::decision_models::clef::test_tokenizer::{

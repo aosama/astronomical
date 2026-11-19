@@ -12,7 +12,7 @@
 //! `StreamingStartupResidencyFacts`, so a live raise demands the resident
 //! engine exactly when a restart would choose it.
 
-use astronomical_model_serving::{
+use model_serving::{
     EnginePlacement, ExpertMemoryAdmissionError, StreamingStartupResidencyFacts,
     ValidatedQwen3_5Artifact,
 };

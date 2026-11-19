@@ -19,11 +19,11 @@
 
 use std::time::Instant;
 
-use astronomical_decision_contract::{
+use decision_contract::{
     DecisionQuestion, HeadInputRequest, OrderedJsonValue, parse_system_one_questions,
 };
-use astronomical_model_serving::{DecisionEngine, KevDecisionEngine};
-use astronomical_test_harness::test_run::TestRunContext;
+use model_serving::{DecisionEngine, KevDecisionEngine};
+use test_harness::test_run::TestRunContext;
 
 use super::decision_memory_peak::{peak_memory_bytes_after_request, peak_memory_report};
 

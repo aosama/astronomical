@@ -17,9 +17,9 @@ use crate::{
     InferenceEngineError, PerformanceAttribution, PerformanceOperation,
     PersistentVisualEmbeddingKey,
 };
-use astronomical_ipc_protocol::RequestId;
-use astronomical_runtime_integration::MlxRuntime;
+use ipc_protocol::RequestId;
 use mlx_bridge::{MlxArray, MlxCompiledElementwiseGraphs, MlxDtype};
+use runtime_integration::MlxRuntime;
 
 /// The loaded-model facts one engine contributes to visual-embedding resolution.
 pub struct VisualEmbeddingEngineContext<'context> {

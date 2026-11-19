@@ -1,8 +1,8 @@
-use astronomical_model_serving::{
+use mlx_bridge::{MlxArray, MlxCompiledElementwiseGraphs};
+use model_serving::{
     qwen3_5_gated_delta_kernel, qwen3_5_gated_delta_sequence, qwen3_5_gated_delta_step,
 };
-use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
-use mlx_bridge::{MlxArray, MlxCompiledElementwiseGraphs};
+use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
 use crate::common::{
     DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_MLX_BUFFER_CACHE_LIMIT_BYTES,

@@ -8,8 +8,8 @@
 //! Attention projections and the feed-forward have no bias, and the
 //! feed-forward uses the exact (erf) GELU, as the Phonon configuration names.
 
-use astronomical_runtime_integration::MlxRuntime;
 use mlx_bridge::MlxArray;
+use runtime_integration::MlxRuntime;
 
 use super::attention_history::AttentionHistory;
 use super::causal_attention_mask::{causal_mask_values, single_query_sees_every_key};

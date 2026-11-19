@@ -1,7 +1,7 @@
 use std::{fs, time::Duration};
 
 use astronomical_daemon::{ChatGenerationExecutor, ChatGenerationStreamEvent, WorkerHealthStatus};
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     ChatGenerationCommand, ChatGenerationSettings, ChatMessage, ChatToolChoice, RequestId,
 };
 use serde_json::Value;

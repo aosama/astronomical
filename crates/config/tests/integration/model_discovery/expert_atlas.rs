@@ -8,8 +8,8 @@ const RESIDENT_BUNDLE_BYTES: usize = 300;
 const LAYER_FILE_BYTES: usize = 16_384;
 
 /// Every model discovered under `models_root`.
-fn discovered_models_under(models_root: &Path) -> Vec<astronomical_config::DiscoveredModel> {
-    astronomical_config::discover_models(&[models_root.to_path_buf()])
+fn discovered_models_under(models_root: &Path) -> Vec<config::DiscoveredModel> {
+    config::discover_models(&[models_root.to_path_buf()])
         .expect("discovery completes")
         .into_iter()
         .flat_map(|directory_scan| directory_scan.discovered_models)

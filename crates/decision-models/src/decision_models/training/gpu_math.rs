@@ -19,8 +19,8 @@
 //! Parameters, optimizer state and every update are element-wise float32
 //! operations, so small updates are never rounded away either.
 
-use astronomical_runtime_integration::MlxRuntime;
 use mlx_bridge::{MlxArray, MlxCError, MlxDtype};
+use runtime_integration::MlxRuntime;
 use thiserror::Error;
 
 /// `1 / √2` and `1 / √(2π)`, for the exact GELU's derivative.

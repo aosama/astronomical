@@ -4,7 +4,7 @@
 //! history and the decoded visual images the engine consumes, keeping image
 //! handling out of the tokenizer's prompt path.
 
-use astronomical_ipc_protocol::ChatMessage;
+use ipc_protocol::ChatMessage;
 
 use super::tokenizer_error::Qwen3_5TokenizerError;
 use crate::qwen3_5_core::vision::{Qwen3_5ImageProcessor, Qwen3_5ProcessedImage};

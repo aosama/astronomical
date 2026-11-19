@@ -473,7 +473,7 @@ impl DownloadCatalogEntry {
     /// discovery publishes a downloaded copy under.
     #[must_use]
     pub fn model_id(&self) -> &str {
-        astronomical_config::leaf_model_id(&self.huggingface_id)
+        config::leaf_model_id(&self.huggingface_id)
     }
 
     #[must_use]
@@ -573,7 +573,7 @@ impl SeenEntryIdentities {
         {
             return Err(DownloadCatalogError::DuplicateHuggingFaceId);
         }
-        let model_id = astronomical_config::leaf_model_id(huggingface_id);
+        let model_id = config::leaf_model_id(huggingface_id);
         if !self.model_ids.insert(model_id.to_ascii_lowercase()) {
             return Err(DownloadCatalogError::DuplicateModelId { entry_index });
         }
@@ -592,10 +592,7 @@ pub fn is_valid_huggingface_id(huggingface_id: &str) -> bool {
 }
 
 pub fn is_valid_immutable_revision(revision: &str) -> bool {
-    astronomical_lowercase_hex::is_lowercase_hex_of_length(
-        revision,
-        GIT_COMMIT_SHA_HEX_CHARACTER_COUNT,
-    )
+    lowercase_hex::is_lowercase_hex_of_length(revision, GIT_COMMIT_SHA_HEX_CHARACTER_COUNT)
 }
 
 fn is_valid_hugging_face_component(component: &str) -> bool {

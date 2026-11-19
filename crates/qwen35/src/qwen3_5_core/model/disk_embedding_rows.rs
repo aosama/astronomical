@@ -14,8 +14,8 @@
 
 use std::fs::File;
 
-use astronomical_runtime_integration::{BoundedReadInterval, MlxRuntime};
 use mlx_bridge::MlxArray;
+use runtime_integration::{BoundedReadInterval, MlxRuntime};
 
 use super::embedding_row_reads::{
     EmbeddingRowSelection, EmbeddingTableLayout, embedding_row_intervals, select_embedding_rows,

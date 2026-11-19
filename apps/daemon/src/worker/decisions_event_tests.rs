@@ -4,15 +4,13 @@
 
 use std::sync::{Arc, RwLock};
 
-use astronomical_decision_contract::decision_training_job::{
+use decision_contract::decision_training_job::{
     DecisionTrainingOutcome, DecisionTrainingStage, RunEnding, RunSummary,
 };
-use astronomical_decision_contract::{
+use decision_contract::{
     DecisionAnswer, DecisionFailure, NoulAnswer, QuestionInputCoverage, QuestionOutcome,
 };
-use astronomical_ipc_protocol::{
-    RequestId, WorkerDecisionCapabilities, WorkerEvent, WorkerModelCapabilities,
-};
+use ipc_protocol::{RequestId, WorkerDecisionCapabilities, WorkerEvent, WorkerModelCapabilities};
 use tokio::sync::{Semaphore, mpsc};
 
 use super::handle_worker_decisions_event;

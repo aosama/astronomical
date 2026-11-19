@@ -7,7 +7,7 @@
 use std::io::Write;
 use std::time::Duration;
 
-use astronomical_ipc_protocol::{DaemonIpcClient, DaemonRequest, DaemonResponse};
+use ipc_protocol::{DaemonIpcClient, DaemonRequest, DaemonResponse};
 use tokio::time::{Instant, interval_at, sleep, timeout};
 
 use super::ImageError;

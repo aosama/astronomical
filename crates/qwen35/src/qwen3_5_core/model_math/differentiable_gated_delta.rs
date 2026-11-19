@@ -170,9 +170,7 @@ fn mlx_gated_delta_update(recurrence_inputs: &[MlxArray]) -> Result<Vec<MlxArray
 
 /// MLX's transforms carry `MlxCError`, so the served recurrence's runtime
 /// error is restated as one.
-fn recurrence_failure(
-    recurrence_error: astronomical_runtime_integration::MlxRuntimeError,
-) -> MlxCError {
+fn recurrence_failure(recurrence_error: runtime_integration::MlxRuntimeError) -> MlxCError {
     MlxCError {
         operation: "apply the gated-delta recurrence",
         description: recurrence_error.to_string(),

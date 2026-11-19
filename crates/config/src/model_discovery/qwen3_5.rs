@@ -36,7 +36,7 @@ pub(super) fn discover_model_metadata(
     // shard index; it discovers through its manifest and resident bundle.
     // The manifest's format is checked, not just its file name: a stock
     // checkpoint may ship an unrelated `manifest.json`.
-    if astronomical_expert_atlas::declares_atlas_manifest(model_directory) {
+    if expert_atlas::declares_atlas_manifest(model_directory) {
         return discover_atlas_model_metadata(model_directory, config_value);
     }
     if !model_directory
@@ -139,13 +139,13 @@ fn discover_atlas_model_metadata(
     model_directory: &Path,
     config_value: &serde_json::Value,
 ) -> Option<Qwen3_5DiscoveredModelMetadata> {
-    if !astronomical_expert_atlas::declares_atlas_manifest(model_directory)
+    if !expert_atlas::declares_atlas_manifest(model_directory)
         || !model_directory.join("tokenizer.json").is_file()
     {
         return None;
     }
     if !model_directory
-        .join(astronomical_expert_atlas::RESIDENT_BUNDLE_FILE_NAME)
+        .join(expert_atlas::RESIDENT_BUNDLE_FILE_NAME)
         .is_file()
     {
         return None;

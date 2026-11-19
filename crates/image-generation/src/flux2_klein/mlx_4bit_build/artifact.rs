@@ -8,7 +8,7 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use astronomical_artifact_validation::ValidatedWeightsFile;
+use artifact_validation::ValidatedWeightsFile;
 
 use super::super::artifact::{
     Flux2KleinArtifactError, Flux2KleinValidatedComponent, Flux2KleinValidatedParts,

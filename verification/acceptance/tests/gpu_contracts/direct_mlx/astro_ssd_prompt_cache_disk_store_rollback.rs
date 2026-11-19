@@ -3,11 +3,11 @@ use std::fs::FileTimes;
 use std::os::unix::fs::PermissionsExt;
 use std::time::{Duration, UNIX_EPOCH};
 
-use astronomical_model_serving::{
+use mlx_bridge::MlxDtype;
+use model_serving::{
     AstroSsdPromptCacheDiskStoreError, ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID,
     ORNITH_1_0_35B_OPTIQ_4BIT_REVISION, PersistentVisualEmbeddingKey,
 };
-use mlx_bridge::MlxDtype;
 
 use super::astro_ssd_prompt_cache_disk_store_support::*;
 

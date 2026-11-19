@@ -4,7 +4,7 @@
 use std::time::Duration;
 
 use astronomical_daemon::{ChatGenerationExecutor, ImageGenerationExecutor};
-use astronomical_ipc_protocol::MlxMemorySnapshotSource;
+use ipc_protocol::MlxMemorySnapshotSource;
 use tokio::time::{Instant, sleep, timeout};
 
 use super::image_generation;

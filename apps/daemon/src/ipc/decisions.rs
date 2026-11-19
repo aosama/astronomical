@@ -2,8 +2,8 @@
 //! target model, dispatches one decisions command to the worker executor,
 //! and answers with a single terminal frame.
 
-use astronomical_decision_contract::{DecisionFailure, OrderedJsonValue};
-use astronomical_ipc_protocol::{DaemonResponse, DaemonTransportError, StreamingResponseWriter};
+use decision_contract::{DecisionFailure, OrderedJsonValue};
+use ipc_protocol::{DaemonResponse, DaemonTransportError, StreamingResponseWriter};
 
 use crate::DecisionsOutput;
 use crate::{

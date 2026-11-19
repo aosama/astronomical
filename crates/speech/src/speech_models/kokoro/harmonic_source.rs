@@ -12,8 +12,8 @@
 
 use std::f32::consts::PI;
 
-use astronomical_runtime_integration::MlxRuntime;
 use mlx_bridge::{MlxArray, MlxDtype};
+use runtime_integration::MlxRuntime;
 
 use crate::speech_models::checkpoint_tensors::CheckpointTensors;
 use crate::speech_models::mlx_layers::linear::Linear;

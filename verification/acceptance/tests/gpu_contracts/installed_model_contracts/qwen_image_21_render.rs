@@ -22,8 +22,8 @@
 
 use std::time::Duration;
 
-use astronomical_model_serving::{QwenImage21Pipeline, QwenImage21RenderRequest};
-use astronomical_runtime_integration::MlxRuntime;
+use model_serving::{QwenImage21Pipeline, QwenImage21RenderRequest};
+use runtime_integration::MlxRuntime;
 
 use crate::common::qwen_image_21;
 
@@ -107,10 +107,9 @@ async fn should_render_a_text_to_image_png_from_the_full_pipeline() {
              {neighbor_correlation:.4} is below the {MINIMUM_NEIGHBOR_CORRELATION} floor"
         );
 
-        if let Some(evidence_directory) =
-            astronomical_test_harness::test_run::TestRunContext::current()
-                .configuration
-                .evidence_directory
+        if let Some(evidence_directory) = test_harness::test_run::TestRunContext::current()
+            .configuration
+            .evidence_directory
         {
             std::fs::create_dir_all(&evidence_directory)
                 .expect("the render evidence directory should create");

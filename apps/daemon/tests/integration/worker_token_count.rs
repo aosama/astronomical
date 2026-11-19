@@ -6,7 +6,7 @@
 use std::time::Duration;
 
 use astronomical_daemon::{ChatGenerationExecutor, ChatGenerationStreamEvent, WorkerHealthStatus};
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     ChatGenerationCommand, ChatGenerationCompletionReason, ChatGenerationSettings, ChatMessage,
     ChatToolChoice, RequestId,
 };

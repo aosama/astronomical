@@ -2,7 +2,7 @@
 //! a chat generation, an image, or speech. Images and speech share how a
 //! command that arrives mid-request is answered, so that lives here once.
 
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     ChatGenerationFailureReason, EmbeddingsFailureReason, ImageGenerationFailureReason,
     ProtocolReader, ProtocolWriter, RequestId, WorkerCommand, WorkerEvent,
 };

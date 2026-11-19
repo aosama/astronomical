@@ -99,7 +99,7 @@ async fn should_serve_one_qwen_image_over_http_end_to_end() {
              correlation {neighbor_correlation:.4} is below the {MINIMUM_NEIGHBOR_CORRELATION} floor"
         );
 
-        if let Some(evidence_directory) = astronomical_test_harness::test_run::TestRunContext::current()
+        if let Some(evidence_directory) = test_harness::test_run::TestRunContext::current()
             .configuration
             .evidence_directory
         {
@@ -138,7 +138,7 @@ fn journey_model_root(fidelity: ModelFidelity) -> PathBuf {
 /// explicit test-run configuration.
 fn qwen_image_model_root() -> PathBuf {
     let artifact_directory =
-        astronomical_test_harness::test_run::TestRunContext::current().required_model_directory();
+        test_harness::test_run::TestRunContext::current().required_model_directory();
     // The selected directory is `models--.../snapshots/<sha>`; discovery accepts the `models--...`
     // entry itself and resolves the active snapshot with its decoded model id.
     let model_root = artifact_directory
@@ -181,15 +181,14 @@ async fn spawn_daemon(
 ) -> (Child, SocketAddr) {
     let daemon_executable_path = match fidelity {
         ModelFidelity::Real => {
-            let daemon_executable_path =
-                astronomical_test_harness::workspace_binary("astronomicald")
-                    .to_string_lossy()
-                    .into_owned();
+            let daemon_executable_path = test_harness::workspace_binary("astronomicald")
+                .to_string_lossy()
+                .into_owned();
             assert_real_worker_binary_exists(&daemon_executable_path);
             daemon_executable_path
         }
         ModelFidelity::Scripted => {
-            astronomical_test_harness::workspace_binary("astronomical-daemon-test-daemon")
+            test_harness::workspace_binary("astronomical-daemon-test-daemon")
                 .to_string_lossy()
                 .into_owned()
         }
@@ -210,7 +209,7 @@ async fn spawn_daemon(
         daemon_spawn_command
             .env(
                 "ASTRONOMICAL_TEST_WORKER_EXECUTABLE_PATH",
-                astronomical_test_harness::workspace_binary("astronomical-daemon-test-worker"),
+                test_harness::workspace_binary("astronomical-daemon-test-worker"),
             )
             .env("ASTRONOMICAL_TEST_WORKER_READY_MODEL_ID", EXPECTED_MODEL_ID)
             .env(

@@ -3,7 +3,7 @@
 //! template, tokenizer, and image-token expansion) and never the model, so
 //! the count is the exact number a `Generate` of the same request prefills.
 
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     ChatGenerationCommand, ChatGenerationCompletionReason, ProtocolWriter, WorkerEvent,
 };
 use tokio::io::AsyncWrite;

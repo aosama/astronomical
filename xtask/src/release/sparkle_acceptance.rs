@@ -422,7 +422,7 @@ pub(crate) fn state_fingerprint(state_directory: &Path) -> Result<String, String
             Ok(marker_bytes) => {
                 fingerprint_text.push_str(&format!(
                     "{}  {marker_path}\n",
-                    astronomical_native_identity::digest_bytes(&marker_bytes)
+                    native_identity::digest_bytes(&marker_bytes)
                 ));
             }
             Err(_) => return Err(format!("external state marker is missing: {marker_path}")),

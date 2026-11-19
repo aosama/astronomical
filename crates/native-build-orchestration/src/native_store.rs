@@ -90,7 +90,7 @@ impl NativeBuildProfile {
 
     /// The identity-library spelling of this profile
     /// (`core` or `core+memory-contract`); shared with
-    /// `astronomical-native-identity` so both sides agree on the manifest
+    /// `native-identity` so both sides agree on the manifest
     /// and command-line vocabulary.
     pub fn identity_name(self) -> &'static str {
         if self.should_build_memory_contract_probe {

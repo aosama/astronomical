@@ -20,8 +20,8 @@
 
 use std::{future::Future, path::Path, time::Duration};
 
-use astronomical_ipc_protocol::{RequestId, WorkerEvent};
-use astronomical_model_serving::{
+use ipc_protocol::{RequestId, WorkerEvent};
+use model_serving::{
     AstroSsdPromptCacheDiskStoreConfig, AstroSsdPromptCacheModelContract, GeneratedToken,
     InferenceEngine, Qwen3_5ArtifactValidator, Qwen3_5InferenceRequest, Qwen3_5ResidentEngine,
     Qwen3_5ResidentPromptProcessingChunkSizer, Qwen3_5Tokenizer,
@@ -123,7 +123,7 @@ async fn should_restore_exact_astro_ssd_prompt_cache_parity_for_one_selected_lar
     require_astro_ssd_prompt_cache_acceptance_completion(async {
         let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
         let configured_prefill_chunk_tokens =
-            astronomical_test_harness::test_run::TestRunContext::current()
+            test_harness::test_run::TestRunContext::current()
                 .configuration
                 .prompt_processing_chunk_tokens
                 .unwrap_or(2_048);

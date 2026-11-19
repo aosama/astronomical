@@ -1,9 +1,9 @@
-use astronomical_model_serving::{
+use model_serving::{
     AstroDecoderStateCacheLayerLayout, AstroDecoderStateCacheLayout, AstroDecoderStateCacheState,
     AstroDecoderStateCacheTensorDtype, AstroDecoderStateCacheTensorLayout,
     RequestDecoderStateStack,
 };
-use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
+use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use tokio::sync::MutexGuard;
 
 use crate::common::{

@@ -10,7 +10,7 @@
 //! result; the report and the copy's training record say what judging it
 //! showed, and the person decides.
 //!
-//! The fitting and training live in the `astronomical-decision-training`
+//! The fitting and training live in the `decision-training`
 //! crate; these verbs read the examples, have the daemon score them, and
 //! report.
 

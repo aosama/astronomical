@@ -1,6 +1,6 @@
 //! Protocol startup and command-loop orchestration for the engine-backed worker.
 
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     ChatGenerationCompletionReason, ChatGenerationFailureReason, MlxMemorySnapshotSource,
     ProtocolReader, ProtocolWriter, WorkerCommand, WorkerDecisionCapabilities, WorkerEvent,
     WorkerModelCapabilities, WorkerRuntimeFeatureConfiguration,

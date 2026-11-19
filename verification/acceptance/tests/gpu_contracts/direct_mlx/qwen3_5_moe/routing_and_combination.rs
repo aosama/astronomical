@@ -1,9 +1,9 @@
-use astronomical_model_serving::{
+use model_serving::{
     qwen3_5_moe_combine_experts, qwen3_5_moe_restore_expert_assignment_order,
     qwen3_5_moe_route_experts, qwen3_5_moe_sort_expert_assignments,
     qwen3_5_moe_sorted_expert_weighted_sum, qwen3_5_moe_sorted_expert_weighted_sum_kernel,
 };
-use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
+use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
 use crate::common::{
     DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_MLX_BUFFER_CACHE_LIMIT_BYTES,

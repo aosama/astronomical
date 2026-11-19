@@ -27,9 +27,9 @@
 //! where the configuration's `model_directory` holds Kokoro's `config.json`,
 //! `kokoro-v1_0.safetensors` and `voices/af_heart.safetensors`.
 
-use astronomical_model_serving::{KokoroSpeechEngine, KokoroSpeechTrace, SpeechEngine};
-use astronomical_test_harness::test_run::TestRunContext;
+use model_serving::{KokoroSpeechEngine, KokoroSpeechTrace, SpeechEngine};
 use serde_json::Value;
+use test_harness::test_run::TestRunContext;
 
 use super::speech_audio_checks::{
     TEST_MLX_BUFFER_CACHE_LIMIT_BYTES, TEST_MLX_MEMORY_CEILING_BYTES,

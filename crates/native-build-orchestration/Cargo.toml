@@ -1,5 +1,5 @@
 [package]
-name = "astronomical-native-build-orchestration"
+name = "native-build-orchestration"
 description = "Single compilation home of the native build orchestration: CMake invocation, identity-keyed store, linking, parallelism, and progress"
 edition.workspace = true
 license.workspace = true
@@ -16,7 +16,7 @@ workspace = true
 # identity policy comes from the shared native-identity library.
 fs4.workspace = true
 sha2.workspace = true
-astronomical-native-identity = { path = "../native-identity" }
+native-identity = { path = "../native-identity" }
 
 [dev-dependencies]
 tempfile = "=3.27.0"

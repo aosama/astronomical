@@ -30,16 +30,16 @@ fn resolve_native_probe_executable_path() -> PathBuf {
         .join("../..")
         .canonicalize()
         .expect("the repository root should resolve above the acceptance package");
-    let identity_request = astronomical_native_identity::FingerprintRequest {
+    let identity_request = native_identity::FingerprintRequest {
         repository_root: &repository_root,
-        profile: astronomical_native_identity::NativeBuildProfile::CoreMemoryContract,
-        scope: astronomical_native_identity::IdentityScope::Full,
-        overrides: astronomical_native_identity::probes::ToolchainOverrides {
+        profile: native_identity::NativeBuildProfile::CoreMemoryContract,
+        scope: native_identity::IdentityScope::Full,
+        overrides: native_identity::probes::ToolchainOverrides {
             target_triple: Some(native_probe_target_triple()),
-            ..astronomical_native_identity::probes::ToolchainOverrides::none()
+            ..native_identity::probes::ToolchainOverrides::none()
         },
     };
-    let native_identity = astronomical_native_identity::native_build_identity(&identity_request)
+    let native_identity = native_identity::native_build_identity(&identity_request)
         .unwrap_or_else(|error| panic!("the native build identity failed for the probe: {error}"));
     let store_root = std::env::var_os("ASTRONOMICAL_NATIVE_BUILD_STORE_DIR")
         .map(PathBuf::from)
@@ -56,7 +56,7 @@ fn resolve_native_probe_executable_path() -> PathBuf {
     if !probe_executable_path.is_file() {
         panic!(
             "the native memory-contract probe was not found at {}; build it first with: \
-             cargo test -p astronomical-runtime-integration --features mlx-memory-contract-probe --no-run",
+             cargo test -p runtime-integration --features mlx-memory-contract-probe --no-run",
             probe_executable_path.display()
         );
     }
@@ -93,8 +93,8 @@ fn should_pass_the_pinned_native_mlx_memory_contract_probe() {
     // The probe subprocess inherits the published metallib location because
     // MLX's own baked-in staging path is removed right after the native build
     // store publishes an entry.
-    let metallib_path = astronomical_runtime_integration::compiled_metallib_path().to_path_buf();
-    astronomical_runtime_integration::validate_metallib_path(&metallib_path)
+    let metallib_path = runtime_integration::compiled_metallib_path().to_path_buf();
+    runtime_integration::validate_metallib_path(&metallib_path)
         .expect("the published native metallib should validate for the probe");
     let native_probe_executable_path = resolve_native_probe_executable_path();
     thread::sleep(METAL_QUIESCENCE_WAIT);

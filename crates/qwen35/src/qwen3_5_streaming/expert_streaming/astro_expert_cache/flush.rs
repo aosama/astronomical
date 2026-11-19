@@ -6,7 +6,7 @@
 //! warming, and the leftover-only previous-token prefetch from issue #537. The
 //! prefetch kind is scored separately because it is an experiment, not warming.
 
-use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
+use runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use super::AstroExpertCache;
 use crate::expert_paging::ExpertWeightPage;
@@ -70,7 +70,7 @@ impl AstroExpertCache {
             } else {
                 let candidate_decode_step_epoch = (pending_insert.is_decode_demand
                     && self.decode_astro_expert_cache_policy
-                        == astronomical_ipc_protocol::WorkerDecodeAstroExpertCachePolicy::Candidate)
+                        == ipc_protocol::WorkerDecodeAstroExpertCachePolicy::Candidate)
                     .then_some(self.decode_step_epoch);
                 let written_count = if let Some(decode_step_epoch) = candidate_decode_step_epoch {
                     self.insert_candidate_decode_experts(

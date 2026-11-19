@@ -4,11 +4,9 @@
 
 use std::collections::BTreeMap;
 
-use astronomical_quantization::allocation::{AllocationConstraints, optimize_mixed_precision};
-use astronomical_quantization::bit_width::{BitWidth, CandidateBitWidths, GroupSize};
-use astronomical_quantization::sensitivity::{
-    SensitivityMethod, SensitivityResult, SensitivityTable,
-};
+use quantization::allocation::{AllocationConstraints, optimize_mixed_precision};
+use quantization::bit_width::{BitWidth, CandidateBitWidths, GroupSize};
+use quantization::sensitivity::{SensitivityMethod, SensitivityResult, SensitivityTable};
 
 use super::fixtures::{self, FixtureAllocationCase};
 

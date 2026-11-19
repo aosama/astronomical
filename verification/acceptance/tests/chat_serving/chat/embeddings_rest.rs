@@ -34,7 +34,7 @@ async fn run_embeddings_gpu_journey() {
         selected_model.model_id
     );
     let maximum_input_tokens = match &selected_model.capabilities {
-        astronomical_config::ModelCapabilities::Embeddings(embedding_capabilities) => {
+        config::ModelCapabilities::Embeddings(embedding_capabilities) => {
             embedding_capabilities.max_input_tokens
         }
         other_capabilities => {
@@ -201,7 +201,7 @@ async fn run_embeddings_gpu_journey() {
     );
 }
 
-fn configured_embeddings_model() -> astronomical_config::DiscoveredModel {
+fn configured_embeddings_model() -> config::DiscoveredModel {
     let discovered_models = crate::support::configured_discovered_models();
     let selected_model = discovered_models
         .into_iter()
@@ -218,7 +218,7 @@ fn configured_embeddings_model() -> astronomical_config::DiscoveredModel {
     assert!(
         matches!(
             selected_model.capabilities,
-            astronomical_config::ModelCapabilities::Embeddings(_)
+            config::ModelCapabilities::Embeddings(_)
         ),
         "{EMBEDDINGS_MODEL_LEAF_ID} must be discovered as an embedding model"
     );

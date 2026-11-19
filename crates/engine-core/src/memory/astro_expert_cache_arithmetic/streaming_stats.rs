@@ -12,10 +12,8 @@
 //! so the values describe the whole serving session of that model instance.
 
 use crate::inference_engine::contract::ExpertLayerTopology;
-use astronomical_model_primitives::performance_attribution::{
-    PerformanceAttribution, StreamedPageSourcePlan,
-};
-use astronomical_model_primitives::serving_phase::SessionStreamingPhase;
+use model_primitives::performance_attribution::{PerformanceAttribution, StreamedPageSourcePlan};
+use model_primitives::serving_phase::SessionStreamingPhase;
 
 /// Records one streamed page's source plan in both ledgers at once: the
 /// opt-in per-request attribution counters and the always-on observatory
@@ -179,7 +177,7 @@ pub enum RouteCoverageClass {
 /// Pure mapping of one astro expert cache layer residency onto the observatory DTO.
 #[must_use]
 pub fn expert_layer_topology_from_residency(
-    layer_residency: &astronomical_memory_policy::residency::CurrentExpertLayerResidency,
+    layer_residency: &memory_policy::residency::CurrentExpertLayerResidency,
 ) -> ExpertLayerTopology {
     ExpertLayerTopology {
         layer_index: u32::try_from(layer_residency.layer_index).unwrap_or(u32::MAX),
@@ -191,7 +189,7 @@ pub fn expert_layer_topology_from_residency(
         retained_payload_bytes: layer_residency.payload_bytes,
         is_complete_layer: matches!(
             layer_residency.class,
-            astronomical_memory_policy::residency::RetainedExpertPageClass::StableCompleteLayer
+            memory_policy::residency::RetainedExpertPageClass::StableCompleteLayer
         ),
         covered_demand: layer_residency.covered_weighted_demand,
     }

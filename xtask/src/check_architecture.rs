@@ -30,14 +30,14 @@ struct ForbiddenDependencyRule {
 const FORBIDDEN_DEPENDENCY_RULES: &[ForbiddenDependencyRule] = &[
     ForbiddenDependencyRule {
         rule_name: "policy-without-mlx-bindings",
-        source_crate: "astronomical-memory-policy",
+        source_crate: "memory-policy",
         forbidden_crate: "mlx-bridge",
         rationale: "the memory policy crate must build and test in the integration lane without ever pulling in the serving crate or its graphics-processor tests",
     },
     ForbiddenDependencyRule {
         rule_name: "policy-without-mlx-fork-bindings",
-        source_crate: "astronomical-memory-policy",
-        forbidden_crate: "astronomical-mlx-c-fork",
+        source_crate: "memory-policy",
+        forbidden_crate: "mlx-c-fork",
         rationale: "the fork extension carries the same graphics-processor linkage as the stock bridge, so the memory policy crate must stay free of it too",
     },
     // The jangtq2 family crate (issue #1427) owns the weight contract end
@@ -48,8 +48,8 @@ const FORBIDDEN_DEPENDENCY_RULES: &[ForbiddenDependencyRule] = &[
     // defeating the extraction.
     ForbiddenDependencyRule {
         rule_name: "family-crate-without-serving",
-        source_crate: "astronomical-jangtq2-qwen35",
-        forbidden_crate: "astronomical-model-serving",
+        source_crate: "jangtq2-qwen35",
+        forbidden_crate: "model-serving",
         rationale: "the jangtq2 family crate must build and test without pulling in the serving crate, which consumes the family through a one-way edge",
     },
     // The model primitives (issue #2340) sit under every model family. An
@@ -58,8 +58,8 @@ const FORBIDDEN_DEPENDENCY_RULES: &[ForbiddenDependencyRule] = &[
     // split exists to stop.
     ForbiddenDependencyRule {
         rule_name: "model-primitives-without-serving",
-        source_crate: "astronomical-model-primitives",
-        forbidden_crate: "astronomical-model-serving",
+        source_crate: "model-primitives",
+        forbidden_crate: "model-serving",
         rationale: "the model primitives crate must build and test without pulling in the serving crate, which consumes the primitives through a one-way edge",
     },
     // The speech families (issue #2340) implement a seam the serving
@@ -67,48 +67,48 @@ const FORBIDDEN_DEPENDENCY_RULES: &[ForbiddenDependencyRule] = &[
     // every speech edit and let a family reach into the engine.
     ForbiddenDependencyRule {
         rule_name: "speech-without-serving",
-        source_crate: "astronomical-speech",
-        forbidden_crate: "astronomical-model-serving",
+        source_crate: "speech",
+        forbidden_crate: "model-serving",
         rationale: "the speech crate must build and test without pulling in the serving crate, which drives the speech engines through a one-way edge",
     },
     // The image families (issue #2340), like speech, implement a seam the
     // serving crate's worker drives.
     ForbiddenDependencyRule {
         rule_name: "image-generation-without-serving",
-        source_crate: "astronomical-image-generation",
-        forbidden_crate: "astronomical-model-serving",
+        source_crate: "image-generation",
+        forbidden_crate: "model-serving",
         rationale: "the image generation crate must build and test without pulling in the serving crate, which drives the image engines through a one-way edge",
     },
     // Artifact validation sits under every model family; an edge to the
     // serving crate would make each family depend on the engine through it.
     ForbiddenDependencyRule {
         rule_name: "artifact-validation-without-serving",
-        source_crate: "astronomical-artifact-validation",
-        forbidden_crate: "astronomical-model-serving",
+        source_crate: "artifact-validation",
+        forbidden_crate: "model-serving",
         rationale: "artifact validation must build and test without pulling in the serving crate, because every model family depends on it",
     },
     // The engine core sits under every model family, which implements its
     // contract; an edge to the serving crate would make the split circular.
     ForbiddenDependencyRule {
         rule_name: "engine-core-without-serving",
-        source_crate: "astronomical-engine-core",
-        forbidden_crate: "astronomical-model-serving",
+        source_crate: "engine-core",
+        forbidden_crate: "model-serving",
         rationale: "the engine core must build and test without pulling in the serving crate, because every model family builds on it",
     },
     // The Qwen 3.5 family sits under the decision models and the serving
     // crate's worker; an edge back would make the split circular.
     ForbiddenDependencyRule {
         rule_name: "qwen35-without-serving",
-        source_crate: "astronomical-qwen35",
-        forbidden_crate: "astronomical-model-serving",
+        source_crate: "qwen35",
+        forbidden_crate: "model-serving",
         rationale: "the Qwen 3.5 crate must build and test without pulling in the serving crate, which drives its engines through a one-way edge",
     },
     // The decision models sit above the Qwen 3.5 family and below the
     // serving crate's worker, which drives them.
     ForbiddenDependencyRule {
         rule_name: "decision-models-without-serving",
-        source_crate: "astronomical-decision-models",
-        forbidden_crate: "astronomical-model-serving",
+        source_crate: "decision-models",
+        forbidden_crate: "model-serving",
         rationale: "the decision models crate must build and test without pulling in the serving crate, which drives the decision engines through a one-way edge",
     },
     // The quantizer reaches the Qwen 3.5 family only through the probe crate
@@ -116,8 +116,8 @@ const FORBIDDEN_DEPENDENCY_RULES: &[ForbiddenDependencyRule] = &[
     // family, never compile the quantizer.
     ForbiddenDependencyRule {
         rule_name: "qwen35-without-quantizer",
-        source_crate: "astronomical-qwen35",
-        forbidden_crate: "astronomical-quantization",
+        source_crate: "qwen35",
+        forbidden_crate: "quantization",
         rationale: "the Qwen 3.5 crate must build without the quantizer, which its sensitivity probe crate brings in only for the CLI's convert verb and the acceptance tests",
     },
 ];

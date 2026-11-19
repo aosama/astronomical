@@ -2,8 +2,8 @@
 //! streaming convolutions behave on a whole utterance that started from
 //! silence: each output depends only on the past.
 
-use astronomical_runtime_integration::MlxRuntime;
 use mlx_bridge::{MlxArray, MlxDtype};
+use runtime_integration::MlxRuntime;
 
 use crate::speech_models::checkpoint_tensors::CheckpointTensors;
 use crate::speech_models::mlx_layers::convolution_weight_layout::{

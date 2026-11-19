@@ -1,4 +1,4 @@
-use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
+use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
 use crate::common::{
     DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_MLX_BUFFER_CACHE_LIMIT_BYTES,
@@ -30,13 +30,9 @@ async fn should_keep_the_candidate_that_crosses_the_top_p_threshold() {
         .array_from_f32(&candidate_logits, &[1, 1, 20])
         .expect("the candidate logits should be valid");
 
-    let masked_logits = astronomical_model_serving::qwen3_5_apply_top_p_mask(
-        &runtime,
-        &probability_array,
-        &logit_array,
-        600,
-    )
-    .expect("top-p filtering should build a valid MLX graph");
+    let masked_logits =
+        model_serving::qwen3_5_apply_top_p_mask(&runtime, &probability_array, &logit_array, 600)
+            .expect("top-p filtering should build a valid MLX graph");
     let masked_logit_values = masked_logits
         .to_vec_f32()
         .expect("the masked logits should evaluate as float32");
@@ -107,7 +103,7 @@ async fn should_draw_acceptance_coins_at_their_probabilities() {
             .random_key(u64::from_le_bytes([7_u8; 8]))
             .expect("the random key should initialize");
         let mut random_state = random_state;
-        let coins = astronomical_model_serving::sample_acceptance_coins_for_tests(
+        let coins = model_serving::sample_acceptance_coins_for_tests(
             &runtime,
             &deterministic,
             &mut random_state,
@@ -129,7 +125,7 @@ async fn should_draw_acceptance_coins_at_their_probabilities() {
             .random_key(1_000 + draw_index)
             .expect("the random key should initialize");
         let mut random_state = random_state;
-        let coins = astronomical_model_serving::sample_acceptance_coins_for_tests(
+        let coins = model_serving::sample_acceptance_coins_for_tests(
             &runtime,
             &half_probabilities,
             &mut random_state,
@@ -157,13 +153,12 @@ fn sampled_residual_token_counts(
             .random_key(500 + draw_index)
             .expect("the random key should initialize");
         let mut random_state = random_state;
-        let sampled_token =
-            astronomical_model_serving::sample_from_relative_probabilities_for_tests(
-                runtime,
-                residuals,
-                &mut random_state,
-            )
-            .expect("the residual sample should build and evaluate");
+        let sampled_token = model_serving::sample_from_relative_probabilities_for_tests(
+            runtime,
+            residuals,
+            &mut random_state,
+        )
+        .expect("the residual sample should build and evaluate");
         let token_id = sampled_token
             .item_u32()
             .expect("the residual sample should be one token");
@@ -188,13 +183,9 @@ async fn should_keep_logits_unchanged_for_a_neutral_repetition_penalty() {
         .array_from_f32(&candidate_logits, &[1, 1, 5])
         .expect("the candidate logits should be valid");
 
-    let penalized_logits = astronomical_model_serving::qwen3_5_apply_repetition_penalty(
-        &runtime,
-        &logit_array,
-        &[1, 3],
-        1_000,
-    )
-    .expect("the neutral penalty should not fail");
+    let penalized_logits =
+        model_serving::qwen3_5_apply_repetition_penalty(&runtime, &logit_array, &[1, 3], 1_000)
+            .expect("the neutral penalty should not fail");
 
     assert!(
         penalized_logits.is_none(),
@@ -221,14 +212,10 @@ async fn should_scale_seen_token_logits_by_the_repetition_penalty() {
 
     // Seen tokens 1 (positive logit) and 3 (negative logit) exercise both
     // transform branches; unseen tokens 0, 2, and 4 must stay exact.
-    let penalized_logits = astronomical_model_serving::qwen3_5_apply_repetition_penalty(
-        &runtime,
-        &logit_array,
-        &[1, 3],
-        1_200,
-    )
-    .expect("the penalty should build a valid MLX graph")
-    .expect("an active penalty with a non-empty history must transform the logits");
+    let penalized_logits =
+        model_serving::qwen3_5_apply_repetition_penalty(&runtime, &logit_array, &[1, 3], 1_200)
+            .expect("the penalty should build a valid MLX graph")
+            .expect("an active penalty with a non-empty history must transform the logits");
     let penalized_logit_values = penalized_logits
         .to_vec_f32()
         .expect("the penalized logits should evaluate as float32");
@@ -286,7 +273,7 @@ async fn should_sample_one_tempered_token_per_logit_row() {
     let mut row_b_mode_count = 0_usize;
     let mut rows_differ_count = 0_usize;
     for _ in 0..draw_count {
-        let sampled_rows = astronomical_model_serving::build_sampled_token_rows_for_tests(
+        let sampled_rows = model_serving::build_sampled_token_rows_for_tests(
             &runtime,
             &logits_array,
             1_000,

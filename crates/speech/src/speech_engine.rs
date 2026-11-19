@@ -17,9 +17,9 @@
 //! on these calls: the worker owns the id of the one request an engine
 //! speaks.
 
-use astronomical_speech_contract::{SpeechFailure, SpeechRequest};
+use speech_contract::{SpeechFailure, SpeechRequest};
 
-use astronomical_memory_policy::telemetry::MlxMemoryTelemetry;
+use memory_policy::telemetry::MlxMemoryTelemetry;
 
 /// What a loaded speech engine offers.
 #[derive(Clone, Debug, Eq, PartialEq)]

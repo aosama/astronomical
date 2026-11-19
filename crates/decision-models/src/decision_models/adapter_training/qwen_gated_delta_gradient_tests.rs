@@ -4,14 +4,14 @@
 //! gradient against, because the Qwen 3.5 crate sits below decision models
 //! (issue #2340).
 
-use astronomical_runtime_integration::MlxRuntime;
 use mlx_bridge::{MlxArray, MlxBindingsContext, MlxCError};
+use runtime_integration::MlxRuntime;
 use serial_test::serial;
 
 use super::loss_gradient::{TrainableLoss, loss_gradients};
 use crate::qwen3_5_core::model_math::differentiable_gated_delta::DifferentiableGatedDelta;
 use crate::{qwen3_5_gated_delta_kernel, qwen3_5_gated_delta_sequence};
-use astronomical_model_primitives::synthetic_weights_test_support::{
+use model_primitives::synthetic_weights_test_support::{
     initialize_test_runtime, shakespeare_values,
 };
 

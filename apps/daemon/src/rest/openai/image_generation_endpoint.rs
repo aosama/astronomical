@@ -3,16 +3,6 @@
 use crate::rest::worker_replacement_wait::lock_configuration_transition_for_generation;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use astronomical_config::ModelCapabilities;
-use astronomical_ipc_protocol::{
-    ImageGenerationCommand, ImageGenerationFailureReason, ImageGenerationSettings, ProtocolError,
-    RequestId, WorkerCommand, encode_command,
-};
-use astronomical_rest_contract::{
-    OpenAiErrorResponse, OpenAiGeneratedImageParts, OpenAiImageGenerationRequest,
-    OpenAiImageGenerationRequestParts, OpenAiImageGenerationResponse,
-    OpenAiImageGenerationValidationError,
-};
 use axum::{
     Json,
     body::Bytes,
@@ -21,6 +11,16 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use base64::{Engine as _, engine::general_purpose::STANDARD};
+use config::ModelCapabilities;
+use ipc_protocol::{
+    ImageGenerationCommand, ImageGenerationFailureReason, ImageGenerationSettings, ProtocolError,
+    RequestId, WorkerCommand, encode_command,
+};
+use rest_contract::{
+    OpenAiErrorResponse, OpenAiGeneratedImageParts, OpenAiImageGenerationRequest,
+    OpenAiImageGenerationRequestParts, OpenAiImageGenerationResponse,
+    OpenAiImageGenerationValidationError,
+};
 
 use crate::serving::request_seed::generated_seed;
 use crate::{
@@ -118,7 +118,7 @@ fn parse_image_generation_request(
 /// revision stamped into successful responses.
 struct ImageGenerationTargetModel {
     resolved_model_id: String,
-    image_capabilities: astronomical_config::ImageGenerationCapabilities,
+    image_capabilities: config::ImageGenerationCapabilities,
     model_revision: String,
 }
 
@@ -142,8 +142,7 @@ fn resolve_image_target_model(
         .iter()
         .map(|discovered_model| discovered_model.model_id.as_str())
         .collect::<Vec<_>>();
-    let resolved_model_id =
-        astronomical_config::resolve_model_id(&request_parts.model, &known_model_ids);
+    let resolved_model_id = config::resolve_model_id(&request_parts.model, &known_model_ids);
     let Some(discovered_model) = discovered_models
         .iter()
         .find(|discovered_model| discovered_model.model_id == resolved_model_id)
@@ -216,7 +215,7 @@ fn build_image_generation_command(
     request_id: u64,
     resolved_model_id: &str,
     request_parts: OpenAiImageGenerationRequestParts,
-    image_capabilities: astronomical_config::ImageGenerationCapabilities,
+    image_capabilities: config::ImageGenerationCapabilities,
 ) -> ImageGenerationCommand {
     // The diffusion schedule is a discovery fact of the model family: image workers start idle
     // and only publish their capabilities after the request-triggered model swap, so the

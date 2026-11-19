@@ -9,7 +9,7 @@ use crate::common::daemon::{
 
 #[tokio::test]
 async fn should_keep_stable_running_while_development_starts_and_stops_independently() {
-    let daemon_executable_path = astronomical_test_harness::workspace_binary("astronomicald")
+    let daemon_executable_path = test_harness::workspace_binary("astronomicald")
         .to_string_lossy()
         .into_owned();
     let stable_state_directory = tempfile::tempdir().expect("stable state should be created");

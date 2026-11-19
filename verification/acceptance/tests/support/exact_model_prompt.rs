@@ -2,8 +2,8 @@
 
 use std::path::Path;
 
-use astronomical_ipc_protocol::ChatMessage;
-use astronomical_model_serving::Qwen3_5PromptRenderer;
+use ipc_protocol::ChatMessage;
+use model_serving::Qwen3_5PromptRenderer;
 use tokenizers::Tokenizer;
 
 pub(crate) fn build_exact_model_prompt_content(

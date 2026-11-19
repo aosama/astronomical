@@ -1,9 +1,9 @@
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     ChatAssistantToolCall, ChatAssistantToolFunction, ChatGenerationCommand,
     ChatGenerationSettings, ChatGenerationValidationError, ChatMessage, ChatToolChoice,
     ChatToolDefinition, RequestId,
 };
-use astronomical_rest_contract::{
+use rest_contract::{
     OpenAiResponseInputItemParts, OpenAiResponseInputParts, OpenAiResponseToolChoiceParts,
     OpenAiResponsesRequest, OpenAiResponsesRequestParts, OpenAiResponsesValidationError,
 };

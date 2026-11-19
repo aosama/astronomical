@@ -11,11 +11,11 @@
 
 // Unsafe is denied workspace-wide, and this crate has none of its own. The one
 // exception, the macOS accounting syscall behind performance attribution,
-// lives in astronomical-model-primitives.
+// lives in model-primitives.
 
 // Artifact validation is shared by every model family and lives in its own
 // crate (issue #2340); the alias keeps `crate::artifact_validation` paths.
-pub(crate) use astronomical_artifact_validation as artifact_validation;
+pub(crate) use ::artifact_validation;
 
 mod engine_backed_worker;
 
@@ -23,51 +23,51 @@ mod model_family_runtime;
 
 // Speech lives in its own crate (issue #2340); the aliases keep each
 // `crate::speech_*` path in this crate resolving.
-pub(crate) use astronomical_speech::speech_engine;
+pub(crate) use ::speech::speech_engine;
 
 #[cfg(feature = "direct-mlx")]
-pub(crate) use astronomical_speech::speech_models;
+pub(crate) use ::speech::speech_models;
 
 // The engine core (the inference contract and its errors, MLX memory, the
 // astro_decoder_state_cache, the generation processor and structured
 // generation) sits below the model families in its own crate (issue #2340).
 // Its public surface, modules included, is re-exported whole, so every
 // `crate::memory`, `crate::inference_engine` and root path here resolves.
-pub use astronomical_engine_core::*;
+pub use ::engine_core::*;
 
 // Image generation lives in its own crate (issue #2340). Its public surface,
 // the `flux2_klein`, `qwen_image_21` and `image_generation_engine` modules
 // included, is re-exported whole, so the worker, this crate's own
 // `crate::flux2_klein` paths and the acceptance tests keep resolving.
-pub use astronomical_image_generation::*;
+pub use ::image_generation::*;
 
 // The model primitives every model family shares (issue #2340); their
 // public surface, modules included, is re-exported whole.
-pub use astronomical_model_primitives::*;
+pub use ::model_primitives::*;
 
 // The Qwen 3.5 family (issue #2340): the core, the resident and streaming
 // engines, Prism Hadamard, speculative decoding, expert paging, the kernel
 // capability probes and the astro_ssd_prompt_cache. Its public surface,
 // modules included, is re-exported whole.
-pub use astronomical_qwen35::*;
+pub use ::qwen35::*;
 
 // The decision and embedding models (issue #2340): Laya, Kev, Clef,
 // ModernBERT and the decision and embedding seams the worker drives. Their
 // public surface, modules included, is re-exported whole.
-pub use astronomical_decision_models::*;
+pub use ::decision_models::*;
 
 #[doc(hidden)]
-pub use artifact_validation::validate_required_file_for_tests;
+pub use ::artifact_validation::validate_required_file_for_tests;
 
-pub use artifact_validation::{ArtifactValidationError, TensorDtype, TensorProfile};
+pub use ::artifact_validation::{ArtifactValidationError, TensorDtype, TensorProfile};
 
 #[doc(hidden)]
-pub use artifact_validation::{
+pub use ::artifact_validation::{
     RawSafetensorsInventoryForTests, RawSafetensorsTensorDescriptorForTests,
     validate_safetensors_required_profiles_for_tests,
 };
 
-pub use astronomical_ipc_protocol::ExpertMemoryMode;
+pub use ipc_protocol::ExpertMemoryMode;
 
 pub use engine_backed_worker::{
     EngineBackedWorker, ModelFactory, ModelFactoryRuntime, WorkerRuntimeError,

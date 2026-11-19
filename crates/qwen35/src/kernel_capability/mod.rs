@@ -266,7 +266,7 @@ static FORCED_WORKER_VERDICTS_FOR_TESTS: OnceLock<WorkerKernelCapabilities> = On
 /// probe stay unprobed and fail closed until their milestone lands.
 #[cfg(feature = "direct-mlx")]
 pub fn worker_process_kernel_capabilities(
-    runtime: &astronomical_runtime_integration::MlxRuntime,
+    runtime: &runtime_integration::MlxRuntime,
     performance_attribution: &mut PerformanceAttribution,
 ) -> &'static WorkerKernelCapabilities {
     static WORKER_PROCESS_KERNEL_CAPABILITIES: OnceLock<WorkerKernelCapabilities> = OnceLock::new();

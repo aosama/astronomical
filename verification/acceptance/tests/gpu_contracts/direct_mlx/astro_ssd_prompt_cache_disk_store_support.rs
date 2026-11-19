@@ -1,11 +1,11 @@
 use std::collections::HashMap;
 
-use astronomical_model_serving::{
+use model_serving::{
     AstroDecoderStateCachePersistedTensorLayout, AstroSsdPromptCacheBlockKey,
     AstroSsdPromptCacheDiskStore, AstroSsdPromptCacheDiskStoreConfig,
     AstroSsdPromptCacheDiskStoreError, AstroSsdPromptCacheModelContract,
 };
-use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
+use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
 use crate::common::qwen3_5_moe;
 use crate::common::{
@@ -134,6 +134,6 @@ pub(super) fn assert_split_tensor_shapes_match(
 
 pub(super) mod hex {
     pub fn encode(block_hash_bytes: [u8; 32]) -> String {
-        astronomical_lowercase_hex::encode_lowercase_hex(&block_hash_bytes)
+        lowercase_hex::encode_lowercase_hex(&block_hash_bytes)
     }
 }

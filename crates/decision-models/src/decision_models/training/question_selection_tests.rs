@@ -1,9 +1,7 @@
 //! Which questions a training takes, and what it keeps about each.
 
-use astronomical_decision_contract::{
-    DecisionAnswer, FloatVector, NoulAnswer, QuestionInputCoverage,
-};
-use astronomical_decision_training::kev_trainable::KevTrainableHead;
+use decision_contract::{DecisionAnswer, FloatVector, NoulAnswer, QuestionInputCoverage};
+use decision_training::kev_trainable::KevTrainableHead;
 
 use super::*;
 

@@ -29,7 +29,7 @@ use std::path::Path;
 use std::time::Duration;
 
 use astronomical_daemon::WorkerHealthSnapshot;
-use astronomical_ipc_protocol::{ChatImageInput, WorkerDecodeAstroExpertCachePolicy};
+use ipc_protocol::{ChatImageInput, WorkerDecodeAstroExpertCachePolicy};
 use serde::Serialize;
 use serial_test::serial;
 
@@ -195,7 +195,7 @@ fn scoreboard_journey(limit_bytes: u64) -> ThroughputJourney {
         journey_timeout: SCOREBOARD_SERVING_BUDGET,
         model_directory: None,
         diagnostic_qwen3_5_engine_override:
-            astronomical_ipc_protocol::WorkerDiagnosticQwen3_5EngineOverride::Automatic,
+            ipc_protocol::WorkerDiagnosticQwen3_5EngineOverride::Automatic,
     }
 }
 

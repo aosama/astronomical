@@ -6,7 +6,7 @@ use crate::inference_engine::contract::ExpertResidencyTelemetry;
 
 #[test]
 fn should_carry_a_dense_model_layer_residency_to_the_worker_snapshot() {
-    let dense_layers = astronomical_ipc_protocol::WorkerDenseLayerResidency {
+    let dense_layers = ipc_protocol::WorkerDenseLayerResidency {
         decoder_layer_count: 32,
         kept_layer_count: 7,
         streamed_layer_payload_bytes: 4_437_000_000,

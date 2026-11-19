@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use tokio::time::Instant;
 
-use astronomical_ipc_protocol::NeuralEnginePrefillStatus;
+use ipc_protocol::NeuralEnginePrefillStatus;
 
 use super::{
     IdleModelUnloadClock, NeuralEnginePreparationProgress, STALLED_PREPARATION_HOLD,

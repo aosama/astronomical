@@ -2,7 +2,7 @@
 //! SwiGLU feed-forward, each behind an RMSNorm with a residual — the reference
 //! `Qwen3VLTextDecoderLayer` exactly.
 
-use astronomical_runtime_integration::MlxRuntime;
+use runtime_integration::MlxRuntime;
 
 use crate::qwen_image_21::QwenImage21EngineError;
 use crate::qwen_image_21::mlx_math;

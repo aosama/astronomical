@@ -27,15 +27,15 @@
 use std::rc::Rc;
 use std::time::Instant;
 
-use astronomical_decision_contract::decision_training_job::{
+use decision_contract::decision_training_job::{
     DecisionTrainingOutcome, DecisionTrainingStage, RunEnding, RunSummary, TrainedQuestion,
     TrainedTensor,
 };
-use astronomical_decision_contract::{DecisionFailure, FloatVector, QuestionOutcome};
-use astronomical_decision_training::head_parameters::ParameterLayout;
-use astronomical_decision_training::training_settings::{SeedEnding, TrainingSettings};
-use astronomical_runtime_integration::MlxRuntime;
+use decision_contract::{DecisionFailure, FloatVector, QuestionOutcome};
+use decision_training::head_parameters::ParameterLayout;
+use decision_training::training_settings::{SeedEnding, TrainingSettings};
 use mlx_bridge::MlxArray;
+use runtime_integration::MlxRuntime;
 
 use super::gpu_math::{GpuMath, GpuTrainingError};
 use super::gpu_training::{GpuSeedRun, GpuTrainer, GpuTrainingSet, STEP_TIME_BUDGET, TrainerStep};

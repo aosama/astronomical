@@ -5,9 +5,9 @@
 //! requested width and normalized again. Pooling and normalization live in
 //! Astronomical; no third-party embedding package is linked.
 
-use astronomical_ipc_protocol::EmbeddingsFailureReason;
-use astronomical_runtime_integration::MlxRuntime;
+use ipc_protocol::EmbeddingsFailureReason;
 use mlx_bridge::{MlxArray, MlxCError};
+use runtime_integration::MlxRuntime;
 
 use crate::modernbert::token_batch::PaddedTokenBatch;
 use crate::modernbert::trunk::{ModernBertTrunk, ModernBertTrunkError};

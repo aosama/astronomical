@@ -4,7 +4,7 @@ use super::scripted_chat_test_doubles::{
 use super::support::{chat_command, close_worker_transport, next_event, ready_event};
 use super::tracking_chat_engine_test_doubles::TrackingChatEngine;
 use crate::{EngineBackedWorker, GeneratedToken};
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     ChatGenerationCompletionReason, ChatGenerationFailureReason, ChatGenerationOutput,
     MAX_IPC_FRAME_BYTES, ProtocolReader, ProtocolWriter, RequestId, WorkerCommand, WorkerEvent,
 };

@@ -4,7 +4,7 @@
 //! and how many paged bytes are retained. They must not invent a second Hybrid /
 //! Paged / Resident answer.
 
-use astronomical_ipc_protocol::ExpertMemoryMode;
+use ipc_protocol::ExpertMemoryMode;
 
 /// Classifies expert RAM ownership from structural facts.
 #[must_use]

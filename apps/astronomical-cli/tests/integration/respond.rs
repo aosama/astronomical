@@ -12,8 +12,8 @@ use std::{io::Write, path::PathBuf};
 
 use astronomical_cli::RespondDependencies;
 use astronomical_cli::RespondError;
-use astronomical_config::AstronomicalRuntimeInstance;
-use astronomical_ipc_protocol::{ChatImageInput, ChatMessage};
+use config::AstronomicalRuntimeInstance;
+use ipc_protocol::{ChatImageInput, ChatMessage};
 use tokio::time::timeout;
 
 use crate::integration::support::environment::{

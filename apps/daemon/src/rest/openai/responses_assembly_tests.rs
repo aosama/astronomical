@@ -2,7 +2,7 @@
 //! events collect into one non-streaming Responses payload.
 
 use crate::{ChatGenerationStreamEvent, OpenAiResponsesCollector};
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     ChatGenerationCompletionReason, ChatGenerationFailureReason, OUT_OF_GRAPHICS_MEMORY_ADVICE,
 };
 

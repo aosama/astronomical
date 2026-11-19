@@ -1,8 +1,8 @@
 //! Kokoro's convolutions over `[length, channels]`, padded symmetrically as
 //! StyleTTS2 and HiFi-GAN pad them (each output sees past and future).
 
-use astronomical_runtime_integration::MlxRuntime;
 use mlx_bridge::MlxArray;
+use runtime_integration::MlxRuntime;
 
 use crate::speech_models::checkpoint_tensors::CheckpointTensors;
 use crate::speech_models::mlx_layers::convolution_weight_layout::{

@@ -3,8 +3,8 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use astronomical_ipc_protocol::{RequestId, WorkerChunkingConfiguration, WorkerEvent};
-use astronomical_runtime_integration::MlxMemoryLimits;
+use ipc_protocol::{RequestId, WorkerChunkingConfiguration, WorkerEvent};
+use runtime_integration::MlxMemoryLimits;
 
 use crate::astro_ssd_prompt_cache::counters::AstroSsdPromptCacheCounters;
 use crate::{
@@ -61,7 +61,7 @@ pub struct Qwen3_5InferenceExecution {
         Option<std::path::PathBuf>,
     /// What the opt-in Neural Engine prefill is doing for the loaded model.
     pub(in crate::qwen3_5_resident::inference_execution) neural_engine_prefill_status:
-        astronomical_ipc_protocol::NeuralEnginePrefillStatus,
+        ipc_protocol::NeuralEnginePrefillStatus,
     /// The programs still on their way to the loaded model, which serves on the GPU
     /// until they arrive.
     pub(in crate::qwen3_5_resident::inference_execution) neural_engine_prefill_preparation: Option<

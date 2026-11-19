@@ -11,13 +11,13 @@
 
 use std::collections::HashSet;
 
-use astronomical_decision_contract::QuestionOutcome;
-use astronomical_decision_training::calibration_metrics::ScoringTemperature;
-use astronomical_decision_training::calibration_plan::{CalibrationPlan, KindOutcome};
-use astronomical_decision_training::holdout_split::state_group_key;
-use astronomical_decision_training::labelled_example::LabelledExample;
-use astronomical_decision_training::scored_question::ScoredQuestion;
-use astronomical_decision_training::training_verdict::ScoredPair;
+use decision_contract::QuestionOutcome;
+use decision_training::calibration_metrics::ScoringTemperature;
+use decision_training::calibration_plan::{CalibrationPlan, KindOutcome};
+use decision_training::holdout_split::state_group_key;
+use decision_training::labelled_example::LabelledExample;
+use decision_training::scored_question::ScoredQuestion;
+use decision_training::training_verdict::ScoredPair;
 
 use super::calibrate::example_requests;
 use super::decision_tool::{DecisionToolDependencies, DecisionToolError};

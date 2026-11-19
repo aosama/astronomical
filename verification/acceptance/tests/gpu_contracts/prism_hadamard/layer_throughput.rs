@@ -7,7 +7,7 @@
 
 use std::time::Instant;
 
-use astronomical_model_serving::prism_hadamard_qwen35::model::{
+use model_serving::prism_hadamard_qwen35::model::{
     PrismHadamardGenerationState, PrismHadamardTextModel,
 };
 use serial_test::serial;

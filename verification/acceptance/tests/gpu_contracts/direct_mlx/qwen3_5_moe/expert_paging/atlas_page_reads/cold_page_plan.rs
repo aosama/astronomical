@@ -6,7 +6,7 @@ use std::fs::File;
 use std::path::PathBuf;
 use std::time::Instant;
 
-use astronomical_model_serving::{
+use model_serving::{
     QuantizedExpertLayerPlan, QuantizedExpertPageManifest,
     build_quantized_expert_page_manifest_from_plan,
 };

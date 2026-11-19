@@ -3,13 +3,13 @@
 //! onto Anthropic error values, plus the one conversion to an HTTP response,
 //! whose status always comes from the error's own type.
 
-use astronomical_ipc_protocol::ChatGenerationFailureReason;
-use astronomical_rest_contract::{AnthropicError, AnthropicMessagesValidationError};
 use axum::{
     Json,
     http::StatusCode,
     response::{IntoResponse, Response},
 };
+use ipc_protocol::ChatGenerationFailureReason;
+use rest_contract::{AnthropicError, AnthropicMessagesValidationError};
 
 use super::messages_translation::AnthropicMessagesTranslationError;
 use crate::GenerationStartError;
@@ -114,7 +114,7 @@ pub(crate) fn failure_error(failure_reason: &ChatGenerationFailureReason) -> Ant
 fn terminal_failure_message(terminal_failure_reason: &ChatGenerationFailureReason) -> String {
     match terminal_failure_reason {
         ChatGenerationFailureReason::OutOfGraphicsMemory => {
-            astronomical_ipc_protocol::OUT_OF_GRAPHICS_MEMORY_ADVICE.to_owned()
+            ipc_protocol::OUT_OF_GRAPHICS_MEMORY_ADVICE.to_owned()
         }
         other_failure_reason => {
             format!("the local worker could not generate the message: {other_failure_reason:?}")

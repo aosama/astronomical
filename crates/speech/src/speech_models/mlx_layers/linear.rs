@@ -1,7 +1,7 @@
 //! A linear layer: `x @ W^T`, plus a bias when the checkpoint has one.
 
-use astronomical_runtime_integration::MlxRuntime;
 use mlx_bridge::MlxArray;
+use runtime_integration::MlxRuntime;
 
 use crate::speech_models::checkpoint_tensors::CheckpointTensors;
 use crate::speech_models::speech_model_error::SpeechModelError;

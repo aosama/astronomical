@@ -3,9 +3,6 @@
 use std::path::Path;
 use std::time::{Duration, Instant};
 
-use astronomical_neural_engine::core_ml::{CoreMlComputeUnits, CoreMlProgram, LayerPlacement};
-use astronomical_neural_engine::documents::projection::MlProgramWeights;
-use astronomical_neural_engine::weights::half_precision::f16_bits_slice_to_f32;
 use astronomical_neural_engine_research::numerical_comparison::{
     NumericalComparison, compare_values,
 };
@@ -13,6 +10,9 @@ use astronomical_neural_engine_research::process_memory::{
     MemoryGrowth, MemorySnapshot, mebibytes,
 };
 use astronomical_neural_engine_research::timing_summary::TimingSummary;
+use neural_engine::core_ml::{CoreMlComputeUnits, CoreMlProgram, LayerPlacement};
+use neural_engine::documents::projection::MlProgramWeights;
+use neural_engine::weights::half_precision::f16_bits_slice_to_f32;
 
 use super::projection_fixture::ProjectionFixture;
 use crate::support::program_loading::load_ml_program;

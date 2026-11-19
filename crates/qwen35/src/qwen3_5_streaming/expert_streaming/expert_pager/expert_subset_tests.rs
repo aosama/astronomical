@@ -5,8 +5,8 @@
 use super::Qwen3_5PagedExpertWeights;
 use crate::expert_paging::ExpertWeightPage;
 use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights;
-use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use mlx_bridge::{MlxArray, MlxDtype};
+use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use serial_test::serial;
 
 const PAGE_EXPERT_COUNT: usize = 4;
@@ -28,11 +28,10 @@ fn packed_codebook_page(runtime: &MlxRuntime) -> Qwen3_5PagedExpertWeights {
         up_projection: tagged_codebook_projection(runtime, 2),
         down_projection: tagged_codebook_projection(runtime, 3),
         gate_activation_rotation:
-            astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookRotation::Hadamard32,
-        up_activation_rotation:
-            astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookRotation::Hadamard32,
+            jangtq2_qwen35::configuration::Jangtq2CodebookRotation::Hadamard32,
+        up_activation_rotation: jangtq2_qwen35::configuration::Jangtq2CodebookRotation::Hadamard32,
         down_activation_rotation:
-            astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookRotation::Hadamard32,
+            jangtq2_qwen35::configuration::Jangtq2CodebookRotation::Hadamard32,
     }
 }
 
@@ -83,7 +82,7 @@ fn should_select_experts_in_the_requested_order_and_keep_the_representation() {
     );
     assert_eq!(
         subset.gate_activation_rotation,
-        astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookRotation::Hadamard32
+        jangtq2_qwen35::configuration::Jangtq2CodebookRotation::Hadamard32
     );
 }
 
@@ -181,7 +180,7 @@ fn should_reject_concatenated_pages_that_do_not_share_rotations_or_codebook_widt
     let retained = packed_codebook_page(&runtime);
     let mut rotated_differently = packed_codebook_page(&runtime);
     rotated_differently.gate_activation_rotation =
-        astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookRotation::NoRotation;
+        jangtq2_qwen35::configuration::Jangtq2CodebookRotation::NoRotation;
     let rotation_refusal = retained
         .concatenate_expert_pages(&runtime, &rotated_differently)
         .expect_err("different activation rotations cannot share one forward");

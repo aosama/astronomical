@@ -1,4 +1,4 @@
-use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
+use runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use super::gated_delta_pipelined_kernel::{
     THREADGROUP_THREAD_COUNT, VALUE_ROW_BLOCK_SIZE, gated_delta_pipelined_kernel_source,
@@ -46,7 +46,7 @@ pub struct Qwen3_5GatedDeltaBoundaryCheckpointResult {
 
 /// Builds the fused Qwen3.5 gated-delta boundary-checkpoint kernel.
 pub fn qwen3_5_gated_delta_checkpoint_kernel()
--> Result<MlxMetalKernel, astronomical_runtime_integration::MlxRuntimeError> {
+-> Result<MlxMetalKernel, runtime_integration::MlxRuntimeError> {
     let checkpoint_kernel_source = gated_delta_pipelined_kernel_source(
         GATED_DELTA_CHECKPOINT_SETUP_SOURCE,
         GATED_DELTA_CHECKPOINT_WRITE_SOURCE,
@@ -72,7 +72,7 @@ pub fn qwen3_5_gated_delta_checkpoint_kernel()
         ],
         &checkpoint_kernel_source,
     )
-    .map_err(astronomical_runtime_integration::MlxRuntimeError::from)
+    .map_err(runtime_integration::MlxRuntimeError::from)
 }
 
 /// Applies fused gated-delta recurrence while retaining requested boundary

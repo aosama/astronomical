@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use astronomical_model_serving::{
+use model_serving::{
     ArtifactValidationError, OptiQMetadataError, Qwen3_5ArtifactError,
     Qwen3_5ArtifactValidationError, Qwen3_5ConfigError,
 };

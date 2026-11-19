@@ -3,12 +3,12 @@ use std::fs::{self, File};
 use std::io::Write;
 use std::path::Path;
 
-use astronomical_model_serving::Flux2KleinTransformerConfig;
-use astronomical_test_harness::fixtures::{
+use model_serving::Flux2KleinTransformerConfig;
+use serde_json::{Value, json};
+use test_harness::fixtures::{
     model_index_json, scheduler_config_json, text_encoder_config_json, transformer_config_json,
     vae_config_json,
 };
-use serde_json::{Value, json};
 
 pub(super) struct SyntheticFlux2KleinArtifact {
     text_tensors_by_shard: BTreeMap<String, Vec<SyntheticTensor>>,

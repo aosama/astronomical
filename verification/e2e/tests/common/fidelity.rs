@@ -1,6 +1,6 @@
 //! Explicit fidelity selection for the whole-product model journeys.
 
-use astronomical_test_harness::test_run::{TestRunConfiguration, TestRunContext};
+use test_harness::test_run::{TestRunConfiguration, TestRunContext};
 
 /// Which daemon and worker pair a journey drives.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

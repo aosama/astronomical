@@ -14,14 +14,12 @@
 
 use std::fmt::Write as _;
 
-use astronomical_decision_contract::DecisionQuestionKind;
-use astronomical_decision_contract::decision_training_job::{RunEnding, RunSummary, TrainingScope};
-use astronomical_decision_contract::training_record::RecordedVerdict;
-use astronomical_decision_training::calibration_metrics::CalibrationMetrics;
-use astronomical_decision_training::training_split::HOLD_BACK_STATE_COUNT;
-use astronomical_decision_training::training_verdict::{
-    JudgedOn, TrainingConcern, TrainingVerdict,
-};
+use decision_contract::DecisionQuestionKind;
+use decision_contract::decision_training_job::{RunEnding, RunSummary, TrainingScope};
+use decision_contract::training_record::RecordedVerdict;
+use decision_training::calibration_metrics::CalibrationMetrics;
+use decision_training::training_split::HOLD_BACK_STATE_COUNT;
+use decision_training::training_verdict::{JudgedOn, TrainingConcern, TrainingVerdict};
 
 use super::counted_noun::counted_noun;
 use super::training_job::PartCounts;

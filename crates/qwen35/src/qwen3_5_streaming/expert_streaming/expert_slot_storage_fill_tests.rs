@@ -6,7 +6,7 @@
 use std::io::Write;
 use std::path::Path;
 
-use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
+use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use serial_test::serial;
 
 use super::ExpertSlotStorageFiller;
@@ -144,8 +144,7 @@ fn zeroed_projection(runtime: &MlxRuntime) -> Qwen3_5AffineWeights {
 }
 
 fn zeroed_table(runtime: &MlxRuntime) -> Qwen3_5PagedExpertWeights {
-    let no_rotation =
-        astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookRotation::NoRotation;
+    let no_rotation = jangtq2_qwen35::configuration::Jangtq2CodebookRotation::NoRotation;
     Qwen3_5PagedExpertWeights {
         gate_projection: zeroed_projection(runtime),
         up_projection: zeroed_projection(runtime),

@@ -13,17 +13,17 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::time::Instant;
 
-use astronomical_decision_contract::calibration_file::CalibrationOverride;
-use astronomical_decision_contract::clef_answers::clef_answer_from_scored_probabilities;
-use astronomical_decision_contract::decision_training_job::{DecisionTrainingJob, TrainingExample};
-use astronomical_decision_contract::head_tuning_file::TunableHeadFamily;
-use astronomical_decision_contract::{
+use decision_contract::calibration_file::CalibrationOverride;
+use decision_contract::clef_answers::clef_answer_from_scored_probabilities;
+use decision_contract::decision_training_job::{DecisionTrainingJob, TrainingExample};
+use decision_contract::head_tuning_file::TunableHeadFamily;
+use decision_contract::{
     DecisionFailure, DecisionQuestion, FloatVector, HeadInputRequest, HeadInputs, OrderedJsonValue,
     QuestionInputCoverage, QuestionOutcome,
 };
-use astronomical_decision_training::head_parameters::ParameterLayout;
-use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
+use decision_training::head_parameters::ParameterLayout;
 use mlx_bridge::MlxArray;
+use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
 use super::head_layers::{ClefAttentionRoute, ClefHeadLayers, head_math};
 use super::head_settings::ClefHeadSettings;
@@ -47,7 +47,7 @@ use crate::decision_models::training::training_session::{
     read_through_decide, start_session,
 };
 use crate::memory::telemetry::MlxMemoryTelemetry;
-use astronomical_model_primitives::forward_pass_memory::forward_pass_memory_telemetry;
+use model_primitives::forward_pass_memory::forward_pass_memory_telemetry;
 
 /// The temperature a Clef logit is used at unless the folder's calibration
 /// names its kind: the reference applies none.

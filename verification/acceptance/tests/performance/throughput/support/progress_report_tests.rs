@@ -58,7 +58,7 @@ fn should_describe_a_reply_in_progress_by_its_generated_tokens() {
 #[test]
 fn should_print_nothing_for_a_stage_without_token_counts() {
     let image_progress = ActiveRequestProgress::ImageGeneration {
-        phase: astronomical_ipc_protocol::ImageGenerationPhase::Denoising,
+        phase: ipc_protocol::ImageGenerationPhase::Denoising,
         completed_steps: 2,
         total_steps: 4,
         elapsed_millis: 900,

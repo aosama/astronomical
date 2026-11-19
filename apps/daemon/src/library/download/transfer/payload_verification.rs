@@ -72,7 +72,7 @@ fn hash_file(
         DownloadFileDigest::Sha256(_) => {
             let mut digest = Sha256::new();
             copy_into_digest(&mut reader, &mut read_bytes, &mut digest)?;
-            Ok(astronomical_lowercase_hex::encode_lowercase_hex(
+            Ok(lowercase_hex::encode_lowercase_hex(
                 digest.finalize().as_ref(),
             ))
         }
@@ -80,7 +80,7 @@ fn hash_file(
             let mut digest = Sha1::new();
             digest.update(format!("blob {expected_bytes}\0").as_bytes());
             copy_into_digest(&mut reader, &mut read_bytes, &mut digest)?;
-            Ok(astronomical_lowercase_hex::encode_lowercase_hex(
+            Ok(lowercase_hex::encode_lowercase_hex(
                 digest.finalize().as_ref(),
             ))
         }

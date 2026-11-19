@@ -2,9 +2,7 @@
 
 use std::{fs, path::Path};
 
-use astronomical_model_serving::{
-    AstroSsdPromptCacheDiskStore, AstroSsdPromptCacheDiskStoreConfig,
-};
+use model_serving::{AstroSsdPromptCacheDiskStore, AstroSsdPromptCacheDiskStoreConfig};
 
 use crate::common::qwen3_5_moe;
 

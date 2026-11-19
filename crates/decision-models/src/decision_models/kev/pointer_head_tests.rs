@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use safetensors::tensor::TensorView;
 use safetensors::{Dtype, serialize};
 
-use astronomical_decision_contract::head_tuning_file::{HeadTuning, TunedTensor};
+use decision_contract::head_tuning_file::{HeadTuning, TunedTensor};
 
 use super::{KevPointerHead, kev_probabilities};
 

@@ -10,7 +10,7 @@ use std::io::Write;
 use std::time::{Duration, Instant};
 
 use crate::formatting::BYTES_PER_GIGABYTE;
-use astronomical_vision_tower::{
+use vision_tower::{
     ArtifactReference, ArtifactSource, BaseMatchProgress, BaseMatchVerdict, TowerAdditionProgress,
     TowerAdditionReport, TowerAdditionRequest, TowerAdditionStage, TowerStatus, VisionTowerError,
     add_tower, inspect_artifact, match_tower_to_text,

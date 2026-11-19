@@ -17,7 +17,18 @@ fn owned(arguments: &[&str]) -> Vec<String> {
         .collect()
 }
 
+/// A build-script generation of the runtime-integration package as Cargo
+/// names it now.
 fn generation_out_directory(root: &Path, generation_suffix: &str) -> PathBuf {
+    root.join("debug")
+        .join("build")
+        .join(format!("runtime-integration-{generation_suffix}"))
+        .join("out")
+}
+
+/// The same generation under the package's pre-rename name, as it lingers
+/// in targets built before the crate names lost their prefix.
+fn pre_rename_generation_out_directory(root: &Path, generation_suffix: &str) -> PathBuf {
     root.join("debug")
         .join("build")
         .join(format!(
@@ -128,6 +139,26 @@ mod should_classify_retired_candidates {
         let out_directory = PathBuf::from("/fixture")
             .join("debug/build/astronomical-runtime-integration-abc123/out");
         assert!(is_retired_candidate_directory(
+            &out_directory,
+            "mlx-c-runtime-build".as_ref()
+        ));
+    }
+
+    #[test]
+    fn should_accept_the_legacy_directory_under_the_renamed_package_generation() {
+        let out_directory =
+            PathBuf::from("/fixture").join("debug/build/runtime-integration-abc123/out");
+        assert!(is_retired_candidate_directory(
+            &out_directory,
+            "mlx-c-runtime-build".as_ref()
+        ));
+    }
+
+    #[test]
+    fn should_reject_the_legacy_directory_under_another_package_generation() {
+        let out_directory =
+            PathBuf::from("/fixture").join("debug/build/model-primitives-abc123/out");
+        assert!(!is_retired_candidate_directory(
             &out_directory,
             "mlx-c-runtime-build".as_ref()
         ));
@@ -245,7 +276,8 @@ mod should_walk_targets_and_collect_candidates {
         }
     }
 
-    /// A complete fake Cargo target: two genuine retired candidates, a
+    /// A complete fake Cargo target: two genuine retired candidates (one
+    /// under each generation spelling), a
     /// mis-decoy legacy name at the wrong depth, a symlink decoy inside an
     /// out directory, and ordinary Cargo noise.
     fn install_scan_fixture(fixture_label: &str) -> ScanFixture {
@@ -260,8 +292,10 @@ mod should_walk_targets_and_collect_candidates {
             .expect("the legacy fixture should be creatable");
         fs::write(legacy_directory.join("build.ninja"), "fixture\n")
             .expect("the legacy fixture file should be writable");
-        let removal_directory =
-            out_directory.join(".mlx-c-runtime-build.astronomical-removing-9-0");
+        // The interrupted removal sits under the pre-rename generation name so
+        // one walk proves both spellings are found.
+        let removal_directory = pre_rename_generation_out_directory(&root_directory, "gen0")
+            .join(".mlx-c-runtime-build.astronomical-removing-9-0");
         fs::create_dir_all(&removal_directory).expect("the removal fixture should be creatable");
         let misplaced_directory = root_directory.join("debug/mlx-c-runtime-build");
         fs::create_dir_all(&misplaced_directory).expect("the decoy should be creatable");

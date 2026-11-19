@@ -2,8 +2,8 @@
 
 use std::path::PathBuf;
 
-use astronomical_runtime_integration::MlxRuntime;
 use mlx_bridge::{MlxArray, MlxDtype};
+use runtime_integration::MlxRuntime;
 
 /// The active snapshot of `repository_id` (`org/name`) in the standard
 /// Hugging Face hub folder under the user's home, where `hf download` and

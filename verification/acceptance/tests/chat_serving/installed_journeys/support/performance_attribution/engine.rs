@@ -1,6 +1,6 @@
 use std::{path::Path, time::Instant};
 
-use astronomical_model_serving::{
+use model_serving::{
     InferenceEngine, PerformanceAttribution, PerformanceAttributionLog, Qwen3_5ArtifactValidator,
     Qwen3_5StreamingEngine, Qwen3_5StreamingPromptProcessingChunkSizer,
 };
@@ -11,7 +11,7 @@ use super::{IMAGE_PAD_TOKEN_ID, PROGRESS_INTERVAL};
 pub(crate) fn create_attributed_engine(
     model_directory: &Path,
     performance_attribution_log_path: &Path,
-    mlx_memory_limits: &astronomical_runtime_integration::MlxMemoryLimits,
+    mlx_memory_limits: &runtime_integration::MlxMemoryLimits,
     fixed_prompt_processing_chunk_size_tokens: u32,
 ) -> (Qwen3_5StreamingEngine, Vec<u32>) {
     create_attributed_engine_with_ssd_streaming_prefill(
@@ -25,7 +25,7 @@ pub(crate) fn create_attributed_engine(
 pub(crate) fn create_attributed_engine_with_ssd_streaming_prefill(
     model_directory: &Path,
     performance_attribution_log_path: &Path,
-    mlx_memory_limits: &astronomical_runtime_integration::MlxMemoryLimits,
+    mlx_memory_limits: &runtime_integration::MlxMemoryLimits,
     fixed_ssd_streaming_prompt_processing_chunk_size_tokens: u32,
 ) -> (Qwen3_5StreamingEngine, Vec<u32>) {
     let validated_artifact = Qwen3_5ArtifactValidator::new()

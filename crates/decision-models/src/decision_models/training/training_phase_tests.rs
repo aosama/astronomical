@@ -3,7 +3,7 @@
 //! training, and how trained scores map back to the questions asked.
 
 use super::*;
-use astronomical_decision_contract::{
+use decision_contract::{
     DecisionAnswer, FloatVector, HeadInputs, NoulAnswer, QuestionInputCoverage,
 };
 

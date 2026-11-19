@@ -1,6 +1,6 @@
 use std::{fs, fs::OpenOptions, os::unix::fs::FileExt};
 
-use astronomical_runtime_integration::{
+use runtime_integration::{
     MlxMemoryLimits, MlxRuntime, MlxRuntimeError, compiled_metallib_path, validate_metallib_path,
 };
 
@@ -96,7 +96,7 @@ fn should_reject_an_mlx_buffer_cache_limit_above_the_active_memory_limit() {
 
 #[test]
 fn should_classify_prefixed_native_operation_capacity_errors() {
-    let prefixed_native_capacity_error = astronomical_runtime_integration::classify_mlx_error(
+    let prefixed_native_capacity_error = runtime_integration::classify_mlx_error(
         "prepare native expert route",
         "native MLX operation failed: ASTRONOMICAL_MLX_ACTIVE_MEMORY_LIMIT_EXCEEDED active_bytes=35346771214 allocation_bytes=3538944 allowed_bytes=35350000000 at native-operation.cpp:25".to_owned(),
     );

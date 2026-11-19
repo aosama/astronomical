@@ -5,7 +5,7 @@
 use crate::lexicon::{Lexicon, WordContext};
 use crate::stress::is_vowel;
 use crate::text_tokens::{PAUSING_PUNCTUATION, TextToken, TextTokenKind, text_tokens};
-use astronomical_english_number_words::is_number_token;
+use english_number_words::is_number_token;
 
 const CONSONANTS: &str = "bdfhjklmnpstvwzðŋɡɹɾʃʒʤʧθ";
 

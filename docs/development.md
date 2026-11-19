@@ -86,7 +86,7 @@ Tests that drive MLX directly or need a real model are run on request, because t
 
 `verify` checks formatting and types, and runs the tests; there is no build, because the package ships its TypeScript sources and OpenCode runs them directly. The tests stand in for OpenCode and for the app, so they need neither running. CI runs the same command on Linux whenever the plugin, `.node-version` or the shared model list changes; a change to the plugin alone skips the macOS lanes.
 
-The tests read the app's `/v1/models` listing from `crates/rest-contract/fixtures/openai_model_list.json`. A test in `astronomical-rest-contract` holds that file to what the contract types serialize. When you change a field the listing carries, that test fails and prints the new listing to paste into the file; the plugin's tests then fail until the plugin reads the new field. 
+The tests read the app's `/v1/models` listing from `crates/rest-contract/fixtures/openai_model_list.json`. A test in `rest-contract` holds that file to what the contract types serialize. When you change a field the listing carries, that test fails and prints the new listing to paste into the file; the plugin's tests then fail until the plugin reads the new field. 
 
 To try the plugin in a real OpenCode against the Development app, add this entry to `plugins` in your OpenCode configuration, with the folder's full path: `{ "package": "/path/to/integrations/opencode", "options": { "channels": ["development"] } }`. Development's models are listed as **Astronomical Development**. The plugin's [README](../integrations/opencode/README.md) describes what users see.
 

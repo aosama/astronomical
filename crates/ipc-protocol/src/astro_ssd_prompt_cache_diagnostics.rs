@@ -72,9 +72,7 @@ impl WorkerAstroSsdPromptCacheExpectedBlockHashPrefix {
     pub fn from_block_hash(block_hash: [u8; 32]) -> Self {
         // Eight bytes (16 hexadecimal characters) are enough to correlate local
         // diagnostics while avoiding publication of complete content identity.
-        Self(astronomical_lowercase_hex::encode_lowercase_hex(
-            &block_hash[..8],
-        ))
+        Self(lowercase_hex::encode_lowercase_hex(&block_hash[..8]))
     }
 
     #[must_use]
@@ -91,7 +89,7 @@ impl<'de> Deserialize<'de> for WorkerAstroSsdPromptCacheExpectedBlockHashPrefix 
         DeserializerType: Deserializer<'de>,
     {
         let hash_prefix = String::deserialize(deserializer)?;
-        if !astronomical_lowercase_hex::is_lowercase_hex_of_length(&hash_prefix, 16) {
+        if !lowercase_hex::is_lowercase_hex_of_length(&hash_prefix, 16) {
             return Err(serde::de::Error::custom(
                 "expected block hash prefix must be 16 lowercase hexadecimal characters",
             ));

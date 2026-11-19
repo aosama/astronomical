@@ -23,8 +23,7 @@ use serde_json::Value;
 use std::num::NonZeroUsize;
 use std::sync::OnceLock;
 
-const ORACLE_FIXTURE_JSON: &str =
-    astronomical_test_harness::fixtures::QWEN_IMAGE_21_CONDITIONING_ORACLE_JSON;
+const ORACLE_FIXTURE_JSON: &str = test_harness::fixtures::QWEN_IMAGE_21_CONDITIONING_ORACLE_JSON;
 
 struct OracleCase {
     raw_input_ids: Vec<Vec<u32>>,

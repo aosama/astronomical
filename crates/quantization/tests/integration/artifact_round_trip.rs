@@ -3,14 +3,12 @@
 
 use std::collections::BTreeMap;
 
-use astronomical_quantization::artifact::{
+use quantization::artifact::{
     METADATA_FILE_NAME, OptiQArtifactMetadata, OptiQSensitivityDocument,
     QuantizationConfigDocument, SENSITIVITY_FILE_NAME, artifact_path, resolve_metadata_path,
 };
-use astronomical_quantization::bit_width::{BitWidth, GroupSize};
-use astronomical_quantization::sensitivity::{
-    SensitivityMethod, SensitivityResult, SensitivityTable,
-};
+use quantization::bit_width::{BitWidth, GroupSize};
+use quantization::sensitivity::{SensitivityMethod, SensitivityResult, SensitivityTable};
 
 #[test]
 fn should_write_config_metadata_and_sensitivity_where_optiq_and_astronomical_read_them() {

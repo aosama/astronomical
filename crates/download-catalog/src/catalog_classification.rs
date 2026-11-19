@@ -31,7 +31,7 @@ pub enum DownloadCatalogFamily {
 impl DownloadCatalogFamily {
     #[must_use]
     pub const fn as_str(self) -> &'static str {
-        astronomical_config::exhaustive_table!(self, {
+        config::exhaustive_table!(self, {
             Self::Qwen3_5 => "qwen3_5",
             Self::Flux2Klein => "flux2_klein",
             Self::QwenImage21 => "qwen_image_21",
@@ -63,7 +63,7 @@ pub enum DownloadCatalogRole {
 impl DownloadCatalogRole {
     #[must_use]
     pub const fn as_str(self) -> &'static str {
-        astronomical_config::exhaustive_table!(self, {
+        config::exhaustive_table!(self, {
             Self::Chat => "chat",
             Self::Coding => "coding",
             Self::ImageGeneration => "image_generation",

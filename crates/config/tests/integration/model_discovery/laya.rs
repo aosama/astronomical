@@ -4,7 +4,7 @@
 use std::fs;
 use std::path::Path;
 
-use astronomical_config::{DecisionModelCapabilities, DiscoveredModel, ModelCapabilities};
+use config::{DecisionModelCapabilities, DiscoveredModel, ModelCapabilities};
 
 /// Writes the minimal Laya checkpoint accepted by shallow discovery.
 fn write_laya_checkpoint(checkpoint_directory: &Path, laya_config_json: &serde_json::Value) {
@@ -68,10 +68,7 @@ fn should_discover_a_laya_decision_model_with_its_stated_token_limit() {
 
     assert_eq!(discovered_models.len(), 1, "Laya must be discovered");
     assert_eq!(discovered_models[0].model_id, "laya-MLX-8bit");
-    assert_eq!(
-        discovered_models[0].model_family,
-        astronomical_config::ModelFamily::Laya
-    );
+    assert_eq!(discovered_models[0].model_family, config::ModelFamily::Laya);
     assert_eq!(maximum_tokens_per_question(&discovered_models[0]), 1_024);
 }
 

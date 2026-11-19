@@ -2,7 +2,7 @@
 //! must report the identity the policy selected, and is announced with the
 //! voices it offers.
 
-use astronomical_ipc_protocol::{WorkerEvent, WorkerModelConfiguration};
+use ipc_protocol::{WorkerEvent, WorkerModelConfiguration};
 
 use super::model_swap::LoadedReplacement;
 use super::support::{ModelFactory, ModelFactoryRuntime, WorkerRuntimeError};

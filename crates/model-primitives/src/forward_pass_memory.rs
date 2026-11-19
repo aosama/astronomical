@@ -7,10 +7,10 @@
 //! resident weights, the forward workspace the process has actually been
 //! seen to need, and free headroom.
 
-use astronomical_runtime_integration::MlxMemorySnapshot;
+use runtime_integration::MlxMemorySnapshot;
 
-use astronomical_memory_policy::forward_pass_utilization::compose_forward_pass_memory_ceiling_utilization;
-use astronomical_memory_policy::telemetry::{MlxActiveMemoryBreakdown, MlxMemoryTelemetry};
+use memory_policy::forward_pass_utilization::compose_forward_pass_memory_ceiling_utilization;
+use memory_policy::telemetry::{MlxActiveMemoryBreakdown, MlxMemoryTelemetry};
 
 /// Turns one allocator observation into the telemetry the worker publishes.
 ///

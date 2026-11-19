@@ -4,7 +4,7 @@
 //! on the user turn they follow, inside an escaped `<system-update>` tag the
 //! model cannot confuse with user text.
 
-use astronomical_ipc_protocol::ChatMessage;
+use ipc_protocol::ChatMessage;
 
 const CHRONOLOGICAL_INSTRUCTION_OPENING_TAG: &str = "<system-update>\n";
 const CHRONOLOGICAL_INSTRUCTION_CLOSING_TAG: &str = "\n</system-update>";
@@ -77,7 +77,7 @@ fn append_escaped_instruction(target_content: &mut String, instruction_content: 
 
 #[cfg(test)]
 mod tests {
-    use astronomical_ipc_protocol::ChatMessage;
+    use ipc_protocol::ChatMessage;
 
     use super::append_instruction;
 

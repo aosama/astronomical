@@ -5,9 +5,9 @@
 //! parts that never change while training: Laya's normalized marker states
 //! and Clef's residual features.
 
-use astronomical_decision_contract::HeadInputs;
-use astronomical_decision_contract::head_tuning_file::TunableHeadFamily;
-use astronomical_decision_training::head_parameters::ParameterLayout;
+use decision_contract::HeadInputs;
+use decision_contract::head_tuning_file::TunableHeadFamily;
+use decision_training::head_parameters::ParameterLayout;
 use mlx_bridge::MlxArray;
 
 use super::gpu_heads::{GpuHeadFamily, GpuHeadInputs};

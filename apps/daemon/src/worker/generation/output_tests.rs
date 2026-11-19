@@ -3,7 +3,7 @@
 
 use std::sync::{Arc, RwLock};
 
-use astronomical_ipc_protocol::{
+use ipc_protocol::{
     ChatGenerationOutput, MlxMemorySnapshotSource, RequestId, WorkerEvent, WorkerMlxMemorySnapshot,
 };
 use tokio::sync::{Semaphore, mpsc};

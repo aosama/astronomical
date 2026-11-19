@@ -60,18 +60,17 @@ fn should_refuse_an_idle_unload_span_that_is_negative_fractional_text_or_above_o
 
 #[test]
 fn should_match_the_schema_default_and_maximum_for_the_idle_unload_span() {
-    let schema_document: serde_json::Value =
-        serde_json::from_slice(astronomical_config::config_schema_bytes())
-            .expect("the embedded schema should be JSON");
+    let schema_document: serde_json::Value = serde_json::from_slice(config::config_schema_bytes())
+        .expect("the embedded schema should be JSON");
     let schema_property =
         &schema_document["$defs"]["runtime"]["properties"]["idle_model_unload_seconds"];
 
     assert_eq!(
         schema_property["default"],
-        astronomical_config::DEFAULT_IDLE_MODEL_UNLOAD_SECONDS
+        config::DEFAULT_IDLE_MODEL_UNLOAD_SECONDS
     );
     assert_eq!(
         schema_property["maximum"],
-        astronomical_config::MAXIMUM_IDLE_MODEL_UNLOAD_SECONDS
+        config::MAXIMUM_IDLE_MODEL_UNLOAD_SECONDS
     );
 }

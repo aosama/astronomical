@@ -4,7 +4,7 @@
 //! its result is the yardstick both the Neural Engine (fp16) and MLX are
 //! measured against.
 
-use astronomical_neural_engine::program_shape::ProgramShape;
+use neural_engine::program_shape::ProgramShape;
 
 use thiserror::Error;
 
