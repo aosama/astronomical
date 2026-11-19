@@ -111,6 +111,15 @@ const FORBIDDEN_DEPENDENCY_RULES: &[ForbiddenDependencyRule] = &[
         forbidden_crate: "astronomical-model-serving",
         rationale: "the decision models crate must build and test without pulling in the serving crate, which drives the decision engines through a one-way edge",
     },
+    // The quantizer reaches the Qwen 3.5 family only through the probe crate
+    // above it (issue #2340), so the worker and daemon, which build on the
+    // family, never compile the quantizer.
+    ForbiddenDependencyRule {
+        rule_name: "qwen35-without-quantizer",
+        source_crate: "astronomical-qwen35",
+        forbidden_crate: "astronomical-quantization",
+        rationale: "the Qwen 3.5 crate must build without the quantizer, which its sensitivity probe crate brings in only for the CLI's convert verb and the acceptance tests",
+    },
 ];
 
 /// One detected violation with the offending dependency chain, source crate

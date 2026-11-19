@@ -3,9 +3,6 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use astronomical_model_serving::quantization_probe::{
-    Qwen3_5SensitivityProbe, load_qwen3_5_probe_model,
-};
 use astronomical_quantization::bit_width::{BitWidth, CandidateBitWidths, GroupSize};
 use astronomical_quantization::error::QuantizationError;
 use astronomical_quantization::module_inventory::QuantizableModuleDescriptor;
@@ -19,6 +16,7 @@ use astronomical_quantization::sensitivity::{
     CalibrationForwardSample, ModuleRestoreToken, SensitivityMethod, SensitivityProbeModel,
     SensitivityTable,
 };
+use astronomical_qwen35_quantization_probe::{Qwen3_5SensitivityProbe, load_qwen3_5_probe_model};
 use mlx_bridge::MlxArray;
 use serial_test::serial;
 

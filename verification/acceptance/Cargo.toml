@@ -121,6 +121,7 @@ astronomical-lowercase-hex = { path = "../../crates/lowercase-hex" }
 astronomical-memory-policy = { path = "../../crates/astronomical-memory-policy" }
 astronomical-neural-engine-research = { path = "../neural-engine" }
 astronomical-model-serving = { path = "../../crates/model-serving", features = ["direct-mlx"] }
+astronomical-qwen35-quantization-probe = { path = "../../crates/qwen35-quantization-probe" }
 astronomical-mlx-c-fork = { path = "../../crates/mlx-c-fork" }
 mlx-bridge.workspace = true
 astronomical-native-identity = { path = "../../crates/native-identity" }

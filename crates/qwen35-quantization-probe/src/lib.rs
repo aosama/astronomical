@@ -1,11 +1,12 @@
 //! Astronomical's implementation of the quantization crate's sensitivity
-//! probe for the Qwen3.5 family.
+//! probe for the Qwen3.5 family, in its own crate (issue #2340) so the
+//! family and the worker never compile the quantizer.
 //!
 //! The quantization crate (the OptiQ port) defines what a probe model must
 //! do: list its quantizable modules, forward a calibration sample, swap one
 //! module's weight for a simulate-quantized copy and restore it, and
-//! compute KL divergence between two logits tensors. This module does that
-//! with the resident Qwen3.5 model and the MLX bindings, so the sweep
+//! compute KL divergence between two logits tensors. This crate does that
+//! with the Qwen 3.5 crate's resident model and the MLX bindings, so the sweep
 //! measures the exact graph Astronomical serves rather than an mlx-lm
 //! re-implementation of the architecture. That is the point of running the
 //! sweep inside Astronomical: the allocation is calibrated on the kernels

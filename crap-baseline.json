@@ -54444,292 +54444,292 @@
       "crate": "astronomical-qwen35"
     },
     {
-      "file": "crates/qwen35/src/quantization_probe/module_locations.rs",
+      "file": "crates/qwen35-quantization-probe/src/module_locations.rs",
       "function": "affine_weights_at_mut",
       "line": 88,
       "cyclomatic": 7.0,
       "coverage": null,
       "crap": 56.0,
-      "crate": "astronomical-qwen35"
+      "crate": "astronomical-qwen35-quantization-probe"
     },
     {
-      "file": "crates/qwen35/src/quantization_probe/module_locations.rs",
+      "file": "crates/qwen35-quantization-probe/src/module_locations.rs",
       "function": "attention_projection_for",
       "line": 192,
       "cyclomatic": 11.0,
       "coverage": null,
       "crap": 132.0,
-      "crate": "astronomical-qwen35"
+      "crate": "astronomical-qwen35-quantization-probe"
     },
     {
-      "file": "crates/qwen35/src/quantization_probe/module_locations.rs",
+      "file": "crates/qwen35-quantization-probe/src/module_locations.rs",
       "function": "attention_weights_mut",
       "line": 107,
       "cyclomatic": 11.0,
       "coverage": null,
       "crap": 132.0,
-      "crate": "astronomical-qwen35"
+      "crate": "astronomical-qwen35-quantization-probe"
     },
     {
-      "file": "crates/qwen35/src/quantization_probe/module_locations.rs",
+      "file": "crates/qwen35-quantization-probe/src/module_locations.rs",
       "function": "feed_forward_location_for",
       "line": 207,
       "cyclomatic": 11.0,
       "coverage": null,
       "crap": 132.0,
-      "crate": "astronomical-qwen35"
+      "crate": "astronomical-qwen35-quantization-probe"
     },
     {
-      "file": "crates/qwen35/src/quantization_probe/module_locations.rs",
+      "file": "crates/qwen35-quantization-probe/src/module_locations.rs",
       "function": "feed_forward_weights_mut",
       "line": 144,
       "cyclomatic": 16.0,
       "coverage": null,
       "crap": 272.0,
-      "crate": "astronomical-qwen35"
+      "crate": "astronomical-qwen35-quantization-probe"
     },
     {
-      "file": "crates/qwen35/src/quantization_probe/module_locations.rs",
+      "file": "crates/qwen35-quantization-probe/src/module_locations.rs",
       "function": "module_location_for",
       "line": 68,
       "cyclomatic": 5.0,
       "coverage": null,
       "crap": 30.0,
-      "crate": "astronomical-qwen35"
+      "crate": "astronomical-qwen35-quantization-probe"
     },
     {
-      "file": "crates/qwen35/src/quantization_probe/module_locations.rs",
+      "file": "crates/qwen35-quantization-probe/src/module_locations.rs",
       "function": "split_decoder_layer",
       "line": 186,
       "cyclomatic": 4.0,
       "coverage": null,
       "crap": 20.0,
-      "crate": "astronomical-qwen35"
+      "crate": "astronomical-qwen35-quantization-probe"
     },
     {
-      "file": "crates/qwen35/src/quantization_probe/qwen3_5_probe.rs",
+      "file": "crates/qwen35-quantization-probe/src/qwen3_5_probe.rs",
       "function": "Bfloat16Source::read_module_weight",
       "line": 253,
       "cyclomatic": 4.0,
       "coverage": null,
       "crap": 20.0,
-      "crate": "astronomical-qwen35"
+      "crate": "astronomical-qwen35-quantization-probe"
     },
     {
-      "file": "crates/qwen35/src/quantization_probe/qwen3_5_probe.rs",
+      "file": "crates/qwen35-quantization-probe/src/qwen3_5_probe.rs",
       "function": "Qwen3_5SensitivityProbe::affine_weights_mut",
       "line": 164,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
-      "crate": "astronomical-qwen35"
+      "crate": "astronomical-qwen35-quantization-probe"
     },
     {
-      "file": "crates/qwen35/src/quantization_probe/qwen3_5_probe.rs",
+      "file": "crates/qwen35-quantization-probe/src/qwen3_5_probe.rs",
       "function": "Qwen3_5SensitivityProbe::bfloat16_source_directory",
       "line": 156,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
-      "crate": "astronomical-qwen35"
+      "crate": "astronomical-qwen35-quantization-probe"
     },
     {
-      "file": "crates/qwen35/src/quantization_probe/qwen3_5_probe.rs",
+      "file": "crates/qwen35-quantization-probe/src/qwen3_5_probe.rs",
       "function": "Qwen3_5SensitivityProbe::current_bit_width",
       "line": 305,
       "cyclomatic": 4.0,
       "coverage": null,
       "crap": 20.0,
-      "crate": "astronomical-qwen35"
+      "crate": "astronomical-qwen35-quantization-probe"
     },
     {
-      "file": "crates/qwen35/src/quantization_probe/qwen3_5_probe.rs",
+      "file": "crates/qwen35-quantization-probe/src/qwen3_5_probe.rs",
       "function": "Qwen3_5SensitivityProbe::forward",
       "line": 315,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-qwen35"
+      "crate": "astronomical-qwen35-quantization-probe"
     },
     {
-      "file": "crates/qwen35/src/quantization_probe/qwen3_5_probe.rs",
+      "file": "crates/qwen35-quantization-probe/src/qwen3_5_probe.rs",
       "function": "Qwen3_5SensitivityProbe::forward_logits",
       "line": 213,
       "cyclomatic": 7.0,
       "coverage": null,
       "crap": 56.0,
-      "crate": "astronomical-qwen35"
+      "crate": "astronomical-qwen35-quantization-probe"
     },
     {
-      "file": "crates/qwen35/src/quantization_probe/qwen3_5_probe.rs",
+      "file": "crates/qwen35-quantization-probe/src/qwen3_5_probe.rs",
       "function": "Qwen3_5SensitivityProbe::kl_divergence",
       "line": 383,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-qwen35"
+      "crate": "astronomical-qwen35-quantization-probe"
     },
     {
-      "file": "crates/qwen35/src/quantization_probe/qwen3_5_probe.rs",
+      "file": "crates/qwen35-quantization-probe/src/qwen3_5_probe.rs",
       "function": "Qwen3_5SensitivityProbe::module_count",
       "line": 146,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-qwen35"
+      "crate": "astronomical-qwen35-quantization-probe"
     },
     {
-      "file": "crates/qwen35/src/quantization_probe/qwen3_5_probe.rs",
+      "file": "crates/qwen35-quantization-probe/src/qwen3_5_probe.rs",
       "function": "Qwen3_5SensitivityProbe::prefill_chunk_tokens",
       "line": 151,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-qwen35"
+      "crate": "astronomical-qwen35-quantization-probe"
     },
     {
-      "file": "crates/qwen35/src/quantization_probe/qwen3_5_probe.rs",
+      "file": "crates/qwen35-quantization-probe/src/qwen3_5_probe.rs",
       "function": "Qwen3_5SensitivityProbe::quantizable_modules",
       "line": 299,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-qwen35"
+      "crate": "astronomical-qwen35-quantization-probe"
     },
     {
-      "file": "crates/qwen35/src/quantization_probe/qwen3_5_probe.rs",
+      "file": "crates/qwen35-quantization-probe/src/qwen3_5_probe.rs",
       "function": "Qwen3_5SensitivityProbe::release_transient_memory",
       "line": 393,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-qwen35"
+      "crate": "astronomical-qwen35-quantization-probe"
     },
     {
-      "file": "crates/qwen35/src/quantization_probe/qwen3_5_probe.rs",
+      "file": "crates/qwen35-quantization-probe/src/qwen3_5_probe.rs",
       "function": "Qwen3_5SensitivityProbe::replacement_weights",
       "line": 193,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
-      "crate": "astronomical-qwen35"
+      "crate": "astronomical-qwen35-quantization-probe"
     },
     {
-      "file": "crates/qwen35/src/quantization_probe/qwen3_5_probe.rs",
+      "file": "crates/qwen35-quantization-probe/src/qwen3_5_probe.rs",
       "function": "Qwen3_5SensitivityProbe::restore_module",
       "line": 359,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
-      "crate": "astronomical-qwen35"
+      "crate": "astronomical-qwen35-quantization-probe"
     },
     {
-      "file": "crates/qwen35/src/quantization_probe/qwen3_5_probe.rs",
+      "file": "crates/qwen35-quantization-probe/src/qwen3_5_probe.rs",
       "function": "Qwen3_5SensitivityProbe::simulate_quantize_module",
       "line": 325,
       "cyclomatic": 8.0,
       "coverage": null,
       "crap": 72.0,
-      "crate": "astronomical-qwen35"
+      "crate": "astronomical-qwen35-quantization-probe"
     },
     {
-      "file": "crates/qwen35/src/quantization_probe/qwen3_5_probe.rs",
+      "file": "crates/qwen35-quantization-probe/src/qwen3_5_probe.rs",
       "function": "Qwen3_5SensitivityProbe::ties_head_to",
       "line": 187,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
-      "crate": "astronomical-qwen35"
+      "crate": "astronomical-qwen35-quantization-probe"
     },
     {
-      "file": "crates/qwen35/src/quantization_probe/qwen3_5_probe.rs",
+      "file": "crates/qwen35-quantization-probe/src/qwen3_5_probe.rs",
       "function": "load_qwen3_5_probe_model",
       "line": 79,
       "cyclomatic": 9.0,
       "coverage": null,
       "crap": 90.0,
-      "crate": "astronomical-qwen35"
+      "crate": "astronomical-qwen35-quantization-probe"
     },
     {
-      "file": "crates/qwen35/src/quantization_probe/qwen3_5_probe.rs",
+      "file": "crates/qwen35-quantization-probe/src/qwen3_5_probe.rs",
       "function": "load_resident_model",
       "line": 117,
       "cyclomatic": 6.0,
       "coverage": null,
       "crap": 42.0,
-      "crate": "astronomical-qwen35"
+      "crate": "astronomical-qwen35-quantization-probe"
     },
     {
-      "file": "crates/qwen35/src/quantization_probe/qwen3_5_probe.rs",
+      "file": "crates/qwen35-quantization-probe/src/qwen3_5_probe.rs",
       "function": "probe_step",
       "line": 404,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
-      "crate": "astronomical-qwen35"
+      "crate": "astronomical-qwen35-quantization-probe"
     },
     {
-      "file": "crates/qwen35/src/quantization_probe/qwen3_5_probe.rs",
+      "file": "crates/qwen35-quantization-probe/src/qwen3_5_probe.rs",
       "function": "tied_head_key",
       "line": 416,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-qwen35"
+      "crate": "astronomical-qwen35-quantization-probe"
     },
     {
-      "file": "crates/qwen35/src/quantization_probe/qwen3_5_probe.rs",
+      "file": "crates/qwen35-quantization-probe/src/qwen3_5_probe.rs",
       "function": "unresolvable",
       "line": 420,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-qwen35"
+      "crate": "astronomical-qwen35-quantization-probe"
     },
     {
-      "file": "crates/qwen35/src/quantization_probe/simulated_quantization.rs",
+      "file": "crates/qwen35-quantization-probe/src/simulated_quantization.rs",
       "function": "encoded_from_source",
       "line": 66,
       "cyclomatic": 4.0,
       "coverage": null,
       "crap": 20.0,
-      "crate": "astronomical-qwen35"
+      "crate": "astronomical-qwen35-quantization-probe"
     },
     {
-      "file": "crates/qwen35/src/quantization_probe/simulated_quantization.rs",
+      "file": "crates/qwen35-quantization-probe/src/simulated_quantization.rs",
       "function": "float32_log_softmax",
       "line": 132,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
-      "crate": "astronomical-qwen35"
+      "crate": "astronomical-qwen35-quantization-probe"
     },
     {
-      "file": "crates/qwen35/src/quantization_probe/simulated_quantization.rs",
+      "file": "crates/qwen35-quantization-probe/src/simulated_quantization.rs",
       "function": "mean_kl_divergence",
       "line": 96,
       "cyclomatic": 9.0,
       "coverage": null,
       "crap": 90.0,
-      "crate": "astronomical-qwen35"
+      "crate": "astronomical-qwen35-quantization-probe"
     },
     {
-      "file": "crates/qwen35/src/quantization_probe/simulated_quantization.rs",
+      "file": "crates/qwen35-quantization-probe/src/simulated_quantization.rs",
       "function": "mlx_step",
       "line": 20,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
-      "crate": "astronomical-qwen35"
+      "crate": "astronomical-qwen35-quantization-probe"
     },
     {
-      "file": "crates/qwen35/src/quantization_probe/simulated_quantization.rs",
+      "file": "crates/qwen35-quantization-probe/src/simulated_quantization.rs",
       "function": "quantize_dequantized_bfloat16",
       "line": 34,
       "cyclomatic": 5.0,
       "coverage": null,
       "crap": 30.0,
-      "crate": "astronomical-qwen35"
+      "crate": "astronomical-qwen35-quantization-probe"
     },
     {
       "file": "crates/qwen35/src/qwen3_5_core/artifacts/artifact.rs",

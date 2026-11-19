@@ -6,13 +6,13 @@
 use astronomical_quantization::bit_width::{BitWidth, GroupSize};
 use astronomical_quantization::error::QuantizationError;
 
-use crate::qwen3_5_core::model_math::decoder_layer_weights::{
+use astronomical_qwen35::qwen3_5_core::model_math::decoder_layer_weights::{
     Qwen3_5AffineWeights, Qwen3_5DecoderFeedForwardWeights,
 };
-use crate::qwen3_5_core::model_math::feed_forward_weights::{
+use astronomical_qwen35::qwen3_5_core::model_math::feed_forward_weights::{
     Qwen3_5MoEFeedForwardWeights, Qwen3_5MoERouterGateWeights,
 };
-use crate::qwen3_5_resident::experts::{
+use astronomical_qwen35::qwen3_5_resident::experts::{
     Qwen3_5ResidentExpertLayerWeights, Qwen3_5ResidentGateUpWeights,
 };
 

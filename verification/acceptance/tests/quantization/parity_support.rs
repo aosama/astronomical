@@ -6,7 +6,6 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use astronomical_model_serving::quantization_probe::load_qwen3_5_probe_model;
 use astronomical_quantization::allocation::AllocationConstraints;
 use astronomical_quantization::bit_width::{CandidateBitWidths, GroupSize};
 use astronomical_quantization::error::QuantizationError;
@@ -14,6 +13,7 @@ use astronomical_quantization::pipeline::{
     PipelineMethod, ProbeModelHandle, ProbeModelLoader, ProbeModelSweeper,
     QuantizationPipelineRequest, ReferenceMode,
 };
+use astronomical_qwen35_quantization_probe::load_qwen3_5_probe_model;
 
 use super::artifact_comparison::{json_differences, read_json_document, tensor_differences};
 use super::support::{
