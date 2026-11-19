@@ -27,7 +27,7 @@ astronomical-decision-training = { path = "../decision-training" }
 astronomical-engine-core = { path = "../engine-core" }
 astronomical-gpu-building-blocks = { path = "../gpu-building-blocks" }
 astronomical-ipc-protocol = { path = "../ipc-protocol" }
-astronomical-memory-policy = { path = "../astronomical-memory-policy" }
+astronomical-memory-policy = { path = "../memory-policy" }
 astronomical-qwen35 = { path = "../qwen35" }
 astronomical-runtime-integration = { path = "../runtime-integration", features = ["mlx"], optional = true }
 mlx-bridge = { workspace = true, optional = true }

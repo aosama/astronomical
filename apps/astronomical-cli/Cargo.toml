@@ -50,7 +50,7 @@ astronomical-ipc-protocol = { path = "../../crates/ipc-protocol" }
 astronomical-speech-contract = { path = "../../crates/speech-contract" }
 astronomical-qwen35-quantization-probe = { path = "../../crates/qwen35-quantization-probe", optional = true }
 # The machine's memory ceiling the convert and evaluate verbs size MLX by.
-astronomical-memory-policy = { path = "../../crates/astronomical-memory-policy", optional = true }
+astronomical-memory-policy = { path = "../../crates/memory-policy", optional = true }
 astronomical-quantization = { path = "../../crates/quantization" }
 astronomical-runtime-integration = { path = "../../crates/runtime-integration", features = ["mlx"], optional = true }
 astronomical-vision-tower = { path = "../../crates/vision-tower" }

@@ -26,9 +26,9 @@ astronomical-expert-record-reader = { path = "../expert-record-reader" }
 astronomical-gpu-building-blocks = { path = "../gpu-building-blocks" }
 astronomical-ipc-protocol = { path = "../ipc-protocol" }
 # The jangtq2 weight family (issue #1427), consumed one way.
-astronomical-jangtq2-qwen35 = { path = "../astronomical-jangtq2-qwen35" }
+astronomical-jangtq2-qwen35 = { path = "../jangtq2-qwen35" }
 astronomical-lowercase-hex = { path = "../lowercase-hex" }
-astronomical-memory-policy = { path = "../astronomical-memory-policy" }
+astronomical-memory-policy = { path = "../memory-policy" }
 astronomical-neural-engine = { path = "../neural-engine", features = ["mlx-hand-off"], optional = true }
 astronomical-runtime-integration = { path = "../runtime-integration", features = ["mlx"], optional = true }
 mlx-bridge = { workspace = true, optional = true }
