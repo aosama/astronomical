@@ -99,7 +99,7 @@ MLX patches (`mlx-0.32.4-*.patch`):
   metallib path upstream ships by default never executes this generator,
   which is why the defect reached a release tag. Retires when an MLX release
   fixes the generator; the wide-head-dimension attention test in
-  `crates/model-serving/tests/direct_mlx/attention/masked_attention.rs`
+  `verification/acceptance/tests/gpu_contracts/direct_mlx/attention/masked_attention.rs`
   fails within seconds if the patch is dropped while the defect persists.
 
 MLX-C patches (`mlx-c-0.8.0-*.patch`):

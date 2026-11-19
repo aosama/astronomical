@@ -14,7 +14,8 @@ workspace = true
 # place a model family meets the 17,000-line quantizer, so it lives apart from
 # both: the Qwen crate, the worker and the daemon never compile the quantizer,
 # and only the CLI's `quantize-convert` feature and the acceptance tests pull
-# this crate in. It runs on MLX, so it has no default-features build.
+# this crate in. It runs on MLX and turns on its dependencies' direct-mlx
+# itself, so the pre-commit default-features check lints it in its own call.
 [dependencies]
 quantization = { path = "../quantization", features = ["direct-mlx"] }
 qwen35 = { path = "../qwen35", features = ["direct-mlx"] }
