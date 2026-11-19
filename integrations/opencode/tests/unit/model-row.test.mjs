@@ -4,7 +4,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { parseAstronomicalModelRow } from "../../dist/astronomer-model-row.js";
+import { parseAstronomicalModelRow } from "../../dist/model-row.js";
 
 function row(overrides = {}) {
   return {
@@ -31,7 +31,6 @@ describe("a well-formed wire row becomes a fully resolved chat row", () => {
       input_modalities: ["text", "image"],
       supports_reasoning: true,
       supports_tool_calls: true,
-      supports_structured_outputs: true,
       supported_endpoints: ["/v1/chat/completions"],
     });
   });
@@ -43,7 +42,7 @@ describe("a well-formed wire row becomes a fully resolved chat row", () => {
     );
   });
 
-  it("drops wire facts nothing reads (created, owned_by, output_modalities, reasoning_format)", () => {
+  it("drops wire facts nothing reads (created, owned_by, output_modalities, reasoning_format, structured outputs)", () => {
     const parsed = parseAstronomicalModelRow(
       row({
         created: 1_792_257_274,
@@ -56,6 +55,7 @@ describe("a well-formed wire row becomes a fully resolved chat row", () => {
     assert.equal(Object.hasOwn(parsed, "owned_by"), false);
     assert.equal(Object.hasOwn(parsed, "output_modalities"), false);
     assert.equal(Object.hasOwn(parsed, "reasoning_format"), false);
+    assert.equal(Object.hasOwn(parsed, "supports_structured_outputs"), false);
   });
 });
 

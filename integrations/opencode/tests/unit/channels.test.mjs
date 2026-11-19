@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { resolveAstronomicalChannels } from "../../dist/astronomer-base-url.js";
+import { resolveAstronomicalChannels } from "../../dist/channels.js";
 import {
   STABLE,
   DEV,
