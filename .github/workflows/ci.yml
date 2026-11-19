@@ -899,6 +899,7 @@ jobs:
           cargo test --locked -p xtask --test workflow_verification_tools_github_actions_cache_contract
           cargo test --locked -p xtask --test workflow_xcode_pin_contract
           cargo test --locked -p xtask --test workflow_macos_packaging_contract
+          cargo test --locked -p xtask --test workflow_opencode_plugin_publish_contract
           cargo test --locked -p xtask --test workflow_verified_work_contract
           cargo test --locked -p xtask --test workflow_xtask_binary_contract
           # The decision to skip the macOS lanes on a merge, through real git

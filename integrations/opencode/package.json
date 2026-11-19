@@ -15,10 +15,12 @@
   ],
   "scripts": {
     "test": "node --test tests/unit/*.test.mjs tests/component/*.test.mjs",
-    "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.mjs\" \"*.md\"",
-    "format:check": "prettier --check \"src/**/*.ts\" \"tests/**/*.mjs\" \"*.md\"",
+    "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.mjs\" \"scripts/**/*.mjs\" \"*.md\"",
+    "format:check": "prettier --check \"src/**/*.ts\" \"tests/**/*.mjs\" \"scripts/**/*.mjs\" \"*.md\"",
     "verify": "npm run format:check && npm run typecheck && npm test",
-    "typecheck": "tsc -p tsconfig.json"
+    "typecheck": "tsc -p tsconfig.json",
+    "prepack": "node scripts/copy-license.mjs",
+    "postpack": "node scripts/copy-license.mjs --remove"
   },
   "keywords": [
     "opencode",

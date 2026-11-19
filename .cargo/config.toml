@@ -463,6 +463,12 @@ test-quantization-mixture-of-experts = "run -p xtask -- test-run --package astro
 # domains pass. A login-only no-reply address is refused because GitHub
 # credits it to whichever stranger owns that login.
 #
+# `cargo xtask opencode-plugin-release-check opencode-plugin-vMAJOR.MINOR.PATCH`
+# refuses an OpenCode plugin release whose tag, integrations/opencode/package.json
+# version and CHANGELOG.md heading disagree. With --require-on-main it also
+# refuses a checked-out commit that is not on origin/main; the npm publish
+# workflow always passes it (scripts/release/opencode-plugin.md).
+#
 # `cargo xtask replay-expert-misses EVIDENCE_DIRECTORY` (alias
 # `cargo replay-expert-misses`) replays the replies `measure-expert-misses`
 # recorded under each astro_expert_cache keeping rule; see that alias.

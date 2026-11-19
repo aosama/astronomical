@@ -89,3 +89,7 @@ path = "tests/workflow_xtask_binary_contract.rs"
 [[test]]
 name = "workflow_macos_packaging_contract"
 path = "tests/workflow_macos_packaging_contract.rs"
+
+[[test]]
+name = "workflow_opencode_plugin_publish_contract"
+path = "tests/workflow_opencode_plugin_publish_contract.rs"
