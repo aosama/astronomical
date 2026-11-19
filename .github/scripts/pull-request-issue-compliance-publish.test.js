@@ -162,3 +162,89 @@ test("publisher grants status publication without synthetic check-write permissi
     assert.match(publisherWorkflow, /ref: \$\{\{ github\.event\.repository\.default_branch \}\}/);
     assert.match(publisherWorkflow, /retries: 3/);
 });
+
+// A collector run for commit "lower-head" belongs to the lower pull request of a
+// stack, while the association endpoint also lists the stacked pull request.
+async function publishForStackedHeadCommit(associatedPullRequests) {
+    const requestedPullRequestNumbers = [];
+    const context = {
+        eventName: "workflow_run",
+        runId: 123,
+        repo: { owner: "example", repo: "astronomical" },
+        payload: { workflow_run: { head_sha: "lower-head" } },
+    };
+    const github = {
+        rest: {
+            pulls: {
+                get: async ({ pull_number }) => {
+                    requestedPullRequestNumbers.push(pull_number);
+                    return {
+                        data: { head: { sha: "lower-head" }, body: "## Linked issue\n\nRefs #224\n", user: { login: "contributor" } },
+                    };
+                },
+            },
+            issues: {
+                get: async () => ({
+                    data: {
+                        number: 224,
+                        state: "open",
+                        html_url: "https://github.com/example/astronomical/issues/224",
+                        labels: [],
+                    },
+                }),
+            },
+            repos: {
+                createCommitStatus: async () => {},
+                listPullRequestsAssociatedWithCommit: async () => ({ data: associatedPullRequests }),
+            },
+        },
+    };
+    await executePublisher(require, {
+        env: { GITHUB_WORKSPACE: repositoryRoot, GITHUB_SERVER_URL: "https://github.com" },
+    }, context, github, { info: () => {}, warning: () => {}, error: () => {}, setFailed: () => {} });
+    return requestedPullRequestNumbers;
+}
+
+function openPullRequest(number, headSha) {
+    return {
+        number,
+        state: "open",
+        head: { sha: headSha },
+        base: { repo: { full_name: "example/astronomical" } },
+    };
+}
+
+test("publishes for the pull request whose head is the checked commit, not one stacked on it", { timeout: 60_000 }, async () => {
+    const requested = await publishForStackedHeadCommit([
+        openPullRequest(43, "stacked-head"),
+        openPullRequest(42, "lower-head"),
+    ]);
+    assert.deepEqual(requested, [42]);
+});
+
+test("falls back to the first open pull request when none has the checked commit as its head", { timeout: 60_000 }, async () => {
+    const requested = await publishForStackedHeadCommit([
+        { ...openPullRequest(41, "older-head"), state: "closed" },
+        openPullRequest(43, "stacked-head"),
+    ]);
+    assert.deepEqual(requested, [43]);
+});
+
+test("skips without reading a pull request when none is open in this repository", { timeout: 60_000 }, async () => {
+    const requested = await publishForStackedHeadCommit([
+        { ...openPullRequest(41, "lower-head"), state: "closed" },
+    ]);
+    assert.deepEqual(requested, []);
+});
+
+test("never picks a fork's pull request even when its head is the checked commit", { timeout: 60_000 }, async () => {
+    const forkPullRequest = {
+        ...openPullRequest(44, "lower-head"),
+        base: { repo: { full_name: "someone-else/astronomical" } },
+    };
+    const requested = await publishForStackedHeadCommit([
+        forkPullRequest,
+        openPullRequest(42, "other-head"),
+    ]);
+    assert.deepEqual(requested, [42]);
+});
