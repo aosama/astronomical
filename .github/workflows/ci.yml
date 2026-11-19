@@ -918,6 +918,10 @@ jobs:
           verification/tooling_contracts/test-source-size-check.sh
           cargo xtask check-test-channel-isolation
           cargo xtask check-architecture
+          # Every website page carries the one shared header and footer;
+          # a page edited by hand fails here until `cargo xtask site-layout`
+          # has rewritten it.
+          cargo xtask site-layout --check
         timeout-minutes: 5
       - name: Publish step timing summary
         if: always()

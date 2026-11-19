@@ -21,17 +21,18 @@
   <body>
     <a class="skip-link" href="#main">Skip to content</a>
     <header class="site-header">
+      <!-- Shared by every page: edit xtask/src/site_layout/site_header_and_footer.rs, then run `cargo xtask site-layout`. -->
       <a class="brand" href="./index.html" aria-label="Astronomical home">
         <img src="./assets/mark.svg" alt="" width="32" height="32">
         <span>astronomical</span>
       </a>
       <nav class="site-nav" aria-label="Primary navigation">
-        <a href="#capabilities">Capabilities</a>
-        <a href="#reports">Field notes</a>
         <a href="./models.html">Models</a>
+        <a href="./index.html#reports">Field notes</a>
         <a href="./local-api.html">Local API</a>
-        <a href="./privacy.html">Privacy</a>
         <a href="./support.html">Support</a>
+        <a href="./privacy.html">Privacy</a>
+        <a href="https://discord.gg/E8a5qmhRhr">Discord</a>
         <a href="https://github.com/aosama/astronomical">Source</a>
       </nav>
     </header>
@@ -192,12 +193,21 @@
     </main>
 
     <footer class="site-footer">
+      <!-- Shared by every page: edit xtask/src/site_layout/site_header_and_footer.rs, then run `cargo xtask site-layout`. -->
       <a class="brand" href="./index.html">
         <img src="./assets/mark.svg" alt="" width="26" height="26">
         <span>astronomical</span>
       </a>
       <p>Local language, vision, and image models for Apple silicon.</p>
-      <div><a href="https://github.com/aosama/astronomical">GitHub</a><a href="./local-api.html">Local API</a><a href="#reports">Field notes</a><a href="https://discord.gg/E8a5qmhRhr">Discord</a></div>
+      <nav aria-label="Site links">
+        <a href="./models.html">Models</a>
+        <a href="./index.html#reports">Field notes</a>
+        <a href="./local-api.html">Local API</a>
+        <a href="./support.html">Support</a>
+        <a href="./privacy.html">Privacy</a>
+        <a href="https://discord.gg/E8a5qmhRhr">Discord</a>
+        <a href="https://github.com/aosama/astronomical">Source</a>
+      </nav>
     </footer>
 
     <script src="./assets/release-feed.js"></script>

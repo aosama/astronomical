@@ -147,9 +147,23 @@ code {
   transition: color 160ms ease;
 }
 
+/* Every page carries all seven menu links, so in a narrow window a two-word
+   label like "Field notes" would otherwise break inside itself; the menu
+   moves under the brand instead (see the 960px rule below). */
+.site-nav a {
+  white-space: nowrap;
+}
+
 .site-nav a:hover,
 .site-footer a:hover,
 .text-link:hover {
+  color: var(--silver);
+}
+
+/* The shared header marks the page you are on (aria-current="page") and,
+   on a field note, its section (aria-current="true"); one rule serves both
+   so the menu reads the same on every page. */
+.site-nav a[aria-current] {
   color: var(--silver);
 }
 
@@ -255,16 +269,19 @@ code {
   margin: 0;
 }
 
-.site-footer > div {
+.site-footer > nav {
   display: flex;
   flex-wrap: wrap;
   gap: 10px 24px;
 }
 
-@media (max-width: 720px) {
-  :root { --shell: calc(100vw - 32px); }
+@media (max-width: 960px) {
   .site-header { flex-wrap: wrap; padding-block: 14px; }
   .site-nav { flex-wrap: wrap; gap: 10px 18px; }
+}
+
+@media (max-width: 720px) {
+  :root { --shell: calc(100vw - 32px); }
 }
 
 @media (prefers-reduced-motion: reduce) {

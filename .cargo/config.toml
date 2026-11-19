@@ -473,6 +473,12 @@ test-quantization-mixture-of-experts = "run -p xtask -- test-run --package astro
 # `cargo replay-expert-misses`) replays the replies `measure-expert-misses`
 # recorded under each astro_expert_cache keeping rule; see that alias.
 #
+# `cargo xtask site-layout` writes the one shared header and footer, defined
+# in xtask/src/site_layout/site_header_and_footer.rs, into every page under site/; edit
+# the menu there, never in a page. `cargo xtask site-layout --check` changes
+# nothing and fails on a page whose copy differs; the Configuration contracts
+# CI job runs it.
+#
 # `cargo xtask install-verification-tools [--prefix DIR]` installs the pinned
 # cargo-about and sccache prebuilts, SHA-256 verified, into DIR (default
 # `$CARGO_HOME/bin`), and skips any binary already reporting its pinned
