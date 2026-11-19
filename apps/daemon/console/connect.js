@@ -102,14 +102,17 @@ function connectionModelGuidanceText({ modelIdentifiers, selectedModelIdentifier
     return `${sampleProvenance}, and any identifier in this list works. ${CONNECTION_MODEL_LIST_SENTENCE}`;
 }
 
+// OpenCode 2's configuration shape: `providers`, a runtime `package`, and the
+// endpoint and credential under `settings`. The earlier `provider` / `npm` /
+// `options` shape is deprecated in OpenCode's published schema.
 function opencodeProviderConfigurationSnippet(apiBaseUrl, modelIdentifier) {
     return JSON.stringify({
         "$schema": "https://opencode.ai/config.json",
-        provider: {
+        providers: {
             [CONNECTION_PROVIDER_IDENTIFIER]: {
-                npm: "@ai-sdk/openai-compatible",
                 name: CONNECTION_PROVIDER_DISPLAY_NAME,
-                options: {
+                package: "@opencode/ai/providers/openai-compatible",
+                settings: {
                     baseURL: apiBaseUrl,
                     apiKey: CONNECTION_CREDENTIAL_PLACEHOLDER
                 },

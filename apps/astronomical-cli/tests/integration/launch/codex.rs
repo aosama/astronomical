@@ -302,6 +302,7 @@ fn should_generate_the_exact_session_config_document() {
     let expected_config = format!(
         "model = \"library-chat-model\"\n\
          model_provider = \"astronomical\"\n\
+         model_context_window = 131072\n\
          \n\
          [model_providers.astronomical]\n\
          name = \"Astronomical\"\n\

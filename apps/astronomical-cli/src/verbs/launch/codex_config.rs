@@ -70,14 +70,29 @@ pub fn codex_config_toml(bind_address: SocketAddr, chat_model: &InstalledChatMod
     format!(
         "model = {}\n\
          model_provider = \"{CODEX_PROVIDER_ID}\"\n\
+         {}\
          \n\
          [model_providers.{CODEX_PROVIDER_ID}]\n\
          name = \"Astronomical\"\n\
          base_url = {}\n\
          wire_api = \"responses\"\n",
         toml_basic_string(&chat_model.model_id),
+        context_window_line(chat_model),
         toml_basic_string(&openai_compatible_base_url),
     )
+}
+
+/// `model_context_window` from the Codex configuration reference, when the app
+/// advertises a context window: Codex otherwise assumes a window for a model
+/// it does not know, and plans compaction around a capacity the local model
+/// may not have.
+fn context_window_line(chat_model: &InstalledChatModel) -> String {
+    match chat_model.context_window_tokens {
+        Some(context_window_tokens) => {
+            format!("model_context_window = {context_window_tokens}\n")
+        }
+        None => String::new(),
+    }
 }
 
 /// Quotes a TOML basic string, escaping everything TOML forbids raw inside
@@ -109,7 +124,34 @@ fn toml_basic_string(value: &str) -> String {
 
 #[cfg(test)]
 mod codex_config_tests {
-    use super::toml_basic_string;
+    use super::{codex_config_toml, toml_basic_string};
+    use crate::verbs::launch::chat_models::InstalledChatModel;
+
+    fn chat_model(context_window_tokens: Option<u32>) -> InstalledChatModel {
+        InstalledChatModel {
+            model_id: "library-chat-model".to_owned(),
+            context_window_tokens,
+        }
+    }
+
+    #[test]
+    fn should_declare_the_advertised_context_window() {
+        let config_text = codex_config_toml(
+            "127.0.0.1:6733".parse().expect("address"),
+            &chat_model(Some(262_144)),
+        );
+        assert!(config_text.contains("\nmodel_context_window = 262144\n"));
+    }
+
+    #[test]
+    fn should_leave_the_context_window_out_when_the_app_advertises_none() {
+        let config_text = codex_config_toml(
+            "127.0.0.1:6733".parse().expect("address"),
+            &chat_model(None),
+        );
+        assert!(!config_text.contains("model_context_window"));
+        assert!(config_text.contains("model_provider = \"astronomical\"\n\n[model_providers"));
+    }
 
     #[test]
     fn should_quote_a_plain_value_unchanged() {

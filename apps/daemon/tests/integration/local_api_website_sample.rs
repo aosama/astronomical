@@ -242,29 +242,29 @@ fn should_publish_provider_configuration_that_parses_once_the_identifier_is_past
             ),
         };
 
-        let (provider, is_opencode) = if document.get("provider").is_some() {
-            (&document["provider"]["astronomical"], true)
-        } else {
-            (
-                document
-                    .get("providers")
-                    .and_then(|providers| providers.get("astronomical"))
-                    .unwrap_or(&serde_json::Value::Null),
-                false,
-            )
-        };
+        assert!(
+            document.get("provider").is_none(),
+            "OpenCode 2 reads providers, package and settings; the earlier provider shape is deprecated"
+        );
+        let provider = document
+            .get("providers")
+            .and_then(|providers| providers.get("astronomical"))
+            .unwrap_or(&serde_json::Value::Null);
         if provider.as_object().is_none() {
             continue;
         }
+        // OpenCode keeps a provider's endpoint and credential under `settings`;
+        // Pi keeps them on the provider itself.
+        let is_opencode = provider.get("settings").is_some();
         provider_configurations += 1;
 
-        let opencode_base_url = if is_opencode {
-            provider["options"]["baseURL"].as_str()
+        let published_base_url_text = if is_opencode {
+            provider["settings"]["baseURL"].as_str()
         } else {
             provider["baseUrl"].as_str()
         };
         let published_base_url =
-            opencode_base_url.expect("a published provider must name a base URL");
+            published_base_url_text.expect("a published provider must name a base URL");
         assert!(
             published_base_url.starts_with("http://127.0.0.1:"),
             "the published base URL must stay a loopback address"
@@ -275,7 +275,7 @@ fn should_publish_provider_configuration_that_parses_once_the_identifier_is_past
         );
 
         let published_credential = if is_opencode {
-            provider["options"]["apiKey"].as_str()
+            provider["settings"]["apiKey"].as_str()
         } else {
             provider["apiKey"].as_str()
         }
@@ -290,7 +290,10 @@ fn should_publish_provider_configuration_that_parses_once_the_identifier_is_past
         );
 
         if is_opencode {
-            assert_eq!(provider["npm"], "@ai-sdk/openai-compatible");
+            assert_eq!(
+                provider["package"],
+                "@opencode/ai/providers/openai-compatible"
+            );
             assert_eq!(
                 provider["models"][MODEL_ID],
                 serde_json::json!({"name": MODEL_ID}),

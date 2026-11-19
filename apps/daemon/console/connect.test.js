@@ -224,10 +224,11 @@ test("builds an opencode provider block that names the local endpoint and a serv
     const configuration = JSON.parse(snippet);
 
     assert.equal(configuration.$schema, "https://opencode.ai/config.json");
-    const provider = configuration.provider.astronomical;
-    assert.equal(provider.npm, "@ai-sdk/openai-compatible");
-    assert.equal(provider.options.baseURL, "http://127.0.0.1:6733/v1");
-    assert.ok(provider.options.apiKey.length > 0);
+    assert.equal(configuration.provider, undefined, "the deprecated provider shape is gone");
+    const provider = configuration.providers.astronomical;
+    assert.equal(provider.package, "@opencode/ai/providers/openai-compatible");
+    assert.equal(provider.settings.baseURL, "http://127.0.0.1:6733/v1");
+    assert.ok(provider.settings.apiKey.length > 0);
     assert.deepEqual(Object.keys(provider.models), ["example-selected-model"]);
 });
 
@@ -265,7 +266,7 @@ test("states that the local endpoint performs no authorization check and needs o
     );
     assert.match(elements["connect-credential-guidance"].textContent, /loopback/i);
     assert.equal(
-        JSON.parse(elements["connect-opencode-snippet"].textContent).provider.astronomical.options.apiKey,
+        JSON.parse(elements["connect-opencode-snippet"].textContent).providers.astronomical.settings.apiKey,
         advertisedPlaceholder,
         "the key a user pastes must be the placeholder the view advertises"
     );
