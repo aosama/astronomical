@@ -76,6 +76,16 @@ Run the macOS menu contracts:
 
 Tests that drive MLX directly or need a real model are run on request, because they need Apple graphics hardware or models on your Mac.
 
+## The OpenCode plugin
+
+`integrations/opencode` holds the OpenCode plugin that lists the app's chat models in OpenCode's model picker. It is a standalone npm package with its own lockfile and its own version number, because it follows OpenCode's plugin interface rather than the app's releases. It needs Node, at the version in `.node-version`:
+
+    cd integrations/opencode
+    npm ci
+    npm run verify
+
+`verify` checks formatting, builds, and runs the tests. The tests stand in for OpenCode and for the app, so they need neither running. To try the plugin in a real OpenCode, add the folder's full path to `plugins` in your OpenCode configuration and start the Development app; its models are listed as **Astronomical Development**. The plugin's [README](../integrations/opencode/README.md) describes what users see.
+
 ## Build and install Stable (release only)
 
 Installing Stable and publishing a release use release-only commands, `cargo xtask release ...` and the scripts under `scripts/release/`. They are never part of checking an ordinary commit or push.

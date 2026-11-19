@@ -1,0 +1,58 @@
+{
+  "name": "opencode-astronomical",
+  "version": "0.1.0",
+  "description": "OpenCode plugin that lists the chat models of Astronomical, the local model runner for Apple silicon Macs, in OpenCode's model picker and keeps the list current while the app runs.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js",
+    "./server": "./dist/index.js",
+    "./tui": "./dist/tui.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "test": "npm run build && node --test tests/unit/*.test.mjs",
+    "format": "prettier --write \"src/**/*.{ts,tsx}\" \"tests/**/*.mjs\" \"*.md\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx}\" \"tests/**/*.mjs\" \"*.md\"",
+    "verify": "npm run format:check && npm test",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "opencode",
+    "opencode-plugin",
+    "astronomical",
+    "provider",
+    "local-llm",
+    "openai-compatible"
+  ],
+  "license": "Apache-2.0",
+  "homepage": "https://getastronomical.com/local-api.html",
+  "bugs": {
+    "url": "https://github.com/aosama/astronomical/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/aosama/astronomical.git",
+    "directory": "integrations/opencode"
+  },
+  "devDependencies": {
+    "@opencode/plugin": "2.0.32",
+    "@opencode/theme": "2.0.32",
+    "@opentui/core": "0.5.17",
+    "@opentui/solid": "0.5.17",
+    "@types/node": "^22.0.0",
+    "prettier": "^3.8.1",
+    "solid-js": "1.9.12",
+    "typescript": "^5.7.0"
+  },
+  "peerDependencies": {
+    "@opencode/plugin": ">=2.0.32 <3"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}
