@@ -73,11 +73,19 @@ jobs:
                 commit_sha: headSha,
               });
               const repositoryFullName = `${context.repo.owner}/${context.repo.repo}`;
-              const openSameRepositoryPullRequest = associatedPullRequests.data.find((pullRequest) =>
+              const openSameRepositoryPullRequests = associatedPullRequests.data.filter((pullRequest) =>
                 pullRequest.state === "open"
                 && pullRequest.base.repo.full_name === repositoryFullName,
               );
-              return openSameRepositoryPullRequest?.number;
+              // A commit belongs to every open pull request stacked on top of it,
+              // and the association endpoint may list a stacked one first, which
+              // left the lower pull request without its required status. The
+              // pull request whose head is this exact commit is the one the
+              // collector ran for.
+              const pullRequestAtHeadCommit = openSameRepositoryPullRequests.find((pullRequest) =>
+                pullRequest.head?.sha === headSha,
+              );
+              return (pullRequestAtHeadCommit ?? openSameRepositoryPullRequests[0])?.number;
             }
 
             const pullRequestNumber = await resolvePullRequestNumber();
