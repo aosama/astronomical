@@ -218,6 +218,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "astronomical-engine-core"
+version = "0.2.118"
+dependencies = [
+ "astronomical-gpu-building-blocks",
+ "astronomical-ipc-protocol",
+ "astronomical-memory-policy",
+ "astronomical-runtime-integration",
+ "libc",
+ "mlx-bridge",
+ "regex-automata",
+ "serde",
+ "serial_test",
+ "tempfile",
+ "thiserror",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "astronomical-english-number-words"
 version = "0.2.118"
 
@@ -374,6 +393,7 @@ dependencies = [
  "astronomical-config",
  "astronomical-decision-contract",
  "astronomical-decision-training",
+ "astronomical-engine-core",
  "astronomical-expert-atlas",
  "astronomical-expert-record-reader",
  "astronomical-gpu-building-blocks",

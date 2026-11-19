@@ -12,8 +12,6 @@ pub(crate) use astronomical_artifact_validation as artifact_validation;
 // path in this crate resolving without touching its many consumers.
 use astronomical_gpu_building_blocks::attention;
 
-mod astro_decoder_state_cache;
-
 mod embedding_engine;
 
 mod engine_backed_worker;
@@ -23,15 +21,11 @@ mod expert_paging;
 #[cfg(feature = "direct-mlx")]
 use astronomical_gpu_building_blocks::gpu_token_sampling;
 
-pub(crate) mod inference_engine;
-
 mod kernel_capability;
 
-pub(crate) mod memory;
+mod mlx_inference_engine;
 
 mod model_family_runtime;
-
-pub(crate) mod model_generation_processor;
 
 pub(crate) mod decision_engine;
 
@@ -85,6 +79,14 @@ mod qwen3_5_resident;
 
 mod qwen3_5_streaming;
 
+// The engine core (the inference contract and its errors, MLX memory, the
+// astro_decoder_state_cache, the generation processor and structured
+// generation) sits below the model families in its own crate (issue #2340).
+// Its public surface, modules included, is re-exported whole, so every
+// `crate::memory`, `crate::inference_engine` and root path here resolves.
+pub use astronomical_engine_core::*;
+pub use mlx_inference_engine::MlxInferenceEngine;
+
 // Image generation lives in its own crate (issue #2340). Its public surface,
 // the `flux2_klein`, `qwen_image_21` and `image_generation_engine` modules
 // included, is re-exported whole, so the worker, this crate's own
@@ -103,9 +105,6 @@ pub mod speculative_decoding;
 use astronomical_gpu_building_blocks::sampling_seed;
 
 use astronomical_gpu_building_blocks::sparse_experts;
-
-#[cfg_attr(not(feature = "direct-mlx"), allow(dead_code))]
-mod structured_generation;
 
 #[doc(hidden)]
 pub use artifact_validation::validate_required_file_for_tests;
@@ -127,20 +126,6 @@ pub use attention::{
     RopeFrequencyError, SlidingWindowVisibilityError, YarnRopeFrequencyDenominators,
     compute_default_rope_frequency_denominators, compute_yarn_rope_frequency_denominators,
     sliding_window_position_is_visible, sliding_window_visibility_table,
-};
-
-#[cfg(feature = "direct-mlx")]
-pub use astro_decoder_state_cache::{
-    AstroDecoderStateCacheState, AstroDecoderStateCacheStateAllocationCheckpoint, ConvolutionState,
-    ConvolutionStateBoundaryCheckpointUpdate, FullAttentionKeyValueState,
-    FullAttentionKeyValueStateAllocationCheckpoint, GatedDeltaRecurrentState,
-    RotatingKeyValueState, RotatingKeyValueStateAllocationCheckpoint,
-};
-
-pub use astro_decoder_state_cache::{
-    AstroDecoderStateCacheLayerLayout, AstroDecoderStateCacheLayout,
-    AstroDecoderStateCacheLayoutError, AstroDecoderStateCachePersistedTensorLayout,
-    AstroDecoderStateCacheTensorDtype, AstroDecoderStateCacheTensorLayout,
 };
 
 pub use decision_engine::{
@@ -185,11 +170,6 @@ pub use gpu_token_sampling::{
     sample_from_relative_probabilities_for_tests,
 };
 
-pub use inference_engine::{
-    GeneratedToken, GenerationFinalization, InferenceEngine, InferenceEngineError,
-    MlxInferenceEngine, MlxInferenceExecution,
-};
-
 #[cfg(feature = "direct-mlx")]
 pub use prism_hadamard_qwen35::engine::{
     PrismHadamardQwen35Engine, PrismHadamardQwen35InferenceExecution,
@@ -210,39 +190,6 @@ pub use kernel_capability::{
     CustomKernelVerdict, CustomMetalKernelFamily, CustomMetalKernelProbe, KernelCapabilityError,
     KernelUnsupportedReason, WorkerKernelCapabilities, validate_probe_outputs,
 };
-
-pub use memory::{
-    AllocationAdmissionDecision, AllocationAdmissionObservation, CompleteResidencyDecision,
-    CompleteResidencyHeadroomBoundary, CompleteResidencyRequirements, CurrentExpertLayerResidency,
-    EnginePlacement, ExpertLayerState, ExpertMemoryAdmissionError, ExpertResidencyPlan,
-    ExpertResidencyPlanError, MeasuredExpertLayerPayload, MemoryBoundary,
-    MemoryCeilingChangeDecision, MemoryCeilingChangeRequirements, MemoryCeilingUtilization,
-    MemoryPhase, MemoryReserveSnapshot, ModelMemoryFacts, ModelMemoryFactsError,
-    ModelMemoryGeometry, ModelMemoryGeometryError, ResidentForwardAdmissionDecision,
-    ResidentForwardAdmissionRejection, ResidentPromotionBlocker, ResidentPromotionDecision,
-    RetainedExpertPageClass, RetainedPrefixRetentionDecision, RetainedPrefixRetentionRequirements,
-    RotatingAdmissionError, StreamingEngineRequirement, StreamingStartupResidencyFacts,
-    VISIBLE_ANSWER_RESERVE_TOKENS, bounded_output_reservation_token_count,
-    classify_expert_memory_mode, complete_layers_beyond_keep_count,
-    decode_warm_floor_eviction_indexes, decode_whole_layer_keep_count,
-    effective_mlx_memory_ceiling_after_wired_claim, effective_mlx_memory_ceiling_bytes,
-    floor_raise_limit_bytes, floor_raised_ceiling_bytes,
-    geometry_safe_minimum_mlx_memory_ceiling_bytes, hot_expert_warm_slot_count,
-    kept_layer_indexes_to_seat_before_reply, machine_ceiling_from_physical_ram_bytes,
-    minimum_decode_warm_slot_count, observed_expert_memory_mode,
-    persistent_context_restore_workspace_bytes, plan_expert_residency,
-    rotating_committed_token_count, rotating_prefill_transient_token_count,
-    safe_minimum_active_memory_ceiling_bytes, seated_complete_layer_count,
-    should_commit_mandatory_complete_layer, should_commit_mandatory_routed_page,
-    should_commit_multi_token_union_as_complete_layer,
-    should_complete_partial_layer_on_prefill_read,
-    should_promote_demoted_streaming_engine_to_resident, should_seed_partial_layer_on_prefill_read,
-};
-
-#[cfg(feature = "direct-mlx")]
-pub use memory::SessionExpertRouteSample;
-#[cfg(feature = "direct-mlx")]
-pub use memory::{MlxAllocationAdmission, MlxAllocationAdmissionError};
 
 #[cfg(feature = "direct-mlx")]
 pub use model_family_runtime::ModelFamilyInferenceEngine;
@@ -318,21 +265,6 @@ pub use crate::artifact_validation::tensor_inventory::{
 pub use crate::artifact_validation::types::RequiredFileProfile;
 
 pub use crate::artifact_validation::validated_artifact::ValidatedWeightsFile;
-
-pub use crate::inference_engine::contract::{
-    EngineGenerationStart, ExpertResidencyTelemetry, PreparedInferenceRequest,
-};
-
-pub use crate::inference_engine::load_result::EngineLoadResult;
-
-pub use crate::memory::telemetry::{
-    MlxActiveMemoryBreakdown, MlxMemoryLimitAdjustment, MlxMemoryTelemetry,
-};
-
-pub use crate::model_generation_processor::{
-    MalformedModelOutputDiagnostic, ModelGeneratedTokenTranslation, ModelGenerationOutputError,
-    ModelGenerationProcessor, PreparedModelGeneration,
-};
 
 pub use crate::performance_attribution::macos_process_io::MacosProcessIoError;
 

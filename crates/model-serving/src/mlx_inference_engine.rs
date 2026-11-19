@@ -1,10 +1,18 @@
+//! The owner-thread engine every Qwen 3.5 family runs on: one MLX thread owns
+//! the model, and requests reach it over channels.
+//!
+//! The contract it implements lives in astronomical-engine-core; this owner
+//! stays beside the families (issue #2340) because each family adds its own
+//! constructors to `MlxInferenceEngine<Execution>`, which Rust allows only in
+//! the crate that defines the type.
+
 use std::sync::mpsc::{Receiver, SyncSender, sync_channel};
 use std::thread::{self, JoinHandle};
 
 use astronomical_ipc_protocol::{NeuralEnginePrefillStatus, RequestId, WorkerEvent};
 use tokio::sync::oneshot;
 
-use super::{
+use crate::inference_engine::{
     EngineGenerationStart, EngineLoadResult, GeneratedToken, GenerationFinalization,
     InferenceEngine, InferenceEngineError, MlxInferenceExecution,
 };
@@ -55,7 +63,7 @@ where
     }
 
     #[cfg(feature = "direct-mlx")]
-    pub(crate) async fn run_owner_test_operation(
+    pub async fn run_owner_test_operation(
         &self,
         owner_test_operation: impl FnOnce(&mut Execution) -> Result<(), InferenceEngineError>
         + Send

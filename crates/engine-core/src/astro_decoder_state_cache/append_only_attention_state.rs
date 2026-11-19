@@ -33,9 +33,7 @@ pub struct FullAttentionKeyValueStateAllocationCheckpoint {
 }
 
 impl FullAttentionKeyValueState {
-    pub(crate) fn empty_with_validated_growth_tokens(
-        full_attention_kv_state_growth_tokens: i32,
-    ) -> Self {
+    pub fn empty_with_validated_growth_tokens(full_attention_kv_state_growth_tokens: i32) -> Self {
         Self {
             keys: None,
             values: None,

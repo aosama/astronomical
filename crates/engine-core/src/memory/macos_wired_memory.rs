@@ -15,14 +15,14 @@ use std::sync::OnceLock;
 
 /// One reading of the system's wired memory beside the kernel's wire limit.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) struct MacosWiredMemoryReading {
-    pub(crate) system_wired_bytes: u64,
-    pub(crate) system_wire_limit_bytes: u64,
+pub struct MacosWiredMemoryReading {
+    pub system_wired_bytes: u64,
+    pub system_wire_limit_bytes: u64,
 }
 
 /// Reads the system's wired memory now. `None` when the kernel refuses
 /// either figure; the caller then leaves its plan as it is.
-pub(crate) fn read_macos_wired_memory() -> Option<MacosWiredMemoryReading> {
+pub fn read_macos_wired_memory() -> Option<MacosWiredMemoryReading> {
     Some(MacosWiredMemoryReading {
         system_wired_bytes: system_wired_bytes()?,
         system_wire_limit_bytes: system_wire_limit_bytes()?,

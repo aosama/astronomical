@@ -3,7 +3,7 @@ use astronomical_memory_policy::residency::{
     minimum_decode_warm_slot_count,
 };
 
-pub(crate) fn complete_layers_within_decode_warm_budget(
+pub fn complete_layers_within_decode_warm_budget(
     geometries: &[ExpertLayerGeometry],
     current_residencies: &[CurrentExpertLayerResidency],
     planned_layer_indexes: &[usize],
@@ -72,14 +72,14 @@ pub(crate) fn complete_layers_within_decode_warm_budget(
     selected_layer_indexes
 }
 
-pub(crate) trait DecodeExpertSeating {
+pub trait DecodeExpertSeating {
     type Error: std::fmt::Display;
 
     fn seat_complete_layer(&mut self, layer_index: usize) -> Result<Option<u64>, Self::Error>;
     fn materialize_complete_layers(&mut self) -> Result<(), Self::Error>;
 }
 
-pub(crate) fn seat_and_materialize_complete_layers<Seating: DecodeExpertSeating>(
+pub fn seat_and_materialize_complete_layers<Seating: DecodeExpertSeating>(
     seating: &mut Seating,
     layer_indexes: &[usize],
 ) -> Result<u64, Seating::Error> {
