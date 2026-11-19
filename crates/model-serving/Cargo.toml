@@ -12,7 +12,7 @@ workspace = true
 
 [features]
 default = []
-direct-mlx = ["astronomical-qwen35/direct-mlx", "astronomical-artifact-validation/direct-mlx", "astronomical-engine-core/direct-mlx", "astronomical-image-generation/direct-mlx", "astronomical-gpu-building-blocks/direct-mlx", "astronomical-speech/direct-mlx", "dep:astronomical-runtime-integration", "dep:mlx-bridge"]
+direct-mlx = ["astronomical-decision-models/direct-mlx", "astronomical-qwen35/direct-mlx", "astronomical-artifact-validation/direct-mlx", "astronomical-engine-core/direct-mlx", "astronomical-image-generation/direct-mlx", "astronomical-gpu-building-blocks/direct-mlx", "astronomical-speech/direct-mlx", "dep:astronomical-runtime-integration"]
 
 # The worker and the wiring between model families (issue #2340). Every crate
 # below is consumed one way; `cargo xtask check-architecture` holds each of
@@ -26,6 +26,8 @@ astronomical-engine-core = { path = "../engine-core" }
 # The Qwen 3.5 family, which the decision models score on and the worker
 # serves.
 astronomical-qwen35 = { path = "../qwen35" }
+# The decision and embedding models and their seams.
+astronomical-decision-models = { path = "../decision-models" }
 # The image generation families and their worker seam.
 astronomical-image-generation = { path = "../image-generation" }
 # The GPU building blocks every family shares.
@@ -33,11 +35,9 @@ astronomical-gpu-building-blocks = { path = "../gpu-building-blocks" }
 # The text-to-speech families and their worker seam.
 astronomical-speech = { path = "../speech" }
 astronomical-config = { path = "../config" }
-# The decision-model contract: typed questions, calibration, typed answers and
-# each family's prompt layout. It has no graphics-processor dependency; the
-# decision backends in this crate add the forward pass.
+# The decision-model contract the worker passes to and from the decision
+# engines.
 astronomical-decision-contract = { path = "../decision-contract" }
-astronomical-decision-training = { path = "../decision-training" }
 # The speech request, failures and audio encoding the worker passes to and
 # from the speech engines.
 astronomical-speech-contract = { path = "../speech-contract" }
@@ -47,12 +47,9 @@ astronomical-ipc-protocol = { path = "../ipc-protocol" }
 astronomical-memory-policy = { path = "../astronomical-memory-policy" }
 astronomical-lowercase-hex = { path = "../lowercase-hex" }
 astronomical-runtime-integration = { path = "../runtime-integration", features = ["mlx"], optional = true }
-mlx-bridge = { workspace = true, optional = true }
 image.workspace = true
-safetensors.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
-tokenizers.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 
@@ -63,6 +60,4 @@ astronomical-test-harness = { path = "../test-harness", features = ["test-fixtur
 astronomical-gpu-building-blocks = { path = "../gpu-building-blocks", features = ["test-support"] }
 # start_paused virtual time for #[tokio::test(start_paused = true)] bodies.
 tokio = { workspace = true, features = ["test-util"] }
-# The GPU tests sample the process-global MLX allocator, so they serialize.
-serial_test.workspace = true
 tempfile = "=3.27.0"

@@ -103,6 +103,14 @@ const FORBIDDEN_DEPENDENCY_RULES: &[ForbiddenDependencyRule] = &[
         forbidden_crate: "astronomical-model-serving",
         rationale: "the Qwen 3.5 crate must build and test without pulling in the serving crate, which drives its engines through a one-way edge",
     },
+    // The decision models sit above the Qwen 3.5 family and below the
+    // serving crate's worker, which drives them.
+    ForbiddenDependencyRule {
+        rule_name: "decision-models-without-serving",
+        source_crate: "astronomical-decision-models",
+        forbidden_crate: "astronomical-model-serving",
+        rationale: "the decision models crate must build and test without pulling in the serving crate, which drives the decision engines through a one-way edge",
+    },
 ];
 
 /// One detected violation with the offending dependency chain, source crate
