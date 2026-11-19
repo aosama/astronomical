@@ -6,7 +6,7 @@ use astronomical_runtime_integration::MlxRuntime;
 use mlx_bridge::{MlxArray, MlxDtype};
 use serial_test::serial;
 
-use crate::mlx_test_runtime::initialize_test_runtime;
+use crate::synthetic_weights_test_support::initialize_test_runtime;
 
 use super::{
     AFFINE_QUANTIZATION_BITS, AFFINE_QUANTIZATION_GROUP_SIZE, AffineQuantizedLinear,

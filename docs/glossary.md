@@ -15,7 +15,7 @@ Every cache and memory area in Astronomical has one formal name, and the prefix 
 
 A sparse model routes every token to a few experts in every layer. When the whole model does not fit under the memory limit, the experts that are not in memory are read from storage. The `astro_expert_cache` is the set of experts held in memory: one table per layer, with a capacity the memory governor sets.
 
-- In the engine it is the type `AstroExpertCache` (`crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache.rs`).
+- In the engine it is the type `AstroExpertCache` (`crates/qwen35/src/qwen3_5_streaming/expert_streaming/astro_expert_cache.rs`).
 - Its arithmetic model, replayed against recorded replies without a GPU, is `astro_expert_cache_model` in `crates/astronomical-memory-policy`.
 - To the memory ledger it is the kept weights of a sparse model: `kept_weight_capacity_bytes` is the capacity it is given. A dense model keeps whole layers under the same account and has no `astro_expert_cache`.
 - Older code calls an expert held in it kept, retained, resident, warm or hot. All five mean the same thing: the expert is in the `astro_expert_cache`.

@@ -41,16 +41,16 @@ adapted from the oMLX project's Qwen 3.5 prefill kernels
 quantized-matmul tile selection (qwen35_qmm_nax.metal), the fa256 steel
 attention (qwen35_attention.metal), and the MoE gather
 (qwen35_moe_gather_nax.metal). The gated-delta decode prework
-(crates/model-serving/src/qwen3_5/model/gdn_decode_prework_kernel.rs) and the
+(crates/qwen35/src/qwen3_5_core/model_math/gdn_decode_prework_kernel.rs) and the
 software-pipelined gated-delta prefill recurrence
-(crates/model-serving/src/qwen3_5/model/gated_delta_pipelined_kernel.rs) are
+(crates/qwen35/src/qwen3_5_core/model_math/gated_delta_pipelined_kernel.rs) are
 likewise adapted from oMLX and compiled just in time from Rust source. These
 kernels are Apple MIT-licensed as part of MLX and Apache-2.0 licensed by oMLX
 for the additions. The adapted kernels point back to this notice, and the
 inline attribution comments in the corresponding MLX patches preserve that
 provenance for every line ported from oMLX. The folded ternary family's
 one-launch signed Hadamard rotation
-(crates/model-serving/src/prism_hadamard_qwen35/model/signed_rotation_kernel.rs)
+(crates/qwen35/src/prism_hadamard_qwen35/model/signed_rotation_kernel.rs)
 reproduces the radix butterfly of MLX's own Hadamard kernel
 (mlx/backend/metal/kernels/hadamard.h, Apple MIT) so its float32 addition
 order matches the public MLX operation bit for bit.
@@ -202,7 +202,7 @@ Licensed under the Apache License, Version 2.0. A complete copy of that license 
 
 TensorFold
 Source: https://github.com/ashhart/TensorFold
-Used as the upstream source of the row-batched 4-bit quantized matmul that Astronomical incorporates. The Metal source in crates/model-serving/src/row_batched_matmul/kernel_source.rs and the weight regrouping and input-slice rule beside it are adapted from TensorFold's lane matmul (src/tensorfold/kernels/qwen/dense/v1/lane_qmm.py at tag v0.3.5.1): M5 matrix units multiply the raw 4-bit codes, each group's scale and offset is applied after the product, and long inputs are split across simdgroups and added in slice order. The register-ordered form of that matmul under crates/model-serving/src/row_batched_matmul (weights regrouped into the matrix unit's register order, with its conversion and restoration kernels) follows TensorFold's register-ordered lane kernels. The draft-tree decoding under crates/model-serving/src/speculative_decoding also follows TensorFold's engine: the best-first tree search over the drafter's candidate lattice and its scoring constants, the keyed sampler whose draws depend only on the seed, position and token, the suffix lookup that proposes copies from the context, and the 16-row draft block whose trained rows are masked from the later ones. The row-exact draft-tree attention in crates/model-serving/src/qwen3_5_core/model_math/row_exact_tree_attention.rs follows TensorFold's tree attention (zig/kernels/metal/qwen27/attention_mpp.metal, q27_attn_prefix and q27_attn_tail, at release 1.2.9): a row's keys as the context followed by its own ancestors, cut into tiles by key index, scored on the M5 matrix units sixteen query vectors at a time with the running softmax kept in each lane's own elements, and chunk partials merged in chunk order.
+Used as the upstream source of the row-batched 4-bit quantized matmul that Astronomical incorporates. The Metal source in crates/gpu-building-blocks/src/row_batched_matmul/kernel_source.rs and the weight regrouping and input-slice rule beside it are adapted from TensorFold's lane matmul (src/tensorfold/kernels/qwen/dense/v1/lane_qmm.py at tag v0.3.5.1): M5 matrix units multiply the raw 4-bit codes, each group's scale and offset is applied after the product, and long inputs are split across simdgroups and added in slice order. The register-ordered form of that matmul under crates/gpu-building-blocks/src/row_batched_matmul (weights regrouped into the matrix unit's register order, with its conversion and restoration kernels) follows TensorFold's register-ordered lane kernels. The draft-tree decoding under crates/qwen35/src/speculative_decoding also follows TensorFold's engine: the best-first tree search over the drafter's candidate lattice and its scoring constants, the keyed sampler whose draws depend only on the seed, position and token, the suffix lookup that proposes copies from the context, and the 16-row draft block whose trained rows are masked from the later ones. The row-exact draft-tree attention in crates/qwen35/src/qwen3_5_core/model_math/row_exact_tree_attention.rs follows TensorFold's tree attention (zig/kernels/metal/qwen27/attention_mpp.metal, q27_attn_prefix and q27_attn_tail, at release 1.2.9): a row's keys as the context followed by its own ancestors, cut into tiles by key index, scored on the M5 matrix units sixteen query vectors at a time with the running softmax kept in each lane's own elements, and chunk partials merged in chunk order.
 
 TensorFold source translations
 Copyright 2026 TensorFold contributors
@@ -235,7 +235,7 @@ SOFTWARE.
 
 Kokoro
 Source: https://github.com/hexgrad/kokoro
-The Kokoro-82M text-to-speech model (StyleTTS2 with an iSTFTNet vocoder) is translated from its PyTorch reference into the MLX engine under crates/model-serving/src/speech_models/kokoro.
+The Kokoro-82M text-to-speech model (StyleTTS2 with an iSTFTNet vocoder) is translated from its PyTorch reference into the MLX engine under crates/speech/src/speech_models/kokoro.
 
 The upstream license file names no copyright holder; the work is by the hexgrad project.
 
@@ -243,7 +243,7 @@ Licensed under the Apache License, Version 2.0. A complete copy of that license 
 
 Phonon TTS runtime (xn-ptts)
 Source: https://github.com/gradium-ai/xn-ptts
-The Phonon 31M text-to-speech model (a causal flow language model with a one-step flow head and the Mimi codec decoder) is translated from Gradium's Rust reference runtime into the MLX engine under crates/model-serving/src/speech_models/phonon. The runtime is licensed MIT or Apache-2.0; Astronomical uses it under the Apache License 2.0.
+The Phonon 31M text-to-speech model (a causal flow language model with a one-step flow head and the Mimi codec decoder) is translated from Gradium's Rust reference runtime into the MLX engine under crates/speech/src/speech_models/phonon. The runtime is licensed MIT or Apache-2.0; Astronomical uses it under the Apache License 2.0.
 
 The upstream license files name no copyright holder; the work is by Gradium.
 
@@ -491,7 +491,7 @@ incorporates, as source translations from mlx-optiq 0.6.5 and 0.7.9:
   guard, the structural fallback, the bf16 layer index (module inventory),
   the bf16 and block-scaled FP8 weight loading (the requantizer's source
   reader), the swap-forward-restore probe cycle (the Qwen3.5 probe in
-  crates/model-serving/src/quantization_probe), the KL formula, the
+  crates/qwen35/src/quantization_probe), the KL formula, the
   sensitivity checkpoint, and the sensitivity report
   (optiq/core/sensitivity.py).
 - The greedy knapsack allocator with the block-aware floor and block-run

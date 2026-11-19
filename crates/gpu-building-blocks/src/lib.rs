@@ -23,6 +23,9 @@ pub mod affine_quantized_linear;
 
 pub mod affine_quantization_scheme;
 
+#[cfg(feature = "direct-mlx")]
+pub mod adapter_target;
+
 pub mod attention;
 
 #[cfg(feature = "direct-mlx")]
@@ -34,8 +37,11 @@ pub mod gpu_token_sampling;
 #[cfg(feature = "direct-mlx")]
 pub mod linear_adapters;
 
-#[cfg(all(test, feature = "direct-mlx"))]
-mod mlx_test_runtime;
+// Small synthetic weight files for GPU tests in this crate and the family
+// crates above it; compiled only for this crate's tests or when a dependent's
+// dev build turns on `test-support`.
+#[cfg(all(feature = "direct-mlx", any(test, feature = "test-support")))]
+pub mod synthetic_weights_test_support;
 
 pub mod performance_attribution;
 
@@ -48,3 +54,46 @@ pub mod sampling_seed;
 pub mod serving_phase;
 
 pub mod sparse_experts;
+
+// The public surface the serving crate re-exported from these modules before
+// they moved here; the serving crate and the families re-export or import it.
+#[cfg(feature = "direct-mlx")]
+pub use attention::build_causal_sliding_window_mask;
+
+pub use attention::{
+    RopeFrequencyError, SlidingWindowVisibilityError, YarnRopeFrequencyDenominators,
+    compute_default_rope_frequency_denominators, compute_yarn_rope_frequency_denominators,
+    sliding_window_position_is_visible, sliding_window_visibility_table,
+};
+
+#[doc(hidden)]
+#[cfg(feature = "direct-mlx")]
+pub use gpu_token_sampling::{
+    build_sampled_token_rows_for_tests, sample_acceptance_coins_for_tests,
+    sample_from_relative_probabilities_for_tests,
+};
+
+pub use performance_attribution::macos_process_io::{
+    MacosProcessIoDelta, sample_current_process_io, sample_process_io_for_process_id,
+};
+
+pub use performance_attribution::{
+    GenerationPerformanceAttributionMetadata, ModelLoadingPerformanceAttributionMetadata,
+    PerformanceAttribution, PerformanceAttributionLog, PerformanceAttributionOutcome,
+    PerformanceAttributionReport, PerformanceCounter, PerformanceOperation,
+    PerformanceOperationMeasurement, process_io_delta_between_samples,
+};
+
+pub use performance_attribution::macos_process_io::MacosProcessIoError;
+
+pub use route_observation::{LayerRoutedExpertIds, ObservedExpertRoute};
+
+#[cfg(feature = "direct-mlx")]
+pub use sparse_experts::{
+    ExpertAssignmentOrder, SortedExpertAssignments, StackedExpertProjection,
+    expert_assignment_order, gather_expert_projection, restore_expert_assignment_order,
+    router_weighted_expert_inputs, sort_expert_assignments, sorted_expert_weighted_sum,
+    sorted_expert_weighted_sum_kernel, unsorted_expert_weighted_sum,
+};
+
+pub use sparse_experts::{SparseExpertError, invert_assignment_order};

@@ -14,48 +14,8 @@ use astronomical_decision_contract::decision_adapters_file::{
     DECISION_ADAPTERS_FILE_NAME, DecisionAdapters, MAXIMUM_DECISION_ADAPTERS_FILE_BYTES,
     parse_decision_adapters,
 };
-use astronomical_runtime_integration::MlxSafetensors;
 
-/// A linear layer that may carry an add-on, with its widths.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct AdapterTarget {
-    /// The shipped weight's prefix, the name before `.weight`.
-    pub(crate) name: String,
-    pub(crate) input_width: usize,
-    pub(crate) output_width: usize,
-}
-
-impl AdapterTarget {
-    /// The target of an affine-quantized linear layer, its widths read from
-    /// the stored tensors: `weight` has one row per output and `scales` one
-    /// column per group of inputs. Only the names are looked up; no weight
-    /// bytes are read.
-    pub(crate) fn of_quantized_linear(
-        tensors: &MlxSafetensors,
-        name: String,
-        quantization_group_size: usize,
-    ) -> Result<Self, DecisionFailure> {
-        let (Ok(packed_weight), Ok(scales)) = (
-            tensors.tensor(&format!("{name}.weight")),
-            tensors.tensor(&format!("{name}.scales")),
-        ) else {
-            return Err(DecisionFailure::fatal_execution(&format!(
-                "the model has no quantized layer {name}"
-            )));
-        };
-        let (weight_shape, scales_shape) = (packed_weight.shape(), scales.shape());
-        if weight_shape.len() != 2 || scales_shape.len() != 2 {
-            return Err(DecisionFailure::fatal_execution(&format!(
-                "the quantized layer {name} is not a matrix"
-            )));
-        }
-        Ok(Self {
-            output_width: weight_shape[0] as usize,
-            input_width: scales_shape[1] as usize * quantization_group_size,
-            name,
-        })
-    }
-}
+pub(crate) use astronomical_gpu_building_blocks::adapter_target::AdapterTarget;
 
 /// The folder's add-ons, or none when the folder has no file.
 pub(crate) fn read_decision_adapters(

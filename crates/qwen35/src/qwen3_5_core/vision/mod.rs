@@ -1,0 +1,68 @@
+pub mod image_processor;
+#[cfg(feature = "direct-mlx")]
+mod vision_attention;
+
+#[cfg(all(test, feature = "direct-mlx"))]
+#[path = "vision_attention_tests.rs"]
+mod vision_attention_tests;
+mod vision_config;
+#[cfg(any(test, feature = "direct-mlx"))]
+pub mod vision_input_plan;
+#[cfg(feature = "direct-mlx")]
+mod vision_model;
+#[cfg(feature = "direct-mlx")]
+mod vision_rotary_embedding;
+#[cfg(feature = "direct-mlx")]
+mod vision_tensor_source;
+pub mod vision_tensor_spec;
+#[cfg(feature = "direct-mlx")]
+mod vision_weights;
+mod visual_astro_ssd_prompt_cache_identity;
+#[cfg(feature = "direct-mlx")]
+pub mod visual_embedding_injection;
+pub mod visual_embeddings;
+#[cfg(feature = "direct-mlx")]
+pub mod visual_embeddings_runtime;
+
+#[cfg(any(test, feature = "direct-mlx"))]
+pub use image_processor::Qwen3_5ImageGrid;
+
+pub use image_processor::{
+    Qwen3_5ImageProcessingError, Qwen3_5ImageProcessor, Qwen3_5ProcessedImage,
+};
+#[cfg(feature = "direct-mlx")]
+pub use vision_attention::Qwen3_5VisionPaddingZeroCache;
+pub use vision_config::Qwen3_5VisionConfig;
+#[cfg(feature = "direct-mlx")]
+pub use vision_model::Qwen3_5VisionModel;
+pub use vision_tensor_spec::qwen3_5_vision_tensor_profiles;
+#[cfg(feature = "direct-mlx")]
+pub use vision_tensor_spec::qwen3_5_vision_tensor_profiles_for_model;
+#[cfg(feature = "direct-mlx")]
+pub use vision_weights::Qwen3_5VisionWeights;
+#[cfg(feature = "direct-mlx")]
+pub use vision_weights::VisionTensorLocation;
+pub use visual_astro_ssd_prompt_cache_identity::{
+    Qwen3_5VisualAstroSsdPromptCacheIdentityPlan,
+    Qwen3_5VisualAstroSsdPromptCacheIdentityPlanError,
+    plan_qwen3_5_visual_astro_ssd_prompt_cache_block_inputs,
+};
+#[cfg(feature = "direct-mlx")]
+pub use visual_embedding_injection::qwen3_5_inject_visual_embeddings;
+pub use visual_embeddings::{
+    Qwen3_5VisualEmbeddingSuffixPlan, Qwen3_5VisualEmbeddingSuffixPlanError,
+    plan_qwen3_5_visual_embedding_suffix,
+};
+
+#[cfg(feature = "direct-mlx")]
+pub use super::artifacts::ValidatedQwen3_5Artifact;
+pub use super::configuration::Qwen3_5ConfigError;
+#[cfg(feature = "direct-mlx")]
+pub use super::model_math::error::Qwen3_5ExecutionError;
+#[cfg(feature = "direct-mlx")]
+pub use visual_embeddings_runtime::{
+    VisualEmbeddingEngineContext, resolve_visual_embeddings_for_processed_images,
+};
+
+#[cfg(feature = "direct-mlx")]
+pub use vision_input_plan::Qwen3_5VisionInputPlan;

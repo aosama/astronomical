@@ -7,4 +7,6 @@ pub(crate) mod layer_recomputation;
 pub(crate) mod loss_gradient;
 pub(crate) mod micro_batch_objective;
 pub(crate) mod mlx_buffer_cache_reclaim;
+#[cfg(test)]
+mod qwen_gated_delta_gradient_tests;
 pub(crate) mod whole_model_layout;

@@ -19,7 +19,7 @@ use super::super::gpu_upload::{
 };
 use super::super::question_batch::QuestionBatch;
 use super::*;
-use crate::synthetic_weights_test_support::initialize_test_runtime;
+use astronomical_gpu_building_blocks::synthetic_weights_test_support::initialize_test_runtime;
 
 /// Scores and gradients from the GPU and from the CPU oracle, for one family.
 fn compare_with_oracle(

@@ -7,7 +7,7 @@ use mlx_bridge::{MlxArray, MlxBindingsContext, MlxCError, MlxDtype};
 use serial_test::serial;
 
 use super::{TrainableLoss, loss_gradients};
-use crate::synthetic_weights_test_support::{
+use astronomical_gpu_building_blocks::synthetic_weights_test_support::{
     SYNTHETIC_QUANTIZATION_BITS, SYNTHETIC_QUANTIZATION_GROUP_SIZE, initialize_test_runtime,
     shakespeare_values,
 };

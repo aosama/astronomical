@@ -1,0 +1,522 @@
+use std::collections::{BTreeSet, HashMap};
+use std::path::PathBuf;
+use std::sync::Arc;
+
+use astronomical_runtime_integration::{MlxRuntime, MlxSafetensors, PositionalFileReadMetrics};
+
+use crate::qwen3_5_core::artifacts::{
+    QuantizationMode, QuantizedExpertLayerPlan, QuantizedTensorSource, SafetensorsDtype,
+};
+use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights;
+use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
+
+use super::{
+    Qwen3_5ResidentExpertLayerWeights, Qwen3_5ResidentExpertWeights, Qwen3_5ResidentGateUpWeights,
+};
+use mlx_bridge::{MlxArray, MlxDtype};
+
+type ResidentSourceTensorKey = (PathBuf, String);
+type ResidentSourceTensorMap = HashMap<ResidentSourceTensorKey, MlxArray>;
+
+#[cfg(test)]
+#[path = "resident_expert_loading_tests.rs"]
+mod resident_expert_loading_tests;
+
+impl Qwen3_5ResidentExpertWeights {
+    /// Materializes all complete expert layers directly from their shared plans.
+    pub fn load(
+        runtime: &MlxRuntime,
+        layer_plans: &[QuantizedExpertLayerPlan],
+        positional_file_read_metrics: Option<Arc<PositionalFileReadMetrics>>,
+    ) -> Result<Self, Qwen3_5ExecutionError> {
+        let complete_model_payload_bytes = complete_model_payload_bytes(layer_plans)?;
+        let complete_model_expert_entry_count = complete_model_expert_entry_count(layer_plans);
+        let source_file_paths = collect_source_file_paths(layer_plans);
+        let resident_source_shards = load_resident_source_shards(
+            runtime,
+            &source_file_paths,
+            &positional_file_read_metrics,
+        )?;
+        tracing::debug!(
+            source_shard_count = resident_source_shards.len(),
+            "started detaching resident expert tensors from safetensors source maps"
+        );
+        let mut resident_source_tensors = gather_resident_source_tensors(
+            runtime,
+            layer_plans,
+            &resident_source_shards,
+            &positional_file_read_metrics,
+        )?;
+        // MLX lazy load primitives retain their shared descriptor reader. Dropping
+        // the source maps here removes their second reference to every selected
+        // tensor, so evaluated gate/up sources can retire after one-layer fusion.
+        drop(resident_source_shards);
+        tracing::debug!(
+            resident_source_tensor_count = resident_source_tensors.len(),
+            "completed detaching resident expert tensors from safetensors source maps"
+        );
+        // Evaluate one complete layer before advancing. This bounds lazy source
+        // graphs and makes each progress record correspond to materialized MLX
+        // storage, not merely constructed safetensors views. The helper reports
+        // the fusion tallies the completion log needs.
+        let ResidentLayerMaterialization {
+            resident_layers,
+            fused_gate_up_layer_count,
+            separate_gate_up_layer_count,
+        } = materialize_resident_layers(runtime, &mut resident_source_tensors, layer_plans)?;
+
+        if let Some(((_, unconsumed_tensor_name), _)) = resident_source_tensors.iter().next() {
+            return Err(Qwen3_5ExecutionError::InvalidTensor {
+                tensor_name: unconsumed_tensor_name.clone(),
+                description: "resident expert source tensor was not consumed by its layer plan",
+            });
+        }
+
+        tracing::info!(
+            total_layer_count = layer_plans.len(),
+            fused_gate_up_layer_count,
+            separate_gate_up_layer_count,
+            "completed resident expert gate/up materialization"
+        );
+
+        let candidate_owner = Self::new(
+            resident_layers,
+            complete_model_expert_entry_count,
+            complete_model_payload_bytes,
+        );
+        Ok(candidate_owner)
+    }
+}
+
+/// The materialized resident layers plus the gate/up fusion tallies the
+/// completion log reports. Fused layers release their transient source
+/// tensors during synchronous evaluation; separate layers keep their tensors
+/// as independent owners. The split tells the operator how much of the model
+/// took the memory-saving fused path.
+struct ResidentLayerMaterialization {
+    resident_layers: Vec<Qwen3_5ResidentExpertLayerWeights>,
+    fused_gate_up_layer_count: usize,
+    separate_gate_up_layer_count: usize,
+}
+
+/// Materializes every complete resident expert layer in plan order, evaluating
+/// each layer's arrays synchronously before advancing to the next. Evaluating
+/// one layer at a time bounds how many lazy source graphs are alive at once,
+/// so the memory footprint stays close to the materialized layers rather than
+/// the whole safetensors source. Fused gate/up layers drain the
+/// `mlx_buffer_cache` right after their synchronous evaluation detaches them from the
+/// source concatenation, returning reclaimable buffers before the next layer
+/// reserves its storage.
+fn materialize_resident_layers(
+    runtime: &MlxRuntime,
+    resident_source_tensors: &mut ResidentSourceTensorMap,
+    layer_plans: &[QuantizedExpertLayerPlan],
+) -> Result<ResidentLayerMaterialization, Qwen3_5ExecutionError> {
+    let mut resident_layers = Vec::with_capacity(layer_plans.len());
+    let mut fused_gate_up_layer_count = 0_usize;
+    let mut separate_gate_up_layer_count = 0_usize;
+    for (layer_index, layer_plan) in layer_plans.iter().enumerate() {
+        let complete_layer_payload_bytes = layer_plan
+            .complete_expert_payload_byte_count()
+            .map_err(|plan_error| Qwen3_5ExecutionError::ExpertLayerPlan {
+                description: plan_error.to_string(),
+            })?;
+        tracing::info!(
+            layer_index,
+            total_layer_count = layer_plans.len(),
+            layer_prefix = layer_plan.layer_prefix,
+            complete_layer_payload_bytes,
+            "started materializing one complete resident expert layer"
+        );
+        let resident_layer = load_resident_layer(runtime, resident_source_tensors, layer_plan)?;
+        let gate_up_fusion_applied = resident_layer.gate_up_weights.is_fused();
+        let gate_up_fusion_transient_payload_bytes = resident_layer
+            .gate_up_weights
+            .materialization_transient_payload_bytes();
+        let gate_up_fusion_incompatibility_reason =
+            resident_layer.gate_up_weights.incompatibility_reason();
+        let mut complete_layer_arrays = Vec::new();
+        resident_layer.append_array_references(&mut complete_layer_arrays);
+        runtime.evaluate_arrays(&complete_layer_arrays)?;
+        if gate_up_fusion_applied {
+            // Synchronous evaluation detached the fused owner from its source
+            // concatenation. Drain reclaimable buffers before the next layer.
+            runtime.clear_mlx_buffer_cache()?;
+        }
+        if gate_up_fusion_applied {
+            fused_gate_up_layer_count = fused_gate_up_layer_count.saturating_add(1);
+        } else {
+            separate_gate_up_layer_count = separate_gate_up_layer_count.saturating_add(1);
+        }
+        tracing::info!(
+            completed_layer_count = layer_index + 1,
+            total_layer_count = layer_plans.len(),
+            complete_layer_payload_bytes,
+            gate_up_fusion_applied,
+            gate_up_fusion_transient_payload_bytes,
+            gate_up_fusion_incompatibility_reason,
+            "materialized one complete resident expert layer"
+        );
+        resident_layers.push(resident_layer);
+    }
+    Ok(ResidentLayerMaterialization {
+        resident_layers,
+        fused_gate_up_layer_count,
+        separate_gate_up_layer_count,
+    })
+}
+
+/// Counts every expert entry the resident owner will hold by summing each
+/// layer plan's expert capacity. Saturating on overflow is deliberate here:
+/// this count only sizes bookkeeping, while the byte total above is the
+/// overflow-checked one.
+fn complete_model_expert_entry_count(layer_plans: &[QuantizedExpertLayerPlan]) -> usize {
+    layer_plans.iter().fold(0_usize, |entry_count, layer_plan| {
+        entry_count.saturating_add(layer_plan.expert_capacity)
+    })
+}
+
+/// Collects the distinct safetensors shards the layer plans read from (Atlas
+/// layer files are not safetensors and load separately). The
+/// `BTreeSet` both deduplicates shared source files (layers of one model
+/// frequently share a shard) and gives the shard-loading loop a deterministic
+/// order so logs are reproducible run to run.
+fn collect_source_file_paths(layer_plans: &[QuantizedExpertLayerPlan]) -> BTreeSet<PathBuf> {
+    layer_plans
+        .iter()
+        .flat_map(|layer_plan| {
+            layer_plan
+                .tensor_sources
+                .iter()
+                .filter(|tensor_source| !tensor_source.is_expert_atlas_source())
+                .map(|tensor_source| tensor_source.source_file.clone())
+        })
+        .collect::<BTreeSet<_>>()
+}
+
+/// Every complete expert tensor the layer plans name: shard tensors detached
+/// from their loaded shards, and Atlas tensors reassembled from records.
+fn gather_resident_source_tensors(
+    runtime: &MlxRuntime,
+    layer_plans: &[QuantizedExpertLayerPlan],
+    resident_source_shards: &HashMap<PathBuf, MlxSafetensors>,
+    positional_file_read_metrics: &Option<Arc<PositionalFileReadMetrics>>,
+) -> Result<ResidentSourceTensorMap, Qwen3_5ExecutionError> {
+    let mut resident_source_tensors =
+        detach_resident_source_tensors(layer_plans, resident_source_shards)?;
+    insert_atlas_resident_source_tensors(
+        runtime,
+        layer_plans,
+        positional_file_read_metrics,
+        &mut resident_source_tensors,
+    )?;
+    Ok(resident_source_tensors)
+}
+
+/// Adds every Atlas-held tensor to the resident source map as a complete
+/// `[experts, ...]` tensor. An Atlas layer file is a run of expert records,
+/// so a complete layer loads as one page of every expert through the same
+/// bounded reader the pager uses, which reassembles each tensor from the
+/// records; materialization then proceeds exactly as for shards.
+fn insert_atlas_resident_source_tensors(
+    runtime: &MlxRuntime,
+    layer_plans: &[QuantizedExpertLayerPlan],
+    positional_file_read_metrics: &Option<Arc<PositionalFileReadMetrics>>,
+    resident_source_tensors: &mut ResidentSourceTensorMap,
+) -> Result<(), Qwen3_5ExecutionError> {
+    let expert_page_error = |page_error: crate::qwen3_5_core::artifacts::ExpertManifestError| {
+        Qwen3_5ExecutionError::ExpertSourceFailure {
+            description: format!("loading a complete Atlas expert layer failed: {page_error}"),
+        }
+    };
+    for layer_plan in layer_plans {
+        if !layer_plan
+            .tensor_sources
+            .iter()
+            .any(QuantizedTensorSource::is_expert_atlas_source)
+        {
+            continue;
+        }
+        let every_expert_id: Vec<usize> = (0..layer_plan.expert_capacity).collect();
+        let complete_layer_manifest =
+            crate::qwen3_5_core::artifacts::build_quantized_expert_page_manifest_from_plan(
+                layer_plan,
+                &every_expert_id,
+            )
+            .map_err(expert_page_error)?;
+        let mut complete_layer_tensors =
+            crate::qwen3_5_core::artifacts::load_quantized_expert_page(
+                runtime,
+                &complete_layer_manifest,
+                positional_file_read_metrics.as_ref().map(Arc::clone),
+            )
+            .map_err(expert_page_error)?;
+        for tensor_source in layer_plan
+            .tensor_sources
+            .iter()
+            .filter(|tensor_source| tensor_source.is_expert_atlas_source())
+        {
+            let page_tensor_name = format!(
+                "{}.{}",
+                tensor_source.projection_name, tensor_source.parameter_name
+            );
+            let complete_tensor = complete_layer_tensors
+                .remove(&page_tensor_name)
+                .ok_or_else(|| Qwen3_5ExecutionError::MissingTensor {
+                    tensor_name: tensor_source.tensor_name.clone(),
+                })?;
+            resident_source_tensors.insert(
+                (
+                    tensor_source.source_file.clone(),
+                    tensor_source.tensor_name.clone(),
+                ),
+                complete_tensor,
+            );
+        }
+    }
+    Ok(())
+}
+
+/// Opens every distinct expert source file and loads its safetensors shard
+/// through the runtime. The deterministic `BTreeSet` iteration order makes the
+/// load sequence and its logs reproducible. Each shard keeps the runtime's
+/// lazy descriptor reader alive until the caller drops the returned map.
+fn load_resident_source_shards(
+    runtime: &MlxRuntime,
+    source_file_paths: &BTreeSet<PathBuf>,
+    positional_file_read_metrics: &Option<Arc<PositionalFileReadMetrics>>,
+) -> Result<HashMap<PathBuf, MlxSafetensors>, Qwen3_5ExecutionError> {
+    let mut resident_source_shards = HashMap::new();
+    for source_file_path in source_file_paths {
+        let resident_source_file = std::fs::File::open(source_file_path).map_err(|open_error| {
+            Qwen3_5ExecutionError::ExpertSourceFailure {
+                description: format!(
+                    "opening expert source file {} failed: {open_error}",
+                    source_file_path.display()
+                ),
+            }
+        })?;
+        let resident_source_shard = runtime.load_safetensors(
+            resident_source_file,
+            positional_file_read_metrics.as_ref().map(Arc::clone),
+        )?;
+        resident_source_shards.insert(source_file_path.clone(), resident_source_shard);
+    }
+    Ok(resident_source_shards)
+}
+
+/// Sums every layer plan's complete expert payload byte count with overflow
+/// detection. A single `u64` covers the whole resident model, so one plan
+/// reporting a bad count or an overflowing total must fail the load before any
+/// storage is reserved.
+fn complete_model_payload_bytes(
+    layer_plans: &[QuantizedExpertLayerPlan],
+) -> Result<u64, Qwen3_5ExecutionError> {
+    layer_plans
+        .iter()
+        .try_fold(0_u64, |total_payload_bytes, layer_plan| {
+            let layer_payload_bytes =
+                layer_plan
+                    .complete_expert_payload_byte_count()
+                    .map_err(|plan_error| Qwen3_5ExecutionError::ExpertLayerPlan {
+                        description: plan_error.to_string(),
+                    })?;
+            total_payload_bytes.checked_add(layer_payload_bytes).ok_or(
+                Qwen3_5ExecutionError::InvalidInput {
+                    description: "complete expert payload byte count overflowed",
+                },
+            )
+        })
+}
+
+fn load_resident_layer(
+    runtime: &MlxRuntime,
+    resident_source_tensors: &mut ResidentSourceTensorMap,
+    layer_plan: &QuantizedExpertLayerPlan,
+) -> Result<Qwen3_5ResidentExpertLayerWeights, Qwen3_5ExecutionError> {
+    let gate_projection =
+        load_resident_projection(resident_source_tensors, layer_plan, "gate_proj")?;
+    let up_projection = load_resident_projection(resident_source_tensors, layer_plan, "up_proj")?;
+    Ok(Qwen3_5ResidentExpertLayerWeights::new(
+        Qwen3_5ResidentGateUpWeights::build(runtime, layer_plan, gate_projection, up_projection)?,
+        load_resident_projection(resident_source_tensors, layer_plan, "down_proj")?,
+    ))
+}
+
+fn load_resident_projection(
+    resident_source_tensors: &mut ResidentSourceTensorMap,
+    layer_plan: &QuantizedExpertLayerPlan,
+    projection_name: &str,
+) -> Result<Qwen3_5AffineWeights, Qwen3_5ExecutionError> {
+    let quantization_mode = layer_plan.quantization_mode_for_projection(projection_name);
+    if quantization_mode == QuantizationMode::Jangtq2Codebook {
+        return Err(Qwen3_5ExecutionError::InvalidInput {
+            description: "jangtq2 expert weights require the bounded streaming path",
+        });
+    }
+    let weight_source = projection_parameter_source(layer_plan, projection_name, "weight")?;
+    let weight = take_validated_source_tensor(resident_source_tensors, weight_source)?;
+    // Preserve the validated artifact representation exactly. Resident mode is
+    // an ownership change, never an opportunity to requantize or widen weights.
+    match quantization_mode {
+        QuantizationMode::NativeBfloat16 => Ok(Qwen3_5AffineWeights::NativeBfloat16 { weight }),
+        QuantizationMode::Affine => {
+            let scales_source = projection_parameter_source(layer_plan, projection_name, "scales")?;
+            let biases_source = projection_parameter_source(layer_plan, projection_name, "biases")?;
+            Ok(Qwen3_5AffineWeights::Quantized {
+                packed_weight: weight,
+                quantization_scales: take_validated_source_tensor(
+                    resident_source_tensors,
+                    scales_source,
+                )?,
+                quantization_biases: take_validated_source_tensor(
+                    resident_source_tensors,
+                    biases_source,
+                )?,
+                quantization_bits: weight_source.quantization_bits,
+                quantization_group_size: weight_source.quantization_group_size,
+            })
+        }
+        QuantizationMode::Jangtq2Codebook => Err(Qwen3_5ExecutionError::InvalidInput {
+            description: "jangtq2 expert weights require the bounded streaming path",
+        }),
+    }
+}
+
+fn projection_parameter_source<'plan>(
+    layer_plan: &'plan QuantizedExpertLayerPlan,
+    projection_name: &str,
+    parameter_name: &str,
+) -> Result<&'plan QuantizedTensorSource, Qwen3_5ExecutionError> {
+    layer_plan
+        .tensor_sources
+        .iter()
+        .find(|tensor_source| {
+            tensor_source.projection_name == projection_name
+                && tensor_source.parameter_name == parameter_name
+        })
+        .ok_or_else(|| Qwen3_5ExecutionError::MissingTensor {
+            tensor_name: format!(
+                "{}.switch_mlp.{projection_name}.{parameter_name}",
+                layer_plan.layer_prefix
+            ),
+        })
+}
+
+fn detach_resident_source_tensors(
+    layer_plans: &[QuantizedExpertLayerPlan],
+    resident_source_shards: &HashMap<PathBuf, MlxSafetensors>,
+) -> Result<ResidentSourceTensorMap, Qwen3_5ExecutionError> {
+    let resident_source_tensor_capacity = layer_plans
+        .iter()
+        .map(|layer_plan| layer_plan.tensor_sources.len())
+        .sum();
+    let mut resident_source_tensors = HashMap::with_capacity(resident_source_tensor_capacity);
+    for tensor_source in layer_plans
+        .iter()
+        .flat_map(|layer_plan| layer_plan.tensor_sources.iter())
+        .filter(|tensor_source| !tensor_source.is_expert_atlas_source())
+    {
+        let source_tensor_key = (
+            tensor_source.source_file.clone(),
+            tensor_source.tensor_name.clone(),
+        );
+        if resident_source_tensors.contains_key(&source_tensor_key) {
+            return Err(Qwen3_5ExecutionError::InvalidTensor {
+                tensor_name: tensor_source.tensor_name.clone(),
+                description: "resident expert tensor appears more than once in the layer plans",
+            });
+        }
+        let resident_source_shard = resident_source_shards
+            .get(&tensor_source.source_file)
+            .ok_or_else(|| Qwen3_5ExecutionError::MissingTensor {
+                tensor_name: tensor_source.tensor_name.clone(),
+            })?;
+        let source_tensor = resident_source_shard.tensor(&tensor_source.tensor_name)?;
+        resident_source_tensors.insert(source_tensor_key, source_tensor);
+    }
+    Ok(resident_source_tensors)
+}
+
+fn take_validated_source_tensor(
+    resident_source_tensors: &mut ResidentSourceTensorMap,
+    tensor_source: &QuantizedTensorSource,
+) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    let source_tensor = resident_source_tensors
+        .remove(&(
+            tensor_source.source_file.clone(),
+            tensor_source.tensor_name.clone(),
+        ))
+        .ok_or_else(|| Qwen3_5ExecutionError::MissingTensor {
+            tensor_name: tensor_source.tensor_name.clone(),
+        })?;
+    validate_source_tensor(tensor_source, &source_tensor)?;
+    Ok(source_tensor)
+}
+
+fn validate_source_tensor(
+    tensor_source: &QuantizedTensorSource,
+    source_tensor: &MlxArray,
+) -> Result<(), Qwen3_5ExecutionError> {
+    // Plans came from bounded safetensors-header validation. Rechecking the MLX
+    // view closes the boundary between header metadata and the array actually
+    // retained by the resident owner.
+    let expected_shape = tensor_source
+        .full_shape
+        .iter()
+        .map(|dimension| {
+            i32::try_from(*dimension).map_err(|_| Qwen3_5ExecutionError::InvalidTensor {
+                tensor_name: tensor_source.tensor_name.clone(),
+                description: "resident expert tensor shape exceeds the MLX range",
+            })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    if source_tensor.shape() != expected_shape {
+        return Err(Qwen3_5ExecutionError::InvalidTensor {
+            tensor_name: tensor_source.tensor_name.clone(),
+            description: "resident expert tensor shape differs from the validated layer plan",
+        });
+    }
+    if source_tensor.dtype() != mlx_dtype(tensor_source.dtype)? {
+        return Err(Qwen3_5ExecutionError::InvalidTensor {
+            tensor_name: tensor_source.tensor_name.clone(),
+            description: "resident expert tensor dtype differs from the validated layer plan",
+        });
+    }
+    let expected_payload_bytes = u64::try_from(tensor_source.bytes_per_expert)
+        .ok()
+        .and_then(|bytes_per_expert| {
+            u64::try_from(tensor_source.expert_capacity)
+                .ok()
+                .and_then(|expert_capacity| bytes_per_expert.checked_mul(expert_capacity))
+        })
+        .ok_or_else(|| Qwen3_5ExecutionError::InvalidTensor {
+            tensor_name: tensor_source.tensor_name.clone(),
+            description: "resident expert tensor payload byte count overflowed",
+        })?;
+    let actual_payload_bytes = u64::try_from(source_tensor.byte_count()).map_err(|_| {
+        Qwen3_5ExecutionError::InvalidTensor {
+            tensor_name: tensor_source.tensor_name.clone(),
+            description: "resident expert tensor payload exceeds the u64 range",
+        }
+    })?;
+    if actual_payload_bytes != expected_payload_bytes {
+        return Err(Qwen3_5ExecutionError::TensorPayloadMismatch {
+            actual_payload_bytes,
+            expected_payload_bytes,
+        });
+    }
+    Ok(())
+}
+
+fn mlx_dtype(safetensors_dtype: SafetensorsDtype) -> Result<MlxDtype, Qwen3_5ExecutionError> {
+    match safetensors_dtype {
+        SafetensorsDtype::Uint32 => Ok(MlxDtype::UInt32),
+        SafetensorsDtype::Float16 => Ok(MlxDtype::Float16),
+        SafetensorsDtype::BFloat16 => Ok(MlxDtype::BFloat16),
+        SafetensorsDtype::Float32 => Ok(MlxDtype::Float32),
+        _ => Err(Qwen3_5ExecutionError::InvalidInput {
+            description: "resident expert tensor plan contains an unsupported dtype",
+        }),
+    }
+}
