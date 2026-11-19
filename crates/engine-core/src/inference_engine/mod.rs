@@ -1,7 +1,6 @@
-pub(crate) mod contract;
+pub mod contract;
 mod error;
-pub(crate) mod load_result;
-mod mlx_owner;
+pub mod load_result;
 
 pub use contract::{
     EngineGenerationStart, GeneratedToken, GenerationFinalization, InferenceEngine,
@@ -9,4 +8,3 @@ pub use contract::{
 };
 pub use error::InferenceEngineError;
 pub use load_result::EngineLoadResult;
-pub use mlx_owner::MlxInferenceEngine;

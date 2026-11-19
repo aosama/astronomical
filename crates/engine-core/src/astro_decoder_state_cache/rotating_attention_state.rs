@@ -5,7 +5,9 @@
 
 use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 
-use crate::performance_attribution::{PerformanceAttribution, PerformanceOperation};
+use astronomical_gpu_building_blocks::performance_attribution::{
+    PerformanceAttribution, PerformanceOperation,
+};
 use mlx_bridge::MlxArray;
 
 const TOKEN_AXIS: usize = 2;

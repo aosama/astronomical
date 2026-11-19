@@ -69,7 +69,7 @@ impl SessionExpertRouteSample {
 
 /// Per-token expert routes of one reply, and the reply's totals.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub(crate) struct ReplyExpertRouteRecord {
+pub struct ReplyExpertRouteRecord {
     storage_read_expert_counts_by_token: Vec<u16>,
     routed_expert_count_per_token: u16,
     reply_totals: SessionExpertRouteSample,
@@ -78,7 +78,7 @@ pub(crate) struct ReplyExpertRouteRecord {
 impl ReplyExpertRouteRecord {
     /// Records one reply token from the change in the session's counters
     /// across its forward.
-    pub(crate) fn record_token(&mut self, token_change: SessionExpertRouteSample) {
+    pub fn record_token(&mut self, token_change: SessionExpertRouteSample) {
         let routed_expert_count = token_change
             .memory_served_expert_count
             .saturating_add(token_change.storage_read_expert_count);
@@ -96,24 +96,24 @@ impl ReplyExpertRouteRecord {
 
     /// How many routed experts one token uses, or zero before any token.
     #[must_use]
-    pub(crate) const fn routed_expert_count_per_token(&self) -> u16 {
+    pub const fn routed_expert_count_per_token(&self) -> u16 {
         self.routed_expert_count_per_token
     }
 
     /// Whether no reply token has been recorded yet.
     #[must_use]
-    pub(crate) fn is_empty(&self) -> bool {
+    pub fn is_empty(&self) -> bool {
         self.storage_read_expert_counts_by_token.is_empty()
     }
 
     /// The reply's totals over every recorded token.
     #[must_use]
-    pub(crate) const fn reply_totals(&self) -> SessionExpertRouteSample {
+    pub const fn reply_totals(&self) -> SessionExpertRouteSample {
         self.reply_totals
     }
 
     #[must_use]
-    pub(crate) fn into_storage_read_expert_counts_by_token(self) -> Vec<u16> {
+    pub fn into_storage_read_expert_counts_by_token(self) -> Vec<u16> {
         self.storage_read_expert_counts_by_token
     }
 }

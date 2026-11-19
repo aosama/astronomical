@@ -25,6 +25,7 @@ pub fn expert_page_peak_allocation_bytes(
 }
 
 /// Calculates the packed source bytes for a page from one expert's payload.
+#[cfg(any(feature = "direct-mlx", test))]
 #[must_use]
 pub fn source_expert_page_payload_bytes(
     source_bytes_per_expert: u64,

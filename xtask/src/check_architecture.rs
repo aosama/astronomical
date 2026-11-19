@@ -87,6 +87,14 @@ const FORBIDDEN_DEPENDENCY_RULES: &[ForbiddenDependencyRule] = &[
         forbidden_crate: "astronomical-model-serving",
         rationale: "artifact validation must build and test without pulling in the serving crate, because every model family depends on it",
     },
+    // The engine core sits under every model family, which implements its
+    // contract; an edge to the serving crate would make the split circular.
+    ForbiddenDependencyRule {
+        rule_name: "engine-core-without-serving",
+        source_crate: "astronomical-engine-core",
+        forbidden_crate: "astronomical-model-serving",
+        rationale: "the engine core must build and test without pulling in the serving crate, because every model family builds on it",
+    },
 ];
 
 /// One detected violation with the offending dependency chain, source crate

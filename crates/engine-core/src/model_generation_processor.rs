@@ -107,8 +107,8 @@ pub struct MalformedModelOutputDiagnostic {
 
 /// Prepared inference request paired with its model-specific output state.
 pub struct PreparedModelGeneration<InferenceRequest, RequestOutput> {
-    pub(crate) inference_request: InferenceRequest,
-    pub(crate) request_output: RequestOutput,
+    pub inference_request: InferenceRequest,
+    pub request_output: RequestOutput,
 }
 
 impl<InferenceRequest, RequestOutput> PreparedModelGeneration<InferenceRequest, RequestOutput> {

@@ -4,7 +4,7 @@ use super::{
     ExpertStreamingSessionCounters, RouteCoverageClass, expert_layer_topology_from_residency,
     no_astro_expert_cache_route_source_bytes, record_streamed_page_source_plan_in_both_ledgers,
 };
-use crate::performance_attribution::StreamedPageSourcePlan;
+use astronomical_gpu_building_blocks::performance_attribution::StreamedPageSourcePlan;
 use astronomical_gpu_building_blocks::serving_phase::SessionStreamingPhase;
 use astronomical_memory_policy::residency::{CurrentExpertLayerResidency, RetainedExpertPageClass};
 
@@ -32,7 +32,7 @@ fn replay_streamed_page_in_both_ledgers(
     route_token_count: i32,
     serving_phase: SessionStreamingPhase,
     payload_byte_count: u64,
-    performance_attribution: &mut crate::PerformanceAttribution,
+    performance_attribution: &mut astronomical_gpu_building_blocks::performance_attribution::PerformanceAttribution,
     session_counters: &mut ExpertStreamingSessionCounters,
 ) {
     record_streamed_page_source_plan_in_both_ledgers(
@@ -57,7 +57,9 @@ fn replay_streamed_page_in_both_ledgers(
 /// its attribution reports by tens of gigabytes of prefill).
 #[test]
 fn should_agree_between_session_counters_and_attribution_reports() {
-    let mut performance_attribution = crate::PerformanceAttribution::enabled();
+    let mut performance_attribution =
+        astronomical_gpu_building_blocks::performance_attribution::PerformanceAttribution::enabled(
+        );
     let mut session_counters = ExpertStreamingSessionCounters::default();
     // Two prefill chunks, then a decode token, then a multi-token decode
     // route (speculative decode): the phase must come from the engine, not
@@ -91,9 +93,9 @@ fn should_agree_between_session_counters_and_attribution_reports() {
         &mut session_counters,
     );
     let attributed_prefill_bytes = performance_attribution
-        .counter_value(crate::PerformanceCounter::MandatoryPrefillExpertSourcePayloadBytes);
+        .counter_value(astronomical_gpu_building_blocks::performance_attribution::PerformanceCounter::MandatoryPrefillExpertSourcePayloadBytes);
     let attributed_decode_bytes = performance_attribution
-        .counter_value(crate::PerformanceCounter::MandatoryDecodeExpertSourcePayloadBytes);
+        .counter_value(astronomical_gpu_building_blocks::performance_attribution::PerformanceCounter::MandatoryDecodeExpertSourcePayloadBytes);
     assert_eq!(attributed_prefill_bytes, 1_700);
     assert_eq!(attributed_decode_bytes, 100);
     assert_eq!(session_counters.mandatory_prefill_source_bytes, 1_700);

@@ -53,7 +53,7 @@
 mod admission;
 mod budget;
 #[cfg(any(test, feature = "direct-mlx"))]
-pub(crate) mod decode_seating;
+pub mod decode_seating;
 #[cfg(test)]
 mod decode_seating_tests;
 // The dense-resident ceiling policy is consumed only by the direct-MLX
@@ -65,21 +65,21 @@ mod dense_resident;
 // Only the direct-MLX streaming engine reads it; the unit tests read it
 // without the graphics-processor runtime.
 #[cfg(any(feature = "direct-mlx", test))]
-pub(crate) mod macos_wired_memory;
+pub mod macos_wired_memory;
 // Only the direct-MLX streaming engine records replies through it; the unit
 // tests own it without the graphics-processor runtime.
 #[cfg(any(feature = "direct-mlx", test))]
-pub(crate) mod mlx_buffer_cache_reply_record;
+pub mod mlx_buffer_cache_reply_record;
 // Only the direct-MLX streaming engine records replies through it; the unit
 // tests own it without the graphics-processor runtime.
 #[cfg(any(feature = "direct-mlx", test))]
-pub(crate) mod reply_expert_route_record;
+pub mod reply_expert_route_record;
 #[cfg(feature = "direct-mlx")]
 pub use reply_expert_route_record::SessionExpertRouteSample;
 // The telemetry and ceiling-utilization records are plain values, so they
 // live in the memory policy crate (issue #2340) where engines below this
 // crate can fill them in; the alias keeps `crate::memory::telemetry` paths.
-pub(crate) use astronomical_memory_policy::telemetry;
+pub use astronomical_memory_policy::telemetry;
 
 pub use admission::{
     AllocationAdmissionDecision, AllocationAdmissionObservation, CompleteResidencyDecision,
@@ -99,16 +99,15 @@ pub use budget::{
 #[cfg(feature = "direct-mlx")]
 pub use budget::{MlxAllocationAdmission, MlxAllocationAdmissionError};
 #[cfg(feature = "direct-mlx")]
-pub(crate) use dense_resident::dense_resident_safe_minimum_mlx_memory_ceiling_bytes;
+pub use dense_resident::dense_resident_safe_minimum_mlx_memory_ceiling_bytes;
 // Byte-arithmetic page-peaking is pure planning over validated shapes; the
-// direct-MLX admission callers and the unit artifact-contract tests share
-// it, while the plain default-feature lib omits the module entirely.
-#[cfg(any(feature = "direct-mlx", test))]
-pub(crate) use astro_expert_cache_arithmetic::expert_page_peak_allocation_bytes;
+// direct-MLX admission callers and the serving crate's artifact-contract
+// unit tests share it.
+pub use astro_expert_cache_arithmetic::expert_page_peak_allocation_bytes;
 #[cfg(feature = "direct-mlx")]
-pub(crate) use astro_expert_cache_arithmetic::source_expert_page_payload_bytes;
+pub use astro_expert_cache_arithmetic::source_expert_page_payload_bytes;
 #[cfg(feature = "direct-mlx")]
-pub(crate) use astro_expert_cache_arithmetic::{
+pub use astro_expert_cache_arithmetic::{
     ExpertStreamingSessionCounters, RouteCoverageClass, StreamedPageSourcePlan,
     expert_layer_topology_from_residency, no_astro_expert_cache_route_source_bytes,
     record_streamed_page_source_plan_in_both_ledgers,
@@ -130,7 +129,7 @@ pub use astronomical_memory_policy::residency::seated_complete_layer_count;
 // nameable here under the same feature gate, without widening the crate's
 // public surface.
 #[cfg(feature = "direct-mlx")]
-pub(crate) use astronomical_memory_policy::residency;
+pub use astronomical_memory_policy::residency;
 pub use astronomical_memory_policy::residency::{
     CompleteResidencyHeadroomBoundary, CurrentExpertLayerResidency, ExpertLayerState,
     ExpertResidencyPlan, ExpertResidencyPlanError, RetainedExpertPageClass,

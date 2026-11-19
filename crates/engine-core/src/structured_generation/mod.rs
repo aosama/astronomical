@@ -15,7 +15,7 @@ use regex_mask::RegexTokenMask;
 
 /// Compiled constraint used while sampling visible (non-thinking) tokens.
 #[derive(Clone, Debug)]
-pub(crate) struct StructuredTokenConstraint {
+pub struct StructuredTokenConstraint {
     vocabulary_pieces: Arc<Vec<String>>,
     end_of_sequence_token_ids: Vec<u32>,
     kind: ConstraintKind,
@@ -36,7 +36,7 @@ impl StructuredTokenConstraint {
     /// Compiles one daemon-validated constraint or explains why this
     /// worker cannot mask it. A compile failure is request-scoped, so the
     /// loaded worker stays reusable for later requests.
-    pub(crate) fn compile(
+    pub fn compile(
         constraint: &StructuredGenerationConstraint,
         vocabulary_pieces: Vec<String>,
         end_of_sequence_token_ids: Vec<u32>,
@@ -62,7 +62,7 @@ impl StructuredTokenConstraint {
         })
     }
 
-    pub(crate) fn logit_bias_values(&mut self) -> Vec<f32> {
+    pub fn logit_bias_values(&mut self) -> Vec<f32> {
         let vocabulary_size = self.vocabulary_pieces.len();
         let mut biases = vec![f32::NEG_INFINITY; vocabulary_size];
         match &mut self.kind {
@@ -111,7 +111,7 @@ impl StructuredTokenConstraint {
         biases
     }
 
-    pub(crate) fn accept_visible_token(&mut self, token_id: u32) {
+    pub fn accept_visible_token(&mut self, token_id: u32) {
         if self.end_of_sequence_token_ids.contains(&token_id) {
             return;
         }
@@ -185,7 +185,7 @@ impl StructuredTokenConstraint {
     }
 }
 
-pub(crate) fn normalize_token_piece(token_piece: &str) -> String {
+pub fn normalize_token_piece(token_piece: &str) -> String {
     token_piece.replace(['\u{0120}', '▁'], " ")
 }
 

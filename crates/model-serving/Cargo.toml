@@ -12,12 +12,15 @@ workspace = true
 
 [features]
 default = []
-direct-mlx = ["astronomical-artifact-validation/direct-mlx", "astronomical-image-generation/direct-mlx", "astronomical-gpu-building-blocks/direct-mlx", "astronomical-speech/direct-mlx", "dep:astronomical-neural-engine", "dep:astronomical-runtime-integration", "dep:mlx-bridge", "dep:astronomical-mlx-c-fork", "dep:astronomical-quantization", "astronomical-quantization/direct-mlx", "astronomical-jangtq2-qwen35/direct-mlx"]
+direct-mlx = ["astronomical-artifact-validation/direct-mlx", "astronomical-engine-core/direct-mlx", "astronomical-image-generation/direct-mlx", "astronomical-gpu-building-blocks/direct-mlx", "astronomical-speech/direct-mlx", "dep:astronomical-neural-engine", "dep:astronomical-runtime-integration", "dep:mlx-bridge", "dep:astronomical-mlx-c-fork", "dep:astronomical-quantization", "astronomical-quantization/direct-mlx", "astronomical-jangtq2-qwen35/direct-mlx"]
 
 [dependencies]
 astronomical-expert-atlas = { path = "../expert-atlas" }
 # Model folder validation every family shares (issue #2340).
 astronomical-artifact-validation = { path = "../artifact-validation" }
+# The engine contract, MLX memory and the astro_decoder_state_cache, below the
+# families (issue #2340), one way.
+astronomical-engine-core = { path = "../engine-core" }
 # The image generation families and their worker seam (issue #2340), one way.
 astronomical-image-generation = { path = "../image-generation" }
 # The GPU building blocks every family shares (issue #2340). One-way edge:

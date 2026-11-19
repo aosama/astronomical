@@ -1,12 +1,11 @@
-//! `astro_expert_cache` owner in the serving crate: the page-materialization byte
-//! arithmetic is compiled only with the direct-MLX feature (plus the unit
-//! artifact-contract tests) and stays beside the bindings.
+//! Byte arithmetic for the `astro_expert_cache` owner in the engine core:
+//! page materialization peaks and the expert-streaming session counters,
+//! kept beside the MLX bindings that act on them.
 
 // Pure checked byte arithmetic over validated shapes with no MLX (Metal
-// Performance Shaders graph engine) dependency. The direct-MLX admission
-// callers and the unit artifact-contract tests (cfg(test)) are its only
-// consumers, so the plain default-feature lib builds without it.
-#[cfg(any(feature = "direct-mlx", test))]
+// Performance Shaders graph engine) dependency. It is compiled in every
+// build: the serving crate's artifact-contract unit tests call it from
+// another crate, where this crate's own `cfg(test)` does not apply.
 mod page_materialization;
 
 #[cfg(test)]
@@ -21,13 +20,12 @@ mod streaming_stats;
 #[cfg(test)]
 mod streaming_stats_tests;
 #[cfg(feature = "direct-mlx")]
-pub(crate) use crate::performance_attribution::StreamedPageSourcePlan;
-#[cfg(any(feature = "direct-mlx", test))]
+pub use astronomical_gpu_building_blocks::performance_attribution::StreamedPageSourcePlan;
 pub use page_materialization::expert_page_peak_allocation_bytes;
 #[cfg(feature = "direct-mlx")]
 pub use page_materialization::source_expert_page_payload_bytes;
 #[cfg(any(feature = "direct-mlx", test))]
-pub(crate) use streaming_stats::{
+pub use streaming_stats::{
     ExpertStreamingSessionCounters, RouteCoverageClass, expert_layer_topology_from_residency,
     no_astro_expert_cache_route_source_bytes, record_streamed_page_source_plan_in_both_ledgers,
 };
