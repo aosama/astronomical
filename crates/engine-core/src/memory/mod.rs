@@ -24,7 +24,7 @@
 //!   `Idle`. The residency planner treats `GenerationPreparation` like
 //!   `Decode`.
 //! - **1 owner of the limit** — the memory governor
-//!   (`memory-policy::ledger`). Each engine opens one, tells
+//!   (`memory_policy::ledger`). Each engine opens one, tells
 //!   it what happens and applies the capacity it answers with.
 //! - **3 layer states** — when a reply begins, `residency` plans one
 //!   `ExpertLayerState` per sparse decoder layer: `Kept`, `Hot` or

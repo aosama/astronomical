@@ -1,7 +1,7 @@
 //! The runtime-backed check made before a page of experts is read
 //! (`live_allocation`), which samples the MLX runtime and so stays beside
 //! the bindings. The facts a memory governor is opened with live in
-//! `memory-policy::model_memory` and are re-exported here so
+//! `memory_policy::model_memory` and are re-exported here so
 //! consumer paths stay stable.
 
 #[cfg(feature = "direct-mlx")]

@@ -216,7 +216,7 @@ test-kev-whole-model-layer-recomputation = "run -p xtask -- test-run --package a
 test-clef-whole-model-layer-recomputation = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter whole_model_layer_recomputation::should_train_a_text_over_the_pass_budget_to_the_same_weights_in_less_memory_on_clef"
 # Text to speech: Kokoro-82M and Phonon 31M on MLX. `test-speech` runs the
 # speech lib tests (shared layers, both families' layers on small weights from
-# the Shakespeare fixture, the engines' request checks) in speech,
+# the Shakespeare fixture, the engines' request checks) in the speech crate,
 # and the worker's speech tests in the serving crate; about a second, no
 # installed model. `test-english-speech-text` runs the pure crates that turn
 # text into what the models read: Kokoro's phonemes and spoken numbers, and

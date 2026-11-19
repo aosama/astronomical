@@ -1,6 +1,6 @@
 //! The pure admission decisions (allocation, complete residency, context
 //! sizes, retained-prefix, rotating) live in
-//! `memory-policy::admission` and are re-exported here so
+//! `memory_policy::admission` and are re-exported here so
 //! consumer paths stay stable.
 
 pub use memory_policy::admission::{
