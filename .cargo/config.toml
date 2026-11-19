@@ -479,6 +479,10 @@ test-quantization-mixture-of-experts = "run -p xtask -- test-run --package astro
 # nothing and fails on a page whose copy differs; the Configuration contracts
 # CI job runs it.
 #
+# `cargo xtask check-site-links` fails when a relative href or src in any
+# page under site/ names a file that is not published with it (links that
+# leave the site are not fetched); the same CI job runs it.
+#
 # `cargo xtask install-verification-tools [--prefix DIR]` installs the pinned
 # cargo-about and sccache prebuilts, SHA-256 verified, into DIR (default
 # `$CARGO_HOME/bin`), and skips any binary already reporting its pinned
