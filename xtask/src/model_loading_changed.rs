@@ -3,8 +3,9 @@
 //! trip gate.
 //!
 //! The gate used to diff a hand-written folder list, which went stale when
-//! the serving crate was split (issue #2340): it named two renamed folders,
-//! which `git diff` ignores silently, and missed every new crate. The list is
+//! the serving crate was split (issue #2340): it kept naming folders after
+//! they were renamed, which `git diff` ignores silently, and missed every new
+//! crate until a review caught it. The list is
 //! now derived from `cargo metadata`: every local crate the inference worker
 //! reaches through normal or build dependencies, plus the few paths outside
 //! that closure which still change what a model loads. Watching the whole
@@ -23,10 +24,12 @@ use std::process::Command;
 const STATUS_PREFIX: &str = "[model-loading-changed]";
 const WORKER_PACKAGE_NAME: &str = "astronomical-inference-worker";
 /// Paths outside the worker's crate closure whose change still changes how a
-/// model loads: the quantizer and vision tower write the artifacts the worker
+/// model loads: the root manifest pins dependency versions and the release
+/// profile, the quantizer and vision tower write the artifacts the worker
 /// reads, the native build tool and the third-party pins and patches build
 /// the MLX the worker links, and the registry lists the supported models.
 pub(crate) const ADDITIONAL_MODEL_LOADING_PATHS: &[&str] = &[
+    "Cargo.toml",
     "crates/quantization",
     "crates/vision-tower",
     "crates/native-build-tool",
@@ -135,18 +138,23 @@ pub(crate) fn model_loading_paths(
             "{STATUS_PREFIX} status=failed reason=worker-package-missing package={WORKER_PACKAGE_NAME}"
         ));
     }
-    let mut watched_paths: BTreeSet<String> = ADDITIONAL_MODEL_LOADING_PATHS
-        .iter()
-        .map(|additional_path| (*additional_path).to_owned())
-        .collect();
+    let mut watched_paths: BTreeSet<String> = BTreeSet::new();
+    for additional_path in ADDITIONAL_MODEL_LOADING_PATHS {
+        watched_paths.insert((*additional_path).to_owned());
+    }
     let mut visit_queue: VecDeque<&str> = VecDeque::from([WORKER_PACKAGE_NAME]);
     let mut visited_package_names: BTreeSet<&str> = BTreeSet::new();
     while let Some(package_name) = visit_queue.pop_front() {
         if !visited_package_names.insert(package_name) {
             continue;
         }
+        // A path dependency outside the workspace is missing from
+        // `cargo metadata --no-deps`; skipping it would let a change there
+        // pass unwatched, so the gate refuses instead.
         let Some(local_package) = local_packages.get(package_name) else {
-            continue;
+            return Err(format!(
+                "{STATUS_PREFIX} status=failed reason=local-dependency-not-in-workspace package={package_name}"
+            ));
         };
         watched_paths.insert(local_package.relative_directory.clone());
         for dependency_name in &local_package.local_dependency_names {
@@ -216,10 +224,13 @@ fn local_shipped_dependency_name(
     package_name: &str,
 ) -> Result<Option<String>, String> {
     let dependency_name = string_field(dependency_value, "name")?;
-    let dependency_kind = dependency_value
-        .get("kind")
-        .and_then(serde_json::Value::as_str)
-        .unwrap_or("normal");
+    // An absent or null kind is cargo's spelling of a normal dependency; any
+    // other value it does not document means its format changed.
+    let dependency_kind = match dependency_value.get("kind") {
+        None | Some(serde_json::Value::Null) => "normal",
+        Some(serde_json::Value::String(kind_text)) => kind_text.as_str(),
+        Some(_) => "unreadable",
+    };
     let is_shipped_edge = match dependency_kind {
         "normal" | "build" => true,
         "dev" => false,
@@ -230,7 +241,11 @@ fn local_shipped_dependency_name(
         }
     };
     let is_local = dependency_value.get("path").is_some();
-    Ok((is_shipped_edge && is_local).then(|| dependency_name.to_owned()))
+    if is_shipped_edge && is_local {
+        Ok(Some(dependency_name.to_owned()))
+    } else {
+        Ok(None)
+    }
 }
 
 fn string_field<'document>(

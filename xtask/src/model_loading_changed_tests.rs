@@ -171,9 +171,13 @@ fn should_fail_closed_on_a_package_outside_the_repository() {
 }
 
 #[test]
-fn should_fail_closed_on_malformed_metadata() {
+fn should_fail_closed_on_metadata_that_is_not_json() {
     let failure = model_loading_paths("not json", Path::new(REPOSITORY_ROOT)).unwrap_err();
     assert!(failure.contains("reason=metadata-not-json"), "{failure}");
+}
+
+#[test]
+fn should_fail_closed_on_metadata_without_packages() {
     let failure = model_loading_paths("{}", Path::new(REPOSITORY_ROOT)).unwrap_err();
     assert!(
         failure.contains("reason=metadata-without-packages"),
@@ -182,10 +186,80 @@ fn should_fail_closed_on_malformed_metadata() {
 }
 
 #[test]
+fn should_fail_closed_on_a_package_without_a_name() {
+    let metadata_json_text = format!(
+        "{{\"packages\":[{{\"manifest_path\":\"{REPOSITORY_ROOT}/apps/inference-worker/Cargo.toml\",\"dependencies\":[]}}]}}"
+    );
+    let failure = model_loading_paths(&metadata_json_text, Path::new(REPOSITORY_ROOT)).unwrap_err();
+    assert!(
+        failure.contains("reason=metadata-missing-field field=name"),
+        "{failure}"
+    );
+}
+
+#[test]
+fn should_fail_closed_on_a_package_without_a_dependencies_array() {
+    let metadata_json_text = format!(
+        "{{\"packages\":[{{\"name\":\"astronomical-inference-worker\",\"manifest_path\":\"{REPOSITORY_ROOT}/apps/inference-worker/Cargo.toml\"}}]}}"
+    );
+    let failure = model_loading_paths(&metadata_json_text, Path::new(REPOSITORY_ROOT)).unwrap_err();
+    assert!(
+        failure.contains("reason=package-without-dependencies"),
+        "{failure}"
+    );
+}
+
+#[test]
+fn should_fail_closed_on_a_local_dependency_outside_the_workspace() {
+    let metadata_json_text =
+        metadata_document_for(&[worker_package(vec![("vendored-sibling", None, true)])]);
+    let failure = model_loading_paths(&metadata_json_text, Path::new(REPOSITORY_ROOT)).unwrap_err();
+    assert!(
+        failure.contains("reason=local-dependency-not-in-workspace package=vendored-sibling"),
+        "{failure}"
+    );
+}
+
+#[test]
+fn should_fail_closed_on_a_dependency_kind_that_is_not_text() {
+    let metadata_json_text = format!(
+        "{{\"packages\":[{{\"name\":\"astronomical-inference-worker\",\"manifest_path\":\"{REPOSITORY_ROOT}/apps/inference-worker/Cargo.toml\",\"dependencies\":[{{\"name\":\"qwen35\",\"kind\":5,\"path\":\"{REPOSITORY_ROOT}/crates/qwen35\"}}]}}]}}"
+    );
+    let failure = model_loading_paths(&metadata_json_text, Path::new(REPOSITORY_ROOT)).unwrap_err();
+    assert!(
+        failure.contains("reason=unknown-dependency-kind kind=unreadable"),
+        "{failure}"
+    );
+}
+
+#[test]
+fn should_follow_a_dependency_whose_kind_is_spelled_normal() {
+    let metadata_json_text = metadata_document_for(&[
+        worker_package(vec![("qwen35", Some("normal"), true)]),
+        library_package("qwen35", Vec::new()),
+    ]);
+    let watched_paths =
+        model_loading_paths(&metadata_json_text, Path::new(REPOSITORY_ROOT)).unwrap();
+    assert!(watched_paths.contains(&"crates/qwen35".to_owned()));
+}
+
+#[test]
 fn should_accept_exactly_one_previous_tag() {
     assert_eq!(parse_previous_tag(&["v0.2.118".to_owned()]), Ok("v0.2.118"));
+}
+
+#[test]
+fn should_refuse_a_missing_previous_tag() {
     assert!(parse_previous_tag(&[]).is_err());
+}
+
+#[test]
+fn should_refuse_more_than_one_previous_tag() {
     assert!(parse_previous_tag(&["v0.2.117".to_owned(), "v0.2.118".to_owned()]).is_err());
+}
+
+#[test]
+fn should_refuse_a_flag_or_an_empty_text_as_the_previous_tag() {
     assert!(parse_previous_tag(&["--since".to_owned()]).is_err());
     assert!(parse_previous_tag(&[String::new()]).is_err());
 }
