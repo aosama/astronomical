@@ -29,3 +29,4 @@ mod sparse_expert_projection;
 mod sparse_expert_projection_page_independence;
 mod sparse_expert_projection_sorted_stride;
 mod sparse_experts;
+mod worker_wired_residency_tests;

@@ -29,6 +29,9 @@ pub(crate) mod qwen3_5_moe;
 #[cfg(feature = "direct-mlx")]
 #[allow(dead_code)]
 pub(crate) mod qwen_image_21;
+#[cfg(feature = "direct-mlx")]
+#[allow(dead_code)]
+pub(crate) mod worker_wired_residency;
 
 #[cfg(feature = "direct-mlx")]
 #[allow(dead_code)]
@@ -158,7 +161,12 @@ pub(crate) const DIRECT_MLX_TEST_MLX_BUFFER_CACHE_LIMIT_BYTES: usize = 8 * 1024 
 #[cfg(feature = "direct-mlx")]
 #[allow(dead_code)]
 pub(crate) async fn direct_mlx_test_guard() -> MutexGuard<'static, ()> {
-    DIRECT_MLX_TEST_LOCK.lock().await
+    let gpu_exclusive = DIRECT_MLX_TEST_LOCK.lock().await;
+    // Every direct-MLX test takes this guard before it touches MLX, so this
+    // is the one place that makes the test process hold memory as the serving
+    // worker does; see `worker_wired_residency` for what happens without it.
+    worker_wired_residency::claim_wired_residency_as_the_worker_does();
+    gpu_exclusive
 }
 
 #[cfg(feature = "direct-mlx")]
