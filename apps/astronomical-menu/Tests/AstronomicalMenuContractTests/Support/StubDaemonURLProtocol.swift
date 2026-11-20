@@ -12,6 +12,9 @@ final class StubDaemonURLProtocol: URLProtocol, @unchecked Sendable {
   nonisolated(unsafe) static var statusResponseConfiguration: ResponseConfiguration?
   nonisolated(unsafe) static var receivedRequestTimeoutInterval: TimeInterval?
   nonisolated(unsafe) static var receivedRequestPaths: [String] = []
+  /// The method and body of the last request to a path other than the status, for tests that
+  /// pin what a control action sends.
+  nonisolated(unsafe) static var receivedControlRequest: (method: String, body: Data)?
 
   override class func canInit(with request: URLRequest) -> Bool { true }
 
@@ -26,6 +29,9 @@ final class StubDaemonURLProtocol: URLProtocol, @unchecked Sendable {
       requestedPath = ""
     }
     Self.receivedRequestPaths.append(requestedPath)
+    if requestedPath != "/v1/status" {
+      Self.receivedControlRequest = (request.httpMethod ?? "", Self.bodyData(of: request))
+    }
     let selectedResponseConfiguration: ResponseConfiguration?
     if requestedPath == "/v1/status" {
       if let statusConfiguration = Self.statusResponseConfiguration {
@@ -60,6 +66,22 @@ final class StubDaemonURLProtocol: URLProtocol, @unchecked Sendable {
   }
 
   override func stopLoading() {}
+
+  /// URLSession hands a protocol the body as a stream, never as `httpBody`.
+  private static func bodyData(of request: URLRequest) -> Data {
+    if let bodyData = request.httpBody { return bodyData }
+    guard let bodyStream = request.httpBodyStream else { return Data() }
+    bodyStream.open()
+    defer { bodyStream.close() }
+    var bodyData = Data()
+    var readBytes = [UInt8](repeating: 0, count: 4_096)
+    while bodyStream.hasBytesAvailable {
+      let readByteCount = bodyStream.read(&readBytes, maxLength: readBytes.count)
+      guard readByteCount > 0 else { break }
+      bodyData.append(readBytes, count: readByteCount)
+    }
+    return bodyData
+  }
 
   static func urlSessionConfiguration() -> URLSessionConfiguration {
     let urlSessionConfiguration = URLSessionConfiguration.ephemeral

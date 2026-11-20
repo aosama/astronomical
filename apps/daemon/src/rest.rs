@@ -23,6 +23,7 @@ pub(crate) mod experts;
 pub(crate) mod finder_reveal;
 pub(crate) mod loopback_browser_guard;
 pub(crate) mod maximum_mlx_memory;
+pub(crate) mod menu_bar_setting;
 pub(crate) mod request_body_budget;
 pub(crate) mod request_rejections;
 pub(crate) mod status;
@@ -38,3 +39,5 @@ mod config_reload_tests;
 mod expert_placement_tests;
 #[cfg(test)]
 mod experts_tests;
+#[cfg(test)]
+mod menu_bar_setting_tests;

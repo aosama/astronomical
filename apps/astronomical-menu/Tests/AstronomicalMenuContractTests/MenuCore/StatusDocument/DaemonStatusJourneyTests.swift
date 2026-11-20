@@ -70,7 +70,7 @@ final class DaemonStatusJourneyTests: XCTestCase {
     XCTAssertEqual(imageConfiguration.modelFamily, .qwenImage21)
     XCTAssertNil(telemetryStore.lastStatusRefreshErrorMessage)
     XCTAssertEqual(telemetryStore.statusDocument.status, "ready")
-    XCTAssertEqual(telemetryStore.statusDocument.menuBarTitle, "Image 50%")
+    XCTAssertEqual(telemetryStore.statusDocument.menuBarActivityTitle, "Image 50%")
     XCTAssertEqual(telemetryStore.statusDocument.progressTitle, "50% · 2 / 4 steps")
   }
 

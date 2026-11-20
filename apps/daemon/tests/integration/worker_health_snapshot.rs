@@ -1,8 +1,8 @@
 use std::time::Duration;
 
 use astronomical_daemon::{
-    ChatGenerationExecutor, PendingAstroSsdPromptCacheClear, ServingSessionSnapshot,
-    WorkerHealthSnapshot, WorkerHealthStatus,
+    ChatGenerationExecutor, CompletedRequestWork, PendingAstroSsdPromptCacheClear,
+    ServingSessionSnapshot, WorkerHealthSnapshot, WorkerHealthStatus,
 };
 use ipc_protocol::{
     ChatModelCapabilities, ImageGenerationCapabilities, WorkerModelCapabilities,
@@ -106,31 +106,51 @@ async fn should_preserve_a_pending_astro_ssd_prompt_cache_clear_across_model_rep
     .expect("health replacement test should finish within one second");
 }
 
+fn completed_request_work(
+    prompt_token_count: u32,
+    restored_token_count: u32,
+    prefill_elapsed_millis: u64,
+    generated_token_count: u16,
+    generation_elapsed_millis: u64,
+) -> CompletedRequestWork {
+    CompletedRequestWork {
+        prompt_token_count,
+        astro_ssd_prompt_cache_restored_token_count: restored_token_count,
+        generated_token_count,
+        prefill_elapsed_millis,
+        generation_elapsed_millis,
+    }
+}
+
 #[test]
-fn should_average_only_requests_that_report_each_throughput_measurement() {
+fn should_report_session_speeds_as_total_tokens_over_total_time() {
     let mut serving_session_snapshot = ServingSessionSnapshot::empty();
 
-    serving_session_snapshot.record_completed_request(1_000, 100, Some(10.0), None);
-    serving_session_snapshot.record_completed_request(2_000, 200, None, Some(20.0));
+    // 900 prefilled tokens in 1 s, then 2,700 in 9 s: 3,600 tokens over 10 s is 360 tok/s.
+    // The mean of the two requests' own speeds (900 and 300) would say 600.
+    serving_session_snapshot
+        .record_completed_request(completed_request_work(1_000, 100, 1_000, 10, 1_000));
     serving_session_snapshot.record_prompt_work_reuse(WorkerPromptWorkReuse {
         target_eligible_token_count: 10_000,
         target_restored_token_count: 8_000,
     });
-    serving_session_snapshot.record_completed_request(3_000, 300, Some(30.0), Some(40.0));
+    serving_session_snapshot
+        .record_completed_request(completed_request_work(3_000, 300, 9_000, 490, 9_000));
 
-    assert_eq!(serving_session_snapshot.completed_request_count, 3);
-    assert_eq!(serving_session_snapshot.total_prompt_token_count, 6_000);
+    assert_eq!(serving_session_snapshot.completed_request_count, 2);
+    assert_eq!(serving_session_snapshot.total_prompt_token_count, 4_000);
     assert_eq!(
         serving_session_snapshot.total_reused_prompt_token_count,
-        600
+        400
     );
     assert_eq!(
         serving_session_snapshot.average_prefill_tok_per_second,
-        20.0
+        360.0
     );
+    // 500 generated tokens over 10 s; the mean of 10 and about 54 tok/s would say 32.
     assert_eq!(
         serving_session_snapshot.average_generation_tok_per_second,
-        30.0
+        50.0
     );
     assert_eq!(
         serving_session_snapshot.target_prompt_work_token_count,
@@ -139,6 +159,45 @@ fn should_average_only_requests_that_report_each_throughput_measurement() {
     assert_eq!(
         serving_session_snapshot.target_reused_prompt_work_token_count,
         8_000
+    );
+}
+
+#[test]
+fn should_leave_a_speed_unchanged_when_a_request_has_nothing_to_measure_for_it() {
+    let mut serving_session_snapshot = ServingSessionSnapshot::empty();
+    serving_session_snapshot
+        .record_completed_request(completed_request_work(1_000, 0, 2_000, 100, 4_000));
+
+    // Fully restored prompt, no prefill time, no generated tokens, no generation time.
+    serving_session_snapshot
+        .record_completed_request(completed_request_work(5_000, 5_000, 3_000, 0, 6_000));
+    serving_session_snapshot.record_completed_request(completed_request_work(5_000, 0, 0, 50, 0));
+    // A restored count above the prompt length is capped at the prompt length.
+    serving_session_snapshot
+        .record_completed_request(completed_request_work(100, 900, 1_000, 0, 0));
+
+    assert_eq!(serving_session_snapshot.completed_request_count, 4);
+    assert_eq!(
+        serving_session_snapshot.average_prefill_tok_per_second,
+        500.0
+    );
+    assert_eq!(
+        serving_session_snapshot.average_generation_tok_per_second,
+        25.0
+    );
+    assert_eq!(
+        serving_session_snapshot.total_reused_prompt_token_count,
+        5_100
+    );
+}
+
+#[test]
+fn should_report_zero_speeds_before_any_request_is_measured() {
+    let serving_session_snapshot = ServingSessionSnapshot::empty();
+    assert_eq!(serving_session_snapshot.average_prefill_tok_per_second, 0.0);
+    assert_eq!(
+        serving_session_snapshot.average_generation_tok_per_second,
+        0.0
     );
 }
 
@@ -159,7 +218,7 @@ fn should_preserve_the_serving_session_when_the_resident_model_is_replaced() {
     previous_health_snapshot.mlx_memory_ceiling_bytes = 40_000;
     previous_health_snapshot
         .serving_session
-        .record_completed_request(1_000, 750, Some(10.0), Some(20.0));
+        .record_completed_request(completed_request_work(1_000, 750, 25_000, 20, 1_000));
 
     let replacement_health_snapshot =
         astronomical_daemon::WorkerHealthSnapshot::ready_with_replacement_model(

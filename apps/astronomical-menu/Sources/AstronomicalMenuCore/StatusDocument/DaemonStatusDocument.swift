@@ -197,12 +197,17 @@ struct DaemonStatusDocument: Codable, Equatable {
   let machineMlxMemoryCeilingBytes: UInt64
   // GPU memory macOS granted the worker as a wired pool; nil when serving is
   // pageable with no wired claim. The engine plans below it by a Metal
-  // margin, so the memory stepper derives its reachable top from it.
+  // margin, so the memory slider derives its reachable top from it.
   let wiredResidencyBudgetBytes: UInt64?
   let minimumMlxMemoryCeilingBytes: UInt64
   let configuredMaximumMlxMemoryGigabytes: UInt64?
   let pendingMlxMemoryCeilingBytes: UInt64?
   let mlxMemoryLimitError: String?
+  /// The person's choice from config.json: whether progress and speed are written beside the
+  /// menu bar icon. An engine that does not report it means the icon alone.
+  let menuBarShowsProgressAndSpeed: Bool
+  /// The person's choice from config.json: whether the popover shows its technical rows.
+  let menuBarShowsTechnicalDetails: Bool
   let servingSession: ServingSession
 
   struct ExpertPlacementCopy: Codable, Equatable {
@@ -232,6 +237,8 @@ struct DaemonStatusDocument: Codable, Equatable {
     case configuredMaximumMlxMemoryGigabytes = "configured_maximum_mlx_memory_gb"
     case pendingMlxMemoryCeilingBytes = "pending_mlx_memory_ceiling_bytes"
     case mlxMemoryLimitError = "mlx_memory_limit_error"
+    case menuBarShowsProgressAndSpeed = "menu_bar_shows_progress_and_speed"
+    case menuBarShowsTechnicalDetails = "menu_bar_shows_technical_details"
     case servingSession = "serving_session"
   }
 
@@ -294,6 +301,10 @@ struct DaemonStatusDocument: Codable, Equatable {
     pendingMlxMemoryCeilingBytes =
       try container.decodeIfPresent(UInt64.self, forKey: .pendingMlxMemoryCeilingBytes)
     mlxMemoryLimitError = try container.decodeIfPresent(String.self, forKey: .mlxMemoryLimitError)
+    menuBarShowsProgressAndSpeed =
+      try container.decodeIfPresent(Bool.self, forKey: .menuBarShowsProgressAndSpeed) ?? false
+    menuBarShowsTechnicalDetails =
+      try container.decodeIfPresent(Bool.self, forKey: .menuBarShowsTechnicalDetails) ?? false
     let decodedServingSession = try container.decodeIfPresent(
       ServingSession.self, forKey: .servingSession)
     if let decodedServingSession {
@@ -326,6 +337,8 @@ struct DaemonStatusDocument: Codable, Equatable {
     configuredMaximumMlxMemoryGigabytes: UInt64? = nil,
     pendingMlxMemoryCeilingBytes: UInt64? = nil,
     mlxMemoryLimitError: String? = nil,
+    menuBarShowsProgressAndSpeed: Bool = false,
+    menuBarShowsTechnicalDetails: Bool = false,
     servingSession: ServingSession
   ) {
     self.application = application
@@ -350,6 +363,8 @@ struct DaemonStatusDocument: Codable, Equatable {
     self.configuredMaximumMlxMemoryGigabytes = configuredMaximumMlxMemoryGigabytes
     self.pendingMlxMemoryCeilingBytes = pendingMlxMemoryCeilingBytes
     self.mlxMemoryLimitError = mlxMemoryLimitError
+    self.menuBarShowsProgressAndSpeed = menuBarShowsProgressAndSpeed
+    self.menuBarShowsTechnicalDetails = menuBarShowsTechnicalDetails
     self.servingSession = servingSession
   }
 
@@ -432,11 +447,6 @@ struct DaemonStatusDocument: Codable, Equatable {
     )
   }
 
-  var sessionTitle: String {
-    let requestCount = servingSession.completedRequestCount
-    return
-      "\(requestCount) \(requestCount == 1 ? "request" : "requests") · \(Int(servingSession.averageGenerationTokensPerSecond.rounded())) tok/s avg"
-  }
   private var sessionPromptReuse:
     (
       reusedPromptTokenCount: UInt64, newPromptTokenCount: UInt64

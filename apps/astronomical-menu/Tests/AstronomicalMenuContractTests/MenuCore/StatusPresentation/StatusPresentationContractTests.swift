@@ -176,13 +176,13 @@ final class StatusPresentationContractTests: XCTestCase {
   func test_should_keep_the_status_item_title_stable_while_the_popover_is_open() {
     XCTAssertEqual(
       menuBarTitleToDisplay(
-        currentTitle: "", latestTitle: "GEN 24.7 tok/s", popoverIsShown: true),
+        currentTitle: "", latestTitle: " 24 tok/s", popoverIsShown: true),
       ""
     )
     XCTAssertEqual(
       menuBarTitleToDisplay(
-        currentTitle: "", latestTitle: "GEN 24.7 tok/s", popoverIsShown: false),
-      "GEN 24.7 tok/s"
+        currentTitle: "", latestTitle: " 24 tok/s", popoverIsShown: false),
+      " 24 tok/s"
     )
   }
 
@@ -238,7 +238,7 @@ final class StatusPresentationContractTests: XCTestCase {
         """.utf8)
     )
 
-    XCTAssertEqual(statusDocument.menuBarTitle, "GEN 27.0 tok/s")
+    XCTAssertEqual(statusDocument.menuBarActivityTitle, "27 tok/s")
     XCTAssertEqual(statusDocument.phaseTitle, "Generating")
     XCTAssertEqual(statusDocument.modelFootprintTitle, "Size not measured")
     XCTAssertEqual(statusDocument.progressTitle, "27 / 512 tokens")
@@ -247,7 +247,9 @@ final class StatusPresentationContractTests: XCTestCase {
     XCTAssertEqual(statusDocument.progressCompletedUnitCount, 27)
     XCTAssertEqual(statusDocument.progressTotalUnitCount, 512)
     XCTAssertEqual(statusDocument.mlxMemoryLimitTitle, "37.25 GB")
-    XCTAssertEqual(statusDocument.sessionTitle, "4 requests · 27 tok/s avg")
+    XCTAssertEqual(
+      SessionSpeedTilesPresentation(statusDocument: statusDocument).caption,
+      "Average this session · 4 requests")
     XCTAssertEqual(statusDocument.modelDiskSizeTitle, "17.15 GB")
     XCTAssertEqual(statusDocument.mlxMemoryBreakdown.expertPayloadByteCount, 5_000_000_000)
     XCTAssertEqual(statusDocument.mlxMemoryBreakdown.runtimeWorkByteCount, 2_000_000_000)
@@ -271,7 +273,7 @@ final class StatusPresentationContractTests: XCTestCase {
     )
 
     XCTAssertTrue(statusDocument.isActive)
-    XCTAssertEqual(statusDocument.menuBarTitle, "Image 50%")
+    XCTAssertEqual(statusDocument.menuBarActivityTitle, "Image 50%")
     XCTAssertEqual(statusDocument.phaseTitle, "Generating image")
     XCTAssertEqual(statusDocument.flightTitle, "Generating image · 50%")
     XCTAssertEqual(statusDocument.progressTitle, "50% · 2 / 4 steps")
@@ -292,7 +294,7 @@ final class StatusPresentationContractTests: XCTestCase {
     )
 
     XCTAssertTrue(statusDocument.isActive)
-    XCTAssertEqual(statusDocument.menuBarTitle, "Speaking…")
+    XCTAssertEqual(statusDocument.menuBarActivityTitle, "Speaking…")
     XCTAssertEqual(statusDocument.phaseTitle, "Reading text aloud")
     XCTAssertEqual(statusDocument.flightTitle, "Reading text aloud")
   }
@@ -305,7 +307,7 @@ final class StatusPresentationContractTests: XCTestCase {
       )
     )
 
-    XCTAssertEqual(statusDocument.menuBarTitle, "Image · Decoding")
+    XCTAssertEqual(statusDocument.menuBarActivityTitle, "Image · Decoding")
     XCTAssertEqual(statusDocument.phaseTitle, "Decoding image")
     XCTAssertEqual(statusDocument.flightTitle, "Decoding image")
     XCTAssertEqual(statusDocument.progressTitle, "Decoding image")
@@ -320,7 +322,7 @@ final class StatusPresentationContractTests: XCTestCase {
       )
     )
 
-    XCTAssertEqual(statusDocument.menuBarTitle, "Image · Denoising")
+    XCTAssertEqual(statusDocument.menuBarActivityTitle, "Image · Denoising")
     XCTAssertEqual(statusDocument.flightTitle, "Denoising complete")
     XCTAssertEqual(statusDocument.progressTitle, "Denoising complete")
     XCTAssertTrue(statusDocument.isActive)
@@ -426,7 +428,7 @@ final class StatusPresentationContractTests: XCTestCase {
       from: Data(#"{"status":"ready","activity":"prompt_processing"}"#.utf8)
     )
 
-    XCTAssertEqual(statusDocument.menuBarTitle, "Restoring…")
+    XCTAssertEqual(statusDocument.menuBarActivityTitle, "Restoring…")
     XCTAssertEqual(statusDocument.phaseTitle, "Restoring prompt cache")
     XCTAssertEqual(statusDocument.flightTitle, "Restoring prompt cache")
     XCTAssertEqual(statusDocument.progressTitle, "Restoring prompt cache")
@@ -474,7 +476,7 @@ final class StatusPresentationContractTests: XCTestCase {
         """.utf8)
     )
 
-    XCTAssertEqual(statusDocument.menuBarTitle, "Prompt 7% · 1076 avg tok/s")
+    XCTAssertEqual(statusDocument.menuBarActivityTitle, "Prompt \u{2007}7% · 1076 tok/s")
     XCTAssertEqual(statusDocument.flightTitle, "Prompt processing · 7% · 1076 avg tok/s")
     XCTAssertEqual(statusDocument.elapsedTimeMetricTitle, "Elapsed / ETA")
     XCTAssertEqual(statusDocument.elapsedTimeTitle, "1.0 s / 12.4 s")
@@ -489,7 +491,9 @@ final class StatusPresentationContractTests: XCTestCase {
         """.utf8)
     )
 
-    XCTAssertEqual(statusDocument.sessionTitle, "1 request · 70 tok/s avg")
+    let tilesPresentation = SessionSpeedTilesPresentation(statusDocument: statusDocument)
+    XCTAssertEqual(tilesPresentation.caption, "Average this session · 1 request")
+    XCTAssertEqual(tilesPresentation.writingTile.speedTitle, "70 tok/s")
   }
 
   func test_should_explain_how_much_of_the_session_prompts_were_reused_and_new() throws {
@@ -519,7 +523,7 @@ final class StatusPresentationContractTests: XCTestCase {
     )
 
     XCTAssertEqual(statusDocument.phaseTitle, "Loading")
-    XCTAssertEqual(statusDocument.menuBarTitle, " Loading")
+    XCTAssertEqual(statusDocument.menuBarActivityTitle, "Loading")
   }
 
   func test_should_not_round_partial_prompt_reuse_up_to_one_hundred_percent() {

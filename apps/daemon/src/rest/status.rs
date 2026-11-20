@@ -170,6 +170,7 @@ fn attach_worker_memory_and_session_facts(
                 maximum_mlx_memory_bytes / 1_073_741_824
             })
     );
+    attach_menu_bar_settings(status_json, application_state);
     status_json["serving_session"] = serde_json::json!({
         "completed_request_count": worker_health_snapshot.serving_session.completed_request_count,
         "total_prompt_token_count": worker_health_snapshot.serving_session.total_prompt_token_count,
@@ -180,6 +181,24 @@ fn attach_worker_memory_and_session_facts(
         "average_generation_tok_per_second": worker_health_snapshot.serving_session.average_generation_tok_per_second,
         "neural_engine": neural_engine_session_facts(&worker_health_snapshot.serving_session.neural_engine),
     });
+}
+
+/// The menu-bar agent draws its item and popover from these on every poll, so a
+/// change saved on Observatory's Settings page reaches the menu bar within a second.
+fn attach_menu_bar_settings(
+    status_json: &mut serde_json::Value,
+    application_state: &ApplicationState,
+) {
+    let mut shows_progress_and_speed = false;
+    let mut shows_technical_details = false;
+    if let Some(reloadable_config) = application_state.reloadable_config.as_ref()
+        && let Ok(resolved_config) = reloadable_config.read()
+    {
+        shows_progress_and_speed = resolved_config.menu_bar_shows_progress_and_speed;
+        shows_technical_details = resolved_config.menu_bar_shows_technical_details;
+    }
+    status_json["menu_bar_shows_progress_and_speed"] = serde_json::json!(shows_progress_and_speed);
+    status_json["menu_bar_shows_technical_details"] = serde_json::json!(shows_technical_details);
 }
 
 fn neural_engine_session_facts(

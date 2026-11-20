@@ -109,6 +109,8 @@
   "minimum_mlx_memory_ceiling_bytes": 1,
   "mlx_memory_ceiling_bytes": 0,
   "mlx_memory_limit_error": null,
+  "menu_bar_shows_progress_and_speed": false,
+  "menu_bar_shows_technical_details": false,
   "mlx_memory_snapshot": null,
   "pending_mlx_memory_ceiling_bytes": null,
   "astro_ssd_prompt_cache": {

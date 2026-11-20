@@ -34,6 +34,8 @@ A small file looks like this. Keep the `$schema` line: the app refuses a file th
 | `runtime.metal_residency_refresh_enabled` | Keeps a model's memory ready for the graphics chip while idle. | Off. |
 | `ssd_prompt_cache.enabled` | Saves work on prompts to the SSD so repeated text is not read again. | On. |
 | `ssd_prompt_cache.maximum_size_gb` | The most disk space that saved work may use. | 50 GB. |
+| `menu_bar.show_progress_and_speed` | Writes prompt progress and reply speed beside the menu bar icon. | Off: the icon alone. |
+| `menu_bar.show_technical_details` | Adds the memory breakdown, GPU use, session totals and build details to the menu bar popover. | Off: a simpler popover. |
 
 Older files called the `ssd_prompt_cache` section `prompt_cache`, and two chunking settings `prompt_cache_block_tokens` and `prompt_cache_common_prefix_stride_blocks`. Astronomical moves them to the new names the first time it reads the file.
 

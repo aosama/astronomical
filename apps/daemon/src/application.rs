@@ -502,6 +502,11 @@ fn capability_conditional_routes(
                 post(crate::rest::config_document::reset_config_document)
                     .layer(DefaultBodyLimit::max(4 * 1024)),
             )
+            .route(
+                "/v1/config/menu-bar",
+                put(crate::rest::menu_bar_setting::update_menu_bar_setting)
+                    .layer(DefaultBodyLimit::max(4 * 1024)),
+            )
     } else {
         router
     };

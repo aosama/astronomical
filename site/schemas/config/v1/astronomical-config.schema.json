@@ -12,6 +12,7 @@
         {"title": "Memory", "description": "How much memory models may use, which model is used when none is named, and when an unused model is released.", "settings": ["runtime.maximum_mlx_memory_gb", "runtime.default_model", "runtime.idle_model_unload_seconds", "runtime.metal_residency_refresh_enabled"]},
         {"title": "Locations", "description": "The folders Astronomical reads models from and writes downloads and compiled programs to.", "settings": ["runtime.model_directories", "runtime.model_download_directory", "runtime.neural_engine_program_directory"]},
         {"title": "Prompt cache", "description": "A cache on disk that lets a prompt seen before skip most of its processing.", "settings": ["ssd_prompt_cache.enabled", "ssd_prompt_cache.maximum_size_gb"]},
+        {"title": "Menu bar", "description": "What the Astronomical item at the top of the screen shows, and how much detail its menu gives.", "settings": ["menu_bar.show_progress_and_speed", "menu_bar.show_technical_details"]},
         {"title": "Diagnostics", "description": "What Astronomical writes to its logs. Useful when reporting a problem.", "settings": ["diagnostics.log_level", "diagnostics.retained_log_files", "diagnostics.completion_attribution_enabled", "diagnostics.performance_attribution_enabled"]}
     ],
     "tuning": [
@@ -58,6 +59,9 @@
     },
     "diagnostics": {
       "$ref": "#/$defs/diagnostics"
+    },
+    "menu_bar": {
+      "$ref": "#/$defs/menu_bar"
     }
   },
   "$defs": {
@@ -423,6 +427,29 @@
           "x-astronomical-unit": "files",
           "x-astronomical-explanation": "Logs are kept in one file per hour. This is how many of those files are kept before the oldest is removed, so a larger number keeps a longer history and uses more disk.",
           "x-astronomical-apply-mode": "worker-replacement"
+        }
+      }
+    },
+    "menu_bar": {
+      "type": "object",
+      "description": "What the macOS menu bar item shows beside its icon and in its popover.",
+      "additionalProperties": false,
+      "properties": {
+        "show_progress_and_speed": {
+          "title": "Show progress and speed in the menu bar",
+          "type": "boolean",
+          "default": false,
+          "description": "Whether the menu bar item writes prompt progress and tokens per second beside its icon while a request runs. The icon and the popover show activity either way.",
+          "x-astronomical-explanation": "Writes how far along a prompt is and how fast a reply is being written next to the Astronomical icon at the top of the screen. Leave it off for a quiet menu bar: the icon still shows when a model is working, and clicking it shows the same numbers.",
+          "x-astronomical-apply-mode": "live"
+        },
+        "show_technical_details": {
+          "title": "Show technical details in the menu",
+          "type": "boolean",
+          "default": false,
+          "description": "Whether the menu bar popover shows its technical rows: the memory breakdown, GPU use, memory pressure, session totals, the Neural Engine row, build details and Reload config.",
+          "x-astronomical-explanation": "Adds a detailed breakdown of how memory is used, graphics chip activity, totals for this session and build details to the menu that opens from the Astronomical icon. Useful when investigating speed or memory. Leave it off for a simpler menu.",
+          "x-astronomical-apply-mode": "live"
         }
       }
     }

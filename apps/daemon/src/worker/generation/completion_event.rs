@@ -13,8 +13,9 @@ use ipc_protocol::{
 };
 
 use crate::{
-    ChatGenerationStreamEvent, CompletionAttributionLog, GenerationPerformanceLog,
-    GenerationPerformanceRecord, WorkerActivity, WorkerControlError, WorkerHealthSnapshot,
+    ChatGenerationStreamEvent, CompletedRequestWork, CompletionAttributionLog,
+    GenerationPerformanceLog, GenerationPerformanceRecord, WorkerActivity, WorkerControlError,
+    WorkerHealthSnapshot,
     performance::completion_attribution_log::record_completion_at_now,
     performance::generation_log::unix_epoch_millis,
     serving::chat_generation_executor::try_send_stream_event,
@@ -362,20 +363,18 @@ fn publish_post_completion_activity(
     completion_observation: &CompletionObservation<'_>,
     health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
 ) {
+    let completion_measurements = completion_observation.completion_measurements;
+    let completion_timings = completion_observation.completion_timings;
     record_serving_session(
         health_snapshot,
-        completion_observation
-            .completion_measurements
-            .prompt_token_count,
-        completion_observation
-            .completion_measurements
-            .astro_ssd_prompt_cache_restored_token_count,
-        completion_observation
-            .completion_timings
-            .prefill_tok_per_second,
-        completion_observation
-            .completion_timings
-            .generation_tok_per_second,
+        CompletedRequestWork {
+            prompt_token_count: completion_measurements.prompt_token_count,
+            astro_ssd_prompt_cache_restored_token_count: completion_measurements
+                .astro_ssd_prompt_cache_restored_token_count,
+            generated_token_count: completion_measurements.generated_token_count,
+            prefill_elapsed_millis: completion_timings.prefill_elapsed_millis,
+            generation_elapsed_millis: completion_timings.generation_elapsed_millis,
+        },
     );
     publish_activity(health_snapshot, WorkerActivity::Idle);
     clear_active_request_progress(health_snapshot);

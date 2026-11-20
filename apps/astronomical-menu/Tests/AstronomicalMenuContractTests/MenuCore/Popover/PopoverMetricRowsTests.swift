@@ -85,7 +85,7 @@ final class PopoverMetricRowsTests: XCTestCase {
     XCTAssertEqual(layerByLayer.progressTitle, "55% · 98765 tokens")
     XCTAssertEqual(layerByLayer.progressCompletedUnitCount, 22)
     XCTAssertEqual(layerByLayer.progressTotalUnitCount, 40)
-    XCTAssertEqual(layerByLayer.menuBarTitle, "Prompt 55%")
+    XCTAssertEqual(layerByLayer.menuBarActivityTitle, "Prompt 55%")
     XCTAssertTrue(layerByLayer.showsProgressBar)
     assertOneMetricLineTall(layerByLayer)
   }

@@ -24,6 +24,7 @@ mod config_document;
 mod configuration_status;
 mod generation_admission;
 mod maximum_mlx_memory;
+mod menu_bar_setting;
 mod mixed_reload_configuration_generation;
 mod output_limits;
 mod reload_status;

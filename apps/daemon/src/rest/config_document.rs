@@ -89,7 +89,9 @@ fn refusal(status_code: StatusCode, status: &'static str, message: String) -> Re
     (status_code, Json(ConfigWriteRefusal { status, message })).into_response()
 }
 
-fn write_error_response(configuration_error: config::AstronomicalConfigError) -> Response {
+pub(super) fn write_error_response(
+    configuration_error: config::AstronomicalConfigError,
+) -> Response {
     use config::AstronomicalConfigError as ConfigError;
     match configuration_error {
         ConfigError::ConfigChangedDuringUpdate => refusal(
@@ -155,7 +157,7 @@ pub(crate) async fn read_config_document(
 /// A candidate must also resolve against the discovered models: a context limit
 /// above an artifact's own passes the document's checks but fails at this step,
 /// which would otherwise leave a file the daemon refuses to reload.
-fn validate_candidate_resolves(
+pub(super) fn validate_candidate_resolves(
     runtime_config_resolver: &ResolvedRuntimeConfigResolver,
     candidate_document: &serde_json::Value,
 ) -> Result<(), Box<Response>> {
@@ -185,7 +187,7 @@ fn validate_candidate_resolves(
     Ok(())
 }
 
-async fn reload_after_write(
+pub(super) async fn reload_after_write(
     application_state: ApplicationState,
     document_digest: String,
 ) -> Response {

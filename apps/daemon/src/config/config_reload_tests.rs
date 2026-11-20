@@ -352,6 +352,40 @@ fn should_not_restart_worker_when_metal_residency_refresh_is_unchanged() {
 }
 
 #[test]
+fn should_apply_the_menu_bar_setting_without_restarting_the_worker() {
+    let current = sample_resolved_config();
+    let mut candidate = sample_resolved_config();
+    candidate.menu_bar_shows_progress_and_speed = true;
+    // A saved file always carries a new generation; a switch that only changes what the
+    // menu bar draws must not drop the loaded model by replacing the worker.
+    candidate.configuration_generation = "next-generation".to_owned();
+
+    let decision = ConfigReloadDiff::compare(&current, &candidate);
+
+    assert!(matches!(
+        decision,
+        ConfigReloadDecision::NoWorkerRestart { ref reloaded_fields, .. }
+            if reloaded_fields == &["menu_bar.show_progress_and_speed".to_owned()]
+    ));
+}
+
+#[test]
+fn should_apply_the_technical_details_switch_without_restarting_the_worker() {
+    let current = sample_resolved_config();
+    let mut candidate = sample_resolved_config();
+    candidate.menu_bar_shows_technical_details = true;
+    candidate.configuration_generation = "next-generation".to_owned();
+
+    let decision = ConfigReloadDiff::compare(&current, &candidate);
+
+    assert!(matches!(
+        decision,
+        ConfigReloadDecision::NoWorkerRestart { ref reloaded_fields, .. }
+            if reloaded_fields == &["menu_bar.show_technical_details".to_owned()]
+    ));
+}
+
+#[test]
 fn should_apply_a_new_idle_unload_span_without_restarting_the_worker() {
     let current = sample_resolved_config();
     let mut candidate = sample_resolved_config();
@@ -517,6 +551,8 @@ pub(super) fn sample_resolved_config() -> ResolvedRuntimeConfig {
         configured_astro_ssd_prompt_cache_enabled: None,
         metal_residency_refresh_enabled: false,
         idle_model_unload_seconds: 0,
+        menu_bar_shows_progress_and_speed: false,
+        menu_bar_shows_technical_details: false,
         configured_astro_ssd_prompt_cache_maximum_size_bytes: None,
         performance_attribution_enabled: false,
         astro_ssd_prompt_cache_config: AstroSsdPromptCacheConfig::new(
