@@ -1,6 +1,6 @@
 # Astronomical
 
-<a href="https://github.com/aosama/astronomical/releases/download/v0.2.121/Astronomical-0.2.121-macOS-arm64.dmg"><img src="site/assets/download-for-mac.svg" alt="Download for Mac" width="170" height="34" style="vertical-align:middle"></a> <a href="https://discord.gg/E8a5qmhRhr"><img src="site/assets/discord.svg" alt="Discord" width="162" height="34" style="vertical-align:middle"></a>
+<a href="https://github.com/aosama/astronomical/releases/download/v0.2.122/Astronomical-0.2.122-macOS-arm64.dmg"><img src="site/assets/download-for-mac.svg" alt="Download for Mac" width="170" height="34" style="vertical-align:middle"></a> <a href="https://discord.gg/E8a5qmhRhr"><img src="site/assets/discord.svg" alt="Discord" width="162" height="34" style="vertical-align:middle"></a>
 
 **Run large AI models privately on your Mac, including models bigger than the memory you can spare.**
 
