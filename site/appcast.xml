@@ -4,42 +4,34 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.119</title>
-            <pubDate>Thu, 19 Nov 2026 01:26:33 -0500</pubDate>
-            <sparkle:version>2416</sparkle:version>
-            <sparkle:shortVersionString>0.2.119</sparkle:shortVersionString>
+            <title>0.2.120</title>
+            <pubDate>Thu, 19 Nov 2026 19:58:21 -0500</pubDate>
+            <sparkle:version>2426</sparkle:version>
+            <sparkle:shortVersionString>0.2.120</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[## Fewer storage reads while streaming
+            <description sparkle:format="markdown"><![CDATA[## What's new
 
-When a mixture-of-experts model is bigger than the memory you give it, Astronomical reads the experts each word needs from the SSD. This release keeps whole only as many layers as still leave every other layer a fair share of memory, and sizes those shares from the memory they actually have, so far fewer experts have to be read again.
+- **Qwen 3.8 27B now answers about twice as fast on M5 Macs, straight from the catalog.** The download catalog offers it as **Qwen3.8-27B-MLX-4bit-vision-DFLASH2**: the 4-bit model with its vision intact and a small draft model built in. The draft model guesses the next few words and the large model checks them all in one step. Every word is still the large model's own choice. After a 10,000-token prompt it writes 35 to 37 tokens a second, where the plain 4-bit build wrote 16.7. On Macs without an M5 GPU, with less memory, or for a message with a picture in it, it runs just like the plain build.
+- The catalog now offers that build as its only 4-bit Qwen 3.8 27B. The two 2-bit ternary 27B builds remain for Macs with 8 GB of memory.
+- Every page of the website shares one header and footer.
 
-- Ornith 1.5 35B-A3B 8-bit Astro Atlas at 17.6 GB: 21 to 49 experts read from the SSD per word, down from 71 to 109, and 32.1 tokens a second with nothing held in the macOS file cache, up from 22.2.
-- The 4-bit OptiQ build at an 11 GB limit: 33.3 tokens a second, up from 25.1.
-- Replies are word for word the same as before.
-- Each reply's hits, misses and bytes read from the SSD now show in `/v1/experts` and in the log.
+## Under the hood
 
-## New in the catalog
+- The model-serving code is split into smaller, focused parts, with no change in behaviour.
+- Release and website checks moved into the project's own typed tooling.
 
-- **Ornith-1.5-35B-A3B-MLX-8bit-vision with its DFlash2 drafter**, for draft trees on the highest-precision Ornith build.
+## Compatibility
 
-## OpenCode
+- Your models, conversations and settings are kept. A model you downloaded earlier from a retired catalog entry stays installed and usable.
+- Requires macOS 14 or later on Apple silicon.
 
-- `astronomical launch opencode` writes OpenCode's current configuration format and tells OpenCode the model's real context window. `astronomical launch codex` now declares the context window too.
-- A new OpenCode plugin keeps every model Astronomical serves in OpenCode's model picker: `opencode plugin add opencode-astronomical`. It is published separately from the app; see the [local API page](https://getastronomical.com/local-api.html).
-
-## Also
-
-- The model engine is now built as several smaller parts. Nothing changes in what it does.
-
-Your models, chats and settings are kept across the update. Requires an Apple silicon Mac with macOS 14 or later.
-
-Astronomical 0.2.119 is signed with a Developer ID, notarized by Apple, and delivered through the direct download and the signed Sparkle update feed.
+Astronomical is signed with a Developer ID, notarized by Apple, and delivered through a signed Sparkle update feed.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.119/Astronomical-0.2.119-macOS-arm64.dmg" length="25479836" type="application/octet-stream" sparkle:edSignature="NVxKyp/GoDKX6NoCnUEFz40l+0XTMXoer66rk2semgZWe4KKmFJ2YeXHNMY07i2OBKRJy+N13T++Ysa4VcYUBQ=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.120/Astronomical-0.2.120-macOS-arm64.dmg" length="25491162" type="application/octet-stream" sparkle:edSignature="z20d78XnP9bucWKnLs0TstM4hSLosBI/rClvORgHKF9IAZfXrXAmbRuVHLGuM/r4ZF++hCtfUJtk+GHmo+MZDg=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: pgP8z4DwLc/iMNT3E52U+aIa/7GP6kJIvpxryEhq6Vgs1LK/C6JqPM7mBuDI6Bo8LoO5yNTycF4zklpqZqJvBQ==
-length: 3004
+edSignature: y/Myk865kRnt1W2n3aZ9qZ1A22JkXhuvEjeIDwZRZQTME+sP924AGxUsrfUS+Mbnfjax/AQuIdMQBHEoUAzoCg==
+length: 2554
 -->
