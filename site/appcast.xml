@@ -4,31 +4,35 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.121</title>
-            <pubDate>Thu, 19 Nov 2026 21:19:51 -0500</pubDate>
-            <sparkle:version>2429</sparkle:version>
-            <sparkle:shortVersionString>0.2.121</sparkle:shortVersionString>
+            <title>0.2.122</title>
+            <pubDate>Fri, 20 Nov 2026 06:49:24 -0500</pubDate>
+            <sparkle:version>2434</sparkle:version>
+            <sparkle:shortVersionString>0.2.122</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[## Enhancements
+            <description sparkle:format="markdown"><![CDATA[## What's new
 
-- **The 6-bit vision Ornith 1.5 35B-A3B now drafts out of the box.** The download catalog adds `Ornith-1.5-35B-A3B-MLX-6bit-vision-DFLASH2`: the 6-bit vision build with the DFlash2 draft model packed in, every file byte-identical to its source. It takes about 28 GB on disk and about 29.5 GB of model memory, so a 48 GB M5 Mac holds the model and its drafter whole. Measured against the plain 6-bit vision build on such a Mac at temperature 1.0, short replies decode about 1.16 times faster (89.4 against 77.3 tokens a second); after a 10,011-token prompt the two run about even. Macs without an M5 GPU, and memory limits too low for the drafter, decode exactly like the plain build. The plain 6-bit vision build stays in the catalog.
+- **A quiet menu bar.** The Astronomical icon now stands alone by default. While a prompt is read or a picture is drawn, the icon itself shows how far along it is. If you'd like the old progress and speed text beside it, switch it on in Observatory's Settings or from the ⋯ button in the menu.
+- **A simpler menu.** The menu that opens from the icon now shows your model, what it's doing, how fast it reads and writes, how much memory it uses, and your memory limit. The detailed memory breakdown and build information are still there: switch on "Show technical details in the menu".
+- **A memory slider.** Set the most memory a model may use by dragging. A mark shows the loaded model's size, and a sentence tells you what your choice leaves for macOS and your other apps, or warns when part of the model will be read from the SSD. Drag it all the way right to use whatever your Mac allows.
+- **Reading and writing speed.** The menu shows how fast the model reads your prompts and writes its replies, averaged over the session, with the live speed while a reply is under way.
+- **A clear sign when something's wrong.** If Astronomical's engine stops answering, the icon shows an exclamation mark and "Not running", and the menu offers Restart.
+- **Slightly faster prompt reading** on mixture-of-experts models held fully in memory, with identical replies.
 
-## Compatibility
+## Fixes
 
-- Existing configurations, installed models, conversations and settings are preserved; the configuration schema is unchanged.
-- macOS 14 or later on Apple silicon.
+- The session's reading and writing speeds now weigh each request by how much it did, so a very short reply no longer skews them.
 
-## Distribution
+## Good to know
 
-Signed with a Developer ID under Hardened Runtime, notarized by Apple and stapled; the Sparkle update is EdDSA-signed over the final bytes and served from a signed feed.
-
-Tracked in #2383.
+- Your conversations, models, settings and saved prompt work are all kept.
+- Requires macOS 14 or later on Apple silicon.
+- The app is signed with the project's Developer ID and notarized by Apple.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.121/Astronomical-0.2.121-macOS-arm64.dmg" length="25484737" type="application/octet-stream" sparkle:edSignature="5nEcwi/oFDXIJBBkPWZl4aa2rDq7HYzLdGilC4yn0/tyDZNgzhn6TXd3oOYbDZnFUBzJiXbeETDNV3ncA/wzDA=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.122/Astronomical-0.2.122-macOS-arm64.dmg" length="25595766" type="application/octet-stream" sparkle:edSignature="Yt4Qfo941zTQ51KW5Eduj/6dClysWy0JQT7qbJMklN065Tb0OSo8pzgcOShtiTgQ3ev9OSD8SKbOoxtd4gxiDQ=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: bqy7bT7scvxQIQ87lna1UQiAtMFQ80HO4f2HyI9lN7ObLuyKpYhWNrjlcIqgaeAY1fDcN9UQN4VeOc//I/ZRCA==
-length: 2374
+edSignature: JSGBboObxUI+vFolVXVlHybJ3ZCdf8SgsVa+WKC14ElOtmUYc5Yu2Ex7IxnqWNolgTRkEgnilrsf+9Nj67bwAw==
+length: 2963
 -->
