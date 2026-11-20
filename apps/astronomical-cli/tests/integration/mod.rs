@@ -4,6 +4,7 @@
 //! HTTP stand-in. One module per verb, mirroring `src/verbs`; the shared
 //! fakes and environment helpers live under `support`.
 
+mod astronomical_skill;
 mod decide;
 mod doctor;
 mod download_wait;
