@@ -20,8 +20,10 @@ use crate::{AstroDecoderStateCacheLayout, ModelMemoryFacts};
 
 use super::model_chunking_configuration::Qwen3_5ModelChunkingConfiguration;
 
-/// Faster paths a model turns on only after proving them on this machine;
-/// a freshly loaded model has every one off and runs MLX's own kernels.
+/// Faster paths a model turns on only after proving them on this machine.
+/// The resident loader turns on the fused expert combination when its
+/// capability probe passes; every other path starts off and runs MLX's own
+/// kernels until something enables it.
 #[derive(Debug, Default)]
 pub struct Qwen3_5OptionalAccelerators {
     /// Opt-in engine for linear-attention output gates during prefill; `None`
@@ -55,6 +57,11 @@ pub struct Qwen3_5OptionalAccelerators {
     /// For measurements only: it evaluates every layer on the spot.
     pub tree_attention_error_record:
         Option<std::cell::RefCell<Vec<super::tree_attention_measurement::TreeAttentionErrorCount>>>,
+    /// One Metal pass for the sorted routed-expert sum plus the gated shared
+    /// expert on prompt chunks, bit for bit equal to the two-step path it
+    /// replaces. The streaming engine's paged MoE forward combines through its
+    /// own path, so only the resident engine sets it.
+    pub sorted_expert_shared_combination_kernel: Option<MlxMetalKernel>,
 }
 
 /// One resident native Qwen3.5 text model, optional vision tower, and its direct MLX runtime.
@@ -76,7 +83,7 @@ pub struct Qwen3_5ModelBase {
     pub gated_delta_checkpoint_kernel: Option<MlxMetalKernel>,
     /// Fused decode prework kernel; None when demoted or environment-disabled.
     pub gdn_decode_prework_kernel: Option<MlxMetalKernel>,
-    /// Faster paths a model turns on only after proving them; all off by default.
+    /// Faster paths a model turns on only after proving them on this machine.
     pub optional_accelerators: Qwen3_5OptionalAccelerators,
     pub sorted_expert_weighted_sum_kernel: Option<MlxMetalKernel>,
     pub compiled_swiglu: MlxCompiledSwiGlu,

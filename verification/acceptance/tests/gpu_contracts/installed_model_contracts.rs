@@ -1,6 +1,9 @@
 #[cfg(feature = "direct-mlx")]
 mod common;
 #[cfg(feature = "direct-mlx")]
+#[path = "installed_model_contracts/fused_expert_combination_prefill_ab.rs"]
+mod fused_expert_combination_prefill_ab;
+#[cfg(feature = "direct-mlx")]
 #[path = "installed_model_contracts/mod.rs"]
 mod installed_model_contracts;
 #[cfg(feature = "direct-mlx")]

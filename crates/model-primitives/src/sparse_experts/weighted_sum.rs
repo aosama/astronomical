@@ -13,7 +13,17 @@ use mlx_bridge::{
 };
 
 const OPERATION: &str = "reduce stacked expert outputs";
-const SORTED_EXPERT_WEIGHTED_SUM_SOURCE: &str = r#"
+
+/// Threads per threadgroup for every sorted expert reduction launch.
+pub const SORTED_EXPERT_REDUCTION_THREADS_PER_THREADGROUP: i32 = 256;
+
+/// Metal statements that leave the Float32 router-weighted sum of one output
+/// element in `weighted_sum`, with `output_index` and `token_index` in scope.
+///
+/// Kernels that fuse more work after the reduction build their source from
+/// this text, so their sums stay bit for bit equal to this kernel's: the
+/// accumulation order and Float32 widening are what decide the rounded bits.
+pub const SORTED_EXPERT_WEIGHTED_REDUCTION_METAL_STATEMENTS: &str = r#"
     auto output_index = thread_position_in_grid.x;
     auto token_index = output_index / output_dimension;
     auto output_dimension_index = output_index % output_dimension;
@@ -29,6 +39,9 @@ const SORTED_EXPERT_WEIGHTED_SUM_SOURCE: &str = r#"
                                   output_dimension_index] *
             (float)scores[assignment_index];
     }
+"#;
+
+const SORTED_EXPERT_WEIGHTED_SUM_STORE_STATEMENT: &str = r#"
     weighted_outputs[output_index] = (OutputT)weighted_sum;
 "#;
 
@@ -39,7 +52,11 @@ pub fn sorted_expert_weighted_sum_kernel()
         "sorted_expert_weighted_sum",
         &["sorted_outputs", "inverse_order", "scores"],
         &["weighted_outputs"],
-        SORTED_EXPERT_WEIGHTED_SUM_SOURCE,
+        &[
+            SORTED_EXPERT_WEIGHTED_REDUCTION_METAL_STATEMENTS,
+            SORTED_EXPERT_WEIGHTED_SUM_STORE_STATEMENT,
+        ]
+        .concat(),
     )
     .map_err(runtime_integration::MlxRuntimeError::from)
 }
@@ -172,7 +189,11 @@ fn sorted_expert_weighted_sum_inner(
             sorted_expert_outputs.dtype(),
         )],
         [output_element_count, 1, 1],
-        [256.min(output_element_count), 1, 1],
+        [
+            SORTED_EXPERT_REDUCTION_THREADS_PER_THREADGROUP.min(output_element_count),
+            1,
+            1,
+        ],
         &[
             MlxMetalKernelTemplateArgument::Dtype {
                 name: "OutputT",

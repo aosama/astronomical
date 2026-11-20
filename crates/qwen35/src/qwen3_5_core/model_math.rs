@@ -49,6 +49,10 @@ pub mod row_exact_tree_attention;
 #[cfg(all(test, feature = "direct-mlx"))]
 mod row_exact_tree_attention_tests;
 #[cfg(feature = "direct-mlx")]
+pub mod sorted_expert_shared_combination;
+#[cfg(all(test, feature = "direct-mlx"))]
+mod sorted_expert_shared_combination_tests;
+#[cfg(feature = "direct-mlx")]
 pub mod streamed_layer_binding;
 #[cfg(all(test, feature = "direct-mlx"))]
 #[path = "model_math/streamed_layer_binding_tests.rs"]
