@@ -192,6 +192,26 @@
             "upstream_license": "MIT"
         },
         {
+            "huggingface_id": "ahmedihamdy/Ornith-1.5-35B-A3B-MLX-6bit-vision-DFLASH2",
+            "revision": "0af05d417d9e886cf7ae5b85cc0f2417ff994f50",
+            "summary": "The large Ornith with its original vision and a draft model built in: quicker short replies on M5 Macs.",
+            "family": "qwen3_5",
+            "approximate_size_bytes": 30134581820,
+            "approximate_memory_bytes": 31462544230,
+            "minimum_memory_bytes": 3670688512,
+            "role": "chat",
+            "public": true,
+            "description": "The same model as Ornith-1.5-35B-A3B-MLX-6bit-vision, with a small draft model packed in. On an M5 Mac with room for the whole model, the draft model guesses the next few words and the large model checks them all in one step, so short replies arrive about a sixth sooner and every word is still the large model's own choice. After a very long prompt it runs about as fast as the plain build. On other Macs, or with less memory, it runs just like the 6-bit vision build.",
+            "capabilities": {
+                "supports_reasoning": true,
+                "supports_vision": true,
+                "supports_tool_calls": true,
+                "context_window": 262144
+            },
+            "quantization_label": "MLX 6-bit (affine, group 64), bf16 vision, DFlash2 draft model",
+            "upstream_license": "MIT"
+        },
+        {
             "huggingface_id": "ahmedihamdy/Ornith-1.5-35B-A3B-MLX-8bit-vision",
             "revision": "605cbfe28036cdaba9b3410f3a97d6db51e782bf",
             "summary": "The large Ornith with its original vision, for screenshots and documents.",

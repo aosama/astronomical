@@ -577,6 +577,16 @@ fn should_ship_the_optiq_dflash2_package_with_its_bundled_drafter() {
 }
 
 #[test]
+fn should_ship_the_6bit_vision_dflash2_package_with_its_bundled_drafter() {
+    assert_dflash2_package_matches_its_plain_twin(DFlash2PackageExpectation {
+        package_huggingface_id: "ahmedihamdy/Ornith-1.5-35B-A3B-MLX-6bit-vision-DFLASH2",
+        plain_twin_huggingface_id: "ahmedihamdy/Ornith-1.5-35B-A3B-MLX-6bit-vision",
+        pinned_revision: "0af05d417d9e886cf7ae5b85cc0f2417ff994f50",
+        vision_tower_path: "model-vision.safetensors",
+    });
+}
+
+#[test]
 fn should_ship_the_8bit_vision_dflash2_package_with_its_bundled_drafter() {
     assert_dflash2_package_matches_its_plain_twin(DFlash2PackageExpectation {
         package_huggingface_id: "ahmedihamdy/Ornith-1.5-35B-A3B-MLX-8bit-vision-DFLASH2",
