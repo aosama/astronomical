@@ -513,6 +513,11 @@ audit-unused-public-workspace = "workspace-unused-pub"
 # Acceptance lanes: one alias per GPU lane, so the packages, features,
 # targets, and the serial rule cannot be forgotten.
 
+# Every acceptance test that takes the shared GPU guard claims Metal wired
+# residency once per process, as the serving worker does at startup, and
+# prints `[direct-mlx-test] wired_residency_claim=...`; without the claim,
+# macOS may compress a large model's weights and a speed number means nothing.
+
 # The model-serving direct-MLX contract suite plus the runtime-integration
 # MLX-C coverage bridge contract (CPU-only) so bridge drift fails the lane.
 test-direct-mlx = "test --no-fail-fast -p astronomical-acceptance --features astronomical-acceptance/direct-mlx -p runtime-integration --features runtime-integration/mlx -p model-primitives --features model-primitives/direct-mlx -p speech --features speech/direct-mlx -p image-generation --features image-generation/direct-mlx -p engine-core --features engine-core/direct-mlx -p qwen35 --features qwen35/direct-mlx -p decision-models --features decision-models/direct-mlx -p qwen35-quantization-probe -p model-serving --features model-serving/direct-mlx --lib --test direct_mlx --test mlx_c_coverage_contract_tests -- --test-threads=1"
