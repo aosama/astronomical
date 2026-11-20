@@ -3,8 +3,8 @@
 //! A capable GPU keeps the measured custom-kernel fast path; a GPU that
 //! cannot compile or execute a kernel still serves the same request through
 //! the equivalent public MLX API. Verdicts are proven by compile plus a
-//! bounded execution probe with expected-value validation — never by a chip
-//! name — and are computed once per worker process, then reused by every
+//! bounded execution probe with output validation — expected values, or bit
+//! equality with the MLX path a kernel replaces — never by a chip name — and are computed once per worker process, then reused by every
 //! model swap and REST request without re-probing.
 
 use std::collections::HashMap;
@@ -21,6 +21,8 @@ pub mod gated_delta_probes;
 pub mod prism_hadamard_probes;
 #[cfg(feature = "direct-mlx")]
 pub mod row_batched_matmul_probe;
+#[cfg(feature = "direct-mlx")]
+pub mod sorted_expert_shared_combination_probe;
 #[cfg(feature = "direct-mlx")]
 pub mod sorted_expert_weighted_sum_probe;
 
@@ -90,7 +92,8 @@ pub enum CustomKernelVerdict {
 ///
 /// Implementations compile the kernel and execute a representative launch on
 /// minimal inputs, validating the output against fixed deterministic expected
-/// values. The runtime binding lives inside each implementation so unit
+/// values or, for a kernel that must be bit for bit equal to the path it
+/// replaces, against that path's output on the same inputs. The runtime binding lives inside each implementation so unit
 /// tests can drive the capability owner with fake probes.
 pub trait CustomMetalKernelProbe {
     fn family(&self) -> CustomMetalKernelFamily;
@@ -279,6 +282,9 @@ pub fn worker_process_kernel_capabilities(
         // those supplies into the once-per-process probe run.
         let mut family_probes: Vec<Box<dyn CustomMetalKernelProbe + '_>> = Vec::new();
         family_probes.extend(sorted_expert_weighted_sum_probe::capability_probes(runtime));
+        family_probes.extend(sorted_expert_shared_combination_probe::capability_probes(
+            runtime,
+        ));
         family_probes.extend(fused_jangtq2_gathered_projection_probe::capability_probes(
             runtime,
         ));

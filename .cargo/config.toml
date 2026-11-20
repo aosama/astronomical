@@ -866,6 +866,15 @@ test-neural-engine = "test --no-fail-fast -p neural-engine --all-targets"
 # {"diagnostics": true} for performance attribution.
 test-engine-versus-memory-ceiling = "run -p xtask -- test-run --package astronomical-acceptance --features performance_throughput --test performance_throughput --release --filter engine_versus_memory_ceiling --ignored"
 
+# Fused MoE expert combination A/B on the resident Ornith-1.5-35B-A3B 4-bit
+# model (Development model list): the two-step sorted weighted sum plus
+# compiled shared-expert graph against the one-pass fused kernel, on one
+# loaded model. Checks both arms' logits are equal, then prints min, median
+# and max prefill seconds per arm for 2,048, 3,072 and 4,096-token chunks and
+# the whole ~10,000-token Shakespeare prompt. About two minutes; stop the
+# Development daemon first so both do not hold the model's memory.
+measure-fused-expert-combination-prefill = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --case-budget-seconds 600 --filter should_report_fused_expert_combination_prefill_ab_across_chunk_sizes"
+
 # Streaming scoreboard (issue #2221): the rows the streaming memory redesign is
 # judged by, one model under one limit per row, taken at the product's default
 # prompt chunk with attribution off. Runs all four cells in turn, each with

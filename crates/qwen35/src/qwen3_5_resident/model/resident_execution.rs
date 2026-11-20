@@ -2,7 +2,9 @@
 //!
 //! Resident execution changes weight ownership only. It reuses the production
 //! router, assignment sorting, affine profiles, SwiGLU graph, weighted sum, and
-//! shared-expert combination so resident and paged modes implement the same math.
+//! shared-expert combination so resident and paged modes compute the same bits.
+//! On prompt chunks it may fuse the sorted weighted sum and the shared-expert
+//! combination into one Metal pass, which is bit for bit equal to the two.
 
 use mlx_bridge::MlxArray;
 
@@ -20,6 +22,10 @@ use super::output_combination;
 use super::routing::{
     qwen3_5_moe_sort_expert_assignments, qwen3_5_moe_sorted_expert_weighted_sum,
     qwen3_5_moe_unsorted_expert_weighted_sum,
+};
+use crate::qwen3_5_core::model_math::sorted_expert_shared_combination::{
+    SortedExpertSharedCombinationInputs, can_fuse_sorted_expert_shared_combination,
+    qwen3_5_sorted_expert_shared_combination,
 };
 use crate::sparse_experts;
 
@@ -100,29 +106,20 @@ impl Qwen3_5ResidentModel {
             are_expert_indices_sorted,
             performance_attribution,
         )?;
-        let sparse_expert_output = match sorted_expert_assignments.as_ref() {
-            Some((_sorted_states, _sorted_indices, inverse_order)) => {
-                qwen3_5_moe_sorted_expert_weighted_sum(
-                    &self.runtime,
-                    self.sorted_expert_weighted_sum_kernel()?,
-                    &selected_outputs,
-                    inverse_order,
-                    selected_scores,
-                )?
-            }
-            None => {
-                let selected_outputs = self.runtime.squeeze_axis(&selected_outputs, -2)?;
-                qwen3_5_moe_unsorted_expert_weighted_sum(
-                    &self.runtime,
-                    &selected_outputs,
-                    selected_scores,
-                )?
-            }
+        let routed_expert_outputs = RoutedExpertOutputs {
+            selected_outputs: &selected_outputs,
+            assignment_order: match sorted_expert_assignments.as_ref() {
+                Some((_sorted_states, _sorted_indices, inverse_order)) => {
+                    RoutedAssignmentOrder::Sorted { inverse_order }
+                }
+                None => RoutedAssignmentOrder::Unsorted,
+            },
+            selected_scores,
         };
-        self.combine_resident_sparse_and_shared_experts(
+        self.combine_resident_routed_and_shared_experts(
             hidden_states,
             mixture_of_experts_weights,
-            &sparse_expert_output,
+            &routed_expert_outputs,
             should_use_compiled_elementwise_graphs,
         )
     }
@@ -274,13 +271,121 @@ impl Qwen3_5ResidentModel {
         }
     }
 
-    fn combine_resident_sparse_and_shared_experts(
+    /// Adds the gated shared expert to the routed experts' weighted sum. A
+    /// prompt chunk on the sorted route with the fused kernel enabled does
+    /// both in one Metal pass; every other case reduces first, then combines.
+    fn combine_resident_routed_and_shared_experts(
         &self,
         hidden_states: &MlxArray,
         mixture_of_experts_weights: &Qwen3_5MoEFeedForwardWeights,
-        sparse_expert_output: &MlxArray,
+        routed_expert_outputs: &RoutedExpertOutputs<'_>,
         should_use_compiled_elementwise_graphs: bool,
     ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+        let (shared_expert_output, shared_expert_gate_logits) = self
+            .resident_shared_expert_output_and_gate_logits(
+                hidden_states,
+                mixture_of_experts_weights,
+            )?;
+        if should_use_compiled_elementwise_graphs
+            && let Some(combined_expert_output) = self.fused_sorted_expert_shared_combination(
+                routed_expert_outputs,
+                &shared_expert_output,
+                &shared_expert_gate_logits,
+            )?
+        {
+            return Ok(combined_expert_output);
+        }
+        let sparse_expert_output = self.resident_sparse_expert_output(routed_expert_outputs)?;
+        if should_use_compiled_elementwise_graphs {
+            Ok(self
+                .runtime
+                .apply_compiled_sparse_shared_expert_combination(
+                    &self.compiled_elementwise_graphs,
+                    &sparse_expert_output,
+                    &shared_expert_output,
+                    &shared_expert_gate_logits,
+                )?)
+        } else {
+            Ok(output_combination::combine_sparse_and_shared_experts(
+                &self.runtime,
+                &sparse_expert_output,
+                &shared_expert_output,
+                &shared_expert_gate_logits,
+            )?)
+        }
+    }
+
+    /// The fused one-pass combination, or `None` when it does not apply: the
+    /// kernel is not loaded, the assignments were not sorted, or the dtypes
+    /// are not the ones its bit-for-bit contract is proven for. Callers skip
+    /// it for one-token decode, which keeps the uncompiled two-step path it
+    /// was tuned on; the fused kernel replaces only the prompt-chunk graph.
+    fn fused_sorted_expert_shared_combination(
+        &self,
+        routed_expert_outputs: &RoutedExpertOutputs<'_>,
+        shared_expert_output: &MlxArray,
+        shared_expert_gate_logits: &MlxArray,
+    ) -> Result<Option<MlxArray>, Qwen3_5ExecutionError> {
+        let (Some(combination_kernel), RoutedAssignmentOrder::Sorted { inverse_order }) = (
+            self.optional_accelerators
+                .sorted_expert_shared_combination_kernel
+                .as_ref(),
+            routed_expert_outputs.assignment_order,
+        ) else {
+            return Ok(None);
+        };
+        let combination_inputs = SortedExpertSharedCombinationInputs {
+            sorted_expert_outputs: routed_expert_outputs.selected_outputs,
+            inverse_order,
+            selected_scores: routed_expert_outputs.selected_scores,
+            shared_expert_output,
+            shared_expert_gate_logits,
+        };
+        if !can_fuse_sorted_expert_shared_combination(&combination_inputs) {
+            return Ok(None);
+        }
+        Ok(Some(qwen3_5_sorted_expert_shared_combination(
+            &self.runtime,
+            combination_kernel,
+            &combination_inputs,
+        )?))
+    }
+
+    /// Router-score weighted sum of the routed experts, through the sorted
+    /// kernel when the assignments were sorted.
+    fn resident_sparse_expert_output(
+        &self,
+        routed_expert_outputs: &RoutedExpertOutputs<'_>,
+    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+        match routed_expert_outputs.assignment_order {
+            RoutedAssignmentOrder::Sorted { inverse_order } => {
+                Ok(qwen3_5_moe_sorted_expert_weighted_sum(
+                    &self.runtime,
+                    self.sorted_expert_weighted_sum_kernel()?,
+                    routed_expert_outputs.selected_outputs,
+                    inverse_order,
+                    routed_expert_outputs.selected_scores,
+                )?)
+            }
+            RoutedAssignmentOrder::Unsorted => {
+                let selected_outputs = self
+                    .runtime
+                    .squeeze_axis(routed_expert_outputs.selected_outputs, -2)?;
+                Ok(qwen3_5_moe_unsorted_expert_weighted_sum(
+                    &self.runtime,
+                    &selected_outputs,
+                    routed_expert_outputs.selected_scores,
+                )?)
+            }
+        }
+    }
+
+    /// The shared expert's SwiGLU output and its one gate logit per token.
+    fn resident_shared_expert_output_and_gate_logits(
+        &self,
+        hidden_states: &MlxArray,
+        mixture_of_experts_weights: &Qwen3_5MoEFeedForwardWeights,
+    ) -> Result<(MlxArray, MlxArray), Qwen3_5ExecutionError> {
         let shared_gate = self.quantized_linear(
             hidden_states,
             &mixture_of_experts_weights.shared_expert_gate_projection,
@@ -292,30 +397,31 @@ impl Qwen3_5ResidentModel {
         let shared_activated =
             self.runtime
                 .apply_compiled_swiglu(&self.compiled_swiglu, &shared_gate, &shared_up)?;
-        let shared_output = self.quantized_linear(
+        let shared_expert_output = self.quantized_linear(
             &shared_activated,
             &mixture_of_experts_weights.shared_expert_down_projection,
         )?;
-        let shared_gate_logits = self.quantized_linear(
+        let shared_expert_gate_logits = self.quantized_linear(
             hidden_states,
             &mixture_of_experts_weights.shared_expert_output_gate_projection,
         )?;
-        if should_use_compiled_elementwise_graphs {
-            Ok(self
-                .runtime
-                .apply_compiled_sparse_shared_expert_combination(
-                    &self.compiled_elementwise_graphs,
-                    sparse_expert_output,
-                    &shared_output,
-                    &shared_gate_logits,
-                )?)
-        } else {
-            Ok(output_combination::combine_sparse_and_shared_experts(
-                &self.runtime,
-                sparse_expert_output,
-                &shared_output,
-                &shared_gate_logits,
-            )?)
-        }
+        Ok((shared_expert_output, shared_expert_gate_logits))
     }
+}
+
+/// The routed experts' down-projection outputs and what reduces them.
+struct RoutedExpertOutputs<'arrays> {
+    /// `[assignments, 1, hidden]` when sorted, `[..., top_k, 1, hidden]` when not.
+    selected_outputs: &'arrays MlxArray,
+    assignment_order: RoutedAssignmentOrder<'arrays>,
+    /// Router scores in original assignment order, `[..., top_k]`.
+    selected_scores: &'arrays MlxArray,
+}
+
+/// Whether the routed outputs are in sorted-by-expert order, which carries the
+/// inverse permutation back to the router's order.
+#[derive(Clone, Copy)]
+enum RoutedAssignmentOrder<'arrays> {
+    Sorted { inverse_order: &'arrays MlxArray },
+    Unsorted,
 }

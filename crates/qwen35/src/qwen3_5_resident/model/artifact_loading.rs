@@ -68,25 +68,24 @@ impl Qwen3_5ResidentModel {
             should_bind_vision_weights,
             performance_attribution,
         )?;
-        let (expert_layer_plans, sorted_expert_weighted_sum_kernel) =
-            match config.feed_forward_architecture() {
-                Qwen3_5FeedForwardArchitecture::Dense => (Vec::new(), None),
-                Qwen3_5FeedForwardArchitecture::MixtureOfExperts => {
-                    let resident_expert_layer_plans = load_resident_expert_layer_plans(
-                        &runtime,
-                        model_directory,
-                        &config,
-                        &shard_index,
-                        &tensor_inventory,
-                        expert_atlas.as_ref(),
-                        performance_attribution,
-                    )?;
-                    (
-                        resident_expert_layer_plans.expert_layer_plans,
-                        resident_expert_layer_plans.sorted_expert_weighted_sum_kernel,
-                    )
-                }
-            };
+        let ResidentMixtureOfExpertsParts {
+            expert_layer_plans,
+            sorted_expert_weighted_sum_kernel,
+            sorted_expert_shared_combination_kernel,
+        } = match config.feed_forward_architecture() {
+            Qwen3_5FeedForwardArchitecture::Dense => ResidentMixtureOfExpertsParts::default(),
+            Qwen3_5FeedForwardArchitecture::MixtureOfExperts => {
+                load_resident_mixture_of_experts_parts(
+                    &runtime,
+                    model_directory,
+                    &config,
+                    &shard_index,
+                    &tensor_inventory,
+                    expert_atlas.as_ref(),
+                    performance_attribution,
+                )?
+            }
+        };
         // astro decoder state cache geometry cannot be finalized before weights and sparse plans are
         // bound: their source dtypes determine MLX result-type promotion. Derive
         // the persistence contract at that boundary without evaluating tensors.
@@ -134,7 +133,11 @@ impl Qwen3_5ResidentModel {
                 gated_delta_kernel,
                 gated_delta_checkpoint_kernel,
                 gdn_decode_prework_kernel,
-                optional_accelerators: Default::default(),
+                optional_accelerators:
+                    crate::qwen3_5_core::model::base::Qwen3_5OptionalAccelerators {
+                        sorted_expert_shared_combination_kernel,
+                        ..Default::default()
+                    },
                 sorted_expert_weighted_sum_kernel,
                 compiled_swiglu,
                 compiled_elementwise_graphs,
@@ -157,17 +160,20 @@ impl Qwen3_5ResidentModel {
 }
 
 /// The resident engine's MoE-only pieces: the quantized expert layer plans
-/// built from the validated inventory and the sorted-reduction kernel verdict.
-struct ResidentExpertLayerPlans {
+/// built from the validated inventory and the custom MoE kernels this
+/// machine's capability probes kept. A dense model has none of them.
+#[derive(Default)]
+struct ResidentMixtureOfExpertsParts {
     expert_layer_plans: Vec<QuantizedExpertLayerPlan>,
     sorted_expert_weighted_sum_kernel: Option<MlxMetalKernel>,
+    sorted_expert_shared_combination_kernel: Option<MlxMetalKernel>,
 }
 
-/// Builds the resident expert layer plans for a sparse model. Mirrors the MoE
-/// branch of the inlined loader, including the plan-construction attribution
-/// span and the sorted-reduction verdict.
+/// Builds the resident expert layer plans for a sparse model, under the
+/// plan-construction attribution span, and keeps the custom MoE kernels this
+/// machine's capability verdicts allow.
 #[allow(clippy::too_many_arguments)]
-fn load_resident_expert_layer_plans(
+fn load_resident_mixture_of_experts_parts(
     runtime: &MlxRuntime,
     model_directory: &Path,
     config: &crate::Qwen3_5Config,
@@ -175,7 +181,7 @@ fn load_resident_expert_layer_plans(
     tensor_inventory: &crate::TensorInventory,
     expert_atlas: Option<&expert_atlas::AtlasManifest>,
     performance_attribution: &mut PerformanceAttribution,
-) -> Result<ResidentExpertLayerPlans, Qwen3_5ExecutionError> {
+) -> Result<ResidentMixtureOfExpertsParts, Qwen3_5ExecutionError> {
     let tensor_name_to_shard_file_name: std::collections::HashMap<String, String> = shard_index
         .language_tensor_name_to_shard_file_name()
         .iter()
@@ -206,32 +212,67 @@ fn load_resident_expert_layer_plans(
             })
         },
     )?;
-    // The GPU capability verdict decides whether this worker
-    // process retains the measured sorted-reduction kernel. A
-    // demoted kernel leaves None and every MoE forward takes the
-    // unsorted MLX route for the worker's lifetime.
+    let worker_kernel_capabilities = crate::kernel_capability::worker_process_kernel_capabilities(
+        runtime,
+        performance_attribution,
+    );
     let sorted_expert_weighted_sum_kernel =
-        if crate::kernel_capability::worker_process_kernel_capabilities(
-            runtime,
-            performance_attribution,
-        )
-        .is_custom_kernel_supported(
-            crate::kernel_capability::CustomMetalKernelFamily::SORTED_EXPERT_WEIGHTED_SUM,
-        ) {
-            Some(
-                crate::qwen3_5_core::model_math::routing::qwen3_5_moe_sorted_expert_weighted_sum_kernel(
-                )?,
-            )
-        } else {
-            tracing::info!(
-                "sorted expert weighted-sum kernel demoted to the MLX fallback for this worker process"
-            );
-            None
-        };
-    Ok(ResidentExpertLayerPlans {
+        retained_sorted_expert_weighted_sum_kernel(worker_kernel_capabilities)?;
+    let sorted_expert_shared_combination_kernel = retained_sorted_expert_shared_combination_kernel(
+        worker_kernel_capabilities,
+        sorted_expert_weighted_sum_kernel.is_some(),
+    )?;
+    Ok(ResidentMixtureOfExpertsParts {
         expert_layer_plans,
         sorted_expert_weighted_sum_kernel,
+        sorted_expert_shared_combination_kernel,
     })
+}
+
+/// The GPU capability verdict decides whether this worker process retains the
+/// measured sorted-reduction kernel. A demoted kernel leaves `None` and every
+/// MoE forward takes the unsorted MLX route for the worker's lifetime.
+fn retained_sorted_expert_weighted_sum_kernel(
+    worker_kernel_capabilities: &crate::kernel_capability::WorkerKernelCapabilities,
+) -> Result<Option<MlxMetalKernel>, Qwen3_5ExecutionError> {
+    let sorted_reduction_family =
+        crate::kernel_capability::CustomMetalKernelFamily::SORTED_EXPERT_WEIGHTED_SUM;
+    if !worker_kernel_capabilities.is_custom_kernel_supported(sorted_reduction_family) {
+        tracing::info!(
+            "sorted expert weighted-sum kernel demoted to the MLX fallback for this worker process"
+        );
+        return Ok(None);
+    }
+    Ok(Some(
+        crate::qwen3_5_core::model_math::routing::qwen3_5_moe_sorted_expert_weighted_sum_kernel()?,
+    ))
+}
+
+/// Keeps the fused sorted-expert and shared-expert combination when its
+/// probe passed. It reads the sorted assignment layout, so it is kept only
+/// alongside the sorted-reduction kernel. On the 35B-A3B 4-bit resident model
+/// it measured +0.3 to +0.4% median prefill speed for single 2,048 to
+/// 4,096-token chunks and +0.03% over a 10,176-token prompt, with identical
+/// logits: a small, free gain, near run-to-run spread.
+fn retained_sorted_expert_shared_combination_kernel(
+    worker_kernel_capabilities: &crate::kernel_capability::WorkerKernelCapabilities,
+    is_sorted_reduction_retained: bool,
+) -> Result<Option<MlxMetalKernel>, Qwen3_5ExecutionError> {
+    if !is_sorted_reduction_retained {
+        return Ok(None);
+    }
+    let fused_combination_family =
+        crate::kernel_capability::CustomMetalKernelFamily::SORTED_EXPERT_SHARED_COMBINATION;
+    if !worker_kernel_capabilities.is_custom_kernel_supported(fused_combination_family) {
+        tracing::info!(
+            verdict = ?worker_kernel_capabilities.verdict(fused_combination_family),
+            "fused sorted-expert and shared-expert combination kernel demoted to the two-step path for this worker process"
+        );
+        return Ok(None);
+    }
+    Ok(Some(
+        crate::qwen3_5_core::model_math::sorted_expert_shared_combination::qwen3_5_sorted_expert_shared_combination_kernel()?,
+    ))
 }
 
 /// Assembles the limit and geometry this engine runs under from the
