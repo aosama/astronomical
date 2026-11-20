@@ -16,7 +16,7 @@
 //! plain library. Without a paired drafter the same journey measures plain
 //! decoding, so running it on a target and on the same model without its
 //! drafter is the serving A/B. On the M5-family GPU these were measured on,
-//! the dense 27B decoded about 13 tok/s plain against about 36 with draft
+//! the dense 27B decoded about 17 tok/s plain against about 36 with draft
 //! trees, and the Ornith 1.5 35B-A3B OptiQ 4-bit 67.7 against 81.3, so the
 //! decode rate itself says which path ran.
 

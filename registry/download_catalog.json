@@ -407,41 +407,22 @@
             "upstream_license": "MIT"
         },
         {
-            "huggingface_id": "Youssofal/Qwen3.8-27B-MTPLX-Optimized-Speed",
-            "revision": "1d5087d2062c02b279180a53e4016cf9cd7a3d7e",
-            "summary": "A large model tuned to answer two to three times faster.",
+            "huggingface_id": "ahmedihamdy/Qwen3.8-27B-MLX-4bit-vision-DFLASH2",
+            "revision": "3ea6c842336d4a78cdeea6ffaf6908efc906bee1",
+            "summary": "A large all-round model that reads pictures, with its draft model built in: about twice as fast on M5 Macs.",
             "family": "qwen3_5",
-            "approximate_size_bytes": 20703486926,
-            "approximate_memory_bytes": 21796958946,
+            "approximate_size_bytes": 19930637987,
+            "approximate_memory_bytes": 21024110007,
             "role": "chat",
             "public": true,
-            "description": "A fast all-around model that reads pictures and text, reasons before answering, and calls tools for agentic work. It keeps Qwen 3.8's native multi-token-prediction head for two to three times the speed of plain decoding, at a lean 4-bit size that fits comfortably on 32 GB Macs.",
+            "description": "Qwen 3.8 27B in a 4-bit build with a small draft model packed in. A large, capable model that reads pictures and text, reasons before answering, and calls tools for agentic work. On an M5 Mac the draft model guesses the next few words and the large model checks them all in one step, so answers arrive about twice as fast and every word is still the large model's own choice. On other Macs, with less memory, or when a message has a picture in it, it runs just like the plain 4-bit build.",
             "capabilities": {
                 "supports_reasoning": true,
                 "supports_vision": true,
                 "supports_tool_calls": true,
                 "context_window": 262144
             },
-            "quantization_label": "MTPLX dynamic 4-bit (affine, group 32)",
-            "upstream_license": "Apache-2.0"
-        },
-        {
-            "huggingface_id": "TensorFold/Qwen3.8-27B-MLX-4bit",
-            "revision": "22d8d538154e0e5b6f8dcb1fcc74a60a0798104c",
-            "summary": "A large all-round model that reads pictures and thinks before it answers.",
-            "family": "qwen3_5",
-            "approximate_size_bytes": 16081520999,
-            "approximate_memory_bytes": 17174993019,
-            "role": "chat",
-            "public": true,
-            "description": "Qwen 3.8 27B in a plain 4-bit build. A large, capable model that reads pictures and text, reasons before answering, and calls tools for agentic work. Best for writing, coding and multi-step problems when quality matters more than speed, and keeps a large memory window for long conversations and documents.",
-            "capabilities": {
-                "supports_reasoning": true,
-                "supports_vision": true,
-                "supports_tool_calls": true,
-                "context_window": 262144
-            },
-            "quantization_label": "4-bit affine (group 64), bf16 vision tower",
+            "quantization_label": "4-bit affine (group 64), bf16 vision tower, DFlash2 draft model",
             "upstream_license": "Apache-2.0"
         },
         {

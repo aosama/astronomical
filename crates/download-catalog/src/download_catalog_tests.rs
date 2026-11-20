@@ -486,35 +486,78 @@ fn should_ship_kokoro_and_phonon_as_speech_models() {
     );
 }
 
-/// The plain 4-bit Qwen 3.8 27B is the target the DFlash2 drafter pairs with,
-/// so the catalog offers it as an ordinary chat model with its vision tower
-/// and every file in the repository: nothing is filtered out, because the
-/// processor and chat template files are what make pictures and tools work.
+/// The 4-bit Qwen 3.8 27B is offered once, as TensorFold's 4-bit build with
+/// z-lab's DFlash2 drafter bundled in its `drafter` folder: the pair
+/// TensorFold's own engine serves. Its plain twin is no longer in the
+/// catalog, so its weight bytes and working allowance are pinned here. The disk
+/// check must cover both checkpoints' weight files. The download keeps
+/// every file, because the processor and chat template files are what make
+/// pictures and tools work and the drafter folder is what makes it draft.
 #[test]
-fn should_ship_the_plain_four_bit_qwen3_8_27b_as_a_vision_chat_model() {
+fn should_ship_qwen3_8_27b_only_as_the_vision_dflash2_package() {
+    const QWEN3_8_TARGET_WEIGHTS_BYTES: u64 = 16_054_541_349;
+    const PLAIN_TWIN_WORKING_ALLOWANCE_BYTES: u64 = 1_093_472_020;
+    const QWEN3_8_DRAFTER_WEIGHTS_BYTES: u64 = 3_848_817_896;
     let download_catalog =
         DownloadCatalog::load_bundled().expect("the shipped bundled catalog should parse");
-    let qwen3_8_entry = download_catalog
-        .entries()
-        .iter()
-        .find(|catalog_entry| catalog_entry.huggingface_id() == "TensorFold/Qwen3.8-27B-MLX-4bit")
-        .expect("the shipped catalog should offer the plain 4-bit Qwen 3.8 27B");
-
-    assert_eq!(qwen3_8_entry.role(), DownloadCatalogRole::Chat);
-    assert_eq!(qwen3_8_entry.family().as_str(), "qwen3_5");
-    assert_eq!(
-        qwen3_8_entry.revision(),
-        "22d8d538154e0e5b6f8dcb1fcc74a60a0798104c"
+    let package_entry = shipped_entry(
+        &download_catalog,
+        "ahmedihamdy/Qwen3.8-27B-MLX-4bit-vision-DFLASH2",
     );
-    assert!(!qwen3_8_entry.experimental() && !qwen3_8_entry.get_started());
-    let capabilities = qwen3_8_entry.capabilities();
+
+    assert_eq!(package_entry.role(), DownloadCatalogRole::Chat);
+    assert_eq!(package_entry.family().as_str(), "qwen3_5");
+    assert_eq!(
+        package_entry.revision(),
+        "3ea6c842336d4a78cdeea6ffaf6908efc906bee1"
+    );
+    assert!(!package_entry.experimental() && !package_entry.get_started());
+    let capabilities = package_entry.capabilities();
     assert!(capabilities.supports_vision && capabilities.supports_reasoning);
     assert!(capabilities.supports_tool_calls);
-    assert!(qwen3_8_entry.approximate_memory_bytes() > qwen3_8_entry.approximate_size_bytes());
-    let selection = qwen3_8_entry.download_path_selection();
+    assert!(
+        package_entry.approximate_size_bytes()
+            >= QWEN3_8_TARGET_WEIGHTS_BYTES + QWEN3_8_DRAFTER_WEIGHTS_BYTES
+    );
+    assert_eq!(
+        package_entry.approximate_memory_bytes() - package_entry.approximate_size_bytes(),
+        PLAIN_TWIN_WORKING_ALLOWANCE_BYTES
+    );
+    let selection = package_entry.download_path_selection();
     assert!(selection.includes("model-00003-of-00003.safetensors"));
     assert!(selection.includes("preprocessor_config.json"));
     assert!(selection.includes("chat_template.jinja"));
+    assert!(selection.includes("drafter/model.safetensors"));
+    assert!(selection.includes("drafter/config.json"));
+    let other_four_bit_qwen3_8_27b_ids: Vec<&str> = download_catalog
+        .entries()
+        .iter()
+        .map(DownloadCatalogEntry::huggingface_id)
+        .filter(|huggingface_id| {
+            huggingface_id.contains("Qwen3.8-27B") && !huggingface_id.contains("Ternary")
+        })
+        .filter(|huggingface_id| *huggingface_id != package_entry.huggingface_id())
+        .collect();
+    assert!(
+        other_four_bit_qwen3_8_27b_ids.is_empty(),
+        "the package should be the only non-ternary Qwen 3.8 27B: {other_four_bit_qwen3_8_27b_ids:?}"
+    );
+}
+
+/// The 2-bit ternary 27B builds stay beside the 4-bit package: at under 9 GB
+/// they are the only way an 8 GB Mac runs a 27B model, and no Mac is cut off
+/// from a model by its memory.
+#[test]
+fn should_keep_the_ternary_qwen3_8_27b_builds_for_small_memory_macs() {
+    let download_catalog =
+        DownloadCatalog::load_bundled().expect("the shipped bundled catalog should parse");
+    for ternary_huggingface_id in [
+        "prism-ml/Ternary-Bonsai-2-27B-mlx-2bit",
+        "nathansutton/Qwen3.8-27B-Ternary-Bonsai-2-DFlash2-MLX",
+    ] {
+        let ternary_entry = shipped_entry(&download_catalog, ternary_huggingface_id);
+        assert!(ternary_entry.approximate_memory_bytes() < 10 * 1024 * 1024 * 1024);
+    }
 }
 
 /// A DFlash2 package is a plain catalog model with its DFlash2 drafter in a
