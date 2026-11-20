@@ -1,6 +1,6 @@
 import Foundation
 
-/// Bytes in one gigabyte, matching the daemon and the memory stepper.
+/// Bytes in one gigabyte, matching the daemon and the memory slider.
 let mlxMemoryBytesPerGigabyte: UInt64 = 1_073_741_824
 
 /// Share of a wired claim kept out of MLX planning, in parts per thousand.
@@ -14,7 +14,7 @@ private let metalWorkingSetMarginPartsPerThousand: UInt64 = 25
 /// Reports whether the live engine ceiling is the ceiling this request installs.
 ///
 /// A request above the plannable wired budget lands below the number the
-/// stepper sent. Treating only an exact byte match as success leaves
+/// slider sent. Treating only an exact byte match as success leaves
 /// "MLX memory setting persisted and applied" on screen after the engine has
 /// already adopted the clamped ceiling.
 func liveMlxMemoryCeilingAdoptedRequest(

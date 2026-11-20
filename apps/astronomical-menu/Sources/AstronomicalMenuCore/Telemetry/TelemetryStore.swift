@@ -34,8 +34,7 @@ final class TelemetryStore: ObservableObject {
   @Published private(set) var lastStatusRefreshErrorMessage: String?
   @Published private(set) var hasDiscoveredModels = false
   @Published var editableMaximumMlxMemoryGigabytes: UInt64 = 0
-  var onMenuBarTitleChanged: ((String) -> Void)?
-  var onMenuBarGlyphStateChanged: ((MenuBarGlyphState) -> Void)?
+  var onMenuBarPresentationChanged: ((MenuBarPresentation) -> Void)?
 
   /// Suspends the feedback-dismissal task for its delay. Production sleeps the
   /// real duration; tests inject a gate they release explicitly so assertions
@@ -51,6 +50,7 @@ final class TelemetryStore: ObservableObject {
   private var pollingTask: Task<Void, Never>?
   private var latestStatusRefreshTask: Task<DaemonStatusDocument, Never>?
   private var neuralEngineBannerPolicy = NeuralEngineBannerPolicy()
+  private var engineDowntimePolicy = EngineDowntimePolicy()
   var onNeuralEngineBannerDue: ((NeuralEngineBanner) -> Void)?
   private var latestStatusRefreshSequence = 0
   private var controlActionFeedbackDismissalTask: Task<Void, Never>?
@@ -110,6 +110,21 @@ final class TelemetryStore: ObservableObject {
 
   func restoreMacMaximumMlxMemoryLimit() {
     Task { await performMaximumMlxMemoryLimitUpdate(nil) }
+  }
+
+  func setMenuBarSetting(_ menuBarSwitch: MenuBarSwitch, isOn: Bool) {
+    Task { await performMenuBarSettingUpdate(menuBarSwitch, isOn: isOn) }
+  }
+
+  /// Saves the choice through the engine and reads it back, so the switch shows what is
+  /// stored and never a choice that failed to save.
+  func performMenuBarSettingUpdate(_ menuBarSwitch: MenuBarSwitch, isOn: Bool) async {
+    do {
+      try await daemonClient.updateMenuBarSetting(menuBarSwitch, isOn: isOn)
+    } catch {
+      presentControlActionFeedback(.failure(controlActionErrorMessage(error)))
+    }
+    await refresh()
   }
 
   func performMaximumMlxMemoryLimitUpdate(_ maximumMlxMemoryGigabytes: UInt64?) async {
@@ -287,8 +302,10 @@ final class TelemetryStore: ObservableObject {
       editableMaximumMlxMemoryGigabytes = appliedMaximumMlxMemoryWholeGigabytes(
         for: nextStatusDocument)
     }
-    onMenuBarTitleChanged?(nextStatusDocument.menuBarTitle)
-    onMenuBarGlyphStateChanged?(nextStatusDocument.menuBarGlyphState)
+    onMenuBarPresentationChanged?(
+      MenuBarPresentation(
+        statusDocument: nextStatusDocument,
+        engineIsDown: engineDowntimePolicy.engineIsDown(for: nextStatusDocument, at: Date())))
     if let neuralEngineBanner = neuralEngineBannerPolicy.banner(
       for: nextStatusDocument, at: Date())
     {
@@ -354,7 +371,7 @@ final class TelemetryStore: ObservableObject {
     (statusDocument.minimumMlxMemoryCeilingBytes + 1_073_741_823) / 1_073_741_824
   }
 
-  /// Largest whole-GB setting the engine serves unchanged; the stepper never
+  /// Largest whole-GB setting the engine serves unchanged; the slider never
   /// offers a value the engine would cap (issue #1282).
   var maximumWholeGigabytes: UInt64 {
     reachableMaximumMlxMemoryWholeGigabytes(for: statusDocument)

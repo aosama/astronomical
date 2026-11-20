@@ -153,6 +153,8 @@ fn fixture_resolved_runtime_config(
         configured_astro_ssd_prompt_cache_enabled: None,
         metal_residency_refresh_enabled: false,
         idle_model_unload_seconds: 0,
+        menu_bar_shows_progress_and_speed: false,
+        menu_bar_shows_technical_details: false,
         configured_astro_ssd_prompt_cache_maximum_size_bytes: None,
         performance_attribution_enabled: false,
         astro_ssd_prompt_cache_config: AstroSsdPromptCacheConfig::new(

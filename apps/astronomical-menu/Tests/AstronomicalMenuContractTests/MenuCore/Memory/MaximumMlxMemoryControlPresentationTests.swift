@@ -38,9 +38,7 @@ final class MaximumMlxMemoryControlPresentationTests: XCTestCase {
     let controlPresentation = MaximumMlxMemoryControlPresentation(
       statusDocument: servedStatusDocument, editableMaximumWholeGigabytes: 34)
 
-    XCTAssertEqual(controlPresentation.reachableMaximumCaption, "of 36 GB")
     XCTAssertFalse(controlPresentation.shouldOfferApply)
-    XCTAssertTrue(controlPresentation.shouldOfferMacMaximum)
     XCTAssertNil(controlPresentation.cappedCeilingCaption)
   }
 
@@ -58,7 +56,7 @@ final class MaximumMlxMemoryControlPresentationTests: XCTestCase {
   }
 
   func test_should_hide_use_max_and_the_cap_while_the_mac_maximum_is_in_force() {
-    // "Use Max" asks for whatever the Mac allows; serving the plannable wired
+    // The top of the slider asks for whatever the Mac allows; serving the plannable wired
     // budget below the machine ceiling honours it and must not read as a cap.
     let macMaximumStatusDocument = statusDocument(
       liveCeilingBytes: plannableWiredResidencyBytes,
@@ -69,7 +67,6 @@ final class MaximumMlxMemoryControlPresentationTests: XCTestCase {
     let controlPresentation = MaximumMlxMemoryControlPresentation(
       statusDocument: macMaximumStatusDocument, editableMaximumWholeGigabytes: 36)
 
-    XCTAssertFalse(controlPresentation.shouldOfferMacMaximum)
     XCTAssertFalse(controlPresentation.shouldOfferApply)
     XCTAssertNil(controlPresentation.cappedCeilingCaption)
   }

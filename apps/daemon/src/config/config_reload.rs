@@ -52,6 +52,11 @@ pub struct ResolvedRuntimeConfig {
     pub metal_residency_refresh_enabled: bool,
     /// Seconds an unused model stays loaded; zero keeps it. Applied live.
     pub idle_model_unload_seconds: u64,
+    /// Whether the menu bar item writes progress and speed beside its icon. Applied live;
+    /// the daemon only reports it, because the menu-bar agent is what draws the item.
+    pub menu_bar_shows_progress_and_speed: bool,
+    /// Whether the menu bar popover shows its technical rows. Applied live, like the above.
+    pub menu_bar_shows_technical_details: bool,
     /// Performance attribution preference captured by the worker at startup.
     pub performance_attribution_enabled: bool,
     /// Whether the worker may read and write the `astro_ssd_prompt_cache`.
@@ -183,6 +188,8 @@ impl ResolvedRuntimeConfigResolver {
             maximum_mlx_memory_bytes: user_config.maximum_mlx_memory_bytes()?,
             metal_residency_refresh_enabled: user_config.metal_residency_refresh_enabled(),
             idle_model_unload_seconds: user_config.idle_model_unload_seconds(),
+            menu_bar_shows_progress_and_speed: user_config.menu_bar_shows_progress_and_speed(),
+            menu_bar_shows_technical_details: user_config.menu_bar_shows_technical_details(),
             performance_attribution_enabled: user_config.performance_attribution_enabled(),
             astro_ssd_prompt_cache_enabled: user_config.astro_ssd_prompt_cache_enabled(),
             configured_astro_ssd_prompt_cache_enabled: user_config
@@ -405,11 +412,28 @@ fn in_place_field_changes(
     if current.idle_model_unload_seconds != candidate.idle_model_unload_seconds {
         changed_fields.push("idle_model_unload_seconds".to_owned());
     }
+    changed_fields.extend(menu_bar_field_changes(current, candidate));
     if model_request_defaults_differ(
         &current.model_policy_catalog,
         &candidate.model_policy_catalog,
     ) {
         changed_fields.push("model_generation_defaults".to_owned());
+    }
+    changed_fields
+}
+
+/// The changed menu-bar display switches. Only the menu-bar agent reads them, through the
+/// status document, so they always apply in place.
+fn menu_bar_field_changes(
+    current: &ResolvedRuntimeConfig,
+    candidate: &ResolvedRuntimeConfig,
+) -> Vec<String> {
+    let mut changed_fields = Vec::new();
+    if current.menu_bar_shows_progress_and_speed != candidate.menu_bar_shows_progress_and_speed {
+        changed_fields.push("menu_bar.show_progress_and_speed".to_owned());
+    }
+    if current.menu_bar_shows_technical_details != candidate.menu_bar_shows_technical_details {
+        changed_fields.push("menu_bar.show_technical_details".to_owned());
     }
     changed_fields
 }

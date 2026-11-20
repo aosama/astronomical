@@ -64,12 +64,22 @@ struct OrbitalTelemetryPopover: View {
       Divider()
       activityRows(statusDocument)
       Divider()
-      resourceRows(statusDocument)
-      controlFeedbackRows(statusDocument)
+      SessionSpeedTiles(statusDocument: statusDocument)
       Divider()
-      buildIdentityRows(statusDocument)
-      primaryActionButtons
-      serverControlRow
+      // Everyday rows answer "what is it doing and how much memory"; the technical rows answer
+      // a developer's questions and appear only when the person asks for them in Settings.
+      if statusDocument.menuBarShowsTechnicalDetails {
+        resourceRows(statusDocument)
+      } else {
+        EverydayMemoryRow(statusDocument: statusDocument)
+        MaximumModelMemorySlider(telemetryStore: telemetryStore, statusDocument: statusDocument)
+      }
+      controlFeedbackRows(statusDocument)
+      if statusDocument.menuBarShowsTechnicalDetails {
+        Divider()
+        buildIdentityRows(statusDocument)
+      }
+      footer(statusDocument)
     }
     .font(PopoverTypography.body)
     .padding(PopoverLayout.edgePadding).frame(width: PopoverLayout.width).background(
@@ -136,7 +146,8 @@ struct OrbitalTelemetryPopover: View {
     metricRow("Flight", statusDocument.flightTitle)
     PopoverProgressRow(statusDocument: statusDocument)
     metricRow(statusDocument.elapsedTimeMetricTitle, statusDocument.elapsedTimeTitle)
-    if let neuralEngineTitle = statusDocument.neuralEnginePrefill?.metricTitle(
+    if statusDocument.menuBarShowsTechnicalDetails,
+      let neuralEngineTitle = statusDocument.neuralEnginePrefill?.metricTitle(
       showsEstimate: !statusDocument.isActive)
     {
       metricRow("Neural Engine", neuralEngineTitle)
@@ -164,8 +175,7 @@ struct OrbitalTelemetryPopover: View {
       headroomSplit: statusDocument.mlxHeadroomSplit,
       sourceTitle: statusDocument.mlxMemorySourceTitle
     )
-    maximumMlxMemoryControl(statusDocument)
-    metricRow("Session", statusDocument.sessionTitle)
+    MaximumModelMemorySlider(telemetryStore: telemetryStore, statusDocument: statusDocument)
     PromptReuseBar(
       reusedFraction: statusDocument.sessionPromptReuseFraction,
       percentageTitle: statusDocument.sessionPromptReusePercentageTitle,
@@ -219,28 +229,24 @@ struct OrbitalTelemetryPopover: View {
   }
 
   @ViewBuilder
-  private var primaryActionButtons: some View {
-    Button(action: telemetryStore.hasDiscoveredModels ? openObservatory : openDownloadModels) {
-      Label(
-        telemetryStore.hasDiscoveredModels ? "Open Observatory" : "Download a model",
-        systemImage: telemetryStore.hasDiscoveredModels ? "safari" : "arrow.down.circle"
-      )
-        .frame(maxWidth: .infinity)
+  private func footer(_ statusDocument: DaemonStatusDocument) -> some View {
+    let footerPresentation = PopoverFooterPresentation(
+      statusDocument: statusDocument, hasDiscoveredModels: telemetryStore.hasDiscoveredModels)
+    if footerPresentation.offersModelDownload {
+      Button(action: openDownloadModels) {
+        Label("Download a model", systemImage: "arrow.down.circle").frame(maxWidth: .infinity)
+      }
+      .buttonStyle(.borderedProminent)
+      .tint(AstronomicalBrandPalette.accentColor)
     }
-    .buttonStyle(.borderedProminent)
-    .tint(AstronomicalBrandPalette.accentColor)
-    Button(action: openChat) {
-      Label("Chat", systemImage: "bubble.left.and.bubble.right")
-        .frame(maxWidth: .infinity)
-    }
-    .buttonStyle(.borderedProminent)
-    .tint(AstronomicalBrandPalette.accentColor)
-  }
-
-  private var serverControlRow: some View {
-    HStack {
-      Button("Reload config", action: reloadConfiguration)
-      Button("Restart server", action: restartServer)
+    HStack(spacing: 8) {
+      chatButton(carriesAccent: footerPresentation.chatCarriesAccent)
+      // The ⋯ menu carries Restart at all times.
+      if footerPresentation.offersRestartInPlaceOfObservatory {
+        Button("Restart server", action: restartServer)
+      } else {
+        Button(action: openObservatory) { Label("Observatory", systemImage: "safari") }
+      }
       Spacer()
       Menu {
         // The main app owns the updater; this asks it for a check, so the
@@ -254,6 +260,23 @@ struct OrbitalTelemetryPopover: View {
           Button("Remove “astronomical” terminal command…", action: removeTerminalCommand)
           Divider()
         }
+        // The same stored value as the switch on Observatory's Settings page: it is saved in
+        // config.json through the engine, so it cannot be changed while the engine is stopped.
+        Toggle(
+          "Show progress and speed in menu bar",
+          isOn: menuBarSettingBinding(.progressAndSpeed, statusDocument.menuBarShowsProgressAndSpeed)
+        )
+        .disabled(statusDocument.status == "unavailable")
+        Toggle(
+          "Show technical details",
+          isOn: menuBarSettingBinding(.technicalDetails, statusDocument.menuBarShowsTechnicalDetails)
+        )
+        .disabled(statusDocument.status == "unavailable")
+        Divider()
+        if statusDocument.menuBarShowsTechnicalDetails {
+          Button("Reload config", action: reloadConfiguration)
+        }
+        Button("Restart server", action: restartServer)
         // Automatic checks, the update channel and Launch at Login live
         // in the main app's menu: they are settings of the main app, which
         // owns the updater and registers this agent at login.
@@ -264,6 +287,24 @@ struct OrbitalTelemetryPopover: View {
         Image(systemName: "ellipsis.circle")
       }
       .menuStyle(.borderlessButton)
+    }
+  }
+
+  private func menuBarSettingBinding(_ menuBarSwitch: MenuBarSwitch, _ isOn: Bool) -> Binding<Bool> {
+    Binding(
+      get: { isOn },
+      set: { requestedIsOn in telemetryStore.setMenuBarSetting(menuBarSwitch, isOn: requestedIsOn) })
+  }
+
+  @ViewBuilder
+  private func chatButton(carriesAccent: Bool) -> some View {
+    let chatLabel = Label("Chat", systemImage: "bubble.left.and.bubble.right")
+    if carriesAccent {
+      Button(action: openChat) { chatLabel }
+        .buttonStyle(.borderedProminent)
+        .tint(AstronomicalBrandPalette.accentColor)
+    } else {
+      Button(action: openChat) { chatLabel }
     }
   }
 
@@ -298,56 +339,6 @@ struct OrbitalTelemetryPopover: View {
       // popover is already long, while the label above says the same thing.
     }
     .frame(maxWidth: .infinity, alignment: .leading)
-  }
-
-  @ViewBuilder
-  private func maximumMlxMemoryControl(_ statusDocument: DaemonStatusDocument) -> some View {
-    if telemetryStore.minimumWholeGigabytes <= telemetryStore.maximumWholeGigabytes,
-      telemetryStore.maximumWholeGigabytes > 0
-    {
-      let controlPresentation = telemetryStore.maximumMlxMemoryControlPresentation
-      VStack(alignment: .leading, spacing: 4) {
-        // One row: the popover is long, so the label, the stepper and the
-        // reachable maximum share a line instead of stacking three.
-        HStack(spacing: 6) {
-          // The label is the one piece allowed to shrink, so Apply and Use Max
-          // showing together still fit the 358pt row instead of clipping.
-          Text("Maximum model RAM").foregroundStyle(.secondary)
-            .lineLimit(1).minimumScaleFactor(0.7)
-          Spacer(minLength: 4)
-          Stepper(
-            value: $telemetryStore.editableMaximumMlxMemoryGigabytes,
-            in: telemetryStore.minimumWholeGigabytes...telemetryStore.maximumWholeGigabytes
-          ) {
-            Text("\(telemetryStore.editableMaximumMlxMemoryGigabytes) GB")
-              .font(PopoverTypography.monospacedBody)
-          }
-          .fixedSize()
-          Text(controlPresentation.reachableMaximumCaption)
-            .font(.caption).foregroundStyle(.secondary).lineLimit(1).fixedSize()
-          if controlPresentation.shouldOfferApply {
-            Button("Apply", action: telemetryStore.updateMaximumMlxMemoryLimit)
-              .controlSize(.small)
-          }
-          if controlPresentation.shouldOfferMacMaximum {
-            Button("Use Max", action: telemetryStore.restoreMacMaximumMlxMemoryLimit)
-              .controlSize(.small)
-              .accessibilityLabel("Use the Mac maximum")
-          }
-        }
-        if let cappedCeilingCaption = controlPresentation.cappedCeilingCaption {
-          Text(cappedCeilingCaption).font(.caption).foregroundStyle(.orange)
-        }
-        if let pendingMlxMemoryCeilingBytes = statusDocument.pendingMlxMemoryCeilingBytes {
-          Text("Pending \(gigabyteValueText(byteCount: pendingMlxMemoryCeilingBytes))")
-            .font(.caption).foregroundStyle(.orange)
-        }
-        if let mlxMemoryLimitError = statusDocument.mlxMemoryLimitError {
-          Text(mlxMemoryLimitError).font(.caption).foregroundStyle(.red)
-        }
-      }
-      .accessibilityElement(children: .contain)
-    }
   }
 }
 

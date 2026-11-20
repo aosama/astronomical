@@ -32,7 +32,7 @@ final class NeuralEngineStatusTests: XCTestCase {
   func test_should_count_programs_in_the_menu_bar_while_idle() throws {
     let statusDocument = try statusDocument(prefillJSON: preparingJSON)
 
-    XCTAssertEqual(statusDocument.menuBarTitle, "Neural Engine 12/56")
+    XCTAssertEqual(statusDocument.menuBarActivityTitle, "Neural Engine 12/56")
     XCTAssertEqual(statusDocument.neuralEnginePrefill?.metricTitle(showsEstimate: true), "Preparing 12/56 · about 44 s")
   }
 
@@ -43,7 +43,7 @@ final class NeuralEngineStatusTests: XCTestCase {
         "elapsed_ms":12000,"estimated_remaining_ms":33000,"is_waiting_to_measure":true}
         """)
 
-    XCTAssertEqual(statusDocument.menuBarTitle, "Neural Engine measuring")
+    XCTAssertEqual(statusDocument.menuBarActivityTitle, "Neural Engine measuring")
     XCTAssertEqual(
       statusDocument.neuralEnginePrefill?.metricTitle(showsEstimate: true),
       "Measuring at the next pause")
@@ -63,12 +63,12 @@ final class NeuralEngineStatusTests: XCTestCase {
   func test_should_leave_the_menu_bar_to_a_running_generation() throws {
     let statusDocument = try statusDocument(prefillJSON: preparingJSON, activity: "generating")
 
-    XCTAssertFalse(statusDocument.menuBarTitle.contains("Neural Engine"))
+    XCTAssertFalse(statusDocument.menuBarActivityTitle.contains("Neural Engine"))
   }
 
   func test_should_not_show_a_count_once_the_programs_are_settled() throws {
-    XCTAssertEqual(try statusDocument(prefillJSON: activeJSON).menuBarTitle, "")
-    XCTAssertEqual(try statusDocument(prefillJSON: unavailableJSON).menuBarTitle, "")
+    XCTAssertEqual(try statusDocument(prefillJSON: activeJSON).menuBarActivityTitle, "")
+    XCTAssertEqual(try statusDocument(prefillJSON: unavailableJSON).menuBarActivityTitle, "")
   }
 
   func test_should_title_each_settled_state_in_the_popover() throws {
@@ -82,7 +82,7 @@ final class NeuralEngineStatusTests: XCTestCase {
   func test_should_show_nothing_for_an_unknown_state() throws {
     let statusDocument = try statusDocument(prefillJSON: #"{"state":"warming"}"#)
 
-    XCTAssertEqual(statusDocument.menuBarTitle, "")
+    XCTAssertEqual(statusDocument.menuBarActivityTitle, "")
     XCTAssertNil(statusDocument.neuralEnginePrefill?.metricTitle(showsEstimate: true))
   }
 

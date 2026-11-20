@@ -93,6 +93,8 @@ pub(super) fn sample_resolved_config() -> ResolvedRuntimeConfig {
         // live fixture holds the default the reload will resolve; any other
         // value would make every reload report a span change.
         idle_model_unload_seconds: config::DEFAULT_IDLE_MODEL_UNLOAD_SECONDS,
+        menu_bar_shows_progress_and_speed: false,
+        menu_bar_shows_technical_details: false,
         configured_astro_ssd_prompt_cache_maximum_size_bytes: None,
         performance_attribution_enabled: false,
         astro_ssd_prompt_cache_config: config::AstroSsdPromptCacheConfig::new(

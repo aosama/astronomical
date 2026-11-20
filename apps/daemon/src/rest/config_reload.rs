@@ -438,6 +438,10 @@ fn apply_in_place_reload_fields(
     // Worker and listener settings remain live-old until the requested restart succeeds.
     live_config.maximum_mlx_memory_bytes = candidate_resolved.maximum_mlx_memory_bytes;
     live_config.idle_model_unload_seconds = candidate_resolved.idle_model_unload_seconds;
+    live_config.menu_bar_shows_progress_and_speed =
+        candidate_resolved.menu_bar_shows_progress_and_speed;
+    live_config.menu_bar_shows_technical_details =
+        candidate_resolved.menu_bar_shows_technical_details;
     live_config.model_policy_catalog = Arc::new(catalog_with_candidate_request_defaults(
         &live_config.model_policy_catalog,
         &candidate_resolved.model_policy_catalog,

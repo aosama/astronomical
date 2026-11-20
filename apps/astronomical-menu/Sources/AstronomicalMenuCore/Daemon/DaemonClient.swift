@@ -8,6 +8,7 @@ protocol DaemonClient: Sendable {
   func reloadConfiguration() async throws -> ConfigurationReloadResult
   func requestShutdown() async throws
   func updateMaximumMlxMemoryGigabytes(_ maximumMlxMemoryGigabytes: UInt64?) async throws -> String
+  func updateMenuBarSetting(_ menuBarSwitch: MenuBarSwitch, isOn: Bool) async throws
   func healthIsAvailable() async -> Bool
   func expectedInstanceIsHealthy() async -> Bool
   func modelsAreAvailable() async -> Bool
@@ -17,6 +18,9 @@ extension DaemonClient {
   func modelsAreAvailable() async -> Bool { false }
   func updateMaximumMlxMemoryGigabytes(_ maximumMlxMemoryGigabytes: UInt64?) async throws -> String {
     throw DaemonClientError.serverRejected("Maximum model RAM control is unavailable")
+  }
+  func updateMenuBarSetting(_ menuBarSwitch: MenuBarSwitch, isOn: Bool) async throws {
+    throw DaemonClientError.serverRejected("The menu bar setting is unavailable")
   }
 
   func expectedInstanceIsHealthy() async -> Bool {
@@ -109,6 +113,16 @@ struct LocalDaemonClient: DaemonClient {
       path: "/v1/config/maximum-mlx-memory", method: "PUT", requestBody: requestBody,
       acceptedStatusCodes: [200, 202], timeoutInterval: maximumMlxMemoryUpdateTimeoutSeconds)
     return try JSONDecoder().decode(ConfigurationReloadResult.self, from: responseBody).message
+  }
+
+  /// Saves the choice in config.json through the engine, so Observatory's Settings page
+  /// and this popover always show the same stored value.
+  func updateMenuBarSetting(_ menuBarSwitch: MenuBarSwitch, isOn: Bool) async throws {
+    _ = try await fetchStatus()
+    let requestBody = try JSONSerialization.data(withJSONObject: [menuBarSwitch.rawValue: isOn])
+    _ = try await request(
+      path: "/v1/config/menu-bar", method: "PUT", requestBody: requestBody,
+      acceptedStatusCodes: [200])
   }
 
   func healthIsAvailable() async -> Bool {
@@ -221,6 +235,12 @@ private struct MaximumMlxMemoryRequest: Encodable {
   let maximumMlxMemoryGigabytes: UInt64?
 
   enum CodingKeys: String, CodingKey { case maximumMlxMemoryGigabytes = "maximum_mlx_memory_gb" }
+}
+
+/// The menu bar switches stored in config.json's `menu_bar` section, named as the file names them.
+enum MenuBarSwitch: String, CaseIterable, Sendable {
+  case progressAndSpeed = "show_progress_and_speed"
+  case technicalDetails = "show_technical_details"
 }
 
 enum DaemonClientError: LocalizedError {

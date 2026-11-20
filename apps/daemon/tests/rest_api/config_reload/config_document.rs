@@ -2,7 +2,7 @@ use super::*;
 
 const MAXIMUM_RESPONSE_BYTES: usize = 1024 * 1024;
 
-fn valid_document() -> serde_json::Value {
+pub(super) fn valid_document() -> serde_json::Value {
     serde_json::json!({
         "$schema": "./astronomical-config.schema.json",
         "schema_version": 1,
@@ -10,7 +10,7 @@ fn valid_document() -> serde_json::Value {
     })
 }
 
-fn application_with_config(
+pub(super) fn application_with_config(
     home_directory: &std::path::Path,
 ) -> (
     axum::Router,
@@ -25,7 +25,7 @@ fn application_with_config(
     (application, reloadable_config)
 }
 
-async fn json_of(response: axum::response::Response) -> serde_json::Value {
+pub(super) async fn json_of(response: axum::response::Response) -> serde_json::Value {
     let response_body = to_bytes(response.into_body(), MAXIMUM_RESPONSE_BYTES)
         .await
         .expect("the response body should be readable");
@@ -45,7 +45,7 @@ async fn get_config(application: &axum::Router) -> axum::response::Response {
         .expect("the application should respond")
 }
 
-async fn send_json(
+pub(super) async fn send_json(
     application: &axum::Router,
     method: &str,
     uri: &str,
@@ -65,7 +65,7 @@ async fn send_json(
         .expect("the application should respond")
 }
 
-fn config_file_text(home_directory: &std::path::Path) -> String {
+pub(super) fn config_file_text(home_directory: &std::path::Path) -> String {
     std::fs::read_to_string(home_directory.join(".astronomical-dev").join("config.json"))
         .expect("the config file should read")
 }

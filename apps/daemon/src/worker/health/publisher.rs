@@ -297,20 +297,12 @@ pub(crate) fn publish_mlx_memory_limit_rejection(
 
 pub(crate) fn record_serving_session(
     health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
-    prompt_token_count: u32,
-    astro_ssd_prompt_cache_restored_token_count: u32,
-    prefill_tok_per_second: Option<f64>,
-    generation_tok_per_second: Option<f64>,
+    completed_request_work: crate::serving::serving_session_snapshot::CompletedRequestWork,
 ) {
     if let Ok(mut worker_health_snapshot) = health_snapshot.write() {
         worker_health_snapshot
             .serving_session
-            .record_completed_request(
-                prompt_token_count,
-                astro_ssd_prompt_cache_restored_token_count,
-                prefill_tok_per_second,
-                generation_tok_per_second,
-            );
+            .record_completed_request(completed_request_work);
     }
 }
 

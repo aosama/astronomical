@@ -445,6 +445,44 @@ final class DaemonClientContractTests: XCTestCase {
     XCTAssertEqual(StubDaemonURLProtocol.receivedRequestTimeoutInterval, 120)
   }
 
+  func test_should_send_each_menu_bar_switch_under_its_config_json_name() async throws {
+    for (menuBarSwitch, expectedBody) in [
+      (MenuBarSwitch.progressAndSpeed, #"{"show_progress_and_speed":true}"#),
+      (MenuBarSwitch.technicalDetails, #"{"show_technical_details":true}"#),
+    ] {
+      StubDaemonURLProtocol.responseConfiguration = .init(
+        statusCode: 200, responseBody: Data(#"{"status":"saved"}"#.utf8))
+      StubDaemonURLProtocol.receivedRequestPaths = []
+      StubDaemonURLProtocol.receivedControlRequest = nil
+      defer {
+        StubDaemonURLProtocol.responseConfiguration = nil
+        StubDaemonURLProtocol.receivedControlRequest = nil
+      }
+      let localDaemonClient = LocalDaemonClient(
+        urlSession: URLSession(configuration: StubDaemonURLProtocol.urlSessionConfiguration()))
+
+      try await localDaemonClient.updateMenuBarSetting(menuBarSwitch, isOn: true)
+
+      XCTAssertEqual(StubDaemonURLProtocol.receivedRequestPaths.last, "/v1/config/menu-bar")
+      let controlRequest = try XCTUnwrap(StubDaemonURLProtocol.receivedControlRequest)
+      XCTAssertEqual(controlRequest.method, "PUT")
+      XCTAssertEqual(String(decoding: controlRequest.body, as: UTF8.self), expectedBody)
+    }
+  }
+
+  func test_should_fail_a_menu_bar_switch_the_engine_refuses_to_save() async {
+    StubDaemonURLProtocol.responseConfiguration = .init(
+      statusCode: 409, responseBody: Data("config.json could not be read".utf8))
+    defer { StubDaemonURLProtocol.responseConfiguration = nil }
+    let localDaemonClient = LocalDaemonClient(
+      urlSession: URLSession(configuration: StubDaemonURLProtocol.urlSessionConfiguration()))
+
+    do {
+      try await localDaemonClient.updateMenuBarSetting(.technicalDetails, isOn: false)
+      XCTFail("a refused save must not report success")
+    } catch {}
+  }
+
   private func storeIdentity(applicationGroupIdentifier: String?) -> ApplicationIdentity {
     ApplicationIdentity(
       channel: .appStore,

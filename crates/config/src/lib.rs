@@ -375,6 +375,34 @@ impl AstronomicalConfig {
             .unwrap_or(false)
     }
 
+    /// Returns whether the menu bar item writes progress and speed beside its icon.
+    ///
+    /// It defaults to off: the popover carries the same numbers, and text that
+    /// changes several times a second in the menu bar distracts from whatever
+    /// else is on screen.
+    #[must_use]
+    pub fn menu_bar_shows_progress_and_speed(&self) -> bool {
+        self.user_config_file
+            .menu_bar
+            .as_ref()
+            .and_then(|menu_bar| menu_bar.show_progress_and_speed)
+            .unwrap_or(false)
+    }
+
+    /// Returns whether the menu bar popover shows its technical rows: the
+    /// memory breakdown, GPU use, session totals and build details.
+    ///
+    /// It defaults to off: those rows answer questions a developer asks, and
+    /// the popover reads more simply without them for everyone else.
+    #[must_use]
+    pub fn menu_bar_shows_technical_details(&self) -> bool {
+        self.user_config_file
+            .menu_bar
+            .as_ref()
+            .and_then(|menu_bar| menu_bar.show_technical_details)
+            .unwrap_or(false)
+    }
+
     /// Resolves inherited policy for one canonical discovered model identity, matching `models`
     /// entries by its leaf ID only. Prefer [`Self::resolved_discovered_model_config`] when the
     /// model's full Hugging Face ID is known.

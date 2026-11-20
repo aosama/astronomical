@@ -29,6 +29,8 @@ pub(crate) struct UserConfigFile {
     pub(crate) models: BTreeMap<String, ModelConfigFile>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) diagnostics: Option<DiagnosticsConfigFile>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) menu_bar: Option<MenuBarConfigFile>,
 }
 
 impl UserConfigFile {
@@ -60,6 +62,7 @@ impl UserConfigFile {
             }),
             models: BTreeMap::new(),
             diagnostics: None,
+            menu_bar: None,
         }
     }
 
@@ -124,6 +127,18 @@ pub(crate) struct DiagnosticsConfigFile {
     pub(crate) log_level: Option<LogLevel>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) retained_log_files: Option<usize>,
+}
+
+/// What the macOS menu bar item shows. It lives in this file, not in the
+/// menu-bar agent's own preferences, so Observatory's Settings page and the
+/// agent's popover edit one stored value and can never disagree.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct MenuBarConfigFile {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) show_progress_and_speed: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) show_technical_details: Option<bool>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]

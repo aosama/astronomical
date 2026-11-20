@@ -116,18 +116,23 @@ final class MenuBarGlyphTests: XCTestCase {
 
   func test_should_describe_the_loading_glyph_for_accessibility() {
     XCTAssertEqual(
-      makeMenuBarGlyphImage(state: .loadingModel).accessibilityDescription,
+      makeMenuBarGlyphImage(MenuBarGlyph(state: .loadingModel)).accessibilityDescription,
       "Astronomical, loading a model")
   }
 
-  func test_should_render_five_distinct_template_glyphs() throws {
-    let glyphStates: [MenuBarGlyphState] = [
-      .idle, .resident, .streaming, .generating, .loadingModel,
+  func test_should_render_every_glyph_as_a_distinct_template_image() throws {
+    let glyphs: [MenuBarGlyph] = [
+      MenuBarGlyph(state: .idle), MenuBarGlyph(state: .resident), MenuBarGlyph(state: .streaming),
+      MenuBarGlyph(state: .generating), MenuBarGlyph(state: .loadingModel),
+      MenuBarGlyph(state: .engineNotRunning),
+      MenuBarGlyph(state: .generating, completedProgressStepCount: 0),
+      MenuBarGlyph(state: .generating, completedProgressStepCount: 8),
+      MenuBarGlyph(state: .generating, completedProgressStepCount: 16),
     ]
     var renderedAlphaSamples: [[UInt8]] = []
-    for glyphState in glyphStates {
-      let glyphImage = makeMenuBarGlyphImage(state: glyphState)
-      XCTAssertTrue(glyphImage.isTemplate, "\(glyphState) must adapt to the menu bar appearance")
+    for glyph in glyphs {
+      let glyphImage = makeMenuBarGlyphImage(glyph)
+      XCTAssertTrue(glyphImage.isTemplate, "\(glyph) must adapt to the menu bar appearance")
       XCTAssertEqual(glyphImage.size, NSSize(width: 18, height: 18))
       renderedAlphaSamples.append(try alphaSamples(of: glyphImage))
     }
@@ -135,12 +140,61 @@ final class MenuBarGlyphTests: XCTestCase {
       for secondIndex in (firstIndex + 1)..<renderedAlphaSamples.count {
         XCTAssertNotEqual(
           firstSamples, renderedAlphaSamples[secondIndex],
-          "\(glyphStates[firstIndex]) and \(glyphStates[secondIndex]) render identically")
+          "\(glyphs[firstIndex]) and \(glyphs[secondIndex]) render identically")
       }
     }
     let inkCoverage = renderedAlphaSamples.map { samples in samples.filter { $0 > 127 }.count }
     // Solid disc carries more ink than hatching, and hatching more than the empty plate.
     XCTAssertGreaterThan(inkCoverage[1], inkCoverage[2])
     XCTAssertGreaterThan(inkCoverage[2], inkCoverage[0])
+    // The pie gains ink as the work advances.
+    XCTAssertGreaterThan(inkCoverage[7], inkCoverage[6])
+    XCTAssertGreaterThan(inkCoverage[8], inkCoverage[7])
+  }
+
+  private func promptStatusDocument(completedTokenCount: Int, phase: String = "target") throws
+    -> DaemonStatusDocument
+  {
+    let activity = phase == "generation" ? "generating" : "prompt_processing"
+    let progress =
+      "{\"phase\":\"\(phase)\",\"processed_tokens\":\(completedTokenCount),\"total_tokens\":1000,\"elapsed_ms\":2000}"
+    let servingSession =
+      "{\"completed_request_count\":0,\"total_prompt_token_count\":0,\"total_reused_prompt_token_count\":0,\"target_prompt_work_token_count\":0,\"target_reused_prompt_work_token_count\":0,\"average_prefill_tok_per_second\":0,\"average_generation_tok_per_second\":0}"
+    let statusJSON =
+      "{\"status\":\"ready\",\"activity\":\"\(activity)\",\"ready_model_id\":\"dense\",\"progress\":\(progress),\"serving_session\":\(servingSession)}"
+    return try JSONDecoder().decode(DaemonStatusDocument.self, from: Data(statusJSON.utf8))
+  }
+
+  func test_should_draw_prompt_progress_in_sixteenths_rounded_down() throws {
+    XCTAssertEqual(
+      try promptStatusDocument(completedTokenCount: 0).menuBarGlyph(engineIsDown: false),
+      MenuBarGlyph(state: .generating, completedProgressStepCount: 0))
+    XCTAssertEqual(
+      try promptStatusDocument(completedTokenCount: 499).menuBarGlyph(engineIsDown: false),
+      MenuBarGlyph(state: .generating, completedProgressStepCount: 7))
+    XCTAssertEqual(
+      try promptStatusDocument(completedTokenCount: 1000).menuBarGlyph(engineIsDown: false),
+      MenuBarGlyph(state: .generating, completedProgressStepCount: 16))
+  }
+
+  func test_should_draw_no_progress_while_a_reply_is_written_or_nothing_runs() throws {
+    XCTAssertEqual(
+      try promptStatusDocument(completedTokenCount: 200, phase: "generation")
+        .menuBarGlyph(engineIsDown: false), MenuBarGlyph(state: .generating))
+    XCTAssertEqual(
+      try statusDocument(status: "ready", activity: "idle", readyModel: "dense", expertMemoryMode: nil)
+        .menuBarGlyph(engineIsDown: false), MenuBarGlyph(state: .resident))
+  }
+
+  func test_should_show_the_stopped_engine_over_every_other_state() throws {
+    XCTAssertEqual(
+      DaemonStatusDocument.unavailable.menuBarGlyph(engineIsDown: true),
+      MenuBarGlyph(state: .engineNotRunning))
+    XCTAssertEqual(
+      makeMenuBarGlyphImage(MenuBarGlyph(state: .engineNotRunning)).accessibilityDescription,
+      "Astronomical, engine not running")
+    XCTAssertEqual(
+      MenuBarGlyph(state: .generating, completedProgressStepCount: 8).accessibilityTitle,
+      "generating, 50 percent")
   }
 }

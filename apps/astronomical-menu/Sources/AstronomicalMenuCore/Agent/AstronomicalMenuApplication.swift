@@ -34,7 +34,8 @@ public final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate,
   private var statusItem: NSStatusItem?
   private var telemetryPopover: NSPopover?
   private var latestMenuBarTitle = ""
-  private var latestMenuBarGlyphState = MenuBarGlyphState.idle
+  private var latestMenuBarGlyph = MenuBarGlyph(state: .idle)
+  private var latestMenuBarPresentation = MenuBarPresentation.launching
   private var daemonMaintenanceTask: Task<Void, Never>?
 
   public func applicationDidFinishLaunching(_ notification: Notification) {
@@ -46,10 +47,15 @@ public final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate,
     let menuBarStatusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     menuBarStatusItem.button?.target = self
     menuBarStatusItem.button?.action = #selector(toggleTelemetryPopover)
-    menuBarStatusItem.button?.image = makeMenuBarGlyphImage(state: latestMenuBarGlyphState)
+    menuBarStatusItem.button?.image = makeMenuBarGlyphImage(latestMenuBarGlyph)
+    // Digits of one width keep the item from resizing, and its neighbours from shifting, as a
+    // percentage or a speed changes.
+    menuBarStatusItem.button?.font = NSFont.monospacedDigitSystemFont(
+      ofSize: NSFont.menuBarFont(ofSize: 0).pointSize, weight: .regular)
     menuBarStatusItem.button?.setAccessibilityLabel(
       "Astronomical \(applicationIdentity.channel.displayName) telemetry")
-    menuBarStatusItem.button?.toolTip = applicationIdentity.buildTitle
+    menuBarStatusItem.button?.toolTip = latestMenuBarPresentation.toolTip(
+      buildTitle: applicationIdentity.buildTitle)
     statusItem = menuBarStatusItem
 
     let popover = NSPopover()
@@ -79,26 +85,8 @@ public final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate,
     telemetryStore.onNeuralEngineBannerDue = { [weak self] neuralEngineBanner in
       self?.neuralEngineBannerPresenter.present(neuralEngineBanner)
     }
-    telemetryStore.onMenuBarTitleChanged = { [weak self] menuBarTitle in
-      guard let self else { return }
-      let channelAwareMenuBarTitle =
-        applicationIdentity.channel == .development
-        ? " DEV\(menuBarTitle.isEmpty ? "" : " · \(menuBarTitle)")" : menuBarTitle
-      latestMenuBarTitle = channelAwareMenuBarTitle
-      let currentTitle: String
-      if let statusButton = statusItem?.button {
-        currentTitle = statusButton.title
-      } else {
-        currentTitle = ""
-      }
-      statusItem?.button?.title = menuBarTitleToDisplay(
-        currentTitle: currentTitle,
-        latestTitle: channelAwareMenuBarTitle,
-        popoverIsShown: telemetryPopover?.isShown == true
-      )
-    }
-    telemetryStore.onMenuBarGlyphStateChanged = { [weak self] menuBarGlyphState in
-      self?.showMenuBarGlyph(menuBarGlyphState)
+    telemetryStore.onMenuBarPresentationChanged = { [weak self] menuBarPresentation in
+      self?.showMenuBarPresentation(menuBarPresentation)
     }
     daemonMaintenanceTask = Task { [weak self] in
       guard let self else { return }
@@ -137,12 +125,29 @@ public final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate,
     updateNoticeCoordinator.start()
   }
 
-  // Status polls arrive every few seconds; redrawing only on a state change
-  // keeps the status item from re-laying out while the title text updates.
-  private func showMenuBarGlyph(_ menuBarGlyphState: MenuBarGlyphState) {
-    guard menuBarGlyphState != latestMenuBarGlyphState else { return }
-    latestMenuBarGlyphState = menuBarGlyphState
-    statusItem?.button?.image = makeMenuBarGlyphImage(state: menuBarGlyphState)
+  private func showMenuBarPresentation(_ menuBarPresentation: MenuBarPresentation) {
+    latestMenuBarPresentation = menuBarPresentation
+    latestMenuBarTitle = menuBarTitleToShow(
+      presentation: menuBarPresentation,
+      isDevelopmentChannel: applicationIdentity.channel == .development)
+    showMenuBarGlyph(menuBarPresentation.glyph)
+    guard let statusButton = statusItem?.button else { return }
+    statusButton.title = menuBarTitleToDisplay(
+      currentTitle: statusButton.title,
+      latestTitle: latestMenuBarTitle,
+      popoverIsShown: telemetryPopover?.isShown == true)
+    // Assigning an unchanged tooltip still restarts its hover delay, so a tooltip would never
+    // appear while polls arrive four times a second.
+    let toolTip = menuBarPresentation.toolTip(buildTitle: applicationIdentity.buildTitle)
+    if statusButton.toolTip != toolTip { statusButton.toolTip = toolTip }
+  }
+
+  // Status polls arrive several times a second; redrawing only when the glyph changes keeps
+  // the status item from re-laying out on every one.
+  private func showMenuBarGlyph(_ menuBarGlyph: MenuBarGlyph) {
+    guard menuBarGlyph != latestMenuBarGlyph else { return }
+    latestMenuBarGlyph = menuBarGlyph
+    statusItem?.button?.image = makeMenuBarGlyphImage(menuBarGlyph)
   }
 
   @objc private func toggleTelemetryPopover() {

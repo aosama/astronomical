@@ -112,7 +112,7 @@ pub use serving::image_generation_executor::{
     ImageGenerationExecutionError, ImageGenerationExecutor, ImageGenerationOutput,
     ImageGenerationTimeouts,
 };
-pub use serving::serving_session_snapshot::ServingSessionSnapshot;
+pub use serving::serving_session_snapshot::{CompletedRequestWork, ServingSessionSnapshot};
 pub use serving::speech_executor::{SpeechExecutionError, SpeechOutput, SpeechTimeouts};
 pub use shutdown_control::ShutdownController;
 pub use system_telemetry::parse_macos_memory_pressure_level;

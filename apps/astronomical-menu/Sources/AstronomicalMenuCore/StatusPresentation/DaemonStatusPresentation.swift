@@ -17,7 +17,7 @@ extension DaemonStatusDocument {
   // the first PrefillProgress event arrives only after astro SSD prompt cache restore
   // returns. Missing progress in that window is restore work, not idle and not
   // expert SSD streaming.
-  private var isRestoringAstroSsdPromptCache: Bool {
+  var isRestoringAstroSsdPromptCache: Bool {
     activity == "prompt_processing" && progress == nil
   }
 
@@ -30,30 +30,6 @@ extension DaemonStatusDocument {
       return nil
     }
     return Double(progress.completedUnitCount) / (Double(progress.elapsedMilliseconds) / 1_000)
-  }
-
-  var menuBarTitle: String {
-    if let modelLoadInFlight { return modelLoadInFlight.menuBarTitle }
-    guard status == "ready" else { return status == "loading" ? " Loading" : "" }
-    if activity == "generating", let currentPhaseTokensPerSecond {
-      return String(format: "GEN %.1f tok/s", currentPhaseTokensPerSecond)
-    }
-    if activity == "image_generation", let progress {
-      if progress.hasCompletedDenoising { return "Image · Denoising" }
-      return progress.phase == "denoising" && !progress.hasCompletedDenoising
-        ? "Image \(progress.completionPercentageTitle)"
-        : "Image · \(progress.shortImagePhaseTitle)"
-    }
-    if activity == "generation_preparation" { return "Preparing…" }
-    if activity == "speaking" { return "Speaking…" }
-    if isRestoringAstroSsdPromptCache { return "Restoring…" }
-    guard activity == "prompt_processing", let progress else {
-      // Only when idle: a generation's own title always says more than a background count.
-      return activity == "idle" ? neuralEnginePrefill?.menuBarTitle ?? "" : ""
-    }
-    let completionPercentageTitle = progress.completionPercentageTitle
-    guard let currentPhaseTokensPerSecond else { return "Prompt \(completionPercentageTitle)" }
-    return "Prompt \(completionPercentageTitle) · \(Int(currentPhaseTokensPerSecond.rounded())) avg tok/s"
   }
 
   var flightTitle: String {

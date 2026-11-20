@@ -35,7 +35,7 @@ function listedPaths(pageName) {
 }
 
 test("should_list_every_schema_setting_on_a_page_so_no_trailing_other_group_appears", () => {
-    assert.deepEqual(groupTitles("settings"), ["Memory", "Locations", "Prompt cache", "Diagnostics"]);
+    assert.deepEqual(groupTitles("settings"), ["Memory", "Locations", "Prompt cache", "Menu bar", "Diagnostics"]);
     assert.ok(!groupTitles("tuning").includes("Other"));
 });
 
@@ -330,7 +330,7 @@ const FOLDER_SETTING_PATHS = [
 test("should_leave_out_a_group_whose_settings_the_instance_cannot_honour", () => {
     const groups = call("configurationPageGroups", bundledSchema, "settings", FOLDER_SETTING_PATHS);
 
-    assert.deepEqual(groups.map((group) => group.title), ["Memory", "Prompt cache", "Diagnostics"],
+    assert.deepEqual(groups.map((group) => group.title), ["Memory", "Prompt cache", "Menu bar", "Diagnostics"],
         "no Locations group, and the folder settings do not reappear under Other");
 });
 
@@ -347,6 +347,21 @@ test("should_show_every_group_when_nothing_is_unavailable_or_the_list_names_no_r
         const groupTitlesShown = call("configurationPageGroups", bundledSchema, "settings", unavailableSettingPaths)
             .map((group) => group.title);
 
-        assert.deepEqual(groupTitlesShown, ["Memory", "Locations", "Prompt cache", "Diagnostics"]);
+        assert.deepEqual(groupTitlesShown, ["Memory", "Locations", "Prompt cache", "Menu bar", "Diagnostics"]);
+    }
+});
+
+test("should_offer_both_menu_bar_switches_as_live_booleans_that_start_off", () => {
+    const menuBarGroup = call("configurationPageGroups", bundledSchema, "settings")
+        .find((group) => group.title === "Menu bar");
+
+    assert.deepEqual(menuBarGroup.descriptors.map((descriptor) => descriptor.path.join(".")),
+        ["menu_bar.show_progress_and_speed", "menu_bar.show_technical_details"]);
+    for (const switchName of ["show_progress_and_speed", "show_technical_details"]) {
+        const menuBarSwitch = bundledSchema.$defs.menu_bar.properties[switchName];
+        assert.equal(menuBarSwitch.type, "boolean", switchName);
+        assert.equal(menuBarSwitch.default, false, switchName);
+        assert.equal(menuBarSwitch["x-astronomical-apply-mode"], "live", switchName);
+        assert.ok(menuBarSwitch["x-astronomical-explanation"].length > 20, switchName);
     }
 });

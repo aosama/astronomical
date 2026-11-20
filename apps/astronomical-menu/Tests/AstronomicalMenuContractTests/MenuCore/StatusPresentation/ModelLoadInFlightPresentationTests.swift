@@ -22,7 +22,7 @@ final class ModelLoadInFlightPresentationTests: XCTestCase {
   func test_should_describe_a_load_while_the_status_still_reads_ready() throws {
     let statusDocument = try statusDocument(modelLoadInFlightJSON: namedLoadJSON)
 
-    XCTAssertEqual(statusDocument.menuBarTitle, "Loading model")
+    XCTAssertEqual(statusDocument.menuBarActivityTitle, "Loading model")
     XCTAssertEqual(statusDocument.phaseTitle, "Loading")
     XCTAssertEqual(statusDocument.flightTitle, "Loading the model")
     XCTAssertEqual(statusDocument.progressTitle, "Loading the model")
@@ -64,7 +64,7 @@ final class ModelLoadInFlightPresentationTests: XCTestCase {
     let statusDocument = try statusDocument(modelLoadInFlightJSON: "null")
 
     XCTAssertNil(statusDocument.modelLoadInFlight)
-    XCTAssertEqual(statusDocument.menuBarTitle, "")
+    XCTAssertEqual(statusDocument.menuBarActivityTitle, "")
     XCTAssertEqual(statusDocument.flightTitle, "Standing by")
     XCTAssertEqual(statusDocument.phaseTitle, "Ready")
   }

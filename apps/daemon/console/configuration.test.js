@@ -37,7 +37,7 @@ function descriptorAt(settingPath) {
 test("should_offer_every_section_of_the_schema_except_the_format_constants", () => {
     const descriptors = call("configurationSettingDescriptors", bundledSchema, bundledSchema, []);
     assert.deepEqual(descriptors.map((descriptor) => descriptor.key),
-        ["runtime", "ssd_prompt_cache", "chunking", "models", "diagnostics"]);
+        ["runtime", "ssd_prompt_cache", "chunking", "models", "diagnostics", "menu_bar"]);
 });
 
 test("should_describe_every_leaf_setting_with_a_supported_control", () => {
