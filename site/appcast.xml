@@ -4,34 +4,31 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.120</title>
-            <pubDate>Thu, 19 Nov 2026 19:58:21 -0500</pubDate>
-            <sparkle:version>2426</sparkle:version>
-            <sparkle:shortVersionString>0.2.120</sparkle:shortVersionString>
+            <title>0.2.121</title>
+            <pubDate>Thu, 19 Nov 2026 21:19:51 -0500</pubDate>
+            <sparkle:version>2429</sparkle:version>
+            <sparkle:shortVersionString>0.2.121</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[## What's new
+            <description sparkle:format="markdown"><![CDATA[## Enhancements
 
-- **Qwen 3.8 27B now answers about twice as fast on M5 Macs, straight from the catalog.** The download catalog offers it as **Qwen3.8-27B-MLX-4bit-vision-DFLASH2**: the 4-bit model with its vision intact and a small draft model built in. The draft model guesses the next few words and the large model checks them all in one step. Every word is still the large model's own choice. After a 10,000-token prompt it writes 35 to 37 tokens a second, where the plain 4-bit build wrote 16.7. On Macs without an M5 GPU, with less memory, or for a message with a picture in it, it runs just like the plain build.
-- The catalog now offers that build as its only 4-bit Qwen 3.8 27B. The two 2-bit ternary 27B builds remain for Macs with 8 GB of memory.
-- Every page of the website shares one header and footer.
-
-## Under the hood
-
-- The model-serving code is split into smaller, focused parts, with no change in behaviour.
-- Release and website checks moved into the project's own typed tooling.
+- **The 6-bit vision Ornith 1.5 35B-A3B now drafts out of the box.** The download catalog adds `Ornith-1.5-35B-A3B-MLX-6bit-vision-DFLASH2`: the 6-bit vision build with the DFlash2 draft model packed in, every file byte-identical to its source. It takes about 28 GB on disk and about 29.5 GB of model memory, so a 48 GB M5 Mac holds the model and its drafter whole. Measured against the plain 6-bit vision build on such a Mac at temperature 1.0, short replies decode about 1.16 times faster (89.4 against 77.3 tokens a second); after a 10,011-token prompt the two run about even. Macs without an M5 GPU, and memory limits too low for the drafter, decode exactly like the plain build. The plain 6-bit vision build stays in the catalog.
 
 ## Compatibility
 
-- Your models, conversations and settings are kept. A model you downloaded earlier from a retired catalog entry stays installed and usable.
-- Requires macOS 14 or later on Apple silicon.
+- Existing configurations, installed models, conversations and settings are preserved; the configuration schema is unchanged.
+- macOS 14 or later on Apple silicon.
 
-Astronomical is signed with a Developer ID, notarized by Apple, and delivered through a signed Sparkle update feed.
+## Distribution
+
+Signed with a Developer ID under Hardened Runtime, notarized by Apple and stapled; the Sparkle update is EdDSA-signed over the final bytes and served from a signed feed.
+
+Tracked in #2383.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.120/Astronomical-0.2.120-macOS-arm64.dmg" length="25491162" type="application/octet-stream" sparkle:edSignature="z20d78XnP9bucWKnLs0TstM4hSLosBI/rClvORgHKF9IAZfXrXAmbRuVHLGuM/r4ZF++hCtfUJtk+GHmo+MZDg=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.121/Astronomical-0.2.121-macOS-arm64.dmg" length="25484737" type="application/octet-stream" sparkle:edSignature="5nEcwi/oFDXIJBBkPWZl4aa2rDq7HYzLdGilC4yn0/tyDZNgzhn6TXd3oOYbDZnFUBzJiXbeETDNV3ncA/wzDA=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: y/Myk865kRnt1W2n3aZ9qZ1A22JkXhuvEjeIDwZRZQTME+sP924AGxUsrfUS+Mbnfjax/AQuIdMQBHEoUAzoCg==
-length: 2554
+edSignature: bqy7bT7scvxQIQ87lna1UQiAtMFQ80HO4f2HyI9lN7ObLuyKpYhWNrjlcIqgaeAY1fDcN9UQN4VeOc//I/ZRCA==
+length: 2374
 -->
