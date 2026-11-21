@@ -45,6 +45,12 @@ enum WorkerLoadedModelRuntimeConfiguration: Codable, Equatable {
   case flux2Klein(WorkerLoadedFlux2KleinModelRuntimeConfiguration)
   case qwenImage21(WorkerLoadedQwenImage21ModelRuntimeConfiguration)
   case embeddings(WorkerLoadedEmbeddingModelRuntimeConfiguration)
+  /// A kind of model the agent shows nothing special for, such as a speech or
+  /// decision model, or one a newer engine adds. Only its kind and model are
+  /// kept. Refusing an unfamiliar kind made every status poll fail for as
+  /// long as such a model stayed loaded, and the menu bar then said
+  /// "Not running" about an engine that was answering.
+  case other(kind: String, modelIdentifier: String?)
 
   private enum CodingKeys: String, CodingKey, CaseIterable {
     case kind
@@ -61,7 +67,13 @@ enum WorkerLoadedModelRuntimeConfiguration: Codable, Equatable {
   init(from decoder: Decoder) throws {
     try decoder.rejectUnknownKeys(CodingKeys.self)
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    let kind = try container.decode(Kind.self, forKey: .kind)
+    let kindName = try container.decode(String.self, forKey: .kind)
+    guard let kind = Kind(rawValue: kindName) else {
+      let otherConfiguration = try container.decodeIfPresent(
+        OtherModelConfiguration.self, forKey: .configuration)
+      self = .other(kind: kindName, modelIdentifier: otherConfiguration?.modelIdentifier)
+      return
+    }
     switch kind {
     case .autoregressive:
       self = .autoregressive(
@@ -105,6 +117,21 @@ enum WorkerLoadedModelRuntimeConfiguration: Codable, Equatable {
     case let .embeddings(configuration):
       try container.encode(Kind.embeddings, forKey: .kind)
       try container.encode(configuration, forKey: .configuration)
+    case let .other(kind, modelIdentifier):
+      try container.encode(kind, forKey: .kind)
+      try container.encode(
+        OtherModelConfiguration(modelIdentifier: modelIdentifier), forKey: .configuration)
+    }
+  }
+
+  /// The one field read from a kind the agent has no dedicated shape for.
+  /// Its other fields are skipped on purpose, so a new field never breaks
+  /// the poll.
+  private struct OtherModelConfiguration: Codable {
+    let modelIdentifier: String?
+
+    enum CodingKeys: String, CodingKey {
+      case modelIdentifier = "model_id"
     }
   }
 

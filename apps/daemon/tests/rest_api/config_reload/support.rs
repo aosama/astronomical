@@ -95,6 +95,13 @@ pub(super) fn sample_resolved_config() -> ResolvedRuntimeConfig {
         idle_model_unload_seconds: config::DEFAULT_IDLE_MODEL_UNLOAD_SECONDS,
         menu_bar_shows_progress_and_speed: false,
         menu_bar_shows_technical_details: false,
+        // On, as a config file without a skill section resolves, so a reload
+        // against this starting point reports no skill change.
+        skill_settings: astronomical_daemon::SkillSettings {
+            declared_to_models: true,
+            updates_from_web: true,
+            index_path: Default::default(),
+        },
         configured_astro_ssd_prompt_cache_maximum_size_bytes: None,
         performance_attribution_enabled: false,
         astro_ssd_prompt_cache_config: config::AstroSsdPromptCacheConfig::new(

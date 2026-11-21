@@ -401,6 +401,15 @@ impl AstronomicalInstancePaths {
         self.state_directory.join("models")
     }
 
+    /// Where the app keeps the Astronomical skill agents read
+    /// (`astronomical/SKILL.md` inside it). The engine points models at this
+    /// folder, so its path must stay stable across app updates and free of
+    /// spaces; the app bundle's own path is neither.
+    #[must_use]
+    pub fn skill_directory(&self) -> PathBuf {
+        self.state_directory.join("skill")
+    }
+
     #[must_use]
     pub fn logging_directory(&self) -> PathBuf {
         self.state_directory.join("logs")

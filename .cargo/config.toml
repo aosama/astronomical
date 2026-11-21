@@ -469,6 +469,21 @@ test-quantization-mixture-of-experts = "run -p xtask -- test-run --package astro
 # refuses a checked-out commit that is not on origin/main; the npm publish
 # workflow always passes it (scripts/release/opencode-plugin.md).
 #
+# The Astronomical skill shipped with the app lives in skill/astronomical (see
+# skill/README.md). `cargo test -p astronomical-cli --test integration_tests
+# astronomical_skill` checks it against the CLI's help: every command, subcommand
+# and flag it names must exist, every reference file must be linked from
+# SKILL.md, and SKILL.md stays under its line budget. The engine compiles the
+# skill in and writes it to the instance's state folder at every start;
+# `cargo test -p astronomical-daemon --lib astronomical_skill` checks that its
+# compiled-in file list matches skill/astronomical and that install, refresh
+# and repair work, and that an update from the website installs, is refused
+# when incomplete, and survives a restart.
+# `cargo xtask skill-site` publishes the skill to site/skill with a manifest
+# (version, oldest suitable app version, a SHA-256 per file) that installed
+# apps read about once a day; `cargo xtask skill-site --check` changes nothing
+# and fails when the published copy differs from skill/astronomical.
+#
 # `cargo xtask replay-expert-misses EVIDENCE_DIRECTORY` (alias
 # `cargo replay-expert-misses`) replays the replies `measure-expert-misses`
 # recorded under each astro_expert_cache keeping rule; see that alias.

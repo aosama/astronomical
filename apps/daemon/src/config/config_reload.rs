@@ -57,6 +57,9 @@ pub struct ResolvedRuntimeConfig {
     pub menu_bar_shows_progress_and_speed: bool,
     /// Whether the menu bar popover shows its technical rows. Applied live, like the above.
     pub menu_bar_shows_technical_details: bool,
+    /// Whether models are told about the Astronomical skill, where it is, and
+    /// whether it is kept current from the web. Applied live.
+    pub skill_settings: crate::SkillSettings,
     /// Performance attribution preference captured by the worker at startup.
     pub performance_attribution_enabled: bool,
     /// Whether the worker may read and write the `astro_ssd_prompt_cache`.
@@ -190,6 +193,10 @@ impl ResolvedRuntimeConfigResolver {
             idle_model_unload_seconds: user_config.idle_model_unload_seconds(),
             menu_bar_shows_progress_and_speed: user_config.menu_bar_shows_progress_and_speed(),
             menu_bar_shows_technical_details: user_config.menu_bar_shows_technical_details(),
+            skill_settings: crate::SkillSettings::resolve(
+                user_config,
+                &self.instance_paths.skill_directory(),
+            ),
             performance_attribution_enabled: user_config.performance_attribution_enabled(),
             astro_ssd_prompt_cache_enabled: user_config.astro_ssd_prompt_cache_enabled(),
             configured_astro_ssd_prompt_cache_enabled: user_config
@@ -413,6 +420,7 @@ fn in_place_field_changes(
         changed_fields.push("idle_model_unload_seconds".to_owned());
     }
     changed_fields.extend(menu_bar_field_changes(current, candidate));
+    changed_fields.extend(skill_field_changes(current, candidate));
     if model_request_defaults_differ(
         &current.model_policy_catalog,
         &candidate.model_policy_catalog,
@@ -434,6 +442,22 @@ fn menu_bar_field_changes(
     }
     if current.menu_bar_shows_technical_details != candidate.menu_bar_shows_technical_details {
         changed_fields.push("menu_bar.show_technical_details".to_owned());
+    }
+    changed_fields
+}
+
+/// The changed skill switches. The daemon applies both itself, on the next
+/// request and the next update check, so they always apply in place.
+fn skill_field_changes(
+    current: &ResolvedRuntimeConfig,
+    candidate: &ResolvedRuntimeConfig,
+) -> Vec<String> {
+    let mut changed_fields = Vec::new();
+    if current.skill_settings.declared_to_models != candidate.skill_settings.declared_to_models {
+        changed_fields.push("skill.declare_to_models".to_owned());
+    }
+    if current.skill_settings.updates_from_web != candidate.skill_settings.updates_from_web {
+        changed_fields.push("skill.update_from_web".to_owned());
     }
     changed_fields
 }

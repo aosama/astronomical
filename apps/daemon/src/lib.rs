@@ -14,6 +14,8 @@
 
 mod application;
 mod application_build_identity;
+mod astronomical_skill;
+mod astronomical_skill_update;
 mod config;
 mod console;
 mod instance_lock;
@@ -50,12 +52,21 @@ pub use library::application::{
 };
 pub use library::model_folder_trash::{MacTrashCommand, ModelFolderTrash, ModelFolderTrashError};
 
+pub use astronomical_skill::{
+    ASTRONOMICAL_SKILL_NAME, SkillInstallOutcome, bundled_skill_version,
+    install_astronomical_skill, skill_index_path,
+};
+pub use astronomical_skill_update::{
+    SKILL_SITE_BASE_URL, SkillUpdateError, SkillUpdateOutcome, keep_skill_current,
+    production_skill_site_http_client, update_skill_from_site,
+};
 pub use config::config_reload::{
     ConfigReloadDecision, ConfigReloadDiff, ResolvedRuntimeConfig, ResolvedRuntimeConfigError,
     ResolvedRuntimeConfigResolver,
 };
 pub use config::resolved_configuration_generation::ResolvedConfigurationGeneration;
 pub use config::runtime_model_policy::{RuntimeModelGenerationDefaults, RuntimeModelPolicy};
+pub use config::skill_settings::SkillSettings;
 pub use instance_lock::{AstronomicalInstanceLock, AstronomicalInstanceLockError};
 pub use ipc::service::{DaemonIpcGenerationContext, DaemonIpcService, start_daemon_ipc_service};
 pub use library::model_discovery_refresh::LibraryModelDiscoveryRefresh;

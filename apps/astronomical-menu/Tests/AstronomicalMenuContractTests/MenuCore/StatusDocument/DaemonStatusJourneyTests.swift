@@ -97,37 +97,37 @@ final class DaemonStatusJourneyTests: XCTestCase {
     XCTAssertNil(telemetryStore.lastStatusRefreshErrorMessage)
   }
 
+  /// A whole poll through the agent's real client and store. Refusing a kind
+  /// of loaded model the agent had no shape for (speech, decisions) made this
+  /// poll fail for as long as the model stayed loaded, and the menu bar then
+  /// said "Not running" about an engine that was answering.
   @MainActor
-  func test_should_diagnose_an_unknown_loaded_model_family_and_recover_on_the_next_valid_status() async throws {
+  func test_should_stay_ready_while_a_model_of_an_unfamiliar_kind_is_loaded() async throws {
     let validStatusResponse = try fixtureData(named: "full-qwen-image-status")
-    var malformedStatusFixture = try jsonObject(from: validStatusResponse)
-    var runtimeConfiguration = try XCTUnwrap(
-      malformedStatusFixture["worker_runtime_feature_configuration"] as? [String: Any])
-    var loadedModel = try XCTUnwrap(runtimeConfiguration["loaded_model"] as? [String: Any])
-    loadedModel["kind"] = "some_future_image_family"
-    runtimeConfiguration["loaded_model"] = loadedModel
-    malformedStatusFixture["worker_runtime_feature_configuration"] = runtimeConfiguration
-    StubDaemonURLProtocol.statusResponseConfiguration = .init(
-      statusCode: 200,
-      responseBody: try JSONSerialization.data(withJSONObject: malformedStatusFixture)
-    )
-    defer { StubDaemonURLProtocol.statusResponseConfiguration = nil }
-    let telemetryStore = TelemetryStore(daemonClient: localDevelopmentDaemonClient())
+    for unfamiliarKind in ["speech", "decisions", "some_future_image_family"] {
+      var statusFixture = try jsonObject(from: validStatusResponse)
+      var runtimeConfiguration = try XCTUnwrap(
+        statusFixture["worker_runtime_feature_configuration"] as? [String: Any])
+      runtimeConfiguration["loaded_model"] = [
+        "kind": unfamiliarKind,
+        "configuration": ["model_id": "some-model", "model_family": "some-family"],
+      ]
+      statusFixture["worker_runtime_feature_configuration"] = runtimeConfiguration
+      StubDaemonURLProtocol.statusResponseConfiguration = .init(
+        statusCode: 200,
+        responseBody: try JSONSerialization.data(withJSONObject: statusFixture)
+      )
+      defer { StubDaemonURLProtocol.statusResponseConfiguration = nil }
+      let telemetryStore = TelemetryStore(daemonClient: localDevelopmentDaemonClient())
 
-    await telemetryStore.refresh()
+      await telemetryStore.refresh()
 
-    XCTAssertEqual(telemetryStore.statusDocument.status, "unavailable")
-    XCTAssertTrue(
-      telemetryStore.lastStatusRefreshErrorMessage?.contains("some_future_image_family") == true)
-
-    StubDaemonURLProtocol.statusResponseConfiguration = .init(
-      statusCode: 200,
-      responseBody: validStatusResponse
-    )
-    await telemetryStore.refresh()
-
-    XCTAssertEqual(telemetryStore.statusDocument.status, "ready")
-    XCTAssertNil(telemetryStore.lastStatusRefreshErrorMessage)
+      XCTAssertEqual(telemetryStore.statusDocument.status, "ready", unfamiliarKind)
+      XCTAssertNil(telemetryStore.lastStatusRefreshErrorMessage, unfamiliarKind)
+      XCTAssertEqual(
+        telemetryStore.statusDocument.workerRuntimeFeatureConfiguration?.loadedModel,
+        .other(kind: unfamiliarKind, modelIdentifier: "some-model"), unfamiliarKind)
+    }
   }
 
   @MainActor

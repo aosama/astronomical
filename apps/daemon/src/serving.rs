@@ -9,6 +9,7 @@ pub(crate) mod image_generation_executor;
 pub(crate) mod neural_engine_session_totals;
 pub(crate) mod request_seed;
 pub(crate) mod serving_session_snapshot;
+pub(crate) mod skill_declaration;
 pub(crate) mod speech_executor;
 pub(crate) mod speech_service;
 pub(crate) mod structured_output;

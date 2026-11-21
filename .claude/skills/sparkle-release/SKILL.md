@@ -42,6 +42,14 @@ If any credential check fails, stop and read the message: the notarization check
 4. Save the returned issue number as `ISSUE_NUMBER`. Both release pull requests must link only this issue.
 5. Compare `site/schemas/config/v1/astronomical-config.schema.json` at `PREVIOUS_TAG` with `main`, and require every removed property to be in `strip_retired_config_fields` (`RETIRED_CHUNKING_FIELD_NAMES` for chunking fields).
 6. Merge any fix the release needs on its own branch and pull request before starting section 2, so the bump stays version-only. A fix mixed into the bump branch fails the version-only classifier, and the bump then pays for the full macOS lanes.
+7. Review the Astronomical skill against this release. Read `skill/README.md`, then compare `git diff "$PREVIOUS_TAG"..main` with `skill/astronomical`. The skill needs an update when the release:
+   - adds, renames or removes a command, flag or output of the command-line interface;
+   - changes how Astronomical connects to a coding tool or editor (Zed, OpenCode, Pi Coding Agent, Visual Studio Code, Claude Code, Codex or another harness);
+   - adds or withdraws a kind of model or an ability;
+   - changes a setting, a default or the local API a person or an agent relies on;
+   - changes what a person should do when something fails.
+
+   When any of these applies, update the skill through its own pull request before section 2: edit `skill/astronomical`, raise `skill_version` in `skill/release.json`, set its `minimum_app_version` to `$VERSION` when the skill now relies on something this release adds, and run `cargo xtask skill-site`. Then add one line to the release issue: either what changed in the skill, or `Skill reviewed: no update needed`. Do not start section 2 without that line.
 
 ## 2. Merge the version bump
 

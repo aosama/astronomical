@@ -21,3 +21,4 @@ mod model_config;
 mod prompt_processing_chunk_sizing;
 mod runtime;
 mod runtime_instance;
+mod skill;

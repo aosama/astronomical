@@ -75,6 +75,10 @@ pub(super) async fn stream_chat_generation(
             enforced_schema_output_instruction(schema_text),
         );
     }
+    crate::serving::skill_declaration::declare_astronomical_skill(
+        generation_context.reloadable_config.as_ref(),
+        &mut messages,
+    );
     let health_snapshot = generation_context.executor.worker_health_snapshot();
     let dispatched_model_id = match admitted_catalog_model_id(
         &health_snapshot,

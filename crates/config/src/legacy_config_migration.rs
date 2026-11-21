@@ -231,6 +231,7 @@ fn build_migrated_config(
                 .and_then(|logging| logging.retained_files),
         }),
         menu_bar: None,
+        skill: None,
     }
 }
 

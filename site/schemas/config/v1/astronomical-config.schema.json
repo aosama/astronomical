@@ -13,6 +13,7 @@
         {"title": "Locations", "description": "The folders Astronomical reads models from and writes downloads and compiled programs to.", "settings": ["runtime.model_directories", "runtime.model_download_directory", "runtime.neural_engine_program_directory"]},
         {"title": "Prompt cache", "description": "A cache on disk that lets a prompt seen before skip most of its processing.", "settings": ["ssd_prompt_cache.enabled", "ssd_prompt_cache.maximum_size_gb"]},
         {"title": "Menu bar", "description": "What the Astronomical item at the top of the screen shows, and how much detail its menu gives.", "settings": ["menu_bar.show_progress_and_speed", "menu_bar.show_technical_details"]},
+        {"title": "Astronomical skill", "description": "How coding agents and other tools that use your models learn what Astronomical can do.", "settings": ["skill.declare_to_models", "skill.update_from_web"]},
         {"title": "Diagnostics", "description": "What Astronomical writes to its logs. Useful when reporting a problem.", "settings": ["diagnostics.log_level", "diagnostics.retained_log_files", "diagnostics.completion_attribution_enabled", "diagnostics.performance_attribution_enabled"]}
     ],
     "tuning": [
@@ -62,6 +63,9 @@
     },
     "menu_bar": {
       "$ref": "#/$defs/menu_bar"
+    },
+    "skill": {
+      "$ref": "#/$defs/skill"
     }
   },
   "$defs": {
@@ -449,6 +453,29 @@
           "default": false,
           "description": "Whether the menu bar popover shows its technical rows: the memory breakdown, GPU use, memory pressure, session totals, the Neural Engine row, build details and Reload config.",
           "x-astronomical-explanation": "Adds a detailed breakdown of how memory is used, graphics chip activity, totals for this session and build details to the menu that opens from the Astronomical icon. Useful when investigating speed or memory. Leave it off for a simpler menu.",
+          "x-astronomical-apply-mode": "live"
+        }
+      }
+    },
+    "skill": {
+      "type": "object",
+      "description": "How the Astronomical skill reaches the models this app serves, and how it stays current.",
+      "additionalProperties": false,
+      "properties": {
+        "declare_to_models": {
+          "title": "Tell models about the Astronomical skill",
+          "type": "boolean",
+          "default": true,
+          "description": "Whether the engine adds a short note to the system prompt of every chat request, saying that the Astronomical skill exists and where on this Mac to read it.",
+          "x-astronomical-explanation": "Astronomical keeps a short guide, called a skill, on this Mac. It explains how to draw images, read text aloud, describe pictures, choose models and fix problems with Astronomical. With this on, every model you run is told the guide exists and where the file is, so a coding agent or other tool can read it when you ask for one of those things, with nothing for you to install. The note is about 150 tokens at the end of the system prompt; the guide itself is read only when needed. It says that this Mac runs Astronomical and what it can do, and asks the model to read the guide before answering a question about Astronomical or drawing, speaking or describing a picture, followed by the file's location. The exact wording is in the app's status report, at /v1/status on the local address. Nothing leaves your Mac. Turn it off to send prompts exactly as your tools wrote them.",
+          "x-astronomical-apply-mode": "live"
+        },
+        "update_from_web": {
+          "title": "Keep the skill up to date",
+          "type": "boolean",
+          "default": true,
+          "description": "Whether the app checks getastronomical.com about once a day for a newer Astronomical skill that suits this version of the app, and downloads it.",
+          "x-astronomical-explanation": "The guide that models read improves between versions of the app. With this on, Astronomical looks on its own website about once a day for a newer guide and downloads it; the copy that came with the app is used when you are offline. The check sends nothing about you or your work. Turn it off to keep the copy that came with the app.",
           "x-astronomical-apply-mode": "live"
         }
       }

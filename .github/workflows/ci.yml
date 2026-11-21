@@ -916,6 +916,9 @@ jobs:
           # a page edited by hand fails here until `cargo xtask site-layout`
           # has rewritten it.
           cargo xtask site-layout --check
+          # The skill published under site/skill must match skill/astronomical;
+          # a skill edit fails here until `cargo xtask skill-site` has run.
+          cargo xtask skill-site --check
           # Every relative link and asset reference in the website must name
           # a published file. It runs here rather than in the static job
           # because this job has already compiled xtask.
