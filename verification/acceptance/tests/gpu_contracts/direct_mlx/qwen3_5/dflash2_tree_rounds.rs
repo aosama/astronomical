@@ -391,7 +391,7 @@ fn compare_cells_per_seed(cells: &[Cell], seed_count: u64) {
 /// Plain decoding in the same harness, the ladder's baseline: one token a
 /// step through the target's verification forward with no taps and no
 /// drafter, picked as the tree rounds pick, over the same output length.
-fn report_plain_decode(cell: &Cell, seed_count: u64) {
+pub(super) fn report_plain_decode(cell: &Cell, seed_count: u64) {
     let pair = load_pair();
     let (mut emitted_count, mut decode_seconds) = (0, 0.0);
     for seed_offset in 0..seed_count {
@@ -433,7 +433,7 @@ fn report_plain_decode(cell: &Cell, seed_count: u64) {
 
 /// Decodes every cell with and without context copies; a sampled cell
 /// pools up to `sampled_seed_limit` seeds.
-fn decode_cells_with_trees(cells: &[Cell], sampled_seed_limit: u64) {
+pub(super) fn decode_cells_with_trees(cells: &[Cell], sampled_seed_limit: u64) {
     let mut pair = load_pair();
     pair.target
         .enable_draft_tree_verification()

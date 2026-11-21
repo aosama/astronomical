@@ -324,19 +324,35 @@ pub(super) fn draft_tree(
     drafting: Drafting,
 ) -> DraftTree {
     let (hidden, draft_logits) = drafted_block(pair, round, drafting, cell.node_budget);
-    let lattice = draft_lattice(
-        pair.target.runtime(),
-        pair.drafter_weights
-            .candidate_selector
-            .as_ref()
-            .expect("a DFlash2 drafter has a candidate selector"),
-        &pair.drafter_configuration,
-        &hidden,
-        &draft_logits,
-        round.last_token_id,
-    )
-    .expect("the lattice reads back");
+    let lattice = block_lattice(pair, &hidden, &draft_logits, round.last_token_id);
     search_tree(pair, cell, round, drafting, &lattice)
+}
+
+/// The block's lattice as serving builds it: through DFlash2's candidate
+/// selector, or from the head alone for a DFlash drafter, which has none.
+fn block_lattice(
+    pair: &JourneyPair,
+    hidden: &MlxArray,
+    draft_logits: &MlxArray,
+    anchor_token_id: u32,
+) -> model_serving::speculative_decoding::dflash_drafter::DraftLattice {
+    let runtime = pair.target.runtime();
+    match &pair.drafter_weights.candidate_selector {
+        Some(selector_weights) => draft_lattice(
+            runtime,
+            selector_weights,
+            &pair.drafter_configuration,
+            hidden,
+            draft_logits,
+            anchor_token_id,
+        ),
+        None => model_serving::speculative_decoding::dflash_drafter::head_only_draft_lattice(
+            runtime,
+            &pair.drafter_configuration,
+            draft_logits,
+        ),
+    }
+    .expect("the lattice reads back")
 }
 
 /// A drafted tree with each stage's milliseconds, every stage synced.
@@ -360,18 +376,7 @@ pub(super) fn staged_draft_tree(
         .expect("the drafter evaluates");
     let drafter_milliseconds = started_at.elapsed().as_secs_f64() * 1000.0;
     let started_at = std::time::Instant::now();
-    let lattice = draft_lattice(
-        runtime,
-        pair.drafter_weights
-            .candidate_selector
-            .as_ref()
-            .expect("a DFlash2 drafter has a candidate selector"),
-        &pair.drafter_configuration,
-        &hidden,
-        &draft_logits,
-        round.last_token_id,
-    )
-    .expect("the lattice reads back");
+    let lattice = block_lattice(pair, &hidden, &draft_logits, round.last_token_id);
     let lattice_milliseconds = started_at.elapsed().as_secs_f64() * 1000.0;
     let started_at = std::time::Instant::now();
     let tree = search_tree(pair, cell, round, Drafting::Tree, &lattice);

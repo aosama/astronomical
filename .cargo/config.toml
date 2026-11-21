@@ -614,6 +614,14 @@ measure-dflash2-tree-oracle = "run -p xtask -- test-run --package astronomical-a
 # attention over many interleaved seeds, each seed printed, since tokens kept
 # a round vary between sampled texts more than between attention paths.
 # Those are long: pass --exact --filter with the test's full path.
+# The same harness's sweeps for either drafter generation: tree and chain
+# sizes from 1 to 15 drafted tokens for code and chat at the publisher's
+# recommended 0.6 and chat at 1.0, and 3- to 6-node trees at 0.6 (each case
+# prints kept tokens a round, milliseconds a round and decode tok/s). Pass
+# --exact --filter direct_mlx::qwen3_5::dflash2_tree_size_sweeps::should_sweep_tree_sizes_and_chains_for_code_and_chat_at_real_temperatures
+# (about 10 minutes) or dflash2_tree_size_sweeps::should_compare_three_to_six_node_trees_at_the_recommended_temperature
+# (about 2 minutes), with --configuration naming a target whose drafter
+# folder holds a DFlash or DFlash2 drafter.
 measure-dflash2-tree-rounds = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter dflash2_tree_round"
 # Whether a verified draft row gives the target's own one-token step's
 # logits: the greedy continuation fed one token a step, as one 16-row chain
@@ -659,6 +667,12 @@ measure-dflash2-serving-throughput = "run -p xtask -- test-run --package astrono
 # logits must match, and for DFlash2 the greedy path and kept candidates too.
 # Seconds.
 test-dflash-drafter-reference = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter dflash_drafter_reference"
+# What a routed-expert projection costs by how its rows are laid out: one row
+# a gathered expert (how a draft round's rows are verified) against several
+# rows on one gathered expert, on random 6-bit weights of the 35B-A3B's
+# expert shape, 40 projections an evaluation. Prices reading each expert once
+# for every row that picked it before any kernel is written. Seconds.
+measure-expert-rows-per-read = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --exact --filter direct_mlx::expert_rows_per_read_cost::should_price_rows_on_one_gathered_expert_against_one_row_a_slot"
 # The row-batched kernel's GPU contracts: matches MLX's quantized matmul on
 # every 27B shape at 1 to 32 rows, gives each row the same bits alone and
 # inside a 16-row block, and refuses packings it cannot read. Seconds.
