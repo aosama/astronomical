@@ -102,7 +102,7 @@ pub const TENSORFOLD_TREE_BLOCK_ROW_COUNT: usize = 16;
 /// 16-row block reproduces its rounds one for one on its own greedy code
 /// completion (5.81 tokens kept a round against 5.62) and lifted raw code
 /// completion from 65.7 to 72.0 tok/s on the 27B, but through the real
-/// worker it kept 2.96 tokens a round instead of 3.73 on sampled prose after
+/// worker it kept 2.96 tokens a round instead of 3.73 on sampled everyday writing after
 /// a 10,011-token prompt (28.3 against 35.6 tok/s), a loss the model-level
 /// journeys do not show and that is not yet explained.
 #[must_use]

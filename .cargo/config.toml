@@ -606,7 +606,7 @@ measure-dflash2-tree-oracle = "run -p xtask -- test-run --package astronomical-a
 # a short and a long prompt, and by layer stage). Same pair and memory as
 # above; about three minutes, or one test with --filter NAME. With a
 # mixture-of-experts target (see the configuration note below) it also has:
-# the tree-size ladder against plain one-token steps; prose after a
+# the tree-size ladder against plain one-token steps; a story continued after a
 # 10,000-token prompt; synced rounds through the row-exact tree attention
 # kernel and MLX's attention from 14 to 11,292 context tokens (where the
 # kernel starts to pay); trees against chains three and four tokens deep;
