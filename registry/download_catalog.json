@@ -212,6 +212,46 @@
             "upstream_license": "MIT"
         },
         {
+            "huggingface_id": "ahmedihamdy/Ornith-1.5-35B-A3B-MLX-4bit-vision-DFLASH",
+            "revision": "f7747af757d30a8841f383e33c0d8d8f60680769",
+            "summary": "Ornith's 4-bit build with vision and its own draft model: code about a quarter faster on M5 Macs.",
+            "family": "qwen3_5",
+            "approximate_size_bytes": 21194272957,
+            "approximate_memory_bytes": 22522235367,
+            "minimum_memory_bytes": 4451287808,
+            "role": "chat",
+            "public": true,
+            "description": "The Ornith team's 4-bit Ornith 1.5 35B-A3B with its original vision put back, so it reads pictures, and their own draft model packed in. On an M5 Mac with room for the whole model, the draft model guesses the next few words and the large model checks them in one step: code arrives about a quarter sooner, essays about a tenth slower. Every word is still the large model's own. On other Macs it runs without the draft model.",
+            "capabilities": {
+                "supports_reasoning": true,
+                "supports_vision": true,
+                "supports_tool_calls": true,
+                "context_window": 262144
+            },
+            "quantization_label": "MLX 4-bit (affine, group 64), bf16 vision, DFlash draft model",
+            "upstream_license": "MIT"
+        },
+        {
+            "huggingface_id": "ahmedihamdy/Ornith-1.5-35B-A3B-MLX-6bit-vision-DFLASH",
+            "revision": "5778d8e773408341acde6e7b5b59e4868d8762a0",
+            "summary": "Ornith's 6-bit build with vision and its own draft model: code about a quarter faster on M5 Macs.",
+            "family": "qwen3_5",
+            "approximate_size_bytes": 29853872497,
+            "approximate_memory_bytes": 31181834907,
+            "minimum_memory_bytes": 3670688512,
+            "role": "chat",
+            "public": true,
+            "description": "The Ornith team's 6-bit Ornith 1.5 35B-A3B with its original vision put back, so it reads pictures, and their own draft model packed in. On an M5 Mac with room for the whole model, the draft model guesses the next few words and the large model checks them in one step: code arrives about a quarter sooner, essays about a seventh slower. Every word is still the large model's own. On other Macs it runs without the draft model.",
+            "capabilities": {
+                "supports_reasoning": true,
+                "supports_vision": true,
+                "supports_tool_calls": true,
+                "context_window": 262144
+            },
+            "quantization_label": "MLX 6-bit (affine, group 64), bf16 vision, DFlash draft model",
+            "upstream_license": "MIT"
+        },
+        {
             "huggingface_id": "ahmedihamdy/Ornith-1.5-35B-A3B-MLX-8bit-vision",
             "revision": "605cbfe28036cdaba9b3410f3a97d6db51e782bf",
             "summary": "The large Ornith with its original vision, for screenshots and documents.",
