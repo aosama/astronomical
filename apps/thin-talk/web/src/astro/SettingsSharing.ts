@@ -2,7 +2,7 @@ import { makeElement } from "./AstroDom";
 import type { ProblemReportChoice, ProblemReportClient, ProblemReports, SentProblemReport } from "../ProblemReportClient";
 import { NEVER_INCLUDED_TEXT, makeNoteField } from "../ProblemReportCard";
 import { ProblemReportsNotOfferedError } from "../ProblemReportClient";
-import type { WaitingProblemReport } from "../ProblemReportClient";
+import type { DailyCount, WaitingProblemReport } from "../ProblemReportClient";
 import { makeRow, makeSection, rowButton } from "./SettingsRows";
 
 /** The picker's choices, in the words the person reads. */
@@ -22,6 +22,7 @@ export class SettingsSharing {
   private readonly document: Document;
   private readonly client: ProblemReportClient;
   private isSentListOpen = false;
+  private dailyCount: DailyCount | null = null;
   /** The report the person is writing after pressing Report a problem. */
   private personReport: WaitingProblemReport | null = null;
   private personReportOutcome = "";
@@ -33,6 +34,7 @@ export class SettingsSharing {
   }
 
   public async refresh(): Promise<void> {
+    this.dailyCount = await this.client.fetchDailyCount();
     try {
       this.showRows(await this.client.fetchProblemReports());
     } catch (error) {
@@ -60,7 +62,7 @@ export class SettingsSharing {
     }
     rows.push(
       makeRow(document, "Problem reports", this.reportDetail(problemReports), this.choicePicker(problemReports.choice)),
-      makeRow(document, "Daily count", makeElement(document, "span", "settings__row-value--muted", "Not sent"), null),
+      this.dailyCountRow(),
       this.sentRow(problemReports.sent),
     );
     if (this.isSentListOpen) {
@@ -121,6 +123,26 @@ export class SettingsSharing {
       );
     }
     return list;
+  }
+
+  /** The daily count: the exact line, whether it is on, when it last went,
+   * and the button that turns it on or off. */
+  private dailyCountRow(): HTMLElement {
+    const dailyCount = this.dailyCount;
+    if (dailyCount === null) {
+      return makeRow(this.document, "Daily count", makeElement(this.document, "span", "settings__row-value--muted", "Not sent"), null);
+    }
+    const isOn = dailyCount.answer === true;
+    const lastSent = dailyCount.lastSentUnixDay === null ? "" : ` Last sent ${new Date(dailyCount.lastSentUnixDay * 86_400_000).toLocaleDateString(undefined, { timeZone: "UTC" })}.`;
+    const detailText = isOn ? `On. Once a day: ${dailyCount.line}.${lastSent}` : `Off. If on, once a day: ${dailyCount.line}`;
+    const detail = makeElement(this.document, "span", "settings__row-value--muted", detailText);
+    detail.dataset.testid = "settings-daily-count-detail";
+    return makeRow(this.document, "Daily count", detail, rowButton(this.document, "settings-daily-count", isOn ? "Turn off" : "Turn on", () => void this.setDailyCount(!isOn)));
+  }
+
+  private async setDailyCount(isCounted: boolean): Promise<void> {
+    await this.client.saveDailyCountAnswer(isCounted);
+    await this.refresh();
   }
 
   private reportProblemRow(): HTMLElement {

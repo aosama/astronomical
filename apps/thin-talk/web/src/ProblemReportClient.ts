@@ -20,6 +20,17 @@ export interface ProblemReports {
   sent: SentProblemReport[];
 }
 
+/** The daily count as the engine describes it for this Mac. */
+export interface DailyCount {
+  /** The exact line this Mac sends, with its real values. */
+  line: string;
+  /** True or false once answered; null while the person has not been asked. */
+  answer: boolean | null;
+  shouldAsk: boolean;
+  /** Days since 1970-01-01 (UTC) of the last count sent, or null. */
+  lastSentUnixDay: number | null;
+}
+
 /** What the engine said after Send report or Don't send. */
 export interface ProblemReportAnswer {
   isDone: boolean;
@@ -91,6 +102,39 @@ export class ProblemReportClient {
     if (!response.ok) {
       throw new Error(`saving the sharing choice answered ${response.status}`);
     }
+  }
+
+  /** The daily count for this Mac, or null when this version has none (the
+   * Mac App Store version) or the engine cannot be asked. */
+  public async fetchDailyCount(): Promise<DailyCount | null> {
+    try {
+      const response = await this.fetchFunction(`${this.daemonBaseURL}/v1/daily-count`);
+      if (!response.ok) {
+        return null;
+      }
+      const plain = (await response.json()) as Record<string, unknown>;
+      if (typeof plain["line"] !== "string") {
+        return null;
+      }
+      return {
+        line: plain["line"],
+        answer: typeof plain["answer"] === "boolean" ? plain["answer"] : null,
+        shouldAsk: plain["should_ask"] === true,
+        lastSentUnixDay: typeof plain["last_sent_unix_day"] === "number" ? plain["last_sent_unix_day"] : null,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  /** Saves the person's answer to "May this Mac be counted?". */
+  public async saveDailyCountAnswer(isCounted: boolean): Promise<boolean> {
+    const response = await this.fetchFunction(`${this.daemonBaseURL}/v1/config/sharing`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ daily_count: isCounted }),
+    }).catch(() => null);
+    return response !== null && response.ok;
   }
 
   private async answerReport(reportNumber: number, answer: "send" | "decline", typedNote = ""): Promise<ProblemReportAnswer> {
