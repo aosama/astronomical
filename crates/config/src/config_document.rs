@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 
 use crate::chunking_config::ChunkingConfigFile;
-use crate::{AstronomicalConfigError, LogLevel};
+use crate::{AstronomicalConfigError, LogLevel, ProblemReportChoice};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -33,6 +33,8 @@ pub(crate) struct UserConfigFile {
     pub(crate) menu_bar: Option<MenuBarConfigFile>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) skill: Option<SkillConfigFile>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) sharing: Option<SharingConfigFile>,
 }
 
 impl UserConfigFile {
@@ -66,6 +68,7 @@ impl UserConfigFile {
             diagnostics: None,
             menu_bar: None,
             skill: None,
+            sharing: None,
         }
     }
 
@@ -154,6 +157,17 @@ pub(crate) struct SkillConfigFile {
     pub(crate) declare_to_models: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) update_from_web: Option<bool>,
+}
+
+/// What the person chose to send to the developers. The daemon and the
+/// apps read it; no worker does.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct SharingConfigFile {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) problem_reports: Option<ProblemReportChoice>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) daily_count: Option<bool>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
