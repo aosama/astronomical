@@ -1,4 +1,4 @@
-//! The engine-owned DFlash2 drafter runtime.
+//! The engine-owned DFlash drafter runtime, of either generation.
 //!
 //! One resident engine may host one drafter beside its target. Loading is
 //! permissive about absence (a library with no drafter runs the classic
@@ -16,9 +16,9 @@ use runtime_integration::MlxSafetensors;
 
 use crate::PerformanceAttribution;
 use crate::qwen3_5_resident::Qwen3_5ResidentModel;
-use crate::speculative_decoding::dflash2_drafter::{
-    DFlash2DrafterConfiguration, DFlash2DrafterWeights, DFlash2DrafterWeightsError,
-    DraftTreeOptions, bind_drafter_weights,
+use crate::speculative_decoding::dflash_drafter::{
+    DFlashDrafterConfiguration, DFlashDrafterWeights, DFlashDrafterWeightsError, DraftTreeOptions,
+    bind_drafter_weights,
 };
 
 use super::draft_tree_size::draft_tree_options_for_target;
@@ -31,8 +31,8 @@ const DRAFTER_WEIGHTS_FILE_NAME: &str = "model.safetensors";
 
 /// The loaded drafter a session drafts with.
 pub struct Qwen3_5SpeculativeDraftRuntime {
-    pub drafter_configuration: DFlash2DrafterConfiguration,
-    pub drafter_weights: DFlash2DrafterWeights,
+    pub drafter_configuration: DFlashDrafterConfiguration,
+    pub drafter_weights: DFlashDrafterWeights,
     /// The tree size and search settings, chosen for this target's kind.
     pub tree_options: DraftTreeOptions,
     /// Keeps the drafter's lazily mapped codebooks alive.
@@ -70,9 +70,10 @@ impl Qwen3_5SpeculativeDraftRuntime {
         let tree_options = draft_tree_options_for_target(model.config().expert_count());
         tracing::info!(
             drafter_directory = %drafter_directory.display(),
+            drafter_generation = ?drafter_configuration.generation,
             converted_projection_count,
             tree_node_budget = tree_options.node_budget,
-            "resident engine decode path: DFlash2 draft trees"
+            "resident engine decode path: DFlash draft trees"
         );
         Ok(Some(Self {
             drafter_configuration,
@@ -119,8 +120,8 @@ fn prepare_target_for_draft_trees(
 fn load_drafter_weights(
     model: &Qwen3_5ResidentModel,
     drafter_directory: &Path,
-    drafter_configuration: &DFlash2DrafterConfiguration,
-) -> Result<(DFlash2DrafterWeights, MlxSafetensors), Qwen3_5SpeculativeDraftLoadingError> {
+    drafter_configuration: &DFlashDrafterConfiguration,
+) -> Result<(DFlashDrafterWeights, MlxSafetensors), Qwen3_5SpeculativeDraftLoadingError> {
     let weights_file = match std::fs::File::open(drafter_directory.join(DRAFTER_WEIGHTS_FILE_NAME))
     {
         Ok(weights_file) => weights_file,
@@ -182,7 +183,7 @@ pub enum Qwen3_5SpeculativeDraftLoadingError {
     #[error("the DFlash2 drafter's model.safetensors is unreadable: {source}")]
     WeightsUnreadable { source: std::io::Error },
     #[error("the DFlash2 drafter weights did not bind: {0}")]
-    Weights(#[source] DFlash2DrafterWeightsError),
+    Weights(#[source] DFlashDrafterWeightsError),
     #[error(
         "the active memory limit cannot host the DFlash2 drafter: {free_bytes} bytes free, {required_bytes} bytes required"
     )]

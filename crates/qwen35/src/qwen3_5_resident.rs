@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 #![allow(unused_imports)]
 
-mod dflash2_draft_target;
+mod dflash_draft_target;
 // Crate-visible so the sensitivity probe can swap one routed-expert
 // projection for a re-encoded copy and put the original back.
 mod astro_neural_engine_program_cache;

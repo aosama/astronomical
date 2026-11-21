@@ -1,5 +1,5 @@
 use super::draft_tree_size::{MIXTURE_OF_EXPERTS_NODE_BUDGET, draft_tree_options_for_target};
-use crate::speculative_decoding::dflash2_drafter::DraftTreeOptions;
+use crate::speculative_decoding::dflash_drafter::DraftTreeOptions;
 
 #[test]
 fn should_keep_the_default_fifteen_node_tree_for_a_dense_target() {

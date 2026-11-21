@@ -142,7 +142,7 @@ fn should_measure_where_a_small_tree_round_spends_its_time_after_a_journey_promp
 #[ignore = "loads a real target and its DFlash2 drafter (the 27B pair unless configured); run through cargo measure-dflash2-tree-rounds"]
 #[serial]
 fn should_separate_a_long_contexts_attention_work_from_copies_of_its_keys() {
-    use model_serving::speculative_decoding::dflash2_drafter::DraftTree;
+    use model_serving::speculative_decoding::dflash_drafter::DraftTree;
     let mut pair = load_pair();
     pair.target
         .enable_draft_tree_verification()
@@ -355,7 +355,7 @@ const CHAIN_COMPARISON_ROUNDS: usize = 12;
 #[ignore = "loads a real target and its DFlash2 drafter (the 27B pair unless configured); run through cargo measure-dflash2-tree-rounds"]
 #[serial]
 fn should_compare_a_chain_tree_verify_with_the_plain_forward_over_as_many_rows() {
-    use model_serving::speculative_decoding::dflash2_drafter::DraftTree;
+    use model_serving::speculative_decoding::dflash_drafter::DraftTree;
     use model_serving::{PerformanceAttribution, VerificationLogitsMode};
     let mut pair = load_pair();
     pair.target
@@ -513,8 +513,8 @@ fn should_attribute_a_sixteen_row_forward_to_its_layer_stages() {
 #[ignore = "loads a real target and its DFlash2 drafter (the 27B pair unless configured); run through cargo measure-dflash2-tree-rounds"]
 #[serial]
 fn should_leave_the_trained_rows_unchanged_when_the_block_is_longer() {
-    use model_serving::speculative_decoding::dflash2_drafter::{
-        DFlash2DraftTarget, DrafterContextStates, drafted_hidden_rows,
+    use model_serving::speculative_decoding::dflash_drafter::{
+        DFlashDraftTarget, DrafterContextStates, drafted_hidden_rows,
     };
     let pair = load_pair();
     let runtime = pair.target.runtime();
@@ -543,7 +543,7 @@ fn should_leave_the_trained_rows_unchanged_when_the_block_is_longer() {
                 .array_from_u32(&block_ids, &[1, block_row_count as i32])
                 .expect("the block builds");
             let mut context_states = DrafterContextStates::new(configuration, 0);
-            let target: &dyn DFlash2DraftTarget = &pair.target;
+            let target: &dyn DFlashDraftTarget = &pair.target;
             let hidden_rows = drafted_hidden_rows(
                 runtime,
                 &pair.drafter_weights,

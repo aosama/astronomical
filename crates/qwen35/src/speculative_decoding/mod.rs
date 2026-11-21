@@ -7,7 +7,7 @@
 //! family that is.
 
 pub mod context_copy;
-pub mod dflash2_drafter;
+pub mod dflash_drafter;
 pub mod keyed_sampling;
 pub mod tree_rows;
 pub mod verification_decision;

@@ -16,9 +16,10 @@ use mlx_bridge::MlxArray;
 
 use crate::qwen3_5_core::decoder::request_state::RequestDecoderStateStack;
 use crate::qwen3_5_resident::model::{Qwen3_5ExecutionError, Qwen3_5ResidentModel};
-use crate::speculative_decoding::dflash2_drafter::{
-    DFlash2DraftTarget, DraftTreeOptions, DrafterContextStates, KeyedNoise, best_first_draft_tree,
-    draft_lattice, drafted_hidden_rows, tree_block_row_count,
+use crate::speculative_decoding::dflash_drafter::{
+    DFlashDraftTarget, DraftLattice, DraftTreeOptions, DrafterContextStates, KeyedNoise,
+    best_first_draft_tree, draft_lattice, drafted_hidden_rows, head_only_draft_lattice,
+    tree_block_row_count,
 };
 use crate::speculative_decoding::keyed_sampling::{RequestKeyedNoise, keyed_sample};
 use crate::speculative_decoding::tree_rows::TreeRows;
@@ -230,7 +231,7 @@ fn drafted_tree_rows(
     let mut block_ids = vec![configuration.mask_token_id; block_row_count];
     block_ids[0] = round_request.bonus_token_id;
     let block = runtime.array_from_u32(&block_ids, &[1, block_row_count as i32])?;
-    let target: &dyn DFlash2DraftTarget = model;
+    let target: &dyn DFlashDraftTarget = model;
     let hidden_rows = drafted_hidden_rows(
         runtime,
         &draft_runtime.drafter_weights,
@@ -241,10 +242,9 @@ fn drafted_tree_rows(
         &pending_tap_rows,
     )?;
     let draft_logits = target.head_logits(runtime, &hidden_rows)?;
-    let lattice = draft_lattice(
-        runtime,
-        &draft_runtime.drafter_weights.candidate_selector,
-        configuration,
+    let lattice = drafted_lattice(
+        model,
+        draft_runtime,
         &hidden_rows,
         &draft_logits,
         round_request.bonus_token_id,
@@ -276,6 +276,31 @@ fn drafted_tree_rows(
         round_request.bonus_token_id,
         &tree,
     ))
+}
+
+/// The block's candidate lattice: scored by DFlash2's candidate selector,
+/// or by the target head alone for a DFlash drafter, which has none.
+fn drafted_lattice(
+    model: &Qwen3_5ResidentModel,
+    draft_runtime: &Qwen3_5SpeculativeDraftRuntime,
+    hidden_rows: &MlxArray,
+    draft_logits: &MlxArray,
+    bonus_token_id: u32,
+) -> Result<DraftLattice, Qwen3_5ExecutionError> {
+    let runtime = model.runtime();
+    let configuration = &draft_runtime.drafter_configuration;
+    let lattice = match &draft_runtime.drafter_weights.candidate_selector {
+        Some(selector_weights) => draft_lattice(
+            runtime,
+            selector_weights,
+            configuration,
+            hidden_rows,
+            draft_logits,
+            bonus_token_id,
+        )?,
+        None => head_only_draft_lattice(runtime, configuration, draft_logits)?,
+    };
+    Ok(lattice)
 }
 
 /// The target's pick after every row of `per_row_logits` [1, rows, V]: the

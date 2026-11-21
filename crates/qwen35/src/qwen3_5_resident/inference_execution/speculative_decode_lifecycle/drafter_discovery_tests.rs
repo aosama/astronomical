@@ -166,3 +166,76 @@ fn should_fall_back_to_the_library_when_the_bundled_drafter_does_not_pair() {
 
     assert_eq!(found.0, library_drafter);
 }
+
+/// A first-generation DFlash drafter configuration for the same target.
+fn first_generation_drafter_document(target_layer_count: i32) -> Value {
+    let mut document = drafter_document(target_layer_count);
+    document["architectures"] = json!(["DFlashDraftModel"]);
+    document
+        .as_object_mut()
+        .expect("an object")
+        .remove("is_causal");
+    let dflash = document["dflash_config"]
+        .as_object_mut()
+        .expect("an object");
+    for second_generation_field in [
+        "conv_group_size",
+        "conv_kernel_size",
+        "selector_rank",
+        "selector_top_k",
+    ] {
+        dflash.remove(second_generation_field);
+    }
+    document
+}
+
+#[test]
+fn should_prefer_a_dflash2_library_drafter_over_an_earlier_dflash_one() {
+    let library_root = tempfile::tempdir().expect("a temporary directory");
+    let target = library_root.path().join("acme").join("target-27b");
+    write_config(&target, &json!({"model_type": "qwen3_5"}));
+    let first_generation = library_root.path().join("aaa-lab").join("drafter");
+    write_config(&first_generation, &first_generation_drafter_document(64));
+    let second_generation = library_root.path().join("zzz-lab").join("drafter");
+    write_config(&second_generation, &drafter_document(64));
+    let (found_directory, found_configuration) = paired_drafter_directory(&target, &TARGET_27B)
+        .expect("the library lists")
+        .expect("a drafter pairs");
+    assert_eq!(found_directory, second_generation);
+    assert_eq!(
+        found_configuration.generation,
+        crate::speculative_decoding::dflash_drafter::DrafterGeneration::DFlash2
+    );
+}
+
+#[test]
+fn should_use_a_dflash_library_drafter_when_it_is_the_only_one_that_pairs() {
+    let library_root = tempfile::tempdir().expect("a temporary directory");
+    let target = library_root.path().join("acme").join("target-27b");
+    write_config(&target, &json!({"model_type": "qwen3_5"}));
+    let first_generation = library_root.path().join("lab").join("drafter");
+    write_config(&first_generation, &first_generation_drafter_document(64));
+    let mismatched = library_root.path().join("other").join("drafter");
+    write_config(&mismatched, &drafter_document(48));
+    let (found_directory, _) = paired_drafter_directory(&target, &TARGET_27B)
+        .expect("the library lists")
+        .expect("a drafter pairs");
+    assert_eq!(found_directory, first_generation);
+}
+
+#[test]
+fn should_keep_a_bundled_dflash_drafter_over_a_dflash2_library_drafter() {
+    let library_root = tempfile::tempdir().expect("a temporary directory");
+    let target = library_root.path().join("acme").join("target-27b");
+    write_config(&target, &json!({"model_type": "qwen3_5"}));
+    let bundled = target.join(BUNDLED_DRAFTER_DIRECTORY_NAME);
+    write_config(&bundled, &first_generation_drafter_document(64));
+    write_config(
+        &library_root.path().join("lab").join("drafter"),
+        &drafter_document(64),
+    );
+    let (found_directory, _) = paired_drafter_directory(&target, &TARGET_27B)
+        .expect("the library lists")
+        .expect("a drafter pairs");
+    assert_eq!(found_directory, bundled);
+}

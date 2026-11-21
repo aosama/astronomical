@@ -11,7 +11,7 @@
 //! of a draft tree is checked by token equality alone, and the drafter can
 //! add the same draws to its scores to lean toward what will be sampled.
 
-use super::dflash2_drafter::KeyedNoise;
+use super::dflash_drafter::KeyedNoise;
 use super::verification_decision::TargetDistribution;
 
 const SEED_INCREMENT: u64 = 0x9E37_79B9_7F4A_7C15;

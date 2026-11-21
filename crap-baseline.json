@@ -94107,7 +94107,7 @@
       "crate": "qwen35"
     },
     {
-      "file": "crates/qwen35/src/qwen3_5_resident/dflash2_draft_target.rs",
+      "file": "crates/qwen35/src/qwen3_5_resident/dflash_draft_target.rs",
       "function": "Qwen3_5ResidentModel::embedded_rows",
       "line": 15,
       "cyclomatic": 2.0,
@@ -94116,7 +94116,7 @@
       "crate": "qwen35"
     },
     {
-      "file": "crates/qwen35/src/qwen3_5_resident/dflash2_draft_target.rs",
+      "file": "crates/qwen35/src/qwen3_5_resident/dflash_draft_target.rs",
       "function": "Qwen3_5ResidentModel::head_logits",
       "line": 25,
       "cyclomatic": 1.0,
@@ -94125,7 +94125,7 @@
       "crate": "qwen35"
     },
     {
-      "file": "crates/qwen35/src/qwen3_5_resident/dflash2_draft_target.rs",
+      "file": "crates/qwen35/src/qwen3_5_resident/dflash_draft_target.rs",
       "function": "Qwen3_5ResidentModel::sampling_distribution_rows",
       "line": 40,
       "cyclomatic": 1.0,
@@ -94134,7 +94134,7 @@
       "crate": "qwen35"
     },
     {
-      "file": "crates/qwen35/src/qwen3_5_resident/dflash2_draft_target.rs",
+      "file": "crates/qwen35/src/qwen3_5_resident/dflash_draft_target.rs",
       "function": "runtime_error",
       "line": 58,
       "cyclomatic": 1.0,
@@ -106689,7 +106689,7 @@
       "crate": "qwen35"
     },
     {
-      "file": "crates/qwen35/src/speculative_decoding/dflash2_drafter/block_attention_mask.rs",
+      "file": "crates/qwen35/src/speculative_decoding/dflash_drafter/block_attention_mask.rs",
       "function": "block_attention_visibility",
       "line": 18,
       "cyclomatic": 9.0,
@@ -106698,7 +106698,7 @@
       "crate": "qwen35"
     },
     {
-      "file": "crates/qwen35/src/speculative_decoding/dflash2_drafter/candidate_selector.rs",
+      "file": "crates/qwen35/src/speculative_decoding/dflash_drafter/candidate_selector.rs",
       "function": "SlotView::candidate_logits",
       "line": 198,
       "cyclomatic": 1.0,
@@ -106707,7 +106707,7 @@
       "crate": "qwen35"
     },
     {
-      "file": "crates/qwen35/src/speculative_decoding/dflash2_drafter/candidate_selector.rs",
+      "file": "crates/qwen35/src/speculative_decoding/dflash_drafter/candidate_selector.rs",
       "function": "SlotView::candidates",
       "line": 194,
       "cyclomatic": 1.0,
@@ -106716,7 +106716,7 @@
       "crate": "qwen35"
     },
     {
-      "file": "crates/qwen35/src/speculative_decoding/dflash2_drafter/candidate_selector.rs",
+      "file": "crates/qwen35/src/speculative_decoding/dflash_drafter/candidate_selector.rs",
       "function": "SlotView::edge_scores",
       "line": 203,
       "cyclomatic": 10.0,
@@ -106725,7 +106725,7 @@
       "crate": "qwen35"
     },
     {
-      "file": "crates/qwen35/src/speculative_decoding/dflash2_drafter/candidate_selector.rs",
+      "file": "crates/qwen35/src/speculative_decoding/dflash_drafter/candidate_selector.rs",
       "function": "SlotView::slot_row",
       "line": 233,
       "cyclomatic": 3.0,
@@ -106734,7 +106734,7 @@
       "crate": "qwen35"
     },
     {
-      "file": "crates/qwen35/src/speculative_decoding/dflash2_drafter/candidate_selector.rs",
+      "file": "crates/qwen35/src/speculative_decoding/dflash_drafter/candidate_selector.rs",
       "function": "choose_slot",
       "line": 133,
       "cyclomatic": 15.0,
@@ -106743,7 +106743,7 @@
       "crate": "qwen35"
     },
     {
-      "file": "crates/qwen35/src/speculative_decoding/dflash2_drafter/candidate_selector.rs",
+      "file": "crates/qwen35/src/speculative_decoding/dflash_drafter/candidate_selector.rs",
       "function": "kept_candidate_ids",
       "line": 103,
       "cyclomatic": 1.0,
@@ -106752,7 +106752,7 @@
       "crate": "qwen35"
     },
     {
-      "file": "crates/qwen35/src/speculative_decoding/dflash2_drafter/candidate_selector.rs",
+      "file": "crates/qwen35/src/speculative_decoding/dflash_drafter/candidate_selector.rs",
       "function": "select_path",
       "line": 38,
       "cyclomatic": 12.0,
@@ -106761,7 +106761,7 @@
       "crate": "qwen35"
     },
     {
-      "file": "crates/qwen35/src/speculative_decoding/dflash2_drafter/candidate_selector.rs",
+      "file": "crates/qwen35/src/speculative_decoding/dflash_drafter/candidate_selector.rs",
       "function": "stack_slots",
       "line": 179,
       "cyclomatic": 2.0,
@@ -106770,7 +106770,7 @@
       "crate": "qwen35"
     },
     {
-      "file": "crates/qwen35/src/speculative_decoding/dflash2_drafter/candidate_selector.rs",
+      "file": "crates/qwen35/src/speculative_decoding/dflash_drafter/candidate_selector.rs",
       "function": "top_k_failure",
       "line": 116,
       "cyclomatic": 1.0,
@@ -106779,7 +106779,7 @@
       "crate": "qwen35"
     },
     {
-      "file": "crates/qwen35/src/speculative_decoding/dflash2_drafter/draft_lattice.rs",
+      "file": "crates/qwen35/src/speculative_decoding/dflash_drafter/draft_lattice.rs",
       "function": "CodebookRows::of",
       "line": 115,
       "cyclomatic": 4.0,
@@ -106788,7 +106788,7 @@
       "crate": "qwen35"
     },
     {
-      "file": "crates/qwen35/src/speculative_decoding/dflash2_drafter/draft_lattice.rs",
+      "file": "crates/qwen35/src/speculative_decoding/dflash_drafter/draft_lattice.rs",
       "function": "SlotCandidates::kept",
       "line": 65,
       "cyclomatic": 7.0,
@@ -106797,7 +106797,7 @@
       "crate": "qwen35"
     },
     {
-      "file": "crates/qwen35/src/speculative_decoding/dflash2_drafter/draft_lattice.rs",
+      "file": "crates/qwen35/src/speculative_decoding/dflash_drafter/draft_lattice.rs",
       "function": "anchor_edge_scores",
       "line": 142,
       "cyclomatic": 10.0,
@@ -106806,7 +106806,7 @@
       "crate": "qwen35"
     },
     {
-      "file": "crates/qwen35/src/speculative_decoding/dflash2_drafter/draft_lattice.rs",
+      "file": "crates/qwen35/src/speculative_decoding/dflash_drafter/draft_lattice.rs",
       "function": "draft_lattice",
       "line": 21,
       "cyclomatic": 11.0,
@@ -106815,7 +106815,7 @@
       "crate": "qwen35"
     },
     {
-      "file": "crates/qwen35/src/speculative_decoding/dflash2_drafter/draft_lattice.rs",
+      "file": "crates/qwen35/src/speculative_decoding/dflash_drafter/draft_lattice.rs",
       "function": "float32_rows",
       "line": 204,
       "cyclomatic": 4.0,
@@ -106824,7 +106824,7 @@
       "crate": "qwen35"
     },
     {
-      "file": "crates/qwen35/src/speculative_decoding/dflash2_drafter/draft_lattice.rs",
+      "file": "crates/qwen35/src/speculative_decoding/dflash_drafter/draft_lattice.rs",
       "function": "projected_slots",
       "line": 91,
       "cyclomatic": 4.0,
@@ -106833,7 +106833,7 @@
       "crate": "qwen35"
     },
     {
-      "file": "crates/qwen35/src/speculative_decoding/dflash2_drafter/draft_lattice.rs",
+      "file": "crates/qwen35/src/speculative_decoding/dflash_drafter/draft_lattice.rs",
       "function": "slot_edge_scores",
       "line": 174,
       "cyclomatic": 8.0,
@@ -106842,7 +106842,7 @@
       "crate": "qwen35"
     },
     {
-      "file": "crates/qwen35/src/speculative_decoding/dflash2_drafter/draft_tree.rs",
+      "file": "crates/qwen35/src/speculative_decoding/dflash_drafter/draft_tree.rs",
       "function": "DraftTreeOptions::default",
       "line": 54,
       "cyclomatic": 1.0,
@@ -106851,7 +106851,7 @@
       "crate": "qwen35"
     },
     {
-      "file": "crates/qwen35/src/speculative_decoding/dflash2_drafter/draft_tree.rs",
+      "file": "crates/qwen35/src/speculative_decoding/dflash_drafter/draft_tree.rs",
       "function": "SlotScorer::edge_score",
       "line": 276,
       "cyclomatic": 3.0,
@@ -106860,7 +106860,7 @@
       "crate": "qwen35"
     },
     {
-      "file": "crates/qwen35/src/speculative_decoding/dflash2_drafter/draft_tree.rs",
+      "file": "crates/qwen35/src/speculative_decoding/dflash_drafter/draft_tree.rs",
       "function": "SlotScorer::expand",
       "line": 237,
       "cyclomatic": 2.0,
@@ -106869,7 +106869,7 @@
       "crate": "qwen35"
     },
     {
-      "file": "crates/qwen35/src/speculative_decoding/dflash2_drafter/draft_tree.rs",
+      "file": "crates/qwen35/src/speculative_decoding/dflash_drafter/draft_tree.rs",
       "function": "SlotScorer::normalized_slot_scores",
       "line": 253,
       "cyclomatic": 5.0,
@@ -106878,7 +106878,7 @@
       "crate": "qwen35"
     },
     {
-      "file": "crates/qwen35/src/speculative_decoding/dflash2_drafter/draft_tree.rs",
+      "file": "crates/qwen35/src/speculative_decoding/dflash_drafter/draft_tree.rs",
       "function": "best_candidates",
       "line": 206,
       "cyclomatic": 7.0,
@@ -106887,7 +106887,7 @@
       "crate": "qwen35"
     },
     {
-      "file": "crates/qwen35/src/speculative_decoding/dflash2_drafter/draft_tree.rs",
+      "file": "crates/qwen35/src/speculative_decoding/dflash_drafter/draft_tree.rs",
       "function": "best_first_draft_tree",
       "line": 126,
       "cyclomatic": 6.0,
@@ -106896,7 +106896,7 @@
       "crate": "qwen35"
     },
     {
-      "file": "crates/qwen35/src/speculative_decoding/dflash2_drafter/draft_tree.rs",
+      "file": "crates/qwen35/src/speculative_decoding/dflash_drafter/draft_tree.rs",
       "function": "best_frontier_index",
       "line": 175,
       "cyclomatic": 3.0,
@@ -106905,7 +106905,7 @@
       "crate": "qwen35"
     },
     {
-      "file": "crates/qwen35/src/speculative_decoding/dflash2_drafter/draft_tree.rs",
+      "file": "crates/qwen35/src/speculative_decoding/dflash_drafter/draft_tree.rs",
       "function": "log_softmax_in_place",
       "line": 290,
       "cyclomatic": 3.0,
@@ -106914,7 +106914,7 @@
       "crate": "qwen35"
     },
     {
-      "file": "crates/qwen35/src/speculative_decoding/dflash2_drafter/draft_tree.rs",
+      "file": "crates/qwen35/src/speculative_decoding/dflash_drafter/draft_tree.rs",
       "function": "parent_order",
       "line": 197,
       "cyclomatic": 3.0,
@@ -106923,7 +106923,7 @@
       "crate": "qwen35"
     },
     {
-      "file": "crates/qwen35/src/speculative_decoding/dflash2_drafter/draft_tree.rs",
+      "file": "crates/qwen35/src/speculative_decoding/dflash_drafter/draft_tree.rs",
       "function": "ranks_before",
       "line": 185,
       "cyclomatic": 3.0,
@@ -106932,7 +106932,7 @@
       "crate": "qwen35"
     },
     {
-      "file": "crates/qwen35/src/speculative_decoding/dflash2_drafter/draft_tree.rs",
+      "file": "crates/qwen35/src/speculative_decoding/dflash_drafter/draft_tree.rs",
       "function": "tree_block_row_count",
       "line": 88,
       "cyclomatic": 1.0,
@@ -106941,7 +106941,7 @@
       "crate": "qwen35"
     },
     {
-      "file": "crates/qwen35/src/speculative_decoding/dflash2_drafter/draft_tree_tests.rs",
+      "file": "crates/qwen35/src/speculative_decoding/dflash_drafter/draft_tree_tests.rs",
       "function": "FavouredToken::draw",
       "line": 39,
       "cyclomatic": 3.0,
@@ -106950,7 +106950,7 @@
       "crate": "qwen35"
     },
     {
-      "file": "crates/qwen35/src/speculative_decoding/dflash2_drafter/draft_tree_tests.rs",
+      "file": "crates/qwen35/src/speculative_decoding/dflash_drafter/draft_tree_tests.rs",
       "function": "flat_lattice",
       "line": 7,
       "cyclomatic": 3.0,
@@ -106959,7 +106959,7 @@
       "crate": "qwen35"
     },
     {
-      "file": "crates/qwen35/src/speculative_decoding/dflash2_drafter/draft_tree_tests.rs",
+      "file": "crates/qwen35/src/speculative_decoding/dflash_drafter/draft_tree_tests.rs",
       "function": "options",
       "line": 24,
       "cyclomatic": 1.0,
@@ -106968,7 +106968,7 @@
       "crate": "qwen35"
     },
     {
-      "file": "crates/qwen35/src/speculative_decoding/dflash2_drafter/drafter_attention.rs",
+      "file": "crates/qwen35/src/speculative_decoding/dflash_drafter/drafter_attention.rs",
       "function": "HeadShaper::rotated_heads",
       "line": 134,
       "cyclomatic": 6.0,
@@ -106977,7 +106977,7 @@
       "crate": "qwen35"
     },
     {
-      "file": "crates/qwen35/src/speculative_decoding/dflash2_drafter/drafter_attention.rs",
+      "file": "crates/qwen35/src/speculative_decoding/dflash_drafter/drafter_attention.rs",
       "function": "HeadShaper::value_heads",
       "line": 161,
       "cyclomatic": 4.0,
@@ -106986,7 +106986,7 @@
       "crate": "qwen35"
     },
     {
-      "file": "crates/qwen35/src/speculative_decoding/dflash2_drafter/drafter_attention.rs",
+      "file": "crates/qwen35/src/speculative_decoding/dflash_drafter/drafter_attention.rs",
       "function": "additive_mask",
       "line": 97,
       "cyclomatic": 5.0,
@@ -106995,7 +106995,7 @@
       "crate": "qwen35"
     },
     {
-      "file": "crates/qwen35/src/speculative_decoding/dflash2_drafter/drafter_attention.rs",
+      "file": "crates/qwen35/src/speculative_decoding/dflash_drafter/drafter_attention.rs",
       "function": "attend_block_to_context",
       "line": 19,
       "cyclomatic": 14.0,
@@ -107004,8 +107004,8 @@
       "crate": "qwen35"
     },
     {
-      "file": "crates/qwen35/src/speculative_decoding/dflash2_drafter/drafter_configuration.rs",
-      "function": "DFlash2DrafterConfiguration::check_consistency",
+      "file": "crates/qwen35/src/speculative_decoding/dflash_drafter/drafter_configuration.rs",
+      "function": "DFlashDrafterConfiguration::check_consistency",
       "line": 138,
       "cyclomatic": 4.0,
       "coverage": null,
@@ -107013,8 +107013,8 @@
       "crate": "qwen35"
     },
     {
-      "file": "crates/qwen35/src/speculative_decoding/dflash2_drafter/drafter_configuration.rs",
-      "function": "DFlash2DrafterConfiguration::context_row_limit",
+      "file": "crates/qwen35/src/speculative_decoding/dflash_drafter/drafter_configuration.rs",
+      "function": "DFlashDrafterConfiguration::context_row_limit",
       "line": 124,
       "cyclomatic": 3.0,
       "coverage": null,
@@ -107022,8 +107022,8 @@
       "crate": "qwen35"
     },
     {
-      "file": "crates/qwen35/src/speculative_decoding/dflash2_drafter/drafter_configuration.rs",
-      "function": "DFlash2DrafterConfiguration::convolution_group_count",
+      "file": "crates/qwen35/src/speculative_decoding/dflash_drafter/drafter_configuration.rs",
+      "function": "DFlashDrafterConfiguration::convolution_group_count",
       "line": 134,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -107031,8 +107031,8 @@
       "crate": "qwen35"
     },
     {
-      "file": "crates/qwen35/src/speculative_decoding/dflash2_drafter/drafter_configuration.rs",
-      "function": "DFlash2DrafterConfiguration::from_config_document",
+      "file": "crates/qwen35/src/speculative_decoding/dflash_drafter/drafter_configuration.rs",
+      "function": "DFlashDrafterConfiguration::from_config_document",
       "line": 67,
       "cyclomatic": 7.0,
       "coverage": null,
@@ -107040,8 +107040,8 @@
       "crate": "qwen35"
     },
     {
-      "file": "crates/qwen35/src/speculative_decoding/dflash2_drafter/drafter_configuration.rs",
-      "function": "DFlash2DrafterConfiguration::from_parts",
+      "file": "crates/qwen35/src/speculative_decoding/dflash_drafter/drafter_configuration.rs",
+      "function": "DFlashDrafterConfiguration::from_parts",
       "line": 84,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -107049,8 +107049,8 @@
       "crate": "qwen35"
     },
     {
-      "file": "crates/qwen35/src/speculative_decoding/dflash2_drafter/drafter_configuration.rs",
-      "function": "DFlash2DrafterConfiguration::proposal_count",
+      "file": "crates/qwen35/src/speculative_decoding/dflash_drafter/drafter_configuration.rs",
+      "function": "DFlashDrafterConfiguration::proposal_count",
       "line": 116,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -107058,8 +107058,8 @@
       "crate": "qwen35"
     },
     {
-      "file": "crates/qwen35/src/speculative_decoding/dflash2_drafter/drafter_configuration.rs",
-      "function": "DFlash2DrafterConfiguration::tap_width",
+      "file": "crates/qwen35/src/speculative_decoding/dflash_drafter/drafter_configuration.rs",
+      "function": "DFlashDrafterConfiguration::tap_width",
       "line": 110,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -107067,7 +107067,7 @@
       "crate": "qwen35"
     },
     {
-      "file": "crates/qwen35/src/speculative_decoding/dflash2_drafter/drafter_configuration.rs",
+      "file": "crates/qwen35/src/speculative_decoding/dflash_drafter/drafter_configuration.rs",
       "function": "integer",
       "line": 346,
       "cyclomatic": 1.0,
@@ -107076,7 +107076,7 @@
       "crate": "qwen35"
     },
     {
-      "file": "crates/qwen35/src/speculative_decoding/dflash2_drafter/drafter_configuration.rs",
+      "file": "crates/qwen35/src/speculative_decoding/dflash_drafter/drafter_configuration.rs",
       "function": "integer_list",
       "line": 365,
       "cyclomatic": 4.0,
@@ -107085,7 +107085,7 @@
       "crate": "qwen35"
     },
     {
-      "file": "crates/qwen35/src/speculative_decoding/dflash2_drafter/drafter_configuration.rs",
+      "file": "crates/qwen35/src/speculative_decoding/dflash_drafter/drafter_configuration.rs",
       "function": "is_set_beyond_identity",
       "line": 303,
       "cyclomatic": 3.0,
@@ -107094,7 +107094,7 @@
       "crate": "qwen35"
     },
     {
-      "file": "crates/qwen35/src/speculative_decoding/dflash2_drafter/drafter_configuration.rs",
+      "file": "crates/qwen35/src/speculative_decoding/dflash_drafter/drafter_configuration.rs",
       "function": "layer_attention",
       "line": 325,
       "cyclomatic": 6.0,
@@ -107103,7 +107103,7 @@
       "crate": "qwen35"
     },
     {
-      "file": "crates/qwen35/src/speculative_decoding/dflash2_drafter/drafter_configuration.rs",
+      "file": "crates/qwen35/src/speculative_decoding/dflash_drafter/drafter_configuration.rs",
       "function": "number",
       "line": 358,
       "cyclomatic": 1.0,
@@ -107112,7 +107112,7 @@
       "crate": "qwen35"
     },
     {
-      "file": "crates/qwen35/src/speculative_decoding/dflash2_drafter/drafter_configuration.rs",
+      "file": "crates/qwen35/src/speculative_decoding/dflash_drafter/drafter_configuration.rs",
       "function": "read_drafting_shape",
       "line": 238,
       "cyclomatic": 8.0,
@@ -107121,7 +107121,7 @@
       "crate": "qwen35"
     },
     {
-      "file": "crates/qwen35/src/speculative_decoding/dflash2_drafter/drafter_configuration.rs",
+      "file": "crates/qwen35/src/speculative_decoding/dflash_drafter/drafter_configuration.rs",
       "function": "read_model_shape",
       "line": 206,
       "cyclomatic": 13.0,
@@ -107130,7 +107130,7 @@
       "crate": "qwen35"
     },
     {
-      "file": "crates/qwen35/src/speculative_decoding/dflash2_drafter/drafter_configuration.rs",
+      "file": "crates/qwen35/src/speculative_decoding/dflash_drafter/drafter_configuration.rs",
       "function": "refuse_unimplemented_fields",
       "line": 269,
       "cyclomatic": 6.0,
@@ -107139,7 +107139,7 @@
       "crate": "qwen35"
     },
     {
-      "file": "crates/qwen35/src/speculative_decoding/dflash2_drafter/drafter_configuration.rs",
+      "file": "crates/qwen35/src/speculative_decoding/dflash_drafter/drafter_configuration.rs",
       "function": "require_architecture",
       "line": 250,
       "cyclomatic": 2.0,
@@ -107148,7 +107148,7 @@
       "crate": "qwen35"
     },
     {
-      "file": "crates/qwen35/src/speculative_decoding/dflash2_drafter/drafter_configuration.rs",
+      "file": "crates/qwen35/src/speculative_decoding/dflash_drafter/drafter_configuration.rs",
       "function": "rope_theta",
       "line": 313,
       "cyclomatic": 1.0,
@@ -107157,7 +107157,7 @@
       "crate": "qwen35"
     },
     {
-      "file": "crates/qwen35/src/speculative_decoding/dflash2_drafter/drafter_configuration_tests.rs",
+      "file": "crates/qwen35/src/speculative_decoding/dflash_drafter/drafter_configuration_tests.rs",
       "function": "qwen38_27b_drafter_document",
       "line": 9,
       "cyclomatic": 1.0,
@@ -107166,7 +107166,7 @@
       "crate": "qwen35"
     },
     {
-      "file": "crates/qwen35/src/speculative_decoding/dflash2_drafter/drafter_context_state.rs",
+      "file": "crates/qwen35/src/speculative_decoding/dflash_drafter/drafter_context_state.rs",
       "function": "DrafterContextStates::new",
       "line": 96,
       "cyclomatic": 4.0,
@@ -107175,7 +107175,7 @@
       "crate": "qwen35"
     },
     {
-      "file": "crates/qwen35/src/speculative_decoding/dflash2_drafter/drafter_context_state.rs",
+      "file": "crates/qwen35/src/speculative_decoding/dflash_drafter/drafter_context_state.rs",
       "function": "DrafterLayerContextState::append_and_fetch",
       "line": 49,
       "cyclomatic": 9.0,
@@ -107184,7 +107184,7 @@
       "crate": "qwen35"
     },
     {
-      "file": "crates/qwen35/src/speculative_decoding/dflash2_drafter/drafter_context_state.rs",
+      "file": "crates/qwen35/src/speculative_decoding/dflash_drafter/drafter_context_state.rs",
       "function": "DrafterLayerContextState::keep_latest_rows",
       "line": 69,
       "cyclomatic": 4.0,
@@ -107193,7 +107193,7 @@
       "crate": "qwen35"
     },
     {
-      "file": "crates/qwen35/src/speculative_decoding/dflash2_drafter/drafter_context_state.rs",
+      "file": "crates/qwen35/src/speculative_decoding/dflash_drafter/drafter_context_state.rs",
       "function": "DrafterLayerContextState::next_context_position",
       "line": 30,
       "cyclomatic": 1.0,
@@ -107202,7 +107202,7 @@
       "crate": "qwen35"
     },
     {
-      "file": "crates/qwen35/src/speculative_decoding/dflash2_drafter/drafter_context_state.rs",
+      "file": "crates/qwen35/src/speculative_decoding/dflash_drafter/drafter_context_state.rs",
       "function": "DrafterLayerContextState::retained_row_limit",
       "line": 26,
       "cyclomatic": 1.0,
@@ -107211,7 +107211,7 @@
       "crate": "qwen35"
     },
     {
-      "file": "crates/qwen35/src/speculative_decoding/dflash2_drafter/drafter_context_state.rs",
+      "file": "crates/qwen35/src/speculative_decoding/dflash_drafter/drafter_context_state.rs",
       "function": "DrafterLayerContextState::skip_rows_beyond_window",
       "line": 36,
       "cyclomatic": 3.0,
@@ -107220,7 +107220,7 @@
       "crate": "qwen35"
     },
     {
-      "file": "crates/qwen35/src/speculative_decoding/dflash2_drafter/drafter_forward.rs",
+      "file": "crates/qwen35/src/speculative_decoding/dflash_drafter/drafter_forward.rs",
       "function": "drafted_hidden_rows",
       "line": 37,
       "cyclomatic": 8.0,
@@ -107229,7 +107229,7 @@
       "crate": "qwen35"
     },
     {
-      "file": "crates/qwen35/src/speculative_decoding/dflash2_drafter/drafter_forward.rs",
+      "file": "crates/qwen35/src/speculative_decoding/dflash_drafter/drafter_forward.rs",
       "function": "drafter_layer",
       "line": 78,
       "cyclomatic": 11.0,
@@ -107238,7 +107238,7 @@
       "crate": "qwen35"
     },
     {
-      "file": "crates/qwen35/src/speculative_decoding/dflash2_drafter/drafter_forward.rs",
+      "file": "crates/qwen35/src/speculative_decoding/dflash_drafter/drafter_forward.rs",
       "function": "swiglu",
       "line": 137,
       "cyclomatic": 5.0,
@@ -107247,7 +107247,7 @@
       "crate": "qwen35"
     },
     {
-      "file": "crates/qwen35/src/speculative_decoding/dflash2_drafter/drafter_linear.rs",
+      "file": "crates/qwen35/src/speculative_decoding/dflash_drafter/drafter_linear.rs",
       "function": "DrafterLinear::forward",
       "line": 49,
       "cyclomatic": 6.0,
@@ -107256,7 +107256,7 @@
       "crate": "qwen35"
     },
     {
-      "file": "crates/qwen35/src/speculative_decoding/dflash2_drafter/drafter_linear.rs",
+      "file": "crates/qwen35/src/speculative_decoding/dflash_drafter/drafter_linear.rs",
       "function": "DrafterLinear::full_precision",
       "line": 40,
       "cyclomatic": 2.0,
@@ -107265,7 +107265,7 @@
       "crate": "qwen35"
     },
     {
-      "file": "crates/qwen35/src/speculative_decoding/dflash2_drafter/drafter_linear.rs",
+      "file": "crates/qwen35/src/speculative_decoding/dflash_drafter/drafter_linear.rs",
       "function": "DrafterLinear::quantize_in_place",
       "line": 82,
       "cyclomatic": 10.0,
@@ -107274,7 +107274,7 @@
       "crate": "qwen35"
     },
     {
-      "file": "crates/qwen35/src/speculative_decoding/dflash2_drafter/drafter_linear.rs",
+      "file": "crates/qwen35/src/speculative_decoding/dflash_drafter/drafter_linear.rs",
       "function": "projection_failure",
       "line": 124,
       "cyclomatic": 1.0,
@@ -107283,8 +107283,8 @@
       "crate": "qwen35"
     },
     {
-      "file": "crates/qwen35/src/speculative_decoding/dflash2_drafter/drafter_weights.rs",
-      "function": "DFlash2DrafterWeights::quantize_linears",
+      "file": "crates/qwen35/src/speculative_decoding/dflash_drafter/drafter_weights.rs",
+      "function": "DFlashDrafterWeights::quantize_linears",
       "line": 238,
       "cyclomatic": 6.0,
       "coverage": null,
@@ -107292,7 +107292,7 @@
       "crate": "qwen35"
     },
     {
-      "file": "crates/qwen35/src/speculative_decoding/dflash2_drafter/drafter_weights.rs",
+      "file": "crates/qwen35/src/speculative_decoding/dflash_drafter/drafter_weights.rs",
       "function": "TensorBinder::linear",
       "line": 221,
       "cyclomatic": 3.0,
@@ -107301,7 +107301,7 @@
       "crate": "qwen35"
     },
     {
-      "file": "crates/qwen35/src/speculative_decoding/dflash2_drafter/drafter_weights.rs",
+      "file": "crates/qwen35/src/speculative_decoding/dflash_drafter/drafter_weights.rs",
       "function": "TensorBinder::tensor",
       "line": 199,
       "cyclomatic": 3.0,
@@ -107310,7 +107310,7 @@
       "crate": "qwen35"
     },
     {
-      "file": "crates/qwen35/src/speculative_decoding/dflash2_drafter/drafter_weights.rs",
+      "file": "crates/qwen35/src/speculative_decoding/dflash_drafter/drafter_weights.rs",
       "function": "bind_convolution",
       "line": 172,
       "cyclomatic": 3.0,
@@ -107319,7 +107319,7 @@
       "crate": "qwen35"
     },
     {
-      "file": "crates/qwen35/src/speculative_decoding/dflash2_drafter/drafter_weights.rs",
+      "file": "crates/qwen35/src/speculative_decoding/dflash_drafter/drafter_weights.rs",
       "function": "bind_drafter_weights",
       "line": 72,
       "cyclomatic": 9.0,
@@ -107328,7 +107328,7 @@
       "crate": "qwen35"
     },
     {
-      "file": "crates/qwen35/src/speculative_decoding/dflash2_drafter/drafter_weights.rs",
+      "file": "crates/qwen35/src/speculative_decoding/dflash_drafter/drafter_weights.rs",
       "function": "bind_layer",
       "line": 112,
       "cyclomatic": 14.0,
@@ -107337,7 +107337,7 @@
       "crate": "qwen35"
     },
     {
-      "file": "crates/qwen35/src/speculative_decoding/dflash2_drafter/grouped_dynamic_convolution.rs",
+      "file": "crates/qwen35/src/speculative_decoding/dflash_drafter/grouped_dynamic_convolution.rs",
       "function": "TapKernels::for_tap",
       "line": 141,
       "cyclomatic": 6.0,
@@ -107346,7 +107346,7 @@
       "crate": "qwen35"
     },
     {
-      "file": "crates/qwen35/src/speculative_decoding/dflash2_drafter/grouped_dynamic_convolution.rs",
+      "file": "crates/qwen35/src/speculative_decoding/dflash_drafter/grouped_dynamic_convolution.rs",
       "function": "convolve",
       "line": 93,
       "cyclomatic": 13.0,
@@ -107355,7 +107355,7 @@
       "crate": "qwen35"
     },
     {
-      "file": "crates/qwen35/src/speculative_decoding/dflash2_drafter/grouped_dynamic_convolution.rs",
+      "file": "crates/qwen35/src/speculative_decoding/dflash_drafter/grouped_dynamic_convolution.rs",
       "function": "convolve_sublayer_input",
       "line": 25,
       "cyclomatic": 6.0,
@@ -107364,7 +107364,7 @@
       "crate": "qwen35"
     },
     {
-      "file": "crates/qwen35/src/speculative_decoding/dflash2_drafter/grouped_dynamic_convolution.rs",
+      "file": "crates/qwen35/src/speculative_decoding/dflash_drafter/grouped_dynamic_convolution.rs",
       "function": "convolve_sublayer_output",
       "line": 57,
       "cyclomatic": 1.0,
@@ -107373,7 +107373,7 @@
       "crate": "qwen35"
     },
     {
-      "file": "crates/qwen35/src/speculative_decoding/dflash2_drafter/grouped_dynamic_convolution.rs",
+      "file": "crates/qwen35/src/speculative_decoding/dflash_drafter/grouped_dynamic_convolution.rs",
       "function": "shifted_down",
       "line": 177,
       "cyclomatic": 6.0,
@@ -107382,7 +107382,7 @@
       "crate": "qwen35"
     },
     {
-      "file": "crates/qwen35/src/speculative_decoding/dflash2_drafter/grouped_dynamic_convolution.rs",
+      "file": "crates/qwen35/src/speculative_decoding/dflash_drafter/grouped_dynamic_convolution.rs",
       "function": "stage_slice",
       "line": 75,
       "cyclomatic": 3.0,

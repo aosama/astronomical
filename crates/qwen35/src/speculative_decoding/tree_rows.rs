@@ -10,7 +10,7 @@
 //! before the anchor. With those, every row computes exactly what it would
 //! have computed had its chain been fed alone.
 
-use super::dflash2_drafter::DraftTree;
+use super::dflash_drafter::DraftTree;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TreeRows {

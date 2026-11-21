@@ -31,6 +31,27 @@ pub struct DraftLattice {
     pub edge_scores: Vec<f32>,
 }
 
+impl DraftLattice {
+    /// The lattice of a drafter without a candidate selector: each slot's
+    /// candidates and head logits, with every edge zero, so the tree ranks a
+    /// slot's candidates the same under every parent.
+    pub fn without_edges(
+        depth: usize,
+        candidate_count: usize,
+        candidate_ids: Vec<u32>,
+        unary_scores: Vec<f32>,
+    ) -> Self {
+        Self {
+            depth,
+            candidate_count,
+            candidate_ids,
+            unary_scores,
+            anchor_edge_scores: vec![0.0; candidate_count],
+            edge_scores: vec![0.0; depth.saturating_sub(1) * candidate_count * candidate_count],
+        }
+    }
+}
+
 /// TensorFold's selector settings; `Default` gives the values its serial
 /// loop uses on chips with matrix units (`loneSelection`: 16 children a node,
 /// so an uncertain slot can spend the whole budget on siblings).
@@ -81,7 +102,7 @@ pub const TENSORFOLD_TREE_BLOCK_ROW_COUNT: usize = 16;
 /// 16-row block reproduces its rounds one for one on its own greedy code
 /// completion (5.81 tokens kept a round against 5.62) and lifted raw code
 /// completion from 65.7 to 72.0 tok/s on the 27B, but through the real
-/// worker it kept 2.96 tokens a round instead of 3.73 on sampled prose after
+/// worker it kept 2.96 tokens a round instead of 3.73 on sampled everyday writing after
 /// a 10,011-token prompt (28.3 against 35.6 tok/s), a loss the model-level
 /// journeys do not show and that is not yet explained.
 #[must_use]

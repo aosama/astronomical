@@ -11,7 +11,7 @@
 use mlx_bridge::MlxArray;
 use runtime_integration::{MlxRuntime, MlxRuntimeError};
 
-use super::drafter_configuration::DFlash2DrafterConfiguration;
+use super::drafter_configuration::DFlashDrafterConfiguration;
 use super::drafter_weights::CandidateSelectorWeights;
 
 /// How the path picks one candidate per slot.
@@ -38,7 +38,7 @@ pub struct ProposedPath {
 pub fn select_path(
     runtime: &MlxRuntime,
     weights: &CandidateSelectorWeights,
-    configuration: &DFlash2DrafterConfiguration,
+    configuration: &DFlashDrafterConfiguration,
     proposal_hidden_rows: &MlxArray,
     proposal_logits: &MlxArray,
     anchor_token_id: &MlxArray,
@@ -60,8 +60,8 @@ pub fn select_path(
         let slot_view = SlotView {
             runtime,
             slot,
-            candidate_count: configuration.selector_candidate_count,
-            rank: configuration.selector_rank,
+            candidate_count: configuration.lattice_candidate_count(),
+            rank: weights.predecessor_codebook.shape()[1],
         };
         let slot_choice = choose_slot(
             &slot_view,
@@ -98,17 +98,17 @@ struct SelectorInputs {
     projected_hidden: MlxArray,
 }
 
-/// The `selector_top_k` highest-logit ids at every slot, best first,
+/// The `lattice_candidate_count` highest-logit ids at every slot, best first,
 /// [1, proposals, candidates], from one top-k pass over the vocabulary.
 pub(super) fn kept_candidate_ids(
     runtime: &MlxRuntime,
-    configuration: &DFlash2DrafterConfiguration,
+    configuration: &DFlashDrafterConfiguration,
     proposal_logits: &MlxArray,
 ) -> Result<MlxArray, MlxRuntimeError> {
     crate::gpu_token_sampling::vocabulary_top_k(
         runtime,
         proposal_logits,
-        configuration.selector_candidate_count,
+        configuration.lattice_candidate_count(),
     )
     .map_err(top_k_failure)
 }

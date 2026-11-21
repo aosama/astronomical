@@ -1,4 +1,4 @@
-//! Finding the DFlash2 drafter installed for a target.
+//! Finding the DFlash drafter installed for a target.
 //!
 //! A drafter has no vocabulary of its own: it borrows the target's
 //! embedding, head and tapped hidden rows, so it is recognized by structure
@@ -12,7 +12,13 @@
 //! folder, is tried first. It belongs to that one model, so a library can
 //! hold the same target with and without drafting side by side, which is how
 //! a draft-tree build is compared with its plain twin. A library-wide drafter
-//! pairs with every target of its shape.
+//! pairs with every target of its shape. When several library drafters pair,
+//! a DFlash2 drafter is preferred over a DFlash one and path order decides
+//! only within a generation. The order is fixed for stability, not speed:
+//! libraries held only DFlash2 drafters before DFlash was served, so
+//! downloading a DFlash drafter never silently changes the one a model
+//! already drafts with. Which generation drafts faster depends on the target
+//! and the text; a package that wants one ships it in its `drafter` folder.
 //!
 //! Two library layouts are then searched from the target's own directory:
 //! the `huggingface_hub_cache` (`models--org--name/snapshots/<revision>`) and
@@ -20,7 +26,7 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::speculative_decoding::dflash2_drafter::DFlash2DrafterConfiguration;
+use crate::speculative_decoding::dflash_drafter::{DFlashDrafterConfiguration, DrafterGeneration};
 
 use super::engine_draft_runtime::Qwen3_5SpeculativeDraftLoadingError;
 
@@ -43,7 +49,7 @@ pub struct DrafterPairing {
 impl DrafterPairing {
     /// Whether `drafter_configuration` was built for a target of this shape.
     #[must_use]
-    pub fn pairs_with(&self, drafter_configuration: &DFlash2DrafterConfiguration) -> bool {
+    pub fn pairs_with(&self, drafter_configuration: &DFlashDrafterConfiguration) -> bool {
         drafter_configuration.target_layer_count == self.target_layer_count
             && drafter_configuration.hidden_size == self.target_hidden_size
             && drafter_configuration.vocabulary_size == self.target_vocabulary_size
@@ -52,39 +58,78 @@ impl DrafterPairing {
 
 /// The drafter that pairs with the target in `target_model_directory`, with
 /// its configuration: the target's bundled drafter when it pairs, otherwise
-/// the first library drafter (in path order) that does.
+/// the library drafter that pairs, DFlash2 before DFlash and then in path
+/// order.
 pub fn paired_drafter_directory(
     target_model_directory: &Path,
     pairing: &DrafterPairing,
-) -> Result<Option<(PathBuf, DFlash2DrafterConfiguration)>, Qwen3_5SpeculativeDraftLoadingError> {
+) -> Result<Option<(PathBuf, DFlashDrafterConfiguration)>, Qwen3_5SpeculativeDraftLoadingError> {
+    let bundled_directory = target_model_directory.join(BUNDLED_DRAFTER_DIRECTORY_NAME);
+    if let Some(drafter_configuration) = pairing_configuration(&bundled_directory, pairing) {
+        return Ok(Some((bundled_directory, drafter_configuration)));
+    }
     let mut library_directories = sibling_model_directories(target_model_directory)?;
     library_directories.sort();
-    let mut candidate_directories =
-        vec![target_model_directory.join(BUNDLED_DRAFTER_DIRECTORY_NAME)];
-    candidate_directories.extend(library_directories);
-    for candidate_directory in candidate_directories {
-        let Some(config_document) = drafter_config_document(&candidate_directory) else {
+    Ok(preferred_library_drafter(library_directories, pairing))
+}
+
+/// The pairing drafter among `library_directories` (in path order): the
+/// first DFlash2 one, or the first DFlash one when no DFlash2 drafter pairs.
+fn preferred_library_drafter(
+    library_directories: Vec<PathBuf>,
+    pairing: &DrafterPairing,
+) -> Option<(PathBuf, DFlashDrafterConfiguration)> {
+    let mut chosen: Option<(PathBuf, DFlashDrafterConfiguration)> = None;
+    for library_directory in library_directories {
+        let Some(drafter_configuration) = pairing_configuration(&library_directory, pairing) else {
             continue;
         };
-        // A drafter of a kind this engine does not implement is not this
-        // target's drafter: it is passed over, never a load failure.
-        let drafter_configuration =
-            match DFlash2DrafterConfiguration::from_config_document(&config_document) {
-                Ok(drafter_configuration) => drafter_configuration,
-                Err(configuration_error) => {
-                    tracing::debug!(
-                        drafter_directory = %candidate_directory.display(),
-                        %configuration_error,
-                        "passing over a drafter this engine does not implement"
-                    );
-                    continue;
-                }
-            };
-        if pairing.pairs_with(&drafter_configuration) {
-            return Ok(Some((candidate_directory, drafter_configuration)));
+        let is_preferred = match &chosen {
+            None => true,
+            Some((_, chosen_configuration)) => {
+                generation_preference(drafter_configuration.generation)
+                    < generation_preference(chosen_configuration.generation)
+            }
+        };
+        if is_preferred {
+            chosen = Some((library_directory, drafter_configuration));
         }
     }
-    Ok(None)
+    chosen
+}
+
+/// Lower is preferred.
+fn generation_preference(generation: DrafterGeneration) -> u8 {
+    match generation {
+        DrafterGeneration::DFlash2 => 0,
+        DrafterGeneration::DFlash => 1,
+    }
+}
+
+/// The configuration of the drafter in `candidate_directory` when there is
+/// one this engine implements and it pairs with the target.
+fn pairing_configuration(
+    candidate_directory: &Path,
+    pairing: &DrafterPairing,
+) -> Option<DFlashDrafterConfiguration> {
+    let config_document = drafter_config_document(candidate_directory)?;
+    // A drafter of a kind this engine does not implement is not this
+    // target's drafter: it is passed over, never a load failure.
+    let drafter_configuration =
+        match DFlashDrafterConfiguration::from_config_document(&config_document) {
+            Ok(drafter_configuration) => drafter_configuration,
+            Err(configuration_error) => {
+                tracing::debug!(
+                    drafter_directory = %candidate_directory.display(),
+                    %configuration_error,
+                    "passing over a drafter this engine does not implement"
+                );
+                return None;
+            }
+        };
+    pairing
+        .pairs_with(&drafter_configuration)
+        .then_some(drafter_configuration)
 }
 
 /// Every model directory in the library the target sits in, whichever of
@@ -135,7 +180,8 @@ fn child_directories(
     Ok(directories)
 }
 
-/// The directory's `config.json` when it describes a DFlash2 drafter; None
+/// The directory's `config.json` when it describes a DFlash drafter of
+/// either generation; None
 /// for any other model, or a file that is missing, oversized or not JSON.
 fn drafter_config_document(model_directory: &Path) -> Option<serde_json::Value> {
     let config_path = model_directory.join(CONFIGURATION_FILE_NAME);

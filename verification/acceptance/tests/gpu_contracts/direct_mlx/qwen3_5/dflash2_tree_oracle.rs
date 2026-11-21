@@ -14,8 +14,8 @@
 //! (chat, greedy and 1.0).
 
 use mlx_bridge::MlxArray;
-use model_serving::speculative_decoding::dflash2_drafter::{
-    DFlash2DraftTarget, DraftTree, DraftTreeOptions, DrafterContextStates, KeyedNoise,
+use model_serving::speculative_decoding::dflash_drafter::{
+    DFlashDraftTarget, DraftTree, DraftTreeOptions, DrafterContextStates, KeyedNoise,
     TENSORFOLD_TREE_BLOCK_ROW_COUNT, best_first_draft_tree, draft_lattice, drafted_hidden_rows,
     tree_block_row_count,
 };
@@ -324,16 +324,35 @@ pub(super) fn draft_tree(
     drafting: Drafting,
 ) -> DraftTree {
     let (hidden, draft_logits) = drafted_block(pair, round, drafting, cell.node_budget);
-    let lattice = draft_lattice(
-        pair.target.runtime(),
-        &pair.drafter_weights.candidate_selector,
-        &pair.drafter_configuration,
-        &hidden,
-        &draft_logits,
-        round.last_token_id,
-    )
-    .expect("the lattice reads back");
+    let lattice = block_lattice(pair, &hidden, &draft_logits, round.last_token_id);
     search_tree(pair, cell, round, drafting, &lattice)
+}
+
+/// The block's lattice as serving builds it: through DFlash2's candidate
+/// selector, or from the head alone for a DFlash drafter, which has none.
+fn block_lattice(
+    pair: &JourneyPair,
+    hidden: &MlxArray,
+    draft_logits: &MlxArray,
+    anchor_token_id: u32,
+) -> model_serving::speculative_decoding::dflash_drafter::DraftLattice {
+    let runtime = pair.target.runtime();
+    match &pair.drafter_weights.candidate_selector {
+        Some(selector_weights) => draft_lattice(
+            runtime,
+            selector_weights,
+            &pair.drafter_configuration,
+            hidden,
+            draft_logits,
+            anchor_token_id,
+        ),
+        None => model_serving::speculative_decoding::dflash_drafter::head_only_draft_lattice(
+            runtime,
+            &pair.drafter_configuration,
+            draft_logits,
+        ),
+    }
+    .expect("the lattice reads back")
 }
 
 /// A drafted tree with each stage's milliseconds, every stage synced.
@@ -357,15 +376,7 @@ pub(super) fn staged_draft_tree(
         .expect("the drafter evaluates");
     let drafter_milliseconds = started_at.elapsed().as_secs_f64() * 1000.0;
     let started_at = std::time::Instant::now();
-    let lattice = draft_lattice(
-        runtime,
-        &pair.drafter_weights.candidate_selector,
-        &pair.drafter_configuration,
-        &hidden,
-        &draft_logits,
-        round.last_token_id,
-    )
-    .expect("the lattice reads back");
+    let lattice = block_lattice(pair, &hidden, &draft_logits, round.last_token_id);
     let lattice_milliseconds = started_at.elapsed().as_secs_f64() * 1000.0;
     let started_at = std::time::Instant::now();
     let tree = search_tree(pair, cell, round, Drafting::Tree, &lattice);
@@ -404,7 +415,7 @@ fn drafted_block(
     let block = runtime
         .array_from_u32(&block_ids, &[1, block_row_count as i32])
         .expect("the block builds");
-    let target: &dyn DFlash2DraftTarget = &pair.target;
+    let target: &dyn DFlashDraftTarget = &pair.target;
     let hidden = drafted_hidden_rows(
         runtime,
         &pair.drafter_weights,
@@ -429,7 +440,7 @@ fn search_tree(
     cell: &Cell,
     round: &RoundState,
     drafting: Drafting,
-    lattice: &model_serving::speculative_decoding::dflash2_drafter::DraftLattice,
+    lattice: &model_serving::speculative_decoding::dflash_drafter::DraftLattice,
 ) -> DraftTree {
     let mut options = DraftTreeOptions {
         sampling_temperature: f64::from(cell.temperature_thousandths) / 1_000.0,
@@ -491,7 +502,7 @@ fn reference_text(pair: &JourneyPair, token_ids: &[u32]) -> String {
 /// TensorFold's own greedy code completion (engine 1.2.0, this prompt, 256
 /// tokens), which it drafted in 43 rounds: 5.95 kept a round.
 const TENSORFOLD_GREEDY_CODE_COMPLETION: &str =
-    include_str!("../../../fixtures/dflash2_reference/tensorfold_greedy_code_completion.txt");
+    include_str!("../../../fixtures/dflash_reference/tensorfold_greedy_code_completion.txt");
 
 /// The two engines' greedy outputs part after about a hundred tokens, where
 /// they round a near-tie differently, so their round counts are not on the

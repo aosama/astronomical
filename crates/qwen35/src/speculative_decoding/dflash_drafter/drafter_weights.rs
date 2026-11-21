@@ -5,12 +5,14 @@ use mlx_bridge::MlxArray;
 use runtime_integration::{MlxRuntime, MlxRuntimeError, MlxSafetensors};
 use thiserror::Error;
 
-use super::drafter_configuration::DFlash2DrafterConfiguration;
+use super::drafter_configuration::{
+    CandidateSelectorShape, DFlashDrafterConfiguration, GroupedConvolutionShape,
+};
 use super::drafter_linear::DrafterLinear;
 
 /// Why a drafter checkpoint could not be bound.
 #[derive(Debug, Error)]
-pub enum DFlash2DrafterWeightsError {
+pub enum DFlashDrafterWeightsError {
     #[error("the drafter checkpoint has no tensor `{tensor_name}`: {source}")]
     MissingTensor {
         tensor_name: String,
@@ -31,6 +33,13 @@ pub enum DFlash2DrafterWeightsError {
 pub struct GroupedConvolutionWeights {
     pub base_kernel: MlxArray,
     pub kernel_projection: DrafterLinear,
+    pub shape: GroupedConvolutionShape,
+}
+
+/// A DFlash2 layer's two convolutions, around its attention and its MLP.
+pub struct LayerConvolutionWeights {
+    pub attention: GroupedConvolutionWeights,
+    pub mlp: GroupedConvolutionWeights,
 }
 
 pub struct DrafterLayerWeights {
@@ -45,8 +54,8 @@ pub struct DrafterLayerWeights {
     pub gate_projection: DrafterLinear,
     pub up_projection: DrafterLinear,
     pub down_projection: DrafterLinear,
-    pub attention_convolution: GroupedConvolutionWeights,
-    pub mlp_convolution: GroupedConvolutionWeights,
+    /// DFlash2 only; a DFlash layer is attention and MLP alone.
+    pub convolutions: Option<LayerConvolutionWeights>,
 }
 
 /// The selector's low-rank score of how well one token follows another at a
@@ -59,21 +68,22 @@ pub struct CandidateSelectorWeights {
     pub successor_codebook: MlxArray,
 }
 
-pub struct DFlash2DrafterWeights {
+pub struct DFlashDrafterWeights {
     /// `fc`: the concatenated target taps down to the drafter's width.
     pub tap_fusion: DrafterLinear,
     pub tap_fusion_normalization: MlxArray,
     pub layers: Vec<DrafterLayerWeights>,
     pub final_normalization: MlxArray,
-    pub candidate_selector: CandidateSelectorWeights,
+    /// DFlash2 only.
+    pub candidate_selector: Option<CandidateSelectorWeights>,
 }
 
 /// Binds every tensor of the drafter from an opened checkpoint.
 pub fn bind_drafter_weights(
     runtime: &MlxRuntime,
     checkpoint: &MlxSafetensors,
-    configuration: &DFlash2DrafterConfiguration,
-) -> Result<DFlash2DrafterWeights, DFlash2DrafterWeightsError> {
+    configuration: &DFlashDrafterConfiguration,
+) -> Result<DFlashDrafterWeights, DFlashDrafterWeightsError> {
     let binder = TensorBinder {
         runtime,
         checkpoint,
@@ -87,33 +97,45 @@ pub fn bind_drafter_weights(
             &format!("layers.{layer_index}"),
         )?);
     }
-    Ok(DFlash2DrafterWeights {
+    Ok(DFlashDrafterWeights {
         tap_fusion: binder.linear("fc.weight", &[hidden, configuration.tap_width()])?,
         tap_fusion_normalization: binder.tensor("hidden_norm.weight", &[hidden])?,
         layers,
         final_normalization: binder.tensor("norm.weight", &[hidden])?,
-        candidate_selector: CandidateSelectorWeights {
-            hidden_projection: binder.linear(
-                "candidate_selector.hidden_projection.weight",
-                &[configuration.selector_rank, hidden],
-            )?,
-            predecessor_codebook: binder.tensor(
-                "candidate_selector.predecessor_codebook",
-                &[configuration.vocabulary_size, configuration.selector_rank],
-            )?,
-            successor_codebook: binder.tensor(
-                "candidate_selector.successor_codebook",
-                &[configuration.vocabulary_size, configuration.selector_rank],
-            )?,
+        candidate_selector: match configuration.candidate_selector {
+            Some(selector_shape) => Some(bind_candidate_selector(
+                &binder,
+                selector_shape,
+                configuration,
+            )?),
+            None => None,
         },
+    })
+}
+
+fn bind_candidate_selector(
+    binder: &TensorBinder<'_>,
+    selector_shape: CandidateSelectorShape,
+    configuration: &DFlashDrafterConfiguration,
+) -> Result<CandidateSelectorWeights, DFlashDrafterWeightsError> {
+    let codebook_shape = [configuration.vocabulary_size, selector_shape.rank];
+    Ok(CandidateSelectorWeights {
+        hidden_projection: binder.linear(
+            "candidate_selector.hidden_projection.weight",
+            &[selector_shape.rank, configuration.hidden_size],
+        )?,
+        predecessor_codebook: binder
+            .tensor("candidate_selector.predecessor_codebook", &codebook_shape)?,
+        successor_codebook: binder
+            .tensor("candidate_selector.successor_codebook", &codebook_shape)?,
     })
 }
 
 fn bind_layer(
     binder: &TensorBinder<'_>,
-    configuration: &DFlash2DrafterConfiguration,
+    configuration: &DFlashDrafterConfiguration,
     layer_prefix: &str,
-) -> Result<DrafterLayerWeights, DFlash2DrafterWeightsError> {
+) -> Result<DrafterLayerWeights, DFlashDrafterWeightsError> {
     let hidden = configuration.hidden_size;
     let query_width = configuration.attention_head_count * configuration.head_dimension;
     let key_value_width = configuration.key_value_head_count * configuration.head_dimension;
@@ -156,37 +178,51 @@ fn bind_layer(
         up_projection: binder.linear(&format!("{mlp}.up_proj.weight"), &[intermediate, hidden])?,
         down_projection: binder
             .linear(&format!("{mlp}.down_proj.weight"), &[hidden, intermediate])?,
-        attention_convolution: bind_convolution(
+        convolutions: bind_layer_convolutions(binder, configuration, layer_prefix)?,
+    })
+}
+
+/// A DFlash2 layer's two convolutions, or None for a DFlash drafter.
+fn bind_layer_convolutions(
+    binder: &TensorBinder<'_>,
+    configuration: &DFlashDrafterConfiguration,
+    layer_prefix: &str,
+) -> Result<Option<LayerConvolutionWeights>, DFlashDrafterWeightsError> {
+    let Some(convolution_shape) = configuration.convolution else {
+        return Ok(None);
+    };
+    Ok(Some(LayerConvolutionWeights {
+        attention: bind_convolution(
             binder,
-            configuration,
+            convolution_shape,
             &format!("{layer_prefix}.attention_conv"),
         )?,
-        mlp_convolution: bind_convolution(
+        mlp: bind_convolution(
             binder,
-            configuration,
+            convolution_shape,
             &format!("{layer_prefix}.mlp_conv"),
         )?,
-    })
+    }))
 }
 
 fn bind_convolution(
     binder: &TensorBinder<'_>,
-    configuration: &DFlash2DrafterConfiguration,
+    shape: GroupedConvolutionShape,
     convolution_prefix: &str,
-) -> Result<GroupedConvolutionWeights, DFlash2DrafterWeightsError> {
-    let kernel_size = configuration.convolution_kernel_size;
+) -> Result<GroupedConvolutionWeights, DFlashDrafterWeightsError> {
     // Two stages (before and after the sublayer), each predicting one weight
     // per kernel tap and convolution group.
-    let predicted_kernel_width = 2 * kernel_size * configuration.convolution_group_count();
+    let predicted_kernel_width = 2 * shape.kernel_size * shape.group_count();
     Ok(GroupedConvolutionWeights {
         base_kernel: binder.tensor(
             &format!("{convolution_prefix}.base_kernel"),
-            &[2, kernel_size, configuration.hidden_size],
+            &[2, shape.kernel_size, shape.channel_count],
         )?,
         kernel_projection: binder.linear(
             &format!("{convolution_prefix}.kernel_projection.weight"),
-            &[predicted_kernel_width, configuration.hidden_size],
+            &[predicted_kernel_width, shape.channel_count],
         )?,
+        shape,
     })
 }
 
@@ -200,16 +236,16 @@ impl TensorBinder<'_> {
         &self,
         tensor_name: &str,
         expected_shape: &[i32],
-    ) -> Result<MlxArray, DFlash2DrafterWeightsError> {
+    ) -> Result<MlxArray, DFlashDrafterWeightsError> {
         let tensor = self.checkpoint.tensor(tensor_name).map_err(|source| {
-            DFlash2DrafterWeightsError::MissingTensor {
+            DFlashDrafterWeightsError::MissingTensor {
                 tensor_name: tensor_name.to_owned(),
                 source,
             }
         })?;
         let actual_shape = tensor.shape();
         if actual_shape != expected_shape {
-            return Err(DFlash2DrafterWeightsError::Shape {
+            return Err(DFlashDrafterWeightsError::Shape {
                 tensor_name: tensor_name.to_owned(),
                 expected_shape: expected_shape.to_vec(),
                 actual_shape,
@@ -222,13 +258,13 @@ impl TensorBinder<'_> {
         &self,
         tensor_name: &str,
         expected_shape: &[i32],
-    ) -> Result<DrafterLinear, DFlash2DrafterWeightsError> {
+    ) -> Result<DrafterLinear, DFlashDrafterWeightsError> {
         let weight = self.tensor(tensor_name, expected_shape)?;
         Ok(DrafterLinear::full_precision(self.runtime, &weight)?)
     }
 }
 
-impl DFlash2DrafterWeights {
+impl DFlashDrafterWeights {
     /// Quantizes every linear layer to 4 bits, group 64, in place: about
     /// 1 GB to stream a round instead of the checkpoint's 3.6 GB for the 27B's
     /// drafter. The selector's codebooks stay bf16: they are gathered, a few
@@ -242,24 +278,65 @@ impl DFlash2DrafterWeights {
     ) -> Result<(), MlxRuntimeError> {
         self.tap_fusion
             .quantize_in_place(runtime, use_register_order)?;
-        self.candidate_selector
-            .hidden_projection
-            .quantize_in_place(runtime, use_register_order)?;
+        if let Some(candidate_selector) = self.candidate_selector.as_mut() {
+            candidate_selector.quantize_projection(runtime, use_register_order)?;
+        }
         for layer in &mut self.layers {
-            for linear in [
-                &mut layer.query_projection,
-                &mut layer.key_projection,
-                &mut layer.value_projection,
-                &mut layer.output_projection,
-                &mut layer.gate_projection,
-                &mut layer.up_projection,
-                &mut layer.down_projection,
-                &mut layer.attention_convolution.kernel_projection,
-                &mut layer.mlp_convolution.kernel_projection,
-            ] {
-                linear.quantize_in_place(runtime, use_register_order)?;
-            }
+            layer.quantize_linears(runtime, use_register_order)?;
         }
         Ok(())
+    }
+}
+
+impl DrafterLayerWeights {
+    fn quantize_linears(
+        &mut self,
+        runtime: &MlxRuntime,
+        use_register_order: bool,
+    ) -> Result<(), MlxRuntimeError> {
+        for linear in [
+            &mut self.query_projection,
+            &mut self.key_projection,
+            &mut self.value_projection,
+            &mut self.output_projection,
+            &mut self.gate_projection,
+            &mut self.up_projection,
+            &mut self.down_projection,
+        ] {
+            linear.quantize_in_place(runtime, use_register_order)?;
+        }
+        if let Some(convolutions) = self.convolutions.as_mut() {
+            convolutions.quantize_kernel_projections(runtime, use_register_order)?;
+        }
+        Ok(())
+    }
+}
+
+impl CandidateSelectorWeights {
+    /// Quantizes the hidden projection; the codebooks stay bf16.
+    fn quantize_projection(
+        &mut self,
+        runtime: &MlxRuntime,
+        use_register_order: bool,
+    ) -> Result<(), MlxRuntimeError> {
+        self.hidden_projection
+            .quantize_in_place(runtime, use_register_order)
+    }
+}
+
+impl LayerConvolutionWeights {
+    /// Quantizes both convolutions' kernel predictions; the fixed kernels
+    /// stay as the checkpoint holds them.
+    fn quantize_kernel_projections(
+        &mut self,
+        runtime: &MlxRuntime,
+        use_register_order: bool,
+    ) -> Result<(), MlxRuntimeError> {
+        self.attention
+            .kernel_projection
+            .quantize_in_place(runtime, use_register_order)?;
+        self.mlp
+            .kernel_projection
+            .quantize_in_place(runtime, use_register_order)
     }
 }

@@ -21,8 +21,8 @@ use std::time::Instant;
 
 use ipc_protocol::RequestId;
 use mlx_bridge::MlxArray;
-use model_serving::speculative_decoding::dflash2_drafter::{
-    DFlash2DraftTarget, DFlash2DrafterConfiguration, DFlash2DrafterWeights, DrafterContextStates,
+use model_serving::speculative_decoding::dflash_drafter::{
+    DFlashDraftTarget, DFlashDrafterConfiguration, DFlashDrafterWeights, DrafterContextStates,
     PathChoice, bind_drafter_weights, drafted_hidden_rows, select_path,
 };
 use model_serving::speculative_decoding::verification_decision::{
@@ -137,8 +137,8 @@ pub(crate) struct JourneyPair {
     /// The model ID chat commands name: the loaded target's folder leaf.
     pub(crate) target_model_id: String,
     pub(crate) tokenizer: Qwen3_5Tokenizer,
-    pub(crate) drafter_configuration: DFlash2DrafterConfiguration,
-    pub(crate) drafter_weights: DFlash2DrafterWeights,
+    pub(crate) drafter_configuration: DFlashDrafterConfiguration,
+    pub(crate) drafter_weights: DFlashDrafterWeights,
     /// Keeps the drafter's lazily mapped tensors alive.
     _drafter_checkpoint: MlxSafetensors,
 }
@@ -269,7 +269,7 @@ pub(crate) fn load_pair() -> JourneyPair {
             .expect("the drafter config reads"),
     )
     .expect("the drafter config parses");
-    let drafter_configuration = DFlash2DrafterConfiguration::from_config_document(&config_document)
+    let drafter_configuration = DFlashDrafterConfiguration::from_config_document(&config_document)
         .expect("the drafter configuration is accepted");
     let drafter_checkpoint = target
         .runtime()
@@ -436,7 +436,7 @@ fn run_round(
     let block = runtime
         .array_from_u32(&block_ids, &[1, configuration.block_size])
         .expect("the block builds");
-    let target: &dyn DFlash2DraftTarget = &pair.target;
+    let target: &dyn DFlashDraftTarget = &pair.target;
     let hidden = drafted_hidden_rows(
         runtime,
         &pair.drafter_weights,
@@ -463,7 +463,10 @@ fn run_round(
     };
     let path = select_path(
         runtime,
-        &pair.drafter_weights.candidate_selector,
+        pair.drafter_weights
+            .candidate_selector
+            .as_ref()
+            .expect("a DFlash2 drafter has a candidate selector"),
         configuration,
         &hidden,
         &draft_logits,
@@ -598,7 +601,7 @@ fn decide(
             probabilities: &kept_probabilities[row_range],
         });
     }
-    let candidate_count = pair.drafter_configuration.selector_candidate_count as usize;
+    let candidate_count = pair.drafter_configuration.lattice_candidate_count() as usize;
     let mut drafted_slots = Vec::with_capacity(drafted_ids.len());
     if let Some(distribution) = drafter_distribution {
         for (slot_index, drafted_id) in drafted_ids.iter().enumerate() {

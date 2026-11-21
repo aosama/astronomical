@@ -15,7 +15,7 @@ use std::time::Instant;
 
 use mlx_bridge::MlxArray;
 use model_serving::RequestDecoderStateStack;
-use model_serving::speculative_decoding::dflash2_drafter::DraftTreeOptions;
+use model_serving::speculative_decoding::dflash_drafter::DraftTreeOptions;
 use model_serving::speculative_decoding::tree_rows::TreeRows;
 use model_serving::{PerformanceAttribution, VerificationLogitsMode};
 use serial_test::serial;
@@ -55,13 +55,13 @@ fn should_decode_chat_cells_with_draft_trees_verified_in_one_target_pass() {
     decode_cells_with_trees(&[ORACLE_CELLS[4], ORACLE_CELLS[3]], SAMPLED_SEED_COUNT);
 }
 
-/// Prose continued after a long prompt, sampled: the cell a long chat or a
+/// A story continued after a long prompt, sampled: the cell a long chat or a
 /// document question lands in, where few drafted tokens are kept a round
 /// and every verified row attends to the whole prompt.
 #[test]
 #[ignore = "loads a real target and its DFlash2 drafter (the 27B pair unless configured); run through cargo measure-dflash2-tree-rounds"]
 #[serial]
-fn should_decode_prose_after_a_long_prompt_with_draft_trees() {
+fn should_decode_a_story_after_a_long_prompt_with_draft_trees() {
     let long_prompt: &'static str = Box::leak(
         include_str!("../../../fixtures/model_metrics_10000_romeo_and_juliet_words.txt")
             .split_whitespace()
@@ -71,7 +71,7 @@ fn should_decode_prose_after_a_long_prompt_with_draft_trees() {
             .into_boxed_str(),
     );
     let mut cell = ORACLE_CELLS[2];
-    cell.label = "prose after a long prompt, 1.0";
+    cell.label = "story after a long prompt, 1.0";
     cell.prompt = long_prompt;
     // One seed: every decode prefills the long prompt again.
     decode_cells_with_trees(&[cell], 1);
@@ -110,14 +110,14 @@ const JOURNEY_INSTRUCTION: &str =
     "Continue the supplied Romeo and Juliet story above for approximately 500 tokens.";
 
 /// The serving journey's own cell in this harness: about 10,000 prompt
-/// tokens, prose at temperature 1.0, plain against the small trees a
+/// tokens, a story at temperature 1.0, plain against the small trees a
 /// mixture-of-experts target drafts with. Read against the journey: if this
 /// keeps the short prompt's gain, the serving loop loses it; if it does not,
 /// the long prompt does.
 #[test]
 #[ignore = "loads a real target and its DFlash2 drafter; run through cargo measure-dflash2-tree-rounds"]
 #[serial]
-fn should_decode_prose_after_a_journey_sized_prompt_plain_and_with_small_trees() {
+fn should_decode_a_story_after_a_journey_sized_prompt_plain_and_with_small_trees() {
     let words: Vec<&str> =
         include_str!("../../../fixtures/model_metrics_10000_romeo_and_juliet_words.txt")
             .split_whitespace()
@@ -126,14 +126,14 @@ fn should_decode_prose_after_a_journey_sized_prompt_plain_and_with_small_trees()
     let prompt: &'static str =
         Box::leak(format!("{}\n\n{JOURNEY_INSTRUCTION}", words.join(" ")).into_boxed_str());
     let mut cell = ORACLE_CELLS[4];
-    cell.label = "prose after a journey-sized prompt, 1.0";
+    cell.label = "story after a journey-sized prompt, 1.0";
     cell.prompt = prompt;
     report_plain_decode(&cell, 1);
     let mut cells = Vec::new();
     for node_budget in [3, 7] {
         let mut sized_cell = cell;
         sized_cell.label = Box::leak(
-            format!("prose after a journey-sized prompt, 1.0, {node_budget}-node tree")
+            format!("story after a journey-sized prompt, 1.0, {node_budget}-node tree")
                 .into_boxed_str(),
         );
         sized_cell.node_budget = node_budget;
@@ -164,7 +164,7 @@ fn should_compare_the_tree_attention_kernel_with_mlx_after_a_journey_sized_promp
     let mut cell = ORACLE_CELLS[4];
     cell.prompt = prompt;
     cell.node_budget = 3;
-    cell.label = "prose after a journey-sized prompt, 1.0, 3-node tree";
+    cell.label = "story after a journey-sized prompt, 1.0, 3-node tree";
     compare_tree_attention_paths(
         &cell,
         JOURNEY_NOISE_CHECK_SEED_COUNT,
@@ -391,7 +391,7 @@ fn compare_cells_per_seed(cells: &[Cell], seed_count: u64) {
 /// Plain decoding in the same harness, the ladder's baseline: one token a
 /// step through the target's verification forward with no taps and no
 /// drafter, picked as the tree rounds pick, over the same output length.
-fn report_plain_decode(cell: &Cell, seed_count: u64) {
+pub(super) fn report_plain_decode(cell: &Cell, seed_count: u64) {
     let pair = load_pair();
     let (mut emitted_count, mut decode_seconds) = (0, 0.0);
     for seed_offset in 0..seed_count {
@@ -433,7 +433,7 @@ fn report_plain_decode(cell: &Cell, seed_count: u64) {
 
 /// Decodes every cell with and without context copies; a sampled cell
 /// pools up to `sampled_seed_limit` seeds.
-fn decode_cells_with_trees(cells: &[Cell], sampled_seed_limit: u64) {
+pub(super) fn decode_cells_with_trees(cells: &[Cell], sampled_seed_limit: u64) {
     let mut pair = load_pair();
     pair.target
         .enable_draft_tree_verification()

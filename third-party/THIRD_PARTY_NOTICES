@@ -211,7 +211,7 @@ Licensed under the Apache License, Version 2.0. A complete copy of that license 
 
 z-lab DFlash
 Source: https://github.com/z-lab/dflash
-Used as the reference for the DFlash2 block drafter that Astronomical translates into Rust. The drafter's forward pass (target-tap fusion, sliding-window context attention over a non-causal block, grouped dynamic causal convolutions, candidate selector) follows dflash/model_mlx.py, and the test fixture generator under verification/acceptance/tests/fixtures/dflash2_reference runs that file to produce the numerical oracle.
+Used as the reference for the DFlash and DFlash2 block drafters that Astronomical translates into Rust. The drafters' forward pass (target-tap fusion, sliding-window and full context attention over a causal or two-way block, and for DFlash2 the grouped dynamic causal convolutions and candidate selector) follows dflash/model_mlx.py, and the test fixture generator under verification/acceptance/tests/fixtures/dflash_reference runs that file to produce the numerical oracles.
 
 Copyright (c) 2026 Z Lab
 
