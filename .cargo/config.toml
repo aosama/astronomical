@@ -513,6 +513,15 @@ test-quantization-mixture-of-experts = "run -p xtask -- test-run --package astro
 # `$CARGO_HOME/bin`), and skips any binary already reporting its pinned
 # version. CI points DIR at a folder restored from the `github_actions_cache` so warm runs download nothing.
 #
+# `cargo xtask usage-report [--repo owner/name] [--catalog PATH]` prints what
+# public numbers say about who uses Astronomical (issue #2413, phase 0):
+# installer downloads per release grouped by week, the repository's stars,
+# forks and 14-day traffic, and Hugging Face downloads for every model in
+# registry/download_catalog.json. It reads GitHub through the signed-in `gh`
+# CLI (traffic needs write access) and Hugging Face through `curl`, prints
+# progress to standard error, and ends each table with what its numbers can
+# and cannot tell. `cargo test -p xtask --bin xtask usage_report` runs its
+# tests, which use recorded answers and never the network.
 # `cargo xtask small-mac-matrix [--base-url URL] [--model ID]... [--mac-gb N]...`
 # finds out how models behave on Macs smaller than this one (issue #2413).
 # Against the Development instance only, for each model and each simulated
