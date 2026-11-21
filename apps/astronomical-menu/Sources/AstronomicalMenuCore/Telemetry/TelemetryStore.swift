@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 private let maximumStatusRefreshErrorCharacterCount = 512
 private let maximumWorkerPolicyConfirmationAttempts = 3
@@ -32,6 +33,8 @@ final class TelemetryStore: ObservableObject {
   @Published private(set) var systemTelemetrySnapshot = SystemTelemetrySnapshot.unavailable
   @Published private(set) var controlActionFeedback: ControlActionFeedback?
   @Published private(set) var lastStatusRefreshErrorMessage: String?
+  private var statusPollJournal = StatusPollJournal()
+  private let statusPollLogger = Logger(subsystem: "dev.astronomical.app", category: "status-poll")
   @Published private(set) var hasDiscoveredModels = false
   @Published var editableMaximumMlxMemoryGigabytes: UInt64 = 0
   var onMenuBarPresentationChanged: ((MenuBarPresentation) -> Void)?
@@ -302,10 +305,15 @@ final class TelemetryStore: ObservableObject {
       editableMaximumMlxMemoryGigabytes = appliedMaximumMlxMemoryWholeGigabytes(
         for: nextStatusDocument)
     }
+    let engineIsDown = engineDowntimePolicy.engineIsDown(for: nextStatusDocument, at: Date())
+    if let journalEntry = statusPollJournal.entry(
+      statusDocument: nextStatusDocument, pollErrorMessage: lastStatusRefreshErrorMessage,
+      engineIsDown: engineIsDown)
+    {
+      statusPollLogger.notice("\(journalEntry, privacy: .public)")
+    }
     onMenuBarPresentationChanged?(
-      MenuBarPresentation(
-        statusDocument: nextStatusDocument,
-        engineIsDown: engineDowntimePolicy.engineIsDown(for: nextStatusDocument, at: Date())))
+      MenuBarPresentation(statusDocument: nextStatusDocument, engineIsDown: engineIsDown))
     if let neuralEngineBanner = neuralEngineBannerPolicy.banner(
       for: nextStatusDocument, at: Date())
     {
