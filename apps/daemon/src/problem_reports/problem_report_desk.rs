@@ -81,9 +81,29 @@ impl ProblemReportDesk {
     /// pressed Send report, and records it. A report that did not go keeps
     /// waiting, so the person can try again.
     pub(crate) async fn send_waiting(&self, report_number: u64) -> ReportSendOutcome {
+        self.send_waiting_with_note(report_number, "").await
+    }
+
+    /// Puts a report the person asked to write in the waiting list whatever
+    /// their choice for automatic reports is, and returns it for the screen.
+    pub(crate) fn offer_from_person(&self, report: ProblemReport) -> WaitingProblemReport {
+        let report_number = self.waiting_reports.offer(report.clone());
+        WaitingProblemReport {
+            report_number,
+            report,
+        }
+    }
+
+    /// As `send_waiting`, with what the person typed about the problem.
+    pub(crate) async fn send_waiting_with_note(
+        &self,
+        report_number: u64,
+        typed_note: &str,
+    ) -> ReportSendOutcome {
         let Some(report) = self.waiting_reports.take(report_number) else {
             return ReportSendOutcome::NotWaiting;
         };
+        let report = report.with_note(typed_note);
         let Some(report_receiver) = &self.report_receiver else {
             self.waiting_reports.put_back(report_number, report);
             return ReportSendOutcome::NotSetUp;

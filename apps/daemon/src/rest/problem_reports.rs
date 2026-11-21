@@ -3,8 +3,10 @@
 //! - `GET /v1/problem-reports`: the person's choice, whether sending is set
 //!   up in this build, the reports waiting for an answer and every report
 //!   already sent, each as the lines the person reads.
+//! - `POST /v1/problem-reports`: the person chose "Report a problem"; answers
+//!   with the report they are about to describe.
 //! - `POST /v1/problem-reports/{report_number}/send`: the person pressed
-//!   Send report.
+//!   Send report; the body may carry `{"note": "..."}`, what they typed.
 //! - `POST /v1/problem-reports/{report_number}/decline`: they pressed Don't
 //!   send.
 
@@ -62,15 +64,53 @@ pub(crate) async fn list_problem_reports(
     .into_response()
 }
 
-pub(crate) async fn send_problem_report(
+/// What the person typed, read from an optional JSON body. A missing or
+/// unreadable body is no note: the note never blocks a report.
+fn typed_note(request_body: &[u8]) -> String {
+    let Ok(body) = serde_json::from_slice::<serde_json::Value>(request_body) else {
+        return String::new();
+    };
+    body["note"].as_str().unwrap_or_default().to_owned()
+}
+
+pub(crate) async fn start_person_report(
     State(application_state): State<ApplicationState>,
-    Path(report_number): Path<u64>,
 ) -> Response {
     let Some(problem_report_desk) = &application_state.problem_report_desk else {
         return (StatusCode::NOT_FOUND, "problem reports are unavailable").into_response();
     };
-    let (status_code, status, message) = match problem_report_desk.send_waiting(report_number).await
-    {
+    let ready_model_id = application_state
+        .generation_executor
+        .worker_health_snapshot()
+        .ready_model_id;
+    let Some(person_report) = crate::problem_reports::person_report(ready_model_id.as_deref())
+    else {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            "problem reports are unavailable",
+        )
+            .into_response();
+    };
+    let waiting_report = problem_report_desk.offer_from_person(person_report);
+    Json(WaitingReportView {
+        report_number: waiting_report.report_number,
+        readable_lines: waiting_report.report.readable_lines(),
+    })
+    .into_response()
+}
+
+pub(crate) async fn send_problem_report(
+    State(application_state): State<ApplicationState>,
+    Path(report_number): Path<u64>,
+    request_body: axum::body::Bytes,
+) -> Response {
+    let Some(problem_report_desk) = &application_state.problem_report_desk else {
+        return (StatusCode::NOT_FOUND, "problem reports are unavailable").into_response();
+    };
+    let send_outcome = problem_report_desk
+        .send_waiting_with_note(report_number, &typed_note(&request_body))
+        .await;
+    let (status_code, status, message) = match send_outcome {
         ReportSendOutcome::Sent => (StatusCode::OK, "sent", "Report sent. Thank you.".to_owned()),
         ReportSendOutcome::NotWaiting => (
             StatusCode::NOT_FOUND,

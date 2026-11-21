@@ -414,11 +414,13 @@ fn problem_report_routes(
     router
         .route(
             "/v1/problem-reports",
-            get(crate::rest::problem_reports::list_problem_reports),
+            get(crate::rest::problem_reports::list_problem_reports)
+                .post(crate::rest::problem_reports::start_person_report),
         )
         .route(
             "/v1/problem-reports/{report_number}/send",
-            post(crate::rest::problem_reports::send_problem_report),
+            post(crate::rest::problem_reports::send_problem_report)
+                .layer(DefaultBodyLimit::max(8 * 1024)),
         )
         .route(
             "/v1/problem-reports/{report_number}/decline",

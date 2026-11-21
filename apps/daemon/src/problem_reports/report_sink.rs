@@ -42,6 +42,7 @@ impl ReportSink {
             mac: self.mac.clone(),
             model,
             problem,
+            note: None,
         }
     }
 
@@ -133,4 +134,11 @@ pub(crate) fn report_download_failure(
     if let Some(problem) = ProblemKind::for_download_failure(error_code) {
         report_problem(problem, Some(huggingface_id));
     }
+}
+
+/// The report for a problem the person wants to describe themselves, or
+/// `None` when no sink is registered.
+pub(crate) fn person_report(ready_model_id: Option<&str>) -> Option<ProblemReport> {
+    let report_sink = REGISTERED_REPORT_SINK.get()?;
+    Some(report_sink.build_report(ProblemKind::ReportedByPerson, ready_model_id))
 }

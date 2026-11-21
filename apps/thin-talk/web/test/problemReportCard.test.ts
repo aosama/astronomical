@@ -110,3 +110,17 @@ test("should_keep_only_well_formed_reports_from_the_engine", () => {
   assert.deepEqual(problemReports.waiting, [{ reportNumber: 1, readableLines: ["ok"] }]);
   assert.deepEqual(problemReports.sent, [{ sentAtUnixSeconds: 1700000000, readableLines: ["sent"] }]);
 });
+
+test("should_send_what_the_person_typed_with_the_report_and_nothing_when_left_empty", async () => {
+  const { card, calls } = cardFor(ONE_WAITING);
+  await card.refresh();
+  (card.element.querySelector('[data-testid="problem-report-note"]') as HTMLTextAreaElement).value = "the reply stopped halfway";
+  click(card, "problem-report-send");
+  await settle();
+  assert.deepEqual(calls.slice(1), ['POST /v1/problem-reports/4/send {"note":"the reply stopped halfway"}']);
+  const empty = cardFor(ONE_WAITING);
+  await empty.card.refresh();
+  click(empty.card, "problem-report-send");
+  await settle();
+  assert.deepEqual(empty.calls.slice(1), ["POST /v1/problem-reports/4/send"]);
+});

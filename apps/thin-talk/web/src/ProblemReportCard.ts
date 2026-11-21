@@ -4,6 +4,21 @@ import type { ProblemReportClient, WaitingProblemReport } from "./ProblemReportC
 /** The promise shown on every report, word for word what the engine keeps. */
 export const NEVER_INCLUDED_TEXT = "Never included: your chats, files, images or folder names.";
 
+/** The longest note the engine keeps; the field stops at the same length. */
+export const MAXIMUM_NOTE_CHARACTERS = 500;
+
+/** The optional box for the person's own words. What they type is sent with
+ * the report and is the only free text in it. */
+export function makeNoteField(document: Document, testID: string): HTMLTextAreaElement {
+  const noteField = makeElement(document, "textarea", "problem-report__note");
+  noteField.dataset.testid = testID;
+  noteField.rows = 2;
+  noteField.maxLength = MAXIMUM_NOTE_CHARACTERS;
+  noteField.placeholder = "What were you doing? (optional, sent with the report)";
+  noteField.setAttribute("aria-label", "What were you doing? Optional, sent with the report.");
+  return noteField;
+}
+
 /**
  * Shows the newest report waiting for the person, in full, right under the
  * failure banner, with Send report and Don't send.
@@ -56,6 +71,7 @@ export class ProblemReportCard {
     const reportText = makeElement(document, "pre", "problem-report__lines", waitingReport.readableLines.join("\n"));
     reportText.dataset.testid = "problem-report-lines";
     const promise = makeElement(document, "p", "problem-report__promise", NEVER_INCLUDED_TEXT);
+    const noteField = makeNoteField(document, "problem-report-note");
     const alwaysLabel = makeElement(document, "label", "problem-report__always");
     const alwaysBox = makeElement(document, "input", "");
     alwaysBox.type = "checkbox";
@@ -65,11 +81,11 @@ export class ProblemReportCard {
     outcome.dataset.testid = "problem-report-outcome";
     const declineButton = this.button("Don't send", "problem-report-decline", false);
     const sendButton = this.button("Send report", "problem-report-send", true);
-    declineButton.addEventListener("click", () => void this.answer(waitingReport.reportNumber, false, alwaysBox.checked, outcome));
-    sendButton.addEventListener("click", () => void this.answer(waitingReport.reportNumber, true, alwaysBox.checked, outcome));
+    declineButton.addEventListener("click", () => void this.answer(waitingReport.reportNumber, false, alwaysBox.checked, "", outcome));
+    sendButton.addEventListener("click", () => void this.answer(waitingReport.reportNumber, true, alwaysBox.checked, noteField.value, outcome));
     const actions = makeElement(document, "div", "problem-report__actions");
     actions.append(declineButton, sendButton);
-    this.cardElement.replaceChildren(heading, explanation, reportText, promise, alwaysLabel, actions, outcome);
+    this.cardElement.replaceChildren(heading, explanation, reportText, promise, noteField, alwaysLabel, actions, outcome);
     this.cardElement.hidden = false;
   }
 
@@ -83,11 +99,11 @@ export class ProblemReportCard {
   /** Sends or declines, saving "always" first when the box is ticked and
    * the person pressed Send. A report that did not go stays on screen with
    * the engine's reason, so the person can try again. */
-  private async answer(reportNumber: number, isSending: boolean, isAlwaysChosen: boolean, outcome: HTMLElement): Promise<void> {
+  private async answer(reportNumber: number, isSending: boolean, isAlwaysChosen: boolean, typedNote: string, outcome: HTMLElement): Promise<void> {
     if (isSending && isAlwaysChosen) {
       await this.client.saveChoice("always").catch(() => undefined);
     }
-    const reportAnswer = isSending ? await this.client.sendReport(reportNumber) : await this.client.declineReport(reportNumber);
+    const reportAnswer = isSending ? await this.client.sendReport(reportNumber, typedNote) : await this.client.declineReport(reportNumber);
     if (reportAnswer.isDone) {
       this.hide();
       return;

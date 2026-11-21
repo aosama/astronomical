@@ -47,6 +47,7 @@ fn should_read_the_same_fields_the_json_carries() {
             &catalog_ids(),
         )),
         problem: ProblemKind::ModelLoadNotEnoughMemory,
+        note: None,
     };
     assert_eq!(
         problem_report.readable_lines(),
@@ -76,6 +77,7 @@ fn should_leave_out_the_model_line_when_a_problem_has_none() {
         mac: this_test_mac(),
         model: None,
         problem: ProblemKind::EngineStoppedUnexpectedly,
+        note: None,
     };
     assert_eq!(
         problem_report.readable_lines(),
@@ -87,4 +89,28 @@ fn should_leave_out_the_model_line_when_a_problem_has_none() {
     );
     let report_json = serde_json::to_value(&problem_report).expect("report should serialize");
     assert!(report_json.get("model").is_none());
+}
+
+#[test]
+fn should_attach_a_trimmed_note_cut_to_the_limit_and_nothing_for_an_empty_one() {
+    let base_report = ProblemReport {
+        app_version: "0.2.126".to_owned(),
+        mac: this_test_mac(),
+        model: None,
+        problem: ProblemKind::ReportedByPerson,
+        note: None,
+    };
+    let noted_report = base_report.clone().with_note("  replies got very slow  ");
+    assert_eq!(noted_report.note.as_deref(), Some("replies got very slow"));
+    assert_eq!(
+        noted_report.readable_lines().last().map(String::as_str),
+        Some("Your note: replies got very slow")
+    );
+    assert_eq!(base_report.clone().with_note("   ").note, None);
+    let long_note = "é".repeat(super::MAXIMUM_NOTE_CHARACTERS + 50);
+    let cut_note = base_report
+        .with_note(&long_note)
+        .note
+        .expect("a long note is kept, cut");
+    assert_eq!(cut_note.chars().count(), super::MAXIMUM_NOTE_CHARACTERS);
 }

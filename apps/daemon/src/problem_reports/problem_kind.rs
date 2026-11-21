@@ -24,6 +24,8 @@ pub(crate) enum ProblemKind {
     CatalogModelUnavailable,
     /// A model downloaded from the catalog could not be used.
     DownloadedModelNotUsable,
+    /// The person chose "Report a problem" themselves; their note says what.
+    ReportedByPerson,
 }
 
 impl ProblemKind {
@@ -37,6 +39,7 @@ impl ProblemKind {
             Self::DownloadChecksumMismatch => "downloaded files did not match the catalog",
             Self::CatalogModelUnavailable => "catalog model could not be downloaded",
             Self::DownloadedModelNotUsable => "downloaded model could not be used",
+            Self::ReportedByPerson => "reported by you",
         }
     }
 

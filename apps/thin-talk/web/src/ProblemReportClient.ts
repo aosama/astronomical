@@ -51,8 +51,19 @@ export class ProblemReportClient {
     return ProblemReportClient.reportsFromPlain(await response.json());
   }
 
-  public async sendReport(reportNumber: number): Promise<ProblemReportAnswer> {
-    return this.answerReport(reportNumber, "send");
+  public async sendReport(reportNumber: number, typedNote = ""): Promise<ProblemReportAnswer> {
+    return this.answerReport(reportNumber, "send", typedNote);
+  }
+
+  /** Starts a report the person wants to write themselves, and returns it
+   * as the lines they will see; null when the engine cannot start one. */
+  public async startPersonReport(): Promise<WaitingProblemReport | null> {
+    const response = await this.fetchFunction(`${this.daemonBaseURL}/v1/problem-reports`, { method: "POST" });
+    if (!response.ok) {
+      return null;
+    }
+    const started = ProblemReportClient.reportsFromPlain({ waiting: [await response.json()] }).waiting[0];
+    return started ?? null;
   }
 
   public async declineReport(reportNumber: number): Promise<ProblemReportAnswer> {
@@ -70,8 +81,13 @@ export class ProblemReportClient {
     }
   }
 
-  private async answerReport(reportNumber: number, answer: "send" | "decline"): Promise<ProblemReportAnswer> {
-    const response = await this.fetchFunction(`${this.daemonBaseURL}/v1/problem-reports/${reportNumber}/${answer}`, { method: "POST" });
+  private async answerReport(reportNumber: number, answer: "send" | "decline", typedNote = ""): Promise<ProblemReportAnswer> {
+    const requestInit: RequestInit = { method: "POST" };
+    if (typedNote.trim().length > 0) {
+      requestInit.headers = { "Content-Type": "application/json" };
+      requestInit.body = JSON.stringify({ note: typedNote });
+    }
+    const response = await this.fetchFunction(`${this.daemonBaseURL}/v1/problem-reports/${reportNumber}/${answer}`, requestInit);
     const answerBody: unknown = await response.json().catch(() => null);
     const message = typeof answerBody === "object" && answerBody !== null ? (answerBody as Record<string, unknown>)["message"] : null;
     return { isDone: response.ok, message: typeof message === "string" ? message : "The engine did not answer." };

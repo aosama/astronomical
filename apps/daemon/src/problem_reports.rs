@@ -27,7 +27,8 @@ pub(crate) use problem_report::ProblemReport;
 pub(crate) use problem_report_desk::{ProblemReportDesk, ReportSendOutcome};
 pub(crate) use report_receiver::{ReportReceiver, sentry_envelope_body};
 pub(crate) use report_sink::{
-    register_report_sink, report_download_failure, report_model_load_failure, report_reply_failure,
+    person_report, register_report_sink, report_download_failure, report_model_load_failure,
+    report_reply_failure,
 };
 pub(crate) use sent_report_log::{SentProblemReport, SentReportLog};
 pub(crate) use waiting_reports::{WaitingProblemReport, WaitingReports};

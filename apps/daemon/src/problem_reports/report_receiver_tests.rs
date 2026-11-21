@@ -13,6 +13,7 @@ fn load_failure_report() -> ProblemReport {
             "mlx-community/Qwen3.5-2B-4bit".to_owned(),
         )),
         problem: ProblemKind::ModelLoadFailed,
+        note: None,
     }
 }
 

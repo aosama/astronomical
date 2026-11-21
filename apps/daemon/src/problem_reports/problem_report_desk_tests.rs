@@ -62,6 +62,7 @@ fn report_of_kind(problem: ProblemKind) -> ProblemReport {
         },
         model: None,
         problem,
+        note: None,
     }
 }
 
@@ -180,4 +181,24 @@ async fn should_drop_a_declined_report_without_sending_it() {
     assert!(!desk.decline(report_number));
     assert!(received_envelopes.lock().expect("lock").is_empty());
     assert!(desk.sent_reports().is_empty());
+}
+
+#[tokio::test]
+async fn should_send_the_persons_note_and_log_it_with_the_report() {
+    let (sentry_dsn, received_envelopes) = serve_stand_in_receiver(StatusCode::OK).await;
+    let state_directory = tempfile::tempdir().expect("temporary folder");
+    let desk = desk_for(state_directory.path(), Some(&sentry_dsn));
+    let waiting_report = desk.offer_from_person(report_of_kind(ProblemKind::ReportedByPerson));
+    let send_outcome = desk
+        .send_waiting_with_note(waiting_report.report_number, "the window froze")
+        .await;
+    assert_eq!(send_outcome, ReportSendOutcome::Sent);
+    assert!(received_envelopes.lock().expect("lock")[0].contains("the window froze"));
+    assert_eq!(
+        desk.sent_reports()[0]
+            .readable_lines
+            .last()
+            .map(String::as_str),
+        Some("Your note: the window froze")
+    );
 }

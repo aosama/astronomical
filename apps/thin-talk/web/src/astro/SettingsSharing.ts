@@ -1,5 +1,7 @@
 import { makeElement } from "./AstroDom";
 import type { ProblemReportChoice, ProblemReportClient, ProblemReports, SentProblemReport } from "../ProblemReportClient";
+import { NEVER_INCLUDED_TEXT, makeNoteField } from "../ProblemReportCard";
+import type { WaitingProblemReport } from "../ProblemReportClient";
 import { makeRow, makeSection, rowButton } from "./SettingsRows";
 
 /** The picker's choices, in the words the person reads. */
@@ -19,6 +21,9 @@ export class SettingsSharing {
   private readonly document: Document;
   private readonly client: ProblemReportClient;
   private isSentListOpen = false;
+  /** The report the person is writing after pressing Report a problem. */
+  private personReport: WaitingProblemReport | null = null;
+  private personReportOutcome = "";
 
   public constructor(document: Document, client: ProblemReportClient) {
     this.document = document;
@@ -55,6 +60,7 @@ export class SettingsSharing {
     if (this.isSentListOpen) {
       rows.push(this.sentList(problemReports.sent));
     }
+    rows.push(this.personReport === null ? this.reportProblemRow() : this.personReportForm(this.personReport));
     this.element.replaceChildren(this.element.firstElementChild ?? "", ...rows);
   }
 
@@ -109,5 +115,53 @@ export class SettingsSharing {
       );
     }
     return list;
+  }
+
+  private reportProblemRow(): HTMLElement {
+    const detail = makeElement(this.document, "span", "settings__row-value--muted", this.personReportOutcome || "Something slow, wrong or confusing? Tell the developers.");
+    detail.dataset.testid = "settings-report-problem-detail";
+    return makeRow(this.document, "Report a problem", detail, rowButton(this.document, "settings-report-problem", "Write a report", () => void this.startPersonReport()));
+  }
+
+  private async startPersonReport(): Promise<void> {
+    this.personReport = await this.client.startPersonReport().catch(() => null);
+    this.personReportOutcome = this.personReport === null ? "A report can't be started right now." : "";
+    await this.refresh();
+  }
+
+  /** The report being written: every line that will be sent, the person's
+   * own words, and Send report / Cancel. */
+  private personReportForm(personReport: WaitingProblemReport): HTMLElement {
+    const form = makeElement(this.document, "div", "settings__person-report");
+    form.dataset.testid = "settings-person-report";
+    const noteField = makeNoteField(this.document, "settings-person-report-note");
+    noteField.placeholder = "What happened? This is sent with the report.";
+    const outcome = makeElement(this.document, "p", "settings__sent-report-time", this.personReportOutcome);
+    const cancelButton = rowButton(this.document, "settings-person-report-cancel", "Cancel", () => void this.finishPersonReport(personReport, null));
+    const sendButton = rowButton(this.document, "settings-person-report-send", "Send report", () => void this.finishPersonReport(personReport, noteField.value));
+    const actions = makeElement(this.document, "div", "settings__person-report-actions");
+    actions.append(cancelButton, sendButton);
+    form.append(
+      makeElement(this.document, "p", "settings__sent-report-time", "This is the whole report, plus what you write below."),
+      makeElement(this.document, "pre", "settings__sent-report-lines", personReport.readableLines.join("\n")),
+      makeElement(this.document, "p", "settings__sent-report-time", NEVER_INCLUDED_TEXT),
+      noteField,
+      actions,
+      outcome,
+    );
+    return form;
+  }
+
+  /** Sends with the note, or cancels when the note is null. A report that
+   * did not go stays open with the engine's reason. */
+  private async finishPersonReport(personReport: WaitingProblemReport, typedNote: string | null): Promise<void> {
+    const answer = typedNote === null ? await this.client.declineReport(personReport.reportNumber) : await this.client.sendReport(personReport.reportNumber, typedNote);
+    if (answer.isDone || typedNote === null) {
+      this.personReport = null;
+      this.personReportOutcome = typedNote === null ? "" : answer.message;
+    } else {
+      this.personReportOutcome = answer.message;
+    }
+    await this.refresh();
   }
 }

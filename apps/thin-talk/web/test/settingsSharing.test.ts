@@ -10,6 +10,12 @@ function sharingFor(listBody: unknown | null): { sharing: SettingsSharing; calls
     if (listBody === null) {
       throw new TypeError("engine not answering");
     }
+    if (init?.method === "POST" && input.endsWith("/v1/problem-reports")) {
+      return new Response(JSON.stringify({ report_number: 9, readable_lines: ["Problem: reported by you"] }), { status: 200 });
+    }
+    if (init?.method === "POST") {
+      return new Response(JSON.stringify({ status: "sent", message: "Report sent. Thank you." }), { status: 200 });
+    }
     return new Response(JSON.stringify(listBody), { status: 200 });
   };
   const client = new ProblemReportClient({ daemonBaseURL: "http://engine", fetchFunction });
@@ -69,4 +75,30 @@ test("should_keep_the_fixed_rows_and_explain_when_the_engine_is_not_answering", 
   assert.match(pageText, /Chats, files and imagesNever/);
   assert.match(pageText, /isn't answering/);
   assert.equal(sharing.element.querySelector('[data-testid="settings-problem-reports"]'), null);
+});
+
+test("should_let_the_person_write_and_send_a_report_of_their_own", async () => {
+  const { sharing, calls } = sharingFor({ ...TWO_SENT, sent: [] });
+  await sharing.refresh();
+  (sharing.element.querySelector('[data-testid="settings-report-problem"]') as HTMLButtonElement).click();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  const form = sharing.element.querySelector('[data-testid="settings-person-report"]') as HTMLElement;
+  assert.match(form.textContent ?? "", /Problem: reported by you/);
+  (form.querySelector('[data-testid="settings-person-report-note"]') as HTMLTextAreaElement).value = "replies are slow since the update";
+  (form.querySelector('[data-testid="settings-person-report-send"]') as HTMLButtonElement).click();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.ok(calls.includes('POST /v1/problem-reports/9/send {"note":"replies are slow since the update"}'));
+  assert.equal(sharing.element.querySelector('[data-testid="settings-person-report"]'), null);
+  assert.match(sharing.element.textContent ?? "", /Report sent\. Thank you\./);
+});
+
+test("should_cancel_a_report_of_their_own_without_sending_it", async () => {
+  const { sharing, calls } = sharingFor({ ...TWO_SENT, sent: [] });
+  await sharing.refresh();
+  (sharing.element.querySelector('[data-testid="settings-report-problem"]') as HTMLButtonElement).click();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  (sharing.element.querySelector('[data-testid="settings-person-report-cancel"]') as HTMLButtonElement).click();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.ok(calls.includes("POST /v1/problem-reports/9/decline"));
+  assert.ok(!calls.some((call) => call.includes("/send")));
 });

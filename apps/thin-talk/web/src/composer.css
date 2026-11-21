@@ -461,3 +461,18 @@
   background: var(--accent);
   color: var(--accent-ink);
 }
+
+.problem-report__note {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  margin: 8px 0 0;
+  padding: 6px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  resize: vertical;
+}
