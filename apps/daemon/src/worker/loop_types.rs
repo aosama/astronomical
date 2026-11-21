@@ -130,6 +130,9 @@ pub(crate) enum WorkerLoopCommand {
         model_id: Option<String>,
         clear_sender: oneshot::Sender<Result<AstroSsdPromptCacheClearOutcome, WorkerControlError>>,
     },
+    UnloadModel {
+        unload_sender: oneshot::Sender<crate::worker::model_unload_request::ModelUnloadOutcome>,
+    },
 }
 
 /// The worker loop can own exactly one request modality at a time.

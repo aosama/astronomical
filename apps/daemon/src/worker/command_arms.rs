@@ -28,7 +28,9 @@ use crate::worker::idle_drain::{
     drain_pending_idle_work, wait_for_single_shot_execution_deadline,
     wait_for_stepped_request_deadline,
 };
-use crate::worker::idle_model_unload::{should_unload_idle_model, unload_idle_model};
+use crate::worker::idle_model_unload::{
+    ModelUnloadCause, should_unload_idle_model, unload_loaded_model,
+};
 use crate::worker::image_request::handle_generate_image_command;
 use crate::worker::loop_types::{
     ActiveWorkerRequest, WorkerLoopCommand, WorkerLoopRuntime, WorkerLoopState,
@@ -36,6 +38,7 @@ use crate::worker::loop_types::{
 use crate::worker::memory::demotion::MemoryDemotionRestart;
 use crate::worker::memory::limit::take_generation_start_after_pending_memory_limit;
 use crate::worker::memory::limit_update_command::queue_or_apply_mlx_memory_limit_update;
+use crate::worker::model_unload_request::handle_model_unload_command;
 use crate::worker::process::containment::{
     close_worker_if_running, contain_worker_failure, shutdown_worker,
 };
@@ -212,7 +215,8 @@ pub(in crate::worker) async fn run_worker_iteration(
             && (has_loaded_model || runtime.pending_astro_ssd_prompt_cache_clear.is_some()) => {
             sample_idle_mlx_memory_telemetry(runtime, has_loaded_model).await;
             if should_unload_idle_model(runtime, has_loaded_model, tokio::time::Instant::now()) {
-                unload_idle_model(runtime).await;
+                let _empty_worker_is_ready =
+                    unload_loaded_model(runtime, ModelUnloadCause::IdleSpan).await;
             }
         }
     }
@@ -283,8 +287,9 @@ pub(in crate::worker) async fn handle_worker_loop_command(
             replace_model_policy_catalog(runtime, routed_command);
             WorkerLoopFlow::Continue
         }
-        routed_command @ WorkerLoopCommand::ClearAstroSsdPromptCache { .. } => {
-            clear_astro_ssd_prompt_cache(runtime, routed_command).await;
+        routed_command @ (WorkerLoopCommand::ClearAstroSsdPromptCache { .. }
+        | WorkerLoopCommand::UnloadModel { .. }) => {
+            handle_memory_release_command(runtime, routed_command).await;
             WorkerLoopFlow::Continue
         }
     }
@@ -613,6 +618,20 @@ fn replace_model_policy_catalog(
     };
     runtime.model_policy_catalog = replacement_model_policy_catalog;
     let _send_outcome = update_sender.send(Ok(()));
+}
+
+/// The commands that give memory or storage back: clearing the
+/// `astro_ssd_prompt_cache` and unloading the loaded model. One dispatch arm
+/// routes both here.
+async fn handle_memory_release_command(
+    runtime: &mut WorkerLoopRuntime,
+    routed_command: WorkerLoopCommand,
+) {
+    if matches!(routed_command, WorkerLoopCommand::UnloadModel { .. }) {
+        handle_model_unload_command(runtime, routed_command).await;
+    } else {
+        clear_astro_ssd_prompt_cache(runtime, routed_command).await;
+    }
 }
 
 /// Delegates an astro SSD prompt cache clear to its handler with the loop's shared

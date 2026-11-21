@@ -1,34 +1,22 @@
-use std::collections::HashMap;
-use std::path::PathBuf;
-use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
-use astronomical_daemon::{
-    ChatGenerationExecutor, GenerationPerformanceLog, ResolvedRuntimeConfig,
-    ResolvedRuntimeConfigResolver, RuntimeModelPolicy, ShutdownController, WorkerHandle,
-    WorkerHealthStatus, build_application, build_application_with_full_control,
-};
+use astronomical_daemon::{ChatGenerationExecutor, WorkerHandle, build_application};
 use axum::{
-    body::{Body, to_bytes},
+    body::Body,
     http::{Method, Request, StatusCode},
-};
-use ipc_protocol::{
-    ChatGenerationCommand, ChatGenerationSettings, ChatMessage, ChatToolChoice, RequestId,
-    WorkerAutoregressiveModelConfiguration, WorkerChunkingConfiguration, WorkerModelConfiguration,
 };
 use tokio::time::{Instant, sleep, timeout};
 use tower::ServiceExt;
 
-const DELAYED_MODEL_ID: &str = "astronomical/delayed-completion-model";
-const TEST_TIMEOUT: Duration = Duration::from_secs(10);
-const ROMEO_AND_JULIET: &str = include_str!(
-    "../../../../verification/acceptance/tests/fixtures/model_metrics_5000_romeo_and_juliet_words.txt"
-);
+use super::stand_in_worker::{
+    delayed_generation_command, launch_stand_in_worker_application, receive_generation_completion,
+    response_json, run_bounded_test,
+};
 
 #[tokio::test]
 async fn should_clear_the_entire_astro_ssd_prompt_cache_while_the_worker_is_idle() {
     run_bounded_test(async {
-        let test_context = launch_astro_ssd_prompt_cache_clear_application().await;
+        let test_context = launch_stand_in_worker_application().await;
         eprintln!("[astro-ssd-prompt-cache-clear-rest] deleting the global astro SSD prompt cache while idle");
 
         let clear_response =
@@ -49,7 +37,7 @@ async fn should_clear_the_entire_astro_ssd_prompt_cache_while_the_worker_is_idle
 #[tokio::test]
 async fn should_clear_one_model_astro_ssd_prompt_cache_by_its_model_id() {
     run_bounded_test(async {
-        let test_context = launch_astro_ssd_prompt_cache_clear_application().await;
+        let test_context = launch_stand_in_worker_application().await;
 
         let clear_response = delete_astro_ssd_prompt_cache(
             &test_context.application,
@@ -68,7 +56,7 @@ async fn should_clear_one_model_astro_ssd_prompt_cache_by_its_model_id() {
 #[tokio::test]
 async fn should_queue_only_the_newest_astro_ssd_prompt_cache_clear_until_generation_finishes() {
     run_bounded_test(async {
-        let test_context = launch_astro_ssd_prompt_cache_clear_application().await;
+        let test_context = launch_stand_in_worker_application().await;
         eprintln!(
             "[astro-ssd-prompt-cache-clear-rest] starting the Romeo and Juliet generation journey"
         );
@@ -108,7 +96,7 @@ async fn should_queue_only_the_newest_astro_ssd_prompt_cache_clear_until_generat
 #[tokio::test]
 async fn should_wait_for_a_queued_generation_before_applying_the_astro_ssd_prompt_cache_clear() {
     run_bounded_test(async {
-        let test_context = launch_astro_ssd_prompt_cache_clear_application().await;
+        let test_context = launch_stand_in_worker_application().await;
         let mut first_generation_events = test_context
             .worker_handle
             .start_chat_generation(delayed_generation_command(51))
@@ -146,7 +134,7 @@ async fn should_wait_for_a_queued_generation_before_applying_the_astro_ssd_promp
 #[tokio::test]
 async fn should_reject_a_model_id_that_can_escape_the_astro_ssd_prompt_cache_root() {
     run_bounded_test(async {
-        let test_context = launch_astro_ssd_prompt_cache_clear_application().await;
+        let test_context = launch_stand_in_worker_application().await;
 
         let clear_response = delete_astro_ssd_prompt_cache(
             &test_context.application,
@@ -180,7 +168,7 @@ async fn should_not_offer_astro_ssd_prompt_cache_clear_without_live_worker_contr
 #[tokio::test]
 async fn should_return_service_unavailable_when_the_worker_has_stopped() {
     run_bounded_test(async {
-        let test_context = launch_astro_ssd_prompt_cache_clear_application().await;
+        let test_context = launch_stand_in_worker_application().await;
         test_context
             .worker_handle
             .clone()
@@ -199,7 +187,7 @@ async fn should_return_service_unavailable_when_the_worker_has_stopped() {
 #[tokio::test]
 async fn should_reject_a_worker_acknowledgement_for_a_different_model_scope() {
     run_bounded_test(async {
-        let test_context = launch_astro_ssd_prompt_cache_clear_application().await;
+        let test_context = launch_stand_in_worker_application().await;
 
         let clear_response = delete_astro_ssd_prompt_cache(
             &test_context.application,
@@ -211,158 +199,6 @@ async fn should_reject_a_worker_acknowledgement_for_a_different_model_scope() {
         test_context.shutdown().await;
     })
     .await;
-}
-
-struct AstroSsdPromptCacheClearTestContext {
-    application: axum::Router,
-    worker_handle: WorkerHandle,
-    _temporary_directory: tempfile::TempDir,
-}
-
-impl AstroSsdPromptCacheClearTestContext {
-    async fn shutdown(self) {
-        self.worker_handle
-            .shutdown()
-            .await
-            .expect("astro SSD prompt cache clear fixture should shut down");
-    }
-}
-
-async fn launch_astro_ssd_prompt_cache_clear_application() -> AstroSsdPromptCacheClearTestContext {
-    let worker_executable_path = PathBuf::from(
-        std::env::var("CARGO_BIN_EXE_astronomical-daemon-idle-worker")
-            .expect("Cargo should provide the idle worker fixture path"),
-    );
-    let temporary_directory = tempfile::tempdir().expect("test directory should be created");
-    let model_directory = temporary_directory.path().join("delayed-completion-model");
-    let model_policy_catalog = Arc::new(HashMap::from([(
-        DELAYED_MODEL_ID.to_owned(),
-        RuntimeModelPolicy {
-            model_directory,
-            generation_defaults: astronomical_daemon::RuntimeModelGenerationDefaults {
-                maximum_output_tokens: 128,
-                configured_maximum_output_tokens: None,
-                temperature_thousandths: None,
-                top_p_thousandths: None,
-                repetition_penalty_thousandths: None,
-            },
-            configured_maximum_context_tokens: None,
-            default_maximum_context_tokens: 2_048,
-            configured_chunking_fields: Default::default(),
-            worker_model_configuration: test_worker_model_configuration(DELAYED_MODEL_ID),
-        },
-    )]));
-    let worker_handle = WorkerHandle::launch(
-        &worker_executable_path,
-        Duration::from_secs(2),
-        GenerationPerformanceLog::open(temporary_directory.path())
-            .expect("test performance log should open"),
-        Arc::clone(&model_policy_catalog),
-    )
-    .await
-    .expect("idle worker fixture should launch");
-    wait_for_ready_worker(&worker_handle).await;
-
-    let resolved_runtime_config = ResolvedRuntimeConfig {
-        neural_engine_program_directory: "neural-engine-programs".into(),
-        configuration_generation:
-            "1111111111111111111111111111111111111111111111111111111111111111".to_owned(),
-        worker_executable_path: worker_executable_path.clone(),
-        discovered_models: Vec::new(),
-        model_discovery_diagnostics: Vec::new(),
-        configured_model_directories: Vec::new(),
-        model_policy_catalog,
-        unmatched_model_config_ids: Vec::new(),
-        maximum_mlx_memory_bytes: None,
-        astro_ssd_prompt_cache_enabled: true,
-        configured_astro_ssd_prompt_cache_enabled: None,
-        metal_residency_refresh_enabled: false,
-        idle_model_unload_seconds: 0,
-        menu_bar_shows_progress_and_speed: false,
-        menu_bar_shows_technical_details: false,
-        skill_settings: Default::default(),
-        configured_astro_ssd_prompt_cache_maximum_size_bytes: None,
-        performance_attribution_enabled: false,
-        astro_ssd_prompt_cache_config: config::AstroSsdPromptCacheConfig::new(
-            temporary_directory.path().join("cache"),
-            50_000_000_000,
-        ),
-        bind_address: "127.0.0.1:6733".to_owned(),
-        logging_config: config::LoggingConfig::new(
-            temporary_directory.path().join("logs"),
-            config::LogLevel::Warn,
-            2,
-        ),
-    };
-    let runtime_config_resolver = ResolvedRuntimeConfigResolver::for_development_home_directory(
-        temporary_directory.path().to_path_buf(),
-        worker_executable_path,
-    );
-    let application = build_application_with_full_control(
-        worker_handle.clone(),
-        Arc::new(RwLock::new(resolved_runtime_config)),
-        runtime_config_resolver,
-        ShutdownController::new(),
-    );
-    AstroSsdPromptCacheClearTestContext {
-        application,
-        worker_handle,
-        _temporary_directory: temporary_directory,
-    }
-}
-
-fn test_worker_model_configuration(model_id: &str) -> WorkerModelConfiguration {
-    WorkerModelConfiguration::Autoregressive(WorkerAutoregressiveModelConfiguration {
-        model_id: model_id.to_owned(),
-        maximum_context_tokens: 2_048,
-        maximum_output_tokens: 128,
-        chunking: WorkerChunkingConfiguration {
-            fixed_prompt_processing_chunk_size_tokens: 256,
-            fixed_ssd_streaming_prompt_processing_chunk_size_tokens: 2_048,
-            full_attention_key_value_growth_tokens: 256,
-            prefill_graph_submission_layer_interval: 0,
-            experimental_ssd_paging_generation_graph_submission_layer_interval: 3,
-            ssd_prompt_cache_block_tokens: None,
-            ssd_prompt_cache_common_prefix_stride_blocks: 4,
-            experimental_decode_stage_attribution_enabled: false,
-            experimental_prefill_stage_attribution_enabled: false,
-            experimental_in_memory_prefix_adoption_enabled: false,
-            experimental_neural_engine_prefill_enabled: false,
-        },
-    })
-}
-
-fn delayed_generation_command(request_id: u64) -> ChatGenerationCommand {
-    ChatGenerationCommand {
-        request_id: RequestId::new(request_id),
-        model: DELAYED_MODEL_ID.to_owned(),
-        messages: vec![ChatMessage::User {
-            content: ROMEO_AND_JULIET.to_owned(),
-            images: Vec::new(),
-        }],
-        tools: Vec::new(),
-        tool_choice: ChatToolChoice::None,
-        settings: ChatGenerationSettings {
-            max_output_tokens: 1,
-            temperature_thousandths: None,
-            top_p_thousandths: None,
-            repetition_penalty_thousandths: None,
-            seed: None,
-            thinking_budget: None,
-        },
-        structured_generation: None,
-    }
-}
-
-async fn receive_generation_completion(
-    generation_events: &mut tokio::sync::mpsc::Receiver<
-        astronomical_daemon::ChatGenerationStreamEvent,
-    >,
-) {
-    timeout(Duration::from_secs(2), generation_events.recv())
-        .await
-        .expect("generation should finish before the timeout")
-        .expect("generation should emit completion");
 }
 
 async fn delete_astro_ssd_prompt_cache(
@@ -394,27 +230,6 @@ async fn get_astro_ssd_prompt_cache_stats(application: &axum::Router) -> serde_j
         .await
         .expect("application should return astro SSD prompt cache stats");
     response_json(stats_response).await
-}
-
-async fn response_json(response: axum::response::Response) -> serde_json::Value {
-    let response_body = to_bytes(response.into_body(), 8 * 1024)
-        .await
-        .expect("response body should be readable");
-    serde_json::from_slice(&response_body).expect("response should contain JSON")
-}
-
-async fn wait_for_ready_worker(worker_handle: &WorkerHandle) {
-    let readiness_deadline = Instant::now() + Duration::from_secs(2);
-    loop {
-        if worker_handle.worker_health_snapshot().status == WorkerHealthStatus::Ready {
-            return;
-        }
-        assert!(
-            Instant::now() < readiness_deadline,
-            "worker should become ready"
-        );
-        sleep(Duration::from_millis(10)).await;
-    }
 }
 
 async fn wait_for_pending_clear_to_finish(application: &axum::Router) {
@@ -455,10 +270,4 @@ async fn wait_for_zeroed_astro_ssd_prompt_cache_stats(application: &axum::Router
         );
         sleep(Duration::from_millis(10)).await;
     }
-}
-
-async fn run_bounded_test(test_journey: impl std::future::Future<Output = ()>) {
-    timeout(TEST_TIMEOUT, test_journey)
-        .await
-        .expect("astro SSD prompt cache clear REST journey should finish within ten seconds");
 }
