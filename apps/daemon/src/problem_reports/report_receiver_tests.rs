@@ -47,8 +47,13 @@ fn should_refuse_a_dsn_without_a_key_host_or_numeric_project() {
 }
 
 #[test]
-fn should_build_no_receiver_while_the_compiled_in_dsn_is_empty() {
-    assert_eq!(ReportReceiver::compiled_in(), None);
+fn should_send_to_the_compiled_in_project_over_https() {
+    let report_receiver =
+        ReportReceiver::compiled_in().expect("the compiled-in DSN should be readable");
+    assert!(
+        report_receiver.envelope_url().starts_with("https://"),
+        "reports must never leave the Mac unencrypted"
+    );
 }
 
 #[test]
