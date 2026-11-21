@@ -591,6 +591,11 @@ fn capability_conditional_routes(
                 put(crate::rest::menu_bar_setting::update_menu_bar_setting)
                     .layer(DefaultBodyLimit::max(4 * 1024)),
             )
+            .route(
+                "/v1/config/sharing",
+                put(crate::rest::sharing_setting::update_sharing_setting)
+                    .layer(DefaultBodyLimit::max(4 * 1024)),
+            )
     } else {
         router
     };

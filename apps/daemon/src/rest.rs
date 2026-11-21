@@ -18,6 +18,7 @@ pub(crate) mod config_document;
 pub(crate) mod config_reload;
 pub(crate) mod config_reload_memory;
 pub(crate) mod config_reveal;
+pub(crate) mod config_section_write;
 pub(crate) mod expert_placement;
 pub(crate) mod experts;
 pub(crate) mod finder_reveal;
@@ -28,6 +29,7 @@ pub(crate) mod model_unload;
 pub(crate) mod problem_reports;
 pub(crate) mod request_body_budget;
 pub(crate) mod request_rejections;
+pub(crate) mod sharing_setting;
 pub(crate) mod status;
 pub(crate) mod system_one_endpoint;
 pub(crate) mod tool_result_images;
@@ -43,3 +45,5 @@ mod expert_placement_tests;
 mod experts_tests;
 #[cfg(test)]
 mod menu_bar_setting_tests;
+#[cfg(test)]
+mod sharing_setting_tests;
