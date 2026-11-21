@@ -2,7 +2,7 @@
 //! whether it may be sent at all.
 
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, OnceLock, RwLock};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use super::{DailyCountLine, DailyCountState, unix_day_now};
@@ -58,7 +58,7 @@ impl DailyCounter {
     pub(crate) fn for_this_mac(state_directory: &Path) -> Option<Self> {
         let line = DailyCountLine {
             app_version: env!("CARGO_PKG_VERSION").to_owned(),
-            mac: MacDescription::read_this_mac()?,
+            mac: this_mac()?,
         };
         Some(Self::new(
             state_directory,
@@ -104,6 +104,14 @@ impl DailyCounter {
         }
         DailyCountOutcome::Sent
     }
+}
+
+/// This Mac's description, read once. The chat window asks for the daily
+/// count each time it comes to the front, and the chip, memory and macOS
+/// version do not change while the engine runs, so `sysctl` runs once.
+fn this_mac() -> Option<MacDescription> {
+    static THIS_MAC: OnceLock<Option<MacDescription>> = OnceLock::new();
+    THIS_MAC.get_or_init(MacDescription::read_this_mac).clone()
 }
 
 fn unix_seconds_now() -> u64 {
