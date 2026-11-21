@@ -33,7 +33,7 @@ pub fn build_application_with_full_control_and_library_download(
         .read()
         .ok()
         .map(|resolved| Arc::new(RwLock::new(resolved.clone())));
-    let problem_report_desk = crate::application::registered_problem_report_desk(
+    let problem_report_desk = crate::problem_report_routes::registered_problem_report_desk(
         &runtime_config_resolver,
         &reloadable_config,
         &download_catalog,

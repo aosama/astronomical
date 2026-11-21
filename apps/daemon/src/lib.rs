@@ -25,6 +25,7 @@ mod instance_lock;
 mod ipc;
 mod library;
 mod performance;
+mod problem_report_routes;
 mod problem_reports;
 mod rest;
 mod serving;
