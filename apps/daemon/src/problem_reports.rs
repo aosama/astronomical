@@ -11,6 +11,7 @@
 //! sending lives apart so the person's choice is checked in one place.
 
 mod catalog_model_name;
+mod flight_recorder;
 mod mac_description;
 mod problem_kind;
 mod problem_report;
@@ -22,6 +23,9 @@ mod sent_report_log;
 mod waiting_reports;
 
 pub(crate) use catalog_model_name::CatalogModelName;
+pub(crate) use flight_recorder::{
+    FlightEvent, recent_flight_event_lines, record_flight_event, record_model_load_start,
+};
 pub(crate) use mac_description::MacDescription;
 pub(crate) use problem_kind::ProblemKind;
 pub(crate) use problem_report::ProblemReport;

@@ -108,6 +108,9 @@ fn react_to_worker_event_while_awaiting_model_swap(
                 model_swapped_event,
                 expected_model_swap,
             )?;
+            crate::problem_reports::record_flight_event(
+                crate::problem_reports::FlightEvent::ModelLoaded,
+            );
             Ok(ModelSwapEventReaction::AwaitNextWorkerEvent)
         }
         WorkerEvent::ModelSwapFailed {
@@ -160,6 +163,9 @@ fn reject_model_swap(
     model_load_failure_reason: String,
     requested_model_id: &str,
 ) -> ModelSwapWaitOutcome {
+    crate::problem_reports::record_flight_event(
+        crate::problem_reports::FlightEvent::ModelLoadFailed,
+    );
     crate::problem_reports::report_model_load_failure(
         &model_load_failure_reason,
         requested_model_id,

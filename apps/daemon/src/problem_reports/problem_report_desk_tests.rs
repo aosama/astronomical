@@ -63,6 +63,7 @@ fn report_of_kind(problem: ProblemKind) -> ProblemReport {
         model: None,
         problem,
         facts: Vec::new(),
+        recent_events: Vec::new(),
         note: None,
     }
 }

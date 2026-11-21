@@ -14,6 +14,7 @@ fn load_failure_report() -> ProblemReport {
         )),
         problem: ProblemKind::ModelLoadFailed,
         facts: Vec::new(),
+        recent_events: Vec::new(),
         note: None,
     }
 }

@@ -45,6 +45,7 @@ impl ReportSink {
             model,
             problem,
             facts: Vec::new(),
+            recent_events: super::recent_flight_event_lines(),
             note: None,
         }
     }
@@ -163,6 +164,7 @@ pub(crate) fn report_worker_exit(exit_cause: Option<String>, worker_lifetime_sec
     let Some(exit_cause) = exit_cause else {
         return;
     };
+    super::record_flight_event(super::FlightEvent::EngineExited);
     report_problem_with_facts(
         ProblemKind::EngineStoppedUnexpectedly,
         None,

@@ -48,6 +48,7 @@ fn should_read_the_same_fields_the_json_carries() {
         )),
         problem: ProblemKind::ModelLoadNotEnoughMemory,
         facts: Vec::new(),
+        recent_events: Vec::new(),
         note: None,
     };
     assert_eq!(
@@ -79,6 +80,7 @@ fn should_leave_out_the_model_line_when_a_problem_has_none() {
         model: None,
         problem: ProblemKind::EngineStoppedUnexpectedly,
         facts: Vec::new(),
+        recent_events: Vec::new(),
         note: None,
     };
     assert_eq!(
@@ -101,6 +103,7 @@ fn should_attach_a_trimmed_note_cut_to_the_limit_and_nothing_for_an_empty_one() 
         model: None,
         problem: ProblemKind::ReportedByPerson,
         facts: Vec::new(),
+        recent_events: Vec::new(),
         note: None,
     };
     let noted_report = base_report.clone().with_note("  replies got very slow  ");
@@ -130,6 +133,7 @@ fn should_show_each_fact_after_the_problem_and_send_it_by_its_key() {
             "Engine exit",
             "signal 6 (SIGABRT)",
         )],
+        recent_events: Vec::new(),
         note: None,
     };
     assert_eq!(
@@ -141,4 +145,31 @@ fn should_show_each_fact_after_the_problem_and_send_it_by_its_key() {
         report_json["facts"],
         serde_json::json!([{"key": "engine_exit", "value": "signal 6 (SIGABRT)"}])
     );
+}
+
+#[test]
+fn should_list_what_led_up_to_the_problem_under_its_own_heading() {
+    let problem_report = ProblemReport {
+        app_version: "0.2.126".to_owned(),
+        mac: this_test_mac(),
+        model: None,
+        problem: ProblemKind::ReplyOutOfMemory,
+        facts: Vec::new(),
+        recent_events: vec![
+            "31 s before: model loaded".to_owned(),
+            "0 s before: reply failed".to_owned(),
+        ],
+        note: None,
+    };
+    let readable_lines = problem_report.readable_lines();
+    assert_eq!(
+        &readable_lines[3..],
+        [
+            "Before this:",
+            "  31 s before: model loaded",
+            "  0 s before: reply failed"
+        ]
+    );
+    let report_json = serde_json::to_value(&problem_report).expect("report should serialize");
+    assert_eq!(report_json["recent_events"][1], "0 s before: reply failed");
 }

@@ -15,6 +15,10 @@ pub(crate) struct ProblemReport {
     /// What explains the problem: fixed names with numbers or fixed words.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub(crate) facts: Vec<ReportFact>,
+    /// What the engine did just before, oldest first, as fixed phrases with
+    /// numbers ("12 s before: model loaded").
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub(crate) recent_events: Vec<String>,
     /// What the person typed about the problem, if anything. The only free
     /// text a report can hold, and it is theirs: they wrote it on the same
     /// screen that shows the rest of the report.
@@ -52,6 +56,12 @@ impl ProblemReport {
         readable_lines.push(format!("Problem: {}", self.problem.plain_description()));
         for fact in &self.facts {
             readable_lines.push(fact.readable_line());
+        }
+        if !self.recent_events.is_empty() {
+            readable_lines.push("Before this:".to_owned());
+            for recent_event in &self.recent_events {
+                readable_lines.push(format!("  {recent_event}"));
+            }
         }
         if let Some(note) = &self.note {
             readable_lines.push(format!("Your note: {note}"));
