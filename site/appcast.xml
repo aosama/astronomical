@@ -4,35 +4,35 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.122</title>
-            <pubDate>Fri, 20 Nov 2026 06:49:24 -0500</pubDate>
-            <sparkle:version>2434</sparkle:version>
-            <sparkle:shortVersionString>0.2.122</sparkle:shortVersionString>
+            <title>0.2.123</title>
+            <pubDate>Fri, 20 Nov 2026 20:20:01 -0500</pubDate>
+            <sparkle:version>2437</sparkle:version>
+            <sparkle:shortVersionString>0.2.123</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
             <description sparkle:format="markdown"><![CDATA[## What's new
 
-- **A quiet menu bar.** The Astronomical icon now stands alone by default. While a prompt is read or a picture is drawn, the icon itself shows how far along it is. If you'd like the old progress and speed text beside it, switch it on in Observatory's Settings or from the ⋯ button in the menu.
-- **A simpler menu.** The menu that opens from the icon now shows your model, what it's doing, how fast it reads and writes, how much memory it uses, and your memory limit. The detailed memory breakdown and build information are still there: switch on "Show technical details in the menu".
-- **A memory slider.** Set the most memory a model may use by dragging. A mark shows the loaded model's size, and a sentence tells you what your choice leaves for macOS and your other apps, or warns when part of the model will be read from the SSD. Drag it all the way right to use whatever your Mac allows.
-- **Reading and writing speed.** The menu shows how fast the model reads your prompts and writes its replies, averaged over the session, with the live speed while a reply is under way.
-- **A clear sign when something's wrong.** If Astronomical's engine stops answering, the icon shows an exclamation mark and "Not running", and the menu offers Restart.
-- **Slightly faster prompt reading** on mixture-of-experts models held fully in memory, with identical replies.
+- **Astronomical now ships with a skill for AI agents.** Coding tools and chat harnesses connected to Astronomical are told where it is, so their agents can learn on their own how to draw images, read text aloud, describe pictures, run decision models, connect tools and troubleshoot Astronomical. Nothing needs installing.
+- **The skill keeps itself current.** About once a day Astronomical checks the website for a newer skill, verifies every file against its published SHA-256 digest, and swaps it in whole. Nothing about your Mac or its use is sent.
+- **Two new settings** in Observatory, under "Astronomical skill": one tells models about the skill, and one keeps it up to date from the website. Both are on by default and apply at once without unloading the model.
+- **`astronomical speak` now speaks aloud** on your Mac's speakers. Pass `--output FILE.wav` to save the audio instead.
 
 ## Fixes
 
-- The session's reading and writing speeds now weigh each request by how much it did, so a very short reply no longer skews them.
+- The menu bar no longer shows "Not running" while a speech or decision model is loaded.
 
-## Good to know
+## Compatibility
 
-- Your conversations, models, settings and saved prompt work are all kept.
+- `astronomical speak` without `--output` no longer saves a file. Scripts that relied on the saved file should pass `--output`.
+- Your settings, conversations and downloaded models are kept. The new `skill` settings section is optional.
 - Requires macOS 14 or later on Apple silicon.
-- The app is signed with the project's Developer ID and notarized by Apple.
+
+The app and disk image are signed with Developer ID, notarized and stapled by Apple, and the update feed is signed.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.122/Astronomical-0.2.122-macOS-arm64.dmg" length="25595766" type="application/octet-stream" sparkle:edSignature="Yt4Qfo941zTQ51KW5Eduj/6dClysWy0JQT7qbJMklN065Tb0OSo8pzgcOShtiTgQ3ev9OSD8SKbOoxtd4gxiDQ=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.123/Astronomical-0.2.123-macOS-arm64.dmg" length="25672905" type="application/octet-stream" sparkle:edSignature="A5ff68DDftqkfUWQ4QSJ1VEFEMPyxvzR+9MmvrJyua81N1k58cfbNKLK/dqo0MIb14wjePON1PdN3JqLHMGMBw=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: JSGBboObxUI+vFolVXVlHybJ3ZCdf8SgsVa+WKC14ElOtmUYc5Yu2Ex7IxnqWNolgTRkEgnilrsf+9Nj67bwAw==
-length: 2963
+edSignature: G9tIwzgkHp5LpUW5K/15cjQfhhB97a0ysPwEo0+O6e+AyWFx1GYyNpN7eWjO/vPZhpIuXKduDBxV8rwepmmZBQ==
+length: 2658
 -->
