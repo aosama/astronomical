@@ -74,6 +74,8 @@ Read them rather than relying on memory or on this skill for specifics.
 - **Leave the app's own files alone** (its settings file, models and logs)
   unless the person asks; Observatory and the commands change them safely.
 - **Report memory in GB of 1,073,741,824 bytes,** as the Mac and the app do.
+- **Report only what happened.** Say a file was saved, played or opened only
+  after the command that did it succeeded.
 - **Never send the person's text, files or logs anywhere** without their yes.
 
 ## Further help
