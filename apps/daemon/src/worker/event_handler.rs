@@ -458,6 +458,7 @@ fn apply_generation_failed(
     };
     tracing::warn!(request_id = request_id.value(), failure_reason = ?reason,
         "worker generation failed");
+    crate::problem_reports::report_reply_failure(&reason, health_snapshot);
     publish_activity(health_snapshot, WorkerActivity::Idle);
     clear_active_request_progress(health_snapshot);
     try_send_stream_event(

@@ -11,7 +11,6 @@ fn report_of_kind(problem: ProblemKind) -> ProblemReport {
         },
         model: None,
         problem,
-        memory: None,
     }
 }
 
@@ -31,8 +30,9 @@ fn should_wait_until_the_report_is_taken_once() {
 #[test]
 fn should_keep_one_report_when_the_same_failure_repeats() {
     let waiting_reports = WaitingReports::default();
-    let first_number = waiting_reports.offer(report_of_kind(ProblemKind::DownloadFailed));
-    let repeat_number = waiting_reports.offer(report_of_kind(ProblemKind::DownloadFailed));
+    let first_number = waiting_reports.offer(report_of_kind(ProblemKind::DownloadChecksumMismatch));
+    let repeat_number =
+        waiting_reports.offer(report_of_kind(ProblemKind::DownloadChecksumMismatch));
     assert_eq!(first_number, repeat_number);
     assert_eq!(waiting_reports.waiting().len(), 1);
 }
@@ -42,17 +42,23 @@ fn should_keep_only_the_newest_reports_when_too_many_wait() {
     let waiting_reports = WaitingReports::default();
     let problem_kinds = [
         ProblemKind::ModelLoadFailed,
-        ProblemKind::DownloadFailed,
+        ProblemKind::DownloadChecksumMismatch,
         ProblemKind::ReplyOutOfMemory,
-        ProblemKind::EngineDidNotStart,
+        ProblemKind::EngineStoppedUnexpectedly,
     ];
     for problem_kind in problem_kinds {
         waiting_reports.offer(report_of_kind(problem_kind));
     }
     let waiting = waiting_reports.waiting();
     assert_eq!(waiting.len(), MAXIMUM_WAITING_REPORTS);
-    assert_eq!(waiting[0].report.problem, ProblemKind::DownloadFailed);
-    assert_eq!(waiting[2].report.problem, ProblemKind::EngineDidNotStart);
+    assert_eq!(
+        waiting[0].report.problem,
+        ProblemKind::DownloadChecksumMismatch
+    );
+    assert_eq!(
+        waiting[2].report.problem,
+        ProblemKind::EngineStoppedUnexpectedly
+    );
 }
 
 #[test]

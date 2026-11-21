@@ -62,7 +62,6 @@ fn report_of_kind(problem: ProblemKind) -> ProblemReport {
         },
         model: None,
         problem,
-        memory: None,
     }
 }
 
@@ -112,14 +111,14 @@ async fn should_send_without_asking_only_when_the_person_chose_always() {
     let state_directory = tempfile::tempdir().expect("temporary folder");
     let desk = desk_for(state_directory.path(), Some(&sentry_dsn));
     desk.offer(
-        report_of_kind(ProblemKind::DownloadFailed),
+        report_of_kind(ProblemKind::DownloadChecksumMismatch),
         ProblemReportChoice::Always,
     )
     .await;
     assert_eq!(received_envelopes.lock().expect("lock").len(), 1);
     assert!(desk.waiting().is_empty());
     desk.offer(
-        report_of_kind(ProblemKind::EngineDidNotStart),
+        report_of_kind(ProblemKind::EngineStoppedUnexpectedly),
         ProblemReportChoice::Never,
     )
     .await;

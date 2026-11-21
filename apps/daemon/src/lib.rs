@@ -22,11 +22,6 @@ mod instance_lock;
 mod ipc;
 mod library;
 mod performance;
-#[expect(
-    dead_code,
-    unused_imports,
-    reason = "the report builder lands before the endpoint that offers its reports (issue #2413)"
-)]
 mod problem_reports;
 mod rest;
 mod serving;

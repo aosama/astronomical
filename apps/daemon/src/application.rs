@@ -375,7 +375,11 @@ pub fn build_application_with_full_control_and_download_catalog(
         .read()
         .ok()
         .map(|resolved| Arc::new(RwLock::new(resolved.clone())));
-    let problem_report_desk = problem_report_desk_for(&runtime_config_resolver);
+    let problem_report_desk = registered_problem_report_desk(
+        &runtime_config_resolver,
+        &reloadable_config,
+        &download_catalog,
+    );
     let application_state = ApplicationState {
         completion_id_namespace: completion_id_namespace(),
         next_chat_request_id: Arc::new(AtomicU64::new(1)),
@@ -420,6 +424,22 @@ fn problem_report_routes(
             "/v1/problem-reports/{report_number}/decline",
             post(crate::rest::problem_reports::decline_problem_report),
         )
+}
+
+/// The production report desk: also registered as the engine's one report
+/// sink, so failures in the worker and the download queue reach it.
+pub(crate) fn registered_problem_report_desk(
+    runtime_config_resolver: &ResolvedRuntimeConfigResolver,
+    reloadable_config: &Arc<RwLock<ResolvedRuntimeConfig>>,
+    download_catalog: &DownloadCatalog,
+) -> Option<Arc<crate::problem_reports::ProblemReportDesk>> {
+    let problem_report_desk = problem_report_desk_for(runtime_config_resolver)?;
+    crate::problem_reports::register_report_sink(
+        Arc::clone(&problem_report_desk),
+        Arc::clone(reloadable_config),
+        download_catalog,
+    );
+    Some(problem_report_desk)
 }
 
 /// The report desk for an instance, logging sent reports in its state

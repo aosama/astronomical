@@ -1,4 +1,4 @@
-use super::{MemoryShortfall, ProblemReport};
+use super::ProblemReport;
 use crate::problem_reports::{CatalogModelName, MacDescription, ProblemKind};
 
 fn this_test_mac() -> MacDescription {
@@ -47,7 +47,6 @@ fn should_read_the_same_fields_the_json_carries() {
             &catalog_ids(),
         )),
         problem: ProblemKind::ModelLoadNotEnoughMemory,
-        memory: Some(MemoryShortfall::from_bytes(30_064_771_072, 22_548_578_304)),
     };
     assert_eq!(
         problem_report.readable_lines(),
@@ -56,7 +55,6 @@ fn should_read_the_same_fields_the_json_carries() {
             "Mac: Apple M5 Pro, 48 GB, macOS 27.2",
             "Model: mlx-community/Ornith-1.5-35B-A3B-OptiQ-4bit",
             "Problem: model load failed, not enough memory",
-            "Memory: needed 28 GB, 21 GB free",
         ]
     );
     let report_json = serde_json::to_value(&problem_report).expect("report should serialize");
@@ -66,37 +64,27 @@ fn should_read_the_same_fields_the_json_carries() {
             "app_version": "0.2.126",
             "mac": {"chip_name": "Apple M5 Pro", "memory_gb": 48, "macos_version": "27.2"},
             "model": "mlx-community/Ornith-1.5-35B-A3B-OptiQ-4bit",
-            "problem": "model_load_not_enough_memory",
-            "memory": {"needed_gb": 28.0, "available_gb": 21.0}
+            "problem": "model_load_not_enough_memory"
         })
     );
 }
 
 #[test]
-fn should_leave_out_the_model_and_memory_lines_when_a_problem_has_neither() {
+fn should_leave_out_the_model_line_when_a_problem_has_none() {
     let problem_report = ProblemReport {
         app_version: "0.2.126".to_owned(),
         mac: this_test_mac(),
         model: None,
-        problem: ProblemKind::EngineDidNotStart,
-        memory: None,
+        problem: ProblemKind::EngineStoppedUnexpectedly,
     };
     assert_eq!(
         problem_report.readable_lines(),
         [
             "App: Astronomical 0.2.126",
             "Mac: Apple M5 Pro, 48 GB, macOS 27.2",
-            "Problem: engine did not start",
+            "Problem: engine stopped unexpectedly",
         ]
     );
     let report_json = serde_json::to_value(&problem_report).expect("report should serialize");
     assert!(report_json.get("model").is_none());
-    assert!(report_json.get("memory").is_none());
-}
-
-#[test]
-fn should_round_memory_figures_to_one_decimal() {
-    let memory_shortfall = MemoryShortfall::from_bytes(1_181_116_006, 0);
-    assert_eq!(memory_shortfall.needed_gb, 1.1);
-    assert_eq!(memory_shortfall.available_gb, 0.0);
 }

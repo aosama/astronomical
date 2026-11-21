@@ -47,6 +47,7 @@ impl ReportReceiver {
         })
     }
 
+    #[cfg(test)]
     pub(crate) fn envelope_url(&self) -> &str {
         &self.envelope_url
     }

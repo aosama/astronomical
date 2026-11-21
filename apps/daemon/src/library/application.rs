@@ -33,7 +33,11 @@ pub fn build_application_with_full_control_and_library_download(
         .read()
         .ok()
         .map(|resolved| Arc::new(RwLock::new(resolved.clone())));
-    let problem_report_desk = crate::application::problem_report_desk_for(&runtime_config_resolver);
+    let problem_report_desk = crate::application::registered_problem_report_desk(
+        &runtime_config_resolver,
+        &reloadable_config,
+        &download_catalog,
+    );
     application_router(ApplicationState {
         completion_id_namespace: Arc::from("library-production"),
         next_chat_request_id,
