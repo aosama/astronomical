@@ -152,6 +152,13 @@ async fn should_keep_reporting_restart_required_until_server_is_restarted() {
         idle_model_unload_seconds: config::DEFAULT_IDLE_MODEL_UNLOAD_SECONDS,
         menu_bar_shows_progress_and_speed: false,
         menu_bar_shows_technical_details: false,
+        // The switches are on by default, as the candidate resolved from
+        // the config file has them, so the reload sees no skill change.
+        skill_settings: astronomical_daemon::SkillSettings {
+            declared_to_models: true,
+            updates_from_web: true,
+            index_path: Default::default(),
+        },
         configured_astro_ssd_prompt_cache_maximum_size_bytes: None,
         performance_attribution_enabled: false,
         astro_ssd_prompt_cache_config: config::AstroSsdPromptCacheConfig::new(

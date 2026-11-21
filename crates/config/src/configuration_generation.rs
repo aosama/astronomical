@@ -15,8 +15,11 @@ pub(crate) fn configuration_generation(
     // reload that sees a new generation and no field it recognizes replaces the worker, which
     // unloads the person's model, so the section is left out of the identity: writing it, even
     // an explicit default, must never cost a model load.
+    // The skill section is the daemon's alone for the same reason: it edits
+    // requests and checks for a newer skill without any worker taking part.
     let worker_relevant_config_file = UserConfigFile {
         menu_bar: None,
+        skill: None,
         ..user_config_file.clone()
     };
     // Hash the typed document so JSON whitespace and member order cannot create a false reload.

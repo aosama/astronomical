@@ -40,10 +40,27 @@ from the index or the index points to a missing one, when the index grows past
 its line budget, and when the description stops naming the abilities.
 
 The engine compiles the skill in and writes it to the app's state folder at
-every start (`apps/daemon/src/astronomical_skill.rs`). A reference file added
+every start (`apps/daemon/src/astronomical_skill.rs`), unless a newer skill
+downloaded from the website is already there. A reference file added
 or removed here must also be added to or removed from that file's
 `EMBEDDED_SKILL_FILES`; `cargo test -p astronomical-daemon --lib
 astronomical_skill` fails until the two match.
+
+## Publishing an update
+
+Installed apps look for a newer skill on the website about once a day, so the
+skill can improve without an app release.
+
+1. Edit `skill/astronomical`.
+2. Raise `skill_version` in `skill/release.json`. Without a higher number no
+   app takes the update.
+3. Set `minimum_app_version` there to the oldest app version the skill suits.
+   The site is published from `main`, so a skill that mentions something not
+   released yet must name the upcoming version, or released apps would be
+   told about a command they do not have.
+4. Run `cargo xtask skill-site`, which copies the skill to `site/skill` and
+   writes its manifest. `cargo xtask skill-site --check` fails in CI when the
+   site's copy is out of date.
 
 A test cannot notice a new ability the skill never mentions. Whenever a
 change adds, renames or removes a command or flag, changes how a coding tool or

@@ -403,6 +403,32 @@ impl AstronomicalConfig {
             .unwrap_or(false)
     }
 
+    /// Returns whether the engine tells every model it serves that the
+    /// Astronomical skill exists and where to read it.
+    ///
+    /// It defaults to on: the skill only helps a person if their agent learns
+    /// of it without any setup, and Observatory shows and switches it.
+    #[must_use]
+    pub fn skill_declared_to_models(&self) -> bool {
+        self.user_config_file
+            .skill
+            .as_ref()
+            .and_then(|skill| skill.declare_to_models)
+            .unwrap_or(true)
+    }
+
+    /// Returns whether the app looks on the project's site for a newer skill
+    /// about once a day. It defaults to on, so the skill improves between
+    /// app releases; the check sends nothing about the person.
+    #[must_use]
+    pub fn skill_updates_from_web(&self) -> bool {
+        self.user_config_file
+            .skill
+            .as_ref()
+            .and_then(|skill| skill.update_from_web)
+            .unwrap_or(true)
+    }
+
     /// Resolves inherited policy for one canonical discovered model identity, matching `models`
     /// entries by its leaf ID only. Prefer [`Self::resolved_discovered_model_config`] when the
     /// model's full Hugging Face ID is known.

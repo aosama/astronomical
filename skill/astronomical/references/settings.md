@@ -8,6 +8,10 @@ another. Each setting explains itself on screen and says when a change takes
 effect. Point the person to the setting by its name on screen. Change a
 setting for them only when they ask, and say what will change first.
 
+Two settings concern this skill itself: one tells every model about it, the
+other keeps it up to date from the website. Both are on unless the person
+turned them off.
+
 ## The settings file
 
 Observatory writes a settings file in the app's state folder. Prefer

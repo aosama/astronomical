@@ -3,7 +3,8 @@ use std::{collections::BTreeSet, fs, path::PathBuf};
 use tempfile::TempDir;
 
 use super::{
-    EMBEDDED_SKILL_FILES, SkillInstallOutcome, install_astronomical_skill, skill_index_path,
+    EMBEDDED_SKILL_FILES, SkillInstallOutcome, bundled_skill_version, downloaded_skill_version,
+    install_astronomical_skill, record_downloaded_skill_version, skill_index_path,
 };
 
 fn repository_skill_directory() -> PathBuf {
@@ -41,6 +42,7 @@ fn should_write_the_whole_skill_into_an_empty_folder() {
         SkillInstallOutcome {
             files_written: EMBEDDED_SKILL_FILES.len(),
             stale_files_removed: 0,
+            kept_downloaded_version: None,
         }
     );
     let index_text =
@@ -69,6 +71,7 @@ fn should_write_nothing_when_the_folder_already_matches() {
         SkillInstallOutcome {
             files_written: 0,
             stale_files_removed: 0,
+            kept_downloaded_version: None,
         }
     );
 }
@@ -90,6 +93,7 @@ fn should_put_back_an_altered_file_and_remove_a_retired_reference() {
         SkillInstallOutcome {
             files_written: 1,
             stale_files_removed: 1,
+            kept_downloaded_version: None,
         }
     );
     assert!(
@@ -117,4 +121,57 @@ fn should_report_an_error_when_the_skill_folder_cannot_be_created() {
     let blocking_file_path = scratch_directory.path().join("skill");
     fs::write(&blocking_file_path, "a file where the folder should be").expect("blocking file");
     assert!(install_astronomical_skill(&blocking_file_path).is_err());
+}
+
+#[test]
+fn should_keep_a_newer_downloaded_skill_across_a_restart() {
+    let skill_directory = TempDir::new().expect("scratch folder");
+    install_astronomical_skill(skill_directory.path()).expect("first install");
+    let index_path = skill_index_path(skill_directory.path());
+    fs::write(&index_path, "a newer skill from the site").expect("downloaded index");
+    let newer_version = bundled_skill_version() + 1;
+    record_downloaded_skill_version(skill_directory.path(), newer_version).expect("record");
+
+    let outcome = install_astronomical_skill(skill_directory.path()).expect("restart");
+    assert_eq!(outcome.kept_downloaded_version, Some(newer_version));
+    assert_eq!(outcome.files_written, 0);
+    assert_eq!(
+        fs::read_to_string(&index_path).expect("index"),
+        "a newer skill from the site"
+    );
+}
+
+#[test]
+fn should_replace_a_downloaded_skill_the_app_has_caught_up_with() {
+    let skill_directory = TempDir::new().expect("scratch folder");
+    install_astronomical_skill(skill_directory.path()).expect("first install");
+    let index_path = skill_index_path(skill_directory.path());
+    fs::write(&index_path, "an older download").expect("downloaded index");
+    record_downloaded_skill_version(skill_directory.path(), bundled_skill_version())
+        .expect("record");
+
+    let outcome = install_astronomical_skill(skill_directory.path()).expect("restart");
+    assert_eq!(outcome.kept_downloaded_version, None);
+    assert_eq!(outcome.files_written, 1);
+    assert_eq!(downloaded_skill_version(skill_directory.path()), None);
+    assert!(
+        fs::read_to_string(&index_path)
+            .expect("index")
+            .starts_with("---\nname: astronomical\n")
+    );
+}
+
+#[test]
+fn should_ignore_a_download_record_whose_skill_is_gone() {
+    let skill_directory = TempDir::new().expect("scratch folder");
+    record_downloaded_skill_version(skill_directory.path(), bundled_skill_version() + 5)
+        .expect("record without a skill folder");
+    assert_eq!(downloaded_skill_version(skill_directory.path()), None);
+    let outcome = install_astronomical_skill(skill_directory.path()).expect("install");
+    assert_eq!(outcome.files_written, EMBEDDED_SKILL_FILES.len());
+}
+
+#[test]
+fn should_carry_a_version_in_the_compiled_in_skill() {
+    assert!(bundled_skill_version() >= 1);
 }

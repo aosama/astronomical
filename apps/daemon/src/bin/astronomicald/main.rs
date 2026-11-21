@@ -256,6 +256,7 @@ async fn run_daemon(
     )
     .await
     .map_err(DaemonError::StartDaemonIpc)?;
+    let skill_update_config = Arc::clone(&reloadable_config);
     let application = build_application_with_full_control_and_library_download(
         worker_handle.clone(),
         next_chat_request_id,
@@ -265,6 +266,13 @@ async fn run_daemon(
         download_catalog,
         library_download_coordinator,
     );
+
+    // The look for a newer skill runs beside serving and ends with the process.
+    tokio::spawn(astronomical_daemon::keep_skill_current(
+        skill_update_config,
+        instance_paths.skill_directory(),
+        ApplicationBuildIdentity::current().version,
+    ));
 
     println!("astronomicald listening on http://{bound_daemon_address}");
 

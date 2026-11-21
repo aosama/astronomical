@@ -171,6 +171,7 @@ fn attach_worker_memory_and_session_facts(
             })
     );
     attach_menu_bar_settings(status_json, application_state);
+    attach_skill_settings(status_json, application_state);
     status_json["serving_session"] = serde_json::json!({
         "completed_request_count": worker_health_snapshot.serving_session.completed_request_count,
         "total_prompt_token_count": worker_health_snapshot.serving_session.total_prompt_token_count,
@@ -199,6 +200,30 @@ fn attach_menu_bar_settings(
     }
     status_json["menu_bar_shows_progress_and_speed"] = serde_json::json!(shows_progress_and_speed);
     status_json["menu_bar_shows_technical_details"] = serde_json::json!(shows_technical_details);
+}
+
+/// Whether models are being told about the Astronomical skill, and the exact
+/// note they are given, so Observatory and a curious person can see what the
+/// engine adds to a prompt.
+fn attach_skill_settings(
+    status_json: &mut serde_json::Value,
+    application_state: &ApplicationState,
+) {
+    let Some(reloadable_config) = application_state.reloadable_config.as_ref() else {
+        return;
+    };
+    let Ok(resolved_config) = reloadable_config.read() else {
+        return;
+    };
+    let skill_settings = &resolved_config.skill_settings;
+    status_json["skill"] = serde_json::json!({
+        "declared_to_models": skill_settings.declared_to_models,
+        "updates_from_web": skill_settings.updates_from_web,
+        "index_path": skill_settings.index_path,
+        "declaration": crate::serving::skill_declaration::skill_declaration_text(
+            &skill_settings.index_path
+        ),
+    });
 }
 
 fn neural_engine_session_facts(

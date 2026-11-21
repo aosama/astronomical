@@ -31,6 +31,8 @@ pub(crate) struct UserConfigFile {
     pub(crate) diagnostics: Option<DiagnosticsConfigFile>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) menu_bar: Option<MenuBarConfigFile>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) skill: Option<SkillConfigFile>,
 }
 
 impl UserConfigFile {
@@ -63,6 +65,7 @@ impl UserConfigFile {
             models: BTreeMap::new(),
             diagnostics: None,
             menu_bar: None,
+            skill: None,
         }
     }
 
@@ -139,6 +142,18 @@ pub(crate) struct MenuBarConfigFile {
     pub(crate) show_progress_and_speed: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) show_technical_details: Option<bool>,
+}
+
+/// How the Astronomical skill reaches the models this app serves and how it
+/// stays current. The daemon applies both switches itself; no worker reads
+/// them.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct SkillConfigFile {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) declare_to_models: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) update_from_web: Option<bool>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]

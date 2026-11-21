@@ -16,6 +16,8 @@ Two files sit beside this one:
 
 ## Steps of a store release
 
+The Astronomical skill (`skill/astronomical`) is reviewed in the Sparkle release of the same version (section 1 of the `sparkle-release` skill). A store release of a version that never had a Sparkle release does that review first.
+
 Start only when the user asks for a store release in their own words; a Sparkle release never implies one. Build from the tag of a version the `sparkle-release` skill has already published, so both channels carry one version number. A store release never changes the direct release.
 
 The sections below this one hold the detail behind each step: the decisions already made for the app record, how to run and try the sandboxed build on screen, what Apple's validation has said before, and how to work on the App Store Connect pages.

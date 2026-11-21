@@ -37,6 +37,7 @@
 - A performance measurement should send at least 10,000 tokens of input and acquire 500 output tokens; plus or minus 10 percent is acceptable. Exceptions can be made if the user specifies it explicitly.
 - A warmup run should be performed before the actual test; the desired warmup is 500 tokens of input and 50 tokens of output.
 - The astro SSD prompt cache must be disabled during performance throughput tests and measurements.
+- The skill declaration (`skill.declare_to_models`) must be disabled during performance throughput tests and measurements, because it adds tokens to every prompt.
 - Those performance throughput tests must run through a Rust optimized build.
 - MOST IMPORTANTLY performance tests must start at the lowermost part of the call stack and move tests upwards through the call stack.
 

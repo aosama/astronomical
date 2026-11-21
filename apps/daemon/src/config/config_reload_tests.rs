@@ -532,7 +532,7 @@ fn should_restart_worker_when_astro_ssd_prompt_cache_flag_changes() {
     );
 }
 
-pub(super) fn sample_resolved_config() -> ResolvedRuntimeConfig {
+pub(crate) fn sample_resolved_config() -> ResolvedRuntimeConfig {
     ResolvedRuntimeConfig {
         neural_engine_program_directory: "neural-engine-programs".into(),
         configuration_generation:
@@ -553,6 +553,7 @@ pub(super) fn sample_resolved_config() -> ResolvedRuntimeConfig {
         idle_model_unload_seconds: 0,
         menu_bar_shows_progress_and_speed: false,
         menu_bar_shows_technical_details: false,
+        skill_settings: Default::default(),
         configured_astro_ssd_prompt_cache_maximum_size_bytes: None,
         performance_attribution_enabled: false,
         astro_ssd_prompt_cache_config: AstroSsdPromptCacheConfig::new(

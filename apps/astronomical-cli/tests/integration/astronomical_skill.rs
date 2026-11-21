@@ -311,7 +311,7 @@ fn should_refuse_a_command_subcommand_or_flag_the_cli_does_not_have() {
 fn should_accept_real_commands_and_ignore_the_name_in_links_and_paths() {
     let real_text = "Run `astronomical models download MODEL_ID`, `astronomical launch claude -- -p \"hi\"`, \
                      see https://github.com/aosama/astronomical, open `astronomical://models/huggingface/a/b`, \
-                     and read `~/.astronomical/logs`.";
+                     and read `~/.astronomical-dev/logs`.";
     assert_eq!(
         skill_text_problems(real_text, astronomical_cli::help_text()),
         Vec::<String>::new()

@@ -249,6 +249,10 @@ fn finalize_responses_generation_command(
         settings_presence,
         &mut chat_generation_command.settings,
     );
+    crate::serving::skill_declaration::declare_astronomical_skill(
+        application_state.reloadable_config.as_ref(),
+        &mut chat_generation_command.messages,
+    );
     tracing::info!(
         request_id,
         model = %chat_generation_command.model,

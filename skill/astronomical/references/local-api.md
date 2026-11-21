@@ -3,8 +3,9 @@
 Use this when writing a program. From a terminal, the `astronomical` command
 is simpler.
 
-- **The address** is shown on Observatory's connect page. It answers only on
-  this Mac and checks no key.
+- **The address** is `http://127.0.0.1:6732` for the installed app and
+  `http://127.0.0.1:6733` for a build from source; Observatory's connect page
+  confirms it. It answers only on this Mac and checks no key.
 - **It speaks the OpenAI and Anthropic APIs:** chat (with streaming, tools,
   pictures and structured output), embeddings, image generation, speech, and
   model listing. Decision models have their own endpoint, listed under

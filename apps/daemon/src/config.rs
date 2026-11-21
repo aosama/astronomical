@@ -11,11 +11,12 @@ pub(crate) mod request_generation_defaults;
 pub(crate) mod resolved_configuration_generation;
 pub(crate) mod resolved_model_policy_catalog;
 pub(crate) mod runtime_model_policy;
+pub(crate) mod skill_settings;
 
 #[cfg(test)]
 mod config_reload_resolver_tests;
 #[cfg(test)]
-mod config_reload_tests;
+pub(crate) mod config_reload_tests;
 #[cfg(test)]
 mod model_request_default_changes_tests;
 #[cfg(test)]
