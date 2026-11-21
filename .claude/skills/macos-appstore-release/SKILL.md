@@ -250,6 +250,7 @@ Screenshots are kept outside version control, in the ignored `private/store-scre
 - A new promise in the listing: do it on screen in the sandboxed build first.
 - A new entitlement: add a sentence to the review notes saying what the person can do because of it.
 - A feature that sends anything off the Mac: the privacy label, the privacy page and the privacy manifest (`scripts/internal/privacy/PrivacyInfo.xcprivacy`) change in the same release.
+- **Problem reports are switched off in the store build** (issue #2413). The direct download can offer a problem report and send it to the developers when the person chooses; the store build has no report desk, serves no `/v1/problem-reports` route and hides the sharing settings, because the engine sees that it keeps its state in the app container (`problem_report_desk_for` in `apps/daemon/src/application.rs`). `cargo test -p astronomical-daemon --lib application_problem_report` and `--lib config_document` guard this. Before removing the guard, change the privacy manifest, the App Privacy answers and the privacy page in that same release, and tell App Review that reports are off until the person turns them on.
 - A new model in the catalog: check its licence allows redistribution, or the content-rights answer no longer holds.
 
 ## Open work

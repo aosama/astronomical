@@ -26,6 +26,15 @@ export interface ProblemReportAnswer {
   message: string;
 }
 
+/** The engine has no problem reports at all, as in the Mac App Store
+ * version, which sends none. Different from an engine that is not answering. */
+export class ProblemReportsNotOfferedError extends Error {
+  public constructor() {
+    super("problem reports are not offered by this version");
+    this.name = "ProblemReportsNotOfferedError";
+  }
+}
+
 /** The fetch signature, so tests can stand in for the engine. */
 export type FetchFunction = (input: string, init?: RequestInit) => Promise<Response>;
 
@@ -45,6 +54,9 @@ export class ProblemReportClient {
 
   public async fetchProblemReports(): Promise<ProblemReports> {
     const response = await this.fetchFunction(`${this.daemonBaseURL}/v1/problem-reports`);
+    if (response.status === 404) {
+      throw new ProblemReportsNotOfferedError();
+    }
     if (!response.ok) {
       throw new Error(`problem reports answered ${response.status}`);
     }

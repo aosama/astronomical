@@ -1,6 +1,7 @@
 import { makeElement } from "./AstroDom";
 import type { ProblemReportChoice, ProblemReportClient, ProblemReports, SentProblemReport } from "../ProblemReportClient";
 import { NEVER_INCLUDED_TEXT, makeNoteField } from "../ProblemReportCard";
+import { ProblemReportsNotOfferedError } from "../ProblemReportClient";
 import type { WaitingProblemReport } from "../ProblemReportClient";
 import { makeRow, makeSection, rowButton } from "./SettingsRows";
 
@@ -34,19 +35,24 @@ export class SettingsSharing {
   public async refresh(): Promise<void> {
     try {
       this.showRows(await this.client.fetchProblemReports());
-    } catch {
-      this.showRows(null);
+    } catch (error) {
+      this.showRows(null, error instanceof ProblemReportsNotOfferedError);
     }
   }
 
   /** Draws the rows; `null` when the engine could not be asked, in which
    * case the fixed rows still show and the changeable ones say why not. */
-  private showRows(problemReports: ProblemReports | null): void {
+  private showRows(problemReports: ProblemReports | null, isNotOffered = false): void {
     const document = this.document;
     const rows: HTMLElement[] = [
       makeRow(document, "Chats, files and images", "Never", null),
       makeRow(document, "Model downloads", "Only the ones you choose", null),
     ];
+    if (problemReports === null && isNotOffered) {
+      rows.push(makeRow(document, "Problem reports", "Never. This version doesn't send them.", null), makeRow(document, "Daily count", "Never", null));
+      this.element.replaceChildren(this.element.firstElementChild ?? "", ...rows);
+      return;
+    }
     if (problemReports === null) {
       rows.push(makeRow(document, null, makeElement(document, "span", "settings__row-value--muted", "The engine isn't answering, so these choices can't be shown right now."), null));
       this.element.replaceChildren(this.element.firstElementChild ?? "", ...rows);

@@ -45,6 +45,11 @@ pub(crate) async fn update_sharing_setting(
     State(application_state): State<ApplicationState>,
     Json(sharing_setting_request): Json<SharingSettingRequest>,
 ) -> Response {
+    // The Mac App Store build has no report desk (see
+    // `problem_report_desk_for`), so it stores no sharing choice either.
+    if application_state.problem_report_desk.is_none() {
+        return (StatusCode::NOT_FOUND, "problem reports are unavailable").into_response();
+    }
     let requested_values = sharing_setting_request.requested_values();
     if requested_values.is_empty() {
         return (StatusCode::BAD_REQUEST, "name at least one sharing choice").into_response();

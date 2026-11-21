@@ -14,6 +14,8 @@
 
 mod application;
 mod application_build_identity;
+#[cfg(test)]
+mod application_problem_report_tests;
 mod astronomical_skill;
 mod astronomical_skill_update;
 mod config;

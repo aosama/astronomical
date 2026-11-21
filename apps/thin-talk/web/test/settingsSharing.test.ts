@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { SettingsSharing } from "../src/astro/SettingsSharing";
 import { ProblemReportClient, type FetchFunction } from "../src/ProblemReportClient";
 
-function sharingFor(listBody: unknown | null): { sharing: SettingsSharing; calls: string[] } {
+function sharingFor(listBody: unknown | null, listStatus = 200): { sharing: SettingsSharing; calls: string[] } {
   const calls: string[] = [];
   const fetchFunction: FetchFunction = async (input, init) => {
     calls.push(`${init?.method ?? "GET"} ${input.replace("http://engine", "")}${init?.body ? ` ${String(init.body)}` : ""}`);
@@ -16,7 +16,7 @@ function sharingFor(listBody: unknown | null): { sharing: SettingsSharing; calls
     if (init?.method === "POST") {
       return new Response(JSON.stringify({ status: "sent", message: "Report sent. Thank you." }), { status: 200 });
     }
-    return new Response(JSON.stringify(listBody), { status: 200 });
+    return new Response(JSON.stringify(listBody), { status: listStatus });
   };
   const client = new ProblemReportClient({ daemonBaseURL: "http://engine", fetchFunction });
   return { sharing: new SettingsSharing(document, client), calls };
@@ -101,4 +101,15 @@ test("should_cancel_a_report_of_their_own_without_sending_it", async () => {
   await new Promise((resolve) => setTimeout(resolve, 0));
   assert.ok(calls.includes("POST /v1/problem-reports/9/decline"));
   assert.ok(!calls.some((call) => call.includes("/send")));
+});
+
+test("should_say_this_version_never_sends_reports_when_the_engine_offers_none", async () => {
+  const { sharing } = sharingFor("problem reports are unavailable", 404);
+  await sharing.refresh();
+  const pageText = sharing.element.textContent ?? "";
+  assert.match(pageText, /Problem reportsNever\. This version doesn't send them\./);
+  assert.match(pageText, /Daily countNever/);
+  assert.doesNotMatch(pageText, /isn't answering/);
+  assert.equal(sharing.element.querySelector('[data-testid="settings-problem-reports"]'), null);
+  assert.equal(sharing.element.querySelector('[data-testid="settings-report-problem"]'), null);
 });

@@ -446,9 +446,20 @@ pub(crate) fn registered_problem_report_desk(
 
 /// The report desk for an instance, logging sent reports in its state
 /// folder and sending to the receiver compiled into this build.
+///
+/// The Mac App Store build gets none: its privacy manifest and its App
+/// Privacy answers in App Store Connect declare that no data is collected,
+/// so until both are updated (issue #2413, "Mac App Store version") that
+/// build must offer no report, register no sink and serve no report route.
 pub(crate) fn problem_report_desk_for(
     runtime_config_resolver: &ResolvedRuntimeConfigResolver,
 ) -> Option<Arc<crate::problem_reports::ProblemReportDesk>> {
+    if runtime_config_resolver
+        .instance_paths()
+        .keeps_state_in_app_container()
+    {
+        return None;
+    }
     Some(Arc::new(crate::problem_reports::ProblemReportDesk::new(
         runtime_config_resolver.state_directory(),
         crate::problem_reports::ReportReceiver::compiled_in(),

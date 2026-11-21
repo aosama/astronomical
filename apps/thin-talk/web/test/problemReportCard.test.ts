@@ -124,3 +124,12 @@ test("should_send_what_the_person_typed_with_the_report_and_nothing_when_left_em
   await settle();
   assert.deepEqual(empty.calls.slice(1), ["POST /v1/problem-reports/4/send"]);
 });
+
+test("should_show_no_card_when_the_engine_offers_no_problem_reports", async () => {
+  const banner = document.createElement("aside");
+  document.body.replaceChildren(banner);
+  const client = new ProblemReportClient({ daemonBaseURL: "http://engine", fetchFunction: async () => new Response("problem reports are unavailable", { status: 404 }) });
+  const card = new ProblemReportCard({ client, document, placeAfter: banner });
+  await card.refresh();
+  assert.equal(card.element.hidden, true);
+});
