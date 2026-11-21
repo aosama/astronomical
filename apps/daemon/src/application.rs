@@ -72,9 +72,30 @@ pub(crate) struct ApplicationState {
     pub(crate) pending_memory_config_generation: Arc<AsyncMutex<Option<String>>>,
     /// Internal shutdown controller for `POST /v1/control/shutdown`.
     pub(crate) shutdown_controller: Option<crate::shutdown_control::ShutdownController>,
+    /// Problem reports waiting for the person, the sent-reports log and the
+    /// receiver. Present only when the instance has a state folder to log in.
+    pub(crate) problem_report_desk: Option<Arc<crate::problem_reports::ProblemReportDesk>>,
 }
 
 impl ApplicationState {
+    /// The person's current choice for problem reports, read from the live
+    /// configuration; asking is the answer whenever none is loaded.
+    pub(crate) fn problem_report_choice(&self) -> config::ProblemReportChoice {
+        self.reloadable_config
+            .as_ref()
+            .and_then(|reloadable_config| {
+                reloadable_config
+                    .read()
+                    .ok()
+                    .map(|resolved_runtime_config| {
+                        resolved_runtime_config
+                            .sharing_settings
+                            .problem_report_choice
+                    })
+            })
+            .unwrap_or_default()
+    }
+
     /// Returns one consistent model-discovery snapshot for listing and routing.
     pub(crate) fn discovered_models_snapshot(&self) -> Vec<DiscoveredModel> {
         self.reloadable_config
@@ -135,6 +156,7 @@ pub fn build_application_with_discovered_models(
         configuration_transition_lock: Arc::new(AsyncMutex::new(())),
         pending_memory_config_generation: Arc::new(AsyncMutex::new(None)),
         shutdown_controller: None,
+        problem_report_desk: None,
     };
 
     application_router(application_state)
@@ -161,6 +183,7 @@ pub fn build_application_with_download_catalog(
         configuration_transition_lock: Arc::new(AsyncMutex::new(())),
         pending_memory_config_generation: Arc::new(AsyncMutex::new(None)),
         shutdown_controller: None,
+        problem_report_desk: None,
     };
 
     application_router(application_state)
@@ -189,6 +212,7 @@ pub fn build_application_with_shutdown(
         configuration_transition_lock: Arc::new(AsyncMutex::new(())),
         pending_memory_config_generation: Arc::new(AsyncMutex::new(None)),
         shutdown_controller: Some(shutdown_controller),
+        problem_report_desk: None,
     };
 
     application_router(application_state)
@@ -220,6 +244,7 @@ pub fn build_development_application_with_reload(
         .read()
         .ok()
         .map(|resolved| Arc::new(RwLock::new(resolved.clone())));
+    let problem_report_desk = problem_report_desk_for(&runtime_config_resolver);
     let application_state = ApplicationState {
         completion_id_namespace: completion_id_namespace(),
         next_chat_request_id: Arc::new(AtomicU64::new(1)),
@@ -236,6 +261,7 @@ pub fn build_development_application_with_reload(
         configuration_transition_lock: Arc::new(AsyncMutex::new(())),
         pending_memory_config_generation: Arc::new(AsyncMutex::new(None)),
         shutdown_controller: None,
+        problem_report_desk,
     };
 
     application_router(application_state)
@@ -349,6 +375,7 @@ pub fn build_application_with_full_control_and_download_catalog(
         .read()
         .ok()
         .map(|resolved| Arc::new(RwLock::new(resolved.clone())));
+    let problem_report_desk = problem_report_desk_for(&runtime_config_resolver);
     let application_state = ApplicationState {
         completion_id_namespace: completion_id_namespace(),
         next_chat_request_id: Arc::new(AtomicU64::new(1)),
@@ -365,9 +392,45 @@ pub fn build_application_with_full_control_and_download_catalog(
         configuration_transition_lock: Arc::new(AsyncMutex::new(())),
         pending_memory_config_generation: Arc::new(AsyncMutex::new(None)),
         shutdown_controller: Some(shutdown_controller),
+        problem_report_desk,
     };
 
     application_router(application_state)
+}
+
+/// The problem report endpoints (see `rest::problem_reports`), present only
+/// when the instance has a report desk.
+fn problem_report_routes(
+    router: Router<ApplicationState>,
+    has_problem_report_desk: bool,
+) -> Router<ApplicationState> {
+    if !has_problem_report_desk {
+        return router;
+    }
+    router
+        .route(
+            "/v1/problem-reports",
+            get(crate::rest::problem_reports::list_problem_reports),
+        )
+        .route(
+            "/v1/problem-reports/{report_number}/send",
+            post(crate::rest::problem_reports::send_problem_report),
+        )
+        .route(
+            "/v1/problem-reports/{report_number}/decline",
+            post(crate::rest::problem_reports::decline_problem_report),
+        )
+}
+
+/// The report desk for an instance, logging sent reports in its state
+/// folder and sending to the receiver compiled into this build.
+pub(crate) fn problem_report_desk_for(
+    runtime_config_resolver: &ResolvedRuntimeConfigResolver,
+) -> Option<Arc<crate::problem_reports::ProblemReportDesk>> {
+    Some(Arc::new(crate::problem_reports::ProblemReportDesk::new(
+        runtime_config_resolver.state_directory(),
+        crate::problem_reports::ReportReceiver::compiled_in(),
+    )))
 }
 
 pub(crate) fn application_router(application_state: ApplicationState) -> Router {
@@ -386,6 +449,7 @@ pub(crate) fn application_router(application_state: ApplicationState) -> Router 
         supports_live_mlx_memory_control,
         supports_shutdown,
     );
+    let router = problem_report_routes(router, application_state.problem_report_desk.is_some());
     router
         .layer(canvas_cors_layer())
         .with_state(application_state)

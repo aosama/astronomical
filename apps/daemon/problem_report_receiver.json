@@ -1,0 +1,4 @@
+{
+  "$comment": "Where problem reports are sent when a person presses Send report (issue #2413). The Sentry project's public client key address (its DSN) goes in sentry_dsn; it is meant to be public, since every installed copy carries it. While it is null, the app offers reports but says sending is not set up yet.",
+  "sentry_dsn": null
+}

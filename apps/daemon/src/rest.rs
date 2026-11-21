@@ -25,6 +25,7 @@ pub(crate) mod loopback_browser_guard;
 pub(crate) mod maximum_mlx_memory;
 pub(crate) mod menu_bar_setting;
 pub(crate) mod model_unload;
+pub(crate) mod problem_reports;
 pub(crate) mod request_body_budget;
 pub(crate) mod request_rejections;
 pub(crate) mod status;

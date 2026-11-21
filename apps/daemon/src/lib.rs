@@ -72,6 +72,7 @@ pub use config::config_reload::{
 };
 pub use config::resolved_configuration_generation::ResolvedConfigurationGeneration;
 pub use config::runtime_model_policy::{RuntimeModelGenerationDefaults, RuntimeModelPolicy};
+pub use config::sharing_settings::SharingSettings;
 pub use config::skill_settings::SkillSettings;
 pub use instance_lock::{AstronomicalInstanceLock, AstronomicalInstanceLockError};
 pub use ipc::service::{DaemonIpcGenerationContext, DaemonIpcService, start_daemon_ipc_service};

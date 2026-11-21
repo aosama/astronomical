@@ -33,6 +33,7 @@ pub fn build_application_with_full_control_and_library_download(
         .read()
         .ok()
         .map(|resolved| Arc::new(RwLock::new(resolved.clone())));
+    let problem_report_desk = crate::application::problem_report_desk_for(&runtime_config_resolver);
     application_router(ApplicationState {
         completion_id_namespace: Arc::from("library-production"),
         next_chat_request_id,
@@ -49,6 +50,7 @@ pub fn build_application_with_full_control_and_library_download(
         configuration_transition_lock: Arc::new(AsyncMutex::new(())),
         pending_memory_config_generation: Arc::new(AsyncMutex::new(None)),
         shutdown_controller: Some(shutdown_controller),
+        problem_report_desk,
     })
 }
 
@@ -100,5 +102,6 @@ pub fn build_application_with_library_download_and_trash(
         configuration_transition_lock: Arc::new(AsyncMutex::new(())),
         pending_memory_config_generation: Arc::new(AsyncMutex::new(None)),
         shutdown_controller: None,
+        problem_report_desk: None,
     })
 }
