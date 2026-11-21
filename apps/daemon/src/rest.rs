@@ -19,6 +19,7 @@ pub(crate) mod config_reload;
 pub(crate) mod config_reload_memory;
 pub(crate) mod config_reveal;
 pub(crate) mod config_section_write;
+pub(crate) mod daily_count;
 pub(crate) mod expert_placement;
 pub(crate) mod experts;
 pub(crate) mod finder_reveal;

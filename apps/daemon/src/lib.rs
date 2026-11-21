@@ -20,6 +20,7 @@ mod astronomical_skill;
 mod astronomical_skill_update;
 mod config;
 mod console;
+mod daily_count;
 mod instance_lock;
 mod ipc;
 mod library;
@@ -71,6 +72,7 @@ pub use config::resolved_configuration_generation::ResolvedConfigurationGenerati
 pub use config::runtime_model_policy::{RuntimeModelGenerationDefaults, RuntimeModelPolicy};
 pub use config::sharing_settings::SharingSettings;
 pub use config::skill_settings::SkillSettings;
+pub use daily_count::keep_daily_count;
 pub use instance_lock::{AstronomicalInstanceLock, AstronomicalInstanceLockError};
 pub use ipc::service::{DaemonIpcGenerationContext, DaemonIpcService, start_daemon_ipc_service};
 pub use library::model_discovery_refresh::LibraryModelDiscoveryRefresh;

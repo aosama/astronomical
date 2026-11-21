@@ -104,33 +104,47 @@ pub(crate) fn sentry_envelope_body(
     for fact in &report.facts {
         tags[fact.key] = serde_json::Value::String(fact.value.clone());
     }
-    let event = json!({
-        "event_id": event_id,
-        "timestamp": sent_at_unix_seconds,
-        "platform": "other",
-        "level": "error",
-        "release": format!("astronomical@{}", report.app_version),
-        "message": {"formatted": report.problem.plain_description()},
-        "fingerprint": [problem_name],
-        "tags": tags,
-        "extra": {"report": report},
-        // Sentry fills a missing address from the connection and looks up a
-        // city from it; the project's "prevent storing IP addresses" drops
-        // the address but kept the city in a live check, and `infer_ip:
-        // never` alone did not stop it. A placeholder address that maps to
-        // no place leaves nothing to look up, and the project setting then
-        // drops the placeholder too.
-        "user": {"ip_address": "0.0.0.0"},
-        "sdk": {
-            "name": "astronomical.problem-reports",
-            "version": "1",
-            "settings": {"infer_ip": "never"},
-        },
+    sentry_envelope_for_event(
+        json!({
+            "level": "error",
+            "release": format!("astronomical@{}", report.app_version),
+            "message": {"formatted": report.problem.plain_description()},
+            "fingerprint": [problem_name],
+            "tags": tags,
+            "extra": {"report": report},
+        }),
+        event_id,
+        sent_at_unix_seconds,
+    )
+}
+
+/// Wraps `event_fields` as one envelope, adding what every event sent from
+/// the app carries: its id and time, and the two settings that keep the
+/// receiver from learning where the Mac is.
+pub(crate) fn sentry_envelope_for_event(
+    mut event_fields: serde_json::Value,
+    event_id: &str,
+    sent_at_unix_seconds: u64,
+) -> String {
+    event_fields["event_id"] = json!(event_id);
+    event_fields["timestamp"] = json!(sent_at_unix_seconds);
+    event_fields["platform"] = json!("other");
+    // Sentry fills a missing address from the connection and looks up a
+    // city from it; the project's "prevent storing IP addresses" drops the
+    // address but kept the city in a live check, and `infer_ip: never` alone
+    // did not stop it. A placeholder address that maps to no place leaves
+    // nothing to look up, and the project setting then drops the
+    // placeholder too.
+    event_fields["user"] = json!({"ip_address": "0.0.0.0"});
+    event_fields["sdk"] = json!({
+        "name": "astronomical.problem-reports",
+        "version": "1",
+        "settings": {"infer_ip": "never"},
     });
     let envelope_header =
         json!({"event_id": event_id, "sent_at_unix_seconds": sent_at_unix_seconds});
     let item_header = json!({"type": "event"});
-    format!("{envelope_header}\n{item_header}\n{event}\n")
+    format!("{envelope_header}\n{item_header}\n{event_fields}\n")
 }
 
 #[cfg(test)]

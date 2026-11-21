@@ -78,6 +78,21 @@ pub(crate) struct ApplicationState {
 }
 
 impl ApplicationState {
+    /// The person's answer to "May this Mac be counted?", read from the
+    /// live configuration; `None` while they have not answered.
+    pub(crate) fn daily_count_answer(&self) -> Option<bool> {
+        self.reloadable_config
+            .as_ref()
+            .and_then(|reloadable_config| {
+                reloadable_config
+                    .read()
+                    .ok()
+                    .and_then(|resolved_runtime_config| {
+                        resolved_runtime_config.sharing_settings.daily_count_answer
+                    })
+            })
+    }
+
     /// The person's current choice for problem reports, read from the live
     /// configuration; asking is the answer whenever none is loaded.
     pub(crate) fn problem_report_choice(&self) -> config::ProblemReportChoice {
@@ -421,6 +436,10 @@ fn problem_report_routes(
             "/v1/problem-reports/{report_number}/send",
             post(crate::rest::problem_reports::send_problem_report)
                 .layer(DefaultBodyLimit::max(8 * 1024)),
+        )
+        .route(
+            "/v1/daily-count",
+            get(crate::rest::daily_count::show_daily_count),
         )
         .route(
             "/v1/problem-reports/{report_number}/decline",

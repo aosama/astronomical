@@ -36,7 +36,7 @@ pub(crate) use problem_kind::ProblemKind;
 pub(crate) use problem_report::ProblemReport;
 pub(crate) use problem_report_desk::{ProblemReportDesk, ReportSendOutcome};
 pub(crate) use report_fact::ReportFact;
-pub(crate) use report_receiver::{ReportReceiver, sentry_envelope_body};
+pub(crate) use report_receiver::{ReportReceiver, sentry_envelope_body, sentry_envelope_for_event};
 pub(crate) use report_sink::{
     person_report, register_report_sink, report_download_failure, report_model_load_failure,
     report_reply_failure, report_worker_exit,

@@ -257,6 +257,7 @@ async fn run_daemon(
     .await
     .map_err(DaemonError::StartDaemonIpc)?;
     let skill_update_config = Arc::clone(&reloadable_config);
+    let daily_count_config = Arc::clone(&reloadable_config);
     let application = build_application_with_full_control_and_library_download(
         worker_handle.clone(),
         next_chat_request_id,
@@ -272,6 +273,13 @@ async fn run_daemon(
         skill_update_config,
         instance_paths.skill_directory(),
         ApplicationBuildIdentity::current().version,
+    ));
+
+    // The daily count, sent only from a Mac whose owner agreed, also runs
+    // beside serving and ends with the process.
+    tokio::spawn(astronomical_daemon::keep_daily_count(
+        daily_count_config,
+        instance_paths.clone(),
     ));
 
     println!("astronomicald listening on http://{bound_daemon_address}");
