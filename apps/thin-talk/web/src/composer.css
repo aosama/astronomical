@@ -425,6 +425,10 @@
   color: var(--ink);
   font-size: 13px;
   white-space: pre-wrap;
+  /* A report lists up to a dozen earlier events; the box scrolls so the
+     card never pushes the message field off the window. */
+  max-height: 150px;
+  overflow: auto;
 }
 
 .problem-report__always {

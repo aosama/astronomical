@@ -692,6 +692,8 @@
   background: var(--fill);
   font-size: 13px;
   white-space: pre-wrap;
+  max-height: 180px;
+  overflow: auto;
 }
 
 .settings__person-report {

@@ -17,7 +17,7 @@ const CHAT_PROMPT: &str = "Shall I compare thee to a summer's day?";
 
 pub fn run_matrix(matrix_options: &MatrixOptions) -> Result<Vec<MatrixCell>, String> {
     let status = instance_status(&matrix_options.base_url)?;
-    if status["channel"] != "development" {
+    if status["application"]["channel"] != "development" {
         return Err("small-mac-matrix only runs against the Development instance".to_owned());
     }
     let original_limit_gb = status["configured_maximum_mlx_memory_gb"].clone();
