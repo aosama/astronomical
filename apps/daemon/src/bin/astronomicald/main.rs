@@ -108,12 +108,30 @@ async fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
+    refresh_astronomical_skill(&instance_paths);
     match run_daemon(instance_paths, user_config).await {
         Ok(()) => ExitCode::SUCCESS,
         Err(daemon_error) => {
             eprintln!("astronomicald failed: {daemon_error}");
             ExitCode::FAILURE
         }
+    }
+}
+
+/// Brings the skill agents read up to date with this release. A Mac whose
+/// state folder refuses the write still serves models, so a failure is logged
+/// and startup goes on.
+fn refresh_astronomical_skill(instance_paths: &AstronomicalInstancePaths) {
+    match astronomical_daemon::install_astronomical_skill(&instance_paths.skill_directory()) {
+        Ok(install_outcome) => tracing::info!(
+            files_written = install_outcome.files_written,
+            stale_files_removed = install_outcome.stale_files_removed,
+            "Astronomical skill is up to date"
+        ),
+        Err(install_error) => tracing::warn!(
+            error = %install_error,
+            "the Astronomical skill could not be written"
+        ),
     }
 }
 

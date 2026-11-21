@@ -473,7 +473,11 @@ test-quantization-mixture-of-experts = "run -p xtask -- test-run --package astro
 # skill/README.md). `cargo test -p astronomical-cli --test integration_tests
 # astronomical_skill` checks it against the CLI's help: every command, subcommand
 # and flag it names must exist, every reference file must be linked from
-# SKILL.md, and SKILL.md stays under its line budget.
+# SKILL.md, and SKILL.md stays under its line budget. The engine compiles the
+# skill in and writes it to the instance's state folder at every start;
+# `cargo test -p astronomical-daemon --lib astronomical_skill` checks that its
+# compiled-in file list matches skill/astronomical and that install, refresh
+# and repair work.
 #
 # `cargo xtask replay-expert-misses EVIDENCE_DIRECTORY` (alias
 # `cargo replay-expert-misses`) replays the replies `measure-expert-misses`

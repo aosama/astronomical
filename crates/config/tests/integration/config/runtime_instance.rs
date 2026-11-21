@@ -50,6 +50,14 @@ fn should_keep_stable_and_development_state_and_endpoints_separate() {
         stable_paths.models_directory(),
         development_paths.models_directory()
     );
+    assert_eq!(
+        stable_paths.skill_directory(),
+        fictional_home_directory.join(".astronomical/skill")
+    );
+    assert_ne!(
+        stable_paths.skill_directory(),
+        development_paths.skill_directory()
+    );
     assert_ne!(
         stable_paths.logging_directory(),
         development_paths.logging_directory()
@@ -82,6 +90,7 @@ fn should_keep_every_writable_path_beneath_an_explicit_test_state_directory() {
         instance_paths.astro_ssd_prompt_cache_directory(),
         instance_paths.models_directory(),
         instance_paths.logging_directory(),
+        instance_paths.skill_directory(),
         instance_paths.daemon_ownership_file_path(),
         instance_paths.instance_lock_file_path(),
     ] {

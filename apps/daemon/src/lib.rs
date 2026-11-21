@@ -14,6 +14,7 @@
 
 mod application;
 mod application_build_identity;
+mod astronomical_skill;
 mod config;
 mod console;
 mod instance_lock;
@@ -50,6 +51,9 @@ pub use library::application::{
 };
 pub use library::model_folder_trash::{MacTrashCommand, ModelFolderTrash, ModelFolderTrashError};
 
+pub use astronomical_skill::{
+    ASTRONOMICAL_SKILL_NAME, SkillInstallOutcome, install_astronomical_skill, skill_index_path,
+};
 pub use config::config_reload::{
     ConfigReloadDecision, ConfigReloadDiff, ResolvedRuntimeConfig, ResolvedRuntimeConfigError,
     ResolvedRuntimeConfigResolver,

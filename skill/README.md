@@ -39,6 +39,12 @@ subcommand or flag the help does not have, when a reference file is missing
 from the index or the index points to a missing one, when the index grows past
 its line budget, and when the description stops naming the abilities.
 
+The engine compiles the skill in and writes it to the app's state folder at
+every start (`apps/daemon/src/astronomical_skill.rs`). A reference file added
+or removed here must also be added to or removed from that file's
+`EMBEDDED_SKILL_FILES`; `cargo test -p astronomical-daemon --lib
+astronomical_skill` fails until the two match.
+
 A test cannot notice a new ability the skill never mentions. Whenever a
 change adds, renames or removes a command or flag, changes how a coding tool or
 editor connects, adds or withdraws a kind of model, or changes a setting or
