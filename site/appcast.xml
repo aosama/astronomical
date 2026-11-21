@@ -4,28 +4,36 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.125</title>
-            <pubDate>Sat, 21 Nov 2026 08:45:23 -0500</pubDate>
-            <sparkle:version>2444</sparkle:version>
-            <sparkle:shortVersionString>0.2.125</sparkle:shortVersionString>
+            <title>0.2.126</title>
+            <pubDate>Sat, 21 Nov 2026 12:30:19 -0500</pubDate>
+            <sparkle:version>2448</sparkle:version>
+            <sparkle:shortVersionString>0.2.126</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[## What's new
+            <description sparkle:format="markdown"><![CDATA[## Tell the developers when something breaks, if you choose to
 
-- **Give a model's memory back on request.** A loaded model holds many gigabytes of memory until Astronomical unloads it after a quiet spell. Programs and agents can now ask for that memory back at once with `POST /v1/control/unload-model` on the local API. The next request loads the model again. A reply that is being written is never interrupted: the request answers "busy" instead.
-- **The Astronomical skill tells agents about it,** so an agent that has finished its job can free the memory when you ask.
+When a model will not load, a reply runs out of graphics memory or stops on a fatal error, a catalog download fails its checks, or the engine stops unexpectedly, the chat window now offers a short problem report under the failure message.
+
+- **You see the whole report first.** Nothing is sent unless you press Send report. You can add a note in your own words, or choose to send such reports without being asked.
+- **What a report holds:** the app version; your Mac's chip, memory and macOS version; the catalog model in use, or only "a model not in the catalog"; the kind of problem with the step that failed; how the engine stopped, if it did; and the engine's last few events as fixed phrases with numbers. Never your prompts, conversations, files, images, folder names or log lines.
+- **Where it goes:** to the project's error-reporting receiver, which does not store internet addresses or work out a location.
+
+## What leaves this Mac
+
+Settings has a new list of everything Astronomical can send and when, your choice for problem reports (ask each time, always send, never), every report already sent as the exact lines that went, and "Report a problem" for things no error catches, such as slow replies. Nothing is asked at first launch, and no usage counts are collected. The privacy page describes all of this.
 
 ## Compatibility
 
-- Your settings, conversations and downloaded models are kept. No setting changed.
-- Requires macOS 14 or later on Apple silicon.
+- Existing settings load unchanged; the new `sharing` section is optional.
+- Conversations, downloaded models and every setting are kept.
+- macOS 14 or later on Apple silicon.
 
-The app and disk image are signed with Developer ID, notarized and stapled by Apple, and the update feed is signed.
+Signed with the project's Developer ID, notarized and stapled by Apple.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.125/Astronomical-0.2.125-macOS-arm64.dmg" length="25678070" type="application/octet-stream" sparkle:edSignature="/H54sMuPi3lOuRNfyBb4Ldhi9/3LFNQu5y/X8Es3EjTIHQfJRvn7VKs+UbrSe1SpZi02xvzR9OKtaZPxu5bZDg=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.126/Astronomical-0.2.126-macOS-arm64.dmg" length="25786760" type="application/octet-stream" sparkle:edSignature="vGqXhg7mR/98+52RgdlPqJl+vZXpLwCJNFkwnSnDT0LLsvEEHByr5SOpco4MrsgPK6qLxl2nV4Nx+GMQn0qKAw=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: of1swCnK0tljQJRaisVV/gSowTVt/+OhxCGybPTm+JNUtV4ZwLIFqrVpDcWEi3RexPA7eypteriv4R5cbQ/MCA==
-length: 2023
+edSignature: z87/cYNmselWxpSJA5dydpsvahmosgwF4+o4B/L0aFMMhMAX9yl/9lE73+UdhEbDDdSW0dPaQsSn9GMuf4u4Aw==
+length: 2884
 -->
