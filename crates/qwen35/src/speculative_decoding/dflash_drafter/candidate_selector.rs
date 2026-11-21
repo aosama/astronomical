@@ -11,7 +11,7 @@
 use mlx_bridge::MlxArray;
 use runtime_integration::{MlxRuntime, MlxRuntimeError};
 
-use super::drafter_configuration::DFlash2DrafterConfiguration;
+use super::drafter_configuration::DFlashDrafterConfiguration;
 use super::drafter_weights::CandidateSelectorWeights;
 
 /// How the path picks one candidate per slot.
@@ -38,7 +38,7 @@ pub struct ProposedPath {
 pub fn select_path(
     runtime: &MlxRuntime,
     weights: &CandidateSelectorWeights,
-    configuration: &DFlash2DrafterConfiguration,
+    configuration: &DFlashDrafterConfiguration,
     proposal_hidden_rows: &MlxArray,
     proposal_logits: &MlxArray,
     anchor_token_id: &MlxArray,
@@ -102,7 +102,7 @@ struct SelectorInputs {
 /// [1, proposals, candidates], from one top-k pass over the vocabulary.
 pub(super) fn kept_candidate_ids(
     runtime: &MlxRuntime,
-    configuration: &DFlash2DrafterConfiguration,
+    configuration: &DFlashDrafterConfiguration,
     proposal_logits: &MlxArray,
 ) -> Result<MlxArray, MlxRuntimeError> {
     crate::gpu_token_sampling::vocabulary_top_k(

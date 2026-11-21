@@ -15,7 +15,7 @@ use std::time::Instant;
 
 use mlx_bridge::MlxArray;
 use model_serving::RequestDecoderStateStack;
-use model_serving::speculative_decoding::dflash2_drafter::DraftTreeOptions;
+use model_serving::speculative_decoding::dflash_drafter::DraftTreeOptions;
 use model_serving::speculative_decoding::tree_rows::TreeRows;
 use model_serving::{PerformanceAttribution, VerificationLogitsMode};
 use serial_test::serial;

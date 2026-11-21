@@ -44,13 +44,11 @@ pub use draft_tree::{
     best_first_draft_tree, tree_block_row_count,
 };
 pub use drafter_configuration::{
-    DFlash2DrafterConfiguration, DFlash2DrafterConfigurationError, DrafterLayerAttention,
+    DFlashDrafterConfiguration, DFlashDrafterConfigurationError, DrafterLayerAttention,
 };
 #[cfg(feature = "direct-mlx")]
 pub use drafter_context_state::DrafterContextStates;
 #[cfg(feature = "direct-mlx")]
-pub use drafter_forward::{DFlash2DraftTarget, drafted_hidden_rows};
+pub use drafter_forward::{DFlashDraftTarget, drafted_hidden_rows};
 #[cfg(feature = "direct-mlx")]
-pub use drafter_weights::{
-    DFlash2DrafterWeights, DFlash2DrafterWeightsError, bind_drafter_weights,
-};
+pub use drafter_weights::{DFlashDrafterWeights, DFlashDrafterWeightsError, bind_drafter_weights};

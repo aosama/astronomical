@@ -1,4 +1,4 @@
-use super::dflash2_drafter::KeyedNoise;
+use super::dflash_drafter::KeyedNoise;
 use super::keyed_sampling::{RequestKeyedNoise, keyed_gumbel, keyed_sample, keyed_uniform};
 use super::verification_decision::TargetDistribution;
 

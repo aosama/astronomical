@@ -14,8 +14,8 @@
 //! (chat, greedy and 1.0).
 
 use mlx_bridge::MlxArray;
-use model_serving::speculative_decoding::dflash2_drafter::{
-    DFlash2DraftTarget, DraftTree, DraftTreeOptions, DrafterContextStates, KeyedNoise,
+use model_serving::speculative_decoding::dflash_drafter::{
+    DFlashDraftTarget, DraftTree, DraftTreeOptions, DrafterContextStates, KeyedNoise,
     TENSORFOLD_TREE_BLOCK_ROW_COUNT, best_first_draft_tree, draft_lattice, drafted_hidden_rows,
     tree_block_row_count,
 };
@@ -404,7 +404,7 @@ fn drafted_block(
     let block = runtime
         .array_from_u32(&block_ids, &[1, block_row_count as i32])
         .expect("the block builds");
-    let target: &dyn DFlash2DraftTarget = &pair.target;
+    let target: &dyn DFlashDraftTarget = &pair.target;
     let hidden = drafted_hidden_rows(
         runtime,
         &pair.drafter_weights,
@@ -429,7 +429,7 @@ fn search_tree(
     cell: &Cell,
     round: &RoundState,
     drafting: Drafting,
-    lattice: &model_serving::speculative_decoding::dflash2_drafter::DraftLattice,
+    lattice: &model_serving::speculative_decoding::dflash_drafter::DraftLattice,
 ) -> DraftTree {
     let mut options = DraftTreeOptions {
         sampling_temperature: f64::from(cell.temperature_thousandths) / 1_000.0,

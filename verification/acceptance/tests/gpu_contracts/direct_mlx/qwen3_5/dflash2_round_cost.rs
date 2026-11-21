@@ -10,8 +10,8 @@
 use std::time::{Duration, Instant};
 
 use mlx_bridge::MlxArray;
-use model_serving::speculative_decoding::dflash2_drafter::{
-    DFlash2DraftTarget, DrafterContextStates, PathChoice, drafted_hidden_rows, select_path,
+use model_serving::speculative_decoding::dflash_drafter::{
+    DFlashDraftTarget, DrafterContextStates, PathChoice, drafted_hidden_rows, select_path,
 };
 use model_serving::{
     PerformanceAttribution, Qwen3_5SpeculativeVerificationOutput, RequestDecoderStateStack,
@@ -215,7 +215,7 @@ fn time_drafting(
     let block = runtime
         .array_from_u32(&block_ids, &[1, configuration.block_size])
         .expect("block");
-    let target: &dyn DFlash2DraftTarget = &pair.target;
+    let target: &dyn DFlashDraftTarget = &pair.target;
     let started = Instant::now();
     let hidden = drafted_hidden_rows(
         runtime,

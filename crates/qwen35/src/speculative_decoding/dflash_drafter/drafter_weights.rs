@@ -5,12 +5,12 @@ use mlx_bridge::MlxArray;
 use runtime_integration::{MlxRuntime, MlxRuntimeError, MlxSafetensors};
 use thiserror::Error;
 
-use super::drafter_configuration::DFlash2DrafterConfiguration;
+use super::drafter_configuration::DFlashDrafterConfiguration;
 use super::drafter_linear::DrafterLinear;
 
 /// Why a drafter checkpoint could not be bound.
 #[derive(Debug, Error)]
-pub enum DFlash2DrafterWeightsError {
+pub enum DFlashDrafterWeightsError {
     #[error("the drafter checkpoint has no tensor `{tensor_name}`: {source}")]
     MissingTensor {
         tensor_name: String,
@@ -59,7 +59,7 @@ pub struct CandidateSelectorWeights {
     pub successor_codebook: MlxArray,
 }
 
-pub struct DFlash2DrafterWeights {
+pub struct DFlashDrafterWeights {
     /// `fc`: the concatenated target taps down to the drafter's width.
     pub tap_fusion: DrafterLinear,
     pub tap_fusion_normalization: MlxArray,
@@ -72,8 +72,8 @@ pub struct DFlash2DrafterWeights {
 pub fn bind_drafter_weights(
     runtime: &MlxRuntime,
     checkpoint: &MlxSafetensors,
-    configuration: &DFlash2DrafterConfiguration,
-) -> Result<DFlash2DrafterWeights, DFlash2DrafterWeightsError> {
+    configuration: &DFlashDrafterConfiguration,
+) -> Result<DFlashDrafterWeights, DFlashDrafterWeightsError> {
     let binder = TensorBinder {
         runtime,
         checkpoint,
@@ -87,7 +87,7 @@ pub fn bind_drafter_weights(
             &format!("layers.{layer_index}"),
         )?);
     }
-    Ok(DFlash2DrafterWeights {
+    Ok(DFlashDrafterWeights {
         tap_fusion: binder.linear("fc.weight", &[hidden, configuration.tap_width()])?,
         tap_fusion_normalization: binder.tensor("hidden_norm.weight", &[hidden])?,
         layers,
@@ -111,9 +111,9 @@ pub fn bind_drafter_weights(
 
 fn bind_layer(
     binder: &TensorBinder<'_>,
-    configuration: &DFlash2DrafterConfiguration,
+    configuration: &DFlashDrafterConfiguration,
     layer_prefix: &str,
-) -> Result<DrafterLayerWeights, DFlash2DrafterWeightsError> {
+) -> Result<DrafterLayerWeights, DFlashDrafterWeightsError> {
     let hidden = configuration.hidden_size;
     let query_width = configuration.attention_head_count * configuration.head_dimension;
     let key_value_width = configuration.key_value_head_count * configuration.head_dimension;
@@ -171,9 +171,9 @@ fn bind_layer(
 
 fn bind_convolution(
     binder: &TensorBinder<'_>,
-    configuration: &DFlash2DrafterConfiguration,
+    configuration: &DFlashDrafterConfiguration,
     convolution_prefix: &str,
-) -> Result<GroupedConvolutionWeights, DFlash2DrafterWeightsError> {
+) -> Result<GroupedConvolutionWeights, DFlashDrafterWeightsError> {
     let kernel_size = configuration.convolution_kernel_size;
     // Two stages (before and after the sublayer), each predicting one weight
     // per kernel tap and convolution group.
@@ -200,16 +200,16 @@ impl TensorBinder<'_> {
         &self,
         tensor_name: &str,
         expected_shape: &[i32],
-    ) -> Result<MlxArray, DFlash2DrafterWeightsError> {
+    ) -> Result<MlxArray, DFlashDrafterWeightsError> {
         let tensor = self.checkpoint.tensor(tensor_name).map_err(|source| {
-            DFlash2DrafterWeightsError::MissingTensor {
+            DFlashDrafterWeightsError::MissingTensor {
                 tensor_name: tensor_name.to_owned(),
                 source,
             }
         })?;
         let actual_shape = tensor.shape();
         if actual_shape != expected_shape {
-            return Err(DFlash2DrafterWeightsError::Shape {
+            return Err(DFlashDrafterWeightsError::Shape {
                 tensor_name: tensor_name.to_owned(),
                 expected_shape: expected_shape.to_vec(),
                 actual_shape,
@@ -222,13 +222,13 @@ impl TensorBinder<'_> {
         &self,
         tensor_name: &str,
         expected_shape: &[i32],
-    ) -> Result<DrafterLinear, DFlash2DrafterWeightsError> {
+    ) -> Result<DrafterLinear, DFlashDrafterWeightsError> {
         let weight = self.tensor(tensor_name, expected_shape)?;
         Ok(DrafterLinear::full_precision(self.runtime, &weight)?)
     }
 }
 
-impl DFlash2DrafterWeights {
+impl DFlashDrafterWeights {
     /// Quantizes every linear layer to 4 bits, group 64, in place: about
     /// 1 GB to stream a round instead of the checkpoint's 3.6 GB for the 27B's
     /// drafter. The selector's codebooks stay bf16: they are gathered, a few

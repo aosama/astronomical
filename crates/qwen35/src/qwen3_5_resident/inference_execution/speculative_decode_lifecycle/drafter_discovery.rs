@@ -20,7 +20,7 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::speculative_decoding::dflash2_drafter::DFlash2DrafterConfiguration;
+use crate::speculative_decoding::dflash_drafter::DFlashDrafterConfiguration;
 
 use super::engine_draft_runtime::Qwen3_5SpeculativeDraftLoadingError;
 
@@ -43,7 +43,7 @@ pub struct DrafterPairing {
 impl DrafterPairing {
     /// Whether `drafter_configuration` was built for a target of this shape.
     #[must_use]
-    pub fn pairs_with(&self, drafter_configuration: &DFlash2DrafterConfiguration) -> bool {
+    pub fn pairs_with(&self, drafter_configuration: &DFlashDrafterConfiguration) -> bool {
         drafter_configuration.target_layer_count == self.target_layer_count
             && drafter_configuration.hidden_size == self.target_hidden_size
             && drafter_configuration.vocabulary_size == self.target_vocabulary_size
@@ -56,7 +56,7 @@ impl DrafterPairing {
 pub fn paired_drafter_directory(
     target_model_directory: &Path,
     pairing: &DrafterPairing,
-) -> Result<Option<(PathBuf, DFlash2DrafterConfiguration)>, Qwen3_5SpeculativeDraftLoadingError> {
+) -> Result<Option<(PathBuf, DFlashDrafterConfiguration)>, Qwen3_5SpeculativeDraftLoadingError> {
     let mut library_directories = sibling_model_directories(target_model_directory)?;
     library_directories.sort();
     let mut candidate_directories =
@@ -69,7 +69,7 @@ pub fn paired_drafter_directory(
         // A drafter of a kind this engine does not implement is not this
         // target's drafter: it is passed over, never a load failure.
         let drafter_configuration =
-            match DFlash2DrafterConfiguration::from_config_document(&config_document) {
+            match DFlashDrafterConfiguration::from_config_document(&config_document) {
                 Ok(drafter_configuration) => drafter_configuration,
                 Err(configuration_error) => {
                     tracing::debug!(

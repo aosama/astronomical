@@ -16,8 +16,8 @@ use mlx_bridge::MlxArray;
 
 use crate::qwen3_5_core::decoder::request_state::RequestDecoderStateStack;
 use crate::qwen3_5_resident::model::{Qwen3_5ExecutionError, Qwen3_5ResidentModel};
-use crate::speculative_decoding::dflash2_drafter::{
-    DFlash2DraftTarget, DraftTreeOptions, DrafterContextStates, KeyedNoise, best_first_draft_tree,
+use crate::speculative_decoding::dflash_drafter::{
+    DFlashDraftTarget, DraftTreeOptions, DrafterContextStates, KeyedNoise, best_first_draft_tree,
     draft_lattice, drafted_hidden_rows, tree_block_row_count,
 };
 use crate::speculative_decoding::keyed_sampling::{RequestKeyedNoise, keyed_sample};
@@ -230,7 +230,7 @@ fn drafted_tree_rows(
     let mut block_ids = vec![configuration.mask_token_id; block_row_count];
     block_ids[0] = round_request.bonus_token_id;
     let block = runtime.array_from_u32(&block_ids, &[1, block_row_count as i32])?;
-    let target: &dyn DFlash2DraftTarget = model;
+    let target: &dyn DFlashDraftTarget = model;
     let hidden_rows = drafted_hidden_rows(
         runtime,
         &draft_runtime.drafter_weights,

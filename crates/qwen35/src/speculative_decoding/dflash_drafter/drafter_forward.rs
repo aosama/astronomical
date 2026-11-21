@@ -6,13 +6,13 @@ use mlx_bridge::MlxArray;
 use runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use super::drafter_attention::attend_block_to_context;
-use super::drafter_configuration::DFlash2DrafterConfiguration;
+use super::drafter_configuration::DFlashDrafterConfiguration;
 use super::drafter_context_state::{DrafterContextStates, DrafterLayerContextState};
-use super::drafter_weights::{DFlash2DrafterWeights, DrafterLayerWeights};
+use super::drafter_weights::{DFlashDrafterWeights, DrafterLayerWeights};
 use super::grouped_dynamic_convolution::{convolve_sublayer_input, convolve_sublayer_output};
 
 /// What the drafter borrows from its target: it has no vocabulary of its own.
-pub trait DFlash2DraftTarget {
+pub trait DFlashDraftTarget {
     /// The target's input embedding rows for `token_ids` [1, L]: [1, L, H].
     fn embedded_rows(
         &self,
@@ -36,9 +36,9 @@ pub trait DFlash2DraftTarget {
 /// they extend every layer's kept context.
 pub fn drafted_hidden_rows(
     runtime: &MlxRuntime,
-    weights: &DFlash2DrafterWeights,
-    configuration: &DFlash2DrafterConfiguration,
-    target: &dyn DFlash2DraftTarget,
+    weights: &DFlashDrafterWeights,
+    configuration: &DFlashDrafterConfiguration,
+    target: &dyn DFlashDraftTarget,
     context_states: &mut DrafterContextStates,
     block_token_ids: &MlxArray,
     target_tap_rows: &MlxArray,
@@ -78,7 +78,7 @@ pub fn drafted_hidden_rows(
 fn drafter_layer(
     runtime: &MlxRuntime,
     layer: &DrafterLayerWeights,
-    configuration: &DFlash2DrafterConfiguration,
+    configuration: &DFlashDrafterConfiguration,
     context_state: &mut DrafterLayerContextState,
     layer_input: &MlxArray,
     fused_context_rows: &MlxArray,

@@ -7,11 +7,11 @@ use runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use crate::InferenceEngineError;
 use crate::gpu_token_sampling::sampling_distribution_rows;
-use crate::speculative_decoding::dflash2_drafter::DFlash2DraftTarget;
+use crate::speculative_decoding::dflash_drafter::DFlashDraftTarget;
 
 use super::model::Qwen3_5ResidentModel;
 
-impl DFlash2DraftTarget for Qwen3_5ResidentModel {
+impl DFlashDraftTarget for Qwen3_5ResidentModel {
     fn embedded_rows(
         &self,
         _runtime: &MlxRuntime,

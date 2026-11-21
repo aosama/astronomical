@@ -12,8 +12,8 @@ use std::fs::File;
 use std::path::PathBuf;
 
 use mlx_bridge::{MlxArray, MlxDtype};
-use model_serving::speculative_decoding::dflash2_drafter::{
-    DFlash2DraftTarget, DFlash2DrafterConfiguration, DrafterContextStates, PathChoice,
+use model_serving::speculative_decoding::dflash_drafter::{
+    DFlashDraftTarget, DFlashDrafterConfiguration, DrafterContextStates, PathChoice,
     bind_drafter_weights, drafted_hidden_rows, select_path,
 };
 use runtime_integration::{MlxMemoryLimits, MlxRuntime, MlxRuntimeError, MlxSafetensors};
@@ -33,7 +33,7 @@ struct FixtureTarget {
     transposed_head: MlxArray,
 }
 
-impl DFlash2DraftTarget for FixtureTarget {
+impl DFlashDraftTarget for FixtureTarget {
     fn embedded_rows(
         &self,
         runtime: &MlxRuntime,
@@ -111,7 +111,7 @@ fn should_reproduce_z_labs_reference_drafter_over_two_rounds() {
             .expect("the config reads"),
     )
     .expect("the config parses");
-    let configuration = DFlash2DrafterConfiguration::from_config_document(&config_document)
+    let configuration = DFlashDrafterConfiguration::from_config_document(&config_document)
         .expect("the configuration is accepted");
     let checkpoint: MlxSafetensors = runtime
         .load_safetensors(

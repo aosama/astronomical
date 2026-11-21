@@ -1,7 +1,7 @@
 use serde_json::{Value, json};
 
 use super::drafter_configuration::{
-    DFlash2DrafterConfiguration, DFlash2DrafterConfigurationError, DrafterLayerAttention,
+    DFlashDrafterConfiguration, DFlashDrafterConfigurationError, DrafterLayerAttention,
 };
 
 /// The published `z-lab/Qwen3.8-27B-DFlash2` configuration's fields that
@@ -28,7 +28,7 @@ fn qwen38_27b_drafter_document() -> Value {
 #[test]
 fn should_read_the_published_27b_drafter_configuration() {
     let configuration =
-        DFlash2DrafterConfiguration::from_config_document(&qwen38_27b_drafter_document())
+        DFlashDrafterConfiguration::from_config_document(&qwen38_27b_drafter_document())
             .expect("the published configuration reads");
     assert_eq!(configuration.tap_width(), 25_600);
     assert_eq!(configuration.proposal_count(), 7);
@@ -47,8 +47,8 @@ fn should_refuse_a_first_generation_dflash_drafter() {
     let mut document = qwen38_27b_drafter_document();
     document["architectures"] = json!(["DFlashDraftModel"]);
     assert_eq!(
-        DFlash2DrafterConfiguration::from_config_document(&document),
-        Err(DFlash2DrafterConfigurationError::Architecture)
+        DFlashDrafterConfiguration::from_config_document(&document),
+        Err(DFlashDrafterConfigurationError::Architecture)
     );
 }
 
@@ -57,8 +57,8 @@ fn should_refuse_logit_soft_capping_it_does_not_implement() {
     let mut document = qwen38_27b_drafter_document();
     document["dflash_config"]["final_logit_softcapping"] = json!(30.0);
     assert_eq!(
-        DFlash2DrafterConfiguration::from_config_document(&document),
-        Err(DFlash2DrafterConfigurationError::Unsupported {
+        DFlashDrafterConfiguration::from_config_document(&document),
+        Err(DFlashDrafterConfigurationError::Unsupported {
             field: "final_logit_softcapping"
         })
     );
@@ -69,7 +69,7 @@ fn should_accept_identity_values_for_the_optional_scales() {
     let mut document = qwen38_27b_drafter_document();
     document["dflash_config"]["output_multiplier"] = json!(1.0);
     document["dflash_config"]["input_embedding_scale"] = json!(1.0);
-    assert!(DFlash2DrafterConfiguration::from_config_document(&document).is_ok());
+    assert!(DFlashDrafterConfiguration::from_config_document(&document).is_ok());
 }
 
 #[test]
@@ -77,8 +77,8 @@ fn should_refuse_a_tap_layer_beyond_the_target() {
     let mut document = qwen38_27b_drafter_document();
     document["dflash_config"]["target_layer_ids"] = json!([5, 64]);
     assert!(matches!(
-        DFlash2DrafterConfiguration::from_config_document(&document),
-        Err(DFlash2DrafterConfigurationError::Inconsistent { .. })
+        DFlashDrafterConfiguration::from_config_document(&document),
+        Err(DFlashDrafterConfigurationError::Inconsistent { .. })
     ));
 }
 
@@ -87,8 +87,8 @@ fn should_refuse_a_block_with_no_proposal_slot() {
     let mut document = qwen38_27b_drafter_document();
     document["dflash_config"]["block_size"] = json!(1);
     assert!(matches!(
-        DFlash2DrafterConfiguration::from_config_document(&document),
-        Err(DFlash2DrafterConfigurationError::Inconsistent { .. })
+        DFlashDrafterConfiguration::from_config_document(&document),
+        Err(DFlashDrafterConfigurationError::Inconsistent { .. })
     ));
 }
 
@@ -100,8 +100,8 @@ fn should_name_a_missing_field() {
         .expect("an object")
         .remove("sliding_window");
     assert_eq!(
-        DFlash2DrafterConfiguration::from_config_document(&document),
-        Err(DFlash2DrafterConfigurationError::Field {
+        DFlashDrafterConfiguration::from_config_document(&document),
+        Err(DFlashDrafterConfigurationError::Field {
             field: "sliding_window"
         })
     );
@@ -112,8 +112,8 @@ fn should_refuse_an_unknown_layer_type() {
     let mut document = qwen38_27b_drafter_document();
     document["layer_types"][2] = json!("linear_attention");
     assert_eq!(
-        DFlash2DrafterConfiguration::from_config_document(&document),
-        Err(DFlash2DrafterConfigurationError::Field {
+        DFlashDrafterConfiguration::from_config_document(&document),
+        Err(DFlashDrafterConfigurationError::Field {
             field: "layer_types"
         })
     );
@@ -122,7 +122,7 @@ fn should_refuse_an_unknown_layer_type() {
 #[test]
 fn should_limit_context_rows_to_the_window_when_every_layer_slides() {
     let configuration =
-        DFlash2DrafterConfiguration::from_config_document(&qwen38_27b_drafter_document())
+        DFlashDrafterConfiguration::from_config_document(&qwen38_27b_drafter_document())
             .expect("the published configuration reads");
     assert_eq!(configuration.context_row_limit(), Some(2_047));
 }
@@ -130,7 +130,7 @@ fn should_limit_context_rows_to_the_window_when_every_layer_slides() {
 #[test]
 fn should_keep_every_context_row_when_any_layer_attends_to_all_of_it() {
     let mut configuration =
-        DFlash2DrafterConfiguration::from_config_document(&qwen38_27b_drafter_document())
+        DFlashDrafterConfiguration::from_config_document(&qwen38_27b_drafter_document())
             .expect("the published configuration reads");
     configuration.layer_attention[2] = DrafterLayerAttention::Full;
     assert_eq!(configuration.context_row_limit(), None);

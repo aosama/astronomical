@@ -10,7 +10,7 @@
 use mlx_bridge::MlxArray;
 use runtime_integration::{MlxRuntime, MlxRuntimeError};
 
-use super::drafter_configuration::{DFlash2DrafterConfiguration, DrafterLayerAttention};
+use super::drafter_configuration::{DFlashDrafterConfiguration, DrafterLayerAttention};
 
 /// One layer's kept context: keys already rotated to their absolute positions.
 pub struct DrafterLayerContextState {
@@ -93,7 +93,7 @@ impl DrafterContextStates {
     /// Empty states whose first context row sits at `first_context_position`:
     /// 0 for a request drafted from its first token, or the prompt length minus
     /// the rows handed over when only the prompt's tail is passed in.
-    pub fn new(configuration: &DFlash2DrafterConfiguration, first_context_position: i32) -> Self {
+    pub fn new(configuration: &DFlashDrafterConfiguration, first_context_position: i32) -> Self {
         let mut layers = Vec::with_capacity(configuration.layer_attention.len());
         for layer_attention in &configuration.layer_attention {
             layers.push(DrafterLayerContextState {

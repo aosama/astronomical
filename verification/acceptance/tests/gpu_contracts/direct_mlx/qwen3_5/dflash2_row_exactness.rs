@@ -13,7 +13,7 @@
 //! is told apart from drift on a clear pick. It reports; it asserts nothing.
 
 use mlx_bridge::MlxArray;
-use model_serving::speculative_decoding::dflash2_drafter::DraftTree;
+use model_serving::speculative_decoding::dflash_drafter::DraftTree;
 use model_serving::speculative_decoding::tree_rows::TreeRows;
 use model_serving::{PerformanceAttribution, VerificationLogitsMode};
 use serial_test::serial;

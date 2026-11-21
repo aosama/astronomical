@@ -1,4 +1,4 @@
-use super::dflash2_drafter::DraftTree;
+use super::dflash_drafter::DraftTree;
 use super::tree_rows::{KeptChain, TreeRows};
 
 /// Anchor 7 with two children (10, 11); 10 has child 20, 20 has child 30.

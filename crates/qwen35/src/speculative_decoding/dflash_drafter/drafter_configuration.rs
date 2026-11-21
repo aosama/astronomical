@@ -21,7 +21,7 @@ pub enum DrafterLayerAttention {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct DFlash2DrafterConfiguration {
+pub struct DFlashDrafterConfiguration {
     pub hidden_size: i32,
     pub layer_count: i32,
     pub attention_head_count: i32,
@@ -52,7 +52,7 @@ pub struct DFlash2DrafterConfiguration {
 
 /// Why a drafter configuration was refused.
 #[derive(Debug, Clone, Error, PartialEq, Eq)]
-pub enum DFlash2DrafterConfigurationError {
+pub enum DFlashDrafterConfigurationError {
     #[error("the drafter declares no {DFLASH2_ARCHITECTURE} architecture")]
     Architecture,
     #[error("the drafter configuration is missing or has a malformed `{field}`")]
@@ -63,16 +63,14 @@ pub enum DFlash2DrafterConfigurationError {
     Inconsistent { description: String },
 }
 
-impl DFlash2DrafterConfiguration {
-    pub fn from_config_document(
-        document: &Value,
-    ) -> Result<Self, DFlash2DrafterConfigurationError> {
+impl DFlashDrafterConfiguration {
+    pub fn from_config_document(document: &Value) -> Result<Self, DFlashDrafterConfigurationError> {
         require_architecture(document)?;
         refuse_unimplemented_fields(document)?;
         let dflash =
             document
                 .get("dflash_config")
-                .ok_or(DFlash2DrafterConfigurationError::Field {
+                .ok_or(DFlashDrafterConfigurationError::Field {
                     field: "dflash_config",
                 })?;
         let configuration =
@@ -135,7 +133,7 @@ impl DFlash2DrafterConfiguration {
         self.hidden_size / self.convolution_group_size
     }
 
-    fn check_consistency(&self) -> Result<(), DFlash2DrafterConfigurationError> {
+    fn check_consistency(&self) -> Result<(), DFlashDrafterConfigurationError> {
         let problems = [
             (
                 self.layer_attention.len() != self.layer_count as usize,
@@ -178,7 +176,7 @@ impl DFlash2DrafterConfiguration {
             ),
         ];
         match problems.iter().find(|(is_problem, _)| *is_problem) {
-            Some((_, description)) => Err(DFlash2DrafterConfigurationError::Inconsistent {
+            Some((_, description)) => Err(DFlashDrafterConfigurationError::Inconsistent {
                 description: (*description).to_owned(),
             }),
             None => Ok(()),
@@ -203,7 +201,7 @@ struct ModelShape {
     target_layer_count: i32,
 }
 
-fn read_model_shape(document: &Value) -> Result<ModelShape, DFlash2DrafterConfigurationError> {
+fn read_model_shape(document: &Value) -> Result<ModelShape, DFlashDrafterConfigurationError> {
     Ok(ModelShape {
         hidden_size: integer(document, "hidden_size")?,
         layer_count: integer(document, "num_hidden_layers")?,
@@ -235,7 +233,7 @@ struct DraftingShape {
     selector_candidate_count: i32,
 }
 
-fn read_drafting_shape(dflash: &Value) -> Result<DraftingShape, DFlash2DrafterConfigurationError> {
+fn read_drafting_shape(dflash: &Value) -> Result<DraftingShape, DFlashDrafterConfigurationError> {
     Ok(DraftingShape {
         block_size: integer(dflash, "block_size")?,
         mask_token_id: integer(dflash, "mask_token_id")? as u32,
@@ -247,7 +245,7 @@ fn read_drafting_shape(dflash: &Value) -> Result<DraftingShape, DFlash2DrafterCo
     })
 }
 
-fn require_architecture(document: &Value) -> Result<(), DFlash2DrafterConfigurationError> {
+fn require_architecture(document: &Value) -> Result<(), DFlashDrafterConfigurationError> {
     let declares_dflash2 = document
         .get("architectures")
         .and_then(Value::as_array)
@@ -259,29 +257,29 @@ fn require_architecture(document: &Value) -> Result<(), DFlash2DrafterConfigurat
     if declares_dflash2 {
         Ok(())
     } else {
-        Err(DFlash2DrafterConfigurationError::Architecture)
+        Err(DFlashDrafterConfigurationError::Architecture)
     }
 }
 
 /// The reference model supports these, but the published drafters leave them
 /// at their identity values; a checkpoint that changes one must not be served
 /// with the wrong arithmetic.
-fn refuse_unimplemented_fields(document: &Value) -> Result<(), DFlash2DrafterConfigurationError> {
+fn refuse_unimplemented_fields(document: &Value) -> Result<(), DFlashDrafterConfigurationError> {
     let dflash = document.get("dflash_config");
     if is_set_beyond_identity(Some(document), "final_logit_softcapping", 0.0)
         || is_set_beyond_identity(dflash, "final_logit_softcapping", 0.0)
     {
-        return Err(DFlash2DrafterConfigurationError::Unsupported {
+        return Err(DFlashDrafterConfigurationError::Unsupported {
             field: "final_logit_softcapping",
         });
     }
     if is_set_beyond_identity(dflash, "input_embedding_scale", 1.0) {
-        return Err(DFlash2DrafterConfigurationError::Unsupported {
+        return Err(DFlashDrafterConfigurationError::Unsupported {
             field: "input_embedding_scale",
         });
     }
     if is_set_beyond_identity(dflash, "output_multiplier", 1.0) {
-        return Err(DFlash2DrafterConfigurationError::Unsupported {
+        return Err(DFlashDrafterConfigurationError::Unsupported {
             field: "output_multiplier",
         });
     }
@@ -291,7 +289,7 @@ fn refuse_unimplemented_fields(document: &Value) -> Result<(), DFlash2DrafterCon
         .and_then(|rope| rope.get("rope_type"))
         .and_then(Value::as_str);
     if rope_type.is_some_and(|rope_type| rope_type != "default") {
-        return Err(DFlash2DrafterConfigurationError::Unsupported {
+        return Err(DFlashDrafterConfigurationError::Unsupported {
             field: "rope_parameters.rope_type",
         });
     }
@@ -310,22 +308,22 @@ fn is_set_beyond_identity(container: Option<&Value>, field: &str, identity: f64)
     }
 }
 
-fn rope_theta(document: &Value) -> Result<f32, DFlash2DrafterConfigurationError> {
+fn rope_theta(document: &Value) -> Result<f32, DFlashDrafterConfigurationError> {
     document
         .get("rope_parameters")
         .and_then(|rope| rope.get("rope_theta"))
         .or_else(|| document.get("rope_theta"))
         .and_then(Value::as_f64)
         .map(|theta| theta as f32)
-        .ok_or(DFlash2DrafterConfigurationError::Field {
+        .ok_or(DFlashDrafterConfigurationError::Field {
             field: "rope_parameters.rope_theta",
         })
 }
 
 fn layer_attention(
     document: &Value,
-) -> Result<Vec<DrafterLayerAttention>, DFlash2DrafterConfigurationError> {
-    let field = DFlash2DrafterConfigurationError::Field {
+) -> Result<Vec<DrafterLayerAttention>, DFlashDrafterConfigurationError> {
+    let field = DFlashDrafterConfigurationError::Field {
         field: "layer_types",
     };
     let layer_types = document
@@ -343,30 +341,27 @@ fn layer_attention(
     Ok(attention_kinds)
 }
 
-fn integer(
-    container: &Value,
-    field: &'static str,
-) -> Result<i32, DFlash2DrafterConfigurationError> {
+fn integer(container: &Value, field: &'static str) -> Result<i32, DFlashDrafterConfigurationError> {
     container
         .get(field)
         .and_then(Value::as_i64)
         .and_then(|value| i32::try_from(value).ok())
         .filter(|value| *value >= 0)
-        .ok_or(DFlash2DrafterConfigurationError::Field { field })
+        .ok_or(DFlashDrafterConfigurationError::Field { field })
 }
 
-fn number(container: &Value, field: &'static str) -> Result<f64, DFlash2DrafterConfigurationError> {
+fn number(container: &Value, field: &'static str) -> Result<f64, DFlashDrafterConfigurationError> {
     container
         .get(field)
         .and_then(Value::as_f64)
-        .ok_or(DFlash2DrafterConfigurationError::Field { field })
+        .ok_or(DFlashDrafterConfigurationError::Field { field })
 }
 
 fn integer_list(
     container: &Value,
     field: &'static str,
-) -> Result<Vec<i32>, DFlash2DrafterConfigurationError> {
-    let malformed = DFlash2DrafterConfigurationError::Field { field };
+) -> Result<Vec<i32>, DFlashDrafterConfigurationError> {
+    let malformed = DFlashDrafterConfigurationError::Field { field };
     let values = container
         .get(field)
         .and_then(Value::as_array)

@@ -9,7 +9,7 @@ use mlx_bridge::MlxArray;
 use runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use super::block_attention_mask::block_attention_visibility;
-use super::drafter_configuration::DFlash2DrafterConfiguration;
+use super::drafter_configuration::DFlashDrafterConfiguration;
 use super::drafter_context_state::DrafterLayerContextState;
 use super::drafter_linear::DrafterLinear;
 use super::drafter_weights::DrafterLayerWeights;
@@ -19,7 +19,7 @@ use super::drafter_weights::DrafterLayerWeights;
 pub fn attend_block_to_context(
     runtime: &MlxRuntime,
     layer: &DrafterLayerWeights,
-    configuration: &DFlash2DrafterConfiguration,
+    configuration: &DFlashDrafterConfiguration,
     context_state: &mut DrafterLayerContextState,
     block_rows: &MlxArray,
     fused_context_rows: &MlxArray,
@@ -96,7 +96,7 @@ pub fn attend_block_to_context(
 /// the queries' dtype so the fused attention keeps its low-precision path.
 fn additive_mask(
     runtime: &MlxRuntime,
-    configuration: &DFlash2DrafterConfiguration,
+    configuration: &DFlashDrafterConfiguration,
     context_state: &DrafterLayerContextState,
     kept_row_count: i32,
     block_row_count: i32,
@@ -126,7 +126,7 @@ fn additive_mask(
 /// Projects rows to attention heads: `[1, rows, H]` → `[1, heads, rows, head_dim]`.
 struct HeadShaper<'shaping> {
     runtime: &'shaping MlxRuntime,
-    configuration: &'shaping DFlash2DrafterConfiguration,
+    configuration: &'shaping DFlashDrafterConfiguration,
 }
 
 impl HeadShaper<'_> {

@@ -10,7 +10,7 @@
 use mlx_bridge::MlxArray;
 use runtime_integration::{MlxRuntime, MlxRuntimeError};
 
-use super::drafter_configuration::DFlash2DrafterConfiguration;
+use super::drafter_configuration::DFlashDrafterConfiguration;
 use super::drafter_weights::GroupedConvolutionWeights;
 
 /// The convolved sublayer input, and the predicted kernel kept for the
@@ -25,7 +25,7 @@ pub struct ConvolvedSublayerInput {
 pub fn convolve_sublayer_input(
     runtime: &MlxRuntime,
     weights: &GroupedConvolutionWeights,
-    configuration: &DFlash2DrafterConfiguration,
+    configuration: &DFlashDrafterConfiguration,
     normalized_rows: &MlxArray,
 ) -> Result<ConvolvedSublayerInput, MlxRuntimeError> {
     let row_count = normalized_rows.shape()[1];
@@ -57,7 +57,7 @@ pub fn convolve_sublayer_input(
 pub fn convolve_sublayer_output(
     runtime: &MlxRuntime,
     weights: &GroupedConvolutionWeights,
-    configuration: &DFlash2DrafterConfiguration,
+    configuration: &DFlashDrafterConfiguration,
     sublayer_output: &MlxArray,
     finishing_kernel: &MlxArray,
 ) -> Result<MlxArray, MlxRuntimeError> {
@@ -96,7 +96,7 @@ fn convolve(
     predicted_kernel: &MlxArray,
     base_kernel: &MlxArray,
     stage: i32,
-    configuration: &DFlash2DrafterConfiguration,
+    configuration: &DFlashDrafterConfiguration,
 ) -> Result<MlxArray, MlxRuntimeError> {
     let row_count = rows.shape()[1];
     let group_count = configuration.convolution_group_count();
@@ -140,7 +140,7 @@ struct TapKernels {
 impl TapKernels {
     fn for_tap(
         runtime: &MlxRuntime,
-        configuration: &DFlash2DrafterConfiguration,
+        configuration: &DFlashDrafterConfiguration,
         base_kernel: &MlxArray,
         predicted_kernel: &MlxArray,
         stage: i32,
