@@ -14,6 +14,8 @@ mod path_selection;
 
 #[cfg(test)]
 mod download_catalog_tests;
+#[cfg(test)]
+mod publisher_dflash_package_tests;
 
 pub use canonical_path::is_canonical_ascii_path;
 pub use download_catalog::{
