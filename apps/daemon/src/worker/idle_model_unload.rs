@@ -267,21 +267,42 @@ pub(in crate::worker) fn should_unload_idle_model(
     worker_idleness.is_free_to_unload() && runtime.idle_model_unload.is_unload_due(now)
 }
 
-/// Closes the worker holding the idle model and launches an empty one.
+/// Why the loaded model is being unloaded, for the log.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum ModelUnloadCause {
+    /// The worker served nothing for the configured idle span.
+    IdleSpan,
+    /// `POST /v1/control/unload-model` asked for it.
+    Requested,
+}
+
+/// Closes the worker holding the loaded model and launches an empty one;
+/// true when the empty worker is ready.
 ///
 /// A worker that will not close gracefully is force-terminated; a relaunch
 /// that fails leaves the worker `Unavailable`, which the contained-failure
 /// relaunch then retries under its crash-loop budget.
-pub(in crate::worker) async fn unload_idle_model(runtime: &mut WorkerLoopRuntime) {
+pub(in crate::worker) async fn unload_loaded_model(
+    runtime: &mut WorkerLoopRuntime,
+    unload_cause: ModelUnloadCause,
+) -> bool {
     let unloaded_model_id = runtime
         .health_snapshot
         .read()
         .ok()
         .and_then(|worker_health_snapshot| worker_health_snapshot.ready_model_id.clone());
+    // The idle span explains an idle unload; a requested one has no span.
+    let idle_seconds = (unload_cause == ModelUnloadCause::IdleSpan).then(|| {
+        runtime
+            .idle_model_unload
+            .idle_model_unload_seconds
+            .load(Ordering::Relaxed)
+    });
     tracing::info!(
         unloaded_model_id = ?unloaded_model_id,
-        idle_seconds = runtime.idle_model_unload.idle_model_unload_seconds.load(Ordering::Relaxed),
-        "unloading idle model by replacing the worker with an empty one"
+        ?unload_cause,
+        ?idle_seconds,
+        "unloading the model by replacing the worker with an empty one"
     );
     // Loading is the closest published state: the worker is being replaced and
     // cannot serve until the empty one acknowledges, a second or two later.
@@ -291,7 +312,7 @@ pub(in crate::worker) async fn unload_idle_model(runtime: &mut WorkerLoopRuntime
     );
     runtime.is_ready = false;
     if let Err(close_error) = runtime.worker_process.close().await {
-        tracing::warn!(error = %close_error, "idle worker did not close gracefully; terminating it");
+        tracing::warn!(error = %close_error, "worker did not close gracefully; terminating it");
         let _termination_outcome = runtime.worker_process.force_terminate().await;
     }
     let relaunch_outcome = replace_terminated_worker(
@@ -305,13 +326,16 @@ pub(in crate::worker) async fn unload_idle_model(runtime: &mut WorkerLoopRuntime
         Ok(()) => {
             runtime.is_ready = true;
             runtime.model_load_deadline = None;
-            tracing::info!("idle model unloaded; an empty worker is ready");
+            tracing::info!(?unload_cause, "model unloaded; an empty worker is ready");
+            true
         }
         Err(relaunch_error) => {
             tracing::error!(
                 error = %relaunch_error,
-                "could not relaunch the worker after unloading the idle model"
+                ?unload_cause,
+                "could not relaunch the worker after unloading the model"
             );
+            false
         }
     }
 }

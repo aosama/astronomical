@@ -553,6 +553,24 @@ impl WorkerHandle {
             .await
             .map_err(|_| WorkerControlError::MissingActiveWorker)?
     }
+
+    /// Unloads the loaded model when no request is running or waiting.
+    pub async fn unload_model(
+        &self,
+    ) -> Result<crate::worker::model_unload_request::ModelUnloadOutcome, WorkerControlError> {
+        let command_sender = self
+            .command_sender
+            .as_ref()
+            .ok_or(WorkerControlError::MissingActiveWorker)?;
+        let (unload_sender, unload_receiver) = oneshot::channel();
+        command_sender
+            .send(WorkerLoopCommand::UnloadModel { unload_sender })
+            .await
+            .map_err(|_| WorkerControlError::MissingActiveWorker)?;
+        unload_receiver
+            .await
+            .map_err(|_| WorkerControlError::MissingActiveWorker)
+    }
 }
 
 /// Admission permits held across one stop-first memory-demotion restart.

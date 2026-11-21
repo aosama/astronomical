@@ -24,6 +24,7 @@ pub(crate) mod idle_model_unload;
 pub(crate) mod image_event;
 pub(crate) mod image_request;
 pub(crate) mod loop_types;
+pub(crate) mod model_unload_request;
 mod request_admission;
 mod request_event_dispatch;
 mod single_shot_command_arms;
@@ -42,6 +43,8 @@ mod event_handler_tests;
 mod event_reaction_tests;
 #[cfg(test)]
 mod loop_types_tests;
+#[cfg(test)]
+mod model_unload_request_tests;
 use std::collections::HashMap;
 use std::sync::atomic::AtomicU64;
 use std::sync::{Arc, RwLock};

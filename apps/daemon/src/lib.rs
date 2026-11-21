@@ -136,4 +136,5 @@ pub use worker::health::{
     WorkerHealthSnapshot, WorkerHealthStatus,
 };
 pub use worker::memory::limit::MlxMemoryLimitUpdateOutcome;
+pub use worker::model_unload_request::ModelUnloadOutcome;
 pub use worker::process::child::{WorkerProcess, WorkerTerminationOutcome};

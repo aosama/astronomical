@@ -24,6 +24,11 @@ is simpler.
 - **Keep a fixed beginning.** Astronomical reuses its work on a prompt that
   starts like an earlier one, so put the fixed instructions first and what
   changes last.
+- **Give memory back when you are done.** A loaded model holds many gigabytes
+  until Astronomical unloads it after a quiet spell. `POST /v1/control/unload-model`
+  frees it now, and the next request loads it again. It refuses with `busy`
+  while a reply is being written, and says `nothing_loaded` when no model is
+  loaded. Do it only when the person asks or a job of yours is finished.
 
 The site's local API page, https://getastronomical.com/local-api.html, has
 settings for specific clients.

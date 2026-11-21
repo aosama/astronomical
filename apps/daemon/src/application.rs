@@ -475,7 +475,7 @@ fn openai_generation_routes(router: Router<ApplicationState>) -> Router<Applicat
 
 /// Adds each control-plane route only when the daemon was built with the
 /// capability it exercises: config reload needs the reloadable config and
-/// resolver, an astro SSD prompt cache clear needs a worker, the live MLX memory ceiling needs
+/// resolver, an astro SSD prompt cache clear and a model unload need a worker, the live MLX memory ceiling needs
 /// both reload and worker control, and shutdown needs the shutdown
 /// controller.
 fn capability_conditional_routes(
@@ -510,11 +510,17 @@ fn capability_conditional_routes(
     } else {
         router
     };
+    // Both need a live worker to act on.
     let router = if supports_astro_ssd_prompt_cache_clear {
-        router.route(
-            "/v1/ssd-prompt-cache",
-            delete(crate::rest::astro_ssd_prompt_cache_clear::clear_cache),
-        )
+        router
+            .route(
+                "/v1/ssd-prompt-cache",
+                delete(crate::rest::astro_ssd_prompt_cache_clear::clear_cache),
+            )
+            .route(
+                "/v1/control/unload-model",
+                post(crate::rest::model_unload::unload_model),
+            )
     } else {
         router
     };
