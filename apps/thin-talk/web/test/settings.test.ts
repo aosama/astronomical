@@ -62,7 +62,7 @@ test("should_open_settings_with_the_saved_name_and_plain_section_names", async (
   assert.equal(element("settings-shown").getAttribute("aria-checked"), "true");
   assert.equal(astroSays(), SETTINGS_LINE);
   const sectionTitles = [...page().querySelectorAll(".settings__section-title")].map((title) => title.textContent);
-  assert.deepEqual(sectionTitles, ["About you", "Models", "Appearance", "Privacy"]);
+  assert.deepEqual(sectionTitles, ["About you", "Models", "Appearance", "What leaves this Mac", "Privacy"]);
   assert.doesNotMatch(page().textContent ?? "", /brain|sketchbook|gifts|grown-up|Explorer|Pilot|Colours/i);
   assert.ok(document.getElementById("sidebar")?.hasAttribute("inert"), "the window behind is out of reach");
   assert.equal(document.activeElement?.id, "settings-done", "focus lands inside the page");

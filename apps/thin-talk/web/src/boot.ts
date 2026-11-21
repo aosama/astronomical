@@ -255,6 +255,7 @@ export function bootChatClient(): AppShell {
   const astro = new AstroCompanion({
     bridge,
     library: new AstroLibrary(client),
+    problemReports: new ProblemReportClient({ daemonBaseURL: config.daemonBaseURL }),
     getStartedOverlay: requireElement<HTMLElement>("#get-started"),
     settingsOverlay: requireElement<HTMLElement>("#settings"),
     emptyState: requireElement<HTMLElement>("#empty-state"),

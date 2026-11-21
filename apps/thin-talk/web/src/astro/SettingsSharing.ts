@@ -1,0 +1,113 @@
+import { makeElement } from "./AstroDom";
+import type { ProblemReportChoice, ProblemReportClient, ProblemReports, SentProblemReport } from "../ProblemReportClient";
+import { makeRow, makeSection, rowButton } from "./SettingsRows";
+
+/** The picker's choices, in the words the person reads. */
+const PROBLEM_REPORT_CHOICES: ReadonlyArray<{ choice: ProblemReportChoice; label: string }> = [
+  { choice: "ask", label: "Ask each time" },
+  { choice: "always", label: "Always send" },
+  { choice: "never", label: "Never" },
+];
+
+/**
+ * The page's "What leaves this Mac" group: everything Astronomical can send
+ * from this Mac, with the one row the person can change, and every report
+ * that has already gone, so anyone can check our word.
+ */
+export class SettingsSharing {
+  public readonly element: HTMLElement;
+  private readonly document: Document;
+  private readonly client: ProblemReportClient;
+  private isSentListOpen = false;
+
+  public constructor(document: Document, client: ProblemReportClient) {
+    this.document = document;
+    this.client = client;
+    this.element = makeSection(document, "What leaves this Mac", "settings-sharing");
+  }
+
+  public async refresh(): Promise<void> {
+    try {
+      this.showRows(await this.client.fetchProblemReports());
+    } catch {
+      this.showRows(null);
+    }
+  }
+
+  /** Draws the rows; `null` when the engine could not be asked, in which
+   * case the fixed rows still show and the changeable ones say why not. */
+  private showRows(problemReports: ProblemReports | null): void {
+    const document = this.document;
+    const rows: HTMLElement[] = [
+      makeRow(document, "Chats, files and images", "Never", null),
+      makeRow(document, "Model downloads", "Only the ones you choose", null),
+    ];
+    if (problemReports === null) {
+      rows.push(makeRow(document, null, makeElement(document, "span", "settings__row-value--muted", "The engine isn't answering, so these choices can't be shown right now."), null));
+      this.element.replaceChildren(this.element.firstElementChild ?? "", ...rows);
+      return;
+    }
+    rows.push(
+      makeRow(document, "Problem reports", this.reportDetail(problemReports), this.choicePicker(problemReports.choice)),
+      makeRow(document, "Daily count", makeElement(document, "span", "settings__row-value--muted", "Not sent"), null),
+      this.sentRow(problemReports.sent),
+    );
+    if (this.isSentListOpen) {
+      rows.push(this.sentList(problemReports.sent));
+    }
+    this.element.replaceChildren(this.element.firstElementChild ?? "", ...rows);
+  }
+
+  private reportDetail(problemReports: ProblemReports): HTMLElement {
+    const detailText = problemReports.isSendingSetUp
+      ? "When something fails, you see the whole report first."
+      : "When something fails, you see the whole report. Sending isn't set up in this version.";
+    return makeElement(this.document, "span", "settings__row-value--muted", detailText);
+  }
+
+  private choicePicker(currentChoice: ProblemReportChoice): HTMLSelectElement {
+    const picker = makeElement(this.document, "select", "settings__picker");
+    picker.dataset.testid = "settings-problem-reports";
+    picker.setAttribute("aria-label", "Problem reports");
+    for (const { choice, label } of PROBLEM_REPORT_CHOICES) {
+      const option = makeElement(this.document, "option", "", label);
+      option.value = choice;
+      option.selected = choice === currentChoice;
+      picker.append(option);
+    }
+    picker.addEventListener("change", () => void this.saveChoice(picker.value as ProblemReportChoice));
+    return picker;
+  }
+
+  /** Saves the new choice and redraws from the engine, so the page shows
+   * what was stored rather than what was picked. */
+  private async saveChoice(choice: ProblemReportChoice): Promise<void> {
+    await this.client.saveChoice(choice).catch(() => undefined);
+    await this.refresh();
+  }
+
+  private sentRow(sentReports: SentProblemReport[]): HTMLElement {
+    const sentText = sentReports.length === 0 ? "Nothing yet" : sentReports.length === 1 ? "1 report" : `${sentReports.length} reports`;
+    const toggle = sentReports.length === 0
+      ? null
+      : rowButton(this.document, "settings-sent-reports", this.isSentListOpen ? "Hide" : "Show", () => {
+          this.isSentListOpen = !this.isSentListOpen;
+          void this.refresh();
+        });
+    return makeRow(this.document, "Sent so far", sentText, toggle);
+  }
+
+  /** Every sent report, newest first, as the exact lines that were sent. */
+  private sentList(sentReports: SentProblemReport[]): HTMLElement {
+    const list = makeElement(this.document, "div", "settings__sent-reports");
+    list.dataset.testid = "settings-sent-report-list";
+    for (const sentReport of [...sentReports].reverse()) {
+      const sentAt = new Date(sentReport.sentAtUnixSeconds * 1000).toLocaleString();
+      list.append(
+        makeElement(this.document, "p", "settings__sent-report-time", `Sent ${sentAt}`),
+        makeElement(this.document, "pre", "settings__sent-report-lines", sentReport.readableLines.join("\n")),
+      );
+    }
+    return list;
+  }
+}
