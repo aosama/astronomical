@@ -1,6 +1,6 @@
-//! Where saved speech lands when `--output` asks for a file: the path decides the format (`.wav`, or `.pcm`
-//! for bare 16-bit samples), and it is claimed before any work starts
-//! (`reserved_output_file`).
+//! Where saved speech lands when `--output` asks for a file: the path
+//! decides the format (`.wav`, or `.pcm` for bare 16-bit samples), and it is
+//! claimed before any work starts (`reserved_output_file`).
 
 use std::path::{Path, PathBuf};
 
