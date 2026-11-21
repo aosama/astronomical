@@ -31,6 +31,27 @@ pub struct DraftLattice {
     pub edge_scores: Vec<f32>,
 }
 
+impl DraftLattice {
+    /// The lattice of a drafter without a candidate selector: each slot's
+    /// candidates and head logits, with every edge zero, so the tree ranks a
+    /// slot's candidates the same under every parent.
+    pub fn without_edges(
+        depth: usize,
+        candidate_count: usize,
+        candidate_ids: Vec<u32>,
+        unary_scores: Vec<f32>,
+    ) -> Self {
+        Self {
+            depth,
+            candidate_count,
+            candidate_ids,
+            unary_scores,
+            anchor_edge_scores: vec![0.0; candidate_count],
+            edge_scores: vec![0.0; depth.saturating_sub(1) * candidate_count * candidate_count],
+        }
+    }
+}
+
 /// TensorFold's selector settings; `Default` gives the values its serial
 /// loop uses on chips with matrix units (`loneSelection`: 16 children a node,
 /// so an uncertain slot can spend the whole budget on siblings).

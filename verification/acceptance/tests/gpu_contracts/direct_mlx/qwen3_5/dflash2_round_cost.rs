@@ -239,7 +239,10 @@ fn time_drafting(
         .expect("anchor");
     let path = select_path(
         runtime,
-        &pair.drafter_weights.candidate_selector,
+        pair.drafter_weights
+            .candidate_selector
+            .as_ref()
+            .expect("a DFlash2 drafter has a candidate selector"),
         configuration,
         &hidden,
         &draft_logits,

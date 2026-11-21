@@ -11,14 +11,16 @@ fn flat_lattice(depth: usize, candidate_count: usize, unary_scores: Vec<f32>) ->
             candidate_ids.push((100 * slot + candidate) as u32);
         }
     }
-    DraftLattice {
-        depth,
-        candidate_count,
-        candidate_ids,
-        unary_scores,
-        anchor_edge_scores: vec![0.0; candidate_count],
-        edge_scores: vec![0.0; depth.saturating_sub(1) * candidate_count * candidate_count],
-    }
+    DraftLattice::without_edges(depth, candidate_count, candidate_ids, unary_scores)
+}
+
+#[test]
+fn should_size_a_lattice_without_edges_for_every_parent_and_no_slot() {
+    let three_slots = DraftLattice::without_edges(3, 4, vec![7; 12], vec![0.5; 12]);
+    assert_eq!(three_slots.anchor_edge_scores, vec![0.0; 4]);
+    assert_eq!(three_slots.edge_scores, vec![0.0; 2 * 4 * 4]);
+    let no_slots = DraftLattice::without_edges(0, 4, Vec::new(), Vec::new());
+    assert!(no_slots.edge_scores.is_empty());
 }
 
 fn options(node_budget: usize, children_per_node: usize) -> DraftTreeOptions {

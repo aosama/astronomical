@@ -463,7 +463,10 @@ fn run_round(
     };
     let path = select_path(
         runtime,
-        &pair.drafter_weights.candidate_selector,
+        pair.drafter_weights
+            .candidate_selector
+            .as_ref()
+            .expect("a DFlash2 drafter has a candidate selector"),
         configuration,
         &hidden,
         &draft_logits,
@@ -598,7 +601,7 @@ fn decide(
             probabilities: &kept_probabilities[row_range],
         });
     }
-    let candidate_count = pair.drafter_configuration.selector_candidate_count as usize;
+    let candidate_count = pair.drafter_configuration.lattice_candidate_count() as usize;
     let mut drafted_slots = Vec::with_capacity(drafted_ids.len());
     if let Some(distribution) = drafter_distribution {
         for (slot_index, drafted_id) in drafted_ids.iter().enumerate() {

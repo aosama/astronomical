@@ -60,8 +60,8 @@ pub fn select_path(
         let slot_view = SlotView {
             runtime,
             slot,
-            candidate_count: configuration.selector_candidate_count,
-            rank: configuration.selector_rank,
+            candidate_count: configuration.lattice_candidate_count(),
+            rank: weights.predecessor_codebook.shape()[1],
         };
         let slot_choice = choose_slot(
             &slot_view,
@@ -98,7 +98,7 @@ struct SelectorInputs {
     projected_hidden: MlxArray,
 }
 
-/// The `selector_top_k` highest-logit ids at every slot, best first,
+/// The `lattice_candidate_count` highest-logit ids at every slot, best first,
 /// [1, proposals, candidates], from one top-k pass over the vocabulary.
 pub(super) fn kept_candidate_ids(
     runtime: &MlxRuntime,
@@ -108,7 +108,7 @@ pub(super) fn kept_candidate_ids(
     crate::gpu_token_sampling::vocabulary_top_k(
         runtime,
         proposal_logits,
-        configuration.selector_candidate_count,
+        configuration.lattice_candidate_count(),
     )
     .map_err(top_k_failure)
 }

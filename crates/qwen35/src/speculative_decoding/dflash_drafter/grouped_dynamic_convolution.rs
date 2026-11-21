@@ -10,7 +10,7 @@
 use mlx_bridge::MlxArray;
 use runtime_integration::{MlxRuntime, MlxRuntimeError};
 
-use super::drafter_configuration::DFlashDrafterConfiguration;
+use super::drafter_configuration::GroupedConvolutionShape;
 use super::drafter_weights::GroupedConvolutionWeights;
 
 /// The convolved sublayer input, and the predicted kernel kept for the
@@ -25,12 +25,11 @@ pub struct ConvolvedSublayerInput {
 pub fn convolve_sublayer_input(
     runtime: &MlxRuntime,
     weights: &GroupedConvolutionWeights,
-    configuration: &DFlashDrafterConfiguration,
     normalized_rows: &MlxArray,
 ) -> Result<ConvolvedSublayerInput, MlxRuntimeError> {
     let row_count = normalized_rows.shape()[1];
-    let kernel_size = configuration.convolution_kernel_size;
-    let group_count = configuration.convolution_group_count();
+    let kernel_size = weights.shape.kernel_size;
+    let group_count = weights.shape.group_count();
     let predicted_kernels = runtime.reshape(
         &weights
             .kernel_projection
@@ -45,7 +44,7 @@ pub fn convolve_sublayer_input(
         &starting_kernel,
         &weights.base_kernel,
         0,
-        configuration,
+        &weights.shape,
     )?;
     Ok(ConvolvedSublayerInput {
         convolved_rows,
@@ -57,7 +56,6 @@ pub fn convolve_sublayer_input(
 pub fn convolve_sublayer_output(
     runtime: &MlxRuntime,
     weights: &GroupedConvolutionWeights,
-    configuration: &DFlashDrafterConfiguration,
     sublayer_output: &MlxArray,
     finishing_kernel: &MlxArray,
 ) -> Result<MlxArray, MlxRuntimeError> {
@@ -67,7 +65,7 @@ pub fn convolve_sublayer_output(
         finishing_kernel,
         &weights.base_kernel,
         1,
-        configuration,
+        &weights.shape,
     )
 }
 
@@ -96,18 +94,18 @@ fn convolve(
     predicted_kernel: &MlxArray,
     base_kernel: &MlxArray,
     stage: i32,
-    configuration: &DFlashDrafterConfiguration,
+    shape: &GroupedConvolutionShape,
 ) -> Result<MlxArray, MlxRuntimeError> {
     let row_count = rows.shape()[1];
-    let group_count = configuration.convolution_group_count();
-    let group_size = configuration.convolution_group_size;
+    let group_count = shape.group_count();
+    let group_size = shape.group_size;
     let grouped_rows = runtime.reshape(rows, &[1, row_count, group_count, group_size])?;
     let mut convolved: Option<MlxArray> = None;
-    for tap in 0..configuration.convolution_kernel_size {
+    for tap in 0..shape.kernel_size {
         let shifted_rows = shifted_down(runtime, &grouped_rows, tap)?;
         let tap_kernels = TapKernels::for_tap(
             runtime,
-            configuration,
+            shape,
             base_kernel,
             predicted_kernel,
             stage,
@@ -126,7 +124,7 @@ fn convolve(
         operation: "convolve DFlash2 block rows",
         description: "the convolution kernel has no taps".to_owned(),
     })?;
-    Ok(runtime.reshape(&convolved, &[1, row_count, configuration.hidden_size])?)
+    Ok(runtime.reshape(&convolved, &[1, row_count, shape.channel_count])?)
 }
 
 /// One tap's two kernels, shaped to broadcast over `[1, rows, groups, group size]`.
@@ -140,7 +138,7 @@ struct TapKernels {
 impl TapKernels {
     fn for_tap(
         runtime: &MlxRuntime,
-        configuration: &DFlashDrafterConfiguration,
+        shape: &GroupedConvolutionShape,
         base_kernel: &MlxArray,
         predicted_kernel: &MlxArray,
         stage: i32,
@@ -148,18 +146,15 @@ impl TapKernels {
         rows: &MlxArray,
     ) -> Result<Self, MlxRuntimeError> {
         let row_count = rows.shape()[1];
-        let group_count = configuration.convolution_group_count();
+        let group_count = shape.group_count();
         let fixed_slice = runtime.slice(
             base_kernel,
             &[stage, tap, 0],
-            &[stage + 1, tap + 1, configuration.hidden_size],
+            &[stage + 1, tap + 1, shape.channel_count],
             &[1, 1, 1],
         )?;
         let fixed = runtime.astype(
-            &runtime.reshape(
-                &fixed_slice,
-                &[1, 1, group_count, configuration.convolution_group_size],
-            )?,
+            &runtime.reshape(&fixed_slice, &[1, 1, group_count, shape.group_size])?,
             rows.dtype(),
         )?;
         let predicted_slice = runtime.slice(

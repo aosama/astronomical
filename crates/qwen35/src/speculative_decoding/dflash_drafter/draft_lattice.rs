@@ -46,7 +46,7 @@ pub fn draft_lattice(
     ])?;
     Ok(DraftLattice {
         depth: slot_count as usize,
-        candidate_count: configuration.selector_candidate_count as usize,
+        candidate_count: configuration.lattice_candidate_count() as usize,
         candidate_ids: candidates.token_ids.to_vec_u32()?,
         unary_scores: candidates.logits.to_vec_f32()?,
         anchor_edge_scores: anchor_edges.to_vec_f32()?,
@@ -56,19 +56,19 @@ pub fn draft_lattice(
 
 /// Each slot's kept candidates: `[slots, candidates]` uint32 ids and their
 /// float32 logits.
-struct SlotCandidates {
-    token_ids: MlxArray,
-    logits: MlxArray,
+pub(super) struct SlotCandidates {
+    pub(super) token_ids: MlxArray,
+    pub(super) logits: MlxArray,
 }
 
 impl SlotCandidates {
-    fn kept(
+    pub(super) fn kept(
         runtime: &MlxRuntime,
         configuration: &DFlashDrafterConfiguration,
         proposal_logits: &MlxArray,
     ) -> Result<Self, MlxRuntimeError> {
         let slot_count = proposal_logits.shape()[1];
-        let candidate_count = configuration.selector_candidate_count;
+        let candidate_count = configuration.lattice_candidate_count();
         let candidate_ids = kept_candidate_ids(runtime, configuration, proposal_logits)?;
         let logits = runtime.take_along_axis(proposal_logits, &candidate_ids, -1)?;
         Ok(Self {

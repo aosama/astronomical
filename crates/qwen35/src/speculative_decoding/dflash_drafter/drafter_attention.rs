@@ -14,16 +14,30 @@ use super::drafter_context_state::DrafterLayerContextState;
 use super::drafter_linear::DrafterLinear;
 use super::drafter_weights::DrafterLayerWeights;
 
-/// Attends `block_rows` [1, L, H] (already normalized and convolved) to the
-/// layer's kept context plus this round's `fused_context_rows` [1, S, H].
+/// The rows one layer's attention reads this round.
+pub struct BlockAttentionRows<'rows> {
+    /// [1, L, H]: the block, already normalized (and convolved, for DFlash2).
+    pub block_rows: &'rows MlxArray,
+    /// [1, S, H]: this round's fused target context.
+    pub fused_context_rows: &'rows MlxArray,
+    /// Whether block rows see only earlier block rows in this layer.
+    pub block_is_causal: bool,
+}
+
+/// Attends the block rows to the layer's kept context plus this round's
+/// fused context rows.
 pub fn attend_block_to_context(
     runtime: &MlxRuntime,
     layer: &DrafterLayerWeights,
     configuration: &DFlashDrafterConfiguration,
     context_state: &mut DrafterLayerContextState,
-    block_rows: &MlxArray,
-    fused_context_rows: &MlxArray,
+    attention_rows: BlockAttentionRows<'_>,
 ) -> Result<MlxArray, MlxRuntimeError> {
+    let BlockAttentionRows {
+        block_rows,
+        fused_context_rows,
+        block_is_causal,
+    } = attention_rows;
     let block_row_count = block_rows.shape()[1];
     let incoming_row_count = fused_context_rows.shape()[1];
     let skipped_row_count = context_state.skip_rows_beyond_window(incoming_row_count);
@@ -74,8 +88,11 @@ pub fn attend_block_to_context(
         runtime,
         configuration,
         context_state,
-        kept_row_count,
-        block_row_count,
+        MaskRows {
+            kept_row_count,
+            block_row_count,
+            block_is_causal,
+        },
         &queries,
     )?;
     let scale = (configuration.head_dimension as f32).powf(-0.5);
@@ -92,16 +109,27 @@ pub fn attend_block_to_context(
     layer.output_projection.forward(runtime, &merged_heads)
 }
 
+/// The key rows a block mask covers, and whether the block is causal.
+struct MaskRows {
+    kept_row_count: i32,
+    block_row_count: i32,
+    block_is_causal: bool,
+}
+
 /// 0 where a block row may attend to a key, negative infinity where not, in
 /// the queries' dtype so the fused attention keeps its low-precision path.
 fn additive_mask(
     runtime: &MlxRuntime,
     configuration: &DFlashDrafterConfiguration,
     context_state: &DrafterLayerContextState,
-    kept_row_count: i32,
-    block_row_count: i32,
+    mask_rows: MaskRows,
     queries: &MlxArray,
 ) -> Result<MlxArray, MlxRuntimeError> {
+    let MaskRows {
+        kept_row_count,
+        block_row_count,
+        block_is_causal,
+    } = mask_rows;
     let sliding_window = context_state
         .retained_row_limit()
         .map(|row_limit| row_limit + 1);
@@ -109,7 +137,7 @@ fn additive_mask(
         kept_row_count,
         block_row_count,
         sliding_window,
-        configuration.block_is_causal,
+        block_is_causal,
         configuration.block_size,
     );
     let mut additive_values = Vec::with_capacity(visibility.len());

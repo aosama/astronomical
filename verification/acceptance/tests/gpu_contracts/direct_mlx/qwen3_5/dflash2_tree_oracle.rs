@@ -326,7 +326,10 @@ pub(super) fn draft_tree(
     let (hidden, draft_logits) = drafted_block(pair, round, drafting, cell.node_budget);
     let lattice = draft_lattice(
         pair.target.runtime(),
-        &pair.drafter_weights.candidate_selector,
+        pair.drafter_weights
+            .candidate_selector
+            .as_ref()
+            .expect("a DFlash2 drafter has a candidate selector"),
         &pair.drafter_configuration,
         &hidden,
         &draft_logits,
@@ -359,7 +362,10 @@ pub(super) fn staged_draft_tree(
     let started_at = std::time::Instant::now();
     let lattice = draft_lattice(
         runtime,
-        &pair.drafter_weights.candidate_selector,
+        pair.drafter_weights
+            .candidate_selector
+            .as_ref()
+            .expect("a DFlash2 drafter has a candidate selector"),
         &pair.drafter_configuration,
         &hidden,
         &draft_logits,
@@ -491,7 +497,7 @@ fn reference_text(pair: &JourneyPair, token_ids: &[u32]) -> String {
 /// TensorFold's own greedy code completion (engine 1.2.0, this prompt, 256
 /// tokens), which it drafted in 43 rounds: 5.95 kept a round.
 const TENSORFOLD_GREEDY_CODE_COMPLETION: &str =
-    include_str!("../../../fixtures/dflash2_reference/tensorfold_greedy_code_completion.txt");
+    include_str!("../../../fixtures/dflash_reference/tensorfold_greedy_code_completion.txt");
 
 /// The two engines' greedy outputs part after about a hundred tokens, where
 /// they round a near-tie differently, so their round counts are not on the

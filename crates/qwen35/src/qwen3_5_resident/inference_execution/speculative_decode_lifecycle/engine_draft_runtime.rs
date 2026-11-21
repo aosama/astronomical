@@ -1,4 +1,4 @@
-//! The engine-owned DFlash2 drafter runtime.
+//! The engine-owned DFlash drafter runtime, of either generation.
 //!
 //! One resident engine may host one drafter beside its target. Loading is
 //! permissive about absence (a library with no drafter runs the classic
@@ -70,9 +70,10 @@ impl Qwen3_5SpeculativeDraftRuntime {
         let tree_options = draft_tree_options_for_target(model.config().expert_count());
         tracing::info!(
             drafter_directory = %drafter_directory.display(),
+            drafter_generation = ?drafter_configuration.generation,
             converted_projection_count,
             tree_node_budget = tree_options.node_budget,
-            "resident engine decode path: DFlash2 draft trees"
+            "resident engine decode path: DFlash draft trees"
         );
         Ok(Some(Self {
             drafter_configuration,

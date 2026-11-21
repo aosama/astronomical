@@ -652,11 +652,13 @@ measure-row-exact-tree-attention = "run -p xtask -- test-run --package astronomi
 # serve under a limit below the model's size, which measures the worker while
 # the model streams from storage. About two minutes.
 measure-dflash2-serving-throughput = "run -p xtask -- test-run --package astronomical-acceptance --features performance_throughput --test performance_throughput --release --filter dflash2_draft_tree --ignored"
-# The DFlash2 drafter against z-lab's own MLX reference: a tiny random
-# drafter run through dflash/model_mlx.py for two rounds (fixture and its
-# generator in verification/acceptance/tests/fixtures/dflash2_reference); hidden
-# rows, logits, greedy path and kept candidates must match. Seconds.
-test-dflash2-drafter-reference = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter dflash2_drafter_reference"
+# Both DFlash drafter generations against z-lab's own MLX reference: a tiny
+# random drafter of each run through dflash/model_mlx.py for two rounds
+# (fixtures and their generator in
+# verification/acceptance/tests/fixtures/dflash_reference); hidden rows and
+# logits must match, and for DFlash2 the greedy path and kept candidates too.
+# Seconds.
+test-dflash-drafter-reference = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter dflash_drafter_reference"
 # The row-batched kernel's GPU contracts: matches MLX's quantized matmul on
 # every 27B shape at 1 to 32 rows, gives each row the same bits alone and
 # inside a 16-row block, and refuses packings it cannot read. Seconds.

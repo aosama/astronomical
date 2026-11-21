@@ -1,11 +1,15 @@
-//! The DFlash2 block drafter (z-lab, MIT), translated from z-lab's MLX
-//! reference `dflash/model_mlx.py`; see `third-party/THIRD_PARTY_NOTICES`.
+//! The DFlash and DFlash2 block drafters (z-lab, MIT), translated from
+//! z-lab's MLX reference `dflash/model_mlx.py`; see
+//! `third-party/THIRD_PARTY_NOTICES`.
 //!
 //! One pass drafts a whole block: the last committed token followed by mask
 //! slots goes through a few layers that attend to fused target hidden rows,
-//! the target's own head scores every slot, and the candidate selector walks
-//! one coherent path through each slot's best candidates, or the draft tree
-//! searches them for the branches most likely to be kept.
+//! and the target's own head scores every slot. The draft tree then searches
+//! each slot's best candidates for the branches most likely to be kept.
+//! DFlash2 adds convolutions inside every layer and a candidate selector that
+//! scores how well one candidate follows another (`draft_lattice`); a DFlash
+//! drafter's tree ranks each slot by the head alone
+//! (`head_only_draft_lattice`).
 
 #[cfg_attr(not(feature = "direct-mlx"), allow(dead_code))]
 pub mod block_attention_mask;
@@ -17,6 +21,7 @@ pub mod draft_tree;
 #[cfg(feature = "direct-mlx")]
 mod drafter_attention;
 pub mod drafter_configuration;
+mod drafter_configuration_fields;
 #[cfg(feature = "direct-mlx")]
 pub mod drafter_context_state;
 #[cfg(feature = "direct-mlx")]
@@ -27,6 +32,8 @@ pub mod drafter_linear;
 pub mod drafter_weights;
 #[cfg(feature = "direct-mlx")]
 mod grouped_dynamic_convolution;
+#[cfg(feature = "direct-mlx")]
+pub mod head_only_draft_lattice;
 
 #[cfg(test)]
 mod block_attention_mask_tests;
@@ -44,7 +51,8 @@ pub use draft_tree::{
     best_first_draft_tree, tree_block_row_count,
 };
 pub use drafter_configuration::{
-    DFlashDrafterConfiguration, DFlashDrafterConfigurationError, DrafterLayerAttention,
+    CandidateSelectorShape, DFlashDrafterConfiguration, DFlashDrafterConfigurationError,
+    DrafterGeneration, DrafterLayerAttention, GroupedConvolutionShape, HEAD_ONLY_CANDIDATE_COUNT,
 };
 #[cfg(feature = "direct-mlx")]
 pub use drafter_context_state::DrafterContextStates;
@@ -52,3 +60,5 @@ pub use drafter_context_state::DrafterContextStates;
 pub use drafter_forward::{DFlashDraftTarget, drafted_hidden_rows};
 #[cfg(feature = "direct-mlx")]
 pub use drafter_weights::{DFlashDrafterWeights, DFlashDrafterWeightsError, bind_drafter_weights};
+#[cfg(feature = "direct-mlx")]
+pub use head_only_draft_lattice::head_only_draft_lattice;
