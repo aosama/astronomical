@@ -40,7 +40,7 @@ pub fn run_matrix(matrix_options: &MatrixOptions) -> Result<Vec<MatrixCell>, Str
         }
     }
     // Put the instance back as it was found: nothing loaded, its own limit.
-    post(
+    request(
         &matrix_options.base_url,
         "/v1/control/unload-model",
         "POST",
@@ -48,7 +48,7 @@ pub fn run_matrix(matrix_options: &MatrixOptions) -> Result<Vec<MatrixCell>, Str
     );
     let restore_body =
         serde_json::json!({ "maximum_mlx_memory_gb": original_limit_gb }).to_string();
-    post(
+    request(
         &matrix_options.base_url,
         "/v1/config/maximum-mlx-memory",
         "PUT",
@@ -59,9 +59,9 @@ pub fn run_matrix(matrix_options: &MatrixOptions) -> Result<Vec<MatrixCell>, Str
 
 fn run_cell(base_url: &str, model_id: &str, mac_memory_gb: u64) -> MatrixCell {
     let memory_limit_gb = simulated_memory_limit_gb(mac_memory_gb);
-    post(base_url, "/v1/control/unload-model", "POST", None);
+    request(base_url, "/v1/control/unload-model", "POST", None);
     let limit_body = serde_json::json!({ "maximum_mlx_memory_gb": memory_limit_gb }).to_string();
-    let limit_answer = post(
+    let limit_answer = request(
         base_url,
         "/v1/config/maximum-mlx-memory",
         "PUT",
@@ -76,7 +76,7 @@ fn run_cell(base_url: &str, model_id: &str, mac_memory_gb: u64) -> MatrixCell {
             })
             .to_string();
             let asked_at = Instant::now();
-            let chat_answer = post(base_url, "/v1/chat/completions", "POST", Some(&chat_body));
+            let chat_answer = request(base_url, "/v1/chat/completions", "POST", Some(&chat_body));
             let chat_answer_text = chat_answer
                 .map(|(_, answer_text)| answer_text)
                 .unwrap_or_default();
@@ -102,14 +102,14 @@ fn report_progress(completed_cell_count: usize, total_cell_count: usize, elapsed
 }
 
 fn instance_status(base_url: &str) -> Result<serde_json::Value, String> {
-    let (_, status_text) = post(base_url, "/v1/status", "GET", None)
+    let (_, status_text) = request(base_url, "/v1/status", "GET", None)
         .ok_or("the Development instance is not answering; start it with `cargo xtask app dev --background`")?;
     serde_json::from_str(&status_text).map_err(|_| "the instance's status was not JSON".to_owned())
 }
 
 fn listed_model_ids(base_url: &str) -> Result<Vec<String>, String> {
     let (_, models_text) =
-        post(base_url, "/v1/models", "GET", None).ok_or("the model list did not answer")?;
+        request(base_url, "/v1/models", "GET", None).ok_or("the model list did not answer")?;
     let models: serde_json::Value = serde_json::from_str(&models_text).unwrap_or_default();
     let mut model_ids = Vec::new();
     for model in models["data"]
@@ -124,9 +124,9 @@ fn listed_model_ids(base_url: &str) -> Result<Vec<String>, String> {
     Ok(model_ids)
 }
 
-/// One request; returns the HTTP status and body, or `None` when the
+/// One request of any method; returns the HTTP status and body, or `None` when the
 /// instance could not be reached.
-fn post(
+fn request(
     base_url: &str,
     path: &str,
     method: &str,

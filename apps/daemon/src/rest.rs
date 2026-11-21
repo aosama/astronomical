@@ -46,4 +46,6 @@ mod experts_tests;
 #[cfg(test)]
 mod menu_bar_setting_tests;
 #[cfg(test)]
+mod problem_reports_tests;
+#[cfg(test)]
 mod sharing_setting_tests;

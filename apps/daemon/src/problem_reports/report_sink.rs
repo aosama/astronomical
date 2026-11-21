@@ -120,7 +120,7 @@ pub(crate) fn report_problem_with_facts(
 pub(crate) fn report_model_load_failure(model_load_failure_reason: &str, requested_model_id: &str) {
     let failure_identity = ipc_protocol::identify_model_load_failure(model_load_failure_reason);
     report_problem_with_facts(
-        ProblemKind::for_model_load_failure(model_load_failure_reason),
+        ProblemKind::for_model_load_failure(failure_identity.code),
         Some(requested_model_id),
         vec![
             ReportFact::new("load_stage", "While", failure_identity.stage),

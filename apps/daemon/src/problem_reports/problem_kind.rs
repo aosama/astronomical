@@ -43,17 +43,12 @@ impl ProblemKind {
         }
     }
 
-    /// The kind for a failed model load. The worker's reason text is read
-    /// only to tell a memory shortfall from other failures; none of it
-    /// enters the report.
-    pub(crate) fn for_model_load_failure(model_load_failure_reason: &str) -> Self {
-        if model_load_failure_reason
-            .to_ascii_lowercase()
-            .contains("memory")
-        {
-            Self::ModelLoadNotEnoughMemory
-        } else {
-            Self::ModelLoadFailed
+    /// The kind for a failed model load, from the failure's identity code,
+    /// so the kind and the code on one report can never disagree.
+    pub(crate) fn for_model_load_failure(failure_code: &str) -> Self {
+        match failure_code {
+            "not_enough_memory" | "memory_admission_failed" => Self::ModelLoadNotEnoughMemory,
+            _ => Self::ModelLoadFailed,
         }
     }
 

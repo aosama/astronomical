@@ -66,7 +66,7 @@ pub(crate) async fn list_problem_reports(
 
 /// What the person typed, read from an optional JSON body. A missing or
 /// unreadable body is no note: the note never blocks a report.
-fn typed_note(request_body: &[u8]) -> String {
+pub(super) fn typed_note(request_body: &[u8]) -> String {
     let Ok(body) = serde_json::from_slice::<serde_json::Value>(request_body) else {
         return String::new();
     };

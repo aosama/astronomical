@@ -4,13 +4,17 @@ use super::ProblemKind;
 use crate::library::DownloadJobPublicErrorCode;
 
 #[test]
-fn should_tell_a_memory_shortfall_from_other_load_failures() {
+fn should_tell_a_memory_shortfall_from_other_load_failures_by_code() {
     assert_eq!(
-        ProblemKind::for_model_load_failure("not enough Memory for the model's weights"),
+        ProblemKind::for_model_load_failure("not_enough_memory"),
         ProblemKind::ModelLoadNotEnoughMemory
     );
     assert_eq!(
-        ProblemKind::for_model_load_failure("unsupported architecture"),
+        ProblemKind::for_model_load_failure("memory_admission_failed"),
+        ProblemKind::ModelLoadNotEnoughMemory
+    );
+    assert_eq!(
+        ProblemKind::for_model_load_failure("model_files_invalid"),
         ProblemKind::ModelLoadFailed
     );
     assert_eq!(

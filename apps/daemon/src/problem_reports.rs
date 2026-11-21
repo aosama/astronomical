@@ -1,11 +1,16 @@
 //! Problem reports: the short, fixed-shape reports a person may choose to
 //! send the developers when something goes wrong (issue #2413).
 //!
-//! A report is built only from fixed fields: the app version, the Mac's chip,
-//! memory and macOS version, a catalog model id and the kind of problem. It never carries free text from an error, a log line, a
-//! prompt or a path, so there is nothing personal for a scrubber to miss. A
-//! model that is not in the download catalog is named only as such, because
-//! a folder or model someone made themselves can carry a personal name.
+//! A report is built from fixed fields: the app version, the Mac's chip,
+//! memory and macOS version, a catalog model id, the kind of problem, facts
+//! that are fixed names with numbers or fixed words (the failed step, its
+//! code, how the engine stopped), and the engine's last few events as fixed
+//! phrases with numbers. It never carries text from an error, a log line, a
+//! prompt or a path, so there is nothing personal for a scrubber to miss. The
+//! one free text is a note the person types on the screen that shows the rest
+//! of the report. A model that is not in the download catalog is named only
+//! as such, because a folder or model someone made themselves can carry a
+//! personal name.
 //!
 //! These modules build and describe reports and never touch the network;
 //! sending lives apart so the person's choice is checked in one place.
