@@ -322,7 +322,7 @@ fn generation_start_error_response(start_error: GenerationStartError) -> Respons
             model_load_failure_reason,
         } => (
             StatusCode::SERVICE_UNAVAILABLE,
-            Json(OpenAiErrorResponse::model_load_failed(
+            Json(crate::rest::request_rejections::model_load_failed_body(
                 model_load_failure_reason,
             )),
         )

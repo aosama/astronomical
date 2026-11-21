@@ -5,16 +5,25 @@ import { ChatFailureKind } from "./ChatFailureKind";
  * daemon reported. The reason is shown verbatim where it is safe; the next
  * action is derived from the kind.
  */
+/** The sentence and next step the engine gives for this exact failure,
+ * when it knows them; they win over the kind's general wording. */
+export interface FailureGuidance {
+  plainMessage: string;
+  nextStep: string;
+}
+
 export class ChatFailure extends Error {
   public readonly kind: ChatFailureKind;
   public readonly reason: string | null;
+  public readonly guidance: FailureGuidance | null;
 
-  public constructor(kind: ChatFailureKind, reason: string | null = null) {
+  public constructor(kind: ChatFailureKind, reason: string | null = null, guidance: FailureGuidance | null = null) {
     const failureMessage: string = reason != null ? reason : kind;
     super(failureMessage);
     this.name = "ChatFailure";
     this.kind = kind;
     this.reason = reason;
+    this.guidance = guidance;
   }
 
   /** What happened, in words for the person and not for the log. The
@@ -23,6 +32,9 @@ export class ChatFailure extends Error {
    * names workers and log files, so it is kept as `reason` for the banner's
    * tooltip and a plain sentence is shown. */
   public get headline(): string {
+    if (this.guidance !== null) {
+      return this.guidance.plainMessage;
+    }
     switch (this.kind) {
       case ChatFailureKind.NO_USABLE_MODEL:
         return this.reason ?? "No chat model is ready.";
@@ -49,6 +61,9 @@ export class ChatFailure extends Error {
    * failure. This is the failure→action contract kept in one place so every
    * surface stays consistent. */
   public get nextAction(): string {
+    if (this.guidance !== null) {
+      return this.guidance.nextStep;
+    }
     switch (this.kind) {
       case ChatFailureKind.NO_USABLE_MODEL:
         return "Get a model from the Models page in the Observatory, then try again.";

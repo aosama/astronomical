@@ -216,7 +216,7 @@ export class DaemonClient {
     }
     if (!response.ok) {
       const reason = ChatFailureClassifier.reasonFromErrorDocument(bodyText);
-      throw new ChatFailure(ChatFailureClassifier.classify(response.status, reason != null ? reason : ""), reason);
+      throw new ChatFailure(ChatFailureClassifier.classifyErrorDocument(response.status, bodyText), reason, ChatFailureClassifier.guidanceFromErrorDocument(bodyText));
     }
     return bodyText;
   }
@@ -314,8 +314,7 @@ export class DaemonClient {
     if (!response.ok) {
       const bodyText = await response.text().catch(() => "");
       const reason = ChatFailureClassifier.reasonFromErrorDocument(bodyText);
-      const searchReason: string = reason != null ? reason : "";
-      throw new ChatFailure(ChatFailureClassifier.classify(response.status, searchReason), reason);
+      throw new ChatFailure(ChatFailureClassifier.classifyErrorDocument(response.status, bodyText), reason, ChatFailureClassifier.guidanceFromErrorDocument(bodyText));
     }
     await DaemonClient.consumeServerSentEvents(response, signal, onChunk);
   }
@@ -388,8 +387,7 @@ export class DaemonClient {
     }
     if (!response.ok) {
       const reason = ChatFailureClassifier.reasonFromErrorDocument(bodyText);
-      const searchReason: string = reason != null ? reason : "";
-      throw new ChatFailure(ChatFailureClassifier.classify(response.status, searchReason), reason);
+      throw new ChatFailure(ChatFailureClassifier.classifyErrorDocument(response.status, bodyText), reason, ChatFailureClassifier.guidanceFromErrorDocument(bodyText));
     }
     return bodyText;
   }

@@ -43,7 +43,7 @@ test("should_say_chats_never_leave_and_show_the_stored_choice_and_sent_count", a
   await sharing.refresh();
   const pageText = sharing.element.textContent ?? "";
   assert.match(pageText, /Chats, files and imagesNever/);
-  assert.match(pageText, /Sent so far2 reports/);
+  assert.match(pageText, /Problem reports sent2 reports/);
   const picker = sharing.element.querySelector('[data-testid="settings-problem-reports"]') as HTMLSelectElement;
   assert.equal(picker.value, "ask");
 });
@@ -72,7 +72,7 @@ test("should_save_a_new_choice_and_redraw_from_the_engine", async () => {
 test("should_say_nothing_was_sent_and_offer_no_list_when_the_log_is_empty", async () => {
   const { sharing } = sharingFor({ ...TWO_SENT, sent: [] });
   await sharing.refresh();
-  assert.match(sharing.element.textContent ?? "", /Sent so farNothing yet/);
+  assert.match(sharing.element.textContent ?? "", /Problem reports sentNothing yet/);
   assert.equal(sharing.element.querySelector('[data-testid="settings-sent-reports"]'), null);
 });
 
@@ -142,4 +142,16 @@ test("should_say_the_count_is_on_with_its_last_sent_day_and_offer_to_turn_it_off
   assert.match(detailText, /^On\. Once a day: /);
   assert.match(detailText, /Last sent /);
   assert.equal(sharing.element.querySelector('[data-testid="settings-daily-count"]')?.textContent, "Turn off");
+});
+
+test("should_describe_each_problem_report_choice_in_words_that_match_it", async () => {
+  for (const [choice, expected] of [
+    ["ask", /you see the whole report and choose whether to send it/],
+    ["always", /a report is sent without asking/],
+    ["never", /No report is offered or sent/],
+  ] as Array<[string, RegExp]>) {
+    const { sharing } = sharingFor({ ...TWO_SENT, choice });
+    await sharing.refresh();
+    assert.match(sharing.element.textContent ?? "", expected, choice);
+  }
 });

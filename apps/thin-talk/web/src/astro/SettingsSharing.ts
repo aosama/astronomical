@@ -12,6 +12,14 @@ const PROBLEM_REPORT_CHOICES: ReadonlyArray<{ choice: ProblemReportChoice; label
   { choice: "never", label: "Never" },
 ];
 
+/** What each choice means, shown beside the picker so the words always
+ * match the stored choice. */
+const PROBLEM_REPORT_CHOICE_DETAILS: Readonly<Record<ProblemReportChoice, string>> = {
+  ask: "When something fails, you see the whole report and choose whether to send it.",
+  always: "When something fails, a report is sent without asking. Each one is listed below.",
+  never: "No report is offered or sent.",
+};
+
 /**
  * The page's "What leaves this Mac" group: everything Astronomical can send
  * from this Mac, with the one row the person can change, and every report
@@ -73,9 +81,9 @@ export class SettingsSharing {
   }
 
   private reportDetail(problemReports: ProblemReports): HTMLElement {
-    const detailText = problemReports.isSendingSetUp
-      ? "When something fails, you see the whole report first."
-      : "When something fails, you see the whole report. Sending isn't set up in this version.";
+    const detailText = !problemReports.isSendingSetUp
+      ? "When something fails, you see the whole report. Sending isn't set up in this version."
+      : PROBLEM_REPORT_CHOICE_DETAILS[problemReports.choice];
     return makeElement(this.document, "span", "settings__row-value--muted", detailText);
   }
 
@@ -108,7 +116,7 @@ export class SettingsSharing {
           this.isSentListOpen = !this.isSentListOpen;
           void this.refresh();
         });
-    return makeRow(this.document, "Sent so far", sentText, toggle);
+    return makeRow(this.document, "Problem reports sent", sentText, toggle);
   }
 
   /** Every sent report, newest first, as the exact lines that were sent. */
