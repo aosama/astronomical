@@ -59,9 +59,13 @@ impl WaitingReports {
         let insert_position = waiting_state
             .reports
             .partition_point(|waiting_report| waiting_report.report_number < report_number);
-        waiting_state
-            .reports
-            .insert(insert_position, WaitingProblemReport { report_number, report });
+        waiting_state.reports.insert(
+            insert_position,
+            WaitingProblemReport {
+                report_number,
+                report,
+            },
+        );
         if waiting_state.reports.len() > MAXIMUM_WAITING_REPORTS {
             waiting_state.reports.remove(0);
         }

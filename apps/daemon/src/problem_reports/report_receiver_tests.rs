@@ -90,9 +90,24 @@ fn should_send_only_the_report_fields_in_the_envelope() {
             "message",
             "platform",
             "release",
+            "sdk",
             "tags",
-            "timestamp"
+            "timestamp",
+            "user"
         ],
-        "no user, device or breadcrumb fields may be sent"
+        "no device or breadcrumb fields may be sent"
+    );
+    assert_eq!(
+        event["user"],
+        serde_json::json!({"ip_address": "0.0.0.0"}),
+        "the only user field is a placeholder address that maps to no place"
+    );
+    assert_eq!(
+        event["sdk"]["settings"]["infer_ip"], "never",
+        "Sentry must not work out an address or a city from the connection"
+    );
+    assert_eq!(
+        event["sdk"]["settings"]["infer_ip"], "never",
+        "Sentry must not work out an address or a city from the connection"
     );
 }

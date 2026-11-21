@@ -108,6 +108,18 @@ pub(crate) fn sentry_envelope_body(
             "macos": report.mac.macos_version,
         },
         "extra": {"report": report},
+        // Sentry fills a missing address from the connection and looks up a
+        // city from it; the project's "prevent storing IP addresses" drops
+        // the address but kept the city in a live check, and `infer_ip:
+        // never` alone did not stop it. A placeholder address that maps to
+        // no place leaves nothing to look up, and the project setting then
+        // drops the placeholder too.
+        "user": {"ip_address": "0.0.0.0"},
+        "sdk": {
+            "name": "astronomical.problem-reports",
+            "version": "1",
+            "settings": {"infer_ip": "never"},
+        },
     });
     let envelope_header =
         json!({"event_id": event_id, "sent_at_unix_seconds": sent_at_unix_seconds});
