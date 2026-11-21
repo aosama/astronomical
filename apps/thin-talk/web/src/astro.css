@@ -666,3 +666,43 @@
     transition: none;
   }
 }
+
+/* "What leaves this Mac": the problem report picker and the list of every
+   report already sent, shown as the exact lines that went. */
+.settings__picker {
+  flex: none;
+  font: inherit;
+  font-size: 14px;
+}
+
+.settings__sent-reports {
+  padding: 4px 0 8px;
+}
+
+.settings__sent-report-time {
+  margin: 8px 0 4px;
+  color: var(--astro-muted);
+  font-size: 13px;
+}
+
+.settings__sent-report-lines {
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--fill);
+  font-size: 13px;
+  white-space: pre-wrap;
+  max-height: 180px;
+  overflow: auto;
+}
+
+.settings__person-report {
+  padding: 4px 0 8px;
+}
+
+.settings__person-report-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
+}

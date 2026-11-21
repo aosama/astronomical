@@ -30,6 +30,7 @@ mod image_generation;
 #[cfg(test)]
 mod image_generation_tests;
 mod message_codec;
+mod model_load_failure_identity;
 mod model_load_in_flight;
 mod neural_engine_chunk_report;
 mod neural_engine_prefill_status;
@@ -95,6 +96,12 @@ pub use image_generation::{
 pub use message_codec::{
     decode_command, decode_daemon_request, decode_daemon_response, decode_event, encode_command,
     encode_daemon_request, encode_daemon_response, encode_event,
+};
+pub use model_load_failure_identity::{
+    ARTIFACT_VALIDATION_FAILED_PREFIX, ENGINE_INITIALIZATION_FAILED_REASON,
+    MEMORY_GEOMETRY_FAILED_REASON, ModelLoadFailureIdentity,
+    PROCESSOR_INITIALIZATION_FAILED_REASON, QWEN_ENGINE_INITIALIZATION_FAILED_REASON,
+    RESIDENCY_ADMISSION_FAILED_REASON, identify_model_load_failure,
 };
 pub use model_load_in_flight::ModelLoadInFlight;
 pub use neural_engine_chunk_report::{NeuralEngineChunkPlacement, NeuralEngineChunkReport};

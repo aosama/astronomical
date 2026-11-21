@@ -69,15 +69,17 @@ impl Qwen3_5ModelStartupError {
         let unbounded_public_model_load_failure_reason = match self {
             Self::ArtifactValidation { source, .. } => source.public_failure_reason(),
             Self::ArtifactRamGeometry { .. } | Self::TextWeightPayloadUnreadable { .. } => {
-                "Qwen3.5 artifact RAM geometry could not be derived".to_owned()
+                ipc_protocol::MEMORY_GEOMETRY_FAILED_REASON.to_owned()
             }
             Self::CompleteResidencyDecision { .. } => {
-                "Qwen3.5 complete-residency admission failed".to_owned()
+                ipc_protocol::RESIDENCY_ADMISSION_FAILED_REASON.to_owned()
             }
             Self::ProcessorInitialization { .. } => {
-                "Qwen3.5 processor initialization failed".to_owned()
+                ipc_protocol::PROCESSOR_INITIALIZATION_FAILED_REASON.to_owned()
             }
-            Self::EngineInitialization { .. } => "Qwen3.5 engine initialization failed".to_owned(),
+            Self::EngineInitialization { .. } => {
+                ipc_protocol::QWEN_ENGINE_INITIALIZATION_FAILED_REASON.to_owned()
+            }
             Self::OpenPerformanceAttributionLog { .. }
             | Self::StreamingPromptProcessingChunkSizing(_) => {
                 "model initialization failed".to_owned()

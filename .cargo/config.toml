@@ -522,6 +522,16 @@ test-quantization-mixture-of-experts = "run -p xtask -- test-run --package astro
 # progress to standard error, and ends each table with what its numbers can
 # and cannot tell. `cargo test -p xtask --bin xtask usage_report` runs its
 # tests, which use recorded answers and never the network.
+# `cargo xtask small-mac-matrix [--base-url URL] [--model ID]... [--mac-gb N]...`
+# finds out how models behave on Macs smaller than this one (issue #2413).
+# Against the Development instance only, for each model and each simulated
+# Mac (8, 16, 24 and 32 GB unless --mac-gb names others) it unloads the
+# model, sets the memory limit that Mac would get (two thirds of its memory,
+# an approximation), asks for 8 tokens and records the outcome and time, then
+# puts the limit back. It loads real models on the GPU, so check that
+# Development is idle first and name one small model with --model for a short
+# run. `cargo test -p xtask --bin xtask small_mac_matrix` runs its tests,
+# which never touch an instance.
 xtask = "run -p xtask --"
 
 # Compile the whole workspace across ALL targets without running anything;

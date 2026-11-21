@@ -14,6 +14,7 @@
         {"title": "Prompt cache", "description": "A cache on disk that lets a prompt seen before skip most of its processing.", "settings": ["ssd_prompt_cache.enabled", "ssd_prompt_cache.maximum_size_gb"]},
         {"title": "Menu bar", "description": "What the Astronomical item at the top of the screen shows, and how much detail its menu gives.", "settings": ["menu_bar.show_progress_and_speed", "menu_bar.show_technical_details"]},
         {"title": "Astronomical skill", "description": "How coding agents and other tools that use your models learn what Astronomical can do.", "settings": ["skill.declare_to_models", "skill.update_from_web"]},
+        {"title": "What leaves this Mac", "description": "Your chats, files and images never leave this Mac. These choices cover the only other things Astronomical can send to its developers.", "settings": ["sharing.problem_reports", "sharing.daily_count"]},
         {"title": "Diagnostics", "description": "What Astronomical writes to its logs. Useful when reporting a problem.", "settings": ["diagnostics.log_level", "diagnostics.retained_log_files", "diagnostics.completion_attribution_enabled", "diagnostics.performance_attribution_enabled"]}
     ],
     "tuning": [
@@ -66,6 +67,9 @@
     },
     "skill": {
       "$ref": "#/$defs/skill"
+    },
+    "sharing": {
+      "$ref": "#/$defs/sharing"
     }
   },
   "$defs": {
@@ -476,6 +480,30 @@
           "default": true,
           "description": "Whether the app checks getastronomical.com about once a day for a newer Astronomical skill that suits this version of the app, and downloads it.",
           "x-astronomical-explanation": "The guide that models read improves between versions of the app. With this on, Astronomical looks on its own website about once a day for a newer guide and downloads it; the copy that came with the app is used when you are offline. The check sends nothing about you or your work. Turn it off to keep the copy that came with the app.",
+          "x-astronomical-apply-mode": "live"
+        }
+      }
+    },
+    "sharing": {
+      "type": "object",
+      "description": "What the person chose to send to the Astronomical developers. Nothing is sent unless chosen here or on the screen that asks.",
+      "additionalProperties": false,
+      "properties": {
+        "problem_reports": {
+          "title": "Problem reports",
+          "type": "string",
+          "enum": ["ask", "always", "never"],
+          "default": "ask",
+          "description": "Whether a report about a failure is shown for the person to send ('ask'), sent without asking ('always'), or never offered ('never').",
+          "x-astronomical-explanation": "When a model fails to load, a download breaks or the app stops unexpectedly, Astronomical can send the developers a short report so it gets fixed. A report holds the app version, the Mac's chip, memory and macOS version, the catalog model in use and the kind of problem, and nothing else: never your chats, files, images or folder names. 'ask' shows you the whole report each time and sends it only if you press Send. 'always' sends reports without asking. 'never' stops offering them.",
+          "x-astronomical-apply-mode": "live"
+        },
+        "daily_count": {
+          "title": "Count this Mac once a day",
+          "type": "boolean",
+          "default": false,
+          "description": "Whether the app sends one line a day with its version, the macOS version, the Mac's chip and its memory, so the developers know how many Macs use Astronomical. Left out until the person answers the question that asks.",
+          "x-astronomical-explanation": "Astronomical cannot see who uses it. With this on, the app sends one line a day, such as 'Astronomical 0.2.126, macOS 27.2, M5 Pro, 48 GB', so the developers know how many Macs run it and which versions they use. It carries no name, no account and nothing from your chats or files.",
           "x-astronomical-apply-mode": "live"
         }
       }

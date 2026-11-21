@@ -382,3 +382,101 @@
   font-size: 15px;
   cursor: default;
 }
+
+/* The problem report card sits under the failure banner. Quiet surface,
+   not danger red: the failure already said what went wrong, and this card
+   is an offer the person may decline. */
+.problem-report {
+  flex: 0 0 auto;
+  margin: 0 24px 8px;
+  padding: 12px 16px;
+  border-radius: 14px;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+}
+
+.problem-report[hidden] {
+  display: none;
+}
+
+.problem-report__heading {
+  margin: 0;
+  color: var(--ink);
+  font-size: 15.5px;
+}
+
+.problem-report__explanation,
+.problem-report__promise,
+.problem-report__outcome {
+  margin: 2px 0 0;
+  color: var(--ink-2);
+  font-size: 14px;
+}
+
+.problem-report__outcome:empty {
+  display: none;
+}
+
+.problem-report__lines {
+  margin: 8px 0;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--fill);
+  color: var(--ink);
+  font-size: 13px;
+  white-space: pre-wrap;
+  /* A report lists up to a dozen earlier events; the box scrolls so the
+     card never pushes the message field off the window. */
+  max-height: 150px;
+  overflow: auto;
+}
+
+.problem-report__always {
+  display: block;
+  margin: 8px 0 0;
+  color: var(--ink-2);
+  font-size: 14px;
+}
+
+.problem-report__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.problem-report__decline,
+.problem-report__send {
+  padding: 6px 16px;
+  border-radius: 10px;
+  font: inherit;
+  font-size: 15px;
+  cursor: default;
+}
+
+.problem-report__decline {
+  border: 1px solid var(--line-strong);
+  background: transparent;
+  color: var(--ink);
+}
+
+.problem-report__send {
+  border: none;
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.problem-report__note {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  margin: 8px 0 0;
+  padding: 6px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  resize: vertical;
+}

@@ -14,6 +14,8 @@
 
 mod application;
 mod application_build_identity;
+#[cfg(test)]
+mod application_problem_report_tests;
 mod astronomical_skill;
 mod astronomical_skill_update;
 mod config;
@@ -22,6 +24,7 @@ mod instance_lock;
 mod ipc;
 mod library;
 mod performance;
+mod problem_reports;
 mod rest;
 mod serving;
 mod shutdown_control;
@@ -66,6 +69,7 @@ pub use config::config_reload::{
 };
 pub use config::resolved_configuration_generation::ResolvedConfigurationGeneration;
 pub use config::runtime_model_policy::{RuntimeModelGenerationDefaults, RuntimeModelPolicy};
+pub use config::sharing_settings::SharingSettings;
 pub use config::skill_settings::SkillSettings;
 pub use instance_lock::{AstronomicalInstanceLock, AstronomicalInstanceLockError};
 pub use ipc::service::{DaemonIpcGenerationContext, DaemonIpcService, start_daemon_ipc_service};

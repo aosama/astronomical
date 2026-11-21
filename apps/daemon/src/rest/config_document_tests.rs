@@ -8,7 +8,7 @@ use config::{AstronomicalInstancePaths, AstronomicalRuntimeInstance};
 use super::unavailable_settings;
 
 #[test]
-fn should_mark_the_folder_settings_unavailable_for_a_sandboxed_instance() {
+fn should_mark_the_folder_and_sharing_settings_unavailable_for_a_sandboxed_instance() {
     let group_container_paths = AstronomicalInstancePaths::for_application_group_container(
         PathBuf::from("/Users/example/Library/Group Containers/TEAM123456.astronomical"),
         AstronomicalRuntimeInstance::Stable,
@@ -20,6 +20,8 @@ fn should_mark_the_folder_settings_unavailable_for_a_sandboxed_instance() {
             "runtime.model_directories",
             "runtime.model_download_directory",
             "runtime.neural_engine_program_directory",
+            "sharing.problem_reports",
+            "sharing.daily_count",
         ]
     );
 }

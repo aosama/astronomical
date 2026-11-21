@@ -60,6 +60,8 @@ pub struct ResolvedRuntimeConfig {
     /// Whether models are told about the Astronomical skill, where it is, and
     /// whether it is kept current from the web. Applied live.
     pub skill_settings: crate::SkillSettings,
+    /// What the person chose to send to the developers. Applied live.
+    pub sharing_settings: crate::SharingSettings,
     /// Performance attribution preference captured by the worker at startup.
     pub performance_attribution_enabled: bool,
     /// Whether the worker may read and write the `astro_ssd_prompt_cache`.
@@ -197,6 +199,7 @@ impl ResolvedRuntimeConfigResolver {
                 user_config,
                 &self.instance_paths.skill_directory(),
             ),
+            sharing_settings: crate::SharingSettings::resolve(user_config),
             performance_attribution_enabled: user_config.performance_attribution_enabled(),
             astro_ssd_prompt_cache_enabled: user_config.astro_ssd_prompt_cache_enabled(),
             configured_astro_ssd_prompt_cache_enabled: user_config
@@ -421,6 +424,11 @@ fn in_place_field_changes(
     }
     changed_fields.extend(menu_bar_field_changes(current, candidate));
     changed_fields.extend(skill_field_changes(current, candidate));
+    changed_fields.extend(
+        current
+            .sharing_settings
+            .changed_setting_names(&candidate.sharing_settings),
+    );
     if model_request_defaults_differ(
         &current.model_policy_catalog,
         &candidate.model_policy_catalog,

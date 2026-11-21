@@ -16,6 +16,8 @@ import "./modelPanelView.test";
 import "./modelDescription.test";
 import "./modelDescriptionDirectory.test";
 import "./loadNotice.test";
+import "./problemReportCard.test";
+import "./settingsSharing.test";
 import "./composerStylesheet.test";
 import "./paletteContrast.test";
 import "./diagramTheme.test";
