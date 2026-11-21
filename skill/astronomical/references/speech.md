@@ -1,21 +1,22 @@
 # Reading text aloud
 
-`astronomical speak` turns text into speech, saves it as an audio file and
-prints the path. It does not play anything. Its options (reading from a file,
-the voice, the pace, where to save) are in `astronomical --help`.
+`astronomical speak` reads text aloud on this Mac's speakers and returns when
+it has finished. With the output option it saves the audio to a file instead
+and plays nothing. Its options (reading from a file, the voice, the pace,
+saving) are in `astronomical --help`.
 
-## When the person wants to hear it
+## Choosing between them
 
-"Read this aloud" or "say this" means the person expects to hear it, so save
-it, then play it: `afplay PATH` plays the saved file on a Mac. Only say it was
-played after `afplay` finished without an error; otherwise say where the file
-is so they can open it.
+- "Read this aloud", "say this", "tell me": speak it. Nothing is saved.
+- "Make an audio file of this", "save it for later": use the output option and
+  tell the person the path the command printed.
 
 ## Doing it well
 
 - **Clean the text first.** Remove markup, code and links that would be read
   out letter by letter.
-- **Split a long text** into parts of a few paragraphs, saved with numbered
-  names. Tell the person they will get several files, to play in order.
-- **Play parts in order,** one `afplay` per file, when a text was split.
+- **Split a long text** into parts of a few paragraphs, one command per part,
+  in order. Each one returns when it has finished speaking.
+- **If playback fails** (for example, no working sound output), the message
+  says so; offer to save the audio as a file instead.
 - The first use downloads the speech model; ask first.

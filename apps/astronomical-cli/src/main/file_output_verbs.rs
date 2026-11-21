@@ -93,13 +93,6 @@ fn run_speak_verb(speak_arguments: astronomical_cli::SpeakArguments) -> ExitCode
             return ExitCode::FAILURE;
         }
     };
-    let default_output_directory = match std::env::current_dir() {
-        Ok(current_directory) => current_directory,
-        Err(directory_error) => {
-            eprintln!("astronomical: could not read the working directory: {directory_error}");
-            return ExitCode::FAILURE;
-        }
-    };
     let mut stdin = io::stdin().lock();
     let mut stdout = io::stdout();
     let mut stderr = io::stderr();
@@ -108,7 +101,7 @@ fn run_speak_verb(speak_arguments: astronomical_cli::SpeakArguments) -> ExitCode
     let mut speak_dependencies = astronomical_cli::SpeakDependencies {
         candidate_socket_paths: speak_candidate_socket_paths,
         runtime_instance: speak_runtime_instance,
-        default_output_directory,
+        audio_player: &astronomical_cli::AfplaySpeakers,
         stdin: &mut stdin,
         stdout: &mut stdout,
         stderr: &mut stderr,

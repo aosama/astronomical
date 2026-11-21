@@ -1,5 +1,6 @@
-//! The one-shot `astronomical speak` journey: text in, one audio file on
-//! disk, the path on standard output, exit.
+//! The one-shot `astronomical speak` journey: text in, spoken aloud on this
+//! Mac's speakers, exit. With `--output` the audio is saved to that file
+//! instead, and its path goes to standard output.
 //!
 //! Like every CLI verb it speaks the framed daemon IPC protocol over the
 //! instance's unix socket: the shared model lifecycle resolves which model
@@ -14,6 +15,8 @@ mod speak_arguments;
 mod speak_exchange;
 #[path = "speak/speak_output.rs"]
 mod speak_output;
+#[path = "speak/speak_playback.rs"]
+mod speak_playback;
 
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
@@ -31,6 +34,8 @@ use crate::{DaemonProbe, ModelLifecycle, RequiredCapability};
 pub use speak_arguments::{SpeakArguments, parse_speak_arguments};
 use speak_exchange::{SpeakExchangeBounds, SpokenReply, exchange_speak_request};
 use speak_output::{ReservedAudioOutput, reserve_audio_output, write_audio};
+use speak_playback::play_spoken_audio;
+pub use speak_playback::{AfplaySpeakers, SpokenAudioPlayer};
 
 /// Collaborators the speak journey needs, injected so tests can stub them.
 pub struct SpeakDependencies<'a> {
@@ -38,8 +43,8 @@ pub struct SpeakDependencies<'a> {
     pub candidate_socket_paths: Vec<PathBuf>,
     /// Channel these sockets belong to, named when its daemon is down.
     pub runtime_instance: AstronomicalRuntimeInstance,
-    /// Where an unnamed output lands: the working directory.
-    pub default_output_directory: PathBuf,
+    /// Plays the audio when no `--output` asks for a file.
+    pub audio_player: &'a dyn SpokenAudioPlayer,
     /// Read to EOF when neither TEXT nor `--file` was given.
     pub stdin: &'a mut dyn Read,
     /// Where the saved path goes.
@@ -58,18 +63,41 @@ pub struct SpeakDependencies<'a> {
     pub download_poll_interval: Duration,
 }
 
-/// Runs the whole journey. The text is read and the output claimed before
-/// the daemon is asked, and the claim is released on every failure, so a
-/// failed run never leaves an empty file behind.
+/// Runs the whole journey: speaks aloud, or saves to `--output`. A saved
+/// file's path is claimed before the daemon is asked and released on every
+/// failure, so a failed run never leaves an empty file behind.
 pub async fn run_speak(
     speak_arguments: &SpeakArguments,
     speak_dependencies: &mut SpeakDependencies<'_>,
 ) -> Result<(), SpeakError> {
     let spoken_text = resolve_spoken_text(speak_arguments, speak_dependencies.stdin)?;
-    let reserved_output = reserve_audio_output(
-        speak_arguments.output_path.as_deref(),
-        &speak_dependencies.default_output_directory,
-    )?;
+    match speak_arguments.output_path.as_deref() {
+        None => {
+            let spoken_reply =
+                request_speech(speak_arguments, spoken_text, speak_dependencies).await?;
+            speak_aloud(spoken_reply, speak_dependencies)
+        }
+        Some(output_path) => {
+            speak_to_file(
+                output_path,
+                speak_arguments,
+                spoken_text,
+                speak_dependencies,
+            )
+            .await
+        }
+    }
+}
+
+/// Claims `output_path`, asks for the audio, and saves it; the claim is
+/// released if anything fails, so no empty file is left behind.
+async fn speak_to_file(
+    output_path: &Path,
+    speak_arguments: &SpeakArguments,
+    spoken_text: String,
+    speak_dependencies: &mut SpeakDependencies<'_>,
+) -> Result<(), SpeakError> {
+    let reserved_output = reserve_audio_output(output_path)?;
     match request_speech(speak_arguments, spoken_text, speak_dependencies).await {
         Ok(spoken_reply) => save_spoken_audio(reserved_output, spoken_reply, speak_dependencies),
         Err(speak_error) => {
@@ -171,6 +199,36 @@ async fn prepare_speech_model(
     Ok(speech_model_id)
 }
 
+/// Plays the audio to the end, then summarises the run on standard error.
+fn speak_aloud(
+    spoken_reply: SpokenReply,
+    speak_dependencies: &mut SpeakDependencies<'_>,
+) -> Result<(), SpeakError> {
+    play_spoken_audio(
+        speak_dependencies.audio_player,
+        &spoken_reply.pcm16_bytes,
+        spoken_reply.metadata.sample_rate_hertz,
+    )?;
+    let metadata = &spoken_reply.metadata;
+    let audio_seconds = metadata.sample_count as f64 / f64::from(metadata.sample_rate_hertz.max(1));
+    let _ = writeln!(
+        speak_dependencies.stderr,
+        "spoke {audio_seconds:.1}s with {} in voice {}, seed {} (pass --seed {} to say it again the same way, or --output FILE.wav to save it)",
+        spoken_reply.model, metadata.voice_name, metadata.seed, metadata.seed,
+    );
+    write_cut_short_note(speak_dependencies.stderr, metadata.cut_short_segment_count);
+    Ok(())
+}
+
+fn write_cut_short_note(stderr: &mut dyn Write, cut_short_segment_count: u32) {
+    if cut_short_segment_count > 0 {
+        let _ = writeln!(
+            stderr,
+            "note: the model stopped early in {cut_short_segment_count} part(s) of the text; shorter sentences may help"
+        );
+    }
+}
+
 /// Writes the audio, prints the saved path on standard output (what a
 /// script captures), and summarises the run on standard error.
 fn save_spoken_audio(
@@ -196,13 +254,7 @@ fn save_spoken_audio(
         metadata.seed,
         metadata.seed,
     );
-    if metadata.cut_short_segment_count > 0 {
-        let _ = writeln!(
-            speak_dependencies.stderr,
-            "note: the model stopped early in {} part(s) of the text; shorter sentences may help",
-            metadata.cut_short_segment_count
-        );
-    }
+    write_cut_short_note(speak_dependencies.stderr, metadata.cut_short_segment_count);
     Ok(())
 }
 
@@ -256,6 +308,8 @@ pub enum SpeakError {
     ReturnedAudioInvalid,
     #[error("Could not write the saved path to standard output: {cause}")]
     StdoutUnwritable { cause: String },
+    #[error("Could not play the audio: {cause}. Pass --output FILE.wav to save it instead.")]
+    PlaybackFailed { cause: String },
 }
 
 impl SpeakError {

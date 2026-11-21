@@ -83,24 +83,20 @@ fn should_refuse_blank_text_and_a_missing_file() {
 #[test]
 fn should_pick_the_format_from_the_extension_and_never_overwrite() {
     let output_directory = tempfile::tempdir().expect("a temporary directory");
-    let default_output =
-        reserve_audio_output(None, output_directory.path()).expect("a timestamped WAV");
-    assert_eq!(default_output.audio_format, AudioFormat::Wav);
-    default_output.reserved_file.discard();
+    let wav_output =
+        reserve_audio_output(&output_directory.path().join("romeo.wav")).expect("a .wav output");
+    assert_eq!(wav_output.audio_format, AudioFormat::Wav);
+    wav_output.reserved_file.discard();
     let pcm_path = output_directory.path().join("romeo.pcm");
-    let pcm_output =
-        reserve_audio_output(Some(&pcm_path), output_directory.path()).expect("a .pcm output");
+    let pcm_output = reserve_audio_output(&pcm_path).expect("a .pcm output");
     assert_eq!(pcm_output.audio_format, AudioFormat::Pcm);
     assert!(matches!(
-        reserve_audio_output(Some(&pcm_path), output_directory.path()),
+        reserve_audio_output(&pcm_path),
         Err(SpeakError::OutputExists { .. })
     ));
     pcm_output.reserved_file.discard();
     assert!(matches!(
-        reserve_audio_output(
-            Some(&output_directory.path().join("romeo.mp3")),
-            output_directory.path()
-        ),
+        reserve_audio_output(&output_directory.path().join("romeo.mp3")),
         Err(SpeakError::OutputMustBeAudio { .. })
     ));
 }
@@ -111,15 +107,13 @@ fn should_pick_the_format_from_the_extension_and_never_overwrite() {
 fn should_write_wav_with_its_header_and_refuse_half_a_sample() {
     let output_directory = tempfile::tempdir().expect("a temporary directory");
     let wav_path = output_directory.path().join("juliet.wav");
-    let wav_output =
-        reserve_audio_output(Some(&wav_path), output_directory.path()).expect("a .wav output");
+    let wav_output = reserve_audio_output(&wav_path).expect("a .wav output");
     let saved_path = write_audio(wav_output, &[0, 0, 0, 64], 24_000).expect("whole samples");
     let saved_bytes = std::fs::read(saved_path).expect("the WAV is readable");
     assert_eq!(&saved_bytes[..4], b"RIFF");
     assert_eq!(saved_bytes.len(), 48);
     let pcm_path = output_directory.path().join("juliet.pcm");
-    let pcm_output =
-        reserve_audio_output(Some(&pcm_path), output_directory.path()).expect("a .pcm output");
+    let pcm_output = reserve_audio_output(&pcm_path).expect("a .pcm output");
     assert!(matches!(
         write_audio(pcm_output, &[0, 0, 7], 24_000),
         Err(SpeakError::ReturnedAudioInvalid)

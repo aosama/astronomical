@@ -1,10 +1,12 @@
-//! The `astronomical speak` one-shot journey: text in, one audio file on
-//! disk, the saved path on stdout, process exits. The daemon side is a stub
-//! speaking the real framed protocol over a real unix socket.
+//! The `astronomical speak` one-shot journey: text in, spoken aloud by
+//! default, or saved to `--output` with its path on stdout. The daemon side
+//! is a stub speaking the real framed protocol over a real unix socket, and a
+//! stand-in player records what would have reached the speakers.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 
-use astronomical_cli::{SpeakArguments, SpeakDependencies, SpeakError};
+use astronomical_cli::{SpeakArguments, SpeakDependencies, SpeakError, SpokenAudioPlayer};
 use config::AstronomicalRuntimeInstance;
 use ipc_protocol::DaemonRequest;
 use speech_contract::SpeechFailure;
@@ -49,17 +51,61 @@ fn speech_stub_config(speech_outcome: StubSpeechOutcome) -> StubDaemonConfig {
     }
 }
 
+/// Records each WAV it is asked to play, and whether it still existed while
+/// playing, instead of making a sound; or refuses, like a Mac with no
+/// working output device.
+#[derive(Default)]
+struct RecordingSpeakers {
+    played_wav_bytes: Mutex<Vec<Vec<u8>>>,
+    played_paths: Mutex<Vec<PathBuf>>,
+    refusal: Option<String>,
+}
+
+impl SpokenAudioPlayer for RecordingSpeakers {
+    fn play_wav_file(&self, wav_path: &Path) -> Result<(), String> {
+        if let Some(refusal) = &self.refusal {
+            return Err(refusal.clone());
+        }
+        let wav_bytes = std::fs::read(wav_path).map_err(|read_error| read_error.to_string())?;
+        self.played_wav_bytes
+            .lock()
+            .expect("recording")
+            .push(wav_bytes);
+        self.played_paths
+            .lock()
+            .expect("recording")
+            .push(wav_path.to_path_buf());
+        Ok(())
+    }
+}
+
 struct SpeakRun {
     outcome: Result<(), SpeakError>,
     stdout: String,
     captured_request: Option<DaemonRequest>,
     test_directory: PathBuf,
+    speakers: RecordingSpeakers,
 }
 
 async fn run_journey(
     test_name: &str,
     stub_config: StubDaemonConfig,
     speak_arguments: SpeakArguments,
+) -> SpeakRun {
+    run_journey_with_speakers(
+        test_name,
+        stub_config,
+        speak_arguments,
+        RecordingSpeakers::default(),
+    )
+    .await
+}
+
+async fn run_journey_with_speakers(
+    test_name: &str,
+    stub_config: StubDaemonConfig,
+    speak_arguments: SpeakArguments,
+    speakers: RecordingSpeakers,
 ) -> SpeakRun {
     let test_directory = fresh_test_directory("speak", test_name);
     let socket_path = test_directory.join(SOCKET_FILE_NAME);
@@ -71,7 +117,7 @@ async fn run_journey(
     let mut speak_dependencies = SpeakDependencies {
         candidate_socket_paths: vec![socket_path],
         runtime_instance: AstronomicalRuntimeInstance::Development,
-        default_output_directory: test_directory.clone(),
+        audio_player: &speakers,
         stdin: &mut unused_stdin,
         stdout: &mut stdout,
         stderr: &mut stderr,
@@ -97,16 +143,17 @@ async fn run_journey(
         stdout: String::from_utf8_lossy(&stdout).into_owned(),
         captured_request,
         test_directory,
+        speakers,
     }
 }
 
 // Positive: an unflagged run asks the built-in speech model, carries every
-// flag across the socket, joins the audio frames, and saves a WAV whose path
-// is the only thing on stdout.
+// flag across the socket, joins the audio frames, plays them as one WAV, and
+// leaves no file and nothing on stdout.
 #[tokio::test]
-async fn should_speak_with_the_built_in_model_and_save_a_wav() {
+async fn should_speak_aloud_with_the_built_in_model_and_leave_no_file() {
     let speak_run = run_journey(
-        "built_in_wav",
+        "built_in_aloud",
         speech_stub_config(StubSpeechOutcome::Completed(vec![1, 0, 2, 0, 3, 0, 4, 0])),
         speak_arguments(None),
     )
@@ -126,10 +173,83 @@ async fn should_speak_with_the_built_in_model_and_save_a_wav() {
     assert_eq!(speak_request.voice_name.as_deref(), Some("am_michael"));
     assert_eq!(speak_request.speed, 1.25);
     assert_eq!(speak_request.seed, Some(42));
-    let saved_path = PathBuf::from(speak_run.stdout.trim());
-    let saved_bytes = std::fs::read(&saved_path).expect("the WAV should be on disk");
+    let played_wav_bytes = speak_run
+        .speakers
+        .played_wav_bytes
+        .lock()
+        .expect("recording");
+    assert_eq!(played_wav_bytes.len(), 1);
+    assert_eq!(&played_wav_bytes[0][..4], b"RIFF");
+    assert_eq!(&played_wav_bytes[0][44..], [1, 0, 2, 0, 3, 0, 4, 0]);
+    assert_eq!(speak_run.stdout, "");
+    for played_path in speak_run
+        .speakers
+        .played_paths
+        .lock()
+        .expect("recording")
+        .iter()
+    {
+        assert!(!played_path.exists(), "the temporary WAV must be removed");
+    }
+}
+
+// Positive: --output saves a WAV, prints only its path, and plays nothing.
+#[tokio::test]
+async fn should_save_a_wav_without_playing_when_an_output_is_named() {
+    let test_directory = fresh_test_directory("speak", "wav_target");
+    let wav_path = test_directory.join("romeo.wav");
+    let speak_run = run_journey(
+        "wav_output",
+        speech_stub_config(StubSpeechOutcome::Completed(vec![1, 0, 2, 0])),
+        speak_arguments(Some(wav_path.clone())),
+    )
+    .await;
+
+    assert!(speak_run.outcome.is_ok(), "{:?}", speak_run.outcome);
+    // The printed path is the saved file, possibly through the folder's
+    // resolved name (/private/var on macOS for /var).
+    let printed_path = PathBuf::from(speak_run.stdout.trim());
+    assert_eq!(
+        printed_path.canonicalize().expect("printed file exists"),
+        wav_path.canonicalize().expect("saved file exists")
+    );
+    let saved_bytes = std::fs::read(&wav_path).expect("the WAV should be on disk");
     assert_eq!(&saved_bytes[..4], b"RIFF");
-    assert_eq!(&saved_bytes[44..], [1, 0, 2, 0, 3, 0, 4, 0]);
+    assert!(
+        speak_run
+            .speakers
+            .played_wav_bytes
+            .lock()
+            .expect("recording")
+            .is_empty()
+    );
+}
+
+// Negative: speakers that cannot play report a clear error that names the
+// way to save instead.
+#[tokio::test]
+async fn should_report_speakers_that_cannot_play_and_suggest_saving() {
+    let speak_run = run_journey_with_speakers(
+        "no_speakers",
+        speech_stub_config(StubSpeechOutcome::Completed(vec![1, 0, 2, 0])),
+        speak_arguments(None),
+        RecordingSpeakers {
+            refusal: Some("no output device".to_owned()),
+            ..Default::default()
+        },
+    )
+    .await;
+
+    let Err(speak_error) = speak_run.outcome else {
+        panic!("playback that fails must fail the journey");
+    };
+    assert!(!speak_error.is_usage_error());
+    let speak_message = speak_error.to_string();
+    assert!(
+        speak_message.contains("no output device"),
+        "{speak_message}"
+    );
+    assert!(speak_message.contains("--output"), "{speak_message}");
 }
 
 // Edge: a .pcm output is the bare samples, both frames joined in order.
@@ -148,15 +268,17 @@ async fn should_save_bare_samples_for_a_pcm_output() {
     assert_eq!(std::fs::read(&pcm_path).expect("the samples"), [5, 0, 6, 0]);
 }
 
-// Negative: a refused voice is the user's to fix, and leaves no file behind.
+// Negative: a refused voice is the user's to fix, and leaves no file behind
+// even when one was asked for.
 #[tokio::test]
 async fn should_report_a_refused_voice_as_a_usage_error_and_leave_no_file() {
+    let test_directory = fresh_test_directory("speak", "refused_voice_target");
     let speak_run = run_journey(
         "refused_voice",
         speech_stub_config(StubSpeechOutcome::Failed(SpeechFailure::invalid_request(
             "there is no voice \"am_michael\"; the voices are default",
         ))),
-        speak_arguments(None),
+        speak_arguments(Some(test_directory.join("romeo.wav"))),
     )
     .await;
 
