@@ -118,9 +118,14 @@ pub(crate) fn report_problem_with_facts(
 
 /// A failed model load, if it is worth a report.
 pub(crate) fn report_model_load_failure(model_load_failure_reason: &str, requested_model_id: &str) {
-    report_problem(
+    let failure_identity = ipc_protocol::identify_model_load_failure(model_load_failure_reason);
+    report_problem_with_facts(
         ProblemKind::for_model_load_failure(model_load_failure_reason),
         Some(requested_model_id),
+        vec![
+            ReportFact::new("load_stage", "While", failure_identity.stage),
+            ReportFact::new("failure_code", "Code", failure_identity.code),
+        ],
     );
 }
 

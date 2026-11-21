@@ -29,7 +29,8 @@ where
         Err(engine_error) => {
             tracing::error!(model_directory = ?model_configuration.model_id(), error = %engine_error, "model engine load failed after swap creation");
             Err(WorkerRuntimeError::ModelSwapFailed {
-                model_load_failure_reason: "model engine initialization failed".to_owned(),
+                model_load_failure_reason: ipc_protocol::ENGINE_INITIALIZATION_FAILED_REASON
+                    .to_owned(),
             })
         }
     }
