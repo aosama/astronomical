@@ -203,6 +203,12 @@ impl DFlashDrafterConfiguration {
     }
 
     fn check_consistency(&self) -> Result<(), DFlashDrafterConfigurationError> {
+        // A zero group or kernel size would divide by zero or build a
+        // convolution with no taps when the weights bind, so it is refused
+        // here as a malformed download rather than crashing the worker.
+        let convolution_is_empty = self
+            .convolution
+            .is_some_and(|convolution| convolution.group_size < 1 || convolution.kernel_size < 1);
         let convolution_does_not_divide = self
             .convolution
             .is_some_and(|convolution| self.hidden_size % convolution.group_size.max(1) != 0);
@@ -217,6 +223,10 @@ impl DFlashDrafterConfiguration {
             (
                 self.attention_head_count % self.key_value_head_count.max(1) != 0,
                 "attention heads must be a multiple of key-value heads",
+            ),
+            (
+                convolution_is_empty,
+                "conv_group_size and conv_kernel_size must be at least 1",
             ),
             (
                 convolution_does_not_divide,

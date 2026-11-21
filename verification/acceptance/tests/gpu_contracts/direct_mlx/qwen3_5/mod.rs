@@ -14,7 +14,7 @@ mod dflash2_row_exactness_by_layer;
 mod dflash2_tree_oracle;
 mod dflash2_tree_round_stages;
 mod dflash2_tree_rounds;
-mod dflash2_tree_size_sweeps;
+mod dflash_tree_size_sweeps;
 mod draft_tree_verification;
 mod drafted_rewind;
 mod elementwise_fusion_probe;

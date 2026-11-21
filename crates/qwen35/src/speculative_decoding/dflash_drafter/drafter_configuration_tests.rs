@@ -218,3 +218,38 @@ fn should_keep_every_context_row_when_any_layer_attends_to_all_of_it() {
     configuration.layer_attention[2] = DrafterLayerAttention::Full;
     assert_eq!(configuration.context_row_limit(), None);
 }
+
+#[test]
+fn should_read_a_drafter_naming_both_architectures_as_dflash2() {
+    let mut document = qwen38_27b_drafter_document();
+    document["architectures"] = json!(["DFlashDraftModel", "DFlash2DraftModel"]);
+    let configuration = DFlashDrafterConfiguration::from_config_document(&document)
+        .expect("the configuration reads");
+    assert_eq!(configuration.generation, DrafterGeneration::DFlash2);
+}
+
+#[test]
+fn should_ignore_second_generation_fields_on_a_dflash_drafter() {
+    let mut document = ornith_35b_dflash_drafter_document();
+    document["dflash_config"]["conv_group_size"] = json!(16);
+    document["dflash_config"]["selector_top_k"] = json!(16);
+    let configuration = DFlashDrafterConfiguration::from_config_document(&document)
+        .expect("the configuration reads");
+    assert_eq!(configuration.convolution, None);
+    assert_eq!(configuration.candidate_selector, None);
+}
+
+#[test]
+fn should_refuse_a_convolution_with_no_group_width_or_no_taps() {
+    for (field, value) in [("conv_group_size", 0), ("conv_kernel_size", 0)] {
+        let mut document = qwen38_27b_drafter_document();
+        document["dflash_config"][field] = json!(value);
+        assert!(
+            matches!(
+                DFlashDrafterConfiguration::from_config_document(&document),
+                Err(DFlashDrafterConfigurationError::Inconsistent { .. })
+            ),
+            "{field} of {value} must be refused"
+        );
+    }
+}

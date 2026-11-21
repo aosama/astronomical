@@ -13,10 +13,12 @@
 //! hold the same target with and without drafting side by side, which is how
 //! a draft-tree build is compared with its plain twin. A library-wide drafter
 //! pairs with every target of its shape. When several library drafters pair,
-//! a DFlash2 drafter is preferred over a DFlash one, the generation this
-//! engine was first measured with, and path order decides only within a
-//! generation, so installing a second drafter never silently swaps the one a
-//! model already drafts with for an older design.
+//! a DFlash2 drafter is preferred over a DFlash one and path order decides
+//! only within a generation. The order is fixed for stability, not speed:
+//! libraries held only DFlash2 drafters before DFlash was served, so
+//! downloading a DFlash drafter never silently changes the one a model
+//! already drafts with. Which generation drafts faster depends on the target
+//! and the text; a package that wants one ships it in its `drafter` folder.
 //!
 //! Two library layouts are then searched from the target's own directory:
 //! the `huggingface_hub_cache` (`models--org--name/snapshots/<revision>`) and
