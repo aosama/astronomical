@@ -4,44 +4,28 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.124</title>
-            <pubDate>Sat, 21 Nov 2026 07:42:06 -0500</pubDate>
-            <sparkle:version>2441</sparkle:version>
-            <sparkle:shortVersionString>0.2.124</sparkle:shortVersionString>
+            <title>0.2.125</title>
+            <pubDate>Sat, 21 Nov 2026 08:45:23 -0500</pubDate>
+            <sparkle:version>2444</sparkle:version>
+            <sparkle:shortVersionString>0.2.125</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
             <description sparkle:format="markdown"><![CDATA[## What's new
 
-- **Faster code with the Ornith team's own draft model.** Astronomical now uses the Ornith team's first-generation DFlash draft model, `ornith-ai/Ornith-1.5-35B-A3B-DFlash`, beside the DFlash2 draft models it already used. A draft model guesses the next few words and the main model checks them all in one step. Every word is still the main model's own choice.
-- **Two new models in Observatory's Models page.** Ornith-1.5-35B-A3B-MLX-4bit-vision-DFLASH and Ornith-1.5-35B-A3B-MLX-6bit-vision-DFLASH are the Ornith team's own 4-bit and 6-bit builds. Each has its original vision put back, so it reads pictures, and its own draft model packed in.
-
-  Measured on an M5 Pro with 48 GB at temperature 0.6, in tokens per second:
-
-  | | Writing an essay | Writing code |
-  |---|---|---|
-  | 4-bit, no draft model | 95.2 | 95.9 |
-  | 4-bit vision with its draft model | 85.2 | 122.1 |
-  | 6-bit, no draft model | 72.5 | 70.7 |
-  | 6-bit vision with its draft model | 62.6 | 89.4 |
-
-  Code comes out about a quarter faster. Essays come out a little slower, because everyday writing has many reasonable ways to continue, so fewer of the draft model's guesses are kept.
-
-## Fixes
-
-- A damaged draft model download is refused instead of stopping the engine.
+- **Give a model's memory back on request.** A loaded model holds many gigabytes of memory until Astronomical unloads it after a quiet spell. Programs and agents can now ask for that memory back at once with `POST /v1/control/unload-model` on the local API. The next request loads the model again. A reply that is being written is never interrupted: the request answers "busy" instead.
+- **The Astronomical skill tells agents about it,** so an agent that has finished its job can free the memory when you ask.
 
 ## Compatibility
 
 - Your settings, conversations and downloaded models are kept. No setting changed.
-- Models that already draft with a DFlash2 draft model keep it.
 - Requires macOS 14 or later on Apple silicon.
 
 The app and disk image are signed with Developer ID, notarized and stapled by Apple, and the update feed is signed.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.124/Astronomical-0.2.124-macOS-arm64.dmg" length="25671169" type="application/octet-stream" sparkle:edSignature="m9WRl+Re8OFeNW3nv/6SgnjVxnE8jUjaf2pZkeEUM0Z0k/qbbaojrfGg8foT7otlqYVi0x96CK5q7Oe5yg80Aw=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.125/Astronomical-0.2.125-macOS-arm64.dmg" length="25678070" type="application/octet-stream" sparkle:edSignature="/H54sMuPi3lOuRNfyBb4Ldhi9/3LFNQu5y/X8Es3EjTIHQfJRvn7VKs+UbrSe1SpZi02xvzR9OKtaZPxu5bZDg=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: JXsGCV50lICu20EhmU3TT9bYDwZeAz1Y4K4dWmIl/F2cN3oV61XUHl91WDhtmasXHzI/+pK4mvY1dl+7cLvjBQ==
-length: 2824
+edSignature: of1swCnK0tljQJRaisVV/gSowTVt/+OhxCGybPTm+JNUtV4ZwLIFqrVpDcWEi3RexPA7eypteriv4R5cbQ/MCA==
+length: 2023
 -->
