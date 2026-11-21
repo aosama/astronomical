@@ -93,6 +93,17 @@ pub(crate) fn sentry_envelope_body(
     sent_at_unix_seconds: u64,
 ) -> String {
     let problem_name = serde_json::to_value(report.problem).unwrap_or_default();
+    let mut tags = json!({
+        "problem": problem_name,
+        "chip": report.mac.chip_name,
+        "memory_gb": report.mac.memory_gb.to_string(),
+        "macos": report.mac.macos_version,
+    });
+    // Facts double as tags so the developers can count by them, such as
+    // how many engine exits were SIGKILL.
+    for fact in &report.facts {
+        tags[fact.key] = serde_json::Value::String(fact.value.clone());
+    }
     let event = json!({
         "event_id": event_id,
         "timestamp": sent_at_unix_seconds,
@@ -101,12 +112,7 @@ pub(crate) fn sentry_envelope_body(
         "release": format!("astronomical@{}", report.app_version),
         "message": {"formatted": report.problem.plain_description()},
         "fingerprint": [problem_name],
-        "tags": {
-            "problem": problem_name,
-            "chip": report.mac.chip_name,
-            "memory_gb": report.mac.memory_gb.to_string(),
-            "macos": report.mac.macos_version,
-        },
+        "tags": tags,
         "extra": {"report": report},
         // Sentry fills a missing address from the connection and looks up a
         // city from it; the project's "prevent storing IP addresses" drops

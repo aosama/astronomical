@@ -3,7 +3,7 @@
 
 use serde::Serialize;
 
-use super::{CatalogModelName, MacDescription, ProblemKind};
+use super::{CatalogModelName, MacDescription, ProblemKind, ReportFact};
 
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub(crate) struct ProblemReport {
@@ -12,6 +12,9 @@ pub(crate) struct ProblemReport {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) model: Option<CatalogModelName>,
     pub(crate) problem: ProblemKind,
+    /// What explains the problem: fixed names with numbers or fixed words.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub(crate) facts: Vec<ReportFact>,
     /// What the person typed about the problem, if anything. The only free
     /// text a report can hold, and it is theirs: they wrote it on the same
     /// screen that shows the rest of the report.
@@ -47,6 +50,9 @@ impl ProblemReport {
             readable_lines.push(format!("Model: {}", model.display_text()));
         }
         readable_lines.push(format!("Problem: {}", self.problem.plain_description()));
+        for fact in &self.facts {
+            readable_lines.push(fact.readable_line());
+        }
         if let Some(note) = &self.note {
             readable_lines.push(format!("Your note: {note}"));
         }

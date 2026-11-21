@@ -11,7 +11,9 @@ use std::sync::{Arc, OnceLock, RwLock};
 
 use crate::ResolvedRuntimeConfig;
 
-use super::{CatalogModelName, MacDescription, ProblemKind, ProblemReport, ProblemReportDesk};
+use super::{
+    CatalogModelName, MacDescription, ProblemKind, ProblemReport, ProblemReportDesk, ReportFact,
+};
 
 static REGISTERED_REPORT_SINK: OnceLock<ReportSink> = OnceLock::new();
 
@@ -42,6 +44,7 @@ impl ReportSink {
             mac: self.mac.clone(),
             model,
             problem,
+            facts: Vec::new(),
             note: None,
         }
     }
@@ -89,10 +92,20 @@ pub(crate) fn register_report_sink(
 /// Hands a problem to the registered sink, which offers, sends or drops it
 /// by the person's choice. Returns at once; sending runs in the background.
 pub(crate) fn report_problem(problem: ProblemKind, model_id: Option<&str>) {
+    report_problem_with_facts(problem, model_id, Vec::new());
+}
+
+/// As `report_problem`, with the facts that explain this problem.
+pub(crate) fn report_problem_with_facts(
+    problem: ProblemKind,
+    model_id: Option<&str>,
+    facts: Vec<ReportFact>,
+) {
     let Some(report_sink) = REGISTERED_REPORT_SINK.get() else {
         return;
     };
-    let problem_report = report_sink.build_report(problem, model_id);
+    let mut problem_report = report_sink.build_report(problem, model_id);
+    problem_report.facts = facts;
     let problem_report_choice = report_sink.problem_report_choice();
     let problem_report_desk = Arc::clone(&report_sink.problem_report_desk);
     report_sink.runtime_handle.spawn(async move {
@@ -141,4 +154,25 @@ pub(crate) fn report_download_failure(
 pub(crate) fn person_report(ready_model_id: Option<&str>) -> Option<ProblemReport> {
     let report_sink = REGISTERED_REPORT_SINK.get()?;
     Some(report_sink.build_report(ProblemKind::ReportedByPerson, ready_model_id))
+}
+
+/// The worker process ended without being asked to. `exit_cause` is the
+/// fixed-format cause from `worker_exit_cause_label`. An exit the engine
+/// asked for (a clean exit code 0, or SIGTERM) is not a problem.
+pub(crate) fn report_worker_exit(exit_cause: Option<String>, worker_lifetime_seconds: u64) {
+    let Some(exit_cause) = exit_cause else {
+        return;
+    };
+    report_problem_with_facts(
+        ProblemKind::EngineStoppedUnexpectedly,
+        None,
+        vec![
+            ReportFact::new("engine_exit", "Engine exit", exit_cause),
+            ReportFact::new(
+                "engine_ran_seconds",
+                "Engine ran for",
+                format!("{worker_lifetime_seconds} s"),
+            ),
+        ],
+    );
 }

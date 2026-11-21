@@ -15,6 +15,7 @@ mod mac_description;
 mod problem_kind;
 mod problem_report;
 mod problem_report_desk;
+mod report_fact;
 mod report_receiver;
 mod report_sink;
 mod sent_report_log;
@@ -25,10 +26,11 @@ pub(crate) use mac_description::MacDescription;
 pub(crate) use problem_kind::ProblemKind;
 pub(crate) use problem_report::ProblemReport;
 pub(crate) use problem_report_desk::{ProblemReportDesk, ReportSendOutcome};
+pub(crate) use report_fact::ReportFact;
 pub(crate) use report_receiver::{ReportReceiver, sentry_envelope_body};
 pub(crate) use report_sink::{
     person_report, register_report_sink, report_download_failure, report_model_load_failure,
-    report_reply_failure,
+    report_reply_failure, report_worker_exit,
 };
 pub(crate) use sent_report_log::{SentProblemReport, SentReportLog};
 pub(crate) use waiting_reports::{WaitingProblemReport, WaitingReports};
