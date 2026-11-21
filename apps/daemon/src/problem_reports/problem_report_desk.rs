@@ -85,13 +85,13 @@ impl ProblemReportDesk {
             return ReportSendOutcome::NotWaiting;
         };
         let Some(report_receiver) = &self.report_receiver else {
-            self.waiting_reports.offer(report);
+            self.waiting_reports.put_back(report_number, report);
             return ReportSendOutcome::NotSetUp;
         };
         let sent_at_unix_seconds = unix_seconds_now();
         let envelope_body = sentry_envelope_body(&report, &new_event_id(), sent_at_unix_seconds);
         if let Err(send_error) = report_receiver.send(&self.http_client, envelope_body).await {
-            self.waiting_reports.offer(report);
+            self.waiting_reports.put_back(report_number, report);
             return ReportSendOutcome::Failed(send_error);
         }
         let sent_report = SentProblemReport {

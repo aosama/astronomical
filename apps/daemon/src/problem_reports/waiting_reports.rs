@@ -52,6 +52,21 @@ impl WaitingReports {
         report_number
     }
 
+    /// Returns a report that was taken but did not go, under its own number,
+    /// so the person's screen still points at it when they try again.
+    pub(crate) fn put_back(&self, report_number: u64, report: ProblemReport) {
+        let mut waiting_state = lock_waiting_state(&self.waiting_state);
+        let insert_position = waiting_state
+            .reports
+            .partition_point(|waiting_report| waiting_report.report_number < report_number);
+        waiting_state
+            .reports
+            .insert(insert_position, WaitingProblemReport { report_number, report });
+        if waiting_state.reports.len() > MAXIMUM_WAITING_REPORTS {
+            waiting_state.reports.remove(0);
+        }
+    }
+
     pub(crate) fn waiting(&self) -> Vec<WaitingProblemReport> {
         lock_waiting_state(&self.waiting_state).reports.clone()
     }
