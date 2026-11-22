@@ -401,10 +401,12 @@ fn applied_memory_update_response(
     } else {
         StatusCode::OK
     };
+    // Both screens show this sentence to the person who moved the control,
+    // so it names the setting as they see it, not the engine's internals.
     let message = if is_queued {
-        "MLX memory setting persisted and queued until generation finalizes"
+        "Maximum model RAM changes when the current reply finishes."
     } else {
-        "MLX memory setting persisted and applied"
+        "Maximum model RAM updated."
     };
     (
         status_code,
@@ -474,7 +476,7 @@ async fn restart_required_memory_update_response(
                 Json(response_document(
                     maximum_mlx_memory_gb,
                     &updated_worker_health_snapshot,
-                    "MLX memory setting persisted and applied after a worker restart".to_owned(),
+                    "Maximum model RAM updated after restarting the engine.".to_owned(),
                 )),
             )
                 .into_response()

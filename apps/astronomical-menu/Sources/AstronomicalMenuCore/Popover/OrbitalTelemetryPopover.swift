@@ -185,12 +185,12 @@ struct OrbitalTelemetryPopover: View {
 
   @ViewBuilder
   private func controlFeedbackRows(_ statusDocument: DaemonStatusDocument) -> some View {
-    if let controlActionFeedback = telemetryStore.controlActionFeedback {
+    if let controlActionFeedback = telemetryStore.visibleControlActionFeedback {
       Text(controlActionFeedback.message)
         .font(.caption)
-        .foregroundStyle(
-          controlActionFeedback.isFailure ? .red : controlActionFeedback.isInProgress ? .secondary : .green
-        )
+        // A success only confirms what the person just did, so it reads as quiet text like
+        // progress; red is kept for a change that did not happen.
+        .foregroundStyle(controlActionFeedback.isFailure ? .red : .secondary)
         .accessibilityLabel("Server control: \(controlActionFeedback.message)")
     }
     if let discoveryDiagnostic = statusDocument.configuration?.modelDiscoveryDiagnostics?.first {

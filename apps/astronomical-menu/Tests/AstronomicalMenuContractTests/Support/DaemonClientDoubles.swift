@@ -18,7 +18,7 @@ struct FixedAnswerDaemonClient: DaemonClient {
   var reloadResult = ConfigurationReloadResult(message: "Config reloaded")
   /// When set, reloading fails with this error instead of returning `reloadResult`.
   var reloadFailure: (any Error & Sendable)?
-  var maximumMlxMemoryUpdateMessage = "MLX memory setting persisted and applied"
+  var maximumMlxMemoryUpdateMessage = "Maximum model RAM updated."
   /// How long the daemon takes to answer a memory update, for journeys where
   /// other feedback arrives first.
   var maximumMlxMemoryUpdateDelay: Duration = .zero
