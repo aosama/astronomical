@@ -4,41 +4,34 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.127</title>
-            <pubDate>Sat, 21 Nov 2026 19:16:22 -0500</pubDate>
-            <sparkle:version>2451</sparkle:version>
-            <sparkle:shortVersionString>0.2.127</sparkle:shortVersionString>
+            <title>0.2.128</title>
+            <pubDate>Sat, 21 Nov 2026 20:20:47 -0500</pubDate>
+            <sparkle:version>2454</sparkle:version>
+            <sparkle:shortVersionString>0.2.128</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[## Count this Mac once a day, if you agree
+            <description sparkle:format="markdown"><![CDATA[## Bug fixes
 
-From the second day you use Astronomical, the chat window asks once, "May this Mac be counted?", and shows the exact line this Mac would send, such as `Astronomical 0.2.127 · macOS 27.2 · Apple M5 Pro · 48 GB`.
+- **A long reply no longer slows down the rest of the Mac.** While a model wrote a long reply to a large conversation, video could freeze, audio could glitch and windows could respond slowly, and it got worse the longer the reply ran. Each time the conversation's attention buffers grew, the outgrown copies were kept instead of being handed back, so the memory the Mac must keep in RAM climbed until it reached the system's ceiling. They are now handed back as the reply is written. With a 34,000-token conversation and a 3,500-token reply on a 35B model, that memory ended at 30.3 GB instead of 39.2 GB and stayed flat throughout, at the same reply speed.
 
-- **Nothing is sent unless you choose "Count this Mac".** "No thanks" is final.
-- **One line a day,** with the app version, macOS version, chip and memory, and no identifier, so one day's line cannot be linked to another's.
-- **Turn it on or off** under "What leaves this Mac" in Settings, which also shows when it last went.
+## Known
 
-## Clearer failures
-
-A model whose files are damaged now says so in plain words, "This model's files are damaged or incomplete. Remove the model and download it again.", instead of "The engine stopped answering".
-
-## Fixes
-
-- "Send reports like this without asking" and the problem report choice in Settings now save from the chat window.
-- Only the chat window, Observatory and tools can change sharing choices or send a report; other pages on this Mac are refused.
+- Replies from a draft-assisted (DFlash) model can still show a one-step memory rise after a freshly read large prompt. This is tracked and not fixed in this release.
 
 ## Compatibility
 
-- Existing settings load unchanged.
+- No setting, command or local API changed.
 - Conversations, downloaded models and every setting are kept.
 - macOS 14 or later on Apple silicon.
 
-Signed with the project's Developer ID, notarized and stapled by Apple.
+## Distribution
+
+The app and disk image are signed with the project's Developer ID, built with the Hardened Runtime, and notarized and stapled by Apple. Existing installations receive this release through the in-app update.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.127/Astronomical-0.2.127-macOS-arm64.dmg" length="25823247" type="application/octet-stream" sparkle:edSignature="YY8dFntqNAYjzl2dsugItTVrnFw89NtSCgjSwL2ZSErO3uWUsdO51WqmSV18PKiw+9L2q9aSO+UOieJmqHZ1CQ=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.128/Astronomical-0.2.128-macOS-arm64.dmg" length="25823643" type="application/octet-stream" sparkle:edSignature="Ovlzaxpe8kUKZ9w8JhvOXclky0EJd7z0ubvhvbPtB+J1RloX6rbcdDglpZ1Yj11UiSXdZ7yWN92FDiGOsgFOAQ=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: 4n2ZFHmzoXwtKPNjhA2ZGs/ExRaqo5RaN6ZO1BThgw5KW8q9fuKZ4bm1I0gynsgAhYUWtC2q8pekZ76ErcbyCg==
-length: 2514
+edSignature: NWMK4UKRjIiLmtCq0FaO+Mxy1GJlS19FMcOkVnFgQohJIlq9AoIoGUIymooFBhbmXLTmNLMUeuTD4xe0QzRXBg==
+length: 2471
 -->
