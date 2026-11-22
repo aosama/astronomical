@@ -56,9 +56,14 @@ async fn get_library_catalog(
                     .display()
                     .to_string()
             });
+    let models_directory_free_bytes = application_state
+        .library_download_coordinator
+        .as_ref()
+        .and_then(|download_coordinator| download_coordinator.models_directory_free_bytes());
     Json(LibraryCatalogResponse {
         schema_version: application_state.download_catalog.schema_version(),
         models_download_directory,
+        models_directory_free_bytes,
         entries,
     })
 }
@@ -94,6 +99,11 @@ struct LibraryCatalogResponse {
     /// destination before the user commits to a multi-gigabyte download.
     #[serde(skip_serializing_if = "Option::is_none")]
     models_download_directory: Option<String>,
+    /// Free bytes on the disk that holds the models folder, read the way the
+    /// download check reads them, so the page's figure agrees with what a
+    /// download is admitted against. Absent when the disk cannot be read.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    models_directory_free_bytes: Option<u64>,
     entries: Vec<LibraryCatalogEntryResponse>,
 }
 
@@ -127,6 +137,12 @@ struct LibraryCatalogEntryResponse {
     upstream_license: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     requestable_model_id: Option<String>,
+    /// The model ID of the lead entry this is another build of; the page
+    /// folds the build under that lead.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    build_of: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    build_difference: Option<&'static str>,
     capabilities: LibraryCatalogCapabilitiesResponse,
 }
 
@@ -153,6 +169,7 @@ impl LibraryCatalogEntryResponse {
     ) -> Self {
         let catalog_entry = projection.catalog_entry;
         let capabilities = &projection.capabilities;
+        let build = catalog_entry.build();
         Self {
             huggingface_id: catalog_entry.huggingface_id().to_owned(),
             revision: catalog_entry.revision().to_owned(),
@@ -175,6 +192,8 @@ impl LibraryCatalogEntryResponse {
             quantization_label: catalog_entry.quantization_label().map(str::to_owned),
             upstream_license: catalog_entry.upstream_license().map(str::to_owned),
             requestable_model_id: projection.requestable_model_id.clone(),
+            build_of: build.map(|catalog_build| catalog_build.lead_model_id().to_owned()),
+            build_difference: build.map(|catalog_build| catalog_build.difference().as_str()),
             capabilities: LibraryCatalogCapabilitiesResponse {
                 supports_reasoning: capabilities.supports_reasoning,
                 supports_vision: capabilities.supports_vision,

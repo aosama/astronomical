@@ -12,6 +12,8 @@ const downloadModelsRenderScriptPath = path.join(__dirname, "download-models-ren
 const downloadModelsRenderScript = fs.readFileSync(downloadModelsRenderScriptPath, "utf8");
 const downloadModelsGroupsScriptPath = path.join(__dirname, "download-models-groups.js");
 const downloadModelsGroupsScript = fs.readFileSync(downloadModelsGroupsScriptPath, "utf8");
+const downloadModelsSuggestionsScriptPath = path.join(__dirname, "download-models-suggestions.js");
+const downloadModelsSuggestionsScript = fs.readFileSync(downloadModelsSuggestionsScriptPath, "utf8");
 const downloadModelsRowScriptPath = path.join(__dirname, "download-models-row.js");
 const downloadModelsRowScript = fs.readFileSync(downloadModelsRowScriptPath, "utf8");
 const downloadModelsLinkedScriptPath = path.join(__dirname, "download-models-linked.js");
@@ -38,6 +40,7 @@ function createDownloadModelsContext() {
     });
     vm.runInContext(downloadModelsScript, scriptContext, { filename: downloadModelsScriptPath });
     vm.runInContext(downloadModelsGroupsScript, scriptContext, { filename: downloadModelsGroupsScriptPath });
+    vm.runInContext(downloadModelsSuggestionsScript, scriptContext, { filename: downloadModelsSuggestionsScriptPath });
     vm.runInContext(downloadModelsRenderScript, scriptContext, { filename: downloadModelsRenderScriptPath });
     vm.runInContext(downloadModelsRowScript, scriptContext, { filename: downloadModelsRowScriptPath });
     vm.runInContext(downloadModelsLinkedScript, scriptContext, { filename: downloadModelsLinkedScriptPath });

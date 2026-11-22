@@ -5,6 +5,8 @@ use std::collections::BTreeSet;
 use serde::Deserialize;
 use thiserror::Error;
 
+pub use crate::catalog_builds::{DownloadCatalogBuild, DownloadCatalogBuildDifference};
+use crate::catalog_builds::{parse_entry_build, validate_catalog_builds};
 pub use crate::catalog_capabilities::DownloadCatalogCapabilities;
 use crate::catalog_capabilities::{DownloadCatalogCapabilitiesDocument, parse_entry_capabilities};
 pub use crate::catalog_classification::{DownloadCatalogFamily, DownloadCatalogRole};
@@ -15,6 +17,10 @@ use crate::path_selection::DownloadPathSelection;
 // and version label gave one model up to four names, and people could not tell
 // which one the terminal and the API accept. The model ID is the leaf of the
 // Hugging Face identity, the same name discovery gives the downloaded folder.
+// Version 5 later gained the optional build_of and build_difference pair,
+// which links a build to its lead without giving it a second name; the
+// catalog is bundled with the binary that reads it, so no reader meets a field
+// it does not know.
 // Version 4 added the summary; version 3 the memory footprint, streaming floor,
 // role, Get started pick, and the experimental and retiring flags. There are no
 // downstream catalog consumers, so the schema moves forward without
@@ -55,6 +61,7 @@ pub struct DownloadCatalogEntry {
     quantization_label: Option<String>,
     upstream_license: Option<String>,
     presentation: CatalogEntryPresentation,
+    build: Option<DownloadCatalogBuild>,
     download_path_selection: DownloadPathSelection,
 }
 
@@ -111,6 +118,18 @@ pub enum DownloadCatalogError {
     DuplicateGetStartedPick { role: &'static str },
     #[error("download catalog entry {entry_index} has invalid or overlapping included paths")]
     InvalidIncludedPaths { entry_index: usize },
+    #[error(
+        "download catalog entry {entry_index} must declare build_of and build_difference together, name another entry, and be neither experimental, retiring nor a get_started pick"
+    )]
+    InvalidBuild { entry_index: usize },
+    #[error(
+        "download catalog entry {entry_index} names a build_of lead no entry has as its model ID"
+    )]
+    UnknownBuildLead { entry_index: usize },
+    #[error(
+        "download catalog entry {entry_index} names a build_of lead that is itself a build, experimental, retiring, or listed in another section"
+    )]
+    InvalidBuildLead { entry_index: usize },
 }
 
 #[derive(Debug, Deserialize)]
@@ -146,6 +165,9 @@ struct DownloadCatalogEntryDocument {
     upstream_license: Option<String>,
     summary: Option<String>,
     included_paths: Option<Vec<String>>,
+    /// The model ID of the lead entry this is another build of.
+    build_of: Option<String>,
+    build_difference: Option<DownloadCatalogBuildDifference>,
 }
 
 impl DownloadCatalog {
@@ -215,7 +237,7 @@ fn parse_and_shape_check_document(
 
 /// Parses every entry in authored order. The rules that span entries, unique
 /// identities and one Get started pick per role, are applied as each entry is
-/// read.
+/// read; the build links are checked last, since a lead may follow its builds.
 fn parse_catalog_entries(
     entry_documents: Vec<DownloadCatalogEntryDocument>,
 ) -> Result<Vec<DownloadCatalogEntry>, DownloadCatalogError> {
@@ -230,6 +252,7 @@ fn parse_catalog_entries(
             &mut get_started_role_names,
         )?);
     }
+    validate_catalog_builds(&entries)?;
     Ok(entries)
 }
 
@@ -278,6 +301,11 @@ fn parse_catalog_entry(
     let entry_texts = parse_entry_texts(&entry_document, entry_index)?;
     let download_path_selection = DownloadPathSelection::try_new(entry_document.included_paths)
         .map_err(|_invalid_selection| DownloadCatalogError::InvalidIncludedPaths { entry_index })?;
+    let build = parse_entry_build(
+        entry_document.build_of.as_deref(),
+        entry_document.build_difference,
+        entry_index,
+    )?;
     Ok(DownloadCatalogEntry {
         huggingface_id: entry_document.huggingface_id,
         revision: entry_document.revision,
@@ -294,6 +322,7 @@ fn parse_catalog_entry(
         quantization_label: entry_texts.quantization_label,
         upstream_license: entry_texts.upstream_license,
         presentation: entry_texts.presentation,
+        build,
         download_path_selection,
     })
 }
@@ -544,6 +573,13 @@ impl DownloadCatalogEntry {
     #[must_use]
     pub fn summary(&self) -> Option<&str> {
         self.presentation.summary.as_deref()
+    }
+
+    /// The lead entry this is another build of, and what sets it apart, or
+    /// `None` for a lead or a model with one build.
+    #[must_use]
+    pub const fn build(&self) -> Option<&DownloadCatalogBuild> {
+        self.build.as_ref()
     }
 
     #[must_use]

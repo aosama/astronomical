@@ -246,7 +246,7 @@ test("should_show_get_and_no_list_when_nothing_is_downloading_or_listed", () => 
     assert.deepEqual(findRenderedElementsByClass(catalogContainer, "download-models-queue"), []);
 });
 
-test("should_draw_the_speed_meter_with_fewer_filled_bars_for_a_model_above_the_ceiling", () => {
+test("should_show_memory_use_for_a_model_that_fits_and_words_for_one_that_does_not", () => {
     const { downloadModelsDocument } = renderModelsPage(
         [
             entryNamed("Small", { approximate_memory_bytes: 4 * GIGABYTE }),
@@ -256,14 +256,42 @@ test("should_draw_the_speed_meter_with_fewer_filled_bars_for_a_model_above_the_c
         `downloadModelsServingCeilingBytes = ${8 * GIGABYTE};`
     );
     const catalogContainer = downloadModelsDocument.catalogContainer;
-    const filledBarCounts = findRenderedElementsByClass(catalogContainer, "download-models-fit")
-        .map((fitMeter) => findRenderedElementsByClass(fitMeter, "download-models-fit-bar-filled").length);
 
-    assert.deepEqual(filledBarCounts, [3, 2, 1]);
     assert.deepEqual(
         textsOfClass(catalogContainer, "download-models-fit-label"),
-        ["Runs smoothly", "Runs, but slower", "Very slow here"]
+        ["4.0 of 8.0 GB memory", "Runs, but slower", "Very slow here"]
     );
+    assert.deepEqual(
+        findRenderedElementsByClass(catalogContainer, "download-models-fit-bar-fill").map((barFill) => barFill.style.width),
+        ["50%", "100%", "100%"]
+    );
+});
+
+test("should_put_free_disk_space_beside_the_memory_figure_when_the_daemon_reports_it", () => {
+    const { downloadModelsDocument } = renderModelsPage(
+        [entryNamed("Talker")],
+        `downloadModelsServingCeilingBytes = ${36.5 * GIGABYTE};
+         downloadModelsCatalogDocument = { ...catalogDocument, models_directory_free_bytes: ${Math.round(362.9 * GIGABYTE)} };`
+    );
+
+    assert.deepEqual(
+        textsOfClass(downloadModelsDocument.catalogContainer, "download-models-section-meta"),
+        ["This Mac gives models 36.5 GB of memory · 362 GB free for downloads"]
+    );
+});
+
+test("should_word_free_disk_space_alone_and_leave_out_a_malformed_figure", () => {
+    const scriptContext = createDownloadModelsContext();
+    const metaText = (servingCeilingBytes, freeBytesJson) => vm.runInContext(
+        `downloadModelsCatalogDocument = { models_directory_free_bytes: ${freeBytesJson} };
+         downloadModelsAddHeadingMetaText(${servingCeilingBytes}, downloadModelsFreeDiskBytes())`,
+        scriptContext
+    );
+
+    assert.equal(metaText(null, 0), "0 GB free for downloads", "a full disk is still a figure");
+    assert.equal(metaText(null, "-1"), "", "a negative figure is no figure");
+    assert.equal(metaText(null, '"a lot"'), "");
+    assert.equal(metaText(8 * GIGABYTE, "undefined"), "This Mac gives models 8.0 GB of memory");
 });
 
 test("should_show_no_speed_meter_and_no_memory_figure_while_the_ceiling_is_unknown", () => {

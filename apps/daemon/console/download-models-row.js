@@ -2,20 +2,25 @@
 // is one model, named by its model ID; the speed meter, the action and the
 // details all describe that one download.
 
-function createDownloadModelsModelRow(catalogRow) {
+// A build folded under its lead passes that lead, so the row can say what sets
+// the build apart.
+function createDownloadModelsModelRow(catalogRow, leadRow = null) {
     const isExpanded = downloadModelsExpandedModelId === catalogRow.modelId;
-    const row = createDownloadModelsElement(
-        "article", isExpanded ? "download-models-row download-models-row-expanded" : "download-models-row"
-    );
+    const rowClassNames = ["download-models-row"];
+    if (isExpanded) rowClassNames.push("download-models-row-expanded");
+    if (leadRow) rowClassNames.push("download-models-row-build");
+    const row = createDownloadModelsElement("article", rowClassNames.join(" "));
     const rowLine = createDownloadModelsElement("div", "download-models-row-line");
     const rowControls = createDownloadModelsElement("div", "download-models-row-controls");
     const fitSlot = createDownloadModelsElement("div", "download-models-row-fit");
     const fitMeter = createDownloadModelsFitMeter(catalogRow);
     if (fitMeter) fitSlot.appendChild(fitMeter);
     const actionSlot = createDownloadModelsElement("div", "download-models-row-action");
-    actionSlot.appendChild(createDownloadModelsRowAction(catalogRow));
+    // List rows carry a quiet Get: the strong button belongs to the one model
+    // the page suggests first, so a long list does not read as twenty calls to act.
+    actionSlot.appendChild(createDownloadModelsRowAction(catalogRow, false));
     rowControls.replaceChildren(fitSlot, actionSlot);
-    rowLine.replaceChildren(createDownloadModelsRowIdentity(catalogRow, isExpanded), rowControls);
+    rowLine.replaceChildren(createDownloadModelsRowIdentity(catalogRow, isExpanded, leadRow), rowControls);
     row.appendChild(rowLine);
     if (isExpanded) row.appendChild(createDownloadModelsRowDetails(catalogRow));
     return row;
@@ -23,7 +28,7 @@ function createDownloadModelsModelRow(catalogRow) {
 
 // The name is the control that opens the details, so the row needs no separate
 // Details button competing with Get.
-function createDownloadModelsRowIdentity(catalogRow, isExpanded) {
+function createDownloadModelsRowIdentity(catalogRow, isExpanded, leadRow) {
     const identity = createDownloadModelsElement("div", "download-models-row-identity");
     const nameButton = createDownloadModelsElement("button", "download-models-row-name", downloadModelsRowName(catalogRow));
     nameButton.type = "button";
@@ -33,6 +38,10 @@ function createDownloadModelsRowIdentity(catalogRow, isExpanded) {
         renderDownloadModelsCatalogDocument(downloadModelsCatalogDocument);
     });
     const identityChildren = [nameButton];
+    const differenceText = leadRow ? downloadModelsBuildDifferenceText(catalogRow, leadRow) : null;
+    if (differenceText) {
+        identityChildren.push(createDownloadModelsParagraph("download-models-row-difference", differenceText));
+    }
     const summaryText = catalogRow.summary || catalogRow.description;
     if (summaryText) {
         identityChildren.push(createDownloadModelsParagraph("download-models-row-summary", summaryText));
@@ -47,7 +56,7 @@ function createDownloadModelsRowIdentity(catalogRow, isExpanded) {
 
 // Exactly one of: it is here, it is on its way, or Get. The controls of a
 // download in flight live in its banner under On this Mac, not on the row.
-function createDownloadModelsRowAction(catalogRow) {
+function createDownloadModelsRowAction(catalogRow, isPrimary = true) {
     if (catalogRow.readyOnThisMac) {
         return createDownloadModelsElement("span", "download-models-row-status download-models-row-status-ready", "On this Mac");
     }
@@ -63,7 +72,7 @@ function createDownloadModelsRowAction(catalogRow) {
             "span", "download-models-row-status", downloadModelsRowStatusText(catalogRow, downloadState)
         );
     }
-    return createDownloadModelsGetButton(catalogRow);
+    return createDownloadModelsGetButton(catalogRow, isPrimary);
 }
 
 function downloadModelsRowStatusText(catalogRow, downloadState) {

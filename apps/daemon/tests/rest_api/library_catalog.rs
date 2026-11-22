@@ -46,13 +46,44 @@ const VALID_CATALOG_JSON: &str = r#"{
             "role": "helper",
             "public": true,
             "capabilities": {"supports_embeddings": true}
+        },
+        {
+            "huggingface_id": "astronomical-test/example-qwen-6bit",
+            "revision": "76543210fedcba9876543210fedcba9876543210",
+            "family": "qwen3_5",
+            "approximate_size_bytes": 6000000000,
+            "approximate_memory_bytes": 2825361094,
+            "role": "chat",
+            "public": true,
+            "build_of": "example-qwen",
+            "build_difference": "more_detail"
         }
     ]
 }"#;
 
-/// The authored three-entry fixture projected onto the public response, pinning
-/// every field the Models page renders for each entry: the role and flags, and the
-/// presentation texts, which are published only for an entry that declares them.
+/// The published capability flags, all false except the ones named.
+fn capabilities_with(supported_capabilities: &[&str]) -> serde_json::Value {
+    let mut capabilities = serde_json::json!({});
+    for capability_name in [
+        "supports_reasoning",
+        "supports_vision",
+        "supports_tool_calls",
+        "supports_image_generation",
+        "supports_embeddings",
+        "supports_decisions",
+        "supports_speech",
+    ] {
+        capabilities[capability_name] =
+            serde_json::Value::Bool(supported_capabilities.contains(&capability_name));
+    }
+    capabilities
+}
+
+/// The authored four-entry fixture projected onto the public response, pinning
+/// every field the Models page renders for each entry: the role and flags, the
+/// presentation texts and the build link, each published only for an entry that
+/// declares it. This application has no download coordinator, so the free disk
+/// figure is absent.
 fn expected_validated_catalog_document() -> serde_json::Value {
     serde_json::json!({
         "schema_version": 5,
@@ -73,15 +104,7 @@ fn expected_validated_catalog_document() -> serde_json::Value {
                 "public": true,
                 "ready_on_this_mac": false,
                 "download_state": null,
-                "capabilities": {
-                    "supports_reasoning": false,
-                    "supports_vision": false,
-                    "supports_tool_calls": false,
-                    "supports_image_generation": false,
-                    "supports_embeddings": false,
-                    "supports_decisions": false,
-                    "supports_speech": false
-                }
+                "capabilities": capabilities_with(&[])
             },
             {
                 "huggingface_id": "astronomical-test/example-prism",
@@ -99,15 +122,7 @@ fn expected_validated_catalog_document() -> serde_json::Value {
                 "public": true,
                 "ready_on_this_mac": false,
                 "download_state": null,
-                "capabilities": {
-                    "supports_reasoning": false,
-                    "supports_vision": false,
-                    "supports_tool_calls": false,
-                    "supports_image_generation": false,
-                    "supports_embeddings": false,
-                    "supports_decisions": false,
-                    "supports_speech": false
-                }
+                "capabilities": capabilities_with(&[])
             },
             {
                 "huggingface_id": "astronomical-test/example-embedder",
@@ -124,15 +139,26 @@ fn expected_validated_catalog_document() -> serde_json::Value {
                 "public": true,
                 "ready_on_this_mac": false,
                 "download_state": null,
-                "capabilities": {
-                    "supports_reasoning": false,
-                    "supports_vision": false,
-                    "supports_tool_calls": false,
-                    "supports_image_generation": false,
-                    "supports_embeddings": true,
-                    "supports_decisions": false,
-                    "supports_speech": false
-                }
+                "capabilities": capabilities_with(&["supports_embeddings"])
+            },
+            {
+                "huggingface_id": "astronomical-test/example-qwen-6bit",
+                "revision": "76543210fedcba9876543210fedcba9876543210",
+                "model_id": "example-qwen-6bit",
+                "family": "qwen3_5",
+                "approximate_size_bytes": 6_000_000_000_u64,
+                "approximate_memory_bytes": 2_825_361_094_u64,
+                "role": "chat",
+                "get_started": false,
+                "experimental": false,
+                "retiring": false,
+                "removable_from_disk": false,
+                "public": true,
+                "ready_on_this_mac": false,
+                "download_state": null,
+                "build_of": "example-qwen",
+                "build_difference": "more_detail",
+                "capabilities": capabilities_with(&[])
             }
         ]
     })

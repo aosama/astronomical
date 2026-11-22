@@ -160,15 +160,32 @@ test("should_judge_fit_at_the_exact_memory_boundary_and_stream_only_with_a_measu
     assert.equal(fitOutcome(wholeModel, 0), null, "an unknown ceiling claims nothing");
 });
 
-test("should_word_every_fit_outcome_as_running_and_fill_fewer_bars_as_it_slows", () => {
+test("should_word_every_fit_outcome_as_running_and_show_memory_use_when_it_fits", () => {
     const scriptContext = createDownloadModelsContext();
     const fitCopy = JSON.parse(JSON.stringify(vm.runInContext("DOWNLOAD_MODELS_FIT_COPY", scriptContext)));
+    const fitLabel = (approximateMemoryBytes, servingCeilingBytes) => {
+        scriptContext.catalogRow = { approximateMemoryBytes, minimumMemoryBytes: null };
+        return vm.runInContext(`downloadModelsFitLabel(catalogRow, ${servingCeilingBytes})`, scriptContext);
+    };
 
-    assert.deepEqual(
-        ["fits", "streams", "slow"].map((fitOutcome) => fitCopy[fitOutcome].filledBarCount), [3, 2, 1]
-    );
-    assert.equal(fitCopy.fits.label, "Runs smoothly");
+    assert.equal(fitCopy.fits.label, "Fits in memory");
     assert.match(fitCopy.slow.explanation, /still runs/, "the Mac's size never stops a model");
+    assert.equal(fitLabel(23 * GIGABYTE, 36.5 * GIGABYTE), "23.0 of 36.5 GB memory");
+    assert.equal(fitLabel(36.5 * GIGABYTE, 36.5 * GIGABYTE), "36.5 of 36.5 GB memory", "equal to the ceiling fits");
+    assert.equal(fitLabel(37 * GIGABYTE, 36.5 * GIGABYTE), "Very slow here");
+});
+
+test("should_fill_the_memory_bar_by_share_and_keep_a_sliver_for_tiny_models", () => {
+    const scriptContext = createDownloadModelsContext();
+    const barPercent = (approximateMemoryBytes, servingCeilingBytes) => {
+        scriptContext.catalogRow = { approximateMemoryBytes };
+        return vm.runInContext(`downloadModelsMemoryBarPercent(catalogRow, ${servingCeilingBytes})`, scriptContext);
+    };
+
+    assert.equal(barPercent(18 * GIGABYTE, 36 * GIGABYTE), 50);
+    assert.equal(barPercent(0.1 * GIGABYTE, 36 * GIGABYTE), 2, "a tiny model still shows a sliver");
+    assert.equal(barPercent(50 * GIGABYTE, 36 * GIGABYTE), 100, "a model over the ceiling fills the bar");
+    assert.equal(barPercent(8 * GIGABYTE, 0), 0, "an unknown ceiling fills nothing");
 });
 
 test("should_list_abilities_in_one_fixed_order_and_nothing_for_a_model_without_any", () => {

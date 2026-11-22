@@ -102,8 +102,8 @@
 .download-models-group-heading h4 { margin: 0; font-size: var(--text-xl); font-weight: 700; }
 .download-models-group-note { color: var(--ink-3); font-size: var(--text-sm); }
 
-/* One model per row. The three control slots have fixed widths so the version
-   pickers, speed meters and buttons of every row line up in columns. */
+/* One model per row. The control slots have fixed widths so the memory meters
+   and buttons of every row line up in columns. */
 .download-models-row { min-width: 0; display: flex; flex-direction: column; }
 .download-models-row-line { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 24px; padding: 16px 22px; }
 .download-models-row-identity { display: flex; flex-direction: column; gap: 3px; flex: 999 1 320px; min-width: 0; }
@@ -117,7 +117,7 @@
 .download-models-row-summary { color: var(--ink-2); font-size: var(--text-md); }
 .download-models-row-abilities { color: var(--ink-3); font-size: var(--text-xs); }
 .download-models-row-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; }
-.download-models-row-fit { width: 172px; display: flex; }
+.download-models-row-fit { width: 204px; display: flex; }
 .download-models-row-action { width: 168px; display: flex; justify-content: flex-end; }
 .download-models-row-status { color: var(--accent-text); font-size: var(--text-sm); font-weight: var(--weight-strong); font-variant-numeric: tabular-nums; }
 .download-models-row-status-ready { display: inline-flex; align-items: center; gap: 8px; color: var(--ink); }
@@ -132,14 +132,33 @@
 }
 .download-models-download-button { font-variant-numeric: tabular-nums; }
 
-/* Speed meter: the number of filled bars carries the verdict with the words */
-.download-models-fit { display: inline-flex; align-items: center; gap: 10px; color: var(--ink-2); font-size: var(--text-sm); font-weight: var(--weight-label); }
-.download-models-fit-bars { display: inline-flex; align-items: flex-end; gap: 3px; height: 17px; }
-.download-models-fit-bar { width: 5px; border-radius: 2px; background: var(--line-strong); }
-.download-models-fit-bar:nth-child(1) { height: 7px; }
-.download-models-fit-bar:nth-child(2) { height: 12px; }
-.download-models-fit-bar:nth-child(3) { height: 17px; }
-.download-models-fit-bar-filled { background: var(--ink); }
+/* Memory meter: the model's share of this Mac's model memory. A model that
+   does not fit draws a full, hollow bar, so the verdict never rests on colour. */
+.download-models-fit { display: inline-flex; flex-direction: column; gap: 5px; width: 100%; color: var(--ink-2); font-size: var(--text-sm); font-weight: var(--weight-label); font-variant-numeric: tabular-nums; }
+.download-models-fit-bar { display: block; height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
+.download-models-fit-bar-fill { display: block; height: 100%; border-radius: 3px; background: var(--accent); }
+.download-models-fit-streams .download-models-fit-bar-fill,
+.download-models-fit-slow .download-models-fit-bar-fill,
+.download-models-fit-over-your-limit .download-models-fit-bar-fill { background: transparent; box-shadow: inset 0 0 0 1.5px var(--ink-3); }
+
+/* Other builds of a model sit under its lead, indented, behind one toggle. */
+.download-models-fold-toggle { align-self: flex-start; margin: -6px 0 10px 41px; padding: 4px 0; border: 0; background: transparent; color: var(--accent-text); cursor: pointer; font-size: var(--text-sm); font-weight: var(--weight-label); }
+.download-models-fold-toggle:hover { text-decoration: underline; }
+.download-models-fold-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.download-models-row-build { margin-left: 22px; border-left: 2px solid var(--line); }
+.download-models-row-build .download-models-row-name { font-size: var(--text-lg); }
+.download-models-row-difference { margin: 0; padding-left: 19px; color: var(--accent-text); font-size: var(--text-sm); font-weight: var(--weight-label); }
+
+/* Suggested for this Mac: a few cards, each one model and why */
+.download-models-suggestions { display: flex; flex-direction: column; gap: 14px; }
+.download-models-suggestions-title { margin: 0; font-size: var(--text-xl); font-weight: 700; }
+.download-models-suggestion-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr)); gap: 14px; }
+.download-models-suggestion-card { min-width: 0; display: flex; flex-direction: column; gap: 8px; padding: 20px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); }
+.download-models-suggestion-card:first-child { border: 2px solid var(--accent); padding: 19px; }
+.download-models-suggestion-tag { color: var(--accent-text); font-size: var(--text-sm); font-weight: var(--weight-strong); }
+.download-models-suggestion-model { margin: 0; color: var(--ink); font-size: var(--text-lg); font-weight: var(--weight-strong); overflow-wrap: anywhere; }
+.download-models-suggestion-reason { flex: 1; margin: 0; color: var(--ink-2); font-size: var(--text-md); }
+.download-models-suggestion-card .button, .download-models-suggestion-card .download-models-row-status { align-self: flex-start; margin-top: 6px; }
 
 /* Details: the long description on the left, the technical facts on the right */
 .download-models-row-details { display: flex; flex-wrap: wrap; gap: 20px 48px; padding: 20px 22px 24px 41px; background: var(--sunk); border-top: 1px solid var(--line); }

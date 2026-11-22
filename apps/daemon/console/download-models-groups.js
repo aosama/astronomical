@@ -33,29 +33,27 @@ const DOWNLOAD_MODELS_SECTION_KEY_BY_ROLE = {
     // nobody chats with it either.
     speech: "helpers"
 };
-// How a model runs here, worded as speed because that is what the person
-// feels. No outcome ever blocks a download: the Mac's size never stops a model
-// (#1902), so the weakest label still says it runs.
+// How a model runs here. A model that fits shows how much of the memory it
+// uses, which tells two models apart where one word for both could not; the
+// others are worded as speed because that is what the person feels. No outcome
+// ever blocks a download: the Mac's size never stops a model (#1902), so the
+// weakest label still says it runs.
 const DOWNLOAD_MODELS_FIT_COPY = {
     fits: {
-        label: "Runs smoothly",
-        explanation: "It fits in the memory this Mac gives to models.",
-        filledBarCount: 3
+        label: "Fits in memory",
+        explanation: "It runs entirely in the memory this Mac gives to models."
     },
     streams: {
         label: "Runs, but slower",
-        explanation: "It is bigger than this Mac's memory for models, so part of it is read from the SSD while it answers.",
-        filledBarCount: 2
+        explanation: "It is bigger than this Mac's memory for models, so part of it is read from the SSD while it answers."
     },
     slow: {
         label: "Very slow here",
-        explanation: "It is much bigger than this Mac's memory for models. It still runs, with long waits between words.",
-        filledBarCount: 1
+        explanation: "It is much bigger than this Mac's memory for models. It still runs, with long waits between words."
     },
     "over-your-limit": {
         label: "Above your memory limit",
-        explanation: "It needs more memory than the maximum you set under Configuration. Raise that maximum to run it.",
-        filledBarCount: 1
+        explanation: "It needs more memory than the maximum you set under Configuration. Raise that maximum to run it."
     }
 };
 const DOWNLOAD_MODELS_ABILITIES = [
@@ -145,7 +143,23 @@ function downloadModelsFitOutcome(catalogRow, servingCeilingBytes, ceilingIsUser
 
 function downloadModelsFitLabel(catalogRow, servingCeilingBytes, ceilingIsUserLimit = false) {
     const fitOutcome = downloadModelsFitOutcome(catalogRow, servingCeilingBytes, ceilingIsUserLimit);
-    return fitOutcome === null ? null : DOWNLOAD_MODELS_FIT_COPY[fitOutcome].label;
+    if (fitOutcome === null) return null;
+    if (fitOutcome === "fits") return downloadModelsMemoryUseText(catalogRow, servingCeilingBytes);
+    return DOWNLOAD_MODELS_FIT_COPY[fitOutcome].label;
+}
+
+// "23.0 of 36.5 GB memory": the model's memory beside what this Mac gives to
+// models, both in the 2^30-byte gigabytes the menu bar shows.
+function downloadModelsMemoryUseText(catalogRow, servingCeilingBytes) {
+    return formatDownloadModelsGigabyteCount(catalogRow.approximateMemoryBytes)
+        + " of " + formatDownloadModelsCardSize(servingCeilingBytes) + " memory";
+}
+
+// How much of the bar a model fills: its share of the memory when it fits, the
+// whole bar when it does not (the words then say what that means).
+function downloadModelsMemoryBarPercent(catalogRow, servingCeilingBytes) {
+    if (!(servingCeilingBytes > 0)) return 0;
+    return Math.min(100, Math.max(2, Math.round(catalogRow.approximateMemoryBytes * 100 / servingCeilingBytes)));
 }
 
 function downloadModelsAbilitiesText(catalogRow) {
@@ -179,6 +193,13 @@ function downloadModelsInstalledSummaryText(catalogRow) {
 // gigabytes, the unit Apple prints on the box.
 function formatDownloadModelsCardSize(approximateSizeBytes) {
     return formatDownloadModelsGigabyteCount(approximateSizeBytes) + " GB";
+}
+
+// Free disk space in whole gigabytes, rounded down so the page never promises
+// room a download would not find. Tenths would change every few seconds on a
+// Mac where any program is writing.
+function formatDownloadModelsFreeDiskText(freeBytes) {
+    return Math.floor(freeBytes / 1073741824) + " GB";
 }
 
 // The number alone, for a phrase that names the unit once ("9.2 of 21.9 GB").

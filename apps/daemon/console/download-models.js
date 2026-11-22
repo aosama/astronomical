@@ -34,6 +34,8 @@ let downloadModelsSearchQuery = "";
 let downloadModelsActiveFilter = "all";
 // The model whose details are open, by its model ID, or null.
 let downloadModelsExpandedModelId = null;
+// Lead model IDs whose other builds are shown under them; folded by default.
+let downloadModelsUnfoldedLeadIds = [];
 // Serving memory ceiling from /v1/status: the limit the engine loads models
 // within, which can sit below the machine's RAM when the user configured a lower
 // maximum. Null means unknown, and the cards then show no fit label rather than a guess.
@@ -114,11 +116,12 @@ function renderDownloadModelsCatalogDocument(catalogDocument, catalogContainer) 
     // input moved, skip the rebuild so in-progress text selection and focus
     // survive (replacing nodes cuts selections out from under an active drag).
     const renderStateFingerprint = JSON.stringify([
-        catalogDocument,
+        downloadModelsFingerprintedCatalogDocument(catalogDocument),
         downloadModelsCurrentDownload,
         downloadModelsSearchQuery,
         downloadModelsActiveFilter,
         downloadModelsExpandedModelId,
+        downloadModelsUnfoldedLeadIds,
         downloadModelsLinkedModelId,
         downloadModelsMeasuredBytesPerSecond,
         downloadModelsServingCeilingBytes,
@@ -167,6 +170,17 @@ function renderDownloadModelsCatalogDocument(catalogDocument, catalogContainer) 
     restoreDownloadModelsSearchSnapshot(searchSnapshot);
     downloadModelsRenderedStateOutcome = "ready";
     return "ready";
+}
+
+// The catalog as the render fingerprint sees it. Free disk space moves with
+// every file any program writes; counting raw bytes would rebuild the page every
+// second and cut through text selections, so it counts only as the whole
+// gigabytes the page shows.
+function downloadModelsFingerprintedCatalogDocument(catalogDocument) {
+    if (!catalogDocument || typeof catalogDocument !== "object") return catalogDocument;
+    const freeBytes = catalogDocument.models_directory_free_bytes;
+    if (!Number.isFinite(freeBytes)) return catalogDocument;
+    return { ...catalogDocument, models_directory_free_bytes: formatDownloadModelsFreeDiskText(freeBytes) };
 }
 
 function captureDownloadModelsSearchSnapshot() {
@@ -260,6 +274,8 @@ function downloadModelsCatalogRowFromEntry(catalogEntry) {
         requestableModelId: typeof catalogEntry.requestable_model_id === "string"
             ? catalogEntry.requestable_model_id
             : null,
+        buildOf: downloadModelsOptionalText(catalogEntry.build_of),
+        buildDifference: downloadModelsOptionalText(catalogEntry.build_difference),
         supportsReasoning: capabilities.supports_reasoning === true,
         supportsVision: capabilities.supports_vision === true,
         supportsToolCalls: capabilities.supports_tool_calls === true,
@@ -353,6 +369,13 @@ function readDownloadModelsCeilingIsUserLimit(statusDocument) {
         return false;
     }
     return configuredGigabytes * 1073741824 < machineCeilingBytes;
+}
+
+// Free bytes on the disk that holds the models folder, as the catalog reports
+// them; null when the daemon could not read the disk.
+function downloadModelsFreeDiskBytes() {
+    const freeBytes = downloadModelsCatalogDocument?.models_directory_free_bytes;
+    return Number.isSafeInteger(freeBytes) && freeBytes >= 0 ? freeBytes : null;
 }
 
 function isPositiveFiniteByteCount(byteCount) {

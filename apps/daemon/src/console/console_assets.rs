@@ -16,6 +16,8 @@ const DOWNLOAD_MODELS_JS: &str = include_str!("../../console/download-models.js"
 const DOWNLOAD_MODELS_RENDER_JS: &str = include_str!("../../console/download-models-render.js");
 const DOWNLOAD_MODELS_GROUPS_JS: &str = include_str!("../../console/download-models-groups.js");
 const DOWNLOAD_MODELS_ROW_JS: &str = include_str!("../../console/download-models-row.js");
+const DOWNLOAD_MODELS_SUGGESTIONS_JS: &str =
+    include_str!("../../console/download-models-suggestions.js");
 const DOWNLOAD_MODELS_LINKED_JS: &str = include_str!("../../console/download-models-linked.js");
 const DOWNLOAD_MODELS_INSTALLED_JS: &str =
     include_str!("../../console/download-models-installed.js");
@@ -93,6 +95,10 @@ where
             get(download_models_groups_script),
         )
         .route("/download-models-row.js", get(download_models_row_script))
+        .route(
+            "/download-models-suggestions.js",
+            get(download_models_suggestions_script),
+        )
         .route(
             "/download-models-linked.js",
             get(download_models_linked_script),
@@ -178,6 +184,12 @@ pub(crate) async fn download_models_removal_script() -> Response {
 /// selectable while a download runs.
 pub(crate) async fn download_models_selection_script() -> Response {
     embedded_text_response(DOWNLOAD_MODELS_SELECTION_JS, JAVASCRIPT_CONTENT_TYPE)
+}
+
+/// `GET /download-models-suggestions.js` — the Models page's suggestions for
+/// this Mac and the folding of a model's builds under its lead.
+pub(crate) async fn download_models_suggestions_script() -> Response {
+    embedded_text_response(DOWNLOAD_MODELS_SUGGESTIONS_JS, JAVASCRIPT_CONTENT_TYPE)
 }
 
 /// `GET /download-models-queue.js` — the Models page's download list.
