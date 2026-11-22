@@ -334,8 +334,8 @@ fn linux_native_build_store(store_root: &Path) -> NativeBuildStore {
     .expect("the Linux native store fixture should be valid")
 }
 
-/// A Linux CMake tree: the shared archives and header, the link library
-/// list, and no Metallib.
+/// A Linux CMake tree: the shared archives and header, MLX's installed CMake
+/// package, and no Metallib.
 fn create_fake_linux_native_outputs(build_directory: &Path) -> Result<(), Box<dyn Error>> {
     let mlx_c_header_directory = build_directory.join("_deps/mlx_c-src/mlx/c");
     let library_directory = build_directory.join("lib");
@@ -344,9 +344,11 @@ fn create_fake_linux_native_outputs(build_directory: &Path) -> Result<(), Box<dy
     fs::write(mlx_c_header_directory.join("mlx.h"), b"mlx-c-header")?;
     fs::write(library_directory.join("libmlx.a"), b"mlx-library")?;
     fs::write(library_directory.join("libmlxc.a"), b"mlxc-library")?;
+    let mlx_package_directory = build_directory.join("mlx-package/share/cmake/MLX");
+    fs::create_dir_all(&mlx_package_directory)?;
     fs::write(
-        library_directory.join("mlx-link-libraries.txt"),
-        b"$<LINK_ONLY:dl>\n",
+        mlx_package_directory.join("MLXTargets.cmake"),
+        b"set_target_properties(mlx PROPERTIES\n  INTERFACE_LINK_LIBRARIES \"dl\"\n)\n",
     )?;
     Ok(())
 }
@@ -365,27 +367,25 @@ fn should_publish_and_reuse_a_linux_entry_without_a_metallib() {
 
     assert!(first_artifacts.was_built());
     assert!(!second_artifacts.was_built());
-    assert!(second_artifacts.mlx_link_libraries_path().is_file());
+    assert!(second_artifacts.mlx_targets_path().is_file());
     assert!(!second_artifacts.metallib_path().exists());
 }
 
 #[test]
-fn should_refuse_to_publish_a_linux_entry_without_its_link_library_list() {
+fn should_refuse_to_publish_a_linux_entry_without_mlx_targets() {
     let store_directory = tempfile::tempdir().expect("the test should create a temporary store");
     let native_build_store = linux_native_build_store(store_directory.path());
 
     let publication_error = native_build_store
         .resolve_or_build(|build_directory| {
             create_fake_linux_native_outputs(build_directory)?;
-            fs::remove_file(build_directory.join("lib/mlx-link-libraries.txt"))?;
+            fs::remove_file(build_directory.join("mlx-package/share/cmake/MLX/MLXTargets.cmake"))?;
             Ok(())
         })
         .expect_err("a Linux entry needs the libraries MLX links");
 
     assert!(
-        publication_error
-            .to_string()
-            .contains("mlx-link-libraries.txt"),
+        publication_error.to_string().contains("MLXTargets.cmake"),
         "the error should name the missing list: {publication_error}"
     );
     assert!(!native_build_store.entry_directory().exists());
@@ -403,4 +403,32 @@ fn should_refuse_to_publish_a_macos_entry_without_its_metallib() {
         "a macOS entry must carry the Metallib"
     );
     assert!(!native_build_store.entry_directory().exists());
+}
+
+#[test]
+fn should_build_every_identity_in_the_same_reusable_folder() {
+    let store_directory = tempfile::tempdir().expect("the test should create a temporary store");
+    let builder_folders = Arc::new(std::sync::Mutex::new(Vec::new()));
+
+    for native_identity in [CORE_NATIVE_IDENTITY, SIBLING_NATIVE_IDENTITY] {
+        let recorded_folders = Arc::clone(&builder_folders);
+        let build_count = Arc::new(AtomicUsize::new(0));
+        let recording_builder = fake_builder(build_count);
+        core_native_build_store(store_directory.path(), native_identity)
+            .resolve_or_build(move |cmake_build_directory: &Path| {
+                recorded_folders
+                    .lock()
+                    .unwrap()
+                    .push(cmake_build_directory.to_path_buf());
+                recording_builder(cmake_build_directory)
+            })
+            .expect("each identity should publish");
+    }
+
+    let builder_folders = builder_folders.lock().unwrap();
+    assert_eq!(builder_folders.len(), 2);
+    assert_eq!(
+        builder_folders[0], builder_folders[1],
+        "a new identity must compile at the same paths so sccache can serve unchanged objects"
+    );
 }

@@ -1531,6 +1531,7 @@ version = "0.2.128"
 dependencies = [
  "fs4",
  "native-identity",
+ "rustix",
  "sha2",
  "tempfile",
 ]

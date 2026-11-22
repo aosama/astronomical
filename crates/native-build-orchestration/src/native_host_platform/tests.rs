@@ -1,5 +1,6 @@
 use super::{
-    MLX_LINK_LIBRARIES_RELATIVE_PATH, NativeTargetPlatform, linux_compiler_configure_arguments,
+    MLX_PACKAGE_INSTALL_RELATIVE_DIRECTORY, MLX_TARGETS_RELATIVE_PATH, NativeTargetPlatform,
+    identity_environment_variables, installs_mlx_package, linux_compiler_configure_arguments,
     native_build_platform_for_host, platform_native_products,
 };
 
@@ -82,7 +83,7 @@ fn should_keep_accepting_an_intel_macos_triple_on_an_apple_silicon_host_as_befor
 }
 
 #[test]
-fn should_publish_the_metallib_on_macos_and_the_link_library_list_on_linux() {
+fn should_publish_the_metallib_on_macos_and_mlx_targets_on_linux() {
     let macos_entry_paths: Vec<&str> = platform_native_products(NativeTargetPlatform::MacOs)
         .iter()
         .map(|platform_product| platform_product.entry_relative_path)
@@ -92,7 +93,7 @@ fn should_publish_the_metallib_on_macos_and_the_link_library_list_on_linux() {
         .map(|platform_product| platform_product.entry_relative_path)
         .collect();
     assert_eq!(macos_entry_paths, ["share/mlx/mlx.metallib"]);
-    assert_eq!(linux_entry_paths, [MLX_LINK_LIBRARIES_RELATIVE_PATH]);
+    assert_eq!(linux_entry_paths, [MLX_TARGETS_RELATIVE_PATH]);
 }
 
 #[test]
@@ -101,4 +102,49 @@ fn should_configure_linux_with_the_compilers_the_identity_probes() {
         linux_compiler_configure_arguments(),
         ["-DCMAKE_C_COMPILER=cc", "-DCMAKE_CXX_COMPILER=c++"]
     );
+}
+
+#[test]
+fn should_install_mlx_package_only_where_the_link_reads_it() {
+    assert!(installs_mlx_package(NativeTargetPlatform::Linux));
+    assert!(
+        !installs_mlx_package(NativeTargetPlatform::MacOs),
+        "the Metal build links a fixed framework set and installs nothing"
+    );
+}
+
+#[test]
+fn should_publish_mlx_targets_from_where_the_package_install_puts_it() {
+    let linux_build_paths: Vec<&str> = platform_native_products(NativeTargetPlatform::Linux)
+        .iter()
+        .map(|platform_product| platform_product.build_relative_path)
+        .collect();
+    assert_eq!(
+        linux_build_paths,
+        [format!(
+            "{MLX_PACKAGE_INSTALL_RELATIVE_DIRECTORY}/{MLX_TARGETS_RELATIVE_PATH}"
+        )]
+    );
+}
+
+#[test]
+fn should_rerun_on_the_linux_identity_inputs_and_nothing_new_on_macos() {
+    let linux_variables = identity_environment_variables(NativeTargetPlatform::Linux);
+    for identity_input in ["CMAKE_PREFIX_PATH", "BLA_VENDOR", "BLAS_ROOT", "MKLROOT"] {
+        assert!(
+            linux_variables.contains(&identity_input),
+            "{identity_input}"
+        );
+    }
+    assert_eq!(
+        linux_variables,
+        native_identity::probes::BLAS_SEARCH_VARIABLES
+    );
+    for process_varying_variable in ["PATH", "LD_LIBRARY_PATH"] {
+        assert!(
+            !linux_variables.contains(&process_varying_variable),
+            "{process_varying_variable} differs between Cargo processes and must not re-run the build"
+        );
+    }
+    assert!(identity_environment_variables(NativeTargetPlatform::MacOs).is_empty());
 }

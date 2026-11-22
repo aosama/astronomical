@@ -151,21 +151,6 @@ if(NOT TARGET mlx OR NOT TARGET mlxc)
     message(FATAL_ERROR "Pinned archives did not define the expected mlx and mlxc targets")
 endif()
 
-# Without Metal, MLX links whatever BLAS and LAPACK its configure found, and
-# those differ between distributions (OpenBLAS, reference BLAS, MKL). The
-# link step reads them from this file, so the Rust linker links exactly what
-# MLX was configured against instead of guessing. The entries are MLX's own
-# INTERFACE_LINK_LIBRARIES, the same list its installed MLXTargets.cmake
-# records, one per line and with generator expressions left unevaluated.
-if(NOT ASTRONOMICAL_MLX_BUILD_METAL)
-    get_target_property(mlx_interface_link_libraries mlx INTERFACE_LINK_LIBRARIES)
-    if(NOT mlx_interface_link_libraries)
-        set(mlx_interface_link_libraries "")
-    endif()
-    list(JOIN mlx_interface_link_libraries "\n" mlx_link_library_lines)
-    file(WRITE "${CMAKE_BINARY_DIR}/lib/mlx-link-libraries.txt" "${mlx_link_library_lines}\n")
-endif()
-
 if(ASTRONOMICAL_BUILD_MEMORY_CONTRACT_PROBE)
     # The probe measures the Metal allocator through Mach and MLX's Metal
     # headers, so it cannot exist without Metal. Failing at configure time

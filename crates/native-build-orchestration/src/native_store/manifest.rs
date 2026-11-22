@@ -27,7 +27,9 @@ use std::{
 use sha2::{Digest, Sha256};
 
 use super::NativeBuildProfile;
-use crate::native_host_platform::{NativeTargetPlatform, platform_native_products};
+use crate::native_host_platform::{
+    NativeTargetPlatform, PlatformNativeProduct, platform_native_products,
+};
 
 /// Full-entry validation: real directory, matching completion marker,
 /// well-formed manifest header, payload matching the manifest byte-for-byte,
@@ -195,15 +197,9 @@ fn require_profile_products(
 ) -> Result<(), Box<dyn Error>> {
     // One loop over the shared products followed by the platform's own, so
     // a platform adds products without adding a validation path.
-    let platform_products =
-        platform_native_products(native_target_platform)
-            .iter()
-            .map(|platform_product| {
-                (
-                    platform_product.entry_relative_path,
-                    platform_product.description,
-                )
-            });
+    let platform_products = platform_native_products(native_target_platform)
+        .iter()
+        .map(PlatformNativeProduct::entry_path_and_description);
     for (relative_path, description) in [
         ("include/mlx/c/mlx.h", "published MLX C umbrella header"),
         ("lib/libmlx.a", "published MLX static library"),
