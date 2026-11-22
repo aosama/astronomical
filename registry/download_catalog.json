@@ -608,17 +608,18 @@
         },
         {
             "huggingface_id": "peculiar-ragdoll/Tiel-Coder-35B-A3B-MLX-oQ6e",
-            "revision": "e96662f04124748aed20b2a2e768f75997f136ca",
+            "revision": "83122cecf180c2a9dfdf66fa7753b72eff7ba9e1",
             "summary": "Built for code. Strong at finding and fixing bugs in real projects.",
             "family": "qwen3_5",
-            "approximate_size_bytes": 29529737097,
-            "approximate_memory_bytes": 30709016052,
-            "minimum_memory_bytes": 4113679104,
+            "approximate_size_bytes": 29709028167,
+            "approximate_memory_bytes": 30888307122,
+            "minimum_memory_bytes": 4292952832,
             "role": "coding",
             "public": true,
-            "description": "A large, coding-focused model built from Ornith 1.5. It reads code and text, reasons through multi-step problems, and uses tools to work through real software tasks - strong at finding and fixing bugs. Runs on ordinary Macs with a lean 6-bit compression that keeps quality high for serious work.",
+            "description": "A large, coding-focused model built from Ornith 1.5. It reads code, text and images, reasons through multi-step problems, and uses tools to work through real software tasks - strong at finding and fixing bugs. Runs on ordinary Macs with a lean 6-bit compression that keeps quality high for serious work.",
             "capabilities": {
                 "supports_reasoning": true,
+                "supports_vision": true,
                 "supports_tool_calls": true,
                 "context_window": 262144
             },
@@ -626,11 +627,11 @@
             "upstream_license": "MIT",
             "measured_speed": {
                 "measured_on": "Mac with an M5 Pro and 48 GB",
-                "astronomical_version": "0.2.129",
+                "astronomical_version": "0.2.130",
                 "tokens_per_second": {
                     "essay_short_prompt": 64,
                     "essay_long_prompt": 60,
-                    "code_short_prompt": 63,
+                    "code_short_prompt": 64,
                     "code_long_prompt": 59
                 }
             }
