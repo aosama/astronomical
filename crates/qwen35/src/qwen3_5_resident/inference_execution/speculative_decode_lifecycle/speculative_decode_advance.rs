@@ -17,6 +17,7 @@
 use ipc_protocol::RequestId;
 
 use crate::GeneratedToken;
+use crate::qwen3_5_core::decoder::reply_token_mlx_buffer_cache_reclaim::reclaim_mlx_buffer_cache_between_draft_rounds;
 use crate::qwen3_5_resident::inference_execution::decode_lifecycle::advance_generation::ActiveRequestAdvance;
 use crate::qwen3_5_resident::inference_execution::decode_lifecycle::generated_token_emission;
 use crate::qwen3_5_resident::inference_execution::memory_governance::completed_forward_memory::capture_completed_forward_memory_observation;
@@ -75,7 +76,7 @@ impl Qwen3_5EngineState {
                 &pending_bonus_token,
             )?
         };
-        self.reclaim_outgrown_slabs_and_run_one_round(request_id, active_request, bonus_token_id)
+        self.reclaim_stale_buffers_and_run_one_round(request_id, active_request, bonus_token_id)
     }
 
     /// Emits one queued or bonus token through the classic emission
@@ -91,8 +92,11 @@ impl Qwen3_5EngineState {
             .model
             .as_ref()
             .ok_or_else(super::super::generation_session_lifecycle::generation_error_constructors::engine_lost_loaded_model_error)?;
+        // Every emitted token carries a fresh reading, as the plain reply
+        // path does; without it `/v1/status` showed the last prompt chunk's
+        // memory for the whole draft-assisted reply.
+        let completed_forward_memory = capture_completed_forward_memory_observation(model)?;
         if self.generated_token_will_be_terminal(active_request, current_generated_token_id) {
-            let completed_forward_memory = capture_completed_forward_memory_observation(model)?;
             let generated_token_emission = self.build_generated_token_emission(
                 model,
                 active_request,
@@ -107,7 +111,7 @@ impl Qwen3_5EngineState {
             model,
             active_request,
             current_generated_token_id,
-            None,
+            Some(&completed_forward_memory),
         )?;
         if generated_token_emission.is_terminal {
             return Ok(ActiveRequestAdvance::Complete(
@@ -119,17 +123,18 @@ impl Qwen3_5EngineState {
         ))
     }
 
-    /// Releases the attention slabs the previous round outgrew, then runs
-    /// the next round. A round is evaluated before it returns, so nothing is
-    /// in flight while the `mlx_buffer_cache` is released.
-    fn reclaim_outgrown_slabs_and_run_one_round(
+    /// Releases the buffers the previous round left behind, then runs the
+    /// next round. A round is evaluated before it returns, so nothing is in
+    /// flight while the `mlx_buffer_cache` is released.
+    fn reclaim_stale_buffers_and_run_one_round(
         &mut self,
         request_id: RequestId,
         active_request: &mut Qwen3_5EngineRequest,
         bonus_token_id: u32,
     ) -> Result<ActiveRequestAdvance, crate::InferenceEngineError> {
         if let Some(model) = self.model.as_ref() {
-            active_request.reclaim_outgrown_attention_slabs(model.runtime())?;
+            reclaim_mlx_buffer_cache_between_draft_rounds(model.runtime())
+                .map_err(qwen3_5_runtime_error)?;
         }
         self.run_one_speculative_round(request_id, active_request, bonus_token_id)
     }
