@@ -44,9 +44,13 @@ struct MaximumMlxMemoryControlPresentation: Equatable {
     if let configuredWholeGigabytes = statusDocument.configuredMaximumMlxMemoryGigabytes {
       configurationIsUnreachable = configuredWholeGigabytes > reachableWholeGigabytes
     }
+    // The engine holds one queued change at a time and refuses a second, so Apply waits until
+    // the queued one lands: offering it would only end in that refusal.
+    let changeIsQueued = statusDocument.pendingMlxMemoryCeilingBytes != nil
     shouldOfferApply =
-      editableMaximumWholeGigabytes != appliedMaximumMlxMemoryWholeGigabytes(for: statusDocument)
-      || configurationIsUnreachable
+      !changeIsQueued
+      && (editableMaximumWholeGigabytes != appliedMaximumMlxMemoryWholeGigabytes(for: statusDocument)
+        || configurationIsUnreachable)
     cappedCeilingCaption = Self.cappedCeilingCaption(for: statusDocument)
   }
 

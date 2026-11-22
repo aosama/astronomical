@@ -17,6 +17,11 @@ struct MaximumModelMemorySlider: View {
   var macMemoryBytes: UInt64 = ProcessInfo.processInfo.physicalMemory
   @State private var isDragging = false
 
+  /// A change is waiting for the reply being written to finish. The engine holds one such change
+  /// at a time and refuses a second, so the slider rests until it lands rather than letting a
+  /// drag end in a refusal.
+  private var changeIsQueued: Bool { statusDocument.pendingMlxMemoryCeilingBytes != nil }
+
   private var sliderPresentation: MaximumModelMemorySliderPresentation {
     MaximumModelMemorySliderPresentation(
       minimumWholeGigabytes: telemetryStore.minimumWholeGigabytes,
@@ -42,10 +47,15 @@ struct MaximumModelMemorySlider: View {
         rangeCaptions(sliderPresentation)
         Text(sliderPresentation.explanation)
           .font(.caption)
-          .foregroundStyle(sliderPresentation.partOfTheModelIsReadFromTheSSD ? .orange : .secondary)
+          // Reading part of a model from the SSD is how Astronomical runs models larger than
+          // the limit, so the sentence stays in the quiet colour: it informs, it does not warn.
+          .foregroundStyle(.secondary)
           // Two lines are always reserved: the sentence grows from one line to two as the
           // thumb crosses the model's size, and the rows below must not jump under a drag.
           .lineLimit(2, reservesSpace: true)
+          // Without a fixed vertical size the popover squeezed the sentence onto one line
+          // and cut it off, although the second line was reserved.
+          .fixedSize(horizontal: false, vertical: true)
           .frame(maxWidth: .infinity, alignment: .leading)
         followUpRows
       }
@@ -82,6 +92,8 @@ struct MaximumModelMemorySlider: View {
       .gesture(dragGesture(thumbRadius: thumbRadius, thumbTravel: thumbTravel))
     }
     .frame(height: MaximumModelMemorySliderLayout.controlHeight)
+    .opacity(changeIsQueued ? 0.45 : 1)
+    .allowsHitTesting(!changeIsQueued)
     .accessibilityElement()
     .accessibilityLabel("Maximum model RAM")
     .accessibilityValue("\(sliderPresentation.chosenWholeGigabytes) gigabytes")
@@ -109,6 +121,7 @@ struct MaximumModelMemorySlider: View {
   // applying each one would have the engine resize its memory once per gigabyte on the way. The
   // Apply button, which appears as soon as the thumb differs from the limit in force, commits.
   private func stepForAccessibility(_ adjustmentDirection: AccessibilityAdjustmentDirection) {
+    guard !changeIsQueued else { return }
     let chosenWholeGigabytes = telemetryStore.editableMaximumMlxMemoryGigabytes
     switch adjustmentDirection {
     case .increment where chosenWholeGigabytes < telemetryStore.maximumWholeGigabytes:
@@ -169,8 +182,13 @@ struct MaximumModelMemorySlider: View {
       Text(cappedCeilingCaption).font(.caption).foregroundStyle(.orange)
     }
     if let pendingMlxMemoryCeilingBytes = statusDocument.pendingMlxMemoryCeilingBytes {
-      Text("Pending \(gigabyteValueText(byteCount: pendingMlxMemoryCeilingBytes))")
-        .font(.caption).foregroundStyle(.orange)
+      // A queued change is the control working as designed, so it reads as a quiet note.
+      Text(
+        queuedMaximumModelMemoryCaption(
+          pendingCeilingBytes: pendingMlxMemoryCeilingBytes,
+          wiredResidencyBudgetBytes: statusDocument.wiredResidencyBudgetBytes)
+      )
+      .font(.caption).foregroundStyle(.secondary)
     }
     if let mlxMemoryLimitError = statusDocument.mlxMemoryLimitError {
       Text(mlxMemoryLimitError).font(.caption).foregroundStyle(.red)

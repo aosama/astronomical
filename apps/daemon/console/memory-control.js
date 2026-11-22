@@ -42,13 +42,24 @@ function appliedMaximumGigabytes(statusDocument, bounds) {
     return Math.min(configuredGigabytes, bounds.maximumGigabytes);
 }
 
-// Something worth colour: an error, a queued change, or an explicit request
+// A change waiting for the reply being written to finish. It names the limit
+// the engine will really install, never the raw request: "Use Max" asks for
+// the whole Mac's memory, which the engine lowers to what macOS lets it keep.
+function queuedMemoryLimitNotice(statusDocument) {
+    const pendingBytes = statusDocument.pending_mlx_memory_ceiling_bytes;
+    if (!pendingBytes) { return ""; }
+    const installedBytes = mlxMemoryCeilingTheEngineWillInstall(
+        pendingBytes, statusDocument.wired_residency_budget_bytes);
+    return "Changes to " + formatGigabytes(installedBytes) + " when the current reply finishes.";
+}
+
+// Something worth saying: an error, a queued change, or an explicit request
 // the engine serves below. "Use Max" landing under the machine ceiling is the
 // request being honoured, so it never counts as a cap.
 function memoryLimitNotice(statusDocument) {
     if (statusDocument.mlx_memory_limit_error) { return statusDocument.mlx_memory_limit_error; }
     if (statusDocument.pending_mlx_memory_ceiling_bytes) {
-        return "Pending " + formatGigabytes(statusDocument.pending_mlx_memory_ceiling_bytes);
+        return queuedMemoryLimitNotice(statusDocument);
     }
     const configuredGigabytes = statusDocument.configured_maximum_mlx_memory_gb;
     const liveCeilingBytes = statusDocument.mlx_memory_ceiling_bytes || 0;
@@ -94,6 +105,13 @@ function renderMemoryLimitControl(statusDocument) {
         "Up to " + bounds.maximumGigabytes + " GB on this Mac";
     const noticeElement = document.getElementById("maximum-mlx-memory-notice");
     noticeElement.textContent = memoryLimitNotice(statusDocument);
+    // A queued change is the control working as designed, so it drops the
+    // warning colour an error or a cap keeps.
+    const isOnlyQueued = !statusDocument.mlx_memory_limit_error
+        && Boolean(statusDocument.pending_mlx_memory_ceiling_bytes);
+    noticeElement.className = isOnlyQueued
+        ? "mlx-memory-control-notice mlx-memory-control-notice-calm"
+        : "mlx-memory-control-notice";
     noticeElement.hidden = noticeElement.textContent === "";
 }
 

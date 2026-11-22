@@ -48,7 +48,8 @@ pub(crate) async fn update_maximum_mlx_memory(
             Json(response_document(
                 maximum_mlx_memory_request.maximum_mlx_memory_gb,
                 &worker_handle.worker_health_snapshot(),
-                "a queued MLX memory setting is still awaiting worker acknowledgement".to_owned(),
+                "Another memory change is waiting for the current reply to finish. Try again after it."
+                    .to_owned(),
             )),
         )
             .into_response();

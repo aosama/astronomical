@@ -48,16 +48,41 @@ final class MaximumModelMemorySliderPresentationTests: XCTestCase {
       "Leaves 36 GB for macOS and your other apps.")
   }
 
-  func test_should_warn_that_the_model_streams_once_the_limit_is_below_its_size() {
+  func test_should_say_that_the_model_streams_once_the_limit_is_below_its_size() {
     let presentation = sliderPresentation(chosen: 20)
     XCTAssertTrue(presentation.partOfTheModelIsReadFromTheSSD)
     XCTAssertEqual(
       presentation.explanation,
-      "This model is 28.00 GB. At 20 GB, part of it is read from the SSD, which is slower. Leaves 28 GB for your other apps."
+      "At 20 GB, part of this 28.00 GB model is read from the SSD, which is slower. Leaves 28 GB for other apps."
     )
+    XCTAssertLessThanOrEqual(
+      presentation.explanation.count, 110, "the sentence must fit the popover's two lines")
     // A limit equal to the size is not below it; a fraction of a gigabyte under it is.
     XCTAssertFalse(sliderPresentation(chosen: 28).partOfTheModelIsReadFromTheSSD)
     XCTAssertTrue(sliderPresentation(chosen: 28, modelSizeGigabytes: 28.05).partOfTheModelIsReadFromTheSSD)
+  }
+
+  /// Resting the slider at the top asks the engine for the whole Mac's memory (48 GB here); the
+  /// engine installs what macOS lets it keep, so the note must name that, never 48.
+  func test_should_name_the_limit_the_engine_will_install_while_a_change_is_queued() {
+    let wholeMacBytes: UInt64 = 48 * 1_073_741_824
+    let wiredResidencyBudgetBytes: UInt64 = 40_200_896_512
+    XCTAssertEqual(
+      queuedMaximumModelMemoryCaption(
+        pendingCeilingBytes: wholeMacBytes, wiredResidencyBudgetBytes: wiredResidencyBudgetBytes),
+      "Changes to 36.50 GB when this reply finishes.")
+  }
+
+  func test_should_name_an_explicit_queued_limit_unchanged_when_the_mac_can_serve_it() {
+    XCTAssertEqual(
+      queuedMaximumModelMemoryCaption(
+        pendingCeilingBytes: 20 * 1_073_741_824, wiredResidencyBudgetBytes: 40_200_896_512),
+      "Changes to 20.00 GB when this reply finishes.")
+    XCTAssertEqual(
+      queuedMaximumModelMemoryCaption(
+        pendingCeilingBytes: 48 * 1_073_741_824, wiredResidencyBudgetBytes: nil),
+      "Changes to 48.00 GB when this reply finishes.",
+      "without a wired claim the engine installs the request itself")
   }
 
   func test_should_stay_defined_when_the_range_is_a_single_value_or_the_limit_passes_the_mac() {

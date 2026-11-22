@@ -327,6 +327,7 @@ body[data-application-channel="development"] #application-channel { color: var(-
 .mlx-memory-control input { min-width: 110px; min-height: 40px; flex: 1 1 110px; padding: 8px 11px; border: 1px solid var(--border-strong); border-radius: var(--radius-small); background: var(--panel-2); color: var(--text); }
 .mlx-memory-control-status { min-height: 1.5em; font-size: var(--text-md); overflow-wrap: anywhere; }
 .mlx-memory-control-notice { color: var(--warn); font-size: var(--text-md); overflow-wrap: anywhere; }
+.mlx-memory-control-notice-calm { color: var(--ink-2); }
 /* Four button weights: primary is the one action a view wants taken (accent
    fill), secondary is any other action (surface with a visible edge), quiet is
    a way out such as Cancel (no edge until hovered), and danger is destructive
