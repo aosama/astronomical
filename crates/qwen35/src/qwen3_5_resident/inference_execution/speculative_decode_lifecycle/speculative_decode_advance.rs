@@ -75,7 +75,7 @@ impl Qwen3_5EngineState {
                 &pending_bonus_token,
             )?
         };
-        self.run_one_speculative_round(request_id, active_request, bonus_token_id)
+        self.reclaim_outgrown_slabs_and_run_one_round(request_id, active_request, bonus_token_id)
     }
 
     /// Emits one queued or bonus token through the classic emission
@@ -117,6 +117,21 @@ impl Qwen3_5EngineState {
         Ok(ActiveRequestAdvance::Continue(
             generated_token_emission.generated_token,
         ))
+    }
+
+    /// Releases the attention slabs the previous round outgrew, then runs
+    /// the next round. A round is evaluated before it returns, so nothing is
+    /// in flight while the `mlx_buffer_cache` is released.
+    fn reclaim_outgrown_slabs_and_run_one_round(
+        &mut self,
+        request_id: RequestId,
+        active_request: &mut Qwen3_5EngineRequest,
+        bonus_token_id: u32,
+    ) -> Result<ActiveRequestAdvance, crate::InferenceEngineError> {
+        if let Some(model) = self.model.as_ref() {
+            active_request.reclaim_outgrown_attention_slabs(model.runtime())?;
+        }
+        self.run_one_speculative_round(request_id, active_request, bonus_token_id)
     }
 
     /// Runs one draft-and-verify round from the bonus token that seeds it,

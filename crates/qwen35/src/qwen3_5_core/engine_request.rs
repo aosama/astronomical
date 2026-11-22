@@ -11,6 +11,7 @@ use mlx_bridge::MlxArray;
 
 use crate::astro_ssd_prompt_cache::block_causal_input::AstroSsdPromptCacheBlockCausalInput;
 use crate::qwen3_5_core::decoder::RequestDecoderStateStack;
+use crate::qwen3_5_core::decoder::reply_token_mlx_buffer_cache_reclaim::OutgrownAttentionSlabReclaim;
 use crate::qwen3_5_core::engine_errors::{fatal_engine_error, qwen3_5_runtime_error};
 use crate::qwen3_5_core::model::Qwen3_5ModelBase;
 use crate::qwen3_5_core::text::sampler;
@@ -64,6 +65,8 @@ pub struct Qwen3_5EngineRequest<RequestExtension> {
     pub generation_residency_preparation_attempted: bool,
     /// First decode-forward latency waiting to be emitted with its generated token.
     pub first_decode_forward_elapsed_millis: Option<u64>,
+    /// Tracks attention slab growth so the reply path can release the slabs it outgrew.
+    pub outgrown_attention_slab_reclaim: OutgrownAttentionSlabReclaim,
     /// Ensures the worker observes generation preparation before blocking handoff work.
     pub generation_preparation_announced: bool,
     pub structured_generation: Option<crate::structured_generation::StructuredTokenConstraint>,
@@ -72,6 +75,17 @@ pub struct Qwen3_5EngineRequest<RequestExtension> {
 }
 
 impl<RequestExtension> Qwen3_5EngineRequest<RequestExtension> {
+    /// Releases attention slabs the last reply step outgrew; the rule and
+    /// its measurements live with [`OutgrownAttentionSlabReclaim`].
+    pub fn reclaim_outgrown_attention_slabs(
+        &mut self,
+        runtime: &runtime_integration::MlxRuntime,
+    ) -> Result<(), InferenceEngineError> {
+        self.outgrown_attention_slab_reclaim
+            .reclaim_after_slab_growth(runtime, self.request_decoder_state.payload_byte_count())
+            .map_err(qwen3_5_runtime_error)
+    }
+
     /// Records one generated token in the penalty history, keeping it sorted and unique.
     ///
     /// Only requests with an active penalty call this, so the common path never

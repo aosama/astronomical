@@ -162,8 +162,11 @@ impl Qwen3_5EngineState {
         } else {
             None
         };
-        let (next_generated_token, completed_forward_memory) =
-            self.decode_next_token_and_collect_memory(active_request, &current_generated_token)?;
+        let (next_generated_token, completed_forward_memory) = self
+            .reclaim_outgrown_slabs_and_decode_next_token(
+                active_request,
+                &current_generated_token,
+            )?;
 
         let generated_token_emission = match early_structured_emission.take() {
             Some(generated_token_emission) => generated_token_emission,
@@ -379,6 +382,21 @@ impl Qwen3_5EngineState {
         Ok(Some(ActiveRequestAdvance::Complete(
             generated_token_emission.generated_token,
         )))
+    }
+
+    /// Releases the attention slabs the previous step outgrew, then decodes
+    /// the next token. The previous token is synchronized by now, so nothing
+    /// is in flight while the `mlx_buffer_cache` is released.
+    fn reclaim_outgrown_slabs_and_decode_next_token(
+        &mut self,
+        active_request: &mut super::engine_request::Qwen3_5EngineRequest,
+        current_generated_token: &MlxArray,
+    ) -> Result<(MlxArray, CompletedForwardMemoryObservation), InferenceEngineError> {
+        let model = self.model.as_ref().ok_or_else(
+            super::super::generation_session_lifecycle::generation_error_constructors::engine_lost_loaded_model_error,
+        )?;
+        active_request.reclaim_outgrown_attention_slabs(model.runtime())?;
+        self.decode_next_token_and_collect_memory(active_request, current_generated_token)
     }
 
     /// Asks whether the next reply step fits, runs it, submits the successor

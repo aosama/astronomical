@@ -10,6 +10,10 @@ mod persistent_state_bridge;
 #[cfg(feature = "direct-mlx")]
 mod persistent_state_kv_restore;
 #[cfg(feature = "direct-mlx")]
+pub mod reply_token_mlx_buffer_cache_reclaim;
+#[cfg(all(test, feature = "direct-mlx"))]
+mod reply_token_mlx_buffer_cache_reclaim_tests;
+#[cfg(feature = "direct-mlx")]
 pub mod request_state;
 pub use astro_decoder_state_cache_layout::{
     Qwen3_5AstroDecoderStateCacheLayerDtypes, qwen3_5_astro_decoder_state_cache_layout,
