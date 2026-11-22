@@ -55,14 +55,15 @@ function createDownloadModelsInstalledLine(installedRow) {
     if (refusalText) identityChildren.push(createDownloadModelsNotice(refusalText));
     identity.replaceChildren(...identityChildren);
     const actions = createDownloadModelsElement("div", "download-models-installed-actions");
+    // The same buttons in the same order on every line: chat (for a model that
+    // chats), Show in Finder, then Remove. Remove appears only for a copy
+    // Download Models installed: a copy the person placed may be shared with
+    // other apps (the Hugging Face folder), so the page never deletes it.
     const actionControls = [];
-    if (canChatWithCatalogModel(installedRow)) actionControls.push(createDownloadModelsOpenInChatButton());
+    if (canChatWithCatalogModel(installedRow)) actionControls.push(createDownloadModelsOpenInChatButton(installedRow));
+    actionControls.push(createDownloadModelsRevealButton(installedRow.huggingfaceId));
     if (canRemoveDownloadModelsModelFromDisk(installedRow)) {
         actionControls.push(...createDownloadModelsRemovalControls(installedRow));
-    } else {
-        // A copy the person placed themself is theirs to manage: the page
-        // shows where it is instead of offering to remove it.
-        actionControls.push(createDownloadModelsRevealButton(installedRow.huggingfaceId));
     }
     actions.replaceChildren(...actionControls);
     line.replaceChildren(identity, actions);
@@ -157,20 +158,25 @@ function canChatWithCatalogModel(catalogRow) {
         && !catalogRow.supportsSpeech;
 }
 
-function createDownloadModelsOpenInChatButton() {
+function createDownloadModelsOpenInChatButton(installedRow) {
     const openInChatButton = createDownloadModelsElement(
         "button", "button button-secondary download-models-open-in-chat", "Chat with this model"
     );
     openInChatButton.type = "button";
-    openInChatButton.addEventListener("click", openThinTalkFromDownloadModels);
+    openInChatButton.addEventListener("click", () => openThinTalkFromDownloadModels(downloadModelsRowName(installedRow)));
     return openInChatButton;
 }
 
-// Thin Talk picks the model inside its own model chooser, so opening the
-// conversation window is all the handoff needs.
-function openThinTalkFromDownloadModels() {
+// The chat link names the model in its query (?model=<model ID>), so the chat
+// window opens on it rather than on whichever model it had. The model ID is
+// the name the chat app lists the model under.
+function downloadModelsChatLinkForModel(chatLink, modelId) {
+    return chatLink + "?model=" + encodeURIComponent(modelId);
+}
+
+function openThinTalkFromDownloadModels(modelId) {
     const chatLink = thinTalkChatLink(document.body.dataset.applicationChannel);
     if (chatLink) {
-        window.location.assign(chatLink);
+        window.location.assign(downloadModelsChatLinkForModel(chatLink, modelId));
     }
 }

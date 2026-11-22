@@ -22,6 +22,7 @@ function recordingHandlers(calledCommands: string[]): HostCommandHandlers {
     exportConversation: () => calledCommands.push("exportConversation"),
     focusComposer: () => calledCommands.push("focusComposer"),
     fillDraft: (draftText) => calledCommands.push(`fillDraft:${draftText}`),
+    selectChatModel: (modelID) => calledCommands.push(`selectChatModel:${modelID}`),
     openSettings: () => calledCommands.push("openSettings"),
     toggleAstro: () => calledCommands.push("toggleAstro"),
     setTitlebarInset: (titlebarInsetPixels) => calledCommands.push(`setTitlebarInset:${titlebarInsetPixels}`),
@@ -50,7 +51,7 @@ test("should_refuse_payloads_that_are_not_a_known_command", () => {
 
 test("should_dispatch_each_command_to_its_own_handler_only", () => {
   for (const hostCommand of Object.values(HostCommand)) {
-    if (hostCommand === HostCommand.SET_TITLEBAR_INSET || hostCommand === HostCommand.FILL_DRAFT) {
+    if (hostCommand === HostCommand.SET_TITLEBAR_INSET || hostCommand === HostCommand.FILL_DRAFT || hostCommand === HostCommand.SELECT_CHAT_MODEL) {
       continue;
     }
     const calledCommands: string[] = [];
@@ -198,3 +199,16 @@ test("should_put_a_draft_in_the_real_message_field_ready_to_send_without_sending
   await waitFor(() => !sendButton.disabled, "Send to become available");
   assert.equal(journey.daemon.chatRequestBodies().length, 0, "nothing is sent to a model");
 }, { timeout: 30_000 });
+
+test("should_hand_a_model_id_to_its_handler_and_refuse_anything_that_is_not_one", () => {
+  const calledCommands: string[] = [];
+  const router = new HostCommandRouter(recordingHandlers(calledCommands));
+
+  assert.equal(router.run({ name: "selectChatModel", model: "Ornith-1.5-35B-A3B-OptiQ-DFLASH2-4bit" }), true);
+  assert.equal(router.run({ name: "selectChatModel", model: "Qwen3.5-0.8B-MLX-4bit" }), true);
+  for (const refusedModel of [undefined, null, 7, "", "-leading-dash", "has space", "a/b", "<script>", "a".repeat(201)]) {
+    assert.equal(router.run({ name: "selectChatModel", model: refusedModel }), false, String(refusedModel).slice(0, 20));
+  }
+
+  assert.deepEqual(calledCommands, ["selectChatModel:Ornith-1.5-35B-A3B-OptiQ-DFLASH2-4bit", "selectChatModel:Qwen3.5-0.8B-MLX-4bit"]);
+});

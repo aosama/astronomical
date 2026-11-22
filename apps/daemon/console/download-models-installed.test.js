@@ -156,8 +156,15 @@ function installedActionLabelsFor(entryOverrides) {
         .children.map((actionButton) => actionButton.textContent);
 }
 
-test("should_offer_the_thin_talk_handoff_for_a_chat_model_on_this_mac", () => {
-    assert.deepEqual(installedActionLabelsFor({ removable_from_disk: true }), ["Chat with this model", "Remove"]);
+test("should_offer_chat_finder_and_remove_in_one_order_for_a_chat_model_download_models_installed", () => {
+    assert.deepEqual(installedActionLabelsFor({ removable_from_disk: true }), ["Chat with this model", "Show in Finder", "Remove"]);
+});
+
+test("should_offer_finder_on_every_kind_of_model_on_this_mac", () => {
+    const speechModelLabels = installedActionLabelsFor({
+        role: "speech", capabilities: { supports_speech: true }, removable_from_disk: true
+    });
+    assert.deepEqual(speechModelLabels, ["Show in Finder", "Remove"]);
 });
 
 test("should_not_offer_the_thin_talk_handoff_for_an_image_embedding_decision_or_speech_model", () => {
@@ -180,11 +187,11 @@ test("should_not_offer_the_thin_talk_handoff_for_an_image_embedding_decision_or_
     assert.equal(speechModelLabels.includes("Chat with this model"), false);
 });
 
-test("should_show_a_copy_the_person_placed_in_finder_instead_of_offering_to_remove_it", () => {
+test("should_show_a_copy_the_person_placed_in_finder_without_offering_to_remove_it", () => {
     assert.deepEqual(installedActionLabelsFor({ removable_from_disk: false }), ["Chat with this model", "Show in Finder"]);
 });
 
-function thinTalkHandoffsFor(applicationChannel) {
+function thinTalkHandoffsFor(applicationChannel, installedRow = { modelId: "Talker", requestableModelId: null }) {
     const thinTalkHandoffs = [];
     const scriptContext = createDownloadModelsContext();
     scriptContext.document = createDownloadModelsDocument();
@@ -197,13 +204,22 @@ function thinTalkHandoffsFor(applicationChannel) {
     // channel rather than naming a link of its own.
     scriptContext.thinTalkChatLink = (requestedChannel) =>
         requestedChannel === "development" ? "development-chat-link" : null;
-    const openInThinTalkButton = vm.runInContext("createDownloadModelsOpenInChatButton()", scriptContext);
+    scriptContext.installedRow = installedRow;
+    const openInThinTalkButton = vm.runInContext("createDownloadModelsOpenInChatButton(installedRow)", scriptContext);
     for (const clickListener of openInThinTalkButton.listeners.click) clickListener();
     return thinTalkHandoffs;
 }
 
 test("should_hand_off_to_this_channels_thin_talk", () => {
-    assert.deepEqual(thinTalkHandoffsFor("development"), ["development-chat-link"]);
+    assert.deepEqual(thinTalkHandoffsFor("development"), ["development-chat-link?model=Talker"]);
+});
+
+test("should_name_the_model_by_the_name_chat_lists_it_under_and_encode_it", () => {
+    assert.deepEqual(
+        thinTalkHandoffsFor("development", { modelId: "Talker", requestableModelId: "My Talker+v2" }),
+        ["development-chat-link?model=My%20Talker%2Bv2"],
+        "a copy under another folder name is asked for by that name"
+    );
 });
 
 test("should_not_hand_off_when_this_channel_has_no_thin_talk_link", () => {
