@@ -23,6 +23,8 @@ const DOWNLOAD_MODELS_INSTALLED_JS: &str =
     include_str!("../../console/download-models-installed.js");
 const DOWNLOAD_MODELS_INSTALLED_ROWS_JS: &str =
     include_str!("../../console/download-models-installed-rows.js");
+const DOWNLOAD_MODELS_VOICE_SAMPLE_JS: &str =
+    include_str!("../../console/download-models-voice-sample.js");
 const DOWNLOAD_MODELS_REMOVAL_JS: &str = include_str!("../../console/download-models-removal.js");
 const DOWNLOAD_MODELS_QUEUE_JS: &str = include_str!("../../console/download-models-queue.js");
 const DOWNLOAD_MODELS_SELECTION_JS: &str =
@@ -115,6 +117,10 @@ where
             get(download_models_installed_rows_script),
         )
         .route(
+            "/download-models-voice-sample.js",
+            get(download_models_voice_sample_script),
+        )
+        .route(
             "/download-models-removal.js",
             get(download_models_removal_script),
         )
@@ -204,6 +210,12 @@ pub(crate) async fn download_models_suggestions_script() -> Response {
 /// their column names, status and ⋯ menu.
 pub(crate) async fn download_models_installed_rows_script() -> Response {
     embedded_text_response(DOWNLOAD_MODELS_INSTALLED_ROWS_JS, JAVASCRIPT_CONTENT_TYPE)
+}
+
+/// `GET /download-models-voice-sample.js` — plays a read-aloud model's
+/// sample from its speaker icon on On this Mac.
+pub(crate) async fn download_models_voice_sample_script() -> Response {
+    embedded_text_response(DOWNLOAD_MODELS_VOICE_SAMPLE_JS, JAVASCRIPT_CONTENT_TYPE)
 }
 
 /// `GET /download-models-queue.js` — the Models page's download list.

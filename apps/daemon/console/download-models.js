@@ -127,6 +127,7 @@ function renderDownloadModelsCatalogDocument(catalogDocument, catalogContainer) 
         downloadModelsInstalledSortAscending,
         downloadModelsOpenMenuHuggingfaceId,
         downloadModelsLoadedModelId(),
+        downloadModelsVoiceSample,
         downloadModelsLinkedModelId,
         downloadModelsMeasuredBytesPerSecond,
         downloadModelsServingCeilingBytes,

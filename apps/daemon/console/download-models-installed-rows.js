@@ -98,9 +98,7 @@ function createDownloadModelsInstalledSortButton(sortColumn) {
 function createDownloadModelsInstalledLine(installedRow) {
     const line = createDownloadModelsElement("div", "download-models-installed-line");
     const lineChildren = [
-        createDownloadModelsElement(
-            "span", "download-models-kind-icon download-models-kind-icon-" + downloadModelsSectionKey(installedRow)
-        ),
+        createDownloadModelsKindIcon(installedRow),
         createDownloadModelsInstalledIdentity(installedRow),
         createDownloadModelsElement("span", "download-models-installed-kind", downloadModelsInstalledKindTitle(installedRow)),
         createDownloadModelsElement(
@@ -116,6 +114,41 @@ function createDownloadModelsInstalledLine(installedRow) {
     if (removalStrip) lineChildren.push(removalStrip);
     line.replaceChildren(...lineChildren);
     return line;
+}
+
+// The kind icon is a button only where a click does something of its own: a
+// chat model's opens the chat on it, a read-aloud model's plays a short
+// sample. Every other kind keeps a plain tile with no hover, so nothing looks
+// clickable that is not.
+function createDownloadModelsKindIcon(installedRow) {
+    const kindClassName = "download-models-kind-icon download-models-kind-icon-" + downloadModelsSectionKey(installedRow);
+    if (canChatWithCatalogModel(installedRow)) {
+        const chatIcon = createDownloadModelsElement("button", kindClassName + " download-models-kind-icon-action");
+        chatIcon.type = "button";
+        chatIcon.title = "Open in chat";
+        chatIcon.setAttribute("aria-label", "Open " + downloadModelsRowName(installedRow) + " in chat");
+        chatIcon.addEventListener("click", () => openThinTalkFromDownloadModels(downloadModelsRowName(installedRow)));
+        return chatIcon;
+    }
+    if (installedRow.supportsSpeech) return createDownloadModelsVoiceSampleIcon(installedRow, kindClassName);
+    return createDownloadModelsElement("span", kindClassName);
+}
+
+function createDownloadModelsVoiceSampleIcon(installedRow, kindClassName) {
+    const phase = downloadModelsVoiceSamplePhase(installedRow.huggingfaceId);
+    const voiceIcon = createDownloadModelsElement(
+        "button",
+        kindClassName + " download-models-kind-icon-action" + (phase ? " download-models-kind-icon-" + phase : "")
+    );
+    voiceIcon.type = "button";
+    voiceIcon.title = downloadModelsVoiceSampleTooltip(installedRow.huggingfaceId);
+    voiceIcon.setAttribute(
+        "aria-label",
+        (phase === "playing" ? "Stop the sample of " : "Hear a sample of ") + downloadModelsRowName(installedRow)
+    );
+    voiceIcon.setAttribute("aria-pressed", String(phase === "playing"));
+    voiceIcon.addEventListener("click", () => void toggleDownloadModelsVoiceSample(installedRow));
+    return voiceIcon;
 }
 
 function createDownloadModelsInstalledIdentity(installedRow) {

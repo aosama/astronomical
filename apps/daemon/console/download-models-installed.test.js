@@ -286,3 +286,100 @@ test("should_say_where_a_hugging_face_copy_lives_and_explain_it_once_under_the_l
     assert.equal(textsOfClass(catalogContainer, "download-models-row-menu-item").at(-1), "Managed in your Hugging Face folder");
     assert.equal(textsOfClass(catalogContainer, "download-models-installed-footnote").length, 1);
 });
+
+function renderIconsWithContext(catalogEntries, contextAdditions = {}) {
+    const scriptContext = createDownloadModelsContext();
+    const downloadModelsDocument = createDownloadModelsDocument();
+    scriptContext.document = downloadModelsDocument;
+    Object.assign(scriptContext, contextAdditions);
+    scriptContext.catalogDocument = { schema_version: 5, entries: catalogEntries };
+    vm.runInContext(
+        `downloadModelsCatalogDocument = catalogDocument; renderDownloadModelsCatalogDocument(catalogDocument)`,
+        scriptContext
+    );
+    return { scriptContext, catalogContainer: downloadModelsDocument.catalogContainer };
+}
+
+const SPEECH_ENTRY = validCatalogEntry({
+    huggingface_id: "astronomical-test/Reader", model_id: "Reader", role: "speech", ready_on_this_mac: true,
+    capabilities: { supports_speech: true }
+});
+
+test("should_make_only_chat_and_read_aloud_icons_buttons_and_keep_the_rest_plain", () => {
+    const { catalogContainer } = renderIconsWithContext([
+        validCatalogEntry({ huggingface_id: "astronomical-test/Talker", model_id: "Talker", ready_on_this_mac: true }),
+        SPEECH_ENTRY,
+        validCatalogEntry({
+            huggingface_id: "astronomical-test/Painter", model_id: "Painter", role: "image_generation", ready_on_this_mac: true,
+            capabilities: { supports_image_generation: true }
+        })
+    ]);
+    const kindIcons = findRenderedElementsByClass(catalogContainer, "download-models-kind-icon");
+
+    assert.deepEqual(
+        kindIcons.map((kindIcon) => [kindIcon.tagName, kindIcon.title || ""]),
+        [["BUTTON", "Open in chat"], ["SPAN", ""], ["BUTTON", "Hear a sample"]],
+        "ordered by kind: chat, pictures, read aloud"
+    );
+});
+
+test("should_open_the_chat_on_the_model_when_its_chat_icon_is_clicked", () => {
+    const chatLinks = [];
+    const { scriptContext, catalogContainer } = renderIconsWithContext(
+        [validCatalogEntry({ huggingface_id: "astronomical-test/Talker", model_id: "Talker", ready_on_this_mac: true })],
+        {
+            thinTalkChatLink: () => "development-chat-link",
+            window: { location: { assign: (chatLink) => chatLinks.push(chatLink) } }
+        }
+    );
+    scriptContext.document.body = { dataset: { applicationChannel: "development" } };
+    const chatIcon = findRenderedElementsByClass(catalogContainer, "download-models-kind-icon-action")[0];
+
+    for (const clickListener of chatIcon.listeners.click) clickListener();
+
+    assert.deepEqual(chatLinks, ["development-chat-link?model=Talker"]);
+});
+
+test("should_load_then_play_a_voice_sample_and_stop_it_on_a_second_click", async () => {
+    const playedSamples = [];
+    const speechRequests = [];
+    const { scriptContext, catalogContainer } = renderIconsWithContext([SPEECH_ENTRY], {
+        fetch: async (requestUrl, requestOptions) => {
+            speechRequests.push([requestUrl, JSON.parse(requestOptions.body)]);
+            return { ok: true, blob: async () => "wav-bytes" };
+        },
+        URL: { createObjectURL: () => "blob:sample", revokeObjectURL: () => {} },
+        Audio: class {
+            constructor(sampleUrl) { this.sampleUrl = sampleUrl; this.isPaused = false; }
+            addEventListener() {}
+            async play() { playedSamples.push(this.sampleUrl); }
+            pause() { this.isPaused = true; }
+        }
+    });
+    const iconClasses = () => findRenderedElementsByClass(catalogContainer, "download-models-kind-icon")[0].className;
+
+    const playing = vm.runInContext(`toggleDownloadModelsVoiceSample(downloadModelsCatalogRowsFromDocument(catalogDocument)[0])`, scriptContext);
+    assert.match(iconClasses(), /download-models-kind-icon-loading/, "the icon shows it is working before any sound");
+    await playing;
+
+    assert.deepEqual(speechRequests, [["/v1/audio/speech", { model: "Reader", input: "Hello. This is how I sound when I read aloud." }]]);
+    assert.deepEqual(playedSamples, ["blob:sample"]);
+    assert.match(iconClasses(), /download-models-kind-icon-playing/);
+
+    await vm.runInContext(`toggleDownloadModelsVoiceSample(downloadModelsCatalogRowsFromDocument(catalogDocument)[0])`, scriptContext);
+    assert.doesNotMatch(iconClasses(), /download-models-kind-icon-(playing|loading)/, "a second click stops it");
+});
+
+test("should_say_in_the_tooltip_when_a_sample_could_not_play", async () => {
+    const { scriptContext, catalogContainer } = renderIconsWithContext([SPEECH_ENTRY], {
+        fetch: async () => ({ ok: false, blob: async () => null }),
+        URL: { createObjectURL: () => "blob:none", revokeObjectURL: () => {} }
+    });
+
+    await vm.runInContext(`toggleDownloadModelsVoiceSample(downloadModelsCatalogRowsFromDocument(catalogDocument)[0])`, scriptContext);
+
+    assert.equal(
+        findRenderedElementsByClass(catalogContainer, "download-models-kind-icon")[0].title,
+        "The sample could not play. Try again."
+    );
+});

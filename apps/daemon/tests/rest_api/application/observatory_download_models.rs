@@ -164,6 +164,10 @@ async fn should_serve_the_embedded_download_list_and_selection_javascript() {
                 "createDownloadModelsInstalledLine",
             ),
             (
+                "/download-models-voice-sample.js",
+                "toggleDownloadModelsVoiceSample",
+            ),
+            (
                 "/download-models-selection.js",
                 "isDownloadModelsSelectionHeld",
             ),
