@@ -87,9 +87,17 @@ fn delayed_first_segment_factories(
     )]
 }
 
+/// Each journey moves a 64 MiB payload and verifies its SHA-256 in a debug
+/// build; the bound only catches a hang. A slower CPU-only Linux machine
+/// needed 10.7 seconds, so builds without Metal allow more before calling it
+/// one. macOS keeps its 10 seconds.
+#[cfg(target_os = "macos")]
+const SEGMENTED_JOURNEY_HANG_GUARD: Duration = Duration::from_secs(10);
+#[cfg(not(target_os = "macos"))]
+const SEGMENTED_JOURNEY_HANG_GUARD: Duration = Duration::from_secs(60);
 #[tokio::test]
 async fn should_segment_a_large_file_into_parallel_ranged_requests_within_the_bounded_window() {
-    tokio::time::timeout(Duration::from_secs(10), async {
+    tokio::time::timeout(SEGMENTED_JOURNEY_HANG_GUARD, async {
         // Two full segments plus a short final segment: one large file must transfer as several
         // concurrent ranged requests instead of one serial connection, so no single shard can
         // straggle at the end of a download.
@@ -165,7 +173,7 @@ async fn should_segment_a_large_file_into_parallel_ranged_requests_within_the_bo
 
 #[tokio::test]
 async fn should_assemble_out_of_order_segments_without_corruption() {
-    tokio::time::timeout(Duration::from_secs(10), async {
+    tokio::time::timeout(SEGMENTED_JOURNEY_HANG_GUARD, async {
         // The first segment's stream stalls, so later segments finish first and must wait inside
         // the assembler instead of overwriting the contiguous prefix out of order.
         let segment_bytes = PAYLOAD_TRANSFER_SEGMENT_BYTES as usize;
