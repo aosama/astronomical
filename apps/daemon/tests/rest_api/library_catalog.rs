@@ -93,10 +93,12 @@ fn capabilities_with(supported_capabilities: &[&str]) -> serde_json::Value {
 /// every field the Models page renders for each entry: the role and flags, the
 /// presentation texts, the build link and the measured speed, each published only for an entry that
 /// declares it. This application has no download coordinator, so the free disk
-/// figure is absent.
+/// figure is absent, and its worker reports no memory ceiling, so nothing is
+/// suggested.
 fn expected_validated_catalog_document() -> serde_json::Value {
     serde_json::json!({
         "schema_version": 5,
+        "suggestions": [],
         "entries": [
             {
                 "huggingface_id": "astronomical-test/example-qwen",

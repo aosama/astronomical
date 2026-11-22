@@ -12,6 +12,8 @@ mod catalog_classification;
 mod catalog_presentation;
 mod catalog_speed;
 mod download_catalog;
+mod model_suggestion_wording;
+mod model_suggestions;
 mod path_selection;
 
 #[cfg(test)]
@@ -25,5 +27,8 @@ pub use download_catalog::{
     DownloadCatalogCapabilities, DownloadCatalogEntry, DownloadCatalogError, DownloadCatalogFamily,
     DownloadCatalogMeasuredSpeed, DownloadCatalogRole, DownloadCatalogTaskSpeeds,
     is_valid_huggingface_id, is_valid_immutable_revision,
+};
+pub use model_suggestions::{
+    ModelSuggestion, ModelSuggestionKind, SuggestionInputs, suggest_models,
 };
 pub use path_selection::{DownloadPathSelection, InvalidDownloadPathSelection};

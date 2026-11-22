@@ -3,6 +3,7 @@
 
 mod catalog_endpoint;
 mod catalog_projection;
+mod catalog_suggestions;
 
 #[cfg(test)]
 mod catalog_load_attribution_tests;

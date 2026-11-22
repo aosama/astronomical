@@ -3,6 +3,7 @@
 use axum::{Json, Router, extract::State, routing::get};
 use serde::Serialize;
 
+use super::catalog_suggestions::{LibrarySuggestionResponse, library_suggestions};
 use crate::{application::ApplicationState, library::project_catalog_entries};
 
 pub(crate) fn library_catalog_routes() -> Router<ApplicationState> {
@@ -60,10 +61,12 @@ async fn get_library_catalog(
         .library_download_coordinator
         .as_ref()
         .and_then(|download_coordinator| download_coordinator.models_directory_free_bytes());
+    let suggestions = library_suggestions(&application_state, &projections);
     Json(LibraryCatalogResponse {
         schema_version: application_state.download_catalog.schema_version(),
         models_download_directory,
         models_directory_free_bytes,
+        suggestions,
         entries,
     })
 }
@@ -104,6 +107,9 @@ struct LibraryCatalogResponse {
     /// download is admitted against. Absent when the disk cannot be read.
     #[serde(skip_serializing_if = "Option::is_none")]
     models_directory_free_bytes: Option<u64>,
+    /// What would be better on this Mac, most useful first; the Models page
+    /// and the chat app's first run both show these.
+    suggestions: Vec<LibrarySuggestionResponse>,
     entries: Vec<LibraryCatalogEntryResponse>,
 }
 

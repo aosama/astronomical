@@ -119,7 +119,7 @@ function createDownloadModelsStarterCard(starterCard, starterRow, isRecommended)
 // here. Only the first card's Get is the strong button, so the page asks for
 // one decision at a time.
 function createDownloadModelsSuggestionsSection(catalogRows) {
-    const suggestions = downloadModelsSuggestions(catalogRows, downloadModelsServingCeilingBytes);
+    const suggestions = downloadModelsSuggestionCards(downloadModelsCatalogDocument, catalogRows);
     if (suggestions.length === 0) return null;
     const section = createDownloadModelsElement("section", "download-models-suggestions");
     const cardGrid = createDownloadModelsElement("div", "download-models-suggestion-grid");
@@ -135,7 +135,7 @@ function createDownloadModelsSuggestionsSection(catalogRows) {
 
 function createDownloadModelsSuggestionCard(suggestion, isFirst) {
     const card = createDownloadModelsElement(
-        "article", "download-models-suggestion-card download-models-suggestion-" + suggestion.kind
+        "article", "download-models-suggestion-card download-models-suggestion-" + suggestion.kind.replace(/_/g, "-")
     );
     const cardChildren = [
         createDownloadModelsElement("span", "download-models-suggestion-tag", suggestion.tag),
