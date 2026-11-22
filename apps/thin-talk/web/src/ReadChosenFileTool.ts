@@ -2,13 +2,13 @@ import type { ConversationTool, ToolCallContext, ToolParametersSchema } from "./
 import { runHostToolUse } from "./HostToolUseRunner";
 import { SessionBridge } from "./SessionBridge";
 
-/** The tool waits while the user answers the sheet and picks a file, which
+/** The tool waits while the user picks a file in the open panel, which
  * takes as long as they take; this bounds a use nobody ever answers. */
 const USER_CHOICE_TOOL_TIMEOUT_MILLISECONDS = 10 * 60_000;
 
 /**
- * Reads one text file the user chooses. The host shows the approval sheet and
- * then an open panel as one step, so the model never names a path and only
+ * Reads one text file the user chooses. The host shows an open panel, and the
+ * user's pick there is the approval, so the model never names a path and only
  * sees a file the user handed over.
  */
 export class ReadChosenFileTool implements ConversationTool {
