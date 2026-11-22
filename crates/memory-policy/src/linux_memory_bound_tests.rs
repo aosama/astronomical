@@ -1,9 +1,12 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use super::{
-    cgroup_memory_limit_bytes, cgroup_v2_group_path, memory_bound_bytes,
+    cgroup_limits_along_ancestors, cgroup_memory_limit_bytes, cgroup_v1_memory_group_path,
+    cgroup_v1_memory_limit_bytes, cgroup_v2_group_path, memory_bound_bytes,
     physical_ram_bytes_from_linux_meminfo,
 };
+
+const GIBIBYTE: u64 = 1_073_741_824;
 
 #[test]
 fn should_read_the_physical_memory_size_from_linux_meminfo() {
@@ -101,5 +104,118 @@ fn should_keep_physical_memory_without_a_tighter_cgroup_limit() {
     assert_eq!(
         memory_bound_bytes(eight_gigabytes, &[64 * 1_073_741_824]),
         eight_gigabytes
+    );
+}
+
+/// Inside a cgroup namespace a process outside the namespace root sees a
+/// climbing path; reading it would leave the cgroup mount.
+#[test]
+fn should_take_a_climbing_group_path_as_the_namespace_root() {
+    assert_eq!(
+        cgroup_v2_group_path("0::/../../other\n"),
+        Some(PathBuf::new())
+    );
+}
+
+#[test]
+fn should_drop_the_deleted_suffix_of_a_removed_group() {
+    assert_eq!(
+        cgroup_v2_group_path("0::/system.slice/gone.service (deleted)\n"),
+        Some(PathBuf::from("system.slice/gone.service"))
+    );
+}
+
+#[test]
+fn should_find_the_v1_memory_group_among_other_controllers() {
+    let hybrid_membership = "12:cpu,cpuacct:/docker/abc\n4:memory:/docker/abc\n0::/init.scope\n";
+    assert_eq!(
+        cgroup_v1_memory_group_path(hybrid_membership),
+        Some(PathBuf::from("docker/abc"))
+    );
+}
+
+#[test]
+fn should_find_no_v1_memory_group_on_a_pure_v2_host() {
+    assert_eq!(cgroup_v1_memory_group_path("0::/user.slice\n"), None);
+    assert_eq!(cgroup_v1_memory_group_path(""), None);
+}
+
+#[test]
+fn should_read_a_v1_limit_and_treat_its_unlimited_sentinel_as_no_limit() {
+    assert_eq!(
+        cgroup_v1_memory_limit_bytes("17179869184\n"),
+        Some(16 * GIBIBYTE)
+    );
+    assert_eq!(cgroup_v1_memory_limit_bytes("9223372036854771712\n"), None);
+    assert_eq!(cgroup_v1_memory_limit_bytes("0\n"), None);
+    assert_eq!(cgroup_v1_memory_limit_bytes("unlimited\n"), None);
+}
+
+fn write_limit(controller_root: &Path, group_path: &str, limit_file_name: &str, limit_text: &str) {
+    let group_directory = controller_root.join(group_path);
+    std::fs::create_dir_all(&group_directory).expect("the group folder should be created");
+    std::fs::write(group_directory.join(limit_file_name), limit_text)
+        .expect("the limit file should be written");
+}
+
+/// The walk reads the group and every ancestor: a tighter parent, a leaf
+/// with no limit, and a missing middle file all count correctly.
+#[test]
+fn should_collect_every_finite_limit_from_the_group_up_to_the_root() {
+    let cgroup_mount = tempfile::tempdir().expect("a temporary cgroup mount should exist");
+    write_limit(
+        cgroup_mount.path(),
+        "user.slice/app.scope",
+        "memory.max",
+        "max\n",
+    );
+    write_limit(
+        cgroup_mount.path(),
+        "user.slice",
+        "memory.max",
+        "8589934592\n",
+    );
+
+    let cgroup_limits = cgroup_limits_along_ancestors(
+        cgroup_mount.path(),
+        Path::new("user.slice/app.scope/worker"),
+        "memory.max",
+        cgroup_memory_limit_bytes,
+    );
+
+    assert_eq!(cgroup_limits, [8 * GIBIBYTE]);
+    assert_eq!(
+        memory_bound_bytes(64 * GIBIBYTE, &cgroup_limits),
+        8 * GIBIBYTE
+    );
+}
+
+#[test]
+fn should_read_the_root_group_and_find_no_limit_in_an_empty_mount() {
+    let cgroup_mount = tempfile::tempdir().expect("a temporary cgroup mount should exist");
+
+    assert!(
+        cgroup_limits_along_ancestors(
+            cgroup_mount.path(),
+            Path::new(""),
+            "memory.max",
+            cgroup_memory_limit_bytes
+        )
+        .is_empty()
+    );
+    write_limit(
+        cgroup_mount.path(),
+        "",
+        "memory.limit_in_bytes",
+        "4294967296\n",
+    );
+    assert_eq!(
+        cgroup_limits_along_ancestors(
+            cgroup_mount.path(),
+            Path::new(""),
+            "memory.limit_in_bytes",
+            cgroup_v1_memory_limit_bytes
+        ),
+        [4 * GIBIBYTE]
     );
 }

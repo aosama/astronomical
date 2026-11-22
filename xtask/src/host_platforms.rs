@@ -14,6 +14,11 @@
 //! workspace crate depending on it, since Cargo would build the dependency
 //! anyway. A crate without the declaration builds everywhere, and a crate
 //! drops its declaration once it builds on the other hosts too.
+//!
+//! Every crate builds on Linux today, so no manifest declares it. The
+//! mechanism stays because the hooks and lints already honour it: the next
+//! crate that needs an Apple-only framework declares itself here instead of
+//! breaking the Linux pre-commit hook.
 
 use std::collections::BTreeSet;
 use std::path::Path;
