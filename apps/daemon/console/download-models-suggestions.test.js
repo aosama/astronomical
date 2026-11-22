@@ -337,3 +337,57 @@ test("should_list_measured_speeds_with_where_they_were_measured_in_the_details",
         assert.equal(detailTexts.includes(expectedText), true, expectedText);
     }
 });
+
+test("should_make_a_draft_build_quicker_at_everything_the_best_fit_itself", () => {
+    const suggestions = suggestionsFor(
+        ladderCatalog({
+            Large: { measured_speed: measuredSpeed(71, 68) },
+            "Large-draft": { measured_speed: measuredSpeed(81, 97) },
+            Painter: { ready_on_this_mac: true }
+        }),
+        gigabytes(36.5)
+    );
+
+    assert.deepEqual(tagsAndModels(suggestions)[0], ["Best fit for this Mac", "Large-draft"]);
+    assert.equal(tagsAndModels(suggestions).filter(([, modelId]) => modelId === "Large-draft").length, 1, "one card, not two");
+    assert.match(suggestions[0][2], /about 14% quicker when writing and 43% quicker with code/);
+});
+
+test("should_offer_a_quicker_build_beside_the_one_here_without_merging", () => {
+    const suggestions = suggestionsFor(
+        ladderCatalog({
+            Large: { ready_on_this_mac: true, measured_speed: measuredSpeed(71, 68) },
+            "Large-draft": { measured_speed: measuredSpeed(81, 97) },
+            Painter: { ready_on_this_mac: true }
+        }),
+        gigabytes(36.5)
+    );
+
+    assert.deepEqual(tagsAndModels(suggestions)[0], ["Quicker", "Large-draft"]);
+    assert.match(suggestions[0][2], /quicker with code than Large, because a draft model is built in/);
+});
+
+test("should_never_trade_detail_for_speed_with_a_smaller_draft_build", () => {
+    const suggestions = suggestionsFor(
+        ladderCatalog({
+            Large: { ready_on_this_mac: true, measured_speed: measuredSpeed(71, 68) },
+            "Large-draft": { measured_speed: measuredSpeed(95, 111), approximate_memory_bytes: gigabytes(21) },
+            Painter: { ready_on_this_mac: true }
+        }),
+        gigabytes(36.5)
+    );
+
+    assert.equal(tagsAndModels(suggestions).some(([, modelId]) => modelId === "Large-draft"), false, "21 GB keeps less than 23 GB");
+});
+
+test("should_say_how_much_slower_a_build_with_more_detail_replies_when_both_are_measured", () => {
+    const suggestions = suggestionsFor(
+        ladderCatalog({
+            Small: { ready_on_this_mac: true, measured_speed: measuredSpeed(50, 50) },
+            "Small-6bit": { measured_speed: measuredSpeed(36, 36) }
+        }),
+        gigabytes(11.3)
+    );
+
+    assert.match(suggestions[0][2], /needs 2\.1 GB more memory, and replies about 28% slower\./);
+});

@@ -71,8 +71,10 @@ function downloadModelsSuggestions(catalogRows, servingCeilingBytes) {
     const claimedLeadIds = downloadModelsClaimedLeadIds(catalogRows);
     const bestFitRow = downloadModelsBestFitRow(ladder, servingCeilingBytes);
     const suggestions = [
-        downloadModelsBestFitSuggestion(ladder, bestFitRow, claimedLeadIds, servingCeilingBytes),
-        downloadModelsQuickerForCodeSuggestion(catalogRows, bestFitRow, servingCeilingBytes),
+        ...downloadModelsMergeQuickerIntoBestFit(
+            downloadModelsBestFitSuggestion(ladder, bestFitRow, claimedLeadIds, servingCeilingBytes),
+            downloadModelsQuickerSuggestion(catalogRows, bestFitRow, servingCeilingBytes)
+        ),
         downloadModelsMoreDetailSuggestion(catalogRows, bestFitRow, servingCeilingBytes),
         downloadModelsStreamingSuggestion(ladder, bestFitRow, claimedLeadIds, servingCeilingBytes),
         downloadModelsPicturesSuggestion(catalogRows)
@@ -141,9 +143,15 @@ function downloadModelsMoreDetailSuggestion(catalogRows, bestFitRow, servingCeil
     const extraMemoryText = formatDownloadModelsCardSize(
         largestCandidateRow.approximateMemoryBytes - bestFitRow.approximateMemoryBytes
     );
+    const bothMeasured = largestCandidateRow.measuredSpeed && bestFitRow.measuredSpeed;
+    const speedChangePercent = bothMeasured
+        ? downloadModelsPercentChange(downloadModelsEssayRate(largestCandidateRow), downloadModelsEssayRate(bestFitRow))
+        : 0;
+    const speedText = speedChangePercent <= -3 ? ", and replies about " + (-speedChangePercent) + "% slower" : "";
     return {
         kind: "more-detail", tag: "Closer to the original", catalogRow: largestCandidateRow,
-        reason: "The same model as " + bestFitRow.modelId + " with more of its original detail kept. It needs " + extraMemoryText + " more memory."
+        reason: "The same model as " + bestFitRow.modelId + " with more of its original detail kept. It needs "
+            + extraMemoryText + " more memory" + speedText + "."
     };
 }
 
@@ -173,9 +181,13 @@ function downloadModelsSpeedReferenceRow(catalogRows, bestFitRow) {
 
 // A draft build of the best-fit model that measured clearly quicker at code
 // and fits whole in memory with room: a build that has to stream drafts
-// nothing yet, so it is never offered for speed. The reason says plainly when
-// everyday writing is slower, so the person can weigh it.
-function downloadModelsQuickerForCodeSuggestion(catalogRows, bestFitRow, servingCeilingBytes) {
+// nothing yet, so it is never offered for speed. It must also need at least
+// the memory of the build it replaces, so speed never quietly costs detail
+// (a plain 4-bit draft build is quicker than a 4/8-bit build partly because it
+// keeps less). When it is clearly quicker at everyday writing too, it is simply
+// quicker; otherwise the reason says how writing compares, so the person can
+// weigh it.
+function downloadModelsQuickerSuggestion(catalogRows, bestFitRow, servingCeilingBytes) {
     if (bestFitRow === null || !isDownloadModelsRowInMemory(bestFitRow, servingCeilingBytes)) return null;
     const referenceRow = downloadModelsSpeedReferenceRow(catalogRows, bestFitRow);
     if (referenceRow === null) return null;
@@ -183,6 +195,7 @@ function downloadModelsQuickerForCodeSuggestion(catalogRows, bestFitRow, serving
     const quickerRows = catalogRows.filter(
         (catalogRow) => catalogRow.buildOf === bestFitRow.modelId && catalogRow.buildDifference === "draft_model"
             && catalogRow.measuredSpeed && catalogRow.approximateMemoryBytes <= roomyCeilingBytes
+            && catalogRow.approximateMemoryBytes >= referenceRow.approximateMemoryBytes
             && !isDownloadModelsRowClaimed(catalogRow)
             && downloadModelsCodeRate(catalogRow) >= downloadModelsCodeRate(referenceRow) * DOWNLOAD_MODELS_QUICKER_SPEED_RATIO
     );
@@ -190,16 +203,45 @@ function downloadModelsQuickerForCodeSuggestion(catalogRows, bestFitRow, serving
     const quickestRow = quickerRows.reduce(
         (bestRow, catalogRow) => (downloadModelsCodeRate(catalogRow) > downloadModelsCodeRate(bestRow) ? catalogRow : bestRow)
     );
-    const codeGainPercent = Math.round((downloadModelsCodeRate(quickestRow) / downloadModelsCodeRate(referenceRow) - 1) * 100);
-    const essayChangePercent = Math.round((downloadModelsEssayRate(quickestRow) / downloadModelsEssayRate(referenceRow) - 1) * 100);
-    const essayText = essayChangePercent < 0
-        ? " Writing an essay is about " + (-essayChangePercent) + "% slower."
-        : "";
+    const codeGainPercent = downloadModelsPercentChange(downloadModelsCodeRate(quickestRow), downloadModelsCodeRate(referenceRow));
+    const essayChangePercent = downloadModelsPercentChange(downloadModelsEssayRate(quickestRow), downloadModelsEssayRate(referenceRow));
+    const isQuickerForWriting = downloadModelsEssayRate(quickestRow)
+        >= downloadModelsEssayRate(referenceRow) * DOWNLOAD_MODELS_QUICKER_SPEED_RATIO;
+    if (isQuickerForWriting) {
+        return {
+            kind: "quicker", tag: "Quicker", catalogRow: quickestRow, referenceRow,
+            reason: "Replies about " + essayChangePercent + "% quicker when writing and " + codeGainPercent
+                + "% quicker with code than " + referenceRow.modelId + ", because a draft model is built in."
+        };
+    }
+    const essayText = essayChangePercent <= -3 ? " Writing an essay is about " + (-essayChangePercent) + "% slower." : "";
     return {
-        kind: "quicker-code", tag: "Quicker for code", catalogRow: quickestRow,
+        kind: "quicker-code", tag: "Quicker for code", catalogRow: quickestRow, referenceRow,
         reason: "Writes code about " + codeGainPercent + "% quicker than " + referenceRow.modelId
             + ", because a draft model is built in." + essayText
     };
+}
+
+function downloadModelsPercentChange(newRate, referenceRate) {
+    return Math.round((newRate / referenceRate - 1) * 100);
+}
+
+// When a draft build is quicker at everything and the person has not got the
+// best fit yet, the draft build becomes the best fit itself: one card, the
+// quicker build, instead of two that differ only in speed.
+function downloadModelsMergeQuickerIntoBestFit(bestFitSuggestion, quickerSuggestion) {
+    if (bestFitSuggestion === null || quickerSuggestion === null || quickerSuggestion.kind !== "quicker"
+        || quickerSuggestion.referenceRow !== bestFitSuggestion.catalogRow) {
+        return [bestFitSuggestion, quickerSuggestion];
+    }
+    return [{
+        kind: bestFitSuggestion.kind, tag: bestFitSuggestion.tag, catalogRow: quickerSuggestion.catalogRow,
+        reason: bestFitSuggestion.reason + " Its draft model makes replies about "
+            + downloadModelsPercentChange(downloadModelsEssayRate(quickerSuggestion.catalogRow), downloadModelsEssayRate(bestFitSuggestion.catalogRow))
+            + "% quicker when writing and "
+            + downloadModelsPercentChange(downloadModelsCodeRate(quickerSuggestion.catalogRow), downloadModelsCodeRate(bestFitSuggestion.catalogRow))
+            + "% quicker with code."
+    }, null];
 }
 
 // The largest ladder model, when it does not fit in memory but streams: much

@@ -128,7 +128,17 @@
                 "context_window": 262144
             },
             "quantization_label": "OptiQ mixed-precision 4/8-bit (affine, group 64)",
-            "upstream_license": "Apache-2.0"
+            "upstream_license": "Apache-2.0",
+            "measured_speed": {
+                "measured_on": "Mac with an M5 Pro and 48 GB",
+                "astronomical_version": "0.2.129",
+                "tokens_per_second": {
+                    "essay_short_prompt": 70,
+                    "essay_long_prompt": 68,
+                    "code_short_prompt": 71,
+                    "code_long_prompt": 66
+                }
+            }
         },
         {
             "huggingface_id": "ahmedihamdy/Ornith-1.5-9B-MLX-4bit-vision",
@@ -149,7 +159,17 @@
                 "context_window": 262144
             },
             "quantization_label": "MLX 4-bit (affine, group 64), vision tower at bf16",
-            "upstream_license": "MIT"
+            "upstream_license": "MIT",
+            "measured_speed": {
+                "measured_on": "Mac with an M5 Pro and 48 GB",
+                "astronomical_version": "0.2.129",
+                "tokens_per_second": {
+                    "essay_short_prompt": 51,
+                    "essay_long_prompt": 48,
+                    "code_short_prompt": 51,
+                    "code_long_prompt": 48
+                }
+            }
         },
         {
             "huggingface_id": "ahmedihamdy/Ornith-1.5-9B-MLX-6bit-vision",
@@ -171,7 +191,17 @@
             "quantization_label": "MLX 6-bit (affine, group 64), vision tower at bf16",
             "upstream_license": "MIT",
             "build_of": "Ornith-1.5-9B-MLX-4bit-vision",
-            "build_difference": "more_detail"
+            "build_difference": "more_detail",
+            "measured_speed": {
+                "measured_on": "Mac with an M5 Pro and 48 GB",
+                "astronomical_version": "0.2.129",
+                "tokens_per_second": {
+                    "essay_short_prompt": 36,
+                    "essay_long_prompt": 35,
+                    "code_short_prompt": 36,
+                    "code_long_prompt": 35
+                }
+            }
         },
         {
             "huggingface_id": "ahmedihamdy/Ornith-1.5-9B-vision-OptiQ-static-4.5bpw",
@@ -193,7 +223,17 @@
             "quantization_label": "OptiQ static 4/5/8-bit, 4.6 bits avg (affine, group 64)",
             "upstream_license": "MIT",
             "build_of": "Ornith-1.5-9B-MLX-4bit-vision",
-            "build_difference": "more_detail"
+            "build_difference": "more_detail",
+            "measured_speed": {
+                "measured_on": "Mac with an M5 Pro and 48 GB",
+                "astronomical_version": "0.2.129",
+                "tokens_per_second": {
+                    "essay_short_prompt": 45,
+                    "essay_long_prompt": 42,
+                    "code_short_prompt": 45,
+                    "code_long_prompt": 42
+                }
+            }
         },
         {
             "huggingface_id": "ahmedihamdy/Ornith-1.5-35B-A3B-MLX-6bit-vision",
@@ -215,7 +255,17 @@
             "quantization_label": "MLX 6-bit (affine, group 64), 8-bit routers, bf16 vision tower",
             "upstream_license": "MIT",
             "build_of": "Ornith-1.5-35B-A3B-OptiQ-4bit",
-            "build_difference": "more_detail"
+            "build_difference": "more_detail",
+            "measured_speed": {
+                "measured_on": "Mac with an M5 Pro and 48 GB",
+                "astronomical_version": "0.2.129",
+                "tokens_per_second": {
+                    "essay_short_prompt": 71,
+                    "essay_long_prompt": 66,
+                    "code_short_prompt": 72,
+                    "code_long_prompt": 67
+                }
+            }
         },
         {
             "huggingface_id": "ahmedihamdy/Ornith-1.5-35B-A3B-MLX-6bit-vision-DFLASH2",
@@ -237,7 +287,17 @@
             "quantization_label": "MLX 6-bit (affine, group 64), bf16 vision, DFlash2 draft model",
             "upstream_license": "MIT",
             "build_of": "Ornith-1.5-35B-A3B-OptiQ-4bit",
-            "build_difference": "draft_model"
+            "build_difference": "draft_model",
+            "measured_speed": {
+                "measured_on": "Mac with an M5 Pro and 48 GB",
+                "astronomical_version": "0.2.129",
+                "tokens_per_second": {
+                    "essay_short_prompt": 67,
+                    "essay_long_prompt": 61,
+                    "code_short_prompt": 80,
+                    "code_long_prompt": 72
+                }
+            }
         },
         {
             "huggingface_id": "ahmedihamdy/Ornith-1.5-35B-A3B-MLX-4bit-vision-DFLASH",
@@ -259,7 +319,17 @@
             "quantization_label": "MLX 4-bit (affine, group 64), bf16 vision, DFlash draft model",
             "upstream_license": "MIT",
             "build_of": "Ornith-1.5-35B-A3B-OptiQ-4bit",
-            "build_difference": "draft_model"
+            "build_difference": "draft_model",
+            "measured_speed": {
+                "measured_on": "Mac with an M5 Pro and 48 GB",
+                "astronomical_version": "0.2.129",
+                "tokens_per_second": {
+                    "essay_short_prompt": 95,
+                    "essay_long_prompt": 78,
+                    "code_short_prompt": 111,
+                    "code_long_prompt": 94
+                }
+            }
         },
         {
             "huggingface_id": "ahmedihamdy/Ornith-1.5-35B-A3B-MLX-6bit-vision-DFLASH",
@@ -281,7 +351,17 @@
             "quantization_label": "MLX 6-bit (affine, group 64), bf16 vision, DFlash draft model",
             "upstream_license": "MIT",
             "build_of": "Ornith-1.5-35B-A3B-OptiQ-4bit",
-            "build_difference": "draft_model"
+            "build_difference": "draft_model",
+            "measured_speed": {
+                "measured_on": "Mac with an M5 Pro and 48 GB",
+                "astronomical_version": "0.2.129",
+                "tokens_per_second": {
+                    "essay_short_prompt": 74,
+                    "essay_long_prompt": 65,
+                    "code_short_prompt": 88,
+                    "code_long_prompt": 80
+                }
+            }
         },
         {
             "huggingface_id": "ahmedihamdy/Ornith-1.5-35B-A3B-MLX-8bit-vision",
@@ -303,7 +383,17 @@
             "quantization_label": "MLX 8-bit (affine, group 64), vision tower at bf16",
             "upstream_license": "MIT",
             "build_of": "Ornith-1.5-35B-A3B-OptiQ-4bit",
-            "build_difference": "more_detail"
+            "build_difference": "more_detail",
+            "measured_speed": {
+                "measured_on": "Mac with an M5 Pro and 48 GB",
+                "astronomical_version": "0.2.129",
+                "tokens_per_second": {
+                    "essay_short_prompt": 52,
+                    "essay_long_prompt": 41,
+                    "code_short_prompt": 63,
+                    "code_long_prompt": 47
+                }
+            }
         },
         {
             "huggingface_id": "ahmedihamdy/Ornith-1.5-35B-A3B-MLX-8bit-vision-astro-atlas-streaming",
@@ -442,7 +532,17 @@
                 "context_window": 262144
             },
             "quantization_label": "OptiQ mixed-precision 4/8-bit (affine, group 64)",
-            "upstream_license": "MIT"
+            "upstream_license": "MIT",
+            "measured_speed": {
+                "measured_on": "Mac with an M5 Pro and 48 GB",
+                "astronomical_version": "0.2.129",
+                "tokens_per_second": {
+                    "essay_short_prompt": 71,
+                    "essay_long_prompt": 66,
+                    "code_short_prompt": 70,
+                    "code_long_prompt": 65
+                }
+            }
         },
         {
             "huggingface_id": "ahmedihamdy/Ornith-1.5-35B-A3B-OptiQ-DFLASH2-4bit",
@@ -464,7 +564,17 @@
             "quantization_label": "OptiQ 4/8-bit (affine, group 64) with a DFlash2 draft model",
             "upstream_license": "MIT",
             "build_of": "Ornith-1.5-35B-A3B-OptiQ-4bit",
-            "build_difference": "draft_model"
+            "build_difference": "draft_model",
+            "measured_speed": {
+                "measured_on": "Mac with an M5 Pro and 48 GB",
+                "astronomical_version": "0.2.129",
+                "tokens_per_second": {
+                    "essay_short_prompt": 85,
+                    "essay_long_prompt": 77,
+                    "code_short_prompt": 106,
+                    "code_long_prompt": 87
+                }
+            }
         },
         {
             "huggingface_id": "ahmedihamdy/Ornith-1.5-35B-A3B-OptiQ-static-5.5bpw",
@@ -486,7 +596,17 @@
             "quantization_label": "OptiQ static 4/8-bit, 5.5 bits avg (affine, group 64)",
             "upstream_license": "MIT",
             "build_of": "Ornith-1.5-35B-A3B-OptiQ-4bit",
-            "build_difference": "more_detail"
+            "build_difference": "more_detail",
+            "measured_speed": {
+                "measured_on": "Mac with an M5 Pro and 48 GB",
+                "astronomical_version": "0.2.129",
+                "tokens_per_second": {
+                    "essay_short_prompt": 68,
+                    "essay_long_prompt": 63,
+                    "code_short_prompt": 67,
+                    "code_long_prompt": 63
+                }
+            }
         },
         {
             "huggingface_id": "peculiar-ragdoll/Tiel-Coder-35B-A3B-MLX-oQ6e",
@@ -505,7 +625,17 @@
                 "context_window": 262144
             },
             "quantization_label": "oQ6e mixed-precision 6/8-bit (affine, group 64/128)",
-            "upstream_license": "MIT"
+            "upstream_license": "MIT",
+            "measured_speed": {
+                "measured_on": "Mac with an M5 Pro and 48 GB",
+                "astronomical_version": "0.2.129",
+                "tokens_per_second": {
+                    "essay_short_prompt": 64,
+                    "essay_long_prompt": 60,
+                    "code_short_prompt": 63,
+                    "code_long_prompt": 59
+                }
+            }
         },
         {
             "huggingface_id": "peculiar-ragdoll/Cyber-Tiel-Coder-35B-A3B-MLX-oQ6e",
@@ -545,7 +675,17 @@
                 "context_window": 262144
             },
             "quantization_label": "4-bit affine (group 64), bf16 vision tower, DFlash2 draft model",
-            "upstream_license": "Apache-2.0"
+            "upstream_license": "Apache-2.0",
+            "measured_speed": {
+                "measured_on": "Mac with an M5 Pro and 48 GB",
+                "astronomical_version": "0.2.129",
+                "tokens_per_second": {
+                    "essay_short_prompt": 40,
+                    "essay_long_prompt": 35,
+                    "code_short_prompt": 55,
+                    "code_long_prompt": 42
+                }
+            }
         },
         {
             "huggingface_id": "prism-ml/Ternary-Bonsai-2-27B-mlx-2bit",
