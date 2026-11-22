@@ -172,6 +172,26 @@
             "upstream_license": "MIT"
         },
         {
+            "huggingface_id": "ahmedihamdy/Ornith-1.5-9B-vision-OptiQ-static-4.5bpw",
+            "revision": "27ea26a6175ead91d1067f020be41318d045849b",
+            "summary": "A quick everyday assistant for writing, questions and photos, with more detail kept where it counts.",
+            "family": "qwen3_5",
+            "approximate_size_bytes": 7286495182,
+            "approximate_memory_bytes": 8402858995,
+            "minimum_memory_bytes": 2290609408,
+            "role": "chat",
+            "public": true,
+            "description": "A capable everyday model that sees pictures and text, reasons before answering, and answers quickly. This build keeps a few key parts of the model at 8 bits and the rest mostly at 4 or 5, so it sits between the 4-bit and 6-bit builds in size.",
+            "capabilities": {
+                "supports_reasoning": true,
+                "supports_vision": true,
+                "supports_tool_calls": true,
+                "context_window": 262144
+            },
+            "quantization_label": "OptiQ static 4/5/8-bit, 4.6 bits avg (affine, group 64)",
+            "upstream_license": "MIT"
+        },
+        {
             "huggingface_id": "ahmedihamdy/Ornith-1.5-35B-A3B-MLX-6bit-vision",
             "revision": "6d2cb55f91769cef240d36fffd448c60bdd1900d",
             "summary": "The large Ornith with its original vision, for screenshots and documents.",
@@ -424,6 +444,26 @@
                 "context_window": 262144
             },
             "quantization_label": "OptiQ 4/8-bit (affine, group 64) with a DFlash2 draft model",
+            "upstream_license": "MIT"
+        },
+        {
+            "huggingface_id": "ahmedihamdy/Ornith-1.5-35B-A3B-OptiQ-static-5.5bpw",
+            "revision": "b9b8fd725c22e38b2962e0044b8e7b9d4b707095",
+            "summary": "The heavy thinker with more of its detail kept, for Macs with a little more memory.",
+            "family": "qwen3_5",
+            "approximate_size_bytes": 27559062441,
+            "approximate_memory_bytes": 28668906594,
+            "minimum_memory_bytes": 4484842240,
+            "role": "coding",
+            "public": true,
+            "description": "The same large model as Ornith-1.5-35B-A3B-OptiQ-4bit, with more of each layer kept at 8 bits, so it needs about 4 GB more memory. For long writing, complex reasoning, coding, and reading pictures.",
+            "capabilities": {
+                "supports_reasoning": true,
+                "supports_vision": true,
+                "supports_tool_calls": true,
+                "context_window": 262144
+            },
+            "quantization_label": "OptiQ static 4/8-bit, 5.5 bits avg (affine, group 64)",
             "upstream_license": "MIT"
         },
         {
