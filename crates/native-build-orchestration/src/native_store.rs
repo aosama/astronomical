@@ -14,8 +14,13 @@
 //! ```text
 //! <root>/v<schema>/entries/<64-hex identity>/   published payloads
 //! <root>/v<schema>/locks/<identity>.lock        exclusive per-identity locks
-//! <root>/v<schema>/staging/<id>.<pid>.<nonce>/  in-progress builds
+//! <root>/v<schema>/staging/<id>.<pid>.<nonce>/  in-progress publications
+//! <root>/v<schema>/build-slots/slot-<n>/        reusable CMake build folders
 //! ```
+//!
+//! The CMake compile runs in a build slot, a fixed folder reused between
+//! builds so the compile commands keep the same absolute paths and sccache
+//! can serve unchanged objects (see `build_slot`).
 //!
 //! The schema directory version (`native-build-store-schema-version`, a
 //! fingerprinted input) fences every entry whenever the layout or validation
@@ -50,10 +55,12 @@ use crate::native_host_platform::{
     MLX_TARGETS_RELATIVE_PATH, NativeTargetPlatform, platform_native_products,
 };
 
+mod build_slot;
 mod manifest;
 #[cfg(test)]
 mod tests;
 
+use build_slot::acquire_build_slot;
 use manifest::{
     copy_directory_without_symlinks, copy_required_file, sync_directory, sync_directory_tree,
     validate_entry, write_manifest, write_synced_file,
@@ -63,8 +70,8 @@ use manifest::{
 /// module documentation. Content is an unsigned integer in the file beside
 /// this module.
 const STORE_SCHEMA_VERSION_TEXT: &str = include_str!("native-build-store-schema-version");
-const LOCK_PROGRESS_INTERVAL: Duration = Duration::from_secs(5);
-const LOCK_RETRY_INTERVAL: Duration = Duration::from_millis(100);
+pub(crate) const LOCK_PROGRESS_INTERVAL: Duration = Duration::from_secs(5);
+pub(crate) const LOCK_RETRY_INTERVAL: Duration = Duration::from_millis(100);
 
 /// Which optional native products a profile builds and publishes.
 ///
@@ -213,9 +220,9 @@ impl NativeBuildStore {
             Err(metadata_error) => return Err(metadata_error.into()),
         }
 
+        let build_slot = acquire_build_slot(&self.schema_directory().join("build-slots"))?;
+        let cmake_build_directory = build_slot.cmake_build_directory.clone();
         let staging_directory = self.create_staging_directory()?;
-        let cmake_build_directory = staging_directory.join("cmake");
-        fs::create_dir(&cmake_build_directory)?;
         eprintln!(
             "[native-build-store] status=building identity={} profile={}",
             self.native_identity,

@@ -404,3 +404,31 @@ fn should_refuse_to_publish_a_macos_entry_without_its_metallib() {
     );
     assert!(!native_build_store.entry_directory().exists());
 }
+
+#[test]
+fn should_build_every_identity_in_the_same_reusable_folder() {
+    let store_directory = tempfile::tempdir().expect("the test should create a temporary store");
+    let builder_folders = Arc::new(std::sync::Mutex::new(Vec::new()));
+
+    for native_identity in [CORE_NATIVE_IDENTITY, SIBLING_NATIVE_IDENTITY] {
+        let recorded_folders = Arc::clone(&builder_folders);
+        let build_count = Arc::new(AtomicUsize::new(0));
+        let recording_builder = fake_builder(build_count);
+        core_native_build_store(store_directory.path(), native_identity)
+            .resolve_or_build(move |cmake_build_directory: &Path| {
+                recorded_folders
+                    .lock()
+                    .unwrap()
+                    .push(cmake_build_directory.to_path_buf());
+                recording_builder(cmake_build_directory)
+            })
+            .expect("each identity should publish");
+    }
+
+    let builder_folders = builder_folders.lock().unwrap();
+    assert_eq!(builder_folders.len(), 2);
+    assert_eq!(
+        builder_folders[0], builder_folders[1],
+        "a new identity must compile at the same paths so sccache can serve unchanged objects"
+    );
+}
