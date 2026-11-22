@@ -3,12 +3,18 @@ import { test } from "node:test";
 import { SettingsSharing } from "../src/astro/SettingsSharing";
 import { ProblemReportClient, type FetchFunction } from "../src/ProblemReportClient";
 
-function sharingFor(listBody: unknown | null, listStatus = 200): { sharing: SettingsSharing; calls: string[] } {
+function sharingFor(listBody: unknown | null, listStatus = 200, dailyCountBody: unknown = null): { sharing: SettingsSharing; calls: string[] } {
   const calls: string[] = [];
   const fetchFunction: FetchFunction = async (input, init) => {
     calls.push(`${init?.method ?? "GET"} ${input.replace("http://engine", "")}${init?.body ? ` ${String(init.body)}` : ""}`);
     if (listBody === null) {
       throw new TypeError("engine not answering");
+    }
+    if (input.endsWith("/v1/daily-count")) {
+      return new Response(JSON.stringify(dailyCountBody), { status: dailyCountBody === null ? 404 : 200 });
+    }
+    if (init?.method === "PUT") {
+      return new Response("{}", { status: 200 });
     }
     if (init?.method === "POST" && input.endsWith("/v1/problem-reports")) {
       return new Response(JSON.stringify({ report_number: 9, readable_lines: ["Problem: reported by you"] }), { status: 200 });
@@ -37,7 +43,7 @@ test("should_say_chats_never_leave_and_show_the_stored_choice_and_sent_count", a
   await sharing.refresh();
   const pageText = sharing.element.textContent ?? "";
   assert.match(pageText, /Chats, files and imagesNever/);
-  assert.match(pageText, /Sent so far2 reports/);
+  assert.match(pageText, /Problem reports sent2 reports/);
   const picker = sharing.element.querySelector('[data-testid="settings-problem-reports"]') as HTMLSelectElement;
   assert.equal(picker.value, "ask");
 });
@@ -58,13 +64,15 @@ test("should_save_a_new_choice_and_redraw_from_the_engine", async () => {
   picker.value = "never";
   picker.dispatchEvent(new Event("change"));
   await new Promise((resolve) => setTimeout(resolve, 0));
-  assert.deepEqual(calls.slice(1), ['PUT /v1/config/sharing {"problem_reports":"never"}', "GET /v1/problem-reports"]);
+  const callsAfterFirstDraw = calls.slice(2);
+  assert.equal(callsAfterFirstDraw[0], 'PUT /v1/config/sharing {"problem_reports":"never"}');
+  assert.equal(callsAfterFirstDraw[callsAfterFirstDraw.length - 1], "GET /v1/problem-reports", "the page redraws from the engine after saving");
 });
 
 test("should_say_nothing_was_sent_and_offer_no_list_when_the_log_is_empty", async () => {
   const { sharing } = sharingFor({ ...TWO_SENT, sent: [] });
   await sharing.refresh();
-  assert.match(sharing.element.textContent ?? "", /Sent so farNothing yet/);
+  assert.match(sharing.element.textContent ?? "", /Problem reports sentNothing yet/);
   assert.equal(sharing.element.querySelector('[data-testid="settings-sent-reports"]'), null);
 });
 
@@ -112,4 +120,38 @@ test("should_say_this_version_never_sends_reports_when_the_engine_offers_none", 
   assert.doesNotMatch(pageText, /isn't answering/);
   assert.equal(sharing.element.querySelector('[data-testid="settings-problem-reports"]'), null);
   assert.equal(sharing.element.querySelector('[data-testid="settings-report-problem"]'), null);
+});
+
+const COUNT_LINE = "Astronomical 0.2.127 · macOS 27.2 · Apple M5 Pro · 48 GB";
+
+test("should_show_the_daily_count_line_and_turn_it_on_from_settings", async () => {
+  const { sharing, calls } = sharingFor({ ...TWO_SENT, sent: [] }, 200, { line: COUNT_LINE, answer: null, should_ask: false, last_sent_unix_day: null });
+  await sharing.refresh();
+  assert.match(sharing.element.querySelector('[data-testid="settings-daily-count-detail"]')?.textContent ?? "", new RegExp(`^Off\\. If on, once a day: ${COUNT_LINE}`));
+  const turnOn = sharing.element.querySelector('[data-testid="settings-daily-count"]') as HTMLButtonElement;
+  assert.equal(turnOn.textContent, "Turn on");
+  turnOn.click();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.ok(calls.includes('PUT /v1/config/sharing {"daily_count":true}'));
+});
+
+test("should_say_the_count_is_on_with_its_last_sent_day_and_offer_to_turn_it_off", async () => {
+  const { sharing } = sharingFor({ ...TWO_SENT, sent: [] }, 200, { line: COUNT_LINE, answer: true, should_ask: false, last_sent_unix_day: 20778 });
+  await sharing.refresh();
+  const detailText = sharing.element.querySelector('[data-testid="settings-daily-count-detail"]')?.textContent ?? "";
+  assert.match(detailText, /^On\. Once a day: /);
+  assert.match(detailText, /Last sent /);
+  assert.equal(sharing.element.querySelector('[data-testid="settings-daily-count"]')?.textContent, "Turn off");
+});
+
+test("should_describe_each_problem_report_choice_in_words_that_match_it", async () => {
+  for (const [choice, expected] of [
+    ["ask", /you see the whole report and choose whether to send it/],
+    ["always", /a report is sent without asking/],
+    ["never", /No report is offered or sent/],
+  ] as Array<[string, RegExp]>) {
+    const { sharing } = sharingFor({ ...TWO_SENT, choice });
+    await sharing.refresh();
+    assert.match(sharing.element.textContent ?? "", expected, choice);
+  }
 });

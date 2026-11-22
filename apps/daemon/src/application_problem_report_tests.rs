@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use config::{AstronomicalInstancePaths, AstronomicalRuntimeInstance};
 
 use crate::ResolvedRuntimeConfigResolver;
-use crate::application::problem_report_desk_for;
+use crate::problem_report_routes::problem_report_desk_for;
 
 fn resolver_for(instance_paths: AstronomicalInstancePaths) -> ResolvedRuntimeConfigResolver {
     ResolvedRuntimeConfigResolver::for_instance(instance_paths, PathBuf::new())

@@ -78,6 +78,21 @@ pub(crate) struct ApplicationState {
 }
 
 impl ApplicationState {
+    /// The person's answer to "May this Mac be counted?", read from the
+    /// live configuration; `None` while they have not answered.
+    pub(crate) fn daily_count_answer(&self) -> Option<bool> {
+        self.reloadable_config
+            .as_ref()
+            .and_then(|reloadable_config| {
+                reloadable_config
+                    .read()
+                    .ok()
+                    .and_then(|resolved_runtime_config| {
+                        resolved_runtime_config.sharing_settings.daily_count_answer
+                    })
+            })
+    }
+
     /// The person's current choice for problem reports, read from the live
     /// configuration; asking is the answer whenever none is loaded.
     pub(crate) fn problem_report_choice(&self) -> config::ProblemReportChoice {
@@ -244,7 +259,8 @@ pub fn build_development_application_with_reload(
         .read()
         .ok()
         .map(|resolved| Arc::new(RwLock::new(resolved.clone())));
-    let problem_report_desk = problem_report_desk_for(&runtime_config_resolver);
+    let problem_report_desk =
+        crate::problem_report_routes::problem_report_desk_for(&runtime_config_resolver);
     let application_state = ApplicationState {
         completion_id_namespace: completion_id_namespace(),
         next_chat_request_id: Arc::new(AtomicU64::new(1)),
@@ -375,7 +391,7 @@ pub fn build_application_with_full_control_and_download_catalog(
         .read()
         .ok()
         .map(|resolved| Arc::new(RwLock::new(resolved.clone())));
-    let problem_report_desk = registered_problem_report_desk(
+    let problem_report_desk = crate::problem_report_routes::registered_problem_report_desk(
         &runtime_config_resolver,
         &reloadable_config,
         &download_catalog,
@@ -402,70 +418,6 @@ pub fn build_application_with_full_control_and_download_catalog(
     application_router(application_state)
 }
 
-/// The problem report endpoints (see `rest::problem_reports`), present only
-/// when the instance has a report desk.
-fn problem_report_routes(
-    router: Router<ApplicationState>,
-    has_problem_report_desk: bool,
-) -> Router<ApplicationState> {
-    if !has_problem_report_desk {
-        return router;
-    }
-    router
-        .route(
-            "/v1/problem-reports",
-            get(crate::rest::problem_reports::list_problem_reports)
-                .post(crate::rest::problem_reports::start_person_report),
-        )
-        .route(
-            "/v1/problem-reports/{report_number}/send",
-            post(crate::rest::problem_reports::send_problem_report)
-                .layer(DefaultBodyLimit::max(8 * 1024)),
-        )
-        .route(
-            "/v1/problem-reports/{report_number}/decline",
-            post(crate::rest::problem_reports::decline_problem_report),
-        )
-}
-
-/// The production report desk: also registered as the engine's one report
-/// sink, so failures in the worker and the download queue reach it.
-pub(crate) fn registered_problem_report_desk(
-    runtime_config_resolver: &ResolvedRuntimeConfigResolver,
-    reloadable_config: &Arc<RwLock<ResolvedRuntimeConfig>>,
-    download_catalog: &DownloadCatalog,
-) -> Option<Arc<crate::problem_reports::ProblemReportDesk>> {
-    let problem_report_desk = problem_report_desk_for(runtime_config_resolver)?;
-    crate::problem_reports::register_report_sink(
-        Arc::clone(&problem_report_desk),
-        Arc::clone(reloadable_config),
-        download_catalog,
-    );
-    Some(problem_report_desk)
-}
-
-/// The report desk for an instance, logging sent reports in its state
-/// folder and sending to the receiver compiled into this build.
-///
-/// The Mac App Store build gets none: its privacy manifest and its App
-/// Privacy answers in App Store Connect declare that no data is collected,
-/// so until both are updated (issue #2413, "Mac App Store version") that
-/// build must offer no report, register no sink and serve no report route.
-pub(crate) fn problem_report_desk_for(
-    runtime_config_resolver: &ResolvedRuntimeConfigResolver,
-) -> Option<Arc<crate::problem_reports::ProblemReportDesk>> {
-    if runtime_config_resolver
-        .instance_paths()
-        .keeps_state_in_app_container()
-    {
-        return None;
-    }
-    Some(Arc::new(crate::problem_reports::ProblemReportDesk::new(
-        runtime_config_resolver.state_directory(),
-        crate::problem_reports::ReportReceiver::compiled_in(),
-    )))
-}
-
 pub(crate) fn application_router(application_state: ApplicationState) -> Router {
     let supports_config_reload = application_state.reloadable_config.is_some()
         && application_state.runtime_config_resolver.is_some();
@@ -482,7 +434,10 @@ pub(crate) fn application_router(application_state: ApplicationState) -> Router 
         supports_live_mlx_memory_control,
         supports_shutdown,
     );
-    let router = problem_report_routes(router, application_state.problem_report_desk.is_some());
+    let router = crate::problem_report_routes::problem_report_routes(
+        router,
+        application_state.problem_report_desk.is_some(),
+    );
     router
         .layer(canvas_cors_layer())
         .with_state(application_state)
@@ -604,11 +559,6 @@ fn capability_conditional_routes(
                 put(crate::rest::menu_bar_setting::update_menu_bar_setting)
                     .layer(DefaultBodyLimit::max(4 * 1024)),
             )
-            .route(
-                "/v1/config/sharing",
-                put(crate::rest::sharing_setting::update_sharing_setting)
-                    .layer(DefaultBodyLimit::max(4 * 1024)),
-            )
     } else {
         router
     };
@@ -669,7 +619,15 @@ fn canvas_cors_layer() -> CorsLayer {
                     .unwrap_or(false)
             })
         }))
-        .allow_methods([Method::GET, Method::POST, Method::DELETE, Method::OPTIONS])
+        // PUT saves the chat window's sharing choices; that route is guarded
+        // against other loopback pages by its own origin check.
+        .allow_methods([
+            Method::GET,
+            Method::POST,
+            Method::PUT,
+            Method::DELETE,
+            Method::OPTIONS,
+        ])
         .allow_headers([header::CONTENT_TYPE])
         .max_age(Duration::from_secs(3600))
 }

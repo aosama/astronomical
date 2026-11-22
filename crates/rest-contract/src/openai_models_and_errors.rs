@@ -563,6 +563,8 @@ impl OpenAiErrorResponse {
                 error_type: "invalid_request_error",
                 param: parameter.map(str::to_owned),
                 code: code.map(str::to_owned),
+                plain_message: None,
+                next_step: None,
             },
         }
     }
@@ -575,16 +577,26 @@ impl OpenAiErrorResponse {
                 error_type: "server_error",
                 param: None,
                 code: code.map(str::to_owned),
+                plain_message: None,
+                next_step: None,
             },
         }
     }
 
-    /// Builds a service-unavailable response for a rejected model load.
-    pub fn model_load_failed(model_load_failure_reason: String) -> Self {
-        Self::service_unavailable(
+    /// Builds a service-unavailable response for a rejected model load, with
+    /// the sentence and next step a person should see for that failure.
+    pub fn model_load_failed(
+        model_load_failure_reason: String,
+        plain_message: &str,
+        next_step: &str,
+    ) -> Self {
+        let mut response = Self::service_unavailable(
             format!("the requested model could not be loaded: {model_load_failure_reason}"),
             Some("model_load_failed"),
-        )
+        );
+        response.error.plain_message = Some(plain_message.to_owned());
+        response.error.next_step = Some(next_step.to_owned());
+        response
     }
 
     /// Builds a capacity response when the one-worker scheduler cannot admit another request.
@@ -595,6 +607,8 @@ impl OpenAiErrorResponse {
                 error_type: "server_error",
                 param: None,
                 code: Some("server_capacity".to_owned()),
+                plain_message: None,
+                next_step: None,
             },
         }
     }
@@ -610,6 +624,13 @@ pub struct OpenAiError {
     param: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     code: Option<String>,
+    /// What happened, in words for a person, when the engine knows them;
+    /// `message` keeps the engine's own detail for logs and tools.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    plain_message: Option<String>,
+    /// What the person can do about it, when the engine knows.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    next_step: Option<String>,
 }
 
 #[cfg(test)]

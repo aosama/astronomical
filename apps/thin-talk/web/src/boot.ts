@@ -24,6 +24,7 @@ import { SidebarResizer } from "./SidebarResizer";
 import { runConversationMenu } from "./ConversationMenuFlow";
 import { ChatController } from "./ChatController";
 import { AppShell } from "./AppShell";
+import { DailyCountCard } from "./DailyCountCard";
 import { ProblemReportCard } from "./ProblemReportCard";
 import { ProblemReportClient } from "./ProblemReportClient";
 import { WindowChrome } from "./WindowChrome";
@@ -300,6 +301,15 @@ function wireProblemReports(controller: ChatController, config: AppConfig): void
     }
     isFailureShown = isFailureShownNow;
   });
-  window.addEventListener("focus", () => void problemReportCard.refresh());
+  const dailyCountCard = new DailyCountCard({
+    client: new ProblemReportClient({ daemonBaseURL: config.daemonBaseURL }),
+    document,
+    placeAfter: problemReportCard.element,
+  });
+  window.addEventListener("focus", () => {
+    void problemReportCard.refresh();
+    void dailyCountCard.refresh();
+  });
   void problemReportCard.refresh();
+  void dailyCountCard.refresh();
 }
