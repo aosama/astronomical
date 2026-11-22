@@ -37,6 +37,8 @@ thiserror.workspace = true
 tokenizers.workspace = true
 
 [dev-dependencies]
+# Skips the tests of Astronomical's own Metal kernels where there is no Metal.
+test-harness = { path = "../test-harness" }
 model-primitives = { path = "../model-primitives", features = ["test-support"] }
 # The GPU tests sample the process-global MLX allocator, so they serialize.
 serial_test.workspace = true

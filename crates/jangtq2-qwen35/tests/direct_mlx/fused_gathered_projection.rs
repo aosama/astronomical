@@ -239,6 +239,12 @@ const UNSORTED_DUPLICATE_ROUTE: &[i32] = &[3, 0, 4, 3];
 
 #[test]
 fn should_match_host_reference_for_two_bit_codes_with_one_shared_activation_row() {
+    if test_harness::skip_without(
+        test_harness::PlatformRequirement::MetalGpu,
+        "should_match_host_reference_for_two_bit_codes_with_one_shared_activation_row",
+    ) {
+        return;
+    }
     run_host_reference_contract(
         TWO_BIT_WIDTH,
         96,
@@ -250,6 +256,12 @@ fn should_match_host_reference_for_two_bit_codes_with_one_shared_activation_row(
 
 #[test]
 fn should_match_host_reference_for_three_bit_codes_that_straddle_words() {
+    if test_harness::skip_without(
+        test_harness::PlatformRequirement::MetalGpu,
+        "should_match_host_reference_for_three_bit_codes_that_straddle_words",
+    ) {
+        return;
+    }
     // At 3 bits every 32-code group spans three words and ten codes straddle
     // a word boundary, the layout the kernel's spread-and-mask must honor.
     run_host_reference_contract(
@@ -263,6 +275,12 @@ fn should_match_host_reference_for_three_bit_codes_that_straddle_words() {
 
 #[test]
 fn should_match_host_reference_for_four_bit_codes() {
+    if test_harness::skip_without(
+        test_harness::PlatformRequirement::MetalGpu,
+        "should_match_host_reference_for_four_bit_codes",
+    ) {
+        return;
+    }
     run_host_reference_contract(
         FOUR_BIT_WIDTH,
         64,
@@ -274,6 +292,12 @@ fn should_match_host_reference_for_four_bit_codes() {
 
 #[test]
 fn should_match_host_reference_with_one_activation_row_per_assignment() {
+    if test_harness::skip_without(
+        test_harness::PlatformRequirement::MetalGpu,
+        "should_match_host_reference_with_one_activation_row_per_assignment",
+    ) {
+        return;
+    }
     run_host_reference_contract(
         TWO_BIT_WIDTH,
         96,
@@ -285,6 +309,12 @@ fn should_match_host_reference_with_one_activation_row_per_assignment() {
 
 #[test]
 fn should_project_a_single_assignment_route() {
+    if test_harness::skip_without(
+        test_harness::PlatformRequirement::MetalGpu,
+        "should_project_a_single_assignment_route",
+    ) {
+        return;
+    }
     // The one-assignment boundary: the grid is exactly one expert's rows and
     // the shared-row and per-assignment layouts coincide.
     run_host_reference_contract(TWO_BIT_WIDTH, 64, &[4], false, "single assignment");
@@ -292,6 +322,12 @@ fn should_project_a_single_assignment_route() {
 
 #[test]
 fn should_match_materializing_decode_and_gather_matmul_on_a_top_k_page() {
+    if test_harness::skip_without(
+        test_harness::PlatformRequirement::MetalGpu,
+        "should_match_materializing_decode_and_gather_matmul_on_a_top_k_page",
+    ) {
+        return;
+    }
     let runtime = contract_runtime();
     let kernel = FusedJangtq2GatheredProjectionKernel::new()
         .expect("the fused projection kernel should compile");

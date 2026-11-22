@@ -2,6 +2,7 @@
 //! delta-math contracts live beside the owner in
 //! crates/model-primitives/src/performance_attribution.
 
+#[cfg(target_os = "macos")]
 use model_serving::MacosProcessIoError;
 
 #[cfg(target_os = "macos")]

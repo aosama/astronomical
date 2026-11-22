@@ -20,6 +20,7 @@
 
 mod error_classification;
 mod initialization;
+pub use initialization::platform_bindings_context;
 mod memory_policy;
 #[cfg(test)]
 mod memory_policy_tests;

@@ -1,7 +1,9 @@
 //! The worker's Metal wired-residency claim: how much memory MLX may keep
 //! pinned for the worker lifetime, and the actual claim it issues at startup.
 
+#[cfg(target_os = "macos")]
 use mlx_bridge::set_wired_limit;
+#[cfg(target_os = "macos")]
 use runtime_integration::maximum_recommended_gpu_working_set_size_bytes;
 
 /// The largest wired-residency budget MLX will grant for the machine.
@@ -20,6 +22,7 @@ use runtime_integration::maximum_recommended_gpu_working_set_size_bytes;
 /// gap (issue #1297), where admission planned up to the 42,949,672,960-byte
 /// machine ceiling while the driver could keep only 40,000,028,672 bytes
 /// GPU-resident.
+#[cfg(any(target_os = "macos", test))]
 pub(crate) fn wired_residency_claim_budget_bytes(
     machine_mlx_memory_ceiling_bytes: usize,
     recommended_working_set_bytes: usize,
@@ -37,6 +40,7 @@ pub(crate) fn wired_residency_claim_budget_bytes(
 /// serving: with no wired budget the allocations stay pageable, so the
 /// ceiling keeps its original value; the kernel releases the claim when
 /// the worker exits.
+#[cfg(target_os = "macos")]
 pub(crate) fn claim_wired_residency_up_to(
     machine_mlx_memory_ceiling_bytes: usize,
 ) -> Option<usize> {
@@ -72,4 +76,19 @@ pub(crate) fn claim_wired_residency_up_to(
             None
         }
     }
+}
+
+/// Wired residency is a Metal claim, and a build without Metal runs MLX on
+/// the CPU with ordinary pageable memory. Serving continues without a wired
+/// pool, as it does on macOS when the claim is rejected, so the ceiling keeps
+/// its configured value.
+#[cfg(not(target_os = "macos"))]
+pub(crate) fn claim_wired_residency_up_to(
+    machine_mlx_memory_ceiling_bytes: usize,
+) -> Option<usize> {
+    tracing::info!(
+        machine_mlx_memory_ceiling_bytes,
+        "no Metal wired residency to claim on this platform; serving continues without a wired pool"
+    );
+    None
 }

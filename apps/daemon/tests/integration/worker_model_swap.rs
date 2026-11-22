@@ -30,6 +30,14 @@ const INVALID_IMAGE_MODEL_ID: &str = "astronomical/invalid-image-generation-mode
 const DELAYED_POLICY_ACK_MODEL_ID: &str = "astronomical/delayed-policy-ack-model";
 const DELAYED_IMAGE_POLICY_ACK_MODEL_ID: &str = "astronomical/delayed-image-policy-ack-model";
 
+/// The wait only catches a follow-up image the swap never delivers. Under the
+/// full suite's parallel load on a CPU-only Linux machine one second proved too
+/// short for a healthy delivery, so builds without Metal allow more; macOS
+/// keeps its second.
+#[cfg(target_os = "macos")]
+const FOLLOWUP_IMAGE_HANG_GUARD: Duration = Duration::from_secs(1);
+#[cfg(not(target_os = "macos"))]
+const FOLLOWUP_IMAGE_HANG_GUARD: Duration = Duration::from_secs(10);
 #[tokio::test]
 async fn should_complete_a_queued_model_swap_when_idle_telemetry_arrives_before_acknowledgement() {
     let worker_handle = launch_idle_worker_fixture().await;
@@ -292,7 +300,7 @@ async fn should_not_dispatch_an_image_after_disconnect_during_model_swap() {
         .await
         .expect("the completed swap should remain reusable");
     assert!(
-        timeout(Duration::from_secs(1), followup_image.recv())
+        timeout(FOLLOWUP_IMAGE_HANG_GUARD, followup_image.recv())
             .await
             .expect("follow-up image should remain bounded")
             .expect("follow-up should finish")

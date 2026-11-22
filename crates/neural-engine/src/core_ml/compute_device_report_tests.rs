@@ -38,3 +38,12 @@ fn should_clamp_negative_native_counts_to_zero() {
     assert!(!report.has_neural_engine());
     assert_eq!(report.cpu_count, 1);
 }
+
+#[cfg(not(target_os = "macos"))]
+#[test]
+fn should_find_no_neural_engine_where_core_ml_is_unavailable() {
+    let report = super::report_compute_devices();
+
+    assert!(!report.has_neural_engine());
+    assert_eq!(report.neural_engine_core_count, 0);
+}

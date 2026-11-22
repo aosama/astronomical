@@ -63,9 +63,9 @@ To build only the optimized background service and worker:
       -p astronomical-inference-worker --bin astronomical-inference-worker \
       -p astronomical-daemon --bin astronomicald
 
-## Building the MLX runtime on Linux
+## Building and testing on Linux
 
-Linux support is in progress ([#2424](https://github.com/aosama/astronomical/issues/2424)). So far the pinned, patched MLX runtime builds with MLX's CPU backend and `runtime-integration` links against it. The rest of the workspace and the app do not build on Linux yet.
+Linux support is in progress ([#2424](https://github.com/aosama/astronomical/issues/2424)). The whole workspace builds and its tests run on Linux with MLX's CPU backend. The macOS app and its packaging do not.
 
 You need:
 
@@ -73,10 +73,14 @@ You need:
 - A BLAS and a LAPACK with the `cblas.h` and `lapacke.h` headers, for example OpenBLAS.
 - libclang, which `mlx-bridge` uses to generate its bindings.
 
-Then fetch the native dependencies and build the runtime:
+Then fetch the native dependencies, build and test:
 
     cargo xtask bootstrap-native-dependencies
-    cargo build -p runtime-integration --features mlx
+    cargo xtask provision-bindgen-headers
+    cargo check --workspace --all-targets
+    cargo test --workspace
+
+`provision-bindgen-headers` gives the MLX-C coverage contract the headers it checks the bindings against.
 
 On Linux the build differs from macOS in these ways:
 
@@ -89,6 +93,16 @@ On Linux the build differs from macOS in these ways:
 - **Entries that cannot be linked faithfully are reported as build warnings, not linked.** These are linker flags, conditional generator expressions and CMake targets.
 - **A static BLAS is linked, with a build warning.** Its own dependencies, such as a Fortran runtime, are not recorded by MLX and may need linking by hand.
 - **The native build and its dependencies use the same folders under `~/Library/Caches/Astronomical` as on macOS.**
+
+What runs differently on Linux:
+
+- **MLX runs on its CPU stream.** The runtime uses the GPU stream wherever MLX has a GPU backend and the CPU stream when it has none.
+- **Astronomical's custom Metal kernels are demoted.** Their capability probes fail on Linux, and the engine takes the public-MLX route each kernel already falls back to on a GPU that cannot run it. Tests of the kernels themselves print `skipped … needs a custom Metal kernel` and pass. Training decision-model adapters needs the gated-delta kernel, so it does not run on Linux yet.
+- **Core ML and the Neural Engine report themselves unavailable.** Loading or compiling a program fails with a message saying so, and the device report finds no Neural Engine. Their tests print `skipped … needs Core ML`.
+- **The expert record reader works as on macOS.** Only the direct reads that bypass the `macos_file_cache` are macOS-only.
+- **The daemon's telemetry reads memory pressure from `/proc/pressure/memory`.** GPU utilization reads as unavailable.
+- **The worker reads physical memory from `/proc/meminfo`.** It claims no wired residency, because that is a Metal claim, and serves from ordinary pageable memory.
+- **Run tests with `--show-output`** to see which contracts were skipped and why.
 
 ## Check your change
 

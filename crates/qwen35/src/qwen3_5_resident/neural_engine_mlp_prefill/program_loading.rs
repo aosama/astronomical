@@ -445,7 +445,33 @@ pub fn weight_as_fp16_bits(
     runtime
         .evaluate_arrays(&[&half_precision])
         .map_err(read_failure)?;
+    float16_bits(runtime, &half_precision)
+}
+
+/// The raw float16 bits of an evaluated array.
+#[cfg(target_arch = "aarch64")]
+fn float16_bits(
+    _runtime: &MlxRuntime,
+    half_precision: &mlx_bridge::MlxArray,
+) -> Result<Vec<u16>, &'static str> {
     half_precision.to_vec_f16_bits().map_err(read_failure)
+}
+
+/// MLX-C declares its float16 accessors for ARM only, so elsewhere the same
+/// bits are read by viewing the float16 array as unsigned 16-bit integers,
+/// which reinterprets the bytes without converting any value.
+#[cfg(not(target_arch = "aarch64"))]
+fn float16_bits(
+    runtime: &MlxRuntime,
+    half_precision: &mlx_bridge::MlxArray,
+) -> Result<Vec<u16>, &'static str> {
+    let float16_bit_patterns = runtime
+        .view(half_precision, MlxDtype::UInt16)
+        .map_err(read_failure)?;
+    runtime
+        .evaluate_arrays(&[&float16_bit_patterns])
+        .map_err(read_failure)?;
+    float16_bit_patterns.to_vec_u16().map_err(read_failure)
 }
 
 fn runtime_read_failure(_runtime_error: runtime_integration::MlxRuntimeError) -> &'static str {

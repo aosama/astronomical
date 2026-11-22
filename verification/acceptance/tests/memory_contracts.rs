@@ -20,8 +20,12 @@ mod mlx_c_memory;
 
 #[cfg(feature = "mlx-memory-contract-probe")]
 #[path = "memory_contracts/native_probe.rs"]
+// Measures the Metal allocator, which exists only on macOS.
+#[cfg(target_os = "macos")]
 mod native_probe;
 
 #[cfg(feature = "mlx-memory-contract-probe")]
 #[path = "memory_contracts/memory_fill_speed_probe.rs"]
+// Measures the Metal allocator, which exists only on macOS.
+#[cfg(target_os = "macos")]
 mod memory_fill_speed_probe;

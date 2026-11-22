@@ -27,6 +27,8 @@ pub enum WorkerStartupError {
     InitializeTracing { description: String },
     #[error("failed to sample hw.memsize: {0}")]
     SamplePhysicalMemorySize(#[source] io::Error),
+    #[error("failed to read the Linux memory bound: {description}")]
+    ReadLinuxMemoryBound { description: String },
     #[error("sampling hw.memsize timed out")]
     PhysicalMemorySizeSampleTimedOut,
     #[error("sysctl could not read hw.memsize")]

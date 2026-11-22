@@ -156,7 +156,7 @@ fn native_record_read(
     };
     // preadv refuses more destinations than this, with an error that would
     // read as a failing file.
-    if destination_count > libc::IOV_MAX {
+    if destination_count > MAXIMUM_DESTINATIONS_PER_READ {
         return Err(out_of_range);
     }
     Ok(NativeRecordRead {
@@ -166,6 +166,14 @@ fn native_record_read(
         destinations: record_destinations.as_ptr(),
     })
 }
+
+/// The most destinations one `preadv` accepts: `IOV_MAX` on macOS, and the
+/// kernel's `UIO_MAXIOV` on Linux, where the C library spells the same 1024
+/// limit under that name.
+#[cfg(target_os = "macos")]
+const MAXIMUM_DESTINATIONS_PER_READ: i32 = libc::IOV_MAX;
+#[cfg(target_os = "linux")]
+const MAXIMUM_DESTINATIONS_PER_READ: i32 = libc::UIO_MAXIOV;
 
 /// `ASTRO_EXPERT_RECORD_TRUNCATED` of the native header: negative, so a
 /// drive's own `EIO` is never mistaken for a file too short for the record.

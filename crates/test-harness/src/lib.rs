@@ -16,6 +16,7 @@
 //! resolution.
 
 pub mod deterministic_values;
+pub mod platform_requirement;
 pub mod sparse_decode_full_fit;
 pub mod test_run;
 pub mod timeout;
@@ -24,6 +25,7 @@ pub mod workspace;
 #[cfg(feature = "flux-reference-oracle")]
 pub mod flux_reference_oracle;
 
+pub use platform_requirement::{PlatformRequirement, skip_without};
 pub use timeout::run_with_timeout;
 pub use workspace::workspace_binary;
 

@@ -10,6 +10,20 @@
 fn main() {
     println!("cargo:rerun-if-changed=native/core_ml_bridge.m");
     println!("cargo:rerun-if-changed=native/system_wired_memory.c");
+    println!("cargo:rerun-if-changed=native/core_ml_unavailable.c");
+    // Core ML exists only on macOS. Elsewhere the crate links a bridge that
+    // reports Core ML as unavailable, so its API and callers stay the same.
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("macos") {
+        compile_core_ml_bridge();
+    } else {
+        cc::Build::new()
+            .file("native/core_ml_unavailable.c")
+            .warnings_into_errors(true)
+            .compile("astronomical_core_ml_bridge");
+    }
+}
+
+fn compile_core_ml_bridge() {
     cc::Build::new()
         .file("native/core_ml_bridge.m")
         .file("native/system_wired_memory.c")

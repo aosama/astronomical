@@ -31,8 +31,7 @@
 //! `(batch, value heads, value dims, key dims)` as serving keeps it.
 
 use mlx_bridge::{
-    MlxArray, MlxArrayVector, MlxBindingsContext, MlxCError, MlxClosure, MlxClosureCustom,
-    vjp_of_closure,
+    MlxArray, MlxArrayVector, MlxCError, MlxClosure, MlxClosureCustom, vjp_of_closure,
 };
 
 use crate::{qwen3_5_gated_delta_kernel, qwen3_5_gated_delta_sequence};
@@ -90,7 +89,7 @@ impl DifferentiableGatedDelta {
 /// function, not a graph, so this is one of the closures MLX's calling
 /// convention requires; it owns its kernel and bindings context.
 fn served_forward_closure() -> Result<MlxClosure, MlxCError> {
-    let forward_context = MlxBindingsContext::new()?;
+    let forward_context = runtime_integration::platform_bindings_context()?;
     let served_kernel = qwen3_5_gated_delta_kernel().map_err(recurrence_failure)?;
     MlxClosure::from_fn(move |recurrence_inputs: &[MlxArray]| {
         let [queries, keys, values, decays, update_rates, recurrent_state] = recurrence_inputs
@@ -152,7 +151,7 @@ fn mlx_gated_delta_update(recurrence_inputs: &[MlxArray]) -> Result<Vec<MlxArray
     let [queries, keys, values, decays, update_rates, recurrent_state] = recurrence_inputs else {
         return Err(input_count_failure(recurrence_inputs.len()));
     };
-    let mlx_context = MlxBindingsContext::new()?;
+    let mlx_context = runtime_integration::platform_bindings_context()?;
     let recurrence_outputs = mlx_context.gated_delta_update(
         queries,
         keys,

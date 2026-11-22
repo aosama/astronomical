@@ -240,9 +240,57 @@ fn extract_named_binary(
         )
         .map_err(|error| format!("chmod failed: {error}"))?;
     }
-    std::fs::rename(&matching_binaries[0], destination_path)
+    move_into_place(&matching_binaries[0], destination_path)
+}
+
+/// Moves the extracted binary into the prefix. A rename is atomic, but the
+/// scratch directory lives under the system temporary folder, which on many
+/// Linux systems is a separate filesystem (tmpfs) from the prefix, where a
+/// rename fails with "Invalid cross-device link". The binary is then copied
+/// into the prefix's own folder and renamed over the destination from there.
+pub(crate) fn move_into_place(source_path: &Path, destination_path: &Path) -> Result<(), String> {
+    match std::fs::rename(source_path, destination_path) {
+        Ok(()) => Ok(()),
+        Err(rename_error) if rename_crosses_filesystems(&rename_error) => {
+            copy_beside_then_rename(source_path, destination_path)
+        }
+        Err(rename_error) => Err(format!("move into place failed: {rename_error}")),
+    }
+}
+
+/// Whether a failed rename failed only because source and destination are on
+/// different filesystems, which a copy can still bridge.
+pub(crate) fn rename_crosses_filesystems(rename_error: &std::io::Error) -> bool {
+    rename_error.kind() == std::io::ErrorKind::CrossesDevices
+}
+
+/// Copies to a staging name in the destination's folder, then renames it over
+/// the destination. That last rename stays on one filesystem, so it is atomic:
+/// a running copy of the old binary keeps working, and an interrupted copy
+/// never leaves a truncated binary at the install path.
+pub(crate) fn copy_beside_then_rename(
+    source_path: &Path,
+    destination_path: &Path,
+) -> Result<(), String> {
+    let mut staged_file_name = destination_path
+        .file_name()
+        .ok_or_else(|| {
+            format!(
+                "move into place failed: {} has no file name",
+                destination_path.display()
+            )
+        })?
+        .to_os_string();
+    staged_file_name.push(".staged");
+    let staged_path = destination_path.with_file_name(staged_file_name);
+    std::fs::copy(source_path, &staged_path)
         .map_err(|error| format!("move into place failed: {error}"))?;
-    Ok(())
+    if let Err(rename_error) = std::fs::rename(&staged_path, destination_path) {
+        let _ = std::fs::remove_file(&staged_path);
+        return Err(format!("move into place failed: {rename_error}"));
+    }
+    std::fs::remove_file(source_path)
+        .map_err(|error| format!("removing the extracted copy failed: {error}"))
 }
 
 fn install_pinned_binary(

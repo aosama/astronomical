@@ -73,6 +73,7 @@ pub mod forward_admission;
 pub mod forward_pass_utilization;
 pub mod geometry_floor;
 pub mod ledger;
+pub mod linux_memory_bound;
 pub mod model_memory;
 pub mod neural_engine_admission;
 pub mod neural_engine_program_memory_watch;

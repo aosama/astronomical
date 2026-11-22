@@ -93,6 +93,12 @@ fn largest_magnitude(array: &MlxArray) -> f32 {
 #[test]
 #[serial]
 fn should_score_exactly_as_the_served_fused_kernel() {
+    if test_harness::skip_without(
+        test_harness::PlatformRequirement::MetalGpu,
+        "should_score_exactly_as_the_served_fused_kernel",
+    ) {
+        return;
+    }
     let runtime = initialize_test_runtime();
     let inputs = RecurrenceInputs::new(&runtime, COMPARED_TOKEN_COUNT, 0, 0.9);
     let served_kernel = qwen3_5_gated_delta_kernel().unwrap();
@@ -217,6 +223,12 @@ fn dot(left: &MlxArray, right: &MlxArray) -> f64 {
 #[test]
 #[serial]
 fn should_match_the_loss_change_along_a_direction_through_the_recurrence() {
+    if test_harness::skip_without(
+        test_harness::PlatformRequirement::MetalGpu,
+        "should_match_the_loss_change_along_a_direction_through_the_recurrence",
+    ) {
+        return;
+    }
     const TOKEN_COUNT: i32 = 24;
     let runtime = initialize_test_runtime();
     let inputs = RecurrenceInputs::new(&runtime, TOKEN_COUNT, 0, 0.9);

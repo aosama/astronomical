@@ -37,6 +37,8 @@ serde_json.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]
+# Skips the tests of Astronomical's own Metal kernels where there is no Metal.
+test-harness = { path = "../test-harness" }
 serial_test.workspace = true
 
 # The graphics-processor contract and measurement tests: they need the Metal

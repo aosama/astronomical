@@ -1,8 +1,17 @@
 use super::{system_wired_bytes, wired_growth_bytes};
 
+#[cfg(target_os = "macos")]
 #[test]
 fn should_read_some_wired_memory_on_a_running_mac() {
     assert!(system_wired_bytes() > 0);
+}
+
+// Without Core ML there is no driver wiring program weights to read, and the
+// reading is zero, which callers already treat as "unavailable".
+#[cfg(not(target_os = "macos"))]
+#[test]
+fn should_read_no_wired_memory_where_core_ml_is_unavailable() {
+    assert_eq!(system_wired_bytes(), 0);
 }
 
 #[test]

@@ -51,10 +51,14 @@ impl InstallerSandbox {
         // The port probes the host with uname and the curl shim copies
         // fixture files with cp; PATH is replaced, so the shim directory
         // carries wrappers that exec those platform tools by absolute path
-        // (no PATH lookup, no symlink or copy needed).
-        for (wrapper_name, wrapped_absolute_path) in
-            [("uname", "/usr/bin/uname"), ("cp", "/bin/cp")]
-        {
+        // (no PATH lookup, no symlink or copy needed). GNU tar, unlike the
+        // macOS tar, runs gzip from PATH to unpack a .tar.gz, so gzip is
+        // wrapped too; the macOS tar never calls it.
+        for (wrapper_name, wrapped_absolute_path) in [
+            ("uname", "/usr/bin/uname"),
+            ("cp", "/bin/cp"),
+            ("gzip", "/usr/bin/gzip"),
+        ] {
             std::fs::write(
                 sandbox.shim_directory.join(wrapper_name),
                 format!("#!/bin/sh\nexec {wrapped_absolute_path} \"$@\"\n"),

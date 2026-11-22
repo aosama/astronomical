@@ -51,6 +51,12 @@ fn full_vocabulary_law(
 #[test]
 #[serial]
 fn should_keep_the_tokens_and_probabilities_of_the_full_vocabulary_law() {
+    if test_harness::skip_without(
+        test_harness::PlatformRequirement::MetalGpu,
+        "should_keep_the_tokens_and_probabilities_of_the_full_vocabulary_law",
+    ) {
+        return;
+    }
     let runtime = test_runtime();
     let key = runtime.random_key(17).expect("a key builds");
     let logits = runtime

@@ -31,6 +31,8 @@ serving-acceptance = []
 config = { path = "../../crates/config" }
 ipc-protocol = { path = "../../crates/ipc-protocol" }
 model-serving = { path = "../../crates/model-serving", features = ["direct-mlx"] }
+# The Linux physical-memory parser beside the machine ceiling it feeds.
+memory-policy = { path = "../../crates/memory-policy" }
 runtime-integration = { path = "../../crates/runtime-integration", features = ["mlx"] }
 mlx-bridge.workspace = true
 thiserror.workspace = true

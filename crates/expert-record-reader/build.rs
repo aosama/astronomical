@@ -9,12 +9,20 @@
 fn main() {
     println!("cargo:rerun-if-changed=native/expert_record_reader.cpp");
     println!("cargo:rerun-if-changed=native/expert_record_reader.h");
-    cc::Build::new()
+    let mut native_reader_build = cc::Build::new();
+    native_reader_build
         .cpp(true)
         .std("c++17")
         .file("native/expert_record_reader.cpp")
-        // The worker that links this reader supports macOS 14.0.
-        .flag("-mmacosx-version-min=14.0")
-        .warnings_into_errors(true)
-        .compile("astronomical_expert_record_reader");
+        .warnings_into_errors(true);
+    add_macos_deployment_target(&mut native_reader_build);
+    native_reader_build.compile("astronomical_expert_record_reader");
+}
+
+/// The worker that links this reader supports macOS 14.0. The reader itself
+/// is portable POSIX (threads and preadv), so other targets build it as is.
+fn add_macos_deployment_target(native_reader_build: &mut cc::Build) {
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("macos") {
+        native_reader_build.flag("-mmacosx-version-min=14.0");
+    }
 }

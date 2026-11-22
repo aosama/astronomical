@@ -31,6 +31,8 @@ pub(crate) mod qwen3_5_moe;
 pub(crate) mod qwen_image_21;
 #[cfg(feature = "direct-mlx")]
 #[allow(dead_code)]
+// Metal wired residency exists only on macOS.
+#[cfg(target_os = "macos")]
 pub(crate) mod worker_wired_residency;
 
 #[cfg(feature = "direct-mlx")]
@@ -165,6 +167,8 @@ pub(crate) async fn direct_mlx_test_guard() -> MutexGuard<'static, ()> {
     // Every direct-MLX test takes this guard before it touches MLX, so this
     // is the one place that makes the test process hold memory as the serving
     // worker does; see `worker_wired_residency` for what happens without it.
+    // Without Metal the worker claims no wired residency, so neither do tests.
+    #[cfg(target_os = "macos")]
     worker_wired_residency::claim_wired_residency_as_the_worker_does();
     gpu_exclusive
 }

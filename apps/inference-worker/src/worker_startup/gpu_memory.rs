@@ -14,19 +14,36 @@
 //! is clamped to that budget — the ceiling stays the upper bound while the
 //! wire budget decides what is actually servable without paging the model.
 
+#[cfg(target_os = "macos")]
 use std::time::Duration;
 
 use model_serving::machine_ceiling_from_physical_ram_bytes;
+#[cfg(target_os = "macos")]
 use tokio::{process::Command, time::timeout};
 
 use super::error::WorkerStartupError;
 
+#[cfg(target_os = "macos")]
 const PHYSICAL_MEMORY_SIZE_SYSCTL_KEY: &str = "hw.memsize";
+#[cfg(target_os = "macos")]
 const SYSCTL_SAMPLE_TIMEOUT: Duration = Duration::from_secs(2);
+#[cfg(target_os = "macos")]
 const SYSCTL_EXECUTABLE_PATH: &str = "/usr/sbin/sysctl";
 
 /// Samples the machine MLX memory ceiling from the physical memory size.
 pub async fn machine_mlx_memory_ceiling_bytes() -> Result<usize, WorkerStartupError> {
+    let physical_ram_bytes = sample_physical_ram_bytes().await?;
+    let machine_ceiling_bytes = machine_ceiling_from_physical_ram_bytes(physical_ram_bytes);
+    usize::try_from(machine_ceiling_bytes).map_err(|_| {
+        WorkerStartupError::InvalidPhysicalMemorySize {
+            description: "machine MLX memory ceiling exceeds the platform integer range",
+        }
+    })
+}
+
+/// `hw.memsize`, read through `sysctl`.
+#[cfg(target_os = "macos")]
+async fn sample_physical_ram_bytes() -> Result<u64, WorkerStartupError> {
     let mut sysctl_command = Command::new(SYSCTL_EXECUTABLE_PATH);
     sysctl_command
         .arg("-n")
@@ -40,15 +57,21 @@ pub async fn machine_mlx_memory_ceiling_bytes() -> Result<usize, WorkerStartupEr
         return Err(WorkerStartupError::PhysicalMemorySizeSampleFailed);
     }
     let physical_ram_bytes_text = String::from_utf8_lossy(&sysctl_output.stdout);
-    let physical_ram_bytes = physical_ram_bytes_text.trim().parse::<u64>().map_err(|_| {
+    physical_ram_bytes_text.trim().parse::<u64>().map_err(|_| {
         WorkerStartupError::InvalidPhysicalMemorySize {
             description: "hw.memsize is not an unsigned integer",
         }
-    })?;
-    let machine_ceiling_bytes = machine_ceiling_from_physical_ram_bytes(physical_ram_bytes);
-    usize::try_from(machine_ceiling_bytes).map_err(|_| {
-        WorkerStartupError::InvalidPhysicalMemorySize {
-            description: "machine MLX memory ceiling exceeds the platform integer range",
-        }
     })
+}
+
+/// The Linux memory bound: `MemTotal`, lowered by any cgroup v2 limit on
+/// this process, so a container or systemd unit is never planned past its cap.
+#[cfg(target_os = "linux")]
+async fn sample_physical_ram_bytes() -> Result<u64, WorkerStartupError> {
+    tokio::task::spawn_blocking(memory_policy::linux_memory_bound::read_linux_memory_bound_bytes)
+        .await
+        .map_err(|join_error| WorkerStartupError::ReadLinuxMemoryBound {
+            description: join_error.to_string(),
+        })?
+        .map_err(|description| WorkerStartupError::ReadLinuxMemoryBound { description })
 }

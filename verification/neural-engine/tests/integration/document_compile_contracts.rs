@@ -24,6 +24,7 @@ use crate::support::journey_constants::MINIMUM_COSINE_SIMILARITY;
 use crate::support::program_loading::{
     compile_ml_program_to, load_ml_program, load_ml_program_mlp, load_ml_program_rotated_mlp,
 };
+use test_harness::{PlatformRequirement, skip_without};
 
 const INPUT_CHANNELS: usize = 8;
 const OUTPUT_CHANNELS: usize = 4;
@@ -85,6 +86,12 @@ fn assert_all_finite_and_not_all_zero(output_values: &[f32]) {
 
 #[test]
 fn should_compile_and_run_an_ml_program_with_fp16_weights() {
+    if skip_without(
+        PlatformRequirement::CoreMl,
+        "should_compile_and_run_an_ml_program_with_fp16_weights",
+    ) {
+        return;
+    }
     let model_directory = tempfile::tempdir().expect("a scratch directory");
     let weights = projection_weights();
     let fp16_weights = f32_slice_to_f16_bits(&weights);
@@ -103,6 +110,12 @@ fn should_compile_and_run_an_ml_program_with_fp16_weights() {
 
 #[test]
 fn should_compile_and_run_an_ml_program_split_into_contraction_parts() {
+    if skip_without(
+        PlatformRequirement::CoreMl,
+        "should_compile_and_run_an_ml_program_split_into_contraction_parts",
+    ) {
+        return;
+    }
     let model_directory = tempfile::tempdir().expect("a scratch directory");
     let weights = projection_weights();
     let fp16_weights = f32_slice_to_f16_bits(&weights);
@@ -121,6 +134,12 @@ fn should_compile_and_run_an_ml_program_split_into_contraction_parts() {
 
 #[test]
 fn should_compile_and_run_an_ml_program_with_lookup_table_weights() {
+    if skip_without(
+        PlatformRequirement::CoreMl,
+        "should_compile_and_run_an_ml_program_with_lookup_table_weights",
+    ) {
+        return;
+    }
     let model_directory = tempfile::tempdir().expect("a scratch directory");
     let quantized_weights = AffineQuantizedWeights::quantize(
         &projection_weights(),
@@ -151,6 +170,12 @@ fn should_compile_and_run_an_ml_program_with_lookup_table_weights() {
 
 #[test]
 fn should_compile_and_run_a_whole_mlp_program() {
+    if skip_without(
+        PlatformRequirement::CoreMl,
+        "should_compile_and_run_a_whole_mlp_program",
+    ) {
+        return;
+    }
     let model_directory = tempfile::tempdir().expect("a scratch directory");
     let shape = ProgramShape::new(MLP_HIDDEN_CHANNELS, MLP_HIDDEN_CHANNELS, TOKEN_COUNT)
         .expect("valid shape");
@@ -179,6 +204,12 @@ fn should_compile_and_run_a_whole_mlp_program() {
 
 #[test]
 fn should_compile_and_run_a_rotated_mlp_program() {
+    if skip_without(
+        PlatformRequirement::CoreMl,
+        "should_compile_and_run_a_rotated_mlp_program",
+    ) {
+        return;
+    }
     let model_directory = tempfile::tempdir().expect("a scratch directory");
     let layout = RotatedMlpLayout {
         shape: ProgramShape::new(MLP_HIDDEN_CHANNELS, MLP_HIDDEN_CHANNELS, TOKEN_COUNT)
@@ -214,6 +245,12 @@ fn should_compile_and_run_a_rotated_mlp_program() {
 
 #[test]
 fn should_load_a_program_compiled_earlier_and_leave_its_files_in_place() {
+    if skip_without(
+        PlatformRequirement::CoreMl,
+        "should_load_a_program_compiled_earlier_and_leave_its_files_in_place",
+    ) {
+        return;
+    }
     let scratch_directory = tempfile::tempdir().expect("a scratch directory");
     let kept_program_path = scratch_directory.path().join("kept/program.mlmodelc");
     let weights = projection_weights();

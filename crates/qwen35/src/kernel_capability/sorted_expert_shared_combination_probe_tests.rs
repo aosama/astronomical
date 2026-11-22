@@ -67,6 +67,12 @@ fn should_reject_an_empty_probe_output() {
 #[test]
 #[serial]
 fn should_pass_the_probe_on_this_machines_gpu() {
+    if test_harness::skip_without(
+        test_harness::PlatformRequirement::MetalGpu,
+        "should_pass_the_probe_on_this_machines_gpu",
+    ) {
+        return;
+    }
     let runtime = MlxRuntime::initialize(
         MlxMemoryLimits::new(512 * 1024 * 1024, 512 * 1024 * 1024)
             .expect("the probe test memory limits are valid"),
