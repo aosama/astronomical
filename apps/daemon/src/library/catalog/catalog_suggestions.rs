@@ -54,7 +54,7 @@ fn claimed_huggingface_ids(
     let mut claimed_huggingface_ids: BTreeSet<String> = projections
         .iter()
         .filter(|projection| {
-            projection.ready_on_this_mac
+            projection.served_on_this_mac
                 || projection
                     .download_state
                     .is_some_and(|download_state| download_state != "idle")
