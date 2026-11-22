@@ -396,6 +396,25 @@ fn sccache_compiler_launcher_path() -> Option<PathBuf> {
     (wrapper_file_name == SCCACHE_EXECUTABLE_NAME).then_some(rustc_wrapper_path)
 }
 
+/// Starts the sccache server, when sccache is the compiler launcher, before
+/// a build slot is taken. The slot lock stays open in every compiler this
+/// build starts, so a server first started by one of those compiles would
+/// inherit it and keep the slot busy for its whole lifetime, moving the next
+/// build to another slot path where sccache keys miss. Starting it first
+/// means the server never holds a slot. A failure is ignored: the compile
+/// then starts the server itself, as before.
+pub(crate) fn start_sccache_server_before_taking_a_slot() {
+    let Some(sccache_path) = sccache_compiler_launcher_path() else {
+        return;
+    };
+    let _ignored_status = Command::new(sccache_path)
+        .arg("--start-server")
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status();
+}
+
 fn cmake_boolean(boolean_value: bool) -> &'static str {
     if boolean_value { "ON" } else { "OFF" }
 }

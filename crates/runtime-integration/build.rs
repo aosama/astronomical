@@ -134,8 +134,10 @@ fn cargo_native_build_target() -> Result<(String, NativeTargetPlatform), Box<dyn
 }
 
 /// Declares the environment the platform's native build identity reads, so a
-/// changed BLAS setting or compiler on `PATH` re-runs this script and keys a
-/// new store entry instead of relinking the old one.
+/// changed BLAS setting re-runs this script and keys a new store entry instead
+/// of relinking the old one. `PATH` is deliberately not declared (Cargo and
+/// rustup change it between processes), so a compiler upgrade found through
+/// `PATH` is picked up the next time the script runs for another reason.
 fn emit_identity_environment_rerun_contracts(native_target_platform: NativeTargetPlatform) {
     for environment_variable in identity_environment_variables(native_target_platform) {
         println!("cargo:rerun-if-env-changed={environment_variable}");

@@ -18,6 +18,14 @@
 //! Linux nothing pins the architecture or the C library either, so a Linux
 //! target must be the host's exact triple. (macOS pins `arm64` itself, and its
 //! accepted triples are left exactly as they were.)
+//!
+//! # Changing a recipe
+//!
+//! The configure arguments and published products here are executor code,
+//! outside the native build identity's source pathspecs. Changing either for
+//! any platform must bump `native-build-store-schema-version`, as the identity
+//! policy in `native-identity` requires, or existing store entries built with
+//! the old recipe would be reused.
 
 use std::{error::Error, path::PathBuf, process::Command};
 
