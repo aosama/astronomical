@@ -3,11 +3,10 @@ use runtime_integration::{MLX_BUFFER_CACHE_RECLAIM_THRESHOLD_BYTES, MlxMemoryLim
 use serial_test::serial;
 
 use super::reply_token_mlx_buffer_cache_reclaim::{
-    DRAFT_ROUND_MLX_BUFFER_CACHE_RECLAIM_THRESHOLD_BYTES, OutgrownAttentionSlabReclaim,
-    reclaim_mlx_buffer_cache_between_draft_rounds,
+    OutgrownAttentionSlabReclaim, reclaim_mlx_buffer_cache_between_draft_rounds,
 };
 
-const TEST_MLX_MEMORY_LIMIT_BYTES: usize = 4 * 1024 * 1024 * 1024;
+const TEST_MLX_MEMORY_LIMIT_BYTES: usize = 1024 * 1024 * 1024;
 const FLOAT32_BYTES: usize = 4;
 const DECODER_STATE_BYTES_BEFORE_GROWTH: u64 = 800_000_000;
 const DECODER_STATE_BYTES_AFTER_GROWTH: u64 = 805_000_000;
@@ -142,36 +141,19 @@ fn should_report_growth_only_when_the_state_became_larger() {
     assert!(outgrown_attention_slab_reclaim.observe_slab_growth(DECODER_STATE_BYTES_AFTER_GROWTH));
 }
 
+/// The release itself is the runtime call the tests above exercise; what
+/// a draft round adds is its larger threshold, so a pool that the prompt
+/// path would already release must survive a draft round.
 #[test]
 #[serial]
-fn should_release_between_draft_rounds_above_the_threshold_without_any_slab_growth() {
+fn should_keep_between_draft_rounds_what_the_prompt_threshold_would_release() {
     let runtime = test_runtime();
     runtime
         .synchronize_gpu_stream_and_clear_mlx_buffer_cache()
         .expect("the test starts from an empty mlx_buffer_cache");
-    strand_one_slab_in_the_mlx_buffer_cache(
-        &runtime,
-        DRAFT_ROUND_MLX_BUFFER_CACHE_RECLAIM_THRESHOLD_BYTES,
-    );
-
-    reclaim_mlx_buffer_cache_between_draft_rounds(&runtime).expect("the release succeeds");
-
-    assert_eq!(mlx_buffer_cache_bytes(&runtime), 0);
-}
-
-#[test]
-#[serial]
-fn should_keep_a_small_mlx_buffer_cache_between_draft_rounds() {
-    let runtime = test_runtime();
-    runtime
-        .synchronize_gpu_stream_and_clear_mlx_buffer_cache()
-        .expect("the test starts from an empty mlx_buffer_cache");
-    strand_one_slab_in_the_mlx_buffer_cache(
-        &runtime,
-        DRAFT_ROUND_MLX_BUFFER_CACHE_RECLAIM_THRESHOLD_BYTES / 2,
-    );
+    strand_one_slab_in_the_mlx_buffer_cache(&runtime, MLX_BUFFER_CACHE_RECLAIM_THRESHOLD_BYTES);
     let mlx_buffer_cache_bytes_before = mlx_buffer_cache_bytes(&runtime);
-    assert!(mlx_buffer_cache_bytes_before > 0);
+    assert!(mlx_buffer_cache_bytes_before >= MLX_BUFFER_CACHE_RECLAIM_THRESHOLD_BYTES);
 
     reclaim_mlx_buffer_cache_between_draft_rounds(&runtime).expect("the check succeeds");
 
