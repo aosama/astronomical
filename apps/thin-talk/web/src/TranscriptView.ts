@@ -35,6 +35,21 @@ export interface TranscriptSnapshot {
  * 2. Failures are reported rather than swallowed, because a canvas that renders
  *    nothing while throwing nothing is indistinguishable from a broken model.
  */
+/**
+ * The shortest time between two redraws of the transcript: ten a second.
+ *
+ * A reply streams in at 60 to 80 tokens a second, and redrawing on every
+ * display frame re-rendered the whole growing reply and scrolled the
+ * transcript 60 to 120 times a second. Each redraw makes the window system
+ * composite the window again, and that graphics work competes with the model
+ * for the graphics chip: measured on an M5 Pro while a 35B model wrote a
+ * reply, a trivial graphics job from another app waited up to 213 ms, against
+ * 2 ms when the same reply was requested with no window drawing it, and
+ * video in other apps froze. Ten redraws a second still reads as a steady
+ * stream and leaves the chip to the model and to other apps.
+ */
+const MINIMUM_FLUSH_INTERVAL_MILLISECONDS = 100;
+
 export class TranscriptView {
   private readonly transcript: HTMLElement;
   private readonly emptyState: HTMLElement;
@@ -64,6 +79,8 @@ export class TranscriptView {
   private readonly renderedSignatures = new Map<string, string>();
   private pendingMessages: TranscriptMessage[] = [];
   private flushRequested = false;
+  /** When the transcript was last redrawn, on the `performance.now()` clock. */
+  private lastFlushAt = -MINIMUM_FLUSH_INTERVAL_MILLISECONDS;
   private followScroll = true;
   // The last snapshot drawn, so a persona change can redraw the conversation
   // without waiting for the controller to publish again.
@@ -293,8 +310,11 @@ export class TranscriptView {
       return;
     }
     this.flushRequested = true;
-    window.requestAnimationFrame(() => this.flushPending());
-    window.setTimeout(() => this.flushPending(), 16);
+    const millisecondsUntilNextFlush = Math.max(0, MINIMUM_FLUSH_INTERVAL_MILLISECONDS - (performance.now() - this.lastFlushAt));
+    if (millisecondsUntilNextFlush === 0) {
+      window.requestAnimationFrame(() => this.flushPending());
+    }
+    window.setTimeout(() => this.flushPending(), Math.max(16, millisecondsUntilNextFlush));
   }
 
   private flushPending(): void {
@@ -302,6 +322,7 @@ export class TranscriptView {
       return;
     }
     this.flushRequested = false;
+    this.lastFlushAt = performance.now();
     const batch = this.pendingMessages;
     this.pendingMessages = [];
     const wasFollowing = this.followScroll;
