@@ -46,10 +46,10 @@ fn activations(context: &MlxBindingsContext, row_count: usize, dtype: MlxDtype) 
 }
 
 fn float32_values(context: &MlxBindingsContext, array: &MlxArray) -> Vec<f32> {
-    context
+    let float32_array = context
         .astype(array, MlxDtype::Float32)
-        .and_then(|float32_array| float32_array.to_vec_f32())
-        .expect("the array evaluates")
+        .expect("the array widens");
+    float32_array.to_vec_f32().expect("the array evaluates")
 }
 
 /// The exact projection: float32 dequantized weights times the BF16-rounded
@@ -212,5 +212,45 @@ fn should_reject_mismatched_arguments_like_mlx_does() {
         )
         .is_err(),
         "an input width that does not match the weights must fail"
+    );
+}
+
+#[test]
+fn should_take_the_ordinary_route_when_the_scales_have_another_dtype() {
+    let context = MlxBindingsContext::on_cpu().expect("the CPU stream exists");
+    let (packed_weights, scales, biases) = quantized_weights(&context);
+    let float16_activations = activations(&context, 1, MlxDtype::Float16);
+
+    let routed = quantized_matmul_affine_through_float32(
+        &context,
+        &float16_activations,
+        &packed_weights,
+        &scales,
+        &biases,
+        true,
+        GROUP_SIZE,
+        BITS,
+    )
+    .expect("the route runs");
+    let ordinary = context
+        .quantized_matmul_affine(
+            &float16_activations,
+            &packed_weights,
+            &scales,
+            &biases,
+            true,
+            GROUP_SIZE,
+            BITS,
+        )
+        .expect("the ordinary route runs");
+
+    assert_eq!(
+        routed.dtype(),
+        ordinary.dtype(),
+        "float16 activations with BF16 scales keep MLX's own result dtype"
+    );
+    assert_eq!(
+        float32_values(&context, &routed),
+        float32_values(&context, &ordinary)
     );
 }

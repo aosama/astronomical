@@ -190,10 +190,9 @@ fn persist_mandatory_chunking_fields(
     let chunking = user_config_file
         .chunking
         .get_or_insert_with(Default::default);
-    if chunking.fixed_prompt_processing_chunk_size_tokens.is_none()
-        || chunking.fixed_prompt_processing_chunk_size_tokens
-            == Some(crate::LEGACY_DEFAULT_FIXED_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS)
-    {
+    if crate::should_materialize_resident_chunk_default(
+        chunking.fixed_prompt_processing_chunk_size_tokens,
+    ) {
         // Materialize the resident chunk default into config.json so the value is
         // visible and editable, and carry files written with a retired default
         // chunk to the current default. Any other persisted value is deliberate

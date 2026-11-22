@@ -121,10 +121,11 @@ Start the daemon, and send a chat request to the address it prints:
 
 What to expect:
 
-- **It is slow.** On an older laptop CPU the 0.8B model reads about 1.3 prompt tokens a second and writes about 0.8 reply tokens a second, so a one-sentence answer takes about four minutes, most of it reading the chat template. `"reasoning_effort":"none"` keeps the model from spending its token budget thinking.
-- **Prompts are read 64 tokens at a time by default** on builds without Metal, against 2,048 with Metal. The engine reads one chunk at load to measure its working buffers, and a larger chunk would keep a CPU loading for many minutes. `chunking.fixed_prompt_processing_chunk_size_tokens` in `config.json` sets another size.
+- **It is slow.** On MLX's CPU backend the 0.8B model reads and writes on the order of one token a second, so even a one-sentence answer takes minutes, most of them spent reading the chat template. `"reasoning_effort":"none"` keeps the model from spending its token budget thinking.
+- **Prompts are read 64 tokens at a time by default** on builds without Metal, against 2,048 (4,096 for SSD-paged models) with Metal. The engine reads one chunk at load to measure its working buffers, and a larger chunk would keep a CPU loading for many minutes. `chunking.fixed_prompt_processing_chunk_size_tokens` in `config.json` sets another size, and a saved 2,048 written by an earlier Linux build is moved to the new default.
 - **The daemon gives a model ten minutes to load**, against one minute with Metal, for the same reason.
-- **Quantized projections compute in float32 on the CPU.** MLX's CPU kernel for BF16 and float16 activations is about ten times slower than for float32 ones on CPUs without native half-precision arithmetic, so the runtime widens the activations and rounds the result back. The result is at least as accurate.
+- **Qwen3.5's dense quantized projections compute in float32 on the CPU.** MLX's CPU kernel for BF16 and float16 activations is about ten times slower than for float32 ones on CPUs without native half-precision arithmetic, so the runtime widens the activations and rounds the result back, which is at least as accurate. Other models' quantized paths, and sparse models' expert projections, still use the slower kernel.
+- **SSD-paged sparse models are not a Linux target yet.**
 - **Nothing in MLX enforces the active memory ceiling on Linux.** The memory ledger still plans against it, and `/v1/status` reports `"active_memory_ceiling_enforcement": "unavailable"` in the ledger snapshot (it reads `"enforced_by_mlx"` on macOS). See [#2425](https://github.com/aosama/astronomical/issues/2425).
 - **The bound is the machine's memory, lowered by any cgroup limit** on the daemon, and `maximum_mlx_memory_gb` lowers it further.
 

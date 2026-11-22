@@ -38,36 +38,111 @@ const FLUX_STATUS_FIXTURE: &str = include_str!(
     "../../../../astronomical-menu/Tests/AstronomicalMenuContractTests/Fixtures/full-flux-status.json"
 );
 
-#[tokio::test]
-async fn should_keep_the_complete_autoregressive_menu_fixture_aligned_with_production_status() {
-    if test_harness::skip_without(
-        test_harness::PlatformRequirement::MacosMenuApp,
-        "should_keep_the_complete_autoregressive_menu_fixture_aligned_with_production_status",
-    ) {
+/// The prompt chunk defaults of the Metal build, which the menu app's fixtures
+/// record. Builds without Metal default to smaller chunks (see
+/// `config::DEFAULT_FIXED_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS`).
+const METAL_BUILD_CHUNK_DEFAULTS: [(&str, u32, u32); 2] = [
+    (
+        "fixed_prompt_processing_chunk_size_tokens",
+        config::DEFAULT_FIXED_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS,
+        2_048,
+    ),
+    (
+        "fixed_ssd_streaming_prompt_processing_chunk_size_tokens",
+        config::DEFAULT_FIXED_SSD_STREAMING_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS,
+        4_096,
+    ),
+];
+
+/// Maps this build's chunk defaults to the Metal build's, so the fixtures of
+/// the macOS menu app check every other field on every platform. On macOS the
+/// two are equal and nothing changes.
+fn with_metal_build_chunk_defaults(mut status_document: Value) -> Value {
+    for (chunk_field_name, platform_default, metal_build_default) in METAL_BUILD_CHUNK_DEFAULTS {
+        replace_chunk_default(
+            &mut status_document,
+            chunk_field_name,
+            platform_default,
+            metal_build_default,
+        );
+    }
+    status_document
+}
+
+/// Replaces `platform_default` with `metal_build_default` wherever the field
+/// holds it, directly or as the `default` and `effective` of a setting.
+fn replace_chunk_default(
+    status_value: &mut Value,
+    chunk_field_name: &str,
+    platform_default: u32,
+    metal_build_default: u32,
+) {
+    match status_value {
+        Value::Object(status_fields) => {
+            for (field_name, field_value) in status_fields.iter_mut() {
+                if field_name == chunk_field_name {
+                    replace_default_value(field_value, platform_default, metal_build_default);
+                }
+                replace_chunk_default(
+                    field_value,
+                    chunk_field_name,
+                    platform_default,
+                    metal_build_default,
+                );
+            }
+        }
+        Value::Array(status_items) => {
+            for status_item in status_items {
+                replace_chunk_default(
+                    status_item,
+                    chunk_field_name,
+                    platform_default,
+                    metal_build_default,
+                );
+            }
+        }
+        _ => {}
+    }
+}
+
+fn replace_default_value(field_value: &mut Value, platform_default: u32, metal_build_default: u32) {
+    if field_value == &Value::from(platform_default) {
+        *field_value = Value::from(metal_build_default);
         return;
     }
+    if let Value::Object(setting_fields) = field_value {
+        for setting_part in ["default", "effective"] {
+            if setting_fields.get(setting_part) == Some(&Value::from(platform_default)) {
+                setting_fields.insert(setting_part.to_owned(), Value::from(metal_build_default));
+            }
+        }
+    }
+}
+
+#[tokio::test]
+async fn should_keep_the_complete_autoregressive_menu_fixture_aligned_with_production_status() {
     let actual_status = production_status_document(autoregressive_runtime_configuration()).await;
     let expected_status = fixture_document(AUTOREGRESSIVE_STATUS_FIXTURE);
 
     assert_eq!(
-        normalized_build_identity(actual_status, &expected_status),
+        normalized_build_identity(
+            with_metal_build_chunk_defaults(actual_status),
+            &expected_status
+        ),
         expected_status
     );
 }
 
 #[tokio::test]
 async fn should_keep_the_complete_flux_menu_fixture_aligned_with_production_status() {
-    if test_harness::skip_without(
-        test_harness::PlatformRequirement::MacosMenuApp,
-        "should_keep_the_complete_flux_menu_fixture_aligned_with_production_status",
-    ) {
-        return;
-    }
     let actual_status = production_status_document(flux_runtime_configuration()).await;
     let expected_status = fixture_document(FLUX_STATUS_FIXTURE);
 
     assert_eq!(
-        normalized_build_identity(actual_status, &expected_status),
+        normalized_build_identity(
+            with_metal_build_chunk_defaults(actual_status),
+            &expected_status
+        ),
         expected_status
     );
 }

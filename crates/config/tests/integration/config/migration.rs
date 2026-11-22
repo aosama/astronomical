@@ -362,7 +362,7 @@ fn should_strip_retired_speculative_prefill_settings_from_v1_config() {
         resolved_model
             .chunking()
             .fixed_prompt_processing_chunk_size_tokens(),
-        2_048
+        config::DEFAULT_FIXED_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS
     );
 }
 
@@ -437,7 +437,7 @@ fn should_strip_fields_removed_in_release_0_2_66_from_v1_config() {
         resolved_model
             .chunking()
             .fixed_prompt_processing_chunk_size_tokens(),
-        2_048
+        config::DEFAULT_FIXED_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS
     );
 }
 

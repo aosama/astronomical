@@ -144,7 +144,6 @@ dependencies = [
  "sha2",
  "speech-contract",
  "tempfile",
- "test-harness",
  "thiserror",
  "tokio",
  "tower",

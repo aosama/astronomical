@@ -165,13 +165,12 @@ pub const DEFAULT_FULL_ATTENTION_KEY_VALUE_GROWTH_TOKENS: u32 = 256;
 /// The Metal build's prompt chunk.
 #[cfg(target_os = "macos")]
 pub const DEFAULT_FIXED_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS: u32 = 2_048;
-/// Builds without Metal run MLX on the CPU, where a prompt chunk costs about a
-/// thousand times more: a 64-token chunk of the smallest Qwen3.5 model
-/// measured 51 seconds on an older laptop CPU. The engine runs one chunk at
-/// load to measure its MLX working buffers, so a 2,048-token default would
-/// keep a model loading for half an hour; 64 keeps the load and every
-/// progress report to about a minute there. `config.json` can still set any
-/// size.
+/// Builds without Metal run MLX on the CPU, where a prompt chunk costs orders
+/// of magnitude more than on a GPU: tens of seconds for 64 tokens of the
+/// smallest Qwen3.5 model. The engine runs one chunk at load to measure its
+/// MLX working buffers, so a 2,048-token default would keep a model loading
+/// for most of an hour; 64 keeps the load and every progress report short.
+/// `config.json` can still set any size.
 #[cfg(not(target_os = "macos"))]
 pub const DEFAULT_FIXED_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS: u32 = 64;
 /// The previously shipped resident-chunk default. Load-time persistence rewrites
@@ -191,24 +190,67 @@ pub const LEGACY_DEFAULT_FIXED_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS: u32 = 4_096;
 /// SSD) and 13% at 37 GiB, with identical peak memory and 41k-token prompts
 /// still admitted. The resident chunk's 4,096 win was a macOS file cache artifact;
 /// this one holds with the macOS file cache both cold and warm.
+#[cfg(target_os = "macos")]
 pub const DEFAULT_FIXED_SSD_STREAMING_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS: u32 = 4_096;
+/// The SSD-paged probe also runs one chunk at load, so builds without Metal
+/// use the same small chunk as for resident prompts.
+#[cfg(not(target_os = "macos"))]
+pub const DEFAULT_FIXED_SSD_STREAMING_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS: u32 = 64;
 /// The previously shipped SSD-paged chunk default. Load-time persistence moves
 /// this exact value to the current default, as it does for the resident
 /// chunk; any other persisted value is deliberate user intent and is kept.
 pub const LEGACY_DEFAULT_FIXED_SSD_STREAMING_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS: u32 = 2_048;
 
+/// Chunk sizes a `config.json` holds only because an earlier build wrote its
+/// own default there; load moves them to the current default. Builds without
+/// Metal also retire the Metal build's defaults, which earlier Linux builds
+/// wrote and which keep a CPU loading for many minutes.
+#[cfg(target_os = "macos")]
+const RETIRED_RESIDENT_CHUNK_DEFAULTS: &[u32] =
+    &[LEGACY_DEFAULT_FIXED_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS];
+#[cfg(not(target_os = "macos"))]
+const RETIRED_RESIDENT_CHUNK_DEFAULTS: &[u32] = &[
+    LEGACY_DEFAULT_FIXED_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS,
+    2_048,
+];
+/// SSD-paged sparse models are not served on builds without Metal yet, so a
+/// saved SSD-paged chunk is not retired there beyond what macOS retires.
+const RETIRED_SSD_STREAMING_CHUNK_DEFAULTS: &[u32] =
+    &[LEGACY_DEFAULT_FIXED_SSD_STREAMING_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS];
+
+/// Pure: whether the persisted resident chunk should be (re)written to the
+/// current default — absent, or still a retired default.
+#[must_use]
+pub const fn should_materialize_resident_chunk_default(
+    persisted_chunk_tokens: Option<u32>,
+) -> bool {
+    is_absent_or_retired(persisted_chunk_tokens, RETIRED_RESIDENT_CHUNK_DEFAULTS)
+}
+
 /// Pure: whether the persisted SSD-paged chunk should be (re)written to the
-/// current default — absent, or still the retired default.
+/// current default — absent, or still a retired default.
 #[must_use]
 pub const fn should_materialize_ssd_streaming_chunk_default(
     persisted_chunk_tokens: Option<u32>,
 ) -> bool {
-    match persisted_chunk_tokens {
-        None => true,
-        Some(chunk_tokens) => {
-            chunk_tokens == LEGACY_DEFAULT_FIXED_SSD_STREAMING_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS
+    is_absent_or_retired(persisted_chunk_tokens, RETIRED_SSD_STREAMING_CHUNK_DEFAULTS)
+}
+
+const fn is_absent_or_retired(
+    persisted_chunk_tokens: Option<u32>,
+    retired_defaults: &[u32],
+) -> bool {
+    let Some(chunk_tokens) = persisted_chunk_tokens else {
+        return true;
+    };
+    let mut retired_default_index = 0;
+    while retired_default_index < retired_defaults.len() {
+        if retired_defaults[retired_default_index] == chunk_tokens {
+            return true;
         }
+        retired_default_index += 1;
     }
+    false
 }
 /// One-token decode submits every third layer while experts stream from SSD.
 /// The exact value is not sensitive on the 4-bit sparse model: 1, 2, 3, 4

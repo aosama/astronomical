@@ -189,7 +189,7 @@
           "type": "integer",
           "minimum": 1,
           "default": 2048,
-          "description": "Maximum ordinary prompt-processing rows evaluated in one forward.",
+          "description": "Maximum ordinary prompt-processing rows evaluated in one forward. The default is 2048 with Metal on macOS and 64 on builds without Metal, where MLX runs on the CPU.",
           "x-astronomical-unit": "tokens",
           "x-astronomical-explanation": "A long prompt is read in pieces. This is the size of each piece. Larger pieces read a prompt faster but need more memory at once; smaller pieces are gentler on memory.",
           "x-astronomical-apply-mode": "model-reload"
@@ -199,7 +199,7 @@
           "type": "integer",
           "minimum": 1,
           "default": 4096,
-          "description": "Prompt-processing rows evaluated in one forward while sparse experts stream from storage. Independent of the resident chunk. Astro SSD prompt cache publication may still clamp each forward to the next durable block boundary.",
+          "description": "Prompt-processing rows evaluated in one forward while sparse experts stream from storage. Independent of the resident chunk. Astro SSD prompt cache publication may still clamp each forward to the next durable block boundary. The default is 4096 with Metal on macOS and 64 on builds without Metal.",
           "x-astronomical-unit": "tokens",
           "x-astronomical-explanation": "The same piece size, used when a model is too large for memory and part of it is read from the SSD. It is set separately because reading from the SSD changes which size is fastest.",
           "x-astronomical-apply-mode": "model-reload"

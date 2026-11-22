@@ -3,7 +3,7 @@
 use super::*;
 
 #[test]
-fn should_default_to_2048_resident_and_4096_ssd_streaming_chunks() {
+fn should_default_to_the_platform_resident_and_ssd_streaming_chunks() {
     let temp_home = tempfile::tempdir().expect("temp home should be created");
     write_config(temp_home.path(), "{}");
 
@@ -12,10 +12,13 @@ fn should_default_to_2048_resident_and_4096_ssd_streaming_chunks() {
         .chunking()
         .expect("default chunking should resolve");
 
-    assert_eq!(chunking.fixed_prompt_processing_chunk_size_tokens(), 2_048);
+    assert_eq!(
+        chunking.fixed_prompt_processing_chunk_size_tokens(),
+        config::DEFAULT_FIXED_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS
+    );
     assert_eq!(
         chunking.fixed_ssd_streaming_prompt_processing_chunk_size_tokens(),
-        4_096
+        config::DEFAULT_FIXED_SSD_STREAMING_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS
     );
     let persisted_config = serde_json::from_str::<serde_json::Value>(
         &std::fs::read_to_string(temp_home.path().join(".astronomical/config.json"))
@@ -23,17 +26,18 @@ fn should_default_to_2048_resident_and_4096_ssd_streaming_chunks() {
     )
     .expect("the filled config should be JSON");
     assert_eq!(
-        persisted_config["chunking"]["fixed_prompt_processing_chunk_size_tokens"], 2_048,
+        persisted_config["chunking"]["fixed_prompt_processing_chunk_size_tokens"],
+        config::DEFAULT_FIXED_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS,
         "the resident chunk default should be materialized in config.json"
     );
     assert_eq!(
         persisted_config["chunking"]["fixed_ssd_streaming_prompt_processing_chunk_size_tokens"],
-        4_096
+        config::DEFAULT_FIXED_SSD_STREAMING_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS
     );
 }
 
 #[test]
-fn should_migrate_the_retired_4096_resident_chunk_default_to_2048() {
+fn should_migrate_the_retired_4096_resident_chunk_default_to_the_current_default() {
     let temp_home = tempfile::tempdir().expect("temp home should be created");
     write_config(
         temp_home.path(),
@@ -45,14 +49,18 @@ fn should_migrate_the_retired_4096_resident_chunk_default_to_2048() {
         .chunking()
         .expect("chunking should resolve");
 
-    assert_eq!(chunking.fixed_prompt_processing_chunk_size_tokens(), 2_048);
+    assert_eq!(
+        chunking.fixed_prompt_processing_chunk_size_tokens(),
+        config::DEFAULT_FIXED_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS
+    );
     let persisted_config = serde_json::from_str::<serde_json::Value>(
         &std::fs::read_to_string(temp_home.path().join(".astronomical/config.json"))
             .expect("the migrated config should be readable"),
     )
     .expect("the migrated config should be JSON");
     assert_eq!(
-        persisted_config["chunking"]["fixed_prompt_processing_chunk_size_tokens"], 2_048,
+        persisted_config["chunking"]["fixed_prompt_processing_chunk_size_tokens"],
+        config::DEFAULT_FIXED_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS,
         "the retired 4,096 default should be rewritten to 2,048 on disk"
     );
 }
@@ -98,7 +106,7 @@ fn should_migrate_only_the_global_resident_chunk_default() {
             .chunking()
             .expect("global chunking should resolve")
             .fixed_prompt_processing_chunk_size_tokens(),
-        2_048,
+        config::DEFAULT_FIXED_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS,
         "the global retired default should migrate"
     );
     assert_eq!(
@@ -203,7 +211,7 @@ fn should_carry_the_retired_ssd_streaming_chunk_default_forward() {
 
     assert_eq!(
         chunking.fixed_ssd_streaming_prompt_processing_chunk_size_tokens(),
-        4_096
+        config::DEFAULT_FIXED_SSD_STREAMING_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS
     );
 }
 
@@ -234,4 +242,18 @@ fn should_materialize_the_ssd_streaming_chunk_only_when_absent_or_retired() {
     assert!(!should_materialize_ssd_streaming_chunk_default(Some(4_096)));
     assert!(!should_materialize_ssd_streaming_chunk_default(Some(2_047)));
     assert!(!should_materialize_ssd_streaming_chunk_default(Some(2_049)));
+}
+
+#[test]
+fn should_retire_the_metal_resident_chunk_default_only_where_there_is_no_metal() {
+    use config::should_materialize_resident_chunk_default;
+    assert!(should_materialize_resident_chunk_default(None));
+    assert!(should_materialize_resident_chunk_default(Some(4_096)));
+    assert_eq!(
+        should_materialize_resident_chunk_default(Some(2_048)),
+        !cfg!(target_os = "macos"),
+        "2,048 is the Metal build's default, which earlier CPU builds also wrote"
+    );
+    assert!(!should_materialize_resident_chunk_default(Some(1_024)));
+    assert!(!should_materialize_resident_chunk_default(Some(4_095)));
 }

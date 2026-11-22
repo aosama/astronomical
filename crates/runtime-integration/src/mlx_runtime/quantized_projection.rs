@@ -3,13 +3,13 @@
 //! # Why the CPU takes a float32 route
 //!
 //! MLX's CPU backend runs `quantized_matmul` on BF16 and float16 activations
-//! far slower than on float32 ones: on an x86 CPU without native half
-//! arithmetic, one 64-token, 1024-to-3584 four-bit projection measured
-//! 3,812 ms in BF16 and 383 ms through float32, and one reply token's
-//! vocabulary head 3,645 ms against 412 ms. A 0.8B model's prompt chunk spent
-//! six and a half minutes there. Both kernels accumulate in float32, so
-//! computing in float32 and rounding the result back to the activations' own
-//! dtype gives the same or slightly better values at a tenth of the time.
+//! far slower than on float32 ones: on an x86 CPU without native
+//! half-precision arithmetic a four-bit projection took about ten times longer
+//! in BF16 than through float32, for prompt chunks and single reply tokens
+//! alike, which made a small model's prompt chunk take minutes. Both kernels
+//! accumulate in float32, so computing in float32 and rounding the result back
+//! to the activations' own dtype gives the same or slightly better values in a
+//! tenth of the time.
 //! Metal has no such gap, so macOS calls MLX directly, exactly as before.
 
 use mlx_bridge::{MlxArray, MlxBindingsContext, MlxCError, MlxDtype};
@@ -19,7 +19,7 @@ use super::MlxRuntime;
 impl MlxRuntime {
     /// `activations × dequantize(weights)` through MLX's affine quantized
     /// matmul, on the route that is fast for the device this build of MLX
-    /// computes on. The result has the activations' dtype on every route.
+    /// computes on. Every route returns the dtype MLX itself would return.
     ///
     /// # Errors
     ///
@@ -76,12 +76,16 @@ fn mlx_computes_half_precision_quantized_matmul_slowly() -> Result<bool, MlxCErr
         return Ok(*computes_on_cpu);
     }
     let has_gpu_backend = mlx_bridge::metal_is_available()? || mlx_bridge::cuda_is_available()?;
-    Ok(*COMPUTES_ON_CPU.get_or_init(|| !has_gpu_backend))
+    // A racing thread computed the same answer, so losing the race is harmless.
+    let _already_recorded = COMPUTES_ON_CPU.set(!has_gpu_backend);
+    Ok(!has_gpu_backend)
 }
 
 /// Computes the quantized matmul with float32 activations, scales and biases,
-/// then rounds the result to the activations' own dtype. Float32 activations
-/// take MLX's ordinary route, since there is nothing to widen.
+/// then rounds the result to the activations' own dtype. That is the dtype MLX
+/// returns when activations, scales and biases share it; any other mix, and
+/// float32 activations, take MLX's ordinary route, so the result's dtype never
+/// depends on the route.
 ///
 /// # Errors
 ///
@@ -98,7 +102,10 @@ pub fn quantized_matmul_affine_through_float32(
     bits: i32,
 ) -> Result<MlxArray, MlxCError> {
     let activation_dtype = activations.dtype();
-    if activation_dtype == MlxDtype::Float32 {
+    let shares_one_half_precision_dtype = activation_dtype != MlxDtype::Float32
+        && scales.dtype() == activation_dtype
+        && biases.dtype() == activation_dtype;
+    if !shares_one_half_precision_dtype {
         return context.quantized_matmul_affine(
             activations,
             quantized_weights,

@@ -175,7 +175,7 @@ fn should_load_a_saved_file_that_still_names_the_retired_ssd_prefill_interval() 
     // 2,048 is the retired SSD-paged default, so load carries it forward.
     assert_eq!(
         persisted_chunking["fixed_ssd_streaming_prompt_processing_chunk_size_tokens"],
-        4_096
+        config::DEFAULT_FIXED_SSD_STREAMING_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS
     );
     assert_eq!(
         persisted_chunking["experimental_ssd_paging_generation_graph_submission_layer_interval"],
