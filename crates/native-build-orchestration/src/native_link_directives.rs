@@ -22,8 +22,18 @@ const MACOS_FRAMEWORK_NAMES: [&str; 6] = [
 
 /// Library directories the dynamic loader searches by default. A run path
 /// pointing at one of them changes nothing, so none is emitted.
-const SYSTEM_LIBRARY_DIRECTORIES: [&str; 5] =
-    ["/lib", "/lib64", "/usr/lib", "/usr/lib64", "/usr/local/lib"];
+const SYSTEM_LIBRARY_DIRECTORIES: [&str; 9] = [
+    "/lib",
+    "/lib64",
+    "/usr/lib",
+    "/usr/lib64",
+    "/usr/local/lib",
+    // Debian and Ubuntu's multiarch folders, where their BLAS packages live.
+    "/lib/x86_64-linux-gnu",
+    "/lib/aarch64-linux-gnu",
+    "/usr/lib/x86_64-linux-gnu",
+    "/usr/lib/aarch64-linux-gnu",
+];
 
 /// The cargo directives and warnings for one link line.
 #[derive(Debug, Default, PartialEq, Eq)]
@@ -65,11 +75,12 @@ pub fn macos_link_directive_lines(
 }
 
 /// The Linux line: the two static archives, then the libraries MLX's
-/// configure chose (read from the build's link library list), then the GNU
-/// C++ runtime, which must come last because the archives reference it.
+/// configure chose (as its installed `MLXTargets.cmake` records them), then
+/// the GNU C++ runtime, which must come last because the archives reference
+/// it.
 pub fn linux_link_directives(
     native_library_directory: &Path,
-    mlx_link_library_list: &str,
+    mlx_targets_text: &str,
 ) -> NativeLinkDirectives {
     let mut link_directives = NativeLinkDirectives {
         cargo_directive_lines: vec![
@@ -83,8 +94,14 @@ pub fn linux_link_directives(
         warning_messages: Vec::new(),
         linked_library_files: Vec::new(),
     };
-    for link_library_entry in mlx_link_library_list.lines() {
-        push_link_library_entry(&mut link_directives, link_library_entry);
+    if let Some(exported_link_libraries) = mlx_exported_link_libraries(mlx_targets_text) {
+        for link_library_entry in exported_link_libraries {
+            push_link_library_entry(&mut link_directives, &link_library_entry);
+        }
+    } else {
+        link_directives.warning_messages.push(
+            "MLXTargets.cmake defines no `mlx` target properties, so none of the libraries MLX links (BLAS, LAPACK, dl, pthread) were linked; the final link will name the missing symbols".to_owned(),
+        );
     }
     push_unique_line(
         &mut link_directives.cargo_directive_lines,
@@ -93,22 +110,54 @@ pub fn linux_link_directives(
     link_directives
 }
 
+/// The `INTERFACE_LINK_LIBRARIES` MLX's installed CMake package records for
+/// its `mlx` target, one entry per element, with the export's `\$` escapes
+/// undone. MLX's own package is the published record of what it links, so it
+/// is read rather than reconstructed from build-tree properties. `None` means
+/// the file defines no `mlx` target properties at all, which a changed export
+/// format would cause; a block without the property links nothing.
+pub fn mlx_exported_link_libraries(mlx_targets_text: &str) -> Option<Vec<String>> {
+    let mut is_inside_mlx_properties = false;
+    for targets_line in mlx_targets_text.lines() {
+        let trimmed_line = targets_line.trim();
+        if trimmed_line.starts_with("set_target_properties(mlx PROPERTIES") {
+            is_inside_mlx_properties = true;
+            continue;
+        }
+        if !is_inside_mlx_properties {
+            continue;
+        }
+        if trimmed_line.starts_with(')') {
+            break;
+        }
+        if let Some(quoted_libraries) = trimmed_line.strip_prefix("INTERFACE_LINK_LIBRARIES \"") {
+            let link_libraries_text = quoted_libraries.trim_end_matches('"').replace("\\$", "$");
+            return Some(link_libraries_text.split(';').map(str::to_owned).collect());
+        }
+    }
+    is_inside_mlx_properties.then(Vec::new)
+}
+
 /// Adds one recorded `INTERFACE_LINK_LIBRARIES` entry to the line.
 fn push_link_library_entry(link_directives: &mut NativeLinkDirectives, link_library_entry: &str) {
     let Some(linkable_entry) = linkable_entry_text(link_library_entry) else {
         return;
     };
-    if let Some(library_name) = linkable_entry.strip_prefix("-l") {
-        if library_name.is_empty() || library_name.starts_with(':') {
-            link_directives.warning_messages.push(format!(
-                "MLX links {linkable_entry:?}, which the Rust linker cannot name; it was not linked"
-            ));
-            return;
-        }
-        push_dynamic_library(link_directives, library_name);
+    if let Some(library_file_name) = linkable_entry.strip_prefix("-l:") {
+        push_verbatim_library_name(link_directives, linkable_entry, library_file_name);
+    } else if let Some(library_name) = linkable_entry.strip_prefix("-l") {
+        push_named_library(link_directives, linkable_entry, library_name);
+    } else if linkable_entry.starts_with("$<") {
+        link_directives.warning_messages.push(format!(
+            "MLX links the conditional entry {linkable_entry:?}, which a build script cannot evaluate; it was not linked"
+        ));
     } else if linkable_entry.starts_with('-') {
         link_directives.warning_messages.push(format!(
             "MLX links with the linker flag {linkable_entry:?}, which a build script cannot pass to dependents; it was not linked"
+        ));
+    } else if linkable_entry.contains("${") {
+        link_directives.warning_messages.push(format!(
+            "MLX links {linkable_entry:?}, which names a path relative to its install prefix; it was not linked"
         ));
     } else if linkable_entry.contains("::") {
         link_directives.warning_messages.push(format!(
@@ -122,15 +171,18 @@ fn push_link_library_entry(link_directives: &mut NativeLinkDirectives, link_libr
 }
 
 /// Strips `$<LINK_ONLY:…>` and drops what never reaches a consumer's link:
-/// blank entries, build-tree-only targets (`$<BUILD_INTERFACE:…>`, compiled
-/// into `libmlx.a` already), and CMake's internal `::@` directory markers.
+/// blank entries, build-tree-only targets (`$<BUILD_INTERFACE:…>`), and
+/// CMake's internal `::@` directory markers.
 fn linkable_entry_text(link_library_entry: &str) -> Option<&str> {
     let mut entry_text = link_library_entry.trim();
     while let Some(wrapped_text) = link_only_contents(entry_text) {
         entry_text = wrapped_text.trim();
     }
-    let is_unlinkable =
-        entry_text.is_empty() || entry_text.starts_with("$<") || entry_text.starts_with("::@");
+    // Build-tree-only targets are compiled into `libmlx.a` already; any other
+    // generator expression is reported by the caller instead of dropped.
+    let is_unlinkable = entry_text.is_empty()
+        || entry_text.starts_with("$<BUILD_INTERFACE:")
+        || entry_text.starts_with("::@");
     if is_unlinkable {
         None
     } else {
@@ -232,6 +284,45 @@ fn library_file_kind(library_file_path: &Path) -> Option<(&str, bool)> {
     } else {
         None
     }
+}
+
+/// `-l:libopenblas.so.0` names an exact file, which `+verbatim` passes to the
+/// linker unchanged.
+fn push_verbatim_library_name(
+    link_directives: &mut NativeLinkDirectives,
+    linkable_entry: &str,
+    library_file_name: &str,
+) {
+    if library_file_name.is_empty() {
+        link_directives.warning_messages.push(format!(
+            "MLX links {linkable_entry:?}, which names no file; it was not linked"
+        ));
+        return;
+    }
+    let link_kind = if library_file_name.ends_with(".a") {
+        "static"
+    } else {
+        "dylib"
+    };
+    push_unique_line(
+        &mut link_directives.cargo_directive_lines,
+        format!("cargo:rustc-link-lib={link_kind}:+verbatim={library_file_name}"),
+    );
+}
+
+/// `-lm` names a library the linker finds by its short name.
+fn push_named_library(
+    link_directives: &mut NativeLinkDirectives,
+    linkable_entry: &str,
+    library_name: &str,
+) {
+    if library_name.is_empty() {
+        link_directives.warning_messages.push(format!(
+            "MLX links {linkable_entry:?}, which names no library; it was not linked"
+        ));
+        return;
+    }
+    push_dynamic_library(link_directives, library_name);
 }
 
 fn push_dynamic_library(link_directives: &mut NativeLinkDirectives, library_name: &str) {

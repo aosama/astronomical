@@ -115,6 +115,9 @@ bytes = "1"
 crc32fast = "1"
 futures-util = { version = "0.3", features = ["sink"] }
 fs4 = "1.1.0"
+# Already built for fs4; the native store uses its safe fcntl to keep a build
+# slot locked while the compilers it started still run.
+rustix = { version = "1.1.4", default-features = false, features = ["std"] }
 # url (pulled by reqwest in astronomical-daemon) → idna chooses its Unicode
 # backend from whichever 1.x version stream of idna_adapter the lockfile
 # resolves, because Cargo has no global-features mechanism (issue #606). The
