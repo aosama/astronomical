@@ -128,6 +128,9 @@ pub fn quantized_matmul_affine_through_float32(
     context.astype(&float32_projection, activation_dtype)
 }
 
-#[cfg(test)]
+// The float32 route runs only where MLX has no GPU backend, so its contracts
+// are checked there; the Metal build never takes it, and its CPU stream is
+// not what macOS serves on.
+#[cfg(all(test, not(target_os = "macos")))]
 #[path = "quantized_projection_tests.rs"]
 mod tests;
