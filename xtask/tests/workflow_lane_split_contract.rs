@@ -28,10 +28,12 @@ fn build_job_packs_one_archive_per_tier_lane() {
     let build_steps = steps_of(required_job(&workflow, "rust-core"), "rust-core");
     let archive_step = find_step_by_name(&build_steps, "Archive test binaries");
     let archive_text = run_text_of(archive_step, "archive-test-binaries");
+    // Each archive alias runs through test impact selection, which narrows
+    // its packages and skips an archive no selected package fills.
     for archive_alias in [
-        "cargo nextest-archive-integration",
-        "cargo nextest-archive-rest-api",
-        "cargo nextest-archive-e2e",
+        "xtask selected-cargo --selection \"$RUST_TEST_SELECTION\" nextest-archive-integration",
+        "xtask selected-cargo --selection \"$RUST_TEST_SELECTION\" nextest-archive-rest-api",
+        "xtask selected-cargo --selection \"$RUST_TEST_SELECTION\" nextest-archive-e2e",
     ] {
         assert!(
             archive_text.contains(archive_alias),
@@ -126,12 +128,17 @@ fn every_tier_lane_runs_its_own_archive_without_compiling() {
             required_u64(lane, "timeout-minutes", &format!("job {lane_id}")) <= 10,
             "the {lane_id} lane exceeded its hard cap"
         );
-        // No explicit `if`: with the default success() semantics a failed
-        // build skips every lane and a legitimately skipped build skips them
-        // with it — the verdict owns the fail-closed distinction.
-        assert!(
-            lane.get("if").is_none(),
-            "the {lane_id} lane must inherit the default success() gate"
+        // The unit and integration lanes have no explicit `if`: with the
+        // default success() semantics a failed build skips every lane and a
+        // legitimately skipped build skips them with it. The REST and E2E
+        // lanes add only their test impact selection flag, which keeps that
+        // implicit success() gate; the verdict owns the fail-closed
+        // distinction for all four.
+        let expected_condition = selection_condition_of(lane_id);
+        assert_eq!(
+            lane.get("if").and_then(Value::as_str),
+            expected_condition,
+            "the {lane_id} lane must keep the default success() gate and only its selection flag"
         );
         let lane_steps = steps_of(lane, lane_id);
         for step in &lane_steps {
@@ -396,10 +403,25 @@ fn should_compile_and_archive_every_lane_with_one_package_list() {
     let compile_step = find_step_by_name(&compile_steps, "Compile integration lane tests");
     let compile_text = run_text_of(compile_step, "compile-integration");
     assert!(
-        compile_text
-            .contains("cargo test-integration --timings --no-run --test rest_api_tests --test e2e"),
+        compile_text.contains(
+            "xtask selected-cargo --selection \"$RUST_TEST_SELECTION\" test-integration --timings --no-run --test rest_api_tests --test e2e"
+        ),
         "the integration, REST and E2E lanes must compile in one command"
     );
+}
+
+/// The REST and E2E lanes run only when test impact selection holds their
+/// package; a missing flag (a failed classification) keeps them running.
+fn selection_condition_of(lane_id: &str) -> Option<&'static str> {
+    match lane_id {
+        "rest-contracts" => {
+            Some("${{ needs.detect-changes.outputs.rest_contracts_required != 'false' }}")
+        }
+        "e2e-journeys" => {
+            Some("${{ needs.detect-changes.outputs.e2e_journeys_required != 'false' }}")
+        }
+        _ => None,
+    }
 }
 
 fn package_list_of_alias(alias_prefix: &str) -> String {
@@ -483,16 +505,35 @@ fn contract_targets_missing_from_lane<'a>(
     missing_targets
 }
 
-/// Line by line, so a commented-out invocation does not count as running the target.
+/// Line by line, so a commented-out invocation does not count as running the
+/// target, and word by word, so `--test foo` never counts as `--test foo_bar`
+/// while one command may name several targets.
 fn lane_runs_test_target(lane_text: &str, test_target: &str) -> bool {
-    let invocation_ending = format!("--test {test_target}");
     for lane_line in lane_text.lines() {
         let trimmed_line = lane_line.trim();
-        if !trimmed_line.starts_with('#') && trimmed_line.ends_with(&invocation_ending) {
-            return true;
+        if trimmed_line.starts_with('#') {
+            continue;
+        }
+        let line_words: Vec<&str> = trimmed_line.split_whitespace().collect();
+        for word_pair in line_words.windows(2) {
+            if word_pair[0] == "--test" && word_pair[1] == test_target {
+                return true;
+            }
         }
     }
     false
+}
+
+#[test]
+fn should_count_a_target_named_among_several_but_never_a_longer_one() {
+    let lane_text = "cargo test --locked -p xtask --bin xtask --test first_journeys --test second_journeys\n# cargo test --test commented_journeys";
+    assert!(lane_runs_test_target(lane_text, "first_journeys"));
+    assert!(lane_runs_test_target(lane_text, "second_journeys"));
+    assert!(
+        !lane_runs_test_target(lane_text, "first"),
+        "a prefix of a named target is not that target"
+    );
+    assert!(!lane_runs_test_target(lane_text, "commented_journeys"));
 }
 
 /// The lane names its targets one by one, so a new contract passes locally and then

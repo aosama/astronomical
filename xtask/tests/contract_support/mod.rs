@@ -10,6 +10,10 @@ use serde_yaml::Value;
 use std::path::{Path, PathBuf};
 
 pub(crate) const EXPECTED_MACOS_AUTHORITY: &str = "${{ always() && (needs.detect-changes.result != 'success' || needs.detect-changes.outputs.macos_verification_required == 'true') }}";
+/// The macOS build: like the other macOS lanes it fails closed when the
+/// classification fails, and otherwise runs when test impact selection left
+/// any package for it to test.
+pub(crate) const EXPECTED_RUST_CORE_AUTHORITY: &str = "${{ always() && (needs.detect-changes.result != 'success' || needs.detect-changes.outputs.rust_core_required == 'true') }}";
 pub(crate) const EXPECTED_SWIFT_NODE_AUTHORITY: &str = "${{ always() && (needs.detect-changes.result != 'success' || needs.detect-changes.outputs.swift_node_required == 'true') }}";
 pub(crate) const EXPECTED_MACOS_CONCURRENCY_GROUP: &str =
     "macos-integration-${{ github.event_name }}-${{ github.ref }}";

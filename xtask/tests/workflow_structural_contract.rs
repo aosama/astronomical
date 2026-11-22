@@ -13,8 +13,8 @@ mod contract_support;
 
 use contract_support::{
     EXPECTED_MACOS_AUTHORITY, EXPECTED_MACOS_CONCURRENCY_GROUP, EXPECTED_OBSERVATORY_COMMAND,
-    EXPECTED_SWIFT_CONCURRENCY_GROUP, EXPECTED_SWIFT_NODE_AUTHORITY, MACOS_RUNNER_LABEL,
-    find_step_by_id, find_step_by_name, is_pinned_action_reference,
+    EXPECTED_RUST_CORE_AUTHORITY, EXPECTED_SWIFT_CONCURRENCY_GROUP, EXPECTED_SWIFT_NODE_AUTHORITY,
+    MACOS_RUNNER_LABEL, find_step_by_id, find_step_by_name, is_pinned_action_reference,
     notices_freshness_workflow_contract, required_bool, required_field, required_job,
     required_text, required_u64, run_text_of, steps_of, triggers_of, workflow_contract,
 };
@@ -30,11 +30,16 @@ fn should_use_the_canonical_integration_package_selection_for_compile_and_execut
     // build selection so extracted policy packages cannot disappear.
     let compile_step = find_step_by_name(&verification_steps, "Compile integration lane tests");
     let compile_text = run_text_of(compile_step, "compile-integration");
+    // Test impact selection runs the alias through `xtask selected-cargo`,
+    // which narrows only its packages and test targets; the alias stays the
+    // one list of every package the lanes test.
     assert!(
         compile_text
             .lines()
-            .any(|line| line.trim_start().starts_with("cargo test-integration ")),
-        "the compile step must use cargo test-integration so extracted policy packages cannot disappear"
+            .any(|line| line.trim_start().starts_with(
+                "xtask selected-cargo --selection \"$RUST_TEST_SELECTION\" test-integration "
+            )),
+        "the compile step must build the test-integration alias, narrowed by the selection, so extracted policy packages cannot disappear"
     );
     assert!(
         !compile_text.lines().any(|line| {
@@ -135,7 +140,7 @@ fn required_jobs_keep_names_timeouts_and_fail_closed_authority() {
         "the build job name changed"
     );
     for (macos_job_id, hard_cap_minutes, expected_authority) in [
-        ("rust-core", 15, EXPECTED_MACOS_AUTHORITY),
+        ("rust-core", 15, EXPECTED_RUST_CORE_AUTHORITY),
         ("swift-node", 12, EXPECTED_SWIFT_NODE_AUTHORITY),
         ("neural-engine", 6, EXPECTED_MACOS_AUTHORITY),
     ] {

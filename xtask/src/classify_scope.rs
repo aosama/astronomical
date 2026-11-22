@@ -9,6 +9,9 @@ use std::process::Command;
 
 mod lane_inputs;
 
+use crate::rust_test_selection::{
+    RustTestSelection, rust_lane_requirements, rust_test_selection_for, selection_output_value,
+};
 use crate::verified_tree::{is_tree_already_verified, last_default_branch_run_commit};
 use crate::version_only_bump::{VersionBumpTexts, is_version_only_bump};
 use lane_inputs::{
@@ -249,8 +252,11 @@ pub fn run(repository_root: &Path) -> Result<(), String> {
 
     eprintln!("[ci-change-scope] status=start event={event_name}");
 
-    let verdict = match event {
-        CiEvent::WorkflowDispatch => classify_change_scope(event, &[], false, false),
+    let (verdict, rust_test_selection) = match event {
+        CiEvent::WorkflowDispatch => (
+            classify_change_scope(event, &[], false, false),
+            every_rust_test("manual run"),
+        ),
         CiEvent::PullRequest | CiEvent::Push => {
             let (base_sha, head_sha) = match event {
                 CiEvent::PullRequest => (
@@ -264,16 +270,42 @@ pub fn run(repository_root: &Path) -> Result<(), String> {
             };
             match resolve_verdict_from_history(repository_root, event, base_sha, head_sha) {
                 Some(history_verdict) => history_verdict,
-                None => fail_safe_verdict(),
+                None => (fail_safe_verdict(), every_rust_test("unknown history")),
             }
         }
     };
 
     publish_verdict(&github_output_path, &event_name, &verdict, started_at);
+    publish_rust_test_selection(&github_output_path, &verdict, &rust_test_selection);
     Ok(())
 }
 
-type HistoryVerdict = Option<ChangeScopeVerdict>;
+type HistoryVerdict = Option<(ChangeScopeVerdict, RustTestSelection)>;
+
+fn every_rust_test(reason: &str) -> RustTestSelection {
+    RustTestSelection::All {
+        reason: reason.to_owned(),
+    }
+}
+
+/// Only a pull request is narrowed: the default branch keeps the full run
+/// that proves the whole tree, and a pull request the macOS lanes skip has
+/// nothing to narrow.
+fn rust_test_selection_for_event(
+    repository_root: &Path,
+    event: CiEvent,
+    verdict: &ChangeScopeVerdict,
+    changed_paths: &[String],
+) -> RustTestSelection {
+    if event != CiEvent::PullRequest || !verdict.macos_verification_required {
+        return every_rust_test("not a pull request the macOS lanes verify");
+    }
+    rust_test_selection_for(
+        repository_root,
+        changed_paths,
+        verdict.native_inputs_changed,
+    )
+}
 
 fn resolve_verdict_from_history(
     repository_root: &Path,
@@ -300,13 +332,11 @@ fn resolve_verdict_from_history(
         native_inputs_changed,
         is_version_only_bump,
     );
-    Some(reuse_verified_tree_when_proven(
-        repository_root,
-        event,
-        verdict,
-        &changed_paths,
-        &head_sha,
-    ))
+    let rust_test_selection =
+        rust_test_selection_for_event(repository_root, event, &verdict, &changed_paths);
+    let verdict =
+        reuse_verified_tree_when_proven(repository_root, event, verdict, &changed_paths, &head_sha);
+    Some((verdict, rust_test_selection))
 }
 
 fn reuse_verified_tree_when_proven(
@@ -525,6 +555,53 @@ fn publish_verdict(
         verdict.catalog_check_required,
         verdict.opencode_plugin_check_required,
         started_at.elapsed().as_secs()
+    );
+}
+
+/// Publishes the selection and the macOS Rust lanes it needs. A pull request
+/// that ran only some packages is never recorded as a verified tree (see
+/// `record-verified-work`), so its merge runs every lane on the default branch.
+fn publish_rust_test_selection(
+    github_output_path: &str,
+    verdict: &ChangeScopeVerdict,
+    rust_test_selection: &RustTestSelection,
+) {
+    let lane_requirements =
+        rust_lane_requirements(verdict.macos_verification_required, rust_test_selection);
+    let selection_value = selection_output_value(rust_test_selection);
+    let mut github_output = std::fs::OpenOptions::new()
+        .append(true)
+        .open(github_output_path)
+        .expect("GITHUB_OUTPUT should be appendable");
+    use std::io::Write;
+    writeln!(github_output, "rust_test_selection={selection_value}").unwrap();
+    writeln!(
+        github_output,
+        "rust_core_required={}",
+        lane_requirements.rust_core
+    )
+    .unwrap();
+    writeln!(
+        github_output,
+        "rest_contracts_required={}",
+        lane_requirements.rest_contracts
+    )
+    .unwrap();
+    writeln!(
+        github_output,
+        "e2e_journeys_required={}",
+        lane_requirements.e2e_journeys
+    )
+    .unwrap();
+    let selection_reason = match rust_test_selection {
+        RustTestSelection::All { reason } => reason.as_str(),
+        RustTestSelection::Packages(_) => "affected packages",
+    };
+    eprintln!(
+        "[ci-change-scope] rust_test_selection={selection_value} reason=\"{selection_reason}\" rust_core_required={} rest_contracts_required={} e2e_journeys_required={}",
+        lane_requirements.rust_core,
+        lane_requirements.rest_contracts,
+        lane_requirements.e2e_journeys
     );
 }
 

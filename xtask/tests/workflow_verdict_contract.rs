@@ -459,7 +459,7 @@ fn should_still_fail_a_swift_lane_that_ran_and_failed_whether_or_not_it_was_requ
 /// with the classifier's consent. A placeholder the caller already filled is
 /// gone from the script, so this only fills what the caller left.
 fn with_untouched_linux_lanes_skipped(script: String) -> String {
-    script
+    with_full_rust_test_selection(script)
         .replace(
             "${{ needs.detect-changes.outputs.notices_inputs_changed }}",
             "false",
@@ -475,6 +475,152 @@ fn with_untouched_linux_lanes_skipped(script: String) -> String {
             "false",
         )
         .replace("${{ needs.opencode-plugin.result }}", "skipped")
+}
+
+/// Fills the test impact selection's lane flags as a full run sets them, so
+/// a scenario that does not name them is decided by the older rules alone.
+/// A placeholder the caller already filled is gone, so this only fills the rest.
+fn with_full_rust_test_selection(script: String) -> String {
+    script
+        .replace(
+            "${{ needs.detect-changes.outputs.rust_core_required }}",
+            "true",
+        )
+        .replace(
+            "${{ needs.detect-changes.outputs.rest_contracts_required }}",
+            "true",
+        )
+        .replace(
+            "${{ needs.detect-changes.outputs.e2e_journeys_required }}",
+            "true",
+        )
+}
+
+/// The flags a test impact selection published for a pull request the macOS
+/// lanes verify, and the result every macOS lane reported.
+struct SelectionScenario {
+    rust_core_required: &'static str,
+    rest_contracts_required: &'static str,
+    e2e_journeys_required: &'static str,
+    lane_results: &'static [(&'static str, &'static str)],
+}
+
+fn verdict_passes_with_selection(selection_scenario: &SelectionScenario) -> bool {
+    let workflow = workflow_contract();
+    let verdict_steps = steps_of(required_job(&workflow, "verdict"), "verdict");
+    let verdict_step = find_step_by_name(
+        &verdict_steps,
+        "Fail closed unless every lane is green or legitimately skipped",
+    );
+    let mut script = run_text_of(verdict_step, "verdict")
+        .replace(
+            "${{ needs.detect-changes.outputs.macos_verification_required }}",
+            "true",
+        )
+        .replace(
+            "${{ needs.detect-changes.outputs.swift_node_required }}",
+            "true",
+        )
+        .replace(
+            "${{ needs.detect-changes.outputs.rust_core_required }}",
+            selection_scenario.rust_core_required,
+        )
+        .replace(
+            "${{ needs.detect-changes.outputs.rest_contracts_required }}",
+            selection_scenario.rest_contracts_required,
+        )
+        .replace(
+            "${{ needs.detect-changes.outputs.e2e_journeys_required }}",
+            selection_scenario.e2e_journeys_required,
+        )
+        .replace("${{ needs.detect-changes.result }}", "success")
+        .replace("${{ needs.static.result }}", "success")
+        .replace("${{ needs.config-contracts.result }}", "success");
+    script = with_untouched_linux_lanes_skipped(script);
+    for lane in MACOS_GATED_LANES {
+        let mut lane_result = "success";
+        for (named_lane, named_result) in selection_scenario.lane_results {
+            if *named_lane == lane {
+                lane_result = named_result;
+            }
+        }
+        script = script.replace(&format!("${{{{ needs.{lane}.result }}}}"), lane_result);
+    }
+    let script_directory = tempfile::tempdir().expect("a temporary directory");
+    let script_path = script_directory.path().join("verdict.sh");
+    std::fs::write(&script_path, script).expect("the verdict script should persist");
+    std::process::Command::new("bash")
+        .arg(&script_path)
+        .output()
+        .expect("the verdict script should execute")
+        .status
+        .success()
+}
+
+/// A Swift-only pull request selects no package: the build and every Rust
+/// lane skip, and the gate still passes on the Swift and xtask lanes.
+#[test]
+fn should_pass_a_pull_request_whose_selection_leaves_out_every_rust_lane() {
+    assert!(verdict_passes_with_selection(&SelectionScenario {
+        rust_core_required: "false",
+        rest_contracts_required: "false",
+        e2e_journeys_required: "false",
+        lane_results: &[
+            ("rust-core", "skipped"),
+            ("unit-tests", "skipped"),
+            ("integration-tests", "skipped"),
+            ("rest-contracts", "skipped"),
+            ("e2e-journeys", "skipped"),
+        ],
+    }));
+}
+
+#[test]
+fn should_pass_a_selection_without_the_daemon_that_skips_rest_and_e2e() {
+    assert!(verdict_passes_with_selection(&SelectionScenario {
+        rust_core_required: "true",
+        rest_contracts_required: "false",
+        e2e_journeys_required: "false",
+        lane_results: &[("rest-contracts", "skipped"), ("e2e-journeys", "skipped")],
+    }));
+}
+
+/// The selection may only leave out the lanes its own flags name: a skipped
+/// lane it required, or a skipped lane it never mentions, still fails.
+#[test]
+fn should_fail_a_lane_skipped_while_the_selection_requires_it() {
+    assert!(!verdict_passes_with_selection(&SelectionScenario {
+        rust_core_required: "true",
+        rest_contracts_required: "true",
+        e2e_journeys_required: "false",
+        lane_results: &[("rest-contracts", "skipped"), ("e2e-journeys", "skipped")],
+    }));
+    assert!(!verdict_passes_with_selection(&SelectionScenario {
+        rust_core_required: "true",
+        rest_contracts_required: "true",
+        e2e_journeys_required: "true",
+        lane_results: &[("rust-core", "skipped")],
+    }));
+    assert!(!verdict_passes_with_selection(&SelectionScenario {
+        rust_core_required: "false",
+        rest_contracts_required: "false",
+        e2e_journeys_required: "false",
+        lane_results: &[("neural-engine", "skipped")],
+    }));
+}
+
+#[test]
+fn should_fail_a_selected_lane_that_ran_and_failed() {
+    assert!(!verdict_passes_with_selection(&SelectionScenario {
+        rust_core_required: "true",
+        rest_contracts_required: "false",
+        e2e_journeys_required: "false",
+        lane_results: &[
+            ("unit-tests", "failure"),
+            ("rest-contracts", "skipped"),
+            ("e2e-journeys", "skipped")
+        ],
+    }));
 }
 
 /// One Linux lane the classifier opens on its own: the classifier output that
