@@ -80,7 +80,6 @@
             "approximate_memory_bytes": 1825361094,
             "role": "chat",
             "public": true,
-            "retiring": true,
             "description": "A small, fast, all-around model for daily tasks - chatting, solving problems, using tools, and looking at pictures. It fits comfortably on most Macs, answers quickly, and keeps a large memory window for long conversations. Doubles as a lightweight assistant that helps bigger models respond faster.",
             "capabilities": {
                 "supports_reasoning": true,
@@ -100,7 +99,6 @@
             "approximate_memory_bytes": 2899102914,
             "role": "chat",
             "public": true,
-            "retiring": true,
             "description": "A slightly larger all-around model for everyday use - chatting, reasoning, using tools, and understanding images. Runs on most Macs, balances speed and capability, and keeps a large memory window for long conversations and documents.",
             "capabilities": {
                 "supports_reasoning": true,

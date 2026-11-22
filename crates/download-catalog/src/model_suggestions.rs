@@ -318,7 +318,6 @@ fn is_ladder_entry(entry: &DownloadCatalogEntry) -> bool {
             DownloadCatalogRole::Chat | DownloadCatalogRole::Coding
         )
         && !entry.experimental()
-        && !entry.retiring()
 }
 
 pub(crate) fn lead_model_id(entry: &DownloadCatalogEntry) -> &str {

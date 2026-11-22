@@ -98,7 +98,7 @@ test("should_replace_the_first_visit_question_with_on_this_mac_once_a_model_is_h
 test("should_press_exactly_one_chip_and_none_while_a_search_spans_every_section", () => {
     const filtered = renderModelsPage([entryNamed("Talker")], `downloadModelsActiveFilter = "chat";`);
     const searching = renderModelsPage(
-        [entryNamed("Talker"), entryNamed("Old", { retiring: true })],
+        [entryNamed("Talker"), entryNamed("Old", { experimental: true })],
         `downloadModelsActiveFilter = "chat"; downloadModelsSearchQuery = "old";`
     );
 
@@ -359,16 +359,16 @@ test("should_list_every_kind_of_model_under_all_with_a_chip_each", () => {
         entryNamed("Decider", { role: "decision" }),
         entryNamed("Searcher", { role: "helper" }),
         entryNamed("Early", { experimental: true }),
-        entryNamed("Old", { retiring: true })
+        entryNamed("Old")
     ]);
     const catalogContainer = downloadModelsDocument.catalogContainer;
     const sectionTitles = findRenderedElementsByClass(catalogContainer, "download-models-group-heading")
         .map((groupHeading) => groupHeading.children[0].textContent);
 
-    assert.deepEqual(sectionTitles, ["Chat", "Pictures", "Read aloud", "Decisions", "Text search", "Experimental", "Leaving soon"]);
+    assert.deepEqual(sectionTitles, ["Chat", "Pictures", "Read aloud", "Decisions", "Text search", "Experimental"]);
     assert.deepEqual(
         textsOfClass(catalogContainer, "download-models-chip"),
-        ["All", "Chat", "Pictures", "Read aloud", "Decisions", "Text search", "Experimental", "Leaving soon"]
+        ["All", "Chat", "Pictures", "Read aloud", "Decisions", "Text search", "Experimental"]
     );
     assert.deepEqual(findRenderedElementsByClass(catalogContainer, "download-models-show-more"), [], "nothing hides behind More");
 });

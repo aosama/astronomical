@@ -111,7 +111,6 @@ fn expected_validated_catalog_document() -> serde_json::Value {
                 "role": "chat",
                 "get_started": true,
                 "experimental": false,
-                "retiring": false,
                 "removable_from_disk": false,
                 "public": true,
                 "ready_on_this_mac": false,
@@ -128,7 +127,6 @@ fn expected_validated_catalog_document() -> serde_json::Value {
                 "role": "coding",
                 "get_started": false,
                 "experimental": true,
-                "retiring": false,
                 "removable_from_disk": false,
                 "minimum_memory_bytes": 4_451_287_808_u64,
                 "public": true,
@@ -146,7 +144,6 @@ fn expected_validated_catalog_document() -> serde_json::Value {
                 "role": "helper",
                 "get_started": false,
                 "experimental": false,
-                "retiring": false,
                 "removable_from_disk": false,
                 "public": true,
                 "ready_on_this_mac": false,
@@ -163,7 +160,6 @@ fn expected_validated_catalog_document() -> serde_json::Value {
                 "role": "chat",
                 "get_started": false,
                 "experimental": false,
-                "retiring": false,
                 "removable_from_disk": false,
                 "public": true,
                 "ready_on_this_mac": false,
@@ -446,12 +442,11 @@ fn assert_published_entry_carries_role_memory_and_flags(
             || is_javascript_safe_positive_integer(minimum_memory_bytes.as_u64()),
         "published entry {published_entry_index} streaming floor must be absent or a JavaScript-safe integer"
     );
-    for flag_name in [
-        "get_started",
-        "experimental",
-        "retiring",
-        "removable_from_disk",
-    ] {
+    assert!(
+        published_entry.get("retiring").is_none(),
+        "published entry {published_entry_index} must not mark a supported model as leaving"
+    );
+    for flag_name in ["get_started", "experimental", "removable_from_disk"] {
         assert!(
             published_entry[flag_name].is_boolean(),
             "published entry {published_entry_index} must always carry boolean {flag_name}"

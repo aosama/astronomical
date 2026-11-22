@@ -81,15 +81,15 @@ test("should_order_no_rows_into_an_empty_list", () => {
     assert.equal(orderedRows.length, 0);
 });
 
-test("should_place_retiring_before_experimental_before_role_when_choosing_a_section", () => {
+test("should_place_experimental_before_role_when_choosing_a_section", () => {
     const scriptContext = createDownloadModelsContext();
     const sectionKeyOf = (catalogRow) => {
         scriptContext.catalogRow = catalogRow;
         return vm.runInContext("downloadModelsSectionKey(catalogRow)", scriptContext);
     };
 
-    assert.equal(sectionKeyOf({ role: "coding", retiring: true, experimental: true }), "leaving");
-    assert.equal(sectionKeyOf({ role: "coding", retiring: false, experimental: true }), "experimental");
+    assert.equal(sectionKeyOf({ role: "coding", experimental: true }), "experimental");
+    assert.equal(sectionKeyOf({ role: "chat", retiring: true }), "chat", "a model is never set aside as leaving");
     assert.equal(sectionKeyOf({ role: "coding" }), "chat", "coding models chat too, so they share the Chat section");
     assert.equal(sectionKeyOf({ role: "image_generation" }), "pictures");
     assert.equal(sectionKeyOf({ role: "helper" }), "search", "a text search model has its own section");
@@ -246,15 +246,15 @@ test("should_show_every_section_for_all_and_a_search_and_one_for_its_chip", () =
         `downloadModelsVisibleSectionKeys(${JSON.stringify(filterKey)}, ${JSON.stringify(searchQuery)})`, scriptContext
     )));
 
-    assert.deepEqual(visibleSectionKeys("all", ""), ["chat", "pictures", "voice", "decisions", "search", "experimental", "leaving"]);
+    assert.deepEqual(visibleSectionKeys("all", ""), ["chat", "pictures", "voice", "decisions", "search", "experimental"]);
     assert.deepEqual(visibleSectionKeys("decisions", ""), ["decisions"]);
-    assert.equal(visibleSectionKeys("pictures", "ornith").length, 7, "a search spans every section");
+    assert.equal(visibleSectionKeys("pictures", "ornith").length, 6, "a search spans every section");
 });
 
 test("should_offer_a_chip_only_for_sections_that_have_models_in_page_order", () => {
     const scriptContext = createDownloadModelsContext();
     scriptContext.catalogRows = catalogRowsFrom(scriptContext, [
-        modelNamed("Old", 1, { retiring: true }),
+        modelNamed("Early", 1, { experimental: true }),
         modelNamed("Reader", 1, { role: "speech" }),
         modelNamed("Example-9B", 6),
         modelNamed("Decider", 1, { role: "decision" })
@@ -263,6 +263,6 @@ test("should_offer_a_chip_only_for_sections_that_have_models_in_page_order", () 
         `downloadModelsFilterChips(${rowsScript}).map((filterChip) => filterChip.label)`, scriptContext
     )));
 
-    assert.deepEqual(chipLabels("catalogRows"), ["All", "Chat", "Read aloud", "Decisions", "Leaving soon"]);
+    assert.deepEqual(chipLabels("catalogRows"), ["All", "Chat", "Read aloud", "Decisions", "Experimental"]);
     assert.deepEqual(chipLabels("[]"), ["All"], "an empty catalog still offers All");
 });

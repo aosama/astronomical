@@ -8,16 +8,16 @@
 // "more", it does a different job. Coding models live in Chat: every one of
 // them also chats, and a separate Code section split one model family across
 // two lists. What sets them apart is shown as an ability, "Tuned for coding".
-// Experimental and leaving-soon builds keep sections of their own so an early
-// or departing build never sits among the everyday ones.
+// Experimental builds keep a section of their own so an early build never sits
+// among the everyday ones. Nothing is ever marked as leaving: a supported model
+// stays, and whether to use it is the person's choice.
 const DOWNLOAD_MODELS_SECTIONS = [
     { key: "chat", title: "Chat", note: "Talk, write, ask about photos and get help with code." },
     { key: "pictures", title: "Pictures", note: "Turn a description into an image." },
     { key: "voice", title: "Read aloud", note: "Read text aloud, for the terminal and other programs." },
     { key: "decisions", title: "Decisions", note: "Answer a question with one of a few set answers, for other programs. You do not chat with these." },
     { key: "search", title: "Text search", note: "Find passages that mean the same thing, for other features. You do not chat with these." },
-    { key: "experimental", title: "Experimental", note: "Early builds that may be slower or less reliable." },
-    { key: "leaving", title: "Leaving soon", note: "These leave the catalog in a future release. A copy already on this Mac keeps working." }
+    { key: "experimental", title: "Experimental", note: "Early builds that may be slower or less reliable." }
 ];
 const DOWNLOAD_MODELS_SECTION_KEY_BY_ROLE = {
     chat: "chat",
@@ -64,11 +64,9 @@ const DOWNLOAD_MODELS_ABILITIES = [
 // is rounded hard because it is a feel for size, not a promise.
 const DOWNLOAD_MODELS_WORDS_PER_TOKEN = 0.75;
 
-// Retiring wins over everything so a model on its way out is never offered
-// beside the ones replacing it; experimental wins over role so an early build
-// never appears in an everyday section.
+// Experimental wins over role so an early build never appears in an everyday
+// section.
 function downloadModelsSectionKey(catalogRow) {
-    if (catalogRow.retiring) return "leaving";
     if (catalogRow.experimental) return "experimental";
     return DOWNLOAD_MODELS_SECTION_KEY_BY_ROLE[catalogRow.role];
 }

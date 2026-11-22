@@ -91,7 +91,7 @@ pub(crate) fn validate_catalog_builds(
 }
 
 /// A build is folded under its lead, so it must be listed where the lead is: an
-/// experimental or retiring entry has its own section, and a Get started pick is
+/// experimental entry has its own section, and a Get started pick is
 /// shown on its own. A lead that is itself a build would fold twice.
 fn validate_one_build(
     entries: &[DownloadCatalogEntry],
@@ -99,7 +99,7 @@ fn validate_one_build(
     catalog_entry: &DownloadCatalogEntry,
     build: &DownloadCatalogBuild,
 ) -> Result<(), DownloadCatalogError> {
-    if catalog_entry.get_started() || catalog_entry.experimental() || catalog_entry.retiring() {
+    if catalog_entry.get_started() || catalog_entry.experimental() {
         return Err(DownloadCatalogError::InvalidBuild { entry_index });
     }
     let Some((lead_index, lead_entry)) = entries
@@ -114,7 +114,6 @@ fn validate_one_build(
     }
     let lead_is_listed_apart = lead_entry.build().is_some()
         || lead_entry.experimental()
-        || lead_entry.retiring()
         || !roles_share_a_section(catalog_entry.role(), lead_entry.role());
     if lead_is_listed_apart {
         return Err(DownloadCatalogError::InvalidBuildLead { entry_index });

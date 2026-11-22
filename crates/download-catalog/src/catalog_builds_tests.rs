@@ -148,7 +148,7 @@ fn should_refuse_a_build_of_itself() {
 
 #[test]
 fn should_refuse_a_build_listed_apart_from_its_lead() {
-    for listed_apart_flag in ["experimental", "retiring", "get_started"] {
+    for listed_apart_flag in ["experimental", "get_started"] {
         let mut build_overrides = build_fields("Lead", "more_detail").to_vec();
         build_overrides.push((listed_apart_flag, json!(true)));
         let parse_error = parse_catalog(vec![
@@ -168,10 +168,9 @@ fn should_refuse_a_build_listed_apart_from_its_lead() {
 
 #[test]
 fn should_refuse_a_lead_that_is_a_build_or_listed_elsewhere() {
-    let lead_overrides: [Vec<(&str, Value)>; 4] = [
+    let lead_overrides: [Vec<(&str, Value)>; 3] = [
         build_fields("Root", "draft_model").to_vec(),
         vec![("experimental", json!(true))],
-        vec![("retiring", json!(true))],
         vec![
             ("role", json!("image_generation")),
             ("family", json!("flux2_klein")),

@@ -373,7 +373,7 @@ fn should_not_offer_more_detail_when_a_build_here_is_at_least_as_large() {
     );
 }
 
-// The parser already refuses an experimental or retiring Get started pick, so
+// The parser already refuses an experimental Get started pick, so
 // the ladder is exactly the Get started chat and coding picks.
 #[test]
 fn should_climb_only_the_get_started_picks() {

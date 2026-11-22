@@ -252,7 +252,6 @@ function downloadModelsCatalogRowFromEntry(catalogEntry) {
         role: catalogEntry.role,
         getStarted: catalogEntry.get_started === true,
         experimental: catalogEntry.experimental === true,
-        retiring: catalogEntry.retiring === true,
         minimumMemoryBytes: isDownloadModelsStreamingFloor(catalogEntry.minimum_memory_bytes)
             ? catalogEntry.minimum_memory_bytes
             : null,
