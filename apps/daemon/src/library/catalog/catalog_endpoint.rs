@@ -130,6 +130,9 @@ struct LibraryCatalogEntryResponse {
     minimum_memory_bytes: Option<u64>,
     public: bool,
     ready_on_this_mac: bool,
+    /// True also for a copy the engine serves that the Library has not
+    /// verified (copied by hand, or another revision); On this Mac lists it.
+    served_on_this_mac: bool,
     removable_from_disk: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     destination_directory: Option<String>,
@@ -225,6 +228,7 @@ impl LibraryCatalogEntryResponse {
             minimum_memory_bytes: catalog_entry.minimum_memory_bytes(),
             public: true,
             ready_on_this_mac: projection.ready_on_this_mac,
+            served_on_this_mac: projection.served_on_this_mac,
             removable_from_disk,
             destination_directory,
             download_state: projection.download_state,

@@ -91,14 +91,15 @@ async fn resolve_library_model_folder(
     ready_model_folder(matching_projection, published_download_folder)
 }
 
-/// A discovered model reveals the folder discovery found it in; a model that
-/// is ready only through a validated download reveals its published folder.
+/// A discovered model, ready or only served from a copy, reveals the folder
+/// discovery found it in; a model that is ready only through a validated
+/// download reveals its published folder.
 pub(crate) fn ready_model_folder(
     matching_projection: Option<&CatalogEntryProjection<'_>>,
     published_download_folder: Option<PathBuf>,
 ) -> Result<PathBuf, LibraryRevealRefusal> {
     let projection = matching_projection.ok_or(LibraryRevealRefusal::UnknownModel)?;
-    if !projection.ready_on_this_mac {
+    if !projection.ready_on_this_mac && !projection.served_on_this_mac {
         return Err(LibraryRevealRefusal::NotOnThisMac);
     }
     match &projection.discovered_model_directory {
