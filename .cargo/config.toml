@@ -564,6 +564,16 @@ test-quantization-mixture-of-experts = "run -p xtask -- test-run --package astro
 # afterwards). It loads real models on the GPU, so check Development and
 # Stable are idle first. `cargo test -p xtask --bin xtask measure_speed` runs
 # its tests, which never touch an instance.
+# Test impact selection (CI only): `cargo xtask classify-scope` publishes
+# rust_test_selection for a pull request (`all`, `none`, or the affected
+# packages: those owning a changed file or reading it from outside their
+# folder, plus every package depending on them), and the macOS build runs
+# `cargo xtask selected-cargo --selection VALUE ALIAS [ARGUMENT ...]`, which
+# runs a lane alias with its -p packages and --test targets narrowed to that
+# selection, or skips it when nothing is left. Any path it cannot place, a
+# manifest, Cargo.lock, .cargo/ or native inputs selects `all`; the default
+# branch always runs `all`. `cargo test -p xtask --bin xtask
+# rust_test_selection` runs its tests.
 xtask = "run -p xtask --"
 
 # Compile the whole workspace across ALL targets without running anything;

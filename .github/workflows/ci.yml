@@ -64,6 +64,13 @@ jobs:
       catalog_check_required: ${{ steps.classify.outputs.catalog_check_required }}
       opencode_plugin_check_required: ${{ steps.classify.outputs.opencode_plugin_check_required }}
       swift_node_required: ${{ steps.classify.outputs.swift_node_required }}
+      # Test impact selection (xtask/src/rust_test_selection.rs): on a pull
+      # request, `all`, `none` or the packages the change can affect; every
+      # other run is `all`. The three flags say which macOS Rust lanes run.
+      rust_test_selection: ${{ steps.classify.outputs.rust_test_selection }}
+      rust_core_required: ${{ steps.classify.outputs.rust_core_required }}
+      rest_contracts_required: ${{ steps.classify.outputs.rest_contracts_required }}
+      e2e_journeys_required: ${{ steps.classify.outputs.e2e_journeys_required }}
       head_tree_id: ${{ steps.head-tree.outputs.tree_id }}
     steps:
       - name: Check out source history
@@ -97,7 +104,9 @@ jobs:
   # coordination. Keep the concurrency group's `github_actions_cache` owner set in
   # scripts/ci/tests/test-ci-native-cache-coordination.sh in sync.
   rust-core:
-    if: ${{ always() && (needs.detect-changes.result != 'success' || needs.detect-changes.outputs.macos_verification_required == 'true') }}
+    # A pull request whose selection is empty (only Swift, web or files no
+    # Rust package reads) skips this build and the lanes that use its archives.
+    if: ${{ always() && (needs.detect-changes.result != 'success' || needs.detect-changes.outputs.rust_core_required == 'true') }}
     needs: detect-changes
     # Descriptive job name, duration-free: this job builds everything and
     # packs the nextest archives the per-tier test jobs consume; test
@@ -360,6 +369,8 @@ jobs:
         timeout-minutes: 12
       - name: Compile integration lane tests
         shell: bash
+        env:
+          RUST_TEST_SELECTION: ${{ needs.detect-changes.outputs.rust_test_selection || 'all' }}
         run: |
           set -euo pipefail
           # Cargo captures build-script stderr, so the native CMake rebuild would
@@ -380,7 +391,9 @@ jobs:
           # different features, about 36 of this step's 108 seconds. The archive
           # aliases carry the same package list, so packing them compiles nothing.
           # This also builds the daemon and fixture workers the E2E journeys spawn.
-          cargo test-integration --timings --no-run --test rest_api_tests --test e2e
+          # The selection narrows the alias's packages and test targets to the
+          # pull request's affected packages; `all` runs the alias unchanged.
+          xtask selected-cargo --selection "$RUST_TEST_SELECTION" test-integration --timings --no-run --test rest_api_tests --test e2e
         timeout-minutes: 12
       - name: Classify native build result
         id: native-build-result
@@ -405,13 +418,15 @@ jobs:
       # recompiling (issue #1553 phase 2b). The archive aliases carry the
       # same package selections the compile step built.
       - name: Archive test binaries
+        env:
+          RUST_TEST_SELECTION: ${{ needs.detect-changes.outputs.rust_test_selection || 'all' }}
         run: |
           trap 'scripts/ci/ci-step-timing.sh end archive-test-binaries' EXIT
           scripts/ci/ci-step-timing.sh begin archive-test-binaries
           mkdir -p target/nextest-archives
-          cargo nextest-archive-integration
-          cargo nextest-archive-rest-api
-          cargo nextest-archive-e2e
+          xtask selected-cargo --selection "$RUST_TEST_SELECTION" nextest-archive-integration
+          xtask selected-cargo --selection "$RUST_TEST_SELECTION" nextest-archive-rest-api
+          xtask selected-cargo --selection "$RUST_TEST_SELECTION" nextest-archive-e2e
         timeout-minutes: 5
 
       # Code-shape enforcement is pre-commit territory ONLY (policy,
@@ -429,6 +444,7 @@ jobs:
           if-no-files-found: error
           compression-level: 0
       - name: Upload REST test archive
+        if: ${{ needs.detect-changes.outputs.rest_contracts_required != 'false' }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: nextest-archive-rest-api
@@ -437,6 +453,7 @@ jobs:
           if-no-files-found: error
           compression-level: 0
       - name: Upload E2E test archive
+        if: ${{ needs.detect-changes.outputs.e2e_journeys_required != 'false' }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: nextest-archive-e2e
@@ -1072,6 +1089,10 @@ jobs:
           name: native-metallib
           path: ${{ runner.temp }}/native-metallib
       - name: Run Unit tests from the build archive
+        env:
+          # A narrowed archive may hold no test of this lane's kind; a full
+          # run still fails on zero tests, which would mean a broken archive.
+          NO_TESTS_POLICY: ${{ needs.detect-changes.outputs.rust_test_selection == 'all' && 'fail' || 'warn' }}
         run: |
           set -o pipefail
           # nextest canonicalizes the extract destination and refuses a
@@ -1082,7 +1103,7 @@ jobs:
           # runtime's environment override points at the builder's metallib;
           # its digest was pinned into these binaries at compile time.
           export ASTRONOMICAL_MLX_METALLIB_PATH="$RUNNER_TEMP/native-metallib/mlx.metallib"
-          cargo-nextest nextest run --archive-file "$RUNNER_TEMP/nextest-archive/integration.tar.zst" --extract-to "$RUNNER_TEMP/nextest-extract" --extract-overwrite -E 'kind(lib)'
+          cargo-nextest nextest run --no-tests="$NO_TESTS_POLICY" --archive-file "$RUNNER_TEMP/nextest-archive/integration.tar.zst" --extract-to "$RUNNER_TEMP/nextest-extract" --extract-overwrite -E 'kind(lib)'
 
   integration-tests:
     name: Integration tests
@@ -1106,14 +1127,21 @@ jobs:
           name: nextest-archive-integration
           path: ${{ runner.temp }}/nextest-archive
       - name: Run Integration tests from the build archive
+        env:
+          # A narrowed archive may hold no test of this lane's kind; a full
+          # run still fails on zero tests, which would mean a broken archive.
+          NO_TESTS_POLICY: ${{ needs.detect-changes.outputs.rust_test_selection == 'all' && 'fail' || 'warn' }}
         run: |
           set -o pipefail
           mkdir -p "$RUNNER_TEMP/nextest-extract"
-          cargo-nextest nextest run --no-fail-fast --archive-file "$RUNNER_TEMP/nextest-archive/integration.tar.zst" --extract-to "$RUNNER_TEMP/nextest-extract" --extract-overwrite -E 'kind(test)'
+          cargo-nextest nextest run --no-fail-fast --no-tests="$NO_TESTS_POLICY" --archive-file "$RUNNER_TEMP/nextest-archive/integration.tar.zst" --extract-to "$RUNNER_TEMP/nextest-extract" --extract-overwrite -E 'kind(test)'
 
   rest-contracts:
     name: REST contracts
     needs: [detect-changes, rust-core]
+    # Runs only when the selection holds the daemon, whose rest_api_tests
+    # this lane runs; a failed classification keeps it running.
+    if: ${{ needs.detect-changes.outputs.rest_contracts_required != 'false' }}
     runs-on: xcode-27
     timeout-minutes: 6
     steps:
@@ -1146,6 +1174,9 @@ jobs:
   e2e-journeys:
     name: End-to-end journeys
     needs: [detect-changes, rust-core]
+    # Runs only when the selection holds the end-to-end package; a failed
+    # classification keeps it running.
+    if: ${{ needs.detect-changes.outputs.e2e_journeys_required != 'false' }}
     runs-on: xcode-27
     timeout-minutes: 6
     steps:
@@ -1275,12 +1306,10 @@ jobs:
         run: |
           trap 'scripts/ci/ci-step-timing.sh end xtask-unit-tests' EXIT
           scripts/ci/ci-step-timing.sh begin xtask-unit-tests
-          cargo test --locked -p xtask --bin xtask
-          cargo test --locked -p xtask --test integration_gh_shim_journeys
-          cargo test --locked -p xtask --test integration_install_tools_journeys
-          cargo test --locked -p xtask --test integration_bootstrap_journeys
-          cargo test --locked -p xtask --test integration_disposable_target_journeys
-          cargo test --locked -p xtask --test disposable_target_retirement_contract
+          # One cargo command: it checks the build once and compiles the five
+          # journey binaries in parallel, where six commands compiled them one
+          # after another (about 3 of this step's 25 seconds).
+          cargo test --locked -p xtask --bin xtask --test integration_gh_shim_journeys --test integration_install_tools_journeys --test integration_bootstrap_journeys --test integration_disposable_target_journeys --test disposable_target_retirement_contract
         timeout-minutes: 5
       # The fixture features pull in image and base64 for this one library, so its
       # tests rebuild several crates. Here they cost the build job nothing: about 6
@@ -1358,6 +1387,9 @@ jobs:
           classification_result="${{ needs.detect-changes.result }}"
           macos_verification_required="${{ needs.detect-changes.outputs.macos_verification_required }}"
           swift_node_required="${{ needs.detect-changes.outputs.swift_node_required }}"
+          rust_core_required="${{ needs.detect-changes.outputs.rust_core_required }}"
+          rest_contracts_required="${{ needs.detect-changes.outputs.rest_contracts_required }}"
+          e2e_journeys_required="${{ needs.detect-changes.outputs.e2e_journeys_required }}"
           rust_core_result="${{ needs.rust-core.result }}"
           unit_tests_result="${{ needs.unit-tests.result }}"
           integration_tests_result="${{ needs.integration-tests.result }}"
@@ -1375,6 +1407,17 @@ jobs:
           opencode_plugin_result="${{ needs.opencode-plugin.result }}"
           [ "$classification_result" = "success" ] \
             || fail "classification-result=$classification_result"
+          # Test impact selection leaves a lane out only through its own flag,
+          # which the classifier sets false only for a pull request whose
+          # affected packages the lane does not test.
+          lane_left_out_by_selection() {
+            case "$1" in
+              rust-core|unit-tests|integration-tests) [ "$rust_core_required" = "false" ] ;;
+              rest-contracts) [ "$rest_contracts_required" = "false" ] ;;
+              e2e-journeys) [ "$e2e_journeys_required" = "false" ] ;;
+              *) return 1 ;;
+            esac
+          }
           macos_lanes_may_skip=false
           if [ "$macos_verification_required" != "true" ]; then
             macos_lanes_may_skip=true
@@ -1389,6 +1432,8 @@ jobs:
               skipped)
                 if [ "$lane_name" = swift-node ] && [ "$swift_node_required" != "true" ]; then
                   printf '[ci-verdict] lane=%s result=skipped classification=swift-node-not-required\n' "$lane_name"
+                elif lane_left_out_by_selection "$lane_name"; then
+                  printf '[ci-verdict] lane=%s result=skipped classification=not-in-rust-test-selection\n' "$lane_name"
                 elif [ "$macos_lanes_may_skip" = true ]; then
                   printf '[ci-verdict] lane=%s result=skipped classification=macos-not-required\n' "$lane_name"
                 else
@@ -1451,7 +1496,9 @@ jobs:
   record-verified-work:
     name: Record verified work
     needs: [detect-changes, verdict]
-    if: ${{ !cancelled() && needs.verdict.result == 'success' && needs.detect-changes.outputs.macos_verification_required == 'true' && github.event_name != 'workflow_dispatch' }}
+    # Only a run that tested every package proves the tree: a pull request
+    # narrowed by test impact selection leaves its merge a full run.
+    if: ${{ !cancelled() && needs.verdict.result == 'success' && needs.detect-changes.outputs.macos_verification_required == 'true' && needs.detect-changes.outputs.rust_test_selection == 'all' && github.event_name != 'workflow_dispatch' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 2
     steps:
