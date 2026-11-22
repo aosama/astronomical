@@ -92,22 +92,10 @@ test("should_place_retiring_before_experimental_before_role_when_choosing_a_sect
     assert.equal(sectionKeyOf({ role: "coding", retiring: false, experimental: true }), "experimental");
     assert.equal(sectionKeyOf({ role: "coding" }), "chat", "coding models chat too, so they share the Chat section");
     assert.equal(sectionKeyOf({ role: "image_generation" }), "pictures");
-    assert.equal(sectionKeyOf({ role: "helper" }), "helpers");
-    assert.equal(sectionKeyOf({ role: "decision" }), "helpers", "nobody chats with a decision model");
-    assert.equal(sectionKeyOf({ role: "speech" }), "helpers", "nobody chats with a speech model");
+    assert.equal(sectionKeyOf({ role: "helper" }), "search", "a text search model has its own section");
+    assert.equal(sectionKeyOf({ role: "decision" }), "decisions", "so does a decision model");
+    assert.equal(sectionKeyOf({ role: "speech" }), "voice", "and a model that reads aloud");
     assert.equal(sectionKeyOf({ role: "chat" }), "chat");
-});
-
-test("should_show_everyday_sections_for_all_the_rest_for_more_and_every_section_while_searching", () => {
-    const scriptContext = createDownloadModelsContext();
-    const visibleSectionKeys = (filterKey, searchQuery) => JSON.parse(JSON.stringify(vm.runInContext(
-        `downloadModelsVisibleSectionKeys(${JSON.stringify(filterKey)}, ${JSON.stringify(searchQuery)})`, scriptContext
-    )));
-
-    assert.deepEqual(visibleSectionKeys("all", ""), ["chat", "pictures"]);
-    assert.deepEqual(visibleSectionKeys("more", ""), ["helpers", "experimental", "leaving"]);
-    assert.deepEqual(visibleSectionKeys("pictures", ""), ["pictures"]);
-    assert.equal(visibleSectionKeys("pictures", "ornith").length, 5, "a search spans every section");
 });
 
 test("should_match_a_search_against_the_model_id_source_and_texts_and_everything_when_empty", () => {
@@ -125,20 +113,6 @@ test("should_match_a_search_against_the_model_id_source_and_texts_and_everything
     assert.equal(matches("6-bit affine"), true);
     assert.equal(matches("everyday"), true);
     assert.equal(matches("flux"), false);
-});
-
-test("should_count_only_models_outside_the_everyday_sections_as_hidden", () => {
-    const scriptContext = createDownloadModelsContext();
-    scriptContext.catalogRows = catalogRowsFrom(scriptContext, [
-        modelNamed("Example-9B", 6),
-        modelNamed("Helper", 1, { role: "helper" }),
-        modelNamed("Early", 1, { experimental: true }),
-        modelNamed("Old", 1, { retiring: true })
-    ]);
-
-    assert.equal(vm.runInContext("downloadModelsHiddenModelCount(catalogRows)", scriptContext), 3);
-    assert.equal(vm.runInContext("downloadModelsHiddenModelCount(catalogRows.slice(0, 1))", scriptContext), 0);
-    assert.equal(vm.runInContext("downloadModelsHiddenModelCount([])", scriptContext), 0);
 });
 
 test("should_judge_fit_at_the_exact_memory_boundary_and_stream_only_with_a_measured_floor", () => {
@@ -252,15 +226,43 @@ test("should_put_coding_and_chat_models_in_one_section_ordered_by_size", () => {
     assert.deepEqual(chatModelIds, ["Talker", "Big-coder"]);
 });
 
-test("should_offer_no_code_filter_now_that_coding_models_live_in_chat", () => {
+test("should_offer_no_code_chip_now_that_coding_models_live_in_chat", () => {
     const scriptContext = createDownloadModelsContext();
-    const filterKeys = JSON.parse(JSON.stringify(
-        vm.runInContext("DOWNLOAD_MODELS_FILTERS.map((filterDefinition) => filterDefinition.key)", scriptContext)
+    scriptContext.catalogRows = catalogRowsFrom(scriptContext, [modelNamed("Coder", 22, { role: "coding" })]);
+    const chipKeys = JSON.parse(JSON.stringify(
+        vm.runInContext("downloadModelsFilterChips(catalogRows).map((filterChip) => filterChip.key)", scriptContext)
     ));
     const sectionKeys = JSON.parse(JSON.stringify(
         vm.runInContext("DOWNLOAD_MODELS_SECTIONS.map((catalogSection) => catalogSection.key)", scriptContext)
     ));
 
-    assert.deepEqual(filterKeys, ["all", "chat", "pictures", "more"]);
+    assert.deepEqual(chipKeys, ["all", "chat"]);
     assert.equal(sectionKeys.includes("code"), false);
+});
+
+test("should_show_every_section_for_all_and_a_search_and_one_for_its_chip", () => {
+    const scriptContext = createDownloadModelsContext();
+    const visibleSectionKeys = (filterKey, searchQuery) => JSON.parse(JSON.stringify(vm.runInContext(
+        `downloadModelsVisibleSectionKeys(${JSON.stringify(filterKey)}, ${JSON.stringify(searchQuery)})`, scriptContext
+    )));
+
+    assert.deepEqual(visibleSectionKeys("all", ""), ["chat", "pictures", "voice", "decisions", "search", "experimental", "leaving"]);
+    assert.deepEqual(visibleSectionKeys("decisions", ""), ["decisions"]);
+    assert.equal(visibleSectionKeys("pictures", "ornith").length, 7, "a search spans every section");
+});
+
+test("should_offer_a_chip_only_for_sections_that_have_models_in_page_order", () => {
+    const scriptContext = createDownloadModelsContext();
+    scriptContext.catalogRows = catalogRowsFrom(scriptContext, [
+        modelNamed("Old", 1, { retiring: true }),
+        modelNamed("Reader", 1, { role: "speech" }),
+        modelNamed("Example-9B", 6),
+        modelNamed("Decider", 1, { role: "decision" })
+    ]);
+    const chipLabels = (rowsScript) => JSON.parse(JSON.stringify(vm.runInContext(
+        `downloadModelsFilterChips(${rowsScript}).map((filterChip) => filterChip.label)`, scriptContext
+    )));
+
+    assert.deepEqual(chipLabels("catalogRows"), ["All", "Chat", "Read aloud", "Decisions", "Leaving soon"]);
+    assert.deepEqual(chipLabels("[]"), ["All"], "an empty catalog still offers All");
 });

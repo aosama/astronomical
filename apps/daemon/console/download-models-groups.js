@@ -3,35 +3,29 @@
 // model runs on this Mac.
 // Pure functions over catalog rows; nothing here touches the document.
 
-// Sections in page order. The first two are what most people come for; the
-// rest stay behind the More filter so a newcomer meets a short list, not twenty.
-// Coding models live in Chat: every one of them also chats, and a separate Code
-// section split one model family across two lists. What sets them apart is
-// shown as an ability, "Tuned for coding".
+// Sections in page order, one per kind of work, so every kind of model has a
+// place of its own: a model that reads aloud or answers set questions is not
+// "more", it does a different job. Coding models live in Chat: every one of
+// them also chats, and a separate Code section split one model family across
+// two lists. What sets them apart is shown as an ability, "Tuned for coding".
+// Experimental and leaving-soon builds keep sections of their own so an early
+// or departing build never sits among the everyday ones.
 const DOWNLOAD_MODELS_SECTIONS = [
-    { key: "chat", title: "Chat", note: "Talk, write, ask about photos and get help with code.", isEveryday: true },
-    { key: "pictures", title: "Pictures", note: "Turn a description into an image.", isEveryday: true },
-    { key: "helpers", title: "Helpers", note: "Background helpers other features use. You do not chat with these.", isEveryday: false },
-    { key: "experimental", title: "Experimental", note: "Early builds that may be slower or less reliable.", isEveryday: false },
-    { key: "leaving", title: "Leaving soon", note: "These leave the catalog in a future release. A copy already on this Mac keeps working.", isEveryday: false }
-];
-const DOWNLOAD_MODELS_FILTERS = [
-    { key: "all", label: "All" },
-    { key: "chat", label: "Chat" },
-    { key: "pictures", label: "Pictures" },
-    { key: "more", label: "More" }
+    { key: "chat", title: "Chat", note: "Talk, write, ask about photos and get help with code." },
+    { key: "pictures", title: "Pictures", note: "Turn a description into an image." },
+    { key: "voice", title: "Read aloud", note: "Read text aloud, for the terminal and other programs." },
+    { key: "decisions", title: "Decisions", note: "Answer a question with one of a few set answers, for other programs. You do not chat with these." },
+    { key: "search", title: "Text search", note: "Find passages that mean the same thing, for other features. You do not chat with these." },
+    { key: "experimental", title: "Experimental", note: "Early builds that may be slower or less reliable." },
+    { key: "leaving", title: "Leaving soon", note: "These leave the catalog in a future release. A copy already on this Mac keeps working." }
 ];
 const DOWNLOAD_MODELS_SECTION_KEY_BY_ROLE = {
     chat: "chat",
     coding: "chat",
     image_generation: "pictures",
-    helper: "helpers",
-    // A decision model answers typed questions for other programs; nobody
-    // chats with it, so it sits with the other background helpers.
-    decision: "helpers",
-    // A speech model reads text aloud for other programs and the terminal;
-    // nobody chats with it either.
-    speech: "helpers"
+    speech: "voice",
+    decision: "decisions",
+    helper: "search"
 };
 // How a model runs here. A model that fits shows how much of the memory it
 // uses, which tells two models apart where one word for both could not; the
@@ -97,16 +91,21 @@ function downloadModelsRowsInPageOrder(catalogRows) {
     );
 }
 
-// A search looks through every section, so a model behind More is still found.
+// "All" and any search show every section; a chip shows its own.
 function downloadModelsVisibleSectionKeys(activeFilterKey, searchQuery) {
-    if (searchQuery) return DOWNLOAD_MODELS_SECTIONS.map((section) => section.key);
-    if (activeFilterKey === "more") {
-        return DOWNLOAD_MODELS_SECTIONS.filter((section) => !section.isEveryday).map((section) => section.key);
-    }
-    if (activeFilterKey === "all") {
-        return DOWNLOAD_MODELS_SECTIONS.filter((section) => section.isEveryday).map((section) => section.key);
-    }
+    if (searchQuery || activeFilterKey === "all") return DOWNLOAD_MODELS_SECTIONS.map((section) => section.key);
     return [activeFilterKey];
+}
+
+// The chips the bar offers: All, then one per section that has a model, so no
+// chip ever leads to an empty list.
+function downloadModelsFilterChips(catalogRows) {
+    const occupiedSectionKeys = new Set(catalogRows.map(downloadModelsSectionKey));
+    return [{ key: "all", label: "All" }].concat(
+        DOWNLOAD_MODELS_SECTIONS
+            .filter((section) => occupiedSectionKeys.has(section.key))
+            .map((section) => ({ key: section.key, label: section.title }))
+    );
 }
 
 function downloadModelsRowMatchesQuery(catalogRow, searchQuery) {
@@ -117,12 +116,6 @@ function downloadModelsRowMatchesQuery(catalogRow, searchQuery) {
     ].join(" ").toLowerCase().includes(searchQuery);
 }
 
-function downloadModelsHiddenModelCount(catalogRows) {
-    const everydaySectionKeys = downloadModelsVisibleSectionKeys("all", "");
-    return catalogRows.filter(
-        (catalogRow) => !everydaySectionKeys.includes(downloadModelsSectionKey(catalogRow))
-    ).length;
-}
 
 // Fit compares the model's fully loaded memory with the serving ceiling, the
 // limit the engine actually loads within. Equal counts as fitting because the

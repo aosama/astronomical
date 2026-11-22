@@ -29,7 +29,7 @@ let downloadModelsRefreshPromise = null;
 let downloadModelsProgressSample = null;
 let downloadModelsMeasuredBytesPerSecond = null;
 // What the Add a model list shows: the lowercase search query and the section
-// filter ("all", a section key, or "more").
+// filter ("all" or a section key).
 let downloadModelsSearchQuery = "";
 let downloadModelsActiveFilter = "all";
 // The model whose details are open, by its model ID, or null.

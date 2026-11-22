@@ -151,12 +151,17 @@ function createDownloadModelsSuggestionCard(suggestion, isFirst) {
 
 function createDownloadModelsAddSection(catalogRows) {
     const section = createDownloadModelsElement("section", "download-models-add");
-    const visibleSectionKeys = downloadModelsVisibleSectionKeys(downloadModelsActiveFilter, downloadModelsSearchQuery);
+    const filterChips = downloadModelsFilterChips(catalogRows);
+    // A chip whose section emptied (its last model removed) falls back to All.
+    const activeFilterKey = filterChips.some((filterChip) => filterChip.key === downloadModelsActiveFilter)
+        ? downloadModelsActiveFilter
+        : "all";
+    const visibleSectionKeys = downloadModelsVisibleSectionKeys(activeFilterKey, downloadModelsSearchQuery);
     const sectionElements = DOWNLOAD_MODELS_SECTIONS
         .filter((catalogSection) => visibleSectionKeys.includes(catalogSection.key))
         .map((catalogSection) => createDownloadModelsCatalogSection(catalogSection, catalogRows))
         .filter((sectionElement) => sectionElement !== null);
-    const sectionChildren = [createDownloadModelsAddHeading(), createDownloadModelsFilterBar()];
+    const sectionChildren = [createDownloadModelsAddHeading(), createDownloadModelsFilterBar(filterChips, activeFilterKey)];
     sectionChildren.push(...sectionElements);
     if (sectionElements.length === 0) {
         sectionChildren.push(createDownloadModelsParagraph(
@@ -164,8 +169,6 @@ function createDownloadModelsAddSection(catalogRows) {
             "No model matches that search. Try a shorter word, or clear it to see everything."
         ));
     }
-    const showMoreButton = createDownloadModelsShowMoreButton(catalogRows);
-    if (showMoreButton) sectionChildren.push(showMoreButton);
     section.replaceChildren(...sectionChildren);
     return section;
 }
@@ -196,12 +199,14 @@ function downloadModelsAddHeadingMetaText(servingCeilingBytes, freeDiskBytes) {
     return metaParts.join(" · ");
 }
 
-function createDownloadModelsFilterBar() {
+function createDownloadModelsFilterBar(filterChips, activeFilterKey) {
     const filterBar = createDownloadModelsElement("div", "download-models-filter-bar");
     const chipGroup = createDownloadModelsElement("div", "download-models-chips");
     chipGroup.setAttribute("role", "group");
     chipGroup.setAttribute("aria-label", "What do you want to do?");
-    chipGroup.replaceChildren(...DOWNLOAD_MODELS_FILTERS.map(createDownloadModelsFilterChip));
+    chipGroup.replaceChildren(...filterChips.map(
+        (filterChip) => createDownloadModelsFilterChip(filterChip, activeFilterKey)
+    ));
     const searchInput = createDownloadModelsElement("input", "download-models-search");
     searchInput.id = "download-models-search";
     searchInput.type = "search";
@@ -219,8 +224,8 @@ function createDownloadModelsFilterBar() {
 }
 
 // While a search is active no chip is pressed: the search spans every section.
-function createDownloadModelsFilterChip(filterDefinition) {
-    const isPressed = downloadModelsActiveFilter === filterDefinition.key && !downloadModelsSearchQuery;
+function createDownloadModelsFilterChip(filterDefinition, activeFilterKey) {
+    const isPressed = activeFilterKey === filterDefinition.key && !downloadModelsSearchQuery;
     const chip = createDownloadModelsElement(
         "button",
         isPressed ? "download-models-chip download-models-chip-pressed" : "download-models-chip",
@@ -255,19 +260,6 @@ function createDownloadModelsCatalogSection(catalogSection, catalogRows) {
     return section;
 }
 
-function createDownloadModelsShowMoreButton(catalogRows) {
-    if (downloadModelsActiveFilter !== "all" || downloadModelsSearchQuery) return null;
-    const hiddenModelCount = downloadModelsHiddenModelCount(catalogRows);
-    if (hiddenModelCount === 0) return null;
-    const showMoreButton = createDownloadModelsElement(
-        "button",
-        "button button-secondary download-models-show-more",
-        "Show " + hiddenModelCount + " more: helpers, experimental builds and models leaving soon"
-    );
-    showMoreButton.type = "button";
-    showMoreButton.addEventListener("click", () => selectDownloadModelsFilter("more"));
-    return showMoreButton;
-}
 
 // A bar for the share of this Mac's model memory the model uses, plus the
 // words: "23.0 of 36.5 GB memory" when it fits, what happens when it does not.
