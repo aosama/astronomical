@@ -70,13 +70,17 @@ if git diff --cached --name-only | grep -q '\.rs$'; then
     # over-budget functions carry #[expect], so this single default-world
     # pass fails when a function crosses the budget without an expect, and
     # an #[expect] self-cleans when its function shrinks below the budget.
+    # The pass is `cargo xtask function-length-budget`: on macOS exactly
+    # `cargo clippy --workspace --all-targets`; on other hosts it leaves out
+    # the crates whose manifest declares macOS-only host platforms, and
+    # their dependents, which cannot build there.
     # Default world only: the pass is incremental over warm Cargo build outputs so commits
     # stay fast. Feature-gated acceptance tests get their own pass below;
     # every other feature-gated path stays linted by the developer's own
     # lane runs.
     printf '%s\n' "[pre-commit] status=start check=function-length-budget root=${REPOSITORY_ROOT}"
     budget_started_epoch_seconds="$(date +%s)"
-    if cargo clippy --workspace --all-targets; then
+    if cargo run --quiet --manifest-path "${REPOSITORY_ROOT}/xtask/Cargo.toml" -p xtask -- function-length-budget; then
         budget_elapsed_seconds=$(( $(date +%s) - budget_started_epoch_seconds ))
         printf '%s\n' "[pre-commit] status=success check=function-length-budget elapsed_seconds=${budget_elapsed_seconds}"
     else
@@ -96,11 +100,10 @@ fi
 if git diff --cached --name-only | grep -Eq '^crates/(model-serving|model-primitives|speech|artifact-validation|image-generation|engine-core|qwen35|qwen35-quantization-probe|decision-models)/'; then
     printf '%s\n' "[pre-commit] status=start check=model-serving-default-features root=${REPOSITORY_ROOT}"
     default_features_started_epoch_seconds="$(date +%s)"
-    # The quantization probe is MLX-only: it turns on direct-mlx for the Qwen
-    # crate and everything under it, so it is linted in its own call below
-    # rather than here, where it would switch this check's default world off.
-    if cargo clippy -p model-primitives -p speech -p artifact-validation -p image-generation -p engine-core -p qwen35 -p decision-models -p model-serving --all-targets \
-        && cargo clippy -p qwen35-quantization-probe --all-targets; then
+    # `cargo xtask model-serving-default-features` lints the crates in their
+    # default world and the quantization probe in its own call; on hosts other
+    # than macOS it leaves out the crates that host cannot build.
+    if cargo run --quiet --manifest-path "${REPOSITORY_ROOT}/xtask/Cargo.toml" -p xtask -- model-serving-default-features; then
         default_features_elapsed_seconds=$(( $(date +%s) - default_features_started_epoch_seconds ))
         printf '%s\n' "[pre-commit] status=success check=model-serving-default-features elapsed_seconds=${default_features_elapsed_seconds}"
     else

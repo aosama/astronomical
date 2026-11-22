@@ -148,5 +148,9 @@ pub(crate) fn available_bytes_on_volume(path: &Path) -> std::io::Result<u64> {
     if status != 0 {
         return Err(std::io::Error::last_os_error());
     }
-    Ok(u64::from(volume_statistics.f_bavail) * volume_statistics.f_frsize)
+    // `f_bavail` is 32-bit on macOS and already 64-bit on Linux, so the
+    // widening macOS needs is a no-op there.
+    #[allow(clippy::useless_conversion)]
+    let available_block_count = u64::from(volume_statistics.f_bavail);
+    Ok(available_block_count * volume_statistics.f_frsize)
 }

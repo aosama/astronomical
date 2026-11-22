@@ -38,7 +38,10 @@ use std::{
     process::Command,
 };
 
-use crate::native_host_platform::{NativeTargetPlatform, compiler_configure_arguments};
+use crate::native_host_platform::{
+    MLX_PACKAGE_INSTALL_RELATIVE_DIRECTORY, MLX_SUBPROJECT_BUILD_RELATIVE_DIRECTORY,
+    NativeTargetPlatform, compiler_configure_arguments, installs_mlx_package,
+};
 use crate::native_parallelism;
 use crate::native_progress::NativeBuildProgress;
 use crate::native_store::{NativeBuildArtifacts, NativeBuildProfile};
@@ -133,10 +136,10 @@ pub fn native_build_store_directory() -> Result<PathBuf, Box<dyn Error>> {
 /// Configures and builds the pinned MLX/MLX-C native runtime with CMake.
 ///
 /// Sequence: configure (the platform's compilers, plus the SDK and arm64 on
-/// macOS, Release, sanitized
-/// environment, archive locations, optional probe target) → build the
-/// `mlxc` aggregate target → optionally build the memory-contract probe
-/// binary. Every command reports through the progress recorder so hosted CI
+/// macOS, Release, sanitized environment, archive locations, optional probe
+/// target) → build the `mlxc` aggregate target → optionally build the
+/// memory-contract probe binary → on Linux, install MLX's own CMake package,
+/// whose exported targets the link reads. Every command reports through the progress recorder so hosted CI
 /// can watch the silent multi-minute stretches.
 pub fn build_pinned_native_runtime(
     native_source_directory: &Path,
@@ -206,6 +209,23 @@ pub fn build_pinned_native_runtime(
         native_build_progress,
     )?;
 
+    build_profile_and_platform_extras(
+        native_build_directory,
+        native_target_platform,
+        native_build_profile,
+        native_build_progress,
+    )
+}
+
+/// The steps beyond the `mlxc` target that a profile or platform adds: the
+/// memory-contract probe binary, and on Linux the install of MLX's own CMake
+/// package, whose exported targets the link reads.
+fn build_profile_and_platform_extras(
+    native_build_directory: &Path,
+    native_target_platform: NativeTargetPlatform,
+    native_build_profile: NativeBuildProfile,
+    native_build_progress: &NativeBuildProgress,
+) -> Result<(), Box<dyn Error>> {
     if native_build_profile.should_build_memory_contract_probe() {
         let mut probe_build_command = Command::new("cmake");
         probe_build_command
@@ -219,6 +239,25 @@ pub fn build_pinned_native_runtime(
         run_command(
             &mut probe_build_command,
             "native-memory-contract-probe",
+            native_build_progress,
+        )?;
+    }
+    if installs_mlx_package(native_target_platform) {
+        let mut package_install_command = Command::new("cmake");
+        package_install_command
+            .arg("--install")
+            .arg(native_build_directory.join(MLX_SUBPROJECT_BUILD_RELATIVE_DIRECTORY))
+            .arg("--prefix")
+            .arg(native_build_directory.join(MLX_PACKAGE_INSTALL_RELATIVE_DIRECTORY));
+        remove_uncontrolled_native_environment(&mut package_install_command);
+        // An ambient staging root or install mode would move the package out
+        // of the build directory or publish links instead of files.
+        package_install_command
+            .env_remove("DESTDIR")
+            .env_remove("CMAKE_INSTALL_MODE");
+        run_command(
+            &mut package_install_command,
+            "native-mlx-package-install",
             native_build_progress,
         )?;
     }

@@ -57,9 +57,9 @@ use native_build_orchestration::{
     ASTRO_NATIVE_BUILD_CACHE_DEPENDENCIES_VARIABLE, NATIVE_BUILD_PROGRESS_FILE_VARIABLE,
     NATIVE_BUILD_STATUS_FILE_VARIABLE, NATIVE_BUILD_STORE_VARIABLE, NativeBuildProfile,
     NativeBuildProgress, NativeBuildStore, NativeRuntimeBuildInputs, NativeTargetPlatform,
-    RUSTC_WRAPPER_VARIABLE, build_pinned_native_runtime, native_build_platform,
-    native_build_store_directory, native_parallel_job_count, required_path_variable,
-    resolve_native_build_identity, write_native_build_status,
+    RUSTC_WRAPPER_VARIABLE, build_pinned_native_runtime, identity_environment_variables,
+    native_build_platform, native_build_store_directory, native_parallel_job_count,
+    required_path_variable, resolve_native_build_identity, write_native_build_status,
 };
 
 const MLX_FEATURE_VARIABLE: &str = "CARGO_FEATURE_MLX";
@@ -81,6 +81,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let native_build_profile = selected_native_build_profile();
     let native_build_inputs = NativeRuntimeBuildInputs::from_environment();
     let (target_triple, native_target_platform) = cargo_native_build_target()?;
+    emit_identity_environment_rerun_contracts(native_target_platform);
     let native_build_identity = resolve_native_build_identity(
         &repository_root,
         native_build_profile.identity_name(),
@@ -130,6 +131,15 @@ fn cargo_native_build_target() -> Result<(String, NativeTargetPlatform), Box<dyn
         env::var("HOST").map_err(|_| "required environment variable HOST is missing".to_owned())?;
     let native_target_platform = native_build_platform(&target_triple, &host_triple)?;
     Ok((target_triple, native_target_platform))
+}
+
+/// Declares the environment the platform's native build identity reads, so a
+/// changed BLAS setting or compiler on `PATH` re-runs this script and keys a
+/// new store entry instead of relinking the old one.
+fn emit_identity_environment_rerun_contracts(native_target_platform: NativeTargetPlatform) {
+    for environment_variable in identity_environment_variables(native_target_platform) {
+        println!("cargo:rerun-if-env-changed={environment_variable}");
+    }
 }
 
 /// Declares every environment input whose value change must re-run the

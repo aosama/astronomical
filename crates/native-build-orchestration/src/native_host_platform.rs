@@ -23,10 +23,16 @@ use std::{error::Error, path::PathBuf, process::Command};
 
 pub use native_identity::target_platform::NativeTargetPlatform;
 
-/// The file, relative to both the CMake build directory and a store entry,
-/// where a Linux build records the libraries MLX was configured to link
-/// (see `native/CMakeLists.txt`).
-pub const MLX_LINK_LIBRARIES_RELATIVE_PATH: &str = "lib/mlx-link-libraries.txt";
+/// Where a Linux build installs MLX's own CMake package, relative to the CMake
+/// build directory. MLX is built in-tree, so its install step runs on its
+/// subproject alone after the compile.
+pub const MLX_PACKAGE_INSTALL_RELATIVE_DIRECTORY: &str = "mlx-package";
+/// MLX's subproject build directory inside the CMake build directory.
+pub const MLX_SUBPROJECT_BUILD_RELATIVE_DIRECTORY: &str = "_deps/mlx-build";
+/// The exported targets file of MLX's installed CMake package, relative to a
+/// store entry. It records the libraries MLX was configured to link, which a
+/// Linux link reads back (see `native_link_directives`).
+pub const MLX_TARGETS_RELATIVE_PATH: &str = "share/cmake/MLX/MLXTargets.cmake";
 
 /// A product a platform's build publishes into the store beside the static
 /// archives and headers every platform shares.
@@ -39,6 +45,15 @@ pub struct PlatformNativeProduct {
     pub description: &'static str,
 }
 
+impl PlatformNativeProduct {
+    /// The product's entry path and description, as store validation checks
+    /// them.
+    #[must_use]
+    pub const fn entry_path_and_description(&self) -> (&'static str, &'static str) {
+        (self.entry_relative_path, self.description)
+    }
+}
+
 const MACOS_NATIVE_PRODUCTS: &[PlatformNativeProduct] = &[PlatformNativeProduct {
     build_relative_path: "_deps/mlx-build/mlx/backend/metal/kernels/mlx.metallib",
     entry_relative_path: "share/mlx/mlx.metallib",
@@ -46,9 +61,9 @@ const MACOS_NATIVE_PRODUCTS: &[PlatformNativeProduct] = &[PlatformNativeProduct 
 }];
 
 const LINUX_NATIVE_PRODUCTS: &[PlatformNativeProduct] = &[PlatformNativeProduct {
-    build_relative_path: MLX_LINK_LIBRARIES_RELATIVE_PATH,
-    entry_relative_path: MLX_LINK_LIBRARIES_RELATIVE_PATH,
-    description: "published MLX link library list",
+    build_relative_path: "mlx-package/share/cmake/MLX/MLXTargets.cmake",
+    entry_relative_path: MLX_TARGETS_RELATIVE_PATH,
+    description: "published MLX CMake package targets",
 }];
 
 /// Resolves the platform to build for and refuses a build the host cannot
@@ -73,8 +88,7 @@ pub fn native_build_platform_for_host(
     host_triple: &str,
     host_platform: Option<NativeTargetPlatform>,
 ) -> Result<NativeTargetPlatform, Box<dyn Error>> {
-    let target_platform =
-        NativeTargetPlatform::of_target_triple(target_triple).map_err(|error| error.to_string())?;
+    let target_platform = NativeTargetPlatform::of_target_triple(target_triple)?;
     if host_platform != Some(target_platform) {
         return Err(format!(
             "the native runtime builds only for the host's operating system; {target_triple} targets {target_platform:?} but the host is {host_platform:?}"
@@ -103,6 +117,32 @@ pub const fn host_platform() -> Option<NativeTargetPlatform> {
         None
     }
 }
+
+/// Whether a platform installs MLX's CMake package after the compile. Linux
+/// does, so its link reads the libraries MLX chose from MLX's own published
+/// package; the Metal build links a fixed framework set and needs none.
+pub const fn installs_mlx_package(native_target_platform: NativeTargetPlatform) -> bool {
+    matches!(native_target_platform, NativeTargetPlatform::Linux)
+}
+
+/// Environment variables the platform's native build identity reads, beyond
+/// the ones every build script declares. Cargo must re-run the build script
+/// when any of them changes, or a new BLAS would keep linking the old entry.
+/// Linux hashes the BLAS search settings; macOS reads none of them. `PATH` is
+/// left out: the identity already records the `cc` and `c++` it finds, and
+/// rustup and IDEs alter `PATH` between processes, which would re-run the
+/// build script with nothing changed.
+pub const fn identity_environment_variables(
+    native_target_platform: NativeTargetPlatform,
+) -> &'static [&'static str] {
+    match native_target_platform {
+        NativeTargetPlatform::MacOs => &[],
+        NativeTargetPlatform::Linux => &LINUX_IDENTITY_ENVIRONMENT_VARIABLES,
+    }
+}
+
+const LINUX_IDENTITY_ENVIRONMENT_VARIABLES: [&str; 10] =
+    native_identity::probes::BLAS_SEARCH_VARIABLES;
 
 /// The products a platform publishes beyond the shared archives and headers.
 pub const fn platform_native_products(

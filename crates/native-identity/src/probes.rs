@@ -164,15 +164,24 @@ fn push_linux_compiler_probe_values(
     Ok(())
 }
 
-/// The settings MLX's Linux configure consults to find BLAS and LAPACK.
+/// The settings MLX's Linux configure consults to find BLAS and LAPACK:
+/// CMake's own search paths, FindBLAS and FindLAPACK's vendor and root hints
+/// (including MKL's), and the link and pkg-config paths FindBLAS searches.
+/// `LD_LIBRARY_PATH` is left out on purpose: Cargo rewrites it for every
+/// build script and `cargo run`, so hashing it would key a new store entry
+/// per process.
 /// macOS links Accelerate, so none of these apply there.
-const BLAS_SEARCH_VARIABLES: [&str; 6] = [
+pub const BLAS_SEARCH_VARIABLES: [&str; 10] = [
     "CMAKE_PREFIX_PATH",
     "CMAKE_INCLUDE_PATH",
     "CMAKE_LIBRARY_PATH",
     "BLA_VENDOR",
     "BLAS_HOME",
+    "BLAS_ROOT",
     "LAPACK_ROOT",
+    "MKLROOT",
+    "LIBRARY_PATH",
+    "PKG_CONFIG_PATH",
 ];
 
 /// A Linux store entry records the BLAS and LAPACK files MLX's configure

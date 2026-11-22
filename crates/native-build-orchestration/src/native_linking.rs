@@ -7,8 +7,8 @@
 //!
 //! On macOS the line is the two static archives, the C++ runtime, the six
 //! Apple frameworks and the Clang compiler-rt archive. On Linux it is the two
-//! static archives, the libraries MLX's configure chose, and the GNU C++
-//! runtime.
+//! static archives, the libraries MLX's configure chose (read from MLX's
+//! installed `MLXTargets.cmake`), and the GNU C++ runtime.
 //!
 //! # The Metallib trust chain (macOS)
 //!
@@ -106,16 +106,17 @@ fn configure_macos_rust_linking(
     Ok(())
 }
 
-/// Links the CPU build against the libraries MLX was configured with. There
-/// is no Metallib on Linux, so no Metallib values are emitted.
+/// Links the CPU build against the libraries MLX was configured with, as its
+/// installed CMake package records them. There is no Metallib on Linux, so no
+/// Metallib values are emitted.
 fn configure_linux_rust_linking(
     native_build_artifacts: &NativeBuildArtifacts,
     native_library_directory: &Path,
 ) -> Result<(), Box<dyn Error>> {
-    let mlx_link_libraries_path = native_build_artifacts.mlx_link_libraries_path();
-    require_file(&mlx_link_libraries_path, "MLX link library list")?;
-    let mlx_link_library_list = fs::read_to_string(&mlx_link_libraries_path)?;
-    let link_directives = linux_link_directives(native_library_directory, &mlx_link_library_list);
+    let mlx_targets_path = native_build_artifacts.mlx_targets_path();
+    require_file(&mlx_targets_path, "MLX CMake package targets")?;
+    let mlx_targets_text = fs::read_to_string(&mlx_targets_path)?;
+    let link_directives = linux_link_directives(native_library_directory, &mlx_targets_text);
     // The store entry is keyed by the BLAS search settings, not by the
     // library files themselves; a file removed since the entry was built
     // would otherwise surface as an obscure linker error.

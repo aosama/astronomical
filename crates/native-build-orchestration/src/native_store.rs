@@ -47,7 +47,7 @@ use std::{
 use fs4::TryLockError;
 
 use crate::native_host_platform::{
-    MLX_LINK_LIBRARIES_RELATIVE_PATH, NativeTargetPlatform, platform_native_products,
+    MLX_TARGETS_RELATIVE_PATH, NativeTargetPlatform, platform_native_products,
 };
 
 mod manifest;
@@ -445,9 +445,10 @@ impl NativeBuildArtifacts {
         self.entry_directory.join("share/mlx/mlx.metallib")
     }
 
-    /// Published on Linux only: the libraries MLX was configured to link.
-    pub fn mlx_link_libraries_path(&self) -> PathBuf {
-        self.entry_directory.join(MLX_LINK_LIBRARIES_RELATIVE_PATH)
+    /// Published on Linux only: MLX's exported CMake targets, which record
+    /// the libraries MLX was configured to link.
+    pub fn mlx_targets_path(&self) -> PathBuf {
+        self.entry_directory.join(MLX_TARGETS_RELATIVE_PATH)
     }
 
     /// Present only for the `core+memory-contract` profile.

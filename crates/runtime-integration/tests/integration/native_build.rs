@@ -51,8 +51,12 @@ fn should_build_the_cpu_backend_without_metal_on_linux() {
         .expect("the configuration should have a Linux branch");
     assert!(linux_branch.contains("set(ASTRONOMICAL_MLX_BUILD_METAL OFF)"));
     assert!(
-        NATIVE_BUILD_CONFIGURATION.contains("lib/mlx-link-libraries.txt"),
-        "a Linux build must record the libraries MLX links"
+        NATIVE_HOST_PLATFORM.contains("share/cmake/MLX/MLXTargets.cmake"),
+        "a Linux build must publish MLX's installed package, which records the libraries MLX links"
+    );
+    assert!(
+        NATIVE_BUILD_COMPILATION.contains("installs_mlx_package(native_target_platform)"),
+        "the compile step must install MLX's package where the platform links from it"
     );
 }
 
