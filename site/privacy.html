@@ -43,7 +43,7 @@
           <p class="doc-meta">Effective: November 2, 2026 · Applies to the Astronomical macOS application.</p>
 
           <h2>The short version</h2>
-          <p>Astronomical runs language, vision, and image models entirely on your Mac. Your prompts, conversations, documents, and images are processed on your device and are never sent to us — we operate no servers that receive them. The app has no accounts, no sign-in, no advertising, and no in-app analytics.</p>
+          <p>Astronomical runs language, vision, and image models entirely on your Mac. Your prompts, conversations, documents, and images are processed on your device and are never sent to us — we operate no servers that receive them. The app has no accounts, no sign-in and no advertising. It sends a short problem report only when you choose to, and you see the whole report first. If you agree, it also sends one line a day so the developers can count how many Macs use Astronomical and which versions they run; nothing else about how you use it is collected.</p>
 
           <h2>What never leaves your Mac</h2>
           <ul>
@@ -58,6 +58,8 @@
             <li><strong>Model downloads.</strong> When you choose to install a model, the app downloads model files from public model repositories, such as Hugging Face. The repository sees a standard request for publicly published files. Downloading a model is always an action you initiate.</li>
             <li><strong>Update checks.</strong> Builds distributed outside the Mac App Store check a signed update feed to tell you when a new version exists. The feed operator sees standard web requests for the update description. App Store builds receive updates exclusively through the App Store and make no such request.</li>
             <li><strong>Skill updates.</strong> About once a day the app asks getastronomical.com whether a newer copy of its skill exists, the short guide that tells models on this Mac what Astronomical can do, and downloads it if so. The request carries nothing about you or your work, and a switch in Observatory's Settings turns it off.</li>
+            <li><strong>Problem reports.</strong> Only when you choose to send one; see below.</li>
+            <li><strong>Daily count.</strong> Only if you agree; see below.</li>
             <li><strong>Local API.</strong> The app serves a local interface on this Mac only, at a loopback address. Requests to it never leave your machine.</li>
           </ul>
 
@@ -68,10 +70,28 @@
           <p>The Astronomical plugin for OpenCode, if you install it, asks the app on this Mac, over loopback, which models it serves, about every 30 seconds, and lists them in OpenCode. It sends nothing off this Mac. It writes one file, a log of what it did that never grows past 1 MB, in OpenCode's own state folder. What OpenCode itself does over the network is governed by OpenCode's settings and its maker's privacy policy, not by Astronomical.</p>
 
           <h2>Diagnostics and crash reports</h2>
-          <p>The app itself contains no crash reporting and no usage analytics.</p>
+          <p>The app contains no usage analytics. When something goes wrong, such as a model that will not load, a reply that runs out of memory, or a catalog download whose files do not match, the app can offer to send a short problem report.</p>
           <ul>
+            <li><strong>You see the whole report first.</strong> The app shows every line that would be sent, and nothing is sent unless you press Send report. You can choose instead to send reports without being asked, or never to be offered one, under "What leaves this Mac" in Settings.</li>
+            <li><strong>What a report holds.</strong> The app version; your Mac's chip, memory and macOS version; the name of the catalog model in use, or only the words "a model not in the catalog" for any other model; and the kind of problem, with what explains it: the step that failed and a short code for it, how the engine stopped if it did, and the engine's last few events as fixed phrases with numbers, such as "model loaded", "reply finished (9,100 tokens in, 384 out)" or "memory limit set to 24 GB". If you type a note, your words are sent too; that note is the only free text in a report. Never included: your prompts, conversations, files, images, folder names or log lines.</li>
+            <li><strong>Reporting something yourself.</strong> "Report a problem" under "What leaves this Mac" starts the same kind of report for things no error catches, with your note. It is shown and sent the same way.</li>
+            <li><strong>Where it goes.</strong> To the developers' project at Sentry, an error-reporting service. Like any request over the internet, it reaches Sentry from your internet address. The project is set not to store internet addresses, and the app gives Sentry a placeholder address so no location is worked out from yours.</li>
+            <li><strong>A record on your Mac.</strong> Every report sent is listed under "What leaves this Mac" in Settings, as the exact lines that went.</li>
+          </ul>
+          <ul>
+            <li><strong>Mac App Store builds do not send problem reports.</strong> Everything above applies to the direct download only; the App Store version offers no report and sends none.</li>
             <li><strong>Mac App Store builds.</strong> If you have opted in (in System Settings) to sharing diagnostics and analytics with developers, Apple collects crash reports and aggregated usage statistics through Apple's own systems and shares them with us under Apple's privacy protections. We never receive your content, and individual identification is prevented by Apple's aggregation.</li>
-            <li><strong>Direct-distribution builds.</strong> Crash reports stay on your machine in the system crash reporter. They are sent nowhere unless you choose to attach one yourself when contacting support.</li>
+            <li><strong>Direct-distribution builds.</strong> The system's own crash reports stay on your machine. They are sent nowhere unless you choose to attach one yourself when contacting support.</li>
+          </ul>
+
+          <h2>Daily count</h2>
+          <p>From the second day you use Astronomical, the app asks once whether your Mac may be counted. Nothing is sent unless you choose "Count this Mac".</p>
+          <ul>
+            <li><strong>What it sends.</strong> One line a day: the app version, your Mac's macOS version, chip and memory, for example "Astronomical 0.2.127 · macOS 27.2 · Apple M5 Pro · 48 GB". The app shows you this exact line before you choose.</li>
+            <li><strong>What it never sends.</strong> No name, account, identifier, model name or anything from your conversations or files. Nothing in one day's line tells it apart from another day's, so a Mac cannot be followed over time.</li>
+            <li><strong>Where it goes.</strong> To the same error-reporting receiver as problem reports, with the same protections: internet addresses are not stored and no location is worked out.</li>
+            <li><strong>Turning it off.</strong> "Daily count" under "What leaves this Mac" in Settings shows the line and when it was last sent, and turns it off at any time.</li>
+            <li><strong>Mac App Store builds</strong> do not send a daily count.</li>
           </ul>
 
           <h2>What we do not do</h2>

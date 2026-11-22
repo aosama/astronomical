@@ -55,7 +55,7 @@ async fn should_allow_the_thin_talk_canvas_origin_with_its_methods_and_http_pref
         .get(header::ACCESS_CONTROL_ALLOW_METHODS)
         .and_then(header_text)
         .expect("an allowed preflight should list its methods");
-    for expected_method in ["GET", "POST", "DELETE", "OPTIONS"] {
+    for expected_method in ["GET", "POST", "PUT", "DELETE", "OPTIONS"] {
         assert!(
             allowed_methods.contains(expected_method),
             "{expected_method} missing from {allowed_methods}"

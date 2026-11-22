@@ -24,6 +24,9 @@ import { SidebarResizer } from "./SidebarResizer";
 import { runConversationMenu } from "./ConversationMenuFlow";
 import { ChatController } from "./ChatController";
 import { AppShell } from "./AppShell";
+import { DailyCountCard } from "./DailyCountCard";
+import { ProblemReportCard } from "./ProblemReportCard";
+import { ProblemReportClient } from "./ProblemReportClient";
 import { WindowChrome } from "./WindowChrome";
 import { refreshOnReturnToWindow } from "./WindowReturnRefresh";
 import { HostCommandRouter } from "./HostCommandRouter";
@@ -249,9 +252,11 @@ export function bootChatClient(): AppShell {
   const exportLauncher = wireExport(controller, transcript, bridge, diagrams, config.printedPaper);
   const shell = new AppShell({ controller, transcript, composer, sidebar, host, sidebarResizer });
   shell.start();
+  wireProblemReports(controller, config);
   const astro = new AstroCompanion({
     bridge,
     library: new AstroLibrary(client),
+    problemReports: new ProblemReportClient({ daemonBaseURL: config.daemonBaseURL }),
     getStartedOverlay: requireElement<HTMLElement>("#get-started"),
     settingsOverlay: requireElement<HTMLElement>("#settings"),
     emptyState: requireElement<HTMLElement>("#empty-state"),
@@ -278,4 +283,33 @@ export function bootChatClient(): AppShell {
   void controller.load();
   void astro.start();
   return shell;
+}
+
+/** Offers a problem report when a failure is shown, and when the window comes
+ * back to the front, since a download can fail while it is elsewhere. */
+function wireProblemReports(controller: ChatController, config: AppConfig): void {
+  const problemReportCard = new ProblemReportCard({
+    client: new ProblemReportClient({ daemonBaseURL: config.daemonBaseURL }),
+    document,
+    placeAfter: requireElement<HTMLElement>("#failure-banner"),
+  });
+  let isFailureShown = false;
+  controller.subscribe((publishedState) => {
+    const isFailureShownNow = publishedState.composer.failure !== null;
+    if (isFailureShownNow && !isFailureShown) {
+      void problemReportCard.refresh();
+    }
+    isFailureShown = isFailureShownNow;
+  });
+  const dailyCountCard = new DailyCountCard({
+    client: new ProblemReportClient({ daemonBaseURL: config.daemonBaseURL }),
+    document,
+    placeAfter: problemReportCard.element,
+  });
+  window.addEventListener("focus", () => {
+    void problemReportCard.refresh();
+    void dailyCountCard.refresh();
+  });
+  void problemReportCard.refresh();
+  void dailyCountCard.refresh();
 }

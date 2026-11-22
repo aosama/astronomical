@@ -232,6 +232,7 @@ fn build_migrated_config(
         }),
         menu_bar: None,
         skill: None,
+        sharing: None,
     }
 }
 

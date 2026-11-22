@@ -25,6 +25,7 @@ mod model_identity;
 #[cfg(test)]
 mod model_identity_tests;
 mod resolved_model_config;
+mod sharing_config;
 
 pub use astro_neural_engine_program_cache::{
     ListedNeuralEngineProgramSet, NEURAL_ENGINE_PROGRAM_DIRECTORY_NAME,
@@ -95,6 +96,7 @@ pub use model_identity::{
     near_model_matches, resolve_model_id,
 };
 pub use resolved_model_config::{DEFAULT_MAXIMUM_OUTPUT_TOKENS, ResolvedModelConfig};
+pub use sharing_config::ProblemReportChoice;
 
 use config_document::UserConfigFile;
 

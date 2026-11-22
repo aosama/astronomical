@@ -117,6 +117,10 @@ pub(crate) fn publish_model_load_in_flight(
     model_load_in_flight: Option<ipc_protocol::ModelLoadInFlight>,
 ) {
     if let Ok(mut worker_health_snapshot) = health_snapshot.write() {
+        crate::problem_reports::record_model_load_start(
+            worker_health_snapshot.model_load_in_flight.is_some(),
+            model_load_in_flight.is_some(),
+        );
         worker_health_snapshot.model_load_in_flight = model_load_in_flight;
     }
 }

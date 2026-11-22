@@ -15,7 +15,9 @@ use tokio::{
     time::timeout,
 };
 
-use crate::worker::process::exit_description::worker_exit_status_description;
+use crate::worker::process::exit_description::{
+    worker_exit_cause_label, worker_exit_status_description,
+};
 use crate::worker::process::metal_residency_refresh::apply_metal_residency_refresh_policy;
 use crate::worker::process::relaunch_memory::startup_configuration_carrying_applied_memory_ceiling;
 use crate::{WorkerControlError, worker::process::stderr_tail::WorkerStderrTail};
@@ -499,7 +501,13 @@ impl WorkerProcess {
         )
         .await
         {
-            Ok(Ok(worker_exit_status)) => worker_exit_status_description(worker_exit_status),
+            Ok(Ok(worker_exit_status)) => {
+                crate::problem_reports::report_worker_exit(
+                    worker_exit_cause_label(worker_exit_status),
+                    self.worker_started_at.elapsed().as_secs(),
+                );
+                worker_exit_status_description(worker_exit_status)
+            }
             Ok(Err(wait_error)) => {
                 format!("failed to inspect process exit status: {wait_error}")
             }

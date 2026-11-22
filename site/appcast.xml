@@ -4,28 +4,34 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.125</title>
-            <pubDate>Sat, 21 Nov 2026 08:45:23 -0500</pubDate>
-            <sparkle:version>2444</sparkle:version>
-            <sparkle:shortVersionString>0.2.125</sparkle:shortVersionString>
+            <title>0.2.128</title>
+            <pubDate>Sat, 21 Nov 2026 20:20:47 -0500</pubDate>
+            <sparkle:version>2454</sparkle:version>
+            <sparkle:shortVersionString>0.2.128</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[## What's new
+            <description sparkle:format="markdown"><![CDATA[## Bug fixes
 
-- **Give a model's memory back on request.** A loaded model holds many gigabytes of memory until Astronomical unloads it after a quiet spell. Programs and agents can now ask for that memory back at once with `POST /v1/control/unload-model` on the local API. The next request loads the model again. A reply that is being written is never interrupted: the request answers "busy" instead.
-- **The Astronomical skill tells agents about it,** so an agent that has finished its job can free the memory when you ask.
+- **A long reply no longer slows down the rest of the Mac.** While a model wrote a long reply to a large conversation, video could freeze, audio could glitch and windows could respond slowly, and it got worse the longer the reply ran. Each time the conversation's attention buffers grew, the outgrown copies were kept instead of being handed back, so the memory the Mac must keep in RAM climbed until it reached the system's ceiling. They are now handed back as the reply is written. With a 34,000-token conversation and a 3,500-token reply on a 35B model, that memory ended at 30.3 GB instead of 39.2 GB and stayed flat throughout, at the same reply speed.
+
+## Known
+
+- Replies from a draft-assisted (DFlash) model can still show a one-step memory rise after a freshly read large prompt. This is tracked and not fixed in this release.
 
 ## Compatibility
 
-- Your settings, conversations and downloaded models are kept. No setting changed.
-- Requires macOS 14 or later on Apple silicon.
+- No setting, command or local API changed.
+- Conversations, downloaded models and every setting are kept.
+- macOS 14 or later on Apple silicon.
 
-The app and disk image are signed with Developer ID, notarized and stapled by Apple, and the update feed is signed.
+## Distribution
+
+The app and disk image are signed with the project's Developer ID, built with the Hardened Runtime, and notarized and stapled by Apple. Existing installations receive this release through the in-app update.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.125/Astronomical-0.2.125-macOS-arm64.dmg" length="25678070" type="application/octet-stream" sparkle:edSignature="/H54sMuPi3lOuRNfyBb4Ldhi9/3LFNQu5y/X8Es3EjTIHQfJRvn7VKs+UbrSe1SpZi02xvzR9OKtaZPxu5bZDg=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.128/Astronomical-0.2.128-macOS-arm64.dmg" length="25823643" type="application/octet-stream" sparkle:edSignature="Ovlzaxpe8kUKZ9w8JhvOXclky0EJd7z0ubvhvbPtB+J1RloX6rbcdDglpZ1Yj11UiSXdZ7yWN92FDiGOsgFOAQ=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: of1swCnK0tljQJRaisVV/gSowTVt/+OhxCGybPTm+JNUtV4ZwLIFqrVpDcWEi3RexPA7eypteriv4R5cbQ/MCA==
-length: 2023
+edSignature: NWMK4UKRjIiLmtCq0FaO+Mxy1GJlS19FMcOkVnFgQohJIlq9AoIoGUIymooFBhbmXLTmNLMUeuTD4xe0QzRXBg==
+length: 2471
 -->

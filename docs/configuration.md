@@ -38,6 +38,8 @@ A small file looks like this. Keep the `$schema` line: the app refuses a file th
 | `skill.declare_to_models` | Tells every model where to read the Astronomical skill, with a short note at the end of the system prompt. | On. |
 | `skill.update_from_web` | Looks on getastronomical.com about once a day for a newer skill. | On. |
 | `menu_bar.show_technical_details` | Adds the memory breakdown, GPU use, session totals and build details to the menu bar popover. | Off: a simpler popover. |
+| `sharing.problem_reports` | Whether a report about a failure is shown for you to send (`ask`), sent without asking (`always`), or never offered (`never`). Reports never hold chats, files, images or folder names. | `ask`. |
+| `sharing.daily_count` | Sends one line a day (app version, macOS version, chip, memory) so the developers can count Macs. | Off, until you answer the question that asks. |
 
 Older files called the `ssd_prompt_cache` section `prompt_cache`, and two chunking settings `prompt_cache_block_tokens` and `prompt_cache_common_prefix_stride_blocks`. Astronomical moves them to the new names the first time it reads the file.
 

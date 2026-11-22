@@ -521,6 +521,7 @@ impl DownloadPayloadTransfer {
             Err(join_error) => return Err(DownloadPayloadTransferError::Task(join_error)),
         };
         let failed_job = persist_result?;
+        crate::problem_reports::report_download_failure(error_code, failed_job.huggingface_id());
         self.progress_snapshot.publish(failed_job);
         Ok(())
     }

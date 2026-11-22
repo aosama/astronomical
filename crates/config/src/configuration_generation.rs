@@ -17,9 +17,12 @@ pub(crate) fn configuration_generation(
     // an explicit default, must never cost a model load.
     // The skill section is the daemon's alone for the same reason: it edits
     // requests and checks for a newer skill without any worker taking part.
+    // The sharing section only decides what the daemon and the apps may send,
+    // so answering "May this Mac be counted?" never unloads a model either.
     let worker_relevant_config_file = UserConfigFile {
         menu_bar: None,
         skill: None,
+        sharing: None,
         ..user_config_file.clone()
     };
     // Hash the typed document so JSON whitespace and member order cannot create a false reload.

@@ -46,6 +46,7 @@ pub fn test_engine_request<RequestExtension>(
         astro_ssd_prompt_cache_diagnostics: None,
         generation_residency_preparation_attempted: false,
         first_decode_forward_elapsed_millis: None,
+        outgrown_attention_slab_reclaim: Default::default(),
         generation_preparation_announced: false,
         structured_generation: None,
         engine_extension,

@@ -33,6 +33,30 @@ pub(crate) fn worker_exit_status_description(worker_exit_status: ExitStatus) -> 
     }
 }
 
+/// The exit's cause in a fixed format safe for a problem report, such as
+/// "signal 6 (SIGABRT)" or "exit code 101", or `None` for an exit the daemon
+/// asks for (exit code 0, SIGTERM), which is not a problem.
+pub(crate) fn worker_exit_cause_label(worker_exit_status: ExitStatus) -> Option<String> {
+    if let Some(exit_code) = worker_exit_status.code() {
+        return (exit_code != 0).then(|| format!("exit code {exit_code}"));
+    }
+    let signal_number = worker_exit_status.signal()?;
+    if signal_number == SIGTERM_NUMBER {
+        return None;
+    }
+    for (fault_signal_number, fault_signal_name) in FAULT_SIGNAL_NAMES {
+        if fault_signal_number == signal_number {
+            return Some(format!("signal {signal_number} ({fault_signal_name})"));
+        }
+    }
+    if signal_number == SIGKILL_NUMBER {
+        return Some(format!(
+            "signal {signal_number} (SIGKILL, killed from outside)"
+        ));
+    }
+    Some(format!("signal {signal_number}"))
+}
+
 fn terminating_signal_description(terminating_signal: Option<i32>) -> String {
     let Some(signal_number) = terminating_signal else {
         return "terminated without an exit code or signal".to_owned();

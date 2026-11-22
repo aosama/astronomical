@@ -458,6 +458,8 @@ fn apply_generation_failed(
     };
     tracing::warn!(request_id = request_id.value(), failure_reason = ?reason,
         "worker generation failed");
+    crate::problem_reports::record_flight_event(crate::problem_reports::FlightEvent::ReplyFailed);
+    crate::problem_reports::report_reply_failure(&reason, health_snapshot);
     publish_activity(health_snapshot, WorkerActivity::Idle);
     clear_active_request_progress(health_snapshot);
     try_send_stream_event(
@@ -482,6 +484,11 @@ fn apply_mlx_memory_limit_changed(
     else {
         return;
     };
+    crate::problem_reports::record_flight_event(
+        crate::problem_reports::FlightEvent::MemoryLimitChanged {
+            memory_limit_bytes: effective_mlx_memory_ceiling_bytes,
+        },
+    );
     publish_mlx_memory_limit_changed(
         health_snapshot,
         effective_mlx_memory_ceiling_bytes,
@@ -558,6 +565,12 @@ fn apply_worker_completed(
     else {
         return Ok(());
     };
+    crate::problem_reports::record_flight_event(
+        crate::problem_reports::FlightEvent::ReplyFinished {
+            prompt_token_count,
+            generated_token_count,
+        },
+    );
     handle_worker_completion_event(
         request_id,
         prompt_token_count,

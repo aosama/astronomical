@@ -159,6 +159,7 @@ async fn should_keep_reporting_restart_required_until_server_is_restarted() {
             updates_from_web: true,
             index_path: Default::default(),
         },
+        sharing_settings: Default::default(),
         configured_astro_ssd_prompt_cache_maximum_size_bytes: None,
         performance_attribution_enabled: false,
         astro_ssd_prompt_cache_config: config::AstroSsdPromptCacheConfig::new(

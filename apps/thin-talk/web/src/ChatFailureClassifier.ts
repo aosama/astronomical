@@ -1,3 +1,4 @@
+import type { FailureGuidance } from "./ChatFailure";
 import { ChatFailureKind } from "./ChatFailureKind";
 
 /**
@@ -33,6 +34,52 @@ export class ChatFailureClassifier {
       return codeKind;
     }
     return ChatFailureClassifier.classifyReason(errorMessage !== null ? errorMessage : "");
+  }
+
+  /** Classifies an error answer from its body: the public code in
+   * `{error:{code}}` first, then the sentence, then the HTTP status. Reading
+   * the sentence alone sent a model that would not load to the status
+   * fallback, which named it "the engine stopped answering". */
+  public static classifyErrorDocument(status: number, bodyText: string): ChatFailureKind {
+    const errorCode = ChatFailureClassifier.codeFromErrorDocument(bodyText);
+    const codeKind = errorCode !== null ? ChatFailureClassifier.classifyReason(errorCode) : ChatFailureKind.UNKNOWN;
+    if (codeKind !== ChatFailureKind.UNKNOWN) {
+      return codeKind;
+    }
+    const reason = ChatFailureClassifier.reasonFromErrorDocument(bodyText);
+    return ChatFailureClassifier.classify(status, reason !== null ? reason : "");
+  }
+
+  /** The engine's own sentence and next step for this failure, from
+   * `{error:{plain_message, next_step}}`, or null when it gave none. */
+  public static guidanceFromErrorDocument(bodyText: string): FailureGuidance | null {
+    try {
+      const document: unknown = JSON.parse(bodyText);
+      const errorField = typeof document === "object" && document !== null ? (document as Record<string, unknown>)["error"] : null;
+      if (typeof errorField !== "object" || errorField === null) {
+        return null;
+      }
+      const plainMessage = (errorField as Record<string, unknown>)["plain_message"];
+      const nextStep = (errorField as Record<string, unknown>)["next_step"];
+      if (typeof plainMessage !== "string" || plainMessage.length === 0 || typeof nextStep !== "string" || nextStep.length === 0) {
+        return null;
+      }
+      return { plainMessage, nextStep };
+    } catch {
+      return null;
+    }
+  }
+
+  /** The public code of an `{error:{code}}` answer, or null. */
+  public static codeFromErrorDocument(bodyText: string): string | null {
+    try {
+      const document: unknown = JSON.parse(bodyText);
+      const errorField = typeof document === "object" && document !== null ? (document as Record<string, unknown>)["error"] : null;
+      const errorCode = typeof errorField === "object" && errorField !== null ? (errorField as Record<string, unknown>)["code"] : null;
+      return typeof errorCode === "string" && errorCode.length > 0 ? errorCode : null;
+    } catch {
+      return null;
+    }
   }
 
   public static classify(status: number, reason: string): ChatFailureKind {

@@ -3,7 +3,7 @@
 use std::os::unix::process::ExitStatusExt;
 use std::process::ExitStatus;
 
-use super::worker_exit_status_description;
+use super::{worker_exit_cause_label, worker_exit_status_description};
 
 /// A wait status for a process that exited normally: the code sits in the
 /// second byte, as `waitpid` reports it.
@@ -73,4 +73,30 @@ fn should_report_exit_codes_at_both_ends_of_the_byte() {
         worker_exit_status_description(exited_with_code(255)),
         "exit code 255"
     );
+}
+
+#[test]
+fn should_label_a_fault_a_kill_and_a_failing_exit_code_for_a_problem_report() {
+    assert_eq!(
+        worker_exit_cause_label(ExitStatus::from_raw(6)).as_deref(),
+        Some("signal 6 (SIGABRT)")
+    );
+    assert_eq!(
+        worker_exit_cause_label(ExitStatus::from_raw(9)).as_deref(),
+        Some("signal 9 (SIGKILL, killed from outside)")
+    );
+    assert_eq!(
+        worker_exit_cause_label(ExitStatus::from_raw(101 << 8)).as_deref(),
+        Some("exit code 101")
+    );
+    assert_eq!(
+        worker_exit_cause_label(ExitStatus::from_raw(31)).as_deref(),
+        Some("signal 31")
+    );
+}
+
+#[test]
+fn should_label_nothing_for_an_exit_the_daemon_asks_for() {
+    assert_eq!(worker_exit_cause_label(ExitStatus::from_raw(0)), None);
+    assert_eq!(worker_exit_cause_label(ExitStatus::from_raw(15)), None);
 }
