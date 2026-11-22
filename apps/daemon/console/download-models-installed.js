@@ -143,6 +143,7 @@ function createDownloadModelsOpenInChatButton(installedRow) {
     // The row already names the model, so the button says only what it does;
     // VoiceOver hears which model it opens.
     openInChatButton.setAttribute("aria-label", "Chat with " + downloadModelsRowName(installedRow));
+    openInChatButton.title = "Opens the chat window with this model";
     openInChatButton.addEventListener("click", () => openThinTalkFromDownloadModels(downloadModelsRowName(installedRow)));
     return openInChatButton;
 }
