@@ -59,3 +59,39 @@ test("should_give_every_failure_kind_a_headline_and_a_next_action", () => {
     assert.ok(failure.nextAction.length > 0, kind);
   }
 });
+
+test("should_classify_an_answer_by_its_public_code_before_its_http_status", () => {
+  const loadFailure = JSON.stringify({ error: { message: "the requested model could not be loaded: details", type: "server_error", code: "model_load_failed" } });
+  assert.equal(ChatFailureClassifier.classifyErrorDocument(503, loadFailure), ChatFailureKind.MODEL_LOAD_FAILED);
+  const outOfMemory = JSON.stringify({ error: { message: "x", code: "chat_out_of_memory" } });
+  assert.equal(ChatFailureClassifier.classifyErrorDocument(503, outOfMemory), ChatFailureKind.OUT_OF_MEMORY);
+});
+
+test("should_fall_back_to_the_sentence_then_the_status_without_a_known_code", () => {
+  assert.equal(ChatFailureClassifier.classifyErrorDocument(503, JSON.stringify({ error: { message: "engine is busy" } })), ChatFailureKind.ENGINE_BUSY);
+  assert.equal(ChatFailureClassifier.classifyErrorDocument(503, "not json"), ChatFailureKind.WORKER_UNAVAILABLE);
+  assert.equal(ChatFailureClassifier.classifyErrorDocument(503, JSON.stringify({ error: { message: "x", code: "" } })), ChatFailureKind.WORKER_UNAVAILABLE);
+  assert.equal(ChatFailureClassifier.codeFromErrorDocument(JSON.stringify({ error: { code: 7 } })), null);
+});
+
+test("should_show_the_engines_own_sentence_and_next_step_when_it_gives_them", () => {
+  const body = JSON.stringify({ error: { message: "the requested model could not be loaded: Qwen3.5 artifact validation failed: invalid header", code: "model_load_failed", plain_message: "This model's files are damaged or incomplete.", next_step: "Remove the model and download it again." } });
+  const guidance = ChatFailureClassifier.guidanceFromErrorDocument(body);
+  const failure = new ChatFailure(ChatFailureClassifier.classifyErrorDocument(503, body), ChatFailureClassifier.reasonFromErrorDocument(body), guidance);
+  assert.equal(failure.kind, ChatFailureKind.MODEL_LOAD_FAILED);
+  assert.equal(failure.headline, "This model's files are damaged or incomplete.");
+  assert.equal(failure.nextAction, "Remove the model and download it again.");
+  assert.match(failure.reason ?? "", /artifact validation failed/, "the engine's detail is kept for the tooltip");
+});
+
+test("should_keep_the_kinds_own_wording_when_the_engine_gives_no_guidance", () => {
+  for (const body of [
+    JSON.stringify({ error: { message: "x", code: "model_load_failed" } }),
+    JSON.stringify({ error: { message: "x", code: "model_load_failed", plain_message: "", next_step: "y" } }),
+    "not json",
+  ]) {
+    assert.equal(ChatFailureClassifier.guidanceFromErrorDocument(body), null, body);
+  }
+  const failure = new ChatFailure(ChatFailureKind.MODEL_LOAD_FAILED, null, null);
+  assert.equal(failure.headline, "That model would not load.");
+});

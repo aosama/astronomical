@@ -425,7 +425,7 @@ pub(crate) fn generation_start_rejection_response(
             model_load_failure_reason,
         } => (
             StatusCode::SERVICE_UNAVAILABLE,
-            Json(OpenAiErrorResponse::model_load_failed(
+            Json(crate::rest::request_rejections::model_load_failed_body(
                 model_load_failure_reason,
             )),
         )

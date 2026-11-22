@@ -102,6 +102,7 @@ pub(super) fn sample_resolved_config() -> ResolvedRuntimeConfig {
             updates_from_web: true,
             index_path: Default::default(),
         },
+        sharing_settings: Default::default(),
         configured_astro_ssd_prompt_cache_maximum_size_bytes: None,
         performance_attribution_enabled: false,
         astro_ssd_prompt_cache_config: config::AstroSsdPromptCacheConfig::new(

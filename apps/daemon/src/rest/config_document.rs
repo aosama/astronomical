@@ -43,11 +43,22 @@ const FOLDER_SETTINGS: [&str; 3] = [
     "runtime.neural_engine_program_directory",
 ];
 
+/// Everything the Mac App Store build cannot honour: the folder settings
+/// above, and the sharing choices, because that build sends no problem
+/// reports until its privacy declarations say it does (issue #2413).
+const APP_STORE_UNAVAILABLE_SETTINGS: [&str; 5] = [
+    FOLDER_SETTINGS[0],
+    FOLDER_SETTINGS[1],
+    FOLDER_SETTINGS[2],
+    "sharing.problem_reports",
+    "sharing.daily_count",
+];
+
 fn unavailable_settings(
     instance_paths: &config::AstronomicalInstancePaths,
 ) -> &'static [&'static str] {
     if instance_paths.keeps_state_in_app_container() {
-        &FOLDER_SETTINGS
+        &APP_STORE_UNAVAILABLE_SETTINGS
     } else {
         &[]
     }

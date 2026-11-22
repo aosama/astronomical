@@ -1,3 +1,4 @@
+import type { ProblemReportClient } from "../ProblemReportClient";
 import type { SessionBridge } from "../SessionBridge";
 import type { AstroLibrary } from "./AstroLibrary";
 import { AstroHomeView } from "./AstroHomeView";
@@ -41,6 +42,8 @@ export class AstroCompanion {
   public constructor(init: {
     bridge: SessionBridge;
     library: AstroLibrary;
+    /** Reads and saves the problem report choice for Settings. */
+    problemReports: ProblemReportClient;
     getStartedOverlay: HTMLElement;
     settingsOverlay: HTMLElement;
     emptyState: HTMLElement;
@@ -81,7 +84,7 @@ export class AstroCompanion {
       library: init.library,
       onStarterPrompt: (prompt) => this.prepareMessage(prompt),
     });
-    this.settings = this.makeSettings(init.settingsOverlay, init.library);
+    this.settings = this.makeSettings(init.settingsOverlay, init.library, init.problemReports);
     init.library.onModelInstalled(() => this.welcomeNewModel(init.onModelInstalled));
   }
 
@@ -138,10 +141,11 @@ export class AstroCompanion {
     this.settings.open();
   }
 
-  private makeSettings(overlay: HTMLElement, library: AstroLibrary): SettingsView {
+  private makeSettings(overlay: HTMLElement, library: AstroLibrary, problemReports: ProblemReportClient): SettingsView {
     return new SettingsView({
       overlay,
       library,
+      problemReports,
       callbacks: {
         currentProfile: () => this.profile,
         saveNickname: (typedNickname) => this.remember(this.profile.withNickname(typedNickname)),

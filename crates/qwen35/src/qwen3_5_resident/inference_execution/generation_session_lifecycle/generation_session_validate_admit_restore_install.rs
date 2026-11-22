@@ -616,6 +616,7 @@ impl Qwen3_5EngineState {
                 .clone(),
             generation_residency_preparation_attempted: false,
             first_decode_forward_elapsed_millis: None,
+            outgrown_attention_slab_reclaim: Default::default(),
             generation_preparation_announced: false,
             structured_generation: inference_request.take_structured_generation(),
             engine_extension,

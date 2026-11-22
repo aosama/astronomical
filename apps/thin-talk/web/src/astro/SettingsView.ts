@@ -6,6 +6,8 @@ import { buildNameForm } from "./NameForm";
 import { buildPrivacyNotePanel } from "./PrivacyNote";
 import { SettingsJourney, SettingsStep } from "./SettingsJourney";
 import { SettingsModels } from "./SettingsModels";
+import { SettingsSharing } from "./SettingsSharing";
+import type { ProblemReportClient } from "../ProblemReportClient";
 import { buildAboutYouSection, buildAppearanceSection, buildPrivacySection } from "./SettingsSections";
 import type { SettingsRowActions } from "./SettingsSections";
 
@@ -38,12 +40,13 @@ export class SettingsView {
   private readonly callbacks: SettingsCallbacks;
   private readonly line: HTMLElement;
   private readonly models: SettingsModels;
+  private readonly sharing: SettingsSharing;
   private readonly journey = new SettingsJourney();
   private answers: HTMLElement | null = null;
   private saveAlert: HTMLElement | null = null;
   private hasFailedSave = false;
 
-  public constructor(init: { overlay: HTMLElement; library: AstroLibrary; callbacks: SettingsCallbacks }) {
+  public constructor(init: { overlay: HTMLElement; library: AstroLibrary; problemReports: ProblemReportClient; callbacks: SettingsCallbacks }) {
     this.overlay = init.overlay;
     this.document = init.overlay.ownerDocument;
     this.callbacks = init.callbacks;
@@ -55,6 +58,7 @@ export class SettingsView {
       sayPageLine: () => this.say(this.hasFailedSave ? AstroMoment.SAVE_FAILED : AstroMoment.SETTINGS),
       isShowing: () => this.journey.step === SettingsStep.PAGE,
     });
+    this.sharing = new SettingsSharing(this.document, init.problemReports);
     this.overlay.addEventListener("keydown", (keyEvent) => {
       if (keyEvent.key === "Escape") {
         this.escape();
@@ -136,6 +140,7 @@ export class SettingsView {
     this.overlay.replaceChildren(page);
     this.redrawAnswers();
     void this.models.refresh();
+    void this.sharing.refresh();
   }
 
   /** Rebuilds the answer groups, keeping keyboard focus on the control that
@@ -148,7 +153,7 @@ export class SettingsView {
     const focusedID = this.document.activeElement instanceof HTMLElement ? this.document.activeElement.id : "";
     const profile = this.profile();
     const rowActions = this.rowActions();
-    answers.replaceChildren(buildAboutYouSection(this.document, profile, rowActions), this.models.element, buildAppearanceSection(this.document, profile, rowActions), buildPrivacySection(this.document, rowActions));
+    answers.replaceChildren(buildAboutYouSection(this.document, profile, rowActions), this.models.element, buildAppearanceSection(this.document, profile, rowActions), this.sharing.element, buildPrivacySection(this.document, rowActions));
     if (focusedID.length > 0) {
       this.document.getElementById(focusedID)?.focus();
     }

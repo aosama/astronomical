@@ -140,6 +140,7 @@ fn resolved_runtime_config_with_penalty(
         menu_bar_shows_progress_and_speed: false,
         menu_bar_shows_technical_details: false,
         skill_settings: Default::default(),
+        sharing_settings: Default::default(),
         configured_astro_ssd_prompt_cache_maximum_size_bytes: None,
         performance_attribution_enabled: false,
         astro_ssd_prompt_cache_config: AstroSsdPromptCacheConfig::new(

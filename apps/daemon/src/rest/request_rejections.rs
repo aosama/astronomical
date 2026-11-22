@@ -63,7 +63,7 @@ pub(crate) fn generation_start_error_response(start_error: GenerationStartError)
             model_load_failure_reason,
         } => (
             axum::http::StatusCode::SERVICE_UNAVAILABLE,
-            Json(rest_contract::OpenAiErrorResponse::model_load_failed(
+            Json(crate::rest::request_rejections::model_load_failed_body(
                 model_load_failure_reason,
             )),
         )
@@ -83,4 +83,18 @@ fn request_too_large_response() -> Response {
         )),
     )
         .into_response()
+}
+
+/// The error body for a model that would not load, carrying the sentence and
+/// next step a person should see for this kind of failure (a damaged file
+/// needs a fresh download, not a smaller model).
+pub(crate) fn model_load_failed_body(
+    model_load_failure_reason: String,
+) -> rest_contract::OpenAiErrorResponse {
+    let failure_identity = ipc_protocol::identify_model_load_failure(&model_load_failure_reason);
+    rest_contract::OpenAiErrorResponse::model_load_failed(
+        model_load_failure_reason,
+        failure_identity.plain_sentence,
+        failure_identity.next_step,
+    )
 }
