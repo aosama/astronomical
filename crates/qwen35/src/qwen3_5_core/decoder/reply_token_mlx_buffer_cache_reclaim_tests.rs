@@ -2,7 +2,9 @@ use mlx_bridge::MlxDtype;
 use runtime_integration::{MLX_BUFFER_CACHE_RECLAIM_THRESHOLD_BYTES, MlxMemoryLimits, MlxRuntime};
 use serial_test::serial;
 
-use super::reply_token_mlx_buffer_cache_reclaim::OutgrownAttentionSlabReclaim;
+use super::reply_token_mlx_buffer_cache_reclaim::{
+    OutgrownAttentionSlabReclaim, reclaim_mlx_buffer_cache_between_draft_rounds,
+};
 
 const TEST_MLX_MEMORY_LIMIT_BYTES: usize = 1024 * 1024 * 1024;
 const FLOAT32_BYTES: usize = 4;
@@ -137,4 +139,26 @@ fn should_report_growth_only_when_the_state_became_larger() {
         !outgrown_attention_slab_reclaim.observe_slab_growth(DECODER_STATE_BYTES_BEFORE_GROWTH)
     );
     assert!(outgrown_attention_slab_reclaim.observe_slab_growth(DECODER_STATE_BYTES_AFTER_GROWTH));
+}
+
+/// The release itself is the runtime call the tests above exercise; what
+/// a draft round adds is its larger threshold, so a pool that the prompt
+/// path would already release must survive a draft round.
+#[test]
+#[serial]
+fn should_keep_between_draft_rounds_what_the_prompt_threshold_would_release() {
+    let runtime = test_runtime();
+    runtime
+        .synchronize_gpu_stream_and_clear_mlx_buffer_cache()
+        .expect("the test starts from an empty mlx_buffer_cache");
+    strand_one_slab_in_the_mlx_buffer_cache(&runtime, MLX_BUFFER_CACHE_RECLAIM_THRESHOLD_BYTES);
+    let mlx_buffer_cache_bytes_before = mlx_buffer_cache_bytes(&runtime);
+    assert!(mlx_buffer_cache_bytes_before >= MLX_BUFFER_CACHE_RECLAIM_THRESHOLD_BYTES);
+
+    reclaim_mlx_buffer_cache_between_draft_rounds(&runtime).expect("the check succeeds");
+
+    assert_eq!(
+        mlx_buffer_cache_bytes(&runtime),
+        mlx_buffer_cache_bytes_before
+    );
 }
