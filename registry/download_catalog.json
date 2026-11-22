@@ -647,7 +647,6 @@
             "minimum_memory_bytes": 4292952832,
             "role": "coding",
             "public": true,
-            "experimental": true,
             "description": "An uncensored version of Tiel Coder for adults doing security research or unrestricted coding work. It is built from an abliterated Ornith 1.5 and will go along with requests other models refuse, including harmful ones, so it is not suitable for young people and is best run on a sandboxed setup you watch. It reads code, text and images, reasons through multi-step problems, and uses tools, with a lean 6-bit compression that keeps quality high.",
             "capabilities": {
                 "supports_reasoning": true,
@@ -695,7 +694,6 @@
             "approximate_size_bytes": 8595477990,
             "approximate_memory_bytes": 9771050562,
             "role": "chat",
-            "experimental": true,
             "public": true,
             "description": "A 27B dense ternary model folded into a 2-bit pack. Every rotated projection applies its Hadamard transform at run time, so the compressed weights serve full-precision-quality chat with 48 gated-delta layers and 16 full-attention layers.",
             "capabilities": {
@@ -714,7 +712,6 @@
             "approximate_size_bytes": 8840805938,
             "approximate_memory_bytes": 9985798926,
             "role": "chat",
-            "experimental": true,
             "public": true,
             "description": "A 27B dense ternary model folded into a 2-bit Hadamard pack and paired with a DFlash2 block-diffusion draft model for speculative decoding. The folded ternary weights serve full-precision chat quality, while the draft model accelerates generation by proposing tokens the main model verifies. Text-only, built on Qwen 3.8 27B.",
             "capabilities": {
@@ -734,9 +731,8 @@
             "approximate_memory_bytes": 41768556798,
             "minimum_memory_bytes": 5258427904,
             "role": "chat",
-            "experimental": true,
             "public": true,
-            "description": "The largest model in the catalog, built for the heaviest writing, reasoning, and coding work. This experimental 2-bit mixed-precision build is the leanest way to run the full Ornith 122B - it takes about 37.9 GB on disk and needs a Mac with a large amount of memory. Favors deep, thoughtful answers over fast ones. Reads text only.",
+            "description": "The largest model in the catalog, built for the heaviest writing, reasoning, and coding work. This 2-bit mixed-precision build is the leanest way to run the full Ornith 122B - it takes about 37.9 GB on disk, and on a Mac with less memory than that it reads part of itself from the SSD, so replies are slower. Favors deep, thoughtful answers over fast ones. Reads text only.",
             "capabilities": {
                 "supports_reasoning": true,
                 "supports_tool_calls": true,
