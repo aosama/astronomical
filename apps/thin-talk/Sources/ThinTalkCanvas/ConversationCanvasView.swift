@@ -42,6 +42,8 @@ public final class ConversationCanvasView: NSView {
   private var commandsAwaitingPageLoad: [CanvasPageCommand] = []
   /// A draft sent before the page finished loading; only the latest is kept.
   private var draftAwaitingPageLoad: String?
+  /// A chat model asked for before the page loaded; the latest request wins.
+  private var chatModelAwaitingPageLoad: String?
   /// Where the next export goes without a save panel, when a Development
   /// export-folder link set one. Cleared as soon as an export takes it.
   private var folderForNextExport: URL?
@@ -211,6 +213,16 @@ public final class ConversationCanvasView: NSView {
 
   /// Puts a draft in the page's message field. Kept until the page has loaded
   /// when it has not yet, so a link that launches the app still fills it.
+  /// Switches the page's chat to `modelID`, once the page has loaded.
+  public func selectChatModel(_ modelID: String) {
+    guard isPageLoaded else {
+      chatModelAwaitingPageLoad = modelID
+      return
+    }
+    guard let chatModelScript = CanvasPageCommand.chatModelScript(modelID: modelID) else { return }
+    webView?.evaluateJavaScript(chatModelScript, completionHandler: nil)
+  }
+
   public func fillDraft(_ draftText: String) {
     guard isPageLoaded else {
       draftAwaitingPageLoad = draftText
@@ -243,6 +255,10 @@ public final class ConversationCanvasView: NSView {
     if let heldDraft = draftAwaitingPageLoad {
       draftAwaitingPageLoad = nil
       fillDraft(heldDraft)
+    }
+    if let heldChatModel = chatModelAwaitingPageLoad {
+      chatModelAwaitingPageLoad = nil
+      selectChatModel(heldChatModel)
     }
   }
 

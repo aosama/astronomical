@@ -29,11 +29,13 @@ let downloadModelsRefreshPromise = null;
 let downloadModelsProgressSample = null;
 let downloadModelsMeasuredBytesPerSecond = null;
 // What the Add a model list shows: the lowercase search query and the section
-// filter ("all", a section key, or "more").
+// filter ("all" or a section key).
 let downloadModelsSearchQuery = "";
 let downloadModelsActiveFilter = "all";
 // The model whose details are open, by its model ID, or null.
 let downloadModelsExpandedModelId = null;
+// Lead model IDs whose other builds are shown under them; folded by default.
+let downloadModelsUnfoldedLeadIds = [];
 // Serving memory ceiling from /v1/status: the limit the engine loads models
 // within, which can sit below the machine's RAM when the user configured a lower
 // maximum. Null means unknown, and the cards then show no fit label rather than a guess.
@@ -55,6 +57,7 @@ function wireDownloadModelsCatalog() {
     }
     wireDownloadModelsControls();
     wireDownloadModelsSelectionGuard(catalogContainer);
+    wireDownloadModelsMenuDismissal();
     if (typeof window !== "undefined" && window.location) {
         downloadModelsLinkedModelId = readDownloadModelsLinkedModelId(window.location.search);
     }
@@ -114,11 +117,17 @@ function renderDownloadModelsCatalogDocument(catalogDocument, catalogContainer) 
     // input moved, skip the rebuild so in-progress text selection and focus
     // survive (replacing nodes cuts selections out from under an active drag).
     const renderStateFingerprint = JSON.stringify([
-        catalogDocument,
+        downloadModelsFingerprintedCatalogDocument(catalogDocument),
         downloadModelsCurrentDownload,
         downloadModelsSearchQuery,
         downloadModelsActiveFilter,
         downloadModelsExpandedModelId,
+        downloadModelsUnfoldedLeadIds,
+        downloadModelsInstalledSortKey,
+        downloadModelsInstalledSortAscending,
+        downloadModelsOpenMenuHuggingfaceId,
+        downloadModelsLoadedModelId(),
+        downloadModelsVoiceSample,
         downloadModelsLinkedModelId,
         downloadModelsMeasuredBytesPerSecond,
         downloadModelsServingCeilingBytes,
@@ -167,6 +176,17 @@ function renderDownloadModelsCatalogDocument(catalogDocument, catalogContainer) 
     restoreDownloadModelsSearchSnapshot(searchSnapshot);
     downloadModelsRenderedStateOutcome = "ready";
     return "ready";
+}
+
+// The catalog as the render fingerprint sees it. Free disk space moves with
+// every file any program writes; counting raw bytes would rebuild the page every
+// second and cut through text selections, so it counts only as the whole
+// gigabytes the page shows.
+function downloadModelsFingerprintedCatalogDocument(catalogDocument) {
+    if (!catalogDocument || typeof catalogDocument !== "object") return catalogDocument;
+    const freeBytes = catalogDocument.models_directory_free_bytes;
+    if (!Number.isFinite(freeBytes)) return catalogDocument;
+    return { ...catalogDocument, models_directory_free_bytes: formatDownloadModelsFreeDiskText(freeBytes) };
 }
 
 function captureDownloadModelsSearchSnapshot() {
@@ -238,7 +258,6 @@ function downloadModelsCatalogRowFromEntry(catalogEntry) {
         role: catalogEntry.role,
         getStarted: catalogEntry.get_started === true,
         experimental: catalogEntry.experimental === true,
-        retiring: catalogEntry.retiring === true,
         minimumMemoryBytes: isDownloadModelsStreamingFloor(catalogEntry.minimum_memory_bytes)
             ? catalogEntry.minimum_memory_bytes
             : null,
@@ -260,6 +279,9 @@ function downloadModelsCatalogRowFromEntry(catalogEntry) {
         requestableModelId: typeof catalogEntry.requestable_model_id === "string"
             ? catalogEntry.requestable_model_id
             : null,
+        buildOf: downloadModelsOptionalText(catalogEntry.build_of),
+        buildDifference: downloadModelsOptionalText(catalogEntry.build_difference),
+        measuredSpeed: downloadModelsMeasuredSpeedFromEntry(catalogEntry.measured_speed),
         supportsReasoning: capabilities.supports_reasoning === true,
         supportsVision: capabilities.supports_vision === true,
         supportsToolCalls: capabilities.supports_tool_calls === true,
@@ -273,6 +295,26 @@ function downloadModelsCatalogRowFromEntry(catalogEntry) {
         maxOutputTokens: typeof capabilities.max_output_tokens === "number"
             ? capabilities.max_output_tokens
             : null
+    };
+}
+
+// Measured reply speeds in tokens a second, or null when the entry was not
+// measured or any figure is malformed: a partial speed is never shown.
+function downloadModelsMeasuredSpeedFromEntry(measuredSpeed) {
+    const rates = measuredSpeed?.tokens_per_second;
+    if (!rates || typeof measuredSpeed.measured_on !== "string"
+        || typeof measuredSpeed.astronomical_version !== "string") {
+        return null;
+    }
+    const rateNames = ["essay_short_prompt", "essay_long_prompt", "code_short_prompt", "code_long_prompt"];
+    if (!rateNames.every((rateName) => Number.isInteger(rates[rateName]) && rates[rateName] > 0)) return null;
+    return {
+        measuredOn: measuredSpeed.measured_on,
+        astronomicalVersion: measuredSpeed.astronomical_version,
+        essayShortPrompt: rates.essay_short_prompt,
+        essayLongPrompt: rates.essay_long_prompt,
+        codeShortPrompt: rates.code_short_prompt,
+        codeLongPrompt: rates.code_long_prompt
     };
 }
 
@@ -353,6 +395,13 @@ function readDownloadModelsCeilingIsUserLimit(statusDocument) {
         return false;
     }
     return configuredGigabytes * 1073741824 < machineCeilingBytes;
+}
+
+// Free bytes on the disk that holds the models folder, as the catalog reports
+// them; null when the daemon could not read the disk.
+function downloadModelsFreeDiskBytes() {
+    const freeBytes = downloadModelsCatalogDocument?.models_directory_free_bytes;
+    return Number.isSafeInteger(freeBytes) && freeBytes >= 0 ? freeBytes : null;
 }
 
 function isPositiveFiniteByteCount(byteCount) {

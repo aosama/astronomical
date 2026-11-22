@@ -87,6 +87,14 @@ export class ChatModelDownloadPanel {
   private showDownloadControls(chatModelPick: LibraryStarterPick): { meter: DownloadMeter; downloadButton: HTMLButtonElement } {
     const modelName = makeElement(this.document, "p", "model-download__name", modelNameFromHuggingfaceID(chatModelPick.huggingfaceID));
     modelName.dataset.testid = `${this.idPrefix}-download-model`;
+    // The engine's reason this model suits this Mac, under its name, so the
+    // one offer explains itself instead of asking the person to compare.
+    const reasonElements: HTMLElement[] = [];
+    if (chatModelPick.reason !== null) {
+      const reason = makeElement(this.document, "p", "model-download__reason", chatModelPick.reason);
+      reason.dataset.testid = `${this.idPrefix}-download-reason`;
+      reasonElements.push(reason);
+    }
     const meter = new DownloadMeter(this.document, this.idPrefix, chatModelPick.approximateSizeBytes);
     const downloadButton = makeButton(this.document, `${this.idPrefix}-download`, "Download", false);
     downloadButton.addEventListener("click", () => {
@@ -98,7 +106,7 @@ export class ChatModelDownloadPanel {
     });
     const continueButton = this.continueButton("Skip for now");
     continueButton.hidden = !this.host.canSkip;
-    this.element.append(modelName, meter.element, this.actionRow(downloadButton, ...this.modelsPageButtons(), continueButton), this.whatComesNext());
+    this.element.append(modelName, ...reasonElements, meter.element, this.actionRow(downloadButton, ...this.modelsPageButtons(), continueButton), this.whatComesNext());
     return { meter, downloadButton };
   }
 
