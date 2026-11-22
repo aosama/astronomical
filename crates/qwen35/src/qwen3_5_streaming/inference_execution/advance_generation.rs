@@ -158,7 +158,7 @@ impl Qwen3_5EngineState {
             None
         };
         let (next_generated_token, completed_forward_memory) = self
-            .decode_next_token_and_collect_memory(
+            .reclaim_outgrown_slabs_and_decode_next_token(
                 active_request,
                 &current_generated_token,
                 current_generated_token_id,
@@ -403,6 +403,25 @@ impl Qwen3_5EngineState {
                 &mut active_request.performance_attribution,
             );
         }
+    }
+
+    /// Releases the attention slabs the previous step outgrew, then decodes
+    /// the next token. The previous token is synchronized by now, so nothing
+    /// is in flight while the `mlx_buffer_cache` is released.
+    fn reclaim_outgrown_slabs_and_decode_next_token(
+        &mut self,
+        active_request: &mut super::engine_request::Qwen3_5EngineRequest,
+        current_generated_token: &MlxArray,
+        current_generated_token_id: u32,
+    ) -> Result<(MlxArray, CompletedForwardMemoryObservation), InferenceEngineError> {
+        if let Some(model) = self.model.as_ref() {
+            active_request.reclaim_outgrown_attention_slabs(model.runtime())?;
+        }
+        self.decode_next_token_and_collect_memory(
+            active_request,
+            current_generated_token,
+            current_generated_token_id,
+        )
     }
 
     /// Runs the next decode forward from a fresh memory baseline and
