@@ -79,3 +79,4 @@ public struct ToolApprovalPolicy: Sendable {
     "\(conversationID)\u{0}\(toolName)"
   }
 }
+// Test impact selection probe: a Swift-only change.
