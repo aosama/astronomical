@@ -89,3 +89,7 @@ impl ActiveMemoryCeilingEnforcement {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "worker_memory_ledger_snapshot_tests.rs"]
+mod tests;

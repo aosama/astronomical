@@ -114,7 +114,7 @@ pub fn quantized_matmul_affine_through_float32(
     bits: i32,
 ) -> Result<MlxArray, MlxCError> {
     let activation_dtype = activations.dtype();
-    let shares_one_half_precision_dtype = activation_dtype != MlxDtype::Float32
+    let shares_one_half_precision_dtype = is_half_precision(activation_dtype)
         && scales.dtype() == activation_dtype
         && biases.dtype() == activation_dtype;
     if !shares_one_half_precision_dtype {
@@ -138,6 +138,12 @@ pub fn quantized_matmul_affine_through_float32(
         bits,
     )?;
     context.astype(&float32_projection, activation_dtype)
+}
+
+/// BF16 and float16 are the dtypes MLX's CPU kernel is slow for; any other
+/// dtype (float32, float64) keeps MLX's own route, so nothing is narrowed.
+fn is_half_precision(activation_dtype: MlxDtype) -> bool {
+    matches!(activation_dtype, MlxDtype::BFloat16 | MlxDtype::Float16)
 }
 
 // The float32 route runs only where MLX has no GPU backend, so its contracts

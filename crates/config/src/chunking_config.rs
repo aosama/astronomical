@@ -165,7 +165,8 @@ pub const DEFAULT_FULL_ATTENTION_KEY_VALUE_GROWTH_TOKENS: u32 = 256;
 /// The Metal build's prompt chunk.
 #[cfg(target_os = "macos")]
 pub const DEFAULT_FIXED_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS: u32 = 2_048;
-/// Builds without Metal run MLX on the CPU, where a prompt chunk costs orders
+/// Non-macOS builds run MLX on the CPU today (a future CUDA build would want
+/// its own defaults), where a prompt chunk costs orders
 /// of magnitude more than on a GPU: tens of seconds for 64 tokens of the
 /// smallest Qwen3.5 model. The engine runs one chunk at load to measure its
 /// MLX working buffers, so a 2,048-token default would keep a model loading

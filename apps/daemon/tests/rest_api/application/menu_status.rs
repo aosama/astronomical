@@ -39,7 +39,7 @@ const FLUX_STATUS_FIXTURE: &str = include_str!(
 );
 
 /// The prompt chunk defaults of the Metal build, which the menu app's fixtures
-/// record. Builds without Metal default to smaller chunks (see
+/// record. Non-macOS builds default to smaller chunks (see
 /// `config::DEFAULT_FIXED_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS`).
 const METAL_BUILD_CHUNK_DEFAULTS: [(&str, u32, u32); 2] = [
     (
@@ -54,10 +54,24 @@ const METAL_BUILD_CHUNK_DEFAULTS: [(&str, u32, u32); 2] = [
     ),
 ];
 
+/// The macOS defaults are the Metal build's, which the fixtures record; a
+/// change to either fails here and in the contracts below.
+#[cfg(target_os = "macos")]
+#[test]
+fn should_keep_the_metal_build_chunk_defaults_on_macos() {
+    for (chunk_field_name, platform_default, metal_build_default) in METAL_BUILD_CHUNK_DEFAULTS {
+        assert_eq!(platform_default, metal_build_default, "{chunk_field_name}");
+    }
+}
+
 /// Maps this build's chunk defaults to the Metal build's, so the fixtures of
-/// the macOS menu app check every other field on every platform. On macOS the
-/// two are equal and nothing changes.
+/// the macOS menu app check every other field on every platform. On macOS
+/// the document is compared as served, so a changed macOS default still
+/// fails the contract until the fixtures change with it.
 fn with_metal_build_chunk_defaults(mut status_document: Value) -> Value {
+    if cfg!(target_os = "macos") {
+        return status_document;
+    }
     for (chunk_field_name, platform_default, metal_build_default) in METAL_BUILD_CHUNK_DEFAULTS {
         replace_chunk_default(
             &mut status_document,

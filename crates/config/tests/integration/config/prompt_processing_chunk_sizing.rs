@@ -61,7 +61,7 @@ fn should_migrate_the_retired_4096_resident_chunk_default_to_the_current_default
     assert_eq!(
         persisted_config["chunking"]["fixed_prompt_processing_chunk_size_tokens"],
         config::DEFAULT_FIXED_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS,
-        "the retired 4,096 default should be rewritten to 2,048 on disk"
+        "the retired 4,096 default should be rewritten to this build's default on disk"
     );
 }
 
