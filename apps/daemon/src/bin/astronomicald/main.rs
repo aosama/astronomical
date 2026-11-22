@@ -410,6 +410,9 @@ async fn launch_daemon_worker(
             Ok(worker_handle)
         }
         Err(worker_start_error) => {
+            // Stderr alone is lost once the menu-bar agent restarts the engine;
+            // the daemon log keeps the worker's exit status and stderr tail.
+            tracing::error!(%worker_start_error, "astronomicald worker unavailable");
             eprintln!("astronomicald worker unavailable: {worker_start_error}");
             Ok(WorkerHandle::unavailable())
         }
