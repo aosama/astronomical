@@ -116,11 +116,12 @@ function renderMemoryLimitControl(statusDocument) {
 }
 
 // Feedback stays inside the control's own panel, next to the button pressed.
+// An empty message hides it, as for a change the notice already names.
 function showMemoryControlFeedback(message, feedbackKind) {
     const feedbackElement = document.getElementById("maximum-mlx-memory-feedback");
     feedbackElement.textContent = message;
     feedbackElement.className = "control-feedback feedback-" + feedbackKind;
-    feedbackElement.hidden = false;
+    feedbackElement.hidden = message === "";
 }
 
 function wireMemoryLimitControl() {
@@ -159,7 +160,13 @@ async function updateMaximumMlxMemory(maximumMlxMemoryGigabytes) {
         document.dispatchEvent(new CustomEvent(CONFIG_FILE_WRITTEN_EVENT));
         if (!response.ok) { showMemoryControlFeedback(responseDocument.message || "Memory limit update failed", "error"); return; }
         maximumMlxMemoryEditIsActive = false;
-        showMemoryControlFeedback(responseDocument.message || "Memory limit updated", response.status === 202 ? "progress" : "success");
+        // A change that waits for the current reply is already named, quietly,
+        // by the notice under the input, so it gets no second, coloured message.
+        if (response.status === 202) {
+            showMemoryControlFeedback("", "success");
+        } else {
+            showMemoryControlFeedback(responseDocument.message || "Maximum model RAM updated.", "success");
+        }
         await pollStatus();
     } catch (fetchError) {
         showMemoryControlFeedback("Memory limit update failed: " + fetchError.message, "error");

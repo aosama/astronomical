@@ -429,7 +429,7 @@ final class DaemonClientContractTests: XCTestCase {
   func test_should_allow_a_live_memory_update_to_use_the_bounded_reclamation_timeout() async throws {
     StubDaemonURLProtocol.responseConfiguration = .init(
       statusCode: 200,
-      responseBody: Data(#"{"message":"MLX memory setting persisted and applied"}"#.utf8)
+      responseBody: Data(#"{"message":"Maximum model RAM updated."}"#.utf8)
     )
     StubDaemonURLProtocol.receivedRequestTimeoutInterval = nil
     defer {

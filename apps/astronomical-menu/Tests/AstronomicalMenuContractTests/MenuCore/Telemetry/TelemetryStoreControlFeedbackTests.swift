@@ -111,13 +111,13 @@ final class TelemetryStoreControlFeedbackTests: XCTestCase {
 
     XCTAssertEqual(
       telemetryStore.controlActionFeedback,
-      .success("MLX memory setting persisted and applied")
+      .success("Maximum model RAM updated.")
     )
 
     try await Task.sleep(for: .milliseconds(10))
     XCTAssertEqual(
       telemetryStore.controlActionFeedback,
-      .success("MLX memory setting persisted and applied")
+      .success("Maximum model RAM updated.")
     )
 
     feedbackDismissalGate.release()
@@ -136,13 +136,19 @@ final class TelemetryStoreControlFeedbackTests: XCTestCase {
     await telemetryStore.performMaximumMlxMemoryLimitUpdate(32)
     XCTAssertEqual(
       telemetryStore.controlActionFeedback,
-      .success("MLX memory setting persisted and queued until generation finalizes")
+      .success("Maximum model RAM changes when the current reply finishes.")
     )
+    XCTAssertNil(
+      telemetryStore.visibleControlActionFeedback,
+      "the slider's own note names a queued change, so the success line is not shown twice")
 
     await daemonClient.markMaximumMlxMemoryUpdateAsApplied()
     telemetryStore.refreshNow()
     try await Task.sleep(for: .milliseconds(10))
     XCTAssertNotNil(telemetryStore.controlActionFeedback)
+    XCTAssertEqual(
+      telemetryStore.visibleControlActionFeedback, telemetryStore.controlActionFeedback,
+      "once the change lands, nothing hides the feedback")
 
     feedbackDismissalGate.release()
     try await waitForControlActionFeedbackToDismiss(from: telemetryStore)
@@ -156,7 +162,7 @@ final class TelemetryStoreControlFeedbackTests: XCTestCase {
           effectiveMlxMemoryCeilingBytes: 30_000_000_000,
           mlxMemoryLimitError: "The worker could not apply the requested MLX memory ceiling"),
         maximumMlxMemoryUpdateMessage:
-          "MLX memory setting persisted and queued until generation finalizes")
+          "Maximum model RAM changes when the current reply finishes.")
     )
 
     await telemetryStore.performMaximumMlxMemoryLimitUpdate(32)
@@ -188,7 +194,7 @@ final class TelemetryStoreControlFeedbackTests: XCTestCase {
 
     XCTAssertEqual(
       telemetryStore.controlActionFeedback,
-      .success("MLX memory setting persisted and applied")
+      .success("Maximum model RAM updated.")
     )
     feedbackDismissalGate.release()
     try await waitForControlActionFeedbackToDismiss(from: telemetryStore)
@@ -211,7 +217,7 @@ final class TelemetryStoreControlFeedbackTests: XCTestCase {
 
     XCTAssertEqual(
       telemetryStore.controlActionFeedback,
-      .success("MLX memory setting persisted and applied")
+      .success("Maximum model RAM updated.")
     )
     feedbackDismissalGate.release()
     try await waitForControlActionFeedbackToDismiss(from: telemetryStore)
@@ -233,7 +239,7 @@ final class TelemetryStoreControlFeedbackTests: XCTestCase {
 
     XCTAssertEqual(
       telemetryStore.controlActionFeedback,
-      .success("MLX memory setting persisted and applied")
+      .success("Maximum model RAM updated.")
     )
   }
 
@@ -429,7 +435,7 @@ private actor QueuedMaximumMlxMemoryUpdateDaemonClient: DaemonClient {
   }
 
   func updateMaximumMlxMemoryGigabytes(_ maximumMlxMemoryGigabytes: UInt64?) async throws -> String {
-    "MLX memory setting persisted and queued until generation finalizes"
+    "Maximum model RAM changes when the current reply finishes."
   }
 
   func requestShutdown() async throws {}

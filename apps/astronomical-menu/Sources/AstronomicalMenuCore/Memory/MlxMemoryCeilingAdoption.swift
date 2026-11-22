@@ -15,7 +15,7 @@ private let metalWorkingSetMarginPartsPerThousand: UInt64 = 25
 ///
 /// A request above the plannable wired budget lands below the number the
 /// slider sent. Treating only an exact byte match as success leaves
-/// "MLX memory setting persisted and applied" on screen after the engine has
+/// "Maximum model RAM updated." on screen after the engine has
 /// already adopted the clamped ceiling.
 func liveMlxMemoryCeilingAdoptedRequest(
   liveCeilingBytes: UInt64,

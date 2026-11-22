@@ -28,7 +28,9 @@ test("should_report_a_memory_change_in_its_own_panel_and_tell_the_editor_the_fil
     assert.deepEqual(dispatchedEventTypes, ["observatory:config-file-written"]);
 });
 
-test("should_show_a_queued_memory_change_as_progress", async () => {
+// The notice under the input already names a queued change, quietly; a
+// second, coloured message beside it would only repeat it.
+test("should_add_no_feedback_for_a_queued_memory_change", async () => {
     const scriptContext = createConsoleContext();
     const elementsById = attachRecordingElements(scriptContext);
     recordConfigFileWrittenEvents(scriptContext);
@@ -37,7 +39,8 @@ test("should_show_a_queued_memory_change_as_progress", async () => {
 
     await vm.runInContext("updateMaximumMlxMemory(34)", scriptContext);
 
-    assert.equal(elementsById["maximum-mlx-memory-feedback"].className, "control-feedback feedback-progress");
+    assert.equal(elementsById["maximum-mlx-memory-feedback"].hidden, true);
+    assert.equal(elementsById["maximum-mlx-memory-feedback"].textContent, "");
 });
 
 test("should_tell_the_editor_the_file_changed_even_when_a_memory_change_is_refused", async () => {

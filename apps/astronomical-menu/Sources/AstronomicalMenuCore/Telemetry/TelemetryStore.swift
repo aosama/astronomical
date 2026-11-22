@@ -375,6 +375,17 @@ final class TelemetryStore: ObservableObject {
     return overflowOccurred ? nil : requestedMlxMemoryCeilingBytes
   }
 
+  /// The feedback the popover shows. A success for a change still waiting on the reply being
+  /// written is left out: the slider's own note already says when the change lands, so the
+  /// line would only repeat it.
+  var visibleControlActionFeedback: ControlActionFeedback? {
+    guard let controlActionFeedback else { return nil }
+    if case .success = controlActionFeedback, statusDocument.pendingMlxMemoryCeilingBytes != nil {
+      return nil
+    }
+    return controlActionFeedback
+  }
+
   var minimumWholeGigabytes: UInt64 {
     (statusDocument.minimumMlxMemoryCeilingBytes + 1_073_741_823) / 1_073_741_824
   }
