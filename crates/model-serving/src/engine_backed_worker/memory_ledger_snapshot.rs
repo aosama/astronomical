@@ -1,6 +1,6 @@
 //! The memory ledger's reading as the worker publishes it (issue #2221).
 
-use ipc_protocol::WorkerMemoryLedgerSnapshot;
+use ipc_protocol::{ActiveMemoryCeilingEnforcement, WorkerMemoryLedgerSnapshot};
 use memory_policy::ledger::LedgerReading;
 
 /// Flattens one ledger reading into the protocol's snapshot.
@@ -49,6 +49,7 @@ pub(crate) const fn worker_memory_ledger_snapshot(
         probed_mlx_working_buffer_bytes: ledger_reading.probed_mlx_working_buffer_bytes,
         lowest_kept_share_while_reading_permille: ledger_reading
             .lowest_kept_share_while_reading_permille,
+        active_memory_ceiling_enforcement: ActiveMemoryCeilingEnforcement::for_this_build(),
     }
 }
 

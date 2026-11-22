@@ -13,7 +13,9 @@ use crate::kernel_capability::CustomMetalKernelFamily;
 use crate::qwen3_5_core::artifacts::{Qwen3_5ShardIndex, ValidatedQwen3_5Artifact};
 use crate::qwen3_5_core::configuration::Qwen3_5Config;
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
-use crate::qwen3_5_core::model_math::weights::Qwen3_5Weights;
+use crate::qwen3_5_core::model_math::weights::{
+    Qwen3_5Weights, WeightBindingDtype, bound_dtype_of,
+};
 use crate::qwen3_5_core::vision::Qwen3_5VisionModel;
 use crate::{PerformanceAttribution, PerformanceOperation, TensorInventory};
 
@@ -28,16 +30,34 @@ pub struct BoundLanguageArtifact {
     pub vision_model: Option<Qwen3_5VisionModel>,
 }
 
+/// Binds the language artifact with every tensor exactly as stored, as the
+/// streaming engine needs (see [`bind_language_artifact_for`]).
+pub fn bind_language_artifact(
+    runtime: &MlxRuntime,
+    validated_artifact: &mut ValidatedQwen3_5Artifact,
+    should_bind_vision_weights: bool,
+    performance_attribution: &mut PerformanceAttribution,
+) -> Result<BoundLanguageArtifact, Qwen3_5ExecutionError> {
+    bind_language_artifact_for(
+        runtime,
+        validated_artifact,
+        should_bind_vision_weights,
+        WeightBindingDtype::AsStored,
+        performance_attribution,
+    )
+}
+
 /// Binds the validated language artifact: extracts the configuration and
 /// shard metadata, loads the optional sidecar vision model, maps and loads
 /// the language shards, then binds the weights and (for embedded towers) the
 /// vision model from those shards. Mirrors the inlined preamble of both
 /// engines' loaders expression-for-expression, including the attribution
 /// spans.
-pub fn bind_language_artifact(
+pub fn bind_language_artifact_for(
     runtime: &MlxRuntime,
     validated_artifact: &mut ValidatedQwen3_5Artifact,
     should_bind_vision_weights: bool,
+    weight_binding_dtype: WeightBindingDtype,
     performance_attribution: &mut PerformanceAttribution,
 ) -> Result<BoundLanguageArtifact, Qwen3_5ExecutionError> {
     let config = validated_artifact.config().clone();
@@ -124,6 +144,7 @@ pub fn bind_language_artifact(
                 &config,
                 &shard_index,
                 model_shards,
+                weight_binding_dtype,
             )?;
             Ok((weights, vision_model))
         },
@@ -259,32 +280,46 @@ pub struct InvariantLinearScales {
 /// path folds each scale into `fast_rms_norm`'s per-channel weight so one
 /// fused launch replaces the norm kernel plus the broadcast-multiply kernel
 /// (issue #915 item 5). Every channel carries the same f32 value through the
-/// same BF16 rounding as the scalar scales, which the fused decode-prework
-/// kernel still requires.
+/// same rounding to `scale_dtype` as the scalar scales: BF16, which the fused
+/// decode-prework kernel requires, or float32 where the engine binds for a CPU
+/// compute device and that kernel is demoted anyway (#2441).
 pub fn load_invariant_linear_scales(
     runtime: &MlxRuntime,
     config: &Qwen3_5Config,
+    weight_binding_dtype: WeightBindingDtype,
+) -> Result<InvariantLinearScales, Qwen3_5ExecutionError> {
+    invariant_linear_scales_in(
+        runtime,
+        config,
+        bound_dtype_of(MlxDtype::BFloat16, weight_binding_dtype)?,
+    )
+}
+
+fn invariant_linear_scales_in(
+    runtime: &MlxRuntime,
+    config: &Qwen3_5Config,
+    scale_dtype: MlxDtype,
 ) -> Result<InvariantLinearScales, Qwen3_5ExecutionError> {
     let linear_head_dimension = config.linear_key_head_dimension() as f32;
     let inverse_linear_head_dimension_scale = runtime
         .array_from_f32(&[linear_head_dimension.recip()], &[])
-        .and_then(|float32_scale| runtime.astype(&float32_scale, MlxDtype::BFloat16))?;
+        .and_then(|float32_scale| runtime.astype(&float32_scale, scale_dtype))?;
     let inverse_square_root_linear_head_dimension_scale = runtime
         .array_from_f32(&[linear_head_dimension.sqrt().recip()], &[])
-        .and_then(|float32_scale| runtime.astype(&float32_scale, MlxDtype::BFloat16))?;
+        .and_then(|float32_scale| runtime.astype(&float32_scale, scale_dtype))?;
     let head_dimension_i32 = config.linear_key_head_dimension() as i32;
     let query_normalization_scale_weight = runtime
         .array_from_f32(
             &vec![linear_head_dimension.recip(); head_dimension_i32 as usize],
             &[head_dimension_i32],
         )
-        .and_then(|float32_weight| runtime.astype(&float32_weight, MlxDtype::BFloat16))?;
+        .and_then(|float32_weight| runtime.astype(&float32_weight, scale_dtype))?;
     let key_normalization_scale_weight = runtime
         .array_from_f32(
             &vec![linear_head_dimension.sqrt().recip(); head_dimension_i32 as usize],
             &[head_dimension_i32],
         )
-        .and_then(|float32_weight| runtime.astype(&float32_weight, MlxDtype::BFloat16))?;
+        .and_then(|float32_weight| runtime.astype(&float32_weight, scale_dtype))?;
     Ok(InvariantLinearScales {
         inverse_linear_head_dimension_scale,
         inverse_square_root_linear_head_dimension_scale,

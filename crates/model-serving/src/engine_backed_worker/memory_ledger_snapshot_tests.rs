@@ -128,3 +128,19 @@ fn should_publish_the_latest_system_wired_reading_and_its_limit() {
     assert_eq!(snapshot.system_wired_bytes, 30 * GIBIBYTE);
     assert_eq!(snapshot.system_wire_limit_bytes, 38 * GIBIBYTE);
 }
+
+#[test]
+fn should_report_whether_mlx_enforces_the_active_memory_ceiling_on_this_build() {
+    let snapshot =
+        worker_memory_ledger_snapshot(reading_after_one_prompt_step(4 * GIBIBYTE, 8 * GIBIBYTE, 0));
+
+    let expected_enforcement = if cfg!(target_os = "macos") {
+        ipc_protocol::ActiveMemoryCeilingEnforcement::EnforcedByMlx
+    } else {
+        ipc_protocol::ActiveMemoryCeilingEnforcement::Unavailable
+    };
+    assert_eq!(
+        snapshot.active_memory_ceiling_enforcement,
+        expected_enforcement
+    );
+}

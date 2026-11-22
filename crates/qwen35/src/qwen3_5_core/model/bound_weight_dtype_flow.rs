@@ -176,14 +176,18 @@ fn feed_forward_output_dtype(
 fn dense_contract(projection: &Qwen3_5DenseProjection) -> AffineDtypeContract {
     match projection.bound() {
         Some(bound_weights) => affine_contract(bound_weights),
-        None => AffineDtypeContract::NativeBfloat16,
+        None => AffineDtypeContract::Native {
+            weight: mlx_bridge::MlxDtype::BFloat16,
+        },
     }
 }
 
 /// Reduces one bound affine weight to the shared replay's dtype contract.
 fn affine_contract(affine_weights: &Qwen3_5AffineWeights) -> AffineDtypeContract {
     match affine_weights {
-        Qwen3_5AffineWeights::NativeBfloat16 { .. } => AffineDtypeContract::NativeBfloat16,
+        Qwen3_5AffineWeights::NativeBfloat16 { weight } => AffineDtypeContract::Native {
+            weight: weight.dtype(),
+        },
         Qwen3_5AffineWeights::Jangtq2Codebook { .. } => AffineDtypeContract::Jangtq2Codebook,
         Qwen3_5AffineWeights::Quantized {
             quantization_scales,

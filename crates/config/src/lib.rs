@@ -47,7 +47,7 @@ pub use chunking_config::{
     DEFAULT_PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL,
     LEGACY_DEFAULT_FIXED_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS,
     LEGACY_DEFAULT_FIXED_SSD_STREAMING_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS,
-    should_materialize_ssd_streaming_chunk_default,
+    should_materialize_resident_chunk_default, should_materialize_ssd_streaming_chunk_default,
 };
 pub use config_document_edit::{
     ConfigDocumentSnapshot, config_schema_bytes, read_config_document, reset_config_document,

@@ -6,7 +6,8 @@ use crate::qwen3_5_core::configuration::Qwen3_5Config;
 use crate::qwen3_5_core::frozen_config_test_support::frozen_ornith_1_0_config_bytes;
 
 use super::{
-    apply_rms_norm_storage_convention, is_language_rms_norm_weight_tensor,
+    WeightBindingDtype, apply_rms_norm_storage_convention, binds_widened_to_float32,
+    bound_in_binding_dtype, is_language_rms_norm_weight_tensor,
     is_published_pytorch_convolution_layout, is_raw_hugging_face_norm_offset_weight_tensor,
 };
 
@@ -223,4 +224,81 @@ fn should_scale_only_once_when_both_conventions_would_match_the_same_tensor() {
             .expect("the convention-adjusted RMSNorm weight should be readable"),
         [1.25, 0.5]
     );
+}
+
+#[test]
+fn should_widen_half_precision_only_when_binding_for_a_cpu_compute_device() {
+    for stored_dtype in [
+        mlx_bridge::MlxDtype::BFloat16,
+        mlx_bridge::MlxDtype::Float16,
+    ] {
+        assert!(binds_widened_to_float32(
+            stored_dtype,
+            WeightBindingDtype::ForComputeDevice,
+            true
+        ));
+        assert!(
+            !binds_widened_to_float32(stored_dtype, WeightBindingDtype::ForComputeDevice, false),
+            "a GPU computes half precision accurately"
+        );
+        assert!(
+            !binds_widened_to_float32(stored_dtype, WeightBindingDtype::AsStored, true),
+            "the streaming engine plans from stored bytes"
+        );
+    }
+}
+
+#[test]
+fn should_never_widen_packed_integer_or_float32_tensors() {
+    for stored_dtype in [
+        mlx_bridge::MlxDtype::UInt32,
+        mlx_bridge::MlxDtype::UInt8,
+        mlx_bridge::MlxDtype::Int32,
+        mlx_bridge::MlxDtype::Float32,
+    ] {
+        assert!(
+            !binds_widened_to_float32(stored_dtype, WeightBindingDtype::ForComputeDevice, true),
+            "{stored_dtype:?} keeps its storage"
+        );
+    }
+}
+
+#[test]
+#[serial]
+fn should_bind_a_bfloat16_tensor_in_the_engines_binding_dtype_without_changing_values() {
+    let runtime = test_runtime();
+    let mlx_computes_on_cpu =
+        runtime_integration::mlx_computes_on_cpu().expect("the backend query should answer");
+    for weight_binding_dtype in [
+        WeightBindingDtype::AsStored,
+        WeightBindingDtype::ForComputeDevice,
+    ] {
+        let stored_tensor = runtime
+            .astype(&test_norm_weight(&runtime), mlx_bridge::MlxDtype::BFloat16)
+            .expect("the stored tensor should cast");
+
+        let bound_tensor = bound_in_binding_dtype(&runtime, stored_tensor, weight_binding_dtype)
+            .expect("binding should succeed");
+
+        let expected_dtype = if binds_widened_to_float32(
+            mlx_bridge::MlxDtype::BFloat16,
+            weight_binding_dtype,
+            mlx_computes_on_cpu,
+        ) {
+            mlx_bridge::MlxDtype::Float32
+        } else {
+            mlx_bridge::MlxDtype::BFloat16
+        };
+        assert_eq!(bound_tensor.dtype(), expected_dtype);
+        let bound_values = runtime
+            .astype(&bound_tensor, mlx_bridge::MlxDtype::Float32)
+            .expect("the bound tensor should read as float32")
+            .to_vec_f32()
+            .expect("the bound tensor should evaluate");
+        assert_eq!(
+            bound_values,
+            vec![0.25, -0.5],
+            "binding must not change any value"
+        );
+    }
 }

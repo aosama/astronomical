@@ -26,6 +26,10 @@ use super::{
 };
 use mlx_bridge::{MlxCompiledElementwiseGraphs, MlxCompiledSwiGlu, MlxMetalKernel};
 
+/// The streaming engine plans memory from the bytes on disk, so it binds
+/// tensors exactly as stored.
+const LANGUAGE_WEIGHT_BINDING_DTYPE: crate::qwen3_5_core::model_math::weights::WeightBindingDtype =
+    crate::qwen3_5_core::model_math::weights::WeightBindingDtype::AsStored;
 impl Qwen3_5Model {
     /// Loads a model without diagnostic performance attribution.
     pub fn load(
@@ -133,7 +137,7 @@ impl Qwen3_5Model {
             inverse_square_root_linear_head_dimension_scale,
             query_normalization_scale_weight,
             key_normalization_scale_weight,
-        } = load_invariant_linear_scales(&runtime, &config)?;
+        } = load_invariant_linear_scales(&runtime, &config, LANGUAGE_WEIGHT_BINDING_DTYPE)?;
         let streaming_expert_budget = build_streaming_expert_budget(
             &runtime,
             &config,

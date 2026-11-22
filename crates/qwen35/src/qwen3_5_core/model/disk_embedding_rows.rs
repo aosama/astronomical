@@ -126,10 +126,30 @@ impl Qwen3_5DiskEmbeddingRows {
             &row_selection.selected_row_index_by_token,
             &token_indices_shape,
         )?;
-        let packed_rows = read_table_rows(runtime, &self.weight_table, &row_selection)?;
+        let embedding_rows = self.gathered_rows(
+            runtime,
+            &row_selection,
+            &selected_row_indices,
+            bound_embedding_weights,
+        )?;
+        rows_in_bound_embedding_dtype(runtime, embedding_rows, bound_embedding_weights)
+    }
+}
+
+impl Qwen3_5DiskEmbeddingRows {
+    /// The selected rows, dequantized with their on-disk scales and biases
+    /// when the table is quantized.
+    fn gathered_rows(
+        &self,
+        runtime: &MlxRuntime,
+        row_selection: &EmbeddingRowSelection,
+        selected_row_indices: &MlxArray,
+        bound_embedding_weights: &Qwen3_5AffineWeights,
+    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+        let packed_rows = read_table_rows(runtime, &self.weight_table, row_selection)?;
         match (bound_embedding_weights, &self.affine_tables) {
             (Qwen3_5AffineWeights::NativeBfloat16 { .. }, None) => {
-                Ok(runtime.take_axis(&packed_rows, &selected_row_indices, 0)?)
+                Ok(runtime.take_axis(&packed_rows, selected_row_indices, 0)?)
             }
             (
                 Qwen3_5AffineWeights::Quantized {
@@ -141,9 +161,9 @@ impl Qwen3_5DiskEmbeddingRows {
             ) => super::base::gather_quantized_embedding_rows(
                 runtime,
                 &packed_rows,
-                &read_table_rows(runtime, &affine_tables.scales_table, &row_selection)?,
-                &read_table_rows(runtime, &affine_tables.biases_table, &row_selection)?,
-                &selected_row_indices,
+                &read_table_rows(runtime, &affine_tables.scales_table, row_selection)?,
+                &read_table_rows(runtime, &affine_tables.biases_table, row_selection)?,
+                selected_row_indices,
                 *quantization_group_size,
                 *quantization_bits,
             ),
@@ -152,6 +172,30 @@ impl Qwen3_5DiskEmbeddingRows {
             )),
         }
     }
+}
+
+/// Rows read from disk carry the stored dtype, while rows gathered from the
+/// bound table carry the bound one (float32 where the engine binds for a CPU
+/// compute device, #2441). Casting here makes both paths hand the first layer
+/// the same dtype the decoder-state replay assumes; where the two dtypes
+/// match, as on Metal, nothing is cast.
+pub(super) fn rows_in_bound_embedding_dtype(
+    runtime: &MlxRuntime,
+    embedding_rows: MlxArray,
+    bound_embedding_weights: &Qwen3_5AffineWeights,
+) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    let bound_embedding_dtype = match bound_embedding_weights {
+        Qwen3_5AffineWeights::NativeBfloat16 { weight } => weight.dtype(),
+        Qwen3_5AffineWeights::Quantized {
+            quantization_scales,
+            ..
+        } => quantization_scales.dtype(),
+        Qwen3_5AffineWeights::Jangtq2Codebook { .. } => return Ok(embedding_rows),
+    };
+    if embedding_rows.dtype() == bound_embedding_dtype {
+        return Ok(embedding_rows);
+    }
+    Ok(runtime.astype(&embedding_rows, bound_embedding_dtype)?)
 }
 
 fn invalid_embedding_table(description: &'static str) -> Qwen3_5ExecutionError {

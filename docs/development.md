@@ -104,6 +104,33 @@ What runs differently on Linux:
 - **The worker reads physical memory from `/proc/meminfo`.** It claims no wired residency, because that is a Metal claim, and serves from ordinary pageable memory.
 - **Run tests with `--show-output`** to see which contracts were skipped and why.
 
+## Running a model on Linux
+
+The daemon and worker serve chat models on Linux with MLX's CPU backend. Build them optimized, because the CPU spends its time in MLX and in the worker's own loops, and debug builds of the latter are many times slower:
+
+    cargo build --release -p astronomical-daemon -p astronomical-inference-worker
+
+Put a model in its own folder under a models directory, named as the model is (for example `Qwen3.5-0.8B-MLX-4bit`, the smallest chat model in `registry/download_catalog.json`), and point an instance at that directory. A state directory holds the instance's `config.json`:
+
+    {"schema_version":1,"runtime":{"model_directories":["/path/to/models"],"maximum_mlx_memory_gb":6}}
+
+Start the daemon, and send a chat request to the address it prints:
+
+    target/release/astronomicald --instance development --state-directory /path/to/state
+    curl http://127.0.0.1:PORT/v1/chat/completions -H 'content-type: application/json' \
+      -d '{"model":"Qwen3.5-0.8B-MLX-4bit","messages":[{"role":"user","content":"Who wrote the play Romeo and Juliet?"}],"max_tokens":60,"reasoning_effort":"none"}'
+
+What to expect:
+
+- **It is slow.** On MLX's CPU backend the 0.8B model reads and writes on the order of one token a second, so even a one-sentence answer takes minutes, most of them spent reading the chat template. `"reasoning_effort":"none"` keeps the model from spending its token budget thinking.
+- **Prompts are read 64 tokens at a time by default** on builds without Metal, against 2,048 (4,096 for SSD-paged models) with Metal. The engine reads one chunk at load to measure its working buffers, and a larger chunk would keep a CPU loading for many minutes. `chunking.fixed_prompt_processing_chunk_size_tokens` in `config.json` sets another size, and a saved 2,048 written by an earlier Linux build is moved to the new default.
+- **The daemon gives a model ten minutes to load**, against one minute with Metal, for the same reason.
+- **Other models still compute in half precision on the CPU,** including their quantized projections, which MLX's CPU backend runs about ten times slower in BF16 and float16 than in float32 on CPUs without native half-precision arithmetic.
+- **Qwen3.5 computes in float32 on the CPU.** MLX's CPU backend runs it in BF16 inaccurately enough to change its answers, so the resident engine binds every half-precision language tensor in float32 ([#2441](https://github.com/aosama/astronomical/issues/2441)). Its decoder state is float32 too, about twice the BF16 bytes, and memory admission counts it. The widened weights take more memory than the files on disk: every quantization scale and bias doubles, so a 4-bit weight carries an eighth of a byte of overhead instead of a sixteenth, and any unquantized BF16 tensor doubles. The ledger counts the bound bytes after load, but estimates made from the files before a load (such as the catalog's memory figure) are lower than what the model then uses. The vision tower stays BF16 and its rows are widened as they join the prompt; layers the streaming engine reads from storage bind as stored. The smallest model's answers then match MLX's own float32 reference; what remains wrong is the 0.8B model's own knowledge.
+- **SSD-paged sparse models are not a Linux target yet.**
+- **Nothing in MLX enforces the active memory ceiling on Linux.** The memory ledger still plans against it, and `/v1/status` reports `"active_memory_ceiling_enforcement": "unavailable"` in the ledger snapshot (it reads `"enforced_by_mlx"` on macOS). See [#2425](https://github.com/aosama/astronomical/issues/2425).
+- **The bound is the machine's memory, lowered by any cgroup limit** (cgroup v2's `memory.max`, or the v1 memory controller's limit on older hosts) on the daemon, and `maximum_mlx_memory_gb` lowers it further.
+
 ## Check your change
 
 Check Rust formatting, then run the Rust integration and REST suites:

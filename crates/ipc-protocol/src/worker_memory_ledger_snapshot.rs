@@ -56,4 +56,40 @@ pub struct WorkerMemoryLedgerSnapshot {
     /// The emptiest the kept weights were against the capacity while a
     /// prompt was read, in thousandths.
     pub lowest_kept_share_while_reading_permille: Option<u32>,
+    /// Whether MLX itself refuses an allocation past `limit_bytes`.
+    pub active_memory_ceiling_enforcement: ActiveMemoryCeilingEnforcement,
 }
+
+/// Whether MLX refuses allocations past the active memory ceiling.
+///
+/// The ledger plans every build against the ceiling, but only the Metal build
+/// links Astronomical's patched allocator, which refuses an allocation that
+/// would pass it with a typed, recoverable error. MLX's other allocators only
+/// use the limit to decide when to release the `mlx_buffer_cache`, so past
+/// the ceiling the operating system intervenes instead (issue #2425).
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ActiveMemoryCeilingEnforcement {
+    /// MLX refuses an allocation that would pass the ceiling.
+    EnforcedByMlx,
+    /// Nothing in MLX enforces the ceiling on this build.
+    Unavailable,
+}
+
+impl ActiveMemoryCeilingEnforcement {
+    /// The enforcement of the build this process runs: macOS builds the
+    /// Metal backend with the patched allocator, every other platform builds
+    /// one of MLX's stock allocators.
+    #[must_use]
+    pub const fn for_this_build() -> Self {
+        if cfg!(target_os = "macos") {
+            Self::EnforcedByMlx
+        } else {
+            Self::Unavailable
+        }
+    }
+}
+
+#[cfg(test)]
+#[path = "worker_memory_ledger_snapshot_tests.rs"]
+mod tests;

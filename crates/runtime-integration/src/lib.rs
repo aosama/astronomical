@@ -88,7 +88,8 @@ pub use mlx_runtime_types::{
 
 #[cfg(feature = "mlx")]
 pub use mlx_runtime::{
-    MlxRuntime, classify_mlx_error, evaluated_array_storage_mut, platform_bindings_context,
+    MlxRuntime, classify_mlx_error, evaluated_array_storage_mut, mlx_computes_on_cpu,
+    platform_bindings_context,
 };
 #[cfg(all(feature = "mlx", target_os = "macos"))]
 pub use mlx_runtime::{

@@ -314,7 +314,7 @@ impl Qwen3_5ModelBase {
                 quantization_biases,
                 quantization_group_size,
                 quantization_bits,
-            } => Ok(self.runtime.quantized_matmul_affine(
+            } => Ok(self.runtime.quantized_matmul_affine_on_platform(
                 activations,
                 packed_weight,
                 quantization_scales,

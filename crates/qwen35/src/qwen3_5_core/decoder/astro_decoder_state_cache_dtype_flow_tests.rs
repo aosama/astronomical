@@ -24,7 +24,9 @@ use super::astro_decoder_state_cache_dtype_flow::{
 };
 
 fn native_affine_contract() -> AffineDtypeContract {
-    AffineDtypeContract::NativeBfloat16
+    AffineDtypeContract::Native {
+        weight: MlxDtype::BFloat16,
+    }
 }
 
 fn codebook_affine_contract() -> AffineDtypeContract {
@@ -403,5 +405,29 @@ fn should_narrow_only_floating_astro_decoder_state_cache_dtypes() {
     assert_eq!(
         description,
         "astro decoder state cache state has an unsupported MLX dtype"
+    );
+}
+
+#[test]
+fn should_follow_a_native_weight_bound_in_float32_through_embedding_and_affine() {
+    let float32_native_contract = AffineDtypeContract::Native {
+        weight: MlxDtype::Float32,
+    };
+
+    assert_eq!(
+        embedding_output_dtype(&float32_native_contract).expect("the dtype should derive"),
+        MlxDtype::Float32
+    );
+    assert_eq!(
+        affine_output_dtype(MlxDtype::BFloat16, &float32_native_contract)
+            .expect("the dtype should derive"),
+        MlxDtype::Float32,
+        "a float32 weight promotes a BF16 activation, as MLX does"
+    );
+    assert_eq!(
+        affine_output_dtype(MlxDtype::BFloat16, &native_affine_contract())
+            .expect("the dtype should derive"),
+        MlxDtype::BFloat16,
+        "a BF16 native weight keeps the BF16 contract unchanged"
     );
 }

@@ -28,9 +28,16 @@ use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 /// replay stays independent of how an engine binds its tensors.
 #[derive(Debug, Clone, Copy)]
 pub enum AffineDtypeContract {
-    NativeBfloat16,
+    /// An unquantized weight, in the dtype it was bound in: BF16 as stored,
+    /// or float32 where the engine binds for a CPU compute device (#2441).
+    Native {
+        weight: MlxDtype,
+    },
     Jangtq2Codebook,
-    Quantized { scales: MlxDtype, biases: MlxDtype },
+    Quantized {
+        scales: MlxDtype,
+        biases: MlxDtype,
+    },
 }
 
 /// The normalized input activation plus the linear-attention projections and
@@ -199,7 +206,7 @@ pub fn embedding_output_dtype(
     embedding_contract: &AffineDtypeContract,
 ) -> Result<MlxDtype, Qwen3_5ExecutionError> {
     match embedding_contract {
-        AffineDtypeContract::NativeBfloat16 => Ok(MlxDtype::BFloat16),
+        AffineDtypeContract::Native { weight } => Ok(*weight),
         // A codebook page is never an embedding table; it only appears on the
         // routed-expert path, whose products carry the activation dtype.
         AffineDtypeContract::Jangtq2Codebook => Ok(MlxDtype::BFloat16),
@@ -216,7 +223,7 @@ pub fn affine_output_dtype(
     affine_contract: &AffineDtypeContract,
 ) -> Result<MlxDtype, Qwen3_5ExecutionError> {
     let affine_parameter_dtype = match affine_contract {
-        AffineDtypeContract::NativeBfloat16 => MlxDtype::BFloat16,
+        AffineDtypeContract::Native { weight } => *weight,
         // Codebook levels decode to bfloat16 weights on the materializing path
         // and the fused kernel writes the activation dtype, so the product
         // never widens past the bfloat16 contract of a native page.

@@ -10,6 +10,7 @@ use serial_test::serial;
 
 use super::disk_embedding_rows::{
     AffineEmbeddingTables, DiskEmbeddingTable, Qwen3_5DiskEmbeddingRows,
+    rows_in_bound_embedding_dtype,
 };
 use super::embedding_row_reads::{EmbeddingRowReadError, EmbeddingTableLayout};
 use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights;
@@ -430,4 +431,57 @@ fn should_reject_token_indices_that_are_not_shaped_one_by_tokens() {
         embedding_error,
         Qwen3_5ExecutionError::InvalidInput { .. }
     ));
+}
+
+fn native_embedding_weights(runtime: &MlxRuntime, bound_dtype: MlxDtype) -> Qwen3_5AffineWeights {
+    let float32_table = runtime
+        .array_from_f32(&[0.5, -0.25], &[1, 2])
+        .expect("the native table should build");
+    Qwen3_5AffineWeights::NativeBfloat16 {
+        weight: runtime
+            .astype(&float32_table, bound_dtype)
+            .expect("the native table should cast"),
+    }
+}
+
+fn bfloat16_rows(runtime: &MlxRuntime) -> MlxArray {
+    let float32_rows = runtime
+        .array_from_f32(&[0.5, -0.25], &[1, 2])
+        .expect("the rows should build");
+    runtime
+        .astype(&float32_rows, MlxDtype::BFloat16)
+        .expect("the rows should cast")
+}
+
+#[test]
+#[serial]
+fn should_hand_disk_rows_on_in_the_dtype_the_bound_table_was_widened_to() {
+    let runtime = test_runtime();
+    let bound_table = native_embedding_weights(&runtime, MlxDtype::Float32);
+
+    let embedding_rows =
+        rows_in_bound_embedding_dtype(&runtime, bfloat16_rows(&runtime), &bound_table)
+            .expect("the rows should cast");
+
+    assert_eq!(embedding_rows.dtype(), MlxDtype::Float32);
+    assert_eq!(
+        embedding_rows
+            .to_vec_f32()
+            .expect("the rows should evaluate"),
+        vec![0.5, -0.25],
+        "the cast must not change any value"
+    );
+}
+
+#[test]
+#[serial]
+fn should_leave_disk_rows_alone_when_the_bound_table_kept_their_dtype() {
+    let runtime = test_runtime();
+    let bound_table = native_embedding_weights(&runtime, MlxDtype::BFloat16);
+
+    let embedding_rows =
+        rows_in_bound_embedding_dtype(&runtime, bfloat16_rows(&runtime), &bound_table)
+            .expect("the rows should pass through");
+
+    assert_eq!(embedding_rows.dtype(), MlxDtype::BFloat16);
 }
