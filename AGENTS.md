@@ -26,7 +26,7 @@
 
 - While coding or developing, never run tests, probes, or chat requests against Astronomical Stable; use the Astronomical Development instance instead.
 
-- To give Development a model, symlink a copy already on this Mac into `~/.astronomical-dev/models/<publisher>/<model>`, looking in Stable's `~/.astronomical/models` first. Never download it again into the Hugging Face cache or through the Development app.
+- To give Development a model, symlink a copy already on this Mac into `~/.astronomical-dev/models/<publisher>/<model>`, looking in Stable's `~/.astronomical/models` first. When no copy exists, download it into `~/.astronomical/models/<publisher>/<model>` and symlink that. Never download into the Hugging Face cache or through the Development app.
 
 - When your work is done, move the contents of Development's `astro_ssd_prompt_cache` folder, `~/.astronomical-dev/cache`, to the Trash.
 
