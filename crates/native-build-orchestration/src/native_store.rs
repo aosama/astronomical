@@ -33,13 +33,16 @@
 //! directory whose completion marker matches its identity, whose SHA-256
 //! manifest matches the payload byte-for-byte, and whose profile's products
 //! are all present. A failing entry is removed and rebuilt. A fresh build
-//! happens in a staging directory, is fully synced to disk, is validated,
+//! compiles in a build slot, then its products are copied into a staging
+//! directory, fully synced to disk, validated,
 //! and only then atomically becomes the entry via rename — an interrupted
 //! build can therefore never leave a half-published entry that a later run
 //! would mistake for reusable.
 //!
 //! Concurrency is per-identity: one builder holds the lock file (with
-//! progress heartbeats while waiting), other identities build in parallel.
+//! progress heartbeats while waiting), and other identities build in
+//! parallel, up to one build per build slot; a further build waits for a
+//! slot while holding its identity lock, and says so in its progress lines.
 
 use std::{
     error::Error,
