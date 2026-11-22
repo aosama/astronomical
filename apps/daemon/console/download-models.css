@@ -46,6 +46,14 @@
 .download-models-installed-name, .download-models-banner-title { font-size: var(--text-xl); font-weight: var(--weight-strong); line-height: 1.3; overflow-wrap: anywhere; }
 .download-models-installed-summary, .download-models-banner-detail { color: var(--ink-2); font-size: var(--text-sm); font-variant-numeric: tabular-nums; }
 .download-models-installed-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
+/* Installed models: each button keeps its own column, so Chat, Show in Finder
+   and Remove line up from row to row and a missing one leaves a gap rather
+   than shifting the others. */
+.download-models-installed-columns { display: grid; grid-template-columns: 190px 128px 84px; gap: 6px; justify-items: end; }
+.download-models-installed-columns .download-models-open-in-chat { grid-column: 1; }
+.download-models-installed-columns .download-models-reveal-button { grid-column: 2; }
+.download-models-installed-columns .download-models-remove-button,
+.download-models-installed-columns .download-models-confirm-removal-button { grid-column: 3; }
 /* The removal question takes its own line above its two answers, so the
    person reads it right where they clicked and the answers keep one row. */
 .download-models-removal-question { flex-basis: 100%; color: var(--ink); font-size: var(--text-md); font-weight: var(--weight-label); text-align: right; }

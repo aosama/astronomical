@@ -225,3 +225,17 @@ test("should_name_the_model_by_the_name_chat_lists_it_under_and_encode_it", () =
 test("should_not_hand_off_when_this_channel_has_no_thin_talk_link", () => {
     assert.deepEqual(thinTalkHandoffsFor("unknown-channel"), []);
 });
+
+test("should_lay_installed_buttons_in_columns_with_only_chat_outlined", () => {
+    const catalogContainer = renderWithDownload(
+        { state: "idle" }, [validCatalogEntry({ ready_on_this_mac: true, removable_from_disk: true })]
+    );
+    const actions = findRenderedElementsByClass(catalogContainer, "download-models-installed-actions")[0];
+
+    assert.equal(actions.className.split(" ").includes("download-models-installed-columns"), true);
+    assert.deepEqual(
+        actions.children.map((actionButton) => actionButton.className.split(" ")[1]),
+        ["button-secondary", "button-quiet", "button-quiet"],
+        "Chat stands out; Show in Finder and Remove stay quiet"
+    );
+});

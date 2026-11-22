@@ -54,14 +54,24 @@ function createDownloadModelsInstalledLine(installedRow) {
     const refusalText = downloadModelsRemovalNoticeFor(installedRow);
     if (refusalText) identityChildren.push(createDownloadModelsNotice(refusalText));
     identity.replaceChildren(...identityChildren);
-    const actions = createDownloadModelsElement("div", "download-models-installed-actions");
+    // Fixed columns (chat, Finder, Remove) so the buttons line up from row to
+    // row; the removal question needs the whole width, so it drops them.
+    const isAskingToRemove = downloadModelsRemovalConfirmingId === installedRow.huggingfaceId;
+    const actions = createDownloadModelsElement(
+        "div",
+        isAskingToRemove ? "download-models-installed-actions" : "download-models-installed-actions download-models-installed-columns"
+    );
     // The same buttons in the same order on every line: chat (for a model that
     // chats), Show in Finder, then Remove. Remove appears only for a copy
     // Download Models installed: a copy the person placed may be shared with
     // other apps (the Hugging Face folder), so the page never deletes it.
     const actionControls = [];
     if (canChatWithCatalogModel(installedRow)) actionControls.push(createDownloadModelsOpenInChatButton(installedRow));
-    actionControls.push(createDownloadModelsRevealButton(installedRow.huggingfaceId));
+    // Show in Finder is quiet here: chatting is what most people come for, and
+    // one outlined button per row keeps the column calm.
+    const revealButton = createDownloadModelsRevealButton(installedRow.huggingfaceId);
+    revealButton.className = "button button-quiet download-models-reveal-button";
+    actionControls.push(revealButton);
     if (canRemoveDownloadModelsModelFromDisk(installedRow)) {
         actionControls.push(...createDownloadModelsRemovalControls(installedRow));
     }
