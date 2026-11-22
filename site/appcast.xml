@@ -4,34 +4,31 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.128</title>
-            <pubDate>Sat, 21 Nov 2026 20:20:47 -0500</pubDate>
-            <sparkle:version>2454</sparkle:version>
-            <sparkle:shortVersionString>0.2.128</sparkle:shortVersionString>
+            <title>0.2.129</title>
+            <pubDate>Sat, 21 Nov 2026 21:48:06 -0500</pubDate>
+            <sparkle:version>2457</sparkle:version>
+            <sparkle:shortVersionString>0.2.129</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
             <description sparkle:format="markdown"><![CDATA[## Bug fixes
 
-- **A long reply no longer slows down the rest of the Mac.** While a model wrote a long reply to a large conversation, video could freeze, audio could glitch and windows could respond slowly, and it got worse the longer the reply ran. Each time the conversation's attention buffers grew, the outgrown copies were kept instead of being handed back, so the memory the Mac must keep in RAM climbed until it reached the system's ceiling. They are now handed back as the reply is written. With a 34,000-token conversation and a 3,500-token reply on a 35B model, that memory ended at 30.3 GB instead of 39.2 GB and stayed flat throughout, at the same reply speed.
-
-## Known
-
-- Replies from a draft-assisted (DFlash) model can still show a one-step memory rise after a freshly read large prompt. This is tracked and not fixed in this release.
+- **Draft-assisted replies no longer pile up memory, and run faster on long conversations.** While a draft-assisted (DFlash) model wrote a reply to a large conversation, the memory the Mac must keep in RAM could jump by several gigabytes mid-reply. Working buffers left over from each draft round are now handed back once they pass 2 GB. On the 35B draft-assisted model with a 34,000-token conversation, that memory peaked at 2 GB instead of 7.6 GB, and replies rose from 49.8 to about 60 tokens per second.
+- **Status updates during draft-assisted replies.** The memory figures on the status page now change while a draft-assisted model writes, instead of staying fixed for the whole reply.
 
 ## Compatibility
 
-- No setting, command or local API changed.
-- Conversations, downloaded models and every setting are kept.
-- macOS 14 or later on Apple silicon.
+- No setting, command or local API changed. Replies from plain models are unchanged.
+- Conversations, downloaded models, the prompt store on disk and every setting are kept.
+- Requires macOS 14 or later on Apple silicon.
 
 ## Distribution
 
-The app and disk image are signed with the project's Developer ID, built with the Hardened Runtime, and notarized and stapled by Apple. Existing installations receive this release through the in-app update.
+The app and disk image are signed with the project's Developer ID, notarized and stapled by Apple, and the update is signed with the project's Sparkle key.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.128/Astronomical-0.2.128-macOS-arm64.dmg" length="25823643" type="application/octet-stream" sparkle:edSignature="Ovlzaxpe8kUKZ9w8JhvOXclky0EJd7z0ubvhvbPtB+J1RloX6rbcdDglpZ1Yj11UiSXdZ7yWN92FDiGOsgFOAQ=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.129/Astronomical-0.2.129-macOS-arm64.dmg" length="25825478" type="application/octet-stream" sparkle:edSignature="3ATbSd7OTRb//8KoZM8czh5J0wHVqoCXpFKz7SfXqYMA2JBQPKCOoaeKwBh8cYE+1Obl1ZwCyOVudcK1GYxdCA=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: NWMK4UKRjIiLmtCq0FaO+Mxy1GJlS19FMcOkVnFgQohJIlq9AoIoGUIymooFBhbmXLTmNLMUeuTD4xe0QzRXBg==
-length: 2471
+edSignature: I50rpBg1SiP4Phq505upiXpuweK1VgZQOAT/9X1jNw8iBKTMTzEDHP93n65RDKxWqH47NZ37LoWzY1wdNqLyDQ==
+length: 2352
 -->
