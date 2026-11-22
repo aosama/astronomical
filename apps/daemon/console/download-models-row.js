@@ -10,6 +10,8 @@ function createDownloadModelsModelRow(catalogRow, leadRow = null) {
     if (isExpanded) rowClassNames.push("download-models-row-expanded");
     if (leadRow) rowClassNames.push("download-models-row-build");
     const row = createDownloadModelsElement("article", rowClassNames.join(" "));
+    // On this Mac's Details scrolls here.
+    row.id = "download-models-row-" + catalogRow.modelId;
     const rowLine = createDownloadModelsElement("div", "download-models-row-line");
     const rowControls = createDownloadModelsElement("div", "download-models-row-controls");
     const fitSlot = createDownloadModelsElement("div", "download-models-row-fit");

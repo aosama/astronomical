@@ -160,6 +160,10 @@ async fn should_serve_the_embedded_download_list_and_selection_javascript() {
             ),
             ("/overview-next-step.js", "renderOverviewNextStep"),
             (
+                "/download-models-installed-rows.js",
+                "createDownloadModelsInstalledLine",
+            ),
+            (
                 "/download-models-selection.js",
                 "isDownloadModelsSelectionHeld",
             ),

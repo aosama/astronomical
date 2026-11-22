@@ -18,6 +18,8 @@ const downloadModelsRowScriptPath = path.join(__dirname, "download-models-row.js
 const downloadModelsRowScript = fs.readFileSync(downloadModelsRowScriptPath, "utf8");
 const downloadModelsLinkedScriptPath = path.join(__dirname, "download-models-linked.js");
 const downloadModelsLinkedScript = fs.readFileSync(downloadModelsLinkedScriptPath, "utf8");
+const downloadModelsInstalledRowsScriptPath = path.join(__dirname, "download-models-installed-rows.js");
+const downloadModelsInstalledRowsScript = fs.readFileSync(downloadModelsInstalledRowsScriptPath, "utf8");
 const downloadModelsInstalledScriptPath = path.join(__dirname, "download-models-installed.js");
 const downloadModelsInstalledScript = fs.readFileSync(downloadModelsInstalledScriptPath, "utf8");
 const downloadModelsRemovalScriptPath = path.join(__dirname, "download-models-removal.js");
@@ -45,6 +47,7 @@ function createDownloadModelsContext() {
     vm.runInContext(downloadModelsRowScript, scriptContext, { filename: downloadModelsRowScriptPath });
     vm.runInContext(downloadModelsLinkedScript, scriptContext, { filename: downloadModelsLinkedScriptPath });
     vm.runInContext(downloadModelsInstalledScript, scriptContext, { filename: downloadModelsInstalledScriptPath });
+    vm.runInContext(downloadModelsInstalledRowsScript, scriptContext, { filename: downloadModelsInstalledRowsScriptPath });
     vm.runInContext(downloadModelsRemovalScript, scriptContext, { filename: downloadModelsRemovalScriptPath });
     vm.runInContext(downloadModelsQueueScript, scriptContext, { filename: downloadModelsQueueScriptPath });
     vm.runInContext(downloadModelsSelectionScript, scriptContext, { filename: downloadModelsSelectionScriptPath });

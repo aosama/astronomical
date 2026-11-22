@@ -14,7 +14,7 @@ const {
 const GIGABYTE = 1073741824;
 const DOWNLOADING_MODEL_ID = "astronomical-test/example-qwen";
 
-function renderWithDownload(currentDownload, catalogEntries = [validCatalogEntry({ model_id: "Talker" })]) {
+function renderWithDownload(currentDownload, catalogEntries = [validCatalogEntry({ model_id: "Talker" })], stateScript = "") {
     const scriptContext = createDownloadModelsContext();
     const downloadModelsDocument = createDownloadModelsDocument();
     scriptContext.document = downloadModelsDocument;
@@ -23,6 +23,7 @@ function renderWithDownload(currentDownload, catalogEntries = [validCatalogEntry
     vm.runInContext(
         `downloadModelsCatalogDocument = catalogDocument;
          downloadModelsCurrentDownload = currentDownload;
+         ${stateScript}
          renderDownloadModelsCatalogDocument(catalogDocument)`,
         scriptContext
     );
@@ -144,27 +145,36 @@ test("should_put_the_banner_above_the_models_already_here_and_total_only_those",
     const installedLines = findRenderedElementsByClass(catalogContainer, "download-models-list")[0].children;
 
     assert.match(installedLines[0].className, /download-models-banner/);
-    assert.match(installedLines[1].className, /download-models-installed-line/);
+    assert.match(installedLines[1].className, /download-models-installed-header/);
+    assert.match(installedLines[2].className, /download-models-installed-line/);
     assert.deepEqual(textsOfClass(catalogContainer, "download-models-section-meta").slice(0, 1), ["1 model · 3.0 GB"]);
 });
 
+// The row's visible actions, then its ⋯ menu's items with the menu open.
 function installedActionLabelsFor(entryOverrides) {
+    const catalogEntry = validCatalogEntry({ ready_on_this_mac: true, ...entryOverrides });
     const catalogContainer = renderWithDownload(
-        { state: "idle" }, [validCatalogEntry({ ready_on_this_mac: true, ...entryOverrides })]
+        { state: "idle" }, [catalogEntry], `downloadModelsOpenMenuHuggingfaceId = ${JSON.stringify(catalogEntry.huggingface_id)};`
     );
-    return findRenderedElementsByClass(catalogContainer, "download-models-installed-actions")[0]
-        .children.map((actionButton) => actionButton.textContent);
+    return {
+        visible: findRenderedElementsByClass(catalogContainer, "download-models-installed-actions")[0]
+            .children.map((actionButton) => actionButton.textContent),
+        menu: textsOfClass(catalogContainer, "download-models-row-menu-item")
+    };
 }
 
 test("should_offer_chat_finder_and_remove_in_one_order_for_a_chat_model_download_models_installed", () => {
-    assert.deepEqual(installedActionLabelsFor({ removable_from_disk: true }), ["Chat with this model", "Show in Finder", "Remove"]);
+    const actionLabels = installedActionLabelsFor({ removable_from_disk: true });
+    assert.deepEqual(actionLabels.visible, ["Chat", "⋯"], "one visible action, the rest in the menu");
+    assert.deepEqual(actionLabels.menu, ["Show in Finder", "Copy model ID", "Details", "Open on Hugging Face", "Move to Trash…"]);
 });
 
 test("should_offer_finder_on_every_kind_of_model_on_this_mac", () => {
     const speechModelLabels = installedActionLabelsFor({
         role: "speech", capabilities: { supports_speech: true }, removable_from_disk: true
     });
-    assert.deepEqual(speechModelLabels, ["Show in Finder", "Remove"]);
+    assert.deepEqual(speechModelLabels.visible, ["⋯"]);
+    assert.equal(speechModelLabels.menu.includes("Show in Finder"), true);
 });
 
 test("should_not_offer_the_thin_talk_handoff_for_an_image_embedding_decision_or_speech_model", () => {
@@ -175,20 +185,23 @@ test("should_not_offer_the_thin_talk_handoff_for_an_image_embedding_decision_or_
         role: "helper", capabilities: { supports_embeddings: true }
     });
 
-    assert.equal(pictureModelLabels.includes("Chat with this model"), false);
-    assert.equal(embeddingModelLabels.includes("Chat with this model"), false);
+    assert.equal(pictureModelLabels.visible.includes("Chat"), false);
+    assert.equal(embeddingModelLabels.visible.includes("Chat"), false);
     const decisionModelLabels = installedActionLabelsFor({
         role: "decision", capabilities: { supports_decisions: true }
     });
-    assert.equal(decisionModelLabels.includes("Chat with this model"), false);
+    assert.equal(decisionModelLabels.visible.includes("Chat"), false);
     const speechModelLabels = installedActionLabelsFor({
         role: "speech", capabilities: { supports_speech: true }
     });
-    assert.equal(speechModelLabels.includes("Chat with this model"), false);
+    assert.equal(speechModelLabels.visible.includes("Chat"), false);
 });
 
 test("should_show_a_copy_the_person_placed_in_finder_without_offering_to_remove_it", () => {
-    assert.deepEqual(installedActionLabelsFor({ removable_from_disk: false }), ["Chat with this model", "Show in Finder"]);
+    const placedCopyLabels = installedActionLabelsFor({ removable_from_disk: false });
+    assert.equal(placedCopyLabels.menu.includes("Show in Finder"), true);
+    assert.equal(placedCopyLabels.menu.includes("Move to Trash…"), false);
+    assert.equal(placedCopyLabels.menu.at(-1), "Remove it in Finder: Astronomical did not download it");
 });
 
 function thinTalkHandoffsFor(applicationChannel, installedRow = { modelId: "Talker", requestableModelId: null }) {
@@ -226,16 +239,50 @@ test("should_not_hand_off_when_this_channel_has_no_thin_talk_link", () => {
     assert.deepEqual(thinTalkHandoffsFor("unknown-channel"), []);
 });
 
-test("should_lay_installed_buttons_in_columns_with_only_chat_outlined", () => {
-    const catalogContainer = renderWithDownload(
-        { state: "idle" }, [validCatalogEntry({ ready_on_this_mac: true, removable_from_disk: true })]
-    );
-    const actions = findRenderedElementsByClass(catalogContainer, "download-models-installed-actions")[0];
 
-    assert.equal(actions.className.split(" ").includes("download-models-installed-columns"), true);
-    assert.deepEqual(
-        actions.children.map((actionButton) => actionButton.className.split(" ")[1]),
-        ["button-secondary", "button-quiet", "button-quiet"],
-        "Chat stands out; Show in Finder and Remove stay quiet"
+test("should_show_each_models_kind_icon_size_and_in_memory_status_under_column_names", () => {
+    const catalogContainer = renderWithDownload(
+        { state: "idle" },
+        [
+            validCatalogEntry({ huggingface_id: "astronomical-test/Talker", model_id: "Talker", ready_on_this_mac: true, approximate_size_bytes: 6 * GIGABYTE }),
+            validCatalogEntry({ huggingface_id: "astronomical-test/Reader", model_id: "Reader", role: "speech", ready_on_this_mac: true, approximate_size_bytes: GIGABYTE / 2 })
+        ],
+        'loadedModelId = "Talker";'
     );
+
+    assert.deepEqual(textsOfClass(catalogContainer, "download-models-installed-sort"), ["Model", "Kind ↑", "Size"]);
+    assert.deepEqual(textsOfClass(catalogContainer, "download-models-installed-name"), ["Talker", "Reader"]);
+    assert.deepEqual(textsOfClass(catalogContainer, "download-models-installed-kind"), ["Chat", "Read aloud"]);
+    assert.deepEqual(textsOfClass(catalogContainer, "download-models-installed-size"), ["6.0 GB", "0.5 GB"]);
+    assert.deepEqual(textsOfClass(catalogContainer, "download-models-in-memory"), ["In memory"], "only the loaded model");
+    assert.equal(findRenderedElementsByClass(catalogContainer, "download-models-kind-icon-chat").length, 1);
+    assert.equal(findRenderedElementsByClass(catalogContainer, "download-models-kind-icon-voice").length, 1);
+});
+
+test("should_sort_by_a_clicked_column_and_reverse_on_a_second_click", () => {
+    const catalogContainer = renderWithDownload(
+        { state: "idle" },
+        [
+            validCatalogEntry({ huggingface_id: "astronomical-test/Small", model_id: "Small", ready_on_this_mac: true, approximate_size_bytes: GIGABYTE }),
+            validCatalogEntry({ huggingface_id: "astronomical-test/Big", model_id: "Big", ready_on_this_mac: true, approximate_size_bytes: 9 * GIGABYTE })
+        ],
+        'downloadModelsInstalledSortKey = "size"; downloadModelsInstalledSortAscending = false;'
+    );
+
+    assert.deepEqual(textsOfClass(catalogContainer, "download-models-installed-name"), ["Big", "Small"]);
+    assert.deepEqual(textsOfClass(catalogContainer, "download-models-installed-sort-active"), ["Size ↓"]);
+});
+
+test("should_say_where_a_hugging_face_copy_lives_and_explain_it_once_under_the_list", () => {
+    const catalogEntry = validCatalogEntry({
+        ready_on_this_mac: true, removable_from_disk: false,
+        destination_directory: "/Users/example/.cache/huggingface/hub/models--example--model/snapshots/abc"
+    });
+    const catalogContainer = renderWithDownload(
+        { state: "idle" }, [catalogEntry], `downloadModelsOpenMenuHuggingfaceId = ${JSON.stringify(catalogEntry.huggingface_id)};`
+    );
+
+    assert.deepEqual(textsOfClass(catalogContainer, "download-models-installed-source"), ["From your Hugging Face folder"]);
+    assert.equal(textsOfClass(catalogContainer, "download-models-row-menu-item").at(-1), "Managed in your Hugging Face folder");
+    assert.equal(textsOfClass(catalogContainer, "download-models-installed-footnote").length, 1);
 });

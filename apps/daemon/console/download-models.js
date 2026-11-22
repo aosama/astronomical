@@ -57,6 +57,7 @@ function wireDownloadModelsCatalog() {
     }
     wireDownloadModelsControls();
     wireDownloadModelsSelectionGuard(catalogContainer);
+    wireDownloadModelsMenuDismissal();
     if (typeof window !== "undefined" && window.location) {
         downloadModelsLinkedModelId = readDownloadModelsLinkedModelId(window.location.search);
     }
@@ -122,6 +123,10 @@ function renderDownloadModelsCatalogDocument(catalogDocument, catalogContainer) 
         downloadModelsActiveFilter,
         downloadModelsExpandedModelId,
         downloadModelsUnfoldedLeadIds,
+        downloadModelsInstalledSortKey,
+        downloadModelsInstalledSortAscending,
+        downloadModelsOpenMenuHuggingfaceId,
+        downloadModelsLoadedModelId(),
         downloadModelsLinkedModelId,
         downloadModelsMeasuredBytesPerSecond,
         downloadModelsServingCeilingBytes,
