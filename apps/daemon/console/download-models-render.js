@@ -21,7 +21,7 @@ function createDownloadModelsParagraph(className, text) {
 }
 
 function createDownloadModelsPageSections(catalogRows) {
-    const installedRows = catalogRows.filter((catalogRow) => catalogRow.readyOnThisMac);
+    const installedRows = catalogRows.filter(isDownloadModelsRowOnThisMac);
     const activeDownloadRow = downloadModelsActiveDownloadRow(catalogRows);
     const hasModelsOrDownload = installedRows.length > 0 || activeDownloadRow !== null
         || hasDownloadModelsQueueEntries();

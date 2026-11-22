@@ -262,6 +262,7 @@ function downloadModelsCatalogRowFromEntry(catalogEntry) {
             ? catalogEntry.minimum_memory_bytes
             : null,
         readyOnThisMac: catalogEntry.ready_on_this_mac === true,
+        servedOnThisMac: catalogEntry.served_on_this_mac === true,
         removableFromDisk: catalogEntry.removable_from_disk === true,
         destinationDirectory: typeof catalogEntry.destination_directory === "string"
             ? catalogEntry.destination_directory

@@ -197,6 +197,24 @@ test("should_not_offer_the_thin_talk_handoff_for_an_image_embedding_decision_or_
     assert.equal(speechModelLabels.visible.includes("Chat"), false);
 });
 
+// A copy placed in a models folder by hand (or kept at another revision) is
+// served by the engine, so it belongs under On this Mac like any client sees it,
+// with the same Chat and Finder actions, before Get has verified it.
+test("should_list_a_served_copy_that_is_not_ready_with_chat_and_finder", () => {
+    const servedCopyLabels = installedActionLabelsFor({ ready_on_this_mac: false, served_on_this_mac: true });
+    assert.deepEqual(servedCopyLabels.visible, ["Chat", "⋯"]);
+    assert.equal(servedCopyLabels.menu.includes("Show in Finder"), true);
+    assert.equal(servedCopyLabels.menu.includes("Move to Trash…"), false);
+});
+
+test("should_leave_a_model_that_is_neither_ready_nor_served_off_on_this_mac", () => {
+    const catalogContainer = renderWithDownload(
+        { state: "idle" },
+        [validCatalogEntry({ model_id: "Elsewhere", ready_on_this_mac: false, served_on_this_mac: false })]
+    );
+    assert.equal(findRenderedElementsByClass(catalogContainer, "download-models-installed-actions").length, 0);
+});
+
 test("should_show_a_copy_the_person_placed_in_finder_without_offering_to_remove_it", () => {
     const placedCopyLabels = installedActionLabelsFor({ removable_from_disk: false });
     assert.equal(placedCopyLabels.menu.includes("Show in Finder"), true);

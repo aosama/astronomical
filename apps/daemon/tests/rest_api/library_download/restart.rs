@@ -73,6 +73,36 @@ async fn should_adopt_an_exact_pre_existing_publication_after_manifest_verificat
     .expect("exact destination reconciliation should remain bounded");
 }
 
+/// A copy placed in the models folder by hand has no provenance: the engine
+/// serves it and On this Mac lists it, but it is not ready until Get has
+/// checked it against the manifest, so an interrupted publication is never
+/// taken as installed.
+#[tokio::test]
+async fn should_list_a_hand_copied_model_as_served_but_not_ready_before_get() {
+    timeout(Duration::from_secs(5), async {
+        let test_directory = tempfile::tempdir().expect("temporary directory should be available");
+        write_published_fixture(test_directory.path(), MODEL_CONFIG);
+        let application =
+            build_test_application(test_directory.path(), Arc::new(ScriptedHub::new()));
+
+        let catalog_response = application
+            .oneshot(
+                Request::get("/v1/library/catalog")
+                    .body(Body::empty())
+                    .expect("catalog request should be valid"),
+            )
+            .await
+            .expect("catalog response should be available");
+        let catalog_entry = &response_json(catalog_response).await["entries"][0];
+
+        assert_eq!(catalog_entry["ready_on_this_mac"], false);
+        assert_eq!(catalog_entry["served_on_this_mac"], true);
+        assert_eq!(catalog_entry["requestable_model_id"], "example-qwen");
+    })
+    .await
+    .expect("hand-copy catalog journey should remain bounded");
+}
+
 #[tokio::test]
 async fn should_leave_a_mismatched_pre_existing_publication_untouched() {
     timeout(Duration::from_secs(5), async {

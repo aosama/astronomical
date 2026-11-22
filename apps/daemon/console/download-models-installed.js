@@ -122,13 +122,21 @@ function createDownloadModelsProgressBar(activeDownloadRow, downloadState) {
     return track;
 }
 
+// On this Mac lists every copy the engine serves, the same models any client
+// of the engine sees: one the Models page downloaded (ready) and one copied in
+// by hand or kept at another revision (served). Get still offers to verify and
+// adopt the second kind, so only readiness decides the download controls.
+function isDownloadModelsRowOnThisMac(catalogRow) {
+    return Boolean(catalogRow.readyOnThisMac) || Boolean(catalogRow.servedOnThisMac);
+}
+
 // Thin Talk can only hold a conversation with a chat model: an image model
 // draws through a chat model's tool, an embedding model only turns text into
 // numbers, a decision model only picks among set answers and a speech model
 // only reads text aloud, so offering any of them for a chat would promise
 // something that cannot happen.
 function canChatWithCatalogModel(catalogRow) {
-    return Boolean(catalogRow.readyOnThisMac)
+    return isDownloadModelsRowOnThisMac(catalogRow)
         && !catalogRow.supportsImageGeneration
         && !catalogRow.supportsEmbeddings
         && !catalogRow.supportsDecisions
