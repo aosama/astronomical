@@ -3,8 +3,9 @@ import ThinTalkCore
 import UniformTypeIdentifiers
 
 /// Answers the page's host-tool requests. One request is one whole use of a
-/// tool: the approval sheet and, for the file tools, the open panel, so the
-/// page can never reach a panel without the sheet.
+/// tool: for conversation search the approval sheet, for the file tools the
+/// open panel, whose pick is the person's approval. The page can never read a
+/// file the person did not choose, nor search without their yes.
 ///
 /// Uses run one at a time, in arrival order, and the approval policy is
 /// checked again when a use's turn comes, so "Allow for This Conversation" on
@@ -51,21 +52,23 @@ final class ThinTalkToolHost {
   private func perform(toolName: String, conversationID: String, callID: String) async -> HostToolOutcome {
     defer { cancelledCallIDs.remove(callID) }
     guard !cancelledCallIDs.contains(callID) else { return .cancelled }
-    let actionDescription: String
+    // What the approval sheet asks, or nil when no sheet is shown: the tool
+    // was already allowed, or its open panel is the approval.
+    let sheetActionDescription: String?
     switch approvalPolicy.decision(toolName: toolName, conversationID: conversationID) {
     case .refuse:
       return .unavailable(reason: "this tool is not available in this conversation")
-    case .alreadyAllowed:
-      actionDescription = ""
+    case .alreadyAllowed, .chooseInOpenPanel:
+      sheetActionDescription = nil
     case .ask(let askedActionDescription):
-      actionDescription = askedActionDescription
+      sheetActionDescription = askedActionDescription
     }
     guard let window = windowProvider(), window.isVisible else {
       return .unavailable(reason: "the conversation window is closed")
     }
-    if !actionDescription.isEmpty {
+    if let sheetActionDescription {
       let sheetOutcome = await askForApproval(
-        toolName: toolName, conversationID: conversationID, actionDescription: actionDescription, window: window, callID: callID)
+        toolName: toolName, conversationID: conversationID, actionDescription: sheetActionDescription, window: window, callID: callID)
       guard sheetOutcome == .approved else { return sheetOutcome }
     }
     return await chooseFile(for: toolName, window: window, callID: callID)

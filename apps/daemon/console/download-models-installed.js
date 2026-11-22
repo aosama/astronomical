@@ -1,6 +1,6 @@
 // Astronomical Observatory Models page: the On this Mac section. The download
-// in flight sits on top with the only controls it needs, then one line per
-// model already here with Open and Remove.
+// in flight sits on top with the only controls it needs, then the models
+// already here as rows under column names (download-models-installed-rows.js).
 
 const DOWNLOAD_MODELS_ACTIVE_STATES = [
     "checking_disk", "fetching_manifest", "downloading", "paused", "verifying", "publishing", "failed"
@@ -25,12 +25,16 @@ function createDownloadModelsInstalledSection(installedRows, activeDownloadRow, 
     }
     heading.replaceChildren(...headingChildren);
     const lineList = createDownloadModelsElement("div", "download-models-list");
-    const lines = installedRows.map(createDownloadModelsInstalledLine);
+    const lines = downloadModelsInstalledRowsInOrder(installedRows).map(createDownloadModelsInstalledLine);
+    if (installedRows.length > 0) lines.unshift(createDownloadModelsInstalledHeader());
     const queueList = createDownloadModelsQueueList(catalogRows);
     if (queueList) lines.unshift(queueList);
     if (activeDownloadRow) lines.unshift(createDownloadModelsDownloadBanner(activeDownloadRow));
     lineList.replaceChildren(...lines);
-    section.replaceChildren(heading, lineList);
+    const sectionChildren = [heading, lineList];
+    const footnote = createDownloadModelsInstalledFootnote(installedRows);
+    if (footnote) sectionChildren.push(footnote);
+    section.replaceChildren(...sectionChildren);
     return section;
 }
 
@@ -41,32 +45,6 @@ function downloadModelsInstalledTotalText(installedRows) {
     );
     const modelCountText = installedRows.length === 1 ? "1 model" : installedRows.length + " models";
     return modelCountText + " · " + formatDownloadModelsCardSize(installedBytes);
-}
-
-function createDownloadModelsInstalledLine(installedRow) {
-    const line = createDownloadModelsElement("div", "download-models-installed-line");
-    const identity = createDownloadModelsElement("div", "download-models-installed-identity");
-    const identityChildren = [
-        createDownloadModelsElement("span", "download-models-installed-name", downloadModelsRowName(installedRow)),
-        createDownloadModelsElement("span", "download-models-installed-summary", downloadModelsInstalledSummaryText(installedRow))
-    ];
-    // Why a removal was refused, on the line of the model it is about.
-    const refusalText = downloadModelsRemovalNoticeFor(installedRow);
-    if (refusalText) identityChildren.push(createDownloadModelsNotice(refusalText));
-    identity.replaceChildren(...identityChildren);
-    const actions = createDownloadModelsElement("div", "download-models-installed-actions");
-    const actionControls = [];
-    if (canChatWithCatalogModel(installedRow)) actionControls.push(createDownloadModelsOpenInChatButton());
-    if (canRemoveDownloadModelsModelFromDisk(installedRow)) {
-        actionControls.push(...createDownloadModelsRemovalControls(installedRow));
-    } else {
-        // A copy the person placed themself is theirs to manage: the page
-        // shows where it is instead of offering to remove it.
-        actionControls.push(createDownloadModelsRevealButton(installedRow.huggingfaceId));
-    }
-    actions.replaceChildren(...actionControls);
-    line.replaceChildren(identity, actions);
-    return line;
 }
 
 // One sentence says what is happening and the buttons are the only things the
@@ -157,20 +135,29 @@ function canChatWithCatalogModel(catalogRow) {
         && !catalogRow.supportsSpeech;
 }
 
-function createDownloadModelsOpenInChatButton() {
+function createDownloadModelsOpenInChatButton(installedRow) {
     const openInChatButton = createDownloadModelsElement(
-        "button", "button button-secondary download-models-open-in-chat", "Chat with this model"
+        "button", "button button-secondary download-models-open-in-chat", "Chat"
     );
     openInChatButton.type = "button";
-    openInChatButton.addEventListener("click", openThinTalkFromDownloadModels);
+    // The row already names the model, so the button says only what it does;
+    // VoiceOver hears which model it opens.
+    openInChatButton.setAttribute("aria-label", "Chat with " + downloadModelsRowName(installedRow));
+    openInChatButton.title = "Opens the chat window with this model";
+    openInChatButton.addEventListener("click", () => openThinTalkFromDownloadModels(downloadModelsRowName(installedRow)));
     return openInChatButton;
 }
 
-// Thin Talk picks the model inside its own model chooser, so opening the
-// conversation window is all the handoff needs.
-function openThinTalkFromDownloadModels() {
+// The chat link names the model in its query (?model=<model ID>), so the chat
+// window opens on it rather than on whichever model it had. The model ID is
+// the name the chat app lists the model under.
+function downloadModelsChatLinkForModel(chatLink, modelId) {
+    return chatLink + "?model=" + encodeURIComponent(modelId);
+}
+
+function openThinTalkFromDownloadModels(modelId) {
     const chatLink = thinTalkChatLink(document.body.dataset.applicationChannel);
     if (chatLink) {
-        window.location.assign(chatLink);
+        window.location.assign(downloadModelsChatLinkForModel(chatLink, modelId));
     }
 }

@@ -48,7 +48,7 @@ final class ThinTalkToolHostTests: XCTestCase {
 }
 
 /// The page names the host tool it wants; the native allowlist decides which
-/// names can ever reach a sheet. A name present on one side only is a tool
+/// names can ever reach a sheet or an open panel. A name present on one side only is a tool
 /// that is always refused, so both sides are read and must match.
 final class HostToolNameContractTests: XCTestCase {
   private let webSourceDirectory = URL(fileURLWithPath: #filePath)
@@ -66,7 +66,12 @@ final class HostToolNameContractTests: XCTestCase {
   func test_should_allow_exactly_the_host_tools_the_page_declares() throws {
     let pageHostToolNames = try Set(
       ["ReadChosenFileTool.ts", "DescribeChosenImageTool.ts", "SearchConversationsTool.ts"].map(declaredToolName(inWebSource:)))
-    XCTAssertEqual(pageHostToolNames, Set(ToolApprovalPolicy.actionDescriptionsByToolName.keys))
-    XCTAssertEqual(Set(ToolApprovalPolicy.consequencesByToolName.keys), pageHostToolNames, "every tool explains what happens to what it reads")
+    XCTAssertEqual(pageHostToolNames, ToolApprovalPolicy.allowedToolNames)
+    XCTAssertEqual(
+      Set(ToolApprovalPolicy.consequencesByToolName.keys), Set(ToolApprovalPolicy.actionDescriptionsByToolName.keys),
+      "every tool that asks first explains what happens to what it reads")
+    XCTAssertTrue(
+      ToolApprovalPolicy.toolNamesChosenInOpenPanel.isDisjoint(with: ToolApprovalPolicy.actionDescriptionsByToolName.keys),
+      "a tool is either chosen in the open panel or asked about, never both")
   }
 }

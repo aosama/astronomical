@@ -21,6 +21,11 @@ public final class CanvasCommandController {
     canvas?.applyTitlebarInset(points: insetPoints)
   }
 
+  /// Switches the page's chat to `modelID`.
+  public func selectChatModel(_ modelID: String) {
+    canvas?.selectChatModel(modelID)
+  }
+
   /// Puts a draft in the page's message field without sending it.
   public func fillDraft(_ draftText: String) {
     canvas?.fillDraft(draftText)

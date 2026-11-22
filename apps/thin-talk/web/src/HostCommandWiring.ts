@@ -68,6 +68,7 @@ export function hostCommandHandlers(targets: HostCommandTargets): HostCommandHan
       targets.composerField.value = draftText;
       targets.composerField.dispatchEvent(new Event("input", { bubbles: true }));
     },
+    selectChatModel: (modelID) => void targets.controller.chooseModelFromHost(modelID),
     openSettings: () => targets.astro.openSettings(),
     toggleAstro: () => targets.astro.toggleShown(),
     setTitlebarInset: (titlebarInsetPixels) => targets.windowChrome.applyTitlebarInset(titlebarInsetPixels),

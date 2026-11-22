@@ -1,6 +1,6 @@
 //! Beside-source tests for the catalog entry flags: the Get started pick (one per
-//! role, never experimental, retiring or a helper), and the experimental and
-//! retiring flags with their defaults.
+//! role, never experimental or a helper), the experimental flag with its
+//! default, and the refusal of the retired retiring flag.
 
 use serde_json::json;
 
@@ -51,46 +51,20 @@ fn should_default_flags_to_false_and_the_streaming_floor_to_none() {
 
     assert!(!plain_entry.get_started());
     assert!(!plain_entry.experimental());
-    assert!(!plain_entry.retiring());
     assert_eq!(plain_entry.minimum_memory_bytes(), None);
 }
 
 #[test]
-fn should_parse_a_retiring_entry_that_is_not_a_get_started_pick() {
-    let retiring_entry = parse_catalog_entry(
-        entry_document_with(&[("role", json!("chat")), ("retiring", json!(true))]),
-        0,
-        &mut empty_seen_identities(),
-        &mut empty_get_started_role_names(),
-    )
-    .expect("a retiring chat entry should parse");
-
-    assert!(retiring_entry.retiring());
-    assert!(!retiring_entry.get_started());
-}
-
-#[test]
-fn should_reject_a_retiring_get_started_pick() {
-    let retiring_pick = entry_document_with(&[
-        ("role", json!("chat")),
-        ("get_started", json!(true)),
-        ("retiring", json!(true)),
-    ]);
-
-    assert!(matches!(
-        validate_get_started_pick(&retiring_pick, 4, &mut empty_get_started_role_names()),
-        Err(DownloadCatalogError::InvalidGetStartedPick { entry_index: 4 })
-    ));
-}
-
-#[test]
-fn should_refuse_a_retiring_flag_that_is_not_a_boolean() {
+fn should_refuse_the_retired_retiring_flag_because_supported_models_stay() {
     let mut catalog_entry = baseline_entry_document();
-    catalog_entry["retiring"] = json!("soon");
+    catalog_entry["retiring"] = json!(true);
 
     let document = serde_json::from_value::<DownloadCatalogEntryDocument>(catalog_entry);
 
-    assert!(document.is_err());
+    assert!(
+        document.is_err(),
+        "a catalog cannot mark a supported model for removal"
+    );
 }
 
 #[test]

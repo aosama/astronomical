@@ -50,6 +50,11 @@ public final class ThinTalkConversationActions: NSObject, NSMenuItemValidation {
     commandController.run(.exportConversation)
   }
 
+  /// Opens the chat on `modelID`: "Chat with this model" on the Models page.
+  public func selectChatModel(_ modelID: String) {
+    commandController.selectChatModel(modelID)
+  }
+
   /// Puts a draft in the message field; the person still presses Send.
   public func fillDraft(_ draftText: String) {
     commandController.fillDraft(draftText)

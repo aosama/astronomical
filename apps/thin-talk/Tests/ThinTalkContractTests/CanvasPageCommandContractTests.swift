@@ -29,7 +29,10 @@ final class CanvasPageCommandContractTests: XCTestCase {
 
   func test_should_send_only_commands_the_page_understands_and_cover_every_one() throws {
     let nativeCommandNames = Set(CanvasPageCommand.allCases.map(\.rawValue))
-      .union([CanvasPageCommand.titlebarInsetCommandName, CanvasPageCommand.draftCommandName])
+      .union([
+        CanvasPageCommand.titlebarInsetCommandName, CanvasPageCommand.draftCommandName,
+        CanvasPageCommand.chatModelCommandName,
+      ])
     let pageCommandNames = try pageCommandNames()
     XCTAssertFalse(pageCommandNames.isEmpty, "HostCommand.ts must still declare its commands")
     XCTAssertEqual(nativeCommandNames, pageCommandNames)
@@ -53,6 +56,18 @@ final class CanvasPageCommandContractTests: XCTestCase {
     XCTAssertTrue(hostileScript.contains(#"\"}); alert(1); ({\"a\":\"\n"#), hostileScript)
     XCTAssertFalse(hostileScript.contains("\n"), "a raw line end would end the string literal")
     XCTAssertNotNil(CanvasPageCommand.draftScript(text: ""), "an empty draft still encodes; the page refuses it")
+  }
+
+  /// A model ID arrives in a link any app can open, so it must reach the page
+  /// as data, exactly like a draft; the page then checks it names a model.
+  func test_should_send_a_chat_model_as_an_escaped_string_that_cannot_become_script() throws {
+    XCTAssertEqual(
+      CanvasPageCommand.chatModelScript(modelID: "Qwen3.6-35B-A3B-OptiQ-4bit"),
+      "window.__thintalkCommands?.run({\"name\": \"selectChatModel\", \"model\": \"Qwen3.6-35B-A3B-OptiQ-4bit\"});")
+    let hostileScript = try XCTUnwrap(CanvasPageCommand.chatModelScript(modelID: "\"}); alert(1); ({\"a\":\"\n</script>"))
+    XCTAssertTrue(hostileScript.contains(#"\"}); alert(1); ({\"a\":\"\n"#), hostileScript)
+    XCTAssertFalse(hostileScript.contains("\n"), "a raw line end would end the string literal")
+    XCTAssertFalse(hostileScript.contains("</script>"), "the closing tag is escaped")
   }
 
   func test_should_restate_the_titlebar_inset_in_css_pixels_at_the_current_zoom() {

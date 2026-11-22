@@ -3,7 +3,7 @@ import { DaemonClient } from "./DaemonClient";
 import { runHostToolUse } from "./HostToolUseRunner";
 import { SessionBridge } from "./SessionBridge";
 
-/** The user answers the sheet and picks the image, then a vision model (which
+/** The user picks the image in the open panel, then a vision model (which
  * may have to load first) answers, so a use needs well over the default. */
 const IMAGE_DESCRIPTION_TOOL_TIMEOUT_MILLISECONDS = 10 * 60_000;
 const DEFAULT_IMAGE_QUESTION = "Describe this image in detail.";
@@ -13,7 +13,7 @@ const DEFAULT_IMAGE_QUESTION = "Describe this image in detail.";
  * chat model answering the turn when it can see images, otherwise to the first
  * installed vision model, and that model's description becomes the result. A
  * vision model is looked for before the user is asked anything, so they are
- * never shown a sheet for a tool that cannot work.
+ * never shown an open panel for a tool that cannot work.
  */
 export class DescribeChosenImageTool implements ConversationTool {
   public readonly name = "describe_image";

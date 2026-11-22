@@ -36,13 +36,12 @@
     return created;
   }
 
-  // Experimental builds and models about to leave the list are kept off this
-  // page: a newcomer arriving from a link should meet the dependable ones.
+  // Experimental builds are kept off this page: a newcomer arriving from a
+  // link should meet the dependable ones.
   function isListedModel(catalogEntry) {
     return catalogEntry
       && catalogEntry.public === true
       && catalogEntry.experimental !== true
-      && catalogEntry.retiring !== true
       && typeof catalogEntry.huggingface_id === 'string'
       && MODEL_ID_PATTERN.test(catalogEntry.huggingface_id);
   }
