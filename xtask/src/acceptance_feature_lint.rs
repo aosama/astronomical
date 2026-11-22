@@ -18,9 +18,20 @@
 use std::path::Path;
 use std::process::Command;
 
-use crate::step_log::start_step;
+use crate::host_platforms::packages_unbuildable_on_this_host;
+use crate::step_log::{log_line, start_step};
 
 const ACCEPTANCE_PACKAGE_NAME: &str = "astronomical-acceptance";
+
+/// The hook's entry point: the lint, unless this host cannot build the
+/// acceptance crate.
+pub fn run_where_buildable(repository_root: &Path, arguments: &[String]) -> Result<(), String> {
+    if !arguments.is_empty() || host_builds_acceptance_tests(repository_root)? {
+        run(repository_root, arguments)
+    } else {
+        Ok(())
+    }
+}
 
 pub fn run(repository_root: &Path, arguments: &[String]) -> Result<(), String> {
     if !arguments.is_empty() {
@@ -39,6 +50,22 @@ pub fn run(repository_root: &Path, arguments: &[String]) -> Result<(), String> {
     }
     lint_step.finish("success");
     Ok(())
+}
+
+/// The acceptance crate builds only where its native engines do; on a host
+/// that cannot build it (see `host_platforms`) the lint is skipped and says so.
+fn host_builds_acceptance_tests(repository_root: &Path) -> Result<bool, String> {
+    let packages_left_out = packages_unbuildable_on_this_host(repository_root)?;
+    let is_left_out = packages_left_out
+        .iter()
+        .any(|left_out| left_out == ACCEPTANCE_PACKAGE_NAME);
+    if is_left_out {
+        log_line(&format!(
+            "lint-acceptance-features host={} skipped={ACCEPTANCE_PACKAGE_NAME}",
+            std::env::consts::OS
+        ));
+    }
+    Ok(!is_left_out)
 }
 
 /// `--all-features` applies to the selected package only, so this is every

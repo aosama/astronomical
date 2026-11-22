@@ -87,9 +87,10 @@ pub use mlx_runtime_types::{
 };
 
 #[cfg(feature = "mlx")]
+pub use mlx_runtime::{MlxRuntime, classify_mlx_error, evaluated_array_storage_mut};
+#[cfg(all(feature = "mlx", target_os = "macos"))]
 pub use mlx_runtime::{
-    MlxRuntime, classify_mlx_error, compiled_metallib_path, evaluated_array_storage_mut,
-    maximum_recommended_gpu_working_set_size_bytes, validate_metallib_path,
+    compiled_metallib_path, maximum_recommended_gpu_working_set_size_bytes, validate_metallib_path,
 };
 #[cfg(feature = "mlx")]
 pub use safetensors::file_writer::{MlxSafetensorsWriteOutcome, MlxSafetensorsWriterError};

@@ -1,5 +1,8 @@
 //! Full-mode toolchain probes: the hosted toolchain identity folded into
-//! the native build fingerprint. Digest semantics are carried over from the
+//! the native build fingerprint. The probe set follows the target's operating
+//! system (see [`crate::target_platform`]): macOS probes Xcode, the SDK and
+//! Xcode's Clang; Linux probes the `cc` and `c++` compilers CMake uses there.
+//! Both probe CMake and rustc. Digest semantics are carried over from the
 //! shell era byte-for-byte so `github_actions_cache` keys stay meaningful: whole-output probes
 //! hash raw stdout (trailing newline included), composite probes hash the
 //! re-composed `version=…`/`build=…` text, and overrides hash the override
@@ -8,6 +11,7 @@
 use std::process::Command;
 use std::time::Instant;
 
+use crate::target_platform::NativeTargetPlatform;
 use crate::{FingerprintRequest, NativeIdentityError, digest_bytes};
 
 /// Toolchain identity inputs, explicit per caller. Fixtures inject these
@@ -18,6 +22,13 @@ pub struct ToolchainOverrides {
     pub xcode: Option<String>,
     pub sdk: Option<String>,
     pub clang: Option<String>,
+    /// Linux only: the whole `cc --version` output.
+    pub c_compiler: Option<String>,
+    /// Linux only: the whole `c++ --version` output.
+    pub cxx_compiler: Option<String>,
+    /// Linux only: the CMake search settings that decide which BLAS and
+    /// LAPACK MLX's configure finds, as `NAME=value` lines.
+    pub blas_search: Option<String>,
     pub cmake: Option<String>,
     pub rustc: Option<String>,
     pub target_triple: Option<String>,
@@ -42,9 +53,10 @@ pub struct ProbeValue {
 }
 
 /// Captures the toolchain inputs in the fixed order the shell era
-/// established: target, build type, then the five toolchain probes. This is
-/// the single capture path — the identity manifest digests exactly these
-/// values, so an explained value can never diverge from the hashed one.
+/// established: target, build type, then the target platform's toolchain
+/// probes. This is the single capture path — the identity manifest digests
+/// exactly these values, so an explained value can never diverge from the
+/// hashed one.
 pub fn toolchain_probe_values(
     request: &FingerprintRequest<'_>,
 ) -> Result<Vec<ProbeValue>, NativeIdentityError> {
@@ -63,6 +75,7 @@ pub fn toolchain_probe_values(
     if build_type != "Release" {
         return Err(NativeIdentityError::UnsupportedBuildType(build_type));
     }
+    let compiler_probe_values = platform_compiler_probe_values(&target_triple, &request.overrides)?;
 
     let mut probe_values = vec![
         ProbeValue {
@@ -76,16 +89,7 @@ pub fn toolchain_probe_values(
             from_override: true,
         },
     ];
-    probe_values.push(whole_output_probe_value(
-        "xcode",
-        request.overrides.xcode.as_deref(),
-        "xcodebuild",
-        &["-version"],
-    )?);
-    probe_values.push(composite_sdk_probe_value(request.overrides.sdk.as_deref())?);
-    probe_values.push(composite_clang_probe_value(
-        request.overrides.clang.as_deref(),
-    )?);
+    probe_values.extend(compiler_probe_values);
     probe_values.push(composite_cmake_probe_value(
         request.overrides.cmake.as_deref(),
     )?);
@@ -98,9 +102,115 @@ pub fn toolchain_probe_values(
     Ok(probe_values)
 }
 
+/// Captures the compiler probes of the target triple's operating system. An
+/// unsupported operating system fails here, before any probe runs.
+fn platform_compiler_probe_values(
+    target_triple: &str,
+    overrides: &ToolchainOverrides,
+) -> Result<Vec<ProbeValue>, NativeIdentityError> {
+    let target_platform = NativeTargetPlatform::of_target_triple(target_triple)
+        .map_err(|error| NativeIdentityError::Probe(error.to_string()))?;
+    let mut compiler_probe_values = Vec::new();
+    match target_platform {
+        NativeTargetPlatform::MacOs => {
+            push_macos_compiler_probe_values(overrides, &mut compiler_probe_values)?;
+        }
+        NativeTargetPlatform::Linux => {
+            push_linux_compiler_probe_values(overrides, &mut compiler_probe_values)?;
+        }
+    }
+    Ok(compiler_probe_values)
+}
+
+/// The macOS compiler probes: Xcode, the macOS SDK, and Xcode's Clang. Their
+/// names, order and digest semantics are hashed bytes shared with every
+/// existing macOS store entry, so they must not change.
+fn push_macos_compiler_probe_values(
+    overrides: &ToolchainOverrides,
+    probe_values: &mut Vec<ProbeValue>,
+) -> Result<(), NativeIdentityError> {
+    probe_values.push(whole_output_probe_value(
+        "xcode",
+        overrides.xcode.as_deref(),
+        "xcodebuild",
+        &["-version"],
+    )?);
+    probe_values.push(composite_sdk_probe_value(overrides.sdk.as_deref())?);
+    probe_values.push(composite_clang_probe_value(overrides.clang.as_deref())?);
+    Ok(())
+}
+
+/// The Linux compiler probes. CMake configures Linux builds with the `cc`
+/// and `c++` found on `PATH`, so those exact commands are probed. The whole
+/// `--version` output is hashed because GCC's `-dumpversion` prints only the
+/// major version, which would let a compiler update reuse stale archives.
+fn push_linux_compiler_probe_values(
+    overrides: &ToolchainOverrides,
+    probe_values: &mut Vec<ProbeValue>,
+) -> Result<(), NativeIdentityError> {
+    probe_values.push(whole_output_probe_value(
+        "c-compiler",
+        overrides.c_compiler.as_deref(),
+        "cc",
+        &["--version"],
+    )?);
+    probe_values.push(whole_output_probe_value(
+        "cxx-compiler",
+        overrides.cxx_compiler.as_deref(),
+        "c++",
+        &["--version"],
+    )?);
+    probe_values.push(blas_search_probe_value(overrides.blas_search.as_deref()));
+    Ok(())
+}
+
+/// The settings MLX's Linux configure consults to find BLAS and LAPACK:
+/// CMake's own search paths, FindBLAS and FindLAPACK's vendor and root hints
+/// (including MKL's), and the link and pkg-config paths FindBLAS searches.
+/// `LD_LIBRARY_PATH` is left out on purpose: Cargo rewrites it for every
+/// build script and `cargo run`, so hashing it would key a new store entry
+/// per process.
+/// macOS links Accelerate, so none of these apply there.
+pub const BLAS_SEARCH_VARIABLES: [&str; 10] = [
+    "CMAKE_PREFIX_PATH",
+    "CMAKE_INCLUDE_PATH",
+    "CMAKE_LIBRARY_PATH",
+    "BLA_VENDOR",
+    "BLAS_HOME",
+    "BLAS_ROOT",
+    "LAPACK_ROOT",
+    "MKLROOT",
+    "LIBRARY_PATH",
+    "PKG_CONFIG_PATH",
+];
+
+/// A Linux store entry records the BLAS and LAPACK files MLX's configure
+/// found, and links them by path. Pointing CMake at another BLAS must
+/// therefore build a new entry rather than reuse one whose recorded files
+/// are elsewhere, so the settings that steer that search are hashed. Unset
+/// settings hash as empty values, which keeps the probe present and stable.
+fn blas_search_probe_value(override_text: Option<&str>) -> ProbeValue {
+    let probe_output = match override_text {
+        Some(override_value) => format!("{override_value}\n"),
+        None => {
+            let mut search_setting_lines = String::new();
+            for search_variable in BLAS_SEARCH_VARIABLES {
+                let search_value = std::env::var(search_variable).unwrap_or_default();
+                search_setting_lines.push_str(&format!("{search_variable}={search_value}\n"));
+            }
+            search_setting_lines
+        }
+    };
+    ProbeValue {
+        name: "blas-search",
+        value: probe_output,
+        from_override: override_text.is_some(),
+    }
+}
+
 /// Assembles the toolchain section of the identity manifest in the fixed
-/// order the shell era established: target, build type, then the five
-/// toolchain probes.
+/// order the shell era established: target, build type, then the target
+/// platform's toolchain probes.
 pub fn toolchain_manifest_lines(
     request: &FingerprintRequest<'_>,
 ) -> Result<String, NativeIdentityError> {

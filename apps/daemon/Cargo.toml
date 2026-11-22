@@ -7,6 +7,12 @@ repository.workspace = true
 rust-version.workspace = true
 version.workspace = true
 
+[package.metadata.astronomical]
+# Builds on macOS only for now; the pre-commit hook's function-length
+# pass (`cargo xtask function-length-budget`) leaves it out on other hosts.
+# Drop this table once it builds on Linux (#2424).
+host-platforms = ["macos"]
+
 [package.metadata.cargo-machete]
 # idna_adapter is a resolution-only pin with no import (see its entry below).
 ignored = ["idna_adapter"]

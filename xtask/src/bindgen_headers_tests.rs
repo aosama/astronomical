@@ -1,13 +1,26 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
+// The journeys that exercise the real provisioning run macOS tools and build
+// only on macOS; the imports and fixtures only they use are gated with them.
+#[cfg(target_os = "macos")]
+use std::path::Path;
+#[cfg(target_os = "macos")]
 use std::process::Command;
 
-use native_identity::{NativeBuildProfile, digest_bytes};
+use native_identity::NativeBuildProfile;
+#[cfg(target_os = "macos")]
+use native_identity::digest_bytes;
 
+#[cfg(target_os = "macos")]
 use super::command::run;
-use super::hash_manifest::{manifest_differences, tree_hash_manifest};
+use super::hash_manifest::manifest_differences;
+#[cfg(target_os = "macos")]
+use super::hash_manifest::tree_hash_manifest;
 use super::header_locations::{
-    astro_native_build_cache_dependencies_directory, built_entry_directory, built_identity,
-    native_build_store_directory, native_build_store_schema_version,
+    astro_native_build_cache_dependencies_directory, native_build_store_directory,
+};
+#[cfg(target_os = "macos")]
+use super::header_locations::{
+    built_entry_directory, built_identity, native_build_store_schema_version,
 };
 use super::options::{ProvisionMode, parse_provision_options};
 use super::patch_pipeline::{
@@ -16,6 +29,7 @@ use super::patch_pipeline::{
 use super::pinned_archives::select_pinned_header_archives;
 use super::provision_flow::completion_marker_text;
 
+#[cfg(target_os = "macos")]
 const FIXTURE_PATCH_MARKER: &str = "astronomical fixture patch applied";
 
 fn arguments(argument_words: &[&str]) -> Vec<String> {
@@ -266,6 +280,7 @@ fn should_write_the_completion_marker_in_the_shell_layout() {
     );
 }
 
+#[cfg(target_os = "macos")]
 fn write_fixture_file(file_path: &Path, file_text: &str) {
     std::fs::create_dir_all(file_path.parent().expect("a parent directory"))
         .expect("fixture directory");

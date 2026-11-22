@@ -38,6 +38,12 @@ const NATIVE_INPUT_PATHSPECS: &[&str] = &[
     "crates/native-build-orchestration/src/native_store.rs",
     "crates/native-build-orchestration/src/native_store/manifest.rs",
     "crates/native-build-orchestration/src/native_compile.rs",
+    // The platform module holds both platforms' configure arguments and
+    // store products, and the directives module the whole link line; the
+    // build slot decides where CMake compiles. Each changes the native build.
+    "crates/native-build-orchestration/src/native_host_platform.rs",
+    "crates/native-build-orchestration/src/native_link_directives.rs",
+    "crates/native-build-orchestration/src/native_store/build_slot.rs",
     "crates/native-build-orchestration/src/native-build-store-schema-version",
     "crates/runtime-integration/native",
     "crates/native-identity/src",

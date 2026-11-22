@@ -14,8 +14,13 @@
 //! ```text
 //! <root>/v<schema>/entries/<64-hex identity>/   published payloads
 //! <root>/v<schema>/locks/<identity>.lock        exclusive per-identity locks
-//! <root>/v<schema>/staging/<id>.<pid>.<nonce>/  in-progress builds
+//! <root>/v<schema>/staging/<id>.<pid>.<nonce>/  in-progress publications
+//! <root>/v<schema>/build-slots/slot-<n>/        reusable CMake build folders
 //! ```
+//!
+//! The CMake compile runs in a build slot, a fixed folder reused between
+//! builds so the compile commands keep the same absolute paths and sccache
+//! can serve unchanged objects (see `build_slot`).
 //!
 //! The schema directory version (`native-build-store-schema-version`, a
 //! fingerprinted input) fences every entry whenever the layout or validation
@@ -28,13 +33,16 @@
 //! directory whose completion marker matches its identity, whose SHA-256
 //! manifest matches the payload byte-for-byte, and whose profile's products
 //! are all present. A failing entry is removed and rebuilt. A fresh build
-//! happens in a staging directory, is fully synced to disk, is validated,
+//! compiles in a build slot, then its products are copied into a staging
+//! directory, fully synced to disk, validated,
 //! and only then atomically becomes the entry via rename — an interrupted
 //! build can therefore never leave a half-published entry that a later run
 //! would mistake for reusable.
 //!
 //! Concurrency is per-identity: one builder holds the lock file (with
-//! progress heartbeats while waiting), other identities build in parallel.
+//! progress heartbeats while waiting), and other identities build in
+//! parallel, up to one build per build slot; a further build waits for a
+//! slot while holding its identity lock, and says so in its progress lines.
 
 use std::{
     error::Error,
@@ -46,10 +54,16 @@ use std::{
 
 use fs4::TryLockError;
 
+use crate::native_host_platform::{
+    MLX_TARGETS_RELATIVE_PATH, NativeTargetPlatform, platform_native_products,
+};
+
+mod build_slot;
 mod manifest;
 #[cfg(test)]
 mod tests;
 
+use build_slot::acquire_build_slot;
 use manifest::{
     copy_directory_without_symlinks, copy_required_file, sync_directory, sync_directory_tree,
     validate_entry, write_manifest, write_synced_file,
@@ -59,8 +73,8 @@ use manifest::{
 /// module documentation. Content is an unsigned integer in the file beside
 /// this module.
 const STORE_SCHEMA_VERSION_TEXT: &str = include_str!("native-build-store-schema-version");
-const LOCK_PROGRESS_INTERVAL: Duration = Duration::from_secs(5);
-const LOCK_RETRY_INTERVAL: Duration = Duration::from_millis(100);
+pub(crate) const LOCK_PROGRESS_INTERVAL: Duration = Duration::from_secs(5);
+pub(crate) const LOCK_RETRY_INTERVAL: Duration = Duration::from_millis(100);
 
 /// Which optional native products a profile builds and publishes.
 ///
@@ -117,6 +131,7 @@ impl NativeBuildProfile {
 pub struct NativeBuildStore {
     root_directory: PathBuf,
     native_identity: String,
+    native_target_platform: NativeTargetPlatform,
     native_build_profile: NativeBuildProfile,
 }
 
@@ -133,6 +148,7 @@ impl NativeBuildStore {
     pub fn new(
         root_directory: &Path,
         native_identity: &str,
+        native_target_platform: NativeTargetPlatform,
         native_build_profile: NativeBuildProfile,
     ) -> Result<Self, Box<dyn Error>> {
         if !root_directory.is_absolute() {
@@ -147,6 +163,7 @@ impl NativeBuildStore {
         Ok(Self {
             root_directory: root_directory.to_owned(),
             native_identity: native_identity.to_owned(),
+            native_target_platform,
             native_build_profile,
         })
     }
@@ -180,6 +197,7 @@ impl NativeBuildStore {
             Ok(_) => match validate_entry(
                 &entry_directory,
                 &self.native_identity,
+                self.native_target_platform,
                 self.native_build_profile,
             ) {
                 Ok(()) => {
@@ -205,9 +223,10 @@ impl NativeBuildStore {
             Err(metadata_error) => return Err(metadata_error.into()),
         }
 
+        crate::native_compile::start_sccache_server_before_taking_a_slot();
+        let build_slot = acquire_build_slot(&self.schema_directory().join("build-slots"))?;
+        let cmake_build_directory = build_slot.cmake_build_directory.clone();
         let staging_directory = self.create_staging_directory()?;
-        let cmake_build_directory = staging_directory.join("cmake");
-        fs::create_dir(&cmake_build_directory)?;
         eprintln!(
             "[native-build-store] status=building identity={} profile={}",
             self.native_identity,
@@ -319,9 +338,10 @@ impl NativeBuildStore {
             &cmake_build_directory.join("lib/libmlxc.a"),
             &payload_directory.join("lib/libmlxc.a"),
         )?;
-        copy_required_file(
-            &cmake_build_directory.join("_deps/mlx-build/mlx/backend/metal/kernels/mlx.metallib"),
-            &payload_directory.join("share/mlx/mlx.metallib"),
+        copy_platform_products(
+            self.native_target_platform,
+            cmake_build_directory,
+            &payload_directory,
         )?;
         if self
             .native_build_profile
@@ -358,9 +378,26 @@ impl NativeBuildStore {
         validate_entry(
             &entry_directory,
             &self.native_identity,
+            self.native_target_platform,
             self.native_build_profile,
         )
     }
+}
+
+/// Copies the products only this platform's build produces (the Metallib on
+/// macOS, the link library list on Linux) into the payload.
+fn copy_platform_products(
+    native_target_platform: NativeTargetPlatform,
+    cmake_build_directory: &Path,
+    payload_directory: &Path,
+) -> Result<(), Box<dyn Error>> {
+    for platform_product in platform_native_products(native_target_platform) {
+        copy_required_file(
+            &cmake_build_directory.join(platform_product.build_relative_path),
+            &payload_directory.join(platform_product.entry_relative_path),
+        )?;
+    }
+    Ok(())
 }
 
 fn store_schema_version() -> &'static str {
@@ -414,8 +451,15 @@ impl NativeBuildArtifacts {
         self.native_library_directory().join("libmlx.a")
     }
 
+    /// Published on macOS only.
     pub fn metallib_path(&self) -> PathBuf {
         self.entry_directory.join("share/mlx/mlx.metallib")
+    }
+
+    /// Published on Linux only: MLX's exported CMake targets, which record
+    /// the libraries MLX was configured to link.
+    pub fn mlx_targets_path(&self) -> PathBuf {
+        self.entry_directory.join(MLX_TARGETS_RELATIVE_PATH)
     }
 
     /// Present only for the `core+memory-contract` profile.

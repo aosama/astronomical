@@ -38,6 +38,10 @@ use std::{
     process::Command,
 };
 
+use crate::native_host_platform::{
+    MLX_PACKAGE_INSTALL_RELATIVE_DIRECTORY, MLX_SUBPROJECT_BUILD_RELATIVE_DIRECTORY,
+    NativeTargetPlatform, compiler_configure_arguments, installs_mlx_package,
+};
 use crate::native_parallelism;
 use crate::native_progress::NativeBuildProgress;
 use crate::native_store::{NativeBuildArtifacts, NativeBuildProfile};
@@ -131,24 +135,21 @@ pub fn native_build_store_directory() -> Result<PathBuf, Box<dyn Error>> {
 
 /// Configures and builds the pinned MLX/MLX-C native runtime with CMake.
 ///
-/// Sequence: configure (compilers, SDK, arm64, Release, sanitized
-/// environment, archive locations, optional probe target) → build the
-/// `mlxc` aggregate target → optionally build the memory-contract probe
-/// binary. Every command reports through the progress recorder so hosted CI
+/// Sequence: configure (the platform's compilers, plus the SDK and arm64 on
+/// macOS, Release, sanitized environment, archive locations, optional probe
+/// target) → build the `mlxc` aggregate target → optionally build the
+/// memory-contract probe binary → on Linux, install MLX's own CMake package,
+/// whose exported targets the link reads. Every command reports through the progress recorder so hosted CI
 /// can watch the silent multi-minute stretches.
 pub fn build_pinned_native_runtime(
     native_source_directory: &Path,
     native_build_directory: &Path,
+    native_target_platform: NativeTargetPlatform,
     native_build_profile: NativeBuildProfile,
     native_build_inputs: &NativeRuntimeBuildInputs,
     native_build_progress: &NativeBuildProgress,
 ) -> Result<(), Box<dyn Error>> {
     let mut configure_command = Command::new("cmake");
-    // Resolve the toolchain through xcrun rather than trusting PATH so the
-    // compilers are the ones the identity's toolchain probes measured.
-    let clang_compiler_path = discover_xcrun_path(&["--find", "clang"])?;
-    let clang_cxx_compiler_path = discover_xcrun_path(&["--find", "clang++"])?;
-    let macos_sdk_path = discover_xcrun_path(&["--sdk", "macosx", "--show-sdk-path"])?;
     configure_command
         .arg("-G")
         .arg("Unix Makefiles")
@@ -157,16 +158,7 @@ pub fn build_pinned_native_runtime(
         .arg("-B")
         .arg(native_build_directory)
         .arg("-DCMAKE_BUILD_TYPE=Release")
-        .arg(format!(
-            "-DCMAKE_C_COMPILER={}",
-            clang_compiler_path.display()
-        ))
-        .arg(format!(
-            "-DCMAKE_CXX_COMPILER={}",
-            clang_cxx_compiler_path.display()
-        ))
-        .arg(format!("-DCMAKE_OSX_SYSROOT={}", macos_sdk_path.display()))
-        .arg("-DCMAKE_OSX_ARCHITECTURES=arm64");
+        .args(compiler_configure_arguments(native_target_platform)?);
     remove_uncontrolled_native_environment(&mut configure_command);
     let compiler_launcher_argument = sccache_compiler_launcher_path()
         .map_or_else(String::new, |launcher_path| {
@@ -217,6 +209,23 @@ pub fn build_pinned_native_runtime(
         native_build_progress,
     )?;
 
+    build_profile_and_platform_extras(
+        native_build_directory,
+        native_target_platform,
+        native_build_profile,
+        native_build_progress,
+    )
+}
+
+/// The steps beyond the `mlxc` target that a profile or platform adds: the
+/// memory-contract probe binary, and on Linux the install of MLX's own CMake
+/// package, whose exported targets the link reads.
+fn build_profile_and_platform_extras(
+    native_build_directory: &Path,
+    native_target_platform: NativeTargetPlatform,
+    native_build_profile: NativeBuildProfile,
+    native_build_progress: &NativeBuildProgress,
+) -> Result<(), Box<dyn Error>> {
     if native_build_profile.should_build_memory_contract_probe() {
         let mut probe_build_command = Command::new("cmake");
         probe_build_command
@@ -230,6 +239,25 @@ pub fn build_pinned_native_runtime(
         run_command(
             &mut probe_build_command,
             "native-memory-contract-probe",
+            native_build_progress,
+        )?;
+    }
+    if installs_mlx_package(native_target_platform) {
+        let mut package_install_command = Command::new("cmake");
+        package_install_command
+            .arg("--install")
+            .arg(native_build_directory.join(MLX_SUBPROJECT_BUILD_RELATIVE_DIRECTORY))
+            .arg("--prefix")
+            .arg(native_build_directory.join(MLX_PACKAGE_INSTALL_RELATIVE_DIRECTORY));
+        remove_uncontrolled_native_environment(&mut package_install_command);
+        // An ambient staging root or install mode would move the package out
+        // of the build directory or publish links instead of files.
+        package_install_command
+            .env_remove("DESTDIR")
+            .env_remove("CMAKE_INSTALL_MODE");
+        run_command(
+            &mut package_install_command,
+            "native-mlx-package-install",
             native_build_progress,
         )?;
     }
@@ -313,23 +341,6 @@ fn astro_native_build_cache_dependencies_directory() -> Option<PathBuf> {
         })
 }
 
-fn discover_xcrun_path(arguments: &[&str]) -> Result<PathBuf, Box<dyn Error>> {
-    let path_output = Command::new("xcrun").args(arguments).output()?;
-    if !path_output.status.success() {
-        return Err(format!("xcrun failed to resolve {}", arguments.join(" ")).into());
-    }
-    let path_text = String::from_utf8(path_output.stdout)?;
-    let resolved_path = PathBuf::from(path_text.trim());
-    if !resolved_path.is_absolute() {
-        return Err(format!(
-            "xcrun reported a non-absolute path for {}",
-            arguments.join(" ")
-        )
-        .into());
-    }
-    Ok(resolved_path)
-}
-
 /// Strips ambient compiler/toolchain variables from a CMake invocation.
 ///
 /// These variables change native output bytes without changing anything the
@@ -383,6 +394,25 @@ fn sccache_compiler_launcher_path() -> Option<PathBuf> {
     let rustc_wrapper_path = env::var_os(RUSTC_WRAPPER_VARIABLE).map(PathBuf::from)?;
     let wrapper_file_name = rustc_wrapper_path.file_name()?.to_str()?;
     (wrapper_file_name == SCCACHE_EXECUTABLE_NAME).then_some(rustc_wrapper_path)
+}
+
+/// Starts the sccache server, when sccache is the compiler launcher, before
+/// a build slot is taken. The slot lock stays open in every compiler this
+/// build starts, so a server first started by one of those compiles would
+/// inherit it and keep the slot busy for its whole lifetime, moving the next
+/// build to another slot path where sccache keys miss. Starting it first
+/// means the server never holds a slot. A failure is ignored: the compile
+/// then starts the server itself, as before.
+pub(crate) fn start_sccache_server_before_taking_a_slot() {
+    let Some(sccache_path) = sccache_compiler_launcher_path() else {
+        return;
+    };
+    let _ignored_status = Command::new(sccache_path)
+        .arg("--start-server")
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status();
 }
 
 fn cmake_boolean(boolean_value: bool) -> &'static str {

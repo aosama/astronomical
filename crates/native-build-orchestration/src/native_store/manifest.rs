@@ -27,6 +27,9 @@ use std::{
 use sha2::{Digest, Sha256};
 
 use super::NativeBuildProfile;
+use crate::native_host_platform::{
+    NativeTargetPlatform, PlatformNativeProduct, platform_native_products,
+};
 
 /// Full-entry validation: real directory, matching completion marker,
 /// well-formed manifest header, payload matching the manifest byte-for-byte,
@@ -39,6 +42,7 @@ use super::NativeBuildProfile;
 pub(super) fn validate_entry(
     entry_directory: &Path,
     native_identity: &str,
+    native_target_platform: NativeTargetPlatform,
     native_build_profile: NativeBuildProfile,
 ) -> Result<(), Box<dyn Error>> {
     require_regular_directory(entry_directory, "native entry")?;
@@ -63,7 +67,11 @@ pub(super) fn validate_entry(
     if payload_manifest != payload_manifest_text(entry_directory)? {
         return Err("native entry payload does not match its SHA-256 manifest".into());
     }
-    require_profile_products(entry_directory, native_build_profile)
+    require_profile_products(
+        entry_directory,
+        native_target_platform,
+        native_build_profile,
+    )
 }
 
 /// Writes the entry manifest: compatibility header plus one
@@ -184,14 +192,22 @@ pub(super) fn sync_directory_tree(directory_path: &Path) -> Result<(), Box<dyn E
 /// Asserts the products a profile promises are present as regular files.
 fn require_profile_products(
     entry_directory: &Path,
+    native_target_platform: NativeTargetPlatform,
     native_build_profile: NativeBuildProfile,
 ) -> Result<(), Box<dyn Error>> {
+    // One loop over the shared products followed by the platform's own, so
+    // a platform adds products without adding a validation path.
+    let platform_products = platform_native_products(native_target_platform)
+        .iter()
+        .map(PlatformNativeProduct::entry_path_and_description);
     for (relative_path, description) in [
         ("include/mlx/c/mlx.h", "published MLX C umbrella header"),
         ("lib/libmlx.a", "published MLX static library"),
         ("lib/libmlxc.a", "published MLX C static library"),
-        ("share/mlx/mlx.metallib", "published MLX metallib"),
-    ] {
+    ]
+    .into_iter()
+    .chain(platform_products)
+    {
         require_regular_file(&entry_directory.join(relative_path), description)?;
     }
     if native_build_profile.should_build_memory_contract_probe() {

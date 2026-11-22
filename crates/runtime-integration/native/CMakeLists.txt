@@ -9,7 +9,8 @@
 # fails loudly before any compile. MLX and MLX-C are then patched with the
 # repository-owned patch set under third-party/patches (each patch's purpose
 # and retirement condition are documented in third-party/README.md) and
-# built as one static, Release-mode, arm64-only image.
+# built as one static, Release-mode image: arm64 with Metal on macOS, the
+# host architecture with the CPU backend on Linux.
 #
 # Consumers: the Cargo build script (build-orchestration/native_compile.rs)
 # and the standalone native-build tool drive this file identically; the
@@ -26,11 +27,18 @@ include("${CMAKE_CURRENT_LIST_DIR}/../../../third-party/pins/mlx-v0.32.4.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/../../../third-party/pins/mlx-c-v0.8.0.cmake")
 find_program(PATCH_EXECUTABLE patch REQUIRED)
 
-if(NOT CMAKE_SYSTEM_NAME STREQUAL "Darwin")
-    message(FATAL_ERROR "Astronomical's MLX runtime integration may only build on macOS")
-endif()
-if(NOT CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|aarch64)$")
-    message(FATAL_ERROR "Astronomical's MLX runtime integration requires Apple Silicon")
+# macOS builds the Metal backend on Apple silicon. Linux builds MLX's CPU
+# backend, which is the first step towards GPU backends beyond Metal
+# (issue #2424); it links the BLAS and LAPACK that MLX's configure finds.
+if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+    if(NOT CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|aarch64)$")
+        message(FATAL_ERROR "Astronomical's MLX runtime integration requires Apple Silicon")
+    endif()
+    set(ASTRONOMICAL_MLX_BUILD_METAL ON)
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    set(ASTRONOMICAL_MLX_BUILD_METAL OFF)
+else()
+    message(FATAL_ERROR "Astronomical's MLX runtime integration may only build on macOS or Linux")
 endif()
 
 if(NOT DEFINED ASTRONOMICAL_NATIVE_DEPENDENCY_CACHE_DIR OR "${ASTRONOMICAL_NATIVE_DEPENDENCY_CACHE_DIR}" STREQUAL "")
@@ -70,10 +78,10 @@ set(MLX_BUILD_EXAMPLES OFF CACHE BOOL "Disable upstream MLX examples" FORCE)
 set(MLX_BUILD_BENCHMARKS OFF CACHE BOOL "Disable upstream MLX benchmarks" FORCE)
 set(MLX_BUILD_PYTHON_BINDINGS OFF CACHE BOOL "Exclude Python from the worker runtime" FORCE)
 set(MLX_BUILD_GGUF OFF CACHE BOOL "Disable unneeded GGUF support" FORCE)
-set(MLX_BUILD_METAL ON CACHE BOOL "Require the Metal backend" FORCE)
+set(MLX_BUILD_METAL ${ASTRONOMICAL_MLX_BUILD_METAL} CACHE BOOL "Require the Metal backend on macOS" FORCE)
 set(MLX_BUILD_CPU ON CACHE BOOL "Retain bounded CPU fallback operations" FORCE)
 set(MLX_BUILD_SAFETENSORS ON CACHE BOOL "Require descriptor-backed safetensors loading" FORCE)
-set(MLX_METAL_JIT ON CACHE BOOL "Select Metal kernels for the current Apple GPU and keep them in the Metal kernel cache" FORCE)
+set(MLX_METAL_JIT ${ASTRONOMICAL_MLX_BUILD_METAL} CACHE BOOL "Select Metal kernels for the current Apple GPU and keep them in the metal_kernel_cache" FORCE)
 set(MLX_ENABLE_X64_MAC OFF CACHE BOOL "Reject unsupported Intel macOS builds" FORCE)
 set(MLX_USE_CCACHE OFF CACHE BOOL "Keep the native artifact graph machine-independent" FORCE)
 set(MLX_C_BUILD_EXAMPLES OFF CACHE BOOL "Disable upstream MLX C examples" FORCE)
@@ -144,6 +152,12 @@ if(NOT TARGET mlx OR NOT TARGET mlxc)
 endif()
 
 if(ASTRONOMICAL_BUILD_MEMORY_CONTRACT_PROBE)
+    # The probe measures the Metal allocator through Mach and MLX's Metal
+    # headers, so it cannot exist without Metal. Failing at configure time
+    # spares a full MLX compile that would only fail at the probe.
+    if(NOT ASTRONOMICAL_MLX_BUILD_METAL)
+        message(FATAL_ERROR "The MLX memory contract probe measures the Metal allocator and builds on macOS only")
+    endif()
     add_executable(
         mlx_memory_contract_probe
         EXCLUDE_FROM_ALL

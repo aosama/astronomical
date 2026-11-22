@@ -9,9 +9,10 @@
 //!    `std::terminate`; Astronomical captures the description through the
 //!    error channel instead so a failed operation becomes a typed
 //!    [`MlxRuntimeError`] rather than a dead worker.
-//! 2. The **Metallib path** is resolved and validated before the bindings
-//!    context exists, so the context's first graphics-processor touch already
-//!    sees the pinned kernel archive.
+//! 2. On macOS, the **Metallib path** is resolved and validated before the
+//!    bindings context exists, so the context's first graphics-processor
+//!    touch already sees the pinned kernel archive. Linux builds MLX's CPU
+//!    backend, which has no kernel archive.
 //! 3. The **memory policy** is applied before any allocation can happen, so
 //!    no transient allocation can escape the ceiling the worker promised.
 //! 4. Only then is the **bindings context** created.
@@ -20,12 +21,15 @@
 //! — which is exactly what the once-per-process statics in `memory_policy`
 //! and `metallib` exist to prevent.
 
+#[cfg(target_os = "macos")]
 use std::path::Path;
 
 use crate::{MlxMemoryLimits, MlxRuntimeError};
 use mlx_bridge::MlxBindingsContext;
 
-use super::{MlxRuntime, memory_policy, metallib};
+#[cfg(target_os = "macos")]
+use super::metallib;
+use super::{MlxRuntime, memory_policy};
 
 impl MlxRuntime {
     /// Installs the non-terminating error handler before any fallible MLX call
@@ -39,13 +43,16 @@ impl MlxRuntime {
     /// cannot be created.
     pub fn initialize(memory_limits: MlxMemoryLimits) -> Result<Self, MlxRuntimeError> {
         mlx_bridge::install_non_terminating_error_handler();
+        #[cfg(target_os = "macos")]
         let metallib_path = metallib::configured_metallib_path()?;
+        #[cfg(target_os = "macos")]
         metallib::configure_metallib_path(&metallib_path)?;
         memory_policy::configure_runtime_memory_limits(memory_limits)?;
         let context = create_bindings_context_for_admitted_limits()?;
         Ok(Self {
             context,
             memory_limits,
+            #[cfg(target_os = "macos")]
             metallib_path,
         })
     }
@@ -70,6 +77,7 @@ impl MlxRuntime {
     }
 
     /// Returns the absolute AOT Metal library path selected before GPU setup.
+    #[cfg(target_os = "macos")]
     #[must_use]
     pub fn metallib_path(&self) -> &Path {
         &self.metallib_path

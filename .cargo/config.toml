@@ -407,7 +407,10 @@ test-quantization-mixture-of-experts = "run -p xtask -- test-run --package astro
 # update installs and relaunches and a corrupted one is rejected (release-only
 # steps).
 # `cargo xtask prewarm-native-build --profile core` builds the pinned native
-# MLX runtime into the machine-wide store before Cargo compiles anything.
+# MLX runtime into the machine-wide store before Cargo compiles anything. On
+# Linux it builds MLX's CPU backend instead of Metal (issue #2424); then
+# `cargo build -p runtime-integration --features mlx` links against it (see
+# docs/development.md, "Building the MLX runtime on Linux").
 # `cargo xtask native-fingerprint --profile core [--target TRIPLE] [--explain]`
 # prints that build's identity; `--cache-environment` prints it with its store
 # entry directory as `$GITHUB_ENV` lines for workflows that save the entry to the `github_actions_cache`.
@@ -418,6 +421,15 @@ test-quantization-mixture-of-experts = "run -p xtask -- test-run --package astro
 # with every one of its features on; the pre-commit hook runs it on any
 # staged Rust source, because no default-feature pass and no
 # continuous-integration lane compiles those feature-gated journeys.
+# `cargo xtask function-length-budget` is the pre-commit hook's workspace
+# clippy pass for the 100-line function budget; on macOS it is exactly
+# `cargo clippy --workspace --all-targets`, and on other hosts it leaves out
+# crates whose manifest lists only macOS under `package.metadata.astronomical`
+# `host-platforms`, and every workspace crate depending on them.
+# `cargo xtask model-serving-default-features` is the hook's default-feature
+# lint of model-serving and the crates split out of it, with the same host
+# awareness; `cargo xtask lint-acceptance-features` skips on a host that
+# cannot build the acceptance crate.
 # `cargo xtask convert-laya --checkpoint DIRECTORY --output DIRECTORY` converts a
 # PyTorch Laya checkpoint (model.safetensors, rl_agent_config.json,
 # encoder/config.json, tokenizer/) into the MLX layout Astronomical serves:

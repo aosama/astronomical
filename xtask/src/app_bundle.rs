@@ -44,6 +44,8 @@ mod app_export_declaration_tests;
 #[path = "app_login_launch_check_tests.rs"]
 mod app_login_launch_check_tests;
 #[cfg(test)]
+// Every fixture here assembles a bundle with ditto, a macOS tool.
+#[cfg(target_os = "macos")]
 #[path = "app_package_fixture_tests.rs"]
 mod app_package_fixture_tests;
 #[cfg(test)]

@@ -12,9 +12,9 @@
 //!    `native-build-orchestration` crate's `native_store`
 //!    module) to reuse a published entry for that identity or build one
 //!    under an exclusive lock;
-//! 3. configures **Rust linking** against the published static archives and
-//!    publishes the Metallib beside the cargo target (the same crate's
-//!    `native_linking` module);
+//! 3. configures **Rust linking** against the published static archives and,
+//!    on macOS, publishes the Metallib beside the cargo target (the same
+//!    crate's `native_linking` module);
 //! 4. emits **rerun contracts** so Cargo re-runs exactly when an input the
 //!    artifact depends on changes — and never for a phantom path (see the
 //!    memorialized lesson below).
@@ -56,8 +56,9 @@ use std::{env, error::Error, path::Path, time::Instant};
 use native_build_orchestration::{
     ASTRO_NATIVE_BUILD_CACHE_DEPENDENCIES_VARIABLE, NATIVE_BUILD_PROGRESS_FILE_VARIABLE,
     NATIVE_BUILD_STATUS_FILE_VARIABLE, NATIVE_BUILD_STORE_VARIABLE, NativeBuildProfile,
-    NativeBuildProgress, NativeBuildStore, NativeRuntimeBuildInputs, RUSTC_WRAPPER_VARIABLE,
-    build_pinned_native_runtime, native_build_store_directory, native_parallel_job_count,
+    NativeBuildProgress, NativeBuildStore, NativeRuntimeBuildInputs, NativeTargetPlatform,
+    RUSTC_WRAPPER_VARIABLE, build_pinned_native_runtime, identity_environment_variables,
+    native_build_platform, native_build_store_directory, native_parallel_job_count,
     required_path_variable, resolve_native_build_identity, write_native_build_status,
 };
 
@@ -79,8 +80,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     let native_source_directory = manifest_directory.join("native");
     let native_build_profile = selected_native_build_profile();
     let native_build_inputs = NativeRuntimeBuildInputs::from_environment();
-    let target_triple = env::var("TARGET")
-        .map_err(|_| "required environment variable TARGET is missing".to_owned())?;
+    let (target_triple, native_target_platform) = cargo_native_build_target()?;
+    emit_identity_environment_rerun_contracts(native_target_platform);
     let native_build_identity = resolve_native_build_identity(
         &repository_root,
         native_build_profile.identity_name(),
@@ -90,12 +91,14 @@ fn main() -> Result<(), Box<dyn Error>> {
     let native_build_store = NativeBuildStore::new(
         &native_build_store_directory,
         &native_build_identity,
+        native_target_platform,
         native_build_profile,
     )?;
     let native_build_artifacts = native_build_store.resolve_or_build(|native_build_directory| {
         build_pinned_native_runtime(
             &native_source_directory,
             native_build_directory,
+            native_target_platform,
             native_build_profile,
             &native_build_inputs,
             &native_build_progress,
@@ -107,13 +110,38 @@ fn main() -> Result<(), Box<dyn Error>> {
         native_build_started_at.elapsed(),
     );
 
-    native_build_orchestration::native_linking::configure_rust_linking(&native_build_artifacts)?;
+    native_build_orchestration::native_linking::configure_rust_linking(
+        &native_build_artifacts,
+        native_target_platform,
+    )?;
     emit_native_source_rerun_contracts(
         &manifest_directory,
         &native_source_directory,
         &native_build_inputs,
     );
     Ok(())
+}
+
+/// Cargo's target triple and the platform recipe it selects; a build for
+/// another operating system than the host's is refused here.
+fn cargo_native_build_target() -> Result<(String, NativeTargetPlatform), Box<dyn Error>> {
+    let target_triple = env::var("TARGET")
+        .map_err(|_| "required environment variable TARGET is missing".to_owned())?;
+    let host_triple =
+        env::var("HOST").map_err(|_| "required environment variable HOST is missing".to_owned())?;
+    let native_target_platform = native_build_platform(&target_triple, &host_triple)?;
+    Ok((target_triple, native_target_platform))
+}
+
+/// Declares the environment the platform's native build identity reads, so a
+/// changed BLAS setting re-runs this script and keys a new store entry instead
+/// of relinking the old one. `PATH` is deliberately not declared (Cargo and
+/// rustup change it between processes), so a compiler upgrade found through
+/// `PATH` is picked up the next time the script runs for another reason.
+fn emit_identity_environment_rerun_contracts(native_target_platform: NativeTargetPlatform) {
+    for environment_variable in identity_environment_variables(native_target_platform) {
+        println!("cargo:rerun-if-env-changed={environment_variable}");
+    }
 }
 
 /// Declares every environment input whose value change must re-run the

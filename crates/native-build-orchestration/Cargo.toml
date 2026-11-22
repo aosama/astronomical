@@ -12,9 +12,11 @@ version.workspace = true
 workspace = true
 
 [dependencies]
-# The store locks entries with fs4 and hashes manifests with sha2; the
+# The store locks entries with fs4 (and keeps build-slot locks across
+# child processes with rustix) and hashes manifests with sha2; the
 # identity policy comes from the shared native-identity library.
 fs4.workspace = true
+rustix.workspace = true
 sha2.workspace = true
 native-identity = { path = "../native-identity" }
 
