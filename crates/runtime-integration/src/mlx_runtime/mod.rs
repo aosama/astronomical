@@ -29,6 +29,7 @@ mod memory_policy_tests;
 #[cfg(target_os = "macos")]
 mod metallib;
 mod quantized_projection;
+pub use quantized_projection::mlx_computes_on_cpu;
 mod safetensors_io;
 
 use std::ops::Deref;

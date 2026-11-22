@@ -37,7 +37,7 @@ impl MlxRuntime {
         group_size: i32,
         bits: i32,
     ) -> Result<MlxArray, MlxCError> {
-        if mlx_computes_half_precision_quantized_matmul_slowly()? {
+        if mlx_computes_on_cpu()? {
             return quantized_matmul_affine_through_float32(
                 self,
                 activations,
@@ -61,16 +61,28 @@ impl MlxRuntime {
     }
 }
 
-/// The Metal build computes on the GPU, where half precision is fast.
+/// Whether this build of MLX computes on its CPU backend. The Metal build
+/// always has its GPU; elsewhere MLX computes on the CPU unless it has a GPU
+/// backend. On the CPU, half precision is both slower than float32 and, for
+/// Qwen3.5, inaccurate enough to change answers (#2441), so callers that own
+/// a compute dtype choose float32 there.
+///
+/// # Errors
+///
+/// Returns the MLX description when the backend query fails.
 #[cfg(target_os = "macos")]
 #[allow(clippy::unnecessary_wraps)]
-const fn mlx_computes_half_precision_quantized_matmul_slowly() -> Result<bool, MlxCError> {
+pub const fn mlx_computes_on_cpu() -> Result<bool, MlxCError> {
     Ok(false)
 }
 
-/// Elsewhere MLX computes on its CPU backend unless it has a GPU backend.
+/// See the macOS definition; elsewhere MLX has a GPU only with a GPU backend.
+///
+/// # Errors
+///
+/// Returns the MLX description when the backend query fails.
 #[cfg(not(target_os = "macos"))]
-fn mlx_computes_half_precision_quantized_matmul_slowly() -> Result<bool, MlxCError> {
+pub fn mlx_computes_on_cpu() -> Result<bool, MlxCError> {
     static COMPUTES_ON_CPU: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     if let Some(computes_on_cpu) = COMPUTES_ON_CPU.get() {
         return Ok(*computes_on_cpu);

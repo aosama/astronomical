@@ -8,6 +8,7 @@ use crate::qwen3_5_core::frozen_config_test_support::frozen_ornith_1_0_config_by
 use super::{
     apply_rms_norm_storage_convention, is_language_rms_norm_weight_tensor,
     is_published_pytorch_convolution_layout, is_raw_hugging_face_norm_offset_weight_tensor,
+    widened_for_the_compute_device,
 };
 
 fn test_runtime() -> MlxRuntime {
@@ -222,5 +223,68 @@ fn should_scale_only_once_when_both_conventions_would_match_the_same_tensor() {
             .to_vec_f32()
             .expect("the convention-adjusted RMSNorm weight should be readable"),
         [1.25, 0.5]
+    );
+}
+
+/// The dtype a half-precision tensor binds as: float32 where MLX computes on
+/// its CPU (#2441), and unchanged on the Metal build.
+fn expected_bound_half_precision_dtype(stored_dtype: mlx_bridge::MlxDtype) -> mlx_bridge::MlxDtype {
+    if runtime_integration::mlx_computes_on_cpu().expect("the backend query should answer") {
+        mlx_bridge::MlxDtype::Float32
+    } else {
+        stored_dtype
+    }
+}
+
+#[test]
+#[serial]
+fn should_bind_half_precision_tensors_in_the_compute_devices_dtype() {
+    let runtime = test_runtime();
+    for stored_dtype in [
+        mlx_bridge::MlxDtype::BFloat16,
+        mlx_bridge::MlxDtype::Float16,
+    ] {
+        let stored_tensor = runtime
+            .astype(&test_norm_weight(&runtime), stored_dtype)
+            .expect("the stored tensor should cast");
+
+        let bound_tensor = widened_for_the_compute_device(&runtime, stored_tensor)
+            .expect("binding should succeed");
+
+        assert_eq!(
+            bound_tensor.dtype(),
+            expected_bound_half_precision_dtype(stored_dtype)
+        );
+        let bound_values = runtime
+            .astype(&bound_tensor, mlx_bridge::MlxDtype::Float32)
+            .expect("the bound tensor should read as float32")
+            .to_vec_f32()
+            .expect("the bound tensor should evaluate");
+        assert_eq!(
+            bound_values,
+            vec![0.25, -0.5],
+            "widening must not change any value"
+        );
+    }
+}
+
+#[test]
+#[serial]
+fn should_keep_packed_and_float32_tensors_as_they_are_stored() {
+    let runtime = test_runtime();
+    let packed_weights = MlxArray::from_u32(&[7, 9], &[2]).expect("the packed words should upload");
+    let float32_weights = test_norm_weight(&runtime);
+
+    assert_eq!(
+        widened_for_the_compute_device(&runtime, packed_weights)
+            .expect("binding should succeed")
+            .dtype(),
+        mlx_bridge::MlxDtype::UInt32
+    );
+    assert_eq!(
+        widened_for_the_compute_device(&runtime, float32_weights)
+            .expect("binding should succeed")
+            .dtype(),
+        mlx_bridge::MlxDtype::Float32
     );
 }

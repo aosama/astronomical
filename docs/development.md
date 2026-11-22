@@ -117,15 +117,15 @@ Start the daemon, and send a chat request to the address it prints:
 
     target/release/astronomicald --instance development --state-directory /path/to/state
     curl http://127.0.0.1:PORT/v1/chat/completions -H 'content-type: application/json' \
-      -d '{"model":"Qwen3.5-0.8B-MLX-4bit","messages":[{"role":"user","content":"Who speaks the line \"O Romeo, Romeo, wherefore art thou Romeo?\""}],"max_tokens":60,"reasoning_effort":"none"}'
+      -d '{"model":"Qwen3.5-0.8B-MLX-4bit","messages":[{"role":"user","content":"Who wrote the play Romeo and Juliet?"}],"max_tokens":60,"reasoning_effort":"none"}'
 
 What to expect:
 
 - **It is slow.** On MLX's CPU backend the 0.8B model reads and writes on the order of one token a second, so even a one-sentence answer takes minutes, most of them spent reading the chat template. `"reasoning_effort":"none"` keeps the model from spending its token budget thinking.
 - **Prompts are read 64 tokens at a time by default** on builds without Metal, against 2,048 (4,096 for SSD-paged models) with Metal. The engine reads one chunk at load to measure its working buffers, and a larger chunk would keep a CPU loading for many minutes. `chunking.fixed_prompt_processing_chunk_size_tokens` in `config.json` sets another size, and a saved 2,048 written by an earlier Linux build is moved to the new default.
 - **The daemon gives a model ten minutes to load**, against one minute with Metal, for the same reason.
-- **Qwen3.5's dense quantized projections compute in float32 on the CPU.** MLX's CPU kernel for BF16 and float16 activations is about ten times slower than for float32 ones on CPUs without native half-precision arithmetic, so the runtime widens the activations and rounds the result back, which is at least as accurate. Other models' quantized paths, and sparse models' expert projections, still use the slower kernel.
-- **Answers can be wrong while the model computes in BF16 on the CPU.** MLX's CPU backend runs Qwen3.5 in BF16 less accurately than Metal does, and MLX's own `mlx-lm` gives the same wrong answers there; in float32 the model answers correctly and faster. Computing in float32 on CPU-only builds is [#2441](https://github.com/aosama/astronomical/issues/2441).
+- **Other models still compute in half precision on the CPU,** including their quantized projections, which MLX's CPU backend runs about ten times slower in BF16 and float16 than in float32 on CPUs without native half-precision arithmetic.
+- **Qwen3.5 computes in float32 on the CPU.** MLX's CPU backend runs it in BF16 inaccurately enough to change its answers, so every half-precision tensor is widened to float32 when the model binds ([#2441](https://github.com/aosama/astronomical/issues/2441)). Its decoder state is float32 too, about twice the BF16 bytes, and memory admission counts it. The smallest model's answers then match MLX's own float32 reference; what remains wrong is the 0.8B model's own knowledge.
 - **SSD-paged sparse models are not a Linux target yet.**
 - **Nothing in MLX enforces the active memory ceiling on Linux.** The memory ledger still plans against it, and `/v1/status` reports `"active_memory_ceiling_enforcement": "unavailable"` in the ledger snapshot (it reads `"enforced_by_mlx"` on macOS). See [#2425](https://github.com/aosama/astronomical/issues/2425).
 - **The bound is the machine's memory, lowered by any cgroup limit** on the daemon, and `maximum_mlx_memory_gb` lowers it further.

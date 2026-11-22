@@ -431,12 +431,36 @@ pub(super) fn bind_language_tensor(
         &tensor_profile.name,
         tensor,
     )?;
+    let tensor = widened_for_the_compute_device(runtime, tensor)?;
     let tensor_payload_bytes =
         u64::try_from(tensor.byte_count()).map_err(|_| Qwen3_5ExecutionError::InvalidTensor {
             tensor_name: tensor_profile.name.clone(),
             description: "tensor payload byte count exceeds the u64 range",
         })?;
     Ok((tensor, tensor_payload_bytes))
+}
+
+/// Widens a half-precision tensor to float32 where MLX computes on its CPU.
+///
+/// MLX's CPU backend runs Qwen3.5 in BF16 inaccurately enough to change its
+/// answers, and slower than in float32 (#2441). Widening every non-packed
+/// tensor once at bind makes the whole graph compute in float32: activations
+/// promote from the norms and affine scales they meet, and the decoder-state
+/// dtype replay reads these bound dtypes, so the `astro_decoder_state_cache`
+/// and memory admission size float32 state. Packed quantized weights keep
+/// their integer storage. The Metal build never widens.
+fn widened_for_the_compute_device(
+    runtime: &MlxRuntime,
+    tensor: MlxArray,
+) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    let is_half_precision = matches!(
+        tensor.dtype(),
+        mlx_bridge::MlxDtype::BFloat16 | mlx_bridge::MlxDtype::Float16
+    );
+    if !is_half_precision || !runtime_integration::mlx_computes_on_cpu()? {
+        return Ok(tensor);
+    }
+    Ok(runtime.astype(&tensor, mlx_bridge::MlxDtype::Float32)?)
 }
 
 fn apply_rms_norm_storage_convention(
