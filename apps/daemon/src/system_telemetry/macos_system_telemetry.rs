@@ -133,9 +133,9 @@ fn sample_gpu_utilization_percentage() -> Option<f64> {
         if matching_result != KERN_SUCCESS {
             return None;
         }
-        let result = read_accelerator_utilization(accelerator_iterator);
+        let accelerator_utilization_percentage = read_accelerator_utilization(accelerator_iterator);
         IOObjectRelease(accelerator_iterator);
-        result
+        accelerator_utilization_percentage
     }
 }
 

@@ -28,8 +28,6 @@ use super::{
 const PHYSICAL_MEMORY_SIZE_SYSCTL_KEY: &str = "hw.memsize";
 #[cfg(target_os = "macos")]
 const SYSCTL_EXECUTABLE_PATH: &str = "/usr/sbin/sysctl";
-#[cfg(target_os = "linux")]
-const LINUX_MEMINFO_PATH: &str = "/proc/meminfo";
 
 /// The repository's reproducibility rule: probes prefill in 2,048-token
 /// chunks so a sweep measures the same graph a served request runs.
@@ -156,14 +154,12 @@ pub(super) fn sample_physical_ram_bytes() -> Result<u64, QuantizeError> {
     }
 }
 
-/// `MemTotal` from `/proc/meminfo`, Linux's physical memory size and the one
-/// input the machine ceiling is computed from.
+/// The Linux memory bound, the one input the machine ceiling is computed
+/// from: `MemTotal`, lowered by any cgroup v2 limit on this process.
 #[cfg(target_os = "linux")]
 pub(super) fn sample_physical_ram_bytes() -> Result<u64, QuantizeError> {
-    let meminfo_text = std::fs::read_to_string(LINUX_MEMINFO_PATH)
-        .map_err(|read_error| physical_memory_unreadable(&read_error.to_string()))?;
-    memory_policy::serving_ceiling::physical_ram_bytes_from_linux_meminfo(&meminfo_text)
-        .ok_or_else(|| physical_memory_unreadable("/proc/meminfo has no readable MemTotal line"))
+    memory_policy::linux_memory_bound::read_linux_memory_bound_bytes()
+        .map_err(|description| physical_memory_unreadable(&description))
 }
 
 /// The ceiling as both the active limit and the MLX buffer-cache limit, the

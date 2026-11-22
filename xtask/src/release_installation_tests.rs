@@ -2,17 +2,16 @@
 //! Sparkle update, tested through their pure decisions and fixture
 //! directories.
 
-// Several tests here exercise macOS tools (codesign, ditto, the Xcode SDK)
-// and build only on macOS; the imports and fixtures they share are then
-// unused on other hosts, which is expected rather than dead code.
-#![cfg_attr(not(target_os = "macos"), allow(unused_imports, dead_code))]
 use std::path::{Path, PathBuf};
 
 use super::app_store_package::{
     AppStorePackageRequest, app_store_channel_problem, default_output_package, identity_is_listed,
 };
 use super::command::{AppStoreCommand, ReleaseCommand, parse_release_command};
-use super::sparkle_acceptance::{acceptance_info_plist, state_fingerprint};
+use super::sparkle_acceptance::state_fingerprint;
+// Only the Sparkle acceptance journey, which runs macOS tools, reads the plist.
+#[cfg(target_os = "macos")]
+use super::sparkle_acceptance::acceptance_info_plist;
 use super::stable_installation::{
     PromotionTools, canonical_home_directory, promote_bundle, stable_promotion_problems,
 };

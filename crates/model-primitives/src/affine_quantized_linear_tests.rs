@@ -19,8 +19,6 @@ const ROMEO_AND_JULIET_SOURCE: &str = include_str!(
 const OUTPUT_WIDTH: usize = 32;
 const INPUT_WIDTH: usize = 128;
 
-/// BF16 values in about [-1.5, 1.5] drawn from the play's bytes.
-
 /// Metal's quantized matmul dequantizes the weights to BF16, as the dense
 /// reference does, so both paths round to BF16 once.
 #[cfg(target_os = "macos")]
@@ -31,6 +29,8 @@ const PACKED_TO_DENSE_ROUNDING_BOUND: f32 = 0.5;
 /// 29) in 2 of 96 outputs.
 #[cfg(not(target_os = "macos"))]
 const PACKED_TO_DENSE_ROUNDING_BOUND: f32 = 1.0;
+
+/// BF16 values in about [-1.5, 1.5] drawn from the play's bytes.
 fn shakespeare_bf16(runtime: &MlxRuntime, shape: &[i32], byte_offset: usize) -> MlxArray {
     let value_count = shape.iter().product::<i32>() as usize;
     let values = ROMEO_AND_JULIET_SOURCE

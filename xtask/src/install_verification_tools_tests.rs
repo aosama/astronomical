@@ -1,7 +1,8 @@
 use crate::install_verification_tools::{
-    cargo_about_archive_name, cargo_about_release_url, copy_then_remove, curl_download_arguments,
-    expected_version_line, host_rust_target, move_into_place, published_digest_from_sidecar,
-    sccache_archive_name, sccache_release_url,
+    cargo_about_archive_name, cargo_about_release_url, copy_beside_then_rename,
+    curl_download_arguments, expected_version_line, host_rust_target, move_into_place,
+    published_digest_from_sidecar, rename_crosses_filesystems, sccache_archive_name,
+    sccache_release_url,
 };
 
 fn curl_option_value(option_name: &str) -> Option<&'static str> {
@@ -168,7 +169,24 @@ fn should_move_an_extracted_binary_into_the_prefix() {
 }
 
 #[test]
-fn should_copy_then_remove_when_a_rename_cannot_cross_filesystems() {
+fn should_bridge_only_a_cross_filesystem_rename_failure_with_a_copy() {
+    assert!(rename_crosses_filesystems(&std::io::Error::from(
+        std::io::ErrorKind::CrossesDevices
+    )));
+    for other_failure_kind in [
+        std::io::ErrorKind::NotFound,
+        std::io::ErrorKind::PermissionDenied,
+        std::io::ErrorKind::AlreadyExists,
+    ] {
+        assert!(
+            !rename_crosses_filesystems(&std::io::Error::from(other_failure_kind)),
+            "{other_failure_kind:?} is a real failure, not a filesystem boundary"
+        );
+    }
+}
+
+#[test]
+fn should_copy_beside_the_destination_and_rename_it_into_place() {
     let scratch_directory = tempfile::tempdir().expect("a scratch directory");
     let extracted_binary = scratch_directory.path().join("sccache");
     let installed_binary = scratch_directory.path().join("prefix-sccache");
@@ -180,9 +198,21 @@ fn should_copy_then_remove_when_a_rename_cannot_cross_filesystems() {
             .expect("the fixture binary is made executable");
     }
 
-    copy_then_remove(&extracted_binary, &installed_binary).expect("the fallback copies");
+    std::fs::write(&installed_binary, b"older binary").expect("an older install exists");
+    copy_beside_then_rename(&extracted_binary, &installed_binary).expect("the fallback copies");
 
     assert!(!extracted_binary.exists(), "the scratch copy is removed");
+    assert_eq!(
+        std::fs::read(&installed_binary).expect("installed"),
+        b"binary"
+    );
+    assert!(
+        !scratch_directory
+            .path()
+            .join("prefix-sccache.staged")
+            .exists(),
+        "no staged copy is left behind"
+    );
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;

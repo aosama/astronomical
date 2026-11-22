@@ -5,9 +5,13 @@
 fn main() {
     println!("cargo:rerun-if-changed=native/process_memory.c");
     println!("cargo:rerun-if-changed=native/process_memory_linux.c");
-    // The readings come from Mach on macOS and from /proc on Linux; the fp32
-    // reference uses Accelerate on macOS and a plain loop elsewhere, so only
-    // macOS links a framework.
+    compile_process_memory_readings();
+}
+
+/// The readings come from Mach on macOS and from /proc on Linux; the fp32
+/// reference uses Accelerate on macOS and a plain loop elsewhere, so only
+/// macOS links a framework.
+fn compile_process_memory_readings() {
     if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("macos") {
         cc::Build::new()
             .file("native/process_memory.c")

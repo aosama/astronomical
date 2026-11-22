@@ -22,26 +22,6 @@ pub const fn machine_ceiling_from_physical_ram_bytes(physical_ram_bytes: u64) ->
     physical_ram_bytes
 }
 
-/// The physical memory size on Linux, from the `MemTotal:` line of
-/// `/proc/meminfo` (reported in KiB). macOS reads `hw.memsize` instead.
-/// `None` when the line is missing or malformed, so a caller never computes a
-/// ceiling from a guessed size.
-#[must_use]
-pub fn physical_ram_bytes_from_linux_meminfo(meminfo_text: &str) -> Option<u64> {
-    for meminfo_line in meminfo_text.lines() {
-        let Some(total_text) = meminfo_line.strip_prefix("MemTotal:") else {
-            continue;
-        };
-        let mut total_fields = total_text.split_whitespace();
-        let total_kibibytes = total_fields.next()?.parse::<u64>().ok()?;
-        if total_fields.next() != Some("kB") || total_kibibytes == 0 {
-            return None;
-        }
-        return total_kibibytes.checked_mul(1024);
-    }
-    None
-}
-
 /**
  * Resolves the effective ceiling under the configured and machine limits.
  */

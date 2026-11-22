@@ -29,8 +29,6 @@ const PHYSICAL_MEMORY_SIZE_SYSCTL_KEY: &str = "hw.memsize";
 const SYSCTL_SAMPLE_TIMEOUT: Duration = Duration::from_secs(2);
 #[cfg(target_os = "macos")]
 const SYSCTL_EXECUTABLE_PATH: &str = "/usr/sbin/sysctl";
-#[cfg(target_os = "linux")]
-const LINUX_MEMINFO_PATH: &str = "/proc/meminfo";
 
 /// Samples the machine MLX memory ceiling from the physical memory size.
 pub async fn machine_mlx_memory_ceiling_bytes() -> Result<usize, WorkerStartupError> {
@@ -66,15 +64,14 @@ async fn sample_physical_ram_bytes() -> Result<u64, WorkerStartupError> {
     })
 }
 
-/// `MemTotal` from `/proc/meminfo`, Linux's physical memory size.
+/// The Linux memory bound: `MemTotal`, lowered by any cgroup v2 limit on
+/// this process, so a container or systemd unit is never planned past its cap.
 #[cfg(target_os = "linux")]
 async fn sample_physical_ram_bytes() -> Result<u64, WorkerStartupError> {
-    let meminfo_text = tokio::fs::read_to_string(LINUX_MEMINFO_PATH)
+    tokio::task::spawn_blocking(memory_policy::linux_memory_bound::read_linux_memory_bound_bytes)
         .await
-        .map_err(WorkerStartupError::ReadLinuxMeminfo)?;
-    memory_policy::serving_ceiling::physical_ram_bytes_from_linux_meminfo(&meminfo_text).ok_or(
-        WorkerStartupError::InvalidPhysicalMemorySize {
-            description: "/proc/meminfo has no readable MemTotal line",
-        },
-    )
+        .map_err(|join_error| WorkerStartupError::ReadLinuxMemoryBound {
+            description: join_error.to_string(),
+        })?
+        .map_err(|description| WorkerStartupError::ReadLinuxMemoryBound { description })
 }

@@ -1,8 +1,10 @@
+// The Metallib trust chain exists only for the Metal build on macOS.
+#[cfg(target_os = "macos")]
 use std::{fs, fs::OpenOptions, os::unix::fs::FileExt};
 
-use runtime_integration::{
-    MlxMemoryLimits, MlxRuntime, MlxRuntimeError, compiled_metallib_path, validate_metallib_path,
-};
+use runtime_integration::{MlxMemoryLimits, MlxRuntime, MlxRuntimeError};
+#[cfg(target_os = "macos")]
+use runtime_integration::{compiled_metallib_path, validate_metallib_path};
 
 const ACTIVE_MEMORY_LIMIT_BYTES: usize = 2 * 1024 * 1024 * 1024;
 const MLX_BUFFER_CACHE_LIMIT_BYTES: usize = 256 * 1024 * 1024;
@@ -111,6 +113,7 @@ fn should_classify_prefixed_native_operation_capacity_errors() {
     ));
 }
 
+#[cfg(target_os = "macos")]
 #[test]
 fn should_reject_a_relocated_metallib_whose_build_produced_bytes_were_changed() {
     let relocation_directory =

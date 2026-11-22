@@ -30,4 +30,6 @@ mod sparse_expert_projection;
 mod sparse_expert_projection_page_independence;
 mod sparse_expert_projection_sorted_stride;
 mod sparse_experts;
+// Metal wired residency exists only on macOS.
+#[cfg(target_os = "macos")]
 mod worker_wired_residency_tests;

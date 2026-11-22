@@ -9,11 +9,13 @@ const MEMORY_PRESSURE_KNOWN_BITS: u32 =
     MEMORY_PRESSURE_NORMAL_BIT | MEMORY_PRESSURE_WARNING_BIT | MEMORY_PRESSURE_CRITICAL_BIT;
 
 /// The share of the last ten seconds, in percent, that at least one task
-/// (`some`) or every task (`full`) spent stalled on memory, past which Linux
-/// pressure stall information reads as a warning or as critical. Ten percent
-/// of wall time lost to memory stalls is when reclaim starts to be felt; any
-/// sustained `full` stall means the whole system waits on memory, the closest
-/// match to macOS's critical level.
+/// (`some`) or every task (`full`) spent stalled on memory, at or past which
+/// Linux pressure stall information reads as a warning or as critical. Ten
+/// percent of wall time lost to memory stalls is when reclaim starts to be
+/// felt. Every task stalled for a tenth of that time means the whole system
+/// waits on memory, the closest match to macOS's critical level; a `full`
+/// stall below that threshold, even a sustained one, reads by its `some`
+/// share instead.
 const LINUX_WARNING_SOME_STALL_PERCENTAGE: f64 = 10.0;
 const LINUX_CRITICAL_FULL_STALL_PERCENTAGE: f64 = 10.0;
 
