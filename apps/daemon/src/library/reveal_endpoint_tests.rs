@@ -34,6 +34,7 @@ fn projection_of<'catalog>(
     CatalogEntryProjection {
         catalog_entry,
         ready_on_this_mac,
+        served_on_this_mac: ready_on_this_mac,
         discovered_model_directory: discovered_model_directory.map(str::to_owned),
         requestable_model_id: None,
         download_state: None,
@@ -60,6 +61,23 @@ fn should_refuse_a_catalog_model_that_is_not_on_this_mac() {
         ),
         Err(LibraryRevealRefusal::NotOnThisMac),
         "a model that is not ready must not reveal its would-be download folder"
+    );
+}
+
+/// A hand copy the Library has not verified is still on this Mac, so Show in
+/// Finder opens the folder the engine serves it from.
+#[test]
+fn should_reveal_the_folder_of_a_served_copy_that_is_not_ready() {
+    let download_catalog = example_catalog();
+    let mut served_copy = projection_of(
+        &download_catalog,
+        false,
+        Some("/models/example-org/example-qwen"),
+    );
+    served_copy.served_on_this_mac = true;
+    assert_eq!(
+        ready_model_folder(Some(&served_copy), Some(PathBuf::from("/library/example"))),
+        Ok(PathBuf::from("/models/example-org/example-qwen"))
     );
 }
 

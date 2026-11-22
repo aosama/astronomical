@@ -114,6 +114,7 @@ fn expected_validated_catalog_document() -> serde_json::Value {
                 "removable_from_disk": false,
                 "public": true,
                 "ready_on_this_mac": false,
+                "served_on_this_mac": false,
                 "download_state": null,
                 "capabilities": capabilities_with(&[])
             },
@@ -131,6 +132,7 @@ fn expected_validated_catalog_document() -> serde_json::Value {
                 "minimum_memory_bytes": 4_451_287_808_u64,
                 "public": true,
                 "ready_on_this_mac": false,
+                "served_on_this_mac": false,
                 "download_state": null,
                 "capabilities": capabilities_with(&[])
             },
@@ -147,6 +149,7 @@ fn expected_validated_catalog_document() -> serde_json::Value {
                 "removable_from_disk": false,
                 "public": true,
                 "ready_on_this_mac": false,
+                "served_on_this_mac": false,
                 "download_state": null,
                 "capabilities": capabilities_with(&["supports_embeddings"])
             },
@@ -163,6 +166,7 @@ fn expected_validated_catalog_document() -> serde_json::Value {
                 "removable_from_disk": false,
                 "public": true,
                 "ready_on_this_mac": false,
+                "served_on_this_mac": false,
                 "download_state": null,
                 "build_of": "example-qwen",
                 "build_difference": "more_detail",
