@@ -7,6 +7,7 @@ const {
     createDownloadModelsContext,
     createDownloadModelsDocument,
     findRenderedElementsByClass,
+    renderedTexts,
     test,
     validCatalogEntry,
     vm
@@ -32,12 +33,18 @@ function renderMoreModels(catalogEntries, removalNotice = null, confirmingModelI
     return downloadModelsDocument;
 }
 
+// Everything a person can read on the first On this Mac row: its visible
+// actions, its open menu and its removal question.
 function actionLabels(downloadModelsDocument) {
     // A model that is not on this Mac has no line under On this Mac, so no actions.
-    const installedActions = findRenderedElementsByClass(
-        downloadModelsDocument.catalogContainer, "download-models-installed-actions"
+    const installedLine = findRenderedElementsByClass(
+        downloadModelsDocument.catalogContainer, "download-models-installed-line"
     )[0];
-    return installedActions ? installedActions.children.map((actionButton) => actionButton.textContent) : [];
+    return installedLine ? renderedTexts(installedLine) : [];
+}
+
+function openMenuScript(huggingfaceId) {
+    return `downloadModelsOpenMenuHuggingfaceId = ${JSON.stringify(huggingfaceId)};`;
 }
 
 const DOWNLOADED_BY_DOWNLOAD_MODELS = {
@@ -49,17 +56,20 @@ const DOWNLOADED_BY_DOWNLOAD_MODELS = {
 };
 
 test("should_offer_remove_from_disk_for_a_model_download_models_installed", () => {
-    const downloadModelsDocument = renderMoreModels([validCatalogEntry(DOWNLOADED_BY_DOWNLOAD_MODELS)]);
+    const { downloadModelsDocument } = renderWithState(
+        [validCatalogEntry(DOWNLOADED_BY_DOWNLOAD_MODELS)], openMenuScript(DOWNLOADED_BY_DOWNLOAD_MODELS.huggingface_id)
+    );
 
-    assert.equal(actionLabels(downloadModelsDocument).includes("Remove"), true);
+    assert.equal(actionLabels(downloadModelsDocument).includes("Move to Trash…"), true);
 });
 
 test("should_not_offer_remove_from_disk_for_a_copy_the_person_placed", () => {
-    const downloadModelsDocument = renderMoreModels([
-        validCatalogEntry({ ...DOWNLOADED_BY_DOWNLOAD_MODELS, removable_from_disk: false })
-    ]);
+    const { downloadModelsDocument } = renderWithState(
+        [validCatalogEntry({ ...DOWNLOADED_BY_DOWNLOAD_MODELS, removable_from_disk: false })],
+        openMenuScript(DOWNLOADED_BY_DOWNLOAD_MODELS.huggingface_id)
+    );
 
-    assert.equal(actionLabels(downloadModelsDocument).includes("Remove"), false);
+    assert.equal(actionLabels(downloadModelsDocument).includes("Move to Trash…"), false);
 });
 
 test("should_not_offer_remove_from_disk_for_a_model_that_is_not_on_this_mac", () => {
@@ -90,7 +100,7 @@ test("should_ask_inside_the_card_once_remove_from_disk_is_clicked", () => {
 
     const labels = actionLabels(downloadModelsDocument);
 
-    assert.equal(labels.includes("Remove"), false, "the question replaces the button");
+    assert.equal(labels.includes("Move to Trash…"), false, "the question replaces the menu item");
     assert.equal(labels.includes("Move to Trash"), true);
     assert.equal(labels.includes("Keep"), true);
 });
@@ -101,10 +111,10 @@ test("should_ask_only_on_the_card_whose_button_was_clicked", () => {
         validCatalogEntry({ ...DOWNLOADED_BY_DOWNLOAD_MODELS, huggingface_id: "astronomical-test/other", model_id: "Other" })
     ], null, "astronomical-test/other");
 
-    const labelsByCard = findRenderedElementsByClass(downloadModelsDocument.catalogContainer, "download-models-installed-actions")
-        .map((actions) => actions.children.map((action) => action.textContent));
+    const labelsByCard = findRenderedElementsByClass(downloadModelsDocument.catalogContainer, "download-models-installed-line")
+        .map((installedLine) => renderedTexts(installedLine));
 
-    assert.equal(labelsByCard[0].includes("Remove"), true);
+    assert.equal(labelsByCard[0].includes("Move to Trash"), false);
     assert.equal(labelsByCard[1].includes("Move to Trash"), true);
 });
 
@@ -362,7 +372,7 @@ test("should_disable_other_cards_remove_buttons_while_one_removal_runs", () => {
             validCatalogEntry(DOWNLOADED_BY_DOWNLOAD_MODELS),
             validCatalogEntry({ ...DOWNLOADED_BY_DOWNLOAD_MODELS, huggingface_id: "astronomical-test/other", model_id: "Other" })
         ],
-        `downloadModelsRemovalInFlightId = "astronomical-test/downloaded";`
+        `downloadModelsRemovalInFlightId = "astronomical-test/downloaded"; ${openMenuScript("astronomical-test/other")}`
     );
 
     const otherRemoveButtons = findRenderedElementsByClass(downloadModelsDocument.catalogContainer, "download-models-remove-button");
@@ -380,7 +390,7 @@ test("should_return_focus_to_remove_from_disk_when_keep_is_chosen", async () => 
     vm.runInContext(`cancelDownloadModelsRemoval();`, scriptContext);
     await Promise.resolve();
 
-    assert.equal(downloadModelsDocument.activeElement?.textContent, "Remove");
+    assert.equal(downloadModelsDocument.activeElement?.attributes["aria-label"], "More for Downloaded", "focus returns to the menu that holds Move to Trash");
 });
 
 test("should_focus_the_download_button_after_the_model_moves_to_the_trash", async () => {

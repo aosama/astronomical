@@ -4,34 +4,30 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.128</title>
-            <pubDate>Sat, 21 Nov 2026 20:20:47 -0500</pubDate>
-            <sparkle:version>2454</sparkle:version>
-            <sparkle:shortVersionString>0.2.128</sparkle:shortVersionString>
+            <title>0.2.131</title>
+            <pubDate>Sun, 22 Nov 2026 11:07:50 -0500</pubDate>
+            <sparkle:version>2466</sparkle:version>
+            <sparkle:shortVersionString>0.2.131</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[## Bug fixes
+            <description sparkle:format="markdown"><![CDATA[## What's new
 
-- **A long reply no longer slows down the rest of the Mac.** While a model wrote a long reply to a large conversation, video could freeze, audio could glitch and windows could respond slowly, and it got worse the longer the reply ran. Each time the conversation's attention buffers grew, the outgrown copies were kept instead of being handed back, so the memory the Mac must keep in RAM climbed until it reached the system's ceiling. They are now handed back as the reply is written. With a 34,000-token conversation and a 3,500-token reply on a 35B model, that memory ended at 30.3 GB instead of 39.2 GB and stayed flat throughout, at the same reply speed.
+- **Pictures and files open straight away.** When Astro looks at a picture or reads a file for you, the file picker now opens at once. Choosing a file there is your OK; nothing is read until you pick one. Searching your other conversations still asks first.
 
-## Known
+## Fixed
 
-- Replies from a draft-assisted (DFlash) model can still show a one-step memory rise after a freshly read large prompt. This is tracked and not fixed in this release.
+- **Tiel-Coder shows that it can see pictures.** The Models page now lists "Sees images" for `Tiel-Coder-35B-A3B-MLX-oQ6e`, and the download is the publisher's newer November build, with its real size, memory and reply speeds.
 
 ## Compatibility
 
-- No setting, command or local API changed.
-- Conversations, downloaded models and every setting are kept.
-- macOS 14 or later on Apple silicon.
-
-## Distribution
-
-The app and disk image are signed with the project's Developer ID, built with the Hardened Runtime, and notarized and stapled by Apple. Existing installations receive this release through the in-app update.
+- Your downloaded models, conversations and settings are kept.
+- Requires macOS 14 or later on a Mac with Apple silicon.
+- Signed with Developer ID, notarized by Apple, and delivered through a signed update feed.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.128/Astronomical-0.2.128-macOS-arm64.dmg" length="25823643" type="application/octet-stream" sparkle:edSignature="Ovlzaxpe8kUKZ9w8JhvOXclky0EJd7z0ubvhvbPtB+J1RloX6rbcdDglpZ1Yj11UiSXdZ7yWN92FDiGOsgFOAQ=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.131/Astronomical-0.2.131-macOS-arm64.dmg" length="25847102" type="application/octet-stream" sparkle:edSignature="gdX02ihCmvxdfBng+PZojeKkArWb5bHGkGGDeT5oNoeJ0lhYoby08SW7RUSXi7UTpiGCduxd7PuN4ARpDzTgBw=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: NWMK4UKRjIiLmtCq0FaO+Mxy1GJlS19FMcOkVnFgQohJIlq9AoIoGUIymooFBhbmXLTmNLMUeuTD4xe0QzRXBg==
-length: 2471
+edSignature: WShZSkuWRdPnoBk6O66C0zsH56IEkA4MglKzu8+guYZpwzjc5SV2+I66ip1t2GlWf89vk6OO+uwDDGc0PnO/CQ==
+length: 1975
 -->

@@ -302,3 +302,25 @@ test("should_refuse_a_catalog_entry_without_a_usable_model_id", () => {
     scriptContext.catalogEntry = validCatalogEntry();
     assert.equal(vm.runInContext("isRenderableDownloadModelsCatalogEntry(catalogEntry)", scriptContext), true);
 });
+
+test("should_count_free_disk_space_in_the_render_fingerprint_only_as_the_shown_figure", () => {
+    const scriptContext = createDownloadModelsContext();
+    const fingerprinted = (freeBytesJson) => JSON.parse(vm.runInContext(
+        `JSON.stringify(downloadModelsFingerprintedCatalogDocument({ schema_version: 5, entries: [], models_directory_free_bytes: ${freeBytesJson} }))`,
+        scriptContext
+    ));
+
+    assert.deepEqual(
+        fingerprinted(388_694_573_056),
+        fingerprinted(388_694_573_056 + 4096),
+        "a few bytes written between polls must not rebuild the page"
+    );
+    assert.deepEqual(
+        fingerprinted(388_694_573_056),
+        fingerprinted(388_694_573_056 + 214_748_364),
+        "a fifth of a gigabyte within the same whole gigabyte must not rebuild the page either"
+    );
+    assert.notDeepEqual(fingerprinted(388_694_573_056), fingerprinted(388_694_573_056 + 1073741824));
+    assert.equal(fingerprinted("null").models_directory_free_bytes, null, "no figure stays as it came");
+    assert.equal(vm.runInContext("downloadModelsFingerprintedCatalogDocument(null)", scriptContext), null);
+});

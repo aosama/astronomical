@@ -5,18 +5,29 @@ use std::collections::BTreeSet;
 use serde::Deserialize;
 use thiserror::Error;
 
+pub use crate::catalog_builds::{DownloadCatalogBuild, DownloadCatalogBuildDifference};
+use crate::catalog_builds::{parse_entry_build, validate_catalog_builds};
 pub use crate::catalog_capabilities::DownloadCatalogCapabilities;
 use crate::catalog_capabilities::{DownloadCatalogCapabilitiesDocument, parse_entry_capabilities};
 pub use crate::catalog_classification::{DownloadCatalogFamily, DownloadCatalogRole};
 use crate::catalog_presentation::{CatalogEntryPresentation, parse_entry_presentation};
+use crate::catalog_speed::validate_measured_speed;
+pub use crate::catalog_speed::{DownloadCatalogMeasuredSpeed, DownloadCatalogTaskSpeeds};
 use crate::path_selection::DownloadPathSelection;
 
 // Version 5 removes every name but the model ID: the display name, short name
 // and version label gave one model up to four names, and people could not tell
 // which one the terminal and the API accept. The model ID is the leaf of the
 // Hugging Face identity, the same name discovery gives the downloaded folder.
+// Version 5 later gained two optional additions without a version bump: the
+// build_of and build_difference pair, which links a build to its lead without
+// giving it a second name, and measured_speed, the tokens per second a release
+// measured. The catalog is bundled with the binary that reads it, so no reader
+// meets a field it does not know.
 // Version 4 added the summary; version 3 the memory footprint, streaming floor,
-// role, Get started pick, and the experimental and retiring flags. There are no
+// role, Get started pick, and the experimental flag; its retiring flag was
+// removed because a supported model stays in the catalog, and a catalog that
+// still declares it is refused. There are no
 // downstream catalog consumers, so the schema moves forward without
 // compatibility shims.
 const DOWNLOAD_CATALOG_SCHEMA_VERSION: u32 = 5;
@@ -48,13 +59,14 @@ pub struct DownloadCatalogEntry {
     role: DownloadCatalogRole,
     get_started: bool,
     experimental: bool,
-    retiring: bool,
     minimum_memory_bytes: Option<u64>,
     description: Option<String>,
     capabilities: DownloadCatalogCapabilities,
     quantization_label: Option<String>,
     upstream_license: Option<String>,
     presentation: CatalogEntryPresentation,
+    build: Option<DownloadCatalogBuild>,
+    measured_speed: Option<DownloadCatalogMeasuredSpeed>,
     download_path_selection: DownloadPathSelection,
 }
 
@@ -104,13 +116,29 @@ pub enum DownloadCatalogError {
     #[error("download catalog contains a duplicate or case-colliding Hugging Face identity")]
     DuplicateHuggingFaceId,
     #[error(
-        "download catalog entry {entry_index} cannot be the get_started pick: it is experimental, retiring, or a helper"
+        "download catalog entry {entry_index} cannot be the get_started pick: it is experimental or a helper"
     )]
     InvalidGetStartedPick { entry_index: usize },
     #[error("download catalog declares more than one get_started pick for role {role}")]
     DuplicateGetStartedPick { role: &'static str },
     #[error("download catalog entry {entry_index} has invalid or overlapping included paths")]
     InvalidIncludedPaths { entry_index: usize },
+    #[error(
+        "download catalog entry {entry_index} must declare build_of and build_difference together, name another entry, and be neither experimental nor a get_started pick"
+    )]
+    InvalidBuild { entry_index: usize },
+    #[error(
+        "download catalog entry {entry_index} names a build_of lead no entry has as its model ID"
+    )]
+    UnknownBuildLead { entry_index: usize },
+    #[error(
+        "download catalog entry {entry_index} names a build_of lead that is itself a build, experimental, or listed in another section"
+    )]
+    InvalidBuildLead { entry_index: usize },
+    #[error(
+        "download catalog entry {entry_index} has a measured_speed with a rate outside 1 to 1000 tokens a second, an empty or long measured_on, or a version that is not numeric"
+    )]
+    InvalidMeasuredSpeed { entry_index: usize },
 }
 
 #[derive(Debug, Deserialize)]
@@ -135,10 +163,6 @@ struct DownloadCatalogEntryDocument {
     get_started: bool,
     #[serde(default)]
     experimental: bool,
-    /// Marks a model that will leave the catalog in a later release; it stays
-    /// downloadable and installed copies keep working until then.
-    #[serde(default)]
-    retiring: bool,
     minimum_memory_bytes: Option<u64>,
     description: Option<String>,
     capabilities: Option<DownloadCatalogCapabilitiesDocument>,
@@ -146,6 +170,10 @@ struct DownloadCatalogEntryDocument {
     upstream_license: Option<String>,
     summary: Option<String>,
     included_paths: Option<Vec<String>>,
+    /// The model ID of the lead entry this is another build of.
+    build_of: Option<String>,
+    build_difference: Option<DownloadCatalogBuildDifference>,
+    measured_speed: Option<DownloadCatalogMeasuredSpeed>,
 }
 
 impl DownloadCatalog {
@@ -215,7 +243,7 @@ fn parse_and_shape_check_document(
 
 /// Parses every entry in authored order. The rules that span entries, unique
 /// identities and one Get started pick per role, are applied as each entry is
-/// read.
+/// read; the build links are checked last, since a lead may follow its builds.
 fn parse_catalog_entries(
     entry_documents: Vec<DownloadCatalogEntryDocument>,
 ) -> Result<Vec<DownloadCatalogEntry>, DownloadCatalogError> {
@@ -230,6 +258,7 @@ fn parse_catalog_entries(
             &mut get_started_role_names,
         )?);
     }
+    validate_catalog_builds(&entries)?;
     Ok(entries)
 }
 
@@ -278,6 +307,12 @@ fn parse_catalog_entry(
     let entry_texts = parse_entry_texts(&entry_document, entry_index)?;
     let download_path_selection = DownloadPathSelection::try_new(entry_document.included_paths)
         .map_err(|_invalid_selection| DownloadCatalogError::InvalidIncludedPaths { entry_index })?;
+    let build = parse_entry_build(
+        entry_document.build_of.as_deref(),
+        entry_document.build_difference,
+        entry_index,
+    )?;
+    validate_measured_speed(entry_document.measured_speed.as_ref(), entry_index)?;
     Ok(DownloadCatalogEntry {
         huggingface_id: entry_document.huggingface_id,
         revision: entry_document.revision,
@@ -287,13 +322,14 @@ fn parse_catalog_entry(
         role: entry_document.role,
         get_started: entry_document.get_started,
         experimental: entry_document.experimental,
-        retiring: entry_document.retiring,
         minimum_memory_bytes: entry_document.minimum_memory_bytes,
         description,
         capabilities,
         quantization_label: entry_texts.quantization_label,
         upstream_license: entry_texts.upstream_license,
         presentation: entry_texts.presentation,
+        build,
+        measured_speed: entry_document.measured_speed,
         download_path_selection,
     })
 }
@@ -375,8 +411,8 @@ fn validate_entry_memory_footprint(
 }
 
 /// The Get started pick is the single model steered to a first-time user for
-/// a role, so it must be stable (not experimental), staying in the catalog (not
-/// retiring), and must serve a user-facing role (helpers run behind the scenes). A role can have only one pick, since
+/// a role, so it must be stable (not experimental) and must serve a user-facing
+/// role (helpers run behind the scenes). A role can have only one pick, since
 /// two picks would make the Library's recommendation ambiguous.
 fn validate_get_started_pick(
     entry_document: &DownloadCatalogEntryDocument,
@@ -386,10 +422,7 @@ fn validate_get_started_pick(
     if !entry_document.get_started {
         return Ok(());
     }
-    if entry_document.experimental
-        || entry_document.retiring
-        || entry_document.role.serves_other_programs()
-    {
+    if entry_document.experimental || entry_document.role.serves_other_programs() {
         return Err(DownloadCatalogError::InvalidGetStartedPick { entry_index });
     }
     let role_name = entry_document.role.as_str();
@@ -506,12 +539,6 @@ impl DownloadCatalogEntry {
         self.experimental
     }
 
-    /// Whether the model will leave the catalog in a later release.
-    #[must_use]
-    pub const fn retiring(&self) -> bool {
-        self.retiring
-    }
-
     /// The smallest memory ceiling the daemon measured this model running at by
     /// streaming weights from the SSD, or `None` when no streaming floor was
     /// measured and the model must fit in memory whole.
@@ -544,6 +571,20 @@ impl DownloadCatalogEntry {
     #[must_use]
     pub fn summary(&self) -> Option<&str> {
         self.presentation.summary.as_deref()
+    }
+
+    /// The lead entry this is another build of, and what sets it apart, or
+    /// `None` for a lead or a model with one build.
+    #[must_use]
+    pub const fn build(&self) -> Option<&DownloadCatalogBuild> {
+        self.build.as_ref()
+    }
+
+    /// Reply speeds measured on a named Mac, or `None` when this entry has not
+    /// been measured; the Models page then shows no speed rather than a guess.
+    #[must_use]
+    pub const fn measured_speed(&self) -> Option<&DownloadCatalogMeasuredSpeed> {
+        self.measured_speed.as_ref()
     }
 
     #[must_use]

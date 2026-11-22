@@ -62,3 +62,40 @@ impl OutgrownAttentionSlabReclaim {
         slabs_grew
     }
 }
+
+/// `mlx_buffer_cache` bytes a draft-assisted reply may hold before a round
+/// releases them.
+///
+/// Larger than the prompt path's threshold on purpose: a round's own
+/// working buffers pass 256 MB at long conversations, so that threshold
+/// emptied them on almost every round. Measured on a 35B model with a
+/// 34,000-token conversation, same text and seed, in reply tokens per
+/// second: no release 49.8 (the `mlx_buffer_cache` reached 7.6 GB), 256 MB
+/// 52.8, 1 GB 51.1, 2 GB 58.6 to 60.5, 4 GB 58.0. On a Mac whose MLX
+/// memory limit leaves less room than this, MLX's own collection line
+/// releases the `mlx_buffer_cache` first, as it always has.
+pub const DRAFT_ROUND_MLX_BUFFER_CACHE_RECLAIM_THRESHOLD_BYTES: usize = 2_000_000_000;
+
+/// Releases the `mlx_buffer_cache` between two draft-and-verify rounds once
+/// it holds more than [`DRAFT_ROUND_MLX_BUFFER_CACHE_RECLAIM_THRESHOLD_BYTES`],
+/// whether or not a slab grew.
+///
+/// A round verifies a whole draft tree at once, so its attention buffers
+/// are sized by the tree's rows times the conversation's length. The row
+/// count changes from round to round and the length grows every round,
+/// and MLX hands a freed buffer out again only for a request within two
+/// memory pages of its size. Almost every round therefore allocates
+/// buffers of sizes never seen before and leaves the previous round's
+/// behind for good: about 4 GB every 100 reply tokens at 34,000 tokens of
+/// conversation, which took wired memory to the system wired ceiling.
+///
+/// The growth rule of [`OutgrownAttentionSlabReclaim`] would be wrong
+/// here: it fires once per slab growth, which let the tree buffers pile up
+/// for 256 tokens at a time.
+pub fn reclaim_mlx_buffer_cache_between_draft_rounds(
+    runtime: &MlxRuntime,
+) -> Result<(), MlxRuntimeError> {
+    runtime.synchronize_gpu_stream_and_reclaim_mlx_buffer_cache_above_threshold(
+        DRAFT_ROUND_MLX_BUFFER_CACHE_RECLAIM_THRESHOLD_BYTES,
+    )
+}

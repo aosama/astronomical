@@ -142,6 +142,16 @@ impl LibraryDownloadCoordinator {
         self.job_store.models_directory()
     }
 
+    /// Free bytes on the disk holding the models folder, from the same reading
+    /// the download list admits models against, or `None` when it cannot be
+    /// read. The Models page shows it beside the memory figure.
+    #[must_use]
+    pub fn models_directory_free_bytes(&self) -> Option<u64> {
+        self.capacity_query
+            .available_space_bytes(self.job_store.models_directory())
+            .ok()
+    }
+
     pub async fn recover_startup_state(&self) -> Result<(), LibraryDownloadCoordinatorError> {
         let _command_guard = self.command_lock.lock().await;
         self.remove_empty_staging_folders_best_effort().await;
@@ -555,3 +565,7 @@ fn current_unix_millis() -> u64 {
 pub(crate) mod installed_model_removal;
 #[path = "queue_controls.rs"]
 pub(crate) mod queue_controls;
+
+#[cfg(test)]
+#[path = "coordinator_free_space_tests.rs"]
+mod coordinator_free_space_tests;

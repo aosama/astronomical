@@ -319,6 +319,23 @@ export class ChatController {
     this.publish();
   }
 
+  /**
+   * The host asked for a conversation with this model ("Chat with this model"
+   * on the Observatory's Models page). It becomes the saved choice first, so a
+   * window still starting up picks it once its list arrives; the list is read
+   * again when it lacks the model, since the model may have just been
+   * downloaded; then it is selected. A model the engine does not serve leaves
+   * the current choice alone, as `selectModel` does.
+   */
+  public async chooseModelFromHost(modelID: string): Promise<void> {
+    this.preferences.modelID = modelID;
+    void this.bridge.savePrefs(this.preferences).catch(() => undefined);
+    if (!this.models.some((model) => model.id === modelID)) {
+      await this.refreshChatModels();
+    }
+    this.selectModel(modelID);
+  }
+
   /** Switches the image model the next picture is drawn with. An unknown or
    * unchanged id is ignored, as for the chat model. */
   public selectImageModel(imageModelID: string): void {

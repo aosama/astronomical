@@ -389,3 +389,35 @@ test("should_not_keep_asking_an_engine_whose_answer_makes_no_sense", async () =>
     assert.match(notice ?? "", /unexpected response/);
   });
 }, { timeout: 30_000 });
+
+function selectedChatModelOf(controller: ChatController): () => string | null {
+  let selectedModelID: string | null = null;
+  controller.subscribe((publishedState) => {
+    selectedModelID = publishedState.composer.selectedModelID;
+  });
+  return () => selectedModelID;
+}
+
+test("should_open_on_the_model_the_host_names_even_one_installed_after_the_window_started", async () => {
+  const { controller, daemon } = bootControllerWithEngine();
+  await controller.load();
+  const selectedModelID = selectedChatModelOf(controller);
+  (daemon as unknown as { installedModels: unknown[] }).installedModels.push({
+    id: "freshly-downloaded-model", input_modalities: ["text"], supported_endpoints: ["/v1/chat/completions"],
+  });
+
+  await controller.chooseModelFromHost("freshly-downloaded-model");
+
+  assert.equal(selectedModelID(), "freshly-downloaded-model", "the list is read again, then the model is chosen");
+});
+
+test("should_keep_the_current_model_when_the_host_names_one_the_engine_does_not_serve", async () => {
+  const { controller } = bootControllerWithEngine();
+  await controller.load();
+  const selectedModelID = selectedChatModelOf(controller);
+  controller.selectModel("fake-chat-model");
+
+  await controller.chooseModelFromHost("not-a-served-model");
+
+  assert.equal(selectedModelID() ?? "fake-chat-model", "fake-chat-model");
+});

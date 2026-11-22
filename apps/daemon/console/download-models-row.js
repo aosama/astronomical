@@ -2,20 +2,27 @@
 // is one model, named by its model ID; the speed meter, the action and the
 // details all describe that one download.
 
-function createDownloadModelsModelRow(catalogRow) {
+// A build folded under its lead passes that lead, so the row can say what sets
+// the build apart.
+function createDownloadModelsModelRow(catalogRow, leadRow = null) {
     const isExpanded = downloadModelsExpandedModelId === catalogRow.modelId;
-    const row = createDownloadModelsElement(
-        "article", isExpanded ? "download-models-row download-models-row-expanded" : "download-models-row"
-    );
+    const rowClassNames = ["download-models-row"];
+    if (isExpanded) rowClassNames.push("download-models-row-expanded");
+    if (leadRow) rowClassNames.push("download-models-row-build");
+    const row = createDownloadModelsElement("article", rowClassNames.join(" "));
+    // On this Mac's Details scrolls here.
+    row.id = "download-models-row-" + catalogRow.modelId;
     const rowLine = createDownloadModelsElement("div", "download-models-row-line");
     const rowControls = createDownloadModelsElement("div", "download-models-row-controls");
     const fitSlot = createDownloadModelsElement("div", "download-models-row-fit");
     const fitMeter = createDownloadModelsFitMeter(catalogRow);
     if (fitMeter) fitSlot.appendChild(fitMeter);
     const actionSlot = createDownloadModelsElement("div", "download-models-row-action");
-    actionSlot.appendChild(createDownloadModelsRowAction(catalogRow));
+    // List rows carry a quiet Get: the strong button belongs to the one model
+    // the page suggests first, so a long list does not read as twenty calls to act.
+    actionSlot.appendChild(createDownloadModelsRowAction(catalogRow, false));
     rowControls.replaceChildren(fitSlot, actionSlot);
-    rowLine.replaceChildren(createDownloadModelsRowIdentity(catalogRow, isExpanded), rowControls);
+    rowLine.replaceChildren(createDownloadModelsRowIdentity(catalogRow, isExpanded, leadRow), rowControls);
     row.appendChild(rowLine);
     if (isExpanded) row.appendChild(createDownloadModelsRowDetails(catalogRow));
     return row;
@@ -23,7 +30,7 @@ function createDownloadModelsModelRow(catalogRow) {
 
 // The name is the control that opens the details, so the row needs no separate
 // Details button competing with Get.
-function createDownloadModelsRowIdentity(catalogRow, isExpanded) {
+function createDownloadModelsRowIdentity(catalogRow, isExpanded, leadRow) {
     const identity = createDownloadModelsElement("div", "download-models-row-identity");
     const nameButton = createDownloadModelsElement("button", "download-models-row-name", downloadModelsRowName(catalogRow));
     nameButton.type = "button";
@@ -33,6 +40,10 @@ function createDownloadModelsRowIdentity(catalogRow, isExpanded) {
         renderDownloadModelsCatalogDocument(downloadModelsCatalogDocument);
     });
     const identityChildren = [nameButton];
+    const differenceText = leadRow ? downloadModelsBuildDifferenceText(catalogRow, leadRow) : null;
+    if (differenceText) {
+        identityChildren.push(createDownloadModelsParagraph("download-models-row-difference", differenceText));
+    }
     const summaryText = catalogRow.summary || catalogRow.description;
     if (summaryText) {
         identityChildren.push(createDownloadModelsParagraph("download-models-row-summary", summaryText));
@@ -47,7 +58,7 @@ function createDownloadModelsRowIdentity(catalogRow, isExpanded) {
 
 // Exactly one of: it is here, it is on its way, or Get. The controls of a
 // download in flight live in its banner under On this Mac, not on the row.
-function createDownloadModelsRowAction(catalogRow) {
+function createDownloadModelsRowAction(catalogRow, isPrimary = true) {
     if (catalogRow.readyOnThisMac) {
         return createDownloadModelsElement("span", "download-models-row-status download-models-row-status-ready", "On this Mac");
     }
@@ -63,7 +74,7 @@ function createDownloadModelsRowAction(catalogRow) {
             "span", "download-models-row-status", downloadModelsRowStatusText(catalogRow, downloadState)
         );
     }
-    return createDownloadModelsGetButton(catalogRow);
+    return createDownloadModelsGetButton(catalogRow, isPrimary);
 }
 
 function downloadModelsRowStatusText(catalogRow, downloadState) {
@@ -114,6 +125,7 @@ function downloadModelsFactEntries(catalogRow) {
     ];
     const rememberedWordsText = downloadModelsRememberedWordsText(catalogRow.contextWindow);
     if (rememberedWordsText) factEntries.push(["Remembers", rememberedWordsText]);
+    if (catalogRow.measuredSpeed) factEntries.push(...downloadModelsSpeedFactEntries(catalogRow.measuredSpeed));
     if (catalogRow.quantizationLabel) factEntries.push(["Compression", catalogRow.quantizationLabel]);
     if (catalogRow.upstreamLicense) factEntries.push(["License", catalogRow.upstreamLicense]);
     factEntries.push(["Downloaded from", catalogRow.huggingfaceId]);
@@ -122,6 +134,18 @@ function downloadModelsFactEntries(catalogRow) {
         factEntries.push([catalogRow.readyOnThisMac ? "Saved in" : "Will be saved in", destinationPath]);
     }
     return factEntries;
+}
+
+// Measured speeds sit with the technical facts, in tokens a second as they were
+// measured, with the Mac and version they came from on the next line.
+function downloadModelsSpeedFactEntries(measuredSpeed) {
+    return [
+        ["Writing an essay", measuredSpeed.essayShortPrompt + " tokens a second, " + measuredSpeed.essayLongPrompt
+            + " after a 10,000-token prompt"],
+        ["Writing code", measuredSpeed.codeShortPrompt + " tokens a second, " + measuredSpeed.codeLongPrompt
+            + " after a 10,000-token prompt"],
+        ["Speed measured on", measuredSpeed.measuredOn + ", Astronomical " + measuredSpeed.astronomicalVersion]
+    ];
 }
 
 function createDownloadModelsFactList(catalogRow) {
@@ -143,7 +167,7 @@ function createDownloadModelsLocationActions(catalogRow) {
         "button", "button button-secondary download-models-copy-path-button", "Copy Path"
     );
     copyButton.type = "button";
-    copyButton.addEventListener("click", () => copyDownloadModelsPathToClipboard(destinationPath));
+    copyButton.addEventListener("click", () => copyDownloadModelsTextToClipboard(destinationPath));
     const actionButtons = catalogRow.readyOnThisMac
         ? [createDownloadModelsRevealButton(catalogRow.huggingfaceId), copyButton]
         : [copyButton];
@@ -163,9 +187,9 @@ function createDownloadModelsRevealButton(huggingfaceId) {
     return revealButton;
 }
 
-async function copyDownloadModelsPathToClipboard(destinationPath) {
+async function copyDownloadModelsTextToClipboard(copiedText) {
     try {
-        await navigator.clipboard.writeText(destinationPath);
+        await navigator.clipboard.writeText(copiedText);
     } catch {
         // Clipboard may be unavailable without a secure context or user gesture.
     }

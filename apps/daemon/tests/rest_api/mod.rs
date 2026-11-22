@@ -5,6 +5,7 @@ mod astro_ssd_prompt_cache_stats;
 mod config_reload;
 mod copilot_responses_compatibility;
 mod library_catalog;
+mod library_catalog_suggestions;
 mod library_download;
 mod library_reveal;
 mod model_unload;

@@ -189,6 +189,15 @@
   text-align: center;
 }
 
+/* Why this model suits this Mac, in the engine's words, under its name. */
+.model-download__reason {
+  margin: 0;
+  color: var(--astro-muted);
+  font-size: 15px;
+  line-height: 1.5;
+  text-align: center;
+}
+
 .model-download__next {
   color: var(--astro-muted);
   font-size: 15px;

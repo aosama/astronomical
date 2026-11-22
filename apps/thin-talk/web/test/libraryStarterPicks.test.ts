@@ -23,7 +23,7 @@ test("should_pick_the_get_started_chat_and_image_models", () => {
     ],
   });
   const starterPicks = parseLibraryStarterPicks(catalogText);
-  assert.deepEqual(starterPicks?.chatModel, { huggingfaceID: "example-org/starter-chat", approximateSizeBytes: 5_970_332_199 });
+  assert.deepEqual(starterPicks?.chatModel, { huggingfaceID: "example-org/starter-chat", approximateSizeBytes: 5_970_332_199, reason: null });
   assert.equal(starterPicks?.imageModel?.huggingfaceID, "example-org/starter-image");
 });
 
@@ -54,4 +54,45 @@ test("should_report_a_model_ready_only_when_its_entry_says_so", () => {
   assert.equal(isLibraryModelReady(catalogText, "example-org/not-yet"), false);
   assert.equal(isLibraryModelReady(catalogText, "example-org/absent"), false);
   assert.equal(isLibraryModelReady("broken", "example-org/ready"), false);
+});
+
+function suggestion(kind: string, huggingfaceID: string, reason: string): Record<string, unknown> {
+  return { kind, huggingface_id: huggingfaceID, model_id: huggingfaceID.split("/")[1], tag: "Best fit for this Mac", reason };
+}
+
+const SIZED_ENTRIES = [
+  catalogEntry({ huggingface_id: "example-org/starter-chat", role: "chat", get_started: true, approximate_size_bytes: 5_970_332_199 }),
+  catalogEntry({ huggingface_id: "example-org/large-draft", role: "chat", approximate_size_bytes: 24_590_000_000 }),
+];
+
+test("should_pick_the_engines_best_fit_for_this_mac_with_its_reason", () => {
+  const starterPicks = parseLibraryStarterPicks(JSON.stringify({
+    suggestions: [suggestion("best_fit", "example-org/large-draft", "The strongest suggested model that runs entirely in this Mac's memory.")],
+    entries: SIZED_ENTRIES,
+  }));
+  assert.deepEqual(starterPicks?.chatModel, {
+    huggingfaceID: "example-org/large-draft",
+    approximateSizeBytes: 24_590_000_000,
+    reason: "The strongest suggested model that runs entirely in this Mac's memory.",
+  });
+});
+
+test("should_skip_suggestions_that_are_not_a_first_chat_model_or_not_listed", () => {
+  const starterPicks = parseLibraryStarterPicks(JSON.stringify({
+    suggestions: [
+      suggestion("pictures", "example-org/large-draft", "Makes pictures."),
+      suggestion("best_fit", "example-org/unlisted", "Not in this catalog."),
+      suggestion("stronger", "example-org/large-draft", "Better than what you have."),
+    ],
+    entries: SIZED_ENTRIES,
+  }));
+  assert.equal(starterPicks?.chatModel?.huggingfaceID, "example-org/large-draft");
+  assert.equal(starterPicks?.chatModel?.reason, "Better than what you have.");
+});
+
+test("should_fall_back_to_the_get_started_pick_while_the_engine_suggests_nothing", () => {
+  for (const suggestions of [[], undefined, "not a list"]) {
+    const starterPicks = parseLibraryStarterPicks(JSON.stringify({ suggestions, entries: SIZED_ENTRIES }));
+    assert.deepEqual(starterPicks?.chatModel, { huggingfaceID: "example-org/starter-chat", approximateSizeBytes: 5_970_332_199, reason: null });
+  }
 });

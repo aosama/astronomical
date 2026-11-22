@@ -46,16 +46,59 @@ const VALID_CATALOG_JSON: &str = r#"{
             "role": "helper",
             "public": true,
             "capabilities": {"supports_embeddings": true}
+        },
+        {
+            "huggingface_id": "astronomical-test/example-qwen-6bit",
+            "revision": "76543210fedcba9876543210fedcba9876543210",
+            "family": "qwen3_5",
+            "approximate_size_bytes": 6000000000,
+            "approximate_memory_bytes": 2825361094,
+            "role": "chat",
+            "public": true,
+            "build_of": "example-qwen",
+            "build_difference": "more_detail",
+            "measured_speed": {
+                "measured_on": "Mac with an M5 Pro and 48 GB",
+                "astronomical_version": "0.2.129",
+                "tokens_per_second": {
+                    "essay_short_prompt": 72,
+                    "essay_long_prompt": 66,
+                    "code_short_prompt": 72,
+                    "code_long_prompt": 67
+                }
+            }
         }
     ]
 }"#;
 
-/// The authored three-entry fixture projected onto the public response, pinning
-/// every field the Models page renders for each entry: the role and flags, and the
-/// presentation texts, which are published only for an entry that declares them.
+/// The published capability flags, all false except the ones named.
+fn capabilities_with(supported_capabilities: &[&str]) -> serde_json::Value {
+    let mut capabilities = serde_json::json!({});
+    for capability_name in [
+        "supports_reasoning",
+        "supports_vision",
+        "supports_tool_calls",
+        "supports_image_generation",
+        "supports_embeddings",
+        "supports_decisions",
+        "supports_speech",
+    ] {
+        capabilities[capability_name] =
+            serde_json::Value::Bool(supported_capabilities.contains(&capability_name));
+    }
+    capabilities
+}
+
+/// The authored four-entry fixture projected onto the public response, pinning
+/// every field the Models page renders for each entry: the role and flags, the
+/// presentation texts, the build link and the measured speed, each published only for an entry that
+/// declares it. This application has no download coordinator, so the free disk
+/// figure is absent, and its worker reports no memory ceiling, so nothing is
+/// suggested.
 fn expected_validated_catalog_document() -> serde_json::Value {
     serde_json::json!({
         "schema_version": 5,
+        "suggestions": [],
         "entries": [
             {
                 "huggingface_id": "astronomical-test/example-qwen",
@@ -68,20 +111,11 @@ fn expected_validated_catalog_document() -> serde_json::Value {
                 "role": "chat",
                 "get_started": true,
                 "experimental": false,
-                "retiring": false,
                 "removable_from_disk": false,
                 "public": true,
                 "ready_on_this_mac": false,
                 "download_state": null,
-                "capabilities": {
-                    "supports_reasoning": false,
-                    "supports_vision": false,
-                    "supports_tool_calls": false,
-                    "supports_image_generation": false,
-                    "supports_embeddings": false,
-                    "supports_decisions": false,
-                    "supports_speech": false
-                }
+                "capabilities": capabilities_with(&[])
             },
             {
                 "huggingface_id": "astronomical-test/example-prism",
@@ -93,21 +127,12 @@ fn expected_validated_catalog_document() -> serde_json::Value {
                 "role": "coding",
                 "get_started": false,
                 "experimental": true,
-                "retiring": false,
                 "removable_from_disk": false,
                 "minimum_memory_bytes": 4_451_287_808_u64,
                 "public": true,
                 "ready_on_this_mac": false,
                 "download_state": null,
-                "capabilities": {
-                    "supports_reasoning": false,
-                    "supports_vision": false,
-                    "supports_tool_calls": false,
-                    "supports_image_generation": false,
-                    "supports_embeddings": false,
-                    "supports_decisions": false,
-                    "supports_speech": false
-                }
+                "capabilities": capabilities_with(&[])
             },
             {
                 "huggingface_id": "astronomical-test/example-embedder",
@@ -119,20 +144,39 @@ fn expected_validated_catalog_document() -> serde_json::Value {
                 "role": "helper",
                 "get_started": false,
                 "experimental": false,
-                "retiring": false,
                 "removable_from_disk": false,
                 "public": true,
                 "ready_on_this_mac": false,
                 "download_state": null,
-                "capabilities": {
-                    "supports_reasoning": false,
-                    "supports_vision": false,
-                    "supports_tool_calls": false,
-                    "supports_image_generation": false,
-                    "supports_embeddings": true,
-                    "supports_decisions": false,
-                    "supports_speech": false
-                }
+                "capabilities": capabilities_with(&["supports_embeddings"])
+            },
+            {
+                "huggingface_id": "astronomical-test/example-qwen-6bit",
+                "revision": "76543210fedcba9876543210fedcba9876543210",
+                "model_id": "example-qwen-6bit",
+                "family": "qwen3_5",
+                "approximate_size_bytes": 6_000_000_000_u64,
+                "approximate_memory_bytes": 2_825_361_094_u64,
+                "role": "chat",
+                "get_started": false,
+                "experimental": false,
+                "removable_from_disk": false,
+                "public": true,
+                "ready_on_this_mac": false,
+                "download_state": null,
+                "build_of": "example-qwen",
+                "build_difference": "more_detail",
+                "measured_speed": {
+                    "measured_on": "Mac with an M5 Pro and 48 GB",
+                    "astronomical_version": "0.2.129",
+                    "tokens_per_second": {
+                        "essay_short_prompt": 72,
+                        "essay_long_prompt": 66,
+                        "code_short_prompt": 72,
+                        "code_long_prompt": 67
+                    }
+                },
+                "capabilities": capabilities_with(&[])
             }
         ]
     })
@@ -398,12 +442,11 @@ fn assert_published_entry_carries_role_memory_and_flags(
             || is_javascript_safe_positive_integer(minimum_memory_bytes.as_u64()),
         "published entry {published_entry_index} streaming floor must be absent or a JavaScript-safe integer"
     );
-    for flag_name in [
-        "get_started",
-        "experimental",
-        "retiring",
-        "removable_from_disk",
-    ] {
+    assert!(
+        published_entry.get("retiring").is_none(),
+        "published entry {published_entry_index} must not mark a supported model as leaving"
+    );
+    for flag_name in ["get_started", "experimental", "removable_from_disk"] {
         assert!(
             published_entry[flag_name].is_boolean(),
             "published entry {published_entry_index} must always carry boolean {flag_name}"

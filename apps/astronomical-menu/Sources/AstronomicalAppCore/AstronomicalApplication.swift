@@ -145,7 +145,11 @@ public final class AstronomicalApplication: NSObject, NSApplicationDelegate {
     }
     guard let applicationLink = ApplicationLink.parse(openedURL, channel: applicationIdentity.channel) else { return }
     switch applicationLink {
-    case .chat: chatWindowController.showChatWindow()
+    case .chat:
+      chatWindowController.showChatWindow()
+      if let chatModelID = ChatModelLink.modelID(from: openedURL, channel: applicationIdentity.channel) {
+        chatWindowController.conversationActions.selectChatModel(chatModelID)
+      }
     case .settings: chatWindowController.showSettings()
     case .checkForUpdates: updateCheckFromLink.request()
     }

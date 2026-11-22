@@ -21,6 +21,10 @@ export enum HostCommand {
    * there. A development host sends it so a question can be typed without
    * taking the keyboard; the person, or a test, still presses Send. */
   FILL_DRAFT = "fillDraft",
+  /** Carries `model`: the model ID to chat with. The Observatory's "Chat with
+   * this model" sends it through the chat link, so the window opens on the
+   * model the person picked instead of the one it had. */
+  SELECT_CHAT_MODEL = "selectChatModel",
   /** Carries `points`: the title bar height in CSS pixels at the current zoom. */
   SET_TITLEBAR_INSET = "setTitlebarInset",
 }
@@ -35,6 +39,17 @@ export const MAXIMUM_DRAFT_CHARACTERS = 4000;
  * a usable length. */
 export function validDraftText(candidate: unknown): string | null {
   return typeof candidate === "string" && candidate.trim().length > 0 && candidate.length <= MAXIMUM_DRAFT_CHARACTERS ? candidate : null;
+}
+
+/** The longest model ID a host may send; real ones are well under 100. */
+export const MAXIMUM_MODEL_ID_CHARACTERS = 200;
+/** A model ID is a Hugging Face folder name: letters, digits, dots, dashes and
+ * underscores. Anything else is not a model this app could serve. */
+const MODEL_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
+
+/** The model ID a `selectChatModel` payload carries, or null when it is not one. */
+export function validChatModelID(candidate: unknown): string | null {
+  return typeof candidate === "string" && candidate.length <= MAXIMUM_MODEL_ID_CHARACTERS && MODEL_ID_PATTERN.test(candidate) ? candidate : null;
 }
 
 /** Reads `{name: "<command>"}`; `null` for anything else, so a malformed or

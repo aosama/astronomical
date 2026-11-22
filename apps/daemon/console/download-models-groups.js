@@ -3,59 +3,51 @@
 // model runs on this Mac.
 // Pure functions over catalog rows; nothing here touches the document.
 
-// Sections in page order. The first two are what most people come for; the
-// rest stay behind the More filter so a newcomer meets a short list, not twenty.
-// Coding models live in Chat: every one of them also chats, and a separate Code
-// section split one model family across two lists. What sets them apart is
-// shown as an ability, "Tuned for coding".
+// Sections in page order, one per kind of work, so every kind of model has a
+// place of its own: a model that reads aloud or answers set questions is not
+// "more", it does a different job. Coding models live in Chat: every one of
+// them also chats, and a separate Code section split one model family across
+// two lists. What sets them apart is shown as an ability, "Tuned for coding".
+// Experimental builds keep a section of their own so an early build never sits
+// among the everyday ones. Nothing is ever marked as leaving: a supported model
+// stays, and whether to use it is the person's choice.
 const DOWNLOAD_MODELS_SECTIONS = [
-    { key: "chat", title: "Chat", note: "Talk, write, ask about photos and get help with code.", isEveryday: true },
-    { key: "pictures", title: "Pictures", note: "Turn a description into an image.", isEveryday: true },
-    { key: "helpers", title: "Helpers", note: "Background helpers other features use. You do not chat with these.", isEveryday: false },
-    { key: "experimental", title: "Experimental", note: "Early builds that may be slower or less reliable.", isEveryday: false },
-    { key: "leaving", title: "Leaving soon", note: "These leave the catalog in a future release. A copy already on this Mac keeps working.", isEveryday: false }
-];
-const DOWNLOAD_MODELS_FILTERS = [
-    { key: "all", label: "All" },
-    { key: "chat", label: "Chat" },
-    { key: "pictures", label: "Pictures" },
-    { key: "more", label: "More" }
+    { key: "chat", title: "Chat", note: "Talk, write, ask about photos and get help with code." },
+    { key: "pictures", title: "Pictures", note: "Turn a description into an image." },
+    { key: "voice", title: "Read aloud", note: "Read text aloud, for the terminal and other programs." },
+    { key: "decisions", title: "Decisions", note: "Answer a question with one of a few set answers, for other programs. You do not chat with these." },
+    { key: "search", title: "Text search", note: "Find passages that mean the same thing, for other features. You do not chat with these." },
+    { key: "experimental", title: "Experimental", note: "Early builds that may be slower or less reliable." }
 ];
 const DOWNLOAD_MODELS_SECTION_KEY_BY_ROLE = {
     chat: "chat",
     coding: "chat",
     image_generation: "pictures",
-    helper: "helpers",
-    // A decision model answers typed questions for other programs; nobody
-    // chats with it, so it sits with the other background helpers.
-    decision: "helpers",
-    // A speech model reads text aloud for other programs and the terminal;
-    // nobody chats with it either.
-    speech: "helpers"
+    speech: "voice",
+    decision: "decisions",
+    helper: "search"
 };
-// How a model runs here, worded as speed because that is what the person
-// feels. No outcome ever blocks a download: the Mac's size never stops a model
-// (#1902), so the weakest label still says it runs.
+// How a model runs here. A model that fits shows how much of the memory it
+// uses, which tells two models apart where one word for both could not; the
+// others are worded as speed because that is what the person feels. No outcome
+// ever blocks a download: the Mac's size never stops a model (#1902), so the
+// weakest label still says it runs.
 const DOWNLOAD_MODELS_FIT_COPY = {
     fits: {
-        label: "Runs smoothly",
-        explanation: "It fits in the memory this Mac gives to models.",
-        filledBarCount: 3
+        label: "Fits in memory",
+        explanation: "It runs entirely in the memory this Mac gives to models."
     },
     streams: {
         label: "Runs, but slower",
-        explanation: "It is bigger than this Mac's memory for models, so part of it is read from the SSD while it answers.",
-        filledBarCount: 2
+        explanation: "It is bigger than this Mac's memory for models, so part of it is read from the SSD while it answers."
     },
     slow: {
         label: "Very slow here",
-        explanation: "It is much bigger than this Mac's memory for models. It still runs, with long waits between words.",
-        filledBarCount: 1
+        explanation: "It is much bigger than this Mac's memory for models. It still runs, with long waits between words."
     },
     "over-your-limit": {
         label: "Above your memory limit",
-        explanation: "It needs more memory than the maximum you set under Configuration. Raise that maximum to run it.",
-        filledBarCount: 1
+        explanation: "It needs more memory than the maximum you set under Configuration. Raise that maximum to run it."
     }
 };
 const DOWNLOAD_MODELS_ABILITIES = [
@@ -72,11 +64,9 @@ const DOWNLOAD_MODELS_ABILITIES = [
 // is rounded hard because it is a feel for size, not a promise.
 const DOWNLOAD_MODELS_WORDS_PER_TOKEN = 0.75;
 
-// Retiring wins over everything so a model on its way out is never offered
-// beside the ones replacing it; experimental wins over role so an early build
-// never appears in an everyday section.
+// Experimental wins over role so an early build never appears in an everyday
+// section.
 function downloadModelsSectionKey(catalogRow) {
-    if (catalogRow.retiring) return "leaving";
     if (catalogRow.experimental) return "experimental";
     return DOWNLOAD_MODELS_SECTION_KEY_BY_ROLE[catalogRow.role];
 }
@@ -99,16 +89,21 @@ function downloadModelsRowsInPageOrder(catalogRows) {
     );
 }
 
-// A search looks through every section, so a model behind More is still found.
+// "All" and any search show every section; a chip shows its own.
 function downloadModelsVisibleSectionKeys(activeFilterKey, searchQuery) {
-    if (searchQuery) return DOWNLOAD_MODELS_SECTIONS.map((section) => section.key);
-    if (activeFilterKey === "more") {
-        return DOWNLOAD_MODELS_SECTIONS.filter((section) => !section.isEveryday).map((section) => section.key);
-    }
-    if (activeFilterKey === "all") {
-        return DOWNLOAD_MODELS_SECTIONS.filter((section) => section.isEveryday).map((section) => section.key);
-    }
+    if (searchQuery || activeFilterKey === "all") return DOWNLOAD_MODELS_SECTIONS.map((section) => section.key);
     return [activeFilterKey];
+}
+
+// The chips the bar offers: All, then one per section that has a model, so no
+// chip ever leads to an empty list.
+function downloadModelsFilterChips(catalogRows) {
+    const occupiedSectionKeys = new Set(catalogRows.map(downloadModelsSectionKey));
+    return [{ key: "all", label: "All" }].concat(
+        DOWNLOAD_MODELS_SECTIONS
+            .filter((section) => occupiedSectionKeys.has(section.key))
+            .map((section) => ({ key: section.key, label: section.title }))
+    );
 }
 
 function downloadModelsRowMatchesQuery(catalogRow, searchQuery) {
@@ -119,12 +114,6 @@ function downloadModelsRowMatchesQuery(catalogRow, searchQuery) {
     ].join(" ").toLowerCase().includes(searchQuery);
 }
 
-function downloadModelsHiddenModelCount(catalogRows) {
-    const everydaySectionKeys = downloadModelsVisibleSectionKeys("all", "");
-    return catalogRows.filter(
-        (catalogRow) => !everydaySectionKeys.includes(downloadModelsSectionKey(catalogRow))
-    ).length;
-}
 
 // Fit compares the model's fully loaded memory with the serving ceiling, the
 // limit the engine actually loads within. Equal counts as fitting because the
@@ -145,7 +134,23 @@ function downloadModelsFitOutcome(catalogRow, servingCeilingBytes, ceilingIsUser
 
 function downloadModelsFitLabel(catalogRow, servingCeilingBytes, ceilingIsUserLimit = false) {
     const fitOutcome = downloadModelsFitOutcome(catalogRow, servingCeilingBytes, ceilingIsUserLimit);
-    return fitOutcome === null ? null : DOWNLOAD_MODELS_FIT_COPY[fitOutcome].label;
+    if (fitOutcome === null) return null;
+    if (fitOutcome === "fits") return downloadModelsMemoryUseText(catalogRow, servingCeilingBytes);
+    return DOWNLOAD_MODELS_FIT_COPY[fitOutcome].label;
+}
+
+// "23.0 of 36.5 GB memory": the model's memory beside what this Mac gives to
+// models, both in the 2^30-byte gigabytes the menu bar shows.
+function downloadModelsMemoryUseText(catalogRow, servingCeilingBytes) {
+    return formatDownloadModelsGigabyteCount(catalogRow.approximateMemoryBytes)
+        + " of " + formatDownloadModelsCardSize(servingCeilingBytes) + " memory";
+}
+
+// How much of the bar a model fills: its share of the memory when it fits, the
+// whole bar when it does not (the words then say what that means).
+function downloadModelsMemoryBarPercent(catalogRow, servingCeilingBytes) {
+    if (!(servingCeilingBytes > 0)) return 0;
+    return Math.min(100, Math.max(2, Math.round(catalogRow.approximateMemoryBytes * 100 / servingCeilingBytes)));
 }
 
 function downloadModelsAbilitiesText(catalogRow) {
@@ -179,6 +184,13 @@ function downloadModelsInstalledSummaryText(catalogRow) {
 // gigabytes, the unit Apple prints on the box.
 function formatDownloadModelsCardSize(approximateSizeBytes) {
     return formatDownloadModelsGigabyteCount(approximateSizeBytes) + " GB";
+}
+
+// Free disk space in whole gigabytes, rounded down so the page never promises
+// room a download would not find. Tenths would change every few seconds on a
+// Mac where any program is writing.
+function formatDownloadModelsFreeDiskText(freeBytes) {
+    return Math.floor(freeBytes / 1073741824) + " GB";
 }
 
 // The number alone, for a phrase that names the unit once ("9.2 of 21.9 GB").

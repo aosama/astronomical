@@ -12,7 +12,7 @@
 //! memory for everything else and usually a slower chip, so a pass here is
 //! necessary, not sufficient; a failure here is real.
 
-mod matrix_cells;
+pub(crate) mod matrix_cells;
 mod matrix_run;
 
 use std::path::Path;
