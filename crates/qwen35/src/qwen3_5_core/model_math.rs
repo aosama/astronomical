@@ -60,6 +60,8 @@ mod streamed_layer_binding_tests;
 #[cfg(feature = "direct-mlx")]
 pub mod tensor_slicing;
 #[cfg(feature = "direct-mlx")]
+pub mod weight_binding_dtype;
+#[cfg(feature = "direct-mlx")]
 pub mod weights;
 #[cfg(feature = "direct-mlx")]
 pub mod weights_validation;

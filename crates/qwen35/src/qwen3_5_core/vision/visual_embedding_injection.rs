@@ -12,6 +12,47 @@ use super::Qwen3_5ExecutionError;
 use mlx_bridge::MlxArray;
 
 /// Replaces image-pad token embeddings in one prefill chunk with ordered visual embeddings.
+/// Checks both embeddings' shapes and returns the visual rows widened to the
+/// text embeddings' dtype when they need it, or `None` to splice them as they
+/// are. The vision tower computes in BF16; where the language model binds in
+/// float32 (a CPU compute device, #2441) its rows are widened before the
+/// splice, while equal dtypes, as on Metal, pass untouched and any other
+/// mismatch is refused.
+fn validated_visual_embeddings_in_text_dtype(
+    runtime: &MlxRuntime,
+    text_embeddings: &MlxArray,
+    chunk_token_count: usize,
+    visual_embeddings: &MlxArray,
+) -> Result<Option<MlxArray>, Qwen3_5ExecutionError> {
+    let text_embedding_shape = text_embeddings.shape();
+    let visual_embedding_shape = visual_embeddings.shape();
+    if text_embedding_shape.len() != 3
+        || text_embedding_shape[0] != 1
+        || text_embedding_shape[1] as usize != chunk_token_count
+    {
+        return Err(Qwen3_5ExecutionError::InvalidInput {
+            description: "text embedding shape does not match the prefill chunk",
+        });
+    }
+    let widens_to_text_dtype = visual_embeddings.dtype() == mlx_bridge::MlxDtype::BFloat16
+        && text_embeddings.dtype() == mlx_bridge::MlxDtype::Float32;
+    if visual_embedding_shape.len() != 2
+        || visual_embedding_shape[1] != text_embedding_shape[2]
+        || (visual_embeddings.dtype() != text_embeddings.dtype() && !widens_to_text_dtype)
+    {
+        return Err(Qwen3_5ExecutionError::InvalidInput {
+            description: "visual embeddings do not match the text embedding width and dtype",
+        });
+    }
+    if !widens_to_text_dtype {
+        return Ok(None);
+    }
+    Ok(Some(runtime.astype(
+        visual_embeddings,
+        mlx_bridge::MlxDtype::Float32,
+    )?))
+}
+
 pub fn qwen3_5_inject_visual_embeddings(
     runtime: &MlxRuntime,
     text_embeddings: &MlxArray,
@@ -20,24 +61,17 @@ pub fn qwen3_5_inject_visual_embeddings(
     starting_visual_embedding_index: usize,
     image_pad_token_id: u32,
 ) -> Result<(MlxArray, usize), Qwen3_5ExecutionError> {
+    let widened_visual_embeddings = validated_visual_embeddings_in_text_dtype(
+        runtime,
+        text_embeddings,
+        chunk_token_ids.len(),
+        visual_embeddings,
+    )?;
+    let visual_embeddings = widened_visual_embeddings
+        .as_ref()
+        .unwrap_or(visual_embeddings);
     let text_embedding_shape = text_embeddings.shape();
     let visual_embedding_shape = visual_embeddings.shape();
-    if text_embedding_shape.len() != 3
-        || text_embedding_shape[0] != 1
-        || text_embedding_shape[1] as usize != chunk_token_ids.len()
-    {
-        return Err(Qwen3_5ExecutionError::InvalidInput {
-            description: "text embedding shape does not match the prefill chunk",
-        });
-    }
-    if visual_embedding_shape.len() != 2
-        || visual_embedding_shape[1] != text_embedding_shape[2]
-        || visual_embeddings.dtype() != text_embeddings.dtype()
-    {
-        return Err(Qwen3_5ExecutionError::InvalidInput {
-            description: "visual embeddings do not match the text embedding width and dtype",
-        });
-    }
 
     // Count before constructing updates so an undersized vision tensor fails
     // atomically rather than after partially assembling a lazy replacement graph.
@@ -109,3 +143,7 @@ fn usize_to_i32(dimension_size: usize) -> Result<i32, Qwen3_5ExecutionError> {
         description: "visual embedding index exceeds the MLX integer range",
     })
 }
+
+#[cfg(test)]
+#[path = "visual_embedding_injection_tests.rs"]
+mod tests;

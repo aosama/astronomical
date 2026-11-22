@@ -68,12 +68,15 @@ pub fn bind_decoder_layer_from_tensors(
                 tensor_name: tensor_profile.name.clone(),
             }
         })?;
+        // Streamed layers are planned from their bytes on disk, so they bind
+        // exactly as stored.
         let (tensor, _tensor_payload_bytes) = bind_language_tensor(
             runtime,
             qwen3_5_config,
             raw_hugging_face_norm_offsets_apply,
             tensor_profile,
             tensor,
+            super::weights::WeightBindingDtype::AsStored,
         )?;
         bound_tensors.insert(tensor_profile.name.clone(), tensor);
     }

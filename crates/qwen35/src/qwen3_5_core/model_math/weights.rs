@@ -1,5 +1,9 @@
 use std::collections::HashMap;
 
+use super::weight_binding_dtype::bound_in_binding_dtype;
+pub use super::weight_binding_dtype::{
+    WeightBindingDtype, binds_widened_to_float32, bound_dtype_of,
+};
 use runtime_integration::{MlxRuntime, MlxSafetensors};
 
 use crate::qwen3_5_core::artifacts::{
@@ -123,7 +127,13 @@ impl Qwen3_5Weights {
         performance_attribution.measure_operation(
             PerformanceOperation::ModelTensorBinding,
             |_performance_attribution| {
-                Self::bind_from_model_shards(runtime, &qwen3_5_config, &shard_index, model_shards)
+                Self::bind_from_model_shards(
+                    runtime,
+                    &qwen3_5_config,
+                    &shard_index,
+                    model_shards,
+                    WeightBindingDtype::AsStored,
+                )
             },
         )
     }
@@ -139,6 +149,7 @@ impl Qwen3_5Weights {
         qwen3_5_config: &Qwen3_5Config,
         shard_index: &crate::qwen3_5_core::artifacts::Qwen3_5ShardIndex,
         model_shards: Vec<MlxSafetensors>,
+        weight_binding_dtype: WeightBindingDtype,
     ) -> Result<Self, Qwen3_5ExecutionError> {
         let language_tensor_profiles = qwen3_5_resident_language_tensor_profiles(qwen3_5_config)
             .map_err(|artifact_error| Qwen3_5ExecutionError::ExpertLayerPlan {
@@ -170,6 +181,7 @@ impl Qwen3_5Weights {
                 raw_hugging_face_norm_offsets_apply,
                 tensor_profile,
                 tensor,
+                weight_binding_dtype,
             )?;
             actual_payload_bytes = actual_payload_bytes
                 .checked_add(tensor_payload_bytes)
@@ -402,7 +414,9 @@ pub(super) fn take_decoder_layer_weights(
     })
 }
 
-/// Applies every checkpoint-specific RMSNorm storage convention at binding.
+/// Validates one tensor against its declared dtype, binds it in the engine's
+/// `weight_binding_dtype`, and applies every checkpoint-specific RMSNorm
+/// storage convention.
 ///
 /// Two offset conventions exist and are mutually exclusive per tensor. The
 /// declared JANGTQ2 family offset covers its own tensor set (including the
@@ -421,17 +435,18 @@ pub(super) fn bind_language_tensor(
     raw_hugging_face_norm_offsets_apply: bool,
     tensor_profile: &crate::TensorProfile,
     tensor: MlxArray,
+    weight_binding_dtype: WeightBindingDtype,
 ) -> Result<(MlxArray, u64), Qwen3_5ExecutionError> {
     weights_validation::validate_bound_tensor(tensor_profile, &tensor)?;
     weights_validation::validate_quantized_tensor_bits(qwen3_5_config, tensor_profile)?;
-    let tensor = apply_rms_norm_storage_convention(
+    let tensor = bound_with_storage_conventions(
         runtime,
         qwen3_5_config,
         raw_hugging_face_norm_offsets_apply,
         &tensor_profile.name,
         tensor,
+        weight_binding_dtype,
     )?;
-    let tensor = widened_for_the_compute_device(runtime, tensor)?;
     let tensor_payload_bytes =
         u64::try_from(tensor.byte_count()).map_err(|_| Qwen3_5ExecutionError::InvalidTensor {
             tensor_name: tensor_profile.name.clone(),
@@ -440,27 +455,25 @@ pub(super) fn bind_language_tensor(
     Ok((tensor, tensor_payload_bytes))
 }
 
-/// Widens a half-precision tensor to float32 where MLX computes on its CPU.
-///
-/// MLX's CPU backend runs Qwen3.5 in BF16 inaccurately enough to change its
-/// answers, and slower than in float32 (#2441). Widening every non-packed
-/// tensor once at bind makes the whole graph compute in float32: activations
-/// promote from the norms and affine scales they meet, and the decoder-state
-/// dtype replay reads these bound dtypes, so the `astro_decoder_state_cache`
-/// and memory admission size float32 state. Packed quantized weights keep
-/// their integer storage. The Metal build never widens.
-fn widened_for_the_compute_device(
+/// Binds a tensor in the engine's dtype, then applies the RMSNorm storage
+/// convention. Widening comes first, so a norm's `1 + deviation` is formed in
+/// the compute dtype and keeps float32's precision where the model computes
+/// in float32.
+fn bound_with_storage_conventions(
     runtime: &MlxRuntime,
+    qwen3_5_config: &Qwen3_5Config,
+    raw_hugging_face_norm_offsets_apply: bool,
+    tensor_name: &str,
     tensor: MlxArray,
+    weight_binding_dtype: WeightBindingDtype,
 ) -> Result<MlxArray, Qwen3_5ExecutionError> {
-    let is_half_precision = matches!(
-        tensor.dtype(),
-        mlx_bridge::MlxDtype::BFloat16 | mlx_bridge::MlxDtype::Float16
-    );
-    if !is_half_precision || !runtime_integration::mlx_computes_on_cpu()? {
-        return Ok(tensor);
-    }
-    Ok(runtime.astype(&tensor, mlx_bridge::MlxDtype::Float32)?)
+    apply_rms_norm_storage_convention(
+        runtime,
+        qwen3_5_config,
+        raw_hugging_face_norm_offsets_apply,
+        tensor_name,
+        bound_in_binding_dtype(runtime, tensor, weight_binding_dtype)?,
+    )
 }
 
 fn apply_rms_norm_storage_convention(

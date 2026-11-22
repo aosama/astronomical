@@ -6,7 +6,7 @@ use runtime_integration::MlxRuntime;
 
 use crate::qwen3_5_core::artifacts::QuantizedExpertLayerPlan;
 use crate::qwen3_5_core::model::loading_pipeline::{
-    BoundLanguageArtifact, InvariantLinearScales, ModelKernelVerdicts, bind_language_artifact,
+    BoundLanguageArtifact, InvariantLinearScales, ModelKernelVerdicts, bind_language_artifact_for,
     load_invariant_linear_scales, load_model_kernel_verdicts,
 };
 use crate::{ModelMemoryFacts, ModelMemoryGeometry, PerformanceAttribution, PerformanceOperation};
@@ -19,6 +19,10 @@ use super::{
 };
 use mlx_bridge::{MlxCompiledElementwiseGraphs, MlxCompiledSwiGlu, MlxMetalKernel};
 
+/// The resident engine holds every tensor as bound, so it binds them in the
+/// dtype the compute device runs the model accurately in (#2441).
+const LANGUAGE_WEIGHT_BINDING_DTYPE: crate::qwen3_5_core::model_math::weights::WeightBindingDtype =
+    crate::qwen3_5_core::model_math::weights::WeightBindingDtype::ForComputeDevice;
 impl Qwen3_5ResidentModel {
     /// Loads a model without diagnostic performance attribution.
     pub fn load(
@@ -62,10 +66,11 @@ impl Qwen3_5ResidentModel {
             weights,
             vision_model,
             ..
-        } = bind_language_artifact(
+        } = bind_language_artifact_for(
             &runtime,
             &mut validated_artifact,
             should_bind_vision_weights,
+            LANGUAGE_WEIGHT_BINDING_DTYPE,
             performance_attribution,
         )?;
         let ResidentMixtureOfExpertsParts {
@@ -112,7 +117,7 @@ impl Qwen3_5ResidentModel {
             inverse_square_root_linear_head_dimension_scale,
             query_normalization_scale_weight,
             key_normalization_scale_weight,
-        } = load_invariant_linear_scales(&runtime, &config)?;
+        } = load_invariant_linear_scales(&runtime, &config, LANGUAGE_WEIGHT_BINDING_DTYPE)?;
         let memory_facts = build_resident_model_memory_facts(
             &runtime,
             &config,
