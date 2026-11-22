@@ -63,6 +63,32 @@ To build only the optimized background service and worker:
       -p astronomical-inference-worker --bin astronomical-inference-worker \
       -p astronomical-daemon --bin astronomicald
 
+## Building the MLX runtime on Linux
+
+Linux support is in progress ([#2424](https://github.com/aosama/astronomical/issues/2424)). So far the pinned, patched MLX runtime builds with MLX's CPU backend and `runtime-integration` links against it. The rest of the workspace and the app do not build on Linux yet.
+
+You need:
+
+- CMake and a C and C++ compiler, which CMake finds as `cc` and `c++`. The native build identity records their versions.
+- A BLAS and a LAPACK with the `cblas.h` and `lapacke.h` headers, for example OpenBLAS.
+- libclang, which `mlx-bridge` uses to generate its bindings.
+
+Then fetch the native dependencies and build the runtime:
+
+    cargo xtask bootstrap-native-dependencies
+    cargo build -p runtime-integration --features mlx
+
+On Linux the build differs from macOS in these ways:
+
+- **No Metal and no Metallib.** MLX runs on the CPU, and the runtime has no kernel archive to load or verify.
+- **The BLAS that MLX's configure finds is the one that gets linked.** The build records the exact library files in the store entry's `lib/mlx-link-libraries.txt`, and the Rust link line links those files by name.
+- **Pointing CMake at another BLAS builds a new native runtime.** If your BLAS is outside the system library folders, point CMake at it with its standard `CMAKE_PREFIX_PATH` and `CMAKE_INCLUDE_PATH`. Those settings, and the other BLAS search settings MLX's configure reads, are part of the native build identity. If a recorded library file disappears later, the link stops with a message naming it.
+- **Run paths cover only `runtime-integration`'s own test binaries.** Other programs need a BLAS outside the system folders on the loader's path.
+- **Only the host's own triple is built.** Cross-compiling to another architecture or C library is refused.
+- **The memory-contract probe and the GPU working-set probe are macOS-only.** Both measure Metal.
+- **Entries that cannot be linked faithfully are reported as build warnings, not linked.** These are linker flags, a static BLAS and CMake targets.
+- **The native build and its dependencies use the same folders under `~/Library/Caches/Astronomical` as on macOS.**
+
 ## Check your change
 
 Check Rust formatting, then run the Rust integration and REST suites:

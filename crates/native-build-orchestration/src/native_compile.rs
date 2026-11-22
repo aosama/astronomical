@@ -38,6 +38,7 @@ use std::{
     process::Command,
 };
 
+use crate::native_host_platform::{NativeTargetPlatform, compiler_configure_arguments};
 use crate::native_parallelism;
 use crate::native_progress::NativeBuildProgress;
 use crate::native_store::{NativeBuildArtifacts, NativeBuildProfile};
@@ -131,7 +132,8 @@ pub fn native_build_store_directory() -> Result<PathBuf, Box<dyn Error>> {
 
 /// Configures and builds the pinned MLX/MLX-C native runtime with CMake.
 ///
-/// Sequence: configure (compilers, SDK, arm64, Release, sanitized
+/// Sequence: configure (the platform's compilers, plus the SDK and arm64 on
+/// macOS, Release, sanitized
 /// environment, archive locations, optional probe target) → build the
 /// `mlxc` aggregate target → optionally build the memory-contract probe
 /// binary. Every command reports through the progress recorder so hosted CI
@@ -139,16 +141,12 @@ pub fn native_build_store_directory() -> Result<PathBuf, Box<dyn Error>> {
 pub fn build_pinned_native_runtime(
     native_source_directory: &Path,
     native_build_directory: &Path,
+    native_target_platform: NativeTargetPlatform,
     native_build_profile: NativeBuildProfile,
     native_build_inputs: &NativeRuntimeBuildInputs,
     native_build_progress: &NativeBuildProgress,
 ) -> Result<(), Box<dyn Error>> {
     let mut configure_command = Command::new("cmake");
-    // Resolve the toolchain through xcrun rather than trusting PATH so the
-    // compilers are the ones the identity's toolchain probes measured.
-    let clang_compiler_path = discover_xcrun_path(&["--find", "clang"])?;
-    let clang_cxx_compiler_path = discover_xcrun_path(&["--find", "clang++"])?;
-    let macos_sdk_path = discover_xcrun_path(&["--sdk", "macosx", "--show-sdk-path"])?;
     configure_command
         .arg("-G")
         .arg("Unix Makefiles")
@@ -157,16 +155,7 @@ pub fn build_pinned_native_runtime(
         .arg("-B")
         .arg(native_build_directory)
         .arg("-DCMAKE_BUILD_TYPE=Release")
-        .arg(format!(
-            "-DCMAKE_C_COMPILER={}",
-            clang_compiler_path.display()
-        ))
-        .arg(format!(
-            "-DCMAKE_CXX_COMPILER={}",
-            clang_cxx_compiler_path.display()
-        ))
-        .arg(format!("-DCMAKE_OSX_SYSROOT={}", macos_sdk_path.display()))
-        .arg("-DCMAKE_OSX_ARCHITECTURES=arm64");
+        .args(compiler_configure_arguments(native_target_platform)?);
     remove_uncontrolled_native_environment(&mut configure_command);
     let compiler_launcher_argument = sccache_compiler_launcher_path()
         .map_or_else(String::new, |launcher_path| {
@@ -311,23 +300,6 @@ fn astro_native_build_cache_dependencies_directory() -> Option<PathBuf> {
                     home_directory.join("Library/Caches/Astronomical/native-dependencies")
                 })
         })
-}
-
-fn discover_xcrun_path(arguments: &[&str]) -> Result<PathBuf, Box<dyn Error>> {
-    let path_output = Command::new("xcrun").args(arguments).output()?;
-    if !path_output.status.success() {
-        return Err(format!("xcrun failed to resolve {}", arguments.join(" ")).into());
-    }
-    let path_text = String::from_utf8(path_output.stdout)?;
-    let resolved_path = PathBuf::from(path_text.trim());
-    if !resolved_path.is_absolute() {
-        return Err(format!(
-            "xcrun reported a non-absolute path for {}",
-            arguments.join(" ")
-        )
-        .into());
-    }
-    Ok(resolved_path)
 }
 
 /// Strips ambient compiler/toolchain variables from a CMake invocation.

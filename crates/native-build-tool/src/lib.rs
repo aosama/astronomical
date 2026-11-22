@@ -22,9 +22,10 @@ use std::{
 };
 
 use native_build_orchestration::{
-    NativeBuildProgress, NativeBuildStore, NativeRuntimeBuildInputs, build_pinned_native_runtime,
-    detect_host_target_triple, native_build_store_directory, native_parallel_job_count,
-    resolve_native_build_identity, write_native_build_status,
+    NativeBuildProgress, NativeBuildStore, NativeRuntimeBuildInputs, NativeTargetPlatform,
+    build_pinned_native_runtime, detect_host_target_triple, native_build_platform,
+    native_build_store_directory, native_parallel_job_count, resolve_native_build_identity,
+    write_native_build_status,
 };
 
 /// Re-exported because [`NativeBuildToolArguments::native_build_profile`]
@@ -128,7 +129,7 @@ pub fn run_native_build(
     // No Cargo context here, so the host triple is detected from rustc and
     // stated explicitly to the identity request — producing exactly the
     // identity the Cargo build script will later look up.
-    let target_triple = detect_host_target_triple()?;
+    let (target_triple, native_target_platform) = host_native_build_target()?;
     let native_build_identity = resolve_native_build_identity(
         arguments.repository_root(),
         arguments.native_build_profile().identity_name(),
@@ -138,6 +139,7 @@ pub fn run_native_build(
     let native_build_store = NativeBuildStore::new(
         &native_build_store_directory,
         &native_build_identity,
+        native_target_platform,
         arguments.native_build_profile(),
     )?;
     let native_build_inputs = NativeRuntimeBuildInputs::from_environment();
@@ -145,6 +147,7 @@ pub fn run_native_build(
         build_pinned_native_runtime(
             &native_source_directory,
             native_build_directory,
+            native_target_platform,
             arguments.native_build_profile(),
             &native_build_inputs,
             &native_build_progress,
@@ -159,6 +162,15 @@ pub fn run_native_build(
         was_built: native_build_artifacts.was_built(),
         elapsed: native_build_started_at.elapsed(),
     })
+}
+
+/// The host triple, detected from rustc, and the platform recipe it selects.
+fn host_native_build_target() -> Result<(String, NativeTargetPlatform), Box<dyn Error>> {
+    let target_triple = detect_host_target_triple()?;
+    // The tool has no Cargo context and builds for the host it runs on, so
+    // the detected host triple is both the target and the host.
+    let native_target_platform = native_build_platform(&target_triple, &target_triple)?;
+    Ok((target_triple, native_target_platform))
 }
 
 #[cfg(test)]

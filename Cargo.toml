@@ -108,7 +108,7 @@ version = "0.2.125"
 # consumer class). The Astronomical fork delta (the patched mlx_array_detach
 # symbol) lives in the local mlx-c-fork crate; bump this
 # dependency together with the third-party MLX/MLX-C pins.
-mlx-bridge = { version = "0.32.4-alpha.5", default-features = false }
+mlx-bridge = { version = "0.32.4-alpha.6", default-features = false }
 axum = { version = "0.8.9", default-features = false, features = ["http1", "json", "query", "tokio"] }
 base64 = "0.23"
 bytes = "1"

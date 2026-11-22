@@ -1,17 +1,16 @@
 //! Linker and runtime-resource metadata for a published native store entry.
 //!
-//! Keeping this separate from native compilation makes the Cargo owner small
-//! while retaining one explicit inventory of Apple frameworks and archives.
+//! Keeping this separate from native compilation makes the Cargo owner small.
+//! The link lines themselves are composed in `native_link_directives`, where
+//! each platform's line is tested without a native build; this module checks
+//! the store entry's products and prints those lines.
 //!
-//! # The complete link recipe lives here and only here
+//! On macOS the line is the two static archives, the C++ runtime, the six
+//! Apple frameworks and the Clang compiler-rt archive. On Linux it is the two
+//! static archives, the libraries MLX's configure chose, and the GNU C++
+//! runtime.
 //!
-//! Everything the Rust linker needs from the native build — the two static
-//! archives, the C++ runtime, the six Apple frameworks, and the Clang
-//! compiler-rt archive — is declared in [`configure_rust_linking`]. When a
-//! future native dependency needs a new framework, this function is the only
-//! place to change.
-//!
-//! # The Metallib trust chain
+//! # The Metallib trust chain (macOS)
 //!
 //! The build-produced Metallib is hashed here at build time and injected as
 //! three compile-time environment values
@@ -36,6 +35,8 @@ use std::{
 
 use sha2::{Digest, Sha256};
 
+use crate::native_host_platform::NativeTargetPlatform;
+use crate::native_link_directives::{linux_link_directives, macos_link_directive_lines};
 use crate::native_store::NativeBuildArtifacts;
 
 /// Emits every `cargo:` directive needed to link and run against a store entry.
@@ -43,10 +44,11 @@ use crate::native_store::NativeBuildArtifacts;
 /// # Errors
 ///
 /// Fails when any required product is missing from the published entry (a
-/// corrupt store that slipped past validation) or when the Clang runtime
-/// directory cannot be resolved.
+/// corrupt store that slipped past validation) or, on macOS, when the Clang
+/// runtime directory cannot be resolved.
 pub fn configure_rust_linking(
     native_build_artifacts: &NativeBuildArtifacts,
+    native_target_platform: NativeTargetPlatform,
 ) -> Result<(), Box<dyn Error>> {
     let native_library_directory = native_build_artifacts.native_library_directory();
     require_file(
@@ -57,55 +59,80 @@ pub fn configure_rust_linking(
         &native_library_directory.join("libmlxc.a"),
         "MLX C static library",
     )?;
+    match native_target_platform {
+        NativeTargetPlatform::MacOs => {
+            configure_macos_rust_linking(native_build_artifacts, &native_library_directory)?;
+        }
+        NativeTargetPlatform::Linux => {
+            configure_linux_rust_linking(native_build_artifacts, &native_library_directory)?;
+        }
+    }
+    if let Some(memory_contract_probe_path) = native_build_artifacts.memory_contract_probe_path() {
+        println!(
+            "cargo:rustc-env=ASTRONOMICAL_MLX_MEMORY_CONTRACT_PROBE={}",
+            memory_contract_probe_path.display()
+        );
+    }
+    Ok(())
+}
+
+/// Links the Metal build and hands the runtime its verified Metallib.
+fn configure_macos_rust_linking(
+    native_build_artifacts: &NativeBuildArtifacts,
+    native_library_directory: &Path,
+) -> Result<(), Box<dyn Error>> {
     let metallib_path = native_build_artifacts.metallib_path();
     require_file(&metallib_path, "MLX AOT metallib")?;
     let metallib_size_bytes = metallib_path.metadata()?.len();
     let metallib_sha256_hex = sha256_file_hex(&metallib_path)?;
     publish_metallib_beside_cargo_target(&metallib_path)?;
 
-    println!(
-        "cargo:rustc-link-search=native={}",
-        native_library_directory.display()
-    );
-    println!("cargo:rustc-link-lib=static=mlxc");
-    println!("cargo:rustc-link-lib=static=mlx");
-    println!("cargo:rustc-link-lib=dylib=c++");
-    // The exact framework set the pinned MLX Metal backend links against.
-    // MLX pulls each of these directly; omitting one fails only at final
-    // binary link time, far from its cause, so the set stays explicit here.
-    for framework_name in [
-        "Metal",
-        "Foundation",
-        "IOKit",
-        "CoreFoundation",
-        "QuartzCore",
-        "Accelerate",
-    ] {
-        println!("cargo:rustc-link-lib=framework={framework_name}");
-    }
-    // MLX's C++ sources reference compiler-rt symbols (for example memory
-    // intrinsics); the static link needs the archive explicitly.
     let clang_runtime_directory = discover_clang_runtime_directory()?;
     require_file(
         &clang_runtime_directory.join("libclang_rt.osx.a"),
         "Clang macOS runtime archive",
     )?;
-    println!(
-        "cargo:rustc-link-search=native={}",
-        clang_runtime_directory.display()
-    );
-    println!("cargo:rustc-link-lib=static=clang_rt.osx");
+    for cargo_directive_line in
+        macos_link_directive_lines(native_library_directory, &clang_runtime_directory)
+    {
+        println!("{cargo_directive_line}");
+    }
     println!(
         "cargo:rustc-env=ASTRONOMICAL_MLX_METALLIB_PATH={}",
         metallib_path.display()
     );
     println!("cargo:rustc-env=ASTRONOMICAL_MLX_METALLIB_SIZE_BYTES={metallib_size_bytes}");
     println!("cargo:rustc-env=ASTRONOMICAL_MLX_METALLIB_SHA256={metallib_sha256_hex}");
-    if let Some(memory_contract_probe_path) = native_build_artifacts.memory_contract_probe_path() {
-        println!(
-            "cargo:rustc-env=ASTRONOMICAL_MLX_MEMORY_CONTRACT_PROBE={}",
-            memory_contract_probe_path.display()
-        );
+    Ok(())
+}
+
+/// Links the CPU build against the libraries MLX was configured with. There
+/// is no Metallib on Linux, so no Metallib values are emitted.
+fn configure_linux_rust_linking(
+    native_build_artifacts: &NativeBuildArtifacts,
+    native_library_directory: &Path,
+) -> Result<(), Box<dyn Error>> {
+    let mlx_link_libraries_path = native_build_artifacts.mlx_link_libraries_path();
+    require_file(&mlx_link_libraries_path, "MLX link library list")?;
+    let mlx_link_library_list = fs::read_to_string(&mlx_link_libraries_path)?;
+    let link_directives = linux_link_directives(native_library_directory, &mlx_link_library_list);
+    // The store entry is keyed by the BLAS search settings, not by the
+    // library files themselves; a file removed since the entry was built
+    // would otherwise surface as an obscure linker error.
+    for linked_library_file in &link_directives.linked_library_files {
+        if !linked_library_file.is_file() {
+            return Err(format!(
+                "the native runtime was configured against {}, which no longer exists; reinstall it or point CMake at another BLAS so a new native runtime is built",
+                linked_library_file.display()
+            )
+            .into());
+        }
+    }
+    for warning_message in &link_directives.warning_messages {
+        println!("cargo:warning={warning_message}");
+    }
+    for cargo_directive_line in &link_directives.cargo_directive_lines {
+        println!("{cargo_directive_line}");
     }
     Ok(())
 }

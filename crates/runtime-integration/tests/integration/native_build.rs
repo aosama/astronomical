@@ -7,6 +7,8 @@ use sha2::{Digest, Sha256};
 const NATIVE_BUILD_CONFIGURATION: &str = include_str!("../../native/CMakeLists.txt");
 const NATIVE_BUILD_COMPILATION: &str =
     include_str!("../../../native-build-orchestration/src/native_compile.rs");
+const NATIVE_HOST_PLATFORM: &str =
+    include_str!("../../../native-build-orchestration/src/native_host_platform.rs");
 const NATIVE_BUILD_SCRIPT: &str = include_str!("../../build.rs");
 const NATIVE_TILE_SELECTION_PATCH: &str =
     include_str!("../../../../third-party/patches/mlx-0.32.4-nax-qmm-tile-variants.patch");
@@ -26,9 +28,31 @@ const PINNED_ARCHIVE_CONTENTS: &[u8] = b"verified source archive";
 
 #[test]
 fn should_enable_runtime_metal_kernel_selection_for_the_current_apple_gpu() {
+    let darwin_branch = NATIVE_BUILD_CONFIGURATION
+        .split("elseif(CMAKE_SYSTEM_NAME STREQUAL \"Linux\")")
+        .next()
+        .expect("the configuration should have a macOS branch");
     assert!(
-        NATIVE_BUILD_CONFIGURATION.contains("set(MLX_METAL_JIT ON"),
+        darwin_branch.contains("set(ASTRONOMICAL_MLX_BUILD_METAL ON)"),
+        "macOS must build the Metal backend"
+    );
+    assert!(
+        NATIVE_BUILD_CONFIGURATION.contains("set(MLX_METAL_JIT ${ASTRONOMICAL_MLX_BUILD_METAL}"),
         "the native runtime must let MLX select NAX kernels and keep them in the `metal_kernel_cache` on capable Apple GPUs"
+    );
+}
+
+#[test]
+fn should_build_the_cpu_backend_without_metal_on_linux() {
+    let linux_branch = NATIVE_BUILD_CONFIGURATION
+        .split("elseif(CMAKE_SYSTEM_NAME STREQUAL \"Linux\")")
+        .nth(1)
+        .and_then(|after_linux_condition| after_linux_condition.split("else()").next())
+        .expect("the configuration should have a Linux branch");
+    assert!(linux_branch.contains("set(ASTRONOMICAL_MLX_BUILD_METAL OFF)"));
+    assert!(
+        NATIVE_BUILD_CONFIGURATION.contains("lib/mlx-link-libraries.txt"),
+        "a Linux build must record the libraries MLX links"
     );
 }
 
@@ -39,13 +63,20 @@ fn should_control_the_compiler_and_sdk_that_define_the_native_toolchain() {
         "-DCMAKE_CXX_COMPILER=",
         "-DCMAKE_OSX_SYSROOT=",
         "-DCMAKE_OSX_ARCHITECTURES=arm64",
-        "remove_uncontrolled_native_environment",
     ] {
         assert!(
-            NATIVE_BUILD_COMPILATION.contains(required_configuration),
+            NATIVE_HOST_PLATFORM.contains(required_configuration),
             "the native build must control toolchain input {required_configuration}"
         );
     }
+    assert!(
+        NATIVE_BUILD_COMPILATION.contains("compiler_configure_arguments(native_target_platform)"),
+        "the configure step must take its compilers from the host platform recipe"
+    );
+    assert!(
+        NATIVE_BUILD_COMPILATION.contains("remove_uncontrolled_native_environment"),
+        "the native build must strip ambient compiler variables"
+    );
 }
 
 #[test]

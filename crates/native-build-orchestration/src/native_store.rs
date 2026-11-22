@@ -46,6 +46,10 @@ use std::{
 
 use fs4::TryLockError;
 
+use crate::native_host_platform::{
+    MLX_LINK_LIBRARIES_RELATIVE_PATH, NativeTargetPlatform, platform_native_products,
+};
+
 mod manifest;
 #[cfg(test)]
 mod tests;
@@ -117,6 +121,7 @@ impl NativeBuildProfile {
 pub struct NativeBuildStore {
     root_directory: PathBuf,
     native_identity: String,
+    native_target_platform: NativeTargetPlatform,
     native_build_profile: NativeBuildProfile,
 }
 
@@ -133,6 +138,7 @@ impl NativeBuildStore {
     pub fn new(
         root_directory: &Path,
         native_identity: &str,
+        native_target_platform: NativeTargetPlatform,
         native_build_profile: NativeBuildProfile,
     ) -> Result<Self, Box<dyn Error>> {
         if !root_directory.is_absolute() {
@@ -147,6 +153,7 @@ impl NativeBuildStore {
         Ok(Self {
             root_directory: root_directory.to_owned(),
             native_identity: native_identity.to_owned(),
+            native_target_platform,
             native_build_profile,
         })
     }
@@ -180,6 +187,7 @@ impl NativeBuildStore {
             Ok(_) => match validate_entry(
                 &entry_directory,
                 &self.native_identity,
+                self.native_target_platform,
                 self.native_build_profile,
             ) {
                 Ok(()) => {
@@ -319,9 +327,10 @@ impl NativeBuildStore {
             &cmake_build_directory.join("lib/libmlxc.a"),
             &payload_directory.join("lib/libmlxc.a"),
         )?;
-        copy_required_file(
-            &cmake_build_directory.join("_deps/mlx-build/mlx/backend/metal/kernels/mlx.metallib"),
-            &payload_directory.join("share/mlx/mlx.metallib"),
+        copy_platform_products(
+            self.native_target_platform,
+            cmake_build_directory,
+            &payload_directory,
         )?;
         if self
             .native_build_profile
@@ -358,9 +367,26 @@ impl NativeBuildStore {
         validate_entry(
             &entry_directory,
             &self.native_identity,
+            self.native_target_platform,
             self.native_build_profile,
         )
     }
+}
+
+/// Copies the products only this platform's build produces (the Metallib on
+/// macOS, the link library list on Linux) into the payload.
+fn copy_platform_products(
+    native_target_platform: NativeTargetPlatform,
+    cmake_build_directory: &Path,
+    payload_directory: &Path,
+) -> Result<(), Box<dyn Error>> {
+    for platform_product in platform_native_products(native_target_platform) {
+        copy_required_file(
+            &cmake_build_directory.join(platform_product.build_relative_path),
+            &payload_directory.join(platform_product.entry_relative_path),
+        )?;
+    }
+    Ok(())
 }
 
 fn store_schema_version() -> &'static str {
@@ -414,8 +440,14 @@ impl NativeBuildArtifacts {
         self.native_library_directory().join("libmlx.a")
     }
 
+    /// Published on macOS only.
     pub fn metallib_path(&self) -> PathBuf {
         self.entry_directory.join("share/mlx/mlx.metallib")
+    }
+
+    /// Published on Linux only: the libraries MLX was configured to link.
+    pub fn mlx_link_libraries_path(&self) -> PathBuf {
+        self.entry_directory.join(MLX_LINK_LIBRARIES_RELATIVE_PATH)
     }
 
     /// Present only for the `core+memory-contract` profile.

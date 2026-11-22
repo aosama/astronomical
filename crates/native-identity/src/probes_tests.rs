@@ -15,6 +15,9 @@ fn overridden_request() -> FingerprintRequest<'static> {
             xcode: Some("Xcode 26.0 Build 17A1".to_owned()),
             sdk: Some("version=15.4\nbuild=24A123".to_owned()),
             clang: Some("version=17.0.0\ntarget=arm64-apple-darwin24".to_owned()),
+            c_compiler: None,
+            cxx_compiler: None,
+            blas_search: None,
             cmake: Some("cmake version 4.2.1".to_owned()),
             rustc: Some("rustc 1.97.1".to_owned()),
             target_triple: Some("aarch64-apple-darwin".to_owned()),
@@ -210,5 +213,101 @@ fn should_change_the_manifest_when_the_selected_target_changes() {
     assert_ne!(
         toolchain_manifest_lines(&request).unwrap(),
         original_manifest
+    );
+}
+
+fn overridden_linux_request() -> FingerprintRequest<'static> {
+    FingerprintRequest {
+        repository_root: Path::new("/"),
+        profile: NativeBuildProfile::Core,
+        scope: IdentityScope::Full,
+        overrides: crate::probes::ToolchainOverrides {
+            c_compiler: Some("cc (GCC) 16.2.1".to_owned()),
+            cxx_compiler: Some("c++ (GCC) 16.2.1".to_owned()),
+            blas_search: Some("CMAKE_PREFIX_PATH=".to_owned()),
+            cmake: Some("cmake version 4.2.1".to_owned()),
+            rustc: Some("rustc 1.97.1".to_owned()),
+            target_triple: Some("x86_64-unknown-linux-gnu".to_owned()),
+            ..crate::probes::ToolchainOverrides::none()
+        },
+    }
+}
+
+#[test]
+fn should_probe_the_linux_compilers_instead_of_xcode_for_a_linux_target() {
+    let probe_values = toolchain_probe_values(&overridden_linux_request()).unwrap();
+    let names: Vec<&str> = probe_values.iter().map(|entry| entry.name).collect();
+    assert_eq!(
+        names,
+        [
+            "target",
+            "build-type",
+            "c-compiler",
+            "cxx-compiler",
+            "blas-search",
+            "cmake",
+            "rustc"
+        ]
+    );
+    assert_eq!(
+        probe_values[2].value, "cc (GCC) 16.2.1\n",
+        "whole-output overrides hash the override text plus one trailing newline"
+    );
+}
+
+#[test]
+fn should_ignore_macos_overrides_for_a_linux_target() {
+    let linux_manifest = toolchain_manifest_lines(&overridden_linux_request()).unwrap();
+    let mut request_with_macos_overrides = overridden_linux_request();
+    request_with_macos_overrides.overrides.xcode = Some("Xcode 26.0".to_owned());
+    request_with_macos_overrides.overrides.sdk = Some("version=15.4".to_owned());
+    assert_eq!(
+        toolchain_manifest_lines(&request_with_macos_overrides).unwrap(),
+        linux_manifest,
+        "a Linux identity must not depend on Xcode values"
+    );
+}
+
+#[test]
+fn should_change_the_linux_manifest_when_the_cxx_compiler_changes() {
+    let original_manifest = toolchain_manifest_lines(&overridden_linux_request()).unwrap();
+    let mut request = overridden_linux_request();
+    request.overrides.cxx_compiler = Some("c++ (GCC) 16.3.0".to_owned());
+    assert_ne!(
+        toolchain_manifest_lines(&request).unwrap(),
+        original_manifest
+    );
+}
+
+#[test]
+fn should_change_the_linux_manifest_when_cmake_is_pointed_at_another_blas() {
+    let original_manifest = toolchain_manifest_lines(&overridden_linux_request()).unwrap();
+    let mut request = overridden_linux_request();
+    request.overrides.blas_search = Some("CMAKE_PREFIX_PATH=/opt/openblas".to_owned());
+    assert_ne!(
+        toolchain_manifest_lines(&request).unwrap(),
+        original_manifest,
+        "an entry built against one BLAS must not be reused for another"
+    );
+}
+
+#[test]
+fn should_reject_an_unsupported_target_platform_before_probing() {
+    let mut request = overridden_linux_request();
+    request.overrides.target_triple = Some("x86_64-pc-windows-msvc".to_owned());
+    assert_eq!(
+        toolchain_probe_values(&request),
+        Err(crate::NativeIdentityError::Probe(
+            "the native runtime builds only for macOS or Linux targets, got \"x86_64-pc-windows-msvc\"".to_owned()
+        ))
+    );
+}
+
+#[test]
+fn should_preserve_the_linux_toolchain_manifest_digest_for_direct_fixtures() {
+    let manifest_lines = toolchain_manifest_lines(&overridden_linux_request()).unwrap();
+    assert_eq!(
+        digest_bytes(manifest_lines.as_bytes()),
+        "1cb40686b7ff9aaaca4de483ba7a46efc46551fb33eb338d6fbda1460d7f55b6"
     );
 }

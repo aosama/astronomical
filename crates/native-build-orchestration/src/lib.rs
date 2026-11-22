@@ -24,6 +24,8 @@
 //! `native-identity`.
 
 pub mod native_compile;
+pub mod native_host_platform;
+pub mod native_link_directives;
 pub mod native_linking;
 pub mod native_parallelism;
 pub mod native_progress;
@@ -38,6 +40,7 @@ pub use native_compile::{
     native_parallel_job_count, required_path_variable, resolve_native_build_identity,
     write_native_build_status,
 };
+pub use native_host_platform::{NativeTargetPlatform, native_build_platform};
 pub use native_linking::configure_rust_linking;
 pub use native_progress::{NATIVE_BUILD_PROGRESS_FILE_VARIABLE, NativeBuildProgress};
 pub use native_store::{NativeBuildProfile, NativeBuildStore};

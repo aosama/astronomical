@@ -8,11 +8,14 @@
 //! `cargo xtask native-fingerprint` CLI everywhere else (issue #1250).
 
 pub mod probes;
+pub mod target_platform;
 
 #[cfg(test)]
 mod lib_tests;
 #[cfg(test)]
 mod probes_tests;
+#[cfg(test)]
+mod target_platform_tests;
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
