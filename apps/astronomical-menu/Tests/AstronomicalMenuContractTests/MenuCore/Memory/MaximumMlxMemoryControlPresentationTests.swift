@@ -28,6 +28,29 @@ final class MaximumMlxMemoryControlPresentationTests: XCTestCase {
     )
   }
 
+  /// While a change waits for the reply being written, a second one would be refused, so
+  /// Apply is withheld even though the thumb differs from the limit in force.
+  func test_should_withhold_apply_while_a_change_is_queued_and_offer_it_again_after() {
+    let queuedStatusDocument = statusDocument(
+      liveCeilingBytes: 34 * mlxMemoryBytesPerGigabyte,
+      wiredResidencyBudgetBytes: wiredResidencyBudgetBytes,
+      configuredMaximumGigabytes: 34,
+      pendingCeilingBytes: machineCeilingBytes)
+    let landedStatusDocument = statusDocument(
+      liveCeilingBytes: 34 * mlxMemoryBytesPerGigabyte,
+      wiredResidencyBudgetBytes: wiredResidencyBudgetBytes,
+      configuredMaximumGigabytes: 34)
+
+    XCTAssertFalse(
+      MaximumMlxMemoryControlPresentation(
+        statusDocument: queuedStatusDocument, editableMaximumWholeGigabytes: 35
+      ).shouldOfferApply)
+    XCTAssertTrue(
+      MaximumMlxMemoryControlPresentation(
+        statusDocument: landedStatusDocument, editableMaximumWholeGigabytes: 35
+      ).shouldOfferApply)
+  }
+
   func test_should_show_only_the_reachable_limit_when_the_request_is_served() {
     let servedStatusDocument = statusDocument(
       liveCeilingBytes: 34 * mlxMemoryBytesPerGigabyte,

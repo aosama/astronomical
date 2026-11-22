@@ -86,7 +86,21 @@ struct MaximumModelMemorySliderPresentation: Equatable {
     guard partOfTheModelIsReadFromTheSSD, let modelSizeBytes else {
       return "Leaves \(remainingWholeGigabytes) GB for macOS and your other apps."
     }
+    // Short enough for the two lines the popover gives it: the earlier, longer sentence was cut
+    // off before it reached what the limit leaves for other apps.
     return
-      "This model is \(gigabyteValueText(byteCount: modelSizeBytes)). At \(chosenWholeGigabytes) GB, part of it is read from the SSD, which is slower. Leaves \(remainingWholeGigabytes) GB for your other apps."
+      "At \(chosenWholeGigabytes) GB, part of this \(gigabyteValueText(byteCount: modelSizeBytes)) model is read from the SSD, which is slower. Leaves \(remainingWholeGigabytes) GB for other apps."
   }
+}
+
+/// What the control says while a change waits for the reply being written to finish. It names
+/// the limit the engine will really install, never the raw request: resting the slider at the
+/// top asks for the whole Mac's memory, which the engine lowers to what macOS lets it keep.
+func queuedMaximumModelMemoryCaption(
+  pendingCeilingBytes: UInt64, wiredResidencyBudgetBytes: UInt64?
+) -> String {
+  let installedCeilingBytes = mlxMemoryCeilingTheEngineWillInstall(
+    requestedCeilingBytes: pendingCeilingBytes,
+    wiredResidencyBudgetBytes: wiredResidencyBudgetBytes)
+  return "Changes to \(gigabyteValueText(byteCount: installedCeilingBytes)) when this reply finishes."
 }

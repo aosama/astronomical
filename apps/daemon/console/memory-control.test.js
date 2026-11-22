@@ -163,11 +163,38 @@ test("prefers a pending change and then an error over the cap notice", () => {
         mlx_memory_limit_error: "The worker could not apply the requested MLX memory ceiling"
     });
 
-    assert.equal(pendingElements["maximum-mlx-memory-notice"].textContent, "Pending 34.00 GB");
+    assert.equal(
+        pendingElements["maximum-mlx-memory-notice"].textContent,
+        "Changes to 34.00 GB when the current reply finishes."
+    );
+    assert.equal(
+        pendingElements["maximum-mlx-memory-notice"].className,
+        "mlx-memory-control-notice mlx-memory-control-notice-calm",
+        "a queued change is not a warning"
+    );
+    assert.equal(failedElements["maximum-mlx-memory-notice"].className, "mlx-memory-control-notice");
     assert.equal(
         failedElements["maximum-mlx-memory-notice"].textContent,
         "The worker could not apply the requested MLX memory ceiling"
     );
+});
+
+// "Use Max" queues a request for the whole Mac's memory; the engine installs
+// what macOS lets it keep, and the notice must name that figure.
+test("should_name_the_limit_the_engine_will_install_for_a_queued_whole_mac_request", () => {
+    const queuedElements = renderMemoryControlFor({
+        ...WIRED_MAC_STATUS,
+        mlx_memory_ceiling_bytes: 32212254720,
+        pending_mlx_memory_ceiling_bytes: WIRED_MAC_STATUS.machine_mlx_memory_ceiling_bytes
+    });
+    const reachableBytes = WIRED_MAC_STATUS.wired_residency_budget_bytes
+        - Math.floor(WIRED_MAC_STATUS.wired_residency_budget_bytes / 1000) * 25;
+
+    assert.equal(
+        queuedElements["maximum-mlx-memory-notice"].textContent,
+        "Changes to " + (reachableBytes / 1073741824).toFixed(2) + " GB when the current reply finishes."
+    );
+    assert.ok(reachableBytes < WIRED_MAC_STATUS.machine_mlx_memory_ceiling_bytes);
 });
 
 test("reaches the machine ceiling when serving is pageable and stays quiet before a ceiling exists", () => {
