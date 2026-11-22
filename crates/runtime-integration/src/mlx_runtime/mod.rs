@@ -28,6 +28,7 @@ mod memory_policy_tests;
 // CPU backend and has no kernel archive to resolve or verify (issue #2424).
 #[cfg(target_os = "macos")]
 mod metallib;
+mod quantized_projection;
 mod safetensors_io;
 
 use std::ops::Deref;

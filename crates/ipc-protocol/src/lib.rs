@@ -123,7 +123,9 @@ pub use speech::{
 pub use worker_chunking_configuration::{
     WorkerChunkingConfiguration, graph_submission_layer_interval,
 };
-pub use worker_memory_ledger_snapshot::WorkerMemoryLedgerSnapshot;
+pub use worker_memory_ledger_snapshot::{
+    ActiveMemoryCeilingEnforcement, WorkerMemoryLedgerSnapshot,
+};
 pub use worker_model_capabilities::{
     WorkerModelCapabilities, WorkerModelCapabilitiesValidationError,
 };

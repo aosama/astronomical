@@ -103,6 +103,31 @@ What runs differently on Linux:
 - **The worker reads physical memory from `/proc/meminfo`.** It claims no wired residency, because that is a Metal claim, and serves from ordinary pageable memory.
 - **Run tests with `--show-output`** to see which contracts were skipped and why.
 
+## Running a model on Linux
+
+The daemon and worker serve chat models on Linux with MLX's CPU backend. Build them optimized, because the CPU spends its time in MLX and in the worker's own loops, and debug builds of the latter are many times slower:
+
+    cargo build --release -p astronomical-daemon -p astronomical-inference-worker
+
+Put a model in its own folder under a models directory, named as the model is (for example `Qwen3.5-0.8B-MLX-4bit`, the smallest chat model in `registry/download_catalog.json`), and point an instance at that directory. A state directory holds the instance's `config.json`:
+
+    {"schema_version":1,"runtime":{"model_directories":["/path/to/models"],"maximum_mlx_memory_gb":6}}
+
+Start the daemon, and send a chat request to the address it prints:
+
+    target/release/astronomicald --instance development --state-directory /path/to/state
+    curl http://127.0.0.1:PORT/v1/chat/completions -H 'content-type: application/json' \
+      -d '{"model":"Qwen3.5-0.8B-MLX-4bit","messages":[{"role":"user","content":"Who speaks the line \"O Romeo, Romeo, wherefore art thou Romeo?\""}],"max_tokens":60,"reasoning_effort":"none"}'
+
+What to expect:
+
+- **It is slow.** On an older laptop CPU the 0.8B model reads about 1.3 prompt tokens a second and writes about 0.8 reply tokens a second, so a one-sentence answer takes about four minutes, most of it reading the chat template. `"reasoning_effort":"none"` keeps the model from spending its token budget thinking.
+- **Prompts are read 64 tokens at a time by default** on builds without Metal, against 2,048 with Metal. The engine reads one chunk at load to measure its working buffers, and a larger chunk would keep a CPU loading for many minutes. `chunking.fixed_prompt_processing_chunk_size_tokens` in `config.json` sets another size.
+- **The daemon gives a model ten minutes to load**, against one minute with Metal, for the same reason.
+- **Quantized projections compute in float32 on the CPU.** MLX's CPU kernel for BF16 and float16 activations is about ten times slower than for float32 ones on CPUs without native half-precision arithmetic, so the runtime widens the activations and rounds the result back. The result is at least as accurate.
+- **Nothing in MLX enforces the active memory ceiling on Linux.** The memory ledger still plans against it, and `/v1/status` reports `"active_memory_ceiling_enforcement": "unavailable"` in the ledger snapshot (it reads `"enforced_by_mlx"` on macOS). See [#2425](https://github.com/aosama/astronomical/issues/2425).
+- **The bound is the machine's memory, lowered by any cgroup limit** on the daemon, and `maximum_mlx_memory_gb` lowers it further.
+
 ## Check your change
 
 Check Rust formatting, then run the Rust integration and REST suites:

@@ -28,7 +28,13 @@ use thiserror::Error;
 use tokio::{net::TcpListener, signal};
 use tracing_subscriber::{EnvFilter, fmt};
 
+#[cfg(target_os = "macos")]
 const WORKER_MODEL_LOAD_TIMEOUT: Duration = Duration::from_secs(60);
+/// A load runs one prompt chunk to measure the engine's MLX working buffers.
+/// On MLX's CPU backend that chunk alone took 52 seconds on an older laptop,
+/// so the Metal build's minute would contain healthy loads there.
+#[cfg(not(target_os = "macos"))]
+const WORKER_MODEL_LOAD_TIMEOUT: Duration = Duration::from_secs(600);
 
 mod daemon_arguments;
 use daemon_arguments::{DaemonArguments, DaemonCommand};

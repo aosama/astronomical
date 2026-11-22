@@ -15,6 +15,9 @@ pub enum PlatformRequirement {
     MetalGpu,
     /// The macOS system tools (`sw_vers`, `sysctl` with macOS keys).
     MacosSystemTools,
+    /// The macOS menu app, whose shared fixtures describe the macOS build's
+    /// defaults (for example its 2,048-token prompt chunk).
+    MacosMenuApp,
 }
 
 impl PlatformRequirement {
@@ -29,6 +32,7 @@ impl PlatformRequirement {
             Self::CoreMl => "Core ML and the Neural Engine, which exist only on macOS",
             Self::MetalGpu => "a custom Metal kernel, which runs only on the Metal GPU of macOS",
             Self::MacosSystemTools => "the macOS system tools",
+            Self::MacosMenuApp => "the macOS menu app, whose fixtures describe the macOS build",
         }
     }
 }

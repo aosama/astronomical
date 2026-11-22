@@ -162,7 +162,18 @@ impl ChunkingConfigFile {
 }
 
 pub const DEFAULT_FULL_ATTENTION_KEY_VALUE_GROWTH_TOKENS: u32 = 256;
+/// The Metal build's prompt chunk.
+#[cfg(target_os = "macos")]
 pub const DEFAULT_FIXED_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS: u32 = 2_048;
+/// Builds without Metal run MLX on the CPU, where a prompt chunk costs about a
+/// thousand times more: a 64-token chunk of the smallest Qwen3.5 model
+/// measured 51 seconds on an older laptop CPU. The engine runs one chunk at
+/// load to measure its MLX working buffers, so a 2,048-token default would
+/// keep a model loading for half an hour; 64 keeps the load and every
+/// progress report to about a minute there. `config.json` can still set any
+/// size.
+#[cfg(not(target_os = "macos"))]
+pub const DEFAULT_FIXED_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS: u32 = 64;
 /// The previously shipped resident-chunk default. Load-time persistence rewrites
 /// this exact value to the current default so config.json files written with the
 /// 4,096-token chunk — whose measured win turned out to be a macOS file cache warmth

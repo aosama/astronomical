@@ -40,6 +40,12 @@ const FLUX_STATUS_FIXTURE: &str = include_str!(
 
 #[tokio::test]
 async fn should_keep_the_complete_autoregressive_menu_fixture_aligned_with_production_status() {
+    if test_harness::skip_without(
+        test_harness::PlatformRequirement::MacosMenuApp,
+        "should_keep_the_complete_autoregressive_menu_fixture_aligned_with_production_status",
+    ) {
+        return;
+    }
     let actual_status = production_status_document(autoregressive_runtime_configuration()).await;
     let expected_status = fixture_document(AUTOREGRESSIVE_STATUS_FIXTURE);
 
@@ -51,6 +57,12 @@ async fn should_keep_the_complete_autoregressive_menu_fixture_aligned_with_produ
 
 #[tokio::test]
 async fn should_keep_the_complete_flux_menu_fixture_aligned_with_production_status() {
+    if test_harness::skip_without(
+        test_harness::PlatformRequirement::MacosMenuApp,
+        "should_keep_the_complete_flux_menu_fixture_aligned_with_production_status",
+    ) {
+        return;
+    }
     let actual_status = production_status_document(flux_runtime_configuration()).await;
     let expected_status = fixture_document(FLUX_STATUS_FIXTURE);
 
