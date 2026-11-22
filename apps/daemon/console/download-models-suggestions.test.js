@@ -248,3 +248,92 @@ test("should_list_matching_builds_without_a_toggle_while_searching", () => {
     );
     assert.equal(renderedTexts(catalogContainer).includes("Draft model built in · 1.0 GB more memory"), true);
 });
+
+function measuredSpeed(essayRate, codeRate) {
+    return {
+        measured_on: "Mac with an M5 Pro and 48 GB",
+        astronomical_version: "0.2.129",
+        tokens_per_second: {
+            essay_short_prompt: essayRate, essay_long_prompt: essayRate,
+            code_short_prompt: codeRate, code_long_prompt: codeRate
+        }
+    };
+}
+
+test("should_suggest_a_draft_build_for_code_when_it_measured_clearly_quicker_and_say_what_it_costs", () => {
+    const suggestions = suggestionsFor(
+        ladderCatalog({
+            Large: { measured_speed: measuredSpeed(96, 96) },
+            "Large-draft": { measured_speed: measuredSpeed(89, 125) },
+            Painter: { ready_on_this_mac: true }
+        }),
+        gigabytes(36.5)
+    );
+
+    assert.deepEqual(tagsAndModels(suggestions).slice(0, 2), [
+        ["Best fit for this Mac", "Large"],
+        ["Quicker for code", "Large-draft"]
+    ]);
+    assert.match(suggestions[1][2], /about 30% quicker than Large/);
+    assert.match(suggestions[1][2], /essay is about 7% slower/, "a slower everyday reply is disclosed");
+});
+
+test("should_not_suggest_a_draft_build_inside_the_measurement_spread_or_without_figures", () => {
+    const withinSpread = suggestionsFor(
+        ladderCatalog({
+            Large: { measured_speed: measuredSpeed(96, 100) },
+            "Large-draft": { measured_speed: measuredSpeed(96, 109) },
+            Painter: { ready_on_this_mac: true }
+        }),
+        gigabytes(36.5)
+    );
+    const unmeasured = suggestionsFor(
+        ladderCatalog({ "Large-draft": { measured_speed: measuredSpeed(89, 125) }, Painter: { ready_on_this_mac: true } }),
+        gigabytes(36.5)
+    );
+
+    assert.equal(tagsAndModels(withinSpread).some(([tag]) => tag === "Quicker for code"), false, "9% is within the spread");
+    assert.equal(tagsAndModels(unmeasured).some(([tag]) => tag === "Quicker for code"), false, "no reference figure, no claim");
+});
+
+test("should_never_suggest_a_draft_build_for_speed_when_it_would_not_fit_whole_in_memory", () => {
+    const suggestions = suggestionsFor(
+        ladderCatalog({
+            Large: { measured_speed: measuredSpeed(96, 96) },
+            "Large-draft": { measured_speed: measuredSpeed(89, 125), approximate_memory_bytes: gigabytes(26) },
+            Painter: { ready_on_this_mac: true }
+        }),
+        gigabytes(26)
+    );
+
+    assert.equal(tagsAndModels(suggestions).some(([tag]) => tag === "Quicker for code"), false, "a streaming draft build drafts nothing yet");
+});
+
+test("should_measure_a_draft_build_against_the_quickest_build_already_here", () => {
+    const suggestions = suggestionsFor(
+        ladderCatalog({
+            "Large-6bit": { ready_on_this_mac: true, measured_speed: measuredSpeed(72, 118) },
+            "Large-draft": { measured_speed: measuredSpeed(89, 125) },
+            Painter: { ready_on_this_mac: true }
+        }),
+        gigabytes(36.5)
+    );
+
+    assert.equal(tagsAndModels(suggestions).some(([tag]) => tag === "Quicker for code"), false, "125 is not clearly quicker than 118");
+});
+
+test("should_list_measured_speeds_with_where_they_were_measured_in_the_details", () => {
+    const catalogContainer = renderModelsPage(
+        [entryNamed("Measured", { measured_speed: measuredSpeed(96, 125) })],
+        'downloadModelsExpandedModelId = "Measured";'
+    );
+    const detailTexts = renderedTexts(catalogContainer);
+
+    for (const expectedText of [
+        "96 tokens a second, 96 after a 10,000-token prompt",
+        "125 tokens a second, 125 after a 10,000-token prompt",
+        "Mac with an M5 Pro and 48 GB, Astronomical 0.2.129"
+    ]) {
+        assert.equal(detailTexts.includes(expectedText), true, expectedText);
+    }
+});

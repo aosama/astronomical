@@ -19,6 +19,10 @@ const DOWNLOAD_MODELS_BUILD_DIFFERENCE_TEXT = {
 // for a long conversation, and the page would be suggesting a slowdown.
 const DOWNLOAD_MODELS_ROOMY_FIT_FRACTION = 0.9;
 const DOWNLOAD_MODELS_MAXIMUM_SUGGESTION_COUNT = 3;
+// A draft build is suggested for code only when it measured at least this much
+// quicker than the build it would replace; smaller gaps sit inside the spread
+// between measurement rounds.
+const DOWNLOAD_MODELS_QUICKER_SPEED_RATIO = 1.1;
 
 function isDownloadModelsChatSectionRow(catalogRow) {
     return catalogRow.role === "chat" || catalogRow.role === "coding";
@@ -68,6 +72,7 @@ function downloadModelsSuggestions(catalogRows, servingCeilingBytes) {
     const bestFitRow = downloadModelsBestFitRow(ladder, servingCeilingBytes);
     const suggestions = [
         downloadModelsBestFitSuggestion(ladder, bestFitRow, claimedLeadIds, servingCeilingBytes),
+        downloadModelsQuickerForCodeSuggestion(catalogRows, bestFitRow, servingCeilingBytes),
         downloadModelsMoreDetailSuggestion(catalogRows, bestFitRow, servingCeilingBytes),
         downloadModelsStreamingSuggestion(ladder, bestFitRow, claimedLeadIds, servingCeilingBytes),
         downloadModelsPicturesSuggestion(catalogRows)
@@ -139,6 +144,61 @@ function downloadModelsMoreDetailSuggestion(catalogRows, bestFitRow, servingCeil
     return {
         kind: "more-detail", tag: "Closer to the original", catalogRow: largestCandidateRow,
         reason: "The same model as " + bestFitRow.modelId + " with more of its original detail kept. It needs " + extraMemoryText + " more memory."
+    };
+}
+
+// Code rate of a measured build: the mean of its short- and long-prompt runs.
+function downloadModelsCodeRate(catalogRow) {
+    const measuredSpeed = catalogRow.measuredSpeed;
+    return measuredSpeed ? (measuredSpeed.codeShortPrompt + measuredSpeed.codeLongPrompt) / 2 : null;
+}
+
+function downloadModelsEssayRate(catalogRow) {
+    const measuredSpeed = catalogRow.measuredSpeed;
+    return measuredSpeed ? (measuredSpeed.essayShortPrompt + measuredSpeed.essayLongPrompt) / 2 : null;
+}
+
+// The build a quicker one is measured against: the quickest measured build of
+// the best-fit model the person already has, else the best fit itself.
+function downloadModelsSpeedReferenceRow(catalogRows, bestFitRow) {
+    const claimedMeasuredRows = catalogRows.filter(
+        (catalogRow) => downloadModelsLeadModelId(catalogRow) === bestFitRow.modelId
+            && isDownloadModelsRowClaimed(catalogRow) && catalogRow.measuredSpeed
+    );
+    if (claimedMeasuredRows.length === 0) return bestFitRow.measuredSpeed ? bestFitRow : null;
+    return claimedMeasuredRows.reduce(
+        (quickestRow, catalogRow) => (downloadModelsCodeRate(catalogRow) > downloadModelsCodeRate(quickestRow) ? catalogRow : quickestRow)
+    );
+}
+
+// A draft build of the best-fit model that measured clearly quicker at code
+// and fits whole in memory with room: a build that has to stream drafts
+// nothing yet, so it is never offered for speed. The reason says plainly when
+// everyday writing is slower, so the person can weigh it.
+function downloadModelsQuickerForCodeSuggestion(catalogRows, bestFitRow, servingCeilingBytes) {
+    if (bestFitRow === null || !isDownloadModelsRowInMemory(bestFitRow, servingCeilingBytes)) return null;
+    const referenceRow = downloadModelsSpeedReferenceRow(catalogRows, bestFitRow);
+    if (referenceRow === null) return null;
+    const roomyCeilingBytes = servingCeilingBytes * DOWNLOAD_MODELS_ROOMY_FIT_FRACTION;
+    const quickerRows = catalogRows.filter(
+        (catalogRow) => catalogRow.buildOf === bestFitRow.modelId && catalogRow.buildDifference === "draft_model"
+            && catalogRow.measuredSpeed && catalogRow.approximateMemoryBytes <= roomyCeilingBytes
+            && !isDownloadModelsRowClaimed(catalogRow)
+            && downloadModelsCodeRate(catalogRow) >= downloadModelsCodeRate(referenceRow) * DOWNLOAD_MODELS_QUICKER_SPEED_RATIO
+    );
+    if (quickerRows.length === 0) return null;
+    const quickestRow = quickerRows.reduce(
+        (bestRow, catalogRow) => (downloadModelsCodeRate(catalogRow) > downloadModelsCodeRate(bestRow) ? catalogRow : bestRow)
+    );
+    const codeGainPercent = Math.round((downloadModelsCodeRate(quickestRow) / downloadModelsCodeRate(referenceRow) - 1) * 100);
+    const essayChangePercent = Math.round((downloadModelsEssayRate(quickestRow) / downloadModelsEssayRate(referenceRow) - 1) * 100);
+    const essayText = essayChangePercent < 0
+        ? " Writing an essay is about " + (-essayChangePercent) + "% slower."
+        : "";
+    return {
+        kind: "quicker-code", tag: "Quicker for code", catalogRow: quickestRow,
+        reason: "Writes code about " + codeGainPercent + "% quicker than " + referenceRow.modelId
+            + ", because a draft model is built in." + essayText
     };
 }
 

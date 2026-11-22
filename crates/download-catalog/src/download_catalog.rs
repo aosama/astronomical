@@ -11,13 +11,16 @@ pub use crate::catalog_capabilities::DownloadCatalogCapabilities;
 use crate::catalog_capabilities::{DownloadCatalogCapabilitiesDocument, parse_entry_capabilities};
 pub use crate::catalog_classification::{DownloadCatalogFamily, DownloadCatalogRole};
 use crate::catalog_presentation::{CatalogEntryPresentation, parse_entry_presentation};
+use crate::catalog_speed::validate_measured_speed;
+pub use crate::catalog_speed::{DownloadCatalogMeasuredSpeed, DownloadCatalogTaskSpeeds};
 use crate::path_selection::DownloadPathSelection;
 
 // Version 5 removes every name but the model ID: the display name, short name
 // and version label gave one model up to four names, and people could not tell
 // which one the terminal and the API accept. The model ID is the leaf of the
 // Hugging Face identity, the same name discovery gives the downloaded folder.
-// Version 5 later gained the optional build_of and build_difference pair,
+// Version 5 later gained the optional build_of and build_difference pair and
+// the optional measured_speed,
 // which links a build to its lead without giving it a second name; the
 // catalog is bundled with the binary that reads it, so no reader meets a field
 // it does not know.
@@ -62,6 +65,7 @@ pub struct DownloadCatalogEntry {
     upstream_license: Option<String>,
     presentation: CatalogEntryPresentation,
     build: Option<DownloadCatalogBuild>,
+    measured_speed: Option<DownloadCatalogMeasuredSpeed>,
     download_path_selection: DownloadPathSelection,
 }
 
@@ -130,6 +134,10 @@ pub enum DownloadCatalogError {
         "download catalog entry {entry_index} names a build_of lead that is itself a build, experimental, retiring, or listed in another section"
     )]
     InvalidBuildLead { entry_index: usize },
+    #[error(
+        "download catalog entry {entry_index} has a measured_speed with a rate outside 1 to 1000 tokens a second, an empty or long measured_on, or a version that is not numeric"
+    )]
+    InvalidMeasuredSpeed { entry_index: usize },
 }
 
 #[derive(Debug, Deserialize)]
@@ -168,6 +176,7 @@ struct DownloadCatalogEntryDocument {
     /// The model ID of the lead entry this is another build of.
     build_of: Option<String>,
     build_difference: Option<DownloadCatalogBuildDifference>,
+    measured_speed: Option<DownloadCatalogMeasuredSpeed>,
 }
 
 impl DownloadCatalog {
@@ -306,6 +315,7 @@ fn parse_catalog_entry(
         entry_document.build_difference,
         entry_index,
     )?;
+    validate_measured_speed(entry_document.measured_speed.as_ref(), entry_index)?;
     Ok(DownloadCatalogEntry {
         huggingface_id: entry_document.huggingface_id,
         revision: entry_document.revision,
@@ -323,6 +333,7 @@ fn parse_catalog_entry(
         upstream_license: entry_texts.upstream_license,
         presentation: entry_texts.presentation,
         build,
+        measured_speed: entry_document.measured_speed,
         download_path_selection,
     })
 }
@@ -580,6 +591,13 @@ impl DownloadCatalogEntry {
     #[must_use]
     pub const fn build(&self) -> Option<&DownloadCatalogBuild> {
         self.build.as_ref()
+    }
+
+    /// Reply speeds measured on a named Mac, or `None` when this entry has not
+    /// been measured; the Models page then shows no speed rather than a guess.
+    #[must_use]
+    pub const fn measured_speed(&self) -> Option<&DownloadCatalogMeasuredSpeed> {
+        self.measured_speed.as_ref()
     }
 
     #[must_use]

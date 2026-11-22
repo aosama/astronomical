@@ -56,7 +56,17 @@ const VALID_CATALOG_JSON: &str = r#"{
             "role": "chat",
             "public": true,
             "build_of": "example-qwen",
-            "build_difference": "more_detail"
+            "build_difference": "more_detail",
+            "measured_speed": {
+                "measured_on": "Mac with an M5 Pro and 48 GB",
+                "astronomical_version": "0.2.129",
+                "tokens_per_second": {
+                    "essay_short_prompt": 72,
+                    "essay_long_prompt": 66,
+                    "code_short_prompt": 72,
+                    "code_long_prompt": 67
+                }
+            }
         }
     ]
 }"#;
@@ -81,7 +91,7 @@ fn capabilities_with(supported_capabilities: &[&str]) -> serde_json::Value {
 
 /// The authored four-entry fixture projected onto the public response, pinning
 /// every field the Models page renders for each entry: the role and flags, the
-/// presentation texts and the build link, each published only for an entry that
+/// presentation texts, the build link and the measured speed, each published only for an entry that
 /// declares it. This application has no download coordinator, so the free disk
 /// figure is absent.
 fn expected_validated_catalog_document() -> serde_json::Value {
@@ -158,6 +168,16 @@ fn expected_validated_catalog_document() -> serde_json::Value {
                 "download_state": null,
                 "build_of": "example-qwen",
                 "build_difference": "more_detail",
+                "measured_speed": {
+                    "measured_on": "Mac with an M5 Pro and 48 GB",
+                    "astronomical_version": "0.2.129",
+                    "tokens_per_second": {
+                        "essay_short_prompt": 72,
+                        "essay_long_prompt": 66,
+                        "code_short_prompt": 72,
+                        "code_long_prompt": 67
+                    }
+                },
                 "capabilities": capabilities_with(&[])
             }
         ]
