@@ -63,3 +63,4 @@ fn folder_repository_identity(model_directory: &Path) -> Option<String> {
     let publisher_folder_name = model_directory.parent()?.file_name()?.to_str()?;
     Some(format!("{publisher_folder_name}/{model_folder_name}"))
 }
+// Test impact selection probe: an engine-only change.
