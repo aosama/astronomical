@@ -44,6 +44,19 @@ extension CanvasPageCommand {
     return "window.__thintalkCommands?.run({\"name\": \"\(draftCommandName)\", \"text\": \(textLiteral)});"
   }
 
+  /// The page command that switches the chat to a model.
+  public static let chatModelCommandName = "selectChatModel"
+
+  /// The script that asks the page to chat with `modelID`. The ID is encoded as
+  /// JSON for the same reason the draft is; the page checks it is a model ID.
+  /// Nil when it cannot be encoded.
+  public static func chatModelScript(modelID: String) -> String? {
+    guard let encodedModelID = try? JSONSerialization.data(withJSONObject: modelID, options: [.fragmentsAllowed]),
+      let modelIDLiteral = String(data: encodedModelID, encoding: .utf8)
+    else { return nil }
+    return "window.__thintalkCommands?.run({\"name\": \"\(chatModelCommandName)\", \"model\": \(modelIDLiteral)});"
+  }
+
   /// The page command that carries the title bar inset.
   public static let titlebarInsetCommandName = "setTitlebarInset"
 

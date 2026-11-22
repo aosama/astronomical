@@ -3,6 +3,7 @@
 use axum::{Json, Router, extract::State, routing::get};
 use serde::Serialize;
 
+use super::catalog_suggestions::{LibrarySuggestionResponse, library_suggestions};
 use crate::{application::ApplicationState, library::project_catalog_entries};
 
 pub(crate) fn library_catalog_routes() -> Router<ApplicationState> {
@@ -56,9 +57,16 @@ async fn get_library_catalog(
                     .display()
                     .to_string()
             });
+    let models_directory_free_bytes = application_state
+        .library_download_coordinator
+        .as_ref()
+        .and_then(|download_coordinator| download_coordinator.models_directory_free_bytes());
+    let suggestions = library_suggestions(&application_state, &projections);
     Json(LibraryCatalogResponse {
         schema_version: application_state.download_catalog.schema_version(),
         models_download_directory,
+        models_directory_free_bytes,
+        suggestions,
         entries,
     })
 }
@@ -94,6 +102,14 @@ struct LibraryCatalogResponse {
     /// destination before the user commits to a multi-gigabyte download.
     #[serde(skip_serializing_if = "Option::is_none")]
     models_download_directory: Option<String>,
+    /// Free bytes on the disk that holds the models folder, read the way the
+    /// download check reads them, so the page's figure agrees with what a
+    /// download is admitted against. Absent when the disk cannot be read.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    models_directory_free_bytes: Option<u64>,
+    /// What would be better on this Mac, most useful first; the Models page
+    /// and the chat app's first run both show these.
+    suggestions: Vec<LibrarySuggestionResponse>,
     entries: Vec<LibraryCatalogEntryResponse>,
 }
 
@@ -110,7 +126,6 @@ struct LibraryCatalogEntryResponse {
     role: &'static str,
     get_started: bool,
     experimental: bool,
-    retiring: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     minimum_memory_bytes: Option<u64>,
     public: bool,
@@ -127,7 +142,49 @@ struct LibraryCatalogEntryResponse {
     upstream_license: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     requestable_model_id: Option<String>,
+    /// The model ID of the lead entry this is another build of; the page
+    /// folds the build under that lead.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    build_of: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    build_difference: Option<&'static str>,
+    /// Reply speeds measured on a named Mac; absent for an unmeasured entry.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    measured_speed: Option<LibraryCatalogMeasuredSpeedResponse>,
     capabilities: LibraryCatalogCapabilitiesResponse,
+}
+
+#[derive(Debug, Serialize)]
+struct LibraryCatalogMeasuredSpeedResponse {
+    measured_on: String,
+    astronomical_version: String,
+    tokens_per_second: LibraryCatalogTaskSpeedsResponse,
+}
+
+#[derive(Debug, Serialize)]
+struct LibraryCatalogTaskSpeedsResponse {
+    essay_short_prompt: u16,
+    essay_long_prompt: u16,
+    code_short_prompt: u16,
+    code_long_prompt: u16,
+}
+
+impl LibraryCatalogMeasuredSpeedResponse {
+    fn from_measured_speed(
+        measured_speed: &download_catalog::DownloadCatalogMeasuredSpeed,
+    ) -> Self {
+        let task_speeds = measured_speed.tokens_per_second();
+        Self {
+            measured_on: measured_speed.measured_on().to_owned(),
+            astronomical_version: measured_speed.astronomical_version().to_owned(),
+            tokens_per_second: LibraryCatalogTaskSpeedsResponse {
+                essay_short_prompt: task_speeds.essay_short_prompt,
+                essay_long_prompt: task_speeds.essay_long_prompt,
+                code_short_prompt: task_speeds.code_short_prompt,
+                code_long_prompt: task_speeds.code_long_prompt,
+            },
+        }
+    }
 }
 
 #[derive(Debug, Default, Serialize)]
@@ -153,6 +210,7 @@ impl LibraryCatalogEntryResponse {
     ) -> Self {
         let catalog_entry = projection.catalog_entry;
         let capabilities = &projection.capabilities;
+        let build = catalog_entry.build();
         Self {
             huggingface_id: catalog_entry.huggingface_id().to_owned(),
             revision: catalog_entry.revision().to_owned(),
@@ -164,7 +222,6 @@ impl LibraryCatalogEntryResponse {
             role: catalog_entry.role().as_str(),
             get_started: catalog_entry.get_started(),
             experimental: catalog_entry.experimental(),
-            retiring: catalog_entry.retiring(),
             minimum_memory_bytes: catalog_entry.minimum_memory_bytes(),
             public: true,
             ready_on_this_mac: projection.ready_on_this_mac,
@@ -175,6 +232,11 @@ impl LibraryCatalogEntryResponse {
             quantization_label: catalog_entry.quantization_label().map(str::to_owned),
             upstream_license: catalog_entry.upstream_license().map(str::to_owned),
             requestable_model_id: projection.requestable_model_id.clone(),
+            build_of: build.map(|catalog_build| catalog_build.lead_model_id().to_owned()),
+            build_difference: build.map(|catalog_build| catalog_build.difference().as_str()),
+            measured_speed: catalog_entry
+                .measured_speed()
+                .map(LibraryCatalogMeasuredSpeedResponse::from_measured_speed),
             capabilities: LibraryCatalogCapabilitiesResponse {
                 supports_reasoning: capabilities.supports_reasoning,
                 supports_vision: capabilities.supports_vision,

@@ -54,6 +54,36 @@ final class ApplicationLinkTests: XCTestCase {
     XCTAssertEqual(ApplicationLink.parse(try XCTUnwrap(URL(string: "ASTRONOMICAL://CHAT")), channel: .stable), .chat)
   }
 
+  /// "Chat with this model" opens the chat link with the model in its query;
+  /// the link still opens the chat window, and the model comes back out.
+  func test_should_carry_a_model_through_the_chat_link_in_every_channel() throws {
+    for channel in [ApplicationChannel.development, .stable, .appStore] {
+      let chatModelURL = try XCTUnwrap(ChatModelLink.url(modelID: "Ornith-1.5-35B-A3B-OptiQ-4bit", channel: channel))
+      XCTAssertEqual(ApplicationLink.parse(chatModelURL, channel: channel), .chat, "it is still the chat link")
+      XCTAssertEqual(ChatModelLink.modelID(from: chatModelURL, channel: channel), "Ornith-1.5-35B-A3B-OptiQ-4bit")
+    }
+  }
+
+  func test_should_name_no_model_for_a_plain_chat_link_or_another_channel_or_a_bad_id() throws {
+    let longestModelID = String(repeating: "a", count: ChatModelLink.maximumModelIDCharacters)
+    XCTAssertEqual(
+      ChatModelLink.modelID(from: try XCTUnwrap(ChatModelLink.url(modelID: longestModelID, channel: .development)), channel: .development),
+      longestModelID)
+    let modelNamingNothing = [
+      URL(string: "astronomical-dev://chat"),
+      URL(string: "astronomical-dev://chat?model="),
+      URL(string: "astronomical-dev://chat?model=has%20space"),
+      URL(string: "astronomical-dev://chat?model=-leading-dash"),
+      URL(string: "astronomical-dev://chat?model=a%2Fb"),
+      URL(string: "astronomical-dev://settings?model=Ornith"),
+      URL(string: "astronomical://chat?model=Ornith"),
+      ChatModelLink.url(modelID: longestModelID + "a", channel: .development),
+    ]
+    for chatLink in modelNamingNothing {
+      XCTAssertNil(ChatModelLink.modelID(from: try XCTUnwrap(chatLink), channel: .development), "\(String(describing: chatLink))")
+    }
+  }
+
   func test_should_carry_a_draft_through_a_link_and_back_whatever_it_contains() throws {
     for draftText in ["What is 15% of 80?", "a&b=c #tag ?x", "Explique la photosynthèse 🌱", "line one\nline two"] {
       let draftURL = try XCTUnwrap(DraftLink.url(draftText: draftText, channel: .development))

@@ -43,6 +43,44 @@ public func isThinTalkChatOpenRequest(_ openedURL: URL, channel: ApplicationChan
   ApplicationLink.parse(openedURL, channel: channel) == .chat
 }
 
+/// The chat link with a model: `astronomical://chat?model=<model ID>`, which
+/// the Observatory's "Chat with this model" opens so the window shows that
+/// model rather than whichever it had. Any channel answers it: it only chooses
+/// among models the engine already serves, and the page ignores one it does
+/// not list.
+public enum ChatModelLink {
+  public static let modelParameterName = "model"
+  /// Real model IDs are well under 100 characters.
+  public static let maximumModelIDCharacters = 200
+
+  public static func url(modelID: String, channel: ApplicationChannel) -> URL? {
+    var linkComponents = URLComponents()
+    linkComponents.scheme = channel.chatURLScheme
+    linkComponents.host = ApplicationLink.chat.rawValue
+    linkComponents.queryItems = [URLQueryItem(name: modelParameterName, value: modelID)]
+    return linkComponents.url
+  }
+
+  /// The model a chat link names, or nil when the link is not this channel's
+  /// chat link or names no model ID (letters, digits, dots, dashes, underscores).
+  public static func modelID(from openedURL: URL, channel: ApplicationChannel) -> String? {
+    guard ApplicationLink.parse(openedURL, channel: channel) == .chat,
+      let linkComponents = URLComponents(url: openedURL, resolvingAgainstBaseURL: false),
+      let modelID = linkComponents.queryItems?.first(where: { $0.name == modelParameterName })?.value
+    else { return nil }
+    return isModelID(modelID) ? modelID : nil
+  }
+
+  private static func isModelID(_ candidate: String) -> Bool {
+    guard let firstCharacter = candidate.unicodeScalars.first, candidate.count <= maximumModelIDCharacters else {
+      return false
+    }
+    let allowedCharacters = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-")
+    let isAlphanumeric = CharacterSet.alphanumerics.contains(firstCharacter) && firstCharacter.isASCII
+    return isAlphanumeric && candidate.unicodeScalars.allSatisfy { allowedCharacters.contains($0) }
+  }
+}
+
 /// A link that puts a draft in the Development chat's message field:
 /// `astronomical-dev://draft?text=...`.
 ///

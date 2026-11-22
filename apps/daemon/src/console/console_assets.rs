@@ -16,14 +16,21 @@ const DOWNLOAD_MODELS_JS: &str = include_str!("../../console/download-models.js"
 const DOWNLOAD_MODELS_RENDER_JS: &str = include_str!("../../console/download-models-render.js");
 const DOWNLOAD_MODELS_GROUPS_JS: &str = include_str!("../../console/download-models-groups.js");
 const DOWNLOAD_MODELS_ROW_JS: &str = include_str!("../../console/download-models-row.js");
+const DOWNLOAD_MODELS_SUGGESTIONS_JS: &str =
+    include_str!("../../console/download-models-suggestions.js");
 const DOWNLOAD_MODELS_LINKED_JS: &str = include_str!("../../console/download-models-linked.js");
 const DOWNLOAD_MODELS_INSTALLED_JS: &str =
     include_str!("../../console/download-models-installed.js");
+const DOWNLOAD_MODELS_INSTALLED_ROWS_JS: &str =
+    include_str!("../../console/download-models-installed-rows.js");
+const DOWNLOAD_MODELS_VOICE_SAMPLE_JS: &str =
+    include_str!("../../console/download-models-voice-sample.js");
 const DOWNLOAD_MODELS_REMOVAL_JS: &str = include_str!("../../console/download-models-removal.js");
 const DOWNLOAD_MODELS_QUEUE_JS: &str = include_str!("../../console/download-models-queue.js");
 const DOWNLOAD_MODELS_SELECTION_JS: &str =
     include_str!("../../console/download-models-selection.js");
 const OVERVIEW_JS: &str = include_str!("../../console/overview.js");
+const OVERVIEW_NEXT_STEP_JS: &str = include_str!("../../console/overview-next-step.js");
 const OVERVIEW_CSS: &str = include_str!("../../console/overview.css");
 const NEURAL_ENGINE_PANEL_JS: &str = include_str!("../../console/neural-engine-panel.js");
 const MEMORY_CONTROL_JS: &str = include_str!("../../console/memory-control.js");
@@ -94,12 +101,24 @@ where
         )
         .route("/download-models-row.js", get(download_models_row_script))
         .route(
+            "/download-models-suggestions.js",
+            get(download_models_suggestions_script),
+        )
+        .route(
             "/download-models-linked.js",
             get(download_models_linked_script),
         )
         .route(
             "/download-models-installed.js",
             get(download_models_installed_script),
+        )
+        .route(
+            "/download-models-installed-rows.js",
+            get(download_models_installed_rows_script),
+        )
+        .route(
+            "/download-models-voice-sample.js",
+            get(download_models_voice_sample_script),
         )
         .route(
             "/download-models-removal.js",
@@ -114,6 +133,7 @@ where
             get(download_models_selection_script),
         )
         .route("/overview.js", get(overview_script))
+        .route("/overview-next-step.js", get(overview_next_step_script))
         .route("/overview.css", get(overview_stylesheet))
         .route("/neural-engine-panel.js", get(neural_engine_panel_script))
         .route("/memory-control.js", get(memory_control_script))
@@ -180,6 +200,24 @@ pub(crate) async fn download_models_selection_script() -> Response {
     embedded_text_response(DOWNLOAD_MODELS_SELECTION_JS, JAVASCRIPT_CONTENT_TYPE)
 }
 
+/// `GET /download-models-suggestions.js` — the Models page's suggestions for
+/// this Mac and the folding of a model's builds under its lead.
+pub(crate) async fn download_models_suggestions_script() -> Response {
+    embedded_text_response(DOWNLOAD_MODELS_SUGGESTIONS_JS, JAVASCRIPT_CONTENT_TYPE)
+}
+
+/// `GET /download-models-installed-rows.js` — the rows of On this Mac, with
+/// their column names, status and ⋯ menu.
+pub(crate) async fn download_models_installed_rows_script() -> Response {
+    embedded_text_response(DOWNLOAD_MODELS_INSTALLED_ROWS_JS, JAVASCRIPT_CONTENT_TYPE)
+}
+
+/// `GET /download-models-voice-sample.js` — plays a read-aloud model's
+/// sample from its speaker icon on On this Mac.
+pub(crate) async fn download_models_voice_sample_script() -> Response {
+    embedded_text_response(DOWNLOAD_MODELS_VOICE_SAMPLE_JS, JAVASCRIPT_CONTENT_TYPE)
+}
+
 /// `GET /download-models-queue.js` — the Models page's download list.
 pub(crate) async fn download_models_queue_script() -> Response {
     embedded_text_response(DOWNLOAD_MODELS_QUEUE_JS, JAVASCRIPT_CONTENT_TYPE)
@@ -187,6 +225,12 @@ pub(crate) async fn download_models_queue_script() -> Response {
 
 pub(crate) async fn overview_script() -> Response {
     embedded_text_response(OVERVIEW_JS, JAVASCRIPT_CONTENT_TYPE)
+}
+
+/// `GET /overview-next-step.js` — Home's one next step, the engine's first
+/// model suggestion.
+pub(crate) async fn overview_next_step_script() -> Response {
+    embedded_text_response(OVERVIEW_NEXT_STEP_JS, JAVASCRIPT_CONTENT_TYPE)
 }
 
 /// `GET /overview.css` — the Overview view's layout and colours.

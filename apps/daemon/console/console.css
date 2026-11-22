@@ -222,6 +222,15 @@ body[data-application-channel="development"] #application-channel { color: var(-
 /* An inset shadow rather than a border, so the underline cannot shift the tab. */
 .navigation-button[aria-current="page"] { background: var(--sunk); color: var(--text); font-weight: var(--weight-strong); }
 .navigation-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* The second row of tabs inside Settings and Under the hood. */
+.observatory-subnavigation { display: flex; gap: 4px; margin-bottom: 18px; border-bottom: 1px solid var(--line); }
+.observatory-subnavigation[hidden] { display: none; }
+.subnavigation-button { padding: 8px 14px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--text-2, var(--text)); cursor: pointer; font-size: var(--text-md); }
+.subnavigation-button[hidden] { display: none; }
+.subnavigation-button[aria-current="page"] { border-bottom-color: var(--accent); color: var(--text); font-weight: var(--weight-strong); }
+.subnavigation-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.header-open-chat { align-self: center; text-decoration: none; }
+.header-open-chat:not([href]) { display: none; }
 
 .observatory-workspace {
     min-width: 0;

@@ -95,49 +95,10 @@ test("should_replace_the_first_visit_question_with_on_this_mac_once_a_model_is_h
     assert.deepEqual(textsOfClass(catalogContainer, "download-models-installed-name"), ["Talker"]);
 });
 
-test("should_show_everyday_sections_by_default_and_offer_the_rest_behind_show_more", () => {
-    const { downloadModelsDocument } = renderModelsPage([
-        entryNamed("Talker"),
-        entryNamed("Coder", { role: "coding" }),
-        entryNamed("Painter", { role: "image_generation" }),
-        entryNamed("Helper", { role: "helper" }),
-        entryNamed("Early", { experimental: true }),
-        entryNamed("Old", { retiring: true })
-    ]);
-    const catalogContainer = downloadModelsDocument.catalogContainer;
-    const sectionTitles = findRenderedElementsByClass(catalogContainer, "download-models-group-heading")
-        .map((groupHeading) => groupHeading.children[0].textContent);
-
-    assert.deepEqual(sectionTitles, ["Chat", "Pictures"]);
-    assert.deepEqual(textsOfClass(catalogContainer, "download-models-row-name").slice(0, 2), ["Talker", "Coder"]);
-    assert.deepEqual(textsOfClass(catalogContainer, "download-models-chip"), ["All", "Chat", "Pictures", "More"]);
-    assert.deepEqual(
-        textsOfClass(catalogContainer, "download-models-show-more"),
-        ["Show 3 more: helpers, experimental builds and models leaving soon"]
-    );
-});
-
-test("should_show_only_the_hidden_sections_after_show_more_is_clicked", () => {
-    const { downloadModelsDocument } = renderModelsPage([
-        entryNamed("Talker"),
-        entryNamed("Early-coder", { role: "coding", experimental: true }),
-        entryNamed("Old", { retiring: true, experimental: true })
-    ]);
-    const catalogContainer = downloadModelsDocument.catalogContainer;
-
-    clickRendered(findRenderedElementsByClass(catalogContainer, "download-models-show-more")[0]);
-
-    const sectionTitles = findRenderedElementsByClass(catalogContainer, "download-models-group-heading")
-        .map((groupHeading) => groupHeading.children[0].textContent);
-    assert.deepEqual(sectionTitles, ["Experimental", "Leaving soon"]);
-    assert.deepEqual(textsOfClass(catalogContainer, "download-models-chip-pressed"), ["More"]);
-    assert.deepEqual(findRenderedElementsByClass(catalogContainer, "download-models-show-more"), []);
-});
-
 test("should_press_exactly_one_chip_and_none_while_a_search_spans_every_section", () => {
     const filtered = renderModelsPage([entryNamed("Talker")], `downloadModelsActiveFilter = "chat";`);
     const searching = renderModelsPage(
-        [entryNamed("Talker"), entryNamed("Old", { retiring: true })],
+        [entryNamed("Talker"), entryNamed("Old", { experimental: true })],
         `downloadModelsActiveFilter = "chat"; downloadModelsSearchQuery = "old";`
     );
 
@@ -145,7 +106,7 @@ test("should_press_exactly_one_chip_and_none_while_a_search_spans_every_section"
     assert.deepEqual(textsOfClass(searching.downloadModelsDocument.catalogContainer, "download-models-chip-pressed"), []);
     assert.deepEqual(
         textsOfClass(searching.downloadModelsDocument.catalogContainer, "download-models-row-name"), ["Old"],
-        "the search reaches a model behind More"
+        "the search reaches a model in another section"
     );
 });
 
@@ -246,7 +207,7 @@ test("should_show_get_and_no_list_when_nothing_is_downloading_or_listed", () => 
     assert.deepEqual(findRenderedElementsByClass(catalogContainer, "download-models-queue"), []);
 });
 
-test("should_draw_the_speed_meter_with_fewer_filled_bars_for_a_model_above_the_ceiling", () => {
+test("should_show_memory_use_for_a_model_that_fits_and_words_for_one_that_does_not", () => {
     const { downloadModelsDocument } = renderModelsPage(
         [
             entryNamed("Small", { approximate_memory_bytes: 4 * GIGABYTE }),
@@ -256,14 +217,42 @@ test("should_draw_the_speed_meter_with_fewer_filled_bars_for_a_model_above_the_c
         `downloadModelsServingCeilingBytes = ${8 * GIGABYTE};`
     );
     const catalogContainer = downloadModelsDocument.catalogContainer;
-    const filledBarCounts = findRenderedElementsByClass(catalogContainer, "download-models-fit")
-        .map((fitMeter) => findRenderedElementsByClass(fitMeter, "download-models-fit-bar-filled").length);
 
-    assert.deepEqual(filledBarCounts, [3, 2, 1]);
     assert.deepEqual(
         textsOfClass(catalogContainer, "download-models-fit-label"),
-        ["Runs smoothly", "Runs, but slower", "Very slow here"]
+        ["4.0 of 8.0 GB memory", "Runs, but slower", "Very slow here"]
     );
+    assert.deepEqual(
+        findRenderedElementsByClass(catalogContainer, "download-models-fit-bar-fill").map((barFill) => barFill.style.width),
+        ["50%", "100%", "100%"]
+    );
+});
+
+test("should_put_free_disk_space_beside_the_memory_figure_when_the_daemon_reports_it", () => {
+    const { downloadModelsDocument } = renderModelsPage(
+        [entryNamed("Talker")],
+        `downloadModelsServingCeilingBytes = ${36.5 * GIGABYTE};
+         downloadModelsCatalogDocument = { ...catalogDocument, models_directory_free_bytes: ${Math.round(362.9 * GIGABYTE)} };`
+    );
+
+    assert.deepEqual(
+        textsOfClass(downloadModelsDocument.catalogContainer, "download-models-section-meta"),
+        ["This Mac gives models 36.5 GB of memory · 362 GB free for downloads"]
+    );
+});
+
+test("should_word_free_disk_space_alone_and_leave_out_a_malformed_figure", () => {
+    const scriptContext = createDownloadModelsContext();
+    const metaText = (servingCeilingBytes, freeBytesJson) => vm.runInContext(
+        `downloadModelsCatalogDocument = { models_directory_free_bytes: ${freeBytesJson} };
+         downloadModelsAddHeadingMetaText(${servingCeilingBytes}, downloadModelsFreeDiskBytes())`,
+        scriptContext
+    );
+
+    assert.equal(metaText(null, 0), "0 GB free for downloads", "a full disk is still a figure");
+    assert.equal(metaText(null, "-1"), "", "a negative figure is no figure");
+    assert.equal(metaText(null, '"a lot"'), "");
+    assert.equal(metaText(8 * GIGABYTE, "undefined"), "This Mac gives models 8.0 GB of memory");
 });
 
 test("should_show_no_speed_meter_and_no_memory_figure_while_the_ceiling_is_unknown", () => {
@@ -359,4 +348,42 @@ test("should_treat_only_a_configured_maximum_below_the_machine_as_a_user_limit",
         false,
         "without the machine ceiling nothing can be claimed"
     );
+});
+
+test("should_list_every_kind_of_model_under_all_with_a_chip_each", () => {
+    const { downloadModelsDocument } = renderModelsPage([
+        entryNamed("Talker"),
+        entryNamed("Coder", { role: "coding" }),
+        entryNamed("Painter", { role: "image_generation" }),
+        entryNamed("Reader", { role: "speech" }),
+        entryNamed("Decider", { role: "decision" }),
+        entryNamed("Searcher", { role: "helper" }),
+        entryNamed("Early", { experimental: true }),
+        entryNamed("Old")
+    ]);
+    const catalogContainer = downloadModelsDocument.catalogContainer;
+    const sectionTitles = findRenderedElementsByClass(catalogContainer, "download-models-group-heading")
+        .map((groupHeading) => groupHeading.children[0].textContent);
+
+    assert.deepEqual(sectionTitles, ["Chat", "Pictures", "Read aloud", "Decisions", "Text search", "Experimental"]);
+    assert.deepEqual(
+        textsOfClass(catalogContainer, "download-models-chip"),
+        ["All", "Chat", "Pictures", "Read aloud", "Decisions", "Text search", "Experimental"]
+    );
+    assert.deepEqual(findRenderedElementsByClass(catalogContainer, "download-models-show-more"), [], "nothing hides behind More");
+});
+
+test("should_show_one_section_for_its_chip_and_fall_back_to_all_when_that_section_is_empty", () => {
+    const decisionsOnly = renderModelsPage(
+        [entryNamed("Talker"), entryNamed("Decider", { role: "decision" })],
+        `downloadModelsActiveFilter = "decisions";`
+    );
+    const emptiedSection = renderModelsPage([entryNamed("Talker")], `downloadModelsActiveFilter = "decisions";`);
+    const sectionTitlesOf = (rendered) => findRenderedElementsByClass(rendered.downloadModelsDocument.catalogContainer, "download-models-group-heading")
+        .map((groupHeading) => groupHeading.children[0].textContent);
+
+    assert.deepEqual(sectionTitlesOf(decisionsOnly), ["Decisions"]);
+    assert.deepEqual(textsOfClass(decisionsOnly.downloadModelsDocument.catalogContainer, "download-models-chip-pressed"), ["Decisions"]);
+    assert.deepEqual(sectionTitlesOf(emptiedSection), ["Chat"]);
+    assert.deepEqual(textsOfClass(emptiedSection.downloadModelsDocument.catalogContainer, "download-models-chip-pressed"), ["All"]);
 });

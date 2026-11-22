@@ -145,14 +145,28 @@ async fn should_serve_the_embedded_linked_model_javascript() {
     .expect("the linked-model script journey must finish within five seconds");
 }
 
-// The page names the download list's script and the selection guard in tags
-// of their own, so a missing route would leave Get unable to add a model to
-// the list, or text unselectable while a download runs.
+// The page names the download list's script, the suggestions and the
+// selection guard in tags of their own, so a missing route would leave Get
+// unable to add a model to the list, the page without its suggestions and
+// folded builds, or text unselectable while a download runs.
 #[tokio::test]
 async fn should_serve_the_embedded_download_list_and_selection_javascript() {
     timeout(Duration::from_secs(5), async {
         for (script_path, expected_function) in [
             ("/download-models-queue.js", "startDownloadModelsDownload"),
+            (
+                "/download-models-suggestions.js",
+                "downloadModelsSuggestionCards",
+            ),
+            ("/overview-next-step.js", "renderOverviewNextStep"),
+            (
+                "/download-models-installed-rows.js",
+                "createDownloadModelsInstalledLine",
+            ),
+            (
+                "/download-models-voice-sample.js",
+                "toggleDownloadModelsVoiceSample",
+            ),
             (
                 "/download-models-selection.js",
                 "isDownloadModelsSelectionHeld",

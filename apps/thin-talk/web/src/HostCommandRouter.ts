@@ -1,4 +1,4 @@
-import { HostCommand, parseHostCommand, validDraftText } from "./HostCommand";
+import { HostCommand, parseHostCommand, validChatModelID, validDraftText } from "./HostCommand";
 import { validTitlebarInset } from "./WindowChrome";
 
 /** What each host command does; boot.ts supplies these from the controller and
@@ -14,6 +14,7 @@ export interface HostCommandHandlers {
   openSettings(): void;
   toggleAstro(): void;
   fillDraft(draftText: string): void;
+  selectChatModel(modelID: string): void;
   setTitlebarInset(titlebarInsetPixels: number): void;
 }
 
@@ -21,7 +22,7 @@ export interface HostCommandHandlers {
  * Receives commands from the native menu bar and toolbar.
  *
  * The host calls `window.__thintalkCommands.run({name})`; `setTitlebarInset`
- * also carries `points`, and `fillDraft` carries `text`. The return value says whether the command was
+ * also carries `points`, `fillDraft` carries `text`, and `selectChatModel` carries `model`. The return value says whether the command was
  * understood, which the tests check; the host does not read it.
  */
 export class HostCommandRouter {
@@ -56,11 +57,19 @@ export class HostCommandRouter {
       this.handlers.fillDraft(draftText);
       return true;
     }
+    if (hostCommand === HostCommand.SELECT_CHAT_MODEL) {
+      const modelID = validChatModelID((payload as Record<string, unknown>)["model"]);
+      if (modelID === null) {
+        return false;
+      }
+      this.handlers.selectChatModel(modelID);
+      return true;
+    }
     this.dispatch(hostCommand);
     return true;
   }
 
-  private dispatch(hostCommand: Exclude<HostCommand, HostCommand.SET_TITLEBAR_INSET | HostCommand.FILL_DRAFT>): void {
+  private dispatch(hostCommand: Exclude<HostCommand, HostCommand.SET_TITLEBAR_INSET | HostCommand.FILL_DRAFT | HostCommand.SELECT_CHAT_MODEL>): void {
     switch (hostCommand) {
       case HostCommand.NEW_CHAT:
         this.handlers.newChat();
