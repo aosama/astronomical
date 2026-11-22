@@ -177,6 +177,12 @@ fn should_name_the_macos_build_and_the_mac_in_an_environment() {
 
 #[test]
 fn should_describe_this_process_environment_once() {
+    if test_harness::skip_without(
+        test_harness::PlatformRequirement::MacosSystemTools,
+        "should_describe_this_process_environment_once",
+    ) {
+        return;
+    }
     let placement_environment =
         crate::qwen3_5_resident::host_description::current_host_environment()
             .expect("macOS describes itself");

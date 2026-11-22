@@ -203,6 +203,12 @@ fn narrowed_to_float16(runtime: &MlxRuntime, bfloat16_activation: &MlxArray) -> 
 #[test]
 #[serial]
 fn should_match_the_two_step_combination_bit_for_bit_in_the_resident_layer_shape() {
+    if test_harness::skip_without(
+        test_harness::PlatformRequirement::MetalGpu,
+        "should_match_the_two_step_combination_bit_for_bit_in_the_resident_layer_shape",
+    ) {
+        return;
+    }
     let runtime = test_runtime();
     for seed in [3_u64, 17, 2_026] {
         let arrays =
@@ -217,6 +223,12 @@ fn should_match_the_two_step_combination_bit_for_bit_in_the_resident_layer_shape
 #[test]
 #[serial]
 fn should_match_the_uncompiled_combination_bit_for_bit() {
+    if test_harness::skip_without(
+        test_harness::PlatformRequirement::MetalGpu,
+        "should_match_the_uncompiled_combination_bit_for_bit",
+    ) {
+        return;
+    }
     let runtime = test_runtime();
     let arrays = random_combination_arrays(&runtime, &[32], ORNITH_35B_A3B_HIDDEN_DIMENSION, 41);
     let uncompiled_output = combine_sparse_and_shared_experts(
@@ -236,6 +248,12 @@ fn should_match_the_uncompiled_combination_bit_for_bit() {
 #[test]
 #[serial]
 fn should_match_bit_for_bit_for_one_token_and_widths_off_the_threadgroup_grid() {
+    if test_harness::skip_without(
+        test_harness::PlatformRequirement::MetalGpu,
+        "should_match_bit_for_bit_for_one_token_and_widths_off_the_threadgroup_grid",
+    ) {
+        return;
+    }
     let runtime = test_runtime();
     for (token_count, output_dimension) in [(1, ORNITH_35B_A3B_HIDDEN_DIMENSION), (3, 200), (5, 1)]
     {
@@ -251,6 +269,12 @@ fn should_match_bit_for_bit_for_one_token_and_widths_off_the_threadgroup_grid() 
 #[test]
 #[serial]
 fn should_match_bit_for_bit_at_zero_saturated_and_infinite_gate_logits() {
+    if test_harness::skip_without(
+        test_harness::PlatformRequirement::MetalGpu,
+        "should_match_bit_for_bit_at_zero_saturated_and_infinite_gate_logits",
+    ) {
+        return;
+    }
     let runtime = test_runtime();
     let mut arrays = random_combination_arrays(&runtime, &[8], 64, 11);
     let edge_gate_logits = runtime
@@ -277,6 +301,12 @@ fn should_match_bit_for_bit_at_zero_saturated_and_infinite_gate_logits() {
 #[test]
 #[serial]
 fn should_match_bit_for_bit_with_bfloat16_router_scores() {
+    if test_harness::skip_without(
+        test_harness::PlatformRequirement::MetalGpu,
+        "should_match_bit_for_bit_with_bfloat16_router_scores",
+    ) {
+        return;
+    }
     let runtime = test_runtime();
     let mut arrays = random_combination_arrays(&runtime, &[1, 16], 256, 23);
     arrays.selected_scores = runtime

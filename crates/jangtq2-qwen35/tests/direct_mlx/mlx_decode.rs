@@ -27,6 +27,12 @@ fn reference_golden_u32_values(key: &str) -> Vec<u32> {
 
 #[test]
 fn should_decode_a_multi_expert_page_identically_to_per_expert_pages() {
+    if test_harness::skip_without(
+        test_harness::PlatformRequirement::MetalGpu,
+        "should_decode_a_multi_expert_page_identically_to_per_expert_pages",
+    ) {
+        return;
+    }
     let runtime = contract_runtime();
     // Forty experts on a 3-bit, 64-wide page: every row of the page is
     // decoded by its own threads, and a per-expert reference decode pins
@@ -112,6 +118,12 @@ fn should_decode_a_multi_expert_page_identically_to_per_expert_pages() {
 
 #[test]
 fn should_decode_reference_packed_three_bit_codes_on_mlx() {
+    if test_harness::skip_without(
+        test_harness::PlatformRequirement::MetalGpu,
+        "should_decode_reference_packed_three_bit_codes_on_mlx",
+    ) {
+        return;
+    }
     let runtime = contract_runtime();
     let packed_words = reference_golden_u32_values("pack3_random_words");
     let reference_codes = reference_golden_u32_values("pack3_random_codes");

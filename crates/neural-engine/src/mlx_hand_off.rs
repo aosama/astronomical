@@ -107,14 +107,30 @@ pub fn write_prepared_input(
     }
     // SAFETY: the check above and the caller's evaluation mean the storage holds
     // `element_count` fp16 values, alive and unchanged for this borrow.
-    let fp16_activations = unsafe {
-        std::slice::from_raw_parts(
-            raw::mlx_array_data_float16(prepared.raw()).cast::<u16>(),
-            prepared.element_count(),
-        )
-    };
+    let fp16_activations =
+        unsafe { std::slice::from_raw_parts(float16_storage(prepared), prepared.element_count()) };
     program.write_activations(fp16_activations)?;
     Ok(())
+}
+
+/// The address of an evaluated float16 array's storage, as raw 16-bit values.
+///
+/// MLX-C declares its float16 data accessor for ARM only. Elsewhere the
+/// unsigned 16-bit accessor returns the same storage address without any
+/// conversion, so both read exactly the bytes MLX holds.
+///
+/// # Safety
+///
+/// The array must be evaluated and hold float16 values.
+unsafe fn float16_storage(float16_array: &MlxArray) -> *const u16 {
+    // SAFETY: the caller guarantees an evaluated float16 array; the accessor
+    // only returns the address of its storage.
+    #[cfg(target_arch = "aarch64")]
+    let storage_address = unsafe { raw::mlx_array_data_float16(float16_array.raw()).cast::<u16>() };
+    // SAFETY: as above; `data<uint16_t>` reinterprets the same storage.
+    #[cfg(not(target_arch = "aarch64"))]
+    let storage_address = unsafe { raw::mlx_array_data_uint16(float16_array.raw()) };
+    storage_address
 }
 
 /// The surface outlives the array, so MLX has nothing to free here.

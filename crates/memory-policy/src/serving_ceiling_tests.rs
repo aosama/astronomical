@@ -1,6 +1,7 @@
 use crate::serving_ceiling::{
     effective_mlx_memory_ceiling_after_wired_claim, effective_mlx_memory_ceiling_bytes,
-    floor_raise_limit_bytes, floor_raised_ceiling_bytes, plannable_wired_residency_bytes,
+    floor_raise_limit_bytes, floor_raised_ceiling_bytes, physical_ram_bytes_from_linux_meminfo,
+    plannable_wired_residency_bytes,
 };
 
 /// The claim the 48 GB incident machine received on 2026-10-24.
@@ -223,6 +224,42 @@ fn should_raise_on_each_machine_size_only_when_its_own_memory_binds() {
             ),
             expected_ceiling,
             "{sticker_gigabytes} GB Mac with a 12 GB floor"
+        );
+    }
+}
+
+#[test]
+fn should_read_the_physical_memory_size_from_linux_meminfo() {
+    let meminfo_text = "MemTotal:       15727332 kB\nMemFree:         1048576 kB\n";
+    assert_eq!(
+        physical_ram_bytes_from_linux_meminfo(meminfo_text),
+        Some(15_727_332 * 1024)
+    );
+}
+
+#[test]
+fn should_find_the_total_line_wherever_it_appears() {
+    let meminfo_text = "MemFree:         1048576 kB\nMemTotal:       2 kB\n";
+    assert_eq!(
+        physical_ram_bytes_from_linux_meminfo(meminfo_text),
+        Some(2048)
+    );
+}
+
+#[test]
+fn should_refuse_a_missing_zero_unitless_or_overflowing_total() {
+    for unreadable_meminfo in [
+        "",
+        "MemFree: 1048576 kB\n",
+        "MemTotal: 0 kB\n",
+        "MemTotal: 1048576\n",
+        "MemTotal: lots kB\n",
+        "MemTotal: 18446744073709551615 kB\n",
+    ] {
+        assert_eq!(
+            physical_ram_bytes_from_linux_meminfo(unreadable_meminfo),
+            None,
+            "{unreadable_meminfo:?} must not produce a ceiling"
         );
     }
 }

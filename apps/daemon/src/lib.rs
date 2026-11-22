@@ -126,7 +126,7 @@ pub use serving::image_generation_executor::{
 pub use serving::serving_session_snapshot::{CompletedRequestWork, ServingSessionSnapshot};
 pub use serving::speech_executor::{SpeechExecutionError, SpeechOutput, SpeechTimeouts};
 pub use shutdown_control::ShutdownController;
-pub use system_telemetry::parse_macos_memory_pressure_level;
+pub use system_telemetry::{parse_linux_memory_pressure_level, parse_macos_memory_pressure_level};
 pub use worker::astro_ssd_prompt_cache_clear::AstroSsdPromptCacheClearOutcome;
 pub use worker::control_error::WorkerControlError;
 pub use worker::handle::{GenerationQueueDepth, WorkerHandle};

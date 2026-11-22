@@ -240,9 +240,29 @@ fn extract_named_binary(
         )
         .map_err(|error| format!("chmod failed: {error}"))?;
     }
-    std::fs::rename(&matching_binaries[0], destination_path)
+    move_into_place(&matching_binaries[0], destination_path)
+}
+
+/// Moves the extracted binary into the prefix. A rename is atomic, but the
+/// scratch directory lives under the system temporary folder, which on many
+/// Linux systems is a separate filesystem (tmpfs) from the prefix, where a
+/// rename fails with "Invalid cross-device link". The binary is then copied
+/// (with its permissions) and the scratch copy removed.
+pub(crate) fn move_into_place(source_path: &Path, destination_path: &Path) -> Result<(), String> {
+    match std::fs::rename(source_path, destination_path) {
+        Ok(()) => Ok(()),
+        Err(rename_error) if rename_error.kind() == std::io::ErrorKind::CrossesDevices => {
+            copy_then_remove(source_path, destination_path)
+        }
+        Err(rename_error) => Err(format!("move into place failed: {rename_error}")),
+    }
+}
+
+pub(crate) fn copy_then_remove(source_path: &Path, destination_path: &Path) -> Result<(), String> {
+    std::fs::copy(source_path, destination_path)
         .map_err(|error| format!("move into place failed: {error}"))?;
-    Ok(())
+    std::fs::remove_file(source_path)
+        .map_err(|error| format!("removing the extracted copy failed: {error}"))
 }
 
 fn install_pinned_binary(

@@ -87,7 +87,9 @@ pub use mlx_runtime_types::{
 };
 
 #[cfg(feature = "mlx")]
-pub use mlx_runtime::{MlxRuntime, classify_mlx_error, evaluated_array_storage_mut};
+pub use mlx_runtime::{
+    MlxRuntime, classify_mlx_error, evaluated_array_storage_mut, platform_bindings_context,
+};
 #[cfg(all(feature = "mlx", target_os = "macos"))]
 pub use mlx_runtime::{
     compiled_metallib_path, maximum_recommended_gpu_working_set_size_bytes, validate_metallib_path,

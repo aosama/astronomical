@@ -38,7 +38,9 @@ use runtime_integration::{
     MlxMemoryLimits, MlxRuntime, maximum_recommended_gpu_working_set_size_bytes,
 };
 use serial_test::serial;
-use test_harness::test_run::{TestRunConfiguration, TestRunContext};
+use test_harness::test_run::TestRunContext;
+
+use super::wired_claim_probe_permission::require_probe_permission;
 
 const SYSCTL_EXECUTABLE_PATH: &str = "/usr/sbin/sysctl";
 const PROBE_STEP_BYTES: usize = 512 * 1024 * 1024;
@@ -166,28 +168,6 @@ fn walk_reached_target(walk_outcome: &WalkOutcome, target_bytes: usize) -> bool 
         .healthy_wired_bytes
         .saturating_add(PROBE_STEP_BYTES)
         > target_bytes
-}
-
-fn require_probe_permission(configuration: &TestRunConfiguration) -> Result<(), &'static str> {
-    if configuration.allow_large_wired_memory_probe {
-        Ok(())
-    } else {
-        Err("set allow_large_wired_memory_probe to true in the test-run configuration")
-    }
-}
-
-#[test]
-fn should_reject_the_wired_claim_probe_without_explicit_permission() {
-    assert!(require_probe_permission(&TestRunConfiguration::default()).is_err());
-}
-
-#[test]
-fn should_accept_explicit_permission_for_the_wired_claim_probe() {
-    let configuration = TestRunConfiguration {
-        allow_large_wired_memory_probe: true,
-        ..Default::default()
-    };
-    assert_eq!(require_probe_permission(&configuration), Ok(()));
 }
 
 fn read_sysctl_integer(sysctl_key: &str) -> Option<u64> {

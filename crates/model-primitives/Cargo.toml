@@ -34,6 +34,8 @@ thiserror.workspace = true
 tempfile = { version = "=3.27.0", optional = true }
 
 [dev-dependencies]
+# Skips the tests of Astronomical's own Metal kernels where there is no Metal.
+test-harness = { path = "../test-harness" }
 # start_paused virtual time for #[tokio::test(start_paused = true)] bodies.
 tokio = { workspace = true, features = ["test-util"] }
 # The GPU tests sample the process-global MLX allocator, so they serialize.

@@ -5,6 +5,7 @@
 
 use std::io::Write;
 use std::path::Path;
+#[cfg(target_os = "macos")]
 use std::process::Command;
 
 use memory_policy::serving_ceiling::machine_ceiling_from_physical_ram_bytes;
@@ -23,8 +24,12 @@ use super::{
     QuantizeReferenceArgument, StandardErrorProgressReporter,
 };
 
+#[cfg(target_os = "macos")]
 const PHYSICAL_MEMORY_SIZE_SYSCTL_KEY: &str = "hw.memsize";
+#[cfg(target_os = "macos")]
 const SYSCTL_EXECUTABLE_PATH: &str = "/usr/sbin/sysctl";
+#[cfg(target_os = "linux")]
+const LINUX_MEMINFO_PATH: &str = "/proc/meminfo";
 
 /// The repository's reproducibility rule: probes prefill in 2,048-token
 /// chunks so a sweep measures the same graph a served request runs.
@@ -127,6 +132,7 @@ fn pipeline_request_from(
 }
 
 /// `hw.memsize`, the one input the machine ceiling is computed from.
+#[cfg(target_os = "macos")]
 pub(super) fn sample_physical_ram_bytes() -> Result<u64, QuantizeError> {
     let sysctl_output = match Command::new(SYSCTL_EXECUTABLE_PATH)
         .arg("-n")
@@ -148,6 +154,16 @@ pub(super) fn sample_physical_ram_bytes() -> Result<u64, QuantizeError> {
             "hw.memsize is not an unsigned integer",
         )),
     }
+}
+
+/// `MemTotal` from `/proc/meminfo`, Linux's physical memory size and the one
+/// input the machine ceiling is computed from.
+#[cfg(target_os = "linux")]
+pub(super) fn sample_physical_ram_bytes() -> Result<u64, QuantizeError> {
+    let meminfo_text = std::fs::read_to_string(LINUX_MEMINFO_PATH)
+        .map_err(|read_error| physical_memory_unreadable(&read_error.to_string()))?;
+    memory_policy::serving_ceiling::physical_ram_bytes_from_linux_meminfo(&meminfo_text)
+        .ok_or_else(|| physical_memory_unreadable("/proc/meminfo has no readable MemTotal line"))
 }
 
 /// The ceiling as both the active limit and the MLX buffer-cache limit, the

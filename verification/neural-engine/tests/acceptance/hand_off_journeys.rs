@@ -82,8 +82,13 @@ fn surface_stays_mapped(runtime: &MlxRuntime, projection: &CoreMlProgram) -> boo
         .evaluate_arrays(&[&surface_array])
         .expect("the surface array evaluates");
     // SAFETY: the array is evaluated and live; only its address is compared.
-    let array_values = unsafe { raw::mlx_array_data_float16(surface_array.raw()) };
-    std::ptr::eq(array_values.cast::<u16>(), fp16_values)
+    // MLX-C declares the float16 accessor for ARM only; elsewhere the uint16
+    // accessor returns the same storage address without conversion.
+    #[cfg(target_arch = "aarch64")]
+    let array_values = unsafe { raw::mlx_array_data_float16(surface_array.raw()) }.cast::<u16>();
+    #[cfg(not(target_arch = "aarch64"))]
+    let array_values = unsafe { raw::mlx_array_data_uint16(surface_array.raw()) };
+    std::ptr::eq(array_values, fp16_values)
 }
 
 fn run_hand_off_call(

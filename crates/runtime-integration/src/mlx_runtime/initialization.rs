@@ -88,7 +88,38 @@ impl MlxRuntime {
 /// counted. If creation fails no runtime will exist to release that count on
 /// drop, so it is released here before the error returns.
 fn create_bindings_context_for_admitted_limits() -> Result<MlxBindingsContext, MlxRuntimeError> {
-    MlxBindingsContext::new().map_err(release_admitted_limits_on_failure)
+    platform_bindings_context().map_err(release_admitted_limits_on_failure)
+}
+
+/// A bindings context on the device this build of MLX computes on: the GPU
+/// stream on macOS, exactly as before, and elsewhere the GPU when MLX has
+/// one or the CPU when it has none. Every caller that builds its own MLX
+/// graph context goes through this, so no graph asks a GPU-less MLX for a
+/// GPU stream.
+///
+/// # Errors
+///
+/// Returns the MLX description when the stream cannot be acquired.
+#[cfg(target_os = "macos")]
+pub fn platform_bindings_context() -> Result<MlxBindingsContext, mlx_bridge::MlxCError> {
+    MlxBindingsContext::new()
+}
+
+/// Elsewhere MLX may have been built with a GPU backend (CUDA) or with none
+/// (the CPU backend Linux builds today, issue #2424). The GPU stream is used
+/// whenever MLX has a GPU; otherwise the runtime runs on MLX's CPU stream,
+/// because asking a GPU-less MLX for its GPU stream fails.
+///
+/// # Errors
+///
+/// Returns the MLX description when the stream cannot be acquired.
+#[cfg(not(target_os = "macos"))]
+pub fn platform_bindings_context() -> Result<MlxBindingsContext, mlx_bridge::MlxCError> {
+    if mlx_bridge::metal_is_available()? || mlx_bridge::cuda_is_available()? {
+        MlxBindingsContext::new()
+    } else {
+        MlxBindingsContext::on_cpu()
+    }
 }
 
 fn release_admitted_limits_on_failure(context_error: mlx_bridge::MlxCError) -> MlxRuntimeError {

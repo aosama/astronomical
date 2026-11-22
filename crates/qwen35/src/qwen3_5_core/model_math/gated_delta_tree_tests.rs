@@ -143,6 +143,12 @@ fn sequence_outputs(runtime: &MlxRuntime, inputs: &RecurrenceInputs) -> MlxArray
 #[test]
 #[serial]
 fn should_match_the_sequence_kernel_bit_for_bit_on_a_chain() {
+    if test_harness::skip_without(
+        test_harness::PlatformRequirement::MetalGpu,
+        "should_match_the_sequence_kernel_bit_for_bit_on_a_chain",
+    ) {
+        return;
+    }
     let runtime = test_runtime();
     let inputs = recurrence_inputs(&runtime, 6, 3);
     let chain = [None, Some(0), Some(1), Some(2), Some(3), Some(4)];
@@ -155,6 +161,12 @@ fn should_match_the_sequence_kernel_bit_for_bit_on_a_chain() {
 #[test]
 #[serial]
 fn should_give_every_branch_row_what_its_chain_alone_would_give() {
+    if test_harness::skip_without(
+        test_harness::PlatformRequirement::MetalGpu,
+        "should_give_every_branch_row_what_its_chain_alone_would_give",
+    ) {
+        return;
+    }
     let runtime = test_runtime();
     let inputs = recurrence_inputs(&runtime, 7, 5);
     // Two branches under the anchor, one three deep, and a sibling pair.
@@ -187,6 +199,12 @@ fn should_give_every_branch_row_what_its_chain_alone_would_give() {
 #[test]
 #[serial]
 fn should_give_a_copied_chain_below_a_branch_what_its_chain_alone_gives() {
+    if test_harness::skip_without(
+        test_harness::PlatformRequirement::MetalGpu,
+        "should_give_a_copied_chain_below_a_branch_what_its_chain_alone_gives",
+    ) {
+        return;
+    }
     let runtime = test_runtime();
     let inputs = recurrence_inputs(&runtime, 8, 7);
     // A small tree, then a copied run continuing row 3 for four rows.
@@ -231,6 +249,12 @@ fn should_pad_every_chain_to_the_longest_and_list_it_from_the_anchor() {
 #[test]
 #[serial]
 fn should_replay_kept_rows_to_the_sequence_kernels_final_state_bit_for_bit() {
+    if test_harness::skip_without(
+        test_harness::PlatformRequirement::MetalGpu,
+        "should_replay_kept_rows_to_the_sequence_kernels_final_state_bit_for_bit",
+    ) {
+        return;
+    }
     let runtime = test_runtime();
     let inputs = recurrence_inputs(&runtime, 7, 11);
     let replay_kernel = qwen3_5_gated_delta_replay_kernel().expect("the replay kernel declares");

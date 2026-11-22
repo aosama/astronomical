@@ -6,6 +6,7 @@
 
 use std::path::Path;
 
+#[cfg(target_os = "macos")]
 use super::build_identity::BuildIdentity;
 use super::bundle_check::plist_identity_problems;
 use super::channel_profile::{Channel, ChannelProfile};
@@ -31,6 +32,8 @@ fn arguments(argument_words: &[&str]) -> Vec<String> {
     owned_arguments
 }
 
+/// Shared with the bundle fixtures, which assemble with a macOS tool.
+#[cfg(target_os = "macos")]
 pub(super) fn release_identity(is_dirty: bool) -> BuildIdentity {
     BuildIdentity {
         application_version: "0.2.88".to_owned(),

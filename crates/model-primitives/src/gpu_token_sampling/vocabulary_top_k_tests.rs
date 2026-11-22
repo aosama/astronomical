@@ -29,6 +29,12 @@ fn host_top_k(values: &[f32], vocabulary_size: usize, kept_count: usize) -> Vec<
 #[test]
 #[serial]
 fn should_find_each_rows_best_tokens_in_order_as_a_full_sort_does() {
+    if test_harness::skip_without(
+        test_harness::PlatformRequirement::MetalGpu,
+        "should_find_each_rows_best_tokens_in_order_as_a_full_sort_does",
+    ) {
+        return;
+    }
     let runtime = test_runtime();
     let key = runtime.random_key(3).expect("a key builds");
     // A real vocabulary width with bf16 logits, which tie often.

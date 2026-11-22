@@ -11,6 +11,7 @@
 // and nothing unsafe leaves the file.
 #![allow(unsafe_code)]
 
+#[cfg(target_os = "macos")]
 use std::sync::OnceLock;
 
 /// One reading of the system's wired memory beside the kernel's wire limit.
@@ -22,6 +23,7 @@ pub struct MacosWiredMemoryReading {
 
 /// Reads the system's wired memory now. `None` when the kernel refuses
 /// either figure; the caller then leaves its plan as it is.
+#[cfg(target_os = "macos")]
 pub fn read_macos_wired_memory() -> Option<MacosWiredMemoryReading> {
     Some(MacosWiredMemoryReading {
         system_wired_bytes: system_wired_bytes()?,
@@ -29,6 +31,16 @@ pub fn read_macos_wired_memory() -> Option<MacosWiredMemoryReading> {
     })
 }
 
+/// Only macOS wires what the graphics processor works on and caps it with a
+/// wire limit. Elsewhere there is no ceiling to stay under, so the reading is
+/// always unavailable and the caller leaves its plan as it is, exactly as when
+/// the macOS kernel refuses a figure.
+#[cfg(not(target_os = "macos"))]
+pub fn read_macos_wired_memory() -> Option<MacosWiredMemoryReading> {
+    None
+}
+
+#[cfg(target_os = "macos")]
 fn system_wired_bytes() -> Option<u64> {
     let mut virtual_memory_statistics = std::mem::MaybeUninit::<libc::vm_statistics64>::zeroed();
     let mut statistics_word_count = libc::HOST_VM_INFO64_COUNT;
@@ -57,11 +69,13 @@ fn system_wired_bytes() -> Option<u64> {
 
 /// The kernel sets its wire limit from the Mac's memory size at startup, so
 /// it is read once.
+#[cfg(target_os = "macos")]
 fn system_wire_limit_bytes() -> Option<u64> {
     static SYSTEM_WIRE_LIMIT_BYTES: OnceLock<Option<u64>> = OnceLock::new();
     *SYSTEM_WIRE_LIMIT_BYTES.get_or_init(read_system_wire_limit_bytes)
 }
 
+#[cfg(target_os = "macos")]
 fn read_system_wire_limit_bytes() -> Option<u64> {
     let mut system_wire_limit_bytes: u64 = 0;
     let mut value_byte_count = std::mem::size_of::<u64>();
@@ -83,6 +97,7 @@ fn read_system_wire_limit_bytes() -> Option<u64> {
 mod tests {
     use super::read_macos_wired_memory;
 
+    #[cfg(target_os = "macos")]
     #[test]
     fn should_read_a_positive_wired_total_and_wire_limit() {
         let reading = read_macos_wired_memory().expect("macOS should report its wired memory");
@@ -91,6 +106,7 @@ mod tests {
         assert!(reading.system_wire_limit_bytes > 0);
     }
 
+    #[cfg(target_os = "macos")]
     #[test]
     fn should_report_the_same_wire_limit_on_every_reading() {
         let first_reading = read_macos_wired_memory().expect("macOS should report its memory");
@@ -100,5 +116,11 @@ mod tests {
             first_reading.system_wire_limit_bytes,
             second_reading.system_wire_limit_bytes
         );
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    #[test]
+    fn should_report_no_wired_reading_where_there_is_no_wire_limit() {
+        assert_eq!(read_macos_wired_memory(), None);
     }
 }

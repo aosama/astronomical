@@ -1,7 +1,7 @@
 use crate::install_verification_tools::{
-    cargo_about_archive_name, cargo_about_release_url, curl_download_arguments,
-    expected_version_line, host_rust_target, published_digest_from_sidecar, sccache_archive_name,
-    sccache_release_url,
+    cargo_about_archive_name, cargo_about_release_url, copy_then_remove, curl_download_arguments,
+    expected_version_line, host_rust_target, move_into_place, published_digest_from_sidecar,
+    sccache_archive_name, sccache_release_url,
 };
 
 fn curl_option_value(option_name: &str) -> Option<&'static str> {
@@ -149,4 +149,70 @@ fn sidecar_parsing_finds_the_digest_hex_token() {
     );
     assert!(published_digest_from_sidecar("no digest here").is_err());
     assert!(published_digest_from_sidecar("").is_err());
+}
+
+#[test]
+fn should_move_an_extracted_binary_into_the_prefix() {
+    let scratch_directory = tempfile::tempdir().expect("a scratch directory");
+    let extracted_binary = scratch_directory.path().join("cargo-about");
+    let installed_binary = scratch_directory.path().join("prefix-cargo-about");
+    std::fs::write(&extracted_binary, b"binary").expect("the fixture binary is written");
+
+    move_into_place(&extracted_binary, &installed_binary).expect("a same-filesystem move works");
+
+    assert!(!extracted_binary.exists());
+    assert_eq!(
+        std::fs::read(&installed_binary).expect("installed"),
+        b"binary"
+    );
+}
+
+#[test]
+fn should_copy_then_remove_when_a_rename_cannot_cross_filesystems() {
+    let scratch_directory = tempfile::tempdir().expect("a scratch directory");
+    let extracted_binary = scratch_directory.path().join("sccache");
+    let installed_binary = scratch_directory.path().join("prefix-sccache");
+    std::fs::write(&extracted_binary, b"binary").expect("the fixture binary is written");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&extracted_binary, std::fs::Permissions::from_mode(0o755))
+            .expect("the fixture binary is made executable");
+    }
+
+    copy_then_remove(&extracted_binary, &installed_binary).expect("the fallback copies");
+
+    assert!(!extracted_binary.exists(), "the scratch copy is removed");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let installed_mode = std::fs::metadata(&installed_binary)
+            .expect("installed")
+            .permissions()
+            .mode();
+        assert_eq!(
+            installed_mode & 0o777,
+            0o755,
+            "the copy keeps the executable bit"
+        );
+    }
+}
+
+#[test]
+fn should_report_a_failed_move_when_the_prefix_folder_is_missing() {
+    let scratch_directory = tempfile::tempdir().expect("a scratch directory");
+    let extracted_binary = scratch_directory.path().join("cargo-about");
+    std::fs::write(&extracted_binary, b"binary").expect("the fixture binary is written");
+
+    let move_failure = move_into_place(
+        &extracted_binary,
+        &scratch_directory.path().join("missing-prefix/cargo-about"),
+    )
+    .expect_err("a missing prefix folder cannot receive the binary");
+
+    assert!(move_failure.contains("move into place failed"));
+    assert!(
+        extracted_binary.exists(),
+        "a failed move keeps the extracted copy"
+    );
 }

@@ -1,3 +1,8 @@
+// Several tests here exercise macOS tools (codesign, ditto, the Xcode SDK)
+// and build only on macOS; the imports and fixtures they share are then
+// unused on other hosts, which is expected rather than dead code.
+#![cfg_attr(not(target_os = "macos"), allow(unused_imports, dead_code))]
+
 use std::path::{Path, PathBuf};
 use std::process::Command;
 

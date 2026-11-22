@@ -138,6 +138,12 @@ fn should_accept_only_single_stage_power_of_two_blocks_for_the_fused_rotation() 
 #[test]
 #[serial]
 fn should_rotate_bit_identically_through_the_fused_kernel_and_the_composed_route() {
+    if test_harness::skip_without(
+        test_harness::PlatformRequirement::MetalGpu,
+        "should_rotate_bit_identically_through_the_fused_kernel_and_the_composed_route",
+    ) {
+        return;
+    }
     let fixture_directory = write_fixture_pack(|_| {});
     let pack = FoldedPackValidator::new()
         .validate(&fixture_directory, 4096)

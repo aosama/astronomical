@@ -45,7 +45,7 @@ pub fn loss_gradients<Loss: TrainableLoss>(
     trainable_loss: Loss,
     trainable_arrays: &[MlxArray],
 ) -> Result<LossGradients, MlxCError> {
-    let graph_context = MlxBindingsContext::new()?;
+    let graph_context = runtime_integration::platform_bindings_context()?;
     // The one closure here is MLX's own calling convention: its transforms
     // take a function, not a graph.
     let loss_closure = MlxClosure::from_fn(move |closure_inputs: &[MlxArray]| {

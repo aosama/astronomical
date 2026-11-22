@@ -177,6 +177,7 @@ dependencies = [
  "astronomical-daemon",
  "config",
  "ipc-protocol",
+ "memory-policy",
  "mlx-bridge",
  "model-serving",
  "runtime-integration",
@@ -606,6 +607,7 @@ dependencies = [
  "serde_json",
  "serial_test",
  "tempfile",
+ "test-harness",
  "thiserror",
  "tokenizers",
 ]
@@ -1224,6 +1226,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serial_test",
+ "test-harness",
  "thiserror",
 ]
 
@@ -1457,6 +1460,7 @@ dependencies = [
  "serde_json",
  "serial_test",
  "tempfile",
+ "test-harness",
  "thiserror",
  "tokio",
 ]

@@ -101,6 +101,8 @@ fn should_refuse_a_package_that_does_not_exist_before_contacting_apple() {
 
 /// A file that is not an installer package at all carries no store
 /// signature, so it is refused locally and nothing is sent.
+// Reads the package signature with pkgutil, a macOS tool.
+#[cfg(target_os = "macos")]
 #[test]
 fn should_refuse_a_file_that_is_not_a_signed_store_package() {
     let fixture_directory = tempfile::tempdir().expect("a temporary directory");

@@ -404,7 +404,7 @@ test-quantization-mixture-of-experts = "run -p xtask -- test-run --package astro
 # MLX runtime into the machine-wide store before Cargo compiles anything. On
 # Linux it builds MLX's CPU backend instead of Metal (issue #2424); then
 # `cargo build -p runtime-integration --features mlx` links against it (see
-# docs/development.md, "Building the MLX runtime on Linux").
+# docs/development.md, "Building and testing on Linux").
 # `cargo xtask native-fingerprint --profile core [--target TRIPLE] [--explain]`
 # prints that build's identity; `--cache-environment` prints it with its store
 # entry directory as `$GITHUB_ENV` lines for workflows that save the entry to the `github_actions_cache`.

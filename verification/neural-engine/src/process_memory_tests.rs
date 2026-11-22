@@ -12,7 +12,13 @@ fn should_read_a_non_zero_footprint_for_this_process() {
     let current = MemorySnapshot::capture();
 
     assert!(current.process_physical_footprint_bytes > 0);
-    assert!(current.system_wired_bytes > 0);
+    // The wired count is the Neural Engine driver's, read through Core ML's
+    // crate, so it exists only on macOS and reads as zero elsewhere.
+    if cfg!(target_os = "macos") {
+        assert!(current.system_wired_bytes > 0);
+    } else {
+        assert_eq!(current.system_wired_bytes, 0);
+    }
 }
 
 #[test]
