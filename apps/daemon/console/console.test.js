@@ -88,6 +88,7 @@ test("activates a directly requested Observatory path without replacing it", () 
     const replacedPaths = [];
     scriptContext.document = {
         querySelectorAll(selector) {
+            if (selector === "[data-observatory-opens]") return [];
             return selector === "[data-observatory-destination]" ? navigationButtons : observatoryViews;
         }
     };
@@ -116,6 +117,7 @@ test("should_open_overview_for_the_retired_model_path_and_show_its_address", () 
     const replacedPaths = [];
     scriptContext.document = {
         querySelectorAll(selector) {
+            if (selector === "[data-observatory-opens]") return [];
             return selector === "[data-observatory-destination]" ? navigationButtons : observatoryViews;
         }
     };
@@ -141,6 +143,7 @@ test("should_open_download_models_for_the_retired_library_path_and_show_its_addr
     const replacedPaths = [];
     scriptContext.document = {
         querySelectorAll(selector) {
+            if (selector === "[data-observatory-opens]") return [];
             return selector === "[data-observatory-destination]" ? navigationButtons : observatoryViews;
         }
     };
@@ -166,6 +169,7 @@ test("should_open_settings_for_the_retired_configuration_path_and_show_its_addre
     const replacedPaths = [];
     scriptContext.document = {
         querySelectorAll(selector) {
+            if (selector === "[data-observatory-opens]") return [];
             return selector === "[data-observatory-destination]" ? navigationButtons : observatoryViews;
         }
     };
@@ -191,6 +195,7 @@ test("should_retain_direct_download_models_navigation_and_restore_it_from_browse
     let popstateHandler;
     scriptContext.document = {
         querySelectorAll(selector) {
+            if (selector === "[data-observatory-opens]") return [];
             return selector === "[data-observatory-destination]" ? navigationButtons : observatoryViews;
         }
     };
@@ -455,4 +460,30 @@ test("should_hide_the_second_row_of_tabs_on_a_page_without_a_section", () => {
 
     assert.equal(subnavigation.hidden, true);
     assert.equal(navigationButtons[0].attributes["aria-current"], "page");
+});
+
+test("should_open_the_models_tab_from_see_all_models_without_marking_the_shortcut_current", () => {
+    const scriptContext = createConsoleContext();
+    const clickedTabs = [];
+    const modelsTab = createNavigationButton("download-models");
+    modelsTab.click = () => clickedTabs.push("download-models");
+    const navigationButtons = [createNavigationButton("overview"), modelsTab];
+    const shortcutListeners = [];
+    const seeAllButton = {
+        dataset: { observatoryOpens: "download-models" },
+        attributes: {},
+        addEventListener(eventName, listener) { shortcutListeners.push(listener); }
+    };
+    const missingTabShortcut = { dataset: { observatoryOpens: "no-such-view" }, addEventListener(eventName, listener) { shortcutListeners.push(listener); } };
+    scriptContext.document = {
+        querySelectorAll(selector) {
+            return selector === "[data-observatory-opens]" ? [seeAllButton, missingTabShortcut] : [];
+        }
+    };
+
+    vm.runInContext("wireObservatoryShortcuts", scriptContext)(navigationButtons);
+    for (const shortcutListener of shortcutListeners) shortcutListener();
+
+    assert.deepEqual(clickedTabs, ["download-models"], "a shortcut to a missing view does nothing");
+    assert.equal(seeAllButton.attributes["aria-current"], undefined);
 });

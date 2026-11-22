@@ -27,7 +27,7 @@ fn should_read_every_option_and_keep_models_in_order() {
         MeasureSpeedOptions {
             base_url: "http://127.0.0.1:9999".to_owned(),
             round_count: 5,
-            measured_on: "Mac with an M4 Max and 128 GB".to_owned(),
+            measured_on: Some("Mac with an M4 Max and 128 GB".to_owned()),
             should_write_catalog: true,
             model_ids: vec!["Model-B".to_owned(), "Model-A".to_owned()],
         }
@@ -36,9 +36,7 @@ fn should_read_every_option_and_keep_models_in_order() {
 
 #[test]
 fn should_default_to_development_three_rounds_and_no_catalog_write() {
-    let parsed_options =
-        MeasureSpeedOptions::parse(&arguments(&["--measured-on", "a Mac", "Model-A"]))
-            .expect("valid");
+    let parsed_options = MeasureSpeedOptions::parse(&arguments(&["Model-A"])).expect("valid");
 
     assert_eq!(
         parsed_options.base_url, "http://127.0.0.1:6733",
@@ -46,6 +44,10 @@ fn should_default_to_development_three_rounds_and_no_catalog_write() {
     );
     assert_eq!(parsed_options.round_count, 3);
     assert!(!parsed_options.should_write_catalog);
+    assert_eq!(
+        parsed_options.measured_on, None,
+        "parsing leaves the Mac's description to the run"
+    );
 }
 
 #[test]

@@ -11,6 +11,14 @@ const DOWNLOAD_MODELS_VOICE_SAMPLE_TEXT = "Hello. This is how I sound when I rea
 // icon shows that it is working before any sound comes.
 let downloadModelsVoiceSample = null;
 let downloadModelsVoiceSampleAudio = null;
+// The object URL holding the fetched speech, freed whenever the sample stops,
+// so repeated samples do not keep their audio in memory.
+let downloadModelsVoiceSampleUrl = null;
+
+// A two-sample silent WAV. Safari lets an audio element play later only if it
+// was first played inside the click; the speech arrives a second or two after
+// the click, so the element is unlocked with this silence and reused.
+const DOWNLOAD_MODELS_SILENT_AUDIO_URL = "data:audio/wav;base64,UklGRiYAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQIAAACAgA==";
 
 function downloadModelsVoiceSamplePhase(huggingfaceId) {
     return downloadModelsVoiceSample?.huggingfaceId === huggingfaceId ? downloadModelsVoiceSample.phase : null;
@@ -26,7 +34,19 @@ function stopDownloadModelsVoiceSample() {
         downloadModelsVoiceSampleAudio.pause();
         downloadModelsVoiceSampleAudio = null;
     }
+    if (downloadModelsVoiceSampleUrl) {
+        URL.revokeObjectURL(downloadModelsVoiceSampleUrl);
+        downloadModelsVoiceSampleUrl = null;
+    }
     setDownloadModelsVoiceSample(null);
+}
+
+// Runs inside the click, before any await, so the element counts as started
+// by the person. A refused unlock is ignored: the later play reports failure.
+function unlockDownloadModelsVoiceSampleAudio() {
+    const sampleAudio = new Audio(DOWNLOAD_MODELS_SILENT_AUDIO_URL);
+    sampleAudio.play()?.catch?.(() => {});
+    return sampleAudio;
 }
 
 // Plays the sample, or stops it when this model's sample is already loading
@@ -36,18 +56,26 @@ async function toggleDownloadModelsVoiceSample(installedRow) {
     const wasThisModel = downloadModelsVoiceSamplePhase(installedRow.huggingfaceId) !== null;
     stopDownloadModelsVoiceSample();
     if (wasThisModel) return;
-    setDownloadModelsVoiceSample({ huggingfaceId: installedRow.huggingfaceId, phase: "loading" });
+    let sampleAudio = null;
     try {
+        sampleAudio = unlockDownloadModelsVoiceSampleAudio();
+        downloadModelsVoiceSampleAudio = sampleAudio;
+        setDownloadModelsVoiceSample({ huggingfaceId: installedRow.huggingfaceId, phase: "loading" });
         const sampleUrl = await fetchDownloadModelsVoiceSampleUrl(downloadModelsRowName(installedRow));
-        if (downloadModelsVoiceSamplePhase(installedRow.huggingfaceId) !== "loading") return;
-        downloadModelsVoiceSampleAudio = new Audio(sampleUrl);
-        downloadModelsVoiceSampleAudio.addEventListener("ended", () => {
+        // A stop or another model's sample while the speech was on its way
+        // replaced this element; its speech is no longer wanted.
+        if (downloadModelsVoiceSampleAudio !== sampleAudio) {
             URL.revokeObjectURL(sampleUrl);
-            stopDownloadModelsVoiceSample();
-        });
-        await downloadModelsVoiceSampleAudio.play();
+            return;
+        }
+        downloadModelsVoiceSampleUrl = sampleUrl;
+        sampleAudio.addEventListener("ended", stopDownloadModelsVoiceSample);
+        sampleAudio.src = sampleUrl;
+        await sampleAudio.play();
         setDownloadModelsVoiceSample({ huggingfaceId: installedRow.huggingfaceId, phase: "playing" });
     } catch {
+        // A sample stopped or replaced meanwhile is not this click's failure.
+        if (downloadModelsVoiceSampleAudio !== sampleAudio) return;
         setDownloadModelsVoiceSample({ huggingfaceId: installedRow.huggingfaceId, phase: "failed" });
     }
 }

@@ -1,5 +1,5 @@
-// Astronomical Observatory Models page "Remove": the button on a downloaded
-// model's line under On this Mac, the in-line confirmation that names what
+// Astronomical Observatory Models page removal: Move to Trash… in a
+// downloaded model's ⋯ menu under On this Mac, the in-line confirmation that names what
 // will move, and the request. The daemon moves only a folder this page itself
 // installed, and moves it to the Trash, so a mistaken removal can be undone in
 // Finder.
@@ -18,8 +18,8 @@ let downloadModelsRemovalConfirmingId = null;
 // The model whose removal request is on its way, or null. A second click on a
 // line that is already moving its folder must not send a second request.
 let downloadModelsRemovalInFlightId = null;
-// Which control to focus once the line is drawn again ("keep", "remove" or
-// "download"), so keyboard and VoiceOver users land on the question, come back
+// Which control to focus once the line is drawn again ("keep", "remove" for
+// the row's ⋯ menu button, or "download"), so keyboard and VoiceOver users land on the question, come back
 // from it, and are not dropped to the page top when the controls disappear.
 let downloadModelsRemovalFocusRequest = null;
 
@@ -41,8 +41,9 @@ function downloadModelsRemovalConfirmationText(catalogRow) {
         + ". You can download it again any time.";
 }
 
-// The line's removal controls: the Remove button; once clicked, the
-// question with Move to Trash and Keep; while the request runs, its progress.
+// The removal strip's controls, drawn only once Move to Trash… in the row's
+// ⋯ menu was chosen: the question with Move to Trash and Keep, or, while the
+// request runs, its progress.
 function createDownloadModelsRemovalControls(catalogRow) {
     if (downloadModelsRemovalInFlightId === catalogRow.huggingfaceId) {
         const movingButton = createDownloadModelsRemovalButton(
@@ -50,17 +51,6 @@ function createDownloadModelsRemovalControls(catalogRow) {
         );
         movingButton.disabled = true;
         return [movingButton];
-    }
-    if (downloadModelsRemovalConfirmingId !== catalogRow.huggingfaceId) {
-        const removeButton = createDownloadModelsRemovalButton(
-            "Remove", "button button-quiet download-models-remove-button",
-            () => askToRemoveDownloadModelsModel(catalogRow)
-        );
-        // One removal at a time: another line's button waits, rather than
-        // opening a question whose Move to Trash could not act yet.
-        removeButton.disabled = downloadModelsRemovalInFlightId !== null;
-        focusDownloadModelsRemovalControlIfRequested(catalogRow, "remove", removeButton);
-        return [removeButton];
     }
     return createDownloadModelsRemovalQuestion(catalogRow);
 }

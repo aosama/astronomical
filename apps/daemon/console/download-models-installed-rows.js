@@ -211,7 +211,7 @@ function createDownloadModelsRowMenu(installedRow) {
     menu.setAttribute("aria-label", "Actions for " + downloadModelsRowName(installedRow));
     menu.replaceChildren(
         createDownloadModelsMenuItem("Show in Finder", "finder", () => revealDownloadModelsModelInFinder(installedRow.huggingfaceId)),
-        createDownloadModelsMenuItem("Copy model ID", "copy", () => copyDownloadModelsPathToClipboard(downloadModelsRowName(installedRow))),
+        createDownloadModelsMenuItem("Copy model ID", "copy", () => copyDownloadModelsTextToClipboard(downloadModelsRowName(installedRow))),
         createDownloadModelsMenuItem("Details", "details", () => showDownloadModelsRowDetails(installedRow)),
         createDownloadModelsMenuItem("Open on Hugging Face", "external", () => openDownloadModelsOnHuggingFace(installedRow)),
         createDownloadModelsElement("div", "download-models-row-menu-separator"),
@@ -234,13 +234,15 @@ function createDownloadModelsMenuItem(label, iconName, onChoose) {
     return menuItem;
 }
 
-// Move to Trash only for a copy Download Models installed; any other copy
-// may belong to another app as well, so the menu says why it stays.
+// Move to Trash only for a copy the engine reports as removable (one Download
+// Models installed, with a Trash to move it to). The menu names a reason only
+// when the path proves it, a shared Hugging Face folder copy; any other refusal
+// may have several causes, so it just points to Finder.
 function createDownloadModelsRemovalMenuItem(installedRow) {
     if (!canRemoveDownloadModelsModelFromDisk(installedRow)) {
         const keptText = isDownloadModelsRowInHuggingFaceFolder(installedRow)
             ? "Managed in your Hugging Face folder"
-            : "Remove it in Finder: Astronomical did not download it";
+            : "Remove it in Finder instead";
         const keptNote = createDownloadModelsElement(
             "span", "download-models-row-menu-item download-models-row-menu-note download-models-menu-icon-lock", keptText
         );
@@ -298,7 +300,7 @@ function createDownloadModelsInstalledFootnote(installedRows) {
     if (installedRows.every(canRemoveDownloadModelsModelFromDisk)) return null;
     return createDownloadModelsParagraph(
         "download-models-installed-footnote",
-        "A model Astronomical did not download, such as one in your Hugging Face folder, can be shown in Finder but is never moved to the Trash from here, so other apps that use it keep working."
+        "Some models can only be removed in Finder. A model in your Hugging Face folder is never moved to the Trash from here, so other apps that use it keep working."
     );
 }
 

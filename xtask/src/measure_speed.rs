@@ -27,7 +27,7 @@ mod stream_timing;
 
 use std::path::Path;
 
-use measure_speed_options::MeasureSpeedOptions;
+use measure_speed_options::{MeasureSpeedOptions, this_mac_description};
 use speed_catalog::{MeasurementPlace, ModelSpeedRounds, write_measured_speed};
 use speed_progress::SpeedProgress;
 use speed_prompts::{SpeedPrompts, SpeedTask};
@@ -42,6 +42,10 @@ const CATALOG_PATH: &str = "registry/download_catalog.json";
 
 pub fn run(repository_root: &Path, arguments: &[String]) -> Result<(), String> {
     let measure_speed_options = MeasureSpeedOptions::parse(arguments)?;
+    let measured_on = measure_speed_options
+        .measured_on
+        .clone()
+        .unwrap_or_else(this_mac_description);
     let engine_version = check_engine_is_set_up(&measure_speed_options.base_url)?;
     let speed_prompts = SpeedPrompts::load(repository_root)?;
     let speed_progress = SpeedProgress::start(
@@ -61,7 +65,7 @@ pub fn run(repository_root: &Path, arguments: &[String]) -> Result<(), String> {
     speed_progress.finish();
     if measure_speed_options.should_write_catalog {
         let measurement_place = MeasurementPlace {
-            measured_on: &measure_speed_options.measured_on,
+            measured_on: &measured_on,
             astronomical_version: &engine_version,
         };
         write_catalog(repository_root, &measured_models, &measurement_place)?;

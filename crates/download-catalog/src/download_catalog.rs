@@ -19,11 +19,11 @@ use crate::path_selection::DownloadPathSelection;
 // and version label gave one model up to four names, and people could not tell
 // which one the terminal and the API accept. The model ID is the leaf of the
 // Hugging Face identity, the same name discovery gives the downloaded folder.
-// Version 5 later gained the optional build_of and build_difference pair and
-// the optional measured_speed,
-// which links a build to its lead without giving it a second name; the
-// catalog is bundled with the binary that reads it, so no reader meets a field
-// it does not know.
+// Version 5 later gained two optional additions without a version bump: the
+// build_of and build_difference pair, which links a build to its lead without
+// giving it a second name, and measured_speed, the tokens per second a release
+// measured. The catalog is bundled with the binary that reads it, so no reader
+// meets a field it does not know.
 // Version 4 added the summary; version 3 the memory footprint, streaming floor,
 // role, Get started pick, and the experimental flag; its retiring flag was
 // removed because a supported model stays in the catalog, and a catalog that

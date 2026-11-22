@@ -11,7 +11,9 @@ const BYTES_PER_GIGABYTE: u64 = 1_073_741_824;
 pub struct MeasureSpeedOptions {
     pub base_url: String,
     pub round_count: usize,
-    pub measured_on: String,
+    /// Where the figures were measured, when given; `run` reads this Mac
+    /// otherwise, so parsing never touches the hardware.
+    pub measured_on: Option<String>,
     pub should_write_catalog: bool,
     pub model_ids: Vec<String>,
 }
@@ -21,7 +23,7 @@ impl MeasureSpeedOptions {
         let mut parsed_options = Self {
             base_url: DEVELOPMENT_BASE_URL.to_owned(),
             round_count: DEFAULT_ROUND_COUNT,
-            measured_on: String::new(),
+            measured_on: None,
             should_write_catalog: false,
             model_ids: Vec::new(),
         };
@@ -37,7 +39,7 @@ impl MeasureSpeedOptions {
                 }
                 "--measured-on" => {
                     parsed_options.measured_on =
-                        option_value(&mut remaining_arguments, "--measured-on")?
+                        Some(option_value(&mut remaining_arguments, "--measured-on")?)
                 }
                 "--write-catalog" => parsed_options.should_write_catalog = true,
                 flag if flag.starts_with("--") => return Err(format!("unknown option {flag}")),
@@ -46,9 +48,6 @@ impl MeasureSpeedOptions {
         }
         if parsed_options.model_ids.is_empty() {
             return Err("usage: cargo xtask measure-speed [--base-url URL] [--rounds N] [--measured-on TEXT] [--write-catalog] MODEL_ID...".to_owned());
-        }
-        if parsed_options.measured_on.is_empty() {
-            parsed_options.measured_on = this_mac_description();
         }
         Ok(parsed_options)
     }
@@ -77,7 +76,7 @@ fn parse_round_count(round_text: &str) -> Result<usize, String> {
 
 /// "Mac with an M5 Pro and 48 GB", read from this Mac, so the figures always
 /// say where they were measured without anyone typing it.
-fn this_mac_description() -> String {
+pub(crate) fn this_mac_description() -> String {
     let chip_name = sysctl_value("machdep.cpu.brand_string").map_or_else(
         || "Mac".to_owned(),
         |brand| brand.trim_start_matches("Apple ").to_owned(),

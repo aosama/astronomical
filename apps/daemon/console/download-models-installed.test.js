@@ -201,7 +201,7 @@ test("should_show_a_copy_the_person_placed_in_finder_without_offering_to_remove_
     const placedCopyLabels = installedActionLabelsFor({ removable_from_disk: false });
     assert.equal(placedCopyLabels.menu.includes("Show in Finder"), true);
     assert.equal(placedCopyLabels.menu.includes("Move to Trash…"), false);
-    assert.equal(placedCopyLabels.menu.at(-1), "Remove it in Finder: Astronomical did not download it");
+    assert.equal(placedCopyLabels.menu.at(-1), "Remove it in Finder instead");
 });
 
 function thinTalkHandoffsFor(applicationChannel, installedRow = { modelId: "Talker", requestableModelId: null }) {
@@ -350,9 +350,9 @@ test("should_load_then_play_a_voice_sample_and_stop_it_on_a_second_click", async
         },
         URL: { createObjectURL: () => "blob:sample", revokeObjectURL: () => {} },
         Audio: class {
-            constructor(sampleUrl) { this.sampleUrl = sampleUrl; this.isPaused = false; }
+            constructor(sampleUrl) { this.src = sampleUrl; this.isPaused = false; }
             addEventListener() {}
-            async play() { playedSamples.push(this.sampleUrl); }
+            async play() { playedSamples.push(this.src); }
             pause() { this.isPaused = true; }
         }
     });
@@ -363,11 +363,33 @@ test("should_load_then_play_a_voice_sample_and_stop_it_on_a_second_click", async
     await playing;
 
     assert.deepEqual(speechRequests, [["/v1/audio/speech", { model: "Reader", input: "Hello. This is how I sound when I read aloud." }]]);
-    assert.deepEqual(playedSamples, ["blob:sample"]);
+    assert.match(playedSamples[0], /^data:audio\/wav;base64,/, "the click itself plays silence, so Safari allows the later sound");
+    assert.deepEqual(playedSamples.slice(1), ["blob:sample"]);
     assert.match(iconClasses(), /download-models-kind-icon-playing/);
 
     await vm.runInContext(`toggleDownloadModelsVoiceSample(downloadModelsCatalogRowsFromDocument(catalogDocument)[0])`, scriptContext);
     assert.doesNotMatch(iconClasses(), /download-models-kind-icon-(playing|loading)/, "a second click stops it");
+});
+
+test("should_free_the_sample_audio_when_a_playing_sample_is_stopped", async () => {
+    const revokedUrls = [];
+    const { scriptContext } = renderIconsWithContext([SPEECH_ENTRY], {
+        fetch: async () => ({ ok: true, blob: async () => "wav-bytes" }),
+        URL: { createObjectURL: () => "blob:stopped-sample", revokeObjectURL: (freedUrl) => revokedUrls.push(freedUrl) },
+        Audio: class {
+            constructor(sampleUrl) { this.src = sampleUrl; }
+            addEventListener() {}
+            async play() {}
+            pause() {}
+        }
+    });
+    const toggleFirstRow = `toggleDownloadModelsVoiceSample(downloadModelsCatalogRowsFromDocument(catalogDocument)[0])`;
+    await vm.runInContext(toggleFirstRow, scriptContext);
+    assert.deepEqual(revokedUrls, [], "a playing sample keeps its audio");
+
+    await vm.runInContext(toggleFirstRow, scriptContext);
+
+    assert.deepEqual(revokedUrls, ["blob:stopped-sample"]);
 });
 
 test("should_say_in_the_tooltip_when_a_sample_could_not_play", async () => {

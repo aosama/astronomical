@@ -84,8 +84,22 @@ function wireObservatoryNavigation() {
             );
         });
     });
+    wireObservatoryShortcuts(navigationButtons);
     window.addEventListener("popstate", activateCurrentObservatoryPath);
     activateCurrentObservatoryPath();
+}
+
+// A button inside a page that leads to another view (Home's "See all models")
+// works through that view's own tab, so it is never itself marked as the
+// current page alongside the tab.
+function wireObservatoryShortcuts(navigationButtons) {
+    document.querySelectorAll("[data-observatory-opens]").forEach((shortcutButton) => {
+        shortcutButton.addEventListener("click", () => {
+            const destinationTab = navigationButtons.find((navigationButton) =>
+                navigationButton.dataset.observatoryDestination === shortcutButton.dataset.observatoryOpens);
+            if (destinationTab) destinationTab.click();
+        });
+    });
 }
 
 function activateObservatoryView(requestedViewIdentifier, navigationButtons, observatoryViews, updateHistory) {

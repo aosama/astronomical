@@ -167,7 +167,7 @@ function createDownloadModelsLocationActions(catalogRow) {
         "button", "button button-secondary download-models-copy-path-button", "Copy Path"
     );
     copyButton.type = "button";
-    copyButton.addEventListener("click", () => copyDownloadModelsPathToClipboard(destinationPath));
+    copyButton.addEventListener("click", () => copyDownloadModelsTextToClipboard(destinationPath));
     const actionButtons = catalogRow.readyOnThisMac
         ? [createDownloadModelsRevealButton(catalogRow.huggingfaceId), copyButton]
         : [copyButton];
@@ -187,9 +187,9 @@ function createDownloadModelsRevealButton(huggingfaceId) {
     return revealButton;
 }
 
-async function copyDownloadModelsPathToClipboard(destinationPath) {
+async function copyDownloadModelsTextToClipboard(copiedText) {
     try {
-        await navigator.clipboard.writeText(destinationPath);
+        await navigator.clipboard.writeText(copiedText);
     } catch {
         // Clipboard may be unavailable without a secure context or user gesture.
     }
