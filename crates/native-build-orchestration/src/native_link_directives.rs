@@ -132,10 +132,39 @@ pub fn mlx_exported_link_libraries(mlx_targets_text: &str) -> Option<Vec<String>
         }
         if let Some(quoted_libraries) = trimmed_line.strip_prefix("INTERFACE_LINK_LIBRARIES \"") {
             let link_libraries_text = quoted_libraries.trim_end_matches('"').replace("\\$", "$");
-            return Some(link_libraries_text.split(';').map(str::to_owned).collect());
+            return Some(split_cmake_list_outside_generator_expressions(
+                &link_libraries_text,
+            ));
         }
     }
     is_inside_mlx_properties.then(Vec::new)
+}
+
+/// Splits a CMake list at the semicolons that separate its entries. A
+/// semicolon inside a generator expression (`$<$<CONFIG:Debug>:a;b>`) belongs
+/// to that expression, so it is kept, and the whole expression stays one
+/// entry that the caller reports instead of linking half of it.
+fn split_cmake_list_outside_generator_expressions(cmake_list_text: &str) -> Vec<String> {
+    let mut list_entries = Vec::new();
+    let mut current_entry = String::new();
+    let mut generator_expression_depth = 0_usize;
+    let mut previous_character = '\0';
+    for list_character in cmake_list_text.chars() {
+        match list_character {
+            '<' if previous_character == '$' => generator_expression_depth += 1,
+            '>' if generator_expression_depth > 0 => generator_expression_depth -= 1,
+            ';' if generator_expression_depth == 0 => {
+                list_entries.push(std::mem::take(&mut current_entry));
+                previous_character = list_character;
+                continue;
+            }
+            _ => {}
+        }
+        current_entry.push(list_character);
+        previous_character = list_character;
+    }
+    list_entries.push(current_entry);
+    list_entries
 }
 
 /// Adds one recorded `INTERFACE_LINK_LIBRARIES` entry to the line.
@@ -194,10 +223,12 @@ fn link_only_contents(entry_text: &str) -> Option<&str> {
     entry_text.strip_prefix("$<LINK_ONLY:")?.strip_suffix('>')
 }
 
-/// Links the exact library file CMake recorded. `+verbatim` passes its file
+/// Links the library file name CMake recorded. `+verbatim` passes the file
 /// name to the linker unchanged (`-l:libopenblas.so.0`), so the linker takes
-/// that file rather than whichever `libopenblas` a search folder holds first,
-/// and a versioned file without an unversioned link still links. A shared
+/// that exact name rather than whichever `libopenblas` variant it prefers, and
+/// a versioned file without an unversioned link still links. The linker still
+/// searches its folders in order for that name, so when two recorded folders
+/// hold a file of the same name, the first folder searched supplies it. A shared
 /// library also gets a run path, so this crate's own test binaries find it at
 /// run time when it lives outside the loader's default directories.
 fn push_library_file(link_directives: &mut NativeLinkDirectives, library_file_path: &Path) {

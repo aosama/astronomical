@@ -223,6 +223,7 @@ impl NativeBuildStore {
             Err(metadata_error) => return Err(metadata_error.into()),
         }
 
+        crate::native_compile::start_sccache_server_before_taking_a_slot();
         let build_slot = acquire_build_slot(&self.schema_directory().join("build-slots"))?;
         let cmake_build_directory = build_slot.cmake_build_directory.clone();
         let staging_directory = self.create_staging_directory()?;

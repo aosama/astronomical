@@ -191,6 +191,29 @@ fn should_read_the_mlx_targets_link_libraries_with_the_export_escapes_undone() {
     assert_eq!(link_library_entries[2], "/opt/openblas/lib/libopenblas.so");
 }
 
+/// A semicolon inside a nested generator expression belongs to it; splitting
+/// there would link a bare fragment such as `b>` as a library.
+#[test]
+fn should_keep_a_nested_generator_expression_with_a_semicolon_as_one_entry() {
+    let nested_expression = "set_target_properties(mlx PROPERTIES\n  INTERFACE_LINK_LIBRARIES \"dl;\\$<\\$<CONFIG:Debug>:a;b>;pthread\"\n)\n";
+
+    assert_eq!(
+        mlx_exported_link_libraries(nested_expression).unwrap(),
+        ["dl", "$<$<CONFIG:Debug>:a;b>", "pthread"]
+    );
+}
+
+#[test]
+fn should_keep_empty_entries_between_adjacent_semicolons() {
+    let adjacent_semicolons =
+        "set_target_properties(mlx PROPERTIES\n  INTERFACE_LINK_LIBRARIES \"dl;;pthread\"\n)\n";
+
+    assert_eq!(
+        mlx_exported_link_libraries(adjacent_semicolons).unwrap(),
+        ["dl", "", "pthread"]
+    );
+}
+
 #[test]
 fn should_read_no_link_libraries_from_a_package_without_the_property() {
     let package_without_link_libraries = "add_library(mlx STATIC IMPORTED)\n\nset_target_properties(mlx PROPERTIES\n  INTERFACE_COMPILE_FEATURES \"cxx_std_20\"\n)\n";
