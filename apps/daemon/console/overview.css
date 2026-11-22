@@ -107,3 +107,12 @@
 @media (prefers-reduced-motion: reduce) {
     .overview-now-fill, .overview-memory-seg { transition: none; }
 }
+
+/* Home's one next step: the engine's first suggestion, in the accent outline
+   the Models page gives its first suggestion. */
+.overview-next-step { display: flex; flex-direction: column; gap: 6px; border: 2px solid var(--accent); }
+.overview-next-step[hidden] { display: none; }
+.overview-next-step-tag { margin: 0; color: var(--accent-text); font-size: var(--text-sm); font-weight: var(--weight-strong); }
+.overview-next-step-model { margin: 0; font-family: var(--font-mono, ui-monospace, monospace); font-size: var(--text-lg); font-weight: var(--weight-strong); overflow-wrap: anywhere; }
+.overview-next-step-reason { margin: 0; color: var(--ink-2, var(--text)); }
+.overview-next-step-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; }

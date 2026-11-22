@@ -97,17 +97,44 @@ function activateObservatoryView(requestedViewIdentifier, navigationButtons, obs
         observatoryView.hidden = observatoryView.dataset.observatoryView !== activeViewIdentifier;
     });
     navigationButtons.forEach((navigationButton) => {
-        if (navigationButton.dataset.observatoryDestination === activeViewIdentifier) {
+        if (isObservatoryNavigationButtonCurrent(navigationButton, activeViewIdentifier)) {
             navigationButton.setAttribute("aria-current", "page");
         } else {
             navigationButton.removeAttribute("aria-current");
         }
     });
+    showObservatorySubnavigation(navigationButtons, activeViewIdentifier);
     const targetPath = OBSERVATORY_PATH_MAP[activeViewIdentifier] || OBSERVATORY_DEFAULT_PATH;
     if (updateHistory) {
         history.pushState(null, "", targetPath);
     }
     return activeViewIdentifier;
+}
+
+// A section button stays current on every page of its section (Settings on
+// Tuning, Under the hood on Memory); any other button only on its own page.
+function isObservatoryNavigationButtonCurrent(navigationButton, activeViewIdentifier) {
+    const sectionViews = (navigationButton.dataset.observatoryGroup || "").split(" ");
+    return navigationButton.dataset.observatoryDestination === activeViewIdentifier
+        || sectionViews.includes(activeViewIdentifier);
+}
+
+// The second row of tabs shows the pages of the active section, and only for
+// a section with more than one page.
+function showObservatorySubnavigation(navigationButtons, activeViewIdentifier) {
+    const subnavigation = typeof document.getElementById === "function"
+        ? document.getElementById("observatory-subnavigation")
+        : null;
+    const sectionButton = navigationButtons.find(
+        (navigationButton) => (navigationButton.dataset.observatoryGroup || "").split(" ").includes(activeViewIdentifier)
+    );
+    const activeSection = sectionButton ? sectionButton.dataset.observatoryDestination : null;
+    if (subnavigation) subnavigation.hidden = activeSection === null;
+    navigationButtons
+        .filter((navigationButton) => navigationButton.dataset.observatorySection)
+        .forEach((subnavigationButton) => {
+            subnavigationButton.hidden = subnavigationButton.dataset.observatorySection !== activeSection;
+        });
 }
 
 async function pollStatus() {
@@ -120,6 +147,7 @@ async function pollStatus() {
         renderStatusHeader(data);
         loadedModelId = data.ready_model_id || null;
         renderOverviewNow(data);
+        renderOverviewNextStep();
         renderOverviewMemory(data);
         renderOverviewModel(data, readExpertPlacement(data));
         renderOverviewSession(data);
@@ -184,13 +212,18 @@ function thinTalkChatLink(applicationChannel) {
     return THIN_TALK_CHAT_LINKS.get(applicationChannel) || null;
 }
 
+// The header's Open chat button and the Chat page's link both open this
+// channel's chat window.
 function renderThinTalkLink(applicationChannel) {
-    const openThinTalkLink = document.getElementById("open-thin-talk");
     const chatLink = thinTalkChatLink(applicationChannel);
-    if (chatLink) {
-        openThinTalkLink.setAttribute("href", chatLink);
-    } else {
-        openThinTalkLink.removeAttribute("href");
+    for (const openChatLinkId of ["open-thin-talk", "header-open-chat"]) {
+        const openChatLink = document.getElementById(openChatLinkId);
+        if (!openChatLink) continue;
+        if (chatLink) {
+            openChatLink.setAttribute("href", chatLink);
+        } else {
+            openChatLink.removeAttribute("href");
+        }
     }
 }
 

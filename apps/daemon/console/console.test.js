@@ -401,3 +401,58 @@ test("should_keep_every_chat_link_out_of_download_models_and_the_shell", () => {
 });
 
 /** A document whose elements are created on first lookup and keep their text. */
+
+function createSectionButton(observatoryDestination, sectionViews) {
+    const sectionButton = createNavigationButton(observatoryDestination);
+    sectionButton.dataset.observatoryGroup = sectionViews;
+    return sectionButton;
+}
+
+function createSubnavigationButton(observatoryDestination, observatorySection) {
+    const subnavigationButton = createNavigationButton(observatoryDestination);
+    subnavigationButton.dataset.observatorySection = observatorySection;
+    subnavigationButton.hidden = false;
+    return subnavigationButton;
+}
+
+function activateWithSections(requestedView) {
+    const scriptContext = createConsoleContext();
+    const subnavigation = { hidden: false };
+    scriptContext.document.getElementById = (elementId) => (elementId === "observatory-subnavigation" ? subnavigation : null);
+    const navigationButtons = [
+        createNavigationButton("overview"),
+        createSectionButton("settings", "settings tuning"),
+        createSectionButton("experts", "experts memory"),
+        createSubnavigationButton("settings", "settings"),
+        createSubnavigationButton("tuning", "settings"),
+        createSubnavigationButton("experts", "experts"),
+        createSubnavigationButton("memory", "experts")
+    ];
+    scriptContext.navigationButtons = navigationButtons;
+    scriptContext.observatoryViews = ["overview", "settings", "tuning", "experts", "memory"].map(createObservatoryView);
+    vm.runInContext(`activateObservatoryView(${JSON.stringify(requestedView)}, navigationButtons, observatoryViews)`, scriptContext);
+    return { navigationButtons, subnavigation };
+}
+
+test("should_keep_a_section_current_on_each_of_its_pages_and_show_only_its_tabs", () => {
+    const { navigationButtons, subnavigation } = activateWithSections("memory");
+
+    assert.equal(subnavigation.hidden, false);
+    assert.deepEqual(
+        navigationButtons.map((navigationButton) => navigationButton.attributes["aria-current"] || ""),
+        ["", "", "page", "", "", "", "page"],
+        "Under the hood and its Memory tab are current"
+    );
+    assert.deepEqual(
+        navigationButtons.slice(3).map((subnavigationButton) => subnavigationButton.hidden),
+        [true, true, false, false],
+        "only Experts and Memory tabs show"
+    );
+});
+
+test("should_hide_the_second_row_of_tabs_on_a_page_without_a_section", () => {
+    const { navigationButtons, subnavigation } = activateWithSections("overview");
+
+    assert.equal(subnavigation.hidden, true);
+    assert.equal(navigationButtons[0].attributes["aria-current"], "page");
+});

@@ -26,6 +26,7 @@ const DOWNLOAD_MODELS_QUEUE_JS: &str = include_str!("../../console/download-mode
 const DOWNLOAD_MODELS_SELECTION_JS: &str =
     include_str!("../../console/download-models-selection.js");
 const OVERVIEW_JS: &str = include_str!("../../console/overview.js");
+const OVERVIEW_NEXT_STEP_JS: &str = include_str!("../../console/overview-next-step.js");
 const OVERVIEW_CSS: &str = include_str!("../../console/overview.css");
 const NEURAL_ENGINE_PANEL_JS: &str = include_str!("../../console/neural-engine-panel.js");
 const MEMORY_CONTROL_JS: &str = include_str!("../../console/memory-control.js");
@@ -120,6 +121,7 @@ where
             get(download_models_selection_script),
         )
         .route("/overview.js", get(overview_script))
+        .route("/overview-next-step.js", get(overview_next_step_script))
         .route("/overview.css", get(overview_stylesheet))
         .route("/neural-engine-panel.js", get(neural_engine_panel_script))
         .route("/memory-control.js", get(memory_control_script))
@@ -199,6 +201,12 @@ pub(crate) async fn download_models_queue_script() -> Response {
 
 pub(crate) async fn overview_script() -> Response {
     embedded_text_response(OVERVIEW_JS, JAVASCRIPT_CONTENT_TYPE)
+}
+
+/// `GET /overview-next-step.js` — Home's one next step, the engine's first
+/// model suggestion.
+pub(crate) async fn overview_next_step_script() -> Response {
+    embedded_text_response(OVERVIEW_NEXT_STEP_JS, JAVASCRIPT_CONTENT_TYPE)
 }
 
 /// `GET /overview.css` — the Overview view's layout and colours.
