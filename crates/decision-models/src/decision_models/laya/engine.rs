@@ -7,13 +7,12 @@
 //! answers.
 
 use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::rc::Rc;
-use std::time::Instant;
 
 use decision_contract::calibration_file::CalibrationOverride;
 use decision_contract::decision_adapters_file::DecisionAdapters;
-use decision_contract::decision_training_job::{DecisionTrainingJob, TrainingExample};
+use decision_contract::decision_training_job::TrainingExample;
 use decision_contract::head_tuning_file::{HeadTuning, TunableHeadFamily};
 use decision_contract::laya_sequence::LayaQuestionSequence;
 use decision_contract::{
@@ -25,11 +24,12 @@ use decision_training::head_parameters::ParameterLayout;
 use mlx_bridge::MlxArray;
 use runtime_integration::{MlxMemoryLimits, MlxRuntime, MlxSafetensors};
 
-use crate::decision_engine::DecisionTrainingStep;
-use crate::decision_engine::{DecisionEngine, DecisionEngineLoadResult, DecisionEngineOutput};
 use crate::decision_models::calibration_override::read_calibration_override;
 use crate::decision_models::decision_adapters::{
     check_adapter_targets, read_decision_adapters, unusable_adapters,
+};
+use crate::decision_models::decision_engine_shell::{
+    AdmittedDecision, DecisionEngineShell, DecisionFamily, LoadedDecisionModel, PreparedFolder,
 };
 use crate::decision_models::head_tuning::{check_tuned_shape, read_head_tuning, unusable_tuning};
 use crate::decision_models::laya::adapter_targets::laya_adapter_targets;
@@ -42,52 +42,41 @@ use crate::decision_models::laya::loaded_state::sequence_failure;
 use crate::decision_models::laya::tokenizer::LayaTokenizer;
 use crate::decision_models::laya::whole_model_scorer::LayaWholeModelScorer;
 use crate::decision_models::training::question_selection::RowSource;
-use crate::decision_models::training::training_session::{
-    DecisionTrainingHost, DecisionTrainingSession, WholeModelScorer, keep_session_if_running,
-    read_through_decide, start_session,
-};
+use crate::decision_models::training::training_session::WholeModelScorer;
 use crate::linear_adapters::LinearAdapters;
-use crate::memory::telemetry::MlxMemoryTelemetry;
 use crate::modernbert::weight_layout::{ModernBertWeightLayout, TokenEmbeddingStorage};
-use model_primitives::forward_pass_memory::forward_pass_memory_telemetry;
 
 /// The tensor-name prefix a Laya checkpoint keeps its encoder under.
 const ENCODER_TENSOR_PREFIX: &str = "encoder";
 /// The tensor whose presence means the token embeddings are stored quantized.
 const QUANTIZED_EMBEDDING_SCALES_TENSOR: &str = "encoder.embeddings.tok_embeddings.scales";
 
-/// A Laya runtime bound to one artifact directory.
-pub struct LayaDecisionEngine {
-    model_id: String,
-    /// The model folder, which training reads the shipped scorer from.
-    model_directory: PathBuf,
-    effective_mlx_memory_ceiling_bytes: usize,
-    mlx_buffer_cache_limit_bytes: usize,
-    resident_weight_bytes: u64,
-    preloaded_artifact: Option<LayaArtifact>,
-    /// Temperatures fitted on the person's own examples, read at
-    /// construction so an unusable file fails before any weights load.
+/// Laya behind the shared decision engine, bound to one artifact directory.
+pub type LayaDecisionEngine = DecisionEngineShell<LayaDecisionFamily>;
+
+pub struct LayaDecisionFamily;
+
+/// What construction reads from a Laya folder, so an unusable file fails
+/// before any weights load; load consumes it.
+pub struct LayaPreparedFolder {
+    artifact: LayaArtifact,
+    /// Temperatures fitted on the person's own examples.
     calibration_override: CalibrationOverride,
-    /// The folder's trained scorer, read at construction for the same reason.
+    /// The folder's trained scorer.
     head_tuning: HeadTuning,
-    /// The folder's add-on weights, read at construction for the same reason.
+    /// The folder's add-on weights.
     decision_adapters: DecisionAdapters,
-    /// Shared, because a whole-model training's loss is built inside an MLX
-    /// closure that must own everything it reads.
-    loaded_state: Option<Rc<LoadedLayaState>>,
-    post_cleanup_memory_telemetry: Option<MlxMemoryTelemetry>,
-    /// A training of the final layers in progress, if any.
-    training_session: Option<DecisionTrainingSession>,
 }
 
-impl LayaDecisionEngine {
-    /// Creates an unloaded engine from validated on-disk artifact evidence.
-    pub fn new(
-        model_id: impl Into<String>,
+impl DecisionFamily for LayaDecisionFamily {
+    type Prepared = LayaPreparedFolder;
+    type LoadedState = LoadedLayaState;
+    type RequestPlan = Vec<LayaQuestionSequence>;
+    const TUNABLE_FAMILY: TunableHeadFamily = TunableHeadFamily::Laya;
+
+    fn prepare(
         model_directory: &Path,
-        effective_mlx_memory_ceiling_bytes: usize,
-        mlx_buffer_cache_limit_bytes: usize,
-    ) -> Result<Self, DecisionFailure> {
+    ) -> Result<PreparedFolder<LayaPreparedFolder>, DecisionFailure> {
         let artifact = match LayaArtifact::load(model_directory) {
             Ok(artifact) => artifact,
             Err(artifact_error) => {
@@ -99,22 +88,152 @@ impl LayaDecisionEngine {
         let calibration_override = read_calibration_override(model_directory)?;
         let head_tuning = read_head_tuning(model_directory, TunableHeadFamily::Laya)?;
         let decision_adapters = read_decision_adapters(model_directory)?;
-        Ok(Self {
-            model_id: model_id.into(),
-            model_directory: model_directory.to_path_buf(),
-            calibration_override,
-            head_tuning,
-            decision_adapters,
-            effective_mlx_memory_ceiling_bytes,
-            mlx_buffer_cache_limit_bytes,
+        Ok(PreparedFolder {
             resident_weight_bytes: artifact.weights_file_bytes,
-            preloaded_artifact: Some(artifact),
-            loaded_state: None,
-            post_cleanup_memory_telemetry: None,
-            training_session: None,
+            prepared: LayaPreparedFolder {
+                artifact,
+                calibration_override,
+                head_tuning,
+                decision_adapters,
+            },
         })
     }
 
+    fn load_state(
+        _model_directory: &Path,
+        prepared: &mut Option<LayaPreparedFolder>,
+        memory_limits: MlxMemoryLimits,
+    ) -> Result<LoadedDecisionModel<LoadedLayaState>, DecisionFailure> {
+        let Some(prepared_folder) = prepared.take() else {
+            return Err(DecisionFailure::fatal_execution(
+                "decision engine load was requested twice",
+            ));
+        };
+        let Ok(runtime) = MlxRuntime::initialize(memory_limits) else {
+            return Err(DecisionFailure::fatal_execution(
+                "decision runtime initialization failed",
+            ));
+        };
+        load_laya_state(runtime, prepared_folder)
+    }
+
+    fn runtime(loaded_state: &LoadedLayaState) -> &MlxRuntime {
+        &loaded_state.runtime
+    }
+
+    /// Laya checks for a loaded model first, then for questions, and builds
+    /// every question's sequence before any model work.
+    fn admit_decision<'loaded>(
+        loaded_state: Option<&'loaded Rc<LoadedLayaState>>,
+        state: &OrderedJsonValue,
+        questions: &[DecisionQuestion],
+    ) -> Result<
+        AdmittedDecision<'loaded, LoadedLayaState, Vec<LayaQuestionSequence>>,
+        DecisionFailure,
+    > {
+        let Some(loaded_state) = loaded_state else {
+            return Err(DecisionFailure::fatal_execution(
+                "the decision engine was asked to decide before load",
+            ));
+        };
+        if questions.is_empty() {
+            return Err(DecisionFailure::invalid_request(
+                "a decision request needs at least one question",
+            ));
+        }
+        Ok(AdmittedDecision {
+            loaded_state,
+            request_plan: loaded_state.build_question_sequences(state, questions)?,
+        })
+    }
+
+    fn answer_questions(
+        loaded_state: &Rc<LoadedLayaState>,
+        question_sequences: Vec<LayaQuestionSequence>,
+        _state: &OrderedJsonValue,
+        questions: &[DecisionQuestion],
+        head_input_request: HeadInputRequest,
+    ) -> Result<(Vec<QuestionOutcome>, u32), DecisionFailure> {
+        let scored_rows = loaded_state.scored_rows_by_question(
+            questions,
+            &question_sequences,
+            head_input_request,
+        )?;
+        answered_questions(
+            &QuestionTemperatures {
+                configuration: &loaded_state.configuration,
+                calibration_override: &loaded_state.calibration_override,
+            },
+            questions,
+            &question_sequences,
+            scored_rows,
+        )
+    }
+
+    fn whole_model_scorer(
+        loaded_state: &Rc<LoadedLayaState>,
+        examples: &[TrainingExample],
+        row_sources: &[RowSource],
+        scorer_layout: &ParameterLayout,
+    ) -> Result<WholeModelScorer, DecisionFailure> {
+        LayaWholeModelScorer::for_rows(loaded_state, examples, row_sources, scorer_layout)
+    }
+}
+
+/// Loads the weights, the tokenizer, the trained scorer and the add-ons a
+/// prepared folder names, in the order the folder's checks expect.
+fn load_laya_state(
+    runtime: MlxRuntime,
+    prepared_folder: LayaPreparedFolder,
+) -> Result<LoadedDecisionModel<LoadedLayaState>, DecisionFailure> {
+    let artifact = prepared_folder.artifact;
+    let tensors = match runtime.load_safetensors(artifact.weights_file, None) {
+        Ok(tensors) => tensors,
+        Err(load_error) => {
+            return Err(DecisionFailure::fatal_execution(&format!(
+                "decision weights failed to load: {load_error}"
+            )));
+        }
+    };
+    let tokenizer = match LayaTokenizer::from_artifact_bytes(
+        &artifact.tokenizer_json_bytes,
+        &artifact.tokenizer_settings_bytes,
+    ) {
+        Ok(tokenizer) => tokenizer,
+        Err(tokenizer_error) => {
+            return Err(DecisionFailure::fatal_execution(&format!(
+                "decision tokenizer failed to load: {tokenizer_error}"
+            )));
+        }
+    };
+    let maximum_tokens_per_question = artifact
+        .configuration
+        .sequence_limits
+        .maximum_sequence_tokens as u32;
+    let tuned_tensors = tuned_head_tensors(&tensors, &prepared_folder.head_tuning)?;
+    let weight_layout = detect_weight_layout(&tensors);
+    let adapters = uploaded_adapters(
+        &runtime,
+        &tensors,
+        (&artifact.configuration, &weight_layout),
+        &prepared_folder.decision_adapters,
+    )?;
+    Ok(LoadedDecisionModel {
+        loaded_state: LoadedLayaState {
+            weight_layout,
+            runtime,
+            tensors,
+            tuned_tensors,
+            adapters,
+            configuration: artifact.configuration,
+            tokenizer,
+            calibration_override: prepared_folder.calibration_override,
+        },
+        maximum_tokens_per_question,
+    })
+}
+
+impl LayaDecisionEngine {
     /// The token sequence each question would be read as, without running the model.
     ///
     /// Exposed so the layout on a real tokenizer can be compared with the
@@ -125,7 +244,7 @@ impl LayaDecisionEngine {
         state: &OrderedJsonValue,
         questions: &[DecisionQuestion],
     ) -> Result<Vec<LayaQuestionSequence>, DecisionFailure> {
-        let Some(loaded_state) = self.loaded_state.as_ref() else {
+        let Some(loaded_state) = self.loaded_state() else {
             return Err(DecisionFailure::fatal_execution(
                 "the decision engine was asked for sequences before load",
             ));
@@ -134,173 +253,6 @@ impl LayaDecisionEngine {
     }
 }
 
-impl DecisionEngine for LayaDecisionEngine {
-    fn load(&mut self) -> Result<DecisionEngineLoadResult, DecisionFailure> {
-        let Some(artifact) = self.preloaded_artifact.take() else {
-            return Err(DecisionFailure::fatal_execution(
-                "decision engine load was requested twice",
-            ));
-        };
-        let Ok(memory_limits) = MlxMemoryLimits::new(
-            self.effective_mlx_memory_ceiling_bytes,
-            self.mlx_buffer_cache_limit_bytes,
-        ) else {
-            return Err(DecisionFailure::fatal_execution(
-                "decision runtime memory limits are invalid",
-            ));
-        };
-        let Ok(runtime) = MlxRuntime::initialize(memory_limits) else {
-            return Err(DecisionFailure::fatal_execution(
-                "decision runtime initialization failed",
-            ));
-        };
-        let tensors = match runtime.load_safetensors(artifact.weights_file, None) {
-            Ok(tensors) => tensors,
-            Err(load_error) => {
-                return Err(DecisionFailure::fatal_execution(&format!(
-                    "decision weights failed to load: {load_error}"
-                )));
-            }
-        };
-        let tokenizer = match LayaTokenizer::from_artifact_bytes(
-            &artifact.tokenizer_json_bytes,
-            &artifact.tokenizer_settings_bytes,
-        ) {
-            Ok(tokenizer) => tokenizer,
-            Err(tokenizer_error) => {
-                return Err(DecisionFailure::fatal_execution(&format!(
-                    "decision tokenizer failed to load: {tokenizer_error}"
-                )));
-            }
-        };
-        let maximum_tokens_per_question = artifact
-            .configuration
-            .sequence_limits
-            .maximum_sequence_tokens as u32;
-        let tuned_tensors = tuned_head_tensors(&tensors, &self.head_tuning)?;
-        let weight_layout = detect_weight_layout(&tensors);
-        let adapters = uploaded_adapters(
-            &runtime,
-            &tensors,
-            (&artifact.configuration, &weight_layout),
-            &self.decision_adapters,
-        )?;
-        self.loaded_state = Some(Rc::new(LoadedLayaState {
-            weight_layout,
-            runtime,
-            tensors,
-            tuned_tensors,
-            adapters,
-            configuration: artifact.configuration,
-            tokenizer,
-        }));
-        Ok(DecisionEngineLoadResult {
-            model_id: self.model_id.clone(),
-            maximum_tokens_per_question,
-        })
-    }
-
-    fn decide(
-        &mut self,
-        state: &OrderedJsonValue,
-        questions: &[DecisionQuestion],
-        head_input_request: HeadInputRequest,
-    ) -> Result<DecisionEngineOutput, DecisionFailure> {
-        let started_at = Instant::now();
-        let Some(loaded_state) = self.loaded_state.as_ref() else {
-            return Err(DecisionFailure::fatal_execution(
-                "the decision engine was asked to decide before load",
-            ));
-        };
-        if questions.is_empty() {
-            return Err(DecisionFailure::invalid_request(
-                "a decision request needs at least one question",
-            ));
-        }
-        let question_sequences = loaded_state.build_question_sequences(state, questions)?;
-        let forward_result = loaded_state.scored_rows_by_question(
-            questions,
-            &question_sequences,
-            head_input_request,
-        );
-        // The pass arrays are dropped by now, whether or not a pass failed;
-        // synchronizing and clearing the MLX buffer cache returns their memory
-        // before the next request.
-        let _cleanup_result = loaded_state
-            .runtime
-            .synchronize_gpu_stream_and_clear_mlx_buffer_cache();
-        // Taken after the cleanup, so it holds no `mlx_buffer_cache` bytes and is
-        // the state the next request starts from.
-        let post_cleanup_memory_telemetry = match loaded_state.runtime.memory_snapshot() {
-            Ok(memory_snapshot) => Some(forward_pass_memory_telemetry(
-                &memory_snapshot,
-                self.effective_mlx_memory_ceiling_bytes as u64,
-                self.resident_weight_bytes,
-            )),
-            Err(_) => None,
-        };
-        let decision_outcome = match forward_result {
-            Ok(scored_rows) => answered_questions(
-                &QuestionTemperatures {
-                    configuration: &loaded_state.configuration,
-                    calibration_override: &self.calibration_override,
-                },
-                questions,
-                &question_sequences,
-                scored_rows,
-            ),
-            Err(forward_failure) => Err(forward_failure),
-        };
-        self.post_cleanup_memory_telemetry = post_cleanup_memory_telemetry;
-        let (question_outcomes, input_token_count) = decision_outcome?;
-        Ok(DecisionEngineOutput {
-            question_outcomes,
-            input_token_count,
-            elapsed_millis: u64::try_from(started_at.elapsed().as_millis()).unwrap_or(u64::MAX),
-        })
-    }
-
-    fn start_training(&mut self, job: DecisionTrainingJob) -> Result<(), DecisionFailure> {
-        if self.loaded_state.is_none() {
-            return Err(DecisionFailure::fatal_execution(
-                "the decision engine was asked to train before load",
-            ));
-        }
-        start_session(&mut self.training_session, job)
-    }
-
-    fn advance_training(&mut self) -> Result<DecisionTrainingStep, DecisionFailure> {
-        let Some(mut session) = self.training_session.take() else {
-            return Err(DecisionFailure::fatal_execution(
-                "no training is in progress",
-            ));
-        };
-        let step = session.advance(self);
-        keep_session_if_running(&mut self.training_session, session, &step);
-        step
-    }
-
-    fn cancel_training(&mut self) {
-        self.training_session = None;
-    }
-
-    fn take_post_cleanup_memory_telemetry(&mut self) -> Option<MlxMemoryTelemetry> {
-        self.post_cleanup_memory_telemetry.take()
-    }
-
-    fn collect_mlx_memory_telemetry(&self) -> Option<MlxMemoryTelemetry> {
-        let loaded_state = self.loaded_state.as_ref()?;
-        let memory_snapshot = loaded_state.runtime.memory_snapshot().ok()?;
-        Some(forward_pass_memory_telemetry(
-            &memory_snapshot,
-            self.effective_mlx_memory_ceiling_bytes as u64,
-            self.resident_weight_bytes,
-        ))
-    }
-}
-
-/// Where a question's temperature comes from: the folder's calibration for
-/// a kind it names, otherwise the checkpoint's own table.
 struct QuestionTemperatures<'loaded> {
     configuration: &'loaded LayaConfiguration,
     calibration_override: &'loaded CalibrationOverride,
@@ -467,49 +419,6 @@ fn detect_weight_layout(tensors: &MlxSafetensors) -> ModernBertWeightLayout {
         TokenEmbeddingStorage::Dense
     };
     ModernBertWeightLayout::new(ENCODER_TENSOR_PREFIX, token_embedding_storage)
-}
-
-/// What a training needs from this engine.
-impl DecisionTrainingHost for LayaDecisionEngine {
-    fn read_answers(
-        &mut self,
-        state: &OrderedJsonValue,
-        questions: &OrderedJsonValue,
-        head_input_request: HeadInputRequest,
-    ) -> Result<Vec<QuestionOutcome>, DecisionFailure> {
-        read_through_decide(self, state, questions, head_input_request)
-    }
-
-    fn mlx_runtime(&self) -> Result<&MlxRuntime, DecisionFailure> {
-        match self.loaded_state.as_ref() {
-            Some(loaded_state) => Ok(&loaded_state.runtime),
-            None => Err(DecisionFailure::fatal_execution(
-                "the decision engine was asked to train before load",
-            )),
-        }
-    }
-
-    fn model_directory(&self) -> &Path {
-        &self.model_directory
-    }
-
-    fn tunable_family(&self) -> TunableHeadFamily {
-        TunableHeadFamily::Laya
-    }
-
-    fn whole_model_scorer(
-        &mut self,
-        examples: &[TrainingExample],
-        row_sources: &[RowSource],
-        scorer_layout: &ParameterLayout,
-    ) -> Result<WholeModelScorer, DecisionFailure> {
-        let Some(loaded_state) = self.loaded_state.as_ref() else {
-            return Err(DecisionFailure::fatal_execution(
-                "the decision engine was asked to train before load",
-            ));
-        };
-        LayaWholeModelScorer::for_rows(loaded_state, examples, row_sources, scorer_layout)
-    }
 }
 
 #[cfg(test)]

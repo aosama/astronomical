@@ -9,13 +9,12 @@
 //! with a plain softmax, as the reference's `systemone` computes them.
 
 use std::collections::HashSet;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::rc::Rc;
-use std::time::Instant;
 
 use decision_contract::calibration_file::CalibrationOverride;
 use decision_contract::clef_answers::clef_answer_from_scored_probabilities;
-use decision_contract::decision_training_job::{DecisionTrainingJob, TrainingExample};
+use decision_contract::decision_training_job::TrainingExample;
 use decision_contract::head_tuning_file::TunableHeadFamily;
 use decision_contract::{
     DecisionFailure, DecisionQuestion, FloatVector, HeadInputRequest, HeadInputs, OrderedJsonValue,
@@ -34,41 +33,28 @@ use super::prompt::{
 };
 use super::tokenizer::ClefTokenizer;
 use super::whole_model_scorer::ClefWholeModelScorer;
-use crate::decision_engine::DecisionTrainingStep;
-use crate::decision_engine::{DecisionEngine, DecisionEngineLoadResult, DecisionEngineOutput};
 use crate::decision_models::calibration_override::read_calibration_override;
+use crate::decision_models::decision_engine_shell::{
+    AdmittedDecision, DecisionEngineShell, DecisionFamily, LoadedDecisionModel, PreparedFolder,
+    admit_questions_then_load, safetensors_bytes_in,
+};
 use crate::decision_models::head_tuning::read_head_tuning;
 use crate::decision_models::qwen_backbone::{
     HoldsDecisionBackbone, PREFILL_CHUNK_TOKENS, QwenDecisionBackbone,
 };
 use crate::decision_models::training::question_selection::RowSource;
-use crate::decision_models::training::training_session::{
-    DecisionTrainingHost, DecisionTrainingSession, WholeModelScorer, keep_session_if_running,
-    read_through_decide, start_session,
-};
-use crate::memory::telemetry::MlxMemoryTelemetry;
-use model_primitives::forward_pass_memory::forward_pass_memory_telemetry;
+use crate::decision_models::training::training_session::WholeModelScorer;
 
 /// The temperature a Clef logit is used at unless the folder's calibration
 /// names its kind: the reference applies none.
 const CLEF_TEMPERATURE: f64 = 1.0;
 
-/// A Clef runtime bound to one model folder.
-pub struct ClefDecisionEngine {
-    model_id: String,
-    model_directory: PathBuf,
-    effective_mlx_memory_ceiling_bytes: usize,
-    mlx_buffer_cache_limit_bytes: usize,
-    resident_weight_bytes: u64,
-    /// Shared with a whole-model training's scorer, which reads the
-    /// backbone and the head from inside MLX's gradient closures.
-    loaded_state: Option<Rc<LoadedClefState>>,
-    post_cleanup_memory_telemetry: Option<MlxMemoryTelemetry>,
-    /// A training of the final layers in progress, if any.
-    training_session: Option<DecisionTrainingSession>,
-}
+/// Clef behind the shared decision engine, bound to one model folder.
+pub type ClefDecisionEngine = DecisionEngineShell<ClefDecisionFamily>;
 
-pub(super) struct LoadedClefState {
+pub struct ClefDecisionFamily;
+
+pub struct LoadedClefState {
     pub(super) backbone: QwenDecisionBackbone,
     pub(super) tokenizer: ClefTokenizer,
     pub(super) head_weights: ClefHeadWeights,
@@ -83,31 +69,92 @@ impl HoldsDecisionBackbone for LoadedClefState {
     }
 }
 
-impl ClefDecisionEngine {
-    /// Creates an unloaded engine for the Clef folder `model_directory`.
-    pub fn new(
-        model_id: impl Into<String>,
-        model_directory: &Path,
-        effective_mlx_memory_ceiling_bytes: usize,
-        mlx_buffer_cache_limit_bytes: usize,
-    ) -> Result<Self, DecisionFailure> {
+impl DecisionFamily for ClefDecisionFamily {
+    type Prepared = ();
+    type LoadedState = LoadedClefState;
+    type RequestPlan = ();
+    const TUNABLE_FAMILY: TunableHeadFamily = TunableHeadFamily::Clef;
+
+    fn prepare(model_directory: &Path) -> Result<PreparedFolder<()>, DecisionFailure> {
         ClefHeadSettings::read(model_directory)?;
         // Read here as well as at load so an unusable file is refused before
         // any weights are loaded.
         read_calibration_override(model_directory)?;
         read_head_tuning(model_directory, TunableHeadFamily::Clef)?;
-        Ok(Self {
-            model_id: model_id.into(),
-            model_directory: model_directory.to_path_buf(),
-            effective_mlx_memory_ceiling_bytes,
-            mlx_buffer_cache_limit_bytes,
-            resident_weight_bytes: weight_file_bytes(model_directory),
-            loaded_state: None,
-            post_cleanup_memory_telemetry: None,
-            training_session: None,
+        Ok(PreparedFolder {
+            prepared: (),
+            resident_weight_bytes: safetensors_bytes_in(model_directory),
         })
     }
 
+    fn load_state(
+        model_directory: &Path,
+        _prepared: &mut Option<()>,
+        memory_limits: MlxMemoryLimits,
+    ) -> Result<LoadedDecisionModel<LoadedClefState>, DecisionFailure> {
+        let head_settings = ClefHeadSettings::read(model_directory)?;
+        let calibration_override = read_calibration_override(model_directory)?;
+        let tokenizer = ClefTokenizer::read(model_directory)?;
+        let backbone = QwenDecisionBackbone::load(model_directory, memory_limits)?;
+        if backbone.model.hidden_size() as usize != head_settings.hidden_size {
+            return Err(DecisionFailure::fatal_execution(
+                "Clef's joint head was trained for a different backbone width",
+            ));
+        }
+        let mut head_weights =
+            ClefHeadWeights::read(backbone.model.runtime(), model_directory, &head_settings)?;
+        head_weights.apply_tuning(&read_head_tuning(model_directory, TunableHeadFamily::Clef)?)?;
+        Ok(LoadedDecisionModel {
+            loaded_state: LoadedClefState {
+                backbone,
+                tokenizer,
+                head_weights,
+                head_settings,
+                calibration_override,
+            },
+            maximum_tokens_per_question: CLEF_MAXIMUM_SEQUENCE_TOKENS as u32,
+        })
+    }
+
+    fn runtime(loaded_state: &LoadedClefState) -> &MlxRuntime {
+        loaded_state.backbone.model.runtime()
+    }
+
+    fn admit_decision<'loaded>(
+        loaded_state: Option<&'loaded Rc<LoadedClefState>>,
+        _state: &OrderedJsonValue,
+        questions: &[DecisionQuestion],
+    ) -> Result<AdmittedDecision<'loaded, LoadedClefState, ()>, DecisionFailure> {
+        admit_questions_then_load("Clef", loaded_state, questions)
+    }
+
+    fn answer_questions(
+        loaded_state: &Rc<LoadedClefState>,
+        _request_plan: (),
+        state: &OrderedJsonValue,
+        questions: &[DecisionQuestion],
+        head_input_request: HeadInputRequest,
+    ) -> Result<(Vec<QuestionOutcome>, u32), DecisionFailure> {
+        answer_every_question(
+            loaded_state,
+            &loaded_state.head_weights,
+            state,
+            questions,
+            head_input_request,
+        )
+    }
+
+    fn whole_model_scorer(
+        loaded_state: &Rc<LoadedClefState>,
+        examples: &[TrainingExample],
+        row_sources: &[RowSource],
+        scorer_layout: &ParameterLayout,
+    ) -> Result<WholeModelScorer, DecisionFailure> {
+        ClefWholeModelScorer::for_rows(loaded_state, examples, row_sources, scorer_layout)
+    }
+}
+
+impl ClefDecisionEngine {
     /// The token identifiers of a request's sequence, without running the model.
     ///
     /// Exposed so the layout on the real tokenizer can be compared with the
@@ -118,146 +165,12 @@ impl ClefDecisionEngine {
         state: &OrderedJsonValue,
         questions: &[DecisionQuestion],
     ) -> Result<Vec<u32>, DecisionFailure> {
-        let loaded_state = self.loaded_state()?;
-        Ok(build_clef_sequence(&loaded_state.tokenizer, state, questions)?.token_ids)
-    }
-
-    fn loaded_state(&self) -> Result<&LoadedClefState, DecisionFailure> {
-        match self.loaded_state.as_deref() {
-            Some(loaded_state) => Ok(loaded_state),
-            None => Err(DecisionFailure::fatal_execution(
+        let Some(loaded_state) = self.loaded_state() else {
+            return Err(DecisionFailure::fatal_execution(
                 "the Clef engine was asked to decide before load",
-            )),
-        }
-    }
-}
-
-impl DecisionEngine for ClefDecisionEngine {
-    fn load(&mut self) -> Result<DecisionEngineLoadResult, DecisionFailure> {
-        if self.loaded_state.is_some() {
-            return Err(DecisionFailure::fatal_execution(
-                "decision engine load was requested twice",
-            ));
-        }
-        let memory_limits = MlxMemoryLimits::new(
-            self.effective_mlx_memory_ceiling_bytes,
-            self.mlx_buffer_cache_limit_bytes,
-        )
-        .map_err(|_| {
-            DecisionFailure::fatal_execution("decision runtime memory limits are invalid")
-        })?;
-        let head_settings = ClefHeadSettings::read(&self.model_directory)?;
-        let calibration_override = read_calibration_override(&self.model_directory)?;
-        let tokenizer = ClefTokenizer::read(&self.model_directory)?;
-        let backbone = QwenDecisionBackbone::load(&self.model_directory, memory_limits)?;
-        if backbone.model.hidden_size() as usize != head_settings.hidden_size {
-            return Err(DecisionFailure::fatal_execution(
-                "Clef's joint head was trained for a different backbone width",
-            ));
-        }
-        let mut head_weights = ClefHeadWeights::read(
-            backbone.model.runtime(),
-            &self.model_directory,
-            &head_settings,
-        )?;
-        head_weights.apply_tuning(&read_head_tuning(
-            &self.model_directory,
-            TunableHeadFamily::Clef,
-        )?)?;
-        self.loaded_state = Some(Rc::new(LoadedClefState {
-            backbone,
-            tokenizer,
-            head_weights,
-            head_settings,
-            calibration_override,
-        }));
-        Ok(DecisionEngineLoadResult {
-            model_id: self.model_id.clone(),
-            maximum_tokens_per_question: CLEF_MAXIMUM_SEQUENCE_TOKENS as u32,
-        })
-    }
-
-    fn decide(
-        &mut self,
-        state: &OrderedJsonValue,
-        questions: &[DecisionQuestion],
-        head_input_request: HeadInputRequest,
-    ) -> Result<DecisionEngineOutput, DecisionFailure> {
-        let started_at = Instant::now();
-        if questions.is_empty() {
-            return Err(DecisionFailure::invalid_request(
-                "a decision request needs at least one question",
-            ));
-        }
-        let loaded_state = self.loaded_state()?;
-        let decision_outcome = answer_every_question(
-            loaded_state,
-            &loaded_state.head_weights,
-            state,
-            questions,
-            head_input_request,
-        );
-        // Whatever happened, the request's decoder state is dropped by now;
-        // clearing the MLX buffer cache returns its memory before the next one.
-        let runtime = loaded_state.backbone.model.runtime();
-        let _cleanup_result = runtime.synchronize_gpu_stream_and_clear_mlx_buffer_cache();
-        self.post_cleanup_memory_telemetry =
-            runtime.memory_snapshot().ok().map(|memory_snapshot| {
-                forward_pass_memory_telemetry(
-                    &memory_snapshot,
-                    self.effective_mlx_memory_ceiling_bytes as u64,
-                    self.resident_weight_bytes,
-                )
-            });
-        let (question_outcomes, input_token_count) = decision_outcome?;
-        Ok(DecisionEngineOutput {
-            question_outcomes,
-            input_token_count,
-            elapsed_millis: u64::try_from(started_at.elapsed().as_millis()).unwrap_or(u64::MAX),
-        })
-    }
-
-    fn start_training(&mut self, job: DecisionTrainingJob) -> Result<(), DecisionFailure> {
-        if self.loaded_state.is_none() {
-            return Err(DecisionFailure::fatal_execution(
-                "the decision engine was asked to train before load",
-            ));
-        }
-        start_session(&mut self.training_session, job)
-    }
-
-    fn advance_training(&mut self) -> Result<DecisionTrainingStep, DecisionFailure> {
-        let Some(mut session) = self.training_session.take() else {
-            return Err(DecisionFailure::fatal_execution(
-                "no training is in progress",
             ));
         };
-        let step = session.advance(self);
-        keep_session_if_running(&mut self.training_session, session, &step);
-        step
-    }
-
-    fn cancel_training(&mut self) {
-        self.training_session = None;
-    }
-
-    fn take_post_cleanup_memory_telemetry(&mut self) -> Option<MlxMemoryTelemetry> {
-        self.post_cleanup_memory_telemetry.take()
-    }
-
-    fn collect_mlx_memory_telemetry(&self) -> Option<MlxMemoryTelemetry> {
-        let loaded_state = self.loaded_state.as_ref()?;
-        let memory_snapshot = loaded_state
-            .backbone
-            .model
-            .runtime()
-            .memory_snapshot()
-            .ok()?;
-        Some(forward_pass_memory_telemetry(
-            &memory_snapshot,
-            self.effective_mlx_memory_ceiling_bytes as u64,
-            self.resident_weight_bytes,
-        ))
+        Ok(build_clef_sequence(&loaded_state.tokenizer, state, questions)?.token_ids)
     }
 }
 
@@ -461,66 +374,6 @@ fn plain_softmax(option_logits: &[f64]) -> Vec<f64> {
         *weight /= weight_total;
     }
     weights
-}
-
-/// The bytes of the backbone's and head's weight files, reported as resident memory.
-fn weight_file_bytes(model_directory: &Path) -> u64 {
-    let Ok(directory_entries) = std::fs::read_dir(model_directory) else {
-        return 0;
-    };
-    let mut total_bytes = 0;
-    for directory_entry in directory_entries.flatten() {
-        let file_name = directory_entry.file_name();
-        if file_name.to_string_lossy().ends_with(".safetensors")
-            && let Ok(file_metadata) = directory_entry.metadata()
-        {
-            total_bytes += file_metadata.len();
-        }
-    }
-    total_bytes
-}
-
-/// What a training needs from this engine.
-impl DecisionTrainingHost for ClefDecisionEngine {
-    fn read_answers(
-        &mut self,
-        state: &OrderedJsonValue,
-        questions: &OrderedJsonValue,
-        head_input_request: HeadInputRequest,
-    ) -> Result<Vec<QuestionOutcome>, DecisionFailure> {
-        read_through_decide(self, state, questions, head_input_request)
-    }
-
-    fn mlx_runtime(&self) -> Result<&MlxRuntime, DecisionFailure> {
-        match self.loaded_state.as_ref() {
-            Some(loaded_state) => Ok(loaded_state.backbone.model.runtime()),
-            None => Err(DecisionFailure::fatal_execution(
-                "the decision engine was asked to train before load",
-            )),
-        }
-    }
-
-    fn model_directory(&self) -> &Path {
-        &self.model_directory
-    }
-
-    fn tunable_family(&self) -> TunableHeadFamily {
-        TunableHeadFamily::Clef
-    }
-
-    fn whole_model_scorer(
-        &mut self,
-        examples: &[TrainingExample],
-        row_sources: &[RowSource],
-        scorer_layout: &ParameterLayout,
-    ) -> Result<WholeModelScorer, DecisionFailure> {
-        let Some(loaded_state) = self.loaded_state.as_ref() else {
-            return Err(DecisionFailure::fatal_execution(
-                "the decision engine was asked to train before load",
-            ));
-        };
-        ClefWholeModelScorer::for_rows(loaded_state, examples, row_sources, scorer_layout)
-    }
 }
 
 #[cfg(test)]
