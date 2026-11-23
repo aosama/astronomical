@@ -6,8 +6,8 @@
 //! retention decision itself lives in the memory package; this holder is the
 //! typed state the engine retains and installs.
 
-use crate::astro_ssd_prompt_cache::AstroSsdPromptCacheBlockKey;
 use crate::qwen3_5_core::decoder::RequestDecoderStateStack;
+use engine_core::astro_ssd_prompt_cache::AstroSsdPromptCacheBlockKey;
 
 use super::Qwen3_5EngineState;
 

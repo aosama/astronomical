@@ -12,6 +12,8 @@
 
 pub mod astro_decoder_state_cache;
 
+pub mod astro_ssd_prompt_cache;
+
 pub mod expert_paging;
 
 pub mod inference_engine;
@@ -23,6 +25,34 @@ pub mod model_generation_processor;
 pub mod speculative_decoding;
 
 pub mod structured_generation;
+
+pub use astro_ssd_prompt_cache::block_causal_input::AstroSsdPromptCacheBlockCausalInput;
+pub use astro_ssd_prompt_cache::block_format::AstroSsdPromptCacheBlockHeader;
+pub use astro_ssd_prompt_cache::block_format_error::AstroSsdPromptCacheBlockError;
+pub use astro_ssd_prompt_cache::prefix_lookup::AstroSsdPromptCachePrefixLookup;
+pub use astro_ssd_prompt_cache::visual_embedding_format::PersistentVisualEmbeddingFileHeader;
+pub use astro_ssd_prompt_cache::visual_embedding_key::PERSISTENT_VISUAL_EMBEDDING_FORMAT_VERSION;
+
+pub use astro_ssd_prompt_cache::{
+    AstroSsdPromptCacheBlockKey, AstroSsdPromptCacheBlockKeyError,
+    AstroSsdPromptCacheLookupDiagnostics, AstroSsdPromptCacheMissReason,
+    AstroSsdPromptCacheModelContract, AstroSsdPromptCacheModelContractError,
+    AstroSsdPromptCachePrefixLookupResult, PersistentVisualEmbeddingFileError,
+    PersistentVisualEmbeddingKey, PersistentVisualEmbeddingModelContract,
+    astro_ssd_prompt_cache_boundary_clamped_prefill_chunk_end,
+    astro_ssd_prompt_cache_boundary_completed_prefill_chunk_tokens,
+    astro_ssd_prompt_cache_clamped_prefill_chunk_end,
+    astro_ssd_prompt_cache_partial_tail_capture_end,
+};
+
+#[cfg(feature = "direct-mlx")]
+pub use astro_ssd_prompt_cache::{
+    AstroSsdPromptCacheClearOutcome, AstroSsdPromptCacheDiskStore,
+    AstroSsdPromptCacheDiskStoreConfig, AstroSsdPromptCacheDiskStoreError,
+    AstroSsdPromptCachePublicationOutcome, AstroSsdPromptCacheStartupCleanupCategory,
+    AstroSsdPromptCacheStartupCleanupEvidence, build_astro_ssd_prompt_cache_stats_event,
+    clear_astro_ssd_prompt_cache_directory,
+};
 
 #[cfg(feature = "direct-mlx")]
 pub use astro_decoder_state_cache::{

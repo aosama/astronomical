@@ -45,6 +45,8 @@ pub mod disk_store_scan;
 mod disk_store_visual_embeddings;
 #[cfg(feature = "direct-mlx")]
 mod disk_store_write;
+#[cfg(test)]
+mod frozen_ornith_test_support;
 mod model_contract;
 mod model_contract_error;
 mod model_contract_storage_geometry;

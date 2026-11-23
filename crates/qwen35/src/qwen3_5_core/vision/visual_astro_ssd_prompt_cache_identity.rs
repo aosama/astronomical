@@ -9,7 +9,7 @@ use thiserror::Error;
 #[cfg(test)]
 mod tests;
 
-use crate::astro_ssd_prompt_cache::block_causal_input::AstroSsdPromptCacheBlockCausalInput;
+use engine_core::astro_ssd_prompt_cache::block_causal_input::AstroSsdPromptCacheBlockCausalInput;
 
 const QWEN_VISUAL_BLOCK_CAUSAL_INPUT_DOMAIN: &[u8] = b"astronomical-qwen3-5-visual-block-v1";
 

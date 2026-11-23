@@ -9,11 +9,11 @@
 //! not fill its last block: that last token runs on its own so the partial
 //! tail block is captured where the next request's lookup expects it.
 
-use crate::astro_ssd_prompt_cache::{
+use crate::qwen3_5_streaming::model::layer_major_prefill::LayerMajorSpan;
+use engine_core::astro_ssd_prompt_cache::{
     astro_ssd_prompt_cache_boundary_completed_prefill_chunk_tokens,
     astro_ssd_prompt_cache_partial_tail_capture_end, resolve_prompt_prefill_chunk_span,
 };
-use crate::qwen3_5_streaming::model::layer_major_prefill::LayerMajorSpan;
 
 /// The spans one layer-major prefill runs and the cursor it advances to.
 #[derive(Clone, Debug, Eq, PartialEq)]

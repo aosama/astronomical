@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 
 use thiserror::Error;
 
-use crate::safetensors::{
+use memory_policy::safetensors::{
     BoundedSafetensorsHeaderError, SafetensorsTensorView as PersistentSafetensorsTensorView,
     read_bounded_safetensors_json_header,
 };

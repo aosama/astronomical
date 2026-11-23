@@ -1,9 +1,9 @@
 //! The Qwen 3.5 model family (issue #2340): the shared core (configuration,
 //! tokenizer, decoder, model math, artifacts and vision), the resident and
 //! streaming engines, the Prism Hadamard ternary build, speculative decoding,
-//! expert paging, the custom kernel capability probes, the
-//! astro_ssd_prompt_cache the family's engines publish to, the owner-thread
-//! engine they run on. The quantizer's sensitivity probe for this family lives
+//! the custom kernel capability probes, and the owner-thread engine they run
+//! on. The `astro_ssd_prompt_cache` and expert paging they use live in the
+//! engine core. The quantizer's sensitivity probe for this family lives
 //! in `qwen35-quantization-probe`, so this crate never compiles
 //! the quantizer.
 //!
@@ -13,8 +13,6 @@
 //! `cargo xtask check-architecture` enforces. The serving crate re-exports
 //! this crate's root with a glob, so every name at this root stays unique
 //! across the crates it re-exports.
-
-pub mod astro_ssd_prompt_cache;
 
 pub mod kernel_capability;
 
@@ -45,7 +43,6 @@ pub mod qwen3_5_streaming;
 pub(crate) use ::artifact_validation;
 use artifact_validation::*;
 use engine_core::*;
-use memory_policy::safetensors;
 use model_primitives::*;
 
 pub use mlx_inference_engine::MlxInferenceEngine;
@@ -84,45 +81,12 @@ pub use kernel_capability::{
     KernelUnsupportedReason, WorkerKernelCapabilities, validate_probe_outputs,
 };
 
-pub use astro_ssd_prompt_cache::{
-    AstroSsdPromptCacheBlockKey, AstroSsdPromptCacheBlockKeyError,
-    AstroSsdPromptCacheLookupDiagnostics, AstroSsdPromptCacheMissReason,
-    AstroSsdPromptCacheModelContract, AstroSsdPromptCacheModelContractError,
-    AstroSsdPromptCachePrefixLookupResult, PersistentVisualEmbeddingFileError,
-    PersistentVisualEmbeddingKey, PersistentVisualEmbeddingModelContract,
-    astro_ssd_prompt_cache_boundary_clamped_prefill_chunk_end,
-    astro_ssd_prompt_cache_boundary_completed_prefill_chunk_tokens,
-    astro_ssd_prompt_cache_clamped_prefill_chunk_end,
-    astro_ssd_prompt_cache_partial_tail_capture_end,
-};
-
-#[cfg(feature = "direct-mlx")]
-pub use astro_ssd_prompt_cache::{
-    AstroSsdPromptCacheClearOutcome, AstroSsdPromptCacheDiskStore,
-    AstroSsdPromptCacheDiskStoreConfig, AstroSsdPromptCacheDiskStoreError,
-    AstroSsdPromptCachePublicationOutcome, AstroSsdPromptCacheStartupCleanupCategory,
-    AstroSsdPromptCacheStartupCleanupEvidence, build_astro_ssd_prompt_cache_stats_event,
-    clear_astro_ssd_prompt_cache_directory,
-};
-
 pub use qwen3_5_core::artifacts::{
     Qwen3_5ArtifactError, Qwen3_5ArtifactValidationError, Qwen3_5ArtifactValidator,
     Qwen3_5MemoryGeometryError, Qwen3_5ShardIndex, ValidatedQwen3_5Artifact,
     expert_layer_plans_for_validated_artifact, model_memory_geometry_from_validated_artifact,
     qwen3_5_language_tensor_profiles,
 };
-
-pub use astro_ssd_prompt_cache::block_causal_input::AstroSsdPromptCacheBlockCausalInput;
-
-pub use astro_ssd_prompt_cache::block_format::AstroSsdPromptCacheBlockHeader;
-
-pub use astro_ssd_prompt_cache::block_format_error::AstroSsdPromptCacheBlockError;
-
-pub use astro_ssd_prompt_cache::prefix_lookup::AstroSsdPromptCachePrefixLookup;
-
-pub use astro_ssd_prompt_cache::visual_embedding_format::PersistentVisualEmbeddingFileHeader;
-
-pub use astro_ssd_prompt_cache::visual_embedding_key::PERSISTENT_VISUAL_EMBEDDING_FORMAT_VERSION;
 
 pub use qwen3_5_core::configuration::{
     Qwen3_5Config, Qwen3_5ConfigError, Qwen3_5FeedForwardArchitecture,
