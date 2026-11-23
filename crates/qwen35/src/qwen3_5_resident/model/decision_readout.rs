@@ -18,7 +18,6 @@
 
 use mlx_bridge::{MlxArray, MlxDtype};
 
-use super::decoder_layer_weights::Qwen3_5AffineWeights;
 use super::{Qwen3_5ExecutionError, Qwen3_5ResidentModel, RequestDecoderStateStack};
 use crate::PerformanceAttribution;
 

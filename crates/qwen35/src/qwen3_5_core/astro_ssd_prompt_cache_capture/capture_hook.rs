@@ -2,7 +2,7 @@
 
 use crate::InferenceEngineError;
 use crate::qwen3_5_core::engine_request::Qwen3_5EngineRequest;
-use crate::qwen3_5_core::model::Qwen3_5ModelBase;
+use crate::qwen3_5_core::shared_execution::execution_core::Qwen3_5ExecutionCoreOwner;
 
 /// The engine-specific half of astro SSD prompt cache capture.
 ///
@@ -12,12 +12,7 @@ use crate::qwen3_5_core::model::Qwen3_5ModelBase;
 /// single retry. The resident engine holds every expert by design and has
 /// nothing to evict, so its retry repeats the first attempt unchanged; the
 /// divergence between the engines is recorded on issue #1637.
-pub trait Qwen3_5AstroSsdPromptCacheCapture {
-    /// The engine's model; capture itself needs only the shared base.
-    type Model: std::ops::Deref<Target = Qwen3_5ModelBase>;
-    /// The engine-only request state carried by its requests.
-    type RequestExtension;
-
+pub trait Qwen3_5AstroSsdPromptCacheCapture: Qwen3_5ExecutionCoreOwner {
     /// Frees what this engine can before the one publication retry, given
     /// the bytes the MLX active-memory limit was short by, and records what
     /// it freed in the request's astro SSD prompt cache diagnostics.

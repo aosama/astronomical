@@ -16,11 +16,8 @@ pub mod engine_draft_runtime;
 pub mod speculation_session_admission;
 pub mod speculative_decode_advance;
 
-pub use engine_draft_runtime::{Qwen3_5DraftRuntimeLoadOutcome, Qwen3_5SpeculativeDraftRuntime};
-pub use speculation_session_admission::{
-    SpeculationSessionRequestProperties, VerificationTokenChoice,
-    should_admit_speculation_for_session,
-};
+pub use engine_draft_runtime::Qwen3_5SpeculativeDraftRuntime;
+pub use speculation_session_admission::VerificationTokenChoice;
 
 #[cfg(test)]
 mod draft_tree_round_tests;

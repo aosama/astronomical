@@ -2,12 +2,13 @@
 //! that owns a [`Qwen3_5ExecutionCore`]. Each runs on the MLX owner thread,
 //! where the engine's state lives.
 
-use ipc_protocol::{RequestId, WorkerPromptWorkReuse};
+use ipc_protocol::{ExpertMemoryMode, RequestId, WorkerPromptWorkReuse};
 
 use crate::qwen3_5_core::engine_errors::{fatal_engine_error, qwen3_5_runtime_error};
 use crate::{InferenceEngineError, MlxInferenceEngine, MlxInferenceExecution};
 
 use super::execution_core::Qwen3_5ExecutionCoreOwner;
+use super::text_model::Qwen3_5TextModel;
 
 impl<Execution> MlxInferenceEngine<Execution>
 where
@@ -51,6 +52,41 @@ where
         })
         .await
     }
+}
+
+/// Controls that read the loaded text model.
+impl<Execution> MlxInferenceEngine<Execution>
+where
+    Execution: MlxInferenceExecution + Qwen3_5ExecutionCoreOwner<Model: Qwen3_5TextModel>,
+{
+    /// Returns the currently loaded model's truthful expert-memory mode.
+    #[doc(hidden)]
+    pub async fn expert_memory_mode_for_tests(
+        &self,
+    ) -> Result<Option<ExpertMemoryMode>, InferenceEngineError> {
+        let (expert_memory_mode_sender, expert_memory_mode_receiver) =
+            std::sync::mpsc::sync_channel(1);
+        self.run_owner_test_operation(move |qwen_inference_execution| {
+            expert_memory_mode_sender
+                .send(loaded_expert_memory_mode(qwen_inference_execution))
+                .map_err(|_| fatal_engine_error("expert-memory mode receiver stopped unexpectedly"))
+        })
+        .await?;
+        expert_memory_mode_receiver.recv().map_err(|_| {
+            fatal_engine_error("expert-memory mode owner operation returned no response")
+        })
+    }
+}
+
+fn loaded_expert_memory_mode<Execution>(inference_execution: &Execution) -> Option<ExpertMemoryMode>
+where
+    Execution: Qwen3_5ExecutionCoreOwner<Model: Qwen3_5TextModel>,
+{
+    inference_execution
+        .execution_core()
+        .model
+        .as_ref()
+        .map(Qwen3_5TextModel::expert_memory_mode)
 }
 
 fn active_request_prompt_work_reuse<Execution: Qwen3_5ExecutionCoreOwner>(

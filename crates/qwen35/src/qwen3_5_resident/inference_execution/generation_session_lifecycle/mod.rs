@@ -17,7 +17,6 @@ mod generation_session_validate_admit_restore_install;
 // They are private here, but every child above can reach them as
 // `super::<name>` exactly as before the move.
 use super::Qwen3_5EngineState;
-use super::decoder_state_reuse;
 use super::engine_request;
 use super::fatal_engine_error;
 use super::qwen3_5_runtime_error;

@@ -73,10 +73,6 @@ impl ForwardShape {
         }
     }
 
-    pub(in crate::qwen3_5_resident) const fn phase(self) -> LedgerPhase {
-        self.phase
-    }
-
     const fn prompt_chunk_token_count(self) -> Option<usize> {
         if self.is_prompt_chunk {
             Some(self.token_count)

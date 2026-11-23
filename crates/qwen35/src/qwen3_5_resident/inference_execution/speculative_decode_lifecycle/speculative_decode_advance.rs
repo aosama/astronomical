@@ -16,7 +16,6 @@
 
 use ipc_protocol::RequestId;
 
-use crate::GeneratedToken;
 use crate::qwen3_5_core::decoder::reply_token_mlx_buffer_cache_reclaim::reclaim_mlx_buffer_cache_between_draft_rounds;
 use crate::qwen3_5_core::shared_execution::decode_step::ActiveRequestAdvance;
 use crate::qwen3_5_core::shared_execution::generated_token_emission;

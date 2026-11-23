@@ -11,7 +11,6 @@ use crate::qwen3_5_core::model::loading_pipeline::{
 };
 use crate::{ModelMemoryFacts, ModelMemoryGeometry, PerformanceAttribution, PerformanceOperation};
 
-use super::Qwen3_5ModelBase;
 use super::Qwen3_5ResidentModel;
 use super::{
     Qwen3_5ExecutionError, Qwen3_5FeedForwardArchitecture, Qwen3_5VisionModel, Qwen3_5Weights,

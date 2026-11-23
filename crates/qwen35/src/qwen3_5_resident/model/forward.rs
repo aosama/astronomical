@@ -1,10 +1,7 @@
 use mlx_bridge::MlxArray;
 
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
-use crate::qwen3_5_core::model_math::feed_forward_weights::{
-    Qwen3_5MoEFeedForwardWeights, Qwen3_5MoERouterGateWeights,
-};
-use crate::qwen3_5_core::model_math::routing;
+use crate::qwen3_5_core::model_math::feed_forward_weights::Qwen3_5MoEFeedForwardWeights;
 use crate::qwen3_5_resident::experts::Qwen3_5ResidentExpertLayerWeights;
 use crate::qwen3_5_resident::model::Qwen3_5ResidentModel;
 use crate::{PerformanceAttribution, PerformanceOperation};

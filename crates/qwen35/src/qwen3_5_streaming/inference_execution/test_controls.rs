@@ -1,5 +1,4 @@
 use crate::{AstroExpertCacheStatistics, InferenceEngineError};
-use ipc_protocol::ExpertMemoryMode;
 
 use crate::MlxInferenceEngine;
 
@@ -9,13 +8,6 @@ use super::{Qwen3_5EngineState, Qwen3_5InferenceExecution, fatal_engine_error};
 // public wrappers. Keeping acceptance-only state mutation out of the engine
 // owner prevents the production lifecycle module from becoming a test-control bag.
 impl Qwen3_5EngineState {
-    fn expert_memory_mode_for_tests(&self) -> Option<ExpertMemoryMode> {
-        self.core
-            .model
-            .as_ref()
-            .map(|loaded_model| loaded_model.expert_memory_mode())
-    }
-
     fn take_direct_expert_fetch_counts_for_tests(
         &self,
     ) -> Result<crate::DirectExpertFetchCounts, InferenceEngineError> {
@@ -121,24 +113,6 @@ impl Qwen3_5EngineState {
 }
 
 impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
-    /// Returns the currently loaded model's truthful expert-memory mode.
-    #[doc(hidden)]
-    pub async fn expert_memory_mode_for_tests(
-        &self,
-    ) -> Result<Option<ExpertMemoryMode>, InferenceEngineError> {
-        let (expert_memory_mode_sender, expert_memory_mode_receiver) =
-            std::sync::mpsc::sync_channel(1);
-        self.run_owner_test_operation(move |qwen_inference_execution| {
-            expert_memory_mode_sender
-                .send(qwen_inference_execution.expert_memory_mode_for_tests())
-                .map_err(|_| fatal_engine_error("expert-memory mode receiver stopped unexpectedly"))
-        })
-        .await?;
-        expert_memory_mode_receiver.recv().map_err(|_| {
-            fatal_engine_error("expert-memory mode owner operation returned no response")
-        })
-    }
-
     /// Which way each fetching layer's missing experts went since this was
     /// last called, and why the direct way was refused when it was.
     #[doc(hidden)]

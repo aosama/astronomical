@@ -1,32 +1,23 @@
-use crate::inference_engine::contract::ExpertResidencyTelemetry;
 use crate::qwen3_5_core::shared_execution::astro_ssd_prompt_cache_restore;
-use crate::qwen3_5_core::shared_execution::generation_finalization_steps;
 use crate::qwen3_5_core::shared_execution::generation_start_steps;
 use crate::qwen3_5_core::shared_execution::generation_thinking_end_markers;
 use crate::qwen3_5_core::shared_execution::generation_visual_embedding_validation;
-use crate::qwen3_5_core::text::thinking_budget::Qwen3_5ThinkingBudgetError;
 use crate::{
-    EngineGenerationStart, InferenceEngineError, PerformanceAttribution,
-    PerformanceAttributionOutcome, PerformanceCounter, Qwen3_5InferenceRequest,
-    Qwen3_5SamplingStrategy, Qwen3_5ThinkingBudgetState,
+    EngineGenerationStart, InferenceEngineError, PerformanceAttribution, PerformanceCounter,
+    Qwen3_5InferenceRequest, Qwen3_5SamplingStrategy, Qwen3_5ThinkingBudgetState,
 };
 
 use mlx_bridge::MlxArray;
 
 use super::engine_request::{Qwen3_5EngineRequest, ResidentRequestExtension};
 use super::{Qwen3_5EngineState, qwen3_5_runtime_error};
-use crate::astro_decoder_state_cache::AstroDecoderStateCacheLayout;
 use crate::astro_ssd_prompt_cache::block_causal_input::AstroSsdPromptCacheBlockCausalInput;
 use crate::qwen3_5_core::decoder::RequestDecoderStateStack;
 use crate::qwen3_5_core::shared_execution::astro_ssd_prompt_cache_visual_identity::{
     Qwen3_5AstroSsdPromptCacheVisualIdentity, Qwen3_5AstroSsdPromptCacheVisualIdentityInput,
 };
-use crate::qwen3_5_core::shared_execution::generation_request_validation::{
-    self, Qwen3_5GenerationRequestLimits,
-};
-use crate::qwen3_5_core::text::sampler;
+use crate::qwen3_5_core::shared_execution::generation_request_validation::{self};
 use crate::qwen3_5_resident::model::request_errors;
-use crate::sampling_seed::current_time_millis_since_unix_epoch;
 
 /// The prompt-side identity of a generation session: token list, image-pad
 /// accounting, `astro_ssd_prompt_cache` eligibility flags, speculative admission, and the

@@ -1,12 +1,11 @@
-use ipc_protocol::WorkerChunkingConfiguration;
-use runtime_integration::{MlxMemoryLimits, MlxRuntime};
+use runtime_integration::MlxRuntime;
 use std::sync::Arc;
 
 use crate::inference_engine::load_result::EngineLoadResult;
 use crate::{
-    AstroSsdPromptCacheDiskStore, AstroSsdPromptCacheDiskStoreConfig,
-    AstroSsdPromptCacheModelContract, InferenceEngineError, PerformanceAttribution,
-    PerformanceAttributionOutcome, PerformanceOperation, PersistentVisualEmbeddingModelContract,
+    AstroSsdPromptCacheDiskStore, AstroSsdPromptCacheModelContract, InferenceEngineError,
+    PerformanceAttribution, PerformanceAttributionOutcome, PerformanceOperation,
+    PersistentVisualEmbeddingModelContract,
 };
 
 use super::speculative_decode_lifecycle::{
@@ -20,7 +19,6 @@ use crate::qwen3_5_core::shared_execution::model_loading_steps::{
     resolve_model_chunking_configuration, resolve_validated_model_identity,
     resolve_visual_embedding_model_contract,
 };
-use crate::qwen3_5_core::vision::{Qwen3_5ImageProcessor, Qwen3_5VisionConfig};
 use crate::qwen3_5_resident::model::Qwen3_5ResidentModel;
 use crate::qwen3_5_resident::neural_engine_prefill_loading::{
     NeuralEnginePreparationStep, begin_neural_engine_prefill_preparation,

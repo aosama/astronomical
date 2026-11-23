@@ -72,7 +72,6 @@ pub fn not_worthwhile_reason(gain: f64) -> String {
 #[derive(Clone, Copy, Debug)]
 struct TimedChunk {
     engines: ChunkEngines,
-    end_token: usize,
     elapsed: Duration,
 }
 
@@ -213,7 +212,6 @@ impl ChunkComparison {
         }
         let finished_chunk = TimedChunk {
             engines: self.chosen_engines,
-            end_token: start_token + token_count,
             elapsed,
         };
         self.compare_with_neighbours(finished_chunk);

@@ -15,10 +15,6 @@ fn plain_greedy_request() -> SpeculationSessionRequestProperties {
     }
 }
 
-const PAIRED_TARGET: (usize, usize, u32) = (40, 2048, 248_320);
-const PAIRED_DRAFT: (i32, i32, i32) = (40, 248_320, 16_384);
-const PAIRED_TAPS: [i32; 8] = [1, 6, 11, 16, 22, 27, 32, 37];
-
 #[test]
 fn should_admit_a_plain_greedy_session() {
     assert!(should_admit_speculation_for_session(&plain_greedy_request()));

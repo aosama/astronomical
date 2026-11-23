@@ -42,20 +42,14 @@ pub use crate::qwen3_5_core::decoder::RequestDecoderStateStack;
 #[cfg(feature = "direct-mlx")]
 pub use crate::qwen3_5_core::model::Qwen3_5ModelBase;
 #[cfg(feature = "direct-mlx")]
-pub use crate::qwen3_5_core::model::full_attention::qwen3_5_full_attention_step;
-#[cfg(feature = "direct-mlx")]
 pub use crate::qwen3_5_core::model::model_chunking_configuration::Qwen3_5ModelChunkingConfiguration;
 #[cfg(feature = "direct-mlx")]
 pub use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 #[cfg(feature = "direct-mlx")]
 pub use crate::qwen3_5_core::model_math::weights::Qwen3_5Weights;
 pub use crate::qwen3_5_core::model_math::{
-    decoder_layer_weights, error, feed_forward_weights, forward_contract,
-    gated_delta_boundary_checkpoints, gated_delta_sequence, gated_delta_step,
-    gdn_decode_prework_kernel, output_combination, routing, weights,
+    error, feed_forward_weights, forward_contract, output_combination, routing,
 };
-#[cfg(feature = "direct-mlx")]
-pub use crate::qwen3_5_core::vision::{Qwen3_5ProcessedImage, Qwen3_5VisualEmbeddingSuffixPlan};
 #[cfg(feature = "direct-mlx")]
 pub use crate::qwen3_5_core::vision::{Qwen3_5VisionModel, visual_embedding_injection};
 #[cfg(feature = "direct-mlx")]
@@ -64,8 +58,6 @@ pub use decoder_stack_suffix_forward::RecordedDecoderLayerInput;
 pub use forward_graph::Qwen3_5TargetForwardOutput;
 #[cfg(feature = "direct-mlx")]
 pub use resident_model::Qwen3_5ResidentModel;
-#[cfg(feature = "direct-mlx")]
-pub use resident_model::Qwen3_5ResidentModel as Qwen3_5Model;
 #[cfg(feature = "direct-mlx")]
 pub use tree_verification_forward::Qwen3_5DraftTreeVerification;
 pub use verification_forward::{

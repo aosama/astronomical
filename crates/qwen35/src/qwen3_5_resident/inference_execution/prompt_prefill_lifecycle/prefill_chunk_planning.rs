@@ -29,9 +29,6 @@ pub(super) struct PrefillChunkPlan {
     /// applicable.
     pub(super) astro_ssd_prompt_cache_block_token_count: Option<usize>,
 
-    /// Workspace bytes needed for direct astro SSD prompt cache publication.
-    pub(super) direct_publication_workspace_bytes: usize,
-
     /// Combined temporary workspace reservation.
     pub(super) exact_temporary_workspace_bytes: usize,
 }
@@ -125,7 +122,6 @@ impl Qwen3_5EngineState {
             all_completed_prefill_chunk_tokens,
             intermediate_completed_prefill_chunk_tokens,
             astro_ssd_prompt_cache_block_token_count,
-            direct_publication_workspace_bytes,
             exact_temporary_workspace_bytes,
         })
     }

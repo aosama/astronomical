@@ -3,15 +3,10 @@
 use crate::InferenceEngineError;
 use crate::qwen3_5_core::astro_ssd_prompt_cache_capture::Qwen3_5AstroSsdPromptCacheCapture;
 use crate::qwen3_5_resident::inference_execution::Qwen3_5EngineState;
-use crate::qwen3_5_resident::inference_execution::engine_request::{
-    Qwen3_5EngineRequest, ResidentRequestExtension,
-};
+use crate::qwen3_5_resident::inference_execution::engine_request::Qwen3_5EngineRequest;
 use crate::qwen3_5_resident::model::Qwen3_5ResidentModel;
 
 impl Qwen3_5AstroSsdPromptCacheCapture for Qwen3_5EngineState {
-    type Model = Qwen3_5ResidentModel;
-    type RequestExtension = ResidentRequestExtension;
-
     /// Reclaims nothing: the resident engine holds every expert by design,
     /// so there is no pageable payload to evict, and the retry repeats the
     /// first attempt with nothing changed in between (issue #1637).

@@ -16,6 +16,4 @@ pub(in crate::qwen3_5_resident::inference_execution) mod inject_input_tokens;
 use super::Qwen3_5EngineState;
 use super::completed_forward_memory;
 use super::engine_request;
-use super::fatal_engine_error;
 use super::forward_memory;
-use super::qwen3_5_runtime_error;

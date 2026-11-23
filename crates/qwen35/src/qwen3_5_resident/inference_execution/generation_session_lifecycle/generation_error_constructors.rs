@@ -19,12 +19,6 @@ pub(in crate::qwen3_5_resident::inference_execution) fn restored_prompt_prefix_e
     super::fatal_engine_error("restored prompt prefix exceeds the u32 range")
 }
 
-pub(in crate::qwen3_5_resident::inference_execution) fn completed_prefill_chunk_tokens_exceed_u32_range_error(
-    _try_from_error: std::num::TryFromIntError,
-) -> InferenceEngineError {
-    super::fatal_engine_error("completed_prefill_chunk_tokens exceeds the u32 range")
-}
-
 pub(in crate::qwen3_5_resident::inference_execution) fn eligible_astro_ssd_prompt_cache_capture_has_no_astro_ssd_prompt_cache_owner_error()
 -> InferenceEngineError {
     super::fatal_engine_error(
@@ -45,17 +39,6 @@ pub(in crate::qwen3_5_resident::inference_execution) fn astro_ssd_prompt_cache_p
 pub(in crate::qwen3_5_resident::inference_execution) fn generation_context_memory_reservation_overflowed_error()
 -> InferenceEngineError {
     request_errors::invalid_request_error("generation context memory reservation overflowed")
-}
-
-pub(in crate::qwen3_5_resident::inference_execution) fn prefill_activation_workspace_exceeds_platform_range_error(
-    _try_from_error: std::num::TryFromIntError,
-) -> InferenceEngineError {
-    request_errors::invalid_request_error("prefill activation workspace exceeds the platform range")
-}
-
-pub(in crate::qwen3_5_resident::inference_execution) fn generation_context_workspace_reservation_overflowed_error()
--> InferenceEngineError {
-    request_errors::invalid_request_error("generation context workspace reservation overflowed")
 }
 
 pub(in crate::qwen3_5_resident::inference_execution) fn current_mlx_memory_ceiling_exceeds_u64_range_error(

@@ -14,7 +14,6 @@ pub mod speculative_decode_lifecycle;
 mod test_controls;
 // Downward bindings so the phase folders keep their pre-move one-level
 // `super::<module>` paths into the persistent astro SSD prompt cache machinery.
-use astro_ssd_prompt_cache::decoder_state_reuse;
 use astro_ssd_prompt_cache::retained_live_prefix;
 // Downward binding so the phase folders keep their one-level
 // `super::completed_forward_memory` paths into the memory-governance home.
@@ -29,8 +28,6 @@ pub use engine_error_helpers::fatal_engine_error;
 pub use engine_error_helpers::qwen3_5_runtime_error;
 pub use engine_state::Qwen3_5EngineState;
 pub use engine_state::Qwen3_5InferenceExecution;
-
-pub use memory_governance::memory_limit::safe_minimum_mlx_memory_ceiling_bytes;
 
 /// Qwen3.5 inference engine backed by the architecture-neutral MLX owner driver.
 pub type Qwen3_5ResidentEngine = MlxInferenceEngine<Qwen3_5InferenceExecution>;
