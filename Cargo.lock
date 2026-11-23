@@ -701,6 +701,7 @@ dependencies = [
  "regex-automata",
  "runtime-integration",
  "serde",
+ "serde_json",
  "serial_test",
  "tempfile",
  "thiserror",

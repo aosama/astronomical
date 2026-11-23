@@ -42,8 +42,6 @@ pub mod qwen3_5_resident;
 
 pub mod qwen3_5_streaming;
 
-pub mod speculative_decoding;
-
 // The crates below this family, imported at the root so the family's
 // `crate::...` paths into them read as they did inside the serving crate.
 pub(crate) use ::artifact_validation;

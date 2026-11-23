@@ -20,6 +20,7 @@ direct-mlx = ["dep:runtime-integration", "dep:mlx-bridge", "model-primitives/dir
 # enforces the serving edge.
 [dependencies]
 model-primitives = { path = "../model-primitives" }
+serde_json.workspace = true
 ipc-protocol = { path = "../ipc-protocol" }
 memory-policy = { path = "../memory-policy" }
 runtime-integration = { path = "../runtime-integration", features = ["mlx"], optional = true }

@@ -32,9 +32,9 @@ impl Qwen3_5EngineState {
     fn draft_model_status(&self) -> ipc_protocol::DraftModelStatus {
         match self.core.model.as_ref() {
             Some(loaded_model) => {
-                crate::speculative_decoding::unused_drafter_status::streaming_load_status(
+                engine_core::speculative_decoding::unused_drafter_status::streaming_load_status(
                     &self.core.model_directory,
-                    &crate::speculative_decoding::drafter_discovery::DrafterPairing {
+                    &engine_core::speculative_decoding::drafter_discovery::DrafterPairing {
                         target_layer_count: loaded_model.config.layer_count() as i32,
                         target_hidden_size: loaded_model.config.hidden_size() as i32,
                         target_vocabulary_size: loaded_model.config.vocabulary_size() as i32,

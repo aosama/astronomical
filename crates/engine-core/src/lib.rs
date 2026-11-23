@@ -18,6 +18,8 @@ pub mod memory;
 
 pub mod model_generation_processor;
 
+pub mod speculative_decoding;
+
 pub mod structured_generation;
 
 #[cfg(feature = "direct-mlx")]

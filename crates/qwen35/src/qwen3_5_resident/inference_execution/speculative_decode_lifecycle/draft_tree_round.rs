@@ -16,14 +16,14 @@ use mlx_bridge::MlxArray;
 
 use crate::qwen3_5_core::decoder::request_state::RequestDecoderStateStack;
 use crate::qwen3_5_resident::model::{Qwen3_5ExecutionError, Qwen3_5ResidentModel};
-use crate::speculative_decoding::dflash_drafter::{
+use engine_core::speculative_decoding::dflash_drafter::{
     DFlashDraftTarget, DraftLattice, DraftTreeOptions, DrafterContextStates, KeyedNoise,
     best_first_draft_tree, draft_lattice, drafted_hidden_rows, head_only_draft_lattice,
     tree_block_row_count,
 };
-use crate::speculative_decoding::keyed_sampling::{RequestKeyedNoise, keyed_sample};
-use crate::speculative_decoding::tree_rows::TreeRows;
-use crate::speculative_decoding::verification_decision::TargetDistribution;
+use engine_core::speculative_decoding::keyed_sampling::{RequestKeyedNoise, keyed_sample};
+use engine_core::speculative_decoding::tree_rows::TreeRows;
+use engine_core::speculative_decoding::verification_decision::TargetDistribution;
 
 use super::engine_draft_runtime::Qwen3_5SpeculativeDraftRuntime;
 use super::speculation_session_admission::VerificationTokenChoice;
