@@ -133,7 +133,7 @@ fn prefill_injected_feedback_prefix<Engine: Qwen3_5InputInjectionHooks>(
         },
         &active_request.request_decoder_state,
     )?;
-    let model = loaded_model(engine)?;
+    let model = engine.execution_core().loaded_model()?;
     model
         .prefill_chunk_with_performance_attribution(
             feedback_prefix_token_ids,
@@ -171,7 +171,7 @@ fn decode_injected_final_token<Engine: Qwen3_5InputInjectionHooks>(
         Qwen3_5ForwardKind::ReplyToken,
         &active_request.request_decoder_state,
     )?;
-    let model = loaded_model(engine)?;
+    let model = engine.execution_core().loaded_model()?;
     let feedback_logits = model
         .build_forward_chunk_with_performance_attribution(
             &[final_input_token_id],
@@ -201,16 +201,6 @@ fn decode_injected_final_token<Engine: Qwen3_5InputInjectionHooks>(
     )?;
     active_request.pending_generated_token = Some(next_generated_token);
     Ok(())
-}
-
-fn loaded_model<Engine: Qwen3_5InputInjectionHooks>(
-    engine: &Engine,
-) -> Result<&Engine::Model, InferenceEngineError> {
-    engine
-        .execution_core()
-        .model
-        .as_ref()
-        .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))
 }
 
 /// Context arithmetic inputs for projecting whether an injection fits the

@@ -1,16 +1,6 @@
 use super::*;
 
 #[test]
-fn should_carry_the_exact_engine_lost_loaded_model_failure_text() {
-    let engine_error = engine_lost_loaded_model_error();
-
-    assert!(matches!(
-        engine_error,
-        crate::InferenceEngineError::Fatal { reason } if reason == "Qwen3.5 engine lost its loaded model"
-    ));
-}
-
-#[test]
 fn should_carry_the_exact_missing_image_pad_token_id_failure_text() {
     let engine_error = missing_image_pad_token_id_error();
 

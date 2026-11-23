@@ -71,11 +71,7 @@ impl Qwen3_5EngineState {
                 &inference_request,
             )?;
         let thinking_budget_state = self.build_thinking_budget_state(&inference_request)?;
-        let model = self
-            .core
-            .model
-            .as_ref()
-            .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+        let model = self.core.loaded_model()?;
         model.forget_expert_layer_states();
         // A fresh request observes a fresh SSD-read tally so the label
         // emitted across this request's lifecycle reflects only this

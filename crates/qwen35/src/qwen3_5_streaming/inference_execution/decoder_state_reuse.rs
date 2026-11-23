@@ -17,11 +17,7 @@ impl Qwen3_5AstroSsdPromptCacheRestoreHooks for Qwen3_5EngineState {
         &self,
         restore_workspace_bytes: usize,
     ) -> Result<u64, InferenceEngineError> {
-        let model = self
-            .core
-            .model
-            .as_ref()
-            .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+        let model = self.core.loaded_model()?;
         Ok(model
             .govern_restore_workspace(u64::try_from(restore_workspace_bytes).unwrap_or(u64::MAX)))
     }

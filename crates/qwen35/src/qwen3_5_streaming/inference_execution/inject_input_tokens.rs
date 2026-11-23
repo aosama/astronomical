@@ -19,11 +19,7 @@ impl Qwen3_5InputInjectionHooks for Qwen3_5EngineState {
         _active_request: &mut Qwen3_5EngineRequest,
         projected_context_tokens: usize,
     ) -> Result<(), InferenceEngineError> {
-        let model = self
-            .core
-            .model
-            .as_ref()
-            .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+        let model = self.core.loaded_model()?;
         let projected_context_bytes = projected_context_tokens
             .saturating_mul(self.core.context_memory_reservation_bytes_per_token);
         model.govern_context_extent(u64::try_from(projected_context_bytes).unwrap_or(u64::MAX));

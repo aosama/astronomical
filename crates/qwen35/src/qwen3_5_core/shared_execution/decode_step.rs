@@ -227,7 +227,7 @@ fn emit_reply_token_and_decode_successor<Engine: Qwen3_5DecodeStepHooks>(
 ) -> Result<ActiveRequestAdvance, InferenceEngineError> {
     let mut early_structured_emission = if active_request.structured_generation.is_some() {
         let generated_token_emission = build_generated_token_emission(
-            loaded_model(engine)?,
+            engine.execution_core().loaded_model()?,
             &engine.execution_core().end_of_sequence_token_ids,
             active_request,
             current_generated_token_id,
@@ -250,7 +250,7 @@ fn emit_reply_token_and_decode_successor<Engine: Qwen3_5DecodeStepHooks>(
     let generated_token_emission = match early_structured_emission.take() {
         Some(generated_token_emission) => generated_token_emission,
         None => build_generated_token_emission(
-            loaded_model(engine)?,
+            engine.execution_core().loaded_model()?,
             &engine.execution_core().end_of_sequence_token_ids,
             active_request,
             current_generated_token_id,
@@ -320,7 +320,7 @@ fn build_forced_thinking_transition_token<Engine: Qwen3_5DecodeStepHooks>(
     forced_thinking_transition_token_id: u32,
 ) -> Result<MlxArray, InferenceEngineError> {
     active_request.pending_generated_token = None;
-    let model = loaded_model(engine)?;
+    let model = engine.execution_core().loaded_model()?;
     let forced_generated_token = active_request
         .performance_attribution
         .measure_operation(
@@ -352,7 +352,7 @@ fn complete_generation_if_terminal<Engine: Qwen3_5DecodeStepHooks>(
     ) {
         return Ok(None);
     }
-    let model = loaded_model(engine)?;
+    let model = engine.execution_core().loaded_model()?;
     let completed_forward_memory_snapshot = model.memory_snapshot_for_telemetry()?;
     let generated_token_emission = build_generated_token_emission(
         model,
@@ -364,14 +364,4 @@ fn complete_generation_if_terminal<Engine: Qwen3_5DecodeStepHooks>(
     Ok(Some(ActiveRequestAdvance::Complete(
         generated_token_emission.generated_token,
     )))
-}
-
-fn loaded_model<Engine: Qwen3_5DecodeStepHooks>(
-    engine: &Engine,
-) -> Result<&Engine::Model, InferenceEngineError> {
-    engine
-        .execution_core()
-        .model
-        .as_ref()
-        .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))
 }

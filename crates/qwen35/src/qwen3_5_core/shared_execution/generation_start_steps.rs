@@ -77,7 +77,7 @@ pub fn resolve_sampling_random_state<Engine: Qwen3_5ExecutionCoreOwner>(
         } => {
             sampler::validate_sampled_strategy(temperature_thousandths, top_k, top_p_thousandths)?;
             Ok(Some(sampler::random_state_for_seed(
-                loaded_model(engine)?,
+                engine.execution_core().loaded_model()?,
                 resolve_sampling_seed(seed, current_time_millis_since_unix_epoch),
             )?))
         }
@@ -103,9 +103,11 @@ pub fn prepare_precomputed_visual_embeddings<Engine: Qwen3_5ExecutionCoreOwner>(
         visual_embedding_values.len(),
     )
     .map_err(VisualEmbeddingValidationError::into_generation_failure)?;
-    let model = loaded_model(engine)?;
-    let visual_embedding_hidden_size =
-        loaded_visual_embedding_contract(engine)?.visual_embedding_hidden_size();
+    let model = engine.execution_core().loaded_model()?;
+    let visual_embedding_hidden_size = engine
+        .execution_core()
+        .loaded_persistent_visual_embedding_model_contract()?
+        .visual_embedding_hidden_size();
     validate_precomputed_visual_embedding_buffer_size(
         visual_embedding_row_count,
         visual_embedding_values.len(),
@@ -198,8 +200,10 @@ where
 }
 
 /// The start contract the worker observes. No forward has run yet, so the
-/// expert memory mode is the model's ownership claim; token emission
-/// refines it with evidence.
+/// expert memory mode is the model's ownership claim: the streaming engine's
+/// freshly reset read tally carries no evidence, and reporting it would
+/// claim "resident" for every streaming request during prefill. Token
+/// emission refines the claim with evidence.
 pub fn build_generation_start_contract<Engine>(
     engine: &Engine,
     restored_prompt_prefix_token_count: u32,
@@ -213,31 +217,9 @@ where
 {
     Ok(EngineGenerationStart::with_expert_memory_mode(
         restored_prompt_prefix_token_count,
-        loaded_model(engine)?.expert_memory_mode(),
+        engine.execution_core().loaded_model()?.expert_memory_mode(),
     )
     .with_restored_prompt_prefix_token_count(restored_prompt_prefix_token_count)
     .with_prompt_processing_phase(initial_prompt_processing_phase)
     .with_astro_ssd_prompt_cache_diagnostics(astro_ssd_prompt_cache_diagnostics))
-}
-
-fn loaded_model<Engine: Qwen3_5ExecutionCoreOwner>(
-    engine: &Engine,
-) -> Result<&Engine::Model, InferenceEngineError> {
-    engine
-        .execution_core()
-        .model
-        .as_ref()
-        .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))
-}
-
-fn loaded_visual_embedding_contract<Engine: Qwen3_5ExecutionCoreOwner>(
-    engine: &Engine,
-) -> Result<&crate::PersistentVisualEmbeddingModelContract, InferenceEngineError> {
-    engine
-        .execution_core()
-        .persistent_visual_embedding_model_contract
-        .as_ref()
-        .ok_or_else(|| {
-            fatal_engine_error("Qwen3.5 persistent visual embedding model contract is not loaded")
-        })
 }

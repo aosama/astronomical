@@ -193,6 +193,28 @@ impl<Model, RequestExtension> Qwen3_5ExecutionCore<Model, RequestExtension> {
         }
     }
 
+    /// The loaded model; an engine asked to serve without one has lost it,
+    /// which is fatal.
+    pub fn loaded_model(&self) -> Result<&Model, InferenceEngineError> {
+        self.model
+            .as_ref()
+            .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))
+    }
+
+    /// The visual embedding contract of the loaded model, present once a
+    /// model is loaded.
+    pub fn loaded_persistent_visual_embedding_model_contract(
+        &self,
+    ) -> Result<&crate::PersistentVisualEmbeddingModelContract, InferenceEngineError> {
+        self.persistent_visual_embedding_model_contract
+            .as_ref()
+            .ok_or_else(|| {
+                fatal_engine_error(
+                    "Qwen3.5 persistent visual embedding model contract is not loaded",
+                )
+            })
+    }
+
     /// The attribution recorded while the engine was built, taken once by the
     /// model load that finishes it; disabled when it was already taken.
     pub fn take_model_loading_performance_attribution(&mut self) -> PerformanceAttribution {

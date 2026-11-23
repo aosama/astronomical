@@ -3,6 +3,7 @@ use crate::qwen3_5_core::shared_execution::astro_ssd_prompt_cache_restore;
 use crate::qwen3_5_core::shared_execution::generation_finalization_steps;
 use crate::qwen3_5_core::shared_execution::generation_start_steps;
 use crate::qwen3_5_core::shared_execution::generation_thinking_end_markers;
+use crate::qwen3_5_core::shared_execution::generation_visual_embedding_validation;
 use crate::qwen3_5_core::text::thinking_budget::Qwen3_5ThinkingBudgetError;
 use crate::{
     EngineGenerationStart, InferenceEngineError, PerformanceAttribution,
@@ -126,11 +127,7 @@ impl Qwen3_5EngineState {
         // means every expert of this mixture-of-experts model already sits in
         // graphics memory; each token routes through only a few experts, and
         // nothing streams in from disk while generating.
-        let model = self
-            .core
-            .model
-            .as_ref()
-            .ok_or_else(super::generation_error_constructors::engine_lost_loaded_model_error)?;
+        let model = self.core.loaded_model()?;
         // The `astro_decoder_state_cache` layout describes, per decoder layer, the shape of the
         // key-value state — the model's memory of tokens it has already seen.
         // Recording attention once per token is what lets each new token be
@@ -263,7 +260,7 @@ impl Qwen3_5EngineState {
             .image_pad_token_id()
             .ok_or_else(super::generation_error_constructors::missing_image_pad_token_id_error)?;
         let prompt_image_pad_token_count =
-            crate::qwen3_5_core::shared_execution::generation_visual_embedding_validation::count_image_pad_placeholder_tokens(
+            generation_visual_embedding_validation::count_image_pad_placeholder_tokens(
                 &prompt_token_ids,
                 image_pad_token_id,
             );
