@@ -21,12 +21,12 @@ use std::sync::Arc;
 use runtime_integration::{MlxRuntimeError, PositionalFileReadMetrics};
 use thiserror::Error;
 
-use crate::expert_paging::{
-    ExpertManifestError, ExpertWeightPage, QuantizedExpertLayerPlan, SafetensorsHeaderError,
-};
 use crate::memory::ExpertStreamingSessionCounters;
 use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights;
 use crate::{MlxAllocationAdmission, MlxAllocationAdmissionError};
+use engine_core::expert_paging::{
+    ExpertManifestError, ExpertWeightPage, QuantizedExpertLayerPlan, SafetensorsHeaderError,
+};
 use mlx_bridge::MlxArray;
 
 /// Typed failures during expert streaming and resident-source handling.

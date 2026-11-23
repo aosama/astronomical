@@ -8,7 +8,6 @@
 //! which keep nothing. The plan never gives anything back; only the
 //! capacity does.
 
-use crate::expert_paging::QuantizedExpertLayerPlan;
 use crate::memory::residency::ExpertLayerGeometry;
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_streaming::expert_streaming::expert_pager::ExpertPagingError;
@@ -18,6 +17,7 @@ use crate::{
     PerformanceAttribution, PerformanceCounter, PerformanceOperation, RetainedExpertPageClass,
     plan_expert_residency, seated_complete_layer_count,
 };
+use engine_core::expert_paging::QuantizedExpertLayerPlan;
 
 use super::streaming_model::Qwen3_5StreamingModel;
 

@@ -21,7 +21,6 @@ use mlx_bridge::MlxArray;
 
 use super::feed_forward_weights::Qwen3_5MoEFeedForwardWeights;
 use super::prefill_complete_layer_prefetch::PartlyKeptLayers;
-use crate::expert_paging::QuantizedExpertPageManifest;
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_streaming::expert_streaming::expert_pager::{
     Qwen3_5ExpertPager, Qwen3_5ExpertStreamingRequestShape, Qwen3_5PagedExpertWeights,
@@ -30,6 +29,7 @@ use crate::qwen3_5_streaming::model::Qwen3_5Model;
 use crate::{
     PerformanceAttribution, PerformanceCounter, should_commit_multi_token_union_as_complete_layer,
 };
+use engine_core::expert_paging::QuantizedExpertPageManifest;
 
 /// The complete page of the layer a layer-at-a-time prompt is working on.
 #[derive(Debug)]

@@ -12,10 +12,6 @@ use std::path::Path;
 
 use serde_json::json;
 
-use crate::expert_paging::quantized_expert_manifest::{
-    ExpertManifestError, QuantizationMode, QuantizedExpertLayerPlan,
-};
-use crate::expert_paging::safetensors_header::SafetensorsDtype;
 use crate::qwen3_5_core::artifacts::quantized_expert_layer_plan::{
     build_quantized_expert_layer_plan, build_quantized_expert_layer_plans,
 };
@@ -24,6 +20,10 @@ use crate::qwen3_5_core::artifacts::{
 };
 use crate::qwen3_5_core::configuration::Qwen3_5Config;
 use crate::qwen3_5_core::frozen_config_test_support::frozen_ornith_1_0_config_bytes;
+use engine_core::expert_paging::quantized_expert_manifest::{
+    ExpertManifestError, QuantizationMode, QuantizedExpertLayerPlan,
+};
+use engine_core::expert_paging::safetensors_header::SafetensorsDtype;
 
 const EXPERT_CAPACITY: usize = 2;
 const OUTPUT_DIMENSION: usize = 4;

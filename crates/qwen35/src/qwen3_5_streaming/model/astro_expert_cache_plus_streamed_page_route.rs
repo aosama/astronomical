@@ -2,7 +2,7 @@
 
 use runtime_integration::{MlxRuntime, MlxRuntimeError};
 
-use crate::expert_paging::{ExpertPageRoutePartition, QuantizedExpertPageManifest};
+use engine_core::expert_paging::{ExpertPageRoutePartition, QuantizedExpertPageManifest};
 use mlx_bridge::MlxArray;
 
 const BUILD_ASTRO_EXPERT_CACHE_PLUS_STREAMED_PAGE_ROUTE_OPERATION: &str =

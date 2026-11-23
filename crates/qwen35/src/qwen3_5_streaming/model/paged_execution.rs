@@ -3,13 +3,13 @@
 use mlx_bridge::MlxArray;
 use runtime_integration::MlxRuntime;
 
-use crate::expert_paging::QuantizedExpertPageManifest;
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_streaming::model::Qwen3_5Model;
 use crate::sparse_experts::{
     ExpertAssignmentOrder, StackedExpertProjection, gather_expert_projection,
 };
 use crate::{PerformanceAttribution, PerformanceCounter, PerformanceOperation};
+use engine_core::expert_paging::QuantizedExpertPageManifest;
 use jangtq2_qwen35::configuration::Jangtq2CodebookRotation;
 
 use super::super::expert_streaming::expert_pager::Qwen3_5PagedExpertWeights;
