@@ -22,6 +22,7 @@ use rest_contract::{
     OpenAiImageGenerationValidationError,
 };
 
+use crate::rest::openai::chat_generation_admission::worker_unavailable_response;
 use crate::serving::request_seed::generated_seed;
 use crate::{
     GenerationStartError, ImageGenerationExecutionError, ImageGenerationOutput,
@@ -430,17 +431,6 @@ fn invalid_request_response(
             message,
             parameter,
             Some(code),
-        )),
-    )
-        .into_response()
-}
-
-fn worker_unavailable_response() -> Response {
-    (
-        StatusCode::SERVICE_UNAVAILABLE,
-        Json(OpenAiErrorResponse::service_unavailable(
-            "the local worker is unavailable",
-            Some("worker_unavailable"),
         )),
     )
         .into_response()

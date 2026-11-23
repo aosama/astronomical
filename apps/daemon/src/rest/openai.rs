@@ -5,6 +5,7 @@
 pub(crate) mod chat_completion;
 pub(crate) mod chat_endpoint;
 pub(crate) mod chat_failure_wording;
+pub(crate) mod chat_generation_admission;
 pub(crate) mod chat_stream;
 pub(crate) mod chat_translation;
 pub(crate) mod embeddings_endpoint;

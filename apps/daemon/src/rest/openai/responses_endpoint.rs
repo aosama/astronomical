@@ -1,6 +1,5 @@
 use crate::rest::worker_replacement_wait::lock_configuration_transition_for_generation;
 use std::collections::VecDeque;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use axum::{
     Json,
@@ -9,7 +8,6 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response, sse::Event, sse::Sse},
 };
-use config::ModelCapabilities;
 use futures_util::stream;
 use ipc_protocol::RequestId;
 use rest_contract::{
@@ -17,12 +15,14 @@ use rest_contract::{
     OpenAiResponsesRequest, OpenAiResponsesRequestParts, OpenAiResponsesValidationError,
 };
 
-use crate::application;
 use crate::application::ApplicationState;
-use crate::{
-    ChatGenerationStreamEvent, GenerationStartError, OpenAiResponsesCollector,
-    OpenAiResponsesStreamEncoder,
+use crate::rest::openai::chat_generation_admission::{
+    allocate_chat_request_identifier, apply_configured_generation_settings,
+    generation_start_rejection_response, generation_timestamp,
+    request_generation_settings_presence, resolve_chat_target_model,
+    start_chat_generation_after_admission, worker_unavailable_response,
 };
+use crate::{ChatGenerationStreamEvent, OpenAiResponsesCollector, OpenAiResponsesStreamEncoder};
 
 pub(crate) async fn create_response(
     State(application_state): State<ApplicationState>,
@@ -43,7 +43,7 @@ pub(crate) async fn create_response(
     let configuration_transition_guard =
         lock_configuration_transition_for_generation(&application_state).await;
     let resolved_model_id =
-        match resolve_responses_target_model(&application_state, &request_parts.model) {
+        match resolve_chat_target_model(&application_state, &request_parts.model, "Responses") {
             Ok(resolved_model_id) => resolved_model_id,
             Err(rejection_response) => return rejection_response,
         };
@@ -52,8 +52,12 @@ pub(crate) async fn create_response(
     let structured_output = request_parts.structured_output.clone();
     let response_instructions = request_parts.instructions.clone();
     let response_request_configuration = request_parts.response_configuration();
-    let settings_presence = responses_request_generation_settings_presence(&request_parts);
-    let request_id = match allocate_responses_request_identifier(&application_state) {
+    let settings_presence = request_generation_settings_presence(
+        request_parts.requested_maximum_output_tokens,
+        request_parts.temperature,
+        request_parts.top_p,
+    );
+    let request_id = match allocate_chat_request_identifier(&application_state) {
         Ok(request_id) => request_id,
         Err(rejection_response) => return rejection_response,
     };
@@ -71,32 +75,22 @@ pub(crate) async fn create_response(
         settings_presence,
     );
     let model_id = chat_generation_command.model.clone();
-    let (admission_sender, mut admission_receiver) = tokio::sync::oneshot::channel();
-    let mut generation_start_future = application_state
-        .generation_executor
-        .start_chat_generation_with_admission_signal(chat_generation_command, admission_sender);
-    let generation_start_result = tokio::select! {
-        admission_result = &mut admission_receiver => {
-            drop(configuration_transition_guard);
-            match admission_result {
-                Ok(()) => generation_start_future.await,
-                Err(_) => Err(GenerationStartError::WorkerUnavailable),
-            }
-        }
-        generation_start_result = &mut generation_start_future => {
-            drop(configuration_transition_guard);
-            generation_start_result
-        }
-    };
+    let generation_start_result = start_chat_generation_after_admission(
+        &application_state,
+        chat_generation_command,
+        configuration_transition_guard,
+    )
+    .await;
     let stream_event_receiver = match generation_start_result {
         Ok(stream_event_receiver) => stream_event_receiver,
         Err(generation_start_error) => {
-            return super::chat_endpoint::generation_start_rejection_response(
-                generation_start_error,
-            );
+            return generation_start_rejection_response(generation_start_error);
         }
     };
-    let created_at_unix_seconds = match responses_stream_timestamp() {
+    let created_at_unix_seconds = match generation_timestamp(
+        "the local server could not timestamp the response",
+        "response_timestamp_failed",
+    ) {
         Ok(created_at_unix_seconds) => created_at_unix_seconds,
         Err(rejection_response) => return rejection_response,
     };
@@ -135,83 +129,6 @@ fn parse_responses_request(request_body_bytes: &[u8]) -> Result<OpenAiResponsesR
     })
 }
 
-/// Resolves the Responses target model against worker readiness, the
-/// available model alias table, and the model's capability set.
-// The Err variant carries the fully built axum response; it is large but
-// constructed once and moved once, so boxing it would only add indirection.
-#[allow(clippy::result_large_err)]
-fn resolve_responses_target_model(
-    application_state: &ApplicationState,
-    requested_model: &str,
-) -> Result<String, Response> {
-    let worker_health_snapshot = application_state
-        .generation_executor
-        .worker_health_snapshot();
-    if !worker_health_snapshot.status.is_ready() {
-        return Err(worker_unavailable_response());
-    }
-    let Some(resolved_model_id) = application_state.resolve_available_generation_model_id(
-        requested_model,
-        worker_health_snapshot.ready_model_id.as_deref(),
-    ) else {
-        return Err(invalid_request_response(
-            "model is not loaded by the local worker",
-            Some("model"),
-            "model_not_found",
-        ));
-    };
-    if application_state
-        .discovered_models_snapshot()
-        .iter()
-        .find(|discovered_model| discovered_model.model_id == resolved_model_id)
-        .is_some_and(|discovered_model| {
-            !matches!(discovered_model.capabilities, ModelCapabilities::Chat(_))
-        })
-    {
-        return Err(invalid_request_response(
-            "the requested model does not support Responses generation",
-            Some("model"),
-            "model_capability_mismatch",
-        ));
-    }
-    Ok(resolved_model_id)
-}
-
-/// Pure: records which generation settings the request supplied explicitly,
-/// so the reloadable defaults only fill the gaps. Repetition penalty is
-/// never request-supplied on the Responses surface.
-fn responses_request_generation_settings_presence(
-    request_parts: &OpenAiResponsesRequestParts,
-) -> crate::config::request_generation_defaults::RequestGenerationSettingsPresence {
-    crate::config::request_generation_defaults::RequestGenerationSettingsPresence {
-        maximum_output_tokens: request_parts.requested_maximum_output_tokens.is_some(),
-        temperature: request_parts.temperature.is_some(),
-        top_p: request_parts.top_p.is_some(),
-        repetition_penalty: false,
-    }
-}
-
-/// Allocates the next local chat request identifier; the Responses surface
-/// shares the chat identifier space.
-// The Err variant carries the fully built axum response; it is large but
-// constructed once and moved once, so boxing it would only add indirection.
-#[allow(clippy::result_large_err)]
-fn allocate_responses_request_identifier(
-    application_state: &ApplicationState,
-) -> Result<u64, Response> {
-    match application::allocate_chat_request_id(&application_state.next_chat_request_id) {
-        Some(request_id) => Ok(request_id),
-        None => Err((
-            StatusCode::SERVICE_UNAVAILABLE,
-            Json(OpenAiErrorResponse::service_unavailable(
-                "the local request identifier space is exhausted",
-                Some("request_id_exhausted"),
-            )),
-        )
-            .into_response()),
-    }
-}
-
 /// Translates the validated request parts into the IPC generation command.
 // The Err variant carries the fully built axum response; it is large but
 // constructed once and moved once, so boxing it would only add indirection.
@@ -242,16 +159,11 @@ fn finalize_responses_generation_command(
     request_body_bytes: usize,
     settings_presence: crate::config::request_generation_defaults::RequestGenerationSettingsPresence,
 ) -> ipc_protocol::ChatGenerationCommand {
-    chat_generation_command.model = resolved_model_id;
-    crate::config::request_generation_defaults::apply_generation_defaults(
-        application_state.reloadable_config.as_ref(),
-        &chat_generation_command.model,
+    apply_configured_generation_settings(
+        application_state,
+        &mut chat_generation_command,
+        resolved_model_id,
         settings_presence,
-        &mut chat_generation_command.settings,
-    );
-    crate::serving::skill_declaration::declare_astronomical_skill(
-        application_state.reloadable_config.as_ref(),
-        &mut chat_generation_command.messages,
     );
     tracing::info!(
         request_id,
@@ -266,28 +178,6 @@ fn finalize_responses_generation_command(
         "accepted REST Responses request"
     );
     chat_generation_command
-}
-
-/// Reads the wall clock for the response timestamp, rejecting when the local
-/// clock predates the Unix epoch.
-// The Err variant carries the fully built axum response; it is large but
-// constructed once and moved once, so boxing it would only add indirection.
-#[allow(clippy::result_large_err)]
-fn responses_stream_timestamp() -> Result<u64, Response> {
-    match SystemTime::now().duration_since(UNIX_EPOCH) {
-        Ok(duration_since_epoch) => Ok(duration_since_epoch.as_secs()),
-        Err(system_time_error) => {
-            tracing::error!(error = %system_time_error, "system clock predates the Unix epoch");
-            Err((
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(OpenAiErrorResponse::service_unavailable(
-                    "the local server could not timestamp the response",
-                    Some("response_timestamp_failed"),
-                )),
-            )
-                .into_response())
-        }
-    }
 }
 
 /// Dispatches to the non-streaming collector or the server-sent-events
@@ -499,17 +389,6 @@ fn responses_validation_rejection_response(
             .into_response();
     }
     invalid_request_response(validation_error.to_string(), None, "invalid_request")
-}
-
-fn worker_unavailable_response() -> Response {
-    (
-        StatusCode::SERVICE_UNAVAILABLE,
-        Json(OpenAiErrorResponse::service_unavailable(
-            "the local worker is unavailable",
-            Some("worker_unavailable"),
-        )),
-    )
-        .into_response()
 }
 
 fn assembly_failure_response(message: String) -> Response {

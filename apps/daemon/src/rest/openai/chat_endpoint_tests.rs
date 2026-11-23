@@ -5,8 +5,9 @@
 
 use axum::http::StatusCode;
 
-use super::{chat_validation_rejection_response, generation_start_rejection_response};
+use super::chat_validation_rejection_response;
 use crate::GenerationStartError;
+use crate::rest::openai::chat_generation_admission::generation_start_rejection_response;
 use rest_contract::OpenAiChatCompletionValidationError;
 
 #[test]
