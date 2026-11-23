@@ -2,6 +2,7 @@
 //! residency-forked field (expert pager, retained experts, residency plans,
 //! route observation) and the paged execution entry points.
 
+use crate::qwen3_5_core::model::target_forward_graph::Qwen3_5TargetForwardGraph;
 use mlx_bridge::MlxArray;
 
 use std::cell::{Cell, RefCell};

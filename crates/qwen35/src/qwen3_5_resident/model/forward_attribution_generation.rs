@@ -6,6 +6,7 @@
 //! files inside the source-size budget.
 
 use crate::PerformanceAttribution;
+use crate::qwen3_5_core::model::target_forward_graph::Qwen3_5TargetForwardGraph;
 
 use super::Qwen3_5ResidentModel;
 use super::forward_contract;
@@ -36,6 +37,7 @@ impl Qwen3_5ResidentModel {
             token_ids.len() as i32,
             starting_position_tokens,
             request_decoder_state,
+            (),
             performance_attribution,
         )
     }
@@ -63,6 +65,7 @@ impl Qwen3_5ResidentModel {
             1,
             starting_position_tokens,
             request_decoder_state,
+            (),
             performance_attribution,
         )
     }

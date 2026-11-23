@@ -123,9 +123,9 @@ mod live_memory_limit;
 #[cfg(feature = "direct-mlx")]
 pub use crate::qwen3_5_core::model::model_chunking_configuration::Qwen3_5ModelChunkingConfiguration;
 #[cfg(feature = "direct-mlx")]
-pub use error::Qwen3_5ExecutionError;
+pub use crate::qwen3_5_core::model::target_forward_graph::Qwen3_5TargetForwardOutput;
 #[cfg(feature = "direct-mlx")]
-pub use forward_graph::Qwen3_5TargetForwardOutput;
+pub use error::Qwen3_5ExecutionError;
 #[cfg(feature = "direct-mlx")]
 pub use weights::Qwen3_5Weights;
 

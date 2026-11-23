@@ -5,6 +5,7 @@
 //! experts the table lacked, and the loop around a whole token that runs it
 //! again the exact way when any layer's count was not zero.
 
+use crate::qwen3_5_core::model::target_forward_graph::Qwen3_5TargetForwardGraph;
 use std::cell::Cell;
 
 use mlx_bridge::MlxArray;

@@ -1,5 +1,6 @@
 //! Request-owned performance-attribution forwarding for Qwen3.5 MLX graphs.
 
+use crate::qwen3_5_core::model::target_forward_graph::Qwen3_5TargetForwardGraph;
 use mlx_bridge::MlxArray;
 
 use crate::PerformanceAttribution;

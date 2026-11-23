@@ -44,18 +44,18 @@ pub use crate::qwen3_5_core::model::Qwen3_5ModelBase;
 #[cfg(feature = "direct-mlx")]
 pub use crate::qwen3_5_core::model::model_chunking_configuration::Qwen3_5ModelChunkingConfiguration;
 #[cfg(feature = "direct-mlx")]
+pub use crate::qwen3_5_core::model::target_forward_graph::Qwen3_5TargetForwardOutput;
+#[cfg(feature = "direct-mlx")]
 pub use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 #[cfg(feature = "direct-mlx")]
 pub use crate::qwen3_5_core::model_math::weights::Qwen3_5Weights;
 pub use crate::qwen3_5_core::model_math::{
-    error, feed_forward_weights, forward_contract, output_combination, routing,
+    feed_forward_weights, forward_contract, output_combination, routing,
 };
 #[cfg(feature = "direct-mlx")]
 pub use crate::qwen3_5_core::vision::{Qwen3_5VisionModel, visual_embedding_injection};
 #[cfg(feature = "direct-mlx")]
 pub use decoder_stack_suffix_forward::RecordedDecoderLayerInput;
-#[cfg(feature = "direct-mlx")]
-pub use forward_graph::Qwen3_5TargetForwardOutput;
 #[cfg(feature = "direct-mlx")]
 pub use resident_model::Qwen3_5ResidentModel;
 #[cfg(feature = "direct-mlx")]
