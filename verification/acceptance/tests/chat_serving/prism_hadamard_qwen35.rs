@@ -5,4 +5,3 @@
 
 mod chat;
 mod support;
-mod throughput;

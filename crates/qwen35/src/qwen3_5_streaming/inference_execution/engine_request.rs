@@ -26,5 +26,3 @@ pub struct StreamingRequestExtension {
     pub(in crate::qwen3_5_streaming) reply_expert_route_record:
         crate::memory::reply_expert_route_record::ReplyExpertRouteRecord,
 }
-
-impl Qwen3_5EngineRequest {}

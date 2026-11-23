@@ -146,7 +146,7 @@ impl Qwen3_5EngineState {
 
     /// Loads the enumerated prefix, reconstructs the concatenated full-attention
     /// state, absorbs the newest recurrent snapshot, materializes everything on
-    /// the GPU, releases the transient buffers, and resumes expert retention.
+    /// the GPU, and releases the transient buffers.
     #[allow(clippy::too_many_arguments)]
     fn load_and_reconstruct_restored_prefix(
         &self,

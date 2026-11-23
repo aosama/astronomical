@@ -1,5 +1,4 @@
 mod astro_ssd_prompt_cache;
-/// Prefill-to-decode no-I/O reconciliation: lift pressure and preserve topology.
 mod decode_lifecycle;
 mod engine_construction;
 mod engine_error_helpers;

@@ -39,6 +39,8 @@ pub mod probe_token_ids;
 #[cfg(feature = "direct-mlx")]
 pub mod register_ordered_projections;
 #[cfg(feature = "direct-mlx")]
+pub mod routed_expert_selection;
+#[cfg(feature = "direct-mlx")]
 pub mod tree_attention_measurement;
 #[cfg(feature = "direct-mlx")]
 pub mod tree_layer_attention;

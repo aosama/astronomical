@@ -1,6 +1,7 @@
-//! Decoder-layer feed-forward execution for the streaming engine: the half of
-//! the residual sandwich that forks by feed-forward architecture (dense MLP
-//! versus routed mixture-of-experts with expert paging).
+//! Decoder-layer feed-forward execution for the resident engine: the half of
+//! the residual sandwich that forks by feed-forward architecture (dense MLP,
+//! which can run on the Neural Engine during prefill, versus routed
+//! mixture-of-experts over expert weights held whole in memory).
 
 use mlx_bridge::MlxArray;
 

@@ -149,7 +149,6 @@ pub use paged_execution_mode::Qwen3_5MoEPagedExecutionMode;
 #[cfg(feature = "direct-mlx")]
 pub use paged_route_resolution::{PagedForwardMissingRouteCollector, PagedRouteValidationOutcome};
 #[cfg(feature = "direct-mlx")]
-#[cfg(feature = "direct-mlx")]
 pub use routing::{
     qwen3_5_moe_restore_expert_assignment_order, qwen3_5_moe_route_experts,
     qwen3_5_moe_sort_expert_assignments, qwen3_5_moe_sorted_expert_weighted_sum,

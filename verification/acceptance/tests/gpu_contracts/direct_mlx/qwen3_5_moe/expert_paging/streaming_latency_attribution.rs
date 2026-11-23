@@ -7,8 +7,8 @@
 //! to attribute where paged-prefill time goes: disk read, MLX graph
 //! materialization, or the higher-level scheduling that re-issues loads.
 //!
-//! Each probe reports wall time, effective gigabytes per second (decimal SI:
-//! 1 GB = 1,000,000,000 bytes), positional read-call counts, and the overlap
+//! Each probe reports wall time, effective gigabytes per second (1 GB =
+//! 1,073,741,824 bytes, as everywhere in Astronomical), positional read-call counts, and the overlap
 //! ratio between cumulative read time and wall time (how parallel the reads
 //! actually were). Every probe enforces the 60-second ceiling by asserting its
 //! own elapsed time.
@@ -177,11 +177,13 @@ fn load_page_tensors_for_hold(
     loaded_tensors
 }
 
-/// How many bytes of complete expert layers to hold while re-measuring reads.
-const PRESSURE_HOLD_TARGET_BYTES: u64 = 27 * 1_000_000_000;
+/// How many bytes of complete expert layers to hold while re-measuring reads:
+/// 25 GB, within one percent of the 27,000,000,000 bytes this hold used when
+/// it was written in decimal units, so earlier recordings stay comparable.
+const PRESSURE_HOLD_TARGET_BYTES: u64 = 25 * 1_073_741_824;
 
 #[test]
-#[ignore = "streams one complete expert layer from the installed large sparse MoE streaming model and reports the effective rate, unpressured then under a 27 GB hold"]
+#[ignore = "streams one complete expert layer from the installed large sparse MoE streaming model and reports the effective rate, unpressured then under a 25 GB hold"]
 #[serial]
 fn should_attribute_complete_layer_streaming_rate() {
     let fixture = installed_large_sparse_moe_streaming_fixture();
@@ -193,7 +195,7 @@ fn should_attribute_complete_layer_streaming_rate() {
     unpressured.report("complete-layer-unpressured");
     unpressured.assert_within_ceiling("complete-layer-unpressured");
 
-    // Reproduce serving memory pressure: paged prefill seats roughly 27 GB of
+    // Reproduce serving memory pressure: paged prefill seats roughly 25 GB of
     // experts before its later chunks stream, and the attribution records show
     // those later reads running several times slower than the first chunk's.
     // Holding a comparable materialized allocation isolates whether the

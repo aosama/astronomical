@@ -59,11 +59,11 @@ pub struct WorkerChunkingConfiguration {
 #[must_use]
 pub const fn graph_submission_layer_interval(
     token_count: i32,
-    sparse_experts_are_paged: bool,
+    weights_stream_from_storage: bool,
     prefill_graph_submission_layer_interval: u32,
     experimental_ssd_paging_generation_graph_submission_layer_interval: u32,
 ) -> u32 {
-    match (sparse_experts_are_paged, token_count == 1) {
+    match (weights_stream_from_storage, token_count == 1) {
         (false, true) | (true, false) => 0,
         (false, false) => prefill_graph_submission_layer_interval,
         (true, true) => experimental_ssd_paging_generation_graph_submission_layer_interval,
@@ -76,11 +76,11 @@ impl WorkerChunkingConfiguration {
     pub const fn graph_submission_layer_interval(
         &self,
         token_count: i32,
-        sparse_experts_are_paged: bool,
+        weights_stream_from_storage: bool,
     ) -> u32 {
         graph_submission_layer_interval(
             token_count,
-            sparse_experts_are_paged,
+            weights_stream_from_storage,
             self.prefill_graph_submission_layer_interval,
             self.experimental_ssd_paging_generation_graph_submission_layer_interval,
         )

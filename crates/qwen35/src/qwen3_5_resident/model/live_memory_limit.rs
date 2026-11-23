@@ -29,7 +29,7 @@ impl Qwen3_5ResidentModel {
         let current_mlx_memory_limits = self.runtime.memory_limits();
         let current_mlx_memory_ceiling_bytes =
             u64::try_from(current_mlx_memory_limits.active_memory_limit_bytes()).map_err(|_| {
-                super::super::inference_execution::fatal_engine_error(
+                crate::qwen3_5_core::engine_errors::fatal_engine_error(
                     "current MLX memory ceiling exceeds the u64 range",
                 )
             })?;
@@ -37,11 +37,11 @@ impl Qwen3_5ResidentModel {
         let current_active_memory_bytes = u64::try_from(
             self.runtime
                 .memory_snapshot()
-                .map_err(super::super::inference_execution::qwen3_5_runtime_error)?
+                .map_err(crate::qwen3_5_core::engine_errors::qwen3_5_runtime_error)?
                 .active_memory_bytes(),
         )
         .map_err(|_| {
-            super::super::inference_execution::fatal_engine_error(
+            crate::qwen3_5_core::engine_errors::fatal_engine_error(
                 "current MLX active memory exceeds the u64 range",
             )
         })?;
@@ -76,7 +76,7 @@ impl Qwen3_5ResidentModel {
         }
         let requested_mlx_memory_ceiling_bytes_as_usize =
             usize::try_from(requested_mlx_memory_ceiling_bytes).map_err(|_| {
-                super::super::inference_execution::fatal_engine_error(
+                crate::qwen3_5_core::engine_errors::fatal_engine_error(
                     "requested MLX memory ceiling exceeds the platform range",
                 )
             })?;
@@ -88,7 +88,7 @@ impl Qwen3_5ResidentModel {
             requested_mlx_memory_ceiling_bytes_as_usize,
             requested_mlx_memory_ceiling_bytes_as_usize,
         )
-        .map_err(super::super::inference_execution::qwen3_5_runtime_error)?;
+        .map_err(crate::qwen3_5_core::engine_errors::qwen3_5_runtime_error)?;
         let is_lowering_mlx_memory_ceiling = matches!(
             ceiling_change_decision,
             MemoryCeilingChangeDecision::Lower { .. }
@@ -100,12 +100,12 @@ impl Qwen3_5ResidentModel {
                 .runtime
                 .synchronize_gpu_stream_and_clear_mlx_buffer_cache()
                 .and_then(|()| self.runtime.memory_snapshot())
-                .map_err(super::super::inference_execution::qwen3_5_runtime_error)?;
+                .map_err(crate::qwen3_5_core::engine_errors::qwen3_5_runtime_error)?;
             let post_reclamation_active_memory_bytes = u64::try_from(
                 post_reclamation_mlx_memory_snapshot.active_memory_bytes(),
             )
             .map_err(|_| {
-                super::super::inference_execution::fatal_engine_error(
+                crate::qwen3_5_core::engine_errors::fatal_engine_error(
                     "post-reclamation MLX active memory exceeds the u64 range",
                 )
             })?;
@@ -120,7 +120,7 @@ impl Qwen3_5ResidentModel {
             .runtime
             .update_memory_limits(requested_mlx_memory_limits)
         {
-            return Err(super::super::inference_execution::qwen3_5_runtime_error(
+            return Err(crate::qwen3_5_core::engine_errors::qwen3_5_runtime_error(
                 runtime_update_error,
             ));
         }

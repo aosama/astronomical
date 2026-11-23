@@ -31,6 +31,10 @@ impl InferenceEngine for ModelFamilyInferenceEngine {
     ) -> Result<Option<ipc_protocol::NeuralEnginePrefillStatus>, InferenceEngineError> {
         match self {
             Self::Qwen3_5(engine) => engine.advance_neural_engine_preparation().await,
+            // Only the resident engine prepares Neural Engine programs. Answering
+            // here, rather than asking the owner thread, keeps a gone owner thread
+            // from being reported as a stopped Neural Engine preparation that the
+            // other engines never had.
             Self::Qwen3_5Streaming(_) | Self::PrismHadamardQwen35(_) => Ok(None),
         }
     }
