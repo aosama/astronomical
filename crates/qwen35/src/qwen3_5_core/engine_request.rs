@@ -9,7 +9,6 @@
 use ipc_protocol::{RequestId, WorkerAstroSsdPromptCacheRequestDiagnostics, WorkerPromptWorkReuse};
 use mlx_bridge::MlxArray;
 
-use crate::astro_ssd_prompt_cache::block_causal_input::AstroSsdPromptCacheBlockCausalInput;
 use crate::qwen3_5_core::decoder::RequestDecoderStateStack;
 use crate::qwen3_5_core::decoder::reply_token_mlx_buffer_cache_reclaim::OutgrownAttentionSlabReclaim;
 use crate::qwen3_5_core::engine_errors::{fatal_engine_error, qwen3_5_runtime_error};
@@ -19,6 +18,7 @@ use crate::{
     AstroSsdPromptCacheBlockKey, InferenceEngineError, PerformanceAttribution,
     PerformanceOperation, Qwen3_5SamplingStrategy, Qwen3_5ThinkingBudgetState,
 };
+use engine_core::astro_ssd_prompt_cache::block_causal_input::AstroSsdPromptCacheBlockCausalInput;
 
 /// One request's state in either Qwen3.5 engine. The fields both engines
 /// read live here; `engine_extension` holds what only one engine needs

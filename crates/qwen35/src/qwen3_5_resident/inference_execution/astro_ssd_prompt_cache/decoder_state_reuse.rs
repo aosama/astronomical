@@ -6,12 +6,12 @@
 
 use ipc_protocol::WorkerInMemoryPrefixAdoptionOutcome;
 
-use crate::astro_ssd_prompt_cache::prefix_lookup::AstroSsdPromptCachePrefixLookup;
 use crate::qwen3_5_core::decoder::RequestDecoderStateStack;
 use crate::qwen3_5_core::shared_execution::astro_ssd_prompt_cache_restore::{
     AstroSsdPromptCacheRestoreRequest, LivePrefixAdoption, Qwen3_5AstroSsdPromptCacheRestoreHooks,
 };
 use crate::{InferenceEngineError, PerformanceAttribution};
+use engine_core::astro_ssd_prompt_cache::prefix_lookup::AstroSsdPromptCachePrefixLookup;
 
 use super::Qwen3_5EngineState;
 

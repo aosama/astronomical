@@ -17,7 +17,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use runtime_integration::MlxRuntime;
 
-use crate::{PerformanceAttribution, PerformanceOperation};
+use model_primitives::performance_attribution::{PerformanceAttribution, PerformanceOperation};
 
 use super::block_key::AstroSsdPromptCacheBlockKey;
 use super::block_manifest::{

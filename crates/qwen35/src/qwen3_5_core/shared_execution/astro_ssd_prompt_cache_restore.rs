@@ -15,9 +15,6 @@ use ipc_protocol::{
     RequestId, WorkerAstroSsdPromptCacheRequestDiagnostics, WorkerInMemoryPrefixAdoptionOutcome,
 };
 
-use crate::astro_ssd_prompt_cache::block_causal_input::AstroSsdPromptCacheBlockCausalInput;
-use crate::astro_ssd_prompt_cache::prefix_lookup::AstroSsdPromptCachePrefixLookup;
-use crate::astro_ssd_prompt_cache::restore_support;
 use crate::qwen3_5_core::decoder::RequestDecoderStateStack;
 use crate::qwen3_5_core::engine_errors::fatal_engine_error;
 use crate::{
@@ -25,7 +22,11 @@ use crate::{
     AstroSsdPromptCacheLookupDiagnostics, InferenceEngineError, PerformanceAttribution,
     PerformanceOperation,
 };
+use engine_core::astro_ssd_prompt_cache::block_causal_input::AstroSsdPromptCacheBlockCausalInput;
+use engine_core::astro_ssd_prompt_cache::prefix_lookup::AstroSsdPromptCachePrefixLookup;
+use engine_core::astro_ssd_prompt_cache::restore_support;
 
+use super::astro_ssd_prompt_cache_state_install;
 use super::execution_core::Qwen3_5ExecutionCoreOwner;
 use super::restore_transient_workspace::restore_transient_workspace_bytes;
 
@@ -227,7 +228,7 @@ fn load_and_reconstruct_restored_prefix<Engine: Qwen3_5ExecutionCoreOwner>(
     )?;
     let last_restored_astro_ssd_prompt_cache_block_key =
         restored_kv_block_load.last_restored_astro_ssd_prompt_cache_block_key;
-    restore_support::restore_concatenated_full_attention_state(
+    astro_ssd_prompt_cache_state_install::restore_concatenated_full_attention_state(
         model.runtime(),
         request_decoder_state,
         restored_kv_block_load.restored_astro_ssd_prompt_cache_kv_block_tensors,
@@ -244,7 +245,7 @@ fn load_and_reconstruct_restored_prefix<Engine: Qwen3_5ExecutionCoreOwner>(
         .ok_or_else(|| {
             fatal_engine_error("persistent astro-ssd-prompt-cache restore lost snapshot key")
         })?;
-    restore_support::absorb_newest_recurrent_snapshot(
+    astro_ssd_prompt_cache_state_install::absorb_newest_recurrent_snapshot(
         model.runtime(),
         astro_ssd_prompt_cache,
         request_decoder_state,
@@ -252,7 +253,7 @@ fn load_and_reconstruct_restored_prefix<Engine: Qwen3_5ExecutionCoreOwner>(
         restored_span.complete_block_count,
         performance_attribution,
     )?;
-    restore_support::materialize_and_release_restored_state(
+    astro_ssd_prompt_cache_state_install::materialize_and_release_restored_state(
         model.runtime(),
         request_decoder_state,
         restored_span.complete_block_count,

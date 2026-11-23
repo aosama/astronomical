@@ -17,7 +17,6 @@ use std::time::Instant;
 use ipc_protocol::{NeuralEngineChunkReport, RequestId};
 use runtime_integration::{MLX_BUFFER_CACHE_RECLAIM_THRESHOLD_BYTES, MlxMemorySnapshot};
 
-use crate::astro_ssd_prompt_cache::{ResolvedPrefillChunkSpan, resolve_prompt_prefill_chunk_span};
 use crate::memory::telemetry::MlxMemoryTelemetry;
 use crate::qwen3_5_core::astro_ssd_prompt_cache_capture::{
     Qwen3_5AstroSsdPromptCacheCapture, capture_astro_ssd_prompt_cache_blocks,
@@ -33,6 +32,9 @@ use crate::qwen3_5_core::engine_request::Qwen3_5EngineRequest;
 use crate::{
     GeneratedToken, InferenceEngineError, PerformanceOperation,
     Qwen3_5AstroSsdPromptCacheBoundaryCheckpoint,
+};
+use engine_core::astro_ssd_prompt_cache::{
+    ResolvedPrefillChunkSpan, resolve_prompt_prefill_chunk_span,
 };
 
 use super::execution_core::Qwen3_5ExecutionCoreOwner;

@@ -7,7 +7,6 @@
 //! engine in `qwen3_5_core::shared_execution::generation_finalization_steps`.
 
 use crate::astro_decoder_state_cache::AstroDecoderStateCacheState;
-use crate::astro_ssd_prompt_cache::block_causal_input::AstroSsdPromptCacheBlockCausalInput;
 use crate::qwen3_5_core::decoder::RequestDecoderStateStack;
 use crate::qwen3_5_core::model::memory_breakdown::Qwen3_5MemoryOwnership;
 use crate::qwen3_5_core::shared_execution::generation_finalization_steps;
@@ -16,6 +15,7 @@ use crate::{
     PerformanceAttributionOutcome, PerformanceOperation, RetainedPrefixRetentionDecision,
     RetainedPrefixRetentionRequirements,
 };
+use engine_core::astro_ssd_prompt_cache::block_causal_input::AstroSsdPromptCacheBlockCausalInput;
 
 use super::Qwen3_5EngineState;
 use super::engine_request::Qwen3_5EngineRequest;

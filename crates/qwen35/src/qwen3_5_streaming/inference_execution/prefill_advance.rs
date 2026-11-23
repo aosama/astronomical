@@ -177,7 +177,7 @@ impl Qwen3_5EngineState {
         active_request: &super::engine_request::Qwen3_5EngineRequest,
         prefill_end_exclusive: usize,
     ) -> Option<PrefillAttempt> {
-        let crate::astro_ssd_prompt_cache::ResolvedPrefillChunkSpan { prefill_start, .. } =
+        let engine_core::astro_ssd_prompt_cache::ResolvedPrefillChunkSpan { prefill_start, .. } =
             prompt_reading_steps::resolve_next_prefill_chunk_span(
                 self,
                 active_request,

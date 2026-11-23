@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 
 use runtime_integration::{MlxRuntime, MlxSafetensorsWriteOutcome, MlxSafetensorsWriterError};
 
-use crate::{PerformanceAttribution, PerformanceOperation};
+use model_primitives::performance_attribution::{PerformanceAttribution, PerformanceOperation};
 
 use super::block_format::AstroSsdPromptCacheBlockHeader;
 use super::block_format_error::AstroSsdPromptCacheBlockError;
