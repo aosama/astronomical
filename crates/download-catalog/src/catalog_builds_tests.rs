@@ -207,7 +207,7 @@ fn should_link_every_bundled_build_to_a_lead_in_the_chat_list() {
         })
         .collect();
 
-    assert_eq!(builds_with_leads.len(), 11);
+    assert_eq!(builds_with_leads.len(), 12);
     assert!(builds_with_leads.iter().all(|(_, lead_model_id)| {
         [
             "Ornith-1.5-9B-MLX-4bit-vision",

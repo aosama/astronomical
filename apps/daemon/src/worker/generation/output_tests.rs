@@ -9,7 +9,9 @@ use ipc_protocol::{
 use tokio::sync::{Semaphore, mpsc};
 
 use crate::WorkerHealthSnapshot;
-use crate::worker::generation::output::{handle_worker_generation_progress, handle_worker_output};
+use crate::worker::generation::output::{
+    handle_worker_drafting_report, handle_worker_generation_progress, handle_worker_output,
+};
 use crate::worker::loop_types::ActiveGeneration;
 
 fn decode_snapshot(peak_memory_bytes: u64) -> WorkerMlxMemorySnapshot {
@@ -55,6 +57,7 @@ fn active_generation_with_token_budget(
         request_id: RequestId::new(1),
         stream_event_sender,
         chat_work: crate::worker::loop_types::ChatWork::Generate,
+        drafting_statistics: None,
     }
 }
 
@@ -140,4 +143,37 @@ fn should_fold_the_generation_progress_snapshot_peak_into_the_request_maximum() 
         active_generation.maximum_mlx_peak_memory_bytes,
         Some(36_954_430_548)
     );
+}
+
+fn drafting_report(request_id: u64) -> WorkerEvent {
+    WorkerEvent::DraftingReport {
+        request_id: RequestId::new(request_id),
+        drafting: ipc_protocol::RequestDraftingStatistics {
+            round_count: 26,
+            drafted_token_count: 78,
+            accepted_token_count: 74,
+        },
+    }
+}
+
+#[test]
+fn should_keep_the_drafting_report_of_the_active_reply() {
+    let (stream_event_sender, _stream_event_receiver) = mpsc::channel(4);
+    let mut active_request = active_generation_with_token_budget(stream_event_sender, 100);
+    handle_worker_drafting_report(drafting_report(1), &mut active_request)
+        .expect("a report for the active reply is accepted");
+    assert_eq!(
+        active_request
+            .drafting_statistics
+            .map(|reply_drafting| reply_drafting.accepted_token_count),
+        Some(74)
+    );
+}
+
+#[test]
+fn should_refuse_a_drafting_report_for_another_reply() {
+    let (stream_event_sender, _stream_event_receiver) = mpsc::channel(4);
+    let mut active_request = active_generation_with_token_budget(stream_event_sender, 100);
+    assert!(handle_worker_drafting_report(drafting_report(2), &mut active_request).is_err());
+    assert_eq!(active_request.drafting_statistics, None);
 }

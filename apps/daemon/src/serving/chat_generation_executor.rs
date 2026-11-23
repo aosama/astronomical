@@ -36,6 +36,10 @@ pub enum ChatGenerationStreamEvent {
         astro_ssd_prompt_cache_restored_token_count: u32,
         reason: ChatGenerationCompletionReason,
     },
+    /// What drafting did for this reply, sent just before `Completed` and
+    /// only when the reply drafted. A separate event, so only the surfaces
+    /// that report drafting read it.
+    DraftingReport(ipc_protocol::RequestDraftingStatistics),
     Failed {
         reason: ChatGenerationFailureReason,
     },

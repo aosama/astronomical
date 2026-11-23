@@ -575,6 +575,38 @@
             }
         },
         {
+            "huggingface_id": "ahmedihamdy/Ornith-1.5-35B-A3B-OptiQ-4bit-vision-DFLASH",
+            "revision": "d58c7ee9e214252d0cef485868cd86cdbd3a6214",
+            "summary": "The heavy thinker with Ornith's own draft model: code about a third quicker, on less disk.",
+            "family": "qwen3_5",
+            "approximate_size_bytes": 23850350514,
+            "approximate_memory_bytes": 24980456427,
+            "minimum_memory_bytes": 4451287808,
+            "role": "coding",
+            "public": true,
+            "description": "The same large model as Ornith-1.5-35B-A3B-OptiQ-4bit, with the Ornith team's own draft model packed in. On an M5 Mac the draft model guesses the next few words and the large model checks them in one step, so code arrives about a third sooner and essays about a tenth sooner (measured on an M5 Pro Mac), and every word is still the large model's own. The DFlash2 build is quicker; this one takes about 0.7 GB less disk. On other Macs it runs like the OptiQ build.",
+            "capabilities": {
+                "supports_reasoning": true,
+                "supports_vision": true,
+                "supports_tool_calls": true,
+                "context_window": 262144
+            },
+            "quantization_label": "OptiQ 4/8-bit (affine, group 64) with a DFlash draft model",
+            "upstream_license": "MIT",
+            "build_of": "Ornith-1.5-35B-A3B-OptiQ-4bit",
+            "build_difference": "draft_model",
+            "measured_speed": {
+                "measured_on": "Mac with an M5 Pro and 48 GB",
+                "astronomical_version": "0.2.132",
+                "tokens_per_second": {
+                    "essay_short_prompt": 74,
+                    "essay_long_prompt": 62,
+                    "code_short_prompt": 91,
+                    "code_long_prompt": 75
+                }
+            }
+        },
+        {
             "huggingface_id": "ahmedihamdy/Ornith-1.5-35B-A3B-OptiQ-static-5.5bpw",
             "revision": "b9b8fd725c22e38b2962e0044b8e7b9d4b707095",
             "summary": "The heavy thinker with more of its detail kept, for Macs with a little more memory.",

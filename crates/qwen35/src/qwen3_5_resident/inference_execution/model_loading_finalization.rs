@@ -21,6 +21,7 @@ impl Qwen3_5EngineState {
             )
             .with_minimum_mlx_memory_ceiling_bytes(minimum_mlx_memory_ceiling_bytes)
             .with_neural_engine_prefill_status(self.neural_engine_prefill_status.clone())
+            .with_draft_model_status(self.draft_model_status.clone())
     }
 
     #[allow(clippy::too_many_arguments)]

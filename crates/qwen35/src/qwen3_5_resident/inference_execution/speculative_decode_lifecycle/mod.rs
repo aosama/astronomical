@@ -1,6 +1,6 @@
 //! Speculative decoding lifecycle for the resident Qwen3.5 engine.
 //!
-//! When a DFlash2 drafter that pairs with the target is installed beside it
+//! When a DFlash drafter of either generation that pairs with the target is installed beside it
 //! (`drafter_discovery`), the engine hosts it (`engine_draft_runtime`) and
 //! admits the sessions whose semantics drafting preserves
 //! (`speculation_session_admission`). An admitted session decodes in rounds
@@ -9,6 +9,7 @@
 //! follow. `speculative_decode_advance` drains each round's tokens through
 //! the ordinary emission machinery, one per engine advance.
 
+pub mod draft_model_status_report;
 pub mod draft_tree_round;
 pub mod draft_tree_size;
 pub mod drafter_discovery;
@@ -16,7 +17,7 @@ pub mod engine_draft_runtime;
 pub mod speculation_session_admission;
 pub mod speculative_decode_advance;
 
-pub use engine_draft_runtime::Qwen3_5SpeculativeDraftRuntime;
+pub use engine_draft_runtime::{Qwen3_5DraftRuntimeLoadOutcome, Qwen3_5SpeculativeDraftRuntime};
 pub use speculation_session_admission::{
     SpeculationSessionRequestProperties, VerificationTokenChoice,
     should_admit_speculation_for_session,

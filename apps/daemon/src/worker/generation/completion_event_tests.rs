@@ -73,6 +73,7 @@ fn active_chat_request(
         request_id,
         stream_event_sender,
         chat_work: ChatWork::Generate,
+        drafting_statistics: None,
     }
 }
 
@@ -329,6 +330,7 @@ fn timed_out_chat_request(
         request_id: RequestId::new(1),
         stream_event_sender,
         chat_work: ChatWork::Generate,
+        drafting_statistics: None,
     };
     (measurements, completed_request)
 }

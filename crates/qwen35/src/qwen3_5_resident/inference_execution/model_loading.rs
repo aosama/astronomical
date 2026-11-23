@@ -10,7 +10,9 @@ use crate::{
 };
 
 use super::astro_ssd_prompt_cache_startup_logging;
-use super::speculative_decode_lifecycle::Qwen3_5SpeculativeDraftRuntime;
+use super::speculative_decode_lifecycle::{
+    Qwen3_5SpeculativeDraftRuntime, draft_model_status_report,
+};
 use super::{Qwen3_5EngineState, fatal_engine_error, qwen3_5_runtime_error};
 use crate::qwen3_5_core::artifacts::ValidatedQwen3_5Artifact;
 use crate::qwen3_5_core::model::model_chunking_configuration::Qwen3_5ModelChunkingConfiguration;
@@ -177,30 +179,24 @@ impl Qwen3_5EngineState {
         }
     }
 
-    /// A DFlash2 drafter installed beside the target turns on draft trees;
-    /// with none (or on a GPU without the kernels they need) every session
-    /// decodes one token per forward. A drafter that fails to load costs
-    /// the speedup, never the model.
+    /// A DFlash drafter of either generation installed beside the target
+    /// turns on draft trees; with none (or on a GPU without the kernels they
+    /// need) every session decodes one token per forward. A drafter that
+    /// fails to load costs the speedup, never the model. Status learns which
+    /// of these happened.
     fn install_speculative_draft_runtime(
         &mut self,
         model: &mut Qwen3_5ResidentModel,
         model_loading_performance_attribution: &mut PerformanceAttribution,
     ) {
-        self.speculative_draft_runtime = match Qwen3_5SpeculativeDraftRuntime::load_for_target(
+        let load_outcome = Qwen3_5SpeculativeDraftRuntime::load_for_target(
             model,
             self.memory_limits.active_memory_limit_bytes(),
             &self.model_directory,
             model_loading_performance_attribution,
-        ) {
-            Ok(speculative_draft_runtime) => speculative_draft_runtime,
-            Err(draft_loading_error) => {
-                tracing::warn!(
-                    %draft_loading_error,
-                    "the installed DFlash2 drafter could not be loaded; decoding stays classic"
-                );
-                None
-            }
-        };
+        );
+        (self.speculative_draft_runtime, self.draft_model_status) =
+            draft_model_status_report::draft_runtime_and_status(load_outcome);
     }
 
     /// Moves the successfully loaded model and its `astro_ssd_prompt_cache` ownership into the

@@ -161,11 +161,53 @@ function createDownloadModelsInstalledIdentity(installedRow) {
             "span", "download-models-installed-source", "From your Hugging Face folder"
         ));
     }
+    const drafterLine = downloadModelsDrafterLine(installedRow);
+    if (drafterLine) {
+        const drafterNote = createDownloadModelsElement("span", "download-models-installed-source", drafterLine);
+        drafterNote.title = DOWNLOAD_MODELS_DRAFTER_EXPLANATION;
+        identityChildren.push(drafterNote);
+    }
     // Why a removal was refused, on the line of the model it is about.
     const refusalText = downloadModelsRemovalNoticeFor(installedRow);
     if (refusalText) identityChildren.push(createDownloadModelsNotice(refusalText));
     identity.replaceChildren(...identityChildren);
     return identity;
+}
+
+// What a draft model is, for the note's hover text: what it does for the
+// person, then the one condition it needs.
+const DOWNLOAD_MODELS_DRAFTER_EXPLANATION = "A small helper model guesses the next few words and this model "
+    + "checks them all in one step, so replies arrive sooner. Every word is still this model's own. "
+    + "It needs an M5 Mac with room for the whole model.";
+
+function downloadModelsLoadedDraftModel() {
+    return typeof loadedDraftModel === "object" ? loadedDraftModel : null;
+}
+
+function downloadModelsLoadedReplyDrafting() {
+    return typeof loadedReplyDrafting === "object" ? loadedReplyDrafting : null;
+}
+
+// The note under a model's name that carries a draft model. The loaded model
+// says what its drafter is doing right now, from the status poll, whether the
+// drafter is in its own folder or elsewhere in the library; the rest only say
+// they carry one of their own, since nothing is known until they load.
+function downloadModelsDrafterLine(installedRow) {
+    const liveDraftModel = isDownloadModelsRowInMemory(installedRow) ? downloadModelsLoadedDraftModel() : null;
+    const hasLiveDrafter = liveDraftModel && (liveDraftModel.state === "drafting" || liveDraftModel.state === "unavailable");
+    if (!installedRow.bundledDrafter && !hasLiveDrafter) return null;
+    if (liveDraftModel && liveDraftModel.state === "unavailable") {
+        return "Has a draft model, not in use: " + liveDraftModel.reason;
+    }
+    if (liveDraftModel && liveDraftModel.state === "drafting") {
+        const replyDrafting = downloadModelsLoadedReplyDrafting();
+        if (replyDrafting && replyDrafting.drafted_token_count > 0) {
+            const keptPercent = Math.round(100 * replyDrafting.accepted_token_count / replyDrafting.drafted_token_count);
+            return "Drafting: the last reply kept " + keptPercent + "% of the guessed words";
+        }
+        return "Drafting for quicker replies";
+    }
+    return "Has a draft model for quicker replies";
 }
 
 function createDownloadModelsInstalledStatus(installedRow) {

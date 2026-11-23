@@ -33,6 +33,25 @@ Do not restart or stop the engine to fix slowness; it throws away the loaded
 model and its progress. If nothing answers at all, the menu-bar item has an
 option to restart the engine; that is the person's action, not yours.
 
+## A model copied in by hand does not show up
+
+Astronomical notices a model folder added to, moved within or removed from
+its models folder within a few seconds, with no restart. If one still does
+not appear:
+
+- Its weight files must be real files. A shortcut (symlink) to a weight file
+  is refused; a copy, or a symlink to the whole model folder, works.
+- `astronomical models list` lists only models this release can run. A folder
+  of another kind, or an incomplete one, is skipped.
+
+## A model fails to load
+
+Usually there is not enough free memory at that moment. Something else may
+hold a large model: another app, or a second copy of Astronomical such as a
+build from source. Ask the person to close or unload it there
+(`astronomical unload` frees Astronomical's), then try again. A lower memory
+limit also lets the model load, reading part of it from the SSD.
+
 ## A download stalls or fails
 
 Run the same download again; it resumes. Check free disk space. A model the

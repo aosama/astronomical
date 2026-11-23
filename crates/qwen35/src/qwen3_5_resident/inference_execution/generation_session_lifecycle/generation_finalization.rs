@@ -142,6 +142,18 @@ impl Qwen3_5EngineState {
             &mut active_request.performance_attribution,
             PerformanceAttribution::disabled(),
         );
+        let mut drafting_statistics = active_request.engine_extension.drafting_statistics;
+        // A reply that ends partway through a kept chain leaves its drafts in
+        // the emission queue; every entry but the tail (the round's
+        // correction token, not a draft) was counted as kept but never sent.
+        let unsent_accepted_token_count = active_request
+            .engine_extension
+            .speculative_emission_queue
+            .len()
+            .saturating_sub(1);
+        drafting_statistics.withdraw_unsent_accepted_tokens(
+            u32::try_from(unsent_accepted_token_count).unwrap_or(u32::MAX),
+        );
         // Drop pending tokens and decoder state before sampling post-request memory.
         drop(active_request);
         // `release_request_memory` synchronizes the model stream before clearing
@@ -151,12 +163,14 @@ impl Qwen3_5EngineState {
             |_performance_attribution| self.release_request_memory(request_id),
         );
         self.govern_request_end();
-        let generation_finalization = self.collect_generation_finalization(
-            &mut performance_attribution,
-            mlx_memory_snapshot
-                .as_ref()
-                .and_then(snapshot_peak_memory_bytes_option),
-        );
+        let generation_finalization = self
+            .collect_generation_finalization(
+                &mut performance_attribution,
+                mlx_memory_snapshot
+                    .as_ref()
+                    .and_then(snapshot_peak_memory_bytes_option),
+            )
+            .with_drafting_statistics(drafting_statistics);
         self.record_generation_performance_attribution(
             performance_attribution,
             outcome,

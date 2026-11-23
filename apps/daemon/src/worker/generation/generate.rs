@@ -366,5 +366,6 @@ fn assemble_active_chat_generation(
         request_id,
         stream_event_sender,
         chat_work,
+        drafting_statistics: None,
     })
 }

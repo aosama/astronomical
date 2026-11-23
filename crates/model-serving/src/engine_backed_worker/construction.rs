@@ -31,6 +31,7 @@ where
             is_neural_engine_preparation_running: false,
             has_request_run_since_settling: false,
             unsent_neural_engine_prefill_event: None,
+            unsent_draft_model_event: None,
         }
     }
 }
@@ -92,6 +93,7 @@ where
             is_neural_engine_preparation_running: false,
             has_request_run_since_settling: false,
             unsent_neural_engine_prefill_event: None,
+            unsent_draft_model_event: None,
         }
     }
 

@@ -6,12 +6,12 @@
     "references/decision-models.md": "f3fed9c1669e4144f94e216784c6e26c2b295a126030aab27c35a4de0880d9c6",
     "references/getting-started.md": "8202bb225ab88b4300a0d8a3ee8d56ebd00fc2def6f6e7bb3501d9e3d25ec2fe",
     "references/images.md": "9e58d2d8197829fe955629930e1e8548641a38d756d8e2698f04708fead0bc2f",
-    "references/local-api.md": "6e06e3c971df6e4ac05765802d7a4269dba946f09269d7bd548493dabc089022",
-    "references/models-and-memory.md": "7a374dacf603ba0c6fa5965c97294225966bce35001ae0e8360e296aa7be282f",
+    "references/local-api.md": "7d1a513c37a05a7d6ff22b3ad2529a9d8121ea7bbd396a013d18bbfbe89c7d50",
+    "references/models-and-memory.md": "95c4a583419ab3af77634067b4fad2228bd481324bb630bec98f19ccc622218f",
     "references/settings.md": "36c5bd46bf3c0fea0bc375f88c907f24acb996e4d1cedd0e0e0a032a8db063b7",
     "references/speech.md": "892a232176de1435776df11f45ab2cc98f5db17debc54bb033bac86157aacacd",
-    "references/troubleshooting.md": "65797d03520dd5bd99bd1ffa5ed9f05f320deefbbf7b93571b388f3d527ad1e7"
+    "references/troubleshooting.md": "c78350daceb34f4aa7c596f152a26404598269ef8d022d55837460b4df721e2a"
   },
-  "minimum_app_version": "0.2.125",
-  "skill_version": 2
+  "minimum_app_version": "0.2.133",
+  "skill_version": 3
 }

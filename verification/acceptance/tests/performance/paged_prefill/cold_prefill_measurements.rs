@@ -373,22 +373,19 @@ async fn measure_worker_summarization(
         match stream_event {
             ChatGenerationStreamEvent::ReasoningFragment(text)
             | ChatGenerationStreamEvent::TextFragment(text) => {
-                if first_output_at.is_none() {
-                    first_output_at = Some(Instant::now());
-                    eprintln!("[performance-measurement] first generated output received");
-                }
-                generated_text.push_str(&text);
+                record_generated_output(&mut first_output_at, &mut generated_text, &text, "output");
             }
             ChatGenerationStreamEvent::ToolCall {
                 function_name,
                 arguments_json,
                 ..
             } => {
-                if first_output_at.is_none() {
-                    first_output_at = Some(Instant::now());
-                    eprintln!("[performance-measurement] first generated tool call received");
-                }
-                generated_text.push_str(&function_name);
+                record_generated_output(
+                    &mut first_output_at,
+                    &mut generated_text,
+                    &function_name,
+                    "tool call",
+                );
                 generated_text.push_str(&arguments_json);
             }
             ChatGenerationStreamEvent::PrefillProgress {
@@ -410,6 +407,8 @@ async fn measure_worker_summarization(
                     mlx_peak_memory_bytes,
                 );
             }
+            // A measurement of prefill, which drafting never touches.
+            ChatGenerationStreamEvent::DraftingReport(_) => {}
             ChatGenerationStreamEvent::Completed {
                 prompt_token_count: completed_prompt_token_count,
                 generated_token_count,
@@ -482,4 +481,19 @@ fn fifty_thousand_word_case() -> ColdPrefillMeasurementCase {
         source_word_count: 50_000,
         should_require_three_paragraphs: false,
     }
+}
+
+/// Notes when the first generated output of a measured reply arrived, the
+/// boundary the time-to-first-output figure ends at, and keeps its text.
+fn record_generated_output(
+    first_output_at: &mut Option<Instant>,
+    generated_text: &mut String,
+    output_text: &str,
+    output_kind: &str,
+) {
+    if first_output_at.is_none() {
+        *first_output_at = Some(Instant::now());
+        eprintln!("[performance-measurement] first generated {output_kind} received");
+    }
+    generated_text.push_str(output_text);
 }

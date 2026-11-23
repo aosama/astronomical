@@ -102,6 +102,15 @@
   "configured_maximum_mlx_memory_gb": null,
   "effective_generation": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
   "neural_engine_prefill": null,
+  "draft_model": null,
+  "drafting": {
+    "last_reply": null,
+    "since_model_loaded": {
+      "accepted_token_count": 0,
+      "drafted_token_count": 0,
+      "round_count": 0
+    }
+  },
   "model_load_in_flight": null,
   "expert_memory_mode": null,
   "expert_residency": null,

@@ -37,6 +37,7 @@ pub enum CliCommand {
     Speak(SpeakArguments),
     Models(ModelsCommand),
     Status,
+    Unload,
     Doctor,
     Schema(SchemaArguments),
     ValidateConfig(ValidateConfigArguments),
@@ -86,8 +87,10 @@ pub fn parse_command(
         "embed" | "decide" => parse_helper_model_verb(command_name, &remaining_arguments[1..]),
         "image" | "speak" => parse_file_output_verb(command_name, &remaining_arguments[1..]),
         "models" => parse_models_verb(&remaining_arguments[1..]),
-        "status" => command_taking_no_arguments(&remaining_arguments[1..], CliCommand::Status),
-        "doctor" => command_taking_no_arguments(&remaining_arguments[1..], CliCommand::Doctor),
+        "status" | "unload" | "doctor" => command_taking_no_arguments(
+            &remaining_arguments[1..],
+            argument_free_command(command_name),
+        ),
         "schema" => parse_schema_command(&remaining_arguments[1..]).map(CliCommand::Schema),
         "validate" => {
             parse_validate_command(&remaining_arguments[1..]).map(CliCommand::ValidateConfig)
@@ -133,6 +136,16 @@ fn parse_helper_model_verb(
         return parse_decide_arguments(verb_arguments).map(CliCommand::Decide);
     }
     parse_embed_arguments(verb_arguments).map(CliCommand::Embed)
+}
+
+/// The verb a word names among those that take no arguments; kept apart so
+/// `parse_command` adds no branch per such verb.
+fn argument_free_command(command_name: &str) -> CliCommand {
+    match command_name {
+        "status" => CliCommand::Status,
+        "unload" => CliCommand::Unload,
+        _ => CliCommand::Doctor,
+    }
 }
 
 fn command_taking_no_arguments(

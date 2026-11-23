@@ -102,7 +102,8 @@ impl OpenAiResponsesStreamEncoder {
                     None,
                 ))
             }
-            ChatGenerationStreamEvent::PrefillProgress { .. } => Ok(VecDeque::new()),
+            ChatGenerationStreamEvent::PrefillProgress { .. }
+            | ChatGenerationStreamEvent::DraftingReport(_) => Ok(VecDeque::new()),
             ChatGenerationStreamEvent::ReasoningFragment(reasoning_text) => {
                 if self.reasoning_excluded {
                     // The model still thought and the token count still lands in

@@ -6,7 +6,10 @@ use std::{io::Write, path::PathBuf};
 
 use astronomical_cli::StatusDependencies;
 use config::AstronomicalRuntimeInstance;
-use ipc_protocol::{DaemonWorkerStatus, ModelLoadInFlight, NeuralEnginePrefillStatus};
+use ipc_protocol::{
+    DaemonWorkerStatus, DraftModelGeneration, DraftModelLocation, DraftModelStatus,
+    ModelLoadInFlight, NeuralEnginePrefillStatus,
+};
 use tokio::time::timeout;
 
 use crate::integration::support::environment;
@@ -347,4 +350,56 @@ async fn should_add_no_neural_engine_line_when_the_setting_is_off() {
         !report_before_any_model.contains("neural engine"),
         "{report_before_any_model}"
     );
+}
+
+/// The status report from a stub whose loaded model reports `draft_model`.
+async fn status_report_with_drafter(
+    test_name: &str,
+    draft_model: Option<DraftModelStatus>,
+) -> String {
+    let test_directory = environment::fresh_test_directory("status", test_name);
+    let socket_path = test_directory.join(SOCKET_FILE_NAME);
+    let stub_daemon_task = spawn_stub_daemon(
+        socket_path.clone(),
+        StubDaemonConfig {
+            installed_models: vec![StubInstalledModel::chat("test/model", true)],
+            draft_model,
+            ..Default::default()
+        },
+    );
+    let mut stdout = Vec::new();
+    let mut status_dependencies = status_dependencies(vec![socket_path], &mut stdout);
+    timeout(
+        TEST_TIMEOUT,
+        astronomical_cli::run_status(&mut status_dependencies),
+    )
+    .await
+    .expect("the status journey should finish inside the test timeout")
+    .expect("the status journey should complete against the stub daemon");
+    stub_daemon_task.abort();
+    let _ = std::fs::remove_dir_all(&test_directory);
+    String::from_utf8(stdout).expect("the report is text")
+}
+
+#[tokio::test]
+async fn should_show_that_the_loaded_model_drafts() {
+    let report = status_report_with_drafter(
+        "drafting",
+        Some(DraftModelStatus::Drafting {
+            generation: DraftModelGeneration::Dflash,
+            location: DraftModelLocation::Bundled,
+            tree_node_budget: 3,
+        }),
+    )
+    .await;
+    assert!(
+        report.contains("drafter:  drafting with DFlash, the model's own drafter"),
+        "{report}"
+    );
+}
+
+#[tokio::test]
+async fn should_add_no_drafter_line_before_any_model_reports() {
+    let report = status_report_with_drafter("no-drafter-report", None).await;
+    assert!(!report.contains("drafter"), "{report}");
 }

@@ -258,6 +258,7 @@ async fn run_daemon(
             download_catalog: Arc::clone(&download_catalog),
             library_download_coordinator: Some(Arc::clone(&library_download_coordinator)),
             instance_paths: instance_paths.clone(),
+            worker_control: Some(worker_handle.clone()),
         },
         &daemon_attribution_log,
     )
@@ -458,9 +459,20 @@ async fn assemble_daemon_services(
             Arc::new(astronomical_daemon::Fs4DiskCapacityQuery),
             hub_transport.clone(),
             hub_transport,
-            discovery_refresh,
+            Arc::clone(&discovery_refresh)
+                as Arc<dyn astronomical_daemon::DownloadPublicationRefresh>,
             daemon_attribution_log.clone(),
         ));
+    // Not joined at shutdown: it holds no state worth finishing, and the
+    // shutdown signal ends its loop before the runtime stops.
+    let _model_folder_watch_task = astronomical_daemon::spawn_model_folder_watch(
+        astronomical_daemon::ModelFolderWatch {
+            automatic_models_directory: instance_paths.models_directory(),
+            reloadable_config: Arc::clone(&reloadable_config),
+            discovery_refresh,
+        },
+        shutdown_controller.subscribe(),
+    );
     library_download_coordinator
         .recover_startup_state()
         .await

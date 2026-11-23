@@ -17,6 +17,8 @@ mod model_load_in_flight_tests;
 #[cfg(test)]
 mod neural_engine_prefill_tests;
 #[cfg(test)]
+mod reply_drafting_tests;
+#[cfg(test)]
 #[path = "health/request_progress_count_tests.rs"]
 mod request_progress_count_tests;
 
@@ -25,13 +27,14 @@ pub(crate) mod expert_streaming;
 pub(crate) use publisher::{
     clear_active_request_progress, clear_latest_mlx_memory_snapshot,
     publish_active_request_progress, publish_activity, publish_astro_ssd_prompt_cache_stats,
-    publish_expert_memory_mode, publish_expert_residency, publish_expert_streaming_stats,
-    publish_health, publish_latest_mlx_memory_snapshot, publish_mlx_memory_limit_changed,
+    publish_draft_model, publish_engine_status_event, publish_expert_memory_mode,
+    publish_expert_residency, publish_expert_streaming_stats, publish_health,
+    publish_latest_mlx_memory_snapshot, publish_mlx_memory_limit_changed,
     publish_mlx_memory_limit_rejection, publish_mlx_memory_limit_restart_required,
     publish_model_load_in_flight, publish_neural_engine_prefill,
     publish_pending_astro_ssd_prompt_cache_clear, publish_pending_mlx_memory_ceiling,
     publish_worker_expert_residency, record_neural_engine_chunk, record_prompt_work_reuse,
-    record_serving_session,
+    record_reply_drafting, record_serving_session,
 };
 
 /// Coarse worker availability state exposed by the daemon readiness endpoint.
@@ -283,6 +286,13 @@ pub struct WorkerHealthSnapshot {
     /// What the loaded model's opt-in Neural Engine prefill is doing; `None`
     /// when the setting is off or no model is loaded.
     pub neural_engine_prefill: Option<ipc_protocol::NeuralEnginePrefillStatus>,
+    /// Whether the loaded model drafts with a DFlash draft model; `None` when
+    /// no model is loaded or its engine never looks for one.
+    pub draft_model: Option<ipc_protocol::DraftModelStatus>,
+    /// What drafting did for the last finished reply; `None` when it did not draft.
+    pub last_reply_drafting: Option<ipc_protocol::RequestDraftingStatistics>,
+    /// Drafting summed over every reply since this model loaded.
+    pub session_drafting: ipc_protocol::RequestDraftingStatistics,
     /// Which model is loading. Every wholesale health replacement (ready, idle,
     /// unavailable) rebuilds this as `None`, so a finished or failed load never leaves
     /// a stale report behind.
@@ -343,6 +353,9 @@ impl WorkerHealthSnapshot {
             active_request_progress: None,
             expert_memory_mode: None,
             neural_engine_prefill: None,
+            draft_model: None,
+            last_reply_drafting: None,
+            session_drafting: ipc_protocol::RequestDraftingStatistics::NONE,
             model_load_in_flight: None,
             request_progress_count: 0,
             expert_residency: None,
@@ -419,6 +432,9 @@ impl WorkerHealthSnapshot {
             active_request_progress: None,
             expert_memory_mode: None,
             neural_engine_prefill: None,
+            draft_model: None,
+            last_reply_drafting: None,
+            session_drafting: ipc_protocol::RequestDraftingStatistics::NONE,
             model_load_in_flight: None,
             request_progress_count: 0,
             expert_residency: None,
@@ -450,6 +466,9 @@ impl WorkerHealthSnapshot {
             active_request_progress: None,
             expert_memory_mode: None,
             neural_engine_prefill: None,
+            draft_model: None,
+            last_reply_drafting: None,
+            session_drafting: ipc_protocol::RequestDraftingStatistics::NONE,
             model_load_in_flight: None,
             request_progress_count: 0,
             expert_residency: None,

@@ -7,6 +7,7 @@
 //! sequence, like the real daemon.
 
 use super::stub_decisions::{scripted_decisions_response, training_refusal};
+use super::stub_model_control::stub_model_control_answer;
 use crate::integration::support::stub_download_status::scripted_download_status;
 use std::{
     path::PathBuf,
@@ -85,6 +86,10 @@ pub struct StubDaemonConfig {
     /// and never answered.
     pub hung_status_requests: std::ops::Range<usize>,
     pub neural_engine_prefill: Option<ipc_protocol::NeuralEnginePrefillStatus>,
+    /// The drafter status every `Status` reports.
+    pub draft_model: Option<ipc_protocol::DraftModelStatus>,
+    /// What every `ModelUnload` answers; an unload names the resident model.
+    pub model_unload_status: ipc_protocol::DaemonModelUnloadStatus,
     pub embeddings_outcome: StubEmbeddingsOutcome,
     /// How long an `EmbedGenerate` stays silent before its one frame, standing in for
     /// a queue or a model load inside the real daemon.
@@ -137,6 +142,8 @@ impl Default for StubDaemonConfig {
             request_progress_counts: Vec::new(),
             hung_status_requests: 0..0,
             neural_engine_prefill: None,
+            draft_model: None,
+            model_unload_status: ipc_protocol::DaemonModelUnloadStatus::Unloaded,
             embeddings_outcome: StubEmbeddingsOutcome::Completed,
             embeddings_first_frame_delay: Duration::ZERO,
             embedding_vector: vec![0.25, -0.5],
@@ -303,6 +310,8 @@ pub fn spawn_stub_daemon(
                                         &request_progress_count_index,
                                     ),
                                     neural_engine_prefill: config.neural_engine_prefill.clone(),
+                                    draft_model: config.draft_model.clone(),
+                                    last_reply_drafting: None,
                                 })
                                 .await
                                 .expect("the stub status should transmit");
@@ -400,17 +409,18 @@ pub fn spawn_stub_daemon(
                                 .await
                                 .expect("the stub download status should transmit");
                         }
-                        DaemonRequest::DefaultModelSet { model_id } => {
-                            *default_model_id
-                                .lock()
-                                .expect("the stub default lock should stay live") =
-                                Some(model_id.clone());
+                        model_control_request @ (DaemonRequest::ModelUnload
+                        | DaemonRequest::DefaultModelSet { .. }) => {
+                            let control_answer = stub_model_control_answer(
+                                model_control_request,
+                                &config,
+                                &default_model_id,
+                                resident_model_id.as_ref(),
+                            );
                             protocol_writer
-                                .send_daemon_response(&DaemonResponse::DefaultModelSet {
-                                    default_model_id: model_id,
-                                })
+                                .send_daemon_response(&control_answer)
                                 .await
-                                .expect("the stub default set should transmit");
+                                .expect("the stub model control answer should transmit");
                         }
                         DaemonRequest::ChatGenerate {
                             messages,

@@ -107,6 +107,25 @@ pub enum DaemonRequest {
     DefaultModelSet {
         model_id: String,
     },
+    /// Unloads the loaded model now, instead of waiting for the idle unload,
+    /// when no request is running or waiting.
+    ModelUnload,
+}
+
+/// What an unload request did, mirroring `POST /v1/control/unload-model`.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DaemonModelUnloadStatus {
+    /// The model was unloaded and its memory freed.
+    Unloaded,
+    /// No model was loaded.
+    NothingLoaded,
+    /// A request is running or waiting, so the model stays loaded.
+    Busy,
+    /// The engine is not running.
+    Unavailable,
+    /// The model was unloaded, but the engine is still restarting.
+    UnloadedEngineRestarting,
 }
 
 /// What the user chose for one speech request.
@@ -175,6 +194,15 @@ pub enum DaemonResponse {
         /// What the Neural Engine is doing for the loaded model; `None` before any
         /// model has reported.
         neural_engine_prefill: Option<crate::NeuralEnginePrefillStatus>,
+        /// Whether the loaded model drafts with a DFlash draft model; `None`
+        /// before a model has reported, and for engines that never look for
+        /// one.
+        #[serde(default)]
+        draft_model: Option<crate::DraftModelStatus>,
+        /// What drafting did for the last finished reply; `None` when it did
+        /// not draft.
+        #[serde(default)]
+        last_reply_drafting: Option<crate::RequestDraftingStatistics>,
     },
     /// Answer to [`DaemonRequest::ModelsList`].
     ModelsList { models: Vec<DaemonListedModel> },
@@ -191,6 +219,12 @@ pub enum DaemonResponse {
     },
     /// Terminal frame for an admitted [`DaemonRequest::DefaultModelSet`].
     DefaultModelSet { default_model_id: String },
+    /// Terminal frame for [`DaemonRequest::ModelUnload`].
+    ModelUnloaded {
+        status: DaemonModelUnloadStatus,
+        /// The model that was unloaded, when one was.
+        model_id: Option<String>,
+    },
     /// Terminal refusal when the daemon declines a model-management request.
     RequestRejected { reason: String },
     /// One visible answer fragment, streamed in generation order.

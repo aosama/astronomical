@@ -26,6 +26,18 @@ impl Qwen3_5EngineState {
                     self.chunking.experimental_neural_engine_prefill_enabled,
                 ),
             )
+            .with_draft_model_status(self.draft_model_status())
+    }
+
+    /// This engine never drafts; status names a drafter it would have used.
+    fn draft_model_status(&self) -> ipc_protocol::DraftModelStatus {
+        match self.model.as_ref() {
+            Some(loaded_model) => crate::qwen3_5_resident::streaming_draft_model_status(
+                &self.model_directory,
+                &loaded_model.config,
+            ),
+            None => ipc_protocol::DraftModelStatus::None,
+        }
     }
 
     #[allow(clippy::too_many_arguments)]

@@ -124,6 +124,7 @@ async fn should_not_send_when_the_active_request_is_not_an_image_request() {
             request_id: RequestId::new(2),
             stream_event_sender,
             chat_work: crate::worker::loop_types::ChatWork::Generate,
+            drafting_statistics: None,
         },
     ));
 
