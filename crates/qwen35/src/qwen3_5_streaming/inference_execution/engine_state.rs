@@ -35,4 +35,10 @@ impl Qwen3_5ExecutionCoreOwner for Qwen3_5InferenceExecution {
     fn execution_core(&self) -> &Qwen3_5ExecutionCore<Qwen3_5Model, StreamingRequestExtension> {
         &self.core
     }
+
+    fn execution_core_mut(
+        &mut self,
+    ) -> &mut Qwen3_5ExecutionCore<Self::Model, Self::RequestExtension> {
+        &mut self.core
+    }
 }

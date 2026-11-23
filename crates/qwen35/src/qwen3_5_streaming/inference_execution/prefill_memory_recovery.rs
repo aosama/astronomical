@@ -101,21 +101,25 @@ impl Qwen3_5EngineState {
             // Same split borrow as request start: the store must be reinstalled
             // even when restore fails, or later requests silently lose the `astro_ssd_prompt_cache`.
             let astro_ssd_prompt_cache = self.core.astro_ssd_prompt_cache.take();
-            let restore_result =
-                if let Some(astro_ssd_prompt_cache) = astro_ssd_prompt_cache.as_ref() {
-                    self.restore_astro_ssd_prompt_cache_prefix(
-                        request_id,
-                        astro_ssd_prompt_cache,
-                        &active_request.input_token_ids,
-                        &active_request.astro_ssd_prompt_cache_block_causal_inputs,
-                        active_request.engine_extension.reserved_context_tokens,
+            let restore_result = if let Some(astro_ssd_prompt_cache) =
+                astro_ssd_prompt_cache.as_ref()
+            {
+                crate::qwen3_5_core::shared_execution::astro_ssd_prompt_cache_restore::restore_astro_ssd_prompt_cache_prefix(
+                        self,
+                        &crate::qwen3_5_core::shared_execution::astro_ssd_prompt_cache_restore::AstroSsdPromptCacheRestoreRequest {
+                            request_id,
+                            astro_ssd_prompt_cache,
+                            prompt_token_ids: &active_request.input_token_ids,
+                            block_causal_inputs: &active_request.astro_ssd_prompt_cache_block_causal_inputs,
+                            total_context_tokens: active_request.engine_extension.reserved_context_tokens,
+                        },
                         &mut active_request.request_decoder_state,
                         &mut active_request.performance_attribution,
                     )
                     .map(Some)
-                } else {
-                    Ok(None)
-                };
+            } else {
+                Ok(None)
+            };
             self.core.astro_ssd_prompt_cache = astro_ssd_prompt_cache;
             if let Some(restore_outcome) = restore_result? {
                 restored_prefill_cursor = restore_outcome.restored_token_count;

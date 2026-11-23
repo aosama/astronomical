@@ -20,9 +20,9 @@ use crate::{
 
 use crate::astro_ssd_prompt_cache::restore_support::astro_ssd_prompt_cache_request_diagnostics;
 
-use super::decoder_state_reuse::AstroSsdPromptCacheRestoreOutcome;
 use super::retained_live_prefix::RetainedLiveDecoderPrefix;
 use super::{Qwen3_5EngineState, fatal_engine_error};
+use crate::qwen3_5_core::shared_execution::astro_ssd_prompt_cache_restore::AstroSsdPromptCacheRestoreOutcome;
 
 impl Qwen3_5EngineState {
     pub(super) fn install_adopted_live_prefix(

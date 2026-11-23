@@ -4,7 +4,7 @@
 /// key-value blocks and the recurrent snapshot never coexist — the snapshot
 /// loads only after the block set materializes and releases — so the
 /// workspace is the larger of the two totals, saturating into usize.
-pub(super) fn restore_transient_workspace_bytes(
+pub fn restore_transient_workspace_bytes(
     total_sequence_block_file_size_bytes: u64,
     recurrent_snapshot_file_size_bytes: u64,
 ) -> usize {

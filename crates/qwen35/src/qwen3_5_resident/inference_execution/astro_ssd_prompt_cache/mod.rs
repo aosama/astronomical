@@ -15,7 +15,6 @@ pub(in crate::qwen3_5_resident::inference_execution) mod adopt_retained_live_pre
 mod astro_ssd_prompt_cache_capture_engine;
 pub(in crate::qwen3_5_resident::inference_execution) mod decoder_state_reuse;
 pub(in crate::qwen3_5_resident::inference_execution) mod in_memory_adoption_decision;
-pub(in crate::qwen3_5_resident::inference_execution) mod restore_transient_workspace;
 // One level wider than its siblings: the engine module re-exports the
 // retained-prefix owner across the whole resident engine, matching the
 // visibility this module had before the move.

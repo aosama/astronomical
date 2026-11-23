@@ -377,21 +377,25 @@ impl Qwen3_5EngineState {
             // state (including counters) can be mutated as &mut self while the
             // disk store is used as a plain borrowed reference.
             let astro_ssd_prompt_cache = self.core.astro_ssd_prompt_cache.take();
-            let restore_result =
-                if let Some(astro_ssd_prompt_cache) = astro_ssd_prompt_cache.as_ref() {
-                    self.restore_astro_ssd_prompt_cache_prefix(
-                        inference_request.request_id(),
-                        astro_ssd_prompt_cache,
-                        prompt_token_ids,
-                        astro_ssd_prompt_cache_block_causal_inputs,
-                        reserved_context_tokens,
+            let restore_result = if let Some(astro_ssd_prompt_cache) =
+                astro_ssd_prompt_cache.as_ref()
+            {
+                crate::qwen3_5_core::shared_execution::astro_ssd_prompt_cache_restore::restore_astro_ssd_prompt_cache_prefix(
+                        self,
+                        &crate::qwen3_5_core::shared_execution::astro_ssd_prompt_cache_restore::AstroSsdPromptCacheRestoreRequest {
+                            request_id: inference_request.request_id(),
+                            astro_ssd_prompt_cache,
+                            prompt_token_ids,
+                            block_causal_inputs: astro_ssd_prompt_cache_block_causal_inputs,
+                            total_context_tokens: reserved_context_tokens,
+                        },
                         request_decoder_state,
                         performance_attribution,
                     )
                     .map(Some)
-                } else {
-                    Ok(None)
-                };
+            } else {
+                Ok(None)
+            };
             // Restores can fail closed for data correctness, but the disk-store owner must
             // remain installed for the next independent request. Returning while it is
             // temporarily taken would silently turn later traffic into a mode with the `astro_ssd_prompt_cache` disabled.

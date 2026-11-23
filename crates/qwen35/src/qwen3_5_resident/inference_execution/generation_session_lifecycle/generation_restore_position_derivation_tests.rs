@@ -1,8 +1,8 @@
 use ipc_protocol::WorkerAstroSsdPromptCacheLookupOutcome;
 use ipc_protocol::WorkerAstroSsdPromptCacheRequestDiagnostics;
 
-use super::super::decoder_state_reuse::AstroSsdPromptCacheRestoreOutcome;
 use super::derive_generation_session_position;
+use crate::qwen3_5_core::shared_execution::astro_ssd_prompt_cache_restore::AstroSsdPromptCacheRestoreOutcome;
 
 fn zeroed_request_diagnostics() -> WorkerAstroSsdPromptCacheRequestDiagnostics {
     WorkerAstroSsdPromptCacheRequestDiagnostics {
