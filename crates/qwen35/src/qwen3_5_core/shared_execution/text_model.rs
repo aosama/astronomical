@@ -41,6 +41,12 @@ pub trait Qwen3_5TextModel: Qwen3_5MemoryOwnership {
         &self,
     ) -> Result<runtime_integration::MlxMemorySnapshot, crate::InferenceEngineError>;
 
+    /// The smallest MLX memory ceiling the loaded model can serve under.
+    fn minimum_mlx_memory_ceiling_bytes(&self) -> Result<u64, crate::InferenceEngineError>;
+
+    /// The model bytes held in memory, as loading attribution reports them.
+    fn resident_model_payload_byte_count(&self) -> u64;
+
     /// Reads a stretch of tokens into the request's decoder state without
     /// sampling from them.
     fn prefill_chunk_with_performance_attribution(

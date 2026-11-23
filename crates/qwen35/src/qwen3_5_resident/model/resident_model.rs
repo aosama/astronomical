@@ -100,6 +100,15 @@ impl crate::qwen3_5_core::shared_execution::text_model::Qwen3_5TextModel for Qwe
             .map_err(crate::qwen3_5_core::engine_errors::qwen3_5_runtime_error)
     }
 
+    fn minimum_mlx_memory_ceiling_bytes(&self) -> Result<u64, crate::InferenceEngineError> {
+        Qwen3_5ResidentModel::minimum_mlx_memory_ceiling_bytes(self)
+    }
+
+    /// The resident engine holds the whole shared base in memory.
+    fn resident_model_payload_byte_count(&self) -> u64 {
+        Qwen3_5ModelBase::resident_model_payload_byte_count(&self.base)
+    }
+
     fn prefill_chunk_with_performance_attribution(
         &self,
         token_ids: &[u32],

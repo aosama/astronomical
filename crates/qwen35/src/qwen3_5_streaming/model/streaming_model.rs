@@ -160,6 +160,14 @@ impl crate::qwen3_5_core::shared_execution::text_model::Qwen3_5TextModel for Qwe
             .map_err(crate::qwen3_5_core::engine_errors::qwen3_5_runtime_error)
     }
 
+    fn minimum_mlx_memory_ceiling_bytes(&self) -> Result<u64, crate::InferenceEngineError> {
+        Qwen3_5StreamingModel::minimum_mlx_memory_ceiling_bytes(self)
+    }
+
+    fn resident_model_payload_byte_count(&self) -> u64 {
+        Qwen3_5StreamingModel::resident_model_payload_byte_count(self)
+    }
+
     fn prefill_chunk_with_performance_attribution(
         &self,
         token_ids: &[u32],
