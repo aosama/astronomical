@@ -19967,7 +19967,7 @@
     {
       "file": "apps/daemon/src/worker.rs",
       "function": "run_worker",
-      "line": 71,
+      "line": 72,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
@@ -20371,17 +20371,8 @@
     },
     {
       "file": "apps/daemon/src/worker/decisions_request.rs",
-      "function": "admit_decisions_command",
-      "line": 107,
-      "cyclomatic": 4.0,
-      "coverage": null,
-      "crap": 20.0,
-      "crate": "astronomical-daemon"
-    },
-    {
-      "file": "apps/daemon/src/worker/decisions_request.rs",
-      "function": "admit_decisions_request",
-      "line": 155,
+      "function": "DecisionsRequestKind::active_request",
+      "line": 47,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -20389,17 +20380,44 @@
     },
     {
       "file": "apps/daemon/src/worker/decisions_request.rs",
-      "function": "handle_generate_decisions_command",
-      "line": 25,
-      "cyclomatic": 8.0,
+      "function": "DecisionsRequestKind::dispatch",
+      "line": 40,
+      "cyclomatic": 1.0,
       "coverage": null,
-      "crap": 72.0,
+      "crap": 2.0,
+      "crate": "astronomical-daemon"
+    },
+    {
+      "file": "apps/daemon/src/worker/decisions_request.rs",
+      "function": "DecisionsRequestKind::request_id",
+      "line": 29,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "astronomical-daemon"
+    },
+    {
+      "file": "apps/daemon/src/worker/decisions_request.rs",
+      "function": "DecisionsRequestKind::requested_model",
+      "line": 25,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "astronomical-daemon"
+    },
+    {
+      "file": "apps/daemon/src/worker/decisions_request.rs",
+      "function": "DecisionsRequestKind::resident_model_accepts",
+      "line": 33,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
       "crate": "astronomical-daemon"
     },
     {
       "file": "apps/daemon/src/worker/decisions_request.rs",
       "function": "resident_model_answers_decisions",
-      "line": 140,
+      "line": 62,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
@@ -20443,17 +20461,44 @@
     },
     {
       "file": "apps/daemon/src/worker/embeddings_request.rs",
-      "function": "admit_embeddings_command",
-      "line": 110,
-      "cyclomatic": 4.0,
+      "function": "EmbeddingsRequestKind::active_request",
+      "line": 48,
+      "cyclomatic": 1.0,
       "coverage": null,
-      "crap": 20.0,
+      "crap": 2.0,
       "crate": "astronomical-daemon"
     },
     {
       "file": "apps/daemon/src/worker/embeddings_request.rs",
-      "function": "admit_embeddings_request",
-      "line": 168,
+      "function": "EmbeddingsRequestKind::dispatch",
+      "line": 39,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "astronomical-daemon"
+    },
+    {
+      "file": "apps/daemon/src/worker/embeddings_request.rs",
+      "function": "EmbeddingsRequestKind::request_id",
+      "line": 28,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "astronomical-daemon"
+    },
+    {
+      "file": "apps/daemon/src/worker/embeddings_request.rs",
+      "function": "EmbeddingsRequestKind::requested_model",
+      "line": 24,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "astronomical-daemon"
+    },
+    {
+      "file": "apps/daemon/src/worker/embeddings_request.rs",
+      "function": "EmbeddingsRequestKind::resident_model_accepts",
+      "line": 32,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -20462,19 +20507,10 @@
     {
       "file": "apps/daemon/src/worker/embeddings_request.rs",
       "function": "embeddings_command_supported",
-      "line": 149,
+      "line": 64,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-daemon"
-    },
-    {
-      "file": "apps/daemon/src/worker/embeddings_request.rs",
-      "function": "handle_generate_embeddings_command",
-      "line": 23,
-      "cyclomatic": 8.0,
-      "coverage": null,
-      "crap": 72.0,
       "crate": "astronomical-daemon"
     },
     {
@@ -20822,7 +20858,7 @@
     {
       "file": "apps/daemon/src/worker/generation/admission.rs",
       "function": "WorkerHandle::start_decisions_generation_with_queue_admission",
-      "line": 185,
+      "line": 181,
       "cyclomatic": 9.0,
       "coverage": null,
       "crap": 90.0,
@@ -20849,7 +20885,7 @@
     {
       "file": "apps/daemon/src/worker/generation/admission.rs",
       "function": "WorkerHandle::start_speech_generation_with_queue_admission",
-      "line": 236,
+      "line": 232,
       "cyclomatic": 9.0,
       "coverage": null,
       "crap": 90.0,
@@ -22370,7 +22406,7 @@
     {
       "file": "apps/daemon/src/worker/loop_types.rs",
       "function": "ActiveGeneration::fold_observed_mlx_peak_memory_bytes",
-      "line": 375,
+      "line": 373,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -22379,7 +22415,7 @@
     {
       "file": "apps/daemon/src/worker/loop_types.rs",
       "function": "ActiveWorkerRequest::chat",
-      "line": 162,
+      "line": 160,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
@@ -22388,7 +22424,7 @@
     {
       "file": "apps/daemon/src/worker/loop_types.rs",
       "function": "ActiveWorkerRequest::chat_mut",
-      "line": 169,
+      "line": 167,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
@@ -22397,7 +22433,7 @@
     {
       "file": "apps/daemon/src/worker/loop_types.rs",
       "function": "ActiveWorkerRequest::chat_stream_event_sender",
-      "line": 193,
+      "line": 191,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
@@ -22406,7 +22442,7 @@
     {
       "file": "apps/daemon/src/worker/loop_types.rs",
       "function": "ActiveWorkerRequest::decisions_mut",
-      "line": 226,
+      "line": 224,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
@@ -22415,7 +22451,7 @@
     {
       "file": "apps/daemon/src/worker/loop_types.rs",
       "function": "ActiveWorkerRequest::decisions_result_sender",
-      "line": 235,
+      "line": 233,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
@@ -22424,7 +22460,7 @@
     {
       "file": "apps/daemon/src/worker/loop_types.rs",
       "function": "ActiveWorkerRequest::embeddings_mut",
-      "line": 183,
+      "line": 181,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
@@ -22433,7 +22469,7 @@
     {
       "file": "apps/daemon/src/worker/loop_types.rs",
       "function": "ActiveWorkerRequest::embeddings_result_sender",
-      "line": 215,
+      "line": 213,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
@@ -22442,7 +22478,7 @@
     {
       "file": "apps/daemon/src/worker/loop_types.rs",
       "function": "ActiveWorkerRequest::image_mut",
-      "line": 176,
+      "line": 174,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
@@ -22451,7 +22487,7 @@
     {
       "file": "apps/daemon/src/worker/loop_types.rs",
       "function": "ActiveWorkerRequest::image_result_sender",
-      "line": 204,
+      "line": 202,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
@@ -22460,7 +22496,7 @@
     {
       "file": "apps/daemon/src/worker/loop_types.rs",
       "function": "ActiveWorkerRequest::request_id",
-      "line": 148,
+      "line": 146,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -22469,7 +22505,7 @@
     {
       "file": "apps/daemon/src/worker/loop_types.rs",
       "function": "ActiveWorkerRequest::single_shot_execution_deadline",
-      "line": 244,
+      "line": 242,
       "cyclomatic": 4.0,
       "coverage": null,
       "crap": 20.0,
@@ -22478,7 +22514,7 @@
     {
       "file": "apps/daemon/src/worker/loop_types.rs",
       "function": "ActiveWorkerRequest::speech_mut",
-      "line": 254,
+      "line": 252,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
@@ -22487,7 +22523,7 @@
     {
       "file": "apps/daemon/src/worker/loop_types.rs",
       "function": "ActiveWorkerRequest::speech_result_sender",
-      "line": 263,
+      "line": 261,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
@@ -23926,29 +23962,56 @@
     },
     {
       "file": "apps/daemon/src/worker/single_shot_command_arms.rs",
-      "function": "admit_decisions_generation_command",
-      "line": 35,
-      "cyclomatic": 3.0,
+      "function": "admit_decisions_command",
+      "line": 30,
+      "cyclomatic": 1.0,
       "coverage": null,
-      "crap": 12.0,
+      "crap": 2.0,
       "crate": "astronomical-daemon"
     },
     {
       "file": "apps/daemon/src/worker/single_shot_command_arms.rs",
-      "function": "admit_embeddings_generation_command",
-      "line": 100,
-      "cyclomatic": 3.0,
+      "function": "admit_embeddings_command",
+      "line": 53,
+      "cyclomatic": 1.0,
       "coverage": null,
-      "crap": 12.0,
+      "crap": 2.0,
       "crate": "astronomical-daemon"
     },
     {
       "file": "apps/daemon/src/worker/single_shot_command_arms.rs",
       "function": "admit_single_shot_generation_command",
-      "line": 20,
+      "line": 18,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
+      "crate": "astronomical-daemon"
+    },
+    {
+      "file": "apps/daemon/src/worker/single_shot_request.rs",
+      "function": "admit_single_shot_command",
+      "line": 83,
+      "cyclomatic": 3.0,
+      "coverage": null,
+      "crap": 12.0,
+      "crate": "astronomical-daemon"
+    },
+    {
+      "file": "apps/daemon/src/worker/single_shot_request.rs",
+      "function": "admit_single_shot_work",
+      "line": 195,
+      "cyclomatic": 4.0,
+      "coverage": null,
+      "crap": 20.0,
+      "crate": "astronomical-daemon"
+    },
+    {
+      "file": "apps/daemon/src/worker/single_shot_request.rs",
+      "function": "handle_single_shot_command",
+      "line": 126,
+      "cyclomatic": 8.0,
+      "coverage": null,
+      "crap": 72.0,
       "crate": "astronomical-daemon"
     },
     {
@@ -33440,7 +33503,7 @@
     {
       "file": "apps/inference-worker/tests/integration/flux2_klein_fixture.rs",
       "function": "replace_json_field",
-      "line": 142,
+      "line": 74,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -33449,7 +33512,7 @@
     {
       "file": "apps/inference-worker/tests/integration/flux2_klein_fixture.rs",
       "function": "write_executable_artifact",
-      "line": 12,
+      "line": 14,
       "cyclomatic": 5.0,
       "coverage": null,
       "crap": 30.0,
@@ -33457,26 +33520,8 @@
     },
     {
       "file": "apps/inference-worker/tests/integration/flux2_klein_fixture.rs",
-      "function": "write_json",
-      "line": 150,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-inference-worker"
-    },
-    {
-      "file": "apps/inference-worker/tests/integration/flux2_klein_fixture.rs",
       "function": "write_revision",
-      "line": 134,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-inference-worker"
-    },
-    {
-      "file": "apps/inference-worker/tests/integration/flux2_klein_fixture.rs",
-      "function": "write_safetensors_payload",
-      "line": 126,
+      "line": 66,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -33602,16 +33647,7 @@
     {
       "file": "apps/inference-worker/tests/integration/qwen_image_21_fixture.rs",
       "function": "mutate_profile",
-      "line": 77,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-inference-worker"
-    },
-    {
-      "file": "apps/inference-worker/tests/integration/qwen_image_21_fixture.rs",
-      "function": "pipeline_index",
-      "line": 114,
+      "line": 88,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -33620,52 +33656,7 @@
     {
       "file": "apps/inference-worker/tests/integration/qwen_image_21_fixture.rs",
       "function": "remove_component",
-      "line": 87,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-inference-worker"
-    },
-    {
-      "file": "apps/inference-worker/tests/integration/qwen_image_21_fixture.rs",
-      "function": "scheduler_config",
-      "line": 203,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-inference-worker"
-    },
-    {
-      "file": "apps/inference-worker/tests/integration/qwen_image_21_fixture.rs",
-      "function": "text_encoder_config",
-      "line": 145,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-inference-worker"
-    },
-    {
-      "file": "apps/inference-worker/tests/integration/qwen_image_21_fixture.rs",
-      "function": "transformer_config",
-      "line": 126,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-inference-worker"
-    },
-    {
-      "file": "apps/inference-worker/tests/integration/qwen_image_21_fixture.rs",
-      "function": "vae_config",
-      "line": 179,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-inference-worker"
-    },
-    {
-      "file": "apps/inference-worker/tests/integration/qwen_image_21_fixture.rs",
-      "function": "write_component_weights",
-      "line": 92,
+      "line": 98,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -33674,7 +33665,7 @@
     {
       "file": "apps/inference-worker/tests/integration/qwen_image_21_fixture.rs",
       "function": "write_executable_artifact",
-      "line": 13,
+      "line": 18,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
@@ -33682,26 +33673,8 @@
     },
     {
       "file": "apps/inference-worker/tests/integration/qwen_image_21_fixture.rs",
-      "function": "write_json",
-      "line": 223,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-inference-worker"
-    },
-    {
-      "file": "apps/inference-worker/tests/integration/qwen_image_21_fixture.rs",
       "function": "write_revision",
-      "line": 67,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-inference-worker"
-    },
-    {
-      "file": "apps/inference-worker/tests/integration/qwen_image_21_fixture.rs",
-      "function": "write_safetensors_payload",
-      "line": 106,
+      "line": 78,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -37949,7 +37922,7 @@
     {
       "file": "crates/config/tests/integration/model_discovery/flux2_klein.rs",
       "function": "invalidate_artifact",
-      "line": 270,
+      "line": 273,
       "cyclomatic": 11.0,
       "coverage": null,
       "crap": 132.0,
@@ -37958,7 +37931,7 @@
     {
       "file": "crates/config/tests/integration/model_discovery/flux2_klein.rs",
       "function": "modular_weight_size_from_fixture",
-      "line": 445,
+      "line": 384,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -37967,7 +37940,7 @@
     {
       "file": "crates/config/tests/integration/model_discovery/flux2_klein.rs",
       "function": "replace_index_total_size",
-      "line": 492,
+      "line": 423,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -37976,7 +37949,7 @@
     {
       "file": "crates/config/tests/integration/model_discovery/flux2_klein.rs",
       "function": "replace_json_field",
-      "line": 500,
+      "line": 431,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -37985,28 +37958,10 @@
     {
       "file": "crates/config/tests/integration/model_discovery/flux2_klein.rs",
       "function": "write_executable_flux2_klein_artifact",
-      "line": 325,
+      "line": 327,
       "cyclomatic": 5.0,
       "coverage": null,
       "crap": 30.0,
-      "crate": "config"
-    },
-    {
-      "file": "crates/config/tests/integration/model_discovery/flux2_klein.rs",
-      "function": "write_json",
-      "line": 508,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "config"
-    },
-    {
-      "file": "crates/config/tests/integration/model_discovery/flux2_klein.rs",
-      "function": "write_safetensors_payload",
-      "line": 484,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
       "crate": "config"
     },
     {
@@ -38201,7 +38156,7 @@
     {
       "file": "crates/config/tests/integration/model_discovery/qwen_image_21.rs",
       "function": "fixture_weight_file_size_bytes",
-      "line": 268,
+      "line": 262,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -38210,7 +38165,7 @@
     {
       "file": "crates/config/tests/integration/model_discovery/qwen_image_21.rs",
       "function": "invalidate_artifact",
-      "line": 147,
+      "line": 152,
       "cyclomatic": 8.0,
       "coverage": null,
       "crap": 72.0,
@@ -38218,53 +38173,8 @@
     },
     {
       "file": "crates/config/tests/integration/model_discovery/qwen_image_21.rs",
-      "function": "qwen_pipeline_index",
-      "line": 283,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "config"
-    },
-    {
-      "file": "crates/config/tests/integration/model_discovery/qwen_image_21.rs",
       "function": "qwen_pipeline_index_json",
-      "line": 279,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "config"
-    },
-    {
-      "file": "crates/config/tests/integration/model_discovery/qwen_image_21.rs",
-      "function": "qwen_scheduler_config",
-      "line": 372,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "config"
-    },
-    {
-      "file": "crates/config/tests/integration/model_discovery/qwen_image_21.rs",
-      "function": "qwen_text_encoder_config",
-      "line": 314,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "config"
-    },
-    {
-      "file": "crates/config/tests/integration/model_discovery/qwen_image_21.rs",
-      "function": "qwen_transformer_config",
-      "line": 295,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "config"
-    },
-    {
-      "file": "crates/config/tests/integration/model_discovery/qwen_image_21.rs",
-      "function": "qwen_vae_config",
-      "line": 348,
+      "line": 273,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -38273,25 +38183,7 @@
     {
       "file": "crates/config/tests/integration/model_discovery/qwen_image_21.rs",
       "function": "replace_json_field",
-      "line": 400,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "config"
-    },
-    {
-      "file": "crates/config/tests/integration/model_discovery/qwen_image_21.rs",
-      "function": "write_component_weights",
-      "line": 254,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "config"
-    },
-    {
-      "file": "crates/config/tests/integration/model_discovery/qwen_image_21.rs",
-      "function": "write_json",
-      "line": 411,
+      "line": 277,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -38300,19 +38192,10 @@
     {
       "file": "crates/config/tests/integration/model_discovery/qwen_image_21.rs",
       "function": "write_qwen_image_21_artifact",
-      "line": 187,
+      "line": 192,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
-      "crate": "config"
-    },
-    {
-      "file": "crates/config/tests/integration/model_discovery/qwen_image_21.rs",
-      "function": "write_safetensors_payload",
-      "line": 392,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
       "crate": "config"
     },
     {
@@ -40621,107 +40504,8 @@
     },
     {
       "file": "crates/decision-models/src/decision_models/clef/engine.rs",
-      "function": "ClefDecisionEngine::advance_training",
-      "line": 229,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "decision-models"
-    },
-    {
-      "file": "crates/decision-models/src/decision_models/clef/engine.rs",
-      "function": "ClefDecisionEngine::cancel_training",
-      "line": 240,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "decision-models"
-    },
-    {
-      "file": "crates/decision-models/src/decision_models/clef/engine.rs",
-      "function": "ClefDecisionEngine::collect_mlx_memory_telemetry",
-      "line": 248,
-      "cyclomatic": 3.0,
-      "coverage": null,
-      "crap": 12.0,
-      "crate": "decision-models"
-    },
-    {
-      "file": "crates/decision-models/src/decision_models/clef/engine.rs",
-      "function": "ClefDecisionEngine::decide",
-      "line": 180,
-      "cyclomatic": 4.0,
-      "coverage": null,
-      "crap": 20.0,
-      "crate": "decision-models"
-    },
-    {
-      "file": "crates/decision-models/src/decision_models/clef/engine.rs",
-      "function": "ClefDecisionEngine::load",
-      "line": 136,
-      "cyclomatic": 11.0,
-      "coverage": null,
-      "crap": 132.0,
-      "crate": "decision-models"
-    },
-    {
-      "file": "crates/decision-models/src/decision_models/clef/engine.rs",
-      "function": "ClefDecisionEngine::loaded_state",
-      "line": 125,
-      "cyclomatic": 3.0,
-      "coverage": null,
-      "crap": 12.0,
-      "crate": "decision-models"
-    },
-    {
-      "file": "crates/decision-models/src/decision_models/clef/engine.rs",
-      "function": "ClefDecisionEngine::mlx_runtime",
-      "line": 494,
-      "cyclomatic": 3.0,
-      "coverage": null,
-      "crap": 12.0,
-      "crate": "decision-models"
-    },
-    {
-      "file": "crates/decision-models/src/decision_models/clef/engine.rs",
-      "function": "ClefDecisionEngine::model_directory",
-      "line": 503,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "decision-models"
-    },
-    {
-      "file": "crates/decision-models/src/decision_models/clef/engine.rs",
-      "function": "ClefDecisionEngine::new",
-      "line": 88,
-      "cyclomatic": 4.0,
-      "coverage": null,
-      "crap": 20.0,
-      "crate": "decision-models"
-    },
-    {
-      "file": "crates/decision-models/src/decision_models/clef/engine.rs",
-      "function": "ClefDecisionEngine::read_answers",
-      "line": 485,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "decision-models"
-    },
-    {
-      "file": "crates/decision-models/src/decision_models/clef/engine.rs",
       "function": "ClefDecisionEngine::sequence_token_ids",
-      "line": 116,
-      "cyclomatic": 3.0,
-      "coverage": null,
-      "crap": 12.0,
-      "crate": "decision-models"
-    },
-    {
-      "file": "crates/decision-models/src/decision_models/clef/engine.rs",
-      "function": "ClefDecisionEngine::start_training",
-      "line": 220,
+      "line": 163,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
@@ -40729,8 +40513,8 @@
     },
     {
       "file": "crates/decision-models/src/decision_models/clef/engine.rs",
-      "function": "ClefDecisionEngine::take_post_cleanup_memory_telemetry",
-      "line": 244,
+      "function": "ClefDecisionFamily::admit_decision",
+      "line": 123,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -40738,8 +40522,8 @@
     },
     {
       "file": "crates/decision-models/src/decision_models/clef/engine.rs",
-      "function": "ClefDecisionEngine::tunable_family",
-      "line": 507,
+      "function": "ClefDecisionFamily::answer_questions",
+      "line": 131,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -40747,8 +40531,35 @@
     },
     {
       "file": "crates/decision-models/src/decision_models/clef/engine.rs",
-      "function": "ClefDecisionEngine::whole_model_scorer",
-      "line": 511,
+      "function": "ClefDecisionFamily::load_state",
+      "line": 90,
+      "cyclomatic": 9.0,
+      "coverage": null,
+      "crap": 90.0,
+      "crate": "decision-models"
+    },
+    {
+      "file": "crates/decision-models/src/decision_models/clef/engine.rs",
+      "function": "ClefDecisionFamily::prepare",
+      "line": 78,
+      "cyclomatic": 4.0,
+      "coverage": null,
+      "crap": 20.0,
+      "crate": "decision-models"
+    },
+    {
+      "file": "crates/decision-models/src/decision_models/clef/engine.rs",
+      "function": "ClefDecisionFamily::runtime",
+      "line": 119,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "decision-models"
+    },
+    {
+      "file": "crates/decision-models/src/decision_models/clef/engine.rs",
+      "function": "ClefDecisionFamily::whole_model_scorer",
+      "line": 147,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -40757,7 +40568,7 @@
     {
       "file": "crates/decision-models/src/decision_models/clef/engine.rs",
       "function": "LoadedClefState::decision_backbone",
-      "line": 81,
+      "line": 67,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -40766,7 +40577,7 @@
     {
       "file": "crates/decision-models/src/decision_models/clef/engine.rs",
       "function": "answer_every_question",
-      "line": 269,
+      "line": 182,
       "cyclomatic": 8.0,
       "coverage": null,
       "crap": 72.0,
@@ -40775,7 +40586,7 @@
     {
       "file": "crates/decision-models/src/decision_models/clef/engine.rs",
       "function": "canonical_head_inputs",
-      "line": 337,
+      "line": 250,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
@@ -40784,7 +40595,7 @@
     {
       "file": "crates/decision-models/src/decision_models/clef/engine.rs",
       "function": "plain_softmax",
-      "line": 448,
+      "line": 361,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
@@ -40793,7 +40604,7 @@
     {
       "file": "crates/decision-models/src/decision_models/clef/engine.rs",
       "function": "question_outcome",
-      "line": 364,
+      "line": 277,
       "cyclomatic": 6.0,
       "coverage": null,
       "crap": 42.0,
@@ -40801,17 +40612,8 @@
     },
     {
       "file": "crates/decision-models/src/decision_models/clef/engine.rs",
-      "function": "weight_file_bytes",
-      "line": 467,
-      "cyclomatic": 4.0,
-      "coverage": null,
-      "crap": 20.0,
-      "crate": "decision-models"
-    },
-    {
-      "file": "crates/decision-models/src/decision_models/clef/engine.rs",
       "function": "whole_sequence_hidden_states",
-      "line": 418,
+      "line": 331,
       "cyclomatic": 6.0,
       "coverage": null,
       "crap": 42.0,
@@ -41511,6 +41313,249 @@
       "crate": "decision-models"
     },
     {
+      "file": "crates/decision-models/src/decision_models/decision_engine_shell.rs",
+      "function": "DecisionEngineShell::advance_training",
+      "line": 224,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "decision-models"
+    },
+    {
+      "file": "crates/decision-models/src/decision_models/decision_engine_shell.rs",
+      "function": "DecisionEngineShell::cancel_training",
+      "line": 235,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "decision-models"
+    },
+    {
+      "file": "crates/decision-models/src/decision_models/decision_engine_shell.rs",
+      "function": "DecisionEngineShell::collect_mlx_memory_telemetry",
+      "line": 243,
+      "cyclomatic": 2.0,
+      "coverage": null,
+      "crap": 6.0,
+      "crate": "decision-models"
+    },
+    {
+      "file": "crates/decision-models/src/decision_models/decision_engine_shell.rs",
+      "function": "DecisionEngineShell::decide",
+      "line": 188,
+      "cyclomatic": 3.0,
+      "coverage": null,
+      "crap": 12.0,
+      "crate": "decision-models"
+    },
+    {
+      "file": "crates/decision-models/src/decision_models/decision_engine_shell.rs",
+      "function": "DecisionEngineShell::load",
+      "line": 165,
+      "cyclomatic": 3.0,
+      "coverage": null,
+      "crap": 12.0,
+      "crate": "decision-models"
+    },
+    {
+      "file": "crates/decision-models/src/decision_models/decision_engine_shell.rs",
+      "function": "DecisionEngineShell::loaded_for_training",
+      "line": 154,
+      "cyclomatic": 3.0,
+      "coverage": null,
+      "crap": 12.0,
+      "crate": "decision-models"
+    },
+    {
+      "file": "crates/decision-models/src/decision_models/decision_engine_shell.rs",
+      "function": "DecisionEngineShell::loaded_state",
+      "line": 141,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "decision-models"
+    },
+    {
+      "file": "crates/decision-models/src/decision_models/decision_engine_shell.rs",
+      "function": "DecisionEngineShell::memory_telemetry",
+      "line": 145,
+      "cyclomatic": 2.0,
+      "coverage": null,
+      "crap": 6.0,
+      "crate": "decision-models"
+    },
+    {
+      "file": "crates/decision-models/src/decision_models/decision_engine_shell.rs",
+      "function": "DecisionEngineShell::mlx_runtime",
+      "line": 259,
+      "cyclomatic": 2.0,
+      "coverage": null,
+      "crap": 6.0,
+      "crate": "decision-models"
+    },
+    {
+      "file": "crates/decision-models/src/decision_models/decision_engine_shell.rs",
+      "function": "DecisionEngineShell::model_directory",
+      "line": 263,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "decision-models"
+    },
+    {
+      "file": "crates/decision-models/src/decision_models/decision_engine_shell.rs",
+      "function": "DecisionEngineShell::new",
+      "line": 120,
+      "cyclomatic": 2.0,
+      "coverage": null,
+      "crap": 6.0,
+      "crate": "decision-models"
+    },
+    {
+      "file": "crates/decision-models/src/decision_models/decision_engine_shell.rs",
+      "function": "DecisionEngineShell::read_answers",
+      "line": 250,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "decision-models"
+    },
+    {
+      "file": "crates/decision-models/src/decision_models/decision_engine_shell.rs",
+      "function": "DecisionEngineShell::start_training",
+      "line": 219,
+      "cyclomatic": 2.0,
+      "coverage": null,
+      "crap": 6.0,
+      "crate": "decision-models"
+    },
+    {
+      "file": "crates/decision-models/src/decision_models/decision_engine_shell.rs",
+      "function": "DecisionEngineShell::take_post_cleanup_memory_telemetry",
+      "line": 239,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "decision-models"
+    },
+    {
+      "file": "crates/decision-models/src/decision_models/decision_engine_shell.rs",
+      "function": "DecisionEngineShell::tunable_family",
+      "line": 267,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "decision-models"
+    },
+    {
+      "file": "crates/decision-models/src/decision_models/decision_engine_shell.rs",
+      "function": "DecisionEngineShell::whole_model_scorer",
+      "line": 271,
+      "cyclomatic": 2.0,
+      "coverage": null,
+      "crap": 6.0,
+      "crate": "decision-models"
+    },
+    {
+      "file": "crates/decision-models/src/decision_models/decision_engine_shell.rs",
+      "function": "admit_questions_then_load",
+      "line": 288,
+      "cyclomatic": 4.0,
+      "coverage": null,
+      "crap": 20.0,
+      "crate": "decision-models"
+    },
+    {
+      "file": "crates/decision-models/src/decision_models/decision_engine_shell.rs",
+      "function": "safetensors_bytes_in",
+      "line": 311,
+      "cyclomatic": 4.0,
+      "coverage": null,
+      "crap": 20.0,
+      "crate": "decision-models"
+    },
+    {
+      "file": "crates/decision-models/src/decision_models/decision_engine_shell_tests.rs",
+      "function": "GlobeFamily::admit_decision",
+      "line": 61,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "decision-models"
+    },
+    {
+      "file": "crates/decision-models/src/decision_models/decision_engine_shell_tests.rs",
+      "function": "GlobeFamily::answer_questions",
+      "line": 69,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "decision-models"
+    },
+    {
+      "file": "crates/decision-models/src/decision_models/decision_engine_shell_tests.rs",
+      "function": "GlobeFamily::load_state",
+      "line": 49,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "decision-models"
+    },
+    {
+      "file": "crates/decision-models/src/decision_models/decision_engine_shell_tests.rs",
+      "function": "GlobeFamily::prepare",
+      "line": 37,
+      "cyclomatic": 2.0,
+      "coverage": null,
+      "crap": 6.0,
+      "crate": "decision-models"
+    },
+    {
+      "file": "crates/decision-models/src/decision_models/decision_engine_shell_tests.rs",
+      "function": "GlobeFamily::runtime",
+      "line": 57,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "decision-models"
+    },
+    {
+      "file": "crates/decision-models/src/decision_models/decision_engine_shell_tests.rs",
+      "function": "GlobeFamily::whole_model_scorer",
+      "line": 79,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "decision-models"
+    },
+    {
+      "file": "crates/decision-models/src/decision_models/decision_engine_shell_tests.rs",
+      "function": "noul_question",
+      "line": 94,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "decision-models"
+    },
+    {
+      "file": "crates/decision-models/src/decision_models/decision_engine_shell_tests.rs",
+      "function": "train_before_load_failure",
+      "line": 108,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "decision-models"
+    },
+    {
+      "file": "crates/decision-models/src/decision_models/decision_engine_shell_tests.rs",
+      "function": "unloaded_engine",
+      "line": 89,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "decision-models"
+    },
+    {
       "file": "crates/decision-models/src/decision_models/forward_pass_planning.rs",
       "function": "pass_exceeds_budget",
       "line": 48,
@@ -41593,107 +41638,8 @@
     },
     {
       "file": "crates/decision-models/src/decision_models/kev/engine.rs",
-      "function": "KevDecisionEngine::advance_training",
-      "line": 208,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "decision-models"
-    },
-    {
-      "file": "crates/decision-models/src/decision_models/kev/engine.rs",
-      "function": "KevDecisionEngine::cancel_training",
-      "line": 219,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "decision-models"
-    },
-    {
-      "file": "crates/decision-models/src/decision_models/kev/engine.rs",
-      "function": "KevDecisionEngine::collect_mlx_memory_telemetry",
-      "line": 227,
-      "cyclomatic": 3.0,
-      "coverage": null,
-      "crap": 12.0,
-      "crate": "decision-models"
-    },
-    {
-      "file": "crates/decision-models/src/decision_models/kev/engine.rs",
-      "function": "KevDecisionEngine::decide",
-      "line": 164,
-      "cyclomatic": 4.0,
-      "coverage": null,
-      "crap": 20.0,
-      "crate": "decision-models"
-    },
-    {
-      "file": "crates/decision-models/src/decision_models/kev/engine.rs",
-      "function": "KevDecisionEngine::load",
-      "line": 123,
-      "cyclomatic": 11.0,
-      "coverage": null,
-      "crap": 132.0,
-      "crate": "decision-models"
-    },
-    {
-      "file": "crates/decision-models/src/decision_models/kev/engine.rs",
-      "function": "KevDecisionEngine::loaded_state",
-      "line": 112,
-      "cyclomatic": 3.0,
-      "coverage": null,
-      "crap": 12.0,
-      "crate": "decision-models"
-    },
-    {
-      "file": "crates/decision-models/src/decision_models/kev/engine.rs",
-      "function": "KevDecisionEngine::mlx_runtime",
-      "line": 429,
-      "cyclomatic": 3.0,
-      "coverage": null,
-      "crap": 12.0,
-      "crate": "decision-models"
-    },
-    {
-      "file": "crates/decision-models/src/decision_models/kev/engine.rs",
-      "function": "KevDecisionEngine::model_directory",
-      "line": 438,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "decision-models"
-    },
-    {
-      "file": "crates/decision-models/src/decision_models/kev/engine.rs",
-      "function": "KevDecisionEngine::new",
-      "line": 75,
-      "cyclomatic": 4.0,
-      "coverage": null,
-      "crap": 20.0,
-      "crate": "decision-models"
-    },
-    {
-      "file": "crates/decision-models/src/decision_models/kev/engine.rs",
       "function": "KevDecisionEngine::question_row_layouts",
-      "line": 103,
-      "cyclomatic": 3.0,
-      "coverage": null,
-      "crap": 12.0,
-      "crate": "decision-models"
-    },
-    {
-      "file": "crates/decision-models/src/decision_models/kev/engine.rs",
-      "function": "KevDecisionEngine::read_answers",
-      "line": 420,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "decision-models"
-    },
-    {
-      "file": "crates/decision-models/src/decision_models/kev/engine.rs",
-      "function": "KevDecisionEngine::start_training",
-      "line": 199,
+      "line": 143,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
@@ -41701,8 +41647,8 @@
     },
     {
       "file": "crates/decision-models/src/decision_models/kev/engine.rs",
-      "function": "KevDecisionEngine::take_post_cleanup_memory_telemetry",
-      "line": 223,
+      "function": "KevDecisionFamily::admit_decision",
+      "line": 109,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -41710,8 +41656,8 @@
     },
     {
       "file": "crates/decision-models/src/decision_models/kev/engine.rs",
-      "function": "KevDecisionEngine::tunable_family",
-      "line": 442,
+      "function": "KevDecisionFamily::answer_questions",
+      "line": 117,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -41719,8 +41665,35 @@
     },
     {
       "file": "crates/decision-models/src/decision_models/kev/engine.rs",
-      "function": "KevDecisionEngine::whole_model_scorer",
-      "line": 446,
+      "function": "KevDecisionFamily::load_state",
+      "line": 77,
+      "cyclomatic": 9.0,
+      "coverage": null,
+      "crap": 90.0,
+      "crate": "decision-models"
+    },
+    {
+      "file": "crates/decision-models/src/decision_models/kev/engine.rs",
+      "function": "KevDecisionFamily::prepare",
+      "line": 65,
+      "cyclomatic": 4.0,
+      "coverage": null,
+      "crap": 20.0,
+      "crate": "decision-models"
+    },
+    {
+      "file": "crates/decision-models/src/decision_models/kev/engine.rs",
+      "function": "KevDecisionFamily::runtime",
+      "line": 105,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "decision-models"
+    },
+    {
+      "file": "crates/decision-models/src/decision_models/kev/engine.rs",
+      "function": "KevDecisionFamily::whole_model_scorer",
+      "line": 127,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -41729,7 +41702,7 @@
     {
       "file": "crates/decision-models/src/decision_models/kev/engine.rs",
       "function": "LoadedKevState::decision_backbone",
-      "line": 68,
+      "line": 54,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -41738,7 +41711,7 @@
     {
       "file": "crates/decision-models/src/decision_models/kev/engine.rs",
       "function": "answer_every_question",
-      "line": 272,
+      "line": 186,
       "cyclomatic": 7.0,
       "coverage": null,
       "crap": 56.0,
@@ -41747,7 +41720,7 @@
     {
       "file": "crates/decision-models/src/decision_models/kev/engine.rs",
       "function": "hidden_state_at",
-      "line": 397,
+      "line": 311,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -41756,7 +41729,7 @@
     {
       "file": "crates/decision-models/src/decision_models/kev/engine.rs",
       "function": "kev_calibrated_probabilities",
-      "line": 248,
+      "line": 162,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
@@ -41765,7 +41738,7 @@
     {
       "file": "crates/decision-models/src/decision_models/kev/engine.rs",
       "function": "kev_head_inputs",
-      "line": 385,
+      "line": 299,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
@@ -41774,19 +41747,10 @@
     {
       "file": "crates/decision-models/src/decision_models/kev/engine.rs",
       "function": "question_scores",
-      "line": 335,
+      "line": 249,
       "cyclomatic": 8.0,
       "coverage": null,
       "crap": 72.0,
-      "crate": "decision-models"
-    },
-    {
-      "file": "crates/decision-models/src/decision_models/kev/engine.rs",
-      "function": "weight_file_bytes",
-      "line": 402,
-      "cyclomatic": 4.0,
-      "coverage": null,
-      "crap": 20.0,
       "crate": "decision-models"
     },
     {
@@ -42376,80 +42340,8 @@
     },
     {
       "file": "crates/decision-models/src/decision_models/laya/engine.rs",
-      "function": "LayaDecisionEngine::advance_training",
-      "line": 272,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "decision-models"
-    },
-    {
-      "file": "crates/decision-models/src/decision_models/laya/engine.rs",
-      "function": "LayaDecisionEngine::cancel_training",
-      "line": 283,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "decision-models"
-    },
-    {
-      "file": "crates/decision-models/src/decision_models/laya/engine.rs",
-      "function": "LayaDecisionEngine::collect_mlx_memory_telemetry",
-      "line": 291,
-      "cyclomatic": 3.0,
-      "coverage": null,
-      "crap": 12.0,
-      "crate": "decision-models"
-    },
-    {
-      "file": "crates/decision-models/src/decision_models/laya/engine.rs",
-      "function": "LayaDecisionEngine::decide",
-      "line": 203,
-      "cyclomatic": 8.0,
-      "coverage": null,
-      "crap": 72.0,
-      "crate": "decision-models"
-    },
-    {
-      "file": "crates/decision-models/src/decision_models/laya/engine.rs",
-      "function": "LayaDecisionEngine::load",
-      "line": 138,
-      "cyclomatic": 7.0,
-      "coverage": null,
-      "crap": 56.0,
-      "crate": "decision-models"
-    },
-    {
-      "file": "crates/decision-models/src/decision_models/laya/engine.rs",
-      "function": "LayaDecisionEngine::mlx_runtime",
-      "line": 483,
-      "cyclomatic": 3.0,
-      "coverage": null,
-      "crap": 12.0,
-      "crate": "decision-models"
-    },
-    {
-      "file": "crates/decision-models/src/decision_models/laya/engine.rs",
-      "function": "LayaDecisionEngine::model_directory",
-      "line": 492,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "decision-models"
-    },
-    {
-      "file": "crates/decision-models/src/decision_models/laya/engine.rs",
-      "function": "LayaDecisionEngine::new",
-      "line": 85,
-      "cyclomatic": 6.0,
-      "coverage": null,
-      "crap": 42.0,
-      "crate": "decision-models"
-    },
-    {
-      "file": "crates/decision-models/src/decision_models/laya/engine.rs",
       "function": "LayaDecisionEngine::question_sequences",
-      "line": 123,
+      "line": 242,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -42457,17 +42349,17 @@
     },
     {
       "file": "crates/decision-models/src/decision_models/laya/engine.rs",
-      "function": "LayaDecisionEngine::read_answers",
-      "line": 474,
-      "cyclomatic": 1.0,
+      "function": "LayaDecisionFamily::admit_decision",
+      "line": 126,
+      "cyclomatic": 3.0,
       "coverage": null,
-      "crap": 2.0,
+      "crap": 12.0,
       "crate": "decision-models"
     },
     {
       "file": "crates/decision-models/src/decision_models/laya/engine.rs",
-      "function": "LayaDecisionEngine::start_training",
-      "line": 263,
+      "function": "LayaDecisionFamily::answer_questions",
+      "line": 150,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
@@ -42475,8 +42367,8 @@
     },
     {
       "file": "crates/decision-models/src/decision_models/laya/engine.rs",
-      "function": "LayaDecisionEngine::take_post_cleanup_memory_telemetry",
-      "line": 287,
+      "function": "LayaDecisionFamily::load_state",
+      "line": 102,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -42484,8 +42376,17 @@
     },
     {
       "file": "crates/decision-models/src/decision_models/laya/engine.rs",
-      "function": "LayaDecisionEngine::tunable_family",
-      "line": 496,
+      "function": "LayaDecisionFamily::prepare",
+      "line": 77,
+      "cyclomatic": 6.0,
+      "coverage": null,
+      "crap": 42.0,
+      "crate": "decision-models"
+    },
+    {
+      "file": "crates/decision-models/src/decision_models/laya/engine.rs",
+      "function": "LayaDecisionFamily::runtime",
+      "line": 120,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -42493,8 +42394,8 @@
     },
     {
       "file": "crates/decision-models/src/decision_models/laya/engine.rs",
-      "function": "LayaDecisionEngine::whole_model_scorer",
-      "line": 500,
+      "function": "LayaDecisionFamily::whole_model_scorer",
+      "line": 173,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -42503,7 +42404,7 @@
     {
       "file": "crates/decision-models/src/decision_models/laya/engine.rs",
       "function": "QuestionTemperatures::temperature_for",
-      "line": 310,
+      "line": 262,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
@@ -42512,7 +42413,7 @@
     {
       "file": "crates/decision-models/src/decision_models/laya/engine.rs",
       "function": "answered_questions",
-      "line": 325,
+      "line": 277,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
@@ -42521,7 +42422,7 @@
     {
       "file": "crates/decision-models/src/decision_models/laya/engine.rs",
       "function": "detect_weight_layout",
-      "line": 463,
+      "line": 415,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
@@ -42530,7 +42431,7 @@
     {
       "file": "crates/decision-models/src/decision_models/laya/engine.rs",
       "function": "laya_head_inputs",
-      "line": 398,
+      "line": 350,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
@@ -42538,8 +42439,17 @@
     },
     {
       "file": "crates/decision-models/src/decision_models/laya/engine.rs",
+      "function": "load_laya_state",
+      "line": 185,
+      "cyclomatic": 7.0,
+      "coverage": null,
+      "crap": 56.0,
+      "crate": "decision-models"
+    },
+    {
+      "file": "crates/decision-models/src/decision_models/laya/engine.rs",
       "function": "question_outcome",
-      "line": 352,
+      "line": 304,
       "cyclomatic": 5.0,
       "coverage": null,
       "crap": 30.0,
@@ -42548,7 +42458,7 @@
     {
       "file": "crates/decision-models/src/decision_models/laya/engine.rs",
       "function": "tuned_head_tensors",
-      "line": 411,
+      "line": 363,
       "cyclomatic": 6.0,
       "coverage": null,
       "crap": 42.0,
@@ -42557,7 +42467,7 @@
     {
       "file": "crates/decision-models/src/decision_models/laya/engine.rs",
       "function": "uploaded_adapters",
-      "line": 442,
+      "line": 394,
       "cyclomatic": 6.0,
       "coverage": null,
       "crap": 42.0,
@@ -42836,7 +42746,7 @@
     {
       "file": "crates/decision-models/src/decision_models/laya/loaded_state.rs",
       "function": "ForwardRows::head_pass_rows",
-      "line": 243,
+      "line": 247,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -42845,7 +42755,7 @@
     {
       "file": "crates/decision-models/src/decision_models/laya/loaded_state.rs",
       "function": "ForwardRows::push",
-      "line": 232,
+      "line": 236,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -42854,7 +42764,7 @@
     {
       "file": "crates/decision-models/src/decision_models/laya/loaded_state.rs",
       "function": "ForwardRows::with_capacity",
-      "line": 224,
+      "line": 228,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -42863,7 +42773,7 @@
     {
       "file": "crates/decision-models/src/decision_models/laya/loaded_state.rs",
       "function": "LoadedLayaState::build_question_sequences",
-      "line": 46,
+      "line": 50,
       "cyclomatic": 4.0,
       "coverage": null,
       "crap": 20.0,
@@ -42872,7 +42782,7 @@
     {
       "file": "crates/decision-models/src/decision_models/laya/loaded_state.rs",
       "function": "LoadedLayaState::padded_option_logits",
-      "line": 148,
+      "line": 152,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
@@ -42881,7 +42791,7 @@
     {
       "file": "crates/decision-models/src/decision_models/laya/loaded_state.rs",
       "function": "LoadedLayaState::run_forward_pass",
-      "line": 115,
+      "line": 119,
       "cyclomatic": 4.0,
       "coverage": null,
       "crap": 20.0,
@@ -42890,7 +42800,7 @@
     {
       "file": "crates/decision-models/src/decision_models/laya/loaded_state.rs",
       "function": "LoadedLayaState::scored_rows_by_question",
-      "line": 75,
+      "line": 79,
       "cyclomatic": 7.0,
       "coverage": null,
       "crap": 56.0,
@@ -42899,7 +42809,7 @@
     {
       "file": "crates/decision-models/src/decision_models/laya/loaded_state.rs",
       "function": "LoadedLayaState::served_parts",
-      "line": 166,
+      "line": 170,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
@@ -42908,7 +42818,7 @@
     {
       "file": "crates/decision-models/src/decision_models/laya/loaded_state.rs",
       "function": "LoadedLayaState::token_batch",
-      "line": 179,
+      "line": 183,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
@@ -42917,7 +42827,7 @@
     {
       "file": "crates/decision-models/src/decision_models/laya/loaded_state.rs",
       "function": "LoadedLayaState::trunk_and_head",
-      "line": 194,
+      "line": 198,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -42926,7 +42836,7 @@
     {
       "file": "crates/decision-models/src/decision_models/laya/loaded_state.rs",
       "function": "forward_failure",
-      "line": 276,
+      "line": 280,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -42935,7 +42845,7 @@
     {
       "file": "crates/decision-models/src/decision_models/laya/loaded_state.rs",
       "function": "sequence_failure",
-      "line": 265,
+      "line": 269,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
@@ -52725,54 +52635,9 @@
       "crate": "image-generation"
     },
     {
-      "file": "crates/image-generation/src/flux2_klein/engine/components.rs",
-      "function": "Flux2KleinComponentLoad::new",
-      "line": 22,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "image-generation"
-    },
-    {
-      "file": "crates/image-generation/src/flux2_klein/engine/components.rs",
-      "function": "Flux2KleinEngineComponents::adopt_floor_raise_limit",
-      "line": 76,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "image-generation"
-    },
-    {
-      "file": "crates/image-generation/src/flux2_klein/engine/components.rs",
-      "function": "Flux2KleinEngineComponents::collect_mlx_memory_telemetry",
-      "line": 69,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "image-generation"
-    },
-    {
-      "file": "crates/image-generation/src/flux2_klein/engine/components.rs",
-      "function": "Flux2KleinEngineComponents::take_post_cleanup_memory_telemetry",
-      "line": 66,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "image-generation"
-    },
-    {
-      "file": "crates/image-generation/src/flux2_klein/engine/components.rs",
-      "function": "Flux2KleinEngineComponents::update_mlx_memory_limit",
-      "line": 78,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "image-generation"
-    },
-    {
       "file": "crates/image-generation/src/flux2_klein/engine/lifecycle.rs",
-      "function": "ActiveRequest::advance_phase",
-      "line": 426,
+      "function": "Flux2KleinActiveRequest::advance_phase",
+      "line": 257,
       "cyclomatic": 7.0,
       "coverage": null,
       "crap": 56.0,
@@ -52780,8 +52645,8 @@
     },
     {
       "file": "crates/image-generation/src/flux2_klein/engine/lifecycle.rs",
-      "function": "ActiveRequest::completed_denoising_steps",
-      "line": 416,
+      "function": "Flux2KleinActiveRequest::completed_denoising_steps",
+      "line": 229,
       "cyclomatic": 4.0,
       "coverage": null,
       "crap": 20.0,
@@ -52789,35 +52654,8 @@
     },
     {
       "file": "crates/image-generation/src/flux2_klein/engine/lifecycle.rs",
-      "function": "Flux2KleinImageEngine::advance_generation",
-      "line": 288,
-      "cyclomatic": 12.0,
-      "coverage": null,
-      "crap": 156.0,
-      "crate": "image-generation"
-    },
-    {
-      "file": "crates/image-generation/src/flux2_klein/engine/lifecycle.rs",
-      "function": "Flux2KleinImageEngine::cancel_generation",
-      "line": 362,
-      "cyclomatic": 2.0,
-      "coverage": null,
-      "crap": 6.0,
-      "crate": "image-generation"
-    },
-    {
-      "file": "crates/image-generation/src/flux2_klein/engine/lifecycle.rs",
-      "function": "Flux2KleinImageEngine::collect_mlx_memory_telemetry",
-      "line": 386,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "image-generation"
-    },
-    {
-      "file": "crates/image-generation/src/flux2_klein/engine/lifecycle.rs",
-      "function": "Flux2KleinImageEngine::complete_encoded_request",
-      "line": 158,
+      "function": "Flux2KleinActiveRequest::partial_progress",
+      "line": 241,
       "cyclomatic": 4.0,
       "coverage": null,
       "crap": 20.0,
@@ -52825,8 +52663,8 @@
     },
     {
       "file": "crates/image-generation/src/flux2_klein/engine/lifecycle.rs",
-      "function": "Flux2KleinImageEngine::elapsed_millis",
-      "line": 111,
+      "function": "Flux2KleinActiveRequest::request_id",
+      "line": 194,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -52834,35 +52672,35 @@
     },
     {
       "file": "crates/image-generation/src/flux2_klein/engine/lifecycle.rs",
-      "function": "Flux2KleinImageEngine::fail_active_request",
-      "line": 115,
-      "cyclomatic": 3.0,
+      "function": "Flux2KleinActiveRequest::result_metadata",
+      "line": 206,
+      "cyclomatic": 1.0,
       "coverage": null,
-      "crap": 12.0,
+      "crap": 2.0,
+      "crate": "image-generation"
+    },
+    {
+      "file": "crates/image-generation/src/flux2_klein/engine/lifecycle.rs",
+      "function": "Flux2KleinActiveRequest::started_at",
+      "line": 198,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "image-generation"
+    },
+    {
+      "file": "crates/image-generation/src/flux2_klein/engine/lifecycle.rs",
+      "function": "Flux2KleinActiveRequest::total_steps",
+      "line": 202,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
       "crate": "image-generation"
     },
     {
       "file": "crates/image-generation/src/flux2_klein/engine/lifecycle.rs",
       "function": "Flux2KleinImageEngine::from_model_family_factory",
-      "line": 63,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "image-generation"
-    },
-    {
-      "file": "crates/image-generation/src/flux2_klein/engine/lifecycle.rs",
-      "function": "Flux2KleinImageEngine::load",
-      "line": 218,
-      "cyclomatic": 4.0,
-      "coverage": null,
-      "crap": 20.0,
-      "crate": "image-generation"
-    },
-    {
-      "file": "crates/image-generation/src/flux2_klein/engine/lifecycle.rs",
-      "function": "Flux2KleinImageEngine::loaded_revision",
-      "line": 107,
+      "line": 60,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -52871,61 +52709,16 @@
     {
       "file": "crates/image-generation/src/flux2_klein/engine/lifecycle.rs",
       "function": "Flux2KleinImageEngine::new",
-      "line": 38,
+      "line": 35,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "image-generation"
-    },
-    {
-      "file": "crates/image-generation/src/flux2_klein/engine/lifecycle.rs",
-      "function": "Flux2KleinImageEngine::progress",
-      "line": 140,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "image-generation"
-    },
-    {
-      "file": "crates/image-generation/src/flux2_klein/engine/lifecycle.rs",
-      "function": "Flux2KleinImageEngine::restore_with_progress",
-      "line": 205,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "image-generation"
-    },
-    {
-      "file": "crates/image-generation/src/flux2_klein/engine/lifecycle.rs",
-      "function": "Flux2KleinImageEngine::start_generation",
-      "line": 244,
-      "cyclomatic": 7.0,
-      "coverage": null,
-      "crap": 56.0,
-      "crate": "image-generation"
-    },
-    {
-      "file": "crates/image-generation/src/flux2_klein/engine/lifecycle.rs",
-      "function": "Flux2KleinImageEngine::take_post_cleanup_memory_telemetry",
-      "line": 382,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "image-generation"
-    },
-    {
-      "file": "crates/image-generation/src/flux2_klein/engine/lifecycle.rs",
-      "function": "Flux2KleinImageEngine::update_mlx_memory_limit",
-      "line": 390,
-      "cyclomatic": 2.0,
-      "coverage": null,
-      "crap": 6.0,
       "crate": "image-generation"
     },
     {
       "file": "crates/image-generation/src/flux2_klein/engine/lifecycle.rs",
       "function": "Flux2KleinImageEngine::with_components_for_tests",
-      "line": 94,
+      "line": 82,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -52933,17 +52726,44 @@
     },
     {
       "file": "crates/image-generation/src/flux2_klein/engine/lifecycle.rs",
-      "function": "Flux2KleinImageEngine::with_floor_raise_limit_bytes",
-      "line": 84,
-      "cyclomatic": 1.0,
+      "function": "Flux2KleinImageFamily::advance_request",
+      "line": 133,
+      "cyclomatic": 6.0,
       "coverage": null,
-      "crap": 2.0,
+      "crap": 42.0,
+      "crate": "image-generation"
+    },
+    {
+      "file": "crates/image-generation/src/flux2_klein/engine/lifecycle.rs",
+      "function": "Flux2KleinImageFamily::start_request",
+      "line": 95,
+      "cyclomatic": 5.0,
+      "coverage": null,
+      "crap": 30.0,
       "crate": "image-generation"
     },
     {
       "file": "crates/image-generation/src/flux2_klein/engine/lifecycle.rs",
       "function": "RequestPhase::public_failure_description",
-      "line": 470,
+      "line": 301,
+      "cyclomatic": 6.0,
+      "coverage": null,
+      "crap": 42.0,
+      "crate": "image-generation"
+    },
+    {
+      "file": "crates/image-generation/src/flux2_klein/engine/lifecycle.rs",
+      "function": "complete_encoded_request",
+      "line": 179,
+      "cyclomatic": 3.0,
+      "coverage": null,
+      "crap": 12.0,
+      "crate": "image-generation"
+    },
+    {
+      "file": "crates/image-generation/src/flux2_klein/engine/lifecycle.rs",
+      "function": "run_phase",
+      "line": 159,
       "cyclomatic": 6.0,
       "coverage": null,
       "crap": 42.0,
@@ -53051,7 +52871,7 @@
     {
       "file": "crates/image-generation/src/flux2_klein/engine/mlx_components/engine_components.rs",
       "function": "Flux2KleinMlxComponents::adopt_floor_raise_limit",
-      "line": 243,
+      "line": 50,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -53060,7 +52880,7 @@
     {
       "file": "crates/image-generation/src/flux2_klein/engine/mlx_components/engine_components.rs",
       "function": "Flux2KleinMlxComponents::collect_mlx_memory_telemetry",
-      "line": 223,
+      "line": 29,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -53069,7 +52889,7 @@
     {
       "file": "crates/image-generation/src/flux2_klein/engine/mlx_components/engine_components.rs",
       "function": "Flux2KleinMlxComponents::condition_prompt",
-      "line": 62,
+      "line": 144,
       "cyclomatic": 5.0,
       "coverage": null,
       "crap": 30.0,
@@ -53078,7 +52898,7 @@
     {
       "file": "crates/image-generation/src/flux2_klein/engine/mlx_components/engine_components.rs",
       "function": "Flux2KleinMlxComponents::decode_latents",
-      "line": 182,
+      "line": 264,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
@@ -53087,7 +52907,7 @@
     {
       "file": "crates/image-generation/src/flux2_klein/engine/mlx_components/engine_components.rs",
       "function": "Flux2KleinMlxComponents::denoise_euler",
-      "line": 155,
+      "line": 237,
       "cyclomatic": 4.0,
       "coverage": null,
       "crap": 20.0,
@@ -53096,7 +52916,7 @@
     {
       "file": "crates/image-generation/src/flux2_klein/engine/mlx_components/engine_components.rs",
       "function": "Flux2KleinMlxComponents::encode_png",
-      "line": 189,
+      "line": 271,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
@@ -53105,7 +52925,7 @@
     {
       "file": "crates/image-generation/src/flux2_klein/engine/mlx_components/engine_components.rs",
       "function": "Flux2KleinMlxComponents::finalize_request",
-      "line": 210,
+      "line": 16,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -53114,7 +52934,7 @@
     {
       "file": "crates/image-generation/src/flux2_klein/engine/mlx_components/engine_components.rs",
       "function": "Flux2KleinMlxComponents::initialize_keyed_noise",
-      "line": 147,
+      "line": 229,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
@@ -53132,7 +52952,7 @@
     {
       "file": "crates/image-generation/src/flux2_klein/engine/mlx_components/engine_components.rs",
       "function": "Flux2KleinMlxComponents::start_request",
-      "line": 16,
+      "line": 98,
       "cyclomatic": 8.0,
       "coverage": null,
       "crap": 72.0,
@@ -53141,7 +52961,7 @@
     {
       "file": "crates/image-generation/src/flux2_klein/engine/mlx_components/engine_components.rs",
       "function": "Flux2KleinMlxComponents::take_post_cleanup_memory_telemetry",
-      "line": 219,
+      "line": 25,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -53150,7 +52970,7 @@
     {
       "file": "crates/image-generation/src/flux2_klein/engine/mlx_components/engine_components.rs",
       "function": "Flux2KleinMlxComponents::update_mlx_memory_limit",
-      "line": 247,
+      "line": 54,
       "cyclomatic": 10.0,
       "coverage": null,
       "crap": 110.0,
@@ -53159,7 +52979,7 @@
     {
       "file": "crates/image-generation/src/flux2_klein/engine/mlx_components/engine_components.rs",
       "function": "mlx_buffer_cache_limit_for_ceiling",
-      "line": 290,
+      "line": 293,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -53402,7 +53222,7 @@
     {
       "file": "crates/image-generation/src/flux2_klein/engine/tests/lifecycle_support.rs",
       "function": "FakeComponents::condition_prompt",
-      "line": 146,
+      "line": 152,
       "cyclomatic": 6.0,
       "coverage": null,
       "crap": 42.0,
@@ -53411,7 +53231,7 @@
     {
       "file": "crates/image-generation/src/flux2_klein/engine/tests/lifecycle_support.rs",
       "function": "FakeComponents::decode_latents",
-      "line": 182,
+      "line": 188,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
@@ -53420,7 +53240,7 @@
     {
       "file": "crates/image-generation/src/flux2_klein/engine/tests/lifecycle_support.rs",
       "function": "FakeComponents::denoise_euler",
-      "line": 167,
+      "line": 173,
       "cyclomatic": 4.0,
       "coverage": null,
       "crap": 20.0,
@@ -53429,7 +53249,7 @@
     {
       "file": "crates/image-generation/src/flux2_klein/engine/tests/lifecycle_support.rs",
       "function": "FakeComponents::encode_png",
-      "line": 187,
+      "line": 193,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
@@ -53438,16 +53258,16 @@
     {
       "file": "crates/image-generation/src/flux2_klein/engine/tests/lifecycle_support.rs",
       "function": "FakeComponents::finalize_request",
-      "line": 192,
-      "cyclomatic": 6.0,
+      "line": 114,
+      "cyclomatic": 2.0,
       "coverage": null,
-      "crap": 42.0,
+      "crap": 6.0,
       "crate": "image-generation"
     },
     {
       "file": "crates/image-generation/src/flux2_klein/engine/tests/lifecycle_support.rs",
       "function": "FakeComponents::initialize_keyed_noise",
-      "line": 163,
+      "line": 169,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -53456,7 +53276,7 @@
     {
       "file": "crates/image-generation/src/flux2_klein/engine/tests/lifecycle_support.rs",
       "function": "FakeComponents::load",
-      "line": 106,
+      "line": 95,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
@@ -53465,16 +53285,16 @@
     {
       "file": "crates/image-generation/src/flux2_klein/engine/tests/lifecycle_support.rs",
       "function": "FakeComponents::record",
-      "line": 223,
-      "cyclomatic": 2.0,
+      "line": 200,
+      "cyclomatic": 1.0,
       "coverage": null,
-      "crap": 6.0,
+      "crap": 2.0,
       "crate": "image-generation"
     },
     {
       "file": "crates/image-generation/src/flux2_klein/engine/tests/lifecycle_support.rs",
       "function": "FakeComponents::start_request",
-      "line": 125,
+      "line": 131,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
@@ -53483,16 +53303,7 @@
     {
       "file": "crates/image-generation/src/flux2_klein/engine/tests/lifecycle_support.rs",
       "function": "FakeComponents::take_post_cleanup_memory_telemetry",
-      "line": 217,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "image-generation"
-    },
-    {
-      "file": "crates/image-generation/src/flux2_klein/engine/tests/lifecycle_support.rs",
-      "function": "assert_final_cleanup_memory",
-      "line": 84,
+      "line": 125,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -53501,7 +53312,7 @@
     {
       "file": "crates/image-generation/src/flux2_klein/engine/tests/lifecycle_support.rs",
       "function": "bounded_conditioning_fake_engine",
-      "line": 30,
+      "line": 37,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -53510,16 +53321,7 @@
     {
       "file": "crates/image-generation/src/flux2_klein/engine/tests/lifecycle_support.rs",
       "function": "bounded_fake_engine",
-      "line": 23,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "image-generation"
-    },
-    {
-      "file": "crates/image-generation/src/flux2_klein/engine/tests/lifecycle_support.rs",
-      "function": "cloned_events",
-      "line": 77,
+      "line": 30,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -53528,7 +53330,7 @@
     {
       "file": "crates/image-generation/src/flux2_klein/engine/tests/lifecycle_support.rs",
       "function": "fake_engine",
-      "line": 16,
+      "line": 23,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -53537,7 +53339,7 @@
     {
       "file": "crates/image-generation/src/flux2_klein/engine/tests/lifecycle_support.rs",
       "function": "scripted_engine",
-      "line": 42,
+      "line": 49,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -53546,7 +53348,7 @@
     {
       "file": "crates/image-generation/src/flux2_klein/engine/tests/lifecycle_support.rs",
       "function": "valid_command",
-      "line": 62,
+      "line": 69,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -53555,7 +53357,7 @@
     {
       "file": "crates/image-generation/src/flux2_klein/engine/tests/vae_lifecycle_tests.rs",
       "function": "StagedVaeComponents::condition_prompt",
-      "line": 248,
+      "line": 267,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -53564,7 +53366,7 @@
     {
       "file": "crates/image-generation/src/flux2_klein/engine/tests/vae_lifecycle_tests.rs",
       "function": "StagedVaeComponents::decode_latents",
-      "line": 264,
+      "line": 283,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
@@ -53573,7 +53375,7 @@
     {
       "file": "crates/image-generation/src/flux2_klein/engine/tests/vae_lifecycle_tests.rs",
       "function": "StagedVaeComponents::denoise_euler",
-      "line": 256,
+      "line": 275,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -53582,7 +53384,7 @@
     {
       "file": "crates/image-generation/src/flux2_klein/engine/tests/vae_lifecycle_tests.rs",
       "function": "StagedVaeComponents::encode_png",
-      "line": 282,
+      "line": 301,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -53591,7 +53393,7 @@
     {
       "file": "crates/image-generation/src/flux2_klein/engine/tests/vae_lifecycle_tests.rs",
       "function": "StagedVaeComponents::finalize_request",
-      "line": 287,
+      "line": 238,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
@@ -53600,7 +53402,7 @@
     {
       "file": "crates/image-generation/src/flux2_klein/engine/tests/vae_lifecycle_tests.rs",
       "function": "StagedVaeComponents::initialize_keyed_noise",
-      "line": 252,
+      "line": 271,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -53609,7 +53411,7 @@
     {
       "file": "crates/image-generation/src/flux2_klein/engine/tests/vae_lifecycle_tests.rs",
       "function": "StagedVaeComponents::load",
-      "line": 219,
+      "line": 220,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -53618,7 +53420,7 @@
     {
       "file": "crates/image-generation/src/flux2_klein/engine/tests/vae_lifecycle_tests.rs",
       "function": "StagedVaeComponents::record",
-      "line": 305,
+      "line": 308,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -53627,7 +53429,7 @@
     {
       "file": "crates/image-generation/src/flux2_klein/engine/tests/vae_lifecycle_tests.rs",
       "function": "StagedVaeComponents::start_request",
-      "line": 237,
+      "line": 256,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -53636,7 +53438,7 @@
     {
       "file": "crates/image-generation/src/flux2_klein/engine/tests/vae_lifecycle_tests.rs",
       "function": "advance_to_decoding",
-      "line": 167,
+      "line": 168,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
@@ -53645,7 +53447,7 @@
     {
       "file": "crates/image-generation/src/flux2_klein/engine/tests/vae_lifecycle_tests.rs",
       "function": "cloned_events",
-      "line": 190,
+      "line": 191,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -53654,7 +53456,7 @@
     {
       "file": "crates/image-generation/src/flux2_klein/engine/tests/vae_lifecycle_tests.rs",
       "function": "cloned_pixels",
-      "line": 204,
+      "line": 205,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -53663,7 +53465,7 @@
     {
       "file": "crates/image-generation/src/flux2_klein/engine/tests/vae_lifecycle_tests.rs",
       "function": "decode_events",
-      "line": 197,
+      "line": 198,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -53672,7 +53474,7 @@
     {
       "file": "crates/image-generation/src/flux2_klein/engine/tests/vae_lifecycle_tests.rs",
       "function": "finish_started_request",
-      "line": 152,
+      "line": 153,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
@@ -53681,7 +53483,7 @@
     {
       "file": "crates/image-generation/src/flux2_klein/engine/tests/vae_lifecycle_tests.rs",
       "function": "run_to_completion",
-      "line": 144,
+      "line": 145,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -53690,7 +53492,7 @@
     {
       "file": "crates/image-generation/src/flux2_klein/engine/tests/vae_lifecycle_tests.rs",
       "function": "staged_engine",
-      "line": 125,
+      "line": 126,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -53699,7 +53501,7 @@
     {
       "file": "crates/image-generation/src/flux2_klein/engine/tests/vae_lifecycle_tests.rs",
       "function": "valid_command",
-      "line": 175,
+      "line": 176,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -55508,16 +55310,16 @@
     {
       "file": "crates/image-generation/src/flux2_klein/transformer/math.rs",
       "function": "apply_rope",
-      "line": 139,
-      "cyclomatic": 19.0,
+      "line": 117,
+      "cyclomatic": 6.0,
       "coverage": null,
-      "crap": 380.0,
+      "crap": 42.0,
       "crate": "image-generation"
     },
     {
       "file": "crates/image-generation/src/flux2_klein/transformer/math.rs",
       "function": "apply_rope_for_component_oracle",
-      "line": 192,
+      "line": 141,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -55525,26 +55327,8 @@
     },
     {
       "file": "crates/image-generation/src/flux2_klein/transformer/math.rs",
-      "function": "fp32_layer_norm",
-      "line": 19,
-      "cyclomatic": 4.0,
-      "coverage": null,
-      "crap": 20.0,
-      "crate": "image-generation"
-    },
-    {
-      "file": "crates/image-generation/src/flux2_klein/transformer/math.rs",
-      "function": "fp32_rms_norm",
-      "line": 29,
-      "cyclomatic": 5.0,
-      "coverage": null,
-      "crap": 30.0,
-      "crate": "image-generation"
-    },
-    {
-      "file": "crates/image-generation/src/flux2_klein/transformer/math.rs",
       "function": "linear",
-      "line": 11,
+      "line": 13,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
@@ -55553,7 +55337,7 @@
     {
       "file": "crates/image-generation/src/flux2_klein/transformer/math.rs",
       "function": "rope_frequencies",
-      "line": 95,
+      "line": 73,
       "cyclomatic": 14.0,
       "coverage": null,
       "crap": 210.0,
@@ -55562,7 +55346,7 @@
     {
       "file": "crates/image-generation/src/flux2_klein/transformer/math.rs",
       "function": "swiglu",
-      "line": 43,
+      "line": 21,
       "cyclomatic": 7.0,
       "coverage": null,
       "crap": 56.0,
@@ -55571,7 +55355,7 @@
     {
       "file": "crates/image-generation/src/flux2_klein/transformer/math.rs",
       "function": "timestep_embedding",
-      "line": 69,
+      "line": 47,
       "cyclomatic": 12.0,
       "coverage": null,
       "crap": 156.0,
@@ -56460,6 +56244,366 @@
       "crate": "image-generation"
     },
     {
+      "file": "crates/image-generation/src/image_engine_shell.rs",
+      "function": "ImageComponentLoad::new",
+      "line": 35,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "image-generation"
+    },
+    {
+      "file": "crates/image-generation/src/image_engine_shell.rs",
+      "function": "ImageEngineComponents::adopt_floor_raise_limit",
+      "line": 82,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "image-generation"
+    },
+    {
+      "file": "crates/image-generation/src/image_engine_shell.rs",
+      "function": "ImageEngineComponents::collect_mlx_memory_telemetry",
+      "line": 74,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "image-generation"
+    },
+    {
+      "file": "crates/image-generation/src/image_engine_shell.rs",
+      "function": "ImageEngineComponents::take_post_cleanup_memory_telemetry",
+      "line": 70,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "image-generation"
+    },
+    {
+      "file": "crates/image-generation/src/image_engine_shell.rs",
+      "function": "ImageEngineComponents::update_mlx_memory_limit",
+      "line": 84,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "image-generation"
+    },
+    {
+      "file": "crates/image-generation/src/image_engine_shell.rs",
+      "function": "ImageEngineShell::advance_generation",
+      "line": 341,
+      "cyclomatic": 2.0,
+      "coverage": null,
+      "crap": 6.0,
+      "crate": "image-generation"
+    },
+    {
+      "file": "crates/image-generation/src/image_engine_shell.rs",
+      "function": "ImageEngineShell::cancel_generation",
+      "line": 349,
+      "cyclomatic": 4.0,
+      "coverage": null,
+      "crap": 20.0,
+      "crate": "image-generation"
+    },
+    {
+      "file": "crates/image-generation/src/image_engine_shell.rs",
+      "function": "ImageEngineShell::collect_mlx_memory_telemetry",
+      "line": 378,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "image-generation"
+    },
+    {
+      "file": "crates/image-generation/src/image_engine_shell.rs",
+      "function": "ImageEngineShell::complete_rendered_request",
+      "line": 226,
+      "cyclomatic": 2.0,
+      "coverage": null,
+      "crap": 6.0,
+      "crate": "image-generation"
+    },
+    {
+      "file": "crates/image-generation/src/image_engine_shell.rs",
+      "function": "ImageEngineShell::elapsed_millis",
+      "line": 164,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "image-generation"
+    },
+    {
+      "file": "crates/image-generation/src/image_engine_shell.rs",
+      "function": "ImageEngineShell::fail_active_request",
+      "line": 172,
+      "cyclomatic": 3.0,
+      "coverage": null,
+      "crap": 12.0,
+      "crate": "image-generation"
+    },
+    {
+      "file": "crates/image-generation/src/image_engine_shell.rs",
+      "function": "ImageEngineShell::from_components",
+      "line": 138,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "image-generation"
+    },
+    {
+      "file": "crates/image-generation/src/image_engine_shell.rs",
+      "function": "ImageEngineShell::load",
+      "line": 285,
+      "cyclomatic": 5.0,
+      "coverage": null,
+      "crap": 30.0,
+      "crate": "image-generation"
+    },
+    {
+      "file": "crates/image-generation/src/image_engine_shell.rs",
+      "function": "ImageEngineShell::loaded_revision",
+      "line": 160,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "image-generation"
+    },
+    {
+      "file": "crates/image-generation/src/image_engine_shell.rs",
+      "function": "ImageEngineShell::progress",
+      "line": 198,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "image-generation"
+    },
+    {
+      "file": "crates/image-generation/src/image_engine_shell.rs",
+      "function": "ImageEngineShell::restore_with_progress",
+      "line": 212,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "image-generation"
+    },
+    {
+      "file": "crates/image-generation/src/image_engine_shell.rs",
+      "function": "ImageEngineShell::start_generation",
+      "line": 321,
+      "cyclomatic": 4.0,
+      "coverage": null,
+      "crap": 20.0,
+      "crate": "image-generation"
+    },
+    {
+      "file": "crates/image-generation/src/image_engine_shell.rs",
+      "function": "ImageEngineShell::take_matching_active_request",
+      "line": 260,
+      "cyclomatic": 2.0,
+      "coverage": null,
+      "crap": 6.0,
+      "crate": "image-generation"
+    },
+    {
+      "file": "crates/image-generation/src/image_engine_shell.rs",
+      "function": "ImageEngineShell::take_post_cleanup_memory_telemetry",
+      "line": 374,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "image-generation"
+    },
+    {
+      "file": "crates/image-generation/src/image_engine_shell.rs",
+      "function": "ImageEngineShell::update_mlx_memory_limit",
+      "line": 382,
+      "cyclomatic": 4.0,
+      "coverage": null,
+      "crap": 20.0,
+      "crate": "image-generation"
+    },
+    {
+      "file": "crates/image-generation/src/image_engine_shell.rs",
+      "function": "ImageEngineShell::with_floor_raise_limit_bytes",
+      "line": 153,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "image-generation"
+    },
+    {
+      "file": "crates/image-generation/src/image_engine_shell.rs",
+      "function": "mismatched_request_failure",
+      "line": 278,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "image-generation"
+    },
+    {
+      "file": "crates/image-generation/src/image_engine_shell_test_support.rs",
+      "function": "assert_final_cleanup_memory",
+      "line": 68,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "image-generation"
+    },
+    {
+      "file": "crates/image-generation/src/image_engine_shell_test_support.rs",
+      "function": "cloned_events",
+      "line": 12,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "image-generation"
+    },
+    {
+      "file": "crates/image-generation/src/image_engine_shell_test_support.rs",
+      "function": "finalize_event",
+      "line": 39,
+      "cyclomatic": 7.0,
+      "coverage": null,
+      "crap": 56.0,
+      "crate": "image-generation"
+    },
+    {
+      "file": "crates/image-generation/src/image_engine_shell_test_support.rs",
+      "function": "record_lifecycle_event",
+      "line": 21,
+      "cyclomatic": 2.0,
+      "coverage": null,
+      "crap": 6.0,
+      "crate": "image-generation"
+    },
+    {
+      "file": "crates/image-generation/src/image_engine_shell_test_support.rs",
+      "function": "scripted_post_cleanup_memory",
+      "line": 58,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "image-generation"
+    },
+    {
+      "file": "crates/image-generation/src/image_engine_shell_tests.rs",
+      "function": "GlobeFamily::advance_request",
+      "line": 110,
+      "cyclomatic": 2.0,
+      "coverage": null,
+      "crap": 6.0,
+      "crate": "image-generation"
+    },
+    {
+      "file": "crates/image-generation/src/image_engine_shell_tests.rs",
+      "function": "GlobeFamily::start_request",
+      "line": 99,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "image-generation"
+    },
+    {
+      "file": "crates/image-generation/src/image_engine_shell_tests.rs",
+      "function": "GlobeRequest::request_id",
+      "line": 70,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "image-generation"
+    },
+    {
+      "file": "crates/image-generation/src/image_engine_shell_tests.rs",
+      "function": "GlobeRequest::result_metadata",
+      "line": 82,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "image-generation"
+    },
+    {
+      "file": "crates/image-generation/src/image_engine_shell_tests.rs",
+      "function": "GlobeRequest::started_at",
+      "line": 74,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "image-generation"
+    },
+    {
+      "file": "crates/image-generation/src/image_engine_shell_tests.rs",
+      "function": "GlobeRequest::total_steps",
+      "line": 78,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "image-generation"
+    },
+    {
+      "file": "crates/image-generation/src/image_engine_shell_tests.rs",
+      "function": "ScriptedComponents::finalize_request",
+      "line": 44,
+      "cyclomatic": 2.0,
+      "coverage": null,
+      "crap": 6.0,
+      "crate": "image-generation"
+    },
+    {
+      "file": "crates/image-generation/src/image_engine_shell_tests.rs",
+      "function": "ScriptedComponents::load",
+      "line": 32,
+      "cyclomatic": 2.0,
+      "coverage": null,
+      "crap": 6.0,
+      "crate": "image-generation"
+    },
+    {
+      "file": "crates/image-generation/src/image_engine_shell_tests.rs",
+      "function": "fatal",
+      "line": 172,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "image-generation"
+    },
+    {
+      "file": "crates/image-generation/src/image_engine_shell_tests.rs",
+      "function": "globe_capabilities",
+      "line": 126,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "image-generation"
+    },
+    {
+      "file": "crates/image-generation/src/image_engine_shell_tests.rs",
+      "function": "globe_command",
+      "line": 157,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "image-generation"
+    },
+    {
+      "file": "crates/image-generation/src/image_engine_shell_tests.rs",
+      "function": "globe_engine",
+      "line": 139,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "image-generation"
+    },
+    {
+      "file": "crates/image-generation/src/image_engine_shell_tests.rs",
+      "function": "loaded_globe_engine",
+      "line": 151,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "image-generation"
+    },
+    {
       "file": "crates/image-generation/src/image_generation_engine.rs",
       "function": "ImageGenerationEngine::collect_mlx_memory_telemetry",
       "line": 43,
@@ -57091,53 +57235,8 @@
     },
     {
       "file": "crates/image-generation/src/qwen_image_21/engine/components.rs",
-      "function": "QwenImage21ComponentLoad::new",
-      "line": 25,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "image-generation"
-    },
-    {
-      "file": "crates/image-generation/src/qwen_image_21/engine/components.rs",
-      "function": "QwenImage21EngineComponents::adopt_floor_raise_limit",
-      "line": 108,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "image-generation"
-    },
-    {
-      "file": "crates/image-generation/src/qwen_image_21/engine/components.rs",
-      "function": "QwenImage21EngineComponents::collect_mlx_memory_telemetry",
-      "line": 100,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "image-generation"
-    },
-    {
-      "file": "crates/image-generation/src/qwen_image_21/engine/components.rs",
-      "function": "QwenImage21EngineComponents::take_post_cleanup_memory_telemetry",
-      "line": 96,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "image-generation"
-    },
-    {
-      "file": "crates/image-generation/src/qwen_image_21/engine/components.rs",
-      "function": "QwenImage21EngineComponents::update_mlx_memory_limit",
-      "line": 110,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "image-generation"
-    },
-    {
-      "file": "crates/image-generation/src/qwen_image_21/engine/components.rs",
       "function": "QwenImage21EngineRequest::new",
-      "line": 55,
+      "line": 30,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -57145,8 +57244,8 @@
     },
     {
       "file": "crates/image-generation/src/qwen_image_21/engine/lifecycle.rs",
-      "function": "ActiveRequest::public_failure_description",
-      "line": 369,
+      "function": "QwenImage21ActiveRequest::request_id",
+      "line": 166,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -57154,26 +57253,8 @@
     },
     {
       "file": "crates/image-generation/src/qwen_image_21/engine/lifecycle.rs",
-      "function": "QwenImage21ImageEngine::advance_generation",
-      "line": 210,
-      "cyclomatic": 13.0,
-      "coverage": null,
-      "crap": 182.0,
-      "crate": "image-generation"
-    },
-    {
-      "file": "crates/image-generation/src/qwen_image_21/engine/lifecycle.rs",
-      "function": "QwenImage21ImageEngine::cancel_generation",
-      "line": 312,
-      "cyclomatic": 2.0,
-      "coverage": null,
-      "crap": 6.0,
-      "crate": "image-generation"
-    },
-    {
-      "file": "crates/image-generation/src/qwen_image_21/engine/lifecycle.rs",
-      "function": "QwenImage21ImageEngine::collect_mlx_memory_telemetry",
-      "line": 336,
+      "function": "QwenImage21ActiveRequest::result_metadata",
+      "line": 178,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -57181,8 +57262,8 @@
     },
     {
       "file": "crates/image-generation/src/qwen_image_21/engine/lifecycle.rs",
-      "function": "QwenImage21ImageEngine::elapsed_millis",
-      "line": 101,
+      "function": "QwenImage21ActiveRequest::started_at",
+      "line": 170,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -57190,17 +57271,8 @@
     },
     {
       "file": "crates/image-generation/src/qwen_image_21/engine/lifecycle.rs",
-      "function": "QwenImage21ImageEngine::fail_active_request",
-      "line": 105,
-      "cyclomatic": 3.0,
-      "coverage": null,
-      "crap": 12.0,
-      "crate": "image-generation"
-    },
-    {
-      "file": "crates/image-generation/src/qwen_image_21/engine/lifecycle.rs",
-      "function": "QwenImage21ImageEngine::from_components",
-      "line": 39,
+      "function": "QwenImage21ActiveRequest::total_steps",
+      "line": 174,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -57209,70 +57281,16 @@
     {
       "file": "crates/image-generation/src/qwen_image_21/engine/lifecycle.rs",
       "function": "QwenImage21ImageEngine::from_model_family_factory",
-      "line": 63,
+      "line": 35,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "image-generation"
-    },
-    {
-      "file": "crates/image-generation/src/qwen_image_21/engine/lifecycle.rs",
-      "function": "QwenImage21ImageEngine::load",
-      "line": 145,
-      "cyclomatic": 4.0,
-      "coverage": null,
-      "crap": 20.0,
-      "crate": "image-generation"
-    },
-    {
-      "file": "crates/image-generation/src/qwen_image_21/engine/lifecycle.rs",
-      "function": "QwenImage21ImageEngine::loaded_revision",
-      "line": 97,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "image-generation"
-    },
-    {
-      "file": "crates/image-generation/src/qwen_image_21/engine/lifecycle.rs",
-      "function": "QwenImage21ImageEngine::progress",
-      "line": 130,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "image-generation"
-    },
-    {
-      "file": "crates/image-generation/src/qwen_image_21/engine/lifecycle.rs",
-      "function": "QwenImage21ImageEngine::start_generation",
-      "line": 171,
-      "cyclomatic": 5.0,
-      "coverage": null,
-      "crap": 30.0,
-      "crate": "image-generation"
-    },
-    {
-      "file": "crates/image-generation/src/qwen_image_21/engine/lifecycle.rs",
-      "function": "QwenImage21ImageEngine::take_post_cleanup_memory_telemetry",
-      "line": 332,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "image-generation"
-    },
-    {
-      "file": "crates/image-generation/src/qwen_image_21/engine/lifecycle.rs",
-      "function": "QwenImage21ImageEngine::update_mlx_memory_limit",
-      "line": 340,
-      "cyclomatic": 2.0,
-      "coverage": null,
-      "crap": 6.0,
       "crate": "image-generation"
     },
     {
       "file": "crates/image-generation/src/qwen_image_21/engine/lifecycle.rs",
       "function": "QwenImage21ImageEngine::with_components_for_tests",
-      "line": 89,
+      "line": 61,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -57280,11 +57298,20 @@
     },
     {
       "file": "crates/image-generation/src/qwen_image_21/engine/lifecycle.rs",
-      "function": "QwenImage21ImageEngine::with_floor_raise_limit_bytes",
-      "line": 54,
-      "cyclomatic": 1.0,
+      "function": "QwenImage21ImageFamily::advance_request",
+      "line": 107,
+      "cyclomatic": 11.0,
       "coverage": null,
-      "crap": 2.0,
+      "crap": 132.0,
+      "crate": "image-generation"
+    },
+    {
+      "file": "crates/image-generation/src/qwen_image_21/engine/lifecycle.rs",
+      "function": "QwenImage21ImageFamily::start_request",
+      "line": 74,
+      "cyclomatic": 3.0,
+      "coverage": null,
+      "crap": 12.0,
       "crate": "image-generation"
     },
     {
@@ -57299,7 +57326,7 @@
     {
       "file": "crates/image-generation/src/qwen_image_21/engine/mlx_components.rs",
       "function": "QwenImage21MlxComponents::adopt_floor_raise_limit",
-      "line": 447,
+      "line": 368,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -57308,7 +57335,7 @@
     {
       "file": "crates/image-generation/src/qwen_image_21/engine/mlx_components.rs",
       "function": "QwenImage21MlxComponents::advance_render",
-      "line": 296,
+      "line": 429,
       "cyclomatic": 7.0,
       "coverage": null,
       "crap": 56.0,
@@ -57317,7 +57344,7 @@
     {
       "file": "crates/image-generation/src/qwen_image_21/engine/mlx_components.rs",
       "function": "QwenImage21MlxComponents::collect_mlx_memory_telemetry",
-      "line": 443,
+      "line": 364,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -57326,7 +57353,7 @@
     {
       "file": "crates/image-generation/src/qwen_image_21/engine/mlx_components.rs",
       "function": "QwenImage21MlxComponents::finalize_request",
-      "line": 354,
+      "line": 275,
       "cyclomatic": 8.0,
       "coverage": null,
       "crap": 72.0,
@@ -57389,7 +57416,7 @@
     {
       "file": "crates/image-generation/src/qwen_image_21/engine/mlx_components.rs",
       "function": "QwenImage21MlxComponents::start_request",
-      "line": 275,
+      "line": 408,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
@@ -57398,7 +57425,7 @@
     {
       "file": "crates/image-generation/src/qwen_image_21/engine/mlx_components.rs",
       "function": "QwenImage21MlxComponents::take_post_cleanup_memory_telemetry",
-      "line": 439,
+      "line": 360,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -57407,7 +57434,7 @@
     {
       "file": "crates/image-generation/src/qwen_image_21/engine/mlx_components.rs",
       "function": "QwenImage21MlxComponents::update_mlx_memory_limit",
-      "line": 451,
+      "line": 372,
       "cyclomatic": 7.0,
       "coverage": null,
       "crap": 56.0,
@@ -57434,7 +57461,7 @@
     {
       "file": "crates/image-generation/src/qwen_image_21/engine/tests/lifecycle_support.rs",
       "function": "FakeComponents::advance_render",
-      "line": 150,
+      "line": 156,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
@@ -57443,16 +57470,16 @@
     {
       "file": "crates/image-generation/src/qwen_image_21/engine/tests/lifecycle_support.rs",
       "function": "FakeComponents::finalize_request",
-      "line": 166,
-      "cyclomatic": 6.0,
+      "line": 121,
+      "cyclomatic": 2.0,
       "coverage": null,
-      "crap": 42.0,
+      "crap": 6.0,
       "crate": "image-generation"
     },
     {
       "file": "crates/image-generation/src/qwen_image_21/engine/tests/lifecycle_support.rs",
       "function": "FakeComponents::load",
-      "line": 122,
+      "line": 111,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
@@ -57461,16 +57488,16 @@
     {
       "file": "crates/image-generation/src/qwen_image_21/engine/tests/lifecycle_support.rs",
       "function": "FakeComponents::record",
-      "line": 197,
-      "cyclomatic": 2.0,
+      "line": 174,
+      "cyclomatic": 1.0,
       "coverage": null,
-      "crap": 6.0,
+      "crap": 2.0,
       "crate": "image-generation"
     },
     {
       "file": "crates/image-generation/src/qwen_image_21/engine/tests/lifecycle_support.rs",
       "function": "FakeComponents::start_request",
-      "line": 132,
+      "line": 138,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
@@ -57479,25 +57506,7 @@
     {
       "file": "crates/image-generation/src/qwen_image_21/engine/tests/lifecycle_support.rs",
       "function": "FakeComponents::take_post_cleanup_memory_telemetry",
-      "line": 191,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "image-generation"
-    },
-    {
-      "file": "crates/image-generation/src/qwen_image_21/engine/tests/lifecycle_support.rs",
-      "function": "assert_final_cleanup_memory",
-      "line": 75,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "image-generation"
-    },
-    {
-      "file": "crates/image-generation/src/qwen_image_21/engine/tests/lifecycle_support.rs",
-      "function": "cloned_events",
-      "line": 68,
+      "line": 132,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -57506,7 +57515,7 @@
     {
       "file": "crates/image-generation/src/qwen_image_21/engine/tests/lifecycle_support.rs",
       "function": "fake_engine",
-      "line": 20,
+      "line": 27,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -57515,7 +57524,7 @@
     {
       "file": "crates/image-generation/src/qwen_image_21/engine/tests/lifecycle_support.rs",
       "function": "image_capabilities",
-      "line": 210,
+      "line": 183,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -57524,7 +57533,7 @@
     {
       "file": "crates/image-generation/src/qwen_image_21/engine/tests/lifecycle_support.rs",
       "function": "scripted_advances_engine",
-      "line": 37,
+      "line": 44,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -57533,7 +57542,7 @@
     {
       "file": "crates/image-generation/src/qwen_image_21/engine/tests/lifecycle_support.rs",
       "function": "scripted_rendered",
-      "line": 104,
+      "line": 93,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -57542,7 +57551,7 @@
     {
       "file": "crates/image-generation/src/qwen_image_21/engine/tests/lifecycle_support.rs",
       "function": "six_step_render_advances",
-      "line": 87,
+      "line": 76,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
@@ -57551,7 +57560,7 @@
     {
       "file": "crates/image-generation/src/qwen_image_21/engine/tests/lifecycle_support.rs",
       "function": "valid_command",
-      "line": 53,
+      "line": 60,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -57857,7 +57866,7 @@
     {
       "file": "crates/image-generation/src/qwen_image_21/mlx_math.rs",
       "function": "QuantizedLinear::forward",
-      "line": 57,
+      "line": 59,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
@@ -57866,7 +57875,7 @@
     {
       "file": "crates/image-generation/src/qwen_image_21/mlx_math.rs",
       "function": "QuantizedLinear::load",
-      "line": 38,
+      "line": 40,
       "cyclomatic": 5.0,
       "coverage": null,
       "crap": 30.0,
@@ -57875,7 +57884,7 @@
     {
       "file": "crates/image-generation/src/qwen_image_21/mlx_math.rs",
       "function": "QwenImage21EngineError::from",
-      "line": 67,
+      "line": 69,
       "cyclomatic": 4.0,
       "coverage": null,
       "crap": 20.0,
@@ -57884,16 +57893,16 @@
     {
       "file": "crates/image-generation/src/qwen_image_21/mlx_math.rs",
       "function": "apply_rope",
-      "line": 166,
-      "cyclomatic": 18.0,
+      "line": 143,
+      "cyclomatic": 5.0,
       "coverage": null,
-      "crap": 342.0,
+      "crap": 30.0,
       "crate": "image-generation"
     },
     {
       "file": "crates/image-generation/src/qwen_image_21/mlx_math.rs",
       "function": "apply_rope_half_split",
-      "line": 267,
+      "line": 217,
       "cyclomatic": 18.0,
       "coverage": null,
       "crap": 342.0,
@@ -57902,7 +57911,7 @@
     {
       "file": "crates/image-generation/src/qwen_image_21/mlx_math.rs",
       "function": "attention_scale",
-      "line": 214,
+      "line": 164,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
@@ -57910,26 +57919,8 @@
     },
     {
       "file": "crates/image-generation/src/qwen_image_21/mlx_math.rs",
-      "function": "fp32_layer_norm",
-      "line": 117,
-      "cyclomatic": 4.0,
-      "coverage": null,
-      "crap": 20.0,
-      "crate": "image-generation"
-    },
-    {
-      "file": "crates/image-generation/src/qwen_image_21/mlx_math.rs",
-      "function": "fp32_rms_norm",
-      "line": 129,
-      "cyclomatic": 5.0,
-      "coverage": null,
-      "crap": 30.0,
-      "crate": "image-generation"
-    },
-    {
-      "file": "crates/image-generation/src/qwen_image_21/mlx_math.rs",
       "function": "fp32_zero_center_rms_norm",
-      "line": 145,
+      "line": 122,
       "cyclomatic": 8.0,
       "coverage": null,
       "crap": 72.0,
@@ -57938,7 +57929,7 @@
     {
       "file": "crates/image-generation/src/qwen_image_21/mlx_math.rs",
       "function": "fused_attention",
-      "line": 228,
+      "line": 178,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
@@ -57947,7 +57938,7 @@
     {
       "file": "crates/image-generation/src/qwen_image_21/mlx_math.rs",
       "function": "masked_attention",
-      "line": 243,
+      "line": 193,
       "cyclomatic": 9.0,
       "coverage": null,
       "crap": 90.0,
@@ -57956,7 +57947,7 @@
     {
       "file": "crates/image-generation/src/qwen_image_21/mlx_math.rs",
       "function": "validate_shape",
-      "line": 92,
+      "line": 94,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
@@ -66109,17 +66100,8 @@
     },
     {
       "file": "crates/model-primitives/src/affine_quantized_linear_tests.rs",
-      "function": "float32_values",
-      "line": 71,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "model-primitives"
-    },
-    {
-      "file": "crates/model-primitives/src/affine_quantized_linear_tests.rs",
       "function": "packed_projection",
-      "line": 50,
+      "line": 43,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -66128,7 +66110,7 @@
     {
       "file": "crates/model-primitives/src/affine_quantized_linear_tests.rs",
       "function": "shakespeare_bf16",
-      "line": 34,
+      "line": 33,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -66267,6 +66249,78 @@
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
+      "crate": "model-primitives"
+    },
+    {
+      "file": "crates/model-primitives/src/fp32_layers.rs",
+      "function": "fp32_layer_norm",
+      "line": 16,
+      "cyclomatic": 3.0,
+      "coverage": null,
+      "crap": 12.0,
+      "crate": "model-primitives"
+    },
+    {
+      "file": "crates/model-primitives/src/fp32_layers.rs",
+      "function": "fp32_rms_norm",
+      "line": 29,
+      "cyclomatic": 4.0,
+      "coverage": null,
+      "crap": 20.0,
+      "crate": "model-primitives"
+    },
+    {
+      "file": "crates/model-primitives/src/fp32_layers.rs",
+      "function": "rotate_adjacent_pairs",
+      "line": 49,
+      "cyclomatic": 14.0,
+      "coverage": null,
+      "crap": 210.0,
+      "crate": "model-primitives"
+    },
+    {
+      "file": "crates/model-primitives/src/fp32_layers_tests.rs",
+      "function": "angle_tables",
+      "line": 175,
+      "cyclomatic": 3.0,
+      "coverage": null,
+      "crap": 12.0,
+      "crate": "model-primitives"
+    },
+    {
+      "file": "crates/model-primitives/src/fp32_layers_tests.rs",
+      "function": "head_shape",
+      "line": 164,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "model-primitives"
+    },
+    {
+      "file": "crates/model-primitives/src/fp32_layers_tests.rs",
+      "function": "layer_norm_oracle",
+      "line": 28,
+      "cyclomatic": 2.0,
+      "coverage": null,
+      "crap": 6.0,
+      "crate": "model-primitives"
+    },
+    {
+      "file": "crates/model-primitives/src/fp32_layers_tests.rs",
+      "function": "rms_norm_oracle",
+      "line": 49,
+      "cyclomatic": 2.0,
+      "coverage": null,
+      "crap": 6.0,
+      "crate": "model-primitives"
+    },
+    {
+      "file": "crates/model-primitives/src/fp32_layers_tests.rs",
+      "function": "rotation_oracle",
+      "line": 188,
+      "cyclomatic": 4.0,
+      "coverage": null,
+      "crap": 20.0,
       "crate": "model-primitives"
     },
     {
@@ -67756,6 +67810,15 @@
     },
     {
       "file": "crates/model-primitives/src/synthetic_weights_test_support.rs",
+      "function": "float32_values",
+      "line": 156,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "model-primitives"
+    },
+    {
+      "file": "crates/model-primitives/src/synthetic_weights_test_support.rs",
       "function": "initialize_test_runtime",
       "line": 19,
       "cyclomatic": 1.0,
@@ -67766,7 +67829,7 @@
     {
       "file": "crates/model-primitives/src/synthetic_weights_test_support.rs",
       "function": "largest_difference",
-      "line": 127,
+      "line": 163,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
@@ -67785,6 +67848,24 @@
       "file": "crates/model-primitives/src/synthetic_weights_test_support.rs",
       "function": "shakespeare_values",
       "line": 33,
+      "cyclomatic": 2.0,
+      "coverage": null,
+      "crap": 6.0,
+      "crate": "model-primitives"
+    },
+    {
+      "file": "crates/model-primitives/src/synthetic_weights_test_support.rs",
+      "function": "upload_values",
+      "line": 143,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "model-primitives"
+    },
+    {
+      "file": "crates/model-primitives/src/synthetic_weights_test_support.rs",
+      "function": "wide_shakespeare_values",
+      "line": 130,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
@@ -72536,7 +72617,7 @@
     {
       "file": "crates/model-serving/tests/integration/artifacts/frozen_ornith_1_0_fixtures.rs",
       "function": "astro_decoder_state_cache_layer_dtypes",
-      "line": 61,
+      "line": 63,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -72545,7 +72626,7 @@
     {
       "file": "crates/model-serving/tests/integration/artifacts/frozen_ornith_1_0_fixtures.rs",
       "function": "astro_ssd_prompt_cache_model_contract",
-      "line": 25,
+      "line": 27,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -72554,52 +72635,16 @@
     {
       "file": "crates/model-serving/tests/integration/artifacts/frozen_ornith_1_0_fixtures.rs",
       "function": "bfloat16_astro_decoder_state_cache_layer_dtypes",
-      "line": 52,
+      "line": 54,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "model-serving"
-    },
-    {
-      "file": "crates/model-serving/tests/integration/artifacts/frozen_ornith_1_0_fixtures.rs",
-      "function": "expected_layer_types",
-      "line": 220,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "model-serving"
-    },
-    {
-      "file": "crates/model-serving/tests/integration/artifacts/frozen_ornith_1_0_fixtures.rs",
-      "function": "expected_quantized_module_names",
-      "line": 182,
-      "cyclomatic": 6.0,
-      "coverage": null,
-      "crap": 42.0,
       "crate": "model-serving"
     },
     {
       "file": "crates/model-serving/tests/integration/artifacts/frozen_ornith_1_0_fixtures.rs",
       "function": "frozen_ornith_1_0_config",
-      "line": 15,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "model-serving"
-    },
-    {
-      "file": "crates/model-serving/tests/integration/artifacts/frozen_ornith_1_0_fixtures.rs",
-      "function": "frozen_ornith_1_0_optiq_config_bytes",
-      "line": 93,
-      "cyclomatic": 3.0,
-      "coverage": null,
-      "crap": 12.0,
-      "crate": "model-serving"
-    },
-    {
-      "file": "crates/model-serving/tests/integration/artifacts/frozen_ornith_1_0_fixtures.rs",
-      "function": "frozen_ornith_1_0_optiq_vision_config_bytes",
-      "line": 158,
+      "line": 17,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -72608,7 +72653,7 @@
     {
       "file": "crates/model-serving/tests/integration/artifacts/frozen_ornith_1_0_fixtures.rs",
       "function": "frozen_ornith_1_0_vision_config",
-      "line": 20,
+      "line": 22,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -72617,7 +72662,7 @@
     {
       "file": "crates/model-serving/tests/integration/artifacts/frozen_ornith_1_0_fixtures.rs",
       "function": "persistent_visual_embedding_model_contract",
-      "line": 81,
+      "line": 83,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -84559,38 +84604,11 @@
     },
     {
       "file": "crates/qwen35/src/astro_ssd_prompt_cache/prefix_lookup/tests/lookup_fixtures.rs",
-      "function": "expected_layer_types",
-      "line": 177,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "qwen35"
-    },
-    {
-      "file": "crates/qwen35/src/astro_ssd_prompt_cache/prefix_lookup/tests/lookup_fixtures.rs",
-      "function": "expected_quantized_module_names",
-      "line": 139,
-      "cyclomatic": 6.0,
-      "coverage": null,
-      "crap": 42.0,
-      "crate": "qwen35"
-    },
-    {
-      "file": "crates/qwen35/src/astro_ssd_prompt_cache/prefix_lookup/tests/lookup_fixtures.rs",
       "function": "frozen_ornith_1_0_config",
       "line": 13,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "qwen35"
-    },
-    {
-      "file": "crates/qwen35/src/astro_ssd_prompt_cache/prefix_lookup/tests/lookup_fixtures.rs",
-      "function": "frozen_ornith_1_0_optiq_config_bytes",
-      "line": 74,
-      "cyclomatic": 3.0,
-      "coverage": null,
-      "crap": 12.0,
       "crate": "qwen35"
     },
     {
@@ -91408,26 +91426,8 @@
     },
     {
       "file": "crates/qwen35/src/qwen3_5_core/frozen_config_test_support.rs",
-      "function": "expected_layer_types",
-      "line": 454,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "qwen35"
-    },
-    {
-      "file": "crates/qwen35/src/qwen3_5_core/frozen_config_test_support.rs",
-      "function": "expected_quantized_module_names",
-      "line": 416,
-      "cyclomatic": 6.0,
-      "coverage": null,
-      "crap": 42.0,
-      "crate": "qwen35"
-    },
-    {
-      "file": "crates/qwen35/src/qwen3_5_core/frozen_config_test_support.rs",
       "function": "expected_qwen3_5_language_tensor_profiles",
-      "line": 346,
+      "line": 69,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -91436,61 +91436,25 @@
     {
       "file": "crates/qwen35/src/qwen3_5_core/frozen_config_test_support.rs",
       "function": "frozen_dense_qwen3_6_config",
-      "line": 325,
+      "line": 48,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "qwen35"
-    },
-    {
-      "file": "crates/qwen35/src/qwen3_5_core/frozen_config_test_support.rs",
-      "function": "frozen_optiq_metadata_bytes",
-      "line": 149,
-      "cyclomatic": 2.0,
-      "coverage": null,
-      "crap": 6.0,
       "crate": "qwen35"
     },
     {
       "file": "crates/qwen35/src/qwen3_5_core/frozen_config_test_support.rs",
       "function": "frozen_ornith_1_0_config",
-      "line": 17,
+      "line": 23,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "qwen35"
-    },
-    {
-      "file": "crates/qwen35/src/qwen3_5_core/frozen_config_test_support.rs",
-      "function": "frozen_ornith_1_0_config_bytes",
-      "line": 22,
-      "cyclomatic": 3.0,
-      "coverage": null,
-      "crap": 12.0,
       "crate": "qwen35"
     },
     {
       "file": "crates/qwen35/src/qwen3_5_core/frozen_config_test_support.rs",
       "function": "frozen_ornith_1_0_image_processor",
-      "line": 310,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "qwen35"
-    },
-    {
-      "file": "crates/qwen35/src/qwen3_5_core/frozen_config_test_support.rs",
-      "function": "frozen_ornith_1_0_optiq_config_bytes",
-      "line": 84,
-      "cyclomatic": 3.0,
-      "coverage": null,
-      "crap": 12.0,
-      "crate": "qwen35"
-    },
-    {
-      "file": "crates/qwen35/src/qwen3_5_core/frozen_config_test_support.rs",
-      "function": "frozen_ornith_1_0_optiq_vision_config_bytes",
-      "line": 286,
+      "line": 33,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -91499,7 +91463,7 @@
     {
       "file": "crates/qwen35/src/qwen3_5_core/frozen_config_test_support.rs",
       "function": "frozen_ornith_1_0_vision_config",
-      "line": 281,
+      "line": 28,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -91507,17 +91471,8 @@
     },
     {
       "file": "crates/qwen35/src/qwen3_5_core/frozen_config_test_support.rs",
-      "function": "frozen_sparse_mixed_precision_config_bytes",
-      "line": 184,
-      "cyclomatic": 9.0,
-      "coverage": null,
-      "crap": 90.0,
-      "crate": "qwen35"
-    },
-    {
-      "file": "crates/qwen35/src/qwen3_5_core/frozen_config_test_support.rs",
       "function": "persistent_visual_embedding_model_contract",
-      "line": 314,
+      "line": 37,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -116770,80 +116725,8 @@
     },
     {
       "file": "crates/speech/src/speech_models/kokoro/engine.rs",
-      "function": "KokoroSpeechEngine::advance_speech",
-      "line": 150,
-      "cyclomatic": 2.0,
-      "coverage": null,
-      "crap": 6.0,
-      "crate": "speech"
-    },
-    {
-      "file": "crates/speech/src/speech_models/kokoro/engine.rs",
-      "function": "KokoroSpeechEngine::cancel_speech",
-      "line": 165,
-      "cyclomatic": 2.0,
-      "coverage": null,
-      "crap": 6.0,
-      "crate": "speech"
-    },
-    {
-      "file": "crates/speech/src/speech_models/kokoro/engine.rs",
-      "function": "KokoroSpeechEngine::collect_mlx_memory_telemetry",
-      "line": 181,
-      "cyclomatic": 2.0,
-      "coverage": null,
-      "crap": 6.0,
-      "crate": "speech"
-    },
-    {
-      "file": "crates/speech/src/speech_models/kokoro/engine.rs",
-      "function": "KokoroSpeechEngine::load",
-      "line": 105,
-      "cyclomatic": 4.0,
-      "coverage": null,
-      "crap": 20.0,
-      "crate": "speech"
-    },
-    {
-      "file": "crates/speech/src/speech_models/kokoro/engine.rs",
-      "function": "KokoroSpeechEngine::loaded_mut",
-      "line": 97,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "speech"
-    },
-    {
-      "file": "crates/speech/src/speech_models/kokoro/engine.rs",
-      "function": "KokoroSpeechEngine::new",
-      "line": 50,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "speech"
-    },
-    {
-      "file": "crates/speech/src/speech_models/kokoro/engine.rs",
-      "function": "KokoroSpeechEngine::start_speech",
-      "line": 128,
-      "cyclomatic": 5.0,
-      "coverage": null,
-      "crap": 30.0,
-      "crate": "speech"
-    },
-    {
-      "file": "crates/speech/src/speech_models/kokoro/engine.rs",
-      "function": "KokoroSpeechEngine::take_post_cleanup_memory_telemetry",
-      "line": 174,
-      "cyclomatic": 2.0,
-      "coverage": null,
-      "crap": 6.0,
-      "crate": "speech"
-    },
-    {
-      "file": "crates/speech/src/speech_models/kokoro/engine.rs",
       "function": "KokoroSpeechEngine::trace_phonemes",
-      "line": 72,
+      "line": 85,
       "cyclomatic": 4.0,
       "coverage": null,
       "crap": 20.0,
@@ -116851,8 +116734,26 @@
     },
     {
       "file": "crates/speech/src/speech_models/kokoro/engine.rs",
-      "function": "LoadedKokoro::ensure_voice_loaded",
-      "line": 188,
+      "function": "KokoroSpeechFamily::load_family",
+      "line": 48,
+      "cyclomatic": 2.0,
+      "coverage": null,
+      "crap": 6.0,
+      "crate": "speech"
+    },
+    {
+      "file": "crates/speech/src/speech_models/kokoro/engine.rs",
+      "function": "KokoroSpeechFamily::plan_speech",
+      "line": 64,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "speech"
+    },
+    {
+      "file": "crates/speech/src/speech_models/kokoro/engine.rs",
+      "function": "LoadedSpeech::ensure_voice_loaded",
+      "line": 111,
       "cyclomatic": 4.0,
       "coverage": null,
       "crap": 20.0,
@@ -116860,8 +116761,8 @@
     },
     {
       "file": "crates/speech/src/speech_models/kokoro/engine.rs",
-      "function": "LoadedKokoro::speak_segment",
-      "line": 202,
+      "function": "LoadedSpeech::speak_segment",
+      "line": 127,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
@@ -118012,8 +117913,8 @@
     },
     {
       "file": "crates/speech/src/speech_models/phonon/engine.rs",
-      "function": "LoadedPhonon::speak_segment",
-      "line": 176,
+      "function": "LoadedSpeech::speak_segment",
+      "line": 111,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
@@ -118021,8 +117922,8 @@
     },
     {
       "file": "crates/speech/src/speech_models/phonon/engine.rs",
-      "function": "LoadedPhonon::voice_history",
-      "line": 161,
+      "function": "LoadedSpeech::voice_history",
+      "line": 88,
       "cyclomatic": 6.0,
       "coverage": null,
       "crap": 42.0,
@@ -118030,8 +117931,8 @@
     },
     {
       "file": "crates/speech/src/speech_models/phonon/engine.rs",
-      "function": "PhononSpeechEngine::advance_speech",
-      "line": 122,
+      "function": "PhononSpeechFamily::load_family",
+      "line": 48,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
@@ -118039,65 +117940,11 @@
     },
     {
       "file": "crates/speech/src/speech_models/phonon/engine.rs",
-      "function": "PhononSpeechEngine::cancel_speech",
-      "line": 137,
-      "cyclomatic": 2.0,
+      "function": "PhononSpeechFamily::plan_speech",
+      "line": 64,
+      "cyclomatic": 3.0,
       "coverage": null,
-      "crap": 6.0,
-      "crate": "speech"
-    },
-    {
-      "file": "crates/speech/src/speech_models/phonon/engine.rs",
-      "function": "PhononSpeechEngine::collect_mlx_memory_telemetry",
-      "line": 153,
-      "cyclomatic": 2.0,
-      "coverage": null,
-      "crap": 6.0,
-      "crate": "speech"
-    },
-    {
-      "file": "crates/speech/src/speech_models/phonon/engine.rs",
-      "function": "PhononSpeechEngine::load",
-      "line": 76,
-      "cyclomatic": 4.0,
-      "coverage": null,
-      "crap": 20.0,
-      "crate": "speech"
-    },
-    {
-      "file": "crates/speech/src/speech_models/phonon/engine.rs",
-      "function": "PhononSpeechEngine::loaded_mut",
-      "line": 68,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "speech"
-    },
-    {
-      "file": "crates/speech/src/speech_models/phonon/engine.rs",
-      "function": "PhononSpeechEngine::new",
-      "line": 50,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "speech"
-    },
-    {
-      "file": "crates/speech/src/speech_models/phonon/engine.rs",
-      "function": "PhononSpeechEngine::start_speech",
-      "line": 98,
-      "cyclomatic": 7.0,
-      "coverage": null,
-      "crap": 56.0,
-      "crate": "speech"
-    },
-    {
-      "file": "crates/speech/src/speech_models/phonon/engine.rs",
-      "function": "PhononSpeechEngine::take_post_cleanup_memory_telemetry",
-      "line": 146,
-      "cyclomatic": 2.0,
-      "coverage": null,
-      "crap": 6.0,
+      "crap": 12.0,
       "crate": "speech"
     },
     {
@@ -118569,6 +118416,141 @@
       "crate": "speech"
     },
     {
+      "file": "crates/speech/src/speech_models/speech_engine_shell.rs",
+      "function": "LoadedSpeech::clean_up_after_request",
+      "line": 78,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "speech"
+    },
+    {
+      "file": "crates/speech/src/speech_models/speech_engine_shell.rs",
+      "function": "SpeechEngineShell::advance_speech",
+      "line": 167,
+      "cyclomatic": 2.0,
+      "coverage": null,
+      "crap": 6.0,
+      "crate": "speech"
+    },
+    {
+      "file": "crates/speech/src/speech_models/speech_engine_shell.rs",
+      "function": "SpeechEngineShell::cancel_speech",
+      "line": 178,
+      "cyclomatic": 2.0,
+      "coverage": null,
+      "crap": 6.0,
+      "crate": "speech"
+    },
+    {
+      "file": "crates/speech/src/speech_models/speech_engine_shell.rs",
+      "function": "SpeechEngineShell::collect_mlx_memory_telemetry",
+      "line": 192,
+      "cyclomatic": 2.0,
+      "coverage": null,
+      "crap": 6.0,
+      "crate": "speech"
+    },
+    {
+      "file": "crates/speech/src/speech_models/speech_engine_shell.rs",
+      "function": "SpeechEngineShell::load",
+      "line": 126,
+      "cyclomatic": 4.0,
+      "coverage": null,
+      "crap": 20.0,
+      "crate": "speech"
+    },
+    {
+      "file": "crates/speech/src/speech_models/speech_engine_shell.rs",
+      "function": "SpeechEngineShell::loaded_mut",
+      "line": 108,
+      "cyclomatic": 3.0,
+      "coverage": null,
+      "crap": 12.0,
+      "crate": "speech"
+    },
+    {
+      "file": "crates/speech/src/speech_models/speech_engine_shell.rs",
+      "function": "SpeechEngineShell::new",
+      "line": 90,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "speech"
+    },
+    {
+      "file": "crates/speech/src/speech_models/speech_engine_shell.rs",
+      "function": "SpeechEngineShell::start_speech",
+      "line": 149,
+      "cyclomatic": 6.0,
+      "coverage": null,
+      "crap": 42.0,
+      "crate": "speech"
+    },
+    {
+      "file": "crates/speech/src/speech_models/speech_engine_shell.rs",
+      "function": "SpeechEngineShell::take_post_cleanup_memory_telemetry",
+      "line": 185,
+      "cyclomatic": 2.0,
+      "coverage": null,
+      "crap": 6.0,
+      "crate": "speech"
+    },
+    {
+      "file": "crates/speech/src/speech_models/speech_engine_shell.rs",
+      "function": "not_loaded_failure",
+      "line": 117,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "speech"
+    },
+    {
+      "file": "crates/speech/src/speech_models/speech_engine_shell_tests.rs",
+      "function": "LoadedSpeech::speak_segment",
+      "line": 46,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "speech"
+    },
+    {
+      "file": "crates/speech/src/speech_models/speech_engine_shell_tests.rs",
+      "function": "UnloadableFamily::load_family",
+      "line": 26,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "speech"
+    },
+    {
+      "file": "crates/speech/src/speech_models/speech_engine_shell_tests.rs",
+      "function": "UnloadableFamily::plan_speech",
+      "line": 33,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "speech"
+    },
+    {
+      "file": "crates/speech/src/speech_models/speech_engine_shell_tests.rs",
+      "function": "speech_request",
+      "line": 63,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "speech"
+    },
+    {
+      "file": "crates/speech/src/speech_models/speech_engine_shell_tests.rs",
+      "function": "unloaded_engine",
+      "line": 59,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "speech"
+    },
+    {
       "file": "crates/speech/src/speech_models/speech_memory.rs",
       "function": "SpeechMemoryAccount::clean_up_after_request",
       "line": 41,
@@ -118977,6 +118959,150 @@
       "file": "crates/test-harness/src/fixtures/e2e_test_model_names.rs",
       "function": "streamed_dense_model_id",
       "line": 114,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "test-harness"
+    },
+    {
+      "file": "crates/test-harness/src/fixtures/frozen_ornith_1_0_fixture.rs",
+      "function": "expected_layer_types",
+      "line": 331,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "test-harness"
+    },
+    {
+      "file": "crates/test-harness/src/fixtures/frozen_ornith_1_0_fixture.rs",
+      "function": "expected_quantized_module_names",
+      "line": 293,
+      "cyclomatic": 6.0,
+      "coverage": null,
+      "crap": 42.0,
+      "crate": "test-harness"
+    },
+    {
+      "file": "crates/test-harness/src/fixtures/frozen_ornith_1_0_fixture.rs",
+      "function": "frozen_optiq_metadata_bytes",
+      "line": 137,
+      "cyclomatic": 2.0,
+      "coverage": null,
+      "crap": 6.0,
+      "crate": "test-harness"
+    },
+    {
+      "file": "crates/test-harness/src/fixtures/frozen_ornith_1_0_fixture.rs",
+      "function": "frozen_ornith_1_0_config_bytes",
+      "line": 10,
+      "cyclomatic": 3.0,
+      "coverage": null,
+      "crap": 12.0,
+      "crate": "test-harness"
+    },
+    {
+      "file": "crates/test-harness/src/fixtures/frozen_ornith_1_0_fixture.rs",
+      "function": "frozen_ornith_1_0_optiq_config_bytes",
+      "line": 72,
+      "cyclomatic": 3.0,
+      "coverage": null,
+      "crap": 12.0,
+      "crate": "test-harness"
+    },
+    {
+      "file": "crates/test-harness/src/fixtures/frozen_ornith_1_0_fixture.rs",
+      "function": "frozen_ornith_1_0_optiq_vision_config_bytes",
+      "line": 269,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "test-harness"
+    },
+    {
+      "file": "crates/test-harness/src/fixtures/frozen_ornith_1_0_fixture.rs",
+      "function": "frozen_sparse_mixed_precision_config_bytes",
+      "line": 172,
+      "cyclomatic": 9.0,
+      "coverage": null,
+      "crap": 90.0,
+      "crate": "test-harness"
+    },
+    {
+      "file": "crates/test-harness/src/fixtures/image_pipeline_fixture.rs",
+      "function": "qwen_image_21_pipeline_index",
+      "line": 80,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "test-harness"
+    },
+    {
+      "file": "crates/test-harness/src/fixtures/image_pipeline_fixture.rs",
+      "function": "qwen_image_21_scheduler_config",
+      "line": 169,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "test-harness"
+    },
+    {
+      "file": "crates/test-harness/src/fixtures/image_pipeline_fixture.rs",
+      "function": "qwen_image_21_text_encoder_config",
+      "line": 111,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "test-harness"
+    },
+    {
+      "file": "crates/test-harness/src/fixtures/image_pipeline_fixture.rs",
+      "function": "qwen_image_21_transformer_config",
+      "line": 92,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "test-harness"
+    },
+    {
+      "file": "crates/test-harness/src/fixtures/image_pipeline_fixture.rs",
+      "function": "qwen_image_21_vae_config",
+      "line": 145,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "test-harness"
+    },
+    {
+      "file": "crates/test-harness/src/fixtures/image_pipeline_fixture.rs",
+      "function": "write_component_weights",
+      "line": 189,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "test-harness"
+    },
+    {
+      "file": "crates/test-harness/src/fixtures/image_pipeline_fixture.rs",
+      "function": "write_flux2_klein_pipeline_configs",
+      "line": 14,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "test-harness"
+    },
+    {
+      "file": "crates/test-harness/src/fixtures/image_pipeline_fixture.rs",
+      "function": "write_json",
+      "line": 211,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "test-harness"
+    },
+    {
+      "file": "crates/test-harness/src/fixtures/image_pipeline_fixture.rs",
+      "function": "write_safetensors_payload",
+      "line": 203,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -126824,7 +126950,7 @@
     {
       "file": "verification/acceptance/tests/gpu_contracts/common/qwen3_5_moe.rs",
       "function": "astro_decoder_state_cache_layer_dtypes",
-      "line": 71,
+      "line": 82,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -126833,7 +126959,7 @@
     {
       "file": "verification/acceptance/tests/gpu_contracts/common/qwen3_5_moe.rs",
       "function": "astro_ssd_prompt_cache_model_contract",
-      "line": 26,
+      "line": 37,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -126842,34 +126968,16 @@
     {
       "file": "verification/acceptance/tests/gpu_contracts/common/qwen3_5_moe.rs",
       "function": "bfloat16_astro_decoder_state_cache_layer_dtypes",
-      "line": 53,
+      "line": 64,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-acceptance"
-    },
-    {
-      "file": "verification/acceptance/tests/gpu_contracts/common/qwen3_5_moe.rs",
-      "function": "expected_layer_types",
-      "line": 328,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-acceptance"
-    },
-    {
-      "file": "verification/acceptance/tests/gpu_contracts/common/qwen3_5_moe.rs",
-      "function": "expected_quantized_module_names",
-      "line": 290,
-      "cyclomatic": 6.0,
-      "coverage": null,
-      "crap": 42.0,
       "crate": "astronomical-acceptance"
     },
     {
       "file": "verification/acceptance/tests/gpu_contracts/common/qwen3_5_moe.rs",
       "function": "expected_qwen3_5_language_tensor_profiles",
-      "line": 103,
+      "line": 114,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -126878,61 +126986,25 @@
     {
       "file": "verification/acceptance/tests/gpu_contracts/common/qwen3_5_moe.rs",
       "function": "float32_astro_decoder_state_cache_layer_dtypes",
-      "line": 62,
+      "line": 73,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-acceptance"
-    },
-    {
-      "file": "verification/acceptance/tests/gpu_contracts/common/qwen3_5_moe.rs",
-      "function": "frozen_optiq_metadata_bytes",
-      "line": 259,
-      "cyclomatic": 2.0,
-      "coverage": null,
-      "crap": 6.0,
       "crate": "astronomical-acceptance"
     },
     {
       "file": "verification/acceptance/tests/gpu_contracts/common/qwen3_5_moe.rs",
       "function": "frozen_ornith_1_0_config",
-      "line": 12,
+      "line": 23,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-acceptance"
-    },
-    {
-      "file": "verification/acceptance/tests/gpu_contracts/common/qwen3_5_moe.rs",
-      "function": "frozen_ornith_1_0_config_bytes",
-      "line": 108,
-      "cyclomatic": 3.0,
-      "coverage": null,
-      "crap": 12.0,
       "crate": "astronomical-acceptance"
     },
     {
       "file": "verification/acceptance/tests/gpu_contracts/common/qwen3_5_moe.rs",
       "function": "frozen_ornith_1_0_image_processor",
-      "line": 22,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-acceptance"
-    },
-    {
-      "file": "verification/acceptance/tests/gpu_contracts/common/qwen3_5_moe.rs",
-      "function": "frozen_ornith_1_0_optiq_config_bytes",
-      "line": 170,
-      "cyclomatic": 3.0,
-      "coverage": null,
-      "crap": 12.0,
-      "crate": "astronomical-acceptance"
-    },
-    {
-      "file": "verification/acceptance/tests/gpu_contracts/common/qwen3_5_moe.rs",
-      "function": "frozen_ornith_1_0_optiq_vision_config_bytes",
-      "line": 235,
+      "line": 33,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -126941,7 +127013,7 @@
     {
       "file": "verification/acceptance/tests/gpu_contracts/common/qwen3_5_moe.rs",
       "function": "frozen_ornith_1_0_vision_config",
-      "line": 17,
+      "line": 28,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -126949,17 +127021,8 @@
     },
     {
       "file": "verification/acceptance/tests/gpu_contracts/common/qwen3_5_moe.rs",
-      "function": "frozen_sparse_mixed_precision_config_bytes",
-      "line": 344,
-      "cyclomatic": 9.0,
-      "coverage": null,
-      "crap": 90.0,
-      "crate": "astronomical-acceptance"
-    },
-    {
-      "file": "verification/acceptance/tests/gpu_contracts/common/qwen3_5_moe.rs",
       "function": "persistent_visual_embedding_model_contract",
-      "line": 91,
+      "line": 102,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
