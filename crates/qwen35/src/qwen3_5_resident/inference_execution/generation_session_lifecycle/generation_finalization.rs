@@ -11,6 +11,7 @@ use crate::astro_ssd_prompt_cache::block_causal_input::AstroSsdPromptCacheBlockC
 use crate::memory::telemetry::MlxActiveMemoryBreakdown;
 use crate::qwen3_5_core::decoder::RequestDecoderStateStack;
 use crate::qwen3_5_core::model::memory_breakdown::Qwen3_5MemoryOwnership;
+use crate::qwen3_5_core::shared_execution::generation_finalization_steps;
 use crate::{
     AstroSsdPromptCacheBlockKey, GenerationFinalization, GenerationPerformanceAttributionMetadata,
     InferenceEngineError, PerformanceAttribution, PerformanceAttributionOutcome,
@@ -22,9 +23,7 @@ use super::engine_request::Qwen3_5EngineRequest;
 use super::retained_live_prefix::RetainedLiveDecoderPrefix;
 use crate::qwen3_5_core::shared_execution::request_memory_release::release_request_memory;
 
-impl crate::qwen3_5_core::shared_execution::generation_finalization_steps::Qwen3_5FinalizationHooks
-    for Qwen3_5EngineState
-{
+impl generation_finalization_steps::Qwen3_5FinalizationHooks for Qwen3_5EngineState {
     fn retained_live_context_state_payload_bytes(&self) -> u64 {
         Qwen3_5EngineState::live_retained_context_state_payload_bytes(self)
     }
@@ -100,9 +99,9 @@ impl Qwen3_5EngineState {
                     .and_then(|snapshot| u64::try_from(snapshot.peak_memory_bytes()).ok()),
             )
             .with_drafting_statistics(drafting_statistics);
-        crate::qwen3_5_core::shared_execution::generation_finalization_steps::record_generation_performance_attribution(
+        generation_finalization_steps::record_generation_performance_attribution(
             self,
-            crate::qwen3_5_core::shared_execution::generation_finalization_steps::GenerationAttributionRecord {
+            generation_finalization_steps::GenerationAttributionRecord {
                 performance_attribution,
                 outcome,
                 request_id,

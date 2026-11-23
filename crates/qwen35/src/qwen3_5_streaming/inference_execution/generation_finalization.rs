@@ -6,6 +6,7 @@
 
 use super::NO_RETAINED_LIVE_PREFIX_BYTES;
 use crate::qwen3_5_core::model::memory_breakdown::Qwen3_5MemoryOwnership;
+use crate::qwen3_5_core::shared_execution::generation_finalization_steps;
 use crate::{
     GenerationFinalization, MlxMemoryTelemetry, PerformanceAttribution,
     PerformanceAttributionOutcome, PerformanceOperation,
@@ -15,9 +16,7 @@ use super::Qwen3_5EngineState;
 use super::engine_request::Qwen3_5EngineRequest;
 use crate::qwen3_5_core::shared_execution::request_memory_release::release_request_memory;
 
-impl crate::qwen3_5_core::shared_execution::generation_finalization_steps::Qwen3_5FinalizationHooks
-    for Qwen3_5EngineState
-{
+impl generation_finalization_steps::Qwen3_5FinalizationHooks for Qwen3_5EngineState {
     fn measured_prompt_mlx_working_buffer_bytes(&self) -> Option<u64> {
         self.core.model.as_ref().and_then(
             crate::qwen3_5_streaming::model::Qwen3_5Model::measured_prompt_mlx_working_buffer_bytes,
@@ -134,9 +133,9 @@ impl Qwen3_5EngineState {
         );
         let generation_finalization =
             generation_finalization.with_reply_memory_record(reply_memory_record);
-        crate::qwen3_5_core::shared_execution::generation_finalization_steps::record_generation_performance_attribution(
+        generation_finalization_steps::record_generation_performance_attribution(
             self,
-            crate::qwen3_5_core::shared_execution::generation_finalization_steps::GenerationAttributionRecord {
+            generation_finalization_steps::GenerationAttributionRecord {
                 performance_attribution,
                 outcome,
                 request_id,
