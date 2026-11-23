@@ -12,46 +12,55 @@ use std::path::Path;
 
 use config::DiscoveredModel;
 
-/// The discovered copy of `huggingface_id`, preferring the catalog's exact
-/// revision, then any copy whose provenance names the repository, then a copy
-/// without provenance whose `<publisher>/<model>` folder spells it.
+/// The discovered copy of a catalog entry known by `catalog_entry_names` (its
+/// current Hugging Face name first, then any names it had before a rename),
+/// preferring the catalog's exact revision, then any copy whose provenance
+/// names the repository, then a copy without provenance whose
+/// `<publisher>/<model>` folder spells one of its names.
 pub(crate) fn find_discovered_copy<'a>(
-    huggingface_id: &str,
+    catalog_entry_names: &[&str],
     catalog_revision: &str,
     discovered_models: &'a [DiscoveredModel],
 ) -> Option<&'a DiscoveredModel> {
-    find_exact_copy(huggingface_id, catalog_revision, discovered_models).or_else(|| {
+    find_exact_copy(catalog_entry_names, catalog_revision, discovered_models).or_else(|| {
         discovered_models
             .iter()
-            .find(|discovered_model| is_copy_of_repository(discovered_model, huggingface_id))
+            .find(|discovered_model| is_copy_of_repository(discovered_model, catalog_entry_names))
     })
 }
 
-/// The copy whose provenance names `huggingface_id` at the catalog's
-/// revision: the only copy the download coordinator treats as installed,
-/// because a folder without provenance at the download destination may be a
-/// publication that was interrupted and still needs its manifest check.
+/// The copy whose provenance names one of `catalog_entry_names` at the
+/// catalog's revision: the only copy the download coordinator treats as
+/// installed, because a folder without provenance at the download destination
+/// may be a publication that was interrupted and still needs its manifest
+/// check. Hugging Face keeps a repository's commits when it is renamed, so a
+/// copy downloaded under a former name at this revision holds the same files.
 pub(crate) fn find_exact_copy<'a>(
-    huggingface_id: &str,
+    catalog_entry_names: &[&str],
     catalog_revision: &str,
     discovered_models: &'a [DiscoveredModel],
 ) -> Option<&'a DiscoveredModel> {
     discovered_models.iter().find(|discovered_model| {
-        discovered_model.provider_model_id.as_deref() == Some(huggingface_id)
+        discovered_model
+            .provider_model_id
+            .as_deref()
+            .is_some_and(|provider_model_id| catalog_entry_names.contains(&provider_model_id))
             && discovered_model.revision == catalog_revision
     })
 }
 
-/// Whether `discovered_model` is a copy of `huggingface_id` at any revision.
+/// Whether `discovered_model` is a copy of the entry at any revision.
 /// Provenance, when present, is the only evidence: a copy that names another
 /// repository is another model even if its folder looks the same.
-fn is_copy_of_repository(discovered_model: &DiscoveredModel, huggingface_id: &str) -> bool {
+fn is_copy_of_repository(discovered_model: &DiscoveredModel, catalog_entry_names: &[&str]) -> bool {
     match discovered_model.provider_model_id.as_deref() {
-        Some(provider_model_id) => provider_model_id == huggingface_id,
+        Some(provider_model_id) => catalog_entry_names.contains(&provider_model_id),
         None => {
-            folder_repository_identity(&discovered_model.model_directory).as_deref()
-                == Some(huggingface_id)
-                && config::leaf_model_id(huggingface_id) == discovered_model.model_id
+            let folder_identity = folder_repository_identity(&discovered_model.model_directory);
+            catalog_entry_names.iter().any(|huggingface_id| {
+                folder_identity.as_deref() == Some(*huggingface_id)
+                    && config::leaf_model_id(huggingface_id) == discovered_model.model_id
+            })
         }
     }
 }

@@ -13,6 +13,8 @@ pub use crate::catalog_classification::{DownloadCatalogFamily, DownloadCatalogRo
 use crate::catalog_presentation::{CatalogEntryPresentation, parse_entry_presentation};
 use crate::catalog_speed::validate_measured_speed;
 pub use crate::catalog_speed::{DownloadCatalogMeasuredSpeed, DownloadCatalogTaskSpeeds};
+use crate::entry_identity::{SeenEntryIdentities, claim_former_identities};
+pub use crate::entry_identity::{is_valid_huggingface_id, is_valid_immutable_revision};
 use crate::path_selection::DownloadPathSelection;
 
 // Version 5 removes every name but the model ID: the display name, short name
@@ -22,8 +24,11 @@ use crate::path_selection::DownloadPathSelection;
 // Version 5 later gained two optional additions without a version bump: the
 // build_of and build_difference pair, which links a build to its lead without
 // giving it a second name, and measured_speed, the tokens per second a release
-// measured. The catalog is bundled with the binary that reads it, so no reader
-// meets a field it does not know.
+// measured. It later also gained former_huggingface_ids, the names a
+// repository had before a rename on Hugging Face, so a copy downloaded under
+// an old name stays this entry's copy instead of showing as a second model.
+// The catalog is bundled with the binary that reads it, so no reader meets a
+// field it does not know.
 // Version 4 added the summary; version 3 the memory footprint, streaming floor,
 // role, Get started pick, and the experimental flag; its retiring flag was
 // removed because a supported model stays in the catalog, and a catalog that
@@ -33,11 +38,9 @@ use crate::path_selection::DownloadPathSelection;
 const DOWNLOAD_CATALOG_SCHEMA_VERSION: u32 = 5;
 const MAXIMUM_DOWNLOAD_CATALOG_BYTES: usize = 1_000_000;
 const MAXIMUM_DOWNLOAD_CATALOG_ENTRY_COUNT: usize = 1_024;
-const MAXIMUM_HUGGING_FACE_COMPONENT_LENGTH: usize = 96;
 const MAXIMUM_DESCRIPTION_BYTES: usize = 512;
 const MAXIMUM_QUANTIZATION_LABEL_BYTES: usize = 64;
 const MAXIMUM_UPSTREAM_LICENSE_BYTES: usize = 128;
-const GIT_COMMIT_SHA_HEX_CHARACTER_COUNT: usize = 40;
 const MAXIMUM_JAVASCRIPT_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
 const BUNDLED_DOWNLOAD_CATALOG_JSON: &str = include_str!("../../../registry/download_catalog.json");
 
@@ -52,6 +55,7 @@ pub struct DownloadCatalog {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DownloadCatalogEntry {
     huggingface_id: String,
+    former_huggingface_ids: Vec<String>,
     revision: String,
     family: DownloadCatalogFamily,
     approximate_size_bytes: u64,
@@ -83,6 +87,8 @@ pub enum DownloadCatalogError {
     TooManyEntries,
     #[error("download catalog entry {entry_index} has an invalid Hugging Face identity")]
     InvalidHuggingFaceId { entry_index: usize },
+    #[error("download catalog entry {entry_index} has an invalid former Hugging Face identity")]
+    InvalidFormerHuggingFaceId { entry_index: usize },
     #[error("download catalog entry {entry_index} has an invalid immutable revision")]
     InvalidRevision { entry_index: usize },
     #[error("download catalog entry {entry_index} has an invalid description")]
@@ -152,6 +158,9 @@ struct DownloadCatalogDocument {
 #[serde(deny_unknown_fields)]
 struct DownloadCatalogEntryDocument {
     huggingface_id: String,
+    /// Names the repository had before it was renamed on Hugging Face.
+    #[serde(default)]
+    former_huggingface_ids: Vec<String>,
     revision: String,
     family: DownloadCatalogFamily,
     approximate_size_bytes: u64,
@@ -323,6 +332,7 @@ fn parse_catalog_entry(
     )?;
     Ok(DownloadCatalogEntry {
         huggingface_id: entry_document.huggingface_id,
+        former_huggingface_ids: entry_document.former_huggingface_ids,
         revision: entry_document.revision,
         family: entry_document.family,
         approximate_size_bytes: entry_document.approximate_size_bytes,
@@ -386,7 +396,8 @@ fn validate_entry_document(
 
 /// Guards the entry identity: a Hub-safe repository id, first-seen
 /// case-insensitively across the whole catalog, a model ID no earlier entry
-/// uses, plus an immutable full-length commit revision instead of a moving ref.
+/// uses, an immutable full-length commit revision instead of a moving ref,
+/// then any former names, held to the same uniqueness as current ones.
 /// The model ID is the only name people see, so two organizations publishing
 /// the same repository name would show two models no one could tell apart.
 fn validate_entry_identity(
@@ -401,7 +412,11 @@ fn validate_entry_identity(
     if !is_valid_immutable_revision(&entry_document.revision) {
         return Err(DownloadCatalogError::InvalidRevision { entry_index });
     }
-    Ok(())
+    claim_former_identities(
+        &entry_document.former_huggingface_ids,
+        entry_index,
+        seen_identities,
+    )
 }
 
 /// Guards the JavaScript-safe size claim and the public-visibility release
@@ -531,6 +546,15 @@ impl DownloadCatalogEntry {
         &self.huggingface_id
     }
 
+    /// Every name the repository has had on Hugging Face, the current one
+    /// first. A copy downloaded before a rename keeps the old name in its
+    /// provenance and folder, and Hugging Face moves a repository with its
+    /// commits, so that copy is still this entry at this revision.
+    pub fn huggingface_ids(&self) -> impl Iterator<Item = &str> {
+        std::iter::once(self.huggingface_id.as_str())
+            .chain(self.former_huggingface_ids.iter().map(String::as_str))
+    }
+
     #[must_use]
     pub fn revision(&self) -> &str {
         &self.revision
@@ -626,69 +650,6 @@ impl DownloadCatalogEntry {
     pub const fn download_path_selection(&self) -> &DownloadPathSelection {
         &self.download_path_selection
     }
-}
-
-/// The identities every entry read so far has claimed, compared ignoring case.
-#[derive(Default)]
-struct SeenEntryIdentities {
-    huggingface_ids: BTreeSet<String>,
-    model_ids: BTreeSet<String>,
-}
-
-impl SeenEntryIdentities {
-    /// Claims one entry's Hugging Face identity and model ID. A repeated
-    /// identity is reported first, because it also repeats the model ID.
-    fn claim(
-        &mut self,
-        huggingface_id: &str,
-        entry_index: usize,
-    ) -> Result<(), DownloadCatalogError> {
-        if !self
-            .huggingface_ids
-            .insert(huggingface_id.to_ascii_lowercase())
-        {
-            return Err(DownloadCatalogError::DuplicateHuggingFaceId);
-        }
-        let model_id = config::leaf_model_id(huggingface_id);
-        if !self.model_ids.insert(model_id.to_ascii_lowercase()) {
-            return Err(DownloadCatalogError::DuplicateModelId { entry_index });
-        }
-        Ok(())
-    }
-}
-
-pub fn is_valid_huggingface_id(huggingface_id: &str) -> bool {
-    let mut identity_components = huggingface_id.split('/');
-    let organization = identity_components.next().unwrap_or_default();
-    let model_name = identity_components.next().unwrap_or_default();
-    identity_components.next().is_none()
-        && is_valid_hugging_face_component(organization)
-        && is_valid_hugging_face_component(model_name)
-        && !model_name.ends_with(".git")
-}
-
-pub fn is_valid_immutable_revision(revision: &str) -> bool {
-    lowercase_hex::is_lowercase_hex_of_length(revision, GIT_COMMIT_SHA_HEX_CHARACTER_COUNT)
-}
-
-fn is_valid_hugging_face_component(component: &str) -> bool {
-    let component_bytes = component.as_bytes();
-    if component.is_empty()
-        || component.len() > MAXIMUM_HUGGING_FACE_COMPONENT_LENGTH
-        || component_bytes
-            .first()
-            .is_some_and(|character| matches!(*character, b'-' | b'.'))
-        || component_bytes
-            .last()
-            .is_some_and(|character| matches!(*character, b'-' | b'.'))
-        || component.contains("--")
-        || component.contains("..")
-    {
-        return false;
-    }
-    component_bytes.iter().copied().all(|character| {
-        character.is_ascii_alphanumeric() || matches!(character, b'-' | b'_' | b'.')
-    })
 }
 
 #[cfg(test)]

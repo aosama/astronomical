@@ -4,40 +4,31 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.132</title>
-            <pubDate>Sun, 22 Nov 2026 19:11:11 -0500</pubDate>
-            <sparkle:version>2476</sparkle:version>
-            <sparkle:shortVersionString>0.2.132</sparkle:shortVersionString>
+            <title>0.2.134</title>
+            <pubDate>Mon, 23 Nov 2026 08:08:28 -0500</pubDate>
+            <sparkle:version>2483</sparkle:version>
+            <sparkle:shortVersionString>0.2.134</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[## Astronomical 0.2.132
+            <description sparkle:format="markdown"><![CDATA[## What's new
 
-### Maximum model RAM
+- **Clearer name for the OptiQ DFlash2 model.** `Ornith-1.5-35B-A3B-OptiQ-DFLASH2-4bit` is now `Ornith-1.5-35B-A3B-OptiQ-4bit-vision-DFLASH2`, named like every other model with a built-in draft model: model, quantizer, bits, vision, draft model.
+- **Your copy carries over.** If you already downloaded it under the old name, it stays on this Mac under the renamed row and keeps working under the name you know. Nothing downloads again.
 
-- A queued change now names the limit the engine will really install, never a figure larger than this Mac can reach.
-- While a change waits for the current reply to finish, the slider rests and Apply is not offered.
-- Normal states use the quiet text colour: reading part of a model from the SSD, a queued change and a successful update are not warnings.
-- Feedback uses plain words, such as "Maximum model RAM updated."
+## Fixes
 
-### Observatory
+- **Get works again for that model.** After it moved to its new name on Hugging Face, 0.2.133 and earlier could no longer download it.
 
-- On this Mac lists every model the engine serves, including copies in a configured model folder that match a catalog entry.
+## Compatibility
 
-### Reliability
+Your models, conversations and settings are kept. No setting, command or local API changed.
 
-- When the inference worker stops before the engine's next message reaches it, the engine log now keeps the worker's exit status and the end of its error output. A worker that fails to start is also written to the engine log.
-
-### Compatibility
-
-- macOS 14.0 and later on Apple silicon.
-- Existing settings, conversations and downloaded models are preserved; no configuration fields were removed.
-
-Signed with Developer ID, notarized by Apple and delivered through the signed Sparkle update feed.
+This release is signed with a Developer ID, built with Hardened Runtime and notarized by Apple.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.132/Astronomical-0.2.132-macOS-arm64.dmg" length="25876109" type="application/octet-stream" sparkle:edSignature="ky0MkifjkWE4FKUe059d6J5gPRXYxRSay6GFrWiAQxZ0/1R9LWE+yPnA+ntLQYUXjUDeK8djc5m5QbZd72NTCA=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.134/Astronomical-0.2.134-macOS-arm64.dmg" length="25978686" type="application/octet-stream" sparkle:edSignature="yz8wlZ3woL+d5VBDVQ6ZrFKPEjOF5FGYM+Wn5wvlIlOgDkILTkvs/2omyOyAUeqYFcEQeMlGMrGkl+Koanp/AQ=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: iO3uTVBsXsza3XqCIq5unD9WHHudZZa++frsSy2E9+4fTqB2wgnF62lzpNq9xMiK2oRXmPJ6PWKOHc8sV5ugBw==
-length: 2359
+edSignature: PutTOOOmTMsKkYvWoKycvYY1OCw5JnJPtUZzfY4bryqpldrNvXJ5T71fqGqCjHGUrK8byUh88xOLceKve/ZcDA==
+length: 2037
 -->

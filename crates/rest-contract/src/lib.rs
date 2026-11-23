@@ -25,6 +25,9 @@ mod openai_embeddings_response;
 mod openai_image_generation_request;
 mod openai_image_generation_response;
 mod openai_models_and_errors;
+#[cfg(test)]
+#[path = "openai_request_contract_tests.rs"]
+mod openai_request_contract_tests;
 mod openai_response_format;
 mod openai_responses_input;
 mod openai_responses_request;
@@ -33,7 +36,10 @@ mod openai_responses_stream;
 mod openai_responses_tools;
 mod openai_speech_request;
 mod openai_structured_outputs;
+mod request_bounds;
 mod request_budget;
+mod structured_generation_fields;
+mod thinking_control_fields;
 mod thinking_controls;
 mod tool_name_rule;
 
@@ -127,6 +133,7 @@ pub use openai_structured_outputs::{
     OpenAiStructuredOutputsValidationError, enforced_generation_from_extra_body,
     enforced_generation_from_json_schema, guided_grammar_to_enforced_generation,
 };
+pub use request_bounds::RequestBoundsError;
 pub use request_budget::{
     MAX_IMAGE_DECODED_BYTES, MAX_IMAGE_PARTS_PER_REQUEST, MAX_INLINE_MEDIA_BYTES,
     MAX_OUTPUT_TOKENS, MAX_REQUEST_BODY_BYTES, MAX_TOOL_SCHEMA_NESTING_DEPTH,

@@ -569,7 +569,7 @@ fn should_keep_the_ternary_qwen3_8_27b_builds_for_small_memory_macs() {
 #[test]
 fn should_ship_the_optiq_dflash2_package_with_its_bundled_drafter() {
     assert_dflash2_package_matches_its_plain_twin(DFlash2PackageExpectation {
-        package_huggingface_id: "ahmedihamdy/Ornith-1.5-35B-A3B-OptiQ-DFLASH2-4bit",
+        package_huggingface_id: "ahmedihamdy/Ornith-1.5-35B-A3B-OptiQ-4bit-vision-DFLASH2",
         plain_twin_huggingface_id: "mlx-community/Ornith-1.5-35B-A3B-OptiQ-4bit",
         pinned_revision: "28c5203a83fa7bc39b3363b870273c23f6bcf04e",
         vision_tower_path: "optiq/optiq_vision.safetensors",

@@ -1,18 +1,20 @@
 use std::collections::BTreeMap;
 
-use crate::MAX_OUTPUT_TOKENS;
 use serde::Deserialize;
 use serde_json::Value;
 use thiserror::Error;
 
-use crate::request_budget::{MAX_IMAGE_PARTS_PER_REQUEST, MAX_INLINE_MEDIA_BYTES};
+use crate::request_bounds::{
+    RequestBoundsError, validate_image_part_count, validate_inline_media_total,
+    validate_output_token_count, validate_sampling_parameter,
+};
+use crate::structured_generation_fields::StructuredGenerationFields;
+use crate::thinking_control_fields::ThinkingControlFields;
 use crate::{
-    ChatTemplateKwargsRequestObject, EnforcedStructuredGeneration, OpenAiChatMessage,
-    OpenAiChatMessageParts, OpenAiResponseFormat, OpenAiStopSequences, OpenAiStreamOptions,
-    OpenAiStructuredOutput, OpenAiStructuredOutputValidationError, OpenAiStructuredOutputs,
+    EnforcedStructuredGeneration, OpenAiChatMessage, OpenAiChatMessageParts, OpenAiStopSequences,
+    OpenAiStreamOptions, OpenAiStructuredOutput, OpenAiStructuredOutputValidationError,
     OpenAiStructuredOutputsValidationError, OpenAiToolChoice, OpenAiToolChoiceMode,
-    OpenAiToolDefinition, OpenAiToolDefinitionParts, ReasoningRequestObject, ThinkingControls,
-    ThinkingControlsError, ThinkingControlsInputs, enforced_generation_from_extra_body,
+    OpenAiToolDefinition, OpenAiToolDefinitionParts, ThinkingControlsError,
 };
 
 /// The fallback generated-token budget when an OpenAI client does not send
@@ -43,32 +45,6 @@ pub struct OpenAiChatCompletionRequest {
     #[serde(default)]
     store: Option<bool>,
     #[serde(default)]
-    reasoning_effort: Option<String>,
-    /// Maximum tokens the model may spend inside the thinking block before being
-    /// forced to close it and start the visible response. When `None`, the model
-    /// thinks freely up to `max_tokens`.
-    #[serde(default)]
-    thinking_budget: Option<u32>,
-    /// Coding-agent spelling of the thinking budget: the agent resolves this
-    /// field name from its provider compatibility configuration and falls back
-    /// to it when the server declares thinking-budget support.
-    #[serde(default)]
-    thinking_token_budget: Option<u32>,
-    /// Documented OpenAI-compatible alias for the thinking budget used by
-    /// coding-agent traffic alongside `thinking_token_budget`.
-    #[serde(default)]
-    thinking_budget_tokens: Option<u32>,
-    /// OpenRouter-style reasoning object carrying an effort level, a direct
-    /// token limit, an on/off switch, and a stream-exclusion preference.
-    #[serde(default)]
-    reasoning: Option<ReasoningRequestObject>,
-    /// Qwen-style flat switch for the thinking channel.
-    #[serde(default)]
-    enable_thinking: Option<bool>,
-    /// vLLM-style template-kwarg block carrying the thinking toggle.
-    #[serde(default)]
-    chat_template_kwargs: Option<ChatTemplateKwargsRequestObject>,
-    #[serde(default)]
     stop: Option<OpenAiStopSequences>,
     #[serde(default)]
     seed: Option<u64>,
@@ -76,12 +52,12 @@ pub struct OpenAiChatCompletionRequest {
     stream: bool,
     #[serde(default)]
     stream_options: Option<OpenAiStreamOptions>,
-    #[serde(default)]
-    response_format: Option<OpenAiResponseFormat>,
-    #[serde(default)]
-    structured_outputs: Option<OpenAiStructuredOutputs>,
-    #[serde(default)]
-    guided_grammar: Option<String>,
+    /// Declared before `unknown_fields`, so their spellings are taken first
+    /// and never reach the catch-all map.
+    #[serde(flatten)]
+    thinking_controls: ThinkingControlFields,
+    #[serde(flatten)]
+    structured_generation: StructuredGenerationFields,
     #[serde(flatten)]
     unknown_fields: BTreeMap<String, Value>,
 }
@@ -112,20 +88,15 @@ impl OpenAiChatCompletionRequest {
 
         self.validate_tool_choice()?;
         self.validate_output_token_budget()?;
-        self.resolve_thinking_controls()?;
+        self.thinking_controls.resolve()?;
         validate_sampling_parameter("temperature", self.temperature, 0.0, 2.0)?;
         validate_sampling_parameter("top_p", self.top_p, 0.0, 1.0)?;
         self.validate_unsupported_options()?;
         if self.stop.is_some() {
             return Err(OpenAiChatCompletionValidationError::UnsupportedStopSequences);
         }
-        if let Some(response_format) = &self.response_format {
-            response_format.clone().into_structured_output()?;
-        }
-        enforced_generation_from_extra_body(
-            self.structured_outputs.clone(),
-            self.guided_grammar.as_deref(),
-        )?;
+        self.structured_generation.response_format_output()?;
+        self.structured_generation.enforced_generation()?;
 
         Ok(())
     }
@@ -169,26 +140,6 @@ impl OpenAiChatCompletionRequest {
         self.seed
     }
 
-    /// Resolves every submitted thinking-control spelling into one hard budget
-    /// plus the stream exclusion preference, mirroring the output-token budget
-    /// rule: several spellings are fine while they agree, and disagreement is
-    /// a caller bug that must fail loudly instead of silently picking one.
-    fn resolve_thinking_controls(
-        &self,
-    ) -> Result<ThinkingControls, OpenAiChatCompletionValidationError> {
-        ThinkingControlsInputs {
-            thinking_budget: self.thinking_budget,
-            thinking_token_budget: self.thinking_token_budget,
-            thinking_budget_tokens: self.thinking_budget_tokens,
-            reasoning: self.reasoning.as_ref(),
-            reasoning_effort: self.reasoning_effort.as_deref(),
-            enable_thinking: self.enable_thinking,
-            chat_template_kwargs: self.chat_template_kwargs.as_ref(),
-        }
-        .resolve()
-        .map_err(OpenAiChatCompletionValidationError::ThinkingControls)
-    }
-
     /// Validates and consumes this REST DTO into protocol-neutral request parts.
     pub fn into_parts(
         self,
@@ -197,17 +148,9 @@ impl OpenAiChatCompletionRequest {
         let maximum_output_tokens = self.maximum_output_tokens();
         let requested_maximum_output_tokens = self.max_completion_tokens.or(self.max_tokens);
         let includes_usage_in_stream = self.includes_usage_in_stream();
-        let structured_output = self
-            .response_format
-            .clone()
-            .map(OpenAiResponseFormat::into_structured_output)
-            .transpose()?
-            .flatten();
-        let enforced_structured_generation = crate::enforced_generation_from_extra_body(
-            self.structured_outputs.clone(),
-            self.guided_grammar.as_deref(),
-        )?;
-        let thinking_controls = self.resolve_thinking_controls()?;
+        let structured_output = self.structured_generation.response_format_output()?;
+        let enforced_structured_generation = self.structured_generation.enforced_generation()?;
+        let thinking_controls = self.thinking_controls.resolve()?;
         // Inline media accumulates across every user and tool message so the
         // portable media budget is per request, not per message. Each image was already
         // size-checked individually during decode; this accumulation rejects a
@@ -266,15 +209,7 @@ impl OpenAiChatCompletionRequest {
             );
         }
 
-        let actual_output_tokens = self.maximum_output_tokens();
-        if actual_output_tokens == 0 || actual_output_tokens > MAX_OUTPUT_TOKENS {
-            return Err(
-                OpenAiChatCompletionValidationError::OutputTokenCountOutOfRange {
-                    actual_output_tokens,
-                    maximum_output_tokens: MAX_OUTPUT_TOKENS,
-                },
-            );
-        }
+        validate_output_token_count(self.maximum_output_tokens())?;
         Ok(())
     }
 
@@ -410,24 +345,6 @@ pub enum OpenAiChatCompletionValidationError {
         maximum_bytes: usize,
         excess_bytes: usize,
     },
-    /// The request carried more image parts than the portable image-count budget.
-    #[error(
-        "the request carries {actual_image_part_count} image parts, exceeding the {maximum_image_part_count}-image budget by {excess_image_part_count} (mirrors the 100-image-per-request limit Anthropic documents for 200k-context models)"
-    )]
-    ImagePartCountExceedsBudget {
-        actual_image_part_count: usize,
-        maximum_image_part_count: usize,
-        excess_image_part_count: usize,
-    },
-    /// The request's total decoded inline media exceeded the portable media budget.
-    #[error(
-        "the request carries {actual_inline_media_bytes} decoded image bytes, exceeding the {maximum_inline_media_bytes}-byte inline-media budget by {excess_inline_media_bytes} bytes (mirrors the 20 MB total inline request size of the Gemini API)"
-    )]
-    InlineMediaExceedsBudget {
-        actual_inline_media_bytes: usize,
-        maximum_inline_media_bytes: usize,
-        excess_inline_media_bytes: usize,
-    },
     /// An assistant history record contained no answer, reasoning, or tool call.
     #[error("assistant messages must contain content, reasoning, or tool calls")]
     EmptyAssistantMessage,
@@ -468,21 +385,9 @@ pub enum OpenAiChatCompletionValidationError {
     /// A reasoning-control spelling was contradictory or unrecognized.
     #[error(transparent)]
     ThinkingControls(#[from] ThinkingControlsError),
-    /// The output token budget was zero or too large for the worker representation.
-    #[error(
-        "output token count is {actual_output_tokens}, outside the 1..={maximum_output_tokens} token range"
-    )]
-    OutputTokenCountOutOfRange {
-        actual_output_tokens: u32,
-        maximum_output_tokens: u32,
-    },
-    /// A sampling setting fell outside its OpenAI-compatible range.
-    #[error("{parameter_name} is outside the supported range {minimum}..={maximum}")]
-    SamplingParameterOutOfRange {
-        parameter_name: &'static str,
-        minimum: String,
-        maximum: String,
-    },
+    /// The request fell outside a bound every generation request shares.
+    #[error(transparent)]
+    RequestBounds(#[from] RequestBoundsError),
     /// Caller-defined stop sequences are not implemented by the initial endpoint.
     #[error("caller-supplied stop sequences are unsupported")]
     UnsupportedStopSequences,
@@ -501,12 +406,19 @@ impl OpenAiChatCompletionValidationError {
     /// portable request budget) rather than a malformed-request one (HTTP 400).
     #[must_use]
     pub fn is_request_too_large(&self) -> bool {
-        matches!(
-            self,
-            Self::ImageTooLarge { .. }
-                | Self::ImagePartCountExceedsBudget { .. }
-                | Self::InlineMediaExceedsBudget { .. }
-        )
+        is_chat_size_rejection(self)
+    }
+}
+
+/// The size rejections: one image over its own budget, or a shared bound on
+/// the whole request's images.
+fn is_chat_size_rejection(validation_error: &OpenAiChatCompletionValidationError) -> bool {
+    match validation_error {
+        OpenAiChatCompletionValidationError::ImageTooLarge { .. } => true,
+        OpenAiChatCompletionValidationError::RequestBounds(bounds_error) => {
+            bounds_error.is_request_too_large()
+        }
+        _ => false,
     }
 }
 
@@ -518,57 +430,6 @@ fn validate_non_empty_string(
         return Err(OpenAiChatCompletionValidationError::EmptyString { field_name });
     }
     Ok(())
-}
-
-fn validate_image_part_count(
-    image_part_count: usize,
-) -> Result<(), OpenAiChatCompletionValidationError> {
-    if image_part_count > MAX_IMAGE_PARTS_PER_REQUEST {
-        return Err(
-            OpenAiChatCompletionValidationError::ImagePartCountExceedsBudget {
-                actual_image_part_count: image_part_count,
-                maximum_image_part_count: MAX_IMAGE_PARTS_PER_REQUEST,
-                excess_image_part_count: image_part_count - MAX_IMAGE_PARTS_PER_REQUEST,
-            },
-        );
-    }
-    Ok(())
-}
-
-fn validate_inline_media_total(
-    decoded_inline_media_bytes: usize,
-) -> Result<(), OpenAiChatCompletionValidationError> {
-    if decoded_inline_media_bytes > MAX_INLINE_MEDIA_BYTES {
-        return Err(
-            OpenAiChatCompletionValidationError::InlineMediaExceedsBudget {
-                actual_inline_media_bytes: decoded_inline_media_bytes,
-                maximum_inline_media_bytes: MAX_INLINE_MEDIA_BYTES,
-                excess_inline_media_bytes: decoded_inline_media_bytes - MAX_INLINE_MEDIA_BYTES,
-            },
-        );
-    }
-    Ok(())
-}
-
-fn validate_sampling_parameter(
-    parameter_name: &'static str,
-    parameter_value: Option<f32>,
-    minimum: f32,
-    maximum: f32,
-) -> Result<(), OpenAiChatCompletionValidationError> {
-    let Some(parameter_value) = parameter_value else {
-        return Ok(());
-    };
-    if parameter_value.is_finite() && parameter_value >= minimum && parameter_value <= maximum {
-        return Ok(());
-    }
-    Err(
-        OpenAiChatCompletionValidationError::SamplingParameterOutOfRange {
-            parameter_name,
-            minimum: minimum.to_string(),
-            maximum: maximum.to_string(),
-        },
-    )
 }
 
 #[cfg(test)]
