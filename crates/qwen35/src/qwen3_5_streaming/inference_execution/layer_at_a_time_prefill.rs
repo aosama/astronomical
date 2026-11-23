@@ -10,6 +10,7 @@
 //! are done after each one, and lets a request be cancelled between layers
 //! instead of only when the whole prompt has been read.
 
+use crate::qwen3_5_core::shared_execution::prompt_reading_steps;
 use std::time::Instant;
 
 use ipc_protocol::WorkerPromptLayerProgress;
@@ -298,9 +299,9 @@ impl Qwen3_5EngineState {
         let model = self.core.loaded_model()?;
         let mlx_memory_telemetry = match model.memory_snapshot_with_forward_peak().ok() {
             Some(mlx_memory_snapshot) => Some(
-                super::prefill_advance::prefill_mlx_memory_telemetry_from_snapshot(
+                prompt_reading_steps::prefill_mlx_memory_telemetry_from_snapshot(
                     model,
-                    active_request,
+                    &active_request.request_decoder_state,
                     mlx_memory_snapshot,
                 )?,
             ),

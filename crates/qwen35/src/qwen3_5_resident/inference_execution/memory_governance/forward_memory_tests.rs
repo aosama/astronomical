@@ -26,7 +26,7 @@ fn governor_with_both_phases_measured() -> MemoryGovernor {
     )
     .expect("the limit is not zero");
     let _ = memory_governor.record_probe(
-        ForwardShape::prompt_chunk(PROMPT_CHUNK_TOKEN_COUNT).phase(),
+        ForwardShape::prompt_chunk(PROMPT_CHUNK_TOKEN_COUNT).phase,
         PROMPT_CHUNK_MLX_WORKING_BUFFER_BYTES,
     );
     let _ = memory_governor.record_probe(

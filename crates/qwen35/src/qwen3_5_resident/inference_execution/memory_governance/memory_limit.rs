@@ -1,27 +1,9 @@
 use crate::qwen3_5_core::model::memory_breakdown::Qwen3_5MemoryOwnership;
 use std::time::Instant;
 
-use crate::memory::telemetry::MlxActiveMemoryBreakdown;
-use crate::{InferenceEngineError, safe_minimum_active_memory_ceiling_bytes};
+use crate::InferenceEngineError;
 
 use super::Qwen3_5EngineState;
-
-/// Calculates the smallest safe idle MLX ceiling for a loaded model.
-///
-/// Retained expert pages are reclaimable. The remaining live model bytes plus
-/// one maximum routed expert page are non-evictable for the next request.
-#[must_use]
-pub const fn safe_minimum_mlx_memory_ceiling_bytes(
-    current_idle_active_mlx_memory_bytes: u64,
-    evictable_retained_expert_payload_bytes: u64,
-    maximum_expert_page_reserve_bytes: u64,
-) -> u64 {
-    safe_minimum_active_memory_ceiling_bytes(
-        current_idle_active_mlx_memory_bytes,
-        evictable_retained_expert_payload_bytes,
-        maximum_expert_page_reserve_bytes,
-    )
-}
 
 impl Qwen3_5EngineState {
     pub(in crate::qwen3_5_resident::inference_execution) fn update_mlx_memory_limit(

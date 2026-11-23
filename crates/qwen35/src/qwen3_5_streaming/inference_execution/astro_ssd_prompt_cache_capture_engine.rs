@@ -1,14 +1,11 @@
 //! The streaming engine's half of the shared astro SSD prompt cache capture.
 
-use super::engine_request::{Qwen3_5EngineRequest, StreamingRequestExtension};
+use super::engine_request::Qwen3_5EngineRequest;
 use super::{Qwen3_5EngineState, Qwen3_5Model};
 use crate::qwen3_5_core::astro_ssd_prompt_cache_capture::Qwen3_5AstroSsdPromptCacheCapture;
 use crate::{InferenceEngineError, PerformanceOperation};
 
 impl Qwen3_5AstroSsdPromptCacheCapture for Qwen3_5EngineState {
-    type Model = Qwen3_5Model;
-    type RequestExtension = StreamingRequestExtension;
-
     /// Leases the deficit from the memory governor, so the astro expert cache
     /// gives back that much, measured on its own
     /// so performance reports can attribute why publication paused, and adds

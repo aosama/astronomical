@@ -2,14 +2,11 @@
 
 use mlx_bridge::MlxArray;
 
-use std::cell::Cell;
-
 use crate::qwen3_5_core::artifacts::QuantizedExpertLayerPlan;
 use crate::qwen3_5_core::decoder::RequestDecoderStateStack;
 use crate::qwen3_5_core::model::Qwen3_5ModelBase;
 use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5DecoderLayerWeights;
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
-use crate::qwen3_5_core::model_math::forward_contract;
 use crate::qwen3_5_resident::Qwen3_5ResidentExpertWeights;
 use crate::{AstroDecoderStateCacheState, AstroExpertCacheStatistics, PerformanceAttribution};
 

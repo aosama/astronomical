@@ -41,7 +41,4 @@ pub(in crate::qwen3_5_resident) struct RetainedLiveDecoderPrefix {
     /// covers, in chain order. Adoption matches the next prompt's chain
     /// against these hashes.
     pub(in crate::qwen3_5_resident) complete_block_keys: Vec<AstroSsdPromptCacheBlockKey>,
-    /// The token boundary of the last complete block: the token count the
-    /// retained state can adopt.
-    pub(in crate::qwen3_5_resident) adoptable_token_count: usize,
 }

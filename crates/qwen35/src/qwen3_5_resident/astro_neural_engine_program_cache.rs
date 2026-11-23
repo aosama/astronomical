@@ -30,7 +30,6 @@ use config::{
 use neural_engine::core_ml::{
     ComputePlacement, CoreMlComputeUnits, CoreMlProgram, compile_model_to,
 };
-use neural_engine::program_shape::ProgramShape;
 
 use super::host_description::{current_host_environment, macos_product_version};
 use super::neural_engine_mlp_prefill::NEURAL_ENGINE_FINISH_TIMEOUT;

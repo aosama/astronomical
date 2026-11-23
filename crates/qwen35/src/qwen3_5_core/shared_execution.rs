@@ -24,6 +24,7 @@ pub mod generation_vocabulary_boundaries;
 pub mod input_injection;
 pub mod model_loading_steps;
 pub mod prompt_processing_chunk_sizer;
+pub mod prompt_reading_steps;
 pub mod request_memory_release;
 pub mod restore_transient_workspace;
 pub mod test_controls;

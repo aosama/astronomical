@@ -29,9 +29,6 @@ fn should_carry_the_exact_prefill_workspace_overflow_failure_texts() {
     let boundary_workspace_error = boundary_checkpoint_workspace_bytes_overflowed_error();
     let publication_workspace_error =
         astro_ssd_prompt_cache_publication_workspace_bytes_overflowed_error();
-    let completed_chunk_tokens_error = completed_prefill_chunk_tokens_exceed_u32_range_error(
-        u32::try_from(usize::MAX).expect_err("usize maximum must exceed u32"),
-    );
 
     assert!(matches!(
         eligible_capture_error,
@@ -45,10 +42,6 @@ fn should_carry_the_exact_prefill_workspace_overflow_failure_texts() {
         publication_workspace_error,
         crate::InferenceEngineError::Fatal { reason } if reason == "astro-ssd-prompt-cache publication workspace bytes overflowed"
     ));
-    assert!(matches!(
-        completed_chunk_tokens_error,
-        crate::InferenceEngineError::Fatal { reason } if reason == "completed_prefill_chunk_tokens exceeds the u32 range"
-    ));
 }
 
 #[test]
@@ -56,9 +49,6 @@ fn should_carry_the_exact_memory_governance_failure_texts() {
     let try_from_int_error = u32::try_from(usize::MAX).expect_err("usize maximum must exceed u32");
 
     let context_reservation_error = generation_context_memory_reservation_overflowed_error();
-    let prefill_workspace_error =
-        prefill_activation_workspace_exceeds_platform_range_error(try_from_int_error);
-    let context_workspace_error = generation_context_workspace_reservation_overflowed_error();
     let ceiling_range_error =
         current_mlx_memory_ceiling_exceeds_u64_range_error(try_from_int_error);
     let active_memory_error = mlx_active_memory_exceeds_u64_range_error(try_from_int_error);
@@ -68,14 +58,6 @@ fn should_carry_the_exact_memory_governance_failure_texts() {
     assert!(matches!(
         context_reservation_error,
         crate::InferenceEngineError::InvalidRequest { reason } if reason == "generation context memory reservation overflowed"
-    ));
-    assert!(matches!(
-        prefill_workspace_error,
-        crate::InferenceEngineError::InvalidRequest { reason } if reason == "prefill activation workspace exceeds the platform range"
-    ));
-    assert!(matches!(
-        context_workspace_error,
-        crate::InferenceEngineError::InvalidRequest { reason } if reason == "generation context workspace reservation overflowed"
     ));
     assert!(matches!(
         ceiling_range_error,

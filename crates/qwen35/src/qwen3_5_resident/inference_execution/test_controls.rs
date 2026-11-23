@@ -1,23 +1,13 @@
 use crate::{AstroExpertCacheStatistics, InferenceEngineError};
-use ipc_protocol::{ExpertMemoryMode, RequestId};
 
 use crate::MlxInferenceEngine;
 
-use super::{
-    Qwen3_5EngineState, Qwen3_5InferenceExecution, fatal_engine_error, qwen3_5_runtime_error,
-};
+use super::{Qwen3_5EngineState, Qwen3_5InferenceExecution, fatal_engine_error};
 
 // These owner-thread operations intentionally live beside their asynchronous
 // public wrappers. Keeping acceptance-only state mutation out of the engine
 // owner prevents the production lifecycle module from becoming a test-control bag.
 impl Qwen3_5EngineState {
-    fn expert_memory_mode_for_tests(&self) -> Option<ExpertMemoryMode> {
-        self.core
-            .model
-            .as_ref()
-            .map(|loaded_model| loaded_model.expert_memory_mode())
-    }
-
     fn astro_expert_cache_statistics_for_tests(
         &self,
     ) -> Result<AstroExpertCacheStatistics, InferenceEngineError> {
@@ -44,24 +34,6 @@ impl Qwen3_5EngineState {
 }
 
 impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
-    /// Returns the currently loaded model's truthful expert-memory mode.
-    #[doc(hidden)]
-    pub async fn expert_memory_mode_for_tests(
-        &self,
-    ) -> Result<Option<ExpertMemoryMode>, InferenceEngineError> {
-        let (expert_memory_mode_sender, expert_memory_mode_receiver) =
-            std::sync::mpsc::sync_channel(1);
-        self.run_owner_test_operation(move |qwen_inference_execution| {
-            expert_memory_mode_sender
-                .send(qwen_inference_execution.expert_memory_mode_for_tests())
-                .map_err(|_| fatal_engine_error("expert-memory mode receiver stopped unexpectedly"))
-        })
-        .await?;
-        expert_memory_mode_receiver.recv().map_err(|_| {
-            fatal_engine_error("expert-memory mode owner operation returned no response")
-        })
-    }
-
     /// The memory governor's view after the last measured forward, with its
     /// accounts compared against what MLX reported.
     #[doc(hidden)]

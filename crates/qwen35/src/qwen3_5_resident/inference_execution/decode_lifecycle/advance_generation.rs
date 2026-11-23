@@ -15,17 +15,12 @@ use crate::qwen3_5_core::shared_execution::decode_step::{
 };
 use mlx_bridge::MlxArray;
 
-use crate::{
-    GeneratedToken, InferenceEngineError, PerformanceAttributionOutcome, PerformanceOperation,
-};
+use crate::{GeneratedToken, InferenceEngineError, PerformanceOperation};
 
-use super::completed_forward_memory::{
-    CompletedForwardMemoryObservation, capture_completed_forward_memory_observation,
-};
+use super::Qwen3_5EngineState;
+use super::completed_forward_memory::CompletedForwardMemoryObservation;
 use super::engine_request::Qwen3_5EngineRequest;
 use super::forward_memory::{ForwardShape, report_completed_forward};
-use super::{Qwen3_5EngineState, qwen3_5_runtime_error};
-use crate::qwen3_5_core::shared_execution::generated_token_emission;
 impl Qwen3_5DecodeStepHooks for Qwen3_5EngineState {
     fn advance_prompt_prefill_if_pending(
         &mut self,
