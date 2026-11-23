@@ -20,6 +20,8 @@ direct-mlx = ["dep:runtime-integration", "dep:mlx-bridge", "model-primitives/dir
 # enforces the serving edge.
 [dependencies]
 model-primitives = { path = "../model-primitives" }
+lowercase-hex = { path = "../lowercase-hex" }
+sha2.workspace = true
 # The jangtq2 weight format (issue #1427): expert pages read its codebook
 # projections. It is a weight format, not a model family, and depends on no
 # engine crate.
@@ -38,6 +40,7 @@ tokio.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
+test-harness = { path = "../test-harness", features = ["test-fixtures"] }
 # start_paused virtual time for #[tokio::test(start_paused = true)] bodies.
 tokio = { workspace = true, features = ["test-util"] }
 # The GPU tests sample the process-global MLX allocator, so they serialize.

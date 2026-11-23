@@ -20,11 +20,11 @@ use crate::AstroSsdPromptCacheDiskStore;
 use crate::AstroSsdPromptCacheDiskStoreConfig;
 use crate::Qwen3_5InferenceRequest;
 use crate::Qwen3_5ThinkingBudgetState;
-use crate::astro_ssd_prompt_cache::AstroSsdPromptCacheCounters;
 use crate::prism_hadamard_qwen35::artifacts::ValidatedFoldedPack;
 use crate::prism_hadamard_qwen35::model::PrismHadamardTextModel;
 use crate::prism_hadamard_qwen35::model::StraightGenerationState;
 use crate::{PerformanceAttribution, PerformanceAttributionLog, PerformanceOperation};
+use engine_core::astro_ssd_prompt_cache::AstroSsdPromptCacheCounters;
 
 /// Everything `load` needs, captured on the caller thread before the owner
 /// thread starts.

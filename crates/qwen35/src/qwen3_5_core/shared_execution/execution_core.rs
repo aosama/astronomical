@@ -12,7 +12,6 @@ use std::sync::Arc;
 use ipc_protocol::{WorkerChunkingConfiguration, WorkerEvent};
 use runtime_integration::MlxMemoryLimits;
 
-use crate::astro_ssd_prompt_cache::counters::AstroSsdPromptCacheCounters;
 use crate::qwen3_5_core::artifacts::ValidatedQwen3_5Artifact;
 use crate::qwen3_5_core::engine_errors::{fatal_engine_error, qwen3_5_runtime_error};
 use crate::qwen3_5_core::engine_request::Qwen3_5EngineRequest;
@@ -23,6 +22,7 @@ use crate::{
     PerformanceAttributionLog, PersistentVisualEmbeddingModelContract,
     build_astro_ssd_prompt_cache_stats_event,
 };
+use engine_core::astro_ssd_prompt_cache::counters::AstroSsdPromptCacheCounters;
 
 use super::generation_request_validation::Qwen3_5GenerationRequestLimits;
 use super::prompt_processing_chunk_sizer::Qwen3_5PromptProcessingChunkSizer;

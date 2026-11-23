@@ -17,11 +17,11 @@ use super::Qwen3_5Model;
 use super::layer_major_prefill::{
     LayerMajorCheckpointContract, LayerMajorPrefillRequest, LayerMajorSpan,
 };
-use crate::astro_ssd_prompt_cache::astro_ssd_prompt_cache_boundary_completed_prefill_chunk_tokens;
 use crate::qwen3_5_core::decoder::Qwen3_5AstroSsdPromptCacheBoundaryCheckpoint;
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_streaming::inference_execution::layer_major_span_plan::layer_major_span_plan;
 use crate::{PerformanceAttribution, RequestDecoderStateStack};
+use engine_core::astro_ssd_prompt_cache::astro_ssd_prompt_cache_boundary_completed_prefill_chunk_tokens;
 
 /// One published boundary: its token position and every snapshot tensor.
 pub type PublishedBoundarySnapshot = (usize, BTreeMap<String, Vec<f32>>);

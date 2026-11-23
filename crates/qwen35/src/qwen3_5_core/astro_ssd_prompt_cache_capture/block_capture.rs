@@ -18,11 +18,11 @@ use runtime_integration::MlxMemorySnapshot;
 use std::collections::HashMap;
 
 use super::capture_hook::Qwen3_5AstroSsdPromptCacheCapture;
-use crate::astro_ssd_prompt_cache::block_causal_input::AstroSsdPromptCacheBlockCausalInput;
-use crate::astro_ssd_prompt_cache::capture_planning;
 use crate::qwen3_5_core::engine_errors::qwen3_5_runtime_error;
 use crate::qwen3_5_core::engine_request::Qwen3_5EngineRequest;
 use crate::qwen3_5_core::model::Qwen3_5ModelBase;
+use engine_core::astro_ssd_prompt_cache::block_causal_input::AstroSsdPromptCacheBlockCausalInput;
+use engine_core::astro_ssd_prompt_cache::capture_planning;
 
 /// Converts a required persistence failure into the user-visible engine error.
 pub(super) fn required_prompt_state_persistence_failure<RequestExtension>(

@@ -1,4 +1,4 @@
-use crate::qwen3_5_streaming::{
+use crate::astro_ssd_prompt_cache::frozen_ornith_test_support::{
     ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID, ORNITH_1_0_35B_OPTIQ_4BIT_REVISION,
 };
 

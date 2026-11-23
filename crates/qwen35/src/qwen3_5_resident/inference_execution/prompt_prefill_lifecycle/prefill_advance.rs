@@ -49,7 +49,7 @@ impl Qwen3_5EngineState {
         ) else {
             return Ok(None);
         };
-        let crate::astro_ssd_prompt_cache::ResolvedPrefillChunkSpan {
+        let engine_core::astro_ssd_prompt_cache::ResolvedPrefillChunkSpan {
             prefill_start,
             requested_prefill_chunk_end: prefill_end,
             attempted_prefill_chunk_token_count,
