@@ -19,8 +19,8 @@ use std::time::Duration;
 use ipc_protocol::RequestId;
 use model_serving::{
     CustomMetalKernelFamily, GeneratedToken, InferenceEngine, PerformanceAttribution,
-    Qwen3_5ArtifactValidator, Qwen3_5InferenceRequest, Qwen3_5StreamingEngine,
-    Qwen3_5StreamingPromptProcessingChunkSizer, install_forced_worker_verdicts_for_tests,
+    Qwen3_5ArtifactValidator, Qwen3_5InferenceRequest, Qwen3_5PromptProcessingChunkSizer,
+    Qwen3_5StreamingEngine, install_forced_worker_verdicts_for_tests,
     worker_process_kernel_capabilities,
 };
 use runtime_integration::MlxRuntime;
@@ -80,7 +80,7 @@ async fn run_forced_fallback_romeo_continuation() {
         mlx_memory_limits.active_memory_limit_bytes(),
         mlx_memory_limits.mlx_buffer_cache_limit_bytes(),
         None,
-        Qwen3_5StreamingPromptProcessingChunkSizer::for_ssd_streaming_chunk_size_tokens(16)
+        Qwen3_5PromptProcessingChunkSizer::for_chunk_size_tokens(16)
             .expect("the test streaming prefill chunk size should be valid"),
         IMAGE_PAD_TOKEN_ID,
         model_directory.to_path_buf(),

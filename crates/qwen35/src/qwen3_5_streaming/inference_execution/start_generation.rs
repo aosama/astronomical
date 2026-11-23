@@ -7,16 +7,19 @@ use crate::{
 use ipc_protocol::WorkerAstroSsdPromptCacheRequestDiagnostics;
 use mlx_bridge::MlxArray;
 
-use super::astro_ssd_prompt_cache_visual_identity::{
-    Qwen3_5AstroSsdPromptCacheVisualIdentity, Qwen3_5AstroSsdPromptCacheVisualIdentityInput,
-};
 use super::engine_request::{Qwen3_5EngineRequest, StreamingRequestExtension};
 use super::{Qwen3_5EngineState, qwen3_5_runtime_error};
 use crate::astro_decoder_state_cache::AstroDecoderStateCacheLayout;
 use crate::astro_ssd_prompt_cache::block_causal_input::AstroSsdPromptCacheBlockCausalInput;
 use crate::qwen3_5_core::decoder::RequestDecoderStateStack;
+use crate::qwen3_5_core::engine_errors::invalid_request_error;
+use crate::qwen3_5_core::shared_execution::astro_ssd_prompt_cache_visual_identity::{
+    Qwen3_5AstroSsdPromptCacheVisualIdentity, Qwen3_5AstroSsdPromptCacheVisualIdentityInput,
+};
+use crate::qwen3_5_core::shared_execution::generation_request_validation::{
+    self, Qwen3_5GenerationRequestLimits,
+};
 use crate::qwen3_5_core::text::sampler;
-use crate::qwen3_5_streaming::model::request_refusal;
 use crate::sampling_seed::current_time_millis_since_unix_epoch;
 
 /// The starting cursor of a generation session, derived from the `astro_ssd_prompt_cache`: what the
@@ -52,6 +55,17 @@ struct InstallActiveGenerationRequest<'a> {
 }
 
 impl Qwen3_5EngineState {
+    /// The loaded model's limits a new request is checked against.
+    fn generation_request_limits(&self) -> Qwen3_5GenerationRequestLimits {
+        Qwen3_5GenerationRequestLimits {
+            is_model_loaded: self.model.is_some(),
+            think_end_token_id: self.think_end_token_id,
+            vocabulary_size: self.vocabulary_size,
+            maximum_position_count: self.maximum_position_count,
+            hard_maximum_position_count: self.hard_maximum_position_count,
+        }
+    }
+
     pub(super) fn start_generation(
         &mut self,
         mut inference_request: Qwen3_5InferenceRequest,
@@ -61,7 +75,10 @@ impl Qwen3_5EngineState {
         let performance_attribution =
             self.ensure_no_active_generation(&inference_request, taken_performance_attribution)?;
         let reserved_context_tokens =
-            self.validate_generation_request_and_resolve_reserved_context(&inference_request)?;
+            generation_request_validation::validate_generation_request_and_resolve_reserved_context(
+                &self.generation_request_limits(),
+                &inference_request,
+            )?;
         let thinking_budget_state = self.build_thinking_budget_state(&inference_request)?;
         let model = self
             .model
@@ -140,13 +157,11 @@ impl Qwen3_5EngineState {
         &self,
         inference_request: &Qwen3_5InferenceRequest,
     ) -> Result<Qwen3_5ThinkingBudgetState, InferenceEngineError> {
-        let mut natural_reasoning_end_token_ids =
-            inference_request.natural_reasoning_end_token_ids().to_vec();
-        if !natural_reasoning_end_token_ids.contains(&self.think_end_token_id) {
-            // The model thinking marker remains authoritative for direct engine callers that do not
-            // pass tokenizer-derived implicit boundaries such as tool-call starts.
-            natural_reasoning_end_token_ids.push(self.think_end_token_id);
-        }
+        let natural_reasoning_end_token_ids =
+            crate::qwen3_5_core::shared_execution::generation_thinking_end_markers::natural_reasoning_end_token_ids_with_model_safety_net(
+                inference_request.natural_reasoning_end_token_ids(),
+                self.think_end_token_id,
+            );
         Qwen3_5ThinkingBudgetState::new(
             inference_request.generation_starts_inside_thinking_block(),
             inference_request.thinking_budget(),
@@ -156,7 +171,7 @@ impl Qwen3_5EngineState {
             natural_reasoning_end_token_ids,
         )
         .map_err(|source| {
-            request_refusal::invalid_request_error(format!(
+            invalid_request_error(format!(
                 "invalid Qwen3.5 thinking-budget configuration: {source}"
             ))
         })
@@ -178,9 +193,7 @@ impl Qwen3_5EngineState {
         let random_state = self.resolve_sampling_random_state(sampling_strategy)?;
         let prompt_token_ids = inference_request.input_token_ids().to_vec();
         let image_pad_token_id = inference_request.image_pad_token_id().ok_or_else(|| {
-            request_refusal::invalid_request_error(
-                "generation request is missing the image-pad token ID",
-            )
+            invalid_request_error("generation request is missing the image-pad token ID")
         })?;
         let prompt_image_pad_token_count = prompt_token_ids
             .iter()
@@ -308,7 +321,7 @@ impl Qwen3_5EngineState {
             ));
         }
         if prompt_image_pad_token_count != visual_embedding_row_count {
-            return Err(request_refusal::invalid_request_error(
+            return Err(invalid_request_error(
                 "image pad token count does not match visual embedding row count",
             ));
         }
@@ -450,7 +463,7 @@ impl Qwen3_5EngineState {
                 image_pad_token_id,
             )
             .map_err(|visual_embedding_suffix_plan_error| {
-                request_refusal::invalid_request_error(format!(
+                invalid_request_error(format!(
                     "visual embedding suffix planning failed: {visual_embedding_suffix_plan_error}"
                 ))
             })?;

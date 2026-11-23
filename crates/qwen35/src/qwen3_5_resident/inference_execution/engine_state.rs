@@ -16,10 +16,10 @@ use crate::{
 
 use super::super::ValidatedQwen3_5Artifact;
 use super::super::model::Qwen3_5ResidentModel;
-use super::Qwen3_5ResidentPromptProcessingChunkSizer;
 use super::astro_ssd_prompt_cache::retained_live_prefix::RetainedLiveDecoderPrefix;
 use super::engine_request::Qwen3_5EngineRequest;
 use super::speculative_decode_lifecycle::engine_draft_runtime::Qwen3_5SpeculativeDraftRuntime;
+use crate::qwen3_5_core::shared_execution::prompt_processing_chunk_sizer::Qwen3_5PromptProcessingChunkSizer;
 
 pub struct Qwen3_5InferenceExecution {
     pub(in crate::qwen3_5_resident::inference_execution) active_request:
@@ -53,7 +53,7 @@ pub struct Qwen3_5InferenceExecution {
     pub persistent_visual_embedding_model_contract: Option<PersistentVisualEmbeddingModelContract>,
     pub astro_ssd_prompt_cache: Option<Arc<AstroSsdPromptCacheDiskStore>>,
     pub(in crate::qwen3_5_resident::inference_execution) prompt_processing_chunk_sizer:
-        Qwen3_5ResidentPromptProcessingChunkSizer,
+        Qwen3_5PromptProcessingChunkSizer,
     pub(in crate::qwen3_5_resident::inference_execution) chunking: WorkerChunkingConfiguration,
     /// Where this model revision's compiled Neural Engine programs are kept
     /// between loads; `None` compiles them again on every load.

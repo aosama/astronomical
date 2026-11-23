@@ -34,6 +34,8 @@ pub mod frozen_config_test_support;
 pub mod model;
 pub mod model_math;
 pub mod quantizations;
+#[cfg(feature = "direct-mlx")]
+pub mod shared_execution;
 pub use model_primitives::route_observation;
 pub mod text;
 pub mod vision;

@@ -14,9 +14,9 @@ use crate::{
 use super::super::ValidatedQwen3_5Artifact;
 use super::Qwen3_5InferenceExecution;
 use super::Qwen3_5ResidentEngine;
-use super::Qwen3_5ResidentPromptProcessingChunkSizer;
 use super::engine_error_helpers::fatal_engine_error;
 use super::engine_error_helpers::qwen3_5_runtime_error;
+use crate::qwen3_5_core::shared_execution::prompt_processing_chunk_sizer::Qwen3_5PromptProcessingChunkSizer;
 
 impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
     /// Starts the owner thread with an explicit `prefill_chunk_tokens` sizer.
@@ -29,7 +29,7 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
         active_memory_limit_bytes: usize,
         mlx_buffer_cache_limit_bytes: usize,
         astro_ssd_prompt_cache_disk_store_config: Option<AstroSsdPromptCacheDiskStoreConfig>,
-        prompt_processing_chunk_sizer: Qwen3_5ResidentPromptProcessingChunkSizer,
+        prompt_processing_chunk_sizer: Qwen3_5PromptProcessingChunkSizer,
         think_end_token_id: u32,
         model_directory: PathBuf,
         chunking: WorkerChunkingConfiguration,
@@ -54,7 +54,7 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
         active_memory_limit_bytes: usize,
         mlx_buffer_cache_limit_bytes: usize,
         astro_ssd_prompt_cache_disk_store_config: Option<AstroSsdPromptCacheDiskStoreConfig>,
-        prompt_processing_chunk_sizer: Qwen3_5ResidentPromptProcessingChunkSizer,
+        prompt_processing_chunk_sizer: Qwen3_5PromptProcessingChunkSizer,
         think_end_token_id: u32,
         model_directory: PathBuf,
         chunking: WorkerChunkingConfiguration,
@@ -85,7 +85,7 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
         active_memory_limit_bytes: usize,
         mlx_buffer_cache_limit_bytes: usize,
         astro_ssd_prompt_cache_disk_store_config: Option<AstroSsdPromptCacheDiskStoreConfig>,
-        prompt_processing_chunk_sizer: Qwen3_5ResidentPromptProcessingChunkSizer,
+        prompt_processing_chunk_sizer: Qwen3_5PromptProcessingChunkSizer,
         think_end_token_id: u32,
         model_directory: PathBuf,
         maximum_context_tokens: u32,

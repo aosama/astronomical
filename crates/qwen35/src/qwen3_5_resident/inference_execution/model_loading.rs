@@ -9,13 +9,13 @@ use crate::{
     PerformanceAttributionOutcome, PerformanceOperation, PersistentVisualEmbeddingModelContract,
 };
 
-use super::astro_ssd_prompt_cache_startup_logging;
 use super::speculative_decode_lifecycle::{
     Qwen3_5SpeculativeDraftRuntime, draft_model_status_report,
 };
 use super::{Qwen3_5EngineState, fatal_engine_error, qwen3_5_runtime_error};
 use crate::qwen3_5_core::artifacts::ValidatedQwen3_5Artifact;
 use crate::qwen3_5_core::model::model_chunking_configuration::Qwen3_5ModelChunkingConfiguration;
+use crate::qwen3_5_core::shared_execution::astro_ssd_prompt_cache_startup_logging;
 use crate::qwen3_5_core::vision::{Qwen3_5ImageProcessor, Qwen3_5VisionConfig};
 use crate::qwen3_5_resident::model::Qwen3_5ResidentModel;
 use crate::qwen3_5_resident::neural_engine_prefill_loading::{

@@ -5,7 +5,7 @@ use std::time::Duration;
 use ipc_protocol::RequestId;
 use model_serving::{
     AstroSsdPromptCacheDiskStoreConfig, GeneratedToken, InferenceEngine, Qwen3_5ArtifactValidator,
-    Qwen3_5InferenceRequest, Qwen3_5ResidentEngine, Qwen3_5ResidentPromptProcessingChunkSizer,
+    Qwen3_5InferenceRequest, Qwen3_5PromptProcessingChunkSizer, Qwen3_5ResidentEngine,
     Qwen3_5Tokenizer,
 };
 use runtime_integration::MlxRuntime;
@@ -86,11 +86,10 @@ async fn run_astro_ssd_prompt_cache_restore_peak_acceptance() {
     let mut worker_chunking_configuration = crate::common::standard_worker_chunking_configuration();
     worker_chunking_configuration.ssd_prompt_cache_block_tokens =
         Some(ASTRO_SSD_PROMPT_CACHE_RESTORE_PEAK_BLOCK_TOKENS);
-    let prompt_processing_chunk_sizer =
-        Qwen3_5ResidentPromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens(
-            ASTRO_SSD_PROMPT_CACHE_RESTORE_PEAK_PREFILL_CHUNK_TOKENS,
-        )
-        .expect("the selected prefill chunk size should be valid");
+    let prompt_processing_chunk_sizer = Qwen3_5PromptProcessingChunkSizer::for_chunk_size_tokens(
+        ASTRO_SSD_PROMPT_CACHE_RESTORE_PEAK_PREFILL_CHUNK_TOKENS,
+    )
+    .expect("the selected prefill chunk size should be valid");
     let mut qwen3_5_engine = Qwen3_5ResidentEngine::new_with_prompt_processing_chunk_sizer(
         validated_artifact,
         memory_limits.active_memory_limit_bytes(),

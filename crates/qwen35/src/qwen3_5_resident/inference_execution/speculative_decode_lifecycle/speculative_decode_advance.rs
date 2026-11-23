@@ -18,8 +18,8 @@ use ipc_protocol::RequestId;
 
 use crate::GeneratedToken;
 use crate::qwen3_5_core::decoder::reply_token_mlx_buffer_cache_reclaim::reclaim_mlx_buffer_cache_between_draft_rounds;
+use crate::qwen3_5_core::shared_execution::generated_token_emission;
 use crate::qwen3_5_resident::inference_execution::decode_lifecycle::advance_generation::ActiveRequestAdvance;
-use crate::qwen3_5_resident::inference_execution::decode_lifecycle::generated_token_emission;
 use crate::qwen3_5_resident::inference_execution::memory_governance::completed_forward_memory::capture_completed_forward_memory_observation;
 
 use super::super::engine_request::Qwen3_5EngineRequest;
@@ -96,22 +96,29 @@ impl Qwen3_5EngineState {
         // path does; without it `/v1/status` showed the last prompt chunk's
         // memory for the whole draft-assisted reply.
         let completed_forward_memory = capture_completed_forward_memory_observation(model)?;
-        if self.generated_token_will_be_terminal(active_request, current_generated_token_id) {
-            let generated_token_emission = self.build_generated_token_emission(
-                model,
-                active_request,
-                current_generated_token_id,
-                Some(&completed_forward_memory),
-            )?;
+        if generated_token_emission::generated_token_will_be_terminal(
+            &self.end_of_sequence_token_ids,
+            active_request,
+            current_generated_token_id,
+        ) {
+            let generated_token_emission =
+                generated_token_emission::build_generated_token_emission(
+                    model,
+                    &self.end_of_sequence_token_ids,
+                    active_request,
+                    current_generated_token_id,
+                    Some(&completed_forward_memory.mlx_memory_snapshot),
+                )?;
             return Ok(ActiveRequestAdvance::Complete(
                 generated_token_emission.generated_token,
             ));
         }
-        let generated_token_emission = self.build_generated_token_emission(
+        let generated_token_emission = generated_token_emission::build_generated_token_emission(
             model,
+            &self.end_of_sequence_token_ids,
             active_request,
             current_generated_token_id,
-            Some(&completed_forward_memory),
+            Some(&completed_forward_memory.mlx_memory_snapshot),
         )?;
         if generated_token_emission.is_terminal {
             return Ok(ActiveRequestAdvance::Complete(

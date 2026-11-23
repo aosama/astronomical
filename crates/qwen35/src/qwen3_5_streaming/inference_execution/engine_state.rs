@@ -15,8 +15,8 @@ use crate::{
 
 use super::super::ValidatedQwen3_5Artifact;
 use super::super::model::Qwen3_5Model;
-use super::Qwen3_5StreamingPromptProcessingChunkSizer;
 use super::engine_request::Qwen3_5EngineRequest;
+use crate::qwen3_5_core::shared_execution::prompt_processing_chunk_sizer::Qwen3_5PromptProcessingChunkSizer;
 
 /// Everything the streaming engine keeps between engine steps: the loaded
 /// model, the active request, the limits it was started with and its
@@ -58,7 +58,7 @@ pub struct Qwen3_5InferenceExecution {
     pub persistent_visual_embedding_model_contract: Option<PersistentVisualEmbeddingModelContract>,
     pub astro_ssd_prompt_cache: Option<Arc<AstroSsdPromptCacheDiskStore>>,
     pub(in crate::qwen3_5_streaming::inference_execution) prompt_processing_chunk_sizer:
-        Qwen3_5StreamingPromptProcessingChunkSizer,
+        Qwen3_5PromptProcessingChunkSizer,
     pub(in crate::qwen3_5_streaming::inference_execution) chunking: WorkerChunkingConfiguration,
     pub(in crate::qwen3_5_streaming::inference_execution) validated_artifact:
         Option<ValidatedQwen3_5Artifact>,

@@ -17,9 +17,8 @@ use model_serving::{
     ModelFamilyInferenceEngine, ModelLoadingPerformanceAttributionMetadata, PerformanceAttribution,
     PerformanceAttributionLog, PerformanceAttributionOutcome, PerformanceOperation,
     Qwen3_5ArtifactValidator, Qwen3_5GenerationProcessor, Qwen3_5MemoryGeometryError,
-    Qwen3_5ResidentEngine, Qwen3_5ResidentPromptProcessingChunkSizer, Qwen3_5StreamingEngine,
-    Qwen3_5StreamingPromptProcessingChunkSizer, ValidatedQwen3_5Artifact,
-    model_memory_geometry_from_validated_artifact,
+    Qwen3_5PromptProcessingChunkSizer, Qwen3_5ResidentEngine, Qwen3_5StreamingEngine,
+    ValidatedQwen3_5Artifact, model_memory_geometry_from_validated_artifact,
 };
 
 use super::qwen3_5_model_startup_error::Qwen3_5ModelStartupError;
@@ -434,7 +433,7 @@ fn construct_resident_engine(
     artifact_shard_count: usize,
 ) -> Result<ModelFamilyInferenceEngine, Qwen3_5ModelStartupError> {
     let prompt_processing_chunk_sizer =
-        match Qwen3_5ResidentPromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens(
+        match Qwen3_5PromptProcessingChunkSizer::for_chunk_size_tokens(
             chunking.fixed_prompt_processing_chunk_size_tokens,
         ) {
             Ok(prompt_processing_chunk_sizer) => prompt_processing_chunk_sizer,
@@ -448,9 +447,11 @@ fn construct_resident_engine(
                     artifact_shard_count,
                     "prompt-processing chunk configuration failed",
                 );
-                return Err(Qwen3_5ModelStartupError::ResidentPromptProcessingChunkSizing(
-                    prompt_processing_chunk_sizer_error,
-                ));
+                return Err(
+                    Qwen3_5ModelStartupError::ResidentPromptProcessingChunkSizing(
+                        prompt_processing_chunk_sizer_error,
+                    ),
+                );
             }
         };
     // DFlash speculative decoding is disabled by design: no draft
@@ -498,7 +499,7 @@ fn construct_streaming_engine(
     artifact_shard_count: usize,
 ) -> Result<ModelFamilyInferenceEngine, Qwen3_5ModelStartupError> {
     let prompt_processing_chunk_sizer =
-        match Qwen3_5StreamingPromptProcessingChunkSizer::for_ssd_streaming_chunk_size_tokens(
+        match Qwen3_5PromptProcessingChunkSizer::for_chunk_size_tokens(
             chunking.fixed_ssd_streaming_prompt_processing_chunk_size_tokens,
         ) {
             Ok(prompt_processing_chunk_sizer) => prompt_processing_chunk_sizer,

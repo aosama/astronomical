@@ -2,7 +2,7 @@
 
 use crate::AstroSsdPromptCacheDiskStore;
 
-pub(super) fn log_astro_ssd_prompt_cache_startup_cleanup(
+pub fn log_astro_ssd_prompt_cache_startup_cleanup(
     astro_ssd_prompt_cache_role: &'static str,
     astro_ssd_prompt_cache: &AstroSsdPromptCacheDiskStore,
 ) {

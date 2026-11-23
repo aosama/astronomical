@@ -128,6 +128,28 @@ impl crate::qwen3_5_core::model::memory_breakdown::Qwen3_5MemoryOwnership
     }
 }
 
+// Named calls: method syntax inside these bodies would resolve to the trait
+// itself if an inherent method were ever renamed, recursing forever.
+impl crate::qwen3_5_core::shared_execution::text_model::Qwen3_5TextModel for Qwen3_5StreamingModel {
+    fn observed_expert_memory_mode(&self) -> ipc_protocol::ExpertMemoryMode {
+        Qwen3_5StreamingModel::observed_expert_memory_mode(self)
+    }
+
+    fn expert_residency_telemetry_for_breakdown(
+        &self,
+        active_memory_breakdown: &crate::memory::telemetry::MlxActiveMemoryBreakdown,
+    ) -> crate::inference_engine::contract::ExpertResidencyTelemetry {
+        Qwen3_5StreamingModel::expert_residency_telemetry_for_breakdown(
+            self,
+            active_memory_breakdown,
+        )
+    }
+
+    fn latest_memory_ledger_reading(&self) -> Option<memory_policy::ledger::LedgerReading> {
+        Qwen3_5StreamingModel::latest_memory_ledger_reading(self)
+    }
+}
+
 impl std::ops::DerefMut for Qwen3_5StreamingModel {
     fn deref_mut(&mut self) -> &mut Qwen3_5ModelBase {
         &mut self.base

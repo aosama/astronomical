@@ -15,7 +15,6 @@ mod prefill_terminal_failure_descriptions;
 mod prompt_prefill;
 mod prompt_prefill_errors;
 // Visible one level up: the engine module re-exports the chunk sizer.
-pub(super) mod prompt_processing_chunk_sizer;
 mod terminal_prefill_seed;
 
 // Re-bindings of the engine-level owners that stay in inference_execution.

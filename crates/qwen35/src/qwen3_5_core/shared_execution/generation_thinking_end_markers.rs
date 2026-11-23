@@ -4,7 +4,7 @@
 /// reasoning boundaries omit it, so a thinking block can always be closed —
 /// even for direct engine callers that pass no tokenizer-derived boundary
 /// such as a tool-call start.
-pub(super) fn natural_reasoning_end_token_ids_with_model_safety_net(
+pub fn natural_reasoning_end_token_ids_with_model_safety_net(
     caller_supplied_marker_token_ids: &[u32],
     model_think_end_token_id: u32,
 ) -> Vec<u32> {
@@ -18,7 +18,7 @@ pub(super) fn natural_reasoning_end_token_ids_with_model_safety_net(
 /// Returns whether a forced thinking transition ends exactly at the model's
 /// think-end marker — the rule a thinking budget demands so reasoning can
 /// always be closed by a model-owned token sequence.
-pub(super) fn forced_thinking_transition_ends_with_model_marker(
+pub fn forced_thinking_transition_ends_with_model_marker(
     forced_transition_token_ids: &[u32],
     model_think_end_token_id: u32,
 ) -> bool {

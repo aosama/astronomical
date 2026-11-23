@@ -9,7 +9,7 @@ use ipc_protocol::{
 };
 use model_serving::{
     AstroSsdPromptCacheDiskStoreConfig, GeneratedToken, InferenceEngine, Qwen3_5ArtifactValidator,
-    Qwen3_5ResidentEngine, Qwen3_5ResidentPromptProcessingChunkSizer, Qwen3_5Tokenizer,
+    Qwen3_5PromptProcessingChunkSizer, Qwen3_5ResidentEngine, Qwen3_5Tokenizer,
 };
 use tokio::time::{Instant, sleep, timeout};
 
@@ -178,7 +178,7 @@ async fn load_visual_acceptance_engine(
             // the journey writes a single block.
             crate::common::configured_model_artifact_astro_ssd_prompt_cache_maximum_size_bytes(),
         )),
-        Qwen3_5ResidentPromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens(
+        Qwen3_5PromptProcessingChunkSizer::for_chunk_size_tokens(
             VISUAL_ACCEPTANCE_PREFILL_CHUNK_TOKENS,
         )
         .expect("the visual acceptance prefill size should be valid"),

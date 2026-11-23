@@ -8,8 +8,7 @@ use std::path::PathBuf;
 
 use model_serving::{
     ExpertMemoryAdmissionError, InferenceEngineError, Qwen3_5ArtifactValidationError,
-    Qwen3_5MemoryGeometryError, Qwen3_5ResidentPromptProcessingChunkSizerError,
-    Qwen3_5StreamingPromptProcessingChunkSizerError, Qwen3_5TokenizerError,
+    Qwen3_5MemoryGeometryError, Qwen3_5PromptProcessingChunkSizerError, Qwen3_5TokenizerError,
 };
 use thiserror::Error;
 
@@ -51,9 +50,9 @@ pub enum Qwen3_5ModelStartupError {
         source: io::Error,
     },
     #[error("failed to configure Qwen3.5 prompt-processing chunks")]
-    StreamingPromptProcessingChunkSizing(#[source] Qwen3_5StreamingPromptProcessingChunkSizerError),
+    StreamingPromptProcessingChunkSizing(#[source] Qwen3_5PromptProcessingChunkSizerError),
     #[error("failed to configure resident Qwen3.5 prompt-processing chunks")]
-    ResidentPromptProcessingChunkSizing(#[source] Qwen3_5ResidentPromptProcessingChunkSizerError),
+    ResidentPromptProcessingChunkSizing(#[source] Qwen3_5PromptProcessingChunkSizerError),
     #[error("failed to start Qwen3.5 engine at {model_directory:?}")]
     EngineInitialization {
         model_directory: PathBuf,

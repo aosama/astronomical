@@ -29,7 +29,7 @@ use std::{path::Path, process::Stdio, time::Duration};
 use ipc_protocol::{ExpertMemoryMode, RequestId};
 use model_serving::{
     CompleteResidencyHeadroomBoundary, GeneratedToken, InferenceEngine, Qwen3_5ArtifactValidator,
-    Qwen3_5InferenceRequest, Qwen3_5ResidentEngine, Qwen3_5ResidentPromptProcessingChunkSizer,
+    Qwen3_5InferenceRequest, Qwen3_5PromptProcessingChunkSizer, Qwen3_5ResidentEngine,
     Qwen3_5StreamingEngine, model_memory_geometry_from_validated_artifact,
 };
 use runtime_integration::MlxMemoryLimits;
@@ -193,10 +193,8 @@ async fn load_resident_engine(model_directory: &Path) -> (Qwen3_5ResidentEngine,
         .end_of_sequence_token_ids()
         .to_vec();
     let prefill_chunk_sizer =
-        Qwen3_5ResidentPromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens(
-            PREFILL_CHUNK_TOKEN_COUNT as u32,
-        )
-        .expect("the selected resident prefill size should be valid");
+        Qwen3_5PromptProcessingChunkSizer::for_chunk_size_tokens(PREFILL_CHUNK_TOKEN_COUNT as u32)
+            .expect("the selected resident prefill size should be valid");
     let mlx_memory_limits =
         crate::common::sample_machine_serving_acceptance_mlx_memory_limits().await;
     let mut qwen3_5_engine = Qwen3_5ResidentEngine::new_with_prompt_processing_chunk_sizer(

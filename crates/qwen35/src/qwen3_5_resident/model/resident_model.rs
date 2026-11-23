@@ -70,6 +70,28 @@ impl crate::qwen3_5_core::model::memory_breakdown::Qwen3_5MemoryOwnership for Qw
     }
 }
 
+// Named calls: method syntax inside these bodies would resolve to the trait
+// itself if an inherent method were ever renamed, recursing forever.
+impl crate::qwen3_5_core::shared_execution::text_model::Qwen3_5TextModel for Qwen3_5ResidentModel {
+    fn observed_expert_memory_mode(&self) -> ipc_protocol::ExpertMemoryMode {
+        Qwen3_5ResidentModel::expert_memory_mode(self)
+    }
+
+    fn expert_residency_telemetry_for_breakdown(
+        &self,
+        active_memory_breakdown: &crate::memory::telemetry::MlxActiveMemoryBreakdown,
+    ) -> crate::inference_engine::contract::ExpertResidencyTelemetry {
+        Qwen3_5ResidentModel::expert_residency_telemetry_for_breakdown(
+            self,
+            active_memory_breakdown,
+        )
+    }
+
+    fn latest_memory_ledger_reading(&self) -> Option<memory_policy::ledger::LedgerReading> {
+        Qwen3_5ResidentModel::latest_memory_ledger_reading(self)
+    }
+}
+
 impl Qwen3_5ResidentModel {
     /// The memory governor's view after the last measured forward, with its
     /// accounts compared against what MLX reported; `None` before the first.

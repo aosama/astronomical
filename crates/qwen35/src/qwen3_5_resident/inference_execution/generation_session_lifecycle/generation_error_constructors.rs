@@ -23,34 +23,6 @@ pub(in crate::qwen3_5_resident::inference_execution) fn visual_embedding_model_c
     super::fatal_engine_error("Qwen3.5 persistent visual embedding model contract is not loaded")
 }
 
-pub(in crate::qwen3_5_resident::inference_execution) fn thinking_budget_output_reservation_overflow_error()
--> InferenceEngineError {
-    request_errors::invalid_request_error("thinking-budget output reservation overflowed")
-}
-
-pub(in crate::qwen3_5_resident::inference_execution) fn generation_context_token_count_overflow_error()
--> InferenceEngineError {
-    request_errors::invalid_request_error("generation context token count overflowed")
-}
-
-pub(in crate::qwen3_5_resident::inference_execution) fn mlx_active_memory_bytes_exceed_u64_range_error(
-    _try_from_error: std::num::TryFromIntError,
-) -> InferenceEngineError {
-    super::fatal_engine_error("MLX active memory bytes exceed the u64 range")
-}
-
-pub(in crate::qwen3_5_resident::inference_execution) fn mlx_buffer_cache_bytes_exceed_u64_range_error(
-    _try_from_error: std::num::TryFromIntError,
-) -> InferenceEngineError {
-    super::fatal_engine_error("MLX buffer cache memory bytes exceed the u64 range")
-}
-
-pub(in crate::qwen3_5_resident::inference_execution) fn mlx_peak_memory_bytes_exceed_u64_range_error(
-    _try_from_error: std::num::TryFromIntError,
-) -> InferenceEngineError {
-    super::fatal_engine_error("MLX peak memory bytes exceed the u64 range")
-}
-
 pub(in crate::qwen3_5_resident::inference_execution) fn visual_embedding_row_count_exceeds_i32_range_error(
     _try_from_error: std::num::TryFromIntError,
 ) -> InferenceEngineError {
@@ -90,11 +62,6 @@ pub(in crate::qwen3_5_resident::inference_execution) fn boundary_checkpoint_work
 pub(in crate::qwen3_5_resident::inference_execution) fn astro_ssd_prompt_cache_publication_workspace_bytes_overflowed_error()
 -> InferenceEngineError {
     super::fatal_engine_error("astro-ssd-prompt-cache publication workspace bytes overflowed")
-}
-
-pub(in crate::qwen3_5_resident::inference_execution) fn generated_token_counter_overflowed_error()
--> InferenceEngineError {
-    super::fatal_engine_error("generated-token counter overflowed")
 }
 
 pub(in crate::qwen3_5_resident::inference_execution) fn full_attention_growth_tokens_exceed_i32_range_error(
