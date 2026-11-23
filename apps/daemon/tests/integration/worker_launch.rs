@@ -50,6 +50,52 @@ async fn should_report_worker_exit_status_and_stderr_when_the_event_stream_close
     );
 }
 
+// The worker can exit before the daemon's next write reaches it. That write
+// fails with a broken pipe, and the daemon must still report why the worker
+// went away instead of only "failed to write an IPC frame".
+#[tokio::test]
+async fn should_report_worker_exit_status_and_stderr_when_a_command_write_finds_the_worker_gone() {
+    let worker_executable_path = PathBuf::from(
+        std::env::var("CARGO_BIN_EXE_astronomical-daemon-stderr-probe-worker")
+            .expect("Cargo should provide the stderr-probe worker fixture path"),
+    );
+    let mut worker_process = WorkerProcess::launch_with_timeouts(
+        worker_executable_path,
+        Duration::from_secs(1),
+        Duration::from_secs(1),
+    )
+    .await
+    .expect("the stderr-probe worker should launch");
+    assert!(
+        worker_process
+            .next_event()
+            .await
+            .expect("the readiness event should be readable")
+            .is_some()
+    );
+
+    // Writes land in the pipe buffer until the worker has exited, so keep
+    // writing until one fails.
+    let write_failure_deadline = Instant::now() + Duration::from_secs(5);
+    let worker_gone_error = loop {
+        match worker_process.sample_mlx_memory().await {
+            Err(write_error) => break write_error,
+            Ok(()) if Instant::now() < write_failure_deadline => {
+                sleep(Duration::from_millis(20)).await;
+            }
+            Ok(()) => panic!("a write to the exited worker should fail within five seconds"),
+        }
+    };
+    let worker_gone_diagnostic = worker_gone_error.to_string();
+
+    assert!(
+        worker_gone_diagnostic.contains("worker process exited"),
+        "unexpected diagnostic: {worker_gone_diagnostic}"
+    );
+    assert!(worker_gone_diagnostic.contains("exit code 0"));
+    assert!(worker_gone_diagnostic.contains("stderr-probe worker observed visible stderr"));
+}
+
 #[tokio::test]
 async fn should_load_the_requested_model_only_after_the_first_generation_request() {
     let worker_executable_path = PathBuf::from(

@@ -5,8 +5,9 @@ use std::{
 };
 
 use ipc_protocol::{
-    ChatGenerationCommand, EmbeddingsCommand, ImageGenerationCommand, ProtocolReader,
-    ProtocolWriter, RequestId, WorkerCommand, WorkerEvent, WorkerStartupConfiguration,
+    ChatGenerationCommand, EmbeddingsCommand, ImageGenerationCommand, ProtocolError,
+    ProtocolReader, ProtocolWriter, RequestId, WorkerCommand, WorkerEvent,
+    WorkerStartupConfiguration,
 };
 use tokio::{
     io::AsyncReadExt,
@@ -183,30 +184,8 @@ impl WorkerProcess {
             }
         };
 
-        let mut command_writer = ProtocolWriter::new(worker_stdin);
-        if let Some(worker_startup_configuration) = worker_startup_configuration {
-            let initialization_write_result = timeout(
-                command_write_timeout,
-                command_writer.send_command(&WorkerCommand::InitializeWorker(
-                    worker_startup_configuration,
-                )),
-            )
-            .await
-            .map_err(|_| WorkerControlError::CommandWriteTimeout {
-                command_timeout_millis: command_write_timeout.as_millis(),
-            })
-            .and_then(|write_result| write_result.map_err(Into::into));
-            if let Err(initialization_write_error) = initialization_write_result {
-                return Err(cleanup_startup_failure(
-                    initialization_write_error,
-                    &mut worker_process,
-                    shutdown_timeout,
-                )
-                .await);
-            }
-        }
-        Ok(Self {
-            command_writer: Some(command_writer),
+        let mut launched_worker = Self {
+            command_writer: Some(ProtocolWriter::new(worker_stdin)),
             event_reader: ProtocolReader::new(worker_stdout),
             command_write_timeout,
             launch_executable_path,
@@ -217,7 +196,34 @@ impl WorkerProcess {
             worker_stderr_tail,
             worker_started_at,
             worker_process,
-        })
+        };
+        if let Some(worker_startup_configuration) = worker_startup_configuration {
+            launched_worker
+                .send_startup_initialization(worker_startup_configuration)
+                .await?;
+        }
+        Ok(launched_worker)
+    }
+
+    /// Sends the startup configuration, reaping the process when the write
+    /// fails so a failed launch never leaves a child behind.
+    async fn send_startup_initialization(
+        &mut self,
+        worker_startup_configuration: WorkerStartupConfiguration,
+    ) -> Result<(), WorkerControlError> {
+        let initialization_command = WorkerCommand::InitializeWorker(worker_startup_configuration);
+        match self
+            .send_command_with_timeout(&initialization_command)
+            .await
+        {
+            Ok(()) => Ok(()),
+            Err(initialization_write_error) => Err(cleanup_startup_failure(
+                initialization_write_error,
+                &mut self.worker_process,
+                self.shutdown_timeout,
+            )
+            .await),
+        }
     }
 
     /// Starts a clean process from this worker's exact portable launch inputs.
@@ -465,8 +471,19 @@ impl WorkerProcess {
                 });
             }
         };
-        command_write_outcome?;
-        Ok(())
+        match command_write_outcome {
+            Ok(()) => Ok(()),
+            // A broken pipe means the worker has already exited and closed its
+            // stdin. Its exit status and stderr explain why; the bare write
+            // error would discard both, which left a worker that died before
+            // its first command with no diagnostic in the daemon log.
+            Err(ProtocolError::WriteFrame(write_error))
+                if write_error.kind() == std::io::ErrorKind::BrokenPipe =>
+            {
+                Err(self.worker_process_exit_error().await)
+            }
+            Err(protocol_error) => Err(protocol_error.into()),
+        }
     }
 
     /// Collects bounded child diagnostics after stdout can no longer carry IPC.
