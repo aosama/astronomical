@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use ipc_protocol::{ExpertMemoryMode, RequestId};
 use model_serving::{
-    CompleteResidencyHeadroomBoundary, Qwen3_5ArtifactValidator,
+    CompleteResidencyHeadroomBoundary, Qwen3_5ArtifactValidator, Qwen3_5TextModelTestControls,
     model_memory_geometry_from_validated_artifact,
 };
 use runtime_integration::MlxMemoryLimits;

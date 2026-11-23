@@ -7,8 +7,8 @@
 use ipc_protocol::RequestId;
 use model_serving::{
     GeneratedToken, GenerationFinalization, InferenceEngine, Qwen3_5ArtifactValidator,
-    Qwen3_5InferenceRequest, Qwen3_5PromptProcessingChunkSizer, Qwen3_5ResidentEngine,
-    Qwen3_5StreamingEngine, Qwen3_5Tokenizer,
+    Qwen3_5InferenceRequest, Qwen3_5MlxEngineConstructors, Qwen3_5PromptProcessingChunkSizer,
+    Qwen3_5ResidentEngine, Qwen3_5StreamingEngine, Qwen3_5Tokenizer,
 };
 
 pub(super) const RESIDENCY_LIFECYCLE_PROMPT_TOKEN_COUNT: usize = 256;

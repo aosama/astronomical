@@ -10,13 +10,26 @@ use crate::{InferenceEngineError, MlxInferenceEngine, MlxInferenceExecution};
 use super::execution_core::Qwen3_5ExecutionCoreOwner;
 use super::text_model::Qwen3_5TextModel;
 
-impl<Execution> MlxInferenceEngine<Execution>
+/// Test controls of the `MlxInferenceEngine` this family runs on. A trait,
+/// because only the engine core may add inherent methods to that type.
+// Every caller awaits these in place, so the futures' Send bound never matters.
+#[allow(async_fn_in_trait)]
+pub trait Qwen3_5MlxEngineTestControls {
+    /// How much prompt work the active request reused, for the request named.
+    async fn prompt_work_reuse_for_tests(
+        &self,
+        request_id: RequestId,
+    ) -> Result<WorkerPromptWorkReuse, InferenceEngineError>;
+
+    /// Resets the process-global MLX peak counter on the engine owner thread.
+    async fn reset_mlx_peak_memory_for_tests(&self) -> Result<(), InferenceEngineError>;
+}
+
+impl<Execution> Qwen3_5MlxEngineTestControls for MlxInferenceEngine<Execution>
 where
     Execution: MlxInferenceExecution + Qwen3_5ExecutionCoreOwner,
 {
-    /// How much prompt work the active request reused, for the request named.
-    #[doc(hidden)]
-    pub async fn prompt_work_reuse_for_tests(
+    async fn prompt_work_reuse_for_tests(
         &self,
         request_id: RequestId,
     ) -> Result<WorkerPromptWorkReuse, InferenceEngineError> {
@@ -35,9 +48,7 @@ where
         })
     }
 
-    /// Resets the process-global MLX peak counter on the engine owner thread.
-    #[doc(hidden)]
-    pub async fn reset_mlx_peak_memory_for_tests(&self) -> Result<(), InferenceEngineError> {
+    async fn reset_mlx_peak_memory_for_tests(&self) -> Result<(), InferenceEngineError> {
         self.run_owner_test_operation(|inference_execution| {
             inference_execution
                 .execution_core()
@@ -55,13 +66,22 @@ where
 }
 
 /// Controls that read the loaded text model.
-impl<Execution> MlxInferenceEngine<Execution>
+/// Test controls of the `MlxInferenceEngine` this family runs on. A trait,
+/// because only the engine core may add inherent methods to that type.
+// Every caller awaits these in place, so the futures' Send bound never matters.
+#[allow(async_fn_in_trait)]
+pub trait Qwen3_5TextModelTestControls {
+    /// Returns the currently loaded model's truthful expert-memory mode.
+    async fn expert_memory_mode_for_tests(
+        &self,
+    ) -> Result<Option<ExpertMemoryMode>, InferenceEngineError>;
+}
+
+impl<Execution> Qwen3_5TextModelTestControls for MlxInferenceEngine<Execution>
 where
     Execution: MlxInferenceExecution + Qwen3_5ExecutionCoreOwner<Model: Qwen3_5TextModel>,
 {
-    /// Returns the currently loaded model's truthful expert-memory mode.
-    #[doc(hidden)]
-    pub async fn expert_memory_mode_for_tests(
+    async fn expert_memory_mode_for_tests(
         &self,
     ) -> Result<Option<ExpertMemoryMode>, InferenceEngineError> {
         let (expert_memory_mode_sender, expert_memory_mode_receiver) =

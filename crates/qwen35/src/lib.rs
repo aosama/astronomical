@@ -18,8 +18,6 @@ pub mod astro_ssd_prompt_cache;
 
 pub mod kernel_capability;
 
-pub mod mlx_inference_engine;
-
 // The folded ternary family ships its loader and straight text model as
 // crate API ahead of the serving-path integration; the acceptance crate
 // exercises it through this public surface.
@@ -49,8 +47,6 @@ use artifact_validation::*;
 use engine_core::*;
 use memory_policy::safetensors;
 use model_primitives::*;
-
-pub use mlx_inference_engine::MlxInferenceEngine;
 
 #[cfg(feature = "direct-mlx")]
 pub use engine_core::expert_paging::load_quantized_expert_page;
@@ -244,13 +240,22 @@ pub use qwen3_5_core::vision::{
 };
 
 #[cfg(feature = "direct-mlx")]
+pub use qwen3_5_core::shared_execution::engine_construction::Qwen3_5MlxEngineConstructors;
+#[cfg(feature = "direct-mlx")]
 pub use qwen3_5_core::shared_execution::execution_core::Qwen3_5ExecutionCoreSettings;
 #[cfg(feature = "direct-mlx")]
 pub use qwen3_5_core::shared_execution::prompt_processing_chunk_sizer::{
     Qwen3_5PromptProcessingChunkSizer, Qwen3_5PromptProcessingChunkSizerError,
 };
 #[cfg(feature = "direct-mlx")]
-pub use qwen3_5_resident::{Qwen3_5ResidentEngine, Qwen3_5ResidentModel, ResidentEngineSettings};
+pub use qwen3_5_core::shared_execution::test_controls::{
+    Qwen3_5MlxEngineTestControls, Qwen3_5TextModelTestControls,
+};
+#[cfg(feature = "direct-mlx")]
+pub use qwen3_5_resident::{
+    Qwen3_5ResidentEngine, Qwen3_5ResidentEngineTestControls, Qwen3_5ResidentModel,
+    ResidentEngineSettings,
+};
 
 #[cfg(feature = "direct-mlx")]
 pub use qwen3_5_resident::{
@@ -263,6 +268,8 @@ pub use qwen3_5_resident::{
     ResidentLayerArraysForTests, ResidentProjectionArraysForTests, resident_layer_arrays_for_tests,
 };
 
+#[cfg(feature = "direct-mlx")]
+pub use qwen3_5_streaming::Qwen3_5StreamingEngineTestControls;
 #[cfg(feature = "direct-mlx")]
 pub use qwen3_5_streaming::{
     ExpertPagingError, Qwen3_5ExpertPager, Qwen3_5MoEAstroExpertCachePlusStreamedPageRoute,

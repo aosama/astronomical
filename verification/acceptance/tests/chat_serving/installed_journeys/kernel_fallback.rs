@@ -19,9 +19,9 @@ use std::time::Duration;
 use ipc_protocol::RequestId;
 use model_serving::{
     CustomMetalKernelFamily, GeneratedToken, InferenceEngine, PerformanceAttribution,
-    Qwen3_5ArtifactValidator, Qwen3_5InferenceRequest, Qwen3_5PromptProcessingChunkSizer,
-    Qwen3_5StreamingEngine, install_forced_worker_verdicts_for_tests,
-    worker_process_kernel_capabilities,
+    Qwen3_5ArtifactValidator, Qwen3_5InferenceRequest, Qwen3_5MlxEngineConstructors,
+    Qwen3_5PromptProcessingChunkSizer, Qwen3_5StreamingEngine,
+    install_forced_worker_verdicts_for_tests, worker_process_kernel_capabilities,
 };
 use runtime_integration::MlxRuntime;
 use tokio::time::timeout;

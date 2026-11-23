@@ -11,7 +11,8 @@ use std::time::Duration;
 use ipc_protocol::RequestId;
 use model_serving::{
     PerformanceAttribution, PerformanceAttributionLog, Qwen3_5ArtifactValidator,
-    Qwen3_5PromptProcessingChunkSizer, Qwen3_5StreamingEngine, Qwen3_5Tokenizer,
+    Qwen3_5MlxEngineConstructors, Qwen3_5PromptProcessingChunkSizer, Qwen3_5StreamingEngine,
+    Qwen3_5Tokenizer,
 };
 use tokio::time::timeout;
 

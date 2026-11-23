@@ -22,6 +22,7 @@
 //! `cargo measure-decode-residency-attribution` (warm) and
 //! `cargo measure-cold-decode-residency-attribution` (cold).
 
+use model_serving::Qwen3_5StreamingEngineTestControls;
 use std::path::Path;
 use std::time::Duration;
 
