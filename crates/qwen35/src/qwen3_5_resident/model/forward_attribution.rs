@@ -1,5 +1,6 @@
 //! Request-owned performance-attribution forwarding for Qwen3.5 MLX graphs.
 
+use crate::qwen3_5_core::model::target_forward_graph::Qwen3_5TargetForwardGraph;
 use mlx_bridge::MlxArray;
 
 use crate::PerformanceAttribution;
@@ -109,6 +110,7 @@ impl Qwen3_5ResidentModel {
             starting_position_tokens,
             request_decoder_state,
             boundary_checkpoint_collector,
+            (),
             performance_attribution,
         )?);
         Ok(consumed_visual_embedding_count)
@@ -180,6 +182,7 @@ impl Qwen3_5ResidentModel {
             starting_position_tokens,
             request_decoder_state,
             None,
+            (),
             performance_attribution,
         )?;
         let graph_elapsed = graph_started_at.elapsed();
@@ -234,6 +237,7 @@ impl Qwen3_5ResidentModel {
             starting_position_tokens,
             request_decoder_state,
             Some(&mut boundary_checkpoint_collector),
+            (),
             performance_attribution,
         )?;
         self.evaluate_decoder_state_with_performance_attribution(
@@ -275,6 +279,7 @@ impl Qwen3_5ResidentModel {
             starting_position_tokens,
             request_decoder_state,
             Some(&mut boundary_checkpoint_collector),
+            (),
             performance_attribution,
         )?;
         self.evaluate_terminal_prefill_state_with_performance_attribution(
@@ -312,6 +317,7 @@ impl Qwen3_5ResidentModel {
             token_ids.len() as i32,
             starting_position_tokens,
             request_decoder_state,
+            (),
             performance_attribution,
         )?;
         self.evaluate_forward_state_with_performance_attribution(

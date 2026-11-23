@@ -6,6 +6,7 @@
 //! files inside the source-size budget.
 
 use crate::PerformanceAttribution;
+use crate::qwen3_5_core::model::target_forward_graph::Qwen3_5TargetForwardGraph;
 use crate::qwen3_5_streaming::Qwen3_5MoEPagedExecutionMode;
 
 use super::Qwen3_5Model;

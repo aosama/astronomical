@@ -16,6 +16,9 @@
 //! continues it from the state's length. Positions therefore simply continue
 //! from the state for every question; nothing restarts.
 
+use crate::qwen3_5_core::model::target_forward_graph::{
+    Qwen3_5ForwardPositions, Qwen3_5TargetForwardGraph,
+};
 use mlx_bridge::{MlxArray, MlxDtype};
 
 use super::{Qwen3_5ExecutionError, Qwen3_5ResidentModel, RequestDecoderStateStack};
@@ -100,11 +103,14 @@ impl Qwen3_5ResidentModel {
         let forward_output = self
             .build_target_forward_graph_from_token_indices_with_position_offsets(
                 &token_indices,
-                token_count,
-                starting_position_tokens,
-                None,
+                Qwen3_5ForwardPositions {
+                    token_count,
+                    starting_position_tokens,
+                    token_position_offsets: None,
+                },
                 request_decoder_state,
                 None,
+                (),
                 &mut disabled_performance_attribution,
                 false,
             )?;
