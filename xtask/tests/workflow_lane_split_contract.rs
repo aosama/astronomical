@@ -511,14 +511,19 @@ fn contract_targets_missing_from_lane<'a>(
 fn lane_runs_test_target(lane_text: &str, test_target: &str) -> bool {
     for lane_line in lane_text.lines() {
         let trimmed_line = lane_line.trim();
-        if trimmed_line.starts_with('#') {
-            continue;
+        if !trimmed_line.starts_with('#') && line_names_test_target(trimmed_line, test_target) {
+            return true;
         }
-        let line_words: Vec<&str> = trimmed_line.split_whitespace().collect();
-        for word_pair in line_words.windows(2) {
-            if word_pair[0] == "--test" && word_pair[1] == test_target {
-                return true;
-            }
+    }
+    false
+}
+
+/// Whether one uncommented line passes `--test test_target`.
+fn line_names_test_target(lane_line: &str, test_target: &str) -> bool {
+    let line_words: Vec<&str> = lane_line.split_whitespace().collect();
+    for word_pair in line_words.windows(2) {
+        if word_pair[0] == "--test" && word_pair[1] == test_target {
+            return true;
         }
     }
     false

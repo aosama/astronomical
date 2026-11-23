@@ -42,34 +42,49 @@ pub(crate) fn project_catalog_entries<'a>(
 ) -> Vec<CatalogEntryProjection<'a>> {
     let mut projections = Vec::with_capacity(download_catalog.entry_count());
     for catalog_entry in download_catalog.entries() {
-        let huggingface_id = catalog_entry.huggingface_id();
-        let exact_copy =
-            find_exact_copy(huggingface_id, catalog_entry.revision(), discovered_models);
-        let served_copy =
-            find_discovered_copy(huggingface_id, catalog_entry.revision(), discovered_models);
-        let has_validated_publication = validated_publications.contains(huggingface_id);
-        let is_ready = exact_copy.is_some() || has_validated_publication;
-        let is_served = is_ready || served_copy.is_some();
-        let requestable_model_id = is_served.then(|| {
-            served_copy.map_or_else(
-                || requestable_model_id_from_huggingface_id(huggingface_id),
-                |model| model.model_id.clone(),
-            )
-        });
-        projections.push(CatalogEntryProjection {
+        projections.push(project_catalog_entry(
             catalog_entry,
-            ready_on_this_mac: is_ready,
-            served_on_this_mac: is_served,
-            discovered_model_directory: served_copy
-                .map(|model| model.model_directory.display().to_string()),
-            requestable_model_id,
-            download_state: current_job
-                .filter(|job| job.huggingface_id() == huggingface_id && !is_ready)
-                .map(|job| job.state().as_str()),
-            capabilities: catalog_entry.capabilities().clone(),
-        });
+            discovered_models,
+            validated_publications,
+            current_job,
+        ));
     }
     projections
+}
+
+/// One catalog entry joined with discovery and publication state, by the
+/// rules `project_catalog_entries` states.
+fn project_catalog_entry<'a>(
+    catalog_entry: &'a DownloadCatalogEntry,
+    discovered_models: &[DiscoveredModel],
+    validated_publications: &BTreeSet<String>,
+    current_job: Option<&DownloadJob>,
+) -> CatalogEntryProjection<'a> {
+    let huggingface_id = catalog_entry.huggingface_id();
+    let exact_copy = find_exact_copy(huggingface_id, catalog_entry.revision(), discovered_models);
+    let served_copy =
+        find_discovered_copy(huggingface_id, catalog_entry.revision(), discovered_models);
+    let has_validated_publication = validated_publications.contains(huggingface_id);
+    let is_ready = exact_copy.is_some() || has_validated_publication;
+    let is_served = is_ready || served_copy.is_some();
+    let requestable_model_id = is_served.then(|| {
+        served_copy.map_or_else(
+            || requestable_model_id_from_huggingface_id(huggingface_id),
+            |model| model.model_id.clone(),
+        )
+    });
+    CatalogEntryProjection {
+        catalog_entry,
+        ready_on_this_mac: is_ready,
+        served_on_this_mac: is_served,
+        discovered_model_directory: served_copy
+            .map(|model| model.model_directory.display().to_string()),
+        requestable_model_id,
+        download_state: current_job
+            .filter(|job| job.huggingface_id() == huggingface_id && !is_ready)
+            .map(|job| job.state().as_str()),
+        capabilities: catalog_entry.capabilities().clone(),
+    }
 }
 
 /// Derives the local requestable model ID from the Hugging Face identity's leaf segment.

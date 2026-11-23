@@ -99,13 +99,19 @@ pub(crate) fn ready_model_folder(
     published_download_folder: Option<PathBuf>,
 ) -> Result<PathBuf, LibraryRevealRefusal> {
     let projection = matching_projection.ok_or(LibraryRevealRefusal::UnknownModel)?;
-    if !projection.ready_on_this_mac && !projection.served_on_this_mac {
+    if !is_on_this_mac(projection) {
         return Err(LibraryRevealRefusal::NotOnThisMac);
     }
     match &projection.discovered_model_directory {
         Some(discovered_folder) => Ok(PathBuf::from(discovered_folder)),
         None => published_download_folder.ok_or(LibraryRevealRefusal::NotOnThisMac),
     }
+}
+
+/// Whether the engine has the model at all: ready at the catalog's revision,
+/// or served from another copy.
+fn is_on_this_mac(projection: &CatalogEntryProjection<'_>) -> bool {
+    projection.ready_on_this_mac || projection.served_on_this_mac
 }
 
 #[cfg(test)]
