@@ -38,7 +38,7 @@ use serial_test::serial;
 const PROBE_NAME: &str = "fused-expert-combination-prefill-ab";
 
 /// The resident MoE model the fused kernel was built for.
-const MODEL_ID: &str = "Ornith-1.5-35B-A3B-OptiQ-DFLASH2-4bit";
+const MODEL_ID: &str = "Ornith-1.5-35B-A3B-OptiQ-4bit-vision-DFLASH2";
 
 /// Single-chunk rungs, in tokens.
 const SINGLE_CHUNK_SIZES: [usize; 3] = [2_048, 3_072, 4_096];

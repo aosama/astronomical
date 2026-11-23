@@ -204,11 +204,11 @@ test("should_hand_a_model_id_to_its_handler_and_refuse_anything_that_is_not_one"
   const calledCommands: string[] = [];
   const router = new HostCommandRouter(recordingHandlers(calledCommands));
 
-  assert.equal(router.run({ name: "selectChatModel", model: "Ornith-1.5-35B-A3B-OptiQ-DFLASH2-4bit" }), true);
+  assert.equal(router.run({ name: "selectChatModel", model: "Ornith-1.5-35B-A3B-OptiQ-4bit-vision-DFLASH2" }), true);
   assert.equal(router.run({ name: "selectChatModel", model: "Qwen3.5-0.8B-MLX-4bit" }), true);
   for (const refusedModel of [undefined, null, 7, "", "-leading-dash", "has space", "a/b", "<script>", "a".repeat(201)]) {
     assert.equal(router.run({ name: "selectChatModel", model: refusedModel }), false, String(refusedModel).slice(0, 20));
   }
 
-  assert.deepEqual(calledCommands, ["selectChatModel:Ornith-1.5-35B-A3B-OptiQ-DFLASH2-4bit", "selectChatModel:Qwen3.5-0.8B-MLX-4bit"]);
+  assert.deepEqual(calledCommands, ["selectChatModel:Ornith-1.5-35B-A3B-OptiQ-4bit-vision-DFLASH2", "selectChatModel:Qwen3.5-0.8B-MLX-4bit"]);
 });

@@ -543,7 +543,8 @@
             }
         },
         {
-            "huggingface_id": "ahmedihamdy/Ornith-1.5-35B-A3B-OptiQ-DFLASH2-4bit",
+            "huggingface_id": "ahmedihamdy/Ornith-1.5-35B-A3B-OptiQ-4bit-vision-DFLASH2",
+            "former_huggingface_ids": ["ahmedihamdy/Ornith-1.5-35B-A3B-OptiQ-DFLASH2-4bit"],
             "revision": "28c5203a83fa7bc39b3363b870273c23f6bcf04e",
             "summary": "The heavy thinker with its draft model built in: writing about a fifth quicker, code about 40% quicker.",
             "family": "qwen3_5",

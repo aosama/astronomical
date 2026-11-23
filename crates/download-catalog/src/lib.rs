@@ -12,6 +12,7 @@ mod catalog_classification;
 mod catalog_presentation;
 mod catalog_speed;
 mod download_catalog;
+mod entry_identity;
 mod model_suggestion_wording;
 mod model_suggestions;
 mod path_selection;

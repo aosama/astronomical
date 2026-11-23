@@ -61,9 +61,17 @@ fn project_catalog_entry<'a>(
     current_job: Option<&DownloadJob>,
 ) -> CatalogEntryProjection<'a> {
     let huggingface_id = catalog_entry.huggingface_id();
-    let exact_copy = find_exact_copy(huggingface_id, catalog_entry.revision(), discovered_models);
-    let served_copy =
-        find_discovered_copy(huggingface_id, catalog_entry.revision(), discovered_models);
+    let catalog_entry_names = catalog_entry.huggingface_ids().collect::<Vec<_>>();
+    let exact_copy = find_exact_copy(
+        &catalog_entry_names,
+        catalog_entry.revision(),
+        discovered_models,
+    );
+    let served_copy = find_discovered_copy(
+        &catalog_entry_names,
+        catalog_entry.revision(),
+        discovered_models,
+    );
     let has_validated_publication = validated_publications.contains(huggingface_id);
     let is_ready = exact_copy.is_some() || has_validated_publication;
     let is_served = is_ready || served_copy.is_some();
