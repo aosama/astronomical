@@ -4,30 +4,40 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.131</title>
-            <pubDate>Sun, 22 Nov 2026 11:07:50 -0500</pubDate>
-            <sparkle:version>2466</sparkle:version>
-            <sparkle:shortVersionString>0.2.131</sparkle:shortVersionString>
+            <title>0.2.132</title>
+            <pubDate>Sun, 22 Nov 2026 19:11:11 -0500</pubDate>
+            <sparkle:version>2476</sparkle:version>
+            <sparkle:shortVersionString>0.2.132</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[## What's new
+            <description sparkle:format="markdown"><![CDATA[## Astronomical 0.2.132
 
-- **Pictures and files open straight away.** When Astro looks at a picture or reads a file for you, the file picker now opens at once. Choosing a file there is your OK; nothing is read until you pick one. Searching your other conversations still asks first.
+### Maximum model RAM
 
-## Fixed
+- A queued change now names the limit the engine will really install, never a figure larger than this Mac can reach.
+- While a change waits for the current reply to finish, the slider rests and Apply is not offered.
+- Normal states use the quiet text colour: reading part of a model from the SSD, a queued change and a successful update are not warnings.
+- Feedback uses plain words, such as "Maximum model RAM updated."
 
-- **Tiel-Coder shows that it can see pictures.** The Models page now lists "Sees images" for `Tiel-Coder-35B-A3B-MLX-oQ6e`, and the download is the publisher's newer November build, with its real size, memory and reply speeds.
+### Observatory
 
-## Compatibility
+- On this Mac lists every model the engine serves, including copies in a configured model folder that match a catalog entry.
 
-- Your downloaded models, conversations and settings are kept.
-- Requires macOS 14 or later on a Mac with Apple silicon.
-- Signed with Developer ID, notarized by Apple, and delivered through a signed update feed.
+### Reliability
+
+- When the inference worker stops before the engine's next message reaches it, the engine log now keeps the worker's exit status and the end of its error output. A worker that fails to start is also written to the engine log.
+
+### Compatibility
+
+- macOS 14.0 and later on Apple silicon.
+- Existing settings, conversations and downloaded models are preserved; no configuration fields were removed.
+
+Signed with Developer ID, notarized by Apple and delivered through the signed Sparkle update feed.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.131/Astronomical-0.2.131-macOS-arm64.dmg" length="25847102" type="application/octet-stream" sparkle:edSignature="gdX02ihCmvxdfBng+PZojeKkArWb5bHGkGGDeT5oNoeJ0lhYoby08SW7RUSXi7UTpiGCduxd7PuN4ARpDzTgBw=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.132/Astronomical-0.2.132-macOS-arm64.dmg" length="25876109" type="application/octet-stream" sparkle:edSignature="ky0MkifjkWE4FKUe059d6J5gPRXYxRSay6GFrWiAQxZ0/1R9LWE+yPnA+ntLQYUXjUDeK8djc5m5QbZd72NTCA=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: WShZSkuWRdPnoBk6O66C0zsH56IEkA4MglKzu8+guYZpwzjc5SV2+I66ip1t2GlWf89vk6OO+uwDDGc0PnO/CQ==
-length: 1975
+edSignature: iO3uTVBsXsza3XqCIq5unD9WHHudZZa++frsSy2E9+4fTqB2wgnF62lzpNq9xMiK2oRXmPJ6PWKOHc8sV5ugBw==
+length: 2359
 -->
