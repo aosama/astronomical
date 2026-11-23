@@ -16,6 +16,9 @@ use super::Qwen3_5InferenceExecution;
 use super::Qwen3_5ResidentEngine;
 use super::engine_error_helpers::fatal_engine_error;
 use super::engine_error_helpers::qwen3_5_runtime_error;
+use crate::qwen3_5_core::shared_execution::execution_core::{
+    Qwen3_5ExecutionCore, Qwen3_5ExecutionCoreSettings,
+};
 use crate::qwen3_5_core::shared_execution::prompt_processing_chunk_sizer::Qwen3_5PromptProcessingChunkSizer;
 
 impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
@@ -94,57 +97,26 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
         performance_attribution_log: PerformanceAttributionLog,
         astro_neural_engine_program_cache_directory: Option<PathBuf>,
     ) -> Result<Qwen3_5ResidentEngine, InferenceEngineError> {
-        let full_attention_kv_state_growth_tokens =
-            i32::try_from(chunking.full_attention_key_value_growth_tokens)
-            .map_err(super::generation_session_lifecycle::generation_error_constructors::full_attention_growth_tokens_exceed_i32_range_error)?;
-        let end_of_sequence_token_ids = validated_artifact
-            .config()
-            .end_of_sequence_token_ids()
-            .to_vec();
-        let artifact_maximum_position_count = validated_artifact.config().maximum_position_count();
-        if maximum_context_tokens == 0 || maximum_context_tokens > artifact_maximum_position_count {
-            return Err(fatal_engine_error(
-                "effective Qwen3.5 context must be positive and not exceed the artifact context",
-            ));
-        }
-        let maximum_position_count = maximum_context_tokens as usize;
-        let hard_maximum_position_count = artifact_maximum_position_count as usize;
-        let vocabulary_size = validated_artifact.config().vocabulary_size();
-        let context_memory_reservation_bytes_per_token = validated_artifact
-            .config()
-            .context_memory_reservation_bytes(1)
-            .ok_or_else(super::generation_session_lifecycle::generation_error_constructors::context_memory_reservation_overflowed_error)?;
-        let memory_limits =
-            MlxMemoryLimits::new(active_memory_limit_bytes, mlx_buffer_cache_limit_bytes)
-                .map_err(qwen3_5_runtime_error)?;
-        MlxInferenceEngine::new(move || Qwen3_5InferenceExecution {
-            active_request: None,
+        let validated_core_settings = Qwen3_5ExecutionCoreSettings {
+            validated_artifact,
+            active_memory_limit_bytes,
+            mlx_buffer_cache_limit_bytes,
             astro_ssd_prompt_cache_disk_store_config,
-            astro_ssd_prompt_cache_counters: AstroSsdPromptCacheCounters::default(),
-            context_memory_reservation_bytes_per_token,
-            end_of_sequence_token_ids,
-            think_end_token_id,
-            full_attention_kv_state_growth_tokens,
-            memory_limits,
-            model_directory,
-            model_id: None,
-            model_revision: None,
-            model_loading_performance_attribution: Some(model_loading_performance_attribution),
-            performance_attribution_log,
-            maximum_position_count,
-            hard_maximum_position_count,
-            model: None,
-            astro_ssd_prompt_cache_model_contract: None,
-            persistent_visual_embedding_model_contract: None,
-            astro_ssd_prompt_cache: None,
             prompt_processing_chunk_sizer,
+            think_end_token_id,
+            model_directory,
+            maximum_context_tokens,
             chunking,
+            model_loading_performance_attribution,
+            performance_attribution_log,
+        }
+        .validate()?;
+        MlxInferenceEngine::new(move || Qwen3_5InferenceExecution {
+            core: Qwen3_5ExecutionCore::new(validated_core_settings),
             neural_engine_prefill_status: ipc_protocol::NeuralEnginePrefillStatus::Off,
             neural_engine_prefill_preparation: None,
             astro_neural_engine_program_cache_directory,
             retained_live_prefix: None,
-            validated_artifact: Some(validated_artifact),
-            vocabulary_size,
             speculative_draft_runtime: None,
             draft_model_status: ipc_protocol::DraftModelStatus::None,
         })

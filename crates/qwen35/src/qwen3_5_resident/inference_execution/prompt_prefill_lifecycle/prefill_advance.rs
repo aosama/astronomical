@@ -122,7 +122,7 @@ impl Qwen3_5EngineState {
         prefill_end: usize,
         forward_chunk_elapsed_millis: u64,
     ) -> Option<ipc_protocol::NeuralEngineChunkReport> {
-        self.model.as_ref()?.note_neural_engine_chunk_finished(
+        self.core.model.as_ref()?.note_neural_engine_chunk_finished(
             prefill_start,
             prefill_end - prefill_start,
             Duration::from_millis(forward_chunk_elapsed_millis),
@@ -139,6 +139,7 @@ impl Qwen3_5EngineState {
         prefill_end_exclusive: usize,
     ) -> Option<crate::astro_ssd_prompt_cache::ResolvedPrefillChunkSpan> {
         let astro_ssd_prompt_cache_block_token_count = self
+            .core
             .astro_ssd_prompt_cache
             .as_ref()
             .map(|astro_ssd_prompt_cache| {
@@ -150,12 +151,13 @@ impl Qwen3_5EngineState {
         crate::astro_ssd_prompt_cache::resolve_prompt_prefill_chunk_span(
             active_request.prefill_cursor,
             prefill_end_exclusive,
-            self.prompt_processing_chunk_sizer
+            self.core
+                .prompt_processing_chunk_sizer
                 .next_prompt_processing_chunk_end(
                     active_request.prefill_cursor,
                     prefill_end_exclusive,
                 ),
-            self.astro_ssd_prompt_cache.is_some(),
+            self.core.astro_ssd_prompt_cache.is_some(),
             active_request.can_use_astro_ssd_prompt_cache,
             astro_ssd_prompt_cache_block_token_count,
         )
@@ -358,6 +360,7 @@ impl Qwen3_5EngineState {
         boundary_checkpoints: Vec<crate::Qwen3_5AstroSsdPromptCacheBoundaryCheckpoint>,
     ) -> Result<(), InferenceEngineError> {
         let model = self
+            .core
             .model
             .as_ref()
             .ok_or_else(engine_lost_loaded_model_error)?;
@@ -365,7 +368,7 @@ impl Qwen3_5EngineState {
         // Publication deliberately precedes `advance_position` and cursor update.
         // If storage fails, the request stops at its last durable parent rather
         // than continuing with an in-memory chain that restart cannot reproduce.
-        if let Some(astro_ssd_prompt_cache) = self.astro_ssd_prompt_cache.as_ref() {
+        if let Some(astro_ssd_prompt_cache) = self.core.astro_ssd_prompt_cache.as_ref() {
             if active_request.can_use_astro_ssd_prompt_cache && !boundary_checkpoints.is_empty() {
                 capture_astro_ssd_prompt_cache_blocks(
                     self,
@@ -404,6 +407,7 @@ impl Qwen3_5EngineState {
         prefill_end: usize,
     ) -> Result<(), InferenceEngineError> {
         let model = self
+            .core
             .model
             .as_ref()
             .ok_or_else(engine_lost_loaded_model_error)?;
@@ -466,6 +470,7 @@ impl Qwen3_5EngineState {
         admitted_forward: super::forward_memory::AdmittedForward,
     ) -> Result<(), InferenceEngineError> {
         let model = self
+            .core
             .model
             .as_ref()
             .ok_or_else(engine_lost_loaded_model_error)?;
@@ -491,6 +496,7 @@ impl Qwen3_5EngineState {
         neural_engine_chunk: Option<ipc_protocol::NeuralEngineChunkReport>,
     ) -> Result<GeneratedToken, InferenceEngineError> {
         let model = self
+            .core
             .model
             .as_ref()
             .ok_or_else(engine_lost_loaded_model_error)?;

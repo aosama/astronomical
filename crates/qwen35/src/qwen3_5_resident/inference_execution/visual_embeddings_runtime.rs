@@ -18,12 +18,14 @@ pub fn resolve_visual_embeddings_for_processed_images(
     performance_attribution: &mut PerformanceAttribution,
 ) -> Result<Option<MlxArray>, InferenceEngineError> {
     let model = engine_state
+        .core
         .model
         .as_ref()
         .ok_or_else(|| InferenceEngineError::Fatal {
             reason: "Qwen3.5 engine lost its loaded model".to_owned(),
         })?;
     let visual_embedding_model_contract = engine_state
+        .core
         .persistent_visual_embedding_model_contract
         .as_ref()
         .ok_or_else(|| InferenceEngineError::Fatal {
@@ -34,11 +36,11 @@ pub fn resolve_visual_embeddings_for_processed_images(
         vision_model: model.vision_model(),
         compiled_elementwise_graphs: &model.compiled_elementwise_graphs,
         visual_embedding_model_contract,
-        astro_ssd_prompt_cache: engine_state.astro_ssd_prompt_cache.as_deref(),
+        astro_ssd_prompt_cache: engine_state.core.astro_ssd_prompt_cache.as_deref(),
     };
     let visual_embedding_resolution = resolve_shared_visual_embeddings(
         visual_embedding_context,
-        &mut engine_state.astro_ssd_prompt_cache_counters,
+        &mut engine_state.core.astro_ssd_prompt_cache_counters,
         request_id,
         processed_visual_images,
         visual_embedding_suffix_plan,
@@ -50,7 +52,7 @@ pub fn resolve_visual_embeddings_for_processed_images(
 
 /// Releases the loaded model's vision tower once its embeddings are resolved.
 fn release_loaded_vision_tower(engine_state: &mut Qwen3_5EngineState) {
-    if let Some(model) = engine_state.model.as_mut() {
+    if let Some(model) = engine_state.core.model.as_mut() {
         model.base.release_vision_tower_after_image_request();
     }
 }

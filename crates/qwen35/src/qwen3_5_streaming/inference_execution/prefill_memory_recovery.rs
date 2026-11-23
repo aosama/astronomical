@@ -48,6 +48,7 @@ impl Qwen3_5EngineState {
         known_shortfall_bytes: u64,
     ) -> Result<bool, InferenceEngineError> {
         let model = self
+            .core
             .model
             .as_ref()
             .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
@@ -72,6 +73,7 @@ impl Qwen3_5EngineState {
         failed_prefill_start: usize,
     ) -> Result<(), InferenceEngineError> {
         let model = self
+            .core
             .model
             .as_ref()
             .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
@@ -81,7 +83,7 @@ impl Qwen3_5EngineState {
         active_request.request_decoder_state =
             RequestDecoderStateStack::empty_from_astro_decoder_state_cache_layout_with_full_attention_kv_state_growth_tokens(
                 &astro_decoder_state_cache_layout,
-                self.full_attention_kv_state_growth_tokens,
+                self.core.full_attention_kv_state_growth_tokens,
             )
             .map_err(qwen3_5_runtime_error)?;
         active_request.pending_generated_token = None;
@@ -93,10 +95,12 @@ impl Qwen3_5EngineState {
         let mut restored_prefill_cursor = 0_usize;
         let mut restored_next_position_tokens = 0_u32;
         let mut restored_last_astro_ssd_prompt_cache_block_key = None;
-        if self.astro_ssd_prompt_cache.is_some() && active_request.can_use_astro_ssd_prompt_cache {
+        if self.core.astro_ssd_prompt_cache.is_some()
+            && active_request.can_use_astro_ssd_prompt_cache
+        {
             // Same split borrow as request start: the store must be reinstalled
             // even when restore fails, or later requests silently lose the `astro_ssd_prompt_cache`.
-            let astro_ssd_prompt_cache = self.astro_ssd_prompt_cache.take();
+            let astro_ssd_prompt_cache = self.core.astro_ssd_prompt_cache.take();
             let restore_result =
                 if let Some(astro_ssd_prompt_cache) = astro_ssd_prompt_cache.as_ref() {
                     self.restore_astro_ssd_prompt_cache_prefix(
@@ -112,7 +116,7 @@ impl Qwen3_5EngineState {
                 } else {
                     Ok(None)
                 };
-            self.astro_ssd_prompt_cache = astro_ssd_prompt_cache;
+            self.core.astro_ssd_prompt_cache = astro_ssd_prompt_cache;
             if let Some(restore_outcome) = restore_result? {
                 restored_prefill_cursor = restore_outcome.restored_token_count;
                 restored_next_position_tokens =
@@ -277,6 +281,7 @@ impl Qwen3_5EngineState {
         known_shortfall_bytes: u64,
     ) -> Result<bool, InferenceEngineError> {
         let model = self
+            .core
             .model
             .as_ref()
             .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;

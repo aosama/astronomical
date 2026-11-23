@@ -33,7 +33,7 @@ impl Qwen3_5EngineState {
         &self,
         model: &Qwen3_5ResidentModel,
     ) {
-        let limit_bytes = self.memory_limits.active_memory_limit_bytes() as u64;
+        let limit_bytes = self.core.memory_limits.active_memory_limit_bytes() as u64;
         let model_shape = ModelMemoryShape {
             core_weight_bytes: fixed_weight_bytes(model),
             streamable_weight_bytes: 0,
@@ -45,12 +45,13 @@ impl Qwen3_5EngineState {
             return;
         };
         let prompt_chunk_token_count = self
+            .core
             .prompt_processing_chunk_sizer
             .prompt_processing_operation_bound_tokens();
         let probe_started_at = std::time::Instant::now();
         match model.measure_forward_mlx_working_buffers(
             prompt_chunk_token_count,
-            self.full_attention_kv_state_growth_tokens,
+            self.core.full_attention_kv_state_growth_tokens,
         ) {
             Ok(probed_mlx_working_buffers) => {
                 tracing::info!(
@@ -94,7 +95,7 @@ impl Qwen3_5EngineState {
         stored_state_bytes: u64,
     ) {
         let prompt_chunk_phase = self.serving_prompt_chunk_phase();
-        if let Some(model) = self.model.as_ref()
+        if let Some(model) = self.core.model.as_ref()
             && let Some(memory_governor) = model.memory_governor.borrow_mut().as_mut()
         {
             nothing_to_give_back(
@@ -107,7 +108,7 @@ impl Qwen3_5EngineState {
     /// stored-state account.
     pub(in crate::qwen3_5_resident::inference_execution) fn govern_request_end(&self) {
         let retained_stored_state_bytes = self.live_retained_context_state_payload_bytes();
-        if let Some(model) = self.model.as_ref()
+        if let Some(model) = self.core.model.as_ref()
             && let Some(memory_governor) = model.memory_governor.borrow_mut().as_mut()
         {
             nothing_to_give_back(memory_governor.finish_request(retained_stored_state_bytes));
@@ -119,7 +120,7 @@ impl Qwen3_5EngineState {
     pub(in crate::qwen3_5_resident::inference_execution) fn measured_prompt_chunk_mlx_working_buffer_bytes(
         &self,
     ) -> Option<u64> {
-        let model = self.model.as_ref()?;
+        let model = self.core.model.as_ref()?;
         let memory_governor = model.memory_governor.borrow();
         let prompt_chunk_accounts = memory_governor
             .as_ref()?
@@ -132,7 +133,8 @@ impl Qwen3_5EngineState {
     /// The phase of a prompt chunk of the size this engine serves.
     pub(super) fn serving_prompt_chunk_phase(&self) -> LedgerPhase {
         reading_prompt_phase(
-            self.prompt_processing_chunk_sizer
+            self.core
+                .prompt_processing_chunk_sizer
                 .prompt_processing_operation_bound_tokens(),
         )
     }

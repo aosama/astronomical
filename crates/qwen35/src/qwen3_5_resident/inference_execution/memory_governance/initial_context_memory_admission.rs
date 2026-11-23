@@ -50,9 +50,10 @@ impl Qwen3_5EngineState {
         context_token_count: usize,
     ) -> Result<(), InferenceEngineError> {
         let whole_context_bytes = context_token_count
-            .checked_mul(self.context_memory_reservation_bytes_per_token)
+            .checked_mul(self.core.context_memory_reservation_bytes_per_token)
             .ok_or_else(super::super::generation_session_lifecycle::generation_error_constructors::generation_context_memory_reservation_overflowed_error)?;
         let model = self
+            .core
             .model
             .as_ref()
             .ok_or_else(super::super::generation_session_lifecycle::generation_error_constructors::engine_lost_loaded_model_error)?;

@@ -44,6 +44,7 @@ impl Qwen3_5EngineState {
         prefill_end_exclusive: usize,
     ) -> Option<LayerMajorSpanPlan> {
         let capture_block_token_count = self
+            .core
             .astro_ssd_prompt_cache
             .as_ref()
             .filter(|_| active_request.can_use_astro_ssd_prompt_cache)
@@ -55,7 +56,8 @@ impl Qwen3_5EngineState {
         super::layer_major_span_plan::layer_major_span_plan(
             prefill_start,
             prefill_end_exclusive,
-            self.prompt_processing_chunk_sizer
+            self.core
+                .prompt_processing_chunk_sizer
                 .maximum_prompt_processing_chunk_size_tokens(),
             capture_block_token_count,
         )
@@ -104,10 +106,13 @@ impl Qwen3_5EngineState {
         prefill_start: usize,
         prefill_end: usize,
     ) -> Result<(Vec<usize>, Option<usize>), PromptPrefillChunkAttemptError> {
-        if self.astro_ssd_prompt_cache.is_none() || !active_request.can_use_astro_ssd_prompt_cache {
+        if self.core.astro_ssd_prompt_cache.is_none()
+            || !active_request.can_use_astro_ssd_prompt_cache
+        {
             return Ok((Vec::new(), None));
         }
         let astro_ssd_prompt_cache_block_token_count = self
+            .core
             .astro_ssd_prompt_cache
             .as_ref()
             .ok_or_else(|| {

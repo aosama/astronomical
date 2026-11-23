@@ -159,6 +159,7 @@ impl Qwen3_5EngineState {
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<Option<AstroSsdPromptCacheBlockKey>, InferenceEngineError> {
         let model = self
+            .core
             .model
             .as_ref()
             .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
@@ -230,7 +231,8 @@ impl Qwen3_5EngineState {
                 .startup_cleanup_evidence
                 .as_ref(),
         );
-        self.astro_ssd_prompt_cache_counters
+        self.core
+            .astro_ssd_prompt_cache_counters
             .record_astro_ssd_prompt_cache_miss();
         AstroSsdPromptCacheRestoreOutcome {
             astro_ssd_prompt_cache_restored_token_count: 0,
@@ -275,10 +277,12 @@ impl Qwen3_5EngineState {
                     "persistent astro-ssd-prompt-cache token count exceeds the u32 range",
                 )
             })?;
-        self.astro_ssd_prompt_cache_counters
+        self.core
+            .astro_ssd_prompt_cache_counters
             .record_astro_ssd_prompt_cache_hit(hit_finalization.restored_token_count);
         if hit_finalization.restored_partial_tail_block_key.is_some() {
-            self.astro_ssd_prompt_cache_counters
+            self.core
+                .astro_ssd_prompt_cache_counters
                 .record_partial_tail_hit();
         }
         Ok(AstroSsdPromptCacheRestoreOutcome {
@@ -301,6 +305,7 @@ impl Qwen3_5EngineState {
         restore_workspace_bytes: usize,
     ) -> Result<u64, InferenceEngineError> {
         let model = self
+            .core
             .model
             .as_ref()
             .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
@@ -311,7 +316,7 @@ impl Qwen3_5EngineState {
     /// The restored blocks have joined the stored state: their room goes
     /// back to the kept weights.
     fn give_back_astro_ssd_prompt_cache_restore_workspace(&self) {
-        if let Some(model) = self.model.as_ref() {
+        if let Some(model) = self.core.model.as_ref() {
             model.govern_restore_workspace_end();
         }
     }

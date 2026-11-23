@@ -89,6 +89,7 @@ impl Qwen3_5EngineState {
         current_generated_token_id: u32,
     ) -> Result<ActiveRequestAdvance, crate::InferenceEngineError> {
         let model = self
+            .core
             .model
             .as_ref()
             .ok_or_else(super::super::generation_session_lifecycle::generation_error_constructors::engine_lost_loaded_model_error)?;
@@ -97,14 +98,14 @@ impl Qwen3_5EngineState {
         // memory for the whole draft-assisted reply.
         let completed_forward_memory = capture_completed_forward_memory_observation(model)?;
         if generated_token_emission::generated_token_will_be_terminal(
-            &self.end_of_sequence_token_ids,
+            &self.core.end_of_sequence_token_ids,
             active_request,
             current_generated_token_id,
         ) {
             let generated_token_emission =
                 generated_token_emission::build_generated_token_emission(
                     model,
-                    &self.end_of_sequence_token_ids,
+                    &self.core.end_of_sequence_token_ids,
                     active_request,
                     current_generated_token_id,
                     Some(&completed_forward_memory.mlx_memory_snapshot),
@@ -115,7 +116,7 @@ impl Qwen3_5EngineState {
         }
         let generated_token_emission = generated_token_emission::build_generated_token_emission(
             model,
-            &self.end_of_sequence_token_ids,
+            &self.core.end_of_sequence_token_ids,
             active_request,
             current_generated_token_id,
             Some(&completed_forward_memory.mlx_memory_snapshot),
@@ -139,7 +140,7 @@ impl Qwen3_5EngineState {
         active_request: &mut Qwen3_5EngineRequest,
         bonus_token_id: u32,
     ) -> Result<ActiveRequestAdvance, crate::InferenceEngineError> {
-        if let Some(model) = self.model.as_ref() {
+        if let Some(model) = self.core.model.as_ref() {
             reclaim_mlx_buffer_cache_between_draft_rounds(model.runtime())
                 .map_err(qwen3_5_runtime_error)?;
         }
@@ -155,6 +156,7 @@ impl Qwen3_5EngineState {
         bonus_token_id: u32,
     ) -> Result<ActiveRequestAdvance, crate::InferenceEngineError> {
         let model = self
+            .core
             .model
             .as_ref()
             .ok_or_else(super::super::generation_session_lifecycle::generation_error_constructors::engine_lost_loaded_model_error)?;

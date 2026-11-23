@@ -54,17 +54,6 @@ struct InstallActiveGenerationRequest<'a> {
 }
 
 impl Qwen3_5EngineState {
-    /// The loaded model's limits a new request is checked against.
-    fn generation_request_limits(&self) -> Qwen3_5GenerationRequestLimits {
-        Qwen3_5GenerationRequestLimits {
-            is_model_loaded: self.model.is_some(),
-            think_end_token_id: self.think_end_token_id,
-            vocabulary_size: self.vocabulary_size,
-            maximum_position_count: self.maximum_position_count,
-            hard_maximum_position_count: self.hard_maximum_position_count,
-        }
-    }
-
     /// Admits one chat request into the engine and assembles its generation
     /// session. This is the first step of inference for a fully resident
     /// Qwen3.5 mixture-of-experts model, and it runs no model math: every
@@ -95,7 +84,7 @@ impl Qwen3_5EngineState {
         // model's context window (its maximum sequence length).
         let reserved_context_tokens =
             generation_request_validation::validate_generation_request_and_resolve_reserved_context(
-                &self.generation_request_limits(),
+                &self.core.generation_request_limits(),
                 &inference_request,
             )?;
         // Qwen3.5 can "think" before answering: it emits a private reasoning
@@ -106,7 +95,7 @@ impl Qwen3_5EngineState {
         let natural_reasoning_end_token_ids =
             crate::qwen3_5_core::shared_execution::generation_thinking_end_markers::natural_reasoning_end_token_ids_with_model_safety_net(
                 inference_request.natural_reasoning_end_token_ids(),
-                self.think_end_token_id,
+                self.core.think_end_token_id,
             );
         // Turns the caller's thinking allowance into a small state machine
         // with three phases — thinking, forcing the transition out of
@@ -131,6 +120,7 @@ impl Qwen3_5EngineState {
         // graphics memory; each token routes through only a few experts, and
         // nothing streams in from disk while generating.
         let model = self
+            .core
             .model
             .as_ref()
             .ok_or_else(super::generation_error_constructors::engine_lost_loaded_model_error)?;
@@ -179,7 +169,7 @@ impl Qwen3_5EngineState {
         let mut request_decoder_state =
             RequestDecoderStateStack::empty_from_astro_decoder_state_cache_layout_with_full_attention_kv_state_growth_tokens(
                 &astro_decoder_state_cache_layout,
-                self.full_attention_kv_state_growth_tokens,
+                self.core.full_attention_kv_state_growth_tokens,
             )
             .map_err(qwen3_5_runtime_error)?;
         // Restore the longest prompt prefix already present in the
@@ -244,7 +234,7 @@ impl Qwen3_5EngineState {
         // This engine serves exactly one request at a time: a model resident
         // in graphics memory plus one active session is all it can hold, so a
         // second concurrent request is rejected outright instead of queued.
-        if self.active_request.is_none() {
+        if self.core.active_request.is_none() {
             return Ok(performance_attribution);
         }
         self.record_generation_performance_attribution(
@@ -280,7 +270,7 @@ impl Qwen3_5EngineState {
                     top_k,
                     top_p_thousandths,
                 )?;
-                let model = self.model.as_ref().ok_or_else(
+                let model = self.core.model.as_ref().ok_or_else(
                     super::generation_error_constructors::engine_lost_loaded_model_error,
                 )?;
                 Ok(Some(sampler::random_state_for_seed(
@@ -325,7 +315,7 @@ impl Qwen3_5EngineState {
         // of recomputing. Persistent snapshots contain target decoder state
         // only, so target-only execution is preferred whenever the
         // `astro_ssd_prompt_cache` is available.
-        let astro_ssd_prompt_cache_is_available = self.astro_ssd_prompt_cache.is_some();
+        let astro_ssd_prompt_cache_is_available = self.core.astro_ssd_prompt_cache.is_some();
         let can_use_astro_ssd_prompt_cache =
             super::generation_session_decisions::can_use_astro_ssd_prompt_cache(
                 astro_ssd_prompt_cache_is_available,
@@ -365,7 +355,7 @@ impl Qwen3_5EngineState {
                     prompt_token_ids: &prompt_token_ids,
                     prompt_image_pad_token_count,
                     image_pad_token_id,
-                    astro_ssd_prompt_cache: self.astro_ssd_prompt_cache.as_deref(),
+                    astro_ssd_prompt_cache: self.core.astro_ssd_prompt_cache.as_deref(),
                     can_use_astro_ssd_prompt_cache,
                 },
                 performance_attribution,
@@ -409,10 +399,12 @@ impl Qwen3_5EngineState {
             super::generation_visual_embedding_validation::VisualEmbeddingValidationError::into_generation_failure,
         )?;
         let model = self
+            .core
             .model
             .as_ref()
             .ok_or_else(super::generation_error_constructors::engine_lost_loaded_model_error)?;
         let visual_embedding_hidden_size = self
+            .core
             .persistent_visual_embedding_model_contract
             .as_ref()
             .ok_or_else(
@@ -462,11 +454,11 @@ impl Qwen3_5EngineState {
         Option<super::decoder_state_reuse::AstroSsdPromptCacheRestoreOutcome>,
         InferenceEngineError,
     > {
-        if self.astro_ssd_prompt_cache.is_some() && can_use_astro_ssd_prompt_cache {
+        if self.core.astro_ssd_prompt_cache.is_some() && can_use_astro_ssd_prompt_cache {
             // Split the borrow: take the `astro_ssd_prompt_cache` out temporarily so the engine
             // state (including counters) can be mutated as &mut self while the
             // disk store is used as a plain borrowed reference.
-            let astro_ssd_prompt_cache = self.astro_ssd_prompt_cache.take();
+            let astro_ssd_prompt_cache = self.core.astro_ssd_prompt_cache.take();
             let restore_result =
                 if let Some(astro_ssd_prompt_cache) = astro_ssd_prompt_cache.as_ref() {
                     self.restore_astro_ssd_prompt_cache_prefix(
@@ -485,7 +477,7 @@ impl Qwen3_5EngineState {
             // Restores can fail closed for data correctness, but the disk-store owner must
             // remain installed for the next independent request. Returning while it is
             // temporarily taken would silently turn later traffic into a mode with the `astro_ssd_prompt_cache` disabled.
-            self.astro_ssd_prompt_cache = astro_ssd_prompt_cache;
+            self.core.astro_ssd_prompt_cache = astro_ssd_prompt_cache;
             return restore_result;
         }
         Ok(None)
@@ -566,7 +558,7 @@ impl Qwen3_5EngineState {
         // behavior stays measurable after the fact.
         tracing::info!(
             request_id = inference_request.request_id().value(),
-            astro_ssd_prompt_cache_is_available = self.astro_ssd_prompt_cache.is_some(),
+            astro_ssd_prompt_cache_is_available = self.core.astro_ssd_prompt_cache.is_some(),
             sampling_selects_highest_logit,
             effective_temperature_thousandths,
             "resolved target-only generation request session"
@@ -597,7 +589,7 @@ impl Qwen3_5EngineState {
             prompt_prefill_end_exclusive,
             sampling_strategy,
         );
-        self.active_request = Some(Qwen3_5EngineRequest {
+        self.core.active_request = Some(Qwen3_5EngineRequest {
             request_decoder_state,
             generated_token_count: 0,
             input_token_ids: prompt_identity.prompt_token_ids,
@@ -666,7 +658,8 @@ impl Qwen3_5EngineState {
     ) -> Result<EngineGenerationStart, InferenceEngineError> {
         Ok(EngineGenerationStart::with_expert_memory_mode(
             restored_prompt_prefix_token_count,
-            self.model
+            self.core
+                .model
                 .as_ref()
                 .ok_or_else(super::generation_error_constructors::engine_lost_loaded_model_error)?
                 .expert_memory_mode(),

@@ -135,6 +135,7 @@ impl Qwen3_5EngineState {
     ) -> Result<AdmittedForward, ForwardAdmissionError> {
         self.tell_neural_engine_preparation_the_gpu_is_in_use();
         let model = self
+            .core
             .model
             .as_ref()
             .ok_or_else(super::super::generation_session_lifecycle::generation_error_constructors::engine_lost_loaded_model_error)?;

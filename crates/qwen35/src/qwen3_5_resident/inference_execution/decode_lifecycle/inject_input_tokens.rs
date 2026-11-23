@@ -17,20 +17,20 @@ impl Qwen3_5EngineState {
         }
         if input_token_ids
             .iter()
-            .any(|token_id| *token_id >= self.vocabulary_size)
+            .any(|token_id| *token_id >= self.core.vocabulary_size)
         {
             return Err(super::fatal_engine_error(
                 "injected model feedback contains a token outside the model vocabulary",
             ));
         }
 
-        let mut active_request = self.active_request.take().ok_or_else(|| {
+        let mut active_request = self.core.active_request.take().ok_or_else(|| {
             super::fatal_engine_error(
                 "Qwen3.5 model feedback injection requested without an active request",
             )
         })?;
         if active_request.request_id != request_id {
-            self.active_request = Some(active_request);
+            self.core.active_request = Some(active_request);
             return Err(super::fatal_engine_error(
                 "Qwen3.5 model feedback injection request correlation mismatch",
             ));
@@ -38,7 +38,7 @@ impl Qwen3_5EngineState {
 
         match self.inject_into_active_request(&mut active_request, &input_token_ids) {
             Ok(()) => {
-                self.active_request = Some(active_request);
+                self.core.active_request = Some(active_request);
                 Ok(())
             }
             Err(generation_error) => {
@@ -66,8 +66,8 @@ impl Qwen3_5EngineState {
                     .maximum_output_tokens
                     .saturating_sub(active_request.generated_token_count))
                     as usize,
-                hard_maximum_position_count: self.hard_maximum_position_count,
-                advertised_maximum_position_count: self.maximum_position_count,
+                hard_maximum_position_count: self.core.hard_maximum_position_count,
+                advertised_maximum_position_count: self.core.maximum_position_count,
             })?;
         self.require_request_context_to_fit(projected_context_tokens)?;
 
@@ -108,6 +108,7 @@ impl Qwen3_5EngineState {
             0,
         )?;
         let model = self
+            .core
             .model
             .as_ref()
             .ok_or_else(super::super::generation_session_lifecycle::generation_error_constructors::engine_lost_loaded_model_error)?;
@@ -142,6 +143,7 @@ impl Qwen3_5EngineState {
             0,
         )?;
         let model = self
+            .core
             .model
             .as_ref()
             .ok_or_else(super::super::generation_session_lifecycle::generation_error_constructors::engine_lost_loaded_model_error)?;
