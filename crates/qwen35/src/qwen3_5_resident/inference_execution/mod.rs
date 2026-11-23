@@ -15,8 +15,6 @@ mod test_controls;
 mod visual_embeddings_runtime;
 // Downward bindings so the phase folders keep their pre-move one-level
 // `super::<module>` paths into the persistent astro SSD prompt cache machinery.
-use astro_ssd_prompt_cache::astro_ssd_prompt_cache_startup_logging;
-use astro_ssd_prompt_cache::astro_ssd_prompt_cache_visual_identity;
 use astro_ssd_prompt_cache::decoder_state_reuse;
 use astro_ssd_prompt_cache::retained_live_prefix;
 // Downward binding so the phase folders keep their one-level
@@ -33,9 +31,6 @@ pub use engine_state::Qwen3_5EngineState;
 pub use engine_state::Qwen3_5InferenceExecution;
 
 pub use memory_governance::memory_limit::safe_minimum_mlx_memory_ceiling_bytes;
-pub use prompt_prefill_lifecycle::prompt_processing_chunk_sizer::{
-    Qwen3_5ResidentPromptProcessingChunkSizer, Qwen3_5ResidentPromptProcessingChunkSizerError,
-};
 
 /// Qwen3.5 inference engine backed by the architecture-neutral MLX owner driver.
 pub type Qwen3_5ResidentEngine = MlxInferenceEngine<Qwen3_5InferenceExecution>;

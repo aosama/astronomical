@@ -3,11 +3,7 @@
 
 use crate::{InferenceEngineError, StreamingEngineRequirement};
 
-pub fn invalid_request_error(reason: impl Into<String>) -> InferenceEngineError {
-    InferenceEngineError::InvalidRequest {
-        reason: reason.into(),
-    }
-}
+pub use crate::qwen3_5_core::engine_errors::invalid_request_error;
 
 /// The request does not fit beside every weight, so it moves to the
 /// streaming engine, which keeps what fits and reads the rest from the SSD.

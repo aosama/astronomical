@@ -19,6 +19,7 @@ use crate::{
 use super::Qwen3_5EngineState;
 use super::engine_request::Qwen3_5EngineRequest;
 use super::retained_live_prefix::RetainedLiveDecoderPrefix;
+use crate::qwen3_5_core::shared_execution::request_memory_release::release_request_memory;
 
 /// Converts one memory snapshot's peak counter to a u64 when it fits.
 fn snapshot_peak_memory_bytes_option(
@@ -54,14 +55,14 @@ impl Qwen3_5EngineState {
             .map_err(super::qwen3_5_runtime_error)?;
         let active_memory_bytes = u64::try_from(mlx_memory_snapshot.active_memory_bytes())
             .map_err(
-            super::generation_error_constructors::mlx_active_memory_bytes_exceed_u64_range_error,
-        )?;
+                crate::qwen3_5_core::engine_errors::mlx_active_memory_bytes_exceed_u64_range_error,
+            )?;
         let mlx_buffer_cache_bytes = u64::try_from(mlx_memory_snapshot.mlx_buffer_cache_bytes())
             .map_err(
-                super::generation_error_constructors::mlx_buffer_cache_bytes_exceed_u64_range_error,
+                crate::qwen3_5_core::engine_errors::mlx_buffer_cache_bytes_exceed_u64_range_error,
             )?;
         let peak_memory_bytes = u64::try_from(mlx_memory_snapshot.peak_memory_bytes()).map_err(
-            super::generation_error_constructors::mlx_peak_memory_bytes_exceed_u64_range_error,
+            crate::qwen3_5_core::engine_errors::mlx_peak_memory_bytes_exceed_u64_range_error,
         )?;
         let active_memory_breakdown = model.finalized_active_memory_breakdown(
             active_memory_bytes,
@@ -160,7 +161,7 @@ impl Qwen3_5EngineState {
         // allocator storage, so one-token-ahead decode cannot race reclamation.
         let mlx_memory_snapshot = performance_attribution.measure_operation(
             PerformanceOperation::MlxBufferCacheCleanup,
-            |_performance_attribution| self.release_request_memory(request_id),
+            |_performance_attribution| release_request_memory(self.model.as_deref(), request_id),
         );
         self.govern_request_end();
         let generation_finalization = self

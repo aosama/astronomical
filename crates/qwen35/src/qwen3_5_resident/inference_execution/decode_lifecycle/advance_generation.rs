@@ -16,8 +16,8 @@ use super::completed_forward_memory::{
     CompletedForwardMemoryObservation, capture_completed_forward_memory_observation,
 };
 use super::forward_memory::{ForwardShape, report_completed_forward};
-use super::generated_token_emission;
 use super::{Qwen3_5EngineState, qwen3_5_runtime_error};
+use crate::qwen3_5_core::shared_execution::generated_token_emission;
 impl Qwen3_5EngineState {
     pub(in crate::qwen3_5_resident::inference_execution) fn advance_generation(
         &mut self,
@@ -147,12 +147,14 @@ impl Qwen3_5EngineState {
             let model = self.model.as_ref().ok_or_else(
                 super::super::generation_session_lifecycle::generation_error_constructors::engine_lost_loaded_model_error,
             )?;
-            let generated_token_emission = self.build_generated_token_emission(
-                model,
-                active_request,
-                current_generated_token_id,
-                None,
-            )?;
+            let generated_token_emission =
+                generated_token_emission::build_generated_token_emission(
+                    model,
+                    &self.end_of_sequence_token_ids,
+                    active_request,
+                    current_generated_token_id,
+                    None,
+                )?;
             if generated_token_emission.is_terminal {
                 return Ok(ActiveRequestAdvance::Complete(
                     generated_token_emission.generated_token,
@@ -174,11 +176,12 @@ impl Qwen3_5EngineState {
                 let model = self.model.as_ref().ok_or_else(
                     super::super::generation_session_lifecycle::generation_error_constructors::engine_lost_loaded_model_error,
                 )?;
-                self.build_generated_token_emission(
+                generated_token_emission::build_generated_token_emission(
                     model,
+                    &self.end_of_sequence_token_ids,
                     active_request,
                     current_generated_token_id,
-                    Some(&completed_forward_memory),
+                    Some(&completed_forward_memory.mlx_memory_snapshot),
                 )?
             }
         };
@@ -365,7 +368,11 @@ impl Qwen3_5EngineState {
         active_request: &mut super::engine_request::Qwen3_5EngineRequest,
         current_generated_token_id: u32,
     ) -> Result<Option<ActiveRequestAdvance>, InferenceEngineError> {
-        if !self.generated_token_will_be_terminal(active_request, current_generated_token_id) {
+        if !generated_token_emission::generated_token_will_be_terminal(
+            &self.end_of_sequence_token_ids,
+            active_request,
+            current_generated_token_id,
+        ) {
             return Ok(None);
         }
         let model = self
@@ -373,11 +380,12 @@ impl Qwen3_5EngineState {
             .as_ref()
             .ok_or_else(super::super::generation_session_lifecycle::generation_error_constructors::engine_lost_loaded_model_error)?;
         let completed_forward_memory = capture_completed_forward_memory_observation(model)?;
-        let generated_token_emission = self.build_generated_token_emission(
+        let generated_token_emission = generated_token_emission::build_generated_token_emission(
             model,
+            &self.end_of_sequence_token_ids,
             active_request,
             current_generated_token_id,
-            Some(&completed_forward_memory),
+            Some(&completed_forward_memory.mlx_memory_snapshot),
         )?;
         Ok(Some(ActiveRequestAdvance::Complete(
             generated_token_emission.generated_token,

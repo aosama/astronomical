@@ -20,7 +20,7 @@
 use ipc_protocol::RequestId;
 
 use crate::qwen3_5_core::decoder::RequestDecoderStateStack;
-use crate::qwen3_5_streaming::model::request_refusal;
+use crate::qwen3_5_core::engine_errors::invalid_request_error;
 use crate::{GeneratedToken, InferenceEngineError, MemoryPhase};
 
 use super::engine_request::Qwen3_5EngineRequest;
@@ -179,7 +179,7 @@ fn prefill_memory_failure_error(
                 allowed_active_memory_bytes,
                 "prefill forward exceeded the MLX active-memory limit"
             );
-            request_refusal::invalid_request_error(format!(
+            invalid_request_error(format!(
                 "prompt forward of {attempted_prefill_chunk_token_count} tokens exceeded the MLX active-memory limit: {active_memory_bytes} active bytes, {attempted_allocation_bytes} requested bytes, {allowed_active_memory_bytes} allowed bytes"
             ))
         }
@@ -191,7 +191,7 @@ fn prefill_memory_failure_error(
                 reason = %reason,
                 "prefill forward exhausted graphics-processor memory"
             );
-            request_refusal::invalid_request_error(format!(
+            invalid_request_error(format!(
                 "prompt forward of {attempted_prefill_chunk_token_count} tokens exhausted GPU memory: {reason}"
             ))
         }

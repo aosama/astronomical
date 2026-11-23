@@ -13,9 +13,9 @@ use crate::{
 
 use super::super::ValidatedQwen3_5Artifact;
 use super::{
-    Qwen3_5InferenceExecution, Qwen3_5StreamingEngine, Qwen3_5StreamingPromptProcessingChunkSizer,
-    fatal_engine_error, qwen3_5_runtime_error,
+    Qwen3_5InferenceExecution, Qwen3_5StreamingEngine, fatal_engine_error, qwen3_5_runtime_error,
 };
+use crate::qwen3_5_core::shared_execution::prompt_processing_chunk_sizer::Qwen3_5PromptProcessingChunkSizer;
 
 impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
     /// Starts the owner thread with an explicit `prefill_chunk_tokens` sizer.
@@ -28,7 +28,7 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
         active_memory_limit_bytes: usize,
         mlx_buffer_cache_limit_bytes: usize,
         astro_ssd_prompt_cache_disk_store_config: Option<AstroSsdPromptCacheDiskStoreConfig>,
-        prompt_processing_chunk_sizer: Qwen3_5StreamingPromptProcessingChunkSizer,
+        prompt_processing_chunk_sizer: Qwen3_5PromptProcessingChunkSizer,
         think_end_token_id: u32,
         model_directory: PathBuf,
         chunking: WorkerChunkingConfiguration,
@@ -53,7 +53,7 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
         active_memory_limit_bytes: usize,
         mlx_buffer_cache_limit_bytes: usize,
         astro_ssd_prompt_cache_disk_store_config: Option<AstroSsdPromptCacheDiskStoreConfig>,
-        prompt_processing_chunk_sizer: Qwen3_5StreamingPromptProcessingChunkSizer,
+        prompt_processing_chunk_sizer: Qwen3_5PromptProcessingChunkSizer,
         think_end_token_id: u32,
         model_directory: PathBuf,
         chunking: WorkerChunkingConfiguration,
@@ -83,7 +83,7 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
         active_memory_limit_bytes: usize,
         mlx_buffer_cache_limit_bytes: usize,
         astro_ssd_prompt_cache_disk_store_config: Option<AstroSsdPromptCacheDiskStoreConfig>,
-        prompt_processing_chunk_sizer: Qwen3_5StreamingPromptProcessingChunkSizer,
+        prompt_processing_chunk_sizer: Qwen3_5PromptProcessingChunkSizer,
         think_end_token_id: u32,
         model_directory: PathBuf,
         maximum_context_tokens: u32,
@@ -114,7 +114,7 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
         active_memory_limit_bytes: usize,
         mlx_buffer_cache_limit_bytes: usize,
         astro_ssd_prompt_cache_disk_store_config: Option<AstroSsdPromptCacheDiskStoreConfig>,
-        prompt_processing_chunk_sizer: Qwen3_5StreamingPromptProcessingChunkSizer,
+        prompt_processing_chunk_sizer: Qwen3_5PromptProcessingChunkSizer,
         think_end_token_id: u32,
         model_directory: PathBuf,
         maximum_context_tokens: u32,

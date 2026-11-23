@@ -10,24 +10,24 @@ use crate::{
     plan_qwen3_5_visual_astro_ssd_prompt_cache_block_inputs,
 };
 
-use crate::qwen3_5_streaming::model::request_refusal;
+use crate::qwen3_5_core::engine_errors::{fatal_engine_error, invalid_request_error};
 
-pub(super) struct Qwen3_5AstroSsdPromptCacheVisualIdentity {
-    pub(super) ordered_image_visual_embedding_row_counts: Vec<usize>,
-    pub(super) block_causal_inputs: Vec<AstroSsdPromptCacheBlockCausalInput>,
+pub struct Qwen3_5AstroSsdPromptCacheVisualIdentity {
+    pub ordered_image_visual_embedding_row_counts: Vec<usize>,
+    pub block_causal_inputs: Vec<AstroSsdPromptCacheBlockCausalInput>,
 }
 
 /// Borrowed request context keeps prompt scanning and `astro_ssd_prompt_cache` policy decisions in their existing owners.
-pub(super) struct Qwen3_5AstroSsdPromptCacheVisualIdentityInput<'a> {
-    pub(super) prompt_token_ids: &'a [u32],
-    pub(super) prompt_image_pad_token_count: usize,
-    pub(super) image_pad_token_id: u32,
-    pub(super) astro_ssd_prompt_cache: Option<&'a AstroSsdPromptCacheDiskStore>,
-    pub(super) can_use_astro_ssd_prompt_cache: bool,
+pub struct Qwen3_5AstroSsdPromptCacheVisualIdentityInput<'a> {
+    pub prompt_token_ids: &'a [u32],
+    pub prompt_image_pad_token_count: usize,
+    pub image_pad_token_id: u32,
+    pub astro_ssd_prompt_cache: Option<&'a AstroSsdPromptCacheDiskStore>,
+    pub can_use_astro_ssd_prompt_cache: bool,
 }
 
 impl Qwen3_5AstroSsdPromptCacheVisualIdentity {
-    pub(super) fn prepare(
+    pub fn prepare(
         inference_request: &Qwen3_5InferenceRequest,
         visual_identity_input: Qwen3_5AstroSsdPromptCacheVisualIdentityInput<'_>,
         performance_attribution: &mut PerformanceAttribution,
@@ -60,11 +60,11 @@ impl Qwen3_5AstroSsdPromptCacheVisualIdentity {
             .try_fold(0_usize, |accumulated_visual_row_count, image_row_count| {
                 accumulated_visual_row_count.checked_add(*image_row_count)
             })
-            .ok_or_else(|| super::fatal_engine_error("processed image token count overflowed"))?;
+            .ok_or_else(|| fatal_engine_error("processed image token count overflowed"))?;
         if has_processed_visual_images
             && visual_identity_input.prompt_image_pad_token_count != expected_visual_row_count
         {
-            return Err(request_refusal::invalid_request_error(
+            return Err(invalid_request_error(
                 "image pad token count does not match processed image token count",
             ));
         }
@@ -74,7 +74,7 @@ impl Qwen3_5AstroSsdPromptCacheVisualIdentity {
             let block_token_count = visual_identity_input
                 .astro_ssd_prompt_cache
                 .ok_or_else(|| {
-                    super::fatal_engine_error(
+                    fatal_engine_error(
                         "the astro SSD prompt cache disappeared during visual identity planning",
                     )
                 })?
@@ -94,7 +94,7 @@ impl Qwen3_5AstroSsdPromptCacheVisualIdentity {
                     },
                 )
                 .map_err(|visual_identity_plan_error| {
-                    request_refusal::invalid_request_error(format!(
+                    invalid_request_error(format!(
                         "visual astro-ssd-prompt-cache identity planning failed: {visual_identity_plan_error}"
                     ))
                 })?
@@ -109,3 +109,7 @@ impl Qwen3_5AstroSsdPromptCacheVisualIdentity {
         })
     }
 }
+
+#[cfg(test)]
+#[path = "astro_ssd_prompt_cache_visual_identity_tests.rs"]
+mod astro_ssd_prompt_cache_visual_identity_tests;

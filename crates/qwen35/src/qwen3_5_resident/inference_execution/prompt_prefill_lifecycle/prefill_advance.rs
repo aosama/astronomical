@@ -34,12 +34,12 @@ use runtime_integration::{MLX_BUFFER_CACHE_RECLAIM_THRESHOLD_BYTES, MlxMemorySna
 use super::super::engine_request::Qwen3_5EngineRequest;
 use super::super::generation_session_lifecycle::generation_error_constructors::completed_prefill_chunk_tokens_exceed_u32_range_error;
 use super::super::generation_session_lifecycle::generation_error_constructors::engine_lost_loaded_model_error;
-use super::super::generation_session_lifecycle::generation_error_constructors::mlx_active_memory_bytes_exceed_u64_range_error;
-use super::super::generation_session_lifecycle::generation_error_constructors::mlx_buffer_cache_bytes_exceed_u64_range_error;
-use super::super::generation_session_lifecycle::generation_error_constructors::mlx_peak_memory_bytes_exceed_u64_range_error;
 use super::completed_forward_memory;
 use super::prompt_prefill_errors::PromptPrefillChunkAttemptError;
 use super::{Qwen3_5EngineState, fatal_engine_error, qwen3_5_runtime_error};
+use crate::qwen3_5_core::engine_errors::mlx_active_memory_bytes_exceed_u64_range_error;
+use crate::qwen3_5_core::engine_errors::mlx_buffer_cache_bytes_exceed_u64_range_error;
+use crate::qwen3_5_core::engine_errors::mlx_peak_memory_bytes_exceed_u64_range_error;
 use crate::qwen3_5_resident::model::Qwen3_5ResidentModel;
 use crate::qwen3_5_resident::model::request_errors;
 impl Qwen3_5EngineState {

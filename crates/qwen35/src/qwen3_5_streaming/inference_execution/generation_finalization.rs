@@ -14,6 +14,7 @@ use crate::{
 
 use super::Qwen3_5EngineState;
 use super::engine_request::Qwen3_5EngineRequest;
+use crate::qwen3_5_core::shared_execution::request_memory_release::release_request_memory;
 
 impl Qwen3_5EngineState {
     /// Closes the request with the memory governor: its stored state is
@@ -176,7 +177,7 @@ impl Qwen3_5EngineState {
         // allocator storage, so one-token-ahead decode cannot race reclamation.
         let mlx_memory_snapshot = performance_attribution.measure_operation(
             PerformanceOperation::MlxBufferCacheCleanup,
-            |_performance_attribution| self.release_request_memory(request_id),
+            |_performance_attribution| release_request_memory(self.model.as_deref(), request_id),
         );
         let generation_finalization = self.collect_generation_finalization(
             &mut performance_attribution,

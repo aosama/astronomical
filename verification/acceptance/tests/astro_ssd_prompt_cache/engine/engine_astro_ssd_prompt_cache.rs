@@ -23,8 +23,8 @@ use std::{future::Future, path::Path, time::Duration};
 use ipc_protocol::{RequestId, WorkerEvent};
 use model_serving::{
     AstroSsdPromptCacheDiskStoreConfig, AstroSsdPromptCacheModelContract, GeneratedToken,
-    InferenceEngine, Qwen3_5ArtifactValidator, Qwen3_5InferenceRequest, Qwen3_5ResidentEngine,
-    Qwen3_5ResidentPromptProcessingChunkSizer, Qwen3_5Tokenizer,
+    InferenceEngine, Qwen3_5ArtifactValidator, Qwen3_5InferenceRequest,
+    Qwen3_5PromptProcessingChunkSizer, Qwen3_5ResidentEngine, Qwen3_5Tokenizer,
     qwen3_5_astro_decoder_state_cache_layout,
 };
 use tokio::time::{Instant, MissedTickBehavior, interval, sleep};
@@ -284,10 +284,8 @@ pub(super) async fn load_astro_ssd_prompt_cache_acceptance_engine(
     let model_id = validated_artifact.model_id().to_owned();
     let model_revision = validated_artifact.revision().to_owned();
     let prefill_chunk_sizer =
-        Qwen3_5ResidentPromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens(
-            fixed_prefill_chunk_tokens,
-        )
-        .expect("the selected resident prefill size should be valid");
+        Qwen3_5PromptProcessingChunkSizer::for_chunk_size_tokens(fixed_prefill_chunk_tokens)
+            .expect("the selected resident prefill size should be valid");
     let mlx_memory_limits =
         crate::common::sample_machine_serving_acceptance_mlx_memory_limits().await;
     let mut worker_chunking_configuration = crate::common::standard_worker_chunking_configuration();

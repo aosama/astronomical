@@ -14,7 +14,6 @@ pub(in crate::qwen3_5_resident::inference_execution) mod initial_context_memory_
 // engine use its forward shape and admission error.
 pub(in crate::qwen3_5_resident) mod forward_memory;
 pub(in crate::qwen3_5_resident::inference_execution) mod memory_limit;
-pub(in crate::qwen3_5_resident::inference_execution) mod request_memory_release;
 pub(in crate::qwen3_5_resident::inference_execution) mod resident_memory_governor;
 
 // Re-bindings of the engine-level owners that stay in inference_execution.

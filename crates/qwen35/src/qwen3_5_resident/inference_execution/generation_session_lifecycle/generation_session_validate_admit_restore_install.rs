@@ -8,14 +8,17 @@ use crate::{
 
 use mlx_bridge::MlxArray;
 
-use super::astro_ssd_prompt_cache_visual_identity::{
-    Qwen3_5AstroSsdPromptCacheVisualIdentity, Qwen3_5AstroSsdPromptCacheVisualIdentityInput,
-};
 use super::engine_request::{Qwen3_5EngineRequest, ResidentRequestExtension};
 use super::{Qwen3_5EngineState, qwen3_5_runtime_error};
 use crate::astro_decoder_state_cache::AstroDecoderStateCacheLayout;
 use crate::astro_ssd_prompt_cache::block_causal_input::AstroSsdPromptCacheBlockCausalInput;
 use crate::qwen3_5_core::decoder::RequestDecoderStateStack;
+use crate::qwen3_5_core::shared_execution::astro_ssd_prompt_cache_visual_identity::{
+    Qwen3_5AstroSsdPromptCacheVisualIdentity, Qwen3_5AstroSsdPromptCacheVisualIdentityInput,
+};
+use crate::qwen3_5_core::shared_execution::generation_request_validation::{
+    self, Qwen3_5GenerationRequestLimits,
+};
 use crate::qwen3_5_core::text::sampler;
 use crate::qwen3_5_resident::model::request_errors;
 use crate::sampling_seed::current_time_millis_since_unix_epoch;
@@ -51,6 +54,17 @@ struct InstallActiveGenerationRequest<'a> {
 }
 
 impl Qwen3_5EngineState {
+    /// The loaded model's limits a new request is checked against.
+    fn generation_request_limits(&self) -> Qwen3_5GenerationRequestLimits {
+        Qwen3_5GenerationRequestLimits {
+            is_model_loaded: self.model.is_some(),
+            think_end_token_id: self.think_end_token_id,
+            vocabulary_size: self.vocabulary_size,
+            maximum_position_count: self.maximum_position_count,
+            hard_maximum_position_count: self.hard_maximum_position_count,
+        }
+    }
+
     /// Admits one chat request into the engine and assembles its generation
     /// session. This is the first step of inference for a fully resident
     /// Qwen3.5 mixture-of-experts model, and it runs no model math: every
@@ -80,14 +94,17 @@ impl Qwen3_5EngineState {
         // every token the model may still generate — which must fit inside the
         // model's context window (its maximum sequence length).
         let reserved_context_tokens =
-            self.validate_generation_request_and_resolve_reserved_context(&inference_request)?;
+            generation_request_validation::validate_generation_request_and_resolve_reserved_context(
+                &self.generation_request_limits(),
+                &inference_request,
+            )?;
         // Qwen3.5 can "think" before answering: it emits a private reasoning
         // block bounded by model markers, then produces the visible answer.
         // The unit appends the model's own think-end marker as a safety net so
         // a thinking block can always be closed, even when the caller supplied
         // no tokenizer-derived boundary.
         let natural_reasoning_end_token_ids =
-            super::generation_thinking_end_markers::natural_reasoning_end_token_ids_with_model_safety_net(
+            crate::qwen3_5_core::shared_execution::generation_thinking_end_markers::natural_reasoning_end_token_ids_with_model_safety_net(
                 inference_request.natural_reasoning_end_token_ids(),
                 self.think_end_token_id,
             );

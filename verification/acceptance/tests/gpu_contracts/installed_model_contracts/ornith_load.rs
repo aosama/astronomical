@@ -11,7 +11,7 @@ use std::time::Duration;
 use ipc_protocol::RequestId;
 use model_serving::{
     PerformanceAttribution, PerformanceAttributionLog, Qwen3_5ArtifactValidator,
-    Qwen3_5StreamingEngine, Qwen3_5StreamingPromptProcessingChunkSizer, Qwen3_5Tokenizer,
+    Qwen3_5PromptProcessingChunkSizer, Qwen3_5StreamingEngine, Qwen3_5Tokenizer,
 };
 use tokio::time::timeout;
 
@@ -77,7 +77,7 @@ async fn load_and_generate_with_configured_ornith_artifact() {
             mlx_memory_limits.active_memory_limit_bytes(),
             mlx_memory_limits.mlx_buffer_cache_limit_bytes(),
             None,
-            Qwen3_5StreamingPromptProcessingChunkSizer::for_ssd_streaming_chunk_size_tokens(
+            Qwen3_5PromptProcessingChunkSizer::for_chunk_size_tokens(
                 ORNITH_ACCEPTANCE_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS,
             )
             .expect("the Ornith journey prompt-processing chunk size should be valid"),

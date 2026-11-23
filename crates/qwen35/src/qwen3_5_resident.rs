@@ -30,11 +30,8 @@ pub use experts::{
     ResidentLayerArraysForTests, ResidentProjectionArraysForTests, resident_layer_arrays_for_tests,
 };
 pub use inference_execution::Qwen3_5InferenceExecution;
+pub use inference_execution::Qwen3_5ResidentEngine;
 pub use inference_execution::speculative_decode_lifecycle::VerificationTokenChoice;
-pub use inference_execution::{
-    Qwen3_5ResidentEngine, Qwen3_5ResidentPromptProcessingChunkSizer,
-    Qwen3_5ResidentPromptProcessingChunkSizerError,
-};
 pub use model::Qwen3_5ResidentModel;
 #[cfg(feature = "direct-mlx")]
 pub use model::RecordedDecoderLayerInput;

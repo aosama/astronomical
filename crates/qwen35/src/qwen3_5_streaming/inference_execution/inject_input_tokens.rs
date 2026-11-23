@@ -4,7 +4,9 @@ use crate::{InferenceEngineError, PerformanceOperation};
 
 use super::Qwen3_5EngineState;
 use super::completed_forward_memory::{self, MeasuredForward};
-use crate::qwen3_5_streaming::model::request_refusal;
+use crate::qwen3_5_core::engine_errors::{
+    generation_context_token_count_overflow_error, invalid_request_error,
+};
 
 impl Qwen3_5EngineState {
     pub(super) fn inject_input_tokens(
@@ -213,11 +215,9 @@ fn project_injection_context_token_count(
         .next_position_tokens
         .checked_add(projection.injected_input_token_count)
         .and_then(|context_tokens| context_tokens.checked_add(projection.remaining_output_tokens))
-        .ok_or_else(|| {
-            request_refusal::invalid_request_error("generation context token count overflowed")
-        })?;
+        .ok_or_else(generation_context_token_count_overflow_error)?;
     if projected_context_tokens > projection.hard_maximum_position_count {
-        return Err(request_refusal::invalid_request_error(
+        return Err(invalid_request_error(
             "generation context exceeds the model maximum position count",
         ));
     }

@@ -5,7 +5,7 @@ use ipc_protocol::{
 };
 use model_serving::{
     GeneratedToken, InferenceEngine, Qwen3_5ArtifactValidator, Qwen3_5InferenceRequest,
-    Qwen3_5StreamingEngine, Qwen3_5StreamingPromptProcessingChunkSizer, Qwen3_5Tokenizer,
+    Qwen3_5PromptProcessingChunkSizer, Qwen3_5StreamingEngine, Qwen3_5Tokenizer,
 };
 use tokio::time::timeout;
 
@@ -42,7 +42,7 @@ async fn run_romeo_continuation() {
         mlx_memory_limits.active_memory_limit_bytes(),
         mlx_memory_limits.mlx_buffer_cache_limit_bytes(),
         None,
-        Qwen3_5StreamingPromptProcessingChunkSizer::for_ssd_streaming_chunk_size_tokens(16)
+        Qwen3_5PromptProcessingChunkSizer::for_chunk_size_tokens(16)
             .expect("the test streaming prefill chunk size should be valid"),
         image_pad_token_id,
         model_directory.to_path_buf(),
@@ -130,7 +130,7 @@ async fn should_generate_a_sampled_continuation_through_the_engine_trait() {
         mlx_memory_limits.active_memory_limit_bytes(),
         mlx_memory_limits.mlx_buffer_cache_limit_bytes(),
         None,
-        Qwen3_5StreamingPromptProcessingChunkSizer::for_ssd_streaming_chunk_size_tokens(16)
+        Qwen3_5PromptProcessingChunkSizer::for_chunk_size_tokens(16)
             .expect("the test streaming prefill chunk size should be valid"),
         IMAGE_PAD_TOKEN_ID,
         model_directory.to_path_buf(),

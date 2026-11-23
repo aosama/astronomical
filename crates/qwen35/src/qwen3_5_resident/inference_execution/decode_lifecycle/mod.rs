@@ -13,7 +13,6 @@ pub(in crate::qwen3_5_resident::inference_execution) mod advance_generation;
 // across the whole resident engine, matching the visibility this module had
 // before the move.
 pub(in crate::qwen3_5_resident::inference_execution) mod decode_step_decisions;
-pub(in crate::qwen3_5_resident) mod generated_token_emission;
 pub(in crate::qwen3_5_resident::inference_execution) mod inject_input_tokens;
 
 // Re-bindings of the engine-level owners that stay in inference_execution.

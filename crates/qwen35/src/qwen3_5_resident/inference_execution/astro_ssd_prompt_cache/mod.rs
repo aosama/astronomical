@@ -13,8 +13,6 @@
 
 pub(in crate::qwen3_5_resident::inference_execution) mod adopt_retained_live_prefix;
 mod astro_ssd_prompt_cache_capture_engine;
-pub(in crate::qwen3_5_resident::inference_execution) mod astro_ssd_prompt_cache_startup_logging;
-pub(in crate::qwen3_5_resident::inference_execution) mod astro_ssd_prompt_cache_visual_identity;
 pub(in crate::qwen3_5_resident::inference_execution) mod decoder_state_reuse;
 pub(in crate::qwen3_5_resident::inference_execution) mod in_memory_adoption_decision;
 pub(in crate::qwen3_5_resident::inference_execution) mod restore_transient_workspace;
