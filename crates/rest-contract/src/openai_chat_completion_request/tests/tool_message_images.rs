@@ -5,6 +5,7 @@
 use serde_json::{Value, json};
 
 use super::*;
+use crate::RequestBoundsError;
 use crate::request_budget::MAX_IMAGE_PARTS_PER_REQUEST;
 
 /// A 1x1 red PNG, the smallest image the decoder accepts as real.
@@ -98,10 +99,12 @@ fn should_count_tool_message_images_toward_the_image_part_budget() {
 
     assert!(matches!(
         validation_error,
-        OpenAiChatCompletionValidationError::ImagePartCountExceedsBudget {
-            excess_image_part_count: 1,
-            ..
-        }
+        OpenAiChatCompletionValidationError::RequestBounds(
+            RequestBoundsError::ImagePartCountExceedsBudget {
+                excess_image_part_count: 1,
+                ..
+            }
+        )
     ));
 }
 

@@ -4,15 +4,19 @@ use serde::Deserialize;
 use serde_json::Value;
 use thiserror::Error;
 
+use crate::request_bounds::{
+    RequestBoundsError, validate_output_token_count, validate_sampling_parameter,
+};
+use crate::structured_generation_fields::StructuredGenerationFields;
+use crate::thinking_control_fields::ThinkingControlFields;
 use crate::{
-    ChatTemplateKwargsRequestObject, DEFAULT_OPENAI_OUTPUT_TOKENS, EnforcedStructuredGeneration,
-    MAX_OUTPUT_TOKENS, OpenAiResponseFormat, OpenAiResponseFunctionTool, OpenAiResponseInput,
-    OpenAiResponseInputParts, OpenAiResponseRequestConfiguration, OpenAiResponseToolChoice,
-    OpenAiResponseToolChoiceParts, OpenAiResponseToolDefinition, OpenAiResponseToolDefinitionParts,
-    OpenAiStructuredOutput, OpenAiStructuredOutputValidationError, OpenAiStructuredOutputs,
-    OpenAiStructuredOutputsValidationError, ReasoningRequestObject, ThinkingControls,
-    ThinkingControlsError, ThinkingControlsInputs, enforced_generation_from_extra_body,
-    merge_structured_output_requests, structured_output_from_responses_text_format,
+    DEFAULT_OPENAI_OUTPUT_TOKENS, EnforcedStructuredGeneration, OpenAiResponseFunctionTool,
+    OpenAiResponseInput, OpenAiResponseInputParts, OpenAiResponseRequestConfiguration,
+    OpenAiResponseToolChoice, OpenAiResponseToolChoiceParts, OpenAiResponseToolDefinition,
+    OpenAiResponseToolDefinitionParts, OpenAiStructuredOutput,
+    OpenAiStructuredOutputValidationError, OpenAiStructuredOutputsValidationError,
+    ThinkingControlsError, merge_structured_output_requests,
+    structured_output_from_responses_text_format,
 };
 
 /// One bounded request to the local OpenAI-compatible Responses endpoint.
@@ -64,18 +68,6 @@ pub struct OpenAiResponsesRequest {
     #[serde(default)]
     prompt_cache_retention: Option<String>,
     #[serde(default)]
-    reasoning: Option<ReasoningRequestObject>,
-    /// OpenAI `reasoning_effort` level name; resolved through the shared
-    /// thinking-control resolution.
-    #[serde(default)]
-    reasoning_effort: Option<String>,
-    /// Qwen-style flat switch for the thinking channel.
-    #[serde(default)]
-    enable_thinking: Option<bool>,
-    /// vLLM-style template-kwarg block carrying the thinking toggle.
-    #[serde(default)]
-    chat_template_kwargs: Option<ChatTemplateKwargsRequestObject>,
-    #[serde(default)]
     stream_options: Option<Value>,
     #[serde(default)]
     text: Option<Value>,
@@ -91,48 +83,17 @@ pub struct OpenAiResponsesRequest {
     top_p: Option<f32>,
     #[serde(default)]
     stream: bool,
-    #[serde(default)]
-    thinking_budget: Option<u32>,
-    /// Coding-agent spelling of the thinking budget: the agent resolves this
-    /// field name from its provider compatibility configuration and falls back
-    /// to it when the server declares thinking-budget support.
-    #[serde(default)]
-    thinking_token_budget: Option<u32>,
-    /// Documented OpenAI-compatible alias for the thinking budget used by
-    /// coding-agent traffic alongside `thinking_token_budget`.
-    #[serde(default)]
-    thinking_budget_tokens: Option<u32>,
-    #[serde(default)]
-    response_format: Option<OpenAiResponseFormat>,
-    #[serde(default)]
-    structured_outputs: Option<OpenAiStructuredOutputs>,
-    #[serde(default)]
-    guided_grammar: Option<String>,
+    /// Declared before `unknown_fields`, so their spellings are taken first
+    /// and never reach the catch-all map, which `into_parts` refuses.
+    #[serde(flatten)]
+    thinking_controls: ThinkingControlFields,
+    #[serde(flatten)]
+    structured_generation: StructuredGenerationFields,
     #[serde(flatten)]
     unknown_fields: BTreeMap<String, Value>,
 }
 
 impl OpenAiResponsesRequest {
-    /// Resolves every submitted thinking-control spelling into one hard budget
-    /// plus the stream exclusion preference, mirroring the output-token budget
-    /// rule: several spellings are fine while they agree, and disagreement is
-    /// a caller bug that must fail loudly instead of silently picking one.
-    fn resolve_thinking_controls(
-        &self,
-    ) -> Result<ThinkingControls, OpenAiResponsesValidationError> {
-        ThinkingControlsInputs {
-            thinking_budget: self.thinking_budget,
-            thinking_token_budget: self.thinking_token_budget,
-            thinking_budget_tokens: self.thinking_budget_tokens,
-            reasoning: self.reasoning.as_ref(),
-            reasoning_effort: self.reasoning_effort.as_deref(),
-            enable_thinking: self.enable_thinking,
-            chat_template_kwargs: self.chat_template_kwargs.as_ref(),
-        }
-        .resolve()
-        .map_err(OpenAiResponsesValidationError::ThinkingControls)
-    }
-
     /// Validates and consumes this public request into protocol-neutral parts.
     pub fn into_parts(self) -> Result<OpenAiResponsesRequestParts, OpenAiResponsesValidationError> {
         if let Some((field_name, _)) = self.unknown_fields.first_key_value() {
@@ -147,27 +108,15 @@ impl OpenAiResponsesRequest {
             .max_output_tokens
             .unwrap_or(DEFAULT_OPENAI_OUTPUT_TOKENS);
         let requested_maximum_output_tokens = self.max_output_tokens;
-        if maximum_output_tokens == 0 || maximum_output_tokens > MAX_OUTPUT_TOKENS {
-            return Err(OpenAiResponsesValidationError::OutputTokenCountOutOfRange {
-                actual_output_tokens: maximum_output_tokens,
-                maximum_output_tokens: MAX_OUTPUT_TOKENS,
-            });
-        }
+        validate_output_token_count(maximum_output_tokens)?;
         validate_sampling_parameter("temperature", self.temperature, 0.0, 2.0)?;
         validate_sampling_parameter("top_p", self.top_p, 0.0, 1.0)?;
-        let thinking_controls = self.resolve_thinking_controls()?;
+        let thinking_controls = self.thinking_controls.resolve()?;
         let structured_output = merge_structured_output_requests(
-            self.response_format
-                .clone()
-                .map(OpenAiResponseFormat::into_structured_output)
-                .transpose()?
-                .flatten(),
+            self.structured_generation.response_format_output()?,
             structured_output_from_responses_text_format(self.text.as_ref())?,
         )?;
-        let enforced_structured_generation = enforced_generation_from_extra_body(
-            self.structured_outputs.clone(),
-            self.guided_grammar.as_deref(),
-        )?;
+        let enforced_structured_generation = self.structured_generation.enforced_generation()?;
         validate_compatibility_fields(&self)?;
         let tools = self
             .tools
@@ -260,26 +209,11 @@ pub enum OpenAiResponsesValidationError {
     /// A reasoning-control spelling was contradictory or unrecognized.
     #[error(transparent)]
     ThinkingControls(#[from] ThinkingControlsError),
+    /// The request fell outside a bound every generation request shares.
+    #[error(transparent)]
+    RequestBounds(#[from] RequestBoundsError),
     #[error("invalid image input: {0}")]
     ImageInput(#[source] crate::OpenAiChatCompletionValidationError),
-    /// The request carried more image parts than the portable image-count budget.
-    #[error(
-        "the request carries {actual_image_part_count} image parts, exceeding the {maximum_image_part_count}-image budget by {excess_image_part_count} (mirrors the 100-image-per-request limit Anthropic documents for 200k-context models)"
-    )]
-    ImagePartCountExceedsBudget {
-        actual_image_part_count: usize,
-        maximum_image_part_count: usize,
-        excess_image_part_count: usize,
-    },
-    /// The request's total decoded inline media exceeded the portable media budget.
-    #[error(
-        "the request carries {actual_inline_media_bytes} decoded image bytes, exceeding the {maximum_inline_media_bytes}-byte inline-media budget by {excess_inline_media_bytes} bytes (mirrors the 20 MB total inline request size of the Gemini API)"
-    )]
-    InlineMediaExceedsBudget {
-        actual_inline_media_bytes: usize,
-        maximum_inline_media_bytes: usize,
-        excess_inline_media_bytes: usize,
-    },
     #[error("encrypted foreign reasoning cannot be replayed locally")]
     UnsupportedReasoningReplay,
     #[error("response input item type '{input_item_type}' is unsupported")]
@@ -302,19 +236,6 @@ pub enum OpenAiResponsesValidationError {
     MetadataEntryCountExceeded,
     #[error("metadata key or value exceeds the supported length")]
     MetadataTextTooLong,
-    #[error(
-        "output token count is {actual_output_tokens}, outside the 1..={maximum_output_tokens} token range"
-    )]
-    OutputTokenCountOutOfRange {
-        actual_output_tokens: u32,
-        maximum_output_tokens: u32,
-    },
-    #[error("{parameter_name} is outside the supported range {minimum}..={maximum}")]
-    SamplingParameterOutOfRange {
-        parameter_name: &'static str,
-        minimum: String,
-        maximum: String,
-    },
     #[error("request field '{field_name}' is unknown")]
     UnknownField { field_name: String },
     #[error(transparent)]
@@ -328,10 +249,19 @@ impl OpenAiResponsesValidationError {
     /// portable request budget) rather than a malformed-request one (HTTP 400).
     #[must_use]
     pub fn is_request_too_large(&self) -> bool {
-        matches!(
-            self,
-            Self::ImagePartCountExceedsBudget { .. } | Self::InlineMediaExceedsBudget { .. }
-        ) || matches!(self, Self::ImageInput(chat_error) if chat_error.is_request_too_large())
+        is_responses_size_rejection(self)
+    }
+}
+
+/// The size rejections: a shared bound on the whole request's images, or one
+/// image over its own budget, reported through the image-input error.
+fn is_responses_size_rejection(validation_error: &OpenAiResponsesValidationError) -> bool {
+    match validation_error {
+        OpenAiResponsesValidationError::RequestBounds(bounds_error) => {
+            bounds_error.is_request_too_large()
+        }
+        OpenAiResponsesValidationError::ImageInput(chat_error) => chat_error.is_request_too_large(),
+        _ => false,
     }
 }
 
@@ -421,27 +351,6 @@ fn validate_compatibility_fields(
         return Err(OpenAiResponsesValidationError::MetadataTextTooLong);
     }
     Ok(())
-}
-
-fn validate_sampling_parameter(
-    parameter_name: &'static str,
-    parameter_value: Option<f32>,
-    minimum: f32,
-    maximum: f32,
-) -> Result<(), OpenAiResponsesValidationError> {
-    let Some(parameter_value) = parameter_value else {
-        return Ok(());
-    };
-    if parameter_value.is_finite() && parameter_value >= minimum && parameter_value <= maximum {
-        return Ok(());
-    }
-    Err(
-        OpenAiResponsesValidationError::SamplingParameterOutOfRange {
-            parameter_name,
-            minimum: minimum.to_string(),
-            maximum: maximum.to_string(),
-        },
-    )
 }
 
 #[cfg(test)]

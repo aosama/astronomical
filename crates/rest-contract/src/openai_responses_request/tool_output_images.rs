@@ -7,6 +7,7 @@
 
 use serde_json::{Value, json};
 
+use crate::RequestBoundsError;
 use crate::request_budget::MAX_IMAGE_PARTS_PER_REQUEST;
 use crate::{
     OpenAiResponseInputItemParts, OpenAiResponseInputParts, OpenAiResponsesRequest,
@@ -153,10 +154,12 @@ fn should_count_function_call_output_images_toward_the_image_part_budget() {
 
     assert!(matches!(
         validation_error,
-        OpenAiResponsesValidationError::ImagePartCountExceedsBudget {
-            excess_image_part_count: 1,
-            ..
-        }
+        OpenAiResponsesValidationError::RequestBounds(
+            RequestBoundsError::ImagePartCountExceedsBudget {
+                excess_image_part_count: 1,
+                ..
+            }
+        )
     ));
 }
 

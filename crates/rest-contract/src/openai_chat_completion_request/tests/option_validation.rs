@@ -1,4 +1,5 @@
 use super::*;
+use crate::RequestBoundsError;
 
 #[test]
 fn should_reject_an_output_budget_above_the_worker_representation_limit() {
@@ -20,10 +21,12 @@ fn should_reject_an_output_budget_above_the_worker_representation_limit() {
 
     assert_eq!(
         validation_error,
-        OpenAiChatCompletionValidationError::OutputTokenCountOutOfRange {
-            actual_output_tokens: MAX_OUTPUT_TOKENS + 1,
-            maximum_output_tokens: MAX_OUTPUT_TOKENS,
-        }
+        OpenAiChatCompletionValidationError::RequestBounds(
+            RequestBoundsError::OutputTokenCountOutOfRange {
+                actual_output_tokens: MAX_OUTPUT_TOKENS + 1,
+                maximum_output_tokens: MAX_OUTPUT_TOKENS,
+            }
+        )
     );
 }
 
