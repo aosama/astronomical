@@ -101,6 +101,8 @@ fn should_round_trip_daemon_responses_through_the_wire_codec() {
             model_load_in_flight: None,
             request_progress_count: 7,
             neural_engine_prefill: None,
+            draft_model: None,
+            last_reply_drafting: None,
         },
         DaemonResponse::Status {
             worker_status: DaemonWorkerStatus::Loading,
@@ -109,6 +111,8 @@ fn should_round_trip_daemon_responses_through_the_wire_codec() {
             model_load_in_flight: Some(crate::ModelLoadInFlight::unnamed()),
             request_progress_count: 0,
             neural_engine_prefill: None,
+            draft_model: None,
+            last_reply_drafting: None,
         },
         DaemonResponse::Status {
             worker_status: DaemonWorkerStatus::Unavailable,
@@ -117,6 +121,8 @@ fn should_round_trip_daemon_responses_through_the_wire_codec() {
             model_load_in_flight: None,
             request_progress_count: 7,
             neural_engine_prefill: None,
+            draft_model: None,
+            last_reply_drafting: None,
         },
         DaemonResponse::ModelsList {
             models: vec![DaemonListedModel {

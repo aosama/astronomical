@@ -4,7 +4,8 @@
 
 - `astronomical models list`: what this Mac has.
 - `astronomical models supported`: what this release can download, and its size.
-- `astronomical status`: the default model and the loaded one.
+- `astronomical status`: the default model, the loaded one, and whether it
+  drafts with a draft model (`drafter:`), which makes replies quicker.
 - The address's `/v1/models` list (see `references/local-api.md`) also says
   what each chat model accepts, such as pictures.
 
@@ -35,6 +36,23 @@ lower limit leaves more room for the rest of the Mac.
   conversation so far, and working space. A very small limit can be too small
   for a very long conversation.
 
+## Draft models
+
+Some models carry a draft model: a small helper that guesses the next few
+words, which the main model checks all at once. Replies arrive sooner, most
+of all for code, and every word is still the main model's own. Their names
+contain `DFLASH` or `DFLASH2`; the listing's measured speeds say how much each
+gains.
+
+- **It needs an M5-family Mac with room for the whole model.** A model read
+  partly from the SSD, or a Mac without an M5 chip, runs it without the
+  helper, at its normal speed.
+- **Some requests never use it:** a picture in the prompt, structured output
+  and a repetition penalty all decode one word at a time.
+- **`astronomical status` shows what it is doing.** The `drafter:` line says
+  whether the loaded model drafts or why not, and the line under it says how
+  many guesses the last reply kept. Most kept means most gained.
+
 ## Helping someone choose
 
 The welcome and Observatory suggest a model that suits this Mac; start from
@@ -50,3 +68,5 @@ Give one recommendation with its reason, and let the person decide.
 
 A model that sits unused is unloaded after a while to free memory, and the
 next request loads it again. A setting in Observatory controls how long.
+`astronomical unload` frees the memory now, when the person needs it for
+something else; it refuses while a request is running.

@@ -76,7 +76,8 @@ pub use config::skill_settings::SkillSettings;
 pub use daily_count::keep_daily_count;
 pub use instance_lock::{AstronomicalInstanceLock, AstronomicalInstanceLockError};
 pub use ipc::service::{DaemonIpcGenerationContext, DaemonIpcService, start_daemon_ipc_service};
-pub use library::model_discovery_refresh::LibraryModelDiscoveryRefresh;
+pub use library::model_discovery_refresh::{LibraryModelDiscoveryRefresh, ModelLibraryChange};
+pub use library::model_folder_watch::{ModelFolderWatch, spawn_model_folder_watch};
 pub use library::{
     DiskCapacityQuery, DownloadCatalog, DownloadCatalogEntry, DownloadCatalogError,
     DownloadCatalogFamily, DownloadCatalogRole, DownloadDiskCapacityCheck, DownloadDiskPreflight,

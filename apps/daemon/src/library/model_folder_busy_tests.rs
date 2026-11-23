@@ -1,6 +1,8 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
-use config::{ChatModelCapabilities, DiscoveredModel, ModelCapabilities, ModelFamily};
+use config::DiscoveredModel;
+
+use crate::library::discovered_model_test_support::discovered_chat_model;
 use ipc_protocol::ModelLoadInFlight;
 
 use super::{ModelFolderBusy, model_folder_busy_reason, model_ids_served_from_folder};
@@ -8,23 +10,7 @@ use super::{ModelFolderBusy, model_folder_busy_reason, model_ids_served_from_fol
 const REMOVED_FOLDER: &str = "/fictional/models/example-org/example-qwen";
 
 fn discovered_model(model_id: &str, model_directory: &str) -> DiscoveredModel {
-    DiscoveredModel {
-        model_id: model_id.to_owned(),
-        provider_model_id: None,
-        model_family: ModelFamily::Qwen3_5,
-        revision: "fictional-revision".to_owned(),
-        model_directory: PathBuf::from(model_directory),
-        capabilities: ModelCapabilities::Chat(ChatModelCapabilities {
-            context_window: 65_536,
-            max_input_tokens: 65_535,
-            max_output_tokens: 20_480,
-            supports_vision: false,
-            supports_reasoning: true,
-            supports_tool_calls: true,
-        }),
-        license: None,
-        model_size_bytes: 1_000,
-    }
+    discovered_chat_model(model_id, None, "fictional-revision", model_directory)
 }
 
 fn folder_model_ids() -> Vec<String> {

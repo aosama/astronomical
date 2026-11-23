@@ -8,12 +8,16 @@
 
 pub mod context_copy;
 pub mod dflash_drafter;
+pub mod drafter_discovery;
 pub mod keyed_sampling;
 pub mod tree_rows;
+pub mod unused_drafter_status;
 pub mod verification_decision;
 
 #[cfg(test)]
 mod context_copy_tests;
+#[cfg(test)]
+mod drafter_discovery_tests;
 #[cfg(test)]
 mod keyed_sampling_tests;
 #[cfg(test)]

@@ -109,6 +109,25 @@ pub(in crate::worker) fn handle_worker_completion_event(
         completion_log,
     );
     publish_post_completion_activity(&completion_observation, health_snapshot);
+    crate::worker::health::record_reply_drafting(
+        health_snapshot,
+        completed_request.drafting_statistics,
+    );
+    send_completion_stream_events(&completed_request, &completion_measurements)
+}
+
+/// The reply's last stream events: what drafting did, when it drafted, and
+/// then its completion.
+fn send_completion_stream_events(
+    completed_request: &ActiveGeneration,
+    completion_measurements: &CompletionMeasurements,
+) -> Result<(), WorkerControlError> {
+    if let Some(reply_drafting) = completed_request.drafting_statistics {
+        try_send_stream_event(
+            &completed_request.stream_event_sender,
+            ChatGenerationStreamEvent::DraftingReport(reply_drafting),
+        )?;
+    }
     try_send_stream_event(
         &completed_request.stream_event_sender,
         ChatGenerationStreamEvent::Completed {

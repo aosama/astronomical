@@ -146,6 +146,7 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
             validated_artifact: Some(validated_artifact),
             vocabulary_size,
             speculative_draft_runtime: None,
+            draft_model_status: ipc_protocol::DraftModelStatus::None,
         })
     }
 }

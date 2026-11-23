@@ -7,8 +7,9 @@ use std::{path::PathBuf, time::Duration};
 
 use config::AstronomicalRuntimeInstance;
 use ipc_protocol::{
-    DaemonCatalogEntry, DaemonDownloadJob, DaemonIpcClient, DaemonListedModel, DaemonRequest,
-    DaemonResponse, DaemonWorkerStatus, ModelLoadInFlight, NeuralEnginePrefillStatus,
+    DaemonCatalogEntry, DaemonDownloadJob, DaemonIpcClient, DaemonListedModel,
+    DaemonModelUnloadStatus, DaemonRequest, DaemonResponse, DaemonWorkerStatus, DraftModelStatus,
+    ModelLoadInFlight, NeuralEnginePrefillStatus, RequestDraftingStatistics,
 };
 use tokio::time::timeout;
 
@@ -75,6 +76,11 @@ pub struct DaemonStatusSnapshot {
     /// What the Neural Engine is doing for the loaded model; `None` before any model
     /// has reported.
     pub neural_engine_prefill: Option<NeuralEnginePrefillStatus>,
+    /// Whether the loaded model drafts; `None` before a model has reported,
+    /// and for engines that never look for a drafter.
+    pub draft_model: Option<DraftModelStatus>,
+    /// What drafting did for the last finished reply.
+    pub last_reply_drafting: Option<RequestDraftingStatistics>,
 }
 
 /// Socket candidates plus the per-stage bound both verbs share.
@@ -104,6 +110,8 @@ impl DaemonProbe {
                 model_load_in_flight,
                 request_progress_count,
                 neural_engine_prefill,
+                draft_model,
+                last_reply_drafting,
             } => Ok(DaemonStatusSnapshot {
                 worker_status,
                 ready_model_id,
@@ -111,6 +119,8 @@ impl DaemonProbe {
                 model_load_in_flight,
                 request_progress_count,
                 neural_engine_prefill,
+                draft_model,
+                last_reply_drafting,
             }),
             _ => Err(DaemonProbeError::DaemonStoppedResponding),
         }
@@ -177,6 +187,22 @@ impl DaemonProbe {
                 job,
                 waiting_huggingface_ids,
             } => Ok((job, waiting_huggingface_ids)),
+            DaemonResponse::RequestRejected { reason } => {
+                Err(DaemonProbeError::DaemonRejected { reason })
+            }
+            _ => Err(DaemonProbeError::DaemonStoppedResponding),
+        }
+    }
+
+    /// Unloads the loaded model; what happened arrives as the status.
+    pub async fn model_unload(
+        &self,
+    ) -> Result<(DaemonModelUnloadStatus, Option<String>), DaemonProbeError> {
+        match self
+            .request_on_fresh_connection(&DaemonRequest::ModelUnload)
+            .await?
+        {
+            DaemonResponse::ModelUnloaded { status, model_id } => Ok((status, model_id)),
             DaemonResponse::RequestRejected { reason } => {
                 Err(DaemonProbeError::DaemonRejected { reason })
             }

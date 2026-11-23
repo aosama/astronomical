@@ -35,6 +35,7 @@ mod undelivered_training_result;
 
 pub(crate) mod command_arms;
 pub(crate) mod event_reaction;
+pub(crate) mod readiness_event;
 
 #[cfg(test)]
 mod command_arms_tests;

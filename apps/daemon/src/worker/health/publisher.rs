@@ -87,6 +87,48 @@ pub(crate) fn clear_active_request_progress(health_snapshot: &Arc<RwLock<WorkerH
     }
 }
 
+/// Publishes an engine's report about the loaded model's Neural Engine
+/// prefill or its drafter, which callers route together so their dispatch
+/// adds no branch per report.
+pub(crate) fn publish_engine_status_event(
+    health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
+    engine_status_event: ipc_protocol::WorkerEvent,
+) {
+    match engine_status_event {
+        ipc_protocol::WorkerEvent::NeuralEnginePrefillChanged {
+            neural_engine_prefill,
+        } => publish_neural_engine_prefill(health_snapshot, Some(neural_engine_prefill)),
+        ipc_protocol::WorkerEvent::DraftModelChanged { draft_model } => {
+            publish_draft_model(health_snapshot, Some(draft_model));
+        }
+        _ => {}
+    }
+}
+
+/// Keeps the last reply's drafting figures and adds them to the session's.
+pub(crate) fn record_reply_drafting(
+    health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
+    reply_drafting: Option<ipc_protocol::RequestDraftingStatistics>,
+) {
+    if let Ok(mut worker_health_snapshot) = health_snapshot.write() {
+        if let Some(reply_drafting) = reply_drafting.as_ref() {
+            worker_health_snapshot
+                .session_drafting
+                .accumulate(reply_drafting);
+        }
+        worker_health_snapshot.last_reply_drafting = reply_drafting;
+    }
+}
+
+pub(crate) fn publish_draft_model(
+    health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
+    draft_model: Option<ipc_protocol::DraftModelStatus>,
+) {
+    if let Ok(mut worker_health_snapshot) = health_snapshot.write() {
+        worker_health_snapshot.draft_model = draft_model;
+    }
+}
+
 pub(crate) fn publish_neural_engine_prefill(
     health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
     neural_engine_prefill: Option<ipc_protocol::NeuralEnginePrefillStatus>,

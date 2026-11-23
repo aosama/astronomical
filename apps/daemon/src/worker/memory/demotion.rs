@@ -464,6 +464,7 @@ async fn read_candidate_acknowledgement(
             event @ (WorkerEvent::MlxMemorySample { .. }
             | WorkerEvent::ExpertMemoryModeChanged { .. }
             | WorkerEvent::NeuralEnginePrefillChanged { .. }
+            | WorkerEvent::DraftModelChanged { .. }
             | WorkerEvent::AstroSsdPromptCacheStats { .. }) => {
                 if deferred_process_events.len() >= MAXIMUM_DEFERRED_DEMOTION_PROCESS_EVENTS {
                     return Err(WorkerControlError::CandidateProtocolViolation {

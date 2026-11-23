@@ -1,6 +1,6 @@
-use std::path::PathBuf;
+use config::DiscoveredModel;
 
-use config::{ChatModelCapabilities, DiscoveredModel, ModelCapabilities, ModelFamily};
+use crate::library::discovered_model_test_support::discovered_chat_model;
 
 use super::catalog_copy_match::find_discovered_copy;
 
@@ -13,23 +13,12 @@ fn discovered_copy(
     revision: &str,
     model_directory: &str,
 ) -> DiscoveredModel {
-    DiscoveredModel {
-        model_id: "Example-Chat-4bit".to_owned(),
-        provider_model_id: provider_model_id.map(str::to_owned),
-        model_family: ModelFamily::Qwen3_5,
-        revision: revision.to_owned(),
-        model_directory: PathBuf::from(model_directory),
-        capabilities: ModelCapabilities::Chat(ChatModelCapabilities {
-            context_window: 65_536,
-            max_input_tokens: 65_535,
-            max_output_tokens: 20_480,
-            supports_vision: false,
-            supports_reasoning: true,
-            supports_tool_calls: true,
-        }),
-        license: None,
-        model_size_bytes: 1_000,
-    }
+    discovered_chat_model(
+        "Example-Chat-4bit",
+        provider_model_id,
+        revision,
+        model_directory,
+    )
 }
 
 #[test]

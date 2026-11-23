@@ -197,6 +197,7 @@ async fn read_recovery_acknowledgement(
             WorkerEvent::MlxMemorySample { .. }
             | WorkerEvent::ExpertMemoryModeChanged { .. }
             | WorkerEvent::NeuralEnginePrefillChanged { .. }
+            | WorkerEvent::DraftModelChanged { .. }
             | WorkerEvent::AstroSsdPromptCacheStats { .. } => {}
             _ => {
                 return Err(WorkerControlError::WorkerProtocolViolation {
@@ -394,7 +395,8 @@ fn is_progress_of_request(worker_event: &WorkerEvent, request_id: RequestId) -> 
         | WorkerEvent::GenerationPreparationStarted { request_id, .. }
         | WorkerEvent::GenerationProgress { request_id, .. }
         | WorkerEvent::FirstDecodeCompleted { request_id, .. }
-        | WorkerEvent::PromptWorkReuse { request_id, .. } => *request_id,
+        | WorkerEvent::PromptWorkReuse { request_id, .. }
+        | WorkerEvent::DraftingReport { request_id, .. } => *request_id,
         _ => return false,
     };
     event_request_id == request_id
@@ -411,13 +413,13 @@ fn react_to_cancellation_event(
     expects_stepped_finalization: bool,
 ) -> Result<CancellationEventReaction, WorkerControlError> {
     match worker_event {
-        // Sent while the worker was idle and still unread when this request started.
-        WorkerEvent::NeuralEnginePrefillChanged {
-            neural_engine_prefill,
-        } => {
-            crate::worker::health::publish_neural_engine_prefill(
+        // Sent while the worker was idle (after a load or an engine switch)
+        // and still unread when this request started.
+        engine_status_event @ (WorkerEvent::NeuralEnginePrefillChanged { .. }
+        | WorkerEvent::DraftModelChanged { .. }) => {
+            crate::worker::health::publish_engine_status_event(
                 health_snapshot,
-                Some(neural_engine_prefill),
+                engine_status_event,
             );
             Ok(CancellationEventReaction::KeepDraining)
         }

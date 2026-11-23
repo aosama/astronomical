@@ -18,6 +18,10 @@ pub(crate) struct OpenAiChatStreamEncoder {
     model_id: String,
     request_id: u64,
     reasoning_excluded: bool,
+    /// What drafting did for the reply, reported just before its completion
+    /// and put in the final chunk's usage. A `Cell` because encoding takes
+    /// `&self`.
+    reply_drafting: std::cell::Cell<Option<ipc_protocol::RequestDraftingStatistics>>,
 }
 
 impl OpenAiChatStreamEncoder {
@@ -36,6 +40,7 @@ impl OpenAiChatStreamEncoder {
             model_id,
             request_id,
             reasoning_excluded,
+            reply_drafting: std::cell::Cell::new(None),
         }
     }
 
@@ -88,7 +93,11 @@ impl OpenAiChatStreamEncoder {
                 function_name,
                 arguments_json,
             )),
-            ChatGenerationStreamEvent::PrefillProgress { .. } => Ok(VecDeque::new()),
+            progress_or_drafting_event @ (ChatGenerationStreamEvent::PrefillProgress { .. }
+            | ChatGenerationStreamEvent::DraftingReport(_)) => {
+                self.keep_drafting_report(progress_or_drafting_event);
+                Ok(VecDeque::new())
+            }
             ChatGenerationStreamEvent::Completed {
                 prompt_token_count,
                 generated_token_count,
@@ -111,6 +120,14 @@ impl OpenAiChatStreamEncoder {
                     "chat_worker_unavailable",
                 ),
             },
+        }
+    }
+
+    /// Keeps a drafting report for the final chunk's usage; progress events
+    /// share the caller's arm and produce no chunk.
+    fn keep_drafting_report(&self, stream_event: ChatGenerationStreamEvent) {
+        if let ChatGenerationStreamEvent::DraftingReport(reply_drafting) = stream_event {
+            self.reply_drafting.set(Some(reply_drafting));
         }
     }
 
@@ -160,6 +177,8 @@ impl OpenAiChatStreamEncoder {
             let token_usage = token_usage.with_astro_ssd_prompt_cache_restored_tokens(
                 astro_ssd_prompt_cache_restored_token_count,
             );
+            let token_usage =
+                super::chat_completion::with_drafted_tokens(token_usage, self.reply_drafting.get());
             completion_chunk = completion_chunk.with_usage(token_usage);
         }
         let completion_event = self.serialized_event("completion", completion_chunk)?;
@@ -190,3 +209,7 @@ impl OpenAiChatStreamEncoder {
         Ok(Event::default().data(sse_data))
     }
 }
+
+#[cfg(test)]
+#[path = "chat_stream_drafting_tests.rs"]
+mod drafting_tests;

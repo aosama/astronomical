@@ -21,6 +21,12 @@ is simpler.
 - **Send one request at a time.** One reply is written at a time.
 - **Read error messages.** Unsupported options and unknown model names are
   refused with a JSON error that names the problem.
+- **See what a draft model did.** A chat completion from a model that drafts
+  reports, in `usage.completion_tokens_details`, how many guessed words were
+  kept (`accepted_prediction_tokens`) and thrown away
+  (`rejected_prediction_tokens`). `/v1/status` has the same for the last reply
+  under `drafting`, and says under `draft_model` whether the loaded model
+  drafts at all and, if not, why.
 - **Keep a fixed beginning.** Astronomical reuses its work on a prompt that
   starts like an earlier one, so put the fixed instructions first and what
   changes last.

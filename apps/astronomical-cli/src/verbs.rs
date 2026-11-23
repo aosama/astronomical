@@ -20,5 +20,6 @@ pub mod respond;
 pub mod schema;
 pub mod speak;
 pub mod status;
+pub mod unload;
 pub mod validate_config;
 pub mod vision;

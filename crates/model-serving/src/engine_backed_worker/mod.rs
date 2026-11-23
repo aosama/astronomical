@@ -59,6 +59,9 @@ pub struct EngineBackedWorker<
     /// A status from a load made during a generation, which has no event stream to
     /// hand, held so the idle loop remains the one place these reports leave from.
     pub(crate) unsent_neural_engine_prefill_event: Option<WorkerEvent>,
+    /// The drafter status from such a load: a switch to the streaming engine
+    /// for one request loses the drafter, and promotion back regains it.
+    pub(crate) unsent_draft_model_event: Option<WorkerEvent>,
 }
 
 pub(crate) enum LoadedRuntime<

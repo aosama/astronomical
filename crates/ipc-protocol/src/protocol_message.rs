@@ -388,6 +388,19 @@ pub enum WorkerEvent {
     NeuralEnginePrefillChanged {
         neural_engine_prefill: crate::NeuralEnginePrefillStatus,
     },
+    /// What drafting did for one reply; sent just before its `Completed`,
+    /// and only when the reply drafted.
+    DraftingReport {
+        request_id: RequestId,
+        drafting: crate::RequestDraftingStatistics,
+    },
+    /// Reports whether the loaded model drafts with a DFlash draft model.
+    /// Sent once a load settles, and again when a request's engine swap
+    /// gains or loses the drafter; absent for engines that never look for
+    /// one.
+    DraftModelChanged {
+        draft_model: crate::DraftModelStatus,
+    },
     /// Says where one prompt chunk ran. A fact about the model's programs rather than
     /// the request, so it stays meaningful if that request has since been cancelled.
     NeuralEngineChunkFinished {

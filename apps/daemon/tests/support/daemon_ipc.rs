@@ -68,6 +68,7 @@ pub(crate) fn unavailable_generation_context() -> DaemonIpcGenerationContext {
             std::env::temp_dir().join("ast-dipc-no-instance"),
             AstronomicalRuntimeInstance::Development,
         ),
+        worker_control: None,
     }
 }
 
@@ -583,6 +584,7 @@ pub(crate) async fn start_stub_daemon_ipc_service_with_runtime_config(
         download_catalog: bundled_test_download_catalog(),
         library_download_coordinator: None,
         instance_paths: instance_paths.clone(),
+        worker_control: None,
     };
     timeout(
         HANDSHAKE_TEST_TIMEOUT,
