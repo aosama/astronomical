@@ -43,7 +43,7 @@ tracing-subscriber.workspace = true
 
 [dev-dependencies]
 astronomical-daemon = { path = "../daemon" }
-test-harness = { path = "../../crates/test-harness", features = ["flux-reference-oracle"] }
+test-harness = { path = "../../crates/test-harness", features = ["flux-reference-oracle", "test-fixtures"] }
 serde_json.workspace = true
 serial_test.workspace = true
 tempfile = "=3.27.0"
