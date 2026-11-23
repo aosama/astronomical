@@ -8,8 +8,9 @@ use std::sync::{Arc, RwLock};
 
 use ipc_protocol::{EmbeddingsCommand, RequestId};
 
-use crate::worker::loop_types::WorkerLoopRuntime;
-use crate::worker::loop_types::{ActiveEmbeddingsGeneration, ActiveWorkerRequest};
+use crate::worker::loop_types::{
+    ActiveEmbeddingsGeneration, ActiveWorkerRequest, WorkerLoopRuntime,
+};
 use crate::worker::request_kind_admission::{AdmittedRequest, RequestKind};
 use crate::{
     EmbeddingsExecutionError, EmbeddingsOutput, WorkerActivity, WorkerControlError,
@@ -23,6 +24,8 @@ impl RequestKind for EmbeddingsRequestKind {
     type ResultMessage = Result<EmbeddingsOutput, EmbeddingsExecutionError>;
     type RequestBounds = ();
     const COMMAND_NAME: &'static str = "GenerateEmbeddings";
+    // A forward pass sends no progress before its answer, so health keeps
+    // showing the worker as idle, as it did before this admission was shared.
     const STARTED_ACTIVITY: WorkerActivity = WorkerActivity::Idle;
 
     fn requested_model(embeddings_command: &EmbeddingsCommand) -> &str {

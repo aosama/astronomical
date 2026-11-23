@@ -9,8 +9,9 @@ use std::sync::{Arc, RwLock};
 use ipc_protocol::RequestId;
 
 use crate::serving::decisions_executor::DecisionsWork;
-use crate::worker::loop_types::WorkerLoopRuntime;
-use crate::worker::loop_types::{ActiveDecisionsGeneration, ActiveWorkerRequest};
+use crate::worker::loop_types::{
+    ActiveDecisionsGeneration, ActiveWorkerRequest, WorkerLoopRuntime,
+};
 use crate::worker::request_kind_admission::{AdmittedRequest, RequestKind};
 use crate::{
     DecisionsExecutionError, DecisionsOutput, WorkerActivity, WorkerControlError,
@@ -24,6 +25,8 @@ impl RequestKind for DecisionsRequestKind {
     type ResultMessage = Result<DecisionsOutput, DecisionsExecutionError>;
     type RequestBounds = ();
     const COMMAND_NAME: &'static str = "GenerateDecisions";
+    // A forward pass sends no progress before its answer, so health keeps
+    // showing the worker as idle, as it did before this admission was shared.
     const STARTED_ACTIVITY: WorkerActivity = WorkerActivity::Idle;
 
     fn requested_model(decisions_work: &DecisionsWork) -> &str {

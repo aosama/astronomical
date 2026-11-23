@@ -261,3 +261,7 @@ async fn start_admitted_request<Kind: RequestKind>(
         .await;
     }
 }
+
+#[cfg(test)]
+#[path = "request_kind_admission_tests.rs"]
+mod request_kind_admission_tests;

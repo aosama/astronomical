@@ -70,7 +70,7 @@ async fn should_refuse_speech_when_the_resident_model_cannot_speak() {
 // Edge: a model the catalog does not know is refused without a swap, and the
 // slowest pace the contract accepts is admitted under its larger audio bound.
 #[tokio::test]
-async fn should_refuse_an_unknown_model_and_admit_the_slowest_pace() {
+async fn should_refuse_speech_from_an_unknown_model_and_admit_the_slowest_pace() {
     let worker_handle = launch_idle_worker_fixture().await;
 
     let refusal = worker_handle
