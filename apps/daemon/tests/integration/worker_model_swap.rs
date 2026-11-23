@@ -17,7 +17,7 @@ use ipc_protocol::{
     WorkerAutoregressiveModelConfiguration, WorkerChunkingConfiguration,
     WorkerDecodeAstroExpertCachePolicy, WorkerFlux2KleinModelConfiguration,
     WorkerImageGenerationModelFamily, WorkerLogLevel, WorkerModelConfiguration,
-    WorkerStartupConfiguration,
+    WorkerSpeechModelConfiguration, WorkerSpeechModelFamily, WorkerStartupConfiguration,
 };
 use tokio::time::{Instant, sleep, timeout};
 
@@ -29,6 +29,7 @@ const IMAGE_MODEL_ID: &str = "astronomical/image-generation-model";
 const INVALID_IMAGE_MODEL_ID: &str = "astronomical/invalid-image-generation-model";
 const DELAYED_POLICY_ACK_MODEL_ID: &str = "astronomical/delayed-policy-ack-model";
 const DELAYED_IMAGE_POLICY_ACK_MODEL_ID: &str = "astronomical/delayed-image-policy-ack-model";
+pub(super) const SPEECH_MODEL_ID: &str = "astronomical/speech-model";
 
 /// The wait only catches a follow-up image the swap never delivers. Under the
 /// full suite's parallel load on a CPU-only Linux machine one second proved too
@@ -372,6 +373,10 @@ pub(super) async fn launch_idle_worker_fixture() -> WorkerHandle {
                     "/models/delayed-image-policy-ack-model",
                 ),
             ),
+            (
+                SPEECH_MODEL_ID.to_owned(),
+                speech_runtime_model_policy(SPEECH_MODEL_ID, "/models/speech-model"),
+            ),
         ])),
         WorkerStartupConfiguration {
             neural_engine_program_directory: "neural-engine-programs".into(),
@@ -418,6 +423,19 @@ fn image_runtime_model_policy(model_id: &str, model_directory: &str) -> RuntimeM
                 artifact_revision: "fixture-revision".to_owned(),
             },
         ),
+    }
+}
+
+fn speech_runtime_model_policy(model_id: &str, model_directory: &str) -> RuntimeModelPolicy {
+    RuntimeModelPolicy {
+        worker_model_configuration: WorkerModelConfiguration::Speech(
+            WorkerSpeechModelConfiguration {
+                model_id: model_id.to_owned(),
+                model_family: WorkerSpeechModelFamily::Kokoro,
+                artifact_revision: "fixture-revision".to_owned(),
+            },
+        ),
+        ..image_runtime_model_policy(model_id, model_directory)
     }
 }
 

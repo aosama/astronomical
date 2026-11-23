@@ -7,15 +7,16 @@
 use std::{error::Error, process::ExitCode, time::Duration};
 
 use ipc_protocol::{
-    ChatGenerationCompletionReason, ChatModelCapabilities, ExpertMemoryMode,
-    MlxMemorySnapshotSource, ProtocolReader, ProtocolWriter, RequestId, WorkerCommand, WorkerEvent,
-    WorkerMlxMemorySnapshot, WorkerRuntimeFeatureConfiguration,
+    ChatGenerationCompletionReason, ExpertMemoryMode, MlxMemorySnapshotSource, ProtocolReader,
+    ProtocolWriter, RequestId, WorkerCommand, WorkerEvent, WorkerMlxMemorySnapshot,
+    WorkerRuntimeFeatureConfiguration,
 };
 
 // This smaller fixture reuses only capability and completion helpers from the shared scenario module.
 #[allow(dead_code)]
 mod scripted_worker_image;
 
+mod fixture_chat_capabilities;
 mod scripted_worker_decisions;
 mod scripted_worker_single_shot;
 mod scripted_worker_speech;
@@ -170,24 +171,7 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
                             expert_memory_mode: Some(ExpertMemoryMode::Resident),
                             minimum_mlx_memory_ceiling_bytes: 3_000_000_000,
                             model_id: replacement_model_id.to_owned(),
-                            capabilities: match model_configuration.autoregressive() {
-                                Some(autoregressive_configuration) => ChatModelCapabilities {
-                                    supports_reasoning: true,
-                                    supports_tool_calls: true,
-                                    has_vision: false,
-                                    max_input_tokens: autoregressive_configuration
-                                        .maximum_context_tokens
-                                        .saturating_sub(1),
-                                    max_output_tokens: autoregressive_configuration
-                                        .maximum_output_tokens,
-                                    context_window: autoregressive_configuration
-                                        .maximum_context_tokens,
-                                }
-                                .into(),
-                                None => ipc_protocol::WorkerModelCapabilities::image_generation(
-                                    scripted_worker_image::image_capabilities(),
-                                ),
-                            },
+                            capabilities: swapped_model_capabilities(&model_configuration),
                         })
                         .await?;
                     if let Some(mut runtime_configuration) =
@@ -309,6 +293,33 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
         }
     }
     Ok(())
+}
+
+/// What the swapped-in model advertises, by its kind: chat for an
+/// autoregressive model, speech for a speech model, and images otherwise.
+fn swapped_model_capabilities(
+    model_configuration: &ipc_protocol::WorkerModelConfiguration,
+) -> ipc_protocol::WorkerModelCapabilities {
+    if let Some(autoregressive_configuration) = model_configuration.autoregressive() {
+        return fixture_chat_capabilities::swapped_chat_capabilities(autoregressive_configuration)
+            .into();
+    }
+    if matches!(
+        model_configuration,
+        ipc_protocol::WorkerModelConfiguration::Speech(_)
+    ) {
+        return ipc_protocol::WorkerModelCapabilities::speech(
+            ipc_protocol::WorkerSpeechCapabilities {
+                sample_rate_hertz: 24_000,
+                voice_names: vec!["af_heart".to_owned()],
+                default_voice_name: "af_heart".to_owned(),
+                supports_speed: true,
+            },
+        );
+    }
+    ipc_protocol::WorkerModelCapabilities::image_generation(
+        scripted_worker_image::image_capabilities(),
+    )
 }
 
 async fn emit_memory_snapshot<WriteTransport>(

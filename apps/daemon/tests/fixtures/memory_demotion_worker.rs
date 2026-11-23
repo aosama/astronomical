@@ -14,6 +14,8 @@
 
 #![forbid(unsafe_code)]
 
+mod fixture_chat_capabilities;
+
 use std::{
     fs::{self, OpenOptions},
     io::Write,
@@ -22,9 +24,9 @@ use std::{
 };
 
 use ipc_protocol::{
-    ChatGenerationCompletionReason, ChatModelCapabilities, ExpertMemoryMode,
-    ImageGenerationCapabilities, MlxMemorySnapshotSource, ProtocolError, ProtocolReader,
-    ProtocolWriter, WorkerAutoregressiveModelConfiguration, WorkerCommand, WorkerEvent,
+    ChatGenerationCompletionReason, ExpertMemoryMode, ImageGenerationCapabilities,
+    MlxMemorySnapshotSource, ProtocolError, ProtocolReader, ProtocolWriter,
+    WorkerAutoregressiveModelConfiguration, WorkerCommand, WorkerEvent,
     WorkerLoadedModelRuntimeConfiguration, WorkerMlxMemorySnapshot, WorkerModelCapabilities,
     WorkerRuntimeFeatureConfiguration, WorkerStartupConfiguration,
 };
@@ -300,17 +302,10 @@ fn chat_capabilities(
     autoregressive_configuration: Option<&WorkerAutoregressiveModelConfiguration>,
 ) -> WorkerModelCapabilities {
     match autoregressive_configuration {
-        Some(autoregressive_configuration) => ChatModelCapabilities {
-            supports_reasoning: true,
-            supports_tool_calls: true,
-            has_vision: false,
-            max_input_tokens: autoregressive_configuration
-                .maximum_context_tokens
-                .saturating_sub(1),
-            max_output_tokens: autoregressive_configuration.maximum_output_tokens,
-            context_window: autoregressive_configuration.maximum_context_tokens,
+        Some(autoregressive_configuration) => {
+            fixture_chat_capabilities::swapped_chat_capabilities(autoregressive_configuration)
+                .into()
         }
-        .into(),
         None => WorkerModelCapabilities::image_generation(ImageGenerationCapabilities {
             minimum_width_pixels: 64,
             maximum_width_pixels: 1_024,

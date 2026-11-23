@@ -44,7 +44,7 @@ use crate::worker::process::containment::{
 };
 use crate::worker::process::failure_relaunch::relaunch_contained_worker;
 use crate::worker::process::replacement::WorkerReplacement;
-use crate::worker::single_shot_command_arms::admit_single_shot_generation_command;
+use crate::worker::request_kind_command_arms::admit_request_kind_generation_command;
 use crate::{
     ChatGenerationStreamEvent, EmbeddingsExecutionError, EmbeddingsOutput, GenerationStartError,
     ImageGenerationExecutionError, ImageGenerationOutput, WorkerControlError,
@@ -258,14 +258,14 @@ pub(in crate::worker) async fn handle_worker_loop_command(
             admit_chat_generation_command(runtime, is_worker_running, routed_command).await;
             WorkerLoopFlow::Continue
         }
-        routed_command @ (WorkerLoopCommand::GenerateImage { .. }
-        | WorkerLoopCommand::GenerateSpeech { .. }) => {
-            admit_stepped_generation_command(runtime, is_worker_running, routed_command).await;
+        routed_command @ WorkerLoopCommand::GenerateImage { .. } => {
+            admit_image_generation_command(runtime, is_worker_running, routed_command).await;
             WorkerLoopFlow::Continue
         }
         routed_command @ (WorkerLoopCommand::GenerateEmbeddings { .. }
-        | WorkerLoopCommand::GenerateDecisions { .. }) => {
-            admit_single_shot_generation_command(runtime, is_worker_running, routed_command).await;
+        | WorkerLoopCommand::GenerateDecisions { .. }
+        | WorkerLoopCommand::GenerateSpeech { .. }) => {
+            admit_request_kind_generation_command(runtime, is_worker_running, routed_command).await;
             WorkerLoopFlow::Continue
         }
         routed_command @ WorkerLoopCommand::Shutdown { .. } => {
@@ -295,28 +295,9 @@ pub(in crate::worker) async fn handle_worker_loop_command(
     }
 }
 
-/// The readiness guard shared by the three generation arms: a worker that is
+/// The readiness guard shared by every generation arm: a worker that is
 /// not ready, or not running, rejects the request with
 /// `WorkerUnavailable` and the arm stops before any admission work.
-/// Admits a request that runs a step at a time: speech through its own arm,
-/// an image through the other.
-async fn admit_stepped_generation_command(
-    runtime: &mut WorkerLoopRuntime,
-    is_worker_running: bool,
-    routed_command: WorkerLoopCommand,
-) {
-    if matches!(routed_command, WorkerLoopCommand::GenerateSpeech { .. }) {
-        crate::worker::speech_request::admit_speech_generation_command(
-            runtime,
-            is_worker_running,
-            routed_command,
-        )
-        .await;
-        return;
-    }
-    admit_image_generation_command(runtime, is_worker_running, routed_command).await;
-}
-
 pub(in crate::worker) fn reject_unavailable_worker(
     is_ready: bool,
     is_worker_running: bool,
