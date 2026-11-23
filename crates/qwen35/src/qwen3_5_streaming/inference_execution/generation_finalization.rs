@@ -6,15 +6,37 @@
 
 use super::NO_RETAINED_LIVE_PREFIX_BYTES;
 use crate::qwen3_5_core::model::memory_breakdown::Qwen3_5MemoryOwnership;
+use crate::qwen3_5_core::shared_execution::generation_finalization_steps;
 use crate::{
-    GenerationFinalization, GenerationPerformanceAttributionMetadata, InferenceEngineError,
-    MlxMemoryTelemetry, PerformanceAttribution, PerformanceAttributionOutcome,
-    PerformanceOperation,
+    GenerationFinalization, MlxMemoryTelemetry, PerformanceAttribution,
+    PerformanceAttributionOutcome, PerformanceOperation,
 };
 
 use super::Qwen3_5EngineState;
 use super::engine_request::Qwen3_5EngineRequest;
 use crate::qwen3_5_core::shared_execution::request_memory_release::release_request_memory;
+
+impl generation_finalization_steps::Qwen3_5FinalizationHooks for Qwen3_5EngineState {
+    fn measured_prompt_mlx_working_buffer_bytes(&self) -> Option<u64> {
+        self.core.model.as_ref().and_then(
+            crate::qwen3_5_streaming::model::Qwen3_5Model::measured_prompt_mlx_working_buffer_bytes,
+        )
+    }
+
+    fn finalize_generation_request(
+        &mut self,
+        active_request: Qwen3_5EngineRequest,
+        performance_attribution_outcome: PerformanceAttributionOutcome,
+        failure_description: Option<&'static str>,
+    ) -> GenerationFinalization {
+        Qwen3_5EngineState::finalize_generation_request(
+            self,
+            active_request,
+            performance_attribution_outcome,
+            failure_description,
+        )
+    }
+}
 
 impl Qwen3_5EngineState {
     /// Closes the request with the memory governor: its stored state is
@@ -46,84 +68,6 @@ impl Qwen3_5EngineState {
                 "could not keep the dense layers again after the request"
             );
         }
-    }
-
-    pub(super) fn collect_current_mlx_memory_telemetry(
-        &self,
-    ) -> Result<Option<MlxMemoryTelemetry>, InferenceEngineError> {
-        let Some(model) = self.core.model.as_ref() else {
-            return Ok(None);
-        };
-        let mlx_memory_snapshot = model
-            .memory_snapshot_with_forward_peak()
-            .map_err(super::qwen3_5_runtime_error)?;
-        let active_memory_bytes = u64::try_from(mlx_memory_snapshot.active_memory_bytes())
-            .map_err(|_| {
-                super::fatal_engine_error("MLX active memory bytes exceed the u64 range")
-            })?;
-        let mlx_buffer_cache_bytes = u64::try_from(mlx_memory_snapshot.mlx_buffer_cache_bytes())
-            .map_err(|_| {
-                super::fatal_engine_error("MLX buffer cache memory bytes exceed the u64 range")
-            })?;
-        let peak_memory_bytes = u64::try_from(mlx_memory_snapshot.peak_memory_bytes())
-            .map_err(|_| super::fatal_engine_error("MLX peak memory bytes exceed the u64 range"))?;
-        let active_memory_breakdown = model.finalized_active_memory_breakdown(
-            active_memory_bytes,
-            NO_RETAINED_LIVE_PREFIX_BYTES,
-            0,
-        );
-        Ok(Some(
-            MlxMemoryTelemetry::new(
-                active_memory_bytes,
-                mlx_buffer_cache_bytes,
-                peak_memory_bytes,
-                active_memory_breakdown,
-            )
-            // The claim is derived from the breakdown reconciling this exact
-            // snapshot so the published pair describes one memory instant.
-            .with_expert_residency_telemetry(
-                model.expert_residency_telemetry_for_breakdown(&active_memory_breakdown),
-            )
-            // Issue #510: the idle sample answers "is the remaining headroom
-            // free or promised" by planning the next request's decode budget
-            // against a fresh zero-token context, plus the live prefix it holds.
-            .with_memory_ceiling_utilization(
-                model.between_request_memory_ceiling_utilization_for_breakdown(
-                    active_memory_bytes,
-                    active_memory_breakdown,
-                ),
-            )
-            .with_memory_ledger_reading(model.latest_memory_ledger_reading()),
-        ))
-    }
-
-    pub(super) fn finalize_generation_request_after_error(
-        &mut self,
-        active_request: Qwen3_5EngineRequest,
-        generation_error: &InferenceEngineError,
-        rejection_description: &'static str,
-        failure_description: &'static str,
-    ) {
-        let (performance_attribution_outcome, performance_attribution_failure_description) =
-            match generation_error {
-                InferenceEngineError::InvalidRequest { .. }
-                | InferenceEngineError::ResidentForkRequired { .. }
-                | InferenceEngineError::ResidentStreamingReplacementRequired { .. }
-                | InferenceEngineError::StreamingResidentPromotionRequired { .. }
-                | InferenceEngineError::MlxMemoryLimitRejected { .. }
-                | InferenceEngineError::EngineBusy => (
-                    PerformanceAttributionOutcome::Rejected,
-                    rejection_description,
-                ),
-                InferenceEngineError::Fatal { .. } => {
-                    (PerformanceAttributionOutcome::Failed, failure_description)
-                }
-            };
-        let _generation_finalization = self.finalize_generation_request(
-            active_request,
-            performance_attribution_outcome,
-            Some(performance_attribution_failure_description),
-        );
     }
 
     pub(super) fn finalize_generation_request(
@@ -189,13 +133,16 @@ impl Qwen3_5EngineState {
         );
         let generation_finalization =
             generation_finalization.with_reply_memory_record(reply_memory_record);
-        self.record_generation_performance_attribution(
-            performance_attribution,
-            outcome,
-            request_id,
-            configured_maximum_output_tokens,
-            mlx_memory_snapshot,
-            failure_description,
+        generation_finalization_steps::record_generation_performance_attribution(
+            self,
+            generation_finalization_steps::GenerationAttributionRecord {
+                performance_attribution,
+                outcome,
+                request_id,
+                configured_maximum_output_tokens,
+                mlx_memory_snapshot,
+                failure_description,
+            },
         );
         generation_finalization
     }
@@ -319,67 +266,6 @@ impl Qwen3_5EngineState {
             self.core.model_id.as_deref(),
             &persisted_usage,
         );
-    }
-
-    pub(super) fn record_generation_performance_attribution(
-        &mut self,
-        performance_attribution: PerformanceAttribution,
-        outcome: PerformanceAttributionOutcome,
-        request_id: ipc_protocol::RequestId,
-        configured_maximum_output_tokens: u16,
-        mlx_memory_snapshot: Option<runtime_integration::MlxMemorySnapshot>,
-        failure_description: Option<&'static str>,
-    ) {
-        if !performance_attribution.is_enabled() {
-            return;
-        }
-        let (Some(model_id), Some(model_revision)) =
-            (self.core.model_id.clone(), self.core.model_revision.clone())
-        else {
-            tracing::error!(
-                request_id = request_id.value(),
-                "completed generation lacked loaded-model attribution metadata"
-            );
-            return;
-        };
-        let measured_prompt_mlx_working_buffer_bytes = self.core.model.as_ref().and_then(
-            crate::qwen3_5_streaming::model::Qwen3_5Model::measured_prompt_mlx_working_buffer_bytes,
-        );
-        let Some(performance_attribution_report) =
-            performance_attribution.finish_generation(GenerationPerformanceAttributionMetadata {
-                outcome,
-                model_id,
-                model_revision,
-                prefill_transient_observation_completed: measured_prompt_mlx_working_buffer_bytes
-                    .is_some(),
-                prefill_observed_transient_high_water_bytes:
-                    measured_prompt_mlx_working_buffer_bytes.unwrap_or(0),
-                request_id: request_id.value(),
-                configured_maximum_output_tokens,
-                mlx_active_memory_bytes: mlx_memory_snapshot
-                    .as_ref()
-                    .and_then(|snapshot| u64::try_from(snapshot.active_memory_bytes()).ok()),
-                mlx_buffer_cache_bytes: mlx_memory_snapshot
-                    .as_ref()
-                    .and_then(|snapshot| u64::try_from(snapshot.mlx_buffer_cache_bytes()).ok()),
-                mlx_peak_memory_bytes: mlx_memory_snapshot
-                    .as_ref()
-                    .and_then(|snapshot| u64::try_from(snapshot.peak_memory_bytes()).ok()),
-                failure_description: failure_description.map(str::to_owned),
-            })
-        else {
-            return;
-        };
-        if let Err(performance_attribution_write_error) = self
-            .core
-            .performance_attribution_log
-            .record(&performance_attribution_report)
-        {
-            tracing::warn!(
-                error = %performance_attribution_write_error,
-                "failed to append generation performance attribution"
-            );
-        }
     }
 }
 

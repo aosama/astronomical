@@ -1,15 +1,17 @@
 //! One terminal cleanup path for success, rejection, cancellation, and failure.
 //!
-//! Request-owned lazy arrays are dropped before expert-retention policy resumes
-//! and before allocator cleanup. After that workspace is gone, complete residency
-//! is restored when the leftover ceiling admits it so a fitting model is not left
-//! streaming. Final telemetry then reports that restored ownership.
+//! The live prefix is kept for the next reply before the request's arrays are
+//! dropped; allocator cleanup follows, then the memory governor ends the
+//! request, and the final telemetry reports what remains. The telemetry, the
+//! attribution record and the after-error path are shared with the streaming
+//! engine in `qwen3_5_core::shared_execution::generation_finalization_steps`.
 
 use crate::astro_decoder_state_cache::AstroDecoderStateCacheState;
 use crate::astro_ssd_prompt_cache::block_causal_input::AstroSsdPromptCacheBlockCausalInput;
 use crate::memory::telemetry::MlxActiveMemoryBreakdown;
 use crate::qwen3_5_core::decoder::RequestDecoderStateStack;
 use crate::qwen3_5_core::model::memory_breakdown::Qwen3_5MemoryOwnership;
+use crate::qwen3_5_core::shared_execution::generation_finalization_steps;
 use crate::{
     AstroSsdPromptCacheBlockKey, GenerationFinalization, GenerationPerformanceAttributionMetadata,
     InferenceEngineError, PerformanceAttribution, PerformanceAttributionOutcome,
@@ -21,108 +23,31 @@ use super::engine_request::Qwen3_5EngineRequest;
 use super::retained_live_prefix::RetainedLiveDecoderPrefix;
 use crate::qwen3_5_core::shared_execution::request_memory_release::release_request_memory;
 
-/// Converts one memory snapshot's peak counter to a u64 when it fits.
-fn snapshot_peak_memory_bytes_option(
-    memory_snapshot: &runtime_integration::MlxMemorySnapshot,
-) -> Option<u64> {
-    u64::try_from(memory_snapshot.peak_memory_bytes()).ok()
-}
+impl generation_finalization_steps::Qwen3_5FinalizationHooks for Qwen3_5EngineState {
+    fn retained_live_context_state_payload_bytes(&self) -> u64 {
+        Qwen3_5EngineState::live_retained_context_state_payload_bytes(self)
+    }
 
-/// Converts one memory snapshot's active counter to a u64 when it fits.
-fn snapshot_active_memory_bytes_option(
-    memory_snapshot: &runtime_integration::MlxMemorySnapshot,
-) -> Option<u64> {
-    u64::try_from(memory_snapshot.active_memory_bytes()).ok()
-}
+    fn measured_prompt_mlx_working_buffer_bytes(&self) -> Option<u64> {
+        self.measured_prompt_chunk_mlx_working_buffer_bytes()
+    }
 
-/// Converts one memory snapshot's MLX buffer-cache counter to a u64 when it fits.
-fn snapshot_mlx_buffer_cache_bytes_option(
-    memory_snapshot: &runtime_integration::MlxMemorySnapshot,
-) -> Option<u64> {
-    u64::try_from(memory_snapshot.mlx_buffer_cache_bytes()).ok()
+    fn finalize_generation_request(
+        &mut self,
+        active_request: Qwen3_5EngineRequest,
+        performance_attribution_outcome: PerformanceAttributionOutcome,
+        failure_description: Option<&'static str>,
+    ) -> GenerationFinalization {
+        Qwen3_5EngineState::finalize_generation_request(
+            self,
+            active_request,
+            performance_attribution_outcome,
+            failure_description,
+        )
+    }
 }
 
 impl Qwen3_5EngineState {
-    pub(in crate::qwen3_5_resident::inference_execution) fn collect_current_mlx_memory_telemetry(
-        &self,
-    ) -> Result<Option<MlxMemoryTelemetry>, InferenceEngineError> {
-        let Some(model) = self.core.model.as_ref() else {
-            return Ok(None);
-        };
-        let mlx_memory_snapshot = model
-            .runtime()
-            .memory_snapshot()
-            .map_err(super::qwen3_5_runtime_error)?;
-        let active_memory_bytes = u64::try_from(mlx_memory_snapshot.active_memory_bytes())
-            .map_err(
-                crate::qwen3_5_core::engine_errors::mlx_active_memory_bytes_exceed_u64_range_error,
-            )?;
-        let mlx_buffer_cache_bytes = u64::try_from(mlx_memory_snapshot.mlx_buffer_cache_bytes())
-            .map_err(
-                crate::qwen3_5_core::engine_errors::mlx_buffer_cache_bytes_exceed_u64_range_error,
-            )?;
-        let peak_memory_bytes = u64::try_from(mlx_memory_snapshot.peak_memory_bytes()).map_err(
-            crate::qwen3_5_core::engine_errors::mlx_peak_memory_bytes_exceed_u64_range_error,
-        )?;
-        let active_memory_breakdown = model.finalized_active_memory_breakdown(
-            active_memory_bytes,
-            self.live_retained_context_state_payload_bytes(),
-            0,
-        );
-        Ok(Some(
-            MlxMemoryTelemetry::new(
-                active_memory_bytes,
-                mlx_buffer_cache_bytes,
-                peak_memory_bytes,
-                active_memory_breakdown,
-            )
-            // The claim is derived from the breakdown reconciling this exact
-            // snapshot, so the published pair cannot straddle a promotion or
-            // demote (issue #337).
-            .with_expert_residency_telemetry(
-                model.expert_residency_telemetry_for_breakdown(&active_memory_breakdown),
-            )
-            // Issue #510: the idle sample answers "is the remaining headroom
-            // free or promised" from the memory governor's accounts.
-            .with_memory_ceiling_utilization(
-                model.between_request_memory_ceiling_utilization_for_breakdown(
-                    active_memory_bytes,
-                    active_memory_breakdown,
-                ),
-            )
-            .with_memory_ledger_reading(model.latest_memory_ledger_reading()),
-        ))
-    }
-
-    pub(in crate::qwen3_5_resident::inference_execution) fn finalize_generation_request_after_error(
-        &mut self,
-        active_request: Qwen3_5EngineRequest,
-        generation_error: &InferenceEngineError,
-        rejection_description: &'static str,
-        failure_description: &'static str,
-    ) {
-        let (performance_attribution_outcome, performance_attribution_failure_description) =
-            match generation_error {
-                InferenceEngineError::InvalidRequest { .. }
-                | InferenceEngineError::ResidentForkRequired { .. }
-                | InferenceEngineError::ResidentStreamingReplacementRequired { .. }
-                | InferenceEngineError::StreamingResidentPromotionRequired { .. }
-                | InferenceEngineError::MlxMemoryLimitRejected { .. }
-                | InferenceEngineError::EngineBusy => (
-                    PerformanceAttributionOutcome::Rejected,
-                    rejection_description,
-                ),
-                InferenceEngineError::Fatal { .. } => {
-                    (PerformanceAttributionOutcome::Failed, failure_description)
-                }
-            };
-        let _generation_finalization = self.finalize_generation_request(
-            active_request,
-            performance_attribution_outcome,
-            Some(performance_attribution_failure_description),
-        );
-    }
-
     pub(in crate::qwen3_5_resident::inference_execution) fn finalize_generation_request(
         &mut self,
         mut active_request: Qwen3_5EngineRequest,
@@ -171,16 +96,19 @@ impl Qwen3_5EngineState {
                 &mut performance_attribution,
                 mlx_memory_snapshot
                     .as_ref()
-                    .and_then(snapshot_peak_memory_bytes_option),
+                    .and_then(|snapshot| u64::try_from(snapshot.peak_memory_bytes()).ok()),
             )
             .with_drafting_statistics(drafting_statistics);
-        self.record_generation_performance_attribution(
-            performance_attribution,
-            outcome,
-            request_id,
-            configured_maximum_output_tokens,
-            mlx_memory_snapshot,
-            failure_description,
+        generation_finalization_steps::record_generation_performance_attribution(
+            self,
+            generation_finalization_steps::GenerationAttributionRecord {
+                performance_attribution,
+                outcome,
+                request_id,
+                configured_maximum_output_tokens,
+                mlx_memory_snapshot,
+                failure_description,
+            },
         );
         generation_finalization
     }
@@ -360,66 +288,6 @@ impl Qwen3_5EngineState {
             mlx_memory_telemetry,
             expert_residency_telemetry,
         )
-    }
-
-    pub(in crate::qwen3_5_resident::inference_execution) fn record_generation_performance_attribution(
-        &mut self,
-        performance_attribution: PerformanceAttribution,
-        outcome: PerformanceAttributionOutcome,
-        request_id: ipc_protocol::RequestId,
-        configured_maximum_output_tokens: u16,
-        mlx_memory_snapshot: Option<runtime_integration::MlxMemorySnapshot>,
-        failure_description: Option<&'static str>,
-    ) {
-        if !performance_attribution.is_enabled() {
-            return;
-        }
-        let (Some(model_id), Some(model_revision)) =
-            (self.core.model_id.clone(), self.core.model_revision.clone())
-        else {
-            tracing::error!(
-                request_id = request_id.value(),
-                "completed generation lacked loaded-model attribution metadata"
-            );
-            return;
-        };
-        let Some(performance_attribution_report) =
-            performance_attribution.finish_generation(GenerationPerformanceAttributionMetadata {
-                outcome,
-                model_id,
-                model_revision,
-                prefill_transient_observation_completed: self
-                    .measured_prompt_chunk_mlx_working_buffer_bytes()
-                    .is_some(),
-                prefill_observed_transient_high_water_bytes: self
-                    .measured_prompt_chunk_mlx_working_buffer_bytes()
-                    .unwrap_or(0),
-                request_id: request_id.value(),
-                configured_maximum_output_tokens,
-                mlx_active_memory_bytes: mlx_memory_snapshot
-                    .as_ref()
-                    .and_then(snapshot_active_memory_bytes_option),
-                mlx_buffer_cache_bytes: mlx_memory_snapshot
-                    .as_ref()
-                    .and_then(snapshot_mlx_buffer_cache_bytes_option),
-                mlx_peak_memory_bytes: mlx_memory_snapshot
-                    .as_ref()
-                    .and_then(snapshot_peak_memory_bytes_option),
-                failure_description: failure_description.map(str::to_owned),
-            })
-        else {
-            return;
-        };
-        if let Err(performance_attribution_write_error) = self
-            .core
-            .performance_attribution_log
-            .record(&performance_attribution_report)
-        {
-            tracing::warn!(
-                error = %performance_attribution_write_error,
-                "failed to append generation performance attribution"
-            );
-        }
     }
 }
 

@@ -26,4 +26,11 @@ pub trait Qwen3_5TextModel: Qwen3_5MemoryOwnership {
 
     /// The memory governor's latest ledger reading, when it has one.
     fn latest_memory_ledger_reading(&self) -> Option<LedgerReading>;
+
+    /// The MLX memory reading telemetry reports. The streaming model raises
+    /// its peak to the largest prompt layer it measured, which MLX's own
+    /// counter misses when layers are evaluated one at a time.
+    fn memory_snapshot_for_telemetry(
+        &self,
+    ) -> Result<runtime_integration::MlxMemorySnapshot, crate::InferenceEngineError>;
 }

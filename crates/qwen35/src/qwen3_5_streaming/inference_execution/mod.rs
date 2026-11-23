@@ -31,6 +31,7 @@ use crate::MlxInferenceEngine;
 // after the state and constructors moved into their own files.
 use super::model::Qwen3_5Model;
 
+pub use engine_construction::StreamingEngineSettings;
 pub use engine_state::{Qwen3_5EngineState, Qwen3_5InferenceExecution};
 pub use memory_limit::safe_minimum_mlx_memory_ceiling_bytes;
 

@@ -1,5 +1,6 @@
 //! Whether a request's whole context fits, asked before the first forward.
 
+use crate::qwen3_5_core::shared_execution::generation_finalization_steps;
 use crate::qwen3_5_resident::model::request_errors;
 use crate::{
     InferenceEngineError, PerformanceAttribution, PerformanceAttributionOutcome,
@@ -24,13 +25,19 @@ impl Qwen3_5EngineState {
                 Ok(())
             }
             Err(context_admission_error) => {
-                self.record_generation_performance_attribution(
-                    std::mem::replace(performance_attribution, PerformanceAttribution::disabled()),
-                    PerformanceAttributionOutcome::Rejected,
-                    request_id,
-                    configured_maximum_output_tokens,
-                    None,
-                    Some("generation context admission rejected"),
+                generation_finalization_steps::record_generation_performance_attribution(
+                    self,
+                    generation_finalization_steps::GenerationAttributionRecord {
+                        performance_attribution: std::mem::replace(
+                            performance_attribution,
+                            PerformanceAttribution::disabled(),
+                        ),
+                        outcome: PerformanceAttributionOutcome::Rejected,
+                        request_id,
+                        configured_maximum_output_tokens,
+                        mlx_memory_snapshot: None,
+                        failure_description: Some("generation context admission rejected"),
+                    },
                 );
                 Err(context_admission_error)
             }

@@ -31,13 +31,10 @@ const DELAYED_POLICY_ACK_MODEL_ID: &str = "astronomical/delayed-policy-ack-model
 const DELAYED_IMAGE_POLICY_ACK_MODEL_ID: &str = "astronomical/delayed-image-policy-ack-model";
 pub(super) const SPEECH_MODEL_ID: &str = "astronomical/speech-model";
 
-/// The wait only catches a follow-up image the swap never delivers. Under the
-/// full suite's parallel load on a CPU-only Linux machine one second proved too
-/// short for a healthy delivery, so builds without Metal allow more; macOS
-/// keeps its second.
-#[cfg(target_os = "macos")]
-const FOLLOWUP_IMAGE_HANG_GUARD: Duration = Duration::from_secs(1);
-#[cfg(not(target_os = "macos"))]
+/// The wait only catches a follow-up image the swap never delivers, so a
+/// longer one costs a passing run nothing. Under the full suite's parallel
+/// load one second proved too short for a healthy delivery, first on a
+/// CPU-only Linux machine and then on the macOS CI runner.
 const FOLLOWUP_IMAGE_HANG_GUARD: Duration = Duration::from_secs(10);
 #[tokio::test]
 async fn should_complete_a_queued_model_swap_when_idle_telemetry_arrives_before_acknowledgement() {

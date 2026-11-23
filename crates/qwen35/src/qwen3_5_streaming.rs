@@ -18,7 +18,9 @@ pub use expert_streaming::route_observation::{
 #[cfg(feature = "direct-mlx")]
 pub use expert_streaming::{ExpertPagingError, Qwen3_5ExpertPager};
 #[cfg(feature = "direct-mlx")]
-pub use inference_execution::{Qwen3_5StreamingEngine, safe_minimum_mlx_memory_ceiling_bytes};
+pub use inference_execution::{
+    Qwen3_5StreamingEngine, StreamingEngineSettings, safe_minimum_mlx_memory_ceiling_bytes,
+};
 #[cfg(feature = "direct-mlx")]
 pub use model::direct_expert_fetch_tally::DirectExpertFetchCounts;
 #[cfg(feature = "direct-mlx")]

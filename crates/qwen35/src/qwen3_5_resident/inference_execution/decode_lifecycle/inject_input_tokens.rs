@@ -1,3 +1,4 @@
+use crate::qwen3_5_core::shared_execution::generation_finalization_steps;
 use ipc_protocol::RequestId;
 
 use crate::{InferenceEngineError, PerformanceOperation};
@@ -42,7 +43,8 @@ impl Qwen3_5EngineState {
                 Ok(())
             }
             Err(generation_error) => {
-                self.finalize_generation_request_after_error(
+                generation_finalization_steps::finalize_generation_request_after_error(
+                    self,
                     active_request,
                     &generation_error,
                     "model feedback injection rejected",

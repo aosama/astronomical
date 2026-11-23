@@ -3,6 +3,7 @@
 //! The token returned to the user is normally the predecessor of the token
 //! already being evaluated.
 
+use crate::qwen3_5_core::shared_execution::generation_finalization_steps;
 use std::time::Instant;
 
 use ipc_protocol::RequestId;
@@ -63,7 +64,8 @@ impl Qwen3_5EngineState {
                 Ok(generated_token.with_generation_finalization(generation_finalization))
             }
             Err(generation_error) => {
-                self.finalize_generation_request_after_error(
+                generation_finalization_steps::finalize_generation_request_after_error(
+                    self,
                     active_request,
                     &generation_error,
                     "generation advance rejected",
@@ -209,7 +211,8 @@ impl Qwen3_5EngineState {
             .model
             .as_ref()
             .ok_or_else(super::super::generation_session_lifecycle::generation_error_constructors::engine_lost_loaded_model_error)?;
-        let mlx_memory_telemetry = self.collect_current_mlx_memory_telemetry()?;
+        let mlx_memory_telemetry =
+            generation_finalization_steps::collect_current_mlx_memory_telemetry(self)?;
         let expert_residency = match mlx_memory_telemetry
             .as_ref()
             .and_then(|telemetry| telemetry.expert_residency_telemetry())

@@ -1,4 +1,7 @@
 use crate::inference_engine::contract::ExpertResidencyTelemetry;
+use crate::qwen3_5_core::shared_execution::astro_ssd_prompt_cache_restore;
+use crate::qwen3_5_core::shared_execution::generation_finalization_steps;
+use crate::qwen3_5_core::shared_execution::generation_thinking_end_markers;
 use crate::qwen3_5_core::text::thinking_budget::Qwen3_5ThinkingBudgetError;
 use crate::{
     EngineGenerationStart, InferenceEngineError, PerformanceAttribution,
@@ -93,7 +96,7 @@ impl Qwen3_5EngineState {
         // a thinking block can always be closed, even when the caller supplied
         // no tokenizer-derived boundary.
         let natural_reasoning_end_token_ids =
-            crate::qwen3_5_core::shared_execution::generation_thinking_end_markers::natural_reasoning_end_token_ids_with_model_safety_net(
+            generation_thinking_end_markers::natural_reasoning_end_token_ids_with_model_safety_net(
                 inference_request.natural_reasoning_end_token_ids(),
                 self.core.think_end_token_id,
             );
@@ -237,13 +240,16 @@ impl Qwen3_5EngineState {
         if self.core.active_request.is_none() {
             return Ok(performance_attribution);
         }
-        self.record_generation_performance_attribution(
-            performance_attribution,
-            PerformanceAttributionOutcome::Rejected,
-            inference_request.request_id(),
-            inference_request.max_output_tokens(),
-            None,
-            Some("generation engine is already serving a request"),
+        generation_finalization_steps::record_generation_performance_attribution(
+            self,
+            generation_finalization_steps::GenerationAttributionRecord {
+                performance_attribution,
+                outcome: PerformanceAttributionOutcome::Rejected,
+                request_id: inference_request.request_id(),
+                configured_maximum_output_tokens: inference_request.max_output_tokens(),
+                mlx_memory_snapshot: None,
+                failure_description: Some("generation engine is already serving a request"),
+            },
         );
         Err(InferenceEngineError::EngineBusy)
     }
@@ -451,20 +457,19 @@ impl Qwen3_5EngineState {
         request_decoder_state: &mut RequestDecoderStateStack,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<
-        Option<crate::qwen3_5_core::shared_execution::astro_ssd_prompt_cache_restore::AstroSsdPromptCacheRestoreOutcome>,
+        Option<astro_ssd_prompt_cache_restore::AstroSsdPromptCacheRestoreOutcome>,
         InferenceEngineError,
-    >{
+    > {
         if self.core.astro_ssd_prompt_cache.is_some() && can_use_astro_ssd_prompt_cache {
             // Split the borrow: take the `astro_ssd_prompt_cache` out temporarily so the engine
             // state (including counters) can be mutated as &mut self while the
             // disk store is used as a plain borrowed reference.
             let astro_ssd_prompt_cache = self.core.astro_ssd_prompt_cache.take();
-            let restore_result = if let Some(astro_ssd_prompt_cache) =
-                astro_ssd_prompt_cache.as_ref()
-            {
-                crate::qwen3_5_core::shared_execution::astro_ssd_prompt_cache_restore::restore_astro_ssd_prompt_cache_prefix(
+            let restore_result =
+                if let Some(astro_ssd_prompt_cache) = astro_ssd_prompt_cache.as_ref() {
+                    astro_ssd_prompt_cache_restore::restore_astro_ssd_prompt_cache_prefix(
                         self,
-                        &crate::qwen3_5_core::shared_execution::astro_ssd_prompt_cache_restore::AstroSsdPromptCacheRestoreRequest {
+                        &astro_ssd_prompt_cache_restore::AstroSsdPromptCacheRestoreRequest {
                             request_id: inference_request.request_id(),
                             astro_ssd_prompt_cache,
                             prompt_token_ids,
@@ -475,9 +480,9 @@ impl Qwen3_5EngineState {
                         performance_attribution,
                     )
                     .map(Some)
-            } else {
-                Ok(None)
-            };
+                } else {
+                    Ok(None)
+                };
             // Restores can fail closed for data correctness, but the disk-store owner must
             // remain installed for the next independent request. Returning while it is
             // temporarily taken would silently turn later traffic into a mode with the `astro_ssd_prompt_cache` disabled.

@@ -1,5 +1,6 @@
 //! Trait bridge from the engine-neutral execution contract onto the state methods.
 
+use crate::qwen3_5_core::shared_execution::generation_finalization_steps;
 use ipc_protocol::{RequestId, WorkerEvent};
 
 use crate::inference_engine::load_result::EngineLoadResult;
@@ -69,7 +70,7 @@ impl MlxInferenceExecution for Qwen3_5InferenceExecution {
     fn collect_mlx_memory_telemetry(
         &self,
     ) -> Result<Option<MlxMemoryTelemetry>, InferenceEngineError> {
-        Qwen3_5EngineState::collect_current_mlx_memory_telemetry(self)
+        generation_finalization_steps::collect_current_mlx_memory_telemetry(self)
     }
 
     fn update_mlx_memory_limit(

@@ -6,6 +6,7 @@
 //! graphics processor ahead of time.
 
 use crate::qwen3_5_core::model::memory_breakdown::Qwen3_5MemoryOwnership;
+use crate::qwen3_5_core::shared_execution::generation_finalization_steps;
 use std::time::Instant;
 
 use ipc_protocol::RequestId;
@@ -68,7 +69,8 @@ impl Qwen3_5EngineState {
                 Ok(generated_token.with_generation_finalization(generation_finalization))
             }
             Err(generation_error) => {
-                self.finalize_generation_request_after_error(
+                generation_finalization_steps::finalize_generation_request_after_error(
+                    self,
                     active_request,
                     &generation_error,
                     "generation advance rejected",
