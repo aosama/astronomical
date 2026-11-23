@@ -53,6 +53,12 @@ impl Qwen3_5ExecutionCoreOwner for Qwen3_5InferenceExecution {
     ) -> &Qwen3_5ExecutionCore<Qwen3_5ResidentModel, ResidentRequestExtension> {
         &self.core
     }
+
+    fn execution_core_mut(
+        &mut self,
+    ) -> &mut Qwen3_5ExecutionCore<Self::Model, Self::RequestExtension> {
+        &mut self.core
+    }
 }
 
 impl Qwen3_5EngineState {

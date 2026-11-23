@@ -3,7 +3,7 @@
 use crate::AstroSsdPromptCacheBlockKey;
 use ipc_protocol::WorkerAstroSsdPromptCacheRequestDiagnostics;
 
-use super::decoder_state_reuse::AstroSsdPromptCacheRestoreOutcome;
+use crate::qwen3_5_core::shared_execution::astro_ssd_prompt_cache_restore::AstroSsdPromptCacheRestoreOutcome;
 
 /// Where the admitted session begins: how much prompt work already exists
 /// and which token position the first new token occupies.

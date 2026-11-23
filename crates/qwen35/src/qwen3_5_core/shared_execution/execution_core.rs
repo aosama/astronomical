@@ -66,6 +66,10 @@ pub trait Qwen3_5ExecutionCoreOwner {
     type RequestExtension;
 
     fn execution_core(&self) -> &Qwen3_5ExecutionCore<Self::Model, Self::RequestExtension>;
+
+    fn execution_core_mut(
+        &mut self,
+    ) -> &mut Qwen3_5ExecutionCore<Self::Model, Self::RequestExtension>;
 }
 
 /// What the worker resolves before an engine starts.

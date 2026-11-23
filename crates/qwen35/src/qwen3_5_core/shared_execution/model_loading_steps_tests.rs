@@ -1,4 +1,4 @@
-//! Beside-source coverage for the pure resident-loading units: the chunking
+//! Beside-source coverage for the pure model-loading steps: the chunking
 //! configuration validation. The load pipeline itself runs under the serial
 //! engine lane against real artifacts.
 

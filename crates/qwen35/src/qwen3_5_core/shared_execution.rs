@@ -6,6 +6,7 @@
 //! fix to a step reaches both. The trait is reached through static generics,
 //! so a step costs the same per token as the copies it replaces.
 
+pub mod astro_ssd_prompt_cache_restore;
 pub mod astro_ssd_prompt_cache_startup_logging;
 pub mod astro_ssd_prompt_cache_visual_identity;
 pub mod execution_core;
@@ -13,7 +14,9 @@ pub mod generated_token_emission;
 pub mod generation_request_validation;
 pub mod generation_thinking_end_markers;
 pub mod generation_vocabulary_boundaries;
+pub mod model_loading_steps;
 pub mod prompt_processing_chunk_sizer;
 pub mod request_memory_release;
+pub mod restore_transient_workspace;
 pub mod test_controls;
 pub mod text_model;

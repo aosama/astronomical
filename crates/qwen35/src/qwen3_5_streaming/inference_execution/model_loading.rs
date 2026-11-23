@@ -1,20 +1,22 @@
-use ipc_protocol::{WorkerChunkingConfiguration, WorkerDecodeAstroExpertCachePolicy};
+use ipc_protocol::WorkerDecodeAstroExpertCachePolicy;
 use runtime_integration::MlxRuntime;
 use std::sync::Arc;
 
 use crate::inference_engine::load_result::EngineLoadResult;
 use crate::{
-    AstroSsdPromptCacheDiskStore, AstroSsdPromptCacheDiskStoreConfig,
-    AstroSsdPromptCacheModelContract, InferenceEngineError, PerformanceAttribution,
-    PerformanceAttributionOutcome, PerformanceOperation, PersistentVisualEmbeddingModelContract,
-    StreamingStartupResidencyFacts,
+    AstroSsdPromptCacheDiskStore, AstroSsdPromptCacheModelContract, InferenceEngineError,
+    PerformanceAttribution, PerformanceAttributionOutcome, PerformanceOperation,
+    PersistentVisualEmbeddingModelContract, StreamingStartupResidencyFacts,
 };
 
 use super::{Qwen3_5EngineState, fatal_engine_error, qwen3_5_runtime_error};
 use crate::qwen3_5_core::artifacts::ValidatedQwen3_5Artifact;
 use crate::qwen3_5_core::model::model_chunking_configuration::Qwen3_5ModelChunkingConfiguration;
-use crate::qwen3_5_core::shared_execution::astro_ssd_prompt_cache_startup_logging;
-use crate::qwen3_5_core::vision::{Qwen3_5ImageProcessor, Qwen3_5VisionConfig};
+use crate::qwen3_5_core::shared_execution::model_loading_steps::{
+    initialize_mlx_runtime_with_cleanup, open_astro_ssd_prompt_cache,
+    resolve_model_chunking_configuration, resolve_validated_model_identity,
+    resolve_visual_embedding_model_contract,
+};
 use crate::qwen3_5_streaming::model::Qwen3_5Model;
 
 impl Qwen3_5EngineState {
@@ -73,7 +75,7 @@ impl Qwen3_5EngineState {
                     &resolved_model_revision,
                 );
             let (astro_ssd_prompt_cache_model_contract, astro_ssd_prompt_cache) =
-                open_streaming_astro_ssd_prompt_cache(
+                open_astro_ssd_prompt_cache(
                     self.core.astro_ssd_prompt_cache_disk_store_config.clone(),
                     &model,
                     &self.core.chunking,
@@ -286,47 +288,6 @@ fn with_loaded_sequence_state_rate(
     Some(startup_residency_facts)
 }
 
-/// Initializes the MLX runtime under attribution and immediately clears the
-/// MLX buffer cache. Dropping the prior model moves its Metal buffers into
-/// MLX's process-global allocator pool; releasing them before replacement
-/// weights load keeps stale residency from competing during first-request
-/// paging.
-fn initialize_mlx_runtime_with_cleanup(
-    memory_limits: runtime_integration::MlxMemoryLimits,
-    model_loading_performance_attribution: &mut PerformanceAttribution,
-) -> Result<MlxRuntime, InferenceEngineError> {
-    let runtime = model_loading_performance_attribution
-        .measure_operation(
-            PerformanceOperation::MlxRuntimeInitialization,
-            |_performance_attribution| MlxRuntime::initialize(memory_limits),
-        )
-        .map_err(qwen3_5_runtime_error)?;
-    model_loading_performance_attribution
-        .measure_operation(
-            PerformanceOperation::MlxBufferCacheCleanup,
-            |_performance_attribution| runtime.clear_mlx_buffer_cache(),
-        )
-        .map_err(qwen3_5_runtime_error)?;
-    Ok(runtime)
-}
-
-/// Pure: validates the worker chunking settings into the model chunking
-/// configuration the streaming loader consumes.
-fn resolve_model_chunking_configuration(
-    chunking: &WorkerChunkingConfiguration,
-) -> Result<Qwen3_5ModelChunkingConfiguration, InferenceEngineError> {
-    Qwen3_5ModelChunkingConfiguration::new(
-        chunking.full_attention_key_value_growth_tokens,
-        chunking.prefill_graph_submission_layer_interval,
-        chunking.experimental_ssd_paging_generation_graph_submission_layer_interval,
-    )
-    .map_err(|configuration_error| {
-        fatal_engine_error(format!(
-            "failed to validate model chunking configuration: {configuration_error}"
-        ))
-    })
-}
-
 /// How the engine will run forwards: the chunking the model loads with, and
 /// the prefill shape a dense model's MLX working buffers are measured at.
 struct StreamingForwardShape {
@@ -373,126 +334,6 @@ fn load_and_materialize_streaming_model(
     model.begin_serving_session_observation();
     model.open_memory_governor();
     Ok(model)
-}
-
-/// Resolves the validated artifact identity the state fields report after a
-/// successful load; losing either during loading is a fatal engine error.
-fn resolve_validated_model_identity(
-    model_id: &Option<String>,
-    model_revision: &Option<String>,
-) -> Result<(String, String), InferenceEngineError> {
-    let resolved_model_id = model_id
-        .clone()
-        .ok_or_else(|| fatal_engine_error("model loading lost the validated model identifier"))?;
-    let resolved_model_revision = model_revision
-        .clone()
-        .ok_or_else(|| fatal_engine_error("model loading lost the validated model revision"))?;
-    Ok((resolved_model_id, resolved_model_revision))
-}
-
-/// Pure: builds the in-memory vision tensor geometry contract used to
-/// validate both direct visual embeddings and optional disk entries. It
-/// creates no storage owner; scanning and all other disk work remain inside
-/// the branch where the `astro_ssd_prompt_cache` is enabled.
-fn resolve_visual_embedding_model_contract(
-    qwen3_5_vision_config: Option<&Qwen3_5VisionConfig>,
-    resolved_model_id: &str,
-    resolved_model_revision: &str,
-) -> Option<PersistentVisualEmbeddingModelContract> {
-    qwen3_5_vision_config.map(|vision_config| {
-        let qwen3_5_image_processor = Qwen3_5ImageProcessor::from_vision_config(vision_config);
-        PersistentVisualEmbeddingModelContract::new(
-            resolved_model_id.to_owned(),
-            resolved_model_revision.to_owned(),
-            vision_config.out_hidden_size() as usize,
-            qwen3_5_image_processor.maximum_image_token_count_after_spatial_merge(),
-        )
-    })
-}
-
-/// Opens the `astro_ssd_prompt_cache` when a disk store is configured; a
-/// disabled `astro_ssd_prompt_cache` yields no contract and no store, so it cannot fail model
-/// loading because of storage alignment, quota, stale files, or filesystem
-/// availability (contract derivation is intentionally inside the same branch
-/// as store ownership).
-#[allow(clippy::too_many_arguments)]
-fn open_streaming_astro_ssd_prompt_cache(
-    astro_ssd_prompt_cache_disk_store_config: Option<AstroSsdPromptCacheDiskStoreConfig>,
-    model: &Qwen3_5Model,
-    chunking: &WorkerChunkingConfiguration,
-    resolved_model_id: &str,
-    resolved_model_revision: &str,
-    persistent_visual_embedding_model_contract: Option<&PersistentVisualEmbeddingModelContract>,
-    model_loading_performance_attribution: &mut PerformanceAttribution,
-) -> Result<
-    (
-        Option<AstroSsdPromptCacheModelContract>,
-        Option<Arc<AstroSsdPromptCacheDiskStore>>,
-    ),
-    InferenceEngineError,
-> {
-    let Some(astro_ssd_prompt_cache_disk_store_config) = astro_ssd_prompt_cache_disk_store_config
-    else {
-        return Ok((None, None));
-    };
-    let global_astro_ssd_prompt_cache_maximum_size_bytes =
-        astro_ssd_prompt_cache_disk_store_config.global_astro_ssd_prompt_cache_maximum_size_bytes();
-    let astro_ssd_prompt_cache_model_contract = AstroSsdPromptCacheModelContract::resolve(
-        resolved_model_id.to_owned(),
-        resolved_model_revision.to_owned(),
-        model.astro_decoder_state_cache_layout().clone(),
-        model.config().maximum_position_count() as usize,
-        model.runtime().memory_limits().active_memory_limit_bytes() as u64,
-        global_astro_ssd_prompt_cache_maximum_size_bytes,
-        chunking
-            .ssd_prompt_cache_block_tokens
-            .map(|block_token_count| block_token_count as usize),
-        chunking.ssd_prompt_cache_common_prefix_stride_blocks,
-    )
-    .map_err(|model_contract_error| {
-        fatal_engine_error(format!(
-            "could not resolve persistent model-state storage contract: {model_contract_error}"
-        ))
-    })?;
-    let astro_ssd_prompt_cache = model_loading_performance_attribution
-        .measure_operation(
-            PerformanceOperation::AstroSsdPromptCacheOpenAndScan,
-            |_performance_attribution| {
-                AstroSsdPromptCacheDiskStore::open(
-                    astro_ssd_prompt_cache_disk_store_config,
-                    astro_ssd_prompt_cache_model_contract.clone(),
-                )
-            },
-        )
-        .map_err(|astro_ssd_prompt_cache_error| {
-            fatal_engine_error(format!(
-                "required target prompt-state storage initialization failed: {astro_ssd_prompt_cache_error}"
-            ))
-        })?;
-    if let Some(persistent_visual_embedding_model_contract) =
-        persistent_visual_embedding_model_contract
-        && let Err(visual_embedding_scan_error) = astro_ssd_prompt_cache
-            .scan_visual_embeddings(persistent_visual_embedding_model_contract)
-    {
-        return Err(fatal_engine_error(format!(
-            "required visual prompt-state storage scan failed: {visual_embedding_scan_error}"
-        )));
-    }
-    astro_ssd_prompt_cache_startup_logging::log_astro_ssd_prompt_cache_startup_cleanup(
-        "target",
-        &astro_ssd_prompt_cache,
-    );
-    tracing::info!(
-        sequence_state_block_count = astro_ssd_prompt_cache.sequence_state_block_count(),
-        boundary_state_snapshot_count = astro_ssd_prompt_cache.boundary_state_snapshot_count(),
-        total_size_bytes = astro_ssd_prompt_cache.total_size_bytes(),
-        maximum_size_bytes = global_astro_ssd_prompt_cache_maximum_size_bytes,
-        "opened Qwen3.5 astro-ssd-prompt-cache"
-    );
-    Ok((
-        Some(astro_ssd_prompt_cache_model_contract),
-        Some(Arc::new(astro_ssd_prompt_cache)),
-    ))
 }
 
 /// Records the failed loading attribution for the artifact metadata
