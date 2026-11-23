@@ -4,10 +4,10 @@ use std::path::PathBuf;
 use expert_atlas::{AtlasExpertLayer, AtlasRecordSlot};
 
 use super::{apply_record_strides, synthesize_layer_header};
-use crate::expert_paging::quantized_expert_manifest::{
+use engine_core::expert_paging::quantized_expert_manifest::{
     QuantizationMode, QuantizedExpertLayerPlan, QuantizedTensorSource,
 };
-use crate::expert_paging::safetensors_header::SafetensorsDtype;
+use engine_core::expert_paging::safetensors_header::SafetensorsDtype;
 
 fn atlas_layer(slots: Vec<AtlasRecordSlot>) -> AtlasExpertLayer {
     let record_byte_count = slots.iter().map(|slot| slot.bytes_per_expert).sum();

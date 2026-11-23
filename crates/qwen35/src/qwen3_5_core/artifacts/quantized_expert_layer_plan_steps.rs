@@ -8,14 +8,14 @@
 use std::collections::{HashMap, hash_map::Entry};
 use std::path::{Path, PathBuf};
 
-use crate::expert_paging::quantized_expert_manifest::{
-    ExpertManifestError, QuantizationMode, QuantizedExpertLayerPlan, QuantizedTensorSource,
-};
-use crate::expert_paging::safetensors_header::SafetensorsHeader;
 use crate::qwen3_5_core::configuration::Qwen3_5Config;
 use crate::qwen3_5_core::quantizations::mlx_quantization::{
     ModuleQuantizationProfile, ModuleWeightCodec,
 };
+use engine_core::expert_paging::quantized_expert_manifest::{
+    ExpertManifestError, QuantizationMode, QuantizedExpertLayerPlan, QuantizedTensorSource,
+};
+use engine_core::expert_paging::safetensors_header::SafetensorsHeader;
 
 use super::{
     ProjectionStorageContract, layer_quantization_mode, projection_storage_contract,
@@ -115,7 +115,9 @@ fn resolve_projection_tensor_sources(
         let header = match safetensors_header_cache.entry(source_file.clone()) {
             Entry::Occupied(memoized_header_entry) => memoized_header_entry.into_mut(),
             Entry::Vacant(vacant_header_entry) => vacant_header_entry.insert(
-                crate::expert_paging::safetensors_header::parse_safetensors_header(&source_file)?,
+                engine_core::expert_paging::safetensors_header::parse_safetensors_header(
+                    &source_file,
+                )?,
             ),
         };
         let tensor_entry = header

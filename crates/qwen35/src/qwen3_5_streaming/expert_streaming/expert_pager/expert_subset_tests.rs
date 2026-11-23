@@ -3,8 +3,8 @@
 //! requested slot order, and rejects slots outside the page.
 
 use super::Qwen3_5PagedExpertWeights;
-use crate::expert_paging::ExpertWeightPage;
 use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights;
+use engine_core::expert_paging::ExpertWeightPage;
 use mlx_bridge::{MlxArray, MlxDtype};
 use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use serial_test::serial;

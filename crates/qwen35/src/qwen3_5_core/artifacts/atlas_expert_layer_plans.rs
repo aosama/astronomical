@@ -17,11 +17,13 @@ use std::path::{Path, PathBuf};
 use expert_atlas::{AtlasExpertLayer, AtlasManifest};
 
 use super::quantized_expert_layer_plan::build_quantized_expert_layer_plan_with_stored_names_and_safetensors_header_cache;
-use crate::expert_paging::quantized_expert_manifest::{
+use crate::qwen3_5_core::configuration::Qwen3_5Config;
+use engine_core::expert_paging::quantized_expert_manifest::{
     ExpertManifestError, QuantizedExpertLayerPlan,
 };
-use crate::expert_paging::safetensors_header::{SafetensorsHeader, TensorHeaderEntry, parse_dtype};
-use crate::qwen3_5_core::configuration::Qwen3_5Config;
+use engine_core::expert_paging::safetensors_header::{
+    SafetensorsHeader, TensorHeaderEntry, parse_dtype,
+};
 
 const ROUTED_EXPERT_NAME_MARKER: &str = "switch_mlp.";
 

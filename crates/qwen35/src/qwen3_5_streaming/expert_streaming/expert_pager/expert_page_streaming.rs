@@ -10,12 +10,12 @@ use crate::{
 use std::mem::size_of;
 
 use super::{ExpertPagingError, Qwen3_5ExpertPager, Qwen3_5PagedExpertWeights};
-use crate::expert_paging::{
+use crate::memory::{StreamedPageSourcePlan, record_streamed_page_source_plan_in_both_ledgers};
+use crate::qwen3_5_streaming::expert_streaming::paged_expert_weights;
+use engine_core::expert_paging::{
     QuantizedExpertPageManifest, build_quantized_expert_page_manifest_from_plan,
     load_quantized_expert_page,
 };
-use crate::memory::{StreamedPageSourcePlan, record_streamed_page_source_plan_in_both_ledgers};
-use crate::qwen3_5_streaming::expert_streaming::paged_expert_weights;
 use model_primitives::serving_phase::SessionStreamingPhase;
 
 /// Request dimensions needed to attribute one source plan without retaining routes.

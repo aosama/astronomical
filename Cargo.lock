@@ -694,6 +694,7 @@ name = "engine-core"
 version = "0.2.134"
 dependencies = [
  "ipc-protocol",
+ "jangtq2-qwen35",
  "libc",
  "memory-policy",
  "mlx-bridge",
@@ -701,6 +702,7 @@ dependencies = [
  "regex-automata",
  "runtime-integration",
  "serde",
+ "serde_json",
  "serial_test",
  "tempfile",
  "thiserror",

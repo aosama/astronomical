@@ -9,7 +9,7 @@
 use runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use super::AstroExpertCache;
-use crate::expert_paging::ExpertWeightPage;
+use engine_core::expert_paging::ExpertWeightPage;
 
 impl AstroExpertCache {
     /// Writes queued miss experts into their layer tables after GPU evaluation

@@ -4,11 +4,11 @@
 
 use super::streaming_model::Qwen3_5StreamingModel;
 use crate::PerformanceAttribution;
-use crate::expert_paging::QuantizedExpertPageManifest;
 use crate::qwen3_5_streaming::expert_streaming::ExpertPagingError;
 use crate::qwen3_5_streaming::expert_streaming::expert_pager::{
     Qwen3_5ExpertPager, Qwen3_5ExpertStreamingRequestShape, Qwen3_5PagedExpertWeights,
 };
+use engine_core::expert_paging::QuantizedExpertPageManifest;
 use model_primitives::serving_phase::SessionStreamingPhase;
 
 impl Qwen3_5StreamingModel {

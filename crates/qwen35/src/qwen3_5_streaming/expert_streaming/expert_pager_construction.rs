@@ -11,9 +11,9 @@ use runtime_integration::{MlxRuntime, PositionalFileReadMetrics};
 
 use super::expert_pager::{ExpertPagingError, Qwen3_5ExpertPager};
 use crate::MlxAllocationAdmission;
-use crate::expert_paging::QuantizedExpertLayerPlan;
 use crate::memory::ExpertStreamingSessionCounters;
 use crate::qwen3_5_core::configuration::Qwen3_5Config;
+use engine_core::expert_paging::QuantizedExpertLayerPlan;
 
 impl Qwen3_5ExpertPager {
     /// Returns the number of MoE layers with validated layer plans.

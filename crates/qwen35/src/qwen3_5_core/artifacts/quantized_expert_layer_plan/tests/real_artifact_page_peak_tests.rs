@@ -5,12 +5,12 @@
 //! sources plus every decoded output — is what prefill admission must fit
 //! beside live request memory before any expert of the layer can load.
 
-use crate::expert_paging::quantized_expert_manifest::QuantizedExpertLayerPlan;
 use crate::qwen3_5_core::artifacts::quantized_expert_layer_plan::build_quantized_expert_layer_plans;
 use crate::qwen3_5_core::artifacts::{
     Qwen3_5ArtifactValidator, Qwen3_5ShardIndex, qwen3_5_language_tensor_profiles,
 };
 use crate::qwen3_5_core::configuration::Qwen3_5Config;
+use engine_core::expert_paging::quantized_expert_manifest::QuantizedExpertLayerPlan;
 
 use std::collections::HashMap;
 

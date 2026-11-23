@@ -8,7 +8,6 @@ use mlx_bridge::MlxArray;
 
 use std::cell::{Cell, RefCell};
 
-use crate::expert_paging::AstroExpertCacheStatistics;
 use crate::qwen3_5_core::decoder::RequestDecoderStateStack;
 use crate::qwen3_5_core::model::Qwen3_5ModelBase;
 use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5DecoderLayerWeights;
@@ -20,6 +19,7 @@ use crate::qwen3_5_streaming::{
     Qwen3_5MoEPagedExecutionMode,
 };
 use crate::{AstroDecoderStateCacheState, ExpertResidencyPlan, PerformanceAttribution};
+use engine_core::expert_paging::AstroExpertCacheStatistics;
 
 use crate::qwen3_5_core::decoder::Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector;
 

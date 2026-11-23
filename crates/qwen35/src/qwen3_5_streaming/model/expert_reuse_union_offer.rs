@@ -6,7 +6,6 @@
 
 use std::cell::RefCell;
 
-use crate::expert_paging::QuantizedExpertPageManifest;
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_streaming::expert_streaming::AstroExpertCache;
 use crate::qwen3_5_streaming::expert_streaming::expert_pager::Qwen3_5PagedExpertWeights;
@@ -15,6 +14,7 @@ use crate::{
     PerformanceAttribution, PerformanceCounter, should_commit_mandatory_routed_page,
     should_commit_multi_token_union_as_complete_layer, should_seed_partial_layer_on_prefill_read,
 };
+use engine_core::expert_paging::QuantizedExpertPageManifest;
 
 impl Qwen3_5Model {
     /// Offers a just-streamed multi-token union to retained ownership: either

@@ -111,3 +111,7 @@ impl RouteObservationRing {
         self.capacity
     }
 }
+
+#[cfg(test)]
+#[path = "route_observation_tests.rs"]
+mod route_observation_tests;
