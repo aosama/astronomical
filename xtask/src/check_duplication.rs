@@ -16,6 +16,10 @@
 //! add the copy together. `--write` replaces the baseline with the measured
 //! counts, and only after that check passes, so the file can only go down.
 //!
+//! Like the CRAP ratchet, the measure reads the working tree, unstaged edits
+//! included, not the staged snapshot: a hook run before a commit sees what is
+//! on disk.
+//!
 //! The measure undercounts on purpose: it sees only text that repeats line
 //! for line. Two copies that do the same job with different variable names
 //! are invisible to it, so a falling count is evidence of progress, not proof

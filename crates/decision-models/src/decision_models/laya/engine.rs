@@ -104,6 +104,10 @@ impl DecisionFamily for LayaDecisionFamily {
         prepared: &mut Option<LayaPreparedFolder>,
         memory_limits: MlxMemoryLimits,
     ) -> Result<LoadedDecisionModel<LoadedLayaState>, DecisionFailure> {
+        // The shell checks the memory limits before calling here, so a second
+        // load after a first one failed on its limits reports the limits
+        // again; Laya's own engine took the folder first and then reported
+        // the load as requested twice. No caller loads twice.
         let Some(prepared_folder) = prepared.take() else {
             return Err(DecisionFailure::fatal_execution(
                 "decision engine load was requested twice",

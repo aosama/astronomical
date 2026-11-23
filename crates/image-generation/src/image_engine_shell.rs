@@ -169,7 +169,7 @@ impl<Family: ImageFamily> ImageEngineShell<Family> {
     /// Concrete component failures are path-free and bounded here, so a user
     /// can tell malformed tensors, unsupported operations and memory pressure
     /// apart.
-    pub fn fail_active_request(
+    pub(crate) fn fail_active_request(
         &mut self,
         failure_description: String,
         public_failure_description: &'static str,
@@ -209,7 +209,7 @@ impl<Family: ImageFamily> ImageEngineShell<Family> {
     }
 
     /// Keeps a still-running request in progress and reports where it stands.
-    pub fn restore_with_progress(
+    pub(crate) fn restore_with_progress(
         &mut self,
         active_request: Family::ActiveRequest,
         phase: ImageGenerationPhase,
@@ -223,7 +223,7 @@ impl<Family: ImageFamily> ImageEngineShell<Family> {
     /// Finalizes a request whose image is encoded and returns it. A failed
     /// finalize after a successful encode is fatal: the image exists, but the
     /// accounting contract cannot be honored.
-    pub fn complete_rendered_request(
+    pub(crate) fn complete_rendered_request(
         &mut self,
         active_request: Family::ActiveRequest,
         png_bytes: Vec<u8>,

@@ -314,7 +314,7 @@ fn parse_catalog_entry(
     let description = parse_optional_entry_description(&entry_document, entry_index)?;
     let capabilities = parse_entry_capabilities(entry_document.capabilities.as_ref(), entry_index)?;
     let entry_texts = parse_entry_texts(&entry_document, entry_index)?;
-    let entry_downloads = parse_entry_downloads(
+    let entry_build_and_files = parse_entry_build_and_files(
         entry_document.included_paths,
         entry_document.build_of.as_deref(),
         entry_document.build_difference,
@@ -336,33 +336,34 @@ fn parse_catalog_entry(
         quantization_label: entry_texts.quantization_label,
         upstream_license: entry_texts.upstream_license,
         presentation: entry_texts.presentation,
-        build: entry_downloads.build,
+        build: entry_build_and_files.build,
         measured_speed: entry_document.measured_speed,
-        download_path_selection: entry_downloads.download_path_selection,
+        download_path_selection: entry_build_and_files.download_path_selection,
     })
 }
 
-/// What an entry says about the files it downloads and how they compare:
-/// the included paths, the build it belongs to, and its measured speed.
-struct EntryDownloads {
+/// What an entry says about its files and its place among builds: the
+/// included paths and the build it belongs to. Its measured speed is checked
+/// alongside them but kept on the entry as written.
+struct EntryBuildAndFiles {
     download_path_selection: DownloadPathSelection,
     build: Option<DownloadCatalogBuild>,
 }
 
 /// Checks the included paths, the build link and the measured speed, in that
 /// authored order, so a multi-invalid entry reports the same first failure.
-fn parse_entry_downloads(
+fn parse_entry_build_and_files(
     included_paths: Option<Vec<String>>,
     build_of: Option<&str>,
     build_difference: Option<DownloadCatalogBuildDifference>,
     measured_speed: Option<&DownloadCatalogMeasuredSpeed>,
     entry_index: usize,
-) -> Result<EntryDownloads, DownloadCatalogError> {
+) -> Result<EntryBuildAndFiles, DownloadCatalogError> {
     let download_path_selection = DownloadPathSelection::try_new(included_paths)
         .map_err(|_invalid_selection| DownloadCatalogError::InvalidIncludedPaths { entry_index })?;
     let build = parse_entry_build(build_of, build_difference, entry_index)?;
     validate_measured_speed(measured_speed, entry_index)?;
-    Ok(EntryDownloads {
+    Ok(EntryBuildAndFiles {
         download_path_selection,
         build,
     })
