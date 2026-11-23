@@ -20,7 +20,7 @@ impl Qwen3_5EngineState {
     /// Closes the request with the memory governor: its stored state is
     /// gone, and the astro expert cache may keep what the idle model has room for.
     fn govern_request_end_at_finalization(&self, request_id: u64) {
-        if let Some(model) = self.model.as_ref() {
+        if let Some(model) = self.core.model.as_ref() {
             // A request that ends while a prompt is being read one layer at
             // a time leaves that prompt's pages in hand and routes pending.
             model.discard_expert_state_of_an_unfinished_prompt();
@@ -36,7 +36,7 @@ impl Qwen3_5EngineState {
     /// streamed layer for every token. A failure leaves the layers
     /// streaming, which is still correct, so it is only logged.
     fn keep_dense_layers_again_at_finalization(&self, request_id: u64) {
-        let Some(model) = self.model.as_ref() else {
+        let Some(model) = self.core.model.as_ref() else {
             return;
         };
         if let Err(keep_error) = model.keep_dense_layers_the_governor_has_room_for() {
@@ -51,7 +51,7 @@ impl Qwen3_5EngineState {
     pub(super) fn collect_current_mlx_memory_telemetry(
         &self,
     ) -> Result<Option<MlxMemoryTelemetry>, InferenceEngineError> {
-        let Some(model) = self.model.as_ref() else {
+        let Some(model) = self.core.model.as_ref() else {
             return Ok(None);
         };
         let mlx_memory_snapshot = model
@@ -161,7 +161,7 @@ impl Qwen3_5EngineState {
         // gives back only what no longer fits.
         self.govern_request_end_at_finalization(request_id.value());
         self.keep_dense_layers_again_at_finalization(request_id.value());
-        if let Some(model) = self.model.as_ref() {
+        if let Some(model) = self.core.model.as_ref() {
             let astro_expert_cache_statistics = model.astro_expert_cache_statistics();
             tracing::info!(
                 request_id = request_id.value(),
@@ -177,7 +177,9 @@ impl Qwen3_5EngineState {
         // allocator storage, so one-token-ahead decode cannot race reclamation.
         let mlx_memory_snapshot = performance_attribution.measure_operation(
             PerformanceOperation::MlxBufferCacheCleanup,
-            |_performance_attribution| release_request_memory(self.model.as_deref(), request_id),
+            |_performance_attribution| {
+                release_request_memory(self.core.model.as_deref(), request_id)
+            },
         );
         let generation_finalization = self.collect_generation_finalization(
             &mut performance_attribution,
@@ -203,7 +205,7 @@ impl Qwen3_5EngineState {
         performance_attribution: &mut PerformanceAttribution,
         release_peak_memory_bytes: Option<u64>,
     ) -> GenerationFinalization {
-        let Some(model) = self.model.as_ref() else {
+        let Some(model) = self.core.model.as_ref() else {
             return GenerationFinalization::default();
         };
         let expert_memory_mode = Some(model.observed_expert_memory_mode());
@@ -286,7 +288,7 @@ impl Qwen3_5EngineState {
                 mlx_memory_telemetry,
                 expert_residency_telemetry,
             ),
-            self.model_id.as_deref(),
+            self.core.model_id.as_deref(),
             expert_memory_mode,
             expert_residency_telemetry,
         )
@@ -300,21 +302,21 @@ impl Qwen3_5EngineState {
     /// contract: the store logs write failures and serving continues
     /// unchanged.
     fn persist_expert_usage_history(&self) {
-        let Some(model) = self.model.as_ref() else {
+        let Some(model) = self.core.model.as_ref() else {
             return;
         };
         let Some(astro_expert_cache) = model.astro_expert_cache.as_ref() else {
             return;
         };
         let usage_file_path = crate::qwen3_5_streaming::expert_streaming::expert_usage_file_path(
-            &self.model_directory,
+            &self.core.model_directory,
         );
         let persisted_usage = astro_expert_cache
             .borrow_mut()
             .take_persisted_expert_usage();
         crate::qwen3_5_streaming::expert_streaming::write_expert_usage(
             &usage_file_path,
-            self.model_id.as_deref(),
+            self.core.model_id.as_deref(),
             &persisted_usage,
         );
     }
@@ -332,7 +334,7 @@ impl Qwen3_5EngineState {
             return;
         }
         let (Some(model_id), Some(model_revision)) =
-            (self.model_id.clone(), self.model_revision.clone())
+            (self.core.model_id.clone(), self.core.model_revision.clone())
         else {
             tracing::error!(
                 request_id = request_id.value(),
@@ -340,7 +342,7 @@ impl Qwen3_5EngineState {
             );
             return;
         };
-        let measured_prompt_mlx_working_buffer_bytes = self.model.as_ref().and_then(
+        let measured_prompt_mlx_working_buffer_bytes = self.core.model.as_ref().and_then(
             crate::qwen3_5_streaming::model::Qwen3_5Model::measured_prompt_mlx_working_buffer_bytes,
         );
         let Some(performance_attribution_report) =
@@ -369,6 +371,7 @@ impl Qwen3_5EngineState {
             return;
         };
         if let Err(performance_attribution_write_error) = self
+            .core
             .performance_attribution_log
             .record(&performance_attribution_report)
         {

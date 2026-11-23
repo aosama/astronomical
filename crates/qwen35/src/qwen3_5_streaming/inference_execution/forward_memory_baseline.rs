@@ -22,6 +22,7 @@ impl Qwen3_5EngineState {
         &self,
     ) -> Result<ForwardMemoryBaseline, InferenceEngineError> {
         let model = self
+            .core
             .model
             .as_ref()
             .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;

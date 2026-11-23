@@ -19,19 +19,17 @@ use crate::qwen3_5_streaming::model::Qwen3_5Model;
 
 impl Qwen3_5EngineState {
     pub(super) fn load(&mut self) -> Result<EngineLoadResult, InferenceEngineError> {
-        if let Some(model) = self.model.as_ref() {
+        if let Some(model) = self.core.model.as_ref() {
             return Ok(self.engine_load_result(model.minimum_mlx_memory_ceiling_bytes()?));
         }
-        let mut model_loading_performance_attribution = self
-            .model_loading_performance_attribution
-            .take()
-            .unwrap_or_else(PerformanceAttribution::disabled);
+        let mut model_loading_performance_attribution =
+            self.core.take_model_loading_performance_attribution();
         let mut model_id = None;
         let mut model_revision = None;
         let mut total_artifact_payload_bytes = None;
         let mut model_shard_count = None;
         let model_loading_result: Result<_, InferenceEngineError> = (|| {
-            let validated_artifact = self.validated_artifact.take().ok_or_else(|| {
+            let validated_artifact = self.core.validated_artifact.take().ok_or_else(|| {
                 fatal_engine_error("validated Qwen3.5 artifact is unavailable during MLX load")
             })?;
             let qwen3_5_vision_config = validated_artifact.vision_config().cloned();
@@ -52,14 +50,14 @@ impl Qwen3_5EngineState {
             )?
             .or(self.startup_residency_facts);
             let runtime = initialize_mlx_runtime_with_cleanup(
-                self.memory_limits,
+                self.core.memory_limits,
                 &mut model_loading_performance_attribution,
             )?;
-            let model_chunking = resolve_model_chunking_configuration(&self.chunking)?;
+            let model_chunking = resolve_model_chunking_configuration(&self.core.chunking)?;
             let model = load_and_materialize_streaming_model(
                 runtime,
                 validated_artifact,
-                &self.model_directory,
+                &self.core.model_directory,
                 self.streaming_forward_shape(model_chunking),
                 self.decode_astro_expert_cache_policy,
                 &mut model_loading_performance_attribution,
@@ -76,9 +74,9 @@ impl Qwen3_5EngineState {
                 );
             let (astro_ssd_prompt_cache_model_contract, astro_ssd_prompt_cache) =
                 open_streaming_astro_ssd_prompt_cache(
-                    self.astro_ssd_prompt_cache_disk_store_config.clone(),
+                    self.core.astro_ssd_prompt_cache_disk_store_config.clone(),
                     &model,
-                    &self.chunking,
+                    &self.core.chunking,
                     &resolved_model_id,
                     &resolved_model_revision,
                     persistent_visual_embedding_model_contract.as_ref(),
@@ -144,16 +142,16 @@ impl Qwen3_5EngineState {
         total_artifact_payload_bytes: Option<u64>,
         model_shard_count: Option<usize>,
     ) -> Result<EngineLoadResult, InferenceEngineError> {
-        self.model_id = model_id.clone();
-        self.model_revision = model_revision.clone();
-        self.astro_ssd_prompt_cache_model_contract = astro_ssd_prompt_cache_model_contract;
-        self.persistent_visual_embedding_model_contract =
+        self.core.model_id = model_id.clone();
+        self.core.model_revision = model_revision.clone();
+        self.core.astro_ssd_prompt_cache_model_contract = astro_ssd_prompt_cache_model_contract;
+        self.core.persistent_visual_embedding_model_contract =
             persistent_visual_embedding_model_contract;
-        self.astro_ssd_prompt_cache = astro_ssd_prompt_cache;
+        self.core.astro_ssd_prompt_cache = astro_ssd_prompt_cache;
         let mlx_memory_snapshot = model.runtime().memory_snapshot().ok();
         let resident_model_payload_bytes = Some(model.resident_model_payload_byte_count());
         let minimum_mlx_memory_ceiling_bytes = model.minimum_mlx_memory_ceiling_bytes()?;
-        self.model = Some(model);
+        self.core.model = Some(model);
         if let Err(performance_attribution_error) = self
             .record_model_loading_performance_attribution(
                 model_loading_performance_attribution,
@@ -193,9 +191,10 @@ impl Qwen3_5EngineState {
     fn layer_probe_shape(&self) -> crate::qwen3_5_streaming::model::LayerProbeShape {
         crate::qwen3_5_streaming::model::LayerProbeShape {
             prefill_chunk_token_count: self
+                .core
                 .prompt_processing_chunk_sizer
                 .maximum_prompt_processing_chunk_size_tokens(),
-            full_attention_kv_state_growth_tokens: self.full_attention_kv_state_growth_tokens,
+            full_attention_kv_state_growth_tokens: self.core.full_attention_kv_state_growth_tokens,
         }
     }
 }
@@ -214,7 +213,7 @@ fn capture_streaming_startup_residency_facts(
         |_performance_attribution| {
             crate::model_memory_geometry_from_validated_artifact(
                 validated_artifact,
-                &engine_state.model_directory,
+                &engine_state.core.model_directory,
             )
         },
     );

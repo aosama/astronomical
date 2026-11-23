@@ -121,6 +121,7 @@ impl Qwen3_5EngineState {
         let memory_baseline = self.begin_forward_memory_measurement()?;
         let span_to_fail_once = self.prompt_span_to_fail_once_for_tests.take();
         let model = self
+            .core
             .model
             .as_ref()
             .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
@@ -177,6 +178,7 @@ impl Qwen3_5EngineState {
                 super::fatal_engine_error("no layer-at-a-time prompt is in flight to advance")
             })?;
         let model = self
+            .core
             .model
             .as_ref()
             .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
@@ -302,6 +304,7 @@ impl Qwen3_5EngineState {
         prompt_layer_progress: WorkerPromptLayerProgress,
     ) -> Result<GeneratedToken, InferenceEngineError> {
         let model = self
+            .core
             .model
             .as_ref()
             .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;

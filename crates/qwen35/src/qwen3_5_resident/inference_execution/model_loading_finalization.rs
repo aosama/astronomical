@@ -15,7 +15,8 @@ impl Qwen3_5EngineState {
         // The worker forwards this value instead of inferring mode from memory.
         EngineLoadResult::new()
             .with_expert_memory_mode(
-                self.model
+                self.core
+                    .model
                     .as_ref()
                     .map(|loaded_model| loaded_model.expert_memory_mode()),
             )
@@ -66,6 +67,7 @@ impl Qwen3_5EngineState {
             return Ok(());
         };
         if let Err(performance_attribution_write_error) = self
+            .core
             .performance_attribution_log
             .record(&performance_attribution_report)
         {

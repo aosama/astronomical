@@ -16,9 +16,7 @@ use crate::qwen3_5_core::engine_errors::invalid_request_error;
 use crate::qwen3_5_core::shared_execution::astro_ssd_prompt_cache_visual_identity::{
     Qwen3_5AstroSsdPromptCacheVisualIdentity, Qwen3_5AstroSsdPromptCacheVisualIdentityInput,
 };
-use crate::qwen3_5_core::shared_execution::generation_request_validation::{
-    self, Qwen3_5GenerationRequestLimits,
-};
+use crate::qwen3_5_core::shared_execution::generation_request_validation;
 use crate::qwen3_5_core::text::sampler;
 use crate::sampling_seed::current_time_millis_since_unix_epoch;
 
@@ -55,17 +53,6 @@ struct InstallActiveGenerationRequest<'a> {
 }
 
 impl Qwen3_5EngineState {
-    /// The loaded model's limits a new request is checked against.
-    fn generation_request_limits(&self) -> Qwen3_5GenerationRequestLimits {
-        Qwen3_5GenerationRequestLimits {
-            is_model_loaded: self.model.is_some(),
-            think_end_token_id: self.think_end_token_id,
-            vocabulary_size: self.vocabulary_size,
-            maximum_position_count: self.maximum_position_count,
-            hard_maximum_position_count: self.hard_maximum_position_count,
-        }
-    }
-
     pub(super) fn start_generation(
         &mut self,
         mut inference_request: Qwen3_5InferenceRequest,
@@ -76,11 +63,12 @@ impl Qwen3_5EngineState {
             self.ensure_no_active_generation(&inference_request, taken_performance_attribution)?;
         let reserved_context_tokens =
             generation_request_validation::validate_generation_request_and_resolve_reserved_context(
-                &self.generation_request_limits(),
+                &self.core.generation_request_limits(),
                 &inference_request,
             )?;
         let thinking_budget_state = self.build_thinking_budget_state(&inference_request)?;
         let model = self
+            .core
             .model
             .as_ref()
             .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
@@ -104,7 +92,7 @@ impl Qwen3_5EngineState {
             performance_attribution,
         );
         if admitted_generation_start.is_err()
-            && let Some(model) = self.model.as_ref()
+            && let Some(model) = self.core.model.as_ref()
         {
             model.govern_request_end(request_id.value());
         }
@@ -114,13 +102,14 @@ impl Qwen3_5EngineState {
     /// Tells the memory governor a request starts reading its prompt, in
     /// spans of at most the configured chunk.
     fn govern_request_start(&self, inference_request: &Qwen3_5InferenceRequest) {
-        let Some(model) = self.model.as_ref() else {
+        let Some(model) = self.core.model.as_ref() else {
             return;
         };
         model.govern_request_start(
             u64::try_from(inference_request.input_token_ids().len()).unwrap_or(u64::MAX),
             u32::try_from(
-                self.prompt_processing_chunk_sizer
+                self.core
+                    .prompt_processing_chunk_sizer
                     .maximum_prompt_processing_chunk_size_tokens(),
             )
             .unwrap_or(u32::MAX),
@@ -136,7 +125,7 @@ impl Qwen3_5EngineState {
         inference_request: &Qwen3_5InferenceRequest,
         performance_attribution: PerformanceAttribution,
     ) -> Result<PerformanceAttribution, InferenceEngineError> {
-        if self.active_request.is_none() {
+        if self.core.active_request.is_none() {
             return Ok(performance_attribution);
         }
         self.record_generation_performance_attribution(
@@ -160,7 +149,7 @@ impl Qwen3_5EngineState {
         let natural_reasoning_end_token_ids =
             crate::qwen3_5_core::shared_execution::generation_thinking_end_markers::natural_reasoning_end_token_ids_with_model_safety_net(
                 inference_request.natural_reasoning_end_token_ids(),
-                self.think_end_token_id,
+                self.core.think_end_token_id,
             );
         Qwen3_5ThinkingBudgetState::new(
             inference_request.generation_starts_inside_thinking_block(),
@@ -201,7 +190,7 @@ impl Qwen3_5EngineState {
             .count();
         let has_precomputed_visual_embeddings = inference_request.has_visual_embeddings();
         let has_processed_visual_images = inference_request.has_processed_visual_images();
-        let astro_ssd_prompt_cache_is_available = self.astro_ssd_prompt_cache.is_some();
+        let astro_ssd_prompt_cache_is_available = self.core.astro_ssd_prompt_cache.is_some();
         // Persistent snapshots currently contain target decoder state only. Prefer target-only
         // execution whenever the `astro_ssd_prompt_cache` is available so optional prediction artifacts retain
         // prompt reuse without restoring an incompatible shifted history.
@@ -214,7 +203,7 @@ impl Qwen3_5EngineState {
                     prompt_token_ids: &prompt_token_ids,
                     prompt_image_pad_token_count,
                     image_pad_token_id,
-                    astro_ssd_prompt_cache: self.astro_ssd_prompt_cache.as_deref(),
+                    astro_ssd_prompt_cache: self.core.astro_ssd_prompt_cache.as_deref(),
                     can_use_astro_ssd_prompt_cache,
                 },
                 &mut performance_attribution,
@@ -230,7 +219,7 @@ impl Qwen3_5EngineState {
         let mut request_decoder_state = RequestDecoderStateStack::
             empty_from_astro_decoder_state_cache_layout_with_full_attention_kv_state_growth_tokens(
                 astro_decoder_state_cache_layout,
-                self.full_attention_kv_state_growth_tokens,
+                self.core.full_attention_kv_state_growth_tokens,
             )
             .map_err(qwen3_5_runtime_error)?;
         let restored_prompt_prefix_session = self.restore_astro_ssd_prompt_cache_prefix_session(
@@ -290,7 +279,7 @@ impl Qwen3_5EngineState {
                     top_k,
                     top_p_thousandths,
                 )?;
-                let model = self.model.as_ref().ok_or_else(|| {
+                let model = self.core.model.as_ref().ok_or_else(|| {
                     super::fatal_engine_error("Qwen3.5 engine lost its loaded model")
                 })?;
                 Ok(Some(sampler::random_state_for_seed(
@@ -326,10 +315,12 @@ impl Qwen3_5EngineState {
             ));
         }
         let model = self
+            .core
             .model
             .as_ref()
             .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
         let visual_embedding_hidden_size = self
+            .core
             .persistent_visual_embedding_model_contract
             .as_ref()
             .ok_or_else(|| {
@@ -381,11 +372,11 @@ impl Qwen3_5EngineState {
         request_decoder_state: &mut RequestDecoderStateStack,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<RestoredPromptPrefixSession, InferenceEngineError> {
-        if self.astro_ssd_prompt_cache.is_some() && can_use_astro_ssd_prompt_cache {
+        if self.core.astro_ssd_prompt_cache.is_some() && can_use_astro_ssd_prompt_cache {
             // Split the borrow: take the `astro_ssd_prompt_cache` out temporarily so the engine
             // state (including counters) can be mutated as &mut self while the
             // disk store is used as a plain borrowed reference.
-            let astro_ssd_prompt_cache = self.astro_ssd_prompt_cache.take();
+            let astro_ssd_prompt_cache = self.core.astro_ssd_prompt_cache.take();
             let restore_result =
                 if let Some(astro_ssd_prompt_cache) = astro_ssd_prompt_cache.as_ref() {
                     self.restore_astro_ssd_prompt_cache_prefix(
@@ -404,7 +395,7 @@ impl Qwen3_5EngineState {
             // Restores can fail closed for data correctness, but the disk-store owner must
             // remain installed for the next independent request. Returning while it is
             // temporarily taken would silently turn later traffic into a mode with the `astro_ssd_prompt_cache` disabled.
-            self.astro_ssd_prompt_cache = astro_ssd_prompt_cache;
+            self.core.astro_ssd_prompt_cache = astro_ssd_prompt_cache;
             let restore_outcome = restore_result?;
             if let Some(restore_outcome) = restore_outcome {
                 return Ok(RestoredPromptPrefixSession {
@@ -468,10 +459,12 @@ impl Qwen3_5EngineState {
                 ))
             })?;
         let visual_embedding_model = self
+            .core
             .model
             .as_ref()
             .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
         let visual_embedding_model_contract = self
+            .core
             .persistent_visual_embedding_model_contract
             .as_ref()
             .ok_or_else(|| {
@@ -484,12 +477,12 @@ impl Qwen3_5EngineState {
             vision_model: visual_embedding_model.vision_model(),
             compiled_elementwise_graphs: &visual_embedding_model.compiled_elementwise_graphs,
             visual_embedding_model_contract,
-            astro_ssd_prompt_cache: self.astro_ssd_prompt_cache.as_deref(),
+            astro_ssd_prompt_cache: self.core.astro_ssd_prompt_cache.as_deref(),
         };
         let visual_embedding_resolution =
             crate::qwen3_5_core::vision::resolve_visual_embeddings_for_processed_images(
                 visual_embedding_context,
-                &mut self.astro_ssd_prompt_cache_counters,
+                &mut self.core.astro_ssd_prompt_cache_counters,
                 inference_request.request_id(),
                 inference_request.processed_visual_images(),
                 &visual_embedding_suffix_plan,
@@ -501,7 +494,7 @@ impl Qwen3_5EngineState {
 
     /// Releases the loaded model's vision tower once its embeddings are resolved.
     fn release_loaded_vision_tower(&mut self) {
-        if let Some(model) = self.model.as_mut() {
+        if let Some(model) = self.core.model.as_mut() {
             model.base.release_vision_tower_after_image_request();
         }
     }
@@ -542,7 +535,7 @@ impl Qwen3_5EngineState {
         };
         tracing::info!(
             request_id = inference_request.request_id().value(),
-            astro_ssd_prompt_cache_is_available = self.astro_ssd_prompt_cache.is_some(),
+            astro_ssd_prompt_cache_is_available = self.core.astro_ssd_prompt_cache.is_some(),
             sampling_selects_highest_logit,
             effective_temperature_thousandths,
             "resolved target-only generation request session"
@@ -561,7 +554,7 @@ impl Qwen3_5EngineState {
         let initial_prompt_processing_phase = (restored_prompt_prefix_session.prefill_cursor
             < prompt_prefill_end_exclusive)
             .then_some(ipc_protocol::WorkerPromptProcessingPhase::Target);
-        self.active_request = Some(Qwen3_5EngineRequest {
+        self.core.active_request = Some(Qwen3_5EngineRequest {
             request_decoder_state,
             generated_token_count: 0,
             input_token_ids: prompt_token_ids,
@@ -630,7 +623,8 @@ impl Qwen3_5EngineState {
         // ownership claim, and token emission refines it with evidence.
         Ok(EngineGenerationStart::with_expert_memory_mode(
             restored_prompt_prefix_token_count,
-            self.model
+            self.core
+                .model
                 .as_ref()
                 .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?
                 .expert_memory_mode(),

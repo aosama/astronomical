@@ -28,18 +28,18 @@ impl Qwen3_5EngineState {
         &mut self,
         requested_mlx_memory_ceiling_bytes: u64,
     ) -> Result<MlxMemoryLimitAdjustment, InferenceEngineError> {
-        if self.active_request.is_some() {
+        if self.core.active_request.is_some() {
             return Err(InferenceEngineError::EngineBusy);
         }
         let live_retained_context_state_payload_bytes =
             self.live_retained_context_state_payload_bytes();
-        let Some(model) = self.model.as_mut() else {
+        let Some(model) = self.core.model.as_mut() else {
             return Err(super::fatal_engine_error(
                 "cannot update the MLX memory ceiling before the model is loaded",
             ));
         };
         let old_mlx_memory_ceiling_bytes =
-            u64::try_from(self.memory_limits.active_memory_limit_bytes()).map_err(
+            u64::try_from(self.core.memory_limits.active_memory_limit_bytes()).map_err(
                 super::super::generation_session_lifecycle::generation_error_constructors::current_mlx_memory_ceiling_exceeds_u64_range_error,
             )?;
         let mlx_memory_snapshot_before_adjustment = model
@@ -50,7 +50,7 @@ impl Qwen3_5EngineState {
         let adjustment_started_at = Instant::now();
         let (minimum_mlx_memory_ceiling_bytes, updated_mlx_memory_limits) =
             model.update_mlx_memory_limit(requested_mlx_memory_ceiling_bytes)?;
-        self.memory_limits = updated_mlx_memory_limits;
+        self.core.memory_limits = updated_mlx_memory_limits;
         model.govern_limit_change(updated_mlx_memory_limits.active_memory_limit_bytes() as u64);
 
         let mlx_memory_snapshot_after_adjustment = model

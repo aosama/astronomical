@@ -53,7 +53,7 @@ impl Qwen3_5EngineState {
         prefill_end: usize,
         plan: &PrefillChunkPlan,
     ) -> Result<ForwardDispatchOutcome, PrefillForwardError> {
-        let model = self.model.as_ref().ok_or_else(
+        let model = self.core.model.as_ref().ok_or_else(
             super::prefill_invalid_input_error_constructors::engine_lost_loaded_model_invalid_input,
         )?;
 

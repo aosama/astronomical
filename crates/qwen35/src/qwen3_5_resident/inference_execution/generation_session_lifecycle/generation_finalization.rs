@@ -46,7 +46,7 @@ impl Qwen3_5EngineState {
     pub(in crate::qwen3_5_resident::inference_execution) fn collect_current_mlx_memory_telemetry(
         &self,
     ) -> Result<Option<MlxMemoryTelemetry>, InferenceEngineError> {
-        let Some(model) = self.model.as_ref() else {
+        let Some(model) = self.core.model.as_ref() else {
             return Ok(None);
         };
         let mlx_memory_snapshot = model
@@ -161,7 +161,9 @@ impl Qwen3_5EngineState {
         // allocator storage, so one-token-ahead decode cannot race reclamation.
         let mlx_memory_snapshot = performance_attribution.measure_operation(
             PerformanceOperation::MlxBufferCacheCleanup,
-            |_performance_attribution| release_request_memory(self.model.as_deref(), request_id),
+            |_performance_attribution| {
+                release_request_memory(self.core.model.as_deref(), request_id)
+            },
         );
         self.govern_request_end();
         let generation_finalization = self
@@ -194,7 +196,7 @@ impl Qwen3_5EngineState {
         &mut self,
         active_request: &mut Qwen3_5EngineRequest,
     ) -> Option<RetainedLiveDecoderPrefix> {
-        let model_contract = self.astro_ssd_prompt_cache_model_contract.as_ref()?;
+        let model_contract = self.core.astro_ssd_prompt_cache_model_contract.as_ref()?;
         if !active_request.can_use_astro_ssd_prompt_cache {
             return None;
         }
@@ -215,11 +217,14 @@ impl Qwen3_5EngineState {
         let adoptable_block_count = verified_state_offset_count / block_token_count;
         let adoptable_block_count = adoptable_block_count.min(prompt_complete_block_count);
         let retention_decision = RetainedPrefixRetentionRequirements {
-            adoption_enabled: self.chunking.experimental_in_memory_prefix_adoption_enabled,
+            adoption_enabled: self
+                .core
+                .chunking
+                .experimental_in_memory_prefix_adoption_enabled,
             adoptable_token_count: adoptable_block_count * block_token_count,
             retained_state_payload_bytes: active_request.request_decoder_state.payload_byte_count(),
             effective_mlx_memory_ceiling_bytes: u64::try_from(
-                self.memory_limits.active_memory_limit_bytes(),
+                self.core.memory_limits.active_memory_limit_bytes(),
             )
             .unwrap_or(u64::MAX),
         }
@@ -254,8 +259,8 @@ impl Qwen3_5EngineState {
         }
         let placeholder_decoder_state =
             RequestDecoderStateStack::empty_from_astro_decoder_state_cache_layout_with_full_attention_kv_state_growth_tokens(
-                self.model.as_ref()?.astro_decoder_state_cache_layout(),
-                self.full_attention_kv_state_growth_tokens,
+                self.core.model.as_ref()?.astro_decoder_state_cache_layout(),
+                self.core.full_attention_kv_state_growth_tokens,
             )
             .ok()?;
         let decoder_state = std::mem::replace(
@@ -274,7 +279,7 @@ impl Qwen3_5EngineState {
         performance_attribution: &mut PerformanceAttribution,
         release_peak_memory_bytes: Option<u64>,
     ) -> GenerationFinalization {
-        let Some(model) = self.model.as_ref() else {
+        let Some(model) = self.core.model.as_ref() else {
             return GenerationFinalization::default();
         };
         let expert_memory_mode = Some(model.expert_memory_mode());
@@ -370,7 +375,7 @@ impl Qwen3_5EngineState {
             return;
         }
         let (Some(model_id), Some(model_revision)) =
-            (self.model_id.clone(), self.model_revision.clone())
+            (self.core.model_id.clone(), self.core.model_revision.clone())
         else {
             tracing::error!(
                 request_id = request_id.value(),
@@ -406,6 +411,7 @@ impl Qwen3_5EngineState {
             return;
         };
         if let Err(performance_attribution_write_error) = self
+            .core
             .performance_attribution_log
             .record(&performance_attribution_report)
         {

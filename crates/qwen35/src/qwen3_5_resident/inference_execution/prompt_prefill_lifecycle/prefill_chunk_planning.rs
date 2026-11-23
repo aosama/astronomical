@@ -49,12 +49,13 @@ impl Qwen3_5EngineState {
         prefill_end: usize,
     ) -> Result<PrefillChunkPlan, PromptPrefillChunkAttemptError> {
         let model = self
+            .core
             .model
             .as_ref()
 .ok_or_else(super::super::generation_session_lifecycle::generation_error_constructors::engine_lost_loaded_model_error)?;
         let prefill_token_count = prefill_end - prefill_start;
-        let capture_is_eligible =
-            self.astro_ssd_prompt_cache.is_some() && active_request.can_use_astro_ssd_prompt_cache;
+        let capture_is_eligible = self.core.astro_ssd_prompt_cache.is_some()
+            && active_request.can_use_astro_ssd_prompt_cache;
 
         // Paths with the `astro_ssd_prompt_cache` disabled and request-ineligible paths stop here: they do not
         // plan checkpoint boundaries, derive a synthetic block length, or
@@ -63,6 +64,7 @@ impl Qwen3_5EngineState {
         let (all_completed_prefill_chunk_tokens, astro_ssd_prompt_cache_block_token_count) =
             if capture_is_eligible {
                 let astro_ssd_prompt_cache_block_token_count = self
+                    .core
                     .astro_ssd_prompt_cache
                     .as_ref()
 .ok_or_else(super::super::generation_session_lifecycle::generation_error_constructors::eligible_astro_ssd_prompt_cache_capture_has_no_astro_ssd_prompt_cache_owner_error)?
@@ -105,7 +107,8 @@ impl Qwen3_5EngineState {
         };
 
         let direct_publication_workspace_bytes = if !all_completed_prefill_chunk_tokens.is_empty() {
-            self.astro_ssd_prompt_cache
+            self.core
+                .astro_ssd_prompt_cache
                 .as_ref()
                 .map(|astro_ssd_prompt_cache| {
                     astro_ssd_prompt_cache

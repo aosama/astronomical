@@ -202,7 +202,8 @@ impl Qwen3_5EngineState {
                 .startup_cleanup_evidence
                 .as_ref(),
         );
-        self.astro_ssd_prompt_cache_counters
+        self.core
+            .astro_ssd_prompt_cache_counters
             .record_astro_ssd_prompt_cache_miss();
         AstroSsdPromptCacheRestoreOutcome {
             astro_ssd_prompt_cache_restored_token_count: 0,
@@ -252,10 +253,12 @@ impl Qwen3_5EngineState {
                     "persistent astro-ssd-prompt-cache token count exceeds the u32 range",
                 )
             })?;
-        self.astro_ssd_prompt_cache_counters
+        self.core
+            .astro_ssd_prompt_cache_counters
             .record_astro_ssd_prompt_cache_hit(hit_finalization.restored_token_count);
         if hit_finalization.restored_partial_tail_block_key.is_some() {
-            self.astro_ssd_prompt_cache_counters
+            self.core
+                .astro_ssd_prompt_cache_counters
                 .record_partial_tail_hit();
         }
         Ok(AstroSsdPromptCacheRestoreOutcome {
@@ -282,6 +285,7 @@ impl Qwen3_5EngineState {
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<Option<AstroSsdPromptCacheBlockKey>, InferenceEngineError> {
         let model = self
+            .core
             .model
             .as_ref()
             .ok_or_else(
@@ -343,7 +347,11 @@ impl Qwen3_5EngineState {
         request_decoder_state: &mut RequestDecoderStateStack,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<InMemoryPrefixAdoptionResolution, InferenceEngineError> {
-        if !self.chunking.experimental_in_memory_prefix_adoption_enabled {
+        if !self
+            .core
+            .chunking
+            .experimental_in_memory_prefix_adoption_enabled
+        {
             return Ok(InMemoryPrefixAdoptionResolution::NotAdopted(None));
         }
         if self.retained_live_prefix.is_none() {

@@ -83,23 +83,6 @@ fn should_carry_the_exact_prefill_workspace_overflow_failure_texts() {
 }
 
 #[test]
-fn should_carry_the_exact_construction_failure_texts() {
-    let try_from_int_error = u32::try_from(usize::MAX).expect_err("usize maximum must exceed u32");
-    let growth_tokens_error =
-        full_attention_growth_tokens_exceed_i32_range_error(try_from_int_error);
-    let context_reservation_error = context_memory_reservation_overflowed_error();
-
-    assert!(matches!(
-        growth_tokens_error,
-        crate::InferenceEngineError::Fatal { reason } if reason == "full-attention growth tokens exceed Int32 range"
-    ));
-    assert!(matches!(
-        context_reservation_error,
-        crate::InferenceEngineError::Fatal { reason } if reason == "Qwen3.5 context memory reservation overflowed"
-    ));
-}
-
-#[test]
 fn should_carry_the_exact_memory_governance_failure_texts() {
     let try_from_int_error = u32::try_from(usize::MAX).expect_err("usize maximum must exceed u32");
 

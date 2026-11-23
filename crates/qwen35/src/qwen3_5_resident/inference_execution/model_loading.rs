@@ -38,7 +38,7 @@ impl Qwen3_5EngineState {
             self.neural_engine_prefill_preparation,
         ) = begin_neural_engine_prefill_preparation(
             model,
-            &self.chunking,
+            &self.core.chunking,
             self.astro_neural_engine_program_cache_directory.as_deref(),
             None,
         );
@@ -59,7 +59,7 @@ impl Qwen3_5EngineState {
     pub(super) fn advance_neural_engine_preparation(
         &mut self,
     ) -> Option<ipc_protocol::NeuralEnginePrefillStatus> {
-        let model = self.model.as_mut()?;
+        let model = self.core.model.as_mut()?;
         let Some(preparation) = self.neural_engine_prefill_preparation.as_mut() else {
             let settled_status =
                 settle_neural_engine_programs(model, &self.neural_engine_prefill_status)?;
@@ -79,19 +79,17 @@ impl Qwen3_5EngineState {
     }
 
     pub(super) fn load(&mut self) -> Result<EngineLoadResult, InferenceEngineError> {
-        if let Some(model) = self.model.as_ref() {
+        if let Some(model) = self.core.model.as_ref() {
             return Ok(self.engine_load_result(model.minimum_mlx_memory_ceiling_bytes()?));
         }
-        let mut model_loading_performance_attribution = self
-            .model_loading_performance_attribution
-            .take()
-            .unwrap_or_else(PerformanceAttribution::disabled);
+        let mut model_loading_performance_attribution =
+            self.core.take_model_loading_performance_attribution();
         let mut model_id = None;
         let mut model_revision = None;
         let mut total_artifact_payload_bytes = None;
         let mut model_shard_count = None;
         let model_loading_result: Result<_, InferenceEngineError> = (|| {
-            let validated_artifact = self.validated_artifact.take().ok_or_else(|| {
+            let validated_artifact = self.core.validated_artifact.take().ok_or_else(|| {
                 fatal_engine_error("validated Qwen3.5 artifact is unavailable during MLX load")
             })?;
             let qwen3_5_vision_config = validated_artifact.vision_config().cloned();
@@ -100,15 +98,15 @@ impl Qwen3_5EngineState {
             total_artifact_payload_bytes = Some(validated_artifact.total_payload_bytes());
             model_shard_count = Some(validated_artifact.shard_count());
             let runtime = initialize_mlx_runtime_with_cleanup(
-                self.memory_limits,
+                self.core.memory_limits,
                 &mut model_loading_performance_attribution,
             )
             .map_err(qwen3_5_runtime_error)?;
-            let model_chunking = resolve_model_chunking_configuration(&self.chunking)?;
+            let model_chunking = resolve_model_chunking_configuration(&self.core.chunking)?;
             let mut model = load_and_materialize_resident_model(
                 runtime,
                 validated_artifact,
-                &self.model_directory,
+                &self.core.model_directory,
                 model_chunking,
                 &mut model_loading_performance_attribution,
             )
@@ -123,9 +121,9 @@ impl Qwen3_5EngineState {
                 );
             let (astro_ssd_prompt_cache_model_contract, astro_ssd_prompt_cache) =
                 open_resident_astro_ssd_prompt_cache(
-                    self.astro_ssd_prompt_cache_disk_store_config.clone(),
+                    self.core.astro_ssd_prompt_cache_disk_store_config.clone(),
                     &model,
-                    &self.chunking,
+                    &self.core.chunking,
                     &resolved_model_id,
                     &resolved_model_revision,
                     persistent_visual_embedding_model_contract.as_ref(),
@@ -191,8 +189,8 @@ impl Qwen3_5EngineState {
     ) {
         let load_outcome = Qwen3_5SpeculativeDraftRuntime::load_for_target(
             model,
-            self.memory_limits.active_memory_limit_bytes(),
-            &self.model_directory,
+            self.core.memory_limits.active_memory_limit_bytes(),
+            &self.core.model_directory,
             model_loading_performance_attribution,
         );
         (self.speculative_draft_runtime, self.draft_model_status) =
@@ -216,17 +214,17 @@ impl Qwen3_5EngineState {
         total_artifact_payload_bytes: Option<u64>,
         model_shard_count: Option<usize>,
     ) -> Result<EngineLoadResult, InferenceEngineError> {
-        self.model_id = model_id.clone();
-        self.model_revision = model_revision.clone();
-        self.astro_ssd_prompt_cache_model_contract = astro_ssd_prompt_cache_model_contract;
-        self.persistent_visual_embedding_model_contract =
+        self.core.model_id = model_id.clone();
+        self.core.model_revision = model_revision.clone();
+        self.core.astro_ssd_prompt_cache_model_contract = astro_ssd_prompt_cache_model_contract;
+        self.core.persistent_visual_embedding_model_contract =
             persistent_visual_embedding_model_contract;
-        self.astro_ssd_prompt_cache = astro_ssd_prompt_cache;
+        self.core.astro_ssd_prompt_cache = astro_ssd_prompt_cache;
         let mlx_memory_snapshot = model.runtime().memory_snapshot().ok();
         let resident_model_payload_bytes = Some(model.resident_model_payload_byte_count());
         let minimum_mlx_memory_ceiling_bytes = model.minimum_mlx_memory_ceiling_bytes()?;
         self.open_memory_governor(&model);
-        self.model = Some(model);
+        self.core.model = Some(model);
         if let Err(performance_attribution_error) = self
             .record_model_loading_performance_attribution(
                 model_loading_performance_attribution,

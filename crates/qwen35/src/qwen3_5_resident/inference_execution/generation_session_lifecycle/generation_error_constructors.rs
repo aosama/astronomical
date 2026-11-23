@@ -64,17 +64,6 @@ pub(in crate::qwen3_5_resident::inference_execution) fn astro_ssd_prompt_cache_p
     super::fatal_engine_error("astro-ssd-prompt-cache publication workspace bytes overflowed")
 }
 
-pub(in crate::qwen3_5_resident::inference_execution) fn full_attention_growth_tokens_exceed_i32_range_error(
-    _try_from_error: std::num::TryFromIntError,
-) -> InferenceEngineError {
-    super::fatal_engine_error("full-attention growth tokens exceed Int32 range")
-}
-
-pub(in crate::qwen3_5_resident::inference_execution) fn context_memory_reservation_overflowed_error()
--> InferenceEngineError {
-    super::fatal_engine_error("Qwen3.5 context memory reservation overflowed")
-}
-
 pub(in crate::qwen3_5_resident::inference_execution) fn generation_context_memory_reservation_overflowed_error()
 -> InferenceEngineError {
     request_errors::invalid_request_error("generation context memory reservation overflowed")

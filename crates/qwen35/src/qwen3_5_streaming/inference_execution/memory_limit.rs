@@ -28,12 +28,12 @@ impl Qwen3_5EngineState {
         &mut self,
         requested_mlx_memory_ceiling_bytes: u64,
     ) -> Result<MlxMemoryLimitAdjustment, InferenceEngineError> {
-        if self.active_request.is_some() {
+        if self.core.active_request.is_some() {
             return Err(InferenceEngineError::EngineBusy);
         }
         self.require_no_resident_promotion(requested_mlx_memory_ceiling_bytes)?;
         let old_mlx_memory_ceiling_bytes = self.current_mlx_memory_ceiling_bytes()?;
-        let Some(model) = self.model.as_mut() else {
+        let Some(model) = self.core.model.as_mut() else {
             return Err(super::fatal_engine_error(
                 "cannot update the MLX memory ceiling before the model is loaded",
             ));
@@ -45,7 +45,7 @@ impl Qwen3_5EngineState {
         let adjustment_started_at = Instant::now();
         let (minimum_mlx_memory_ceiling_bytes, updated_mlx_memory_limits) =
             model.update_mlx_memory_limit(requested_mlx_memory_ceiling_bytes)?;
-        self.memory_limits = updated_mlx_memory_limits;
+        self.core.memory_limits = updated_mlx_memory_limits;
 
         let mlx_memory_snapshot_after_adjustment = model
             .memory_snapshot_with_forward_peak()
@@ -102,7 +102,7 @@ impl Qwen3_5EngineState {
         requested_mlx_memory_ceiling_bytes: u64,
     ) -> Result<(), InferenceEngineError> {
         if requested_mlx_memory_ceiling_bytes > self.current_mlx_memory_ceiling_bytes()?
-            && self.model.is_some()
+            && self.core.model.is_some()
             && self
                 .startup_residency_facts
                 .is_some_and(|startup_residency_facts| {
@@ -121,7 +121,7 @@ impl Qwen3_5EngineState {
     }
 
     fn current_mlx_memory_ceiling_bytes(&self) -> Result<u64, InferenceEngineError> {
-        u64::try_from(self.memory_limits.active_memory_limit_bytes()).map_err(|_| {
+        u64::try_from(self.core.memory_limits.active_memory_limit_bytes()).map_err(|_| {
             super::fatal_engine_error("current MLX memory ceiling exceeds the u64 range")
         })
     }

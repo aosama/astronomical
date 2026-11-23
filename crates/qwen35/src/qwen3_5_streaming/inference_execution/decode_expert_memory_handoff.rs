@@ -28,7 +28,7 @@ impl Qwen3_5EngineState {
         request_id: RequestId,
         active_request: &mut super::engine_request::Qwen3_5EngineRequest,
     ) -> Result<(), InferenceEngineError> {
-        let Some(model) = self.model.as_mut() else {
+        let Some(model) = self.core.model.as_mut() else {
             return Err(super::fatal_engine_error(
                 "Qwen3.5 engine lost its loaded model",
             ));

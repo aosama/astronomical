@@ -7,11 +7,9 @@ use crate::{
     EngineGenerationStart, GeneratedToken, GenerationFinalization, InferenceEngineError,
     MlxInferenceExecution, MlxMemoryLimitAdjustment, MlxMemoryTelemetry,
     PerformanceAttributionOutcome, Qwen3_5InferenceRequest,
-    build_astro_ssd_prompt_cache_stats_event,
 };
 
 use super::engine_state::{Qwen3_5EngineState, Qwen3_5InferenceExecution};
-use super::fatal_engine_error;
 
 impl MlxInferenceExecution for Qwen3_5InferenceExecution {
     type Request = Qwen3_5InferenceRequest;
@@ -52,26 +50,14 @@ impl MlxInferenceExecution for Qwen3_5InferenceExecution {
     fn collect_astro_ssd_prompt_cache_stats(
         &self,
     ) -> Result<Option<WorkerEvent>, InferenceEngineError> {
-        Ok(Qwen3_5EngineState::collect_astro_ssd_prompt_cache_stats(
-            self,
-        ))
+        Ok(self.core.astro_ssd_prompt_cache_stats_event())
     }
 
     fn clear_astro_ssd_prompt_cache(
         &mut self,
         model_id: Option<String>,
     ) -> Result<Option<WorkerEvent>, InferenceEngineError> {
-        let Some(astro_ssd_prompt_cache) = self.astro_ssd_prompt_cache.as_ref() else {
-            return Ok(None);
-        };
-        let clear_outcome = astro_ssd_prompt_cache
-            .clear_astro_ssd_prompt_cache(model_id.as_deref())
-            .map_err(|clear_error| fatal_engine_error(clear_error.to_string()))?;
-        Ok(Some(WorkerEvent::AstroSsdPromptCacheCleared {
-            model_id: clear_outcome.model_id,
-            blocks_removed: clear_outcome.blocks_removed,
-            bytes_freed: clear_outcome.bytes_freed,
-        }))
+        self.core.clear_astro_ssd_prompt_cache(model_id.as_deref())
     }
 
     fn collect_mlx_memory_telemetry(
@@ -89,41 +75,15 @@ impl MlxInferenceExecution for Qwen3_5InferenceExecution {
 }
 
 impl Qwen3_5EngineState {
-    fn collect_astro_ssd_prompt_cache_stats(&self) -> Option<WorkerEvent> {
-        let astro_ssd_prompt_cache = self.astro_ssd_prompt_cache.as_ref()?;
-        let global_astro_ssd_prompt_cache_maximum_size_bytes = self
-            .astro_ssd_prompt_cache_disk_store_config
-            .as_ref()
-            .map(|disk_store_config| {
-                disk_store_config.global_astro_ssd_prompt_cache_maximum_size_bytes()
-            })?;
-        Some(build_astro_ssd_prompt_cache_stats_event(
-            &self.astro_ssd_prompt_cache_counters,
-            u64::try_from(
-                astro_ssd_prompt_cache
-                    .model_contract_ref()
-                    .block_token_count(),
-            )
-            .unwrap_or(u64::MAX),
-            u64::try_from(astro_ssd_prompt_cache.sequence_state_block_count()).unwrap_or(u64::MAX),
-            u64::try_from(astro_ssd_prompt_cache.boundary_state_snapshot_count())
-                .unwrap_or(u64::MAX),
-            u64::try_from(astro_ssd_prompt_cache.visual_embedding_count()).unwrap_or(u64::MAX),
-            astro_ssd_prompt_cache.total_size_bytes(),
-            astro_ssd_prompt_cache.visual_embedding_total_size_bytes(),
-            global_astro_ssd_prompt_cache_maximum_size_bytes,
-        ))
-    }
-
     fn cancel_generation(
         &mut self,
         request_id: RequestId,
     ) -> Result<GenerationFinalization, InferenceEngineError> {
-        let Some(active_request) = self.active_request.take() else {
+        let Some(active_request) = self.core.active_request.take() else {
             return Ok(GenerationFinalization::default());
         };
         if active_request.request_id != request_id {
-            self.active_request = Some(active_request);
+            self.core.active_request = Some(active_request);
             Ok(GenerationFinalization::default())
         } else {
             Ok(self.finalize_generation_request(

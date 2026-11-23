@@ -23,13 +23,13 @@ impl Qwen3_5EngineState {
         &mut self,
         request_id: RequestId,
     ) -> Result<GeneratedToken, InferenceEngineError> {
-        let mut active_request = self.active_request.take().ok_or_else(|| {
+        let mut active_request = self.core.active_request.take().ok_or_else(|| {
             super::fatal_engine_error(
                 "Qwen3.5 generation advance requested without an active request",
             )
         })?;
         if active_request.request_id != request_id {
-            self.active_request = Some(active_request);
+            self.core.active_request = Some(active_request);
             return Err(super::fatal_engine_error(
                 "Qwen3.5 generation request correlation mismatch",
             ));
@@ -51,7 +51,7 @@ impl Qwen3_5EngineState {
             .complete_operation_span(advance_span, advance_span_started_at);
         match active_request_advance {
             Ok(ActiveRequestAdvance::Continue(generated_token)) => {
-                self.active_request = Some(active_request);
+                self.core.active_request = Some(active_request);
                 Ok(generated_token)
             }
             Ok(ActiveRequestAdvance::Complete(generated_token)) => {
@@ -144,13 +144,13 @@ impl Qwen3_5EngineState {
         // Prefetch samples the successor before this token is accepted. A live
         // mask must see the commit first or Juliet/Romeo prefixes stay allowed.
         let mut early_structured_emission = if active_request.structured_generation.is_some() {
-            let model = self.model.as_ref().ok_or_else(
+            let model = self.core.model.as_ref().ok_or_else(
                 super::super::generation_session_lifecycle::generation_error_constructors::engine_lost_loaded_model_error,
             )?;
             let generated_token_emission =
                 generated_token_emission::build_generated_token_emission(
                     model,
-                    &self.end_of_sequence_token_ids,
+                    &self.core.end_of_sequence_token_ids,
                     active_request,
                     current_generated_token_id,
                     None,
@@ -173,12 +173,12 @@ impl Qwen3_5EngineState {
         let generated_token_emission = match early_structured_emission.take() {
             Some(generated_token_emission) => generated_token_emission,
             None => {
-                let model = self.model.as_ref().ok_or_else(
+                let model = self.core.model.as_ref().ok_or_else(
                     super::super::generation_session_lifecycle::generation_error_constructors::engine_lost_loaded_model_error,
                 )?;
                 generated_token_emission::build_generated_token_emission(
                     model,
-                    &self.end_of_sequence_token_ids,
+                    &self.core.end_of_sequence_token_ids,
                     active_request,
                     current_generated_token_id,
                     Some(&completed_forward_memory.mlx_memory_snapshot),
@@ -205,6 +205,7 @@ impl Qwen3_5EngineState {
     /// (issue #337).
     fn announce_generation_preparation(&self) -> Result<GeneratedToken, InferenceEngineError> {
         let model = self
+            .core
             .model
             .as_ref()
             .ok_or_else(super::super::generation_session_lifecycle::generation_error_constructors::engine_lost_loaded_model_error)?;
@@ -275,6 +276,7 @@ impl Qwen3_5EngineState {
     ) -> Result<MlxArray, InferenceEngineError> {
         active_request.pending_generated_token = None;
         let model = self
+            .core
             .model
             .as_ref()
             .ok_or_else(super::super::generation_session_lifecycle::generation_error_constructors::engine_lost_loaded_model_error)?;
@@ -314,6 +316,7 @@ impl Qwen3_5EngineState {
             0,
         )?;
         let model = self
+            .core
             .model
             .as_ref()
             .ok_or_else(super::super::generation_session_lifecycle::generation_error_constructors::engine_lost_loaded_model_error)?;
@@ -369,20 +372,21 @@ impl Qwen3_5EngineState {
         current_generated_token_id: u32,
     ) -> Result<Option<ActiveRequestAdvance>, InferenceEngineError> {
         if !generated_token_emission::generated_token_will_be_terminal(
-            &self.end_of_sequence_token_ids,
+            &self.core.end_of_sequence_token_ids,
             active_request,
             current_generated_token_id,
         ) {
             return Ok(None);
         }
         let model = self
+            .core
             .model
             .as_ref()
             .ok_or_else(super::super::generation_session_lifecycle::generation_error_constructors::engine_lost_loaded_model_error)?;
         let completed_forward_memory = capture_completed_forward_memory_observation(model)?;
         let generated_token_emission = generated_token_emission::build_generated_token_emission(
             model,
-            &self.end_of_sequence_token_ids,
+            &self.core.end_of_sequence_token_ids,
             active_request,
             current_generated_token_id,
             Some(&completed_forward_memory.mlx_memory_snapshot),
@@ -400,7 +404,7 @@ impl Qwen3_5EngineState {
         active_request: &mut super::engine_request::Qwen3_5EngineRequest,
         current_generated_token: &MlxArray,
     ) -> Result<(MlxArray, CompletedForwardMemoryObservation), InferenceEngineError> {
-        let model = self.model.as_ref().ok_or_else(
+        let model = self.core.model.as_ref().ok_or_else(
             super::super::generation_session_lifecycle::generation_error_constructors::engine_lost_loaded_model_error,
         )?;
         active_request.reclaim_outgrown_attention_slabs(model.runtime())?;
@@ -421,6 +425,7 @@ impl Qwen3_5EngineState {
             0,
         )?;
         let model = self
+            .core
             .model
             .as_ref()
             .ok_or_else(super::super::generation_session_lifecycle::generation_error_constructors::engine_lost_loaded_model_error)?;

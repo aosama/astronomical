@@ -59,6 +59,7 @@ impl Qwen3_5EngineState {
         }
 
         let model = self
+            .core
             .model
             .as_ref()
             .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
@@ -111,7 +112,8 @@ impl Qwen3_5EngineState {
             WorkerAstroSsdPromptCacheLookupOutcome::Hit;
         astro_ssd_prompt_cache_diagnostics.in_memory_prefix_adoption =
             Some(WorkerInMemoryPrefixAdoptionOutcome::Adopted);
-        self.astro_ssd_prompt_cache_counters
+        self.core
+            .astro_ssd_prompt_cache_counters
             .record_in_memory_prefix_adoption_hit();
         Ok(AstroSsdPromptCacheRestoreOutcome {
             astro_ssd_prompt_cache_restored_token_count: u32::try_from(adopted_token_count)
