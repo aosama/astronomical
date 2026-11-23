@@ -169,9 +169,9 @@ pub(in crate::worker) async fn contain_mlx_memory_limit_failure(
 ///
 /// Issue #515: the next Generate must not be admitted against the old
 /// ceiling after the user has already asked for more RAM. Call this both
-/// at the idle loop head and immediately before starting chat, image, or
-/// embeddings work, because `select` can deliver a Generate that was
-/// sitting in the channel beside the raise.
+/// at the idle loop head and immediately before starting any generation
+/// (chat, image, embeddings, decisions or speech), because `select` can
+/// deliver a Generate that was sitting in the channel beside the raise.
 #[allow(clippy::too_many_arguments)]
 pub(in crate::worker) async fn apply_pending_mlx_memory_limit_if_idle(
     pending_mlx_memory_limit_update: &mut Option<PendingMlxMemoryLimitUpdate>,

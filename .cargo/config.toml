@@ -238,8 +238,9 @@ test-clef-whole-model-layer-recomputation = "run -p xtask -- test-run --package 
 # `kokoro_reference_speech.json`: frames per token, pitch, energy and loudness;
 # a few seconds. `generate_kokoro_reference_speech.py` beside the fixture
 # says how to record it again. `test-speech-serving` runs how speech is
-# served without a model: the daemon's speech admission, events, model choice
-# and `POST /v1/audio/speech`
+# served without a model: the daemon's speech admission (through the
+# worker loop's shared request-kind admission, against the idle-worker
+# fixture), events, model choice and `POST /v1/audio/speech`
 # and IPC journeys (audio in bounded frames, refusals before dispatch), with
 # scripted workers; under a minute. `test-speak-cli` runs `astronomical
 # speak`'s own tests and its journeys against a stub daemon. The chat
