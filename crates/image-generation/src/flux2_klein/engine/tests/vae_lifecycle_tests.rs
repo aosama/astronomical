@@ -2,6 +2,7 @@
 
 use std::sync::{Arc, Mutex};
 
+use crate::image_engine_shell::ImageEngineComponents;
 use crate::{
     FLUX2_KLEIN_OFFICIAL_MODEL_ID, FLUX2_KLEIN_OFFICIAL_REVISION, Flux2KleinComponentLoad,
     Flux2KleinEngineComponents, Flux2KleinFlowSchedule, Flux2KleinFlowScheduler,
@@ -215,7 +216,7 @@ struct StagedVaeComponents {
     next_decode_stage_index: usize,
 }
 
-impl Flux2KleinEngineComponents for StagedVaeComponents {
+impl ImageEngineComponents for StagedVaeComponents {
     fn load(&mut self) -> Result<Flux2KleinComponentLoad, String> {
         Ok(Flux2KleinComponentLoad::new(
             FLUX2_KLEIN_OFFICIAL_MODEL_ID,
@@ -234,6 +235,24 @@ impl Flux2KleinEngineComponents for StagedVaeComponents {
         ))
     }
 
+    fn finalize_request(
+        &mut self,
+        outcome: PerformanceAttributionOutcome,
+        _encoded_bytes: Option<u64>,
+        _failure_description: Option<&str>,
+    ) -> Result<(), String> {
+        if outcome == PerformanceAttributionOutcome::Cancelled {
+            self.record("cleanup:drop-decoder-state");
+            self.record("cleanup:drop-tile-graph");
+            self.record("cleanup:drop-vae-arrays");
+            self.record("cleanup:synchronize");
+            self.record("cleanup:clear-mlx-buffer-cache");
+        }
+        Ok(())
+    }
+}
+
+impl Flux2KleinEngineComponents for StagedVaeComponents {
     fn start_request(
         &mut self,
         _request_id: RequestId,
@@ -282,22 +301,6 @@ impl Flux2KleinEngineComponents for StagedVaeComponents {
     fn encode_png(&mut self) -> Result<Vec<u8>, String> {
         self.record("encode");
         Ok(b"parity pixels".to_vec())
-    }
-
-    fn finalize_request(
-        &mut self,
-        outcome: PerformanceAttributionOutcome,
-        _encoded_bytes: Option<u64>,
-        _failure_description: Option<&str>,
-    ) -> Result<(), String> {
-        if outcome == PerformanceAttributionOutcome::Cancelled {
-            self.record("cleanup:drop-decoder-state");
-            self.record("cleanup:drop-tile-graph");
-            self.record("cleanup:drop-vae-arrays");
-            self.record("cleanup:synchronize");
-            self.record("cleanup:clear-mlx-buffer-cache");
-        }
-        Ok(())
     }
 }
 

@@ -177,7 +177,7 @@ impl QwenImage21MlxComponents {
     }
 }
 
-impl QwenImage21EngineComponents for QwenImage21MlxComponents {
+impl ImageEngineComponents for QwenImage21MlxComponents {
     fn load(&mut self) -> Result<QwenImage21ComponentLoad, String> {
         let mut load_attribution = self.new_attribution();
         let mut attribution_log = PerformanceAttributionLog::open(
@@ -270,85 +270,6 @@ impl QwenImage21EngineComponents for QwenImage21MlxComponents {
             qwen_image_21_image_generation_capabilities(),
             minimum_mlx_memory_ceiling_bytes,
         ))
-    }
-
-    fn start_request(
-        &mut self,
-        request_id: RequestId,
-        request: QwenImage21EngineRequest,
-    ) -> Result<(), String> {
-        if self.request_id.is_some() {
-            return Err("a Qwen-Image-2.1 request is already active".to_owned());
-        }
-        self.request_attribution = Some(self.new_attribution());
-        self.post_cleanup_memory_telemetry = None;
-        self.request = Some(RequestControls {
-            prompt: request.prompt,
-            width_pixels: request.width_pixels,
-            height_pixels: request.height_pixels,
-            steps: request.steps,
-            seed: request.seed,
-        });
-        self.request_id = Some(request_id);
-        Ok(())
-    }
-
-    fn advance_render(&mut self) -> Result<QwenImage21RenderAdvance, String> {
-        let request = self
-            .request
-            .clone()
-            .ok_or_else(|| "no Qwen-Image-2.1 request is active".to_owned())?;
-        if self.session.is_none() {
-            // The preparation boundary: map every component's weights and check the request in.
-            self.initialize_runtime()?;
-            let render_request = QwenImage21RenderRequest {
-                prompt: request.prompt,
-                width: request.width_pixels as usize,
-                height: request.height_pixels as usize,
-                num_inference_steps: request.steps as usize,
-                seed: request.seed,
-            };
-            let model_directory = self.model_directory.clone();
-            // The runtime is handed out for the boundary and restored even on failure, because
-            // the process-global MLX state cannot be re-initialized with different limits.
-            let runtime = self
-                .runtime
-                .take()
-                .ok_or_else(|| "the MLX runtime is unavailable".to_owned())?;
-            let session_result = self.measure_boundary(
-                PerformanceOperation::ImagePipelineConstruction,
-                &runtime,
-                |_components, runtime| {
-                    let pipeline = QwenImage21Pipeline::load(runtime, &model_directory)
-                        .map_err(|error| error.to_string())?;
-                    pipeline
-                        .into_render_session(&render_request)
-                        .map_err(|error| error.to_string())
-                },
-            );
-            self.runtime = Some(runtime);
-            let session = session_result?;
-            self.session = Some(session);
-            return Ok(QwenImage21RenderAdvance::Preparing);
-        }
-        let runtime = self
-            .runtime
-            .take()
-            .ok_or_else(|| "the MLX runtime is unavailable".to_owned())?;
-        let advance_result = self.measure_boundary(
-            PerformanceOperation::ImageRenderBoundary,
-            &runtime,
-            |components, runtime| {
-                components
-                    .session
-                    .as_mut()
-                    .ok_or_else(|| "the Qwen-Image-2.1 render session is unavailable".to_owned())?
-                    .advance(runtime)
-                    .map_err(|error| error.to_string())
-            },
-        );
-        self.runtime = Some(runtime);
-        advance_result
     }
 
     fn finalize_request(
@@ -483,4 +404,86 @@ impl QwenImage21EngineComponents for QwenImage21MlxComponents {
     }
 }
 
+impl QwenImage21EngineComponents for QwenImage21MlxComponents {
+    fn start_request(
+        &mut self,
+        request_id: RequestId,
+        request: QwenImage21EngineRequest,
+    ) -> Result<(), String> {
+        if self.request_id.is_some() {
+            return Err("a Qwen-Image-2.1 request is already active".to_owned());
+        }
+        self.request_attribution = Some(self.new_attribution());
+        self.post_cleanup_memory_telemetry = None;
+        self.request = Some(RequestControls {
+            prompt: request.prompt,
+            width_pixels: request.width_pixels,
+            height_pixels: request.height_pixels,
+            steps: request.steps,
+            seed: request.seed,
+        });
+        self.request_id = Some(request_id);
+        Ok(())
+    }
+
+    fn advance_render(&mut self) -> Result<QwenImage21RenderAdvance, String> {
+        let request = self
+            .request
+            .clone()
+            .ok_or_else(|| "no Qwen-Image-2.1 request is active".to_owned())?;
+        if self.session.is_none() {
+            // The preparation boundary: map every component's weights and check the request in.
+            self.initialize_runtime()?;
+            let render_request = QwenImage21RenderRequest {
+                prompt: request.prompt,
+                width: request.width_pixels as usize,
+                height: request.height_pixels as usize,
+                num_inference_steps: request.steps as usize,
+                seed: request.seed,
+            };
+            let model_directory = self.model_directory.clone();
+            // The runtime is handed out for the boundary and restored even on failure, because
+            // the process-global MLX state cannot be re-initialized with different limits.
+            let runtime = self
+                .runtime
+                .take()
+                .ok_or_else(|| "the MLX runtime is unavailable".to_owned())?;
+            let session_result = self.measure_boundary(
+                PerformanceOperation::ImagePipelineConstruction,
+                &runtime,
+                |_components, runtime| {
+                    let pipeline = QwenImage21Pipeline::load(runtime, &model_directory)
+                        .map_err(|error| error.to_string())?;
+                    pipeline
+                        .into_render_session(&render_request)
+                        .map_err(|error| error.to_string())
+                },
+            );
+            self.runtime = Some(runtime);
+            let session = session_result?;
+            self.session = Some(session);
+            return Ok(QwenImage21RenderAdvance::Preparing);
+        }
+        let runtime = self
+            .runtime
+            .take()
+            .ok_or_else(|| "the MLX runtime is unavailable".to_owned())?;
+        let advance_result = self.measure_boundary(
+            PerformanceOperation::ImageRenderBoundary,
+            &runtime,
+            |components, runtime| {
+                components
+                    .session
+                    .as_mut()
+                    .ok_or_else(|| "the Qwen-Image-2.1 render session is unavailable".to_owned())?
+                    .advance(runtime)
+                    .map_err(|error| error.to_string())
+            },
+        );
+        self.runtime = Some(runtime);
+        advance_result
+    }
+}
+
+use crate::image_engine_shell::ImageEngineComponents;
 use memory_policy::telemetry::{MlxMemoryLimitAdjustment, MlxMemoryTelemetry};

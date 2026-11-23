@@ -2,6 +2,13 @@
 
 use std::sync::{Arc, Mutex};
 
+use crate::image_engine_shell::ImageEngineComponents;
+pub(super) use crate::image_engine_shell_test_support::{
+    assert_final_cleanup_memory, cloned_events,
+};
+use crate::image_engine_shell_test_support::{
+    finalize_event, record_lifecycle_event, scripted_post_cleanup_memory,
+};
 use crate::{
     FLUX2_KLEIN_OFFICIAL_MODEL_ID, FLUX2_KLEIN_OFFICIAL_REVISION, Flux2KleinComponentLoad,
     Flux2KleinEngineComponents, Flux2KleinFlowStep, Flux2KleinImageDimensions,
@@ -10,7 +17,7 @@ use crate::{
 use ipc_protocol::{
     ImageGenerationCapabilities, ImageGenerationCommand, ImageGenerationSettings, RequestId,
 };
-use memory_policy::telemetry::{MlxActiveMemoryBreakdown, MlxMemoryTelemetry};
+use memory_policy::telemetry::MlxMemoryTelemetry;
 use model_primitives::performance_attribution::PerformanceAttributionOutcome;
 
 pub(super) fn fake_engine(
@@ -74,24 +81,6 @@ pub(super) fn valid_command(request_id: u64, seed: u64) -> ImageGenerationComman
     }
 }
 
-pub(super) fn cloned_events(lifecycle_events: &Arc<Mutex<Vec<String>>>) -> Vec<String> {
-    lifecycle_events
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
-        .clone()
-}
-
-pub(super) fn assert_final_cleanup_memory(memory_telemetry: Option<MlxMemoryTelemetry>) {
-    let memory_telemetry =
-        memory_telemetry.expect("finalized FLUX requests should expose MLX memory");
-    assert_eq!(memory_telemetry.mlx_buffer_cache_bytes, 0);
-    assert!(memory_telemetry.active_memory_bytes <= memory_telemetry.peak_memory_bytes);
-    assert_eq!(
-        memory_telemetry.active_memory_breakdown,
-        MlxActiveMemoryBreakdown::default()
-    );
-}
-
 struct FakeComponents {
     lifecycle_events: Arc<Mutex<Vec<String>>>,
     failing_event: Option<String>,
@@ -102,7 +91,7 @@ struct FakeComponents {
     post_cleanup_memory_telemetry: Option<MlxMemoryTelemetry>,
 }
 
-impl Flux2KleinEngineComponents for FakeComponents {
+impl ImageEngineComponents for FakeComponents {
     fn load(&mut self) -> Result<Flux2KleinComponentLoad, String> {
         self.record("load")?;
         Ok(Flux2KleinComponentLoad::new(
@@ -122,6 +111,23 @@ impl Flux2KleinEngineComponents for FakeComponents {
         ))
     }
 
+    fn finalize_request(
+        &mut self,
+        outcome: PerformanceAttributionOutcome,
+        encoded_bytes: Option<u64>,
+        failure_description: Option<&str>,
+    ) -> Result<(), String> {
+        self.record(&finalize_event(outcome, encoded_bytes, failure_description))?;
+        self.post_cleanup_memory_telemetry = Some(scripted_post_cleanup_memory());
+        Ok(())
+    }
+
+    fn take_post_cleanup_memory_telemetry(&mut self) -> Option<MlxMemoryTelemetry> {
+        self.post_cleanup_memory_telemetry.take()
+    }
+}
+
+impl Flux2KleinEngineComponents for FakeComponents {
     fn start_request(
         &mut self,
         _request_id: RequestId,
@@ -188,47 +194,10 @@ impl Flux2KleinEngineComponents for FakeComponents {
         self.record("encode")?;
         Ok(b"complete png".to_vec())
     }
-
-    fn finalize_request(
-        &mut self,
-        outcome: PerformanceAttributionOutcome,
-        encoded_bytes: Option<u64>,
-        failure_description: Option<&str>,
-    ) -> Result<(), String> {
-        let outcome_name = match outcome {
-            PerformanceAttributionOutcome::Success => "success",
-            PerformanceAttributionOutcome::Rejected => "rejected",
-            PerformanceAttributionOutcome::Cancelled => "cancelled",
-            PerformanceAttributionOutcome::Failed => "failed",
-        };
-        let outcome_detail = failure_description
-            .map(str::to_owned)
-            .unwrap_or_else(|| encoded_bytes.unwrap_or(0).to_string());
-        self.record(&format!("finalize:{outcome_name}:{outcome_detail}"))?;
-        self.post_cleanup_memory_telemetry = Some(MlxMemoryTelemetry::new(
-            96_000_000,
-            0,
-            512_000_000,
-            MlxActiveMemoryBreakdown::default(),
-        ));
-        Ok(())
-    }
-
-    fn take_post_cleanup_memory_telemetry(&mut self) -> Option<MlxMemoryTelemetry> {
-        self.post_cleanup_memory_telemetry.take()
-    }
 }
 
 impl FakeComponents {
     fn record(&self, event: &str) -> Result<(), String> {
-        self.lifecycle_events
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .push(event.to_owned());
-        if self.failing_event.as_deref() == Some(event) {
-            Err(format!("injected failure at {event}"))
-        } else {
-            Ok(())
-        }
+        record_lifecycle_event(&self.lifecycle_events, self.failing_event.as_deref(), event)
     }
 }
