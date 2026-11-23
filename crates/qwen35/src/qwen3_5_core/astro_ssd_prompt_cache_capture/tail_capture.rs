@@ -7,7 +7,7 @@
 //! is best-effort by contract: the request never depends on tail reuse, so
 //! every failure is logged and skipped.
 
-use crate::astro_ssd_prompt_cache::tail_capture_planning::{
+use engine_core::astro_ssd_prompt_cache::tail_capture_planning::{
     PromptTailCaptureSpan, TailBlockCausalInputResolution, build_tail_block_key,
     prompt_tail_capture_span, resolve_tail_block_causal_input,
 };
@@ -15,11 +15,11 @@ use std::collections::HashMap;
 
 use mlx_bridge::MlxArray;
 
-use crate::astro_ssd_prompt_cache::block_causal_input::AstroSsdPromptCacheBlockCausalInput;
 use crate::{
     AstroSsdPromptCacheBlockKey, AstroSsdPromptCacheDiskStore,
     AstroSsdPromptCachePublicationOutcome, PerformanceOperation,
 };
+use engine_core::astro_ssd_prompt_cache::block_causal_input::AstroSsdPromptCacheBlockCausalInput;
 
 use super::block_capture::{PromptBlockPublicationFailure, publish_block_with_reclamation_retry};
 use super::capture_hook::Qwen3_5AstroSsdPromptCacheCapture;

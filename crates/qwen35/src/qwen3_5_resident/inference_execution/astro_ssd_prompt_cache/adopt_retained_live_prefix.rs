@@ -11,14 +11,14 @@
 use ipc_protocol::{WorkerAstroSsdPromptCacheLookupOutcome, WorkerInMemoryPrefixAdoptionOutcome};
 
 use crate::astro_decoder_state_cache::AstroDecoderStateCacheState;
-use crate::astro_ssd_prompt_cache::AstroSsdPromptCacheDiskStore;
 use crate::qwen3_5_core::decoder::RequestDecoderStateStack;
 use crate::{
     AstroSsdPromptCachePrefixLookupResult, InferenceEngineError, PerformanceAttribution,
     PerformanceOperation,
 };
+use engine_core::astro_ssd_prompt_cache::AstroSsdPromptCacheDiskStore;
 
-use crate::astro_ssd_prompt_cache::restore_support::astro_ssd_prompt_cache_request_diagnostics;
+use engine_core::astro_ssd_prompt_cache::restore_support::astro_ssd_prompt_cache_request_diagnostics;
 
 use super::retained_live_prefix::RetainedLiveDecoderPrefix;
 use super::{Qwen3_5EngineState, fatal_engine_error};

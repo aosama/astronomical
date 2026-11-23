@@ -8,6 +8,7 @@
 
 pub mod astro_ssd_prompt_cache_restore;
 pub mod astro_ssd_prompt_cache_startup_logging;
+pub mod astro_ssd_prompt_cache_state_install;
 pub mod astro_ssd_prompt_cache_visual_identity;
 pub mod decode_step;
 pub mod decode_step_decisions;

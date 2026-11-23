@@ -16,9 +16,6 @@ use ipc_protocol::WorkerEvent;
 use mlx_bridge::MlxArray;
 use runtime_integration::MlxRuntime;
 
-use crate::astro_ssd_prompt_cache::AstroSsdPromptCacheCounters;
-use crate::astro_ssd_prompt_cache::prefix_lookup::AstroSsdPromptCachePrefixLookup;
-use crate::astro_ssd_prompt_cache::quota_bounded_contract::resolve_quota_bounded_astro_ssd_prompt_cache_contract;
 use crate::prism_hadamard_qwen35::astro_decoder_state_cache_layout;
 use crate::prism_hadamard_qwen35::engine::execution::{
     PrismHadamardQwen35ActiveGeneration, PrismHadamardQwen35InferenceExecution,
@@ -31,6 +28,9 @@ use crate::{
     AstroSsdPromptCacheModelContract, AstroSsdPromptCachePublicationOutcome, InferenceEngineError,
     PerformanceAttribution, PerformanceOperation, build_astro_ssd_prompt_cache_stats_event,
 };
+use engine_core::astro_ssd_prompt_cache::AstroSsdPromptCacheCounters;
+use engine_core::astro_ssd_prompt_cache::prefix_lookup::AstroSsdPromptCachePrefixLookup;
+use engine_core::astro_ssd_prompt_cache::quota_bounded_contract::resolve_quota_bounded_astro_ssd_prompt_cache_contract;
 
 #[allow(clippy::too_many_arguments)]
 /// Opens the SSD store for one loaded folded-ternary revision.

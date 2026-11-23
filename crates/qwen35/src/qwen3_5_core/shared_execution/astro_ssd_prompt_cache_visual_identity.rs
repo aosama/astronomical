@@ -3,12 +3,12 @@
 //! This owner validates image row geometry once, builds the ordinary target
 //! block plan once, and lets lookup and capture consume the same immutable identities.
 
-use crate::astro_ssd_prompt_cache::block_causal_input::AstroSsdPromptCacheBlockCausalInput;
 use crate::{
     AstroSsdPromptCacheDiskStore, InferenceEngineError, PerformanceAttribution,
     PerformanceOperation, Qwen3_5InferenceRequest,
     plan_qwen3_5_visual_astro_ssd_prompt_cache_block_inputs,
 };
+use engine_core::astro_ssd_prompt_cache::block_causal_input::AstroSsdPromptCacheBlockCausalInput;
 
 use crate::qwen3_5_core::engine_errors::{fatal_engine_error, invalid_request_error};
 

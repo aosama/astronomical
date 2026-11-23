@@ -151,3 +151,7 @@ fn linear_attention_layer_layout(
         ),
     ]))
 }
+
+#[cfg(test)]
+#[path = "astro_decoder_state_cache_layout_tests.rs"]
+mod astro_decoder_state_cache_layout_tests;

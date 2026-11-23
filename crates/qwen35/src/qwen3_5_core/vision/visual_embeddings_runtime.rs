@@ -9,13 +9,13 @@ use super::Qwen3_5ProcessedImage;
 use super::vision_model::Qwen3_5VisionModel;
 use super::visual_embeddings::Qwen3_5VisualEmbeddingRequiredImage;
 use super::visual_embeddings::Qwen3_5VisualEmbeddingSuffixPlan;
-use crate::astro_ssd_prompt_cache::{
-    AstroSsdPromptCacheCounters, AstroSsdPromptCacheDiskStore,
-    PersistentVisualEmbeddingModelContract,
-};
 use crate::{
     InferenceEngineError, PerformanceAttribution, PerformanceOperation,
     PersistentVisualEmbeddingKey,
+};
+use engine_core::astro_ssd_prompt_cache::{
+    AstroSsdPromptCacheCounters, AstroSsdPromptCacheDiskStore,
+    PersistentVisualEmbeddingModelContract,
 };
 use ipc_protocol::RequestId;
 use mlx_bridge::{MlxArray, MlxCompiledElementwiseGraphs, MlxDtype};

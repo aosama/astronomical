@@ -10,7 +10,7 @@ use std::fs::File;
 use std::path::Path;
 
 use crate::astro_decoder_state_cache::AstroDecoderStateCachePersistedTensorLayout;
-use crate::safetensors::SafetensorsTensorView;
+use memory_policy::safetensors::SafetensorsTensorView;
 
 use super::block_format_error::AstroSsdPromptCacheBlockError;
 use super::model_contract::AstroSsdPromptCacheModelContract;
