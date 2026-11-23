@@ -83,8 +83,6 @@ pub(crate) enum WorkerLoopCommand {
         embeddings_command: ipc_protocol::EmbeddingsCommand,
         start_sender: oneshot::Sender<Result<(), GenerationStartError>>,
         embeddings_result_sender: mpsc::Sender<Result<EmbeddingsOutput, EmbeddingsExecutionError>>,
-        admitted_at: Instant,
-        queue_wait_elapsed: std::time::Duration,
     },
     GenerateDecisions {
         active_generation_permit: OwnedSemaphorePermit,

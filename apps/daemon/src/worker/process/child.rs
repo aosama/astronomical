@@ -471,18 +471,21 @@ impl WorkerProcess {
                 });
             }
         };
-        match command_write_outcome {
-            Ok(()) => Ok(()),
-            // A broken pipe means the worker has already exited and closed its
-            // stdin. Its exit status and stderr explain why; the bare write
-            // error would discard both, which left a worker that died before
-            // its first command with no diagnostic in the daemon log.
-            Err(ProtocolError::WriteFrame(write_error))
-                if write_error.kind() == std::io::ErrorKind::BrokenPipe =>
-            {
-                Err(self.worker_process_exit_error().await)
-            }
-            Err(protocol_error) => Err(protocol_error.into()),
+        if let Err(protocol_error) = command_write_outcome {
+            return Err(self.command_write_error(protocol_error).await);
+        }
+        Ok(())
+    }
+
+    /// A broken pipe means the worker has already exited and closed its
+    /// stdin. Its exit status and stderr explain why; the bare write error
+    /// would discard both, which left a worker that died before its first
+    /// command with no diagnostic in the daemon log.
+    async fn command_write_error(&mut self, protocol_error: ProtocolError) -> WorkerControlError {
+        if is_broken_pipe_write(&protocol_error) {
+            self.worker_process_exit_error().await
+        } else {
+            protocol_error.into()
         }
     }
 
@@ -611,4 +614,13 @@ async fn force_terminate_and_reap(
         Err(kill_error) => return Err(WorkerControlError::TerminateWorker(kill_error)),
     }
     wait_for_worker(worker_process, shutdown_timeout).await
+}
+
+/// Whether a command write failed because the worker closed its stdin.
+fn is_broken_pipe_write(protocol_error: &ProtocolError) -> bool {
+    matches!(
+        protocol_error,
+        ProtocolError::WriteFrame(write_error)
+            if write_error.kind() == std::io::ErrorKind::BrokenPipe
+    )
 }

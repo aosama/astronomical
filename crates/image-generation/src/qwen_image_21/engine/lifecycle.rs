@@ -1,62 +1,34 @@
-//! The Qwen-Image-2.1 lifecycle owner: load once, serve one request at a time, one boundary
-//! per advance, and publish only after cleanup succeeds.
+//! Qwen-Image-2.1 behind the shared image lifecycle: its request checks and
+//! how each render boundary of its session is reported. The lifecycle around
+//! it (load once, one request at a time, publish only after cleanup) is the
+//! shared [`ImageEngineShell`].
 
 #[cfg(feature = "direct-mlx")]
 use std::path::PathBuf;
 use std::time::Instant;
 
 use ipc_protocol::{
-    GeneratedImage, ImageGenerationCommand, ImageGenerationFailureReason, ImageGenerationPhase,
+    ImageGenerationCommand, ImageGenerationFailureReason, ImageGenerationPhase,
     ImageGenerationResultMetadata, RequestId,
 };
 
-use crate::image_generation_engine::ImageGenerationEngineLoadResult;
+use crate::image_engine_shell::{ActiveImageRequest, ImageEngineShell, ImageFamily};
 #[cfg(feature = "direct-mlx")]
 use crate::qwen_image_21::QWEN_IMAGE_21_OFFICIAL_MODEL_ID;
 use crate::{
-    ImageGenerationEngine, ImageGenerationEngineStep,
-    qwen_image_21::engine::components::{
-        QwenImage21ComponentLoad, QwenImage21EngineComponents, QwenImage21EngineRequest,
-    },
+    ImageGenerationEngineStep,
+    qwen_image_21::engine::components::{QwenImage21EngineComponents, QwenImage21EngineRequest},
     qwen_image_21::engine::request_validation::validate_official_request,
     qwen_image_21::official_profile::QWEN_IMAGE_21_GUIDANCE_THOUSANDTHS,
     qwen_image_21::render_contract::QwenImage21RenderAdvance,
 };
-use memory_policy::telemetry::MlxMemoryLimitAdjustment;
-use memory_policy::telemetry::MlxMemoryTelemetry;
-use model_primitives::performance_attribution::PerformanceAttributionOutcome;
 
 /// Official Qwen-Image-2.1 engine composed behind the architecture-neutral worker contract.
-pub struct QwenImage21ImageEngine {
-    serving_model_id: String,
-    components: Box<dyn QwenImage21EngineComponents>,
-    loaded_revision: Option<String>,
-    active_request: Option<ActiveRequest>,
-}
+pub type QwenImage21ImageEngine = ImageEngineShell<QwenImage21ImageFamily>;
+
+pub struct QwenImage21ImageFamily;
 
 impl QwenImage21ImageEngine {
-    /// Factory-facing constructor over any component owner.
-    pub fn from_components(
-        serving_model_id: impl Into<String>,
-        components: Box<dyn QwenImage21EngineComponents>,
-    ) -> Self {
-        Self {
-            serving_model_id: serving_model_id.into(),
-            components,
-            loaded_revision: None,
-            active_request: None,
-        }
-    }
-
-    /// Tells the engine how far a load may plan above its ceiling to reach its
-    /// floor (#1902): the user's own limit, or unbounded when they set none.
-    #[must_use]
-    pub fn with_floor_raise_limit_bytes(mut self, floor_raise_limit_bytes: u64) -> Self {
-        self.components
-            .adopt_floor_raise_limit(floor_raise_limit_bytes);
-        self
-    }
-
     /// Worker-factory constructor over the native MLX component owner.
     #[cfg(feature = "direct-mlx")]
     #[must_use]
@@ -92,95 +64,18 @@ impl QwenImage21ImageEngine {
     ) -> Self {
         Self::from_components(serving_model_id, components)
     }
-
-    #[must_use]
-    pub fn loaded_revision(&self) -> Option<&str> {
-        self.loaded_revision.as_deref()
-    }
-
-    fn elapsed_millis(active_request: &ActiveRequest) -> u64 {
-        u64::try_from(active_request.started_at.elapsed().as_millis()).unwrap_or(u64::MAX)
-    }
-
-    fn fail_active_request(
-        &mut self,
-        failure_description: String,
-        public_failure_description: &'static str,
-    ) -> ImageGenerationFailureReason {
-        self.active_request = None;
-        match self.components.finalize_request(
-            PerformanceAttributionOutcome::Failed,
-            None,
-            Some(&failure_description),
-        ) {
-            Ok(()) => ImageGenerationFailureReason::FatalExecution {
-                // Concrete component failures are path-free and bounded here so a user can
-                // distinguish artifact, memory, and execution pressure.
-                reason: format!("{public_failure_description}: {failure_description}")
-                    .chars()
-                    .take(512)
-                    .collect(),
-            },
-            Err(_cleanup_failure) => ImageGenerationFailureReason::FatalExecution {
-                reason: "Qwen-Image-2.1 image generation and cleanup failed".to_owned(),
-            },
-        }
-    }
-
-    fn progress(
-        active_request: &ActiveRequest,
-        phase: ImageGenerationPhase,
-        completed_steps: u16,
-    ) -> ImageGenerationEngineStep {
-        ImageGenerationEngineStep::Progress {
-            phase,
-            completed_steps,
-            total_steps: active_request.steps,
-            elapsed_millis: Self::elapsed_millis(active_request),
-        }
-    }
 }
 
-impl ImageGenerationEngine for QwenImage21ImageEngine {
-    fn load(&mut self) -> Result<ImageGenerationEngineLoadResult, ImageGenerationFailureReason> {
-        if self.active_request.is_some() {
-            return Err(ImageGenerationFailureReason::EngineBusy);
-        }
-        let loaded: QwenImage21ComponentLoad = self.components.load().map_err(|reason| {
-            ImageGenerationFailureReason::FatalExecution {
-                // Component errors are path-free by contract; retaining their bounded detail
-                // makes artifact and memory admission failures actionable at the load boundary.
-                reason: format!("Qwen-Image-2.1 could not load the selected model: {reason}")
-                    .chars()
-                    .take(384)
-                    .collect(),
-            }
-        })?;
-        if loaded.model_id != self.serving_model_id {
-            return Err(ImageGenerationFailureReason::FatalExecution {
-                reason: "Qwen-Image-2.1 loaded under an unexpected serving identity".to_owned(),
-            });
-        }
-        self.loaded_revision = Some(loaded.revision);
-        Ok(
-            ImageGenerationEngineLoadResult::new(loaded.model_id, loaded.capabilities)
-                .with_minimum_mlx_memory_ceiling_bytes(loaded.minimum_mlx_memory_ceiling_bytes),
-        )
-    }
+impl ImageFamily for QwenImage21ImageFamily {
+    type Components = dyn QwenImage21EngineComponents;
+    type ActiveRequest = QwenImage21ActiveRequest;
+    const FAMILY_NAME: &'static str = "Qwen-Image-2.1";
 
-    fn start_generation(
-        &mut self,
+    fn start_request(
+        engine: &mut QwenImage21ImageEngine,
         generation_command: ImageGenerationCommand,
-    ) -> Result<(), ImageGenerationFailureReason> {
-        if self.loaded_revision.is_none() {
-            return Err(ImageGenerationFailureReason::FatalExecution {
-                reason: "Qwen-Image-2.1 must be loaded before generation starts".to_owned(),
-            });
-        }
-        if self.active_request.is_some() {
-            return Err(ImageGenerationFailureReason::EngineBusy);
-        }
-        validate_official_request(&self.serving_model_id, &generation_command)?;
+    ) -> Result<QwenImage21ActiveRequest, ImageGenerationFailureReason> {
+        validate_official_request(&engine.serving_model_id, &generation_command)?;
         let engine_request = QwenImage21EngineRequest::new(
             generation_command.prompt,
             generation_command.settings.width_pixels,
@@ -188,171 +83,77 @@ impl ImageGenerationEngine for QwenImage21ImageEngine {
             generation_command.settings.steps,
             generation_command.settings.seed,
         );
-        self.components
+        if let Err(reason) = engine
+            .components
             .start_request(generation_command.request_id, engine_request)
-            .map_err(|reason| {
-                self.fail_active_request(
-                    reason,
-                    "Qwen-Image-2.1 could not prepare the image request",
-                )
-            })?;
-        self.active_request = Some(ActiveRequest {
+        {
+            return Err(engine.fail_active_request(
+                reason,
+                "Qwen-Image-2.1 could not prepare the image request",
+            ));
+        }
+        Ok(QwenImage21ActiveRequest {
             request_id: generation_command.request_id,
             width_pixels: generation_command.settings.width_pixels,
             height_pixels: generation_command.settings.height_pixels,
             steps: generation_command.settings.steps,
             seed: generation_command.settings.seed,
             started_at: Instant::now(),
-        });
-        Ok(())
+        })
     }
 
-    fn advance_generation(
-        &mut self,
-        request_id: RequestId,
+    /// The render session owns the fine-grained phase; each boundary it
+    /// reports maps to one public progress phase.
+    fn advance_request(
+        engine: &mut QwenImage21ImageEngine,
+        active_request: QwenImage21ActiveRequest,
     ) -> Result<ImageGenerationEngineStep, ImageGenerationFailureReason> {
-        let active_request = self.active_request.take().ok_or_else(|| {
-            ImageGenerationFailureReason::invalid_request("no Qwen-Image-2.1 request is active")
-        })?;
-        if active_request.request_id != request_id {
-            self.active_request = Some(active_request);
-            return Err(ImageGenerationFailureReason::invalid_request(
-                "request identifier does not match the active Qwen-Image-2.1 request",
-            ));
-        }
-        let advance = match self.components.advance_render() {
+        let advance = match engine.components.advance_render() {
             Ok(advance) => advance,
             Err(reason) => {
-                let public_failure_description = active_request.public_failure_description();
-                return Err(self.fail_active_request(reason, public_failure_description));
+                return Err(engine.fail_active_request(
+                    reason,
+                    "Qwen-Image-2.1 could not complete image generation",
+                ));
             }
         };
-        match advance {
-            QwenImage21RenderAdvance::Preparing => {
-                let progress = Self::progress(&active_request, ImageGenerationPhase::Preparing, 0);
-                self.active_request = Some(active_request);
-                Ok(progress)
-            }
+        let (phase, completed_steps) = match advance {
+            QwenImage21RenderAdvance::Preparing => (ImageGenerationPhase::Preparing, 0),
             QwenImage21RenderAdvance::ConditioningCompleted => {
-                let progress =
-                    Self::progress(&active_request, ImageGenerationPhase::EncodingPrompt, 0);
-                self.active_request = Some(active_request);
-                Ok(progress)
+                (ImageGenerationPhase::EncodingPrompt, 0)
             }
-            QwenImage21RenderAdvance::NoisePrepared => {
-                let progress = Self::progress(&active_request, ImageGenerationPhase::Denoising, 0);
-                self.active_request = Some(active_request);
-                Ok(progress)
-            }
+            QwenImage21RenderAdvance::NoisePrepared => (ImageGenerationPhase::Denoising, 0),
             QwenImage21RenderAdvance::DenoisingStep {
                 completed_steps,
                 total_steps: _,
-            } => {
-                let completed_steps = u16::try_from(completed_steps).unwrap_or(u16::MAX);
-                let progress = Self::progress(
-                    &active_request,
-                    ImageGenerationPhase::Denoising,
-                    completed_steps,
-                );
-                self.active_request = Some(active_request);
-                Ok(progress)
-            }
+            } => (
+                ImageGenerationPhase::Denoising,
+                u16::try_from(completed_steps).unwrap_or(u16::MAX),
+            ),
             QwenImage21RenderAdvance::DecodingCompleted => {
-                let progress = Self::progress(
-                    &active_request,
-                    ImageGenerationPhase::Decoding,
-                    active_request.steps,
-                );
-                self.active_request = Some(active_request);
-                Ok(progress)
+                (ImageGenerationPhase::Decoding, active_request.steps)
             }
             QwenImage21RenderAdvance::Rendered(rendered) => {
-                let png_bytes = rendered.to_png_bytes().map_err(|error| {
-                    let _ = self.fail_active_request(
-                        error.to_string(),
-                        "Qwen-Image-2.1 could not encode the generated image",
-                    );
-                    ImageGenerationFailureReason::EncodingFailed {
-                        reason: "the rendered pixels could not be encoded as PNG".to_owned(),
+                let png_bytes = match rendered.to_png_bytes() {
+                    Ok(png_bytes) => png_bytes,
+                    Err(error) => {
+                        let _ = engine.fail_active_request(
+                            error.to_string(),
+                            "Qwen-Image-2.1 could not encode the generated image",
+                        );
+                        return Err(ImageGenerationFailureReason::EncodingFailed {
+                            reason: "the rendered pixels could not be encoded as PNG".to_owned(),
+                        });
                     }
-                })?;
-                let elapsed_millis = Self::elapsed_millis(&active_request);
-                let encoded_byte_count = u64::try_from(png_bytes.len()).unwrap_or(u64::MAX);
-                if self
-                    .components
-                    .finalize_request(
-                        PerformanceAttributionOutcome::Success,
-                        Some(encoded_byte_count),
-                        None,
-                    )
-                    .is_err()
-                {
-                    return Err(ImageGenerationFailureReason::FatalExecution {
-                        reason: "Qwen-Image-2.1 could not finalize the generated image".to_owned(),
-                    });
-                }
-                Ok(ImageGenerationEngineStep::Completed {
-                    generated_image: GeneratedImage {
-                        mime_type: "image/png".to_owned(),
-                        encoded_bytes: png_bytes,
-                    },
-                    result_metadata: ImageGenerationResultMetadata {
-                        width_pixels: active_request.width_pixels,
-                        height_pixels: active_request.height_pixels,
-                        steps: active_request.steps,
-                        guidance_thousandths: QWEN_IMAGE_21_GUIDANCE_THOUSANDTHS,
-                        seed: active_request.seed,
-                        elapsed_millis,
-                    },
-                })
+                };
+                return engine.complete_rendered_request(active_request, png_bytes);
             }
-        }
-    }
-
-    fn cancel_generation(
-        &mut self,
-        request_id: RequestId,
-    ) -> Result<(), ImageGenerationFailureReason> {
-        let Some(active_request) = self.active_request.as_ref() else {
-            return Ok(());
         };
-        if active_request.request_id != request_id {
-            return Err(ImageGenerationFailureReason::invalid_request(
-                "request identifier does not match the active Qwen-Image-2.1 request",
-            ));
-        }
-        self.active_request = None;
-        self.components
-            .finalize_request(PerformanceAttributionOutcome::Cancelled, None, None)
-            .map_err(|_reason| ImageGenerationFailureReason::FatalExecution {
-                reason: "Qwen-Image-2.1 could not cleanly cancel image generation".to_owned(),
-            })
-    }
-
-    fn take_post_cleanup_memory_telemetry(&mut self) -> Option<MlxMemoryTelemetry> {
-        self.components.take_post_cleanup_memory_telemetry()
-    }
-
-    fn collect_mlx_memory_telemetry(&self) -> Option<MlxMemoryTelemetry> {
-        self.components.collect_mlx_memory_telemetry()
-    }
-
-    fn update_mlx_memory_limit(
-        &mut self,
-        requested_mlx_memory_ceiling_bytes: u64,
-    ) -> Result<MlxMemoryLimitAdjustment, ImageGenerationFailureReason> {
-        if self.active_request.is_some() {
-            return Err(ImageGenerationFailureReason::EngineBusy);
-        }
-        self.components
-            .update_mlx_memory_limit(requested_mlx_memory_ceiling_bytes)
-            .map_err(|reason| ImageGenerationFailureReason::FatalExecution {
-                reason: reason.chars().take(256).collect(),
-            })
+        Ok(engine.restore_with_progress(active_request, phase, completed_steps))
     }
 }
 
-struct ActiveRequest {
+pub struct QwenImage21ActiveRequest {
     request_id: RequestId,
     width_pixels: u32,
     height_pixels: u32,
@@ -361,12 +162,27 @@ struct ActiveRequest {
     started_at: Instant,
 }
 
-impl ActiveRequest {
-    /// The bounded public description for a failure surfacing mid-render.
-    ///
-    /// The render session owns the fine-grained phase; the engine can only name the coarse
-    /// stage, which is exactly what a REST caller can act on.
-    const fn public_failure_description(&self) -> &'static str {
-        "Qwen-Image-2.1 could not complete image generation"
+impl ActiveImageRequest for QwenImage21ActiveRequest {
+    fn request_id(&self) -> RequestId {
+        self.request_id
+    }
+
+    fn started_at(&self) -> Instant {
+        self.started_at
+    }
+
+    fn total_steps(&self) -> u16 {
+        self.steps
+    }
+
+    fn result_metadata(&self, elapsed_millis: u64) -> ImageGenerationResultMetadata {
+        ImageGenerationResultMetadata {
+            width_pixels: self.width_pixels,
+            height_pixels: self.height_pixels,
+            steps: self.steps,
+            guidance_thousandths: QWEN_IMAGE_21_GUIDANCE_THOUSANDTHS,
+            seed: self.seed,
+            elapsed_millis,
+        }
     }
 }

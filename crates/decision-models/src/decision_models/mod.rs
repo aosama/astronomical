@@ -9,6 +9,7 @@ pub mod adapter_training;
 pub mod calibration_override;
 pub mod clef;
 pub mod decision_adapters;
+pub mod decision_engine_shell;
 pub mod forward_pass_planning;
 pub mod head_tuning;
 pub mod kev;

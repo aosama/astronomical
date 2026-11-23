@@ -14,6 +14,11 @@
 
 pub mod flux2_klein;
 
+pub mod image_engine_shell;
+
+#[cfg(test)]
+pub(crate) mod image_engine_shell_test_support;
+
 pub mod image_generation_engine;
 
 pub mod qwen_image_21;
@@ -61,6 +66,8 @@ pub use flux2_klein::transformer::{
     Flux2KleinBlockGroupEvent, Flux2KleinTransformerGeometry, Flux2KleinTransformerGeometryError,
     Flux2KleinTransformerInputs, Flux2KleinTransformerWeights,
 };
+
+pub use image_engine_shell::{ImageComponentLoad, ImageEngineComponents};
 
 pub use image_generation_engine::ImageGenerationEngineLoadResult;
 

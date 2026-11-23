@@ -6,16 +6,15 @@ use mlx_bridge::{MlxArray, MlxDtype};
 use runtime_integration::MlxRuntime;
 use serial_test::serial;
 
-use crate::synthetic_weights_test_support::initialize_test_runtime;
+use crate::synthetic_weights_test_support::{
+    float32_values, initialize_test_runtime, wide_shakespeare_values,
+};
 
 use super::{
     AFFINE_QUANTIZATION_BITS, AFFINE_QUANTIZATION_GROUP_SIZE, AffineQuantizedLinear,
     AffineQuantizedLinearError,
 };
 
-const ROMEO_AND_JULIET_SOURCE: &str = include_str!(
-    "../../../verification/acceptance/tests/fixtures/model_metrics_5000_romeo_and_juliet_words.txt"
-);
 const OUTPUT_WIDTH: usize = 32;
 const INPUT_WIDTH: usize = 128;
 
@@ -33,14 +32,8 @@ const PACKED_TO_DENSE_ROUNDING_BOUND: f32 = 1.0;
 /// BF16 values in about [-1.5, 1.5] drawn from the play's bytes.
 fn shakespeare_bf16(runtime: &MlxRuntime, shape: &[i32], byte_offset: usize) -> MlxArray {
     let value_count = shape.iter().product::<i32>() as usize;
-    let values = ROMEO_AND_JULIET_SOURCE
-        .bytes()
-        .skip(byte_offset)
-        .take(value_count)
-        .map(|source_byte| (f32::from(source_byte) - 96.0) / 32.0)
-        .collect::<Vec<_>>();
     let float32_values = runtime
-        .array_from_f32(&values, shape)
+        .array_from_f32(&wide_shakespeare_values(value_count, byte_offset), shape)
         .expect("the fixture values should upload");
     runtime
         .astype(&float32_values, MlxDtype::BFloat16)
@@ -66,13 +59,6 @@ fn packed_projection(runtime: &MlxRuntime) -> ([MlxArray; 3], MlxArray) {
         )
         .expect("the packed weight should dequantize");
     ([packed_weight, scales, biases], dequantized_weight)
-}
-
-fn float32_values(runtime: &MlxRuntime, array: &MlxArray) -> Vec<f32> {
-    runtime
-        .astype(array, MlxDtype::Float32)
-        .and_then(|float32_array| float32_array.to_vec_f32())
-        .expect("the array should evaluate")
 }
 
 #[test]

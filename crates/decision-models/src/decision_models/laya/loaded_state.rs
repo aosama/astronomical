@@ -6,6 +6,7 @@
 //! and the decision head as one lazy graph and reads back one logit per
 //! option.
 
+use decision_contract::calibration_file::CalibrationOverride;
 use std::collections::BTreeMap;
 
 use decision_contract::laya_rendering::{
@@ -40,6 +41,9 @@ pub struct LoadedLayaState {
     pub configuration: LayaConfiguration,
     pub weight_layout: ModernBertWeightLayout,
     pub tokenizer: LayaTokenizer,
+    /// Temperatures fitted on the person's own examples, read when the
+    /// engine was built and kept with the model they calibrate.
+    pub calibration_override: CalibrationOverride,
 }
 
 impl LoadedLayaState {

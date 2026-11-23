@@ -471,7 +471,22 @@ test-quantization-mixture-of-experts = "run -p xtask -- test-run --package astro
 # squash can; the module doc lists what the gate cannot see).
 # `cargo xtask crap-baseline --against origin/main`, run by the pre-push hook,
 # judges the tree against main's baseline instead, catching a branch built on
-# an older one. GitHub Actions runs no code-shape enforcement at all.
+# an older one. GitHub Actions runs both this ratchet and check-duplication
+# on the Linux config-contracts lane against HEAD^1, as the backstop for a
+# checkout whose hooks did not run; it runs no clippy.
+#
+# `cargo xtask check-duplication [--write] [--against REF] [--top N]` is the
+# duplication ratchet of issue #2473 over duplication-baseline.json. A code
+# line counts as repeated when it sits in a run of at least six consecutive
+# code lines (blank and `//` lines dropped, whitespace trimmed, model-family
+# names such as Resident/Streaming or Kev/Clef/Laya masked) that also appears
+# in another file under crates/, apps/, verification/ or xtask/. Production
+# and test files are counted apart, and it prints the area pairs and file
+# pairs that hold the most repeated lines (`--top N`, default 15). Each count
+# may stay or go down against the baseline committed at HEAD (pre-commit) or
+# at `--against origin/main` (pre-push), and the config-contracts lane runs it
+# against HEAD^1; `--write` records lower counts, and only after that check
+# passes. It runs in about three seconds.
 #
 # `cargo xtask commit-identity --staged` (pre-commit) and
 # `cargo xtask commit-identity --pre-push` (pre-push, reads git's ref lines on

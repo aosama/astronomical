@@ -28,6 +28,7 @@ pub(crate) mod model_unload_request;
 mod request_admission;
 mod request_event_dispatch;
 mod single_shot_command_arms;
+mod single_shot_request;
 pub(crate) mod speech_event;
 pub(crate) mod speech_request;
 mod undelivered_training_result;

@@ -8,11 +8,93 @@ use ipc_protocol::ExpertMemoryMode;
 
 use super::*;
 
-impl Flux2KleinEngineComponents for Flux2KleinMlxComponents {
+impl ImageEngineComponents for Flux2KleinMlxComponents {
     fn load(&mut self) -> Result<Flux2KleinComponentLoad, String> {
         self.load_inner()
     }
 
+    fn finalize_request(
+        &mut self,
+        outcome: PerformanceAttributionOutcome,
+        encoded_bytes: Option<u64>,
+        failure_description: Option<&str>,
+    ) -> Result<(), String> {
+        self.finalize_request_inner(outcome, encoded_bytes, failure_description)
+    }
+
+    fn take_post_cleanup_memory_telemetry(&mut self) -> Option<MlxMemoryTelemetry> {
+        self.post_cleanup_memory_telemetry.take()
+    }
+
+    fn collect_mlx_memory_telemetry(&self) -> Option<MlxMemoryTelemetry> {
+        self.runtime
+            .as_ref()
+            .and_then(|runtime| runtime.memory_snapshot().ok())
+            .map(|snapshot| {
+                let mut telemetry = MlxMemoryTelemetry::new(
+                    snapshot.active_memory_bytes() as u64,
+                    snapshot.mlx_buffer_cache_bytes() as u64,
+                    snapshot.peak_memory_bytes() as u64,
+                    memory_policy::telemetry::MlxActiveMemoryBreakdown::default(),
+                );
+                if let Some(memory_ceiling_utilization) =
+                    self.memory_ceiling_utilization(snapshot.active_memory_bytes() as u64)
+                {
+                    telemetry =
+                        telemetry.with_memory_ceiling_utilization(memory_ceiling_utilization);
+                }
+                telemetry
+            })
+    }
+
+    fn adopt_floor_raise_limit(&mut self, floor_raise_limit_bytes: u64) {
+        self.floor_raise_limit_bytes = floor_raise_limit_bytes;
+    }
+
+    fn update_mlx_memory_limit(
+        &mut self,
+        requested_mlx_memory_ceiling_bytes: u64,
+    ) -> Result<MlxMemoryLimitAdjustment, String> {
+        if self.request_id.is_some() {
+            return Err("memory limits cannot change during image generation".to_owned());
+        }
+        let requested_ceiling = usize::try_from(requested_mlx_memory_ceiling_bytes)
+            .map_err(|_| "the requested MLX memory ceiling exceeds this platform".to_owned())?;
+        self.replenish_validated_descriptors()?;
+        let geometry = memory_geometry(
+            self.validated_artifact
+                .as_ref()
+                .ok_or_else(|| "the validated FLUX.2 Klein artifact is unavailable".to_owned())?,
+        )?;
+        let residency_plan =
+            Flux2KleinMemoryAdmission::plan(requested_mlx_memory_ceiling_bytes, &geometry)
+                .map_err(|error| error.to_string())?;
+        let mlx_buffer_cache_limit_bytes = mlx_buffer_cache_limit_for_ceiling(
+            self.original_mlx_buffer_cache_limit_bytes,
+            requested_ceiling,
+        );
+        let memory_limits = MlxMemoryLimits::new(requested_ceiling, mlx_buffer_cache_limit_bytes)
+            .map_err(|error| error.to_string())?;
+        self.runtime
+            .as_mut()
+            .ok_or_else(|| "the MLX runtime is unavailable".to_owned())?
+            .update_memory_limits(memory_limits)
+            .map_err(|error| error.to_string())?;
+        self.effective_mlx_memory_ceiling_bytes = requested_ceiling;
+        self.mlx_buffer_cache_limit_bytes = mlx_buffer_cache_limit_bytes;
+        let minimum_mlx_memory_ceiling_bytes = residency_plan.minimum_mlx_memory_ceiling_bytes();
+        self.residency_plan = Some(residency_plan);
+        Ok(MlxMemoryLimitAdjustment::new(
+            requested_mlx_memory_ceiling_bytes,
+            mlx_buffer_cache_limit_bytes as u64,
+            minimum_mlx_memory_ceiling_bytes,
+            ExpertMemoryMode::Resident,
+            self.collect_mlx_memory_telemetry(),
+        ))
+    }
+}
+
+impl Flux2KleinEngineComponents for Flux2KleinMlxComponents {
     fn start_request(
         &mut self,
         request_id: RequestId,
@@ -206,85 +288,6 @@ impl Flux2KleinEngineComponents for Flux2KleinMlxComponents {
         self.restore_request_attribution(attribution);
         operation_result
     }
-
-    fn finalize_request(
-        &mut self,
-        outcome: PerformanceAttributionOutcome,
-        encoded_bytes: Option<u64>,
-        failure_description: Option<&str>,
-    ) -> Result<(), String> {
-        self.finalize_request_inner(outcome, encoded_bytes, failure_description)
-    }
-
-    fn take_post_cleanup_memory_telemetry(&mut self) -> Option<MlxMemoryTelemetry> {
-        self.post_cleanup_memory_telemetry.take()
-    }
-
-    fn collect_mlx_memory_telemetry(&self) -> Option<MlxMemoryTelemetry> {
-        self.runtime
-            .as_ref()
-            .and_then(|runtime| runtime.memory_snapshot().ok())
-            .map(|snapshot| {
-                let mut telemetry = MlxMemoryTelemetry::new(
-                    snapshot.active_memory_bytes() as u64,
-                    snapshot.mlx_buffer_cache_bytes() as u64,
-                    snapshot.peak_memory_bytes() as u64,
-                    memory_policy::telemetry::MlxActiveMemoryBreakdown::default(),
-                );
-                if let Some(memory_ceiling_utilization) =
-                    self.memory_ceiling_utilization(snapshot.active_memory_bytes() as u64)
-                {
-                    telemetry =
-                        telemetry.with_memory_ceiling_utilization(memory_ceiling_utilization);
-                }
-                telemetry
-            })
-    }
-    fn adopt_floor_raise_limit(&mut self, floor_raise_limit_bytes: u64) {
-        self.floor_raise_limit_bytes = floor_raise_limit_bytes;
-    }
-
-    fn update_mlx_memory_limit(
-        &mut self,
-        requested_mlx_memory_ceiling_bytes: u64,
-    ) -> Result<MlxMemoryLimitAdjustment, String> {
-        if self.request_id.is_some() {
-            return Err("memory limits cannot change during image generation".to_owned());
-        }
-        let requested_ceiling = usize::try_from(requested_mlx_memory_ceiling_bytes)
-            .map_err(|_| "the requested MLX memory ceiling exceeds this platform".to_owned())?;
-        self.replenish_validated_descriptors()?;
-        let geometry = memory_geometry(
-            self.validated_artifact
-                .as_ref()
-                .ok_or_else(|| "the validated FLUX.2 Klein artifact is unavailable".to_owned())?,
-        )?;
-        let residency_plan =
-            Flux2KleinMemoryAdmission::plan(requested_mlx_memory_ceiling_bytes, &geometry)
-                .map_err(|error| error.to_string())?;
-        let mlx_buffer_cache_limit_bytes = mlx_buffer_cache_limit_for_ceiling(
-            self.original_mlx_buffer_cache_limit_bytes,
-            requested_ceiling,
-        );
-        let memory_limits = MlxMemoryLimits::new(requested_ceiling, mlx_buffer_cache_limit_bytes)
-            .map_err(|error| error.to_string())?;
-        self.runtime
-            .as_mut()
-            .ok_or_else(|| "the MLX runtime is unavailable".to_owned())?
-            .update_memory_limits(memory_limits)
-            .map_err(|error| error.to_string())?;
-        self.effective_mlx_memory_ceiling_bytes = requested_ceiling;
-        self.mlx_buffer_cache_limit_bytes = mlx_buffer_cache_limit_bytes;
-        let minimum_mlx_memory_ceiling_bytes = residency_plan.minimum_mlx_memory_ceiling_bytes();
-        self.residency_plan = Some(residency_plan);
-        Ok(MlxMemoryLimitAdjustment::new(
-            requested_mlx_memory_ceiling_bytes,
-            mlx_buffer_cache_limit_bytes as u64,
-            minimum_mlx_memory_ceiling_bytes,
-            ExpertMemoryMode::Resident,
-            self.collect_mlx_memory_telemetry(),
-        ))
-    }
 }
 
 fn mlx_buffer_cache_limit_for_ceiling(
@@ -294,4 +297,5 @@ fn mlx_buffer_cache_limit_for_ceiling(
     original_mlx_buffer_cache_limit_bytes.min(requested_mlx_memory_ceiling_bytes)
 }
 
+use crate::image_engine_shell::ImageEngineComponents;
 use memory_policy::telemetry::MlxMemoryLimitAdjustment;

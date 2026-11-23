@@ -93,3 +93,7 @@ pub use qwen_image_21_oracles::{
 };
 
 mod qwen_image_21_oracles;
+
+pub mod frozen_ornith_1_0_fixture;
+
+pub mod image_pipeline_fixture;

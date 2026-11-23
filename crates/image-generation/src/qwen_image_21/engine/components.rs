@@ -4,38 +4,13 @@
 //! full lifecycle without MLX) while production retains one concrete owner. It deliberately has
 //! no `Send` bound because MLX component state is runtime-thread-affine.
 
-use ipc_protocol::{ImageGenerationCapabilities, RequestId};
+use ipc_protocol::RequestId;
 
+use crate::image_engine_shell::{ImageComponentLoad, ImageEngineComponents};
 use crate::qwen_image_21::render_contract::QwenImage21RenderAdvance;
-use memory_policy::telemetry::MlxMemoryLimitAdjustment;
-use memory_policy::telemetry::MlxMemoryTelemetry;
-use model_primitives::performance_attribution::PerformanceAttributionOutcome;
 
-/// Loaded identity supplied by either the native components or an scripted lifecycle fake.
-pub struct QwenImage21ComponentLoad {
-    pub(super) model_id: String,
-    pub(super) revision: String,
-    pub(super) capabilities: ImageGenerationCapabilities,
-    pub(super) minimum_mlx_memory_ceiling_bytes: u64,
-}
-
-impl QwenImage21ComponentLoad {
-    /// Records the identity, advertisement, and memory floor one load established.
-    #[must_use]
-    pub fn new(
-        model_id: impl Into<String>,
-        revision: impl Into<String>,
-        capabilities: ImageGenerationCapabilities,
-        minimum_mlx_memory_ceiling_bytes: u64,
-    ) -> Self {
-        Self {
-            model_id: model_id.into(),
-            revision: revision.into(),
-            capabilities,
-            minimum_mlx_memory_ceiling_bytes,
-        }
-    }
-}
+/// Loaded identity supplied by either the native components or a scripted lifecycle fake.
+pub type QwenImage21ComponentLoad = ImageComponentLoad;
 
 /// One request's controls as the engine validated them, in the components' own types.
 // The MLX component owner reads these fields when it builds the render session; without the
@@ -69,11 +44,9 @@ impl QwenImage21EngineRequest {
     }
 }
 
-/// The component seam the Qwen-Image-2.1 lifecycle drives.
-pub trait QwenImage21EngineComponents {
-    /// Validates the artifact and reports the serving identity, advertisement, and memory floor.
-    fn load(&mut self) -> Result<QwenImage21ComponentLoad, String>;
-
+/// The render steps the Qwen-Image-2.1 lifecycle drives, beyond the shared
+/// [`ImageEngineComponents`].
+pub trait QwenImage21EngineComponents: ImageEngineComponents {
     /// Records one request's controls; the first `advance_render` constructs its pipeline.
     fn start_request(
         &mut self,
@@ -83,34 +56,4 @@ pub trait QwenImage21EngineComponents {
 
     /// Executes exactly one render boundary; `Rendered` carries the completed image.
     fn advance_render(&mut self) -> Result<QwenImage21RenderAdvance, String>;
-
-    /// Closes the request: releases the render session, writes attribution, and captures the
-    /// post-cleanup memory observation.
-    fn finalize_request(
-        &mut self,
-        outcome: PerformanceAttributionOutcome,
-        encoded_bytes: Option<u64>,
-        failure_description: Option<&str>,
-    ) -> Result<(), String>;
-
-    fn take_post_cleanup_memory_telemetry(&mut self) -> Option<MlxMemoryTelemetry> {
-        None
-    }
-
-    fn collect_mlx_memory_telemetry(&self) -> Option<MlxMemoryTelemetry> {
-        None
-    }
-
-    /// Records the highest ceiling a load may plan at to reach its floor
-    /// (#1902), so a load whose floor is above the ceiling plans at its floor
-    /// instead of refusing, unless the user set a lower limit. Components that
-    /// never refuse at load ignore it.
-    fn adopt_floor_raise_limit(&mut self, _floor_raise_limit_bytes: u64) {}
-
-    fn update_mlx_memory_limit(
-        &mut self,
-        _requested_mlx_memory_ceiling_bytes: u64,
-    ) -> Result<MlxMemoryLimitAdjustment, String> {
-        Err("live MLX memory limits are unavailable".to_owned())
-    }
 }

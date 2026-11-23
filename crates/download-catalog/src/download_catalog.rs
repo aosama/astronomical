@@ -247,6 +247,16 @@ fn parse_and_shape_check_document(
 fn parse_catalog_entries(
     entry_documents: Vec<DownloadCatalogEntryDocument>,
 ) -> Result<Vec<DownloadCatalogEntry>, DownloadCatalogError> {
+    let entries = parse_entries_in_authored_order(entry_documents)?;
+    validate_catalog_builds(&entries)?;
+    Ok(entries)
+}
+
+/// Every entry parsed on its own, with the identity and Get started rules
+/// that span entries applied as each one is read.
+fn parse_entries_in_authored_order(
+    entry_documents: Vec<DownloadCatalogEntryDocument>,
+) -> Result<Vec<DownloadCatalogEntry>, DownloadCatalogError> {
     let mut seen_identities = SeenEntryIdentities::default();
     let mut get_started_role_names = BTreeSet::new();
     let mut entries = Vec::with_capacity(entry_documents.len());
@@ -258,7 +268,6 @@ fn parse_catalog_entries(
             &mut get_started_role_names,
         )?);
     }
-    validate_catalog_builds(&entries)?;
     Ok(entries)
 }
 
@@ -305,14 +314,13 @@ fn parse_catalog_entry(
     let description = parse_optional_entry_description(&entry_document, entry_index)?;
     let capabilities = parse_entry_capabilities(entry_document.capabilities.as_ref(), entry_index)?;
     let entry_texts = parse_entry_texts(&entry_document, entry_index)?;
-    let download_path_selection = DownloadPathSelection::try_new(entry_document.included_paths)
-        .map_err(|_invalid_selection| DownloadCatalogError::InvalidIncludedPaths { entry_index })?;
-    let build = parse_entry_build(
+    let entry_build_and_files = parse_entry_build_and_files(
+        entry_document.included_paths,
         entry_document.build_of.as_deref(),
         entry_document.build_difference,
+        entry_document.measured_speed.as_ref(),
         entry_index,
     )?;
-    validate_measured_speed(entry_document.measured_speed.as_ref(), entry_index)?;
     Ok(DownloadCatalogEntry {
         huggingface_id: entry_document.huggingface_id,
         revision: entry_document.revision,
@@ -328,9 +336,36 @@ fn parse_catalog_entry(
         quantization_label: entry_texts.quantization_label,
         upstream_license: entry_texts.upstream_license,
         presentation: entry_texts.presentation,
-        build,
+        build: entry_build_and_files.build,
         measured_speed: entry_document.measured_speed,
+        download_path_selection: entry_build_and_files.download_path_selection,
+    })
+}
+
+/// What an entry says about its files and its place among builds: the
+/// included paths and the build it belongs to. Its measured speed is checked
+/// alongside them but kept on the entry as written.
+struct EntryBuildAndFiles {
+    download_path_selection: DownloadPathSelection,
+    build: Option<DownloadCatalogBuild>,
+}
+
+/// Checks the included paths, the build link and the measured speed, in that
+/// authored order, so a multi-invalid entry reports the same first failure.
+fn parse_entry_build_and_files(
+    included_paths: Option<Vec<String>>,
+    build_of: Option<&str>,
+    build_difference: Option<DownloadCatalogBuildDifference>,
+    measured_speed: Option<&DownloadCatalogMeasuredSpeed>,
+    entry_index: usize,
+) -> Result<EntryBuildAndFiles, DownloadCatalogError> {
+    let download_path_selection = DownloadPathSelection::try_new(included_paths)
+        .map_err(|_invalid_selection| DownloadCatalogError::InvalidIncludedPaths { entry_index })?;
+    let build = parse_entry_build(build_of, build_difference, entry_index)?;
+    validate_measured_speed(measured_speed, entry_index)?;
+    Ok(EntryBuildAndFiles {
         download_path_selection,
+        build,
     })
 }
 

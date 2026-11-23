@@ -442,6 +442,7 @@ dependencies = [
  "sha2",
  "speech-contract",
  "tempfile",
+ "test-harness",
  "thiserror",
  "tracing",
 ]

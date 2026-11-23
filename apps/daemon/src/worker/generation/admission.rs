@@ -143,7 +143,6 @@ impl WorkerHandle {
             let generation_queue_permit = Arc::clone(&self.generation_queue_permits)
                 .try_acquire_owned()
                 .map_err(|_| GenerationStartError::CapacityUnavailable)?;
-            let admitted_at = Instant::now();
             if let Some(admission_sender) = admission_sender {
                 let _admission_signal_result = admission_sender.send(());
             }
@@ -151,7 +150,6 @@ impl WorkerHandle {
                 .acquire_owned()
                 .await
                 .map_err(|_| GenerationStartError::WorkerUnavailable)?;
-            let queue_wait_elapsed = admitted_at.elapsed();
             drop(generation_queue_permit);
 
             let (embeddings_result_sender, embeddings_result_receiver) = mpsc::channel(1);
@@ -162,8 +160,6 @@ impl WorkerHandle {
                     embeddings_command,
                     start_sender,
                     embeddings_result_sender,
-                    admitted_at,
-                    queue_wait_elapsed,
                 })
                 .await
                 .map_err(|_| GenerationStartError::WorkerUnavailable)?;

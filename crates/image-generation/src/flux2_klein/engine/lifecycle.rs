@@ -1,35 +1,32 @@
-//! Architecture-neutral phase machine that prevents publication before cleanup.
+//! FLUX.2 Klein behind the shared image lifecycle: its request checks and its
+//! phase machine (prompt conditioning, keyed noise, Euler denoising, decoding
+//! and PNG encoding). The lifecycle around it, which prevents publication
+//! before cleanup, is the shared [`ImageEngineShell`].
 
 #[cfg(feature = "direct-mlx")]
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use ipc_protocol::{
-    GeneratedImage, ImageGenerationCommand, ImageGenerationFailureReason, ImageGenerationPhase,
+    ImageGenerationCommand, ImageGenerationFailureReason, ImageGenerationPhase,
     ImageGenerationResultMetadata, RequestId,
 };
 
-use crate::image_generation_engine::ImageGenerationEngineLoadResult;
-use crate::{ImageGenerationEngine, ImageGenerationEngineStep};
-use model_primitives::performance_attribution::PerformanceAttributionOutcome;
+use crate::ImageGenerationEngineStep;
+use crate::image_engine_shell::{ActiveImageRequest, ImageEngineShell, ImageFamily};
 
 #[cfg(feature = "direct-mlx")]
 use super::super::Flux2KleinArtifactProvenance;
 use super::super::{Flux2KleinFlowSchedule, Flux2KleinImageDimensions, Flux2KleinOfficialProfile};
 use super::components::Flux2KleinEngineComponents;
 use super::request_validation;
-use memory_policy::telemetry::MlxMemoryLimitAdjustment;
-use memory_policy::telemetry::MlxMemoryTelemetry;
 
 const IMAGE_TRANSPORT_LIMIT_BYTES: u64 = 32 * 1024 * 1024;
 
 /// Official FLUX.2 Klein engine composed behind the architecture-neutral worker contract.
-pub struct Flux2KleinImageEngine {
-    serving_model_id: String,
-    components: Box<dyn Flux2KleinEngineComponents>,
-    loaded_revision: Option<String>,
-    active_request: Option<ActiveRequest>,
-}
+pub type Flux2KleinImageEngine = ImageEngineShell<Flux2KleinImageFamily>;
+
+pub struct Flux2KleinImageFamily;
 
 impl Flux2KleinImageEngine {
     /// Factory-facing constructor for either reviewed build; the provenance
@@ -78,15 +75,6 @@ impl Flux2KleinImageEngine {
         )
     }
 
-    /// Tells the engine how far a load may plan above its ceiling to reach its
-    /// floor (#1902): the user's own limit, or unbounded when they set none.
-    #[must_use]
-    pub fn with_floor_raise_limit_bytes(mut self, floor_raise_limit_bytes: u64) -> Self {
-        self.components
-            .adopt_floor_raise_limit(floor_raise_limit_bytes);
-        self
-    }
-
     #[doc(hidden)]
     // The DX production constructor composes through this seam, so it survives
     // any direct-mlx build, not just test builds.
@@ -95,185 +83,43 @@ impl Flux2KleinImageEngine {
         serving_model_id: impl Into<String>,
         components: Box<dyn Flux2KleinEngineComponents>,
     ) -> Self {
-        Self {
-            serving_model_id: serving_model_id.into(),
-            components,
-            loaded_revision: None,
-            active_request: None,
-        }
-    }
-
-    #[must_use]
-    pub fn loaded_revision(&self) -> Option<&str> {
-        self.loaded_revision.as_deref()
-    }
-
-    fn elapsed_millis(active_request: &ActiveRequest) -> u64 {
-        u64::try_from(active_request.started_at.elapsed().as_millis()).unwrap_or(u64::MAX)
-    }
-
-    fn fail_active_request(
-        &mut self,
-        failure_description: String,
-        public_failure_description: &'static str,
-    ) -> ImageGenerationFailureReason {
-        self.active_request = None;
-        match self.components.finalize_request(
-            PerformanceAttributionOutcome::Failed,
-            None,
-            Some(&failure_description),
-        ) {
-            Ok(()) => ImageGenerationFailureReason::FatalExecution {
-                // Concrete component failures are path-free and bounded here so a user can
-                // distinguish malformed tensors, unsupported operations, and memory pressure.
-                reason: format!("{public_failure_description}: {failure_description}")
-                    .chars()
-                    .take(512)
-                    .collect(),
-            },
-            Err(_cleanup_failure) => ImageGenerationFailureReason::FatalExecution {
-                reason: "FLUX.2 Klein image generation and cleanup failed".to_owned(),
-            },
-        }
-    }
-
-    fn progress(
-        active_request: &ActiveRequest,
-        phase: ImageGenerationPhase,
-        completed_steps: u16,
-    ) -> ImageGenerationEngineStep {
-        ImageGenerationEngineStep::Progress {
-            phase,
-            completed_steps,
-            total_steps: Flux2KleinOfficialProfile::inference_step_count() as u16,
-            elapsed_millis: Self::elapsed_millis(active_request),
-        }
-    }
-
-    /// Terminal encoding step: encodes the decoded latents to PNG, finalizes
-    /// the request's attribution as a success, and returns the completed
-    /// image with its result metadata. A failed encode fails the active
-    /// request; a failed finalize after a successful encode is fatal because
-    /// the image exists but the accounting contract cannot be honored.
-    fn complete_encoded_request(
-        &mut self,
-        active_request: ActiveRequest,
-    ) -> Result<ImageGenerationEngineStep, ImageGenerationFailureReason> {
-        let png_bytes = match self.components.encode_png() {
-            Ok(png_bytes) => png_bytes,
-            Err(reason) => {
-                return Err(self.fail_active_request(
-                    reason,
-                    "FLUX.2 Klein could not encode the generated image",
-                ));
-            }
-        };
-        let elapsed_millis = Self::elapsed_millis(&active_request);
-        let encoded_byte_count = u64::try_from(png_bytes.len()).unwrap_or(u64::MAX);
-        if self
-            .components
-            .finalize_request(
-                PerformanceAttributionOutcome::Success,
-                Some(encoded_byte_count),
-                None,
-            )
-            .is_err()
-        {
-            return Err(ImageGenerationFailureReason::FatalExecution {
-                reason: "FLUX.2 Klein could not finalize the generated image".to_owned(),
-            });
-        }
-        Ok(ImageGenerationEngineStep::Completed {
-            generated_image: GeneratedImage {
-                mime_type: "image/png".to_owned(),
-                encoded_bytes: png_bytes,
-            },
-            result_metadata: ImageGenerationResultMetadata {
-                width_pixels: active_request.dimensions.width_pixels(),
-                height_pixels: active_request.dimensions.height_pixels(),
-                steps: Flux2KleinOfficialProfile::inference_step_count() as u16,
-                guidance_thousandths: Flux2KleinOfficialProfile::guidance_thousandths(),
-                seed: active_request.seed,
-                elapsed_millis,
-            },
-        })
-    }
-
-    /// Restores a still-running request as active and reports its progress
-    /// step. Used by the partial-phase branches: the phase's work advanced
-    /// but did not complete, so the request continues from where it stands.
-    fn restore_with_progress(
-        &mut self,
-        active_request: ActiveRequest,
-        phase: ImageGenerationPhase,
-        completed_steps: u16,
-    ) -> ImageGenerationEngineStep {
-        let progress = Self::progress(&active_request, phase, completed_steps);
-        self.active_request = Some(active_request);
-        progress
+        Self::from_components(serving_model_id, components)
     }
 }
 
-impl ImageGenerationEngine for Flux2KleinImageEngine {
-    fn load(&mut self) -> Result<ImageGenerationEngineLoadResult, ImageGenerationFailureReason> {
-        if self.active_request.is_some() {
-            return Err(ImageGenerationFailureReason::EngineBusy);
-        }
-        let loaded = self.components.load().map_err(|reason| {
-            ImageGenerationFailureReason::FatalExecution {
-                // Component errors are path-free by contract; retaining their bounded detail makes
-                // artifact and memory admission failures actionable at the public load boundary.
-                reason: format!("FLUX.2 Klein could not load the selected model: {reason}")
-                    .chars()
-                    .take(384)
-                    .collect(),
-            }
-        })?;
-        if loaded.model_id != self.serving_model_id {
-            return Err(ImageGenerationFailureReason::FatalExecution {
-                reason: "FLUX.2 Klein loaded under an unexpected serving identity".to_owned(),
-            });
-        }
-        self.loaded_revision = Some(loaded.revision);
-        Ok(
-            ImageGenerationEngineLoadResult::new(loaded.model_id, loaded.capabilities)
-                .with_minimum_mlx_memory_ceiling_bytes(loaded.minimum_mlx_memory_ceiling_bytes),
-        )
-    }
+impl ImageFamily for Flux2KleinImageFamily {
+    type Components = dyn Flux2KleinEngineComponents;
+    type ActiveRequest = Flux2KleinActiveRequest;
+    const FAMILY_NAME: &'static str = "FLUX.2 Klein";
 
-    fn start_generation(
-        &mut self,
+    fn start_request(
+        engine: &mut Flux2KleinImageEngine,
         generation_command: ImageGenerationCommand,
-    ) -> Result<(), ImageGenerationFailureReason> {
-        if self.loaded_revision.is_none() {
-            return Err(ImageGenerationFailureReason::FatalExecution {
-                reason: "FLUX.2 Klein must be loaded before generation starts".to_owned(),
-            });
-        }
-        if self.active_request.is_some() {
-            return Err(ImageGenerationFailureReason::EngineBusy);
-        }
-        request_validation::validate_official_request(&self.serving_model_id, &generation_command)?;
+    ) -> Result<Flux2KleinActiveRequest, ImageGenerationFailureReason> {
+        request_validation::validate_official_request(
+            &engine.serving_model_id,
+            &generation_command,
+        )?;
         let dimensions = Flux2KleinImageDimensions::validate(
             generation_command.settings.width_pixels,
             generation_command.settings.height_pixels,
             IMAGE_TRANSPORT_LIMIT_BYTES,
         )
         .map_err(|error| ImageGenerationFailureReason::invalid_request(error.to_string()))?;
-        let schedule = match self.components.start_request(
+        let schedule = match engine.components.start_request(
             generation_command.request_id,
             dimensions,
             generation_command.settings.seed,
         ) {
             Ok(schedule) => schedule,
             Err(reason) => {
-                return Err(self.fail_active_request(
+                return Err(engine.fail_active_request(
                     reason,
                     "FLUX.2 Klein could not prepare the image request",
                 ));
             }
         };
-        self.active_request = Some(ActiveRequest {
+        Ok(Flux2KleinActiveRequest {
             request_id: generation_command.request_id,
             prompt: generation_command.prompt,
             seed: generation_command.settings.seed,
@@ -281,128 +127,95 @@ impl ImageGenerationEngine for Flux2KleinImageEngine {
             schedule,
             phase: RequestPhase::Conditioning,
             started_at: Instant::now(),
-        });
-        Ok(())
+        })
     }
 
-    fn advance_generation(
-        &mut self,
-        request_id: RequestId,
+    fn advance_request(
+        engine: &mut Flux2KleinImageEngine,
+        mut active_request: Flux2KleinActiveRequest,
     ) -> Result<ImageGenerationEngineStep, ImageGenerationFailureReason> {
-        let mut active_request = self.active_request.take().ok_or_else(|| {
-            ImageGenerationFailureReason::invalid_request("no FLUX.2 Klein request is active")
-        })?;
-        if active_request.request_id != request_id {
-            self.active_request = Some(active_request);
-            return Err(ImageGenerationFailureReason::invalid_request(
-                "request identifier does not match the active FLUX.2 Klein request",
-            ));
-        }
-        let mut conditioning_completed = None;
-        let mut denoising_advance = None;
-        let mut decoding_completed = None;
-        let operation = match active_request.phase {
-            RequestPhase::Conditioning => self
-                .components
-                .condition_prompt(&active_request.prompt)
-                .map(|did_complete_conditioning| {
-                    conditioning_completed = Some(did_complete_conditioning);
-                }),
-            RequestPhase::Noise => self.components.initialize_keyed_noise(
-                active_request.seed,
-                active_request.schedule.initial_sigma(),
-            ),
-            RequestPhase::Denoising(step_index) => self
-                .components
-                .denoise_euler(step_index, active_request.schedule.steps()[step_index])
-                .map(|did_complete_euler_step| {
-                    denoising_advance = Some(did_complete_euler_step);
-                }),
-            RequestPhase::Decoding => {
-                self.components
-                    .decode_latents()
-                    .map(|did_complete_decoding| {
-                        decoding_completed = Some(did_complete_decoding);
-                    })
-            }
-            RequestPhase::Encoding => return self.complete_encoded_request(active_request),
+        let phase_outcome = match active_request.phase {
+            RequestPhase::Encoding => return complete_encoded_request(engine, active_request),
+            _ => run_phase(engine, &active_request),
         };
-        if let Err(reason) = operation {
-            let public_failure_description = active_request.phase.public_failure_description();
-            return Err(self.fail_active_request(reason, public_failure_description));
-        }
-        if conditioning_completed == Some(false) {
-            return Ok(self.restore_with_progress(
-                active_request,
-                ImageGenerationPhase::EncodingPrompt,
-                0,
-            ));
-        }
-        if denoising_advance == Some(false) {
-            let completed_denoising_steps = active_request.completed_denoising_steps();
-            return Ok(self.restore_with_progress(
-                active_request,
-                ImageGenerationPhase::Denoising,
-                completed_denoising_steps,
-            ));
-        }
-        if decoding_completed == Some(false) {
-            return Ok(self.restore_with_progress(
-                active_request,
-                ImageGenerationPhase::Decoding,
-                Flux2KleinOfficialProfile::inference_step_count() as u16,
-            ));
+        let did_complete_phase = match phase_outcome {
+            Ok(did_complete_phase) => did_complete_phase,
+            Err(reason) => {
+                let public_failure_description = active_request.phase.public_failure_description();
+                return Err(engine.fail_active_request(reason, public_failure_description));
+            }
+        };
+        if !did_complete_phase {
+            let (phase, completed_steps) = active_request.partial_progress();
+            return Ok(engine.restore_with_progress(active_request, phase, completed_steps));
         }
         let (phase, completed_steps) = active_request.advance_phase();
-        let progress = Self::progress(&active_request, phase, completed_steps);
-        self.active_request = Some(active_request);
-        Ok(progress)
-    }
-
-    fn cancel_generation(
-        &mut self,
-        request_id: RequestId,
-    ) -> Result<(), ImageGenerationFailureReason> {
-        let Some(active_request) = self.active_request.as_ref() else {
-            return Ok(());
-        };
-        if active_request.request_id != request_id {
-            return Err(ImageGenerationFailureReason::invalid_request(
-                "request identifier does not match the active FLUX.2 Klein request",
-            ));
-        }
-        self.active_request = None;
-        self.components
-            .finalize_request(PerformanceAttributionOutcome::Cancelled, None, None)
-            .map_err(|_reason| ImageGenerationFailureReason::FatalExecution {
-                reason: "FLUX.2 Klein could not cleanly cancel image generation".to_owned(),
-            })
-    }
-
-    fn take_post_cleanup_memory_telemetry(&mut self) -> Option<MlxMemoryTelemetry> {
-        self.components.take_post_cleanup_memory_telemetry()
-    }
-
-    fn collect_mlx_memory_telemetry(&self) -> Option<MlxMemoryTelemetry> {
-        self.components.collect_mlx_memory_telemetry()
-    }
-
-    fn update_mlx_memory_limit(
-        &mut self,
-        requested_mlx_memory_ceiling_bytes: u64,
-    ) -> Result<MlxMemoryLimitAdjustment, ImageGenerationFailureReason> {
-        if self.active_request.is_some() {
-            return Err(ImageGenerationFailureReason::EngineBusy);
-        }
-        self.components
-            .update_mlx_memory_limit(requested_mlx_memory_ceiling_bytes)
-            .map_err(|reason| ImageGenerationFailureReason::FatalExecution {
-                reason: reason.chars().take(256).collect(),
-            })
+        Ok(engine.restore_with_progress(active_request, phase, completed_steps))
     }
 }
 
-struct ActiveRequest {
+/// Runs the request's current phase on the components. `Ok(false)` means
+/// the phase advanced but did not finish, so the request stays in it.
+fn run_phase(
+    engine: &mut Flux2KleinImageEngine,
+    active_request: &Flux2KleinActiveRequest,
+) -> Result<bool, String> {
+    match active_request.phase {
+        RequestPhase::Conditioning => engine.components.condition_prompt(&active_request.prompt),
+        RequestPhase::Noise => engine
+            .components
+            .initialize_keyed_noise(active_request.seed, active_request.schedule.initial_sigma())
+            .map(|()| true),
+        RequestPhase::Denoising(step_index) => engine
+            .components
+            .denoise_euler(step_index, active_request.schedule.steps()[step_index]),
+        RequestPhase::Decoding => engine.components.decode_latents(),
+        RequestPhase::Encoding => Ok(true),
+    }
+}
+
+/// Terminal encoding step: a failed encode fails the request; a successful
+/// one is finalized and returned by the shell.
+fn complete_encoded_request(
+    engine: &mut Flux2KleinImageEngine,
+    active_request: Flux2KleinActiveRequest,
+) -> Result<ImageGenerationEngineStep, ImageGenerationFailureReason> {
+    let png_bytes = match engine.components.encode_png() {
+        Ok(png_bytes) => png_bytes,
+        Err(reason) => {
+            return Err(engine
+                .fail_active_request(reason, "FLUX.2 Klein could not encode the generated image"));
+        }
+    };
+    engine.complete_rendered_request(active_request, png_bytes)
+}
+
+impl ActiveImageRequest for Flux2KleinActiveRequest {
+    fn request_id(&self) -> RequestId {
+        self.request_id
+    }
+
+    fn started_at(&self) -> Instant {
+        self.started_at
+    }
+
+    fn total_steps(&self) -> u16 {
+        Flux2KleinOfficialProfile::inference_step_count() as u16
+    }
+
+    fn result_metadata(&self, elapsed_millis: u64) -> ImageGenerationResultMetadata {
+        ImageGenerationResultMetadata {
+            width_pixels: self.dimensions.width_pixels(),
+            height_pixels: self.dimensions.height_pixels(),
+            steps: Flux2KleinOfficialProfile::inference_step_count() as u16,
+            guidance_thousandths: Flux2KleinOfficialProfile::guidance_thousandths(),
+            seed: self.seed,
+            elapsed_millis,
+        }
+    }
+}
+
+pub struct Flux2KleinActiveRequest {
     request_id: RequestId,
     prompt: String,
     seed: u64,
@@ -412,7 +225,7 @@ struct ActiveRequest {
     started_at: Instant,
 }
 
-impl ActiveRequest {
+impl Flux2KleinActiveRequest {
     fn completed_denoising_steps(&self) -> u16 {
         match self.phase {
             RequestPhase::Denoising(step_index) => step_index as u16,
@@ -420,6 +233,24 @@ impl ActiveRequest {
                 Flux2KleinOfficialProfile::inference_step_count() as u16
             }
             RequestPhase::Conditioning | RequestPhase::Noise => 0,
+        }
+    }
+
+    /// Where a request stands when its current phase advanced without
+    /// finishing.
+    fn partial_progress(&self) -> (ImageGenerationPhase, u16) {
+        match self.phase {
+            RequestPhase::Conditioning | RequestPhase::Noise => {
+                (ImageGenerationPhase::EncodingPrompt, 0)
+            }
+            RequestPhase::Denoising(_) => (
+                ImageGenerationPhase::Denoising,
+                self.completed_denoising_steps(),
+            ),
+            RequestPhase::Decoding | RequestPhase::Encoding => (
+                ImageGenerationPhase::Decoding,
+                Flux2KleinOfficialProfile::inference_step_count() as u16,
+            ),
         }
     }
 

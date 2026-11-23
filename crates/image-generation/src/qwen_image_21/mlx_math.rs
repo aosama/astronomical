@@ -20,6 +20,8 @@ use model_primitives::affine_quantized_linear::{
     AFFINE_QUANTIZATION_BITS, AFFINE_QUANTIZATION_GROUP_SIZE, AFFINE_QUANTIZED_VALUES_PER_WORD,
     AffineQuantizedLinear, AffineQuantizedLinearError,
 };
+use model_primitives::fp32_layers::rotate_adjacent_pairs;
+pub(in crate::qwen_image_21) use model_primitives::fp32_layers::{fp32_layer_norm, fp32_rms_norm};
 
 /// The artifact's affine quantization: 4-bit values in groups of 64 input
 /// channels, defined once in the shared quantized-linear module.
@@ -113,31 +115,6 @@ pub(in crate::qwen_image_21) fn validate_shape(
     Ok(())
 }
 
-/// `nn.LayerNorm` without affine parameters, computed in FP32.
-pub(in crate::qwen_image_21) fn fp32_layer_norm(
-    runtime: &MlxRuntime,
-    input: &MlxArray,
-    epsilon: f32,
-) -> Result<MlxArray, QwenImage21EngineError> {
-    let normalized_f32 = runtime
-        .layer_norm_without_weight_and_bias(&runtime.astype(input, MlxDtype::Float32)?, epsilon)?;
-    Ok(runtime.astype(&normalized_f32, input.dtype())?)
-}
-
-/// `RMSNorm` over the last axis: FP32 normalization, cast back, then the BF16 learned scale —
-/// the diffusers `RMSNorm` order, which multiplies by the weight only after the cast.
-pub(in crate::qwen_image_21) fn fp32_rms_norm(
-    runtime: &MlxRuntime,
-    input: &MlxArray,
-    weight: &MlxArray,
-    epsilon: f32,
-) -> Result<MlxArray, QwenImage21EngineError> {
-    let input_f32 = runtime.astype(input, MlxDtype::Float32)?;
-    let normalized_f32 = runtime.rms_norm_without_weight(&input_f32, epsilon)?;
-    let normalized = runtime.astype(&normalized_f32, input.dtype())?;
-    Ok(runtime.multiply(&normalized, weight)?)
-}
-
 /// Zero-centered RMSNorm: FP32 chain `x * rrms * (weight + 1)`, then cast.
 ///
 /// The runtime counterpart of `qwen_image_21::norm::zero_center_rms_norm`, which computes the same
@@ -180,34 +157,7 @@ pub(in crate::qwen_image_21) fn apply_rope(
             description: "rotary tables must match the token and channel counts".to_owned(),
         });
     }
-    let input_f32 = runtime.astype(input, MlxDtype::Float32)?;
-    let real_values = runtime.slice(
-        &input_f32,
-        &[0, 0, 0, 0],
-        &[shape[0], shape[1], shape[2], shape[3]],
-        &[1, 1, 1, 2],
-    )?;
-    let imaginary_values = runtime.slice(
-        &input_f32,
-        &[0, 0, 0, 1],
-        &[shape[0], shape[1], shape[2], shape[3]],
-        &[1, 1, 1, 2],
-    )?;
-    let negative_imaginary_values = runtime.negative(&imaginary_values)?;
-    let rotated_pairs = runtime.concatenate_axis(
-        &[
-            &runtime.expand_dims(&negative_imaginary_values, 4)?,
-            &runtime.expand_dims(&real_values, 4)?,
-        ],
-        4,
-    )?;
-    let rotated_pairs = runtime.reshape(&rotated_pairs, &shape)?;
-    let broadcast_cosines = runtime.reshape(cosines, &[1, shape[1], 1, shape[3]])?;
-    let broadcast_sines = runtime.reshape(sines, &[1, shape[1], 1, shape[3]])?;
-    let cosine_component = runtime.multiply(&input_f32, &broadcast_cosines)?;
-    let sine_component = runtime.multiply(&rotated_pairs, &broadcast_sines)?;
-    let rotated = runtime.add(&cosine_component, &sine_component)?;
-    Ok(runtime.astype(&rotated, input.dtype())?)
+    Ok(rotate_adjacent_pairs(runtime, input, cosines, sines)?)
 }
 
 /// Attention scale `1 / sqrt(head_dim)`, matching the reference SDPA default.

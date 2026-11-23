@@ -1,44 +1,20 @@
-//! Architecture-neutral component contract behind the FLUX lifecycle owner.
+//! The FLUX.2 Klein render steps behind the shared image lifecycle. Loading,
+//! finalizing, memory telemetry and live limits are the shared
+//! [`ImageEngineComponents`]; this trait adds the phases FLUX runs.
 
-use ipc_protocol::{ImageGenerationCapabilities, RequestId};
-
-use model_primitives::performance_attribution::PerformanceAttributionOutcome;
+use ipc_protocol::RequestId;
 
 use super::super::{Flux2KleinFlowSchedule, Flux2KleinFlowStep, Flux2KleinImageDimensions};
-use memory_policy::telemetry::MlxMemoryLimitAdjustment;
-use memory_policy::telemetry::MlxMemoryTelemetry;
+use crate::image_engine_shell::{ImageComponentLoad, ImageEngineComponents};
 
-/// Loaded identity supplied by either native components or an scripted lifecycle fake.
+/// Loaded identity supplied by either native components or a scripted lifecycle fake.
 #[doc(hidden)]
-pub struct Flux2KleinComponentLoad {
-    pub(super) model_id: String,
-    pub(super) revision: String,
-    pub(super) capabilities: ImageGenerationCapabilities,
-    pub(super) minimum_mlx_memory_ceiling_bytes: u64,
-}
-
-impl Flux2KleinComponentLoad {
-    #[doc(hidden)]
-    pub fn new(
-        model_id: impl Into<String>,
-        revision: impl Into<String>,
-        capabilities: ImageGenerationCapabilities,
-        minimum_mlx_memory_ceiling_bytes: u64,
-    ) -> Self {
-        Self {
-            model_id: model_id.into(),
-            revision: revision.into(),
-            capabilities,
-            minimum_mlx_memory_ceiling_bytes,
-        }
-    }
-}
+pub type Flux2KleinComponentLoad = ImageComponentLoad;
 
 /// Component seam keeps lifecycle tests scripted while production retains one concrete owner.
 /// It deliberately has no `Send` bound because MLX component state is runtime-thread-affine.
 #[doc(hidden)]
-pub trait Flux2KleinEngineComponents {
-    fn load(&mut self) -> Result<Flux2KleinComponentLoad, String>;
+pub trait Flux2KleinEngineComponents: ImageEngineComponents {
     fn start_request(
         &mut self,
         request_id: RequestId,
@@ -57,28 +33,4 @@ pub trait Flux2KleinEngineComponents {
     /// Returns true only when the complete decoded pixel array is ready for encoding.
     fn decode_latents(&mut self) -> Result<bool, String>;
     fn encode_png(&mut self) -> Result<Vec<u8>, String>;
-    fn finalize_request(
-        &mut self,
-        outcome: PerformanceAttributionOutcome,
-        encoded_bytes: Option<u64>,
-        failure_description: Option<&str>,
-    ) -> Result<(), String>;
-    fn take_post_cleanup_memory_telemetry(&mut self) -> Option<MlxMemoryTelemetry> {
-        None
-    }
-    fn collect_mlx_memory_telemetry(&self) -> Option<MlxMemoryTelemetry> {
-        None
-    }
-    /// Records the highest ceiling a load may plan at to reach its floor
-    /// (#1902), so a load whose floor is above the ceiling plans at its floor
-    /// instead of refusing, unless the user set a lower limit. Components that
-    /// never refuse at load ignore it.
-    fn adopt_floor_raise_limit(&mut self, _floor_raise_limit_bytes: u64) {}
-
-    fn update_mlx_memory_limit(
-        &mut self,
-        _requested_mlx_memory_ceiling_bytes: u64,
-    ) -> Result<MlxMemoryLimitAdjustment, String> {
-        Err("live MLX memory limits are unavailable".to_owned())
-    }
 }
