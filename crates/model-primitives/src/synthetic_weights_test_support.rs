@@ -124,6 +124,42 @@ pub fn load_synthetic_weights(
         .expect("the synthetic weights should load")
 }
 
+/// Values in about [-1.5, 1.5] drawn from the play's bytes: wide enough that
+/// normalizations and projections move them visibly, unlike
+/// `shakespeare_values`, which stays close to one center on purpose.
+pub fn wide_shakespeare_values(value_count: usize, byte_offset: usize) -> Vec<f32> {
+    let mut values = Vec::with_capacity(value_count);
+    for source_byte in ROMEO_AND_JULIET_SOURCE
+        .bytes()
+        .skip(byte_offset)
+        .take(value_count)
+    {
+        values.push((f32::from(source_byte) - 96.0) / 32.0);
+    }
+    values
+}
+
+/// Uploads float32 `values` in `shape` and converts them to `dtype`.
+pub fn upload_values(
+    runtime: &MlxRuntime,
+    values: &[f32],
+    shape: &[i32],
+    dtype: mlx_bridge::MlxDtype,
+) -> MlxArray {
+    runtime
+        .array_from_f32(values, shape)
+        .and_then(|float32_array| runtime.astype(&float32_array, dtype))
+        .expect("the fixture values should upload in the requested dtype")
+}
+
+/// Evaluates `array` and reads it back as float32 values.
+pub fn float32_values(runtime: &MlxRuntime, array: &MlxArray) -> Vec<f32> {
+    runtime
+        .astype(array, mlx_bridge::MlxDtype::Float32)
+        .and_then(|float32_array| float32_array.to_vec_f32())
+        .expect("the array should evaluate")
+}
+
 pub fn largest_difference(left_values: &[f32], right_values: &[f32]) -> f32 {
     assert_eq!(left_values.len(), right_values.len());
     let mut largest_difference = 0.0_f32;

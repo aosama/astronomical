@@ -33,6 +33,9 @@ pub mod attention;
 pub mod forward_pass_memory;
 
 #[cfg(feature = "direct-mlx")]
+pub mod fp32_layers;
+
+#[cfg(feature = "direct-mlx")]
 pub mod gpu_token_sampling;
 
 #[cfg(feature = "direct-mlx")]

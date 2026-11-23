@@ -5,6 +5,8 @@ use runtime_integration::MlxRuntime;
 use super::{Flux2KleinTransformerError, Flux2KleinTransformerGeometry};
 use crate::flux2_klein::tensor_store::Flux2KleinWeight;
 use mlx_bridge::{MlxArray, MlxDtype};
+use model_primitives::fp32_layers::rotate_adjacent_pairs;
+pub(super) use model_primitives::fp32_layers::{fp32_layer_norm, fp32_rms_norm};
 
 /// `input @ weightᵀ`, dense or on 4-bit packed weights depending on how the
 /// artifact stores the projection.
@@ -14,30 +16,6 @@ pub(super) fn linear(
     weight: &Flux2KleinWeight,
 ) -> Result<MlxArray, Flux2KleinTransformerError> {
     Ok(weight.project(runtime, input)?)
-}
-
-pub(super) fn fp32_layer_norm(
-    runtime: &MlxRuntime,
-    input: &MlxArray,
-    epsilon: f32,
-) -> Result<MlxArray, Flux2KleinTransformerError> {
-    let normalized_f32 = runtime
-        .layer_norm_without_weight_and_bias(&runtime.astype(input, MlxDtype::Float32)?, epsilon)?;
-    Ok(runtime.astype(&normalized_f32, input.dtype())?)
-}
-
-pub(super) fn fp32_rms_norm(
-    runtime: &MlxRuntime,
-    input: &MlxArray,
-    weight: &MlxArray,
-    epsilon: f32,
-) -> Result<MlxArray, Flux2KleinTransformerError> {
-    // The reference computes variance in FP32, then returns to the value dtype
-    // before applying its retained BF16 learned scale.
-    let input_f32 = runtime.astype(input, MlxDtype::Float32)?;
-    let normalized_f32 = runtime.rms_norm_without_weight(&input_f32, epsilon)?;
-    let normalized = runtime.astype(&normalized_f32, input.dtype())?;
-    Ok(runtime.multiply(&normalized, weight)?)
 }
 
 pub(super) fn swiglu(
@@ -151,41 +129,12 @@ pub(super) fn apply_rope(
             description: "RoPE tensors are incompatible",
         });
     }
-    let input_f32 = runtime.astype(input, MlxDtype::Float32)?;
     if shape[3] % 2 != 0 {
         return Err(Flux2KleinTransformerError::InvalidInput {
             description: "RoPE feature width must contain complete real/imaginary pairs",
         });
     }
-    let real_values = runtime.slice(
-        &input_f32,
-        &[0, 0, 0, 0],
-        &[shape[0], shape[1], shape[2], shape[3]],
-        &[1, 1, 1, 2],
-    )?;
-    let imaginary_values = runtime.slice(
-        &input_f32,
-        &[0, 0, 0, 1],
-        &[shape[0], shape[1], shape[2], shape[3]],
-        &[1, 1, 1, 2],
-    )?;
-    // The official FLUX layout stores each complex component as adjacent real and
-    // imaginary values; rotating feature halves would couple unrelated frequencies.
-    let negative_imaginary_values = runtime.negative(&imaginary_values)?;
-    let rotated_pairs = runtime.concatenate_axis(
-        &[
-            &runtime.expand_dims(&negative_imaginary_values, 4)?,
-            &runtime.expand_dims(&real_values, 4)?,
-        ],
-        4,
-    )?;
-    let rotated_pairs = runtime.reshape(&rotated_pairs, &shape)?;
-    let cosines = runtime.reshape(cosines, &[1, shape[1], 1, shape[3]])?;
-    let sines = runtime.reshape(sines, &[1, shape[1], 1, shape[3]])?;
-    let cosine_component = runtime.multiply(&input_f32, &cosines)?;
-    let sine_component = runtime.multiply(&rotated_pairs, &sines)?;
-    let rotated = runtime.add(&cosine_component, &sine_component)?;
-    Ok(runtime.astype(&rotated, input.dtype())?)
+    Ok(rotate_adjacent_pairs(runtime, input, cosines, sines)?)
 }
 
 #[doc(hidden)]
