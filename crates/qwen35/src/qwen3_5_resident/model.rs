@@ -53,7 +53,7 @@ pub use crate::qwen3_5_core::model_math::{
     feed_forward_weights, forward_contract, output_combination, routing,
 };
 #[cfg(feature = "direct-mlx")]
-pub use crate::qwen3_5_core::vision::{Qwen3_5VisionModel, visual_embedding_injection};
+pub use crate::qwen3_5_core::vision::Qwen3_5VisionModel;
 #[cfg(feature = "direct-mlx")]
 pub use decoder_stack_suffix_forward::RecordedDecoderLayerInput;
 #[cfg(feature = "direct-mlx")]

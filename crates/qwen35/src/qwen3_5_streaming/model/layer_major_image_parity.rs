@@ -8,6 +8,7 @@
 //! a time with the same stand-in image embeddings and return what each
 //! would publish.
 
+use crate::qwen3_5_core::model::prefill_forward::Qwen3_5PrefillForward;
 use mlx_bridge::MlxArray;
 
 use super::Qwen3_5Model;

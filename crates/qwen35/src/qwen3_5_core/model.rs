@@ -35,6 +35,8 @@ pub mod model_chunking_configuration;
 #[cfg(feature = "direct-mlx")]
 pub mod output_gate_engine;
 #[cfg(feature = "direct-mlx")]
+pub mod prefill_forward;
+#[cfg(feature = "direct-mlx")]
 pub mod probe_token_ids;
 #[cfg(feature = "direct-mlx")]
 pub mod register_ordered_projections;

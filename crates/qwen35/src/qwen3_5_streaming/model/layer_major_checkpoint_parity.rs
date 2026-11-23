@@ -8,6 +8,7 @@
 //! published snapshot to the host, widened to Float32, which is exact for
 //! the bfloat16 and Float32 tensors the snapshots hold.
 
+use crate::qwen3_5_core::model::prefill_forward::Qwen3_5PrefillForward;
 use std::collections::BTreeMap;
 
 use mlx_bridge::{MlxArray, MlxDtype};

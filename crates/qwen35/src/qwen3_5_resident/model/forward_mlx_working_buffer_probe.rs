@@ -10,6 +10,7 @@
 use super::Qwen3_5ResidentModel;
 use crate::PerformanceAttribution;
 use crate::qwen3_5_core::decoder::RequestDecoderStateStack;
+use crate::qwen3_5_core::model::prefill_forward::Qwen3_5PrefillForward;
 use crate::qwen3_5_core::model::probe_token_ids::vocabulary_walking_token_ids;
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_core::model_math::forward_contract::forward_state_arrays;
