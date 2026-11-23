@@ -30,5 +30,6 @@ mod worker_memory_demotion_support;
 mod worker_memory_limit_model_swap;
 mod worker_model_swap;
 mod worker_replacement;
+mod worker_request_kind_admission;
 mod worker_startup_runtime;
 mod worker_token_count;
