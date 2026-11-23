@@ -285,11 +285,7 @@ impl Qwen3_5EngineState {
         boundary_checkpoints: Vec<crate::Qwen3_5AstroSsdPromptCacheBoundaryCheckpoint>,
     ) -> Result<(), InferenceEngineError> {
         let prefill_token_count = prefill_end - prefill_start;
-        let model = self
-            .core
-            .model
-            .as_ref()
-            .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+        let model = self.core.loaded_model()?;
         // Publication deliberately precedes `advance_position` and cursor update.
         // If storage fails, the request stops at its last durable parent rather
         // than continuing with an in-memory chain that restart cannot reproduce.
@@ -331,11 +327,7 @@ impl Qwen3_5EngineState {
         prefill_start: usize,
         prefill_end: usize,
     ) -> Result<(), InferenceEngineError> {
-        let model = self
-            .core
-            .model
-            .as_ref()
-            .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+        let model = self.core.loaded_model()?;
         // Retire the chunk tape. Reclaim the MLX buffer cache only when it is
         // large enough to justify an IOGPU-visible clear.
         let memory_snapshot_before_end_of_prefill_chunk_cleanup =
@@ -393,11 +385,7 @@ impl Qwen3_5EngineState {
         measured_forward_token_count: usize,
         active_memory_bytes_before_forward: usize,
     ) -> Result<(), InferenceEngineError> {
-        let model = self
-            .core
-            .model
-            .as_ref()
-            .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+        let model = self.core.loaded_model()?;
         completed_forward_memory::measure_completed_forward(
             model,
             completed_forward_memory::MeasuredForward::prompt(measured_forward_token_count),
@@ -420,11 +408,7 @@ impl Qwen3_5EngineState {
         forward_chunk_started_at: Instant,
         forward_chunk_elapsed_millis: u64,
     ) -> Result<GeneratedToken, InferenceEngineError> {
-        let model = self
-            .core
-            .model
-            .as_ref()
-            .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+        let model = self.core.loaded_model()?;
         let prefill_token_count = prefill_end - prefill_start;
         // Demand-selected pages are materialized once after all prompt chunks.
         // Rebuilding them at every barrier would repeatedly read the same model

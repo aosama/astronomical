@@ -58,11 +58,7 @@ impl Qwen3_5EngineState {
             }
         }
 
-        let model = self
-            .core
-            .model
-            .as_ref()
-            .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+        let model = self.core.loaded_model()?;
         let mut astro_ssd_prompt_cache_recurrent_snapshot_tensors = performance_attribution
             .measure_operation(
                 PerformanceOperation::AstroSsdPromptCacheRecurrentSnapshotRead,

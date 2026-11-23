@@ -1,7 +1,9 @@
 use crate::inference_engine::contract::ExpertResidencyTelemetry;
 use crate::qwen3_5_core::shared_execution::astro_ssd_prompt_cache_restore;
 use crate::qwen3_5_core::shared_execution::generation_finalization_steps;
+use crate::qwen3_5_core::shared_execution::generation_start_steps;
 use crate::qwen3_5_core::shared_execution::generation_thinking_end_markers;
+use crate::qwen3_5_core::shared_execution::generation_visual_embedding_validation;
 use crate::qwen3_5_core::text::thinking_budget::Qwen3_5ThinkingBudgetError;
 use crate::{
     EngineGenerationStart, InferenceEngineError, PerformanceAttribution,
@@ -77,8 +79,11 @@ impl Qwen3_5EngineState {
         // inside the request itself; taking it out here means rejection paths
         // below can still record why a request never started.
         let taken_performance_attribution = inference_request.take_performance_attribution();
-        let mut performance_attribution =
-            self.ensure_no_active_generation(&inference_request, taken_performance_attribution)?;
+        let mut performance_attribution = generation_start_steps::ensure_no_active_generation(
+            self,
+            &inference_request,
+            taken_performance_attribution,
+        )?;
         // Early validation: the model must be loaded, the prompt must contain
         // at least one token, the output budget must be positive, and a
         // thinking budget must reserve room for its forced transition. The
@@ -122,11 +127,7 @@ impl Qwen3_5EngineState {
         // means every expert of this mixture-of-experts model already sits in
         // graphics memory; each token routes through only a few experts, and
         // nothing streams in from disk while generating.
-        let model = self
-            .core
-            .model
-            .as_ref()
-            .ok_or_else(super::generation_error_constructors::engine_lost_loaded_model_error)?;
+        let model = self.core.loaded_model()?;
         // The `astro_decoder_state_cache` layout describes, per decoder layer, the shape of the
         // key-value state — the model's memory of tokens it has already seen.
         // Recording attention once per token is what lets each new token be
@@ -152,7 +153,8 @@ impl Qwen3_5EngineState {
         // dropped rather than recorded as a rejection — unlike the two gates
         // above, which record every rejection they issue.
         let sampling_strategy = inference_request.sampling_strategy();
-        let random_state = self.resolve_sampling_random_state(sampling_strategy)?;
+        let random_state =
+            generation_start_steps::resolve_sampling_random_state(self, sampling_strategy)?;
         let prompt_identity = self.resolve_prompt_identity(
             &inference_request,
             sampling_strategy,
@@ -161,20 +163,14 @@ impl Qwen3_5EngineState {
         // Image requests can arrive with visual embeddings already
         // computed by an earlier pipeline stage; this validates and uploads
         // them into the array prefill will splice over the placeholders.
-        let precomputed_visual_embeddings = self.prepare_precomputed_visual_embeddings(
-            &inference_request,
-            prompt_identity.prompt_image_pad_token_count,
-        )?;
-        // The per-request `astro_decoder_state_cache`: one state owner per decoder
-        // layer, allocated empty here and grown as tokens are processed.
-        // Full-attention layers grow in the configured slab granularity so
-        // resize cost stays amortized across the request's lifetime.
+        let precomputed_visual_embeddings =
+            generation_start_steps::prepare_precomputed_visual_embeddings(
+                self,
+                &inference_request,
+                prompt_identity.prompt_image_pad_token_count,
+            )?;
         let mut request_decoder_state =
-            RequestDecoderStateStack::empty_from_astro_decoder_state_cache_layout_with_full_attention_kv_state_growth_tokens(
-                &astro_decoder_state_cache_layout,
-                self.core.full_attention_kv_state_growth_tokens,
-            )
-            .map_err(qwen3_5_runtime_error)?;
+            self.empty_request_decoder_state(&astro_decoder_state_cache_layout)?;
         // Restore the longest prompt prefix already present in the
         // `astro_ssd_prompt_cache`. On success `prefill_cursor` moves past the
         // restored tokens so prefill computes only the new suffix, and
@@ -197,14 +193,18 @@ impl Qwen3_5EngineState {
         // If the request instead carries raw processed images, the vision
         // encoder runs now: plan where each image's embedding rows land in
         // the not-yet-restored suffix, then encode pixels into rows.
-        let visual_embeddings = self.resolve_session_visual_embeddings(
+        let visual_embeddings = generation_start_steps::resolve_session_visual_embeddings(
+            self,
             &inference_request,
             precomputed_visual_embeddings,
             prompt_identity.has_processed_visual_images,
-            &prompt_identity.prompt_token_ids,
-            generation_position.prefill_cursor,
-            &prompt_identity.ordered_image_visual_embedding_row_counts,
-            prompt_identity.image_pad_token_id,
+            generation_start_steps::SessionVisualEmbeddingPlacement {
+                prompt_token_ids: &prompt_identity.prompt_token_ids,
+                prefill_cursor: generation_position.prefill_cursor,
+                ordered_image_visual_embedding_row_counts: &prompt_identity
+                    .ordered_image_visual_embedding_row_counts,
+                image_pad_token_id: prompt_identity.image_pad_token_id,
+            },
             &mut performance_attribution,
         )?;
         // Every check passed: install the session. This object owns all
@@ -225,69 +225,19 @@ impl Qwen3_5EngineState {
         })
     }
 
-    /// Rejects a second concurrent request outright — this engine serves
-    /// exactly one generation at a time — recording the rejection into the
-    /// performance attribution before handing the attribution back on the
-    /// free-engine path.
-    fn ensure_no_active_generation(
-        &mut self,
-        inference_request: &Qwen3_5InferenceRequest,
-        performance_attribution: PerformanceAttribution,
-    ) -> Result<PerformanceAttribution, InferenceEngineError> {
-        // This engine serves exactly one request at a time: a model resident
-        // in graphics memory plus one active session is all it can hold, so a
-        // second concurrent request is rejected outright instead of queued.
-        if self.core.active_request.is_none() {
-            return Ok(performance_attribution);
-        }
-        generation_finalization_steps::record_generation_performance_attribution(
-            self,
-            generation_finalization_steps::GenerationAttributionRecord {
-                performance_attribution,
-                outcome: PerformanceAttributionOutcome::Rejected,
-                request_id: inference_request.request_id(),
-                configured_maximum_output_tokens: inference_request.max_output_tokens(),
-                mlx_memory_snapshot: None,
-                failure_description: Some("generation engine is already serving a request"),
-            },
-        );
-        Err(InferenceEngineError::EngineBusy)
-    }
-
-    /// Sampling decides how the next token is picked from the model's
-    /// probability distribution. HighestLogit is greedy — no randomness
-    /// needed. TopKTopP samples randomly and gets validated here, with one
-    /// reusable randomness buffer created up front on the device so
-    /// per-token sampling later stays cheap.
-    fn resolve_sampling_random_state(
+    /// The per-request `astro_decoder_state_cache`: one state owner per decoder
+    /// layer, allocated empty here and grown as tokens are processed.
+    /// Full-attention layers grow in the configured slab granularity so
+    /// resize cost stays amortized across the request's lifetime.
+    fn empty_request_decoder_state(
         &self,
-        sampling_strategy: Qwen3_5SamplingStrategy,
-    ) -> Result<Option<MlxArray>, InferenceEngineError> {
-        match sampling_strategy {
-            Qwen3_5SamplingStrategy::HighestLogit => Ok(None),
-            Qwen3_5SamplingStrategy::TopKTopP {
-                temperature_thousandths,
-                top_k,
-                top_p_thousandths,
-                seed,
-            } => {
-                sampler::validate_sampled_strategy(
-                    temperature_thousandths,
-                    top_k,
-                    top_p_thousandths,
-                )?;
-                let model = self.core.model.as_ref().ok_or_else(
-                    super::generation_error_constructors::engine_lost_loaded_model_error,
-                )?;
-                Ok(Some(sampler::random_state_for_seed(
-                    model,
-                    crate::qwen3_5_core::text::resolve_sampling_seed(
-                        seed,
-                        current_time_millis_since_unix_epoch,
-                    ),
-                )?))
-            }
-        }
+        astro_decoder_state_cache_layout: &crate::AstroDecoderStateCacheLayout,
+    ) -> Result<RequestDecoderStateStack, InferenceEngineError> {
+        RequestDecoderStateStack::empty_from_astro_decoder_state_cache_layout_with_full_attention_kv_state_growth_tokens(
+            astro_decoder_state_cache_layout,
+            self.core.full_attention_kv_state_growth_tokens,
+        )
+        .map_err(qwen3_5_runtime_error)
     }
 
     /// Resolves the prompt-side session identity: token list, image-pad
@@ -310,7 +260,7 @@ impl Qwen3_5EngineState {
             .image_pad_token_id()
             .ok_or_else(super::generation_error_constructors::missing_image_pad_token_id_error)?;
         let prompt_image_pad_token_count =
-            super::generation_visual_embedding_validation::count_image_pad_placeholder_tokens(
+            generation_visual_embedding_validation::count_image_pad_placeholder_tokens(
                 &prompt_token_ids,
                 image_pad_token_id,
             );
@@ -383,66 +333,6 @@ impl Qwen3_5EngineState {
         })
     }
 
-    /// Validates and uploads caller-supplied visual embeddings — row count
-    /// must match the image-placeholder count and the buffer size must match
-    /// the model's embedding width — into the graphics-processor array that
-    /// prefill will splice over the image placeholders.
-    fn prepare_precomputed_visual_embeddings(
-        &self,
-        inference_request: &Qwen3_5InferenceRequest,
-        prompt_image_pad_token_count: usize,
-    ) -> Result<Option<MlxArray>, InferenceEngineError> {
-        let Some(visual_embedding_values) = inference_request.visual_embeddings() else {
-            return Ok(None);
-        };
-        let visual_embedding_row_count = inference_request.visual_embedding_row_count();
-        super::generation_visual_embedding_validation::validate_precomputed_visual_embedding_row_counts(
-            prompt_image_pad_token_count,
-            visual_embedding_row_count,
-            visual_embedding_values.len(),
-        )
-        .map_err(
-            super::generation_visual_embedding_validation::VisualEmbeddingValidationError::into_generation_failure,
-        )?;
-        let model = self
-            .core
-            .model
-            .as_ref()
-            .ok_or_else(super::generation_error_constructors::engine_lost_loaded_model_error)?;
-        let visual_embedding_hidden_size = self
-            .core
-            .persistent_visual_embedding_model_contract
-            .as_ref()
-            .ok_or_else(
-                super::generation_error_constructors::visual_embedding_model_contract_not_loaded_error,
-            )?
-            .visual_embedding_hidden_size();
-        super::generation_visual_embedding_validation::validate_precomputed_visual_embedding_buffer_size(
-            visual_embedding_row_count,
-            visual_embedding_values.len(),
-            visual_embedding_hidden_size,
-        )
-        .map_err(
-            super::generation_visual_embedding_validation::VisualEmbeddingValidationError::into_generation_failure,
-        )?;
-        Ok(Some(
-            model
-                .runtime()
-                .array_from_f32(
-                    visual_embedding_values,
-                    &[
-                        i32::try_from(visual_embedding_row_count).map_err(
-                            super::generation_error_constructors::visual_embedding_row_count_exceeds_i32_range_error,
-                        )?,
-                        i32::try_from(visual_embedding_hidden_size).map_err(
-                            super::generation_error_constructors::visual_embedding_hidden_size_exceeds_i32_range_error,
-                        )?,
-                    ],
-                )
-                .map_err(qwen3_5_runtime_error)?,
-        ))
-    }
-
     /// Restores the longest prompt prefix already present in the
     /// `astro_ssd_prompt_cache`, returning the restore outcome for position derivation. The
     /// disk-store owner is always reinstalled before any path escapes.
@@ -490,48 +380,6 @@ impl Qwen3_5EngineState {
             return restore_result;
         }
         Ok(None)
-    }
-
-    /// Resolves the session's visual embeddings: caller-supplied arrays pass
-    /// through, processed images run the vision encoder against the
-    /// not-yet-restored suffix plan, and text-only requests carry none.
-    #[allow(clippy::too_many_arguments)]
-    fn resolve_session_visual_embeddings(
-        &mut self,
-        inference_request: &Qwen3_5InferenceRequest,
-        precomputed_visual_embeddings: Option<MlxArray>,
-        has_processed_visual_images: bool,
-        prompt_token_ids: &[u32],
-        prefill_cursor: usize,
-        ordered_image_visual_embedding_row_counts: &[usize],
-        image_pad_token_id: u32,
-        performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<Option<MlxArray>, InferenceEngineError> {
-        if let Some(precomputed_visual_embeddings) = precomputed_visual_embeddings {
-            return Ok(Some(precomputed_visual_embeddings));
-        }
-        if !has_processed_visual_images {
-            return Ok(None);
-        }
-        let visual_embedding_suffix_plan =
-            crate::qwen3_5_core::vision::plan_qwen3_5_visual_embedding_suffix(
-                prompt_token_ids,
-                prefill_cursor,
-                ordered_image_visual_embedding_row_counts,
-                image_pad_token_id,
-            )
-            .map_err(|visual_embedding_suffix_plan_error| {
-                request_errors::invalid_request_error(format!(
-                    "visual embedding suffix planning failed: {visual_embedding_suffix_plan_error}"
-                ))
-            })?;
-        super::visual_embeddings_runtime::resolve_visual_embeddings_for_processed_images(
-            self,
-            inference_request.request_id(),
-            inference_request.processed_visual_images(),
-            &visual_embedding_suffix_plan,
-            performance_attribution,
-        )
     }
 
     /// Installs the assembled session as the engine's active request and
@@ -647,34 +495,11 @@ impl Qwen3_5EngineState {
         // tokens were restored rather than computed, which expert memory
         // mode the loaded model uses (fully resident in this engine), and
         // whether the first advance is prefill or decoding.
-        self.build_generation_start_contract(
+        generation_start_steps::build_generation_start_contract(
+            self,
             restored_prompt_prefix_token_count,
             initial_prompt_processing_phase,
             generation_position.astro_ssd_prompt_cache_diagnostics,
         )
-    }
-
-    /// Builds the caller-visible generation-start contract: the restored
-    /// cursor, the loaded model's expert memory mode, the first processing
-    /// phase, and the `astro_ssd_prompt_cache` diagnostics.
-    fn build_generation_start_contract(
-        &self,
-        restored_prompt_prefix_token_count: u32,
-        initial_prompt_processing_phase: Option<ipc_protocol::WorkerPromptProcessingPhase>,
-        astro_ssd_prompt_cache_diagnostics: Option<
-            ipc_protocol::WorkerAstroSsdPromptCacheRequestDiagnostics,
-        >,
-    ) -> Result<EngineGenerationStart, InferenceEngineError> {
-        Ok(EngineGenerationStart::with_expert_memory_mode(
-            restored_prompt_prefix_token_count,
-            self.core
-                .model
-                .as_ref()
-                .ok_or_else(super::generation_error_constructors::engine_lost_loaded_model_error)?
-                .expert_memory_mode(),
-        )
-        .with_restored_prompt_prefix_token_count(restored_prompt_prefix_token_count)
-        .with_prompt_processing_phase(initial_prompt_processing_phase)
-        .with_astro_ssd_prompt_cache_diagnostics(astro_ssd_prompt_cache_diagnostics))
     }
 }

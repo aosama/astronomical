@@ -33,7 +33,6 @@ use runtime_integration::{MLX_BUFFER_CACHE_RECLAIM_THRESHOLD_BYTES, MlxMemorySna
 
 use super::super::engine_request::Qwen3_5EngineRequest;
 use super::super::generation_session_lifecycle::generation_error_constructors::completed_prefill_chunk_tokens_exceed_u32_range_error;
-use super::super::generation_session_lifecycle::generation_error_constructors::engine_lost_loaded_model_error;
 use super::completed_forward_memory;
 use super::prompt_prefill_errors::PromptPrefillChunkAttemptError;
 use super::{Qwen3_5EngineState, fatal_engine_error, qwen3_5_runtime_error};
@@ -359,11 +358,7 @@ impl Qwen3_5EngineState {
         prefill_end: usize,
         boundary_checkpoints: Vec<crate::Qwen3_5AstroSsdPromptCacheBoundaryCheckpoint>,
     ) -> Result<(), InferenceEngineError> {
-        let model = self
-            .core
-            .model
-            .as_ref()
-            .ok_or_else(engine_lost_loaded_model_error)?;
+        let model = self.core.loaded_model()?;
         let prefill_token_count = prefill_end - prefill_start;
         // Publication deliberately precedes `advance_position` and cursor update.
         // If storage fails, the request stops at its last durable parent rather
@@ -406,11 +401,7 @@ impl Qwen3_5EngineState {
         prefill_start: usize,
         prefill_end: usize,
     ) -> Result<(), InferenceEngineError> {
-        let model = self
-            .core
-            .model
-            .as_ref()
-            .ok_or_else(engine_lost_loaded_model_error)?;
+        let model = self.core.loaded_model()?;
         // Retire the chunk tape. Reclaim the MLX buffer cache only when it is
         // large enough to justify an IOGPU-visible clear.
         let memory_snapshot_before_end_of_prefill_chunk_cleanup =
@@ -469,11 +460,7 @@ impl Qwen3_5EngineState {
         active_request: &Qwen3_5EngineRequest,
         admitted_forward: super::forward_memory::AdmittedForward,
     ) -> Result<(), InferenceEngineError> {
-        let model = self
-            .core
-            .model
-            .as_ref()
-            .ok_or_else(engine_lost_loaded_model_error)?;
+        let model = self.core.loaded_model()?;
         super::forward_memory::report_completed_forward(
             model,
             admitted_forward,
@@ -495,11 +482,7 @@ impl Qwen3_5EngineState {
         forward_chunk_elapsed_millis: u64,
         neural_engine_chunk: Option<ipc_protocol::NeuralEngineChunkReport>,
     ) -> Result<GeneratedToken, InferenceEngineError> {
-        let model = self
-            .core
-            .model
-            .as_ref()
-            .ok_or_else(engine_lost_loaded_model_error)?;
+        let model = self.core.loaded_model()?;
         let prefill_token_count = prefill_end - prefill_start;
         // Demand-selected pages are materialized once after all prompt chunks.
         // Rebuilding them at every barrier would repeatedly read the same model

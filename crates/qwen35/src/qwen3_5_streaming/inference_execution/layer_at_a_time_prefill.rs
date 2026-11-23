@@ -120,11 +120,7 @@ impl Qwen3_5EngineState {
             .record_counter(PerformanceCounter::PrefillChunkCount, 1);
         let memory_baseline = self.begin_forward_memory_measurement()?;
         let span_to_fail_once = self.prompt_span_to_fail_once_for_tests.take();
-        let model = self
-            .core
-            .model
-            .as_ref()
-            .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+        let model = self.core.loaded_model()?;
         let spans = plan.layer_major_span_plan.spans.as_slice();
         let checkpoint_contract =
             plan.astro_ssd_prompt_cache_block_token_count
@@ -177,11 +173,7 @@ impl Qwen3_5EngineState {
             .ok_or_else(|| {
                 super::fatal_engine_error("no layer-at-a-time prompt is in flight to advance")
             })?;
-        let model = self
-            .core
-            .model
-            .as_ref()
-            .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+        let model = self.core.loaded_model()?;
         let advance_outcome = model
             .advance_layer_major_prefill(
                 &mut prefill_in_flight.layer_major_prefill_run,
@@ -303,11 +295,7 @@ impl Qwen3_5EngineState {
         active_request: &Qwen3_5EngineRequest,
         prompt_layer_progress: WorkerPromptLayerProgress,
     ) -> Result<GeneratedToken, InferenceEngineError> {
-        let model = self
-            .core
-            .model
-            .as_ref()
-            .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+        let model = self.core.loaded_model()?;
         let mlx_memory_telemetry = match model.memory_snapshot_with_forward_peak().ok() {
             Some(mlx_memory_snapshot) => Some(
                 super::prefill_advance::prefill_mlx_memory_telemetry_from_snapshot(

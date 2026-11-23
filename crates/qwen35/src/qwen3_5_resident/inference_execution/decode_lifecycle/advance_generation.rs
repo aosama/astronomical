@@ -119,11 +119,7 @@ impl Qwen3_5EngineState {
     /// breakdown, so the announced claim and snapshot describe one instant
     /// (issue #337).
     fn announce_generation_preparation(&self) -> Result<GeneratedToken, InferenceEngineError> {
-        let model = self
-            .core
-            .model
-            .as_ref()
-            .ok_or_else(super::super::generation_session_lifecycle::generation_error_constructors::engine_lost_loaded_model_error)?;
+        let model = self.core.loaded_model()?;
         let mlx_memory_telemetry =
             generation_finalization_steps::collect_current_mlx_memory_telemetry(self)?;
         let expert_residency = match mlx_memory_telemetry
@@ -160,11 +156,7 @@ impl Qwen3_5EngineState {
             0,
             0,
         )?;
-        let model = self
-            .core
-            .model
-            .as_ref()
-            .ok_or_else(super::super::generation_session_lifecycle::generation_error_constructors::engine_lost_loaded_model_error)?;
+        let model = self.core.loaded_model()?;
         // This log is the first-token decode seam after prompt restore.
         tracing::info!(
             request_id = request_id.value(),
@@ -217,9 +209,7 @@ impl Qwen3_5EngineState {
         active_request: &mut super::engine_request::Qwen3_5EngineRequest,
         current_generated_token: &MlxArray,
     ) -> Result<(MlxArray, CompletedForwardMemoryObservation), InferenceEngineError> {
-        let model = self.core.model.as_ref().ok_or_else(
-            super::super::generation_session_lifecycle::generation_error_constructors::engine_lost_loaded_model_error,
-        )?;
+        let model = self.core.loaded_model()?;
         active_request.reclaim_outgrown_attention_slabs(model.runtime())?;
         self.decode_next_token_and_collect_memory(active_request, current_generated_token)
     }
@@ -237,11 +227,7 @@ impl Qwen3_5EngineState {
             0,
             0,
         )?;
-        let model = self
-            .core
-            .model
-            .as_ref()
-            .ok_or_else(super::super::generation_session_lifecycle::generation_error_constructors::engine_lost_loaded_model_error)?;
+        let model = self.core.loaded_model()?;
         let next_generated_token = {
             let next_logits = model
                 .build_generated_token_forward_with_performance_attribution(

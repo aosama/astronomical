@@ -1,16 +1,6 @@
 use super::*;
 
 #[test]
-fn should_carry_the_exact_engine_lost_loaded_model_failure_text() {
-    let engine_error = engine_lost_loaded_model_error();
-
-    assert!(matches!(
-        engine_error,
-        crate::InferenceEngineError::Fatal { reason } if reason == "Qwen3.5 engine lost its loaded model"
-    ));
-}
-
-#[test]
 fn should_carry_the_exact_missing_image_pad_token_id_failure_text() {
     let engine_error = missing_image_pad_token_id_error();
 
@@ -21,32 +11,11 @@ fn should_carry_the_exact_missing_image_pad_token_id_failure_text() {
 }
 
 #[test]
-fn should_carry_the_exact_visual_embedding_model_contract_not_loaded_failure_text() {
-    let engine_error = visual_embedding_model_contract_not_loaded_error();
-
-    assert!(matches!(
-        engine_error,
-        crate::InferenceEngineError::Fatal { reason } if reason == "Qwen3.5 persistent visual embedding model contract is not loaded"
-    ));
-}
-
-#[test]
-fn should_carry_the_exact_visual_embedding_and_restored_prefix_range_failure_texts() {
+fn should_carry_the_exact_restored_prefix_range_failure_text() {
     let try_from_int_error = u32::try_from(usize::MAX).expect_err("usize maximum must exceed u32");
 
-    let row_count_error = visual_embedding_row_count_exceeds_i32_range_error(try_from_int_error);
-    let hidden_size_error =
-        visual_embedding_hidden_size_exceeds_i32_range_error(try_from_int_error);
     let restored_prefix_error = restored_prompt_prefix_exceeds_u32_range_error(try_from_int_error);
 
-    assert!(matches!(
-        row_count_error,
-        crate::InferenceEngineError::Fatal { reason } if reason == "visual embedding row count exceeds the i32 range"
-    ));
-    assert!(matches!(
-        hidden_size_error,
-        crate::InferenceEngineError::Fatal { reason } if reason == "visual embedding hidden size exceeds the i32 range"
-    ));
     assert!(matches!(
         restored_prefix_error,
         crate::InferenceEngineError::Fatal { reason } if reason == "restored prompt prefix exceeds the u32 range"

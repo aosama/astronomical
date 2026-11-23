@@ -1,38 +1,16 @@
 //! Named error constructors for the generation-session lifecycle.
 //!
 //! Every function here exists so call sites pass a name by path instead of
-//! writing a closure (`.ok_or_else(engine_lost_loaded_model_error)`), and the
+//! writing a closure (`.ok_or_else(missing_image_pad_token_id_error)`), and the
 //! tests lock each message byte-for-byte so the extraction from inline
 //! closures stays provably behavior-preserving.
 
 use crate::InferenceEngineError;
 use crate::qwen3_5_resident::model::request_errors;
 
-pub(in crate::qwen3_5_resident::inference_execution) fn engine_lost_loaded_model_error()
--> InferenceEngineError {
-    super::fatal_engine_error("Qwen3.5 engine lost its loaded model")
-}
-
 pub(in crate::qwen3_5_resident::inference_execution) fn missing_image_pad_token_id_error()
 -> InferenceEngineError {
     request_errors::invalid_request_error("generation request is missing the image-pad token ID")
-}
-
-pub(in crate::qwen3_5_resident::inference_execution) fn visual_embedding_model_contract_not_loaded_error()
--> InferenceEngineError {
-    super::fatal_engine_error("Qwen3.5 persistent visual embedding model contract is not loaded")
-}
-
-pub(in crate::qwen3_5_resident::inference_execution) fn visual_embedding_row_count_exceeds_i32_range_error(
-    _try_from_error: std::num::TryFromIntError,
-) -> InferenceEngineError {
-    super::fatal_engine_error("visual embedding row count exceeds the i32 range")
-}
-
-pub(in crate::qwen3_5_resident::inference_execution) fn visual_embedding_hidden_size_exceeds_i32_range_error(
-    _try_from_error: std::num::TryFromIntError,
-) -> InferenceEngineError {
-    super::fatal_engine_error("visual embedding hidden size exceeds the i32 range")
 }
 
 pub(in crate::qwen3_5_resident::inference_execution) fn restored_prompt_prefix_exceeds_u32_range_error(

@@ -88,11 +88,7 @@ impl Qwen3_5EngineState {
         active_request: &mut Qwen3_5EngineRequest,
         current_generated_token_id: u32,
     ) -> Result<ActiveRequestAdvance, crate::InferenceEngineError> {
-        let model = self
-            .core
-            .model
-            .as_ref()
-            .ok_or_else(super::super::generation_session_lifecycle::generation_error_constructors::engine_lost_loaded_model_error)?;
+        let model = self.core.loaded_model()?;
         // Every emitted token carries a fresh reading, as the plain reply
         // path does; without it `/v1/status` showed the last prompt chunk's
         // memory for the whole draft-assisted reply.
@@ -155,11 +151,7 @@ impl Qwen3_5EngineState {
         active_request: &mut Qwen3_5EngineRequest,
         bonus_token_id: u32,
     ) -> Result<ActiveRequestAdvance, crate::InferenceEngineError> {
-        let model = self
-            .core
-            .model
-            .as_ref()
-            .ok_or_else(super::super::generation_session_lifecycle::generation_error_constructors::engine_lost_loaded_model_error)?;
+        let model = self.core.loaded_model()?;
         let draft_runtime = self.speculative_draft_runtime.as_ref().ok_or_else(|| {
             fatal_engine_error("speculative advance requested without a resident draft runtime")
         })?;

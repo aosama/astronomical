@@ -77,6 +77,10 @@ impl crate::qwen3_5_core::shared_execution::text_model::Qwen3_5TextModel for Qwe
         Qwen3_5ResidentModel::expert_memory_mode(self)
     }
 
+    fn expert_memory_mode(&self) -> ipc_protocol::ExpertMemoryMode {
+        Qwen3_5ResidentModel::expert_memory_mode(self)
+    }
+
     fn expert_residency_telemetry_for_breakdown(
         &self,
         active_memory_breakdown: &crate::memory::telemetry::MlxActiveMemoryBreakdown,
@@ -97,6 +101,51 @@ impl crate::qwen3_5_core::shared_execution::text_model::Qwen3_5TextModel for Qwe
         self.runtime()
             .memory_snapshot()
             .map_err(crate::qwen3_5_core::engine_errors::qwen3_5_runtime_error)
+    }
+
+    fn prefill_chunk_with_performance_attribution(
+        &self,
+        token_ids: &[u32],
+        starting_position_tokens: u32,
+        request_decoder_state: &mut crate::qwen3_5_core::decoder::RequestDecoderStateStack,
+        performance_attribution: &mut crate::PerformanceAttribution,
+    ) -> Result<(), crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError> {
+        Qwen3_5ResidentModel::prefill_chunk_with_performance_attribution(
+            self,
+            token_ids,
+            starting_position_tokens,
+            request_decoder_state,
+            performance_attribution,
+        )
+    }
+
+    fn build_forward_chunk_with_performance_attribution(
+        &self,
+        token_ids: &[u32],
+        starting_position_tokens: u32,
+        request_decoder_state: &mut crate::qwen3_5_core::decoder::RequestDecoderStateStack,
+        performance_attribution: &mut crate::PerformanceAttribution,
+    ) -> Result<mlx_bridge::MlxArray, crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError>
+    {
+        Qwen3_5ResidentModel::build_forward_chunk_with_performance_attribution(
+            self,
+            token_ids,
+            starting_position_tokens,
+            request_decoder_state,
+            performance_attribution,
+        )
+    }
+
+    fn async_evaluate_generation(
+        &self,
+        generated_token: &mlx_bridge::MlxArray,
+        request_decoder_state: &crate::qwen3_5_core::decoder::RequestDecoderStateStack,
+    ) -> Result<(), crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError> {
+        Qwen3_5ResidentModel::async_evaluate_generation(
+            self,
+            generated_token,
+            request_decoder_state,
+        )
     }
 }
 

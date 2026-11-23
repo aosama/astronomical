@@ -7,6 +7,10 @@
 
 use crate::InferenceEngineError;
 
+use crate::qwen3_5_core::shared_execution::forward_memory_governance::{
+    Qwen3_5ForwardKind, Qwen3_5ForwardMemoryGovernance,
+};
+
 use super::{Qwen3_5EngineState, qwen3_5_runtime_error};
 
 /// What was held when a forward began.
@@ -21,11 +25,7 @@ impl Qwen3_5EngineState {
     pub(in crate::qwen3_5_streaming) fn begin_forward_memory_measurement(
         &self,
     ) -> Result<ForwardMemoryBaseline, InferenceEngineError> {
-        let model = self
-            .core
-            .model
-            .as_ref()
-            .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+        let model = self.core.loaded_model()?;
         let memory_snapshot_before_forward = model
             .runtime()
             .memory_snapshot()
@@ -38,5 +38,54 @@ impl Qwen3_5EngineState {
         Ok(ForwardMemoryBaseline {
             active_memory_bytes: memory_snapshot_before_forward.active_memory_bytes(),
         })
+    }
+}
+
+/// What the streaming engine carries across one forward: the memory
+/// baseline taken before it and what the forward is, for the governor.
+pub struct StreamingForwardInProgress {
+    memory_baseline: ForwardMemoryBaseline,
+    measured_forward: super::completed_forward_memory::MeasuredForward,
+}
+
+/// The streaming engine never refuses a forward: it measures memory before
+/// it and tells its governor afterwards what the forward used.
+impl Qwen3_5ForwardMemoryGovernance for Qwen3_5EngineState {
+    type ForwardInProgress = StreamingForwardInProgress;
+
+    fn begin_governed_forward(
+        &mut self,
+        forward_kind: Qwen3_5ForwardKind,
+        _request_decoder_state: &crate::qwen3_5_core::decoder::RequestDecoderStateStack,
+    ) -> Result<StreamingForwardInProgress, InferenceEngineError> {
+        let measured_forward = match forward_kind {
+            Qwen3_5ForwardKind::PromptChunk { token_count } => {
+                super::completed_forward_memory::MeasuredForward::prompt(token_count)
+            }
+            Qwen3_5ForwardKind::ReplyToken => {
+                super::completed_forward_memory::MeasuredForward::reply_token()
+            }
+        };
+        Ok(StreamingForwardInProgress {
+            memory_baseline: self.begin_forward_memory_measurement()?,
+            measured_forward,
+        })
+    }
+
+    fn complete_governed_forward(
+        &self,
+        forward_in_progress: StreamingForwardInProgress,
+        stored_state_bytes: u64,
+        performance_attribution: &mut crate::PerformanceAttribution,
+    ) -> Result<runtime_integration::MlxMemorySnapshot, InferenceEngineError> {
+        let model = self.core.loaded_model()?;
+        Ok(super::completed_forward_memory::measure_completed_forward(
+            model,
+            forward_in_progress.measured_forward,
+            stored_state_bytes,
+            forward_in_progress.memory_baseline.active_memory_bytes,
+            performance_attribution,
+        )?
+        .mlx_memory_snapshot)
     }
 }

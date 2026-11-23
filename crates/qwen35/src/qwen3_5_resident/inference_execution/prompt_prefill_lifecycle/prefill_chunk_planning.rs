@@ -48,11 +48,7 @@ impl Qwen3_5EngineState {
         prefill_start: usize,
         prefill_end: usize,
     ) -> Result<PrefillChunkPlan, PromptPrefillChunkAttemptError> {
-        let model = self
-            .core
-            .model
-            .as_ref()
-.ok_or_else(super::super::generation_session_lifecycle::generation_error_constructors::engine_lost_loaded_model_error)?;
+        let model = self.core.loaded_model()?;
         let prefill_token_count = prefill_end - prefill_start;
         let capture_is_eligible = self.core.astro_ssd_prompt_cache.is_some()
             && active_request.can_use_astro_ssd_prompt_cache;

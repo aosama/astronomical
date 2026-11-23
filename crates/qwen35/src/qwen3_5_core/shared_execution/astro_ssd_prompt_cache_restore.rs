@@ -217,11 +217,7 @@ fn load_and_reconstruct_restored_prefix<Engine: Qwen3_5ExecutionCoreOwner>(
     request_decoder_state: &mut RequestDecoderStateStack,
     performance_attribution: &mut PerformanceAttribution,
 ) -> Result<Option<AstroSsdPromptCacheBlockKey>, InferenceEngineError> {
-    let model = engine
-        .execution_core()
-        .model
-        .as_ref()
-        .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+    let model = engine.execution_core().loaded_model()?;
     let restored_kv_block_load = restore_support::load_restored_kv_blocks(
         model.runtime(),
         astro_ssd_prompt_cache,

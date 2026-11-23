@@ -11,6 +11,12 @@ use tokio::{
     time::{Instant, sleep, timeout},
 };
 
+/// How long a spawned daemon may take to print its startup line. The wait
+/// only catches a daemon that never starts, so a longer one costs a passing
+/// run nothing; three seconds proved too short on the macOS CI runner under
+/// the full suite's parallel load.
+const DAEMON_STARTUP_LINE_GUARD: Duration = Duration::from_secs(30);
+
 pub(crate) const DAEMON_STARTUP_PREFIX: &str = "astronomicald listening on http://";
 pub(crate) const TEST_WORKER_READY_MODEL_ID_ENVIRONMENT_VARIABLE: &str =
     "ASTRONOMICAL_TEST_WORKER_READY_MODEL_ID";
@@ -66,7 +72,7 @@ pub(crate) async fn spawn_daemon_with_worker_ready_model(
         .take()
         .expect("the daemon should expose stdout");
     let mut daemon_stdout_lines = BufReader::new(daemon_stdout).lines();
-    let startup_line = timeout(Duration::from_secs(3), daemon_stdout_lines.next_line())
+    let startup_line = timeout(DAEMON_STARTUP_LINE_GUARD, daemon_stdout_lines.next_line())
         .await
         .expect("the daemon should print its startup line")
         .expect("daemon stdout should remain readable")
@@ -195,7 +201,7 @@ pub(crate) async fn spawn_actual_instance_daemon(
         .take()
         .expect("daemon stdout should be captured");
     let mut stdout_lines = BufReader::new(stdout).lines();
-    let startup_line = timeout(Duration::from_secs(3), stdout_lines.next_line())
+    let startup_line = timeout(DAEMON_STARTUP_LINE_GUARD, stdout_lines.next_line())
         .await
         .expect("daemon should report its endpoint")
         .expect("daemon startup output should be readable")

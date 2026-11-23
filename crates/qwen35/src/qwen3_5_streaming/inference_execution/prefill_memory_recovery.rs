@@ -26,7 +26,7 @@ use crate::{GeneratedToken, InferenceEngineError, MemoryPhase};
 
 use super::engine_request::Qwen3_5EngineRequest;
 use super::prompt_prefill_errors::PromptPrefillChunkAttemptError;
-use super::{Qwen3_5EngineState, fatal_engine_error, qwen3_5_runtime_error};
+use super::{Qwen3_5EngineState, qwen3_5_runtime_error};
 
 /// Whether a prefill memory failure may be redone at all.
 ///
@@ -48,11 +48,7 @@ impl Qwen3_5EngineState {
         failed_prefill_start: usize,
         known_shortfall_bytes: u64,
     ) -> Result<bool, InferenceEngineError> {
-        let model = self
-            .core
-            .model
-            .as_ref()
-            .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+        let model = self.core.loaded_model()?;
         if !model.govern_redo_after_memory_failure(MemoryPhase::Prefill, known_shortfall_bytes) {
             return Ok(false);
         }
@@ -73,11 +69,7 @@ impl Qwen3_5EngineState {
         active_request: &mut Qwen3_5EngineRequest,
         failed_prefill_start: usize,
     ) -> Result<(), InferenceEngineError> {
-        let model = self
-            .core
-            .model
-            .as_ref()
-            .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+        let model = self.core.loaded_model()?;
         let astro_decoder_state_cache_layout = model.astro_decoder_state_cache_layout().clone();
         // Drop the possibly half-updated decoder state first so its buffers are
         // unreferenced before the MLX buffer cache is cleared below.
@@ -287,11 +279,7 @@ impl Qwen3_5EngineState {
         active_request: &mut Qwen3_5EngineRequest,
         known_shortfall_bytes: u64,
     ) -> Result<bool, InferenceEngineError> {
-        let model = self
-            .core
-            .model
-            .as_ref()
-            .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+        let model = self.core.loaded_model()?;
         if !model.govern_redo_after_memory_failure(MemoryPhase::Prefill, known_shortfall_bytes) {
             active_request.engine_extension.layer_at_a_time_prefill = None;
             return Ok(false);

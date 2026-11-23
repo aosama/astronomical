@@ -38,7 +38,11 @@ impl MlxInferenceExecution for Qwen3_5InferenceExecution {
         request_id: RequestId,
         input_token_ids: Vec<u32>,
     ) -> Result<(), InferenceEngineError> {
-        Qwen3_5EngineState::inject_input_tokens(self, request_id, input_token_ids)
+        crate::qwen3_5_core::shared_execution::input_injection::inject_input_tokens(
+            self,
+            request_id,
+            input_token_ids,
+        )
     }
 
     fn cancel_generation(

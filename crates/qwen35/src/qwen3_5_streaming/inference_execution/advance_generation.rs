@@ -137,11 +137,7 @@ impl Qwen3_5EngineState {
     ) -> Result<MlxArray, InferenceEngineError> {
         let final_prompt_token_id = active_request.input_token_ids[final_prompt_index];
         let memory_baseline = self.begin_forward_memory_measurement()?;
-        let model = self
-            .core
-            .model
-            .as_ref()
-            .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+        let model = self.core.loaded_model()?;
         // This log is the first-token decode seam after prompt restore.
         tracing::info!(
             request_id = request_id.value(),
@@ -243,11 +239,7 @@ impl Qwen3_5EngineState {
         current_generated_token_id: u32,
     ) -> Result<(MlxArray, CompletedForwardMemoryObservation), InferenceEngineError> {
         let memory_baseline = self.begin_forward_memory_measurement()?;
-        let model = self
-            .core
-            .model
-            .as_ref()
-            .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+        let model = self.core.loaded_model()?;
         let expert_route_sample_before = begin_reply_token_expert_routes(model, active_request);
         let next_generated_token = {
             model.begin_decode_astro_expert_cache_forward();
