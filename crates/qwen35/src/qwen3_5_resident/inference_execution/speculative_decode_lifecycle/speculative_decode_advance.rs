@@ -18,8 +18,8 @@ use ipc_protocol::RequestId;
 
 use crate::GeneratedToken;
 use crate::qwen3_5_core::decoder::reply_token_mlx_buffer_cache_reclaim::reclaim_mlx_buffer_cache_between_draft_rounds;
+use crate::qwen3_5_core::shared_execution::decode_step::ActiveRequestAdvance;
 use crate::qwen3_5_core::shared_execution::generated_token_emission;
-use crate::qwen3_5_resident::inference_execution::decode_lifecycle::advance_generation::ActiveRequestAdvance;
 use crate::qwen3_5_resident::inference_execution::memory_governance::completed_forward_memory::capture_completed_forward_memory_observation;
 
 use super::super::engine_request::Qwen3_5EngineRequest;
@@ -165,7 +165,7 @@ impl Qwen3_5EngineState {
         })?;
         // The prefill-seeded bonus reports a truthful zero for the first
         // decode-forward latency, exactly as the classic pending path does.
-        if super::super::decode_lifecycle::decode_step_decisions::pending_successor_reports_zero_first_decode_time(
+        if crate::qwen3_5_core::shared_execution::decode_step_decisions::pending_successor_reports_zero_first_decode_time(
             active_request.generated_token_count,
             active_request.first_decode_forward_elapsed_millis,
         ) {

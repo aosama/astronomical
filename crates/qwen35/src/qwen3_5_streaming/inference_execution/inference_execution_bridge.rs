@@ -30,7 +30,7 @@ impl MlxInferenceExecution for Qwen3_5InferenceExecution {
         &mut self,
         request_id: RequestId,
     ) -> Result<GeneratedToken, InferenceEngineError> {
-        Qwen3_5EngineState::advance_generation(self, request_id)
+        crate::qwen3_5_core::shared_execution::decode_step::advance_generation(self, request_id)
     }
 
     fn inject_input_tokens(
