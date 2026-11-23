@@ -7,6 +7,7 @@ fn speculative_extension(queued_token_ids: &[u32]) -> ResidentRequestExtension {
     ResidentRequestExtension {
         speculative_draft_session: None,
         speculative_emission_queue: queued_token_ids.iter().copied().collect::<VecDeque<u32>>(),
+        drafting_statistics: ipc_protocol::RequestDraftingStatistics::default(),
         speculative_session_admitted: true,
     }
 }

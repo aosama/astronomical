@@ -395,6 +395,8 @@ pub struct GenerationFinalization {
     mlx_memory_telemetry: Option<MlxMemoryTelemetry>,
     expert_residency_telemetry: Option<ExpertResidencyTelemetry>,
     expert_streaming_stats: Option<Box<ExpertStreamingStats>>,
+    /// What drafting did for this reply; `None` when it never drafted.
+    drafting_statistics: Option<ipc_protocol::RequestDraftingStatistics>,
 }
 
 impl GenerationFinalization {
@@ -409,7 +411,26 @@ impl GenerationFinalization {
             mlx_memory_telemetry,
             expert_residency_telemetry,
             expert_streaming_stats: None,
+            drafting_statistics: None,
         }
+    }
+
+    /// Attaches what drafting did for this reply, when it drafted at all.
+    #[must_use]
+    pub fn with_drafting_statistics(
+        mut self,
+        drafting_statistics: ipc_protocol::RequestDraftingStatistics,
+    ) -> Self {
+        self.drafting_statistics = drafting_statistics
+            .has_drafted()
+            .then_some(drafting_statistics);
+        self
+    }
+
+    /// What drafting did for this reply; `None` when it never drafted.
+    #[must_use]
+    pub const fn drafting_statistics(&self) -> Option<ipc_protocol::RequestDraftingStatistics> {
+        self.drafting_statistics
     }
 
     /// Attaches session expert-streaming stats without disturbing `Copy`.
@@ -556,3 +577,7 @@ impl GeneratedToken {
         self
     }
 }
+
+#[cfg(test)]
+#[path = "contract_tests.rs"]
+mod tests;

@@ -102,3 +102,31 @@ fn should_omit_cached_tokens_from_usage_when_zero() {
         "expected no prompt_tokens_details in serialized usage: {serialized}"
     );
 }
+
+#[test]
+fn should_report_a_draft_models_kept_and_thrown_away_guesses_as_prediction_tokens() {
+    let token_usage = OpenAiTokenUsage::new(28, 500)
+        .expect("small token counts should produce non-overflowing usage")
+        .with_drafted_tokens(310, 290);
+
+    let serialized =
+        serde_json::to_string(&token_usage).expect("the usage with drafting should serialize");
+
+    assert!(
+        serialized.contains(
+            r#""completion_tokens_details":{"accepted_prediction_tokens":310,"rejected_prediction_tokens":290}"#
+        ),
+        "{serialized}"
+    );
+}
+
+#[test]
+fn should_omit_completion_token_details_for_a_reply_that_never_drafted() {
+    let token_usage = OpenAiTokenUsage::new(28, 500)
+        .expect("small token counts should produce non-overflowing usage");
+    let serialized = serde_json::to_string(&token_usage).expect("the usage should serialize");
+    assert!(
+        !serialized.contains("completion_tokens_details"),
+        "{serialized}"
+    );
+}

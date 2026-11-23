@@ -131,6 +131,9 @@ where
     where
         WriteTransport: AsyncWrite + Unpin,
     {
+        // Kept before the reportable-state check: a reply can draft on an
+        // engine that reports no memory or residency facts.
+        active_generation.drafting_statistics = generation_finalization.drafting_statistics();
         if !generation_finalization.has_reportable_state() {
             return Ok(());
         }
@@ -365,17 +368,8 @@ where
     where
         WriteTransport: AsyncWrite + Unpin,
     {
-        if active_generation
-            .prompt_work_reuse
-            .target_eligible_token_count
-            > 0
-        {
-            event_writer
-                .send_event(&WorkerEvent::PromptWorkReuse {
-                    request_id: active_generation.request_id,
-                    prompt_work_reuse: active_generation.prompt_work_reuse,
-                })
-                .await?;
+        for reply_report in reply_reports(active_generation).into_iter().flatten() {
+            event_writer.send_event(&reply_report).await?;
         }
         event_writer
             .send_event(&WorkerEvent::Completed {
@@ -398,15 +392,14 @@ where
     /// Emits a `WorkerEvent::AstroSsdPromptCacheStats` event when the engine
     /// has an open `astro_ssd_prompt_cache`. Silently skips when the engine returns
     /// `None` (no `astro_ssd_prompt_cache` open) or when collection fails.
-    /// The last events of a model load. The Neural Engine status comes after the
-    /// runtime configuration because the daemon clears it when it completes a swap,
-    /// which happens on that configuration.
-    pub(crate) async fn emit_astro_ssd_prompt_cache_stats_then_neural_engine_status<
-        WriteTransport,
-    >(
+    /// The last events of a model load. The Neural Engine and drafter statuses
+    /// come after the runtime configuration because the daemon clears them when
+    /// it completes a swap, which happens on that configuration.
+    pub(crate) async fn emit_astro_ssd_prompt_cache_stats_then_engine_statuses<WriteTransport>(
         &mut self,
         event_writer: &mut ProtocolWriter<WriteTransport>,
         neural_engine_prefill_event: Option<&WorkerEvent>,
+        draft_model_event: Option<&WorkerEvent>,
     ) -> Result<(), WorkerRuntimeError>
     where
         WriteTransport: AsyncWrite + Unpin,
@@ -420,6 +413,9 @@ where
         );
         if let Some(neural_engine_prefill_event) = neural_engine_prefill_event {
             event_writer.send_event(neural_engine_prefill_event).await?;
+        }
+        if let Some(draft_model_event) = draft_model_event {
+            event_writer.send_event(draft_model_event).await?;
         }
         Ok(())
     }
@@ -657,3 +653,26 @@ pub(crate) fn worker_memory_snapshot(
 #[cfg(test)]
 #[path = "output_tests.rs"]
 mod tests;
+
+/// The reports a reply sends just before its completion, each only when it
+/// has something to say: the prompt work it reused and what drafting did.
+fn reply_reports<RequestOutput, RetryRequest>(
+    active_generation: &ActiveEngineGeneration<RequestOutput, RetryRequest>,
+) -> [Option<WorkerEvent>; 2] {
+    let prompt_work_reuse_report = (active_generation
+        .prompt_work_reuse
+        .target_eligible_token_count
+        > 0)
+    .then_some(WorkerEvent::PromptWorkReuse {
+        request_id: active_generation.request_id,
+        prompt_work_reuse: active_generation.prompt_work_reuse,
+    });
+    let drafting_report =
+        active_generation
+            .drafting_statistics
+            .map(|drafting| WorkerEvent::DraftingReport {
+                request_id: active_generation.request_id,
+                drafting,
+            });
+    [prompt_work_reuse_report, drafting_report]
+}

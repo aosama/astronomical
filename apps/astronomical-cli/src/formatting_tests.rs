@@ -1,6 +1,9 @@
-use ipc_protocol::NeuralEnginePrefillStatus;
+use ipc_protocol::{
+    DraftModelGeneration, DraftModelLocation, DraftModelStatus, NeuralEnginePrefillStatus,
+    RequestDraftingStatistics,
+};
 
-use super::render_neural_engine_prefill;
+use super::{render_draft_model, render_neural_engine_prefill, render_reply_drafting};
 
 fn preparing(
     completed_program_count: u32,
@@ -132,4 +135,57 @@ fn should_name_places_in_the_download_line_as_people_say_them() {
 #[test]
 fn should_name_place_zero_without_a_special_suffix() {
     assert_eq!(super::ordinal_place(0), "0th");
+}
+
+#[test]
+fn should_describe_a_model_drafting_with_its_own_drafter() {
+    let drafting_status = DraftModelStatus::Drafting {
+        generation: DraftModelGeneration::Dflash,
+        location: DraftModelLocation::Bundled,
+        tree_node_budget: 3,
+    };
+    assert_eq!(
+        render_draft_model(&drafting_status),
+        "drafting with DFlash, the model's own drafter; up to 3 guessed words checked per step"
+    );
+}
+
+#[test]
+fn should_say_none_for_a_model_without_a_drafter() {
+    assert_eq!(render_draft_model(&DraftModelStatus::None), "none");
+}
+
+#[test]
+fn should_give_the_reason_an_installed_drafter_is_not_used() {
+    let unavailable_status = DraftModelStatus::Unavailable {
+        reason: "this Mac's GPU cannot run the kernels drafting needs; an M5-family GPU can"
+            .to_owned(),
+    };
+    assert_eq!(
+        render_draft_model(&unavailable_status),
+        "not in use: this Mac's GPU cannot run the kernels drafting needs; an M5-family GPU can"
+    );
+}
+
+#[test]
+fn should_describe_the_last_replys_kept_guesses_as_a_share() {
+    let reply_drafting = RequestDraftingStatistics {
+        round_count: 200,
+        drafted_token_count: 600,
+        accepted_token_count: 300,
+    };
+    assert_eq!(
+        render_reply_drafting(&reply_drafting),
+        "last reply kept 300 of 600 guessed words (50%) over 200 steps"
+    );
+}
+
+#[test]
+fn should_not_divide_by_zero_when_a_round_guessed_nothing() {
+    let reply_drafting = RequestDraftingStatistics {
+        round_count: 1,
+        drafted_token_count: 0,
+        accepted_token_count: 0,
+    };
+    assert!(render_reply_drafting(&reply_drafting).contains("(0%)"));
 }

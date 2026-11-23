@@ -23,6 +23,8 @@ fn status_reporting(
         model_load_in_flight,
         request_progress_count,
         neural_engine_prefill: None,
+        draft_model: None,
+        last_reply_drafting: None,
     }
 }
 

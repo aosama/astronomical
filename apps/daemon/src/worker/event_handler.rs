@@ -20,14 +20,14 @@ use crate::{
     worker::generation::completion_event::handle_worker_completion_event,
     worker::generation::output::{
         handle_worker_first_decode_completed, handle_worker_generation_progress,
-        handle_worker_output, handle_worker_prompt_work_reuse,
+        handle_worker_output, handle_worker_reply_report,
     },
     worker::generation::prefill_progress::handle_worker_prefill_progress,
     worker::generation::preparation::handle_generation_preparation_started,
     worker::health::{
         clear_active_request_progress, clear_latest_mlx_memory_snapshot, publish_activity,
-        publish_astro_ssd_prompt_cache_stats, publish_expert_memory_mode,
-        publish_expert_streaming_stats, publish_health, publish_latest_mlx_memory_snapshot,
+        publish_astro_ssd_prompt_cache_stats, publish_draft_model, publish_expert_memory_mode,
+        publish_expert_streaming_stats, publish_latest_mlx_memory_snapshot,
         publish_mlx_memory_limit_changed, publish_mlx_memory_limit_rejection,
         publish_model_load_in_flight, publish_neural_engine_prefill,
         publish_worker_expert_residency,
@@ -56,22 +56,14 @@ pub(super) fn handle_worker_event(
         }
         model_state_event @ (WorkerEvent::ExpertMemoryModeChanged { .. }
         | WorkerEvent::NeuralEnginePrefillChanged { .. }
+        | WorkerEvent::DraftModelChanged { .. }
         | WorkerEvent::NeuralEngineChunkFinished { .. }
         | WorkerEvent::ModelLoadInFlight { .. }) => {
             apply_model_state_event(model_state_event, health_snapshot)
         }
-        worker_ready_event @ WorkerEvent::Ready { .. } => {
-            apply_worker_ready(
-                worker_ready_event,
-                health_snapshot,
-                is_ready,
-                active_request,
-                model_load_deadline,
-            )?;
-        }
-        worker_idle_event @ WorkerEvent::Idle { .. } => {
-            apply_worker_idle(
-                worker_idle_event,
+        readiness_event @ (WorkerEvent::Ready { .. } | WorkerEvent::Idle { .. }) => {
+            crate::worker::readiness_event::apply_worker_readiness_event(
+                readiness_event,
                 health_snapshot,
                 is_ready,
                 active_request,
@@ -103,7 +95,8 @@ pub(super) fn handle_worker_event(
         | WorkerEvent::GenerationPreparationStarted { .. }
         | WorkerEvent::GenerationProgress { .. }
         | WorkerEvent::FirstDecodeCompleted { .. }
-        | WorkerEvent::PromptWorkReuse { .. }) => {
+        | WorkerEvent::PromptWorkReuse { .. }
+        | WorkerEvent::DraftingReport { .. }) => {
             dispatch_chat_progress_event(worker_progress_event, health_snapshot, active_request)?;
         }
         worker_completed_event @ WorkerEvent::Completed { .. } => {
@@ -222,7 +215,7 @@ fn apply_memory_limit_event(
         restart_required_event @ WorkerEvent::MlxMemoryLimitRestartRequired { .. } => {
             apply_mlx_memory_limit_restart_required(restart_required_event, health_snapshot);
         }
-        // The dispatch match routes only the four events above here.
+        // The dispatch match routes only the three events above here.
         _ => {}
     }
 }
@@ -236,9 +229,6 @@ fn apply_model_state_event(
         WorkerEvent::ExpertMemoryModeChanged { expert_memory_mode } => {
             publish_expert_memory_mode(health_snapshot, expert_memory_mode);
         }
-        WorkerEvent::NeuralEnginePrefillChanged {
-            neural_engine_prefill,
-        } => publish_neural_engine_prefill(health_snapshot, Some(neural_engine_prefill)),
         WorkerEvent::NeuralEngineChunkFinished { report } => {
             crate::worker::health::record_neural_engine_chunk(health_snapshot, report);
         }
@@ -248,80 +238,18 @@ fn apply_model_state_event(
             // The worker has already dropped the previous model and its programs, so
             // what it last said about them no longer describes anything.
             publish_neural_engine_prefill(health_snapshot, None);
+            publish_draft_model(health_snapshot, None);
             publish_model_load_in_flight(health_snapshot, Some(model_load_in_flight));
         }
-        // The dispatch match routes only the three events above here.
-        _ => {}
+        // The dispatch match routes only the model-state events here, so what
+        // remains is the Neural Engine's report or the drafter's.
+        engine_status_event => {
+            crate::worker::health::publish_engine_status_event(
+                health_snapshot,
+                engine_status_event,
+            );
+        }
     }
-}
-
-/// Applies worker readiness with a loaded model. Mirrors the inlined arm,
-/// including the duplicate-readiness protocol violation.
-fn apply_worker_ready(
-    worker_ready_event: WorkerEvent,
-    health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
-    is_ready: &mut bool,
-    active_request: &mut Option<ActiveWorkerRequest>,
-    model_load_deadline: &mut Option<Instant>,
-) -> Result<(), WorkerControlError> {
-    // The dispatch match routes only Ready events here; the let-else keeps
-    // the function total without a silent catch-all arm.
-    let WorkerEvent::Ready {
-        model_id,
-        capabilities,
-    } = worker_ready_event
-    else {
-        return Ok(());
-    };
-    if *is_ready || active_request.is_some() {
-        return Err(protocol_violation("duplicate worker readiness"));
-    }
-    *is_ready = true;
-    // A worker that opted in announces this right after readiness.
-    publish_neural_engine_prefill(health_snapshot, None);
-    tracing::info!(model = %model_id, "worker model is ready");
-    *model_load_deadline = None;
-    publish_health(
-        health_snapshot,
-        WorkerHealthSnapshot::ready_with_model(model_id, capabilities),
-    );
-    Ok(())
-}
-
-/// Applies worker readiness without a model, carrying the reported memory
-/// ceilings. Mirrors the inlined arm.
-fn apply_worker_idle(
-    worker_idle_event: WorkerEvent,
-    health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
-    is_ready: &mut bool,
-    active_request: &mut Option<ActiveWorkerRequest>,
-    model_load_deadline: &mut Option<Instant>,
-) -> Result<(), WorkerControlError> {
-    // Same routing contract as apply_worker_ready.
-    let WorkerEvent::Idle {
-        machine_mlx_memory_ceiling_bytes,
-        effective_mlx_memory_ceiling_bytes,
-        minimum_mlx_memory_ceiling_bytes,
-        wired_residency_budget_bytes,
-    } = worker_idle_event
-    else {
-        return Ok(());
-    };
-    if *is_ready || active_request.is_some() {
-        return Err(protocol_violation("duplicate worker idle event"));
-    }
-    *is_ready = true;
-    *model_load_deadline = None;
-    publish_health(
-        health_snapshot,
-        WorkerHealthSnapshot::ready_without_model_with_memory_limits(
-            machine_mlx_memory_ceiling_bytes,
-            effective_mlx_memory_ceiling_bytes,
-            minimum_mlx_memory_ceiling_bytes,
-            wired_residency_budget_bytes,
-        ),
-    );
-    Ok(())
 }
 
 /// Applies one standalone MLX memory sample: publishes the public status
@@ -587,9 +515,9 @@ fn apply_worker_completed(
 }
 
 /// Dispatches the request-scoped chat progress events (output fragments,
-/// prefill progress, generation progress, first decode, prompt work reuse) to
-/// their dedicated handlers. Routed from the main dispatch match; total
-/// without a silent catch-all.
+/// prefill progress, generation progress, first decode, prompt work reuse,
+/// drafting report) to their dedicated handlers. The main dispatch match
+/// routes only these events here, so its final arm never runs.
 fn dispatch_chat_progress_event(
     worker_progress_event: WorkerEvent,
     health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
@@ -628,13 +556,12 @@ fn dispatch_chat_progress_event(
                 active_chat_request_mut(active_request)?,
             )
         }
-        worker_prompt_work_reuse_event @ WorkerEvent::PromptWorkReuse { .. } => {
-            handle_worker_prompt_work_reuse(
-                worker_prompt_work_reuse_event,
-                health_snapshot,
-                active_chat_request(active_request)?,
-            )
-        }
+        reply_report_event @ (WorkerEvent::PromptWorkReuse { .. }
+        | WorkerEvent::DraftingReport { .. }) => handle_worker_reply_report(
+            reply_report_event,
+            health_snapshot,
+            active_chat_request_mut(active_request)?,
+        ),
         _ => Ok(()),
     }
 }
@@ -683,15 +610,6 @@ fn active_chat_request_mut(
     active_request
         .as_mut()
         .and_then(ActiveWorkerRequest::chat_mut)
-        .ok_or_else(|| protocol_violation("chat event without an active chat request"))
-}
-
-fn active_chat_request(
-    active_request: &Option<ActiveWorkerRequest>,
-) -> Result<&ActiveGeneration, WorkerControlError> {
-    active_request
-        .as_ref()
-        .and_then(ActiveWorkerRequest::chat)
         .ok_or_else(|| protocol_violation("chat event without an active chat request"))
 }
 

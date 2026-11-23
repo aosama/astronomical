@@ -82,7 +82,8 @@ impl OpenAiResponsesCollector {
                 });
                 Ok(())
             }
-            ChatGenerationStreamEvent::PrefillProgress { .. } => Ok(()),
+            ChatGenerationStreamEvent::PrefillProgress { .. }
+            | ChatGenerationStreamEvent::DraftingReport(_) => Ok(()),
             ChatGenerationStreamEvent::Completed { .. } => {
                 Err(OpenAiResponsesAssemblyError::UnexpectedCompletionEvent)
             }

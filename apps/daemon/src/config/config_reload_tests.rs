@@ -607,23 +607,12 @@ pub(super) fn sample_runtime_model_policy() -> RuntimeModelPolicy {
 }
 
 fn sample_discovered_model(revision: &str) -> config::DiscoveredModel {
-    config::DiscoveredModel {
-        model_id: "default".to_owned(),
-        provider_model_id: None,
-        model_family: config::ModelFamily::Qwen3_5,
-        revision: revision.to_owned(),
-        model_directory: PathBuf::from("/fictional/models/default"),
-        capabilities: ModelCapabilities::Chat(ChatModelCapabilities {
-            context_window: 65_536,
-            max_input_tokens: 65_535,
-            max_output_tokens: 20_480,
-            supports_vision: false,
-            supports_reasoning: true,
-            supports_tool_calls: true,
-        }),
-        license: None,
-        model_size_bytes: 1_000,
-    }
+    crate::library::discovered_model_test_support::discovered_chat_model(
+        "default",
+        None,
+        revision,
+        "/fictional/models/default",
+    )
 }
 
 fn image_discovered_model(revision: &str, supports_image_editing: bool) -> config::DiscoveredModel {

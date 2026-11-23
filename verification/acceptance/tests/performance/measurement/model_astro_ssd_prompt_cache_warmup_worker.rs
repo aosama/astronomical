@@ -415,7 +415,8 @@ async fn measure_worker_summarization(
                 generated_text.push_str(&function_name);
                 generated_text.push_str(&arguments_json);
             }
-            ChatGenerationStreamEvent::PrefillProgress { .. } => {}
+            ChatGenerationStreamEvent::PrefillProgress { .. }
+            | ChatGenerationStreamEvent::DraftingReport(_) => {}
             ChatGenerationStreamEvent::Completed {
                 prompt_token_count,
                 generated_token_count,

@@ -26,6 +26,24 @@ impl Qwen3_5EngineState {
                     self.chunking.experimental_neural_engine_prefill_enabled,
                 ),
             )
+            .with_draft_model_status(self.draft_model_status())
+    }
+
+    /// This engine never drafts; status names a drafter it would have used.
+    fn draft_model_status(&self) -> ipc_protocol::DraftModelStatus {
+        match self.model.as_ref() {
+            Some(loaded_model) => {
+                crate::speculative_decoding::unused_drafter_status::streaming_load_status(
+                    &self.model_directory,
+                    &crate::speculative_decoding::drafter_discovery::DrafterPairing {
+                        target_layer_count: loaded_model.config.layer_count() as i32,
+                        target_hidden_size: loaded_model.config.hidden_size() as i32,
+                        target_vocabulary_size: loaded_model.config.vocabulary_size() as i32,
+                    },
+                )
+            }
+            None => ipc_protocol::DraftModelStatus::None,
+        }
     }
 
     #[allow(clippy::too_many_arguments)]

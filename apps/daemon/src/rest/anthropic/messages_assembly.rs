@@ -88,7 +88,8 @@ impl AnthropicMessageCollector {
                 function_name,
                 arguments_json,
             }),
-            ChatGenerationStreamEvent::PrefillProgress { .. } => {}
+            ChatGenerationStreamEvent::PrefillProgress { .. }
+            | ChatGenerationStreamEvent::DraftingReport(_) => {}
             ChatGenerationStreamEvent::Completed { .. } => {
                 return Err(AnthropicMessagesAssemblyError::UnexpectedCompletionEvent);
             }

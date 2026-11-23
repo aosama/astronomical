@@ -72,6 +72,8 @@ async fn should_report_the_loaded_model_identity_for_status_requests() {
             model_load_in_flight: None,
             request_progress_count: 0,
             neural_engine_prefill: None,
+            draft_model: None,
+            last_reply_drafting: None,
         }
     );
 

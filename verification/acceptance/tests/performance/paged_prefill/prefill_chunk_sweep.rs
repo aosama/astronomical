@@ -227,6 +227,8 @@ async fn run_model_with_prefill_chunk_tokens(prefill_chunk_tokens: u32) -> Prefi
             | WorkerEvent::GenerationFinalized { .. }
             | WorkerEvent::ExpertMemoryModeChanged { .. }
             | WorkerEvent::NeuralEnginePrefillChanged { .. }
+            | WorkerEvent::DraftModelChanged { .. }
+            | WorkerEvent::DraftingReport { .. }
             | WorkerEvent::NeuralEngineChunkFinished { .. }
             | WorkerEvent::ModelLoadInFlight { .. }
             | WorkerEvent::AstroSsdPromptCacheStats { .. }

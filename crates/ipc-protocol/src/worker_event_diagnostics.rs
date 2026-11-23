@@ -40,6 +40,8 @@ impl WorkerEvent {
             Self::MlxMemoryLimitRestartRequired => "mlx_memory_limit_restart_required",
             Self::ExpertMemoryModeChanged => "expert_memory_mode_changed",
             Self::NeuralEnginePrefillChanged => "neural_engine_prefill_changed",
+            Self::DraftModelChanged => "draft_model_changed",
+            Self::DraftingReport => "drafting_report",
             Self::NeuralEngineChunkFinished => "neural_engine_chunk_finished",
             Self::ModelLoadInFlight => "model_load_in_flight",
             Self::GenerationFinalized => "generation_finalized",
@@ -103,6 +105,7 @@ impl WorkerEvent {
             | Self::GenerationProgress { request_id, .. }
             | Self::FirstDecodeCompleted { request_id, .. }
             | Self::PromptWorkReuse { request_id, .. }
+            | Self::DraftingReport { request_id, .. }
             | Self::Completed { request_id, .. }
             | Self::Failed { request_id, .. } => Some(*request_id),
             Self::RuntimeFeatureConfigurationApplied { .. }
@@ -113,6 +116,7 @@ impl WorkerEvent {
             | Self::MlxMemoryLimitRestartRequired { .. }
             | Self::ExpertMemoryModeChanged { .. }
             | Self::NeuralEnginePrefillChanged { .. }
+            | Self::DraftModelChanged { .. }
             | Self::NeuralEngineChunkFinished { .. }
             | Self::ModelLoadInFlight { .. }
             | Self::ExpertStreamingStats { .. }

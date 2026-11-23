@@ -1,4 +1,7 @@
-use ipc_protocol::{NeuralEnginePrefillStatus, WorkerEvent};
+use ipc_protocol::{
+    DraftModelGeneration, DraftModelLocation, DraftModelStatus, NeuralEnginePrefillStatus,
+    WorkerEvent,
+};
 
 use super::EngineLoadResult;
 
@@ -57,4 +60,36 @@ fn should_explain_an_unsupported_engine_only_when_the_user_opted_in() {
         EngineLoadResult::neural_engine_prefill_unsupported_when_enabled(true),
         NeuralEnginePrefillStatus::Unavailable { .. }
     ));
+}
+
+#[test]
+fn should_announce_no_drafter_state_for_an_engine_that_never_drafts() {
+    assert_eq!(EngineLoadResult::new().draft_model_event(), None);
+}
+
+#[test]
+fn should_announce_that_the_loaded_model_drafts() {
+    let drafting_status = DraftModelStatus::Drafting {
+        generation: DraftModelGeneration::Dflash,
+        location: DraftModelLocation::Bundled,
+        tree_node_budget: 4,
+    };
+    let load_result = EngineLoadResult::new().with_draft_model_status(drafting_status.clone());
+    assert_eq!(
+        load_result.draft_model_event(),
+        Some(WorkerEvent::DraftModelChanged {
+            draft_model: drafting_status
+        })
+    );
+}
+
+#[test]
+fn should_announce_a_model_without_a_drafter_rather_than_stay_silent() {
+    let load_result = EngineLoadResult::new().with_draft_model_status(DraftModelStatus::None);
+    assert_eq!(
+        load_result.draft_model_event(),
+        Some(WorkerEvent::DraftModelChanged {
+            draft_model: DraftModelStatus::None
+        })
+    );
 }

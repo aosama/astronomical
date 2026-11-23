@@ -305,6 +305,74 @@ test("should_say_where_a_hugging_face_copy_lives_and_explain_it_once_under_the_l
     assert.equal(textsOfClass(catalogContainer, "download-models-installed-footnote").length, 1);
 });
 
+test("should_say_a_model_carries_a_draft_model_before_it_loads", () => {
+    const catalogContainer = renderWithDownload(
+        { state: "idle" },
+        [
+            validCatalogEntry({ huggingface_id: "astronomical-test/Drafter", model_id: "Drafter", ready_on_this_mac: true, bundled_drafter: "dflash" }),
+            validCatalogEntry({ huggingface_id: "astronomical-test/Plain", model_id: "Plain", ready_on_this_mac: true })
+        ]
+    );
+
+    assert.deepEqual(textsOfClass(catalogContainer, "download-models-installed-source"), ["Has a draft model for quicker replies"]);
+});
+
+test("should_show_the_loaded_models_last_reply_kept_share_while_it_drafts", () => {
+    const catalogContainer = renderWithDownload(
+        { state: "idle" },
+        [validCatalogEntry({ huggingface_id: "astronomical-test/Drafter", model_id: "Drafter", ready_on_this_mac: true, bundled_drafter: "dflash2" })],
+        `loadedModelId = "Drafter";
+         loadedDraftModel = { state: "drafting", generation: "dflash2", location: "bundled", tree_node_budget: 3 };
+         loadedReplyDrafting = { round_count: 100, drafted_token_count: 300, accepted_token_count: 150 };`
+    );
+
+    assert.deepEqual(textsOfClass(catalogContainer, "download-models-installed-source"), ["Drafting: the last reply kept 50% of the guessed words"]);
+});
+
+test("should_give_the_reason_a_loaded_models_draft_model_is_not_in_use", () => {
+    const catalogContainer = renderWithDownload(
+        { state: "idle" },
+        [validCatalogEntry({ huggingface_id: "astronomical-test/Drafter", model_id: "Drafter", ready_on_this_mac: true, bundled_drafter: "dflash" })],
+        `loadedModelId = "Drafter";
+         loadedDraftModel = { state: "unavailable", reason: "the memory limit leaves no room for it beside the model" };`
+    );
+
+    assert.deepEqual(textsOfClass(catalogContainer, "download-models-installed-source"), [
+        "Has a draft model, not in use: the memory limit leaves no room for it beside the model"
+    ]);
+});
+
+test("should_show_a_library_drafter_for_the_loaded_model_without_one_of_its_own", () => {
+    const catalogContainer = renderWithDownload(
+        { state: "idle" },
+        [validCatalogEntry({ huggingface_id: "astronomical-test/Borrower", model_id: "Borrower", ready_on_this_mac: true })],
+        `loadedModelId = "Borrower";
+         loadedDraftModel = { state: "drafting", generation: "dflash2", location: "library", tree_node_budget: 3 };`
+    );
+
+    assert.deepEqual(textsOfClass(catalogContainer, "download-models-installed-source"), ["Drafting for quicker replies"]);
+});
+
+test("should_say_nothing_for_a_loaded_model_without_any_drafter", () => {
+    const catalogContainer = renderWithDownload(
+        { state: "idle" },
+        [validCatalogEntry({ huggingface_id: "astronomical-test/Plain", model_id: "Plain", ready_on_this_mac: true })],
+        `loadedModelId = "Plain";
+         loadedDraftModel = { state: "none" };`
+    );
+
+    assert.deepEqual(textsOfClass(catalogContainer, "download-models-installed-source"), []);
+});
+
+test("should_ignore_an_unknown_drafter_kind_from_the_catalog", () => {
+    const catalogContainer = renderWithDownload(
+        { state: "idle" },
+        [validCatalogEntry({ huggingface_id: "astronomical-test/Odd", model_id: "Odd", ready_on_this_mac: true, bundled_drafter: "medusa" })]
+    );
+
+    assert.deepEqual(textsOfClass(catalogContainer, "download-models-installed-source"), []);
+});
+
 function renderIconsWithContext(catalogEntries, contextAdditions = {}) {
     const scriptContext = createDownloadModelsContext();
     const downloadModelsDocument = createDownloadModelsDocument();

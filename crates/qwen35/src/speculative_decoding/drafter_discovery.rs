@@ -26,9 +26,14 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::speculative_decoding::dflash_drafter::{DFlashDrafterConfiguration, DrafterGeneration};
+use super::dflash_drafter::{DFlashDrafterConfiguration, DrafterGeneration};
 
-use super::engine_draft_runtime::Qwen3_5SpeculativeDraftLoadingError;
+/// Why the library could not be searched for a drafter.
+#[derive(Debug, thiserror::Error)]
+pub enum DrafterDiscoveryError {
+    #[error("the model library directory cannot be listed to find a DFlash drafter: {source}")]
+    LibraryUnlistable { source: std::io::Error },
+}
 
 const HUGGINGFACE_SNAPSHOTS_DIRECTORY_NAME: &str = "snapshots";
 const CONFIGURATION_FILE_NAME: &str = "config.json";
@@ -63,7 +68,7 @@ impl DrafterPairing {
 pub fn paired_drafter_directory(
     target_model_directory: &Path,
     pairing: &DrafterPairing,
-) -> Result<Option<(PathBuf, DFlashDrafterConfiguration)>, Qwen3_5SpeculativeDraftLoadingError> {
+) -> Result<Option<(PathBuf, DFlashDrafterConfiguration)>, DrafterDiscoveryError> {
     let bundled_directory = target_model_directory.join(BUNDLED_DRAFTER_DIRECTORY_NAME);
     if let Some(drafter_configuration) = pairing_configuration(&bundled_directory, pairing) {
         return Ok(Some((bundled_directory, drafter_configuration)));
@@ -136,7 +141,7 @@ fn pairing_configuration(
 /// the two layouts that is.
 fn sibling_model_directories(
     target_model_directory: &Path,
-) -> Result<Vec<PathBuf>, Qwen3_5SpeculativeDraftLoadingError> {
+) -> Result<Vec<PathBuf>, DrafterDiscoveryError> {
     let parent_directory = target_model_directory.parent();
     let is_hub_snapshot = parent_directory
         .and_then(Path::file_name)
@@ -165,11 +170,9 @@ fn sibling_model_directories(
     Ok(model_directories)
 }
 
-fn child_directories(
-    directory: &Path,
-) -> Result<Vec<PathBuf>, Qwen3_5SpeculativeDraftLoadingError> {
+fn child_directories(directory: &Path) -> Result<Vec<PathBuf>, DrafterDiscoveryError> {
     let entries = std::fs::read_dir(directory)
-        .map_err(|source| Qwen3_5SpeculativeDraftLoadingError::LibraryUnlistable { source })?;
+        .map_err(|source| DrafterDiscoveryError::LibraryUnlistable { source })?;
     let mut directories = Vec::new();
     for entry in entries.flatten() {
         let path = entry.path();

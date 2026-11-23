@@ -21,6 +21,7 @@ mod daemon_transport_error;
 mod decisions;
 #[cfg(test)]
 mod decisions_tests;
+mod draft_model_status;
 mod embeddings;
 #[cfg(test)]
 mod embeddings_tests;
@@ -43,6 +44,7 @@ mod protocol_message_tests;
 mod protocol_reader;
 mod protocol_writer;
 mod reply_memory_record;
+mod request_drafting_statistics;
 mod speech;
 mod worker_chunking_configuration;
 #[cfg(test)]
@@ -75,14 +77,15 @@ pub use daemon_client::DaemonIpcClient;
 pub use daemon_listener::{AcceptedDaemonConnection, DaemonIpcListener, StreamingResponseWriter};
 pub use daemon_protocol::{
     DAEMON_APPLICATION_NAME, DAEMON_PROTOCOL_VERSION, DaemonCatalogEntry, DaemonDownloadJob,
-    DaemonListedModel, DaemonRequest, DaemonResponse, DaemonWorkerStatus, ImageGenerateRequest,
-    MAXIMUM_SPEECH_AUDIO_FRAME_BYTES, SpeakGenerateRequest,
+    DaemonListedModel, DaemonModelUnloadStatus, DaemonRequest, DaemonResponse, DaemonWorkerStatus,
+    ImageGenerateRequest, MAXIMUM_SPEECH_AUDIO_FRAME_BYTES, SpeakGenerateRequest,
 };
 pub use daemon_transport_error::DaemonTransportError;
 pub use decisions::{
     DecisionTrainingCommand, DecisionsCommand, DecisionsValidationError,
     MINIMUM_DECISION_TOKENS_PER_QUESTION, WorkerDecisionCapabilities,
 };
+pub use draft_model_status::{DraftModelGeneration, DraftModelLocation, DraftModelStatus};
 pub use embeddings::{
     EmbeddingEncodingFormat, EmbeddingsCommand, EmbeddingsFailureReason, EmbeddingsValidationError,
 };
@@ -117,6 +120,7 @@ pub use protocol_message::{
 pub use protocol_reader::ProtocolReader;
 pub use protocol_writer::ProtocolWriter;
 pub use reply_memory_record::ReplyMemoryRecord;
+pub use request_drafting_statistics::RequestDraftingStatistics;
 pub use speech::{
     SpeechCommand, SpeechResultMetadata, SpokenAudioSegment, WorkerSpeechCapabilities,
 };

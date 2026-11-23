@@ -111,7 +111,18 @@ pub(super) struct LoadedReplacement<
     pub(super) runtime_configuration: ipc_protocol::WorkerLoadedModelRuntimeConfiguration,
     pub(super) engine_placement: Option<EnginePlacement>,
     pub(super) startup_residency_facts: Option<crate::StreamingStartupResidencyFacts>,
+    /// The statuses a load announces last; empty for runtimes that report
+    /// neither a Neural Engine nor a drafter.
+    pub(super) load_status_events: LoadStatusEvents,
+}
+
+/// The events a model load announces after its configuration: what the
+/// Neural Engine prefill is doing and what the engine found for a drafter.
+#[derive(Default)]
+pub(super) struct LoadStatusEvents {
     pub(super) neural_engine_prefill_event: Option<WorkerEvent>,
+    /// `None` for engines that never look for a drafter.
+    pub(super) draft_model_event: Option<WorkerEvent>,
 }
 
 impl<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine, DecisionsEngine, TextToSpeechEngine>
@@ -207,7 +218,7 @@ where
             runtime_configuration,
             engine_placement,
             startup_residency_facts,
-            neural_engine_prefill_event,
+            load_status_events,
         } = self
             .load_replacement_runtime(factory_runtime, &model_configuration, event_writer)
             .await?;
@@ -243,9 +254,10 @@ where
         self.emit_mlx_memory_sample(MlxMemorySnapshotSource::ModelLoaded, event_writer)
             .await?;
         announce_floor_raise(floor_raise_event, event_writer).await?;
-        self.emit_astro_ssd_prompt_cache_stats_then_neural_engine_status(
+        self.emit_astro_ssd_prompt_cache_stats_then_engine_statuses(
             event_writer,
-            neural_engine_prefill_event.as_ref(),
+            load_status_events.neural_engine_prefill_event.as_ref(),
+            load_status_events.draft_model_event.as_ref(),
         )
         .await
     }
@@ -388,7 +400,10 @@ where
             runtime_configuration,
             engine_placement,
             startup_residency_facts: engine_load_result.startup_residency_facts(),
-            neural_engine_prefill_event: engine_load_result.neural_engine_prefill_event(),
+            load_status_events: LoadStatusEvents {
+                neural_engine_prefill_event: engine_load_result.neural_engine_prefill_event(),
+                draft_model_event: engine_load_result.draft_model_event(),
+            },
         })
     }
 
@@ -438,7 +453,7 @@ where
             // No autoregressive engine is loaded, so there is no placement.
             engine_placement: None,
             startup_residency_facts: None,
-            neural_engine_prefill_event: None,
+            load_status_events: LoadStatusEvents::default(),
         })
     }
 
@@ -488,7 +503,7 @@ where
             // No autoregressive engine is loaded, so there is no placement.
             engine_placement: None,
             startup_residency_facts: None,
-            neural_engine_prefill_event: None,
+            load_status_events: LoadStatusEvents::default(),
         })
     }
 
@@ -540,7 +555,7 @@ where
             // No autoregressive engine is loaded, so there is no placement.
             engine_placement: None,
             startup_residency_facts: None,
-            neural_engine_prefill_event: None,
+            load_status_events: LoadStatusEvents::default(),
         })
     }
 }

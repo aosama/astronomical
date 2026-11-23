@@ -12,6 +12,7 @@
 
 use std::path::Path;
 
+use ipc_protocol::DraftModelLocation;
 use runtime_integration::MlxSafetensors;
 
 use crate::PerformanceAttribution;
@@ -22,12 +23,33 @@ use crate::speculative_decoding::dflash_drafter::{
 };
 
 use super::draft_tree_size::draft_tree_options_for_target;
-use super::drafter_discovery::{DrafterPairing, paired_drafter_directory};
+use crate::speculative_decoding::drafter_discovery::{
+    BUNDLED_DRAFTER_DIRECTORY_NAME, DrafterPairing, paired_drafter_directory,
+};
 
 /// Headroom the drafter load insists on beyond its own weight bytes, so the
 /// first verify workspace never starts life squeezed against the ceiling.
 const DRAFTER_LOAD_HEADROOM_BYTES: u64 = 512 * 1024 * 1024;
 const DRAFTER_WEIGHTS_FILE_NAME: &str = "model.safetensors";
+
+/// What looking for and loading a drafter found.
+pub enum Qwen3_5DraftRuntimeLoadOutcome {
+    /// A paired drafter is loaded; boxed because it holds the drafter's weights.
+    Loaded(Box<Qwen3_5SpeculativeDraftRuntime>),
+    /// No drafter in the model's folder or the library pairs with it.
+    NoPairedDrafter,
+    /// A drafter pairs, but this GPU cannot run the kernels drafting needs.
+    KernelsUnavailable,
+}
+
+/// `Bundled` when the drafter is the model's own `drafter` folder.
+fn drafter_location(target_model_directory: &Path, drafter_directory: &Path) -> DraftModelLocation {
+    if drafter_directory == target_model_directory.join(BUNDLED_DRAFTER_DIRECTORY_NAME) {
+        DraftModelLocation::Bundled
+    } else {
+        DraftModelLocation::Library
+    }
+}
 
 /// The loaded drafter a session drafts with.
 pub struct Qwen3_5SpeculativeDraftRuntime {
@@ -35,20 +57,23 @@ pub struct Qwen3_5SpeculativeDraftRuntime {
     pub drafter_weights: DFlashDrafterWeights,
     /// The tree size and search settings, chosen for this target's kind.
     pub tree_options: DraftTreeOptions,
+    /// Whether the drafter came from the model's own folder or the library.
+    pub drafter_location: DraftModelLocation,
     /// Keeps the drafter's lazily mapped codebooks alive.
     _drafter_checkpoint: MlxSafetensors,
 }
 
 impl Qwen3_5SpeculativeDraftRuntime {
-    /// Finds and loads the drafter for `model`, or `Ok(None)` when the
-    /// library holds none that pairs with it, or this GPU cannot run the
-    /// register-ordered kernels a drafting session needs.
+    /// Finds and loads the drafter for `model`, saying apart a library that
+    /// holds none that pairs with it from a GPU that cannot run the
+    /// register-ordered kernels a drafting session needs, because status
+    /// reports the second as a drafter installed but unused.
     pub fn load_for_target(
         model: &mut Qwen3_5ResidentModel,
         active_memory_limit_bytes: usize,
         target_model_directory: &Path,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<Option<Self>, Qwen3_5SpeculativeDraftLoadingError> {
+    ) -> Result<Qwen3_5DraftRuntimeLoadOutcome, Qwen3_5SpeculativeDraftLoadingError> {
         let pairing = DrafterPairing {
             target_layer_count: model.config().layer_count() as i32,
             target_hidden_size: model.config().hidden_size() as i32,
@@ -57,13 +82,14 @@ impl Qwen3_5SpeculativeDraftRuntime {
         let Some((drafter_directory, drafter_configuration)) =
             paired_drafter_directory(target_model_directory, &pairing)?
         else {
-            return Ok(None);
+            return Ok(Qwen3_5DraftRuntimeLoadOutcome::NoPairedDrafter);
         };
+        let drafter_location = drafter_location(target_model_directory, &drafter_directory);
         ensure_memory_headroom_for_drafter(model, active_memory_limit_bytes, &drafter_directory)?;
         let Some(converted_projection_count) =
             prepare_target_for_draft_trees(model, performance_attribution)?
         else {
-            return Ok(None);
+            return Ok(Qwen3_5DraftRuntimeLoadOutcome::KernelsUnavailable);
         };
         let (drafter_weights, drafter_checkpoint) =
             load_drafter_weights(model, &drafter_directory, &drafter_configuration)?;
@@ -75,12 +101,13 @@ impl Qwen3_5SpeculativeDraftRuntime {
             tree_node_budget = tree_options.node_budget,
             "resident engine decode path: DFlash draft trees"
         );
-        Ok(Some(Self {
+        Ok(Qwen3_5DraftRuntimeLoadOutcome::Loaded(Box::new(Self {
             drafter_configuration,
             drafter_weights,
             tree_options,
+            drafter_location,
             _drafter_checkpoint: drafter_checkpoint,
-        }))
+        })))
     }
 }
 
@@ -102,7 +129,7 @@ fn prepare_target_for_draft_trees(
         .map_err(Qwen3_5SpeculativeDraftLoadingError::Target)?
     else {
         tracing::info!(
-            "a paired DFlash2 drafter is installed, but this GPU cannot run the \
+            "a paired DFlash drafter is installed, but this GPU cannot run the \
              register-ordered kernels drafting needs; decoding stays classic"
         );
         return Ok(None);
@@ -174,18 +201,20 @@ fn ensure_memory_headroom_for_drafter(
 
 #[derive(Debug, thiserror::Error)]
 pub enum Qwen3_5SpeculativeDraftLoadingError {
-    #[error("the model library directory cannot be listed to find a DFlash2 drafter: {source}")]
-    LibraryUnlistable { source: std::io::Error },
-    #[error("the graphics-processor runtime rejected the DFlash2 drafter load: {0}")]
+    #[error(transparent)]
+    LibraryUnlistable(
+        #[from] crate::speculative_decoding::drafter_discovery::DrafterDiscoveryError,
+    ),
+    #[error("the graphics-processor runtime rejected the DFlash drafter load: {0}")]
     Runtime(#[source] runtime_integration::MlxRuntimeError),
     #[error("the target could not be prepared for drafting: {0}")]
     Target(#[source] crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError),
-    #[error("the DFlash2 drafter's model.safetensors is unreadable: {source}")]
+    #[error("the DFlash drafter's model.safetensors is unreadable: {source}")]
     WeightsUnreadable { source: std::io::Error },
-    #[error("the DFlash2 drafter weights did not bind: {0}")]
+    #[error("the DFlash drafter weights did not bind: {0}")]
     Weights(#[source] DFlashDrafterWeightsError),
     #[error(
-        "the active memory limit cannot host the DFlash2 drafter: {free_bytes} bytes free, {required_bytes} bytes required"
+        "the active memory limit cannot host the DFlash drafter: {free_bytes} bytes free, {required_bytes} bytes required"
     )]
     InsufficientHeadroom {
         free_bytes: u64,

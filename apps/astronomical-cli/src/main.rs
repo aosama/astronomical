@@ -51,7 +51,9 @@ fn main() -> ExitCode {
             file_output_verbs::run_file_output_verb(file_output_command)
         }
         Ok(CliCommand::Models(models_command)) => run_models_verb(models_command),
-        Ok(CliCommand::Status) => run_status_verb(),
+        Ok(daemon_state_command @ (CliCommand::Status | CliCommand::Unload)) => {
+            run_daemon_state_verb(&daemon_state_command)
+        }
         Ok(CliCommand::Doctor) => run_doctor_verb(),
         Ok(CliCommand::Quantize(quantize_command)) => run_quantize_verb(quantize_command),
         Ok(model_building_command @ (CliCommand::Vision(_) | CliCommand::Decision(_))) => {
@@ -597,27 +599,45 @@ fn run_doctor_verb() -> ExitCode {
     }
 }
 
-fn run_status_verb() -> ExitCode {
-    let status_runtime = match build_current_thread_runtime() {
-        Ok(status_runtime) => status_runtime,
+/// The two verbs that read or change what the daemon holds, sharing one
+/// runtime and the instance's sockets. Unloading replaces the worker process
+/// and waits for the new one to start, so both get the bound a
+/// model-loading verb gets.
+fn run_daemon_state_verb(daemon_state_command: &CliCommand) -> ExitCode {
+    let daemon_state_runtime = match build_current_thread_runtime() {
+        Ok(daemon_state_runtime) => daemon_state_runtime,
         Err(runtime_error) => {
             eprintln!("astronomical: {runtime_error}");
             return ExitCode::FAILURE;
         }
     };
     let mut stdout = io::stdout();
-    let (status_runtime_instance, status_candidate_socket_paths) =
-        own_runtime_instance_and_ipc_socket_paths();
-    let mut status_dependencies = astronomical_cli::StatusDependencies {
-        candidate_socket_paths: status_candidate_socket_paths,
-        runtime_instance: status_runtime_instance,
-        stdout: &mut stdout,
-        request_timeout: DAEMON_VERB_STAGE_TIMEOUT,
+    let (runtime_instance, candidate_socket_paths) = own_runtime_instance_and_ipc_socket_paths();
+    let verb_outcome = if matches!(daemon_state_command, CliCommand::Unload) {
+        let mut unload_dependencies = astronomical_cli::UnloadDependencies {
+            candidate_socket_paths,
+            runtime_instance,
+            stdout: &mut stdout,
+            request_timeout: DAEMON_VERB_STAGE_TIMEOUT,
+        };
+        daemon_state_runtime
+            .block_on(astronomical_cli::run_unload(&mut unload_dependencies))
+            .map_err(|unload_error| unload_error.to_string())
+    } else {
+        let mut status_dependencies = astronomical_cli::StatusDependencies {
+            candidate_socket_paths,
+            runtime_instance,
+            stdout: &mut stdout,
+            request_timeout: DAEMON_VERB_STAGE_TIMEOUT,
+        };
+        daemon_state_runtime
+            .block_on(astronomical_cli::run_status(&mut status_dependencies))
+            .map_err(|status_error| status_error.to_string())
     };
-    match status_runtime.block_on(astronomical_cli::run_status(&mut status_dependencies)) {
+    match verb_outcome {
         Ok(()) => ExitCode::SUCCESS,
-        Err(status_error) => {
-            let _ = writeln!(io::stderr(), "astronomical: {status_error}");
+        Err(verb_failure) => {
+            let _ = writeln!(io::stderr(), "astronomical: {verb_failure}");
             ExitCode::FAILURE
         }
     }

@@ -8,3 +8,4 @@ pub mod stub_decisions;
 pub mod stub_download_status;
 pub mod stub_inventory;
 pub mod stub_loopback_http;
+pub mod stub_model_control;

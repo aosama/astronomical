@@ -93,7 +93,7 @@ where
             runtime_configuration: model_configuration.runtime_configuration(),
             engine_placement: None,
             startup_residency_facts: None,
-            neural_engine_prefill_event: None,
+            load_status_events: super::model_swap::LoadStatusEvents::default(),
         })
     }
 }

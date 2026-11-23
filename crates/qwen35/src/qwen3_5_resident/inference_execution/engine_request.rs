@@ -23,6 +23,8 @@ pub struct ResidentRequestExtension {
     /// (forced thinking transition, mid-decode feedback injection) suspends
     /// speculation for the remainder of the session.
     pub(in crate::qwen3_5_resident) speculative_session_admitted: bool,
+    /// What drafting has done for this reply so far, reported when it ends.
+    pub(in crate::qwen3_5_resident) drafting_statistics: ipc_protocol::RequestDraftingStatistics,
 }
 
 impl ResidentRequestExtension {
@@ -61,6 +63,7 @@ impl ResidentRequestExtension {
                 .then_some(DraftSession::new(keyed_seed)),
             speculative_emission_queue: std::collections::VecDeque::new(),
             speculative_session_admitted,
+            drafting_statistics: ipc_protocol::RequestDraftingStatistics::default(),
         }
     }
 }

@@ -266,7 +266,8 @@ async fn run_single_measured_request(
             }
             ChatGenerationStreamEvent::ReasoningFragment(_)
             | ChatGenerationStreamEvent::TextFragment(_)
-            | ChatGenerationStreamEvent::ToolCall { .. } => {}
+            | ChatGenerationStreamEvent::ToolCall { .. }
+            | ChatGenerationStreamEvent::DraftingReport(_) => {}
             ChatGenerationStreamEvent::Completed {
                 prompt_token_count,
                 astro_ssd_prompt_cache_restored_token_count,

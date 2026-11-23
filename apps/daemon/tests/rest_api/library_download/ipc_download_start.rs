@@ -33,6 +33,7 @@ async fn start_ipc_service(
         download_catalog,
         library_download_coordinator: Some(coordinator),
         instance_paths: instance_paths.clone(),
+        worker_control: None,
     };
     let attribution_log = DaemonPerformanceAttributionLog::open(state_directory, false)
         .expect("disabled attribution should construct");

@@ -79,6 +79,9 @@ pub struct Qwen3_5InferenceExecution {
     pub(in crate::qwen3_5_resident::inference_execution) speculative_draft_runtime: Option<
         super::speculative_decode_lifecycle::engine_draft_runtime::Qwen3_5SpeculativeDraftRuntime,
     >,
+    /// What looking for a drafter found at load, for status.
+    pub(in crate::qwen3_5_resident::inference_execution) draft_model_status:
+        ipc_protocol::DraftModelStatus,
 }
 
 pub type Qwen3_5EngineState = Qwen3_5InferenceExecution;

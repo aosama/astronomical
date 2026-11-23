@@ -77,6 +77,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             download_catalog: Arc::new(DownloadCatalog::empty()),
             library_download_coordinator: None,
             instance_paths: instance_paths.clone(),
+            worker_control: Some(worker_handle.clone()),
         },
         &DaemonPerformanceAttributionLog::disabled(),
     )

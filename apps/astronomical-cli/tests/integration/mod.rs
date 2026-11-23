@@ -18,5 +18,6 @@ mod respond;
 mod speak;
 mod status;
 mod support;
+mod unload;
 mod validate_config;
 mod vision;

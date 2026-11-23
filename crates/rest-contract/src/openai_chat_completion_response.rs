@@ -317,6 +317,18 @@ pub struct OpenAiTokenUsage {
     total_tokens: u32,
     #[serde(skip_serializing_if = "Option::is_none")]
     prompt_tokens_details: Option<OpenAiPromptTokenDetails>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    completion_tokens_details: Option<OpenAiCompletionTokenDetails>,
+}
+
+/// Breakdown of the reply's tokens. OpenAI reports a predicted output's
+/// guesses here: the ones the model kept and the ones it threw away. A draft
+/// model's guesses are the same thing, so drafting reports through the same
+/// fields any OpenAI client already reads.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+struct OpenAiCompletionTokenDetails {
+    accepted_prediction_tokens: u32,
+    rejected_prediction_tokens: u32,
 }
 
 /// Breakdown of prompt token costs, following the OpenAI convention.
@@ -335,6 +347,7 @@ impl OpenAiTokenUsage {
                 completion_tokens,
                 total_tokens,
                 prompt_tokens_details: None,
+                completion_tokens_details: None,
             })
     }
 
@@ -349,6 +362,21 @@ impl OpenAiTokenUsage {
         } else {
             None
         };
+        self
+    }
+
+    /// Attaches a draft model's kept and thrown-away guesses. Omitted for a
+    /// reply that never drafted, so its response shape is unchanged.
+    #[must_use]
+    pub fn with_drafted_tokens(
+        mut self,
+        accepted_prediction_tokens: u32,
+        rejected_prediction_tokens: u32,
+    ) -> Self {
+        self.completion_tokens_details = Some(OpenAiCompletionTokenDetails {
+            accepted_prediction_tokens,
+            rejected_prediction_tokens,
+        });
         self
     }
 }

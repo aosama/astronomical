@@ -1,4 +1,4 @@
-use ipc_protocol::{ExpertMemoryMode, NeuralEnginePrefillStatus};
+use ipc_protocol::{DraftModelStatus, ExpertMemoryMode, NeuralEnginePrefillStatus};
 
 use crate::StreamingStartupResidencyFacts;
 
@@ -12,6 +12,8 @@ pub struct EngineLoadResult {
     minimum_mlx_memory_ceiling_bytes: u64,
     startup_residency_facts: Option<StreamingStartupResidencyFacts>,
     neural_engine_prefill_status: NeuralEnginePrefillStatus,
+    /// `None` for an engine that never looks for a drafter, so it announces nothing.
+    draft_model_status: Option<DraftModelStatus>,
 }
 
 impl EngineLoadResult {
@@ -22,6 +24,7 @@ impl EngineLoadResult {
             minimum_mlx_memory_ceiling_bytes: 1,
             startup_residency_facts: None,
             neural_engine_prefill_status: NeuralEnginePrefillStatus::Off,
+            draft_model_status: None,
         }
     }
 
@@ -103,6 +106,22 @@ impl EngineLoadResult {
         Some(ipc_protocol::WorkerEvent::NeuralEnginePrefillChanged {
             neural_engine_prefill: self.neural_engine_prefill_status.clone(),
         })
+    }
+
+    /// Sets what the engine found when it looked for a drafter.
+    #[must_use]
+    pub fn with_draft_model_status(mut self, draft_model_status: DraftModelStatus) -> Self {
+        self.draft_model_status = Some(draft_model_status);
+        self
+    }
+
+    /// The event announcing the drafter state, or `None` for an engine that
+    /// never looks for a drafter, so such engines publish exactly what they always did.
+    #[must_use]
+    pub fn draft_model_event(&self) -> Option<ipc_protocol::WorkerEvent> {
+        self.draft_model_status
+            .clone()
+            .map(|draft_model| ipc_protocol::WorkerEvent::DraftModelChanged { draft_model })
     }
 
     /// Returns the expert-memory mode selected before readiness.
