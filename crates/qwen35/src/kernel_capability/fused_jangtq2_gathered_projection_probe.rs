@@ -25,12 +25,10 @@ const PROBE_WORDS_PER_ROW: usize = 2;
 /// Two assignments routed to the two experts in reverse order.
 const PROBE_EXPERT_INDICES: [i32; 2] = [1, 0];
 
-impl CustomMetalKernelFamily {
-    /// Registry identifier of the fused jangtq2 gathered projection family.
-    /// The family owns this constant; the capability module stays agnostic.
-    pub const FUSED_JANGTQ2_GATHERED_PROJECTION: Self =
-        Self::new("fused_jangtq2_gathered_projection");
-}
+/// Registry identifier of the fused jangtq2 gathered projection family.
+/// The family owns this constant; the capability module stays agnostic.
+pub const FUSED_JANGTQ2_GATHERED_PROJECTION: CustomMetalKernelFamily =
+    CustomMetalKernelFamily::new("fused_jangtq2_gathered_projection");
 
 /// Supplies this family's probes for the once-per-process probe run. The
 /// worker registration list is the only central touch point.
@@ -51,7 +49,7 @@ impl<'runtime> FusedJangtq2GatheredProjectionProbe<'runtime> {
 
 impl CustomMetalKernelProbe for FusedJangtq2GatheredProjectionProbe<'_> {
     fn family(&self) -> CustomMetalKernelFamily {
-        CustomMetalKernelFamily::FUSED_JANGTQ2_GATHERED_PROJECTION
+        FUSED_JANGTQ2_GATHERED_PROJECTION
     }
 
     fn probe(&self) -> Result<(), KernelCapabilityError> {

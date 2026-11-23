@@ -32,13 +32,14 @@ const PROBE_VALUE_HEAD_DIMENSION: i32 = 32;
 /// direct-MLX contracts.
 const PROBE_PARITY_TOLERANCE: f32 = 1e-3;
 
-impl CustomMetalKernelFamily {
-    /// Registry identifiers of the gated-delta kernel families. The family
-    /// owns these constants; the capability module stays agnostic.
-    pub const GATED_DELTA_SEQUENCE: Self = Self::new("gated_delta_sequence");
-    pub const GATED_DELTA_BOUNDARY_CHECKPOINT: Self = Self::new("gated_delta_boundary_checkpoint");
-    pub const GDN_DECODE_PREWORK: Self = Self::new("gdn_decode_prework");
-}
+/// Registry identifiers of the gated-delta kernel families. The family
+/// owns these constants; the capability module stays agnostic.
+pub const GATED_DELTA_SEQUENCE: CustomMetalKernelFamily =
+    CustomMetalKernelFamily::new("gated_delta_sequence");
+pub const GATED_DELTA_BOUNDARY_CHECKPOINT: CustomMetalKernelFamily =
+    CustomMetalKernelFamily::new("gated_delta_boundary_checkpoint");
+pub const GDN_DECODE_PREWORK: CustomMetalKernelFamily =
+    CustomMetalKernelFamily::new("gdn_decode_prework");
 
 /// Supplies this family's probes for the once-per-process probe run. The
 /// worker registration list is the only central touch point.
@@ -188,7 +189,7 @@ impl<'runtime> GatedDeltaSequenceProbe<'runtime> {
 
 impl CustomMetalKernelProbe for GatedDeltaSequenceProbe<'_> {
     fn family(&self) -> CustomMetalKernelFamily {
-        CustomMetalKernelFamily::GATED_DELTA_SEQUENCE
+        GATED_DELTA_SEQUENCE
     }
 
     fn probe(&self) -> Result<(), KernelCapabilityError> {
@@ -249,7 +250,7 @@ impl<'runtime> GatedDeltaBoundaryCheckpointProbe<'runtime> {
 
 impl CustomMetalKernelProbe for GatedDeltaBoundaryCheckpointProbe<'_> {
     fn family(&self) -> CustomMetalKernelFamily {
-        CustomMetalKernelFamily::GATED_DELTA_BOUNDARY_CHECKPOINT
+        GATED_DELTA_BOUNDARY_CHECKPOINT
     }
 
     fn probe(&self) -> Result<(), KernelCapabilityError> {
@@ -500,7 +501,7 @@ impl<'runtime> GdnDecodePreworkProbe<'runtime> {
 
 impl CustomMetalKernelProbe for GdnDecodePreworkProbe<'_> {
     fn family(&self) -> CustomMetalKernelFamily {
-        CustomMetalKernelFamily::GDN_DECODE_PREWORK
+        GDN_DECODE_PREWORK
     }
 
     fn probe(&self) -> Result<(), KernelCapabilityError> {

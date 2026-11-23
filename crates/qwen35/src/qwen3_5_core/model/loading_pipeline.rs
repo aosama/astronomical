@@ -9,7 +9,6 @@ use mlx_bridge::{MlxDtype, MlxMetalKernel};
 use runtime_integration::MlxRuntime;
 
 use crate::kernel_capability;
-use crate::kernel_capability::CustomMetalKernelFamily;
 use crate::qwen3_5_core::artifacts::{Qwen3_5ShardIndex, ValidatedQwen3_5Artifact};
 use crate::qwen3_5_core::configuration::Qwen3_5Config;
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
@@ -210,7 +209,7 @@ pub fn load_model_kernel_verdicts(
     // checkpoint fallback preserves the astro SSD prompt cache boundary contract.
     let gated_delta_kernel =
         if kernel_capability::worker_process_kernel_capabilities(runtime, performance_attribution)
-            .is_custom_kernel_supported(CustomMetalKernelFamily::GATED_DELTA_SEQUENCE)
+            .is_custom_kernel_supported(crate::kernel_capability::GATED_DELTA_SEQUENCE)
         {
             Some(
                 crate::qwen3_5_core::model_math::gated_delta_sequence::qwen3_5_gated_delta_kernel(
@@ -226,7 +225,7 @@ pub fn load_model_kernel_verdicts(
         runtime,
         performance_attribution,
     )
-    .is_custom_kernel_supported(CustomMetalKernelFamily::GATED_DELTA_BOUNDARY_CHECKPOINT)
+    .is_custom_kernel_supported(crate::kernel_capability::GATED_DELTA_BOUNDARY_CHECKPOINT)
     {
         Some(
                 crate::qwen3_5_core::model_math::gated_delta_boundary_checkpoints::qwen3_5_gated_delta_checkpoint_kernel(
@@ -244,7 +243,7 @@ pub fn load_model_kernel_verdicts(
         runtime,
         performance_attribution,
     )
-    .is_custom_kernel_supported(CustomMetalKernelFamily::GDN_DECODE_PREWORK)
+    .is_custom_kernel_supported(crate::kernel_capability::GDN_DECODE_PREWORK)
     {
         Some(
             crate::qwen3_5_core::model_math::gdn_decode_prework_kernel::qwen3_5_gdn_decode_prework_kernel(

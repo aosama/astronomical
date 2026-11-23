@@ -377,9 +377,8 @@ fn load_streaming_expert_runtime(
             runtime,
             performance_attribution,
         )
-        .is_custom_kernel_supported(
-            crate::kernel_capability::CustomMetalKernelFamily::SORTED_EXPERT_WEIGHTED_SUM,
-        ) {
+        .is_custom_kernel_supported(crate::kernel_capability::SORTED_EXPERT_WEIGHTED_SUM)
+        {
             Some(qwen3_5_streaming::qwen3_5_moe_sorted_expert_weighted_sum_kernel()?)
         } else {
             tracing::info!(
@@ -545,9 +544,8 @@ fn fused_jangtq2_gathered_projection_kernel_for_pager(
         runtime,
         performance_attribution,
     )
-    .is_custom_kernel_supported(
-        crate::kernel_capability::CustomMetalKernelFamily::FUSED_JANGTQ2_GATHERED_PROJECTION,
-    ) {
+    .is_custom_kernel_supported(crate::kernel_capability::FUSED_JANGTQ2_GATHERED_PROJECTION)
+    {
         tracing::info!(
             "fused jangtq2 gathered projection kernel demoted to the materializing decoder for this worker process"
         );

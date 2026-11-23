@@ -19,10 +19,9 @@ use crate::row_batched_matmul::{
     RegisterOrderedWeight, RowBatchedMatmulKernels, register_ordered_matmul,
 };
 
-impl CustomMetalKernelFamily {
-    /// Registry identifier of the row-batched 4-bit matmul.
-    pub const ROW_BATCHED_MATMUL: Self = Self::new("row_batched_matmul");
-}
+/// Registry identifier of the row-batched 4-bit matmul.
+pub const ROW_BATCHED_MATMUL: CustomMetalKernelFamily =
+    CustomMetalKernelFamily::new("row_batched_matmul");
 
 pub fn capability_probes(runtime: &MlxRuntime) -> Vec<Box<dyn CustomMetalKernelProbe + '_>> {
     vec![Box::new(RowBatchedMatmulProbe { runtime })]
@@ -42,7 +41,7 @@ struct RowBatchedMatmulProbe<'runtime> {
 
 impl CustomMetalKernelProbe for RowBatchedMatmulProbe<'_> {
     fn family(&self) -> CustomMetalKernelFamily {
-        CustomMetalKernelFamily::ROW_BATCHED_MATMUL
+        ROW_BATCHED_MATMUL
     }
 
     fn probe(&self) -> Result<(), KernelCapabilityError> {

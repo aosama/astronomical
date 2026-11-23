@@ -239,8 +239,7 @@ fn load_resident_mixture_of_experts_parts(
 fn retained_sorted_expert_weighted_sum_kernel(
     worker_kernel_capabilities: &crate::kernel_capability::WorkerKernelCapabilities,
 ) -> Result<Option<MlxMetalKernel>, Qwen3_5ExecutionError> {
-    let sorted_reduction_family =
-        crate::kernel_capability::CustomMetalKernelFamily::SORTED_EXPERT_WEIGHTED_SUM;
+    let sorted_reduction_family = crate::kernel_capability::SORTED_EXPERT_WEIGHTED_SUM;
     if !worker_kernel_capabilities.is_custom_kernel_supported(sorted_reduction_family) {
         tracing::info!(
             "sorted expert weighted-sum kernel demoted to the MLX fallback for this worker process"
@@ -265,8 +264,7 @@ fn retained_sorted_expert_shared_combination_kernel(
     if !is_sorted_reduction_retained {
         return Ok(None);
     }
-    let fused_combination_family =
-        crate::kernel_capability::CustomMetalKernelFamily::SORTED_EXPERT_SHARED_COMBINATION;
+    let fused_combination_family = crate::kernel_capability::SORTED_EXPERT_SHARED_COMBINATION;
     if !worker_kernel_capabilities.is_custom_kernel_supported(fused_combination_family) {
         tracing::info!(
             verdict = ?worker_kernel_capabilities.verdict(fused_combination_family),
