@@ -1,8 +1,9 @@
-//! Kokoro as a [`SpeechEngine`]: text is phonemized and cut into passes of
-//! at most 510 phonemes at sentence ends, and each step speaks one pass.
+//! Kokoro as a speech family: text is phonemized and cut into passes of at
+//! most 510 phonemes at sentence ends, and each step speaks one pass. The
+//! engine around it is the shared [`SpeechEngineShell`].
 
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::Path;
 
 use english_phonemes::{english_phoneme_chunks, prepare_english_lexicon};
 use runtime_integration::MlxRuntime;
@@ -13,58 +14,70 @@ use super::reference_trace::KokoroSpeechTrace;
 use super::speech_model::{KOKORO_SAMPLE_RATE_HERTZ, KokoroSpeechModel};
 use super::utterance::{KOKORO_MAXIMUM_PHONEMES, KokoroUtterance};
 use super::voice_pack::KokoroVoice;
-use crate::speech_engine::{SpeechEngine, SpeechEngineLoadResult, SpeechEngineStep, StartedSpeech};
-use crate::speech_models::checkpoint_tensors::weights_file_bytes;
-use crate::speech_models::engine_settings::SpeechEngineSettings;
-use crate::speech_models::speech_memory::SpeechMemoryAccount;
-use crate::speech_models::speech_request_slot::{
-    SegmentSpeaker, SpeechRequestSlot, SpokenSegment, ends_request, voice_for_checked_request,
+use crate::speech_models::speech_engine_shell::{
+    FamilyLoad, LoadedSpeech, PlannedSpeech, SpeechEngineShell, SpeechFamily,
 };
-use memory_policy::telemetry::MlxMemoryTelemetry;
+use crate::speech_models::speech_request_slot::{SegmentSpeaker, SpokenSegment};
 
-pub struct KokoroSpeechEngine {
-    settings: SpeechEngineSettings,
-    loaded: Option<LoadedKokoro>,
-    /// Each segment is one pass's phonemes.
-    request_slot: SpeechRequestSlot<String, KokoroRequestContext>,
-}
+/// Kokoro behind the shared speech engine; each segment is one pass's
+/// phonemes.
+pub type KokoroSpeechEngine = SpeechEngineShell<KokoroSpeechFamily>;
 
-struct LoadedKokoro {
-    model_directory: PathBuf,
-    runtime: MlxRuntime,
+pub struct KokoroSpeechFamily;
+
+pub struct KokoroParts {
     model: KokoroSpeechModel,
-    load_result: SpeechEngineLoadResult,
-    memory_account: SpeechMemoryAccount,
     /// Voices are a few hundred kilobytes; each is read once, on first use.
     voices_by_name: HashMap<String, KokoroVoice>,
 }
 
 /// What every pass of one request is spoken with.
-struct KokoroRequestContext {
+pub struct KokoroRequestContext {
     voice_name: String,
     speed: f32,
     noise_seed: u64,
 }
 
-impl KokoroSpeechEngine {
-    pub fn new(
-        model_id: impl Into<String>,
-        model_directory: PathBuf,
-        effective_mlx_memory_ceiling_bytes: usize,
-        mlx_buffer_cache_limit_bytes: usize,
-    ) -> Self {
-        Self {
-            settings: SpeechEngineSettings {
-                model_id: model_id.into(),
-                model_directory,
-                effective_mlx_memory_ceiling_bytes,
-                mlx_buffer_cache_limit_bytes,
+impl SpeechFamily for KokoroSpeechFamily {
+    type FamilyParts = KokoroParts;
+    type Segment = String;
+    type RequestContext = KokoroRequestContext;
+    const FAMILY_NAME: &'static str = "Kokoro";
+    const WEIGHTS_FILE_NAME: &'static str = KOKORO_WEIGHTS_FILE_NAME;
+
+    fn load_family(
+        runtime: &MlxRuntime,
+        model_directory: &Path,
+    ) -> Result<FamilyLoad<KokoroParts>, SpeechFailure> {
+        let model = KokoroSpeechModel::load(runtime, model_directory)?;
+        prepare_english_lexicon();
+        Ok(FamilyLoad {
+            family_parts: KokoroParts {
+                model,
+                voices_by_name: HashMap::new(),
             },
-            loaded: None,
-            request_slot: SpeechRequestSlot::empty(),
-        }
+            speech_capabilities: config::kokoro_speech_capabilities(model_directory),
+            model_sample_rate_hertz: KOKORO_SAMPLE_RATE_HERTZ,
+        })
     }
 
+    fn plan_speech(
+        _loaded: &mut LoadedSpeech<KokoroParts>,
+        speech_request: &SpeechRequest,
+        voice_name: &str,
+    ) -> Result<PlannedSpeech<String, KokoroRequestContext>, SpeechFailure> {
+        Ok(PlannedSpeech {
+            segments: english_phoneme_chunks(&speech_request.text, KOKORO_MAXIMUM_PHONEMES),
+            request_context: KokoroRequestContext {
+                voice_name: voice_name.to_owned(),
+                speed: speech_request.speed,
+                noise_seed: speech_request.seed,
+            },
+        })
+    }
+}
+
+impl KokoroSpeechEngine {
     /// Speaks `phonemes` without excitation noise and returns the durations,
     /// curves and samples, so a journey can hold them against Kokoro's
     /// PyTorch reference. Serving never calls it.
@@ -79,125 +92,37 @@ impl KokoroSpeechEngine {
         loaded.ensure_voice_loaded(voice_name)?;
         let utterance = KokoroUtterance {
             phonemes,
-            voice: &loaded.voices_by_name[voice_name],
+            voice: &loaded.family_parts.voices_by_name[voice_name],
             speed,
             noise_seed: None,
         };
         let speech_trace = loaded
+            .family_parts
             .model
             .forward(&loaded.runtime, &utterance)
             .and_then(|forward_pass| KokoroSpeechTrace::read(&loaded.runtime, &forward_pass));
         // Cleaned up on failure too, so a failed trace leaves no arrays behind.
-        loaded
-            .memory_account
-            .clean_up_after_request(&loaded.runtime);
+        loaded.clean_up_after_request();
         Ok(speech_trace?)
     }
-
-    fn loaded_mut(&mut self) -> Result<&mut LoadedKokoro, SpeechFailure> {
-        self.loaded
-            .as_mut()
-            .ok_or_else(|| SpeechFailure::fatal_execution("the Kokoro engine is not loaded"))
-    }
 }
 
-impl SpeechEngine for KokoroSpeechEngine {
-    fn load(&mut self) -> Result<SpeechEngineLoadResult, SpeechFailure> {
-        let runtime = self.settings.initialize_runtime()?;
-        let model_directory = self.settings.model_directory.clone();
-        let model = KokoroSpeechModel::load(&runtime, &model_directory)?;
-        prepare_english_lexicon();
-        let load_result = self.settings.load_result(
-            config::kokoro_speech_capabilities(&model_directory),
-            KOKORO_SAMPLE_RATE_HERTZ,
-        )?;
-        let memory_account = self.settings.memory_account(weights_file_bytes(
-            &model_directory.join(KOKORO_WEIGHTS_FILE_NAME),
-        ));
-        self.loaded = Some(LoadedKokoro {
-            model_directory,
-            runtime,
-            model,
-            load_result: load_result.clone(),
-            memory_account,
-            voices_by_name: HashMap::new(),
-        });
-        Ok(load_result)
-    }
-
-    fn start_speech(
-        &mut self,
-        speech_request: SpeechRequest,
-    ) -> Result<StartedSpeech, SpeechFailure> {
-        self.request_slot.ensure_idle()?;
-        let voice_name =
-            voice_for_checked_request(&speech_request, &self.loaded_mut()?.load_result)?;
-        let phoneme_chunks = english_phoneme_chunks(&speech_request.text, KOKORO_MAXIMUM_PHONEMES);
-        let started_speech = StartedSpeech {
-            voice_name: voice_name.clone(),
-            sample_rate_hertz: KOKORO_SAMPLE_RATE_HERTZ,
-            total_segments: phoneme_chunks.len(),
-        };
-        let request_context = KokoroRequestContext {
-            voice_name,
-            speed: speech_request.speed,
-            noise_seed: speech_request.seed,
-        };
-        self.request_slot.start(phoneme_chunks, request_context)?;
-        Ok(started_speech)
-    }
-
-    fn advance_speech(&mut self) -> Result<SpeechEngineStep, SpeechFailure> {
-        let Some(loaded) = self.loaded.as_mut() else {
-            return Err(SpeechFailure::fatal_execution(
-                "the Kokoro engine is not loaded",
-            ));
-        };
-        let speech_step = self.request_slot.advance(loaded);
-        if ends_request(&speech_step) {
-            loaded
-                .memory_account
-                .clean_up_after_request(&loaded.runtime);
-        }
-        speech_step
-    }
-
-    fn cancel_speech(&mut self) {
-        self.request_slot.cancel();
-        if let Some(loaded) = self.loaded.as_mut() {
-            loaded
-                .memory_account
-                .clean_up_after_request(&loaded.runtime);
-        }
-    }
-
-    fn take_post_cleanup_memory_telemetry(&mut self) -> Option<MlxMemoryTelemetry> {
-        self.loaded
-            .as_mut()?
-            .memory_account
-            .take_post_cleanup_memory_telemetry()
-    }
-
-    fn collect_mlx_memory_telemetry(&self) -> Option<MlxMemoryTelemetry> {
-        let loaded = self.loaded.as_ref()?;
-        loaded.memory_account.observe(&loaded.runtime)
-    }
-}
-
-impl LoadedKokoro {
+impl LoadedSpeech<KokoroParts> {
     fn ensure_voice_loaded(&mut self, voice_name: &str) -> Result<(), SpeechFailure> {
-        if !self.voices_by_name.contains_key(voice_name) {
+        if !self.family_parts.voices_by_name.contains_key(voice_name) {
             let voice = KokoroVoice::load(
                 &self.runtime,
                 &voice_file_path(&self.model_directory, voice_name)?,
             )?;
-            self.voices_by_name.insert(voice_name.to_owned(), voice);
+            self.family_parts
+                .voices_by_name
+                .insert(voice_name.to_owned(), voice);
         }
         Ok(())
     }
 }
 
-impl SegmentSpeaker<String, KokoroRequestContext> for LoadedKokoro {
+impl SegmentSpeaker<String, KokoroRequestContext> for LoadedSpeech<KokoroParts> {
     /// Pass `n` of a request seeds its noise with `seed + n`.
     fn speak_segment(
         &mut self,
@@ -209,7 +134,7 @@ impl SegmentSpeaker<String, KokoroRequestContext> for LoadedKokoro {
         self.ensure_voice_loaded(voice_name)?;
         let utterance = KokoroUtterance {
             phonemes,
-            voice: &self.voices_by_name[voice_name],
+            voice: &self.family_parts.voices_by_name[voice_name],
             speed: request_context.speed,
             noise_seed: Some(
                 request_context
@@ -217,7 +142,7 @@ impl SegmentSpeaker<String, KokoroRequestContext> for LoadedKokoro {
                     .wrapping_add(segment_index as u64),
             ),
         };
-        let samples = self.model.speak(&self.runtime, &utterance)?;
+        let samples = self.family_parts.model.speak(&self.runtime, &utterance)?;
         Ok(SpokenSegment {
             samples,
             was_cut_short: false,
