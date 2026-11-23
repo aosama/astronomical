@@ -11,13 +11,13 @@ use mlx_bridge::MlxArray;
 
 use super::engine_request::{Qwen3_5EngineRequest, ResidentRequestExtension};
 use super::{Qwen3_5EngineState, qwen3_5_runtime_error};
-use crate::astro_ssd_prompt_cache::block_causal_input::AstroSsdPromptCacheBlockCausalInput;
 use crate::qwen3_5_core::decoder::RequestDecoderStateStack;
 use crate::qwen3_5_core::shared_execution::astro_ssd_prompt_cache_visual_identity::{
     Qwen3_5AstroSsdPromptCacheVisualIdentity, Qwen3_5AstroSsdPromptCacheVisualIdentityInput,
 };
 use crate::qwen3_5_core::shared_execution::generation_request_validation::{self};
 use crate::qwen3_5_resident::model::request_errors;
+use engine_core::astro_ssd_prompt_cache::block_causal_input::AstroSsdPromptCacheBlockCausalInput;
 
 /// The prompt-side identity of a generation session: token list, image-pad
 /// accounting, `astro_ssd_prompt_cache` eligibility flags, speculative admission, and the

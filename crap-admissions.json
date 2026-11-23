@@ -1,7 +1,7 @@
 {
   "admitted_functions": [
     {
-      "function": "crates/qwen35/src/astro_ssd_prompt_cache/disk_store_write.rs:AstroSsdPromptCacheDiskStore::publish_block_with_performance_attribution",
+      "function": "crates/engine-core/src/astro_ssd_prompt_cache/disk_store_write.rs:AstroSsdPromptCacheDiskStore::publish_block_with_performance_attribution",
       "reason": "Renamed from PersistentPromptCacheDiskStore::publish_block_with_performance_attribution when the cache got its formal name; the body is unchanged and the baseline already holds it at cyclomatic 21."
     },
     {
