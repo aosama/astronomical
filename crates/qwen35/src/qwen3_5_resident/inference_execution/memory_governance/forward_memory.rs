@@ -84,7 +84,7 @@ impl ForwardShape {
 
 /// A forward that was found to fit, kept until the forward is measured.
 #[derive(Clone, Copy, Debug)]
-pub(in crate::qwen3_5_resident) struct AdmittedForward {
+pub struct AdmittedForward {
     forward_shape: ForwardShape,
     active_bytes_before_forward: u64,
 }
@@ -319,3 +319,43 @@ pub(in crate::qwen3_5_resident) fn report_completed_forward(
 #[cfg(test)]
 #[path = "forward_memory_tests.rs"]
 mod tests;
+
+/// The resident engine asks its memory governor before each forward and may
+/// refuse it; afterwards it reports what the forward used.
+impl
+    crate::qwen3_5_core::shared_execution::forward_memory_governance::Qwen3_5ForwardMemoryGovernance
+    for Qwen3_5EngineState
+{
+    type ForwardInProgress = AdmittedForward;
+
+    fn begin_governed_forward(
+        &mut self,
+        forward_kind: crate::qwen3_5_core::shared_execution::forward_memory_governance::Qwen3_5ForwardKind,
+        request_decoder_state: &RequestDecoderStateStack,
+    ) -> Result<AdmittedForward, InferenceEngineError> {
+        let forward_shape = match forward_kind {
+            crate::qwen3_5_core::shared_execution::forward_memory_governance::Qwen3_5ForwardKind::PromptChunk { token_count } => {
+                ForwardShape::prompt_chunk(token_count)
+            }
+            crate::qwen3_5_core::shared_execution::forward_memory_governance::Qwen3_5ForwardKind::ReplyToken => {
+                ForwardShape::reply_token()
+            }
+        };
+        Ok(self.admit_forward(forward_shape, request_decoder_state, 0, 0)?)
+    }
+
+    fn complete_governed_forward(
+        &self,
+        admitted_forward: AdmittedForward,
+        stored_state_bytes: u64,
+        _performance_attribution: &mut crate::PerformanceAttribution,
+    ) -> Result<runtime_integration::MlxMemorySnapshot, InferenceEngineError> {
+        let model = self.core.model.as_ref().ok_or_else(
+            super::super::generation_session_lifecycle::generation_error_constructors::engine_lost_loaded_model_error,
+        )?;
+        Ok(
+            report_completed_forward(model, admitted_forward, stored_state_bytes)?
+                .mlx_memory_snapshot,
+        )
+    }
+}

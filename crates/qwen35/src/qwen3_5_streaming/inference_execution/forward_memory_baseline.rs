@@ -40,3 +40,59 @@ impl Qwen3_5EngineState {
         })
     }
 }
+
+/// What the streaming engine carries across one forward: the memory
+/// baseline taken before it and what the forward is, for the governor.
+pub struct StreamingForwardInProgress {
+    memory_baseline: ForwardMemoryBaseline,
+    measured_forward: super::completed_forward_memory::MeasuredForward,
+}
+
+/// The streaming engine never refuses a forward: it measures memory before
+/// it and tells its governor afterwards what the forward used.
+impl
+    crate::qwen3_5_core::shared_execution::forward_memory_governance::Qwen3_5ForwardMemoryGovernance
+    for Qwen3_5EngineState
+{
+    type ForwardInProgress = StreamingForwardInProgress;
+
+    fn begin_governed_forward(
+        &mut self,
+        forward_kind: crate::qwen3_5_core::shared_execution::forward_memory_governance::Qwen3_5ForwardKind,
+        _request_decoder_state: &crate::qwen3_5_core::decoder::RequestDecoderStateStack,
+    ) -> Result<StreamingForwardInProgress, InferenceEngineError> {
+        let measured_forward = match forward_kind {
+            crate::qwen3_5_core::shared_execution::forward_memory_governance::Qwen3_5ForwardKind::PromptChunk { token_count } => {
+                super::completed_forward_memory::MeasuredForward::prompt(token_count)
+            }
+            crate::qwen3_5_core::shared_execution::forward_memory_governance::Qwen3_5ForwardKind::ReplyToken => {
+                super::completed_forward_memory::MeasuredForward::reply_token()
+            }
+        };
+        Ok(StreamingForwardInProgress {
+            memory_baseline: self.begin_forward_memory_measurement()?,
+            measured_forward,
+        })
+    }
+
+    fn complete_governed_forward(
+        &self,
+        forward_in_progress: StreamingForwardInProgress,
+        stored_state_bytes: u64,
+        performance_attribution: &mut crate::PerformanceAttribution,
+    ) -> Result<runtime_integration::MlxMemorySnapshot, InferenceEngineError> {
+        let model = self
+            .core
+            .model
+            .as_ref()
+            .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+        Ok(super::completed_forward_memory::measure_completed_forward(
+            model,
+            forward_in_progress.measured_forward,
+            stored_state_bytes,
+            forward_in_progress.memory_baseline.active_memory_bytes,
+            performance_attribution,
+        )?
+        .mlx_memory_snapshot)
+    }
+}

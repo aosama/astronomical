@@ -155,6 +155,51 @@ impl crate::qwen3_5_core::shared_execution::text_model::Qwen3_5TextModel for Qwe
         self.memory_snapshot_with_forward_peak()
             .map_err(crate::qwen3_5_core::engine_errors::qwen3_5_runtime_error)
     }
+
+    fn prefill_chunk_with_performance_attribution(
+        &self,
+        token_ids: &[u32],
+        starting_position_tokens: u32,
+        request_decoder_state: &mut crate::qwen3_5_core::decoder::RequestDecoderStateStack,
+        performance_attribution: &mut crate::PerformanceAttribution,
+    ) -> Result<(), crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError> {
+        Qwen3_5StreamingModel::prefill_chunk_with_performance_attribution(
+            self,
+            token_ids,
+            starting_position_tokens,
+            request_decoder_state,
+            performance_attribution,
+        )
+    }
+
+    fn build_forward_chunk_with_performance_attribution(
+        &self,
+        token_ids: &[u32],
+        starting_position_tokens: u32,
+        request_decoder_state: &mut crate::qwen3_5_core::decoder::RequestDecoderStateStack,
+        performance_attribution: &mut crate::PerformanceAttribution,
+    ) -> Result<mlx_bridge::MlxArray, crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError>
+    {
+        Qwen3_5StreamingModel::build_forward_chunk_with_performance_attribution(
+            self,
+            token_ids,
+            starting_position_tokens,
+            request_decoder_state,
+            performance_attribution,
+        )
+    }
+
+    fn async_evaluate_generation(
+        &self,
+        generated_token: &mlx_bridge::MlxArray,
+        request_decoder_state: &crate::qwen3_5_core::decoder::RequestDecoderStateStack,
+    ) -> Result<(), crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError> {
+        Qwen3_5StreamingModel::async_evaluate_generation(
+            self,
+            generated_token,
+            request_decoder_state,
+        )
+    }
 }
 
 impl std::ops::DerefMut for Qwen3_5StreamingModel {

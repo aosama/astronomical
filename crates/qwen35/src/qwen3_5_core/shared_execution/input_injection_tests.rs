@@ -1,6 +1,6 @@
-//! Beside-source tests for the pure context-projection unit of
-//! `inject_input_tokens`. The injection step itself needs a loaded engine,
-//! so only the pure arithmetic guard is unit-tested here.
+//! Beside-source tests for the pure context-projection unit of the shared
+//! feedback injection. The injection step itself needs a
+//! loaded engine, so only the pure arithmetic guard is unit-tested here.
 
 use super::{InjectionContextTokenProjection, project_injection_context_token_count};
 use crate::InferenceEngineError;
