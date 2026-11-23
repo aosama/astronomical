@@ -9,6 +9,7 @@
 pub mod astro_ssd_prompt_cache_restore;
 pub mod astro_ssd_prompt_cache_startup_logging;
 pub mod astro_ssd_prompt_cache_visual_identity;
+pub mod engine_construction;
 pub mod execution_core;
 pub mod generated_token_emission;
 pub mod generation_request_validation;

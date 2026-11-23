@@ -246,11 +246,13 @@ pub use qwen3_5_core::vision::{
 };
 
 #[cfg(feature = "direct-mlx")]
+pub use qwen3_5_core::shared_execution::execution_core::Qwen3_5ExecutionCoreSettings;
+#[cfg(feature = "direct-mlx")]
 pub use qwen3_5_core::shared_execution::prompt_processing_chunk_sizer::{
     Qwen3_5PromptProcessingChunkSizer, Qwen3_5PromptProcessingChunkSizerError,
 };
 #[cfg(feature = "direct-mlx")]
-pub use qwen3_5_resident::{Qwen3_5ResidentEngine, Qwen3_5ResidentModel};
+pub use qwen3_5_resident::{Qwen3_5ResidentEngine, Qwen3_5ResidentModel, ResidentEngineSettings};
 
 #[cfg(feature = "direct-mlx")]
 pub use qwen3_5_resident::{
@@ -280,7 +282,7 @@ pub use qwen3_5_streaming::{
 #[cfg(feature = "direct-mlx")]
 pub use qwen3_5_streaming::{
     DirectExpertFetchCounts, LayerProbeShape, Qwen3_5StreamingEngine, Qwen3_5StreamingModel,
-    Qwen3_5StreamingTargetForwardOutput, RoutedReplyRecording,
+    Qwen3_5StreamingTargetForwardOutput, RoutedReplyRecording, StreamingEngineSettings,
     safe_minimum_mlx_memory_ceiling_bytes,
 };
 

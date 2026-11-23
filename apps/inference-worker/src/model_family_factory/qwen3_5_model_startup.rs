@@ -16,8 +16,9 @@ use model_serving::{
     AstroSsdPromptCacheDiskStoreConfig, CompleteResidencyRequirements, EnginePlacement,
     ModelFamilyInferenceEngine, ModelLoadingPerformanceAttributionMetadata, PerformanceAttribution,
     PerformanceAttributionLog, PerformanceAttributionOutcome, PerformanceOperation,
-    Qwen3_5ArtifactValidator, Qwen3_5GenerationProcessor, Qwen3_5MemoryGeometryError,
-    Qwen3_5PromptProcessingChunkSizer, Qwen3_5ResidentEngine, Qwen3_5StreamingEngine,
+    Qwen3_5ArtifactValidator, Qwen3_5ExecutionCoreSettings, Qwen3_5GenerationProcessor,
+    Qwen3_5MemoryGeometryError, Qwen3_5PromptProcessingChunkSizer, Qwen3_5ResidentEngine,
+    Qwen3_5StreamingEngine, ResidentEngineSettings, StreamingEngineSettings,
     ValidatedQwen3_5Artifact, model_memory_geometry_from_validated_artifact,
 };
 
@@ -457,19 +458,23 @@ fn construct_resident_engine(
     // DFlash speculative decoding is disabled by design: no draft
     // is ever constructed for the resident engine (see the
     // speculative-decode lifecycle module for the full rationale).
-    Qwen3_5ResidentEngine::new_with_effective_context_runtime_chunking_and_performance_attribution(
-        validated_artifact,
-        active_memory_limit_bytes,
-        mlx_buffer_cache_limit_bytes,
-        astro_ssd_prompt_cache_disk_store_config,
-        prompt_processing_chunk_sizer,
-        think_end_token_id,
-        model_directory_path.to_path_buf(),
-        maximum_context_tokens,
-        chunking,
-        model_loading_performance_attribution,
-        performance_attribution_log,
-        astro_neural_engine_program_cache_directory,
+    Qwen3_5ResidentEngine::new_with_execution_core_settings(
+        Qwen3_5ExecutionCoreSettings {
+            validated_artifact,
+            active_memory_limit_bytes,
+            mlx_buffer_cache_limit_bytes,
+            astro_ssd_prompt_cache_disk_store_config,
+            prompt_processing_chunk_sizer,
+            think_end_token_id,
+            model_directory: model_directory_path.to_path_buf(),
+            maximum_context_tokens,
+            chunking,
+            model_loading_performance_attribution,
+            performance_attribution_log,
+        },
+        ResidentEngineSettings {
+            astro_neural_engine_program_cache_directory,
+        },
     )
     .map(ModelFamilyInferenceEngine::Qwen3_5)
     .map_err(|source| Qwen3_5ModelStartupError::EngineInitialization {
@@ -520,19 +525,23 @@ fn construct_streaming_engine(
                 );
             }
         };
-    Qwen3_5StreamingEngine::new_with_effective_context_runtime_chunking_performance_attribution_and_decode_astro_expert_cache_policy(
-        validated_artifact,
-        active_memory_limit_bytes,
-        mlx_buffer_cache_limit_bytes,
-        astro_ssd_prompt_cache_disk_store_config,
-        prompt_processing_chunk_sizer,
-        think_end_token_id,
-        model_directory_path.to_path_buf(),
-        maximum_context_tokens,
-        chunking,
-        model_loading_performance_attribution,
-        performance_attribution_log,
-        decode_astro_expert_cache_policy,
+    Qwen3_5StreamingEngine::new_with_execution_core_settings(
+        Qwen3_5ExecutionCoreSettings {
+            validated_artifact,
+            active_memory_limit_bytes,
+            mlx_buffer_cache_limit_bytes,
+            astro_ssd_prompt_cache_disk_store_config,
+            prompt_processing_chunk_sizer,
+            think_end_token_id,
+            model_directory: model_directory_path.to_path_buf(),
+            maximum_context_tokens,
+            chunking,
+            model_loading_performance_attribution,
+            performance_attribution_log,
+        },
+        StreamingEngineSettings {
+            decode_astro_expert_cache_policy,
+        },
     )
     .map(ModelFamilyInferenceEngine::Qwen3_5Streaming)
     .map_err(|source| Qwen3_5ModelStartupError::EngineInitialization {
