@@ -1,178 +1,75 @@
 use ipc_protocol::WorkerDecodeAstroExpertCachePolicy;
 use runtime_integration::MlxRuntime;
-use std::sync::Arc;
 
 use crate::inference_engine::load_result::EngineLoadResult;
 use crate::{
-    AstroSsdPromptCacheDiskStore, AstroSsdPromptCacheModelContract, InferenceEngineError,
-    PerformanceAttribution, PerformanceAttributionOutcome, PerformanceOperation,
-    PersistentVisualEmbeddingModelContract, StreamingStartupResidencyFacts,
+    InferenceEngineError, PerformanceAttribution, PerformanceOperation,
+    StreamingStartupResidencyFacts,
 };
 
 use super::{Qwen3_5EngineState, fatal_engine_error, qwen3_5_runtime_error};
 use crate::qwen3_5_core::artifacts::ValidatedQwen3_5Artifact;
 use crate::qwen3_5_core::model::model_chunking_configuration::Qwen3_5ModelChunkingConfiguration;
-use crate::qwen3_5_core::shared_execution::model_loading_steps::{
-    initialize_mlx_runtime_with_cleanup, open_astro_ssd_prompt_cache,
-    resolve_model_chunking_configuration, resolve_validated_model_identity,
-    resolve_visual_embedding_model_contract,
-};
+use crate::qwen3_5_core::shared_execution::model_loading_lifecycle::Qwen3_5ModelLoadingHooks;
 use crate::qwen3_5_streaming::model::Qwen3_5Model;
 
-impl Qwen3_5EngineState {
-    pub(super) fn load(&mut self) -> Result<EngineLoadResult, InferenceEngineError> {
-        if let Some(model) = self.core.model.as_ref() {
-            return Ok(self.engine_load_result(model.minimum_mlx_memory_ceiling_bytes()?));
-        }
-        let mut model_loading_performance_attribution =
-            self.core.take_model_loading_performance_attribution();
-        let mut model_id = None;
-        let mut model_revision = None;
-        let mut total_artifact_payload_bytes = None;
-        let mut model_shard_count = None;
-        let model_loading_result: Result<_, InferenceEngineError> = (|| {
-            let validated_artifact = self.core.validated_artifact.take().ok_or_else(|| {
-                fatal_engine_error("validated Qwen3.5 artifact is unavailable during MLX load")
-            })?;
-            let qwen3_5_vision_config = validated_artifact.vision_config().cloned();
-            model_id = Some(validated_artifact.model_id().to_owned());
-            model_revision = Some(validated_artifact.revision().to_owned());
-            total_artifact_payload_bytes = Some(validated_artifact.total_payload_bytes());
-            model_shard_count = Some(validated_artifact.shard_count());
-            // Capture the startup engine-selection facts before the artifact
-            // moves into the model: a later live raise consults them to
-            // decide whether the raised ceiling would select the resident
-            // engine in a replacement worker. Derived from the same artifact
-            // and directory the selection itself reads, so the two answers
-            // cannot drift.
-            self.startup_residency_facts = capture_streaming_startup_residency_facts(
-                self,
-                &validated_artifact,
-                &mut model_loading_performance_attribution,
-            )?
-            .or(self.startup_residency_facts);
-            let runtime = initialize_mlx_runtime_with_cleanup(
-                self.core.memory_limits,
-                &mut model_loading_performance_attribution,
-            )?;
-            let model_chunking = resolve_model_chunking_configuration(&self.core.chunking)?;
-            let model = load_and_materialize_streaming_model(
-                runtime,
-                validated_artifact,
-                &self.core.model_directory,
-                self.streaming_forward_shape(model_chunking),
-                self.decode_astro_expert_cache_policy,
-                &mut model_loading_performance_attribution,
-            )?;
-            self.startup_residency_facts =
-                with_loaded_sequence_state_rate(self.startup_residency_facts, &model);
-            let (resolved_model_id, resolved_model_revision) =
-                resolve_validated_model_identity(&model_id, &model_revision)?;
-            let persistent_visual_embedding_model_contract =
-                resolve_visual_embedding_model_contract(
-                    qwen3_5_vision_config.as_ref(),
-                    &resolved_model_id,
-                    &resolved_model_revision,
-                );
-            let (astro_ssd_prompt_cache_model_contract, astro_ssd_prompt_cache) =
-                open_astro_ssd_prompt_cache(
-                    self.core.astro_ssd_prompt_cache_disk_store_config.clone(),
-                    &model,
-                    &self.core.chunking,
-                    &resolved_model_id,
-                    &resolved_model_revision,
-                    persistent_visual_embedding_model_contract.as_ref(),
-                    &mut model_loading_performance_attribution,
-                )?;
-            model
-                .runtime()
-                .synchronize_gpu_stream_and_clear_mlx_buffer_cache()
-                .map_err(qwen3_5_runtime_error)?;
-            Ok((
-                model,
-                astro_ssd_prompt_cache_model_contract,
-                persistent_visual_embedding_model_contract,
-                astro_ssd_prompt_cache,
-            ))
-        })();
-
-        match model_loading_result {
-            Ok((
-                model,
-                astro_ssd_prompt_cache_model_contract,
-                persistent_visual_embedding_model_contract,
-                astro_ssd_prompt_cache,
-            )) => self.install_loaded_streaming_model(
-                model,
-                astro_ssd_prompt_cache_model_contract,
-                persistent_visual_embedding_model_contract,
-                astro_ssd_prompt_cache,
-                model_loading_performance_attribution,
-                model_id,
-                model_revision,
-                total_artifact_payload_bytes,
-                model_shard_count,
-            ),
-            Err(model_loading_error) => {
-                record_failed_streaming_model_loading(
-                    self,
-                    model_loading_performance_attribution,
-                    model_id,
-                    model_revision,
-                    total_artifact_payload_bytes,
-                    model_shard_count,
-                    &model_loading_error,
-                );
-                Err(model_loading_error)
-            }
-        }
+impl Qwen3_5ModelLoadingHooks for Qwen3_5EngineState {
+    /// Captures the startup engine-selection facts before the artifact moves
+    /// into the model: a later live raise consults them to decide whether the
+    /// raised ceiling would select the resident engine in a replacement
+    /// worker. They come from the same artifact and directory the selection
+    /// itself reads, so the two answers cannot drift.
+    fn observe_artifact_before_load(
+        &mut self,
+        validated_artifact: &ValidatedQwen3_5Artifact,
+        model_loading_performance_attribution: &mut PerformanceAttribution,
+    ) -> Result<(), InferenceEngineError> {
+        self.startup_residency_facts = capture_streaming_startup_residency_facts(
+            self,
+            validated_artifact,
+            model_loading_performance_attribution,
+        )?
+        .or(self.startup_residency_facts);
+        Ok(())
     }
 
-    /// Moves the successfully loaded model and its `astro_ssd_prompt_cache` ownership into the
-    /// engine state, records the successful loading attribution, and reports
-    /// the engine load result.
-    #[allow(clippy::too_many_arguments)]
-    fn install_loaded_streaming_model(
+    fn load_and_materialize_model(
         &mut self,
-        model: Qwen3_5Model,
-        astro_ssd_prompt_cache_model_contract: Option<AstroSsdPromptCacheModelContract>,
-        persistent_visual_embedding_model_contract: Option<PersistentVisualEmbeddingModelContract>,
-        astro_ssd_prompt_cache: Option<Arc<AstroSsdPromptCacheDiskStore>>,
-        model_loading_performance_attribution: PerformanceAttribution,
-        model_id: Option<String>,
-        model_revision: Option<String>,
-        total_artifact_payload_bytes: Option<u64>,
-        model_shard_count: Option<usize>,
-    ) -> Result<EngineLoadResult, InferenceEngineError> {
-        self.core.model_id = model_id.clone();
-        self.core.model_revision = model_revision.clone();
-        self.core.astro_ssd_prompt_cache_model_contract = astro_ssd_prompt_cache_model_contract;
-        self.core.persistent_visual_embedding_model_contract =
-            persistent_visual_embedding_model_contract;
-        self.core.astro_ssd_prompt_cache = astro_ssd_prompt_cache;
-        let mlx_memory_snapshot = model.runtime().memory_snapshot().ok();
-        let resident_model_payload_bytes = Some(model.resident_model_payload_byte_count());
-        let minimum_mlx_memory_ceiling_bytes = model.minimum_mlx_memory_ceiling_bytes()?;
-        self.core.model = Some(model);
-        if let Err(performance_attribution_error) = self
-            .record_model_loading_performance_attribution(
-                model_loading_performance_attribution,
-                PerformanceAttributionOutcome::Success,
-                model_id,
-                model_revision,
-                total_artifact_payload_bytes,
-                resident_model_payload_bytes,
-                model_shard_count,
-                mlx_memory_snapshot,
-                None,
-            )
-        {
-            tracing::warn!(
-                error = %performance_attribution_error,
-                "failed to persist model-loading performance attribution after successful load"
-            );
-        }
-        Ok(self.engine_load_result(minimum_mlx_memory_ceiling_bytes))
+        runtime: MlxRuntime,
+        validated_artifact: ValidatedQwen3_5Artifact,
+        model_chunking: Qwen3_5ModelChunkingConfiguration,
+        model_loading_performance_attribution: &mut PerformanceAttribution,
+    ) -> Result<Qwen3_5Model, InferenceEngineError> {
+        let model = load_and_materialize_streaming_model(
+            runtime,
+            validated_artifact,
+            &self.core.model_directory,
+            self.streaming_forward_shape(model_chunking),
+            self.decode_astro_expert_cache_policy,
+            model_loading_performance_attribution,
+        )?;
+        self.startup_residency_facts =
+            with_loaded_sequence_state_rate(self.startup_residency_facts, &model);
+        Ok(model)
+    }
+
+    /// Clears what loading left in the `mlx_buffer_cache` before serving.
+    fn prepare_loaded_model(
+        &mut self,
+        model: &mut Qwen3_5Model,
+        _model_loading_performance_attribution: &mut PerformanceAttribution,
+    ) -> Result<(), InferenceEngineError> {
+        model
+            .runtime()
+            .synchronize_gpu_stream_and_clear_mlx_buffer_cache()
+            .map_err(qwen3_5_runtime_error)
+    }
+
+    /// The memory governor already opened as the model loaded.
+    fn adopt_loaded_model(&mut self, _model: &Qwen3_5Model) {}
+
+    fn engine_load_result(&self, minimum_mlx_memory_ceiling_bytes: u64) -> EngineLoadResult {
+        Qwen3_5EngineState::engine_load_result(self, minimum_mlx_memory_ceiling_bytes)
     }
 }
 
@@ -334,35 +231,4 @@ fn load_and_materialize_streaming_model(
     model.begin_serving_session_observation();
     model.open_memory_governor();
     Ok(model)
-}
-
-/// Records the failed loading attribution for the artifact metadata
-/// captured before the failure, warning without masking the original error.
-fn record_failed_streaming_model_loading(
-    engine_state: &mut Qwen3_5EngineState,
-    model_loading_performance_attribution: PerformanceAttribution,
-    model_id: Option<String>,
-    model_revision: Option<String>,
-    total_artifact_payload_bytes: Option<u64>,
-    model_shard_count: Option<usize>,
-    model_loading_error: &InferenceEngineError,
-) {
-    if let Err(performance_attribution_error) = engine_state
-        .record_model_loading_performance_attribution(
-            model_loading_performance_attribution,
-            PerformanceAttributionOutcome::Failed,
-            model_id,
-            model_revision,
-            total_artifact_payload_bytes,
-            None,
-            model_shard_count,
-            None,
-            Some(model_loading_error.to_string()),
-        )
-    {
-        tracing::warn!(
-            error = %performance_attribution_error,
-            "failed to persist model-loading performance attribution after failure"
-        );
-    }
 }

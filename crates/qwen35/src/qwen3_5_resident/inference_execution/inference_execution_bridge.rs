@@ -16,7 +16,7 @@ impl MlxInferenceExecution for Qwen3_5InferenceExecution {
     type Request = Qwen3_5InferenceRequest;
 
     fn load(&mut self) -> Result<EngineLoadResult, InferenceEngineError> {
-        Qwen3_5EngineState::load(self)
+        crate::qwen3_5_core::shared_execution::model_loading_lifecycle::load_model(self)
     }
 
     fn start_generation(
