@@ -17,6 +17,7 @@ use super::terminal_prefill_seed::{
     chunk_requires_visual_embeddings, seed_first_generated_token_from_terminal_prefill_chunk,
     seed_terminal_text_prefill_after_astro_ssd_prompt_cache_boundaries,
 };
+use crate::qwen3_5_core::model::prefill_forward::Qwen3_5PrefillForward;
 
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_resident::model::Qwen3_5ResidentModel;
