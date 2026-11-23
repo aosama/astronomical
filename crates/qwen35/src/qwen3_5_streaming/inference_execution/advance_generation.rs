@@ -1,124 +1,54 @@
-//! Serial request advancement, one token ahead.
-//!
-//! Each advance runs the successor's forward synchronously, because its expert
-//! routes must be resolved before the token may become visible, and returns
-//! the current token. Unlike the resident engine, nothing is submitted to the
-//! graphics processor ahead of time.
+//! The streaming engine's part of a decode step: reconciling expert
+//! residency after the prompt, the expert statistics recorded once a reply
+//! token is read, and its forwards, which run the successor synchronously
+//! because its expert routes must be resolved before the token may become
+//! visible; unlike the resident engine, nothing is submitted to the graphics
+//! processor ahead of time. The step itself is shared with the resident
+//! engine in `qwen3_5_core::shared_execution::decode_step`.
 
 use crate::qwen3_5_core::model::memory_breakdown::Qwen3_5MemoryOwnership;
-use crate::qwen3_5_core::shared_execution::generation_finalization_steps;
 use std::time::Instant;
 
 use ipc_protocol::RequestId;
+use runtime_integration::MlxMemorySnapshot;
+
+use crate::qwen3_5_core::shared_execution::decode_step::{
+    ActiveRequestAdvance, Qwen3_5DecodeStepHooks,
+};
 use mlx_bridge::MlxArray;
 
-use crate::{
-    GeneratedToken, InferenceEngineError, PerformanceAttributionOutcome, PerformanceOperation,
-};
+use crate::{GeneratedToken, InferenceEngineError};
 
+use super::Qwen3_5EngineState;
 use super::completed_forward_memory::{
-    CompletedForwardMemoryObservation, MeasuredForward,
-    capture_completed_forward_memory_observation, measure_completed_forward,
+    CompletedForwardMemoryObservation, MeasuredForward, measure_completed_forward,
 };
-use super::{Qwen3_5EngineState, qwen3_5_runtime_error};
-use crate::qwen3_5_core::shared_execution::generated_token_emission;
+use super::engine_request::Qwen3_5EngineRequest;
 
 use crate::qwen3_5_streaming::model::Qwen3_5Model;
-impl Qwen3_5EngineState {
-    pub(super) fn advance_generation(
+impl Qwen3_5DecodeStepHooks for Qwen3_5EngineState {
+    fn advance_prompt_prefill_if_pending(
         &mut self,
         request_id: RequestId,
-    ) -> Result<GeneratedToken, InferenceEngineError> {
-        let mut active_request = self.core.active_request.take().ok_or_else(|| {
-            super::fatal_engine_error(
-                "Qwen3.5 generation advance requested without an active request",
-            )
-        })?;
-        if active_request.request_id != request_id {
-            self.core.active_request = Some(active_request);
-            return Err(super::fatal_engine_error(
-                "Qwen3.5 generation request correlation mismatch",
-            ));
-        }
-
-        let advance_span = if active_request.prefill_cursor
-            < active_request.input_token_ids.len().saturating_sub(1)
-        {
-            PerformanceOperation::PromptPrefillAdvanceSpan
-        } else {
-            PerformanceOperation::DecodeAdvanceSpan
-        };
-        let advance_span_started_at = active_request
-            .performance_attribution
-            .begin_operation_span();
-        let active_request_advance = self.advance_active_request(request_id, &mut active_request);
-        active_request
-            .performance_attribution
-            .complete_operation_span(advance_span, advance_span_started_at);
-        match active_request_advance {
-            Ok(ActiveRequestAdvance::Continue(generated_token)) => {
-                self.core.active_request = Some(active_request);
-                Ok(generated_token)
-            }
-            Ok(ActiveRequestAdvance::Complete(generated_token)) => {
-                let generation_finalization = self.finalize_generation_request(
-                    active_request,
-                    PerformanceAttributionOutcome::Success,
-                    None,
-                );
-                Ok(generated_token.with_generation_finalization(generation_finalization))
-            }
-            Err(generation_error) => {
-                generation_finalization_steps::finalize_generation_request_after_error(
-                    self,
-                    active_request,
-                    &generation_error,
-                    "generation advance rejected",
-                    "generation advance failed",
-                );
-                Err(generation_error)
-            }
-        }
+        active_request: &mut Qwen3_5EngineRequest,
+    ) -> Result<Option<GeneratedToken>, InferenceEngineError> {
+        Qwen3_5EngineState::advance_prompt_prefill_if_pending(self, request_id, active_request)
     }
 
-    /// Advances the active request by one decode step: prefill handoff,
-    /// residency preparation and announcement, the forced/pending/first-decode
-    /// token trichotomy, hot-expert warming, the terminal check, and the
-    /// next-token forward with its memory observation and emission.
-    fn advance_active_request(
+    fn begin_generation_preparation(
         &mut self,
         request_id: RequestId,
-        active_request: &mut super::engine_request::Qwen3_5EngineRequest,
-    ) -> Result<ActiveRequestAdvance, InferenceEngineError> {
-        // Keep model borrows operation-local because the steps below take
-        // `&mut self`.
-        if let Some(prefill_progress) =
-            self.advance_prompt_prefill_if_pending(request_id, active_request)?
-        {
-            return Ok(ActiveRequestAdvance::Continue(prefill_progress));
-        }
-        if let Some(preparation_announcement) =
-            self.begin_generation_preparation(request_id, active_request)?
-        {
-            return Ok(preparation_announcement);
-        }
-        let final_prompt_index = active_request.input_token_ids.len() - 1;
+        active_request: &mut Qwen3_5EngineRequest,
+    ) -> Result<Option<ActiveRequestAdvance>, InferenceEngineError> {
+        Qwen3_5EngineState::begin_generation_preparation(self, request_id, active_request)
+    }
 
-        let forced_thinking_transition_token_id =
-            active_request.next_forced_thinking_transition_token_id()?;
-        let mut first_decode_forward_started_at = None;
-        let current_generated_token = self.current_generated_token_for_decode(
-            request_id,
-            active_request,
-            forced_thinking_transition_token_id,
-            final_prompt_index,
-            &mut first_decode_forward_started_at,
-        )?;
-
-        let current_generated_token_id = generated_token_emission::synchronize_generated_token_id(
-            active_request,
-            &current_generated_token,
-        )?;
+    /// Warms the hot experts the token used and records the warm-insert and
+    /// prefetch statistics of the forward that produced it.
+    fn after_reply_token_synchronized(
+        &self,
+        active_request: &mut Qwen3_5EngineRequest,
+    ) -> Result<(), InferenceEngineError> {
         if let Some(model) = self.core.model.as_ref() {
             self.warm_hot_experts_and_record_utilization(model, active_request);
             model
@@ -127,78 +57,45 @@ impl Qwen3_5EngineState {
                 )
                 .map_err(InferenceEngineError::from)?;
         }
-        if let Some(first_decode_forward_started_at) = first_decode_forward_started_at {
-            active_request.first_decode_forward_elapsed_millis = Some(
-                u64::try_from(first_decode_forward_started_at.elapsed().as_millis())
-                    .unwrap_or(u64::MAX),
-            );
-        }
-        if let Some(completed_advance) =
-            self.complete_generation_if_terminal(active_request, current_generated_token_id)?
-        {
-            return Ok(completed_advance);
-        }
+        Ok(())
+    }
 
-        // Prefetch samples the successor before this token is accepted. A live
-        // mask must see the commit first or Juliet/Romeo prefixes stay allowed.
-        let mut early_structured_emission = if active_request.structured_generation.is_some() {
-            let model =
-                self.core.model.as_ref().ok_or_else(|| {
-                    super::fatal_engine_error("Qwen3.5 engine lost its loaded model")
-                })?;
-            let generated_token_emission =
-                generated_token_emission::build_generated_token_emission(
-                    model,
-                    &self.core.end_of_sequence_token_ids,
-                    active_request,
-                    current_generated_token_id,
-                    None,
-                )?;
-            if generated_token_emission.is_terminal {
-                return Ok(ActiveRequestAdvance::Complete(
-                    generated_token_emission.generated_token,
-                ));
-            }
-            Some(generated_token_emission)
-        } else {
-            None
-        };
+    fn decode_first_token_from_final_prompt(
+        &mut self,
+        request_id: RequestId,
+        active_request: &mut Qwen3_5EngineRequest,
+        final_prompt_index: usize,
+        first_decode_forward_started_at: &mut Option<Instant>,
+    ) -> Result<MlxArray, InferenceEngineError> {
+        Qwen3_5EngineState::decode_first_token_from_final_prompt(
+            self,
+            request_id,
+            active_request,
+            final_prompt_index,
+            first_decode_forward_started_at,
+        )
+    }
+
+    fn decode_next_token(
+        &mut self,
+        active_request: &mut Qwen3_5EngineRequest,
+        current_generated_token: &MlxArray,
+        current_generated_token_id: u32,
+    ) -> Result<(MlxArray, MlxMemorySnapshot), InferenceEngineError> {
         let (next_generated_token, completed_forward_memory) = self
             .reclaim_outgrown_slabs_and_decode_next_token(
                 active_request,
-                &current_generated_token,
+                current_generated_token,
                 current_generated_token_id,
             )?;
-
-        let generated_token_emission = match early_structured_emission.take() {
-            Some(generated_token_emission) => generated_token_emission,
-            None => {
-                let model = self.core.model.as_ref().ok_or_else(|| {
-                    super::fatal_engine_error("Qwen3.5 engine lost its loaded model")
-                })?;
-                generated_token_emission::build_generated_token_emission(
-                    model,
-                    &self.core.end_of_sequence_token_ids,
-                    active_request,
-                    current_generated_token_id,
-                    Some(&completed_forward_memory.mlx_memory_snapshot),
-                )?
-            }
-        };
-        if generated_token_emission.is_terminal {
-            Ok(ActiveRequestAdvance::Complete(
-                generated_token_emission.generated_token,
-            ))
-        } else {
-            // Keep the successor private until the next call reads it. The
-            // current token alone is observable.
-            active_request.pending_generated_token = Some(next_generated_token);
-            Ok(ActiveRequestAdvance::Continue(
-                generated_token_emission.generated_token,
-            ))
-        }
+        Ok((
+            next_generated_token,
+            completed_forward_memory.mlx_memory_snapshot,
+        ))
     }
+}
 
+impl Qwen3_5EngineState {
     /// Announces preparation the moment prompt work ends, then reconciles
     /// decode residency on the next advance. Reconciling first kept the
     /// public status on "prompt processing 100%" for as long as residency
@@ -225,108 +122,6 @@ impl Qwen3_5EngineState {
             self.prepare_decode_expert_residency_after_prefill(request_id, active_request)?;
         }
         Ok(None)
-    }
-
-    /// Completes the generation when the synchronized token is terminal.
-    /// `Ok(None)` means the generation continues.
-    fn complete_generation_if_terminal(
-        &mut self,
-        active_request: &mut super::engine_request::Qwen3_5EngineRequest,
-        current_generated_token_id: u32,
-    ) -> Result<Option<ActiveRequestAdvance>, InferenceEngineError> {
-        if !generated_token_emission::generated_token_will_be_terminal(
-            &self.core.end_of_sequence_token_ids,
-            active_request,
-            current_generated_token_id,
-        ) {
-            return Ok(None);
-        }
-        let model = self
-            .core
-            .model
-            .as_ref()
-            .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
-        let completed_forward_memory = capture_completed_forward_memory_observation(model)?;
-        let generated_token_emission = generated_token_emission::build_generated_token_emission(
-            model,
-            &self.core.end_of_sequence_token_ids,
-            active_request,
-            current_generated_token_id,
-            Some(&completed_forward_memory.mlx_memory_snapshot),
-        )?;
-        Ok(Some(ActiveRequestAdvance::Complete(
-            generated_token_emission.generated_token,
-        )))
-    }
-
-    /// The current token for one decode step: a forced thinking transition
-    /// token, the prefill-produced pending token, or the first decode from the
-    /// final prompt token.
-    fn current_generated_token_for_decode(
-        &mut self,
-        request_id: RequestId,
-        active_request: &mut super::engine_request::Qwen3_5EngineRequest,
-        forced_thinking_transition_token_id: Option<u32>,
-        final_prompt_index: usize,
-        first_decode_forward_started_at: &mut Option<Instant>,
-    ) -> Result<MlxArray, InferenceEngineError> {
-        if let Some(forced_thinking_transition_token_id) = forced_thinking_transition_token_id {
-            return self.build_forced_thinking_transition_token(
-                active_request,
-                forced_thinking_transition_token_id,
-            );
-        }
-        match active_request.pending_generated_token.take() {
-            Some(pending_generated_token) => {
-                // Final prefill already produced this token; report a truthful
-                // zero rather than attributing later output handling to decode.
-                if active_request.generated_token_count == 0
-                    && active_request.first_decode_forward_elapsed_millis.is_none()
-                {
-                    active_request.first_decode_forward_elapsed_millis = Some(0);
-                }
-                Ok(pending_generated_token)
-            }
-            None => self.decode_first_token_from_final_prompt(
-                request_id,
-                active_request,
-                final_prompt_index,
-                first_decode_forward_started_at,
-            ),
-        }
-    }
-
-    /// Builds the forced thinking transition token. The asynchronously selected
-    /// successor was conditioned on the last committed reasoning token but was
-    /// never itself forwarded; replacing it here keeps the forced token and
-    /// decoder history identical. Mirrors the inlined arm.
-    fn build_forced_thinking_transition_token(
-        &self,
-        active_request: &mut super::engine_request::Qwen3_5EngineRequest,
-        forced_thinking_transition_token_id: u32,
-    ) -> Result<MlxArray, InferenceEngineError> {
-        active_request.pending_generated_token = None;
-        let model = self
-            .core
-            .model
-            .as_ref()
-            .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
-        let forced_generated_token = active_request
-            .performance_attribution
-            .measure_operation(
-                PerformanceOperation::ForcedThinkingTransitionTokenArrayConstruction,
-                |_performance_attribution| {
-                    model
-                        .runtime()
-                        .array_from_u32(&[forced_thinking_transition_token_id], &[1, 1])
-                },
-            )
-            .map_err(qwen3_5_runtime_error)?;
-        active_request.performance_attribution.record_counter(
-            crate::PerformanceCounter::ForcedThinkingTransitionTokenCount,
-            1,
-        );
-        Ok(forced_generated_token)
     }
 
     /// Decodes the first token from the final prompt token, records the
@@ -505,11 +300,6 @@ impl Qwen3_5EngineState {
             );
         Ok((next_generated_token, completed_forward_memory))
     }
-}
-
-pub(super) enum ActiveRequestAdvance {
-    Continue(GeneratedToken),
-    Complete(GeneratedToken),
 }
 
 /// Before a reply token's forward: notes the reply's start for a recorded
