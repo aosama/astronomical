@@ -30,3 +30,10 @@ archive.include = [
     { path = "debug/astronomical-daemon-replacement-ready-worker", relative-to = "target", on-missing = "error" },
     { path = "debug/astronomical-daemon-memory-demotion-worker", relative-to = "target", on-missing = "error" },
 ]
+
+[profile.ci-without-daemon-executables]
+# The archive of a pull request whose test selection leaves out the daemon
+# package. The narrowed build makes none of the daemon's executables, and the
+# REST and end-to-end lanes, the only ones that launch them, do not run for
+# such a selection, so this archive carries no extra paths. `cargo xtask
+# selected-cargo` picks this profile for those selections.
