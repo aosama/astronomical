@@ -29,6 +29,10 @@ use super::model_loading_steps::{
 };
 use super::text_model::Qwen3_5TextModel;
 
+/// The points in a load where the engines differ. The resident engine loads
+/// its experts, Neural Engine programs and drafter after the model; the
+/// streaming engine reads its startup residency facts from the artifact first
+/// and opens its memory governor as the model loads.
 pub trait Qwen3_5ModelLoadingHooks: Qwen3_5FinalizationHooks {
     /// Reads what the engine needs from the artifact before the artifact
     /// moves into the model.
