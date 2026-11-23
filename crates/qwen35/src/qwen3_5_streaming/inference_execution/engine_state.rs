@@ -18,6 +18,9 @@ use super::super::model::Qwen3_5Model;
 use super::Qwen3_5StreamingPromptProcessingChunkSizer;
 use super::engine_request::Qwen3_5EngineRequest;
 
+/// Everything the streaming engine keeps between engine steps: the loaded
+/// model, the active request, the limits it was started with and its
+/// `astro_ssd_prompt_cache` ownership.
 pub struct Qwen3_5InferenceExecution {
     pub(in crate::qwen3_5_streaming) active_request: Option<Qwen3_5EngineRequest>,
     pub(in crate::qwen3_5_streaming) decode_astro_expert_cache_policy:

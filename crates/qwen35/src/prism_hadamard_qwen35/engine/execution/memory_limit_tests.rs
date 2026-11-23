@@ -57,3 +57,15 @@ fn should_keep_the_configured_buffer_limit_at_an_equal_ceiling() {
         2 * ONE_GB
     );
 }
+
+// Edge: before the model loads the minimum is one byte, so a zero ceiling is
+// still the typed rejection rather than a silently raised one.
+#[test]
+fn should_reject_a_zero_ceiling_before_the_model_loads() {
+    let refusal = ceiling_change_refusal(false, 0, 1);
+
+    assert!(matches!(
+        refusal,
+        Some(InferenceEngineError::MlxMemoryLimitRejected { .. })
+    ));
+}

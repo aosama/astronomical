@@ -365,7 +365,7 @@ impl MlxInferenceExecution for PrismHadamardQwen35InferenceExecution {
         ) {
             return Err(refusal);
         }
-        self.ceiling_bytes = requested_mlx_memory_ceiling_bytes.max(1);
+        self.ceiling_bytes = requested_mlx_memory_ceiling_bytes;
         self.mlx_buffer_cache_bytes = super::memory_limit::mlx_buffer_cache_bytes_for_ceiling(
             self.configured_mlx_buffer_cache_bytes,
             self.ceiling_bytes,
@@ -410,11 +410,6 @@ impl MlxInferenceExecution for PrismHadamardQwen35InferenceExecution {
 }
 
 impl PrismHadamardQwen35InferenceExecution {
-    /// Samples the current MLX memory footprint for the status surface.
-    ///
-    /// The dense folded-ternary model owns its whole weight payload, so the
-    /// breakdown attributes active memory to the model core first and the
-    /// live generation state second; there is no expert owner.
     /// Applies the current ceiling and `mlx_buffer_cache` limit to the MLX
     /// runtime once the model is loaded; before that, `load` applies them.
     fn apply_memory_limits_to_loaded_runtime(&mut self) -> Result<(), InferenceEngineError> {
@@ -436,6 +431,11 @@ impl PrismHadamardQwen35InferenceExecution {
             })
     }
 
+    /// Samples the current MLX memory footprint for the status surface.
+    ///
+    /// The dense folded-ternary model owns its whole weight payload, so the
+    /// breakdown attributes active memory to the model core first and the
+    /// live generation state second; there is no expert owner.
     pub(super) fn collect_current_mlx_memory_telemetry(&self) -> Option<MlxMemoryTelemetry> {
         let model = self.model.as_ref()?;
         let memory_snapshot = match model.runtime.memory_snapshot() {

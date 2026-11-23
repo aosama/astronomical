@@ -33,6 +33,8 @@ mod test_controls;
 
 use crate::MlxInferenceEngine;
 
+// Kept so the phase files keep resolving the model as `super::Qwen3_5Model`
+// after the state and constructors moved into their own files.
 use super::model::Qwen3_5Model;
 
 pub use engine_state::{Qwen3_5EngineState, Qwen3_5InferenceExecution};
