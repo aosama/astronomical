@@ -2,6 +2,7 @@
 //! residency-forked field (expert pager, retained experts, residency plans,
 //! route observation) and the paged execution entry points.
 
+use crate::qwen3_5_core::model::prefill_forward::Qwen3_5PrefillForward;
 use crate::qwen3_5_core::model::target_forward_graph::Qwen3_5TargetForwardGraph;
 use mlx_bridge::MlxArray;
 
@@ -176,7 +177,7 @@ impl crate::qwen3_5_core::shared_execution::text_model::Qwen3_5TextModel for Qwe
         request_decoder_state: &mut crate::qwen3_5_core::decoder::RequestDecoderStateStack,
         performance_attribution: &mut crate::PerformanceAttribution,
     ) -> Result<(), crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError> {
-        Qwen3_5StreamingModel::prefill_chunk_with_performance_attribution(
+        crate::qwen3_5_core::model::prefill_forward::Qwen3_5PrefillForward::prefill_chunk_with_performance_attribution(
             self,
             token_ids,
             starting_position_tokens,
