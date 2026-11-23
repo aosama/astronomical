@@ -4,38 +4,31 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.133</title>
-            <pubDate>Mon, 23 Nov 2026 00:11:53 -0500</pubDate>
-            <sparkle:version>2480</sparkle:version>
-            <sparkle:shortVersionString>0.2.133</sparkle:shortVersionString>
+            <title>0.2.134</title>
+            <pubDate>Mon, 23 Nov 2026 08:08:28 -0500</pubDate>
+            <sparkle:version>2483</sparkle:version>
+            <sparkle:shortVersionString>0.2.134</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
             <description sparkle:format="markdown"><![CDATA[## What's new
 
-- **A new model to download: Ornith 1.5 35B-A3B OptiQ 4-bit with the Ornith team's draft model.** On an M5 Mac, code arrives about a third sooner and essays about a tenth sooner than with the plain OptiQ build, and every word is still the model's own. The DFlash2 build of the same model stays quicker; this one takes about 0.7 GB less disk.
-- **`astronomical unload`** frees the loaded model's memory from the terminal. It refuses while a reply is being written.
-- **See whether a draft model is helping:**
-  - `astronomical status` says whether the loaded model drafts (or why not) and how many guessed words the last reply kept.
-  - Observatory's Models page notes the models that carry a draft model.
-  - Programs see the same figures in `/v1/status`, and in OpenAI chat usage as `accepted_prediction_tokens` and `rejected_prediction_tokens`.
-- **Models you copy, move or remove by hand show up within seconds,** with no restart. A copy still in progress is listed once it has finished.
+- **Clearer name for the OptiQ DFlash2 model.** `Ornith-1.5-35B-A3B-OptiQ-DFLASH2-4bit` is now `Ornith-1.5-35B-A3B-OptiQ-4bit-vision-DFLASH2`, named like every other model with a built-in draft model: model, quantizer, bits, vision, draft model.
+- **Your copy carries over.** If you already downloaded it under the old name, it stays on this Mac under the renamed row and keeps working under the name you know. Nothing downloads again.
 
 ## Fixes
 
-- A model folder moved by hand no longer fails to load with "selected model family could not be classified".
-
-## For agents
-
-The Astronomical skill now explains draft models, what to do when a model copied in by hand does not appear or a model fails to load for lack of memory, and the drafting figures in the local API.
+- **Get works again for that model.** After it moved to its new name on Hugging Face, 0.2.133 and earlier could no longer download it.
 
 ## Compatibility
 
-Your models, conversations and settings carry over unchanged. Astronomical 0.2.133 is signed with a Developer ID certificate and notarized by Apple.
+Your models, conversations and settings are kept. No setting, command or local API changed.
+
+This release is signed with a Developer ID, built with Hardened Runtime and notarized by Apple.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.133/Astronomical-0.2.133-macOS-arm64.dmg" length="25970918" type="application/octet-stream" sparkle:edSignature="WpKXAn1sObyWv3+D1O7K4FQyhvGAgeD0oQZ0hMC5oopV5J93lHY7tvljsn26JfmkTA45ieYeN5Ba30eGEEqPBg=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.134/Astronomical-0.2.134-macOS-arm64.dmg" length="25978686" type="application/octet-stream" sparkle:edSignature="yz8wlZ3woL+d5VBDVQ6ZrFKPEjOF5FGYM+Wn5wvlIlOgDkILTkvs/2omyOyAUeqYFcEQeMlGMrGkl+Koanp/AQ=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: 5mth6S+51KLVbAeJmifFH8dH1a5xsQjMm+9OJbTC3DAmOAdIsI8Tl3hC4AWU5Z/B2Ry8wanyWRZg+b3eh9XRCA==
-length: 2738
+edSignature: PutTOOOmTMsKkYvWoKycvYY1OCw5JnJPtUZzfY4bryqpldrNvXJ5T71fqGqCjHGUrK8byUh88xOLceKve/ZcDA==
+length: 2037
 -->
