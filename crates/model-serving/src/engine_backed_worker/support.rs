@@ -325,6 +325,9 @@ pub(crate) struct ActiveEngineGeneration<RequestOutput, RetryRequest> {
     pub(crate) astro_ssd_prompt_cache_restored_token_count: u32,
     pub(crate) required_prompt_processing_token_count: u32,
     pub(crate) prompt_work_reuse: WorkerPromptWorkReuse,
+    /// What drafting did for this reply, from the engine's finalization;
+    /// reported just before completion.
+    pub(crate) drafting_statistics: Option<ipc_protocol::RequestDraftingStatistics>,
     pub(crate) prefill_processed_tokens: u32,
     pub(crate) prefill_elapsed_millis: u64,
     pub(crate) generation_started_at: Option<Instant>,
@@ -363,6 +366,7 @@ impl<RequestOutput, RetryRequest> ActiveEngineGeneration<RequestOutput, RetryReq
             astro_ssd_prompt_cache_restored_token_count,
             required_prompt_processing_token_count,
             prompt_work_reuse: WorkerPromptWorkReuse::default(),
+            drafting_statistics: None,
             prefill_processed_tokens: 0,
             prefill_elapsed_millis: 0,
             generation_started_at: None,

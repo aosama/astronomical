@@ -1,6 +1,9 @@
 //! Display formatting shared by the CLI verbs.
 
-use ipc_protocol::NeuralEnginePrefillStatus;
+use ipc_protocol::{
+    DraftModelGeneration, DraftModelLocation, DraftModelStatus, NeuralEnginePrefillStatus,
+    RequestDraftingStatistics,
+};
 
 /// The gigabyte every Astronomical screen and message uses: 2³⁰ bytes, the
 /// one Apple means when it describes a Mac's memory. A figure printed here
@@ -20,6 +23,48 @@ pub(crate) fn format_gigabytes(size_bytes: u64) -> String {
 
 /// The line `respond` keeps redrawing while it waits for a load, and `status` shows.
 pub(crate) const MODEL_LOAD_LINE: &str = "Loading the model";
+
+/// Whether the loaded model drafts, in words a newcomer can read: the drafter
+/// guesses words ahead and the model checks a whole guess in one step.
+pub(crate) fn render_draft_model(draft_model: &DraftModelStatus) -> String {
+    match draft_model {
+        DraftModelStatus::None => "none".to_owned(),
+        DraftModelStatus::Drafting {
+            generation,
+            location,
+            tree_node_budget,
+        } => {
+            let generation_name = match generation {
+                DraftModelGeneration::Dflash => "DFlash",
+                DraftModelGeneration::Dflash2 => "DFlash2",
+            };
+            let location_words = match location {
+                DraftModelLocation::Bundled => "the model's own drafter",
+                DraftModelLocation::Library => "a drafter from the model library",
+            };
+            format!(
+                "drafting with {generation_name}, {location_words}; up to {tree_node_budget} guessed words checked per step"
+            )
+        }
+        DraftModelStatus::Unavailable { reason } => format!("not in use: {reason}"),
+    }
+}
+
+/// What drafting did for the last reply, as a share of the guesses kept.
+pub(crate) fn render_reply_drafting(reply_drafting: &RequestDraftingStatistics) -> String {
+    let kept_percent = if reply_drafting.drafted_token_count == 0 {
+        0
+    } else {
+        u64::from(reply_drafting.accepted_token_count) * 100
+            / u64::from(reply_drafting.drafted_token_count)
+    };
+    format!(
+        "last reply kept {} of {} guessed words ({kept_percent}%) over {} steps",
+        reply_drafting.accepted_token_count,
+        reply_drafting.drafted_token_count,
+        reply_drafting.round_count
+    )
+}
 
 /// What the Neural Engine is doing for the loaded model. Nothing for `Off`, so a
 /// user who never enabled the setting keeps the usual status lines.

@@ -209,6 +209,13 @@ impl Qwen3_5EngineState {
             crate::PerformanceCounter::SpeculativeAcceptedTokenCount,
             round_outcome.accepted_proposal_count as u64,
         );
+        active_request
+            .engine_extension
+            .drafting_statistics
+            .record_round(
+                u32::try_from(round_outcome.drafted_token_count).unwrap_or(u32::MAX),
+                u32::try_from(round_outcome.accepted_proposal_count).unwrap_or(u32::MAX),
+            );
         tracing::debug!(
             request_id = request_id.value(),
             accepted_proposal_count = round_outcome.accepted_proposal_count,

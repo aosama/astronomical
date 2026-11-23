@@ -46,6 +46,7 @@ pub use verbs::speak::{
     AfplaySpeakers, SpeakArguments, SpeakDependencies, SpeakError, SpokenAudioPlayer, run_speak,
 };
 pub use verbs::status::{StatusDependencies, StatusError, run_status};
+pub use verbs::unload::{UnloadDependencies, UnloadError, run_unload};
 pub use verbs::validate_config::{
     ValidateConfigArguments, ValidateConfigDependencies, ValidateConfigError, run_validate_config,
 };

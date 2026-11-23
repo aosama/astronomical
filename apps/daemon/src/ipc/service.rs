@@ -78,6 +78,9 @@ pub struct DaemonIpcGenerationContext {
     pub library_download_coordinator: Option<Arc<LibraryDownloadCoordinator>>,
     /// Instance paths used to read and persist user configuration.
     pub instance_paths: AstronomicalInstancePaths,
+    /// The live worker, for requests that control it rather than generate
+    /// (unloading the model); `None` where only generation is wired.
+    pub worker_control: Option<crate::WorkerHandle>,
 }
 
 /// Starts serving ephemeral local daemon requests on the instance socket.
@@ -332,7 +335,8 @@ async fn handle_streaming_daemon_request(
         | DaemonRequest::Catalog
         | DaemonRequest::DownloadStart { .. }
         | DaemonRequest::DownloadStatus
-        | DaemonRequest::DefaultModelSet { .. }) => {
+        | DaemonRequest::DefaultModelSet { .. }
+        | DaemonRequest::ModelUnload) => {
             handle_model_management_request(
                 &generation_context,
                 &daemon_attribution_log,
@@ -387,11 +391,12 @@ async fn handle_model_management_request(
             )
             .await
         }
-        DaemonRequest::DefaultModelSet { model_id } => {
-            crate::ipc::models::handle_default_model_set(
+        model_control_request @ (DaemonRequest::DefaultModelSet { .. }
+        | DaemonRequest::ModelUnload) => {
+            handle_model_control_request(
                 generation_context,
                 daemon_attribution_log,
-                model_id,
+                model_control_request,
                 streaming_response_writer,
             )
             .await
@@ -400,6 +405,31 @@ async fn handle_model_management_request(
         // other request has its own arm there and is answered before this.
         _generation_request => Ok(()),
     }
+}
+
+/// Answers the two requests that change what the daemon holds: the default
+/// model and the loaded one. Kept apart so the model-management dispatch
+/// adds no branch per request.
+async fn handle_model_control_request(
+    generation_context: &DaemonIpcGenerationContext,
+    daemon_attribution_log: &DaemonPerformanceAttributionLog,
+    model_control_request: DaemonRequest,
+    streaming_response_writer: StreamingResponseWriter,
+) -> Result<(), DaemonTransportError> {
+    let DaemonRequest::DefaultModelSet { model_id } = model_control_request else {
+        return super::model_unload::handle_model_unload(
+            generation_context,
+            streaming_response_writer,
+        )
+        .await;
+    };
+    crate::ipc::models::handle_default_model_set(
+        generation_context,
+        daemon_attribution_log,
+        model_id,
+        streaming_response_writer,
+    )
+    .await
 }
 
 /// Answers the IPC handshake with the daemon's protocol version.
@@ -437,6 +467,8 @@ async fn answer_status(
         model_load_in_flight: health_snapshot.model_load_in_flight,
         request_progress_count: health_snapshot.request_progress_count,
         neural_engine_prefill: health_snapshot.neural_engine_prefill,
+        draft_model: health_snapshot.draft_model,
+        last_reply_drafting: health_snapshot.last_reply_drafting,
     };
     send_attributed_streaming_response(
         daemon_attribution_log,

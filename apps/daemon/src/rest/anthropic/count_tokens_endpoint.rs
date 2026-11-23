@@ -91,7 +91,8 @@ async fn await_token_count(
             ChatGenerationStreamEvent::ReasoningFragment(_)
             | ChatGenerationStreamEvent::TextFragment(_)
             | ChatGenerationStreamEvent::ToolCall { .. }
-            | ChatGenerationStreamEvent::PrefillProgress { .. } => {}
+            | ChatGenerationStreamEvent::PrefillProgress { .. }
+            | ChatGenerationStreamEvent::DraftingReport(_) => {}
         }
     }
     anthropic_error_response(worker_unavailable_error())

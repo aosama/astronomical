@@ -358,6 +358,9 @@ pub(crate) struct ActiveGeneration {
     /// count completes through the same path but stays out of the
     /// performance and attribution logs.
     pub(crate) chat_work: ChatWork,
+    /// What drafting did for this reply, from the worker's report just
+    /// before completion; `None` when it never drafted.
+    pub(crate) drafting_statistics: Option<ipc_protocol::RequestDraftingStatistics>,
 }
 
 impl ActiveGeneration {

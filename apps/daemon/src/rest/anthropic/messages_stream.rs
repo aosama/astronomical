@@ -85,7 +85,8 @@ impl AnthropicMessagesStreamEncoder {
                 function_name,
                 arguments_json,
             } => self.tool_use_block(tool_call_index, function_name, arguments_json),
-            ChatGenerationStreamEvent::PrefillProgress { .. } => VecDeque::new(),
+            ChatGenerationStreamEvent::PrefillProgress { .. }
+            | ChatGenerationStreamEvent::DraftingReport(_) => VecDeque::new(),
             terminal_event => self.encode_terminal(terminal_event),
         }
     }
@@ -119,7 +120,8 @@ impl AnthropicMessagesStreamEncoder {
             ChatGenerationStreamEvent::ReasoningFragment(_)
             | ChatGenerationStreamEvent::TextFragment(_)
             | ChatGenerationStreamEvent::ToolCall { .. }
-            | ChatGenerationStreamEvent::PrefillProgress { .. } => VecDeque::new(),
+            | ChatGenerationStreamEvent::PrefillProgress { .. }
+            | ChatGenerationStreamEvent::DraftingReport(_) => VecDeque::new(),
         }
     }
 

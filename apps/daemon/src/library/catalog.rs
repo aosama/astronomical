@@ -1,6 +1,7 @@
 //! Model catalog: the projection onto installed models and the REST endpoint.
 //! The catalog itself and its parser live in `download-catalog`.
 
+mod bundled_drafter;
 mod catalog_copy_match;
 mod catalog_endpoint;
 mod catalog_projection;

@@ -134,6 +134,8 @@ pub(crate) struct OpenAiChatCompletionCollector {
     reasoning_content: String,
     reasoning_excluded: bool,
     tool_calls: Vec<OpenAiResponseToolCall>,
+    /// What drafting did for the reply, reported just before its completion.
+    reply_drafting: Option<ipc_protocol::RequestDraftingStatistics>,
 }
 
 impl OpenAiChatCompletionCollector {
@@ -151,6 +153,7 @@ impl OpenAiChatCompletionCollector {
             reasoning_content: String::new(),
             reasoning_excluded,
             tool_calls: Vec::new(),
+            reply_drafting: None,
         }
     }
 
@@ -160,6 +163,14 @@ impl OpenAiChatCompletionCollector {
         }
         if let Some(compact_json) = compact_extracted_json_text(&self.text_content) {
             self.text_content = compact_json;
+        }
+    }
+
+    /// Keeps a drafting report for the completion's usage; progress events
+    /// share the caller's arm and are passed over.
+    fn keep_drafting_report(&mut self, stream_event: ChatGenerationStreamEvent) {
+        if let ChatGenerationStreamEvent::DraftingReport(reply_drafting) = stream_event {
+            self.reply_drafting = Some(reply_drafting);
         }
     }
 
@@ -198,7 +209,13 @@ impl OpenAiChatCompletionCollector {
                 ));
                 None
             }
-            ChatGenerationStreamEvent::PrefillProgress { .. } => None,
+            // Progress has no place in a complete reply; a drafting report is
+            // kept for the usage the completion reports.
+            progress_or_drafting_event @ (ChatGenerationStreamEvent::PrefillProgress { .. }
+            | ChatGenerationStreamEvent::DraftingReport(_)) => {
+                self.keep_drafting_report(progress_or_drafting_event);
+                None
+            }
             ChatGenerationStreamEvent::Completed { .. } => None,
             ChatGenerationStreamEvent::Failed { reason } => {
                 Some(failed_chat_error_response(&reason))
@@ -249,6 +266,7 @@ impl OpenAiChatCompletionCollector {
                 .with_astro_ssd_prompt_cache_restored_tokens(
                     astro_ssd_prompt_cache_restored_token_count,
                 );
+        let token_usage = with_drafted_tokens(token_usage, self.reply_drafting);
         Ok(OpenAiChatCompletionResponse::new(
             self.completion_id,
             self.created,
@@ -271,3 +289,22 @@ pub(crate) enum OpenAiChatCompletionCollectorError {
         generated_token_count: u16,
     },
 }
+
+/// Reports a draft model's kept and thrown-away guesses in the reply's usage,
+/// for a reply that drafted. Shared with the streamed reply.
+pub(crate) fn with_drafted_tokens(
+    token_usage: OpenAiTokenUsage,
+    drafting: Option<ipc_protocol::RequestDraftingStatistics>,
+) -> OpenAiTokenUsage {
+    match drafting {
+        Some(reply_drafting) => token_usage.with_drafted_tokens(
+            reply_drafting.accepted_token_count,
+            reply_drafting.rejected_token_count(),
+        ),
+        None => token_usage,
+    }
+}
+
+#[cfg(test)]
+#[path = "chat_completion_drafting_tests.rs"]
+mod drafting_tests;

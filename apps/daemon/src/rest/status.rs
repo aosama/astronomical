@@ -138,6 +138,11 @@ fn attach_worker_memory_and_session_facts(
     );
     status_json["neural_engine_prefill"] =
         serde_json::json!(worker_health_snapshot.neural_engine_prefill);
+    status_json["draft_model"] = serde_json::json!(worker_health_snapshot.draft_model);
+    status_json["drafting"] = serde_json::json!({
+        "last_reply": worker_health_snapshot.last_reply_drafting,
+        "since_model_loaded": worker_health_snapshot.session_drafting,
+    });
     status_json["model_load_in_flight"] =
         serde_json::json!(worker_health_snapshot.model_load_in_flight);
     super::expert_placement::attach_expert_placement_and_residency(

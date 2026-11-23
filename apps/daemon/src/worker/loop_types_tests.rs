@@ -42,6 +42,7 @@ fn active_chat_request(
         request_id: RequestId::new(1),
         stream_event_sender,
         chat_work: crate::worker::loop_types::ChatWork::Generate,
+        drafting_statistics: None,
     })
 }
 

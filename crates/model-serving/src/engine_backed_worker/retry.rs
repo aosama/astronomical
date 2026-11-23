@@ -107,7 +107,7 @@ where
             engine_load_result.minimum_mlx_memory_ceiling_bytes();
         self.is_neural_engine_preparation_running =
             engine_load_result.is_neural_engine_preparation_running();
-        self.unsent_neural_engine_prefill_event = engine_load_result.neural_engine_prefill_event();
+        self.hold_load_status_events(&engine_load_result);
         self.loaded_runtime = Some(LoadedRuntime::Autoregressive(replacement_model));
         // Not announced: a generation is active, and the daemon waits only for
         // the events it expects, so the raised ceiling reaches status later.

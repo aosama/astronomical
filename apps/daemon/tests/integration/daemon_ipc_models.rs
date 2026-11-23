@@ -378,6 +378,8 @@ async fn should_set_and_report_the_default_model_over_daemon_ipc() {
             model_load_in_flight: None,
             request_progress_count: 0,
             neural_engine_prefill: None,
+            draft_model: None,
+            last_reply_drafting: None,
         }
     );
 

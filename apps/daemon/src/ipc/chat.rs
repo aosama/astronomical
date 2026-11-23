@@ -279,7 +279,8 @@ fn stream_event_to_daemon_response(
             function_name,
             arguments_json,
         }),
-        ChatGenerationStreamEvent::PrefillProgress { .. } => None,
+        ChatGenerationStreamEvent::PrefillProgress { .. }
+        | ChatGenerationStreamEvent::DraftingReport(_) => None,
         ChatGenerationStreamEvent::Completed {
             prompt_token_count,
             generated_token_count,

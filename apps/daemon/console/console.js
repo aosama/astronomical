@@ -38,6 +38,10 @@ const OBSERVATORY_DEFAULT_PATH = "/overview";
 let selectedModelId = null;
 // The model the worker reports as loaded (status ready_model_id), or null.
 let loadedModelId = null;
+// The loaded model's drafter report and its last reply's drafting, from the
+// same status poll; the Models page reads both.
+let loadedDraftModel = null;
+let loadedReplyDrafting = null;
 
 document.addEventListener("DOMContentLoaded", () => {
     console.log("observatory boot");
@@ -160,6 +164,8 @@ async function pollStatus() {
         renderApplicationIdentity(data.application);
         renderStatusHeader(data);
         loadedModelId = data.ready_model_id || null;
+        loadedDraftModel = data.draft_model || null;
+        loadedReplyDrafting = (data.drafting && data.drafting.last_reply) || null;
         renderOverviewNow(data);
         renderOverviewNextStep();
         renderOverviewMemory(data);

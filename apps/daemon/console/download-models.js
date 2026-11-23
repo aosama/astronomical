@@ -283,6 +283,9 @@ function downloadModelsCatalogRowFromEntry(catalogEntry) {
         buildOf: downloadModelsOptionalText(catalogEntry.build_of),
         buildDifference: downloadModelsOptionalText(catalogEntry.build_difference),
         measuredSpeed: downloadModelsMeasuredSpeedFromEntry(catalogEntry.measured_speed),
+        bundledDrafter: catalogEntry.bundled_drafter === "dflash" || catalogEntry.bundled_drafter === "dflash2"
+            ? catalogEntry.bundled_drafter
+            : null,
         supportsReasoning: capabilities.supports_reasoning === true,
         supportsVision: capabilities.supports_vision === true,
         supportsToolCalls: capabilities.supports_tool_calls === true,

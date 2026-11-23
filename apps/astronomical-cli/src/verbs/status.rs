@@ -1,5 +1,5 @@
-//! The `astronomical status` verb: worker state, resident model, effective
-//! default model, and the active download job, if any.
+//! The `astronomical status` verb: worker state, resident model and whether it
+//! drafts, effective default model, and the active download job, if any.
 
 use std::{fmt::Write as _, io::Write, path::PathBuf, time::Duration};
 
@@ -10,7 +10,10 @@ use ipc_protocol::{DaemonDownloadJob, DaemonWorkerStatus};
 use crate::transport::ipc::DaemonProbeError;
 use crate::{
     DaemonProbe,
-    formatting::{MODEL_LOAD_LINE, format_gigabytes, render_neural_engine_prefill},
+    formatting::{
+        MODEL_LOAD_LINE, format_gigabytes, render_draft_model, render_neural_engine_prefill,
+        render_reply_drafting,
+    },
     transport::ipc::DaemonStatusSnapshot,
 };
 use thiserror::Error;
@@ -47,6 +50,7 @@ pub async fn run_status(
     );
     write_model_load_line(&mut report, &status_snapshot);
     write_neural_engine_line(&mut report, &status_snapshot);
+    write_drafter_line(&mut report, &status_snapshot);
     let _ = writeln!(
         report,
         "default:  {}",
@@ -111,6 +115,24 @@ fn write_neural_engine_line(report: &mut String, status_snapshot: &DaemonStatusS
     };
     if let Some(neural_engine_line) = render_neural_engine_prefill(neural_engine_prefill) {
         let _ = writeln!(report, "neural engine:  {neural_engine_line}");
+    }
+}
+
+/// Only once a loaded model has reported, and not mid-load, when the
+/// previous model's report no longer describes anything.
+fn write_drafter_line(report: &mut String, status_snapshot: &DaemonStatusSnapshot) {
+    if status_snapshot.model_load_in_flight.is_some() {
+        return;
+    }
+    if let Some(draft_model) = &status_snapshot.draft_model {
+        let _ = writeln!(report, "drafter:  {}", render_draft_model(draft_model));
+    }
+    if let Some(reply_drafting) = &status_snapshot.last_reply_drafting {
+        let _ = writeln!(
+            report,
+            "          {}",
+            render_reply_drafting(reply_drafting)
+        );
     }
 }
 

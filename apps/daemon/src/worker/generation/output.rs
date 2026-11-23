@@ -316,3 +316,40 @@ pub(in crate::worker) fn handle_worker_prompt_work_reuse(
     crate::worker::health::record_prompt_work_reuse(health_snapshot, prompt_work_reuse);
     Ok(())
 }
+
+/// Keeps what drafting did for the reply, which the worker reports just
+/// before the reply's completion, so the completion can carry it.
+pub(in crate::worker) fn handle_worker_drafting_report(
+    worker_event: WorkerEvent,
+    active_request: &mut ActiveGeneration,
+) -> Result<(), WorkerControlError> {
+    let WorkerEvent::DraftingReport {
+        request_id,
+        drafting,
+    } = worker_event
+    else {
+        return Err(protocol_violation(
+            "handle_worker_drafting_report received a non-DraftingReport event",
+        ));
+    };
+    if request_id != active_request.request_id {
+        return Err(protocol_violation("drafting report request mismatch"));
+    }
+    active_request.drafting_statistics = Some(drafting);
+    Ok(())
+}
+
+/// Routes the two reports a reply's worker sends just before its completion:
+/// the prompt work it reused and what drafting did. Kept apart so the chat
+/// progress dispatch adds no branch per report.
+pub(in crate::worker) fn handle_worker_reply_report(
+    reply_report_event: WorkerEvent,
+    health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
+    active_request: &mut ActiveGeneration,
+) -> Result<(), WorkerControlError> {
+    if matches!(reply_report_event, WorkerEvent::DraftingReport { .. }) {
+        handle_worker_drafting_report(reply_report_event, active_request)
+    } else {
+        handle_worker_prompt_work_reuse(reply_report_event, health_snapshot, active_request)
+    }
+}

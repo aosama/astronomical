@@ -78,7 +78,7 @@ async fn get_library_catalog(
 ///
 /// The check reads metadata, resolves two paths and reads a small provenance
 /// file, synchronously inside this async handler. That is a few filesystem calls
-/// served from the macOS file cache per downloaded model, well below what a blocking task
+/// served from the `macos_file_cache` per downloaded model, well below what a blocking task
 /// hand-off would cost, so it runs inline.
 fn is_removable_from_disk(
     application_state: &ApplicationState,
@@ -154,6 +154,11 @@ struct LibraryCatalogEntryResponse {
     /// Reply speeds measured on a named Mac; absent for an unmeasured entry.
     #[serde(skip_serializing_if = "Option::is_none")]
     measured_speed: Option<LibraryCatalogMeasuredSpeedResponse>,
+    /// `dflash` or `dflash2` when the copy on this Mac carries a draft model
+    /// in its own `drafter` folder; read from the folder, so a copy without
+    /// one says nothing even when the catalog entry ships one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    bundled_drafter: Option<ipc_protocol::DraftModelGeneration>,
     capabilities: LibraryCatalogCapabilitiesResponse,
 }
 
@@ -241,6 +246,17 @@ impl LibraryCatalogEntryResponse {
             measured_speed: catalog_entry
                 .measured_speed()
                 .map(LibraryCatalogMeasuredSpeedResponse::from_measured_speed),
+            // A metadata call and a read of a few-kilobyte file per model on
+            // this Mac, served from the `macos_file_cache`, inline for the same
+            // reason `is_removable_from_disk` reads inline: cheaper than a
+            // blocking task hand-off.
+            bundled_drafter: projection.discovered_model_directory.as_deref().and_then(
+                |model_directory| {
+                    super::bundled_drafter::bundled_drafter_generation(std::path::Path::new(
+                        model_directory,
+                    ))
+                },
+            ),
             capabilities: LibraryCatalogCapabilitiesResponse {
                 supports_reasoning: capabilities.supports_reasoning,
                 supports_vision: capabilities.supports_vision,

@@ -3,11 +3,14 @@
 pub(crate) mod application;
 pub(crate) mod catalog;
 pub(crate) mod crypto_provider;
+#[cfg(test)]
+pub(crate) mod discovered_model_test_support;
 pub(crate) mod download;
 pub(crate) mod hub;
 pub(crate) mod model_discovery_refresh;
 pub(crate) mod model_folder_busy;
 pub(crate) mod model_folder_trash;
+pub(crate) mod model_folder_watch;
 mod removal_endpoint;
 mod reveal_endpoint;
 
