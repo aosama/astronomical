@@ -30,11 +30,17 @@ pub(super) fn text_astro_ssd_prompt_cache_checkpoints_have_no_block_contract_inv
 
 /// The terminal prefill seed samples the first generated token from the final
 /// prompt logits; a sampler failure here is unrecoverable for the request.
+/// The typed error carries only a fixed description, so the sampler's own
+/// error is logged here; without it the cause of the failure would be lost.
 pub(super) fn terminal_prefill_first_generated_token_sampling_failed_invalid_input<
-    SamplingError,
+    SamplingError: std::fmt::Display,
 >(
-    _sampling_error: SamplingError,
+    sampling_error: SamplingError,
 ) -> Qwen3_5ExecutionError {
+    tracing::warn!(
+        error = %sampling_error,
+        "failed to sample the first generated token from terminal prefill logits"
+    );
     Qwen3_5ExecutionError::InvalidInput {
         description: "failed to sample the first generated token from terminal prefill logits",
     }

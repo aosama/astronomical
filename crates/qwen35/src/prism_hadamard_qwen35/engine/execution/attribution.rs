@@ -64,6 +64,7 @@ impl PrismHadamardQwen35InferenceExecution {
             return;
         };
         let request_id = active_generation.request_id;
+        let generation_outcome = generation_outcome(active_generation.has_reached_reply_end);
         let configured_maximum_output_tokens = active_generation.request.max_output_tokens();
         let performance_attribution = std::mem::replace(
             &mut active_generation.performance_attribution,
@@ -71,6 +72,7 @@ impl PrismHadamardQwen35InferenceExecution {
         );
         self.record_generation_performance_attribution(
             performance_attribution,
+            generation_outcome,
             request_id,
             configured_maximum_output_tokens,
         );
@@ -79,6 +81,7 @@ impl PrismHadamardQwen35InferenceExecution {
     fn record_generation_performance_attribution(
         &mut self,
         performance_attribution: PerformanceAttribution,
+        generation_outcome: PerformanceAttributionOutcome,
         request_id: RequestId,
         configured_maximum_output_tokens: u16,
     ) {
@@ -101,7 +104,7 @@ impl PrismHadamardQwen35InferenceExecution {
             .and_then(|model| model.runtime.memory_snapshot().ok());
         let Some(report) =
             performance_attribution.finish_generation(GenerationPerformanceAttributionMetadata {
-                outcome: PerformanceAttributionOutcome::Success,
+                outcome: generation_outcome,
                 model_id,
                 model_revision,
                 prefill_transient_observation_completed: false,
@@ -131,3 +134,18 @@ impl PrismHadamardQwen35InferenceExecution {
         }
     }
 }
+
+/// Every folded-ternary request ends through cancellation, so the outcome is
+/// read from whether the reply reached its own end: a completed reply is a
+/// success, and one stopped before its end is a cancellation.
+pub(super) fn generation_outcome(has_reached_reply_end: bool) -> PerformanceAttributionOutcome {
+    if has_reached_reply_end {
+        PerformanceAttributionOutcome::Success
+    } else {
+        PerformanceAttributionOutcome::Cancelled
+    }
+}
+
+#[cfg(test)]
+#[path = "attribution_tests.rs"]
+mod attribution_tests;
