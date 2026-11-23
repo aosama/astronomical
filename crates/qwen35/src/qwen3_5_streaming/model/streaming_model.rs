@@ -148,6 +148,13 @@ impl crate::qwen3_5_core::shared_execution::text_model::Qwen3_5TextModel for Qwe
     fn latest_memory_ledger_reading(&self) -> Option<memory_policy::ledger::LedgerReading> {
         Qwen3_5StreamingModel::latest_memory_ledger_reading(self)
     }
+
+    fn memory_snapshot_for_telemetry(
+        &self,
+    ) -> Result<runtime_integration::MlxMemorySnapshot, crate::InferenceEngineError> {
+        self.memory_snapshot_with_forward_peak()
+            .map_err(crate::qwen3_5_core::engine_errors::qwen3_5_runtime_error)
+    }
 }
 
 impl std::ops::DerefMut for Qwen3_5StreamingModel {

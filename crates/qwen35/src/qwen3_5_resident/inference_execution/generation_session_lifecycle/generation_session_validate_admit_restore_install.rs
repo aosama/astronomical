@@ -237,13 +237,16 @@ impl Qwen3_5EngineState {
         if self.core.active_request.is_none() {
             return Ok(performance_attribution);
         }
-        self.record_generation_performance_attribution(
-            performance_attribution,
-            PerformanceAttributionOutcome::Rejected,
-            inference_request.request_id(),
-            inference_request.max_output_tokens(),
-            None,
-            Some("generation engine is already serving a request"),
+        crate::qwen3_5_core::shared_execution::generation_finalization_steps::record_generation_performance_attribution(
+            self,
+            crate::qwen3_5_core::shared_execution::generation_finalization_steps::GenerationAttributionRecord {
+                performance_attribution,
+                outcome: PerformanceAttributionOutcome::Rejected,
+                request_id: inference_request.request_id(),
+                configured_maximum_output_tokens: inference_request.max_output_tokens(),
+                mlx_memory_snapshot: None,
+                failure_description: Some("generation engine is already serving a request"),
+            },
         );
         Err(InferenceEngineError::EngineBusy)
     }

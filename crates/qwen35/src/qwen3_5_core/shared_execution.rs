@@ -12,6 +12,7 @@ pub mod astro_ssd_prompt_cache_visual_identity;
 pub mod engine_construction;
 pub mod execution_core;
 pub mod generated_token_emission;
+pub mod generation_finalization_steps;
 pub mod generation_request_validation;
 pub mod generation_thinking_end_markers;
 pub mod generation_vocabulary_boundaries;
