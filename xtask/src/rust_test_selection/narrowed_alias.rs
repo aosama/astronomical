@@ -64,7 +64,41 @@ pub(crate) fn narrowed_alias_arguments(
     if requested_test_count > 0 && kept_test_count == 0 && !has_standalone_target {
         return None;
     }
-    Some(narrowed_arguments)
+    Some(with_archive_profile_for_selection(
+        narrowed_arguments,
+        &kept_package_names,
+        super::REST_CONTRACTS_PACKAGE,
+    ))
+}
+
+/// The nextest profile the CI archives use. It packs the daemon's
+/// executables, which the REST and end-to-end journeys launch.
+const CI_ARCHIVE_PROFILE: &str = "ci";
+/// The same archive without the daemon's executables, for a selection that
+/// leaves the daemon out: the daemon is not built then, and no lane that
+/// runs from that archive launches it.
+const CI_ARCHIVE_PROFILE_WITHOUT_DAEMON_EXECUTABLES: &str = "ci-without-daemon-executables";
+
+/// Switches a `--profile ci` archive to the profile without the daemon's
+/// executables when the daemon package is not kept. Without this, the
+/// archive step demanded executables the narrowed build never made.
+pub(crate) fn with_archive_profile_for_selection(
+    mut narrowed_arguments: Vec<String>,
+    kept_package_names: &BTreeSet<String>,
+    daemon_package_name: &str,
+) -> Vec<String> {
+    if kept_package_names.contains(daemon_package_name) {
+        return narrowed_arguments;
+    }
+    for argument_index in 1..narrowed_arguments.len() {
+        if narrowed_arguments[argument_index - 1] == "--profile"
+            && narrowed_arguments[argument_index] == CI_ARCHIVE_PROFILE
+        {
+            narrowed_arguments[argument_index] =
+                CI_ARCHIVE_PROFILE_WITHOUT_DAEMON_EXECUTABLES.to_owned();
+        }
+    }
+    narrowed_arguments
 }
 
 fn kept_packages(

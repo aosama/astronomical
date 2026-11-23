@@ -534,7 +534,7 @@ fn fused_jangtq2_gathered_projection_kernel_for_pager(
             .iter()
             .any(|projection_name| {
                 layer_plan.quantization_mode_for_projection(projection_name)
-                    == crate::expert_paging::QuantizationMode::Jangtq2Codebook
+                    == engine_core::expert_paging::QuantizationMode::Jangtq2Codebook
             })
     });
     if !has_codebook_experts {

@@ -30,8 +30,8 @@ use crate::artifact_validation::{
     ValidatedRequiredFile, ValidatedSafetensorsSource, hugging_face_snapshot_model_id,
     validate_required_file, validate_required_files,
 };
-use crate::expert_paging::SafetensorsHeader;
 use crate::qwen3_5_core::vision::vision_tensor_spec;
+use engine_core::expert_paging::SafetensorsHeader;
 use expert_atlas::{RESIDENT_BUNDLE_FILE_NAME, VISION_BUNDLE_FILE_NAME};
 
 impl Qwen3_5ArtifactValidator {
@@ -167,7 +167,7 @@ fn parse_atlas_bundle_headers(
 ) -> Result<(SafetensorsHeader, Option<SafetensorsHeader>), Qwen3_5ArtifactValidationError> {
     // The resident bundle carries every non-expert tensor; the vision
     // bundle travels beside it unchanged from the source artifact.
-    let resident_header = crate::expert_paging::parse_safetensors_header(
+    let resident_header = engine_core::expert_paging::parse_safetensors_header(
         &model_directory.join(RESIDENT_BUNDLE_FILE_NAME),
     )
     .map_err(|source| ArtifactValidationError::InvalidResidentBundle { source })
@@ -184,7 +184,7 @@ fn parse_atlas_bundle_headers(
     }
     let vision_header = if model_directory.join(VISION_BUNDLE_FILE_NAME).is_file() {
         Some(
-            crate::expert_paging::parse_safetensors_header(
+            engine_core::expert_paging::parse_safetensors_header(
                 &model_directory.join(VISION_BUNDLE_FILE_NAME),
             )
             .map_err(|source| ArtifactValidationError::InvalidResidentBundle { source })

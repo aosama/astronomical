@@ -1,11 +1,9 @@
-//! Expert-storage owner in the Qwen 3.5 crate: the quantized expert manifests
-//! (which embed model-family configuration types), the bounded MLX reader,
-//! and the retained-expert ownership records stay beside the bindings and
-//! the families. The pure safetensors-header parsing (over
-//! `memory-policy`'s `safetensors` and `strict_json`) and the
-//! astro expert cache statistics are re-exported from the policy crate; the module
-//! re-export keeps `crate::expert_paging::safetensors_header::...` paths
-//! resolving for their consumers.
+//! Expert storage shared by every model family with sparse experts: the
+//! quantized expert manifests, the bounded MLX reader, and the
+//! retained-expert ownership records. It names no family type. The pure
+//! safetensors-header parsing (over `memory-policy`'s `safetensors` and
+//! `strict_json`) and the `astro_expert_cache` statistics are re-exported from
+//! the policy crate.
 
 #[cfg(feature = "direct-mlx")]
 mod bounded_expert_reader;
@@ -18,8 +16,6 @@ mod source_manifests;
 mod quantized_expert_page_manifest_tests;
 #[cfg(test)]
 mod retained_expert_ownership_tests;
-#[cfg(test)]
-mod route_observation_tests;
 
 pub use memory_policy::expert_paging::AstroExpertCacheStatistics;
 // Module re-export: qwen3_5_core reaches the parser by module path

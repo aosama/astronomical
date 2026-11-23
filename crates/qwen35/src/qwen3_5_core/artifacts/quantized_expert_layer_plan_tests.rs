@@ -11,12 +11,12 @@ use super::quantized_expert_layer_plan_steps::{
     ProjectionPlanInputs, assemble_expert_layer_plan, drain_projection_tensor_sources,
 };
 use super::{PARAMETER_NAMES, ProjectionStorageContract};
-use crate::expert_paging::quantized_expert_manifest::{
-    ExpertManifestError, QuantizationMode, QuantizedTensorSource,
-};
-use crate::expert_paging::safetensors_header::SafetensorsDtype;
 use crate::qwen3_5_core::configuration::Qwen3_5Config;
 use crate::qwen3_5_core::frozen_config_test_support::frozen_ornith_1_0_config_bytes;
+use engine_core::expert_paging::quantized_expert_manifest::{
+    ExpertManifestError, QuantizationMode, QuantizedTensorSource,
+};
+use engine_core::expert_paging::safetensors_header::SafetensorsDtype;
 
 const LAYER_PREFIX: &str = "language_model.model.layers.0.mlp";
 const PROJECTION_NAME: &str = "gate_proj";

@@ -10,10 +10,10 @@ use std::collections::{HashMap, HashSet};
 use ipc_protocol::WorkerDecodeAstroExpertCachePolicy;
 use runtime_integration::{MlxRuntime, MlxRuntimeError};
 
-use crate::expert_paging::{
+use crate::qwen3_5_streaming::expert_streaming::expert_pager::Qwen3_5PagedExpertWeights;
+use engine_core::expert_paging::{
     ExpertWeightPage, QuantizedExpertPageManifest, RetainedExpertReclamation,
 };
-use crate::qwen3_5_streaming::expert_streaming::expert_pager::Qwen3_5PagedExpertWeights;
 
 use slot_writes::RetainedReferenceOk;
 

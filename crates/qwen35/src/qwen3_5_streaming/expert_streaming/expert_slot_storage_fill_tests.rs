@@ -10,11 +10,11 @@ use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use serial_test::serial;
 
 use super::ExpertSlotStorageFiller;
-use crate::expert_paging::{
-    QuantizationMode, QuantizedExpertLayerPlan, QuantizedTensorSource, SafetensorsDtype,
-};
 use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights;
 use crate::qwen3_5_streaming::expert_streaming::expert_pager::Qwen3_5PagedExpertWeights;
+use engine_core::expert_paging::{
+    QuantizationMode, QuantizedExpertLayerPlan, QuantizedTensorSource, SafetensorsDtype,
+};
 
 pub(super) const EXPERT_COUNT: usize = 4;
 pub(super) const TABLE_SLOT_COUNT: usize = 3;

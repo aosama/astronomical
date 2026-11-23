@@ -10,7 +10,6 @@
 use runtime_integration::MlxRuntime;
 
 use super::paged_execution::RoutedExpertAssignmentOutputs;
-use crate::expert_paging::ExpertPageRoutePartition;
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_streaming::expert_streaming::RoutedExpertCoverage;
 use crate::qwen3_5_streaming::expert_streaming::expert_pager::Qwen3_5ExpertPager;
@@ -21,6 +20,7 @@ use crate::qwen3_5_streaming::model::astro_expert_cache_plus_streamed_page_route
 use crate::qwen3_5_streaming::model::feed_forward_weights::Qwen3_5MoEFeedForwardWeights;
 use crate::qwen3_5_streaming::model::routing;
 use crate::{PerformanceAttribution, PerformanceCounter, PerformanceOperation};
+use engine_core::expert_paging::ExpertPageRoutePartition;
 use mlx_bridge::MlxArray;
 
 /// Reshapes one partial route side to the batched assignment layout the gather

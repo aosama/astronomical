@@ -16,8 +16,6 @@
 
 pub mod astro_ssd_prompt_cache;
 
-pub mod expert_paging;
-
 pub mod kernel_capability;
 
 pub mod mlx_inference_engine;
@@ -55,9 +53,9 @@ use model_primitives::*;
 pub use mlx_inference_engine::MlxInferenceEngine;
 
 #[cfg(feature = "direct-mlx")]
-pub use expert_paging::load_quantized_expert_page;
+pub use engine_core::expert_paging::load_quantized_expert_page;
 
-pub use expert_paging::{
+pub use engine_core::expert_paging::{
     AstroExpertCacheStatistics, ExpertManifestError, ExpertPageRoutePartition, ExpertWeightPage,
     QuantizationMode, QuantizedExpertLayerPlan, QuantizedExpertPageManifest,
     QuantizedExpertShardManifest, QuantizedExpertSourceInterval, QuantizedExpertTensorRange,

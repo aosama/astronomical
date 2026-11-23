@@ -1,6 +1,8 @@
 use std::collections::BTreeSet;
 
-use super::narrowed_alias::{alias_text_from_config, narrowed_alias_arguments};
+use super::narrowed_alias::{
+    alias_text_from_config, narrowed_alias_arguments, with_archive_profile_for_selection,
+};
 use super::workspace_graph_tests::fictional_graph;
 
 const INTEGRATION_ALIAS: &str =
@@ -85,4 +87,42 @@ fn should_read_an_alias_only_from_the_alias_table() {
         Some("test -p core --lib")
     );
     assert_eq!(alias_text_from_config(config_text, "missing"), None);
+}
+
+const CI_ARCHIVE_ARGUMENTS: &str =
+    "nextest archive --profile ci --archive-file integration.tar.zst -p engine --lib";
+
+#[test]
+fn should_pack_without_daemon_executables_when_the_daemon_is_not_selected() {
+    assert_eq!(
+        with_archive_profile_for_selection(
+            words(CI_ARCHIVE_ARGUMENTS),
+            &names(&["engine"]),
+            "daemon"
+        ),
+        words(
+            "nextest archive --profile ci-without-daemon-executables --archive-file integration.tar.zst -p engine --lib"
+        )
+    );
+}
+
+#[test]
+fn should_keep_the_ci_profile_when_the_daemon_is_selected() {
+    assert_eq!(
+        with_archive_profile_for_selection(
+            words(CI_ARCHIVE_ARGUMENTS),
+            &names(&["engine", "daemon"]),
+            "daemon"
+        ),
+        words(CI_ARCHIVE_ARGUMENTS)
+    );
+}
+
+#[test]
+fn should_leave_arguments_without_the_ci_profile_unchanged() {
+    let test_arguments = words("test --no-fail-fast -p engine --lib --profile release-tests");
+    assert_eq!(
+        with_archive_profile_for_selection(test_arguments.clone(), &names(&["engine"]), "daemon"),
+        test_arguments
+    );
 }
