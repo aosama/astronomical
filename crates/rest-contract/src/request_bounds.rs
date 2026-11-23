@@ -5,6 +5,9 @@
 //! [`RequestBoundsError`], wrapped transparently, so a caller reads the same
 //! words from either endpoint.
 //!
+//! The ceilings themselves, and where each figure comes from, live in
+//! `request_budget`; this module only enforces them and words the refusals.
+//!
 //! The Anthropic surface keeps its own errors: its messages are worded for its
 //! own protocol.
 

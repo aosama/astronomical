@@ -138,3 +138,34 @@ fn should_accept_the_largest_output_budget_on_both_requests() {
         Ok(())
     );
 }
+
+#[test]
+fn should_refuse_to_parse_a_malformed_thinking_value_on_both_requests() {
+    let chat_document = json!({
+        "model": MODEL_ID,
+        "messages": [{"role": "user", "content": "Shall I compare thee to a summer's day?"}],
+        "thinking_budget": "lots"
+    });
+    let responses_document = json!({
+        "model": MODEL_ID,
+        "input": "Shall I compare thee to a summer's day?",
+        "thinking_budget": "lots"
+    });
+    assert!(serde_json::from_value::<OpenAiChatCompletionRequest>(chat_document).is_err());
+    assert!(serde_json::from_value::<OpenAiResponsesRequest>(responses_document).is_err());
+}
+
+#[test]
+fn should_report_conflicting_structured_constraints_in_the_same_words() {
+    let conflicting_fields = json!({
+        "structured_outputs": {"choice": ["Montague", "Capulet"]},
+        "guided_grammar": "root ::= \"Montague\""
+    });
+    let chat_error = chat_request(conflicting_fields.clone()).expect_err("two constraints");
+    let responses_error = responses_request(conflicting_fields).expect_err("two constraints");
+    assert_eq!(
+        chat_error.to_string(),
+        "set only one of structured_outputs or guided_grammar"
+    );
+    assert_eq!(responses_error.to_string(), chat_error.to_string());
+}
