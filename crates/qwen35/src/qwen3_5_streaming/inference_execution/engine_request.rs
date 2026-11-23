@@ -26,3 +26,17 @@ pub struct StreamingRequestExtension {
     pub(in crate::qwen3_5_streaming) reply_expert_route_record:
         crate::memory::reply_expert_route_record::ReplyExpertRouteRecord,
 }
+
+impl StreamingRequestExtension {
+    /// A new request's streaming state: nothing read, recorded or opened yet,
+    /// with the context it reserved at admission.
+    pub(in crate::qwen3_5_streaming) fn for_new_request(reserved_context_tokens: usize) -> Self {
+        Self {
+            has_opened_prefill_demand_window: false,
+            reserved_context_tokens,
+            layer_at_a_time_prefill: None,
+            mlx_buffer_cache_reply_record: Default::default(),
+            reply_expert_route_record: Default::default(),
+        }
+    }
+}

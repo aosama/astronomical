@@ -12,7 +12,6 @@ mod generation_finalization;
 mod generation_restore_position_derivation;
 mod generation_session_decisions;
 mod generation_session_validate_admit_restore_install;
-mod generation_visual_embedding_validation;
 
 // Re-bindings of the engine-level owners that stay in inference_execution.
 // They are private here, but every child above can reach them as
@@ -23,4 +22,3 @@ use super::engine_request;
 use super::fatal_engine_error;
 use super::qwen3_5_runtime_error;
 use super::retained_live_prefix;
-use super::visual_embeddings_runtime;

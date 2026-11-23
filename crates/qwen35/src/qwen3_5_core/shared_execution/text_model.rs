@@ -20,6 +20,10 @@ pub trait Qwen3_5TextModel: Qwen3_5MemoryOwnership {
     /// observed for the forward that produced the token.
     fn observed_expert_memory_mode(&self) -> ExpertMemoryMode;
 
+    /// How the model holds expert weights by ownership, before any forward
+    /// has given evidence; a request's start reports this.
+    fn expert_memory_mode(&self) -> ExpertMemoryMode;
+
     /// The expert residency claim derived from one memory breakdown, so the
     /// telemetry and the claim describe the same instant.
     fn expert_residency_telemetry_for_breakdown(

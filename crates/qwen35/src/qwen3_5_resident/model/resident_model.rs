@@ -77,6 +77,10 @@ impl crate::qwen3_5_core::shared_execution::text_model::Qwen3_5TextModel for Qwe
         Qwen3_5ResidentModel::expert_memory_mode(self)
     }
 
+    fn expert_memory_mode(&self) -> ipc_protocol::ExpertMemoryMode {
+        Qwen3_5ResidentModel::expert_memory_mode(self)
+    }
+
     fn expert_residency_telemetry_for_breakdown(
         &self,
         active_memory_breakdown: &crate::memory::telemetry::MlxActiveMemoryBreakdown,
