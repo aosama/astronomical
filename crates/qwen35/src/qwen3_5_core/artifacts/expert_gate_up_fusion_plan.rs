@@ -1,6 +1,8 @@
 use thiserror::Error;
 
-use crate::expert_paging::{QuantizationMode, QuantizedExpertLayerPlan, QuantizedTensorSource};
+use engine_core::expert_paging::{
+    QuantizationMode, QuantizedExpertLayerPlan, QuantizedTensorSource,
+};
 
 #[derive(Clone, Debug, Error, Eq, PartialEq)]
 pub enum ExpertGateUpFusionPlanError {

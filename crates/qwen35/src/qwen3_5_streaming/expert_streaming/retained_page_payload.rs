@@ -6,8 +6,8 @@
 //! bundle's expert set from fitting in RAM). The retained payload is
 //! therefore exactly the packed source bytes of the selected experts.
 
-use crate::expert_paging::QuantizedExpertLayerPlan;
 use crate::qwen3_5_streaming::expert_streaming::expert_pager::ExpertPagingError;
+use engine_core::expert_paging::QuantizedExpertLayerPlan;
 
 pub fn retained_expert_layer_page_payload_bytes(
     layer_plan: &QuantizedExpertLayerPlan,

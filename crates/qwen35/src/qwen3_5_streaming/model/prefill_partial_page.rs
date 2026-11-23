@@ -6,10 +6,10 @@
 //! keeps the single-page prefill forward, which decodes exactly the page it
 //! multiplies, so the page contains only the routed union.
 
-use crate::expert_paging::{ExpertWeightPage, QuantizedExpertPageManifest};
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_streaming::expert_streaming::expert_pager::Qwen3_5PagedExpertWeights;
 use crate::{PerformanceAttribution, PerformanceCounter};
+use engine_core::expert_paging::{ExpertWeightPage, QuantizedExpertPageManifest};
 
 use super::Qwen3_5Model;
 use super::prefill_partial_layer_read::{

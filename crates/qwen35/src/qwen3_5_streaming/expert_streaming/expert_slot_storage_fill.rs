@@ -19,9 +19,9 @@ use mlx_bridge::MlxArray;
 use runtime_integration::{MlxRuntimeError, evaluated_array_storage_mut};
 
 use super::record_read_plan::{StorageSlice, plan_record_reads};
-use crate::expert_paging::QuantizedExpertLayerPlan;
 use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights;
 use crate::qwen3_5_streaming::expert_streaming::expert_pager::Qwen3_5PagedExpertWeights;
+use engine_core::expert_paging::QuantizedExpertLayerPlan;
 
 /// Helper threads of the record reader. A reply token's fetch on one layer
 /// is about five experts, each read as three overlapping parts; with the

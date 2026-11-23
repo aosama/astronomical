@@ -37,8 +37,8 @@ use super::slot_writes::{
     write_expert_into_slot,
 };
 use super::{AstroExpertCache, ExpertSlotTable};
-use crate::expert_paging::ExpertWeightPage;
 use crate::qwen3_5_streaming::expert_streaming::expert_pager::Qwen3_5PagedExpertWeights;
+use engine_core::expert_paging::ExpertWeightPage;
 
 impl AstroExpertCache {
     /// Inserts streamed experts into the layer's slot table. The first insert

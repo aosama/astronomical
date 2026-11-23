@@ -80,7 +80,7 @@ fn should_pad_a_packed_codebook_page_to_warm_capacity_without_decoding_it() {
     // 5 × 2 × 2 × 4 bytes of codes plus 5 × 2 × 2 bytes of float16 scales.
     let packed_bytes_per_slot = (OUTPUT_ROWS * WORDS_PER_ROW * 4 + OUTPUT_ROWS * 2) as u64;
     assert_eq!(
-        crate::expert_paging::ExpertWeightPage::resident_payload_byte_count(&table),
+        engine_core::expert_paging::ExpertWeightPage::resident_payload_byte_count(&table),
         5 * 3 * packed_bytes_per_slot
     );
 }

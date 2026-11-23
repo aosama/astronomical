@@ -3,7 +3,7 @@
 
 use mlx_bridge::MlxArray;
 
-use crate::expert_paging::{AstroExpertCacheStatistics, RetainedExpertReclamation};
+use engine_core::expert_paging::{AstroExpertCacheStatistics, RetainedExpertReclamation};
 
 use super::AstroExpertCache;
 

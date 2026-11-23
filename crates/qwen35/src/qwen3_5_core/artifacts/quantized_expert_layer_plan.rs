@@ -15,16 +15,16 @@ mod quantized_expert_layer_plan_steps;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use crate::expert_paging::quantized_expert_manifest::{
-    ExpertManifestError, QuantizationMode, QuantizedExpertLayerPlan, QuantizedTensorSource,
-};
-use crate::expert_paging::quantized_expert_validation;
-use crate::expert_paging::safetensors_header::{
-    SafetensorsDtype, SafetensorsHeader, TensorHeaderEntry,
-};
 use crate::qwen3_5_core::configuration::Qwen3_5Config;
 use crate::qwen3_5_core::quantizations::mlx_quantization::{
     ModuleQuantizationProfile, ModuleWeightCodec,
+};
+use engine_core::expert_paging::{
+    quantized_expert_manifest::{
+        ExpertManifestError, QuantizationMode, QuantizedExpertLayerPlan, QuantizedTensorSource,
+    },
+    quantized_expert_validation,
+    safetensors_header::{SafetensorsDtype, SafetensorsHeader, TensorHeaderEntry},
 };
 
 use self::quantized_expert_layer_plan_steps::{

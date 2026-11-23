@@ -24,7 +24,6 @@
 use mlx_bridge::MlxArray;
 
 use super::feed_forward_weights::Qwen3_5MoEFeedForwardWeights;
-use crate::expert_paging::{QuantizedExpertLayerPlan, QuantizedExpertPageManifest};
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_streaming::expert_streaming::expert_pager::{
     Qwen3_5ExpertPager, Qwen3_5ExpertStreamingRequestShape, Qwen3_5PagedExpertWeights,
@@ -35,6 +34,7 @@ use crate::qwen3_5_streaming::model::expert_reuse::ExpertPageDisposition;
 use crate::{
     PerformanceAttribution, PerformanceCounter, should_commit_multi_token_union_as_complete_layer,
 };
+use engine_core::expert_paging::{QuantizedExpertLayerPlan, QuantizedExpertPageManifest};
 
 /// Expected-coverage factor for "this chunk routes every expert".
 ///

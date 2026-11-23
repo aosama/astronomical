@@ -15,8 +15,8 @@ use super::insert_planning::{
     PlannedRowSource, PlannedSlotInsert, snapshot_insert_planning_inputs, write_planned_experts,
 };
 use super::slot_writes::materialize_and_detach_table_weights;
-use crate::expert_paging::QuantizedExpertLayerPlan;
 use crate::qwen3_5_streaming::expert_streaming::ExpertSlotStorageFiller;
+use engine_core::expert_paging::QuantizedExpertLayerPlan;
 
 /// What one fetch into a table did.
 #[derive(Clone, Copy, Debug)]

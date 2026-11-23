@@ -12,7 +12,7 @@ workspace = true
 
 [features]
 default = []
-direct-mlx = ["dep:runtime-integration", "dep:mlx-bridge", "model-primitives/direct-mlx"]
+direct-mlx = ["dep:runtime-integration", "dep:mlx-bridge", "model-primitives/direct-mlx", "jangtq2-qwen35/direct-mlx"]
 
 # The engine contract, MLX memory and the astro_decoder_state_cache, below
 # every model family (issue #2340). One-way edge: nothing here may depend on a
@@ -20,6 +20,10 @@ direct-mlx = ["dep:runtime-integration", "dep:mlx-bridge", "model-primitives/dir
 # enforces the serving edge.
 [dependencies]
 model-primitives = { path = "../model-primitives" }
+# The jangtq2 weight format (issue #1427): expert pages read its codebook
+# projections. It is a weight format, not a model family, and depends on no
+# engine crate.
+jangtq2-qwen35 = { path = "../jangtq2-qwen35" }
 serde_json.workspace = true
 ipc-protocol = { path = "../ipc-protocol" }
 memory-policy = { path = "../memory-policy" }

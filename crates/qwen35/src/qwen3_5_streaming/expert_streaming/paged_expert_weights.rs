@@ -16,8 +16,8 @@ use std::collections::HashMap;
 use mlx_bridge::MlxArray;
 
 use super::expert_pager::{ExpertPagingError, Qwen3_5PagedExpertWeights};
-use crate::expert_paging::{QuantizationMode, QuantizedExpertLayerPlan};
 use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights;
+use engine_core::expert_paging::{QuantizationMode, QuantizedExpertLayerPlan};
 
 pub(super) fn build_paged_expert_weights(
     loaded_tensors: &mut HashMap<String, MlxArray>,

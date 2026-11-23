@@ -15,8 +15,8 @@ use super::slot_writes::{
     create_warm_table_weights, materialize_and_detach_table_weights, write_expert_into_slot,
 };
 use super::{AstroExpertCache, ExpertSlotTable};
-use crate::expert_paging::ExpertWeightPage;
 use crate::qwen3_5_streaming::expert_streaming::expert_pager::Qwen3_5PagedExpertWeights;
+use engine_core::expert_paging::ExpertWeightPage;
 
 /// Snapshots the eviction-planning inputs from the `astro_expert_cache` before the table
 /// borrow: the layer's prefetched-but-unconsumed experts and the incoming

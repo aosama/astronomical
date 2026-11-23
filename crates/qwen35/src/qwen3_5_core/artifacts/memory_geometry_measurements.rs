@@ -11,12 +11,12 @@ use std::path::Path;
 use thiserror::Error;
 
 use crate::ModelMemoryGeometry;
-use crate::expert_paging::QuantizedExpertLayerPlan;
 use crate::memory::{
     MeasuredExpertLayerPayload, ModelMemoryGeometryError,
     model_memory_geometry_from_measured_layer_facts,
 };
 use crate::qwen3_5_core::artifacts::{Qwen3_5FeedForwardArchitecture, ValidatedQwen3_5Artifact};
+use engine_core::expert_paging::QuantizedExpertLayerPlan;
 
 /// Why disk-only RAM measurements could not be composed for this artifact.
 #[derive(Clone, Copy, Debug, Eq, Error, PartialEq)]

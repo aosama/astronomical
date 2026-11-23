@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use crate::{
+use crate::expert_paging::{
     QuantizationMode, QuantizedExpertLayerPlan, QuantizedExpertPageManifest, QuantizedTensorSource,
     SafetensorsDtype,
 };

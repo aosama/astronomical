@@ -12,6 +12,8 @@
 
 pub mod astro_decoder_state_cache;
 
+pub mod expert_paging;
+
 pub mod inference_engine;
 
 pub mod memory;
