@@ -14,6 +14,7 @@ pub mod generated_token_emission;
 pub mod generation_request_validation;
 pub mod generation_thinking_end_markers;
 pub mod generation_vocabulary_boundaries;
+pub mod model_loading_steps;
 pub mod prompt_processing_chunk_sizer;
 pub mod request_memory_release;
 pub mod restore_transient_workspace;
