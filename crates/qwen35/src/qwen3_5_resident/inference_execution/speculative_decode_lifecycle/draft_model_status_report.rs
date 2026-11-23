@@ -1,10 +1,10 @@
-//! What the engines tell status about a drafter: the resident engine about
-//! the one it loaded, the SSD-streaming engine about one it cannot use.
+//! What the resident engine tells status about its drafter. The streaming
+//! engine's answer, which shares the wording, is
+//! `crate::speculative_decoding::unused_drafter_status`.
 //!
 //! Kept apart from loading so every answer is testable without a graphics
-//! processor: the resident answers depend only on what loading found (a
-//! failed load is also logged), and the streaming answer reads only the
-//! library's folders. Reasons are
+//! processor: each depends only on what loading found (a failed load is also
+//! logged). Reasons are
 //! written for the person reading status and never carry a local path. Each
 //! starts at the cause, because every surface that shows one already says a
 //! drafter is installed and not in use.
@@ -17,9 +17,6 @@ use super::engine_draft_runtime::{
     Qwen3_5DraftRuntimeLoadOutcome, Qwen3_5SpeculativeDraftLoadingError,
     Qwen3_5SpeculativeDraftRuntime,
 };
-
-/// Reason given when a drafter pairs but the model streams from the SSD.
-pub const STREAMING_REASON: &str = "the model is reading its weights from the SSD, and drafting runs only when the whole model is in memory";
 
 /// Reason given when a drafter pairs but this GPU lacks the kernels.
 pub const KERNELS_UNAVAILABLE_REASON: &str =
@@ -77,36 +74,14 @@ pub fn failed_load_status(loading_error: &Qwen3_5SpeculativeDraftLoadingError) -
         }
         Qwen3_5SpeculativeDraftLoadingError::WeightsUnreadable { .. }
         | Qwen3_5SpeculativeDraftLoadingError::Weights(_) => "its weights could not be read",
-        Qwen3_5SpeculativeDraftLoadingError::LibraryUnlistable { .. } => {
-            "the model library could not be searched for one"
+        Qwen3_5SpeculativeDraftLoadingError::LibraryUnlistable(_) => {
+            crate::speculative_decoding::unused_drafter_status::LIBRARY_UNSEARCHABLE_REASON
         }
         Qwen3_5SpeculativeDraftLoadingError::Runtime(_)
         | Qwen3_5SpeculativeDraftLoadingError::Target(_) => "the GPU could not prepare it",
     };
     DraftModelStatus::Unavailable {
         reason: reason.to_owned(),
-    }
-}
-
-/// The status for a model the SSD-streaming engine loaded, which never
-/// drafts: a drafter that would pair is reported as unused, with the reason,
-/// so a person knows what they would gain from more memory.
-#[must_use]
-pub fn streaming_load_status(
-    target_model_directory: &std::path::Path,
-    target_configuration: &crate::Qwen3_5Config,
-) -> DraftModelStatus {
-    let pairing = super::drafter_discovery::DrafterPairing {
-        target_layer_count: target_configuration.layer_count() as i32,
-        target_hidden_size: target_configuration.hidden_size() as i32,
-        target_vocabulary_size: target_configuration.vocabulary_size() as i32,
-    };
-    match super::drafter_discovery::paired_drafter_directory(target_model_directory, &pairing) {
-        Ok(Some(_)) => DraftModelStatus::Unavailable {
-            reason: STREAMING_REASON.to_owned(),
-        },
-        Ok(None) => DraftModelStatus::None,
-        Err(discovery_error) => failed_load_status(&discovery_error),
     }
 }
 

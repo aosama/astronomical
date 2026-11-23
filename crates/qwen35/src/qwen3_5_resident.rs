@@ -30,10 +30,7 @@ pub use experts::{
     ResidentLayerArraysForTests, ResidentProjectionArraysForTests, resident_layer_arrays_for_tests,
 };
 pub use inference_execution::Qwen3_5InferenceExecution;
-// The streaming engine never drafts, but reports a drafter it would have
-// used, through the same discovery and wording as this engine.
 pub use inference_execution::speculative_decode_lifecycle::VerificationTokenChoice;
-pub(crate) use inference_execution::speculative_decode_lifecycle::draft_model_status_report::streaming_load_status as streaming_draft_model_status;
 pub use inference_execution::{
     Qwen3_5ResidentEngine, Qwen3_5ResidentPromptProcessingChunkSizer,
     Qwen3_5ResidentPromptProcessingChunkSizerError,

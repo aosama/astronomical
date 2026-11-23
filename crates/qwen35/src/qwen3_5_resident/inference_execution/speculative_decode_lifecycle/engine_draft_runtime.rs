@@ -23,7 +23,7 @@ use crate::speculative_decoding::dflash_drafter::{
 };
 
 use super::draft_tree_size::draft_tree_options_for_target;
-use super::drafter_discovery::{
+use crate::speculative_decoding::drafter_discovery::{
     BUNDLED_DRAFTER_DIRECTORY_NAME, DrafterPairing, paired_drafter_directory,
 };
 
@@ -201,8 +201,10 @@ fn ensure_memory_headroom_for_drafter(
 
 #[derive(Debug, thiserror::Error)]
 pub enum Qwen3_5SpeculativeDraftLoadingError {
-    #[error("the model library directory cannot be listed to find a DFlash drafter: {source}")]
-    LibraryUnlistable { source: std::io::Error },
+    #[error(transparent)]
+    LibraryUnlistable(
+        #[from] crate::speculative_decoding::drafter_discovery::DrafterDiscoveryError,
+    ),
     #[error("the graphics-processor runtime rejected the DFlash drafter load: {0}")]
     Runtime(#[source] runtime_integration::MlxRuntimeError),
     #[error("the target could not be prepared for drafting: {0}")]
