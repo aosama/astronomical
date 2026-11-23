@@ -59,6 +59,10 @@ name = "disposable_target_retirement_contract"
 path = "tests/disposable_target_retirement_contract.rs"
 
 [[test]]
+name = "workflow_code_shape_ratchet_contract"
+path = "tests/workflow_code_shape_ratchet_contract.rs"
+
+[[test]]
 name = "workflow_structural_contract"
 path = "tests/workflow_structural_contract.rs"
 

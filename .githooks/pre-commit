@@ -31,8 +31,9 @@ else
     exit 1
 fi
 
-# cargo-crap complexity ratchet: HARD FAIL, pre-commit ONLY (policy,
-# 2026-10-31 — CI runs no code-shape enforcement at all). Scores every
+# cargo-crap complexity ratchet: HARD FAIL. The Linux config-contracts lane
+# repeats it against the base commit as a backstop, since hooks can fail to
+# run without a word (a hooks path naming a missing folder). Scores every
 # function against the baseline committed at HEAD without compiling the
 # workspace, through `cargo xtask crap-baseline`: an existing function may
 # only improve, growth fails the commit, and a function the baseline does
@@ -57,6 +58,27 @@ if git diff --cached --name-only | grep -Eq '\.rs$|^crap-baseline\.json$|^crap-a
         gate_elapsed_seconds=$(( $(date +%s) - gate_started_epoch_seconds ))
         printf '%s\n' "[pre-commit] status=failed check=crap-complexity-ratchet elapsed_seconds=${gate_elapsed_seconds}" >&2
         printf '%s\n' '[pre-commit] hint=each violation line above names its own remedy' >&2
+        exit 1
+    fi
+fi
+
+# Duplication ratchet (issue #2473): HARD FAIL, in the hooks and on the
+# config-contracts lane, like the complexity ratchet above.
+# `cargo xtask check-duplication` counts the code lines that sit in a block
+# of six or more lines repeated in another file, production and test code
+# apart, and fails when either count exceeds the baseline committed at HEAD. It needs no tool beyond xtask and
+# takes about three seconds, so it runs whenever Rust source or the baseline
+# is staged.
+if git diff --cached --name-only | grep -Eq '\.rs$|^duplication-baseline\.json$'; then
+    printf '%s\n' "[pre-commit] status=start check=duplication-ratchet root=${REPOSITORY_ROOT}"
+    duplication_started_epoch_seconds="$(date +%s)"
+    if cargo run --quiet --manifest-path "${REPOSITORY_ROOT}/xtask/Cargo.toml" -p xtask -- check-duplication --top 5; then
+        duplication_elapsed_seconds=$(( $(date +%s) - duplication_started_epoch_seconds ))
+        printf '%s\n' "[pre-commit] status=success check=duplication-ratchet elapsed_seconds=${duplication_elapsed_seconds}"
+    else
+        duplication_elapsed_seconds=$(( $(date +%s) - duplication_started_epoch_seconds ))
+        printf '%s\n' "[pre-commit] status=failed check=duplication-ratchet elapsed_seconds=${duplication_elapsed_seconds}" >&2
+        printf '%s\n' '[pre-commit] hint=move the repeated block into one shared place; the file pairs above show where it is' >&2
         exit 1
     fi
 fi

@@ -429,12 +429,11 @@ jobs:
           xtask selected-cargo --selection "$RUST_TEST_SELECTION" nextest-archive-e2e
         timeout-minutes: 5
 
-      # Code-shape enforcement is pre-commit territory ONLY (policy,
-      # 2026-10-31): the pre-commit hook runs the cargo-crap complexity
-      # ratchet (hard fail, see .githooks/pre-commit) and the clippy
-      # function-length budget. The retired cargo-crap CI step lived here —
-      # 13 seconds of every run, 10 of them installing the tool — and the
-      # three clippy budget lanes above it left earlier the same day.
+      # The clippy function-length budget is pre-commit territory only
+      # (policy, 2026-10-31). The complexity and duplication ratchets run in
+      # the hooks and again on the Linux config-contracts lane as a backstop;
+      # the macOS cargo-crap step that lived here cost 13 seconds of the
+      # critical path, 10 of them installing the tool.
       - name: Upload integration test archive
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -894,16 +893,20 @@ jobs:
     steps:
       - name: Configure step timing attribution
         run: printf 'ASTRONOMICAL_CI_TIMING_FILE=%s/astronomical-ci-step-timings.csv\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
+      # Two commits deep, so HEAD^1 exists for the code-shape ratchets below:
+      # the base branch tip under a pull request's merge commit, and the
+      # previous main commit on a push to main.
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 1
+          fetch-depth: 2
           persist-credentials: false
       - name: Run workflow contracts
         run: |
           trap 'scripts/ci/ci-step-timing.sh end ci-cache-contracts' EXIT
           scripts/ci/ci-step-timing.sh begin ci-cache-contracts
           cargo test --locked -p xtask --test workflow_structural_contract
+          cargo test --locked -p xtask --test workflow_code_shape_ratchet_contract
           cargo test --locked -p xtask --test workflow_verdict_contract
           cargo test --locked -p xtask --test workflow_lane_split_contract
           cargo test --locked -p xtask --test workflow_github_actions_cache_owner_contract
@@ -918,6 +921,27 @@ jobs:
           cargo test --locked -p xtask --test integration_classify_scope_journeys
           scripts/ci/tests/test-ci-native-cache-coordination.sh
         timeout-minutes: 5
+      # The server-side backstop for the complexity and duplication ratchets
+      # the git hooks run. Hooks are local: a checkout whose hooks path names a
+      # missing folder runs none of them without a word, and on 2026-11-22 six
+      # functions reached main grown that way. Here the merged tree is judged
+      # against the baselines committed on HEAD^1, the same rule the pre-push
+      # hook applies against origin/main. It runs on this Linux lane, parallel
+      # to the macOS lanes, so it adds no wall clock to a pull request.
+      # install-action verifies the cargo-crap release digest carried in the
+      # pinned action commit; fallback none refuses an unverified binary.
+      - name: Provision pinned cargo-crap
+        uses: taiki-e/install-action@ab49d3c64680143e184118bed66a46419fc15519 # v2.90.5
+        with:
+          tool: cargo-crap@0.9.0
+          fallback: none
+      - name: Run code-shape ratchets
+        run: |
+          trap 'scripts/ci/ci-step-timing.sh end code-shape-ratchets' EXIT
+          scripts/ci/ci-step-timing.sh begin code-shape-ratchets
+          cargo xtask crap-baseline --against HEAD^1
+          cargo xtask check-duplication --against HEAD^1 --top 10
+        timeout-minutes: 3
       # The pyramid count over this repository is local-only (cargo xtask
       # tier-pyramid); its behavior on a fixture tree is an xtask unit test.
       - name: Run repository contract scripts

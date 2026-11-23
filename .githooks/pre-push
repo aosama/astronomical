@@ -18,19 +18,11 @@ else
     exit 1
 fi
 
-# Every push triggers a paid GitHub Actions round trip; a compile failure that
-# one local `cargo verify` compile would have caught wastes that money and
-# several minutes of wall clock. Gate the push on the full workspace compile
-# across all targets. ASTRONOMICAL_SKIP_PRE_PUSH=1 escapes deliberately, for
-# example when pushing a branch whose failures are the subject under test.
-if [ "${ASTRONOMICAL_SKIP_PRE_PUSH:-0}" = "1" ]; then
-    printf '%s\n' '[pre-push] status=skipped reason=ASTRONOMICAL_SKIP_PRE_PUSH=1'
-    exit 0
-fi
-
-# The pre-commit ratchet judges each commit against its own HEAD, so two
-# branches that pass on their own can still grow a function once both land
-# (#2000 and #2001 did exactly that). Judging the pushed tree against the
+# The two code-shape ratchets run before the skip switch below, like the
+# identity check: they take seconds, and a push that skipped them is how
+# grown functions reached main unnoticed. The pre-commit ratchet judges each
+# commit against its own HEAD, so two branches that pass on their own can
+# still grow a function once both land (#2000 and #2001 did exactly that). Judging the pushed tree against the
 # baseline on origin/main catches a branch built on an older baseline before
 # it costs a pull request; run `git fetch origin main` first so that ref is
 # current. A clone without origin/main skips the check rather than guess.
@@ -45,6 +37,32 @@ if git rev-parse --verify --quiet origin/main >/dev/null; then
     fi
 else
     printf '%s\n' '[pre-push] status=skipped check=crap-complexity-against-main reason=no-origin-main'
+fi
+
+# The duplication ratchet judged against main's baseline, for the same
+# reason as the complexity check above: two branches can each hold their
+# count and still add copies once both land.
+if git rev-parse --verify --quiet origin/main >/dev/null; then
+    printf '%s\n' "[pre-push] status=start check=duplication-against-main"
+    if cargo run --quiet --manifest-path "${REPOSITORY_ROOT}/xtask/Cargo.toml" -p xtask -- check-duplication --against origin/main --top 5; then
+        printf '%s\n' "[pre-push] status=success check=duplication-against-main"
+    else
+        printf '%s\n' "[pre-push] status=failed check=duplication-against-main" >&2
+        printf '%s\n' '[pre-push] hint=merge origin/main into this branch, then remove the copies that brought a count above the main baseline' >&2
+        exit 1
+    fi
+else
+    printf '%s\n' '[pre-push] status=skipped check=duplication-against-main reason=no-origin-main'
+fi
+
+# Every push triggers a paid GitHub Actions round trip; a compile failure that
+# one local `cargo verify` compile would have caught wastes that money and
+# several minutes of wall clock. Gate the push on the full workspace compile
+# across all targets. ASTRONOMICAL_SKIP_PRE_PUSH=1 escapes deliberately, for
+# example when pushing a branch whose failures are the subject under test.
+if [ "${ASTRONOMICAL_SKIP_PRE_PUSH:-0}" = "1" ]; then
+    printf '%s\n' '[pre-push] status=skipped reason=ASTRONOMICAL_SKIP_PRE_PUSH=1'
+    exit 0
 fi
 
 printf '%s\n' "[pre-push] status=start check=cargo-verify root=${REPOSITORY_ROOT}"
