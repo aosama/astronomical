@@ -2,7 +2,7 @@ use serde::Deserialize;
 use serde_json::Value;
 
 use crate::image_input;
-use crate::request_budget::{MAX_IMAGE_PARTS_PER_REQUEST, MAX_INLINE_MEDIA_BYTES};
+use crate::request_bounds::{validate_image_part_count, validate_inline_media_total};
 use crate::{DecodedImageInput, OpenAiResponsesValidationError};
 
 /// Stateless input accepted by the local Responses endpoint.
@@ -290,34 +290,6 @@ impl OpenAiResponseInput {
             }
         }
     }
-}
-
-fn validate_image_part_count(
-    image_part_count: usize,
-) -> Result<(), OpenAiResponsesValidationError> {
-    if image_part_count > MAX_IMAGE_PARTS_PER_REQUEST {
-        return Err(
-            OpenAiResponsesValidationError::ImagePartCountExceedsBudget {
-                actual_image_part_count: image_part_count,
-                maximum_image_part_count: MAX_IMAGE_PARTS_PER_REQUEST,
-                excess_image_part_count: image_part_count - MAX_IMAGE_PARTS_PER_REQUEST,
-            },
-        );
-    }
-    Ok(())
-}
-
-fn validate_inline_media_total(
-    decoded_inline_media_bytes: usize,
-) -> Result<(), OpenAiResponsesValidationError> {
-    if decoded_inline_media_bytes > MAX_INLINE_MEDIA_BYTES {
-        return Err(OpenAiResponsesValidationError::InlineMediaExceedsBudget {
-            actual_inline_media_bytes: decoded_inline_media_bytes,
-            maximum_inline_media_bytes: MAX_INLINE_MEDIA_BYTES,
-            excess_inline_media_bytes: decoded_inline_media_bytes - MAX_INLINE_MEDIA_BYTES,
-        });
-    }
-    Ok(())
 }
 
 impl OpenAiResponseInputItem {

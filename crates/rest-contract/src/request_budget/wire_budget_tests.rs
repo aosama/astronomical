@@ -1,3 +1,4 @@
+use crate::RequestBoundsError;
 use crate::{
     MAX_IMAGE_DECODED_BYTES, MAX_IMAGE_PARTS_PER_REQUEST, MAX_INLINE_MEDIA_BYTES,
     MAX_REQUEST_BODY_BYTES, OpenAiChatCompletionRequest, OpenAiChatCompletionValidationError,
@@ -151,11 +152,13 @@ fn should_reject_a_chat_request_one_byte_over_the_inline_media_budget() {
 
     assert!(matches!(
         validation_error,
-        OpenAiChatCompletionValidationError::InlineMediaExceedsBudget {
-            maximum_inline_media_bytes: MAX_INLINE_MEDIA_BYTES,
-            excess_inline_media_bytes: 1,
-            ..
-        }
+        OpenAiChatCompletionValidationError::RequestBounds(
+            RequestBoundsError::InlineMediaExceedsBudget {
+                maximum_inline_media_bytes: MAX_INLINE_MEDIA_BYTES,
+                excess_inline_media_bytes: 1,
+                ..
+            }
+        )
     ));
     assert!(validation_error.is_request_too_large());
     assert!(validation_error.to_string().contains("Gemini API"));
@@ -186,11 +189,13 @@ fn should_reject_a_chat_request_one_image_over_the_image_count_budget() {
 
     assert!(matches!(
         validation_error,
-        OpenAiChatCompletionValidationError::ImagePartCountExceedsBudget {
-            actual_image_part_count: 101,
-            maximum_image_part_count: MAX_IMAGE_PARTS_PER_REQUEST,
-            excess_image_part_count: 1,
-        }
+        OpenAiChatCompletionValidationError::RequestBounds(
+            RequestBoundsError::ImagePartCountExceedsBudget {
+                actual_image_part_count: 101,
+                maximum_image_part_count: MAX_IMAGE_PARTS_PER_REQUEST,
+                excess_image_part_count: 1,
+            }
+        )
     ));
     assert!(validation_error.is_request_too_large());
     assert!(validation_error.to_string().contains("Anthropic"));
@@ -212,7 +217,9 @@ fn should_reject_the_image_count_before_decoding_any_image() {
 
     assert!(matches!(
         validation_error,
-        OpenAiChatCompletionValidationError::ImagePartCountExceedsBudget { .. }
+        OpenAiChatCompletionValidationError::RequestBounds(
+            RequestBoundsError::ImagePartCountExceedsBudget { .. }
+        )
     ));
 }
 
@@ -262,11 +269,13 @@ fn should_reject_a_responses_request_one_byte_over_the_inline_media_budget() {
 
     assert!(matches!(
         validation_error,
-        OpenAiResponsesValidationError::InlineMediaExceedsBudget {
-            maximum_inline_media_bytes: MAX_INLINE_MEDIA_BYTES,
-            excess_inline_media_bytes: 1,
-            ..
-        }
+        OpenAiResponsesValidationError::RequestBounds(
+            RequestBoundsError::InlineMediaExceedsBudget {
+                maximum_inline_media_bytes: MAX_INLINE_MEDIA_BYTES,
+                excess_inline_media_bytes: 1,
+                ..
+            }
+        )
     ));
     assert!(validation_error.is_request_too_large());
 }
@@ -296,10 +305,12 @@ fn should_reject_a_responses_request_one_image_over_the_image_count_budget() {
 
     assert!(matches!(
         validation_error,
-        OpenAiResponsesValidationError::ImagePartCountExceedsBudget {
-            actual_image_part_count: 101,
-            ..
-        }
+        OpenAiResponsesValidationError::RequestBounds(
+            RequestBoundsError::ImagePartCountExceedsBudget {
+                actual_image_part_count: 101,
+                ..
+            }
+        )
     ));
     assert!(validation_error.is_request_too_large());
 }
