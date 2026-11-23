@@ -55,9 +55,9 @@ impl Qwen3_5ResidentModel {
             self.config.maximum_position_count(),
         )?;
         let token_indices = self.runtime.astype(generated_token, MlxDtype::Int32)?;
-        // Paged decode must resolve deferred missing-route bitmaps before the
-        // generated token becomes request-visible. Use a synchronous completion
-        // root with exact replay instead of decode-ahead async evaluation alone.
+        // Every expert is resident, so the graph is returned lazily: the caller
+        // submits it with `async_evaluate_generation` one token ahead of the
+        // token it hands back.
         self.build_forward_graph(
             &token_indices,
             1,

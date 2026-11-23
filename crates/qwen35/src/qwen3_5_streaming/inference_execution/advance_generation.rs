@@ -1,7 +1,9 @@
-//! Serial request advancement with one-token-ahead graphics-processor submission.
+//! Serial request advancement, one token ahead.
 //!
-//! The token returned to the user is normally the predecessor of the token
-//! already being evaluated.
+//! Each advance runs the successor's forward synchronously, because its expert
+//! routes must be resolved before the token may become visible, and returns
+//! the current token. Unlike the resident engine, nothing is submitted to the
+//! graphics processor ahead of time.
 
 use crate::qwen3_5_core::model::memory_breakdown::Qwen3_5MemoryOwnership;
 use std::time::Instant;
@@ -183,8 +185,8 @@ impl Qwen3_5EngineState {
                 generated_token_emission.generated_token,
             ))
         } else {
-            // Keep the asynchronously submitted successor private until the
-            // next call synchronizes it. The current token alone is observable.
+            // Keep the successor private until the next call reads it. The
+            // current token alone is observable.
             active_request.pending_generated_token = Some(next_generated_token);
             Ok(ActiveRequestAdvance::Continue(
                 generated_token_emission.generated_token,

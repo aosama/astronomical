@@ -129,11 +129,12 @@ impl MlxInferenceExecution for PrismHadamardQwen35InferenceExecution {
             .ok_or_else(|| InferenceEngineError::Fatal {
                 reason: "folded-ternary model is not loaded".to_owned(),
             })?;
-        if inference_request.input_token_ids().is_empty() {
-            return Err(InferenceEngineError::InvalidRequest {
-                reason: "folded-ternary prompt must contain tokens".to_owned(),
-            });
-        }
+        super::request_checks::check_serving_request(
+            inference_request.input_token_ids(),
+            inference_request.max_output_tokens(),
+            model.pack().config().text().vocab_size,
+            self.maximum_context_tokens,
+        )?;
         let sampling_seed = sampling_seed::resolve_sampling_seed(
             match inference_request.sampling_strategy() {
                 crate::Qwen3_5SamplingStrategy::HighestLogit => None,
@@ -154,7 +155,7 @@ impl MlxInferenceExecution for PrismHadamardQwen35InferenceExecution {
                 .to_vec(),
             inference_request.natural_reasoning_end_token_ids().to_vec(),
         )
-        .map_err(|budget_error| InferenceEngineError::Fatal {
+        .map_err(|budget_error| InferenceEngineError::InvalidRequest {
             reason: format!("folded-ternary thinking budget is invalid: {budget_error}"),
         })?;
         let penalized_token_ids = inference_request.initial_penalized_token_ids();
@@ -181,6 +182,7 @@ impl MlxInferenceExecution for PrismHadamardQwen35InferenceExecution {
         }
         self.active = Some(PrismHadamardQwen35ActiveGeneration {
             request_id,
+            has_reached_reply_end: false,
             remaining_output_tokens: u32::from(inference_request.max_output_tokens()),
             prompt_token_ids: prompt_token_ids.clone(),
             remaining_prompt_token_ids: prompt_token_ids
@@ -252,6 +254,7 @@ impl MlxInferenceExecution for PrismHadamardQwen35InferenceExecution {
             }
             None => {
                 let Some(sampled_token) = active.pending_sampled_token.take() else {
+                    active.has_reached_reply_end = true;
                     return Ok(GeneratedToken::EndOfSequence);
                 };
                 // Build and submit the successor before reading this token's
@@ -266,6 +269,7 @@ impl MlxInferenceExecution for PrismHadamardQwen35InferenceExecution {
                         &sampled_token,
                     )?;
                 if eos_token_ids.contains(&selected_token_id) {
+                    active.has_reached_reply_end = true;
                     return Ok(GeneratedToken::EndOfSequence);
                 }
                 (selected_token_id, speculated_successor)
@@ -286,15 +290,13 @@ impl MlxInferenceExecution for PrismHadamardQwen35InferenceExecution {
         }
         let output_budget_exhausted = record_emitted_token(&mut active.remaining_output_tokens);
         if output_budget_exhausted {
+            active.has_reached_reply_end = true;
             active.pending_sampled_token = None;
-            return Ok(GeneratedToken::TokenId {
-                token_id: selected_token_id,
+            return Ok(reply_token(
+                selected_token_id,
                 is_reasoning_token,
-                expert_memory_mode: Some(ExpertMemoryMode::Resident),
                 mlx_memory_telemetry,
-                first_decode_forward_elapsed_millis: None,
-                generation_finalization: None,
-            });
+            ));
         }
         record_penalized_token_id(active, selected_token_id);
         let successor = match speculated_successor {
@@ -309,14 +311,11 @@ impl MlxInferenceExecution for PrismHadamardQwen35InferenceExecution {
         };
         active.pending_sampled_token =
             successor_stays_pending(active.remaining_output_tokens).then_some(successor);
-        Ok(GeneratedToken::TokenId {
-            token_id: selected_token_id,
+        Ok(reply_token(
+            selected_token_id,
             is_reasoning_token,
-            expert_memory_mode: Some(ExpertMemoryMode::Resident),
             mlx_memory_telemetry,
-            first_decode_forward_elapsed_millis: None,
-            generation_finalization: None,
-        })
+        ))
     }
 
     fn collect_mlx_memory_telemetry(
@@ -359,25 +358,19 @@ impl MlxInferenceExecution for PrismHadamardQwen35InferenceExecution {
         &mut self,
         requested_mlx_memory_ceiling_bytes: u64,
     ) -> Result<MlxMemoryLimitAdjustment, InferenceEngineError> {
-        self.ceiling_bytes = requested_mlx_memory_ceiling_bytes.max(1);
-        self.mlx_buffer_cache_bytes = self.mlx_buffer_cache_bytes.min(self.ceiling_bytes);
-        if let Some(model) = self.model.as_mut() {
-            let memory_limits = MlxMemoryLimits::new(
-                usize::try_from(self.ceiling_bytes).unwrap_or(usize::MAX),
-                usize::try_from(self.mlx_buffer_cache_bytes).unwrap_or(usize::MAX),
-            )
-            .map_err(|error| InferenceEngineError::Fatal {
-                reason: format!("folded-ternary MLX limits failed: {error}"),
-            })?;
-            model
-                .runtime
-                .update_memory_limits(memory_limits)
-                .map_err(|error| InferenceEngineError::Fatal {
-                    reason: format!(
-                        "folded-ternary could not apply the MLX memory ceiling: {error}"
-                    ),
-                })?;
+        if let Some(refusal) = super::memory_limit::ceiling_change_refusal(
+            self.active.is_some(),
+            requested_mlx_memory_ceiling_bytes,
+            self.minimum_ceiling_bytes,
+        ) {
+            return Err(refusal);
         }
+        self.ceiling_bytes = requested_mlx_memory_ceiling_bytes;
+        self.mlx_buffer_cache_bytes = super::memory_limit::mlx_buffer_cache_bytes_for_ceiling(
+            self.configured_mlx_buffer_cache_bytes,
+            self.ceiling_bytes,
+        );
+        self.apply_memory_limits_to_loaded_runtime()?;
         let mlx_memory_telemetry = self.collect_current_mlx_memory_telemetry();
         Ok(MlxMemoryLimitAdjustment::new(
             self.ceiling_bytes,
@@ -417,6 +410,27 @@ impl MlxInferenceExecution for PrismHadamardQwen35InferenceExecution {
 }
 
 impl PrismHadamardQwen35InferenceExecution {
+    /// Applies the current ceiling and `mlx_buffer_cache` limit to the MLX
+    /// runtime once the model is loaded; before that, `load` applies them.
+    fn apply_memory_limits_to_loaded_runtime(&mut self) -> Result<(), InferenceEngineError> {
+        let Some(model) = self.model.as_mut() else {
+            return Ok(());
+        };
+        let memory_limits = MlxMemoryLimits::new(
+            usize::try_from(self.ceiling_bytes).unwrap_or(usize::MAX),
+            usize::try_from(self.mlx_buffer_cache_bytes).unwrap_or(usize::MAX),
+        )
+        .map_err(|error| InferenceEngineError::Fatal {
+            reason: format!("folded-ternary MLX limits failed: {error}"),
+        })?;
+        model
+            .runtime
+            .update_memory_limits(memory_limits)
+            .map_err(|error| InferenceEngineError::Fatal {
+                reason: format!("folded-ternary could not apply the MLX memory ceiling: {error}"),
+            })
+    }
+
     /// Samples the current MLX memory footprint for the status surface.
     ///
     /// The dense folded-ternary model owns its whole weight payload, so the
@@ -602,5 +616,23 @@ pub(super) fn submit_successor(
 pub(super) fn gpu_error<E: std::fmt::Display>(error: E) -> InferenceEngineError {
     InferenceEngineError::Fatal {
         reason: error.to_string(),
+    }
+}
+
+/// One reply token as the worker receives it. The folded-ternary model holds
+/// every weight, so its expert memory mode is always resident; it records no
+/// first-decode timing and finalizes through cancellation, not here.
+fn reply_token(
+    selected_token_id: u32,
+    is_reasoning_token: bool,
+    mlx_memory_telemetry: Option<MlxMemoryTelemetry>,
+) -> GeneratedToken {
+    GeneratedToken::TokenId {
+        token_id: selected_token_id,
+        is_reasoning_token,
+        expert_memory_mode: Some(ExpertMemoryMode::Resident),
+        mlx_memory_telemetry,
+        first_decode_forward_elapsed_millis: None,
+        generation_finalization: None,
     }
 }

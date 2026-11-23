@@ -356,27 +356,6 @@ impl Qwen3_5EngineState {
         )
     }
 
-    /// Converts one memory snapshot's peak counter to a u64 when it fits.
-    fn snapshot_peak_memory_bytes_option(
-        memory_snapshot: &runtime_integration::MlxMemorySnapshot,
-    ) -> Option<u64> {
-        u64::try_from(memory_snapshot.peak_memory_bytes()).ok()
-    }
-
-    /// Converts one memory snapshot's active counter to a u64 when it fits.
-    fn snapshot_active_memory_bytes_option(
-        memory_snapshot: &runtime_integration::MlxMemorySnapshot,
-    ) -> Option<u64> {
-        u64::try_from(memory_snapshot.active_memory_bytes()).ok()
-    }
-
-    /// Converts one memory snapshot's MLX buffer-cache counter to a u64 when it fits.
-    fn snapshot_mlx_buffer_cache_bytes_option(
-        memory_snapshot: &runtime_integration::MlxMemorySnapshot,
-    ) -> Option<u64> {
-        u64::try_from(memory_snapshot.mlx_buffer_cache_bytes()).ok()
-    }
-
     pub(in crate::qwen3_5_resident::inference_execution) fn record_generation_performance_attribution(
         &mut self,
         performance_attribution: PerformanceAttribution,

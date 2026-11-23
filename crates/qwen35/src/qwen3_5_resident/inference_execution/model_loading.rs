@@ -104,7 +104,7 @@ impl Qwen3_5EngineState {
                 &mut model_loading_performance_attribution,
             )
             .map_err(qwen3_5_runtime_error)?;
-            let model_chunking = validated_model_chunking(&self.chunking)?;
+            let model_chunking = resolve_model_chunking_configuration(&self.chunking)?;
             let mut model = load_and_materialize_resident_model(
                 runtime,
                 validated_artifact,
@@ -554,14 +554,3 @@ fn record_failed_resident_model_loading(
 #[cfg(test)]
 #[path = "model_loading_tests.rs"]
 mod model_loading_tests;
-
-fn validated_model_chunking(
-    chunking: &WorkerChunkingConfiguration,
-) -> Result<Qwen3_5ModelChunkingConfiguration, InferenceEngineError> {
-    match resolve_model_chunking_configuration(chunking) {
-        Ok(model_chunking) => Ok(model_chunking),
-        Err(configuration_error) => Err(fatal_engine_error(format!(
-            "failed to validate model chunking configuration: {configuration_error}"
-        ))),
-    }
-}

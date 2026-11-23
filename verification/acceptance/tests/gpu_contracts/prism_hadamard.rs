@@ -3,8 +3,8 @@
 //! These are acceptance, not unit, contracts: every test loads the real
 //! installed pack (roughly 8 GB of model weights) and drives the
 //! graphics processor, so they are feature-gated on `direct-mlx`, run
-//! `--ignored` by default, and locate the pack through environment variables
-//! instead of any hardcoded developer path. The performance tiers live in
+//! `--ignored` by default, and locate the pack through the test run's
+//! configuration instead of any hardcoded developer path. The performance tiers live in
 //! `prism_hadamard/` beside the shared pack and prompt helpers.
 
 use serial_test::serial;
@@ -63,8 +63,8 @@ fn should_replay_the_upstream_reference_greedy_trajectory() {
     assert_eq!(expected_tokens.len(), PARITY_TOKEN_COUNT);
 
     let model = loaded_journey_model();
-    // An empty stop set makes the production generation loop decode exactly
-    // the reference length; any arithmetic divergence anywhere in the
+    // An empty stop set makes the model's own greedy session decode exactly
+    // the reference length (this replays the model, not the serving engine); any arithmetic divergence anywhere in the
     // trajectory breaks the sequence equality below.
     let actual_tokens = model
         .generate_greedy(&input_ids, PARITY_TOKEN_COUNT, &[])

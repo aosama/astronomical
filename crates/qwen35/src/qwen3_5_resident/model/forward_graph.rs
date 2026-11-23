@@ -304,8 +304,6 @@ impl Qwen3_5ResidentModel {
         performance_attribution: &mut PerformanceAttribution,
         should_materialize_vocabulary_logits: bool,
     ) -> Result<Qwen3_5TargetForwardOutput, Qwen3_5ExecutionError> {
-        // Each forward owns one deferred missing-route collection. Clear any
-        // leftover roots from a cancelled or failed previous attempt.
         let rope_offset_tokens = i32::try_from(starting_position_tokens).map_err(|_| {
             Qwen3_5ExecutionError::InvalidInput {
                 description: "starting position exceeds the MLX int32 range",

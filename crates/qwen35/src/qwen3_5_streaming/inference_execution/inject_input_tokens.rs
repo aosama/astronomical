@@ -151,6 +151,14 @@ impl Qwen3_5EngineState {
             .model
             .as_ref()
             .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+        // The final feedback token runs the lazy forward and is submitted
+        // ahead, unlike a reply token. It is still exact: outside optimistic
+        // serving every sparse layer either serves from a table that holds
+        // all its experts or brings its route to the host and reads what is
+        // missing. What it skips is bookkeeping for this one token: the
+        // decode-phase bracket of the `astro_expert_cache` and the expert
+        // demand and route sample that `forward_resolving_expert_routes`
+        // records, which the next forward clears.
         let feedback_logits = model
             .build_forward_chunk_with_performance_attribution(
                 &[final_input_token_id],

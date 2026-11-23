@@ -1,14 +1,15 @@
 //! One terminal cleanup path for success, rejection, cancellation, and failure.
 //!
-//! Request-owned lazy arrays are dropped before expert-retention policy resumes
-//! and before allocator cleanup. Final telemetry then reports the retained
-//! pager ownership after cleanup.
+//! Request-owned lazy arrays are dropped before the memory governor ends the
+//! request, dense layers are kept again, and allocator cleanup runs. Final
+//! telemetry then reports the retained pager ownership after cleanup.
 
 use super::NO_RETAINED_LIVE_PREFIX_BYTES;
 use crate::qwen3_5_core::model::memory_breakdown::Qwen3_5MemoryOwnership;
 use crate::{
     GenerationFinalization, GenerationPerformanceAttributionMetadata, InferenceEngineError,
-    PerformanceAttribution, PerformanceAttributionOutcome, PerformanceOperation,
+    MlxMemoryTelemetry, PerformanceAttribution, PerformanceAttributionOutcome,
+    PerformanceOperation,
 };
 
 use super::Qwen3_5EngineState;
@@ -378,11 +379,6 @@ impl Qwen3_5EngineState {
     }
 }
 
-use crate::MlxMemoryTelemetry;
-
-/// Says how full the `mlx_buffer_cache` was after each token of the reply.
-/// Tokens after which it was empty allocated every buffer afresh, which is
-/// what made replies at the top of the memory range a third as fast.
 /// One line per reply with how well the `astro_expert_cache` chose what to
 /// keep: per reply token, the routed experts it held, the ones it missed, the
 /// bytes those misses read and the time spent waiting on them. Always on, so a
@@ -429,6 +425,9 @@ fn per_reply_token(reply_token_count: usize, total: u64) -> f64 {
     total as f64 / reply_token_count as f64
 }
 
+/// Says how full the `mlx_buffer_cache` was after each token of the reply.
+/// Tokens after which it was empty allocated every buffer afresh, which is
+/// what made replies at the top of the memory range a third as fast.
 fn log_mlx_buffer_cache_over_the_reply(
     request_id: u64,
     mlx_buffer_cache_reply_record: crate::memory::mlx_buffer_cache_reply_record::MlxBufferCacheReplyRecord,

@@ -7,7 +7,9 @@
 mod attribution;
 mod engine_trait_impl;
 mod input_injection;
+mod memory_limit;
 mod prefill_chunk;
+mod request_checks;
 mod sampling;
 
 use ipc_protocol::RequestId;
@@ -50,6 +52,9 @@ pub struct PrismHadamardQwen35InferenceExecution {
     pub(super) active: Option<PrismHadamardQwen35ActiveGeneration>,
     pub(super) ceiling_bytes: u64,
     pub(super) mlx_buffer_cache_bytes: u64,
+    /// The `mlx_buffer_cache` limit the worker was started with; a lowered
+    /// ceiling caps it, and a raised one brings it back.
+    pub(super) configured_mlx_buffer_cache_bytes: u64,
     pub(super) minimum_ceiling_bytes: u64,
     pub(super) maximum_context_tokens: u32,
     prompt_processing_chunk_tokens: u32,
@@ -64,6 +69,10 @@ pub struct PrismHadamardQwen35InferenceExecution {
 /// One active straight generation: chunked prefill plus one-token decode.
 pub(super) struct PrismHadamardQwen35ActiveGeneration {
     pub(super) request_id: RequestId,
+    /// Whether the reply reached its own end (an end-of-sequence token or
+    /// the output budget). Every request ends through cancellation, so this
+    /// is what tells a completed reply from one that was stopped.
+    pub(super) has_reached_reply_end: bool,
     pub(super) remaining_output_tokens: u32,
     /// The full prompt token ids, so capture can name blocks by their
     /// absolute token range even after `remaining_prompt_token_ids` drains.
@@ -133,6 +142,7 @@ impl PrismHadamardQwen35InferenceExecution {
             active: None,
             ceiling_bytes,
             mlx_buffer_cache_bytes,
+            configured_mlx_buffer_cache_bytes: mlx_buffer_cache_bytes,
             minimum_ceiling_bytes: 1,
             maximum_context_tokens,
             prompt_processing_chunk_tokens,
