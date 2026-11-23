@@ -318,7 +318,7 @@ jobs:
       # silent cargo-binstall or source build if the pinned release is absent.
       # Every lane below uses the identical reference and tool pin.
       - name: Provision pinned cargo-nextest
-        uses: taiki-e/install-action@ab49d3c64680143e184118bed66a46419fc15519 # v2.90.5
+        uses: taiki-e/install-action@75a7c0f87bd666af3cdb75c5b9e9d03ab6044e6f # v2.90.6
         with:
           tool: cargo-nextest@0.9.149
           fallback: none
@@ -931,7 +931,7 @@ jobs:
       # install-action verifies the cargo-crap release digest carried in the
       # pinned action commit; fallback none refuses an unverified binary.
       - name: Provision pinned cargo-crap
-        uses: taiki-e/install-action@ab49d3c64680143e184118bed66a46419fc15519 # v2.90.5
+        uses: taiki-e/install-action@75a7c0f87bd666af3cdb75c5b9e9d03ab6044e6f # v2.90.6
         with:
           tool: cargo-crap@0.9.0
           fallback: none
@@ -1098,7 +1098,7 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
       - name: Provision pinned cargo-nextest
-        uses: taiki-e/install-action@ab49d3c64680143e184118bed66a46419fc15519 # v2.90.5
+        uses: taiki-e/install-action@75a7c0f87bd666af3cdb75c5b9e9d03ab6044e6f # v2.90.6
         with:
           tool: cargo-nextest@0.9.149
           fallback: none
@@ -1141,7 +1141,7 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
       - name: Provision pinned cargo-nextest
-        uses: taiki-e/install-action@ab49d3c64680143e184118bed66a46419fc15519 # v2.90.5
+        uses: taiki-e/install-action@75a7c0f87bd666af3cdb75c5b9e9d03ab6044e6f # v2.90.6
         with:
           tool: cargo-nextest@0.9.149
           fallback: none
@@ -1175,7 +1175,7 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
       - name: Provision pinned cargo-nextest
-        uses: taiki-e/install-action@ab49d3c64680143e184118bed66a46419fc15519 # v2.90.5
+        uses: taiki-e/install-action@75a7c0f87bd666af3cdb75c5b9e9d03ab6044e6f # v2.90.6
         with:
           tool: cargo-nextest@0.9.149
           fallback: none
@@ -1210,7 +1210,7 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
       - name: Provision pinned cargo-nextest
-        uses: taiki-e/install-action@ab49d3c64680143e184118bed66a46419fc15519 # v2.90.5
+        uses: taiki-e/install-action@75a7c0f87bd666af3cdb75c5b9e9d03ab6044e6f # v2.90.6
         with:
           tool: cargo-nextest@0.9.149
           fallback: none
@@ -1290,7 +1290,7 @@ jobs:
       # compiles. The version must equal the third-party/tool-pins pin (the
       # `github_actions_cache` owner contract enforces it) so both jobs share one sccache storage format.
       - name: Provision pinned sccache
-        uses: taiki-e/install-action@ab49d3c64680143e184118bed66a46419fc15519 # v2.90.5
+        uses: taiki-e/install-action@75a7c0f87bd666af3cdb75c5b9e9d03ab6044e6f # v2.90.6
         with:
           tool: sccache@0.19.0
           fallback: none
