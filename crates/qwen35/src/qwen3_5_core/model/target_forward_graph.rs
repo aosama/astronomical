@@ -40,12 +40,6 @@ impl Qwen3_5TargetForwardOutput {
         &self.final_logits
     }
 
-    /// Takes the float32 logits for the final target position.
-    #[must_use]
-    pub fn into_final_logits(self) -> MlxArray {
-        self.final_logits
-    }
-
     /// Returns every final decoder row before the trunk's final RMS normalization.
     #[must_use]
     pub fn pre_final_normalization_hidden_states(&self) -> &MlxArray {
@@ -85,6 +79,8 @@ impl Qwen3_5ForwardPositions<'_> {
     }
 }
 
+/// A Qwen3.5 text model's forward graph. A model supplies its decoder-layer
+/// loop; the default methods build every kind of forward around it.
 pub trait Qwen3_5TargetForwardGraph: Deref<Target = Qwen3_5ModelBase> {
     /// How a forward runs beyond its tokens: the streaming model's paged
     /// execution mode. The resident model runs every forward one way, so its
