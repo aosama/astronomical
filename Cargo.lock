@@ -1297,6 +1297,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "kokoro"
+version = "0.2.134"
+dependencies = [
+ "config",
+ "english-phonemes",
+ "memory-policy",
+ "mlx-bridge",
+ "model-primitives",
+ "runtime-integration",
+ "serde_json",
+ "serial_test",
+ "speech",
+ "speech-contract",
+ "tempfile",
+ "thiserror",
+ "tokenizers",
+]
+
+[[package]]
 name = "lazy_static"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1483,9 +1502,11 @@ dependencies = [
  "image",
  "image-generation",
  "ipc-protocol",
+ "kokoro",
  "lowercase-hex",
  "memory-policy",
  "model-primitives",
+ "phonon",
  "quantization",
  "qwen35",
  "runtime-integration",
@@ -1653,6 +1674,25 @@ name = "percent-encoding"
 version = "2.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
+
+[[package]]
+name = "phonon"
+version = "0.2.134"
+dependencies = [
+ "config",
+ "english-phonemes",
+ "memory-policy",
+ "mlx-bridge",
+ "model-primitives",
+ "runtime-integration",
+ "serde_json",
+ "serial_test",
+ "speech",
+ "speech-contract",
+ "tempfile",
+ "thiserror",
+ "tokenizers",
+]
 
 [[package]]
 name = "pin-project-lite"

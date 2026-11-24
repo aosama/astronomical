@@ -1,0 +1,50 @@
+[package]
+name = "phonon"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+# The test lanes this package runs in. `cargo xtask lane-cargo` builds each
+# lane's command from these declarations (issue #2473, Step 6), so no alias
+# lists packages by hand; an empty list says the package is in no lane.
+[package.metadata.astronomical]
+test-lanes = ["integration", "integration-and-rest", "nextest", "direct-mlx"]
+direct-mlx-lane-feature = "direct-mlx"
+
+[lints]
+workspace = true
+
+[features]
+default = []
+direct-mlx = ["speech/direct-mlx", "dep:runtime-integration", "dep:mlx-bridge", "dep:model-primitives", "model-primitives/direct-mlx", "dep:english-phonemes", "dep:config", "dep:tokenizers", "dep:serde_json", "dep:thiserror"]
+
+# The Phonon speech family: a causal flow language model with a Mimi decoder, reading tokens.
+# One crate per family (issue #2473, Step 7); the speech shell beside it holds
+# what every speech family shares. One-way edge: nothing here may depend on
+# model-serving.
+[dependencies]
+# The speech shell: the engine seam, layers and checkpoint reading every speech
+# family shares.
+speech = { path = "../speech" }
+# The speech request, failures and audio encoding every side shares.
+speech-contract = { path = "../../../contracts/speech-contract" }
+# The MLX memory telemetry each speech step reports.
+memory-policy = { path = "../../../foundation/memory-policy" }
+# The rest serve only the direct-MLX engines.
+config = { path = "../../../foundation/config", optional = true }
+english-phonemes = { path = "../../../foundation/english-phonemes", optional = true }
+model-primitives = { path = "../../../engine/model-primitives", optional = true }
+runtime-integration = { path = "../../../foundation/runtime-integration", features = ["mlx"], optional = true }
+mlx-bridge = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
+thiserror = { workspace = true, optional = true }
+tokenizers = { workspace = true, optional = true }
+
+[dev-dependencies]
+speech = { path = "../speech", features = ["test-support"] }
+# The GPU tests sample the process-global MLX allocator, so they serialize.
+serial_test.workspace = true
+tempfile = "=3.27.0"
