@@ -55,23 +55,23 @@ pub(crate) fn forced_unsupported_worker_kernel_capabilities()
     // Every family the Qwen3.5 loader consults is demoted with a distinct
     // unsupported reason so one serving request exercises each fallback
     // route.
-    use model_serving::{CustomKernelVerdict, CustomMetalKernelFamily};
+    use model_serving::CustomKernelVerdict;
     let forced_demotion_description = "forced demotion for the serving fallback journey";
     model_serving::WorkerKernelCapabilities::with_forced_verdicts_for_tests([
         (
-            CustomMetalKernelFamily::SORTED_EXPERT_WEIGHTED_SUM,
+            model_serving::kernel_capability::SORTED_EXPERT_WEIGHTED_SUM,
             CustomKernelVerdict::Unsupported(model_serving::KernelUnsupportedReason::Compilation {
                 description: forced_demotion_description.to_owned(),
             }),
         ),
         (
-            CustomMetalKernelFamily::GATED_DELTA_SEQUENCE,
+            model_serving::kernel_capability::GATED_DELTA_SEQUENCE,
             CustomKernelVerdict::Unsupported(model_serving::KernelUnsupportedReason::Execution {
                 description: forced_demotion_description.to_owned(),
             }),
         ),
         (
-            CustomMetalKernelFamily::GATED_DELTA_BOUNDARY_CHECKPOINT,
+            model_serving::kernel_capability::GATED_DELTA_BOUNDARY_CHECKPOINT,
             CustomKernelVerdict::Unsupported(
                 model_serving::KernelUnsupportedReason::OutputMismatch {
                     description: forced_demotion_description.to_owned(),

@@ -197,11 +197,9 @@ fn should_detect_a_artifact_validation_to_serving_dependency() {
     );
 }
 
-#[test]
-fn should_detect_an_engine_core_to_serving_dependency() {
-    // Every family implements the engine core's contract; an edge back to
-    // the serving crate would make the split circular.
-    let metadata_json_text = metadata_document_for(&[
+/// Every rule's crates, sound except for the engine core's own dependencies.
+fn workspace_metadata_with_engine_core_dependencies(engine_core_dependencies: Vec<&str>) -> String {
+    metadata_document_for(&[
         ("memory-policy", vec!["serde_json"], "normal"),
         ("mlx-bridge", Vec::new(), "normal"),
         ("mlx-c-fork", Vec::new(), "normal"),
@@ -213,15 +211,37 @@ fn should_detect_an_engine_core_to_serving_dependency() {
         ("qwen35", vec!["mlx-bridge"], "normal"),
         ("decision-models", vec!["mlx-bridge"], "normal"),
         ("quantization", Vec::new(), "normal"),
-        ("engine-core", vec!["model-serving"], "normal"),
+        ("engine-core", engine_core_dependencies, "normal"),
         ("model-serving", vec!["engine-core"], "normal"),
-    ]);
+    ])
+}
+
+#[test]
+fn should_detect_an_engine_core_to_serving_dependency() {
+    // Every family implements the engine core's contract; an edge back to
+    // the serving crate would make the split circular.
+    let metadata_json_text =
+        workspace_metadata_with_engine_core_dependencies(vec!["model-serving"]);
     let violations = architecture_violations(&metadata_json_text).unwrap();
     assert_eq!(violations.len(), 1);
     assert_eq!(violations[0].rule_name, "engine-core-without-serving");
     assert_eq!(
         violations[0].dependency_chain,
         vec!["engine-core", "model-serving"]
+    );
+}
+
+#[test]
+fn should_detect_an_engine_core_to_qwen35_family_dependency() {
+    // The engine core holds family-neutral machinery; an edge to the Qwen
+    // 3.5 family would let it name a family type again.
+    let metadata_json_text = workspace_metadata_with_engine_core_dependencies(vec!["qwen35"]);
+    let violations = architecture_violations(&metadata_json_text).unwrap();
+    assert_eq!(violations.len(), 1);
+    assert_eq!(violations[0].rule_name, "engine-core-without-qwen35-family");
+    assert_eq!(
+        violations[0].dependency_chain,
+        vec!["engine-core", "qwen35"]
     );
 }
 

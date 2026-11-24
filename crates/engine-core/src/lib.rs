@@ -18,6 +18,8 @@ pub mod expert_paging;
 
 pub mod inference_engine;
 
+pub mod kernel_capability_registry;
+
 pub mod memory;
 
 pub mod model_generation_processor;

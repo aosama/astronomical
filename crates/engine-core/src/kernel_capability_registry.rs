@@ -1,0 +1,281 @@
+//! Per-worker capability verdicts for Astronomical custom Metal kernels.
+//!
+//! A capable GPU keeps the measured custom-kernel fast path; a GPU that
+//! cannot compile or execute a kernel still serves the same request through
+//! the equivalent public MLX API. Verdicts are proven by compile plus a
+//! bounded execution probe with output validation — expected values, or bit
+//! equality with the MLX path a kernel replaces — never by a chip name — and are computed once per worker process, then reused by every
+//! model swap and REST request without re-probing.
+
+use std::collections::HashMap;
+#[cfg(feature = "direct-mlx")]
+use std::sync::OnceLock;
+
+use model_primitives::performance_attribution::{PerformanceAttribution, PerformanceOperation};
+
+#[cfg(test)]
+#[path = "kernel_capability_registry_tests.rs"]
+mod kernel_capability_registry_tests;
+
+/// Opaque identifier for one Astronomical custom Metal kernel family.
+///
+/// The identifier is deliberately family-agnostic: this module knows nothing
+/// about which families exist. Each family's own probe module defines its
+/// identifier as an associated constant and supplies its probes through one
+/// registration call at worker start, so adding a family kernel touches only
+/// that family's code. The wrapped string is the registry key verdicts are
+/// stored under and must be unique across families.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct CustomMetalKernelFamily(&'static str);
+
+impl CustomMetalKernelFamily {
+    /// Creates the opaque identifier for one custom kernel family.
+    #[must_use]
+    pub const fn new(family_registry_key: &'static str) -> Self {
+        Self(family_registry_key)
+    }
+
+    /// Returns the stable registry key of this family.
+    #[must_use]
+    pub const fn as_str(&self) -> &'static str {
+        self.0
+    }
+}
+
+impl std::fmt::Display for CustomMetalKernelFamily {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(self.0)
+    }
+}
+
+/// Why one custom kernel family cannot run on this GPU.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum KernelUnsupportedReason {
+    /// The kernel source failed to compile on this device.
+    Compilation { description: String },
+    /// The bounded representative launch failed to execute.
+    Execution { description: String },
+    /// The launch executed but produced values that fail expected-value
+    /// validation; a silently dropped dispatch returning zeros is a known
+    /// historical failure signature on this platform.
+    OutputMismatch { description: String },
+    /// The family was never probed in this worker process. Fail closed.
+    Unprobed,
+}
+
+/// The capability verdict for one custom kernel family.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum CustomKernelVerdict {
+    /// The probe passed; production dispatch may use the custom kernel.
+    Supported,
+    /// The probe failed or was never run; production dispatch must use the
+    /// equivalent public MLX API for the rest of the worker process.
+    Unsupported(KernelUnsupportedReason),
+}
+
+/// A bounded capability probe for one custom kernel family.
+///
+/// Implementations compile the kernel and execute a representative launch on
+/// minimal inputs, validating the output against fixed deterministic expected
+/// values or, for a kernel that must be bit for bit equal to the path it
+/// replaces, against that path's output on the same inputs. The runtime binding lives inside each implementation so unit
+/// tests can drive the capability owner with fake probes.
+pub trait CustomMetalKernelProbe {
+    fn family(&self) -> CustomMetalKernelFamily;
+
+    /// Runs the bounded probe; `Ok(())` proves this GPU can run the kernel.
+    fn probe(&self) -> Result<(), KernelCapabilityError>;
+}
+
+/// The failure evidence a probe reports.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum KernelCapabilityError {
+    Compilation { description: String },
+    Execution { description: String },
+    OutputMismatch { description: String },
+}
+
+/// Validates probe output values against fixed expected values with the same
+/// relative tolerance the direct-MLX contracts use. Deliberately rejects the
+/// all-zeros signature of a silently dropped dispatch.
+pub fn validate_probe_outputs(
+    actual_output_values: &[f32],
+    expected_output_values: &[f32],
+) -> Result<(), KernelCapabilityError> {
+    if actual_output_values.len() != expected_output_values.len() {
+        return Err(KernelCapabilityError::OutputMismatch {
+            description: format!(
+                "probe produced {} output values but {} were expected",
+                actual_output_values.len(),
+                expected_output_values.len()
+            ),
+        });
+    }
+    for (value_index, (actual_value, expected_value)) in actual_output_values
+        .iter()
+        .zip(expected_output_values.iter())
+        .enumerate()
+    {
+        let comparison_scale = expected_value.abs().max(1.0);
+        if (actual_value - expected_value).abs() > 1e-5 * comparison_scale {
+            return Err(KernelCapabilityError::OutputMismatch {
+                description: format!(
+                    "probe output value {value_index} read {actual_value:.6} but expected {expected_value:.6}"
+                ),
+            });
+        }
+    }
+    Ok(())
+}
+
+/// The retained capability verdicts for one worker process.
+///
+/// Verdicts are computed once at construction — at first model load, when the
+/// worker already holds its runtime — and reused by every subsequent request
+/// and model swap. Verdicts are never persisted to disk: an operating-system
+/// update can change what compiles and runs, so a verdict stored on disk is a staleness
+/// hazard for a probe cost measured in milliseconds.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct WorkerKernelCapabilities {
+    verdicts: HashMap<CustomMetalKernelFamily, CustomKernelVerdict>,
+}
+
+impl WorkerKernelCapabilities {
+    /// Probes every provided family exactly once and retains the verdicts.
+    ///
+    /// Each probe runs under one attribution operation so the probe cost on
+    /// the model-load critical path is measurable.
+    pub fn probe_custom_kernels(
+        probes: &[&dyn CustomMetalKernelProbe],
+        performance_attribution: &mut PerformanceAttribution,
+    ) -> Self {
+        let mut verdicts = HashMap::with_capacity(probes.len());
+        for probe in probes {
+            let verdict = performance_attribution.measure_operation(
+                PerformanceOperation::CustomKernelCapabilityProbe,
+                |_| match probe.probe() {
+                    Ok(()) => CustomKernelVerdict::Supported,
+                    Err(error) => CustomKernelVerdict::Unsupported(match error {
+                        KernelCapabilityError::Compilation { description } => {
+                            KernelUnsupportedReason::Compilation { description }
+                        }
+                        KernelCapabilityError::Execution { description } => {
+                            KernelUnsupportedReason::Execution { description }
+                        }
+                        KernelCapabilityError::OutputMismatch { description } => {
+                            KernelUnsupportedReason::OutputMismatch { description }
+                        }
+                    }),
+                },
+            );
+            // A colliding registry key would silently let one family's
+            // verdict stand in for another's — a fail-open outcome that
+            // defeats the fail-closed rule — so registration refuses it.
+            if verdicts.insert(probe.family(), verdict).is_some() {
+                panic!(
+                    "duplicate custom kernel family registry key: {}",
+                    probe.family()
+                );
+            }
+        }
+        Self { verdicts }
+    }
+
+    /// Returns the retained verdict for one family; unprobed families fail
+    /// closed.
+    #[must_use]
+    pub fn verdict(&self, family: CustomMetalKernelFamily) -> CustomKernelVerdict {
+        self.verdicts
+            .get(&family)
+            .cloned()
+            .unwrap_or(CustomKernelVerdict::Unsupported(
+                KernelUnsupportedReason::Unprobed,
+            ))
+    }
+
+    /// Returns whether production dispatch may use the custom kernel.
+    #[must_use]
+    pub fn is_custom_kernel_supported(&self, family: CustomMetalKernelFamily) -> bool {
+        self.verdict(family) == CustomKernelVerdict::Supported
+    }
+
+    /// Builds an owner from explicit verdicts. CI hardware cannot make a real
+    /// kernel fail, so unit and direct-MLX journeys force verdicts through
+    /// this documented test-only constructor; production must never call it.
+    #[doc(hidden)]
+    pub fn with_forced_verdicts_for_tests(
+        forced_verdicts: impl IntoIterator<Item = (CustomMetalKernelFamily, CustomKernelVerdict)>,
+    ) -> Self {
+        let mut verdict_map = HashMap::new();
+        for (family, verdict) in forced_verdicts {
+            if verdict_map.insert(family, verdict).is_some() {
+                panic!("duplicate forced custom kernel family registry key: {family}");
+            }
+        }
+        Self {
+            verdicts: verdict_map,
+        }
+    }
+}
+
+/// Test-only installation point for forced worker verdicts.
+///
+/// CI hardware cannot make a real kernel fail, so a serving journey seeds the
+/// worker-process verdicts before constructing an engine; the production
+/// consultation path then observes the forced verdicts through the same
+/// `OnceLock` it always uses. Production code must never call this. The
+/// process-global seed means one journey per test process, which matches the
+/// bounded serial execution rule for real-model journeys.
+#[cfg(feature = "direct-mlx")]
+#[doc(hidden)]
+pub fn install_forced_worker_verdicts_for_tests(forced_verdicts: WorkerKernelCapabilities) {
+    if FORCED_WORKER_VERDICTS_FOR_TESTS
+        .set(forced_verdicts)
+        .is_err()
+    {
+        panic!(
+            "forced worker kernel verdicts were already installed for this process; \
+             each serving journey must run in its own process"
+        );
+    }
+}
+
+#[cfg(feature = "direct-mlx")]
+static FORCED_WORKER_VERDICTS_FOR_TESTS: OnceLock<WorkerKernelCapabilities> = OnceLock::new();
+
+/// Returns the retained kernel-capability verdicts for this worker process.
+///
+/// Verdicts depend only on the GPU and operating system, so the first model
+/// load probes every available family once and every later load in the same
+/// process — including model hot-swaps — reuses the retained result. The
+/// inference worker is one process per machine session, so a process-global
+/// owner is the exact once-per-worker lifetime the issue requires; the
+/// daemon never links model-serving. Families without an implemented
+/// probe stay unprobed and fail closed until their milestone lands.
+///
+/// `family_probes` lists every family's probes; forced verdicts installed
+/// for a test take their place.
+#[cfg(feature = "direct-mlx")]
+pub fn worker_process_kernel_capabilities(
+    runtime: &runtime_integration::MlxRuntime,
+    family_probes: for<'runtime> fn(
+        &'runtime runtime_integration::MlxRuntime,
+    ) -> Vec<Box<dyn CustomMetalKernelProbe + 'runtime>>,
+    performance_attribution: &mut PerformanceAttribution,
+) -> &'static WorkerKernelCapabilities {
+    static WORKER_PROCESS_KERNEL_CAPABILITIES: OnceLock<WorkerKernelCapabilities> = OnceLock::new();
+    WORKER_PROCESS_KERNEL_CAPABILITIES.get_or_init(|| {
+        if let Some(forced_verdicts) = FORCED_WORKER_VERDICTS_FOR_TESTS.get() {
+            return forced_verdicts.clone();
+        }
+        let worker_family_probes = family_probes(runtime);
+        let family_probe_references: Vec<&dyn CustomMetalKernelProbe> = worker_family_probes
+            .iter()
+            .map(|probe| probe.as_ref())
+            .collect();
+        WorkerKernelCapabilities::probe_custom_kernels(
+            &family_probe_references,
+            performance_attribution,
+        )
+    })
+}

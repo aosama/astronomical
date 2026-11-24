@@ -95,6 +95,16 @@ const FORBIDDEN_DEPENDENCY_RULES: &[ForbiddenDependencyRule] = &[
         forbidden_crate: "model-serving",
         rationale: "the engine core must build and test without pulling in the serving crate, because every model family builds on it",
     },
+    // Family-neutral machinery moves out of the Qwen 3.5 family into the
+    // engine core (issue #2473, Step 3), starting with the custom kernel
+    // capability registry. An edge from the engine core back to the family
+    // would let that machinery name a family type again.
+    ForbiddenDependencyRule {
+        rule_name: "engine-core-without-qwen35-family",
+        source_crate: "engine-core",
+        forbidden_crate: "qwen35",
+        rationale: "the engine core holds machinery every model family shares, so it must build without any family crate; a family supplies its parts through the engine core's traits",
+    },
     // The Qwen 3.5 family sits under the decision models and the serving
     // crate's worker; an edge back would make the split circular.
     ForbiddenDependencyRule {

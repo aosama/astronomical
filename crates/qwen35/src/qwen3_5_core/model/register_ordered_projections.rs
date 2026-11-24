@@ -12,7 +12,7 @@ use mlx_bridge::MlxArray;
 
 use super::Qwen3_5ModelBase;
 use super::base::Qwen3_5LinearWeights;
-use crate::kernel_capability::{CustomMetalKernelFamily, worker_process_kernel_capabilities};
+use crate::kernel_capability::worker_process_kernel_capabilities;
 use crate::performance_attribution::PerformanceAttribution;
 use crate::qwen3_5_core::model_math::decoder_layer_weights::{
     Qwen3_5AffineWeights, Qwen3_5AttentionWeights, Qwen3_5DecoderFeedForwardWeights,
@@ -45,7 +45,7 @@ impl Qwen3_5ModelBase {
     ) -> Result<Option<usize>, Qwen3_5ExecutionError> {
         let capabilities =
             worker_process_kernel_capabilities(&self.runtime, performance_attribution);
-        if !capabilities.is_custom_kernel_supported(CustomMetalKernelFamily::ROW_BATCHED_MATMUL) {
+        if !capabilities.is_custom_kernel_supported(crate::kernel_capability::ROW_BATCHED_MATMUL) {
             return Ok(None);
         }
         let kernels = RowBatchedMatmulKernels::declare()?;
