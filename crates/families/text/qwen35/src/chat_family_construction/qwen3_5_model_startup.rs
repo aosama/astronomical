@@ -2,18 +2,10 @@
 //! artifacts, derive the RAM geometry and the complete-residency decision,
 //! build the tokenizer and processor, and select and initialize the engine.
 
-use model_serving::Qwen3_5MlxEngineConstructors;
+use crate::Qwen3_5MlxEngineConstructors;
 use std::path::PathBuf;
 
-use config::{
-    AstroSsdPromptCacheConfig, astro_neural_engine_program_cache_directory_for_model,
-    model_weights_fingerprint, remove_other_weights_of_model,
-};
-use ipc_protocol::{
-    WorkerChunkingConfiguration, WorkerDecodeAstroExpertCachePolicy,
-    WorkerDiagnosticQwen3_5EngineOverride,
-};
-use model_serving::{
+use crate::{
     AstroSsdPromptCacheDiskStoreConfig, CompleteResidencyRequirements, EnginePlacement,
     ModelFamilyInferenceEngine, ModelLoadingPerformanceAttributionMetadata, PerformanceAttribution,
     PerformanceAttributionLog, PerformanceAttributionOutcome, PerformanceOperation,
@@ -22,18 +14,17 @@ use model_serving::{
     Qwen3_5StreamingEngine, ResidentEngineSettings, StreamingEngineSettings,
     ValidatedQwen3_5Artifact, boxed_chat_engine, model_memory_geometry_from_validated_artifact,
 };
+use ipc_protocol::{
+    WorkerAutoregressiveModelConfiguration, WorkerChunkingConfiguration,
+    WorkerDecodeAstroExpertCachePolicy, WorkerDiagnosticQwen3_5EngineOverride,
+};
 
 use super::qwen3_5_model_startup_error::Qwen3_5ModelStartupError;
-
-#[derive(Clone, Copy)]
-pub(crate) enum Qwen3_5EngineSelection {
-    /// Startup selection from the complete-residency fit. A diagnostic
-    /// journey may force the engine family; the computed placement is kept
-    /// either way so the worker lifecycle stays identical to production.
-    Automatic(WorkerDiagnosticQwen3_5EngineOverride),
-    StreamingRetry,
-    ResidentPromotion,
-}
+use super::qwen3_5_startup_storage::{
+    astro_ssd_prompt_cache_disk_store_config, model_astro_neural_engine_program_cache_directory,
+    open_model_loading_attribution,
+};
+use super::{ChatEngineSelection, ChatFamilySettings, ChatRuntimeParts};
 
 #[derive(Clone, Copy, Debug)]
 enum Qwen3_5SelectedEngine {
@@ -41,65 +32,35 @@ enum Qwen3_5SelectedEngine {
     Streaming,
 }
 
-/// `None` keeps nothing between loads, which also covers weights that cannot be
-/// identified: rebuilding is slow, and reusing another model's programs would be wrong.
-fn model_astro_neural_engine_program_cache_directory(
-    neural_engine_program_directory: Option<&std::path::Path>,
-    model_directory: &std::path::Path,
-    model_id: &str,
-    model_revision: &str,
-) -> Option<PathBuf> {
-    let program_directory = neural_engine_program_directory?;
-    let model_program_directory = astro_neural_engine_program_cache_directory_for_model(
-        program_directory,
-        model_id,
-        model_revision,
-        &model_weights_fingerprint(model_directory)?,
-    );
-    remove_other_weights_of_model(program_directory, model_id, &model_program_directory);
-    Some(model_program_directory)
-}
-
-#[allow(clippy::too_many_arguments)]
-pub(crate) fn initialize_qwen3_5_model(
+/// Validates the folder, selects and starts the engine, and builds the
+/// processor, from the worker's chat settings and the model's policy.
+pub(super) fn initialize_qwen3_5_model(
     model_directory_path: PathBuf,
-    active_memory_limit_bytes: usize,
-    mlx_buffer_cache_limit_bytes: usize,
-    astro_ssd_prompt_cache_config: AstroSsdPromptCacheConfig,
-    neural_engine_program_directory: Option<PathBuf>,
-    requested_model_id: String,
-    maximum_context_tokens: u32,
-    max_output_tokens: u32,
-    astro_ssd_prompt_cache_enabled: bool,
-    performance_attribution_enabled: bool,
-    decode_astro_expert_cache_policy: WorkerDecodeAstroExpertCachePolicy,
-    performance_attribution_log_path: PathBuf,
-    chunking: WorkerChunkingConfiguration,
-
-    engine_selection: Qwen3_5EngineSelection,
-) -> Result<
-    (
-        Qwen3_5GenerationProcessor,
-        ModelFamilyInferenceEngine,
-        Option<EnginePlacement>,
-    ),
-    Qwen3_5ModelStartupError,
-> {
-    let model_loading_performance_attribution = if performance_attribution_enabled {
-        PerformanceAttribution::enabled()
-    } else {
-        PerformanceAttribution::disabled()
-    };
-    let mut performance_attribution_log = PerformanceAttributionLog::open(
-        &performance_attribution_log_path,
+    chat_family_settings: ChatFamilySettings,
+    model_configuration: WorkerAutoregressiveModelConfiguration,
+    engine_selection: ChatEngineSelection,
+) -> Result<ChatRuntimeParts, Qwen3_5ModelStartupError> {
+    let ChatFamilySettings {
+        effective_mlx_memory_ceiling_bytes: active_memory_limit_bytes,
+        mlx_buffer_cache_limit_bytes,
+        astro_ssd_prompt_cache_config,
+        neural_engine_program_directory,
         performance_attribution_enabled,
-    )
-    .map_err(
-        |source| Qwen3_5ModelStartupError::OpenPerformanceAttributionLog {
-            log_path: performance_attribution_log_path.clone(),
-            source,
-        },
-    )?;
+        decode_astro_expert_cache_policy,
+        performance_attribution_log_path,
+        astro_ssd_prompt_cache_enabled,
+    } = chat_family_settings;
+    let WorkerAutoregressiveModelConfiguration {
+        model_id: requested_model_id,
+        maximum_context_tokens,
+        maximum_output_tokens: max_output_tokens,
+        chunking,
+    } = model_configuration;
+    let (model_loading_performance_attribution, mut performance_attribution_log) =
+        open_model_loading_attribution(
+            performance_attribution_enabled,
+            &performance_attribution_log_path,
+        )?;
     let (validated_artifact, model_loading_performance_attribution) = validate_startup_artifact(
         model_loading_performance_attribution,
         &mut performance_attribution_log,
@@ -140,24 +101,12 @@ pub(crate) fn initialize_qwen3_5_model(
     let think_end_token_id = generation_processor.think_end_token_id();
     let model_id = validated_artifact.model_id().to_owned();
     let model_revision = validated_artifact.revision().to_owned();
-    // Derive the model-specific path only when the user enabled the
-    // `astro_ssd_prompt_cache`. This keeps disabled operation from touching model/revision
-    // astro SSD prompt cache identity, opening directories, scanning files, or reserving publication
-    // workspace later in model loading.
-    let astro_ssd_prompt_cache_disk_store_config = astro_ssd_prompt_cache_enabled.then(|| {
-        let per_model_astro_ssd_prompt_cache_config =
-            astro_ssd_prompt_cache_config.for_model(&model_id, &model_revision);
-        AstroSsdPromptCacheDiskStoreConfig::new(
-            per_model_astro_ssd_prompt_cache_config
-                .active_model_astro_ssd_prompt_cache_directory()
-                .clone(),
-            per_model_astro_ssd_prompt_cache_config
-                .global_astro_ssd_prompt_cache_root_directory()
-                .clone(),
-            per_model_astro_ssd_prompt_cache_config
-                .global_astro_ssd_prompt_cache_maximum_size_bytes(),
-        )
-    });
+    let astro_ssd_prompt_cache_disk_store_config = astro_ssd_prompt_cache_disk_store_config(
+        astro_ssd_prompt_cache_enabled,
+        &astro_ssd_prompt_cache_config,
+        &model_id,
+        &model_revision,
+    );
     let astro_neural_engine_program_cache_directory =
         model_astro_neural_engine_program_cache_directory(
             neural_engine_program_directory.as_deref(),
@@ -184,7 +133,11 @@ pub(crate) fn initialize_qwen3_5_model(
         artifact_payload_bytes,
         artifact_shard_count,
     )?;
-    Ok((generation_processor, qwen3_5_engine, engine_placement))
+    Ok(ChatRuntimeParts {
+        generation_processor,
+        inference_engine: qwen3_5_engine,
+        engine_placement,
+    })
 }
 
 /// Constructs whichever engine the startup selection chose, mapping an
@@ -300,7 +253,7 @@ fn select_startup_engine(
     validated_artifact: &ValidatedQwen3_5Artifact,
     model_directory_path: &std::path::Path,
     active_memory_limit_bytes: usize,
-    engine_selection: Qwen3_5EngineSelection,
+    engine_selection: ChatEngineSelection,
     artifact_model_id: &str,
     artifact_model_revision: &str,
     artifact_payload_bytes: u64,
@@ -313,7 +266,7 @@ fn select_startup_engine(
     Qwen3_5ModelStartupError,
 > {
     match engine_selection {
-        Qwen3_5EngineSelection::Automatic(diagnostic_engine_override) => {
+        ChatEngineSelection::Automatic(diagnostic_engine_override) => {
             match model_loading_performance_attribution.measure_operation(
                 PerformanceOperation::ArtifactMemoryGeometry,
                 |_performance_attribution| {
@@ -353,11 +306,11 @@ fn select_startup_engine(
                 }
             }
         }
-        Qwen3_5EngineSelection::StreamingRetry => Ok((
+        ChatEngineSelection::StreamingRetry => Ok((
             (Qwen3_5SelectedEngine::Streaming, None),
             model_loading_performance_attribution,
         )),
-        Qwen3_5EngineSelection::ResidentPromotion => Ok((
+        ChatEngineSelection::ResidentPromotion => Ok((
             (Qwen3_5SelectedEngine::Resident, None),
             model_loading_performance_attribution,
         )),
@@ -569,7 +522,7 @@ fn apply_diagnostic_engine_override(
 }
 
 fn select_qwen3_5_engine_from_artifact(
-    validated_artifact: &model_serving::ValidatedQwen3_5Artifact,
+    validated_artifact: &crate::ValidatedQwen3_5Artifact,
     model_directory_path: &std::path::Path,
     active_memory_limit_bytes: usize,
 ) -> Result<(Qwen3_5SelectedEngine, EnginePlacement), Qwen3_5ModelStartupError> {

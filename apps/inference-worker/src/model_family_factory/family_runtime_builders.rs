@@ -3,11 +3,10 @@
 //! The factory looks a classified family up here instead of matching on it.
 //! The table is the family list itself (`model_families.list` in the
 //! registry crate), so a family has one line for discovery and the worker.
-//! Decision and speech families are built by kind from the family's own
-//! type, so a new family of those kinds adds one line to the table and no
-//! code here; chat, image and embedding families still have a builder each. Each builder
-//! takes its own kind of configuration, and a family sent another kind's
-//! policy is refused before any builder runs.
+//! Every family is built by kind from the family's own type, so a new family
+//! adds one line to the table and no code here. Each builder takes its own
+//! kind of configuration, and a family sent another kind's policy is refused
+//! before any builder runs.
 
 use std::future::Future;
 use std::path::PathBuf;
@@ -20,7 +19,10 @@ use ipc_protocol::{
     WorkerModelConfiguration, WorkerSpeechModelConfiguration,
 };
 use model_serving::decision_models::decision_engine_shell::{DecisionEngineShell, DecisionFamily};
-use model_serving::{EmbeddingFamilyConstruction, ImageFamilyConstruction};
+use model_serving::{
+    ChatEngineSelection, ChatFamilyConstruction, ChatRuntimeParts, EmbeddingFamilyConstruction,
+    ImageFamilyConstruction,
+};
 use model_serving::{ModelFactoryRuntime, SpeechEngine, SpeechEngineShell, SpeechFamily};
 
 use super::configured_family_check::FAMILY_MISMATCH_REASON;
@@ -30,15 +32,21 @@ use super::{ModelFamilyFactory, ModelFamilyRuntime};
 pub(super) type RuntimeFuture<'factory> =
     Pin<Box<dyn Future<Output = Result<ModelFamilyRuntime, String>> + Send + 'factory>>;
 
+/// A chat builder's runtime parts, borrowing the factory's settings.
+pub(super) type ChatRuntimeFuture<'factory> =
+    Pin<Box<dyn Future<Output = Result<ChatRuntimeParts, String>> + Send + 'factory>>;
+
+/// A chat family's builder, for startup and for the worker's engine swaps.
+pub(super) type ChatRuntimeBuilder = for<'factory> fn(
+    &'factory ModelFamilyFactory,
+    PathBuf,
+    WorkerAutoregressiveModelConfiguration,
+    ChatEngineSelection,
+) -> ChatRuntimeFuture<'factory>;
+
 /// One family's builder, typed by the kind of configuration it takes.
 pub(super) enum FamilyRuntimeBuilder {
-    Chat(
-        for<'factory> fn(
-            &'factory ModelFamilyFactory,
-            PathBuf,
-            WorkerAutoregressiveModelConfiguration,
-        ) -> RuntimeFuture<'factory>,
-    ),
+    Chat(ChatRuntimeBuilder),
     ImageGeneration(
         for<'factory> fn(
             &'factory ModelFamilyFactory,
@@ -85,6 +93,15 @@ macro_rules! model_family {
 static FAMILY_RUNTIME_BUILDERS: &[(ModelFamily, FamilyRuntimeBuilder)] =
     &include!("../../../../crates/families/registry/model-family-registry/src/model_families.list");
 
+/// The chat builder of `model_family`, if it is a chat family the worker
+/// serves; the worker's engine swaps rebuild a chat runtime through it.
+pub(super) fn chat_runtime_builder(model_family: ModelFamily) -> Option<ChatRuntimeBuilder> {
+    match family_runtime_builder(model_family)? {
+        FamilyRuntimeBuilder::Chat(build_chat_runtime) => Some(*build_chat_runtime),
+        _ => None,
+    }
+}
+
 /// The builder the worker serves `model_family` with, if it serves it.
 pub(super) fn family_runtime_builder(
     model_family: ModelFamily,
@@ -105,7 +122,8 @@ impl FamilyRuntimeBuilder {
     ) -> Result<ModelFamilyRuntime, String> {
         match (self, model_configuration) {
             (Self::Chat(build), WorkerModelConfiguration::Autoregressive(chat_configuration)) => {
-                build(
+                build_chat_startup_runtime(
+                    *build,
                     model_family_factory,
                     model_directory_path,
                     chat_configuration,
@@ -149,26 +167,41 @@ impl FamilyRuntimeBuilder {
     }
 }
 
-fn build_qwen3_5_runtime(
+/// A chat family's runtime at startup, selected by the complete-residency
+/// fit unless a diagnostic journey forces the engine; the placement it was
+/// selected under travels with it.
+async fn build_chat_startup_runtime(
+    build_chat_runtime: ChatRuntimeBuilder,
     model_family_factory: &ModelFamilyFactory,
     model_directory_path: PathBuf,
     chat_configuration: WorkerAutoregressiveModelConfiguration,
-) -> RuntimeFuture<'_> {
-    Box::pin(
-        model_family_factory
-            .create_qwen3_5_autoregressive_runtime(model_directory_path, chat_configuration),
+) -> Result<ModelFamilyRuntime, String> {
+    let chat_runtime_parts = build_chat_runtime(
+        model_family_factory,
+        model_directory_path,
+        chat_configuration,
+        ChatEngineSelection::Automatic(model_family_factory.diagnostic_qwen3_5_engine_override),
     )
+    .await?;
+    Ok(ModelFactoryRuntime::Autoregressive {
+        processor: chat_runtime_parts.generation_processor,
+        engine: chat_runtime_parts.inference_engine,
+        engine_placement: chat_runtime_parts.engine_placement,
+    })
 }
 
-fn build_prism_hadamard_qwen35_runtime(
+/// Every chat family: its own startup, on a blocking task.
+fn build_chat_runtime<Family: ChatFamilyConstruction + 'static>(
     model_family_factory: &ModelFamilyFactory,
     model_directory_path: PathBuf,
     chat_configuration: WorkerAutoregressiveModelConfiguration,
-) -> RuntimeFuture<'_> {
-    Box::pin(
-        model_family_factory
-            .create_prism_hadamard_autoregressive_runtime(model_directory_path, chat_configuration),
-    )
+    engine_selection: ChatEngineSelection,
+) -> ChatRuntimeFuture<'_> {
+    Box::pin(model_family_factory.create_chat_runtime_parts::<Family>(
+        model_directory_path,
+        chat_configuration,
+        engine_selection,
+    ))
 }
 
 /// Every image family: its own folder check, then its engine.

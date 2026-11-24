@@ -1,18 +1,15 @@
-//! Failure vocabulary for the Qwen3.5 startup pipeline. Family-owned detail is
-//! bounded at the worker boundary through
-//! `worker_startup::error::bound_public_model_load_failure_reason` before it
-//! reaches daemon-facing diagnostics.
+//! Failure vocabulary for the Qwen3.5 startup pipeline. The public reason
+//! carries no local paths; the worker bounds its length at its own boundary
+//! before it reaches daemon-facing diagnostics.
 
 use std::io;
 use std::path::PathBuf;
 
-use model_serving::{
+use crate::{
     ExpertMemoryAdmissionError, InferenceEngineError, Qwen3_5ArtifactValidationError,
     Qwen3_5MemoryGeometryError, Qwen3_5PromptProcessingChunkSizerError, Qwen3_5TokenizerError,
 };
 use thiserror::Error;
-
-use crate::worker_startup::error;
 
 /// Failure produced while constructing the Qwen family processor and engine.
 #[derive(Debug, Error)]
@@ -62,10 +59,11 @@ pub enum Qwen3_5ModelStartupError {
 }
 
 impl Qwen3_5ModelStartupError {
-    /// Describes a Qwen model-load failure with safe detail but no local paths.
+    /// Describes a Qwen model-load failure with safe detail but no local
+    /// paths. The worker bounds its length.
     #[must_use]
     pub fn public_model_load_failure_reason(&self) -> String {
-        let unbounded_public_model_load_failure_reason = match self {
+        match self {
             Self::ArtifactValidation { source, .. } => source.public_failure_reason(),
             Self::ArtifactRamGeometry { .. } | Self::TextWeightPayloadUnreadable { .. } => {
                 ipc_protocol::MEMORY_GEOMETRY_FAILED_REASON.to_owned()
@@ -86,7 +84,6 @@ impl Qwen3_5ModelStartupError {
             Self::ResidentPromptProcessingChunkSizing(_) => {
                 "model initialization failed".to_owned()
             }
-        };
-        error::bound_public_model_load_failure_reason(unbounded_public_model_load_failure_reason)
+        }
     }
 }

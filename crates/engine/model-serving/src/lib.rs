@@ -19,8 +19,6 @@ pub(crate) use ::artifact_validation;
 
 mod engine_backed_worker;
 
-mod model_family_runtime;
-
 // Speech lives in its own crates (issue #2340, #2473); the alias keeps each
 // `crate::speech_engine` path in this crate resolving.
 pub(crate) use ::speech::speech_engine;
@@ -87,8 +85,6 @@ pub use engine_backed_worker::{
 };
 
 #[cfg(feature = "direct-mlx")]
-pub use model_family_runtime::{ModelFamilyInferenceEngine, boxed_chat_engine};
-
 #[cfg(feature = "direct-mlx")]
 pub use kokoro::{KokoroSpeechEngine, KokoroSpeechFamily, KokoroSpeechTrace, KokoroSpeechTracing};
 
