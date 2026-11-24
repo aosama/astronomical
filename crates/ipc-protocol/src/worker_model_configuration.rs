@@ -41,6 +41,10 @@ pub enum WorkerImageGenerationModelFamily {
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum WorkerEmbeddingModelFamily {
+    /// Spelt as the catalog, the family label and the menu app spell it;
+    /// snake case would make it `modern_bert`, which the menu app's status
+    /// decoder refuses.
+    #[serde(rename = "modernbert")]
     ModernBert,
 }
 
