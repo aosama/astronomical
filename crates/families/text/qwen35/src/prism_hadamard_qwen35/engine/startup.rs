@@ -214,7 +214,7 @@ fn astro_ssd_prompt_cache_disk_store_config_for(
 /// The configured block token count is none unless the operator set it, and
 /// the common-prefix stride is floored at one block so checkpointing always
 /// has a stride.
-fn pending_load_for(
+pub(super) fn pending_load_for(
     serving_settings: &PrismHadamardQwen35ServingSettings,
     effective_mlx_memory_ceiling_bytes: usize,
     mlx_buffer_cache_limit_bytes: usize,
@@ -235,7 +235,7 @@ fn pending_load_for(
 
 /// The prefill chunk size, floored at one token as the folded-ternary
 /// engine has always floored it, so the sizer never refuses it.
-fn prompt_processing_chunk_sizer_for(
+pub(super) fn prompt_processing_chunk_sizer_for(
     serving_settings: &PrismHadamardQwen35ServingSettings,
 ) -> Result<Qwen3_5PromptProcessingChunkSizer, PrismHadamardQwen35StartupError> {
     Qwen3_5PromptProcessingChunkSizer::for_chunk_size_tokens(

@@ -8,6 +8,8 @@
 
 mod astro_ssd_prompt_cache;
 mod execution;
+#[cfg(test)]
+mod fixture_engine_test_support;
 mod startup;
 
 pub use execution::{

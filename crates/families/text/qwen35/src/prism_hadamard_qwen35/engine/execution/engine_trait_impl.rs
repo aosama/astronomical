@@ -1,31 +1,15 @@
 //! The `MlxInferenceExecution` engine implementation for the owner-thread
-//! folded-ternary execution: load, chunked prefill, decode, correction
-//! injection, and live memory-limit adjustment. Split from the execution
-//! state vocabulary in the parent so each file stays inside the source-size
-//! budget; as a child module it reaches the parent's private fields directly.
-
-use std::time::Instant;
+//! folded-ternary execution: load, start, decode through the shared Qwen 3.5
+//! decode step, correction injection, cancellation, and live memory-limit
+//! adjustment. Split from the execution state vocabulary in the parent so
+//! each file stays inside the source-size budget; as a child module it
+//! reaches the parent's private fields directly.
 
 use ipc_protocol::{ExpertMemoryMode, RequestId};
 use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
-use mlx_bridge::MlxArray;
-
 use super::active_generation::{PrismRequestStart, prism_active_generation};
-use super::{
-    PrismHadamardQwen35ActiveGeneration, PrismHadamardQwen35InferenceExecution,
-    PrismHadamardQwen35PendingLoad,
-    prefill_chunk::{
-        capture_completed_prefill_astro_ssd_prompt_cache_block,
-        forward_prefill_chunk_hidden_states, prefill_chunk_length, prefill_progress_token,
-        queue_prefill_first_token, submit_prefill_state_evaluation,
-    },
-    record_emitted_token,
-    sampling::{
-        record_penalized_token_id, sample_token, successor_may_be_speculated, synchronize_token_id,
-    },
-    successor_stays_pending,
-};
+use super::{PrismHadamardQwen35InferenceExecution, PrismHadamardQwen35PendingLoad};
 use crate::EngineGenerationStart;
 use crate::GeneratedToken;
 use crate::GenerationFinalization;
@@ -33,12 +17,14 @@ use crate::InferenceEngineError;
 use crate::MlxInferenceExecution;
 use crate::MlxMemoryLimitAdjustment;
 use crate::MlxMemoryTelemetry;
+use crate::PerformanceAttributionOutcome;
 use crate::PerformanceOperation;
 use crate::Qwen3_5ThinkingBudgetState;
+use crate::RequestDecoderStateStack;
 use crate::inference_engine::load_result::EngineLoadResult;
-use crate::prism_hadamard_qwen35::model::{
-    PrismHadamardTextModel, request_decoder_state_evaluation_arrays,
-};
+use crate::prism_hadamard_qwen35::model::PrismHadamardTextModel;
+use crate::qwen3_5_core::shared_execution::decode_step::advance_generation;
+use crate::qwen3_5_core::shared_execution::generation_finalization_steps::Qwen3_5FinalizationHooks;
 use crate::sampling_seed;
 use crate::sampling_seed::current_time_millis_since_unix_epoch;
 use ipc_protocol::WorkerEvent;
@@ -185,113 +171,13 @@ impl MlxInferenceExecution for PrismHadamardQwen35InferenceExecution {
         ))
     }
 
+    /// Runs one step of the active request through the shared Qwen 3.5
+    /// decode step: a prompt chunk while any remains, then one reply token.
     fn decode_next_token(
         &mut self,
         request_id: RequestId,
     ) -> Result<GeneratedToken, InferenceEngineError> {
-        let prompt_processing_chunk_tokens = self.prompt_processing_chunk_tokens();
-        let has_remaining_prompt =
-            self.execution_core
-                .active_request
-                .as_ref()
-                .is_some_and(|active_generation| {
-                    !active_generation
-                        .engine_extension
-                        .remaining_prompt_token_ids
-                        .is_empty()
-                });
-        if has_remaining_prompt {
-            return self.prefill_next_chunk(request_id, prompt_processing_chunk_tokens);
-        }
-        let model =
-            self.execution_core
-                .model
-                .as_ref()
-                .ok_or_else(|| InferenceEngineError::Fatal {
-                    reason: "folded-ternary model is not loaded".to_owned(),
-                })?;
-        // Sampled before the active-generation borrow; the one-step-old read
-        // still moves with real decode work and keeps the status surface live.
-        let mlx_memory_telemetry = self.collect_current_mlx_memory_telemetry();
-        let active = self.execution_core.active_request.as_mut().ok_or_else(|| {
-            InferenceEngineError::Fatal {
-                reason: "folded-ternary has no active generation".to_owned(),
-            }
-        })?;
-        if active.request_id != request_id {
-            return Err(InferenceEngineError::Fatal {
-                reason: "folded-ternary generation request correlation mismatch".to_owned(),
-            });
-        }
-        let forced_token_id = active
-            .thinking_budget_state
-            .next_forced_transition_token_id()
-            .map_err(|budget_error| InferenceEngineError::Fatal {
-                reason: format!("folded-ternary thinking budget failed: {budget_error}"),
-            })?;
-        let eos_token_ids = &model.pack().config().text().eos_token_ids;
-        let (selected_token_id, speculated_successor) = match forced_token_id {
-            Some(forced_token_id) => {
-                // A forced transition replaces whatever was sampled; the
-                // decoder state is still exactly the state after the last
-                // emitted token, so the forced token's forward runs below.
-                active.pending_generated_token = None;
-                (forced_token_id, None)
-            }
-            None => {
-                let Some(sampled_token) = active.pending_generated_token.take() else {
-                    active.engine_extension.has_reached_reply_end = true;
-                    return Ok(GeneratedToken::EndOfSequence);
-                };
-                // Build and submit the successor before reading this token's
-                // value whenever nothing on the host can change the
-                // successor's sampling: the device executes while the host
-                // synchronizes, and the only waste is a successor behind a
-                // token that turns out to end the sequence.
-                let (selected_token_id, speculated_successor) =
-                    speculate_successor_and_synchronize_sampled_token(
-                        model,
-                        active,
-                        &sampled_token,
-                    )?;
-                if eos_token_ids.contains(&selected_token_id) {
-                    active.engine_extension.has_reached_reply_end = true;
-                    return Ok(GeneratedToken::EndOfSequence);
-                }
-                (selected_token_id, speculated_successor)
-            }
-        };
-        let is_reasoning_token = observe_committed_token(active, selected_token_id)?;
-        let output_budget_exhausted =
-            record_emitted_token(&mut active.engine_extension.remaining_output_tokens);
-        if output_budget_exhausted {
-            active.engine_extension.has_reached_reply_end = true;
-            active.pending_generated_token = None;
-            return Ok(reply_token(
-                selected_token_id,
-                is_reasoning_token,
-                mlx_memory_telemetry,
-            ));
-        }
-        record_penalized_token_id(active, selected_token_id);
-        let successor = match speculated_successor {
-            Some(successor) => successor,
-            None => {
-                let token_indices = model
-                    .runtime
-                    .array_from_i32(&[selected_token_id as i32], &[1, 1])
-                    .map_err(gpu_error)?;
-                submit_successor(model, active, &token_indices)?
-            }
-        };
-        active.pending_generated_token =
-            successor_stays_pending(active.engine_extension.remaining_output_tokens)
-                .then_some(successor);
-        Ok(reply_token(
-            selected_token_id,
-            is_reasoning_token,
-            mlx_memory_telemetry,
-        ))
+        advance_generation(self, request_id)
     }
 
     fn collect_mlx_memory_telemetry(
@@ -308,25 +194,28 @@ impl MlxInferenceExecution for PrismHadamardQwen35InferenceExecution {
         super::input_injection::inject_input_tokens(self, request_id, input_token_ids)
     }
 
+    /// Ends a request the client stopped. A request that already ended on
+    /// its own was finalized by the decode step and is no longer here.
     fn cancel_generation(
         &mut self,
         request_id: RequestId,
     ) -> Result<GenerationFinalization, InferenceEngineError> {
-        if self
-            .execution_core
-            .active_request
-            .as_ref()
-            .is_some_and(|active_generation| active_generation.request_id != request_id)
-        {
+        let Some(active_generation) = self.execution_core.active_request.take() else {
+            return Ok(GenerationFinalization::new(
+                Some(ExpertMemoryMode::Resident),
+                self.collect_current_mlx_memory_telemetry(),
+                None,
+            ));
+        };
+        if active_generation.request_id != request_id {
+            self.execution_core.active_request = Some(active_generation);
             return Err(InferenceEngineError::Fatal {
                 reason: "folded-ternary cancellation request correlation mismatch".to_owned(),
             });
         }
-        self.take_active_and_record_generation_attribution();
-        let mlx_memory_telemetry = self.collect_current_mlx_memory_telemetry();
-        Ok(GenerationFinalization::new(
-            Some(ExpertMemoryMode::Resident),
-            mlx_memory_telemetry,
+        Ok(self.finalize_generation_request(
+            active_generation,
+            PerformanceAttributionOutcome::Cancelled,
             None,
         ))
     }
@@ -443,8 +332,23 @@ impl PrismHadamardQwen35InferenceExecution {
             })
     }
 
-    /// Samples the current MLX memory footprint for the status surface.
+    /// Samples the current MLX memory footprint for the status surface,
+    /// charging the active request's decoder state while it is in the core.
     pub(super) fn collect_current_mlx_memory_telemetry(&self) -> Option<MlxMemoryTelemetry> {
+        self.mlx_memory_telemetry_with_live_decoder_state(
+            self.execution_core
+                .active_request
+                .as_ref()
+                .map(|active_generation| &active_generation.request_decoder_state),
+        )
+    }
+
+    /// The MLX memory footprint with `live_request_decoder_state` charged to
+    /// the context; the shared decode step passes the request it holds.
+    pub(super) fn mlx_memory_telemetry_with_live_decoder_state(
+        &self,
+        live_request_decoder_state: Option<&RequestDecoderStateStack>,
+    ) -> Option<MlxMemoryTelemetry> {
         let model = self.execution_core.model.as_ref()?;
         let memory_snapshot = match model.runtime.memory_snapshot() {
             Ok(memory_snapshot) => memory_snapshot,
@@ -463,10 +367,7 @@ impl PrismHadamardQwen35InferenceExecution {
         let active_memory_breakdown = super::active_memory_breakdown::prism_active_memory_breakdown(
             model,
             active_memory_bytes,
-            self.execution_core
-                .active_request
-                .as_ref()
-                .map(|active_generation| &active_generation.request_decoder_state),
+            live_request_decoder_state,
         );
         Some(MlxMemoryTelemetry::new(
             active_memory_bytes,
@@ -475,167 +376,6 @@ impl PrismHadamardQwen35InferenceExecution {
             active_memory_breakdown,
         ))
     }
-
-    /// Advances one bounded prompt-processing chunk through the straight
-    /// forward pass and reports prefill progress to the worker.
-    fn prefill_next_chunk(
-        &mut self,
-        request_id: RequestId,
-        prompt_processing_chunk_tokens: usize,
-    ) -> Result<GeneratedToken, InferenceEngineError> {
-        let model =
-            self.execution_core
-                .model
-                .as_ref()
-                .ok_or_else(|| InferenceEngineError::Fatal {
-                    reason: "folded-ternary model is not loaded".to_owned(),
-                })?;
-        // Sampled before the active-generation borrow; chunk boundaries are
-        // far enough apart that one-chunk-old memory reads stay honest.
-        let mlx_memory_telemetry = self.collect_current_mlx_memory_telemetry();
-        let active = self.execution_core.active_request.as_mut().ok_or_else(|| {
-            InferenceEngineError::Fatal {
-                reason: "folded-ternary has no active generation".to_owned(),
-            }
-        })?;
-        if active.request_id != request_id {
-            return Err(InferenceEngineError::Fatal {
-                reason: "folded-ternary prefill request correlation mismatch".to_owned(),
-            });
-        }
-        let astro_ssd_prompt_cache = self.execution_core.astro_ssd_prompt_cache.clone();
-        let chunk_length = prefill_chunk_length(
-            active.prefill_cursor,
-            active.engine_extension.remaining_prompt_token_ids.len(),
-            prompt_processing_chunk_tokens,
-            astro_ssd_prompt_cache
-                .as_ref()
-                .map(|astro_ssd_prompt_cache| {
-                    astro_ssd_prompt_cache
-                        .model_contract_ref()
-                        .block_token_count()
-                }),
-        );
-        let chunk_token_ids: Vec<i32> = active
-            .engine_extension
-            .remaining_prompt_token_ids
-            .drain(..chunk_length)
-            .map(|token_id| token_id as i32)
-            .collect();
-        let chunk_started_at = Instant::now();
-        let hidden_states =
-            forward_prefill_chunk_hidden_states(model, active, &chunk_token_ids, chunk_length)?;
-        let remaining_prompt_token_ids_are_empty = active
-            .engine_extension
-            .remaining_prompt_token_ids
-            .is_empty();
-        let final_logits = submit_prefill_state_evaluation(
-            model,
-            active,
-            &hidden_states,
-            remaining_prompt_token_ids_are_empty,
-        )?;
-        let elapsed_millis = chunk_started_at
-            .elapsed()
-            .as_millis()
-            .try_into()
-            .unwrap_or(u64::MAX);
-        queue_prefill_first_token(model, active, final_logits.as_ref())?;
-        // Capture runs after the chunk's state graph was submitted: the
-        // published tensors chain onto the lazy arrays and materialize during
-        // publication, so no extra device synchronization happens here.
-        active.prefill_cursor += chunk_length;
-        capture_completed_prefill_astro_ssd_prompt_cache_block(
-            model,
-            astro_ssd_prompt_cache.as_deref(),
-            active,
-        )?;
-        Ok(prefill_progress_token(
-            chunk_length,
-            elapsed_millis,
-            mlx_memory_telemetry,
-            active.prompt_work_reuse,
-        ))
-    }
-}
-
-/// Commits a selected token to the thinking budget and, when it is visible
-/// output that was already visible before it, to the structured constraint.
-/// Returns whether the token is reasoning.
-fn observe_committed_token(
-    active: &mut PrismHadamardQwen35ActiveGeneration,
-    selected_token_id: u32,
-) -> Result<bool, InferenceEngineError> {
-    let was_already_visible = !active.thinking_budget_state.is_inside_thinking();
-    let is_reasoning_token = active
-        .thinking_budget_state
-        .observe_committed_token(selected_token_id)
-        .map_err(|budget_error| InferenceEngineError::Fatal {
-            reason: format!("folded-ternary thinking budget failed: {budget_error}"),
-        })?;
-    if was_already_visible
-        && !is_reasoning_token
-        && let Some(structured_generation) = active.structured_generation.as_mut()
-    {
-        structured_generation.accept_visible_token(selected_token_id);
-    }
-    Ok(is_reasoning_token)
-}
-
-/// Speculates the successor of a sampled token when the output budget allows
-/// it, then synchronizes the sampled token's value inside its
-/// `DecodeSamplingSpan` region. Speculating first lets the device execute
-/// while the host synchronizes; the only waste is a successor behind a token
-/// that turns out to end the sequence.
-fn speculate_successor_and_synchronize_sampled_token(
-    model: &PrismHadamardTextModel,
-    active: &mut PrismHadamardQwen35ActiveGeneration,
-    sampled_token: &MlxArray,
-) -> Result<(u32, Option<MlxArray>), InferenceEngineError> {
-    let speculated_successor = if successor_may_be_speculated(active)
-        && active.engine_extension.remaining_output_tokens > 1
-    {
-        Some(submit_successor(model, active, sampled_token)?)
-    } else {
-        None
-    };
-    let selected_token_id = active
-        .measure_operation_with_request(PerformanceOperation::DecodeSamplingSpan, |_| {
-            synchronize_token_id(sampled_token)
-        })?;
-    Ok((selected_token_id, speculated_successor))
-}
-
-/// Builds the forward for `token_indices` (`[1, 1]`, host or device
-/// resident), samples its successor lazily, and submits the whole step
-/// asynchronously together with every retained state array. Returns the
-/// lazy successor; nothing here waits for the graphics processor.
-pub(super) fn submit_successor(
-    model: &PrismHadamardTextModel,
-    active: &mut PrismHadamardQwen35ActiveGeneration,
-    token_indices: &MlxArray,
-) -> Result<MlxArray, InferenceEngineError> {
-    let logits = active
-        .measure_operation_with_request(
-            PerformanceOperation::DecodeAdvanceSpan,
-            |active_generation| active_generation.forward_pass(model, token_indices),
-        )
-        .map_err(gpu_error)?;
-    let successor = sample_token(model, &logits, active)?;
-    active
-        .measure_operation_with_request(
-            PerformanceOperation::DecodeAsyncEvaluationSubmission,
-            |active_generation| {
-                model
-                    .runtime
-                    .async_eval_arrays(&request_decoder_state_evaluation_arrays(
-                        &active_generation.request_decoder_state,
-                        &successor,
-                    ))
-            },
-        )
-        .map_err(gpu_error)?;
-    Ok(successor)
 }
 
 /// Maps any boundary failure onto the engine error surface, keeping the
@@ -643,23 +383,5 @@ pub(super) fn submit_successor(
 pub(super) fn gpu_error<E: std::fmt::Display>(error: E) -> InferenceEngineError {
     InferenceEngineError::Fatal {
         reason: error.to_string(),
-    }
-}
-
-/// One reply token as the worker receives it. The folded-ternary model holds
-/// every weight, so its expert memory mode is always resident; it records no
-/// first-decode timing and finalizes through cancellation, not here.
-fn reply_token(
-    selected_token_id: u32,
-    is_reasoning_token: bool,
-    mlx_memory_telemetry: Option<MlxMemoryTelemetry>,
-) -> GeneratedToken {
-    GeneratedToken::TokenId {
-        token_id: selected_token_id,
-        is_reasoning_token,
-        expert_memory_mode: Some(ExpertMemoryMode::Resident),
-        mlx_memory_telemetry,
-        first_decode_forward_elapsed_millis: None,
-        generation_finalization: None,
     }
 }

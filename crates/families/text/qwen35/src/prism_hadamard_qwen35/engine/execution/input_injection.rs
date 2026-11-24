@@ -2,9 +2,8 @@
 
 use ipc_protocol::RequestId;
 
+use super::PrismHadamardQwen35InferenceExecution;
 use super::engine_trait_impl::gpu_error;
-use super::sampling::sample_token;
-use super::{PrismHadamardQwen35InferenceExecution, successor_stays_pending};
 use crate::{InferenceEngineError, PerformanceOperation};
 
 pub(super) fn inject_input_tokens(
@@ -80,8 +79,11 @@ fn validated_feedback_token_count(
     let projected_context_token_count = processed_context_token_count
         .checked_add(input_token_ids.len())
         .and_then(|context_token_count| {
-            context_token_count
-                .checked_add(active_generation.engine_extension.remaining_output_tokens as usize)
+            context_token_count.checked_add(usize::from(
+                active_generation
+                    .maximum_output_tokens
+                    .saturating_sub(active_generation.generated_token_count),
+            ))
         })
         .ok_or_else(|| InferenceEngineError::InvalidRequest {
             reason: "folded-ternary feedback context token count overflowed".to_owned(),
@@ -143,7 +145,7 @@ fn run_feedback_forward_and_sample(
         .map_err(gpu_error)?;
     let next_token = active_generation.measure_operation_with_request(
         PerformanceOperation::DecodeSamplingSpan,
-        |active_generation| sample_token(model, &final_logits, active_generation),
+        |active_generation| active_generation.build_generated_token(model, &final_logits),
     )?;
     active_generation
         .measure_operation_with_request(
@@ -151,8 +153,6 @@ fn run_feedback_forward_and_sample(
             |_| model.runtime.async_eval_arrays(&[&next_token]),
         )
         .map_err(gpu_error)?;
-    active_generation.pending_generated_token =
-        successor_stays_pending(active_generation.engine_extension.remaining_output_tokens)
-            .then_some(next_token);
+    active_generation.pending_generated_token = Some(next_token);
     Ok(())
 }

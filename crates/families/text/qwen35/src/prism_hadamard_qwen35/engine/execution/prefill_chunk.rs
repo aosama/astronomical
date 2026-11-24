@@ -1,8 +1,10 @@
-//! Chunked-prefill units for the owner-thread folded-ternary execution.
+//! Chunked prefill for the owner-thread folded-ternary execution.
 //!
-//! Split from `engine_trait_impl` so each file stays inside the source-size
-//! budget; the measured regions (`measure_operation` spans) keep their exact
-//! original boundaries because performance attribution depends on them.
+//! The shared decode step asks for one chunk at a time while any of the
+//! prompt remains, and measures the whole chunk as its prompt advance span;
+//! the measured regions inside it keep their boundaries.
+
+use std::time::Instant;
 
 use ipc_protocol::{ExpertMemoryMode, WorkerPromptWorkReuse};
 
@@ -17,10 +19,8 @@ use crate::PerformanceOperation;
 use crate::astro_ssd_prompt_cache_boundary_clamped_prefill_chunk_end;
 use crate::prism_hadamard_qwen35::model::PrismHadamardTextModel;
 
-use super::PrismHadamardQwen35ActiveGeneration;
 use super::engine_trait_impl::gpu_error;
-use super::sampling::sample_token;
-use super::successor_stays_pending;
+use super::{PrismHadamardQwen35ActiveGeneration, PrismHadamardQwen35InferenceExecution};
 
 /// Anchors a prefill chunk at the processed-prompt cursor and returns how
 /// many prompt tokens it consumes, stopping the chunk at the first
@@ -49,7 +49,8 @@ pub(super) fn prefill_chunk_length(
 }
 
 /// Builds the chunk's `[1, chunk_length]` token-index array and runs the
-/// straight forward pass inside its `PromptPrefillAdvanceSpan` region.
+/// straight forward pass. The shared step's prompt advance span already
+/// covers this forward, so it is not measured again here.
 pub(super) fn forward_prefill_chunk_hidden_states(
     model: &PrismHadamardTextModel,
     active_generation: &mut PrismHadamardQwen35ActiveGeneration,
@@ -61,10 +62,7 @@ pub(super) fn forward_prefill_chunk_hidden_states(
         .array_from_i32(chunk_token_ids, &[1, chunk_length as i32])
         .map_err(gpu_error)?;
     active_generation
-        .measure_operation_with_request(
-            PerformanceOperation::PromptPrefillAdvanceSpan,
-            |active_generation| active_generation.forward_hidden_states(model, &token_indices),
-        )
+        .forward_hidden_states(model, &token_indices)
         .map_err(gpu_error)
 }
 
@@ -113,9 +111,11 @@ pub(super) fn submit_prefill_state_evaluation(
     Ok(final_logits)
 }
 
-/// When the chunk completed the prompt, samples the first decode token
-/// inside `DecodeSamplingSpan`, kicks off its asynchronous evaluation, and
-/// queues it as the pending sampled token the next decode step consumes.
+/// When the chunk completed the prompt, samples the first decode token with
+/// the shared sampler inside `DecodeSamplingSpan`, kicks off its asynchronous
+/// evaluation, and queues it as the pending token the next decode step reads.
+/// The output budget is the shared decode step's to enforce, so the token is
+/// always queued.
 pub(super) fn queue_prefill_first_token(
     model: &PrismHadamardTextModel,
     active_generation: &mut PrismHadamardQwen35ActiveGeneration,
@@ -124,7 +124,7 @@ pub(super) fn queue_prefill_first_token(
     if let Some(final_logits) = final_logits {
         let first_token = active_generation.measure_operation_with_request(
             PerformanceOperation::DecodeSamplingSpan,
-            |active_generation| sample_token(model, final_logits, active_generation),
+            |active_generation| active_generation.build_generated_token(model, final_logits),
         )?;
         active_generation
             .measure_operation_with_request(
@@ -132,9 +132,7 @@ pub(super) fn queue_prefill_first_token(
                 |_| model.runtime.async_eval_arrays(&[&first_token]),
             )
             .map_err(gpu_error)?;
-        active_generation.pending_generated_token =
-            successor_stays_pending(active_generation.engine_extension.remaining_output_tokens)
-                .then_some(first_token);
+        active_generation.pending_generated_token = Some(first_token);
     }
     Ok(())
 }
@@ -164,6 +162,76 @@ pub(super) fn capture_completed_prefill_astro_ssd_prompt_cache_block(
         );
     active_generation.performance_attribution = capture_attribution;
     capture_result
+}
+
+impl PrismHadamardQwen35InferenceExecution {
+    /// Advances one bounded prompt-processing chunk of `active` through the
+    /// straight forward pass and reports prefill progress to the worker. The
+    /// shared decode step holds the request outside the core while it runs.
+    pub(super) fn prefill_next_chunk(
+        &mut self,
+        active: &mut PrismHadamardQwen35ActiveGeneration,
+        prompt_processing_chunk_tokens: usize,
+    ) -> Result<GeneratedToken, InferenceEngineError> {
+        // Sampled before the chunk runs; chunk boundaries are far enough
+        // apart that one-chunk-old memory reads stay honest.
+        let mlx_memory_telemetry =
+            self.mlx_memory_telemetry_with_live_decoder_state(Some(&active.request_decoder_state));
+        let model = self.execution_core.loaded_model()?;
+        let astro_ssd_prompt_cache = self.execution_core.astro_ssd_prompt_cache.clone();
+        let chunk_length = prefill_chunk_length(
+            active.prefill_cursor,
+            active.engine_extension.remaining_prompt_token_ids.len(),
+            prompt_processing_chunk_tokens,
+            astro_ssd_prompt_cache
+                .as_ref()
+                .map(|astro_ssd_prompt_cache| {
+                    astro_ssd_prompt_cache
+                        .model_contract_ref()
+                        .block_token_count()
+                }),
+        );
+        let chunk_token_ids: Vec<i32> = active
+            .engine_extension
+            .remaining_prompt_token_ids
+            .drain(..chunk_length)
+            .map(|token_id| token_id as i32)
+            .collect();
+        let chunk_started_at = Instant::now();
+        let hidden_states =
+            forward_prefill_chunk_hidden_states(model, active, &chunk_token_ids, chunk_length)?;
+        let remaining_prompt_token_ids_are_empty = active
+            .engine_extension
+            .remaining_prompt_token_ids
+            .is_empty();
+        let final_logits = submit_prefill_state_evaluation(
+            model,
+            active,
+            &hidden_states,
+            remaining_prompt_token_ids_are_empty,
+        )?;
+        let elapsed_millis = chunk_started_at
+            .elapsed()
+            .as_millis()
+            .try_into()
+            .unwrap_or(u64::MAX);
+        queue_prefill_first_token(model, active, final_logits.as_ref())?;
+        // Capture runs after the chunk's state graph was submitted: the
+        // published tensors chain onto the lazy arrays and materialize during
+        // publication, so no extra device synchronization happens here.
+        active.prefill_cursor += chunk_length;
+        capture_completed_prefill_astro_ssd_prompt_cache_block(
+            model,
+            astro_ssd_prompt_cache.as_deref(),
+            active,
+        )?;
+        Ok(prefill_progress_token(
+            chunk_length,
+            elapsed_millis,
+            mlx_memory_telemetry,
+            active.prompt_work_reuse,
+        ))
+    }
 }
 
 /// Builds the prefill progress token for exactly one chunk.

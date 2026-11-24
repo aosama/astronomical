@@ -70,6 +70,27 @@ pub trait Qwen3_5DecodeStepHooks: Qwen3_5FinalizationHooks {
         Ok(None)
     }
 
+    /// Lets an engine run the reply token's successor forward and submit it
+    /// before the host reads the reply token, so the graphics processor
+    /// computes the successor while the host waits for the read. Returns the
+    /// submitted successor and the memory reading after its forward, or
+    /// `None` when this step reads first. The default never submits early, so
+    /// an engine that keeps it runs every step in the read-first order.
+    ///
+    /// An engine may submit early only when nothing the host learns from the
+    /// read can change the successor's sampling (no repetition history, no
+    /// structured mask, no forced thinking transition) and the reply token
+    /// cannot be the last the output budget allows. A successor submitted
+    /// behind a token that turns out to end the reply is dropped unread.
+    fn submit_successor_before_reply_token_read(
+        &mut self,
+        _active_request: &mut Qwen3_5EngineRequest<Self::RequestExtension>,
+        _current_generated_token: &MlxArray,
+        _is_forced_thinking_transition: bool,
+    ) -> Result<Option<(MlxArray, MlxMemorySnapshot)>, InferenceEngineError> {
+        Ok(None)
+    }
+
     /// Runs once the reply token has been read on the host.
     fn after_reply_token_synchronized(
         &self,
@@ -194,6 +215,11 @@ fn advance_active_request<Engine: Qwen3_5DecodeStepHooks>(
         final_prompt_index,
         &mut first_decode_forward_started_at,
     )?;
+    let early_submitted_successor = engine.submit_successor_before_reply_token_read(
+        active_request,
+        &current_generated_token,
+        forced_thinking_transition_token_id.is_some(),
+    )?;
     let current_generated_token_id =
         synchronize_generated_token_id(active_request, &current_generated_token)?;
     engine.after_reply_token_synchronized(active_request)?;
@@ -213,18 +239,21 @@ fn advance_active_request<Engine: Qwen3_5DecodeStepHooks>(
         active_request,
         &current_generated_token,
         current_generated_token_id,
+        early_submitted_successor,
     )
 }
 
-/// Emits the reply token just read and runs its successor's forward. With
-/// structured generation the token is emitted before the forward: the
-/// successor is sampled ahead, and a live mask must see the commit first or
-/// Juliet/Romeo prefixes stay allowed.
+/// Emits the reply token just read and runs its successor's forward, unless
+/// the engine already submitted it before the read. With structured
+/// generation the token is emitted before the forward: the successor is
+/// sampled ahead, and a live mask must see the commit first or Juliet/Romeo
+/// prefixes stay allowed.
 fn emit_reply_token_and_decode_successor<Engine: Qwen3_5DecodeStepHooks>(
     engine: &mut Engine,
     active_request: &mut Qwen3_5EngineRequest<Engine::RequestExtension>,
     current_generated_token: &MlxArray,
     current_generated_token_id: u32,
+    early_submitted_successor: Option<(MlxArray, MlxMemorySnapshot)>,
 ) -> Result<ActiveRequestAdvance, InferenceEngineError> {
     let mut early_structured_emission = if active_request.structured_generation.is_some() {
         let generated_token_emission = build_generated_token_emission(
@@ -243,11 +272,15 @@ fn emit_reply_token_and_decode_successor<Engine: Qwen3_5DecodeStepHooks>(
     } else {
         None
     };
-    let (next_generated_token, completed_forward_memory_snapshot) = engine.decode_next_token(
-        active_request,
-        current_generated_token,
-        current_generated_token_id,
-    )?;
+    let (next_generated_token, completed_forward_memory_snapshot) = match early_submitted_successor
+    {
+        Some(early_submitted_successor) => early_submitted_successor,
+        None => engine.decode_next_token(
+            active_request,
+            current_generated_token,
+            current_generated_token_id,
+        )?,
+    };
     let generated_token_emission = match early_structured_emission.take() {
         Some(generated_token_emission) => generated_token_emission,
         None => build_generated_token_emission(

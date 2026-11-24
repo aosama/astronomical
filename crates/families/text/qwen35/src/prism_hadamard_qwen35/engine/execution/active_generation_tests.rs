@@ -61,11 +61,8 @@ fn should_start_the_shared_record_right_after_the_restored_prefix() {
         active_generation.maximum_output_tokens,
         MAXIMUM_OUTPUT_TOKENS
     );
-    assert_eq!(
-        active_generation.engine_extension.remaining_output_tokens,
-        u32::from(MAXIMUM_OUTPUT_TOKENS)
-    );
-    assert!(!active_generation.engine_extension.has_reached_reply_end);
+    // The shared decode step counts the output budget from zero emitted.
+    assert_eq!(active_generation.generated_token_count, 0);
     assert!(active_generation.random_state.is_some());
     assert!(active_generation.pending_generated_token.is_none());
     assert!(active_generation.can_use_astro_ssd_prompt_cache);
