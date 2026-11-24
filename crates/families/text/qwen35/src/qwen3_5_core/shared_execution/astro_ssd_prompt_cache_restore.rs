@@ -90,6 +90,47 @@ pub trait Qwen3_5AstroSsdPromptCacheRestoreHooks: Qwen3_5ExecutionCoreOwner {
     fn give_back_restore_workspace(&self) {}
 }
 
+/// The prompt a restore reads, without the disk store, which
+/// `restore_prefix_keeping_store_installed` takes from the core itself.
+pub struct AstroSsdPromptCachePrefixRestore<'a> {
+    pub request_id: RequestId,
+    pub prompt_token_ids: &'a [u32],
+    pub block_causal_inputs: &'a [AstroSsdPromptCacheBlockCausalInput],
+    pub total_context_tokens: usize,
+}
+
+/// Restores the longest prompt prefix the engine's `astro_ssd_prompt_cache`
+/// holds, or `None` when the engine has none. The disk store is taken out of
+/// the core for the restore, so the engine can be borrowed mutably while the
+/// store is read, and it is put back before any path returns: a restore may
+/// fail closed for correctness, but leaving the store out would quietly
+/// turn every later request into one without the `astro_ssd_prompt_cache`.
+pub fn restore_prefix_keeping_store_installed<Engine: Qwen3_5AstroSsdPromptCacheRestoreHooks>(
+    engine: &mut Engine,
+    prefix_restore: AstroSsdPromptCachePrefixRestore<'_>,
+    request_decoder_state: &mut RequestDecoderStateStack,
+    performance_attribution: &mut PerformanceAttribution,
+) -> Result<Option<AstroSsdPromptCacheRestoreOutcome>, InferenceEngineError> {
+    let Some(astro_ssd_prompt_cache) = engine.execution_core_mut().astro_ssd_prompt_cache.take()
+    else {
+        return Ok(None);
+    };
+    let restore_result = restore_astro_ssd_prompt_cache_prefix(
+        engine,
+        &AstroSsdPromptCacheRestoreRequest {
+            request_id: prefix_restore.request_id,
+            astro_ssd_prompt_cache: &astro_ssd_prompt_cache,
+            prompt_token_ids: prefix_restore.prompt_token_ids,
+            block_causal_inputs: prefix_restore.block_causal_inputs,
+            total_context_tokens: prefix_restore.total_context_tokens,
+        },
+        request_decoder_state,
+        performance_attribution,
+    );
+    engine.execution_core_mut().astro_ssd_prompt_cache = Some(astro_ssd_prompt_cache);
+    restore_result.map(Some)
+}
+
 /// Restores the longest prefix the `astro_ssd_prompt_cache` holds for this
 /// prompt, or returns the cold outcome when it holds none.
 pub fn restore_astro_ssd_prompt_cache_prefix<Engine: Qwen3_5AstroSsdPromptCacheRestoreHooks>(

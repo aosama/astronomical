@@ -40,8 +40,3 @@ pub use memory_limit::safe_minimum_mlx_memory_ceiling_bytes;
 pub type Qwen3_5StreamingEngine = MlxInferenceEngine<Qwen3_5InferenceExecution>;
 
 pub use crate::qwen3_5_core::engine_errors::{fatal_engine_error, qwen3_5_runtime_error};
-
-/// The streaming engine keeps no decoder state between requests, so a
-/// finalized measurement has no retained live prefix to charge to the
-/// context owner.
-pub(super) const NO_RETAINED_LIVE_PREFIX_BYTES: u64 = 0;
