@@ -110,7 +110,7 @@ fn is_klein_4b_transformer_index(transformer_index: &MfluxWeightIndex) -> bool {
 
 /// Whether `directory` carries the build's transformer index. Such a folder is
 /// a pipeline root even without `model_index.json`, so scans stop there.
-pub(super) fn has_build_marker(directory: &Path) -> bool {
+pub fn has_build_marker(directory: &Path) -> bool {
     directory
         .join(FLUX2_KLEIN_MLX_4BIT_TRANSFORMER_INDEX_FILE_NAME)
         .is_file()
@@ -118,7 +118,7 @@ pub(super) fn has_build_marker(directory: &Path) -> bool {
 
 /// Whether `directory` holds this build. An unreadable or foreign index is not
 /// this build, so classification can still fall back to `config.json`.
-pub(super) fn classifies_directory(directory: &Path) -> bool {
+pub fn classifies_directory(directory: &Path) -> bool {
     let Ok(index_bytes) = bounded_artifact_file::read_bounded_nonempty_file(
         &directory.join(FLUX2_KLEIN_MLX_4BIT_TRANSFORMER_INDEX_FILE_NAME),
         MAXIMUM_INDEX_BYTES,

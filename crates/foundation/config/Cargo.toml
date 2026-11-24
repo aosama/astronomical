@@ -17,8 +17,10 @@ test-lanes = ["integration", "integration-and-rest", "nextest"]
 workspace = true
 
 [dependencies]
-# Model discovery, which config reads when it loads settings and re-exports.
+# Model discovery and the family list, which config reads when it loads
+# settings and re-exports.
 model-discovery = { path = "../model-discovery" }
+model-family-registry = { path = "../../families/registry/model-family-registry" }
 lowercase-hex = { path = "../lowercase-hex" }
 libc.workspace = true
 serde.workspace = true

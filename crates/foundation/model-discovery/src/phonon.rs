@@ -24,7 +24,7 @@ pub const PHONON_VOICES_DIRECTORY_NAME: &str = "voices";
 const MAXIMUM_CONFIGURATION_BYTES: u64 = 1024 * 1024;
 
 /// Whether `model_directory` holds a complete Phonon checkpoint.
-pub(super) fn classifies_directory(model_directory: &Path) -> bool {
+pub fn classifies_directory(model_directory: &Path) -> bool {
     for required_file_name in [
         PHONON_WEIGHTS_FILE_NAME,
         PHONON_TOKENIZER_FILE_NAME,

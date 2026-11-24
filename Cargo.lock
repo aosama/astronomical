@@ -454,6 +454,7 @@ dependencies = [
  "libc",
  "lowercase-hex",
  "model-discovery",
+ "model-family-registry",
  "serde",
  "serde_json",
  "sha2",
@@ -1543,6 +1544,14 @@ dependencies = [
  "speech-contract",
  "tempfile",
  "thiserror",
+]
+
+[[package]]
+name = "model-family-registry"
+version = "0.2.134"
+dependencies = [
+ "model-discovery",
+ "serde_json",
 ]
 
 [[package]]

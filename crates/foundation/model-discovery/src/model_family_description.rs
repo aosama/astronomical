@@ -44,33 +44,6 @@ impl ModelFamily {
     pub const fn as_str(self) -> &'static str {
         self.identifier
     }
-
-    /// The registered family with this identifier.
-    #[must_use]
-    pub fn from_identifier(identifier: &str) -> Option<Self> {
-        super::model_family_registry::registered_description_named(identifier)
-            .map(|description| description.model_family)
-    }
-
-    /// The first family, in registry order, that claims this `config.json`
-    /// `model_type`, without claiming the folder holds a servable model.
-    #[must_use]
-    pub fn from_model_type(model_type: Option<&str>) -> Option<Self> {
-        super::model_family_classification::family_of_model_type(model_type)
-    }
-
-    /// The family's description, or `None` for an identifier no family
-    /// registers.
-    #[must_use]
-    pub fn description(self) -> Option<&'static ModelFamilyDescription> {
-        super::model_family_registry::registered_description_named(self.identifier)
-    }
-
-    /// The kind of model the family is, or `None` when it is not registered.
-    #[must_use]
-    pub fn kind(self) -> Option<ModelKind> {
-        self.description().map(|description| description.kind)
-    }
 }
 
 /// Recognizes a family from a Diffusers pipeline index document.
@@ -86,7 +59,10 @@ pub type ModelTypeRecognizer = fn(Option<&str>) -> bool;
 pub type ModelDiscoverer = fn(&Path, &str) -> Option<DiscoveredModel>;
 
 /// Finds the further models a discovered repository bundles in subfolders.
-pub type BundledModelDiscoverer = fn(&DiscoveredModel) -> Vec<DiscoveredModel>;
+pub type BundledModelDiscoverer = fn(
+    &super::model_family_registry::ModelFamilyRegistry,
+    &DiscoveredModel,
+) -> Vec<DiscoveredModel>;
 
 /// Everything discovery needs to know about one family.
 pub struct ModelFamilyDescription {
@@ -98,6 +74,10 @@ pub struct ModelFamilyDescription {
     pub recognizes_directory: Option<DirectoryRecognizer>,
     /// Asked of the `model_type` in `config.json` when no marker matched.
     pub recognizes_model_type: Option<ModelTypeRecognizer>,
+    /// Asked of every scanned folder: a folder it marks is a pipeline root
+    /// although it has no `model_index.json`, so discovery never treats its
+    /// component folders as models of their own.
+    pub marks_pipeline_root: Option<DirectoryRecognizer>,
     /// The file whose download metadata records the revision of a folder
     /// without a pipeline index.
     pub revision_file_name: &'static str,
@@ -120,6 +100,7 @@ impl ModelFamilyDescription {
             recognizes_pipeline_index: None,
             recognizes_directory: None,
             recognizes_model_type: None,
+            marks_pipeline_root: None,
             revision_file_name: CONFIGURATION_FILE_NAME,
             discover_model,
             discover_bundled_models: None,
@@ -177,6 +158,24 @@ impl ModelFamilyDescription {
         self.recognizes_directory = Some(recognizes_directory);
         self.revision_file_name = revision_file_name;
         self
+    }
+
+    /// Marks a folder as a pipeline root by a file a build of the family
+    /// keeps there in place of a pipeline index.
+    #[must_use]
+    pub const fn also_marks_pipeline_root(
+        mut self,
+        marks_pipeline_root: DirectoryRecognizer,
+    ) -> Self {
+        self.marks_pipeline_root = Some(marks_pipeline_root);
+        self
+    }
+
+    /// Whether this family marks the folder as a pipeline root.
+    #[must_use]
+    pub fn marks_pipeline_root(&self, directory: &Path) -> bool {
+        self.marks_pipeline_root
+            .is_some_and(|marks_pipeline_root| marks_pipeline_root(directory))
     }
 
     /// Whether this family claims a Diffusers pipeline index document.

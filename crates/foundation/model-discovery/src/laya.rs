@@ -31,7 +31,7 @@ pub(super) struct LayaDiscoveredModelMetadata {
 }
 
 /// Recognizes the MLX-converted Laya decision model type.
-pub(super) fn recognizes_model_type(model_type: Option<&str>) -> bool {
+pub fn recognizes_model_type(model_type: Option<&str>) -> bool {
     matches!(model_type, Some("laya"))
 }
 

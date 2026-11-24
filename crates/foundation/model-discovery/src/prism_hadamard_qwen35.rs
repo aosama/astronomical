@@ -19,7 +19,7 @@ pub(super) struct PrismHadamardDiscoveredModelMetadata {
 }
 
 /// Recognizes the folded ternary pack model type.
-pub(super) fn recognizes_model_type(model_type: Option<&str>) -> bool {
+pub fn recognizes_model_type(model_type: Option<&str>) -> bool {
     matches!(model_type, Some("prism_hadamard_qwen35"))
 }
 

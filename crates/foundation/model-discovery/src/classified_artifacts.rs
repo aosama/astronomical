@@ -1,3 +1,4 @@
+use super::model_family_registry::ModelFamilyRegistry;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -29,11 +30,18 @@ pub struct ClassifiedModelArtifact {
 
 /// Finds classified model-family artifacts without advertising them as executable models.
 pub fn discover_classified_model_artifacts(
+    model_family_registry: &ModelFamilyRegistry,
     model_directories: &[PathBuf],
 ) -> Result<Vec<ClassifiedModelArtifact>, DiscoveredModelError> {
     let mut classified_artifacts = Vec::new();
     for model_directory in model_directories {
-        scan_classified_artifacts(model_directory, 0, true, &mut classified_artifacts)?;
+        scan_classified_artifacts(
+            model_family_registry,
+            model_directory,
+            0,
+            true,
+            &mut classified_artifacts,
+        )?;
     }
     classified_artifacts.sort_by(|first_artifact, second_artifact| {
         first_artifact
@@ -54,6 +62,7 @@ pub fn discover_classified_model_artifacts(
 }
 
 fn scan_classified_artifacts(
+    model_family_registry: &ModelFamilyRegistry,
     current_directory: &Path,
     depth: usize,
     is_configured_root: bool,
@@ -62,13 +71,21 @@ fn scan_classified_artifacts(
     if depth > MAXIMUM_CLASSIFIED_SCAN_DEPTH {
         return Ok(());
     }
-    if super::model_family_classification::has_model_root_marker(current_directory) {
-        if let Ok(Some(model_family)) = super::classify_model_directory(current_directory)
+    if super::model_family_classification::has_model_root_marker(
+        model_family_registry,
+        current_directory,
+    ) {
+        if let Ok(Some(model_family)) =
+            super::classify_model_directory(model_family_registry, current_directory)
             && let Some(model_id) = model_identity(current_directory)
         {
             classified_artifacts.push(ClassifiedModelArtifact {
                 model_id,
-                upstream_revision: immutable_model_revision(current_directory, model_family),
+                upstream_revision: immutable_model_revision(
+                    model_family_registry,
+                    current_directory,
+                    model_family,
+                ),
                 model_directory: current_directory.to_path_buf(),
                 model_family,
             });
@@ -93,7 +110,13 @@ fn scan_classified_artifacts(
                 .and_then(|file_name| file_name.to_str())
                 .is_some_and(|file_name| file_name.starts_with('.'))
         {
-            scan_classified_artifacts(&entry_path, depth + 1, false, classified_artifacts)?;
+            scan_classified_artifacts(
+                model_family_registry,
+                &entry_path,
+                depth + 1,
+                false,
+                classified_artifacts,
+            )?;
         }
     }
     Ok(())
@@ -180,24 +203,29 @@ fn is_valid_provider_model_id(provider_model_id: &str) -> bool {
 
 /// Returns artifact provenance only when its source records an immutable revision candidate.
 pub(super) fn immutable_model_revision(
+    model_family_registry: &ModelFamilyRegistry,
     model_directory: &Path,
     model_family: ModelFamily,
 ) -> Option<String> {
     immutable_file_revision(
         model_directory,
-        authoritative_file_name(model_directory, model_family),
+        authoritative_file_name(model_family_registry, model_directory, model_family),
     )
 }
 
 /// The file whose download metadata records the artifact's revision: the one
 /// the directory was classified from, which for a folder without a pipeline
 /// index its family names.
-fn authoritative_file_name(model_directory: &Path, model_family: ModelFamily) -> &'static str {
+fn authoritative_file_name(
+    model_family_registry: &ModelFamilyRegistry,
+    model_directory: &Path,
+    model_family: ModelFamily,
+) -> &'static str {
     if model_directory.join("model_index.json").is_file() {
         "model_index.json"
     } else {
-        model_family
-            .description()
+        model_family_registry
+            .description_of(model_family)
             .map_or("config.json", |family_description| {
                 family_description.revision_file_name
             })

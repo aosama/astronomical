@@ -11,7 +11,7 @@ use std::collections::BTreeSet;
 
 use config::{
     FLUX2_KLEIN_MLX_4BIT_TRANSFORMER_INDEX_FILE_NAME, KOKORO_WEIGHTS_FILE_NAME,
-    MINIMUM_SERVABLE_CONTEXT_WINDOW_TOKENS, ModelFamily, PHONON_DEFAULT_VOICE_FILE_NAME,
+    MINIMUM_SERVABLE_CONTEXT_WINDOW_TOKENS, PHONON_DEFAULT_VOICE_FILE_NAME,
     PHONON_TOKENIZER_FILE_NAME, PHONON_WEIGHTS_FILE_NAME, classify_mflux_transformer_index_bytes,
     classify_pipeline_index_bytes, context_window_tokens, is_kokoro_configuration,
     is_phonon_configuration, required_shard_file_names,
@@ -161,8 +161,9 @@ impl DownloadExecutablePreflight {
                 "config.json is not valid JSON: {source}"
             ))
         })?;
-        let model_family =
-            ModelFamily::from_model_type(config_document.get("model_type").and_then(Value::as_str));
+        let model_family = config::model_family_of_model_type(
+            config_document.get("model_type").and_then(Value::as_str),
+        );
         let Some(model_family) = model_family else {
             return validate_speech_manifest_shape(manifest_file_paths, &config_document);
         };

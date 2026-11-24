@@ -1,105 +1,97 @@
-//! Every model family's description, in the order a folder is classified
+//! The families discovery recognizes, handed to it rather than known by it
 //! (issue #2473, Step 5).
 //!
-//! One explicit list, rather than registration at link time, so a reader
-//! sees every family in one place and a family left out fails the registry
-//! tests instead of vanishing at run time. Within each way of recognizing a
-//! folder (pipeline index, marker file, `model_type`) the first family that
-//! claims it wins, so the order below is the classification order. Each
-//! family declares its constant and its recognizers in its own module.
+//! Discovery holds the rules every family shares: how a folder is walked,
+//! read and classified. Which families exist is a list in the
+//! `model-family-registry` crate, above this one, so a family's own
+//! recognizers can live next to the family and this crate never names one.
+//! Every discovery entry point takes the registry, and the registry crate
+//! offers the same entry points with its list already passed in.
 
-use super::artifact_discovery::{
-    discover_clef_model, discover_flux2_klein_model, discover_kev_model, discover_kokoro_model,
-    discover_laya_bundled_checkpoints, discover_laya_model, discover_modernbert_model,
-    discover_phonon_model, discover_prism_hadamard_qwen35_model, discover_qwen_image_21_model,
-    discover_qwen3_5_model,
-};
-use super::model_family_description::{ModelFamilyDescription, ModelKind};
-use super::{
-    CLEF_MODEL_FAMILY, FLUX2_KLEIN_MODEL_FAMILY, KEV_MODEL_FAMILY, KOKORO_MODEL_FAMILY,
-    LAYA_MODEL_FAMILY, MODERNBERT_MODEL_FAMILY, PHONON_MODEL_FAMILY,
-    PRISM_HADAMARD_QWEN35_MODEL_FAMILY, QWEN_IMAGE_21_MODEL_FAMILY, QWEN3_5_MODEL_FAMILY, clef,
-    flux2_klein, flux2_klein_mlx_4bit, kev, kokoro, laya, modernbert, phonon,
-    prism_hadamard_qwen35, qwen_image_21, qwen3_5,
-};
+use std::path::Path;
 
-pub(super) static REGISTERED_MODEL_FAMILIES: [ModelFamilyDescription; 10] = [
-    ModelFamilyDescription::recognized_by_pipeline_index(
-        FLUX2_KLEIN_MODEL_FAMILY,
-        ModelKind::ImageGeneration,
-        flux2_klein::classifies_pipeline_index,
-        discover_flux2_klein_model,
-    )
-    .also_recognized_by_marker_file(
-        flux2_klein_mlx_4bit::classifies_directory,
-        flux2_klein_mlx_4bit::FLUX2_KLEIN_MLX_4BIT_TRANSFORMER_INDEX_FILE_NAME,
-    ),
-    ModelFamilyDescription::recognized_by_pipeline_index(
-        QWEN_IMAGE_21_MODEL_FAMILY,
-        ModelKind::ImageGeneration,
-        qwen_image_21::classifies_pipeline_index,
-        discover_qwen_image_21_model,
-    ),
-    ModelFamilyDescription::recognized_by_marker_file(
-        KEV_MODEL_FAMILY,
-        ModelKind::Decision,
-        kev::classifies_directory,
-        discover_kev_model,
-    ),
-    ModelFamilyDescription::recognized_by_marker_file(
-        CLEF_MODEL_FAMILY,
-        ModelKind::Decision,
-        clef::classifies_directory,
-        discover_clef_model,
-    ),
-    ModelFamilyDescription::recognized_by_marker_file(
-        KOKORO_MODEL_FAMILY,
-        ModelKind::Speech,
-        kokoro::classifies_directory,
-        discover_kokoro_model,
-    ),
-    ModelFamilyDescription::recognized_by_marker_file(
-        PHONON_MODEL_FAMILY,
-        ModelKind::Speech,
-        phonon::classifies_directory,
-        discover_phonon_model,
-    ),
-    ModelFamilyDescription::recognized_by_model_type(
-        QWEN3_5_MODEL_FAMILY,
-        ModelKind::Chat,
-        qwen3_5::recognizes_model_type,
-        discover_qwen3_5_model,
-    ),
-    ModelFamilyDescription::recognized_by_model_type(
-        PRISM_HADAMARD_QWEN35_MODEL_FAMILY,
-        ModelKind::Chat,
-        prism_hadamard_qwen35::recognizes_model_type,
-        discover_prism_hadamard_qwen35_model,
-    ),
-    ModelFamilyDescription::recognized_by_model_type(
-        MODERNBERT_MODEL_FAMILY,
-        ModelKind::Embedding,
-        modernbert::recognizes_model_type,
-        discover_modernbert_model,
-    ),
-    ModelFamilyDescription::recognized_by_model_type(
-        LAYA_MODEL_FAMILY,
-        ModelKind::Decision,
-        laya::recognizes_model_type,
-        discover_laya_model,
-    )
-    .with_bundled_models(discover_laya_bundled_checkpoints),
-];
+use super::model_family_description::{ModelFamily, ModelFamilyDescription, ModelKind};
 
-/// The registered description whose family has this identifier.
-pub(super) fn registered_description_named(
-    identifier: &str,
-) -> Option<&'static ModelFamilyDescription> {
-    REGISTERED_MODEL_FAMILIES
-        .iter()
-        .find(|registered_description| registered_description.model_family.as_str() == identifier)
+/// Every registered family's description, in classification order: within
+/// each way of recognizing a folder (pipeline index, marker file,
+/// `model_type`), the first family that claims it wins.
+#[derive(Clone, Copy)]
+pub struct ModelFamilyRegistry {
+    registered_families: &'static [ModelFamilyDescription],
 }
 
-#[cfg(test)]
-#[path = "model_family_registry_tests.rs"]
-mod model_family_registry_tests;
+impl ModelFamilyRegistry {
+    #[must_use]
+    pub const fn new(registered_families: &'static [ModelFamilyDescription]) -> Self {
+        Self {
+            registered_families,
+        }
+    }
+
+    /// Every description, in classification order.
+    #[must_use]
+    pub const fn descriptions(&self) -> &'static [ModelFamilyDescription] {
+        self.registered_families
+    }
+
+    /// The description of the family with this identifier.
+    #[must_use]
+    pub fn description_named(&self, identifier: &str) -> Option<&'static ModelFamilyDescription> {
+        self.registered_families
+            .iter()
+            .find(|registered_description| {
+                registered_description.model_family.as_str() == identifier
+            })
+    }
+
+    /// The registered family with this identifier.
+    #[must_use]
+    pub fn family_named(&self, identifier: &str) -> Option<ModelFamily> {
+        self.description_named(identifier)
+            .map(|description| description.model_family)
+    }
+
+    /// The family's description, or `None` for a family nothing registers.
+    #[must_use]
+    pub fn description_of(
+        &self,
+        model_family: ModelFamily,
+    ) -> Option<&'static ModelFamilyDescription> {
+        self.description_named(model_family.as_str())
+    }
+
+    /// The kind of model the family is, or `None` when it is not registered.
+    #[must_use]
+    pub fn kind_of(&self, model_family: ModelFamily) -> Option<ModelKind> {
+        self.description_of(model_family)
+            .map(|description| description.kind)
+    }
+
+    /// The first family that claims this `config.json` `model_type`, without
+    /// claiming the folder holds a servable model.
+    #[must_use]
+    pub fn family_of_model_type(&self, model_type: Option<&str>) -> Option<ModelFamily> {
+        self.registered_families
+            .iter()
+            .find(|family_description| family_description.claims_model_type(model_type))
+            .map(|family_description| family_description.model_family)
+    }
+
+    /// The first family whose marker file the folder carries.
+    #[must_use]
+    pub fn family_marked_by_file(&self, model_directory: &Path) -> Option<ModelFamily> {
+        self.registered_families
+            .iter()
+            .find(|family_description| family_description.claims_directory(model_directory))
+            .map(|family_description| family_description.model_family)
+    }
+
+    /// Whether a family marks this folder as a pipeline root that carries no
+    /// pipeline index of its own, as the 4-bit FLUX.2 Klein build does.
+    #[must_use]
+    pub fn marks_pipeline_root(&self, directory: &Path) -> bool {
+        self.registered_families
+            .iter()
+            .any(|family_description| family_description.marks_pipeline_root(directory))
+    }
+}

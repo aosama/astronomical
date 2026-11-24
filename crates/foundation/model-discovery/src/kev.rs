@@ -24,7 +24,7 @@ const MAXIMUM_SETTINGS_BYTES: u64 = 64 * 1024;
 const KEV_MAXIMUM_TOKENS_PER_QUESTION: u32 = 65_536 + 8_192;
 
 /// Whether `model_directory` is marked as a Kev decision model.
-pub(super) fn classifies_directory(model_directory: &Path) -> bool {
+pub fn classifies_directory(model_directory: &Path) -> bool {
     let Ok(settings_bytes) = bounded_artifact_file::read_bounded_nonempty_file(
         &model_directory.join(KEV_SETTINGS_FILE_NAME),
         MAXIMUM_SETTINGS_BYTES,

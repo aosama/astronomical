@@ -5,6 +5,7 @@
 //! that destination. The daemon resolver and the model-serving acceptance harness both
 //! resolve through this module, so journeys cannot drift from what the daemon advertises.
 
+use super::model_family_registry::ModelFamilyRegistry;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
@@ -39,22 +40,27 @@ pub struct EffectiveModelDiscovery {
 /// in the production precedence the daemon serves: the automatic Library destination wins
 /// identity collisions with authored roots, and an absent automatic root is simply skipped.
 pub fn discover_effective_models(
+    model_family_registry: &ModelFamilyRegistry,
     automatic_models_directory: &Path,
     configured_model_directories: &[PathBuf],
 ) -> Result<EffectiveModelDiscovery, EffectiveModelDiscoveryError> {
     match automatic_models_directory.try_exists() {
         Ok(true) => {
-            let mut effective_models =
-                discover_models(&[automatic_models_directory.to_path_buf()])?
-                    .into_iter()
-                    .flat_map(|directory_scan| directory_scan.discovered_models)
-                    .collect::<Vec<_>>();
+            let mut effective_models = discover_models(
+                model_family_registry,
+                &[automatic_models_directory.to_path_buf()],
+            )?
+            .into_iter()
+            .flat_map(|directory_scan| directory_scan.discovered_models)
+            .collect::<Vec<_>>();
             let automatic_model_ids = effective_models
                 .iter()
                 .map(|discovered_model| discovered_model.model_id.clone())
                 .collect::<HashSet<_>>();
-            let mut configured_discovery_report =
-                discover_models_excluding_ambiguous_identities(configured_model_directories)?;
+            let mut configured_discovery_report = discover_models_excluding_ambiguous_identities(
+                model_family_registry,
+                configured_model_directories,
+            )?;
             let configured_models = configured_discovery_report
                 .directory_scans
                 .into_iter()
@@ -74,8 +80,10 @@ pub fn discover_effective_models(
             })
         }
         Ok(false) => {
-            let discovery_report =
-                discover_models_excluding_ambiguous_identities(configured_model_directories)?;
+            let discovery_report = discover_models_excluding_ambiguous_identities(
+                model_family_registry,
+                configured_model_directories,
+            )?;
             Ok(EffectiveModelDiscovery {
                 discovered_models: discovery_report
                     .directory_scans
