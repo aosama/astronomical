@@ -481,7 +481,10 @@ fn should_parse_a_complete_entry_into_the_public_entry_type() {
     );
     assert_eq!(catalog_entry.revision(), VALID_REVISION);
     assert_eq!(catalog_entry.model_id(), "example-qwen");
-    assert_eq!(catalog_entry.family(), DownloadCatalogFamily::Qwen3_5);
+    assert_eq!(
+        Some(catalog_entry.family()),
+        DownloadCatalogFamily::named("qwen3_5")
+    );
     assert_eq!(catalog_entry.approximate_size_bytes(), 4_000_000_000);
     assert_eq!(
         catalog_entry.description(),
