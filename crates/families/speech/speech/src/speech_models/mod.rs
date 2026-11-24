@@ -8,13 +8,11 @@
 
 pub mod checkpoint_tensors;
 pub mod engine_settings;
-pub mod kokoro;
 pub mod mlx_layers;
-pub mod phonon;
 pub mod speech_engine_shell;
 pub mod speech_memory;
 pub mod speech_model_error;
 pub mod speech_request_slot;
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 pub mod speech_test_support;
 pub mod voice_files;

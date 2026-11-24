@@ -71,6 +71,33 @@ const FORBIDDEN_DEPENDENCY_RULES: &[ForbiddenDependencyRule] = &[
         forbidden_crate: "model-serving",
         rationale: "the speech crate must build and test without pulling in the serving crate, which drives the speech engines through a one-way edge",
     },
+    // Each speech family is a crate of its own (issue #2473, Step 7). Like
+    // the shell, it never reaches the serving crate, and one family never
+    // reaches another, so a family can be added or changed alone.
+    ForbiddenDependencyRule {
+        rule_name: "kokoro-without-serving",
+        source_crate: "kokoro",
+        forbidden_crate: "model-serving",
+        rationale: "the Kokoro crate must build and test without pulling in the serving crate, which drives the speech engines through a one-way edge",
+    },
+    ForbiddenDependencyRule {
+        rule_name: "phonon-without-serving",
+        source_crate: "phonon",
+        forbidden_crate: "model-serving",
+        rationale: "the Phonon crate must build and test without pulling in the serving crate, which drives the speech engines through a one-way edge",
+    },
+    ForbiddenDependencyRule {
+        rule_name: "kokoro-without-phonon",
+        source_crate: "kokoro",
+        forbidden_crate: "phonon",
+        rationale: "one speech family must not depend on another; what they share belongs in the speech shell",
+    },
+    ForbiddenDependencyRule {
+        rule_name: "phonon-without-kokoro",
+        source_crate: "phonon",
+        forbidden_crate: "kokoro",
+        rationale: "one speech family must not depend on another; what they share belongs in the speech shell",
+    },
     // The image families (issue #2340), like speech, implement a seam the
     // serving crate's worker drives.
     ForbiddenDependencyRule {

@@ -19,10 +19,13 @@ workspace = true
 
 [features]
 default = []
+# The test helpers the speech family crates' tests share.
+test-support = ["direct-mlx", "dep:tempfile"]
 direct-mlx = ["dep:runtime-integration", "dep:mlx-bridge", "dep:model-primitives", "model-primitives/direct-mlx", "dep:english-phonemes", "dep:config", "dep:tokenizers", "dep:serde_json", "dep:thiserror"]
 
-# The text-to-speech families (Kokoro, Phonon) and the worker-facing seam
-# they implement (issue #2340). One-way edge: nothing here may depend on
+# The speech shell: the worker-facing seam every text-to-speech family
+# implements, and the layers, checkpoint and voice reading they share. Each
+# family is a crate of its own beside it (issue #2473, Step 7). One-way edge: nothing here may depend on
 # model-serving; `cargo xtask check-architecture` enforces it.
 [dependencies]
 # The speech request, failures and audio encoding every side shares.
@@ -38,6 +41,8 @@ mlx-bridge = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
 thiserror = { workspace = true, optional = true }
 tokenizers = { workspace = true, optional = true }
+# Only the shared test helpers use it, through `test-support`.
+tempfile = { version = "=3.27.0", optional = true }
 
 [dev-dependencies]
 # The GPU tests sample the process-global MLX allocator, so they serialize.
