@@ -11,5 +11,11 @@ version.workspace = true
 # Deliberately dependency-free, so no crate that depends on this leaf gains a
 # transitive dependency by doing so (issue #1998).
 
+# The test lanes this package runs in. `cargo xtask lane-cargo` builds each
+# lane's command from these declarations (issue #2473, Step 6), so no alias
+# lists packages by hand; an empty list says the package is in no lane.
+[package.metadata.astronomical]
+test-lanes = ["integration", "integration-and-rest", "nextest"]
+
 [lints]
 workspace = true

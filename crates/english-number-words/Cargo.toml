@@ -10,5 +10,11 @@ version.workspace = true
 
 # Deliberately dependency-free: any speech front end can read numbers with it.
 
+# The test lanes this package runs in. `cargo xtask lane-cargo` builds each
+# lane's command from these declarations (issue #2473, Step 6), so no alias
+# lists packages by hand; an empty list says the package is in no lane.
+[package.metadata.astronomical]
+test-lanes = []
+
 [lints]
 workspace = true
