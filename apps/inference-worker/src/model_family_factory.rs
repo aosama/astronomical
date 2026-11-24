@@ -1,11 +1,7 @@
-//! Model-family dispatch: build the concrete image or autoregressive engine for
-//! a verified model directory, routing each supported family (FLUX.2-klein,
-//! Qwen-Image-21, the Qwen3.5 text engine) through its own startup pipeline.
-//!
-//! The Qwen3.5 startup pipeline lives alongside this orchestrator in the
-//! `model_family_factory/` folder: the startup routine (`qwen3_5_model_startup`),
-//! the dense placement it consults (`qwen3_5_dense_engine_placement`), and its
-//! failure type (`qwen3_5_model_startup_error`).
+//! Model-family dispatch: build the unloaded runtime of whichever family a
+//! verified model directory classifies as, through that family's builder in
+//! the family list. Each family's own startup lives with the family; the
+//! factory holds only the settings every builder reads.
 
 use std::path::PathBuf;
 
@@ -16,30 +12,25 @@ use ipc_protocol::{
     WorkerImageGenerationModelConfiguration, WorkerModelConfiguration,
 };
 use model_serving::{
+    ChatEngineSelection, ChatFamilyConstruction, ChatFamilySettings, ChatRuntimeParts,
+};
+use model_serving::{
     DecisionEngine, EmbeddingEngine, EmbeddingFamilyConstruction, EngineBackedWorker,
     FamilyEngineSettings, ImageArtifactRefusal, ImageFamilyConstruction, ImageGenerationEngine,
-    ModelFactory, ModelFactoryRuntime, ModelFamilyInferenceEngine,
-    PrismHadamardQwen35ServingSettings, Qwen3_5GenerationProcessor, RecordedTrainingEngine,
-    SpeechEngine, boxed_chat_engine, image_engine_from_evidence,
-    initialize_prism_hadamard_qwen35_model_with_serving_settings, verified_image_artifact,
+    ModelFactory, ModelFactoryRuntime, ModelFamilyInferenceEngine, Qwen3_5GenerationProcessor,
+    RecordedTrainingEngine, SpeechEngine, image_engine_from_evidence, verified_image_artifact,
 };
+
+use crate::worker_startup::error::bound_public_model_load_failure_reason;
 
 mod configured_family_check;
 mod family_runtime_builders;
 #[cfg(test)]
 mod family_test_support;
-mod qwen3_5_dense_engine_placement;
-#[cfg(test)]
-mod qwen3_5_dense_engine_placement_tests;
-mod qwen3_5_model_startup;
-mod qwen3_5_model_startup_error;
-
-#[cfg(test)]
-mod qwen3_5_model_startup_error_tests;
 
 use self::configured_family_check::classified_model_family;
+use self::family_runtime_builders::chat_runtime_builder;
 use self::family_runtime_builders::family_runtime_builder;
-use self::qwen3_5_model_startup::Qwen3_5EngineSelection;
 
 /// Creates the concrete family processor and engine for a selected model directory.
 #[doc(hidden)]
@@ -136,49 +127,68 @@ impl ModelFamilyFactory {
         self
     }
 
-    async fn create_qwen3_5_runtime(
+    /// The settings every chat family's startup reads.
+    fn chat_family_settings(&self) -> ChatFamilySettings {
+        ChatFamilySettings {
+            effective_mlx_memory_ceiling_bytes: self.effective_mlx_memory_ceiling_bytes,
+            mlx_buffer_cache_limit_bytes: self.mlx_buffer_cache_limit_bytes,
+            astro_ssd_prompt_cache_config: self.astro_ssd_prompt_cache_config.clone(),
+            neural_engine_program_directory: self.neural_engine_program_directory.clone(),
+            performance_attribution_enabled: self.performance_attribution_enabled,
+            decode_astro_expert_cache_policy: self.decode_astro_expert_cache_policy,
+            performance_attribution_log_path: self.performance_attribution_log_path.clone(),
+            astro_ssd_prompt_cache_enabled: self.astro_ssd_prompt_cache_enabled,
+        }
+    }
+
+    /// Builds a chat family's runtime on a blocking task, since its startup
+    /// reads the model folder and starts the engine's owner thread. Every
+    /// chat family's failure reason is bounded here, at the worker boundary.
+    async fn create_chat_runtime_parts<Family: ChatFamilyConstruction + 'static>(
         &self,
         model_directory_path: PathBuf,
         model_configuration: WorkerAutoregressiveModelConfiguration,
-        engine_selection: Qwen3_5EngineSelection,
-    ) -> Result<
-        (
-            model_serving::Qwen3_5GenerationProcessor,
-            ModelFamilyInferenceEngine,
-            Option<model_serving::EnginePlacement>,
-        ),
-        String,
-    > {
-        let effective_mlx_memory_ceiling_bytes = self.effective_mlx_memory_ceiling_bytes;
-        let mlx_buffer_cache_limit_bytes = self.mlx_buffer_cache_limit_bytes;
-        let astro_ssd_prompt_cache_config = self.astro_ssd_prompt_cache_config.clone();
-        let neural_engine_program_directory = self.neural_engine_program_directory.clone();
-        let performance_attribution_enabled = self.performance_attribution_enabled;
-        let decode_astro_expert_cache_policy = self.decode_astro_expert_cache_policy;
-        let performance_attribution_log_path = self.performance_attribution_log_path.clone();
-        let astro_ssd_prompt_cache_enabled = self.astro_ssd_prompt_cache_enabled;
+        engine_selection: ChatEngineSelection,
+    ) -> Result<ChatRuntimeParts, String> {
+        let chat_family_settings = self.chat_family_settings();
         tokio::task::spawn_blocking(move || {
-            let chunking = model_configuration.chunking.clone();
-            qwen3_5_model_startup::initialize_qwen3_5_model(
+            Family::build_chat_runtime(
+                chat_family_settings,
                 model_directory_path,
-                effective_mlx_memory_ceiling_bytes,
-                mlx_buffer_cache_limit_bytes,
-                astro_ssd_prompt_cache_config,
-                neural_engine_program_directory,
-                model_configuration.model_id,
-                model_configuration.maximum_context_tokens,
-                model_configuration.maximum_output_tokens,
-                astro_ssd_prompt_cache_enabled,
-                performance_attribution_enabled,
-                decode_astro_expert_cache_policy,
-                performance_attribution_log_path,
-                chunking,
+                model_configuration,
                 engine_selection,
             )
-            .map_err(|startup_error| startup_error.public_model_load_failure_reason())
         })
         .await
-        .map_err(|_| "Qwen3.5 initialization task failed".to_owned())?
+        .map_err(|_| Family::INITIALIZATION_TASK_FAILURE.to_owned())?
+        .map_err(bound_public_model_load_failure_reason)
+    }
+
+    /// The chat runtime a worker-directed swap builds, from the family the
+    /// folder classifies as.
+    async fn create_chat_swap_runtime_parts(
+        &self,
+        model_directory: &str,
+        model_configuration: WorkerModelConfiguration,
+        engine_selection: ChatEngineSelection,
+    ) -> Result<ChatRuntimeParts, String> {
+        let model_directory_path = PathBuf::from(model_directory);
+        let model_family =
+            classified_model_family(model_directory_path.clone(), &model_configuration).await?;
+        let WorkerModelConfiguration::Autoregressive(chat_configuration) = model_configuration
+        else {
+            return Err("an engine swap requires an autoregressive model".to_owned());
+        };
+        let Some(build_chat_runtime) = model_family.and_then(chat_runtime_builder) else {
+            return Err("selected model has an unsupported model family".to_owned());
+        };
+        build_chat_runtime(
+            self,
+            model_directory_path,
+            chat_configuration,
+            engine_selection,
+        )
+        .await
     }
 }
 
@@ -217,20 +227,16 @@ impl
         model_directory: &str,
         model_configuration: WorkerModelConfiguration,
     ) -> Result<ModelFamilyRuntime, String> {
-        let WorkerModelConfiguration::Autoregressive(model_configuration) = model_configuration
-        else {
-            return Err("streaming retry requires an autoregressive model".to_owned());
-        };
-        let (generation_processor, inference_engine, _) = self
-            .create_qwen3_5_runtime(
-                PathBuf::from(model_directory),
+        let chat_runtime_parts = self
+            .create_chat_swap_runtime_parts(
+                model_directory,
                 model_configuration,
-                Qwen3_5EngineSelection::StreamingRetry,
+                ChatEngineSelection::StreamingRetry,
             )
             .await?;
         Ok(ModelFactoryRuntime::autoregressive_for_streaming_retry(
-            generation_processor,
-            inference_engine,
+            chat_runtime_parts.generation_processor,
+            chat_runtime_parts.inference_engine,
         ))
     }
 
@@ -243,20 +249,16 @@ impl
         model_directory: &str,
         model_configuration: WorkerModelConfiguration,
     ) -> Result<ModelFamilyRuntime, String> {
-        let WorkerModelConfiguration::Autoregressive(model_configuration) = model_configuration
-        else {
-            return Err("resident promotion requires an autoregressive model".to_owned());
-        };
-        let (generation_processor, inference_engine, _) = self
-            .create_qwen3_5_runtime(
-                PathBuf::from(model_directory),
+        let chat_runtime_parts = self
+            .create_chat_swap_runtime_parts(
+                model_directory,
                 model_configuration,
-                Qwen3_5EngineSelection::ResidentPromotion,
+                ChatEngineSelection::ResidentPromotion,
             )
             .await?;
         Ok(ModelFactoryRuntime::autoregressive_for_resident_promotion(
-            generation_processor,
-            inference_engine,
+            chat_runtime_parts.generation_processor,
+            chat_runtime_parts.inference_engine,
         ))
     }
 
@@ -291,28 +293,6 @@ impl
 }
 
 impl ModelFamilyFactory {
-    /// Creates the Qwen3.5 autoregressive runtime through the automatic
-    /// startup selection. Automatic selection always yields a startup
-    /// placement; the worker's model swap rejects a runtime without one.
-    async fn create_qwen3_5_autoregressive_runtime(
-        &self,
-        model_directory_path: PathBuf,
-        model_configuration: WorkerAutoregressiveModelConfiguration,
-    ) -> Result<ModelFamilyRuntime, String> {
-        let (generation_processor, qwen3_5_engine, engine_placement) = self
-            .create_qwen3_5_runtime(
-                model_directory_path,
-                model_configuration,
-                Qwen3_5EngineSelection::Automatic(self.diagnostic_qwen3_5_engine_override),
-            )
-            .await?;
-        Ok(ModelFactoryRuntime::Autoregressive {
-            processor: generation_processor,
-            engine: qwen3_5_engine,
-            engine_placement,
-        })
-    }
-
     /// The settings every family's engine builder reads.
     fn family_engine_settings(&self) -> FamilyEngineSettings {
         FamilyEngineSettings {
@@ -350,58 +330,6 @@ impl ModelFamilyFactory {
                 verified_evidence,
             ),
         )))
-    }
-
-    /// Initializes the folded-ternary Prism-Hadamard runtime on a blocking
-    /// task. The folded pack is dense, so complete residency is not a
-    /// sparse-expert concern and the placement records that the resident
-    /// engine fits by construction.
-    async fn create_prism_hadamard_autoregressive_runtime(
-        &self,
-        model_directory_path: PathBuf,
-        model_configuration: WorkerAutoregressiveModelConfiguration,
-    ) -> Result<ModelFamilyRuntime, String> {
-        let effective_mlx_memory_ceiling_bytes = self.effective_mlx_memory_ceiling_bytes;
-        let mlx_buffer_cache_limit_bytes = self.mlx_buffer_cache_limit_bytes;
-        let performance_attribution_enabled = self.performance_attribution_enabled;
-        let performance_attribution_log_path = self.performance_attribution_log_path.clone();
-        let astro_ssd_prompt_cache_enabled = self.astro_ssd_prompt_cache_enabled;
-        let astro_ssd_prompt_cache_config = self.astro_ssd_prompt_cache_config.clone();
-        let initialization_task_result = tokio::task::spawn_blocking(move || {
-            let (generation_processor, prism_engine) =
-                initialize_prism_hadamard_qwen35_model_with_serving_settings(
-                    &model_directory_path,
-                    effective_mlx_memory_ceiling_bytes,
-                    mlx_buffer_cache_limit_bytes,
-                    performance_attribution_enabled,
-                    PrismHadamardQwen35ServingSettings {
-                        maximum_context_tokens: Some(model_configuration.maximum_context_tokens),
-                        maximum_output_tokens: Some(model_configuration.maximum_output_tokens),
-                        prompt_processing_chunk_tokens: model_configuration
-                            .chunking
-                            .fixed_prompt_processing_chunk_size_tokens,
-                        // The folded pack ships the Qwen thinking
-                        // template and the shared processor honors
-                        // per-request thinking budgets.
-                        enable_thinking: true,
-                        chunking: model_configuration.chunking.clone(),
-                        astro_ssd_prompt_cache_enabled,
-                        astro_ssd_prompt_cache_config: astro_ssd_prompt_cache_enabled
-                            .then_some(astro_ssd_prompt_cache_config),
-                        performance_attribution_log_path: Some(performance_attribution_log_path),
-                    },
-                )
-                .map_err(|startup_error| startup_error.to_string())?;
-            Ok::<_, String>((generation_processor, prism_engine))
-        })
-        .await
-        .map_err(|_| "folded ternary initialization task failed".to_owned())?;
-        let (generation_processor, prism_engine) = initialization_task_result?;
-        Ok(ModelFactoryRuntime::autoregressive(
-            generation_processor,
-            boxed_chat_engine(prism_engine),
-            model_serving::EnginePlacement::CompleteResidencyFits,
-        ))
     }
 
     /// Wraps a decision family's unloaded engine for serving. The unloaded

@@ -29,10 +29,13 @@
         PHONON_FAMILY_DESCRIPTION,
         Speech(build_speech_runtime::<model_serving::PhononSpeechFamily>)
     ),
-    model_family!(QWEN3_5_FAMILY_DESCRIPTION, Chat(build_qwen3_5_runtime)),
+    model_family!(
+        QWEN3_5_FAMILY_DESCRIPTION,
+        Chat(build_chat_runtime::<model_serving::Qwen3_5ChatFamily>)
+    ),
     model_family!(
         PRISM_HADAMARD_QWEN35_FAMILY_DESCRIPTION,
-        Chat(build_prism_hadamard_qwen35_runtime)
+        Chat(build_chat_runtime::<model_serving::PrismHadamardQwen35ChatFamily>)
     ),
     model_family!(
         MODERNBERT_FAMILY_DESCRIPTION,
