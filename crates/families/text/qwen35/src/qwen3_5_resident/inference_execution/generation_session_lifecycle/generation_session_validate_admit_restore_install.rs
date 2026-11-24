@@ -2,19 +2,25 @@ use crate::qwen3_5_core::shared_execution::astro_ssd_prompt_cache_restore;
 use crate::qwen3_5_core::shared_execution::generation_start_steps;
 use crate::qwen3_5_core::shared_execution::generation_visual_embedding_validation;
 use crate::{
-    EngineGenerationStart, InferenceEngineError, PerformanceAttribution, PerformanceCounter,
-    Qwen3_5InferenceRequest, Qwen3_5SamplingStrategy, Qwen3_5ThinkingBudgetState,
+    EngineGenerationStart, InferenceEngineError, PerformanceAttribution, Qwen3_5InferenceRequest,
+    Qwen3_5SamplingStrategy, Qwen3_5ThinkingBudgetState,
 };
 
 use mlx_bridge::MlxArray;
 
-use super::engine_request::{Qwen3_5EngineRequest, ResidentRequestExtension};
+use super::engine_request::ResidentRequestExtension;
 use super::{Qwen3_5EngineState, qwen3_5_runtime_error};
 use crate::qwen3_5_core::decoder::RequestDecoderStateStack;
 use crate::qwen3_5_core::shared_execution::astro_ssd_prompt_cache_visual_identity::{
     Qwen3_5AstroSsdPromptCacheVisualIdentity, Qwen3_5AstroSsdPromptCacheVisualIdentityInput,
 };
+use crate::qwen3_5_core::shared_execution::engine_request_installation::{
+    AdmittedGenerationSession, new_engine_request,
+};
 use crate::qwen3_5_core::shared_execution::generation_request_validation::{self};
+use crate::qwen3_5_core::shared_execution::generation_session_position::{
+    GenerationSessionPosition, derive_generation_session_position,
+};
 use engine_core::astro_ssd_prompt_cache::block_causal_input::AstroSsdPromptCacheBlockCausalInput;
 
 /// The prompt-side identity of a generation session: token list, image-pad
@@ -43,7 +49,7 @@ struct InstallActiveGenerationRequest<'a> {
     random_state: Option<MlxArray>,
     inference_request: &'a mut Qwen3_5InferenceRequest,
     thinking_budget_state: Qwen3_5ThinkingBudgetState,
-    generation_position: super::generation_restore_position_derivation::GenerationSessionPosition,
+    generation_position: GenerationSessionPosition,
     performance_attribution: PerformanceAttribution,
 }
 
@@ -157,9 +163,7 @@ impl Qwen3_5EngineState {
                 &mut performance_attribution,
             )?;
         let generation_position =
-            super::generation_restore_position_derivation::derive_generation_session_position(
-                restored_astro_ssd_prompt_cache_outcome,
-            );
+            derive_generation_session_position(restored_astro_ssd_prompt_cache_outcome);
         // If the request instead carries raw processed images, the vision
         // encoder runs now: plan where each image's embedding rows land in
         // the not-yet-restored suffix, then encode pixels into rows.
@@ -353,37 +357,8 @@ impl Qwen3_5EngineState {
             inference_request,
             thinking_budget_state,
             generation_position,
-            mut performance_attribution,
+            performance_attribution,
         } = install_inputs;
-        let sampling_selects_highest_logit =
-            matches!(sampling_strategy, Qwen3_5SamplingStrategy::HighestLogit);
-        let effective_temperature_thousandths = match sampling_strategy {
-            Qwen3_5SamplingStrategy::HighestLogit => 0,
-            Qwen3_5SamplingStrategy::TopKTopP {
-                temperature_thousandths,
-                ..
-            } => temperature_thousandths,
-        };
-        // Observability: one log line plus two counters (prompt size, and
-        // how much of it came from the `astro_ssd_prompt_cache`) so each request's
-        // behavior stays measurable after the fact.
-        tracing::info!(
-            request_id = inference_request.request_id().value(),
-            astro_ssd_prompt_cache_is_available = self.core.astro_ssd_prompt_cache.is_some(),
-            sampling_selects_highest_logit,
-            effective_temperature_thousandths,
-            "resolved target-only generation request session"
-        );
-        performance_attribution.record_counter(
-            PerformanceCounter::PromptTokenCount,
-            u64::try_from(prompt_identity.prompt_token_ids.len()).unwrap_or(u64::MAX),
-        );
-        performance_attribution.record_counter(
-            PerformanceCounter::AstroSsdPromptCacheRestoredTokenCount,
-            u64::from(generation_position.astro_ssd_prompt_cache_restored_token_count),
-        );
-        let target_eligible_prompt_work_token_count =
-            u64::try_from(prompt_identity.prompt_token_ids.len()).unwrap_or(u64::MAX);
         // If any prompt tokens remain beyond the restored prefix, the
         // first work this request performs is prompt prefill (the "Target"
         // phase); a fully restored prompt skips prefill and starts
@@ -400,47 +375,28 @@ impl Qwen3_5EngineState {
             prompt_prefill_end_exclusive,
             sampling_strategy,
         );
-        self.core.active_request = Some(Qwen3_5EngineRequest {
-            request_decoder_state,
-            generated_token_count: 0,
-            input_token_ids: prompt_identity.prompt_token_ids,
-            last_restored_astro_ssd_prompt_cache_block_key: generation_position
-                .last_restored_astro_ssd_prompt_cache_block_key,
-            can_use_astro_ssd_prompt_cache: prompt_identity.can_use_astro_ssd_prompt_cache,
-            maximum_output_tokens: inference_request.max_output_tokens(),
-            astro_ssd_prompt_cache_block_causal_inputs: prompt_identity
-                .astro_ssd_prompt_cache_block_causal_inputs,
-            next_position_tokens: generation_position.next_position_tokens,
-            pending_generated_token: None,
-            // How many prompt tokens are already considered processed —
-            // restored tokens count without being recomputed.
-            prefill_cursor: generation_position.prefill_cursor,
-            random_state,
-            request_id: inference_request.request_id(),
-            sampling_strategy,
-            repetition_penalty_thousandths: inference_request.repetition_penalty_thousandths(),
-            penalized_token_ids: inference_request.initial_penalized_token_ids(),
-            visual_embeddings,
-            consumed_visual_embedding_count: 0,
-            has_visual_inputs: prompt_identity.has_precomputed_visual_embeddings
-                || prompt_identity.has_processed_visual_images,
-            image_pad_token_id: prompt_identity.image_pad_token_id,
-            thinking_budget_state,
-            performance_attribution,
-            prompt_work_reuse: ipc_protocol::WorkerPromptWorkReuse {
-                target_eligible_token_count: target_eligible_prompt_work_token_count,
-                target_restored_token_count: generation_position.restored_target_work_token_count,
+        let astro_ssd_prompt_cache_is_available = self.core.astro_ssd_prompt_cache.is_some();
+        self.core.active_request = Some(new_engine_request(
+            AdmittedGenerationSession {
+                request_decoder_state,
+                prompt_token_ids: prompt_identity.prompt_token_ids,
+                can_use_astro_ssd_prompt_cache: prompt_identity.can_use_astro_ssd_prompt_cache,
+                astro_ssd_prompt_cache_block_causal_inputs: prompt_identity
+                    .astro_ssd_prompt_cache_block_causal_inputs,
+                astro_ssd_prompt_cache_is_available,
+                session_position: &generation_position,
+                sampling_strategy,
+                random_state,
+                inference_request,
+                visual_embeddings,
+                has_visual_inputs: prompt_identity.has_precomputed_visual_embeddings
+                    || prompt_identity.has_processed_visual_images,
+                image_pad_token_id: prompt_identity.image_pad_token_id,
+                thinking_budget_state,
+                performance_attribution,
             },
-            astro_ssd_prompt_cache_diagnostics: generation_position
-                .astro_ssd_prompt_cache_diagnostics
-                .clone(),
-            generation_residency_preparation_attempted: false,
-            first_decode_forward_elapsed_millis: None,
-            outgrown_attention_slab_reclaim: Default::default(),
-            generation_preparation_announced: false,
-            structured_generation: inference_request.take_structured_generation(),
             engine_extension,
-        });
+        ));
         let restored_prompt_prefix_token_count = u32::try_from(generation_position.prefill_cursor)
             .map_err(
                 super::generation_error_constructors::restored_prompt_prefix_exceeds_u32_range_error,
