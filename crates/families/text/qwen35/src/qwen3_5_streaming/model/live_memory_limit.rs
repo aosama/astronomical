@@ -10,19 +10,13 @@ use crate::{
     geometry_safe_minimum_mlx_memory_ceiling_bytes,
 };
 
+use crate::qwen3_5_core::model::live_memory_observation::{
+    LiveMemoryObservation, observe_live_memory, post_reclamation_active_memory_bytes,
+    requested_mlx_memory_limits_when_changed,
+};
+
 use super::Qwen3_5Model;
 use super::prefill_partial_layer_read::should_clear_prefill_completion_refusals;
-
-/// The live runtime facts one ceiling-change decision reads: limits currently
-/// installed, the ceiling they imply, the model's geometry-safe minimum, and
-/// currently active memory. Snapshotting them together keeps the decision
-/// operating on one coherent instant of the runtime.
-struct LiveMemoryObservation {
-    current_mlx_memory_limits: MlxMemoryLimits,
-    current_mlx_memory_ceiling_bytes: u64,
-    minimum_mlx_memory_ceiling_bytes: u64,
-    current_active_memory_bytes: u64,
-}
 
 impl Qwen3_5Model {
     pub fn minimum_mlx_memory_ceiling_bytes(&self) -> Result<u64, InferenceEngineError> {
@@ -35,13 +29,12 @@ impl Qwen3_5Model {
         &mut self,
         requested_mlx_memory_ceiling_bytes: u64,
     ) -> Result<(u64, MlxMemoryLimits), InferenceEngineError> {
-        let live_memory_observation = self.observed_live_memory_state()?;
         let LiveMemoryObservation {
             current_mlx_memory_limits,
             current_mlx_memory_ceiling_bytes,
             minimum_mlx_memory_ceiling_bytes,
             current_active_memory_bytes,
-        } = live_memory_observation;
+        } = observe_live_memory(&self.runtime, self.minimum_mlx_memory_ceiling_bytes()?)?;
         let expert_statistics = self.astro_expert_cache_statistics();
         let ceiling_change_decision = MemoryCeilingChangeRequirements {
             current_ceiling_bytes: current_mlx_memory_ceiling_bytes,
@@ -65,21 +58,13 @@ impl Qwen3_5Model {
                         .to_owned(),
             });
         }
-        let requested_mlx_memory_ceiling_bytes_as_usize =
-            usize::try_from(requested_mlx_memory_ceiling_bytes).map_err(|_| {
-                crate::qwen3_5_core::engine_errors::fatal_engine_error(
-                    "requested MLX memory ceiling exceeds the platform range",
-                )
-            })?;
-        if requested_mlx_memory_ceiling_bytes == current_mlx_memory_ceiling_bytes {
+        let Some(requested_mlx_memory_limits) = requested_mlx_memory_limits_when_changed(
+            requested_mlx_memory_ceiling_bytes,
+            current_mlx_memory_ceiling_bytes,
+        )?
+        else {
             return Ok((minimum_mlx_memory_ceiling_bytes, current_mlx_memory_limits));
-        }
-
-        let requested_mlx_memory_limits = MlxMemoryLimits::new(
-            requested_mlx_memory_ceiling_bytes_as_usize,
-            requested_mlx_memory_ceiling_bytes_as_usize,
-        )
-        .map_err(crate::qwen3_5_core::engine_errors::qwen3_5_runtime_error)?;
+        };
         let is_lowering_mlx_memory_ceiling = matches!(
             ceiling_change_decision,
             MemoryCeilingChangeDecision::Lower { .. }
@@ -145,38 +130,6 @@ impl Qwen3_5Model {
         }
     }
 
-    /// Everything the ceiling-change decision needs to observe about the live
-    /// runtime before any limit moves: the limits currently installed, the
-    /// ceiling they imply, the geometry-safe minimum for this model, and the
-    /// memory actually active right now.
-    fn observed_live_memory_state(&self) -> Result<LiveMemoryObservation, InferenceEngineError> {
-        let current_mlx_memory_limits = self.runtime.memory_limits();
-        let current_mlx_memory_ceiling_bytes =
-            u64::try_from(current_mlx_memory_limits.active_memory_limit_bytes()).map_err(|_| {
-                crate::qwen3_5_core::engine_errors::fatal_engine_error(
-                    "current MLX memory ceiling exceeds the u64 range",
-                )
-            })?;
-        let minimum_mlx_memory_ceiling_bytes = self.minimum_mlx_memory_ceiling_bytes()?;
-        let current_active_memory_bytes = u64::try_from(
-            self.runtime
-                .memory_snapshot()
-                .map_err(crate::qwen3_5_core::engine_errors::qwen3_5_runtime_error)?
-                .active_memory_bytes(),
-        )
-        .map_err(|_| {
-            crate::qwen3_5_core::engine_errors::fatal_engine_error(
-                "current MLX active memory exceeds the u64 range",
-            )
-        })?;
-        Ok(LiveMemoryObservation {
-            current_mlx_memory_limits,
-            current_mlx_memory_ceiling_bytes,
-            minimum_mlx_memory_ceiling_bytes,
-            current_active_memory_bytes,
-        })
-    }
-
     /// Lowers the ceiling by first reclaiming retained experts under the old,
     /// larger limit, then proving the reclaimed memory fits the new one.
     /// Native eviction comes first because the old MLX ceiling still permits
@@ -193,19 +146,8 @@ impl Qwen3_5Model {
         self.prepare_expert_residency_for_lower_mlx_memory_limit(
             requested_mlx_memory_ceiling_bytes,
         )?;
-        let post_reclamation_mlx_memory_snapshot = self
-            .runtime
-            .synchronize_gpu_stream_and_clear_mlx_buffer_cache()
-            .and_then(|()| self.runtime.memory_snapshot())
-            .map_err(crate::qwen3_5_core::engine_errors::qwen3_5_runtime_error)?;
-        let post_reclamation_active_memory_bytes = u64::try_from(
-            post_reclamation_mlx_memory_snapshot.active_memory_bytes(),
-        )
-        .map_err(|_| {
-            crate::qwen3_5_core::engine_errors::fatal_engine_error(
-                "post-reclamation MLX active memory exceeds the u64 range",
-            )
-        })?;
+        let post_reclamation_active_memory_bytes =
+            post_reclamation_active_memory_bytes(&self.runtime)?;
         if post_reclamation_active_memory_bytes > requested_mlx_memory_ceiling_bytes {
             self.restore_memory_ceiling_policy(previous_memory_ceiling_bytes)?;
             return Err(crate::qwen3_5_core::engine_errors::fatal_engine_error(
