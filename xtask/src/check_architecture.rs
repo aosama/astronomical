@@ -36,6 +36,15 @@ const FORBIDDEN_DEPENDENCY_RULES: &[ForbiddenDependencyRule] = &[
         forbidden_crate: "mlx-bridge",
         rationale: "the memory policy crate must build and test in the integration lane without ever pulling in the serving crate or its graphics-processor tests",
     },
+    // Model discovery (issue #2473, Step 5) is what the daemon recognizes
+    // folders with, and the daemon never links MLX. Discovery reaching the
+    // bindings would pull the graphics-processor world into the daemon.
+    ForbiddenDependencyRule {
+        rule_name: "model-discovery-without-mlx-bindings",
+        source_crate: "model-discovery",
+        forbidden_crate: "mlx-bridge",
+        rationale: "model discovery must build without the MLX bindings, because the daemon discovers models through it and never links MLX",
+    },
     ForbiddenDependencyRule {
         rule_name: "policy-without-mlx-fork-bindings",
         source_crate: "memory-policy",

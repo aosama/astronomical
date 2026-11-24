@@ -451,13 +451,12 @@ dependencies = [
 name = "config"
 version = "0.2.134"
 dependencies = [
- "expert-atlas",
  "libc",
  "lowercase-hex",
+ "model-discovery",
  "serde",
  "serde_json",
  "sha2",
- "speech-contract",
  "tempfile",
  "test-harness",
  "thiserror",
@@ -1530,6 +1529,20 @@ name = "mlx-c-fork"
 version = "0.2.134"
 dependencies = [
  "mlx-bridge",
+]
+
+[[package]]
+name = "model-discovery"
+version = "0.2.134"
+dependencies = [
+ "expert-atlas",
+ "lowercase-hex",
+ "serde",
+ "serde_json",
+ "sha2",
+ "speech-contract",
+ "tempfile",
+ "thiserror",
 ]
 
 [[package]]

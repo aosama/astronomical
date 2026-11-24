@@ -1,10 +1,18 @@
+//! Model discovery (issue #2473, Step 5): how Astronomical recognizes a
+//! model folder, which family it belongs to, and what it can serve, from the
+//! folder alone. It was a module of `config`; it is a crate of its own so the
+//! model families' own recognizers can move next to their families and still
+//! sit below `config`, which reads discovery when it loads settings. `config`
+//! re-exports this crate's public surface, so existing paths keep resolving.
+//!
+//! The crate reads files and parses documents only: it never links MLX, so
+//! the daemon can discover models without the engines.
+
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
 use thiserror::Error;
-
-use crate::model_discovery_huggingface_hub_cache;
 
 const MAXIMUM_PUBLIC_DISCOVERY_DIAGNOSTICS: usize = 32;
 
@@ -21,10 +29,15 @@ mod kokoro;
 mod laya;
 mod marked_decision_folder;
 mod model_card_front_matter;
+mod model_discovery_huggingface_hub_cache;
 mod model_family_classification;
 mod model_family_description;
 mod model_family_registry;
 mod model_folder_placement;
+mod model_identity;
+#[cfg(test)]
+#[path = "model_identity_tests.rs"]
+mod model_identity_tests;
 mod modernbert;
 mod phonon;
 mod prism_hadamard_qwen35;
@@ -60,6 +73,10 @@ pub use model_family_classification::{
 };
 pub use model_family_description::{ModelFamily, ModelFamilyDescription, ModelKind};
 pub use model_folder_placement::is_discoverable_model_folder;
+pub use model_identity::{
+    configured_model_id_for, decode_huggingface_hub_cache_directory_name, leaf_model_id,
+    near_model_matches, resolve_model_id,
+};
 pub use modernbert::MODERNBERT_MODEL_FAMILY;
 pub use phonon::PHONON_MODEL_FAMILY;
 pub use phonon::{

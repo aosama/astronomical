@@ -17,11 +17,9 @@ test-lanes = ["integration", "integration-and-rest", "nextest"]
 workspace = true
 
 [dependencies]
-expert-atlas = { path = "../../engine/expert-atlas" }
+# Model discovery, which config reads when it loads settings and re-exports.
+model-discovery = { path = "../model-discovery" }
 lowercase-hex = { path = "../lowercase-hex" }
-# The voice-name rule discovery lists speech voices by, shared with the
-# engines that load them; pure Rust with no further dependencies.
-speech-contract = { path = "../../contracts/speech-contract" }
 libc.workspace = true
 serde.workspace = true
 serde_json.workspace = true
