@@ -29,6 +29,8 @@ pub mod adapter_target;
 
 pub mod attention;
 
+pub mod family_engine_settings;
+
 #[cfg(feature = "direct-mlx")]
 pub mod forward_pass_memory;
 
@@ -63,6 +65,8 @@ pub mod sparse_experts;
 // they moved here; the serving crate and the families re-export or import it.
 #[cfg(feature = "direct-mlx")]
 pub use attention::build_causal_sliding_window_mask;
+
+pub use family_engine_settings::FamilyEngineSettings;
 
 pub use attention::{
     RopeFrequencyError, SlidingWindowVisibilityError, YarnRopeFrequencyDenominators,

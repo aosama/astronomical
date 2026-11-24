@@ -7,11 +7,11 @@
 [
     model_family!(
         FLUX2_KLEIN_FAMILY_DESCRIPTION,
-        ImageGeneration(build_flux2_klein_runtime)
+        ImageGeneration(build_image_runtime::<model_serving::Flux2KleinImageFamily>)
     ),
     model_family!(
         QWEN_IMAGE_21_FAMILY_DESCRIPTION,
-        ImageGeneration(build_qwen_image_21_runtime)
+        ImageGeneration(build_image_runtime::<model_serving::QwenImage21ImageFamily>)
     ),
     model_family!(
         KEV_FAMILY_DESCRIPTION,

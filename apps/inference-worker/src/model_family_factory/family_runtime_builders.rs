@@ -19,6 +19,7 @@ use ipc_protocol::{
     WorkerEmbeddingModelConfiguration, WorkerImageGenerationModelConfiguration,
     WorkerModelConfiguration, WorkerSpeechModelConfiguration,
 };
+use model_serving::ImageFamilyConstruction;
 use model_serving::decision_models::decision_engine_shell::{DecisionEngineShell, DecisionFamily};
 use model_serving::{ModelFactoryRuntime, SpeechEngine, SpeechEngineShell, SpeechFamily};
 
@@ -173,25 +174,15 @@ fn build_prism_hadamard_qwen35_runtime(
     )
 }
 
-fn build_flux2_klein_runtime(
+/// Every image family: its own folder check, then its engine.
+fn build_image_runtime<Family: ImageFamilyConstruction>(
     model_family_factory: &ModelFamilyFactory,
     model_directory_path: PathBuf,
     image_configuration: WorkerImageGenerationModelConfiguration,
 ) -> RuntimeFuture<'_> {
     Box::pin(
         model_family_factory
-            .create_flux2_klein_image_engine(model_directory_path, image_configuration),
-    )
-}
-
-fn build_qwen_image_21_runtime(
-    model_family_factory: &ModelFamilyFactory,
-    model_directory_path: PathBuf,
-    image_configuration: WorkerImageGenerationModelConfiguration,
-) -> RuntimeFuture<'_> {
-    Box::pin(
-        model_family_factory
-            .create_qwen_image_21_image_engine(model_directory_path, image_configuration),
+            .create_image_engine::<Family>(model_directory_path, image_configuration),
     )
 }
 

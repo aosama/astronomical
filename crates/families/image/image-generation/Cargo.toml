@@ -29,6 +29,8 @@ direct-mlx = ["model-primitives/direct-mlx"]
 # may depend on model-serving; `cargo xtask check-architecture`
 # enforces it.
 [dependencies]
+# The evidence discovery's folder check yields, which the worker builds from.
+model-discovery = { path = "../../../foundation/model-discovery" }
 model-primitives = { path = "../../../engine/model-primitives" }
 ipc-protocol = { path = "../../../contracts/ipc-protocol" }
 memory-policy = { path = "../../../foundation/memory-policy" }

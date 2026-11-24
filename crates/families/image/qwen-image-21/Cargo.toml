@@ -26,6 +26,10 @@ direct-mlx = ["image-generation/direct-mlx", "dep:runtime-integration", "dep:mlx
 # beside it holds the seam every image family implements. One-way edges:
 # nothing here may depend on model-serving or on another image family.
 [dependencies]
+# The folder evidence discovery's check yields, and this family's own
+# check, which the worker repeats before building the engine.
+model-discovery = { path = "../../../foundation/model-discovery" }
+qwen-image-21-recognition = { path = "recognition" }
 # The image engine seam and shell every image family shares.
 image-generation = { path = "../image-generation" }
 artifact-validation = { path = "../../../foundation/artifact-validation" }

@@ -302,16 +302,19 @@ impl Qwen3_5EngineState {
 pub(super) const fn known_memory_shortfall_bytes(
     prompt_prefill_chunk_attempt_error: &PromptPrefillChunkAttemptError,
 ) -> u64 {
-    match prompt_prefill_chunk_attempt_error {
-        PromptPrefillChunkAttemptError::ActiveMemoryLimitExceeded {
-            active_memory_bytes,
-            attempted_allocation_bytes,
-            allowed_active_memory_bytes,
-        } => (*active_memory_bytes as u64)
+    // Only an MLX limit refusal carries figures; the other failures, and the
+    // admission refusal this engine never makes, have none.
+    if let PromptPrefillChunkAttemptError::ActiveMemoryLimitExceeded {
+        active_memory_bytes,
+        attempted_allocation_bytes,
+        allowed_active_memory_bytes,
+    } = prompt_prefill_chunk_attempt_error
+    {
+        (*active_memory_bytes as u64)
             .saturating_add(*attempted_allocation_bytes as u64)
-            .saturating_sub(*allowed_active_memory_bytes as u64),
-        PromptPrefillChunkAttemptError::Engine(_)
-        | PromptPrefillChunkAttemptError::GraphicsProcessorMemoryExhausted { .. } => 0,
+            .saturating_sub(*allowed_active_memory_bytes as u64)
+    } else {
+        0
     }
 }
 
@@ -320,11 +323,11 @@ pub(super) const fn known_memory_shortfall_bytes(
 pub(super) const fn ran_out_of_memory(
     prompt_prefill_chunk_attempt_error: &PromptPrefillChunkAttemptError,
 ) -> bool {
-    match prompt_prefill_chunk_attempt_error {
-        PromptPrefillChunkAttemptError::Engine(_) => false,
+    matches!(
+        prompt_prefill_chunk_attempt_error,
         PromptPrefillChunkAttemptError::ActiveMemoryLimitExceeded { .. }
-        | PromptPrefillChunkAttemptError::GraphicsProcessorMemoryExhausted { .. } => true,
-    }
+            | PromptPrefillChunkAttemptError::GraphicsProcessorMemoryExhausted { .. }
+    )
 }
 
 #[cfg(test)]

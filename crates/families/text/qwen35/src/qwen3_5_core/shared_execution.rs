@@ -26,6 +26,7 @@ pub mod input_injection;
 pub mod mlx_memory_limit_change;
 pub mod model_loading_lifecycle;
 pub mod model_loading_steps;
+pub mod prompt_prefill_errors;
 pub mod prompt_processing_chunk_sizer;
 pub mod prompt_reading_steps;
 pub mod request_memory_release;

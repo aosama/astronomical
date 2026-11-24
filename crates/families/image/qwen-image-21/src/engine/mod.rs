@@ -16,9 +16,9 @@ mod lifecycle;
 mod mlx_components;
 mod request_validation;
 
-pub use lifecycle::QwenImage21ImageEngine;
 #[cfg(feature = "direct-mlx")]
 pub use lifecycle::build_qwen_image_21_image_engine;
+pub use lifecycle::{QwenImage21ImageEngine, QwenImage21ImageFamily};
 #[cfg(feature = "direct-mlx")]
 pub use mlx_components::QwenImage21MlxComponents;
 pub use request_validation::validate_official_request;

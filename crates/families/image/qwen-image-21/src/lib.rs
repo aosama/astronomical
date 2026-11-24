@@ -105,7 +105,7 @@ pub use vae::{
 pub use engine::QwenImage21MlxComponents;
 #[cfg(feature = "direct-mlx")]
 pub use engine::build_qwen_image_21_image_engine;
-pub use engine::{QwenImage21ImageEngine, validate_official_request};
+pub use engine::{QwenImage21ImageEngine, QwenImage21ImageFamily, validate_official_request};
 pub use engine_error::QwenImage21EngineError;
 pub use official_profile::{
     QWEN_IMAGE_21_ACTIVATION_HEADROOM_BYTES, QWEN_IMAGE_21_GUIDANCE_THOUSANDTHS,

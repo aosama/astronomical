@@ -13,9 +13,10 @@ use std::time::Duration;
 
 use ipc_protocol::{ImageGenerationCommand, ImageGenerationSettings, RequestId};
 use model_serving::{
-    ImageGenerationEngine, ImageGenerationEngineStep, QWEN_IMAGE_21_LICENSE_IDENTIFIER,
-    QWEN_IMAGE_21_OFFICIAL_MODEL_ID, QWEN_IMAGE_21_PROVIDER_MODEL_ID,
-    QwenImage21ArtifactProvenance, QwenImage21ImageEngine, build_qwen_image_21_image_engine,
+    FamilyEngineSettings, ImageGenerationEngine, ImageGenerationEngineStep,
+    QWEN_IMAGE_21_LICENSE_IDENTIFIER, QWEN_IMAGE_21_OFFICIAL_MODEL_ID,
+    QWEN_IMAGE_21_PROVIDER_MODEL_ID, QwenImage21ArtifactProvenance, QwenImage21ImageEngine,
+    build_qwen_image_21_image_engine,
 };
 
 use crate::common::qwen_image_21::{
@@ -56,10 +57,13 @@ async fn should_serve_two_image_generation_requests_through_the_engine() {
                 PINNED_ARTIFACT_REVISION,
                 QWEN_IMAGE_21_LICENSE_IDENTIFIER,
             ),
-            journey_effective_ceiling_bytes(),
-            JOURNEY_MLX_BUFFER_CACHE_LIMIT_BYTES,
-            true,
-            attribution_log_path.clone(),
+            &FamilyEngineSettings {
+                effective_mlx_memory_ceiling_bytes: journey_effective_ceiling_bytes(),
+                mlx_buffer_cache_limit_bytes: JOURNEY_MLX_BUFFER_CACHE_LIMIT_BYTES,
+                floor_raise_limit_bytes: 0,
+                performance_attribution_enabled: true,
+                performance_attribution_log_path: attribution_log_path.clone(),
+            },
         );
 
         let loaded = engine

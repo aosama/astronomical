@@ -19,9 +19,9 @@ mod mlx_components;
 
 #[cfg(feature = "direct-mlx")]
 pub use components::{Flux2KleinComponentLoad, Flux2KleinEngineComponents};
-pub use lifecycle::Flux2KleinImageEngine;
 #[cfg(feature = "direct-mlx")]
 pub use lifecycle::build_flux2_klein_image_engine;
+pub use lifecycle::{Flux2KleinImageEngine, Flux2KleinImageFamily};
 #[cfg(feature = "direct-mlx")]
 pub use mlx_components::{
     flux2_klein_euler_update_for_tests, flux2_klein_initial_latents_for_tests,
