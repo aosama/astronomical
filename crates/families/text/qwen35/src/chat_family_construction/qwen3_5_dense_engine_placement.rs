@@ -12,7 +12,7 @@
 //! `StreamingStartupResidencyFacts`, so a live raise demands the resident
 //! engine exactly when a restart would choose it.
 
-use model_serving::{
+use crate::{
     EnginePlacement, ExpertMemoryAdmissionError, StreamingStartupResidencyFacts,
     ValidatedQwen3_5Artifact,
 };
