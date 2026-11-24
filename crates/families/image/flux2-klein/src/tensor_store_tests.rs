@@ -8,7 +8,7 @@ use std::io::Write;
 use mlx_bridge::MlxDtype;
 use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use serde_json::{Map, json};
-use serial_test::serial;
+use serial_test::file_serial;
 
 use super::{Flux2KleinTensorStore, Flux2KleinTensorStoreError, Flux2KleinWeight};
 use crate::weight_layout::{Flux2KleinComponent, Flux2KleinWeightLayout};
@@ -102,7 +102,7 @@ fn packed_transformer_projection() -> Vec<StoredFixtureTensor> {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_return_bf16_kernels_untouched_in_the_bf16_layout() {
     let runtime = initialize_test_runtime();
     let (_shard_directory, store) = store_of(
@@ -124,7 +124,7 @@ fn should_return_bf16_kernels_untouched_in_the_bf16_layout() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_return_4bit_vae_kernels_in_the_diffusers_order() {
     let runtime = initialize_test_runtime();
     let (_shard_directory, store) = store_of(
@@ -146,7 +146,7 @@ fn should_return_4bit_vae_kernels_in_the_diffusers_order() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_dequantize_a_packed_projection_found_by_its_diffusers_name() {
     let runtime = initialize_test_runtime();
     let (_shard_directory, store) = store_of(
@@ -169,7 +169,7 @@ fn should_dequantize_a_packed_projection_found_by_its_diffusers_name() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_keep_a_packed_projection_packed_when_bound_as_a_weight() {
     let runtime = initialize_test_runtime();
     let (_shard_directory, store) = store_of(
@@ -188,7 +188,7 @@ fn should_keep_a_packed_projection_packed_when_bound_as_a_weight() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_refuse_a_packed_projection_bound_at_another_logical_shape() {
     let runtime = initialize_test_runtime();
     let (_shard_directory, store) = store_of(
@@ -207,7 +207,7 @@ fn should_refuse_a_packed_projection_bound_at_another_logical_shape() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_report_a_tensor_no_shard_holds_as_missing() {
     let runtime = initialize_test_runtime();
     let (_shard_directory, store) = store_of(

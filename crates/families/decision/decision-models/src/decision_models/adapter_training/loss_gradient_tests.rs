@@ -4,7 +4,7 @@
 
 use mlx_bridge::{MlxArray, MlxBindingsContext, MlxCError, MlxDtype};
 use runtime_integration::MlxRuntime;
-use serial_test::serial;
+use serial_test::file_serial;
 
 use super::{TrainableLoss, loss_gradients};
 use model_primitives::synthetic_weights_test_support::{
@@ -208,7 +208,7 @@ fn stepped(
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_match_the_loss_change_along_a_direction_through_every_laya_operation() {
     let runtime = initialize_test_runtime();
     let adapter_down = shakespeare_values(&runtime, &[ADAPTER_RANK, HIDDEN_WIDTH], 1700, 0.0);
@@ -256,7 +256,7 @@ fn should_match_the_loss_change_along_a_direction_through_every_laya_operation()
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_give_a_zero_gradient_to_an_array_the_loss_never_reads() {
     let runtime = initialize_test_runtime();
     let read_array = shakespeare_values(&runtime, &[3, 4], 0, 0.5);
@@ -276,7 +276,7 @@ fn should_give_a_zero_gradient_to_an_array_the_loss_never_reads() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_report_an_error_when_a_graph_has_no_gradient_for_an_input() {
     let runtime = initialize_test_runtime();
     let dense_weight = shakespeare_values(&runtime, &[64, 64], 0, 0.0);

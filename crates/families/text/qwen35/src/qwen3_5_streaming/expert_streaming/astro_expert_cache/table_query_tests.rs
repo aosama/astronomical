@@ -2,10 +2,10 @@ use super::AstroExpertCache;
 use super::astro_expert_cache_tests::{
     EXPERT_CAPACITY, WARM_SLOT_COUNT, streamed_weights_for_expert_count, test_runtime,
 };
-use serial_test::serial;
+use serial_test::file_serial;
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_report_route_missing_non_resident_and_occupied_experts_per_table() {
     let runtime = test_runtime();
     let mut astro_expert_cache = AstroExpertCache::new(2);
@@ -56,7 +56,7 @@ fn should_report_route_missing_non_resident_and_occupied_experts_per_table() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_report_real_demand_coverage_from_the_recorded_routing_evidence() {
     let runtime = test_runtime();
     let mut astro_expert_cache = AstroExpertCache::new(1);
@@ -86,7 +86,7 @@ fn should_report_real_demand_coverage_from_the_recorded_routing_evidence() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_prepare_no_optimistic_lookup_for_a_layer_without_a_table() {
     let mut astro_expert_cache = AstroExpertCache::new(2);
     astro_expert_cache.set_capacity(1024 * 1024 * 1024);
@@ -99,7 +99,7 @@ fn should_prepare_no_optimistic_lookup_for_a_layer_without_a_table() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_mark_every_expert_a_partial_table_lacks_in_its_optimistic_lookup() {
     let runtime = test_runtime();
     let mut astro_expert_cache = AstroExpertCache::new(1);

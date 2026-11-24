@@ -4,7 +4,7 @@
 
 use std::cell::Cell;
 
-use serial_test::serial;
+use serial_test::file_serial;
 
 use super::Qwen3_5VisionModel;
 use crate::qwen3_5_core::frozen_config_test_support::FROZEN_VISION_CONFIG_JSON;
@@ -33,7 +33,7 @@ fn vision_model_over(
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_release_nothing_when_no_image_used_the_tower() {
     let runtime = test_runtime();
     let shard_directory = tempfile::tempdir().expect("a shard folder should exist");
@@ -50,7 +50,7 @@ fn should_release_nothing_when_no_image_used_the_tower() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_stop_counting_a_used_tower_once_it_is_released() {
     let runtime = test_runtime();
     let shard_directory = tempfile::tempdir().expect("a shard folder should exist");
@@ -77,7 +77,7 @@ fn should_stop_counting_a_used_tower_once_it_is_released() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_keep_counting_the_tower_when_its_release_fails() {
     let runtime = test_runtime();
     let shard_directory = tempfile::tempdir().expect("a shard folder should exist");

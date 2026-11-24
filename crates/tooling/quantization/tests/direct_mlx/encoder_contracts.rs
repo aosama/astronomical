@@ -7,7 +7,7 @@ use quantization::encoder::mlx::quantize_best;
 use quantization::encoder::reference::{dequantize_slab, encode_slab};
 use quantization::error::QuantizationError;
 
-use serial_test::parallel;
+use serial_test::file_parallel;
 
 use super::support::{contract_runtime, outlier_heavy_weights};
 
@@ -15,7 +15,7 @@ const ROWS: usize = 16;
 const COLUMNS: usize = 256;
 
 #[test]
-#[parallel]
+#[file_parallel]
 fn should_match_the_reference_encoder_bit_for_bit_on_packed_codes_at_two_bits() {
     let runtime = contract_runtime();
     let weights = outlier_heavy_weights(ROWS, COLUMNS);
@@ -54,7 +54,7 @@ fn should_match_the_reference_encoder_bit_for_bit_on_packed_codes_at_two_bits() 
 }
 
 #[test]
-#[parallel]
+#[file_parallel]
 fn should_produce_the_stock_mlx_layout_above_four_bits() {
     // At 8 bits the search is bypassed and the output must equal
     // runtime.quantize_affine exactly, so artifacts stay byte-reproducible.
@@ -83,7 +83,7 @@ fn should_produce_the_stock_mlx_layout_above_four_bits() {
 }
 
 #[test]
-#[parallel]
+#[file_parallel]
 fn should_never_have_higher_squared_error_than_stock_min_max() {
     let runtime = contract_runtime();
     let weights = outlier_heavy_weights(ROWS, COLUMNS);
@@ -124,7 +124,7 @@ fn should_never_have_higher_squared_error_than_stock_min_max() {
 }
 
 #[test]
-#[parallel]
+#[file_parallel]
 fn should_dequantize_through_mlx_to_the_same_values_as_the_reference() {
     // The GPU-encoded artifact must read back through MLX's own dequantize
     // (what every loader uses) to the values the reference predicts.
@@ -160,7 +160,7 @@ fn should_dequantize_through_mlx_to_the_same_values_as_the_reference() {
 }
 
 #[test]
-#[parallel]
+#[file_parallel]
 fn should_match_the_reference_bit_for_bit_at_three_bits_on_a_stacked_expert_tensor() {
     // Three bits is the straddling bit-expansion packing path, and a 3-D
     // stack is how routed experts arrive; the reference encodes the stack
@@ -212,7 +212,7 @@ fn should_match_the_reference_bit_for_bit_at_three_bits_on_a_stacked_expert_tens
 }
 
 #[test]
-#[parallel]
+#[file_parallel]
 fn should_equal_stock_quantize_affine_when_the_policy_is_disabled_at_two_bits() {
     let runtime = contract_runtime();
     let weights = outlier_heavy_weights(ROWS, COLUMNS);
@@ -239,7 +239,7 @@ fn should_equal_stock_quantize_affine_when_the_policy_is_disabled_at_two_bits() 
 }
 
 #[test]
-#[parallel]
+#[file_parallel]
 fn should_refuse_the_keep_bfloat16_tier() {
     let runtime = contract_runtime();
     let weights_array = runtime
@@ -264,7 +264,7 @@ fn should_refuse_the_keep_bfloat16_tier() {
 }
 
 #[test]
-#[parallel]
+#[file_parallel]
 fn should_refuse_a_last_axis_that_does_not_divide_into_groups() {
     let runtime = contract_runtime();
     let odd_columns = 96;

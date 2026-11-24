@@ -1,7 +1,7 @@
 //! The plain-operation attention a training differentiates, against MLX's
 //! fused attention serving runs, on grouped heads.
 
-use serial_test::serial;
+use serial_test::file_serial;
 
 use super::*;
 use model_primitives::synthetic_weights_test_support::{
@@ -36,7 +36,7 @@ fn keys_and_values(runtime: &MlxRuntime) -> (MlxArray, MlxArray) {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_match_fused_causal_attention_for_a_run_of_queries_after_a_prefix() {
     let runtime = initialize_test_runtime();
     let (keys, values) = keys_and_values(&runtime);
@@ -53,7 +53,7 @@ fn should_match_fused_causal_attention_for_a_run_of_queries_after_a_prefix() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_match_fused_attention_for_one_query_seeing_every_key() {
     let runtime = initialize_test_runtime();
     let (keys, values) = keys_and_values(&runtime);
@@ -68,7 +68,7 @@ fn should_match_fused_attention_for_one_query_seeing_every_key() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_hide_later_keys_from_an_earlier_query() {
     let runtime = initialize_test_runtime();
     let (keys, values) = keys_and_values(&runtime);

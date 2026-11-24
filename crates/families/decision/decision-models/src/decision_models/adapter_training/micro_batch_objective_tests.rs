@@ -1,7 +1,7 @@
 //! The micro-batch objective against the formula final-layer training uses.
 
 use mlx_bridge::{MlxArray, MlxBindingsContext, MlxCError};
-use serial_test::serial;
+use serial_test::file_serial;
 
 use super::*;
 use crate::decision_models::adapter_training::loss_gradient::{TrainableLoss, loss_gradients};
@@ -65,7 +65,7 @@ impl TrainableLoss for LogitsAsTrainable {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_weigh_each_questions_surprise_over_its_own_options_only() {
     let runtime = initialize_test_runtime();
     let math = GpuMath { runtime: &runtime };
@@ -92,7 +92,7 @@ fn should_weigh_each_questions_surprise_over_its_own_options_only() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_widen_logits_narrower_than_the_batch_with_padding() {
     let runtime = initialize_test_runtime();
     let math = GpuMath { runtime: &runtime };
@@ -114,7 +114,7 @@ fn should_widen_logits_narrower_than_the_batch_with_padding() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_give_the_same_score_gradient_final_layer_training_writes_by_hand() {
     let runtime = initialize_test_runtime();
     let math = GpuMath { runtime: &runtime };
@@ -159,7 +159,7 @@ fn should_give_the_same_score_gradient_final_layer_training_writes_by_hand() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_sum_micro_batch_gradients_and_start_from_the_first() {
     let runtime = initialize_test_runtime();
     let mut summed_gradients = Vec::new();

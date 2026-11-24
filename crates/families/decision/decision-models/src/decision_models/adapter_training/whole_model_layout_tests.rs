@@ -1,6 +1,6 @@
 //! The order, shapes and starting values of a whole-model training's parameters.
 
-use serial_test::serial;
+use serial_test::file_serial;
 
 use super::*;
 use model_primitives::synthetic_weights_test_support::initialize_test_runtime;
@@ -28,7 +28,7 @@ fn small_layout() -> WholeModelLayout {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_start_the_scorer_as_served_and_every_add_on_switched_off() {
     let runtime = initialize_test_runtime();
     let math = GpuMath { runtime: &runtime };
@@ -60,7 +60,7 @@ fn should_start_the_scorer_as_served_and_every_add_on_switched_off() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_start_every_training_from_the_same_add_ons() {
     let runtime = initialize_test_runtime();
     let math = GpuMath { runtime: &runtime };
@@ -82,7 +82,7 @@ fn should_start_every_training_from_the_same_add_ons() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_hand_the_forward_pass_the_scorer_by_name_and_the_add_ons_by_layer() {
     let runtime = initialize_test_runtime();
     let math = GpuMath { runtime: &runtime };

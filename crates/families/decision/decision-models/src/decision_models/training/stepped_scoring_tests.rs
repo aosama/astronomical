@@ -2,7 +2,7 @@
 
 use std::time::Instant;
 
-use serial_test::serial;
+use serial_test::file_serial;
 
 use super::super::gpu_math::GpuMath;
 use super::super::gpu_test_support::ranked_task;
@@ -11,7 +11,7 @@ use super::*;
 use model_primitives::synthetic_weights_test_support::initialize_test_runtime;
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_give_exactly_the_scores_of_one_pass_when_split_across_many_steps() {
     let runtime = initialize_test_runtime();
     let math = GpuMath { runtime: &runtime };
@@ -40,7 +40,7 @@ fn should_give_exactly_the_scores_of_one_pass_when_split_across_many_steps() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_score_everything_in_one_step_when_time_allows() {
     let runtime = initialize_test_runtime();
     let math = GpuMath { runtime: &runtime };
@@ -61,7 +61,7 @@ fn should_score_everything_in_one_step_when_time_allows() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_be_finished_at_once_with_no_questions() {
     let runtime = initialize_test_runtime();
     let math = GpuMath { runtime: &runtime };
@@ -78,7 +78,7 @@ fn should_be_finished_at_once_with_no_questions() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_score_only_the_chosen_rows_and_leave_the_others_empty() {
     let runtime = initialize_test_runtime();
     let math = GpuMath { runtime: &runtime };

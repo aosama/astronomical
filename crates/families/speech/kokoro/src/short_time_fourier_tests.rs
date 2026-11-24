@@ -2,14 +2,14 @@
 //! transposed-convolution orientation or the envelope were wrong, a signal
 //! would not come back. Values come from the Romeo and Juliet fixture.
 
-use serial_test::serial;
+use serial_test::file_serial;
 
 use speech::speech_models::speech_test_support::{initialize_test_runtime, shakespeare_values};
 
 use super::{HOP_SIZE, ShortTimeFourier, inverse_window_envelope, reflect_padded_indices};
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_reconstruct_a_signal_from_its_own_spectrum() {
     let runtime = initialize_test_runtime();
     let fourier = ShortTimeFourier::new(&runtime).expect("the basis builds");
@@ -51,7 +51,7 @@ fn should_reconstruct_a_signal_from_its_own_spectrum() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_give_the_dc_bin_of_a_negative_signal_a_phase_of_plus_pi() {
     let runtime = initialize_test_runtime();
     let fourier = ShortTimeFourier::new(&runtime).expect("the basis builds");

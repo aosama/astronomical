@@ -6,7 +6,7 @@
 
 use mlx_bridge::{MlxArray, MlxBindingsContext, MlxCError};
 use runtime_integration::MlxRuntime;
-use serial_test::serial;
+use serial_test::file_serial;
 
 use super::loss_gradient::{TrainableLoss, loss_gradients};
 use crate::qwen3_5_core::model_math::differentiable_gated_delta::DifferentiableGatedDelta;
@@ -91,7 +91,7 @@ fn largest_magnitude(array: &MlxArray) -> f32 {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_score_exactly_as_the_served_fused_kernel() {
     if test_harness::skip_without(
         test_harness::PlatformRequirement::MetalGpu,
@@ -138,7 +138,7 @@ fn should_score_exactly_as_the_served_fused_kernel() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_refuse_inputs_whose_heads_do_not_match_and_name_the_recurrence() {
     let runtime = initialize_test_runtime();
     let inputs = RecurrenceInputs::new(&runtime, 1, 0, 0.9);
@@ -221,7 +221,7 @@ fn dot(left: &MlxArray, right: &MlxArray) -> f64 {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_match_the_loss_change_along_a_direction_through_the_recurrence() {
     if test_harness::skip_without(
         test_harness::PlatformRequirement::MetalGpu,

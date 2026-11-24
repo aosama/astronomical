@@ -3,7 +3,7 @@
 use decision_training::training_losses::{
     LABEL_SMOOTHING, negative_log_likelihood, shipped_agreement_loss, smoothed_cross_entropy,
 };
-use serial_test::serial;
+use serial_test::file_serial;
 
 use super::super::gpu_test_support::assert_all_close;
 use super::super::question_batch::OptionLayout;
@@ -11,7 +11,7 @@ use super::*;
 use model_primitives::synthetic_weights_test_support::initialize_test_runtime;
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_give_the_label_and_agreement_gradients_the_cpu_losses_give() {
     let runtime = initialize_test_runtime();
     let math = GpuMath { runtime: &runtime };
@@ -65,7 +65,7 @@ fn should_give_the_label_and_agreement_gradients_the_cpu_losses_give() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_measure_the_mean_surprise_at_the_right_answer() {
     let runtime = initialize_test_runtime();
     let math = GpuMath { runtime: &runtime };

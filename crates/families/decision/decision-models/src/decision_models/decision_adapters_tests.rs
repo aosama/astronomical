@@ -1,7 +1,7 @@
 //! Unit tests for reading a folder's add-ons and checking them against the model.
 
 use decision_contract::decision_adapters_file::{LinearAdapter, decision_adapters_bytes};
-use serial_test::serial;
+use serial_test::file_serial;
 
 use super::*;
 use model_primitives::synthetic_weights_test_support::{
@@ -104,7 +104,7 @@ fn should_refuse_an_add_on_whose_widths_differ_from_its_layer() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_read_a_quantized_layers_widths_from_its_stored_tensors() {
     let runtime = initialize_test_runtime();
     let mut synthetic_weights = SyntheticWeights::new();

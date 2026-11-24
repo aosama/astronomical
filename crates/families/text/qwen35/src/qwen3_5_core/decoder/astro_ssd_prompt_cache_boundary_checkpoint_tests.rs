@@ -4,7 +4,7 @@
 use super::Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector;
 use mlx_bridge::MlxArray;
 use runtime_integration::{MlxMemoryLimits, MlxRuntime};
-use serial_test::serial;
+use serial_test::file_serial;
 
 const BOUNDARY_TOKENS: [usize; 2] = [1_792, 3_584];
 const BLOCK_TOKEN_COUNT: usize = 1_792;
@@ -38,7 +38,7 @@ fn collector() -> Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_record_a_forgotten_layer_again_with_the_redone_values() {
     let _runtime = initialize_test_runtime();
     let mut collector = collector();
@@ -66,7 +66,7 @@ fn should_record_a_forgotten_layer_again_with_the_redone_values() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_refuse_to_record_a_layer_twice_without_forgetting_it() {
     let _runtime = initialize_test_runtime();
     let mut collector = collector();
@@ -81,7 +81,7 @@ fn should_refuse_to_record_a_layer_twice_without_forgetting_it() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_leave_other_layers_alone_when_forgetting_one_that_recorded_nothing() {
     let _runtime = initialize_test_runtime();
     let mut collector = collector();

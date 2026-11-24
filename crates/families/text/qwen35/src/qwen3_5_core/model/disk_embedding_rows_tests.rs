@@ -6,7 +6,7 @@ use std::io::Write;
 
 use mlx_bridge::{MlxArray, MlxDtype};
 use runtime_integration::{MlxMemoryLimits, MlxRuntime};
-use serial_test::serial;
+use serial_test::file_serial;
 
 use super::disk_embedding_rows::{
     AffineEmbeddingTables, DiskEmbeddingTable, Qwen3_5DiskEmbeddingRows,
@@ -205,7 +205,7 @@ fn resident_quantized_form(
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_embed_quantized_tokens_exactly_like_the_resident_table() {
     let runtime = test_runtime();
     let shard_directory = tempfile::tempdir().expect("a shard folder should exist");
@@ -261,7 +261,7 @@ fn should_embed_quantized_tokens_exactly_like_the_resident_table() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_embed_bfloat16_tokens_exactly_like_the_resident_table() {
     let runtime = test_runtime();
     let shard_directory = tempfile::tempdir().expect("a shard folder should exist");
@@ -302,7 +302,7 @@ fn should_embed_bfloat16_tokens_exactly_like_the_resident_table() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_reject_a_token_one_past_the_last_row() {
     let runtime = test_runtime();
     let shard_directory = tempfile::tempdir().expect("a shard folder should exist");
@@ -337,7 +337,7 @@ fn should_reject_a_token_one_past_the_last_row() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_reject_tables_that_do_not_match_the_bound_form() {
     let runtime = test_runtime();
     let shard_directory = tempfile::tempdir().expect("a shard folder should exist");
@@ -371,7 +371,7 @@ fn bfloat16_disk_rows(shard_directory: &std::path::Path) -> Qwen3_5DiskEmbedding
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_embed_one_decode_token_exactly_like_the_resident_table() {
     let runtime = test_runtime();
     let shard_directory = tempfile::tempdir().expect("a shard folder should exist");
@@ -409,7 +409,7 @@ fn should_embed_one_decode_token_exactly_like_the_resident_table() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_reject_token_indices_that_are_not_shaped_one_by_tokens() {
     let runtime = test_runtime();
     let shard_directory = tempfile::tempdir().expect("a shard folder should exist");
@@ -454,7 +454,7 @@ fn bfloat16_rows(runtime: &MlxRuntime) -> MlxArray {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_hand_disk_rows_on_in_the_dtype_the_bound_table_was_widened_to() {
     let runtime = test_runtime();
     let bound_table = native_embedding_weights(&runtime, MlxDtype::Float32);
@@ -474,7 +474,7 @@ fn should_hand_disk_rows_on_in_the_dtype_the_bound_table_was_widened_to() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_leave_disk_rows_alone_when_the_bound_table_kept_their_dtype() {
     let runtime = test_runtime();
     let bound_table = native_embedding_weights(&runtime, MlxDtype::BFloat16);

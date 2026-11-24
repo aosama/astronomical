@@ -7,7 +7,7 @@ use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights
 use jangtq2_qwen35::configuration::Jangtq2CodebookRotation;
 use mlx_bridge::MlxArray;
 use runtime_integration::{MlxMemoryLimits, MlxRuntime};
-use serial_test::serial;
+use serial_test::file_serial;
 
 const SINGLE_DECODE_TOKEN_COUNT: i32 = 1;
 const PREFILL_CHUNK_TOKEN_COUNT: i32 = 2_048;
@@ -64,7 +64,7 @@ fn page_of(
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_multiply_a_complete_affine_page_for_decode_and_prefill_without_the_fused_kernel() {
     let _runtime = initialize_test_runtime();
     let affine_page = page_of(
@@ -83,7 +83,7 @@ fn should_multiply_a_complete_affine_page_for_decode_and_prefill_without_the_fus
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_multiply_a_complete_native_bfloat16_page_for_a_prefill_chunk() {
     let _runtime = initialize_test_runtime();
     let bfloat16_page = page_of(
@@ -98,7 +98,7 @@ fn should_multiply_a_complete_native_bfloat16_page_for_a_prefill_chunk() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_multiply_a_complete_codebook_page_only_for_one_decode_token_with_the_fused_kernel() {
     let _runtime = initialize_test_runtime();
     let codebook_page = page_of(
@@ -113,7 +113,7 @@ fn should_multiply_a_complete_codebook_page_only_for_one_decode_token_with_the_f
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_refuse_a_complete_codebook_page_without_the_fused_kernel() {
     let _runtime = initialize_test_runtime();
     let codebook_page = page_of(
@@ -128,7 +128,7 @@ fn should_refuse_a_complete_codebook_page_without_the_fused_kernel() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_refuse_a_complete_codebook_page_for_a_two_token_chunk_even_with_the_fused_kernel() {
     let _runtime = initialize_test_runtime();
     let codebook_page = page_of(
@@ -140,7 +140,7 @@ fn should_refuse_a_complete_codebook_page_for_a_two_token_chunk_even_with_the_fu
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_refuse_a_mixed_page_when_any_projection_needs_a_transient_decode() {
     let _runtime = initialize_test_runtime();
     let mixed_page = page_of(

@@ -1,4 +1,4 @@
-use serial_test::serial;
+use serial_test::file_serial;
 
 use crate::inference_engine::load_result::EngineLoadResult;
 use crate::memory::dense_resident_safe_minimum_mlx_memory_ceiling_bytes;
@@ -48,7 +48,7 @@ fn load_fixture_execution(
 // Positive: the load reports the whole pack resident, the dense floor as
 // the minimum ceiling, and a Neural Engine prefill it cannot serve.
 #[test]
-#[serial]
+#[file_serial]
 fn should_report_the_dense_floor_and_resident_placement_after_a_load() {
     let (pack_payload_bytes, execution, first_load) =
         load_fixture_execution(&serving_settings_with(64, 1));
@@ -77,7 +77,7 @@ fn should_report_the_dense_floor_and_resident_placement_after_a_load() {
 // Edge: a second load reports the model already held instead of failing,
 // and a load that never asked for the Neural Engine announces nothing.
 #[test]
-#[serial]
+#[file_serial]
 fn should_report_the_held_model_on_a_second_load() {
     let mut serving_settings = serving_settings_with(64, 1);
     serving_settings
@@ -98,7 +98,7 @@ fn should_report_the_held_model_on_a_second_load() {
 // Negative: chunking settings the shared load refuses fail the load as an
 // engine failure, and no model is installed.
 #[test]
-#[serial]
+#[file_serial]
 fn should_fail_a_load_whose_chunking_settings_do_not_validate() {
     let mut serving_settings = serving_settings_with(64, 1);
     serving_settings

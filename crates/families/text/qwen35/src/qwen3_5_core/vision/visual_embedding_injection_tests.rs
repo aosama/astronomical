@@ -1,6 +1,6 @@
 use mlx_bridge::{MlxArray, MlxDtype};
 use runtime_integration::{MlxMemoryLimits, MlxRuntime};
-use serial_test::serial;
+use serial_test::file_serial;
 
 use super::qwen3_5_inject_visual_embeddings;
 
@@ -44,7 +44,7 @@ fn spliced_values(runtime: &MlxRuntime, spliced: &MlxArray) -> Vec<f32> {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_widen_bfloat16_visual_rows_into_float32_text_embeddings() {
     let runtime = test_runtime();
     let (spliced, spliced_row_count) = qwen3_5_inject_visual_embeddings(
@@ -66,7 +66,7 @@ fn should_widen_bfloat16_visual_rows_into_float32_text_embeddings() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_splice_matching_bfloat16_embeddings_as_they_are() {
     let runtime = test_runtime();
     let (spliced, _spliced_row_count) = qwen3_5_inject_visual_embeddings(
@@ -83,7 +83,7 @@ fn should_splice_matching_bfloat16_embeddings_as_they_are() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_refuse_a_wider_visual_dtype_than_the_text_and_a_mismatched_width() {
     let runtime = test_runtime();
     for (text_dtype, visual_dtype, visual_width) in [

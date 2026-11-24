@@ -10,7 +10,7 @@ use crate::qwen3_5_core::frozen_config_test_support::frozen_ornith_1_0_config;
 
 use mlx_bridge::MlxArray;
 use runtime_integration::{MlxMemoryLimits, MlxRuntime};
-use serial_test::serial;
+use serial_test::file_serial;
 
 use super::{RequestDecoderStateStack, composite_first_use_bytes};
 use crate::astro_decoder_state_cache::{ConvolutionState, GatedDeltaRecurrentState};
@@ -219,7 +219,7 @@ fn should_project_the_fixed_state_bytes_of_an_unallocated_linear_attention_layer
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_project_nothing_for_an_already_allocated_linear_attention_layer() {
     let _runtime = test_runtime();
     let mut convolution = ConvolutionState::empty();
@@ -234,7 +234,7 @@ fn should_project_nothing_for_an_already_allocated_linear_attention_layer() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_refuse_a_partially_allocated_linear_attention_layer() {
     let _runtime = test_runtime();
     let mut convolution = ConvolutionState::empty();

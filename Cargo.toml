@@ -113,7 +113,9 @@ serde = { version = "1", features = ["derive"] }
 # read one unit off would be tokenized differently from the reference.
 serde_json = { version = "1", features = ["float_roundtrip"] }
 serde_yaml = "0.9"
-serial_test = "4"
+# file_locks: GPU tests lock across processes, since nextest runs each test
+# in a process of its own and `serial` only locks within one (issue #2539).
+serial_test = { version = "4", features = ["file_locks"] }
 sha1 = "=0.11.0"
 sha2 = "=0.11.1"
 thiserror = "2"

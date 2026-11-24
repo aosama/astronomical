@@ -4,7 +4,7 @@
 //! the table without the experts it could not read.
 
 use runtime_integration::MlxRuntime;
-use serial_test::serial;
+use serial_test::file_serial;
 
 use super::*;
 use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights;
@@ -100,7 +100,7 @@ fn expected_words_for(expert_id: usize) -> Vec<u32> {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_read_a_missing_expert_into_the_table_beside_the_ones_it_holds() {
     let runtime = test_runtime();
     let expert_file = write_expert_file(FileLayout::RecordsTogether);
@@ -123,7 +123,7 @@ fn should_read_a_missing_expert_into_the_table_beside_the_ones_it_holds() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_evict_an_expert_the_token_does_not_use_when_the_table_is_full() {
     let runtime = test_runtime();
     let expert_file = write_expert_file(FileLayout::RecordsTogether);
@@ -153,7 +153,7 @@ fn should_evict_an_expert_the_token_does_not_use_when_the_table_is_full() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_refuse_when_every_slot_holds_an_expert_the_token_uses() {
     let runtime = test_runtime();
     let expert_file = write_expert_file(FileLayout::RecordsTogether);
@@ -175,7 +175,7 @@ fn should_refuse_when_every_slot_holds_an_expert_the_token_uses() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_refuse_a_layer_with_no_table_and_a_fetch_of_nothing() {
     let runtime = test_runtime();
     let expert_file = write_expert_file(FileLayout::RecordsTogether);
@@ -202,7 +202,7 @@ fn should_refuse_a_layer_with_no_table_and_a_fetch_of_nothing() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_give_up_the_slots_of_experts_it_could_not_read() {
     let runtime = test_runtime();
     let expert_file = write_expert_file(FileLayout::RecordsTogether);

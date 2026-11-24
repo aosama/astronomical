@@ -1,5 +1,5 @@
 use ipc_protocol::{RequestId, WorkerPromptWorkReuse};
-use serial_test::serial;
+use serial_test::file_serial;
 
 use super::{PrismRequestStart, prism_active_generation};
 use crate::prism_hadamard_qwen35::model::fixture_model_test_support::load_fixture_text_model;
@@ -10,7 +10,7 @@ const PROMPT_TOKEN_IDS: [u32; 5] = [11, 12, 13, 14, 15];
 const MAXIMUM_OUTPUT_TOKENS: u16 = 7;
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_start_the_shared_record_at_the_prompt_start_without_a_store() {
     let fixture = load_fixture_text_model();
     let text_model = &fixture.text_model;

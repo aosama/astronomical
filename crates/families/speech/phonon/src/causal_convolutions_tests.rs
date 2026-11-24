@@ -1,4 +1,4 @@
-use serial_test::serial;
+use serial_test::file_serial;
 
 use super::{CausalConv1d, CausalConvTranspose1d, CausalGeometry};
 use speech::speech_models::checkpoint_tensors::CheckpointTensors;
@@ -7,7 +7,7 @@ use speech::speech_models::speech_test_support::{
 };
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_see_only_the_past_and_keep_the_length() {
     let runtime = initialize_test_runtime();
     // Kernel (1, 10, 100): y[t] = x[t-2] + 10 x[t-1] + 100 x[t], with zeros before the start.
@@ -34,7 +34,7 @@ fn should_see_only_the_past_and_keep_the_length() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_upsample_to_exactly_stride_times_the_length() {
     let runtime = initialize_test_runtime();
     // Kernel (1, 2, 3, 4), stride 2: each step lays four samples, half overlapping the next.
@@ -62,7 +62,7 @@ fn should_upsample_to_exactly_stride_times_the_length() {
 
 // Edge: a prefix of the input gives a prefix of the output.
 #[test]
-#[serial]
+#[file_serial]
 fn should_give_a_prefix_of_the_output_for_a_prefix_of_the_input() {
     let runtime = initialize_test_runtime();
     let tensors = checkpoint_from_arrays(

@@ -11,18 +11,18 @@ use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights
 // Both tests sample the process-global MLX allocator (active-memory bytes)
 // and assert exact deltas with a tight slack. serial_test's lock does not
 // fence unannotated tests, so serializing only these two is not enough:
-// every MLX-allocating test in this binary must carry #[serial] for these
+// every MLX-allocating test in this binary must carry #[file_serial] for these
 // samples to stay clean — freeing the others proved this by failing here.
 // Serial in this crate guards global allocator accounting, not the
 // real-model load rule.
-use serial_test::serial;
+use serial_test::file_serial;
 
 /// Issue #955 invariant: after every flush, a table's real payload must equal
 /// the per-expert geometry bytes times its slot-map occupancy. The second
 /// identical ask validates this at plan time, so any accounting drift in
 /// warming surfaces as a fatal paging error on the next request.
 #[test]
-#[serial]
+#[file_serial]
 fn should_keep_payload_accounting_exact_across_growth_and_eviction() {
     let runtime = test_runtime();
     let mut astro_expert_cache = AstroExpertCache::new(1);
@@ -86,7 +86,7 @@ fn should_keep_payload_accounting_exact_across_growth_and_eviction() {
 /// detach their results; the status-published memory decomposition closes
 /// only when every active expert byte is claimed by the `astro_expert_cache`.
 #[test]
-#[serial]
+#[file_serial]
 fn should_not_leave_retired_or_source_tensors_active_after_growth() {
     let runtime = test_runtime();
     // Wide rows make each projection array tens of kilobytes, so a real pin

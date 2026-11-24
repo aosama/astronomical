@@ -1,6 +1,6 @@
 use mlx_bridge::MlxArray;
 use runtime_integration::{MlxMemoryLimits, MlxRuntime};
-use serial_test::serial;
+use serial_test::file_serial;
 
 use crate::qwen3_5_core::configuration::Qwen3_5Config;
 use crate::qwen3_5_core::frozen_config_test_support::frozen_ornith_1_0_config_bytes;
@@ -37,7 +37,7 @@ fn test_norm_weight(runtime: &MlxRuntime) -> MlxArray {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_add_one_to_declared_jangtq2_language_rms_norm_weights_at_binding() {
     let runtime = test_runtime();
     let qwen3_5_config = config_with_norm_convention("qwen3_5_language_mlx_plus_one");
@@ -67,7 +67,7 @@ fn should_add_one_to_declared_jangtq2_language_rms_norm_weights_at_binding() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_preserve_direct_rms_norm_weights_when_the_artifact_has_no_plus_one_convention() {
     let runtime = test_runtime();
     let qwen3_5_config = config_with_norm_convention("direct");
@@ -135,7 +135,7 @@ fn should_detect_the_published_pytorch_convolution_layout_exactly() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_add_the_unit_scale_to_raw_hugging_face_norm_weights() {
     let runtime = test_runtime();
     let qwen3_5_config = config_with_norm_convention("direct");
@@ -158,7 +158,7 @@ fn should_add_the_unit_scale_to_raw_hugging_face_norm_weights() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_pass_norms_through_when_the_convolution_is_already_mlx_converted() {
     let runtime = test_runtime();
     let qwen3_5_config = config_with_norm_convention("direct");
@@ -181,7 +181,7 @@ fn should_pass_norms_through_when_the_convolution_is_already_mlx_converted() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_leave_the_gated_linear_attention_norm_direct_under_the_raw_hugging_face_convention() {
     let runtime = test_runtime();
     let qwen3_5_config = config_with_norm_convention("direct");
@@ -204,7 +204,7 @@ fn should_leave_the_gated_linear_attention_norm_direct_under_the_raw_hugging_fac
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_scale_only_once_when_both_conventions_would_match_the_same_tensor() {
     let runtime = test_runtime();
     let qwen3_5_config = config_with_norm_convention("qwen3_5_language_mlx_plus_one");
@@ -264,7 +264,7 @@ fn should_never_widen_packed_integer_or_float32_tensors() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_bind_a_bfloat16_tensor_in_the_engines_binding_dtype_without_changing_values() {
     let runtime = test_runtime();
     let mlx_computes_on_cpu =

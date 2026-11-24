@@ -11,7 +11,7 @@ use std::collections::BTreeMap;
 
 use mlx_bridge::MlxArray;
 use runtime_integration::{MlxRuntime, MlxSafetensors};
-use serial_test::serial;
+use serial_test::file_serial;
 
 use super::{HeadPassRows, LayaDecisionHead};
 use crate::configuration::LayaConfiguration;
@@ -210,7 +210,7 @@ fn long_row() -> TestRow {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_score_a_padded_row_as_it_scores_that_row_alone() {
     let runtime = initialize_test_runtime();
     let configuration = synthetic_configuration(2);
@@ -231,7 +231,7 @@ fn should_score_a_padded_row_as_it_scores_that_row_alone() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_return_each_row_exactly_its_own_option_count() {
     let runtime = initialize_test_runtime();
     let configuration = synthetic_configuration(2);
@@ -259,7 +259,7 @@ fn should_return_each_row_exactly_its_own_option_count() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_score_the_same_row_differently_for_a_different_question_type() {
     let runtime = initialize_test_runtime();
     let configuration = synthetic_configuration(2);
@@ -274,7 +274,7 @@ fn should_score_the_same_row_differently_for_a_different_question_type() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_score_markers_with_no_head_layers() {
     let runtime = initialize_test_runtime();
     let configuration = synthetic_configuration(0);
@@ -285,7 +285,7 @@ fn should_score_markers_with_no_head_layers() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_name_the_head_tensor_an_artifact_is_missing() {
     let runtime = initialize_test_runtime();
     let configuration = synthetic_configuration(2);
@@ -301,7 +301,7 @@ fn should_name_the_head_tensor_an_artifact_is_missing() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_read_a_trained_scorer_tensor_in_place_of_the_shipped_one() {
     let runtime = initialize_test_runtime();
     let configuration = synthetic_configuration(2);

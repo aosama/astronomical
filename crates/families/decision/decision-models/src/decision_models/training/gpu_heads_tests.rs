@@ -9,7 +9,7 @@ use decision_training::clef_trainable::ClefTrainableHead;
 use decision_training::kev_trainable::KevTrainableHead;
 use decision_training::laya_trainable::LayaTrainableHead;
 use decision_training::trainable_head::TrainableHead;
-use serial_test::serial;
+use serial_test::file_serial;
 
 use super::super::gpu_test_support::{
     assert_all_close, clef_questions, kev_questions, laya_questions, sequence_values,
@@ -78,7 +78,7 @@ fn compare_with_oracle(
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_score_and_differentiate_kev_as_the_cpu_oracle_does() {
     compare_with_oracle(
         TunableHeadFamily::Kev,
@@ -88,7 +88,7 @@ fn should_score_and_differentiate_kev_as_the_cpu_oracle_does() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_score_and_differentiate_laya_as_the_cpu_oracle_does() {
     compare_with_oracle(
         TunableHeadFamily::Laya,
@@ -98,7 +98,7 @@ fn should_score_and_differentiate_laya_as_the_cpu_oracle_does() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_score_and_differentiate_clef_as_the_cpu_oracle_does() {
     compare_with_oracle(
         TunableHeadFamily::Clef,
@@ -108,7 +108,7 @@ fn should_score_and_differentiate_clef_as_the_cpu_oracle_does() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_refuse_inputs_of_another_family() {
     let runtime = initialize_test_runtime();
     let math = GpuMath { runtime: &runtime };

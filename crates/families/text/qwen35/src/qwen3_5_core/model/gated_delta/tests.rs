@@ -1,6 +1,6 @@
 use mlx_bridge::MlxArray;
 use runtime_integration::{MlxMemoryLimits, MlxRuntime};
-use serial_test::serial;
+use serial_test::file_serial;
 
 use super::normalize_linear_attention_convolution_weight;
 
@@ -13,7 +13,7 @@ fn test_runtime() -> MlxRuntime {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_transpose_published_pytorch_conv1d_weights_into_the_mlx_layout() {
     let runtime = test_runtime();
     let published_weight_values = (0..12)
@@ -37,7 +37,7 @@ fn should_transpose_published_pytorch_conv1d_weights_into_the_mlx_layout() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_reject_a_conv1d_weight_shape_outside_both_published_layouts() {
     let runtime = test_runtime();
     let malformed_convolution_weight = MlxArray::from_f32(&[0.0; 24], &[4, 2, 3])

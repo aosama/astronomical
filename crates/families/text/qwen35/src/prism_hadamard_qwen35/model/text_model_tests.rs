@@ -1,5 +1,5 @@
 use ipc_protocol::ExpertMemoryMode;
-use serial_test::serial;
+use serial_test::file_serial;
 
 use super::super::fixture_model_test_support::load_fixture_text_model;
 use super::super::{PrismHadamardTextModel, request_decoder_state_evaluation_arrays};
@@ -15,7 +15,7 @@ const PROMPT_CHUNK_TOKEN_IDS: [u32; 2] = [1, 2];
 const FORWARDED_TOKEN_ID: u32 = 3;
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_produce_the_same_logits_as_the_prism_forward() {
     let fixture = load_fixture_text_model();
     let text_model = &fixture.text_model;
@@ -56,7 +56,7 @@ fn should_produce_the_same_logits_as_the_prism_forward() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_submit_the_generated_token_with_every_live_state_root() {
     let fixture = load_fixture_text_model();
     let text_model = &fixture.text_model;
@@ -89,7 +89,7 @@ fn should_submit_the_generated_token_with_every_live_state_root() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_report_a_fully_resident_dense_model_without_a_governor() {
     let fixture = load_fixture_text_model();
     let text_model = &fixture.text_model;

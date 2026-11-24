@@ -32,6 +32,8 @@
 
 - Tests that use real full sized models and loads them in memory for further use by the GPU must use the Rust `serial_test` `#[serial]` annotation; The same applies to throughput-measurement tests and performance tests.
 
+- Under `crates/` and `apps/`, a test that uses the GPU takes `serial_test`'s `#[file_serial]` instead of `#[serial]`: nextest runs every test in a process of its own, and only `#[file_serial]` locks across processes (issue #2539).
+
 - SSD-paging e2e journeys get a 120-second runner budget. If an e2e journey exceeds that budget, use lower-level tests to identify the slow call path rather than increasing the budget or repeating long model runs.
 
 - The fixture of Shakespear is highly recommended to be used as the input for LLMs; there should not be random text or tokens used for testing. Exceptions can be made where Shakespear is not suitable for the test -- for example a coding fixture.

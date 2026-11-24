@@ -39,14 +39,14 @@
 //! stay alive across the measurement — a dropped, freed output can return a
 //! stale or zeroed graph result on a later identical launch.
 //!
-//! Every test is `#[serial]` because these are throughput measurements,
+//! Every test is `#[file_serial]` because these are throughput measurements,
 //! and they are `#[ignore]`d: run them optimized through
 //! `cargo test-jangtq2-decode-throughput` (the filter matches this module's
 //! `..._throughput` names).
 
 use mlx_bridge::{MlxArray, MlxDtype, MlxMetalKernel};
 use runtime_integration::MlxRuntime;
-use serial_test::serial;
+use serial_test::file_serial;
 
 use fixtures::{
     deterministic_packed_words, deterministic_row_scales, deterministic_token_activations,
@@ -627,7 +627,7 @@ fn report_prefill_measurement(
 }
 
 #[test]
-#[serial]
+#[file_serial]
 #[ignore = "graphics-processor prototype measurement: run optimized via cargo test-jangtq2-decode-throughput"]
 fn should_measure_complete_layer_gate_up_prefill_gathered_dequant_throughput() {
     measure_prefill_gathered_dequant(
@@ -639,7 +639,7 @@ fn should_measure_complete_layer_gate_up_prefill_gathered_dequant_throughput() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 #[ignore = "graphics-processor prototype measurement: run optimized via cargo test-jangtq2-decode-throughput"]
 fn should_measure_complete_layer_down_2bit_prefill_gathered_dequant_throughput() {
     measure_prefill_gathered_dequant(
@@ -651,7 +651,7 @@ fn should_measure_complete_layer_down_2bit_prefill_gathered_dequant_throughput()
 }
 
 #[test]
-#[serial]
+#[file_serial]
 #[ignore = "graphics-processor prototype measurement: run optimized via cargo test-jangtq2-decode-throughput"]
 fn should_measure_complete_layer_down_3bit_prefill_gathered_dequant_throughput() {
     measure_prefill_gathered_dequant(
