@@ -57,3 +57,29 @@ async fn should_preserve_generation_and_chunking_configuration_in_acknowledgemen
     assert!(serialized_event.contains(&configuration_generation));
     assert!(!serialized_event.contains("/tmp/"));
 }
+
+#[test]
+fn should_spell_the_modernbert_family_as_the_menu_app_reads_it() {
+    let wire_spelling = serde_json::to_string(&crate::WorkerEmbeddingModelFamily::ModernBert)
+        .expect("the family serializes");
+
+    assert_eq!(wire_spelling, r#""modernbert""#);
+}
+
+#[test]
+fn should_read_the_modernbert_family_from_its_catalog_spelling() {
+    let embedding_family: crate::WorkerEmbeddingModelFamily =
+        serde_json::from_str(r#""modernbert""#).expect("the catalog spelling reads");
+
+    assert_eq!(
+        embedding_family,
+        crate::WorkerEmbeddingModelFamily::ModernBert
+    );
+}
+
+#[test]
+fn should_refuse_the_snake_case_spelling_of_the_modernbert_family() {
+    let refusal = serde_json::from_str::<crate::WorkerEmbeddingModelFamily>(r#""modern_bert""#);
+
+    assert!(refusal.is_err(), "{refusal:?}");
+}
