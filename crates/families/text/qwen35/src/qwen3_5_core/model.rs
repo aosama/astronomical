@@ -27,6 +27,10 @@ pub mod gated_delta;
 #[cfg(feature = "direct-mlx")]
 pub mod layer_additions;
 #[cfg(feature = "direct-mlx")]
+pub mod live_memory_observation;
+#[cfg(all(test, feature = "direct-mlx"))]
+#[path = "model/live_memory_observation_tests.rs"]
+mod live_memory_observation_tests;
 pub mod loading_geometry;
 #[cfg(feature = "direct-mlx")]
 pub mod loading_pipeline;

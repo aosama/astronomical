@@ -1,46 +1,38 @@
 //! How a catalog entry is classified: the executable family that decides which
 //! engine loads it, and the role that decides where the Models page offers it.
 
-use serde::Deserialize;
+use config::ModelFamily;
+use model_family_registry::model_family_named;
+use serde::de::Error as _;
+use serde::{Deserialize, Deserializer};
 
-/// Executable model families intentionally supported by catalog version 2.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
-#[serde(rename_all = "snake_case")]
-pub enum DownloadCatalogFamily {
-    Qwen3_5,
-    Flux2Klein,
-    /// The wire name matches the discovery family, including its underscore before 21.
-    #[serde(rename = "qwen_image_21")]
-    QwenImage21,
-    /// The wire name matches the discovery model_type, which has no underscore.
-    #[serde(rename = "modernbert")]
-    ModernBert,
-    /// Wire name matches the folded ternary pack's `model_type`.
-    #[serde(rename = "prism_hadamard_qwen35")]
-    PrismHadamardQwen35,
-    /// A decision model; the wire name matches the discovery model_type.
-    Laya,
-    /// A decision model; the wire name matches the discovery family.
-    Clef,
-    /// A speech model; the wire name matches the discovery family.
-    Kokoro,
-    /// A speech model; the wire name matches the discovery family.
-    Phonon,
-}
+/// The executable family that decides which engine loads a catalog entry:
+/// a family the registry names, read from the entry's family identifier.
+/// Naming the registry, not a list of its own, keeps a new family to its own
+/// crate, one registry line and its catalog entries (issue #2473).
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct DownloadCatalogFamily(ModelFamily);
 
 impl DownloadCatalogFamily {
+    /// The registered family with this identifier.
+    #[must_use]
+    pub fn named(identifier: &str) -> Option<Self> {
+        model_family_named(identifier).map(Self)
+    }
+
     #[must_use]
     pub const fn as_str(self) -> &'static str {
-        config::exhaustive_table!(self, {
-            Self::Qwen3_5 => "qwen3_5",
-            Self::Flux2Klein => "flux2_klein",
-            Self::QwenImage21 => "qwen_image_21",
-            Self::ModernBert => "modernbert",
-            Self::PrismHadamardQwen35 => "prism_hadamard_qwen35",
-            Self::Laya => "laya",
-            Self::Clef => "clef",
-            Self::Kokoro => "kokoro",
-            Self::Phonon => "phonon",
+        self.0.as_str()
+    }
+}
+
+impl<'de> Deserialize<'de> for DownloadCatalogFamily {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let family_identifier = String::deserialize(deserializer)?;
+        Self::named(&family_identifier).ok_or_else(|| {
+            D::Error::custom(format!(
+                "unknown model family `{family_identifier}`; the family registry names every supported family"
+            ))
         })
     }
 }

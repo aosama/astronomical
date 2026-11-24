@@ -18,6 +18,8 @@ mod model_suggestions;
 mod path_selection;
 
 #[cfg(test)]
+mod catalog_classification_tests;
+#[cfg(test)]
 mod download_catalog_tests;
 #[cfg(test)]
 mod publisher_dflash_package_tests;

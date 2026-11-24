@@ -18,6 +18,9 @@ test-lanes = ["integration", "integration-and-rest", "nextest"]
 # leaf_model_id and the exhaustive_table macro; pure Rust, no native build.
 config = { path = "../../foundation/config" }
 lowercase-hex = { path = "../../foundation/lowercase-hex" }
+# The family registry names every supported family; MLX-free, so the daemon
+# can read the catalog without linking MLX.
+model-family-registry = { path = "../../families/registry/model-family-registry" }
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
