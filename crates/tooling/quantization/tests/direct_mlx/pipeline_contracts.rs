@@ -15,7 +15,7 @@ use quantization::progress::SilentProgressReporter;
 use quantization::sensitivity::exact_sweep::ExactSweepRequest;
 use quantization::sensitivity::{SensitivityMethod, SensitivityResult, SensitivityTable};
 use runtime_integration::MlxRuntime;
-use serial_test::parallel;
+use serial_test::file_parallel;
 
 use super::support::{contract_runtime, outlier_heavy_weights};
 
@@ -29,7 +29,7 @@ const DOWN_PROJECTION: &str = "model.layers.0.mlp.down_proj";
 const WORD_LEVEL_TOKENIZER_JSON: &str = r#"{"version": "1.0", "truncation": null, "padding": null, "added_tokens": [], "normalizer": null, "pre_tokenizer": {"type": "Whitespace"}, "post_processor": null, "decoder": null, "model": {"type": "WordLevel", "vocab": {"[UNK]": 0, "the": 1}, "unk_token": "[UNK]"}}"#;
 
 #[test]
-#[parallel]
+#[file_parallel]
 fn should_write_a_complete_static_artifact() {
     let runtime = contract_runtime();
     let workspace = tempfile::tempdir().expect("a temporary directory should be creatable");
@@ -70,7 +70,7 @@ fn should_write_a_complete_static_artifact() {
 }
 
 #[test]
-#[parallel]
+#[file_parallel]
 fn should_refuse_an_existing_artifact_unless_overwrite_is_requested() {
     let runtime = contract_runtime();
     let workspace = tempfile::tempdir().expect("a temporary directory should be creatable");
@@ -105,7 +105,7 @@ fn should_refuse_an_existing_artifact_unless_overwrite_is_requested() {
 }
 
 #[test]
-#[parallel]
+#[file_parallel]
 fn should_convert_into_an_empty_artifact_directory_an_interrupted_run_left_behind() {
     let runtime = contract_runtime();
     let workspace = tempfile::tempdir().expect("a temporary directory should be creatable");
@@ -125,7 +125,7 @@ fn should_convert_into_an_empty_artifact_directory_an_interrupted_run_left_behin
 }
 
 #[test]
-#[parallel]
+#[file_parallel]
 fn should_sweep_against_the_bfloat16_source_when_it_fits() {
     let runtime = contract_runtime();
     let workspace = tempfile::tempdir().expect("a temporary directory should be creatable");
@@ -158,7 +158,7 @@ fn should_sweep_against_the_bfloat16_source_when_it_fits() {
 }
 
 #[test]
-#[parallel]
+#[file_parallel]
 fn should_sweep_against_a_uniform_baseline_and_remove_it_when_bfloat16_does_not_fit() {
     let runtime = contract_runtime();
     let workspace = tempfile::tempdir().expect("a temporary directory should be creatable");

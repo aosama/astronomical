@@ -6,7 +6,7 @@
 use super::paged_execution::decode_token_activation_rows;
 use mlx_bridge::MlxArray;
 use runtime_integration::{MlxMemoryLimits, MlxRuntime};
-use serial_test::serial;
+use serial_test::file_serial;
 
 const INPUT_WIDTH: usize = 64;
 const EXPERTS_PER_TOKEN: usize = 8;
@@ -33,7 +33,7 @@ fn route(assignment_count: usize) -> MlxArray {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_flatten_one_shared_decode_token_row_for_every_assignment() {
     let runtime = test_runtime();
     let rows = decode_token_activation_rows(
@@ -48,7 +48,7 @@ fn should_flatten_one_shared_decode_token_row_for_every_assignment() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_flatten_one_row_per_assignment_on_the_sorted_decode_path() {
     let runtime = test_runtime();
     let rows = decode_token_activation_rows(
@@ -63,7 +63,7 @@ fn should_flatten_one_row_per_assignment_on_the_sorted_decode_path() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_keep_a_multi_token_chunk_on_the_materializing_path() {
     let runtime = test_runtime();
     // Two tokens route sixteen assignments: more than one token routes, so
@@ -91,7 +91,7 @@ fn should_keep_a_multi_token_chunk_on_the_materializing_path() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_reject_empty_routes_and_partial_routes_stay_decode_tokens() {
     let runtime = test_runtime();
     let empty_route = MlxArray::from_i32(&[], &[1, 1, 0]).expect("an empty route should upload");

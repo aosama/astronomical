@@ -4,7 +4,7 @@
 
 use mlx_bridge::{MlxArray, MlxDtype};
 use runtime_integration::MlxRuntime;
-use serial_test::serial;
+use serial_test::file_serial;
 
 use crate::synthetic_weights_test_support::{
     float32_values, initialize_test_runtime, wide_shakespeare_values,
@@ -62,7 +62,7 @@ fn packed_projection(runtime: &MlxRuntime) -> ([MlxArray; 3], MlxArray) {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_project_on_packed_weights_like_the_dequantized_dense_form() {
     let runtime = initialize_test_runtime();
     let (packed_tensors, dequantized_weight) = packed_projection(&runtime);
@@ -96,7 +96,7 @@ fn should_project_on_packed_weights_like_the_dequantized_dense_form() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_gather_rows_exactly_as_dequantize_then_take() {
     let runtime = initialize_test_runtime();
     let (packed_tensors, dequantized_weight) = packed_projection(&runtime);
@@ -120,7 +120,7 @@ fn should_gather_rows_exactly_as_dequantize_then_take() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_refuse_a_triple_packed_for_another_input_width() {
     let runtime = initialize_test_runtime();
     let (packed_tensors, _) = packed_projection(&runtime);
@@ -135,7 +135,7 @@ fn should_refuse_a_triple_packed_for_another_input_width() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_refuse_activations_of_the_wrong_width_or_rank() {
     let runtime = initialize_test_runtime();
     let (packed_tensors, _) = packed_projection(&runtime);

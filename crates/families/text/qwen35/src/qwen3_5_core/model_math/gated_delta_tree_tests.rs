@@ -4,7 +4,7 @@
 
 use mlx_bridge::{MlxArray, MlxDtype};
 use runtime_integration::{MlxMemoryLimits, MlxRuntime};
-use serial_test::serial;
+use serial_test::file_serial;
 
 use super::gated_delta_sequence::{qwen3_5_gated_delta_kernel, qwen3_5_gated_delta_sequence};
 use super::gated_delta_tree::{
@@ -141,7 +141,7 @@ fn sequence_outputs(runtime: &MlxRuntime, inputs: &RecurrenceInputs) -> MlxArray
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_match_the_sequence_kernel_bit_for_bit_on_a_chain() {
     if test_harness::skip_without(
         test_harness::PlatformRequirement::MetalGpu,
@@ -159,7 +159,7 @@ fn should_match_the_sequence_kernel_bit_for_bit_on_a_chain() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_give_every_branch_row_what_its_chain_alone_would_give() {
     if test_harness::skip_without(
         test_harness::PlatformRequirement::MetalGpu,
@@ -197,7 +197,7 @@ fn should_give_every_branch_row_what_its_chain_alone_would_give() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_give_a_copied_chain_below_a_branch_what_its_chain_alone_gives() {
     if test_harness::skip_without(
         test_harness::PlatformRequirement::MetalGpu,
@@ -247,7 +247,7 @@ fn should_pad_every_chain_to_the_longest_and_list_it_from_the_anchor() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_replay_kept_rows_to_the_sequence_kernels_final_state_bit_for_bit() {
     if test_harness::skip_without(
         test_harness::PlatformRequirement::MetalGpu,

@@ -3,7 +3,7 @@
 //! and its real MLX conversion are recognized as one base. Revisions are pinned, so
 //! a later upload to those repositories cannot change the answer.
 
-use serial_test::serial;
+use serial_test::file_serial;
 use vision_tower::{
     ArtifactReference, ArtifactSource, BaseMatchProgress, BaseMatchVerdict, TowerAdditionProgress,
     TowerAdditionRequest, TowerAdditionStage, TowerStatus, VisionTowerError, add_tower,
@@ -35,7 +35,7 @@ async fn open(reference_text: &str) -> ArtifactSource {
 }
 
 #[tokio::test]
-#[serial]
+#[file_serial]
 #[ignore = "reads public repositories over the network"]
 async fn should_see_no_tower_in_a_text_only_mlx_conversion() {
     let inspection = inspect_artifact(&open(TEXT_ONLY_MLX).await)
@@ -47,7 +47,7 @@ async fn should_see_no_tower_in_a_text_only_mlx_conversion() {
 }
 
 #[tokio::test]
-#[serial]
+#[file_serial]
 #[ignore = "reads public repositories over the network"]
 async fn should_see_the_whole_tower_in_the_upstream_checkpoint() {
     let inspection = inspect_artifact(&open(UPSTREAM_WITH_TOWER).await)
@@ -63,7 +63,7 @@ async fn should_see_the_whole_tower_in_the_upstream_checkpoint() {
 }
 
 #[tokio::test]
-#[serial]
+#[file_serial]
 #[ignore = "reads public repositories over the network"]
 async fn should_prove_an_mlx_conversion_shares_its_upstream_base() {
     let report = match_tower_to_text(
@@ -78,7 +78,7 @@ async fn should_prove_an_mlx_conversion_shares_its_upstream_base() {
 }
 
 #[tokio::test]
-#[serial]
+#[file_serial]
 #[ignore = "reads public repositories over the network"]
 async fn should_refuse_a_tower_for_a_model_of_another_width() {
     let report = match_tower_to_text(
@@ -96,7 +96,7 @@ async fn should_refuse_a_tower_for_a_model_of_another_width() {
 }
 
 #[tokio::test]
-#[serial]
+#[file_serial]
 #[ignore = "reads public repositories over the network"]
 async fn should_ask_for_a_local_text_model_rather_than_download_one() {
     let text_source = open(TEXT_ONLY_MLX).await;

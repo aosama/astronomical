@@ -1,4 +1,4 @@
-use serial_test::serial;
+use serial_test::file_serial;
 
 use super::{elu, leaky_relu, modulate};
 use crate::speech_models::speech_test_support::{
@@ -6,7 +6,7 @@ use crate::speech_models::speech_test_support::{
 };
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_scale_only_negative_values_in_leaky_relu() {
     let runtime = initialize_test_runtime();
     let input = upload(&runtime, &[-2.0, 0.0, 3.0], &[3]);
@@ -18,7 +18,7 @@ fn should_scale_only_negative_values_in_leaky_relu() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_follow_exp_minus_one_below_zero_in_elu() {
     let runtime = initialize_test_runtime();
     let input = upload(&runtime, &[-1.0, 0.0, 2.5], &[3]);
@@ -28,7 +28,7 @@ fn should_follow_exp_minus_one_below_zero_in_elu() {
 
 // Edge: a very negative input approaches -1 without overflow.
 #[test]
-#[serial]
+#[file_serial]
 fn should_approach_minus_one_for_very_negative_elu_inputs() {
     let runtime = initialize_test_runtime();
     let input = upload(&runtime, &[-80.0], &[1]);
@@ -37,7 +37,7 @@ fn should_approach_minus_one_for_very_negative_elu_inputs() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_scale_by_one_plus_scale_then_shift() {
     let runtime = initialize_test_runtime();
     let normalized = upload(&runtime, &[1.0, -2.0], &[1, 2]);

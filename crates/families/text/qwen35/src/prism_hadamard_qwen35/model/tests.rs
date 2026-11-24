@@ -6,7 +6,7 @@
 use std::collections::HashMap;
 
 use runtime_integration::{MlxMemoryLimits, MlxRuntime};
-use serial_test::serial;
+use serial_test::file_serial;
 
 use super::forward::rope_offset_tokens;
 use super::{
@@ -34,7 +34,7 @@ fn smoke_test_runtime() -> MlxRuntime {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_project_only_the_final_prompt_position_to_vocabulary_logits() {
     let fixture_directory = write_fixture_pack(|_| {});
     let pack = FoldedPackValidator::new()
@@ -77,7 +77,7 @@ fn should_project_only_the_final_prompt_position_to_vocabulary_logits() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_continue_generation_state_across_decoding_steps() {
     let fixture_directory = write_fixture_pack(|_| {});
     let pack = FoldedPackValidator::new()
@@ -132,7 +132,7 @@ fn should_continue_generation_state_across_decoding_steps() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_list_step_evaluation_roots_by_state_kind_in_decoder_layer_order() {
     let fixture_directory = write_fixture_pack(|_| {});
     let pack = FoldedPackValidator::new()
@@ -184,7 +184,7 @@ fn should_list_step_evaluation_roots_by_state_kind_in_decoder_layer_order() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_refuse_a_decoder_layer_whose_state_kind_does_not_match_its_weights() {
     let fixture_directory = write_fixture_pack(|_| {});
     let pack = FoldedPackValidator::new()
@@ -213,7 +213,7 @@ fn should_refuse_a_decoder_layer_whose_state_kind_does_not_match_its_weights() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_probe_any_decoder_layer_on_a_fresh_generation_state() {
     let fixture_directory = write_fixture_pack(|_| {});
     let pack = FoldedPackValidator::new()
@@ -308,7 +308,7 @@ fn should_accept_only_single_stage_power_of_two_blocks_for_the_fused_rotation() 
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_rotate_bit_identically_through_the_fused_kernel_and_the_composed_route() {
     if test_harness::skip_without(
         test_harness::PlatformRequirement::MetalGpu,

@@ -1,4 +1,4 @@
-use serial_test::serial;
+use serial_test::file_serial;
 
 use super::StyleModulation;
 use speech::speech_models::checkpoint_tensors::CheckpointTensors;
@@ -28,7 +28,7 @@ fn constant_style_modulation(
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_normalise_over_the_length_then_apply_the_style() {
     let runtime = initialize_test_runtime();
     let modulation = constant_style_modulation(&runtime, 1.0, 0.5);
@@ -46,7 +46,7 @@ fn should_normalise_over_the_length_then_apply_the_style() {
 
 // Edge: a constant channel normalises to zero, leaving only the shift.
 #[test]
-#[serial]
+#[file_serial]
 fn should_leave_only_the_shift_on_a_constant_channel() {
     let runtime = initialize_test_runtime();
     let modulation = constant_style_modulation(&runtime, 3.0, -0.25);

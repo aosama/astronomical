@@ -6,7 +6,7 @@
 
 use mlx_bridge::{MlxArray, MlxDtype};
 use runtime_integration::{MlxMemoryLimits, MlxRuntime};
-use serial_test::serial;
+use serial_test::file_serial;
 
 use super::gated_delta_tree::TreeRowChains;
 use super::row_exact_tree_attention::{
@@ -78,7 +78,7 @@ fn zeros(runtime: &MlxRuntime, shape: &[i32], dtype: MlxDtype) -> MlxArray {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_accept_the_mixture_of_experts_round_with_its_slab_filled_exactly() {
     assert!(Shapes::fitting().accepted(&test_runtime()));
 }
@@ -86,7 +86,7 @@ fn should_accept_the_mixture_of_experts_round_with_its_slab_filled_exactly() {
 /// Three rows in a chain pad their chains to 4 entries; the slab holds only
 /// the 3 rows after the context, and that is all the kernel reads.
 #[test]
-#[serial]
+#[file_serial]
 fn should_accept_a_three_row_chain_whose_padded_chain_passes_the_slab_end() {
     let shapes = Shapes {
         rows: 3,
@@ -97,7 +97,7 @@ fn should_accept_a_three_row_chain_whose_padded_chain_passes_the_slab_end() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_accept_a_single_row() {
     let shapes = Shapes {
         rows: 1,
@@ -108,7 +108,7 @@ fn should_accept_a_single_row() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_refuse_more_rows_than_two_matrix_tiles_hold() {
     let shapes = Shapes {
         rows: 5,
@@ -119,7 +119,7 @@ fn should_refuse_more_rows_than_two_matrix_tiles_hold() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_refuse_a_slab_without_room_for_every_row() {
     let shapes = Shapes {
         slab_capacity: CONTEXT_LENGTH + 3,
@@ -129,7 +129,7 @@ fn should_refuse_a_slab_without_room_for_every_row() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_refuse_a_query_group_other_than_eight() {
     let shapes = Shapes {
         query_heads: 8,
@@ -139,7 +139,7 @@ fn should_refuse_a_query_group_other_than_eight() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_refuse_float32_queries() {
     let shapes = Shapes {
         query_dtype: MlxDtype::Float32,
@@ -149,7 +149,7 @@ fn should_refuse_float32_queries() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_refuse_a_head_size_other_than_256() {
     let shapes = Shapes {
         head_size: 128,

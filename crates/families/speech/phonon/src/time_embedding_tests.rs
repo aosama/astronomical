@@ -1,4 +1,4 @@
-use serial_test::serial;
+use serial_test::file_serial;
 
 use super::uncentred_rms_norm;
 use speech::speech_models::speech_test_support::{
@@ -6,7 +6,7 @@ use speech::speech_models::speech_test_support::{
 };
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_divide_by_the_root_mean_square_without_centring() {
     let runtime = initialize_test_runtime();
     let input_values = [1.0f32, 2.0, 3.0, 6.0];
@@ -26,7 +26,7 @@ fn should_divide_by_the_root_mean_square_without_centring() {
 
 // Edge: zeros stay zeros; the epsilon keeps the division finite.
 #[test]
-#[serial]
+#[file_serial]
 fn should_keep_a_zero_row_at_zero() {
     let runtime = initialize_test_runtime();
     let input = upload(&runtime, &[0.0; 4], &[1, 4]);

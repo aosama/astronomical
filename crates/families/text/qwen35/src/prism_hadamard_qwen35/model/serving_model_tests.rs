@@ -1,11 +1,11 @@
-use serial_test::serial;
+use serial_test::file_serial;
 
 use super::super::fixture_model_test_support::load_fixture_text_model;
 use crate::prism_hadamard_qwen35::artifacts::tests::pack_fixture::FIXTURE_VOCAB_SIZE;
 use crate::qwen3_5_core::model::Qwen3_5ServingModel;
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_answer_the_limits_and_layout_the_prism_engine_uses() {
     let mut fixture = load_fixture_text_model();
     let text_model = &fixture.text_model;
@@ -36,7 +36,7 @@ fn should_answer_the_limits_and_layout_the_prism_engine_uses() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_choose_the_same_greedy_token_as_prism_sampling() {
     let fixture = load_fixture_text_model();
     let text_model = &fixture.text_model;

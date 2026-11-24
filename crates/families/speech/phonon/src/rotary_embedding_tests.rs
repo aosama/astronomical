@@ -1,4 +1,4 @@
-use serial_test::serial;
+use serial_test::file_serial;
 
 use super::{rotary_table, rotate_interleaved_pairs};
 use speech::speech_models::speech_test_support::{
@@ -25,7 +25,7 @@ fn should_continue_positions_from_an_offset() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_rotate_each_interleaved_pair_by_its_angle() {
     let runtime = initialize_test_runtime();
     // One head, one position (position 1), two pairs: (1, 0) and (0, 1).
@@ -46,7 +46,7 @@ fn should_rotate_each_interleaved_pair_by_its_angle() {
 
 // Edge: position 0 leaves every pair unrotated.
 #[test]
-#[serial]
+#[file_serial]
 fn should_leave_position_zero_unrotated() {
     let runtime = initialize_test_runtime();
     let heads = upload(&runtime, &[0.5, -1.5, 2.0, 3.0], &[1, 1, 4]);

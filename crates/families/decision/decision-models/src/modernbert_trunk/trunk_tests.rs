@@ -11,7 +11,7 @@
 
 use mlx_bridge::{MlxArray, MlxDtype};
 use runtime_integration::{MlxRuntime, MlxSafetensors};
-use serial_test::serial;
+use serial_test::file_serial;
 
 use super::{ModernBertTrunk, ModernBertTrunkError};
 use crate::modernbert_trunk::configuration::ModernBertConfiguration;
@@ -197,7 +197,7 @@ fn token_sequence(token_count: usize, first_token_id: u32) -> Vec<u32> {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_give_each_row_of_a_padded_batch_the_hidden_states_it_gets_alone() {
     let runtime = initialize_test_runtime();
     let token_embedding_storage = TokenEmbeddingStorage::AffineQuantized;
@@ -241,7 +241,7 @@ fn should_give_each_row_of_a_padded_batch_the_hidden_states_it_gets_alone() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_give_rows_of_an_unpadded_batch_the_hidden_states_they_get_alone() {
     let runtime = initialize_test_runtime();
     let token_embedding_storage = TokenEmbeddingStorage::AffineQuantized;
@@ -278,7 +278,7 @@ fn should_give_rows_of_an_unpadded_batch_the_hidden_states_they_get_alone() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_hide_padding_when_every_row_is_inside_the_local_window() {
     let runtime = initialize_test_runtime();
     let token_embedding_storage = TokenEmbeddingStorage::AffineQuantized;
@@ -313,7 +313,7 @@ fn should_hide_padding_when_every_row_is_inside_the_local_window() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_encode_a_single_token_sequence() {
     let runtime = initialize_test_runtime();
     let token_embedding_storage = TokenEmbeddingStorage::AffineQuantized;
@@ -331,7 +331,7 @@ fn should_encode_a_single_token_sequence() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_read_a_dense_embedding_table_like_the_quantized_one_it_equals() {
     let runtime = initialize_test_runtime();
     let quantized_tensors = load_synthetic_weights(
@@ -363,7 +363,7 @@ fn should_read_a_dense_embedding_table_like_the_quantized_one_it_equals() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_name_the_tensor_an_artifact_is_missing() {
     let runtime = initialize_test_runtime();
     let token_embedding_storage = TokenEmbeddingStorage::AffineQuantized;

@@ -1,5 +1,5 @@
 use ipc_protocol::RequestId;
-use serial_test::serial;
+use serial_test::file_serial;
 
 use crate::PerformanceAttribution;
 use crate::prism_hadamard_qwen35::engine::fixture_engine_test_support::loaded_fixture_engine;
@@ -7,7 +7,7 @@ use crate::prism_hadamard_qwen35::engine::fixture_engine_test_support::loaded_fi
 // Positive and edge: with no store open, a request starts from position zero
 // with one unallocated decoder-state owner per fixture decoder layer.
 #[test]
-#[serial]
+#[file_serial]
 fn should_start_a_request_from_position_zero_when_no_store_is_open() {
     let mut fixture_engine = loaded_fixture_engine(|_| {});
 

@@ -9,7 +9,7 @@ use super::gated_delta_boundary_checkpoints::{
 use super::gated_delta_sequence_contract::{GatedDeltaSequenceShape, template_arguments};
 use mlx_bridge::{MlxArray, MlxDtype, MlxMetalKernelTemplateArgument};
 use runtime_integration::{MlxMemoryLimits, MlxRuntime, MlxRuntimeError};
-use serial_test::serial;
+use serial_test::file_serial;
 
 fn test_sequence_shape() -> GatedDeltaSequenceShape {
     GatedDeltaSequenceShape {
@@ -111,7 +111,7 @@ fn should_carry_each_batch_size_into_the_b_integer() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_unpack_three_kernel_outputs_in_launch_order() {
     // The runtime installs the MLX allocator that backs `MlxArray::from_i32`,
     // matching every other direct-MLX unit test in this crate.
@@ -131,7 +131,7 @@ fn should_unpack_three_kernel_outputs_in_launch_order() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_reject_a_launch_without_sequence_outputs() {
     // The runtime installs the MLX allocator that backs `MlxArray::from_i32`,
     // matching every other direct-MLX unit test in this crate.
@@ -148,7 +148,7 @@ fn should_reject_a_launch_without_sequence_outputs() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_reject_a_launch_missing_the_final_recurrent_state() {
     // The runtime installs the MLX allocator that backs `MlxArray::from_i32`,
     // matching every other direct-MLX unit test in this crate.
@@ -165,7 +165,7 @@ fn should_reject_a_launch_missing_the_final_recurrent_state() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_reject_a_launch_missing_only_the_boundary_states() {
     // The runtime installs the MLX allocator that backs `MlxArray::from_i32`,
     // matching every other direct-MLX unit test in this crate.

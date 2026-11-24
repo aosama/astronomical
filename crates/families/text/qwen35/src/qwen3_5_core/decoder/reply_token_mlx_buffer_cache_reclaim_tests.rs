@@ -1,6 +1,6 @@
 use mlx_bridge::MlxDtype;
 use runtime_integration::{MLX_BUFFER_CACHE_RECLAIM_THRESHOLD_BYTES, MlxMemoryLimits, MlxRuntime};
-use serial_test::serial;
+use serial_test::file_serial;
 
 use super::reply_token_mlx_buffer_cache_reclaim::{
     OutgrownAttentionSlabReclaim, reclaim_mlx_buffer_cache_between_draft_rounds,
@@ -52,7 +52,7 @@ fn mlx_buffer_cache_bytes(runtime: &MlxRuntime) -> usize {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_release_the_mlx_buffer_cache_once_an_outgrown_slab_passes_the_threshold() {
     let runtime = test_runtime();
     runtime
@@ -69,7 +69,7 @@ fn should_release_the_mlx_buffer_cache_once_an_outgrown_slab_passes_the_threshol
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_keep_the_mlx_buffer_cache_while_it_is_below_the_threshold() {
     let runtime = test_runtime();
     runtime
@@ -91,7 +91,7 @@ fn should_keep_the_mlx_buffer_cache_while_it_is_below_the_threshold() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_succeed_on_an_empty_mlx_buffer_cache() {
     let runtime = test_runtime();
     runtime
@@ -106,7 +106,7 @@ fn should_succeed_on_an_empty_mlx_buffer_cache() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_keep_working_buffers_above_the_threshold_when_no_slab_grew() {
     let runtime = test_runtime();
     runtime
@@ -145,7 +145,7 @@ fn should_report_growth_only_when_the_state_became_larger() {
 /// a draft round adds is its larger threshold, so a pool that the prompt
 /// path would already release must survive a draft round.
 #[test]
-#[serial]
+#[file_serial]
 fn should_keep_between_draft_rounds_what_the_prompt_threshold_would_release() {
     let runtime = test_runtime();
     runtime

@@ -7,7 +7,7 @@ use crate::memory::RetainedExpertPageClass;
 use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights;
 use crate::qwen3_5_streaming::expert_streaming::PersistedExpertUsage;
 use runtime_integration::{MlxMemoryLimits, MlxRuntime};
-use serial_test::serial;
+use serial_test::file_serial;
 
 pub(super) const WARM_SLOT_COUNT: usize = 8;
 pub(super) const EXPERT_CAPACITY: usize = 16;
@@ -62,7 +62,7 @@ pub(super) fn streamed_weights_for_expert_count(
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_grow_a_warm_table_from_the_first_decode_miss_and_serve_later_hits() {
     let runtime = test_runtime();
     let mut astro_expert_cache = AstroExpertCache::new(1);
@@ -119,7 +119,7 @@ fn should_grow_a_warm_table_from_the_first_decode_miss_and_serve_later_hits() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_evict_the_least_read_expert_when_a_warm_table_overflows() {
     let runtime = test_runtime();
     let mut astro_expert_cache = AstroExpertCache::new(1);
@@ -166,7 +166,7 @@ fn should_evict_the_least_read_expert_when_a_warm_table_overflows() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_keep_the_stream_operation_local_when_the_budget_refuses_the_warm_table() {
     let runtime = test_runtime();
     let mut astro_expert_cache = AstroExpertCache::new(1);
@@ -192,7 +192,7 @@ fn should_keep_the_stream_operation_local_when_the_budget_refuses_the_warm_table
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_scale_final_prefill_chunk_demand_above_earlier_prompt_frequency() {
     let runtime = test_runtime();
     let mut astro_expert_cache = AstroExpertCache::new(2);
@@ -233,7 +233,7 @@ fn should_scale_final_prefill_chunk_demand_above_earlier_prompt_frequency() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_count_warm_inserts_only_for_hot_expert_warming() {
     let runtime = test_runtime();
     let mut astro_expert_cache = AstroExpertCache::new(1);
@@ -305,7 +305,7 @@ fn warm_two_tokens(
 /// mostly-zero tables, the per-token slot resize then reported zero
 /// affordable slots, and every later token re-streamed its experts from disk.
 #[test]
-#[serial]
+#[file_serial]
 fn should_keep_budget_headroom_for_sibling_layers_when_the_first_warm_tables_are_barely_filled() {
     let runtime = test_runtime();
     let mut probe_astro_expert_cache = AstroExpertCache::new(1);
@@ -357,7 +357,7 @@ fn should_keep_budget_headroom_for_sibling_layers_when_the_first_warm_tables_are
 /// must still land through least-read eviction inside the existing capacity
 /// instead of dropping the routed experts entirely.
 #[test]
-#[serial]
+#[file_serial]
 fn should_fall_back_to_least_read_eviction_when_the_budget_refuses_growth() {
     let runtime = test_runtime();
     let mut astro_expert_cache = AstroExpertCache::new(1);
@@ -412,7 +412,7 @@ fn should_fall_back_to_least_read_eviction_when_the_budget_refuses_growth() {
 /// Oversubscription therefore cannot originate in `try_adopt_complete_layer`;
 /// it can only arrive through a ceiling raised above the composed budget.
 #[test]
-#[serial]
+#[file_serial]
 fn should_seat_at_most_the_composed_ceiling_and_refuse_every_further_complete_layer() {
     let runtime = test_runtime();
     let sparse_layer_count = 8_usize;
@@ -458,7 +458,7 @@ fn should_seat_at_most_the_composed_ceiling_and_refuse_every_further_complete_la
 /// pressure paths may reclaim, never on finalization releasing tables
 /// outright.
 #[test]
-#[serial]
+#[file_serial]
 fn should_classify_a_filled_warm_table_as_pinned_and_a_partial_one_as_elastic() {
     let runtime = test_runtime();
     let mut astro_expert_cache = AstroExpertCache::new(2);
@@ -501,7 +501,7 @@ fn should_classify_a_filled_warm_table_as_pinned_and_a_partial_one_as_elastic() 
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_raise_demand_coverage_ranking_from_seeded_usage_history() {
     let runtime = test_runtime();
     let mut seeded_astro_expert_cache = AstroExpertCache::new(1);
@@ -550,7 +550,7 @@ fn should_raise_demand_coverage_ranking_from_seeded_usage_history() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_serve_a_second_chunk_route_from_a_layer_seated_by_the_first_chunk() {
     let runtime = test_runtime();
     let mut astro_expert_cache = AstroExpertCache::new(1);
@@ -586,7 +586,7 @@ fn should_serve_a_second_chunk_route_from_a_layer_seated_by_the_first_chunk() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_adopt_a_streamed_complete_layer_when_the_budget_admits_it() {
     let runtime = test_runtime();
     let mut astro_expert_cache = AstroExpertCache::new(1);

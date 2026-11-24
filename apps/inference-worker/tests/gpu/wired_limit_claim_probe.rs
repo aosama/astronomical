@@ -37,7 +37,7 @@ use mlx_bridge::{MlxArray, MlxDtype, set_wired_limit};
 use runtime_integration::{
     MlxMemoryLimits, MlxRuntime, maximum_recommended_gpu_working_set_size_bytes,
 };
-use serial_test::serial;
+use serial_test::file_serial;
 use test_harness::test_run::TestRunContext;
 
 use super::wired_claim_probe_permission::require_probe_permission;
@@ -87,7 +87,7 @@ impl Drop for WiredLimitClaimGuard {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 #[ignore = "requires allow_large_wired_memory_probe in the explicit test-run configuration"]
 fn should_extend_the_wired_boundary_beyond_default_policy_when_mlx_claims_a_wired_limit() {
     require_probe_permission(&TestRunContext::current().configuration)

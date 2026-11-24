@@ -16,7 +16,7 @@ use quantization::requantize::bit_policy::BitPolicy;
 use quantization::requantize::driver::run_requantize;
 use quantization::requantize::tensor_plan::RequantizeTensorPlan;
 use runtime_integration::MlxRuntime;
-use serial_test::parallel;
+use serial_test::file_parallel;
 
 use super::support::{contract_runtime, outlier_heavy_weights};
 
@@ -25,7 +25,7 @@ const COLUMNS: usize = 256;
 const SHARD_BYTES_LIMIT: u64 = 64 * 1024;
 
 #[test]
-#[parallel]
+#[file_parallel]
 fn should_dequantize_a_packed_source_with_its_own_parameters_before_re_encoding() {
     let runtime = contract_runtime();
     let source = tempfile::tempdir().expect("a temporary directory should be creatable");
@@ -56,7 +56,7 @@ fn should_dequantize_a_packed_source_with_its_own_parameters_before_re_encoding(
 }
 
 #[test]
-#[parallel]
+#[file_parallel]
 fn should_split_a_fused_gate_up_tensor_into_its_lower_and_upper_halves() {
     let runtime = contract_runtime();
     let source = tempfile::tempdir().expect("a temporary directory should be creatable");
@@ -91,7 +91,7 @@ fn should_split_a_fused_gate_up_tensor_into_its_lower_and_upper_halves() {
 }
 
 #[test]
-#[parallel]
+#[file_parallel]
 fn should_stack_unfused_per_expert_tensors_in_expert_order() {
     let runtime = contract_runtime();
     let source = tempfile::tempdir().expect("a temporary directory should be creatable");
@@ -135,7 +135,7 @@ fn should_stack_unfused_per_expert_tensors_in_expert_order() {
 }
 
 #[test]
-#[parallel]
+#[file_parallel]
 fn should_multiply_each_fp8_tile_by_its_block_scale() {
     // Powers of two as block scales keep the bf16 products exact, so the
     // host-side expectation and the GPU dequantization agree bit for bit.
@@ -180,7 +180,7 @@ fn should_multiply_each_fp8_tile_by_its_block_scale() {
 }
 
 #[test]
-#[parallel]
+#[file_parallel]
 fn should_report_progress_ending_at_every_planned_tensor() {
     let runtime = contract_runtime();
     let source = tempfile::tempdir().expect("a temporary directory should be creatable");

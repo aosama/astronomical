@@ -7,7 +7,7 @@ use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights
 use engine_core::expert_paging::ExpertWeightPage;
 use mlx_bridge::{MlxArray, MlxDtype};
 use runtime_integration::{MlxMemoryLimits, MlxRuntime};
-use serial_test::serial;
+use serial_test::file_serial;
 
 const PAGE_EXPERT_COUNT: usize = 4;
 const OUTPUT_ROWS: usize = 2;
@@ -52,7 +52,7 @@ fn packed_words_of(projection: &Qwen3_5AffineWeights) -> (Vec<u32>, u32) {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_select_experts_in_the_requested_order_and_keep_the_representation() {
     let runtime = test_runtime();
     let page = packed_codebook_page(&runtime);
@@ -87,7 +87,7 @@ fn should_select_experts_in_the_requested_order_and_keep_the_representation() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_select_a_single_expert_and_the_whole_page() {
     let runtime = test_runtime();
     let page = packed_codebook_page(&runtime);
@@ -105,7 +105,7 @@ fn should_select_a_single_expert_and_the_whole_page() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_reject_slots_outside_the_page_and_empty_selections() {
     let runtime = test_runtime();
     let page = packed_codebook_page(&runtime);
@@ -120,7 +120,7 @@ fn should_reject_slots_outside_the_page_and_empty_selections() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_concatenate_retained_experts_ahead_of_the_appended_page() {
     let runtime = test_runtime();
     let page = packed_codebook_page(&runtime);
@@ -146,7 +146,7 @@ fn should_concatenate_retained_experts_ahead_of_the_appended_page() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_concatenate_a_single_retained_expert_with_a_single_miss() {
     let runtime = test_runtime();
     let page = packed_codebook_page(&runtime);
@@ -174,7 +174,7 @@ fn should_concatenate_a_single_retained_expert_with_a_single_miss() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_reject_concatenated_pages_that_do_not_share_rotations_or_codebook_width() {
     let runtime = test_runtime();
     let retained = packed_codebook_page(&runtime);

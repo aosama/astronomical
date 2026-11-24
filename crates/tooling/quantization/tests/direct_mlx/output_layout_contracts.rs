@@ -15,7 +15,7 @@ use quantization::requantize::driver::{VISION_SIDECAR_FILE_NAME, run_requantize}
 use quantization::requantize::tensor_plan::RequantizeTensorPlan;
 use quantization::requantize::{MTP_SIDECAR_RELATIVE_PATH, RequantizeOutcome};
 use runtime_integration::MlxRuntime;
-use serial_test::parallel;
+use serial_test::file_parallel;
 
 use super::requantize_layout_contracts::{bfloat16_weight, save_source};
 use super::support::contract_runtime;
@@ -115,7 +115,7 @@ fn written_tensor(runtime: &MlxRuntime, output: &Path, file_name: &str, key: &st
 }
 
 #[test]
-#[parallel]
+#[file_parallel]
 fn should_write_language_tensors_under_mlx_lm_names_and_drop_the_heads_it_drops() {
     let runtime = contract_runtime();
 
@@ -139,7 +139,7 @@ fn should_write_language_tensors_under_mlx_lm_names_and_drop_the_heads_it_drops(
 }
 
 #[test]
-#[parallel]
+#[file_parallel]
 fn should_move_the_convolution_axes_and_materialize_the_norm_gamma() {
     let runtime = contract_runtime();
     let source_norm = bfloat16_weight(&runtime, &[HIDDEN_COLUMNS]);
@@ -171,7 +171,7 @@ fn should_move_the_convolution_axes_and_materialize_the_norm_gamma() {
 }
 
 #[test]
-#[parallel]
+#[file_parallel]
 fn should_keep_the_decay_parameter_at_its_stored_width() {
     let runtime = contract_runtime();
 
@@ -188,7 +188,7 @@ fn should_keep_the_decay_parameter_at_its_stored_width() {
 }
 
 #[test]
-#[parallel]
+#[file_parallel]
 fn should_write_the_tower_to_the_sidecar_channel_last_and_list_it_in_the_index() {
     let runtime = contract_runtime();
 
@@ -210,7 +210,7 @@ fn should_write_the_tower_to_the_sidecar_channel_last_and_list_it_in_the_index()
 }
 
 #[test]
-#[parallel]
+#[file_parallel]
 fn should_write_no_sidecar_for_a_source_without_a_tower() {
     let runtime = contract_runtime();
     let source = tempfile::tempdir().expect("a temporary directory should be creatable");
@@ -314,7 +314,7 @@ fn final_conversion_policy() -> BitPolicy {
 }
 
 #[test]
-#[parallel]
+#[file_parallel]
 fn should_write_the_prediction_head_quantized_beside_its_untouched_norm_and_fusion_layer() {
     let runtime = contract_runtime();
 
@@ -365,7 +365,7 @@ fn should_write_the_prediction_head_quantized_beside_its_untouched_norm_and_fusi
 }
 
 #[test]
-#[parallel]
+#[file_parallel]
 fn should_split_a_fused_head_expert_tensor_into_per_expert_quantized_projections() {
     let runtime = contract_runtime();
 
@@ -402,7 +402,7 @@ fn should_split_a_fused_head_expert_tensor_into_per_expert_quantized_projections
 }
 
 #[test]
-#[parallel]
+#[file_parallel]
 fn should_write_no_prediction_head_for_a_baseline_built_to_be_probed() {
     let runtime = contract_runtime();
     let uniform_baseline = BitPolicy::Uniform {

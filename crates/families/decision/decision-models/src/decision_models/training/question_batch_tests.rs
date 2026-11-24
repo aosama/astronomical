@@ -1,6 +1,6 @@
 //! Unit tests for laying out questions with different option counts.
 
-use serial_test::serial;
+use serial_test::file_serial;
 
 use super::*;
 use model_primitives::synthetic_weights_test_support::initialize_test_runtime;
@@ -18,7 +18,7 @@ fn should_number_each_batch_option_by_its_dataset_row_and_batch_question() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_pad_scores_far_below_any_real_score_and_unpad_them_in_order() {
     let runtime = initialize_test_runtime();
     let math = GpuMath { runtime: &runtime };
