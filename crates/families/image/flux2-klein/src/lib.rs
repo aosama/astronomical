@@ -37,12 +37,10 @@ pub mod transformer_shape_profile;
 pub mod vae;
 pub mod weight_layout;
 
-#[cfg(feature = "direct-mlx")]
-pub use artifact::Flux2KleinArtifactValidator;
 pub use artifact::{
     FLUX2_KLEIN_OFFICIAL_MODEL_ID, FLUX2_KLEIN_OFFICIAL_REVISION, FLUX2_KLEIN_PROVIDER_MODEL_ID,
-    Flux2KleinArtifactError, Flux2KleinArtifactProvenance, Flux2KleinLicense,
-    Flux2KleinRetainedArtifactFiles, ValidatedFlux2KleinArtifact,
+    Flux2KleinArtifactError, Flux2KleinArtifactProvenance, Flux2KleinArtifactValidator,
+    Flux2KleinLicense, Flux2KleinRetainedArtifactFiles, ValidatedFlux2KleinArtifact,
 };
 pub use configuration::{
     Flux2KleinConfigError, Flux2KleinPipelineConfig, Flux2KleinSchedulerConfig,

@@ -22,7 +22,7 @@ use std::time::Instant;
 use decision_contract::{
     DecisionQuestion, HeadInputRequest, OrderedJsonValue, parse_system_one_questions,
 };
-use model_serving::{DecisionEngine, KevDecisionEngine};
+use model_serving::{DecisionEngine, KevDecisionEngine, kev_question_row_layouts};
 use test_harness::test_run::TestRunContext;
 
 use super::decision_memory_peak::{peak_memory_bytes_after_request, peak_memory_report};
@@ -80,9 +80,12 @@ fn state_at_the_limit(decision_engine: &KevDecisionEngine) -> (OrderedJsonValue,
     let mut overflowing_word_count = ROMEO_AND_JULIET_WORDS.split_whitespace().count() + 1;
     while overflowing_word_count - fitting_word_count > 1 {
         let probe_word_count = fitting_word_count.midpoint(overflowing_word_count);
-        let fits = decision_engine
-            .question_row_layouts(&state_of_words(probe_word_count), &one_question)
-            .is_ok();
+        let fits = kev_question_row_layouts(
+            &decision_engine,
+            &state_of_words(probe_word_count),
+            &one_question,
+        )
+        .is_ok();
         if fits {
             fitting_word_count = probe_word_count;
         } else {
@@ -90,8 +93,7 @@ fn state_at_the_limit(decision_engine: &KevDecisionEngine) -> (OrderedJsonValue,
         }
     }
     let state = state_of_words(fitting_word_count);
-    let state_token_count = decision_engine
-        .question_row_layouts(&state, &one_question)
+    let state_token_count = kev_question_row_layouts(&decision_engine, &state, &one_question)
         .expect("the bisected state fits")[0]
         .state_token_count;
     (state, state_token_count)

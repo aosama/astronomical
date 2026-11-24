@@ -52,10 +52,19 @@ pub use ::model_primitives::*;
 // modules included, is re-exported whole.
 pub use ::qwen35::*;
 
-// The decision and embedding models (issue #2340): Laya, Kev, Clef,
-// ModernBERT and the decision and embedding seams the worker drives. Their
-// public surface, modules included, is re-exported whole.
+// The decision shell (issues #2340, #2473): the decision and embedding seams
+// the worker drives and what the decision families share, re-exported whole.
+// Each decision family is a crate of its own; the worker reaches its engine
+// through the names below.
 pub use ::decision_models::*;
+#[cfg(feature = "direct-mlx")]
+pub use clef::{ClefDecisionEngine, clef_sequence_token_ids};
+#[cfg(feature = "direct-mlx")]
+pub use kev::{KevDecisionEngine, KevRowLayout, kev_question_row_layouts};
+#[cfg(feature = "direct-mlx")]
+pub use laya::{LayaDecisionEngine, laya_question_sequences};
+#[cfg(feature = "direct-mlx")]
+pub use modernbert::{EncodedEmbeddingInput, ModernBertEmbeddingEngine, encode_embedding_input};
 
 #[doc(hidden)]
 pub use ::artifact_validation::validate_required_file_for_tests;

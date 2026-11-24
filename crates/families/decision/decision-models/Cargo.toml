@@ -21,8 +21,9 @@ workspace = true
 default = []
 direct-mlx = ["dep:runtime-integration", "dep:mlx-bridge", "qwen35/direct-mlx", "engine-core/direct-mlx", "model-primitives/direct-mlx"]
 
-# The decision and embedding models (issue #2340), above the Qwen 3.5 family
-# their Kev and Clef backbones come from. One-way edge: nothing here may depend
+# The decision shell (issues #2340, #2473): what every decision family
+# shares, above the Qwen 3.5 family the Kev and Clef backbone comes from.
+# Each family is a crate of its own beside it. One-way edge: nothing here may depend
 # on model-serving; `cargo xtask check-architecture` enforces it.
 [dependencies]
 # The decision-model contract: typed questions, calibration, typed answers and

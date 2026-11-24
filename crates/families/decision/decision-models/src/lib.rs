@@ -1,10 +1,11 @@
-//! The decision and embedding models of Astronomical (issue #2340): Laya,
-//! Kev and Clef, which answer typed questions about a text, their
-//! calibration and training, ModernBERT embeddings, and the decision and
-//! embedding seams the worker drives.
+//! The decision shell of Astronomical (issues #2340, #2473): the decision
+//! and embedding seams the worker drives, the engine shell every decision
+//! family runs in, calibration and training, the Qwen 3.5 backbone Kev and
+//! Clef score on, and the ModernBERT trunk Laya and the ModernBERT embedding
+//! family share. Each family is a crate of its own beside this one: `laya`,
+//! `kev`, `clef` and `modernbert`.
 //!
-//! Kev and Clef score on a Qwen 3.5 backbone, so this crate sits above
-//! `qwen35`. It is the one consumer of
+//! The Qwen 3.5 backbone puts this crate above `qwen35`. It is the one consumer of
 //! `decision-training` among the model crates. The edge to the
 //! serving crate is one way, which `cargo xtask check-architecture`
 //! enforces. The serving crate re-exports this crate's root with a glob, so
@@ -18,7 +19,7 @@ pub mod decision_models;
 pub mod embedding_engine;
 
 #[cfg(feature = "direct-mlx")]
-pub mod modernbert;
+pub mod modernbert_trunk;
 
 // The crates below these families, imported at the root so the families'
 // `crate::...` paths into them read as they did inside the serving crate.
@@ -36,20 +37,8 @@ pub use decision_engine::{
 };
 
 #[cfg(feature = "direct-mlx")]
-pub use decision_models::clef::ClefDecisionEngine;
-
-#[cfg(feature = "direct-mlx")]
-pub use decision_models::kev::{KevDecisionEngine, KevRowLayout};
-
-#[cfg(feature = "direct-mlx")]
-pub use decision_models::laya::LayaDecisionEngine;
-
-#[cfg(feature = "direct-mlx")]
 pub use decision_models::recorded_training::RecordedTrainingEngine;
 
 pub use embedding_engine::{
     EmbeddingEngine, EmbeddingEngineLoadResult, EmbeddingEngineOutput, EmbeddingUnavailableEngine,
 };
-
-#[cfg(feature = "direct-mlx")]
-pub use modernbert::{EncodedEmbeddingInput, ModernBertEmbeddingEngine, encode_embedding_input};

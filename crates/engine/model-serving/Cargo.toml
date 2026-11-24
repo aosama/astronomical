@@ -19,7 +19,7 @@ workspace = true
 
 [features]
 default = []
-direct-mlx = ["decision-models/direct-mlx", "qwen35/direct-mlx", "artifact-validation/direct-mlx", "engine-core/direct-mlx", "image-generation/direct-mlx", "flux2-klein/direct-mlx", "qwen-image-21/direct-mlx", "model-primitives/direct-mlx", "speech/direct-mlx", "kokoro/direct-mlx", "phonon/direct-mlx", "dep:runtime-integration"]
+direct-mlx = ["decision-models/direct-mlx", "qwen35/direct-mlx", "artifact-validation/direct-mlx", "engine-core/direct-mlx", "image-generation/direct-mlx", "flux2-klein/direct-mlx", "qwen-image-21/direct-mlx", "model-primitives/direct-mlx", "speech/direct-mlx", "kokoro/direct-mlx", "phonon/direct-mlx", "laya/direct-mlx", "kev/direct-mlx", "clef/direct-mlx", "modernbert/direct-mlx", "dep:runtime-integration"]
 
 # The worker and the wiring between model families (issue #2340). Every crate
 # below is consumed one way; `cargo xtask check-architecture` holds each of
@@ -33,8 +33,12 @@ engine-core = { path = "../engine-core" }
 # The Qwen 3.5 family, which the decision models score on and the worker
 # serves.
 qwen35 = { path = "../../families/text/qwen35" }
-# The decision and embedding models and their seams.
+# The decision and embedding seams, and the decision families.
 decision-models = { path = "../../families/decision/decision-models" }
+laya = { path = "../../families/decision/laya" }
+kev = { path = "../../families/decision/kev" }
+clef = { path = "../../families/decision/clef" }
+modernbert = { path = "../../families/decision/modernbert" }
 # The image generation families and their worker seam.
 image-generation = { path = "../../families/image/image-generation" }
 flux2-klein = { path = "../../families/image/flux2-klein" }

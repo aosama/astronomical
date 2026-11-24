@@ -25,7 +25,7 @@ use std::path::Path;
 use decision_contract::{
     HeadInputRequest, OrderedJsonValue, QuestionOutcome, parse_system_one_questions,
 };
-use model_serving::{DecisionEngine, LayaDecisionEngine};
+use model_serving::{DecisionEngine, LayaDecisionEngine, laya_question_sequences};
 use test_harness::test_run::TestRunContext;
 
 use super::decision_reference_fixture::{
@@ -159,8 +159,7 @@ fn compare_case(
     let questions = parse_system_one_questions(reference_field(reference_case, "questions"))
         .unwrap_or_else(|error| panic!("case {case_name}: {error}"));
     let reference_questions = reference_array(reference_case, "reference");
-    let question_sequences = decision_engine
-        .question_sequences(state, &questions)
+    let question_sequences = laya_question_sequences(&decision_engine, state, &questions)
         .unwrap_or_else(|error| panic!("case {case_name}: {error}"));
     for (question_sequence, reference_question) in
         question_sequences.iter().zip(reference_questions)

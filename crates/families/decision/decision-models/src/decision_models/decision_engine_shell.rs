@@ -138,7 +138,7 @@ impl<Family: DecisionFamily> DecisionEngineShell<Family> {
     }
 
     /// The loaded model, if `load` has run.
-    pub(crate) fn loaded_state(&self) -> Option<&Rc<Family::LoadedState>> {
+    pub fn loaded_state(&self) -> Option<&Rc<Family::LoadedState>> {
         self.loaded_state.as_ref()
     }
 

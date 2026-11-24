@@ -10,12 +10,17 @@
 //! storage contract to the schema the pack already enforces keeps a future
 //! dtype change from silently producing unreadable astro decoder state cache files.
 
+// The live request state needs the MLX runtime; the layout contract below
+// does not, so the crate still builds without `direct-mlx`.
+#[cfg(feature = "direct-mlx")]
 use runtime_integration::MlxRuntimeError;
 
+#[cfg(feature = "direct-mlx")]
+use crate::RequestDecoderStateStack;
 use crate::{
     AstroDecoderStateCacheLayerLayout, AstroDecoderStateCacheLayout,
     AstroDecoderStateCacheLayoutError, AstroDecoderStateCacheTensorDtype,
-    AstroDecoderStateCacheTensorLayout, RequestDecoderStateStack,
+    AstroDecoderStateCacheTensorLayout,
 };
 
 use super::configuration::FoldedPackConfig;
@@ -36,6 +41,7 @@ pub const PRISM_FULL_ATTENTION_KEY_VALUE_GROWTH_TOKENS: usize = 256;
 /// steps Prism has always allocated: a slab's capacity decides when MLX
 /// reallocates and copies it, and a different step would move those copies
 /// and change decode speed even though the attended tokens stay the same.
+#[cfg(feature = "direct-mlx")]
 pub fn prism_request_decoder_state(
     astro_decoder_state_cache_layout: &AstroDecoderStateCacheLayout,
 ) -> Result<RequestDecoderStateStack, MlxRuntimeError> {
@@ -150,6 +156,7 @@ pub fn prism_hadamard_qwen35_astro_decoder_state_cache_layout(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(feature = "direct-mlx")]
     use crate::AstroDecoderStateCacheState;
     use serde_json::json;
 
@@ -292,6 +299,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "direct-mlx")]
     #[test]
     fn should_build_one_live_state_owner_per_decoder_layer_in_layer_order() {
         let astro_decoder_state_cache_layout =
@@ -317,6 +325,7 @@ mod tests {
         assert_eq!(request_decoder_state.payload_byte_count(), 0);
     }
 
+    #[cfg(feature = "direct-mlx")]
     #[test]
     fn should_grow_full_attention_slabs_in_prism_steps_of_256_tokens() {
         let astro_decoder_state_cache_layout =
@@ -344,6 +353,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "direct-mlx")]
     #[test]
     fn should_refuse_a_layer_layout_the_qwen_state_owners_cannot_hold() {
         // A recurrent tensor outside a composite layer is valid layout
@@ -361,6 +371,7 @@ mod tests {
         assert!(prism_request_decoder_state(&standalone_recurrent_layout).is_err());
     }
 
+    #[cfg(feature = "direct-mlx")]
     fn live_state_family_name(layer_state: &AstroDecoderStateCacheState) -> &'static str {
         match layer_state {
             AstroDecoderStateCacheState::AppendOnlyAttention { .. } => "append_only_attention",
