@@ -1,7 +1,12 @@
-use super::NO_RETAINED_LIVE_PREFIX_BYTES;
-use crate::qwen3_5_core::model::memory_breakdown::Qwen3_5MemoryOwnership;
-use std::time::Instant;
+//! The streaming engine's own steps in a live MLX memory-ceiling change; the
+//! shared Qwen3.5 change runs every other step.
 
+use runtime_integration::MlxMemoryLimits;
+
+use crate::qwen3_5_core::engine_errors::{
+    mlx_memory_ceiling_change_before_load_error, mlx_memory_ceiling_exceeds_u64_range_error,
+};
+use crate::qwen3_5_core::shared_execution::mlx_memory_limit_change::Qwen3_5MlxMemoryLimitHooks;
 use crate::{InferenceEngineError, safe_minimum_active_memory_ceiling_bytes};
 
 use super::Qwen3_5EngineState;
@@ -23,85 +28,21 @@ pub const fn safe_minimum_mlx_memory_ceiling_bytes(
     )
 }
 
-impl Qwen3_5EngineState {
-    pub(super) fn update_mlx_memory_limit(
-        &mut self,
-        requested_mlx_memory_ceiling_bytes: u64,
-    ) -> Result<MlxMemoryLimitAdjustment, InferenceEngineError> {
-        if self.core.active_request.is_some() {
-            return Err(InferenceEngineError::EngineBusy);
-        }
-        self.require_no_resident_promotion(requested_mlx_memory_ceiling_bytes)?;
-        let old_mlx_memory_ceiling_bytes = self.current_mlx_memory_ceiling_bytes()?;
-        let Some(model) = self.core.model.as_mut() else {
-            return Err(super::fatal_engine_error(
-                "cannot update the MLX memory ceiling before the model is loaded",
-            ));
-        };
-        let mlx_memory_snapshot_before_adjustment = model
-            .memory_snapshot_with_forward_peak()
-            .map_err(super::qwen3_5_runtime_error)?;
-        let expert_memory_mode_before_adjustment = model.expert_memory_mode();
-        let adjustment_started_at = Instant::now();
-        let (minimum_mlx_memory_ceiling_bytes, updated_mlx_memory_limits) =
-            model.update_mlx_memory_limit(requested_mlx_memory_ceiling_bytes)?;
-        self.core.memory_limits = updated_mlx_memory_limits;
-
-        let mlx_memory_snapshot_after_adjustment = model
-            .memory_snapshot_with_forward_peak()
-            .map_err(super::qwen3_5_runtime_error)?;
-        let (active_memory_bytes, mlx_buffer_cache_bytes, peak_memory_bytes) =
-            snapshot_memory_triple(&mlx_memory_snapshot_after_adjustment)?;
-        let (expert_residency, mlx_memory_telemetry_value) = adjustment_telemetry(
-            model,
-            active_memory_bytes,
-            mlx_buffer_cache_bytes,
-            peak_memory_bytes,
-        );
-        let mlx_memory_telemetry = Some(mlx_memory_telemetry_value);
-        let expert_memory_mode = model.expert_memory_mode();
-        let expert_residency_transition_occurred =
-            expert_memory_mode != expert_memory_mode_before_adjustment;
-        tracing::info!(
-            old_mlx_memory_ceiling_bytes,
-            new_mlx_memory_ceiling_bytes = requested_mlx_memory_ceiling_bytes,
-            minimum_mlx_memory_ceiling_bytes,
-            adjustment_elapsed_millis = adjustment_started_at.elapsed().as_millis(),
-            active_mlx_memory_bytes_before = mlx_memory_snapshot_before_adjustment.active_memory_bytes(),
-            active_mlx_memory_bytes_after = mlx_memory_snapshot_after_adjustment.active_memory_bytes(),
-            mlx_buffer_cache_bytes_before = mlx_memory_snapshot_before_adjustment.mlx_buffer_cache_bytes(),
-            mlx_buffer_cache_bytes_after = mlx_memory_snapshot_after_adjustment.mlx_buffer_cache_bytes(),
-            expert_memory_mode = ?expert_memory_mode,
-            expert_residency_transition_occurred,
-            "applied live MLX memory ceiling adjustment"
-        );
-        Ok(MlxMemoryLimitAdjustment::new(
-            requested_mlx_memory_ceiling_bytes,
-            u64::try_from(updated_mlx_memory_limits.mlx_buffer_cache_limit_bytes()).map_err(
-                |_| {
-                    super::fatal_engine_error(
-                        "updated MLX buffer cache limit exceeds the u64 range",
-                    )
-                },
-            )?,
-            minimum_mlx_memory_ceiling_bytes,
-            expert_memory_mode,
-            mlx_memory_telemetry,
-        )
-        .with_expert_residency_telemetry(expert_residency))
-    }
-
+impl Qwen3_5MlxMemoryLimitHooks for Qwen3_5EngineState {
     /// A raise that now admits complete expert residency must not be
     /// absorbed in place: this engine structurally never reports complete
     /// ownership, and the startup selection a replacement worker runs
     /// would load the resident engine under the persisted ceiling.
     /// Demanding the replacement keeps the live worker congruent with
     /// what a restart would choose.
-    fn require_no_resident_promotion(
+    fn refuse_mlx_memory_ceiling_change(
         &self,
         requested_mlx_memory_ceiling_bytes: u64,
     ) -> Result<(), InferenceEngineError> {
-        if requested_mlx_memory_ceiling_bytes > self.current_mlx_memory_ceiling_bytes()?
+        let current_mlx_memory_ceiling_bytes =
+            u64::try_from(self.core.memory_limits.active_memory_limit_bytes())
+                .map_err(mlx_memory_ceiling_exceeds_u64_range_error)?;
+        if requested_mlx_memory_ceiling_bytes > current_mlx_memory_ceiling_bytes
             && self.core.model.is_some()
             && self
                 .startup_residency_facts
@@ -120,70 +61,17 @@ impl Qwen3_5EngineState {
         Ok(())
     }
 
-    fn current_mlx_memory_ceiling_bytes(&self) -> Result<u64, InferenceEngineError> {
-        u64::try_from(self.core.memory_limits.active_memory_limit_bytes()).map_err(|_| {
-            super::fatal_engine_error("current MLX memory ceiling exceeds the u64 range")
-        })
+    /// The streaming model gives back retained experts and kept dense layers
+    /// before lowering, and moves its expert pager and memory governor with
+    /// the installed limit, rolling every part back when a step fails.
+    fn change_model_mlx_memory_ceiling(
+        &mut self,
+        requested_mlx_memory_ceiling_bytes: u64,
+    ) -> Result<(u64, MlxMemoryLimits), InferenceEngineError> {
+        self.core
+            .model
+            .as_mut()
+            .ok_or_else(mlx_memory_ceiling_change_before_load_error)?
+            .update_mlx_memory_limit(requested_mlx_memory_ceiling_bytes)
     }
 }
-
-/// Reads one memory snapshot's three byte counters as u64 values. Every
-/// counter is a usize in the runtime; a value beyond the u64 range means the
-/// accounting itself is broken, which is fatal rather than clampable.
-fn snapshot_memory_triple(
-    mlx_memory_snapshot: &runtime_integration::MlxMemorySnapshot,
-) -> Result<(u64, u64, u64), InferenceEngineError> {
-    let active_memory_bytes = u64::try_from(mlx_memory_snapshot.active_memory_bytes())
-        .map_err(|_| super::fatal_engine_error("MLX active memory exceeds the u64 range"))?;
-    let mlx_buffer_cache_bytes = u64::try_from(mlx_memory_snapshot.mlx_buffer_cache_bytes())
-        .map_err(|_| super::fatal_engine_error("MLX buffer cache memory exceeds the u64 range"))?;
-    let peak_memory_bytes = u64::try_from(mlx_memory_snapshot.peak_memory_bytes())
-        .map_err(|_| super::fatal_engine_error("MLX peak memory exceeds the u64 range"))?;
-    Ok((
-        active_memory_bytes,
-        mlx_buffer_cache_bytes,
-        peak_memory_bytes,
-    ))
-}
-
-/// Builds the telemetry pair one adjustment publishes: the expert residency
-/// claim and the MLX memory telemetry. One claim serves both the telemetry
-/// and the adjustment event, derived from the breakdown of this exact
-/// snapshot so neither publication can straddle a promotion or demote
-/// (issue #337). The utilization split rides along because the adjustment
-/// event lands after the ModelLoaded sample — a split-less telemetry here
-/// would overwrite the load-complete split on the status the menu paints
-/// (issue #510).
-fn adjustment_telemetry(
-    model: &crate::qwen3_5_streaming::model::Qwen3_5Model,
-    active_memory_bytes: u64,
-    mlx_buffer_cache_bytes: u64,
-    peak_memory_bytes: u64,
-) -> (crate::ExpertResidencyTelemetry, MlxMemoryTelemetry) {
-    let active_memory_breakdown = model.finalized_active_memory_breakdown(
-        active_memory_bytes,
-        NO_RETAINED_LIVE_PREFIX_BYTES,
-        0,
-    );
-    let expert_residency = model.expert_residency_telemetry_for_breakdown(&active_memory_breakdown);
-    let mlx_memory_telemetry = MlxMemoryTelemetry::new(
-        active_memory_bytes,
-        mlx_buffer_cache_bytes,
-        peak_memory_bytes,
-        active_memory_breakdown,
-    )
-    .with_expert_residency_telemetry(expert_residency)
-    // Issue #510: the adjustment event lands after the ModelLoaded
-    // sample, so a split-less telemetry here would overwrite the
-    // load-complete split on the status the menu paints.
-    .with_memory_ceiling_utilization(
-        model.between_request_memory_ceiling_utilization_for_breakdown(
-            active_memory_bytes,
-            active_memory_breakdown,
-        ),
-    )
-    .with_memory_ledger_reading(model.latest_memory_ledger_reading());
-    (expert_residency, mlx_memory_telemetry)
-}
-
-use crate::{MlxMemoryLimitAdjustment, MlxMemoryTelemetry};

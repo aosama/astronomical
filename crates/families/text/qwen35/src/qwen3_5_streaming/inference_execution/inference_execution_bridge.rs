@@ -6,8 +6,7 @@ use ipc_protocol::{RequestId, WorkerEvent};
 use crate::inference_engine::load_result::EngineLoadResult;
 use crate::{
     EngineGenerationStart, GeneratedToken, GenerationFinalization, InferenceEngineError,
-    MlxInferenceExecution, MlxMemoryLimitAdjustment, MlxMemoryTelemetry,
-    PerformanceAttributionOutcome, Qwen3_5InferenceRequest,
+    MlxInferenceExecution, MlxMemoryLimitAdjustment, MlxMemoryTelemetry, Qwen3_5InferenceRequest,
 };
 
 use super::engine_state::{Qwen3_5EngineState, Qwen3_5InferenceExecution};
@@ -49,7 +48,9 @@ impl MlxInferenceExecution for Qwen3_5InferenceExecution {
         &mut self,
         request_id: RequestId,
     ) -> Result<GenerationFinalization, InferenceEngineError> {
-        Qwen3_5EngineState::cancel_generation(self, request_id)
+        Ok(generation_finalization_steps::cancel_generation(
+            self, request_id,
+        ))
     }
 
     fn collect_astro_ssd_prompt_cache_stats(
@@ -75,27 +76,9 @@ impl MlxInferenceExecution for Qwen3_5InferenceExecution {
         &mut self,
         requested_mlx_memory_ceiling_bytes: u64,
     ) -> Result<MlxMemoryLimitAdjustment, InferenceEngineError> {
-        Qwen3_5EngineState::update_mlx_memory_limit(self, requested_mlx_memory_ceiling_bytes)
-    }
-}
-
-impl Qwen3_5EngineState {
-    fn cancel_generation(
-        &mut self,
-        request_id: RequestId,
-    ) -> Result<GenerationFinalization, InferenceEngineError> {
-        let Some(active_request) = self.core.active_request.take() else {
-            return Ok(GenerationFinalization::default());
-        };
-        if active_request.request_id != request_id {
-            self.core.active_request = Some(active_request);
-            Ok(GenerationFinalization::default())
-        } else {
-            Ok(self.finalize_generation_request(
-                active_request,
-                PerformanceAttributionOutcome::Cancelled,
-                None,
-            ))
-        }
+        crate::qwen3_5_core::shared_execution::mlx_memory_limit_change::update_mlx_memory_limit(
+            self,
+            requested_mlx_memory_ceiling_bytes,
+        )
     }
 }

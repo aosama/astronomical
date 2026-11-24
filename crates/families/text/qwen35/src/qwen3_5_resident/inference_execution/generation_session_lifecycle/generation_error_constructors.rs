@@ -41,30 +41,6 @@ pub(in crate::qwen3_5_resident::inference_execution) fn generation_context_memor
     request_errors::invalid_request_error("generation context memory reservation overflowed")
 }
 
-pub(in crate::qwen3_5_resident::inference_execution) fn current_mlx_memory_ceiling_exceeds_u64_range_error(
-    _try_from_error: std::num::TryFromIntError,
-) -> InferenceEngineError {
-    super::fatal_engine_error("current MLX memory ceiling exceeds the u64 range")
-}
-
-pub(in crate::qwen3_5_resident::inference_execution) fn mlx_active_memory_exceeds_u64_range_error(
-    _try_from_error: std::num::TryFromIntError,
-) -> InferenceEngineError {
-    super::fatal_engine_error("MLX active memory exceeds the u64 range")
-}
-
-pub(in crate::qwen3_5_resident::inference_execution) fn mlx_buffer_cache_exceeds_u64_range_error(
-    _try_from_error: std::num::TryFromIntError,
-) -> InferenceEngineError {
-    super::fatal_engine_error("MLX buffer cache memory exceeds the u64 range")
-}
-
-pub(in crate::qwen3_5_resident::inference_execution) fn mlx_peak_memory_exceeds_u64_range_error(
-    _try_from_error: std::num::TryFromIntError,
-) -> InferenceEngineError {
-    super::fatal_engine_error("MLX peak memory exceeds the u64 range")
-}
-
 #[cfg(test)]
 #[path = "generation_error_constructors_tests.rs"]
 mod generation_error_constructors_tests;

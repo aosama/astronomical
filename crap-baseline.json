@@ -72516,180 +72516,9 @@
       "crate": "qwen35"
     },
     {
-      "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/engine/astro_ssd_prompt_cache.rs",
-      "function": "PrismHadamardQwen35InferenceExecution::astro_ssd_prompt_cache_stats_event",
-      "line": 653,
-      "cyclomatic": 2.0,
-      "coverage": null,
-      "crap": 6.0,
-      "crate": "qwen35"
-    },
-    {
-      "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/engine/astro_ssd_prompt_cache.rs",
-      "function": "absorb_boundary_snapshot",
-      "line": 220,
-      "cyclomatic": 4.0,
-      "coverage": null,
-      "crap": 20.0,
-      "crate": "qwen35"
-    },
-    {
-      "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/engine/astro_ssd_prompt_cache.rs",
-      "function": "absorb_linear_layer_snapshot",
-      "line": 246,
-      "cyclomatic": 6.0,
-      "coverage": null,
-      "crap": 42.0,
-      "crate": "qwen35"
-    },
-    {
-      "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/engine/astro_ssd_prompt_cache.rs",
-      "function": "block_tensors_by_name",
-      "line": 314,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "qwen35"
-    },
-    {
-      "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/engine/astro_ssd_prompt_cache.rs",
-      "function": "capture_completed_astro_ssd_prompt_cache_block",
-      "line": 337,
-      "cyclomatic": 8.0,
-      "coverage": null,
-      "crap": 72.0,
-      "crate": "qwen35"
-    },
-    {
-      "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/engine/astro_ssd_prompt_cache.rs",
-      "function": "chain_block_key",
-      "line": 634,
-      "cyclomatic": 3.0,
-      "coverage": null,
-      "crap": 12.0,
-      "crate": "qwen35"
-    },
-    {
-      "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/engine/astro_ssd_prompt_cache.rs",
-      "function": "extract_boundary_snapshot_tensors",
-      "line": 435,
-      "cyclomatic": 6.0,
-      "coverage": null,
-      "crap": 42.0,
-      "crate": "qwen35"
-    },
-    {
-      "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/engine/astro_ssd_prompt_cache.rs",
-      "function": "extract_sequence_block_tensors",
-      "line": 402,
-      "cyclomatic": 4.0,
-      "coverage": null,
-      "crap": 20.0,
-      "crate": "qwen35"
-    },
-    {
-      "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/engine/astro_ssd_prompt_cache.rs",
-      "function": "load_complete_kv_blocks",
-      "line": 522,
-      "cyclomatic": 5.0,
-      "coverage": null,
-      "crap": 30.0,
-      "crate": "qwen35"
-    },
-    {
-      "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/engine/astro_ssd_prompt_cache.rs",
-      "function": "lookup_and_restore_prompt_prefix",
-      "line": 92,
-      "cyclomatic": 6.0,
-      "coverage": null,
-      "crap": 42.0,
-      "crate": "qwen35"
-    },
-    {
-      "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/engine/astro_ssd_prompt_cache.rs",
-      "function": "missing_capture_state",
-      "line": 467,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "qwen35"
-    },
-    {
-      "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/engine/astro_ssd_prompt_cache.rs",
-      "function": "missing_snapshot_tensor",
-      "line": 277,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "qwen35"
-    },
-    {
-      "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/engine/astro_ssd_prompt_cache.rs",
-      "function": "open_astro_ssd_prompt_cache_store",
-      "line": 39,
-      "cyclomatic": 3.0,
-      "coverage": null,
-      "crap": 12.0,
-      "crate": "qwen35"
-    },
-    {
-      "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/engine/astro_ssd_prompt_cache.rs",
-      "function": "restore_full_attention_layer",
-      "line": 179,
-      "cyclomatic": 6.0,
-      "coverage": null,
-      "crap": 42.0,
-      "crate": "qwen35"
-    },
-    {
-      "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/engine/astro_ssd_prompt_cache.rs",
-      "function": "restore_full_attention_layers_from_blocks",
-      "line": 154,
-      "cyclomatic": 4.0,
-      "coverage": null,
-      "crap": 20.0,
-      "crate": "qwen35"
-    },
-    {
-      "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/engine/astro_ssd_prompt_cache.rs",
-      "function": "restore_state_and_absorb_boundary_snapshot",
-      "line": 578,
-      "cyclomatic": 7.0,
-      "coverage": null,
-      "crap": 56.0,
-      "crate": "qwen35"
-    },
-    {
-      "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/engine/astro_ssd_prompt_cache.rs",
-      "function": "restored_evaluation_arrays",
-      "line": 290,
-      "cyclomatic": 6.0,
-      "coverage": null,
-      "crap": 42.0,
-      "crate": "qwen35"
-    },
-    {
-      "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/engine/astro_ssd_prompt_cache.rs",
-      "function": "retain_captured_tensor",
-      "line": 475,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "qwen35"
-    },
-    {
-      "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/engine/astro_ssd_prompt_cache.rs",
-      "function": "slice_token_range",
-      "line": 483,
-      "cyclomatic": 2.0,
-      "coverage": null,
-      "crap": 6.0,
-      "crate": "qwen35"
-    },
-    {
       "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/engine/execution.rs",
       "function": "PrismHadamardQwen35InferenceExecution::execution_core",
-      "line": 72,
+      "line": 71,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -72698,7 +72527,7 @@
     {
       "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/engine/execution.rs",
       "function": "PrismHadamardQwen35InferenceExecution::execution_core_mut",
-      "line": 76,
+      "line": 75,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -72707,7 +72536,7 @@
     {
       "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/engine/execution.rs",
       "function": "PrismHadamardQwen35InferenceExecution::maximum_context_tokens",
-      "line": 98,
+      "line": 97,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -72716,16 +72545,7 @@
     {
       "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/engine/execution.rs",
       "function": "PrismHadamardQwen35InferenceExecution::pending",
-      "line": 82,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "qwen35"
-    },
-    {
-      "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/engine/execution.rs",
-      "function": "PrismHadamardQwen35InferenceExecution::prompt_processing_chunk_tokens",
-      "line": 103,
+      "line": 81,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -72734,7 +72554,7 @@
     {
       "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/engine/execution/active_generation.rs",
       "function": "PrismHadamardQwen35ActiveGeneration::advance_position_after_forward",
-      "line": 127,
+      "line": 132,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -72743,7 +72563,7 @@
     {
       "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/engine/execution/active_generation.rs",
       "function": "PrismHadamardQwen35ActiveGeneration::forward_hidden_states",
-      "line": 95,
+      "line": 100,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
@@ -72752,7 +72572,7 @@
     {
       "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/engine/execution/active_generation.rs",
       "function": "PrismHadamardQwen35ActiveGeneration::forward_pass",
-      "line": 111,
+      "line": 116,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
@@ -72761,16 +72581,34 @@
     {
       "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/engine/execution/active_generation.rs",
       "function": "prism_active_generation",
-      "line": 44,
-      "cyclomatic": 1.0,
+      "line": 45,
+      "cyclomatic": 3.0,
       "coverage": null,
-      "crap": 2.0,
+      "crap": 12.0,
       "crate": "qwen35"
     },
     {
       "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/engine/execution/active_memory_breakdown.rs",
       "function": "prism_active_memory_breakdown",
       "line": 13,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "qwen35"
+    },
+    {
+      "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/engine/execution/astro_ssd_prompt_cache_hooks.rs",
+      "function": "PrismHadamardQwen35InferenceExecution::reclaim_before_publication_retry",
+      "line": 24,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "qwen35"
+    },
+    {
+      "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/engine/execution/astro_ssd_prompt_cache_hooks.rs",
+      "function": "prism_quota_bounded_contract",
+      "line": 40,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -72789,15 +72627,15 @@
       "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/engine/execution/decode_hooks.rs",
       "function": "PrismHadamardQwen35InferenceExecution::advance_prompt_prefill_if_pending",
       "line": 77,
-      "cyclomatic": 2.0,
+      "cyclomatic": 1.0,
       "coverage": null,
-      "crap": 6.0,
+      "crap": 2.0,
       "crate": "qwen35"
     },
     {
       "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/engine/execution/decode_hooks.rs",
       "function": "PrismHadamardQwen35InferenceExecution::begin_generation_preparation",
-      "line": 96,
+      "line": 87,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -72806,7 +72644,7 @@
     {
       "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/engine/execution/decode_hooks.rs",
       "function": "PrismHadamardQwen35InferenceExecution::decode_first_token_from_final_prompt",
-      "line": 121,
+      "line": 112,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -72815,7 +72653,7 @@
     {
       "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/engine/execution/decode_hooks.rs",
       "function": "PrismHadamardQwen35InferenceExecution::decode_next_token",
-      "line": 134,
+      "line": 125,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
@@ -72842,7 +72680,7 @@
     {
       "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/engine/execution/decode_hooks.rs",
       "function": "PrismHadamardQwen35InferenceExecution::submit_successor_before_reply_token_read",
-      "line": 104,
+      "line": 95,
       "cyclomatic": 4.0,
       "coverage": null,
       "crap": 20.0,
@@ -72851,7 +72689,7 @@
     {
       "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/engine/execution/decode_hooks.rs",
       "function": "forward_and_submit_successor",
-      "line": 162,
+      "line": 153,
       "cyclomatic": 5.0,
       "coverage": null,
       "crap": 30.0,
@@ -72860,7 +72698,7 @@
     {
       "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/engine/execution/decode_hooks.rs",
       "function": "idle_mlx_memory_telemetry",
-      "line": 187,
+      "line": 178,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
@@ -72869,7 +72707,7 @@
     {
       "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/engine/execution/decode_hooks.rs",
       "function": "successor_may_be_submitted_before_read",
-      "line": 149,
+      "line": 140,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
@@ -72896,7 +72734,7 @@
     {
       "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/engine/execution/engine_trait_impl.rs",
       "function": "PrismHadamardQwen35InferenceExecution::apply_memory_limits_to_loaded_runtime",
-      "line": 316,
+      "line": 283,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -72905,7 +72743,7 @@
     {
       "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/engine/execution/engine_trait_impl.rs",
       "function": "PrismHadamardQwen35InferenceExecution::cancel_generation",
-      "line": 193,
+      "line": 182,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
@@ -72914,16 +72752,16 @@
     {
       "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/engine/execution/engine_trait_impl.rs",
       "function": "PrismHadamardQwen35InferenceExecution::clear_astro_ssd_prompt_cache",
-      "line": 253,
-      "cyclomatic": 2.0,
+      "line": 242,
+      "cyclomatic": 1.0,
       "coverage": null,
-      "crap": 6.0,
+      "crap": 2.0,
       "crate": "qwen35"
     },
     {
       "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/engine/execution/engine_trait_impl.rs",
       "function": "PrismHadamardQwen35InferenceExecution::collect_astro_ssd_prompt_cache_stats",
-      "line": 247,
+      "line": 236,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -72932,7 +72770,7 @@
     {
       "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/engine/execution/engine_trait_impl.rs",
       "function": "PrismHadamardQwen35InferenceExecution::collect_current_mlx_memory_telemetry",
-      "line": 331,
+      "line": 298,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -72941,7 +72779,7 @@
     {
       "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/engine/execution/engine_trait_impl.rs",
       "function": "PrismHadamardQwen35InferenceExecution::collect_mlx_memory_telemetry",
-      "line": 177,
+      "line": 166,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -72950,7 +72788,7 @@
     {
       "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/engine/execution/engine_trait_impl.rs",
       "function": "PrismHadamardQwen35InferenceExecution::decode_next_token",
-      "line": 170,
+      "line": 159,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -72959,7 +72797,7 @@
     {
       "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/engine/execution/engine_trait_impl.rs",
       "function": "PrismHadamardQwen35InferenceExecution::inject_input_tokens",
-      "line": 183,
+      "line": 172,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -72968,7 +72806,7 @@
     {
       "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/engine/execution/engine_trait_impl.rs",
       "function": "PrismHadamardQwen35InferenceExecution::load",
-      "line": 36,
+      "line": 37,
       "cyclomatic": 7.0,
       "coverage": null,
       "crap": 56.0,
@@ -72977,7 +72815,7 @@
     {
       "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/engine/execution/engine_trait_impl.rs",
       "function": "PrismHadamardQwen35InferenceExecution::mlx_memory_telemetry_with_live_decoder_state",
-      "line": 342,
+      "line": 309,
       "cyclomatic": 7.0,
       "coverage": null,
       "crap": 56.0,
@@ -72986,7 +72824,7 @@
     {
       "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/engine/execution/engine_trait_impl.rs",
       "function": "PrismHadamardQwen35InferenceExecution::open_astro_ssd_prompt_cache_store_after_load",
-      "line": 280,
+      "line": 256,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
@@ -72995,7 +72833,7 @@
     {
       "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/engine/execution/engine_trait_impl.rs",
       "function": "PrismHadamardQwen35InferenceExecution::start_generation",
-      "line": 100,
+      "line": 98,
       "cyclomatic": 7.0,
       "coverage": null,
       "crap": 56.0,
@@ -73004,7 +72842,7 @@
     {
       "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/engine/execution/engine_trait_impl.rs",
       "function": "PrismHadamardQwen35InferenceExecution::update_mlx_memory_limit",
-      "line": 217,
+      "line": 206,
       "cyclomatic": 4.0,
       "coverage": null,
       "crap": 20.0,
@@ -73013,7 +72851,7 @@
     {
       "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/engine/execution/engine_trait_impl.rs",
       "function": "gpu_error",
-      "line": 377,
+      "line": 344,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -73084,35 +72922,8 @@
     },
     {
       "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/engine/execution/prefill_chunk.rs",
-      "function": "PrismHadamardQwen35InferenceExecution::prefill_next_chunk",
-      "line": 171,
-      "cyclomatic": 6.0,
-      "coverage": null,
-      "crap": 42.0,
-      "crate": "qwen35"
-    },
-    {
-      "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/engine/execution/prefill_chunk.rs",
-      "function": "capture_completed_prefill_astro_ssd_prompt_cache_block",
-      "line": 144,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "qwen35"
-    },
-    {
-      "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/engine/execution/prefill_chunk.rs",
-      "function": "forward_prefill_chunk_hidden_states",
-      "line": 54,
-      "cyclomatic": 2.0,
-      "coverage": null,
-      "crap": 6.0,
-      "crate": "qwen35"
-    },
-    {
-      "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/engine/execution/prefill_chunk.rs",
-      "function": "prefill_chunk_length",
-      "line": 31,
+      "function": "PrismHadamardQwen35InferenceExecution::advance_prompt_prefill",
+      "line": 44,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
@@ -73120,8 +72931,26 @@
     },
     {
       "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/engine/execution/prefill_chunk.rs",
+      "function": "PrismHadamardQwen35InferenceExecution::chunk_boundary_plan",
+      "line": 133,
+      "cyclomatic": 6.0,
+      "coverage": null,
+      "crap": 42.0,
+      "crate": "qwen35"
+    },
+    {
+      "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/engine/execution/prefill_chunk.rs",
+      "function": "PrismHadamardQwen35InferenceExecution::read_prompt_stretch",
+      "line": 87,
+      "cyclomatic": 11.0,
+      "coverage": null,
+      "crap": 132.0,
+      "crate": "qwen35"
+    },
+    {
+      "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/engine/execution/prefill_chunk.rs",
       "function": "prefill_progress_token",
-      "line": 243,
+      "line": 185,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -73130,7 +72959,7 @@
     {
       "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/engine/execution/prefill_chunk.rs",
       "function": "queue_prefill_first_token",
-      "line": 119,
+      "line": 252,
       "cyclomatic": 4.0,
       "coverage": null,
       "crap": 20.0,
@@ -73139,25 +72968,61 @@
     {
       "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/engine/execution/prefill_chunk.rs",
       "function": "submit_prefill_state_evaluation",
-      "line": 74,
+      "line": 207,
       "cyclomatic": 6.0,
       "coverage": null,
       "crap": 42.0,
       "crate": "qwen35"
     },
     {
-      "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/engine/execution/starting_decoder_state.rs",
-      "function": "starting_request_decoder_state",
-      "line": 21,
-      "cyclomatic": 3.0,
+      "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/engine/execution/prefill_chunk_tests.rs",
+      "function": "repeated_prompt_token_ids",
+      "line": 24,
+      "cyclomatic": 1.0,
       "coverage": null,
-      "crap": 12.0,
+      "crap": 2.0,
+      "crate": "qwen35"
+    },
+    {
+      "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/engine/execution/prefill_chunk_tests.rs",
+      "function": "run_to_completion",
+      "line": 49,
+      "cyclomatic": 5.0,
+      "coverage": null,
+      "crap": 30.0,
+      "crate": "qwen35"
+    },
+    {
+      "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/engine/execution/prefill_chunk_tests.rs",
+      "function": "start_greedy",
+      "line": 30,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "qwen35"
+    },
+    {
+      "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/engine/execution/starting_decoder_state.rs",
+      "function": "PrismHadamardQwen35InferenceExecution::starting_request_decoder_state",
+      "line": 29,
+      "cyclomatic": 4.0,
+      "coverage": null,
+      "crap": 20.0,
       "crate": "qwen35"
     },
     {
       "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/engine/fixture_engine_test_support.rs",
       "function": "LoadedFixtureEngine::drop",
-      "line": 105,
+      "line": 106,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "qwen35"
+    },
+    {
+      "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/engine/fixture_engine_test_support.rs",
+      "function": "load_fixture_engine",
+      "line": 152,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -73166,7 +73031,16 @@
     {
       "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/engine/fixture_engine_test_support.rs",
       "function": "loaded_fixture_engine",
-      "line": 111,
+      "line": 112,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "qwen35"
+    },
+    {
+      "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/engine/fixture_engine_test_support.rs",
+      "function": "loaded_fixture_engine_with_astro_ssd_prompt_cache",
+      "line": 129,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -73211,7 +73085,7 @@
     {
       "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/engine/startup.rs",
       "function": "open_performance_attribution_log",
-      "line": 250,
+      "line": 238,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -73220,7 +73094,7 @@
     {
       "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/engine/startup.rs",
       "function": "pending_load_for",
-      "line": 218,
+      "line": 212,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -73229,7 +73103,7 @@
     {
       "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/engine/startup.rs",
       "function": "prompt_processing_chunk_sizer_for",
-      "line": 239,
+      "line": 227,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -73391,7 +73265,7 @@
     {
       "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/model.rs",
       "function": "PrismHadamardTextModel::argmax_last_token",
-      "line": 210,
+      "line": 218,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
@@ -73400,7 +73274,7 @@
     {
       "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/model.rs",
       "function": "PrismHadamardTextModel::generate_greedy",
-      "line": 178,
+      "line": 186,
       "cyclomatic": 6.0,
       "coverage": null,
       "crap": 42.0,
@@ -73409,16 +73283,16 @@
     {
       "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/model.rs",
       "function": "PrismHadamardTextModel::new",
-      "line": 80,
-      "cyclomatic": 14.0,
+      "line": 85,
+      "cyclomatic": 15.0,
       "coverage": null,
-      "crap": 210.0,
+      "crap": 240.0,
       "crate": "qwen35"
     },
     {
       "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/model.rs",
       "function": "PrismHadamardTextModel::pack",
-      "line": 156,
+      "line": 164,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -73427,7 +73301,7 @@
     {
       "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/model.rs",
       "function": "PrismHadamardTextModel::rotate",
-      "line": 162,
+      "line": 170,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -73436,7 +73310,7 @@
     {
       "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/model.rs",
       "function": "retained_fused_rotation_kernel",
-      "line": 226,
+      "line": 252,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
@@ -73444,8 +73318,17 @@
     },
     {
       "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/model.rs",
+      "function": "retained_gated_delta_checkpoint_kernel",
+      "line": 233,
+      "cyclomatic": 2.0,
+      "coverage": null,
+      "crap": 6.0,
+      "crate": "qwen35"
+    },
+    {
+      "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/model.rs",
       "function": "validate_greedy_generation_request",
-      "line": 244,
+      "line": 270,
       "cyclomatic": 6.0,
       "coverage": null,
       "crap": 42.0,
@@ -73481,7 +73364,7 @@
     {
       "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/model/forward.rs",
       "function": "PrismHadamardTextModel::embed_tokens",
-      "line": 257,
+      "line": 316,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
@@ -73490,7 +73373,7 @@
     {
       "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/model/forward.rs",
       "function": "PrismHadamardTextModel::empty_request_decoder_state",
-      "line": 77,
+      "line": 82,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -73499,16 +73382,16 @@
     {
       "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/model/forward.rs",
       "function": "PrismHadamardTextModel::forward_decoder_layer",
-      "line": 172,
-      "cyclomatic": 10.0,
+      "line": 202,
+      "cyclomatic": 1.0,
       "coverage": null,
-      "crap": 110.0,
+      "crap": 2.0,
       "crate": "qwen35"
     },
     {
       "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/model/forward.rs",
       "function": "PrismHadamardTextModel::forward_decoder_layers",
-      "line": 146,
+      "line": 172,
       "cyclomatic": 5.0,
       "coverage": null,
       "crap": 30.0,
@@ -73517,7 +73400,7 @@
     {
       "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/model/forward.rs",
       "function": "PrismHadamardTextModel::forward_dense_mlp",
-      "line": 269,
+      "line": 328,
       "cyclomatic": 5.0,
       "coverage": null,
       "crap": 30.0,
@@ -73526,7 +73409,16 @@
     {
       "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/model/forward.rs",
       "function": "PrismHadamardTextModel::forward_hidden_states",
-      "line": 105,
+      "line": 110,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "qwen35"
+    },
+    {
+      "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/model/forward.rs",
+      "function": "PrismHadamardTextModel::forward_hidden_states_recording_boundary_states",
+      "line": 127,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
@@ -73535,7 +73427,7 @@
     {
       "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/model/forward.rs",
       "function": "PrismHadamardTextModel::forward_pass",
-      "line": 89,
+      "line": 94,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
@@ -73544,7 +73436,7 @@
     {
       "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/model/forward.rs",
       "function": "PrismHadamardTextModel::logits_for_last_hidden_state",
-      "line": 242,
+      "line": 301,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
@@ -73552,8 +73444,17 @@
     },
     {
       "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/model/forward.rs",
+      "function": "PrismHadamardTextModel::run_decoder_layer",
+      "line": 220,
+      "cyclomatic": 10.0,
+      "coverage": null,
+      "crap": 110.0,
+      "crate": "qwen35"
+    },
+    {
+      "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/model/forward.rs",
       "function": "request_decoder_state_evaluation_arrays",
-      "line": 35,
+      "line": 40,
       "cyclomatic": 7.0,
       "coverage": null,
       "crap": 56.0,
@@ -73562,7 +73463,7 @@
     {
       "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/model/forward.rs",
       "function": "rope_offset_tokens",
-      "line": 64,
+      "line": 69,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -73652,7 +73553,7 @@
     {
       "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/model/forward/gated_delta.rs",
       "function": "PrismHadamardTextModel::convolution_to_normalized_heads",
-      "line": 122,
+      "line": 248,
       "cyclomatic": 10.0,
       "coverage": null,
       "crap": 110.0,
@@ -73661,10 +73562,37 @@
     {
       "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/model/forward/gated_delta.rs",
       "function": "PrismHadamardTextModel::forward_linear_attention_layer",
-      "line": 21,
-      "cyclomatic": 14.0,
+      "line": 48,
+      "cyclomatic": 13.0,
       "coverage": null,
-      "crap": 210.0,
+      "crap": 182.0,
+      "crate": "qwen35"
+    },
+    {
+      "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/model/forward/gated_delta.rs",
+      "function": "PrismHadamardTextModel::recur_over_chunk",
+      "line": 149,
+      "cyclomatic": 5.0,
+      "coverage": null,
+      "crap": 30.0,
+      "crate": "qwen35"
+    },
+    {
+      "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/model/forward/gated_delta.rs",
+      "function": "PrismHadamardTextModel::recur_recording_boundary_states",
+      "line": 188,
+      "cyclomatic": 7.0,
+      "coverage": null,
+      "crap": 56.0,
+      "crate": "qwen35"
+    },
+    {
+      "file": "crates/families/text/qwen35/src/prism_hadamard_qwen35/model/forward/gated_delta.rs",
+      "function": "missing_boundary_collector",
+      "line": 340,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
       "crate": "qwen35"
     },
     {
@@ -82085,7 +82013,7 @@
     {
       "file": "crates/families/text/qwen35/src/qwen3_5_core/shared_execution/model_loading_steps.rs",
       "function": "open_and_scan_astro_ssd_prompt_cache_store",
-      "line": 179,
+      "line": 230,
       "cyclomatic": 4.0,
       "coverage": null,
       "crap": 20.0,
@@ -82094,7 +82022,16 @@
     {
       "file": "crates/families/text/qwen35/src/qwen3_5_core/shared_execution/model_loading_steps.rs",
       "function": "open_astro_ssd_prompt_cache",
-      "line": 137,
+      "line": 155,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "qwen35"
+    },
+    {
+      "file": "crates/families/text/qwen35/src/qwen3_5_core/shared_execution/model_loading_steps.rs",
+      "function": "open_astro_ssd_prompt_cache_with_contract_resolver",
+      "line": 186,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
@@ -82103,7 +82040,7 @@
     {
       "file": "crates/families/text/qwen35/src/qwen3_5_core/shared_execution/model_loading_steps.rs",
       "function": "resolve_astro_ssd_prompt_cache_model_contract",
-      "line": 104,
+      "line": 120,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,

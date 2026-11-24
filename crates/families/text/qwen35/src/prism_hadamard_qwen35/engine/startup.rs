@@ -15,7 +15,7 @@ use crate::Qwen3_5GenerationProcessor;
 use crate::prism_hadamard_qwen35::artifacts::FoldedPackValidator;
 use crate::prism_hadamard_qwen35::engine::{
     PrismHadamardQwen35Engine, PrismHadamardQwen35InferenceExecution,
-    PrismHadamardQwen35PendingLoad, PrismHadamardQwen35PendingStartup,
+    PrismHadamardQwen35PendingStartup,
 };
 use crate::qwen3_5_core::shared_execution::prompt_processing_chunk_sizer::Qwen3_5PromptProcessingChunkSizer;
 use crate::{PerformanceAttribution, PerformanceAttributionLog, PerformanceOperation};
@@ -109,14 +109,8 @@ pub fn initialize_prism_hadamard_qwen35_model_with_serving_settings(
         open_performance_attribution_log(&serving_settings, performance_attribution_enabled)?;
     let astro_ssd_prompt_cache_disk_store_config =
         astro_ssd_prompt_cache_disk_store_config_for(&serving_settings, &model_id, &model_revision);
-    let pending_load = pending_load_for(
-        &serving_settings,
-        effective_mlx_memory_ceiling_bytes,
-        mlx_buffer_cache_limit_bytes,
-    );
     // The validated pack, limits and processor facts the shared Qwen 3.5
-    // core keeps; Prism's own rules for the limits it derives differently
-    // are restored when the execution builds the core.
+    // core keeps; the shared load starts the MLX runtime at these limits.
     let validated_execution_core_settings = Qwen3_5ExecutionCoreSettings {
         validated_artifact: pack,
         active_memory_limit_bytes: effective_mlx_memory_ceiling_bytes,
@@ -138,7 +132,9 @@ pub fn initialize_prism_hadamard_qwen35_model_with_serving_settings(
     )?;
     let pending_startup = PrismHadamardQwen35PendingStartup {
         validated_execution_core_settings,
-        pending_load,
+        neural_engine_mlp_prefill_requested: serving_settings
+            .chunking
+            .experimental_neural_engine_prefill_enabled,
     };
     let engine = MlxInferenceEngine::new(move || {
         PrismHadamardQwen35InferenceExecution::pending(pending_startup)
@@ -204,22 +200,6 @@ fn astro_ssd_prompt_cache_disk_store_config_for(
                     .global_astro_ssd_prompt_cache_maximum_size_bytes(),
             )
         })
-}
-
-/// The startup values only the folded-ternary load reads. The
-/// `astro_ssd_prompt_cache` block size and checkpoint stride are read from
-/// the chunking settings by the shared open step.
-pub(super) fn pending_load_for(
-    serving_settings: &PrismHadamardQwen35ServingSettings,
-    effective_mlx_memory_ceiling_bytes: usize,
-    mlx_buffer_cache_limit_bytes: usize,
-) -> PrismHadamardQwen35PendingLoad {
-    let chunking = &serving_settings.chunking;
-    PrismHadamardQwen35PendingLoad {
-        effective_mlx_memory_ceiling_bytes,
-        mlx_buffer_cache_limit_bytes,
-        neural_engine_mlp_prefill_requested: chunking.experimental_neural_engine_prefill_enabled,
-    }
 }
 
 /// The prefill chunk size, floored at one token as the folded-ternary

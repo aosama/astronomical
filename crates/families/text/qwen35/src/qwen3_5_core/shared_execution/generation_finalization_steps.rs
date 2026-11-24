@@ -1,6 +1,7 @@
-//! The finalization steps both Qwen3.5 engines take: the memory telemetry a
+//! The finalization steps every Qwen3.5 engine takes: the memory telemetry a
 //! finished or idle engine reports, the performance attribution record of a
-//! generation, and finalizing a request that ended in an error.
+//! generation, cancelling a request, and finalizing a request that ended in
+//! an error.
 //!
 //! The order in which an engine drops its request, ends its governed request
 //! and releases MLX memory differs between the engines, so the finalization
@@ -8,6 +9,7 @@
 
 use runtime_integration::MlxMemorySnapshot;
 
+use crate::inference_engine::contract::ExpertResidencyTelemetry;
 use crate::qwen3_5_core::engine_errors::{
     mlx_active_memory_bytes_exceed_u64_range_error, mlx_buffer_cache_bytes_exceed_u64_range_error,
     mlx_peak_memory_bytes_exceed_u64_range_error,
@@ -54,6 +56,19 @@ pub fn collect_current_mlx_memory_telemetry<Engine: Qwen3_5FinalizationHooks>(
         return Ok(None);
     };
     let mlx_memory_snapshot = model.memory_snapshot_for_telemetry()?;
+    let (_expert_residency_telemetry, mlx_memory_telemetry) =
+        idle_mlx_memory_telemetry_for_snapshot(engine, model, &mlx_memory_snapshot)?;
+    Ok(Some(mlx_memory_telemetry))
+}
+
+/// The between-request telemetry of one memory reading, and the expert
+/// residency claim derived from the same breakdown, so a report that carries
+/// both cannot straddle a promotion or demote (issue #337).
+pub fn idle_mlx_memory_telemetry_for_snapshot<Engine: Qwen3_5FinalizationHooks>(
+    engine: &Engine,
+    model: &Engine::Model,
+    mlx_memory_snapshot: &MlxMemorySnapshot,
+) -> Result<(ExpertResidencyTelemetry, MlxMemoryTelemetry), InferenceEngineError> {
     let active_memory_bytes = u64::try_from(mlx_memory_snapshot.active_memory_bytes())
         .map_err(mlx_active_memory_bytes_exceed_u64_range_error)?;
     let mlx_buffer_cache_bytes = u64::try_from(mlx_memory_snapshot.mlx_buffer_cache_bytes())
@@ -65,29 +80,48 @@ pub fn collect_current_mlx_memory_telemetry<Engine: Qwen3_5FinalizationHooks>(
         engine.retained_live_context_state_payload_bytes(),
         0,
     );
-    Ok(Some(
-        MlxMemoryTelemetry::new(
+    let expert_residency_telemetry =
+        model.expert_residency_telemetry_for_breakdown(&active_memory_breakdown);
+    let mlx_memory_telemetry = MlxMemoryTelemetry::new(
+        active_memory_bytes,
+        mlx_buffer_cache_bytes,
+        peak_memory_bytes,
+        active_memory_breakdown,
+    )
+    .with_expert_residency_telemetry(expert_residency_telemetry)
+    // Issue #510: the idle sample answers "is the remaining headroom free or
+    // promised" from the memory governor's accounts, and a sample without
+    // the split would overwrite the load-complete split the menu paints.
+    .with_memory_ceiling_utilization(
+        model.between_request_memory_ceiling_utilization_for_breakdown(
             active_memory_bytes,
-            mlx_buffer_cache_bytes,
-            peak_memory_bytes,
             active_memory_breakdown,
-        )
-        // The claim is derived from the breakdown reconciling this exact
-        // snapshot, so the published pair cannot straddle a promotion or
-        // demote (issue #337).
-        .with_expert_residency_telemetry(
-            model.expert_residency_telemetry_for_breakdown(&active_memory_breakdown),
-        )
-        // Issue #510: the idle sample answers "is the remaining headroom
-        // free or promised" from the memory governor's accounts.
-        .with_memory_ceiling_utilization(
-            model.between_request_memory_ceiling_utilization_for_breakdown(
-                active_memory_bytes,
-                active_memory_breakdown,
-            ),
-        )
-        .with_memory_ledger_reading(model.latest_memory_ledger_reading()),
-    ))
+        ),
+    )
+    .with_memory_ledger_reading(model.latest_memory_ledger_reading());
+    Ok((expert_residency_telemetry, mlx_memory_telemetry))
+}
+
+/// Ends the request the client stopped. A request that already ended on its
+/// own was finalized by the decode step and is gone, so there is nothing to
+/// report; a stop meant for another request leaves the running one alone,
+/// because a late stop for a finished request must not end its successor.
+pub fn cancel_generation<Engine: Qwen3_5FinalizationHooks>(
+    engine: &mut Engine,
+    request_id: ipc_protocol::RequestId,
+) -> GenerationFinalization {
+    let Some(active_request) = engine.execution_core_mut().active_request.take() else {
+        return GenerationFinalization::default();
+    };
+    if active_request.request_id != request_id {
+        engine.execution_core_mut().active_request = Some(active_request);
+        return GenerationFinalization::default();
+    }
+    engine.finalize_generation_request(
+        active_request,
+        PerformanceAttributionOutcome::Cancelled,
+        None,
+    )
 }
 
 /// Finalizes a request that ended in an error, recording it as rejected when

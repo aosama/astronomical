@@ -1,5 +1,6 @@
-//! Loading a model into either Qwen3.5 engine: the steps both take, in the
-//! order both take them, with the engine's own work at three points.
+//! Loading a model into any Qwen3.5 engine: the steps all of them take, in
+//! the order all of them take them, with the engine's own work at three
+//! points.
 //!
 //! An engine that already holds a model reports it as loaded. Otherwise the
 //! validated artifact moves into a freshly loaded model, the
@@ -23,9 +24,9 @@ use crate::{
 
 use super::generation_finalization_steps::Qwen3_5FinalizationHooks;
 use super::model_loading_steps::{
-    initialize_mlx_runtime_with_cleanup, open_astro_ssd_prompt_cache,
-    resolve_model_chunking_configuration, resolve_validated_model_identity,
-    resolve_visual_embedding_model_contract,
+    AstroSsdPromptCacheContractResolver, initialize_mlx_runtime_with_cleanup,
+    open_astro_ssd_prompt_cache_with_contract_resolver, resolve_model_chunking_configuration,
+    resolve_validated_model_identity, resolve_visual_embedding_model_contract,
 };
 use super::serving_artifact::Qwen3_5ServingArtifact;
 use super::text_model::Qwen3_5TextModel;
@@ -33,8 +34,14 @@ use super::text_model::Qwen3_5TextModel;
 /// The points in a load where the engines differ. The resident engine loads
 /// its experts, Neural Engine programs and drafter after the model; the
 /// streaming engine reads its startup residency facts from the artifact first
-/// and opens its memory governor as the model loads.
+/// and opens its memory governor as the model loads; the folded-ternary
+/// engine sizes its `astro_ssd_prompt_cache` contract to the disk quota.
 pub trait Qwen3_5ModelLoadingHooks: Qwen3_5FinalizationHooks {
+    /// Sizes the model's `astro_ssd_prompt_cache` contract when a disk store
+    /// is configured.
+    const ASTRO_SSD_PROMPT_CACHE_CONTRACT_RESOLVER: AstroSsdPromptCacheContractResolver =
+        AstroSsdPromptCacheModelContract::resolve;
+
     /// Reads what the engine needs from the artifact before the artifact
     /// moves into the model.
     fn observe_artifact_before_load(
@@ -166,7 +173,7 @@ fn load_model_parts<Engine: Qwen3_5ModelLoadingHooks>(
     );
     let execution_core = engine.execution_core();
     let (astro_ssd_prompt_cache_model_contract, astro_ssd_prompt_cache) =
-        open_astro_ssd_prompt_cache(
+        open_astro_ssd_prompt_cache_with_contract_resolver(
             execution_core
                 .astro_ssd_prompt_cache_disk_store_config
                 .clone(),
@@ -175,6 +182,7 @@ fn load_model_parts<Engine: Qwen3_5ModelLoadingHooks>(
             &resolved_model_id,
             &resolved_model_revision,
             persistent_visual_embedding_model_contract.as_ref(),
+            Engine::ASTRO_SSD_PROMPT_CACHE_CONTRACT_RESOLVER,
             model_loading_performance_attribution,
         )?;
     engine.prepare_loaded_model(&mut model, model_loading_performance_attribution)?;
