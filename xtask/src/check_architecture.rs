@@ -10,6 +10,8 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::path::Path;
 use std::process::Command;
 
+use crate::check_architecture_family_layer::{FAMILY_LAYER_RULE_NAMES, family_layer_violations};
+
 /// One forbidden-dependency rule: the dependency graph must hold no path
 /// from `source_crate` to `forbidden_crate`, following every dependency
 /// kind. Rules name workspace members, so a crate rename must update the
@@ -47,7 +49,7 @@ const FORBIDDEN_DEPENDENCY_RULES: &[ForbiddenDependencyRule] = &[
     // split circular and rebuild the serving crate on every family edit,
     // defeating the extraction.
     ForbiddenDependencyRule {
-        rule_name: "family-crate-without-serving",
+        rule_name: "weight-format-without-serving",
         source_crate: "jangtq2-qwen35",
         forbidden_crate: "model-serving",
         rationale: "the jangtq2 family crate must build and test without pulling in the serving crate, which consumes the family through a one-way edge",
@@ -61,50 +63,6 @@ const FORBIDDEN_DEPENDENCY_RULES: &[ForbiddenDependencyRule] = &[
         source_crate: "model-primitives",
         forbidden_crate: "model-serving",
         rationale: "the model primitives crate must build and test without pulling in the serving crate, which consumes the primitives through a one-way edge",
-    },
-    // The speech families (issue #2340) implement a seam the serving
-    // crate's worker drives. An edge back would rebuild the serving crate on
-    // every speech edit and let a family reach into the engine.
-    ForbiddenDependencyRule {
-        rule_name: "speech-without-serving",
-        source_crate: "speech",
-        forbidden_crate: "model-serving",
-        rationale: "the speech crate must build and test without pulling in the serving crate, which drives the speech engines through a one-way edge",
-    },
-    // Each speech family is a crate of its own (issue #2473, Step 7). Like
-    // the shell, it never reaches the serving crate, and one family never
-    // reaches another, so a family can be added or changed alone.
-    ForbiddenDependencyRule {
-        rule_name: "kokoro-without-serving",
-        source_crate: "kokoro",
-        forbidden_crate: "model-serving",
-        rationale: "the Kokoro crate must build and test without pulling in the serving crate, which drives the speech engines through a one-way edge",
-    },
-    ForbiddenDependencyRule {
-        rule_name: "phonon-without-serving",
-        source_crate: "phonon",
-        forbidden_crate: "model-serving",
-        rationale: "the Phonon crate must build and test without pulling in the serving crate, which drives the speech engines through a one-way edge",
-    },
-    ForbiddenDependencyRule {
-        rule_name: "kokoro-without-phonon",
-        source_crate: "kokoro",
-        forbidden_crate: "phonon",
-        rationale: "one speech family must not depend on another; what they share belongs in the speech shell",
-    },
-    ForbiddenDependencyRule {
-        rule_name: "phonon-without-kokoro",
-        source_crate: "phonon",
-        forbidden_crate: "kokoro",
-        rationale: "one speech family must not depend on another; what they share belongs in the speech shell",
-    },
-    // The image families (issue #2340), like speech, implement a seam the
-    // serving crate's worker drives.
-    ForbiddenDependencyRule {
-        rule_name: "image-generation-without-serving",
-        source_crate: "image-generation",
-        forbidden_crate: "model-serving",
-        rationale: "the image generation crate must build and test without pulling in the serving crate, which drives the image engines through a one-way edge",
     },
     // Artifact validation sits under every model family; an edge to the
     // serving crate would make each family depend on the engine through it.
@@ -132,22 +90,6 @@ const FORBIDDEN_DEPENDENCY_RULES: &[ForbiddenDependencyRule] = &[
         forbidden_crate: "qwen35",
         rationale: "the engine core holds machinery every model family shares, so it must build without any family crate; a family supplies its parts through the engine core's traits",
     },
-    // The Qwen 3.5 family sits under the decision models and the serving
-    // crate's worker; an edge back would make the split circular.
-    ForbiddenDependencyRule {
-        rule_name: "qwen35-without-serving",
-        source_crate: "qwen35",
-        forbidden_crate: "model-serving",
-        rationale: "the Qwen 3.5 crate must build and test without pulling in the serving crate, which drives its engines through a one-way edge",
-    },
-    // The decision models sit above the Qwen 3.5 family and below the
-    // serving crate's worker, which drives them.
-    ForbiddenDependencyRule {
-        rule_name: "decision-models-without-serving",
-        source_crate: "decision-models",
-        forbidden_crate: "model-serving",
-        rationale: "the decision models crate must build and test without pulling in the serving crate, which drives the decision engines through a one-way edge",
-    },
     // The quantizer reaches the Qwen 3.5 family only through the probe crate
     // above it (issue #2340), so the worker and daemon, which build on the
     // family, never compile the quantizer.
@@ -165,12 +107,19 @@ const FORBIDDEN_DEPENDENCY_RULES: &[ForbiddenDependencyRule] = &[
 #[derive(Debug)]
 pub(crate) struct ArchitectureViolation {
     pub(crate) rule_name: &'static str,
-    rationale: &'static str,
+    pub(crate) rationale: &'static str,
     pub(crate) dependency_chain: Vec<String>,
 }
 
 pub fn run(repository_root: &Path) -> Result<(), String> {
     println!("[check-architecture] phase=repository-graph status=start");
+    let metadata_json_text = workspace_metadata_json(repository_root)?;
+    let mut violations = architecture_violations(&metadata_json_text)?;
+    violations.extend(family_layer_violations(&metadata_json_text)?);
+    report_verdict(&violations)
+}
+
+fn workspace_metadata_json(repository_root: &Path) -> Result<String, String> {
     let metadata_output = Command::new("cargo")
         .arg("metadata")
         .arg("--format-version")
@@ -186,19 +135,14 @@ pub fn run(repository_root: &Path) -> Result<(), String> {
             String::from_utf8_lossy(&metadata_output.stderr).trim()
         ));
     }
-    let metadata_json_text = String::from_utf8_lossy(&metadata_output.stdout).into_owned();
-    let violations = architecture_violations(&metadata_json_text)?;
-    if violations.is_empty() {
-        for rule in FORBIDDEN_DEPENDENCY_RULES {
-            println!("[check-architecture] rule={} status=pass", rule.rule_name);
-        }
-        println!(
-            "[check-architecture] status=success rules={}",
-            FORBIDDEN_DEPENDENCY_RULES.len()
-        );
-        Ok(())
-    } else {
-        for violation in &violations {
+    Ok(String::from_utf8_lossy(&metadata_output.stdout).into_owned())
+}
+
+/// Prints one line per rule on success, or one line per violation, keeping
+/// the output lines hooks and CI steps read.
+fn report_verdict(violations: &[ArchitectureViolation]) -> Result<(), String> {
+    if !violations.is_empty() {
+        for violation in violations {
             eprintln!(
                 "[check-architecture] rule={} violation: {}; {}",
                 violation.rule_name,
@@ -206,11 +150,22 @@ pub fn run(repository_root: &Path) -> Result<(), String> {
                 violation.rationale
             );
         }
-        Err(format!(
+        return Err(format!(
             "[check-architecture] status=failed violations={}",
             violations.len()
-        ))
+        ));
     }
+    for rule in FORBIDDEN_DEPENDENCY_RULES {
+        println!("[check-architecture] rule={} status=pass", rule.rule_name);
+    }
+    for family_rule_name in FAMILY_LAYER_RULE_NAMES {
+        println!("[check-architecture] rule={family_rule_name} status=pass");
+    }
+    println!(
+        "[check-architecture] status=success rules={}",
+        FORBIDDEN_DEPENDENCY_RULES.len() + FAMILY_LAYER_RULE_NAMES.len()
+    );
+    Ok(())
 }
 
 /// Checks every rule against a `cargo metadata --format-version 1` document
@@ -252,7 +207,7 @@ pub(crate) fn architecture_violations(
 /// build dependencies count as edges deliberately: a dev-edge would pull
 /// the forbidden crate into the source crate's own test builds, which is
 /// exactly the layering breach the rules exist to prevent.
-fn dependency_graph_from_metadata(
+pub(crate) fn dependency_graph_from_metadata(
     metadata_json_text: &str,
 ) -> Result<BTreeMap<String, BTreeSet<String>>, String> {
     let metadata_document: serde_json::Value = serde_json::from_str(metadata_json_text)
@@ -303,7 +258,7 @@ fn dependency_graph_from_metadata(
 /// Breadth-first search returning the shortest chain from `start_crate` to
 /// `target_crate`, inclusive of both endpoints, or `None` when the target is
 /// unreachable.
-fn shortest_dependency_chain(
+pub(crate) fn shortest_dependency_chain(
     dependency_graph: &BTreeMap<String, BTreeSet<String>>,
     start_crate: &str,
     target_crate: &str,

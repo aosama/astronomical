@@ -126,9 +126,14 @@ pub trait ImageFamily: Sized + 'static {
 }
 
 /// An image family's engine: its components and the request in progress.
+///
+/// The family's [`ImageFamily`] steps live in the family's own crate, so the
+/// model id and the components they read are public; the lifecycle state
+/// (the loaded revision and the request in progress) stays private, so only
+/// the shell's own steps move it.
 pub struct ImageEngineShell<Family: ImageFamily> {
-    pub(crate) serving_model_id: String,
-    pub(crate) components: Box<Family::Components>,
+    pub serving_model_id: String,
+    pub components: Box<Family::Components>,
     loaded_revision: Option<String>,
     active_request: Option<Family::ActiveRequest>,
 }
@@ -161,7 +166,7 @@ impl<Family: ImageFamily> ImageEngineShell<Family> {
         self.loaded_revision.as_deref()
     }
 
-    fn elapsed_millis(active_request: &Family::ActiveRequest) -> u64 {
+    pub fn elapsed_millis(active_request: &Family::ActiveRequest) -> u64 {
         u64::try_from(active_request.started_at().elapsed().as_millis()).unwrap_or(u64::MAX)
     }
 
@@ -169,7 +174,7 @@ impl<Family: ImageFamily> ImageEngineShell<Family> {
     /// Concrete component failures are path-free and bounded here, so a user
     /// can tell malformed tensors, unsupported operations and memory pressure
     /// apart.
-    pub(crate) fn fail_active_request(
+    pub fn fail_active_request(
         &mut self,
         failure_description: String,
         public_failure_description: &'static str,
@@ -195,7 +200,7 @@ impl<Family: ImageFamily> ImageEngineShell<Family> {
         }
     }
 
-    fn progress(
+    pub fn progress(
         active_request: &Family::ActiveRequest,
         phase: ImageGenerationPhase,
         completed_steps: u16,
@@ -209,7 +214,7 @@ impl<Family: ImageFamily> ImageEngineShell<Family> {
     }
 
     /// Keeps a still-running request in progress and reports where it stands.
-    pub(crate) fn restore_with_progress(
+    pub fn restore_with_progress(
         &mut self,
         active_request: Family::ActiveRequest,
         phase: ImageGenerationPhase,
@@ -223,7 +228,7 @@ impl<Family: ImageFamily> ImageEngineShell<Family> {
     /// Finalizes a request whose image is encoded and returns it. A failed
     /// finalize after a successful encode is fatal: the image exists, but the
     /// accounting contract cannot be honored.
-    pub(crate) fn complete_rendered_request(
+    pub fn complete_rendered_request(
         &mut self,
         active_request: Family::ActiveRequest,
         png_bytes: Vec<u8>,

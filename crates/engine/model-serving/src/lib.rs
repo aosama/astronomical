@@ -32,11 +32,15 @@ pub(crate) use ::speech::speech_engine;
 // `crate::memory`, `crate::inference_engine` and root path here resolves.
 pub use ::engine_core::*;
 
-// Image generation lives in its own crate (issue #2340). Its public surface,
-// the `flux2_klein`, `qwen_image_21` and `image_generation_engine` modules
-// included, is re-exported whole, so the worker, this crate's own
-// `crate::flux2_klein` paths and the acceptance tests keep resolving.
+// Image generation lives in its own crates (issue #2340, #2473): the shell
+// and one crate per family. Their public surfaces, and the family crates as
+// `flux2_klein` and `qwen_image_21` modules, are re-exported so the worker,
+// this crate's own paths and the acceptance tests keep resolving.
+pub use ::flux2_klein;
+pub use ::flux2_klein::*;
 pub use ::image_generation::*;
+pub use ::qwen_image_21;
+pub use ::qwen_image_21::*;
 
 // The model primitives every model family shares (issue #2340); their
 // public surface, modules included, is re-exported whole.

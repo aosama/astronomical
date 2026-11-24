@@ -9,7 +9,7 @@ use memory_policy::telemetry::{MlxActiveMemoryBreakdown, MlxMemoryTelemetry};
 use model_primitives::performance_attribution::PerformanceAttributionOutcome;
 
 /// The events a fake has recorded so far, in order.
-pub(crate) fn cloned_events(lifecycle_events: &Arc<Mutex<Vec<String>>>) -> Vec<String> {
+pub fn cloned_events(lifecycle_events: &Arc<Mutex<Vec<String>>>) -> Vec<String> {
     lifecycle_events
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner())
@@ -18,7 +18,7 @@ pub(crate) fn cloned_events(lifecycle_events: &Arc<Mutex<Vec<String>>>) -> Vec<S
 
 /// Records `event`, then fails it when it is the one the test injects a
 /// failure at.
-pub(crate) fn record_lifecycle_event(
+pub fn record_lifecycle_event(
     lifecycle_events: &Arc<Mutex<Vec<String>>>,
     failing_event: Option<&str>,
     event: &str,
@@ -36,7 +36,7 @@ pub(crate) fn record_lifecycle_event(
 
 /// The event a finalize records: its outcome, then the failure it reports or
 /// the encoded byte count.
-pub(crate) fn finalize_event(
+pub fn finalize_event(
     outcome: PerformanceAttributionOutcome,
     encoded_bytes: Option<u64>,
     failure_description: Option<&str>,
@@ -55,7 +55,7 @@ pub(crate) fn finalize_event(
 }
 
 /// The memory a fake reports after cleanup: no mlx_buffer_cache bytes left.
-pub(crate) fn scripted_post_cleanup_memory() -> MlxMemoryTelemetry {
+pub fn scripted_post_cleanup_memory() -> MlxMemoryTelemetry {
     MlxMemoryTelemetry::new(
         96_000_000,
         0,
@@ -65,7 +65,7 @@ pub(crate) fn scripted_post_cleanup_memory() -> MlxMemoryTelemetry {
 }
 
 /// A finalized request must report memory with the mlx_buffer_cache emptied.
-pub(crate) fn assert_final_cleanup_memory(memory_telemetry: Option<MlxMemoryTelemetry>) {
+pub fn assert_final_cleanup_memory(memory_telemetry: Option<MlxMemoryTelemetry>) {
     let memory_telemetry =
         memory_telemetry.expect("finalized image requests should expose MLX memory");
     assert_eq!(memory_telemetry.mlx_buffer_cache_bytes, 0);

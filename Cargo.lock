@@ -813,6 +813,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "flux2-klein"
+version = "0.2.134"
+dependencies = [
+ "artifact-validation",
+ "image",
+ "image-generation",
+ "ipc-protocol",
+ "memory-policy",
+ "mlx-bridge",
+ "model-primitives",
+ "runtime-integration",
+ "safetensors",
+ "serde",
+ "serde_json",
+ "serial_test",
+ "tempfile",
+ "test-harness",
+ "thiserror",
+ "tokenizers",
+ "tracing",
+]
+
+[[package]]
 name = "fnv"
 version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1143,22 +1166,9 @@ dependencies = [
 name = "image-generation"
 version = "0.2.134"
 dependencies = [
- "artifact-validation",
- "image",
  "ipc-protocol",
  "memory-policy",
- "mlx-bridge",
  "model-primitives",
- "runtime-integration",
- "safetensors",
- "serde",
- "serde_json",
- "serial_test",
- "tempfile",
- "test-harness",
- "thiserror",
- "tokenizers",
- "tracing",
 ]
 
 [[package]]
@@ -1499,6 +1509,7 @@ dependencies = [
  "decision-contract",
  "decision-models",
  "engine-core",
+ "flux2-klein",
  "image",
  "image-generation",
  "ipc-protocol",
@@ -1508,6 +1519,7 @@ dependencies = [
  "model-primitives",
  "phonon",
  "quantization",
+ "qwen-image-21",
  "qwen35",
  "runtime-integration",
  "serde_json",
@@ -1789,6 +1801,29 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1fbf4db142a473a8d80c26bbf18454ed458bf8d26c8219c331daecfdbd079001"
 dependencies = [
  "proc-macro2",
+]
+
+[[package]]
+name = "qwen-image-21"
+version = "0.2.134"
+dependencies = [
+ "artifact-validation",
+ "image",
+ "image-generation",
+ "ipc-protocol",
+ "memory-policy",
+ "mlx-bridge",
+ "model-primitives",
+ "runtime-integration",
+ "safetensors",
+ "serde",
+ "serde_json",
+ "serial_test",
+ "tempfile",
+ "test-harness",
+ "thiserror",
+ "tokenizers",
+ "tracing",
 ]
 
 [[package]]

@@ -4,7 +4,7 @@
 use std::fs;
 
 use model_serving::{
-    Flux2KleinArtifactProvenance, Flux2KleinImageEngine, ImageGenerationEngine,
+    Flux2KleinArtifactProvenance, ImageGenerationEngine, build_flux2_klein_image_engine,
     flux2_klein_euler_update_for_tests, flux2_klein_keyed_noise_and_euler_for_tests,
 };
 use runtime_integration::{MlxMemoryLimits, MlxRuntime};
@@ -22,7 +22,7 @@ const ROMEO_AND_JULIET_SOURCE: &str = include_str!(
 fn should_clear_replacement_mlx_buffer_cache_and_persist_a_bounded_failed_load_report() {
     let model_directory = tempfile::tempdir().expect("the invalid artifact directory should exist");
     let attribution_log_path = model_directory.path().join("performance.jsonl");
-    let mut engine = Flux2KleinImageEngine::from_model_family_factory(
+    let mut engine = build_flux2_klein_image_engine(
         model_directory.path(),
         Flux2KleinArtifactProvenance::official(),
         DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES,

@@ -19,29 +19,16 @@ workspace = true
 
 [features]
 default = []
-direct-mlx = ["dep:runtime-integration", "dep:mlx-bridge", "model-primitives/direct-mlx", "artifact-validation/direct-mlx"]
+# The test helpers the image family crates' tests share.
+test-support = []
+direct-mlx = ["model-primitives/direct-mlx"]
 
-# The image generation families (FLUX.2 klein, Qwen-Image-2.1) and the
-# worker-facing seam they implement (issue #2340). One-way edge: nothing here
+# The image-generation shell: the worker-facing seam every image family
+# implements and the engine shell they share. Each family is a crate of its
+# own beside it (issue #2473, Step 7). One-way edge: nothing here
 # may depend on model-serving; `cargo xtask check-architecture`
 # enforces it.
 [dependencies]
-artifact-validation = { path = "../../../foundation/artifact-validation" }
 model-primitives = { path = "../../../engine/model-primitives" }
 ipc-protocol = { path = "../../../contracts/ipc-protocol" }
 memory-policy = { path = "../../../foundation/memory-policy" }
-runtime-integration = { path = "../../../foundation/runtime-integration", features = ["mlx"], optional = true }
-mlx-bridge = { workspace = true, optional = true }
-image.workspace = true
-safetensors.workspace = true
-serde.workspace = true
-serde_json.workspace = true
-thiserror.workspace = true
-tokenizers.workspace = true
-tracing.workspace = true
-
-[dev-dependencies]
-test-harness = { path = "../../../foundation/test-harness", features = ["test-fixtures"] }
-# The GPU tests sample the process-global MLX allocator, so they serialize.
-serial_test.workspace = true
-tempfile = "=3.27.0"

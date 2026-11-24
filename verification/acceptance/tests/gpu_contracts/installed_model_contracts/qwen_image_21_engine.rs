@@ -15,7 +15,7 @@ use ipc_protocol::{ImageGenerationCommand, ImageGenerationSettings, RequestId};
 use model_serving::{
     ImageGenerationEngine, ImageGenerationEngineStep, QWEN_IMAGE_21_LICENSE_IDENTIFIER,
     QWEN_IMAGE_21_OFFICIAL_MODEL_ID, QWEN_IMAGE_21_PROVIDER_MODEL_ID,
-    QwenImage21ArtifactProvenance, QwenImage21ImageEngine,
+    QwenImage21ArtifactProvenance, QwenImage21ImageEngine, build_qwen_image_21_image_engine,
 };
 
 use crate::common::qwen_image_21::{
@@ -49,7 +49,7 @@ async fn should_serve_two_image_generation_requests_through_the_engine() {
         let attribution_log_path = attribution_directory
             .path()
             .join("qwen-image-21-engine-attribution.jsonl");
-        let mut engine = QwenImage21ImageEngine::from_model_family_factory(
+        let mut engine = build_qwen_image_21_image_engine(
             artifact_directory(),
             QwenImage21ArtifactProvenance::new(
                 QWEN_IMAGE_21_PROVIDER_MODEL_ID,

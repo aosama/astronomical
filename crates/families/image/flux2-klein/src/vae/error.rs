@@ -1,0 +1,39 @@
+//! Typed failures at the validated FLUX.2 Klein VAE execution boundary.
+
+use thiserror::Error;
+
+#[cfg(feature = "direct-mlx")]
+#[derive(Debug, Error)]
+pub enum Flux2KleinVaeError {
+    #[error("FLUX.2 Klein packed latent geometry is invalid: {reason}")]
+    InvalidLatentGeometry { reason: String },
+    #[error("FLUX.2 Klein VAE tiling geometry is invalid: {reason}")]
+    InvalidTilingGeometry { reason: String },
+    #[cfg(feature = "direct-mlx")]
+    #[error("FLUX.2 Klein VAE MLX execution failed")]
+    Mlx(#[from] runtime_integration::MlxRuntimeError),
+    #[cfg(feature = "direct-mlx")]
+    #[error(transparent)]
+    TensorStore(#[from] crate::tensor_store::Flux2KleinTensorStoreError),
+}
+
+impl Flux2KleinVaeError {
+    pub(super) fn latent_geometry(reason: impl Into<String>) -> Self {
+        Self::InvalidLatentGeometry {
+            reason: reason.into(),
+        }
+    }
+
+    pub(super) fn tiling_geometry(reason: impl Into<String>) -> Self {
+        Self::InvalidTilingGeometry {
+            reason: reason.into(),
+        }
+    }
+}
+
+#[cfg(feature = "direct-mlx")]
+impl From<mlx_bridge::MlxCError> for Flux2KleinVaeError {
+    fn from(captured_error: mlx_bridge::MlxCError) -> Self {
+        runtime_integration::MlxRuntimeError::from(captured_error).into()
+    }
+}
