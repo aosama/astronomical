@@ -10,6 +10,7 @@
 use runtime_integration::MlxMemorySnapshot;
 
 use crate::inference_engine::contract::ExpertResidencyTelemetry;
+use crate::memory::telemetry::MlxActiveMemoryBreakdown;
 use crate::qwen3_5_core::engine_errors::{
     mlx_active_memory_bytes_exceed_u64_range_error, mlx_buffer_cache_bytes_exceed_u64_range_error,
     mlx_peak_memory_bytes_exceed_u64_range_error,
@@ -93,24 +94,50 @@ pub fn idle_mlx_memory_telemetry_for_snapshot<Engine: Qwen3_5FinalizationHooks>(
     );
     let expert_residency_telemetry =
         model.expert_residency_telemetry_for_breakdown(&active_memory_breakdown);
-    let mlx_memory_telemetry = MlxMemoryTelemetry::new(
-        active_memory_bytes,
-        mlx_buffer_cache_bytes,
-        peak_memory_bytes,
+    let mlx_memory_telemetry = between_request_mlx_memory_telemetry(
+        model,
+        MlxMemoryCounters {
+            active_memory_bytes,
+            mlx_buffer_cache_bytes,
+            peak_memory_bytes,
+        },
         active_memory_breakdown,
     )
-    .with_expert_residency_telemetry(expert_residency_telemetry)
-    // Issue #510: the idle sample answers "is the remaining headroom free or
-    // promised" from the memory governor's accounts, and a sample without
-    // the split would overwrite the load-complete split the menu paints.
+    .with_expert_residency_telemetry(expert_residency_telemetry);
+    Ok((expert_residency_telemetry, mlx_memory_telemetry))
+}
+
+/// One MLX memory reading in the u64 units telemetry reports.
+pub struct MlxMemoryCounters {
+    pub active_memory_bytes: u64,
+    pub mlx_buffer_cache_bytes: u64,
+    pub peak_memory_bytes: u64,
+}
+
+/// The telemetry of a reading taken between requests, which the idle status
+/// sample and a finished request's report both are.
+pub fn between_request_mlx_memory_telemetry<Model: Qwen3_5TextModel>(
+    model: &Model,
+    mlx_memory_counters: MlxMemoryCounters,
+    active_memory_breakdown: MlxActiveMemoryBreakdown,
+) -> MlxMemoryTelemetry {
+    MlxMemoryTelemetry::new(
+        mlx_memory_counters.active_memory_bytes,
+        mlx_memory_counters.mlx_buffer_cache_bytes,
+        mlx_memory_counters.peak_memory_bytes,
+        active_memory_breakdown,
+    )
+    // Issue #510: a between-request sample answers "is the remaining
+    // headroom free or promised" from the memory governor's accounts, and a
+    // sample without the split would overwrite the load-complete split the
+    // menu paints.
     .with_memory_ceiling_utilization(
         model.between_request_memory_ceiling_utilization_for_breakdown(
-            active_memory_bytes,
+            mlx_memory_counters.active_memory_bytes,
             active_memory_breakdown,
         ),
     )
-    .with_memory_ledger_reading(model.latest_memory_ledger_reading());
-    Ok((expert_residency_telemetry, mlx_memory_telemetry))
+    .with_memory_ledger_reading(model.latest_memory_ledger_reading())
 }
 
 /// Ends the request the client stopped. A request that already ended on its
