@@ -35,6 +35,8 @@ serving-acceptance = []
 
 [dependencies]
 config = { path = "../../crates/foundation/config" }
+# The family list, whose lines also name each family's builder.
+model-family-registry = { path = "../../crates/families/registry/model-family-registry" }
 ipc-protocol = { path = "../../crates/contracts/ipc-protocol" }
 model-serving = { path = "../../crates/engine/model-serving", features = ["direct-mlx"] }
 # The Linux physical-memory parser beside the machine ceiling it feeds.

@@ -53,7 +53,7 @@ fn should_register_every_family_constant_with_its_identifier_and_kind() {
 #[test]
 fn should_register_each_identifier_once() {
     let mut registered_identifiers = HashSet::new();
-    for family_description in &REGISTERED_MODEL_FAMILIES {
+    for family_description in REGISTERED_MODEL_FAMILIES {
         assert!(
             registered_identifiers.insert(family_description.model_family.as_str()),
             "{} is registered twice",
@@ -64,7 +64,7 @@ fn should_register_each_identifier_once() {
 
 #[test]
 fn should_give_every_family_a_way_to_be_recognized() {
-    for family_description in &REGISTERED_MODEL_FAMILIES {
+    for family_description in REGISTERED_MODEL_FAMILIES {
         assert!(
             family_description.recognizes_pipeline_index.is_some()
                 || family_description.recognizes_directory.is_some()
@@ -84,7 +84,7 @@ fn should_find_no_description_for_an_unregistered_identifier() {
 
 #[test]
 fn should_let_only_laya_bundle_further_models() {
-    for family_description in &REGISTERED_MODEL_FAMILIES {
+    for family_description in REGISTERED_MODEL_FAMILIES {
         assert_eq!(
             family_description.discover_bundled_models.is_some(),
             family_description.model_family == LAYA_MODEL_FAMILY,

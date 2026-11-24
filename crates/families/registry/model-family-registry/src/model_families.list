@@ -1,0 +1,45 @@
+// The model families Astronomical serves, one line each (issue #2473,
+// Step 5). Discovery reads the first half of a line, the family's
+// description, from its recognition crate; the worker reads the second
+// half, how it builds the family's engine. Within each way of recognizing a
+// folder (pipeline index, marker file, `model_type`) the first family that
+// claims it wins, so this order is the classification order.
+[
+    model_family!(
+        FLUX2_KLEIN_FAMILY_DESCRIPTION,
+        ImageGeneration(build_flux2_klein_runtime)
+    ),
+    model_family!(
+        QWEN_IMAGE_21_FAMILY_DESCRIPTION,
+        ImageGeneration(build_qwen_image_21_runtime)
+    ),
+    model_family!(
+        KEV_FAMILY_DESCRIPTION,
+        Decision(build_decision_runtime::<model_serving::KevDecisionFamily>)
+    ),
+    model_family!(
+        CLEF_FAMILY_DESCRIPTION,
+        Decision(build_decision_runtime::<model_serving::ClefDecisionFamily>)
+    ),
+    model_family!(
+        KOKORO_FAMILY_DESCRIPTION,
+        Speech(build_speech_runtime::<model_serving::KokoroSpeechFamily>)
+    ),
+    model_family!(
+        PHONON_FAMILY_DESCRIPTION,
+        Speech(build_speech_runtime::<model_serving::PhononSpeechFamily>)
+    ),
+    model_family!(QWEN3_5_FAMILY_DESCRIPTION, Chat(build_qwen3_5_runtime)),
+    model_family!(
+        PRISM_HADAMARD_QWEN35_FAMILY_DESCRIPTION,
+        Chat(build_prism_hadamard_qwen35_runtime)
+    ),
+    model_family!(
+        MODERNBERT_FAMILY_DESCRIPTION,
+        Embedding(build_modernbert_runtime)
+    ),
+    model_family!(
+        LAYA_FAMILY_DESCRIPTION,
+        Decision(build_decision_runtime::<model_serving::LayaDecisionFamily>)
+    ),
+]
