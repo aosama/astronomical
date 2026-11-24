@@ -3,9 +3,11 @@
 
 use std::path::Path;
 
-use model_discovery::*;
+use model_discovery::{
+    DiscoveredModel, ModelFamilyDescription, ModelKind, discover_marked_decision_model,
+};
 
-use crate::*;
+use crate::{CLEF_MODEL_FAMILY, clef};
 
 /// How discovery recognizes and reads a folder of this family.
 pub const CLEF_FAMILY_DESCRIPTION: ModelFamilyDescription =

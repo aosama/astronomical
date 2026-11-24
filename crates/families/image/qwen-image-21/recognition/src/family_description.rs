@@ -3,9 +3,9 @@
 
 use std::path::Path;
 
-use model_discovery::*;
+use model_discovery::{DiscoveredModel, ModelFamilyDescription, ModelKind, discovered_image_model};
 
-use crate::*;
+use crate::{QWEN_IMAGE_21_MODEL_FAMILY, qwen_image_21};
 
 /// How discovery recognizes and reads a folder of this family.
 pub const QWEN_IMAGE_21_FAMILY_DESCRIPTION: ModelFamilyDescription =

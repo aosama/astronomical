@@ -4,9 +4,14 @@
 use std::fs;
 use std::path::Path;
 
-use model_discovery::*;
+use model_discovery::{
+    ChatModelCapabilities, DiscoveredModel, ModelCapabilities, ModelFamilyDescription, ModelKind,
+    ModelLicense, provenance_or_config_revision,
+};
 
-use crate::*;
+use crate::{
+    PRISM_HADAMARD_QWEN35_MODEL_FAMILY, QWEN3_5_MODEL_FAMILY, prism_hadamard_qwen35, qwen3_5,
+};
 
 /// How discovery recognizes and reads a folder of this family.
 pub const QWEN3_5_FAMILY_DESCRIPTION: ModelFamilyDescription =

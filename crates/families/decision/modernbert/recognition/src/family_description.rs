@@ -4,9 +4,12 @@
 use std::fs;
 use std::path::Path;
 
-use model_discovery::*;
+use model_discovery::{
+    DiscoveredModel, EmbeddingModelCapabilities, ModelCapabilities, ModelFamilyDescription,
+    ModelKind, provenance_or_config_revision,
+};
 
-use crate::*;
+use crate::{MODERNBERT_MODEL_FAMILY, modernbert};
 
 /// How discovery recognizes and reads a folder of this family.
 pub const MODERNBERT_FAMILY_DESCRIPTION: ModelFamilyDescription =

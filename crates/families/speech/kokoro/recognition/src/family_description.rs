@@ -3,9 +3,9 @@
 
 use std::path::Path;
 
-use model_discovery::*;
+use model_discovery::{DiscoveredModel, ModelFamilyDescription, ModelKind, discover_speech_model};
 
-use crate::*;
+use crate::{KOKORO_MODEL_FAMILY, KOKORO_WEIGHTS_FILE_NAME, kokoro, kokoro_speech_capabilities};
 
 /// How discovery recognizes and reads a folder of this family.
 pub const KOKORO_FAMILY_DESCRIPTION: ModelFamilyDescription =

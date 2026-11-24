@@ -4,9 +4,12 @@
 use std::fs;
 use std::path::Path;
 
-use model_discovery::*;
+use model_discovery::{
+    DecisionModelCapabilities, DiscoveredModel, ModelCapabilities, ModelFamilyDescription,
+    ModelFamilyRegistry, ModelKind, provenance_or_config_revision, try_discover_model_with_id,
+};
 
-use crate::*;
+use crate::{LAYA_MODEL_FAMILY, laya};
 
 /// How discovery recognizes and reads a folder of this family.
 pub const LAYA_FAMILY_DESCRIPTION: ModelFamilyDescription =

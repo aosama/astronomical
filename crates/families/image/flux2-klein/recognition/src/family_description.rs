@@ -3,9 +3,9 @@
 
 use std::path::Path;
 
-use model_discovery::*;
+use model_discovery::{DiscoveredModel, ModelFamilyDescription, ModelKind, discovered_image_model};
 
-use crate::*;
+use crate::{FLUX2_KLEIN_MODEL_FAMILY, flux2_klein, flux2_klein_mlx_4bit};
 
 /// How discovery recognizes and reads a folder of this family.
 pub const FLUX2_KLEIN_FAMILY_DESCRIPTION: ModelFamilyDescription =

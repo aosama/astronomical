@@ -163,3 +163,7 @@ pub fn is_reviewed_flow_match_scheduler(
         && !geometry.use_exponential_sigmas
         && !geometry.use_karras_sigmas
 }
+
+#[cfg(test)]
+#[path = "image_pipeline_folder_tests.rs"]
+mod tests;

@@ -30,3 +30,5 @@ thiserror.workspace = true
 
 [dev-dependencies]
 tempfile = "=3.27.0"
+# The reviewed image pipeline documents the shared folder checks are tested on.
+test-harness = { path = "../test-harness", features = ["test-fixtures"] }
