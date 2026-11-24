@@ -27,6 +27,10 @@ pub struct Qwen3_5InferenceRequest {
     performance_attribution: PerformanceAttribution,
     #[cfg_attr(not(feature = "direct-mlx"), allow(dead_code))]
     structured_generation: Option<crate::structured_generation::StructuredTokenConstraint>,
+    /// Whether a failed resident start may be replayed on the streaming
+    /// engine. A family with no streaming engine, such as the folded ternary
+    /// packs, prepares requests that refuse the replay.
+    allows_streaming_retry: bool,
 }
 
 impl PreparedInferenceRequest for Qwen3_5InferenceRequest {
@@ -35,7 +39,7 @@ impl PreparedInferenceRequest for Qwen3_5InferenceRequest {
     }
 
     fn clone_for_streaming_retry(&self) -> Option<Self> {
-        Some(self.clone())
+        self.allows_streaming_retry.then(|| self.clone())
     }
 
     fn record_streaming_retry_interval(
@@ -123,7 +127,16 @@ impl Qwen3_5InferenceRequest {
             natural_reasoning_end_token_ids: Vec::new(),
             performance_attribution: PerformanceAttribution::disabled(),
             structured_generation: None,
+            allows_streaming_retry: true,
         }
+    }
+
+    /// Whether this request may be replayed on the streaming engine; a
+    /// family without one prepares requests that refuse the replay.
+    #[must_use]
+    pub fn with_streaming_retry_allowed(mut self, allows_streaming_retry: bool) -> Self {
+        self.allows_streaming_retry = allows_streaming_retry;
+        self
     }
 
     /// Overrides the repetition penalty resolved for this request.
