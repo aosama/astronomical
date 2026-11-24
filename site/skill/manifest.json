@@ -2,7 +2,7 @@
   "files": {
     "SKILL.md": "bdd495cad9cf1d7c828a712e6fe95e9386cd8e7a014870fba3dc30a1989904cf",
     "references/chat-and-pictures.md": "53d969238fdb08d354cfd850eefefc890d45f692c76567187d052fd69e07b846",
-    "references/coding-tools.md": "607f92b660fd1199fec87347112d93f8681ee312dbf6d0707b02b093a039cf33",
+    "references/coding-tools.md": "f210a2168e8312808e6f8adb5133b5680c52dbd83a268a990666b5697ea9d035",
     "references/decision-models.md": "f3fed9c1669e4144f94e216784c6e26c2b295a126030aab27c35a4de0880d9c6",
     "references/getting-started.md": "8202bb225ab88b4300a0d8a3ee8d56ebd00fc2def6f6e7bb3501d9e3d25ec2fe",
     "references/images.md": "9e58d2d8197829fe955629930e1e8548641a38d756d8e2698f04708fead0bc2f",
@@ -13,5 +13,5 @@
     "references/troubleshooting.md": "c78350daceb34f4aa7c596f152a26404598269ef8d022d55837460b4df721e2a"
   },
   "minimum_app_version": "0.2.133",
-  "skill_version": 3
+  "skill_version": 4
 }

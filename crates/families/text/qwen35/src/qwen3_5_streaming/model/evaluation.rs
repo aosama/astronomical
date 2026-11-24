@@ -7,29 +7,7 @@ use super::{Qwen3_5ExecutionError, Qwen3_5Model, RequestDecoderStateStack};
 use crate::qwen3_5_core::decoder::Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector;
 
 impl Qwen3_5Model {
-    /// Returns the highest-logit token ID for one final-position output.
-    pub fn highest_logit_token_id(
-        &self,
-        final_position_logits: &MlxArray,
-    ) -> Result<u32, Qwen3_5ExecutionError> {
-        let selected_token = self.select_highest_logit_token(final_position_logits)?;
-        Ok(selected_token.item_u32()?)
-    }
-
-    /// Materializes final logits and mutable decoder state for one forward pass.
-    pub fn evaluate_forward_state(
-        &self,
-        final_logits: &MlxArray,
-        request_decoder_state: &RequestDecoderStateStack,
-    ) -> Result<(), Qwen3_5ExecutionError> {
-        let mut disabled_performance_attribution = PerformanceAttribution::disabled();
-        self.evaluate_forward_state_with_performance_attribution(
-            final_logits,
-            request_decoder_state,
-            &mut disabled_performance_attribution,
-        )?;
-        Ok(())
-    }
+    crate::qwen3_5_core::model::shared_model_methods::qwen3_5_shared_model_evaluation_methods!();
 
     /// Evaluates forward roots and resolves deferred GPU missing-route bitmaps.
     pub fn evaluate_forward_state_with_performance_attribution(
@@ -61,18 +39,6 @@ impl Qwen3_5Model {
         }
         self.evaluate_arrays_resolving_paged_routes(&evaluation_arrays, performance_attribution)
             .and_then(require_every_route_resolved)
-    }
-
-    /// Submits decode evaluation without synchronizing the graphics processor.
-    pub fn async_evaluate_generation(
-        &self,
-        generated_token: &MlxArray,
-        request_decoder_state: &RequestDecoderStateStack,
-    ) -> Result<(), Qwen3_5ExecutionError> {
-        let evaluation_arrays =
-            super::forward_contract::forward_state_arrays(generated_token, request_decoder_state)?;
-        self.runtime.async_eval_arrays(&evaluation_arrays)?;
-        Ok(())
     }
 }
 

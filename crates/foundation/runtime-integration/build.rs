@@ -51,7 +51,12 @@
 //! (`tests/integration/native_build_wiring.rs`) now fails if a watched path does
 //! not exist, so the class of failure cannot return silently.
 
-use std::{env, error::Error, path::Path, time::Instant};
+use std::{
+    env,
+    error::Error,
+    path::{Path, PathBuf},
+    time::Instant,
+};
 
 use native_build_orchestration::{
     ASTRO_NATIVE_BUILD_CACHE_DEPENDENCIES_VARIABLE, NATIVE_BUILD_PROGRESS_FILE_VARIABLE,
@@ -59,7 +64,8 @@ use native_build_orchestration::{
     NativeBuildProgress, NativeBuildStore, NativeRuntimeBuildInputs, NativeTargetPlatform,
     RUSTC_WRAPPER_VARIABLE, build_pinned_native_runtime, identity_environment_variables,
     native_build_platform, native_build_store_directory, native_parallel_job_count,
-    required_path_variable, resolve_native_build_identity, write_native_build_status,
+    required_path_variable, resolve_native_build_identity, workspace_root_above,
+    write_native_build_status,
 };
 
 const MLX_FEATURE_VARIABLE: &str = "CARGO_FEATURE_MLX";
@@ -76,7 +82,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         .map_err(|message| -> Box<dyn Error> { message.into() })?;
     native_build_progress.record_build_start(&native_parallel_job_count());
     let native_build_started_at = Instant::now();
-    let repository_root = manifest_directory.join("../../..").canonicalize()?;
+    let repository_root = canonical_workspace_root(&manifest_directory)?;
     let native_source_directory = manifest_directory.join("native");
     let native_build_profile = selected_native_build_profile();
     let native_build_inputs = NativeRuntimeBuildInputs::from_environment();
@@ -131,6 +137,15 @@ fn cargo_native_build_target() -> Result<(String, NativeTargetPlatform), Box<dyn
         env::var("HOST").map_err(|_| "required environment variable HOST is missing".to_owned())?;
     let native_target_platform = native_build_platform(&target_triple, &host_triple)?;
     Ok((target_triple, native_target_platform))
+}
+
+/// The workspace root the native build identity's pathspecs are relative
+/// to, found the way the identity's own tests find it, so a crate move can
+/// never point the build at a folder with no tracked native inputs.
+fn canonical_workspace_root(manifest_directory: &Path) -> Result<PathBuf, Box<dyn Error>> {
+    let workspace_root = workspace_root_above(manifest_directory)
+        .ok_or("no Cargo.lock above the runtime-integration crate")?;
+    Ok(workspace_root.canonicalize()?)
 }
 
 /// Declares the environment the platform's native build identity reads, so a

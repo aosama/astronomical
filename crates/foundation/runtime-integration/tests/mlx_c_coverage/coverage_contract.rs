@@ -23,13 +23,13 @@ const COVERAGE_EXCLUSIONS: Exclusions = &[(
     "error.h declares mlx_error as a C preprocessor variadic macro that forwards to the internal _mlx_error helper, so no function declaration exists for bindgen or the header parser to see; raw.rs declares the variadic signature by hand and the build script appends it to the inventory.",
 )];
 
-/// Resolves the provisioned bindgen header extraction directory exactly the
-/// way the mlx-bridge build script does.
+/// Resolves the provisioned bindgen header extraction directory the way the
+/// runtime-integration build script does: the same workspace root, found by
+/// `native_identity::workspace_root_above`, and the same source-only identity.
 fn resolve_header_directory() -> Result<PathBuf, String> {
-    let repository_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .map_err(|error| format!("repository root resolution failed: {error}"))?;
+    let repository_root =
+        native_identity::workspace_root_above(std::path::Path::new(env!("CARGO_MANIFEST_DIR")))
+            .ok_or("repository root resolution failed: no Cargo.lock above the crate")?;
     // Override-free by construction, mirroring the build script discipline.
     let identity_request = native_identity::FingerprintRequest {
         repository_root: &repository_root,

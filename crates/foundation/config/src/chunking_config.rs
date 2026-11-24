@@ -162,7 +162,7 @@ impl ChunkingConfigFile {
 }
 
 pub const DEFAULT_FULL_ATTENTION_KEY_VALUE_GROWTH_TOKENS: u32 = 256;
-/// The Metal build's prompt chunk.
+/// The macOS (Metal) build's prompt chunk.
 #[cfg(target_os = "macos")]
 pub const DEFAULT_FIXED_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS: u32 = 2_048;
 /// Non-macOS builds run MLX on the CPU today (a future CUDA build would want
@@ -193,7 +193,7 @@ pub const LEGACY_DEFAULT_FIXED_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS: u32 = 4_096;
 /// this one holds with the macOS file cache both cold and warm.
 #[cfg(target_os = "macos")]
 pub const DEFAULT_FIXED_SSD_STREAMING_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS: u32 = 4_096;
-/// The SSD-paged probe also runs one chunk at load, so builds without Metal
+/// The SSD-paged probe also runs one chunk at load, so non-macOS builds
 /// use the same small chunk as for resident prompts.
 #[cfg(not(target_os = "macos"))]
 pub const DEFAULT_FIXED_SSD_STREAMING_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS: u32 = 64;
@@ -203,8 +203,8 @@ pub const DEFAULT_FIXED_SSD_STREAMING_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS: u32 =
 pub const LEGACY_DEFAULT_FIXED_SSD_STREAMING_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS: u32 = 2_048;
 
 /// Chunk sizes a `config.json` holds only because an earlier build wrote its
-/// own default there; load moves them to the current default. Builds without
-/// Metal also retire the Metal build's defaults, which earlier Linux builds
+/// own default there; load moves them to the current default. Non-macOS
+/// builds also retire the macOS build's defaults, which earlier Linux builds
 /// wrote and which keep a CPU loading for many minutes.
 #[cfg(target_os = "macos")]
 const RETIRED_RESIDENT_CHUNK_DEFAULTS: &[u32] =
@@ -214,7 +214,7 @@ const RETIRED_RESIDENT_CHUNK_DEFAULTS: &[u32] = &[
     LEGACY_DEFAULT_FIXED_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS,
     2_048,
 ];
-/// SSD-paged sparse models are not served on builds without Metal yet, so a
+/// SSD-paged sparse models are not served on non-macOS builds yet, so a
 /// saved SSD-paged chunk is not retired there beyond what macOS retires.
 const RETIRED_SSD_STREAMING_CHUNK_DEFAULTS: &[u32] =
     &[LEGACY_DEFAULT_FIXED_SSD_STREAMING_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS];
