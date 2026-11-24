@@ -1,6 +1,5 @@
 use crate::qwen3_5_core::shared_execution::astro_ssd_prompt_cache_restore;
 use crate::qwen3_5_core::shared_execution::generation_start_steps;
-use crate::qwen3_5_core::shared_execution::generation_thinking_end_markers;
 use crate::qwen3_5_core::shared_execution::generation_visual_embedding_validation;
 use crate::{
     EngineGenerationStart, InferenceEngineError, PerformanceAttribution, PerformanceCounter,
@@ -16,7 +15,6 @@ use crate::qwen3_5_core::shared_execution::astro_ssd_prompt_cache_visual_identit
     Qwen3_5AstroSsdPromptCacheVisualIdentity, Qwen3_5AstroSsdPromptCacheVisualIdentityInput,
 };
 use crate::qwen3_5_core::shared_execution::generation_request_validation::{self};
-use crate::qwen3_5_resident::model::request_errors;
 use engine_core::astro_ssd_prompt_cache::block_causal_input::AstroSsdPromptCacheBlockCausalInput;
 
 /// The prompt-side identity of a generation session: token list, image-pad
@@ -91,29 +89,10 @@ impl Qwen3_5EngineState {
         // The unit appends the model's own think-end marker as a safety net so
         // a thinking block can always be closed, even when the caller supplied
         // no tokenizer-derived boundary.
-        let natural_reasoning_end_token_ids =
-            generation_thinking_end_markers::natural_reasoning_end_token_ids_with_model_safety_net(
-                inference_request.natural_reasoning_end_token_ids(),
-                self.core.think_end_token_id,
-            );
-        // Turns the caller's thinking allowance into a small state machine
-        // with three phases — thinking, forcing the transition out of
-        // thinking, and visible answer — so the engine can cut reasoning off
-        // once the allowance is spent while still leaving room for a complete
-        // final answer inside the output budget.
-        let thinking_budget_state = Qwen3_5ThinkingBudgetState::new(
-            inference_request.generation_starts_inside_thinking_block(),
-            inference_request.thinking_budget(),
-            inference_request
-                .forced_thinking_transition_token_ids()
-                .to_vec(),
-            natural_reasoning_end_token_ids,
-        )
-        .map_err(|source| {
-            request_errors::invalid_request_error(format!(
-                "invalid Qwen3.5 thinking-budget configuration: {source}"
-            ))
-        })?;
+        let thinking_budget_state = generation_start_steps::build_thinking_budget_state(
+            self.core.think_end_token_id,
+            &inference_request,
+        )?;
         // Borrow the loaded model weights. "Fully resident" in this engine
         // means every expert of this mixture-of-experts model already sits in
         // graphics memory; each token routes through only a few experts, and

@@ -31,7 +31,8 @@ pub(super) struct PrismRequestStart {
     pub(super) request_decoder_state: RequestDecoderStateStack,
     pub(super) restored_token_count: u32,
     pub(super) last_restored_block_key: Option<AstroSsdPromptCacheBlockKey>,
-    pub(super) random_state: MlxArray,
+    /// The sampler's random state; none for a greedy request.
+    pub(super) random_state: Option<MlxArray>,
     pub(super) thinking_budget_state: Qwen3_5ThinkingBudgetState,
     pub(super) performance_attribution: PerformanceAttribution,
     pub(super) can_use_astro_ssd_prompt_cache: bool,
@@ -64,7 +65,7 @@ pub(super) fn prism_active_generation(
         next_position_tokens: restored_token_count,
         pending_generated_token: None,
         prefill_cursor: restored_token_count as usize,
-        random_state: Some(request_start.random_state),
+        random_state: request_start.random_state,
         request_id: inference_request.request_id(),
         sampling_strategy: inference_request.sampling_strategy(),
         repetition_penalty_thousandths: inference_request.repetition_penalty_thousandths(),

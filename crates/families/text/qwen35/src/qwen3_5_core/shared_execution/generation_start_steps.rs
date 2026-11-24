@@ -22,7 +22,7 @@ use crate::qwen3_5_core::vision::{
 use crate::sampling_seed::current_time_millis_since_unix_epoch;
 use crate::{
     EngineGenerationStart, InferenceEngineError, PerformanceAttribution,
-    PerformanceAttributionOutcome,
+    PerformanceAttributionOutcome, Qwen3_5ThinkingBudgetState,
 };
 
 use super::execution_core::Qwen3_5ExecutionCoreOwner;
@@ -60,6 +60,36 @@ pub fn ensure_no_active_generation<Engine: Qwen3_5FinalizationHooks>(
         },
     );
     Err(InferenceEngineError::EngineBusy)
+}
+
+/// Builds the request's thinking-budget state machine, appending the
+/// model's own think-end marker as a safety net when the caller supplied no
+/// tokenizer-derived boundaries such as tool-call starts. Its three phases
+/// (thinking, forcing the transition out of thinking, visible answer) let the
+/// engine cut reasoning off once the allowance is spent while still leaving
+/// room for a complete final answer inside the output budget.
+pub fn build_thinking_budget_state(
+    think_end_token_id: u32,
+    inference_request: &Qwen3_5InferenceRequest,
+) -> Result<Qwen3_5ThinkingBudgetState, InferenceEngineError> {
+    let natural_reasoning_end_token_ids =
+        super::generation_thinking_end_markers::natural_reasoning_end_token_ids_with_model_safety_net(
+            inference_request.natural_reasoning_end_token_ids(),
+            think_end_token_id,
+        );
+    Qwen3_5ThinkingBudgetState::new(
+        inference_request.generation_starts_inside_thinking_block(),
+        inference_request.thinking_budget(),
+        inference_request
+            .forced_thinking_transition_token_ids()
+            .to_vec(),
+        natural_reasoning_end_token_ids,
+    )
+    .map_err(|source| {
+        invalid_request_error(format!(
+            "invalid Qwen3.5 thinking-budget configuration: {source}"
+        ))
+    })
 }
 
 /// The sampler's random state: none for greedy decoding, and for sampling a

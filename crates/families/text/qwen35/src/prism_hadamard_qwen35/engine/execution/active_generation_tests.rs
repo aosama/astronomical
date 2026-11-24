@@ -28,10 +28,12 @@ fn should_start_the_shared_record_right_after_the_restored_prefix() {
             .expect("the fixture layout should create decoder state"),
         restored_token_count: RESTORED_TOKEN_COUNT,
         last_restored_block_key: None,
-        random_state: text_model
-            .runtime
-            .random_key(7)
-            .expect("the random key should build"),
+        random_state: Some(
+            text_model
+                .runtime
+                .random_key(7)
+                .expect("the random key should build"),
+        ),
         thinking_budget_state: Qwen3_5ThinkingBudgetState::new(false, None, Vec::new(), Vec::new())
             .expect("a request outside thinking needs no forced transition"),
         performance_attribution: PerformanceAttribution::disabled(),

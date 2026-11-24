@@ -93,6 +93,7 @@ pub fn initialize_prism_hadamard_qwen35_model_with_serving_settings(
                 &tokenizer_bytes,
                 &model_id,
                 model_vocabulary_size,
+                declared_context_tokens,
                 context_window,
                 max_output_tokens,
                 serving_settings.enable_thinking,

@@ -1,6 +1,5 @@
 use crate::qwen3_5_core::shared_execution::astro_ssd_prompt_cache_restore;
 use crate::qwen3_5_core::shared_execution::generation_start_steps;
-use crate::qwen3_5_core::shared_execution::generation_thinking_end_markers;
 use crate::{
     AstroSsdPromptCacheBlockKey, EngineGenerationStart, InferenceEngineError,
     PerformanceAttribution, PerformanceCounter, Qwen3_5InferenceRequest, Qwen3_5SamplingStrategy,
@@ -116,31 +115,16 @@ impl Qwen3_5EngineState {
         );
     }
 
-    /// Builds the request's thinking-budget state machine, appending the
-    /// model's own think-end marker as a safety net when the caller supplied
-    /// no tokenizer-derived boundaries such as tool-call starts.
+    /// Builds the request's thinking-budget state machine through the shared
+    /// start step.
     fn build_thinking_budget_state(
         &self,
         inference_request: &Qwen3_5InferenceRequest,
     ) -> Result<Qwen3_5ThinkingBudgetState, InferenceEngineError> {
-        let natural_reasoning_end_token_ids =
-            generation_thinking_end_markers::natural_reasoning_end_token_ids_with_model_safety_net(
-                inference_request.natural_reasoning_end_token_ids(),
-                self.core.think_end_token_id,
-            );
-        Qwen3_5ThinkingBudgetState::new(
-            inference_request.generation_starts_inside_thinking_block(),
-            inference_request.thinking_budget(),
-            inference_request
-                .forced_thinking_transition_token_ids()
-                .to_vec(),
-            natural_reasoning_end_token_ids,
+        generation_start_steps::build_thinking_budget_state(
+            self.core.think_end_token_id,
+            inference_request,
         )
-        .map_err(|source| {
-            invalid_request_error(format!(
-                "invalid Qwen3.5 thinking-budget configuration: {source}"
-            ))
-        })
     }
 
     /// Assembles the admitted session: sampling state, prompt metadata, visual

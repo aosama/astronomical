@@ -105,3 +105,71 @@ fn should_map_a_parser_error_as_malformed_output() {
         }
     );
 }
+
+/// A folded-pack processor whose configured window (64 tokens) is far below
+/// its pack's own 4,096 positions.
+fn folded_pack_processor_with_a_small_configured_window() -> super::Qwen3_5GenerationProcessor {
+    super::Qwen3_5GenerationProcessor::from_folded_pack_text_dialect(
+        &crate::qwen3_5_core::text::tokenizer::tests::ornith_tokenizer_json_bytes(248_056),
+        "synthetic-folded-pack",
+        248_320,
+        4_096,
+        64,
+        8_000,
+        false,
+        false,
+    )
+    .expect("the synthetic folded-pack processor should load")
+}
+
+fn short_chat_command(max_output_tokens: u16) -> ipc_protocol::ChatGenerationCommand {
+    // Only the output budget varies; the rest is the plainest chat turn.
+    let settings = ipc_protocol::ChatGenerationSettings {
+        thinking_budget: None,
+        seed: None,
+        max_output_tokens,
+        repetition_penalty_thousandths: None,
+        top_p_thousandths: None,
+        temperature_thousandths: None,
+    };
+    ipc_protocol::ChatGenerationCommand {
+        structured_generation: None,
+        tool_choice: ipc_protocol::ChatToolChoice::None,
+        tools: Vec::new(),
+        settings,
+        messages: vec![ipc_protocol::ChatMessage::User {
+            images: Vec::new(),
+            content: "Romeo, Romeo, wherefore art thou Romeo?".to_owned(),
+        }],
+        model: "synthetic-folded-pack".to_owned(),
+        request_id: ipc_protocol::RequestId::new(8_008),
+    }
+}
+
+#[test]
+fn should_serve_a_folded_pack_request_beyond_the_configured_window_within_the_pack_range() {
+    use crate::model_generation_processor::ModelGenerationProcessor;
+    let processor = folded_pack_processor_with_a_small_configured_window();
+    assert!(
+        processor
+            .prepare_chat_generation(&short_chat_command(100))
+            .is_ok(),
+        "the configured window is advisory; the pack's positions are the limit"
+    );
+}
+
+#[test]
+fn should_refuse_a_folded_pack_request_beyond_the_pack_range_as_a_context_overflow() {
+    use crate::model_generation_processor::ModelGenerationProcessor;
+    let processor = folded_pack_processor_with_a_small_configured_window();
+    let Err(failure_reason) = processor.prepare_chat_generation(&short_chat_command(5_000)) else {
+        panic!("a request beyond the pack's 4,096 positions must be refused");
+    };
+    assert!(matches!(
+        failure_reason,
+        ChatGenerationFailureReason::ContextLengthExceeded {
+            maximum_context_tokens: 4_096,
+            ..
+        }
+    ));
+}
