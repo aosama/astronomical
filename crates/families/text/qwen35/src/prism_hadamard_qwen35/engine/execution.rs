@@ -7,12 +7,12 @@
 mod active_generation;
 mod active_memory_breakdown;
 mod attribution;
+mod decode_hooks;
 mod engine_trait_impl;
 mod input_injection;
 mod memory_limit;
 mod prefill_chunk;
 mod request_checks;
-mod sampling;
 mod starting_decoder_state;
 
 use crate::prism_hadamard_qwen35::artifacts::ValidatedFoldedPack;
@@ -126,33 +126,4 @@ pub(super) fn keep_prism_derived_limits(execution_core: &mut PrismHadamardQwen35
     execution_core.context_memory_reservation_bytes_per_token = 0;
     execution_core.full_attention_kv_state_growth_tokens =
         PRISM_FULL_ATTENTION_KEY_VALUE_GROWTH_TOKENS as i32;
-}
-
-/// Whether a freshly sampled successor should stay queued: only while output
-/// budget remains. An end-of-sequence successor is recognized when its value
-/// is synchronized, so it is queued like any other token here.
-pub(super) fn successor_stays_pending(remaining_output_tokens: u32) -> bool {
-    remaining_output_tokens > 0
-}
-
-pub(super) fn record_emitted_token(remaining_output_tokens: &mut u32) -> bool {
-    *remaining_output_tokens = (*remaining_output_tokens).saturating_sub(1);
-    *remaining_output_tokens == 0
-}
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn should_count_a_prefill_sample_only_when_it_is_emitted() {
-        let mut remaining_output_tokens = 1;
-        assert!(super::successor_stays_pending(remaining_output_tokens));
-        assert_eq!(remaining_output_tokens, 1);
-
-        assert!(super::record_emitted_token(&mut remaining_output_tokens));
-        assert_eq!(remaining_output_tokens, 0);
-        assert!(
-            !super::successor_stays_pending(remaining_output_tokens),
-            "the successor beyond a one-token output budget must not be queued"
-        );
-    }
 }

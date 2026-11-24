@@ -18,13 +18,8 @@ use crate::{
 };
 
 /// The per-request state only the folded-ternary loop reads.
+#[derive(Default)]
 pub struct PrismRequestExtension {
-    /// Whether the reply reached its own end (an end-of-sequence token or
-    /// the output budget). Every request ends through cancellation, so this
-    /// is what tells a completed reply from one that was stopped.
-    pub(in crate::prism_hadamard_qwen35::engine) has_reached_reply_end: bool,
-    /// Output tokens the reply may still emit, counted down per emission.
-    pub(in crate::prism_hadamard_qwen35::engine) remaining_output_tokens: u32,
     /// Prompt tokens no forward has read yet; prefill chunks drain it.
     pub(in crate::prism_hadamard_qwen35::engine) remaining_prompt_token_ids: Vec<u32>,
 }
@@ -55,8 +50,6 @@ pub(super) fn prism_active_generation(
         target_restored_token_count: u64::from(restored_token_count),
     };
     let engine_extension = PrismRequestExtension {
-        has_reached_reply_end: false,
-        remaining_output_tokens: u32::from(inference_request.max_output_tokens()),
         remaining_prompt_token_ids: request_start.prompt_token_ids[restored_token_count as usize..]
             .to_vec(),
     };
