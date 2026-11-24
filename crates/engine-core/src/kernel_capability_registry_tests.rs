@@ -5,16 +5,13 @@
 //! probes count their invocations so the once-per-worker-process contract is
 //! observable without a GPU.
 
+#[path = "kernel_capability_registry_tests/forced_verdicts.rs"]
 mod forced_verdicts;
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use crate::{
-    CustomKernelVerdict, CustomMetalKernelFamily, CustomMetalKernelProbe, KernelCapabilityError,
-    KernelUnsupportedReason, PerformanceAttribution, WorkerKernelCapabilities,
-    validate_probe_outputs,
-};
+use super::*;
 
 // The capability owner is family-agnostic, so these opaque stand-in
 // identifiers exercise the registry semantics in unit tests; the real family
@@ -180,11 +177,10 @@ fn should_distinguish_execution_failures_from_output_mismatches() {
 #[test]
 fn should_fail_closed_for_a_family_that_was_never_probed() {
     let (weighted_sum_probe, _) = supported_probe_pair(COUNTING_WEIGHTED_SUM_FAMILY);
-    let mut performance_attribution = PerformanceAttribution::disabled();
 
     let capabilities = WorkerKernelCapabilities::probe_custom_kernels(
         &[&weighted_sum_probe],
-        &mut performance_attribution,
+        &mut PerformanceAttribution::disabled(),
     );
 
     assert_eq!(

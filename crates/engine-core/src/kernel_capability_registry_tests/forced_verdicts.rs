@@ -8,7 +8,9 @@ use super::{
     COUNTING_BOUNDARY_CHECKPOINT_FAMILY, COUNTING_EXPERT_DECODE_FAMILY,
     COUNTING_GATED_DELTA_FAMILY, COUNTING_WEIGHTED_SUM_FAMILY,
 };
-use crate::{CustomKernelVerdict, KernelUnsupportedReason, WorkerKernelCapabilities};
+use crate::kernel_capability_registry::{
+    CustomKernelVerdict, KernelUnsupportedReason, WorkerKernelCapabilities,
+};
 
 #[test]
 fn should_force_an_unsupported_verdict_for_a_single_family() {

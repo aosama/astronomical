@@ -7,7 +7,7 @@
 use std::time::Duration;
 
 use model_serving::{
-    CustomKernelVerdict, CustomMetalKernelFamily, KernelUnsupportedReason, PerformanceAttribution,
+    CustomKernelVerdict, KernelUnsupportedReason, PerformanceAttribution,
     SortedExpertWeightedSumProbe, WorkerKernelCapabilities, worker_process_kernel_capabilities,
 };
 use runtime_integration::{MlxMemoryLimits, MlxRuntime};
@@ -41,12 +41,12 @@ async fn should_probe_the_real_sorted_expert_weighted_sum_kernel_once_per_proces
         );
 
         assert_eq!(
-            capabilities.verdict(CustomMetalKernelFamily::SORTED_EXPERT_WEIGHTED_SUM),
+            capabilities.verdict(model_serving::kernel_capability::SORTED_EXPERT_WEIGHTED_SUM),
             CustomKernelVerdict::Supported,
             "a GPU that executes the bounded probe with correct output values must keep the custom kernel"
         );
         assert_eq!(
-            capabilities.verdict(CustomMetalKernelFamily::GATED_DELTA_SEQUENCE),
+            capabilities.verdict(model_serving::kernel_capability::GATED_DELTA_SEQUENCE),
             CustomKernelVerdict::Unsupported(KernelUnsupportedReason::Unprobed),
             "families without a probe in this build stay fail-closed"
         );
@@ -74,10 +74,9 @@ async fn should_reuse_worker_process_capabilities_across_model_loads() {
             std::ptr::eq(first_capabilities, second_capabilities),
             "a second model load in the same worker process must reuse the retained verdicts"
         );
-        assert!(
-            first_capabilities
-                .is_custom_kernel_supported(CustomMetalKernelFamily::SORTED_EXPERT_WEIGHTED_SUM)
-        );
+        assert!(first_capabilities.is_custom_kernel_supported(
+            model_serving::kernel_capability::SORTED_EXPERT_WEIGHTED_SUM
+        ));
     })
     .await;
     assert!(

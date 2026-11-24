@@ -154,7 +154,7 @@ fn should_rotate_bit_identically_through_the_fused_kernel_and_the_composed_route
         &model.runtime,
         &mut crate::PerformanceAttribution::disabled(),
     )
-    .verdict(crate::CustomMetalKernelFamily::PRISM_HADAMARD_SIGNED_ROTATION);
+    .verdict(crate::kernel_capability::PRISM_HADAMARD_SIGNED_ROTATION);
     assert_eq!(
         verdict,
         crate::CustomKernelVerdict::Supported,

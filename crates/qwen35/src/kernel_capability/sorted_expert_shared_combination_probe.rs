@@ -23,12 +23,10 @@ use crate::qwen3_5_core::model_math::sorted_expert_shared_combination::{
     qwen3_5_sorted_expert_shared_combination_kernel,
 };
 
-impl CustomMetalKernelFamily {
-    /// Registry identifier of the fused sorted-expert and shared-expert
-    /// combination family.
-    pub const SORTED_EXPERT_SHARED_COMBINATION: Self =
-        Self::new("sorted_expert_shared_combination");
-}
+/// Registry identifier of the fused sorted-expert and shared-expert
+/// combination family.
+pub const SORTED_EXPERT_SHARED_COMBINATION: CustomMetalKernelFamily =
+    CustomMetalKernelFamily::new("sorted_expert_shared_combination");
 
 /// Supplies this family's probes for the once-per-process probe run.
 pub fn capability_probes(runtime: &MlxRuntime) -> Vec<Box<dyn CustomMetalKernelProbe + '_>> {
@@ -48,7 +46,7 @@ impl<'runtime> SortedExpertSharedCombinationProbe<'runtime> {
 
 impl CustomMetalKernelProbe for SortedExpertSharedCombinationProbe<'_> {
     fn family(&self) -> CustomMetalKernelFamily {
-        CustomMetalKernelFamily::SORTED_EXPERT_SHARED_COMBINATION
+        SORTED_EXPERT_SHARED_COMBINATION
     }
 
     fn probe(&self) -> Result<(), KernelCapabilityError> {

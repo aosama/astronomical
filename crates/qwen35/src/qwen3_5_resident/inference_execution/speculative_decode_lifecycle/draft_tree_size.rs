@@ -31,7 +31,7 @@
 //! round but adds about 3 ms of expert reads, and its fifth row passes the
 //! row-exact tree attention kernel's four.
 
-use crate::speculative_decoding::dflash_drafter::DraftTreeOptions;
+use engine_core::speculative_decoding::dflash_drafter::DraftTreeOptions;
 
 /// Nodes past the anchor for a mixture-of-experts target: a 4-row round.
 pub const MIXTURE_OF_EXPERTS_NODE_BUDGET: usize = 3;

@@ -18,10 +18,10 @@ use std::time::Duration;
 
 use ipc_protocol::RequestId;
 use model_serving::{
-    CustomMetalKernelFamily, GeneratedToken, InferenceEngine, PerformanceAttribution,
-    Qwen3_5ArtifactValidator, Qwen3_5InferenceRequest, Qwen3_5MlxEngineConstructors,
-    Qwen3_5PromptProcessingChunkSizer, Qwen3_5StreamingEngine,
-    install_forced_worker_verdicts_for_tests, worker_process_kernel_capabilities,
+    GeneratedToken, InferenceEngine, PerformanceAttribution, Qwen3_5ArtifactValidator,
+    Qwen3_5InferenceRequest, Qwen3_5MlxEngineConstructors, Qwen3_5PromptProcessingChunkSizer,
+    Qwen3_5StreamingEngine, install_forced_worker_verdicts_for_tests,
+    worker_process_kernel_capabilities,
 };
 use runtime_integration::MlxRuntime;
 use tokio::time::timeout;
@@ -61,9 +61,9 @@ async fn run_forced_fallback_romeo_continuation() {
     let retained_verdicts =
         worker_process_kernel_capabilities(&runtime, &mut PerformanceAttribution::disabled());
     for family in [
-        CustomMetalKernelFamily::SORTED_EXPERT_WEIGHTED_SUM,
-        CustomMetalKernelFamily::GATED_DELTA_SEQUENCE,
-        CustomMetalKernelFamily::GATED_DELTA_BOUNDARY_CHECKPOINT,
+        model_serving::kernel_capability::SORTED_EXPERT_WEIGHTED_SUM,
+        model_serving::kernel_capability::GATED_DELTA_SEQUENCE,
+        model_serving::kernel_capability::GATED_DELTA_BOUNDARY_CHECKPOINT,
     ] {
         assert!(
             !retained_verdicts.is_custom_kernel_supported(family),

@@ -17,11 +17,10 @@ use crate::sparse_experts::{
 };
 use mlx_bridge::MlxMetalKernel;
 
-impl CustomMetalKernelFamily {
-    /// Registry identifier of the sorted expert weighted-sum family. The
-    /// family owns this constant; the capability module stays agnostic.
-    pub const SORTED_EXPERT_WEIGHTED_SUM: Self = Self::new("sorted_expert_weighted_sum");
-}
+/// Registry identifier of the sorted expert weighted-sum family. The
+/// family owns this constant; the capability module stays agnostic.
+pub const SORTED_EXPERT_WEIGHTED_SUM: CustomMetalKernelFamily =
+    CustomMetalKernelFamily::new("sorted_expert_weighted_sum");
 
 /// Supplies this family's probes for the once-per-process probe run. The
 /// worker registration list is the only central touch point.
@@ -49,7 +48,7 @@ impl<'runtime> SortedExpertWeightedSumProbe<'runtime> {
 
 impl CustomMetalKernelProbe for SortedExpertWeightedSumProbe<'_> {
     fn family(&self) -> CustomMetalKernelFamily {
-        CustomMetalKernelFamily::SORTED_EXPERT_WEIGHTED_SUM
+        SORTED_EXPERT_WEIGHTED_SUM
     }
 
     fn probe(&self) -> Result<(), KernelCapabilityError> {

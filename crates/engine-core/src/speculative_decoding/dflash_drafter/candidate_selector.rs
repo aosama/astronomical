@@ -105,7 +105,7 @@ pub(super) fn kept_candidate_ids(
     configuration: &DFlashDrafterConfiguration,
     proposal_logits: &MlxArray,
 ) -> Result<MlxArray, MlxRuntimeError> {
-    crate::gpu_token_sampling::vocabulary_top_k(
+    model_primitives::gpu_token_sampling::vocabulary_top_k(
         runtime,
         proposal_logits,
         configuration.lattice_candidate_count(),

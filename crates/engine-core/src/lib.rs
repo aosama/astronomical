@@ -18,11 +18,15 @@ pub mod expert_paging;
 
 pub mod inference_engine;
 
+pub mod kernel_capability_registry;
+
 pub mod memory;
 
 pub mod mlx_inference_engine;
 
 pub mod model_generation_processor;
+
+pub mod speculative_decoding;
 
 pub mod structured_generation;
 

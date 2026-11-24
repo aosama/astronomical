@@ -1,7 +1,7 @@
 //! Speculative decoding lifecycle for the resident Qwen3.5 engine.
 //!
 //! When a DFlash drafter of either generation that pairs with the target is installed beside it
-//! (`crate::speculative_decoding::drafter_discovery`), the engine hosts it (`engine_draft_runtime`) and
+//! (`engine_core::speculative_decoding::drafter_discovery`), the engine hosts it (`engine_draft_runtime`) and
 //! admits the sessions whose semantics drafting preserves
 //! (`speculation_session_admission`). An admitted session decodes in rounds
 //! (`draft_tree_round`): the drafter proposes a tree of continuations, the
