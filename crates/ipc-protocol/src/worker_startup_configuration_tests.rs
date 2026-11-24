@@ -5,9 +5,8 @@ use std::path::PathBuf;
 use crate::{
     ProtocolReader, ProtocolWriter, WorkerAutoregressiveModelConfiguration,
     WorkerChunkingConfiguration, WorkerCommand, WorkerDecodeAstroExpertCachePolicy,
-    WorkerFlux2KleinModelConfiguration, WorkerImageGenerationModelFamily,
-    WorkerLoadedModelRuntimeConfiguration, WorkerLogLevel, WorkerModelConfiguration,
-    WorkerQwenImage21ModelConfiguration, WorkerStartupConfiguration,
+    WorkerImageGenerationModelConfiguration, WorkerLoadedModelRuntimeConfiguration, WorkerLogLevel,
+    WorkerModelConfiguration, WorkerStartupConfiguration,
 };
 use tokio::io::duplex;
 
@@ -181,64 +180,57 @@ fn should_reject_the_retired_untagged_model_configuration_wire_shape() {
     );
 }
 
-#[test]
-fn should_acknowledge_the_exact_tagged_flux_runtime_configuration_without_chat_fields() {
-    let model_configuration =
-        WorkerModelConfiguration::Flux2Klein(WorkerFlux2KleinModelConfiguration {
-            model_id: "FLUX.2-klein-4B".to_owned(),
-            model_family: WorkerImageGenerationModelFamily::Flux2Klein,
-            artifact_revision: "reviewed-revision".to_owned(),
-        });
-
-    let runtime_configuration = model_configuration.runtime_configuration();
-    assert_eq!(
-        runtime_configuration,
-        WorkerLoadedModelRuntimeConfiguration::Flux2Klein(WorkerFlux2KleinModelConfiguration {
-            model_id: "FLUX.2-klein-4B".to_owned(),
-            model_family: WorkerImageGenerationModelFamily::Flux2Klein,
-            artifact_revision: "reviewed-revision".to_owned(),
-        })
-    );
-    assert_eq!(
-        serde_json::to_value(runtime_configuration).expect("FLUX policy should serialize"),
-        serde_json::json!({
-            "kind": "flux2_klein",
-            "configuration": {
-                "model_id": "FLUX.2-klein-4B",
-                "model_family": "flux2_klein",
-                "artifact_revision": "reviewed-revision"
-            }
-        })
-    );
+fn image_model_configuration(model_family: &str) -> WorkerImageGenerationModelConfiguration {
+    WorkerImageGenerationModelConfiguration {
+        model_id: format!("{model_family}-model"),
+        model_family: model_family.to_owned(),
+        artifact_revision: "reviewed-revision".to_owned(),
+    }
 }
 
 #[test]
-fn should_acknowledge_the_exact_tagged_qwen_image_runtime_configuration_without_chat_fields() {
-    let model_configuration =
-        WorkerModelConfiguration::QwenImage21(WorkerQwenImage21ModelConfiguration {
-            model_id: "qwen-image-2.1".to_owned(),
-            model_family: WorkerImageGenerationModelFamily::QwenImage21,
-            artifact_revision: "reviewed-revision".to_owned(),
-        });
+fn should_acknowledge_each_image_family_as_one_tagged_image_configuration() {
+    for model_family in ["flux2_klein", "qwen_image_21"] {
+        let model_configuration =
+            WorkerModelConfiguration::ImageGeneration(image_model_configuration(model_family));
 
-    let runtime_configuration = model_configuration.runtime_configuration();
-    assert_eq!(
-        runtime_configuration,
-        WorkerLoadedModelRuntimeConfiguration::QwenImage21(WorkerQwenImage21ModelConfiguration {
-            model_id: "qwen-image-2.1".to_owned(),
-            model_family: WorkerImageGenerationModelFamily::QwenImage21,
-            artifact_revision: "reviewed-revision".to_owned(),
-        })
-    );
-    assert_eq!(
-        serde_json::to_value(runtime_configuration).expect("Qwen policy should serialize"),
-        serde_json::json!({
-            "kind": "qwen_image21",
+        let runtime_configuration = model_configuration.runtime_configuration();
+
+        assert_eq!(
+            runtime_configuration,
+            WorkerLoadedModelRuntimeConfiguration::ImageGeneration(image_model_configuration(
+                model_family
+            ))
+        );
+        assert_eq!(
+            serde_json::to_value(runtime_configuration).expect("image policy should serialize"),
+            serde_json::json!({
+                "kind": "image_generation",
+                "configuration": {
+                    "model_id": format!("{model_family}-model"),
+                    "model_family": model_family,
+                    "artifact_revision": "reviewed-revision"
+                }
+            })
+        );
+    }
+}
+
+#[test]
+fn should_reject_the_retired_per_family_image_kinds() {
+    for retired_kind in ["flux2_klein", "qwen_image21"] {
+        let retired_configuration = serde_json::json!({
+            "kind": retired_kind,
             "configuration": {
-                "model_id": "qwen-image-2.1",
-                "model_family": "qwen_image21",
+                "model_id": "image-model",
+                "model_family": "flux2_klein",
                 "artifact_revision": "reviewed-revision"
             }
-        })
-    );
+        });
+
+        assert!(
+            serde_json::from_value::<WorkerModelConfiguration>(retired_configuration).is_err(),
+            "{retired_kind}"
+        );
+    }
 }

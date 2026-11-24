@@ -2,8 +2,8 @@
 
 use ipc_protocol::{
     ChatGenerationCompletionReason, ChatModelCapabilities, ImageGenerationCapabilities,
-    ProtocolReader, ProtocolWriter, RequestId, WorkerEvent, WorkerFlux2KleinModelConfiguration,
-    WorkerImageGenerationModelFamily, WorkerLoadedModelRuntimeConfiguration,
+    ProtocolReader, ProtocolWriter, RequestId, WorkerEvent,
+    WorkerImageGenerationModelConfiguration, WorkerLoadedModelRuntimeConfiguration,
     WorkerModelCapabilities, WorkerRuntimeFeatureConfiguration,
 };
 
@@ -121,10 +121,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                             .astro_ssd_prompt_cache_enabled,
                         astro_ssd_prompt_cache_maximum_size_bytes: startup_configuration
                             .global_astro_ssd_prompt_cache_maximum_size_bytes,
-                        loaded_model: Some(WorkerLoadedModelRuntimeConfiguration::Flux2Klein(
-                            WorkerFlux2KleinModelConfiguration {
+                        loaded_model: Some(WorkerLoadedModelRuntimeConfiguration::ImageGeneration(
+                            WorkerImageGenerationModelConfiguration {
                                 model_id: FLUX_MODEL_ID.to_owned(),
-                                model_family: WorkerImageGenerationModelFamily::Flux2Klein,
+                                model_family: "flux2_klein".to_owned(),
                                 artifact_revision: FLUX_REVISION.to_owned(),
                             },
                         )),

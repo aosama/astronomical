@@ -386,10 +386,7 @@ fn capabilities_match_runtime_configuration(
                         == configuration.maximum_context_tokens.saturating_sub(1)
             }) && capabilities.image_generation.is_none()
         }
-        WorkerLoadedModelRuntimeConfiguration::Flux2Klein(_) => {
-            capabilities.chat.is_none() && capabilities.image_generation.is_some()
-        }
-        WorkerLoadedModelRuntimeConfiguration::QwenImage21(_) => {
+        WorkerLoadedModelRuntimeConfiguration::ImageGeneration(_) => {
             capabilities.chat.is_none() && capabilities.image_generation.is_some()
         }
         helper_configuration => {

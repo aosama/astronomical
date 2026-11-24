@@ -29,31 +29,14 @@ pub struct WorkerLoadedAutoregressiveModelRuntimeConfiguration {
     pub chunking: WorkerChunkingConfiguration,
 }
 
-/// Typed image profile identifier carried without autoregressive placeholders.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum WorkerImageGenerationModelFamily {
-    Flux2Klein,
-    QwenImage21,
-}
-
-/// Typed embedding profile identifier carried without autoregressive placeholders.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum WorkerEmbeddingModelFamily {
-    /// Spelt as the catalog, the family label and the menu app spell it;
-    /// snake case would make it `modern_bert`, which the menu app's status
-    /// decoder refuses.
-    #[serde(rename = "modernbert")]
-    ModernBert,
-}
-
 /// Exact embedding artifact identity required by the selected profile.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct WorkerEmbeddingModelConfiguration {
     pub model_id: String,
-    pub model_family: WorkerEmbeddingModelFamily,
+    /// The family's identifier, as discovery labels it (`modernbert`). The
+    /// worker serves the folder only when it classifies as this family.
+    pub model_family: String,
     pub artifact_revision: String,
     /// Native vector width produced by the loaded artifact.
     pub vector_width: u32,
@@ -61,39 +44,18 @@ pub struct WorkerEmbeddingModelConfiguration {
     pub maximum_input_tokens: u32,
 }
 
-/// Typed decision-model family identifier.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum WorkerDecisionModelFamily {
-    /// A ModernBERT encoder that scores one marker token per option.
-    Laya,
-    /// A Qwen3.5 backbone whose pointer head scores each option's closing
-    /// token against its question's decision token.
-    Kev,
-    /// A Qwen3.5 backbone read once over the whole request, whose joint
-    /// schema head scores every option of every question together.
-    Clef,
-}
-
 /// Exact decision artifact identity required by the selected profile.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct WorkerDecisionModelConfiguration {
     pub model_id: String,
-    pub model_family: WorkerDecisionModelFamily,
+    /// The family's identifier, as discovery labels it (`laya`, `kev` or
+    /// `clef`). The worker serves the folder only when it classifies as this
+    /// family.
+    pub model_family: String,
     pub artifact_revision: String,
     /// The longest sequence one question may occupy.
     pub maximum_tokens_per_question: u32,
-}
-
-/// Typed speech-model family identifier.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum WorkerSpeechModelFamily {
-    /// StyleTTS2 with an iSTFTNet vocoder, reading phonemes.
-    Kokoro,
-    /// A causal flow language model with a Mimi decoder, reading tokens.
-    Phonon,
 }
 
 /// Exact speech artifact identity required by the selected profile.
@@ -101,25 +63,22 @@ pub enum WorkerSpeechModelFamily {
 #[serde(deny_unknown_fields)]
 pub struct WorkerSpeechModelConfiguration {
     pub model_id: String,
-    pub model_family: WorkerSpeechModelFamily,
+    /// The family's identifier, as discovery labels it (`kokoro` or
+    /// `phonon`). The worker serves the folder only when it classifies as
+    /// this family.
+    pub model_family: String,
     pub artifact_revision: String,
 }
 
-/// Exact FLUX artifact identity required by the selected image profile.
+/// Exact image artifact identity required by the selected image profile.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
-pub struct WorkerFlux2KleinModelConfiguration {
+pub struct WorkerImageGenerationModelConfiguration {
     pub model_id: String,
-    pub model_family: WorkerImageGenerationModelFamily,
-    pub artifact_revision: String,
-}
-
-/// Exact Qwen-Image-2.1 artifact identity required by the selected image profile.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct WorkerQwenImage21ModelConfiguration {
-    pub model_id: String,
-    pub model_family: WorkerImageGenerationModelFamily,
+    /// The family's identifier, as discovery labels it (`flux2_klein` or
+    /// `qwen_image_21`). The worker serves the folder only when it
+    /// classifies as this family.
+    pub model_family: String,
     pub artifact_revision: String,
 }
 
@@ -133,8 +92,7 @@ pub struct WorkerQwenImage21ModelConfiguration {
 )]
 pub enum WorkerModelConfiguration {
     Autoregressive(WorkerAutoregressiveModelConfiguration),
-    Flux2Klein(WorkerFlux2KleinModelConfiguration),
-    QwenImage21(WorkerQwenImage21ModelConfiguration),
+    ImageGeneration(WorkerImageGenerationModelConfiguration),
     Embeddings(WorkerEmbeddingModelConfiguration),
     Decisions(WorkerDecisionModelConfiguration),
     Speech(WorkerSpeechModelConfiguration),
@@ -150,8 +108,7 @@ pub enum WorkerModelConfiguration {
 )]
 pub enum WorkerLoadedModelRuntimeConfiguration {
     Autoregressive(WorkerLoadedAutoregressiveModelRuntimeConfiguration),
-    Flux2Klein(WorkerFlux2KleinModelConfiguration),
-    QwenImage21(WorkerQwenImage21ModelConfiguration),
+    ImageGeneration(WorkerImageGenerationModelConfiguration),
     Embeddings(WorkerEmbeddingModelConfiguration),
     Decisions(WorkerDecisionModelConfiguration),
     Speech(WorkerSpeechModelConfiguration),
@@ -166,8 +123,7 @@ impl WorkerModelConfiguration {
             configuration => &configuration.model_id,
             [
                 Self::Autoregressive,
-                Self::Flux2Klein,
-                Self::QwenImage21,
+                Self::ImageGeneration,
                 Self::Embeddings,
                 Self::Decisions,
                 Self::Speech,
@@ -180,8 +136,7 @@ impl WorkerModelConfiguration {
     pub const fn autoregressive(&self) -> Option<&WorkerAutoregressiveModelConfiguration> {
         match self {
             Self::Autoregressive(configuration) => Some(configuration),
-            Self::Flux2Klein(_)
-            | Self::QwenImage21(_)
+            Self::ImageGeneration(_)
             | Self::Embeddings(_)
             | Self::Decisions(_)
             | Self::Speech(_) => None,
@@ -195,11 +150,23 @@ impl WorkerModelConfiguration {
     ) -> Option<&mut WorkerAutoregressiveModelConfiguration> {
         match self {
             Self::Autoregressive(configuration) => Some(configuration),
-            Self::Flux2Klein(_)
-            | Self::QwenImage21(_)
+            Self::ImageGeneration(_)
             | Self::Embeddings(_)
             | Self::Decisions(_)
             | Self::Speech(_) => None,
+        }
+    }
+
+    /// The family identifier this policy was resolved for. A chat policy
+    /// names none, because every chat family takes the same configuration.
+    #[must_use]
+    pub fn model_family(&self) -> Option<&str> {
+        match self {
+            Self::Autoregressive(_) => None,
+            Self::ImageGeneration(configuration) => Some(&configuration.model_family),
+            Self::Embeddings(configuration) => Some(&configuration.model_family),
+            Self::Decisions(configuration) => Some(&configuration.model_family),
+            Self::Speech(configuration) => Some(&configuration.model_family),
         }
     }
 
@@ -211,8 +178,7 @@ impl WorkerModelConfiguration {
             configuration => configuration.into(),
             [
                 Self::Autoregressive,
-                Self::Flux2Klein,
-                Self::QwenImage21,
+                Self::ImageGeneration,
                 Self::Embeddings,
                 Self::Decisions,
                 Self::Speech,
@@ -236,15 +202,9 @@ impl From<&WorkerAutoregressiveModelConfiguration> for WorkerLoadedModelRuntimeC
 
 // The remaining families carry no path, so the loaded form is the
 // configuration itself.
-impl From<&WorkerFlux2KleinModelConfiguration> for WorkerLoadedModelRuntimeConfiguration {
-    fn from(configuration: &WorkerFlux2KleinModelConfiguration) -> Self {
-        Self::Flux2Klein(configuration.clone())
-    }
-}
-
-impl From<&WorkerQwenImage21ModelConfiguration> for WorkerLoadedModelRuntimeConfiguration {
-    fn from(configuration: &WorkerQwenImage21ModelConfiguration) -> Self {
-        Self::QwenImage21(configuration.clone())
+impl From<&WorkerImageGenerationModelConfiguration> for WorkerLoadedModelRuntimeConfiguration {
+    fn from(configuration: &WorkerImageGenerationModelConfiguration) -> Self {
+        Self::ImageGeneration(configuration.clone())
     }
 }
 
@@ -275,8 +235,7 @@ impl WorkerLoadedModelRuntimeConfiguration {
             configuration => &configuration.model_id,
             [
                 Self::Autoregressive,
-                Self::Flux2Klein,
-                Self::QwenImage21,
+                Self::ImageGeneration,
                 Self::Embeddings,
                 Self::Decisions,
                 Self::Speech,
@@ -291,8 +250,7 @@ impl WorkerLoadedModelRuntimeConfiguration {
     ) -> Option<&WorkerLoadedAutoregressiveModelRuntimeConfiguration> {
         match self {
             Self::Autoregressive(configuration) => Some(configuration),
-            Self::Flux2Klein(_)
-            | Self::QwenImage21(_)
+            Self::ImageGeneration(_)
             | Self::Embeddings(_)
             | Self::Decisions(_)
             | Self::Speech(_) => None,

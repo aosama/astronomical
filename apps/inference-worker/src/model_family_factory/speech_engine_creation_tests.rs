@@ -2,8 +2,7 @@ use std::path::PathBuf;
 
 use config::ModelFamily;
 use ipc_protocol::{
-    WorkerDecisionModelConfiguration, WorkerDecisionModelFamily, WorkerModelConfiguration,
-    WorkerSpeechModelConfiguration, WorkerSpeechModelFamily,
+    WorkerDecisionModelConfiguration, WorkerModelConfiguration, WorkerSpeechModelConfiguration,
 };
 
 use super::{SpeechMemoryGrant, unloaded_speech_engine};
@@ -15,7 +14,7 @@ fn memory_grant() -> SpeechMemoryGrant {
     }
 }
 
-fn speech_configuration(model_family: WorkerSpeechModelFamily) -> WorkerModelConfiguration {
+fn speech_configuration(model_family: String) -> WorkerModelConfiguration {
     WorkerModelConfiguration::Speech(WorkerSpeechModelConfiguration {
         model_id: "Kokoro-82M-bf16".to_owned(),
         model_family,
@@ -27,14 +26,14 @@ fn speech_configuration(model_family: WorkerSpeechModelFamily) -> WorkerModelCon
 #[test]
 fn should_build_an_unloaded_engine_for_each_speech_family() {
     for (model_family, worker_family) in [
-        (ModelFamily::Kokoro, WorkerSpeechModelFamily::Kokoro),
-        (ModelFamily::Phonon, WorkerSpeechModelFamily::Phonon),
+        (ModelFamily::Kokoro, "kokoro"),
+        (ModelFamily::Phonon, "phonon"),
     ] {
         assert!(
             unloaded_speech_engine(
                 Some(model_family),
                 PathBuf::from("speech-model"),
-                speech_configuration(worker_family),
+                speech_configuration(worker_family.to_owned()),
                 &memory_grant(),
             )
             .is_ok()
@@ -48,7 +47,7 @@ fn should_refuse_a_speech_configuration_for_another_family() {
     let Err(mismatch_reason) = unloaded_speech_engine(
         Some(ModelFamily::Laya),
         PathBuf::from("decision-model"),
-        speech_configuration(WorkerSpeechModelFamily::Kokoro),
+        speech_configuration("kokoro".to_owned()),
         &memory_grant(),
     ) else {
         panic!("a Laya folder is not a speech model");
@@ -62,7 +61,7 @@ fn should_refuse_a_decision_configuration_for_a_speech_folder() {
     let decision_configuration =
         WorkerModelConfiguration::Decisions(WorkerDecisionModelConfiguration {
             model_id: "laya".to_owned(),
-            model_family: WorkerDecisionModelFamily::Laya,
+            model_family: "laya".to_owned(),
             artifact_revision: "abc".to_owned(),
             maximum_tokens_per_question: 512,
         });

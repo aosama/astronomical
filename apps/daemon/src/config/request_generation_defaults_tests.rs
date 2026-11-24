@@ -14,8 +14,7 @@ use crate::config::request_generation_defaults::{
 use crate::{ResolvedRuntimeConfig, RuntimeModelGenerationDefaults, RuntimeModelPolicy};
 use config::{AstroSsdPromptCacheConfig, LogLevel, LoggingConfig};
 use ipc_protocol::{
-    ChatGenerationSettings, WorkerEmbeddingModelConfiguration, WorkerEmbeddingModelFamily,
-    WorkerModelConfiguration,
+    ChatGenerationSettings, WorkerEmbeddingModelConfiguration, WorkerModelConfiguration,
 };
 
 #[test]
@@ -123,7 +122,7 @@ fn resolved_runtime_config_with_penalty(
                 worker_model_configuration: WorkerModelConfiguration::Embeddings(
                     WorkerEmbeddingModelConfiguration {
                         model_id: "default".to_owned(),
-                        model_family: WorkerEmbeddingModelFamily::ModernBert,
+                        model_family: "modernbert".to_owned(),
                         artifact_revision: "test-revision".to_owned(),
                         vector_width: 1,
                         maximum_input_tokens: 512,

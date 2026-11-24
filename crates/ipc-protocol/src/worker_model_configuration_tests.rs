@@ -59,27 +59,25 @@ async fn should_preserve_generation_and_chunking_configuration_in_acknowledgemen
 }
 
 #[test]
-fn should_spell_the_modernbert_family_as_the_menu_app_reads_it() {
-    let wire_spelling = serde_json::to_string(&crate::WorkerEmbeddingModelFamily::ModernBert)
-        .expect("the family serializes");
+fn should_name_the_family_each_single_model_policy_was_resolved_for() {
+    use crate::{
+        WorkerDecisionModelConfiguration, WorkerImageGenerationModelConfiguration,
+        WorkerModelConfiguration,
+    };
 
-    assert_eq!(wire_spelling, r#""modernbert""#);
-}
+    let image_policy =
+        WorkerModelConfiguration::ImageGeneration(WorkerImageGenerationModelConfiguration {
+            model_id: "fictional/image-model".to_owned(),
+            model_family: "qwen_image_21".to_owned(),
+            artifact_revision: "fictional-revision".to_owned(),
+        });
+    let decision_policy = WorkerModelConfiguration::Decisions(WorkerDecisionModelConfiguration {
+        model_id: "fictional/decision-model".to_owned(),
+        model_family: "clef".to_owned(),
+        artifact_revision: "fictional-revision".to_owned(),
+        maximum_tokens_per_question: 512,
+    });
 
-#[test]
-fn should_read_the_modernbert_family_from_its_catalog_spelling() {
-    let embedding_family: crate::WorkerEmbeddingModelFamily =
-        serde_json::from_str(r#""modernbert""#).expect("the catalog spelling reads");
-
-    assert_eq!(
-        embedding_family,
-        crate::WorkerEmbeddingModelFamily::ModernBert
-    );
-}
-
-#[test]
-fn should_refuse_the_snake_case_spelling_of_the_modernbert_family() {
-    let refusal = serde_json::from_str::<crate::WorkerEmbeddingModelFamily>(r#""modern_bert""#);
-
-    assert!(refusal.is_err(), "{refusal:?}");
+    assert_eq!(image_policy.model_family(), Some("qwen_image_21"));
+    assert_eq!(decision_policy.model_family(), Some("clef"));
 }

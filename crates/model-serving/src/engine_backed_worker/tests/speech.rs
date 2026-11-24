@@ -8,7 +8,7 @@ use std::sync::Mutex;
 
 use ipc_protocol::{
     MAX_IPC_FRAME_BYTES, ProtocolReader, ProtocolWriter, RequestId, SpeechCommand, WorkerCommand,
-    WorkerEvent, WorkerModelConfiguration, WorkerSpeechModelConfiguration, WorkerSpeechModelFamily,
+    WorkerEvent, WorkerModelConfiguration, WorkerSpeechModelConfiguration,
 };
 use speech_contract::{SpeechFailure, SpeechRequest};
 use tokio::io::{duplex, split};
@@ -167,7 +167,7 @@ async fn start_worker_with_a_speech_model() -> (SpeechWorkerHarness, WorkerEvent
             model_directory: "/models/speech".to_owned(),
             model_configuration: WorkerModelConfiguration::Speech(WorkerSpeechModelConfiguration {
                 model_id: SPEECH_MODEL_ID.to_owned(),
-                model_family: WorkerSpeechModelFamily::Kokoro,
+                model_family: "kokoro".to_owned(),
                 artifact_revision: "scripted-revision".to_owned(),
             }),
         },

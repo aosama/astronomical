@@ -1,39 +1,101 @@
-//! Unit contracts for how a discovered decision model is named to the worker.
+//! Unit contracts for how a discovered model's family is named to the worker.
 
-use config::ModelFamily;
-use ipc_protocol::WorkerDecisionModelFamily;
+use std::path::PathBuf;
 
-use super::worker_decision_family;
+use config::{
+    DecisionModelCapabilities, DiscoveredModel, ImageGenerationCapabilities, ModelCapabilities,
+    ModelFamily,
+};
+use ipc_protocol::WorkerModelConfiguration;
+
+use super::ResolvedModelPolicyCatalog;
+
+fn discovered_model(model_family: ModelFamily, capabilities: ModelCapabilities) -> DiscoveredModel {
+    DiscoveredModel {
+        model_id: "fictional-model".to_owned(),
+        provider_model_id: None,
+        model_family,
+        revision: "fictional-revision".to_owned(),
+        model_directory: PathBuf::from("fictional-model"),
+        capabilities,
+        license: None,
+        model_size_bytes: 1,
+    }
+}
+
+fn decision_capabilities() -> DecisionModelCapabilities {
+    DecisionModelCapabilities {
+        maximum_tokens_per_question: 512,
+    }
+}
+
+fn image_capabilities() -> ImageGenerationCapabilities {
+    ImageGenerationCapabilities {
+        supports_text_to_image: true,
+        supports_image_editing: false,
+        supports_multiple_reference_images: false,
+        default_steps: 4,
+        minimum_dimension_pixels: 256,
+        maximum_dimension_pixels: 1_024,
+        dimension_multiple_pixels: 16,
+    }
+}
+
+fn decision_family_sent_to_worker(model_family: ModelFamily) -> String {
+    let decision_model = discovered_model(
+        model_family,
+        ModelCapabilities::Decisions(decision_capabilities()),
+    );
+    match ResolvedModelPolicyCatalog::decisions_policy(&decision_model, &decision_capabilities())
+        .worker_model_configuration
+    {
+        WorkerModelConfiguration::Decisions(decision_configuration) => {
+            decision_configuration.model_family
+        }
+        other_configuration => panic!("a decision policy was {other_configuration:?}"),
+    }
+}
 
 #[test]
-fn should_name_a_kev_model_kev_to_the_worker() {
+fn should_name_each_decision_family_by_its_identifier_to_the_worker() {
+    for (model_family, expected_identifier) in [
+        (ModelFamily::Kev, "kev"),
+        (ModelFamily::Clef, "clef"),
+        (ModelFamily::Laya, "laya"),
+    ] {
+        assert_eq!(
+            decision_family_sent_to_worker(model_family),
+            expected_identifier
+        );
+    }
+}
+
+#[test]
+fn should_name_a_family_without_a_decision_engine_as_itself_for_the_worker_to_refuse() {
     assert_eq!(
-        worker_decision_family(ModelFamily::Kev),
-        WorkerDecisionModelFamily::Kev
+        decision_family_sent_to_worker(ModelFamily::Qwen3_5),
+        "qwen3_5",
+        "only Kev, Clef and Laya folders report a decision capability; the worker refuses any other family at load"
     );
 }
 
 #[test]
-fn should_name_a_clef_model_clef_to_the_worker() {
-    assert_eq!(
-        worker_decision_family(ModelFamily::Clef),
-        WorkerDecisionModelFamily::Clef
-    );
-}
+fn should_send_each_image_family_as_one_image_configuration_naming_the_family() {
+    for (model_family, expected_identifier) in [
+        (ModelFamily::Flux2Klein, "flux2_klein"),
+        (ModelFamily::QwenImage21, "qwen_image_21"),
+    ] {
+        let image_model = discovered_model(
+            model_family,
+            ModelCapabilities::ImageGeneration(image_capabilities()),
+        );
 
-#[test]
-fn should_name_a_laya_model_laya_to_the_worker() {
-    assert_eq!(
-        worker_decision_family(ModelFamily::Laya),
-        WorkerDecisionModelFamily::Laya
-    );
-}
-
-#[test]
-fn should_name_a_family_without_a_decision_engine_laya_for_the_worker_to_refuse() {
-    assert_eq!(
-        worker_decision_family(ModelFamily::Qwen3_5),
-        WorkerDecisionModelFamily::Laya,
-        "only Kev and Laya folders report a decision capability; anything else is refused at load"
-    );
+        match ResolvedModelPolicyCatalog::image_policy(&image_model).worker_model_configuration {
+            WorkerModelConfiguration::ImageGeneration(image_configuration) => {
+                assert_eq!(image_configuration.model_family, expected_identifier);
+                assert_eq!(image_configuration.artifact_revision, "fictional-revision");
+            }
+            other_configuration => panic!("an image policy was {other_configuration:?}"),
+        }
+    }
 }

@@ -16,9 +16,9 @@ use axum::{
     http::Request,
 };
 use ipc_protocol::{
-    ModelLoadInFlight, WorkerChunkingConfiguration, WorkerFlux2KleinModelConfiguration,
-    WorkerImageGenerationModelFamily, WorkerLoadedAutoregressiveModelRuntimeConfiguration,
-    WorkerLoadedModelRuntimeConfiguration, WorkerRuntimeFeatureConfiguration,
+    ModelLoadInFlight, WorkerChunkingConfiguration, WorkerImageGenerationModelConfiguration,
+    WorkerLoadedAutoregressiveModelRuntimeConfiguration, WorkerLoadedModelRuntimeConfiguration,
+    WorkerRuntimeFeatureConfiguration,
 };
 use serde_json::Value;
 use tower::ServiceExt;
@@ -297,10 +297,10 @@ fn flux_runtime_configuration() -> WorkerRuntimeFeatureConfiguration {
         configuration_generation: FLUX_CONFIGURATION_GENERATION.to_owned(),
         astro_ssd_prompt_cache_enabled: false,
         astro_ssd_prompt_cache_maximum_size_bytes: 0,
-        loaded_model: Some(WorkerLoadedModelRuntimeConfiguration::Flux2Klein(
-            WorkerFlux2KleinModelConfiguration {
+        loaded_model: Some(WorkerLoadedModelRuntimeConfiguration::ImageGeneration(
+            WorkerImageGenerationModelConfiguration {
                 model_id: FLUX_MODEL_ID.to_owned(),
-                model_family: WorkerImageGenerationModelFamily::Flux2Klein,
+                model_family: "flux2_klein".to_owned(),
                 artifact_revision: "fictional-revision".to_owned(),
             },
         )),

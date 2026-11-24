@@ -152,10 +152,10 @@
     "loaded_model": {
       "configuration": {
         "artifact_revision": "fictional-revision",
-        "model_family": "qwen_image21",
+        "model_family": "qwen_image_21",
         "model_id": "fictional/qwen-image-model"
       },
-      "kind": "qwen_image21"
+      "kind": "image_generation"
     },
     "astro_ssd_prompt_cache_enabled": false,
     "astro_ssd_prompt_cache_maximum_size_bytes": 0

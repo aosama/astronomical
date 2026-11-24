@@ -1,15 +1,11 @@
 //! Integration contracts for selecting the Qwen-Image-2.1 runtime without loading model artifacts.
 
-use astronomical_inference_worker::model_family_factory::ModelFamilyFactory;
-use config::AstroSsdPromptCacheConfig;
-use ipc_protocol::{
-    WorkerAutoregressiveModelConfiguration, WorkerChunkingConfiguration,
-    WorkerImageGenerationModelFamily, WorkerModelConfiguration,
-    WorkerQwenImage21ModelConfiguration,
-};
+use ipc_protocol::WorkerModelConfiguration;
 use model_serving::{ModelFactory, ModelFactoryRuntime, QwenImage21ImageEngine};
 
-use super::flux2_klein_fixture::CANONICAL_MODEL_ID as FLUX_CANONICAL_MODEL_ID;
+use super::image_factory_support::{
+    autoregressive_configuration, image_model_configuration, model_family_factory,
+};
 use super::qwen_image_21_fixture::{
     CANONICAL_MODEL_ID, REVIEWED_REVISION, mutate_profile, remove_component,
     write_executable_artifact, write_revision,
@@ -153,21 +149,6 @@ fn mutate_revision(model_directory: &std::path::Path) {
     write_revision(model_directory, "ffffffffffffffffffffffffffffffffffffffff");
 }
 
-fn model_family_factory(fixture_directory: &std::path::Path) -> ModelFamilyFactory {
-    ModelFamilyFactory::new(
-        2_000_000_000,
-        200_000_000,
-        AstroSsdPromptCacheConfig::new(
-            fixture_directory.join("astro-ssd-prompt-cache"),
-            1_000_000_000,
-        ),
-        true,
-        ipc_protocol::WorkerDecodeAstroExpertCachePolicy::Baseline,
-        fixture_directory.join("performance-attribution.jsonl"),
-        true,
-    )
-}
-
 fn qwen_model_directory() -> tempfile::TempDir {
     let model_directory =
         tempfile::tempdir().expect("the Qwen-Image-2.1 classification fixture should exist");
@@ -176,30 +157,5 @@ fn qwen_model_directory() -> tempfile::TempDir {
 }
 
 fn qwen_configuration(model_id: &str, artifact_revision: &str) -> WorkerModelConfiguration {
-    WorkerModelConfiguration::QwenImage21(WorkerQwenImage21ModelConfiguration {
-        model_id: model_id.to_owned(),
-        model_family: WorkerImageGenerationModelFamily::QwenImage21,
-        artifact_revision: artifact_revision.to_owned(),
-    })
-}
-
-fn autoregressive_configuration() -> WorkerModelConfiguration {
-    WorkerModelConfiguration::Autoregressive(WorkerAutoregressiveModelConfiguration {
-        model_id: FLUX_CANONICAL_MODEL_ID.to_owned(),
-        maximum_context_tokens: 4_096,
-        maximum_output_tokens: 1_024,
-        chunking: WorkerChunkingConfiguration {
-            fixed_prompt_processing_chunk_size_tokens: 1_024,
-            fixed_ssd_streaming_prompt_processing_chunk_size_tokens: 2_048,
-            full_attention_key_value_growth_tokens: 256,
-            prefill_graph_submission_layer_interval: 0,
-            experimental_ssd_paging_generation_graph_submission_layer_interval: 0,
-            ssd_prompt_cache_block_tokens: None,
-            ssd_prompt_cache_common_prefix_stride_blocks: 4,
-            experimental_decode_stage_attribution_enabled: false,
-            experimental_prefill_stage_attribution_enabled: false,
-            experimental_in_memory_prefix_adoption_enabled: false,
-            experimental_neural_engine_prefill_enabled: false,
-        },
-    })
+    image_model_configuration("qwen_image_21", model_id, artifact_revision)
 }

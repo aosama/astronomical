@@ -16,9 +16,8 @@ use config::{
 use ipc_protocol::{
     WorkerAutoregressiveModelConfiguration, WorkerDecisionModelConfiguration,
     WorkerDecodeAstroExpertCachePolicy, WorkerDiagnosticQwen3_5EngineOverride,
-    WorkerEmbeddingModelConfiguration, WorkerFlux2KleinModelConfiguration,
-    WorkerImageGenerationModelFamily, WorkerModelConfiguration,
-    WorkerQwenImage21ModelConfiguration,
+    WorkerEmbeddingModelConfiguration, WorkerImageGenerationModelConfiguration,
+    WorkerModelConfiguration,
 };
 use model_serving::{
     ClefDecisionEngine, DecisionEngine, EmbeddingEngine, EngineBackedWorker,
@@ -29,6 +28,7 @@ use model_serving::{
     boxed_chat_engine, initialize_prism_hadamard_qwen35_model_with_serving_settings,
 };
 
+mod configured_family_check;
 mod qwen3_5_dense_engine_placement;
 #[cfg(test)]
 mod qwen3_5_dense_engine_placement_tests;
@@ -39,6 +39,7 @@ mod speech_engine_creation;
 #[cfg(test)]
 mod qwen3_5_model_startup_error_tests;
 
+use self::configured_family_check::{FAMILY_MISMATCH_REASON, classified_model_family};
 use self::qwen3_5_model_startup::Qwen3_5EngineSelection;
 
 /// Creates the concrete family processor and engine for a selected model directory.
@@ -241,14 +242,8 @@ impl
         model_configuration: WorkerModelConfiguration,
     ) -> Result<ModelFamilyRuntime, String> {
         let model_directory_path = PathBuf::from(model_directory);
-        let classification_directory_path = model_directory_path.clone();
-        let classification_task_result = tokio::task::spawn_blocking(move || {
-            classify_model_directory(&classification_directory_path)
-                .map_err(|_| "selected model family could not be classified".to_owned())
-        })
-        .await
-        .map_err(|_| "model-family classification task failed".to_owned())?;
-        let model_family = classification_task_result?;
+        let model_family =
+            classified_model_family(model_directory_path.clone(), &model_configuration).await?;
         match (model_family, model_configuration) {
             (
                 Some(ModelFamily::Qwen3_5),
@@ -262,14 +257,14 @@ impl
             }
             (
                 Some(ModelFamily::Flux2Klein),
-                WorkerModelConfiguration::Flux2Klein(model_configuration),
+                WorkerModelConfiguration::ImageGeneration(model_configuration),
             ) => {
                 self.create_flux2_klein_image_engine(model_directory_path, model_configuration)
                     .await
             }
             (
                 Some(ModelFamily::QwenImage21),
-                WorkerModelConfiguration::QwenImage21(model_configuration),
+                WorkerModelConfiguration::ImageGeneration(model_configuration),
             ) => {
                 self.create_qwen_image_21_image_engine(model_directory_path, model_configuration)
                     .await
@@ -304,10 +299,7 @@ impl
                 )
                 .await
             }
-            (Some(_), _) => Err(
-                "selected model configuration does not match its classified model family"
-                    .to_owned(),
-            ),
+            (Some(_), _) => Err(FAMILY_MISMATCH_REASON.to_owned()),
             (None, _) => Err("selected model has an unsupported model family".to_owned()),
         }
     }
@@ -422,7 +414,7 @@ impl ModelFamilyFactory {
     async fn create_flux2_klein_image_engine(
         &self,
         model_directory_path: PathBuf,
-        model_configuration: WorkerFlux2KleinModelConfiguration,
+        model_configuration: WorkerImageGenerationModelConfiguration,
     ) -> Result<ModelFamilyRuntime, String> {
         let verification_directory_path = model_directory_path.clone();
         let verification_task_result = tokio::task::spawn_blocking(move || {
@@ -436,8 +428,7 @@ impl ModelFamilyFactory {
         .await
         .map_err(|_| "FLUX.2 Klein verification task failed".to_owned())?;
         let verified_evidence = verification_task_result?;
-        if model_configuration.model_family != WorkerImageGenerationModelFamily::Flux2Klein
-            || model_configuration.model_id != verified_evidence.canonical_model_id
+        if model_configuration.model_id != verified_evidence.canonical_model_id
             || model_configuration.artifact_revision != verified_evidence.revision
         {
             return Err(
@@ -467,7 +458,7 @@ impl ModelFamilyFactory {
     async fn create_qwen_image_21_image_engine(
         &self,
         model_directory_path: PathBuf,
-        model_configuration: WorkerQwenImage21ModelConfiguration,
+        model_configuration: WorkerImageGenerationModelConfiguration,
     ) -> Result<ModelFamilyRuntime, String> {
         let verification_directory_path = model_directory_path.clone();
         let verification_task_result = tokio::task::spawn_blocking(move || {
@@ -482,8 +473,7 @@ impl ModelFamilyFactory {
         .await
         .map_err(|_| "Qwen-Image-2.1 verification task failed".to_owned())?;
         let verified_evidence = verification_task_result?;
-        if model_configuration.model_family != WorkerImageGenerationModelFamily::QwenImage21
-            || model_configuration.model_id != verified_evidence.canonical_model_id
+        if model_configuration.model_id != verified_evidence.canonical_model_id
             || model_configuration.artifact_revision != verified_evidence.revision
         {
             return Err(

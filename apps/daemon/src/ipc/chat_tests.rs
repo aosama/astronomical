@@ -5,9 +5,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 
 use config::{AstroSsdPromptCacheConfig, LogLevel, LoggingConfig};
-use ipc_protocol::{
-    WorkerEmbeddingModelConfiguration, WorkerEmbeddingModelFamily, WorkerModelConfiguration,
-};
+use ipc_protocol::{WorkerEmbeddingModelConfiguration, WorkerModelConfiguration};
 
 use super::{admitted_catalog_model_id, catalog_model_id_or_requested};
 use crate::worker::health::{WorkerHealthSnapshot, WorkerHealthStatus};
@@ -136,7 +134,7 @@ fn config_with_installed_model() -> Arc<RwLock<ResolvedRuntimeConfig>> {
         worker_model_configuration: WorkerModelConfiguration::Embeddings(
             WorkerEmbeddingModelConfiguration {
                 model_id: INSTALLED_LEAF_MODEL_ID.to_owned(),
-                model_family: WorkerEmbeddingModelFamily::ModernBert,
+                model_family: "modernbert".to_owned(),
                 artifact_revision: "test-revision".to_owned(),
                 vector_width: 1,
                 maximum_input_tokens: 512,

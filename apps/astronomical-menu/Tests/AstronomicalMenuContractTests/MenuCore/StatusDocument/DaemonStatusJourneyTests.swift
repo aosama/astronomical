@@ -40,13 +40,13 @@ final class DaemonStatusJourneyTests: XCTestCase {
 
     await telemetryStore.refresh()
 
-    guard case let .flux2Klein(imageConfiguration) = telemetryStore.statusDocument
+    guard case let .imageGeneration(imageConfiguration) = telemetryStore.statusDocument
       .workerRuntimeFeatureConfiguration?.loadedModel
     else {
       return XCTFail("The tagged image configuration must retain its model family")
     }
     XCTAssertEqual(imageConfiguration.modelIdentifier, "fictional/image-model")
-    XCTAssertEqual(imageConfiguration.modelFamily, .flux2Klein)
+    XCTAssertEqual(imageConfiguration.modelFamily, "flux2_klein")
     XCTAssertNil(telemetryStore.lastStatusRefreshErrorMessage)
   }
 
@@ -61,13 +61,13 @@ final class DaemonStatusJourneyTests: XCTestCase {
 
     await telemetryStore.refresh()
 
-    guard case let .qwenImage21(imageConfiguration) = telemetryStore.statusDocument
+    guard case let .imageGeneration(imageConfiguration) = telemetryStore.statusDocument
       .workerRuntimeFeatureConfiguration?.loadedModel
     else {
       return XCTFail("The tagged Qwen-Image configuration must retain its model family")
     }
     XCTAssertEqual(imageConfiguration.modelIdentifier, "fictional/qwen-image-model")
-    XCTAssertEqual(imageConfiguration.modelFamily, .qwenImage21)
+    XCTAssertEqual(imageConfiguration.modelFamily, "qwen_image_21")
     XCTAssertNil(telemetryStore.lastStatusRefreshErrorMessage)
     XCTAssertEqual(telemetryStore.statusDocument.status, "ready")
     XCTAssertEqual(telemetryStore.statusDocument.menuBarActivityTitle, "Image 50%")
@@ -91,7 +91,7 @@ final class DaemonStatusJourneyTests: XCTestCase {
       return XCTFail("The tagged embedding configuration must retain its model family")
     }
     XCTAssertEqual(embeddingConfiguration.modelIdentifier, "fictional/embedding-model")
-    XCTAssertEqual(embeddingConfiguration.modelFamily, .modernBert)
+    XCTAssertEqual(embeddingConfiguration.modelFamily, "modernbert")
     XCTAssertEqual(embeddingConfiguration.vectorWidth, 768)
     XCTAssertEqual(embeddingConfiguration.maximumInputTokens, 8_192)
     XCTAssertNil(telemetryStore.lastStatusRefreshErrorMessage)

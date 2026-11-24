@@ -135,11 +135,9 @@ pub use worker_model_capabilities::{
 };
 pub use worker_model_configuration::{
     WorkerAutoregressiveModelConfiguration, WorkerDecisionModelConfiguration,
-    WorkerDecisionModelFamily, WorkerEmbeddingModelConfiguration, WorkerEmbeddingModelFamily,
-    WorkerFlux2KleinModelConfiguration, WorkerImageGenerationModelFamily,
+    WorkerEmbeddingModelConfiguration, WorkerImageGenerationModelConfiguration,
     WorkerLoadedAutoregressiveModelRuntimeConfiguration, WorkerLoadedModelRuntimeConfiguration,
-    WorkerModelConfiguration, WorkerQwenImage21ModelConfiguration, WorkerSpeechModelConfiguration,
-    WorkerSpeechModelFamily,
+    WorkerModelConfiguration, WorkerSpeechModelConfiguration,
 };
 pub use worker_startup_configuration::{
     WorkerDecodeAstroExpertCachePolicy, WorkerDiagnosticQwen3_5EngineOverride, WorkerLogLevel,
