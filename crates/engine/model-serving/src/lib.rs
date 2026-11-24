@@ -64,7 +64,10 @@ pub use kev::{KevDecisionEngine, KevDecisionFamily, KevRowLayout, kev_question_r
 #[cfg(feature = "direct-mlx")]
 pub use laya::{LayaDecisionEngine, LayaDecisionFamily, laya_question_sequences};
 #[cfg(feature = "direct-mlx")]
-pub use modernbert::{EncodedEmbeddingInput, ModernBertEmbeddingEngine, encode_embedding_input};
+pub use modernbert::{
+    EncodedEmbeddingInput, ModernBertEmbeddingEngine, ModernBertEmbeddingFamily,
+    encode_embedding_input,
+};
 
 #[doc(hidden)]
 pub use ::artifact_validation::validate_required_file_for_tests;

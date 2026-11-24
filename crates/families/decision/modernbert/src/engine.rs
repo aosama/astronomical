@@ -6,10 +6,13 @@
 //! L2 normalization. Pooling and normalization live in Astronomical; no
 //! third-party embedding package is linked.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::time::Instant;
 
 use ipc_protocol::{EmbeddingsCommand, EmbeddingsFailureReason, WorkerEmbeddingCapabilities};
+use model_primitives::FamilyEngineSettings;
+
+use decision_models::EmbeddingFamilyConstruction;
 use runtime_integration::{
     MlxMemoryLimits, MlxMemorySnapshot, MlxRuntime, MlxRuntimeError, MlxSafetensors,
 };
@@ -57,21 +60,21 @@ impl ModernBertEmbeddingEngine {
     pub fn new(
         model_id: impl Into<String>,
         model_directory: &Path,
-        effective_mlx_memory_ceiling_bytes: usize,
-        mlx_buffer_cache_limit_bytes: usize,
-        performance_attribution_enabled: bool,
-        performance_attribution_log_path: PathBuf,
+        family_engine_settings: &FamilyEngineSettings,
     ) -> Result<Self, EmbeddingsFailureReason> {
         let artifact = ModernBertArtifact::load(model_directory)?;
+        let performance_attribution_enabled =
+            family_engine_settings.performance_attribution_enabled;
         let performance_attribution_log = PerformanceAttributionLog::open(
-            &performance_attribution_log_path,
+            &family_engine_settings.performance_attribution_log_path,
             performance_attribution_enabled,
         )
         .unwrap_or_else(|_| PerformanceAttributionLog::disabled());
         Ok(Self {
             model_id: model_id.into(),
-            effective_mlx_memory_ceiling_bytes,
-            mlx_buffer_cache_limit_bytes,
+            effective_mlx_memory_ceiling_bytes: family_engine_settings
+                .effective_mlx_memory_ceiling_bytes,
+            mlx_buffer_cache_limit_bytes: family_engine_settings.mlx_buffer_cache_limit_bytes,
             weights_payload_bytes: artifact.weights_payload_bytes,
             performance_attribution_enabled,
             performance_attribution_log,
@@ -140,6 +143,26 @@ impl ModernBertEmbeddingEngine {
         }
         telemetry
     }
+}
+
+/// The ModernBERT embedding family, as the worker names it.
+pub struct ModernBertEmbeddingFamily;
+
+impl EmbeddingFamilyConstruction for ModernBertEmbeddingFamily {
+    type Engine = ModernBertEmbeddingEngine;
+    const BUILD_ENGINE: fn(
+        &FamilyEngineSettings,
+        String,
+        &Path,
+    ) -> Result<ModernBertEmbeddingEngine, EmbeddingsFailureReason> = build_modernbert_engine;
+}
+
+fn build_modernbert_engine(
+    family_engine_settings: &FamilyEngineSettings,
+    model_id: String,
+    model_directory: &Path,
+) -> Result<ModernBertEmbeddingEngine, EmbeddingsFailureReason> {
+    ModernBertEmbeddingEngine::new(model_id, model_directory, family_engine_settings)
 }
 
 impl EmbeddingEngine for ModernBertEmbeddingEngine {

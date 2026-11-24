@@ -40,5 +40,6 @@ pub use decision_engine::{
 pub use decision_models::recorded_training::RecordedTrainingEngine;
 
 pub use embedding_engine::{
-    EmbeddingEngine, EmbeddingEngineLoadResult, EmbeddingEngineOutput, EmbeddingUnavailableEngine,
+    EmbeddingEngine, EmbeddingEngineLoadResult, EmbeddingEngineOutput, EmbeddingFamilyConstruction,
+    EmbeddingUnavailableEngine,
 };

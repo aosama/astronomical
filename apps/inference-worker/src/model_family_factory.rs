@@ -16,9 +16,9 @@ use ipc_protocol::{
     WorkerImageGenerationModelConfiguration, WorkerModelConfiguration,
 };
 use model_serving::{
-    DecisionEngine, EmbeddingEngine, EngineBackedWorker, FamilyEngineSettings,
-    ImageArtifactRefusal, ImageFamilyConstruction, ImageGenerationEngine, ModelFactory,
-    ModelFactoryRuntime, ModelFamilyInferenceEngine, ModernBertEmbeddingEngine,
+    DecisionEngine, EmbeddingEngine, EmbeddingFamilyConstruction, EngineBackedWorker,
+    FamilyEngineSettings, ImageArtifactRefusal, ImageFamilyConstruction, ImageGenerationEngine,
+    ModelFactory, ModelFactoryRuntime, ModelFamilyInferenceEngine,
     PrismHadamardQwen35ServingSettings, Qwen3_5GenerationProcessor, RecordedTrainingEngine,
     SpeechEngine, boxed_chat_engine, image_engine_from_evidence,
     initialize_prism_hadamard_qwen35_model_with_serving_settings, verified_image_artifact,
@@ -426,22 +426,19 @@ impl ModelFamilyFactory {
             })
     }
 
-    /// Builds the embeddings engine of a folder the factory classified as
-    /// ModernBERT. The unloaded engine only reads config and tokenizer
-    /// bytes; MLX runtime initialization stays inside load() on the worker
-    /// runtime thread because MLX handles are not Send across task boundaries.
-    async fn create_modern_bert_embeddings_engine(
+    /// Builds an embedding family's unloaded engine. The engine only reads
+    /// its configuration and tokenizer here; MLX work waits for `load()` on
+    /// the worker runtime thread, because MLX handles are not `Send` across
+    /// task boundaries.
+    fn create_embedding_engine<Family: EmbeddingFamilyConstruction>(
         &self,
         model_directory_path: PathBuf,
         model_configuration: WorkerEmbeddingModelConfiguration,
     ) -> Result<ModelFamilyRuntime, String> {
-        let embedding_engine = ModernBertEmbeddingEngine::new(
+        let embedding_engine = (Family::BUILD_ENGINE)(
+            &self.family_engine_settings(),
             model_configuration.model_id,
             &model_directory_path,
-            self.effective_mlx_memory_ceiling_bytes,
-            self.mlx_buffer_cache_limit_bytes,
-            self.performance_attribution_enabled,
-            self.performance_attribution_log_path.clone(),
         )
         .map_err(|failure_reason| {
             format!("selected embedding artifact failed initialization: {failure_reason:?}")

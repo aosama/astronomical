@@ -36,7 +36,7 @@
     ),
     model_family!(
         MODERNBERT_FAMILY_DESCRIPTION,
-        Embedding(build_modernbert_runtime)
+        Embedding(build_embedding_runtime::<model_serving::ModernBertEmbeddingFamily>)
     ),
     model_family!(
         LAYA_FAMILY_DESCRIPTION,
