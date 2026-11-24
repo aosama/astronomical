@@ -18,7 +18,7 @@ mod test_tokenizer;
 mod tokenizer;
 mod whole_model_scorer;
 
-pub use engine::{ClefDecisionEngine, clef_sequence_token_ids};
+pub use engine::{ClefDecisionEngine, ClefDecisionFamily, clef_sequence_token_ids};
 
 use ::decision_models::*;
 use ::qwen35::*;

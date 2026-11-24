@@ -17,7 +17,7 @@ mod served_batches;
 mod tokenizer;
 mod whole_model_scorer;
 
-pub use engine::{LayaDecisionEngine, laya_question_sequences};
+pub use engine::{LayaDecisionEngine, LayaDecisionFamily, laya_question_sequences};
 
 use ::decision_models::*;
 use ::model_primitives::*;
