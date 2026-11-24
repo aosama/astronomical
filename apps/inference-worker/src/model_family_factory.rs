@@ -22,10 +22,10 @@ use ipc_protocol::{
 };
 use model_serving::{
     ClefDecisionEngine, DecisionEngine, EngineBackedWorker, Flux2KleinArtifactProvenance,
-    Flux2KleinImageEngine, KevDecisionEngine, LayaDecisionEngine, ModelFactory,
-    ModelFactoryRuntime, ModelFamilyGenerationProcessor, ModelFamilyImageEngine,
-    ModelFamilyInferenceEngine, ModernBertEmbeddingEngine, PrismHadamardQwen35ServingSettings,
-    QwenImage21ArtifactProvenance, QwenImage21ImageEngine, RecordedTrainingEngine, SpeechEngine,
+    Flux2KleinImageEngine, ImageGenerationEngine, KevDecisionEngine, LayaDecisionEngine,
+    ModelFactory, ModelFactoryRuntime, ModelFamilyGenerationProcessor, ModelFamilyInferenceEngine,
+    ModernBertEmbeddingEngine, PrismHadamardQwen35ServingSettings, QwenImage21ArtifactProvenance,
+    QwenImage21ImageEngine, RecordedTrainingEngine, SpeechEngine,
     initialize_prism_hadamard_qwen35_model_with_serving_settings,
 };
 
@@ -67,7 +67,7 @@ pub struct ModelFamilyFactory {
 type ModelFamilyRuntime = ModelFactoryRuntime<
     ModelFamilyGenerationProcessor,
     ModelFamilyInferenceEngine,
-    ModelFamilyImageEngine,
+    Box<dyn ImageGenerationEngine>,
     ModernBertEmbeddingEngine,
     Box<dyn DecisionEngine>,
     Box<dyn SpeechEngine>,
@@ -77,7 +77,7 @@ pub(crate) type InferenceWorker = EngineBackedWorker<
     ModelFamilyGenerationProcessor,
     ModelFamilyInferenceEngine,
     ModelFamilyFactory,
-    ModelFamilyImageEngine,
+    Box<dyn ImageGenerationEngine>,
     ModernBertEmbeddingEngine,
     Box<dyn DecisionEngine>,
     Box<dyn SpeechEngine>,
@@ -229,7 +229,7 @@ impl
     ModelFactory<
         ModelFamilyGenerationProcessor,
         ModelFamilyInferenceEngine,
-        ModelFamilyImageEngine,
+        Box<dyn ImageGenerationEngine>,
         ModernBertEmbeddingEngine,
         Box<dyn DecisionEngine>,
         Box<dyn SpeechEngine>,
@@ -449,19 +449,17 @@ impl ModelFamilyFactory {
             verified_evidence.revision,
             verified_evidence.license.spdx_identifier(),
         );
-        Ok(ModelFactoryRuntime::Image(
-            ModelFamilyImageEngine::Flux2Klein(
-                Flux2KleinImageEngine::from_model_family_factory(
-                    model_directory_path,
-                    provenance,
-                    self.effective_mlx_memory_ceiling_bytes,
-                    self.mlx_buffer_cache_limit_bytes,
-                    self.performance_attribution_enabled,
-                    self.performance_attribution_log_path.clone(),
-                )
-                .with_floor_raise_limit_bytes(self.floor_raise_limit_bytes),
-            ),
-        ))
+        Ok(ModelFactoryRuntime::Image(Box::new(
+            Flux2KleinImageEngine::from_model_family_factory(
+                model_directory_path,
+                provenance,
+                self.effective_mlx_memory_ceiling_bytes,
+                self.mlx_buffer_cache_limit_bytes,
+                self.performance_attribution_enabled,
+                self.performance_attribution_log_path.clone(),
+            )
+            .with_floor_raise_limit_bytes(self.floor_raise_limit_bytes),
+        )))
     }
 
     /// Verifies the Qwen-Image-2.1 directory against the selected
@@ -497,19 +495,17 @@ impl ModelFamilyFactory {
             verified_evidence.revision,
             verified_evidence.license.spdx_identifier(),
         );
-        Ok(ModelFactoryRuntime::Image(
-            ModelFamilyImageEngine::QwenImage21(
-                QwenImage21ImageEngine::from_model_family_factory(
-                    model_directory_path,
-                    provenance,
-                    self.effective_mlx_memory_ceiling_bytes,
-                    self.mlx_buffer_cache_limit_bytes,
-                    self.performance_attribution_enabled,
-                    self.performance_attribution_log_path.clone(),
-                )
-                .with_floor_raise_limit_bytes(self.floor_raise_limit_bytes),
-            ),
-        ))
+        Ok(ModelFactoryRuntime::Image(Box::new(
+            QwenImage21ImageEngine::from_model_family_factory(
+                model_directory_path,
+                provenance,
+                self.effective_mlx_memory_ceiling_bytes,
+                self.mlx_buffer_cache_limit_bytes,
+                self.performance_attribution_enabled,
+                self.performance_attribution_log_path.clone(),
+            )
+            .with_floor_raise_limit_bytes(self.floor_raise_limit_bytes),
+        )))
     }
 
     /// Initializes the folded-ternary Prism-Hadamard runtime on a blocking
