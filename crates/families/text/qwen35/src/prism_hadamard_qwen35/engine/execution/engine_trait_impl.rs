@@ -6,13 +6,15 @@
 
 use std::time::Instant;
 
-use ipc_protocol::{ExpertMemoryMode, RequestId, WorkerPromptWorkReuse};
+use ipc_protocol::{ExpertMemoryMode, RequestId};
 use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
 use mlx_bridge::MlxArray;
 
+use super::active_generation::{PrismRequestStart, prism_active_generation};
 use super::{
     PrismHadamardQwen35ActiveGeneration, PrismHadamardQwen35InferenceExecution,
+    PrismHadamardQwen35PendingLoad,
     prefill_chunk::{
         capture_completed_prefill_astro_ssd_prompt_cache_block,
         forward_prefill_chunk_hidden_states, prefill_chunk_length, prefill_progress_token,
@@ -45,16 +47,27 @@ impl MlxInferenceExecution for PrismHadamardQwen35InferenceExecution {
     type Request = crate::Qwen3_5InferenceRequest;
 
     fn load(&mut self) -> Result<EngineLoadResult, InferenceEngineError> {
-        let pending = self
-            .pending_startup
+        let pending_load = self
+            .pending_load
             .take()
             .ok_or_else(|| InferenceEngineError::Fatal {
                 reason: "folded-ternary startup was already consumed".to_owned(),
             })?;
-        let mut performance_attribution = pending.performance_attribution;
+        let mut performance_attribution = self
+            .execution_core
+            .take_model_loading_performance_attribution();
+        let validated_pack = self
+            .execution_core
+            .validated_artifact
+            .take()
+            .ok_or_else(|| InferenceEngineError::Fatal {
+                reason: "folded-ternary validated pack was already consumed".to_owned(),
+            })?;
+        let model_id = validated_pack.model_id().to_owned();
+        let model_revision = validated_pack.revision().to_owned();
         let memory_limits = MlxMemoryLimits::new(
-            pending.effective_mlx_memory_ceiling_bytes,
-            pending.mlx_buffer_cache_limit_bytes,
+            pending_load.effective_mlx_memory_ceiling_bytes,
+            pending_load.mlx_buffer_cache_limit_bytes,
         )
         .map_err(|error| InferenceEngineError::Fatal {
             reason: format!("folded-ternary MLX limits failed: {error}"),
@@ -68,7 +81,7 @@ impl MlxInferenceExecution for PrismHadamardQwen35InferenceExecution {
             })?;
         let model = performance_attribution
             .measure_operation(PerformanceOperation::ModelSafetensorsMapping, |_| {
-                PrismHadamardTextModel::new(runtime, pending.validated_pack)
+                PrismHadamardTextModel::new(runtime, validated_pack)
             })
             .map_err(gpu_error)?;
         // The dense resident family always owns its whole weight payload; the
@@ -79,39 +92,20 @@ impl MlxInferenceExecution for PrismHadamardQwen35InferenceExecution {
                 weights_payload_bytes,
             );
         self.minimum_ceiling_bytes = minimum_ceiling_bytes;
-        self.performance_attribution_log = pending.performance_attribution_log;
-        self.attribution_model_id = Some(pending.attribution_model_id.clone());
-        self.attribution_model_revision = Some(pending.attribution_model_revision.clone());
-        self.model = Some(model);
-        if let Some(astro_ssd_prompt_cache_disk_store_config) =
-            pending.astro_ssd_prompt_cache_disk_store_config
-        {
-            let loaded_model = self
-                .model
-                .as_ref()
-                .ok_or_else(|| InferenceEngineError::Fatal {
-                    reason: "folded-ternary model is not loaded".to_owned(),
-                })?;
-            self.astro_ssd_prompt_cache = Some(
-                super::super::astro_ssd_prompt_cache::open_astro_ssd_prompt_cache_store(
-                    pending.effective_mlx_memory_ceiling_bytes,
-                    loaded_model,
-                    &pending.attribution_model_id,
-                    &pending.attribution_model_revision,
-                    pending.configured_astro_ssd_prompt_cache_block_token_count,
-                    pending.ssd_prompt_cache_common_prefix_stride_blocks,
-                    astro_ssd_prompt_cache_disk_store_config,
-                    &mut performance_attribution,
-                )?,
-            );
-        }
+        self.execution_core.model_id = Some(model_id);
+        self.execution_core.model_revision = Some(model_revision);
+        self.execution_core.model = Some(model);
+        self.open_astro_ssd_prompt_cache_store_after_load(
+            &pending_load,
+            &mut performance_attribution,
+        )?;
         self.record_model_loading_performance_attribution(performance_attribution);
         Ok(EngineLoadResult::new()
             .with_expert_memory_mode(Some(ExpertMemoryMode::Resident))
             .with_minimum_mlx_memory_ceiling_bytes(minimum_ceiling_bytes)
             .with_neural_engine_prefill_status(
                 EngineLoadResult::neural_engine_prefill_unsupported_when_enabled(
-                    pending.neural_engine_mlp_prefill_requested,
+                    pending_load.neural_engine_mlp_prefill_requested,
                 ),
             ))
     }
@@ -120,20 +114,22 @@ impl MlxInferenceExecution for PrismHadamardQwen35InferenceExecution {
         &mut self,
         mut inference_request: Self::Request,
     ) -> Result<EngineGenerationStart, InferenceEngineError> {
-        if self.active.is_some() {
+        if self.execution_core.active_request.is_some() {
             return Err(InferenceEngineError::EngineBusy);
         }
-        let model = self
-            .model
-            .as_ref()
-            .ok_or_else(|| InferenceEngineError::Fatal {
-                reason: "folded-ternary model is not loaded".to_owned(),
-            })?;
+        let maximum_context_tokens = self.maximum_context_tokens();
+        let model =
+            self.execution_core
+                .model
+                .as_ref()
+                .ok_or_else(|| InferenceEngineError::Fatal {
+                    reason: "folded-ternary model is not loaded".to_owned(),
+                })?;
         super::request_checks::check_serving_request(
             inference_request.input_token_ids(),
             inference_request.max_output_tokens(),
-            model.pack().config().text().vocab_size,
-            self.maximum_context_tokens,
+            self.execution_core.vocabulary_size,
+            maximum_context_tokens,
         )?;
         let sampling_seed = sampling_seed::resolve_sampling_seed(
             match inference_request.sampling_strategy() {
@@ -147,7 +143,7 @@ impl MlxInferenceExecution for PrismHadamardQwen35InferenceExecution {
                 reason: format!("folded-ternary random key failed: {error}"),
             }
         })?;
-        let thinking_budget = Qwen3_5ThinkingBudgetState::new(
+        let thinking_budget_state = Qwen3_5ThinkingBudgetState::new(
             inference_request.generation_starts_inside_thinking_block(),
             inference_request.thinking_budget(),
             inference_request
@@ -158,45 +154,31 @@ impl MlxInferenceExecution for PrismHadamardQwen35InferenceExecution {
         .map_err(|budget_error| InferenceEngineError::InvalidRequest {
             reason: format!("folded-ternary thinking budget is invalid: {budget_error}"),
         })?;
-        let penalized_token_ids = inference_request.initial_penalized_token_ids();
-        let request_id = inference_request.request_id();
-        let structured_generation = inference_request.take_structured_generation();
         let mut performance_attribution = inference_request.take_performance_attribution();
         let prompt_token_ids = inference_request.input_token_ids().to_vec();
         let (request_decoder_state, restore_outcome) =
             super::starting_decoder_state::starting_request_decoder_state(
                 model,
-                self.astro_ssd_prompt_cache.as_deref(),
+                self.execution_core.astro_ssd_prompt_cache.as_deref(),
                 &prompt_token_ids,
-                &mut self.astro_ssd_prompt_cache_counters,
+                &mut self.execution_core.astro_ssd_prompt_cache_counters,
                 &mut performance_attribution,
             )?;
         let astro_ssd_prompt_cache_restored_token_count = restore_outcome.restored_token_count;
-        let last_published_block_key =
-            restore_outcome.last_restored_astro_ssd_prompt_cache_block_key;
-        self.active = Some(PrismHadamardQwen35ActiveGeneration {
-            request_id,
-            has_reached_reply_end: false,
-            remaining_output_tokens: u32::from(inference_request.max_output_tokens()),
-            prompt_token_ids: prompt_token_ids.clone(),
-            remaining_prompt_token_ids: prompt_token_ids
-                [astro_ssd_prompt_cache_restored_token_count as usize..]
-                .to_vec(),
-            processed_prompt_token_count: astro_ssd_prompt_cache_restored_token_count,
-            astro_ssd_prompt_cache_restored_token_count,
+        let request_start = PrismRequestStart {
+            prompt_token_ids,
             request_decoder_state,
-            // The restored prefix is already in the decoder state, so the
-            // first forward continues right after it.
-            next_position_tokens: astro_ssd_prompt_cache_restored_token_count,
-            pending_sampled_token: None,
-            penalized_token_ids,
+            restored_token_count: astro_ssd_prompt_cache_restored_token_count,
+            last_restored_block_key: restore_outcome.last_restored_astro_ssd_prompt_cache_block_key,
             random_state,
-            request: inference_request,
-            thinking_budget,
-            structured_generation,
-            last_published_block_key,
+            thinking_budget_state,
             performance_attribution,
-        });
+            can_use_astro_ssd_prompt_cache: self.execution_core.astro_ssd_prompt_cache.is_some(),
+        };
+        self.execution_core.active_request = Some(prism_active_generation(
+            &mut inference_request,
+            request_start,
+        ));
         Ok(EngineGenerationStart::with_expert_memory_mode(
             astro_ssd_prompt_cache_restored_token_count,
             ExpertMemoryMode::Resident,
@@ -207,35 +189,42 @@ impl MlxInferenceExecution for PrismHadamardQwen35InferenceExecution {
         &mut self,
         request_id: RequestId,
     ) -> Result<GeneratedToken, InferenceEngineError> {
-        let prompt_processing_chunk_tokens = self.prompt_processing_chunk_tokens;
-        let has_remaining_prompt = self.active.as_ref().is_some_and(|active_generation| {
-            !active_generation.remaining_prompt_token_ids.is_empty()
-        });
+        let prompt_processing_chunk_tokens = self.prompt_processing_chunk_tokens();
+        let has_remaining_prompt =
+            self.execution_core
+                .active_request
+                .as_ref()
+                .is_some_and(|active_generation| {
+                    !active_generation
+                        .engine_extension
+                        .remaining_prompt_token_ids
+                        .is_empty()
+                });
         if has_remaining_prompt {
             return self.prefill_next_chunk(request_id, prompt_processing_chunk_tokens);
         }
-        let model = self
-            .model
-            .as_ref()
-            .ok_or_else(|| InferenceEngineError::Fatal {
-                reason: "folded-ternary model is not loaded".to_owned(),
-            })?;
+        let model =
+            self.execution_core
+                .model
+                .as_ref()
+                .ok_or_else(|| InferenceEngineError::Fatal {
+                    reason: "folded-ternary model is not loaded".to_owned(),
+                })?;
         // Sampled before the active-generation borrow; the one-step-old read
         // still moves with real decode work and keeps the status surface live.
         let mlx_memory_telemetry = self.collect_current_mlx_memory_telemetry();
-        let active = self
-            .active
-            .as_mut()
-            .ok_or_else(|| InferenceEngineError::Fatal {
+        let active = self.execution_core.active_request.as_mut().ok_or_else(|| {
+            InferenceEngineError::Fatal {
                 reason: "folded-ternary has no active generation".to_owned(),
-            })?;
+            }
+        })?;
         if active.request_id != request_id {
             return Err(InferenceEngineError::Fatal {
                 reason: "folded-ternary generation request correlation mismatch".to_owned(),
             });
         }
         let forced_token_id = active
-            .thinking_budget
+            .thinking_budget_state
             .next_forced_transition_token_id()
             .map_err(|budget_error| InferenceEngineError::Fatal {
                 reason: format!("folded-ternary thinking budget failed: {budget_error}"),
@@ -246,12 +235,12 @@ impl MlxInferenceExecution for PrismHadamardQwen35InferenceExecution {
                 // A forced transition replaces whatever was sampled; the
                 // decoder state is still exactly the state after the last
                 // emitted token, so the forced token's forward runs below.
-                active.pending_sampled_token = None;
+                active.pending_generated_token = None;
                 (forced_token_id, None)
             }
             None => {
-                let Some(sampled_token) = active.pending_sampled_token.take() else {
-                    active.has_reached_reply_end = true;
+                let Some(sampled_token) = active.pending_generated_token.take() else {
+                    active.engine_extension.has_reached_reply_end = true;
                     return Ok(GeneratedToken::EndOfSequence);
                 };
                 // Build and submit the successor before reading this token's
@@ -266,29 +255,18 @@ impl MlxInferenceExecution for PrismHadamardQwen35InferenceExecution {
                         &sampled_token,
                     )?;
                 if eos_token_ids.contains(&selected_token_id) {
-                    active.has_reached_reply_end = true;
+                    active.engine_extension.has_reached_reply_end = true;
                     return Ok(GeneratedToken::EndOfSequence);
                 }
                 (selected_token_id, speculated_successor)
             }
         };
-        let was_already_visible = !active.thinking_budget.is_inside_thinking();
-        let is_reasoning_token = active
-            .thinking_budget
-            .observe_committed_token(selected_token_id)
-            .map_err(|budget_error| InferenceEngineError::Fatal {
-                reason: format!("folded-ternary thinking budget failed: {budget_error}"),
-            })?;
-        if was_already_visible
-            && !is_reasoning_token
-            && let Some(structured_generation) = active.structured_generation.as_mut()
-        {
-            structured_generation.accept_visible_token(selected_token_id);
-        }
-        let output_budget_exhausted = record_emitted_token(&mut active.remaining_output_tokens);
+        let is_reasoning_token = observe_committed_token(active, selected_token_id)?;
+        let output_budget_exhausted =
+            record_emitted_token(&mut active.engine_extension.remaining_output_tokens);
         if output_budget_exhausted {
-            active.has_reached_reply_end = true;
-            active.pending_sampled_token = None;
+            active.engine_extension.has_reached_reply_end = true;
+            active.pending_generated_token = None;
             return Ok(reply_token(
                 selected_token_id,
                 is_reasoning_token,
@@ -306,8 +284,9 @@ impl MlxInferenceExecution for PrismHadamardQwen35InferenceExecution {
                 submit_successor(model, active, &token_indices)?
             }
         };
-        active.pending_sampled_token =
-            successor_stays_pending(active.remaining_output_tokens).then_some(successor);
+        active.pending_generated_token =
+            successor_stays_pending(active.engine_extension.remaining_output_tokens)
+                .then_some(successor);
         Ok(reply_token(
             selected_token_id,
             is_reasoning_token,
@@ -334,7 +313,8 @@ impl MlxInferenceExecution for PrismHadamardQwen35InferenceExecution {
         request_id: RequestId,
     ) -> Result<GenerationFinalization, InferenceEngineError> {
         if self
-            .active
+            .execution_core
+            .active_request
             .as_ref()
             .is_some_and(|active_generation| active_generation.request_id != request_id)
         {
@@ -356,22 +336,25 @@ impl MlxInferenceExecution for PrismHadamardQwen35InferenceExecution {
         requested_mlx_memory_ceiling_bytes: u64,
     ) -> Result<MlxMemoryLimitAdjustment, InferenceEngineError> {
         if let Some(refusal) = super::memory_limit::ceiling_change_refusal(
-            self.active.is_some(),
+            self.execution_core.active_request.is_some(),
             requested_mlx_memory_ceiling_bytes,
             self.minimum_ceiling_bytes,
         ) {
             return Err(refusal);
         }
-        self.ceiling_bytes = requested_mlx_memory_ceiling_bytes;
-        self.mlx_buffer_cache_bytes = super::memory_limit::mlx_buffer_cache_bytes_for_ceiling(
+        let mlx_buffer_cache_bytes = super::memory_limit::mlx_buffer_cache_bytes_for_ceiling(
             self.configured_mlx_buffer_cache_bytes,
-            self.ceiling_bytes,
+            requested_mlx_memory_ceiling_bytes,
         );
+        self.execution_core.memory_limits = super::memory_limit::memory_limits_for_ceiling(
+            requested_mlx_memory_ceiling_bytes,
+            mlx_buffer_cache_bytes,
+        )?;
         self.apply_memory_limits_to_loaded_runtime()?;
         let mlx_memory_telemetry = self.collect_current_mlx_memory_telemetry();
         Ok(MlxMemoryLimitAdjustment::new(
-            self.ceiling_bytes,
-            self.mlx_buffer_cache_bytes,
+            requested_mlx_memory_ceiling_bytes,
+            mlx_buffer_cache_bytes,
             self.minimum_ceiling_bytes,
             ExpertMemoryMode::Resident,
             mlx_memory_telemetry,
@@ -388,7 +371,8 @@ impl MlxInferenceExecution for PrismHadamardQwen35InferenceExecution {
         &mut self,
         model_id: Option<String>,
     ) -> Result<Option<WorkerEvent>, InferenceEngineError> {
-        let Some(astro_ssd_prompt_cache) = self.astro_ssd_prompt_cache.as_ref() else {
+        let Some(astro_ssd_prompt_cache) = self.execution_core.astro_ssd_prompt_cache.as_ref()
+        else {
             return Ok(None);
         };
         let clear_outcome = astro_ssd_prompt_cache
@@ -407,19 +391,50 @@ impl MlxInferenceExecution for PrismHadamardQwen35InferenceExecution {
 }
 
 impl PrismHadamardQwen35InferenceExecution {
+    /// Opens the `astro_ssd_prompt_cache` store for the model `load` just
+    /// seated, when the worker configured one, against the startup ceiling
+    /// the store's contract has always been sized with.
+    fn open_astro_ssd_prompt_cache_store_after_load(
+        &mut self,
+        pending_load: &PrismHadamardQwen35PendingLoad,
+        performance_attribution: &mut crate::PerformanceAttribution,
+    ) -> Result<(), InferenceEngineError> {
+        let execution_core = &mut self.execution_core;
+        let Some(astro_ssd_prompt_cache_disk_store_config) = execution_core
+            .astro_ssd_prompt_cache_disk_store_config
+            .clone()
+        else {
+            return Ok(());
+        };
+        let loaded_model =
+            execution_core
+                .model
+                .as_ref()
+                .ok_or_else(|| InferenceEngineError::Fatal {
+                    reason: "folded-ternary model is not loaded".to_owned(),
+                })?;
+        let astro_ssd_prompt_cache =
+            super::super::astro_ssd_prompt_cache::open_astro_ssd_prompt_cache_store(
+                pending_load.effective_mlx_memory_ceiling_bytes,
+                loaded_model,
+                loaded_model.pack().model_id(),
+                loaded_model.pack().revision(),
+                pending_load.configured_astro_ssd_prompt_cache_block_token_count,
+                pending_load.ssd_prompt_cache_common_prefix_stride_blocks,
+                astro_ssd_prompt_cache_disk_store_config,
+                performance_attribution,
+            )?;
+        execution_core.astro_ssd_prompt_cache = Some(astro_ssd_prompt_cache);
+        Ok(())
+    }
+
     /// Applies the current ceiling and `mlx_buffer_cache` limit to the MLX
     /// runtime once the model is loaded; before that, `load` applies them.
     fn apply_memory_limits_to_loaded_runtime(&mut self) -> Result<(), InferenceEngineError> {
-        let Some(model) = self.model.as_mut() else {
+        let memory_limits = self.execution_core.memory_limits;
+        let Some(model) = self.execution_core.model.as_mut() else {
             return Ok(());
         };
-        let memory_limits = MlxMemoryLimits::new(
-            usize::try_from(self.ceiling_bytes).unwrap_or(usize::MAX),
-            usize::try_from(self.mlx_buffer_cache_bytes).unwrap_or(usize::MAX),
-        )
-        .map_err(|error| InferenceEngineError::Fatal {
-            reason: format!("folded-ternary MLX limits failed: {error}"),
-        })?;
         model
             .runtime
             .update_memory_limits(memory_limits)
@@ -430,7 +445,7 @@ impl PrismHadamardQwen35InferenceExecution {
 
     /// Samples the current MLX memory footprint for the status surface.
     pub(super) fn collect_current_mlx_memory_telemetry(&self) -> Option<MlxMemoryTelemetry> {
-        let model = self.model.as_ref()?;
+        let model = self.execution_core.model.as_ref()?;
         let memory_snapshot = match model.runtime.memory_snapshot() {
             Ok(memory_snapshot) => memory_snapshot,
             Err(memory_snapshot_error) => {
@@ -448,7 +463,8 @@ impl PrismHadamardQwen35InferenceExecution {
         let active_memory_breakdown = super::active_memory_breakdown::prism_active_memory_breakdown(
             model,
             active_memory_bytes,
-            self.active
+            self.execution_core
+                .active_request
                 .as_ref()
                 .map(|active_generation| &active_generation.request_decoder_state),
         );
@@ -465,32 +481,32 @@ impl PrismHadamardQwen35InferenceExecution {
     fn prefill_next_chunk(
         &mut self,
         request_id: RequestId,
-        prompt_processing_chunk_tokens: u32,
+        prompt_processing_chunk_tokens: usize,
     ) -> Result<GeneratedToken, InferenceEngineError> {
-        let model = self
-            .model
-            .as_ref()
-            .ok_or_else(|| InferenceEngineError::Fatal {
-                reason: "folded-ternary model is not loaded".to_owned(),
-            })?;
+        let model =
+            self.execution_core
+                .model
+                .as_ref()
+                .ok_or_else(|| InferenceEngineError::Fatal {
+                    reason: "folded-ternary model is not loaded".to_owned(),
+                })?;
         // Sampled before the active-generation borrow; chunk boundaries are
         // far enough apart that one-chunk-old memory reads stay honest.
         let mlx_memory_telemetry = self.collect_current_mlx_memory_telemetry();
-        let active = self
-            .active
-            .as_mut()
-            .ok_or_else(|| InferenceEngineError::Fatal {
+        let active = self.execution_core.active_request.as_mut().ok_or_else(|| {
+            InferenceEngineError::Fatal {
                 reason: "folded-ternary has no active generation".to_owned(),
-            })?;
+            }
+        })?;
         if active.request_id != request_id {
             return Err(InferenceEngineError::Fatal {
                 reason: "folded-ternary prefill request correlation mismatch".to_owned(),
             });
         }
-        let astro_ssd_prompt_cache = self.astro_ssd_prompt_cache.clone();
+        let astro_ssd_prompt_cache = self.execution_core.astro_ssd_prompt_cache.clone();
         let chunk_length = prefill_chunk_length(
-            active.processed_prompt_token_count,
-            active.remaining_prompt_token_ids.len(),
+            active.prefill_cursor,
+            active.engine_extension.remaining_prompt_token_ids.len(),
             prompt_processing_chunk_tokens,
             astro_ssd_prompt_cache
                 .as_ref()
@@ -501,6 +517,7 @@ impl PrismHadamardQwen35InferenceExecution {
                 }),
         );
         let chunk_token_ids: Vec<i32> = active
+            .engine_extension
             .remaining_prompt_token_ids
             .drain(..chunk_length)
             .map(|token_id| token_id as i32)
@@ -508,7 +525,10 @@ impl PrismHadamardQwen35InferenceExecution {
         let chunk_started_at = Instant::now();
         let hidden_states =
             forward_prefill_chunk_hidden_states(model, active, &chunk_token_ids, chunk_length)?;
-        let remaining_prompt_token_ids_are_empty = active.remaining_prompt_token_ids.is_empty();
+        let remaining_prompt_token_ids_are_empty = active
+            .engine_extension
+            .remaining_prompt_token_ids
+            .is_empty();
         let final_logits = submit_prefill_state_evaluation(
             model,
             active,
@@ -524,25 +544,42 @@ impl PrismHadamardQwen35InferenceExecution {
         // Capture runs after the chunk's state graph was submitted: the
         // published tensors chain onto the lazy arrays and materialize during
         // publication, so no extra device synchronization happens here.
-        active.processed_prompt_token_count += chunk_length as u32;
+        active.prefill_cursor += chunk_length;
         capture_completed_prefill_astro_ssd_prompt_cache_block(
             model,
             astro_ssd_prompt_cache.as_deref(),
             active,
         )?;
-        let prompt_work_reuse = WorkerPromptWorkReuse {
-            target_eligible_token_count: active.prompt_token_ids.len() as u64,
-            target_restored_token_count: u64::from(
-                active.astro_ssd_prompt_cache_restored_token_count,
-            ),
-        };
         Ok(prefill_progress_token(
             chunk_length,
             elapsed_millis,
             mlx_memory_telemetry,
-            prompt_work_reuse,
+            active.prompt_work_reuse,
         ))
     }
+}
+
+/// Commits a selected token to the thinking budget and, when it is visible
+/// output that was already visible before it, to the structured constraint.
+/// Returns whether the token is reasoning.
+fn observe_committed_token(
+    active: &mut PrismHadamardQwen35ActiveGeneration,
+    selected_token_id: u32,
+) -> Result<bool, InferenceEngineError> {
+    let was_already_visible = !active.thinking_budget_state.is_inside_thinking();
+    let is_reasoning_token = active
+        .thinking_budget_state
+        .observe_committed_token(selected_token_id)
+        .map_err(|budget_error| InferenceEngineError::Fatal {
+            reason: format!("folded-ternary thinking budget failed: {budget_error}"),
+        })?;
+    if was_already_visible
+        && !is_reasoning_token
+        && let Some(structured_generation) = active.structured_generation.as_mut()
+    {
+        structured_generation.accept_visible_token(selected_token_id);
+    }
+    Ok(is_reasoning_token)
 }
 
 /// Speculates the successor of a sampled token when the output budget allows
@@ -555,14 +592,15 @@ fn speculate_successor_and_synchronize_sampled_token(
     active: &mut PrismHadamardQwen35ActiveGeneration,
     sampled_token: &MlxArray,
 ) -> Result<(u32, Option<MlxArray>), InferenceEngineError> {
-    let speculated_successor =
-        if successor_may_be_speculated(active) && active.remaining_output_tokens > 1 {
-            Some(submit_successor(model, active, sampled_token)?)
-        } else {
-            None
-        };
+    let speculated_successor = if successor_may_be_speculated(active)
+        && active.engine_extension.remaining_output_tokens > 1
+    {
+        Some(submit_successor(model, active, sampled_token)?)
+    } else {
+        None
+    };
     let selected_token_id = active
-        .measure_operation(PerformanceOperation::DecodeSamplingSpan, |_| {
+        .measure_operation_with_request(PerformanceOperation::DecodeSamplingSpan, |_| {
             synchronize_token_id(sampled_token)
         })?;
     Ok((selected_token_id, speculated_successor))
@@ -578,14 +616,14 @@ pub(super) fn submit_successor(
     token_indices: &MlxArray,
 ) -> Result<MlxArray, InferenceEngineError> {
     let logits = active
-        .measure_operation(
+        .measure_operation_with_request(
             PerformanceOperation::DecodeAdvanceSpan,
             |active_generation| active_generation.forward_pass(model, token_indices),
         )
         .map_err(gpu_error)?;
     let successor = sample_token(model, &logits, active)?;
     active
-        .measure_operation(
+        .measure_operation_with_request(
             PerformanceOperation::DecodeAsyncEvaluationSubmission,
             |active_generation| {
                 model

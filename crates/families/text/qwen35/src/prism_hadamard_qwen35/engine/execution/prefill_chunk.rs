@@ -29,14 +29,14 @@ use super::successor_stays_pending;
 /// A durable boundary snapshot is only valid at a forward edge, so at most
 /// one durable publication per forward keeps the boundary snapshot honest.
 pub(super) fn prefill_chunk_length(
-    processed_prompt_token_count: u32,
+    prefill_cursor: usize,
     remaining_prompt_token_count: usize,
-    prompt_processing_chunk_tokens: u32,
+    prompt_processing_chunk_tokens: usize,
     astro_ssd_prompt_cache_block_token_count: Option<usize>,
 ) -> usize {
-    let chunk_start = processed_prompt_token_count as usize;
+    let chunk_start = prefill_cursor;
     let requested_chunk_end =
-        chunk_start + remaining_prompt_token_count.min(prompt_processing_chunk_tokens as usize);
+        chunk_start + remaining_prompt_token_count.min(prompt_processing_chunk_tokens);
     let clamped_chunk_end = match astro_ssd_prompt_cache_block_token_count {
         Some(block_token_count) => astro_ssd_prompt_cache_boundary_clamped_prefill_chunk_end(
             chunk_start,
@@ -61,7 +61,7 @@ pub(super) fn forward_prefill_chunk_hidden_states(
         .array_from_i32(chunk_token_ids, &[1, chunk_length as i32])
         .map_err(gpu_error)?;
     active_generation
-        .measure_operation(
+        .measure_operation_with_request(
             PerformanceOperation::PromptPrefillAdvanceSpan,
             |active_generation| active_generation.forward_hidden_states(model, &token_indices),
         )
@@ -82,9 +82,10 @@ pub(super) fn submit_prefill_state_evaluation(
     let final_logits = if remaining_prompt_token_ids_are_empty {
         Some(
             active_generation
-                .measure_operation(PerformanceOperation::FinalLogitsGraphConstruction, |_| {
-                    model.logits_for_last_hidden_state(hidden_states)
-                })
+                .measure_operation_with_request(
+                    PerformanceOperation::FinalLogitsGraphConstruction,
+                    |_| model.logits_for_last_hidden_state(hidden_states),
+                )
                 .map_err(gpu_error)?,
         )
     } else {
@@ -92,7 +93,7 @@ pub(super) fn submit_prefill_state_evaluation(
     };
     if let Some(final_logits) = final_logits.as_ref() {
         active_generation
-            .measure_operation(
+            .measure_operation_with_request(
                 PerformanceOperation::PrefillStateAsyncEvaluationSubmission,
                 |_| {
                     model
@@ -103,7 +104,7 @@ pub(super) fn submit_prefill_state_evaluation(
             .map_err(gpu_error)?;
     } else {
         active_generation
-            .measure_operation(
+            .measure_operation_with_request(
                 PerformanceOperation::PrefillStateAsyncEvaluationSubmission,
                 |_| model.runtime.evaluate_arrays(&[hidden_states]),
             )
@@ -121,18 +122,18 @@ pub(super) fn queue_prefill_first_token(
     final_logits: Option<&MlxArray>,
 ) -> Result<(), InferenceEngineError> {
     if let Some(final_logits) = final_logits {
-        let first_token = active_generation.measure_operation(
+        let first_token = active_generation.measure_operation_with_request(
             PerformanceOperation::DecodeSamplingSpan,
             |active_generation| sample_token(model, final_logits, active_generation),
         )?;
         active_generation
-            .measure_operation(
+            .measure_operation_with_request(
                 PerformanceOperation::DecodeAsyncEvaluationSubmission,
                 |_| model.runtime.async_eval_arrays(&[&first_token]),
             )
             .map_err(gpu_error)?;
-        active_generation.pending_sampled_token =
-            successor_stays_pending(active_generation.remaining_output_tokens)
+        active_generation.pending_generated_token =
+            successor_stays_pending(active_generation.engine_extension.remaining_output_tokens)
                 .then_some(first_token);
     }
     Ok(())

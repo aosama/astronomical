@@ -10,12 +10,14 @@ use ipc_protocol::WorkerChunkingConfiguration;
 
 use crate::AstroSsdPromptCacheDiskStoreConfig;
 use crate::MlxInferenceEngine;
+use crate::Qwen3_5ExecutionCoreSettings;
 use crate::Qwen3_5GenerationProcessor;
 use crate::prism_hadamard_qwen35::artifacts::FoldedPackValidator;
 use crate::prism_hadamard_qwen35::engine::{
     PrismHadamardQwen35Engine, PrismHadamardQwen35InferenceExecution,
-    PrismHadamardQwen35PendingStartup,
+    PrismHadamardQwen35PendingLoad, PrismHadamardQwen35PendingStartup,
 };
+use crate::qwen3_5_core::shared_execution::prompt_processing_chunk_sizer::Qwen3_5PromptProcessingChunkSizer;
 use crate::{PerformanceAttribution, PerformanceAttributionLog, PerformanceOperation};
 
 /// Serving settings the worker hands to the folded-ternary startup.
@@ -25,7 +27,7 @@ pub struct PrismHadamardQwen35ServingSettings {
     pub maximum_output_tokens: Option<u32>,
     pub prompt_processing_chunk_tokens: u32,
     pub enable_thinking: bool,
-    pub chunking: Option<WorkerChunkingConfiguration>,
+    pub chunking: WorkerChunkingConfiguration,
     pub astro_ssd_prompt_cache_enabled: bool,
     pub astro_ssd_prompt_cache_config: Option<AstroSsdPromptCacheConfig>,
     pub performance_attribution_log_path: Option<std::path::PathBuf>,
@@ -102,40 +104,40 @@ pub fn initialize_prism_hadamard_qwen35_model_with_serving_settings(
                 reason: tokenizer_error.to_string(),
             },
         )?;
-    let performance_attribution_log = match &serving_settings.performance_attribution_log_path {
-        Some(log_path) => {
-            PerformanceAttributionLog::open(log_path, performance_attribution_enabled).map_err(
-                |io_error| PrismHadamardQwen35StartupError::EngineOwner {
-                    reason: format!("attribution log failed: {io_error}"),
-                },
-            )?
-        }
-        None => PerformanceAttributionLog::disabled(),
-    };
+    let performance_attribution_log =
+        open_performance_attribution_log(&serving_settings, performance_attribution_enabled)?;
     let astro_ssd_prompt_cache_disk_store_config =
         astro_ssd_prompt_cache_disk_store_config_for(&serving_settings, &model_id, &model_revision);
-    // The durable astro SSD prompt cache block size and checkpoint stride are astro SSD prompt cache
-    // configuration, not the prefill chunk size: they are contract identity
-    // (the storage fingerprint embeds the block count) and must satisfy the
-    // layout's persistence alignment, which an arbitrary chunk size does not.
-    let (
-        configured_astro_ssd_prompt_cache_block_token_count,
-        ssd_prompt_cache_common_prefix_stride_blocks,
-    ) = resolved_astro_ssd_prompt_cache_layout(&serving_settings);
-    let pending_startup = PrismHadamardQwen35PendingStartup {
-        validated_pack: pack,
+    let pending_load = pending_load_for(
+        &serving_settings,
         effective_mlx_memory_ceiling_bytes,
         mlx_buffer_cache_limit_bytes,
-        maximum_context_tokens: context_window,
-        prompt_processing_chunk_tokens: serving_settings.prompt_processing_chunk_tokens,
+    );
+    // The validated pack, limits and processor facts the shared Qwen 3.5
+    // core keeps; Prism's own rules for the limits it derives differently
+    // are restored when the execution builds the core.
+    let validated_execution_core_settings = Qwen3_5ExecutionCoreSettings {
+        validated_artifact: pack,
+        active_memory_limit_bytes: effective_mlx_memory_ceiling_bytes,
+        mlx_buffer_cache_limit_bytes,
         astro_ssd_prompt_cache_disk_store_config,
-        configured_astro_ssd_prompt_cache_block_token_count,
-        ssd_prompt_cache_common_prefix_stride_blocks,
-        neural_engine_mlp_prefill_requested: neural_engine_mlp_prefill_requested(&serving_settings),
-        performance_attribution,
+        prompt_processing_chunk_sizer: prompt_processing_chunk_sizer_for(&serving_settings)?,
+        think_end_token_id: generation_processor.think_end_token_id(),
+        model_directory: model_directory.to_path_buf(),
+        maximum_context_tokens: context_window,
+        chunking: serving_settings.chunking.clone(),
+        model_loading_performance_attribution: performance_attribution,
         performance_attribution_log,
-        attribution_model_id: model_id,
-        attribution_model_revision: model_revision,
+    }
+    .validate()
+    .map_err(
+        |settings_error| PrismHadamardQwen35StartupError::EngineOwner {
+            reason: settings_error.to_string(),
+        },
+    )?;
+    let pending_startup = PrismHadamardQwen35PendingStartup {
+        validated_execution_core_settings,
+        pending_load,
     };
     let engine = MlxInferenceEngine::new(move || {
         PrismHadamardQwen35InferenceExecution::pending(pending_startup)
@@ -203,36 +205,61 @@ fn astro_ssd_prompt_cache_disk_store_config_for(
         })
 }
 
-fn neural_engine_mlp_prefill_requested(
+/// The startup values only the folded-ternary load reads.
+///
+/// The durable `astro_ssd_prompt_cache` block size and checkpoint stride are
+/// its configuration, not the prefill chunk size: they are contract identity
+/// (the storage fingerprint embeds the block count) and must satisfy the
+/// layout's persistence alignment, which an arbitrary chunk size does not.
+/// The configured block token count is none unless the operator set it, and
+/// the common-prefix stride is floored at one block so checkpointing always
+/// has a stride.
+fn pending_load_for(
     serving_settings: &PrismHadamardQwen35ServingSettings,
-) -> bool {
-    match serving_settings.chunking.as_ref() {
-        Some(chunking) => chunking.experimental_neural_engine_prefill_enabled,
-        None => false,
+    effective_mlx_memory_ceiling_bytes: usize,
+    mlx_buffer_cache_limit_bytes: usize,
+) -> PrismHadamardQwen35PendingLoad {
+    let chunking = &serving_settings.chunking;
+    PrismHadamardQwen35PendingLoad {
+        effective_mlx_memory_ceiling_bytes,
+        mlx_buffer_cache_limit_bytes,
+        configured_astro_ssd_prompt_cache_block_token_count: chunking
+            .ssd_prompt_cache_block_tokens
+            .map(|block_token_count| block_token_count as usize),
+        ssd_prompt_cache_common_prefix_stride_blocks: chunking
+            .ssd_prompt_cache_common_prefix_stride_blocks
+            .max(1),
+        neural_engine_mlp_prefill_requested: chunking.experimental_neural_engine_prefill_enabled,
     }
 }
 
-/// Reads the durable astro SSD prompt cache layout knobs from the chunking settings: the
-/// configured block token count (none unless the operator set it) and the
-/// common-prefix stride in blocks, floored at one so checkpointing always has
-/// a stride. These are astro SSD prompt cache contract identity, not prefill chunking.
-fn resolved_astro_ssd_prompt_cache_layout(
+/// The prefill chunk size, floored at one token as the folded-ternary
+/// engine has always floored it, so the sizer never refuses it.
+fn prompt_processing_chunk_sizer_for(
     serving_settings: &PrismHadamardQwen35ServingSettings,
-) -> (Option<usize>, u32) {
-    let configured_astro_ssd_prompt_cache_block_token_count =
-        serving_settings.chunking.as_ref().and_then(|chunking| {
-            chunking
-                .ssd_prompt_cache_block_tokens
-                .map(|block_token_count| block_token_count as usize)
-        });
-    let ssd_prompt_cache_common_prefix_stride_blocks = serving_settings
-        .chunking
-        .as_ref()
-        .map(|chunking| chunking.ssd_prompt_cache_common_prefix_stride_blocks)
-        .unwrap_or(1)
-        .max(1);
-    (
-        configured_astro_ssd_prompt_cache_block_token_count,
-        ssd_prompt_cache_common_prefix_stride_blocks,
+) -> Result<Qwen3_5PromptProcessingChunkSizer, PrismHadamardQwen35StartupError> {
+    Qwen3_5PromptProcessingChunkSizer::for_chunk_size_tokens(
+        serving_settings.prompt_processing_chunk_tokens.max(1),
     )
+    .map_err(|sizer_error| PrismHadamardQwen35StartupError::EngineOwner {
+        reason: sizer_error.to_string(),
+    })
 }
+
+fn open_performance_attribution_log(
+    serving_settings: &PrismHadamardQwen35ServingSettings,
+    performance_attribution_enabled: bool,
+) -> Result<PerformanceAttributionLog, PrismHadamardQwen35StartupError> {
+    let Some(log_path) = &serving_settings.performance_attribution_log_path else {
+        return Ok(PerformanceAttributionLog::disabled());
+    };
+    PerformanceAttributionLog::open(log_path, performance_attribution_enabled).map_err(|io_error| {
+        PrismHadamardQwen35StartupError::EngineOwner {
+            reason: format!("attribution log failed: {io_error}"),
+        }
+    })
+}
+
+#[cfg(test)]
+#[path = "startup_tests.rs"]
+mod startup_tests;

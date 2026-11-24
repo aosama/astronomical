@@ -4,6 +4,7 @@
 //! `MlxInferenceExecution` engine implementation that drives them lives in
 //! `execution::engine_trait_impl`.
 
+mod active_generation;
 mod active_memory_breakdown;
 mod attribution;
 mod engine_trait_impl;
@@ -14,196 +15,117 @@ mod request_checks;
 mod sampling;
 mod starting_decoder_state;
 
-use ipc_protocol::RequestId;
-use mlx_bridge::MlxArray;
-
-use crate::AstroSsdPromptCacheBlockKey;
-use crate::AstroSsdPromptCacheDiskStore;
-use crate::AstroSsdPromptCacheDiskStoreConfig;
-use crate::Qwen3_5InferenceRequest;
-use crate::Qwen3_5ThinkingBudgetState;
-use crate::RequestDecoderStateStack;
 use crate::prism_hadamard_qwen35::artifacts::ValidatedFoldedPack;
-use crate::prism_hadamard_qwen35::model::{PrismHadamardModelError, PrismHadamardTextModel};
-use crate::{PerformanceAttribution, PerformanceAttributionLog, PerformanceOperation};
-use engine_core::astro_ssd_prompt_cache::AstroSsdPromptCacheCounters;
+use crate::prism_hadamard_qwen35::astro_decoder_state_cache_layout::PRISM_FULL_ATTENTION_KEY_VALUE_GROWTH_TOKENS;
+use crate::prism_hadamard_qwen35::model::PrismHadamardTextModel;
+use crate::qwen3_5_core::engine_request::Qwen3_5EngineRequest;
+use crate::qwen3_5_core::shared_execution::execution_core::{
+    Qwen3_5ExecutionCore, Qwen3_5ExecutionCoreOwner, Qwen3_5ValidatedExecutionCoreSettings,
+};
+
+pub use active_generation::PrismRequestExtension;
 
 /// Everything `load` needs, captured on the caller thread before the owner
-/// thread starts.
+/// thread starts: the validated shared settings and the knobs only the
+/// folded-ternary load reads.
 pub struct PrismHadamardQwen35PendingStartup {
-    pub validated_pack: ValidatedFoldedPack,
+    pub validated_execution_core_settings:
+        Qwen3_5ValidatedExecutionCoreSettings<ValidatedFoldedPack>,
+    pub pending_load: PrismHadamardQwen35PendingLoad,
+}
+
+/// The startup values only the folded-ternary load reads.
+pub struct PrismHadamardQwen35PendingLoad {
+    /// The ceiling and `mlx_buffer_cache` limit the runtime starts with. They
+    /// stay apart from the core's current limits because `load` has always
+    /// started the runtime at the worker's startup values.
     pub effective_mlx_memory_ceiling_bytes: usize,
     pub mlx_buffer_cache_limit_bytes: usize,
-    pub maximum_context_tokens: u32,
-    pub prompt_processing_chunk_tokens: u32,
-    pub astro_ssd_prompt_cache_disk_store_config: Option<AstroSsdPromptCacheDiskStoreConfig>,
     pub configured_astro_ssd_prompt_cache_block_token_count: Option<usize>,
     pub ssd_prompt_cache_common_prefix_stride_blocks: u32,
     /// Lets `load` explain that this engine has no Neural Engine path.
     pub neural_engine_mlp_prefill_requested: bool,
-    pub performance_attribution: PerformanceAttribution,
-    pub performance_attribution_log: PerformanceAttributionLog,
-    pub attribution_model_id: String,
-    pub attribution_model_revision: String,
 }
+
+/// One folded-ternary request in the shared request record: chunked prefill
+/// plus one-token decode.
+pub(super) type PrismHadamardQwen35ActiveGeneration = Qwen3_5EngineRequest<PrismRequestExtension>;
+
+/// The folded-ternary execution core: the state both Qwen 3.5 engines keep,
+/// holding the Prism model, request extension and validated pack.
+pub(super) type PrismHadamardQwen35ExecutionCore =
+    Qwen3_5ExecutionCore<PrismHadamardTextModel, PrismRequestExtension, ValidatedFoldedPack>;
 
 /// The synchronous folded-ternary execution owned by the MLX owner thread.
 pub struct PrismHadamardQwen35InferenceExecution {
-    pending_startup: Option<PrismHadamardQwen35PendingStartup>,
-    pub(super) model: Option<PrismHadamardTextModel>,
-    pub(super) active: Option<PrismHadamardQwen35ActiveGeneration>,
-    pub(super) ceiling_bytes: u64,
-    pub(super) mlx_buffer_cache_bytes: u64,
+    pending_load: Option<PrismHadamardQwen35PendingLoad>,
+    pub(super) execution_core: PrismHadamardQwen35ExecutionCore,
     /// The `mlx_buffer_cache` limit the worker was started with; a lowered
     /// ceiling caps it, and a raised one brings it back.
     pub(super) configured_mlx_buffer_cache_bytes: u64,
     pub(super) minimum_ceiling_bytes: u64,
-    pub(super) maximum_context_tokens: u32,
-    prompt_processing_chunk_tokens: u32,
-    pub(super) astro_ssd_prompt_cache: Option<std::sync::Arc<AstroSsdPromptCacheDiskStore>>,
-    pub(super) astro_ssd_prompt_cache_disk_store_config: Option<AstroSsdPromptCacheDiskStoreConfig>,
-    pub(super) astro_ssd_prompt_cache_counters: AstroSsdPromptCacheCounters,
-    pub(super) performance_attribution_log: PerformanceAttributionLog,
-    pub(super) attribution_model_id: Option<String>,
-    pub(super) attribution_model_revision: Option<String>,
 }
 
-/// One active straight generation: chunked prefill plus one-token decode.
-pub(super) struct PrismHadamardQwen35ActiveGeneration {
-    pub(super) request_id: RequestId,
-    /// Whether the reply reached its own end (an end-of-sequence token or
-    /// the output budget). Every request ends through cancellation, so this
-    /// is what tells a completed reply from one that was stopped.
-    pub(super) has_reached_reply_end: bool,
-    pub(super) remaining_output_tokens: u32,
-    /// The full prompt token ids, so capture can name blocks by their
-    /// absolute token range even after `remaining_prompt_token_ids` drains.
-    pub(super) prompt_token_ids: Vec<u32>,
-    pub(super) remaining_prompt_token_ids: Vec<u32>,
-    /// Absolute count of prompt tokens the forward pass has already covered,
-    /// including any restored prefix.
-    pub(super) processed_prompt_token_count: u32,
-    /// The prompt-prefix token count the astro SSD prompt cache restored; reported
-    /// as reused prompt work on every prefill progress event.
-    pub(super) astro_ssd_prompt_cache_restored_token_count: u32,
-    /// One `astro_decoder_state_cache` entry per decoder layer, threaded
-    /// through every forward exactly as the shared Qwen 3.5 engines do.
-    pub(super) request_decoder_state: RequestDecoderStateStack,
-    /// The position the next forward starts at: every prompt, feedback and
-    /// generated token already forwarded, including any restored prefix. It
-    /// feeds the RoPE offsets, like the shared engine request's own counter.
-    pub(super) next_position_tokens: u32,
-    /// The next sampled token as a lazy `[1, 1]` device array whose graph
-    /// is already submitted, or `None` once generation finished. Its value
-    /// reaches the host only when the next step synchronizes it.
-    pub(super) pending_sampled_token: Option<MlxArray>,
-    /// Sorted unique ids the repetition penalty dampens.
-    pub(super) penalized_token_ids: Vec<u32>,
-    pub(super) random_state: MlxArray,
-    pub(super) request: Qwen3_5InferenceRequest,
-    pub(super) thinking_budget: Qwen3_5ThinkingBudgetState,
-    pub(super) structured_generation:
-        Option<crate::structured_generation::StructuredTokenConstraint>,
-    /// The last block this generation durably published; the parent of the
-    /// next capture's key chain.
-    pub(super) last_published_block_key: Option<AstroSsdPromptCacheBlockKey>,
-    pub(super) performance_attribution: PerformanceAttribution,
-}
+impl Qwen3_5ExecutionCoreOwner for PrismHadamardQwen35InferenceExecution {
+    type Model = PrismHadamardTextModel;
+    type RequestExtension = PrismRequestExtension;
+    type Artifact = ValidatedFoldedPack;
 
-impl PrismHadamardQwen35ActiveGeneration {
-    pub(super) fn measure_operation<OperationOutput>(
-        &mut self,
-        performance_operation: PerformanceOperation,
-        operation: impl FnOnce(&mut Self) -> OperationOutput,
-    ) -> OperationOutput {
-        if !self.performance_attribution.is_enabled() {
-            return operation(self);
-        }
-        let mut performance_attribution = std::mem::replace(
-            &mut self.performance_attribution,
-            PerformanceAttribution::disabled(),
-        );
-        let operation_output = performance_attribution
-            .measure_operation(performance_operation, |_performance_attribution| {
-                operation(self)
-            });
-        self.performance_attribution = performance_attribution;
-        operation_output
+    fn execution_core(&self) -> &PrismHadamardQwen35ExecutionCore {
+        &self.execution_core
     }
 
-    /// Runs the straight forward over `token_indices` (`[1, token_count]`)
-    /// from the next position and returns its final hidden row, then
-    /// advances the position by the forwarded token count.
-    pub(super) fn forward_hidden_states(
-        &mut self,
-        model: &PrismHadamardTextModel,
-        token_indices: &MlxArray,
-    ) -> Result<MlxArray, PrismHadamardModelError> {
-        let final_hidden_state_row = model.forward_hidden_states(
-            token_indices,
-            self.next_position_tokens,
-            &mut self.request_decoder_state,
-        )?;
-        self.advance_position(token_indices);
-        Ok(final_hidden_state_row)
-    }
-
-    /// Runs one whole forward from the next position and returns its final
-    /// logits, then advances the position by the forwarded token count.
-    pub(super) fn forward_pass(
-        &mut self,
-        model: &PrismHadamardTextModel,
-        token_indices: &MlxArray,
-    ) -> Result<MlxArray, PrismHadamardModelError> {
-        let logits = model.forward_pass(
-            token_indices,
-            self.next_position_tokens,
-            &mut self.request_decoder_state,
-        )?;
-        self.advance_position(token_indices);
-        Ok(logits)
-    }
-
-    /// The serving checks cap every request at the model's context window,
-    /// far inside u32, so the position never saturates in practice.
-    fn advance_position(&mut self, forwarded_token_indices: &MlxArray) {
-        let forwarded_token_count = forwarded_token_indices.shape()[1];
-        self.next_position_tokens = self
-            .next_position_tokens
-            .saturating_add_signed(forwarded_token_count);
+    fn execution_core_mut(&mut self) -> &mut PrismHadamardQwen35ExecutionCore {
+        &mut self.execution_core
     }
 }
 
 impl PrismHadamardQwen35InferenceExecution {
     pub fn pending(pending_startup: PrismHadamardQwen35PendingStartup) -> Self {
-        let ceiling_bytes = pending_startup.effective_mlx_memory_ceiling_bytes as u64;
-        let mlx_buffer_cache_bytes = pending_startup.mlx_buffer_cache_limit_bytes as u64;
-        let maximum_context_tokens = pending_startup.maximum_context_tokens;
-        let prompt_processing_chunk_tokens = pending_startup.prompt_processing_chunk_tokens.max(1);
         let PrismHadamardQwen35PendingStartup {
-            astro_ssd_prompt_cache_disk_store_config,
-            ..
-        } = &pending_startup;
-        let astro_ssd_prompt_cache_disk_store_config =
-            astro_ssd_prompt_cache_disk_store_config.clone();
+            validated_execution_core_settings,
+            pending_load,
+        } = pending_startup;
+        let mut execution_core = Qwen3_5ExecutionCore::new(validated_execution_core_settings);
+        keep_prism_derived_limits(&mut execution_core);
         Self {
-            pending_startup: Some(pending_startup),
-            model: None,
-            active: None,
-            ceiling_bytes,
-            mlx_buffer_cache_bytes,
-            configured_mlx_buffer_cache_bytes: mlx_buffer_cache_bytes,
+            configured_mlx_buffer_cache_bytes: pending_load.mlx_buffer_cache_limit_bytes as u64,
+            pending_load: Some(pending_load),
+            execution_core,
             minimum_ceiling_bytes: 1,
-            maximum_context_tokens,
-            prompt_processing_chunk_tokens,
-            astro_ssd_prompt_cache: None,
-            astro_ssd_prompt_cache_disk_store_config,
-            astro_ssd_prompt_cache_counters: AstroSsdPromptCacheCounters::default(),
-            performance_attribution_log: PerformanceAttributionLog::disabled(),
-            attribution_model_id: None,
-            attribution_model_revision: None,
         }
     }
+
+    /// The context window requests are held to, in the u32 form the
+    /// folded-ternary checks take; it was resolved from a u32 at startup.
+    pub(super) fn maximum_context_tokens(&self) -> u32 {
+        u32::try_from(self.execution_core.maximum_position_count).unwrap_or(u32::MAX)
+    }
+
+    /// The prompt tokens one prefill chunk may read at most.
+    pub(super) fn prompt_processing_chunk_tokens(&self) -> usize {
+        self.execution_core
+            .prompt_processing_chunk_sizer
+            .maximum_prompt_processing_chunk_size_tokens()
+    }
+}
+
+/// Replaces the three limits the shared settings derive differently from
+/// what the folded-ternary engine has always used, so moving Prism's state
+/// into the shared core changes no behaviour (issue #2473, Prism step 6):
+///
+/// - The configured context window is Prism's hard limit: it refuses any
+///   request beyond it, where the Qwen 3.5 engines refuse only past the
+///   artifact's own position range.
+/// - Prism sets aside no context memory per token; the artifact's honest
+///   figure would start charging the full-attention keys and values.
+/// - Prism's key-value slabs grow in its own fixed step, whatever the
+///   worker's chunking configuration asks of the Qwen 3.5 engines.
+pub(super) fn keep_prism_derived_limits(execution_core: &mut PrismHadamardQwen35ExecutionCore) {
+    execution_core.hard_maximum_position_count = execution_core.maximum_position_count;
+    execution_core.context_memory_reservation_bytes_per_token = 0;
+    execution_core.full_attention_kv_state_growth_tokens =
+        PRISM_FULL_ATTENTION_KEY_VALUE_GROWTH_TOKENS as i32;
 }
 
 /// Whether a freshly sampled successor should stay queued: only while output

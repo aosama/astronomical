@@ -6,6 +6,8 @@
 //! and back up to the configured limit, so a lowered and then raised ceiling
 //! does not leave the `mlx_buffer_cache` smaller than configured.
 
+use runtime_integration::MlxMemoryLimits;
+
 use crate::InferenceEngineError;
 
 /// Why a ceiling change cannot be applied now, if it cannot.
@@ -35,6 +37,23 @@ pub(super) fn mlx_buffer_cache_bytes_for_ceiling(
     mlx_memory_ceiling_bytes: u64,
 ) -> u64 {
     configured_mlx_buffer_cache_bytes.min(mlx_memory_ceiling_bytes)
+}
+
+/// The MLX limits for an accepted ceiling change. A ceiling at or above the
+/// engine's minimum is positive and the `mlx_buffer_cache` limit never
+/// exceeds it, so the limits always validate; the error path only guards
+/// that rule.
+pub(super) fn memory_limits_for_ceiling(
+    mlx_memory_ceiling_bytes: u64,
+    mlx_buffer_cache_bytes: u64,
+) -> Result<MlxMemoryLimits, InferenceEngineError> {
+    MlxMemoryLimits::new(
+        usize::try_from(mlx_memory_ceiling_bytes).unwrap_or(usize::MAX),
+        usize::try_from(mlx_buffer_cache_bytes).unwrap_or(usize::MAX),
+    )
+    .map_err(|error| InferenceEngineError::Fatal {
+        reason: format!("folded-ternary MLX limits failed: {error}"),
+    })
 }
 
 #[cfg(test)]

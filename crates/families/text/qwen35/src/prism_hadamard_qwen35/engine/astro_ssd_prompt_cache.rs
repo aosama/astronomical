@@ -343,17 +343,19 @@ pub(super) fn capture_completed_astro_ssd_prompt_cache_block(
     let block_token_count = astro_ssd_prompt_cache
         .model_contract_ref()
         .block_token_count();
-    let block_end = active_generation.processed_prompt_token_count as usize;
+    let block_end = active_generation.prefill_cursor;
     if block_end == 0 || !block_end.is_multiple_of(block_token_count) {
         return Ok(());
     }
     let block_start = block_end - block_token_count;
     let model_contract = astro_ssd_prompt_cache.model_contract_ref();
-    let block_tokens = active_generation.prompt_token_ids[block_start..block_end].to_vec();
+    let block_tokens = active_generation.input_token_ids[block_start..block_end].to_vec();
     let block_key = chain_block_key(
         model_contract,
         &block_tokens,
-        active_generation.last_published_block_key.as_ref(),
+        active_generation
+            .last_restored_astro_ssd_prompt_cache_block_key
+            .as_ref(),
     )?;
     let sequence_state_tensors = performance_attribution.measure_operation(
         PerformanceOperation::AstroSsdPromptCacheStateExtraction,
@@ -376,7 +378,7 @@ pub(super) fn capture_completed_astro_ssd_prompt_cache_block(
         .publish_block_with_performance_attribution(
             runtime,
             &block_key,
-            active_generation.last_published_block_key.as_ref(),
+            active_generation.last_restored_astro_ssd_prompt_cache_block_key.as_ref(),
             &sequence_state_tensors,
             &boundary_state_tensors,
             performance_attribution,
@@ -391,7 +393,7 @@ pub(super) fn capture_completed_astro_ssd_prompt_cache_block(
         AstroSsdPromptCachePublicationOutcome::Published
             | AstroSsdPromptCachePublicationOutcome::AlreadyPublished
     ) {
-        active_generation.last_published_block_key = Some(block_key);
+        active_generation.last_restored_astro_ssd_prompt_cache_block_key = Some(block_key);
     }
     Ok(())
 }
@@ -649,14 +651,15 @@ impl PrismHadamardQwen35InferenceExecution {
     /// The persistent astro SSD prompt cache observability event, mirroring every other
     /// family with an open store.
     pub(super) fn astro_ssd_prompt_cache_stats_event(&self) -> Option<WorkerEvent> {
-        let astro_ssd_prompt_cache = self.astro_ssd_prompt_cache.as_ref()?;
+        let astro_ssd_prompt_cache = self.execution_core.astro_ssd_prompt_cache.as_ref()?;
         let global_astro_ssd_prompt_cache_maximum_size_bytes = self
+            .execution_core
             .astro_ssd_prompt_cache_disk_store_config
             .as_ref()
             .map(AstroSsdPromptCacheDiskStoreConfig::global_astro_ssd_prompt_cache_maximum_size_bytes)
             .unwrap_or(0);
         Some(build_astro_ssd_prompt_cache_stats_event(
-            &self.astro_ssd_prompt_cache_counters,
+            &self.execution_core.astro_ssd_prompt_cache_counters,
             u64::try_from(
                 astro_ssd_prompt_cache
                     .model_contract_ref()

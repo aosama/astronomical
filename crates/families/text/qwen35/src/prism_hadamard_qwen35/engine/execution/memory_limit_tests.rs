@@ -1,4 +1,6 @@
-use super::{ceiling_change_refusal, mlx_buffer_cache_bytes_for_ceiling};
+use super::{
+    ceiling_change_refusal, memory_limits_for_ceiling, mlx_buffer_cache_bytes_for_ceiling,
+};
 use crate::InferenceEngineError;
 
 const ONE_GB: u64 = 1_073_741_824;
@@ -67,5 +69,40 @@ fn should_reject_a_zero_ceiling_before_the_model_loads() {
     assert!(matches!(
         refusal,
         Some(InferenceEngineError::MlxMemoryLimitRejected { .. })
+    ));
+}
+
+// Positive: an accepted ceiling becomes the MLX limits the core keeps.
+#[test]
+fn should_build_the_limits_of_an_accepted_ceiling() {
+    let memory_limits = memory_limits_for_ceiling(24 * ONE_GB, 2 * ONE_GB)
+        .expect("a ceiling above its mlx_buffer_cache limit must validate");
+    assert_eq!(
+        memory_limits.active_memory_limit_bytes() as u64,
+        24 * ONE_GB
+    );
+    assert_eq!(
+        memory_limits.mlx_buffer_cache_limit_bytes() as u64,
+        2 * ONE_GB
+    );
+}
+
+// Edge: an mlx_buffer_cache limit capped down to the ceiling still validates.
+#[test]
+fn should_accept_an_mlx_buffer_cache_limit_equal_to_the_ceiling() {
+    let capped_mlx_buffer_cache_bytes = mlx_buffer_cache_bytes_for_ceiling(8 * ONE_GB, 4 * ONE_GB);
+    assert!(memory_limits_for_ceiling(4 * ONE_GB, capped_mlx_buffer_cache_bytes).is_ok());
+}
+
+// Negative: limits the accepted-ceiling rule never produces are refused.
+#[test]
+fn should_refuse_limits_that_break_the_ceiling_rule() {
+    assert!(matches!(
+        memory_limits_for_ceiling(0, 0),
+        Err(InferenceEngineError::Fatal { .. })
+    ));
+    assert!(matches!(
+        memory_limits_for_ceiling(ONE_GB, 2 * ONE_GB),
+        Err(InferenceEngineError::Fatal { .. })
     ));
 }

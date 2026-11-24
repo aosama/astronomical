@@ -18,21 +18,24 @@ impl PrismHadamardQwen35InferenceExecution {
             return;
         }
         let mlx_memory_snapshot = self
+            .execution_core
             .model
             .as_ref()
             .and_then(|model| model.runtime.memory_snapshot().ok());
         let Some(report) = performance_attribution.finish_model_loading(
             ModelLoadingPerformanceAttributionMetadata {
                 outcome: PerformanceAttributionOutcome::Success,
-                model_id: self.attribution_model_id.clone(),
-                model_revision: self.attribution_model_revision.clone(),
+                model_id: self.execution_core.model_id.clone(),
+                model_revision: self.execution_core.model_revision.clone(),
                 prefill_transient_observation_completed: false,
                 prefill_observed_transient_high_water_bytes: 0,
                 total_artifact_payload_bytes: self
+                    .execution_core
                     .model
                     .as_ref()
                     .map(|model| model.pack().total_payload_bytes()),
                 resident_model_payload_bytes: self
+                    .execution_core
                     .model
                     .as_ref()
                     .map(|model| model.pack().total_payload_bytes()),
@@ -51,7 +54,11 @@ impl PrismHadamardQwen35InferenceExecution {
         ) else {
             return;
         };
-        if let Err(write_error) = self.performance_attribution_log.record(&report) {
+        if let Err(write_error) = self
+            .execution_core
+            .performance_attribution_log
+            .record(&report)
+        {
             tracing::warn!(
                 error = %write_error,
                 "folded-ternary model-loading attribution could not be recorded"
@@ -60,12 +67,13 @@ impl PrismHadamardQwen35InferenceExecution {
     }
 
     pub(super) fn take_active_and_record_generation_attribution(&mut self) {
-        let Some(mut active_generation) = self.active.take() else {
+        let Some(mut active_generation) = self.execution_core.active_request.take() else {
             return;
         };
         let request_id = active_generation.request_id;
-        let generation_outcome = generation_outcome(active_generation.has_reached_reply_end);
-        let configured_maximum_output_tokens = active_generation.request.max_output_tokens();
+        let generation_outcome =
+            generation_outcome(active_generation.engine_extension.has_reached_reply_end);
+        let configured_maximum_output_tokens = active_generation.maximum_output_tokens;
         let performance_attribution = std::mem::replace(
             &mut active_generation.performance_attribution,
             PerformanceAttribution::disabled(),
@@ -89,8 +97,8 @@ impl PrismHadamardQwen35InferenceExecution {
             return;
         }
         let (Some(model_id), Some(model_revision)) = (
-            self.attribution_model_id.clone(),
-            self.attribution_model_revision.clone(),
+            self.execution_core.model_id.clone(),
+            self.execution_core.model_revision.clone(),
         ) else {
             tracing::warn!(
                 request_id = request_id.value(),
@@ -99,6 +107,7 @@ impl PrismHadamardQwen35InferenceExecution {
             return;
         };
         let mlx_memory_snapshot = self
+            .execution_core
             .model
             .as_ref()
             .and_then(|model| model.runtime.memory_snapshot().ok());
@@ -125,7 +134,11 @@ impl PrismHadamardQwen35InferenceExecution {
         else {
             return;
         };
-        if let Err(write_error) = self.performance_attribution_log.record(&report) {
+        if let Err(write_error) = self
+            .execution_core
+            .performance_attribution_log
+            .record(&report)
+        {
             tracing::warn!(
                 request_id = request_id.value(),
                 error = %write_error,

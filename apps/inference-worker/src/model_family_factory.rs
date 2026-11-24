@@ -437,7 +437,7 @@ impl ModelFamilyFactory {
                         // template and the shared processor honors
                         // per-request thinking budgets.
                         enable_thinking: true,
-                        chunking: Some(model_configuration.chunking.clone()),
+                        chunking: model_configuration.chunking.clone(),
                         astro_ssd_prompt_cache_enabled,
                         astro_ssd_prompt_cache_config: astro_ssd_prompt_cache_enabled
                             .then_some(astro_ssd_prompt_cache_config),
