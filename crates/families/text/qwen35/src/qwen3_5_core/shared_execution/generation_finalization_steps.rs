@@ -37,6 +37,17 @@ pub trait Qwen3_5FinalizationHooks: Qwen3_5ExecutionCoreOwner<Model: Qwen3_5Text
     /// engine serves; `None` while nothing has measured one.
     fn measured_prompt_mlx_working_buffer_bytes(&self) -> Option<u64>;
 
+    /// Adds what this engine reports beyond the shared finalization; the
+    /// streaming engine adds its expert streaming figures.
+    fn complete_generation_finalization(
+        &self,
+        generation_finalization: GenerationFinalization,
+        _expert_memory_mode: Option<ipc_protocol::ExpertMemoryMode>,
+        _expert_residency_telemetry: Option<ExpertResidencyTelemetry>,
+    ) -> GenerationFinalization {
+        generation_finalization
+    }
+
     /// Ends the request: the engine's own order of dropping, governing and
     /// releasing memory, then the record and the finalization report.
     fn finalize_generation_request(

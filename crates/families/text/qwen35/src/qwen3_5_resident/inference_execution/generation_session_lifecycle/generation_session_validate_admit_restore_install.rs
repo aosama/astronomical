@@ -320,36 +320,20 @@ impl Qwen3_5EngineState {
         Option<astro_ssd_prompt_cache_restore::AstroSsdPromptCacheRestoreOutcome>,
         InferenceEngineError,
     > {
-        if self.core.astro_ssd_prompt_cache.is_some() && can_use_astro_ssd_prompt_cache {
-            // Split the borrow: take the `astro_ssd_prompt_cache` out temporarily so the engine
-            // state (including counters) can be mutated as &mut self while the
-            // disk store is used as a plain borrowed reference.
-            let astro_ssd_prompt_cache = self.core.astro_ssd_prompt_cache.take();
-            let restore_result =
-                if let Some(astro_ssd_prompt_cache) = astro_ssd_prompt_cache.as_ref() {
-                    astro_ssd_prompt_cache_restore::restore_astro_ssd_prompt_cache_prefix(
-                        self,
-                        &astro_ssd_prompt_cache_restore::AstroSsdPromptCacheRestoreRequest {
-                            request_id: inference_request.request_id(),
-                            astro_ssd_prompt_cache,
-                            prompt_token_ids,
-                            block_causal_inputs: astro_ssd_prompt_cache_block_causal_inputs,
-                            total_context_tokens: reserved_context_tokens,
-                        },
-                        request_decoder_state,
-                        performance_attribution,
-                    )
-                    .map(Some)
-                } else {
-                    Ok(None)
-                };
-            // Restores can fail closed for data correctness, but the disk-store owner must
-            // remain installed for the next independent request. Returning while it is
-            // temporarily taken would silently turn later traffic into a mode with the `astro_ssd_prompt_cache` disabled.
-            self.core.astro_ssd_prompt_cache = astro_ssd_prompt_cache;
-            return restore_result;
+        if !can_use_astro_ssd_prompt_cache {
+            return Ok(None);
         }
-        Ok(None)
+        astro_ssd_prompt_cache_restore::restore_prefix_keeping_store_installed(
+            self,
+            astro_ssd_prompt_cache_restore::AstroSsdPromptCachePrefixRestore {
+                request_id: inference_request.request_id(),
+                prompt_token_ids,
+                block_causal_inputs: astro_ssd_prompt_cache_block_causal_inputs,
+                total_context_tokens: reserved_context_tokens,
+            },
+            request_decoder_state,
+            performance_attribution,
+        )
     }
 
     /// Installs the assembled session as the engine's active request and
