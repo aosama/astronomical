@@ -91,13 +91,13 @@ workspace = true
 app-store-state-root = ["config/app-store-state-root"]
 
 [dependencies]
-config = { path = "../../crates/config" }
-decision-contract = { path = "../../crates/decision-contract" }
-ipc-protocol = { path = "../../crates/ipc-protocol" }
-download-catalog = { path = "../../crates/download-catalog" }
-lowercase-hex = { path = "../../crates/lowercase-hex" }
-rest-contract = { path = "../../crates/rest-contract" }
-speech-contract = { path = "../../crates/speech-contract" }
+config = { path = "../../crates/foundation/config" }
+decision-contract = { path = "../../crates/contracts/decision-contract" }
+ipc-protocol = { path = "../../crates/contracts/ipc-protocol" }
+download-catalog = { path = "../../crates/tooling/download-catalog" }
+lowercase-hex = { path = "../../crates/foundation/lowercase-hex" }
+rest-contract = { path = "../../crates/contracts/rest-contract" }
+speech-contract = { path = "../../crates/contracts/speech-contract" }
 axum.workspace = true
 base64.workspace = true
 bytes.workspace = true

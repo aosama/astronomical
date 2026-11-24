@@ -90,9 +90,9 @@ fn should_watch_the_workers_transitive_local_closure_and_the_additional_paths() 
         watched_paths,
         expected_paths_with(&[
             "apps/inference-worker",
-            "crates/model-serving",
-            "crates/qwen35",
-            "crates/native-identity",
+            "crates/engine/model-serving",
+            "crates/families/text/qwen35",
+            "crates/foundation/native-identity",
         ])
     );
 }
@@ -127,7 +127,7 @@ fn should_list_a_diamond_dependency_once_in_sorted_order() {
         model_loading_paths(&metadata_json_text, Path::new(REPOSITORY_ROOT)).unwrap();
     let memory_policy_entries = watched_paths
         .iter()
-        .filter(|watched_path| watched_path.as_str() == "crates/memory-policy")
+        .filter(|watched_path| watched_path.as_str() == "crates/foundation/memory-policy")
         .count();
     assert_eq!(memory_policy_entries, 1);
     let mut sorted_paths = watched_paths.clone();
@@ -240,7 +240,7 @@ fn should_follow_a_dependency_whose_kind_is_spelled_normal() {
     ]);
     let watched_paths =
         model_loading_paths(&metadata_json_text, Path::new(REPOSITORY_ROOT)).unwrap();
-    assert!(watched_paths.contains(&"crates/qwen35".to_owned()));
+    assert!(watched_paths.contains(&"crates/families/text/qwen35".to_owned()));
 }
 
 #[test]

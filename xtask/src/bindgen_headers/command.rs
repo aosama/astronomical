@@ -15,7 +15,7 @@ use super::provision_flow::provision_headers;
 use super::verify_flow::verify_headers_against_native_build;
 use crate::step_log::start_step;
 
-const NATIVE_CMAKE_LISTS_PATH: &str = "crates/runtime-integration/native/CMakeLists.txt";
+const NATIVE_CMAKE_LISTS_PATH: &str = "crates/foundation/runtime-integration/native/CMakeLists.txt";
 
 pub fn run(repository_root: &Path, arguments: &[String]) -> Result<(), String> {
     let provision_options = parse_provision_options(arguments)?;

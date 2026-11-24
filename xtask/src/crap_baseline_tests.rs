@@ -11,7 +11,7 @@ use crate::crap_baseline::{
     BASELINE_RELATIVE_PATH, CrapBaselineInvocation, CrapReportSource, run_with_source,
 };
 
-const LOOKUP_TABLE_FILE: &str = "crates/ipc-protocol/src/worker_event_diagnostics.rs";
+const LOOKUP_TABLE_FILE: &str = "crates/contracts/ipc-protocol/src/worker_event_diagnostics.rs";
 const LOOKUP_TABLE_FUNCTION: &str = "WorkerEvent::diagnostic_event_name";
 const COMMITTED_BASELINE_TEXT: &str = "{\"committed\": true}\n";
 

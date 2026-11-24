@@ -75,7 +75,7 @@ test-integration-and-rest = "xtask lane-cargo test-integration-and-rest"
 # reference implementation by checked-in golden vectors. Pure Rust with no
 # graphics processor, model or network; about a second to run. The same tests
 # also run in the integration lanes above. The golden vectors are regenerated
-# with crates/decision-contract/tests/fixtures/generate_laya_golden_reference_vectors.py
+# with crates/contracts/decision-contract/tests/fixtures/generate_laya_golden_reference_vectors.py
 # under a Python environment that has the reference package installed.
 test-decision-contract = "test -p decision-contract"
 # Decision-model calibration and head training on a person's own labelled
@@ -328,7 +328,7 @@ test-laya-discovery = "test -p config --test integration_tests model_discovery::
 # seconds, and each prefill, about eight seconds, prints when it ends.
 measure-dense-streaming-speed = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --case-budget-seconds 3600 --filter should_measure_dense_streaming_speed_from_the_layer_read_up"
 
-# Quantization lanes (the OptiQ port in crates/quantization).
+# Quantization lanes (the OptiQ port in crates/tooling/quantization).
 
 # The GPU encoder against the pure reference encoder and the shard-wise
 # requantizer on synthetic sources (two bf16 shards, packed, fused, stacked,
@@ -346,7 +346,7 @@ test-quantization-acceptance = "run -p xtask -- test-run --package astronomical-
 # the calibration sequences token for token, the bit map from OptiQ's own
 # sweep, and the Rust sweep's module ranking. Append --configuration PATH
 # with model_directory (a bfloat16 source) and reference_artifact_path (what
-# crates/quantization/tests/fixtures/build_optiq_reference_artifacts.py wrote
+# crates/tooling/quantization/tests/fixtures/build_optiq_reference_artifacts.py wrote
 # from that source; build_optiq_parity_sources.py makes the source from an
 # installed quantized model). The measured sweep forwards four calibration
 # sequences and takes about three minutes on Qwen3.5 0.8B, hence the
@@ -727,7 +727,7 @@ measure-batched-kernel-row-exactness = "run -p xtask -- test-run --package astro
 # stored keys: one row unmasked (a plain step), four rows unmasked, and four
 # rows with a tree verify's additive mask. Seconds.
 measure-tree-attention-context-cost = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter tree_attention_context_cost"
-# The row-exact tree attention kernel (crates/qwen35/src/qwen3_5_core/model_math/row_exact_tree_attention.rs):
+# The row-exact tree attention kernel (crates/families/text/qwen35/src/qwen3_5_core/model_math/row_exact_tree_attention.rs):
 # every row of a 4-row chain and of a branching tree must equal its one-row
 # step bit for bit and agree with MLX's masked attention, after 1,000 and 9,000
 # keys; then its time against MLX over 1,024 to 65,536 keys. Seconds.
@@ -770,7 +770,7 @@ test-register-ordered-matmul = "run -p xtask -- test-run --package astronomical-
 # one row. Times the dense Qwen3.8 27B's real 4-bit projection shapes for
 # K = 1 to 128, through MLX's quantized matmul, the row-batched kernel reading
 # MLX's layout, and the register-ordered kernel reading weights converted
-# into TensorFold's order (crates/model-primitives/src/row_batched_matmul), over
+# into TensorFold's order (crates/engine/model-primitives/src/row_batched_matmul), over
 # 16 distinct layers
 # so every pass reads DRAM, plus the 248,320-row output head, then each
 # projection shape on its own. Prints each K's cost against one row and the

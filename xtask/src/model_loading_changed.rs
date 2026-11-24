@@ -30,9 +30,9 @@ const WORKER_PACKAGE_NAME: &str = "astronomical-inference-worker";
 /// the MLX the worker links, and the registry lists the supported models.
 pub(crate) const ADDITIONAL_MODEL_LOADING_PATHS: &[&str] = &[
     "Cargo.toml",
-    "crates/quantization",
-    "crates/vision-tower",
-    "crates/native-build-tool",
+    "crates/tooling/quantization",
+    "crates/tooling/vision-tower",
+    "crates/foundation/native-build-tool",
     "third-party/pins",
     "third-party/patches",
     "third-party/native-dependency-manifest.cmake",

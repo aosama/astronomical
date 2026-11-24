@@ -51,7 +51,7 @@ fn should_scan_every_package_test_tree_including_verification_but_not_the_config
         "apps/daemon/tests/journey.rs",
         "crates/new-crate/tests/contract.rs",
         "verification/e2e/tests/product.rs",
-        "crates/config/tests/loader.rs",
+        "crates/foundation/config/tests/loader.rs",
     ] {
         write_fixture_file(&fixture_root.join(test_file), "fn placeholder() {}\n");
     }
@@ -91,7 +91,7 @@ fn should_report_the_file_and_line_of_each_violation_and_fail_the_command() {
         "fn setup() {}\nlet config = Config::load_from_home_directory();\n",
     );
     write_fixture_file(
-        &fixture_root.join("crates/config/tests/loader.rs"),
+        &fixture_root.join("crates/foundation/config/tests/loader.rs"),
         "AstronomicalRuntimeInstance::Stable\n",
     );
 

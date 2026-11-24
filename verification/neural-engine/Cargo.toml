@@ -30,16 +30,16 @@ all = { level = "warn", priority = -1 }
 too_many_lines = "deny"
 
 [dependencies]
-neural-engine = { path = "../../crates/neural-engine" }
+neural-engine = { path = "../../crates/hardware/neural-engine" }
 thiserror.workspace = true
 
 [build-dependencies]
 cc = "1.2"
 
 [dev-dependencies]
-neural-engine = { path = "../../crates/neural-engine", features = ["mlx-hand-off"] }
-runtime-integration = { path = "../../crates/runtime-integration", features = ["mlx"] }
-test-harness = { path = "../../crates/test-harness" }
+neural-engine = { path = "../../crates/hardware/neural-engine", features = ["mlx-hand-off"] }
+runtime-integration = { path = "../../crates/foundation/runtime-integration", features = ["mlx"] }
+test-harness = { path = "../../crates/foundation/test-harness" }
 mlx-bridge.workspace = true
 serde_json.workspace = true
 serial_test.workspace = true

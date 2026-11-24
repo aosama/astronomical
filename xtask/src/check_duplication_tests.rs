@@ -111,15 +111,15 @@ fn should_treat_a_twelve_character_line_as_short_and_thirteen_as_substantial() {
 
 #[test]
 fn should_classify_production_and_test_sources() {
-    assert!(is_production_source("crates/config/src/model_family.rs"));
+    assert!(is_production_source("crates/foundation/config/src/model_family.rs"));
     assert!(!is_production_source(
-        "crates/config/src/model_family_tests.rs"
+        "crates/foundation/config/src/model_family_tests.rs"
     ));
     assert!(!is_production_source(
-        "crates/config/src/frozen_fixture_support.rs"
+        "crates/foundation/config/src/frozen_fixture_support.rs"
     ));
     assert!(!is_production_source(
-        "crates/config/tests/integration/model.rs"
+        "crates/foundation/config/tests/integration/model.rs"
     ));
     assert!(is_production_source(
         "xtask/src/tests_inventory/selection.rs"
@@ -137,8 +137,8 @@ fn should_skip_build_output_and_pinned_third_party_directories_only() {
 #[test]
 fn should_name_the_area_by_crate_app_and_family_folder() {
     assert_eq!(
-        area_of("crates/config/src/model_discovery/kev.rs"),
-        "crates/config"
+        area_of("crates/foundation/config/src/model_discovery/kev.rs"),
+        "crates/foundation/config"
     );
     assert_eq!(
         area_of("apps/daemon/src/worker/decisions_request.rs"),
@@ -146,24 +146,24 @@ fn should_name_the_area_by_crate_app_and_family_folder() {
     );
     assert_eq!(area_of("xtask/src/check_duplication.rs"), "xtask");
     assert_eq!(
-        area_of("crates/qwen35/src/qwen3_5_streaming/inference_execution/mod.rs"),
-        "crates/qwen35/qwen3_5_streaming"
+        area_of("crates/families/text/qwen35/src/qwen3_5_streaming/inference_execution/mod.rs"),
+        "crates/families/text/qwen35/qwen3_5_streaming"
     );
     assert_eq!(
-        area_of("crates/qwen35/src/qwen3_5_core.rs"),
-        "crates/qwen35/qwen3_5_core"
+        area_of("crates/families/text/qwen35/src/qwen3_5_core.rs"),
+        "crates/families/text/qwen35/qwen3_5_core"
     );
     assert_eq!(
-        area_of("crates/speech/src/speech_models/kokoro/engine.rs"),
-        "crates/speech/kokoro"
+        area_of("crates/families/speech/speech/src/speech_models/kokoro/engine.rs"),
+        "crates/families/speech/speech/kokoro"
     );
 }
 
 #[test]
 fn should_keep_a_file_above_the_family_folders_in_its_crate_area() {
     assert_eq!(
-        area_of("crates/speech/src/speech_engine.rs"),
-        "crates/speech"
+        area_of("crates/families/speech/speech/src/speech_engine.rs"),
+        "crates/families/speech/speech"
     );
     assert_eq!(area_of("Cargo.toml"), "Cargo.toml");
 }
@@ -210,9 +210,9 @@ fn should_count_copies_that_differ_only_by_family_name() {
     let resident_copy = SHARED_BLOCK_TEXT.replace("runtime", "resident_runtime");
     let streaming_copy = SHARED_BLOCK_TEXT.replace("runtime", "streaming_runtime");
     let measurement = measure_repeated_blocks(&[
-        source_file("crates/qwen35/src/qwen3_5_resident/load.rs", &resident_copy),
+        source_file("crates/families/text/qwen35/src/qwen3_5_resident/load.rs", &resident_copy),
         source_file(
-            "crates/qwen35/src/qwen3_5_streaming/load.rs",
+            "crates/families/text/qwen35/src/qwen3_5_streaming/load.rs",
             &streaming_copy,
         ),
     ]);

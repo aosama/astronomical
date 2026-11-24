@@ -2,7 +2,7 @@
 //!
 //! The journeys take a bfloat16 source as `model_directory` and, as
 //! `reference_artifact_path`, the directory
-//! `crates/quantization/tests/fixtures/build_optiq_reference_artifacts.py`
+//! `crates/tooling/quantization/tests/fixtures/build_optiq_reference_artifacts.py`
 //! wrote from the same source: OptiQ's `static_mixed/` and `optiq_mixed/`
 //! artifacts and the calibration sequences its sweep forwarded.
 //!

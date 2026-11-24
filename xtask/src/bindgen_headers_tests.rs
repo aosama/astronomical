@@ -161,7 +161,7 @@ fn should_refuse_a_manifest_missing_duplicating_or_corrupting_an_archive() {
 #[test]
 fn should_parse_the_real_native_cmake_patch_pipeline() {
     let cmake_lists_text = std::fs::read_to_string(
-        repository_root().join("crates/runtime-integration/native/CMakeLists.txt"),
+        repository_root().join("crates/foundation/runtime-integration/native/CMakeLists.txt"),
     )
     .expect("the native CMakeLists should be readable");
 

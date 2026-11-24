@@ -1,0 +1,48 @@
+[package]
+name = "neural-engine"
+build = "build.rs"
+description = "Prefill math on the Apple Neural Engine through public Core ML: the opt-in serving path (issue #161). Its hardware evidence lives in verification/neural-engine."
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+# The test lanes this package runs in. `cargo xtask lane-cargo` builds each
+# lane's command from these declarations (issue #2473, Step 6), so no alias
+# lists packages by hand; an empty list says the package is in no lane.
+[package.metadata.astronomical]
+test-lanes = []
+
+[package.metadata.cargo-machete]
+# cargo-machete reports this build dependency as unused, but build.rs uses it.
+ignored = ["cc"]
+
+[features]
+default = []
+# Passes data between MLX and a loaded program. Serving enables this; its own
+# graph already links the native MLX build this needs.
+mlx-hand-off = ["dep:mlx-bridge"]
+
+[lints.rust]
+# This crate exists to contain the Core ML and IOSurface foreign surface for the
+# Neural Engine; every unsafe block carries a SAFETY argument and every native
+# handle has exactly one RAII owner.
+unsafe_code = "allow"
+unused_must_use = "deny"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+too_many_lines = "deny"
+
+[dependencies]
+mlx-bridge = { workspace = true, optional = true }
+thiserror.workspace = true
+
+[build-dependencies]
+cc = "1.2"
+
+[dev-dependencies]
+test-harness = { path = "../../foundation/test-harness" }
+tempfile = "=3.27.0"

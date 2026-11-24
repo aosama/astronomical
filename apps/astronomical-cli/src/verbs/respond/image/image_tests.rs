@@ -42,7 +42,7 @@ fn should_map_a_webp_extension_to_the_webp_mime_type() {
 
 #[test]
 fn should_advertise_exactly_the_formats_the_decode_stack_honors() {
-    // The vision image processor in crates/model-serving decodes every format
+    // The vision image processor in crates/engine/model-serving decodes every format
     // listed here; its `should_decode_every_format_the_cli_advertises` test
     // pins the same set from the decode side. Change both together.
     assert_eq!(

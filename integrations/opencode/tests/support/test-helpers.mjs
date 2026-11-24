@@ -11,7 +11,7 @@ import { readFileSync } from "node:fs";
 // ("text-only-model", then "vision-model"), then one image, embedding, speech
 // and decision model, which the chat-only filter must drop.
 const MODEL_LIST_FIXTURE_URL = new URL(
-  "../../../../crates/rest-contract/fixtures/openai_model_list.json",
+  "../../../../crates/contracts/rest-contract/fixtures/openai_model_list.json",
   import.meta.url,
 );
 

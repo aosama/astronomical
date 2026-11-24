@@ -69,7 +69,7 @@ name = "engine_astro_ssd_prompt_cache"
 path = "tests/astro_ssd_prompt_cache_engine.rs"
 required-features = ["direct-mlx"]
 
-# The quantization journeys (crates/quantization, the OptiQ port): static
+# The quantization journeys (crates/tooling/quantization, the OptiQ port): static
 # and exact conversions of an installed bf16 source, parity against a
 # Python-produced artifact, and requantizer throughput. Run through
 # `cargo test-quantization-acceptance`.
@@ -118,26 +118,26 @@ too_many_lines = "deny"
 
 [dev-dependencies]
 astronomical-cli = { path = "../../apps/astronomical-cli" }
-config = { path = "../../crates/config" }
-decision-contract = { path = "../../crates/decision-contract" }
-decision-training = { path = "../../crates/decision-training" }
+config = { path = "../../crates/foundation/config" }
+decision-contract = { path = "../../crates/contracts/decision-contract" }
+decision-training = { path = "../../crates/tooling/decision-training" }
 astronomical-daemon = { path = "../../apps/daemon" }
 astronomical-inference-worker = { path = "../../apps/inference-worker" }
-ipc-protocol = { path = "../../crates/ipc-protocol" }
-lowercase-hex = { path = "../../crates/lowercase-hex" }
-memory-policy = { path = "../../crates/memory-policy" }
+ipc-protocol = { path = "../../crates/contracts/ipc-protocol" }
+lowercase-hex = { path = "../../crates/foundation/lowercase-hex" }
+memory-policy = { path = "../../crates/foundation/memory-policy" }
 astronomical-neural-engine-research = { path = "../neural-engine" }
-model-serving = { path = "../../crates/model-serving", features = ["direct-mlx"] }
-qwen35-quantization-probe = { path = "../../crates/qwen35-quantization-probe" }
-mlx-c-fork = { path = "../../crates/mlx-c-fork" }
+model-serving = { path = "../../crates/engine/model-serving", features = ["direct-mlx"] }
+qwen35-quantization-probe = { path = "../../crates/tooling/qwen35-quantization-probe" }
+mlx-c-fork = { path = "../../crates/foundation/mlx-c-fork" }
 mlx-bridge.workspace = true
-native-identity = { path = "../../crates/native-identity" }
-quantization = { path = "../../crates/quantization", features = ["direct-mlx"] }
-rest-contract = { path = "../../crates/rest-contract" }
-speech-contract = { path = "../../crates/speech-contract" }
-runtime-integration = { path = "../../crates/runtime-integration", features = ["mlx"] }
-expert-record-reader = { path = "../../crates/expert-record-reader" }
-test-harness = { path = "../../crates/test-harness", features = ["flux-reference-oracle", "test-fixtures"] }
+native-identity = { path = "../../crates/foundation/native-identity" }
+quantization = { path = "../../crates/tooling/quantization", features = ["direct-mlx"] }
+rest-contract = { path = "../../crates/contracts/rest-contract" }
+speech-contract = { path = "../../crates/contracts/speech-contract" }
+runtime-integration = { path = "../../crates/foundation/runtime-integration", features = ["mlx"] }
+expert-record-reader = { path = "../../crates/engine/expert-record-reader" }
+test-harness = { path = "../../crates/foundation/test-harness", features = ["flux-reference-oracle", "test-fixtures"] }
 axum.workspace = true
 base64.workspace = true
 futures-util.workspace = true

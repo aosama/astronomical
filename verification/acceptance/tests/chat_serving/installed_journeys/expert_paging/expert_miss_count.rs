@@ -57,7 +57,7 @@ const CASE_TIMEOUT: Duration = Duration::from_secs(120);
 
 /// The C++ expert record reader: real code a person might ask about.
 const CODING_SOURCE_TEXT: &str =
-    include_str!("../../../../../../crates/expert-record-reader/native/expert_record_reader.cpp");
+    include_str!("../../../../../../crates/engine/expert-record-reader/native/expert_record_reader.cpp");
 
 /// One measured reply's text and sampling.
 #[derive(Clone, Copy, Debug)]

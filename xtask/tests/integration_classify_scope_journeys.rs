@@ -183,7 +183,7 @@ impl PushScenario {
 const MACOS_REQUIRED: &str = "macos_verification_required=true";
 const MACOS_NOT_REQUIRED: &str = "macos_verification_required=false";
 
-const CODE_PATH: &str = "crates/config/src/lib.rs";
+const CODE_PATH: &str = "crates/foundation/config/src/lib.rs";
 
 #[test]
 fn should_skip_the_macos_lanes_for_a_code_push_whose_tree_already_passed() {

@@ -205,7 +205,7 @@ jobs:
             exit 1
           }
           native_build_store_directory="$HOME/Library/Caches/Astronomical/native-builds"
-          native_store_schema_version="$(tr -d '[:space:]' < crates/native-build-orchestration/src/native-build-store-schema-version)"
+          native_store_schema_version="$(tr -d '[:space:]' < crates/foundation/native-build-orchestration/src/native-build-store-schema-version)"
           case "$native_store_schema_version" in
             ''|*[!0-9]*) printf '%s\n' 'Error: native store schema version is invalid' >&2; exit 1 ;;
           esac
@@ -995,7 +995,7 @@ jobs:
   # The OpenCode plugin, on Linux. It is a standalone npm package that
   # compiles no Rust, so a change inside it alone is classified
   # opencode_plugin_only and skips the macOS lanes. Its tests read the shared
-  # /v1/models sample in crates/rest-contract/fixtures, which a rest-contract
+  # /v1/models sample in crates/contracts/rest-contract/fixtures, which a rest-contract
   # test holds to what the app serializes, so a renamed field fails here
   # until the plugin follows.
   opencode-plugin:

@@ -14,8 +14,8 @@ const SKIPPED_DIRECTORY_NAMES: [&str; 2] = ["target", "third-party"];
 /// of the folder that names the family. Reporting them as one area would hide
 /// the copies between their families, which are what issue #2473 is after.
 /// The depth counts path components from the repository root:
-/// `crates/qwen35/src/qwen3_5_streaming` names its area at depth 3, and
-/// `crates/speech/src/speech_models/kokoro` at depth 4.
+/// `crates/families/text/qwen35/src/qwen3_5_streaming` names its area at depth 3, and
+/// `crates/families/speech/speech/src/speech_models/kokoro` at depth 4.
 const FAMILY_HOLDING_CRATE_AREA_DEPTHS: [(&str, usize); 4] = [
     ("qwen35", 3),
     ("image-generation", 3),
@@ -40,9 +40,9 @@ pub(crate) fn is_production_source(relative_path: &str) -> bool {
         && !parent_components.contains(&"tests")
 }
 
-/// The area a file is reported under: its crate or app (`crates/config`,
+/// The area a file is reported under: its crate or app (`crates/foundation/config`,
 /// `apps/daemon`), the family folder inside a family-holding crate
-/// (`crates/qwen35/qwen3_5_resident`), or `xtask` for the tooling crate.
+/// (`crates/families/text/qwen35/qwen3_5_resident`), or `xtask` for the tooling crate.
 pub(crate) fn area_of(relative_path: &str) -> String {
     let path_components: Vec<&str> = relative_path.split('/').collect();
     if path_components.first() == Some(&"xtask") {
@@ -59,7 +59,7 @@ pub(crate) fn area_of(relative_path: &str) -> String {
 }
 
 /// The family folder or module file name of a path inside a family-holding
-/// crate, without `.rs` (`crates/qwen35/src/qwen3_5_core.rs` belongs with the
+/// crate, without `.rs` (`crates/families/text/qwen35/src/qwen3_5_core.rs` belongs with the
 /// folder it declares); `None` for any other path, and for a file that sits
 /// above the family folders.
 fn family_folder_name<'path>(path_components: &[&'path str]) -> Option<&'path str> {

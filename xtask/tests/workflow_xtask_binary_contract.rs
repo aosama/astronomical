@@ -203,7 +203,7 @@ fn should_key_the_binary_on_every_folder_it_links() {
         github_actions_cache_key_of(github_actions_cache_step_with_operation(&steps, "restore"));
     let linked_folders = folders_linked_into_xtask();
     assert!(
-        linked_folders.contains("crates/native-identity"),
+        linked_folders.contains("crates/foundation/native-identity"),
         "the walk should follow xtask's path dependencies"
     );
     assert_eq!(

@@ -10,7 +10,7 @@
 use std::path::{Path, PathBuf};
 
 const NATIVE_BUILD_STORE_SCHEMA_VERSION_PATH: &str =
-    "crates/native-build-orchestration/src/native-build-store-schema-version";
+    "crates/foundation/native-build-orchestration/src/native-build-store-schema-version";
 const NATIVE_BUILD_STORE_RELATIVE_TO_HOME: &str = "Library/Caches/Astronomical/native-builds";
 
 /// The directory holding one native identity's build products in the default
