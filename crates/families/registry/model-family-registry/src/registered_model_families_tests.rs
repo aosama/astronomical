@@ -9,9 +9,11 @@ use crate::{
 use crate::{MODEL_FAMILY_REGISTRY, model_family_named, model_kind_of};
 use model_discovery::{ModelFamily, ModelKind};
 
-/// Every family constant with the kind it declares. The identifiers are the
-/// spellings the catalog, stored settings and the worker wire already use.
-const EXPECTED_FAMILY_KINDS: [(ModelFamily, &str, ModelKind); 10] = [
+/// The shipped families' identifiers and kinds, pinned because the catalog,
+/// stored settings and the worker wire already use these spellings; a rename
+/// would strand them. A new family need not be added here: every registered
+/// family is checked by `should_resolve_every_registered_family_by_its_own_identifier_and_kind`.
+const PINNED_WIRE_FAMILY_KINDS: [(ModelFamily, &str, ModelKind); 10] = [
     (
         FLUX2_KLEIN_MODEL_FAMILY,
         "flux2_klein",
@@ -37,8 +39,8 @@ const EXPECTED_FAMILY_KINDS: [(ModelFamily, &str, ModelKind); 10] = [
 ];
 
 #[test]
-fn should_register_every_family_constant_with_its_identifier_and_kind() {
-    for (model_family, expected_identifier, expected_kind) in EXPECTED_FAMILY_KINDS {
+fn should_keep_every_shipped_family_at_its_wire_identifier_and_kind() {
+    for (model_family, expected_identifier, expected_kind) in PINNED_WIRE_FAMILY_KINDS {
         assert_eq!(model_family.as_str(), expected_identifier);
         assert_eq!(
             model_kind_of(model_family),
@@ -47,7 +49,32 @@ fn should_register_every_family_constant_with_its_identifier_and_kind() {
         );
         assert_eq!(model_family_named(expected_identifier), Some(model_family));
     }
-    assert_eq!(REGISTERED_MODEL_FAMILIES.len(), EXPECTED_FAMILY_KINDS.len());
+}
+
+#[test]
+fn should_resolve_every_registered_family_by_its_own_identifier_and_kind() {
+    assert!(!REGISTERED_MODEL_FAMILIES.is_empty());
+    for family_description in REGISTERED_MODEL_FAMILIES {
+        let model_family = family_description.model_family;
+        assert_eq!(
+            model_family_named(model_family.as_str()),
+            Some(model_family),
+            "{}",
+            model_family.as_str()
+        );
+        assert_eq!(
+            model_kind_of(model_family),
+            Some(family_description.kind),
+            "{}",
+            model_family.as_str()
+        );
+    }
+}
+
+#[test]
+fn should_name_no_family_for_an_identifier_nothing_registers() {
+    assert_eq!(model_family_named("unregistered_family"), None);
+    assert_eq!(model_family_named(""), None);
 }
 
 #[test]
