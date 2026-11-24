@@ -12,11 +12,9 @@ mod engine_trait_impl;
 mod input_injection;
 mod memory_limit;
 mod prefill_chunk;
-mod request_checks;
 mod starting_decoder_state;
 
 use crate::prism_hadamard_qwen35::artifacts::ValidatedFoldedPack;
-use crate::prism_hadamard_qwen35::astro_decoder_state_cache_layout::PRISM_FULL_ATTENTION_KEY_VALUE_GROWTH_TOKENS;
 use crate::prism_hadamard_qwen35::model::PrismHadamardTextModel;
 use crate::qwen3_5_core::engine_request::Qwen3_5EngineRequest;
 use crate::qwen3_5_core::shared_execution::execution_core::{
@@ -86,8 +84,7 @@ impl PrismHadamardQwen35InferenceExecution {
             validated_execution_core_settings,
             pending_load,
         } = pending_startup;
-        let mut execution_core = Qwen3_5ExecutionCore::new(validated_execution_core_settings);
-        keep_prism_derived_limits(&mut execution_core);
+        let execution_core = Qwen3_5ExecutionCore::new(validated_execution_core_settings);
         Self {
             configured_mlx_buffer_cache_bytes: pending_load.mlx_buffer_cache_limit_bytes as u64,
             pending_load: Some(pending_load),
@@ -108,22 +105,4 @@ impl PrismHadamardQwen35InferenceExecution {
             .prompt_processing_chunk_sizer
             .maximum_prompt_processing_chunk_size_tokens()
     }
-}
-
-/// Replaces the three limits the shared settings derive differently from
-/// what the folded-ternary engine has always used, so moving Prism's state
-/// into the shared core changes no behaviour (issue #2473, Prism step 6):
-///
-/// - The configured context window is Prism's hard limit: it refuses any
-///   request beyond it, where the Qwen 3.5 engines refuse only past the
-///   artifact's own position range.
-/// - Prism sets aside no context memory per token; the artifact's honest
-///   figure would start charging the full-attention keys and values.
-/// - Prism's key-value slabs grow in its own fixed step, whatever the
-///   worker's chunking configuration asks of the Qwen 3.5 engines.
-pub(super) fn keep_prism_derived_limits(execution_core: &mut PrismHadamardQwen35ExecutionCore) {
-    execution_core.hard_maximum_position_count = execution_core.maximum_position_count;
-    execution_core.context_memory_reservation_bytes_per_token = 0;
-    execution_core.full_attention_kv_state_growth_tokens =
-        PRISM_FULL_ATTENTION_KEY_VALUE_GROWTH_TOKENS as i32;
 }

@@ -17,6 +17,7 @@ fn should_start_a_request_from_position_zero_when_no_store_is_open() {
         &fixture.text_model,
         None,
         &[1, 2, 3],
+        256,
         &mut astro_ssd_prompt_cache_counters,
         &mut PerformanceAttribution::disabled(),
     )

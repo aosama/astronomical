@@ -19,14 +19,15 @@ use crate::MlxMemoryLimitAdjustment;
 use crate::MlxMemoryTelemetry;
 use crate::PerformanceAttributionOutcome;
 use crate::PerformanceOperation;
-use crate::Qwen3_5ThinkingBudgetState;
 use crate::RequestDecoderStateStack;
 use crate::inference_engine::load_result::EngineLoadResult;
 use crate::prism_hadamard_qwen35::model::PrismHadamardTextModel;
+use crate::qwen3_5_core::engine_errors::fatal_engine_error;
 use crate::qwen3_5_core::shared_execution::decode_step::advance_generation;
 use crate::qwen3_5_core::shared_execution::generation_finalization_steps::Qwen3_5FinalizationHooks;
-use crate::sampling_seed;
-use crate::sampling_seed::current_time_millis_since_unix_epoch;
+use crate::qwen3_5_core::shared_execution::{
+    generation_request_validation, generation_start_steps,
+};
 use ipc_protocol::WorkerEvent;
 
 impl MlxInferenceExecution for PrismHadamardQwen35InferenceExecution {
@@ -100,75 +101,68 @@ impl MlxInferenceExecution for PrismHadamardQwen35InferenceExecution {
         &mut self,
         mut inference_request: Self::Request,
     ) -> Result<EngineGenerationStart, InferenceEngineError> {
-        if self.execution_core.active_request.is_some() {
-            return Err(InferenceEngineError::EngineBusy);
-        }
-        let maximum_context_tokens = self.maximum_context_tokens();
-        let model =
-            self.execution_core
-                .model
-                .as_ref()
-                .ok_or_else(|| InferenceEngineError::Fatal {
-                    reason: "folded-ternary model is not loaded".to_owned(),
-                })?;
-        super::request_checks::check_serving_request(
-            inference_request.input_token_ids(),
-            inference_request.max_output_tokens(),
-            self.execution_core.vocabulary_size,
-            maximum_context_tokens,
+        let taken_performance_attribution = inference_request.take_performance_attribution();
+        let mut performance_attribution = generation_start_steps::ensure_no_active_generation(
+            self,
+            &inference_request,
+            taken_performance_attribution,
         )?;
-        let sampling_seed = sampling_seed::resolve_sampling_seed(
-            match inference_request.sampling_strategy() {
-                crate::Qwen3_5SamplingStrategy::HighestLogit => None,
-                crate::Qwen3_5SamplingStrategy::TopKTopP { seed, .. } => seed,
-            },
-            current_time_millis_since_unix_epoch,
-        );
-        let random_state = model.runtime.random_key(sampling_seed).map_err(|error| {
-            InferenceEngineError::Fatal {
-                reason: format!("folded-ternary random key failed: {error}"),
-            }
-        })?;
-        let thinking_budget_state = Qwen3_5ThinkingBudgetState::new(
-            inference_request.generation_starts_inside_thinking_block(),
-            inference_request.thinking_budget(),
-            inference_request
-                .forced_thinking_transition_token_ids()
-                .to_vec(),
-            inference_request.natural_reasoning_end_token_ids().to_vec(),
-        )
-        .map_err(|budget_error| InferenceEngineError::InvalidRequest {
-            reason: format!("folded-ternary thinking budget is invalid: {budget_error}"),
-        })?;
-        let mut performance_attribution = inference_request.take_performance_attribution();
+        // The returned reservation is what the request's context may occupy;
+        // the folded-ternary engine keeps no memory governor, so nothing is
+        // admitted against it yet.
+        let _reserved_context_tokens =
+            generation_request_validation::validate_generation_request_and_resolve_reserved_context(
+                &self.execution_core.generation_request_limits(),
+                &inference_request,
+            )?;
+        let thinking_budget_state = generation_start_steps::build_thinking_budget_state(
+            self.execution_core.think_end_token_id,
+            &inference_request,
+        )?;
+        let random_state = generation_start_steps::resolve_sampling_random_state(
+            self,
+            inference_request.sampling_strategy(),
+        )?;
         let prompt_token_ids = inference_request.input_token_ids().to_vec();
+        let execution_core = &mut self.execution_core;
+        // The model is borrowed by field so the counters can be lent mutably
+        // beside it; validation already refused a request with no model.
+        let model = execution_core
+            .model
+            .as_ref()
+            .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
         let (request_decoder_state, restore_outcome) =
             super::starting_decoder_state::starting_request_decoder_state(
                 model,
-                self.execution_core.astro_ssd_prompt_cache.as_deref(),
+                execution_core.astro_ssd_prompt_cache.as_deref(),
                 &prompt_token_ids,
-                &mut self.execution_core.astro_ssd_prompt_cache_counters,
+                execution_core.full_attention_kv_state_growth_tokens,
+                &mut execution_core.astro_ssd_prompt_cache_counters,
                 &mut performance_attribution,
             )?;
-        let astro_ssd_prompt_cache_restored_token_count = restore_outcome.restored_token_count;
+        let restored_token_count = restore_outcome.restored_token_count;
         let request_start = PrismRequestStart {
             prompt_token_ids,
             request_decoder_state,
-            restored_token_count: astro_ssd_prompt_cache_restored_token_count,
+            restored_token_count,
             last_restored_block_key: restore_outcome.last_restored_astro_ssd_prompt_cache_block_key,
             random_state,
             thinking_budget_state,
             performance_attribution,
-            can_use_astro_ssd_prompt_cache: self.execution_core.astro_ssd_prompt_cache.is_some(),
+            can_use_astro_ssd_prompt_cache: execution_core.astro_ssd_prompt_cache.is_some(),
         };
-        self.execution_core.active_request = Some(prism_active_generation(
+        execution_core.active_request = Some(prism_active_generation(
             &mut inference_request,
             request_start,
         ));
-        Ok(EngineGenerationStart::with_expert_memory_mode(
-            astro_ssd_prompt_cache_restored_token_count,
-            ExpertMemoryMode::Resident,
-        ))
+        // A restored prefix always leaves at least one prompt token to read,
+        // so the prompt is still being processed when the request starts.
+        generation_start_steps::build_generation_start_contract(
+            self,
+            restored_token_count,
+            Some(ipc_protocol::WorkerPromptProcessingPhase::Target),
+            None,
+        )
     }
 
     /// Runs one step of the active request through the shared Qwen 3.5
@@ -385,3 +379,7 @@ pub(super) fn gpu_error<E: std::fmt::Display>(error: E) -> InferenceEngineError 
         reason: error.to_string(),
     }
 }
+
+#[cfg(test)]
+#[path = "engine_trait_impl_tests.rs"]
+mod engine_trait_impl_tests;

@@ -13,9 +13,13 @@ use super::{
 use crate::Qwen3_5ExecutionCoreSettings;
 use crate::prism_hadamard_qwen35::artifacts::FoldedPackValidator;
 use crate::prism_hadamard_qwen35::artifacts::tests::pack_fixture::{
-    FixturePackMutation, remove_fixture_directory, write_fixture_pack,
+    FIXTURE_VOCAB_SIZE, FixturePackMutation, remove_fixture_directory, write_fixture_pack,
 };
 use crate::{MlxInferenceExecution, PerformanceAttribution, PerformanceAttributionLog};
+
+/// The fixture's think-end marker: the last vocabulary id, so a thinking
+/// request's forced transition can end with it inside the vocabulary.
+pub(super) const FIXTURE_THINK_END_TOKEN_ID: u32 = FIXTURE_VOCAB_SIZE - 1;
 
 /// The serving settings the worker hands over, with a chunking
 /// configuration whose growth step differs from Prism's own.
@@ -72,7 +76,7 @@ pub(super) fn pending_fixture_execution(
         astro_ssd_prompt_cache_disk_store_config: None,
         prompt_processing_chunk_sizer: prompt_processing_chunk_sizer_for(serving_settings)
             .expect("the chunk size is positive"),
-        think_end_token_id: 248_069,
+        think_end_token_id: FIXTURE_THINK_END_TOKEN_ID,
         model_directory: fixture_directory.to_path_buf(),
         maximum_context_tokens: 2048,
         chunking: serving_settings.chunking.clone(),

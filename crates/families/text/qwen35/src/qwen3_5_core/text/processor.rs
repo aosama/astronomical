@@ -40,10 +40,15 @@ impl Qwen3_5GenerationProcessor {
     // Consumed only by the direct-MLX prism_hadamard engine startup, so the
     // isolated default-feature build would otherwise flag it as dead.
     #[cfg(feature = "direct-mlx")]
+    /// `maximum_position_count` is the pack's own position range, the only
+    /// hard context limit; `context_window` is the configured, advertised
+    /// window, which a request may exceed when it still fits the pack.
+    #[allow(clippy::too_many_arguments)]
     pub fn from_folded_pack_text_dialect(
         tokenizer_bytes: &[u8],
         model_id: &str,
         model_vocabulary_size: u32,
+        maximum_position_count: u32,
         context_window: u32,
         max_output_tokens: u32,
         enable_thinking: bool,
@@ -53,7 +58,7 @@ impl Qwen3_5GenerationProcessor {
             tokenizer_bytes,
             model_id,
             model_vocabulary_size,
-            context_window,
+            maximum_position_count,
             context_window,
             None,
         )?;
