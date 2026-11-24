@@ -4,8 +4,6 @@
 use std::fs;
 use std::path::Path;
 
-use config::ModelFamily;
-
 /// Writes the smallest executable folded pack: config, Hadamard contract,
 /// tokenizer, and single-file weights.
 fn write_folded_pack(model_directory: &Path) {
@@ -45,7 +43,10 @@ fn should_classify_a_complete_folded_pack() {
             .expect("classified artifact discovery should complete");
 
     assert_eq!(artifacts.len(), 1);
-    assert_eq!(artifacts[0].model_family, ModelFamily::PrismHadamardQwen35);
+    assert_eq!(
+        artifacts[0].model_family,
+        config::PRISM_HADAMARD_QWEN35_MODEL_FAMILY
+    );
     assert_eq!(
         artifacts[0].model_id,
         "prism-ml/Ternary-Bonsai-2-27B-mlx-2bit"

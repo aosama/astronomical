@@ -5,8 +5,7 @@ use std::path::PathBuf;
 use crate::{
     AstronomicalConfig, AstronomicalInstancePaths, AstronomicalRuntimeInstance,
     ChatModelCapabilities, DiscoveredModel, EmbeddingModelCapabilities,
-    ImageGenerationCapabilities, ModelCapabilities, ModelConfigEntryOutcome, ModelFamily,
-    SettingsFreeModelKind,
+    ImageGenerationCapabilities, ModelCapabilities, ModelConfigEntryOutcome, SettingsFreeModelKind,
 };
 
 fn config_with_entries(configured_model_ids: &[&str]) -> AstronomicalConfig {
@@ -41,7 +40,7 @@ fn discovered_model(
     DiscoveredModel {
         model_id: model_id.to_owned(),
         provider_model_id: provider_model_id.map(str::to_owned),
-        model_family: ModelFamily::Qwen3_5,
+        model_family: crate::QWEN3_5_MODEL_FAMILY,
         revision: "fictional-revision".to_owned(),
         model_directory: PathBuf::from("/fictional/models").join(model_id),
         capabilities,

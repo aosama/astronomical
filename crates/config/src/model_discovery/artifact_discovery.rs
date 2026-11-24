@@ -1,8 +1,9 @@
 //! Per-directory discovery of one executable model artifact.
 //!
 //! Neutral scan orchestration walks model roots (including Hugging Face hub cache entries) and asks
-//! this module to classify each candidate directory and project its family-owned metadata into
-//! the neutral DiscoveredModel DTO.
+//! this module to classify each candidate directory. The family's registered description then
+//! names the projection below that turns its family-owned metadata into the neutral
+//! DiscoveredModel DTO.
 
 use std::fs;
 use std::path::Path;
@@ -10,9 +11,9 @@ use std::path::Path;
 use crate::model_discovery::marked_decision_folder::MarkedDecisionMetadata;
 use crate::model_discovery::{
     ChatModelCapabilities, DecisionModelCapabilities, DiscoveredModel, EmbeddingModelCapabilities,
-    ModelCapabilities, ModelFamily, ModelLicense, classified_artifacts, clef,
-    derive_revision_from_config_bytes, flux2_klein, kev, laya, model_family, modernbert,
-    prism_hadamard_qwen35, qwen_image_21, qwen3_5,
+    ModelCapabilities, ModelFamily, ModelLicense, SpeechModelCapabilities, classified_artifacts,
+    clef, derive_revision_from_config_bytes, flux2_klein, kev, laya, model_family_classification,
+    modernbert, prism_hadamard_qwen35, qwen_image_21, qwen3_5,
 };
 use crate::model_discovery::{
     KOKORO_WEIGHTS_FILE_NAME, PHONON_WEIGHTS_FILE_NAME, kokoro_speech_capabilities,
@@ -38,58 +39,36 @@ pub fn try_discover_model_with_id(
 ) -> Option<DiscoveredModel> {
     // The typed classifier rejects ambiguous duplicate family markers before
     // the looser metadata document can participate in executable discovery.
-    let model_family = model_family::classify_model_directory(model_directory)
+    let model_family = model_family_classification::classify_model_directory(model_directory)
         .ok()
         .flatten()?;
-    match model_family {
-        ModelFamily::Qwen3_5 => discover_qwen3_5_model(model_directory, model_id, model_family),
-        ModelFamily::Flux2Klein => discover_flux2_klein_model(model_directory, model_family),
-        ModelFamily::ModernBert
-        | ModelFamily::Laya
-        | ModelFamily::Kev
-        | ModelFamily::Clef
-        | ModelFamily::Kokoro
-        | ModelFamily::Phonon => {
-            discover_single_pass_model(model_directory, model_id, model_family)
-        }
-        ModelFamily::PrismHadamardQwen35 => {
-            discover_prism_hadamard_qwen35_model(model_directory, model_id, model_family)
-        }
-        // The native T2I engine is wired end to end (worker factory arm, daemon image
-        // policy, preflight, catalog), so a verified Qwen-Image-2.1 artifact now advertises
-        // with the same evidence shape as FLUX.2 Klein.
-        ModelFamily::QwenImage21 => discover_qwen_image21_model(model_directory, model_family),
-    }
+    (model_family.description()?.discover_model)(model_directory, model_id)
 }
 
-/// Discovers a model whose requests keep nothing between them: Kev, Clef or
-/// Laya, the decision models; the ModernBERT embedding model; or Kokoro or
-/// Phonon, the speech models.
-fn discover_single_pass_model(
+/// Projects a Kokoro folder into the neutral discovery contract.
+pub(super) fn discover_kokoro_model(
     model_directory: &Path,
     model_id: &str,
-    model_family: ModelFamily,
 ) -> Option<DiscoveredModel> {
-    match model_family {
-        ModelFamily::Kev | ModelFamily::Clef => {
-            discover_marked_decision_model(model_directory, model_id, model_family)
-        }
-        ModelFamily::Laya => discover_laya_model(model_directory, model_id, model_family),
-        other_family => discover_encoder_or_speech_model(model_directory, model_id, other_family),
-    }
+    discover_speech_model(
+        model_directory,
+        model_id,
+        kokoro_speech_capabilities(model_directory)?,
+        KOKORO_WEIGHTS_FILE_NAME,
+    )
 }
 
-fn discover_encoder_or_speech_model(
+/// Projects a Phonon folder into the neutral discovery contract.
+pub(super) fn discover_phonon_model(
     model_directory: &Path,
     model_id: &str,
-    model_family: ModelFamily,
 ) -> Option<DiscoveredModel> {
-    match model_family {
-        ModelFamily::Kokoro | ModelFamily::Phonon => {
-            discover_speech_model(model_directory, model_id, model_family)
-        }
-        _ => discover_modernbert_model(model_directory, model_id, model_family),
-    }
+    discover_speech_model(
+        model_directory,
+        model_id,
+        phonon_speech_capabilities(model_directory)?,
+        PHONON_WEIGHTS_FILE_NAME,
+    )
 }
 
 /// Projects a speech folder into the neutral discovery contract: its voices,
@@ -97,25 +76,16 @@ fn discover_encoder_or_speech_model(
 fn discover_speech_model(
     model_directory: &Path,
     model_id: &str,
-    model_family: ModelFamily,
+    speech_capabilities: SpeechModelCapabilities,
+    weights_file_name: &str,
 ) -> Option<DiscoveredModel> {
-    let (speech_capabilities, weights_file_name) = match model_family {
-        ModelFamily::Kokoro => (
-            kokoro_speech_capabilities(model_directory)?,
-            KOKORO_WEIGHTS_FILE_NAME,
-        ),
-        _ => (
-            phonon_speech_capabilities(model_directory)?,
-            PHONON_WEIGHTS_FILE_NAME,
-        ),
-    };
     let configuration_bytes = fs::read(model_directory.join("config.json")).ok()?;
     let (provider_model_id, revision) =
         provenance_or_config_revision(model_directory, &configuration_bytes);
     Some(DiscoveredModel {
         model_id: model_id.to_owned(),
         provider_model_id,
-        model_family,
+        model_family: speech_capabilities.model_family,
         revision,
         model_directory: model_directory.to_path_buf(),
         model_size_bytes: fs::metadata(model_directory.join(weights_file_name))
@@ -126,14 +96,40 @@ fn discover_speech_model(
     })
 }
 
+/// Projects a Kev folder into the neutral discovery contract.
+pub(super) fn discover_kev_model(
+    model_directory: &Path,
+    model_id: &str,
+) -> Option<DiscoveredModel> {
+    discover_marked_decision_model(
+        model_directory,
+        model_id,
+        kev::KEV_MODEL_FAMILY,
+        kev::discover_model_metadata(model_directory)?,
+    )
+}
+
+/// Projects a Clef folder into the neutral discovery contract.
+pub(super) fn discover_clef_model(
+    model_directory: &Path,
+    model_id: &str,
+) -> Option<DiscoveredModel> {
+    discover_marked_decision_model(
+        model_directory,
+        model_id,
+        clef::CLEF_MODEL_FAMILY,
+        clef::discover_model_metadata(model_directory)?,
+    )
+}
+
 /// Projects a decision-model folder its marker file identified (Kev, Clef)
 /// into the neutral discovery contract.
 fn discover_marked_decision_model(
     model_directory: &Path,
     model_id: &str,
     model_family: ModelFamily,
+    family_metadata: MarkedDecisionMetadata,
 ) -> Option<DiscoveredModel> {
-    let family_metadata = marked_decision_metadata(model_directory, model_family)?;
     let settings_bytes = fs::read(model_directory.join(family_metadata.settings_file_name)).ok()?;
     let (provider_model_id, revision) =
         provenance_or_config_revision(model_directory, &settings_bytes);
@@ -149,18 +145,6 @@ fn discover_marked_decision_model(
         license: None,
         model_size_bytes: family_metadata.model_size_bytes,
     })
-}
-
-/// The marker family's own completeness rules and metadata.
-fn marked_decision_metadata(
-    model_directory: &Path,
-    model_family: ModelFamily,
-) -> Option<MarkedDecisionMetadata> {
-    match model_family {
-        ModelFamily::Kev => kev::discover_model_metadata(model_directory),
-        ModelFamily::Clef => clef::discover_model_metadata(model_directory),
-        _ => None,
-    }
 }
 
 /// Derives the provider model id and revision for a config-document family:
@@ -183,10 +167,9 @@ fn provenance_or_config_revision(
 }
 
 /// Projects a Qwen3.5 chat directory into the neutral discovery contract.
-fn discover_qwen3_5_model(
+pub(super) fn discover_qwen3_5_model(
     model_directory: &Path,
     model_id: &str,
-    model_family: ModelFamily,
 ) -> Option<DiscoveredModel> {
     let config_bytes = fs::read(model_directory.join("config.json")).ok()?;
     let config_value: serde_json::Value = serde_json::from_slice(&config_bytes).ok()?;
@@ -196,7 +179,7 @@ fn discover_qwen3_5_model(
     Some(DiscoveredModel {
         model_id: model_id.to_owned(),
         provider_model_id,
-        model_family,
+        model_family: qwen3_5::QWEN3_5_MODEL_FAMILY,
         revision,
         model_directory: model_directory.to_path_buf(),
         capabilities: ModelCapabilities::Chat(ChatModelCapabilities {
@@ -213,16 +196,17 @@ fn discover_qwen3_5_model(
 }
 
 /// Projects a FLUX.2 Klein image-generation directory into the neutral
-/// discovery contract from its self-verifying evidence.
-fn discover_flux2_klein_model(
+/// discovery contract from its self-verifying evidence. It is served under
+/// the canonical id its evidence verifies, never the folder's name.
+pub(super) fn discover_flux2_klein_model(
     model_directory: &Path,
-    model_family: ModelFamily,
+    _folder_model_id: &str,
 ) -> Option<DiscoveredModel> {
     let verified_evidence = flux2_klein::verify_model_directory(model_directory).ok()?;
     Some(DiscoveredModel {
         model_id: verified_evidence.canonical_model_id,
         provider_model_id: Some(verified_evidence.provider_model_id),
-        model_family,
+        model_family: flux2_klein::FLUX2_KLEIN_MODEL_FAMILY,
         revision: verified_evidence.revision,
         model_directory: model_directory.to_path_buf(),
         capabilities: ModelCapabilities::ImageGeneration(verified_evidence.capabilities),
@@ -232,10 +216,9 @@ fn discover_flux2_klein_model(
 }
 
 /// Projects a ModernBERT embeddings directory into the neutral discovery contract.
-fn discover_modernbert_model(
+pub(super) fn discover_modernbert_model(
     model_directory: &Path,
     model_id: &str,
-    model_family: ModelFamily,
 ) -> Option<DiscoveredModel> {
     let config_bytes = fs::read(model_directory.join("config.json")).ok()?;
     let config_value: serde_json::Value = serde_json::from_slice(&config_bytes).ok()?;
@@ -245,7 +228,7 @@ fn discover_modernbert_model(
     Some(DiscoveredModel {
         model_id: model_id.to_owned(),
         provider_model_id,
-        model_family,
+        model_family: modernbert::MODERNBERT_MODEL_FAMILY,
         revision,
         model_directory: model_directory.to_path_buf(),
         capabilities: ModelCapabilities::Embeddings(EmbeddingModelCapabilities {
@@ -258,10 +241,9 @@ fn discover_modernbert_model(
 }
 
 /// Projects a Laya decision-model directory into the neutral discovery contract.
-fn discover_laya_model(
+pub(super) fn discover_laya_model(
     model_directory: &Path,
     model_id: &str,
-    model_family: ModelFamily,
 ) -> Option<DiscoveredModel> {
     let config_bytes = fs::read(model_directory.join("config.json")).ok()?;
     let config_value: serde_json::Value = serde_json::from_slice(&config_bytes).ok()?;
@@ -271,7 +253,7 @@ fn discover_laya_model(
     Some(DiscoveredModel {
         model_id: model_id.to_owned(),
         provider_model_id,
-        model_family,
+        model_family: laya::LAYA_MODEL_FAMILY,
         revision,
         model_directory: model_directory.to_path_buf(),
         capabilities: ModelCapabilities::Decisions(DecisionModelCapabilities {
@@ -282,16 +264,26 @@ fn discover_laya_model(
     })
 }
 
-/// Discovers the checkpoints a Laya repository bundles in its subfolders.
-///
-/// Each becomes a model of its own, named after the repository and the
-/// subfolder. Other families bundle nothing, so they yield no models here.
+/// Discovers the checkpoints a repository bundles in its subfolders, when
+/// its family bundles any. Each becomes a model of its own, named after the
+/// repository and the subfolder.
 pub(super) fn discover_bundled_checkpoints(
     repository_model: &DiscoveredModel,
 ) -> Vec<DiscoveredModel> {
-    if repository_model.model_family != ModelFamily::Laya {
+    let Some(discover_bundled_models) = repository_model
+        .model_family
+        .description()
+        .and_then(|family_description| family_description.discover_bundled_models)
+    else {
         return Vec::new();
-    }
+    };
+    discover_bundled_models(repository_model)
+}
+
+/// The checkpoints a Laya repository bundles, each a model of its own.
+pub(super) fn discover_laya_bundled_checkpoints(
+    repository_model: &DiscoveredModel,
+) -> Vec<DiscoveredModel> {
     let mut bundled_models = Vec::new();
     for bundled_checkpoint in laya::bundled_checkpoints(&repository_model.model_directory) {
         let bundled_model_id = laya::bundled_checkpoint_model_id(
@@ -311,10 +303,9 @@ pub(super) fn discover_bundled_checkpoints(
 /// contract. The vision tower ships inside the pack, but the executable
 /// surface in this phase is text-only, so discovery must not advertise image
 /// input.
-fn discover_prism_hadamard_qwen35_model(
+pub(super) fn discover_prism_hadamard_qwen35_model(
     model_directory: &Path,
     model_id: &str,
-    model_family: ModelFamily,
 ) -> Option<DiscoveredModel> {
     let config_bytes = fs::read(model_directory.join("config.json")).ok()?;
     let config_value: serde_json::Value = serde_json::from_slice(&config_bytes).ok()?;
@@ -325,7 +316,7 @@ fn discover_prism_hadamard_qwen35_model(
     Some(DiscoveredModel {
         model_id: model_id.to_owned(),
         provider_model_id,
-        model_family,
+        model_family: prism_hadamard_qwen35::PRISM_HADAMARD_QWEN35_MODEL_FAMILY,
         revision,
         model_directory: model_directory.to_path_buf(),
         capabilities: ModelCapabilities::Chat(ChatModelCapabilities {
@@ -342,16 +333,17 @@ fn discover_prism_hadamard_qwen35_model(
 }
 
 /// Projects a Qwen-Image-2.1 directory into the neutral discovery contract
-/// from its self-verifying evidence.
-fn discover_qwen_image21_model(
+/// from its self-verifying evidence. It is served under the canonical id its
+/// evidence verifies, never the folder's name.
+pub(super) fn discover_qwen_image_21_model(
     model_directory: &Path,
-    model_family: ModelFamily,
+    _folder_model_id: &str,
 ) -> Option<DiscoveredModel> {
     let verified_evidence = qwen_image_21::verify_model_directory(model_directory).ok()?;
     Some(DiscoveredModel {
         model_id: verified_evidence.canonical_model_id,
         provider_model_id: Some(verified_evidence.provider_model_id),
-        model_family,
+        model_family: qwen_image_21::QWEN_IMAGE_21_MODEL_FAMILY,
         revision: verified_evidence.revision,
         model_directory: model_directory.to_path_buf(),
         capabilities: ModelCapabilities::ImageGeneration(verified_evidence.capabilities),

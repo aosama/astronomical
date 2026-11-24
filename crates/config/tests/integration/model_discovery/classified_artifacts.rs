@@ -1,7 +1,5 @@
 use std::fs;
 
-use config::ModelFamily;
-
 #[test]
 fn should_find_local_and_hugging_face_classified_artifacts_without_advertising_execution() {
     let configured_root = tempfile::tempdir().expect("the test should create a root");
@@ -36,12 +34,12 @@ fn should_find_local_and_hugging_face_classified_artifacts_without_advertising_e
         artifact.model_id == "example-org/Qwen35-Test"
             && artifact.upstream_revision.as_deref()
                 == Some("1111111111111111111111111111111111111111")
-            && artifact.model_family == ModelFamily::Qwen3_5
+            && artifact.model_family == config::QWEN3_5_MODEL_FAMILY
     }));
     assert!(artifacts.iter().any(|artifact| {
         artifact.model_id == "example-org/Qwen35-Hub-Cache-Test"
             && artifact.upstream_revision.as_deref()
                 == Some("2222222222222222222222222222222222222222")
-            && artifact.model_family == ModelFamily::Qwen3_5
+            && artifact.model_family == config::QWEN3_5_MODEL_FAMILY
     }));
 }

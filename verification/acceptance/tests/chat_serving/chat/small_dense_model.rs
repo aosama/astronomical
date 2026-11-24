@@ -47,7 +47,7 @@ fn should_order_the_smallest_available_model_first_for_deployment_litmus() {
         DiscoveredModel {
             model_id: "larger-model".to_owned(),
             provider_model_id: None,
-            model_family: config::ModelFamily::Qwen3_5,
+            model_family: config::QWEN3_5_MODEL_FAMILY,
             revision: "larger-revision".to_owned(),
             model_directory: "/models/larger-model".into(),
             capabilities: chat_model_capabilities(),
@@ -57,7 +57,7 @@ fn should_order_the_smallest_available_model_first_for_deployment_litmus() {
         DiscoveredModel {
             model_id: "same-size-z-model".to_owned(),
             provider_model_id: None,
-            model_family: config::ModelFamily::Qwen3_5,
+            model_family: config::QWEN3_5_MODEL_FAMILY,
             revision: "same-size-z-revision".to_owned(),
             model_directory: "/models/same-size-z-model".into(),
             capabilities: chat_model_capabilities(),
@@ -67,7 +67,7 @@ fn should_order_the_smallest_available_model_first_for_deployment_litmus() {
         DiscoveredModel {
             model_id: "same-size-a-model".to_owned(),
             provider_model_id: None,
-            model_family: config::ModelFamily::Qwen3_5,
+            model_family: config::QWEN3_5_MODEL_FAMILY,
             revision: "same-size-a-revision".to_owned(),
             model_directory: "/models/same-size-a-model".into(),
             capabilities: chat_model_capabilities(),

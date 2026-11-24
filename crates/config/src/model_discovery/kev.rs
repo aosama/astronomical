@@ -10,6 +10,8 @@
 use std::fs;
 use std::path::Path;
 
+use super::model_family_description::ModelFamily;
+
 use super::bounded_artifact_file;
 use super::marked_decision_folder::{MarkedDecisionMetadata, safetensors_total_bytes};
 
@@ -60,3 +62,6 @@ pub(super) fn discover_model_metadata(model_directory: &Path) -> Option<MarkedDe
         settings_file_name: KEV_SETTINGS_FILE_NAME,
     })
 }
+
+/// The Kev decision family: a Qwen3.5 backbone with a pointer head over the options, marked by `kev_decision.json`.
+pub const KEV_MODEL_FAMILY: ModelFamily = ModelFamily::named("kev");

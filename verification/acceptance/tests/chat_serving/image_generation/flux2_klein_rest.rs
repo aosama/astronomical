@@ -4,7 +4,7 @@ use std::{fs, path::Path};
 use std::{net::SocketAddr, time::Duration};
 
 use base64::{Engine as _, engine::general_purpose::STANDARD};
-use config::{DiscoveredModel, ModelCapabilities, ModelFamily, ModelLicense};
+use config::{DiscoveredModel, ModelCapabilities, ModelLicense};
 use image::{GenericImageView, ImageFormat};
 use model_serving::{
     FLUX2_KLEIN_OFFICIAL_REVISION, FLUX2_KLEIN_PROVIDER_MODEL_ID, Flux2KleinImageDimensions,
@@ -351,7 +351,7 @@ fn official_flux_model_from_discovery(discovered_models: &[DiscoveredModel]) -> 
     let discovered_model = discovered_models
         .iter()
         .find(|model| {
-            model.model_family == ModelFamily::Flux2Klein
+            model.model_family == config::FLUX2_KLEIN_MODEL_FAMILY
                 && model.model_id == flux2_klein_model_id
         })
         .cloned()

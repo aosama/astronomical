@@ -11,7 +11,7 @@
 use std::path::{Component, Path};
 
 use super::MAXIMUM_MODEL_SCAN_DEPTH;
-use super::model_family::has_model_root_marker;
+use super::model_family_classification::has_model_root_marker;
 
 /// Whether discovery, scanning `model_root`, would find a model written to
 /// `model_folder`. Both paths must be absolute with links resolved, so a

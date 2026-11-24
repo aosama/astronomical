@@ -269,7 +269,7 @@ fn discovered_model(model_id: &str) -> config::DiscoveredModel {
     config::DiscoveredModel {
         model_id: model_id.to_owned(),
         provider_model_id: None,
-        model_family: config::ModelFamily::Qwen3_5,
+        model_family: config::QWEN3_5_MODEL_FAMILY,
         revision: "test-revision".to_owned(),
         model_directory: PathBuf::from(format!("/fictional/models/{model_id}")),
         capabilities: config::ModelCapabilities::Chat(config::ChatModelCapabilities {

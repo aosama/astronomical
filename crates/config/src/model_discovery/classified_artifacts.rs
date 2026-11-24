@@ -62,7 +62,7 @@ fn scan_classified_artifacts(
     if depth > MAXIMUM_CLASSIFIED_SCAN_DEPTH {
         return Ok(());
     }
-    if super::model_family::has_model_root_marker(current_directory) {
+    if super::model_family_classification::has_model_root_marker(current_directory) {
         if let Ok(Some(model_family)) = super::classify_model_directory(current_directory)
             && let Some(model_id) = model_identity(current_directory)
         {
@@ -190,15 +190,17 @@ pub(super) fn immutable_model_revision(
 }
 
 /// The file whose download metadata records the artifact's revision: the one
-/// the directory was classified from. FLUX.2 Klein without a pipeline index
-/// can only be the 4-bit build, classified from its transformer index.
+/// the directory was classified from, which for a folder without a pipeline
+/// index its family names.
 fn authoritative_file_name(model_directory: &Path, model_family: ModelFamily) -> &'static str {
     if model_directory.join("model_index.json").is_file() {
         "model_index.json"
-    } else if model_family == ModelFamily::Flux2Klein {
-        super::FLUX2_KLEIN_MLX_4BIT_TRANSFORMER_INDEX_FILE_NAME
     } else {
-        "config.json"
+        model_family
+            .description()
+            .map_or("config.json", |family_description| {
+                family_description.revision_file_name
+            })
     }
 }
 

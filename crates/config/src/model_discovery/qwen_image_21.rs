@@ -9,6 +9,8 @@ use std::fs::{self, File};
 use std::io::Read;
 use std::path::{Component, Path};
 
+use super::model_family_description::ModelFamily;
+
 use thiserror::Error;
 
 use super::bounded_artifact_file;
@@ -452,3 +454,6 @@ fn is_safe_safetensors_path(shard_path: &str) -> bool {
             .and_then(|extension| extension.to_str())
             == Some("safetensors")
 }
+
+/// The Qwen-Image-2.1 image family.
+pub const QWEN_IMAGE_21_MODEL_FAMILY: ModelFamily = ModelFamily::named("qwen_image_21");

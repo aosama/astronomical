@@ -4,6 +4,8 @@ use std::collections::HashSet;
 use std::fs;
 use std::path::Path;
 
+use super::model_family_description::ModelFamily;
+
 /// Lowest context window disk discovery and download preflight accept: one token for the prompt
 /// and one for the completion. Anything smaller cannot serve a single user turn.
 pub const MINIMUM_SERVABLE_CONTEXT_WINDOW_TOKENS: u64 = 2;
@@ -205,3 +207,6 @@ fn measure_model_weight_payload_bytes(model_directory: &Path) -> Option<u64> {
     }
     Some(model_size_bytes)
 }
+
+/// The Qwen 3.5 chat family, resident or streamed.
+pub const QWEN3_5_MODEL_FAMILY: ModelFamily = ModelFamily::named("qwen3_5");

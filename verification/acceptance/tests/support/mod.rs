@@ -109,7 +109,7 @@ pub(crate) fn discovered_model_artifact(
     config::DiscoveredModel {
         model_id: model_id.to_owned(),
         provider_model_id: None,
-        model_family: config::ModelFamily::Qwen3_5,
+        model_family: config::QWEN3_5_MODEL_FAMILY,
         revision: "local-model-artifact-test".to_owned(),
         model_directory: model_directory.to_path_buf(),
         capabilities: config::ModelCapabilities::Chat(config::ChatModelCapabilities {
@@ -136,7 +136,7 @@ pub(crate) fn discovered_embedding_model_artifact(
     config::DiscoveredModel {
         model_id: model_id.to_owned(),
         provider_model_id: None,
-        model_family: config::ModelFamily::ModernBert,
+        model_family: config::MODERNBERT_MODEL_FAMILY,
         revision: "local-model-artifact-test".to_owned(),
         model_directory: model_directory.to_path_buf(),
         capabilities: config::ModelCapabilities::Embeddings(config::EmbeddingModelCapabilities {

@@ -2,14 +2,12 @@
 
 use std::path::Path;
 
-use config::ModelFamily;
-
 use super::*;
 
 fn lookup_with_root(models_directory: &Path) -> ModelFolderLookup {
     ModelFolderLookup {
         model_directory: models_directory.join("laya-MLX-8bit"),
-        model_family: ModelFamily::Laya,
+        model_family: config::LAYA_MODEL_FAMILY,
         scanned_model_roots: vec![models_directory.to_path_buf()],
         installed_model_ids: vec!["laya-MLX-8bit".to_owned()],
         nested_model_directories: Vec::new(),

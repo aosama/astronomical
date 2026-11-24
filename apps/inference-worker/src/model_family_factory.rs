@@ -150,14 +150,18 @@ impl ModelFamilyFactory {
     ) -> Result<ModelFamilyRuntime, String> {
         match (encoder_family, encoder_model_configuration) {
             (
-                Some(ModelFamily::ModernBert),
+                Some(config::MODERNBERT_MODEL_FAMILY),
                 WorkerModelConfiguration::Embeddings(model_configuration),
             ) => {
                 self.create_modern_bert_embeddings_engine(model_directory_path, model_configuration)
                     .await
             }
             (
-                Some(decision_family @ (ModelFamily::Laya | ModelFamily::Kev | ModelFamily::Clef)),
+                Some(
+                    decision_family @ (config::LAYA_MODEL_FAMILY
+                    | config::KEV_MODEL_FAMILY
+                    | config::CLEF_MODEL_FAMILY),
+                ),
                 WorkerModelConfiguration::Decisions(model_configuration),
             ) => self.create_decision_engine(
                 decision_family,
@@ -246,7 +250,7 @@ impl
             classified_model_family(model_directory_path.clone(), &model_configuration).await?;
         match (model_family, model_configuration) {
             (
-                Some(ModelFamily::Qwen3_5),
+                Some(config::QWEN3_5_MODEL_FAMILY),
                 WorkerModelConfiguration::Autoregressive(model_configuration),
             ) => {
                 self.create_qwen3_5_autoregressive_runtime(
@@ -256,21 +260,21 @@ impl
                 .await
             }
             (
-                Some(ModelFamily::Flux2Klein),
+                Some(config::FLUX2_KLEIN_MODEL_FAMILY),
                 WorkerModelConfiguration::ImageGeneration(model_configuration),
             ) => {
                 self.create_flux2_klein_image_engine(model_directory_path, model_configuration)
                     .await
             }
             (
-                Some(ModelFamily::QwenImage21),
+                Some(config::QWEN_IMAGE_21_MODEL_FAMILY),
                 WorkerModelConfiguration::ImageGeneration(model_configuration),
             ) => {
                 self.create_qwen_image_21_image_engine(model_directory_path, model_configuration)
                     .await
             }
             (
-                Some(ModelFamily::PrismHadamardQwen35),
+                Some(config::PRISM_HADAMARD_QWEN35_MODEL_FAMILY),
                 WorkerModelConfiguration::Autoregressive(model_configuration),
             ) => {
                 self.create_prism_hadamard_autoregressive_runtime(
@@ -281,12 +285,12 @@ impl
             }
             (
                 encoder_family @ Some(
-                    ModelFamily::ModernBert
-                    | ModelFamily::Laya
-                    | ModelFamily::Kev
-                    | ModelFamily::Clef
-                    | ModelFamily::Kokoro
-                    | ModelFamily::Phonon,
+                    config::MODERNBERT_MODEL_FAMILY
+                    | config::LAYA_MODEL_FAMILY
+                    | config::KEV_MODEL_FAMILY
+                    | config::CLEF_MODEL_FAMILY
+                    | config::KOKORO_MODEL_FAMILY
+                    | config::PHONON_MODEL_FAMILY,
                 ),
                 encoder_model_configuration @ (WorkerModelConfiguration::Embeddings(_)
                 | WorkerModelConfiguration::Decisions(_)
@@ -590,7 +594,7 @@ impl ModelFamilyFactory {
             classify_model_directory(&verification_directory_path)
                 .ok()
                 .flatten()
-                .filter(|family| *family == ModelFamily::ModernBert)
+                .filter(|family| *family == config::MODERNBERT_MODEL_FAMILY)
         })
         .await
         .map_err(|_| "embedding-family classification task failed".to_owned())?;
@@ -626,14 +630,14 @@ fn unloaded_decision_engine(
     mlx_buffer_cache_limit_bytes: usize,
 ) -> Result<Box<dyn DecisionEngine>, String> {
     let engine_outcome = match decision_family {
-        ModelFamily::Kev => KevDecisionEngine::new(
+        config::KEV_MODEL_FAMILY => KevDecisionEngine::new(
             model_id,
             model_directory_path,
             effective_mlx_memory_ceiling_bytes,
             mlx_buffer_cache_limit_bytes,
         )
         .map(boxed_decision_engine),
-        ModelFamily::Clef => ClefDecisionEngine::new(
+        config::CLEF_MODEL_FAMILY => ClefDecisionEngine::new(
             model_id,
             model_directory_path,
             effective_mlx_memory_ceiling_bytes,

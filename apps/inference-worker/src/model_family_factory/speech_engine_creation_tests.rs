@@ -1,6 +1,5 @@
 use std::path::PathBuf;
 
-use config::ModelFamily;
 use ipc_protocol::{
     WorkerDecisionModelConfiguration, WorkerModelConfiguration, WorkerSpeechModelConfiguration,
 };
@@ -26,8 +25,8 @@ fn speech_configuration(model_family: String) -> WorkerModelConfiguration {
 #[test]
 fn should_build_an_unloaded_engine_for_each_speech_family() {
     for (model_family, worker_family) in [
-        (ModelFamily::Kokoro, "kokoro"),
-        (ModelFamily::Phonon, "phonon"),
+        (config::KOKORO_MODEL_FAMILY, "kokoro"),
+        (config::PHONON_MODEL_FAMILY, "phonon"),
     ] {
         assert!(
             unloaded_speech_engine(
@@ -45,7 +44,7 @@ fn should_build_an_unloaded_engine_for_each_speech_family() {
 #[test]
 fn should_refuse_a_speech_configuration_for_another_family() {
     let Err(mismatch_reason) = unloaded_speech_engine(
-        Some(ModelFamily::Laya),
+        Some(config::LAYA_MODEL_FAMILY),
         PathBuf::from("decision-model"),
         speech_configuration("kokoro".to_owned()),
         &memory_grant(),
@@ -67,7 +66,7 @@ fn should_refuse_a_decision_configuration_for_a_speech_folder() {
         });
     assert!(
         unloaded_speech_engine(
-            Some(ModelFamily::Kokoro),
+            Some(config::KOKORO_MODEL_FAMILY),
             PathBuf::from("speech-model"),
             decision_configuration,
             &memory_grant(),

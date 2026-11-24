@@ -1,4 +1,3 @@
-use config::ModelFamily;
 use ipc_protocol::{WorkerModelConfiguration, WorkerSpeechModelConfiguration};
 
 use super::{FAMILY_MISMATCH_REASON, ensure_configuration_names_classified_family};
@@ -15,7 +14,7 @@ fn speech_configuration_naming(model_family: &str) -> WorkerModelConfiguration {
 fn should_accept_a_policy_naming_the_family_found_on_disk() {
     assert_eq!(
         ensure_configuration_names_classified_family(
-            Some(ModelFamily::Phonon),
+            Some(config::PHONON_MODEL_FAMILY),
             &speech_configuration_naming("phonon"),
         ),
         Ok(())
@@ -26,7 +25,7 @@ fn should_accept_a_policy_naming_the_family_found_on_disk() {
 fn should_refuse_a_policy_naming_another_family_of_the_same_kind() {
     assert_eq!(
         ensure_configuration_names_classified_family(
-            Some(ModelFamily::Kokoro),
+            Some(config::KOKORO_MODEL_FAMILY),
             &speech_configuration_naming("phonon"),
         ),
         Err(FAMILY_MISMATCH_REASON.to_owned())

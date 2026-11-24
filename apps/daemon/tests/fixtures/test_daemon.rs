@@ -24,7 +24,7 @@ use astronomical_daemon::{
 use config::{
     AstroSsdPromptCacheConfig, AstronomicalInstancePaths, AstronomicalRuntimeInstance,
     DiscoveredModel, ImageGenerationCapabilities, LogLevel, LoggingConfig, ModelCapabilities,
-    ModelFamily, ModelLicense,
+    ModelLicense,
 };
 use tokio::net::TcpListener;
 
@@ -112,7 +112,7 @@ fn discovered_image_model_from_environment() -> Option<DiscoveredModel> {
     Some(DiscoveredModel {
         model_id: image_model_id,
         provider_model_id: Some("mlx-community/Qwen-Image-2.1".to_owned()),
-        model_family: ModelFamily::QwenImage21,
+        model_family: config::QWEN_IMAGE_21_MODEL_FAMILY,
         revision: "fixture-revision".to_owned(),
         model_directory: PathBuf::from("fixtures/models/qwen-image-21"),
         capabilities: ModelCapabilities::ImageGeneration(ImageGenerationCapabilities {

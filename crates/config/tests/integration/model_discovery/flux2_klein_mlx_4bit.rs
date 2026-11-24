@@ -2,8 +2,8 @@ use std::fs;
 use std::path::Path;
 
 use config::{
-    Flux2KleinDirectoryVerificationError, ModelCapabilities, ModelFamily, ModelLicense,
-    classify_model_directory, verify_flux2_klein_model_directory,
+    FLUX2_KLEIN_MODEL_FAMILY, Flux2KleinDirectoryVerificationError, ModelCapabilities,
+    ModelLicense, classify_model_directory, verify_flux2_klein_model_directory,
 };
 use serde_json::{Map, Value, json};
 
@@ -30,7 +30,7 @@ fn should_discover_the_4bit_build_under_its_own_model_id() {
         discovered_model.provider_model_id.as_deref(),
         Some(PROVIDER_MODEL_ID)
     );
-    assert_eq!(discovered_model.model_family, ModelFamily::Flux2Klein);
+    assert_eq!(discovered_model.model_family, FLUX2_KLEIN_MODEL_FAMILY);
     assert_eq!(discovered_model.revision, REVIEWED_REVISION);
     assert_eq!(discovered_model.license, Some(ModelLicense::Apache20));
     // Two transformer shards, two text shards and one VAE shard.
@@ -54,7 +54,7 @@ fn should_classify_the_4bit_tree_as_flux2_klein_without_a_pipeline_index() {
     assert_eq!(
         classify_model_directory(temporary_directory.path())
             .expect("the 4-bit tree should classify"),
-        Some(ModelFamily::Flux2Klein)
+        Some(FLUX2_KLEIN_MODEL_FAMILY)
     );
 }
 
@@ -70,7 +70,7 @@ fn should_classify_by_the_4bit_index_before_config_json() {
     assert_eq!(
         classify_model_directory(temporary_directory.path())
             .expect("the 4-bit tree should classify"),
-        Some(ModelFamily::Flux2Klein)
+        Some(FLUX2_KLEIN_MODEL_FAMILY)
     );
 }
 
@@ -90,7 +90,7 @@ fn should_fall_back_to_config_json_when_the_transformer_index_is_not_the_4bit_bu
 
     assert_eq!(
         classify_model_directory(temporary_directory.path()).expect("config.json should classify"),
-        Some(ModelFamily::Qwen3_5)
+        Some(config::QWEN3_5_MODEL_FAMILY)
     );
 }
 

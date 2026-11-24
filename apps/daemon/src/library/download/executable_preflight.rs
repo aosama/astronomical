@@ -136,14 +136,11 @@ impl DownloadExecutablePreflight {
                     "model_index.json is not a classifiable pipeline document: {parse_error}"
                 ))
             })?;
-        match classified_family {
-            Some(ModelFamily::Flux2Klein) => Ok(()),
-            Some(ModelFamily::QwenImage21) => Ok(()),
-            Some(_) => Ok(()),
-            None => Err(DownloadExecutablePreflightError::NotExecutable(
+        classified_family.map(|_| ()).ok_or_else(|| {
+            DownloadExecutablePreflightError::NotExecutable(
                 "model_index.json does not describe a supported text-to-image pipeline".to_owned(),
-            )),
-        }
+            )
+        })
     }
 
     async fn validate_config_artifact(
@@ -170,16 +167,7 @@ impl DownloadExecutablePreflight {
             return validate_speech_manifest_shape(manifest_file_paths, &config_document);
         };
         match model_family {
-            // Families whose shallow rules need files on disk keep publication as their backstop.
-            ModelFamily::ModernBert
-            | ModelFamily::Laya
-            | ModelFamily::Kev
-            | ModelFamily::Clef
-            | ModelFamily::Flux2Klein
-            | ModelFamily::QwenImage21
-            | ModelFamily::Kokoro
-            | ModelFamily::Phonon => Ok(()),
-            ModelFamily::Qwen3_5 => {
+            config::QWEN3_5_MODEL_FAMILY => {
                 self.validate_qwen3_5_manifest_shape(
                     manifest,
                     manifest_file_paths,
@@ -187,9 +175,12 @@ impl DownloadExecutablePreflight {
                 )
                 .await
             }
-            ModelFamily::PrismHadamardQwen35 => {
+            config::PRISM_HADAMARD_QWEN35_MODEL_FAMILY => {
                 validate_prism_hadamard_manifest_shape(manifest_file_paths, &config_document)
             }
+            // Every other family's shallow rules need its files on disk, so
+            // discovery after the download is its backstop.
+            _ => Ok(()),
         }
     }
 

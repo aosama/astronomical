@@ -92,7 +92,7 @@ async fn should_canonicalize_a_provider_prefixed_model_for_an_idle_worker() {
         vec![DiscoveredModel {
             model_id: "requested-model".to_owned(),
             provider_model_id: None,
-            model_family: config::ModelFamily::Qwen3_5,
+            model_family: config::QWEN3_5_MODEL_FAMILY,
             revision: "test-revision".to_owned(),
             model_directory: PathBuf::from("/models/requested-model"),
             capabilities: config::ModelCapabilities::Chat(config::ChatModelCapabilities {

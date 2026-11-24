@@ -5,7 +5,6 @@ use std::path::PathBuf;
 
 use config::{
     ChatModelCapabilities, DecisionModelCapabilities, DiscoveredModel, ModelCapabilities,
-    ModelFamily,
 };
 use decision_contract::OrderedJsonValue;
 
@@ -15,7 +14,7 @@ fn decision_model(model_id: &str) -> DiscoveredModel {
     DiscoveredModel {
         model_id: model_id.to_owned(),
         provider_model_id: None,
-        model_family: ModelFamily::Laya,
+        model_family: config::LAYA_MODEL_FAMILY,
         revision: "fixture-revision".to_owned(),
         model_directory: PathBuf::from("fixtures/models/laya"),
         capabilities: ModelCapabilities::Decisions(DecisionModelCapabilities {
@@ -30,7 +29,7 @@ fn chat_model(model_id: &str) -> DiscoveredModel {
     DiscoveredModel {
         model_id: model_id.to_owned(),
         provider_model_id: None,
-        model_family: ModelFamily::Qwen3_5,
+        model_family: config::QWEN3_5_MODEL_FAMILY,
         revision: "fixture-revision".to_owned(),
         model_directory: PathBuf::from("fixtures/models/chat"),
         capabilities: ModelCapabilities::Chat(ChatModelCapabilities {

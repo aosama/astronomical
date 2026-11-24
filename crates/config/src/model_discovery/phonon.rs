@@ -8,9 +8,11 @@
 
 use std::path::Path;
 
+use super::model_family_description::ModelFamily;
+
+use super::SpeechModelCapabilities;
 use super::bounded_artifact_file;
 use super::speech_voices::catalog_voice_names;
-use super::{ModelFamily, SpeechModelCapabilities};
 
 pub const PHONON_CONFIGURATION_FILE_NAME: &str = "config.json";
 pub const PHONON_WEIGHTS_FILE_NAME: &str = "model.safetensors";
@@ -49,7 +51,7 @@ pub fn phonon_speech_capabilities(model_directory: &Path) -> Option<SpeechModelC
         &model_directory.join(PHONON_VOICES_DIRECTORY_NAME),
     ));
     Some(SpeechModelCapabilities {
-        model_family: ModelFamily::Phonon,
+        model_family: PHONON_MODEL_FAMILY,
         sample_rate_hertz: phonon_sample_rate_hertz(model_directory)?,
         default_voice_name: voice_names.first()?.clone(),
         voice_names,
@@ -83,6 +85,9 @@ fn configured_sample_rate_hertz(configuration: &serde_json::Value) -> Option<u32
         .ok()
         .filter(|rate| *rate > 0)
 }
+
+/// The Phonon speech family: a causal flow language model with a Mimi decoder.
+pub const PHONON_MODEL_FAMILY: ModelFamily = ModelFamily::named("phonon");
 
 #[cfg(test)]
 #[path = "phonon_tests.rs"]

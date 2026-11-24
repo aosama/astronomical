@@ -2,6 +2,8 @@
 
 use std::path::Path;
 
+use super::model_family_description::ModelFamily;
+
 /// Lowest context window disk discovery accepts: one token for the prompt and
 /// one for the completion. Anything smaller cannot serve a single user turn.
 pub(super) const MINIMUM_SERVABLE_CONTEXT_WINDOW_TOKENS: u64 = 2;
@@ -61,3 +63,7 @@ pub(super) fn discover_model_metadata(
         model_size_bytes,
     })
 }
+
+/// The folded ternary Qwen 3.5 pack family.
+pub const PRISM_HADAMARD_QWEN35_MODEL_FAMILY: ModelFamily =
+    ModelFamily::named("prism_hadamard_qwen35");

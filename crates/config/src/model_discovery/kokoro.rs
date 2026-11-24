@@ -7,9 +7,11 @@
 
 use std::path::Path;
 
+use super::model_family_description::ModelFamily;
+
+use super::SpeechModelCapabilities;
 use super::bounded_artifact_file;
 use super::speech_voices::catalog_voice_names;
-use super::{ModelFamily, SpeechModelCapabilities};
 
 pub const KOKORO_CONFIGURATION_FILE_NAME: &str = "config.json";
 pub const KOKORO_WEIGHTS_FILE_NAME: &str = "kokoro-v1_0.safetensors";
@@ -62,7 +64,7 @@ pub fn kokoro_speech_capabilities(model_directory: &Path) -> Option<SpeechModelC
         voice_names.first()?.clone()
     };
     Some(SpeechModelCapabilities {
-        model_family: ModelFamily::Kokoro,
+        model_family: KOKORO_MODEL_FAMILY,
         sample_rate_hertz: KOKORO_SAMPLE_RATE_HERTZ,
         voice_names,
         default_voice_name,
@@ -75,6 +77,9 @@ fn is_american_english_voice(voice_name: &str) -> bool {
         .iter()
         .any(|voice_prefix| voice_name.starts_with(voice_prefix))
 }
+
+/// The Kokoro speech family: StyleTTS2 with an iSTFTNet vocoder.
+pub const KOKORO_MODEL_FAMILY: ModelFamily = ModelFamily::named("kokoro");
 
 #[cfg(test)]
 #[path = "kokoro_tests.rs"]
