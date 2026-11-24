@@ -1,6 +1,8 @@
 //! Which engine each model family is served by (issue #2473, Step 5).
 //!
 //! The factory looks a classified family up here instead of matching on it.
+//! The table is the family list itself (`model_families.list` in the
+//! registry crate), so a family has one line for discovery and the worker.
 //! Decision and speech families are built by kind from the family's own
 //! type, so a new family of those kinds adds one line to the table and no
 //! code here; chat, image and embedding families still have a builder each. Each builder
@@ -17,11 +19,9 @@ use ipc_protocol::{
     WorkerEmbeddingModelConfiguration, WorkerImageGenerationModelConfiguration,
     WorkerModelConfiguration, WorkerSpeechModelConfiguration,
 };
+use model_serving::ImageFamilyConstruction;
 use model_serving::decision_models::decision_engine_shell::{DecisionEngineShell, DecisionFamily};
-use model_serving::{
-    ClefDecisionFamily, KevDecisionFamily, KokoroSpeechFamily, LayaDecisionFamily,
-    ModelFactoryRuntime, PhononSpeechFamily, SpeechEngine, SpeechEngineShell, SpeechFamily,
-};
+use model_serving::{ModelFactoryRuntime, SpeechEngine, SpeechEngineShell, SpeechFamily};
 
 use super::configured_family_check::FAMILY_MISMATCH_REASON;
 use super::{ModelFamilyFactory, ModelFamilyRuntime};
@@ -69,49 +69,21 @@ pub(super) enum FamilyRuntimeBuilder {
     ),
 }
 
-/// Every family the worker serves, with its builder.
-static FAMILY_RUNTIME_BUILDERS: [(ModelFamily, FamilyRuntimeBuilder); 10] = [
-    (
-        config::QWEN3_5_MODEL_FAMILY,
-        FamilyRuntimeBuilder::Chat(build_qwen3_5_runtime),
-    ),
-    (
-        config::PRISM_HADAMARD_QWEN35_MODEL_FAMILY,
-        FamilyRuntimeBuilder::Chat(build_prism_hadamard_qwen35_runtime),
-    ),
-    (
-        config::FLUX2_KLEIN_MODEL_FAMILY,
-        FamilyRuntimeBuilder::ImageGeneration(build_flux2_klein_runtime),
-    ),
-    (
-        config::QWEN_IMAGE_21_MODEL_FAMILY,
-        FamilyRuntimeBuilder::ImageGeneration(build_qwen_image_21_runtime),
-    ),
-    (
-        config::MODERNBERT_MODEL_FAMILY,
-        FamilyRuntimeBuilder::Embedding(build_modernbert_runtime),
-    ),
-    (
-        config::LAYA_MODEL_FAMILY,
-        FamilyRuntimeBuilder::Decision(build_decision_runtime::<LayaDecisionFamily>),
-    ),
-    (
-        config::KEV_MODEL_FAMILY,
-        FamilyRuntimeBuilder::Decision(build_decision_runtime::<KevDecisionFamily>),
-    ),
-    (
-        config::CLEF_MODEL_FAMILY,
-        FamilyRuntimeBuilder::Decision(build_decision_runtime::<ClefDecisionFamily>),
-    ),
-    (
-        config::KOKORO_MODEL_FAMILY,
-        FamilyRuntimeBuilder::Speech(build_speech_runtime::<KokoroSpeechFamily>),
-    ),
-    (
-        config::PHONON_MODEL_FAMILY,
-        FamilyRuntimeBuilder::Speech(build_speech_runtime::<PhononSpeechFamily>),
-    ),
-];
+/// Reads a line of the family list as the family and the builder the
+/// worker serves it with; the description half is discovery's.
+macro_rules! model_family {
+    ($family_description:ident, $builder_kind:ident ( $($runtime_builder:tt)* )) => {
+        (
+            model_family_registry::$family_description.model_family,
+            FamilyRuntimeBuilder::$builder_kind($($runtime_builder)*),
+        )
+    };
+}
+
+/// Every family the worker serves, with its builder: the same list, line
+/// for line, that discovery recognizes families from.
+static FAMILY_RUNTIME_BUILDERS: &[(ModelFamily, FamilyRuntimeBuilder)] =
+    &include!("../../../../crates/families/registry/model-family-registry/src/model_families.list");
 
 /// The builder the worker serves `model_family` with, if it serves it.
 pub(super) fn family_runtime_builder(
@@ -202,25 +174,15 @@ fn build_prism_hadamard_qwen35_runtime(
     )
 }
 
-fn build_flux2_klein_runtime(
+/// Every image family: its own folder check, then its engine.
+fn build_image_runtime<Family: ImageFamilyConstruction>(
     model_family_factory: &ModelFamilyFactory,
     model_directory_path: PathBuf,
     image_configuration: WorkerImageGenerationModelConfiguration,
 ) -> RuntimeFuture<'_> {
     Box::pin(
         model_family_factory
-            .create_flux2_klein_image_engine(model_directory_path, image_configuration),
-    )
-}
-
-fn build_qwen_image_21_runtime(
-    model_family_factory: &ModelFamilyFactory,
-    model_directory_path: PathBuf,
-    image_configuration: WorkerImageGenerationModelConfiguration,
-) -> RuntimeFuture<'_> {
-    Box::pin(
-        model_family_factory
-            .create_qwen_image_21_image_engine(model_directory_path, image_configuration),
+            .create_image_engine::<Family>(model_directory_path, image_configuration),
     )
 }
 

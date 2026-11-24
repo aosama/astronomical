@@ -179,6 +179,7 @@ dependencies = [
  "ipc-protocol",
  "memory-policy",
  "mlx-bridge",
+ "model-family-registry",
  "model-serving",
  "runtime-integration",
  "serde_json",
@@ -842,11 +843,13 @@ name = "flux2-klein"
 version = "0.2.134"
 dependencies = [
  "artifact-validation",
+ "flux2-klein-recognition",
  "image",
  "image-generation",
  "ipc-protocol",
  "memory-policy",
  "mlx-bridge",
+ "model-discovery",
  "model-primitives",
  "runtime-integration",
  "safetensors",
@@ -1203,6 +1206,7 @@ version = "0.2.134"
 dependencies = [
  "ipc-protocol",
  "memory-policy",
+ "model-discovery",
  "model-primitives",
 ]
 
@@ -1975,7 +1979,9 @@ dependencies = [
  "ipc-protocol",
  "memory-policy",
  "mlx-bridge",
+ "model-discovery",
  "model-primitives",
+ "qwen-image-21-recognition",
  "runtime-integration",
  "safetensors",
  "serde",

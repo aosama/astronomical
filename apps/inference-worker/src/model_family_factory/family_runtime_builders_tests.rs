@@ -11,19 +11,6 @@ use super::super::configured_family_check::FAMILY_MISMATCH_REASON;
 use super::super::family_test_support::speech_configuration_naming;
 use super::{FAMILY_RUNTIME_BUILDERS, FamilyRuntimeBuilder, family_runtime_builder};
 
-const SERVED_FAMILIES: [ModelFamily; 10] = [
-    config::QWEN3_5_MODEL_FAMILY,
-    config::PRISM_HADAMARD_QWEN35_MODEL_FAMILY,
-    config::FLUX2_KLEIN_MODEL_FAMILY,
-    config::QWEN_IMAGE_21_MODEL_FAMILY,
-    config::MODERNBERT_MODEL_FAMILY,
-    config::LAYA_MODEL_FAMILY,
-    config::KEV_MODEL_FAMILY,
-    config::CLEF_MODEL_FAMILY,
-    config::KOKORO_MODEL_FAMILY,
-    config::PHONON_MODEL_FAMILY,
-];
-
 fn model_family_factory() -> ModelFamilyFactory {
     ModelFamilyFactory::new(
         1 << 30,
@@ -47,18 +34,22 @@ const fn builder_kind(runtime_builder: &FamilyRuntimeBuilder) -> ModelKind {
 }
 
 #[test]
-fn should_serve_every_family_with_a_builder_of_its_own_kind() {
-    for model_family in SERVED_FAMILIES {
+fn should_serve_every_registered_family_with_a_builder_of_its_own_kind() {
+    // Discovery and the worker read the same list, so every family discovery
+    // recognizes has a builder, of the kind its description declares.
+    let registered_descriptions = model_family_registry::MODEL_FAMILY_REGISTRY.descriptions();
+    for family_description in registered_descriptions {
+        let model_family = family_description.model_family;
         let runtime_builder = family_runtime_builder(model_family)
             .unwrap_or_else(|| panic!("{} has no builder", model_family.as_str()));
         assert_eq!(
-            Some(builder_kind(runtime_builder)),
-            config::model_kind_of(model_family),
+            builder_kind(runtime_builder),
+            family_description.kind,
             "{}",
             model_family.as_str()
         );
     }
-    assert_eq!(FAMILY_RUNTIME_BUILDERS.len(), SERVED_FAMILIES.len());
+    assert_eq!(FAMILY_RUNTIME_BUILDERS.len(), registered_descriptions.len());
 }
 
 #[test]

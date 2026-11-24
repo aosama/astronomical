@@ -9,22 +9,19 @@
 
 use std::path::PathBuf;
 
-use config::{
-    AstroSsdPromptCacheConfig, verify_flux2_klein_model_directory,
-    verify_qwen_image_21_model_directory,
-};
+use config::AstroSsdPromptCacheConfig;
 use ipc_protocol::{
     WorkerAutoregressiveModelConfiguration, WorkerDecodeAstroExpertCachePolicy,
     WorkerDiagnosticQwen3_5EngineOverride, WorkerEmbeddingModelConfiguration,
     WorkerImageGenerationModelConfiguration, WorkerModelConfiguration,
 };
 use model_serving::{
-    DecisionEngine, EmbeddingEngine, EngineBackedWorker, Flux2KleinArtifactProvenance,
-    ImageGenerationEngine, ModelFactory, ModelFactoryRuntime, ModelFamilyInferenceEngine,
-    ModernBertEmbeddingEngine, PrismHadamardQwen35ServingSettings, Qwen3_5GenerationProcessor,
-    QwenImage21ArtifactProvenance, RecordedTrainingEngine, SpeechEngine, boxed_chat_engine,
-    build_flux2_klein_image_engine, build_qwen_image_21_image_engine,
-    initialize_prism_hadamard_qwen35_model_with_serving_settings,
+    DecisionEngine, EmbeddingEngine, EngineBackedWorker, FamilyEngineSettings,
+    ImageArtifactRefusal, ImageFamilyConstruction, ImageGenerationEngine, ModelFactory,
+    ModelFactoryRuntime, ModelFamilyInferenceEngine, ModernBertEmbeddingEngine,
+    PrismHadamardQwen35ServingSettings, Qwen3_5GenerationProcessor, RecordedTrainingEngine,
+    SpeechEngine, boxed_chat_engine, image_engine_from_evidence,
+    initialize_prism_hadamard_qwen35_model_with_serving_settings, verified_image_artifact,
 };
 
 mod configured_family_check;
@@ -316,92 +313,42 @@ impl ModelFamilyFactory {
         })
     }
 
-    /// Verifies the FLUX.2 Klein directory against the selected configuration
-    /// and builds its image engine.
-    async fn create_flux2_klein_image_engine(
-        &self,
-        model_directory_path: PathBuf,
-        model_configuration: WorkerImageGenerationModelConfiguration,
-    ) -> Result<ModelFamilyRuntime, String> {
-        let verification_directory_path = model_directory_path.clone();
-        let verification_task_result = tokio::task::spawn_blocking(move || {
-            verify_flux2_klein_model_directory(&verification_directory_path)
-                // Discovery retains typed diagnostics, while this worker boundary must not
-                // reveal which mutable local artifact detail changed after selection.
-                .map_err(|_| {
-                    "selected FLUX.2 Klein artifact failed exact-directory verification".to_owned()
-                })
-        })
-        .await
-        .map_err(|_| "FLUX.2 Klein verification task failed".to_owned())?;
-        let verified_evidence = verification_task_result?;
-        if model_configuration.model_id != verified_evidence.canonical_model_id
-            || model_configuration.artifact_revision != verified_evidence.revision
-        {
-            return Err(
-                "selected FLUX.2 Klein model identity or revision is unsupported".to_owned(),
-            );
+    /// The settings every family's engine builder reads.
+    fn family_engine_settings(&self) -> FamilyEngineSettings {
+        FamilyEngineSettings {
+            effective_mlx_memory_ceiling_bytes: self.effective_mlx_memory_ceiling_bytes,
+            mlx_buffer_cache_limit_bytes: self.mlx_buffer_cache_limit_bytes,
+            floor_raise_limit_bytes: self.floor_raise_limit_bytes,
+            performance_attribution_enabled: self.performance_attribution_enabled,
+            performance_attribution_log_path: self.performance_attribution_log_path.clone(),
         }
-        let provenance = Flux2KleinArtifactProvenance::new(
-            verified_evidence.provider_model_id,
-            verified_evidence.revision,
-            verified_evidence.license.spdx_identifier(),
-        );
-        Ok(ModelFactoryRuntime::Image(Box::new(
-            build_flux2_klein_image_engine(
-                model_directory_path,
-                provenance,
-                self.effective_mlx_memory_ceiling_bytes,
-                self.mlx_buffer_cache_limit_bytes,
-                self.performance_attribution_enabled,
-                self.performance_attribution_log_path.clone(),
-            )
-            .with_floor_raise_limit_bytes(self.floor_raise_limit_bytes),
-        )))
     }
 
-    /// Verifies the Qwen-Image-2.1 directory against the selected
-    /// configuration and builds its image engine.
-    async fn create_qwen_image_21_image_engine(
+    /// Checks an image family's folder against the selected configuration on
+    /// a blocking task, then builds its unloaded engine.
+    async fn create_image_engine<Family: ImageFamilyConstruction>(
         &self,
         model_directory_path: PathBuf,
         model_configuration: WorkerImageGenerationModelConfiguration,
     ) -> Result<ModelFamilyRuntime, String> {
         let verification_directory_path = model_directory_path.clone();
         let verification_task_result = tokio::task::spawn_blocking(move || {
-            verify_qwen_image_21_model_directory(&verification_directory_path)
-                // Discovery retains typed diagnostics, while this worker boundary must not
-                // reveal which mutable local artifact detail changed after selection.
-                .map_err(|_| {
-                    "selected Qwen-Image-2.1 artifact failed exact-directory verification"
-                        .to_owned()
-                })
+            verified_image_artifact::<Family>(
+                &verification_directory_path,
+                &model_configuration.model_id,
+                &model_configuration.artifact_revision,
+            )
         })
         .await
-        .map_err(|_| "Qwen-Image-2.1 verification task failed".to_owned())?;
-        let verified_evidence = verification_task_result?;
-        if model_configuration.model_id != verified_evidence.canonical_model_id
-            || model_configuration.artifact_revision != verified_evidence.revision
-        {
-            return Err(
-                "selected Qwen-Image-2.1 model identity or revision is unsupported".to_owned(),
-            );
-        }
-        let provenance = QwenImage21ArtifactProvenance::new(
-            verified_evidence.provider_model_id,
-            verified_evidence.revision,
-            verified_evidence.license.spdx_identifier(),
-        );
+        .map_err(|_| format!("{} verification task failed", Family::FAMILY_NAME))?;
+        let verified_evidence = verification_task_result
+            .map_err(|refusal| image_artifact_refusal_reason(Family::FAMILY_NAME, refusal))?;
         Ok(ModelFactoryRuntime::Image(Box::new(
-            build_qwen_image_21_image_engine(
+            image_engine_from_evidence::<Family>(
+                &self.family_engine_settings(),
                 model_directory_path,
-                provenance,
-                self.effective_mlx_memory_ceiling_bytes,
-                self.mlx_buffer_cache_limit_bytes,
-                self.performance_attribution_enabled,
-                self.performance_attribution_log_path.clone(),
-            )
-            .with_floor_raise_limit_bytes(self.floor_raise_limit_bytes),
+                verified_evidence,
+            ),
         )))
     }
 
@@ -500,6 +447,20 @@ impl ModelFamilyFactory {
             format!("selected embedding artifact failed initialization: {failure_reason:?}")
         })?;
         Ok(ModelFactoryRuntime::Embeddings(Box::new(embedding_engine)))
+    }
+}
+
+/// The reason the worker gives for an image folder it will not serve. It
+/// names the family and not which detail of the folder changed, because
+/// discovery keeps the typed diagnostics and the selection may be stale.
+fn image_artifact_refusal_reason(family_name: &str, refusal: ImageArtifactRefusal) -> String {
+    match refusal {
+        ImageArtifactRefusal::FailedVerification => {
+            format!("selected {family_name} artifact failed exact-directory verification")
+        }
+        ImageArtifactRefusal::UnsupportedIdentity => {
+            format!("selected {family_name} model identity or revision is unsupported")
+        }
     }
 }
 

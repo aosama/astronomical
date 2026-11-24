@@ -22,6 +22,15 @@ pub struct Flux2KleinArtifactProvenance {
 }
 
 impl Flux2KleinArtifactProvenance {
+    /// The provenance discovery's folder check proved.
+    pub fn from_directory_evidence(evidence: model_discovery::ImageDirectoryEvidence) -> Self {
+        Self::new(
+            evidence.provider_model_id,
+            evidence.revision,
+            evidence.license.spdx_identifier(),
+        )
+    }
+
     pub fn new(
         model_id: impl Into<String>,
         revision: impl Into<String>,

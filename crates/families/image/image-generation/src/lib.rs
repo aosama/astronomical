@@ -15,6 +15,8 @@
 
 pub mod image_engine_shell;
 
+pub mod image_family_construction;
+
 #[cfg(any(test, feature = "test-support"))]
 pub mod image_engine_shell_test_support;
 
@@ -25,5 +27,10 @@ pub use image_generation_engine::{
 };
 
 pub use image_engine_shell::{ImageComponentLoad, ImageEngineComponents};
+
+pub use image_family_construction::{
+    BuildImageEngine, ImageArtifactRefusal, ImageFamilyConstruction, ImageProvenanceFromEvidence,
+    VerifyImageDirectory, image_engine_from_evidence, verified_image_artifact,
+};
 
 pub use image_generation_engine::ImageGenerationEngineLoadResult;

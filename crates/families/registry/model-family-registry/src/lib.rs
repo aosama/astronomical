@@ -61,7 +61,7 @@ use registered_model_families::REGISTERED_MODEL_FAMILIES;
 
 /// Every registered family, in classification order.
 pub static MODEL_FAMILY_REGISTRY: ModelFamilyRegistry =
-    ModelFamilyRegistry::new(&REGISTERED_MODEL_FAMILIES);
+    ModelFamilyRegistry::new(REGISTERED_MODEL_FAMILIES);
 
 /// The registered family with this identifier.
 #[must_use]

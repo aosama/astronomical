@@ -4,7 +4,7 @@
 //! before cleanup, is the shared [`ImageEngineShell`].
 
 #[cfg(feature = "direct-mlx")]
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::time::Instant;
 
 use ipc_protocol::{
@@ -12,8 +12,16 @@ use ipc_protocol::{
     ImageGenerationResultMetadata, RequestId,
 };
 
+#[cfg(feature = "direct-mlx")]
+use flux2_klein_recognition::verify_flux2_klein_model_directory;
 use image_generation::ImageGenerationEngineStep;
 use image_generation::image_engine_shell::{ActiveImageRequest, ImageEngineShell, ImageFamily};
+#[cfg(feature = "direct-mlx")]
+use image_generation::{
+    BuildImageEngine, ImageFamilyConstruction, ImageProvenanceFromEvidence, VerifyImageDirectory,
+};
+#[cfg(feature = "direct-mlx")]
+use model_primitives::FamilyEngineSettings;
 
 #[cfg(feature = "direct-mlx")]
 use super::super::Flux2KleinArtifactProvenance;
@@ -36,26 +44,34 @@ pub struct Flux2KleinImageFamily;
 /// type is the shared shell, which this family crate does not own.
 #[cfg(feature = "direct-mlx")]
 pub fn build_flux2_klein_image_engine(
-    model_directory: impl AsRef<Path>,
+    model_directory: PathBuf,
     provenance: Flux2KleinArtifactProvenance,
-    effective_mlx_memory_ceiling_bytes: usize,
-    mlx_buffer_cache_limit_bytes: usize,
-    performance_attribution_enabled: bool,
-    performance_attribution_log_path: PathBuf,
+    family_engine_settings: &FamilyEngineSettings,
 ) -> Flux2KleinImageEngine {
     let serving_model_id = provenance.serving_model_id();
     Flux2KleinImageEngine::from_components(
         serving_model_id,
         Box::new(super::mlx_components::Flux2KleinMlxComponents::new(
             serving_model_id.to_owned(),
-            model_directory.as_ref().to_path_buf(),
+            model_directory,
             provenance,
-            effective_mlx_memory_ceiling_bytes,
-            mlx_buffer_cache_limit_bytes,
-            performance_attribution_enabled,
-            performance_attribution_log_path,
+            family_engine_settings.effective_mlx_memory_ceiling_bytes,
+            family_engine_settings.mlx_buffer_cache_limit_bytes,
+            family_engine_settings.performance_attribution_enabled,
+            family_engine_settings
+                .performance_attribution_log_path
+                .clone(),
         )),
     )
+}
+
+#[cfg(feature = "direct-mlx")]
+impl ImageFamilyConstruction for Flux2KleinImageFamily {
+    type Provenance = Flux2KleinArtifactProvenance;
+    type DirectoryError = flux2_klein_recognition::Flux2KleinDirectoryVerificationError;
+    const VERIFY_DIRECTORY: VerifyImageDirectory<Self> = verify_flux2_klein_model_directory;
+    const PROVENANCE: ImageProvenanceFromEvidence<Self> = Self::Provenance::from_directory_evidence;
+    const BUILD_ENGINE: BuildImageEngine<Self> = build_flux2_klein_image_engine;
 }
 
 impl ImageFamily for Flux2KleinImageFamily {

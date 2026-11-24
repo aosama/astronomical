@@ -47,10 +47,10 @@ pub use configuration::{
     Flux2KleinTextEncoderConfig, Flux2KleinTransformerConfig, Flux2KleinVaeConfig,
 };
 pub use dimensions::Flux2KleinImageDimensions;
-pub use engine::Flux2KleinImageEngine;
 #[cfg(feature = "direct-mlx")]
 pub use engine::build_flux2_klein_image_engine;
 pub use engine::components::{Flux2KleinComponentLoad, Flux2KleinEngineComponents};
+pub use engine::{Flux2KleinImageEngine, Flux2KleinImageFamily};
 #[cfg(feature = "direct-mlx")]
 #[doc(hidden)]
 pub use engine::{

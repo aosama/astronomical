@@ -5,6 +5,15 @@
 
 #[cfg(feature = "direct-mlx")]
 use std::path::PathBuf;
+
+#[cfg(feature = "direct-mlx")]
+use image_generation::{
+    BuildImageEngine, ImageFamilyConstruction, ImageProvenanceFromEvidence, VerifyImageDirectory,
+};
+#[cfg(feature = "direct-mlx")]
+use model_primitives::FamilyEngineSettings;
+#[cfg(feature = "direct-mlx")]
+use qwen_image_21_recognition::verify_qwen_image_21_model_directory;
 use std::time::Instant;
 
 use ipc_protocol::{
@@ -35,12 +44,9 @@ pub struct QwenImage21ImageFamily;
 #[cfg(feature = "direct-mlx")]
 #[must_use]
 pub fn build_qwen_image_21_image_engine(
-    model_directory: impl Into<PathBuf>,
+    model_directory: PathBuf,
     provenance: crate::artifact::QwenImage21ArtifactProvenance,
-    effective_mlx_memory_ceiling_bytes: usize,
-    mlx_buffer_cache_limit_bytes: usize,
-    performance_attribution_enabled: bool,
-    performance_attribution_log_path: PathBuf,
+    family_engine_settings: &FamilyEngineSettings,
 ) -> QwenImage21ImageEngine {
     QwenImage21ImageEngine::from_components(
         QWEN_IMAGE_21_OFFICIAL_MODEL_ID,
@@ -48,13 +54,24 @@ pub fn build_qwen_image_21_image_engine(
             crate::engine::mlx_components::QwenImage21MlxComponents::new(
                 model_directory,
                 provenance,
-                effective_mlx_memory_ceiling_bytes,
-                mlx_buffer_cache_limit_bytes,
-                performance_attribution_enabled,
-                performance_attribution_log_path,
+                family_engine_settings.effective_mlx_memory_ceiling_bytes,
+                family_engine_settings.mlx_buffer_cache_limit_bytes,
+                family_engine_settings.performance_attribution_enabled,
+                family_engine_settings
+                    .performance_attribution_log_path
+                    .clone(),
             ),
         ),
     )
+}
+
+#[cfg(feature = "direct-mlx")]
+impl ImageFamilyConstruction for QwenImage21ImageFamily {
+    type Provenance = crate::artifact::QwenImage21ArtifactProvenance;
+    type DirectoryError = qwen_image_21_recognition::QwenImage21DirectoryVerificationError;
+    const VERIFY_DIRECTORY: VerifyImageDirectory<Self> = verify_qwen_image_21_model_directory;
+    const PROVENANCE: ImageProvenanceFromEvidence<Self> = Self::Provenance::from_directory_evidence;
+    const BUILD_ENGINE: BuildImageEngine<Self> = build_qwen_image_21_image_engine;
 }
 
 impl ImageFamily for QwenImage21ImageFamily {
