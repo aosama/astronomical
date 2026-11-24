@@ -16,7 +16,7 @@ mod test_tokenizer;
 mod tokenizer;
 mod whole_model_scorer;
 
-pub use engine::{KevDecisionEngine, kev_question_row_layouts};
+pub use engine::{KevDecisionEngine, KevDecisionFamily, kev_question_row_layouts};
 pub use sequence::KevRowLayout;
 
 use ::decision_models::*;

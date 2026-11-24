@@ -108,3 +108,39 @@ async fn should_refuse_a_policy_of_another_kind_before_building() {
 
     assert!(matches!(refusal, Err(reason) if reason == FAMILY_MISMATCH_REASON));
 }
+
+#[tokio::test]
+async fn should_refuse_an_empty_folder_for_each_decision_family() {
+    // The generic decision builder reaches each family's own folder
+    // preparation; an empty folder must come back as the worker's bounded
+    // refusal, not a panic and not an engine.
+    let empty_model_directory =
+        tempfile::tempdir().expect("an empty model directory should be created");
+    for (model_family, identifier) in [
+        (config::LAYA_MODEL_FAMILY, "laya"),
+        (config::KEV_MODEL_FAMILY, "kev"),
+        (config::CLEF_MODEL_FAMILY, "clef"),
+    ] {
+        let decision_policy =
+            WorkerModelConfiguration::Decisions(WorkerDecisionModelConfiguration {
+                model_id: format!("{identifier}-model"),
+                model_family: identifier.to_owned(),
+                artifact_revision: "decision-revision".to_owned(),
+                maximum_tokens_per_question: 512,
+            });
+
+        let refusal = family_runtime_builder(model_family)
+            .expect("decision families are served")
+            .build(
+                &model_family_factory(),
+                empty_model_directory.path().to_path_buf(),
+                decision_policy,
+            )
+            .await;
+
+        assert!(
+            matches!(&refusal, Err(reason) if reason.starts_with("selected decision artifact failed initialization: ")),
+            "{identifier}"
+        );
+    }
+}

@@ -1,7 +1,9 @@
 //! Which engine each model family is served by (issue #2473, Step 5).
 //!
-//! The factory looks a classified family up here instead of matching on it,
-//! so a new family adds its builder and one line to the table. Each builder
+//! The factory looks a classified family up here instead of matching on it.
+//! Decision and speech families are built by kind from the family's own
+//! type, so a new family of those kinds adds one line to the table and no
+//! code here; chat, image and embedding families still have a builder each. Each builder
 //! takes its own kind of configuration, and a family sent another kind's
 //! policy is refused before any builder runs.
 
@@ -15,9 +17,10 @@ use ipc_protocol::{
     WorkerEmbeddingModelConfiguration, WorkerImageGenerationModelConfiguration,
     WorkerModelConfiguration, WorkerSpeechModelConfiguration,
 };
+use model_serving::decision_models::decision_engine_shell::{DecisionEngineShell, DecisionFamily};
 use model_serving::{
-    ClefDecisionEngine, KevDecisionEngine, KokoroSpeechEngine, LayaDecisionEngine,
-    ModelFactoryRuntime, PhononSpeechEngine,
+    ClefDecisionFamily, KevDecisionFamily, KokoroSpeechFamily, LayaDecisionFamily,
+    ModelFactoryRuntime, PhononSpeechFamily, SpeechEngine, SpeechEngineShell, SpeechFamily,
 };
 
 use super::configured_family_check::FAMILY_MISMATCH_REASON;
@@ -90,23 +93,23 @@ static FAMILY_RUNTIME_BUILDERS: [(ModelFamily, FamilyRuntimeBuilder); 10] = [
     ),
     (
         config::LAYA_MODEL_FAMILY,
-        FamilyRuntimeBuilder::Decision(build_laya_runtime),
+        FamilyRuntimeBuilder::Decision(build_decision_runtime::<LayaDecisionFamily>),
     ),
     (
         config::KEV_MODEL_FAMILY,
-        FamilyRuntimeBuilder::Decision(build_kev_runtime),
+        FamilyRuntimeBuilder::Decision(build_decision_runtime::<KevDecisionFamily>),
     ),
     (
         config::CLEF_MODEL_FAMILY,
-        FamilyRuntimeBuilder::Decision(build_clef_runtime),
+        FamilyRuntimeBuilder::Decision(build_decision_runtime::<ClefDecisionFamily>),
     ),
     (
         config::KOKORO_MODEL_FAMILY,
-        FamilyRuntimeBuilder::Speech(build_kokoro_runtime),
+        FamilyRuntimeBuilder::Speech(build_speech_runtime::<KokoroSpeechFamily>),
     ),
     (
         config::PHONON_MODEL_FAMILY,
-        FamilyRuntimeBuilder::Speech(build_phonon_runtime),
+        FamilyRuntimeBuilder::Speech(build_speech_runtime::<PhononSpeechFamily>),
     ),
 ];
 
@@ -232,79 +235,42 @@ fn build_modernbert_runtime(
     )
 }
 
-fn build_laya_runtime(
+/// Every decision family runs in the decision shell, so its engine is the
+/// shell over the family's own type.
+fn build_decision_runtime<Family: DecisionFamily + 'static>(
     model_family_factory: &ModelFamilyFactory,
     model_directory_path: PathBuf,
     decision_configuration: WorkerDecisionModelConfiguration,
 ) -> Result<ModelFamilyRuntime, String> {
-    let laya_engine = LayaDecisionEngine::new(
+    let decision_engine = DecisionEngineShell::<Family>::new(
         decision_configuration.model_id,
         &model_directory_path,
         model_family_factory.effective_mlx_memory_ceiling_bytes,
         model_family_factory.mlx_buffer_cache_limit_bytes,
     );
-    model_family_factory.decision_runtime(&model_directory_path, laya_engine)
+    model_family_factory.decision_runtime(&model_directory_path, decision_engine)
 }
 
-fn build_kev_runtime(
-    model_family_factory: &ModelFamilyFactory,
-    model_directory_path: PathBuf,
-    decision_configuration: WorkerDecisionModelConfiguration,
-) -> Result<ModelFamilyRuntime, String> {
-    let kev_engine = KevDecisionEngine::new(
-        decision_configuration.model_id,
-        &model_directory_path,
-        model_family_factory.effective_mlx_memory_ceiling_bytes,
-        model_family_factory.mlx_buffer_cache_limit_bytes,
-    );
-    model_family_factory.decision_runtime(&model_directory_path, kev_engine)
-}
-
-fn build_clef_runtime(
-    model_family_factory: &ModelFamilyFactory,
-    model_directory_path: PathBuf,
-    decision_configuration: WorkerDecisionModelConfiguration,
-) -> Result<ModelFamilyRuntime, String> {
-    let clef_engine = ClefDecisionEngine::new(
-        decision_configuration.model_id,
-        &model_directory_path,
-        model_family_factory.effective_mlx_memory_ceiling_bytes,
-        model_family_factory.mlx_buffer_cache_limit_bytes,
-    );
-    model_family_factory.decision_runtime(&model_directory_path, clef_engine)
-}
-
-/// The unloaded speech engine holds only its settings; the MLX runtime is
-/// created inside `load()` on the worker runtime thread, because MLX handles
-/// are not `Send` across task boundaries.
-fn build_kokoro_runtime(
+/// Every speech family runs in the speech shell. The unloaded engine holds
+/// only its settings; the MLX runtime is created inside `load()` on the
+/// worker runtime thread, because MLX handles are not `Send` across task
+/// boundaries.
+fn build_speech_runtime<Family: SpeechFamily>(
     model_family_factory: &ModelFamilyFactory,
     model_directory_path: PathBuf,
     speech_configuration: WorkerSpeechModelConfiguration,
-) -> Result<ModelFamilyRuntime, String> {
-    Ok(ModelFactoryRuntime::Speech(Box::new(
-        KokoroSpeechEngine::new(
-            speech_configuration.model_id,
-            model_directory_path,
-            model_family_factory.effective_mlx_memory_ceiling_bytes,
-            model_family_factory.mlx_buffer_cache_limit_bytes,
-        ),
-    )))
-}
-
-fn build_phonon_runtime(
-    model_family_factory: &ModelFamilyFactory,
-    model_directory_path: PathBuf,
-    speech_configuration: WorkerSpeechModelConfiguration,
-) -> Result<ModelFamilyRuntime, String> {
-    Ok(ModelFactoryRuntime::Speech(Box::new(
-        PhononSpeechEngine::new(
-            speech_configuration.model_id,
-            model_directory_path,
-            model_family_factory.effective_mlx_memory_ceiling_bytes,
-            model_family_factory.mlx_buffer_cache_limit_bytes,
-        ),
-    )))
+) -> Result<ModelFamilyRuntime, String>
+where
+    SpeechEngineShell<Family>: SpeechEngine,
+{
+    Ok(ModelFactoryRuntime::Speech(Box::new(SpeechEngineShell::<
+        Family,
+    >::new(
+        speech_configuration.model_id,
+        model_directory_path,
+        model_family_factory.effective_mlx_memory_ceiling_bytes,
+        model_family_factory.mlx_buffer_cache_limit_bytes,
+    ))))
 }
 
 #[cfg(test)]

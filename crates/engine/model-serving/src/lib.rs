@@ -58,11 +58,11 @@ pub use ::qwen35::*;
 // through the names below.
 pub use ::decision_models::*;
 #[cfg(feature = "direct-mlx")]
-pub use clef::{ClefDecisionEngine, clef_sequence_token_ids};
+pub use clef::{ClefDecisionEngine, ClefDecisionFamily, clef_sequence_token_ids};
 #[cfg(feature = "direct-mlx")]
-pub use kev::{KevDecisionEngine, KevRowLayout, kev_question_row_layouts};
+pub use kev::{KevDecisionEngine, KevDecisionFamily, KevRowLayout, kev_question_row_layouts};
 #[cfg(feature = "direct-mlx")]
-pub use laya::{LayaDecisionEngine, laya_question_sequences};
+pub use laya::{LayaDecisionEngine, LayaDecisionFamily, laya_question_sequences};
 #[cfg(feature = "direct-mlx")]
 pub use modernbert::{EncodedEmbeddingInput, ModernBertEmbeddingEngine, encode_embedding_input};
 
@@ -87,10 +87,15 @@ pub use engine_backed_worker::{
 pub use model_family_runtime::{ModelFamilyInferenceEngine, boxed_chat_engine};
 
 #[cfg(feature = "direct-mlx")]
-pub use kokoro::{KokoroSpeechEngine, KokoroSpeechTrace, KokoroSpeechTracing};
+pub use kokoro::{KokoroSpeechEngine, KokoroSpeechFamily, KokoroSpeechTrace, KokoroSpeechTracing};
 
 #[cfg(feature = "direct-mlx")]
-pub use phonon::PhononSpeechEngine;
+pub use phonon::{PhononSpeechEngine, PhononSpeechFamily};
+
+// The speech engine shell and its family trait, which the worker names to
+// build any speech family's engine by its family type.
+#[cfg(feature = "direct-mlx")]
+pub use ::speech::speech_models::speech_engine_shell::{SpeechEngineShell, SpeechFamily};
 
 pub use speech_engine::{
     SpeechEngine, SpeechEngineLoadResult, SpeechEngineStep, SpeechUnavailableEngine, StartedSpeech,
