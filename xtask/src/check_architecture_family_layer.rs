@@ -31,6 +31,12 @@ const FAMILY_WITHOUT_SERVING_RATIONALE: &str = "a model family crate must build 
 pub(crate) const FAMILY_WITHOUT_OTHER_FAMILY_RULE: &str = "family-without-other-family";
 const FAMILY_WITHOUT_OTHER_FAMILY_RATIONALE: &str = "one model family must not depend on another; what they share belongs in the kind's shell crate";
 
+/// Every rule this module checks, for the checker's pass lines.
+pub(crate) const FAMILY_LAYER_RULE_NAMES: [&str; 2] = [
+    FAMILY_WITHOUT_SERVING_RULE,
+    FAMILY_WITHOUT_OTHER_FAMILY_RULE,
+];
+
 /// Checks the family rules against a `cargo metadata --format-version 1`
 /// document. Fails closed when no crate sits under `crates/families/`, or
 /// when the serving crate is absent, so a folder rename cannot make the

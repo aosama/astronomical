@@ -1,16 +1,17 @@
-//! Image generation for Astronomical (issue #2340): the worker-facing seam
-//! every image family implements, and the FLUX.2 klein and Qwen-Image-2.1
-//! families.
+//! The image-generation shell (issues #2340, #2473): the worker-facing seam
+//! every image family implements, and the engine shell that runs a family's
+//! lifecycle (load once, one request at a time, publish only after cleanup).
+//! Each family is a crate of its own beside this one, `flux2-klein` and
+//! `qwen-image-21`, holding only what makes it different.
 //!
-//! The families sit beside the other model families rather than inside the
-//! serving crate, so an image change rebuilds and retests only this crate.
-//! The edge is one way: this crate never depends on
-//! `model-serving`, which `cargo xtask check-architecture`
-//! enforces; the worker there drives these engines through the seam.
+//! The edge is one way: neither this crate nor a family crate depends on
+//! `model-serving`, which `cargo xtask check-architecture` enforces; the
+//! worker there drives the engines through the seam.
 //!
-//! The serving crate re-exports this crate's root with a glob, and a name it
-//! declares itself would silently win over one from here, so every name at
-//! this root stays unique across the two crates.
+//! The serving crate re-exports this crate's root, and each family crate's,
+//! with a glob. A name two of these roots declare makes the globs ambiguous,
+//! which the build rejects, so every name stays unique across the crates;
+//! that is also why `qwen-image-21` keeps its modules private.
 
 pub mod image_engine_shell;
 
@@ -19,7 +20,6 @@ pub mod image_engine_shell_test_support;
 
 pub mod image_generation_engine;
 
-#[cfg(feature = "direct-mlx")]
 pub use image_generation_engine::{
     ImageGenerationEngine, ImageGenerationEngineStep, ImageGenerationUnavailableEngine,
 };

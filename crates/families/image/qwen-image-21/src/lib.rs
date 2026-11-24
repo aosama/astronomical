@@ -1,11 +1,9 @@
-//! The Qwen-Image-2.1 image family.
-
-//! Qwen-Image-2.1 image-generation family.
+//! The Qwen-Image-2.1 image family, a crate of its own beside the
+//! `image-generation` shell and the `flux2-klein` family (issue #2473, Step 7),
+//! for the Qwen-Image-2.1 unified text-to-image + image-editing model. It
+//! covers the whole path from an installed artifact to PNG pixels.
 //!
-//! A parallel module to `flux2_klein` for the Qwen-Image-2.1 unified text-to-image + image-editing
-//! model, covering the whole path from an installed artifact to PNG pixels.
-//!
-//! The module splits into three layers, each with its own files:
+//! The crate splits into three layers, each with its own files:
 //!
 //! - **Pure contracts** (`rope`, `mask`, `modulation`, `time`, `norm`, `scheduler`, `astro_image_prefix_key_value_cache`,
 //!   `latent_layout`, `text_conditioning`): the index and formula logic that is easy to get wrong
@@ -25,6 +23,10 @@
 #[cfg(test)]
 pub mod oracle_test_support;
 
+// `artifact`, `configuration`, `engine`, `scheduler`, `text_conditioning` and
+// `vae` stay private: FLUX.2 Klein has public modules of the same names, and
+// the serving crate re-exports both roots with a glob, where a name both
+// declare is ambiguous. Everything callers need is re-exported below.
 mod artifact;
 mod astro_image_prefix_key_value_cache;
 mod configuration;

@@ -1166,22 +1166,9 @@ dependencies = [
 name = "image-generation"
 version = "0.2.134"
 dependencies = [
- "artifact-validation",
- "image",
  "ipc-protocol",
  "memory-policy",
- "mlx-bridge",
  "model-primitives",
- "runtime-integration",
- "safetensors",
- "serde",
- "serde_json",
- "serial_test",
- "tempfile",
- "test-harness",
- "thiserror",
- "tokenizers",
- "tracing",
 ]
 
 [[package]]

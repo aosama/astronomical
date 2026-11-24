@@ -1,7 +1,6 @@
-//! The FLUX.2 Klein image family: a Diffusers pipeline or the 4-bit MLX build.
-
-//! FLUX.2 Klein 4B image generation, in its BF16 Diffusers build and its 4-bit
-//! MLX build (`mlx_4bit_build`).
+//! The FLUX.2 Klein 4B image family, a crate of its own beside the
+//! `image-generation` shell (issue #2473, Step 7), in its BF16 Diffusers build
+//! and its 4-bit MLX build (`mlx_4bit_build`).
 //!
 //! Artifact validation, configuration, schedules and memory admission carry no
 //! MLX dependency, so the engine cannot bypass their contracts; the MLX engine
@@ -53,7 +52,7 @@ pub use dimensions::Flux2KleinImageDimensions;
 pub use engine::Flux2KleinImageEngine;
 #[cfg(feature = "direct-mlx")]
 pub use engine::build_flux2_klein_image_engine;
-pub use engine::{Flux2KleinComponentLoad, Flux2KleinEngineComponents};
+pub use engine::components::{Flux2KleinComponentLoad, Flux2KleinEngineComponents};
 #[cfg(feature = "direct-mlx")]
 #[doc(hidden)]
 pub use engine::{
@@ -76,9 +75,10 @@ pub use mlx_4bit_build::{
     FLUX2_KLEIN_MLX_4BIT_REVISION,
 };
 pub use official_profile::Flux2KleinOfficialProfile;
-#[cfg(feature = "direct-mlx")]
-pub use scheduler::Flux2KleinFlowScheduler;
-pub use scheduler::{Flux2KleinFlowSchedule, Flux2KleinFlowSchedulerError, Flux2KleinFlowStep};
+pub use scheduler::{
+    Flux2KleinFlowSchedule, Flux2KleinFlowScheduler, Flux2KleinFlowSchedulerError,
+    Flux2KleinFlowStep,
+};
 #[cfg(feature = "direct-mlx")]
 pub use transformer::{
     Flux2KleinBlockGroupEvent, Flux2KleinBlockKind, Flux2KleinComponentOracle,

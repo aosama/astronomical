@@ -10,9 +10,7 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::path::Path;
 use std::process::Command;
 
-use crate::check_architecture_family_layer::{
-    FAMILY_WITHOUT_OTHER_FAMILY_RULE, FAMILY_WITHOUT_SERVING_RULE, family_layer_violations,
-};
+use crate::check_architecture_family_layer::{FAMILY_LAYER_RULE_NAMES, family_layer_violations};
 
 /// One forbidden-dependency rule: the dependency graph must hold no path
 /// from `source_crate` to `forbidden_crate`, following every dependency
@@ -148,6 +146,13 @@ pub(crate) struct ArchitectureViolation {
 
 pub fn run(repository_root: &Path) -> Result<(), String> {
     println!("[check-architecture] phase=repository-graph status=start");
+    let metadata_json_text = workspace_metadata_json(repository_root)?;
+    let mut violations = architecture_violations(&metadata_json_text)?;
+    violations.extend(family_layer_violations(&metadata_json_text)?);
+    report_verdict(&violations)
+}
+
+fn workspace_metadata_json(repository_root: &Path) -> Result<String, String> {
     let metadata_output = Command::new("cargo")
         .arg("metadata")
         .arg("--format-version")
@@ -163,26 +168,14 @@ pub fn run(repository_root: &Path) -> Result<(), String> {
             String::from_utf8_lossy(&metadata_output.stderr).trim()
         ));
     }
-    let metadata_json_text = String::from_utf8_lossy(&metadata_output.stdout).into_owned();
-    let mut violations = architecture_violations(&metadata_json_text)?;
-    violations.extend(family_layer_violations(&metadata_json_text)?);
-    if violations.is_empty() {
-        for rule in FORBIDDEN_DEPENDENCY_RULES {
-            println!("[check-architecture] rule={} status=pass", rule.rule_name);
-        }
-        for family_rule_name in [
-            FAMILY_WITHOUT_SERVING_RULE,
-            FAMILY_WITHOUT_OTHER_FAMILY_RULE,
-        ] {
-            println!("[check-architecture] rule={family_rule_name} status=pass");
-        }
-        println!(
-            "[check-architecture] status=success rules={}",
-            FORBIDDEN_DEPENDENCY_RULES.len() + 2
-        );
-        Ok(())
-    } else {
-        for violation in &violations {
+    Ok(String::from_utf8_lossy(&metadata_output.stdout).into_owned())
+}
+
+/// Prints one line per rule on success, or one line per violation, keeping
+/// the output lines hooks and CI steps read.
+fn report_verdict(violations: &[ArchitectureViolation]) -> Result<(), String> {
+    if !violations.is_empty() {
+        for violation in violations {
             eprintln!(
                 "[check-architecture] rule={} violation: {}; {}",
                 violation.rule_name,
@@ -190,11 +183,22 @@ pub fn run(repository_root: &Path) -> Result<(), String> {
                 violation.rationale
             );
         }
-        Err(format!(
+        return Err(format!(
             "[check-architecture] status=failed violations={}",
             violations.len()
-        ))
+        ));
     }
+    for rule in FORBIDDEN_DEPENDENCY_RULES {
+        println!("[check-architecture] rule={} status=pass", rule.rule_name);
+    }
+    for family_rule_name in FAMILY_LAYER_RULE_NAMES {
+        println!("[check-architecture] rule={family_rule_name} status=pass");
+    }
+    println!(
+        "[check-architecture] status=success rules={}",
+        FORBIDDEN_DEPENDENCY_RULES.len() + FAMILY_LAYER_RULE_NAMES.len()
+    );
+    Ok(())
 }
 
 /// Checks every rule against a `cargo metadata --format-version 1` document
