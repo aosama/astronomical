@@ -13,14 +13,13 @@ use std::path::Path;
 
 use serde::Deserialize;
 
-use super::ModelLicense;
-use super::bounded_artifact_file;
-use super::classified_artifacts;
-use super::flux2_klein::{
-    Flux2KleinDirectoryEvidence, Flux2KleinDirectoryVerificationError, flux2_klein_capabilities,
-    is_safe_safetensors_path, required_weight_size,
+use crate::flux2_klein::{Flux2KleinDirectoryVerificationError, flux2_klein_capabilities};
+use model_discovery::bounded_artifact_file;
+use model_discovery::classified_artifacts;
+use model_discovery::model_card_front_matter::has_front_matter_value;
+use model_discovery::{
+    ImageDirectoryEvidence, ModelLicense, is_safe_safetensors_path, nonempty_file_size,
 };
-use super::model_card_front_matter::has_front_matter_value;
 
 pub(super) const CANONICAL_MODEL_ID: &str = "flux2-klein-4b-4bit";
 pub(super) const PROVIDER_MODEL_ID: &str = "mlx-community/flux2-klein-4b-4bit";
@@ -131,7 +130,7 @@ pub fn classifies_directory(directory: &Path) -> bool {
 /// Rereads one exact directory as the 4-bit build.
 pub(super) fn verify_model_directory_evidence(
     model_directory: &Path,
-) -> Result<Flux2KleinDirectoryEvidence, Flux2KleinDirectoryVerificationError> {
+) -> Result<ImageDirectoryEvidence, Flux2KleinDirectoryVerificationError> {
     let transformer_index = read_index(
         model_directory,
         FLUX2_KLEIN_MLX_4BIT_TRANSFORMER_INDEX_FILE_NAME,
@@ -169,7 +168,7 @@ pub(super) fn verify_model_directory_evidence(
         ],
     )?;
     let (provider_model_id, revision) = provenance(model_directory)?;
-    Ok(Flux2KleinDirectoryEvidence {
+    Ok(ImageDirectoryEvidence {
         canonical_model_id: CANONICAL_MODEL_ID.to_owned(),
         provider_model_id,
         revision,
@@ -252,7 +251,9 @@ fn measure_weight_bytes(
             }
             let shard_path = model_directory.join(component_folder).join(shard_file_name);
             model_size_bytes = model_size_bytes
-                .checked_add(required_weight_size(&shard_path, component)?)
+                .checked_add(nonempty_file_size(&shard_path).ok_or(
+                    Flux2KleinDirectoryVerificationError::MissingOrInvalidWeightFile { component },
+                )?)
                 .ok_or(Flux2KleinDirectoryVerificationError::ModelSizeOverflow)?;
         }
     }
@@ -283,6 +284,18 @@ fn provenance(
 
 fn names_this_build(provider_model_id: &str) -> bool {
     provider_model_id.rsplit('/').next() == Some(CANONICAL_MODEL_ID)
+}
+
+/// Classifies an mflux transformer weight index without a file-system read, so
+/// the download preflight applies the same rule as disk discovery.
+///
+/// # Errors
+/// Returns the index document parse failure verbatim.
+pub fn classify_mflux_transformer_index_bytes(
+    index_bytes: &[u8],
+) -> Result<Option<model_discovery::ModelFamily>, serde_json::Error> {
+    Ok(classifies_transformer_index(index_bytes)?
+        .then_some(crate::flux2_klein::FLUX2_KLEIN_MODEL_FAMILY))
 }
 
 #[cfg(test)]

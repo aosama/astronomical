@@ -7,7 +7,6 @@ use std::path::{Path, PathBuf};
 use serde::Deserialize;
 use thiserror::Error;
 
-use super::flux2_klein_mlx_4bit;
 use super::model_family_description::ModelFamily;
 use super::model_family_registry::ModelFamilyRegistry;
 
@@ -186,20 +185,6 @@ pub(super) fn has_model_root_marker(
     directory: &Path,
 ) -> bool {
     directory.join("config.json").is_file() || is_pipeline_root(model_family_registry, directory)
-}
-
-/// Classifies an mflux transformer weight index without a file-system read, so
-/// the download preflight applies the same rule as disk discovery.
-///
-/// # Errors
-/// Returns the index document parse failure verbatim.
-pub fn classify_mflux_transformer_index_bytes(
-    index_bytes: &[u8],
-) -> Result<Option<ModelFamily>, serde_json::Error> {
-    Ok(
-        flux2_klein_mlx_4bit::classifies_transformer_index(index_bytes)?
-            .then_some(super::flux2_klein::FLUX2_KLEIN_MODEL_FAMILY),
-    )
 }
 
 /// Classifies a Diffusers pipeline index document without a file-system read, reusing the exact

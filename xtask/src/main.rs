@@ -19,6 +19,11 @@ mod check_architecture;
 mod check_architecture_family_layer;
 #[cfg(test)]
 mod check_architecture_family_layer_tests;
+mod check_architecture_recognition_crates;
+#[cfg(test)]
+mod check_architecture_recognition_crates_tests;
+#[cfg(test)]
+mod check_architecture_test_support;
 #[cfg(test)]
 mod check_architecture_tests;
 mod check_duplication;

@@ -6,7 +6,7 @@ use std::path::Path;
 
 use serde::de::DeserializeOwned;
 
-pub(super) fn read_json<Document: DeserializeOwned>(
+pub fn read_json<Document: DeserializeOwned>(
     file_path: &Path,
     maximum_bytes: u64,
 ) -> Result<Document, BoundedDocumentReadError> {
@@ -14,7 +14,7 @@ pub(super) fn read_json<Document: DeserializeOwned>(
     serde_json::from_slice(&file_bytes).map_err(|_| BoundedDocumentReadError::MalformedJson)
 }
 
-pub(super) fn read_bounded_nonempty_file(
+pub fn read_bounded_nonempty_file(
     file_path: &Path,
     maximum_bytes: u64,
 ) -> Result<Vec<u8>, BoundedFileReadError> {
@@ -35,13 +35,13 @@ pub(super) fn read_bounded_nonempty_file(
 }
 
 #[derive(Debug)]
-pub(super) enum BoundedFileReadError {
+pub enum BoundedFileReadError {
     Unavailable,
     InvalidSizeOrType,
 }
 
 #[derive(Debug)]
-pub(super) enum BoundedDocumentReadError {
+pub enum BoundedDocumentReadError {
     File,
     MalformedJson,
 }

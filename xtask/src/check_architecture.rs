@@ -11,6 +11,9 @@ use std::path::Path;
 use std::process::Command;
 
 use crate::check_architecture_family_layer::{FAMILY_LAYER_RULE_NAMES, family_layer_violations};
+use crate::check_architecture_recognition_crates::{
+    RECOGNITION_RULE_NAMES, recognition_crate_violations,
+};
 
 /// One forbidden-dependency rule: the dependency graph must hold no path
 /// from `source_crate` to `forbidden_crate`, following every dependency
@@ -133,6 +136,7 @@ pub fn run(repository_root: &Path) -> Result<(), String> {
     let metadata_json_text = workspace_metadata_json(repository_root)?;
     let mut violations = architecture_violations(&metadata_json_text)?;
     violations.extend(family_layer_violations(&metadata_json_text)?);
+    violations.extend(recognition_crate_violations(&metadata_json_text)?);
     report_verdict(&violations)
 }
 
@@ -175,12 +179,17 @@ fn report_verdict(violations: &[ArchitectureViolation]) -> Result<(), String> {
     for rule in FORBIDDEN_DEPENDENCY_RULES {
         println!("[check-architecture] rule={} status=pass", rule.rule_name);
     }
-    for family_rule_name in FAMILY_LAYER_RULE_NAMES {
+    for family_rule_name in FAMILY_LAYER_RULE_NAMES
+        .into_iter()
+        .chain(RECOGNITION_RULE_NAMES)
+    {
         println!("[check-architecture] rule={family_rule_name} status=pass");
     }
     println!(
         "[check-architecture] status=success rules={}",
-        FORBIDDEN_DEPENDENCY_RULES.len() + FAMILY_LAYER_RULE_NAMES.len()
+        FORBIDDEN_DEPENDENCY_RULES.len()
+            + FAMILY_LAYER_RULE_NAMES.len()
+            + RECOGNITION_RULE_NAMES.len()
     );
     Ok(())
 }
@@ -270,6 +279,32 @@ pub(crate) fn dependency_graph_from_metadata(
         }
     }
     Ok(dependency_graph)
+}
+
+/// Every package's name and manifest path, for the rules that read the
+/// folder layout. Fails closed on a package without either.
+pub(crate) fn package_manifest_paths(
+    metadata_json_text: &str,
+) -> Result<Vec<(String, String)>, String> {
+    let metadata_document: serde_json::Value = serde_json::from_str(metadata_json_text)
+        .map_err(|error| format!("cargo metadata is not valid JSON: {error}"))?;
+    let packages_array = metadata_document
+        .get("packages")
+        .and_then(|packages_value| packages_value.as_array())
+        .ok_or("cargo metadata is missing the packages array")?;
+    let mut package_manifests = Vec::with_capacity(packages_array.len());
+    for package_value in packages_array {
+        let package_name = package_value
+            .get("name")
+            .and_then(|name_value| name_value.as_str())
+            .ok_or("cargo metadata contains a package without a name")?;
+        let manifest_path = package_value
+            .get("manifest_path")
+            .and_then(|path_value| path_value.as_str())
+            .ok_or_else(|| format!("cargo metadata package {package_name} has no manifest_path"))?;
+        package_manifests.push((package_name.to_owned(), manifest_path.to_owned()));
+    }
+    Ok(package_manifests)
 }
 
 /// Breadth-first search returning the shortest chain from `start_crate` to

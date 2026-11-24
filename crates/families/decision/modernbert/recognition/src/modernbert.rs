@@ -7,7 +7,7 @@
 use std::fs;
 use std::path::Path;
 
-use super::model_family_description::ModelFamily;
+use model_discovery::ModelFamily;
 
 /// Family-derived metadata returned to neutral discovery orchestration.
 pub(super) struct ModernBertDiscoveredModelMetadata {

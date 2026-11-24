@@ -14,7 +14,7 @@ const VOICE_FILE_EXTENSION: &str = "safetensors";
 const MAXIMUM_LISTED_VOICES: usize = 256;
 
 /// The voice names in `voices_directory`, sorted. A missing folder holds none.
-pub(super) fn catalog_voice_names(voices_directory: &Path) -> Vec<String> {
+pub fn catalog_voice_names(voices_directory: &Path) -> Vec<String> {
     let Ok(voice_entries) = std::fs::read_dir(voices_directory) else {
         return Vec::new();
     };

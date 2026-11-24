@@ -63,40 +63,37 @@ pub use maximum_mlx_memory::{
 pub use model_config_entries::{
     ModelConfigEntryOutcome, ModelConfigEntryReport, SettingsFreeModelKind,
 };
-pub use model_discovery::{
-    CLEF_MODEL_FAMILY, FLUX2_KLEIN_MODEL_FAMILY, KEV_MODEL_FAMILY, KOKORO_MODEL_FAMILY,
-    LAYA_MODEL_FAMILY, MODERNBERT_MODEL_FAMILY, ModelFamilyDescription, ModelKind,
-    PHONON_MODEL_FAMILY, PRISM_HADAMARD_QWEN35_MODEL_FAMILY, QWEN_IMAGE_21_MODEL_FAMILY,
-    QWEN3_5_MODEL_FAMILY,
-};
+pub use model_discovery::SpeechModelCapabilities;
 pub use model_discovery::{
     ChatModelCapabilities, ClassifiedModelArtifact, DecisionModelCapabilities, DiscoveredModel,
     DiscoveredModelError, EffectiveModelDiscovery, EffectiveModelDiscoveryError,
-    EmbeddingModelCapabilities, FLUX2_KLEIN_MLX_4BIT_TRANSFORMER_INDEX_FILE_NAME,
-    Flux2KleinDirectoryEvidence, Flux2KleinDirectoryVerificationError, ImageGenerationCapabilities,
-    MINIMUM_SERVABLE_CONTEXT_WINDOW_TOKENS, ModelCapabilities, ModelDiscoveryDiagnostic,
-    ModelDiscoveryDiagnosticCode, ModelDiscoveryDirectoryScan, ModelDiscoveryReport, ModelFamily,
-    ModelFamilyClassificationError, ModelLicense, QwenImage21DirectoryEvidence,
-    QwenImage21DirectoryVerificationError, classify_mflux_transformer_index_bytes,
-    context_window_tokens, requestable_model_id, required_shard_file_names,
-    verify_flux2_klein_model_directory, verify_qwen_image_21_model_directory,
+    EmbeddingModelCapabilities, ImageDirectoryEvidence, ImageGenerationCapabilities,
+    ModelCapabilities, ModelDiscoveryDiagnostic, ModelDiscoveryDiagnosticCode,
+    ModelDiscoveryDirectoryScan, ModelDiscoveryReport, ModelFamily, ModelFamilyClassificationError,
+    ModelLicense, requestable_model_id,
 };
-pub use model_discovery::{
-    KOKORO_CONFIGURATION_FILE_NAME, KOKORO_VOICES_DIRECTORY_NAME, KOKORO_WEIGHTS_FILE_NAME,
-    PHONON_CONFIGURATION_FILE_NAME, PHONON_DEFAULT_VOICE_FILE_NAME, PHONON_DEFAULT_VOICE_NAME,
-    PHONON_TOKENIZER_FILE_NAME, PHONON_VOICES_DIRECTORY_NAME, PHONON_WEIGHTS_FILE_NAME,
-    SpeechModelCapabilities, is_kokoro_configuration, is_phonon_configuration,
-    kokoro_speech_capabilities, phonon_speech_capabilities,
-};
+pub use model_discovery::{ModelFamilyDescription, ModelKind};
 pub use model_discovery::{
     configured_model_id_for, decode_huggingface_hub_cache_directory_name, leaf_model_id,
     near_model_matches, resolve_model_id,
 };
 // Discovery with the family list passed in (issue #2473, Step 5).
 pub use model_family_registry::{
-    classify_model_directory, classify_pipeline_index_bytes, discover_classified_model_artifacts,
+    CLEF_MODEL_FAMILY, FLUX2_KLEIN_MLX_4BIT_TRANSFORMER_INDEX_FILE_NAME, FLUX2_KLEIN_MODEL_FAMILY,
+    Flux2KleinDirectoryVerificationError, KEV_MODEL_FAMILY, KOKORO_CONFIGURATION_FILE_NAME,
+    KOKORO_MODEL_FAMILY, KOKORO_VOICES_DIRECTORY_NAME, KOKORO_WEIGHTS_FILE_NAME, LAYA_MODEL_FAMILY,
+    MINIMUM_SERVABLE_CONTEXT_WINDOW_TOKENS, MODERNBERT_MODEL_FAMILY,
+    PHONON_CONFIGURATION_FILE_NAME, PHONON_DEFAULT_VOICE_FILE_NAME, PHONON_DEFAULT_VOICE_NAME,
+    PHONON_MODEL_FAMILY, PHONON_TOKENIZER_FILE_NAME, PHONON_VOICES_DIRECTORY_NAME,
+    PHONON_WEIGHTS_FILE_NAME, PRISM_HADAMARD_QWEN35_MODEL_FAMILY, QWEN_IMAGE_21_MODEL_FAMILY,
+    QWEN3_5_MODEL_FAMILY, QwenImage21DirectoryVerificationError,
+    classify_mflux_transformer_index_bytes, classify_model_directory,
+    classify_pipeline_index_bytes, context_window_tokens, discover_classified_model_artifacts,
     discover_effective_models, discover_models, discover_models_excluding_ambiguous_identities,
-    is_discoverable_model_folder, model_family_named, model_family_of_model_type, model_kind_of,
+    is_discoverable_model_folder, is_kokoro_configuration, is_phonon_configuration,
+    kokoro_speech_capabilities, model_family_named, model_family_of_model_type, model_kind_of,
+    phonon_speech_capabilities, required_shard_file_names, verify_flux2_klein_model_directory,
+    verify_qwen_image_21_model_directory,
 };
 pub use resolved_model_config::{DEFAULT_MAXIMUM_OUTPUT_TOKENS, ResolvedModelConfig};
 pub use sharing_config::ProblemReportChoice;

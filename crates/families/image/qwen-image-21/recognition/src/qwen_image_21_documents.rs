@@ -116,26 +116,6 @@ pub(super) struct QwenImage21VaeGeometry {
 }
 
 #[derive(Deserialize)]
-pub(super) struct QwenImage21SchedulerGeometry {
-    #[serde(rename = "_class_name")]
-    pub(super) class_name: String,
-    pub(super) base_image_seq_len: u32,
-    pub(super) base_shift: f64,
-    pub(super) invert_sigmas: bool,
-    pub(super) max_image_seq_len: u32,
-    pub(super) max_shift: f64,
-    pub(super) num_train_timesteps: u32,
-    pub(super) shift: f64,
-    pub(super) shift_terminal: Option<f64>,
-    pub(super) stochastic_sampling: bool,
-    pub(super) time_shift_type: String,
-    pub(super) use_beta_sigmas: bool,
-    pub(super) use_dynamic_shifting: bool,
-    pub(super) use_exponential_sigmas: bool,
-    pub(super) use_karras_sigmas: bool,
-}
-
-#[derive(Deserialize)]
 pub(super) struct ComponentSafetensorsIndex {
     pub(super) metadata: ComponentSafetensorsIndexMetadata,
     pub(super) weight_map: BTreeMap<String, String>,

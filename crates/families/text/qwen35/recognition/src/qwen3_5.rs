@@ -4,7 +4,7 @@ use std::collections::HashSet;
 use std::fs;
 use std::path::Path;
 
-use super::model_family_description::ModelFamily;
+use model_discovery::ModelFamily;
 
 /// Lowest context window disk discovery and download preflight accept: one token for the prompt
 /// and one for the completion. Anything smaller cannot serve a single user turn.

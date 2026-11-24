@@ -7,7 +7,7 @@ use std::fs;
 use std::path::Path;
 
 /// Family-derived metadata returned to neutral discovery orchestration.
-pub(super) struct MarkedDecisionMetadata {
+pub struct MarkedDecisionMetadata {
     pub maximum_tokens_per_question: u32,
     pub model_size_bytes: u64,
     /// The marker whose bytes the folder's revision is derived from.
@@ -16,7 +16,7 @@ pub(super) struct MarkedDecisionMetadata {
 
 /// The bytes of every safetensors file in `model_directory`: the backbone's
 /// shards and the head.
-pub(super) fn safetensors_total_bytes(model_directory: &Path) -> Option<u64> {
+pub fn safetensors_total_bytes(model_directory: &Path) -> Option<u64> {
     let mut model_size_bytes = 0;
     for directory_entry in fs::read_dir(model_directory).ok()?.flatten() {
         if directory_entry

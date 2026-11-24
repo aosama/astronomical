@@ -14,7 +14,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use super::model_family_description::ModelFamily;
+use model_discovery::ModelFamily;
 
 /// The sequence length a checkpoint reads when its config does not say.
 const DEFAULT_MAXIMUM_TOKENS_PER_QUESTION: u64 = 512;
