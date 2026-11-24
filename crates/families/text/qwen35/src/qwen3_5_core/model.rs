@@ -27,6 +27,8 @@ pub mod gated_delta;
 #[cfg(feature = "direct-mlx")]
 pub mod layer_additions;
 #[cfg(feature = "direct-mlx")]
+pub mod loading_geometry;
+#[cfg(feature = "direct-mlx")]
 pub mod loading_pipeline;
 #[cfg(feature = "direct-mlx")]
 pub mod memory_breakdown;
