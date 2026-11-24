@@ -661,7 +661,7 @@ Apache License 2.0
 
 Used by:
 - linux-raw-sys 0.12.1
-- rustix 1.1.4
+- rustix 1.1.6
 - wasi 0.11.1+wasi-snapshot-preview1
 - wasip2 1.0.4+wasi-0.2.12
 - wit-bindgen 0.57.1
@@ -4561,7 +4561,7 @@ Used by:
 - base64 0.23.1
 - bitflags 2.13.1
 - bumpalo 3.20.3
-- cc 1.11.2
+- cc 1.11.3
 - cexpr 0.6.0
 - cfg-if 1.0.4
 - core-foundation-sys 0.8.7
@@ -4607,12 +4607,12 @@ Used by:
 - rayon-cond 0.4.0
 - rayon-core 1.13.0
 - rayon 1.12.0
-- regex-automata 0.4.18
-- regex-syntax 0.8.11
+- regex-automata 0.4.19
+- regex-syntax 0.8.12
 - regex 1.13.1
 - ring 0.17.14
 - rustc_version 0.4.1
-- rustix 1.1.4
+- rustix 1.1.6
 - rustls-native-certs 0.8.4
 - rustls 0.23.46
 - scopeguard 1.2.0
@@ -7167,7 +7167,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 MIT License
 
 Used by:
-- bytes 1.12.1
+- bytes 1.12.2
 
 Copyright (c) 2018 Carl Lerche
 
