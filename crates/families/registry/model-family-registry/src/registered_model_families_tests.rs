@@ -1,13 +1,8 @@
 use std::collections::HashSet;
 
-<<<<<<<< HEAD:crates/families/registry/model-family-registry/src/registered_model_families_tests.rs
 use super::REGISTERED_MODEL_FAMILIES;
 use crate::{MODEL_FAMILY_REGISTRY, model_family_named, model_kind_of};
 use model_discovery::{
-========
-use super::{REGISTERED_MODEL_FAMILIES, registered_description_named};
-use crate::{
->>>>>>>> origin/main:crates/foundation/model-discovery/src/model_family_registry_tests.rs
     CLEF_MODEL_FAMILY, FLUX2_KLEIN_MODEL_FAMILY, KEV_MODEL_FAMILY, KOKORO_MODEL_FAMILY,
     LAYA_MODEL_FAMILY, MODERNBERT_MODEL_FAMILY, ModelFamily, ModelKind, PHONON_MODEL_FAMILY,
     PRISM_HADAMARD_QWEN35_MODEL_FAMILY, QWEN_IMAGE_21_MODEL_FAMILY, QWEN3_5_MODEL_FAMILY,
