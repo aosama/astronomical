@@ -43,6 +43,8 @@ pub mod register_ordered_projections;
 #[cfg(feature = "direct-mlx")]
 pub mod routed_expert_selection;
 #[cfg(feature = "direct-mlx")]
+pub mod serving_model;
+#[cfg(feature = "direct-mlx")]
 pub mod target_forward_graph;
 #[cfg(feature = "direct-mlx")]
 pub mod tree_attention_measurement;
@@ -53,3 +55,5 @@ pub mod tree_layer_attention;
 pub use base::Qwen3_5ModelBase;
 #[cfg(feature = "direct-mlx")]
 pub use decoder_layer_attention::Qwen3_5DecoderLayerAttentionOutput;
+#[cfg(feature = "direct-mlx")]
+pub use serving_model::Qwen3_5ServingModel;

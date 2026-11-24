@@ -2,6 +2,7 @@
 //! that owns a [`Qwen3_5ExecutionCore`]. Each runs on the MLX owner thread,
 //! where the engine's state lives.
 
+use crate::qwen3_5_core::model::Qwen3_5ServingModel;
 use ipc_protocol::{ExpertMemoryMode, RequestId, WorkerPromptWorkReuse};
 
 use crate::qwen3_5_core::engine_errors::{fatal_engine_error, qwen3_5_runtime_error};

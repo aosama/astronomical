@@ -12,7 +12,7 @@ use mlx_bridge::MlxArray;
 use crate::qwen3_5_core::decoder::RequestDecoderStateStack;
 use crate::qwen3_5_core::decoder::reply_token_mlx_buffer_cache_reclaim::OutgrownAttentionSlabReclaim;
 use crate::qwen3_5_core::engine_errors::{fatal_engine_error, qwen3_5_runtime_error};
-use crate::qwen3_5_core::model::Qwen3_5ModelBase;
+use crate::qwen3_5_core::model::Qwen3_5ServingModel;
 use crate::qwen3_5_core::text::sampler;
 use crate::{
     AstroSsdPromptCacheBlockKey, InferenceEngineError, PerformanceAttribution,
@@ -124,7 +124,7 @@ impl<RequestExtension> Qwen3_5EngineRequest<RequestExtension> {
 
     pub fn build_generated_token(
         &mut self,
-        model: &Qwen3_5ModelBase,
+        model: &impl Qwen3_5ServingModel,
         logits: &MlxArray,
     ) -> Result<MlxArray, InferenceEngineError> {
         let sampling_strategy = self.sampling_strategy;
@@ -136,7 +136,7 @@ impl<RequestExtension> Qwen3_5EngineRequest<RequestExtension> {
             PerformanceOperation::RepetitionPenaltyLogitTransform,
             |_performance_attribution| {
                 crate::gpu_token_sampling::apply_repetition_penalty(
-                    &model.runtime,
+                    model.runtime(),
                     logits,
                     &self.penalized_token_ids,
                     self.repetition_penalty_thousandths,
@@ -153,7 +153,7 @@ impl<RequestExtension> Qwen3_5EngineRequest<RequestExtension> {
                 |_performance_attribution| structured_generation.logit_bias_values(),
             );
             Some(crate::gpu_token_sampling::add_token_logit_bias(
-                &model.runtime,
+                model.runtime(),
                 logits,
                 &logit_bias_values,
             )?)
@@ -224,7 +224,7 @@ impl<RequestExtension> Qwen3_5EngineRequest<RequestExtension> {
 /// dispatch; the caller owns the random state and restores it after
 /// measurement so a lost state surfaces once, not per arm.
 fn sample_generated_token(
-    model: &Qwen3_5ModelBase,
+    model: &impl Qwen3_5ServingModel,
     logits: &MlxArray,
     sampling_strategy: Qwen3_5SamplingStrategy,
     sampling_random_state: &mut Option<MlxArray>,

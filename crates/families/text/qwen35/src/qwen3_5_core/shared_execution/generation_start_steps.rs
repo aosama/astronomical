@@ -6,6 +6,7 @@
 //! retained-prefix adoption for resident; expert residency for streaming)
 //! stays with each engine.
 
+use crate::qwen3_5_core::model::Qwen3_5ServingModel;
 use mlx_bridge::MlxArray;
 
 use crate::qwen3_5_core::engine_errors::{
@@ -181,7 +182,7 @@ where
     let visual_embedding_context = VisualEmbeddingEngineContext {
         runtime: visual_embedding_model.runtime(),
         vision_model: visual_embedding_model.vision_model(),
-        compiled_elementwise_graphs: &visual_embedding_model.compiled_elementwise_graphs,
+        compiled_elementwise_graphs: visual_embedding_model.compiled_elementwise_graphs(),
         visual_embedding_model_contract,
         astro_ssd_prompt_cache: execution_core.astro_ssd_prompt_cache.as_deref(),
     };

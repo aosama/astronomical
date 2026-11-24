@@ -11,7 +11,7 @@ use ipc_protocol::WorkerChunkingConfiguration;
 use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
 use crate::qwen3_5_core::engine_errors::{fatal_engine_error, qwen3_5_runtime_error};
-use crate::qwen3_5_core::model::base::Qwen3_5ModelBase;
+use crate::qwen3_5_core::model::Qwen3_5ServingModel;
 use crate::qwen3_5_core::model::model_chunking_configuration::Qwen3_5ModelChunkingConfiguration;
 use crate::qwen3_5_core::vision::{Qwen3_5ImageProcessor, Qwen3_5VisionConfig};
 use crate::{
@@ -103,7 +103,7 @@ pub fn resolve_visual_embedding_model_contract(
 /// and the request's chunking overrides.
 fn resolve_astro_ssd_prompt_cache_model_contract(
     astro_ssd_prompt_cache_disk_store_config: &AstroSsdPromptCacheDiskStoreConfig,
-    model: &Qwen3_5ModelBase,
+    model: &impl Qwen3_5ServingModel,
     chunking: &WorkerChunkingConfiguration,
     resolved_model_id: &str,
     resolved_model_revision: &str,
@@ -114,7 +114,7 @@ fn resolve_astro_ssd_prompt_cache_model_contract(
         resolved_model_id.to_owned(),
         resolved_model_revision.to_owned(),
         model.astro_decoder_state_cache_layout().clone(),
-        model.config().maximum_position_count() as usize,
+        model.maximum_position_count() as usize,
         model.runtime().memory_limits().active_memory_limit_bytes() as u64,
         global_astro_ssd_prompt_cache_maximum_size_bytes,
         chunking
@@ -136,7 +136,7 @@ fn resolve_astro_ssd_prompt_cache_model_contract(
 /// as store ownership).
 pub fn open_astro_ssd_prompt_cache(
     astro_ssd_prompt_cache_disk_store_config: Option<AstroSsdPromptCacheDiskStoreConfig>,
-    model: &Qwen3_5ModelBase,
+    model: &impl Qwen3_5ServingModel,
     chunking: &WorkerChunkingConfiguration,
     resolved_model_id: &str,
     resolved_model_revision: &str,

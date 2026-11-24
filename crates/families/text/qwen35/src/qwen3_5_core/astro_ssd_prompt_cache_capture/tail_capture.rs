@@ -24,7 +24,7 @@ use engine_core::astro_ssd_prompt_cache::block_causal_input::AstroSsdPromptCache
 use super::block_capture::{PromptBlockPublicationFailure, publish_block_with_reclamation_retry};
 use super::capture_hook::Qwen3_5AstroSsdPromptCacheCapture;
 use crate::qwen3_5_core::engine_request::Qwen3_5EngineRequest;
-use crate::qwen3_5_core::model::Qwen3_5ModelBase;
+use crate::qwen3_5_core::model::Qwen3_5ServingModel;
 
 /// Everything publication needs about one captured tail block, grouped so the
 /// publication step keeps a short signature.
@@ -39,7 +39,7 @@ struct TailBlockPublicationInputs<'a> {
 /// performance-attribution span; `None` after logging a best-effort skip.
 fn extract_tail_kv_block_tensors<RequestExtension>(
     active_request: &mut Qwen3_5EngineRequest<RequestExtension>,
-    model: &Qwen3_5ModelBase,
+    model: &impl Qwen3_5ServingModel,
     tail_capture_span: &PromptTailCaptureSpan,
 ) -> Option<HashMap<String, MlxArray>> {
     let kv_block_tensors = match active_request.measure_operation_with_request(

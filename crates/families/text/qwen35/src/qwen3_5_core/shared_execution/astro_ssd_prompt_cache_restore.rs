@@ -11,6 +11,7 @@
 //! the streaming engine leases room from its memory governor for the blocks a
 //! restore loads.
 
+use crate::qwen3_5_core::model::Qwen3_5ServingModel;
 use ipc_protocol::{
     RequestId, WorkerAstroSsdPromptCacheRequestDiagnostics, WorkerInMemoryPrefixAdoptionOutcome,
 };
