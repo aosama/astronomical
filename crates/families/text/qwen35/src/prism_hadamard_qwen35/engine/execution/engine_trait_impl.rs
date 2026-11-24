@@ -34,7 +34,6 @@ use crate::MlxMemoryTelemetry;
 use crate::PerformanceOperation;
 use crate::Qwen3_5ThinkingBudgetState;
 use crate::inference_engine::load_result::EngineLoadResult;
-use crate::memory::telemetry::MlxActiveMemoryBreakdown;
 use crate::prism_hadamard_qwen35::model::{
     PrismHadamardTextModel, request_decoder_state_evaluation_arrays,
 };
@@ -430,10 +429,6 @@ impl PrismHadamardQwen35InferenceExecution {
     }
 
     /// Samples the current MLX memory footprint for the status surface.
-    ///
-    /// The dense folded-ternary model owns its whole weight payload, so the
-    /// breakdown attributes active memory to the model core first and the
-    /// live decoder state second; there is no expert owner.
     pub(super) fn collect_current_mlx_memory_telemetry(&self) -> Option<MlxMemoryTelemetry> {
         let model = self.model.as_ref()?;
         let memory_snapshot = match model.runtime.memory_snapshot() {
@@ -450,15 +445,12 @@ impl PrismHadamardQwen35InferenceExecution {
         let mlx_buffer_cache_bytes =
             u64::try_from(memory_snapshot.mlx_buffer_cache_bytes()).ok()?;
         let peak_memory_bytes = u64::try_from(memory_snapshot.peak_memory_bytes()).ok()?;
-        let model_core_payload_bytes = model.pack().total_payload_bytes();
-        let context_state_payload_bytes = self.active.as_ref().map_or(0, |active_generation| {
-            active_generation.request_decoder_state.payload_byte_count()
-        });
-        let active_memory_breakdown = MlxActiveMemoryBreakdown::reconcile(
+        let active_memory_breakdown = super::active_memory_breakdown::prism_active_memory_breakdown(
+            model,
             active_memory_bytes,
-            0,
-            model_core_payload_bytes,
-            context_state_payload_bytes,
+            self.active
+                .as_ref()
+                .map(|active_generation| &active_generation.request_decoder_state),
         );
         Some(MlxMemoryTelemetry::new(
             active_memory_bytes,

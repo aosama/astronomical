@@ -6,6 +6,11 @@
 //! streaming engine's model-core bytes exclude dense layers it reads from the
 //! SSD on each forward. Each engine supplies those two figures through
 //! [`Qwen3_5MemoryOwnership`]; the arithmetic itself is written once.
+//!
+//! The arithmetic reads the vision tower through [`Qwen3_5ServingModel`] and
+//! the ceiling through a narrow method rather than through a
+//! `Qwen3_5ModelBase`, so a text model with other weights, the folded Prism
+//! Hadamard pack, composes the same breakdown without owning a base.
 
 use crate::PerformanceAttribution;
 use crate::PerformanceCounter;
@@ -14,12 +19,13 @@ use crate::memory::telemetry::MlxActiveMemoryBreakdown;
 use crate::qwen3_5_core::decoder::RequestDecoderStateStack;
 use crate::qwen3_5_core::vision::Qwen3_5VisionModel;
 
-use super::Qwen3_5ModelBase;
+use super::Qwen3_5ServingModel;
 
 /// What one engine model holds in MLX memory, and the breakdown built on it.
-pub trait Qwen3_5MemoryOwnership {
-    /// The base both engines share: the vision tower and the memory facts.
-    fn model_base(&self) -> &Qwen3_5ModelBase;
+pub trait Qwen3_5MemoryOwnership: Qwen3_5ServingModel {
+    /// The MLX active-memory ceiling the model is serving under, which the
+    /// split sets the reserves against before the memory governor opens.
+    fn mlx_active_memory_ceiling_bytes(&self) -> u64;
 
     /// Expert weight bytes this engine currently holds in MLX memory.
     fn held_expert_payload_bytes(&self) -> u64;
@@ -38,10 +44,7 @@ pub trait Qwen3_5MemoryOwnership {
         match self.governed_memory_reserve_snapshot() {
             Some(governed_budget_snapshot) => governed_budget_snapshot,
             None => crate::memory::MemoryReserveSnapshot::with_only_weights_set_aside(
-                self.model_base()
-                    .memory_facts
-                    .borrow()
-                    .mlx_active_memory_ceiling_bytes(),
+                self.mlx_active_memory_ceiling_bytes(),
                 self.held_model_core_payload_bytes(),
             ),
         }
@@ -211,9 +214,7 @@ fn breakdown_with_context_state_payload_bytes(
         .held_model_core_payload_bytes()
         .saturating_add(
             memory_owner
-                .model_base()
-                .vision_model
-                .as_ref()
+                .vision_model()
                 .map_or(0, Qwen3_5VisionModel::resident_payload_bytes),
         )
         .saturating_add(additional_model_core_payload_bytes);

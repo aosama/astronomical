@@ -137,6 +137,12 @@ impl Qwen3_5ModelBase {
         self.memory_facts.borrow()
     }
 
+    /// The MLX active-memory ceiling this model currently runs under.
+    #[must_use]
+    pub fn mlx_active_memory_ceiling_bytes(&self) -> u64 {
+        self.memory_facts.borrow().mlx_active_memory_ceiling_bytes()
+    }
+
     pub fn sorted_expert_weighted_sum_kernel(
         &self,
     ) -> Result<&MlxMetalKernel, Qwen3_5ExecutionError> {

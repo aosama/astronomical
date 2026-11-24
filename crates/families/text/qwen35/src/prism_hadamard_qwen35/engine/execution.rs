@@ -4,6 +4,7 @@
 //! `MlxInferenceExecution` engine implementation that drives them lives in
 //! `execution::engine_trait_impl`.
 
+mod active_memory_breakdown;
 mod attribution;
 mod engine_trait_impl;
 mod input_injection;

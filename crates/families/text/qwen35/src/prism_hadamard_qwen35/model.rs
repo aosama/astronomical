@@ -22,13 +22,18 @@ use super::configuration::FoldedPackConfigError;
 use super::hadamard::HadamardContractError;
 use weights::{PrismHadamardWeights, build_gdn_normalization_scale_weights, load_family_weights};
 
+mod execution_error;
 mod forward;
 mod fused_projection;
 mod fwht;
 mod measurement;
+mod serving_model;
 pub mod signed_rotation_kernel;
+mod text_model;
 mod weights;
 
+#[cfg(test)]
+pub(crate) mod fixture_model_test_support;
 #[cfg(test)]
 mod tests;
 
