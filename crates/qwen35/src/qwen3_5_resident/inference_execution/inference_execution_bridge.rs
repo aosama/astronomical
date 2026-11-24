@@ -15,6 +15,9 @@ use super::engine_state::Qwen3_5InferenceExecution;
 impl MlxInferenceExecution for Qwen3_5InferenceExecution {
     type Request = Qwen3_5InferenceRequest;
 
+    /// The resident engine builds Neural Engine programs beside the model.
+    const PREPARES_NEURAL_ENGINE_PROGRAMS: bool = true;
+
     fn load(&mut self) -> Result<EngineLoadResult, InferenceEngineError> {
         crate::qwen3_5_core::shared_execution::model_loading_lifecycle::load_model(self)
     }

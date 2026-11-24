@@ -75,8 +75,8 @@ pub use astro_decoder_state_cache::{
 pub use mlx_inference_engine::MlxInferenceEngine;
 
 pub use inference_engine::{
-    GeneratedToken, GenerationFinalization, InferenceEngine, InferenceEngineError,
-    MlxInferenceExecution,
+    DynInferenceEngine, GeneratedToken, GenerationFinalization, InferenceEngine,
+    InferenceEngineError, MlxInferenceExecution,
 };
 
 pub use memory::{

@@ -26,7 +26,7 @@ use model_serving::{
     LayaDecisionEngine, ModelFactory, ModelFactoryRuntime, ModelFamilyInferenceEngine,
     ModernBertEmbeddingEngine, PrismHadamardQwen35ServingSettings, Qwen3_5GenerationProcessor,
     QwenImage21ArtifactProvenance, QwenImage21ImageEngine, RecordedTrainingEngine, SpeechEngine,
-    initialize_prism_hadamard_qwen35_model_with_serving_settings,
+    boxed_chat_engine, initialize_prism_hadamard_qwen35_model_with_serving_settings,
 };
 
 mod qwen3_5_dense_engine_placement;
@@ -555,7 +555,7 @@ impl ModelFamilyFactory {
         let (generation_processor, prism_engine) = initialization_task_result?;
         Ok(ModelFactoryRuntime::autoregressive(
             generation_processor,
-            ModelFamilyInferenceEngine::PrismHadamardQwen35(prism_engine),
+            boxed_chat_engine(prism_engine),
             model_serving::EnginePlacement::CompleteResidencyFits,
         ))
     }
