@@ -74,6 +74,10 @@ pub enum Qwen3_5ExecutionError {
     EmbeddingRowRead(
         #[from] crate::qwen3_5_core::model::embedding_row_reads::EmbeddingRowReadError,
     ),
+    /// A forward failure of a text model whose own error has no Qwen 3.5
+    /// counterpart, carried by its rendering so the engine reports it as is.
+    #[error("text model forward failed: {description}")]
+    TextModelForward { description: String },
     #[error("{description}")]
     WeightSourceDescriptor {
         description: &'static str,

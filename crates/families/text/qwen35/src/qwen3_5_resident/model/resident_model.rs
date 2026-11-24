@@ -39,8 +39,8 @@ impl std::ops::Deref for Qwen3_5ResidentModel {
 }
 
 impl crate::qwen3_5_core::model::memory_breakdown::Qwen3_5MemoryOwnership for Qwen3_5ResidentModel {
-    fn model_base(&self) -> &Qwen3_5ModelBase {
-        &self.base
+    fn mlx_active_memory_ceiling_bytes(&self) -> u64 {
+        self.base.mlx_active_memory_ceiling_bytes()
     }
 
     fn held_expert_payload_bytes(&self) -> u64 {

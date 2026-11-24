@@ -45,6 +45,30 @@ pub fn prism_request_decoder_state(
     )
 }
 
+/// The key and value bytes one more context token adds across every
+/// full-attention layer, or `None` when the layout's geometry overflows.
+///
+/// Only full-attention state grows with the context; the gated-delta layers
+/// keep a fixed convolution buffer and recurrent accumulator whatever the
+/// length. The bytes come from the layout's own dtypes, so a folded pack's
+/// Float16 slabs are counted at the width they are actually stored in.
+pub fn full_attention_key_value_bytes_per_context_token(
+    astro_decoder_state_cache_layout: &AstroDecoderStateCacheLayout,
+) -> Option<usize> {
+    let mut key_value_bytes_per_token = 0_usize;
+    for decoder_layer_index in 0..astro_decoder_state_cache_layout.layer_count() {
+        if let Some(AstroDecoderStateCacheLayerLayout::AppendOnlyAttention {
+            keys, values, ..
+        }) = astro_decoder_state_cache_layout.layer(decoder_layer_index)
+        {
+            key_value_bytes_per_token = key_value_bytes_per_token
+                .checked_add(keys.sequence_payload_byte_count_per_token().ok()?)?
+                .checked_add(values.sequence_payload_byte_count_per_token().ok()?)?;
+        }
+    }
+    Some(key_value_bytes_per_token)
+}
+
 /// Builds the validated persistent astro decoder state cache layout for one folded pack.
 ///
 /// Layer ordering follows `layer_types`, so persisted tensor names
@@ -342,5 +366,46 @@ mod tests {
             AstroDecoderStateCacheState::AppendOnlyAttention { .. } => "append_only_attention",
             AstroDecoderStateCacheState::Composite { .. } => "composite",
         }
+    }
+
+    #[test]
+    fn should_count_float16_keys_and_values_of_full_attention_layers_only() {
+        let one_full_attention_layout =
+            prism_hadamard_qwen35_astro_decoder_state_cache_layout(&shaped_pack_config(&[
+                "linear_attention",
+                "linear_attention",
+                "full_attention",
+            ]))
+            .expect("the fixture layout must validate");
+        // Keys plus values, 2 key-value heads of 16 Float16 elements each.
+        let bytes_per_full_attention_layer = 2 * 2 * 16 * 2;
+        assert_eq!(
+            full_attention_key_value_bytes_per_context_token(&one_full_attention_layout),
+            Some(bytes_per_full_attention_layer)
+        );
+        let two_full_attention_layout =
+            prism_hadamard_qwen35_astro_decoder_state_cache_layout(&shaped_pack_config(&[
+                "full_attention",
+                "linear_attention",
+                "full_attention",
+            ]))
+            .expect("the fixture layout must validate");
+        assert_eq!(
+            full_attention_key_value_bytes_per_context_token(&two_full_attention_layout),
+            Some(2 * bytes_per_full_attention_layer)
+        );
+    }
+
+    #[test]
+    fn should_reserve_nothing_per_token_without_full_attention_layers() {
+        let linear_only_layout =
+            prism_hadamard_qwen35_astro_decoder_state_cache_layout(&shaped_pack_config(&[
+                "linear_attention",
+            ]))
+            .expect("the fixture layout must validate");
+        assert_eq!(
+            full_attention_key_value_bytes_per_context_token(&linear_only_layout),
+            Some(0)
+        );
     }
 }
