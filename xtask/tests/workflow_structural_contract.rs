@@ -48,15 +48,7 @@ fn should_use_the_canonical_integration_package_selection_for_compile_and_execut
         }),
         "the compile step duplicates the canonical integration package selection"
     );
-    let configuration =
-        std::fs::read_to_string(contract_support::repository_root().join(".cargo/config.toml"))
-            .expect("the canonical Cargo configuration should be readable");
-    let integration_alias = configuration
-        .lines()
-        .find(|line| line.starts_with("test-integration = "))
-        .expect("the canonical integration alias should exist");
-    assert!(integration_alias.contains("-p memory-policy "));
-    assert!(integration_alias.contains("--lib --test integration_tests"));
+    // workflow_lane_split_contract checks the alias's lane (issue #2473, Step 6).
 }
 
 #[test]

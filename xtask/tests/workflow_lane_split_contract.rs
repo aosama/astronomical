@@ -76,37 +76,21 @@ fn build_job_packs_one_archive_per_tier_lane() {
 
 #[test]
 fn archive_aliases_carry_the_selections_the_compile_step_builds() {
-    let configuration =
-        std::fs::read_to_string(contract_support::repository_root().join(".cargo/config.toml"))
-            .expect("the canonical Cargo configuration should be readable");
-    let alias_selection = |alias_prefix: &str| -> String {
-        configuration
-            .lines()
-            .find(|line| line.starts_with(alias_prefix))
-            .unwrap_or_else(|| panic!("the {alias_prefix} alias should exist"))
-            .trim_start_matches(alias_prefix)
-            .trim_matches('"')
-            .to_owned()
-    };
-    let compile_selection = alias_selection("test-integration = ");
-    let archive_selection = alias_selection("nextest-archive-integration = ");
-    // Compare from the first package flag onward: the run aliases carry
-    // execution-only flags (--no-fail-fast) that archiving does not.
-    fn selection_tail(alias_value: &str) -> &str {
-        &alias_value[alias_value
-            .find("-p ")
-            .expect("the alias should select packages")..]
-    }
-    // If the selections drifted, the lanes would run filters against
+    // The aliases list no packages: `cargo xtask lane-cargo` builds each from
+    // the packages' declared lanes (issue #2473, Step 6). The compile alias and
+    // the integration archive naming one lane is what keeps their package
+    // lists identical; if they drifted, the lanes would run filters against
     // binaries the compile step's timing and native-progress attribution
     // never saw.
     assert_eq!(
-        selection_tail(&compile_selection),
-        selection_tail(&archive_selection),
+        lane_of_alias("nextest-archive-integration"),
+        lane_of_alias("test-integration"),
         "the nextest-archive-integration alias must carry the identical selection as test-integration"
     );
-    assert!(compile_selection.contains("-p memory-policy "));
-    assert!(compile_selection.contains("--lib --test integration_tests"));
+    assert!(
+        packages_in_lane(&lane_of_alias("test-integration")).contains(&"memory-policy".to_owned())
+    );
+    assert!(lane_table_text().contains("--lib --test integration_tests"));
 }
 
 #[test]
@@ -384,18 +368,19 @@ fn assert_nextest_configuration_keeps_archive_budgets() {
 /// package list recompiles what the build step just compiled.
 #[test]
 fn should_compile_and_archive_every_lane_with_one_package_list() {
-    let compile_selection = package_list_of_alias("test-integration = ");
-    assert!(compile_selection.contains("-p rest-contract"));
-    assert!(compile_selection.contains("-p astronomical-e2e"));
+    let compile_lane = lane_of_alias("test-integration");
+    let compile_packages = packages_in_lane(&compile_lane);
+    assert!(compile_packages.contains(&"rest-contract".to_owned()));
+    assert!(compile_packages.contains(&"astronomical-e2e".to_owned()));
     for archive_alias in [
-        "nextest-archive-integration = ",
-        "nextest-archive-rest-api = ",
-        "nextest-archive-e2e = ",
+        "nextest-archive-integration",
+        "nextest-archive-rest-api",
+        "nextest-archive-e2e",
     ] {
         assert_eq!(
-            package_list_of_alias(archive_alias),
-            compile_selection,
-            "{archive_alias}must carry the compile step's package list"
+            lane_of_alias(archive_alias),
+            compile_lane,
+            "{archive_alias} must carry the compile step's package list"
         );
     }
     let workflow = workflow_contract();
@@ -424,24 +409,71 @@ fn selection_condition_of(lane_id: &str) -> Option<&'static str> {
     }
 }
 
-fn package_list_of_alias(alias_prefix: &str) -> String {
+/// The lane a lane alias builds its command from, read from the lane table
+/// after checking `.cargo/config.toml` makes the alias a lane call.
+fn lane_of_alias(alias_name: &str) -> String {
     let cargo_config =
         std::fs::read_to_string(contract_support::repository_root().join(".cargo/config.toml"))
             .expect("the cargo config should be readable");
-    let mut packages = Vec::new();
-    for config_line in cargo_config.lines() {
-        if !config_line.starts_with(alias_prefix) {
-            continue;
-        }
-        let mut words = config_line.split_whitespace();
-        while let Some(word) = words.next() {
-            if word == "-p" {
-                packages.push(words.next().expect("-p takes a package"));
+    let expected_alias_line = format!(r#"{alias_name} = "xtask lane-cargo {alias_name}""#);
+    assert!(
+        cargo_config
+            .lines()
+            .any(|config_line| config_line == expected_alias_line),
+        "{alias_name} should be a lane alias"
+    );
+    let lane_table = lane_table_text();
+    let alias_entry = format!(r#"alias_name: "{alias_name}","#);
+    let entry_start = lane_table
+        .find(&alias_entry)
+        .unwrap_or_else(|| panic!("the lane table should define {alias_name}"));
+    let lane_line = lane_table[entry_start..]
+        .lines()
+        .nth(1)
+        .expect("a lane entry names its lane on the next line");
+    lane_line
+        .trim()
+        .trim_start_matches("lane_name: \"")
+        .trim_end_matches("\",")
+        .to_owned()
+}
+
+fn lane_table_text() -> String {
+    std::fs::read_to_string(contract_support::repository_root().join("xtask/src/test_lanes.rs"))
+        .expect("the test lane table should be readable")
+}
+
+/// Every workspace package whose manifest declares `lane_name`.
+fn packages_in_lane(lane_name: &str) -> Vec<String> {
+    let lane_entry = format!("\"{lane_name}\"");
+    let mut package_names = Vec::new();
+    for package_root in ["apps", "crates", "verification"] {
+        let package_root = contract_support::repository_root().join(package_root);
+        for directory_entry in std::fs::read_dir(&package_root).expect("package root readable") {
+            let manifest_path = directory_entry
+                .expect("entry readable")
+                .path()
+                .join("Cargo.toml");
+            let Ok(manifest_text) = std::fs::read_to_string(&manifest_path) else {
+                continue;
+            };
+            let declares_lane = manifest_text.lines().any(|manifest_line| {
+                manifest_line.starts_with("test-lanes = [") && manifest_line.contains(&lane_entry)
+            });
+            let package_name = manifest_text
+                .lines()
+                .find_map(|manifest_line| manifest_line.strip_prefix("name = \""))
+                .map(|name_text| name_text.trim_end_matches('"').to_owned());
+            if let (true, Some(package_name)) = (declares_lane, package_name) {
+                package_names.push(package_name);
             }
         }
     }
-    assert!(!packages.is_empty(), "{alias_prefix} should list packages");
-    packages.join(" -p ")
+    assert!(
+        !package_names.is_empty(),
+        "the {lane_name} lane should hold packages"
+    );
+    package_names
 }
 
 /// These two compile with their own features, so they rebuild crates. In the build job
