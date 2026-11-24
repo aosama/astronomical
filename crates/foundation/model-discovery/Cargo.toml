@@ -19,8 +19,6 @@ workspace = true
 # Model discovery (issue #2473, Step 5): reads folders and documents only, so
 # the daemon discovers models without linking MLX.
 [dependencies]
-# Whether a folder declares an expert atlas, which discovery reports.
-expert-atlas = { path = "../../engine/expert-atlas" }
 lowercase-hex = { path = "../lowercase-hex" }
 # The voice-name rule discovery lists speech voices by, shared with the
 # engines that load them; pure Rust with no further dependencies.

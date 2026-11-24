@@ -17,6 +17,46 @@ use model_discovery::{
 
 mod registered_model_families;
 
+// Each family's own names (its constant, file names, folder checks),
+// re-exported so `config` and the daemon keep one path to them.
+pub use clef_recognition::{CLEF_FAMILY_DESCRIPTION, CLEF_MODEL_FAMILY, discover_clef_model};
+pub use flux2_klein_recognition::{
+    FLUX2_KLEIN_FAMILY_DESCRIPTION, FLUX2_KLEIN_MLX_4BIT_TRANSFORMER_INDEX_FILE_NAME,
+    FLUX2_KLEIN_MODEL_FAMILY, Flux2KleinDirectoryVerificationError,
+    classify_mflux_transformer_index_bytes, discover_flux2_klein_model,
+    verify_flux2_klein_model_directory,
+};
+pub use kev_recognition::{KEV_FAMILY_DESCRIPTION, KEV_MODEL_FAMILY, discover_kev_model};
+pub use kokoro_recognition::{
+    KOKORO_CONFIGURATION_FILE_NAME, KOKORO_FAMILY_DESCRIPTION, KOKORO_MODEL_FAMILY,
+    KOKORO_VOICES_DIRECTORY_NAME, KOKORO_WEIGHTS_FILE_NAME, discover_kokoro_model,
+    is_kokoro_configuration, kokoro_speech_capabilities,
+};
+pub use laya_recognition::{
+    LAYA_FAMILY_DESCRIPTION, LAYA_MODEL_FAMILY, discover_laya_bundled_checkpoints,
+    discover_laya_model,
+};
+pub use modernbert_recognition::{
+    MODERNBERT_FAMILY_DESCRIPTION, MODERNBERT_MODEL_FAMILY, discover_modernbert_model,
+};
+pub use phonon_recognition::{
+    PHONON_CONFIGURATION_FILE_NAME, PHONON_DEFAULT_VOICE_FILE_NAME, PHONON_DEFAULT_VOICE_NAME,
+    PHONON_FAMILY_DESCRIPTION, PHONON_MODEL_FAMILY, PHONON_TOKENIZER_FILE_NAME,
+    PHONON_VOICES_DIRECTORY_NAME, PHONON_WEIGHTS_FILE_NAME, discover_phonon_model,
+    is_phonon_configuration, phonon_speech_capabilities,
+};
+pub use qwen_image_21_recognition::{
+    QWEN_IMAGE_21_FAMILY_DESCRIPTION, QWEN_IMAGE_21_MODEL_FAMILY,
+    QwenImage21DirectoryVerificationError, discover_qwen_image_21_model,
+    verify_qwen_image_21_model_directory,
+};
+pub use qwen35_recognition::{
+    MINIMUM_SERVABLE_CONTEXT_WINDOW_TOKENS, PRISM_HADAMARD_QWEN35_FAMILY_DESCRIPTION,
+    PRISM_HADAMARD_QWEN35_MODEL_FAMILY, QWEN3_5_FAMILY_DESCRIPTION, QWEN3_5_MODEL_FAMILY,
+    context_window_tokens, discover_prism_hadamard_qwen35_model, discover_qwen3_5_model,
+    required_shard_file_names,
+};
+
 use registered_model_families::REGISTERED_MODEL_FAMILIES;
 
 /// Every registered family, in classification order.

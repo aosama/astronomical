@@ -11,6 +11,8 @@ members = [
     "crates/engine/*",
     "crates/hardware/*",
     "crates/families/*/*",
+    # Each family's recognition crate, inside the family's own folder.
+    "crates/families/*/*/recognition",
     "crates/weight-formats/*",
     "crates/tooling/*",
     "verification/*",
@@ -28,6 +30,7 @@ default-members = [
     "crates/foundation/*",
     "crates/engine/*",
     "crates/families/*/*",
+    "crates/families/*/*/recognition",
     "crates/weight-formats/*",
     "crates/tooling/*",
     "verification/acceptance",

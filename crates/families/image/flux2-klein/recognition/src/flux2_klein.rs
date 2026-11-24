@@ -6,26 +6,34 @@
 //! present; serving does not pin one Hub SHA.
 
 use std::collections::BTreeSet;
-use std::fs::{self, File};
-use std::io::Read;
-use std::path::{Component, Path};
+use std::path::Path;
 
-use super::model_family_description::ModelFamily;
+use model_discovery::ModelFamily;
 
 use thiserror::Error;
 
-use super::bounded_artifact_file;
-use super::classified_artifacts;
-use super::flux2_klein_documents::{
-    PipelineClass, PipelineIndex, SchedulerGeometry, TextEncoderGeometry, TextEncoderIndex,
-    TransformerGeometry, VaeGeometry,
+use crate::flux2_klein_documents::{
+    PipelineClass, PipelineIndex, TextEncoderGeometry, TextEncoderIndex, TransformerGeometry,
+    VaeGeometry,
 };
-use super::flux2_klein_mlx_4bit;
-use super::{ImageGenerationCapabilities, ModelLicense};
+use crate::flux2_klein_mlx_4bit;
+use model_discovery::bounded_artifact_file;
+use model_discovery::{
+    FlowMatchSchedulerProfile, ImageDirectoryEvidence, ImageGenerationCapabilities, ModelLicense,
+    is_reviewed_flow_match_scheduler, is_safe_safetensors_path, nonempty_file_size,
+    pipeline_provenance, safetensors_payload_size,
+};
 
 pub(super) const CANONICAL_MODEL_ID: &str = "FLUX.2-klein-4B";
 pub(super) const PROVIDER_MODEL_ID: &str = "black-forest-labs/FLUX.2-klein-4B";
 const MAXIMUM_JSON_BYTES: u64 = 4 * 1024 * 1024;
+/// The scheduler settings the reviewed build ships with.
+const REVIEWED_SCHEDULER_PROFILE: FlowMatchSchedulerProfile = FlowMatchSchedulerProfile {
+    max_image_seq_len: 4_096,
+    max_shift: 1.15,
+    shift: 3.0,
+    shift_terminal: None,
+};
 const MAXIMUM_TEXT_ENCODER_INDEX_BYTES: u64 = 32 * 1024 * 1024;
 const MAXIMUM_SIDECAR_BYTES: u64 = 64 * 1024 * 1024;
 const MAXIMUM_LICENSE_BYTES: u64 = 64 * 1024;
@@ -40,17 +48,6 @@ const REQUIRED_SIDECARS: [&str; 8] = [
     "tokenizer/tokenizer_config.json",
     "tokenizer/vocab.json",
 ];
-
-/// Trusted shallow evidence reread from one selected FLUX artifact directory.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct Flux2KleinDirectoryEvidence {
-    pub canonical_model_id: String,
-    pub provider_model_id: String,
-    pub revision: String,
-    pub license: ModelLicense,
-    pub capabilities: ImageGenerationCapabilities,
-    pub model_size_bytes: u64,
-}
 
 /// Bounded path-free rejection for a directory that does not prove the reviewed profile.
 #[derive(Debug, Error, Eq, PartialEq)]
@@ -96,12 +93,12 @@ pub fn classifies_pipeline_index(pipeline_index_bytes: &[u8]) -> Result<bool, se
 /// A directory with a pipeline index is the BF16 build; any other is checked as the 4-bit build.
 pub fn verify_model_directory(
     model_directory: &Path,
-) -> Result<Flux2KleinDirectoryEvidence, Flux2KleinDirectoryVerificationError> {
+) -> Result<ImageDirectoryEvidence, Flux2KleinDirectoryVerificationError> {
     build_verifier(model_directory)(model_directory)
 }
 
 type BuildVerifier =
-    fn(&Path) -> Result<Flux2KleinDirectoryEvidence, Flux2KleinDirectoryVerificationError>;
+    fn(&Path) -> Result<ImageDirectoryEvidence, Flux2KleinDirectoryVerificationError>;
 
 fn build_verifier(model_directory: &Path) -> BuildVerifier {
     if model_directory.join("model_index.json").is_file() {
@@ -130,7 +127,7 @@ pub(super) fn flux2_klein_capabilities() -> ImageGenerationCapabilities {
 /// Requires the authoritative modular package rather than its duplicate single-file export.
 fn verify_model_directory_evidence(
     model_directory: &Path,
-) -> Result<Flux2KleinDirectoryEvidence, Flux2KleinDirectoryVerificationError> {
+) -> Result<ImageDirectoryEvidence, Flux2KleinDirectoryVerificationError> {
     validate_pipeline_index(model_directory)?;
     validate_transformer_geometry(model_directory)?;
     validate_text_encoder_geometry(model_directory)?;
@@ -149,20 +146,11 @@ fn verify_model_directory_evidence(
         )?;
     }
     let model_size_bytes = measure_modular_weight_bytes(model_directory)?;
-    let library_provenance =
-        super::classified_artifacts::immutable_model_provenance(model_directory);
-    let revision = library_provenance
-        .as_ref()
-        .map(|(_, recorded_revision)| recorded_revision.clone())
-        .or_else(|| {
-            classified_artifacts::immutable_file_revision(model_directory, "model_index.json")
-        })
+    let (provider_model_id, revision) = pipeline_provenance(model_directory, PROVIDER_MODEL_ID)
         .ok_or(Flux2KleinDirectoryVerificationError::MissingRevision)?;
-    Ok(Flux2KleinDirectoryEvidence {
+    Ok(ImageDirectoryEvidence {
         canonical_model_id: CANONICAL_MODEL_ID.to_owned(),
-        provider_model_id: library_provenance
-            .map(|(recorded_provider_model_id, _)| recorded_provider_model_id)
-            .unwrap_or_else(|| PROVIDER_MODEL_ID.to_owned()),
+        provider_model_id,
         revision,
         license: ModelLicense::Apache20,
         capabilities: flux2_klein_capabilities(),
@@ -312,28 +300,13 @@ fn validate_vae_geometry(
 fn validate_scheduler_geometry(
     model_directory: &Path,
 ) -> Result<(), Flux2KleinDirectoryVerificationError> {
-    let geometry: SchedulerGeometry = bounded_artifact_file::read_json(
-        &model_directory.join("scheduler/scheduler_config.json"),
+    is_reviewed_flow_match_scheduler(
+        model_directory,
         MAXIMUM_JSON_BYTES,
+        &REVIEWED_SCHEDULER_PROFILE,
     )
-    .map_err(|_| Flux2KleinDirectoryVerificationError::InvalidSchedulerConfiguration)?;
-    (geometry.class_name == "FlowMatchEulerDiscreteScheduler"
-        && geometry.base_image_seq_len == 256
-        && geometry.base_shift == 0.5
-        && !geometry.invert_sigmas
-        && geometry.max_image_seq_len == 4_096
-        && geometry.max_shift == 1.15
-        && geometry.num_train_timesteps == 1_000
-        && geometry.shift == 3.0
-        && geometry.shift_terminal.is_none()
-        && !geometry.stochastic_sampling
-        && geometry.time_shift_type == "exponential"
-        && !geometry.use_beta_sigmas
-        && geometry.use_dynamic_shifting
-        && !geometry.use_exponential_sigmas
-        && !geometry.use_karras_sigmas)
-        .then_some(())
-        .ok_or(Flux2KleinDirectoryVerificationError::InvalidSchedulerConfiguration)
+    .then_some(())
+    .ok_or(Flux2KleinDirectoryVerificationError::InvalidSchedulerConfiguration)
 }
 
 fn measure_modular_weight_bytes(
@@ -362,10 +335,17 @@ fn measure_modular_weight_bytes(
     for shard_path in indexed_shard_paths {
         let indexed_weight_path = model_directory.join("text_encoder").join(shard_path);
         text_encoder_weight_size_bytes = text_encoder_weight_size_bytes
-            .checked_add(required_weight_size(&indexed_weight_path, "text encoder")?)
+            .checked_add(nonempty_file_size(&indexed_weight_path).ok_or(
+                Flux2KleinDirectoryVerificationError::MissingOrInvalidWeightFile {
+                    component: "text encoder",
+                },
+            )?)
             .ok_or(Flux2KleinDirectoryVerificationError::ModelSizeOverflow)?;
         text_encoder_payload_size_bytes = text_encoder_payload_size_bytes
-            .checked_add(required_safetensors_payload_size(&indexed_weight_path)?)
+            .checked_add(
+                safetensors_payload_size(&indexed_weight_path)
+                    .ok_or(Flux2KleinDirectoryVerificationError::InvalidTextEncoderWeightIndex)?,
+            )
             .ok_or(Flux2KleinDirectoryVerificationError::ModelSizeOverflow)?;
     }
     if text_encoder_index.metadata.total_size != text_encoder_payload_size_bytes {
@@ -383,56 +363,12 @@ fn measure_modular_weight_bytes(
         ),
     ] {
         modular_weight_size_bytes = modular_weight_size_bytes
-            .checked_add(required_weight_size(&modular_weight_path, component)?)
+            .checked_add(nonempty_file_size(&modular_weight_path).ok_or(
+                Flux2KleinDirectoryVerificationError::MissingOrInvalidWeightFile { component },
+            )?)
             .ok_or(Flux2KleinDirectoryVerificationError::ModelSizeOverflow)?;
     }
     Ok(modular_weight_size_bytes)
-}
-
-fn required_safetensors_payload_size(
-    weight_path: &Path,
-) -> Result<u64, Flux2KleinDirectoryVerificationError> {
-    let weight_file_size_bytes = fs::metadata(weight_path)
-        .map_err(|_| Flux2KleinDirectoryVerificationError::InvalidTextEncoderWeightIndex)?
-        .len();
-    let mut weight_file = File::open(weight_path)
-        .map_err(|_| Flux2KleinDirectoryVerificationError::InvalidTextEncoderWeightIndex)?;
-    let mut header_length_bytes = [0_u8; 8];
-    weight_file
-        .read_exact(&mut header_length_bytes)
-        .map_err(|_| Flux2KleinDirectoryVerificationError::InvalidTextEncoderWeightIndex)?;
-    let header_size_bytes = u64::from_le_bytes(header_length_bytes);
-    weight_file_size_bytes
-        .checked_sub(8)
-        .and_then(|remaining_bytes| remaining_bytes.checked_sub(header_size_bytes))
-        .filter(|payload_size_bytes| *payload_size_bytes > 0)
-        .ok_or(Flux2KleinDirectoryVerificationError::InvalidTextEncoderWeightIndex)
-}
-
-pub(super) fn required_weight_size(
-    weight_path: &Path,
-    component: &'static str,
-) -> Result<u64, Flux2KleinDirectoryVerificationError> {
-    let weight_metadata = fs::metadata(weight_path).map_err(|_| {
-        Flux2KleinDirectoryVerificationError::MissingOrInvalidWeightFile { component }
-    })?;
-    (weight_metadata.is_file() && weight_metadata.len() > 0)
-        .then_some(weight_metadata.len())
-        .ok_or(Flux2KleinDirectoryVerificationError::MissingOrInvalidWeightFile { component })
-}
-
-pub(super) fn is_safe_safetensors_path(shard_path: &str) -> bool {
-    let shard_file_path = Path::new(shard_path);
-    !shard_path.is_empty()
-        && !shard_path.contains('\\')
-        && !shard_file_path.is_absolute()
-        && shard_file_path
-            .components()
-            .all(|component| matches!(component, Component::Normal(_)))
-        && shard_file_path
-            .extension()
-            .and_then(|extension| extension.to_str())
-            == Some("safetensors")
 }
 
 /// The FLUX.2 Klein image family, as a Diffusers pipeline or the 4-bit build.

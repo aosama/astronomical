@@ -1,25 +1,7 @@
 use crate::check_architecture_family_layer::{
     FAMILY_WITHOUT_OTHER_FAMILY_RULE, FAMILY_WITHOUT_SERVING_RULE, family_layer_violations,
 };
-
-/// Minimal `cargo metadata` document whose packages are the given
-/// `(name, manifest folder below the workspace, dependency names)` tuples.
-fn metadata_document_for(packages: &[(&str, &str, Vec<&str>)]) -> String {
-    let mut package_json_entries = Vec::new();
-    for (package_name, manifest_folder, dependency_names) in packages {
-        let mut dependency_json_entries = Vec::new();
-        for dependency_name in dependency_names {
-            dependency_json_entries.push(format!(
-                "{{\"name\":\"{dependency_name}\",\"kind\":\"normal\"}}"
-            ));
-        }
-        package_json_entries.push(format!(
-            "{{\"name\":\"{package_name}\",\"manifest_path\":\"/workspace/{manifest_folder}/Cargo.toml\",\"dependencies\":[{}]}}",
-            dependency_json_entries.join(",")
-        ));
-    }
-    format!("{{\"packages\":[{}]}}", package_json_entries.join(","))
-}
+use crate::check_architecture_test_support::metadata_document_for;
 
 /// A speech kind with its shell and two families, an image kind with its
 /// shell and one family, and the serving crate above them all.

@@ -3,7 +3,7 @@
 //! reads it as license evidence; only exact `key: value` lines between the
 //! opening and closing `---` count.
 
-pub(super) fn has_front_matter_value(readme: &str, key: &str, expected_value: &str) -> bool {
+pub fn has_front_matter_value(readme: &str, key: &str, expected_value: &str) -> bool {
     let expected_line = format!("{key}: {expected_value}");
     let mut lines = readme.lines().map(str::trim);
     if lines.next() != Some("---") {

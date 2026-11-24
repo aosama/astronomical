@@ -423,6 +423,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "clef-recognition"
+version = "0.2.134"
+dependencies = [
+ "model-discovery",
+ "serde_json",
+]
+
+[[package]]
 name = "combine"
 version = "4.6.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -850,6 +858,16 @@ dependencies = [
  "thiserror",
  "tokenizers",
  "tracing",
+]
+
+[[package]]
+name = "flux2-klein-recognition"
+version = "0.2.134"
+dependencies = [
+ "model-discovery",
+ "serde",
+ "serde_json",
+ "thiserror",
 ]
 
 [[package]]
@@ -1339,6 +1357,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "kev-recognition"
+version = "0.2.134"
+dependencies = [
+ "model-discovery",
+ "serde_json",
+]
+
+[[package]]
 name = "kokoro"
 version = "0.2.134"
 dependencies = [
@@ -1358,6 +1384,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "kokoro-recognition"
+version = "0.2.134"
+dependencies = [
+ "model-discovery",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
 name = "laya"
 version = "0.2.134"
 dependencies = [
@@ -1373,6 +1408,14 @@ dependencies = [
  "tempfile",
  "thiserror",
  "tokenizers",
+]
+
+[[package]]
+name = "laya-recognition"
+version = "0.2.134"
+dependencies = [
+ "model-discovery",
+ "serde_json",
 ]
 
 [[package]]
@@ -1536,7 +1579,6 @@ dependencies = [
 name = "model-discovery"
 version = "0.2.134"
 dependencies = [
- "expert-atlas",
  "lowercase-hex",
  "serde",
  "serde_json",
@@ -1550,7 +1592,16 @@ dependencies = [
 name = "model-family-registry"
 version = "0.2.134"
 dependencies = [
+ "clef-recognition",
+ "flux2-klein-recognition",
+ "kev-recognition",
+ "kokoro-recognition",
+ "laya-recognition",
  "model-discovery",
+ "modernbert-recognition",
+ "phonon-recognition",
+ "qwen-image-21-recognition",
+ "qwen35-recognition",
  "serde_json",
 ]
 
@@ -1623,6 +1674,14 @@ dependencies = [
  "serde_json",
  "thiserror",
  "tokenizers",
+]
+
+[[package]]
+name = "modernbert-recognition"
+version = "0.2.134"
+dependencies = [
+ "model-discovery",
+ "serde_json",
 ]
 
 [[package]]
@@ -1800,6 +1859,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "phonon-recognition"
+version = "0.2.134"
+dependencies = [
+ "model-discovery",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
 name = "pin-project-lite"
 version = "0.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1920,6 +1988,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "qwen-image-21-recognition"
+version = "0.2.134"
+dependencies = [
+ "model-discovery",
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
 name = "qwen35"
 version = "0.2.134"
 dependencies = [
@@ -1960,6 +2038,15 @@ dependencies = [
  "quantization",
  "qwen35",
  "runtime-integration",
+]
+
+[[package]]
+name = "qwen35-recognition"
+version = "0.2.134"
+dependencies = [
+ "expert-atlas",
+ "model-discovery",
+ "serde_json",
 ]
 
 [[package]]

@@ -21,4 +21,14 @@ workspace = true
 # recognizes folders through it.
 [dependencies]
 model-discovery = { path = "../../../foundation/model-discovery" }
+# Each family's recognition crate, in the family's own folder.
+qwen35-recognition = { path = "../../text/qwen35/recognition" }
+flux2-klein-recognition = { path = "../../image/flux2-klein/recognition" }
+qwen-image-21-recognition = { path = "../../image/qwen-image-21/recognition" }
+kokoro-recognition = { path = "../../speech/kokoro/recognition" }
+phonon-recognition = { path = "../../speech/phonon/recognition" }
+kev-recognition = { path = "../../decision/kev/recognition" }
+clef-recognition = { path = "../../decision/clef/recognition" }
+laya-recognition = { path = "../../decision/laya/recognition" }
+modernbert-recognition = { path = "../../decision/modernbert/recognition" }
 serde_json.workspace = true

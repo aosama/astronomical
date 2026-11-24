@@ -5,27 +5,35 @@
 //! engine can execute them.
 
 use std::collections::BTreeSet;
-use std::fs::{self, File};
-use std::io::Read;
-use std::path::{Component, Path};
+use std::path::Path;
 
-use super::model_family_description::ModelFamily;
+use model_discovery::ModelFamily;
 
 use thiserror::Error;
 
-use super::bounded_artifact_file;
-use super::classified_artifacts;
-use super::model_card_front_matter::has_front_matter_value;
-use super::qwen_image_21_documents::{
-    ComponentSafetensorsIndex, PipelineClass, PipelineIndex, QwenImage21SchedulerGeometry,
-    QwenImage21TextEncoderGeometry, QwenImage21TransformerGeometry, QwenImage21VaeGeometry,
+use crate::qwen_image_21_documents::{
+    ComponentSafetensorsIndex, PipelineClass, PipelineIndex, QwenImage21TextEncoderGeometry,
+    QwenImage21TransformerGeometry, QwenImage21VaeGeometry,
 };
-use super::{ImageGenerationCapabilities, ModelLicense};
+use model_discovery::bounded_artifact_file;
+use model_discovery::model_card_front_matter::has_front_matter_value;
+use model_discovery::{
+    FlowMatchSchedulerProfile, ImageDirectoryEvidence, ImageGenerationCapabilities, ModelLicense,
+    is_reviewed_flow_match_scheduler, is_safe_safetensors_path, nonempty_file_size,
+    pipeline_provenance, safetensors_payload_size,
+};
 
 const CANONICAL_MODEL_ID: &str = "Qwen-Image-2.1-MLX-4bit";
 const PROVIDER_MODEL_ID: &str = "mlx-community/Qwen-Image-2.1-MLX-4bit";
 const PIPELINE_CLASS_NAME: &str = "QwenImage21Pipeline";
 const MAXIMUM_JSON_BYTES: u64 = 4 * 1024 * 1024;
+/// The scheduler settings the reviewed build ships with.
+const REVIEWED_SCHEDULER_PROFILE: FlowMatchSchedulerProfile = FlowMatchSchedulerProfile {
+    max_image_seq_len: 8192,
+    max_shift: 0.9,
+    shift: 1.0,
+    shift_terminal: Some(0.02),
+};
 const MAXIMUM_COMPONENT_INDEX_BYTES: u64 = 32 * 1024 * 1024;
 const MAXIMUM_SIDECAR_BYTES: u64 = 64 * 1024 * 1024;
 const MAXIMUM_README_BYTES: u64 = 256 * 1024;
@@ -53,17 +61,6 @@ const REVIEWED_COMPONENTS: [(&str, &str, &str); 3] = [
     ),
     ("vae", "AutoencoderKLQwenImage21", "VAE"),
 ];
-
-/// Shallow proof for one complete Qwen-Image-2.1 MLX pipeline directory.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct QwenImage21DirectoryEvidence {
-    pub canonical_model_id: String,
-    pub provider_model_id: String,
-    pub revision: String,
-    pub license: ModelLicense,
-    pub capabilities: ImageGenerationCapabilities,
-    pub model_size_bytes: u64,
-}
 
 /// Bounded, path-free rejection for a package that does not prove the reviewed T2I profile.
 #[derive(Clone, Debug, Eq, Error, PartialEq)]
@@ -105,7 +102,7 @@ pub fn classifies_pipeline_index(pipeline_index_bytes: &[u8]) -> Result<bool, se
 /// Verifies one selected pipeline package without treating nested component configs as models.
 pub fn verify_model_directory(
     model_directory: &Path,
-) -> Result<QwenImage21DirectoryEvidence, QwenImage21DirectoryVerificationError> {
+) -> Result<ImageDirectoryEvidence, QwenImage21DirectoryVerificationError> {
     validate_pipeline_index(model_directory)?;
     validate_transformer_geometry(model_directory)?;
     validate_text_encoder_geometry(model_directory)?;
@@ -114,20 +111,12 @@ pub fn verify_model_directory(
     validate_processor_files(model_directory)?;
     validate_license_provenance(model_directory)?;
     let model_size_bytes = measure_reviewed_weight_bytes(model_directory)?;
-    let library_provenance = classified_artifacts::immutable_model_provenance(model_directory);
-    let revision = library_provenance
-        .as_ref()
-        .map(|(_, recorded_revision)| recorded_revision.clone())
-        .or_else(|| {
-            classified_artifacts::immutable_file_revision(model_directory, "model_index.json")
-        })
+    let (provider_model_id, revision) = pipeline_provenance(model_directory, PROVIDER_MODEL_ID)
         .ok_or(QwenImage21DirectoryVerificationError::MissingRevision)?;
 
-    Ok(QwenImage21DirectoryEvidence {
+    Ok(ImageDirectoryEvidence {
         canonical_model_id: CANONICAL_MODEL_ID.to_owned(),
-        provider_model_id: library_provenance
-            .map(|(recorded_provider_id, _)| recorded_provider_id)
-            .unwrap_or_else(|| PROVIDER_MODEL_ID.to_owned()),
+        provider_model_id,
         revision,
         license: ModelLicense::QwenResearch,
         capabilities: ImageGenerationCapabilities {
@@ -273,28 +262,13 @@ fn validate_vae_geometry(
 fn validate_scheduler_geometry(
     model_directory: &Path,
 ) -> Result<(), QwenImage21DirectoryVerificationError> {
-    let geometry: QwenImage21SchedulerGeometry = bounded_artifact_file::read_json(
-        &model_directory.join("scheduler/scheduler_config.json"),
+    is_reviewed_flow_match_scheduler(
+        model_directory,
         MAXIMUM_JSON_BYTES,
+        &REVIEWED_SCHEDULER_PROFILE,
     )
-    .map_err(|_| QwenImage21DirectoryVerificationError::InvalidSchedulerConfiguration)?;
-    (geometry.class_name == "FlowMatchEulerDiscreteScheduler"
-        && geometry.base_image_seq_len == 256
-        && geometry.base_shift == 0.5
-        && !geometry.invert_sigmas
-        && geometry.max_image_seq_len == 8192
-        && geometry.max_shift == 0.9
-        && geometry.num_train_timesteps == 1000
-        && geometry.shift == 1.0
-        && geometry.shift_terminal == Some(0.02)
-        && !geometry.stochastic_sampling
-        && geometry.time_shift_type == "exponential"
-        && !geometry.use_beta_sigmas
-        && geometry.use_dynamic_shifting
-        && !geometry.use_exponential_sigmas
-        && !geometry.use_karras_sigmas)
-        .then_some(())
-        .ok_or(QwenImage21DirectoryVerificationError::InvalidSchedulerConfiguration)
+    .then_some(())
+    .ok_or(QwenImage21DirectoryVerificationError::InvalidSchedulerConfiguration)
 }
 
 fn validate_processor_files(
@@ -388,13 +362,16 @@ fn measure_component_weight_bytes(
     let mut component_payload_size_bytes = 0_u64;
     for shard_path in shard_paths {
         let shard_file_path = component_path.join(shard_path);
-        let shard_size_bytes = required_weight_size(&shard_file_path, component_error_name)?;
-        let payload_size_bytes =
-            required_safetensors_payload_size(&shard_file_path).map_err(|_| {
-                QwenImage21DirectoryVerificationError::InvalidComponentWeightIndex {
-                    component: component_error_name,
-                }
-            })?;
+        let shard_size_bytes = nonempty_file_size(&shard_file_path).ok_or(
+            QwenImage21DirectoryVerificationError::MissingOrInvalidWeightFile {
+                component: component_error_name,
+            },
+        )?;
+        let payload_size_bytes = safetensors_payload_size(&shard_file_path).ok_or(
+            QwenImage21DirectoryVerificationError::InvalidComponentWeightIndex {
+                component: component_error_name,
+            },
+        )?;
         component_file_size_bytes = component_file_size_bytes
             .checked_add(shard_size_bytes)
             .ok_or(QwenImage21DirectoryVerificationError::ModelSizeOverflow)?;
@@ -410,47 +387,6 @@ fn measure_component_weight_bytes(
         );
     }
     Ok(component_file_size_bytes)
-}
-
-fn required_weight_size(
-    weight_path: &Path,
-    component: &'static str,
-) -> Result<u64, QwenImage21DirectoryVerificationError> {
-    let weight_metadata = fs::metadata(weight_path).map_err(|_| {
-        QwenImage21DirectoryVerificationError::MissingOrInvalidWeightFile { component }
-    })?;
-    (weight_metadata.is_file() && weight_metadata.len() > 0)
-        .then_some(weight_metadata.len())
-        .ok_or(QwenImage21DirectoryVerificationError::MissingOrInvalidWeightFile { component })
-}
-
-fn required_safetensors_payload_size(weight_path: &Path) -> Result<u64, ()> {
-    let weight_file_size_bytes = fs::metadata(weight_path).map_err(|_| ())?.len();
-    let mut weight_file = File::open(weight_path).map_err(|_| ())?;
-    let mut header_size_bytes = [0_u8; 8];
-    weight_file
-        .read_exact(&mut header_size_bytes)
-        .map_err(|_| ())?;
-    let header_size_bytes = u64::from_le_bytes(header_size_bytes);
-    weight_file_size_bytes
-        .checked_sub(8)
-        .and_then(|remaining| remaining.checked_sub(header_size_bytes))
-        .filter(|payload_size_bytes| *payload_size_bytes > 0)
-        .ok_or(())
-}
-
-fn is_safe_safetensors_path(shard_path: &str) -> bool {
-    let shard_file_path = Path::new(shard_path);
-    !shard_path.is_empty()
-        && !shard_path.contains('\\')
-        && !shard_file_path.is_absolute()
-        && shard_file_path
-            .components()
-            .all(|path_component| matches!(path_component, Component::Normal(_)))
-        && shard_file_path
-            .extension()
-            .and_then(|extension| extension.to_str())
-            == Some("safetensors")
 }
 
 /// The Qwen-Image-2.1 image family.

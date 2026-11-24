@@ -161,7 +161,7 @@ fn model_identity(model_directory: &Path) -> Option<String> {
     Some(format!("{organization_name}/{repository_name}"))
 }
 
-pub(super) fn immutable_model_provenance(model_directory: &Path) -> Option<(String, String)> {
+pub fn immutable_model_provenance(model_directory: &Path) -> Option<(String, String)> {
     let provenance_file_path = model_directory.join(LIBRARY_PROVENANCE_FILE_NAME);
     let provenance_metadata = fs::symlink_metadata(&provenance_file_path).ok()?;
     if !provenance_metadata.is_file()
@@ -202,7 +202,7 @@ fn is_valid_provider_model_id(provider_model_id: &str) -> bool {
 }
 
 /// Returns artifact provenance only when its source records an immutable revision candidate.
-pub(super) fn immutable_model_revision(
+pub fn immutable_model_revision(
     model_family_registry: &ModelFamilyRegistry,
     model_directory: &Path,
     model_family: ModelFamily,
@@ -232,7 +232,7 @@ fn authoritative_file_name(
     }
 }
 
-pub(super) fn immutable_file_revision(
+pub fn immutable_file_revision(
     model_directory: &Path,
     authoritative_file_name: &str,
 ) -> Option<String> {

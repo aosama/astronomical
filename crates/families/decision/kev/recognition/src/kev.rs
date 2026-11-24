@@ -10,10 +10,10 @@
 use std::fs;
 use std::path::Path;
 
-use super::model_family_description::ModelFamily;
+use model_discovery::ModelFamily;
 
-use super::bounded_artifact_file;
-use super::marked_decision_folder::{MarkedDecisionMetadata, safetensors_total_bytes};
+use model_discovery::bounded_artifact_file;
+use model_discovery::marked_decision_folder::{MarkedDecisionMetadata, safetensors_total_bytes};
 
 const KEV_SETTINGS_FILE_NAME: &str = "kev_decision.json";
 const KEV_HEAD_FILE_NAME: &str = "kev_head.safetensors";

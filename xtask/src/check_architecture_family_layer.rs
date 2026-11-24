@@ -19,7 +19,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::check_architecture::{
-    ArchitectureViolation, dependency_graph_from_metadata, shortest_dependency_chain,
+    ArchitectureViolation, dependency_graph_from_metadata, package_manifest_paths,
+    shortest_dependency_chain,
 };
 
 const FAMILY_FOLDER_MARKER: &str = "/crates/families/";
@@ -69,27 +70,13 @@ pub(crate) fn family_layer_violations(
 fn family_layer_crates_by_kind(
     metadata_json_text: &str,
 ) -> Result<BTreeMap<String, BTreeSet<String>>, String> {
-    let metadata_document: serde_json::Value = serde_json::from_str(metadata_json_text)
-        .map_err(|error| format!("cargo metadata is not valid JSON: {error}"))?;
-    let packages_array = metadata_document
-        .get("packages")
-        .and_then(|packages_value| packages_value.as_array())
-        .ok_or("cargo metadata is missing the packages array")?;
     let mut kind_to_member_crates: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
-    for package_value in packages_array {
-        let package_name = package_value
-            .get("name")
-            .and_then(|name_value| name_value.as_str())
-            .ok_or("cargo metadata contains a package without a name")?;
-        let manifest_path = package_value
-            .get("manifest_path")
-            .and_then(|path_value| path_value.as_str())
-            .ok_or_else(|| format!("cargo metadata package {package_name} has no manifest_path"))?;
-        if let Some(kind_folder) = family_kind_folder(manifest_path) {
+    for (package_name, manifest_path) in package_manifest_paths(metadata_json_text)? {
+        if let Some(kind_folder) = family_kind_folder(&manifest_path) {
             kind_to_member_crates
                 .entry(kind_folder.to_owned())
                 .or_default()
-                .insert(package_name.to_owned());
+                .insert(package_name);
         }
     }
     Ok(kind_to_member_crates)

@@ -7,11 +7,11 @@
 
 use std::path::Path;
 
-use super::model_family_description::ModelFamily;
+use model_discovery::ModelFamily;
 
-use super::SpeechModelCapabilities;
-use super::bounded_artifact_file;
-use super::speech_voices::catalog_voice_names;
+use model_discovery::SpeechModelCapabilities;
+use model_discovery::bounded_artifact_file;
+use model_discovery::speech_voices::catalog_voice_names;
 
 pub const KOKORO_CONFIGURATION_FILE_NAME: &str = "config.json";
 pub const KOKORO_WEIGHTS_FILE_NAME: &str = "kokoro-v1_0.safetensors";

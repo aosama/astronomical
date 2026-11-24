@@ -1,0 +1,25 @@
+[package]
+name = "flux2-klein-recognition"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+# The test lanes this package runs in. `cargo xtask lane-cargo` builds each
+# lane's command from these declarations (issue #2473, Step 6), so no alias
+# lists packages by hand; an empty list says the package is in no lane.
+[package.metadata.astronomical]
+test-lanes = ["integration", "integration-and-rest", "nextest"]
+
+[lints]
+workspace = true
+
+# How discovery recognizes the FLUX.2 Klein image family (issue #2473, Step 5). It builds on
+# the rules every family shares in model-discovery and never links MLX.
+[dependencies]
+model-discovery = { path = "../../../../foundation/model-discovery" }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
