@@ -36,9 +36,7 @@ fn should_pass_when_no_rule_crate_reaches_the_forbidden_crate() {
         ("decision-models", vec!["mlx-bridge"], "normal"),
         ("quantization", Vec::new(), "normal"),
         ("speech", vec!["mlx-bridge"], "normal"),
-
         ("kokoro", vec!["speech"], "normal"),
-
         ("phonon", vec!["speech"], "normal"),
         ("model-primitives", vec!["mlx-bridge"], "normal"),
         ("model-serving", vec!["mlx-bridge"], "normal"),
@@ -65,9 +63,7 @@ fn should_detect_a_direct_family_to_serving_dependency() {
         ("decision-models", vec!["mlx-bridge"], "normal"),
         ("quantization", Vec::new(), "normal"),
         ("speech", vec!["mlx-bridge"], "normal"),
-
         ("kokoro", vec!["speech"], "normal"),
-
         ("phonon", vec!["speech"], "normal"),
         ("model-primitives", vec!["mlx-bridge"], "normal"),
         (
@@ -101,9 +97,7 @@ fn should_detect_a_model_primitives_to_serving_dependency() {
         ("decision-models", vec!["mlx-bridge"], "normal"),
         ("quantization", Vec::new(), "normal"),
         ("speech", vec!["mlx-bridge"], "normal"),
-
         ("kokoro", vec!["speech"], "normal"),
-
         ("phonon", vec!["speech"], "normal"),
         (
             "model-primitives",
@@ -164,9 +158,7 @@ fn should_detect_a_image_generation_to_serving_dependency() {
         ("mlx-c-fork", Vec::new(), "normal"),
         ("model-primitives", vec!["mlx-bridge"], "normal"),
         ("speech", vec!["mlx-bridge"], "normal"),
-
         ("kokoro", vec!["speech"], "normal"),
-
         ("phonon", vec!["speech"], "normal"),
         ("image-generation", vec!["model-serving"], "normal"),
         ("artifact-validation", Vec::new(), "normal"),
@@ -196,9 +188,7 @@ fn should_detect_a_artifact_validation_to_serving_dependency() {
         ("mlx-c-fork", Vec::new(), "normal"),
         ("model-primitives", vec!["mlx-bridge"], "normal"),
         ("speech", vec!["mlx-bridge"], "normal"),
-
         ("kokoro", vec!["speech"], "normal"),
-
         ("phonon", vec!["speech"], "normal"),
         ("image-generation", vec!["mlx-bridge"], "normal"),
         ("artifact-validation", vec!["model-serving"], "normal"),
@@ -229,9 +219,7 @@ fn workspace_metadata_with_engine_core_dependencies(engine_core_dependencies: Ve
         ("mlx-c-fork", Vec::new(), "normal"),
         ("model-primitives", vec!["mlx-bridge"], "normal"),
         ("speech", vec!["mlx-bridge"], "normal"),
-
         ("kokoro", vec!["speech"], "normal"),
-
         ("phonon", vec!["speech"], "normal"),
         ("image-generation", vec!["mlx-bridge"], "normal"),
         ("artifact-validation", Vec::new(), "normal"),
@@ -283,9 +271,7 @@ fn should_detect_a_qwen35_to_serving_dependency() {
         ("mlx-c-fork", Vec::new(), "normal"),
         ("model-primitives", vec!["mlx-bridge"], "normal"),
         ("speech", vec!["mlx-bridge"], "normal"),
-
         ("kokoro", vec!["speech"], "normal"),
-
         ("phonon", vec!["speech"], "normal"),
         ("image-generation", vec!["mlx-bridge"], "normal"),
         ("artifact-validation", Vec::new(), "normal"),
@@ -315,9 +301,7 @@ fn should_detect_a_decision_models_to_serving_dependency() {
         ("mlx-c-fork", Vec::new(), "normal"),
         ("model-primitives", vec!["mlx-bridge"], "normal"),
         ("speech", vec!["mlx-bridge"], "normal"),
-
         ("kokoro", vec!["speech"], "normal"),
-
         ("phonon", vec!["speech"], "normal"),
         ("image-generation", vec!["mlx-bridge"], "normal"),
         ("artifact-validation", Vec::new(), "normal"),
@@ -347,9 +331,7 @@ fn should_detect_a_qwen35_to_quantizer_dependency() {
         ("mlx-c-fork", Vec::new(), "normal"),
         ("model-primitives", vec!["mlx-bridge"], "normal"),
         ("speech", vec!["mlx-bridge"], "normal"),
-
         ("kokoro", vec!["speech"], "normal"),
-
         ("phonon", vec!["speech"], "normal"),
         ("image-generation", vec!["mlx-bridge"], "normal"),
         ("artifact-validation", Vec::new(), "normal"),
@@ -384,9 +366,7 @@ fn should_detect_a_direct_forbidden_fork_dependency() {
         ("decision-models", vec!["mlx-bridge"], "normal"),
         ("quantization", Vec::new(), "normal"),
         ("speech", vec!["mlx-bridge"], "normal"),
-
         ("kokoro", vec!["speech"], "normal"),
-
         ("phonon", vec!["speech"], "normal"),
         ("model-primitives", vec!["mlx-bridge"], "normal"),
         ("model-serving", Vec::new(), "normal"),
@@ -416,9 +396,7 @@ fn should_detect_a_direct_forbidden_dependency() {
         ("decision-models", vec!["mlx-bridge"], "normal"),
         ("quantization", Vec::new(), "normal"),
         ("speech", vec!["mlx-bridge"], "normal"),
-
         ("kokoro", vec!["speech"], "normal"),
-
         ("phonon", vec!["speech"], "normal"),
         ("model-primitives", vec!["mlx-bridge"], "normal"),
         ("model-serving", Vec::new(), "normal"),
@@ -456,9 +434,7 @@ fn should_detect_a_transitive_forbidden_dependency() {
         ("decision-models", vec!["mlx-bridge"], "normal"),
         ("quantization", Vec::new(), "normal"),
         ("speech", vec!["mlx-bridge"], "normal"),
-
         ("kokoro", vec!["speech"], "normal"),
-
         ("phonon", vec!["speech"], "normal"),
         ("model-primitives", vec!["mlx-bridge"], "normal"),
         ("model-serving", Vec::new(), "normal"),
@@ -490,9 +466,7 @@ fn should_count_dev_and_build_dependencies_as_reachability_edges() {
             ("decision-models", vec!["mlx-bridge"], "normal"),
             ("quantization", Vec::new(), "normal"),
             ("speech", vec!["mlx-bridge"], "normal"),
-
             ("kokoro", vec!["speech"], "normal"),
-
             ("phonon", vec!["speech"], "normal"),
             ("model-primitives", vec!["mlx-bridge"], "normal"),
             ("model-serving", Vec::new(), "normal"),
@@ -562,7 +536,11 @@ fn should_detect_one_speech_family_depending_on_another() {
         ("speech", vec!["mlx-bridge"], "normal"),
         ("kokoro", vec!["speech", "phonon"], "normal"),
         ("phonon", vec!["speech"], "normal"),
-        ("model-serving", vec!["speech", "kokoro", "phonon"], "normal"),
+        (
+            "model-serving",
+            vec!["speech", "kokoro", "phonon"],
+            "normal",
+        ),
         ("jangtq2-qwen35", vec!["mlx-bridge"], "normal"),
     ]);
     let violations = architecture_violations(&metadata_json_text).unwrap();
