@@ -3,8 +3,8 @@ use std::{fs, path::Path, time::Instant};
 use ipc_protocol::RequestId;
 use model_serving::{
     GeneratedToken, InferenceEngine, PerformanceAttribution, PerformanceAttributionLog,
-    Qwen3_5ArtifactValidator, Qwen3_5InferenceRequest, Qwen3_5PromptProcessingChunkSizer,
-    Qwen3_5StreamingEngine,
+    Qwen3_5ArtifactValidator, Qwen3_5InferenceRequest, Qwen3_5MlxEngineConstructors,
+    Qwen3_5PromptProcessingChunkSizer, Qwen3_5StreamingEngine,
 };
 use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use serde_json::Value;

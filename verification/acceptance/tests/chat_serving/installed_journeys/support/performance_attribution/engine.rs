@@ -2,7 +2,7 @@ use std::{path::Path, time::Instant};
 
 use model_serving::{
     InferenceEngine, PerformanceAttribution, PerformanceAttributionLog, Qwen3_5ArtifactValidator,
-    Qwen3_5PromptProcessingChunkSizer, Qwen3_5StreamingEngine,
+    Qwen3_5MlxEngineConstructors, Qwen3_5PromptProcessingChunkSizer, Qwen3_5StreamingEngine,
 };
 use tokio::time::{MissedTickBehavior, interval};
 

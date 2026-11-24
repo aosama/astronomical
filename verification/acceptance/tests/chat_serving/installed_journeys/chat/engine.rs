@@ -5,7 +5,8 @@ use ipc_protocol::{
 };
 use model_serving::{
     GeneratedToken, InferenceEngine, Qwen3_5ArtifactValidator, Qwen3_5InferenceRequest,
-    Qwen3_5PromptProcessingChunkSizer, Qwen3_5StreamingEngine, Qwen3_5Tokenizer,
+    Qwen3_5MlxEngineConstructors, Qwen3_5PromptProcessingChunkSizer, Qwen3_5StreamingEngine,
+    Qwen3_5Tokenizer,
 };
 use tokio::time::timeout;
 

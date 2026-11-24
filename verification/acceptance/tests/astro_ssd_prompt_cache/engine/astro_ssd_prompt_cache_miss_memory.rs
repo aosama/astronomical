@@ -4,8 +4,9 @@ use std::time::Duration;
 use ipc_protocol::{ExpertMemoryMode, RequestId, WorkerAstroSsdPromptCacheLookupOutcome};
 use model_serving::{
     AstroSsdPromptCacheDiskStoreConfig, AstroSsdPromptCacheModelContract, InferenceEngine,
-    Qwen3_5ArtifactValidator, Qwen3_5InferenceRequest, Qwen3_5PromptProcessingChunkSizer,
-    Qwen3_5ResidentEngine, Qwen3_5Tokenizer, qwen3_5_astro_decoder_state_cache_layout,
+    Qwen3_5ArtifactValidator, Qwen3_5InferenceRequest, Qwen3_5MlxEngineConstructors,
+    Qwen3_5PromptProcessingChunkSizer, Qwen3_5ResidentEngine, Qwen3_5ResidentEngineTestControls,
+    Qwen3_5TextModelTestControls, Qwen3_5Tokenizer, qwen3_5_astro_decoder_state_cache_layout,
 };
 use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use tokio::time::{Instant, MissedTickBehavior, interval, sleep};

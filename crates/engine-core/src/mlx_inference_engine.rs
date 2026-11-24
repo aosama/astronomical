@@ -1,10 +1,9 @@
-//! The owner-thread engine every Qwen 3.5 family runs on: one MLX thread owns
+//! The owner-thread engine every model family runs on: one MLX thread owns
 //! the model, and requests reach it over channels.
 //!
-//! The contract it implements lives in engine-core; this owner
-//! stays beside the families (issue #2340) because each family adds its own
-//! constructors to `MlxInferenceEngine<Execution>`, which Rust allows only in
-//! the crate that defines the type.
+//! A family builds it with `MlxInferenceEngine::new` and an execution of its
+//! own; family-specific constructors and test controls are traits in the
+//! family's crate, since only this crate may add inherent methods here.
 
 use std::sync::mpsc::{Receiver, SyncSender, sync_channel};
 use std::thread::{self, JoinHandle};

@@ -112,11 +112,76 @@ impl Qwen3_5EngineState {
     }
 }
 
-impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
+/// The streaming engine's test controls: expert reads, route samples,
+/// reply recordings and prompt-span redo. They are a trait because the
+/// engine type is defined in the engine core.
+// Every caller awaits these in place, so the futures' Send bound never matters.
+#[allow(async_fn_in_trait)]
+pub trait Qwen3_5StreamingEngineTestControls {
     /// Which way each fetching layer's missing experts went since this was
     /// last called, and why the direct way was refused when it was.
-    #[doc(hidden)]
-    pub async fn take_direct_expert_fetch_counts_for_tests(
+    async fn take_direct_expert_fetch_counts_for_tests(
+        &self,
+    ) -> Result<crate::DirectExpertFetchCounts, InferenceEngineError>;
+
+    /// The session's always-on expert counters now; a reply's own figures
+    /// are the change across it.
+    async fn session_expert_route_sample_for_tests(
+        &self,
+    ) -> Result<crate::SessionExpertRouteSample, InferenceEngineError>;
+
+    /// The routes of the last reply served with performance attribution on,
+    /// and what the `astro_expert_cache` held when it began; `None` when no
+    /// such reply was served since this was last called.
+    async fn take_routed_reply_recording_for_tests(
+        &self,
+    ) -> Result<Option<crate::RoutedReplyRecording>, InferenceEngineError>;
+
+    /// Makes every layer copy its route to the host, even a layer held
+    /// whole, so a measurement can price the stop on its own.
+    async fn set_every_route_brought_to_the_host_for_tests(
+        &self,
+        is_enabled: bool,
+    ) -> Result<(), InferenceEngineError>;
+
+    /// Chooses how a reply token's missing experts arrive: read straight into
+    /// their tables (the default) or loaded as a page and copied afterwards.
+    async fn set_decode_misses_fetched_into_tables_for_tests(
+        &self,
+        is_enabled: bool,
+    ) -> Result<(), InferenceEngineError>;
+
+    /// Returns mode-neutral expert ownership plus cumulative paging statistics.
+    async fn astro_expert_cache_statistics_for_tests(
+        &self,
+    ) -> Result<AstroExpertCacheStatistics, InferenceEngineError>;
+
+    /// Returns the exact complete expert payload used by residency admission.
+    async fn complete_expert_payload_byte_count_for_tests(
+        &self,
+    ) -> Result<u64, InferenceEngineError>;
+
+    /// Removes resident-promotion source descriptors to prove typed failure recovery.
+    async fn remove_resident_expert_source_files_for_tests(
+        &self,
+    ) -> Result<(), InferenceEngineError>;
+
+    /// Has the next prompt that is read one layer at a time fail the span at
+    /// (`layer_index`, `span_index`) once after it is submitted, the way MLX
+    /// reports a span it could not fit.
+    async fn fail_prompt_span_once_for_tests(
+        &self,
+        layer_index: usize,
+        span_index: usize,
+    ) -> Result<(), InferenceEngineError>;
+
+    /// Steps that hit the memory limit and redo attempts made since the
+    /// model loaded, in that order.
+    async fn memory_redo_counts_for_tests(&self) -> Result<(u64, u64), InferenceEngineError>;
+}
+
+impl Qwen3_5StreamingEngineTestControls for MlxInferenceEngine<Qwen3_5InferenceExecution> {
+    async fn take_direct_expert_fetch_counts_for_tests(
         &self,
     ) -> Result<crate::DirectExpertFetchCounts, InferenceEngineError> {
         let (counts_sender, counts_receiver) = std::sync::mpsc::sync_channel(1);
@@ -132,10 +197,7 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
             .map_err(|_| fatal_engine_error("fetch counts owner operation returned no response"))?
     }
 
-    /// The session's always-on expert counters now; a reply's own figures
-    /// are the change across it.
-    #[doc(hidden)]
-    pub async fn session_expert_route_sample_for_tests(
+    async fn session_expert_route_sample_for_tests(
         &self,
     ) -> Result<crate::SessionExpertRouteSample, InferenceEngineError> {
         let (sample_sender, sample_receiver) = std::sync::mpsc::sync_channel(1);
@@ -151,11 +213,7 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
         })?
     }
 
-    /// The routes of the last reply served with performance attribution on,
-    /// and what the `astro_expert_cache` held when it began; `None` when no
-    /// such reply was served since this was last called.
-    #[doc(hidden)]
-    pub async fn take_routed_reply_recording_for_tests(
+    async fn take_routed_reply_recording_for_tests(
         &self,
     ) -> Result<Option<crate::RoutedReplyRecording>, InferenceEngineError> {
         let (recording_sender, recording_receiver) = std::sync::mpsc::sync_channel(1);
@@ -171,10 +229,7 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
         })?
     }
 
-    /// Makes every layer copy its route to the host, even a layer held
-    /// whole, so a measurement can price the stop on its own.
-    #[doc(hidden)]
-    pub async fn set_every_route_brought_to_the_host_for_tests(
+    async fn set_every_route_brought_to_the_host_for_tests(
         &self,
         is_enabled: bool,
     ) -> Result<(), InferenceEngineError> {
@@ -184,10 +239,7 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
         .await
     }
 
-    /// Chooses how a reply token's missing experts arrive: read straight into
-    /// their tables (the default) or loaded as a page and copied afterwards.
-    #[doc(hidden)]
-    pub async fn set_decode_misses_fetched_into_tables_for_tests(
+    async fn set_decode_misses_fetched_into_tables_for_tests(
         &self,
         is_enabled: bool,
     ) -> Result<(), InferenceEngineError> {
@@ -197,9 +249,7 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
         .await
     }
 
-    /// Returns mode-neutral expert ownership plus cumulative paging statistics.
-    #[doc(hidden)]
-    pub async fn astro_expert_cache_statistics_for_tests(
+    async fn astro_expert_cache_statistics_for_tests(
         &self,
     ) -> Result<AstroExpertCacheStatistics, InferenceEngineError> {
         let (expert_statistics_sender, expert_statistics_receiver) =
@@ -217,9 +267,7 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
         })
     }
 
-    /// Returns the exact complete expert payload used by residency admission.
-    #[doc(hidden)]
-    pub async fn complete_expert_payload_byte_count_for_tests(
+    async fn complete_expert_payload_byte_count_for_tests(
         &self,
     ) -> Result<u64, InferenceEngineError> {
         let (complete_expert_payload_sender, complete_expert_payload_receiver) =
@@ -239,9 +287,7 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
         })
     }
 
-    /// Removes resident-promotion source descriptors to prove typed failure recovery.
-    #[doc(hidden)]
-    pub async fn remove_resident_expert_source_files_for_tests(
+    async fn remove_resident_expert_source_files_for_tests(
         &self,
     ) -> Result<(), InferenceEngineError> {
         self.run_owner_test_operation(|qwen_inference_execution| {
@@ -250,11 +296,7 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
         .await
     }
 
-    /// Has the next prompt that is read one layer at a time fail the span at
-    /// (`layer_index`, `span_index`) once after it is submitted, the way MLX
-    /// reports a span it could not fit.
-    #[doc(hidden)]
-    pub async fn fail_prompt_span_once_for_tests(
+    async fn fail_prompt_span_once_for_tests(
         &self,
         layer_index: usize,
         span_index: usize,
@@ -267,10 +309,7 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
         .await
     }
 
-    /// Steps that hit the memory limit and redo attempts made since the
-    /// model loaded, in that order.
-    #[doc(hidden)]
-    pub async fn memory_redo_counts_for_tests(&self) -> Result<(u64, u64), InferenceEngineError> {
+    async fn memory_redo_counts_for_tests(&self) -> Result<(u64, u64), InferenceEngineError> {
         let (redo_counts_sender, redo_counts_receiver) = std::sync::mpsc::sync_channel(1);
         self.run_owner_test_operation(move |qwen_inference_execution| {
             let memory_redo_counts = qwen_inference_execution

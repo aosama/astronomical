@@ -27,6 +27,8 @@ pub use experts::{
     ResidentLayerArraysForTests, ResidentProjectionArraysForTests, resident_layer_arrays_for_tests,
 };
 pub use inference_execution::Qwen3_5InferenceExecution;
+#[cfg(feature = "direct-mlx")]
+pub use inference_execution::Qwen3_5ResidentEngineTestControls;
 pub use inference_execution::speculative_decode_lifecycle::VerificationTokenChoice;
 pub use inference_execution::{Qwen3_5ResidentEngine, ResidentEngineSettings};
 pub use model::Qwen3_5ResidentModel;

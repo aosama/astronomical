@@ -4,6 +4,7 @@
 //! (issue #2221).
 
 use model_serving::Qwen3_5StreamingEngine;
+use model_serving::Qwen3_5StreamingEngineTestControls;
 
 /// What the engine had counted and kept before a span was failed on purpose.
 pub(super) struct RedoBaseline {

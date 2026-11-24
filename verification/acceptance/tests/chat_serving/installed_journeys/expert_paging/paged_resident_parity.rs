@@ -29,8 +29,9 @@ use std::{path::Path, process::Stdio, time::Duration};
 use ipc_protocol::{ExpertMemoryMode, RequestId};
 use model_serving::{
     CompleteResidencyHeadroomBoundary, GeneratedToken, InferenceEngine, Qwen3_5ArtifactValidator,
-    Qwen3_5InferenceRequest, Qwen3_5PromptProcessingChunkSizer, Qwen3_5ResidentEngine,
-    Qwen3_5StreamingEngine, model_memory_geometry_from_validated_artifact,
+    Qwen3_5InferenceRequest, Qwen3_5MlxEngineConstructors, Qwen3_5PromptProcessingChunkSizer,
+    Qwen3_5ResidentEngine, Qwen3_5StreamingEngine, Qwen3_5TextModelTestControls,
+    model_memory_geometry_from_validated_artifact,
 };
 use runtime_integration::MlxMemoryLimits;
 use serial_test::serial;

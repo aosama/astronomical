@@ -24,8 +24,8 @@ use ipc_protocol::{RequestId, WorkerEvent};
 use model_serving::{
     AstroSsdPromptCacheDiskStoreConfig, AstroSsdPromptCacheModelContract, GeneratedToken,
     InferenceEngine, Qwen3_5ArtifactValidator, Qwen3_5InferenceRequest,
-    Qwen3_5PromptProcessingChunkSizer, Qwen3_5ResidentEngine, Qwen3_5Tokenizer,
-    qwen3_5_astro_decoder_state_cache_layout,
+    Qwen3_5MlxEngineConstructors, Qwen3_5PromptProcessingChunkSizer, Qwen3_5ResidentEngine,
+    Qwen3_5Tokenizer, qwen3_5_astro_decoder_state_cache_layout,
 };
 use tokio::time::{Instant, MissedTickBehavior, interval, sleep};
 

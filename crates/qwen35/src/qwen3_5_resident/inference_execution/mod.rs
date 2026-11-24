@@ -12,6 +12,7 @@ mod model_loading_finalization;
 mod prompt_prefill_lifecycle;
 pub mod speculative_decode_lifecycle;
 mod test_controls;
+pub use test_controls::Qwen3_5ResidentEngineTestControls;
 // Downward bindings so the phase folders keep their pre-move one-level
 // `super::<module>` paths into the persistent astro SSD prompt cache machinery.
 use astro_ssd_prompt_cache::retained_live_prefix;
