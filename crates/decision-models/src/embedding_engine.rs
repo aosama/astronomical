@@ -9,7 +9,10 @@ use ipc_protocol::{EmbeddingsCommand, EmbeddingsFailureReason, WorkerEmbeddingCa
 use crate::memory::telemetry::MlxMemoryTelemetry;
 
 /// A loaded embedding runtime that turns validated text into unit-norm vectors.
-pub trait EmbeddingEngine: 'static {
+///
+/// `Any` lets a caller holding a boxed engine ask which family it is; every
+/// engine is `'static`, so it costs nothing.
+pub trait EmbeddingEngine: std::any::Any {
     /// Loads model resources and returns the exact identity and limits to advertise.
     fn load(&mut self) -> Result<EmbeddingEngineLoadResult, EmbeddingsFailureReason>;
 
@@ -27,6 +30,30 @@ pub trait EmbeddingEngine: 'static {
     /// Collects an idle memory observation without adding generation methods.
     fn collect_mlx_memory_telemetry(&self) -> Option<MlxMemoryTelemetry> {
         None
+    }
+}
+
+/// A boxed engine is an engine, so the inference worker holds whichever
+/// embedding family its factory built and a second family needs no change in
+/// the worker's type.
+impl EmbeddingEngine for Box<dyn EmbeddingEngine> {
+    fn embed(
+        &mut self,
+        embeddings_command: &EmbeddingsCommand,
+    ) -> Result<EmbeddingEngineOutput, EmbeddingsFailureReason> {
+        self.as_mut().embed(embeddings_command)
+    }
+
+    fn load(&mut self) -> Result<EmbeddingEngineLoadResult, EmbeddingsFailureReason> {
+        self.as_mut().load()
+    }
+
+    fn collect_mlx_memory_telemetry(&self) -> Option<MlxMemoryTelemetry> {
+        self.as_ref().collect_mlx_memory_telemetry()
+    }
+
+    fn take_post_cleanup_memory_telemetry(&mut self) -> Option<MlxMemoryTelemetry> {
+        self.as_mut().take_post_cleanup_memory_telemetry()
     }
 }
 

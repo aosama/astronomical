@@ -21,9 +21,9 @@ use ipc_protocol::{
     WorkerQwenImage21ModelConfiguration,
 };
 use model_serving::{
-    ClefDecisionEngine, DecisionEngine, EngineBackedWorker, Flux2KleinArtifactProvenance,
-    Flux2KleinImageEngine, KevDecisionEngine, LayaDecisionEngine, ModelFactory,
-    ModelFactoryRuntime, ModelFamilyGenerationProcessor, ModelFamilyImageEngine,
+    ClefDecisionEngine, DecisionEngine, EmbeddingEngine, EngineBackedWorker,
+    Flux2KleinArtifactProvenance, Flux2KleinImageEngine, KevDecisionEngine, LayaDecisionEngine,
+    ModelFactory, ModelFactoryRuntime, ModelFamilyGenerationProcessor, ModelFamilyImageEngine,
     ModelFamilyInferenceEngine, ModernBertEmbeddingEngine, PrismHadamardQwen35ServingSettings,
     QwenImage21ArtifactProvenance, QwenImage21ImageEngine, RecordedTrainingEngine, SpeechEngine,
     initialize_prism_hadamard_qwen35_model_with_serving_settings,
@@ -68,7 +68,7 @@ type ModelFamilyRuntime = ModelFactoryRuntime<
     ModelFamilyGenerationProcessor,
     ModelFamilyInferenceEngine,
     ModelFamilyImageEngine,
-    ModernBertEmbeddingEngine,
+    Box<dyn EmbeddingEngine>,
     Box<dyn DecisionEngine>,
     Box<dyn SpeechEngine>,
 >;
@@ -78,7 +78,7 @@ pub(crate) type InferenceWorker = EngineBackedWorker<
     ModelFamilyInferenceEngine,
     ModelFamilyFactory,
     ModelFamilyImageEngine,
-    ModernBertEmbeddingEngine,
+    Box<dyn EmbeddingEngine>,
     Box<dyn DecisionEngine>,
     Box<dyn SpeechEngine>,
 >;
@@ -230,7 +230,7 @@ impl
         ModelFamilyGenerationProcessor,
         ModelFamilyInferenceEngine,
         ModelFamilyImageEngine,
-        ModernBertEmbeddingEngine,
+        Box<dyn EmbeddingEngine>,
         Box<dyn DecisionEngine>,
         Box<dyn SpeechEngine>,
     > for ModelFamilyFactory
@@ -625,7 +625,7 @@ impl ModelFamilyFactory {
         .map_err(|failure_reason| {
             format!("selected embedding artifact failed initialization: {failure_reason:?}")
         })?;
-        Ok(ModelFactoryRuntime::Embeddings(embedding_engine))
+        Ok(ModelFactoryRuntime::Embeddings(Box::new(embedding_engine)))
     }
 }
 
