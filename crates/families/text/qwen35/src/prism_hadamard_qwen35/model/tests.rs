@@ -8,12 +8,16 @@ use std::collections::HashMap;
 use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use serial_test::serial;
 
-use super::forward::StraightGenerationState;
-use super::{PrismHadamardModelError, PrismHadamardTextModel, validate_greedy_generation_request};
+use super::forward::rope_offset_tokens;
+use super::{
+    PrismHadamardGenerationState, PrismHadamardModelError, PrismHadamardTextModel,
+    request_decoder_state_evaluation_arrays, validate_greedy_generation_request,
+};
 use crate::prism_hadamard_qwen35::artifacts::FoldedPackValidator;
 use crate::prism_hadamard_qwen35::artifacts::tests::pack_fixture::{
     FIXTURE_VOCAB_SIZE, remove_fixture_directory, write_fixture_pack,
 };
+use crate::{AstroDecoderStateCacheState, RequestDecoderStateStack};
 
 const ROMEO_AND_JULIET_SOURCE: &str = include_str!(
     "../../../../../../../verification/acceptance/tests/fixtures/model_metrics_10000_romeo_and_juliet_words.txt"
@@ -44,9 +48,11 @@ fn should_project_only_the_final_prompt_position_to_vocabulary_logits() {
         .runtime
         .array_from_i32(&token_indices, &[1, token_indices.len() as i32])
         .expect("the smoke test tokens should build");
-    let mut state = StraightGenerationState::empty();
+    let mut request_decoder_state = model
+        .empty_request_decoder_state()
+        .expect("the fixture layout should create decoder state");
     let final_hidden_states = model
-        .forward_hidden_states(&tokens, &mut state)
+        .forward_hidden_states(&tokens, 0, &mut request_decoder_state)
         .expect("the decoder should return the final prompt hidden row");
     assert_eq!(
         final_hidden_states.shape(),
@@ -80,14 +86,16 @@ fn should_continue_generation_state_across_decoding_steps() {
     let model = PrismHadamardTextModel::new(smoke_test_runtime(), pack)
         .expect("the fixture pack should load into the runtime");
 
-    let mut state = StraightGenerationState::empty();
+    let mut request_decoder_state = model
+        .empty_request_decoder_state()
+        .expect("the fixture layout should create decoder state");
     let prompt_token_ids = romeo_and_juliet_fixture_token_ids(3);
     let prompt_tokens = model
         .runtime
         .array_from_i32(&prompt_token_ids, &[1, prompt_token_ids.len() as i32])
         .expect("the prompt tokens should build");
     let prompt_logits = model
-        .forward_pass(&prompt_tokens, &mut state)
+        .forward_pass(&prompt_tokens, 0, &mut request_decoder_state)
         .expect("the prefill pass should run");
     model
         .runtime
@@ -104,7 +112,11 @@ fn should_continue_generation_state_across_decoding_steps() {
         .array_from_i32(&[decode_token_id], &[1, 1])
         .expect("the decode token should build");
     let decode_logits = model
-        .forward_pass(&decode_tokens, &mut state)
+        .forward_pass(
+            &decode_tokens,
+            prompt_token_ids.len() as u32,
+            &mut request_decoder_state,
+        )
         .expect("the decode pass should reuse the generation state");
     model
         .runtime
@@ -117,6 +129,166 @@ fn should_continue_generation_state_across_decoding_steps() {
     );
 
     remove_fixture_directory(&fixture_directory);
+}
+
+#[test]
+#[serial]
+fn should_list_step_evaluation_roots_by_state_kind_in_decoder_layer_order() {
+    let fixture_directory = write_fixture_pack(|_| {});
+    let pack = FoldedPackValidator::new()
+        .validate(&fixture_directory, 4096)
+        .expect("the fixture pack should validate");
+    let model = PrismHadamardTextModel::new(smoke_test_runtime(), pack)
+        .expect("the fixture pack should load into the runtime");
+    let mut request_decoder_state = model
+        .empty_request_decoder_state()
+        .expect("the fixture layout should create decoder state");
+    let prompt_token_ids = romeo_and_juliet_fixture_token_ids(3);
+    let prompt_tokens = model
+        .runtime
+        .array_from_i32(&prompt_token_ids, &[1, prompt_token_ids.len() as i32])
+        .expect("the prompt tokens should build");
+    let logits = model
+        .forward_pass(&prompt_tokens, 0, &mut request_decoder_state)
+        .expect("the prefill pass should run");
+
+    let evaluation_roots = request_decoder_state_evaluation_arrays(&request_decoder_state, &logits);
+    let mut expected_roots: Vec<&mlx_bridge::MlxArray> = vec![&logits];
+    expected_roots.extend(fixture_linear_layer_states(&request_decoder_state, true));
+    expected_roots.extend(fixture_linear_layer_states(&request_decoder_state, false));
+    let Some(AstroDecoderStateCacheState::AppendOnlyAttention { attention }) =
+        request_decoder_state.layer(3)
+    else {
+        panic!("the fixture's last decoder layer is its full-attention layer");
+    };
+    expected_roots.extend(attention.keys_state());
+    expected_roots.extend(attention.values_state());
+    // Three linear layers contribute a convolution and a recurrent root each,
+    // the full-attention layer its keys and values, plus the output itself.
+    assert_eq!(expected_roots.len(), 9);
+    assert_eq!(evaluation_roots.len(), expected_roots.len());
+    for (root_index, (evaluation_root, expected_root)) in
+        evaluation_roots.iter().zip(&expected_roots).enumerate()
+    {
+        assert!(
+            std::ptr::eq(*evaluation_root, *expected_root),
+            "evaluation root {root_index} is out of the per-kind decoder-layer order"
+        );
+    }
+    model
+        .runtime
+        .evaluate_arrays(&evaluation_roots)
+        .expect("every evaluation root should evaluate");
+
+    remove_fixture_directory(&fixture_directory);
+}
+
+#[test]
+#[serial]
+fn should_refuse_a_decoder_layer_whose_state_kind_does_not_match_its_weights() {
+    let fixture_directory = write_fixture_pack(|_| {});
+    let pack = FoldedPackValidator::new()
+        .validate(&fixture_directory, 4096)
+        .expect("the fixture pack should validate");
+    let model = PrismHadamardTextModel::new(smoke_test_runtime(), pack)
+        .expect("the fixture pack should load into the runtime");
+    let mut request_decoder_state = model
+        .empty_request_decoder_state()
+        .expect("the fixture layout should create decoder state");
+    // Layer 0 is a gated-delta layer and layer 3 the full-attention layer;
+    // swapping their state hands layer 0 key-value slabs it cannot use.
+    request_decoder_state.layers_mut().swap(0, 3);
+    let hidden_states = model
+        .probe_embedding(&romeo_and_juliet_fixture_token_ids(2))
+        .expect("the fixture tokens should embed");
+
+    let layer_outcome =
+        model.forward_decoder_layer(0, &hidden_states, 0, &mut request_decoder_state);
+
+    assert!(matches!(
+        layer_outcome,
+        Err(PrismHadamardModelError::DecoderStateLayerMismatch { layer_index: 0 })
+    ));
+    remove_fixture_directory(&fixture_directory);
+}
+
+#[test]
+#[serial]
+fn should_probe_any_decoder_layer_on_a_fresh_generation_state() {
+    let fixture_directory = write_fixture_pack(|_| {});
+    let pack = FoldedPackValidator::new()
+        .validate(&fixture_directory, 4096)
+        .expect("the fixture pack should validate");
+    let model = PrismHadamardTextModel::new(smoke_test_runtime(), pack)
+        .expect("the fixture pack should load into the runtime");
+    let hidden_states = model
+        .probe_embedding(&romeo_and_juliet_fixture_token_ids(2))
+        .expect("the fixture tokens should embed");
+    let mut generation_state = PrismHadamardGenerationState::empty();
+
+    // Decoder layer 1 is the fixture's second gated-delta layer: a probe must
+    // reach its own state even though no earlier layer ran on this state.
+    let layer_output = model
+        .probe_decoder_layer(1, &hidden_states, &mut generation_state)
+        .expect("the second gated-delta layer should run on a fresh state");
+    model
+        .evaluate_step(&layer_output, &generation_state)
+        .expect("the probed layer should evaluate");
+    assert_eq!(
+        generation_state.covered_token_count(),
+        0,
+        "a layer probe leaves the position to the caller"
+    );
+    model.advance_probe_state(&mut generation_state, 2);
+    assert_eq!(generation_state.covered_token_count(), 2);
+    assert!(matches!(
+        model.probe_decoder_layer(4, &hidden_states, &mut generation_state),
+        Err(PrismHadamardModelError::UnsupportedLayerType { .. })
+    ));
+
+    remove_fixture_directory(&fixture_directory);
+}
+
+#[test]
+fn should_start_rope_anywhere_inside_the_int32_position_range() {
+    assert_eq!(rope_offset_tokens(0).expect("zero is a position"), 0);
+    assert_eq!(
+        rope_offset_tokens(i32::MAX as u32).expect("the last int32 position is valid"),
+        i32::MAX
+    );
+}
+
+#[test]
+fn should_refuse_a_starting_position_beyond_the_int32_range() {
+    assert!(matches!(
+        rope_offset_tokens(i32::MAX as u32 + 1),
+        Err(PrismHadamardModelError::InvalidGenerationRequest { .. })
+    ));
+}
+
+/// The fixture's three gated-delta layers' convolution buffers (or, with
+/// `should_list_convolution` false, recurrent accumulators) in decoder-layer order.
+fn fixture_linear_layer_states(
+    request_decoder_state: &RequestDecoderStateStack,
+    should_list_convolution: bool,
+) -> Vec<&mlx_bridge::MlxArray> {
+    let mut linear_layer_states = Vec::new();
+    for decoder_layer_state in request_decoder_state.layers() {
+        if let AstroDecoderStateCacheState::Composite {
+            convolution,
+            recurrent,
+        } = decoder_layer_state
+        {
+            let layer_state = if should_list_convolution {
+                convolution.state()
+            } else {
+                recurrent.state()
+            };
+            linear_layer_states.extend(layer_state);
+        }
+    }
+    assert_eq!(linear_layer_states.len(), 3);
+    linear_layer_states
 }
 
 #[test]

@@ -148,6 +148,20 @@ impl RequestDecoderStateStack {
         self.layers.get_mut(layer_index)
     }
 
+    /// Every decoder layer's state in decoder-layer order, for callers that
+    /// visit all layers of one family without an index lookup per layer.
+    #[must_use]
+    pub fn layers(&self) -> &[AstroDecoderStateCacheState] {
+        &self.layers
+    }
+
+    /// Mutable decoder-layer states in decoder-layer order, for seating a
+    /// restored prompt prefix layer by layer.
+    #[must_use]
+    pub fn layers_mut(&mut self) -> &mut [AstroDecoderStateCacheState] {
+        &mut self.layers
+    }
+
     #[must_use]
     /// Returns logical payload bytes across all request-owned decoder states.
     pub fn payload_byte_count(&self) -> u64 {

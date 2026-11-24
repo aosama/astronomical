@@ -72,14 +72,7 @@ fn validated_feedback_token_count(
                 .to_owned(),
         });
     }
-    let processed_context_token_count = usize::try_from(
-        active_generation
-            .generation_state
-            .sequence_position_offset(),
-    )
-    .map_err(|_| InferenceEngineError::Fatal {
-        reason: "folded-ternary context position is negative".to_owned(),
-    })?;
+    let processed_context_token_count = active_generation.next_position_tokens as usize;
     let projected_context_token_count = processed_context_token_count
         .checked_add(input_token_ids.len())
         .and_then(|context_token_count| {
@@ -123,9 +116,7 @@ fn run_feedback_forward_and_sample(
     let hidden_states = active_generation
         .measure_operation(
             PerformanceOperation::PromptPrefillAdvanceSpan,
-            |active_generation| {
-                model.forward_hidden_states(token_indices, &mut active_generation.generation_state)
-            },
+            |active_generation| active_generation.forward_hidden_states(model, token_indices),
         )
         .map_err(gpu_error)?;
     let final_logits = active_generation

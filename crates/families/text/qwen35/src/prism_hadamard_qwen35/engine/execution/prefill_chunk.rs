@@ -16,7 +16,6 @@ use crate::PerformanceAttribution;
 use crate::PerformanceOperation;
 use crate::astro_ssd_prompt_cache_boundary_clamped_prefill_chunk_end;
 use crate::prism_hadamard_qwen35::model::PrismHadamardTextModel;
-use crate::prism_hadamard_qwen35::model::PrismStateSlotLayout;
 
 use super::PrismHadamardQwen35ActiveGeneration;
 use super::engine_trait_impl::gpu_error;
@@ -64,9 +63,7 @@ pub(super) fn forward_prefill_chunk_hidden_states(
     active_generation
         .measure_operation(
             PerformanceOperation::PromptPrefillAdvanceSpan,
-            |active_generation| {
-                model.forward_hidden_states(&token_indices, &mut active_generation.generation_state)
-            },
+            |active_generation| active_generation.forward_hidden_states(model, &token_indices),
         )
         .map_err(gpu_error)
 }
@@ -153,7 +150,6 @@ pub(super) fn capture_completed_prefill_astro_ssd_prompt_cache_block(
     let Some(astro_ssd_prompt_cache) = astro_ssd_prompt_cache else {
         return Ok(());
     };
-    let slot_layout = PrismStateSlotLayout::for_model(model);
     let mut capture_attribution = std::mem::replace(
         &mut active_generation.performance_attribution,
         PerformanceAttribution::disabled(),
@@ -163,7 +159,6 @@ pub(super) fn capture_completed_prefill_astro_ssd_prompt_cache_block(
             &model.runtime,
             astro_ssd_prompt_cache,
             active_generation,
-            &slot_layout,
             &mut capture_attribution,
         );
     active_generation.performance_attribution = capture_attribution;

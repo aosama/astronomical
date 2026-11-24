@@ -10,19 +10,21 @@ use mlx_bridge::MlxArray;
 
 use crate::qwen3_5_core::model_math::gated_delta_sequence::qwen3_5_gated_delta_sequence;
 
+use crate::{ConvolutionState, GatedDeltaRecurrentState};
+
 use super::super::PrismHadamardModelError;
 use super::super::weights::LinearLayerWeights;
-use super::StraightGenerationState;
 
 impl super::super::PrismHadamardTextModel {
-    /// Runs one linear-attention layer through the selected shared gated-delta route.
+    /// Runs one linear-attention layer through the selected shared gated-delta
+    /// route, advancing this layer's convolution and recurrent state.
     pub(super) fn forward_linear_attention_layer(
         &self,
         normalized_input: &MlxArray,
         token_count: i32,
         layer: &LinearLayerWeights,
-        state_slot: usize,
-        state: &mut StraightGenerationState,
+        convolution_state: &mut ConvolutionState,
+        recurrent_state: &mut GatedDeltaRecurrentState,
     ) -> Result<MlxArray, PrismHadamardModelError> {
         let text = self.pack.config().text();
         let rms_norm_epsilon = f32::from_bits(text.rms_norm_epsilon_bits);
@@ -68,12 +70,11 @@ impl super::super::PrismHadamardTextModel {
             )
             .map_err(PrismHadamardModelError::Forward)?;
 
-        let convolution_input = state.convolution_states[state_slot]
+        let convolution_input = convolution_state
             .update(&self.runtime, &mixed_queries_keys_values, token_count)
             .map_err(PrismHadamardModelError::ForwardRuntime)?;
         let head_queries_keys_values =
             self.convolution_to_normalized_heads(&convolution_input, token_count, layer)?;
-        let recurrent_state = &mut state.recurrent_states[state_slot];
         let current_recurrent_state = recurrent_state
             .current_or_zero(&self.runtime)
             .map_err(PrismHadamardModelError::ForwardRuntime)?;

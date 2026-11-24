@@ -12,9 +12,12 @@ use mlx_bridge::{
 };
 use runtime_integration::{MlxRuntime, MlxSafetensors};
 
-use crate::PerformanceAttribution;
+use crate::{
+    AstroDecoderStateCacheLayout, AstroDecoderStateCacheLayoutError, PerformanceAttribution,
+};
 
 use super::artifacts::ValidatedFoldedPack;
+use super::astro_decoder_state_cache_layout::prism_hadamard_qwen35_astro_decoder_state_cache_layout;
 use super::configuration::FoldedPackConfigError;
 use super::hadamard::HadamardContractError;
 use weights::{PrismHadamardWeights, build_gdn_normalization_scale_weights, load_family_weights};
@@ -29,7 +32,7 @@ mod weights;
 #[cfg(test)]
 mod tests;
 
-pub use forward::{PrismStateSlotLayout, StraightGenerationState};
+pub use forward::request_decoder_state_evaluation_arrays;
 pub use measurement::{
     PrismHadamardGenerationState, PrismHadamardGreedySession, PrismHadamardProbeDimensions,
     PrismHadamardProbeProjection,
@@ -61,10 +64,10 @@ pub struct PrismHadamardTextModel {
     pub weights: PrismHadamardWeights,
     pub gdn_query_scale_weight: MlxArray,
     pub gdn_key_scale_weight: MlxArray,
-    /// Each decoder layer's index within its own attention kind: the slot its
-    /// convolution/recurrent (gated-delta) or key-value (full-attention) state
-    /// occupies in the generation state.
-    pub decoder_layer_state_slots: Vec<usize>,
+    /// The validated `astro_decoder_state_cache` layout every request's
+    /// decoder state is built from, one entry per decoder layer, and the
+    /// contract the `astro_ssd_prompt_cache` store is opened with.
+    pub astro_decoder_state_cache_layout: AstroDecoderStateCacheLayout,
 }
 
 impl PrismHadamardTextModel {
@@ -121,22 +124,13 @@ impl PrismHadamardTextModel {
             );
             None
         };
-        let hadamard_block_size = pack.hadamard_contract().block_size();
-        let fused_rotation_kernel = if kernel_capabilities
-            .is_custom_kernel_supported(crate::kernel_capability::PRISM_HADAMARD_SIGNED_ROTATION)
-            && signed_rotation_kernel::is_signed_rotation_eligible(hadamard_block_size)
-        {
-            Some(
-                signed_rotation_kernel::signed_rotation_kernel(hadamard_block_size)
-                    .map_err(PrismHadamardModelError::Forward)?,
-            )
-        } else {
-            tracing::info!(
-                "fused Hadamard rotation demoted to the composed MLX route for this worker process"
-            );
-            None
-        };
-        let decoder_layer_state_slots = decoder_layer_state_slots(&weights);
+        let fused_rotation_kernel = retained_fused_rotation_kernel(
+            kernel_capabilities,
+            pack.hadamard_contract().block_size(),
+        )?;
+        let astro_decoder_state_cache_layout =
+            prism_hadamard_qwen35_astro_decoder_state_cache_layout(pack.config())
+                .map_err(PrismHadamardModelError::AstroDecoderStateCacheLayout)?;
         Ok(Self {
             pack,
             runtime,
@@ -149,7 +143,7 @@ impl PrismHadamardTextModel {
             weights,
             gdn_query_scale_weight,
             gdn_key_scale_weight,
-            decoder_layer_state_slots,
+            astro_decoder_state_cache_layout,
         })
     }
 
@@ -221,27 +215,25 @@ impl PrismHadamardTextModel {
     }
 }
 
-/// Numbers each decoder layer within its attention kind so a layer can find
-/// its own convolution/recurrent or key-value state slot directly.
-fn decoder_layer_state_slots(weights: &PrismHadamardWeights) -> Vec<usize> {
-    let mut linear_layer_count = 0_usize;
-    let mut full_layer_count = 0_usize;
-    weights
-        .decoder_layers
-        .iter()
-        .map(|decoder_layer| match decoder_layer.attention {
-            weights::DecoderLayerAttentionWeights::Linear(_) => {
-                let slot = linear_layer_count;
-                linear_layer_count += 1;
-                slot
-            }
-            weights::DecoderLayerAttentionWeights::Full(_) => {
-                let slot = full_layer_count;
-                full_layer_count += 1;
-                slot
-            }
-        })
-        .collect()
+/// The one-launch signed Hadamard rotation when this GPU passed its bit-exact
+/// probe and the pack's block size is one the kernel reproduces; `None`
+/// keeps the composed three-launch route.
+fn retained_fused_rotation_kernel(
+    kernel_capabilities: &crate::WorkerKernelCapabilities,
+    hadamard_block_size: u32,
+) -> Result<Option<MlxMetalKernel>, PrismHadamardModelError> {
+    if kernel_capabilities
+        .is_custom_kernel_supported(crate::kernel_capability::PRISM_HADAMARD_SIGNED_ROTATION)
+        && signed_rotation_kernel::is_signed_rotation_eligible(hadamard_block_size)
+    {
+        return signed_rotation_kernel::signed_rotation_kernel(hadamard_block_size)
+            .map(Some)
+            .map_err(PrismHadamardModelError::Forward);
+    }
+    tracing::info!(
+        "fused Hadamard rotation demoted to the composed MLX route for this worker process"
+    );
+    Ok(None)
 }
 
 pub fn validate_greedy_generation_request(
@@ -312,6 +304,12 @@ pub enum PrismHadamardModelError {
     UnsupportedLayerType { layer_type: String },
     #[error("the fused gated-delta kernel could not be retained: {0}")]
     KernelRetention(#[source] runtime_integration::MlxRuntimeError),
+    #[error("folded pack astro decoder state cache layout is invalid: {0}")]
+    AstroDecoderStateCacheLayout(#[source] AstroDecoderStateCacheLayoutError),
+    #[error(
+        "decoder layer {layer_index} has no astro decoder state cache entry of its attention kind"
+    )]
+    DecoderStateLayerMismatch { layer_index: usize },
     #[error("the generation pass produced no position to decode from")]
     EmptyGeneration,
     #[error("folded pack greedy generation request is invalid: {description}")]

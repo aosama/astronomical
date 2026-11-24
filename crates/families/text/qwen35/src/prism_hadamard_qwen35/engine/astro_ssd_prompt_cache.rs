@@ -1,7 +1,8 @@
 //! Folded-ternary persistent astro SSD prompt cache open, restore, capture, and stats.
 //!
 //! The disk store, contract, and prefix lookup are family-neutral; this module
-//! only maps the straight generation state onto that contract. Full-attention
+//! only maps the shared decoder-state stack onto that contract, addressing
+//! every tensor by its decoder-layer index. Full-attention
 //! KV spans persist per block, and each published block also carries the
 //! convolution and gated-delta boundary snapshot taken at that block's forward
 //! boundary, so a restored prefix resumes the linear-attention recurrence
@@ -16,12 +17,13 @@ use ipc_protocol::WorkerEvent;
 use mlx_bridge::MlxArray;
 use runtime_integration::MlxRuntime;
 
-use crate::prism_hadamard_qwen35::astro_decoder_state_cache_layout;
 use crate::prism_hadamard_qwen35::engine::execution::{
     PrismHadamardQwen35ActiveGeneration, PrismHadamardQwen35InferenceExecution,
 };
-use crate::prism_hadamard_qwen35::model::{
-    PrismHadamardTextModel, PrismStateSlotLayout, StraightGenerationState,
+use crate::prism_hadamard_qwen35::model::PrismHadamardTextModel;
+use crate::{
+    AstroDecoderStateCacheState, ConvolutionState, FullAttentionKeyValueState,
+    GatedDeltaRecurrentState, RequestDecoderStateStack,
 };
 use crate::{
     AstroSsdPromptCacheBlockKey, AstroSsdPromptCacheDiskStore, AstroSsdPromptCacheDiskStoreConfig,
@@ -44,19 +46,10 @@ pub(super) fn open_astro_ssd_prompt_cache_store(
     disk_store_config: AstroSsdPromptCacheDiskStoreConfig,
     performance_attribution: &mut PerformanceAttribution,
 ) -> Result<Arc<AstroSsdPromptCacheDiskStore>, InferenceEngineError> {
-    let astro_decoder_state_cache_layout =
-        astro_decoder_state_cache_layout::prism_hadamard_qwen35_astro_decoder_state_cache_layout(
-            model.pack.config(),
-        )
-        .map_err(|layout_error| InferenceEngineError::Fatal {
-            reason: format!(
-                "folded-ternary astro-ssd-prompt-cache layout is invalid: {layout_error}"
-            ),
-        })?;
     let model_contract = resolve_quota_bounded_astro_ssd_prompt_cache_contract(
         model_id,
         model_revision,
-        astro_decoder_state_cache_layout,
+        model.astro_decoder_state_cache_layout.clone(),
         model.pack.config().text().max_position_embeddings as usize,
         effective_mlx_memory_ceiling_bytes as u64,
         disk_store_config.global_astro_ssd_prompt_cache_maximum_size_bytes(),
@@ -90,7 +83,8 @@ pub(super) struct PrismAstroSsdPromptCacheRestoreOutcome {
 }
 
 /// Looks the prompt up in the SSD store, restores the matched complete-block
-/// prefix into `generation_state`, and reports the restored cursor.
+/// prefix into the fresh `request_decoder_state`, and reports the restored
+/// cursor the caller's next position starts from.
 ///
 /// The terminal block is dropped when it would consume the whole prompt: the
 /// final forward must process at least one prompt token to produce the first
@@ -99,7 +93,7 @@ pub(super) fn lookup_and_restore_prompt_prefix(
     model: &PrismHadamardTextModel,
     astro_ssd_prompt_cache: &AstroSsdPromptCacheDiskStore,
     prompt_token_ids: &[u32],
-    generation_state: &mut StraightGenerationState,
+    request_decoder_state: &mut RequestDecoderStateStack,
     astro_ssd_prompt_cache_counters: &mut AstroSsdPromptCacheCounters,
     performance_attribution: &mut PerformanceAttribution,
 ) -> Result<PrismAstroSsdPromptCacheRestoreOutcome, InferenceEngineError> {
@@ -127,8 +121,6 @@ pub(super) fn lookup_and_restore_prompt_prefix(
             last_restored_astro_ssd_prompt_cache_block_key: None,
         });
     }
-    *generation_state = StraightGenerationState::restored_prefix_slot_owners(model);
-    let slot_layout = PrismStateSlotLayout::for_model(model);
     let LoadedAstroSsdPromptCacheBlocks {
         loaded_block_tensors,
         last_restored_block_key,
@@ -144,14 +136,12 @@ pub(super) fn lookup_and_restore_prompt_prefix(
     restore_state_and_absorb_boundary_snapshot(
         model,
         astro_ssd_prompt_cache,
-        &slot_layout,
         loaded_block_tensors,
         last_restored_block_key.as_ref(),
         restored_token_count,
-        generation_state,
+        request_decoder_state,
         performance_attribution,
     )?;
-    generation_state.set_sequence_position_offset(restored_token_count as i32);
     astro_ssd_prompt_cache_counters.record_astro_ssd_prompt_cache_hit(restored_token_count);
     Ok(PrismAstroSsdPromptCacheRestoreOutcome {
         restored_token_count: u32::try_from(restored_token_count).unwrap_or(u32::MAX),
@@ -161,96 +151,126 @@ pub(super) fn lookup_and_restore_prompt_prefix(
 
 /// Seats every full-attention slab from the complete block set with one
 /// concatenation per tensor, then validates the restored length.
-fn restore_generation_state_from_blocks(
+fn restore_full_attention_layers_from_blocks(
     model: &PrismHadamardTextModel,
-    slot_layout: &PrismStateSlotLayout,
     loaded_block_tensors: &[HashMap<String, MlxArray>],
     restored_token_count: usize,
-    generation_state: &mut StraightGenerationState,
+    request_decoder_state: &mut RequestDecoderStateStack,
 ) -> Result<(), InferenceEngineError> {
-    let runtime = &model.runtime;
-    for (slot, decoder_layer_index) in slot_layout
-        .full_attention_decoder_layer_indices
-        .iter()
-        .enumerate()
+    for (decoder_layer_index, decoder_layer_state) in
+        request_decoder_state.layers_mut().iter_mut().enumerate()
     {
-        let keys_tensor_name = format!("layer_{decoder_layer_index}_attention.keys");
-        let values_tensor_name = format!("layer_{decoder_layer_index}_attention.values");
-        let keys_slices = block_tensors_by_name(loaded_block_tensors, &keys_tensor_name)?;
-        let values_slices = block_tensors_by_name(loaded_block_tensors, &values_tensor_name)?;
-        let restored_keys = runtime.concatenate_axis(&keys_slices, 2).map_err(|error| {
-            InferenceEngineError::Fatal {
-                reason: format!(
-                    "folded-ternary restored {keys_tensor_name} concat failed: {error}"
-                ),
-            }
-        })?;
-        let restored_values = runtime
-            .concatenate_axis(&values_slices, 2)
-            .map_err(|error| InferenceEngineError::Fatal {
-                reason: format!(
-                    "folded-ternary restored {values_tensor_name} concat failed: {error}"
-                ),
-            })?;
-        let restored_key_token_count = restored_keys.shape()[2];
-        if restored_key_token_count != restored_token_count as i32 {
-            return Err(InferenceEngineError::Fatal {
-                reason: format!(
-                    "folded-ternary restored {keys_tensor_name} covers {restored_key_token_count} tokens but the prefix is {restored_token_count}"
-                ),
-            });
+        if let AstroDecoderStateCacheState::AppendOnlyAttention { attention } = decoder_layer_state
+        {
+            restore_full_attention_layer(
+                &model.runtime,
+                decoder_layer_index,
+                loaded_block_tensors,
+                restored_token_count,
+                attention,
+            )?;
         }
-        generation_state
-            .restore_key_value_slabs(slot, restored_keys, restored_values)
-            .map_err(|error| InferenceEngineError::Fatal {
-                reason: format!("folded-ternary restored full-attention state is invalid: {error}"),
-            })?;
     }
     Ok(())
 }
 
-/// Routes the boundary snapshot's convolution and gated-delta tensors into
-/// their per-kind slots.
-fn absorb_boundary_snapshot(
-    slot_layout: &PrismStateSlotLayout,
-    snapshot_tensors: &HashMap<String, MlxArray>,
-    generation_state: &mut StraightGenerationState,
+/// Concatenates one full-attention layer's restored key and value spans and
+/// installs them as the layer's slabs.
+fn restore_full_attention_layer(
+    runtime: &MlxRuntime,
+    decoder_layer_index: usize,
+    loaded_block_tensors: &[HashMap<String, MlxArray>],
+    restored_token_count: usize,
+    key_value_state: &mut FullAttentionKeyValueState,
 ) -> Result<(), InferenceEngineError> {
-    for (slot, decoder_layer_index) in slot_layout
-        .linear_attention_decoder_layer_indices
-        .iter()
-        .enumerate()
-    {
-        let convolution_tensor_name = format!("layer_{decoder_layer_index}_linear.convolution");
-        let convolution_tensor = snapshot_tensors
-            .get(&convolution_tensor_name)
-            .ok_or_else(|| missing_snapshot_tensor(&convolution_tensor_name))?;
-        generation_state
-            .restore_convolution_state(
-                slot,
-                convolution_tensor
-                    .retain()
-                    .map_err(|error| InferenceEngineError::Fatal {
-                        reason: format!("folded-ternary snapshot retain failed: {error}"),
-                    })?,
-            )
+    let keys_tensor_name = format!("layer_{decoder_layer_index}_attention.keys");
+    let values_tensor_name = format!("layer_{decoder_layer_index}_attention.values");
+    let keys_slices = block_tensors_by_name(loaded_block_tensors, &keys_tensor_name)?;
+    let values_slices = block_tensors_by_name(loaded_block_tensors, &values_tensor_name)?;
+    let restored_keys =
+        runtime
+            .concatenate_axis(&keys_slices, 2)
             .map_err(|error| InferenceEngineError::Fatal {
-                reason: format!("folded-ternary restored convolution state is invalid: {error}"),
+                reason: format!(
+                    "folded-ternary restored {keys_tensor_name} concat failed: {error}"
+                ),
             })?;
-        let recurrent_tensor_name =
-            format!("layer_{decoder_layer_index}_linear.gated_delta_recurrent");
-        let recurrent_tensor = snapshot_tensors
-            .get(&recurrent_tensor_name)
-            .ok_or_else(|| missing_snapshot_tensor(&recurrent_tensor_name))?;
-        generation_state.restore_recurrent_state(
-            slot,
-            recurrent_tensor
-                .retain()
-                .map_err(|error| InferenceEngineError::Fatal {
-                    reason: format!("folded-ternary snapshot retain failed: {error}"),
-                })?,
-        );
+    let restored_values = runtime
+        .concatenate_axis(&values_slices, 2)
+        .map_err(|error| InferenceEngineError::Fatal {
+            reason: format!("folded-ternary restored {values_tensor_name} concat failed: {error}"),
+        })?;
+    let restored_key_token_count = restored_keys.shape()[2];
+    if restored_key_token_count != restored_token_count as i32 {
+        return Err(InferenceEngineError::Fatal {
+            reason: format!(
+                "folded-ternary restored {keys_tensor_name} covers {restored_key_token_count} tokens but the prefix is {restored_token_count}"
+            ),
+        });
     }
+    key_value_state
+        .restore_from_blocks(restored_keys, restored_values)
+        .map_err(|error| InferenceEngineError::Fatal {
+            reason: format!("folded-ternary restored full-attention state is invalid: {error}"),
+        })
+}
+
+/// Routes the boundary snapshot's convolution and gated-delta tensors into
+/// every linear-attention layer's state.
+fn absorb_boundary_snapshot(
+    snapshot_tensors: &HashMap<String, MlxArray>,
+    request_decoder_state: &mut RequestDecoderStateStack,
+) -> Result<(), InferenceEngineError> {
+    for (decoder_layer_index, decoder_layer_state) in
+        request_decoder_state.layers_mut().iter_mut().enumerate()
+    {
+        if let AstroDecoderStateCacheState::Composite {
+            convolution,
+            recurrent,
+        } = decoder_layer_state
+        {
+            absorb_linear_layer_snapshot(
+                decoder_layer_index,
+                snapshot_tensors,
+                convolution,
+                recurrent,
+            )?;
+        }
+    }
+    Ok(())
+}
+
+/// Installs one linear-attention layer's restored convolution buffer, whose
+/// shape is validated against the layer's configured geometry, and its
+/// gated-delta recurrent accumulator.
+fn absorb_linear_layer_snapshot(
+    decoder_layer_index: usize,
+    snapshot_tensors: &HashMap<String, MlxArray>,
+    convolution_state: &mut ConvolutionState,
+    recurrent_state: &mut GatedDeltaRecurrentState,
+) -> Result<(), InferenceEngineError> {
+    let convolution_tensor_name = format!("layer_{decoder_layer_index}_linear.convolution");
+    let convolution_tensor = snapshot_tensors
+        .get(&convolution_tensor_name)
+        .ok_or_else(|| missing_snapshot_tensor(&convolution_tensor_name))?;
+    convolution_state
+        .replace_state(convolution_tensor.retain().map_err(|error| {
+            InferenceEngineError::Fatal {
+                reason: format!("folded-ternary snapshot retain failed: {error}"),
+            }
+        })?)
+        .map_err(|error| InferenceEngineError::Fatal {
+            reason: format!("folded-ternary restored convolution state is invalid: {error}"),
+        })?;
+    let recurrent_tensor_name = format!("layer_{decoder_layer_index}_linear.gated_delta_recurrent");
+    let recurrent_tensor = snapshot_tensors
+        .get(&recurrent_tensor_name)
+        .ok_or_else(|| missing_snapshot_tensor(&recurrent_tensor_name))?;
+    recurrent_state.restore_from_snapshot(recurrent_tensor.retain().map_err(|error| {
+        InferenceEngineError::Fatal {
+            reason: format!("folded-ternary snapshot retain failed: {error}"),
+        }
+    })?);
     Ok(())
 }
 
@@ -264,23 +284,28 @@ fn missing_snapshot_tensor(tensor_name: &str) -> InferenceEngineError {
 
 /// Every live array a restored prefix must materialize before the next
 /// forward: the KV slabs plus the convolution and recurrent accumulators.
-fn restored_evaluation_arrays<'state>(
-    generation_state: &'state StraightGenerationState,
-    slot_layout: &PrismStateSlotLayout,
-) -> Vec<&'state MlxArray> {
-    let mut restored_arrays = Vec::new();
-    for slot in 0..slot_layout.full_attention_decoder_layer_indices.len() {
-        if let Some((keys, values)) = generation_state.key_value_slabs(slot) {
+/// The roots keep their per-kind order (every key/value pair first, then each
+/// linear layer's convolution and recurrent pair), the order the restored
+/// evaluation always used.
+fn restored_evaluation_arrays(request_decoder_state: &RequestDecoderStateStack) -> Vec<&MlxArray> {
+    let decoder_layer_states = request_decoder_state.layers();
+    let mut restored_arrays = Vec::with_capacity(2 * decoder_layer_states.len());
+    for decoder_layer_state in decoder_layer_states {
+        if let AstroDecoderStateCacheState::AppendOnlyAttention { attention } = decoder_layer_state
+            && let (Some(keys), Some(values)) = (attention.keys_state(), attention.values_state())
+        {
             restored_arrays.push(keys);
             restored_arrays.push(values);
         }
     }
-    for slot in 0..slot_layout.linear_attention_decoder_layer_indices.len() {
-        if let Some(convolution_state) = generation_state.convolution_state_array(slot) {
-            restored_arrays.push(convolution_state);
-        }
-        if let Some(recurrent_state) = generation_state.recurrent_state_array(slot) {
-            restored_arrays.push(recurrent_state);
+    for decoder_layer_state in decoder_layer_states {
+        if let AstroDecoderStateCacheState::Composite {
+            convolution,
+            recurrent,
+        } = decoder_layer_state
+        {
+            restored_arrays.extend(convolution.state());
+            restored_arrays.extend(recurrent.state());
         }
     }
     restored_arrays
@@ -313,7 +338,6 @@ pub(super) fn capture_completed_astro_ssd_prompt_cache_block(
     runtime: &MlxRuntime,
     astro_ssd_prompt_cache: &AstroSsdPromptCacheDiskStore,
     active_generation: &mut PrismHadamardQwen35ActiveGeneration,
-    slot_layout: &PrismStateSlotLayout,
     performance_attribution: &mut PerformanceAttribution,
 ) -> Result<(), InferenceEngineError> {
     let block_token_count = astro_ssd_prompt_cache
@@ -336,8 +360,7 @@ pub(super) fn capture_completed_astro_ssd_prompt_cache_block(
         |_performance_attribution| {
             extract_sequence_block_tensors(
                 runtime,
-                &active_generation.generation_state,
-                slot_layout,
+                &active_generation.request_decoder_state,
                 block_start,
                 block_end,
             )
@@ -346,7 +369,7 @@ pub(super) fn capture_completed_astro_ssd_prompt_cache_block(
     let boundary_state_tensors = performance_attribution.measure_operation(
         PerformanceOperation::AstroSsdPromptCacheStateExtraction,
         |_performance_attribution| {
-            extract_boundary_snapshot_tensors(&active_generation.generation_state, slot_layout)
+            extract_boundary_snapshot_tensors(&active_generation.request_decoder_state)
         },
     )?;
     let publication_outcome = astro_ssd_prompt_cache
@@ -376,24 +399,23 @@ pub(super) fn capture_completed_astro_ssd_prompt_cache_block(
 /// Slices one block's KV span out of every full-attention slab.
 fn extract_sequence_block_tensors(
     runtime: &MlxRuntime,
-    generation_state: &StraightGenerationState,
-    slot_layout: &PrismStateSlotLayout,
+    request_decoder_state: &RequestDecoderStateStack,
     block_start: usize,
     block_end: usize,
 ) -> Result<HashMap<String, MlxArray>, InferenceEngineError> {
     let mut sequence_state_tensors = HashMap::new();
-    for (slot, decoder_layer_index) in slot_layout
-        .full_attention_decoder_layer_indices
-        .iter()
-        .enumerate()
+    for (decoder_layer_index, decoder_layer_state) in
+        request_decoder_state.layers().iter().enumerate()
     {
-        let (keys_state, values_state) = generation_state
-            .key_value_slabs(slot)
-            .ok_or_else(|| InferenceEngineError::Fatal {
-                reason: format!(
-                    "folded-ternary astro-ssd-prompt-cache capture is missing full-attention slot {slot} state"
-                ),
-            })?;
+        let AstroDecoderStateCacheState::AppendOnlyAttention { attention } = decoder_layer_state
+        else {
+            continue;
+        };
+        let (Some(keys_state), Some(values_state)) =
+            (attention.keys_state(), attention.values_state())
+        else {
+            return Err(missing_capture_state(decoder_layer_index, "key/value"));
+        };
         sequence_state_tensors.insert(
             format!("layer_{decoder_layer_index}_attention.keys"),
             slice_token_range(runtime, keys_state, block_start, block_end)?,
@@ -409,47 +431,51 @@ fn extract_sequence_block_tensors(
 /// Retains the convolution and gated-delta accumulators captured at the
 /// forward boundary the published block ends on.
 fn extract_boundary_snapshot_tensors(
-    generation_state: &StraightGenerationState,
-    slot_layout: &PrismStateSlotLayout,
+    request_decoder_state: &RequestDecoderStateStack,
 ) -> Result<HashMap<String, MlxArray>, InferenceEngineError> {
     let mut boundary_state_tensors = HashMap::new();
-    for (slot, decoder_layer_index) in slot_layout
-        .linear_attention_decoder_layer_indices
-        .iter()
-        .enumerate()
+    for (decoder_layer_index, decoder_layer_state) in
+        request_decoder_state.layers().iter().enumerate()
     {
-        let convolution_state = generation_state
-            .convolution_state_array(slot)
-            .ok_or_else(|| InferenceEngineError::Fatal {
-                reason: format!(
-                    "folded-ternary astro-ssd-prompt-cache capture is missing linear slot {slot} convolution state"
-                ),
-            })?;
+        let AstroDecoderStateCacheState::Composite {
+            convolution,
+            recurrent,
+        } = decoder_layer_state
+        else {
+            continue;
+        };
+        let convolution_state = convolution
+            .state()
+            .ok_or_else(|| missing_capture_state(decoder_layer_index, "convolution"))?;
         boundary_state_tensors.insert(
             format!("layer_{decoder_layer_index}_linear.convolution"),
-            convolution_state
-                .retain()
-                .map_err(|error| InferenceEngineError::Fatal {
-                    reason: format!("folded-ternary capture retain failed: {error}"),
-                })?,
+            retain_captured_tensor(convolution_state)?,
         );
-        let recurrent_state = generation_state
-            .recurrent_state_array(slot)
-            .ok_or_else(|| InferenceEngineError::Fatal {
-                reason: format!(
-                    "folded-ternary astro-ssd-prompt-cache capture is missing linear slot {slot} recurrent state"
-                ),
-            })?;
+        let recurrent_state = recurrent
+            .state()
+            .ok_or_else(|| missing_capture_state(decoder_layer_index, "recurrent"))?;
         boundary_state_tensors.insert(
             format!("layer_{decoder_layer_index}_linear.gated_delta_recurrent"),
-            recurrent_state
-                .retain()
-                .map_err(|error| InferenceEngineError::Fatal {
-                    reason: format!("folded-ternary capture retain failed: {error}"),
-                })?,
+            retain_captured_tensor(recurrent_state)?,
         );
     }
     Ok(boundary_state_tensors)
+}
+
+fn missing_capture_state(decoder_layer_index: usize, state_role: &str) -> InferenceEngineError {
+    InferenceEngineError::Fatal {
+        reason: format!(
+            "folded-ternary astro-ssd-prompt-cache capture is missing decoder layer {decoder_layer_index} {state_role} state"
+        ),
+    }
+}
+
+fn retain_captured_tensor(captured_tensor: &MlxArray) -> Result<MlxArray, InferenceEngineError> {
+    captured_tensor
+        .retain()
+        .map_err(|error| InferenceEngineError::Fatal {
+            reason: format!("folded-ternary capture retain failed: {error}"),
+        })
 }
 
 fn slice_token_range(
@@ -542,7 +568,7 @@ fn load_complete_kv_blocks(
     })
 }
 
-/// Rebuilds the generation state from the loaded blocks, then absorbs the
+/// Rebuilds the decoder state from the loaded blocks, then absorbs the
 /// boundary snapshot riding the newest block and evaluates the restored
 /// arrays. The newest boundary snapshot is mandatory: without it the
 /// linear-attention recurrence would restart from zero mid-prefix.
@@ -550,22 +576,20 @@ fn load_complete_kv_blocks(
 fn restore_state_and_absorb_boundary_snapshot(
     model: &PrismHadamardTextModel,
     astro_ssd_prompt_cache: &AstroSsdPromptCacheDiskStore,
-    slot_layout: &PrismStateSlotLayout,
     loaded_block_tensors: Vec<HashMap<String, MlxArray>>,
     last_restored_block_key: Option<&AstroSsdPromptCacheBlockKey>,
     restored_token_count: usize,
-    generation_state: &mut StraightGenerationState,
+    request_decoder_state: &mut RequestDecoderStateStack,
     performance_attribution: &mut PerformanceAttribution,
 ) -> Result<(), InferenceEngineError> {
     performance_attribution.measure_operation(
         PerformanceOperation::AstroSsdPromptCacheStateReconstruction,
         |_performance_attribution| {
-            restore_generation_state_from_blocks(
+            restore_full_attention_layers_from_blocks(
                 model,
-                slot_layout,
                 &loaded_block_tensors,
                 restored_token_count,
-                generation_state,
+                request_decoder_state,
             )
         },
     )?;
@@ -591,8 +615,8 @@ fn restore_state_and_absorb_boundary_snapshot(
                     "folded-ternary astro-ssd-prompt-cache boundary snapshot was reported present but missing"
                         .to_owned(),
             })?;
-        absorb_boundary_snapshot(slot_layout, &snapshot_tensors, generation_state)?;
-        let restored_arrays = restored_evaluation_arrays(generation_state, slot_layout);
+        absorb_boundary_snapshot(&snapshot_tensors, request_decoder_state)?;
+        let restored_arrays = restored_evaluation_arrays(request_decoder_state);
         model
             .runtime
             .evaluate_arrays(&restored_arrays)
