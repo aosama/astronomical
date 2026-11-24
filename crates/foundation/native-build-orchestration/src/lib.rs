@@ -46,3 +46,6 @@ pub use native_host_platform::{
 pub use native_linking::configure_rust_linking;
 pub use native_progress::{NATIVE_BUILD_PROGRESS_FILE_VARIABLE, NativeBuildProgress};
 pub use native_store::{NativeBuildProfile, NativeBuildStore};
+// The build script finds the workspace root the same way the identity's
+// own tests do, through the one function that owns the rule.
+pub use native_identity::workspace_root_above;

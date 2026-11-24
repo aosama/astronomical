@@ -9,13 +9,9 @@ use native_identity::{
 };
 
 fn repository_root() -> std::path::PathBuf {
-    // CARGO_MANIFEST_DIR lies below the workspace root, which holds Cargo.lock; the
-    // source-identity pathspecs are workspace-relative.
-    std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .ancestors()
-        .find(|ancestor_directory| ancestor_directory.join("Cargo.lock").is_file())
+    // The source-identity pathspecs are workspace-relative.
+    native_identity::workspace_root_above(std::path::Path::new(env!("CARGO_MANIFEST_DIR")))
         .expect("the crate lives inside the workspace, beside its Cargo.lock")
-        .to_path_buf()
 }
 
 #[test]

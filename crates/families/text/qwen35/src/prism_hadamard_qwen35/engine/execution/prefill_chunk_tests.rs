@@ -71,6 +71,12 @@ fn run_to_completion(fixture_engine: &mut LoadedFixtureEngine, request_id: u64) 
 #[test]
 #[file_serial]
 fn should_restore_a_repeated_prompt_up_to_its_partial_tail() {
+    if test_harness::skip_without(
+        test_harness::PlatformRequirement::MlxGpuBackend,
+        "should_restore_a_repeated_prompt_up_to_its_partial_tail",
+    ) {
+        return;
+    }
     let mut fixture_engine =
         loaded_fixture_engine_with_astro_ssd_prompt_cache(&FIXTURE_ASTRO_SSD_PROMPT_CACHE);
     let cold_start = start_greedy(&mut fixture_engine, 91);
@@ -122,6 +128,12 @@ fn should_open_the_store_with_the_quota_bounded_contract() {
 #[test]
 #[file_serial]
 fn should_report_and_clear_the_store_through_the_shared_core() {
+    if test_harness::skip_without(
+        test_harness::PlatformRequirement::MlxGpuBackend,
+        "should_report_and_clear_the_store_through_the_shared_core",
+    ) {
+        return;
+    }
     let mut fixture_engine =
         loaded_fixture_engine_with_astro_ssd_prompt_cache(&FIXTURE_ASTRO_SSD_PROMPT_CACHE);
     start_greedy(&mut fixture_engine, 93);

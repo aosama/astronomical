@@ -2,22 +2,58 @@ use crate::probes::ToolchainOverrides;
 use crate::{
     FingerprintRequest, IdentityScope, NativeBuildProfile, NativeIdentityError,
     SOURCE_IDENTITY_PATHSPECS, digest_bytes, enumerate_tracked_source_paths, native_build_identity,
-    native_build_identity_with_probe_values,
+    native_build_identity_with_probe_values, workspace_root_above,
 };
 
-/// `CARGO_MANIFEST_DIR` lies below the workspace root, which holds `Cargo.lock`; the
-/// source-identity pathspecs are workspace-relative, so beside-source tests
-/// resolve the workspace root rather than relying on the working directory.
+/// The source-identity pathspecs are workspace-relative, so beside-source
+/// tests resolve the workspace root rather than relying on the working
+/// directory.
 fn workspace_root_from_manifest_directory() -> std::path::PathBuf {
-    let workspace_lock_file = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .ancestors()
-        .map(|ancestor_directory| ancestor_directory.join("Cargo.lock"))
-        .find(|candidate_lock_file| candidate_lock_file.is_file())
-        .expect("the crate lives inside the workspace, beside its Cargo.lock");
-    workspace_lock_file
-        .parent()
-        .expect("a lock file sits in a folder")
-        .to_path_buf()
+    workspace_root_above(std::path::Path::new(env!("CARGO_MANIFEST_DIR")))
+        .expect("the crate lives inside the workspace, beside its Cargo.lock")
+}
+
+#[test]
+fn should_find_the_workspace_root_above_a_deeply_nested_crate() {
+    let workspace_directory = fixture_directory("workspace-root-nested");
+    let nested_crate_directory = workspace_directory.join("crates/foundation/some-crate");
+    std::fs::create_dir_all(&nested_crate_directory).expect("the nested crate folder is created");
+    std::fs::write(workspace_directory.join("Cargo.lock"), "").expect("the lock file is written");
+
+    assert_eq!(
+        workspace_root_above(&nested_crate_directory),
+        Some(workspace_directory.clone())
+    );
+    std::fs::remove_dir_all(&workspace_directory).expect("the fixture folder is removed");
+}
+
+#[test]
+fn should_take_the_starting_folder_itself_when_it_holds_the_lock_file() {
+    let workspace_directory = fixture_directory("workspace-root-self");
+    std::fs::create_dir_all(&workspace_directory).expect("the fixture folder is created");
+    std::fs::write(workspace_directory.join("Cargo.lock"), "").expect("the lock file is written");
+
+    assert_eq!(
+        workspace_root_above(&workspace_directory),
+        Some(workspace_directory.clone())
+    );
+    std::fs::remove_dir_all(&workspace_directory).expect("the fixture folder is removed");
+}
+
+#[test]
+fn should_find_no_workspace_root_where_no_lock_file_is_above() {
+    // The filesystem root holds no Cargo.lock, so nothing is found and no
+    // caller fingerprints an unrelated folder.
+    assert_eq!(workspace_root_above(std::path::Path::new("/")), None);
+    // A folder named Cargo.lock is not a lock file.
+    let workspace_directory = fixture_directory("workspace-root-lock-folder");
+    std::fs::create_dir_all(workspace_directory.join("Cargo.lock"))
+        .expect("the decoy folder is created");
+    assert_ne!(
+        workspace_root_above(&workspace_directory),
+        Some(workspace_directory.clone())
+    );
+    std::fs::remove_dir_all(&workspace_directory).expect("the fixture folder is removed");
 }
 
 fn fixture_directory(fixture_name: &str) -> std::path::PathBuf {

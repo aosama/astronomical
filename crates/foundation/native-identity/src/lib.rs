@@ -213,6 +213,23 @@ pub fn native_build_identity_with_probe_values(
     Ok((identity_digest, probe_values))
 }
 
+/// The workspace root: the nearest folder at or above `starting_directory`
+/// that holds `Cargo.lock`. The source-identity pathspecs are relative to it,
+/// so every caller (build scripts, tests) must agree on it. Walking up rather
+/// than climbing a fixed number of folders keeps them agreeing after a crate
+/// moves to another depth (issue #2473 moved them one level down).
+#[must_use]
+pub fn workspace_root_above(starting_directory: &Path) -> Option<PathBuf> {
+    starting_directory
+        .ancestors()
+        .find(holds_cargo_lock)
+        .map(Path::to_path_buf)
+}
+
+fn holds_cargo_lock(candidate_directory: &&Path) -> bool {
+    candidate_directory.join("Cargo.lock").is_file()
+}
+
 /// Enumerates the committed files under the source-identity pathspecs,
 /// byte-sorted like `LC_ALL=C sort` so the manifest order is stable across
 /// machines. Tracked-only is deliberate: hosted CI checkouts are always
