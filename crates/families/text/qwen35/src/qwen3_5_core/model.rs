@@ -31,6 +31,7 @@ pub mod live_memory_observation;
 #[cfg(all(test, feature = "direct-mlx"))]
 #[path = "model/live_memory_observation_tests.rs"]
 mod live_memory_observation_tests;
+pub mod loading_geometry;
 #[cfg(feature = "direct-mlx")]
 pub mod loading_pipeline;
 #[cfg(feature = "direct-mlx")]
