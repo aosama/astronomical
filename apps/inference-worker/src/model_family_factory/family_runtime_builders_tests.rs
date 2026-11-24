@@ -135,3 +135,40 @@ async fn should_refuse_an_empty_folder_for_each_decision_family() {
         );
     }
 }
+
+#[tokio::test]
+async fn should_refuse_an_empty_folder_for_each_embedding_family() {
+    // The generic embedding builder reaches each family's own artifact
+    // reading; an empty folder comes back as the worker's bounded refusal.
+    let empty_model_directory =
+        tempfile::tempdir().expect("an empty model directory should be created");
+    let embedding_families = model_family_registry::MODEL_FAMILY_REGISTRY
+        .descriptions()
+        .iter()
+        .filter(|family_description| family_description.kind == ModelKind::Embedding);
+    for family_description in embedding_families {
+        let identifier = family_description.model_family.as_str();
+        let embedding_policy =
+            WorkerModelConfiguration::Embeddings(ipc_protocol::WorkerEmbeddingModelConfiguration {
+                model_id: format!("{identifier}-model"),
+                model_family: identifier.to_owned(),
+                artifact_revision: "embedding-revision".to_owned(),
+                vector_width: 768,
+                maximum_input_tokens: 512,
+            });
+
+        let refusal = family_runtime_builder(family_description.model_family)
+            .expect("embedding families are served")
+            .build(
+                &model_family_factory(),
+                empty_model_directory.path().to_path_buf(),
+                embedding_policy,
+            )
+            .await;
+
+        assert!(
+            matches!(&refusal, Err(reason) if reason.starts_with("selected embedding artifact failed initialization: ")),
+            "{identifier}"
+        );
+    }
+}
