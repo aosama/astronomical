@@ -29,5 +29,6 @@ pub mod prompt_processing_chunk_sizer;
 pub mod prompt_reading_steps;
 pub mod request_memory_release;
 pub mod restore_transient_workspace;
+pub mod serving_artifact;
 pub mod test_controls;
 pub mod text_model;
