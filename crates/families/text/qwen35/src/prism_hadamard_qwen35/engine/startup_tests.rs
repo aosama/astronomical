@@ -13,19 +13,12 @@ fn should_carry_the_load_knobs_from_the_chunking_settings() {
     let pending_load = pending_load_for(&serving_settings_with(512, 3), 8 * ONE_GB, ONE_GB);
     assert_eq!(pending_load.effective_mlx_memory_ceiling_bytes, 8 * ONE_GB);
     assert_eq!(pending_load.mlx_buffer_cache_limit_bytes, ONE_GB);
-    assert_eq!(
-        pending_load.configured_astro_ssd_prompt_cache_block_token_count,
-        Some(128)
-    );
-    assert_eq!(pending_load.ssd_prompt_cache_common_prefix_stride_blocks, 3);
     assert!(pending_load.neural_engine_mlp_prefill_requested);
 }
 
 #[test]
-fn should_floor_the_stride_and_the_prefill_chunk_at_one() {
+fn should_floor_the_prefill_chunk_at_one_token() {
     let serving_settings = serving_settings_with(0, 0);
-    let pending_load = pending_load_for(&serving_settings, 8 * ONE_GB, ONE_GB);
-    assert_eq!(pending_load.ssd_prompt_cache_common_prefix_stride_blocks, 1);
     let prompt_processing_chunk_sizer = prompt_processing_chunk_sizer_for(&serving_settings)
         .expect("a zero chunk is floored at one token, never refused");
     assert_eq!(
@@ -44,6 +37,7 @@ fn should_adopt_the_shared_limits_derived_from_the_pack_and_the_worker_settings(
             mlx_memory_ceiling_bytes: 8 * ONE_GB,
             mlx_buffer_cache_bytes: ONE_GB,
         },
+        None,
     );
 
     let execution_core = &execution.execution_core;
@@ -61,7 +55,12 @@ fn should_adopt_the_shared_limits_derived_from_the_pack_and_the_worker_settings(
     // 3.5 request; the fixture settings ask for 1024 tokens.
     assert_eq!(execution_core.full_attention_kv_state_growth_tokens, 1024);
     assert_eq!(execution.maximum_context_tokens(), 2048);
-    assert_eq!(execution.prompt_processing_chunk_tokens(), 512);
+    assert_eq!(
+        execution_core
+            .prompt_processing_chunk_sizer
+            .maximum_prompt_processing_chunk_size_tokens(),
+        512
+    );
     assert_eq!(execution.configured_mlx_buffer_cache_bytes, ONE_GB as u64);
     assert!(execution_core.model.is_none() && execution_core.active_request.is_none());
     remove_fixture_directory(&fixture_directory);

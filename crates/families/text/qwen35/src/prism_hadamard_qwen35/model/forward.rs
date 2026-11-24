@@ -12,13 +12,18 @@
 
 use mlx_bridge::MlxArray;
 
-use crate::{AstroDecoderStateCacheState, RequestDecoderStateStack};
+use crate::{
+    AstroDecoderStateCacheState, Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
+    RequestDecoderStateStack,
+};
 
 use super::PrismHadamardModelError;
 use super::weights::{DecoderLayerAttentionWeights, DenseMlpWeights};
 
 mod full_attention;
 mod gated_delta;
+
+use gated_delta::{LayerBoundaryCheckpoints, LinearLayerState};
 
 /// Every retained `astro_decoder_state_cache` array plus the forward output,
 /// as the evaluation roots one step must materialize together. Convolution
@@ -108,6 +113,26 @@ impl super::PrismHadamardTextModel {
         starting_position_tokens: u32,
         request_decoder_state: &mut RequestDecoderStateStack,
     ) -> Result<MlxArray, PrismHadamardModelError> {
+        self.forward_hidden_states_recording_boundary_states(
+            token_indices,
+            starting_position_tokens,
+            request_decoder_state,
+            None,
+        )
+    }
+
+    /// The same forward, which also keeps every gated-delta layer's state at
+    /// the `astro_ssd_prompt_cache` block boundaries inside the chunk when a
+    /// collector is given; without one it is exactly `forward_hidden_states`.
+    pub fn forward_hidden_states_recording_boundary_states(
+        &self,
+        token_indices: &MlxArray,
+        starting_position_tokens: u32,
+        request_decoder_state: &mut RequestDecoderStateStack,
+        boundary_checkpoint_collector: Option<
+            &mut Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
+        >,
+    ) -> Result<MlxArray, PrismHadamardModelError> {
         let text = self.pack.config().text();
         // The core route carries the leading batch axis: token indices are
         // [1, token_count] and every activation stays [1, token_count, ...].
@@ -117,6 +142,7 @@ impl super::PrismHadamardTextModel {
             token_indices,
             starting_position_tokens,
             request_decoder_state,
+            boundary_checkpoint_collector,
         )?;
 
         let hidden_state_shape = hidden_states.shape();
@@ -148,17 +174,21 @@ impl super::PrismHadamardTextModel {
         token_indices: &MlxArray,
         starting_position_tokens: u32,
         request_decoder_state: &mut RequestDecoderStateStack,
+        mut boundary_checkpoint_collector: Option<
+            &mut Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
+        >,
     ) -> Result<MlxArray, PrismHadamardModelError> {
         let rope_offset_tokens = rope_offset_tokens(starting_position_tokens)?;
         let mut hidden_states = self
             .embed_tokens(token_indices)
             .map_err(PrismHadamardModelError::Forward)?;
         for layer_index in 0..self.weights.decoder_layers.len() {
-            hidden_states = self.forward_decoder_layer(
+            hidden_states = self.run_decoder_layer(
                 layer_index,
                 &hidden_states,
                 rope_offset_tokens,
                 request_decoder_state,
+                boundary_checkpoint_collector.as_deref_mut(),
             )?;
         }
         Ok(hidden_states)
@@ -175,6 +205,27 @@ impl super::PrismHadamardTextModel {
         hidden_states: &MlxArray,
         rope_offset_tokens: i32,
         request_decoder_state: &mut RequestDecoderStateStack,
+    ) -> Result<MlxArray, PrismHadamardModelError> {
+        self.run_decoder_layer(
+            layer_index,
+            hidden_states,
+            rope_offset_tokens,
+            request_decoder_state,
+            None,
+        )
+    }
+
+    /// One decoder layer, with the gated-delta layers handing their boundary
+    /// states to the collector when one is given.
+    fn run_decoder_layer(
+        &self,
+        layer_index: usize,
+        hidden_states: &MlxArray,
+        rope_offset_tokens: i32,
+        request_decoder_state: &mut RequestDecoderStateStack,
+        boundary_checkpoint_collector: Option<
+            &mut Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
+        >,
     ) -> Result<MlxArray, PrismHadamardModelError> {
         let text = self.pack.config().text();
         let token_count = hidden_states.shape()[1];
@@ -202,8 +253,16 @@ impl super::PrismHadamardTextModel {
                 &normalized_input,
                 token_count,
                 linear_layer,
-                convolution,
-                recurrent,
+                LinearLayerState {
+                    convolution_state: convolution,
+                    recurrent_state: recurrent,
+                    boundary_checkpoints: boundary_checkpoint_collector.map(|collector| {
+                        LayerBoundaryCheckpoints {
+                            collector,
+                            decoder_layer_index: layer_index,
+                        }
+                    }),
+                },
             )?,
             (
                 DecoderLayerAttentionWeights::Full(full_layer),
