@@ -10,36 +10,38 @@
 use std::path::PathBuf;
 
 use config::{
-    AstroSsdPromptCacheConfig, ModelFamily, classify_model_directory,
-    verify_flux2_klein_model_directory, verify_qwen_image_21_model_directory,
+    AstroSsdPromptCacheConfig, verify_flux2_klein_model_directory,
+    verify_qwen_image_21_model_directory,
 };
 use ipc_protocol::{
-    WorkerAutoregressiveModelConfiguration, WorkerDecisionModelConfiguration,
-    WorkerDecodeAstroExpertCachePolicy, WorkerDiagnosticQwen3_5EngineOverride,
-    WorkerEmbeddingModelConfiguration, WorkerImageGenerationModelConfiguration,
-    WorkerModelConfiguration,
+    WorkerAutoregressiveModelConfiguration, WorkerDecodeAstroExpertCachePolicy,
+    WorkerDiagnosticQwen3_5EngineOverride, WorkerEmbeddingModelConfiguration,
+    WorkerImageGenerationModelConfiguration, WorkerModelConfiguration,
 };
 use model_serving::{
-    ClefDecisionEngine, DecisionEngine, EmbeddingEngine, EngineBackedWorker,
-    Flux2KleinArtifactProvenance, Flux2KleinImageEngine, ImageGenerationEngine, KevDecisionEngine,
-    LayaDecisionEngine, ModelFactory, ModelFactoryRuntime, ModelFamilyInferenceEngine,
-    ModernBertEmbeddingEngine, PrismHadamardQwen35ServingSettings, Qwen3_5GenerationProcessor,
-    QwenImage21ArtifactProvenance, QwenImage21ImageEngine, RecordedTrainingEngine, SpeechEngine,
-    boxed_chat_engine, initialize_prism_hadamard_qwen35_model_with_serving_settings,
+    DecisionEngine, EmbeddingEngine, EngineBackedWorker, Flux2KleinArtifactProvenance,
+    Flux2KleinImageEngine, ImageGenerationEngine, ModelFactory, ModelFactoryRuntime,
+    ModelFamilyInferenceEngine, ModernBertEmbeddingEngine, PrismHadamardQwen35ServingSettings,
+    Qwen3_5GenerationProcessor, QwenImage21ArtifactProvenance, QwenImage21ImageEngine,
+    RecordedTrainingEngine, SpeechEngine, boxed_chat_engine,
+    initialize_prism_hadamard_qwen35_model_with_serving_settings,
 };
 
 mod configured_family_check;
+mod family_runtime_builders;
+#[cfg(test)]
+mod family_test_support;
 mod qwen3_5_dense_engine_placement;
 #[cfg(test)]
 mod qwen3_5_dense_engine_placement_tests;
 mod qwen3_5_model_startup;
 mod qwen3_5_model_startup_error;
-mod speech_engine_creation;
 
 #[cfg(test)]
 mod qwen3_5_model_startup_error_tests;
 
-use self::configured_family_check::{FAMILY_MISMATCH_REASON, classified_model_family};
+use self::configured_family_check::classified_model_family;
+use self::family_runtime_builders::family_runtime_builder;
 use self::qwen3_5_model_startup::Qwen3_5EngineSelection;
 
 /// Creates the concrete family processor and engine for a selected model directory.
@@ -137,53 +139,6 @@ impl ModelFamilyFactory {
         self
     }
 
-    #[allow(clippy::type_complexity)]
-    /// Builds the engine of a model whose requests keep nothing between them:
-    /// the embedding engine for ModernBERT, a decision engine for Laya, Kev
-    /// or Clef, a speech engine for Kokoro or Phonon. A family paired with
-    /// another family's configuration is refused.
-    async fn create_single_pass_model_engine(
-        &self,
-        encoder_family: Option<ModelFamily>,
-        model_directory_path: PathBuf,
-        encoder_model_configuration: WorkerModelConfiguration,
-    ) -> Result<ModelFamilyRuntime, String> {
-        match (encoder_family, encoder_model_configuration) {
-            (
-                Some(config::MODERNBERT_MODEL_FAMILY),
-                WorkerModelConfiguration::Embeddings(model_configuration),
-            ) => {
-                self.create_modern_bert_embeddings_engine(model_directory_path, model_configuration)
-                    .await
-            }
-            (
-                Some(
-                    decision_family @ (config::LAYA_MODEL_FAMILY
-                    | config::KEV_MODEL_FAMILY
-                    | config::CLEF_MODEL_FAMILY),
-                ),
-                WorkerModelConfiguration::Decisions(model_configuration),
-            ) => self.create_decision_engine(
-                decision_family,
-                &model_directory_path,
-                model_configuration,
-            ),
-            (other_family, other_configuration) => {
-                let memory_grant = speech_engine_creation::SpeechMemoryGrant {
-                    effective_mlx_memory_ceiling_bytes: self.effective_mlx_memory_ceiling_bytes,
-                    mlx_buffer_cache_limit_bytes: self.mlx_buffer_cache_limit_bytes,
-                };
-                speech_engine_creation::unloaded_speech_engine(
-                    other_family,
-                    model_directory_path,
-                    other_configuration,
-                    &memory_grant,
-                )
-                .map(ModelFactoryRuntime::Speech)
-            }
-        }
-    }
-
     async fn create_qwen3_5_runtime(
         &self,
         model_directory_path: PathBuf,
@@ -248,64 +203,12 @@ impl
         let model_directory_path = PathBuf::from(model_directory);
         let model_family =
             classified_model_family(model_directory_path.clone(), &model_configuration).await?;
-        match (model_family, model_configuration) {
-            (
-                Some(config::QWEN3_5_MODEL_FAMILY),
-                WorkerModelConfiguration::Autoregressive(model_configuration),
-            ) => {
-                self.create_qwen3_5_autoregressive_runtime(
-                    model_directory_path,
-                    model_configuration,
-                )
-                .await
-            }
-            (
-                Some(config::FLUX2_KLEIN_MODEL_FAMILY),
-                WorkerModelConfiguration::ImageGeneration(model_configuration),
-            ) => {
-                self.create_flux2_klein_image_engine(model_directory_path, model_configuration)
-                    .await
-            }
-            (
-                Some(config::QWEN_IMAGE_21_MODEL_FAMILY),
-                WorkerModelConfiguration::ImageGeneration(model_configuration),
-            ) => {
-                self.create_qwen_image_21_image_engine(model_directory_path, model_configuration)
-                    .await
-            }
-            (
-                Some(config::PRISM_HADAMARD_QWEN35_MODEL_FAMILY),
-                WorkerModelConfiguration::Autoregressive(model_configuration),
-            ) => {
-                self.create_prism_hadamard_autoregressive_runtime(
-                    model_directory_path,
-                    model_configuration,
-                )
-                .await
-            }
-            (
-                encoder_family @ Some(
-                    config::MODERNBERT_MODEL_FAMILY
-                    | config::LAYA_MODEL_FAMILY
-                    | config::KEV_MODEL_FAMILY
-                    | config::CLEF_MODEL_FAMILY
-                    | config::KOKORO_MODEL_FAMILY
-                    | config::PHONON_MODEL_FAMILY,
-                ),
-                encoder_model_configuration @ (WorkerModelConfiguration::Embeddings(_)
-                | WorkerModelConfiguration::Decisions(_)
-                | WorkerModelConfiguration::Speech(_)),
-            ) => {
-                self.create_single_pass_model_engine(
-                    encoder_family,
-                    model_directory_path,
-                    encoder_model_configuration,
-                )
-                .await
-            }
-            (Some(_), _) => Err(FAMILY_MISMATCH_REASON.to_owned()),
-            (None, _) => Err("selected model has an unsupported model family".to_owned()),
-        }
+        let Some(runtime_builder) = model_family.and_then(family_runtime_builder) else {
+            return Err("selected model has an unsupported model family".to_owned());
+        };
+        runtime_builder
+            .build(self, model_directory_path, model_configuration)
+            .await
     }
 
     fn supports_streaming_retry(&self) -> bool {
@@ -554,34 +457,30 @@ impl ModelFamilyFactory {
         ))
     }
 
-    /// Builds the decision engine of a directory already classified as Laya,
-    /// Kev or Clef. The unloaded engine only reads the config and tokenizer bytes;
-    /// MLX runtime initialization stays inside load() on the worker runtime
-    /// thread.
-    fn create_decision_engine(
+    /// Wraps a decision family's unloaded engine for serving. The unloaded
+    /// engine only reads the config and tokenizer bytes; MLX runtime
+    /// initialization stays inside load() on the worker runtime thread.
+    fn decision_runtime<Engine, InitializationFailure>(
         &self,
-        decision_family: ModelFamily,
         model_directory_path: &std::path::Path,
-        model_configuration: WorkerDecisionModelConfiguration,
-    ) -> Result<ModelFamilyRuntime, String> {
-        let decision_engine = unloaded_decision_engine(
-            decision_family,
-            model_configuration.model_id,
-            model_directory_path,
-            self.effective_mlx_memory_ceiling_bytes,
-            self.mlx_buffer_cache_limit_bytes,
-        );
-        match decision_engine {
-            Ok(decision_engine) => Ok(ModelFactoryRuntime::Decisions(decision_engine)),
+        engine_outcome: Result<Engine, InitializationFailure>,
+    ) -> Result<ModelFamilyRuntime, String>
+    where
+        Engine: DecisionEngine + 'static,
+        InitializationFailure: std::fmt::Display,
+    {
+        recorded_decision_engine(model_directory_path, engine_outcome)
+            .map(ModelFactoryRuntime::Decisions)
             // The failure text is the engine's own bounded, path-free reason.
-            Err(initialization_failure) => Err(format!(
-                "selected decision artifact failed initialization: {initialization_failure}"
-            )),
-        }
+            .map_err(|initialization_failure| {
+                format!(
+                    "selected decision artifact failed initialization: {initialization_failure}"
+                )
+            })
     }
 
-    /// Verifies the directory classifies as ModernBert and builds the
-    /// embeddings engine. The unloaded engine only reads config and tokenizer
+    /// Builds the embeddings engine of a folder the factory classified as
+    /// ModernBERT. The unloaded engine only reads config and tokenizer
     /// bytes; MLX runtime initialization stays inside load() on the worker
     /// runtime thread because MLX handles are not Send across task boundaries.
     async fn create_modern_bert_embeddings_engine(
@@ -589,21 +488,6 @@ impl ModelFamilyFactory {
         model_directory_path: PathBuf,
         model_configuration: WorkerEmbeddingModelConfiguration,
     ) -> Result<ModelFamilyRuntime, String> {
-        let verification_directory_path = model_directory_path.clone();
-        let classified_provider_model_id = tokio::task::spawn_blocking(move || {
-            classify_model_directory(&verification_directory_path)
-                .ok()
-                .flatten()
-                .filter(|family| *family == config::MODERNBERT_MODEL_FAMILY)
-        })
-        .await
-        .map_err(|_| "embedding-family classification task failed".to_owned())?;
-        if classified_provider_model_id.is_none() {
-            return Err(
-                "selected model configuration does not match its classified model family"
-                    .to_owned(),
-            );
-        }
         let embedding_engine = ModernBertEmbeddingEngine::new(
             model_configuration.model_id,
             &model_directory_path,
@@ -619,50 +503,20 @@ impl ModelFamilyFactory {
     }
 }
 
-/// The unloaded engine of a decision family, behind the trait object the
-/// worker serves from. Only decision families reach here; any other is
-/// refused as a mismatch before this is called.
-fn unloaded_decision_engine(
-    decision_family: ModelFamily,
-    model_id: String,
+/// A decision family's engine behind the trait object the worker serves
+/// from. Every answer from a folder `astronomical decision` wrote carries
+/// what judging that folder showed.
+fn recorded_decision_engine<Engine, InitializationFailure>(
     model_directory_path: &std::path::Path,
-    effective_mlx_memory_ceiling_bytes: usize,
-    mlx_buffer_cache_limit_bytes: usize,
-) -> Result<Box<dyn DecisionEngine>, String> {
-    let engine_outcome = match decision_family {
-        config::KEV_MODEL_FAMILY => KevDecisionEngine::new(
-            model_id,
-            model_directory_path,
-            effective_mlx_memory_ceiling_bytes,
-            mlx_buffer_cache_limit_bytes,
-        )
-        .map(boxed_decision_engine),
-        config::CLEF_MODEL_FAMILY => ClefDecisionEngine::new(
-            model_id,
-            model_directory_path,
-            effective_mlx_memory_ceiling_bytes,
-            mlx_buffer_cache_limit_bytes,
-        )
-        .map(boxed_decision_engine),
-        _ => LayaDecisionEngine::new(
-            model_id,
-            model_directory_path,
-            effective_mlx_memory_ceiling_bytes,
-            mlx_buffer_cache_limit_bytes,
-        )
-        .map(boxed_decision_engine),
-    };
-    // Every answer from a folder `astronomical decision` wrote carries what
-    // judging that folder showed.
-    let family_engine =
-        engine_outcome.map_err(|initialization_failure| initialization_failure.to_string())?;
+    engine_outcome: Result<Engine, InitializationFailure>,
+) -> Result<Box<dyn DecisionEngine>, String>
+where
+    Engine: DecisionEngine + 'static,
+    InitializationFailure: std::fmt::Display,
+{
+    let family_engine: Box<dyn DecisionEngine> = Box::new(
+        engine_outcome.map_err(|initialization_failure| initialization_failure.to_string())?,
+    );
     RecordedTrainingEngine::wrapping(family_engine, model_directory_path)
         .map_err(|record_failure| record_failure.to_string())
-}
-
-/// One decision engine behind the trait object the worker serves from.
-fn boxed_decision_engine<Engine: DecisionEngine + 'static>(
-    decision_engine: Engine,
-) -> Box<dyn DecisionEngine> {
-    Box::new(decision_engine)
 }
