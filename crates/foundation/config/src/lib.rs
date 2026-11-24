@@ -19,11 +19,6 @@ mod legacy_config_migration;
 mod logging_config;
 mod maximum_mlx_memory;
 mod model_config_entries;
-mod model_discovery;
-mod model_discovery_huggingface_hub_cache;
-mod model_identity;
-#[cfg(test)]
-mod model_identity_tests;
 mod resolved_model_config;
 mod sharing_config;
 
@@ -97,7 +92,7 @@ pub use model_discovery::{
     SpeechModelCapabilities, is_kokoro_configuration, is_phonon_configuration,
     kokoro_speech_capabilities, phonon_speech_capabilities,
 };
-pub use model_identity::{
+pub use model_discovery::{
     configured_model_id_for, decode_huggingface_hub_cache_directory_name, leaf_model_id,
     near_model_matches, resolve_model_id,
 };
@@ -105,6 +100,10 @@ pub use resolved_model_config::{DEFAULT_MAXIMUM_OUTPUT_TOKENS, ResolvedModelConf
 pub use sharing_config::ProblemReportChoice;
 
 use config_document::UserConfigFile;
+
+// Discovery is a crate of its own (issue #2473, Step 5); the alias keeps
+// `crate::model_discovery` paths in this crate resolving.
+use ::model_discovery;
 
 pub const DEFAULT_ASTRO_SSD_PROMPT_CACHE_MAXIMUM_SIZE_GB: u64 = 50;
 /// One minute covers the pause between turns of a conversation, so a person

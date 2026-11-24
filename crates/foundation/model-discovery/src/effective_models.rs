@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 
 use thiserror::Error;
 
-use crate::model_discovery::{
+use crate::{
     DiscoveredModel, DiscoveredModelError, ModelDiscoveryDiagnostic, discover_models,
     discover_models_excluding_ambiguous_identities,
 };

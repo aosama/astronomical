@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use super::{ModelFamily, ModelFamilyDescription, ModelKind};
-use crate::model_discovery::DiscoveredModel;
+use crate::DiscoveredModel;
 
 fn discovers_nothing(_model_directory: &Path, _model_id: &str) -> Option<DiscoveredModel> {
     None

@@ -8,14 +8,14 @@
 use std::fs;
 use std::path::Path;
 
-use crate::model_discovery::marked_decision_folder::MarkedDecisionMetadata;
-use crate::model_discovery::{
+use crate::marked_decision_folder::MarkedDecisionMetadata;
+use crate::{
     ChatModelCapabilities, DecisionModelCapabilities, DiscoveredModel, EmbeddingModelCapabilities,
     ModelCapabilities, ModelFamily, ModelLicense, SpeechModelCapabilities, classified_artifacts,
     clef, derive_revision_from_config_bytes, flux2_klein, kev, laya, model_family_classification,
     modernbert, prism_hadamard_qwen35, qwen_image_21, qwen3_5,
 };
-use crate::model_discovery::{
+use crate::{
     KOKORO_WEIGHTS_FILE_NAME, PHONON_WEIGHTS_FILE_NAME, kokoro_speech_capabilities,
     phonon_speech_capabilities,
 };

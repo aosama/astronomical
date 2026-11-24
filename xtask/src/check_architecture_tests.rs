@@ -27,6 +27,7 @@ fn metadata_document_for(packages: &[(&str, Vec<&str>, &str)]) -> String {
 fn should_pass_when_no_rule_crate_reaches_the_forbidden_crate() {
     let metadata_json_text = metadata_document_for(&[
         ("memory-policy", vec!["serde_json"], "normal"),
+        ("model-discovery", vec!["serde_json"], "normal"),
         ("mlx-bridge", Vec::new(), "normal"),
         ("mlx-c-fork", Vec::new(), "normal"),
         ("image-generation", vec!["mlx-bridge"], "normal"),
@@ -52,6 +53,7 @@ fn should_detect_a_direct_family_to_serving_dependency() {
     // serving crate on every family edit, defeating the extraction.
     let metadata_json_text = metadata_document_for(&[
         ("memory-policy", vec!["serde_json"], "normal"),
+        ("model-discovery", vec!["serde_json"], "normal"),
         ("mlx-bridge", Vec::new(), "normal"),
         ("mlx-c-fork", Vec::new(), "normal"),
         ("image-generation", vec!["mlx-bridge"], "normal"),
@@ -84,6 +86,7 @@ fn should_detect_a_model_primitives_to_serving_dependency() {
     // serving crate would let a shared kernel reach into one family.
     let metadata_json_text = metadata_document_for(&[
         ("memory-policy", vec!["serde_json"], "normal"),
+        ("model-discovery", vec!["serde_json"], "normal"),
         ("mlx-bridge", Vec::new(), "normal"),
         ("mlx-c-fork", Vec::new(), "normal"),
         ("image-generation", vec!["mlx-bridge"], "normal"),
@@ -116,6 +119,7 @@ fn should_detect_a_artifact_validation_to_serving_dependency() {
     // crate would make each family depend on the engine.
     let metadata_json_text = metadata_document_for(&[
         ("memory-policy", vec!["serde_json"], "normal"),
+        ("model-discovery", vec!["serde_json"], "normal"),
         ("mlx-bridge", Vec::new(), "normal"),
         ("mlx-c-fork", Vec::new(), "normal"),
         ("model-primitives", vec!["mlx-bridge"], "normal"),
@@ -145,6 +149,7 @@ fn should_detect_a_artifact_validation_to_serving_dependency() {
 fn workspace_metadata_with_engine_core_dependencies(engine_core_dependencies: Vec<&str>) -> String {
     metadata_document_for(&[
         ("memory-policy", vec!["serde_json"], "normal"),
+        ("model-discovery", vec!["serde_json"], "normal"),
         ("mlx-bridge", Vec::new(), "normal"),
         ("mlx-c-fork", Vec::new(), "normal"),
         ("model-primitives", vec!["mlx-bridge"], "normal"),
@@ -195,6 +200,7 @@ fn should_detect_a_qwen35_to_quantizer_dependency() {
     // reach it only through the probe crate above it.
     let metadata_json_text = metadata_document_for(&[
         ("memory-policy", vec!["serde_json"], "normal"),
+        ("model-discovery", vec!["serde_json"], "normal"),
         ("mlx-bridge", Vec::new(), "normal"),
         ("mlx-c-fork", Vec::new(), "normal"),
         ("model-primitives", vec!["mlx-bridge"], "normal"),
@@ -224,6 +230,7 @@ fn should_detect_a_direct_forbidden_fork_dependency() {
     let metadata_json_text = metadata_document_for(&[
         ("memory-policy", vec!["mlx-c-fork"], "normal"),
         ("mlx-bridge", Vec::new(), "normal"),
+        ("model-discovery", vec!["serde_json"], "normal"),
         ("mlx-c-fork", Vec::new(), "normal"),
         ("image-generation", vec!["mlx-bridge"], "normal"),
         ("artifact-validation", Vec::new(), "normal"),
@@ -252,6 +259,7 @@ fn should_detect_a_direct_forbidden_dependency() {
     let metadata_json_text = metadata_document_for(&[
         ("memory-policy", vec!["mlx-bridge"], "normal"),
         ("mlx-bridge", Vec::new(), "normal"),
+        ("model-discovery", vec!["serde_json"], "normal"),
         ("mlx-c-fork", Vec::new(), "normal"),
         ("image-generation", vec!["mlx-bridge"], "normal"),
         ("artifact-validation", Vec::new(), "normal"),
@@ -288,6 +296,7 @@ fn should_detect_a_transitive_forbidden_dependency() {
             "normal",
         ),
         ("mlx-bridge", Vec::new(), "normal"),
+        ("model-discovery", vec!["serde_json"], "normal"),
         ("mlx-c-fork", Vec::new(), "normal"),
         ("image-generation", vec!["mlx-bridge"], "normal"),
         ("artifact-validation", Vec::new(), "normal"),
@@ -318,6 +327,7 @@ fn should_count_dev_and_build_dependencies_as_reachability_edges() {
         let metadata_json_text = metadata_document_for(&[
             ("memory-policy", vec!["mlx-bridge"], breach_kind),
             ("mlx-bridge", Vec::new(), "normal"),
+            ("model-discovery", vec!["serde_json"], "normal"),
             ("mlx-c-fork", Vec::new(), "normal"),
             ("image-generation", vec!["mlx-bridge"], "normal"),
             ("artifact-validation", Vec::new(), "normal"),
@@ -374,4 +384,37 @@ fn should_fail_closed_when_the_metadata_is_malformed() {
             "malformed metadata must fail closed: {malformed_json_text}"
         );
     }
+}
+
+#[test]
+fn should_detect_model_discovery_reaching_the_mlx_bindings_through_another_crate() {
+    // The daemon discovers models and never links MLX, so discovery reaching
+    // the bindings through any crate fails, with the whole chain named.
+    let metadata_json_text = metadata_document_for(&[
+        ("memory-policy", vec!["serde_json"], "normal"),
+        ("mlx-bridge", Vec::new(), "normal"),
+        ("model-discovery", vec!["expert-atlas"], "normal"),
+        ("expert-atlas", vec!["mlx-bridge"], "normal"),
+        ("mlx-c-fork", Vec::new(), "normal"),
+        ("image-generation", vec!["mlx-bridge"], "normal"),
+        ("artifact-validation", Vec::new(), "normal"),
+        ("engine-core", vec!["mlx-bridge"], "normal"),
+        ("qwen35", vec!["mlx-bridge"], "normal"),
+        ("decision-models", vec!["mlx-bridge"], "normal"),
+        ("quantization", Vec::new(), "normal"),
+        ("speech", vec!["mlx-bridge"], "normal"),
+        ("model-primitives", vec!["mlx-bridge"], "normal"),
+        ("model-serving", Vec::new(), "normal"),
+        ("jangtq2-qwen35", Vec::new(), "normal"),
+    ]);
+    let violations = architecture_violations(&metadata_json_text).unwrap();
+    assert_eq!(violations.len(), 1);
+    assert_eq!(
+        violations[0].rule_name,
+        "model-discovery-without-mlx-bindings"
+    );
+    assert_eq!(
+        violations[0].dependency_chain,
+        vec!["model-discovery", "expert-atlas", "mlx-bridge"]
+    );
 }
