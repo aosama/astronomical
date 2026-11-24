@@ -704,6 +704,7 @@ version = "0.2.134"
 dependencies = [
  "config",
  "lowercase-hex",
+ "model-family-registry",
  "serde",
  "serde_json",
  "thiserror",
