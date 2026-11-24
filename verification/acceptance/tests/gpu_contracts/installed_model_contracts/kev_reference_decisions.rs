@@ -23,7 +23,7 @@ use std::path::Path;
 use decision_contract::{
     HeadInputRequest, OrderedJsonValue, QuestionOutcome, parse_system_one_questions,
 };
-use model_serving::{DecisionEngine, KevDecisionEngine, KevRowLayout};
+use model_serving::{DecisionEngine, KevDecisionEngine, KevRowLayout, kev_question_row_layouts};
 use test_harness::test_run::TestRunContext;
 
 use super::decision_reference_fixture::{
@@ -164,8 +164,7 @@ fn compare_case(
         .unwrap_or_else(|error| panic!("case {case_name}: {error}"));
     let reference_rows = reference_array(reference_case, "reference");
     assert_eq!(questions.len(), reference_rows.len());
-    let row_layouts = decision_engine
-        .question_row_layouts(state, &questions)
+    let row_layouts = kev_question_row_layouts(&decision_engine, state, &questions)
         .unwrap_or_else(|error| panic!("case {case_name}: {error}"));
     for (row_layout, reference_row) in row_layouts.iter().zip(reference_rows) {
         assert_same_layout(case_name, row_layout, reference_row);

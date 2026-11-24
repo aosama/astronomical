@@ -1,0 +1,335 @@
+//! ModernBERT embedding engine over direct MLX arrays.
+//!
+//! One command maps to one lazy bidirectional-encoder graph evaluated once:
+//! quantized token lookup, embedding LayerNorm, alternating global/local
+//! attention layers, gated MLP, final LayerNorm, and host-side pooling with
+//! L2 normalization. Pooling and normalization live in Astronomical; no
+//! third-party embedding package is linked.
+
+use std::path::{Path, PathBuf};
+use std::time::Instant;
+
+use ipc_protocol::{EmbeddingsCommand, EmbeddingsFailureReason, WorkerEmbeddingCapabilities};
+use runtime_integration::{
+    MlxMemoryLimits, MlxMemorySnapshot, MlxRuntime, MlxRuntimeError, MlxSafetensors,
+};
+use tokenizers::Tokenizer;
+
+use crate::artifact::ModernBertArtifact;
+use crate::embedding_pooling;
+use crate::memory::telemetry::MlxActiveMemoryBreakdown;
+use crate::modernbert_trunk::configuration::ModernBertConfiguration;
+use crate::modernbert_trunk::trunk::ModernBertTrunk;
+use crate::modernbert_trunk::weight_layout::ModernBertWeightLayout;
+use crate::performance_attribution::{
+    ModelLoadingPerformanceAttributionMetadata, PerformanceAttribution, PerformanceAttributionLog,
+    PerformanceAttributionOutcome, PerformanceOperation,
+};
+use crate::tokenizer;
+use crate::{
+    EmbeddingEngine, EmbeddingEngineLoadResult, EmbeddingEngineOutput, MemoryCeilingUtilization,
+};
+use memory_policy::forward_pass_utilization;
+
+/// Loaded ModernBERT runtime bound to one artifact directory.
+pub struct ModernBertEmbeddingEngine {
+    model_id: String,
+    effective_mlx_memory_ceiling_bytes: usize,
+    mlx_buffer_cache_limit_bytes: usize,
+    weights_payload_bytes: u64,
+    performance_attribution_enabled: bool,
+    performance_attribution_log: PerformanceAttributionLog,
+    preloaded_artifact: Option<ModernBertArtifact>,
+    loaded_state: Option<LoadedModernBertState>,
+    post_cleanup_memory_telemetry: Option<MlxMemoryTelemetry>,
+}
+
+struct LoadedModernBertState {
+    runtime: MlxRuntime,
+    tensors: MlxSafetensors,
+    configuration: ModernBertConfiguration,
+    weight_layout: ModernBertWeightLayout,
+    tokenizer: Tokenizer,
+}
+
+impl ModernBertEmbeddingEngine {
+    /// Creates an unloaded engine from validated on-disk artifact evidence.
+    pub fn new(
+        model_id: impl Into<String>,
+        model_directory: &Path,
+        effective_mlx_memory_ceiling_bytes: usize,
+        mlx_buffer_cache_limit_bytes: usize,
+        performance_attribution_enabled: bool,
+        performance_attribution_log_path: PathBuf,
+    ) -> Result<Self, EmbeddingsFailureReason> {
+        let artifact = ModernBertArtifact::load(model_directory)?;
+        let performance_attribution_log = PerformanceAttributionLog::open(
+            &performance_attribution_log_path,
+            performance_attribution_enabled,
+        )
+        .unwrap_or_else(|_| PerformanceAttributionLog::disabled());
+        Ok(Self {
+            model_id: model_id.into(),
+            effective_mlx_memory_ceiling_bytes,
+            mlx_buffer_cache_limit_bytes,
+            weights_payload_bytes: artifact.weights_payload_bytes,
+            performance_attribution_enabled,
+            performance_attribution_log,
+            preloaded_artifact: Some(artifact),
+            loaded_state: None,
+            post_cleanup_memory_telemetry: None,
+        })
+    }
+
+    fn new_attribution(&self) -> PerformanceAttribution {
+        if self.performance_attribution_enabled {
+            PerformanceAttribution::enabled()
+        } else {
+            PerformanceAttribution::disabled()
+        }
+    }
+
+    fn record_attribution_report(
+        &mut self,
+        attribution_report: Option<crate::performance_attribution::PerformanceAttributionReport>,
+    ) {
+        let Some(attribution_report) = attribution_report else {
+            return;
+        };
+        let _ignored_log_result = self.performance_attribution_log.record(&attribution_report);
+    }
+
+    /// Composes the embeddings-lane unused-headroom split for one measurement.
+    ///
+    /// The transient reserve is evidence, not policy: the allocator's
+    /// cumulative peak minus the current active bytes is exactly the forward
+    /// workspace high-water this process has proven, so an idle engine
+    /// promises its last forward's footprint and a mid-forward engine
+    /// promises the partial peak above current usage.
+    fn memory_ceiling_utilization(
+        &self,
+        active_memory_bytes: u64,
+        peak_memory_bytes: u64,
+    ) -> Option<MemoryCeilingUtilization> {
+        Some(
+            forward_pass_utilization::compose_forward_pass_memory_ceiling_utilization(
+                self.effective_mlx_memory_ceiling_bytes as u64,
+                active_memory_bytes,
+                self.weights_payload_bytes,
+                peak_memory_bytes.saturating_sub(active_memory_bytes),
+            ),
+        )
+    }
+
+    fn memory_telemetry_from_snapshot(
+        &self,
+        memory_snapshot: &MlxMemorySnapshot,
+    ) -> MlxMemoryTelemetry {
+        let active_memory_bytes = memory_snapshot.active_memory_bytes() as u64;
+        let mut telemetry = MlxMemoryTelemetry::new(
+            active_memory_bytes,
+            memory_snapshot.mlx_buffer_cache_bytes() as u64,
+            memory_snapshot.peak_memory_bytes() as u64,
+            MlxActiveMemoryBreakdown::default(),
+        );
+        if let Some(memory_ceiling_utilization) = self.memory_ceiling_utilization(
+            active_memory_bytes,
+            memory_snapshot.peak_memory_bytes() as u64,
+        ) {
+            telemetry = telemetry.with_memory_ceiling_utilization(memory_ceiling_utilization);
+        }
+        telemetry
+    }
+}
+
+impl EmbeddingEngine for ModernBertEmbeddingEngine {
+    fn load(&mut self) -> Result<EmbeddingEngineLoadResult, EmbeddingsFailureReason> {
+        let Some(artifact) = self.preloaded_artifact.take() else {
+            return Err(EmbeddingsFailureReason::FatalExecution {
+                reason: "embedding engine load was requested twice".to_owned(),
+            });
+        };
+        let mut performance_attribution = self.new_attribution();
+        let memory_limits = MlxMemoryLimits::new(
+            self.effective_mlx_memory_ceiling_bytes,
+            self.mlx_buffer_cache_limit_bytes,
+        )
+        .map_err(|_| EmbeddingsFailureReason::FatalExecution {
+            reason: "embedding runtime memory limits are invalid".to_owned(),
+        })?;
+        let runtime = performance_attribution.measure_operation(
+            PerformanceOperation::MlxRuntimeInitialization,
+            |_performance_attribution| {
+                MlxRuntime::initialize(memory_limits).map_err(|_| {
+                    EmbeddingsFailureReason::FatalExecution {
+                        reason: "embedding runtime initialization failed".to_owned(),
+                    }
+                })
+            },
+        )?;
+        let tensors = performance_attribution.measure_operation(
+            PerformanceOperation::ModelSafetensorsMapping,
+            |_performance_attribution| {
+                runtime
+                    .load_safetensors(artifact.weights_file, None)
+                    .map_err(runtime_failure)
+            },
+        )?;
+        let tokenizer = performance_attribution.measure_operation(
+            PerformanceOperation::TokenizerInitialization,
+            |_performance_attribution| {
+                Tokenizer::from_bytes(&artifact.tokenizer_bytes).map_err(|tokenizer_error| {
+                    EmbeddingsFailureReason::FatalExecution {
+                        reason: format!("embedding tokenizer failed to load: {tokenizer_error}")
+                            .chars()
+                            .take(256)
+                            .collect(),
+                    }
+                })
+            },
+        )?;
+        let load_result = EmbeddingEngineLoadResult::new(
+            self.model_id.clone(),
+            WorkerEmbeddingCapabilities {
+                vector_width: artifact.configuration.hidden_size,
+                max_input_tokens: artifact.configuration.maximum_position_count,
+            },
+        );
+        self.loaded_state = Some(LoadedModernBertState {
+            runtime,
+            tensors,
+            configuration: artifact.configuration,
+            weight_layout: ModernBertWeightLayout::embedding_artifact(),
+            tokenizer,
+        });
+        let attribution_report = performance_attribution.finish_model_loading(
+            ModelLoadingPerformanceAttributionMetadata {
+                outcome: PerformanceAttributionOutcome::Success,
+                model_id: Some(self.model_id.clone()),
+                model_revision: None,
+                prefill_transient_observation_completed: false,
+                prefill_observed_transient_high_water_bytes: 0,
+                total_artifact_payload_bytes: None,
+                resident_model_payload_bytes: None,
+                model_shard_count: Some(1),
+                mlx_active_memory_bytes: None,
+                mlx_buffer_cache_bytes: None,
+                mlx_peak_memory_bytes: None,
+                failure_description: None,
+            },
+        );
+        self.record_attribution_report(attribution_report);
+        Ok(load_result)
+    }
+
+    fn embed(
+        &mut self,
+        embeddings_command: &EmbeddingsCommand,
+    ) -> Result<EmbeddingEngineOutput, EmbeddingsFailureReason> {
+        embeddings_command.validate().map_err(|validation_error| {
+            EmbeddingsFailureReason::invalid_request(validation_error.to_string())
+        })?;
+        let started_at = Instant::now();
+        let mut performance_attribution = self.new_attribution();
+        let loaded_state =
+            self.loaded_state
+                .as_mut()
+                .ok_or_else(|| EmbeddingsFailureReason::FatalExecution {
+                    reason: "embedding engine embed was called before load".to_owned(),
+                })?;
+        let encoded_inputs = performance_attribution.measure_operation(
+            PerformanceOperation::EmbeddingsTokenization,
+            |_performance_attribution| {
+                let mut encoded_inputs = Vec::with_capacity(embeddings_command.inputs.len());
+                for input_text in &embeddings_command.inputs {
+                    encoded_inputs.push(tokenizer::encode_embedding_input(
+                        &loaded_state.tokenizer,
+                        &loaded_state.configuration,
+                        input_text,
+                    )?);
+                }
+                Ok::<_, EmbeddingsFailureReason>(encoded_inputs)
+            },
+        )?;
+        let (output_embeddings, input_token_counts) = performance_attribution.measure_operation(
+            PerformanceOperation::EmbeddingsForwardSpan,
+            |_performance_attribution| {
+                let mut output_embeddings = Vec::with_capacity(encoded_inputs.len());
+                let mut input_token_counts = Vec::with_capacity(encoded_inputs.len());
+                let trunk = ModernBertTrunk {
+                    runtime: &loaded_state.runtime,
+                    tensors: &loaded_state.tensors,
+                    configuration: &loaded_state.configuration,
+                    weight_layout: &loaded_state.weight_layout,
+                    adapters: None,
+                };
+                for encoded_input in &encoded_inputs {
+                    output_embeddings.push(embedding_pooling::embed_token_ids(
+                        &trunk,
+                        &encoded_input.token_ids,
+                        embeddings_command.dimensions,
+                    )?);
+                    input_token_counts
+                        .push(u32::try_from(encoded_input.token_ids.len()).unwrap_or(u32::MAX));
+                }
+                Ok::<_, EmbeddingsFailureReason>((output_embeddings, input_token_counts))
+            },
+        )?;
+        let elapsed_millis = u64::try_from(started_at.elapsed().as_millis()).unwrap_or(u64::MAX);
+        // The forward arrays are owned inside embed_token_ids and dropped on
+        // return, so this snapshot is the honest post-cleanup observation.
+        // Synchronizing and clearing the MLX buffer cache first keeps the
+        // captured state free of `mlx_buffer_cache` bytes, exactly like the
+        // image engine's cleanup observation.
+        let _cleanup_result = loaded_state
+            .runtime
+            .synchronize_gpu_stream_and_clear_mlx_buffer_cache();
+        if let Ok(memory_snapshot) = loaded_state.runtime.memory_snapshot() {
+            self.post_cleanup_memory_telemetry =
+                Some(self.memory_telemetry_from_snapshot(&memory_snapshot));
+        }
+        let total_input_tokens = input_token_counts
+            .iter()
+            .fold(0u32, |total, count| total.saturating_add(*count));
+        let vector_width = output_embeddings
+            .first()
+            .map(|components| u32::try_from(components.len()).unwrap_or(u32::MAX))
+            .unwrap_or(0);
+        let attribution_report = performance_attribution.finish_embeddings(
+            PerformanceAttributionOutcome::Success,
+            embeddings_command.request_id.value(),
+            self.model_id.clone(),
+            embeddings_command.inputs.len(),
+            total_input_tokens,
+            vector_width,
+            None,
+        );
+        self.record_attribution_report(attribution_report);
+        Ok(EmbeddingEngineOutput {
+            embeddings: output_embeddings,
+            input_token_counts,
+            elapsed_millis,
+        })
+    }
+
+    fn take_post_cleanup_memory_telemetry(&mut self) -> Option<MlxMemoryTelemetry> {
+        self.post_cleanup_memory_telemetry.take()
+    }
+
+    fn collect_mlx_memory_telemetry(&self) -> Option<MlxMemoryTelemetry> {
+        let loaded_state = self.loaded_state.as_ref()?;
+        let memory_snapshot = loaded_state.runtime.memory_snapshot().ok()?;
+        Some(self.memory_telemetry_from_snapshot(&memory_snapshot))
+    }
+}
+
+fn runtime_failure(runtime_error: MlxRuntimeError) -> EmbeddingsFailureReason {
+    EmbeddingsFailureReason::FatalExecution {
+        reason: format!("embedding runtime operation failed: {runtime_error}")
+            .chars()
+            .take(256)
+            .collect(),
+    }
+}
+
+use crate::MlxMemoryTelemetry;

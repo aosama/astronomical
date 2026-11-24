@@ -406,6 +406,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "clef"
+version = "0.2.134"
+dependencies = [
+ "decision-contract",
+ "decision-models",
+ "decision-training",
+ "mlx-bridge",
+ "model-primitives",
+ "qwen35",
+ "runtime-integration",
+ "safetensors",
+ "serde_json",
+ "serial_test",
+ "tokenizers",
+]
+
+[[package]]
 name = "combine"
 version = "4.6.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1307,6 +1324,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "kev"
+version = "0.2.134"
+dependencies = [
+ "decision-contract",
+ "decision-models",
+ "decision-training",
+ "mlx-bridge",
+ "qwen35",
+ "runtime-integration",
+ "safetensors",
+ "serde_json",
+ "tokenizers",
+]
+
+[[package]]
 name = "kokoro"
 version = "0.2.134"
 dependencies = [
@@ -1320,6 +1352,24 @@ dependencies = [
  "serial_test",
  "speech",
  "speech-contract",
+ "tempfile",
+ "thiserror",
+ "tokenizers",
+]
+
+[[package]]
+name = "laya"
+version = "0.2.134"
+dependencies = [
+ "decision-contract",
+ "decision-models",
+ "decision-training",
+ "mlx-bridge",
+ "model-primitives",
+ "runtime-integration",
+ "safetensors",
+ "serde_json",
+ "serial_test",
  "tempfile",
  "thiserror",
  "tokenizers",
@@ -1505,6 +1555,7 @@ name = "model-serving"
 version = "0.2.134"
 dependencies = [
  "artifact-validation",
+ "clef",
  "config",
  "decision-contract",
  "decision-models",
@@ -1513,10 +1564,13 @@ dependencies = [
  "image",
  "image-generation",
  "ipc-protocol",
+ "kev",
  "kokoro",
+ "laya",
  "lowercase-hex",
  "memory-policy",
  "model-primitives",
+ "modernbert",
  "phonon",
  "quantization",
  "qwen-image-21",
@@ -1530,6 +1584,23 @@ dependencies = [
  "thiserror",
  "tokio",
  "tracing",
+]
+
+[[package]]
+name = "modernbert"
+version = "0.2.134"
+dependencies = [
+ "decision-models",
+ "engine-core",
+ "ipc-protocol",
+ "memory-policy",
+ "mlx-bridge",
+ "model-primitives",
+ "runtime-integration",
+ "safetensors",
+ "serde_json",
+ "thiserror",
+ "tokenizers",
 ]
 
 [[package]]

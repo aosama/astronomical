@@ -1,0 +1,44 @@
+[package]
+name = "clef"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+# The test lanes this package runs in. `cargo xtask lane-cargo` builds each
+# lane's command from these declarations (issue #2473, Step 6), so no alias
+# lists packages by hand; an empty list says the package is in no lane.
+[package.metadata.astronomical]
+test-lanes = ["integration", "integration-and-rest", "nextest", "direct-mlx"]
+direct-mlx-lane-feature = "direct-mlx"
+
+[lints]
+workspace = true
+
+[features]
+default = []
+direct-mlx = ["decision-models/direct-mlx", "dep:runtime-integration", "dep:mlx-bridge", "qwen35/direct-mlx", "model-primitives/direct-mlx"]
+
+# The Clef decision family, on the shared Qwen 3.5 backbone.
+# One crate per family (issue #2473, Step 7); the decision-models shell
+# beside it holds what every decision family shares. One-way edges: nothing
+# here may depend on model-serving or on another decision family.
+[dependencies]
+# The decision shell every decision family shares.
+decision-models = { path = "../decision-models" }
+decision-contract = { path = "../../../contracts/decision-contract" }
+decision-training = { path = "../../../tooling/decision-training" }
+model-primitives = { path = "../../../engine/model-primitives" }
+qwen35 = { path = "../../text/qwen35" }
+runtime-integration = { path = "../../../foundation/runtime-integration", features = ["mlx"], optional = true }
+mlx-bridge = { workspace = true, optional = true }
+safetensors.workspace = true
+serde_json.workspace = true
+tokenizers.workspace = true
+
+[dev-dependencies]
+model-primitives = { path = "../../../engine/model-primitives", features = ["test-support"] }
+# The GPU tests sample the process-global MLX allocator, so they serialize.
+serial_test.workspace = true

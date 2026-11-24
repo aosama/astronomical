@@ -37,9 +37,10 @@ impl Qwen3_5GenerationProcessor {
     /// Creates a processor for a folded ternary pack that reuses the Qwen
     /// text dialect (prompt rendering, thinking markers, tool markers) over
     /// the pack's own tokenizer with text-only input.
-    // Consumed only by the direct-MLX prism_hadamard engine startup, so the
-    // isolated default-feature build would otherwise flag it as dead.
-    #[cfg(feature = "direct-mlx")]
+    // Consumed only by the direct-MLX prism_hadamard engine startup and this
+    // module's tests, so the isolated default-feature build would otherwise
+    // flag it as dead.
+    #[cfg(any(test, feature = "direct-mlx"))]
     /// `maximum_position_count` is the pack's own position range, the only
     /// hard context limit; `context_window` is the configured, advertised
     /// window, which a request may exceed when it still fits the pack.

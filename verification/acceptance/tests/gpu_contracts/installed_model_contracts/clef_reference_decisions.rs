@@ -23,7 +23,7 @@ use decision_contract::{
     DecisionQuestion, DecisionQuestionBody, HeadInputRequest, OrderedJsonValue, QuestionOutcome,
     parse_system_one_questions,
 };
-use model_serving::{ClefDecisionEngine, DecisionEngine};
+use model_serving::{ClefDecisionEngine, DecisionEngine, clef_sequence_token_ids};
 use test_harness::test_run::TestRunContext;
 
 use super::decision_reference_fixture::{
@@ -156,8 +156,7 @@ fn compare_case(
     let questions = parse_system_one_questions(reference_field(reference_case, "questions"))
         .unwrap_or_else(|error| panic!("case {case_name}: {error}"));
     let mut token_ids = Vec::new();
-    for token_id in decision_engine
-        .sequence_token_ids(state, &questions)
+    for token_id in clef_sequence_token_ids(&decision_engine, state, &questions)
         .unwrap_or_else(|error| panic!("case {case_name}: {error}"))
     {
         token_ids.push(f64::from(token_id));
