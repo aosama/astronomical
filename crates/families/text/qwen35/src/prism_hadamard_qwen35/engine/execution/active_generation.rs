@@ -6,7 +6,7 @@
 //! position advances by the forwarded token count after every forward,
 //! saturating instead of failing, exactly as before the record was shared.
 
-use ipc_protocol::WorkerPromptWorkReuse;
+use ipc_protocol::{WorkerAstroSsdPromptCacheRequestDiagnostics, WorkerPromptWorkReuse};
 use mlx_bridge::MlxArray;
 
 use super::PrismHadamardQwen35ActiveGeneration;
@@ -14,8 +14,8 @@ use crate::prism_hadamard_qwen35::model::{PrismHadamardModelError, PrismHadamard
 use crate::qwen3_5_core::engine_request::Qwen3_5EngineRequest;
 use crate::qwen3_5_core::shared_execution::astro_ssd_prompt_cache_restore::AstroSsdPromptCacheRestoreOutcome;
 use crate::{
-    PerformanceAttribution, Qwen3_5InferenceRequest, Qwen3_5ThinkingBudgetState,
-    RequestDecoderStateStack,
+    AstroSsdPromptCacheBlockKey, PerformanceAttribution, Qwen3_5InferenceRequest,
+    Qwen3_5ThinkingBudgetState, RequestDecoderStateStack,
 };
 
 /// The per-request state only the folded-ternary loop reads: none since its
@@ -42,19 +42,31 @@ pub(super) struct PrismRequestStart {
 /// Builds the shared request record. The restored prefix is already in the
 /// decoder state, so the first forward continues right after it, and the
 /// prompt work it saved is reported on every prefill progress event.
+/// What a request starts from: the restored token count, the last restored
+/// block key and the restore diagnostics, or nothing restored.
+fn restored_prefix_facts(
+    restore_outcome: Option<AstroSsdPromptCacheRestoreOutcome>,
+) -> (
+    u32,
+    Option<AstroSsdPromptCacheBlockKey>,
+    Option<WorkerAstroSsdPromptCacheRequestDiagnostics>,
+) {
+    match restore_outcome {
+        Some(restore_outcome) => (
+            restore_outcome.astro_ssd_prompt_cache_restored_token_count,
+            restore_outcome.last_restored_astro_ssd_prompt_cache_block_key,
+            Some(restore_outcome.astro_ssd_prompt_cache_diagnostics),
+        ),
+        None => (0, None, None),
+    }
+}
+
 pub(super) fn prism_active_generation(
     inference_request: &mut Qwen3_5InferenceRequest,
     request_start: PrismRequestStart,
 ) -> PrismHadamardQwen35ActiveGeneration {
     let (restored_token_count, last_restored_block_key, astro_ssd_prompt_cache_diagnostics) =
-        match request_start.restore_outcome {
-            Some(restore_outcome) => (
-                restore_outcome.astro_ssd_prompt_cache_restored_token_count,
-                restore_outcome.last_restored_astro_ssd_prompt_cache_block_key,
-                Some(restore_outcome.astro_ssd_prompt_cache_diagnostics),
-            ),
-            None => (0, None, None),
-        };
+        restored_prefix_facts(request_start.restore_outcome);
     let prompt_work_reuse = WorkerPromptWorkReuse {
         target_eligible_token_count: request_start.prompt_token_ids.len() as u64,
         target_restored_token_count: u64::from(restored_token_count),
