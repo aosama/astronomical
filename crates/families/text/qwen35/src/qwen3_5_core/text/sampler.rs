@@ -3,17 +3,17 @@ use mlx_bridge::MlxArray;
 use crate::InferenceEngineError;
 use crate::gpu_token_sampling;
 
-use crate::qwen3_5_core::model::Qwen3_5ModelBase;
+use crate::qwen3_5_core::model::Qwen3_5ServingModel;
 
 pub use crate::gpu_token_sampling::apply_repetition_penalty as qwen3_5_apply_repetition_penalty;
 pub use crate::gpu_token_sampling::apply_top_p_mask as qwen3_5_apply_top_p_mask;
 
 pub fn random_state_for_seed(
-    model: &Qwen3_5ModelBase,
+    model: &impl Qwen3_5ServingModel,
     seed: u64,
 ) -> Result<MlxArray, InferenceEngineError> {
     model
-        .runtime
+        .runtime()
         .random_key(seed)
         .map_err(sampler_runtime_error)
 }
@@ -33,7 +33,7 @@ pub fn validate_sampled_strategy(
 
 /// Builds one lazy Qwen3.5 sample using the shared GPU top-k + top-p pipeline.
 pub fn build_qwen3_5_sampled_token(
-    model: &Qwen3_5ModelBase,
+    model: &impl Qwen3_5ServingModel,
     final_logits: &MlxArray,
     temperature_thousandths: u16,
     top_p_thousandths: u16,
@@ -45,10 +45,10 @@ pub fn build_qwen3_5_sampled_token(
         temperature_thousandths,
         top_p_thousandths,
         top_k,
-        model.config.vocabulary_size(),
+        model.vocabulary_size(),
     )?;
     gpu_token_sampling::build_sampled_token(
-        &model.runtime,
+        model.runtime(),
         final_logits,
         temperature_thousandths,
         top_p_thousandths,

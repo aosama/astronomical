@@ -15,7 +15,7 @@ use runtime_integration::MlxMemoryLimits;
 use crate::qwen3_5_core::artifacts::ValidatedQwen3_5Artifact;
 use crate::qwen3_5_core::engine_errors::{fatal_engine_error, qwen3_5_runtime_error};
 use crate::qwen3_5_core::engine_request::Qwen3_5EngineRequest;
-use crate::qwen3_5_core::model::base::Qwen3_5ModelBase;
+use crate::qwen3_5_core::model::Qwen3_5ServingModel;
 use crate::{
     AstroSsdPromptCacheDiskStore, AstroSsdPromptCacheDiskStoreConfig,
     AstroSsdPromptCacheModelContract, InferenceEngineError, PerformanceAttribution,
@@ -62,7 +62,7 @@ pub struct Qwen3_5ExecutionCore<Model, RequestExtension> {
 /// An engine that keeps a [`Qwen3_5ExecutionCore`], so code shared by both
 /// engines can reach the core of either.
 pub trait Qwen3_5ExecutionCoreOwner {
-    type Model: std::ops::Deref<Target = Qwen3_5ModelBase>;
+    type Model: Qwen3_5ServingModel;
     type RequestExtension;
 
     fn execution_core(&self) -> &Qwen3_5ExecutionCore<Self::Model, Self::RequestExtension>;

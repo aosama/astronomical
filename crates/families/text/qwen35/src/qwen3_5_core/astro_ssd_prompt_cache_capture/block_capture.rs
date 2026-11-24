@@ -20,7 +20,7 @@ use std::collections::HashMap;
 use super::capture_hook::Qwen3_5AstroSsdPromptCacheCapture;
 use crate::qwen3_5_core::engine_errors::qwen3_5_runtime_error;
 use crate::qwen3_5_core::engine_request::Qwen3_5EngineRequest;
-use crate::qwen3_5_core::model::Qwen3_5ModelBase;
+use crate::qwen3_5_core::model::Qwen3_5ServingModel;
 use engine_core::astro_ssd_prompt_cache::block_causal_input::AstroSsdPromptCacheBlockCausalInput;
 use engine_core::astro_ssd_prompt_cache::capture_planning;
 
@@ -252,7 +252,7 @@ pub(super) fn publish_block_with_reclamation_retry<
 /// Extracts one block's KV tensors under the request's extraction measurement,
 /// converting a failure into the request-stopping persistence error.
 fn extract_kv_block_tensors_with_measurement<RequestExtension>(
-    model: &Qwen3_5ModelBase,
+    model: &impl Qwen3_5ServingModel,
     active_request: &mut Qwen3_5EngineRequest<RequestExtension>,
     kv_block_start: usize,
     kv_block_end: usize,
@@ -293,7 +293,7 @@ fn extract_kv_block_tensors_with_measurement<RequestExtension>(
 /// Releases allocator workspace before publication when the active-memory
 /// ceiling needs the room, and records the bytes the release cleared.
 fn release_publication_workspace_if_needed<RequestExtension>(
-    model: &Qwen3_5ModelBase,
+    model: &impl Qwen3_5ServingModel,
     active_request: &mut Qwen3_5EngineRequest<RequestExtension>,
 ) -> Result<(), InferenceEngineError> {
     let memory_snapshot_before_cleanup = model.runtime().memory_snapshot().ok();

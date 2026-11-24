@@ -10,6 +10,7 @@
 //! preparation proceed, the resident engine's drafting, what the streaming
 //! engine records once a token is read, and how the successor's forward runs.
 
+use crate::qwen3_5_core::model::Qwen3_5ServingModel;
 use std::time::Instant;
 
 use ipc_protocol::RequestId;

@@ -7,6 +7,7 @@
 //! model needs, and the model is installed. The loading attribution is
 //! recorded whether the load succeeded or failed.
 
+use crate::qwen3_5_core::model::Qwen3_5ServingModel;
 use std::sync::Arc;
 
 use runtime_integration::{MlxMemorySnapshot, MlxRuntime};

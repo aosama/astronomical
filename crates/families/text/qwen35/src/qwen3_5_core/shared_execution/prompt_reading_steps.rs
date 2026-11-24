@@ -12,6 +12,7 @@
 //! `astro_ssd_prompt_cache` comes before the cursor moves, and progress is
 //! reported only after every state change succeeded.
 
+use crate::qwen3_5_core::model::Qwen3_5ServingModel;
 use std::time::Instant;
 
 use ipc_protocol::{NeuralEngineChunkReport, RequestId};

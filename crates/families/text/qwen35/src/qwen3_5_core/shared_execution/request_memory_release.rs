@@ -3,7 +3,7 @@
 use ipc_protocol::RequestId;
 use runtime_integration::MlxMemorySnapshot;
 
-use crate::qwen3_5_core::model::base::Qwen3_5ModelBase;
+use crate::qwen3_5_core::model::Qwen3_5ServingModel;
 
 /// Synchronizes submitted request work, then returns reusable MLX allocations.
 ///
@@ -12,7 +12,7 @@ use crate::qwen3_5_core::model::base::Qwen3_5ModelBase;
 /// impossible to report cleanup while the request still holds decoder or
 /// snapshot arrays. With no model loaded there is nothing to release.
 pub fn release_request_memory(
-    loaded_model: Option<&Qwen3_5ModelBase>,
+    loaded_model: Option<&impl Qwen3_5ServingModel>,
     request_id: RequestId,
 ) -> Option<MlxMemorySnapshot> {
     let runtime = loaded_model?.runtime();
