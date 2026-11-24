@@ -30,12 +30,12 @@ pub(super) fn sample_token(
         &model.runtime,
         logits,
         &active_generation.penalized_token_ids,
-        active_generation.request.repetition_penalty_thousandths(),
+        active_generation.repetition_penalty_thousandths,
     )?;
     let logits_after_repetition_penalty = repetition_penalized_logits.as_ref().unwrap_or(logits);
     let structured_logit_bias_values = structured_logit_bias_values_if_visible(
         active_generation.structured_generation.as_mut(),
-        active_generation.thinking_budget.is_inside_thinking(),
+        active_generation.thinking_budget_state.is_inside_thinking(),
     );
     let structured_logits = structured_logit_bias_values
         .as_ref()
@@ -51,7 +51,7 @@ pub(super) fn sample_token(
         .as_ref()
         .unwrap_or(logits_after_repetition_penalty);
 
-    match sampling_plan(active_generation.request.sampling_strategy()) {
+    match sampling_plan(active_generation.sampling_strategy) {
         // Greedy requests must bypass the categorical helper, whose positive
         // temperature precondition intentionally excludes temperature zero.
         SamplingPlan::HighestLogit => {
@@ -65,16 +65,49 @@ pub(super) fn sample_token(
             temperature_thousandths,
             top_k,
             top_p_thousandths,
-        } => crate::gpu_token_sampling::build_sampled_token(
-            &model.runtime,
+        } => build_top_k_top_p_token(
+            model,
             sampling_logits,
             temperature_thousandths,
+            top_k,
             top_p_thousandths,
-            Some(top_k),
-            &mut active_generation.random_state,
-        )
-        .map_err(InferenceEngineError::from),
+            active_generation,
+        ),
     }
+}
+
+/// Samples under temperature, top-k and top-p, advancing the request's
+/// random state.
+fn build_top_k_top_p_token(
+    model: &PrismHadamardTextModel,
+    sampling_logits: &MlxArray,
+    temperature_thousandths: u16,
+    top_k: u16,
+    top_p_thousandths: u16,
+    active_generation: &mut PrismHadamardQwen35ActiveGeneration,
+) -> Result<MlxArray, InferenceEngineError> {
+    crate::gpu_token_sampling::build_sampled_token(
+        &model.runtime,
+        sampling_logits,
+        temperature_thousandths,
+        top_p_thousandths,
+        Some(top_k),
+        sampling_random_state(active_generation)?,
+    )
+    .map_err(InferenceEngineError::from)
+}
+
+/// The request's random state. Every folded-ternary request is given one at
+/// its start, greedy or not, so it is only missing if the record was broken.
+fn sampling_random_state(
+    active_generation: &mut PrismHadamardQwen35ActiveGeneration,
+) -> Result<&mut MlxArray, InferenceEngineError> {
+    active_generation
+        .random_state
+        .as_mut()
+        .ok_or_else(|| InferenceEngineError::Fatal {
+            reason: "folded-ternary sampled request lost its random state".to_owned(),
+        })
 }
 
 /// Whether the successor forward may be built before this token's value
@@ -83,7 +116,7 @@ pub(super) fn sample_token(
 pub(super) fn successor_may_be_speculated(
     active_generation: &PrismHadamardQwen35ActiveGeneration,
 ) -> bool {
-    active_generation.request.repetition_penalty_thousandths() == 1_000
+    active_generation.repetition_penalty_thousandths == 1_000
         && active_generation.structured_generation.is_none()
 }
 
@@ -100,7 +133,7 @@ pub(super) fn record_penalized_token_id(
     active_generation: &mut PrismHadamardQwen35ActiveGeneration,
     token_id: u32,
 ) {
-    if active_generation.request.repetition_penalty_thousandths() != 1_000
+    if active_generation.repetition_penalty_thousandths != 1_000
         && let Err(insertion_index) = active_generation
             .penalized_token_ids
             .binary_search(&token_id)

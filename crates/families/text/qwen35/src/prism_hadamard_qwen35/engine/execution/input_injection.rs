@@ -16,12 +16,14 @@ pub(super) fn inject_input_tokens(
         return Ok(());
     }
     let token_count = validated_feedback_token_count(execution, request_id, &input_token_ids)?;
-    let model = execution
-        .model
-        .as_ref()
-        .ok_or_else(|| InferenceEngineError::Fatal {
-            reason: "folded-ternary model is not loaded".to_owned(),
-        })?;
+    let model =
+        execution
+            .execution_core
+            .model
+            .as_ref()
+            .ok_or_else(|| InferenceEngineError::Fatal {
+                reason: "folded-ternary model is not loaded".to_owned(),
+            })?;
     let feedback_token_indices: Vec<i32> = input_token_ids
         .iter()
         .map(|token_id| *token_id as i32)
@@ -43,20 +45,22 @@ fn validated_feedback_token_count(
     request_id: RequestId,
     input_token_ids: &[u32],
 ) -> Result<i32, InferenceEngineError> {
-    let maximum_context_tokens = execution.maximum_context_tokens;
-    let model = execution
-        .model
-        .as_ref()
-        .ok_or_else(|| InferenceEngineError::Fatal {
-            reason: "folded-ternary model is not loaded".to_owned(),
-        })?;
-    let active_generation =
+    let maximum_context_tokens = execution.maximum_context_tokens();
+    let model =
         execution
-            .active
-            .as_mut()
+            .execution_core
+            .model
+            .as_ref()
             .ok_or_else(|| InferenceEngineError::Fatal {
-                reason: "folded-ternary has no active generation".to_owned(),
+                reason: "folded-ternary model is not loaded".to_owned(),
             })?;
+    let active_generation = execution
+        .execution_core
+        .active_request
+        .as_mut()
+        .ok_or_else(|| InferenceEngineError::Fatal {
+            reason: "folded-ternary has no active generation".to_owned(),
+        })?;
     if active_generation.request_id != request_id {
         return Err(InferenceEngineError::Fatal {
             reason: "folded-ternary feedback request correlation mismatch".to_owned(),
@@ -76,7 +80,8 @@ fn validated_feedback_token_count(
     let projected_context_token_count = processed_context_token_count
         .checked_add(input_token_ids.len())
         .and_then(|context_token_count| {
-            context_token_count.checked_add(active_generation.remaining_output_tokens as usize)
+            context_token_count
+                .checked_add(active_generation.engine_extension.remaining_output_tokens as usize)
         })
         .ok_or_else(|| InferenceEngineError::InvalidRequest {
             reason: "folded-ternary feedback context token count overflowed".to_owned(),
@@ -100,32 +105,34 @@ fn run_feedback_forward_and_sample(
     execution: &mut PrismHadamardQwen35InferenceExecution,
     token_indices: &mlx_bridge::MlxArray,
 ) -> Result<(), InferenceEngineError> {
-    let model = execution
-        .model
-        .as_ref()
-        .ok_or_else(|| InferenceEngineError::Fatal {
-            reason: "folded-ternary model is not loaded".to_owned(),
-        })?;
-    let active_generation =
+    let model =
         execution
-            .active
-            .as_mut()
+            .execution_core
+            .model
+            .as_ref()
             .ok_or_else(|| InferenceEngineError::Fatal {
-                reason: "folded-ternary has no active generation".to_owned(),
+                reason: "folded-ternary model is not loaded".to_owned(),
             })?;
+    let active_generation = execution
+        .execution_core
+        .active_request
+        .as_mut()
+        .ok_or_else(|| InferenceEngineError::Fatal {
+            reason: "folded-ternary has no active generation".to_owned(),
+        })?;
     let hidden_states = active_generation
-        .measure_operation(
+        .measure_operation_with_request(
             PerformanceOperation::PromptPrefillAdvanceSpan,
             |active_generation| active_generation.forward_hidden_states(model, token_indices),
         )
         .map_err(gpu_error)?;
     let final_logits = active_generation
-        .measure_operation(PerformanceOperation::FinalLogitsGraphConstruction, |_| {
+        .measure_operation_with_request(PerformanceOperation::FinalLogitsGraphConstruction, |_| {
             model.logits_for_last_hidden_state(&hidden_states)
         })
         .map_err(gpu_error)?;
     active_generation
-        .measure_operation(
+        .measure_operation_with_request(
             PerformanceOperation::PrefillStateAsyncEvaluationSubmission,
             |_| {
                 model
@@ -134,17 +141,18 @@ fn run_feedback_forward_and_sample(
             },
         )
         .map_err(gpu_error)?;
-    let next_token = active_generation.measure_operation(
+    let next_token = active_generation.measure_operation_with_request(
         PerformanceOperation::DecodeSamplingSpan,
         |active_generation| sample_token(model, &final_logits, active_generation),
     )?;
     active_generation
-        .measure_operation(
+        .measure_operation_with_request(
             PerformanceOperation::DecodeAsyncEvaluationSubmission,
             |_| model.runtime.async_eval_arrays(&[&next_token]),
         )
         .map_err(gpu_error)?;
-    active_generation.pending_sampled_token =
-        successor_stays_pending(active_generation.remaining_output_tokens).then_some(next_token);
+    active_generation.pending_generated_token =
+        successor_stays_pending(active_generation.engine_extension.remaining_output_tokens)
+            .then_some(next_token);
     Ok(())
 }
