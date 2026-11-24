@@ -5,8 +5,8 @@ use std::time::Duration;
 use ipc_protocol::RequestId;
 use model_serving::{
     AstroSsdPromptCacheDiskStoreConfig, GeneratedToken, InferenceEngine, Qwen3_5ArtifactValidator,
-    Qwen3_5InferenceRequest, Qwen3_5PromptProcessingChunkSizer, Qwen3_5ResidentEngine,
-    Qwen3_5Tokenizer,
+    Qwen3_5InferenceRequest, Qwen3_5MlxEngineConstructors, Qwen3_5PromptProcessingChunkSizer,
+    Qwen3_5ResidentEngine, Qwen3_5Tokenizer,
 };
 use runtime_integration::MlxRuntime;
 use tokio::time::timeout;

@@ -1,7 +1,7 @@
 use ipc_protocol::RequestId;
 use model_serving::{
     GeneratedToken, InferenceEngine, Qwen3_5ArtifactValidator, Qwen3_5InferenceRequest,
-    Qwen3_5PromptProcessingChunkSizer, Qwen3_5ResidentEngine,
+    Qwen3_5MlxEngineConstructors, Qwen3_5PromptProcessingChunkSizer, Qwen3_5ResidentEngine,
 };
 
 use super::engine_astro_ssd_prompt_cache::{

@@ -1,4 +1,3 @@
-mod image_engine;
 mod output;
 mod processor;
 mod request;
@@ -6,7 +5,6 @@ mod request;
 #[cfg(feature = "direct-mlx")]
 mod inference_engine;
 
-pub use image_engine::ModelFamilyImageEngine;
 pub use output::ModelFamilyRequestOutput;
 pub use processor::ModelFamilyGenerationProcessor;
 pub use request::ModelFamilyInferenceRequest;

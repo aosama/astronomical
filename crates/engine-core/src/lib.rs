@@ -22,6 +22,8 @@ pub mod kernel_capability_registry;
 
 pub mod memory;
 
+pub mod mlx_inference_engine;
+
 pub mod model_generation_processor;
 
 pub mod speculative_decoding;
@@ -69,6 +71,8 @@ pub use astro_decoder_state_cache::{
     AstroDecoderStateCacheLayoutError, AstroDecoderStateCachePersistedTensorLayout,
     AstroDecoderStateCacheTensorDtype, AstroDecoderStateCacheTensorLayout,
 };
+
+pub use mlx_inference_engine::MlxInferenceEngine;
 
 pub use inference_engine::{
     GeneratedToken, GenerationFinalization, InferenceEngine, InferenceEngineError,

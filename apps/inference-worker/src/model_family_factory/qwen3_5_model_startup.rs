@@ -2,6 +2,7 @@
 //! artifacts, derive the RAM geometry and the complete-residency decision,
 //! build the tokenizer and processor, and select and initialize the engine.
 
+use model_serving::Qwen3_5MlxEngineConstructors;
 use std::path::PathBuf;
 
 use config::{

@@ -37,6 +37,10 @@ pub trait EmbeddingEngine: std::any::Any {
 /// embedding family its factory built and a second family needs no change in
 /// the worker's type.
 impl EmbeddingEngine for Box<dyn EmbeddingEngine> {
+    fn collect_mlx_memory_telemetry(&self) -> Option<MlxMemoryTelemetry> {
+        self.as_ref().collect_mlx_memory_telemetry()
+    }
+
     fn embed(
         &mut self,
         embeddings_command: &EmbeddingsCommand,
@@ -44,16 +48,12 @@ impl EmbeddingEngine for Box<dyn EmbeddingEngine> {
         self.as_mut().embed(embeddings_command)
     }
 
-    fn load(&mut self) -> Result<EmbeddingEngineLoadResult, EmbeddingsFailureReason> {
-        self.as_mut().load()
-    }
-
-    fn collect_mlx_memory_telemetry(&self) -> Option<MlxMemoryTelemetry> {
-        self.as_ref().collect_mlx_memory_telemetry()
-    }
-
     fn take_post_cleanup_memory_telemetry(&mut self) -> Option<MlxMemoryTelemetry> {
         self.as_mut().take_post_cleanup_memory_telemetry()
+    }
+
+    fn load(&mut self) -> Result<EmbeddingEngineLoadResult, EmbeddingsFailureReason> {
+        self.as_mut().load()
     }
 }
 

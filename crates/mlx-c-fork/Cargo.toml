@@ -7,6 +7,12 @@ repository.workspace = true
 rust-version.workspace = true
 version.workspace = true
 
+# The test lanes this package runs in. `cargo xtask lane-cargo` builds each
+# lane's command from these declarations (issue #2473, Step 6), so no alias
+# lists packages by hand; an empty list says the package is in no lane.
+[package.metadata.astronomical]
+test-lanes = []
+
 [lints.rust]
 # The extern declaration of the patched MLX-C symbol lives here; the unsafe
 # surface is exactly one foreign function behind a checked wrapper.

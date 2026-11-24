@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use ipc_protocol::{ExpertMemoryMode, RequestId};
 use model_serving::{
-    CompleteResidencyHeadroomBoundary, InferenceEngine,
+    CompleteResidencyHeadroomBoundary, InferenceEngine, Qwen3_5TextModelTestControls,
     model_memory_geometry_from_validated_artifact,
 };
 use tokio::time::timeout;

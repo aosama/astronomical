@@ -293,10 +293,14 @@ fn lane_package_names(repository_root: &Path) -> Result<BTreeSet<String>, String
     Ok(package_names)
 }
 
-/// The text of `alias_name` in `.cargo/config.toml`'s `[alias]` table.
+/// The text of `alias_name` in `.cargo/config.toml`'s `[alias]` table, or,
+/// for a lane alias, the command its lane builds.
 fn read_alias_text(repository_root: &Path, alias_name: &str) -> Result<String, String> {
     let config_text = std::fs::read_to_string(repository_root.join(".cargo/config.toml"))
         .map_err(|error| format!("cannot read .cargo/config.toml: {error}"))?;
-    narrowed_alias::alias_text_from_config(&config_text, alias_name)
-        .ok_or_else(|| format!("alias {alias_name} is not in .cargo/config.toml"))
+    crate::test_lanes::resolved_alias_text(
+        repository_root,
+        alias_name,
+        narrowed_alias::alias_text_from_config(&config_text, alias_name),
+    )
 }

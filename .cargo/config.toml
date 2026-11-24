@@ -25,22 +25,27 @@ warnings = "deny"
 # per-journey parameters and findings live with those tests, not here.
 
 # Every package's integration_tests binary plus lib unit tests.
-# The package list here, in nextest-archive-integration, -rest-api and -e2e must stay
-# identical: cargo unifies features per command, so a different list recompiles what
-# the CI build step just compiled (49 crates and about 36 seconds when they differed).
-test-integration = "test --no-fail-fast -p config -p astronomical-cli -p ipc-protocol -p lowercase-hex -p download-catalog -p decision-contract -p decision-training -p expert-atlas -p native-identity -p memory-policy -p jangtq2-qwen35 -p native-build-orchestration -p native-build-tool -p runtime-integration -p model-primitives -p speech -p artifact-validation -p image-generation -p engine-core -p qwen35 -p qwen35-quantization-probe -p decision-models -p model-serving -p astronomical-inference-worker -p astronomical-daemon -p quantization -p vision-tower -p astronomical-neural-engine-research -p rest-contract -p astronomical-e2e --lib --test integration_tests --test hardware_journeys"
+# The lane aliases below list no packages: each package declares its lanes in its
+# own Cargo.toml under [package.metadata.astronomical] test-lanes, and
+# `cargo xtask lane-cargo ALIAS` builds the command from those declarations
+# (issue #2473, Step 6). Adding a crate to a lane edits only that crate's
+# manifest, and a package that declares no lanes fails instead of being skipped.
+# test-integration and the three nextest archives share the integration lane:
+# cargo unifies features per command, so a different list recompiles what the CI
+# build step just compiled (49 crates and about 36 seconds when they differed).
+test-integration = "xtask lane-cargo test-integration"
 
 # Most of that selection through cargo-nextest (one process per test, so process-global
 # state cannot leak between tests), for local runs; it leaves out the REST contract,
 # E2E and Neural Engine research packages. CI uses the archives below instead.
-nextest-integration = "nextest run --no-fail-fast -p config -p astronomical-cli -p ipc-protocol -p lowercase-hex -p download-catalog -p decision-contract -p decision-training -p expert-atlas -p native-identity -p memory-policy -p jangtq2-qwen35 -p native-build-orchestration -p native-build-tool -p runtime-integration -p model-primitives -p speech -p artifact-validation -p image-generation -p engine-core -p qwen35 -p qwen35-quantization-probe -p decision-models -p model-serving -p astronomical-inference-worker -p astronomical-daemon -p quantization -p vision-tower --lib --test integration_tests"
+nextest-integration = "xtask lane-cargo nextest-integration"
 
 # Portable nextest archives for the CI build/test split; each selection must
 # stay identical to the selection the compile step builds through the cargo
 # aliases above (the workflow lane contract pins that equality).
-nextest-archive-integration = "nextest archive --profile ci --archive-file target/nextest-archives/integration.tar.zst -p config -p astronomical-cli -p ipc-protocol -p lowercase-hex -p download-catalog -p decision-contract -p decision-training -p expert-atlas -p native-identity -p memory-policy -p jangtq2-qwen35 -p native-build-orchestration -p native-build-tool -p runtime-integration -p model-primitives -p speech -p artifact-validation -p image-generation -p engine-core -p qwen35 -p qwen35-quantization-probe -p decision-models -p model-serving -p astronomical-inference-worker -p astronomical-daemon -p quantization -p vision-tower -p astronomical-neural-engine-research -p rest-contract -p astronomical-e2e --lib --test integration_tests --test hardware_journeys"
-nextest-archive-rest-api = "nextest archive --profile ci --archive-file target/nextest-archives/rest-api.tar.zst -p config -p astronomical-cli -p ipc-protocol -p lowercase-hex -p download-catalog -p decision-contract -p decision-training -p expert-atlas -p native-identity -p memory-policy -p jangtq2-qwen35 -p native-build-orchestration -p native-build-tool -p runtime-integration -p model-primitives -p speech -p artifact-validation -p image-generation -p engine-core -p qwen35 -p qwen35-quantization-probe -p decision-models -p model-serving -p astronomical-inference-worker -p astronomical-daemon -p quantization -p vision-tower -p astronomical-neural-engine-research -p rest-contract -p astronomical-e2e --test rest_api_tests"
-nextest-archive-e2e = "nextest archive --profile ci --archive-file target/nextest-archives/e2e.tar.zst -p config -p astronomical-cli -p ipc-protocol -p lowercase-hex -p download-catalog -p decision-contract -p decision-training -p expert-atlas -p native-identity -p memory-policy -p jangtq2-qwen35 -p native-build-orchestration -p native-build-tool -p runtime-integration -p model-primitives -p speech -p artifact-validation -p image-generation -p engine-core -p qwen35 -p qwen35-quantization-probe -p decision-models -p model-serving -p astronomical-inference-worker -p astronomical-daemon -p quantization -p vision-tower -p astronomical-neural-engine-research -p rest-contract -p astronomical-e2e --test e2e"
+nextest-archive-integration = "xtask lane-cargo nextest-archive-integration"
+nextest-archive-rest-api = "xtask lane-cargo nextest-archive-rest-api"
+nextest-archive-e2e = "xtask lane-cargo nextest-archive-e2e"
 
 # The shared fixture registry and leaf-id contracts (test-fixtures), plus the
 # independent FLUX reference-oracle unit coverage (flux-reference-oracle), which
@@ -63,7 +68,7 @@ test-e2e = "test --no-fail-fast -p astronomical-e2e --test e2e"
 test-app-builder = "test -p xtask --bin xtask app_package"
 
 # Both lanes together; run this before committing.
-test-integration-and-rest = "test --no-fail-fast -p config -p astronomical-cli -p ipc-protocol -p lowercase-hex -p download-catalog -p decision-contract -p decision-training -p expert-atlas -p native-identity -p memory-policy -p jangtq2-qwen35 -p native-build-orchestration -p native-build-tool -p runtime-integration -p model-primitives -p speech -p artifact-validation -p image-generation -p engine-core -p qwen35 -p qwen35-quantization-probe -p decision-models -p model-serving -p astronomical-inference-worker -p astronomical-daemon -p quantization -p vision-tower -p astronomical-neural-engine-research -p rest-contract --lib --test integration_tests --test hardware_journeys --test rest_api_tests"
+test-integration-and-rest = "xtask lane-cargo test-integration-and-rest"
 
 # The decision-model contract crate on its own: typed questions, validation,
 # calibration, typed answers and the Laya prompt layout, pinned to the
@@ -613,7 +618,7 @@ audit-unused-public-workspace = "workspace-unused-pub"
 
 # The model-serving direct-MLX contract suite plus the runtime-integration
 # MLX-C coverage bridge contract (CPU-only) so bridge drift fails the lane.
-test-direct-mlx = "test --no-fail-fast -p astronomical-acceptance --features astronomical-acceptance/direct-mlx -p runtime-integration --features runtime-integration/mlx -p model-primitives --features model-primitives/direct-mlx -p speech --features speech/direct-mlx -p image-generation --features image-generation/direct-mlx -p engine-core --features engine-core/direct-mlx -p qwen35 --features qwen35/direct-mlx -p decision-models --features decision-models/direct-mlx -p qwen35-quantization-probe -p model-serving --features model-serving/direct-mlx --lib --test direct_mlx --test mlx_c_coverage_contract_tests -- --test-threads=1"
+test-direct-mlx = "xtask lane-cargo test-direct-mlx"
 
 # Every native memory-contract phase in one bounded invocation; the probe
 # binary must exist first (see check-mlx-memory-contract).

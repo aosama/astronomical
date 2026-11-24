@@ -33,11 +33,31 @@ impl Qwen3_5EngineState {
     }
 }
 
-impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
+/// The resident engine's test controls: its expert payload, memory ledger
+/// and source files. They are a trait because the engine type is defined
+/// in the engine core.
+// Every caller awaits these in place, so the futures' Send bound never matters.
+#[allow(async_fn_in_trait)]
+pub trait Qwen3_5ResidentEngineTestControls {
     /// The memory governor's view after the last measured forward, with its
     /// accounts compared against what MLX reported.
-    #[doc(hidden)]
-    pub async fn memory_ledger_reading_for_tests(
+    async fn memory_ledger_reading_for_tests(
+        &self,
+    ) -> Result<Option<memory_policy::ledger::LedgerReading>, InferenceEngineError>;
+
+    /// Returns mode-neutral expert ownership plus cumulative paging statistics.
+    async fn astro_expert_cache_statistics_for_tests(
+        &self,
+    ) -> Result<AstroExpertCacheStatistics, InferenceEngineError>;
+
+    /// Returns the exact complete expert payload used by residency admission.
+    async fn complete_expert_payload_byte_count_for_tests(
+        &self,
+    ) -> Result<u64, InferenceEngineError>;
+}
+
+impl Qwen3_5ResidentEngineTestControls for MlxInferenceEngine<Qwen3_5InferenceExecution> {
+    async fn memory_ledger_reading_for_tests(
         &self,
     ) -> Result<Option<memory_policy::ledger::LedgerReading>, InferenceEngineError> {
         let (ledger_reading_sender, ledger_reading_receiver) = std::sync::mpsc::sync_channel(1);
@@ -58,9 +78,7 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
             .map_err(|_| fatal_engine_error("ledger reading owner operation returned no response"))
     }
 
-    /// Returns mode-neutral expert ownership plus cumulative paging statistics.
-    #[doc(hidden)]
-    pub async fn astro_expert_cache_statistics_for_tests(
+    async fn astro_expert_cache_statistics_for_tests(
         &self,
     ) -> Result<AstroExpertCacheStatistics, InferenceEngineError> {
         let (expert_statistics_sender, expert_statistics_receiver) =
@@ -78,9 +96,7 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
         })
     }
 
-    /// Returns the exact complete expert payload used by residency admission.
-    #[doc(hidden)]
-    pub async fn complete_expert_payload_byte_count_for_tests(
+    async fn complete_expert_payload_byte_count_for_tests(
         &self,
     ) -> Result<u64, InferenceEngineError> {
         let (complete_expert_payload_sender, complete_expert_payload_receiver) =

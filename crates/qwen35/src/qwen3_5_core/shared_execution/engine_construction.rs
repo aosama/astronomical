@@ -31,11 +31,59 @@ pub trait Qwen3_5EngineConstruction: MlxInferenceExecution + Qwen3_5ExecutionCor
     ) -> Self;
 }
 
-impl<Execution: Qwen3_5EngineConstruction> MlxInferenceEngine<Execution> {
+/// The constructors every Qwen3.5 engine offers. They are a trait because
+/// the owner-thread engine lives in the engine core, and only the crate that
+/// defines a type may add inherent methods to it.
+pub trait Qwen3_5MlxEngineConstructors: Sized {
+    /// What only this engine is started with.
+    type EngineSettings;
+
+    /// Starts the owner thread from the shared settings and the engine's own.
+    fn new_with_execution_core_settings(
+        core_settings: Qwen3_5ExecutionCoreSettings,
+        engine_settings: Self::EngineSettings,
+    ) -> Result<Self, InferenceEngineError>;
+
+    /// Starts the owner thread with an explicit `prefill_chunk_tokens` sizer,
+    /// the artifact's whole context, and attribution off.
+    #[allow(clippy::too_many_arguments)]
+    fn new_with_prompt_processing_chunk_sizer(
+        validated_artifact: ValidatedQwen3_5Artifact,
+        active_memory_limit_bytes: usize,
+        mlx_buffer_cache_limit_bytes: usize,
+        astro_ssd_prompt_cache_disk_store_config: Option<AstroSsdPromptCacheDiskStoreConfig>,
+        prompt_processing_chunk_sizer: Qwen3_5PromptProcessingChunkSizer,
+        think_end_token_id: u32,
+        model_directory: PathBuf,
+        chunking: WorkerChunkingConfiguration,
+    ) -> Result<Self, InferenceEngineError>;
+
+    /// Starts the owner thread with every model-serving work boundary
+    /// resolved and the artifact's whole context.
+    #[allow(clippy::too_many_arguments)]
+    fn new_with_runtime_chunking_and_performance_attribution(
+        validated_artifact: ValidatedQwen3_5Artifact,
+        active_memory_limit_bytes: usize,
+        mlx_buffer_cache_limit_bytes: usize,
+        astro_ssd_prompt_cache_disk_store_config: Option<AstroSsdPromptCacheDiskStoreConfig>,
+        prompt_processing_chunk_sizer: Qwen3_5PromptProcessingChunkSizer,
+        think_end_token_id: u32,
+        model_directory: PathBuf,
+        chunking: WorkerChunkingConfiguration,
+        model_loading_performance_attribution: PerformanceAttribution,
+        performance_attribution_log: PerformanceAttributionLog,
+    ) -> Result<Self, InferenceEngineError>;
+}
+
+impl<Execution: Qwen3_5EngineConstruction> Qwen3_5MlxEngineConstructors
+    for MlxInferenceEngine<Execution>
+{
+    type EngineSettings = Execution::EngineSettings;
+
     /// Starts the owner thread from the shared settings and the engine's own.
     /// The settings are checked first, so a bad one fails here and not at the
     /// first request.
-    pub fn new_with_execution_core_settings(
+    fn new_with_execution_core_settings(
         core_settings: Qwen3_5ExecutionCoreSettings,
         engine_settings: Execution::EngineSettings,
     ) -> Result<Self, InferenceEngineError> {
@@ -52,7 +100,7 @@ impl<Execution: Qwen3_5EngineConstruction> MlxInferenceEngine<Execution> {
     /// the artifact's whole context, and attribution off.
     // Construction dependencies remain explicit to avoid another configuration facade.
     #[allow(clippy::too_many_arguments)]
-    pub fn new_with_prompt_processing_chunk_sizer(
+    fn new_with_prompt_processing_chunk_sizer(
         validated_artifact: ValidatedQwen3_5Artifact,
         active_memory_limit_bytes: usize,
         mlx_buffer_cache_limit_bytes: usize,
@@ -79,7 +127,7 @@ impl<Execution: Qwen3_5EngineConstruction> MlxInferenceEngine<Execution> {
     /// Starts the owner thread with every model-serving work boundary
     /// resolved and the artifact's whole context.
     #[allow(clippy::too_many_arguments)]
-    pub fn new_with_runtime_chunking_and_performance_attribution(
+    fn new_with_runtime_chunking_and_performance_attribution(
         validated_artifact: ValidatedQwen3_5Artifact,
         active_memory_limit_bytes: usize,
         mlx_buffer_cache_limit_bytes: usize,

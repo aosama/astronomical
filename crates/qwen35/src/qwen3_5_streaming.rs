@@ -18,6 +18,8 @@ pub use expert_streaming::route_observation::{
 #[cfg(feature = "direct-mlx")]
 pub use expert_streaming::{ExpertPagingError, Qwen3_5ExpertPager};
 #[cfg(feature = "direct-mlx")]
+pub use inference_execution::Qwen3_5StreamingEngineTestControls;
+#[cfg(feature = "direct-mlx")]
 pub use inference_execution::{
     Qwen3_5StreamingEngine, StreamingEngineSettings, safe_minimum_mlx_memory_ceiling_bytes,
 };

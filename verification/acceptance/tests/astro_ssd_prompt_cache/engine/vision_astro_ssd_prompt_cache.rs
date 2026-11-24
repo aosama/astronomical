@@ -9,7 +9,8 @@ use ipc_protocol::{
 };
 use model_serving::{
     AstroSsdPromptCacheDiskStoreConfig, GeneratedToken, InferenceEngine, Qwen3_5ArtifactValidator,
-    Qwen3_5PromptProcessingChunkSizer, Qwen3_5ResidentEngine, Qwen3_5Tokenizer,
+    Qwen3_5MlxEngineConstructors, Qwen3_5PromptProcessingChunkSizer, Qwen3_5ResidentEngine,
+    Qwen3_5Tokenizer,
 };
 use tokio::time::{Instant, sleep, timeout};
 

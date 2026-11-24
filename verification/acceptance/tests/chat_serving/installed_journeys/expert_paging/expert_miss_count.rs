@@ -33,8 +33,8 @@ use ipc_protocol::{
 };
 use memory_policy::astro_expert_cache_model::RoutedReply;
 use model_serving::{
-    Qwen3_5ArtifactValidator, Qwen3_5StreamingEngine, Qwen3_5Tokenizer, RoutedReplyRecording,
-    SessionExpertRouteSample,
+    Qwen3_5ArtifactValidator, Qwen3_5StreamingEngine, Qwen3_5StreamingEngineTestControls,
+    Qwen3_5Tokenizer, RoutedReplyRecording, SessionExpertRouteSample,
 };
 use runtime_integration::MlxMemoryLimits;
 use serial_test::serial;
