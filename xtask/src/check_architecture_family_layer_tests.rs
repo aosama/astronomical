@@ -56,10 +56,11 @@ fn with_dependencies(
     package_name: &str,
     dependency_names: Vec<&'static str>,
 ) -> Vec<(&'static str, &'static str, Vec<&'static str>)> {
-    for package in &mut packages {
-        if package.0 == package_name {
-            package.2 = dependency_names.clone();
-        }
+    if let Some(package) = packages
+        .iter_mut()
+        .find(|package| package.0 == package_name)
+    {
+        package.2 = dependency_names;
     }
     packages
 }
@@ -181,4 +182,14 @@ fn should_fail_closed_when_a_package_has_no_manifest_path() {
         "{\"packages\":[{\"name\":\"speech\",\"dependencies\":[]}]}".to_owned();
     let error = family_layer_violations(&metadata_json_text).unwrap_err();
     assert!(error.contains("has no manifest_path"), "{error}");
+}
+
+#[test]
+fn should_treat_a_single_crate_kind_as_a_shell() {
+    // The text kind holds its families in one crate today; with no sibling
+    // to depend on, that crate is a shell and only the serving rule applies.
+    let mut packages = layered_workspace_packages();
+    packages.push(("qwen35", "crates/families/text/qwen35", vec!["mlx-bridge"]));
+    let violations = family_layer_violations(&metadata_document_for(&packages)).unwrap();
+    assert!(violations.is_empty(), "{violations:?}");
 }

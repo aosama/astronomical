@@ -49,7 +49,7 @@ const FORBIDDEN_DEPENDENCY_RULES: &[ForbiddenDependencyRule] = &[
     // split circular and rebuild the serving crate on every family edit,
     // defeating the extraction.
     ForbiddenDependencyRule {
-        rule_name: "family-crate-without-serving",
+        rule_name: "weight-format-without-serving",
         source_crate: "jangtq2-qwen35",
         forbidden_crate: "model-serving",
         rationale: "the jangtq2 family crate must build and test without pulling in the serving crate, which consumes the family through a one-way edge",

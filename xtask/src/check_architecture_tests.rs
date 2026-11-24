@@ -71,7 +71,7 @@ fn should_detect_a_direct_family_to_serving_dependency() {
     ]);
     let violations = architecture_violations(&metadata_json_text).unwrap();
     assert_eq!(violations.len(), 1);
-    assert_eq!(violations[0].rule_name, "family-crate-without-serving");
+    assert_eq!(violations[0].rule_name, "weight-format-without-serving");
     assert_eq!(
         violations[0].dependency_chain,
         vec!["jangtq2-qwen35", "model-serving"]
