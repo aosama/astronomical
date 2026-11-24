@@ -12,7 +12,10 @@ use memory_policy::telemetry::MlxMemoryTelemetry;
 ///
 /// Lifecycle methods stay synchronous because native image arrays are owned by the
 /// worker runtime thread and must never be moved through a `Send` future.
-pub trait ImageGenerationEngine: 'static {
+///
+/// `Any` lets a caller holding a boxed engine ask which family it is, as the
+/// worker factory's tests do; every engine is `'static`, so it costs nothing.
+pub trait ImageGenerationEngine: std::any::Any {
     /// Loads model resources and returns the exact identity and limits to advertise.
     fn load(&mut self) -> Result<ImageGenerationEngineLoadResult, ImageGenerationFailureReason>;
 
@@ -52,6 +55,51 @@ pub trait ImageGenerationEngine: 'static {
         Err(ImageGenerationFailureReason::FatalExecution {
             reason: "this image engine does not support live MLX memory limits".to_owned(),
         })
+    }
+}
+
+/// A boxed engine is an engine, so the inference worker can hold whichever
+/// image family its factory built without naming each family in its type.
+impl ImageGenerationEngine for Box<dyn ImageGenerationEngine> {
+    fn load(&mut self) -> Result<ImageGenerationEngineLoadResult, ImageGenerationFailureReason> {
+        self.as_mut().load()
+    }
+
+    fn start_generation(
+        &mut self,
+        generation_command: ImageGenerationCommand,
+    ) -> Result<(), ImageGenerationFailureReason> {
+        self.as_mut().start_generation(generation_command)
+    }
+
+    fn advance_generation(
+        &mut self,
+        request_id: RequestId,
+    ) -> Result<ImageGenerationEngineStep, ImageGenerationFailureReason> {
+        self.as_mut().advance_generation(request_id)
+    }
+
+    fn cancel_generation(
+        &mut self,
+        request_id: RequestId,
+    ) -> Result<(), ImageGenerationFailureReason> {
+        self.as_mut().cancel_generation(request_id)
+    }
+
+    fn collect_mlx_memory_telemetry(&self) -> Option<MlxMemoryTelemetry> {
+        self.as_ref().collect_mlx_memory_telemetry()
+    }
+
+    fn take_post_cleanup_memory_telemetry(&mut self) -> Option<MlxMemoryTelemetry> {
+        self.as_mut().take_post_cleanup_memory_telemetry()
+    }
+
+    fn update_mlx_memory_limit(
+        &mut self,
+        requested_mlx_memory_ceiling_bytes: u64,
+    ) -> Result<MlxMemoryLimitAdjustment, ImageGenerationFailureReason> {
+        self.as_mut()
+            .update_mlx_memory_limit(requested_mlx_memory_ceiling_bytes)
     }
 }
 

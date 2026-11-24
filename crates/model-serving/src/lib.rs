@@ -77,8 +77,7 @@ pub use engine_backed_worker::{
 pub use model_family_runtime::ModelFamilyInferenceEngine;
 
 pub use model_family_runtime::{
-    ModelFamilyGenerationProcessor, ModelFamilyImageEngine, ModelFamilyInferenceRequest,
-    ModelFamilyRequestOutput,
+    ModelFamilyGenerationProcessor, ModelFamilyInferenceRequest, ModelFamilyRequestOutput,
 };
 
 #[cfg(feature = "direct-mlx")]

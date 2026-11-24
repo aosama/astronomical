@@ -7,7 +7,7 @@ use ipc_protocol::{
     WorkerImageGenerationModelFamily, WorkerModelConfiguration,
     WorkerQwenImage21ModelConfiguration,
 };
-use model_serving::{ModelFactory, ModelFactoryRuntime, ModelFamilyImageEngine};
+use model_serving::{ModelFactory, ModelFactoryRuntime, QwenImage21ImageEngine};
 
 use super::flux2_klein_fixture::CANONICAL_MODEL_ID as FLUX_CANONICAL_MODEL_ID;
 use super::qwen_image_21_fixture::{
@@ -34,7 +34,8 @@ async fn should_create_a_lazy_qwen_image_runtime_for_the_pinned_configuration() 
     let ModelFactoryRuntime::Image(image_engine) = factory_runtime else {
         panic!("Qwen-Image-2.1 must not receive a fabricated autoregressive processor");
     };
-    let ModelFamilyImageEngine::QwenImage21(qwen_engine) = image_engine else {
+    let image_engine_as_any: &dyn std::any::Any = image_engine.as_ref();
+    let Some(qwen_engine) = image_engine_as_any.downcast_ref::<QwenImage21ImageEngine>() else {
         panic!("the Qwen-Image-2.1 configuration must select the Qwen image engine");
     };
     assert_eq!(
