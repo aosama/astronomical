@@ -26,11 +26,12 @@ use engine_core::astro_ssd_prompt_cache::counters::AstroSsdPromptCacheCounters;
 
 use super::generation_request_validation::Qwen3_5GenerationRequestLimits;
 use super::prompt_processing_chunk_sizer::Qwen3_5PromptProcessingChunkSizer;
+use super::serving_artifact::Qwen3_5ServingArtifact;
 
-pub struct Qwen3_5ExecutionCore<Model, RequestExtension> {
+pub struct Qwen3_5ExecutionCore<Model, RequestExtension, Artifact = ValidatedQwen3_5Artifact> {
     pub active_request: Option<Qwen3_5EngineRequest<RequestExtension>>,
     pub model: Option<Model>,
-    pub validated_artifact: Option<ValidatedQwen3_5Artifact>,
+    pub validated_artifact: Option<Artifact>,
     /// Directory containing the safetensors model shards.
     pub model_directory: PathBuf,
     pub model_id: Option<String>,
@@ -64,17 +65,21 @@ pub struct Qwen3_5ExecutionCore<Model, RequestExtension> {
 pub trait Qwen3_5ExecutionCoreOwner {
     type Model: Qwen3_5ServingModel;
     type RequestExtension;
+    /// The validated artifact the engine loads its model from.
+    type Artifact: Qwen3_5ServingArtifact;
 
-    fn execution_core(&self) -> &Qwen3_5ExecutionCore<Self::Model, Self::RequestExtension>;
+    fn execution_core(
+        &self,
+    ) -> &Qwen3_5ExecutionCore<Self::Model, Self::RequestExtension, Self::Artifact>;
 
     fn execution_core_mut(
         &mut self,
-    ) -> &mut Qwen3_5ExecutionCore<Self::Model, Self::RequestExtension>;
+    ) -> &mut Qwen3_5ExecutionCore<Self::Model, Self::RequestExtension, Self::Artifact>;
 }
 
 /// What the worker resolves before an engine starts.
-pub struct Qwen3_5ExecutionCoreSettings {
-    pub validated_artifact: ValidatedQwen3_5Artifact,
+pub struct Qwen3_5ExecutionCoreSettings<Artifact = ValidatedQwen3_5Artifact> {
+    pub validated_artifact: Artifact,
     pub active_memory_limit_bytes: usize,
     pub mlx_buffer_cache_limit_bytes: usize,
     pub astro_ssd_prompt_cache_disk_store_config: Option<AstroSsdPromptCacheDiskStoreConfig>,
@@ -87,21 +92,21 @@ pub struct Qwen3_5ExecutionCoreSettings {
     pub performance_attribution_log: PerformanceAttributionLog,
 }
 
-impl Qwen3_5ExecutionCoreSettings {
+impl<Artifact: Qwen3_5ServingArtifact> Qwen3_5ExecutionCoreSettings<Artifact> {
     /// Derives the engine limits from the artifact, refusing a configured
     /// context that is zero or larger than the artifact allows. Runs before
     /// the MLX owner thread starts, so a bad setting fails the engine's
     /// construction instead of its first request.
-    pub fn validate(self) -> Result<Qwen3_5ValidatedExecutionCoreSettings, InferenceEngineError> {
+    pub fn validate(
+        self,
+    ) -> Result<Qwen3_5ValidatedExecutionCoreSettings<Artifact>, InferenceEngineError> {
         let full_attention_kv_state_growth_tokens = checked_full_attention_growth_tokens(
             self.chunking.full_attention_key_value_growth_tokens,
         )?;
-        let artifact_maximum_position_count =
-            self.validated_artifact.config().maximum_position_count();
+        let artifact_maximum_position_count = self.validated_artifact.maximum_position_count();
         check_configured_context(self.maximum_context_tokens, artifact_maximum_position_count)?;
         let context_memory_reservation_bytes_per_token = self
             .validated_artifact
-            .config()
             .context_memory_reservation_bytes(1)
             .ok_or_else(|| fatal_engine_error("Qwen3.5 context memory reservation overflowed"))?;
         let memory_limits = MlxMemoryLimits::new(
@@ -144,17 +149,19 @@ pub fn check_configured_context(
 /// Settings that passed [`Qwen3_5ExecutionCoreSettings::validate`], with the
 /// limits derived from them. They hold no MLX handle, so they can move onto
 /// the MLX owner thread, where the core is built.
-pub struct Qwen3_5ValidatedExecutionCoreSettings {
-    settings: Qwen3_5ExecutionCoreSettings,
+pub struct Qwen3_5ValidatedExecutionCoreSettings<Artifact = ValidatedQwen3_5Artifact> {
+    settings: Qwen3_5ExecutionCoreSettings<Artifact>,
     hard_maximum_position_count: usize,
     context_memory_reservation_bytes_per_token: usize,
     full_attention_kv_state_growth_tokens: i32,
     memory_limits: MlxMemoryLimits,
 }
 
-impl<Model, RequestExtension> Qwen3_5ExecutionCore<Model, RequestExtension> {
+impl<Model, RequestExtension, Artifact: Qwen3_5ServingArtifact>
+    Qwen3_5ExecutionCore<Model, RequestExtension, Artifact>
+{
     /// Builds the core on the MLX owner thread, with no model loaded yet.
-    pub fn new(validated_settings: Qwen3_5ValidatedExecutionCoreSettings) -> Self {
+    pub fn new(validated_settings: Qwen3_5ValidatedExecutionCoreSettings<Artifact>) -> Self {
         let Qwen3_5ValidatedExecutionCoreSettings {
             settings,
             hard_maximum_position_count,
@@ -162,13 +169,15 @@ impl<Model, RequestExtension> Qwen3_5ExecutionCore<Model, RequestExtension> {
             full_attention_kv_state_growth_tokens,
             memory_limits,
         } = validated_settings;
-        let artifact_config = settings.validated_artifact.config();
         Self {
             active_request: None,
             model: None,
-            end_of_sequence_token_ids: artifact_config.end_of_sequence_token_ids().to_vec(),
+            end_of_sequence_token_ids: settings
+                .validated_artifact
+                .end_of_sequence_token_ids()
+                .to_vec(),
             think_end_token_id: settings.think_end_token_id,
-            vocabulary_size: artifact_config.vocabulary_size(),
+            vocabulary_size: settings.validated_artifact.vocabulary_size(),
             maximum_position_count: settings.maximum_context_tokens as usize,
             hard_maximum_position_count,
             context_memory_reservation_bytes_per_token,

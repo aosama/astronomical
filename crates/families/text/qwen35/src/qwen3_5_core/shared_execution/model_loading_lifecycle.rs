@@ -13,7 +13,6 @@ use std::sync::Arc;
 use runtime_integration::{MlxMemorySnapshot, MlxRuntime};
 
 use crate::inference_engine::load_result::EngineLoadResult;
-use crate::qwen3_5_core::artifacts::ValidatedQwen3_5Artifact;
 use crate::qwen3_5_core::engine_errors::fatal_engine_error;
 use crate::qwen3_5_core::model::model_chunking_configuration::Qwen3_5ModelChunkingConfiguration;
 use crate::{
@@ -28,6 +27,7 @@ use super::model_loading_steps::{
     resolve_model_chunking_configuration, resolve_validated_model_identity,
     resolve_visual_embedding_model_contract,
 };
+use super::serving_artifact::Qwen3_5ServingArtifact;
 use super::text_model::Qwen3_5TextModel;
 
 /// The points in a load where the engines differ. The resident engine loads
@@ -39,7 +39,7 @@ pub trait Qwen3_5ModelLoadingHooks: Qwen3_5FinalizationHooks {
     /// moves into the model.
     fn observe_artifact_before_load(
         &mut self,
-        validated_artifact: &ValidatedQwen3_5Artifact,
+        validated_artifact: &Self::Artifact,
         model_loading_performance_attribution: &mut PerformanceAttribution,
     ) -> Result<(), InferenceEngineError>;
 
@@ -48,7 +48,7 @@ pub trait Qwen3_5ModelLoadingHooks: Qwen3_5FinalizationHooks {
     fn load_and_materialize_model(
         &mut self,
         runtime: MlxRuntime,
-        validated_artifact: ValidatedQwen3_5Artifact,
+        validated_artifact: Self::Artifact,
         model_chunking: Qwen3_5ModelChunkingConfiguration,
         model_loading_performance_attribution: &mut PerformanceAttribution,
     ) -> Result<Self::Model, InferenceEngineError>;
