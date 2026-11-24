@@ -105,9 +105,7 @@ impl<Family: SpeechFamily> SpeechEngineShell<Family> {
         }
     }
 
-    pub(crate) fn loaded_mut(
-        &mut self,
-    ) -> Result<&mut LoadedSpeech<Family::FamilyParts>, SpeechFailure> {
+    pub fn loaded_mut(&mut self) -> Result<&mut LoadedSpeech<Family::FamilyParts>, SpeechFailure> {
         match self.loaded.as_mut() {
             Some(loaded) => Ok(loaded),
             None => Err(not_loaded_failure(Family::FAMILY_NAME)),

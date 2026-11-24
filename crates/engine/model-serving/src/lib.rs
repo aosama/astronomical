@@ -21,12 +21,9 @@ mod engine_backed_worker;
 
 mod model_family_runtime;
 
-// Speech lives in its own crate (issue #2340); the aliases keep each
-// `crate::speech_*` path in this crate resolving.
+// Speech lives in its own crates (issue #2340, #2473); the alias keeps each
+// `crate::speech_engine` path in this crate resolving.
 pub(crate) use ::speech::speech_engine;
-
-#[cfg(feature = "direct-mlx")]
-pub(crate) use ::speech::speech_models;
 
 // The engine core (the inference contract and its errors, MLX memory, the
 // astro_decoder_state_cache, the generation processor and structured
@@ -81,10 +78,10 @@ pub use engine_backed_worker::{
 pub use model_family_runtime::{ModelFamilyInferenceEngine, boxed_chat_engine};
 
 #[cfg(feature = "direct-mlx")]
-pub use speech_models::kokoro::{KokoroSpeechEngine, KokoroSpeechTrace};
+pub use kokoro::{KokoroSpeechEngine, KokoroSpeechTrace, KokoroSpeechTracing};
 
 #[cfg(feature = "direct-mlx")]
-pub use speech_models::phonon::PhononSpeechEngine;
+pub use phonon::PhononSpeechEngine;
 
 pub use speech_engine::{
     SpeechEngine, SpeechEngineLoadResult, SpeechEngineStep, SpeechUnavailableEngine, StartedSpeech,

@@ -27,7 +27,7 @@
 //! where the configuration's `model_directory` holds Kokoro's `config.json`,
 //! `kokoro-v1_0.safetensors` and `voices/af_heart.safetensors`.
 
-use model_serving::{KokoroSpeechEngine, KokoroSpeechTrace, SpeechEngine};
+use model_serving::{KokoroSpeechEngine, KokoroSpeechTrace, KokoroSpeechTracing, SpeechEngine};
 use serde_json::Value;
 use test_harness::test_run::TestRunContext;
 
