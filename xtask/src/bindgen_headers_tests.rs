@@ -542,3 +542,18 @@ fn should_refuse_relative_archive_and_store_directories() {
         PathBuf::from("/store")
     );
 }
+
+#[test]
+fn should_skip_every_leading_parent_step_of_a_patch_path() {
+    use super::patch_pipeline::path_below_parent_steps;
+
+    assert_eq!(
+        path_below_parent_steps("../../../../third-party/patches/mlx.patch"),
+        "third-party/patches/mlx.patch"
+    );
+    assert_eq!(
+        path_below_parent_steps("third-party/patches/mlx.patch"),
+        "third-party/patches/mlx.patch"
+    );
+    assert_eq!(path_below_parent_steps("../"), "");
+}

@@ -52,15 +52,22 @@ pub(crate) fn parse_cmake_patch_pipeline(cmake_lists_text: &str) -> Vec<PatchSte
 
 fn patch_path_on_line(cmake_line: &str) -> Option<String> {
     let prefix_position = cmake_line.find(PATCH_FILE_PREFIX)?;
-    let mut path_and_rest = &cmake_line[prefix_position + PATCH_FILE_PREFIX.len()..];
-    while let Some(path_below_parent) = path_and_rest.strip_prefix(PARENT_FOLDER_STEP) {
-        path_and_rest = path_below_parent;
-    }
+    let path_and_rest =
+        path_below_parent_steps(&cmake_line[prefix_position + PATCH_FILE_PREFIX.len()..]);
     let patch_path = match path_and_rest.find('"') {
         Some(quote_position) => &path_and_rest[..quote_position],
         None => path_and_rest,
     };
     Some(patch_path.to_owned())
+}
+
+/// The path after any leading `../` steps.
+pub(crate) fn path_below_parent_steps(relative_path: &str) -> &str {
+    let mut path_below_parents = relative_path;
+    while let Some(path_below_parent) = path_below_parents.strip_prefix(PARENT_FOLDER_STEP) {
+        path_below_parents = path_below_parent;
+    }
+    path_below_parents
 }
 
 /// Reads an explicit patch list: one `dependency<TAB>patch-path` per line.

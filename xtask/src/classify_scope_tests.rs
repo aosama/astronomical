@@ -396,7 +396,10 @@ fn should_skip_only_the_swift_and_node_lane_for_a_rust_change() {
 fn should_run_the_swift_and_node_lane_for_a_mixed_change() {
     let verdict = classify_change_scope(
         CiEvent::PullRequest,
-        &paths(&["crates/foundation/config/src/lib.rs", "apps/daemon/console/console.js"]),
+        &paths(&[
+            "crates/foundation/config/src/lib.rs",
+            "apps/daemon/console/console.js",
+        ]),
         false,
         false,
     );
@@ -489,7 +492,8 @@ fn should_run_every_lane_when_a_catalog_edit_comes_with_code() {
 
 #[test]
 fn should_treat_a_change_to_the_catalog_crate_as_code_and_also_open_the_catalog_lane() {
-    let verdict = pull_request_verdict(&["crates/tooling/download-catalog/src/download_catalog.rs"]);
+    let verdict =
+        pull_request_verdict(&["crates/tooling/download-catalog/src/download_catalog.rs"]);
 
     assert_eq!(verdict.classification, "code_or_build");
     assert!(verdict.macos_verification_required);
@@ -552,7 +556,8 @@ fn should_open_the_plugin_lane_for_a_plugin_readme_edit_that_is_static_content()
 // plugin lane and, as a rest-contract input, every macOS lane too.
 #[test]
 fn should_open_the_plugin_lane_and_the_macos_lanes_for_the_shared_model_list() {
-    let verdict = pull_request_verdict(&["crates/contracts/rest-contract/fixtures/openai_model_list.json"]);
+    let verdict =
+        pull_request_verdict(&["crates/contracts/rest-contract/fixtures/openai_model_list.json"]);
 
     assert_eq!(verdict.classification, "code_or_build");
     assert!(verdict.opencode_plugin_check_required);
@@ -584,7 +589,10 @@ fn should_run_every_lane_when_a_plugin_edit_comes_with_code() {
 #[test]
 fn should_not_open_the_plugin_lane_for_unrelated_changes() {
     assert!(!pull_request_verdict(&["README.md"]).opencode_plugin_check_required);
-    assert!(!pull_request_verdict(&["crates/foundation/config/src/lib.rs"]).opencode_plugin_check_required);
+    assert!(
+        !pull_request_verdict(&["crates/foundation/config/src/lib.rs"])
+            .opencode_plugin_check_required
+    );
     let neighbor_verdict = pull_request_verdict(&["integrations/opencode-other/index.ts"]);
     assert!(!neighbor_verdict.opencode_plugin_check_required);
     assert!(neighbor_verdict.macos_verification_required);

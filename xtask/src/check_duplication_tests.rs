@@ -111,7 +111,9 @@ fn should_treat_a_twelve_character_line_as_short_and_thirteen_as_substantial() {
 
 #[test]
 fn should_classify_production_and_test_sources() {
-    assert!(is_production_source("crates/foundation/config/src/model_family.rs"));
+    assert!(is_production_source(
+        "crates/foundation/config/src/model_family.rs"
+    ));
     assert!(!is_production_source(
         "crates/foundation/config/src/model_family_tests.rs"
     ));
@@ -210,7 +212,10 @@ fn should_count_copies_that_differ_only_by_family_name() {
     let resident_copy = SHARED_BLOCK_TEXT.replace("runtime", "resident_runtime");
     let streaming_copy = SHARED_BLOCK_TEXT.replace("runtime", "streaming_runtime");
     let measurement = measure_repeated_blocks(&[
-        source_file("crates/families/text/qwen35/src/qwen3_5_resident/load.rs", &resident_copy),
+        source_file(
+            "crates/families/text/qwen35/src/qwen3_5_resident/load.rs",
+            &resident_copy,
+        ),
         source_file(
             "crates/families/text/qwen35/src/qwen3_5_streaming/load.rs",
             &streaming_copy,

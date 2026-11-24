@@ -47,7 +47,8 @@ pub(crate) fn area_of(relative_path: &str) -> String {
     if path_components.first() == Some(&"xtask") {
         return "xtask".to_owned();
     }
-    let owning_depth = crate_folder_index(&path_components).map_or(2, |crate_index| crate_index + 1);
+    let owning_depth =
+        crate_folder_index(&path_components).map_or(2, |crate_index| crate_index + 1);
     let owning_folder = match path_components.get(..owning_depth) {
         Some(owning_components) => owning_components.join("/"),
         None => relative_path.to_owned(),

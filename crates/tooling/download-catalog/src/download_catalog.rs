@@ -42,7 +42,8 @@ const MAXIMUM_DESCRIPTION_BYTES: usize = 512;
 const MAXIMUM_QUANTIZATION_LABEL_BYTES: usize = 64;
 const MAXIMUM_UPSTREAM_LICENSE_BYTES: usize = 128;
 const MAXIMUM_JAVASCRIPT_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
-const BUNDLED_DOWNLOAD_CATALOG_JSON: &str = include_str!("../../../../registry/download_catalog.json");
+const BUNDLED_DOWNLOAD_CATALOG_JSON: &str =
+    include_str!("../../../../registry/download_catalog.json");
 
 /// Validated release-bundled entries in authored presentation order.
 #[derive(Clone, Debug, Eq, PartialEq)]

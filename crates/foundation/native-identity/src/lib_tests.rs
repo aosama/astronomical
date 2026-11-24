@@ -9,10 +9,14 @@ use crate::{
 /// source-identity pathspecs are workspace-relative, so beside-source tests
 /// resolve the workspace root rather than relying on the working directory.
 fn workspace_root_from_manifest_directory() -> std::path::PathBuf {
-    std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+    let workspace_lock_file = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .ancestors()
-        .find(|ancestor_directory| ancestor_directory.join("Cargo.lock").is_file())
-        .expect("the crate lives inside the workspace, beside its Cargo.lock")
+        .map(|ancestor_directory| ancestor_directory.join("Cargo.lock"))
+        .find(|candidate_lock_file| candidate_lock_file.is_file())
+        .expect("the crate lives inside the workspace, beside its Cargo.lock");
+    workspace_lock_file
+        .parent()
+        .expect("a lock file sits in a folder")
         .to_path_buf()
 }
 
