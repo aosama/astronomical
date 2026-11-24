@@ -158,10 +158,10 @@ The root `Cargo.toml` lists these folders by glob, so a new crate in any of them
 **Adding a model family.** A family's code lives in its own folder, `crates/families/<kind>/<family>/` (the text kind still holds its families in one crate):
 1. Its engine, in the folder's crate beside its kind's shell.
 2. Its recognition crate in the folder's `recognition/`: the family's constant, recognizers and description.
-3. One line in the family list, `crates/families/registry/model-family-registry/src/model_families.list`. The line names the family's description, which discovery reads, and its builder, which the worker reads; an image, decision, speech or embedding family's builder is the kind's own, built from the family's type, so it needs no worker code.
+3. One line in the family list, `crates/families/registry/model-family-registry/src/model_families.list`. The line names the family's description, which discovery reads, and its builder, which the worker reads. Every kind's builder is the kind's own, built from the family's type (a chat family implements `ChatFamilyConstruction`, an image family `ImageFamilyConstruction`, and so on), so a family needs no worker code.
 4. Cargo needs every crate named once as a dependency, so the new crates also get a line each in the registry's and `model-serving`'s manifests.
 
-Its catalog entries go in `registry/download_catalog.json`. `check-architecture` holds the new crates to the family and recognition rules from their folders, with no edit. A chat family still writes its builder in the worker: the worker's chat runtime is typed on the Qwen 3.5 processor and request, so a chat family of another shape first needs the text shell crate issue #2533 plans.
+Its catalog entries go in `registry/download_catalog.json`. `check-architecture` holds the new crates to the family and recognition rules from their folders, with no edit. Every chat family today prepares the Qwen 3.5 request through the Qwen 3.5 processor; a chat family of another shape first needs the text shell crate issue #2533 plans.
 
 ## Check your change
 

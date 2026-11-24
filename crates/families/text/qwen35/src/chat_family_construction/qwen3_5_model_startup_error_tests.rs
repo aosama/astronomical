@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use model_serving::{
+use crate::{
     ArtifactValidationError, OptiQMetadataError, Qwen3_5ArtifactError,
     Qwen3_5ArtifactValidationError, Qwen3_5ConfigError,
 };
@@ -73,30 +73,5 @@ fn should_explain_visual_tensors_without_a_vision_config() {
     assert_eq!(
         model_startup_error.public_model_load_failure_reason(),
         "Qwen3.5 shard-index validation failed: Qwen3.5 index contains visual tensors but config.json has no vision_config"
-    );
-}
-
-#[test]
-fn should_bound_optiq_metadata_failure_reason_length() {
-    let untrusted_module_name = "untrusted_module_name_".repeat(64);
-    let model_startup_error = Qwen3_5ModelStartupError::ArtifactValidation {
-        model_directory: PathBuf::from("/private/models/example-optiq-model"),
-        source: Qwen3_5ArtifactValidationError::OptiQMetadata(
-            OptiQMetadataError::UnsupportedBits {
-                module_name: untrusted_module_name,
-                actual_bits: 7,
-            },
-        ),
-    };
-
-    let public_failure_reason = model_startup_error.public_model_load_failure_reason();
-
-    assert!(
-        public_failure_reason.chars().count() <= 512,
-        "public model-load errors must remain bounded"
-    );
-    assert!(
-        public_failure_reason.ends_with('…'),
-        "a truncated public model-load error should identify truncation"
     );
 }

@@ -14,6 +14,7 @@
 //! this crate's root with a glob, so every name at this root stays unique
 //! across the crates it re-exports.
 
+pub mod chat_family_construction;
 pub mod kernel_capability;
 
 // The folded ternary family ships its loader and straight text model as
@@ -40,6 +41,7 @@ pub mod qwen3_5_streaming;
 // `crate::...` paths into them read as they did inside the serving crate.
 pub(crate) use ::artifact_validation;
 use artifact_validation::*;
+pub use chat_family_construction::*;
 use engine_core::*;
 use model_primitives::*;
 
