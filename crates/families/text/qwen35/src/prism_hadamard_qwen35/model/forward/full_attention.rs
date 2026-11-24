@@ -15,7 +15,7 @@ use super::super::PrismHadamardModelError;
 use super::super::fused_projection::FusedPackedProjection;
 use super::super::fwht::RotatedActivations;
 use super::super::weights::FullLayerWeights;
-use super::StraightGenerationState;
+use crate::FullAttentionKeyValueState;
 
 /// Head geometry of one full-attention layer, in the i32 form the runtime
 /// reshape calls take.
@@ -104,8 +104,8 @@ impl super::super::PrismHadamardTextModel {
         token_count: i32,
         layer: &FullLayerWeights,
         rms_norm_epsilon: f32,
-        state_slot: usize,
-        state: &mut StraightGenerationState,
+        rope_offset_tokens: i32,
+        key_value_state: &mut FullAttentionKeyValueState,
     ) -> Result<MlxArray, PrismHadamardModelError> {
         let text = self.pack.config().text();
         let head_dimensions = attention_head_dimensions(
@@ -113,7 +113,6 @@ impl super::super::PrismHadamardTextModel {
             text.num_key_value_heads,
             text.head_dim,
         );
-        let rope_offset_tokens = state.sequence_position_offset;
 
         // One rotation of the layer input feeds the one fused launch that
         // produces all three rotated projections.
@@ -139,7 +138,7 @@ impl super::super::PrismHadamardTextModel {
             rope_offset_tokens,
         )?;
         let (active_keys, active_values) =
-            self.append_keys_and_fetch_active_values(state, state_slot, &rotated_projections)?;
+            self.append_keys_and_fetch_active_values(key_value_state, &rotated_projections)?;
         let attention_scale = attention_scale(head_dimensions.attention_head_dimension);
         self.attend_and_project_output(
             layer,
@@ -312,16 +311,14 @@ impl super::super::PrismHadamardTextModel {
         })
     }
 
-    /// Appends the rotated keys and transposed values to the slot's
+    /// Appends the rotated keys and transposed values to the layer's
     /// append-only KV state and fetches the active views covering every
     /// processed token.
     fn append_keys_and_fetch_active_values(
         &self,
-        state: &mut StraightGenerationState,
-        state_slot: usize,
+        key_value_state: &mut FullAttentionKeyValueState,
         rotated_projections: &RotatedProjections,
     ) -> Result<(MlxArray, MlxArray), PrismHadamardModelError> {
-        let key_value_state = &mut state.key_value_states[state_slot];
         let previous_storage_offset_tokens = key_value_state.offset_tokens();
         key_value_state
             .update_and_fetch(

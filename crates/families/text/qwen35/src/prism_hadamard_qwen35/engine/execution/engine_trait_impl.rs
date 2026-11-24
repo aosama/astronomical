@@ -35,8 +35,9 @@ use crate::PerformanceOperation;
 use crate::Qwen3_5ThinkingBudgetState;
 use crate::inference_engine::load_result::EngineLoadResult;
 use crate::memory::telemetry::MlxActiveMemoryBreakdown;
-use crate::prism_hadamard_qwen35::model::PrismHadamardTextModel;
-use crate::prism_hadamard_qwen35::model::StraightGenerationState;
+use crate::prism_hadamard_qwen35::model::{
+    PrismHadamardTextModel, request_decoder_state_evaluation_arrays,
+};
 use crate::sampling_seed;
 use crate::sampling_seed::current_time_millis_since_unix_epoch;
 use ipc_protocol::WorkerEvent;
@@ -163,23 +164,17 @@ impl MlxInferenceExecution for PrismHadamardQwen35InferenceExecution {
         let structured_generation = inference_request.take_structured_generation();
         let mut performance_attribution = inference_request.take_performance_attribution();
         let prompt_token_ids = inference_request.input_token_ids().to_vec();
-        let mut astro_ssd_prompt_cache_restored_token_count: u32 = 0;
-        let mut last_published_block_key = None;
-        let mut generation_state = StraightGenerationState::empty();
-        if let Some(astro_ssd_prompt_cache) = self.astro_ssd_prompt_cache.clone() {
-            let restore_outcome =
-                super::super::astro_ssd_prompt_cache::lookup_and_restore_prompt_prefix(
-                    model,
-                    &astro_ssd_prompt_cache,
-                    &prompt_token_ids,
-                    &mut generation_state,
-                    &mut self.astro_ssd_prompt_cache_counters,
-                    &mut performance_attribution,
-                )?;
-            astro_ssd_prompt_cache_restored_token_count = restore_outcome.restored_token_count;
-            last_published_block_key =
-                restore_outcome.last_restored_astro_ssd_prompt_cache_block_key;
-        }
+        let (request_decoder_state, restore_outcome) =
+            super::starting_decoder_state::starting_request_decoder_state(
+                model,
+                self.astro_ssd_prompt_cache.as_deref(),
+                &prompt_token_ids,
+                &mut self.astro_ssd_prompt_cache_counters,
+                &mut performance_attribution,
+            )?;
+        let astro_ssd_prompt_cache_restored_token_count = restore_outcome.restored_token_count;
+        let last_published_block_key =
+            restore_outcome.last_restored_astro_ssd_prompt_cache_block_key;
         self.active = Some(PrismHadamardQwen35ActiveGeneration {
             request_id,
             has_reached_reply_end: false,
@@ -190,7 +185,10 @@ impl MlxInferenceExecution for PrismHadamardQwen35InferenceExecution {
                 .to_vec(),
             processed_prompt_token_count: astro_ssd_prompt_cache_restored_token_count,
             astro_ssd_prompt_cache_restored_token_count,
-            generation_state,
+            request_decoder_state,
+            // The restored prefix is already in the decoder state, so the
+            // first forward continues right after it.
+            next_position_tokens: astro_ssd_prompt_cache_restored_token_count,
             pending_sampled_token: None,
             penalized_token_ids,
             random_state,
@@ -435,7 +433,7 @@ impl PrismHadamardQwen35InferenceExecution {
     ///
     /// The dense folded-ternary model owns its whole weight payload, so the
     /// breakdown attributes active memory to the model core first and the
-    /// live generation state second; there is no expert owner.
+    /// live decoder state second; there is no expert owner.
     pub(super) fn collect_current_mlx_memory_telemetry(&self) -> Option<MlxMemoryTelemetry> {
         let model = self.model.as_ref()?;
         let memory_snapshot = match model.runtime.memory_snapshot() {
@@ -454,7 +452,7 @@ impl PrismHadamardQwen35InferenceExecution {
         let peak_memory_bytes = u64::try_from(memory_snapshot.peak_memory_bytes()).ok()?;
         let model_core_payload_bytes = model.pack().total_payload_bytes();
         let context_state_payload_bytes = self.active.as_ref().map_or(0, |active_generation| {
-            active_generation.generation_state.payload_byte_count()
+            active_generation.request_decoder_state.payload_byte_count()
         });
         let active_memory_breakdown = MlxActiveMemoryBreakdown::reconcile(
             active_memory_bytes,
@@ -590,9 +588,7 @@ pub(super) fn submit_successor(
     let logits = active
         .measure_operation(
             PerformanceOperation::DecodeAdvanceSpan,
-            |active_generation| {
-                model.forward_pass(token_indices, &mut active_generation.generation_state)
-            },
+            |active_generation| active_generation.forward_pass(model, token_indices),
         )
         .map_err(gpu_error)?;
     let successor = sample_token(model, &logits, active)?;
@@ -600,11 +596,12 @@ pub(super) fn submit_successor(
         .measure_operation(
             PerformanceOperation::DecodeAsyncEvaluationSubmission,
             |active_generation| {
-                model.runtime.async_eval_arrays(
-                    &active_generation
-                        .generation_state
-                        .evaluation_arrays(&successor),
-                )
+                model
+                    .runtime
+                    .async_eval_arrays(&request_decoder_state_evaluation_arrays(
+                        &active_generation.request_decoder_state,
+                        &successor,
+                    ))
             },
         )
         .map_err(gpu_error)?;

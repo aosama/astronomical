@@ -11,26 +11,102 @@
 
 use mlx_bridge::MlxArray;
 
-use super::forward::StraightGenerationState;
+use crate::RequestDecoderStateStack;
+
+use super::forward::request_decoder_state_evaluation_arrays;
 use super::weights::DecoderLayerAttentionWeights;
 use super::{PrismHadamardModelError, PrismHadamardTextModel, validate_greedy_generation_request};
 
-/// The per-sequence generation state (gated-delta convolution and recurrent
-/// state plus full-attention key-value slabs), owned by the caller across
-/// prefill chunks and decode steps.
-pub struct PrismHadamardGenerationState(pub StraightGenerationState);
+/// The per-sequence generation state, owned by the caller across prefill
+/// chunks and decode steps: the shared decoder-state stack (gated-delta
+/// convolution and recurrent state plus full-attention key-value slabs) and
+/// the next position, the same pair a shared Qwen 3.5 engine request keeps.
+///
+/// The probe surface hands out an empty state before any model call, so the
+/// stack, which needs the model's layout, is created on the first forward.
+pub struct PrismHadamardGenerationState {
+    request_decoder_state: Option<RequestDecoderStateStack>,
+    next_position_tokens: u32,
+}
 
 impl PrismHadamardGenerationState {
     /// A fresh state covering no tokens.
     #[must_use]
     pub fn empty() -> Self {
-        Self(StraightGenerationState::empty())
+        Self {
+            request_decoder_state: None,
+            next_position_tokens: 0,
+        }
     }
 
     /// How many tokens the state already covers.
     #[must_use]
-    pub const fn covered_token_count(&self) -> i32 {
-        self.0.sequence_position_offset()
+    pub fn covered_token_count(&self) -> i32 {
+        i32::try_from(self.next_position_tokens).unwrap_or(i32::MAX)
+    }
+
+    /// The decoder-state stack, created from `model`'s layout on first use.
+    fn request_decoder_state_for(
+        &mut self,
+        model: &PrismHadamardTextModel,
+    ) -> Result<&mut RequestDecoderStateStack, PrismHadamardModelError> {
+        let request_decoder_state = match self.request_decoder_state.take() {
+            Some(request_decoder_state) => request_decoder_state,
+            None => model.empty_request_decoder_state()?,
+        };
+        Ok(self.request_decoder_state.insert(request_decoder_state))
+    }
+
+    /// Runs one whole forward from the next position, then advances the
+    /// position by the forwarded token count, as the shared Qwen 3.5 engine
+    /// request does after every forward.
+    fn forward_pass(
+        &mut self,
+        model: &PrismHadamardTextModel,
+        token_indices: &MlxArray,
+    ) -> Result<MlxArray, PrismHadamardModelError> {
+        let starting_position_tokens = self.next_position_tokens;
+        let logits = model.forward_pass(
+            token_indices,
+            starting_position_tokens,
+            self.request_decoder_state_for(model)?,
+        )?;
+        self.advance_position(token_indices.shape()[1]);
+        Ok(logits)
+    }
+
+    /// Runs one decoder layer at the covered position without advancing it;
+    /// the layer probes advance the position themselves once per step.
+    fn forward_decoder_layer(
+        &mut self,
+        model: &PrismHadamardTextModel,
+        layer_index: usize,
+        hidden_states: &MlxArray,
+    ) -> Result<MlxArray, PrismHadamardModelError> {
+        let rope_offset_tokens = self.covered_token_count();
+        model.forward_decoder_layer(
+            layer_index,
+            hidden_states,
+            rope_offset_tokens,
+            self.request_decoder_state_for(model)?,
+        )
+    }
+
+    fn advance_position(&mut self, forwarded_token_count: i32) {
+        self.next_position_tokens = self
+            .next_position_tokens
+            .saturating_add_signed(forwarded_token_count);
+    }
+
+    /// The evaluation roots of one step: `output` plus every retained state
+    /// array, or `output` alone before the first forward allocated any.
+    fn evaluation_arrays<'state>(&'state self, output: &'state MlxArray) -> Vec<&'state MlxArray> {
+        match self.request_decoder_state.as_ref() {
+            Some(request_decoder_state) => {
+                request_decoder_state_evaluation_arrays(request_decoder_state, output)
+            }
+            None => vec![output],
+        }
     }
 }
 
@@ -210,7 +286,7 @@ impl PrismHadamardTextModel {
     }
 
     /// Runs one decoder layer over `[1, token_count, hidden]` activations,
-    /// advancing that layer's slot in `state`. The caller is responsible for
+    /// advancing that layer's entry in `state`. The caller is responsible for
     /// keeping `state` consistent with the positions already covered: a
     /// decode-shaped probe (`token_count == 1`) should follow a prefill probe
     /// on the same state so the layer attends over a realistic prefix.
@@ -225,13 +301,13 @@ impl PrismHadamardTextModel {
                 layer_type: format!("decoder layer {layer_index} does not exist"),
             });
         }
-        self.forward_decoder_layer(layer_index, hidden_states, &mut state.0)
+        state.forward_decoder_layer(self, layer_index, hidden_states)
     }
 
     /// Advances `state` by the token count of the last layer probe so a
     /// following probe sees the right RoPE offset and key-value window.
     pub fn advance_probe_state(&self, state: &mut PrismHadamardGenerationState, token_count: i32) {
-        state.0.advance_position(token_count);
+        state.advance_position(token_count);
     }
 
     /// Runs one prefill pass over `token_ids` (one chunk; the caller slices
@@ -245,7 +321,7 @@ impl PrismHadamardTextModel {
             .runtime
             .array_from_i32(token_ids, &[1, token_ids.len() as i32])
             .map_err(PrismHadamardModelError::Forward)?;
-        self.forward_pass(&token_indices, &mut state.0)
+        state.forward_pass(self, &token_indices)
     }
 
     /// Runs one decode step for `token_id` and returns its logits, lazily.
@@ -258,7 +334,7 @@ impl PrismHadamardTextModel {
             .runtime
             .array_from_i32(&[token_id as i32], &[1, 1])
             .map_err(PrismHadamardModelError::Forward)?;
-        self.forward_pass(&token_indices, &mut state.0)
+        state.forward_pass(self, &token_indices)
     }
 
     /// Materializes `output` together with every retained state array, so
@@ -270,7 +346,7 @@ impl PrismHadamardTextModel {
         state: &PrismHadamardGenerationState,
     ) -> Result<(), PrismHadamardModelError> {
         self.runtime
-            .evaluate_arrays(&state.0.evaluation_arrays(output))
+            .evaluate_arrays(&state.evaluation_arrays(output))
             .map_err(PrismHadamardModelError::Forward)
     }
 
@@ -376,11 +452,11 @@ impl PrismHadamardGreedySession<'_> {
         // keeps working while the host waits for this token's value. The
         // successor is wasted only when this token turns out to be a stop id.
         let successor = if self.remaining_token_count > 1 {
-            let successor_logits = self.model.forward_pass(&token, &mut self.state.0)?;
+            let successor_logits = self.state.forward_pass(self.model, &token)?;
             let successor = self.model.greedy_token_lazily(&successor_logits)?;
             self.model
                 .runtime
-                .async_eval_arrays(&self.state.0.evaluation_arrays(&successor))
+                .async_eval_arrays(&self.state.evaluation_arrays(&successor))
                 .map_err(PrismHadamardModelError::Forward)?;
             Some(successor)
         } else {
@@ -399,7 +475,7 @@ impl PrismHadamardGreedySession<'_> {
     /// How many tokens the session's state covers (prompt plus committed
     /// generated tokens already fed back).
     #[must_use]
-    pub const fn covered_token_count(&self) -> i32 {
+    pub fn covered_token_count(&self) -> i32 {
         self.state.covered_token_count()
     }
 }

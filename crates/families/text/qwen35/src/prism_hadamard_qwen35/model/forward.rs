@@ -11,239 +11,92 @@
 //! paging), which the parity milestone does not exercise.
 
 use mlx_bridge::MlxArray;
-use runtime_integration::MlxRuntimeError;
 
-use crate::{ConvolutionState, FullAttentionKeyValueState, GatedDeltaRecurrentState};
+use crate::{AstroDecoderStateCacheState, RequestDecoderStateStack};
 
 use super::PrismHadamardModelError;
-use super::PrismHadamardTextModel;
 use super::weights::{DecoderLayerAttentionWeights, DenseMlpWeights};
-
-/// The per-kind slot layout of the straight generation state, so persisted
-/// tensor names (decoder-layer indexed) can address per-kind state slots.
-pub struct PrismStateSlotLayout {
-    /// Decoder-layer index of each full-attention slot, in slot order.
-    pub full_attention_decoder_layer_indices: Vec<usize>,
-    /// Decoder-layer index of each linear-attention slot, in slot order.
-    pub linear_attention_decoder_layer_indices: Vec<usize>,
-}
-
-impl PrismStateSlotLayout {
-    /// Rebuilds the decoder-layer-index to per-kind-slot mapping from the
-    /// loaded weights, mirroring `decoder_layer_state_slots`.
-    pub fn for_model(model: &PrismHadamardTextModel) -> Self {
-        let mut full_attention_decoder_layer_indices = Vec::new();
-        let mut linear_attention_decoder_layer_indices = Vec::new();
-        for (decoder_layer_index, decoder_layer) in model.weights.decoder_layers.iter().enumerate()
-        {
-            match &decoder_layer.attention {
-                DecoderLayerAttentionWeights::Linear(_) => {
-                    linear_attention_decoder_layer_indices.push(decoder_layer_index);
-                }
-                DecoderLayerAttentionWeights::Full(_) => {
-                    full_attention_decoder_layer_indices.push(decoder_layer_index);
-                }
-            }
-        }
-        Self {
-            full_attention_decoder_layer_indices,
-            linear_attention_decoder_layer_indices,
-        }
-    }
-}
 
 mod full_attention;
 mod gated_delta;
 
-/// The per-sequence generation state for the straight forward pass.
-pub struct StraightGenerationState {
-    convolution_states: Vec<ConvolutionState>,
-    recurrent_states: Vec<GatedDeltaRecurrentState>,
-    key_value_states: Vec<FullAttentionKeyValueState>,
-    /// How many tokens the state already covers (prefill chunks and decoded
-    /// tokens together), feeding RoPE offsets and `astro_decoder_state_cache` KV views.
-    sequence_position_offset: i32,
+/// Every retained `astro_decoder_state_cache` array plus the forward output,
+/// as the evaluation roots one step must materialize together. Convolution
+/// state branches off the forward input rather than feeding the output, so it
+/// is always an explicit root; the recurrent and key-value arrays are listed
+/// too so one step never leaves a lazy state graph for the next step to drag.
+///
+/// The roots keep the order the per-kind state slots gave them before the
+/// state moved onto the shared decoder-layer stack: the output, every
+/// convolution buffer, every recurrent accumulator, then every key and value
+/// slab, each group in decoder-layer order. Each array's value does not
+/// depend on that order, but MLX schedules a multi-root evaluation in root
+/// order, so keeping it keeps the dispatch sequence the speed proofs measured.
+pub fn request_decoder_state_evaluation_arrays<'state>(
+    request_decoder_state: &'state RequestDecoderStateStack,
+    output: &'state MlxArray,
+) -> Vec<&'state MlxArray> {
+    let decoder_layer_states = request_decoder_state.layers();
+    let mut evaluation_arrays = Vec::with_capacity(1 + 2 * decoder_layer_states.len());
+    evaluation_arrays.push(output);
+    for decoder_layer_state in decoder_layer_states {
+        if let AstroDecoderStateCacheState::Composite { convolution, .. } = decoder_layer_state {
+            evaluation_arrays.extend(convolution.state());
+        }
+    }
+    for decoder_layer_state in decoder_layer_states {
+        if let AstroDecoderStateCacheState::Composite { recurrent, .. } = decoder_layer_state {
+            evaluation_arrays.extend(recurrent.state());
+        }
+    }
+    for decoder_layer_state in decoder_layer_states {
+        if let AstroDecoderStateCacheState::AppendOnlyAttention { attention } = decoder_layer_state
+        {
+            evaluation_arrays.extend(attention.keys_state());
+            evaluation_arrays.extend(attention.values_state());
+        }
+    }
+    evaluation_arrays
 }
 
-impl StraightGenerationState {
-    pub fn empty() -> Self {
-        Self {
-            convolution_states: Vec::new(),
-            recurrent_states: Vec::new(),
-            key_value_states: Vec::new(),
-            sequence_position_offset: 0,
+/// The rotary offset of a forward's first token, in the i32 form RoPE takes,
+/// mirroring how the shared Qwen 3.5 forward converts its starting position.
+pub(super) fn rope_offset_tokens(
+    starting_position_tokens: u32,
+) -> Result<i32, PrismHadamardModelError> {
+    i32::try_from(starting_position_tokens).map_err(|_| {
+        PrismHadamardModelError::InvalidGenerationRequest {
+            description: "the starting position exceeds the MLX int32 range".to_owned(),
         }
-    }
-
-    /// Builds the per-layer slot owners a restored prompt prefix needs,
-    /// mirroring the allocation order a fresh forward would have produced:
-    /// one convolution/recurrent pair per linear layer and one key-value
-    /// owner per full-attention layer, each still unallocated until the
-    /// restored tensors seat them. Keep the kind matching in sync with
-    /// `forward_decoder_layer`, which pushes the same owners lazily.
-    pub fn restored_prefix_slot_owners(model: &PrismHadamardTextModel) -> Self {
-        let text = model.pack.config().text();
-        let mut generation_state = Self::empty();
-        for decoder_layer in &model.weights.decoder_layers {
-            match &decoder_layer.attention {
-                DecoderLayerAttentionWeights::Linear(_) => {
-                    generation_state
-                        .convolution_states
-                        .push(ConvolutionState::empty_with_shape(
-                            text.linear_conv_kernel_dim as i32,
-                            (2 * text.linear_num_key_heads * text.linear_key_head_dim
-                                + text.linear_num_value_heads * text.linear_value_head_dim)
-                                as i32,
-                        ));
-                    generation_state.recurrent_states.push(
-                        GatedDeltaRecurrentState::empty_with_shape(
-                            text.linear_num_value_heads as i32,
-                            text.linear_value_head_dim as i32,
-                            text.linear_key_head_dim as i32,
-                        ),
-                    );
-                }
-                DecoderLayerAttentionWeights::Full(_) => {
-                    // The fresh-forward allocation path uses the same growth
-                    // granularity, so a restored slab behaves identically to
-                    // a forward-grown one.
-                    generation_state.key_value_states.push(
-                        FullAttentionKeyValueState::empty_with_growth_tokens(256)
-                            .expect("the fixed growth granularity is always valid"),
-                    );
-                }
-            }
-        }
-        generation_state
-    }
-
-    /// The allocated K/V slabs of one full-attention layer's slot, for the
-    /// persistent astro SSD prompt cache capture bridge.
-    pub fn key_value_slabs(&self, slot: usize) -> Option<(&MlxArray, &MlxArray)> {
-        let key_value_state = self.key_value_states.get(slot)?;
-        Some((
-            key_value_state.keys_state()?,
-            key_value_state.values_state()?,
-        ))
-    }
-
-    /// Replaces one full-attention layer's slabs from restored SSD astro SSD prompt cache
-    /// block tensors (already concatenated to the full restored length).
-    pub fn restore_key_value_slabs(
-        &mut self,
-        slot: usize,
-        restored_keys: MlxArray,
-        restored_values: MlxArray,
-    ) -> Result<(), MlxRuntimeError> {
-        self.key_value_states[slot].restore_from_blocks(restored_keys, restored_values)
-    }
-
-    /// The allocated convolution rolling buffer of one linear layer's slot.
-    pub fn convolution_state_array(&self, slot: usize) -> Option<&MlxArray> {
-        self.convolution_states.get(slot)?.state()
-    }
-
-    /// Installs a restored convolution rolling buffer after its shape is
-    /// validated against the owner's configured geometry.
-    pub fn restore_convolution_state(
-        &mut self,
-        slot: usize,
-        restored_state: MlxArray,
-    ) -> Result<(), MlxRuntimeError> {
-        self.convolution_states[slot].replace_state(restored_state)
-    }
-
-    /// The allocated gated-delta recurrent accumulator of one linear layer's slot.
-    pub fn recurrent_state_array(&self, slot: usize) -> Option<&MlxArray> {
-        self.recurrent_states.get(slot)?.state()
-    }
-
-    /// Installs a restored gated-delta recurrent accumulator.
-    pub fn restore_recurrent_state(&mut self, slot: usize, restored_state: MlxArray) {
-        self.recurrent_states[slot].restore_from_snapshot(restored_state)
-    }
-
-    /// Retargets the covered position after a restored prefix so RoPE offsets
-    /// and `astro_decoder_state_cache` views continue from the restored length.
-    pub fn set_sequence_position_offset(&mut self, covered_token_count: i32) {
-        self.sequence_position_offset = covered_token_count;
-    }
-
-    pub const fn sequence_position_offset(&self) -> i32 {
-        self.sequence_position_offset
-    }
-
-    /// Host-side byte estimate of every retained state array, matching the
-    /// payload accounting the astro decoder state cache state types publish. The memory
-    /// telemetry breakdown uses it as the live-context owner share.
-    pub fn payload_byte_count(&self) -> u64 {
-        let convolution_state_payload_bytes = self
-            .convolution_states
-            .iter()
-            .map(|convolution_state| convolution_state.payload_byte_count())
-            .fold(0_u64, u64::saturating_add);
-        let recurrent_state_payload_bytes = self
-            .recurrent_states
-            .iter()
-            .map(|recurrent_state| recurrent_state.payload_byte_count())
-            .fold(0_u64, u64::saturating_add);
-        let key_value_state_payload_bytes = self
-            .key_value_states
-            .iter()
-            .map(|key_value_state| key_value_state.payload_byte_count())
-            .fold(0_u64, u64::saturating_add);
-        convolution_state_payload_bytes
-            .saturating_add(recurrent_state_payload_bytes)
-            .saturating_add(key_value_state_payload_bytes)
-    }
-
-    /// Advances the covered position by `token_count` without running a
-    /// forward, for probes that drive one layer at a time.
-    pub const fn advance_position(&mut self, token_count: i32) {
-        self.sequence_position_offset += token_count;
-    }
-
-    /// Every retained state array plus the forward output, as the evaluation
-    /// roots one step must materialize together. Convolution state branches
-    /// off the forward input rather than feeding the output, so it is always
-    /// an explicit root; the recurrent and key-value arrays are listed too so
-    /// one step never leaves a lazy state graph for the next step to drag.
-    pub fn evaluation_arrays<'state>(
-        &'state self,
-        output: &'state MlxArray,
-    ) -> Vec<&'state MlxArray> {
-        let mut evaluation_arrays = Vec::with_capacity(
-            1 + self.convolution_states.len()
-                + self.recurrent_states.len()
-                + 2 * self.key_value_states.len(),
-        );
-        evaluation_arrays.push(output);
-        evaluation_arrays.extend(
-            self.convolution_states
-                .iter()
-                .filter_map(ConvolutionState::state),
-        );
-        evaluation_arrays.extend(
-            self.recurrent_states
-                .iter()
-                .filter_map(GatedDeltaRecurrentState::state),
-        );
-        for key_value_state in &self.key_value_states {
-            evaluation_arrays.extend(key_value_state.keys_state());
-            evaluation_arrays.extend(key_value_state.values_state());
-        }
-        evaluation_arrays
-    }
+    })
 }
 
 impl super::PrismHadamardTextModel {
-    /// Runs one forward pass and returns vocabulary logits for its final token.
+    /// Creates one request's empty decoder state: one owner per decoder layer,
+    /// each unallocated until its first forward or a restored prefix seats it.
+    pub fn empty_request_decoder_state(
+        &self,
+    ) -> Result<RequestDecoderStateStack, PrismHadamardModelError> {
+        super::super::astro_decoder_state_cache_layout::prism_request_decoder_state(
+            &self.astro_decoder_state_cache_layout,
+        )
+        .map_err(PrismHadamardModelError::ForwardRuntime)
+    }
+
+    /// Runs one forward pass from `starting_position_tokens` and returns
+    /// vocabulary logits for its final token. As in the shared Qwen 3.5
+    /// engines, the caller owns the position and advances it afterwards.
     pub fn forward_pass(
         &self,
         token_indices: &MlxArray,
-        state: &mut StraightGenerationState,
+        starting_position_tokens: u32,
+        request_decoder_state: &mut RequestDecoderStateStack,
     ) -> Result<MlxArray, PrismHadamardModelError> {
-        let final_hidden_states = self.forward_hidden_states(token_indices, state)?;
+        let final_hidden_states = self.forward_hidden_states(
+            token_indices,
+            starting_position_tokens,
+            request_decoder_state,
+        )?;
         self.logits_for_last_hidden_state(&final_hidden_states)
     }
 
@@ -252,22 +105,19 @@ impl super::PrismHadamardTextModel {
     pub fn forward_hidden_states(
         &self,
         token_indices: &MlxArray,
-        state: &mut StraightGenerationState,
+        starting_position_tokens: u32,
+        request_decoder_state: &mut RequestDecoderStateStack,
     ) -> Result<MlxArray, PrismHadamardModelError> {
         let text = self.pack.config().text();
         // The core route carries the leading batch axis: token indices are
         // [1, token_count] and every activation stays [1, token_count, ...].
         let token_count = token_indices.shape()[1];
         let rms_norm_epsilon = f32::from_bits(text.rms_norm_epsilon_bits);
-
-        let mut hidden_states = self
-            .embed_tokens(token_indices)
-            .map_err(PrismHadamardModelError::Forward)?;
-
-        for layer_index in 0..self.weights.decoder_layers.len() {
-            hidden_states = self.forward_decoder_layer(layer_index, &hidden_states, state)?;
-        }
-        state.sequence_position_offset += token_count;
+        let hidden_states = self.forward_decoder_layers(
+            token_indices,
+            starting_position_tokens,
+            request_decoder_state,
+        )?;
 
         let hidden_state_shape = hidden_states.shape();
         // Final RMS normalization is position-local, so discard earlier rows first;
@@ -290,21 +140,46 @@ impl super::PrismHadamardTextModel {
             .map_err(PrismHadamardModelError::Forward)
     }
 
+    /// Embeds `token_indices` and runs every decoder layer over them, returning
+    /// the last layer's output before the final normalization, the same span
+    /// the shared Qwen 3.5 forward graph asks a model's decoder-layer loop for.
+    fn forward_decoder_layers(
+        &self,
+        token_indices: &MlxArray,
+        starting_position_tokens: u32,
+        request_decoder_state: &mut RequestDecoderStateStack,
+    ) -> Result<MlxArray, PrismHadamardModelError> {
+        let rope_offset_tokens = rope_offset_tokens(starting_position_tokens)?;
+        let mut hidden_states = self
+            .embed_tokens(token_indices)
+            .map_err(PrismHadamardModelError::Forward)?;
+        for layer_index in 0..self.weights.decoder_layers.len() {
+            hidden_states = self.forward_decoder_layer(
+                layer_index,
+                &hidden_states,
+                rope_offset_tokens,
+                request_decoder_state,
+            )?;
+        }
+        Ok(hidden_states)
+    }
+
     /// Runs one decoder layer (attention half, dense MLP, both residual adds)
     /// over `hidden_states` of shape `[1, token_count, hidden]`, advancing the
-    /// layer's slot in `state`. The embedding and final norm stay outside so
-    /// the measurement surface can time one layer in isolation.
+    /// layer's own entry in `request_decoder_state`. The embedding and final
+    /// norm stay outside so the measurement surface can time one layer in
+    /// isolation.
     pub fn forward_decoder_layer(
         &self,
         layer_index: usize,
         hidden_states: &MlxArray,
-        state: &mut StraightGenerationState,
+        rope_offset_tokens: i32,
+        request_decoder_state: &mut RequestDecoderStateStack,
     ) -> Result<MlxArray, PrismHadamardModelError> {
         let text = self.pack.config().text();
         let token_count = hidden_states.shape()[1];
         let rms_norm_epsilon = f32::from_bits(text.rms_norm_epsilon_bits);
         let decoder_layer = &self.weights.decoder_layers[layer_index];
-        let state_slot = self.decoder_layer_state_slots[layer_index];
         let normalized_input = self
             .runtime
             .rms_norm(
@@ -313,48 +188,35 @@ impl super::PrismHadamardTextModel {
                 rms_norm_epsilon,
             )
             .map_err(PrismHadamardModelError::Forward)?;
-        let attention_output = match &decoder_layer.attention {
-            DecoderLayerAttentionWeights::Linear(linear_layer) => {
-                if state.convolution_states.len() <= state_slot {
-                    state
-                        .convolution_states
-                        .push(ConvolutionState::empty_with_shape(
-                            text.linear_conv_kernel_dim as i32,
-                            (2 * text.linear_num_key_heads * text.linear_key_head_dim
-                                + text.linear_num_value_heads * text.linear_value_head_dim)
-                                as i32,
-                        ));
-                    state
-                        .recurrent_states
-                        .push(GatedDeltaRecurrentState::empty_with_shape(
-                            text.linear_num_value_heads as i32,
-                            text.linear_value_head_dim as i32,
-                            text.linear_key_head_dim as i32,
-                        ));
-                }
-                self.forward_linear_attention_layer(
-                    &normalized_input,
-                    token_count,
-                    linear_layer,
-                    state_slot,
-                    state,
-                )?
-            }
-            DecoderLayerAttentionWeights::Full(full_layer) => {
-                if state.key_value_states.len() <= state_slot {
-                    let key_value_state = FullAttentionKeyValueState::empty_with_growth_tokens(256)
-                        .map_err(PrismHadamardModelError::ForwardRuntime)?;
-                    state.key_value_states.push(key_value_state);
-                }
-                self.forward_full_attention_layer(
-                    &normalized_input,
-                    token_count,
-                    full_layer,
-                    rms_norm_epsilon,
-                    state_slot,
-                    state,
-                )?
-            }
+        let attention_output = match (
+            &decoder_layer.attention,
+            request_decoder_state.layer_mut(layer_index),
+        ) {
+            (
+                DecoderLayerAttentionWeights::Linear(linear_layer),
+                Some(AstroDecoderStateCacheState::Composite {
+                    convolution,
+                    recurrent,
+                }),
+            ) => self.forward_linear_attention_layer(
+                &normalized_input,
+                token_count,
+                linear_layer,
+                convolution,
+                recurrent,
+            )?,
+            (
+                DecoderLayerAttentionWeights::Full(full_layer),
+                Some(AstroDecoderStateCacheState::AppendOnlyAttention { attention }),
+            ) => self.forward_full_attention_layer(
+                &normalized_input,
+                token_count,
+                full_layer,
+                rms_norm_epsilon,
+                rope_offset_tokens,
+                attention,
+            )?,
+            _ => return Err(PrismHadamardModelError::DecoderStateLayerMismatch { layer_index }),
         };
         let hidden_states = self
             .runtime

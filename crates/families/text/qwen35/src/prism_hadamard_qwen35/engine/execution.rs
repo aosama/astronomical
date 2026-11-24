@@ -11,6 +11,7 @@ mod memory_limit;
 mod prefill_chunk;
 mod request_checks;
 mod sampling;
+mod starting_decoder_state;
 
 use ipc_protocol::RequestId;
 use mlx_bridge::MlxArray;
@@ -20,9 +21,9 @@ use crate::AstroSsdPromptCacheDiskStore;
 use crate::AstroSsdPromptCacheDiskStoreConfig;
 use crate::Qwen3_5InferenceRequest;
 use crate::Qwen3_5ThinkingBudgetState;
+use crate::RequestDecoderStateStack;
 use crate::prism_hadamard_qwen35::artifacts::ValidatedFoldedPack;
-use crate::prism_hadamard_qwen35::model::PrismHadamardTextModel;
-use crate::prism_hadamard_qwen35::model::StraightGenerationState;
+use crate::prism_hadamard_qwen35::model::{PrismHadamardModelError, PrismHadamardTextModel};
 use crate::{PerformanceAttribution, PerformanceAttributionLog, PerformanceOperation};
 use engine_core::astro_ssd_prompt_cache::AstroSsdPromptCacheCounters;
 
@@ -84,7 +85,13 @@ pub(super) struct PrismHadamardQwen35ActiveGeneration {
     /// The prompt-prefix token count the astro SSD prompt cache restored; reported
     /// as reused prompt work on every prefill progress event.
     pub(super) astro_ssd_prompt_cache_restored_token_count: u32,
-    pub(super) generation_state: StraightGenerationState,
+    /// One `astro_decoder_state_cache` entry per decoder layer, threaded
+    /// through every forward exactly as the shared Qwen 3.5 engines do.
+    pub(super) request_decoder_state: RequestDecoderStateStack,
+    /// The position the next forward starts at: every prompt, feedback and
+    /// generated token already forwarded, including any restored prefix. It
+    /// feeds the RoPE offsets, like the shared engine request's own counter.
+    pub(super) next_position_tokens: u32,
     /// The next sampled token as a lazy `[1, 1]` device array whose graph
     /// is already submitted, or `None` once generation finished. Its value
     /// reaches the host only when the next step synchronizes it.
@@ -121,6 +128,48 @@ impl PrismHadamardQwen35ActiveGeneration {
             });
         self.performance_attribution = performance_attribution;
         operation_output
+    }
+
+    /// Runs the straight forward over `token_indices` (`[1, token_count]`)
+    /// from the next position and returns its final hidden row, then
+    /// advances the position by the forwarded token count.
+    pub(super) fn forward_hidden_states(
+        &mut self,
+        model: &PrismHadamardTextModel,
+        token_indices: &MlxArray,
+    ) -> Result<MlxArray, PrismHadamardModelError> {
+        let final_hidden_state_row = model.forward_hidden_states(
+            token_indices,
+            self.next_position_tokens,
+            &mut self.request_decoder_state,
+        )?;
+        self.advance_position(token_indices);
+        Ok(final_hidden_state_row)
+    }
+
+    /// Runs one whole forward from the next position and returns its final
+    /// logits, then advances the position by the forwarded token count.
+    pub(super) fn forward_pass(
+        &mut self,
+        model: &PrismHadamardTextModel,
+        token_indices: &MlxArray,
+    ) -> Result<MlxArray, PrismHadamardModelError> {
+        let logits = model.forward_pass(
+            token_indices,
+            self.next_position_tokens,
+            &mut self.request_decoder_state,
+        )?;
+        self.advance_position(token_indices);
+        Ok(logits)
+    }
+
+    /// The serving checks cap every request at the model's context window,
+    /// far inside u32, so the position never saturates in practice.
+    fn advance_position(&mut self, forwarded_token_indices: &MlxArray) {
+        let forwarded_token_count = forwarded_token_indices.shape()[1];
+        self.next_position_tokens = self
+            .next_position_tokens
+            .saturating_add_signed(forwarded_token_count);
     }
 }
 

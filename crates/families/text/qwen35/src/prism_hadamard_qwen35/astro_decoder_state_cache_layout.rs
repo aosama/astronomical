@@ -10,10 +10,12 @@
 //! storage contract to the schema the pack already enforces keeps a future
 //! dtype change from silently producing unreadable astro decoder state cache files.
 
+use runtime_integration::MlxRuntimeError;
+
 use crate::{
     AstroDecoderStateCacheLayerLayout, AstroDecoderStateCacheLayout,
     AstroDecoderStateCacheLayoutError, AstroDecoderStateCacheTensorDtype,
-    AstroDecoderStateCacheTensorLayout,
+    AstroDecoderStateCacheTensorLayout, RequestDecoderStateStack,
 };
 
 use super::configuration::FoldedPackConfig;
@@ -26,12 +28,29 @@ pub const PRISM_ATTENTION_VALUES_TENSOR_ROLE: &str = "attention.values";
 /// The KV slab growth granularity the straight forward pass allocates with.
 pub const PRISM_FULL_ATTENTION_KEY_VALUE_GROWTH_TOKENS: usize = 256;
 
+/// Creates one request's live `astro_decoder_state_cache` owners, one per
+/// decoder layer, from the validated layout.
+///
+/// The growth step is pinned through the shared stack's override rather than
+/// read back from the layout, so the KV slabs grow in exactly the 256-token
+/// steps Prism has always allocated: a slab's capacity decides when MLX
+/// reallocates and copies it, and a different step would move those copies
+/// and change decode speed even though the attended tokens stay the same.
+pub fn prism_request_decoder_state(
+    astro_decoder_state_cache_layout: &AstroDecoderStateCacheLayout,
+) -> Result<RequestDecoderStateStack, MlxRuntimeError> {
+    RequestDecoderStateStack::empty_from_astro_decoder_state_cache_layout_with_full_attention_kv_state_growth_tokens(
+        astro_decoder_state_cache_layout,
+        PRISM_FULL_ATTENTION_KEY_VALUE_GROWTH_TOKENS as i32,
+    )
+}
+
 /// Builds the validated persistent astro decoder state cache layout for one folded pack.
 ///
-/// Layer ordering follows `layer_types` so persisted tensor names
-/// (`layer_<decoder_layer_index>_<role>`) use decoder-layer indices, while the
-/// live `StraightGenerationState` slots number layers within their attention
-/// kind; the mapping between the two is rebuilt from the same list.
+/// Layer ordering follows `layer_types`, so persisted tensor names
+/// (`layer_<decoder_layer_index>_<role>`) and the live
+/// `RequestDecoderStateStack` both address state by the same decoder-layer
+/// index.
 pub fn prism_hadamard_qwen35_astro_decoder_state_cache_layout(
     folded_pack_config: &FoldedPackConfig,
 ) -> Result<AstroDecoderStateCacheLayout, AstroDecoderStateCacheLayoutError> {
@@ -107,6 +126,7 @@ pub fn prism_hadamard_qwen35_astro_decoder_state_cache_layout(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::AstroDecoderStateCacheState;
     use serde_json::json;
 
     /// A tiny pack document shaped exactly like the shipped 27B pack (same
@@ -246,5 +266,81 @@ mod tests {
                 "layer_0_linear.gated_delta_recurrent"
             ]
         );
+    }
+
+    #[test]
+    fn should_build_one_live_state_owner_per_decoder_layer_in_layer_order() {
+        let astro_decoder_state_cache_layout =
+            prism_hadamard_qwen35_astro_decoder_state_cache_layout(&shaped_pack_config(&[
+                "linear_attention",
+                "full_attention",
+                "linear_attention",
+            ]))
+            .expect("the fixture layout must validate");
+        let request_decoder_state = prism_request_decoder_state(&astro_decoder_state_cache_layout)
+            .expect("the validated layout must create live state");
+        let layer_families = request_decoder_state
+            .layers()
+            .iter()
+            .map(live_state_family_name)
+            .collect::<Vec<_>>();
+        assert_eq!(
+            layer_families,
+            vec!["composite", "append_only_attention", "composite"]
+        );
+        // No tensor is allocated before the first forward, so the context
+        // share of the memory breakdown starts at zero.
+        assert_eq!(request_decoder_state.payload_byte_count(), 0);
+    }
+
+    #[test]
+    fn should_grow_full_attention_slabs_in_prism_steps_of_256_tokens() {
+        let astro_decoder_state_cache_layout =
+            prism_hadamard_qwen35_astro_decoder_state_cache_layout(&shaped_pack_config(&[
+                "full_attention",
+            ]))
+            .expect("the fixture layout must validate");
+        let request_decoder_state = prism_request_decoder_state(&astro_decoder_state_cache_layout)
+            .expect("the validated layout must create live state");
+        let Some(AstroDecoderStateCacheState::AppendOnlyAttention { attention }) =
+            request_decoder_state.layer(0)
+        else {
+            panic!("the only layer must be append-only attention");
+        };
+        // One token and exactly one step both fit the first slab; one token
+        // past it needs a second whole slab.
+        for (update_token_count, expected_growth_tokens) in [(1, 256), (256, 256), (257, 512)] {
+            assert_eq!(
+                attention
+                    .projected_capacity_growth_tokens(update_token_count)
+                    .expect("the projection must succeed"),
+                expected_growth_tokens,
+                "an empty slab receiving {update_token_count} tokens"
+            );
+        }
+    }
+
+    #[test]
+    fn should_refuse_a_layer_layout_the_qwen_state_owners_cannot_hold() {
+        // A recurrent tensor outside a composite layer is valid layout
+        // vocabulary, but no Qwen decoder layer owns a lone recurrent tensor.
+        let standalone_recurrent_layout = AstroDecoderStateCacheLayout::new(vec![
+            AstroDecoderStateCacheLayerLayout::recurrent_tensor(
+                AstroDecoderStateCacheTensorLayout::fixed(
+                    PRISM_RECURRENCE_TENSOR_ROLE,
+                    AstroDecoderStateCacheTensorDtype::Float32,
+                    vec![1, 8, 16, 16],
+                ),
+            ),
+        ])
+        .expect("a standalone recurrent tensor layout is valid on its own");
+        assert!(prism_request_decoder_state(&standalone_recurrent_layout).is_err());
+    }
+
+    fn live_state_family_name(layer_state: &AstroDecoderStateCacheState) -> &'static str {
+        match layer_state {
+            AstroDecoderStateCacheState::AppendOnlyAttention { .. } => "append_only_attention",
+            AstroDecoderStateCacheState::Composite { .. } => "composite",
+        }
     }
 }
