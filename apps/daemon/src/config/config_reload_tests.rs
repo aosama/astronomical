@@ -18,7 +18,7 @@ use config::{
 };
 use ipc_protocol::{
     WorkerAutoregressiveModelConfiguration, WorkerChunkingConfiguration,
-    WorkerFlux2KleinModelConfiguration, WorkerImageGenerationModelFamily, WorkerModelConfiguration,
+    WorkerImageGenerationModelConfiguration, WorkerModelConfiguration,
 };
 
 #[test]
@@ -649,10 +649,10 @@ fn image_runtime_model_policy(revision: &str) -> RuntimeModelPolicy {
         configured_maximum_context_tokens: None,
         default_maximum_context_tokens: 0,
         configured_chunking_fields: Default::default(),
-        worker_model_configuration: WorkerModelConfiguration::Flux2Klein(
-            WorkerFlux2KleinModelConfiguration {
+        worker_model_configuration: WorkerModelConfiguration::ImageGeneration(
+            WorkerImageGenerationModelConfiguration {
                 model_id: "FLUX.2-klein-4B".to_owned(),
-                model_family: WorkerImageGenerationModelFamily::Flux2Klein,
+                model_family: "flux2_klein".to_owned(),
                 artifact_revision: revision.to_owned(),
             },
         ),

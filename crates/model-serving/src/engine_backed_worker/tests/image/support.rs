@@ -15,8 +15,8 @@ use ipc_protocol::{
     GeneratedImage, ImageGenerationCapabilities, ImageGenerationCommand,
     ImageGenerationFailureReason, ImageGenerationPhase, ImageGenerationResultMetadata,
     ImageGenerationSettings, MAX_IPC_FRAME_BYTES, MlxMemorySnapshotSource, ProtocolReader,
-    ProtocolWriter, RequestId, WorkerCommand, WorkerEvent, WorkerFlux2KleinModelConfiguration,
-    WorkerImageGenerationModelFamily, WorkerModelConfiguration,
+    ProtocolWriter, RequestId, WorkerCommand, WorkerEvent, WorkerImageGenerationModelConfiguration,
+    WorkerModelConfiguration,
 };
 use tokio::io::{AsyncWrite, duplex, split};
 use tokio::task::JoinHandle;
@@ -182,9 +182,9 @@ impl ImageGenerationEngine for ScriptedImageEngine {
 }
 
 pub(super) fn image_configuration() -> WorkerModelConfiguration {
-    WorkerModelConfiguration::Flux2Klein(WorkerFlux2KleinModelConfiguration {
+    WorkerModelConfiguration::ImageGeneration(WorkerImageGenerationModelConfiguration {
         model_id: FLUX2_KLEIN_OFFICIAL_MODEL_ID.to_owned(),
-        model_family: WorkerImageGenerationModelFamily::Flux2Klein,
+        model_family: "flux2_klein".to_owned(),
         artifact_revision: FLUX2_KLEIN_OFFICIAL_REVISION.to_owned(),
     })
 }

@@ -57,3 +57,27 @@ async fn should_preserve_generation_and_chunking_configuration_in_acknowledgemen
     assert!(serialized_event.contains(&configuration_generation));
     assert!(!serialized_event.contains("/tmp/"));
 }
+
+#[test]
+fn should_name_the_family_each_single_model_policy_was_resolved_for() {
+    use crate::{
+        WorkerDecisionModelConfiguration, WorkerImageGenerationModelConfiguration,
+        WorkerModelConfiguration,
+    };
+
+    let image_policy =
+        WorkerModelConfiguration::ImageGeneration(WorkerImageGenerationModelConfiguration {
+            model_id: "fictional/image-model".to_owned(),
+            model_family: "qwen_image_21".to_owned(),
+            artifact_revision: "fictional-revision".to_owned(),
+        });
+    let decision_policy = WorkerModelConfiguration::Decisions(WorkerDecisionModelConfiguration {
+        model_id: "fictional/decision-model".to_owned(),
+        model_family: "clef".to_owned(),
+        artifact_revision: "fictional-revision".to_owned(),
+        maximum_tokens_per_question: 512,
+    });
+
+    assert_eq!(image_policy.model_family(), Some("qwen_image_21"));
+    assert_eq!(decision_policy.model_family(), Some("clef"));
+}

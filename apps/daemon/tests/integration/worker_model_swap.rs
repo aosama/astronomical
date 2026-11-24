@@ -15,9 +15,8 @@ use ipc_protocol::{
     ChatGenerationCommand, ChatGenerationCompletionReason, ChatGenerationSettings, ChatMessage,
     ChatToolChoice, ImageGenerationCommand, ImageGenerationSettings, RequestId,
     WorkerAutoregressiveModelConfiguration, WorkerChunkingConfiguration,
-    WorkerDecodeAstroExpertCachePolicy, WorkerFlux2KleinModelConfiguration,
-    WorkerImageGenerationModelFamily, WorkerLogLevel, WorkerModelConfiguration,
-    WorkerSpeechModelConfiguration, WorkerSpeechModelFamily, WorkerStartupConfiguration,
+    WorkerDecodeAstroExpertCachePolicy, WorkerImageGenerationModelConfiguration, WorkerLogLevel,
+    WorkerModelConfiguration, WorkerSpeechModelConfiguration, WorkerStartupConfiguration,
 };
 use tokio::time::{Instant, sleep, timeout};
 
@@ -413,10 +412,10 @@ fn image_runtime_model_policy(model_id: &str, model_directory: &str) -> RuntimeM
         configured_maximum_context_tokens: None,
         default_maximum_context_tokens: 0,
         configured_chunking_fields: Default::default(),
-        worker_model_configuration: WorkerModelConfiguration::Flux2Klein(
-            WorkerFlux2KleinModelConfiguration {
+        worker_model_configuration: WorkerModelConfiguration::ImageGeneration(
+            WorkerImageGenerationModelConfiguration {
                 model_id: model_id.to_owned(),
-                model_family: WorkerImageGenerationModelFamily::Flux2Klein,
+                model_family: "flux2_klein".to_owned(),
                 artifact_revision: "fixture-revision".to_owned(),
             },
         ),
@@ -428,7 +427,7 @@ fn speech_runtime_model_policy(model_id: &str, model_directory: &str) -> Runtime
         worker_model_configuration: WorkerModelConfiguration::Speech(
             WorkerSpeechModelConfiguration {
                 model_id: model_id.to_owned(),
-                model_family: WorkerSpeechModelFamily::Kokoro,
+                model_family: "kokoro".to_owned(),
                 artifact_revision: "fixture-revision".to_owned(),
             },
         ),

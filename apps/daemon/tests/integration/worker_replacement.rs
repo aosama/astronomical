@@ -10,9 +10,8 @@ use astronomical_daemon::{
 use ipc_protocol::{
     ChatGenerationCommand, ChatGenerationCompletionReason, ChatGenerationSettings, ChatMessage,
     ChatToolChoice, RequestId, WorkerAutoregressiveModelConfiguration, WorkerChunkingConfiguration,
-    WorkerDecodeAstroExpertCachePolicy, WorkerFlux2KleinModelConfiguration,
-    WorkerImageGenerationModelFamily, WorkerLogLevel, WorkerModelConfiguration,
-    WorkerStartupConfiguration,
+    WorkerDecodeAstroExpertCachePolicy, WorkerImageGenerationModelConfiguration, WorkerLogLevel,
+    WorkerModelConfiguration, WorkerStartupConfiguration,
 };
 use tokio::time::{Instant, sleep};
 
@@ -474,10 +473,10 @@ fn flux_model_policy_catalog(revision: &str) -> Arc<HashMap<String, RuntimeModel
             configured_maximum_context_tokens: None,
             default_maximum_context_tokens: 0,
             configured_chunking_fields: Default::default(),
-            worker_model_configuration: WorkerModelConfiguration::Flux2Klein(
-                WorkerFlux2KleinModelConfiguration {
+            worker_model_configuration: WorkerModelConfiguration::ImageGeneration(
+                WorkerImageGenerationModelConfiguration {
                     model_id: FLUX_MODEL_ID.to_owned(),
-                    model_family: WorkerImageGenerationModelFamily::Flux2Klein,
+                    model_family: "flux2_klein".to_owned(),
                     artifact_revision: revision.to_owned(),
                 },
             ),

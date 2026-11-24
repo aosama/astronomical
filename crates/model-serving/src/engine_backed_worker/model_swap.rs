@@ -634,7 +634,7 @@ pub(super) fn factory_runtime_matches_configuration<
             matches!(model_configuration, WorkerModelConfiguration::Autoregressive(_)),
         ModelFactoryRuntime::Image => matches!(
             model_configuration,
-            WorkerModelConfiguration::Flux2Klein(_) | WorkerModelConfiguration::QwenImage21(_)
+            WorkerModelConfiguration::ImageGeneration(_)
         ),
         ModelFactoryRuntime::Embeddings =>
             matches!(model_configuration, WorkerModelConfiguration::Embeddings(_)),

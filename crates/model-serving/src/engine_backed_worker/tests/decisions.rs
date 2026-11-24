@@ -11,8 +11,8 @@ use decision_contract::{
 };
 use ipc_protocol::{
     DecisionsCommand, MAX_IPC_FRAME_BYTES, MlxMemorySnapshotSource, ProtocolReader, ProtocolWriter,
-    RequestId, WorkerCommand, WorkerDecisionModelConfiguration, WorkerDecisionModelFamily,
-    WorkerEvent, WorkerModelConfiguration,
+    RequestId, WorkerCommand, WorkerDecisionModelConfiguration, WorkerEvent,
+    WorkerModelConfiguration,
 };
 use tokio::io::{duplex, split};
 use tokio::task::JoinHandle;
@@ -268,7 +268,7 @@ async fn start_worker_with_scripts(
             model_configuration: WorkerModelConfiguration::Decisions(
                 WorkerDecisionModelConfiguration {
                     model_id: DECISION_MODEL_ID.to_owned(),
-                    model_family: WorkerDecisionModelFamily::Laya,
+                    model_family: "laya".to_owned(),
                     artifact_revision: "scripted-revision".to_owned(),
                     maximum_tokens_per_question: MAXIMUM_TOKENS_PER_QUESTION,
                 },

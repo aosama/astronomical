@@ -8,13 +8,12 @@ use std::{collections::HashMap, sync::Arc};
 
 use config::{
     AstronomicalConfig, AstronomicalConfigError, ChatModelCapabilities, DiscoveredModel,
-    ModelCapabilities, ModelFamily, ResolvedModelConfig,
+    ModelCapabilities, ResolvedModelConfig,
 };
 use ipc_protocol::{
     WorkerAutoregressiveModelConfiguration, WorkerDecisionModelConfiguration,
-    WorkerDecisionModelFamily, WorkerEmbeddingModelConfiguration, WorkerEmbeddingModelFamily,
-    WorkerFlux2KleinModelConfiguration, WorkerImageGenerationModelFamily, WorkerModelConfiguration,
-    WorkerQwenImage21ModelConfiguration, WorkerSpeechModelConfiguration, WorkerSpeechModelFamily,
+    WorkerEmbeddingModelConfiguration, WorkerImageGenerationModelConfiguration,
+    WorkerModelConfiguration, WorkerSpeechModelConfiguration,
 };
 
 use crate::config::runtime_model_policy::{
@@ -102,39 +101,14 @@ impl ResolvedModelPolicyCatalog {
     }
 
     fn image_policy(discovered_model: &DiscoveredModel) -> RuntimeModelPolicy {
-        let worker_model_configuration = match discovered_model.model_family {
-            ModelFamily::Flux2Klein => {
-                WorkerModelConfiguration::Flux2Klein(WorkerFlux2KleinModelConfiguration {
-                    model_id: discovered_model.model_id.clone(),
-                    model_family: WorkerImageGenerationModelFamily::Flux2Klein,
-                    artifact_revision: discovered_model.revision.clone(),
-                })
-            }
-            ModelFamily::QwenImage21 => {
-                WorkerModelConfiguration::QwenImage21(WorkerQwenImage21ModelConfiguration {
-                    model_id: discovered_model.model_id.clone(),
-                    model_family: WorkerImageGenerationModelFamily::QwenImage21,
-                    artifact_revision: discovered_model.revision.clone(),
-                })
-            }
-            // An image capability requires one of the image families above; a discovered
-            // directory that classifies otherwise fails at worker selection instead of
-            // silently receiving a Flux identity it never verified.
-            ModelFamily::Qwen3_5
-            | ModelFamily::PrismHadamardQwen35
-            | ModelFamily::ModernBert
-            | ModelFamily::Laya
-            | ModelFamily::Kev
-            | ModelFamily::Clef
-            | ModelFamily::Kokoro
-            | ModelFamily::Phonon => {
-                WorkerModelConfiguration::Flux2Klein(WorkerFlux2KleinModelConfiguration {
-                    model_id: discovered_model.model_id.clone(),
-                    model_family: WorkerImageGenerationModelFamily::Flux2Klein,
-                    artifact_revision: discovered_model.revision.clone(),
-                })
-            }
-        };
+        // The worker classifies the folder again and refuses it unless it is
+        // this image family, so the policy names the family discovery found.
+        let worker_model_configuration =
+            WorkerModelConfiguration::ImageGeneration(WorkerImageGenerationModelConfiguration {
+                model_id: discovered_model.model_id.clone(),
+                model_family: discovered_model.model_family.as_str().to_owned(),
+                artifact_revision: discovered_model.revision.clone(),
+            });
         RuntimeModelPolicy {
             model_directory: discovered_model.model_directory.clone(),
             // Chat request defaults remain inert for a typed image worker policy.
@@ -169,7 +143,7 @@ impl ResolvedModelPolicyCatalog {
             worker_model_configuration: WorkerModelConfiguration::Speech(
                 WorkerSpeechModelConfiguration {
                     model_id: discovered_model.model_id.clone(),
-                    model_family: worker_speech_family(discovered_model.model_family),
+                    model_family: discovered_model.model_family.as_str().to_owned(),
                     artifact_revision: discovered_model.revision.clone(),
                 },
             ),
@@ -196,7 +170,7 @@ impl ResolvedModelPolicyCatalog {
             worker_model_configuration: WorkerModelConfiguration::Embeddings(
                 WorkerEmbeddingModelConfiguration {
                     model_id: discovered_model.model_id.clone(),
-                    model_family: WorkerEmbeddingModelFamily::ModernBert,
+                    model_family: discovered_model.model_family.as_str().to_owned(),
                     artifact_revision: discovered_model.revision.clone(),
                     vector_width: embedding_capabilities.vector_width,
                     maximum_input_tokens: embedding_capabilities.max_input_tokens,
@@ -225,50 +199,13 @@ impl ResolvedModelPolicyCatalog {
             worker_model_configuration: WorkerModelConfiguration::Decisions(
                 WorkerDecisionModelConfiguration {
                     model_id: discovered_model.model_id.clone(),
-                    model_family: worker_decision_family(discovered_model.model_family),
+                    model_family: discovered_model.model_family.as_str().to_owned(),
                     artifact_revision: discovered_model.revision.clone(),
                     maximum_tokens_per_question: decision_capabilities.maximum_tokens_per_question,
                 },
             ),
         }
     }
-}
-
-/// The worker's name for a decision family. A decision capability is only
-/// ever discovered on Kev, Clef and Laya folders; any other family is
-/// reported as Laya, and the worker refuses it at load because the folder
-/// is not one.
-fn worker_decision_family(model_family: ModelFamily) -> WorkerDecisionModelFamily {
-    config::exhaustive_table!(model_family, {
-        ModelFamily::Kev => WorkerDecisionModelFamily::Kev,
-        ModelFamily::Clef => WorkerDecisionModelFamily::Clef,
-        ModelFamily::Laya => WorkerDecisionModelFamily::Laya,
-        ModelFamily::Qwen3_5 => WorkerDecisionModelFamily::Laya,
-        ModelFamily::PrismHadamardQwen35 => WorkerDecisionModelFamily::Laya,
-        ModelFamily::Flux2Klein => WorkerDecisionModelFamily::Laya,
-        ModelFamily::QwenImage21 => WorkerDecisionModelFamily::Laya,
-        ModelFamily::ModernBert => WorkerDecisionModelFamily::Laya,
-        ModelFamily::Kokoro => WorkerDecisionModelFamily::Laya,
-        ModelFamily::Phonon => WorkerDecisionModelFamily::Laya,
-    })
-}
-
-/// The worker's name for a speech family. A speech capability is only ever
-/// discovered on Kokoro and Phonon folders; any other family is reported as
-/// Kokoro, and the worker refuses it at load because the folder is not one.
-fn worker_speech_family(model_family: ModelFamily) -> WorkerSpeechModelFamily {
-    config::exhaustive_table!(model_family, {
-        ModelFamily::Kokoro => WorkerSpeechModelFamily::Kokoro,
-        ModelFamily::Phonon => WorkerSpeechModelFamily::Phonon,
-        ModelFamily::Qwen3_5 => WorkerSpeechModelFamily::Kokoro,
-        ModelFamily::PrismHadamardQwen35 => WorkerSpeechModelFamily::Kokoro,
-        ModelFamily::Flux2Klein => WorkerSpeechModelFamily::Kokoro,
-        ModelFamily::QwenImage21 => WorkerSpeechModelFamily::Kokoro,
-        ModelFamily::ModernBert => WorkerSpeechModelFamily::Kokoro,
-        ModelFamily::Laya => WorkerSpeechModelFamily::Kokoro,
-        ModelFamily::Kev => WorkerSpeechModelFamily::Kokoro,
-        ModelFamily::Clef => WorkerSpeechModelFamily::Kokoro,
-    })
 }
 
 #[cfg(test)]

@@ -372,7 +372,7 @@ fn should_reject_a_duplicate_runtime_policy_acknowledgement() {
 fn speech_runtime_configuration() -> WorkerLoadedModelRuntimeConfiguration {
     WorkerLoadedModelRuntimeConfiguration::Speech(ipc_protocol::WorkerSpeechModelConfiguration {
         model_id: SAMPLE_MODEL_ID.to_owned(),
-        model_family: ipc_protocol::WorkerSpeechModelFamily::Kokoro,
+        model_family: "kokoro".to_owned(),
         artifact_revision: "sample-revision".to_owned(),
     })
 }

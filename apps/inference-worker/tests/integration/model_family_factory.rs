@@ -1,17 +1,15 @@
 //! Integration contracts for selecting a runtime without loading model artifacts.
 
-use astronomical_inference_worker::model_family_factory::ModelFamilyFactory;
-use config::AstroSsdPromptCacheConfig;
-use ipc_protocol::{
-    WorkerAutoregressiveModelConfiguration, WorkerChunkingConfiguration,
-    WorkerFlux2KleinModelConfiguration, WorkerImageGenerationModelFamily, WorkerModelConfiguration,
-};
+use ipc_protocol::WorkerModelConfiguration;
 use model_serving::{Flux2KleinImageEngine, ModelFactory, ModelFactoryRuntime};
 use serde_json::json;
 
 use super::flux2_klein_fixture::{
     CANONICAL_MODEL_ID, REVIEWED_REVISION, replace_json_field, write_executable_artifact,
     write_revision,
+};
+use super::image_factory_support::{
+    autoregressive_configuration, image_model_configuration, model_family_factory,
 };
 
 #[tokio::test]
@@ -147,21 +145,6 @@ async fn should_reject_changed_evidence_between_daemon_discovery_and_worker_load
     }
 }
 
-fn model_family_factory(fixture_directory: &std::path::Path) -> ModelFamilyFactory {
-    ModelFamilyFactory::new(
-        2_000_000_000,
-        200_000_000,
-        AstroSsdPromptCacheConfig::new(
-            fixture_directory.join("astro-ssd-prompt-cache"),
-            1_000_000_000,
-        ),
-        true,
-        ipc_protocol::WorkerDecodeAstroExpertCachePolicy::Baseline,
-        fixture_directory.join("performance-attribution.jsonl"),
-        true,
-    )
-}
-
 fn flux_model_directory() -> tempfile::TempDir {
     let model_directory =
         tempfile::tempdir().expect("the FLUX classification fixture should exist");
@@ -170,32 +153,7 @@ fn flux_model_directory() -> tempfile::TempDir {
 }
 
 fn flux_configuration(model_id: &str, artifact_revision: &str) -> WorkerModelConfiguration {
-    WorkerModelConfiguration::Flux2Klein(WorkerFlux2KleinModelConfiguration {
-        model_id: model_id.to_owned(),
-        model_family: WorkerImageGenerationModelFamily::Flux2Klein,
-        artifact_revision: artifact_revision.to_owned(),
-    })
-}
-
-fn autoregressive_configuration() -> WorkerModelConfiguration {
-    WorkerModelConfiguration::Autoregressive(WorkerAutoregressiveModelConfiguration {
-        model_id: CANONICAL_MODEL_ID.to_owned(),
-        maximum_context_tokens: 4_096,
-        maximum_output_tokens: 1_024,
-        chunking: WorkerChunkingConfiguration {
-            fixed_prompt_processing_chunk_size_tokens: 1_024,
-            fixed_ssd_streaming_prompt_processing_chunk_size_tokens: 2_048,
-            full_attention_key_value_growth_tokens: 256,
-            prefill_graph_submission_layer_interval: 0,
-            experimental_ssd_paging_generation_graph_submission_layer_interval: 0,
-            ssd_prompt_cache_block_tokens: None,
-            ssd_prompt_cache_common_prefix_stride_blocks: 4,
-            experimental_decode_stage_attribution_enabled: false,
-            experimental_prefill_stage_attribution_enabled: false,
-            experimental_in_memory_prefix_adoption_enabled: false,
-            experimental_neural_engine_prefill_enabled: false,
-        },
-    })
+    image_model_configuration("flux2_klein", model_id, artifact_revision)
 }
 
 fn mutate_revision(model_directory: &std::path::Path) {

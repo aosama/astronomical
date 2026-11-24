@@ -42,8 +42,7 @@ struct WorkerRuntimeFeatureConfiguration: Codable, Equatable {
 
 enum WorkerLoadedModelRuntimeConfiguration: Codable, Equatable {
   case autoregressive(WorkerLoadedAutoregressiveModelRuntimeConfiguration)
-  case flux2Klein(WorkerLoadedFlux2KleinModelRuntimeConfiguration)
-  case qwenImage21(WorkerLoadedQwenImage21ModelRuntimeConfiguration)
+  case imageGeneration(WorkerLoadedImageGenerationModelRuntimeConfiguration)
   case embeddings(WorkerLoadedEmbeddingModelRuntimeConfiguration)
   /// A kind of model the agent shows nothing special for, such as a speech or
   /// decision model, or one a newer engine adds. Only its kind and model are
@@ -59,8 +58,7 @@ enum WorkerLoadedModelRuntimeConfiguration: Codable, Equatable {
 
   private enum Kind: String, Codable {
     case autoregressive
-    case flux2Klein = "flux2_klein"
-    case qwenImage21 = "qwen_image21"
+    case imageGeneration = "image_generation"
     case embeddings
   }
 
@@ -81,16 +79,10 @@ enum WorkerLoadedModelRuntimeConfiguration: Codable, Equatable {
           WorkerLoadedAutoregressiveModelRuntimeConfiguration.self,
           forKey: .configuration
         ))
-    case .flux2Klein:
-      self = .flux2Klein(
+    case .imageGeneration:
+      self = .imageGeneration(
         try container.decode(
-          WorkerLoadedFlux2KleinModelRuntimeConfiguration.self,
-          forKey: .configuration
-        ))
-    case .qwenImage21:
-      self = .qwenImage21(
-        try container.decode(
-          WorkerLoadedQwenImage21ModelRuntimeConfiguration.self,
+          WorkerLoadedImageGenerationModelRuntimeConfiguration.self,
           forKey: .configuration
         ))
     case .embeddings:
@@ -108,11 +100,8 @@ enum WorkerLoadedModelRuntimeConfiguration: Codable, Equatable {
     case let .autoregressive(configuration):
       try container.encode(Kind.autoregressive, forKey: .kind)
       try container.encode(configuration, forKey: .configuration)
-    case let .flux2Klein(configuration):
-      try container.encode(Kind.flux2Klein, forKey: .kind)
-      try container.encode(configuration, forKey: .configuration)
-    case let .qwenImage21(configuration):
-      try container.encode(Kind.qwenImage21, forKey: .kind)
+    case let .imageGeneration(configuration):
+      try container.encode(Kind.imageGeneration, forKey: .kind)
       try container.encode(configuration, forKey: .configuration)
     case let .embeddings(configuration):
       try container.encode(Kind.embeddings, forKey: .kind)
@@ -164,9 +153,12 @@ struct WorkerLoadedAutoregressiveModelRuntimeConfiguration: Codable, Equatable {
   }
 }
 
-struct WorkerLoadedFlux2KleinModelRuntimeConfiguration: Codable, Equatable {
+/// An image model, whichever image family it is. The family is the
+/// engine's identifier for it, such as `flux2_klein` or `qwen_image_21`, kept
+/// as text so a family the engine adds never fails the status poll.
+struct WorkerLoadedImageGenerationModelRuntimeConfiguration: Codable, Equatable {
   let modelIdentifier: String
-  let modelFamily: WorkerImageGenerationModelFamily
+  let modelFamily: String
   let artifactRevision: String
 
   enum CodingKeys: String, CodingKey, CaseIterable {
@@ -179,34 +171,15 @@ struct WorkerLoadedFlux2KleinModelRuntimeConfiguration: Codable, Equatable {
     try decoder.rejectUnknownKeys(CodingKeys.self)
     let container = try decoder.container(keyedBy: CodingKeys.self)
     modelIdentifier = try container.decode(String.self, forKey: .modelIdentifier)
-    modelFamily = try container.decode(WorkerImageGenerationModelFamily.self, forKey: .modelFamily)
-    artifactRevision = try container.decode(String.self, forKey: .artifactRevision)
-  }
-}
-
-struct WorkerLoadedQwenImage21ModelRuntimeConfiguration: Codable, Equatable {
-  let modelIdentifier: String
-  let modelFamily: WorkerImageGenerationModelFamily
-  let artifactRevision: String
-
-  enum CodingKeys: String, CodingKey, CaseIterable {
-    case modelIdentifier = "model_id"
-    case modelFamily = "model_family"
-    case artifactRevision = "artifact_revision"
-  }
-
-  init(from decoder: Decoder) throws {
-    try decoder.rejectUnknownKeys(CodingKeys.self)
-    let container = try decoder.container(keyedBy: CodingKeys.self)
-    modelIdentifier = try container.decode(String.self, forKey: .modelIdentifier)
-    modelFamily = try container.decode(WorkerImageGenerationModelFamily.self, forKey: .modelFamily)
+    modelFamily = try container.decode(String.self, forKey: .modelFamily)
     artifactRevision = try container.decode(String.self, forKey: .artifactRevision)
   }
 }
 
 struct WorkerLoadedEmbeddingModelRuntimeConfiguration: Codable, Equatable {
   let modelIdentifier: String
-  let modelFamily: WorkerEmbeddingModelFamily
+  /// The engine's identifier for the family, such as `modernbert`.
+  let modelFamily: String
   let artifactRevision: String
   let vectorWidth: UInt32
   let maximumInputTokens: UInt32
@@ -223,20 +196,11 @@ struct WorkerLoadedEmbeddingModelRuntimeConfiguration: Codable, Equatable {
     try decoder.rejectUnknownKeys(CodingKeys.self)
     let container = try decoder.container(keyedBy: CodingKeys.self)
     modelIdentifier = try container.decode(String.self, forKey: .modelIdentifier)
-    modelFamily = try container.decode(WorkerEmbeddingModelFamily.self, forKey: .modelFamily)
+    modelFamily = try container.decode(String.self, forKey: .modelFamily)
     artifactRevision = try container.decode(String.self, forKey: .artifactRevision)
     vectorWidth = try container.decode(UInt32.self, forKey: .vectorWidth)
     maximumInputTokens = try container.decode(UInt32.self, forKey: .maximumInputTokens)
   }
-}
-
-enum WorkerImageGenerationModelFamily: String, Codable, Equatable {
-  case flux2Klein = "flux2_klein"
-  case qwenImage21 = "qwen_image21"
-}
-
-enum WorkerEmbeddingModelFamily: String, Codable, Equatable {
-  case modernBert = "modernbert"
 }
 
 struct WorkerChunkingConfiguration: Codable, Equatable {
