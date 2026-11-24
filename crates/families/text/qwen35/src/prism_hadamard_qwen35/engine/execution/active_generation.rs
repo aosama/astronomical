@@ -94,23 +94,6 @@ pub(super) fn prism_active_generation(
 }
 
 impl PrismHadamardQwen35ActiveGeneration {
-    /// Runs the straight forward over `token_indices` (`[1, token_count]`)
-    /// from the next position and returns its final hidden row, then
-    /// advances the position by the forwarded token count.
-    pub(super) fn forward_hidden_states(
-        &mut self,
-        model: &PrismHadamardTextModel,
-        token_indices: &MlxArray,
-    ) -> Result<MlxArray, PrismHadamardModelError> {
-        let final_hidden_state_row = model.forward_hidden_states(
-            token_indices,
-            self.next_position_tokens,
-            &mut self.request_decoder_state,
-        )?;
-        self.advance_position_after_forward(token_indices);
-        Ok(final_hidden_state_row)
-    }
-
     /// Runs one whole forward from the next position and returns its final
     /// logits, then advances the position by the forwarded token count.
     pub(super) fn forward_pass(

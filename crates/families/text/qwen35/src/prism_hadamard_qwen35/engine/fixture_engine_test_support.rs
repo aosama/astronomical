@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 
 use ipc_protocol::WorkerChunkingConfiguration;
 
-use super::startup::{pending_load_for, prompt_processing_chunk_sizer_for};
+use super::startup::prompt_processing_chunk_sizer_for;
 use super::{
     PrismHadamardQwen35InferenceExecution, PrismHadamardQwen35PendingStartup,
     PrismHadamardQwen35ServingSettings,
@@ -88,11 +88,9 @@ pub(super) fn pending_fixture_execution(
     .expect("the fixture settings should validate");
     PrismHadamardQwen35InferenceExecution::pending(PrismHadamardQwen35PendingStartup {
         validated_execution_core_settings,
-        pending_load: pending_load_for(
-            serving_settings,
-            fixture_memory_limits.mlx_memory_ceiling_bytes,
-            fixture_memory_limits.mlx_buffer_cache_bytes,
-        ),
+        neural_engine_mlp_prefill_requested: serving_settings
+            .chunking
+            .experimental_neural_engine_prefill_enabled,
     })
 }
 

@@ -23,6 +23,7 @@ pub mod generation_thinking_end_markers;
 pub mod generation_visual_embedding_validation;
 pub mod generation_vocabulary_boundaries;
 pub mod input_injection;
+pub mod mlx_memory_limit_change;
 pub mod model_loading_lifecycle;
 pub mod model_loading_steps;
 pub mod prompt_processing_chunk_sizer;

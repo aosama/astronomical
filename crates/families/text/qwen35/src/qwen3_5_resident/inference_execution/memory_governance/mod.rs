@@ -20,5 +20,4 @@ pub(in crate::qwen3_5_resident::inference_execution) mod resident_memory_governo
 // They are private here, but every child above can reach them as
 // `super::<name>` exactly as before the move.
 use super::Qwen3_5EngineState;
-use super::fatal_engine_error;
 use super::qwen3_5_runtime_error;

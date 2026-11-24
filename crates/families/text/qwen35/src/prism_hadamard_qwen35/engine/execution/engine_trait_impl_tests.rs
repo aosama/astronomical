@@ -166,3 +166,64 @@ fn should_refuse_a_second_request_while_one_is_active() {
         Err(InferenceEngineError::EngineBusy)
     ));
 }
+
+// Edge: a stop with nothing running, or meant for another request, reports
+// nothing and leaves the running request alone, because a late stop for a
+// finished request must not end its successor.
+#[test]
+#[serial]
+fn should_ignore_a_stop_with_nothing_running_or_meant_for_another_request() {
+    let mut fixture_engine = loaded_fixture_engine(|_| {});
+    assert_eq!(
+        fixture_engine
+            .execution
+            .cancel_generation(RequestId::new(81))
+            .expect("a stray stop is not an engine failure"),
+        crate::GenerationFinalization::default()
+    );
+    start_greedy(&mut fixture_engine, PROMPT_TOKEN_IDS.to_vec(), 4)
+        .expect("the request should start");
+
+    assert_eq!(
+        fixture_engine
+            .execution
+            .cancel_generation(RequestId::new(99))
+            .expect("a stray stop is not an engine failure"),
+        crate::GenerationFinalization::default()
+    );
+    assert!(
+        fixture_engine
+            .execution
+            .execution_core
+            .active_request
+            .is_some()
+    );
+}
+
+// Positive: a stop for the running request ends it and reports the idle
+// placement and memory.
+#[test]
+#[serial]
+fn should_end_the_running_request_a_stop_names() {
+    let mut fixture_engine = loaded_fixture_engine(|_| {});
+    start_greedy(&mut fixture_engine, PROMPT_TOKEN_IDS.to_vec(), 4)
+        .expect("the request should start");
+
+    let generation_finalization = fixture_engine
+        .execution
+        .cancel_generation(RequestId::new(81))
+        .expect("the request should cancel");
+
+    assert_eq!(
+        generation_finalization.expert_memory_mode(),
+        Some(ipc_protocol::ExpertMemoryMode::Resident)
+    );
+    assert!(generation_finalization.mlx_memory_telemetry().is_some());
+    assert!(
+        fixture_engine
+            .execution
+            .execution_core
+            .active_request
+            .is_none()
+    );
+}

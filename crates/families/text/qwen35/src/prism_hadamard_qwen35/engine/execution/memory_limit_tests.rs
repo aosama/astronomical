@@ -1,34 +1,36 @@
+use ipc_protocol::{ExpertMemoryMode, RequestId};
+use serial_test::serial;
+
 use super::{
     ceiling_change_refusal, memory_limits_for_ceiling, mlx_buffer_cache_bytes_for_ceiling,
 };
-use crate::InferenceEngineError;
+use crate::prism_hadamard_qwen35::artifacts::tests::pack_fixture::{
+    remove_fixture_directory, write_fixture_pack,
+};
+use crate::prism_hadamard_qwen35::engine::fixture_engine_test_support::{
+    FixtureMemoryLimits, loaded_fixture_engine, pending_fixture_execution, serving_settings_with,
+};
+use crate::qwen3_5_core::shared_execution::text_model::Qwen3_5TextModel;
+use crate::{InferenceEngineError, MlxInferenceExecution, Qwen3_5InferenceRequest};
 
 const ONE_GB: u64 = 1_073_741_824;
 
-// Positive: an idle engine accepts a ceiling at or above its minimum.
+// Positive: a ceiling above the minimum is accepted.
 #[test]
-fn should_accept_a_ceiling_change_on_an_idle_engine() {
-    assert!(ceiling_change_refusal(false, 12 * ONE_GB, 10 * ONE_GB).is_none());
+fn should_accept_a_ceiling_above_the_minimum() {
+    assert!(ceiling_change_refusal(12 * ONE_GB, 10 * ONE_GB).is_none());
 }
 
 // Edge: a ceiling exactly at the minimum is accepted.
 #[test]
 fn should_accept_a_ceiling_exactly_at_the_minimum() {
-    assert!(ceiling_change_refusal(false, 10 * ONE_GB, 10 * ONE_GB).is_none());
-}
-
-// Negative: a change while a request runs waits, as on the resident engine.
-#[test]
-fn should_refuse_a_ceiling_change_while_a_request_runs() {
-    let refusal = ceiling_change_refusal(true, 12 * ONE_GB, 10 * ONE_GB);
-
-    assert!(matches!(refusal, Some(InferenceEngineError::EngineBusy)));
+    assert!(ceiling_change_refusal(10 * ONE_GB, 10 * ONE_GB).is_none());
 }
 
 // Negative: one byte below the minimum is the typed rejection.
 #[test]
 fn should_reject_a_ceiling_one_byte_below_the_minimum() {
-    let refusal = ceiling_change_refusal(false, 10 * ONE_GB - 1, 10 * ONE_GB);
+    let refusal = ceiling_change_refusal(10 * ONE_GB - 1, 10 * ONE_GB);
 
     assert!(matches!(
         refusal,
@@ -60,11 +62,11 @@ fn should_keep_the_configured_buffer_limit_at_an_equal_ceiling() {
     );
 }
 
-// Edge: before the model loads the minimum is one byte, so a zero ceiling is
-// still the typed rejection rather than a silently raised one.
+// Edge: a zero ceiling is the typed rejection rather than a silently raised
+// one, even against the smallest minimum.
 #[test]
-fn should_reject_a_zero_ceiling_before_the_model_loads() {
-    let refusal = ceiling_change_refusal(false, 0, 1);
+fn should_reject_a_zero_ceiling() {
+    let refusal = ceiling_change_refusal(0, 1);
 
     assert!(matches!(
         refusal,
@@ -105,4 +107,112 @@ fn should_refuse_limits_that_break_the_ceiling_rule() {
         memory_limits_for_ceiling(ONE_GB, 2 * ONE_GB),
         Err(InferenceEngineError::Fatal { .. })
     ));
+}
+
+// Positive: an idle loaded engine moves to a ceiling at its minimum and
+// back up, keeping the configured mlx_buffer_cache limit under both, and
+// reports the memory after each change.
+#[test]
+#[serial]
+fn should_change_the_ceiling_of_an_idle_engine_and_report_the_memory_after_it() {
+    let mut fixture_engine = loaded_fixture_engine(|_| {});
+    let minimum_mlx_memory_ceiling_bytes = fixture_engine
+        .execution
+        .execution_core
+        .loaded_model()
+        .expect("the fixture model is loaded")
+        .minimum_mlx_memory_ceiling_bytes()
+        .expect("the dense floor is known");
+
+    for requested_mlx_memory_ceiling_bytes in [
+        minimum_mlx_memory_ceiling_bytes,
+        minimum_mlx_memory_ceiling_bytes + ONE_GB,
+    ] {
+        let adjustment = fixture_engine
+            .execution
+            .update_mlx_memory_limit(requested_mlx_memory_ceiling_bytes)
+            .expect("a ceiling at or above the floor should apply");
+        assert_eq!(
+            adjustment.effective_mlx_memory_ceiling_bytes(),
+            requested_mlx_memory_ceiling_bytes
+        );
+        // The fixture worker configured 512 MiB, below every accepted ceiling.
+        assert_eq!(adjustment.mlx_buffer_cache_limit_bytes(), 512 * 1024 * 1024);
+        assert_eq!(
+            adjustment.minimum_mlx_memory_ceiling_bytes(),
+            minimum_mlx_memory_ceiling_bytes
+        );
+        assert_eq!(adjustment.expert_memory_mode(), ExpertMemoryMode::Resident);
+        assert!(adjustment.mlx_memory_telemetry().is_some());
+        assert!(adjustment.expert_residency_telemetry().is_some());
+        assert_eq!(
+            fixture_engine
+                .execution
+                .execution_core
+                .memory_limits
+                .active_memory_limit_bytes() as u64,
+            requested_mlx_memory_ceiling_bytes
+        );
+    }
+}
+
+// Negative: a change waits while a request runs, and a ceiling below the
+// floor is the typed rejection; neither moves the installed limits.
+#[test]
+#[serial]
+fn should_refuse_a_change_while_a_request_runs_or_below_the_floor() {
+    let mut fixture_engine = loaded_fixture_engine(|_| {});
+    let installed_mlx_memory_limits = fixture_engine.execution.execution_core.memory_limits;
+    fixture_engine
+        .execution
+        .start_generation(Qwen3_5InferenceRequest::new_sampling(
+            RequestId::new(61),
+            vec![11, 12, 13],
+            4,
+            0,
+            1_000,
+            None,
+        ))
+        .expect("the request should start");
+    assert!(matches!(
+        fixture_engine
+            .execution
+            .update_mlx_memory_limit(64 * ONE_GB),
+        Err(InferenceEngineError::EngineBusy)
+    ));
+    fixture_engine
+        .execution
+        .cancel_generation(RequestId::new(61))
+        .expect("the request should cancel");
+
+    assert!(matches!(
+        fixture_engine.execution.update_mlx_memory_limit(ONE_GB - 1),
+        Err(InferenceEngineError::MlxMemoryLimitRejected { .. })
+    ));
+    assert_eq!(
+        fixture_engine.execution.execution_core.memory_limits,
+        installed_mlx_memory_limits
+    );
+}
+
+// Negative: a change before any model is loaded is an engine failure, as
+// on every Qwen 3.5 engine.
+#[test]
+#[serial]
+fn should_refuse_a_change_before_the_model_loads() {
+    let fixture_directory = write_fixture_pack(|_| {});
+    let mut execution = pending_fixture_execution(
+        &fixture_directory,
+        &serving_settings_with(64, 1),
+        &FixtureMemoryLimits {
+            mlx_memory_ceiling_bytes: 512 * 1024 * 1024,
+            mlx_buffer_cache_bytes: 512 * 1024 * 1024,
+        },
+        None,
+    );
+
+    let refusal = execution.update_mlx_memory_limit(64 * ONE_GB);
+
+    remove_fixture_directory(&fixture_directory);
+    assert!(matches!(refusal, Err(InferenceEngineError::Fatal { .. })));
 }

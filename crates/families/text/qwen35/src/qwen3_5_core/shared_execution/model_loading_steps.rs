@@ -150,38 +150,10 @@ fn resolve_astro_ssd_prompt_cache_model_contract(
 /// disabled `astro_ssd_prompt_cache` yields no contract and no store, so it cannot fail model
 /// loading because of storage alignment, quota, stale files, or filesystem
 /// availability (contract derivation is intentionally inside the same branch
-/// as store ownership). The contract is sized by
-/// [`AstroSsdPromptCacheModelContract::resolve`].
-pub fn open_astro_ssd_prompt_cache(
-    astro_ssd_prompt_cache_disk_store_config: Option<AstroSsdPromptCacheDiskStoreConfig>,
-    model: &impl Qwen3_5ServingModel,
-    chunking: &WorkerChunkingConfiguration,
-    resolved_model_id: &str,
-    resolved_model_revision: &str,
-    persistent_visual_embedding_model_contract: Option<&PersistentVisualEmbeddingModelContract>,
-    model_loading_performance_attribution: &mut PerformanceAttribution,
-) -> Result<
-    (
-        Option<AstroSsdPromptCacheModelContract>,
-        Option<Arc<AstroSsdPromptCacheDiskStore>>,
-    ),
-    InferenceEngineError,
-> {
-    open_astro_ssd_prompt_cache_with_contract_resolver(
-        astro_ssd_prompt_cache_disk_store_config,
-        model,
-        chunking,
-        resolved_model_id,
-        resolved_model_revision,
-        persistent_visual_embedding_model_contract,
-        AstroSsdPromptCacheModelContract::resolve,
-        model_loading_performance_attribution,
-    )
-}
-
-/// Opens the `astro_ssd_prompt_cache` as [`open_astro_ssd_prompt_cache`]
-/// does, with the contract sized by `contract_resolver`; an engine whose
-/// model needs its contract fitted to the disk quota passes that resolver.
+/// as store ownership). The contract is sized by `contract_resolver`:
+/// [`AstroSsdPromptCacheModelContract::resolve`] for most engines, and a
+/// resolver that fits the contract to the disk quota for an engine whose
+/// model needs that.
 #[allow(clippy::too_many_arguments)]
 pub fn open_astro_ssd_prompt_cache_with_contract_resolver(
     astro_ssd_prompt_cache_disk_store_config: Option<AstroSsdPromptCacheDiskStoreConfig>,
