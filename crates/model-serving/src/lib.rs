@@ -74,7 +74,7 @@ pub use engine_backed_worker::{
 };
 
 #[cfg(feature = "direct-mlx")]
-pub use model_family_runtime::ModelFamilyInferenceEngine;
+pub use model_family_runtime::{ModelFamilyInferenceEngine, boxed_chat_engine};
 
 #[cfg(feature = "direct-mlx")]
 pub use speech_models::kokoro::{KokoroSpeechEngine, KokoroSpeechTrace};

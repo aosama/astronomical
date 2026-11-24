@@ -130,6 +130,11 @@ pub trait MlxInferenceExecution: 'static {
     /// Architecture-specific prepared input accepted by this execution owner.
     type Request: PreparedInferenceRequest + Send + 'static;
 
+    /// Whether this execution prepares Neural Engine programs after it is
+    /// ready. One that does not is answered on the caller's side, so a gone
+    /// owner thread is never reported as a stopped preparation it never had.
+    const PREPARES_NEURAL_ENGINE_PROGRAMS: bool = false;
+
     /// Loads model resources on the owning MLX thread.
     fn load(&mut self) -> Result<EngineLoadResult, InferenceEngineError>;
 

@@ -142,11 +142,7 @@ where
     async fn advance_neural_engine_preparation(
         &mut self,
     ) -> Result<Option<NeuralEnginePrefillStatus>, InferenceEngineError> {
-        let (completion_sender, completion_receiver) = oneshot::channel();
-        self.send_command(MlxInferenceCommand::AdvanceNeuralEnginePreparation(
-            completion_sender,
-        ))?;
-        receive_owner_result(completion_receiver).await
+        self.advance_owner_neural_engine_preparation().await
     }
 
     async fn collect_astro_ssd_prompt_cache_stats(
@@ -190,6 +186,26 @@ where
             requested_mlx_memory_ceiling_bytes,
             completion_sender,
         })?;
+        receive_owner_result(completion_receiver).await
+    }
+}
+
+impl<Execution> MlxInferenceEngine<Execution>
+where
+    Execution: MlxInferenceExecution,
+{
+    /// Asks the owner thread to move Neural Engine preparation along, unless
+    /// this execution prepares none, which is answered here.
+    async fn advance_owner_neural_engine_preparation(
+        &mut self,
+    ) -> Result<Option<NeuralEnginePrefillStatus>, InferenceEngineError> {
+        if !Execution::PREPARES_NEURAL_ENGINE_PROGRAMS {
+            return Ok(None);
+        }
+        let (completion_sender, completion_receiver) = oneshot::channel();
+        self.send_command(MlxInferenceCommand::AdvanceNeuralEnginePreparation(
+            completion_sender,
+        ))?;
         receive_owner_result(completion_receiver).await
     }
 }
@@ -377,3 +393,7 @@ async fn receive_owner_result<Output>(
             reason: "MLX inference owner stopped before reporting command completion".to_owned(),
         })?
 }
+
+#[cfg(test)]
+#[path = "mlx_inference_engine_tests.rs"]
+mod mlx_inference_engine_tests;

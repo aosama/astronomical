@@ -20,7 +20,7 @@ use model_serving::{
     Qwen3_5ArtifactValidator, Qwen3_5ExecutionCoreSettings, Qwen3_5GenerationProcessor,
     Qwen3_5MemoryGeometryError, Qwen3_5PromptProcessingChunkSizer, Qwen3_5ResidentEngine,
     Qwen3_5StreamingEngine, ResidentEngineSettings, StreamingEngineSettings,
-    ValidatedQwen3_5Artifact, model_memory_geometry_from_validated_artifact,
+    ValidatedQwen3_5Artifact, boxed_chat_engine, model_memory_geometry_from_validated_artifact,
 };
 
 use super::qwen3_5_model_startup_error::Qwen3_5ModelStartupError;
@@ -477,7 +477,7 @@ fn construct_resident_engine(
             astro_neural_engine_program_cache_directory,
         },
     )
-    .map(ModelFamilyInferenceEngine::Qwen3_5)
+    .map(boxed_chat_engine)
     .map_err(|source| Qwen3_5ModelStartupError::EngineInitialization {
         model_directory: model_directory_path.to_path_buf(),
         source,
@@ -544,7 +544,7 @@ fn construct_streaming_engine(
             decode_astro_expert_cache_policy,
         },
     )
-    .map(ModelFamilyInferenceEngine::Qwen3_5Streaming)
+    .map(boxed_chat_engine)
     .map_err(|source| Qwen3_5ModelStartupError::EngineInitialization {
         model_directory: model_directory_path.to_path_buf(),
         source,
