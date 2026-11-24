@@ -11,10 +11,7 @@ mod execution;
 mod fixture_engine_test_support;
 mod startup;
 
-pub use execution::{
-    PrismHadamardQwen35InferenceExecution, PrismHadamardQwen35PendingLoad,
-    PrismHadamardQwen35PendingStartup,
-};
+pub use execution::{PrismHadamardQwen35InferenceExecution, PrismHadamardQwen35PendingStartup};
 pub use startup::{
     PrismHadamardQwen35ServingSettings, PrismHadamardQwen35StartupError,
     initialize_prism_hadamard_qwen35_model_with_serving_settings,

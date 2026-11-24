@@ -62,3 +62,23 @@ pub fn generation_context_token_count_overflow_error() -> InferenceEngineError {
 #[cfg(test)]
 #[path = "engine_errors_tests.rs"]
 mod engine_errors_tests;
+
+/// The installed MLX ceiling does not fit a u64, which only a corrupted
+/// limit can produce on a 64-bit Mac.
+pub fn mlx_memory_ceiling_exceeds_u64_range_error(
+    _try_from_error: std::num::TryFromIntError,
+) -> InferenceEngineError {
+    fatal_engine_error("current MLX memory ceiling exceeds the u64 range")
+}
+
+/// The same for the installed `mlx_buffer_cache` limit.
+pub fn mlx_buffer_cache_limit_exceeds_u64_range_error(
+    _try_from_error: std::num::TryFromIntError,
+) -> InferenceEngineError {
+    fatal_engine_error("updated MLX buffer cache limit exceeds the u64 range")
+}
+
+/// A ceiling change arrived before any model was loaded to move.
+pub fn mlx_memory_ceiling_change_before_load_error() -> InferenceEngineError {
+    fatal_engine_error("cannot update the MLX memory ceiling before the model is loaded")
+}

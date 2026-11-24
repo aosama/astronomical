@@ -134,12 +134,8 @@ impl PrismHadamardTextModel {
             );
             None
         };
-        let gated_delta_checkpoint_kernel =
-            retained_gated_delta_checkpoint_kernel(kernel_capabilities)?;
-        let fused_rotation_kernel = retained_fused_rotation_kernel(
-            kernel_capabilities,
-            pack.hadamard_contract().block_size(),
-        )?;
+        let (gated_delta_checkpoint_kernel, fused_rotation_kernel) =
+            retained_probed_kernels(kernel_capabilities, pack.hadamard_contract().block_size())?;
         let astro_decoder_state_cache_layout =
             prism_hadamard_qwen35_astro_decoder_state_cache_layout(pack.config())
                 .map_err(PrismHadamardModelError::AstroDecoderStateCacheLayout)?;
@@ -226,6 +222,18 @@ impl PrismHadamardTextModel {
             .copied()
             .ok_or(PrismHadamardModelError::EmptyGeneration)
     }
+}
+
+/// The two kernels this GPU retains only after a probe: the boundary-checkpoint
+/// gated-delta kernel, and the one-launch Hadamard rotation.
+fn retained_probed_kernels(
+    kernel_capabilities: &crate::WorkerKernelCapabilities,
+    hadamard_block_size: u32,
+) -> Result<(Option<MlxMetalKernel>, Option<MlxMetalKernel>), PrismHadamardModelError> {
+    Ok((
+        retained_gated_delta_checkpoint_kernel(kernel_capabilities)?,
+        retained_fused_rotation_kernel(kernel_capabilities, hadamard_block_size)?,
+    ))
 }
 
 /// The boundary-checkpoint gated-delta kernel when this GPU passed its probe,

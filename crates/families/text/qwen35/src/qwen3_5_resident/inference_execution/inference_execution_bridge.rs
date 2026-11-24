@@ -52,7 +52,9 @@ impl MlxInferenceExecution for Qwen3_5InferenceExecution {
         &mut self,
         request_id: RequestId,
     ) -> Result<GenerationFinalization, InferenceEngineError> {
-        Qwen3_5EngineState::cancel_generation(self, request_id)
+        Ok(generation_finalization_steps::cancel_generation(
+            self, request_id,
+        ))
     }
 
     fn advance_neural_engine_preparation(
@@ -84,6 +86,9 @@ impl MlxInferenceExecution for Qwen3_5InferenceExecution {
         &mut self,
         requested_mlx_memory_ceiling_bytes: u64,
     ) -> Result<MlxMemoryLimitAdjustment, InferenceEngineError> {
-        Qwen3_5EngineState::update_mlx_memory_limit(self, requested_mlx_memory_ceiling_bytes)
+        crate::qwen3_5_core::shared_execution::mlx_memory_limit_change::update_mlx_memory_limit(
+            self,
+            requested_mlx_memory_ceiling_bytes,
+        )
     }
 }
