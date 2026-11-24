@@ -29,4 +29,4 @@ mod text_tokenizer;
 mod time_embedding;
 mod voice;
 
-pub use engine::PhononSpeechEngine;
+pub use engine::{PhononSpeechEngine, PhononSpeechFamily};

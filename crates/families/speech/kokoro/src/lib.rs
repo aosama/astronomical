@@ -28,5 +28,5 @@ mod utterance;
 mod voice_pack;
 mod waveform_generator;
 
-pub use engine::{KokoroSpeechEngine, KokoroSpeechTracing};
+pub use engine::{KokoroSpeechEngine, KokoroSpeechFamily, KokoroSpeechTracing};
 pub use reference_trace::KokoroSpeechTrace;
