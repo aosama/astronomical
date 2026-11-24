@@ -28,6 +28,9 @@ pub struct Qwen3_5GenerationProcessor {
     supports_image_input: bool,
     model_id: String,
     performance_attribution_enabled: bool,
+    /// Whether prepared requests may be replayed on the streaming engine;
+    /// the folded ternary packs have none.
+    allows_streaming_retry: bool,
 }
 
 impl Qwen3_5GenerationProcessor {
@@ -64,6 +67,7 @@ impl Qwen3_5GenerationProcessor {
             supports_image_input: false,
             model_id: model_id.to_owned(),
             performance_attribution_enabled,
+            allows_streaming_retry: false,
         })
     }
 
@@ -110,6 +114,7 @@ impl Qwen3_5GenerationProcessor {
             supports_image_input: validated_artifact.supports_image_input(),
             model_id: requested_model_id,
             performance_attribution_enabled,
+            allows_streaming_retry: true,
         })
     }
 
@@ -185,6 +190,8 @@ impl ModelGenerationProcessor for Qwen3_5GenerationProcessor {
                 );
                 translate_qwen3_5_preparation_error(validation_error)
             })?;
+        let inference_request =
+            inference_request.with_streaming_retry_allowed(self.allows_streaming_retry);
         tracing::info!(
             request_id = chat_generation_command.request_id.value(),
             message_count = chat_generation_command.messages.len(),

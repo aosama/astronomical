@@ -6,7 +6,7 @@ use crate::{
     PrismHadamardQwen35Engine, Qwen3_5ResidentEngine, Qwen3_5StreamingEngine,
 };
 
-use super::ModelFamilyInferenceRequest;
+use crate::Qwen3_5InferenceRequest;
 
 /// Family-tagged inference engine used by the generic worker.
 pub enum ModelFamilyInferenceEngine {
@@ -16,7 +16,9 @@ pub enum ModelFamilyInferenceEngine {
 }
 
 impl InferenceEngine for ModelFamilyInferenceEngine {
-    type Request = ModelFamilyInferenceRequest;
+    /// Every chat family prepares the same request, so the engine takes it
+    /// as is; which engine serves it was decided when the factory built it.
+    type Request = Qwen3_5InferenceRequest;
 
     async fn load(&mut self) -> Result<EngineLoadResult, InferenceEngineError> {
         match self {
@@ -43,19 +45,10 @@ impl InferenceEngine for ModelFamilyInferenceEngine {
         &mut self,
         inference_request: Self::Request,
     ) -> Result<EngineGenerationStart, InferenceEngineError> {
-        match (self, inference_request) {
-            (Self::Qwen3_5(engine), ModelFamilyInferenceRequest::Qwen3_5(inference_request)) => {
-                engine.start_generation(inference_request).await
-            }
-            (
-                Self::Qwen3_5Streaming(engine),
-                ModelFamilyInferenceRequest::Qwen3_5(inference_request),
-            ) => engine.start_generation(inference_request).await,
-            (
-                Self::PrismHadamardQwen35(engine),
-                ModelFamilyInferenceRequest::PrismHadamardQwen35(inference_request),
-            ) => engine.start_generation(inference_request).await,
-            _ => Err(family_mismatch_error()),
+        match self {
+            Self::Qwen3_5(engine) => engine.start_generation(inference_request).await,
+            Self::Qwen3_5Streaming(engine) => engine.start_generation(inference_request).await,
+            Self::PrismHadamardQwen35(engine) => engine.start_generation(inference_request).await,
         }
     }
 
@@ -161,12 +154,6 @@ impl InferenceEngine for ModelFamilyInferenceEngine {
                     .await
             }
         }
-    }
-}
-
-fn family_mismatch_error() -> InferenceEngineError {
-    InferenceEngineError::InvalidRequest {
-        reason: "model-family engine and inference request do not match".to_owned(),
     }
 }
 

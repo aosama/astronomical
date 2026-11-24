@@ -23,8 +23,8 @@ use ipc_protocol::{
 use model_serving::{
     ClefDecisionEngine, DecisionEngine, EmbeddingEngine, EngineBackedWorker,
     Flux2KleinArtifactProvenance, Flux2KleinImageEngine, ImageGenerationEngine, KevDecisionEngine,
-    LayaDecisionEngine, ModelFactory, ModelFactoryRuntime, ModelFamilyGenerationProcessor,
-    ModelFamilyInferenceEngine, ModernBertEmbeddingEngine, PrismHadamardQwen35ServingSettings,
+    LayaDecisionEngine, ModelFactory, ModelFactoryRuntime, ModelFamilyInferenceEngine,
+    ModernBertEmbeddingEngine, PrismHadamardQwen35ServingSettings, Qwen3_5GenerationProcessor,
     QwenImage21ArtifactProvenance, QwenImage21ImageEngine, RecordedTrainingEngine, SpeechEngine,
     initialize_prism_hadamard_qwen35_model_with_serving_settings,
 };
@@ -65,7 +65,7 @@ pub struct ModelFamilyFactory {
 /// family: a chat engine, an image engine, the embedding engine, or a
 /// decision engine of whichever family the model belongs to.
 type ModelFamilyRuntime = ModelFactoryRuntime<
-    ModelFamilyGenerationProcessor,
+    Qwen3_5GenerationProcessor,
     ModelFamilyInferenceEngine,
     Box<dyn ImageGenerationEngine>,
     Box<dyn EmbeddingEngine>,
@@ -74,7 +74,7 @@ type ModelFamilyRuntime = ModelFactoryRuntime<
 >;
 
 pub(crate) type InferenceWorker = EngineBackedWorker<
-    ModelFamilyGenerationProcessor,
+    Qwen3_5GenerationProcessor,
     ModelFamilyInferenceEngine,
     ModelFamilyFactory,
     Box<dyn ImageGenerationEngine>,
@@ -227,7 +227,7 @@ impl ModelFamilyFactory {
 
 impl
     ModelFactory<
-        ModelFamilyGenerationProcessor,
+        Qwen3_5GenerationProcessor,
         ModelFamilyInferenceEngine,
         Box<dyn ImageGenerationEngine>,
         Box<dyn EmbeddingEngine>,
@@ -333,7 +333,7 @@ impl
             )
             .await?;
         Ok(ModelFactoryRuntime::autoregressive_for_streaming_retry(
-            ModelFamilyGenerationProcessor::Qwen3_5(generation_processor),
+            generation_processor,
             inference_engine,
         ))
     }
@@ -359,7 +359,7 @@ impl
             )
             .await?;
         Ok(ModelFactoryRuntime::autoregressive_for_resident_promotion(
-            ModelFamilyGenerationProcessor::Qwen3_5(generation_processor),
+            generation_processor,
             inference_engine,
         ))
     }
@@ -411,7 +411,7 @@ impl ModelFamilyFactory {
             )
             .await?;
         Ok(ModelFactoryRuntime::Autoregressive {
-            processor: ModelFamilyGenerationProcessor::Qwen3_5(generation_processor),
+            processor: generation_processor,
             engine: qwen3_5_engine,
             engine_placement,
         })
@@ -554,7 +554,7 @@ impl ModelFamilyFactory {
         .map_err(|_| "folded ternary initialization task failed".to_owned())?;
         let (generation_processor, prism_engine) = initialization_task_result?;
         Ok(ModelFactoryRuntime::autoregressive(
-            ModelFamilyGenerationProcessor::PrismHadamardQwen35(generation_processor),
+            generation_processor,
             ModelFamilyInferenceEngine::PrismHadamardQwen35(prism_engine),
             model_serving::EnginePlacement::CompleteResidencyFits,
         ))
