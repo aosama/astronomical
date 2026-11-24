@@ -9,6 +9,12 @@ repository.workspace = true
 rust-version.workspace = true
 version.workspace = true
 
+# The test lanes this package runs in. `cargo xtask lane-cargo` builds each
+# lane's command from these declarations (issue #2473, Step 6), so no alias
+# lists packages by hand; an empty list says the package is in no lane.
+[package.metadata.astronomical]
+test-lanes = []
+
 [package.metadata.cargo-machete]
 # cargo-machete reports this build dependency as unused, but build.rs uses it.
 ignored = ["cc"]
