@@ -19,5 +19,5 @@ use ::decision_models::*;
 use ::engine_core::*;
 use ::model_primitives::*;
 
-pub use engine::ModernBertEmbeddingEngine;
+pub use engine::{ModernBertEmbeddingEngine, ModernBertEmbeddingFamily};
 pub use tokenizer::{EncodedEmbeddingInput, encode_embedding_input};

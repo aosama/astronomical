@@ -99,6 +99,20 @@ pub struct EmbeddingEngineOutput {
     pub elapsed_millis: u64,
 }
 
+/// How the worker builds an embedding family's unloaded engine (issue
+/// #2473, Step 5): the family names its builder, and the worker builds
+/// every embedding family the same way, with no code of its own per family.
+pub trait EmbeddingFamilyConstruction: 'static {
+    type Engine: EmbeddingEngine + 'static;
+    /// The unloaded engine for the folder; it reads only its configuration
+    /// and tokenizer, and MLX work waits for `load` on the worker's thread.
+    const BUILD_ENGINE: fn(
+        &model_primitives::FamilyEngineSettings,
+        String,
+        &std::path::Path,
+    ) -> Result<Self::Engine, EmbeddingsFailureReason>;
+}
+
 /// Default embedding slot used by existing chat-only and image-only workers.
 #[doc(hidden)]
 pub struct EmbeddingUnavailableEngine;

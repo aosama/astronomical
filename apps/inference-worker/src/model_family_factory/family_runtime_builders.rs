@@ -19,8 +19,8 @@ use ipc_protocol::{
     WorkerEmbeddingModelConfiguration, WorkerImageGenerationModelConfiguration,
     WorkerModelConfiguration, WorkerSpeechModelConfiguration,
 };
-use model_serving::ImageFamilyConstruction;
 use model_serving::decision_models::decision_engine_shell::{DecisionEngineShell, DecisionFamily};
+use model_serving::{EmbeddingFamilyConstruction, ImageFamilyConstruction};
 use model_serving::{ModelFactoryRuntime, SpeechEngine, SpeechEngineShell, SpeechFamily};
 
 use super::configured_family_check::FAMILY_MISMATCH_REASON;
@@ -47,11 +47,11 @@ pub(super) enum FamilyRuntimeBuilder {
         ) -> RuntimeFuture<'factory>,
     ),
     Embedding(
-        for<'factory> fn(
-            &'factory ModelFamilyFactory,
+        fn(
+            &ModelFamilyFactory,
             PathBuf,
             WorkerEmbeddingModelConfiguration,
-        ) -> RuntimeFuture<'factory>,
+        ) -> Result<ModelFamilyRuntime, String>,
     ),
     Decision(
         fn(
@@ -126,14 +126,11 @@ impl FamilyRuntimeBuilder {
             (
                 Self::Embedding(build),
                 WorkerModelConfiguration::Embeddings(embedding_configuration),
-            ) => {
-                build(
-                    model_family_factory,
-                    model_directory_path,
-                    embedding_configuration,
-                )
-                .await
-            }
+            ) => build(
+                model_family_factory,
+                model_directory_path,
+                embedding_configuration,
+            ),
             (
                 Self::Decision(build),
                 WorkerModelConfiguration::Decisions(decision_configuration),
@@ -186,15 +183,14 @@ fn build_image_runtime<Family: ImageFamilyConstruction>(
     )
 }
 
-fn build_modernbert_runtime(
+/// Every embedding family: its engine from the family's own type.
+fn build_embedding_runtime<Family: EmbeddingFamilyConstruction>(
     model_family_factory: &ModelFamilyFactory,
     model_directory_path: PathBuf,
     embedding_configuration: WorkerEmbeddingModelConfiguration,
-) -> RuntimeFuture<'_> {
-    Box::pin(
-        model_family_factory
-            .create_modern_bert_embeddings_engine(model_directory_path, embedding_configuration),
-    )
+) -> Result<ModelFamilyRuntime, String> {
+    model_family_factory
+        .create_embedding_engine::<Family>(model_directory_path, embedding_configuration)
 }
 
 /// Every decision family runs in the decision shell, so its engine is the

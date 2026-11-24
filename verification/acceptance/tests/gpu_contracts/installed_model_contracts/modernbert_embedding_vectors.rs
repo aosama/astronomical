@@ -19,7 +19,7 @@
 //! and a long one.
 
 use ipc_protocol::{EmbeddingEncodingFormat, EmbeddingsCommand, RequestId};
-use model_serving::{EmbeddingEngine, ModernBertEmbeddingEngine};
+use model_serving::{EmbeddingEngine, FamilyEngineSettings, ModernBertEmbeddingEngine};
 use test_harness::test_run::TestRunContext;
 
 #[path = "../../support/romeo_and_juliet.rs"]
@@ -52,10 +52,15 @@ fn embed_the_excerpts() -> Vec<Vec<f32>> {
     let mut embedding_engine = ModernBertEmbeddingEngine::new(
         EMBEDDING_MODEL_ID,
         &model_directory,
-        TEST_MLX_MEMORY_CEILING_BYTES,
-        TEST_MLX_BUFFER_CACHE_LIMIT_BYTES,
-        false,
-        attribution_log_directory.path().join("attribution.jsonl"),
+        &FamilyEngineSettings {
+            effective_mlx_memory_ceiling_bytes: TEST_MLX_MEMORY_CEILING_BYTES,
+            mlx_buffer_cache_limit_bytes: TEST_MLX_BUFFER_CACHE_LIMIT_BYTES,
+            floor_raise_limit_bytes: 0,
+            performance_attribution_enabled: false,
+            performance_attribution_log_path: attribution_log_directory
+                .path()
+                .join("attribution.jsonl"),
+        },
     )
     .expect("the installed embedding artifact should validate");
     embedding_engine
