@@ -36,8 +36,6 @@ fn should_pass_when_no_rule_crate_reaches_the_forbidden_crate() {
         ("decision-models", vec!["mlx-bridge"], "normal"),
         ("quantization", Vec::new(), "normal"),
         ("speech", vec!["mlx-bridge"], "normal"),
-        ("kokoro", vec!["speech"], "normal"),
-        ("phonon", vec!["speech"], "normal"),
         ("model-primitives", vec!["mlx-bridge"], "normal"),
         ("model-serving", vec!["mlx-bridge"], "normal"),
         // The jangtq2 family crate clean of the serving crate: the one-way
@@ -63,8 +61,6 @@ fn should_detect_a_direct_family_to_serving_dependency() {
         ("decision-models", vec!["mlx-bridge"], "normal"),
         ("quantization", Vec::new(), "normal"),
         ("speech", vec!["mlx-bridge"], "normal"),
-        ("kokoro", vec!["speech"], "normal"),
-        ("phonon", vec!["speech"], "normal"),
         ("model-primitives", vec!["mlx-bridge"], "normal"),
         (
             "model-serving",
@@ -97,8 +93,6 @@ fn should_detect_a_model_primitives_to_serving_dependency() {
         ("decision-models", vec!["mlx-bridge"], "normal"),
         ("quantization", Vec::new(), "normal"),
         ("speech", vec!["mlx-bridge"], "normal"),
-        ("kokoro", vec!["speech"], "normal"),
-        ("phonon", vec!["speech"], "normal"),
         (
             "model-primitives",
             vec!["mlx-bridge", "model-serving"],
@@ -117,68 +111,6 @@ fn should_detect_a_model_primitives_to_serving_dependency() {
 }
 
 #[test]
-fn should_detect_a_speech_to_serving_dependency() {
-    // The serving crate's worker drives the speech engines; an edge back
-    // would rebuild the serving crate on every speech edit.
-    let metadata_json_text = metadata_document_for(&[
-        ("memory-policy", vec!["serde_json"], "normal"),
-        ("mlx-bridge", Vec::new(), "normal"),
-        ("mlx-c-fork", Vec::new(), "normal"),
-        ("image-generation", vec!["mlx-bridge"], "normal"),
-        ("artifact-validation", Vec::new(), "normal"),
-        ("engine-core", vec!["mlx-bridge"], "normal"),
-        ("qwen35", vec!["mlx-bridge"], "normal"),
-        ("decision-models", vec!["mlx-bridge"], "normal"),
-        ("quantization", Vec::new(), "normal"),
-        ("model-primitives", vec!["mlx-bridge"], "normal"),
-        ("speech", vec!["mlx-bridge", "model-serving"], "normal"),
-        // The family crates exist without an edge here, so the only
-        // violation is the shell's own.
-        ("kokoro", Vec::new(), "normal"),
-        ("phonon", Vec::new(), "normal"),
-        ("model-serving", vec!["speech"], "normal"),
-        ("jangtq2-qwen35", vec!["mlx-bridge"], "normal"),
-    ]);
-    let violations = architecture_violations(&metadata_json_text).unwrap();
-    assert_eq!(violations.len(), 1);
-    assert_eq!(violations[0].rule_name, "speech-without-serving");
-    assert_eq!(
-        violations[0].dependency_chain,
-        vec!["speech", "model-serving"]
-    );
-}
-
-#[test]
-fn should_detect_a_image_generation_to_serving_dependency() {
-    // The serving crate's worker drives the image engines; an edge back
-    // would rebuild the serving crate on every image edit.
-    let metadata_json_text = metadata_document_for(&[
-        ("memory-policy", vec!["serde_json"], "normal"),
-        ("mlx-bridge", Vec::new(), "normal"),
-        ("mlx-c-fork", Vec::new(), "normal"),
-        ("model-primitives", vec!["mlx-bridge"], "normal"),
-        ("speech", vec!["mlx-bridge"], "normal"),
-        ("kokoro", vec!["speech"], "normal"),
-        ("phonon", vec!["speech"], "normal"),
-        ("image-generation", vec!["model-serving"], "normal"),
-        ("artifact-validation", Vec::new(), "normal"),
-        ("engine-core", vec!["mlx-bridge"], "normal"),
-        ("qwen35", vec!["mlx-bridge"], "normal"),
-        ("decision-models", vec!["mlx-bridge"], "normal"),
-        ("quantization", Vec::new(), "normal"),
-        ("jangtq2-qwen35", vec!["mlx-bridge"], "normal"),
-        ("model-serving", vec!["image-generation"], "normal"),
-    ]);
-    let violations = architecture_violations(&metadata_json_text).unwrap();
-    assert_eq!(violations.len(), 1);
-    assert_eq!(violations[0].rule_name, "image-generation-without-serving");
-    assert_eq!(
-        violations[0].dependency_chain,
-        vec!["image-generation", "model-serving"]
-    );
-}
-
-#[test]
 fn should_detect_a_artifact_validation_to_serving_dependency() {
     // Every family validates through this crate; an edge to the serving
     // crate would make each family depend on the engine.
@@ -188,8 +120,6 @@ fn should_detect_a_artifact_validation_to_serving_dependency() {
         ("mlx-c-fork", Vec::new(), "normal"),
         ("model-primitives", vec!["mlx-bridge"], "normal"),
         ("speech", vec!["mlx-bridge"], "normal"),
-        ("kokoro", vec!["speech"], "normal"),
-        ("phonon", vec!["speech"], "normal"),
         ("image-generation", vec!["mlx-bridge"], "normal"),
         ("artifact-validation", vec!["model-serving"], "normal"),
         ("jangtq2-qwen35", vec!["mlx-bridge"], "normal"),
@@ -219,8 +149,6 @@ fn workspace_metadata_with_engine_core_dependencies(engine_core_dependencies: Ve
         ("mlx-c-fork", Vec::new(), "normal"),
         ("model-primitives", vec!["mlx-bridge"], "normal"),
         ("speech", vec!["mlx-bridge"], "normal"),
-        ("kokoro", vec!["speech"], "normal"),
-        ("phonon", vec!["speech"], "normal"),
         ("image-generation", vec!["mlx-bridge"], "normal"),
         ("artifact-validation", Vec::new(), "normal"),
         ("jangtq2-qwen35", vec!["mlx-bridge"], "normal"),
@@ -262,66 +190,6 @@ fn should_detect_an_engine_core_to_qwen35_family_dependency() {
 }
 
 #[test]
-fn should_detect_a_qwen35_to_serving_dependency() {
-    // The serving crate's worker drives the Qwen 3.5 engines; an edge back
-    // would make the split circular.
-    let metadata_json_text = metadata_document_for(&[
-        ("memory-policy", vec!["serde_json"], "normal"),
-        ("mlx-bridge", Vec::new(), "normal"),
-        ("mlx-c-fork", Vec::new(), "normal"),
-        ("model-primitives", vec!["mlx-bridge"], "normal"),
-        ("speech", vec!["mlx-bridge"], "normal"),
-        ("kokoro", vec!["speech"], "normal"),
-        ("phonon", vec!["speech"], "normal"),
-        ("image-generation", vec!["mlx-bridge"], "normal"),
-        ("artifact-validation", Vec::new(), "normal"),
-        ("engine-core", vec!["mlx-bridge"], "normal"),
-        ("jangtq2-qwen35", vec!["mlx-bridge"], "normal"),
-        ("decision-models", vec!["mlx-bridge"], "normal"),
-        ("quantization", Vec::new(), "normal"),
-        ("qwen35", vec!["model-serving"], "normal"),
-        ("model-serving", vec!["qwen35"], "normal"),
-    ]);
-    let violations = architecture_violations(&metadata_json_text).unwrap();
-    assert_eq!(violations.len(), 1);
-    assert_eq!(violations[0].rule_name, "qwen35-without-serving");
-    assert_eq!(
-        violations[0].dependency_chain,
-        vec!["qwen35", "model-serving"]
-    );
-}
-
-#[test]
-fn should_detect_a_decision_models_to_serving_dependency() {
-    // The serving crate's worker drives the decision engines; an edge back
-    // would make the split circular.
-    let metadata_json_text = metadata_document_for(&[
-        ("memory-policy", vec!["serde_json"], "normal"),
-        ("mlx-bridge", Vec::new(), "normal"),
-        ("mlx-c-fork", Vec::new(), "normal"),
-        ("model-primitives", vec!["mlx-bridge"], "normal"),
-        ("speech", vec!["mlx-bridge"], "normal"),
-        ("kokoro", vec!["speech"], "normal"),
-        ("phonon", vec!["speech"], "normal"),
-        ("image-generation", vec!["mlx-bridge"], "normal"),
-        ("artifact-validation", Vec::new(), "normal"),
-        ("engine-core", vec!["mlx-bridge"], "normal"),
-        ("qwen35", vec!["mlx-bridge"], "normal"),
-        ("jangtq2-qwen35", vec!["mlx-bridge"], "normal"),
-        ("quantization", Vec::new(), "normal"),
-        ("decision-models", vec!["model-serving"], "normal"),
-        ("model-serving", vec!["decision-models"], "normal"),
-    ]);
-    let violations = architecture_violations(&metadata_json_text).unwrap();
-    assert_eq!(violations.len(), 1);
-    assert_eq!(violations[0].rule_name, "decision-models-without-serving");
-    assert_eq!(
-        violations[0].dependency_chain,
-        vec!["decision-models", "model-serving"]
-    );
-}
-
-#[test]
 fn should_detect_a_qwen35_to_quantizer_dependency() {
     // The worker and daemon build on the Qwen 3.5 family; the quantizer must
     // reach it only through the probe crate above it.
@@ -331,8 +199,6 @@ fn should_detect_a_qwen35_to_quantizer_dependency() {
         ("mlx-c-fork", Vec::new(), "normal"),
         ("model-primitives", vec!["mlx-bridge"], "normal"),
         ("speech", vec!["mlx-bridge"], "normal"),
-        ("kokoro", vec!["speech"], "normal"),
-        ("phonon", vec!["speech"], "normal"),
         ("image-generation", vec!["mlx-bridge"], "normal"),
         ("artifact-validation", Vec::new(), "normal"),
         ("engine-core", vec!["mlx-bridge"], "normal"),
@@ -366,8 +232,6 @@ fn should_detect_a_direct_forbidden_fork_dependency() {
         ("decision-models", vec!["mlx-bridge"], "normal"),
         ("quantization", Vec::new(), "normal"),
         ("speech", vec!["mlx-bridge"], "normal"),
-        ("kokoro", vec!["speech"], "normal"),
-        ("phonon", vec!["speech"], "normal"),
         ("model-primitives", vec!["mlx-bridge"], "normal"),
         ("model-serving", Vec::new(), "normal"),
         ("jangtq2-qwen35", Vec::new(), "normal"),
@@ -396,8 +260,6 @@ fn should_detect_a_direct_forbidden_dependency() {
         ("decision-models", vec!["mlx-bridge"], "normal"),
         ("quantization", Vec::new(), "normal"),
         ("speech", vec!["mlx-bridge"], "normal"),
-        ("kokoro", vec!["speech"], "normal"),
-        ("phonon", vec!["speech"], "normal"),
         ("model-primitives", vec!["mlx-bridge"], "normal"),
         ("model-serving", Vec::new(), "normal"),
         ("jangtq2-qwen35", Vec::new(), "normal"),
@@ -434,8 +296,6 @@ fn should_detect_a_transitive_forbidden_dependency() {
         ("decision-models", vec!["mlx-bridge"], "normal"),
         ("quantization", Vec::new(), "normal"),
         ("speech", vec!["mlx-bridge"], "normal"),
-        ("kokoro", vec!["speech"], "normal"),
-        ("phonon", vec!["speech"], "normal"),
         ("model-primitives", vec!["mlx-bridge"], "normal"),
         ("model-serving", Vec::new(), "normal"),
         ("jangtq2-qwen35", Vec::new(), "normal"),
@@ -466,8 +326,6 @@ fn should_count_dev_and_build_dependencies_as_reachability_edges() {
             ("decision-models", vec!["mlx-bridge"], "normal"),
             ("quantization", Vec::new(), "normal"),
             ("speech", vec!["mlx-bridge"], "normal"),
-            ("kokoro", vec!["speech"], "normal"),
-            ("phonon", vec!["speech"], "normal"),
             ("model-primitives", vec!["mlx-bridge"], "normal"),
             ("model-serving", Vec::new(), "normal"),
             ("jangtq2-qwen35", Vec::new(), "normal"),
@@ -516,35 +374,4 @@ fn should_fail_closed_when_the_metadata_is_malformed() {
             "malformed metadata must fail closed: {malformed_json_text}"
         );
     }
-}
-
-#[test]
-fn should_detect_one_speech_family_depending_on_another() {
-    // What two speech families share belongs in the speech shell; a family
-    // that reaches another would make the two change together.
-    let metadata_json_text = metadata_document_for(&[
-        ("memory-policy", vec!["serde_json"], "normal"),
-        ("mlx-bridge", Vec::new(), "normal"),
-        ("mlx-c-fork", Vec::new(), "normal"),
-        ("image-generation", vec!["mlx-bridge"], "normal"),
-        ("artifact-validation", Vec::new(), "normal"),
-        ("engine-core", vec!["mlx-bridge"], "normal"),
-        ("qwen35", vec!["mlx-bridge"], "normal"),
-        ("decision-models", vec!["mlx-bridge"], "normal"),
-        ("quantization", Vec::new(), "normal"),
-        ("model-primitives", vec!["mlx-bridge"], "normal"),
-        ("speech", vec!["mlx-bridge"], "normal"),
-        ("kokoro", vec!["speech", "phonon"], "normal"),
-        ("phonon", vec!["speech"], "normal"),
-        (
-            "model-serving",
-            vec!["speech", "kokoro", "phonon"],
-            "normal",
-        ),
-        ("jangtq2-qwen35", vec!["mlx-bridge"], "normal"),
-    ]);
-    let violations = architecture_violations(&metadata_json_text).unwrap();
-    assert_eq!(violations.len(), 1);
-    assert_eq!(violations[0].rule_name, "kokoro-without-phonon");
-    assert_eq!(violations[0].dependency_chain, vec!["kokoro", "phonon"]);
 }

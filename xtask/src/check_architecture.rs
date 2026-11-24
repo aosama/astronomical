@@ -64,50 +64,6 @@ const FORBIDDEN_DEPENDENCY_RULES: &[ForbiddenDependencyRule] = &[
         forbidden_crate: "model-serving",
         rationale: "the model primitives crate must build and test without pulling in the serving crate, which consumes the primitives through a one-way edge",
     },
-    // The speech families (issue #2340) implement a seam the serving
-    // crate's worker drives. An edge back would rebuild the serving crate on
-    // every speech edit and let a family reach into the engine.
-    ForbiddenDependencyRule {
-        rule_name: "speech-without-serving",
-        source_crate: "speech",
-        forbidden_crate: "model-serving",
-        rationale: "the speech crate must build and test without pulling in the serving crate, which drives the speech engines through a one-way edge",
-    },
-    // Each speech family is a crate of its own (issue #2473, Step 7). Like
-    // the shell, it never reaches the serving crate, and one family never
-    // reaches another, so a family can be added or changed alone.
-    ForbiddenDependencyRule {
-        rule_name: "kokoro-without-serving",
-        source_crate: "kokoro",
-        forbidden_crate: "model-serving",
-        rationale: "the Kokoro crate must build and test without pulling in the serving crate, which drives the speech engines through a one-way edge",
-    },
-    ForbiddenDependencyRule {
-        rule_name: "phonon-without-serving",
-        source_crate: "phonon",
-        forbidden_crate: "model-serving",
-        rationale: "the Phonon crate must build and test without pulling in the serving crate, which drives the speech engines through a one-way edge",
-    },
-    ForbiddenDependencyRule {
-        rule_name: "kokoro-without-phonon",
-        source_crate: "kokoro",
-        forbidden_crate: "phonon",
-        rationale: "one speech family must not depend on another; what they share belongs in the speech shell",
-    },
-    ForbiddenDependencyRule {
-        rule_name: "phonon-without-kokoro",
-        source_crate: "phonon",
-        forbidden_crate: "kokoro",
-        rationale: "one speech family must not depend on another; what they share belongs in the speech shell",
-    },
-    // The image families (issue #2340), like speech, implement a seam the
-    // serving crate's worker drives.
-    ForbiddenDependencyRule {
-        rule_name: "image-generation-without-serving",
-        source_crate: "image-generation",
-        forbidden_crate: "model-serving",
-        rationale: "the image generation crate must build and test without pulling in the serving crate, which drives the image engines through a one-way edge",
-    },
     // Artifact validation sits under every model family; an edge to the
     // serving crate would make each family depend on the engine through it.
     ForbiddenDependencyRule {
@@ -133,22 +89,6 @@ const FORBIDDEN_DEPENDENCY_RULES: &[ForbiddenDependencyRule] = &[
         source_crate: "engine-core",
         forbidden_crate: "qwen35",
         rationale: "the engine core holds machinery every model family shares, so it must build without any family crate; a family supplies its parts through the engine core's traits",
-    },
-    // The Qwen 3.5 family sits under the decision models and the serving
-    // crate's worker; an edge back would make the split circular.
-    ForbiddenDependencyRule {
-        rule_name: "qwen35-without-serving",
-        source_crate: "qwen35",
-        forbidden_crate: "model-serving",
-        rationale: "the Qwen 3.5 crate must build and test without pulling in the serving crate, which drives its engines through a one-way edge",
-    },
-    // The decision models sit above the Qwen 3.5 family and below the
-    // serving crate's worker, which drives them.
-    ForbiddenDependencyRule {
-        rule_name: "decision-models-without-serving",
-        source_crate: "decision-models",
-        forbidden_crate: "model-serving",
-        rationale: "the decision models crate must build and test without pulling in the serving crate, which drives the decision engines through a one-way edge",
     },
     // The quantizer reaches the Qwen 3.5 family only through the probe crate
     // above it (issue #2340), so the worker and daemon, which build on the

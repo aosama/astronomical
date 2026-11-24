@@ -126,6 +126,11 @@ pub trait ImageFamily: Sized + 'static {
 }
 
 /// An image family's engine: its components and the request in progress.
+///
+/// The family's [`ImageFamily`] steps live in the family's own crate, so the
+/// model id and the components they read are public; the lifecycle state
+/// (the loaded revision and the request in progress) stays private, so only
+/// the shell's own steps move it.
 pub struct ImageEngineShell<Family: ImageFamily> {
     pub serving_model_id: String,
     pub components: Box<Family::Components>,
