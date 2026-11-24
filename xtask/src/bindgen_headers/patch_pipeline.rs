@@ -7,7 +7,11 @@
 
 use std::path::{Path, PathBuf};
 
-const PATCH_FILE_PREFIX: &str = "PATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/../../../";
+/// The CMakeLists names each patch from its own folder; the `../` steps up to
+/// the repository root that follow depend on how deep the crate sits, so they
+/// are skipped whatever their count.
+const PATCH_FILE_PREFIX: &str = "PATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/";
+const PARENT_FOLDER_STEP: &str = "../";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct PatchStep {
@@ -48,7 +52,10 @@ pub(crate) fn parse_cmake_patch_pipeline(cmake_lists_text: &str) -> Vec<PatchSte
 
 fn patch_path_on_line(cmake_line: &str) -> Option<String> {
     let prefix_position = cmake_line.find(PATCH_FILE_PREFIX)?;
-    let path_and_rest = &cmake_line[prefix_position + PATCH_FILE_PREFIX.len()..];
+    let mut path_and_rest = &cmake_line[prefix_position + PATCH_FILE_PREFIX.len()..];
+    while let Some(path_below_parent) = path_and_rest.strip_prefix(PARENT_FOLDER_STEP) {
+        path_and_rest = path_below_parent;
+    }
     let patch_path = match path_and_rest.find('"') {
         Some(quote_position) => &path_and_rest[..quote_position],
         None => path_and_rest,

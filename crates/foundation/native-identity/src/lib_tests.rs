@@ -5,14 +5,14 @@ use crate::{
     native_build_identity_with_probe_values,
 };
 
-/// `CARGO_MANIFEST_DIR` is `<workspace-root>/crates/native-identity`; the
+/// `CARGO_MANIFEST_DIR` lies below the workspace root, which holds `Cargo.lock`; the
 /// source-identity pathspecs are workspace-relative, so beside-source tests
 /// resolve the workspace root rather than relying on the working directory.
 fn workspace_root_from_manifest_directory() -> std::path::PathBuf {
     std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .ancestors()
-        .nth(2)
-        .expect("the crate lives two levels below the workspace root")
+        .find(|ancestor_directory| ancestor_directory.join("Cargo.lock").is_file())
+        .expect("the crate lives inside the workspace, beside its Cargo.lock")
         .to_path_buf()
 }
 

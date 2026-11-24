@@ -131,6 +131,37 @@ What to expect:
 - **Nothing in MLX enforces the active memory ceiling on Linux.** The memory ledger still plans against it, and `/v1/status` reports `"active_memory_ceiling_enforcement": "unavailable"` in the ledger snapshot (it reads `"enforced_by_mlx"` on macOS). See [#2425](https://github.com/aosama/astronomical/issues/2425).
 - **The bound is the machine's memory, lowered by any cgroup limit** (cgroup v2's `memory.max`, or the v1 memory controller's limit on older hosts) on the daemon, and `maximum_mlx_memory_gb` lowers it further.
 
+## How the code is laid out
+
+Every Rust crate sits in a folder named for its role. `cargo xtask check-architecture` holds the dependency edges that matter most:
+- no family crate, nor `engine-core`, `model-primitives`, `artifact-validation` or the `jangtq2-qwen35` weight format, depends on `model-serving`, the worker's serving loop;
+- `engine-core` never depends on the `qwen35` family;
+- `memory-policy` stays free of the MLX bindings;
+- `qwen35` never depends on `quantization`.
+
+| Folder | What lives there |
+|---|---|
+| `crates/contracts/` | The messages programs exchange: the REST API types, the daemon-to-worker protocol, and the speech and decision request shapes. No model code and no MLX. |
+| `crates/foundation/` | What everything builds on: settings and model discovery (`config`), memory policy, the one place that talks to MLX (`runtime-integration`), the MLX bindings, artifact checks, the native build tooling, the English text tools speech reads, and shared test fixtures (`test-harness`). |
+| `crates/engine/` | The machinery every model family shares: the engine contract and owner thread, the `astro_ssd_prompt_cache`, speculative decoding and expert paging (`engine-core`), the shared model building blocks (`model-primitives`), expert placement records, and the worker's serving loop (`model-serving`). |
+| `crates/hardware/` | The Neural Engine crate. Its hardware journeys run only by hand and in their own CI lane, so it is left out of the default build. |
+| `crates/families/<kind>/` | The model families, one folder per kind: `text`, `image`, `speech` and `decision`. A family crate holds only what makes its families different. It never depends on `model-serving`. |
+| `crates/weight-formats/` | Weight formats more than one crate reads. A format only one family uses lives inside that family. |
+| `crates/tooling/` | Tools around the models rather than inside them: quantization and its probe, the vision tower, the download catalog, and decision-head training. |
+| `apps/` | The programs: the daemon, the inference worker, the command line, and the two macOS apps (the menu-bar agent and the chat app). |
+| `verification/` | Journeys that run real models or a whole program: acceptance, end-to-end and Neural Engine research. |
+| `xtask/` | Repository tooling, run as `cargo xtask <command>`. |
+
+The root `Cargo.toml` lists these folders by glob, so a new crate in any of them is a workspace member without an edit there. A crate declares the test lanes it runs in under `[package.metadata.astronomical] test-lanes`, and `cargo xtask lane-cargo` builds each lane's command from those declarations.
+
+**Adding a model family.** A family needs code in four places today:
+1. Its engine, in the crate for its kind under `crates/families/`.
+2. Its discovery module in `crates/foundation/config/src/model_discovery/`, which declares the family's constant and its recognizers.
+3. One entry in the family registry (`model_family_registry.rs` beside it).
+4. One builder and one table line in the worker's `family_runtime_builders.rs`.
+
+Its catalog entries go in `registry/download_catalog.json`. No list of families needs editing anywhere else. Issue #2473 tracks folding steps 2 to 4 into the family's own crate and a single registry line.
+
 ## Check your change
 
 Check Rust formatting, then run the Rust integration and REST suites:
