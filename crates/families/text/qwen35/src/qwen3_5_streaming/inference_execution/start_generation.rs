@@ -1,15 +1,13 @@
 use crate::qwen3_5_core::shared_execution::astro_ssd_prompt_cache_restore;
 use crate::qwen3_5_core::shared_execution::generation_start_steps;
 use crate::{
-    AstroSsdPromptCacheBlockKey, EngineGenerationStart, InferenceEngineError,
-    PerformanceAttribution, PerformanceCounter, Qwen3_5InferenceRequest, Qwen3_5SamplingStrategy,
-    Qwen3_5ThinkingBudgetState,
+    EngineGenerationStart, InferenceEngineError, PerformanceAttribution, Qwen3_5InferenceRequest,
+    Qwen3_5SamplingStrategy, Qwen3_5ThinkingBudgetState,
 };
 
-use ipc_protocol::WorkerAstroSsdPromptCacheRequestDiagnostics;
 use mlx_bridge::MlxArray;
 
-use super::engine_request::{Qwen3_5EngineRequest, StreamingRequestExtension};
+use super::engine_request::StreamingRequestExtension;
 use super::{Qwen3_5EngineState, qwen3_5_runtime_error};
 use crate::astro_decoder_state_cache::AstroDecoderStateCacheLayout;
 use crate::qwen3_5_core::decoder::RequestDecoderStateStack;
@@ -17,19 +15,14 @@ use crate::qwen3_5_core::engine_errors::invalid_request_error;
 use crate::qwen3_5_core::shared_execution::astro_ssd_prompt_cache_visual_identity::{
     Qwen3_5AstroSsdPromptCacheVisualIdentity, Qwen3_5AstroSsdPromptCacheVisualIdentityInput,
 };
+use crate::qwen3_5_core::shared_execution::engine_request_installation::{
+    AdmittedGenerationSession, new_engine_request,
+};
 use crate::qwen3_5_core::shared_execution::generation_request_validation;
+use crate::qwen3_5_core::shared_execution::generation_session_position::{
+    GenerationSessionPosition, derive_generation_session_position,
+};
 use engine_core::astro_ssd_prompt_cache::block_causal_input::AstroSsdPromptCacheBlockCausalInput;
-
-/// The starting cursor of a generation session, derived from the `astro_ssd_prompt_cache`: what the
-/// `astro_ssd_prompt_cache` restored, and where prefill therefore resumes.
-struct RestoredPromptPrefixSession {
-    astro_ssd_prompt_cache_restored_token_count: u32,
-    prefill_cursor: usize,
-    next_position_tokens: u32,
-    last_restored_astro_ssd_prompt_cache_block_key: Option<AstroSsdPromptCacheBlockKey>,
-    astro_ssd_prompt_cache_diagnostics: Option<WorkerAstroSsdPromptCacheRequestDiagnostics>,
-    restored_target_work_token_count: u64,
-}
 
 /// Everything the active-request installation consumes, grouped so the
 /// installation reads as one named phase instead of a positional argument
@@ -44,7 +37,7 @@ struct InstallActiveGenerationRequest<'a> {
     reserved_context_tokens: usize,
     can_use_astro_ssd_prompt_cache: bool,
     astro_ssd_prompt_cache_block_causal_inputs: Vec<AstroSsdPromptCacheBlockCausalInput>,
-    restored_prompt_prefix_session: RestoredPromptPrefixSession,
+    restored_prompt_prefix_session: GenerationSessionPosition,
     visual_embeddings: Option<MlxArray>,
     has_precomputed_visual_embeddings: bool,
     has_processed_visual_images: bool,
@@ -241,46 +234,23 @@ impl Qwen3_5EngineState {
         reserved_context_tokens: usize,
         request_decoder_state: &mut RequestDecoderStateStack,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<RestoredPromptPrefixSession, InferenceEngineError> {
-        if can_use_astro_ssd_prompt_cache {
-            let restore_outcome =
-                astro_ssd_prompt_cache_restore::restore_prefix_keeping_store_installed(
-                    self,
-                    astro_ssd_prompt_cache_restore::AstroSsdPromptCachePrefixRestore {
-                        request_id: inference_request.request_id(),
-                        prompt_token_ids,
-                        block_causal_inputs: astro_ssd_prompt_cache_block_causal_inputs,
-                        total_context_tokens: reserved_context_tokens,
-                    },
-                    request_decoder_state,
-                    performance_attribution,
-                )?;
-            if let Some(restore_outcome) = restore_outcome {
-                return Ok(RestoredPromptPrefixSession {
-                    astro_ssd_prompt_cache_restored_token_count: restore_outcome
-                        .astro_ssd_prompt_cache_restored_token_count,
-                    prefill_cursor: restore_outcome.restored_token_count,
-                    next_position_tokens: restore_outcome
-                        .astro_ssd_prompt_cache_restored_token_count,
-                    last_restored_astro_ssd_prompt_cache_block_key: restore_outcome
-                        .last_restored_astro_ssd_prompt_cache_block_key,
-                    astro_ssd_prompt_cache_diagnostics: Some(
-                        restore_outcome.astro_ssd_prompt_cache_diagnostics,
-                    ),
-                    restored_target_work_token_count: u64::from(
-                        restore_outcome.astro_ssd_prompt_cache_restored_token_count,
-                    ),
-                });
-            }
+    ) -> Result<GenerationSessionPosition, InferenceEngineError> {
+        if !can_use_astro_ssd_prompt_cache {
+            return Ok(derive_generation_session_position(None));
         }
-        Ok(RestoredPromptPrefixSession {
-            astro_ssd_prompt_cache_restored_token_count: 0,
-            prefill_cursor: 0,
-            next_position_tokens: 0,
-            last_restored_astro_ssd_prompt_cache_block_key: None,
-            astro_ssd_prompt_cache_diagnostics: None,
-            restored_target_work_token_count: 0,
-        })
+        let restore_outcome =
+            astro_ssd_prompt_cache_restore::restore_prefix_keeping_store_installed(
+                self,
+                astro_ssd_prompt_cache_restore::AstroSsdPromptCachePrefixRestore {
+                    request_id: inference_request.request_id(),
+                    prompt_token_ids,
+                    block_causal_inputs: astro_ssd_prompt_cache_block_causal_inputs,
+                    total_context_tokens: reserved_context_tokens,
+                },
+                request_decoder_state,
+                performance_attribution,
+            )?;
+        Ok(derive_generation_session_position(restore_outcome))
     }
 
     /// Installs the assembled session as the engine's active request and
@@ -306,76 +276,31 @@ impl Qwen3_5EngineState {
             has_precomputed_visual_embeddings,
             has_processed_visual_images,
             image_pad_token_id,
-            mut performance_attribution,
-        } = install_inputs;
-        let sampling_selects_highest_logit =
-            matches!(sampling_strategy, Qwen3_5SamplingStrategy::HighestLogit);
-        let effective_temperature_thousandths = match sampling_strategy {
-            Qwen3_5SamplingStrategy::HighestLogit => 0,
-            Qwen3_5SamplingStrategy::TopKTopP {
-                temperature_thousandths,
-                ..
-            } => temperature_thousandths,
-        };
-        tracing::info!(
-            request_id = inference_request.request_id().value(),
-            astro_ssd_prompt_cache_is_available = self.core.astro_ssd_prompt_cache.is_some(),
-            sampling_selects_highest_logit,
-            effective_temperature_thousandths,
-            "resolved target-only generation request session"
-        );
-        performance_attribution.record_counter(
-            PerformanceCounter::PromptTokenCount,
-            u64::try_from(prompt_token_ids.len()).unwrap_or(u64::MAX),
-        );
-        performance_attribution.record_counter(
-            PerformanceCounter::AstroSsdPromptCacheRestoredTokenCount,
-            u64::from(restored_prompt_prefix_session.astro_ssd_prompt_cache_restored_token_count),
-        );
-        let target_eligible_prompt_work_token_count =
-            u64::try_from(prompt_token_ids.len()).unwrap_or(u64::MAX);
-        let prompt_prefill_end_exclusive = prompt_token_ids.len();
-        let initial_prompt_processing_phase = (restored_prompt_prefix_session.prefill_cursor
-            < prompt_prefill_end_exclusive)
-            .then_some(ipc_protocol::WorkerPromptProcessingPhase::Target);
-        self.core.active_request = Some(Qwen3_5EngineRequest {
-            request_decoder_state,
-            generated_token_count: 0,
-            input_token_ids: prompt_token_ids,
-            last_restored_astro_ssd_prompt_cache_block_key: restored_prompt_prefix_session
-                .last_restored_astro_ssd_prompt_cache_block_key,
-            can_use_astro_ssd_prompt_cache,
-            maximum_output_tokens: inference_request.max_output_tokens(),
-            astro_ssd_prompt_cache_block_causal_inputs,
-            next_position_tokens: restored_prompt_prefix_session.next_position_tokens,
-            pending_generated_token: None,
-            prefill_cursor: restored_prompt_prefix_session.prefill_cursor,
-            random_state,
-            request_id: inference_request.request_id(),
-            sampling_strategy,
-            repetition_penalty_thousandths: inference_request.repetition_penalty_thousandths(),
-            penalized_token_ids: inference_request.initial_penalized_token_ids(),
-            visual_embeddings,
-            consumed_visual_embedding_count: 0,
-            has_visual_inputs: has_precomputed_visual_embeddings || has_processed_visual_images,
-            image_pad_token_id,
-            thinking_budget_state,
             performance_attribution,
-            prompt_work_reuse: ipc_protocol::WorkerPromptWorkReuse {
-                target_eligible_token_count: target_eligible_prompt_work_token_count,
-                target_restored_token_count: restored_prompt_prefix_session
-                    .restored_target_work_token_count,
+        } = install_inputs;
+        let initial_prompt_processing_phase = (restored_prompt_prefix_session.prefill_cursor
+            < prompt_token_ids.len())
+        .then_some(ipc_protocol::WorkerPromptProcessingPhase::Target);
+        let astro_ssd_prompt_cache_is_available = self.core.astro_ssd_prompt_cache.is_some();
+        self.core.active_request = Some(new_engine_request(
+            AdmittedGenerationSession {
+                request_decoder_state,
+                prompt_token_ids,
+                can_use_astro_ssd_prompt_cache,
+                astro_ssd_prompt_cache_block_causal_inputs,
+                astro_ssd_prompt_cache_is_available,
+                session_position: &restored_prompt_prefix_session,
+                sampling_strategy,
+                random_state,
+                inference_request,
+                visual_embeddings,
+                has_visual_inputs: has_precomputed_visual_embeddings || has_processed_visual_images,
+                image_pad_token_id,
+                thinking_budget_state,
+                performance_attribution,
             },
-            astro_ssd_prompt_cache_diagnostics: restored_prompt_prefix_session
-                .astro_ssd_prompt_cache_diagnostics
-                .clone(),
-            generation_residency_preparation_attempted: false,
-            first_decode_forward_elapsed_millis: None,
-            outgrown_attention_slab_reclaim: Default::default(),
-            generation_preparation_announced: false,
-            structured_generation: inference_request.take_structured_generation(),
-            engine_extension: StreamingRequestExtension::for_new_request(reserved_context_tokens),
-        });
+            StreamingRequestExtension::for_new_request(reserved_context_tokens),
+        ));
         let restored_prompt_prefix_token_count =
             u32::try_from(restored_prompt_prefix_session.prefill_cursor).map_err(|_| {
                 super::fatal_engine_error("restored prompt prefix exceeds the u32 range")

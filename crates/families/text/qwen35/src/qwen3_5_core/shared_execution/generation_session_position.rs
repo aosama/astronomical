@@ -1,4 +1,6 @@
-//! Session position derivation from one persistent astro SSD prompt cache restore outcome.
+//! Where a generation session starts, derived from one `astro_ssd_prompt_cache`
+//! restore outcome; both Qwen3.5 engines start their sessions from it
+//! (issue #2473).
 
 use crate::AstroSsdPromptCacheBlockKey;
 use ipc_protocol::WorkerAstroSsdPromptCacheRequestDiagnostics;
@@ -7,14 +9,13 @@ use crate::qwen3_5_core::shared_execution::astro_ssd_prompt_cache_restore::Astro
 
 /// Where the admitted session begins: how much prompt work already exists
 /// and which token position the first new token occupies.
-pub(super) struct GenerationSessionPosition {
-    pub(super) astro_ssd_prompt_cache_restored_token_count: u32,
-    pub(super) prefill_cursor: usize,
-    pub(super) next_position_tokens: u32,
-    pub(super) restored_target_work_token_count: u64,
-    pub(super) last_restored_astro_ssd_prompt_cache_block_key: Option<AstroSsdPromptCacheBlockKey>,
-    pub(super) astro_ssd_prompt_cache_diagnostics:
-        Option<WorkerAstroSsdPromptCacheRequestDiagnostics>,
+pub struct GenerationSessionPosition {
+    pub astro_ssd_prompt_cache_restored_token_count: u32,
+    pub prefill_cursor: usize,
+    pub next_position_tokens: u32,
+    pub restored_target_work_token_count: u64,
+    pub last_restored_astro_ssd_prompt_cache_block_key: Option<AstroSsdPromptCacheBlockKey>,
+    pub astro_ssd_prompt_cache_diagnostics: Option<WorkerAstroSsdPromptCacheRequestDiagnostics>,
 }
 
 /// Maps one restore outcome onto the session's starting position.
@@ -23,9 +24,9 @@ pub(super) struct GenerationSessionPosition {
 /// all-zero origin, matching the previous default initialization exactly.
 /// In the `Some` arm the cursor and the next position come from different
 /// outcome fields on purpose: the cursor advances by restored tokens while
-/// positions continue from the persistent astro SSD prompt cache token count, and the
+/// positions continue from the `astro_ssd_prompt_cache` token count, and the
 /// two diverge whenever a partial tail block is recovered.
-pub(super) fn derive_generation_session_position(
+pub fn derive_generation_session_position(
     restore_outcome: Option<AstroSsdPromptCacheRestoreOutcome>,
 ) -> GenerationSessionPosition {
     let Some(restore_outcome) = restore_outcome else {
@@ -55,5 +56,5 @@ pub(super) fn derive_generation_session_position(
 }
 
 #[cfg(test)]
-#[path = "generation_restore_position_derivation_tests.rs"]
-mod generation_restore_position_derivation_tests;
+#[path = "generation_session_position_tests.rs"]
+mod generation_session_position_tests;

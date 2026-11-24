@@ -9,7 +9,6 @@
 // one named-constructor surface for identical failure texts.
 pub(in crate::qwen3_5_resident::inference_execution) mod generation_error_constructors;
 mod generation_finalization;
-mod generation_restore_position_derivation;
 mod generation_session_decisions;
 mod generation_session_validate_admit_restore_install;
 
