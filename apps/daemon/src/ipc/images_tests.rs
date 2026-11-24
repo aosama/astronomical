@@ -2,7 +2,7 @@
 //! command building, and outcome mapping. The journeys that cross the real
 //! socket live in `tests/integration/daemon_ipc_images.rs`.
 
-use config::{DiscoveredModel, ImageGenerationCapabilities, ModelCapabilities, ModelFamily};
+use config::{DiscoveredModel, ImageGenerationCapabilities, ModelCapabilities};
 use ipc_protocol::{
     DaemonResponse, GeneratedImage, ImageGenerateRequest, ImageGenerationFailureReason,
     ImageGenerationResultMetadata,
@@ -30,7 +30,7 @@ fn discovered_image_model(model_id: &str) -> DiscoveredModel {
     DiscoveredModel {
         model_id: model_id.to_owned(),
         provider_model_id: None,
-        model_family: ModelFamily::Flux2Klein,
+        model_family: config::FLUX2_KLEIN_MODEL_FAMILY,
         revision: "revision".to_owned(),
         model_directory: PathBuf::from("/tmp/models"),
         capabilities: ModelCapabilities::ImageGeneration(image_capabilities()),

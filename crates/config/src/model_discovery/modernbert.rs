@@ -7,6 +7,8 @@
 use std::fs;
 use std::path::Path;
 
+use super::model_family_description::ModelFamily;
+
 /// Family-derived metadata returned to neutral discovery orchestration.
 pub(super) struct ModernBertDiscoveredModelMetadata {
     pub vector_width: u32,
@@ -58,3 +60,6 @@ fn measure_model_safetensors_bytes(model_directory: &Path) -> Option<u64> {
         .len()
         .into()
 }
+
+/// The ModernBERT embedding family.
+pub const MODERNBERT_MODEL_FAMILY: ModelFamily = ModelFamily::named("modernbert");

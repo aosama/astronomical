@@ -4,7 +4,7 @@
 use std::fs;
 use std::path::Path;
 
-use config::{DecisionModelCapabilities, DiscoveredModel, ModelCapabilities, ModelFamily};
+use config::{DecisionModelCapabilities, DiscoveredModel, ModelCapabilities};
 
 const BACKBONE_SHARD_NAME: &str = "model-00001-of-00001.safetensors";
 const CLEF_HEAD_SETTINGS_JSON: &str = r#"{"hidden_size": 4096, "width": 1024, "routing_layers": 2, "layers": 4, "heads": 16, "feedforward": 4096}"#;
@@ -63,7 +63,7 @@ fn should_discover_a_clef_folder_as_a_decision_model_with_its_sequence_limit() {
 
     assert_eq!(discovered_models.len(), 1, "Clef must be discovered once");
     assert_eq!(discovered_models[0].model_id, "clef-flash-8bit");
-    assert_eq!(discovered_models[0].model_family, ModelFamily::Clef);
+    assert_eq!(discovered_models[0].model_family, config::CLEF_MODEL_FAMILY);
     assert_eq!(
         discovered_models[0].capabilities,
         ModelCapabilities::Decisions(DecisionModelCapabilities {
@@ -101,7 +101,7 @@ fn should_not_read_a_folder_without_the_head_weights_as_clef() {
     assert!(
         discovered_models_in(&temporary_directory)
             .iter()
-            .all(|discovered_model| discovered_model.model_family != ModelFamily::Clef),
+            .all(|discovered_model| discovered_model.model_family != config::CLEF_MODEL_FAMILY),
         "the head settings alone do not make a Clef model"
     );
 }
@@ -117,7 +117,7 @@ fn should_not_read_head_settings_without_a_hidden_size_as_clef() {
     assert!(
         discovered_models_in(&temporary_directory)
             .iter()
-            .all(|discovered_model| discovered_model.model_family != ModelFamily::Clef)
+            .all(|discovered_model| discovered_model.model_family != config::CLEF_MODEL_FAMILY)
     );
 }
 

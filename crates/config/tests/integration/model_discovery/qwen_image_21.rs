@@ -2,8 +2,8 @@ use std::fs;
 use std::path::Path;
 
 use config::{
-    ModelCapabilities, ModelFamily, QwenImage21DirectoryVerificationError,
-    classify_pipeline_index_bytes, verify_qwen_image_21_model_directory,
+    ModelCapabilities, QwenImage21DirectoryVerificationError, classify_pipeline_index_bytes,
+    verify_qwen_image_21_model_directory,
 };
 use serde_json::{Value, json};
 use test_harness::fixtures::image_pipeline_fixture::{
@@ -26,7 +26,7 @@ fn should_classify_the_reviewed_qwen_image_21_pipeline() {
     assert_eq!(
         classify_pipeline_index_bytes(pipeline_index.as_bytes())
             .expect("fixture pipeline should parse"),
-        Some(ModelFamily::QwenImage21)
+        Some(config::QWEN_IMAGE_21_MODEL_FAMILY)
     );
 }
 
@@ -62,7 +62,9 @@ fn should_advertise_a_verified_qwen_image_2_1_artifact_as_image_generation() {
         &super::discover_configured_models(&temporary_directory)[0].discovered_models;
     let discovered_model = discovered_models
         .iter()
-        .find(|discovered_model| discovered_model.model_family == ModelFamily::QwenImage21)
+        .find(|discovered_model| {
+            discovered_model.model_family == config::QWEN_IMAGE_21_MODEL_FAMILY
+        })
         .expect("a verified Qwen-Image-2.1 artifact must appear in the executable model list");
 
     assert_eq!(discovered_model.model_id, CANONICAL_MODEL_ID);

@@ -23,7 +23,7 @@ use astronomical_daemon::{
 use config::{
     AstroSsdPromptCacheConfig, AstronomicalInstancePaths, AstronomicalRuntimeInstance,
     ChatModelCapabilities as DiscoveredChatModelCapabilities, DiscoveredModel,
-    ImageGenerationCapabilities, LogLevel, LoggingConfig, ModelCapabilities, ModelFamily,
+    ImageGenerationCapabilities, LogLevel, LoggingConfig, ModelCapabilities,
 };
 use ipc_protocol::{
     ChatGenerationCommand, ChatGenerationCompletionReason, ChatGenerationSettings, ChatMessage,
@@ -87,7 +87,7 @@ pub(crate) fn ipc_chat_discovered_model(model_id: &str) -> DiscoveredModel {
     DiscoveredModel {
         model_id: model_id.to_owned(),
         provider_model_id: None,
-        model_family: ModelFamily::Qwen3_5,
+        model_family: config::QWEN3_5_MODEL_FAMILY,
         revision: "ipc-test-revision".to_owned(),
         model_directory: PathBuf::from(format!("/tmp/models/{model_id}")),
         capabilities: ModelCapabilities::Chat(DiscoveredChatModelCapabilities {
@@ -473,7 +473,7 @@ pub(crate) fn ipc_image_discovered_model(model_id: &str) -> DiscoveredModel {
     DiscoveredModel {
         model_id: model_id.to_owned(),
         provider_model_id: None,
-        model_family: ModelFamily::Flux2Klein,
+        model_family: config::FLUX2_KLEIN_MODEL_FAMILY,
         revision: "ipc-image-test-revision".to_owned(),
         model_directory: PathBuf::from(format!("/tmp/models/{model_id}")),
         capabilities: ModelCapabilities::ImageGeneration(ImageGenerationCapabilities {
@@ -518,11 +518,11 @@ pub(crate) fn ipc_speech_discovered_model(model_id: &str) -> DiscoveredModel {
     DiscoveredModel {
         model_id: model_id.to_owned(),
         provider_model_id: None,
-        model_family: ModelFamily::Kokoro,
+        model_family: config::KOKORO_MODEL_FAMILY,
         revision: "ipc-speech-test-revision".to_owned(),
         model_directory: PathBuf::from(format!("/tmp/models/{model_id}")),
         capabilities: ModelCapabilities::Speech(config::SpeechModelCapabilities {
-            model_family: ModelFamily::Kokoro,
+            model_family: config::KOKORO_MODEL_FAMILY,
             sample_rate_hertz: 24_000,
             voice_names: vec!["af_heart".to_owned()],
             default_voice_name: "af_heart".to_owned(),
@@ -538,7 +538,7 @@ pub(crate) fn ipc_decision_discovered_model(model_id: &str) -> DiscoveredModel {
     DiscoveredModel {
         model_id: model_id.to_owned(),
         provider_model_id: None,
-        model_family: ModelFamily::Laya,
+        model_family: config::LAYA_MODEL_FAMILY,
         revision: "ipc-decision-test-revision".to_owned(),
         model_directory: PathBuf::from(format!("/tmp/models/{model_id}")),
         capabilities: ModelCapabilities::Decisions(config::DecisionModelCapabilities {

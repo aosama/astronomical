@@ -282,7 +282,7 @@ async fn should_report_ready_status_idle_activity_and_model_id_for_a_ready_worke
         vec![DiscoveredModel {
             model_id: MODEL_ID.to_owned(),
             provider_model_id: None,
-            model_family: config::ModelFamily::Qwen3_5,
+            model_family: config::QWEN3_5_MODEL_FAMILY,
             revision: "test".to_owned(),
             model_directory: "/models/test".into(),
             capabilities: config::ModelCapabilities::Chat(config::ChatModelCapabilities {

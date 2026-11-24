@@ -3,8 +3,8 @@ use std::fs;
 use std::path::Path;
 
 use config::{
-    DiscoveredModelError, Flux2KleinDirectoryVerificationError, ModelCapabilities, ModelFamily,
-    ModelLicense, verify_flux2_klein_model_directory,
+    DiscoveredModelError, FLUX2_KLEIN_MODEL_FAMILY, Flux2KleinDirectoryVerificationError,
+    ModelCapabilities, ModelLicense, verify_flux2_klein_model_directory,
 };
 use serde_json::{Value, json};
 use test_harness::fixtures::image_pipeline_fixture::{
@@ -35,7 +35,7 @@ fn should_discover_the_reviewed_distilled_bf16_flux2_klein_profile_with_typed_ca
         discovered_model.provider_model_id.as_deref(),
         Some(PROVIDER_MODEL_ID)
     );
-    assert_eq!(discovered_model.model_family, ModelFamily::Flux2Klein);
+    assert_eq!(discovered_model.model_family, FLUX2_KLEIN_MODEL_FAMILY);
     assert_eq!(discovered_model.revision, REVIEWED_REVISION);
     assert_eq!(discovered_model.license, Some(ModelLicense::Apache20));
     assert!(discovered_model.model_size_bytes > 0);

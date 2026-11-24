@@ -70,6 +70,12 @@ pub use model_config_entries::{
 };
 pub use model_discovery::is_discoverable_model_folder;
 pub use model_discovery::{
+    CLEF_MODEL_FAMILY, FLUX2_KLEIN_MODEL_FAMILY, KEV_MODEL_FAMILY, KOKORO_MODEL_FAMILY,
+    LAYA_MODEL_FAMILY, MODERNBERT_MODEL_FAMILY, ModelFamilyDescription, ModelKind,
+    PHONON_MODEL_FAMILY, PRISM_HADAMARD_QWEN35_MODEL_FAMILY, QWEN_IMAGE_21_MODEL_FAMILY,
+    QWEN3_5_MODEL_FAMILY,
+};
+pub use model_discovery::{
     ChatModelCapabilities, ClassifiedModelArtifact, DecisionModelCapabilities, DiscoveredModel,
     DiscoveredModelError, EffectiveModelDiscovery, EffectiveModelDiscoveryError,
     EmbeddingModelCapabilities, FLUX2_KLEIN_MLX_4BIT_TRANSFORMER_INDEX_FILE_NAME,

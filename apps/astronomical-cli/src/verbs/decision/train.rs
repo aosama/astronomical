@@ -150,9 +150,9 @@ fn tunable_family(
     model_id: &str,
 ) -> Result<TunableHeadFamily, DecisionToolError> {
     match model_family {
-        ModelFamily::Kev => Ok(TunableHeadFamily::Kev),
-        ModelFamily::Laya => Ok(TunableHeadFamily::Laya),
-        ModelFamily::Clef => Ok(TunableHeadFamily::Clef),
+        config::KEV_MODEL_FAMILY => Ok(TunableHeadFamily::Kev),
+        config::LAYA_MODEL_FAMILY => Ok(TunableHeadFamily::Laya),
+        config::CLEF_MODEL_FAMILY => Ok(TunableHeadFamily::Clef),
         _ => Err(DecisionToolError::NotTrainable {
             model_id: model_id.to_owned(),
         }),

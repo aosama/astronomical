@@ -29,13 +29,13 @@ pub(super) fn unloaded_speech_engine(
     };
     let model_id = speech_configuration.model_id;
     match model_family {
-        Some(ModelFamily::Kokoro) => Ok(Box::new(KokoroSpeechEngine::new(
+        Some(config::KOKORO_MODEL_FAMILY) => Ok(Box::new(KokoroSpeechEngine::new(
             model_id,
             model_directory_path,
             memory_grant.effective_mlx_memory_ceiling_bytes,
             memory_grant.mlx_buffer_cache_limit_bytes,
         ))),
-        Some(ModelFamily::Phonon) => Ok(Box::new(PhononSpeechEngine::new(
+        Some(config::PHONON_MODEL_FAMILY) => Ok(Box::new(PhononSpeechEngine::new(
             model_id,
             model_directory_path,
             memory_grant.effective_mlx_memory_ceiling_bytes,

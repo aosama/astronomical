@@ -4,7 +4,7 @@
 use std::fs;
 use std::path::Path;
 
-use config::{DecisionModelCapabilities, DiscoveredModel, ModelCapabilities, ModelFamily};
+use config::{DecisionModelCapabilities, DiscoveredModel, ModelCapabilities};
 
 const BACKBONE_SHARD_NAME: &str = "model.safetensors-00001-of-00001.safetensors";
 
@@ -57,7 +57,7 @@ fn should_discover_a_kev_folder_as_a_decision_model_not_a_chat_model() {
 
     assert_eq!(discovered_models.len(), 1, "Kev must be discovered once");
     assert_eq!(discovered_models[0].model_id, "kev-0.8b-astronomical");
-    assert_eq!(discovered_models[0].model_family, ModelFamily::Kev);
+    assert_eq!(discovered_models[0].model_family, config::KEV_MODEL_FAMILY);
     assert_eq!(
         discovered_models[0].capabilities,
         ModelCapabilities::Decisions(DecisionModelCapabilities {
@@ -97,7 +97,7 @@ fn should_read_a_folder_whose_marker_names_another_model_type_as_qwen() {
     assert!(
         discovered_models
             .iter()
-            .all(|discovered_model| discovered_model.model_family != ModelFamily::Kev),
+            .all(|discovered_model| discovered_model.model_family != config::KEV_MODEL_FAMILY),
         "only the kev marker makes a folder a Kev model"
     );
 }
@@ -137,6 +137,6 @@ fn should_skip_a_kev_folder_whose_marker_is_not_json() {
     assert!(
         discovered_models_in(&temporary_directory)
             .iter()
-            .all(|discovered_model| discovered_model.model_family != ModelFamily::Kev)
+            .all(|discovered_model| discovered_model.model_family != config::KEV_MODEL_FAMILY)
     );
 }

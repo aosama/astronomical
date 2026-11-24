@@ -3,7 +3,7 @@
 
 use std::path::PathBuf;
 
-use config::{ChatModelCapabilities, DiscoveredModel, ModelCapabilities, ModelFamily};
+use config::{ChatModelCapabilities, DiscoveredModel, ModelCapabilities};
 
 /// A Qwen 3.5 chat model with ordinary limits, at `model_directory`.
 pub(crate) fn discovered_chat_model(
@@ -15,7 +15,7 @@ pub(crate) fn discovered_chat_model(
     DiscoveredModel {
         model_id: model_id.to_owned(),
         provider_model_id: provider_model_id.map(str::to_owned),
-        model_family: ModelFamily::Qwen3_5,
+        model_family: config::QWEN3_5_MODEL_FAMILY,
         revision: revision.to_owned(),
         model_directory: PathBuf::from(model_directory),
         capabilities: ModelCapabilities::Chat(ChatModelCapabilities {

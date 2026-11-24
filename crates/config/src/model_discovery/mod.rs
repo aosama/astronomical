@@ -21,7 +21,9 @@ mod kokoro;
 mod laya;
 mod marked_decision_folder;
 mod model_card_front_matter;
-mod model_family;
+mod model_family_classification;
+mod model_family_description;
+mod model_family_registry;
 mod model_folder_placement;
 mod modernbert;
 mod phonon;
@@ -35,32 +37,43 @@ pub(crate) use artifact_discovery::{try_discover_model, try_discover_model_with_
 pub use classified_artifacts::{
     ClassifiedModelArtifact, discover_classified_model_artifacts, requestable_model_id,
 };
+pub use clef::CLEF_MODEL_FAMILY;
 pub use effective_models::{
     EffectiveModelDiscovery, EffectiveModelDiscoveryError, discover_effective_models,
 };
+pub use flux2_klein::FLUX2_KLEIN_MODEL_FAMILY;
 pub use flux2_klein::{
     Flux2KleinDirectoryEvidence, Flux2KleinDirectoryVerificationError,
     verify_model_directory as verify_flux2_klein_model_directory,
 };
 pub use flux2_klein_mlx_4bit::FLUX2_KLEIN_MLX_4BIT_TRANSFORMER_INDEX_FILE_NAME;
+pub use kev::KEV_MODEL_FAMILY;
+pub use kokoro::KOKORO_MODEL_FAMILY;
 pub use kokoro::{
     KOKORO_CONFIGURATION_FILE_NAME, KOKORO_VOICES_DIRECTORY_NAME, KOKORO_WEIGHTS_FILE_NAME,
     is_kokoro_configuration, kokoro_speech_capabilities,
 };
-pub use model_family::{
-    ModelFamily, ModelFamilyClassificationError, classify_mflux_transformer_index_bytes,
+pub use laya::LAYA_MODEL_FAMILY;
+pub use model_family_classification::{
+    ModelFamilyClassificationError, classify_mflux_transformer_index_bytes,
     classify_model_directory, classify_pipeline_index_bytes,
 };
+pub use model_family_description::{ModelFamily, ModelFamilyDescription, ModelKind};
 pub use model_folder_placement::is_discoverable_model_folder;
+pub use modernbert::MODERNBERT_MODEL_FAMILY;
+pub use phonon::PHONON_MODEL_FAMILY;
 pub use phonon::{
     PHONON_CONFIGURATION_FILE_NAME, PHONON_DEFAULT_VOICE_FILE_NAME, PHONON_DEFAULT_VOICE_NAME,
     PHONON_TOKENIZER_FILE_NAME, PHONON_VOICES_DIRECTORY_NAME, PHONON_WEIGHTS_FILE_NAME,
     is_phonon_configuration, phonon_speech_capabilities,
 };
+pub use prism_hadamard_qwen35::PRISM_HADAMARD_QWEN35_MODEL_FAMILY;
+pub use qwen_image_21::QWEN_IMAGE_21_MODEL_FAMILY;
 pub use qwen_image_21::{
     QwenImage21DirectoryEvidence, QwenImage21DirectoryVerificationError,
     verify_model_directory as verify_qwen_image_21_model_directory,
 };
+pub use qwen3_5::QWEN3_5_MODEL_FAMILY;
 pub use qwen3_5::{
     MINIMUM_SERVABLE_CONTEXT_WINDOW_TOKENS, context_window_tokens, required_shard_file_names,
 };
@@ -464,8 +477,8 @@ fn scan_directory_recursive(
         return Ok(());
     }
 
-    let is_pipeline_root = model_family::is_pipeline_root(current_directory);
-    if model_family::has_model_root_marker(current_directory)
+    let is_pipeline_root = model_family_classification::is_pipeline_root(current_directory);
+    if model_family_classification::has_model_root_marker(current_directory)
         && let Some(discovered_model) = try_discover_model(current_directory)
     {
         discovered_models.extend(artifact_discovery::discover_bundled_checkpoints(

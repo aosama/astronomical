@@ -7,9 +7,7 @@ use axum::{
     body::{Body, to_bytes},
     http::{Request, StatusCode},
 };
-use config::{
-    DiscoveredModel, EmbeddingModelCapabilities, ModelCapabilities, ModelFamily, ModelLicense,
-};
+use config::{DiscoveredModel, EmbeddingModelCapabilities, ModelCapabilities, ModelLicense};
 use tower::ServiceExt;
 
 use crate::support::ScriptedExecutor;
@@ -171,7 +169,7 @@ fn embedding_model() -> DiscoveredModel {
     DiscoveredModel {
         model_id: EMBEDDING_MODEL_ID.to_owned(),
         provider_model_id: Some("mlx-community/nomicai-modernbert-embed-base-8bit".to_owned()),
-        model_family: ModelFamily::ModernBert,
+        model_family: config::MODERNBERT_MODEL_FAMILY,
         revision: "fixture-revision".to_owned(),
         model_directory: PathBuf::from("fixtures/models/modernbert"),
         capabilities: ModelCapabilities::Embeddings(EmbeddingModelCapabilities {
@@ -187,7 +185,7 @@ fn chat_model() -> DiscoveredModel {
     DiscoveredModel {
         model_id: "chat-only-model".to_owned(),
         provider_model_id: None,
-        model_family: ModelFamily::Qwen3_5,
+        model_family: config::QWEN3_5_MODEL_FAMILY,
         revision: "fixture-revision".to_owned(),
         model_directory: PathBuf::from("fixtures/models/chat-only"),
         capabilities: ModelCapabilities::Chat(config::ChatModelCapabilities {

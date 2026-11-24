@@ -60,7 +60,7 @@ fn should_discover_an_executable_modernbert_embedding_model() {
     );
     assert_eq!(
         discovered_model.model_family,
-        config::ModelFamily::ModernBert
+        config::MODERNBERT_MODEL_FAMILY
     );
     match &discovered_model.capabilities {
         ModelCapabilities::Embeddings(EmbeddingModelCapabilities {

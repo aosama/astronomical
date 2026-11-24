@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 use config::{
     BUILTIN_DEFAULT_SPEECH_MODEL_ID, ChatModelCapabilities, DiscoveredModel, ModelCapabilities,
-    ModelFamily, SpeechModelCapabilities,
+    SpeechModelCapabilities,
 };
 
 use super::{
@@ -17,11 +17,11 @@ fn speech_model(model_id: &str) -> DiscoveredModel {
     DiscoveredModel {
         model_id: model_id.to_owned(),
         provider_model_id: None,
-        model_family: ModelFamily::Kokoro,
+        model_family: config::KOKORO_MODEL_FAMILY,
         revision: "fixture-revision".to_owned(),
         model_directory: PathBuf::from("fixtures/models/speech"),
         capabilities: ModelCapabilities::Speech(SpeechModelCapabilities {
-            model_family: ModelFamily::Kokoro,
+            model_family: config::KOKORO_MODEL_FAMILY,
             sample_rate_hertz: 24_000,
             voice_names: vec!["af_heart".to_owned()],
             default_voice_name: "af_heart".to_owned(),
@@ -36,7 +36,7 @@ fn chat_model(model_id: &str) -> DiscoveredModel {
     DiscoveredModel {
         model_id: model_id.to_owned(),
         provider_model_id: None,
-        model_family: ModelFamily::Qwen3_5,
+        model_family: config::QWEN3_5_MODEL_FAMILY,
         revision: "fixture-revision".to_owned(),
         model_directory: PathBuf::from("fixtures/models/chat"),
         capabilities: ModelCapabilities::Chat(ChatModelCapabilities {

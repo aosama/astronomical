@@ -494,7 +494,7 @@ fn discovered_model_with_vision_support(has_vision: bool) -> DiscoveredModel {
     DiscoveredModel {
         model_id: DISCOVERED_VISION_MODEL_ID.to_owned(),
         provider_model_id: None,
-        model_family: config::ModelFamily::Qwen3_5,
+        model_family: config::QWEN3_5_MODEL_FAMILY,
         revision: "test-revision".to_owned(),
         model_directory: PathBuf::from("/tmp/astronomical-discovered-vision-model"),
         capabilities: ModelCapabilities::Chat(DiscoveredChatModelCapabilities {
@@ -514,7 +514,7 @@ fn discovered_decision_model() -> DiscoveredModel {
     DiscoveredModel {
         model_id: "laya-MLX-8bit".to_owned(),
         provider_model_id: Some("cavi-ai/laya-MLX-8bit".to_owned()),
-        model_family: config::ModelFamily::Laya,
+        model_family: config::LAYA_MODEL_FAMILY,
         revision: "reviewed-revision".to_owned(),
         model_directory: PathBuf::from("/tmp/fictional-laya-model"),
         capabilities: ModelCapabilities::Decisions(config::DecisionModelCapabilities {
@@ -529,11 +529,11 @@ fn discovered_speech_model() -> DiscoveredModel {
     DiscoveredModel {
         model_id: "Kokoro-82M-bf16".to_owned(),
         provider_model_id: Some("mlx-community/Kokoro-82M-bf16".to_owned()),
-        model_family: config::ModelFamily::Kokoro,
+        model_family: config::KOKORO_MODEL_FAMILY,
         revision: "fixture-revision".to_owned(),
         model_directory: PathBuf::from("fixtures/models/kokoro"),
         capabilities: ModelCapabilities::Speech(config::SpeechModelCapabilities {
-            model_family: config::ModelFamily::Kokoro,
+            model_family: config::KOKORO_MODEL_FAMILY,
             sample_rate_hertz: 24_000,
             voice_names: vec!["af_heart".to_owned(), "am_michael".to_owned()],
             default_voice_name: "af_heart".to_owned(),
@@ -548,7 +548,7 @@ fn discovered_image_model() -> DiscoveredModel {
     DiscoveredModel {
         model_id: "FLUX.2-klein-4B".to_owned(),
         provider_model_id: Some("black-forest-labs/FLUX.2-klein-4B".to_owned()),
-        model_family: config::ModelFamily::Flux2Klein,
+        model_family: config::FLUX2_KLEIN_MODEL_FAMILY,
         revision: "reviewed-revision".to_owned(),
         model_directory: PathBuf::from("/tmp/fictional-flux-model"),
         capabilities: ModelCapabilities::ImageGeneration(ImageGenerationCapabilities {

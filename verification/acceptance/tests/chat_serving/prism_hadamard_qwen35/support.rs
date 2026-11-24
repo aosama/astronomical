@@ -9,9 +9,7 @@ use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use config::{
-    ChatModelCapabilities, DiscoveredModel, ModelCapabilities, ModelFamily, ModelLicense,
-};
+use config::{ChatModelCapabilities, DiscoveredModel, ModelCapabilities, ModelLicense};
 
 use crate::support::serving_rest::ServingRestServer;
 use crate::support::serving_rest::launch_serving_rest_server_for_artifact_with_memory_limit;
@@ -51,7 +49,7 @@ fn prism_discovered_model_artifact() -> DiscoveredModel {
     DiscoveredModel {
         model_id: public_model_id().to_owned(),
         provider_model_id: Some(public_model_id().to_owned()),
-        model_family: ModelFamily::PrismHadamardQwen35,
+        model_family: config::PRISM_HADAMARD_QWEN35_MODEL_FAMILY,
         revision: "fcba37d2117a7077eac6b613b2668d14d9779edd".to_owned(),
         model_directory: snapshot,
         capabilities: ModelCapabilities::Chat(ChatModelCapabilities {

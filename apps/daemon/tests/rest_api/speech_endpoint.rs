@@ -49,8 +49,8 @@ fn speech_model(
 
 fn installed_speech_models() -> Vec<DiscoveredModel> {
     vec![
-        speech_model(PHONON_MODEL_ID, ModelFamily::Phonon, false),
-        speech_model(KOKORO_MODEL_ID, ModelFamily::Kokoro, true),
+        speech_model(PHONON_MODEL_ID, config::PHONON_MODEL_FAMILY, false),
+        speech_model(KOKORO_MODEL_ID, config::KOKORO_MODEL_FAMILY, true),
     ]
 }
 

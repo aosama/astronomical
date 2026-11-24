@@ -59,9 +59,9 @@ fn decision_family_sent_to_worker(model_family: ModelFamily) -> String {
 #[test]
 fn should_name_each_decision_family_by_its_identifier_to_the_worker() {
     for (model_family, expected_identifier) in [
-        (ModelFamily::Kev, "kev"),
-        (ModelFamily::Clef, "clef"),
-        (ModelFamily::Laya, "laya"),
+        (config::KEV_MODEL_FAMILY, "kev"),
+        (config::CLEF_MODEL_FAMILY, "clef"),
+        (config::LAYA_MODEL_FAMILY, "laya"),
     ] {
         assert_eq!(
             decision_family_sent_to_worker(model_family),
@@ -73,7 +73,7 @@ fn should_name_each_decision_family_by_its_identifier_to_the_worker() {
 #[test]
 fn should_name_a_family_without_a_decision_engine_as_itself_for_the_worker_to_refuse() {
     assert_eq!(
-        decision_family_sent_to_worker(ModelFamily::Qwen3_5),
+        decision_family_sent_to_worker(config::QWEN3_5_MODEL_FAMILY),
         "qwen3_5",
         "only Kev, Clef and Laya folders report a decision capability; the worker refuses any other family at load"
     );
@@ -82,8 +82,8 @@ fn should_name_a_family_without_a_decision_engine_as_itself_for_the_worker_to_re
 #[test]
 fn should_send_each_image_family_as_one_image_configuration_naming_the_family() {
     for (model_family, expected_identifier) in [
-        (ModelFamily::Flux2Klein, "flux2_klein"),
-        (ModelFamily::QwenImage21, "qwen_image_21"),
+        (config::FLUX2_KLEIN_MODEL_FAMILY, "flux2_klein"),
+        (config::QWEN_IMAGE_21_MODEL_FAMILY, "qwen_image_21"),
     ] {
         let image_model = discovered_model(
             model_family,

@@ -446,7 +446,7 @@ async fn should_use_the_same_reloaded_discovery_snapshot_for_listing_and_routing
         config_home_directory,
     );
     let mut reloaded_model = discovered_model_for(RELOADED_MODEL_ID);
-    reloaded_model.model_family = config::ModelFamily::Qwen3_5;
+    reloaded_model.model_family = config::QWEN3_5_MODEL_FAMILY;
     reloadable_config
         .write()
         .expect("the reloadable config should remain writable")
@@ -493,7 +493,7 @@ fn discovered_model_for(model_id: &str) -> config::DiscoveredModel {
     config::DiscoveredModel {
         model_id: model_id.to_owned(),
         provider_model_id: None,
-        model_family: config::ModelFamily::Qwen3_5,
+        model_family: config::QWEN3_5_MODEL_FAMILY,
         revision: "test-revision".to_owned(),
         model_directory: PathBuf::from(format!("/fictional/models/{model_id}")),
         capabilities: config::ModelCapabilities::Chat(config::ChatModelCapabilities {

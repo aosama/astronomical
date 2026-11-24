@@ -70,15 +70,15 @@ fn should_refuse_an_earlier_calibration_it_cannot_read() {
 #[test]
 fn should_train_only_the_decision_families() {
     assert_eq!(
-        tunable_family(ModelFamily::Clef, "clef").unwrap(),
+        tunable_family(config::CLEF_MODEL_FAMILY, "clef").unwrap(),
         TunableHeadFamily::Clef
     );
     assert_eq!(
-        tunable_family(ModelFamily::Kev, "kev").unwrap(),
+        tunable_family(config::KEV_MODEL_FAMILY, "kev").unwrap(),
         TunableHeadFamily::Kev
     );
     assert!(matches!(
-        tunable_family(ModelFamily::Qwen3_5, "qwen"),
+        tunable_family(config::QWEN3_5_MODEL_FAMILY, "qwen"),
         Err(DecisionToolError::NotTrainable { .. })
     ));
 }

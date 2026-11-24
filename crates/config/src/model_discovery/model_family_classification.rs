@@ -1,3 +1,6 @@
+//! Classifies a folder as one registered model family, by asking each
+//! family's own recognizers in registry order.
+
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
@@ -5,80 +8,11 @@ use serde::Deserialize;
 use thiserror::Error;
 
 use super::flux2_klein_mlx_4bit;
-use super::{
-    clef, flux2_klein, kev, kokoro, laya, modernbert, phonon, prism_hadamard_qwen35, qwen_image_21,
-    qwen3_5,
-};
+use super::model_family_description::ModelFamily;
+use super::model_family_registry::REGISTERED_MODEL_FAMILIES;
 
 const MAXIMUM_FAMILY_CONFIG_BYTES: u64 = 4 * 1024 * 1024;
 const MAXIMUM_PIPELINE_INDEX_BYTES: u64 = 1024 * 1024;
-
-/// Closed model-family classification used at discovery and worker startup.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ModelFamily {
-    Qwen3_5,
-    PrismHadamardQwen35,
-    Flux2Klein,
-    QwenImage21,
-    ModernBert,
-    /// A decision model: a ModernBERT encoder scoring one marker per option.
-    Laya,
-    /// A decision model: a Qwen3.5 backbone with a pointer head over the
-    /// options, marked by `kev_decision.json`.
-    Kev,
-    /// A decision model: a Qwen3.5 backbone read once over the whole
-    /// request, with a joint schema head, marked by `joint_head.safetensors`.
-    Clef,
-    /// A speech model: StyleTTS2 with an iSTFTNet vocoder, marked by its
-    /// configuration's sections beside `kokoro-v1_0.safetensors`.
-    Kokoro,
-    /// A speech model: a causal flow language model with a Mimi decoder,
-    /// marked by its configuration's `flow_lm` and `mimi` sections.
-    Phonon,
-}
-
-impl ModelFamily {
-    /// Classifies a config.json model_type without claiming that the family is executable.
-    #[must_use]
-    pub fn from_model_type(model_type: Option<&str>) -> Option<Self> {
-        if qwen3_5::recognizes_model_type(model_type) {
-            Some(Self::Qwen3_5)
-        } else if prism_hadamard_qwen35::recognizes_model_type(model_type) {
-            Some(Self::PrismHadamardQwen35)
-        } else {
-            Self::encoder_family_from_model_type(model_type)
-        }
-    }
-
-    /// The families built on a ModernBERT encoder: the embedding model
-    /// itself, and the decision model that adds a head to it.
-    fn encoder_family_from_model_type(model_type: Option<&str>) -> Option<Self> {
-        if modernbert::recognizes_model_type(model_type) {
-            Some(Self::ModernBert)
-        } else if laya::recognizes_model_type(model_type) {
-            Some(Self::Laya)
-        } else {
-            None
-        }
-    }
-
-    /// Wire label matching the model_type spelling the discovery layer recognizes.
-    #[must_use]
-    pub const fn as_str(self) -> &'static str {
-        crate::exhaustive_table!(self, {
-            Self::Qwen3_5 => "qwen3_5",
-            Self::PrismHadamardQwen35 => "prism_hadamard_qwen35",
-            Self::Flux2Klein => "flux2_klein",
-            Self::QwenImage21 => "qwen_image_21",
-            Self::ModernBert => "modernbert",
-            Self::Laya => "laya",
-            Self::Kev => "kev",
-            Self::Clef => "clef",
-            Self::Kokoro => "kokoro",
-            Self::Phonon => "phonon",
-        })
-    }
-}
 
 /// Failure while reading the family marker from a selected model directory.
 #[derive(Debug, Error)]
@@ -138,33 +72,23 @@ pub fn classify_model_directory(
     classify_config_directory(model_directory)
 }
 
-/// Each family a marker file declares, with the check that finds its marker.
-/// Whether a folder carries one family's marker file.
-type MarkerCheck = fn(&Path) -> bool;
-
-const FAMILIES_MARKED_BY_FILE: [(MarkerCheck, ModelFamily); 5] = [
-    (
-        flux2_klein_mlx_4bit::classifies_directory,
-        ModelFamily::Flux2Klein,
-    ),
-    (kev::classifies_directory, ModelFamily::Kev),
-    (clef::classifies_directory, ModelFamily::Clef),
-    (kokoro::classifies_directory, ModelFamily::Kokoro),
-    (phonon::classifies_directory, ModelFamily::Phonon),
-];
-
-/// The families a folder declares with a marker file rather than with its
-/// config's model type: the 4-bit FLUX.2 Klein build, whose pipeline index
-/// lives under its transformer; Kev and Clef, whose configs are their
-/// Qwen3.5 backbones'; and Kokoro and Phonon, whose configs have no model
-/// type at all.
+/// The first family, in registry order, whose marker file the folder
+/// carries: the 4-bit FLUX.2 Klein build, whose pipeline index lives under
+/// its transformer; Kev and Clef, whose configs are their Qwen3.5
+/// backbones'; and Kokoro and Phonon, whose configs have no model type.
 fn family_marked_by_file(model_directory: &Path) -> Option<ModelFamily> {
-    for (classifies_directory, marked_family) in FAMILIES_MARKED_BY_FILE {
-        if classifies_directory(model_directory) {
-            return Some(marked_family);
-        }
-    }
-    None
+    REGISTERED_MODEL_FAMILIES
+        .iter()
+        .find(|family_description| family_description.claims_directory(model_directory))
+        .map(|family_description| family_description.model_family)
+}
+
+/// The first family, in registry order, that claims this `model_type`.
+pub(super) fn family_of_model_type(model_type: Option<&str>) -> Option<ModelFamily> {
+    REGISTERED_MODEL_FAMILIES
+        .iter()
+        .find(|family_description| family_description.claims_model_type(model_type))
+        .map(|family_description| family_description.model_family)
 }
 
 /// Reads `model_type` from the directory's `config.json`.
@@ -210,9 +134,7 @@ fn classify_config_directory(
             model_directory: model_directory.to_path_buf(),
             source,
         })?;
-    Ok(ModelFamily::from_model_type(
-        config_document.model_type.as_deref(),
-    ))
+    Ok(family_of_model_type(config_document.model_type.as_deref()))
 }
 
 fn classify_pipeline_directory(
@@ -252,24 +174,12 @@ fn classify_pipeline_directory(
             maximum_bytes: MAXIMUM_PIPELINE_INDEX_BYTES,
         });
     }
-    let is_flux2_klein =
-        flux2_klein::classifies_pipeline_index(&pipeline_index_bytes).map_err(|source| {
-            ModelFamilyClassificationError::ParsePipelineIndex {
-                model_directory: model_directory.to_path_buf(),
-                source,
-            }
-        })?;
-    if is_flux2_klein {
-        return Ok(Some(ModelFamily::Flux2Klein));
-    }
-    let is_qwen_image_21 = qwen_image_21::classifies_pipeline_index(&pipeline_index_bytes)
-        .map_err(
-            |source| ModelFamilyClassificationError::ParsePipelineIndex {
-                model_directory: model_directory.to_path_buf(),
-                source,
-            },
-        )?;
-    Ok(is_qwen_image_21.then_some(ModelFamily::QwenImage21))
+    classify_pipeline_index_bytes(&pipeline_index_bytes).map_err(|source| {
+        ModelFamilyClassificationError::ParsePipelineIndex {
+            model_directory: model_directory.to_path_buf(),
+            source,
+        }
+    })
 }
 
 /// Whether `directory` is a Diffusers pipeline root, with or without a
@@ -295,7 +205,7 @@ pub fn classify_mflux_transformer_index_bytes(
 ) -> Result<Option<ModelFamily>, serde_json::Error> {
     Ok(
         flux2_klein_mlx_4bit::classifies_transformer_index(index_bytes)?
-            .then_some(ModelFamily::Flux2Klein),
+            .then_some(super::flux2_klein::FLUX2_KLEIN_MODEL_FAMILY),
     )
 }
 
@@ -307,12 +217,12 @@ pub fn classify_mflux_transformer_index_bytes(
 pub fn classify_pipeline_index_bytes(
     pipeline_index_bytes: &[u8],
 ) -> Result<Option<ModelFamily>, serde_json::Error> {
-    let is_flux2_klein = flux2_klein::classifies_pipeline_index(pipeline_index_bytes)?;
-    if is_flux2_klein {
-        return Ok(Some(ModelFamily::Flux2Klein));
+    for family_description in &REGISTERED_MODEL_FAMILIES {
+        if family_description.claims_pipeline_index(pipeline_index_bytes)? {
+            return Ok(Some(family_description.model_family));
+        }
     }
-    let is_qwen_image_21 = qwen_image_21::classifies_pipeline_index(pipeline_index_bytes)?;
-    Ok(is_qwen_image_21.then_some(ModelFamily::QwenImage21))
+    Ok(None)
 }
 
 /// Minimal duplicate-aware projection keeps family dispatch independent from full config shape.

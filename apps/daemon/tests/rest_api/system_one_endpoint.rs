@@ -7,9 +7,7 @@ use axum::{
     body::{Body, to_bytes},
     http::{Request, StatusCode},
 };
-use config::{
-    DecisionModelCapabilities, DiscoveredModel, ModelCapabilities, ModelFamily, ModelLicense,
-};
+use config::{DecisionModelCapabilities, DiscoveredModel, ModelCapabilities, ModelLicense};
 use decision_contract::{
     ChoiceAnswer, DecisionAnswer, DecisionFailure, OptionProbability, OrderedJsonValue,
     QuestionInputCoverage, QuestionOutcome,
@@ -405,7 +403,7 @@ fn decision_model(model_id: &str) -> DiscoveredModel {
     DiscoveredModel {
         model_id: model_id.to_owned(),
         provider_model_id: Some("cavi-ai/laya-MLX-8bit".to_owned()),
-        model_family: ModelFamily::Laya,
+        model_family: config::LAYA_MODEL_FAMILY,
         revision: "fixture-revision".to_owned(),
         model_directory: PathBuf::from("fixtures/models/laya"),
         capabilities: ModelCapabilities::Decisions(DecisionModelCapabilities {
@@ -420,7 +418,7 @@ fn chat_model() -> DiscoveredModel {
     DiscoveredModel {
         model_id: "chat-only-model".to_owned(),
         provider_model_id: None,
-        model_family: ModelFamily::Qwen3_5,
+        model_family: config::QWEN3_5_MODEL_FAMILY,
         revision: "fixture-revision".to_owned(),
         model_directory: PathBuf::from("fixtures/models/chat-only"),
         capabilities: ModelCapabilities::Chat(config::ChatModelCapabilities {

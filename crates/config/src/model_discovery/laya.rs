@@ -14,6 +14,8 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use super::model_family_description::ModelFamily;
+
 /// The sequence length a checkpoint reads when its config does not say.
 const DEFAULT_MAXIMUM_TOKENS_PER_QUESTION: u64 = 512;
 /// The most bundled checkpoints read from one repository. A handful are
@@ -139,3 +141,6 @@ fn holds_a_laya_config(checkpoint_directory: &Path) -> bool {
             .and_then(serde_json::Value::as_str),
     )
 }
+
+/// The Laya decision family: a ModernBERT encoder scoring one marker per option.
+pub const LAYA_MODEL_FAMILY: ModelFamily = ModelFamily::named("laya");

@@ -10,9 +10,7 @@ use axum::{
     http::{Request, StatusCode},
 };
 use base64::{Engine as _, engine::general_purpose::STANDARD};
-use config::{
-    DiscoveredModel, ImageGenerationCapabilities, ModelCapabilities, ModelFamily, ModelLicense,
-};
+use config::{DiscoveredModel, ImageGenerationCapabilities, ModelCapabilities, ModelLicense};
 use image::{ColorType, ImageDecoder, codecs::png::PngDecoder};
 use tower::ServiceExt;
 
@@ -469,7 +467,7 @@ fn image_model() -> DiscoveredModel {
     DiscoveredModel {
         model_id: IMAGE_MODEL_ID.to_owned(),
         provider_model_id: Some("black-forest-labs/FLUX.2-klein-4B".to_owned()),
-        model_family: ModelFamily::Flux2Klein,
+        model_family: config::FLUX2_KLEIN_MODEL_FAMILY,
         revision: "fixture-revision".to_owned(),
         model_directory: PathBuf::from("fixtures/models/flux2-klein"),
         capabilities: ModelCapabilities::ImageGeneration(ImageGenerationCapabilities {
@@ -490,7 +488,7 @@ fn qwen_image_model() -> DiscoveredModel {
     DiscoveredModel {
         model_id: QWEN_IMAGE_MODEL_ID.to_owned(),
         provider_model_id: Some("mlx-community/Qwen-Image-2.1".to_owned()),
-        model_family: ModelFamily::QwenImage21,
+        model_family: config::QWEN_IMAGE_21_MODEL_FAMILY,
         revision: "fixture-revision".to_owned(),
         model_directory: PathBuf::from("fixtures/models/qwen-image-21"),
         capabilities: ModelCapabilities::ImageGeneration(ImageGenerationCapabilities {
@@ -511,7 +509,7 @@ fn chat_model() -> DiscoveredModel {
     DiscoveredModel {
         model_id: "chat-only-model".to_owned(),
         provider_model_id: None,
-        model_family: ModelFamily::Qwen3_5,
+        model_family: config::QWEN3_5_MODEL_FAMILY,
         revision: "fixture-revision".to_owned(),
         model_directory: PathBuf::from("fixtures/models/chat-only"),
         capabilities: ModelCapabilities::Chat(config::ChatModelCapabilities {

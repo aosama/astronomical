@@ -10,6 +10,8 @@ use std::fs::{self, File};
 use std::io::Read;
 use std::path::{Component, Path};
 
+use super::model_family_description::ModelFamily;
+
 use thiserror::Error;
 
 use super::bounded_artifact_file;
@@ -434,3 +436,6 @@ pub(super) fn is_safe_safetensors_path(shard_path: &str) -> bool {
             .and_then(|extension| extension.to_str())
             == Some("safetensors")
 }
+
+/// The FLUX.2 Klein image family, as a Diffusers pipeline or the 4-bit build.
+pub const FLUX2_KLEIN_MODEL_FAMILY: ModelFamily = ModelFamily::named("flux2_klein");

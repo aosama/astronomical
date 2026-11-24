@@ -77,7 +77,7 @@ fn should_change_resolved_generation_when_artifact_revision_changes() {
     let mut discovered_model = config::DiscoveredModel {
         model_id: "default".to_owned(),
         provider_model_id: None,
-        model_family: config::ModelFamily::Qwen3_5,
+        model_family: config::QWEN3_5_MODEL_FAMILY,
         revision: "revision-a".to_owned(),
         model_directory: PathBuf::from("/fictional/models/default"),
         capabilities: ModelCapabilities::Chat(ChatModelCapabilities {
@@ -619,7 +619,7 @@ fn image_discovered_model(revision: &str, supports_image_editing: bool) -> confi
     config::DiscoveredModel {
         model_id: "FLUX.2-klein-4B".to_owned(),
         provider_model_id: Some("black-forest-labs/FLUX.2-klein-4B".to_owned()),
-        model_family: config::ModelFamily::Flux2Klein,
+        model_family: config::FLUX2_KLEIN_MODEL_FAMILY,
         revision: revision.to_owned(),
         model_directory: PathBuf::from("/fictional/models/FLUX.2-klein-4B"),
         capabilities: ModelCapabilities::ImageGeneration(ImageGenerationCapabilities {

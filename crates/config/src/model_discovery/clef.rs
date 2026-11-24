@@ -9,6 +9,8 @@
 use std::fs;
 use std::path::Path;
 
+use super::model_family_description::ModelFamily;
+
 use super::bounded_artifact_file;
 use super::marked_decision_folder::{MarkedDecisionMetadata, safetensors_total_bytes};
 
@@ -67,3 +69,6 @@ pub(super) fn discover_model_metadata(model_directory: &Path) -> Option<MarkedDe
         settings_file_name: CLEF_HEAD_SETTINGS_FILE_NAME,
     })
 }
+
+/// The Clef decision family: a Qwen3.5 backbone read once over the whole request, with a joint schema head, marked by `joint_head.safetensors`.
+pub const CLEF_MODEL_FAMILY: ModelFamily = ModelFamily::named("clef");

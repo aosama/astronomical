@@ -2,7 +2,7 @@
 //! and for the audio response it builds.
 
 use axum::http::StatusCode;
-use config::{ModelFamily, SpeechModelCapabilities};
+use config::SpeechModelCapabilities;
 use ipc_protocol::SpeechResultMetadata;
 use rest_contract::OpenAiSpeechRequestParts;
 use speech_contract::AudioFormat;
@@ -12,7 +12,7 @@ use crate::SpeechOutput;
 
 fn phonon_capabilities() -> SpeechModelCapabilities {
     SpeechModelCapabilities {
-        model_family: ModelFamily::Phonon,
+        model_family: config::PHONON_MODEL_FAMILY,
         sample_rate_hertz: 24_000,
         voice_names: vec!["default".to_owned()],
         default_voice_name: "default".to_owned(),
