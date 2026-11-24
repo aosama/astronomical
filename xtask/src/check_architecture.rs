@@ -10,6 +10,10 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::path::Path;
 use std::process::Command;
 
+use crate::check_architecture_family_layer::{
+    FAMILY_WITHOUT_OTHER_FAMILY_RULE, FAMILY_WITHOUT_SERVING_RULE, family_layer_violations,
+};
+
 /// One forbidden-dependency rule: the dependency graph must hold no path
 /// from `source_crate` to `forbidden_crate`, following every dependency
 /// kind. Rules name workspace members, so a crate rename must update the
@@ -138,7 +142,7 @@ const FORBIDDEN_DEPENDENCY_RULES: &[ForbiddenDependencyRule] = &[
 #[derive(Debug)]
 pub(crate) struct ArchitectureViolation {
     pub(crate) rule_name: &'static str,
-    rationale: &'static str,
+    pub(crate) rationale: &'static str,
     pub(crate) dependency_chain: Vec<String>,
 }
 
@@ -160,14 +164,21 @@ pub fn run(repository_root: &Path) -> Result<(), String> {
         ));
     }
     let metadata_json_text = String::from_utf8_lossy(&metadata_output.stdout).into_owned();
-    let violations = architecture_violations(&metadata_json_text)?;
+    let mut violations = architecture_violations(&metadata_json_text)?;
+    violations.extend(family_layer_violations(&metadata_json_text)?);
     if violations.is_empty() {
         for rule in FORBIDDEN_DEPENDENCY_RULES {
             println!("[check-architecture] rule={} status=pass", rule.rule_name);
         }
+        for family_rule_name in [
+            FAMILY_WITHOUT_SERVING_RULE,
+            FAMILY_WITHOUT_OTHER_FAMILY_RULE,
+        ] {
+            println!("[check-architecture] rule={family_rule_name} status=pass");
+        }
         println!(
             "[check-architecture] status=success rules={}",
-            FORBIDDEN_DEPENDENCY_RULES.len()
+            FORBIDDEN_DEPENDENCY_RULES.len() + 2
         );
         Ok(())
     } else {
@@ -225,7 +236,7 @@ pub(crate) fn architecture_violations(
 /// build dependencies count as edges deliberately: a dev-edge would pull
 /// the forbidden crate into the source crate's own test builds, which is
 /// exactly the layering breach the rules exist to prevent.
-fn dependency_graph_from_metadata(
+pub(crate) fn dependency_graph_from_metadata(
     metadata_json_text: &str,
 ) -> Result<BTreeMap<String, BTreeSet<String>>, String> {
     let metadata_document: serde_json::Value = serde_json::from_str(metadata_json_text)
@@ -276,7 +287,7 @@ fn dependency_graph_from_metadata(
 /// Breadth-first search returning the shortest chain from `start_crate` to
 /// `target_crate`, inclusive of both endpoints, or `None` when the target is
 /// unreachable.
-fn shortest_dependency_chain(
+pub(crate) fn shortest_dependency_chain(
     dependency_graph: &BTreeMap<String, BTreeSet<String>>,
     start_crate: &str,
     target_crate: &str,

@@ -20,10 +20,10 @@ use ipc_protocol::{
 };
 use model_serving::{
     DecisionEngine, EmbeddingEngine, EngineBackedWorker, Flux2KleinArtifactProvenance,
-    Flux2KleinImageEngine, ImageGenerationEngine, ModelFactory, ModelFactoryRuntime,
-    ModelFamilyInferenceEngine, ModernBertEmbeddingEngine, PrismHadamardQwen35ServingSettings,
-    Qwen3_5GenerationProcessor, QwenImage21ArtifactProvenance, QwenImage21ImageEngine,
-    RecordedTrainingEngine, SpeechEngine, boxed_chat_engine,
+    ImageGenerationEngine, ModelFactory, ModelFactoryRuntime, ModelFamilyInferenceEngine,
+    ModernBertEmbeddingEngine, PrismHadamardQwen35ServingSettings, Qwen3_5GenerationProcessor,
+    QwenImage21ArtifactProvenance, RecordedTrainingEngine, SpeechEngine, boxed_chat_engine,
+    build_flux2_klein_image_engine, build_qwen_image_21_image_engine,
     initialize_prism_hadamard_qwen35_model_with_serving_settings,
 };
 
@@ -348,7 +348,7 @@ impl ModelFamilyFactory {
             verified_evidence.license.spdx_identifier(),
         );
         Ok(ModelFactoryRuntime::Image(Box::new(
-            Flux2KleinImageEngine::from_model_family_factory(
+            build_flux2_klein_image_engine(
                 model_directory_path,
                 provenance,
                 self.effective_mlx_memory_ceiling_bytes,
@@ -393,7 +393,7 @@ impl ModelFamilyFactory {
             verified_evidence.license.spdx_identifier(),
         );
         Ok(ModelFactoryRuntime::Image(Box::new(
-            QwenImage21ImageEngine::from_model_family_factory(
+            build_qwen_image_21_image_engine(
                 model_directory_path,
                 provenance,
                 self.effective_mlx_memory_ceiling_bytes,

@@ -19,7 +19,7 @@ workspace = true
 
 [features]
 default = []
-direct-mlx = ["decision-models/direct-mlx", "qwen35/direct-mlx", "artifact-validation/direct-mlx", "engine-core/direct-mlx", "image-generation/direct-mlx", "model-primitives/direct-mlx", "speech/direct-mlx", "dep:runtime-integration"]
+direct-mlx = ["decision-models/direct-mlx", "qwen35/direct-mlx", "artifact-validation/direct-mlx", "engine-core/direct-mlx", "image-generation/direct-mlx", "flux2-klein/direct-mlx", "qwen-image-21/direct-mlx", "model-primitives/direct-mlx", "speech/direct-mlx", "dep:runtime-integration"]
 
 # The worker and the wiring between model families (issue #2340). Every crate
 # below is consumed one way; `cargo xtask check-architecture` holds each of
@@ -37,6 +37,8 @@ qwen35 = { path = "../../families/text/qwen35" }
 decision-models = { path = "../../families/decision/decision-models" }
 # The image generation families and their worker seam.
 image-generation = { path = "../../families/image/image-generation" }
+flux2-klein = { path = "../../families/image/flux2-klein" }
+qwen-image-21 = { path = "../../families/image/qwen-image-21" }
 # The model primitives every family shares.
 model-primitives = { path = "../model-primitives" }
 # The text-to-speech families and their worker seam.

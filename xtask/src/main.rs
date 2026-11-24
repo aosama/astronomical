@@ -16,6 +16,9 @@ mod bootstrap_native_dependencies;
 #[cfg(test)]
 mod bootstrap_native_dependencies_tests;
 mod check_architecture;
+mod check_architecture_family_layer;
+#[cfg(test)]
+mod check_architecture_family_layer_tests;
 #[cfg(test)]
 mod check_architecture_tests;
 mod check_duplication;

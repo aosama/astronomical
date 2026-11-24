@@ -19,10 +19,13 @@ workspace = true
 
 [features]
 default = []
+# The test helpers the image family crates' tests share.
+test-support = []
 direct-mlx = ["dep:runtime-integration", "dep:mlx-bridge", "model-primitives/direct-mlx", "artifact-validation/direct-mlx"]
 
-# The image generation families (FLUX.2 klein, Qwen-Image-2.1) and the
-# worker-facing seam they implement (issue #2340). One-way edge: nothing here
+# The image-generation shell: the worker-facing seam every image family
+# implements and the engine shell they share. Each family is a crate of its
+# own beside it (issue #2473, Step 7). One-way edge: nothing here
 # may depend on model-serving; `cargo xtask check-architecture`
 # enforces it.
 [dependencies]
