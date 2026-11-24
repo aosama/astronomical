@@ -1,14 +1,5 @@
-use ipc_protocol::{WorkerModelConfiguration, WorkerSpeechModelConfiguration};
-
+use super::super::family_test_support::speech_configuration_naming;
 use super::{FAMILY_MISMATCH_REASON, ensure_configuration_names_classified_family};
-
-fn speech_configuration_naming(model_family: &str) -> WorkerModelConfiguration {
-    WorkerModelConfiguration::Speech(WorkerSpeechModelConfiguration {
-        model_id: "speech-model".to_owned(),
-        model_family: model_family.to_owned(),
-        artifact_revision: "speech-revision".to_owned(),
-    })
-}
 
 #[test]
 fn should_accept_a_policy_naming_the_family_found_on_disk() {
