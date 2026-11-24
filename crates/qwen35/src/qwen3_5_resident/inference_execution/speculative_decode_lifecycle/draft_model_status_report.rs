@@ -1,6 +1,6 @@
 //! What the resident engine tells status about its drafter. The streaming
 //! engine's answer, which shares the wording, is
-//! `crate::speculative_decoding::unused_drafter_status`.
+//! `engine_core::speculative_decoding::unused_drafter_status`.
 //!
 //! Kept apart from loading so every answer is testable without a graphics
 //! processor: each depends only on what loading found (a failed load is also
@@ -11,7 +11,7 @@
 
 use ipc_protocol::{DraftModelGeneration, DraftModelStatus};
 
-use crate::speculative_decoding::dflash_drafter::DrafterGeneration;
+use engine_core::speculative_decoding::dflash_drafter::DrafterGeneration;
 
 use super::engine_draft_runtime::{
     Qwen3_5DraftRuntimeLoadOutcome, Qwen3_5SpeculativeDraftLoadingError,
@@ -75,7 +75,7 @@ pub fn failed_load_status(loading_error: &Qwen3_5SpeculativeDraftLoadingError) -
         Qwen3_5SpeculativeDraftLoadingError::WeightsUnreadable { .. }
         | Qwen3_5SpeculativeDraftLoadingError::Weights(_) => "its weights could not be read",
         Qwen3_5SpeculativeDraftLoadingError::LibraryUnlistable(_) => {
-            crate::speculative_decoding::unused_drafter_status::LIBRARY_UNSEARCHABLE_REASON
+            engine_core::speculative_decoding::unused_drafter_status::LIBRARY_UNSEARCHABLE_REASON
         }
         Qwen3_5SpeculativeDraftLoadingError::Runtime(_)
         | Qwen3_5SpeculativeDraftLoadingError::Target(_) => "the GPU could not prepare it",

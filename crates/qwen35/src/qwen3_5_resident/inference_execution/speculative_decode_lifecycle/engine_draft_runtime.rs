@@ -17,13 +17,13 @@ use runtime_integration::MlxSafetensors;
 
 use crate::PerformanceAttribution;
 use crate::qwen3_5_resident::Qwen3_5ResidentModel;
-use crate::speculative_decoding::dflash_drafter::{
+use engine_core::speculative_decoding::dflash_drafter::{
     DFlashDrafterConfiguration, DFlashDrafterWeights, DFlashDrafterWeightsError, DraftTreeOptions,
     bind_drafter_weights,
 };
 
 use super::draft_tree_size::draft_tree_options_for_target;
-use crate::speculative_decoding::drafter_discovery::{
+use engine_core::speculative_decoding::drafter_discovery::{
     BUNDLED_DRAFTER_DIRECTORY_NAME, DrafterPairing, paired_drafter_directory,
 };
 
@@ -203,7 +203,7 @@ fn ensure_memory_headroom_for_drafter(
 pub enum Qwen3_5SpeculativeDraftLoadingError {
     #[error(transparent)]
     LibraryUnlistable(
-        #[from] crate::speculative_decoding::drafter_discovery::DrafterDiscoveryError,
+        #[from] engine_core::speculative_decoding::drafter_discovery::DrafterDiscoveryError,
     ),
     #[error("the graphics-processor runtime rejected the DFlash drafter load: {0}")]
     Runtime(#[source] runtime_integration::MlxRuntimeError),

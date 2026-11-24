@@ -10,7 +10,7 @@
 use mlx_bridge::MlxArray;
 use runtime_integration::{MlxRuntime, MlxRuntimeError};
 
-use crate::row_batched_matmul::{
+use model_primitives::row_batched_matmul::{
     RegisterOrderedWeight, RowBatchedMatmulKernels, RowBatchedProjectionError,
     register_ordered_matmul_any_rows,
 };

@@ -14,8 +14,8 @@ use super::verification_forward::VerificationLogitsMode;
 use crate::qwen3_5_core::model::tree_layer_attention::{TreeLayerRows, TreeRowInputs};
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_core::model_math::gated_delta_tree::TreeRowChains;
-use crate::speculative_decoding::tree_rows::TreeRows;
 use crate::{PerformanceAttribution, RequestDecoderStateStack};
+use engine_core::speculative_decoding::tree_rows::TreeRows;
 
 /// Layers built between asynchronous starts. Building the pass's graph
 /// takes about 4 ms of CPU for the 27B's 64 layers (some 40 nodes a layer),

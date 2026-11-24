@@ -24,6 +24,8 @@ pub mod memory;
 
 pub mod model_generation_processor;
 
+pub mod speculative_decoding;
+
 pub mod structured_generation;
 
 pub use astro_ssd_prompt_cache::block_causal_input::AstroSsdPromptCacheBlockCausalInput;

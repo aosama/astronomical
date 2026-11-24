@@ -7,7 +7,7 @@ use runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use crate::InferenceEngineError;
 use crate::gpu_token_sampling::sampling_distribution_rows;
-use crate::speculative_decoding::dflash_drafter::DFlashDraftTarget;
+use engine_core::speculative_decoding::dflash_drafter::DFlashDraftTarget;
 
 use super::model::Qwen3_5ResidentModel;
 
