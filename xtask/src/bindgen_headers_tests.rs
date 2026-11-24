@@ -161,7 +161,7 @@ fn should_refuse_a_manifest_missing_duplicating_or_corrupting_an_archive() {
 #[test]
 fn should_parse_the_real_native_cmake_patch_pipeline() {
     let cmake_lists_text = std::fs::read_to_string(
-        repository_root().join("crates/runtime-integration/native/CMakeLists.txt"),
+        repository_root().join("crates/foundation/runtime-integration/native/CMakeLists.txt"),
     )
     .expect("the native CMakeLists should be readable");
 
@@ -541,4 +541,19 @@ fn should_refuse_relative_archive_and_store_directories() {
         native_build_store_directory(Some("/store")).expect("an absolute store is accepted"),
         PathBuf::from("/store")
     );
+}
+
+#[test]
+fn should_skip_every_leading_parent_step_of_a_patch_path() {
+    use super::patch_pipeline::path_below_parent_steps;
+
+    assert_eq!(
+        path_below_parent_steps("../../../../third-party/patches/mlx.patch"),
+        "third-party/patches/mlx.patch"
+    );
+    assert_eq!(
+        path_below_parent_steps("third-party/patches/mlx.patch"),
+        "third-party/patches/mlx.patch"
+    );
+    assert_eq!(path_below_parent_steps("../"), "");
 }

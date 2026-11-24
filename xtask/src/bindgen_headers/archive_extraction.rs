@@ -15,7 +15,7 @@ use super::pinned_archives::PinnedArchive;
 use crate::step_log::log_line;
 
 const APPLY_PATCH_HELPER_PATH: &str =
-    "crates/runtime-integration/native/apply_patch_if_needed.cmake";
+    "crates/foundation/runtime-integration/native/apply_patch_if_needed.cmake";
 
 pub(crate) struct ExtractionRequest<'request> {
     pub(crate) repository_root: &'request Path,

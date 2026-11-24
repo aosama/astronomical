@@ -1,0 +1,41 @@
+[package]
+name = "vision-tower"
+description = "Inspects model artifacts for a vision tower and proves whether a tower shares a text model's base, reading safetensors headers rather than downloading weights."
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+# One explicit integration test binary: unit tests live beside their source as
+# `*_tests.rs` modules inside `src/`. `autotests = false` keeps stray .rs files
+# under tests/ from auto-discovering as extra binaries.
+autotests = false
+
+# The test lanes this package runs in. `cargo xtask lane-cargo` builds each
+# lane's command from these declarations (issue #2473, Step 6), so no alias
+# lists packages by hand; an empty list says the package is in no lane.
+[package.metadata.astronomical]
+test-lanes = ["integration", "integration-and-rest", "nextest"]
+
+[[test]]
+name = "integration_tests"
+path = "tests/integration_tests.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+lowercase-hex = { path = "../../foundation/lowercase-hex" }
+reqwest.workspace = true
+rustls.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+serial_test.workspace = true
+tempfile = "=3.27.0"
+tokio.workspace = true

@@ -22,7 +22,7 @@ public enum ApplicationChannel: String, Equatable, Sendable {
     }
   }
   // Mirrors the daemon's master table (STABLE_LOOPBACK_PORT /
-  // DEVELOPMENT_LOOPBACK_PORT in crates/config/src/astronomical_runtime_instance.rs);
+  // DEVELOPMENT_LOOPBACK_PORT in crates/foundation/config/src/astronomical_runtime_instance.rs);
   // Swift cannot import the Rust constants, so keep the values in sync by hand.
   public var defaultDaemonPort: Int { self == .development ? 6733 : 6732 }
   // macOS gives a shared scheme to whichever installed app it prefers, so a shared

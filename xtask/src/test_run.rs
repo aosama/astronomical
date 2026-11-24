@@ -48,7 +48,7 @@ pub(crate) fn refresh_coverage_inventory(repository_root: &Path, arguments: &[St
         return ExitCode::from(2);
     }
     let started_at = Instant::now();
-    let inventory_path = repository_root.join("crates/mlx-c-fork/COVERAGE_INVENTORY.md");
+    let inventory_path = repository_root.join("crates/foundation/mlx-c-fork/COVERAGE_INVENTORY.md");
     eprintln!(
         "[mlx-c-coverage-inventory] status=start timeout_seconds={}",
         BUILD_BUDGET.as_secs()

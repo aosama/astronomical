@@ -47,7 +47,7 @@ fn static_only_changes_skip_macos_verification_and_github_actions_cache_publicat
 fn code_changes_require_verification_on_both_pr_and_push() {
     for event in [CiEvent::PullRequest, CiEvent::Push] {
         assert_eq!(
-            verdict_for(event, &["crates/config/src/lib.rs"], false),
+            verdict_for(event, &["crates/foundation/config/src/lib.rs"], false),
             (true, false, true, "code_or_build".to_owned(), 1)
         );
     }
@@ -114,7 +114,7 @@ fn should_flag_notices_inputs_when_a_dependency_bump_rewrites_the_lockfile() {
     for event in [CiEvent::PullRequest, CiEvent::Push] {
         assert!(notices_inputs_changed_for(
             event,
-            &["Cargo.lock", "crates/config/Cargo.toml"]
+            &["Cargo.lock", "crates/foundation/config/Cargo.toml"]
         ));
     }
 }
@@ -144,7 +144,7 @@ fn should_not_flag_notices_inputs_for_code_manifest_or_lookalike_paths() {
         assert!(!notices_inputs_changed_for(
             event,
             &[
-                "crates/config/Cargo.toml",
+                "crates/foundation/config/Cargo.toml",
                 "apps/daemon/src/main.rs",
                 "Cargo.toml",
                 "xtask/Cargo.lock",
@@ -251,15 +251,15 @@ fn should_call_every_github_actions_cache_key_input_a_github_actions_cache_input
 #[test]
 fn should_not_call_ordinary_code_a_github_actions_cache_input() {
     for ordinary_path in [
-        "crates/model-serving/src/lib.rs",
+        "crates/engine/model-serving/src/lib.rs",
         "apps/daemon/src/main.rs",
         "apps/daemon/console/console.js",
         "third-party/about.toml",
         "Cargo.toml",
         ".cargo/config.toml",
         "xtask/src/main.rs",
-        "crates/native-identity/src/lib.rs",
-        "crates/test-harness/src/lib.rs",
+        "crates/foundation/native-identity/src/lib.rs",
+        "crates/foundation/test-harness/src/lib.rs",
     ] {
         assert!(
             !is_github_actions_cache_input_path(ordinary_path),
@@ -282,7 +282,7 @@ fn code_verdict(changed_paths: &[String]) -> crate::classify_scope::ChangeScopeV
 
 #[test]
 fn should_ask_about_a_verified_tree_for_a_code_only_push() {
-    let changed_paths = paths(&["crates/config/src/lib.rs", "README.md"]);
+    let changed_paths = paths(&["crates/foundation/config/src/lib.rs", "README.md"]);
     assert!(may_reuse_verified_tree(
         CiEvent::Push,
         &code_verdict(&changed_paths),
@@ -292,7 +292,7 @@ fn should_ask_about_a_verified_tree_for_a_code_only_push() {
 
 #[test]
 fn should_never_reuse_a_verified_tree_on_a_pull_request_or_manual_run() {
-    let changed_paths = paths(&["crates/config/src/lib.rs"]);
+    let changed_paths = paths(&["crates/foundation/config/src/lib.rs"]);
     for event in [CiEvent::PullRequest, CiEvent::WorkflowDispatch] {
         assert!(!may_reuse_verified_tree(
             event,
@@ -304,7 +304,7 @@ fn should_never_reuse_a_verified_tree_on_a_pull_request_or_manual_run() {
 
 #[test]
 fn should_run_in_full_when_a_push_has_a_github_actions_cache_entry_to_publish() {
-    let changed_paths = paths(&["crates/config/src/lib.rs", "Cargo.lock"]);
+    let changed_paths = paths(&["crates/foundation/config/src/lib.rs", "Cargo.lock"]);
     assert!(!may_reuse_verified_tree(
         CiEvent::Push,
         &code_verdict(&changed_paths),
@@ -314,7 +314,7 @@ fn should_run_in_full_when_a_push_has_a_github_actions_cache_entry_to_publish() 
 
 #[test]
 fn should_run_in_full_when_native_inputs_changed() {
-    let changed_paths = paths(&["crates/runtime-integration/native/shim.c"]);
+    let changed_paths = paths(&["crates/foundation/runtime-integration/native/shim.c"]);
     let verdict = classify_change_scope(CiEvent::Push, &changed_paths, true, false);
     assert!(!may_reuse_verified_tree(
         CiEvent::Push,
@@ -335,7 +335,7 @@ fn should_not_ask_when_macos_verification_was_never_required() {
 
 #[test]
 fn should_skip_only_the_macos_lanes_for_a_verified_tree() {
-    let changed_paths = paths(&["crates/config/src/lib.rs", "Cargo.lock"]);
+    let changed_paths = paths(&["crates/foundation/config/src/lib.rs", "Cargo.lock"]);
     let verdict = verdict_for_verified_tree(code_verdict(&changed_paths));
     assert!(!verdict.macos_verification_required);
     assert!(!verdict.swift_node_required);
@@ -369,7 +369,7 @@ fn should_call_everything_the_swift_and_node_lane_reads_an_input() {
 #[test]
 fn should_not_call_rust_code_a_swift_and_node_input() {
     for rust_path in [
-        "crates/model-serving/src/lib.rs",
+        "crates/engine/model-serving/src/lib.rs",
         "apps/daemon/src/main.rs",
         "apps/daemon/tests/rest_api/application/contracts.rs",
         "apps/astronomical-cli/src/main.rs",
@@ -384,7 +384,7 @@ fn should_not_call_rust_code_a_swift_and_node_input() {
 fn should_skip_only_the_swift_and_node_lane_for_a_rust_change() {
     let verdict = classify_change_scope(
         CiEvent::PullRequest,
-        &paths(&["crates/config/src/lib.rs"]),
+        &paths(&["crates/foundation/config/src/lib.rs"]),
         false,
         false,
     );
@@ -396,7 +396,10 @@ fn should_skip_only_the_swift_and_node_lane_for_a_rust_change() {
 fn should_run_the_swift_and_node_lane_for_a_mixed_change() {
     let verdict = classify_change_scope(
         CiEvent::PullRequest,
-        &paths(&["crates/config/src/lib.rs", "apps/daemon/console/console.js"]),
+        &paths(&[
+            "crates/foundation/config/src/lib.rs",
+            "apps/daemon/console/console.js",
+        ]),
         false,
         false,
     );
@@ -425,7 +428,7 @@ fn should_not_require_the_swift_and_node_lane_for_a_version_bump_or_static_chang
 
 #[test]
 fn should_run_the_swift_lane_on_a_full_push_with_no_swift_input() {
-    let rust_paths = paths(&["crates/config/src/lib.rs"]);
+    let rust_paths = paths(&["crates/foundation/config/src/lib.rs"]);
     let push_verdict = classify_change_scope(CiEvent::Push, &rust_paths, false, false);
     assert!(push_verdict.macos_verification_required);
     assert!(
@@ -443,7 +446,7 @@ fn should_keep_the_swift_lane_off_on_a_push_that_needs_no_macos_lanes() {
     assert!(!classify_change_scope(CiEvent::Push, &bump_paths, false, true).swift_node_required);
     let docs_paths = paths(&["docs/guide.md"]);
     assert!(!classify_change_scope(CiEvent::Push, &docs_paths, false, false).swift_node_required);
-    let rust_paths = paths(&["crates/config/src/lib.rs"]);
+    let rust_paths = paths(&["crates/foundation/config/src/lib.rs"]);
     let full_verdict = classify_change_scope(CiEvent::Push, &rust_paths, false, false);
     assert!(!verdict_for_verified_tree(full_verdict).swift_node_required);
 }
@@ -489,7 +492,8 @@ fn should_run_every_lane_when_a_catalog_edit_comes_with_code() {
 
 #[test]
 fn should_treat_a_change_to_the_catalog_crate_as_code_and_also_open_the_catalog_lane() {
-    let verdict = pull_request_verdict(&["crates/download-catalog/src/download_catalog.rs"]);
+    let verdict =
+        pull_request_verdict(&["crates/tooling/download-catalog/src/download_catalog.rs"]);
 
     assert_eq!(verdict.classification, "code_or_build");
     assert!(verdict.macos_verification_required);
@@ -552,7 +556,8 @@ fn should_open_the_plugin_lane_for_a_plugin_readme_edit_that_is_static_content()
 // plugin lane and, as a rest-contract input, every macOS lane too.
 #[test]
 fn should_open_the_plugin_lane_and_the_macos_lanes_for_the_shared_model_list() {
-    let verdict = pull_request_verdict(&["crates/rest-contract/fixtures/openai_model_list.json"]);
+    let verdict =
+        pull_request_verdict(&["crates/contracts/rest-contract/fixtures/openai_model_list.json"]);
 
     assert_eq!(verdict.classification, "code_or_build");
     assert!(verdict.opencode_plugin_check_required);
@@ -584,7 +589,10 @@ fn should_run_every_lane_when_a_plugin_edit_comes_with_code() {
 #[test]
 fn should_not_open_the_plugin_lane_for_unrelated_changes() {
     assert!(!pull_request_verdict(&["README.md"]).opencode_plugin_check_required);
-    assert!(!pull_request_verdict(&["crates/config/src/lib.rs"]).opencode_plugin_check_required);
+    assert!(
+        !pull_request_verdict(&["crates/foundation/config/src/lib.rs"])
+            .opencode_plugin_check_required
+    );
     let neighbor_verdict = pull_request_verdict(&["integrations/opencode-other/index.ts"]);
     assert!(!neighbor_verdict.opencode_plugin_check_required);
     assert!(neighbor_verdict.macos_verification_required);
@@ -619,14 +627,14 @@ fn should_name_the_plugin_lane_inputs_by_their_paths() {
         "integrations/opencode/tests/unit/x.test.mjs"
     ));
     assert!(is_opencode_plugin_check_input_path(
-        "crates/rest-contract/fixtures/openai_model_list.json"
+        "crates/contracts/rest-contract/fixtures/openai_model_list.json"
     ));
     assert!(is_opencode_plugin_check_input_path(".node-version"));
     assert!(!is_opencode_plugin_check_input_path(
         "integrations/opencode"
     ));
     assert!(!is_opencode_plugin_check_input_path(
-        "crates/rest-contract/src/lib.rs"
+        "crates/contracts/rest-contract/src/lib.rs"
     ));
     assert!(!is_opencode_plugin_check_input_path(
         ".github/workflows/pages.yml"

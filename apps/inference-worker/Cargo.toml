@@ -34,12 +34,12 @@ performance_throughput = []
 serving-acceptance = []
 
 [dependencies]
-config = { path = "../../crates/config" }
-ipc-protocol = { path = "../../crates/ipc-protocol" }
-model-serving = { path = "../../crates/model-serving", features = ["direct-mlx"] }
+config = { path = "../../crates/foundation/config" }
+ipc-protocol = { path = "../../crates/contracts/ipc-protocol" }
+model-serving = { path = "../../crates/engine/model-serving", features = ["direct-mlx"] }
 # The Linux physical-memory parser beside the machine ceiling it feeds.
-memory-policy = { path = "../../crates/memory-policy" }
-runtime-integration = { path = "../../crates/runtime-integration", features = ["mlx"] }
+memory-policy = { path = "../../crates/foundation/memory-policy" }
+runtime-integration = { path = "../../crates/foundation/runtime-integration", features = ["mlx"] }
 mlx-bridge.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
@@ -49,7 +49,7 @@ tracing-subscriber.workspace = true
 
 [dev-dependencies]
 astronomical-daemon = { path = "../daemon" }
-test-harness = { path = "../../crates/test-harness", features = ["flux-reference-oracle", "test-fixtures"] }
+test-harness = { path = "../../crates/foundation/test-harness", features = ["flux-reference-oracle", "test-fixtures"] }
 serde_json.workspace = true
 serial_test.workspace = true
 tempfile = "=3.27.0"

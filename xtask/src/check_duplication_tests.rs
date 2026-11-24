@@ -111,15 +111,17 @@ fn should_treat_a_twelve_character_line_as_short_and_thirteen_as_substantial() {
 
 #[test]
 fn should_classify_production_and_test_sources() {
-    assert!(is_production_source("crates/config/src/model_family.rs"));
-    assert!(!is_production_source(
-        "crates/config/src/model_family_tests.rs"
+    assert!(is_production_source(
+        "crates/foundation/config/src/model_family.rs"
     ));
     assert!(!is_production_source(
-        "crates/config/src/frozen_fixture_support.rs"
+        "crates/foundation/config/src/model_family_tests.rs"
     ));
     assert!(!is_production_source(
-        "crates/config/tests/integration/model.rs"
+        "crates/foundation/config/src/frozen_fixture_support.rs"
+    ));
+    assert!(!is_production_source(
+        "crates/foundation/config/tests/integration/model.rs"
     ));
     assert!(is_production_source(
         "xtask/src/tests_inventory/selection.rs"
@@ -137,8 +139,8 @@ fn should_skip_build_output_and_pinned_third_party_directories_only() {
 #[test]
 fn should_name_the_area_by_crate_app_and_family_folder() {
     assert_eq!(
-        area_of("crates/config/src/model_discovery/kev.rs"),
-        "crates/config"
+        area_of("crates/foundation/config/src/model_discovery/kev.rs"),
+        "crates/foundation/config"
     );
     assert_eq!(
         area_of("apps/daemon/src/worker/decisions_request.rs"),
@@ -146,24 +148,24 @@ fn should_name_the_area_by_crate_app_and_family_folder() {
     );
     assert_eq!(area_of("xtask/src/check_duplication.rs"), "xtask");
     assert_eq!(
-        area_of("crates/qwen35/src/qwen3_5_streaming/inference_execution/mod.rs"),
-        "crates/qwen35/qwen3_5_streaming"
+        area_of("crates/families/text/qwen35/src/qwen3_5_streaming/inference_execution/mod.rs"),
+        "crates/families/text/qwen35/qwen3_5_streaming"
     );
     assert_eq!(
-        area_of("crates/qwen35/src/qwen3_5_core.rs"),
-        "crates/qwen35/qwen3_5_core"
+        area_of("crates/families/text/qwen35/src/qwen3_5_core.rs"),
+        "crates/families/text/qwen35/qwen3_5_core"
     );
     assert_eq!(
-        area_of("crates/speech/src/speech_models/kokoro/engine.rs"),
-        "crates/speech/kokoro"
+        area_of("crates/families/speech/speech/src/speech_models/kokoro/engine.rs"),
+        "crates/families/speech/speech/kokoro"
     );
 }
 
 #[test]
 fn should_keep_a_file_above_the_family_folders_in_its_crate_area() {
     assert_eq!(
-        area_of("crates/speech/src/speech_engine.rs"),
-        "crates/speech"
+        area_of("crates/families/speech/speech/src/speech_engine.rs"),
+        "crates/families/speech/speech"
     );
     assert_eq!(area_of("Cargo.toml"), "Cargo.toml");
 }
@@ -188,8 +190,8 @@ fn should_start_blocks_only_where_enough_lines_are_substantial() {
 #[test]
 fn should_count_a_block_shared_by_two_files_on_both_sides() {
     let measurement = measure_repeated_blocks(&[
-        source_file("crates/alpha/src/one.rs", SHARED_BLOCK_TEXT),
-        source_file("crates/beta/src/two.rs", SHARED_BLOCK_TEXT),
+        source_file("crates/tooling/alpha/src/one.rs", SHARED_BLOCK_TEXT),
+        source_file("crates/tooling/beta/src/two.rs", SHARED_BLOCK_TEXT),
     ]);
     assert_eq!(measurement.file_count, 2);
     assert_eq!(measurement.code_line_count, 12);
@@ -197,8 +199,8 @@ fn should_count_a_block_shared_by_two_files_on_both_sides() {
     assert_eq!(
         measurement.area_pairs,
         [RepeatedLinePair {
-            first_place: "crates/alpha".to_owned(),
-            second_place: "crates/beta".to_owned(),
+            first_place: "crates/tooling/alpha".to_owned(),
+            second_place: "crates/tooling/beta".to_owned(),
             repeated_line_count: 6,
         }]
     );
@@ -210,9 +212,12 @@ fn should_count_copies_that_differ_only_by_family_name() {
     let resident_copy = SHARED_BLOCK_TEXT.replace("runtime", "resident_runtime");
     let streaming_copy = SHARED_BLOCK_TEXT.replace("runtime", "streaming_runtime");
     let measurement = measure_repeated_blocks(&[
-        source_file("crates/qwen35/src/qwen3_5_resident/load.rs", &resident_copy),
         source_file(
-            "crates/qwen35/src/qwen3_5_streaming/load.rs",
+            "crates/families/text/qwen35/src/qwen3_5_resident/load.rs",
+            &resident_copy,
+        ),
+        source_file(
+            "crates/families/text/qwen35/src/qwen3_5_streaming/load.rs",
             &streaming_copy,
         ),
     ]);
@@ -228,8 +233,8 @@ fn should_not_count_a_block_repeated_inside_one_file_or_shorter_than_six_lines()
         .collect::<Vec<_>>()
         .join("\n");
     let measurement = measure_repeated_blocks(&[
-        source_file("crates/alpha/src/one.rs", &twice_in_one_file),
-        source_file("crates/beta/src/two.rs", &five_lines),
+        source_file("crates/tooling/alpha/src/one.rs", &twice_in_one_file),
+        source_file("crates/tooling/beta/src/two.rs", &five_lines),
     ]);
     assert_eq!(measurement.repeated_line_count, 0);
     assert!(measurement.area_pairs.is_empty());
@@ -240,8 +245,8 @@ fn should_not_count_a_block_repeated_inside_one_file_or_shorter_than_six_lines()
 fn should_not_count_shared_runs_of_closing_brackets() {
     let closing_brackets = "}\n});\n}\n)\n]\n};\n}\n";
     let measurement = measure_repeated_blocks(&[
-        source_file("crates/alpha/src/one.rs", closing_brackets),
-        source_file("crates/beta/src/two.rs", closing_brackets),
+        source_file("crates/tooling/alpha/src/one.rs", closing_brackets),
+        source_file("crates/tooling/beta/src/two.rs", closing_brackets),
     ]);
     assert_eq!(measurement.repeated_line_count, 0);
 }
@@ -256,14 +261,14 @@ fn should_report_an_empty_corpus_as_zero_percent() {
 #[test]
 fn should_count_a_line_shared_with_two_files_once_in_the_total() {
     let measurement = measure_repeated_blocks(&[
-        source_file("crates/alpha/src/one.rs", SHARED_BLOCK_TEXT),
-        source_file("crates/beta/src/two.rs", SHARED_BLOCK_TEXT),
-        source_file("crates/beta/src/three.rs", SHARED_BLOCK_TEXT),
+        source_file("crates/tooling/alpha/src/one.rs", SHARED_BLOCK_TEXT),
+        source_file("crates/tooling/beta/src/two.rs", SHARED_BLOCK_TEXT),
+        source_file("crates/tooling/beta/src/three.rs", SHARED_BLOCK_TEXT),
     ]);
     assert_eq!(measurement.repeated_line_count, 18);
     let alpha_beta_pair = &measurement.area_pairs[0];
-    assert_eq!(alpha_beta_pair.first_place, "crates/beta");
-    assert_eq!(alpha_beta_pair.second_place, "crates/alpha");
+    assert_eq!(alpha_beta_pair.first_place, "crates/tooling/beta");
+    assert_eq!(alpha_beta_pair.second_place, "crates/tooling/alpha");
     assert_eq!(alpha_beta_pair.repeated_line_count, 12);
 }
 
@@ -360,9 +365,9 @@ fn should_refuse_unknown_arguments_and_missing_or_malformed_values() {
 #[test]
 fn should_print_totals_and_at_most_the_requested_pairs() {
     let measurement = measure_repeated_blocks(&[
-        source_file("crates/alpha/src/one.rs", SHARED_BLOCK_TEXT),
-        source_file("crates/beta/src/two.rs", SHARED_BLOCK_TEXT),
-        source_file("crates/beta/src/three.rs", SHARED_BLOCK_TEXT),
+        source_file("crates/tooling/alpha/src/one.rs", SHARED_BLOCK_TEXT),
+        source_file("crates/tooling/beta/src/two.rs", SHARED_BLOCK_TEXT),
+        source_file("crates/tooling/beta/src/three.rs", SHARED_BLOCK_TEXT),
     ]);
     let report_lines = measurement_lines("production", &measurement, 1);
     assert_eq!(
@@ -370,7 +375,7 @@ fn should_print_totals_and_at_most_the_requested_pairs() {
         "[check-duplication] corpus=production files=3 code_lines=18 repeated_lines=18 repeated_percentage=100.0"
     );
     assert_eq!(report_lines.len(), 5);
-    assert!(report_lines[2].contains("crates/beta  <->  crates/alpha"));
+    assert!(report_lines[2].contains("crates/tooling/beta  <->  crates/tooling/alpha"));
     assert_eq!(measurement_lines("production", &measurement, 0).len(), 1);
 }
 

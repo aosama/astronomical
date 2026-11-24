@@ -22,7 +22,7 @@ pub(crate) const COMPLETION_MARKER_FILE_NAME: &str = "complete";
 const NATIVE_BUILD_STORE_VARIABLE: &str = "ASTRONOMICAL_NATIVE_BUILD_STORE_DIR";
 const DEFAULT_NATIVE_BUILD_STORE_SUFFIX: &str = "Library/Caches/Astronomical/native-builds";
 const NATIVE_BUILD_STORE_SCHEMA_VERSION_PATH: &str =
-    "crates/native-build-orchestration/src/native-build-store-schema-version";
+    "crates/foundation/native-build-orchestration/src/native-build-store-schema-version";
 
 pub(crate) fn astro_native_build_cache_dependencies_directory(
     explicit_directory: Option<&str>,

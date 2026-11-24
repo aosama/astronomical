@@ -48,18 +48,18 @@ quantize-convert = [
 ]
 
 [dependencies]
-config = { path = "../../crates/config" }
-expert-atlas = { path = "../../crates/expert-atlas" }
-decision-contract = { path = "../../crates/decision-contract" }
-decision-training = { path = "../../crates/decision-training" }
-ipc-protocol = { path = "../../crates/ipc-protocol" }
-speech-contract = { path = "../../crates/speech-contract" }
-qwen35-quantization-probe = { path = "../../crates/qwen35-quantization-probe", optional = true }
+config = { path = "../../crates/foundation/config" }
+expert-atlas = { path = "../../crates/engine/expert-atlas" }
+decision-contract = { path = "../../crates/contracts/decision-contract" }
+decision-training = { path = "../../crates/tooling/decision-training" }
+ipc-protocol = { path = "../../crates/contracts/ipc-protocol" }
+speech-contract = { path = "../../crates/contracts/speech-contract" }
+qwen35-quantization-probe = { path = "../../crates/tooling/qwen35-quantization-probe", optional = true }
 # The machine's memory ceiling the convert and evaluate verbs size MLX by.
-memory-policy = { path = "../../crates/memory-policy", optional = true }
-quantization = { path = "../../crates/quantization" }
-runtime-integration = { path = "../../crates/runtime-integration", features = ["mlx"], optional = true }
-vision-tower = { path = "../../crates/vision-tower" }
+memory-policy = { path = "../../crates/foundation/memory-policy", optional = true }
+quantization = { path = "../../crates/tooling/quantization" }
+runtime-integration = { path = "../../crates/foundation/runtime-integration", features = ["mlx"], optional = true }
+vision-tower = { path = "../../crates/tooling/vision-tower" }
 serde.workspace = true
 serde_json.workspace = true
 tempfile = "=3.27.0"

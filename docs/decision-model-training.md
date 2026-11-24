@@ -1,13 +1,13 @@
 # How decision-model training works
 
 Engineering notes for anyone reading or changing the training code
-(`crates/model-serving/src/decision_models`, `crates/decision-training`).
+(`crates/engine/model-serving/src/decision_models`, `crates/tooling/decision-training`).
 How to use training is in the Astronomical skill,
 `skill/astronomical/references/decision-models.md`.
 
 Facts that hold across releases, for anyone reading or changing the training
-code in Astronomical (`crates/model-serving/src/decision_models`,
-`crates/decision-training`):
+code in Astronomical (`crates/engine/model-serving/src/decision_models`,
+`crates/tooling/decision-training`):
 
 - **The Gated DeltaNet recurrence in Qwen3.5 models (Kev, Clef) has its own
   backward pass.** MLX's fused kernel cannot be differentiated, so training

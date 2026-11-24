@@ -10,17 +10,16 @@ pub(crate) const MEASURED_ROOT_DIRECTORIES: [&str; 4] = ["crates", "apps", "veri
 /// this repository does not author.
 const SKIPPED_DIRECTORY_NAMES: [&str; 2] = ["target", "third-party"];
 
-/// Crates that hold several model families side by side, with the path depth
-/// of the folder that names the family. Reporting them as one area would hide
-/// the copies between their families, which are what issue #2473 is after.
-/// The depth counts path components from the repository root:
-/// `crates/qwen35/src/qwen3_5_streaming` names its area at depth 3, and
-/// `crates/speech/src/speech_models/kokoro` at depth 4.
-const FAMILY_HOLDING_CRATE_AREA_DEPTHS: [(&str, usize); 4] = [
-    ("qwen35", 3),
-    ("image-generation", 3),
-    ("speech", 4),
-    ("decision-models", 4),
+/// Crates that hold several model families side by side, with how many
+/// folders below the crate's own folder the family's folder sits. Reporting
+/// them as one area would hide the copies between their families, which are
+/// what issue #2473 is after: `qwen35/src/qwen3_5_streaming` names its area
+/// two folders down, and `speech/src/speech_models/kokoro` three.
+const FAMILY_HOLDING_CRATE_AREA_OFFSETS: [(&str, usize); 4] = [
+    ("qwen35", 2),
+    ("image-generation", 2),
+    ("speech", 3),
+    ("decision-models", 3),
 ];
 
 /// Whether the walk should skip a directory with this name.
@@ -40,15 +39,17 @@ pub(crate) fn is_production_source(relative_path: &str) -> bool {
         && !parent_components.contains(&"tests")
 }
 
-/// The area a file is reported under: its crate or app (`crates/config`,
+/// The area a file is reported under: its crate or app (`crates/foundation/config`,
 /// `apps/daemon`), the family folder inside a family-holding crate
-/// (`crates/qwen35/qwen3_5_resident`), or `xtask` for the tooling crate.
+/// (`crates/families/text/qwen35/qwen3_5_resident`), or `xtask` for the tooling crate.
 pub(crate) fn area_of(relative_path: &str) -> String {
     let path_components: Vec<&str> = relative_path.split('/').collect();
     if path_components.first() == Some(&"xtask") {
         return "xtask".to_owned();
     }
-    let owning_folder = match path_components.get(..2) {
+    let owning_depth =
+        crate_folder_index(&path_components).map_or(2, |crate_index| crate_index + 1);
+    let owning_folder = match path_components.get(..owning_depth) {
         Some(owning_components) => owning_components.join("/"),
         None => relative_path.to_owned(),
     };
@@ -58,17 +59,27 @@ pub(crate) fn area_of(relative_path: &str) -> String {
     }
 }
 
+/// The index of a crate's own folder in a path under `crates/`: crates sit
+/// one folder per layer (`crates/foundation/config`), and family crates one
+/// folder deeper, per kind (`crates/families/text/qwen35`).
+fn crate_folder_index(path_components: &[&str]) -> Option<usize> {
+    match path_components {
+        ["crates", "families", _, _, ..] => Some(3),
+        ["crates", _, _, ..] => Some(2),
+        _ => None,
+    }
+}
+
 /// The family folder or module file name of a path inside a family-holding
-/// crate, without `.rs` (`crates/qwen35/src/qwen3_5_core.rs` belongs with the
+/// crate, without `.rs` (`crates/families/text/qwen35/src/qwen3_5_core.rs` belongs with the
 /// folder it declares); `None` for any other path, and for a file that sits
 /// above the family folders.
 fn family_folder_name<'path>(path_components: &[&'path str]) -> Option<&'path str> {
-    if path_components.first() != Some(&"crates") {
-        return None;
-    }
-    let crate_name = path_components.get(1)?;
-    for (family_holding_crate, area_depth) in FAMILY_HOLDING_CRATE_AREA_DEPTHS {
-        if *crate_name == family_holding_crate && path_components.len() > area_depth {
+    let crate_index = crate_folder_index(path_components)?;
+    let crate_name = path_components[crate_index];
+    for (family_holding_crate, area_offset) in FAMILY_HOLDING_CRATE_AREA_OFFSETS {
+        let area_depth = crate_index + area_offset;
+        if crate_name == family_holding_crate && path_components.len() > area_depth {
             let family_component = path_components[area_depth];
             return Some(
                 family_component

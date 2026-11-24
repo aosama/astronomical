@@ -5,7 +5,7 @@
 # contract that used to live here is the typed Rust test
 # `cargo test -p xtask --test workflow_structural_contract`; the
 # native-fingerprint and change-scope journeys are unit tests beside their
-# sources in `crates/native-identity` and `xtask` (issue #1250).
+# sources in `crates/foundation/native-identity` and `xtask` (issue #1250).
 
 set -eu
 

@@ -63,7 +63,8 @@ const CATALOG_DATA_PATH: &str = "registry/download_catalog.json";
 
 /// Everything the catalog lane builds and tests: the catalog data and the
 /// crate that parses it. A change to either opens the lane.
-const CATALOG_CHECK_INPUT_PATH_PREFIXES: &[&str] = &[CATALOG_DATA_PATH, "crates/download-catalog/"];
+const CATALOG_CHECK_INPUT_PATH_PREFIXES: &[&str] =
+    &[CATALOG_DATA_PATH, "crates/tooling/download-catalog/"];
 
 /// The OpenCode plugin: a standalone npm package that compiles no Rust and
 /// talks to the app only over loopback HTTP, so a change inside it alone (with
@@ -75,7 +76,8 @@ const OPENCODE_PLUGIN_DIRECTORY: &str = "integrations/opencode/";
 /// it to what the contract types serialize, and the plugin's tests parse it.
 /// It is an input of both lanes, so a field rename fails on whichever side has
 /// not followed.
-const MODEL_LIST_FIXTURE_PATH: &str = "crates/rest-contract/fixtures/openai_model_list.json";
+const MODEL_LIST_FIXTURE_PATH: &str =
+    "crates/contracts/rest-contract/fixtures/openai_model_list.json";
 
 /// Everything the OpenCode plugin lane installs, builds or reads.
 const OPENCODE_PLUGIN_CHECK_INPUT_PATH_PREFIXES: &[&str] = &[

@@ -447,26 +447,19 @@ fn lane_table_text() -> String {
 fn packages_in_lane(lane_name: &str) -> Vec<String> {
     let lane_entry = format!("\"{lane_name}\"");
     let mut package_names = Vec::new();
-    for package_root in ["apps", "crates", "verification"] {
-        let package_root = contract_support::repository_root().join(package_root);
-        for directory_entry in std::fs::read_dir(&package_root).expect("package root readable") {
-            let manifest_path = directory_entry
-                .expect("entry readable")
-                .path()
-                .join("Cargo.toml");
-            let Ok(manifest_text) = std::fs::read_to_string(&manifest_path) else {
-                continue;
-            };
-            let declares_lane = manifest_text.lines().any(|manifest_line| {
-                manifest_line.starts_with("test-lanes = [") && manifest_line.contains(&lane_entry)
-            });
-            let package_name = manifest_text
-                .lines()
-                .find_map(|manifest_line| manifest_line.strip_prefix("name = \""))
-                .map(|name_text| name_text.trim_end_matches('"').to_owned());
-            if let (true, Some(package_name)) = (declares_lane, package_name) {
-                package_names.push(package_name);
-            }
+    for manifest_path in contract_support::package_manifests::package_manifest_paths() {
+        let Ok(manifest_text) = std::fs::read_to_string(&manifest_path) else {
+            continue;
+        };
+        let declares_lane = manifest_text.lines().any(|manifest_line| {
+            manifest_line.starts_with("test-lanes = [") && manifest_line.contains(&lane_entry)
+        });
+        let package_name = manifest_text
+            .lines()
+            .find_map(|manifest_line| manifest_line.strip_prefix("name = \""))
+            .map(|name_text| name_text.trim_end_matches('"').to_owned());
+        if let (true, Some(package_name)) = (declares_lane, package_name) {
+            package_names.push(package_name);
         }
     }
     assert!(

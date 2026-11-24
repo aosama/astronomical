@@ -39,7 +39,7 @@ const TEST_TREE_PARENTS: [&str; 3] = ["apps", "crates", "verification"];
 /// The config crate's tests load configuration from temporary home
 /// directories and name the Stable instance deliberately: they test the
 /// loader itself, never live Stable state.
-const EXEMPT_TEST_TREE: &str = "crates/config/tests";
+const EXEMPT_TEST_TREE: &str = "crates/foundation/config/tests";
 
 pub fn run(repository_root: &Path, arguments: &[String]) -> Result<(), String> {
     if !arguments.is_empty() {

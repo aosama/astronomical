@@ -163,7 +163,7 @@ fi
 # since removing a well-covered file can pull the aggregate below the floor —
 # must keep cargo-llvm-cov line coverage at or above 90%. Gated on staged
 # paths so unrelated commits never pay the instrumented coverage run.
-if git diff --cached --name-only | grep -q '^crates/memory-policy/'; then
+if git diff --cached --name-only | grep -q '^crates/foundation/memory-policy/'; then
     printf '%s\n' "[pre-commit] status=start check=memory-policy-coverage-floor root=${REPOSITORY_ROOT}"
     coverage_started_epoch_seconds="$(date +%s)"
     if cargo run --quiet --manifest-path "${REPOSITORY_ROOT}/xtask/Cargo.toml" -p xtask -- coverage-floor; then

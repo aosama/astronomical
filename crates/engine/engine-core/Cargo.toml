@@ -1,0 +1,55 @@
+[package]
+name = "engine-core"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+# The test lanes this package runs in. `cargo xtask lane-cargo` builds each
+# lane's command from these declarations (issue #2473, Step 6), so no alias
+# lists packages by hand; an empty list says the package is in no lane.
+[package.metadata.astronomical]
+test-lanes = ["integration", "integration-and-rest", "nextest", "direct-mlx"]
+direct-mlx-lane-feature = "direct-mlx"
+
+[lints]
+workspace = true
+
+[features]
+default = []
+direct-mlx = ["dep:runtime-integration", "dep:mlx-bridge", "model-primitives/direct-mlx", "jangtq2-qwen35/direct-mlx"]
+
+# The engine contract, MLX memory and the astro_decoder_state_cache, below
+# every model family (issue #2340). One-way edge: nothing here may depend on a
+# family or on model-serving; `cargo xtask check-architecture`
+# enforces the serving edge.
+[dependencies]
+model-primitives = { path = "../model-primitives" }
+lowercase-hex = { path = "../../foundation/lowercase-hex" }
+sha2.workspace = true
+# The jangtq2 weight format (issue #1427): expert pages read its codebook
+# projections. It is a weight format, not a model family, and depends on no
+# engine crate.
+jangtq2-qwen35 = { path = "../../weight-formats/jangtq2-qwen35" }
+serde_json.workspace = true
+ipc-protocol = { path = "../../contracts/ipc-protocol" }
+memory-policy = { path = "../../foundation/memory-policy" }
+runtime-integration = { path = "../../foundation/runtime-integration", features = ["mlx"], optional = true }
+mlx-bridge = { workspace = true, optional = true }
+libc.workspace = true
+# Grammar-constrained decoding for structured generation.
+regex-automata = "0.4"
+serde.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+test-harness = { path = "../../foundation/test-harness", features = ["test-fixtures"] }
+# start_paused virtual time for #[tokio::test(start_paused = true)] bodies.
+tokio = { workspace = true, features = ["test-util"] }
+# The GPU tests sample the process-global MLX allocator, so they serialize.
+serial_test.workspace = true
+tempfile = "=3.27.0"

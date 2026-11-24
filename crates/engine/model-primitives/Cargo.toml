@@ -1,0 +1,50 @@
+[package]
+name = "model-primitives"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+# The test lanes this package runs in. `cargo xtask lane-cargo` builds each
+# lane's command from these declarations (issue #2473, Step 6), so no alias
+# lists packages by hand; an empty list says the package is in no lane.
+[package.metadata.astronomical]
+test-lanes = ["integration", "integration-and-rest", "nextest", "direct-mlx"]
+direct-mlx-lane-feature = "direct-mlx"
+
+[lints]
+workspace = true
+
+[features]
+default = []
+direct-mlx = ["dep:decision-contract", "dep:runtime-integration", "dep:mlx-bridge", "dep:memory-policy"]
+# The synthetic weight helpers for dependents' GPU tests (dev builds only).
+test-support = ["dep:tempfile"]
+
+# One-way edge: nothing here may depend on model-serving
+# (`cargo xtask check-architecture` fails the build if it does) or on a model
+# family (every family depends on this crate, so Cargo refuses the cycle).
+[dependencies]
+# The add-on weight file format the linear adapters read. Optional because the
+# adapters exist only with direct-mlx, so default builds never compile it.
+decision-contract = { path = "../../contracts/decision-contract", optional = true }
+# The MLX memory telemetry types the forward-pass report fills in.
+memory-policy = { path = "../../foundation/memory-policy", optional = true }
+runtime-integration = { path = "../../foundation/runtime-integration", features = ["mlx"], optional = true }
+mlx-bridge = { workspace = true, optional = true }
+libc.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tempfile = { version = "=3.27.0", optional = true }
+
+[dev-dependencies]
+# Skips the tests of Astronomical's own Metal kernels where there is no Metal.
+test-harness = { path = "../../foundation/test-harness" }
+# start_paused virtual time for #[tokio::test(start_paused = true)] bodies.
+tokio = { workspace = true, features = ["test-util"] }
+# The GPU tests sample the process-global MLX allocator, so they serialize.
+serial_test.workspace = true
+tempfile = "=3.27.0"

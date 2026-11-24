@@ -4,7 +4,7 @@
 //! Both retirement phases landed behind this probe's zero-count gate
 //! (Phase 1: the shell cleaner and its contract; Phase 2: the transitional
 //! build-script cleanup, formerly
-//! `crates/runtime-integration/build_legacy_native_output.rs`). The probe
+//! `crates/foundation/runtime-integration/build_legacy_native_output.rs`). The probe
 //! now stands as the permanent verification that the layout never
 //! returns. It never removes anything.
 

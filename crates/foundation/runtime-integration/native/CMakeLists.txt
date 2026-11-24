@@ -1,0 +1,173 @@
+# The pinned native runtime build for Astronomical.
+#
+# Architecture in one paragraph: this project does NOT fetch MLX from the
+# network. Five verified source archives (MLX, MLX-C, metal-cpp,
+# nlohmann/json, fmt) are provisioned ahead of time by
+# `cargo xtask bootstrap-native-dependencies` into a machine-wide astro native build cache,
+# referenced here by absolute path, and re-verified by SHA-256 at configure
+# time (require_pinned_archive below) so a corrupted or swapped archive
+# fails loudly before any compile. MLX and MLX-C are then patched with the
+# repository-owned patch set under third-party/patches (each patch's purpose
+# and retirement condition are documented in third-party/README.md) and
+# built as one static, Release-mode image: arm64 with Metal on macOS, the
+# host architecture with the CPU backend on Linux.
+#
+# Consumers: the Cargo build script (build-orchestration/native_compile.rs)
+# and the standalone native-build tool drive this file identically; the
+# products are published into the identity-keyed native build store
+# (build-orchestration/native_store.rs). This file is a fingerprinted native
+# identity input — a comment or code change here re-keys the store entry and
+# rebuilds the native runtime by design.
+cmake_minimum_required(VERSION 3.24)
+
+project(astronomical_runtime_integration LANGUAGES C CXX)
+
+include(FetchContent)
+include("${CMAKE_CURRENT_LIST_DIR}/../../../../third-party/pins/mlx-v0.32.4.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/../../../../third-party/pins/mlx-c-v0.8.0.cmake")
+find_program(PATCH_EXECUTABLE patch REQUIRED)
+
+# macOS builds the Metal backend on Apple silicon. Linux builds MLX's CPU
+# backend, which is the first step towards GPU backends beyond Metal
+# (issue #2424); it links the BLAS and LAPACK that MLX's configure finds.
+if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+    if(NOT CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|aarch64)$")
+        message(FATAL_ERROR "Astronomical's MLX runtime integration requires Apple Silicon")
+    endif()
+    set(ASTRONOMICAL_MLX_BUILD_METAL ON)
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    set(ASTRONOMICAL_MLX_BUILD_METAL OFF)
+else()
+    message(FATAL_ERROR "Astronomical's MLX runtime integration may only build on macOS or Linux")
+endif()
+
+if(NOT DEFINED ASTRONOMICAL_NATIVE_DEPENDENCY_CACHE_DIR OR "${ASTRONOMICAL_NATIVE_DEPENDENCY_CACHE_DIR}" STREQUAL "")
+    if(NOT DEFINED ENV{HOME} OR "$ENV{HOME}" STREQUAL "")
+        message(FATAL_ERROR "Set ASTRONOMICAL_NATIVE_DEPENDENCY_CACHE_DIR or HOME, then run cargo xtask bootstrap-native-dependencies")
+    endif()
+    set(ASTRONOMICAL_NATIVE_DEPENDENCY_CACHE_DIR "$ENV{HOME}/Library/Caches/Astronomical/native-dependencies")
+endif()
+if(NOT IS_ABSOLUTE "${ASTRONOMICAL_NATIVE_DEPENDENCY_CACHE_DIR}")
+    message(FATAL_ERROR "ASTRONOMICAL_NATIVE_DEPENDENCY_CACHE_DIR must be an absolute path: ${ASTRONOMICAL_NATIVE_DEPENDENCY_CACHE_DIR}")
+endif()
+
+function(require_pinned_archive variable_name dependency_description archive_file_name expected_sha256)
+    set(archive_path "${ASTRONOMICAL_NATIVE_DEPENDENCY_CACHE_DIR}/${archive_file_name}")
+    if(NOT IS_ABSOLUTE "${archive_path}")
+        message(FATAL_ERROR "${variable_name} must be an absolute path: ${archive_path}")
+    endif()
+    if(NOT EXISTS "${archive_path}")
+        message(FATAL_ERROR "Missing ${dependency_description} archive: ${archive_path}. Run cargo xtask bootstrap-native-dependencies to provision the verified astro native build cache.")
+    endif()
+    file(SHA256 "${archive_path}" detected_archive_sha256)
+    if(NOT detected_archive_sha256 STREQUAL expected_sha256)
+        message(FATAL_ERROR "${dependency_description} archive SHA-256 ${detected_archive_sha256} does not match required ${expected_sha256}")
+    endif()
+    set(${variable_name} "${archive_path}" PARENT_SCOPE)
+endfunction()
+
+require_pinned_archive(ASTRONOMICAL_MLX_SOURCE_ARCHIVE "MLX ${ASTRONOMICAL_MLX_VERSION}" "${ASTRONOMICAL_MLX_SOURCE_ARCHIVE_FILE_NAME}" "${ASTRONOMICAL_MLX_SOURCE_ARCHIVE_SHA256}")
+require_pinned_archive(ASTRONOMICAL_MLX_C_SOURCE_ARCHIVE "MLX C ${ASTRONOMICAL_MLX_C_VERSION}" "${ASTRONOMICAL_MLX_C_SOURCE_ARCHIVE_FILE_NAME}" "${ASTRONOMICAL_MLX_C_SOURCE_ARCHIVE_SHA256}")
+require_pinned_archive(ASTRONOMICAL_METAL_CPP_SOURCE_ARCHIVE "metal-cpp ${ASTRONOMICAL_METAL_CPP_VERSION}" "${ASTRONOMICAL_METAL_CPP_SOURCE_ARCHIVE_FILE_NAME}" "${ASTRONOMICAL_METAL_CPP_SOURCE_ARCHIVE_SHA256}")
+require_pinned_archive(ASTRONOMICAL_JSON_SOURCE_ARCHIVE "nlohmann/json ${ASTRONOMICAL_NLOHMANN_JSON_VERSION}" "${ASTRONOMICAL_NLOHMANN_JSON_SOURCE_ARCHIVE_FILE_NAME}" "${ASTRONOMICAL_NLOHMANN_JSON_SOURCE_ARCHIVE_SHA256}")
+require_pinned_archive(ASTRONOMICAL_FMT_SOURCE_ARCHIVE "fmt ${ASTRONOMICAL_FMT_VERSION}" "${ASTRONOMICAL_FMT_SOURCE_ARCHIVE_FILE_NAME}" "${ASTRONOMICAL_FMT_SOURCE_ARCHIVE_SHA256}")
+
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build one static runtime image" FORCE)
+set(MLX_BUILD_TESTS OFF CACHE BOOL "Disable upstream MLX tests" FORCE)
+set(MLX_BUILD_EXAMPLES OFF CACHE BOOL "Disable upstream MLX examples" FORCE)
+set(MLX_BUILD_BENCHMARKS OFF CACHE BOOL "Disable upstream MLX benchmarks" FORCE)
+set(MLX_BUILD_PYTHON_BINDINGS OFF CACHE BOOL "Exclude Python from the worker runtime" FORCE)
+set(MLX_BUILD_GGUF OFF CACHE BOOL "Disable unneeded GGUF support" FORCE)
+set(MLX_BUILD_METAL ${ASTRONOMICAL_MLX_BUILD_METAL} CACHE BOOL "Require the Metal backend on macOS" FORCE)
+set(MLX_BUILD_CPU ON CACHE BOOL "Retain bounded CPU fallback operations" FORCE)
+set(MLX_BUILD_SAFETENSORS ON CACHE BOOL "Require descriptor-backed safetensors loading" FORCE)
+set(MLX_METAL_JIT ${ASTRONOMICAL_MLX_BUILD_METAL} CACHE BOOL "Select Metal kernels for the current Apple GPU and keep them in the metal_kernel_cache" FORCE)
+set(MLX_ENABLE_X64_MAC OFF CACHE BOOL "Reject unsupported Intel macOS builds" FORCE)
+set(MLX_USE_CCACHE OFF CACHE BOOL "Keep the native artifact graph machine-independent" FORCE)
+set(MLX_C_BUILD_EXAMPLES OFF CACHE BOOL "Disable upstream MLX C examples" FORCE)
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_OSX_DEPLOYMENT_TARGET "${ASTRONOMICAL_MLX_MACOS_DEPLOYMENT_TARGET}" CACHE STRING "Pinned deployment target" FORCE)
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
+option(
+    ASTRONOMICAL_BUILD_MEMORY_CONTRACT_PROBE
+    "Build the explicit MLX allocator memory-contract probe"
+    OFF
+)
+
+# These declarations intentionally use the dependency names expected by MLX
+# and MLX C. FetchContent's first declaration wins, so every nested request is
+# satisfied by a verified local archive rather than an upstream URL.
+FetchContent_Declare(metal_cpp URL "${ASTRONOMICAL_METAL_CPP_SOURCE_ARCHIVE}" URL_HASH "SHA256=${ASTRONOMICAL_METAL_CPP_SOURCE_ARCHIVE_SHA256}")
+FetchContent_Declare(json URL "${ASTRONOMICAL_JSON_SOURCE_ARCHIVE}" URL_HASH "SHA256=${ASTRONOMICAL_NLOHMANN_JSON_SOURCE_ARCHIVE_SHA256}")
+FetchContent_Declare(fmt URL "${ASTRONOMICAL_FMT_SOURCE_ARCHIVE}" URL_HASH "SHA256=${ASTRONOMICAL_FMT_SOURCE_ARCHIVE_SHA256}")
+# Every patch in the two PATCH_COMMAND lists below is documented with its
+# purpose and retirement condition in the patch registry of
+# third-party/README.md. The jit-qmv-template-arity patch retired at the
+# v0.32.4 bump: upstream's partial-row qmv fast-kernel restructure declares
+# the full template arity on every qmv/qmv_fast template, which is the
+# defect the patch carried.
+FetchContent_Declare(
+    mlx
+    URL "${ASTRONOMICAL_MLX_SOURCE_ARCHIVE}"
+    URL_HASH "SHA256=${ASTRONOMICAL_MLX_SOURCE_ARCHIVE_SHA256}"
+    PATCH_COMMAND
+        "${CMAKE_COMMAND}"
+        "-DPATCH_EXECUTABLE=${PATCH_EXECUTABLE}"
+        "-DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/../../../../third-party/patches/mlx-0.32.4-stable-prefill-split-k.patch"
+        -P "${CMAKE_CURRENT_LIST_DIR}/apply_patch_if_needed.cmake"
+        COMMAND "${CMAKE_COMMAND}"
+        "-DPATCH_EXECUTABLE=${PATCH_EXECUTABLE}"
+        "-DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/../../../../third-party/patches/mlx-0.32.4-nax-qmm-tile-variants.patch"
+        -P "${CMAKE_CURRENT_LIST_DIR}/apply_patch_if_needed.cmake"
+        COMMAND "${CMAKE_COMMAND}"
+        "-DPATCH_EXECUTABLE=${PATCH_EXECUTABLE}"
+        "-DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/../../../../third-party/patches/mlx-0.32.4-jit-sdpa-dsplit-template-arity.patch"
+        -P "${CMAKE_CURRENT_LIST_DIR}/apply_patch_if_needed.cmake"
+        COMMAND "${CMAKE_COMMAND}"
+        "-DPATCH_EXECUTABLE=${PATCH_EXECUTABLE}"
+        "-DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/../../../../third-party/patches/mlx-0.32.4-astronomical-active-memory-ceiling.patch"
+        -P "${CMAKE_CURRENT_LIST_DIR}/apply_patch_if_needed.cmake"
+        COMMAND "${CMAKE_COMMAND}"
+        "-DPATCH_EXECUTABLE=${PATCH_EXECUTABLE}"
+        "-DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/../../../../third-party/patches/mlx-0.32.4-streaming-safetensors-writer.patch"
+        -P "${CMAKE_CURRENT_LIST_DIR}/apply_patch_if_needed.cmake"
+)
+# The pinned mlx-c v0.8.0 release pairs with the pinned MLX v0.32.4, so no version-gap
+# bridge is needed. The one patch adds mlx_array_detach, which the C API does not offer.
+FetchContent_Declare(
+    mlx_c
+    URL "${ASTRONOMICAL_MLX_C_SOURCE_ARCHIVE}"
+    URL_HASH "SHA256=${ASTRONOMICAL_MLX_C_SOURCE_ARCHIVE_SHA256}"
+    PATCH_COMMAND
+        "${CMAKE_COMMAND}"
+        "-DPATCH_EXECUTABLE=${PATCH_EXECUTABLE}"
+        "-DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/../../../../third-party/patches/mlx-c-0.8.0-expose-array-detach.patch"
+        -P "${CMAKE_CURRENT_LIST_DIR}/apply_patch_if_needed.cmake"
+)
+
+FetchContent_MakeAvailable(metal_cpp json fmt mlx mlx_c)
+
+if(NOT TARGET mlx OR NOT TARGET mlxc)
+    message(FATAL_ERROR "Pinned archives did not define the expected mlx and mlxc targets")
+endif()
+
+if(ASTRONOMICAL_BUILD_MEMORY_CONTRACT_PROBE)
+    # The probe measures the Metal allocator through Mach and MLX's Metal
+    # headers, so it cannot exist without Metal. Failing at configure time
+    # spares a full MLX compile that would only fail at the probe.
+    if(NOT ASTRONOMICAL_MLX_BUILD_METAL)
+        message(FATAL_ERROR "The MLX memory contract probe measures the Metal allocator and builds on macOS only")
+    endif()
+    add_executable(
+        mlx_memory_contract_probe
+        EXCLUDE_FROM_ALL
+        tests/mlx_memory_contract_probe.cpp
+    )
+    target_compile_features(mlx_memory_contract_probe PRIVATE cxx_std_20)
+    target_link_libraries(mlx_memory_contract_probe PRIVATE mlx)
+    set_target_properties(
+        mlx_memory_contract_probe
+        PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+endif()

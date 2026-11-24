@@ -1,0 +1,47 @@
+[package]
+name = "image-generation"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+# The test lanes this package runs in. `cargo xtask lane-cargo` builds each
+# lane's command from these declarations (issue #2473, Step 6), so no alias
+# lists packages by hand; an empty list says the package is in no lane.
+[package.metadata.astronomical]
+test-lanes = ["integration", "integration-and-rest", "nextest", "direct-mlx"]
+direct-mlx-lane-feature = "direct-mlx"
+
+[lints]
+workspace = true
+
+[features]
+default = []
+direct-mlx = ["dep:runtime-integration", "dep:mlx-bridge", "model-primitives/direct-mlx", "artifact-validation/direct-mlx"]
+
+# The image generation families (FLUX.2 klein, Qwen-Image-2.1) and the
+# worker-facing seam they implement (issue #2340). One-way edge: nothing here
+# may depend on model-serving; `cargo xtask check-architecture`
+# enforces it.
+[dependencies]
+artifact-validation = { path = "../../../foundation/artifact-validation" }
+model-primitives = { path = "../../../engine/model-primitives" }
+ipc-protocol = { path = "../../../contracts/ipc-protocol" }
+memory-policy = { path = "../../../foundation/memory-policy" }
+runtime-integration = { path = "../../../foundation/runtime-integration", features = ["mlx"], optional = true }
+mlx-bridge = { workspace = true, optional = true }
+image.workspace = true
+safetensors.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokenizers.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+test-harness = { path = "../../../foundation/test-harness", features = ["test-fixtures"] }
+# The GPU tests sample the process-global MLX allocator, so they serialize.
+serial_test.workspace = true
+tempfile = "=3.27.0"

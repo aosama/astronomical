@@ -31,25 +31,25 @@ const ZERO_GIT_SHA: &str = "0000000000000000000000000000000000000000";
 /// toolchain (it participates in the full hosted toolchain environment). Kept
 /// in sync with the identity policy in `native-identity`.
 const NATIVE_INPUT_PATHSPECS: &[&str] = &[
-    "crates/runtime-integration/build.rs",
+    "crates/foundation/runtime-integration/build.rs",
     // Kept for transition classification: the path matches the bridge
     // deletion itself, so it keeps the crate's former in-repo name
     // (mlx-c-rust); the live build script now lives in the published
     // mlx-bridge crate outside this repository.
     "crates/mlx-c-rust/build.rs",
-    "crates/native-build-orchestration/src/native_linking.rs",
-    "crates/native-build-orchestration/src/native_store.rs",
-    "crates/native-build-orchestration/src/native_store/manifest.rs",
-    "crates/native-build-orchestration/src/native_compile.rs",
+    "crates/foundation/native-build-orchestration/src/native_linking.rs",
+    "crates/foundation/native-build-orchestration/src/native_store.rs",
+    "crates/foundation/native-build-orchestration/src/native_store/manifest.rs",
+    "crates/foundation/native-build-orchestration/src/native_compile.rs",
     // The platform module holds both platforms' configure arguments and
     // store products, and the directives module the whole link line; the
     // build slot decides where CMake compiles. Each changes the native build.
-    "crates/native-build-orchestration/src/native_host_platform.rs",
-    "crates/native-build-orchestration/src/native_link_directives.rs",
-    "crates/native-build-orchestration/src/native_store/build_slot.rs",
-    "crates/native-build-orchestration/src/native-build-store-schema-version",
-    "crates/runtime-integration/native",
-    "crates/native-identity/src",
+    "crates/foundation/native-build-orchestration/src/native_host_platform.rs",
+    "crates/foundation/native-build-orchestration/src/native_link_directives.rs",
+    "crates/foundation/native-build-orchestration/src/native_store/build_slot.rs",
+    "crates/foundation/native-build-orchestration/src/native-build-store-schema-version",
+    "crates/foundation/runtime-integration/native",
+    "crates/foundation/native-identity/src",
     "third-party/native-dependency-manifest.cmake",
     "third-party/pins",
     "third-party/patches",

@@ -6,6 +6,8 @@
 //! subset of this module, so unused members are expected per binary.
 #![allow(dead_code)]
 
+pub(crate) mod package_manifests;
+
 use serde_yaml::Value;
 use std::path::{Path, PathBuf};
 

@@ -1,0 +1,64 @@
+[package]
+name = "quantization"
+description = "Sensitivity-driven mixed-precision affine quantization for MLX artifacts, a Rust port of the OptiQ quantization core"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+# One explicit integration test binary: unit tests live beside their source as
+# `*_tests.rs` modules inside `src/`, and the integration journeys
+# stay under tests/integration/ behind tests/integration_tests.rs. `autotests = false`
+# keeps stray .rs files under tests/ from auto-discovering as extra binaries.
+autotests = false
+
+# The test lanes this package runs in. `cargo xtask lane-cargo` builds each
+# lane's command from these declarations (issue #2473, Step 6), so no alias
+# lists packages by hand; an empty list says the package is in no lane.
+[package.metadata.astronomical]
+test-lanes = ["integration", "integration-and-rest", "nextest"]
+
+[lints]
+workspace = true
+
+[features]
+default = []
+# The GPU world: the range-search affine encoder, the shard-wise requantizer,
+# and the KL divergence math all run through MLX. Everything else in the crate
+# (module taxonomy, the knapsack allocator, the static structural scorer,
+# calibration loading, artifact schemas, the roofline latency model, the astro
+# decoder state cache allocator, and the sensitivity sweep driver) is pure Rust so it
+# compiles, unit-tests, and runs on any host, including the CLI's `plan`
+# sub-verb.
+direct-mlx = ["dep:mlx-bridge", "dep:runtime-integration"]
+
+[dependencies]
+mlx-bridge = { workspace = true, optional = true }
+runtime-integration = { path = "../../foundation/runtime-integration", features = ["mlx"], optional = true }
+minijinja.workspace = true
+safetensors.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokenizers.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+tempfile = "=3.27.0"
+# Peak MLX memory is process-global; the requantizer's bounded-memory
+# contract runs serially against the other direct-MLX contracts.
+serial_test.workspace = true
+
+[[test]]
+name = "integration_tests"
+path = "tests/integration_tests.rs"
+
+# GPU contract tests for the encoder and the shard-wise requantizer. They need
+# a Metal device, so they only exist in the direct-MLX feature world and run
+# in parallel through the `cargo test-quantization-direct-mlx` alias.
+[[test]]
+name = "direct_mlx"
+path = "tests/direct_mlx.rs"
+required-features = ["direct-mlx"]

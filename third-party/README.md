@@ -56,7 +56,7 @@ Astronomical-facing pins carry no version gap and need no compatibility bridge.
 ## Patch registry
 
 Patches apply in the order declared by the `PATCH_COMMAND` list in
-`crates/runtime-integration/native/CMakeLists.txt`, each through
+`crates/foundation/runtime-integration/native/CMakeLists.txt`, each through
 `apply_patch_if_needed.cmake`, which fails the configure loudly when a patch
 no longer applies to the pinned archive. Every patch below is reviewed at
 each pin bump and retired the moment the pinned upstream tree contains the
@@ -127,7 +127,7 @@ MLX-C patches (`mlx-c-0.8.0-*.patch`):
    verifies it against the pinned SHA-256, and provisions the platform cache
    directory. The Astronomical build itself never fetches source.
 3. At every CMake configure,
-   `crates/runtime-integration/native/CMakeLists.txt` re-verifies each
+   `crates/foundation/runtime-integration/native/CMakeLists.txt` re-verifies each
    archive digest through `require_pinned_archive()` before extraction, so a
    tampered or truncated cache fails the build, not the model.
 4. `FetchContent_Declare` consumes only the verified local archive with
@@ -164,7 +164,7 @@ To bump a pinned dependency:
    `mlx-bridge` dependency to the release matching the new pin, reconcile
    call sites against its surface, and check the fork delta: the pinned
    patch set adds exactly one C symbol (`mlx_array_detach`, owned by
-   `crates/mlx-c-fork`); a new patch that adds more symbols must extend
+   `crates/foundation/mlx-c-fork`); a new patch that adds more symbols must extend
    that crate and its `FORK_BRIDGED_FUNCTIONS`. The coverage contract
    (run by `cargo xtask mlx-c-coverage-inventory`) fails on any
    unbridged, stale, or unjustified symbol across both crates. Before the
@@ -204,9 +204,9 @@ owns the
 raw bindgen declarations over its vendored stock headers, the
 captured-error translation, the owned handle types, the per-worker bindings
 context, and every operation wrapper family; it never invokes CMake.
-`crates/mlx-c-fork` owns the Astronomical patch delta over that stock
+`crates/foundation/mlx-c-fork` owns the Astronomical patch delta over that stock
 surface — today the single `mlx_array_detach` symbol.
-`crates/runtime-integration` owns the Astronomical policy over that
+`crates/foundation/runtime-integration` owns the Astronomical policy over that
 boundary — memory-limit enforcement, metallib resolution and verification,
 the safetensors vtable policies, and native build orchestration — and links
 both bridge crates against the pinned patched native image.

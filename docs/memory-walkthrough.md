@@ -4,8 +4,8 @@ This page follows one chat request through Astronomical's memory management, for
 
 ## Who decides what
 
-- **The memory governor** (`crates/memory-policy/src/ledger/governor.rs`) owns the limit. It keeps a ledger with one account per use of memory: the model's fixed weights, the conversation's stored state, the MLX working buffers one step needs, the slots for weights being read, any leases, and a margin of 2%. What is left is the **capacity**: how many bytes of weights may be kept in memory. Nothing sets the capacity. It is always the remainder.
-- **The engine** (`crates/qwen35/src/qwen3_5_streaming/model/memory_governance.rs`) tells the governor what happens and applies the capacity each answer carries, in one function, `apply_kept_weight_capacity`. For a model with experts that function sets the astro expert cache's one capacity. For a dense model it gives trailing kept layers back.
+- **The memory governor** (`crates/foundation/memory-policy/src/ledger/governor.rs`) owns the limit. It keeps a ledger with one account per use of memory: the model's fixed weights, the conversation's stored state, the MLX working buffers one step needs, the slots for weights being read, any leases, and a margin of 2%. What is left is the **capacity**: how many bytes of weights may be kept in memory. Nothing sets the capacity. It is always the remainder.
+- **The engine** (`crates/families/text/qwen35/src/qwen3_5_streaming/model/memory_governance.rs`) tells the governor what happens and applies the capacity each answer carries, in one function, `apply_kept_weight_capacity`. For a model with experts that function sets the astro expert cache's one capacity. For a dense model it gives trailing kept layers back.
 - **The astro expert cache** keeps experts up to its capacity and gives back, in its own order, whatever no longer fits. Nothing else limits or empties it.
 
 ## When the model loads
@@ -56,7 +56,7 @@ A measurement the limit cannot hold does not fail the load. The phase stays unme
 
 ## The in-memory engine
 
-A model that fits is served by the in-memory engine (`crates/qwen35/src/qwen3_5_resident`), which keeps every weight. Its governor's ledger has every weight as fixed and nothing to stream, so the capacity plays no part and there is nothing to give back.
+A model that fits is served by the in-memory engine (`crates/families/text/qwen35/src/qwen3_5_resident`), which keeps every weight. Its governor's ledger has every weight as fixed and nothing to stream, so the capacity plays no part and there is nothing to give back.
 
 - At load it runs one prompt chunk of the serving size and one reply token and records what each needed.
 - Before each forward it asks the governor one question: do the weights, the stored state after this forward, the forward's MLX working buffers and the margin fit the limit? (`inference_execution/memory_governance/forward_memory.rs`)
@@ -65,6 +65,6 @@ A model that fits is served by the in-memory engine (`crates/qwen35/src/qwen3_5_
 
 ## Where the rules are tested
 
-- The ledger is plain arithmetic, so whole requests are replayed against it without a model or a GPU in `crates/memory-policy/src/simulation`. Each real memory incident is one named scenario there, and they run on every commit.
+- The ledger is plain arithmetic, so whole requests are replayed against it without a model or a GPU in `crates/foundation/memory-policy/src/simulation`. Each real memory incident is one named scenario there, and they run on every commit.
 - Streamed and in-memory serving are compared token for token by `cargo test-paged-resident-parity`, including a question where one span is failed on purpose and run again.
 - The journeys under `verification/acceptance/tests/expert_paging/journeys` each assert one outcome a person would notice, on real models.

@@ -1,49 +1,37 @@
 [workspace]
 # Every crate under these folders is a member, so a new crate needs no edit
-# here (issue #2473, Step 7). `exclude` names the folders under them that hold
-# no crate: the two Swift apps and the shell tooling contracts.
-members = ["apps/*", "crates/*", "verification/*", "xtask"]
+# here (issue #2473, Step 7). Crates sit in one folder per layer, and family
+# crates one folder deeper, per kind; docs/development.md describes them.
+# `exclude` names the folders under them that hold no crate: the two Swift
+# apps and the shell tooling contracts.
+members = [
+    "apps/*",
+    "crates/contracts/*",
+    "crates/foundation/*",
+    "crates/engine/*",
+    "crates/hardware/*",
+    "crates/families/*/*",
+    "crates/weight-formats/*",
+    "crates/tooling/*",
+    "verification/*",
+    "xtask",
+]
 exclude = ["apps/astronomical-menu", "apps/thin-talk", "verification/tooling_contracts"]
-# Every member except the two Neural Engine crates, whose hardware journeys run
-# only by hand and in their own CI lane. Globs here would take them in too;
-# this list becomes globs once Step 7 gives each layer its own folder.
+# Every member except the Neural Engine crates, whose hardware journeys run
+# only by hand and in their own CI lane, which is why `crates/hardware/` and
+# `verification/neural-engine` are left out of these globs.
 default-members = [
-    "crates/mlx-c-fork",
     "apps/astronomical-cli",
-    "apps/inference-worker",
     "apps/daemon",
-    "crates/config",
-    "crates/decision-contract",
-    "crates/decision-training",
-    "crates/ipc-protocol",
-    "crates/lowercase-hex",
-    "crates/download-catalog",
-    "crates/english-number-words",
-    "crates/english-phonemes",
-    "crates/speech-contract",
-    "crates/speech",
-    "crates/artifact-validation",
-    "crates/image-generation",
-    "crates/engine-core",
-    "crates/qwen35",
-    "crates/qwen35-quantization-probe",
-    "crates/decision-models",
-    "crates/model-primitives",
-    "crates/model-serving",
-    "crates/memory-policy",
-    "crates/expert-atlas",
-    "crates/expert-record-reader",
-    "crates/jangtq2-qwen35",
-    "crates/native-build-orchestration",
-    "crates/native-build-tool",
-    "crates/native-identity",
-    "crates/quantization",
-    "crates/rest-contract",
-    "crates/test-harness",
-    "crates/runtime-integration",
-    "crates/vision-tower",
-    "verification/e2e",
+    "apps/inference-worker",
+    "crates/contracts/*",
+    "crates/foundation/*",
+    "crates/engine/*",
+    "crates/families/*/*",
+    "crates/weight-formats/*",
+    "crates/tooling/*",
     "verification/acceptance",
+    "verification/e2e",
     "xtask",
 ]
 resolver = "3"

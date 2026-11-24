@@ -2,7 +2,7 @@
 //! projection are swapped, forwarded, and restored like any other module.
 //!
 //! The journeys take as `model_directory` the tied synthetic checkpoint
-//! `crates/quantization/tests/fixtures/build_optiq_synthetic_moe_source.py`
+//! `crates/tooling/quantization/tests/fixtures/build_optiq_synthetic_moe_source.py`
 //! writes (a few megabytes of random weights in an original release's
 //! layout, with fused expert tensors), and as `reference_artifact_path`
 //! what `build_optiq_reference_artifacts.py --reference uniform_4bit

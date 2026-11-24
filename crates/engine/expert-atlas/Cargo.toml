@@ -1,0 +1,29 @@
+[package]
+name = "expert-atlas"
+description = "The Expert Atlas model format: an expert-major re-layout of a mixture-of-experts checkpoint, its conversion, and its manifest."
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+# The test lanes this package runs in. `cargo xtask lane-cargo` builds each
+# lane's command from these declarations (issue #2473, Step 6), so no alias
+# lists packages by hand; an empty list says the package is in no lane.
+[package.metadata.astronomical]
+test-lanes = ["integration", "integration-and-rest", "nextest"]
+
+[lints]
+workspace = true
+
+[dependencies]
+lowercase-hex = { path = "../../foundation/lowercase-hex" }
+libc.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+tempfile = "=3.27.0"

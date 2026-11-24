@@ -15,8 +15,8 @@ Every cache and memory area in Astronomical has one formal name, and the prefix 
 
 A sparse model routes every token to a few experts in every layer. When the whole model does not fit under the memory limit, the experts that are not in memory are read from storage. The `astro_expert_cache` is the set of experts held in memory: one table per layer, with a capacity the memory governor sets.
 
-- In the engine it is the type `AstroExpertCache` (`crates/qwen35/src/qwen3_5_streaming/expert_streaming/astro_expert_cache.rs`).
-- Its arithmetic model, replayed against recorded replies without a GPU, is `astro_expert_cache_model` in `crates/memory-policy`.
+- In the engine it is the type `AstroExpertCache` (`crates/families/text/qwen35/src/qwen3_5_streaming/expert_streaming/astro_expert_cache.rs`).
+- Its arithmetic model, replayed against recorded replies without a GPU, is `astro_expert_cache_model` in `crates/foundation/memory-policy`.
 - To the memory ledger it is the kept weights of a sparse model: `kept_weight_capacity_bytes` is the capacity it is given. A dense model keeps whole layers under the same account and has no `astro_expert_cache`.
 - Older code calls an expert held in it kept, retained, resident, warm or hot. All five mean the same thing: the expert is in the `astro_expert_cache`.
 
@@ -24,7 +24,7 @@ A sparse model routes every token to a few experts in every layer. When the whol
 
 The memory one step needs while it runs: activations, intermediate results and the outputs it is producing. MLX counts these as part of its active memory, together with the model's weights.
 
-- Measured, never estimated: the peak MLX reports for one layer step, less what was held when the step began and less the weights the step had in hand (`crates/memory-policy/src/ledger/mlx_working_buffers.rs`).
+- Measured, never estimated: the peak MLX reports for one layer step, less what was held when the step began and less the weights the step had in hand (`crates/foundation/memory-policy/src/ledger/mlx_working_buffers.rs`).
 - Reading a prompt needs far more than writing a reply, because a prompt step handles a whole span of tokens and a reply step handles one.
 - The memory ledger sets them aside as the account `mlx_working_buffer_bytes`.
 

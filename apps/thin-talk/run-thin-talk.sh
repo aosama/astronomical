@@ -25,7 +25,7 @@ if [ "$#" -gt 0 ]; then
 fi
 
 # These mirror the daemon's Development constants in
-# crates/config/src/astronomical_runtime_instance.rs; keep them in sync.
+# crates/foundation/config/src/astronomical_runtime_instance.rs; keep them in sync.
 APPLICATION_CHANNEL="development"
 bundle_name="Thin Talk Development"
 bundle_identifier="dev.astronomical.thin-talk.development"

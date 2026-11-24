@@ -24,7 +24,7 @@ const PROGRESS_POLL_INTERVAL: Duration = Duration::from_millis(250);
 pub fn run(repository_root: &Path, arguments: &[String]) -> Result<(), String> {
     let native_build_profiles = parse_profiles(arguments)?;
     if !repository_root
-        .join("crates/runtime-integration/native")
+        .join("crates/foundation/runtime-integration/native")
         .is_dir()
     {
         return Err(format!(
