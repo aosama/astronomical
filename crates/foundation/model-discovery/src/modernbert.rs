@@ -17,7 +17,7 @@ pub(super) struct ModernBertDiscoveredModelMetadata {
 }
 
 /// Recognizes the MLX-converted ModernBERT embedding model type.
-pub(super) fn recognizes_model_type(model_type: Option<&str>) -> bool {
+pub fn recognizes_model_type(model_type: Option<&str>) -> bool {
     matches!(model_type, Some("modernbert"))
 }
 

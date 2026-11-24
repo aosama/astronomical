@@ -137,16 +137,16 @@ Every Rust crate sits in a folder named for its role. `cargo xtask check-archite
 - no crate under `crates/families/`, nor `engine-core`, `model-primitives`, `artifact-validation` or the `jangtq2-qwen35` weight format, depends on `model-serving`, the worker's serving loop;
 - no family crate depends on another family of its kind. The family rules are read from the folders, not from a list of names, so a new family crate is held to them without editing the checker;
 - `engine-core` never depends on the `qwen35` family;
-- `memory-policy` and `model-discovery` stay free of the MLX bindings;
+- `memory-policy`, `model-discovery` and `model-family-registry` stay free of the MLX bindings;
 - `qwen35` never depends on `quantization`.
 
 | Folder | What lives there |
 |---|---|
 | `crates/contracts/` | The messages programs exchange: the REST API types, the daemon-to-worker protocol, and the speech and decision request shapes. No model code and no MLX. |
-| `crates/foundation/` | What everything builds on: settings (`config`), model discovery (`model-discovery`, which `config` reads and the daemon uses without ever linking MLX), memory policy, the one place that talks to MLX (`runtime-integration`), the MLX bindings, artifact checks, the native build tooling, the English text tools speech reads, and shared test fixtures (`test-harness`). |
+| `crates/foundation/` | What everything builds on: settings (`config`), model discovery (`model-discovery`: the rules every family shares, naming no family, never linking MLX), memory policy, the one place that talks to MLX (`runtime-integration`), the MLX bindings, artifact checks, the native build tooling, the English text tools speech reads, and shared test fixtures (`test-harness`). |
 | `crates/engine/` | The machinery every model family shares: the engine contract and owner thread, the `astro_ssd_prompt_cache`, speculative decoding and expert paging (`engine-core`), the shared model building blocks (`model-primitives`), expert placement records, and the worker's serving loop (`model-serving`). |
 | `crates/hardware/` | The Neural Engine crate. Its hardware journeys run only by hand and in their own CI lane, so it is left out of the default build. |
-| `crates/families/<kind>/` | The model families, one folder per kind: `text`, `image`, `speech` and `decision`. Each kind has a shell crate holding what its families share (`speech/speech`, `image/image-generation`, `decision/decision-models`), and each family gets a crate of its own beside it, as `speech/kokoro`, `image/flux2-klein` and `decision/laya` do. A building block two families share, such as the ModernBERT trunk under Laya and the ModernBERT embedding family, lives in the shell. A family crate depends on its shell, and a shell depends on no crate of its kind folder; that is how the checker tells them apart. A family crate holds only what makes its family different. |
+| `crates/families/<kind>/` | The model families, one folder per kind: `text`, `image`, `speech` and `decision`. Each kind has a shell crate holding what its families share (`speech/speech`, `image/image-generation`, `decision/decision-models`), and each family gets a crate of its own beside it, as `speech/kokoro`, `image/flux2-klein` and `decision/laya` do. A building block two families share, such as the ModernBERT trunk under Laya and the ModernBERT embedding family, lives in the shell. A family crate depends on its shell, and a shell depends on no crate of its kind folder; that is how the checker tells them apart. A family crate holds only what makes its family different. Beside the kind folders, `registry/model-family-registry` lists every family discovery recognizes, in classification order, and offers discovery with that list passed in; `config` and the daemon discover through it. |
 | `crates/weight-formats/` | Weight formats more than one crate reads. A format only one family uses lives inside that family. |
 | `crates/tooling/` | Tools around the models rather than inside them: quantization and its probe, the vision tower, the download catalog, and decision-head training. |
 | `apps/` | The programs: the daemon, the inference worker, the command line, and the two macOS apps (the menu-bar agent and the chat app). |
@@ -158,8 +158,8 @@ The root `Cargo.toml` lists these folders by glob, so a new crate in any of them
 **Adding a model family.** A family needs code in four places today:
 1. Its engine, in a crate of its own beside its kind's shell under `crates/families/<kind>/` (the text kind still holds its families in one crate).
 2. Its discovery module in `crates/foundation/model-discovery/src/`, which declares the family's constant and its recognizers.
-3. One entry in the family registry (`model_family_registry.rs` beside it).
-4. One builder and one table line in the worker's `family_runtime_builders.rs`.
+3. One entry in the family list (`crates/families/registry/model-family-registry/src/registered_model_families.rs`).
+4. One line in the worker's `family_runtime_builders.rs` table; a chat, image or embedding family also adds a builder there.
 
 Its catalog entries go in `registry/download_catalog.json`. No list of families needs editing anywhere else. Issue #2473 tracks folding steps 2 to 4 into the family's own crate and a single registry line.
 

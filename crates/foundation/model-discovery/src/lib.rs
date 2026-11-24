@@ -16,37 +16,41 @@ use thiserror::Error;
 
 const MAXIMUM_PUBLIC_DISCOVERY_DIAGNOSTICS: usize = 32;
 
-mod artifact_discovery;
+// The family modules and their recognizers are public only so the family
+// list in `model-family-registry` can name them. Each moves into its own
+// family's folder in the next part of issue #2473, Step 5, and leaves this
+// crate naming no family.
+pub mod artifact_discovery;
 mod bounded_artifact_file;
 mod classified_artifacts;
-mod clef;
+pub mod clef;
 mod effective_models;
-mod flux2_klein;
+pub mod flux2_klein;
 mod flux2_klein_documents;
-mod flux2_klein_mlx_4bit;
-mod kev;
-mod kokoro;
-mod laya;
+pub mod flux2_klein_mlx_4bit;
+pub mod kev;
+pub mod kokoro;
+pub mod laya;
 mod marked_decision_folder;
 mod model_card_front_matter;
 mod model_discovery_huggingface_hub_cache;
 mod model_family_classification;
 mod model_family_description;
-mod model_family_registry;
+pub mod model_family_registry;
 mod model_folder_placement;
 mod model_identity;
 #[cfg(test)]
 #[path = "model_identity_tests.rs"]
 mod model_identity_tests;
-mod modernbert;
-mod phonon;
-mod prism_hadamard_qwen35;
-mod qwen3_5;
-mod qwen_image_21;
+pub mod modernbert;
+pub mod phonon;
+pub mod prism_hadamard_qwen35;
+pub mod qwen3_5;
+pub mod qwen_image_21;
 mod qwen_image_21_documents;
 mod speech_voices;
 
-pub(crate) use artifact_discovery::{try_discover_model, try_discover_model_with_id};
+pub use artifact_discovery::{try_discover_model, try_discover_model_with_id};
 pub use classified_artifacts::{
     ClassifiedModelArtifact, discover_classified_model_artifacts, requestable_model_id,
 };
@@ -71,7 +75,12 @@ pub use model_family_classification::{
     ModelFamilyClassificationError, classify_mflux_transformer_index_bytes,
     classify_model_directory, classify_pipeline_index_bytes,
 };
+pub use model_family_description::{
+    BundledModelDiscoverer, DirectoryRecognizer, ModelDiscoverer, ModelTypeRecognizer,
+    PipelineIndexRecognizer,
+};
 pub use model_family_description::{ModelFamily, ModelFamilyDescription, ModelKind};
+pub use model_family_registry::ModelFamilyRegistry;
 pub use model_folder_placement::is_discoverable_model_folder;
 pub use model_identity::{
     configured_model_id_for, decode_huggingface_hub_cache_directory_name, leaf_model_id,
@@ -360,14 +369,16 @@ pub struct ModelDiscoveryReport {
 /// Scan errors for individual directories are logged and skipped — the
 /// function returns all successfully discovered models.
 pub fn discover_models(
+    model_family_registry: &ModelFamilyRegistry,
     model_directories: &[PathBuf],
 ) -> Result<Vec<ModelDiscoveryDirectoryScan>, DiscoveredModelError> {
     let mut directory_scans = Vec::with_capacity(model_directories.len());
     for directory_path in model_directories {
-        let discovered_models = match scan_directory_for_executable_models(directory_path)? {
-            ScannedModelRoot::Available(discovered_models) => discovered_models,
-            ScannedModelRoot::Unavailable => Vec::new(),
-        };
+        let discovered_models =
+            match scan_directory_for_executable_models(model_family_registry, directory_path)? {
+                ScannedModelRoot::Available(discovered_models) => discovered_models,
+                ScannedModelRoot::Unavailable => Vec::new(),
+            };
         directory_scans.push(ModelDiscoveryDirectoryScan {
             path: directory_path.clone(),
             discovered_models,
@@ -379,6 +390,7 @@ pub fn discover_models(
 
 /// Preserves available models while excluding identities found beneath multiple authored roots.
 pub fn discover_models_excluding_ambiguous_identities(
+    model_family_registry: &ModelFamilyRegistry,
     model_directories: &[PathBuf],
 ) -> Result<ModelDiscoveryReport, DiscoveredModelError> {
     let mut directory_scans = Vec::with_capacity(model_directories.len());
@@ -386,7 +398,7 @@ pub fn discover_models_excluding_ambiguous_identities(
     let mut diagnostics = Vec::new();
     for (root_index, directory_path) in model_directories.iter().enumerate() {
         let discovered_models = if scanned_directories.insert(directory_path.clone()) {
-            match scan_directory_for_executable_models(directory_path)? {
+            match scan_directory_for_executable_models(model_family_registry, directory_path)? {
                 ScannedModelRoot::Available(discovered_models) => discovered_models,
                 ScannedModelRoot::Unavailable => {
                     if diagnostics.len() < MAXIMUM_PUBLIC_DISCOVERY_DIAGNOSTICS {
@@ -448,10 +460,16 @@ pub fn discover_models_excluding_ambiguous_identities(
 /// `hub/models--org--model/snapshots/abc123/` and `models/Org-Model-OptiQ-4bit/`).
 /// Each family root is classified before family-owned executable validation.
 fn scan_directory_for_executable_models(
+    model_family_registry: &ModelFamilyRegistry,
     root_directory: &Path,
 ) -> Result<ScannedModelRoot, DiscoveredModelError> {
     let mut discovered_models = Vec::new();
-    match scan_directory_recursive(root_directory, 0, &mut discovered_models) {
+    match scan_directory_recursive(
+        model_family_registry,
+        root_directory,
+        0,
+        &mut discovered_models,
+    ) {
         Ok(()) => Ok(ScannedModelRoot::Available(discovered_models)),
         Err(DiscoveredModelError::ReadDirectory { .. }) => Ok(ScannedModelRoot::Unavailable),
         Err(error) => Err(error),
@@ -463,6 +481,7 @@ fn scan_directory_for_executable_models(
 pub(crate) const MAXIMUM_MODEL_SCAN_DEPTH: usize = 4;
 
 fn scan_directory_recursive(
+    model_family_registry: &ModelFamilyRegistry,
     current_directory: &Path,
     depth: usize,
     discovered_models: &mut Vec<DiscoveredModel>,
@@ -483,10 +502,12 @@ fn scan_directory_recursive(
             )
     {
         if let Some(discovered_model) = try_discover_model_with_id(
+            model_family_registry,
             &huggingface_hub_cache_entry.snapshot_directory,
             &huggingface_hub_cache_entry.model_id,
         ) {
             discovered_models.extend(artifact_discovery::discover_bundled_checkpoints(
+                model_family_registry,
                 &discovered_model,
             ));
             discovered_models.push(discovered_model);
@@ -494,11 +515,13 @@ fn scan_directory_recursive(
         return Ok(());
     }
 
-    let is_pipeline_root = model_family_classification::is_pipeline_root(current_directory);
-    if model_family_classification::has_model_root_marker(current_directory)
-        && let Some(discovered_model) = try_discover_model(current_directory)
+    let is_pipeline_root =
+        model_family_classification::is_pipeline_root(model_family_registry, current_directory);
+    if model_family_classification::has_model_root_marker(model_family_registry, current_directory)
+        && let Some(discovered_model) = try_discover_model(model_family_registry, current_directory)
     {
         discovered_models.extend(artifact_discovery::discover_bundled_checkpoints(
+            model_family_registry,
             &discovered_model,
         ));
         discovered_models.push(discovered_model);
@@ -542,7 +565,12 @@ fn scan_directory_recursive(
             {
                 continue;
             }
-            let _ = scan_directory_recursive(&entry_path, depth + 1, discovered_models);
+            let _ = scan_directory_recursive(
+                model_family_registry,
+                &entry_path,
+                depth + 1,
+                discovered_models,
+            );
         }
     }
 

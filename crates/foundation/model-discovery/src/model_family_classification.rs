@@ -9,7 +9,7 @@ use thiserror::Error;
 
 use super::flux2_klein_mlx_4bit;
 use super::model_family_description::ModelFamily;
-use super::model_family_registry::REGISTERED_MODEL_FAMILIES;
+use super::model_family_registry::ModelFamilyRegistry;
 
 const MAXIMUM_FAMILY_CONFIG_BYTES: u64 = 4 * 1024 * 1024;
 const MAXIMUM_PIPELINE_INDEX_BYTES: u64 = 1024 * 1024;
@@ -61,38 +61,24 @@ pub enum ModelFamilyClassificationError {
 /// known by. The order is the download preflight's too: the pipeline index,
 /// then the 4-bit FLUX.2 Klein transformer index, then `config.json`.
 pub fn classify_model_directory(
+    model_family_registry: &ModelFamilyRegistry,
     model_directory: &Path,
 ) -> Result<Option<ModelFamily>, ModelFamilyClassificationError> {
     if model_directory.join("model_index.json").is_file() {
-        return classify_pipeline_directory(model_directory);
+        return classify_pipeline_directory(model_family_registry, model_directory);
     }
-    if let Some(marked_family) = family_marked_by_file(model_directory) {
+    // Marker files come next, for families a `config.json` model type cannot
+    // tell apart: a build whose pipeline index lives elsewhere, a family
+    // whose config is its backbone's, or one whose config has no model type.
+    if let Some(marked_family) = model_family_registry.family_marked_by_file(model_directory) {
         return Ok(Some(marked_family));
     }
-    classify_config_directory(model_directory)
-}
-
-/// The first family, in registry order, whose marker file the folder
-/// carries: the 4-bit FLUX.2 Klein build, whose pipeline index lives under
-/// its transformer; Kev and Clef, whose configs are their Qwen3.5
-/// backbones'; and Kokoro and Phonon, whose configs have no model type.
-fn family_marked_by_file(model_directory: &Path) -> Option<ModelFamily> {
-    REGISTERED_MODEL_FAMILIES
-        .iter()
-        .find(|family_description| family_description.claims_directory(model_directory))
-        .map(|family_description| family_description.model_family)
-}
-
-/// The first family, in registry order, that claims this `model_type`.
-pub(super) fn family_of_model_type(model_type: Option<&str>) -> Option<ModelFamily> {
-    REGISTERED_MODEL_FAMILIES
-        .iter()
-        .find(|family_description| family_description.claims_model_type(model_type))
-        .map(|family_description| family_description.model_family)
+    classify_config_directory(model_family_registry, model_directory)
 }
 
 /// Reads `model_type` from the directory's `config.json`.
 fn classify_config_directory(
+    model_family_registry: &ModelFamilyRegistry,
     model_directory: &Path,
 ) -> Result<Option<ModelFamily>, ModelFamilyClassificationError> {
     let config_path = model_directory.join("config.json");
@@ -134,10 +120,11 @@ fn classify_config_directory(
             model_directory: model_directory.to_path_buf(),
             source,
         })?;
-    Ok(family_of_model_type(config_document.model_type.as_deref()))
+    Ok(model_family_registry.family_of_model_type(config_document.model_type.as_deref()))
 }
 
 fn classify_pipeline_directory(
+    model_family_registry: &ModelFamilyRegistry,
     model_directory: &Path,
 ) -> Result<Option<ModelFamily>, ModelFamilyClassificationError> {
     let pipeline_index_path = model_directory.join("model_index.json");
@@ -174,7 +161,7 @@ fn classify_pipeline_directory(
             maximum_bytes: MAXIMUM_PIPELINE_INDEX_BYTES,
         });
     }
-    classify_pipeline_index_bytes(&pipeline_index_bytes).map_err(|source| {
+    classify_pipeline_index_bytes(model_family_registry, &pipeline_index_bytes).map_err(|source| {
         ModelFamilyClassificationError::ParsePipelineIndex {
             model_directory: model_directory.to_path_buf(),
             source,
@@ -184,15 +171,21 @@ fn classify_pipeline_directory(
 
 /// Whether `directory` is a Diffusers pipeline root, with or without a
 /// pipeline index. Its component folders are never separate models.
-pub(super) fn is_pipeline_root(directory: &Path) -> bool {
+pub(super) fn is_pipeline_root(
+    model_family_registry: &ModelFamilyRegistry,
+    directory: &Path,
+) -> bool {
     directory.join("model_index.json").is_file()
-        || flux2_klein_mlx_4bit::has_build_marker(directory)
+        || model_family_registry.marks_pipeline_root(directory)
 }
 
 /// Whether `directory` carries the file a model family classifies from, so a
 /// scan stops there instead of descending into it.
-pub(super) fn has_model_root_marker(directory: &Path) -> bool {
-    directory.join("config.json").is_file() || is_pipeline_root(directory)
+pub(super) fn has_model_root_marker(
+    model_family_registry: &ModelFamilyRegistry,
+    directory: &Path,
+) -> bool {
+    directory.join("config.json").is_file() || is_pipeline_root(model_family_registry, directory)
 }
 
 /// Classifies an mflux transformer weight index without a file-system read, so
@@ -215,9 +208,10 @@ pub fn classify_mflux_transformer_index_bytes(
 /// # Errors
 /// Returns the pipeline document parse failure verbatim.
 pub fn classify_pipeline_index_bytes(
+    model_family_registry: &ModelFamilyRegistry,
     pipeline_index_bytes: &[u8],
 ) -> Result<Option<ModelFamily>, serde_json::Error> {
-    for family_description in &REGISTERED_MODEL_FAMILIES {
+    for family_description in model_family_registry.descriptions() {
         if family_description.claims_pipeline_index(pipeline_index_bytes)? {
             return Ok(Some(family_description.model_family));
         }

@@ -1,7 +1,8 @@
 use std::collections::HashSet;
 
-use super::{REGISTERED_MODEL_FAMILIES, registered_description_named};
-use crate::{
+use super::REGISTERED_MODEL_FAMILIES;
+use crate::{MODEL_FAMILY_REGISTRY, model_family_named, model_kind_of};
+use model_discovery::{
     CLEF_MODEL_FAMILY, FLUX2_KLEIN_MODEL_FAMILY, KEV_MODEL_FAMILY, KOKORO_MODEL_FAMILY,
     LAYA_MODEL_FAMILY, MODERNBERT_MODEL_FAMILY, ModelFamily, ModelKind, PHONON_MODEL_FAMILY,
     PRISM_HADAMARD_QWEN35_MODEL_FAMILY, QWEN_IMAGE_21_MODEL_FAMILY, QWEN3_5_MODEL_FAMILY,
@@ -39,14 +40,11 @@ fn should_register_every_family_constant_with_its_identifier_and_kind() {
     for (model_family, expected_identifier, expected_kind) in EXPECTED_FAMILY_KINDS {
         assert_eq!(model_family.as_str(), expected_identifier);
         assert_eq!(
-            model_family.kind(),
+            model_kind_of(model_family),
             Some(expected_kind),
             "{expected_identifier}"
         );
-        assert_eq!(
-            ModelFamily::from_identifier(expected_identifier),
-            Some(model_family)
-        );
+        assert_eq!(model_family_named(expected_identifier), Some(model_family));
     }
     assert_eq!(REGISTERED_MODEL_FAMILIES.len(), EXPECTED_FAMILY_KINDS.len());
 }
@@ -78,9 +76,9 @@ fn should_give_every_family_a_way_to_be_recognized() {
 
 #[test]
 fn should_find_no_description_for_an_unregistered_identifier() {
-    assert!(registered_description_named("qwen3_6").is_none());
-    assert_eq!(ModelFamily::from_identifier(""), None);
-    assert_eq!(ModelFamily::named("qwen3_6").kind(), None);
+    assert!(MODEL_FAMILY_REGISTRY.description_named("qwen3_6").is_none());
+    assert_eq!(model_family_named(""), None);
+    assert_eq!(model_kind_of(ModelFamily::named("qwen3_6")), None);
 }
 
 #[test]

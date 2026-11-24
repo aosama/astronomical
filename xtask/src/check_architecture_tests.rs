@@ -28,6 +28,7 @@ fn should_pass_when_no_rule_crate_reaches_the_forbidden_crate() {
     let metadata_json_text = metadata_document_for(&[
         ("memory-policy", vec!["serde_json"], "normal"),
         ("model-discovery", vec!["serde_json"], "normal"),
+        ("model-family-registry", vec!["model-discovery"], "normal"),
         ("mlx-bridge", Vec::new(), "normal"),
         ("mlx-c-fork", Vec::new(), "normal"),
         ("image-generation", vec!["mlx-bridge"], "normal"),
@@ -54,6 +55,7 @@ fn should_detect_a_direct_family_to_serving_dependency() {
     let metadata_json_text = metadata_document_for(&[
         ("memory-policy", vec!["serde_json"], "normal"),
         ("model-discovery", vec!["serde_json"], "normal"),
+        ("model-family-registry", vec!["model-discovery"], "normal"),
         ("mlx-bridge", Vec::new(), "normal"),
         ("mlx-c-fork", Vec::new(), "normal"),
         ("image-generation", vec!["mlx-bridge"], "normal"),
@@ -87,6 +89,7 @@ fn should_detect_a_model_primitives_to_serving_dependency() {
     let metadata_json_text = metadata_document_for(&[
         ("memory-policy", vec!["serde_json"], "normal"),
         ("model-discovery", vec!["serde_json"], "normal"),
+        ("model-family-registry", vec!["model-discovery"], "normal"),
         ("mlx-bridge", Vec::new(), "normal"),
         ("mlx-c-fork", Vec::new(), "normal"),
         ("image-generation", vec!["mlx-bridge"], "normal"),
@@ -120,6 +123,7 @@ fn should_detect_a_artifact_validation_to_serving_dependency() {
     let metadata_json_text = metadata_document_for(&[
         ("memory-policy", vec!["serde_json"], "normal"),
         ("model-discovery", vec!["serde_json"], "normal"),
+        ("model-family-registry", vec!["model-discovery"], "normal"),
         ("mlx-bridge", Vec::new(), "normal"),
         ("mlx-c-fork", Vec::new(), "normal"),
         ("model-primitives", vec!["mlx-bridge"], "normal"),
@@ -150,6 +154,7 @@ fn workspace_metadata_with_engine_core_dependencies(engine_core_dependencies: Ve
     metadata_document_for(&[
         ("memory-policy", vec!["serde_json"], "normal"),
         ("model-discovery", vec!["serde_json"], "normal"),
+        ("model-family-registry", vec!["model-discovery"], "normal"),
         ("mlx-bridge", Vec::new(), "normal"),
         ("mlx-c-fork", Vec::new(), "normal"),
         ("model-primitives", vec!["mlx-bridge"], "normal"),
@@ -201,6 +206,7 @@ fn should_detect_a_qwen35_to_quantizer_dependency() {
     let metadata_json_text = metadata_document_for(&[
         ("memory-policy", vec!["serde_json"], "normal"),
         ("model-discovery", vec!["serde_json"], "normal"),
+        ("model-family-registry", vec!["model-discovery"], "normal"),
         ("mlx-bridge", Vec::new(), "normal"),
         ("mlx-c-fork", Vec::new(), "normal"),
         ("model-primitives", vec!["mlx-bridge"], "normal"),
@@ -231,6 +237,7 @@ fn should_detect_a_direct_forbidden_fork_dependency() {
         ("memory-policy", vec!["mlx-c-fork"], "normal"),
         ("mlx-bridge", Vec::new(), "normal"),
         ("model-discovery", vec!["serde_json"], "normal"),
+        ("model-family-registry", vec!["model-discovery"], "normal"),
         ("mlx-c-fork", Vec::new(), "normal"),
         ("image-generation", vec!["mlx-bridge"], "normal"),
         ("artifact-validation", Vec::new(), "normal"),
@@ -260,6 +267,7 @@ fn should_detect_a_direct_forbidden_dependency() {
         ("memory-policy", vec!["mlx-bridge"], "normal"),
         ("mlx-bridge", Vec::new(), "normal"),
         ("model-discovery", vec!["serde_json"], "normal"),
+        ("model-family-registry", vec!["model-discovery"], "normal"),
         ("mlx-c-fork", Vec::new(), "normal"),
         ("image-generation", vec!["mlx-bridge"], "normal"),
         ("artifact-validation", Vec::new(), "normal"),
@@ -297,6 +305,7 @@ fn should_detect_a_transitive_forbidden_dependency() {
         ),
         ("mlx-bridge", Vec::new(), "normal"),
         ("model-discovery", vec!["serde_json"], "normal"),
+        ("model-family-registry", vec!["model-discovery"], "normal"),
         ("mlx-c-fork", Vec::new(), "normal"),
         ("image-generation", vec!["mlx-bridge"], "normal"),
         ("artifact-validation", Vec::new(), "normal"),
@@ -328,6 +337,7 @@ fn should_count_dev_and_build_dependencies_as_reachability_edges() {
             ("memory-policy", vec!["mlx-bridge"], breach_kind),
             ("mlx-bridge", Vec::new(), "normal"),
             ("model-discovery", vec!["serde_json"], "normal"),
+            ("model-family-registry", vec!["model-discovery"], "normal"),
             ("mlx-c-fork", Vec::new(), "normal"),
             ("image-generation", vec!["mlx-bridge"], "normal"),
             ("artifact-validation", Vec::new(), "normal"),
@@ -394,6 +404,7 @@ fn should_detect_model_discovery_reaching_the_mlx_bindings_through_another_crate
         ("memory-policy", vec!["serde_json"], "normal"),
         ("mlx-bridge", Vec::new(), "normal"),
         ("model-discovery", vec!["expert-atlas"], "normal"),
+        ("model-family-registry", vec!["model-discovery"], "normal"),
         ("expert-atlas", vec!["mlx-bridge"], "normal"),
         ("mlx-c-fork", Vec::new(), "normal"),
         ("image-generation", vec!["mlx-bridge"], "normal"),
@@ -408,13 +419,32 @@ fn should_detect_model_discovery_reaching_the_mlx_bindings_through_another_crate
         ("jangtq2-qwen35", Vec::new(), "normal"),
     ]);
     let violations = architecture_violations(&metadata_json_text).unwrap();
-    assert_eq!(violations.len(), 1);
+    // The family list reaches the bindings through discovery, so both rules
+    // fire, each naming its own chain.
+    let rule_chains: Vec<(&str, Vec<String>)> = violations
+        .iter()
+        .map(|violation| (violation.rule_name, violation.dependency_chain.clone()))
+        .collect();
     assert_eq!(
-        violations[0].rule_name,
-        "model-discovery-without-mlx-bindings"
-    );
-    assert_eq!(
-        violations[0].dependency_chain,
-        vec!["model-discovery", "expert-atlas", "mlx-bridge"]
+        rule_chains,
+        vec![
+            (
+                "model-discovery-without-mlx-bindings",
+                vec![
+                    "model-discovery".to_owned(),
+                    "expert-atlas".to_owned(),
+                    "mlx-bridge".to_owned()
+                ]
+            ),
+            (
+                "model-family-registry-without-mlx-bindings",
+                vec![
+                    "model-family-registry".to_owned(),
+                    "model-discovery".to_owned(),
+                    "expert-atlas".to_owned(),
+                    "mlx-bridge".to_owned()
+                ]
+            ),
+        ]
     );
 }

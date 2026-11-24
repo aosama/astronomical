@@ -28,7 +28,7 @@ const MAXIMUM_CONFIGURATION_BYTES: u64 = 1024 * 1024;
 const MARKER_SECTIONS: [&str; 3] = ["istftnet", "plbert", "vocab"];
 
 /// Whether `model_directory` holds Kokoro weights and its configuration.
-pub(super) fn classifies_directory(model_directory: &Path) -> bool {
+pub fn classifies_directory(model_directory: &Path) -> bool {
     if !model_directory.join(KOKORO_WEIGHTS_FILE_NAME).is_file() {
         return false;
     }

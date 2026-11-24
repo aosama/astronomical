@@ -45,6 +45,14 @@ const FORBIDDEN_DEPENDENCY_RULES: &[ForbiddenDependencyRule] = &[
         forbidden_crate: "mlx-bridge",
         rationale: "model discovery must build without the MLX bindings, because the daemon discovers models through it and never links MLX",
     },
+    // The family list (issue #2473, Step 5) is what the daemon reaches
+    // discovery through, so it stays off the bindings for the same reason.
+    ForbiddenDependencyRule {
+        rule_name: "model-family-registry-without-mlx-bindings",
+        source_crate: "model-family-registry",
+        forbidden_crate: "mlx-bridge",
+        rationale: "the model family list must build without the MLX bindings, because the daemon discovers models through it and never links MLX",
+    },
     ForbiddenDependencyRule {
         rule_name: "policy-without-mlx-fork-bindings",
         source_crate: "memory-policy",

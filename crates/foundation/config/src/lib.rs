@@ -63,7 +63,6 @@ pub use maximum_mlx_memory::{
 pub use model_config_entries::{
     ModelConfigEntryOutcome, ModelConfigEntryReport, SettingsFreeModelKind,
 };
-pub use model_discovery::is_discoverable_model_folder;
 pub use model_discovery::{
     CLEF_MODEL_FAMILY, FLUX2_KLEIN_MODEL_FAMILY, KEV_MODEL_FAMILY, KOKORO_MODEL_FAMILY,
     LAYA_MODEL_FAMILY, MODERNBERT_MODEL_FAMILY, ModelFamilyDescription, ModelKind,
@@ -79,11 +78,8 @@ pub use model_discovery::{
     ModelDiscoveryDiagnosticCode, ModelDiscoveryDirectoryScan, ModelDiscoveryReport, ModelFamily,
     ModelFamilyClassificationError, ModelLicense, QwenImage21DirectoryEvidence,
     QwenImage21DirectoryVerificationError, classify_mflux_transformer_index_bytes,
-    classify_model_directory, classify_pipeline_index_bytes, context_window_tokens,
-    discover_classified_model_artifacts, discover_effective_models, discover_models,
-    discover_models_excluding_ambiguous_identities, requestable_model_id,
-    required_shard_file_names, verify_flux2_klein_model_directory,
-    verify_qwen_image_21_model_directory,
+    context_window_tokens, requestable_model_id, required_shard_file_names,
+    verify_flux2_klein_model_directory, verify_qwen_image_21_model_directory,
 };
 pub use model_discovery::{
     KOKORO_CONFIGURATION_FILE_NAME, KOKORO_VOICES_DIRECTORY_NAME, KOKORO_WEIGHTS_FILE_NAME,
@@ -95,6 +91,12 @@ pub use model_discovery::{
 pub use model_discovery::{
     configured_model_id_for, decode_huggingface_hub_cache_directory_name, leaf_model_id,
     near_model_matches, resolve_model_id,
+};
+// Discovery with the family list passed in (issue #2473, Step 5).
+pub use model_family_registry::{
+    classify_model_directory, classify_pipeline_index_bytes, discover_classified_model_artifacts,
+    discover_effective_models, discover_models, discover_models_excluding_ambiguous_identities,
+    is_discoverable_model_folder, model_family_named, model_family_of_model_type, model_kind_of,
 };
 pub use resolved_model_config::{DEFAULT_MAXIMUM_OUTPUT_TOKENS, ResolvedModelConfig};
 pub use sharing_config::ProblemReportChoice;

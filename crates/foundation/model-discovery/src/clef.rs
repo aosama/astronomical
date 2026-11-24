@@ -22,7 +22,7 @@ const MAXIMUM_SETTINGS_BYTES: u64 = 64 * 1024;
 const CLEF_MAXIMUM_TOKENS_PER_REQUEST: u32 = 16_384;
 
 /// Whether `model_directory` holds a Clef joint head.
-pub(super) fn classifies_directory(model_directory: &Path) -> bool {
+pub fn classifies_directory(model_directory: &Path) -> bool {
     if !model_directory.join(CLEF_HEAD_WEIGHTS_FILE_NAME).is_file() {
         return false;
     }

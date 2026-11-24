@@ -8,6 +8,7 @@
 //! goes, with no hidden folder, Hugging Face cache entry, model folder or
 //! pipeline folder on the way down (the scan never descends into those).
 
+use super::model_family_registry::ModelFamilyRegistry;
 use std::path::{Component, Path};
 
 use super::MAXIMUM_MODEL_SCAN_DEPTH;
@@ -17,7 +18,11 @@ use super::model_family_classification::has_model_root_marker;
 /// `model_folder`. Both paths must be absolute with links resolved, so a
 /// root reached through a symbolic link compares equal; the folder itself
 /// and its missing parents need not exist yet.
-pub fn is_discoverable_model_folder(model_root: &Path, model_folder: &Path) -> bool {
+pub fn is_discoverable_model_folder(
+    model_family_registry: &ModelFamilyRegistry,
+    model_root: &Path,
+    model_folder: &Path,
+) -> bool {
     let Ok(relative_folder) = model_folder.strip_prefix(model_root) else {
         return false;
     };
@@ -41,12 +46,12 @@ pub fn is_discoverable_model_folder(model_root: &Path, model_folder: &Path) -> b
     // must be one it descends into rather than stops at
     // (a model's marker file, pipeline roots included, stops the scan).
     let mut scanned_folder = model_root.to_path_buf();
-    if has_model_root_marker(&scanned_folder) {
+    if has_model_root_marker(model_family_registry, &scanned_folder) {
         return false;
     }
     for folder_name in &folder_names[..folder_names.len() - 1] {
         scanned_folder.push(folder_name.as_ref());
-        if has_model_root_marker(&scanned_folder) {
+        if has_model_root_marker(model_family_registry, &scanned_folder) {
             return false;
         }
     }

@@ -53,7 +53,7 @@ fn should_serve_every_family_with_a_builder_of_its_own_kind() {
             .unwrap_or_else(|| panic!("{} has no builder", model_family.as_str()));
         assert_eq!(
             Some(builder_kind(runtime_builder)),
-            model_family.kind(),
+            config::model_kind_of(model_family),
             "{}",
             model_family.as_str()
         );

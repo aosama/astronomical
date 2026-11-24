@@ -83,9 +83,7 @@ pub enum Flux2KleinDirectoryVerificationError {
     UnsupportedProviderModelId,
 }
 
-pub(super) fn classifies_pipeline_index(
-    pipeline_index_bytes: &[u8],
-) -> Result<bool, serde_json::Error> {
+pub fn classifies_pipeline_index(pipeline_index_bytes: &[u8]) -> Result<bool, serde_json::Error> {
     let pipeline_class: PipelineClass = serde_json::from_slice(pipeline_index_bytes)?;
     if pipeline_class.class_name.as_deref() != Some(PIPELINE_CLASS_NAME) {
         return Ok(false);

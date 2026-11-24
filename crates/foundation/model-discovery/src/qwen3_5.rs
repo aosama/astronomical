@@ -22,7 +22,7 @@ pub(super) struct Qwen3_5DiscoveredModelMetadata {
 }
 
 /// Recognizes every Qwen model type served by the existing runtime.
-pub(super) fn recognizes_model_type(model_type: Option<&str>) -> bool {
+pub fn recognizes_model_type(model_type: Option<&str>) -> bool {
     matches!(
         model_type,
         Some("qwen3_5") | Some("qwen3_5_moe") | Some("qwen3_5_moe_vision")

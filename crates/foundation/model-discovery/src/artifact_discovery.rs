@@ -5,6 +5,7 @@
 //! names the projection below that turns its family-owned metadata into the neutral
 //! DiscoveredModel DTO.
 
+use super::model_family_registry::ModelFamilyRegistry;
 use std::fs;
 use std::path::Path;
 
@@ -20,12 +21,15 @@ use crate::{
     phonon_speech_capabilities,
 };
 
-pub fn try_discover_model(model_directory: &Path) -> Option<DiscoveredModel> {
+pub fn try_discover_model(
+    model_family_registry: &ModelFamilyRegistry,
+    model_directory: &Path,
+) -> Option<DiscoveredModel> {
     let model_id = model_directory
         .file_name()
         .map(|name| name.to_string_lossy().into_owned())
         .unwrap_or_else(|| "unknown".to_owned());
-    try_discover_model_with_id(model_directory, &model_id)
+    try_discover_model_with_id(model_family_registry, model_directory, &model_id)
 }
 
 /// Attempts to discover an executable model from a directory with an explicit model ID.
@@ -34,22 +38,25 @@ pub fn try_discover_model(model_directory: &Path) -> Option<DiscoveredModel> {
 /// where the model_id is derived from the decoded `models--org--repo` directory name
 /// rather than the snapshot hash.
 pub fn try_discover_model_with_id(
+    model_family_registry: &ModelFamilyRegistry,
     model_directory: &Path,
     model_id: &str,
 ) -> Option<DiscoveredModel> {
     // The typed classifier rejects ambiguous duplicate family markers before
     // the looser metadata document can participate in executable discovery.
-    let model_family = model_family_classification::classify_model_directory(model_directory)
-        .ok()
-        .flatten()?;
-    (model_family.description()?.discover_model)(model_directory, model_id)
+    let model_family = model_family_classification::classify_model_directory(
+        model_family_registry,
+        model_directory,
+    )
+    .ok()
+    .flatten()?;
+    (model_family_registry
+        .description_of(model_family)?
+        .discover_model)(model_directory, model_id)
 }
 
 /// Projects a Kokoro folder into the neutral discovery contract.
-pub(super) fn discover_kokoro_model(
-    model_directory: &Path,
-    model_id: &str,
-) -> Option<DiscoveredModel> {
+pub fn discover_kokoro_model(model_directory: &Path, model_id: &str) -> Option<DiscoveredModel> {
     discover_speech_model(
         model_directory,
         model_id,
@@ -59,10 +66,7 @@ pub(super) fn discover_kokoro_model(
 }
 
 /// Projects a Phonon folder into the neutral discovery contract.
-pub(super) fn discover_phonon_model(
-    model_directory: &Path,
-    model_id: &str,
-) -> Option<DiscoveredModel> {
+pub fn discover_phonon_model(model_directory: &Path, model_id: &str) -> Option<DiscoveredModel> {
     discover_speech_model(
         model_directory,
         model_id,
@@ -97,10 +101,7 @@ fn discover_speech_model(
 }
 
 /// Projects a Kev folder into the neutral discovery contract.
-pub(super) fn discover_kev_model(
-    model_directory: &Path,
-    model_id: &str,
-) -> Option<DiscoveredModel> {
+pub fn discover_kev_model(model_directory: &Path, model_id: &str) -> Option<DiscoveredModel> {
     discover_marked_decision_model(
         model_directory,
         model_id,
@@ -110,10 +111,7 @@ pub(super) fn discover_kev_model(
 }
 
 /// Projects a Clef folder into the neutral discovery contract.
-pub(super) fn discover_clef_model(
-    model_directory: &Path,
-    model_id: &str,
-) -> Option<DiscoveredModel> {
+pub fn discover_clef_model(model_directory: &Path, model_id: &str) -> Option<DiscoveredModel> {
     discover_marked_decision_model(
         model_directory,
         model_id,
@@ -167,10 +165,7 @@ fn provenance_or_config_revision(
 }
 
 /// Projects a Qwen3.5 chat directory into the neutral discovery contract.
-pub(super) fn discover_qwen3_5_model(
-    model_directory: &Path,
-    model_id: &str,
-) -> Option<DiscoveredModel> {
+pub fn discover_qwen3_5_model(model_directory: &Path, model_id: &str) -> Option<DiscoveredModel> {
     let config_bytes = fs::read(model_directory.join("config.json")).ok()?;
     let config_value: serde_json::Value = serde_json::from_slice(&config_bytes).ok()?;
     let family_metadata = qwen3_5::discover_model_metadata(model_directory, &config_value)?;
@@ -198,7 +193,7 @@ pub(super) fn discover_qwen3_5_model(
 /// Projects a FLUX.2 Klein image-generation directory into the neutral
 /// discovery contract from its self-verifying evidence. It is served under
 /// the canonical id its evidence verifies, never the folder's name.
-pub(super) fn discover_flux2_klein_model(
+pub fn discover_flux2_klein_model(
     model_directory: &Path,
     _folder_model_id: &str,
 ) -> Option<DiscoveredModel> {
@@ -216,7 +211,7 @@ pub(super) fn discover_flux2_klein_model(
 }
 
 /// Projects a ModernBERT embeddings directory into the neutral discovery contract.
-pub(super) fn discover_modernbert_model(
+pub fn discover_modernbert_model(
     model_directory: &Path,
     model_id: &str,
 ) -> Option<DiscoveredModel> {
@@ -241,10 +236,7 @@ pub(super) fn discover_modernbert_model(
 }
 
 /// Projects a Laya decision-model directory into the neutral discovery contract.
-pub(super) fn discover_laya_model(
-    model_directory: &Path,
-    model_id: &str,
-) -> Option<DiscoveredModel> {
+pub fn discover_laya_model(model_directory: &Path, model_id: &str) -> Option<DiscoveredModel> {
     let config_bytes = fs::read(model_directory.join("config.json")).ok()?;
     let config_value: serde_json::Value = serde_json::from_slice(&config_bytes).ok()?;
     let family_metadata = laya::discover_model_metadata(model_directory, &config_value)?;
@@ -267,21 +259,22 @@ pub(super) fn discover_laya_model(
 /// Discovers the checkpoints a repository bundles in its subfolders, when
 /// its family bundles any. Each becomes a model of its own, named after the
 /// repository and the subfolder.
-pub(super) fn discover_bundled_checkpoints(
+pub fn discover_bundled_checkpoints(
+    model_family_registry: &ModelFamilyRegistry,
     repository_model: &DiscoveredModel,
 ) -> Vec<DiscoveredModel> {
-    let Some(discover_bundled_models) = repository_model
-        .model_family
-        .description()
+    let Some(discover_bundled_models) = model_family_registry
+        .description_of(repository_model.model_family)
         .and_then(|family_description| family_description.discover_bundled_models)
     else {
         return Vec::new();
     };
-    discover_bundled_models(repository_model)
+    discover_bundled_models(model_family_registry, repository_model)
 }
 
 /// The checkpoints a Laya repository bundles, each a model of its own.
-pub(super) fn discover_laya_bundled_checkpoints(
+pub fn discover_laya_bundled_checkpoints(
+    model_family_registry: &ModelFamilyRegistry,
     repository_model: &DiscoveredModel,
 ) -> Vec<DiscoveredModel> {
     let mut bundled_models = Vec::new();
@@ -290,9 +283,11 @@ pub(super) fn discover_laya_bundled_checkpoints(
             &repository_model.model_id,
             &bundled_checkpoint.checkpoint_name,
         );
-        if let Some(bundled_model) =
-            try_discover_model_with_id(&bundled_checkpoint.checkpoint_directory, &bundled_model_id)
-        {
+        if let Some(bundled_model) = try_discover_model_with_id(
+            model_family_registry,
+            &bundled_checkpoint.checkpoint_directory,
+            &bundled_model_id,
+        ) {
             bundled_models.push(bundled_model);
         }
     }
@@ -303,7 +298,7 @@ pub(super) fn discover_laya_bundled_checkpoints(
 /// contract. The vision tower ships inside the pack, but the executable
 /// surface in this phase is text-only, so discovery must not advertise image
 /// input.
-pub(super) fn discover_prism_hadamard_qwen35_model(
+pub fn discover_prism_hadamard_qwen35_model(
     model_directory: &Path,
     model_id: &str,
 ) -> Option<DiscoveredModel> {
@@ -335,7 +330,7 @@ pub(super) fn discover_prism_hadamard_qwen35_model(
 /// Projects a Qwen-Image-2.1 directory into the neutral discovery contract
 /// from its self-verifying evidence. It is served under the canonical id its
 /// evidence verifies, never the folder's name.
-pub(super) fn discover_qwen_image_21_model(
+pub fn discover_qwen_image_21_model(
     model_directory: &Path,
     _folder_model_id: &str,
 ) -> Option<DiscoveredModel> {
