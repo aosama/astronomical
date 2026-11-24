@@ -16,6 +16,10 @@ use thiserror::Error;
 
 const MAXIMUM_PUBLIC_DISCOVERY_DIAGNOSTICS: usize = 32;
 
+// The family modules and their recognizers are public only so the family
+// list in `model-family-registry` can name them. Each moves into its own
+// family's folder in the next part of issue #2473, Step 5, and leaves this
+// crate naming no family.
 pub mod artifact_discovery;
 mod bounded_artifact_file;
 mod classified_artifacts;

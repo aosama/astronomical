@@ -67,10 +67,9 @@ pub fn classify_model_directory(
     if model_directory.join("model_index.json").is_file() {
         return classify_pipeline_directory(model_family_registry, model_directory);
     }
-    // Marker files come next: the 4-bit FLUX.2 Klein build, whose pipeline
-    // index lives under its transformer; Kev and Clef, whose configs are
-    // their Qwen3.5 backbones'; and Kokoro and Phonon, whose configs have no
-    // model type.
+    // Marker files come next, for families a `config.json` model type cannot
+    // tell apart: a build whose pipeline index lives elsewhere, a family
+    // whose config is its backbone's, or one whose config has no model type.
     if let Some(marked_family) = model_family_registry.family_marked_by_file(model_directory) {
         return Ok(Some(marked_family));
     }
