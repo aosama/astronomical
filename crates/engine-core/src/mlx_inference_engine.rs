@@ -393,3 +393,7 @@ async fn receive_owner_result<Output>(
             reason: "MLX inference owner stopped before reporting command completion".to_owned(),
         })?
 }
+
+#[cfg(test)]
+#[path = "mlx_inference_engine_tests.rs"]
+mod mlx_inference_engine_tests;
