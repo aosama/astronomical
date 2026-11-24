@@ -1,7 +1,7 @@
 //! The GPU optimizer against the CPU optimizer it mirrors.
 
 use decision_training::anchored_adam::{AdamSettings, AnchoredAdam, TRAINING_ADAM_SETTINGS};
-use serial_test::serial;
+use serial_test::file_serial;
 
 use super::super::gpu_test_support::assert_all_close;
 use super::*;
@@ -17,7 +17,7 @@ fn settings() -> AdamSettings {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_take_the_same_three_steps_as_the_cpu_optimizer() {
     let runtime = initialize_test_runtime();
     let math = GpuMath { runtime: &runtime };
@@ -48,7 +48,7 @@ fn should_take_the_same_three_steps_as_the_cpu_optimizer() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_refuse_a_non_finite_gradient_and_change_nothing() {
     let runtime = initialize_test_runtime();
     let math = GpuMath { runtime: &runtime };

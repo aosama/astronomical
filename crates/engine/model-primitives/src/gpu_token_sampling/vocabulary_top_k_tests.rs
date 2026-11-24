@@ -2,7 +2,7 @@
 
 use mlx_bridge::MlxDtype;
 use runtime_integration::{MlxMemoryLimits, MlxRuntime};
-use serial_test::serial;
+use serial_test::file_serial;
 
 use super::vocabulary_top_k;
 
@@ -27,7 +27,7 @@ fn host_top_k(values: &[f32], vocabulary_size: usize, kept_count: usize) -> Vec<
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_find_each_rows_best_tokens_in_order_as_a_full_sort_does() {
     if test_harness::skip_without(
         test_harness::PlatformRequirement::MetalGpu,
@@ -66,7 +66,7 @@ fn should_find_each_rows_best_tokens_in_order_as_a_full_sort_does() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_refuse_more_than_32_tokens_a_row_or_none() {
     let runtime = test_runtime();
     let logits = runtime

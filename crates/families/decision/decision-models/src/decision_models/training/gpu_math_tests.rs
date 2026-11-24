@@ -1,6 +1,6 @@
 //! The precise matrix product against a float64 product on the host.
 
-use serial_test::serial;
+use serial_test::file_serial;
 
 use super::super::gpu_test_support::sequence_values;
 use super::*;
@@ -36,7 +36,7 @@ fn largest_relative_gap(gpu_values: &[f32], reference_values: &[f64]) -> f64 {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_multiply_matrices_to_float32_accuracy_where_a_plain_product_may_not() {
     let runtime = initialize_test_runtime();
     let math = GpuMath { runtime: &runtime };
@@ -67,7 +67,7 @@ fn should_multiply_matrices_to_float32_accuracy_where_a_plain_product_may_not() 
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_give_exact_products_of_values_that_need_no_rounding() {
     let runtime = initialize_test_runtime();
     let math = GpuMath { runtime: &runtime };

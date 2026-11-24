@@ -1,4 +1,4 @@
-use serial_test::serial;
+use serial_test::file_serial;
 
 use super::snake;
 use speech::speech_models::speech_test_support::{
@@ -6,7 +6,7 @@ use speech::speech_models::speech_test_support::{
 };
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_add_the_squared_sine_over_the_frequency() {
     let runtime = initialize_test_runtime();
     let input = upload(&runtime, &[0.5, -1.0], &[1, 2]);
@@ -24,7 +24,7 @@ fn should_add_the_squared_sine_over_the_frequency() {
 
 // Edge: Snake is the identity at the zeros of the sine.
 #[test]
-#[serial]
+#[file_serial]
 fn should_leave_zero_unchanged() {
     let runtime = initialize_test_runtime();
     let input = upload(&runtime, &[0.0], &[1, 1]);

@@ -20,13 +20,13 @@
 //! Run through an optimized build with `cargo test-jangtq2-decode-throughput`
 //! (see `.cargo/config.toml`): the decoder is memory-traffic bound, so
 //! debug-build numbers understate every ratio and must not be recorded. Every
-//! test is `#[serial]` because these are throughput measurements.
+//! test is `#[file_serial]` because these are throughput measurements.
 
 use jangtq2_qwen35::codebook;
 use jangtq2_qwen35::mlx_decode;
 use mlx_bridge::{MlxArray, MlxDtype};
 use runtime_integration::{MlxMemoryLimits, MlxRuntime};
-use serial_test::serial;
+use serial_test::file_serial;
 
 /// Routed experts serving one decode token (Qwen3.5 `num_experts_per_tok`).
 const TOP_K_EXPERT_COUNT: usize = 8;
@@ -253,7 +253,7 @@ fn measure_decode_throughput(case_name: &str, packed_shape: &[i32], bit_width: u
 }
 
 #[test]
-#[serial]
+#[file_serial]
 #[ignore = "graphics-processor throughput measurement: run optimized via cargo test-jangtq2-decode-throughput"]
 fn should_measure_decode_step_top_k_page_codebook_decode_throughput() {
     measure_decode_throughput(
@@ -268,7 +268,7 @@ fn should_measure_decode_step_top_k_page_codebook_decode_throughput() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 #[ignore = "graphics-processor throughput measurement: run optimized via cargo test-jangtq2-decode-throughput"]
 fn should_measure_complete_layer_gate_projection_codebook_decode_throughput() {
     measure_decode_throughput(
@@ -283,7 +283,7 @@ fn should_measure_complete_layer_gate_projection_codebook_decode_throughput() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 #[ignore = "graphics-processor throughput measurement: run optimized via cargo test-jangtq2-decode-throughput"]
 fn should_measure_complete_layer_down_projection_codebook_decode_throughput() {
     measure_decode_throughput(
@@ -310,7 +310,7 @@ fn should_measure_complete_layer_down_projection_codebook_decode_throughput() {
 /// (one token) and the pinned prefill chunk shape, so its share of the
 /// per-token cost is visible beside the decoder's.
 #[test]
-#[serial]
+#[file_serial]
 #[ignore = "graphics-processor throughput measurement: run optimized via cargo test-jangtq2-decode-throughput"]
 fn should_measure_hadamard32_activation_rotation_throughput() {
     let runtime = test_runtime();
@@ -496,7 +496,7 @@ fn measure_fused_gathered_projection_throughput(
 }
 
 #[test]
-#[serial]
+#[file_serial]
 #[ignore = "graphics-processor throughput measurement: run optimized via cargo test-jangtq2-decode-throughput"]
 fn should_measure_decode_step_top_k_page_fused_gathered_projection_throughput() {
     measure_fused_gathered_projection_throughput(

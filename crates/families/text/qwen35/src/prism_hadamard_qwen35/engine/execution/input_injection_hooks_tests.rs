@@ -1,5 +1,5 @@
 use ipc_protocol::RequestId;
-use serial_test::serial;
+use serial_test::file_serial;
 
 use crate::prism_hadamard_qwen35::artifacts::tests::pack_fixture::FIXTURE_VOCAB_SIZE;
 use crate::prism_hadamard_qwen35::engine::fixture_engine_test_support::{
@@ -53,7 +53,7 @@ fn active_next_position_tokens(fixture_engine: &LoadedFixtureEngine) -> u32 {
 // Positive: a feedback prefix and its final token extend the context, a
 // pending reply token is sampled from it, and decoding continues.
 #[test]
-#[serial]
+#[file_serial]
 fn should_read_injected_feedback_and_keep_decoding() {
     let mut fixture_engine = engine_with_first_reply_token(91, 8);
     let position_before_feedback = active_next_position_tokens(&fixture_engine);
@@ -85,7 +85,7 @@ fn should_read_injected_feedback_and_keep_decoding() {
 // Edge: one feedback token has no prefix to read, and empty feedback
 // changes nothing.
 #[test]
-#[serial]
+#[file_serial]
 fn should_inject_a_single_token_and_ignore_empty_feedback() {
     let mut fixture_engine = engine_with_first_reply_token(92, 8);
     let position_before_feedback = active_next_position_tokens(&fixture_engine);
@@ -111,7 +111,7 @@ fn should_inject_a_single_token_and_ignore_empty_feedback() {
 // Edge: feedback past the configured 2,048-token window but inside the
 // pack's 4,096 positions is served, as the shared rule allows.
 #[test]
-#[serial]
+#[file_serial]
 fn should_inject_past_the_configured_window_inside_the_pack_range() {
     let mut fixture_engine = engine_with_first_reply_token(93, 3_000);
 
@@ -131,7 +131,7 @@ fn should_inject_past_the_configured_window_inside_the_pack_range() {
 // Negative: a token outside the vocabulary and feedback for another
 // request are engine failures that leave the running request alone.
 #[test]
-#[serial]
+#[file_serial]
 fn should_refuse_foreign_or_out_of_vocabulary_feedback_and_keep_the_request() {
     let mut fixture_engine = engine_with_first_reply_token(94, 8);
 
@@ -159,7 +159,7 @@ fn should_refuse_foreign_or_out_of_vocabulary_feedback_and_keep_the_request() {
 // Negative: feedback that would carry the context past the pack's 4,096
 // positions is refused as the caller's and ends the request.
 #[test]
-#[serial]
+#[file_serial]
 fn should_refuse_feedback_past_the_pack_range_and_end_the_request() {
     let mut fixture_engine = engine_with_first_reply_token(96, 4_000);
 

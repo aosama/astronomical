@@ -1,5 +1,5 @@
 use ipc_protocol::{RequestId, WorkerPromptProcessingPhase};
-use serial_test::serial;
+use serial_test::file_serial;
 
 use crate::prism_hadamard_qwen35::artifacts::tests::pack_fixture::FIXTURE_VOCAB_SIZE;
 use crate::prism_hadamard_qwen35::engine::fixture_engine_test_support::{
@@ -27,7 +27,7 @@ fn start_greedy(
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_refuse_an_empty_prompt_and_an_out_of_vocabulary_token_as_engine_failures() {
     let mut fixture_engine = loaded_fixture_engine(|_| {});
     assert!(matches!(
@@ -52,7 +52,7 @@ fn should_refuse_an_empty_prompt_and_an_out_of_vocabulary_token_as_engine_failur
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_serve_beyond_the_configured_context_up_to_the_pack_range() {
     let mut fixture_engine = loaded_fixture_engine(|_| {});
     // 3 prompt tokens and 3,000 output tokens pass the configured 2,048 but
@@ -77,7 +77,7 @@ fn should_serve_beyond_the_configured_context_up_to_the_pack_range() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_hold_no_random_state_for_greedy_and_refuse_an_impossible_sampling_strategy() {
     let mut fixture_engine = loaded_fixture_engine(|_| {});
     start_greedy(&mut fixture_engine, PROMPT_TOKEN_IDS.to_vec(), 4)
@@ -112,7 +112,7 @@ fn should_hold_no_random_state_for_greedy_and_refuse_an_impossible_sampling_stra
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_require_a_thinking_transition_that_ends_with_the_model_marker() {
     let mut fixture_engine = loaded_fixture_engine(|_| {});
     let unmarked_transition_request = Qwen3_5InferenceRequest::new_sampling(
@@ -156,7 +156,7 @@ fn should_require_a_thinking_transition_that_ends_with_the_model_marker() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_refuse_a_second_request_while_one_is_active() {
     let mut fixture_engine = loaded_fixture_engine(|_| {});
     start_greedy(&mut fixture_engine, PROMPT_TOKEN_IDS.to_vec(), 4)
@@ -171,7 +171,7 @@ fn should_refuse_a_second_request_while_one_is_active() {
 // nothing and leaves the running request alone, because a late stop for a
 // finished request must not end its successor.
 #[test]
-#[serial]
+#[file_serial]
 fn should_ignore_a_stop_with_nothing_running_or_meant_for_another_request() {
     let mut fixture_engine = loaded_fixture_engine(|_| {});
     assert_eq!(
@@ -203,7 +203,7 @@ fn should_ignore_a_stop_with_nothing_running_or_meant_for_another_request() {
 // Positive: a stop for the running request ends it and reports the idle
 // placement and memory.
 #[test]
-#[serial]
+#[file_serial]
 fn should_end_the_running_request_a_stop_names() {
     let mut fixture_engine = loaded_fixture_engine(|_| {});
     start_greedy(&mut fixture_engine, PROMPT_TOKEN_IDS.to_vec(), 4)

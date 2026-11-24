@@ -3,7 +3,7 @@
 //! come from the Romeo and Juliet fixture.
 
 use mlx_bridge::MlxDtype;
-use serial_test::serial;
+use serial_test::file_serial;
 
 use crate::synthetic_weights_test_support::{
     float32_values, initialize_test_runtime, largest_difference, upload_values,
@@ -62,7 +62,7 @@ fn rms_norm_oracle(row_values: &[f32], scale_values: &[f32]) -> Vec<f32> {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_layer_normalize_each_row_like_the_f64_oracle() {
     let runtime = initialize_test_runtime();
     let input_values = wide_shakespeare_values(ROW_COUNT * ROW_WIDTH, 0);
@@ -83,7 +83,7 @@ fn should_layer_normalize_each_row_like_the_f64_oracle() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_rms_normalize_and_scale_each_row_like_the_f64_oracle() {
     let runtime = initialize_test_runtime();
     let input_values = wide_shakespeare_values(ROW_COUNT * ROW_WIDTH, 512);
@@ -111,7 +111,7 @@ fn should_rms_normalize_and_scale_each_row_like_the_f64_oracle() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_return_the_input_dtype_after_normalizing_in_fp32() {
     let runtime = initialize_test_runtime();
     let input_values = wide_shakespeare_values(ROW_WIDTH, 1024);
@@ -141,7 +141,7 @@ fn should_return_the_input_dtype_after_normalizing_in_fp32() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_refuse_a_scale_that_cannot_broadcast_over_the_row() {
     let runtime = initialize_test_runtime();
     let input = upload_values(
@@ -206,7 +206,7 @@ fn rotation_oracle(head_values: &[f32], cosine_values: &[f32], sine_values: &[f3
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_rotate_each_adjacent_pair_like_the_f64_oracle() {
     let runtime = initialize_test_runtime();
     let head_values = wide_shakespeare_values(TOKEN_COUNT * HEAD_COUNT * FEATURE_WIDTH, 0);
@@ -226,7 +226,7 @@ fn should_rotate_each_adjacent_pair_like_the_f64_oracle() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_leave_heads_unchanged_at_a_zero_angle_and_keep_their_dtype() {
     let runtime = initialize_test_runtime();
     let head_values = wide_shakespeare_values(TOKEN_COUNT * HEAD_COUNT * FEATURE_WIDTH, 2048);
@@ -248,7 +248,7 @@ fn should_leave_heads_unchanged_at_a_zero_angle_and_keep_their_dtype() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_refuse_tables_that_cannot_broadcast_over_the_heads() {
     let runtime = initialize_test_runtime();
     let head_values = wide_shakespeare_values(TOKEN_COUNT * HEAD_COUNT * FEATURE_WIDTH, 0);

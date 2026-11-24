@@ -2,10 +2,10 @@ use super::AstroExpertCache;
 use super::astro_expert_cache_tests::{
     EXPERT_CAPACITY, streamed_weights_for_expert_count, test_runtime,
 };
-use serial_test::serial;
+use serial_test::file_serial;
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_complete_a_cold_prefill_union_seed_using_only_missing_experts() {
     let runtime = test_runtime();
     let mut astro_expert_cache = AstroExpertCache::new(1);

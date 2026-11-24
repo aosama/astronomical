@@ -4,7 +4,7 @@
 
 use mlx_bridge::MlxArray;
 use runtime_integration::MlxRuntime;
-use serial_test::serial;
+use serial_test::file_serial;
 
 use super::{CausalTransformer, TransformerShape};
 use speech::speech_models::checkpoint_tensors::CheckpointTensors;
@@ -137,7 +137,7 @@ fn in_pieces(runtime: &MlxRuntime, transformer: &CausalTransformer, piece_length
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_give_the_same_states_frame_by_frame_as_all_at_once() {
     let runtime = initialize_test_runtime();
     let transformer = shakespeare_transformer(&runtime, None);
@@ -150,7 +150,7 @@ fn should_give_the_same_states_frame_by_frame_as_all_at_once() {
 
 // Boundary: a block length that does not divide the sequence, longer than the window.
 #[test]
-#[serial]
+#[file_serial]
 fn should_give_the_same_states_in_windowed_blocks_as_all_at_once() {
     let runtime = initialize_test_runtime();
     let transformer = shakespeare_transformer(&runtime, Some(3));
@@ -173,7 +173,7 @@ fn should_give_the_same_states_in_windowed_blocks_as_all_at_once() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_leave_the_original_history_unchanged_when_a_branch_grows() {
     let runtime = initialize_test_runtime();
     let transformer = shakespeare_transformer(&runtime, None);

@@ -1,5 +1,5 @@
 use ipc_protocol::{ExpertMemoryMode, RequestId};
-use serial_test::serial;
+use serial_test::file_serial;
 
 use super::{
     ceiling_change_refusal, memory_limits_for_ceiling, mlx_buffer_cache_bytes_for_ceiling,
@@ -113,7 +113,7 @@ fn should_refuse_limits_that_break_the_ceiling_rule() {
 // back up, keeping the configured mlx_buffer_cache limit under both, and
 // reports the memory after each change.
 #[test]
-#[serial]
+#[file_serial]
 fn should_change_the_ceiling_of_an_idle_engine_and_report_the_memory_after_it() {
     let mut fixture_engine = loaded_fixture_engine(|_| {});
     let minimum_mlx_memory_ceiling_bytes = fixture_engine
@@ -159,7 +159,7 @@ fn should_change_the_ceiling_of_an_idle_engine_and_report_the_memory_after_it() 
 // Negative: a change waits while a request runs, and a ceiling below the
 // floor is the typed rejection; neither moves the installed limits.
 #[test]
-#[serial]
+#[file_serial]
 fn should_refuse_a_change_while_a_request_runs_or_below_the_floor() {
     let mut fixture_engine = loaded_fixture_engine(|_| {});
     let installed_mlx_memory_limits = fixture_engine.execution.execution_core.memory_limits;
@@ -198,7 +198,7 @@ fn should_refuse_a_change_while_a_request_runs_or_below_the_floor() {
 // Negative: a change before any model is loaded is an engine failure, as
 // on every Qwen 3.5 engine.
 #[test]
-#[serial]
+#[file_serial]
 fn should_refuse_a_change_before_the_model_loads() {
     let fixture_directory = write_fixture_pack(|_| {});
     let mut execution = pending_fixture_execution(

@@ -4,7 +4,7 @@
 
 use mlx_bridge::{MlxArray, MlxCompiledElementwiseGraphs, MlxDtype};
 use runtime_integration::{MlxMemoryLimits, MlxRuntime};
-use serial_test::serial;
+use serial_test::file_serial;
 
 use super::output_combination::combine_sparse_and_shared_experts;
 use super::routing::{
@@ -201,7 +201,7 @@ fn narrowed_to_float16(runtime: &MlxRuntime, bfloat16_activation: &MlxArray) -> 
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_match_the_two_step_combination_bit_for_bit_in_the_resident_layer_shape() {
     if test_harness::skip_without(
         test_harness::PlatformRequirement::MetalGpu,
@@ -221,7 +221,7 @@ fn should_match_the_two_step_combination_bit_for_bit_in_the_resident_layer_shape
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_match_the_uncompiled_combination_bit_for_bit() {
     if test_harness::skip_without(
         test_harness::PlatformRequirement::MetalGpu,
@@ -246,7 +246,7 @@ fn should_match_the_uncompiled_combination_bit_for_bit() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_match_bit_for_bit_for_one_token_and_widths_off_the_threadgroup_grid() {
     if test_harness::skip_without(
         test_harness::PlatformRequirement::MetalGpu,
@@ -267,7 +267,7 @@ fn should_match_bit_for_bit_for_one_token_and_widths_off_the_threadgroup_grid() 
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_match_bit_for_bit_at_zero_saturated_and_infinite_gate_logits() {
     if test_harness::skip_without(
         test_harness::PlatformRequirement::MetalGpu,
@@ -299,7 +299,7 @@ fn should_match_bit_for_bit_at_zero_saturated_and_infinite_gate_logits() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_match_bit_for_bit_with_bfloat16_router_scores() {
     if test_harness::skip_without(
         test_harness::PlatformRequirement::MetalGpu,
@@ -316,7 +316,7 @@ fn should_match_bit_for_bit_with_bfloat16_router_scores() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_refuse_float16_activations_the_contract_is_not_proven_for() {
     let runtime = test_runtime();
     let mut arrays = random_combination_arrays(&runtime, &[4], 64, 5);
@@ -331,7 +331,7 @@ fn should_refuse_float16_activations_the_contract_is_not_proven_for() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_refuse_a_shared_expert_dtype_that_differs_from_the_routed_outputs() {
     let runtime = test_runtime();
     let mut arrays = random_combination_arrays(&runtime, &[4], 64, 5);
@@ -345,7 +345,7 @@ fn should_refuse_a_shared_expert_dtype_that_differs_from_the_routed_outputs() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_refuse_a_gate_with_more_than_one_logit_per_token() {
     let runtime = test_runtime();
     let mut arrays = random_combination_arrays(&runtime, &[4], 64, 9);
@@ -356,7 +356,7 @@ fn should_refuse_a_gate_with_more_than_one_logit_per_token() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_refuse_a_shared_expert_output_of_another_width() {
     let runtime = test_runtime();
     let mut arrays = random_combination_arrays(&runtime, &[4], 64, 13);
@@ -369,7 +369,7 @@ fn should_refuse_a_shared_expert_output_of_another_width() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_refuse_an_inverse_order_missing_one_assignment() {
     let runtime = test_runtime();
     let mut arrays = random_combination_arrays(&runtime, &[4], 64, 19);
@@ -381,7 +381,7 @@ fn should_refuse_an_inverse_order_missing_one_assignment() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_refuse_sorted_outputs_without_the_projection_axis() {
     let runtime = test_runtime();
     let mut arrays = random_combination_arrays(&runtime, &[4], 64, 29);
@@ -390,7 +390,7 @@ fn should_refuse_sorted_outputs_without_the_projection_axis() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_refuse_router_scores_without_a_top_k_axis() {
     let runtime = test_runtime();
     let mut arrays = random_combination_arrays(&runtime, &[4], 64, 31);

@@ -1,7 +1,7 @@
 //! Unit tests for replacing Clef head tensors with trained ones.
 
 use decision_contract::head_tuning_file::TunedTensor;
-use serial_test::serial;
+use serial_test::file_serial;
 
 use super::*;
 use model_primitives::synthetic_weights_test_support::initialize_test_runtime;
@@ -31,7 +31,7 @@ fn tuning_of(tensor_name: &str, shape: Vec<usize>, values: Vec<f32>) -> HeadTuni
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_read_a_trained_scalar_in_place_of_the_shipped_one() {
     let _runtime = initialize_test_runtime();
     let mut head_weights = small_head();
@@ -49,7 +49,7 @@ fn should_read_a_trained_scalar_in_place_of_the_shipped_one() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_refuse_a_trained_tensor_of_another_shape_or_one_the_head_lacks() {
     let _runtime = initialize_test_runtime();
     let mut head_weights = small_head();
@@ -71,7 +71,7 @@ fn should_refuse_a_trained_tensor_of_another_shape_or_one_the_head_lacks() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_change_nothing_with_an_empty_tuning() {
     let _runtime = initialize_test_runtime();
     let mut head_weights = small_head();

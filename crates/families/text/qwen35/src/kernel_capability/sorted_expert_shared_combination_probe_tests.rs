@@ -1,7 +1,7 @@
 //! The probe's verdict rules, plus one real launch on this machine's GPU.
 
 use runtime_integration::{MlxMemoryLimits, MlxRuntime};
-use serial_test::serial;
+use serial_test::file_serial;
 
 use super::{SortedExpertSharedCombinationProbe, validate_bit_identical_probe_outputs};
 use crate::kernel_capability::{CustomMetalKernelProbe, KernelCapabilityError};
@@ -65,7 +65,7 @@ fn should_reject_an_empty_probe_output() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_pass_the_probe_on_this_machines_gpu() {
     if test_harness::skip_without(
         test_harness::PlatformRequirement::MetalGpu,

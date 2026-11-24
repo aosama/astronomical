@@ -3,7 +3,7 @@
 
 use mlx_bridge::MlxArray;
 use runtime_integration::MlxRuntime;
-use serial_test::serial;
+use serial_test::file_serial;
 
 use super::BidirectionalLstm;
 use speech::speech_models::checkpoint_tensors::CheckpointTensors;
@@ -69,7 +69,7 @@ fn sigmoid(value: f32) -> f32 {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_match_a_hand_computed_first_step() {
     let runtime = initialize_test_runtime();
     let lstm = mirrored_lstm(&runtime);
@@ -97,7 +97,7 @@ fn should_match_a_hand_computed_first_step() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_read_the_backward_direction_as_a_forward_run_over_the_reversed_sequence() {
     let runtime = initialize_test_runtime();
     let lstm = mirrored_lstm(&runtime);

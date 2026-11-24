@@ -7,7 +7,7 @@ use std::io::Write;
 use std::path::Path;
 
 use runtime_integration::{MlxMemoryLimits, MlxRuntime};
-use serial_test::serial;
+use serial_test::file_serial;
 
 use super::ExpertSlotStorageFiller;
 use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights;
@@ -214,19 +214,19 @@ fn assert_experts_land_in_their_slots(layout: FileLayout) {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_read_each_expert_into_its_slot_when_its_slices_are_stored_together() {
     assert_experts_land_in_their_slots(FileLayout::RecordsTogether);
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_read_each_expert_into_its_slot_when_its_slices_are_stored_apart() {
     assert_experts_land_in_their_slots(FileLayout::TensorsApart);
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_change_nothing_when_no_slot_is_asked_for() {
     let runtime = test_runtime();
     let expert_file = write_expert_file(FileLayout::RecordsTogether);
@@ -244,7 +244,7 @@ fn should_change_nothing_when_no_slot_is_asked_for() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_report_a_slot_the_table_does_not_have() {
     let runtime = test_runtime();
     let expert_file = write_expert_file(FileLayout::RecordsTogether);
@@ -260,7 +260,7 @@ fn should_report_a_slot_the_table_does_not_have() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_report_one_slot_planned_for_two_experts() {
     let runtime = test_runtime();
     let expert_file = write_expert_file(FileLayout::RecordsTogether);
@@ -276,7 +276,7 @@ fn should_report_one_slot_planned_for_two_experts() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_report_an_expert_the_file_does_not_hold() {
     let runtime = test_runtime();
     let expert_file = write_expert_file(FileLayout::RecordsTogether);
@@ -289,7 +289,7 @@ fn should_report_an_expert_the_file_does_not_hold() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_refuse_a_table_that_is_not_stored_affine_quantized() {
     let runtime = test_runtime();
     let expert_file = write_expert_file(FileLayout::RecordsTogether);

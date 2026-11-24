@@ -1,6 +1,6 @@
 use ipc_protocol::{RequestId, StructuredGenerationConstraint};
 use serde_json::json;
-use serial_test::serial;
+use serial_test::file_serial;
 
 use super::successor_may_be_submitted_before_read;
 use crate::prism_hadamard_qwen35::artifacts::tests::pack_fixture::FIXTURE_VOCAB_SIZE;
@@ -59,7 +59,7 @@ fn decode_until_finalized(
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_emit_the_end_of_sequence_token_with_its_finalization_and_end_the_request() {
     // Every vocabulary id ends the reply, so the first reply token does.
     let mut fixture_engine = loaded_fixture_engine(|fixture_pack| {
@@ -92,7 +92,7 @@ fn should_emit_the_end_of_sequence_token_with_its_finalization_and_end_the_reque
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_end_the_reply_at_the_output_budget_with_its_finalization() {
     let mut fixture_engine = loaded_fixture_engine(|_| {});
     fixture_engine
@@ -117,7 +117,7 @@ fn should_end_the_reply_at_the_output_budget_with_its_finalization() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_force_the_thinking_transition_once_the_budget_is_spent() {
     let mut fixture_engine = loaded_fixture_engine(|_| {});
     let forced_transition_token_ids = vec![FIXTURE_VOCAB_SIZE - 2, FIXTURE_VOCAB_SIZE - 1];
@@ -149,7 +149,7 @@ fn should_force_the_thinking_transition_once_the_budget_is_spent() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_finalize_the_request_at_once_when_a_step_fails() {
     let mut fixture_engine = loaded_fixture_engine(|_| {});
     let sampled_request =

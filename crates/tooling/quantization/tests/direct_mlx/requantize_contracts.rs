@@ -16,7 +16,7 @@ use quantization::requantize::tensor_plan::RequantizeTensorPlan;
 use quantization::encoder::reference::encode_slab;
 use quantization::error::QuantizationError;
 use quantization::requantize::tensor_plan::TensorPlanEntry;
-use serial_test::{parallel, serial};
+use serial_test::{file_parallel, file_serial};
 
 use super::support::{contract_runtime, outlier_heavy_weights};
 
@@ -130,7 +130,7 @@ fn uniform_plan(source: &std::path::Path, bits: u32) -> RequantizeTensorPlan {
 }
 
 #[test]
-#[parallel]
+#[file_parallel]
 fn should_requantize_a_two_shard_source_into_a_loadable_mixed_precision_artifact() {
     let runtime = contract_runtime();
     let source = tempfile::tempdir().expect("a temporary directory should be creatable");
@@ -175,15 +175,15 @@ fn should_requantize_a_two_shard_source_into_a_loadable_mixed_precision_artifact
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_keep_peak_mlx_memory_near_one_tensor_regardless_of_tensor_count() {
     // Requantize a source with N copies of the same tensor and assert the
     // reported peak is bounded by a small multiple of one tensor's float32
     // working copy, the property that lets a 300B checkpoint convert on a
     // laptop. The bound is deliberately loose (8x one tensor) so allocator
     // slack cannot flake it; the point is that it does not scale with N.
-    // Peak memory is process-global, so this contract runs #[serial] and
-    // every other MLX contract in the binary is #[parallel]: the peak it
+    // Peak memory is process-global, so this contract runs #[file_serial] and
+    // every other MLX contract in the binary is #[file_parallel]: the peak it
     // samples must be its own.
     let runtime = contract_runtime();
     let source = tempfile::tempdir().expect("a temporary directory should be creatable");
@@ -221,7 +221,7 @@ fn largest_float32_bytes(largest_so_far: u64, entry: &TensorPlanEntry) -> u64 {
 }
 
 #[test]
-#[parallel]
+#[file_parallel]
 fn should_write_packed_words_that_match_the_reference_encoder() {
     // At 4 bits the default policy uses stock quantize_affine, which the
     // reference reproduces word for word from the same bf16 weights.
@@ -311,7 +311,7 @@ fn assert_packed_words_match_the_reference(written_words: &[u32], reference_word
 }
 
 #[test]
-#[parallel]
+#[file_parallel]
 fn should_fail_with_a_typed_error_when_a_planned_shard_is_missing() {
     let runtime = contract_runtime();
     let source = tempfile::tempdir().expect("a temporary directory should be creatable");

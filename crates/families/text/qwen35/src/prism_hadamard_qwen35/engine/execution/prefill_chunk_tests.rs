@@ -1,5 +1,5 @@
 use ipc_protocol::{RequestId, WorkerEvent};
-use serial_test::serial;
+use serial_test::file_serial;
 
 use crate::prism_hadamard_qwen35::engine::fixture_engine_test_support::{
     FixtureAstroSsdPromptCache, LoadedFixtureEngine,
@@ -69,7 +69,7 @@ fn run_to_completion(fixture_engine: &mut LoadedFixtureEngine, request_id: u64) 
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_restore_a_repeated_prompt_up_to_its_partial_tail() {
     let mut fixture_engine =
         loaded_fixture_engine_with_astro_ssd_prompt_cache(&FIXTURE_ASTRO_SSD_PROMPT_CACHE);
@@ -88,7 +88,7 @@ fn should_restore_a_repeated_prompt_up_to_its_partial_tail() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_open_the_store_with_the_quota_bounded_contract() {
     let fixture_engine =
         loaded_fixture_engine_with_astro_ssd_prompt_cache(&FIXTURE_ASTRO_SSD_PROMPT_CACHE);
@@ -120,7 +120,7 @@ fn should_open_the_store_with_the_quota_bounded_contract() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_report_and_clear_the_store_through_the_shared_core() {
     let mut fixture_engine =
         loaded_fixture_engine_with_astro_ssd_prompt_cache(&FIXTURE_ASTRO_SSD_PROMPT_CACHE);
@@ -150,7 +150,7 @@ fn should_report_and_clear_the_store_through_the_shared_core() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_retry_a_blocked_publication_without_evicting_anything() {
     let mut fixture_engine =
         loaded_fixture_engine_with_astro_ssd_prompt_cache(&FIXTURE_ASTRO_SSD_PROMPT_CACHE);

@@ -3,7 +3,7 @@
 
 use mlx_bridge::MlxDtype;
 use runtime_integration::{MlxMemoryLimits, MlxRuntime};
-use serial_test::serial;
+use serial_test::file_serial;
 
 use super::super::{masked_logits_after_top_k_and_top_p, softmax_last_axis};
 use super::sampling_distribution_rows;
@@ -49,7 +49,7 @@ fn full_vocabulary_law(
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_keep_the_tokens_and_probabilities_of_the_full_vocabulary_law() {
     if test_harness::skip_without(
         test_harness::PlatformRequirement::MetalGpu,

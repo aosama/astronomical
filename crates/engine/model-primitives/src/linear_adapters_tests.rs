@@ -1,7 +1,7 @@
 //! The add-on path of a linear layer, on small known values.
 
 use decision_contract::decision_adapters_file::{DecisionAdapters, LinearAdapter};
-use serial_test::serial;
+use serial_test::file_serial;
 
 use super::*;
 use crate::synthetic_weights_test_support::initialize_test_runtime;
@@ -21,7 +21,7 @@ fn rank_one_adapter(up_values: Vec<f32>) -> DecisionAdapters {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_add_up_times_down_times_input_to_the_layer_output() {
     let runtime = initialize_test_runtime();
     let adapters =
@@ -40,7 +40,7 @@ fn should_add_up_times_down_times_input_to_the_layer_output() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_leave_the_layer_output_exactly_as_it_was_while_up_is_zero() {
     let runtime = initialize_test_runtime();
     let adapters = LinearAdapters::upload(&runtime, &rank_one_adapter(vec![0.0; 3])).unwrap();
@@ -56,7 +56,7 @@ fn should_leave_the_layer_output_exactly_as_it_was_while_up_is_zero() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_pass_a_layer_without_an_add_on_through_unchanged() {
     let runtime = initialize_test_runtime();
     let adapters =
@@ -72,7 +72,7 @@ fn should_pass_a_layer_without_an_add_on_through_unchanged() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_pair_trainable_arrays_with_their_targets_in_order() {
     let runtime = initialize_test_runtime();
     let targets = vec!["first".to_owned(), "second".to_owned()];
@@ -108,7 +108,7 @@ fn should_have_no_add_ons_when_built_empty() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_keep_a_bfloat16_layer_in_bfloat16_and_leave_it_exact_with_a_zero_add_on() {
     let runtime = initialize_test_runtime();
     let adapters =

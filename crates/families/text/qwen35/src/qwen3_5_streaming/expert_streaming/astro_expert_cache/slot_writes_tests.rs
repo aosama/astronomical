@@ -9,7 +9,7 @@ use super::*;
 use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights;
 use mlx_bridge::{MlxArray, MlxDtype};
 use runtime_integration::MlxRuntime;
-use serial_test::serial;
+use serial_test::file_serial;
 
 const OUTPUT_ROWS: usize = 2;
 /// One 32-code group at 2 bits: two uint32 words per row.
@@ -63,7 +63,7 @@ fn packed_words_and_scales(
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_pad_a_packed_codebook_page_to_warm_capacity_without_decoding_it() {
     let runtime = test_runtime();
     let streamed = packed_codebook_page(&runtime, 2, TWO_BIT_WIDTH);
@@ -86,7 +86,7 @@ fn should_pad_a_packed_codebook_page_to_warm_capacity_without_decoding_it() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_write_one_expert_row_of_codes_and_scales_into_a_slot() {
     let runtime = test_runtime();
     let streamed = packed_codebook_page(&runtime, 3, TWO_BIT_WIDTH);
@@ -118,7 +118,7 @@ fn should_write_one_expert_row_of_codes_and_scales_into_a_slot() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_reject_writing_a_packed_codebook_row_into_a_native_table() {
     let runtime = test_runtime();
     let native = super::astro_expert_cache_tests::streamed_weights_for_expert_count(&runtime, 2);
@@ -131,7 +131,7 @@ fn should_reject_writing_a_packed_codebook_row_into_a_native_table() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_reject_packed_codebook_rows_of_a_different_bit_width() {
     let runtime = test_runtime();
     let two_bit = packed_codebook_page(&runtime, 2, TWO_BIT_WIDTH);

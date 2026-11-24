@@ -5,7 +5,7 @@
 use super::DeferredExpertDemandCollector;
 use mlx_bridge::MlxArray;
 use runtime_integration::{MlxMemoryLimits, MlxRuntime};
-use serial_test::serial;
+use serial_test::file_serial;
 
 const EXPERT_CAPACITY: usize = 256;
 
@@ -23,7 +23,7 @@ fn route_of(expert_ids: &[u32]) -> MlxArray {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_queue_routes_in_layer_order_and_return_their_identifiers_on_take() {
     let _runtime = initialize_test_runtime();
     let mut collector = DeferredExpertDemandCollector::default();
@@ -54,7 +54,7 @@ fn should_queue_routes_in_layer_order_and_return_their_identifiers_on_take() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_discard_every_pending_route() {
     let _runtime = initialize_test_runtime();
     let mut collector = DeferredExpertDemandCollector::default();
@@ -65,7 +65,7 @@ fn should_discard_every_pending_route() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_take_nothing_from_an_empty_collector() {
     let _runtime = initialize_test_runtime();
     let mut collector = DeferredExpertDemandCollector::default();
@@ -73,7 +73,7 @@ fn should_take_nothing_from_an_empty_collector() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_keep_the_retained_route_alive_after_the_caller_drops_its_array() {
     let _runtime = initialize_test_runtime();
     let mut collector = DeferredExpertDemandCollector::default();
@@ -92,7 +92,7 @@ fn should_keep_the_retained_route_alive_after_the_caller_drops_its_array() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_queue_a_resident_route_once_with_its_avoided_read_baseline() {
     let _runtime = initialize_test_runtime();
     let mut collector = DeferredExpertDemandCollector::default();
@@ -112,7 +112,7 @@ fn should_queue_a_resident_route_once_with_its_avoided_read_baseline() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_owe_no_avoided_read_for_a_plain_demand_route() {
     let _runtime = initialize_test_runtime();
     let mut collector = DeferredExpertDemandCollector::default();
@@ -125,7 +125,7 @@ fn should_owe_no_avoided_read_for_a_plain_demand_route() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_keep_each_route_with_the_prompt_weight_it_was_built_under() {
     let _runtime = initialize_test_runtime();
     let mut collector = DeferredExpertDemandCollector::default();

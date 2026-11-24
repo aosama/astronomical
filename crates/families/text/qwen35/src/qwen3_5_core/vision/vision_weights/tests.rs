@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use mlx_bridge::{MlxArray, MlxDtype};
 use runtime_integration::{MlxMemoryLimits, MlxRuntime};
-use serial_test::serial;
+use serial_test::file_serial;
 
 use crate::qwen3_5_core::quantizations::mlx_quantization::ModuleQuantizationProfile;
 
@@ -18,7 +18,7 @@ pub fn test_runtime() -> MlxRuntime {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_apply_quantized_vision_linear_and_preserve_the_native_module_bias() {
     let runtime = test_runtime();
     let linear_module_name = "vision_tower.blocks.0.attn.proj";
@@ -206,7 +206,7 @@ fn held_bytes_around_one_release(
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_release_evaluated_vision_bytes_and_read_them_again_after_rebinding() {
     let runtime = test_runtime();
     let shard_directory = tempfile::tempdir().expect("a shard folder should exist");
@@ -231,7 +231,7 @@ fn should_release_evaluated_vision_bytes_and_read_them_again_after_rebinding() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_reuse_the_retained_descriptors_across_repeated_releases() {
     let runtime = test_runtime();
     let shard_directory = tempfile::tempdir().expect("a shard folder should exist");
@@ -255,7 +255,7 @@ fn should_reuse_the_retained_descriptors_across_repeated_releases() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_release_an_embedded_tower_while_the_language_map_of_its_shard_stays_loaded() {
     let runtime = test_runtime();
     let shard_directory = tempfile::tempdir().expect("a shard folder should exist");
@@ -326,7 +326,7 @@ fn should_release_an_embedded_tower_while_the_language_map_of_its_shard_stays_lo
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_rebind_never_evaluated_vision_weights_without_reading_them() {
     let runtime = test_runtime();
     let shard_directory = tempfile::tempdir().expect("a shard folder should exist");
@@ -347,7 +347,7 @@ fn should_rebind_never_evaluated_vision_weights_without_reading_them() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_keep_the_bound_tensors_when_the_source_file_changed_size() {
     let runtime = test_runtime();
     let shard_directory = tempfile::tempdir().expect("a shard folder should exist");
@@ -380,7 +380,7 @@ fn should_keep_the_bound_tensors_when_the_source_file_changed_size() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_reject_a_location_outside_the_source_files() {
     let runtime = test_runtime();
     let shard_directory = tempfile::tempdir().expect("a shard folder should exist");

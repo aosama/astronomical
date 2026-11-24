@@ -4,7 +4,7 @@
 
 use decision_training::anchored_adam::AdamSettings;
 use decision_training::training_settings::{FINAL_LAYERS_TRAINING_SETTINGS, TrainingSettings};
-use serial_test::serial;
+use serial_test::file_serial;
 
 use super::super::gpu_test_support::{RankedTask, ranked_task};
 use super::*;
@@ -40,7 +40,7 @@ const FAST_SETTINGS: TrainingSettings = TrainingSettings {
 };
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_learn_a_learnable_rule_on_the_gpu() {
     let runtime = initialize_test_runtime();
     let math = GpuMath { runtime: &runtime };
@@ -68,7 +68,7 @@ fn should_learn_a_learnable_rule_on_the_gpu() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_train_identically_when_every_pass_is_split_across_many_steps() {
     let runtime = initialize_test_runtime();
     let math = GpuMath { runtime: &runtime };
@@ -136,7 +136,7 @@ fn should_train_identically_when_every_pass_is_split_across_many_steps() {
 }
 
 #[test]
-#[serial]
+#[file_serial]
 fn should_still_train_when_no_question_is_held_back_to_choose() {
     let runtime = initialize_test_runtime();
     let math = GpuMath { runtime: &runtime };
