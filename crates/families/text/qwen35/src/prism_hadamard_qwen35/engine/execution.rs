@@ -6,6 +6,7 @@
 
 mod active_generation;
 mod active_memory_breakdown;
+mod astro_ssd_prompt_cache_hooks;
 mod attribution;
 mod decode_hooks;
 mod engine_trait_impl;
@@ -39,8 +40,6 @@ pub struct PrismHadamardQwen35PendingLoad {
     /// started the runtime at the worker's startup values.
     pub effective_mlx_memory_ceiling_bytes: usize,
     pub mlx_buffer_cache_limit_bytes: usize,
-    pub configured_astro_ssd_prompt_cache_block_token_count: Option<usize>,
-    pub ssd_prompt_cache_common_prefix_stride_blocks: u32,
     /// Lets `load` explain that this engine has no Neural Engine path.
     pub neural_engine_mlp_prefill_requested: bool,
 }
@@ -97,12 +96,5 @@ impl PrismHadamardQwen35InferenceExecution {
     /// folded-ternary checks take; it was resolved from a u32 at startup.
     pub(super) fn maximum_context_tokens(&self) -> u32 {
         u32::try_from(self.execution_core.maximum_position_count).unwrap_or(u32::MAX)
-    }
-
-    /// The prompt tokens one prefill chunk may read at most.
-    pub(super) fn prompt_processing_chunk_tokens(&self) -> usize {
-        self.execution_core
-            .prompt_processing_chunk_sizer
-            .maximum_prompt_processing_chunk_size_tokens()
     }
 }

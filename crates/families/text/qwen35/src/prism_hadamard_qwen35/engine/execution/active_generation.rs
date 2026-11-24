@@ -12,25 +12,26 @@ use mlx_bridge::MlxArray;
 use super::PrismHadamardQwen35ActiveGeneration;
 use crate::prism_hadamard_qwen35::model::{PrismHadamardModelError, PrismHadamardTextModel};
 use crate::qwen3_5_core::engine_request::Qwen3_5EngineRequest;
+use crate::qwen3_5_core::shared_execution::astro_ssd_prompt_cache_restore::AstroSsdPromptCacheRestoreOutcome;
 use crate::{
-    AstroSsdPromptCacheBlockKey, PerformanceAttribution, Qwen3_5InferenceRequest,
-    Qwen3_5ThinkingBudgetState, RequestDecoderStateStack,
+    PerformanceAttribution, Qwen3_5InferenceRequest, Qwen3_5ThinkingBudgetState,
+    RequestDecoderStateStack,
 };
 
-/// The per-request state only the folded-ternary loop reads.
+/// The per-request state only the folded-ternary loop reads: none since its
+/// prompt reading moved onto the shared cursor (issue #2473, Prism step 9).
+/// The type stays so the folded-ternary record keeps its own extension.
 #[derive(Default)]
-pub struct PrismRequestExtension {
-    /// Prompt tokens no forward has read yet; prefill chunks drain it.
-    pub(in crate::prism_hadamard_qwen35::engine) remaining_prompt_token_ids: Vec<u32>,
-}
+pub struct PrismRequestExtension;
 
 /// What a new folded-ternary request starts from, gathered by
 /// `start_generation` before the record is built.
 pub(super) struct PrismRequestStart {
     pub(super) prompt_token_ids: Vec<u32>,
     pub(super) request_decoder_state: RequestDecoderStateStack,
-    pub(super) restored_token_count: u32,
-    pub(super) last_restored_block_key: Option<AstroSsdPromptCacheBlockKey>,
+    /// What the `astro_ssd_prompt_cache` restored into the decoder state;
+    /// `None` when no store is open.
+    pub(super) restore_outcome: Option<AstroSsdPromptCacheRestoreOutcome>,
     /// The sampler's random state; none for a greedy request.
     pub(super) random_state: Option<MlxArray>,
     pub(super) thinking_budget_state: Qwen3_5ThinkingBudgetState,
@@ -45,20 +46,24 @@ pub(super) fn prism_active_generation(
     inference_request: &mut Qwen3_5InferenceRequest,
     request_start: PrismRequestStart,
 ) -> PrismHadamardQwen35ActiveGeneration {
-    let restored_token_count = request_start.restored_token_count;
+    let (restored_token_count, last_restored_block_key, astro_ssd_prompt_cache_diagnostics) =
+        match request_start.restore_outcome {
+            Some(restore_outcome) => (
+                restore_outcome.astro_ssd_prompt_cache_restored_token_count,
+                restore_outcome.last_restored_astro_ssd_prompt_cache_block_key,
+                Some(restore_outcome.astro_ssd_prompt_cache_diagnostics),
+            ),
+            None => (0, None, None),
+        };
     let prompt_work_reuse = WorkerPromptWorkReuse {
         target_eligible_token_count: request_start.prompt_token_ids.len() as u64,
         target_restored_token_count: u64::from(restored_token_count),
-    };
-    let engine_extension = PrismRequestExtension {
-        remaining_prompt_token_ids: request_start.prompt_token_ids[restored_token_count as usize..]
-            .to_vec(),
     };
     Qwen3_5EngineRequest {
         request_decoder_state: request_start.request_decoder_state,
         generated_token_count: 0,
         input_token_ids: request_start.prompt_token_ids,
-        last_restored_astro_ssd_prompt_cache_block_key: request_start.last_restored_block_key,
+        last_restored_astro_ssd_prompt_cache_block_key: last_restored_block_key,
         can_use_astro_ssd_prompt_cache: request_start.can_use_astro_ssd_prompt_cache,
         maximum_output_tokens: inference_request.max_output_tokens(),
         astro_ssd_prompt_cache_block_causal_inputs: Vec::new(),
@@ -78,13 +83,13 @@ pub(super) fn prism_active_generation(
         thinking_budget_state: request_start.thinking_budget_state,
         performance_attribution: request_start.performance_attribution,
         prompt_work_reuse,
-        astro_ssd_prompt_cache_diagnostics: None,
+        astro_ssd_prompt_cache_diagnostics,
         generation_residency_preparation_attempted: false,
         first_decode_forward_elapsed_millis: None,
         outgrown_attention_slab_reclaim: Default::default(),
         generation_preparation_announced: false,
         structured_generation: inference_request.take_structured_generation(),
-        engine_extension,
+        engine_extension: PrismRequestExtension,
     }
 }
 

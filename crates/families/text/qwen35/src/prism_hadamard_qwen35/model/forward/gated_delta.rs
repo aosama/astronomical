@@ -8,9 +8,36 @@
 
 use mlx_bridge::MlxArray;
 
+use crate::qwen3_5_core::model_math::gated_delta_boundary_checkpoints::qwen3_5_gated_delta_sequence_with_boundary_checkpoints;
 use crate::qwen3_5_core::model_math::gated_delta_sequence::qwen3_5_gated_delta_sequence;
 
-use crate::{ConvolutionState, GatedDeltaRecurrentState};
+use crate::{
+    ConvolutionState, GatedDeltaRecurrentState,
+    Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
+};
+
+/// One gated-delta layer's live state for a forward, and, when the prompt
+/// chunk crosses an `astro_ssd_prompt_cache` block boundary before its end,
+/// the collector that keeps this layer's state at that boundary.
+pub(in crate::prism_hadamard_qwen35::model) struct LinearLayerState<'a> {
+    pub(in crate::prism_hadamard_qwen35::model) convolution_state: &'a mut ConvolutionState,
+    pub(in crate::prism_hadamard_qwen35::model) recurrent_state: &'a mut GatedDeltaRecurrentState,
+    pub(in crate::prism_hadamard_qwen35::model) boundary_checkpoints:
+        Option<LayerBoundaryCheckpoints<'a>>,
+}
+
+/// Where one layer records its boundary states.
+pub(in crate::prism_hadamard_qwen35::model) struct LayerBoundaryCheckpoints<'a> {
+    pub(in crate::prism_hadamard_qwen35::model) collector:
+        &'a mut Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
+    pub(in crate::prism_hadamard_qwen35::model) decoder_layer_index: usize,
+}
+
+/// The two rate activations every gated-delta recurrence consumes.
+struct GatedDeltaRates<'a> {
+    update_rates: &'a MlxArray,
+    decays: &'a MlxArray,
+}
 
 use super::super::PrismHadamardModelError;
 use super::super::weights::LinearLayerWeights;
@@ -23,8 +50,7 @@ impl super::super::PrismHadamardTextModel {
         normalized_input: &MlxArray,
         token_count: i32,
         layer: &LinearLayerWeights,
-        convolution_state: &mut ConvolutionState,
-        recurrent_state: &mut GatedDeltaRecurrentState,
+        linear_layer_state: LinearLayerState<'_>,
     ) -> Result<MlxArray, PrismHadamardModelError> {
         let text = self.pack.config().text();
         let rms_norm_epsilon = f32::from_bits(text.rms_norm_epsilon_bits);
@@ -70,26 +96,27 @@ impl super::super::PrismHadamardTextModel {
             )
             .map_err(PrismHadamardModelError::Forward)?;
 
-        let convolution_input = convolution_state
-            .update(&self.runtime, &mixed_queries_keys_values, token_count)
-            .map_err(PrismHadamardModelError::ForwardRuntime)?;
-        let head_queries_keys_values =
-            self.convolution_to_normalized_heads(&convolution_input, token_count, layer)?;
-        let current_recurrent_state = recurrent_state
-            .current_or_zero(&self.runtime)
-            .map_err(PrismHadamardModelError::ForwardRuntime)?;
-        let (recurrent_output, next_recurrent_state) = qwen3_5_gated_delta_sequence(
-            &self.runtime,
-            self.gated_delta_kernel.as_ref(),
-            &head_queries_keys_values.0,
-            &head_queries_keys_values.1,
-            &head_queries_keys_values.2,
-            &decays,
-            &update_rates,
-            &current_recurrent_state,
-        )
-        .map_err(PrismHadamardModelError::ForwardRuntime)?;
-        recurrent_state.set_next(next_recurrent_state);
+        let gated_delta_rates = GatedDeltaRates {
+            update_rates: &update_rates,
+            decays: &decays,
+        };
+        let recurrent_output = if linear_layer_state.boundary_checkpoints.is_some() {
+            self.recur_recording_boundary_states(
+                &mixed_queries_keys_values,
+                token_count,
+                layer,
+                linear_layer_state,
+                gated_delta_rates,
+            )?
+        } else {
+            self.recur_over_chunk(
+                &mixed_queries_keys_values,
+                token_count,
+                layer,
+                linear_layer_state,
+                gated_delta_rates,
+            )?
+        };
 
         let normalized_output = self
             .runtime
@@ -114,6 +141,105 @@ impl super::super::PrismHadamardTextModel {
             .output
             .forward(&self.runtime, &rotated_gated_output)
             .map_err(PrismHadamardModelError::Forward)
+    }
+
+    /// The convolution window and gated-delta recurrence over a chunk, the
+    /// route every forward takes unless the chunk holds a block boundary
+    /// before its end. Returns the recurrence output and moves both states on.
+    fn recur_over_chunk(
+        &self,
+        mixed_queries_keys_values: &MlxArray,
+        token_count: i32,
+        layer: &LinearLayerWeights,
+        linear_layer_state: LinearLayerState<'_>,
+        gated_delta_rates: GatedDeltaRates<'_>,
+    ) -> Result<MlxArray, PrismHadamardModelError> {
+        let convolution_input = linear_layer_state
+            .convolution_state
+            .update(&self.runtime, mixed_queries_keys_values, token_count)
+            .map_err(PrismHadamardModelError::ForwardRuntime)?;
+        let head_queries_keys_values =
+            self.convolution_to_normalized_heads(&convolution_input, token_count, layer)?;
+        let current_recurrent_state = linear_layer_state
+            .recurrent_state
+            .current_or_zero(&self.runtime)
+            .map_err(PrismHadamardModelError::ForwardRuntime)?;
+        let (recurrent_output, next_recurrent_state) = qwen3_5_gated_delta_sequence(
+            &self.runtime,
+            self.gated_delta_kernel.as_ref(),
+            &head_queries_keys_values.0,
+            &head_queries_keys_values.1,
+            &head_queries_keys_values.2,
+            gated_delta_rates.decays,
+            gated_delta_rates.update_rates,
+            &current_recurrent_state,
+        )
+        .map_err(PrismHadamardModelError::ForwardRuntime)?;
+        linear_layer_state
+            .recurrent_state
+            .set_next(next_recurrent_state);
+        Ok(recurrent_output)
+    }
+
+    /// The same convolution and recurrence through the shared boundary
+    /// routes, which also return this layer's convolution and recurrent state
+    /// at every block boundary inside the chunk, as the Qwen 3.5 layers do;
+    /// the collector keeps them for the blocks the chunk completes.
+    fn recur_recording_boundary_states(
+        &self,
+        mixed_queries_keys_values: &MlxArray,
+        token_count: i32,
+        layer: &LinearLayerWeights,
+        linear_layer_state: LinearLayerState<'_>,
+        gated_delta_rates: GatedDeltaRates<'_>,
+    ) -> Result<MlxArray, PrismHadamardModelError> {
+        let LinearLayerState {
+            convolution_state,
+            recurrent_state,
+            boundary_checkpoints,
+        } = linear_layer_state;
+        let LayerBoundaryCheckpoints {
+            collector,
+            decoder_layer_index,
+        } = boundary_checkpoints.ok_or_else(missing_boundary_collector)?;
+        let convolution_update = convolution_state
+            .update_with_boundary_checkpoints(
+                &self.runtime,
+                mixed_queries_keys_values,
+                token_count,
+                collector.completed_prefill_chunk_tokens(),
+            )
+            .map_err(PrismHadamardModelError::ForwardRuntime)?;
+        let head_queries_keys_values = self.convolution_to_normalized_heads(
+            &convolution_update.convolution_input,
+            token_count,
+            layer,
+        )?;
+        let current_recurrent_state = recurrent_state
+            .current_or_zero(&self.runtime)
+            .map_err(PrismHadamardModelError::ForwardRuntime)?;
+        let checkpointed_recurrence = qwen3_5_gated_delta_sequence_with_boundary_checkpoints(
+            &self.runtime,
+            self.gated_delta_checkpoint_kernel.as_ref(),
+            &head_queries_keys_values.0,
+            &head_queries_keys_values.1,
+            &head_queries_keys_values.2,
+            gated_delta_rates.decays,
+            gated_delta_rates.update_rates,
+            &current_recurrent_state,
+            collector.completed_prefill_chunk_tokens(),
+            collector.checkpoint_interval_token_count(),
+        )
+        .map_err(PrismHadamardModelError::ForwardRuntime)?;
+        recurrent_state.set_next(checkpointed_recurrence.next_recurrent_state);
+        collector
+            .record_linear_attention_layer(
+                decoder_layer_index,
+                convolution_update.boundary_convolution_states,
+                checkpointed_recurrence.recurrent_boundary_states,
+            )
+            .map_err(PrismHadamardModelError::ForwardRuntime)?;
+        Ok(checkpointed_recurrence.sequence_outputs)
     }
 
     /// The composed depthwise convolution, SiLU, head split, and both
@@ -209,4 +335,13 @@ impl super::super::PrismHadamardTextModel {
             .map_err(PrismHadamardModelError::Forward)?;
         Ok((queries, keys, values))
     }
+}
+
+fn missing_boundary_collector() -> PrismHadamardModelError {
+    PrismHadamardModelError::ForwardRuntime(
+        runtime_integration::MlxRuntimeError::RuntimeOperation {
+            operation: "record folded-ternary astro-ssd-prompt-cache boundary states",
+            description: "the boundary route ran without its collector".to_owned(),
+        },
+    )
 }

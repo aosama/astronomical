@@ -76,19 +76,10 @@ impl Qwen3_5FinalizationHooks for PrismHadamardQwen35InferenceExecution {
 impl Qwen3_5DecodeStepHooks for PrismHadamardQwen35InferenceExecution {
     fn advance_prompt_prefill_if_pending(
         &mut self,
-        _request_id: RequestId,
+        request_id: RequestId,
         active_generation: &mut PrismHadamardQwen35ActiveGeneration,
     ) -> Result<Option<GeneratedToken>, InferenceEngineError> {
-        if active_generation
-            .engine_extension
-            .remaining_prompt_token_ids
-            .is_empty()
-        {
-            return Ok(None);
-        }
-        let prompt_processing_chunk_tokens = self.prompt_processing_chunk_tokens();
-        self.prefill_next_chunk(active_generation, prompt_processing_chunk_tokens)
-            .map(Some)
+        self.advance_prompt_prefill(request_id, active_generation)
     }
 
     /// The folded-ternary model is fully resident, so there is nothing to

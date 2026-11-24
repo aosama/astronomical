@@ -187,7 +187,7 @@ fn should_finalize_the_request_at_once_when_a_step_fails() {
 
 #[test]
 fn should_submit_the_successor_early_only_when_the_read_cannot_change_it() {
-    let mut active_generation = test_engine_request(PrismRequestExtension::default());
+    let mut active_generation = test_engine_request(PrismRequestExtension);
     active_generation.maximum_output_tokens = 3;
     assert!(successor_may_be_submitted_before_read(&active_generation));
 

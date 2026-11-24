@@ -15,9 +15,9 @@ use crate::qwen3_5_core::model::Qwen3_5ServingModel;
 use crate::qwen3_5_core::model::model_chunking_configuration::Qwen3_5ModelChunkingConfiguration;
 use crate::qwen3_5_core::vision::{Qwen3_5ImageProcessor, Qwen3_5VisionConfig};
 use crate::{
-    AstroSsdPromptCacheDiskStore, AstroSsdPromptCacheDiskStoreConfig,
-    AstroSsdPromptCacheModelContract, InferenceEngineError, PerformanceAttribution,
-    PerformanceOperation, PersistentVisualEmbeddingModelContract,
+    AstroDecoderStateCacheLayout, AstroSsdPromptCacheDiskStore, AstroSsdPromptCacheDiskStoreConfig,
+    AstroSsdPromptCacheModelContract, AstroSsdPromptCacheModelContractError, InferenceEngineError,
+    PerformanceAttribution, PerformanceOperation, PersistentVisualEmbeddingModelContract,
 };
 
 use super::astro_ssd_prompt_cache_startup_logging;
@@ -98,6 +98,22 @@ pub fn resolve_visual_embedding_model_contract(
     })
 }
 
+/// Sizes a model's persistent `astro_ssd_prompt_cache` contract from its
+/// identity, `astro_decoder_state_cache` layout, position budget, active
+/// memory limit, disk quota, configured block size and checkpoint stride, in
+/// [`AstroSsdPromptCacheModelContract::resolve`]'s argument order.
+pub type AstroSsdPromptCacheContractResolver =
+    fn(
+        String,
+        String,
+        AstroDecoderStateCacheLayout,
+        usize,
+        u64,
+        u64,
+        Option<usize>,
+        u32,
+    ) -> Result<AstroSsdPromptCacheModelContract, AstroSsdPromptCacheModelContractError>;
+
 /// Resolves the persistent astro SSD prompt cache model-state storage contract from
 /// the model's `astro_decoder_state_cache` layout, position budget, active memory limit,
 /// and the request's chunking overrides.
@@ -107,10 +123,11 @@ fn resolve_astro_ssd_prompt_cache_model_contract(
     chunking: &WorkerChunkingConfiguration,
     resolved_model_id: &str,
     resolved_model_revision: &str,
+    contract_resolver: AstroSsdPromptCacheContractResolver,
 ) -> Result<AstroSsdPromptCacheModelContract, InferenceEngineError> {
     let global_astro_ssd_prompt_cache_maximum_size_bytes =
         astro_ssd_prompt_cache_disk_store_config.global_astro_ssd_prompt_cache_maximum_size_bytes();
-    AstroSsdPromptCacheModelContract::resolve(
+    contract_resolver(
         resolved_model_id.to_owned(),
         resolved_model_revision.to_owned(),
         model.astro_decoder_state_cache_layout().clone(),
@@ -133,7 +150,8 @@ fn resolve_astro_ssd_prompt_cache_model_contract(
 /// disabled `astro_ssd_prompt_cache` yields no contract and no store, so it cannot fail model
 /// loading because of storage alignment, quota, stale files, or filesystem
 /// availability (contract derivation is intentionally inside the same branch
-/// as store ownership).
+/// as store ownership). The contract is sized by
+/// [`AstroSsdPromptCacheModelContract::resolve`].
 pub fn open_astro_ssd_prompt_cache(
     astro_ssd_prompt_cache_disk_store_config: Option<AstroSsdPromptCacheDiskStoreConfig>,
     model: &impl Qwen3_5ServingModel,
@@ -141,6 +159,38 @@ pub fn open_astro_ssd_prompt_cache(
     resolved_model_id: &str,
     resolved_model_revision: &str,
     persistent_visual_embedding_model_contract: Option<&PersistentVisualEmbeddingModelContract>,
+    model_loading_performance_attribution: &mut PerformanceAttribution,
+) -> Result<
+    (
+        Option<AstroSsdPromptCacheModelContract>,
+        Option<Arc<AstroSsdPromptCacheDiskStore>>,
+    ),
+    InferenceEngineError,
+> {
+    open_astro_ssd_prompt_cache_with_contract_resolver(
+        astro_ssd_prompt_cache_disk_store_config,
+        model,
+        chunking,
+        resolved_model_id,
+        resolved_model_revision,
+        persistent_visual_embedding_model_contract,
+        AstroSsdPromptCacheModelContract::resolve,
+        model_loading_performance_attribution,
+    )
+}
+
+/// Opens the `astro_ssd_prompt_cache` as [`open_astro_ssd_prompt_cache`]
+/// does, with the contract sized by `contract_resolver`; an engine whose
+/// model needs its contract fitted to the disk quota passes that resolver.
+#[allow(clippy::too_many_arguments)]
+pub fn open_astro_ssd_prompt_cache_with_contract_resolver(
+    astro_ssd_prompt_cache_disk_store_config: Option<AstroSsdPromptCacheDiskStoreConfig>,
+    model: &impl Qwen3_5ServingModel,
+    chunking: &WorkerChunkingConfiguration,
+    resolved_model_id: &str,
+    resolved_model_revision: &str,
+    persistent_visual_embedding_model_contract: Option<&PersistentVisualEmbeddingModelContract>,
+    contract_resolver: AstroSsdPromptCacheContractResolver,
     model_loading_performance_attribution: &mut PerformanceAttribution,
 ) -> Result<
     (
@@ -159,6 +209,7 @@ pub fn open_astro_ssd_prompt_cache(
         chunking,
         resolved_model_id,
         resolved_model_revision,
+        contract_resolver,
     )?;
     let astro_ssd_prompt_cache = open_and_scan_astro_ssd_prompt_cache_store(
         astro_ssd_prompt_cache_disk_store_config,

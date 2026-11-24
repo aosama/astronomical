@@ -206,15 +206,9 @@ fn astro_ssd_prompt_cache_disk_store_config_for(
         })
 }
 
-/// The startup values only the folded-ternary load reads.
-///
-/// The durable `astro_ssd_prompt_cache` block size and checkpoint stride are
-/// its configuration, not the prefill chunk size: they are contract identity
-/// (the storage fingerprint embeds the block count) and must satisfy the
-/// layout's persistence alignment, which an arbitrary chunk size does not.
-/// The configured block token count is none unless the operator set it, and
-/// the common-prefix stride is floored at one block so checkpointing always
-/// has a stride.
+/// The startup values only the folded-ternary load reads. The
+/// `astro_ssd_prompt_cache` block size and checkpoint stride are read from
+/// the chunking settings by the shared open step.
 pub(super) fn pending_load_for(
     serving_settings: &PrismHadamardQwen35ServingSettings,
     effective_mlx_memory_ceiling_bytes: usize,
@@ -224,12 +218,6 @@ pub(super) fn pending_load_for(
     PrismHadamardQwen35PendingLoad {
         effective_mlx_memory_ceiling_bytes,
         mlx_buffer_cache_limit_bytes,
-        configured_astro_ssd_prompt_cache_block_token_count: chunking
-            .ssd_prompt_cache_block_tokens
-            .map(|block_token_count| block_token_count as usize),
-        ssd_prompt_cache_common_prefix_stride_blocks: chunking
-            .ssd_prompt_cache_common_prefix_stride_blocks
-            .max(1),
         neural_engine_mlp_prefill_requested: chunking.experimental_neural_engine_prefill_enabled,
     }
 }

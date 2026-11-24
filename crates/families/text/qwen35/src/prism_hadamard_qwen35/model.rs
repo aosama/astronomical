@@ -62,6 +62,11 @@ pub struct PrismHadamardTextModel {
     /// one-token MLX ops route, which is orders of magnitude slower on
     /// prompt processing and exists only as the documented fallback.
     pub gated_delta_kernel: Option<MlxMetalKernel>,
+    /// The fused gated-delta kernel that also returns the recurrent state at
+    /// `astro_ssd_prompt_cache` block boundaries inside a prompt chunk,
+    /// retained when this GPU passes its probe; `None` takes the ops route
+    /// that snapshots the same positions.
+    pub gated_delta_checkpoint_kernel: Option<MlxMetalKernel>,
     /// The one-launch signed Hadamard rotation, retained when this GPU
     /// passes its bit-exact probe and the pack's block size is one the
     /// kernel reproduces; `None` keeps the composed three-launch route.
@@ -129,6 +134,8 @@ impl PrismHadamardTextModel {
             );
             None
         };
+        let gated_delta_checkpoint_kernel =
+            retained_gated_delta_checkpoint_kernel(kernel_capabilities)?;
         let fused_rotation_kernel = retained_fused_rotation_kernel(
             kernel_capabilities,
             pack.hadamard_contract().block_size(),
@@ -144,6 +151,7 @@ impl PrismHadamardTextModel {
             compiled_gated_delta_rate_activation,
             compiled_dual_head_norm,
             gated_delta_kernel,
+            gated_delta_checkpoint_kernel,
             fused_rotation_kernel,
             weights,
             gdn_query_scale_weight,
@@ -218,6 +226,24 @@ impl PrismHadamardTextModel {
             .copied()
             .ok_or(PrismHadamardModelError::EmptyGeneration)
     }
+}
+
+/// The boundary-checkpoint gated-delta kernel when this GPU passed its probe,
+/// under the same capability check the Qwen 3.5 loaders use.
+fn retained_gated_delta_checkpoint_kernel(
+    kernel_capabilities: &crate::WorkerKernelCapabilities,
+) -> Result<Option<MlxMetalKernel>, PrismHadamardModelError> {
+    if kernel_capabilities
+        .is_custom_kernel_supported(crate::kernel_capability::GATED_DELTA_BOUNDARY_CHECKPOINT)
+    {
+        return crate::qwen3_5_core::model_math::gated_delta_boundary_checkpoints::qwen3_5_gated_delta_checkpoint_kernel()
+            .map(Some)
+            .map_err(PrismHadamardModelError::KernelRetention);
+    }
+    tracing::info!(
+        "gated-delta checkpoint kernel demoted to the MLX ops fallback for this worker process"
+    );
+    Ok(None)
 }
 
 /// The one-launch signed Hadamard rotation when this GPU passed its bit-exact

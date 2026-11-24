@@ -1,125 +1,176 @@
-//! Beside-source tests for the pure chunked-prefill units.
+use ipc_protocol::{RequestId, WorkerEvent};
+use serial_test::serial;
 
-use super::*;
+use crate::prism_hadamard_qwen35::engine::fixture_engine_test_support::{
+    FixtureAstroSsdPromptCache, LoadedFixtureEngine,
+    loaded_fixture_engine_with_astro_ssd_prompt_cache,
+};
+use crate::qwen3_5_core::astro_ssd_prompt_cache_capture::Qwen3_5AstroSsdPromptCacheCapture;
+use crate::{
+    AstroSsdPromptCacheModelContract, EngineGenerationStart, GeneratedToken, MlxInferenceExecution,
+    Qwen3_5InferenceRequest,
+};
+use engine_core::astro_ssd_prompt_cache::quota_bounded_contract::resolve_quota_bounded_astro_ssd_prompt_cache_contract;
 
-#[test]
-fn should_clamp_the_first_chunk_at_the_first_block_boundary_it_would_cross() {
-    let chunk_length = super::prefill_chunk_length(0, 100, 100, Some(32));
-    assert_eq!(chunk_length, 32);
+/// Blocks of 256 tokens, the fixture layout's persistence alignment, read in
+/// chunks of 300 so every chunk holds one block boundary before its end and
+/// the folded-ternary forward records the boundary states itself.
+const FIXTURE_ASTRO_SSD_PROMPT_CACHE: FixtureAstroSsdPromptCache = FixtureAstroSsdPromptCache {
+    prompt_processing_chunk_tokens: 300,
+    block_token_count: 256,
+};
+
+/// 600 prompt tokens: two whole blocks and an 88-token partial tail.
+fn repeated_prompt_token_ids() -> Vec<u32> {
+    (0..600_u32)
+        .map(|token_position| 11 + token_position % 400)
+        .collect()
 }
 
-#[test]
-fn should_anchor_a_later_chunk_on_the_block_boundary_after_its_start() {
-    // One block (32 tokens) is already processed; the next forward may run
-    // to the following boundary at 64 (32 tokens), never past it.
-    assert_eq!(super::prefill_chunk_length(32, 100, 100, Some(32)), 32);
-    // A start one token before that boundary may only consume that token.
-    assert_eq!(super::prefill_chunk_length(31, 100, 100, Some(32)), 1);
+fn start_greedy(
+    fixture_engine: &mut LoadedFixtureEngine,
+    request_id: u64,
+) -> EngineGenerationStart {
+    fixture_engine
+        .execution
+        .start_generation(Qwen3_5InferenceRequest::new_sampling(
+            RequestId::new(request_id),
+            repeated_prompt_token_ids(),
+            2,
+            0,
+            1_000,
+            None,
+        ))
+        .expect("the request should start")
 }
 
-#[test]
-fn should_keep_the_requested_chunk_end_without_a_astro_ssd_prompt_cache() {
-    assert_eq!(super::prefill_chunk_length(0, 100, 100, None), 100);
-}
-
-#[test]
-fn should_stop_the_chunk_short_when_the_remaining_prompt_runs_out_first() {
-    // Ten tokens are requested but only three remain, so the chunk ends at
-    // the prompt end even though the block boundary is far beyond it.
-    assert_eq!(super::prefill_chunk_length(7, 3, 100, Some(32)), 3);
-}
-
-#[test]
-fn should_produce_an_empty_chunk_when_no_prompt_tokens_remain() {
-    assert_eq!(super::prefill_chunk_length(64, 0, 100, Some(32)), 0);
-}
-
-#[test]
-fn should_produce_an_empty_chunk_when_the_chunk_budget_is_zero() {
-    assert_eq!(super::prefill_chunk_length(7, 100, 0, None), 0);
-}
-
-#[test]
-fn should_report_only_the_chunk_own_token_count_as_progress() {
-    let generated_token = super::prefill_progress_token(
-        32,
-        7,
-        None,
-        WorkerPromptWorkReuse {
-            target_eligible_token_count: 128,
-            target_restored_token_count: 64,
-        },
-    );
-    assert_eq!(
-        generated_token,
-        GeneratedToken::PrefillProgress {
-            processed_token_count: 32,
-            elapsed_millis: 7,
-            forward_prefill_chunk_elapsed_millis: 7,
-            completed_prefill_chunk_tokens: 32,
-            mlx_memory_telemetry: None,
-            expert_residency_telemetry: None,
-            expert_memory_mode: Some(ExpertMemoryMode::Resident),
-            prompt_work_reuse: WorkerPromptWorkReuse {
-                target_eligible_token_count: 128,
-                target_restored_token_count: 64,
-            },
-            astro_ssd_prompt_cache_diagnostics: None,
-            neural_engine_chunk: None,
-            prompt_layer_progress: None,
+/// Runs the request until it finalizes itself, returning the token count of
+/// every prompt chunk it read.
+fn run_to_completion(fixture_engine: &mut LoadedFixtureEngine, request_id: u64) -> Vec<u32> {
+    let mut prompt_chunk_token_counts = Vec::new();
+    for _ in 0..16 {
+        match fixture_engine
+            .execution
+            .decode_next_token(RequestId::new(request_id))
+            .expect("the step should succeed")
+        {
+            GeneratedToken::PrefillProgress {
+                processed_token_count,
+                ..
+            } => prompt_chunk_token_counts.push(processed_token_count),
+            GeneratedToken::TokenId {
+                generation_finalization: Some(_),
+                ..
+            } => return prompt_chunk_token_counts,
+            _ => {}
         }
-    );
+    }
+    panic!("the request never finalized itself");
 }
 
 #[test]
-fn should_forward_the_sampled_memory_telemetry_into_the_progress_token() {
-    // The telemetry is opaque here, so the caller's exact value — including
-    // `None` — must reach the progress event untouched.
-    let generated_token = super::prefill_progress_token(
+#[serial]
+fn should_restore_a_repeated_prompt_up_to_its_partial_tail() {
+    let mut fixture_engine =
+        loaded_fixture_engine_with_astro_ssd_prompt_cache(&FIXTURE_ASTRO_SSD_PROMPT_CACHE);
+    let cold_start = start_greedy(&mut fixture_engine, 91);
+    assert_eq!(cold_start.restored_prompt_prefix_token_count(), 0);
+    // The last chunk stops one token short so the 87-token tail up to the
+    // final prompt token can be captured; the final token is read alone.
+    assert_eq!(run_to_completion(&mut fixture_engine, 91), [300, 299, 1]);
+
+    let warm_start = start_greedy(&mut fixture_engine, 92);
+
+    // Both whole blocks and the partial tail are restored: everything but
+    // the final prompt token, which the first reply token needs.
+    assert_eq!(warm_start.restored_prompt_prefix_token_count(), 599);
+    assert_eq!(run_to_completion(&mut fixture_engine, 92), [1]);
+}
+
+#[test]
+#[serial]
+fn should_open_the_store_with_the_quota_bounded_contract() {
+    let fixture_engine =
+        loaded_fixture_engine_with_astro_ssd_prompt_cache(&FIXTURE_ASTRO_SSD_PROMPT_CACHE);
+    let execution_core = &fixture_engine.execution.execution_core;
+    let model = execution_core.loaded_model().expect("the model is loaded");
+    let expected_contract = resolve_quota_bounded_astro_ssd_prompt_cache_contract(
+        model.pack().model_id(),
+        model.pack().revision(),
+        model.astro_decoder_state_cache_layout.clone(),
+        model.pack().config().text().max_position_embeddings as usize,
+        512 * 1024 * 1024,
+        1_073_741_824,
+        Some(256),
         1,
-        0,
-        None,
-        WorkerPromptWorkReuse {
-            target_eligible_token_count: 0,
-            target_restored_token_count: 0,
-        },
+    )
+    .expect("the fixture contract should resolve");
+    let opened_contract: &AstroSsdPromptCacheModelContract = execution_core
+        .astro_ssd_prompt_cache
+        .as_ref()
+        .expect("the store is open")
+        .model_contract_ref();
+    assert_eq!(opened_contract, &expected_contract);
+    assert_eq!(
+        execution_core
+            .astro_ssd_prompt_cache_model_contract
+            .as_ref(),
+        Some(&expected_contract)
     );
-    let GeneratedToken::PrefillProgress {
-        mlx_memory_telemetry,
-        prompt_work_reuse,
-        ..
-    } = generated_token
-    else {
-        panic!("a prefill chunk must report PrefillProgress");
-    };
-    assert_eq!(mlx_memory_telemetry, None);
-    assert_eq!(prompt_work_reuse.target_eligible_token_count, 0);
-    assert_eq!(prompt_work_reuse.target_restored_token_count, 0);
 }
 
 #[test]
-fn should_build_a_zero_length_progress_token_at_the_prompt_end() {
-    let generated_token = super::prefill_progress_token(
-        0,
-        0,
-        None,
-        WorkerPromptWorkReuse {
-            target_eligible_token_count: 0,
-            target_restored_token_count: 0,
-        },
+#[serial]
+fn should_report_and_clear_the_store_through_the_shared_core() {
+    let mut fixture_engine =
+        loaded_fixture_engine_with_astro_ssd_prompt_cache(&FIXTURE_ASTRO_SSD_PROMPT_CACHE);
+    start_greedy(&mut fixture_engine, 93);
+    run_to_completion(&mut fixture_engine, 93);
+
+    assert!(
+        fixture_engine
+            .execution
+            .collect_astro_ssd_prompt_cache_stats()
+            .expect("the statistics should be read")
+            .is_some()
     );
-    let GeneratedToken::PrefillProgress {
-        processed_token_count,
-        elapsed_millis,
-        forward_prefill_chunk_elapsed_millis,
-        completed_prefill_chunk_tokens,
-        ..
-    } = generated_token
+    let Some(WorkerEvent::AstroSsdPromptCacheCleared { blocks_removed, .. }) = fixture_engine
+        .execution
+        .clear_astro_ssd_prompt_cache(None)
+        .expect("the store should clear")
     else {
-        panic!("a prefill chunk must report PrefillProgress");
+        panic!("an open store reports what it cleared");
     };
-    assert_eq!(processed_token_count, 0);
-    assert_eq!(elapsed_millis, 0);
-    assert_eq!(forward_prefill_chunk_elapsed_millis, 0);
-    assert_eq!(completed_prefill_chunk_tokens, 0);
+    assert!(blocks_removed >= 2, "both whole blocks were published");
+    // Negative: with the store cleared, the same prompt starts cold.
+    assert_eq!(
+        start_greedy(&mut fixture_engine, 94).restored_prompt_prefix_token_count(),
+        0
+    );
+}
+
+#[test]
+#[serial]
+fn should_retry_a_blocked_publication_without_evicting_anything() {
+    let mut fixture_engine =
+        loaded_fixture_engine_with_astro_ssd_prompt_cache(&FIXTURE_ASTRO_SSD_PROMPT_CACHE);
+    start_greedy(&mut fixture_engine, 95);
+    let execution = &mut fixture_engine.execution;
+    let mut active_generation = execution
+        .execution_core
+        .active_request
+        .take()
+        .expect("the request is active");
+    let decoder_state_bytes = active_generation.request_decoder_state.payload_byte_count();
+    let model = execution
+        .execution_core
+        .loaded_model()
+        .expect("the model is loaded");
+    execution
+        .reclaim_before_publication_retry(model, &mut active_generation, 1_073_741_824)
+        .expect("a folded pack has nothing to evict before the retry");
+    assert_eq!(
+        active_generation.request_decoder_state.payload_byte_count(),
+        decoder_state_bytes
+    );
 }

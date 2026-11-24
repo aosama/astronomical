@@ -8,8 +8,8 @@
 use ipc_protocol::{ExpertMemoryMode, RequestId};
 use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
+use super::PrismHadamardQwen35InferenceExecution;
 use super::active_generation::{PrismRequestStart, prism_active_generation};
-use super::{PrismHadamardQwen35InferenceExecution, PrismHadamardQwen35PendingLoad};
 use crate::EngineGenerationStart;
 use crate::GeneratedToken;
 use crate::GenerationFinalization;
@@ -25,6 +25,7 @@ use crate::prism_hadamard_qwen35::model::PrismHadamardTextModel;
 use crate::qwen3_5_core::engine_errors::fatal_engine_error;
 use crate::qwen3_5_core::shared_execution::decode_step::advance_generation;
 use crate::qwen3_5_core::shared_execution::generation_finalization_steps::Qwen3_5FinalizationHooks;
+use crate::qwen3_5_core::shared_execution::model_loading_steps::open_astro_ssd_prompt_cache_with_contract_resolver;
 use crate::qwen3_5_core::shared_execution::{
     generation_request_validation, generation_start_steps,
 };
@@ -82,10 +83,7 @@ impl MlxInferenceExecution for PrismHadamardQwen35InferenceExecution {
         self.execution_core.model_id = Some(model_id);
         self.execution_core.model_revision = Some(model_revision);
         self.execution_core.model = Some(model);
-        self.open_astro_ssd_prompt_cache_store_after_load(
-            &pending_load,
-            &mut performance_attribution,
-        )?;
+        self.open_astro_ssd_prompt_cache_store_after_load(&mut performance_attribution)?;
         self.record_model_loading_performance_attribution(performance_attribution);
         Ok(EngineLoadResult::new()
             .with_expert_memory_mode(Some(ExpertMemoryMode::Resident))
@@ -109,8 +107,8 @@ impl MlxInferenceExecution for PrismHadamardQwen35InferenceExecution {
         )?;
         // The returned reservation is what the request's context may occupy;
         // the folded-ternary engine keeps no memory governor, so nothing is
-        // admitted against it yet.
-        let _reserved_context_tokens =
+        // admitted against it, and a restore may not go past it.
+        let reserved_context_tokens =
             generation_request_validation::validate_generation_request_and_resolve_reserved_context(
                 &self.execution_core.generation_request_limits(),
                 &inference_request,
@@ -124,44 +122,35 @@ impl MlxInferenceExecution for PrismHadamardQwen35InferenceExecution {
             inference_request.sampling_strategy(),
         )?;
         let prompt_token_ids = inference_request.input_token_ids().to_vec();
-        let execution_core = &mut self.execution_core;
-        // The model is borrowed by field so the counters can be lent mutably
-        // beside it; validation already refused a request with no model.
-        let model = execution_core
-            .model
-            .as_ref()
-            .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
-        let (request_decoder_state, restore_outcome) =
-            super::starting_decoder_state::starting_request_decoder_state(
-                model,
-                execution_core.astro_ssd_prompt_cache.as_deref(),
-                &prompt_token_ids,
-                execution_core.full_attention_kv_state_growth_tokens,
-                &mut execution_core.astro_ssd_prompt_cache_counters,
-                &mut performance_attribution,
-            )?;
-        let restored_token_count = restore_outcome.restored_token_count;
+        let starting_decoder_state = self.starting_request_decoder_state(
+            inference_request.request_id(),
+            &prompt_token_ids,
+            reserved_context_tokens,
+            &mut performance_attribution,
+        )?;
         let request_start = PrismRequestStart {
             prompt_token_ids,
-            request_decoder_state,
-            restored_token_count,
-            last_restored_block_key: restore_outcome.last_restored_astro_ssd_prompt_cache_block_key,
+            request_decoder_state: starting_decoder_state.request_decoder_state,
+            restore_outcome: starting_decoder_state.restore_outcome,
             random_state,
             thinking_budget_state,
             performance_attribution,
-            can_use_astro_ssd_prompt_cache: execution_core.astro_ssd_prompt_cache.is_some(),
+            can_use_astro_ssd_prompt_cache: self.execution_core.astro_ssd_prompt_cache.is_some(),
         };
-        execution_core.active_request = Some(prism_active_generation(
-            &mut inference_request,
-            request_start,
-        ));
-        // A restored prefix always leaves at least one prompt token to read,
-        // so the prompt is still being processed when the request starts.
+        let active_generation = prism_active_generation(&mut inference_request, request_start);
+        let restored_prompt_prefix_token_count = u32::try_from(active_generation.prefill_cursor)
+            .map_err(|_| fatal_engine_error("restored prompt prefix exceeds the u32 range"))?;
+        let initial_prompt_processing_phase = (active_generation.prefill_cursor
+            < active_generation.input_token_ids.len())
+        .then_some(ipc_protocol::WorkerPromptProcessingPhase::Target);
+        let astro_ssd_prompt_cache_diagnostics =
+            active_generation.astro_ssd_prompt_cache_diagnostics.clone();
+        self.execution_core.active_request = Some(active_generation);
         generation_start_steps::build_generation_start_contract(
             self,
-            restored_token_count,
-            Some(ipc_protocol::WorkerPromptProcessingPhase::Target),
-            None,
+            restored_prompt_prefix_token_count,
+            initial_prompt_processing_phase,
+            astro_ssd_prompt_cache_diagnostics,
         )
     }
 
@@ -247,67 +236,45 @@ impl MlxInferenceExecution for PrismHadamardQwen35InferenceExecution {
     fn collect_astro_ssd_prompt_cache_stats(
         &self,
     ) -> Result<Option<WorkerEvent>, InferenceEngineError> {
-        Ok(self.astro_ssd_prompt_cache_stats_event())
+        Ok(self.execution_core.astro_ssd_prompt_cache_stats_event())
     }
 
     fn clear_astro_ssd_prompt_cache(
         &mut self,
         model_id: Option<String>,
     ) -> Result<Option<WorkerEvent>, InferenceEngineError> {
-        let Some(astro_ssd_prompt_cache) = self.execution_core.astro_ssd_prompt_cache.as_ref()
-        else {
-            return Ok(None);
-        };
-        let clear_outcome = astro_ssd_prompt_cache
+        self.execution_core
             .clear_astro_ssd_prompt_cache(model_id.as_deref())
-            .map_err(|clear_error| InferenceEngineError::Fatal {
-                reason: format!(
-                    "folded-ternary astro SSD prompt cache could not be cleared: {clear_error}"
-                ),
-            })?;
-        Ok(Some(WorkerEvent::AstroSsdPromptCacheCleared {
-            model_id: clear_outcome.model_id,
-            blocks_removed: clear_outcome.blocks_removed,
-            bytes_freed: clear_outcome.bytes_freed,
-        }))
     }
 }
 
 impl PrismHadamardQwen35InferenceExecution {
     /// Opens the `astro_ssd_prompt_cache` store for the model `load` just
-    /// seated, when the worker configured one, against the startup ceiling
-    /// the store's contract has always been sized with.
+    /// seated, when the worker configured one, through the shared open step
+    /// with the quota-bounded contract the folded-ternary store has always
+    /// been sized with.
     fn open_astro_ssd_prompt_cache_store_after_load(
         &mut self,
-        pending_load: &PrismHadamardQwen35PendingLoad,
         performance_attribution: &mut crate::PerformanceAttribution,
     ) -> Result<(), InferenceEngineError> {
-        let execution_core = &mut self.execution_core;
-        let Some(astro_ssd_prompt_cache_disk_store_config) = execution_core
-            .astro_ssd_prompt_cache_disk_store_config
-            .clone()
-        else {
-            return Ok(());
-        };
-        let loaded_model =
-            execution_core
-                .model
-                .as_ref()
-                .ok_or_else(|| InferenceEngineError::Fatal {
-                    reason: "folded-ternary model is not loaded".to_owned(),
-                })?;
-        let astro_ssd_prompt_cache =
-            super::super::astro_ssd_prompt_cache::open_astro_ssd_prompt_cache_store(
-                pending_load.effective_mlx_memory_ceiling_bytes,
+        let execution_core = &self.execution_core;
+        let loaded_model = execution_core.loaded_model()?;
+        let (astro_ssd_prompt_cache_model_contract, astro_ssd_prompt_cache) =
+            open_astro_ssd_prompt_cache_with_contract_resolver(
+                execution_core
+                    .astro_ssd_prompt_cache_disk_store_config
+                    .clone(),
                 loaded_model,
+                &execution_core.chunking,
                 loaded_model.pack().model_id(),
                 loaded_model.pack().revision(),
-                pending_load.configured_astro_ssd_prompt_cache_block_token_count,
-                pending_load.ssd_prompt_cache_common_prefix_stride_blocks,
-                astro_ssd_prompt_cache_disk_store_config,
+                None,
+                super::astro_ssd_prompt_cache_hooks::prism_quota_bounded_contract,
                 performance_attribution,
             )?;
-        execution_core.astro_ssd_prompt_cache = Some(astro_ssd_prompt_cache);
+        self.execution_core.astro_ssd_prompt_cache_model_contract =
+            astro_ssd_prompt_cache_model_contract;
+        self.execution_core.astro_ssd_prompt_cache = astro_ssd_prompt_cache;
         Ok(())
     }
 
