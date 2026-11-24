@@ -19,7 +19,7 @@ workspace = true
 
 [features]
 default = []
-direct-mlx = ["decision-models/direct-mlx", "dep:runtime-integration", "dep:mlx-bridge", "qwen35/direct-mlx", "engine-core/direct-mlx", "model-primitives/direct-mlx"]
+direct-mlx = ["decision-models/direct-mlx", "dep:runtime-integration", "dep:mlx-bridge", "model-primitives/direct-mlx"]
 
 # The Laya decision family, on the shared ModernBERT trunk.
 # One crate per family (issue #2473, Step 7); the decision-models shell
@@ -30,11 +30,7 @@ direct-mlx = ["decision-models/direct-mlx", "dep:runtime-integration", "dep:mlx-
 decision-models = { path = "../decision-models" }
 decision-contract = { path = "../../../contracts/decision-contract" }
 decision-training = { path = "../../../tooling/decision-training" }
-engine-core = { path = "../../../engine/engine-core" }
 model-primitives = { path = "../../../engine/model-primitives" }
-ipc-protocol = { path = "../../../contracts/ipc-protocol" }
-memory-policy = { path = "../../../foundation/memory-policy" }
-qwen35 = { path = "../../text/qwen35" }
 runtime-integration = { path = "../../../foundation/runtime-integration", features = ["mlx"], optional = true }
 mlx-bridge = { workspace = true, optional = true }
 safetensors.workspace = true
@@ -43,8 +39,6 @@ thiserror.workspace = true
 tokenizers.workspace = true
 
 [dev-dependencies]
-# Skips the tests of Astronomical's own Metal kernels where there is no Metal.
-test-harness = { path = "../../../foundation/test-harness" }
 model-primitives = { path = "../../../engine/model-primitives", features = ["test-support"] }
 # The GPU tests sample the process-global MLX allocator, so they serialize.
 serial_test.workspace = true

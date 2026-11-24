@@ -137,7 +137,8 @@ impl<Family: DecisionFamily> DecisionEngineShell<Family> {
         })
     }
 
-    /// The loaded model, if `load` has run.
+    /// The loaded model, if `load` has run. Public because each family is a
+    /// crate of its own, and its layout helpers read the state from there.
     pub fn loaded_state(&self) -> Option<&Rc<Family::LoadedState>> {
         self.loaded_state.as_ref()
     }
