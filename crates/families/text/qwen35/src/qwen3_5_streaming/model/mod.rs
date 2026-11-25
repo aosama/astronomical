@@ -54,6 +54,7 @@ pub mod memory_governance;
 mod mlx_buffer_cache_bound;
 pub mod mtp_drafting;
 pub mod mtp_head;
+mod tree_verification_forward;
 // Holds one streamed layer for every span of a layer-at-a-time prompt.
 pub mod held_prompt_expert_layer;
 // Reads the next streamed layer while the graphics processor computes.

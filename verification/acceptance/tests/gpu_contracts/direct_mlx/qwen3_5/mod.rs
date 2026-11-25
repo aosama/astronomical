@@ -30,6 +30,7 @@ mod request_decoder_state;
 mod restore_workspace;
 mod row_exact_tree_attention;
 mod sampler;
+mod streaming_draft_tree_verification;
 mod tree_attention_context_cost;
 mod vision_padding_fusion_probe;
 mod vision_padding_zero_cache;

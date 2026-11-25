@@ -7,10 +7,11 @@ use mlx_bridge::MlxArray;
 
 use super::Qwen3_5ResidentModel;
 use super::verification_forward::VerificationLogitsMode;
+use crate::PerformanceAttribution;
 use crate::qwen3_5_core::model::Qwen3_5ModelBase;
-use crate::qwen3_5_core::model::draft_tree_verification::{DraftTreeTarget, request_layer_state};
-use crate::qwen3_5_core::model::tree_layer_attention::{TreeLayerRows, TreeRowInputs};
-use crate::{PerformanceAttribution, RequestDecoderStateStack};
+use crate::qwen3_5_core::model::draft_tree_verification::{
+    DraftTreeTarget, TreeLayerFeedForward, TreeLayerWeights,
+};
 use text_generation::execution_error::TextExecutionError;
 
 pub use crate::qwen3_5_core::model::draft_tree_verification::Qwen3_5DraftTreeVerification;
@@ -20,45 +21,40 @@ impl DraftTreeTarget for Qwen3_5ResidentModel {
         self
     }
 
-    fn forward_tree_layer(
+    /// Every resident layer is bound in memory.
+    fn tree_layer_weights(
         &self,
-        hidden_states: &MlxArray,
-        tree: &TreeRowInputs,
         layer_index: usize,
-        request_decoder_state: &mut RequestDecoderStateStack,
-    ) -> Result<(MlxArray, TreeLayerRows), TextExecutionError> {
+    ) -> Result<Box<dyn TreeLayerWeights + '_>, TextExecutionError> {
         let decoder_layer_weights = self
             .weights
             .decoder_layer_weights
             .get(layer_index)
             .ok_or(TextExecutionError::MissingDecoderLayerWeights { layer_index })?;
-        let layer_model_state = request_layer_state(request_decoder_state, layer_index)?;
-        let (attention_output, rows) = self.forward_tree_layer_attention(
-            hidden_states,
-            tree,
-            layer_index,
-            decoder_layer_weights,
-            layer_model_state,
-        )?;
-        let layer_output = self.forward_decoder_layer_feed_forward(
-            &attention_output,
-            tree.row_count,
-            layer_index,
-            decoder_layer_weights,
+        Ok(Box::new(decoder_layer_weights))
+    }
+
+    fn tree_layer_feed_forward(
+        &self,
+        feed_forward: TreeLayerFeedForward<'_>,
+    ) -> Result<MlxArray, TextExecutionError> {
+        self.forward_decoder_layer_feed_forward(
+            feed_forward.attention_output,
+            feed_forward.row_count,
+            feed_forward.layer_index,
+            feed_forward.decoder_layer_weights,
             &mut PerformanceAttribution::disabled(),
-        )?;
-        Ok((layer_output, rows))
+        )
     }
 
     fn tree_per_row_logits(
         &self,
         hidden_states: &MlxArray,
-        row_count: i32,
     ) -> Result<MlxArray, TextExecutionError> {
         self.verification_per_position_logits(
             hidden_states,
             VerificationLogitsMode::AllPositions,
-            row_count,
+            hidden_states.shape()[1],
         )?
         .ok_or(TextExecutionError::InvalidInput {
             description: "a draft tree must produce logits",

@@ -19,6 +19,7 @@ use mlx_bridge::{MlxArray, MlxDtype};
 use super::Qwen3_5ModelBase;
 use super::tree_layer_attention::{TreeLayerRows, TreeRowInputs};
 use crate::RequestDecoderStateStack;
+use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5DecoderLayerWeights;
 use crate::qwen3_5_core::model_math::gated_delta_tree::TreeRowChains;
 use engine_core::speculative_decoding::tree_rows::TreeRows;
 use text_generation::execution_error::TextExecutionError;
@@ -40,30 +41,81 @@ pub struct Qwen3_5DraftTreeVerification {
     context_offset: i32,
 }
 
+/// What one layer's step over the tree's rows is given.
+pub struct TreeLayerStep<'pass> {
+    /// `[1, rows, hidden]`: the rows as the layer before left them.
+    pub hidden_states: &'pass MlxArray,
+    pub tree: &'pass TreeRowInputs,
+    pub layer_index: usize,
+    pub request_decoder_state: &'pass mut RequestDecoderStateStack,
+}
+
+/// One layer's weights as a pass holds them: a reference to weights bound
+/// in memory, or the owner of a layer read for this pass alone.
+pub trait TreeLayerWeights {
+    fn decoder_layer_weights(&self) -> &Qwen3_5DecoderLayerWeights;
+}
+
+impl TreeLayerWeights for &Qwen3_5DecoderLayerWeights {
+    fn decoder_layer_weights(&self) -> &Qwen3_5DecoderLayerWeights {
+        self
+    }
+}
+
+/// What a layer's feed-forward over the tree's rows is given.
+pub struct TreeLayerFeedForward<'pass> {
+    pub attention_output: &'pass super::Qwen3_5DecoderLayerAttentionOutput,
+    pub row_count: i32,
+    pub layer_index: usize,
+    pub decoder_layer_weights: &'pass Qwen3_5DecoderLayerWeights,
+}
+
 /// A model a draft tree can be verified against: the shared base, plus the
 /// steps each engine does its own way.
 pub trait DraftTreeTarget {
     /// The shared model the tree's embedding, attention and commit run on.
     fn draft_tree_model_base(&self) -> &Qwen3_5ModelBase;
 
-    /// One layer over every tree row: its attention half from the base
-    /// (`forward_tree_layer_attention`), then its feed-forward from wherever
-    /// this engine keeps the layer's weights.
+    /// Where this engine finds one layer's weights for the pass: bound in
+    /// memory, or read from storage for this pass alone.
+    fn tree_layer_weights(
+        &self,
+        layer_index: usize,
+    ) -> Result<Box<dyn TreeLayerWeights + '_>, TextExecutionError>;
+
+    /// The feed-forward half of one layer over every tree row, from that
+    /// layer's attention output.
+    fn tree_layer_feed_forward(
+        &self,
+        feed_forward: TreeLayerFeedForward<'_>,
+    ) -> Result<MlxArray, TextExecutionError>;
+
+    /// One layer over every tree row: its attention half from the base,
+    /// then this engine's feed-forward.
     fn forward_tree_layer(
         &self,
-        hidden_states: &MlxArray,
-        tree: &TreeRowInputs,
-        layer_index: usize,
-        request_decoder_state: &mut RequestDecoderStateStack,
-    ) -> Result<(MlxArray, TreeLayerRows), TextExecutionError>;
+        layer_step: TreeLayerStep<'_>,
+    ) -> Result<(MlxArray, TreeLayerRows), TextExecutionError> {
+        let layer_index = layer_step.layer_index;
+        let row_count = layer_step.tree.row_count;
+        let layer_weights = self.tree_layer_weights(layer_index)?;
+        let decoder_layer_weights = layer_weights.decoder_layer_weights();
+        let (attention_output, rows) = self
+            .draft_tree_model_base()
+            .tree_layer_attention_in_request(layer_step, decoder_layer_weights)?;
+        let layer_output = self.tree_layer_feed_forward(TreeLayerFeedForward {
+            attention_output: &attention_output,
+            row_count,
+            layer_index,
+            decoder_layer_weights,
+        })?;
+        Ok((layer_output, rows))
+    }
 
     /// `[1, rows, vocabulary]` float32: the target's logits after every row
     /// of the final hidden states.
-    fn tree_per_row_logits(
-        &self,
-        hidden_states: &MlxArray,
-        row_count: i32,
-    ) -> Result<MlxArray, TextExecutionError>;
+    fn tree_per_row_logits(&self, hidden_states: &MlxArray)
+    -> Result<MlxArray, TextExecutionError>;
 
     /// Whether the pass hands the GPU each few layers while the next are
     /// built. An engine whose layers run host steps inside the graph hands
@@ -91,8 +143,12 @@ pub trait DraftTreeTarget {
         let layer_count = base.config.layer_count() as usize;
         let mut layer_rows = Vec::with_capacity(layer_count);
         for layer_index in 0..layer_count {
-            let (next_hidden_states, rows) =
-                self.forward_tree_layer(&hidden_states, &tree, layer_index, request_decoder_state)?;
+            let (next_hidden_states, rows) = self.forward_tree_layer(TreeLayerStep {
+                hidden_states: &hidden_states,
+                tree: &tree,
+                layer_index,
+                request_decoder_state,
+            })?;
             hidden_states = next_hidden_states;
             layer_rows.push(rows);
             if self.starts_tree_layers_asynchronously()
@@ -107,7 +163,7 @@ pub trait DraftTreeTarget {
             }
         }
         Ok(Qwen3_5DraftTreeVerification {
-            per_row_logits: self.tree_per_row_logits(&hidden_states, tree.row_count)?,
+            per_row_logits: self.tree_per_row_logits(&hidden_states)?,
             hidden_state_taps: collected_taps(tap_slots)?,
             layer_rows,
             context_offset,
@@ -159,6 +215,38 @@ pub fn request_layer_state(
 }
 
 impl Qwen3_5ModelBase {
+    /// A layer's attention half over the tree rows, on that layer's state
+    /// in the request: what every engine's layer step begins with.
+    pub fn tree_layer_attention_in_request(
+        &self,
+        layer_step: TreeLayerStep<'_>,
+        decoder_layer_weights: &Qwen3_5DecoderLayerWeights,
+    ) -> Result<(super::Qwen3_5DecoderLayerAttentionOutput, TreeLayerRows), TextExecutionError>
+    {
+        self.forward_tree_layer_attention(
+            layer_step.hidden_states,
+            layer_step.tree,
+            layer_step.layer_index,
+            decoder_layer_weights,
+            request_layer_state(layer_step.request_decoder_state, layer_step.layer_index)?,
+        )
+    }
+
+    /// `[1, rows, vocabulary]` float32 logits after every row of Qwen 3.5's
+    /// final hidden states: the final norm, then the head, widened so two
+    /// rows' picks compare the same way whatever the head's precision.
+    pub fn normalized_vocabulary_logits_for_every_row(
+        &self,
+        hidden_states: &MlxArray,
+    ) -> Result<MlxArray, TextExecutionError> {
+        let normalized_states = self.final_normalized_states(hidden_states)?;
+        let head_logits = self.quantized_linear(
+            &normalized_states,
+            &self.weights.language_model_head_weights,
+        )?;
+        Ok(self.runtime.astype(&head_logits, MlxDtype::Float32)?)
+    }
+
     fn tree_row_embeddings(&self, tree_rows: &TreeRows) -> Result<MlxArray, TextExecutionError> {
         let mut token_ids = Vec::with_capacity(tree_rows.row_count());
         for token_id in &tree_rows.token_ids {

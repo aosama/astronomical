@@ -676,6 +676,11 @@ test-drafted-rewind = "run -p xtask -- test-run --package astronomical-acceptanc
 # logits match feeding its chain alone, committing a branch leaves the state
 # feeding that branch leaves, and a control that commits the other branch
 # differs. Seconds.
+# `test-streaming-draft-tree-verification` is the same contract on the
+# streaming model, whose layer step and evaluation differ: every row's logits
+# match feeding its chain alone there, and committing a branch leaves the
+# streamed state feeding that branch leaves. Seconds.
+test-streaming-draft-tree-verification = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter _streamed_"
 test-draft-tree-verification = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter draft_tree_verification"
 # Gate 2 baseline: where one DFlash2 draft-and-verify round's time goes on the
 # real 27B pair (drafter, draft head, selector, 8-row verify, readback, rewind)
