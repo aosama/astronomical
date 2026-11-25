@@ -949,9 +949,10 @@ measure-mtp-reply-drafting = "run -p xtask -- test-run --package astronomical-ac
 # is decided as every reply after a first one is (`draft_round_payoff`).
 # Compare the `phase=hosted_drafter_silent` and
 # `phase=hosted_drafter_proposing` lines. Pass --configuration PATH as for
-# `measure-expert-misses`. About thirty seconds a case.
+# `measure-expert-misses`. About thirty seconds a case on a mixture-of-experts
+# model, and up to six minutes on a dense model that streams its layers.
 test-hosted-drafter-reply = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --filter drafted_greedy_reply_as_the_plain_reply_begins"
-measure-hosted-drafter-reply = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --case-budget-seconds 150 --filter reply_speed_with_the_hosted_drafter"
+measure-hosted-drafter-reply = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --case-budget-seconds 500 --filter reply_speed_with_the_hosted_drafter"
 test-in-graph-drafted-blocks = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --filter drafted_blocks_are_looked_up_in_the_graph"
 test-in-graph-route-lookup = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --filter whichever_way_routes_are_looked_up"
 measure-in-graph-route-lookup = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --case-budget-seconds 150 --filter reply_speed_with_routes_"
