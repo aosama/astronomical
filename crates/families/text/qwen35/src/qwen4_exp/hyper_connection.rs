@@ -19,6 +19,8 @@ use crate::qwen3_5_core::model_math::dense_projection::Qwen3_5DenseProjection;
 use crate::qwen3_5_core::model_math::weights::take_dense_projection;
 
 use super::centered_norm::grouped_rms_norm;
+use super::lane_mixing_kernels::{LaneMixingKernels, are_all_bfloat16};
+use runtime_integration::MlxRuntime;
 
 /// One hyper-connection's projections. Its lane norm is bound where the
 /// Qwen 3.5 norm it replaces is: the layer's input or post-attention norm,
@@ -104,11 +106,7 @@ impl Qwen3_5ModelBase {
             f32::from_bits(self.config.rms_norm_epsilon_bits()),
         )?;
         let projected_down = self.quantized_linear(&normalized, &connection.mix_down)?;
-        let mix = self.runtime.silu(
-            &self
-                .runtime
-                .multiply_scalar(&projected_down, 1.0 / lane_count as f32)?,
-        )?;
+        let mix = self.lane_mix_gate(&projected_down, lane_count)?;
         let lane_weights = self
             .runtime
             .sigmoid(&self.quantized_linear(&mix, &connection.mix_up)?)?;
@@ -138,15 +136,9 @@ impl Qwen3_5ModelBase {
                 })?;
         let (block_input, normalized) =
             self.read_lanes(lanes, lane_norm_scale, connection, architecture)?;
-        // `2 * sigmoid(score / lanes)` lets a lane take up to twice the output.
         let scores = self.quantized_linear(&normalized, write_back)?;
-        let lane_count = architecture.residual_lane_count as f32;
-        let write_back_weights = self.runtime.multiply_scalar(
-            &self
-                .runtime
-                .sigmoid(&self.runtime.multiply_scalar(&scores, 1.0 / lane_count)?)?,
-            2.0,
-        )?;
+        let write_back_weights =
+            self.lane_write_back_weights(&scores, architecture.residual_lane_count as i32)?;
         Ok(LaneRead {
             block_input,
             lanes: lanes.retain()?,
@@ -160,16 +152,7 @@ impl Qwen3_5ModelBase {
         block_output: &MlxArray,
         lane_read: &LaneRead,
     ) -> Result<MlxArray, TextExecutionError> {
-        let lanes_shape = lane_read.lanes.shape();
-        let block_output = self.runtime.expand_dims(block_output, -2)?;
-        let weights = self
-            .runtime
-            .expand_dims(&lane_read.write_back_weights, -1)?;
-        let injected = self.runtime.multiply(&block_output, &weights)?;
-        Ok(self.runtime.add(
-            &lane_read.lanes,
-            &self.runtime.reshape(&injected, &lanes_shape)?,
-        )?)
+        self.fused_or_composed_write_back(block_output, lane_read)
     }
 
     /// The last token's vocabulary logits, float32: the final mixer folds
@@ -266,3 +249,241 @@ fn lane_split_shape(shape: &[i32], lane_count: i32, hidden_size: i32) -> Vec<i32
 #[cfg(test)]
 #[path = "hyper_connection_tests.rs"]
 mod hyper_connection_tests;
+
+/// The lane mixers' element-wise steps: one fused kernel each once the
+/// model has proven the kernels on this GPU, otherwise MLX's own primitives.
+impl Qwen3_5ModelBase {
+    /// The fused kernels when they are enabled and every operand is the
+    /// dtype they are proven for.
+    fn lane_mixing_kernels_for(&self, operands: &[&MlxArray]) -> Option<&LaneMixingKernels> {
+        if !are_all_bfloat16(operands) {
+            return None;
+        }
+        self.optional_accelerators.lane_mixing_kernels.as_ref()
+    }
+
+    /// `silu(projected_down / lanes)`.
+    fn lane_mix_gate(
+        &self,
+        projected_down: &MlxArray,
+        lane_count: i32,
+    ) -> Result<MlxArray, TextExecutionError> {
+        match self.lane_mixing_kernels_for(&[projected_down]) {
+            Some(kernels) => Ok(kernels.mix_gate(&self.runtime, projected_down)?),
+            None => composed_lane_mix_gate(&self.runtime, projected_down, lane_count),
+        }
+    }
+
+    /// `2 * sigmoid(scores / lanes)`: a lane may take up to twice the output.
+    fn lane_write_back_weights(
+        &self,
+        scores: &MlxArray,
+        lane_count: i32,
+    ) -> Result<MlxArray, TextExecutionError> {
+        match self.lane_mixing_kernels_for(&[scores]) {
+            Some(kernels) => Ok(kernels.write_back_weights(&self.runtime, scores)?),
+            None => composed_lane_write_back_weights(&self.runtime, scores, lane_count),
+        }
+    }
+
+    fn fused_or_composed_write_back(
+        &self,
+        block_output: &MlxArray,
+        lane_read: &LaneRead,
+    ) -> Result<MlxArray, TextExecutionError> {
+        let operands = [
+            &lane_read.lanes,
+            block_output,
+            &lane_read.write_back_weights,
+        ];
+        match self.lane_mixing_kernels_for(&operands) {
+            Some(kernels) => Ok(kernels.write_back(
+                &self.runtime,
+                &lane_read.lanes,
+                block_output,
+                &lane_read.write_back_weights,
+            )?),
+            None => composed_write_back(
+                &self.runtime,
+                &lane_read.lanes,
+                block_output,
+                &lane_read.write_back_weights,
+            ),
+        }
+    }
+
+    /// Declares the fused lane-mixing kernels and turns them on when each
+    /// gives the composed steps' result bit for bit on this GPU. Returns
+    /// whether they are on; a model without lanes, or a GPU on which a
+    /// kernel does not compile or differs, keeps the composed steps.
+    pub fn enable_fused_lane_mixing(&mut self) -> bool {
+        let Some(architecture) = self.config.qwen4_exp_architecture() else {
+            return false;
+        };
+        let lane_count = architecture.residual_lane_count as i32;
+        let hidden_width = self.config.hidden_size() as i32;
+        match proven_lane_mixing_kernels(&self.runtime, lane_count, hidden_width) {
+            Ok(Some(kernels)) => {
+                self.optional_accelerators.lane_mixing_kernels = Some(kernels);
+                true
+            }
+            Ok(None) => {
+                tracing::info!("the fused lane-mixing kernels are not used on this GPU");
+                false
+            }
+            Err(kernel_error) => {
+                tracing::info!(%kernel_error, "the fused lane-mixing kernels could not be proven");
+                false
+            }
+        }
+    }
+}
+
+fn composed_lane_mix_gate(
+    runtime: &MlxRuntime,
+    projected_down: &MlxArray,
+    lane_count: i32,
+) -> Result<MlxArray, TextExecutionError> {
+    Ok(runtime.silu(&runtime.multiply_scalar(projected_down, 1.0 / lane_count as f32)?)?)
+}
+
+fn composed_lane_write_back_weights(
+    runtime: &MlxRuntime,
+    scores: &MlxArray,
+    lane_count: i32,
+) -> Result<MlxArray, TextExecutionError> {
+    let scaled = runtime.multiply_scalar(scores, 1.0 / lane_count as f32)?;
+    Ok(runtime.multiply_scalar(&runtime.sigmoid(&scaled)?, 2.0)?)
+}
+
+fn composed_write_back(
+    runtime: &MlxRuntime,
+    lanes: &MlxArray,
+    block_output: &MlxArray,
+    lane_weights: &MlxArray,
+) -> Result<MlxArray, TextExecutionError> {
+    let block_output = runtime.expand_dims(block_output, -2)?;
+    let weights = runtime.expand_dims(lane_weights, -1)?;
+    let injected = runtime.multiply(&block_output, &weights)?;
+    Ok(runtime.add(lanes, &runtime.reshape(&injected, &lanes.shape())?)?)
+}
+
+/// Whether the fused lane-mixing kernels give the composed steps' results
+/// bit for bit on this GPU, for a model of `lane_count` lanes of
+/// `hidden_width`: what `enable_fused_lane_mixing` decides by, for a
+/// contract to assert.
+pub fn fused_lane_mixing_matches_the_composed_steps(
+    runtime: &MlxRuntime,
+    lane_count: i32,
+    hidden_width: i32,
+) -> Result<bool, TextExecutionError> {
+    Ok(proven_lane_mixing_kernels(runtime, lane_count, hidden_width)?.is_some())
+}
+
+/// Rows the proof runs: one reply token and a drafted block's worth.
+const PROOF_ROW_COUNTS: [i32; 2] = [1, 4];
+
+/// The kernels, when each equals the composed steps bit for bit over
+/// random bfloat16 operands of the model's own widths.
+fn proven_lane_mixing_kernels(
+    runtime: &MlxRuntime,
+    lane_count: i32,
+    hidden_width: i32,
+) -> Result<Option<LaneMixingKernels>, TextExecutionError> {
+    let Some(kernels) = LaneMixingKernels::declare(lane_count)? else {
+        return Ok(None);
+    };
+    for row_count in PROOF_ROW_COUNTS {
+        let proof_shape = ProofShape {
+            row_count,
+            lane_count,
+            hidden_width,
+        };
+        if !kernels_match_the_composed_steps(runtime, &kernels, &proof_shape)? {
+            return Ok(None);
+        }
+    }
+    Ok(Some(kernels))
+}
+
+/// The operand shape one comparison runs at.
+struct ProofShape {
+    row_count: i32,
+    lane_count: i32,
+    hidden_width: i32,
+}
+
+/// Whether the three kernels give the composed steps' bits at `proof_shape`.
+fn kernels_match_the_composed_steps(
+    runtime: &MlxRuntime,
+    kernels: &LaneMixingKernels,
+    proof_shape: &ProofShape,
+) -> Result<bool, TextExecutionError> {
+    let ProofShape {
+        row_count,
+        lane_count,
+        hidden_width,
+    } = *proof_shape;
+    let random_key = runtime.random_key(2_567)?;
+    let lanes = proof_operand(runtime, &random_key, row_count, lane_count * hidden_width)?;
+    let block_output = proof_operand(runtime, &random_key, row_count, hidden_width)?;
+    let scores = proof_operand(runtime, &random_key, row_count, lane_count)?;
+    let weights = composed_lane_write_back_weights(runtime, &scores, lane_count)?;
+    let fused_and_composed = [
+        (
+            kernels.mix_gate(runtime, &block_output)?,
+            composed_lane_mix_gate(runtime, &block_output, lane_count)?,
+        ),
+        (
+            kernels.write_back_weights(runtime, &scores)?,
+            weights.retain()?,
+        ),
+        (
+            kernels.write_back(runtime, &lanes, &block_output, &weights)?,
+            composed_write_back(runtime, &lanes, &block_output, &weights)?,
+        ),
+    ];
+    let mut all_match = true;
+    for (fused, composed) in &fused_and_composed {
+        all_match &= have_the_same_bits(runtime, fused, composed)?;
+    }
+    Ok(all_match)
+}
+
+/// Random bfloat16 values `[1, rows, width]`, wide enough to reach both
+/// tails of the sigmoid.
+fn proof_operand(
+    runtime: &MlxRuntime,
+    random_key: &MlxArray,
+    row_count: i32,
+    width: i32,
+) -> Result<MlxArray, TextExecutionError> {
+    Ok(runtime.random_normal(
+        &[1, row_count, width],
+        mlx_bridge::MlxDtype::BFloat16,
+        0.0,
+        5.0,
+        random_key,
+    )?)
+}
+
+/// Whether two bfloat16 arrays hold the same bits. Widening bfloat16 to
+/// float32 is exact, so the float32 bits are compared.
+fn have_the_same_bits(
+    runtime: &MlxRuntime,
+    left: &MlxArray,
+    right: &MlxArray,
+) -> Result<bool, TextExecutionError> {
+    if left.shape() != right.shape() || left.dtype() != right.dtype() {
+        return Ok(false);
+    }
+    let left_values =
+        runtime.array_to_vec_f32(&runtime.astype(left, mlx_bridge::MlxDtype::Float32)?)?;
+    let right_values =
+        runtime.array_to_vec_f32(&runtime.astype(right, mlx_bridge::MlxDtype::Float32)?)?;
+    let mut are_equal = left_values.len() == right_values.len();
+    for (left_value, right_value) in left_values.iter().zip(&right_values) {
+        are_equal &= left_value.to_bits() == right_value.to_bits();
+    }
+    Ok(are_equal)
+}

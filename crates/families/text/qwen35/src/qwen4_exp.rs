@@ -11,6 +11,8 @@ pub mod growing_sequence;
 #[cfg(feature = "direct-mlx")]
 pub mod hyper_connection;
 #[cfg(feature = "direct-mlx")]
+pub mod lane_mixing_kernels;
+#[cfg(feature = "direct-mlx")]
 pub mod layer_weights;
 #[cfg(feature = "direct-mlx")]
 pub mod mtp_head_weights;
