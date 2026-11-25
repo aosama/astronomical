@@ -21,6 +21,7 @@ pub mod artifacts;
 pub mod configuration;
 pub mod decoder;
 pub mod dense;
+pub mod draft_tree_decode;
 #[cfg(test)]
 pub mod frozen_config_test_support;
 pub mod model;
