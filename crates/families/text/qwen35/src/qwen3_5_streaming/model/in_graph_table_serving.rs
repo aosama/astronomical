@@ -31,6 +31,11 @@
 //! refused. Should refusals come anyway, the tokens after one are served
 //! exactly for a while, since each refusal costs a forward.
 //!
+//! A drafted block being verified is served the same way: its rows are
+//! reply tokens, each layer's lookup names the slots of every row's route
+//! at once, and tables are grown for one route a row before the block
+//! (`drafted_rows_verification`).
+//!
 //! `in_graph_route_lookup` holds the step and the argument for why it may
 //! reach the model from MLX's thread.
 
@@ -67,10 +72,12 @@ pub(super) struct InGraphLayerServing {
     pub(super) outcome: Arc<SharedLayerOutcome>,
 }
 
-/// How many reply tokens went which way since the model loaded.
+/// How many reply forwards went which way since the model loaded. A
+/// forward is one reply token, or one drafted block being verified, whose
+/// rows are counted as one.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct InGraphServingCounts {
-    /// Tokens attempted with in-graph lookups.
+    /// Forwards attempted with in-graph lookups.
     pub attempted_token_count: u64,
     /// Attempts a lookup refused, which were then served exactly.
     pub refused_token_count: u64,

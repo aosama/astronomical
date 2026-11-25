@@ -1,13 +1,15 @@
 //! How many layers a reply keeps whole, and giving up the rest.
 //!
-//! A layer held whole keeps its route on the graphics processor, so the
-//! forward does not stop for it. Every other layer serves its experts from a
-//! table and stops once per token. Holding a layer whole costs all of its
+//! A layer held whole keeps its route on the graphics processor. Every other
+//! layer serves its experts from a table, which costs a lookup per token:
+//! inside the token's graph when the model looks routes up there, otherwise
+//! a stop that ends the evaluation. Holding a layer whole costs all of its
 //! experts, though, and replays of recorded replies at half the model's size
 //! (issue #2338) showed that keeping every layer the prompt left whole starved
 //! the other layers' tables to 16 experts and missed 71 to 109 experts per
 //! token, against 18 to 34 with only a few layers whole and fair tables for
-//! the rest. `decode_whole_layer_keep_count` sets the number; the layers kept
+//! the rest. `decode_whole_layer_keep_count` sets the number, protecting a
+//! table size that scales with the layer's expert count; the layers kept
 //! are the ones the requests routed to most.
 
 use ipc_protocol::RequestId;
