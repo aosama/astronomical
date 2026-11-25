@@ -18,5 +18,5 @@ mod generation_session_validate_admit_restore_install;
 use super::Qwen3_5EngineState;
 use super::engine_request;
 use super::fatal_engine_error;
-use super::qwen3_5_runtime_error;
+use super::fatal_runtime_error;
 use super::retained_live_prefix;

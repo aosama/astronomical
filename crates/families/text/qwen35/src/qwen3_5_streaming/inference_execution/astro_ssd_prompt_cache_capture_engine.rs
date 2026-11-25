@@ -1,11 +1,11 @@
 //! The streaming engine's half of the shared astro SSD prompt cache capture.
 
-use super::engine_request::Qwen3_5EngineRequest;
+use super::engine_request::StreamingEngineRequest;
 use super::{Qwen3_5EngineState, Qwen3_5Model};
-use crate::qwen3_5_core::astro_ssd_prompt_cache_capture::Qwen3_5AstroSsdPromptCacheCapture;
 use crate::{InferenceEngineError, PerformanceOperation};
+use text_generation::astro_ssd_prompt_cache_capture::TextAstroSsdPromptCacheCapture;
 
-impl Qwen3_5AstroSsdPromptCacheCapture for Qwen3_5EngineState {
+impl TextAstroSsdPromptCacheCapture for Qwen3_5EngineState {
     /// Leases the deficit from the memory governor, so the astro expert cache
     /// gives back that much, measured on its own
     /// so performance reports can attribute why publication paused, and adds
@@ -13,7 +13,7 @@ impl Qwen3_5AstroSsdPromptCacheCapture for Qwen3_5EngineState {
     fn reclaim_before_publication_retry(
         &self,
         model: &Qwen3_5Model,
-        active_request: &mut Qwen3_5EngineRequest,
+        active_request: &mut StreamingEngineRequest,
         active_memory_deficit_bytes: usize,
     ) -> Result<(), InferenceEngineError> {
         let expert_payload_bytes_before_reclamation = model

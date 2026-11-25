@@ -17,16 +17,16 @@
 //! The retry never shrinks the forward: smaller chunks re-pay
 //! complete-layer storage reads without changing the outcome.
 
-use crate::qwen3_5_core::shared_execution::astro_ssd_prompt_cache_restore;
 use ipc_protocol::RequestId;
+use text_generation::generation_loop::astro_ssd_prompt_cache_restore;
 
-use crate::qwen3_5_core::decoder::RequestDecoderStateStack;
-use crate::qwen3_5_core::engine_errors::invalid_request_error;
 use crate::{GeneratedToken, InferenceEngineError, MemoryPhase};
+use text_generation::RequestDecoderStateStack;
+use text_generation::engine_errors::invalid_request_error;
 
-use super::engine_request::Qwen3_5EngineRequest;
+use super::engine_request::StreamingEngineRequest;
 use super::prompt_prefill_errors::PromptPrefillChunkAttemptError;
-use super::{Qwen3_5EngineState, qwen3_5_runtime_error};
+use super::{Qwen3_5EngineState, fatal_runtime_error};
 
 /// Whether a prefill memory failure may be redone at all.
 ///
@@ -44,7 +44,7 @@ impl Qwen3_5EngineState {
     pub(super) fn redo_prefill_after_memory_exhaustion(
         &mut self,
         request_id: RequestId,
-        active_request: &mut Qwen3_5EngineRequest,
+        active_request: &mut StreamingEngineRequest,
         failed_prefill_start: usize,
         known_shortfall_bytes: u64,
     ) -> Result<bool, InferenceEngineError> {
@@ -66,7 +66,7 @@ impl Qwen3_5EngineState {
     pub(super) fn reseed_prefill_from_astro_ssd_prompt_cache(
         &mut self,
         request_id: RequestId,
-        active_request: &mut Qwen3_5EngineRequest,
+        active_request: &mut StreamingEngineRequest,
         failed_prefill_start: usize,
     ) -> Result<(), InferenceEngineError> {
         let model = self.core.loaded_model()?;
@@ -78,13 +78,13 @@ impl Qwen3_5EngineState {
                 &astro_decoder_state_cache_layout,
                 self.core.full_attention_kv_state_growth_tokens,
             )
-            .map_err(qwen3_5_runtime_error)?;
+            .map_err(fatal_runtime_error)?;
         active_request.pending_generated_token = None;
         model.forget_expert_layer_states();
         model
             .runtime()
             .synchronize_gpu_stream_and_clear_mlx_buffer_cache()
-            .map_err(qwen3_5_runtime_error)?;
+            .map_err(fatal_runtime_error)?;
         let mut restored_prefill_cursor = 0_usize;
         let mut restored_next_position_tokens = 0_u32;
         let mut restored_last_astro_ssd_prompt_cache_block_key = None;
@@ -210,7 +210,7 @@ impl Qwen3_5EngineState {
     pub(super) fn recover_failed_prefill_attempt(
         &mut self,
         request_id: RequestId,
-        active_request: &mut super::engine_request::Qwen3_5EngineRequest,
+        active_request: &mut super::engine_request::StreamingEngineRequest,
         prefill_attempt_failure: PrefillAttemptFailure,
         prompt_prefill_chunk_attempt_error: PromptPrefillChunkAttemptError,
     ) -> Result<Option<GeneratedToken>, InferenceEngineError> {
@@ -240,7 +240,7 @@ impl Qwen3_5EngineState {
     fn make_room_to_run_failed_attempt_again(
         &mut self,
         request_id: RequestId,
-        active_request: &mut super::engine_request::Qwen3_5EngineRequest,
+        active_request: &mut super::engine_request::StreamingEngineRequest,
         prefill_attempt_failure: PrefillAttemptFailure,
         known_shortfall_bytes: u64,
     ) -> Result<bool, InferenceEngineError> {
@@ -276,7 +276,7 @@ impl Qwen3_5EngineState {
     fn make_room_to_run_failed_span_again(
         &mut self,
         request_id: RequestId,
-        active_request: &mut Qwen3_5EngineRequest,
+        active_request: &mut StreamingEngineRequest,
         known_shortfall_bytes: u64,
     ) -> Result<bool, InferenceEngineError> {
         let model = self.core.loaded_model()?;
@@ -287,7 +287,7 @@ impl Qwen3_5EngineState {
         model
             .runtime()
             .synchronize_gpu_stream_and_clear_mlx_buffer_cache()
-            .map_err(qwen3_5_runtime_error)?;
+            .map_err(fatal_runtime_error)?;
         tracing::warn!(
             request_id = request_id.value(),
             "a prompt span ran out of memory; running that span again with more room"

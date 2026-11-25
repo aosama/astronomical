@@ -4,12 +4,12 @@
 use runtime_integration::MlxMemoryLimits;
 
 use crate::InferenceEngineError;
-use crate::qwen3_5_core::engine_errors::mlx_memory_ceiling_change_before_load_error;
-use crate::qwen3_5_core::shared_execution::mlx_memory_limit_change::Qwen3_5MlxMemoryLimitHooks;
+use text_generation::engine_errors::mlx_memory_ceiling_change_before_load_error;
+use text_generation::generation_loop::mlx_memory_limit_change::TextMlxMemoryLimitHooks;
 
 use super::Qwen3_5EngineState;
 
-impl Qwen3_5MlxMemoryLimitHooks for Qwen3_5EngineState {
+impl TextMlxMemoryLimitHooks for Qwen3_5EngineState {
     /// The resident model reclaims under the old ceiling before lowering it
     /// and refuses a ceiling its weights cannot fit; the memory governor
     /// then follows the installed limit, so the next forward is admitted

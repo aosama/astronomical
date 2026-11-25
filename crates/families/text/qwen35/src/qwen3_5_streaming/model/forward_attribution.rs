@@ -8,8 +8,8 @@ use crate::PerformanceAttribution;
 use crate::qwen3_5_streaming::Qwen3_5MoEPagedExecutionMode;
 
 use super::Qwen3_5Model;
-use super::{Qwen3_5ExecutionError, RequestDecoderStateStack};
-use crate::qwen3_5_core::decoder::Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector;
+use super::{RequestDecoderStateStack, TextExecutionError};
+use text_generation::AstroSsdPromptCacheBoundaryCheckpointCollector;
 
 impl Qwen3_5Model {
     pub fn forward_chunk_with_performance_attribution(
@@ -18,11 +18,11 @@ impl Qwen3_5Model {
         starting_position_tokens: u32,
         request_decoder_state: &mut RequestDecoderStateStack,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         let signed_token_ids = token_ids
             .iter()
             .map(|token_id| {
-                i32::try_from(*token_id).map_err(|_| Qwen3_5ExecutionError::InvalidInput {
+                i32::try_from(*token_id).map_err(|_| TextExecutionError::InvalidInput {
                     description: "token ID exceeds the MLX int32 range",
                 })
             })
@@ -49,11 +49,9 @@ impl Qwen3_5PrefillForward for Qwen3_5Model {
     fn evaluate_prefill_decoder_state(
         &self,
         request_decoder_state: &RequestDecoderStateStack,
-        boundary_checkpoint_collector: Option<
-            &Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
-        >,
+        boundary_checkpoint_collector: Option<&AstroSsdPromptCacheBoundaryCheckpointCollector>,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<(), Qwen3_5ExecutionError> {
+    ) -> Result<(), TextExecutionError> {
         self.evaluate_decoder_state_for_paged_route_resolution(
             request_decoder_state,
             boundary_checkpoint_collector,

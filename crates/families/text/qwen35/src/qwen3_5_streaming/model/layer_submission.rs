@@ -16,8 +16,8 @@ use mlx_bridge::MlxArray;
 
 use super::Qwen3_5Model;
 use super::forward_layer_weights::ForwardLayerWeights;
-use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::{PerformanceAttribution, PerformanceOperation};
+use text_generation::execution_error::TextExecutionError;
 
 /// Where a forward stands for the configured layer-group submission.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -91,7 +91,7 @@ impl Qwen3_5Model {
         previous_layer_output: &mut Option<MlxArray>,
         layer_group_submission: LayerGroupSubmission,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<(), Qwen3_5ExecutionError> {
+    ) -> Result<(), TextExecutionError> {
         let hidden_states = completed_layer.layer_output;
         match forward_layer_weights.submission(layer_group_submission) {
             LayerSubmission::PromptLayer => self.submit_prompt_layer(
@@ -138,7 +138,7 @@ impl Qwen3_5Model {
         completed_layer: CompletedLayerRoots<'_>,
         previous_layer_output: &mut Option<MlxArray>,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<(), Qwen3_5ExecutionError> {
+    ) -> Result<(), TextExecutionError> {
         let layer_output = completed_layer.layer_output;
         if forward_layer_weights.is_streamed() {
             let mut streamed_weight_arrays = Vec::new();
@@ -168,7 +168,7 @@ impl Qwen3_5Model {
         streamed_layer_output: &MlxArray,
         previous_layer_output: &mut Option<MlxArray>,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<(), Qwen3_5ExecutionError> {
+    ) -> Result<(), TextExecutionError> {
         self.runtime.async_eval_arrays(&[streamed_layer_output])?;
         let mut layer_before_this_one =
             previous_layer_output.replace(streamed_layer_output.retain()?);
@@ -179,7 +179,7 @@ impl Qwen3_5Model {
         &self,
         previous_layer_output: &mut Option<MlxArray>,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<(), Qwen3_5ExecutionError> {
+    ) -> Result<(), TextExecutionError> {
         let Some(submitted_layer_output) = previous_layer_output.take() else {
             return Ok(());
         };

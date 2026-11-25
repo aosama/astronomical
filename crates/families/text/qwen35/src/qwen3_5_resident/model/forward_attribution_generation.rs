@@ -10,7 +10,7 @@ use crate::qwen3_5_core::model::target_forward_graph::Qwen3_5TargetForwardGraph;
 
 use super::Qwen3_5ResidentModel;
 use super::forward_contract;
-use super::{Qwen3_5ExecutionError, RequestDecoderStateStack};
+use super::{RequestDecoderStateStack, TextExecutionError};
 use mlx_bridge::{MlxArray, MlxDtype};
 
 impl Qwen3_5ResidentModel {
@@ -20,11 +20,11 @@ impl Qwen3_5ResidentModel {
         starting_position_tokens: u32,
         request_decoder_state: &mut RequestDecoderStateStack,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         let signed_token_ids = token_ids
             .iter()
             .map(|token_id| {
-                i32::try_from(*token_id).map_err(|_| Qwen3_5ExecutionError::InvalidInput {
+                i32::try_from(*token_id).map_err(|_| TextExecutionError::InvalidInput {
                     description: "token ID exceeds the MLX int32 range",
                 })
             })
@@ -48,7 +48,7 @@ impl Qwen3_5ResidentModel {
         starting_position_tokens: u32,
         request_decoder_state: &mut RequestDecoderStateStack,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         forward_contract::validate_generated_token_forward(
             generated_token,
             starting_position_tokens,

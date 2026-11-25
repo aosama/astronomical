@@ -2,30 +2,29 @@
 //! announcement, its drafted advance, and its forwards, which are admitted by
 //! the memory governor before they run and submit the successor to the
 //! graphics processor one token ahead. The step itself is shared with the
-//! streaming engine in `qwen3_5_core::shared_execution::decode_step`.
+//! streaming engine in `text_generation::generation_loop::decode_step`.
 
-use crate::qwen3_5_core::shared_execution::generation_finalization_steps;
+use crate::qwen3_5_resident::inference_execution::engine_request::ResidentSpeculativeRequest;
 use std::time::Instant;
+use text_generation::generation_loop::generation_finalization_steps;
 
 use ipc_protocol::RequestId;
 use runtime_integration::MlxMemorySnapshot;
 
-use crate::qwen3_5_core::shared_execution::decode_step::{
-    ActiveRequestAdvance, Qwen3_5DecodeStepHooks,
-};
 use mlx_bridge::MlxArray;
+use text_generation::generation_loop::decode_step::{ActiveRequestAdvance, TextDecodeStepHooks};
 
 use crate::{GeneratedToken, InferenceEngineError, PerformanceOperation};
 
 use super::Qwen3_5EngineState;
 use super::completed_forward_memory::CompletedForwardMemoryObservation;
-use super::engine_request::Qwen3_5EngineRequest;
+use super::engine_request::ResidentEngineRequest;
 use super::forward_memory::{ForwardShape, report_completed_forward};
-impl Qwen3_5DecodeStepHooks for Qwen3_5EngineState {
+impl TextDecodeStepHooks for Qwen3_5EngineState {
     fn advance_prompt_prefill_if_pending(
         &mut self,
         request_id: RequestId,
-        active_request: &mut Qwen3_5EngineRequest,
+        active_request: &mut ResidentEngineRequest,
     ) -> Result<Option<GeneratedToken>, InferenceEngineError> {
         Qwen3_5EngineState::advance_prompt_prefill_if_pending(self, request_id, active_request)
     }
@@ -35,7 +34,7 @@ impl Qwen3_5DecodeStepHooks for Qwen3_5EngineState {
     fn begin_generation_preparation(
         &mut self,
         _request_id: RequestId,
-        active_request: &mut Qwen3_5EngineRequest,
+        active_request: &mut ResidentEngineRequest,
     ) -> Result<Option<ActiveRequestAdvance>, InferenceEngineError> {
         active_request.generation_residency_preparation_attempted = true;
         if active_request.generation_preparation_announced {
@@ -56,7 +55,7 @@ impl Qwen3_5DecodeStepHooks for Qwen3_5EngineState {
     fn advance_drafted_generation_if_admitted(
         &mut self,
         request_id: RequestId,
-        active_request: &mut Qwen3_5EngineRequest,
+        active_request: &mut ResidentEngineRequest,
         forced_thinking_transition_token_id: Option<u32>,
     ) -> Result<Option<ActiveRequestAdvance>, InferenceEngineError> {
         if !active_request.engine_extension.speculative_session_admitted {
@@ -77,7 +76,7 @@ impl Qwen3_5DecodeStepHooks for Qwen3_5EngineState {
     fn decode_first_token_from_final_prompt(
         &mut self,
         request_id: RequestId,
-        active_request: &mut Qwen3_5EngineRequest,
+        active_request: &mut ResidentEngineRequest,
         final_prompt_index: usize,
         first_decode_forward_started_at: &mut Option<Instant>,
     ) -> Result<MlxArray, InferenceEngineError> {
@@ -92,7 +91,7 @@ impl Qwen3_5DecodeStepHooks for Qwen3_5EngineState {
 
     fn decode_next_token(
         &mut self,
-        active_request: &mut Qwen3_5EngineRequest,
+        active_request: &mut ResidentEngineRequest,
         current_generated_token: &MlxArray,
         _current_generated_token_id: u32,
     ) -> Result<(MlxArray, MlxMemorySnapshot), InferenceEngineError> {
@@ -140,7 +139,7 @@ impl Qwen3_5EngineState {
     fn decode_first_token_from_final_prompt(
         &mut self,
         request_id: RequestId,
-        active_request: &mut super::engine_request::Qwen3_5EngineRequest,
+        active_request: &mut super::engine_request::ResidentEngineRequest,
         final_prompt_index: usize,
         first_decode_forward_started_at: &mut Option<Instant>,
     ) -> Result<MlxArray, InferenceEngineError> {
@@ -201,7 +200,7 @@ impl Qwen3_5EngineState {
     /// is in flight while the `mlx_buffer_cache` is released.
     fn reclaim_outgrown_slabs_and_decode_next_token(
         &mut self,
-        active_request: &mut super::engine_request::Qwen3_5EngineRequest,
+        active_request: &mut super::engine_request::ResidentEngineRequest,
         current_generated_token: &MlxArray,
     ) -> Result<(MlxArray, CompletedForwardMemoryObservation), InferenceEngineError> {
         let model = self.core.loaded_model()?;
@@ -213,7 +212,7 @@ impl Qwen3_5EngineState {
     /// for asynchronous evaluation, and reports what the step needed.
     fn decode_next_token_and_collect_memory(
         &mut self,
-        active_request: &mut super::engine_request::Qwen3_5EngineRequest,
+        active_request: &mut super::engine_request::ResidentEngineRequest,
         current_generated_token: &MlxArray,
     ) -> Result<(MlxArray, CompletedForwardMemoryObservation), InferenceEngineError> {
         let admitted_forward = self.admit_forward(

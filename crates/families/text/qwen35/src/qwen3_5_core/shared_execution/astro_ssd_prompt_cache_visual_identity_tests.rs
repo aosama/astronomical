@@ -2,8 +2,8 @@ use ipc_protocol::RequestId;
 
 use crate::InferenceEngineError;
 use crate::PerformanceAttribution;
-use crate::qwen3_5_core::text::Qwen3_5InferenceRequest;
-use crate::qwen3_5_core::vision::{Qwen3_5ImageGrid, Qwen3_5ProcessedImage};
+use crate::qwen3_5_core::vision::{ImageGrid, ProcessedImage};
+use text_generation::TextInferenceRequest;
 
 use super::Qwen3_5AstroSsdPromptCacheVisualIdentity;
 use super::Qwen3_5AstroSsdPromptCacheVisualIdentityInput;
@@ -12,13 +12,13 @@ const IMAGE_PAD_TOKEN_ID: u32 = 151_655;
 
 fn processed_image_with_token_count_after_spatial_merge(
     image_token_count_after_spatial_merge: usize,
-) -> Qwen3_5ProcessedImage {
-    Qwen3_5ProcessedImage {
+) -> ProcessedImage {
+    ProcessedImage {
         encoded_image_sha256: [7; 32],
         pixel_values: Vec::new(),
         pixel_values_row_count: 0,
         pixel_values_column_count: 0,
-        image_grid: Qwen3_5ImageGrid {
+        image_grid: ImageGrid {
             temporal_patch_count: 2,
             height_patch_count: 4,
             width_patch_count: 4,
@@ -32,7 +32,7 @@ fn processed_image_with_token_count_after_spatial_merge(
 #[test]
 fn should_plan_an_empty_visual_identity_for_a_text_only_request() {
     let inference_request =
-        Qwen3_5InferenceRequest::new(RequestId::new(900), vec![248_045, 846, 198], 512);
+        TextInferenceRequest::new(RequestId::new(900), vec![248_045, 846, 198], 512);
 
     let visual_identity = Qwen3_5AstroSsdPromptCacheVisualIdentity::prepare(
         &inference_request,
@@ -57,7 +57,7 @@ fn should_plan_an_empty_visual_identity_for_a_text_only_request() {
 
 #[test]
 fn should_collect_ordered_row_counts_without_planning_blocks_when_reuse_is_disabled() {
-    let inference_request = Qwen3_5InferenceRequest::new(
+    let inference_request = TextInferenceRequest::new(
         RequestId::new(901),
         vec![248_045, IMAGE_PAD_TOKEN_ID, IMAGE_PAD_TOKEN_ID],
         512,
@@ -89,7 +89,7 @@ fn should_collect_ordered_row_counts_without_planning_blocks_when_reuse_is_disab
 
 #[test]
 fn should_reject_an_image_pad_count_that_differs_from_the_processed_image_tokens() {
-    let inference_request = Qwen3_5InferenceRequest::new(
+    let inference_request = TextInferenceRequest::new(
         RequestId::new(902),
         vec![
             248_045,
@@ -129,7 +129,7 @@ fn should_reject_an_image_pad_count_that_differs_from_the_processed_image_tokens
 
 #[test]
 fn should_reject_processed_image_row_counts_that_overflow_the_expected_total() {
-    let inference_request = Qwen3_5InferenceRequest::new(RequestId::new(903), vec![248_045], 512)
+    let inference_request = TextInferenceRequest::new(RequestId::new(903), vec![248_045], 512)
         .with_processed_visual_images(vec![
             processed_image_with_token_count_after_spatial_merge(usize::MAX),
             processed_image_with_token_count_after_spatial_merge(usize::MAX),
@@ -156,7 +156,7 @@ fn should_reject_processed_image_row_counts_that_overflow_the_expected_total() {
 #[test]
 fn should_require_the_disk_store_when_visual_block_planning_is_enabled() {
     let inference_request =
-        Qwen3_5InferenceRequest::new(RequestId::new(904), vec![248_045, IMAGE_PAD_TOKEN_ID], 512)
+        TextInferenceRequest::new(RequestId::new(904), vec![248_045, IMAGE_PAD_TOKEN_ID], 512)
             .with_processed_visual_images(vec![
                 processed_image_with_token_count_after_spatial_merge(1),
             ]);

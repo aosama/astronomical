@@ -15,10 +15,10 @@
 
 use std::cell::{Cell, RefCell};
 
-use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_streaming::model::Qwen3_5Model;
 use crate::{PerformanceAttribution, PerformanceCounter, PerformanceOperation};
 use mlx_bridge::MlxArray;
+use text_generation::execution_error::TextExecutionError;
 
 /// One layer served on the graphics processor on the assumption that its
 /// table held every routed expert.
@@ -103,7 +103,7 @@ impl Qwen3_5Model {
         &self,
         evaluation_arrays: &[&MlxArray],
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<PagedRouteValidationOutcome, Qwen3_5ExecutionError> {
+    ) -> Result<PagedRouteValidationOutcome, TextExecutionError> {
         // Copy references, not arrays. `completion_roots` merely gives MLX one
         // explicit list of graph roots whose dependencies include every eagerly
         // loaded expert page used by this forward.
@@ -161,7 +161,7 @@ impl Qwen3_5Model {
         eval_elapsed: std::time::Duration,
         completion_root_count: usize,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<PagedRouteValidationOutcome, Qwen3_5ExecutionError> {
+    ) -> Result<PagedRouteValidationOutcome, TextExecutionError> {
         if self.optimistic_forward_missed_experts(optimistic_layer_servings)? {
             // Nothing this forward learned is true: its routes came from
             // wrong hidden states after the first missing expert.
@@ -209,7 +209,7 @@ impl Qwen3_5Model {
     pub fn record_warm_insert_and_prefetch_statistics(
         &self,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<(), Qwen3_5ExecutionError> {
+    ) -> Result<(), TextExecutionError> {
         let written_expert_count = self.flush_pending_expert_slot_inserts_internal()?;
         if written_expert_count > 0 {
             performance_attribution.record_counter(
@@ -263,12 +263,12 @@ impl Qwen3_5Model {
     }
 
     /// Counted variant of the post-evaluation warm insert flush.
-    fn flush_pending_expert_slot_inserts_internal(&self) -> Result<u64, Qwen3_5ExecutionError> {
+    fn flush_pending_expert_slot_inserts_internal(&self) -> Result<u64, TextExecutionError> {
         if let Some(astro_expert_cache) = self.astro_expert_cache.as_ref() {
             return astro_expert_cache
                 .borrow_mut()
                 .flush_pending_inserts(&self.runtime)
-                .map_err(Qwen3_5ExecutionError::from);
+                .map_err(TextExecutionError::from);
         }
         Ok(0)
     }
@@ -281,7 +281,7 @@ impl Qwen3_5Model {
     fn optimistic_forward_missed_experts(
         &self,
         optimistic_layer_servings: &[OptimisticLayerServing],
-    ) -> Result<bool, Qwen3_5ExecutionError> {
+    ) -> Result<bool, TextExecutionError> {
         if self
             .paged_forward_missing_route_collector
             .has_abandoned_optimistic_serving

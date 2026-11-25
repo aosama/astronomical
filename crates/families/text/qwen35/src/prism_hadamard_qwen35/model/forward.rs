@@ -13,7 +13,7 @@
 use mlx_bridge::MlxArray;
 
 use crate::{
-    AstroDecoderStateCacheState, Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
+    AstroDecoderStateCacheState, AstroSsdPromptCacheBoundaryCheckpointCollector,
     RequestDecoderStateStack,
 };
 
@@ -129,9 +129,7 @@ impl super::PrismHadamardTextModel {
         token_indices: &MlxArray,
         starting_position_tokens: u32,
         request_decoder_state: &mut RequestDecoderStateStack,
-        boundary_checkpoint_collector: Option<
-            &mut Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
-        >,
+        boundary_checkpoint_collector: Option<&mut AstroSsdPromptCacheBoundaryCheckpointCollector>,
     ) -> Result<MlxArray, PrismHadamardModelError> {
         let text = self.pack.config().text();
         // The core route carries the leading batch axis: token indices are
@@ -175,7 +173,7 @@ impl super::PrismHadamardTextModel {
         starting_position_tokens: u32,
         request_decoder_state: &mut RequestDecoderStateStack,
         mut boundary_checkpoint_collector: Option<
-            &mut Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
+            &mut AstroSsdPromptCacheBoundaryCheckpointCollector,
         >,
     ) -> Result<MlxArray, PrismHadamardModelError> {
         let rope_offset_tokens = rope_offset_tokens(starting_position_tokens)?;
@@ -223,9 +221,7 @@ impl super::PrismHadamardTextModel {
         hidden_states: &MlxArray,
         rope_offset_tokens: i32,
         request_decoder_state: &mut RequestDecoderStateStack,
-        boundary_checkpoint_collector: Option<
-            &mut Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
-        >,
+        boundary_checkpoint_collector: Option<&mut AstroSsdPromptCacheBoundaryCheckpointCollector>,
     ) -> Result<MlxArray, PrismHadamardModelError> {
         let text = self.pack.config().text();
         let token_count = hidden_states.shape()[1];

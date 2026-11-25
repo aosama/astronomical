@@ -2,16 +2,16 @@
 
 use mlx_bridge::MlxArray;
 
-use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_streaming::model::Qwen3_5Model;
 use crate::{PerformanceAttribution, PerformanceOperation};
+use text_generation::execution_error::TextExecutionError;
 
 impl Qwen3_5Model {
     /// Copies and normalizes one route for compact page planning.
     pub(super) fn copy_sorted_unique_expert_ids(
         &self,
         selected_indices: &MlxArray,
-    ) -> Result<Vec<usize>, Qwen3_5ExecutionError> {
+    ) -> Result<Vec<usize>, TextExecutionError> {
         let mut selected_expert_ids = self.copy_selected_expert_ids(selected_indices, None)?;
         selected_expert_ids.sort_unstable();
         selected_expert_ids.dedup();
@@ -23,7 +23,7 @@ impl Qwen3_5Model {
         &self,
         selected_indices: &MlxArray,
         mut performance_attribution: Option<&mut PerformanceAttribution>,
-    ) -> Result<Vec<usize>, Qwen3_5ExecutionError> {
+    ) -> Result<Vec<usize>, TextExecutionError> {
         let contiguous_ids =
             if let Some(performance_attribution) = performance_attribution.as_deref_mut() {
                 performance_attribution.measure_operation(

@@ -29,8 +29,8 @@ use std::time::Instant;
 use config::AstronomicalConfig;
 use mlx_bridge::MlxArray;
 use model_serving::{
-    Qwen3_5ArtifactValidator, Qwen3_5ModelChunkingConfiguration, Qwen3_5ResidentModel,
-    Qwen3_5Tokenizer,
+    Qwen3_5ArtifactValidator, Qwen3_5ResidentModel, Qwen3_5Tokenizer,
+    TextModelChunkingConfiguration,
 };
 use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use serial_test::serial;
@@ -155,7 +155,7 @@ fn load_resident_model_and_prompt() -> (Qwen3_5ResidentModel, Vec<u32>) {
         prompt_token_ids.len() >= SINGLE_CHUNK_SIZES[SINGLE_CHUNK_SIZES.len() - 1],
         "the Shakespeare prompt must reach the largest single chunk"
     );
-    let model_chunking = Qwen3_5ModelChunkingConfiguration::new(
+    let model_chunking = TextModelChunkingConfiguration::new(
         FULL_ATTENTION_KV_GROWTH_TOKENS,
         PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL,
         SSD_PAGING_GENERATION_LAYER_INTERVAL,

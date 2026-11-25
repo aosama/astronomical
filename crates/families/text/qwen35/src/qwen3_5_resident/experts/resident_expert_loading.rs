@@ -8,7 +8,7 @@ use crate::qwen3_5_core::artifacts::{
     QuantizationMode, QuantizedExpertLayerPlan, QuantizedTensorSource, SafetensorsDtype,
 };
 use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights;
-use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
+use text_generation::execution_error::TextExecutionError;
 
 use super::{
     Qwen3_5ResidentExpertLayerWeights, Qwen3_5ResidentExpertWeights, Qwen3_5ResidentGateUpWeights,
@@ -28,7 +28,7 @@ impl Qwen3_5ResidentExpertWeights {
         runtime: &MlxRuntime,
         layer_plans: &[QuantizedExpertLayerPlan],
         positional_file_read_metrics: Option<Arc<PositionalFileReadMetrics>>,
-    ) -> Result<Self, Qwen3_5ExecutionError> {
+    ) -> Result<Self, TextExecutionError> {
         let complete_model_payload_bytes = complete_model_payload_bytes(layer_plans)?;
         let complete_model_expert_entry_count = complete_model_expert_entry_count(layer_plans);
         let source_file_paths = collect_source_file_paths(layer_plans);
@@ -66,7 +66,7 @@ impl Qwen3_5ResidentExpertWeights {
         } = materialize_resident_layers(runtime, &mut resident_source_tensors, layer_plans)?;
 
         if let Some(((_, unconsumed_tensor_name), _)) = resident_source_tensors.iter().next() {
-            return Err(Qwen3_5ExecutionError::InvalidTensor {
+            return Err(TextExecutionError::InvalidTensor {
                 tensor_name: unconsumed_tensor_name.clone(),
                 description: "resident expert source tensor was not consumed by its layer plan",
             });
@@ -111,14 +111,14 @@ fn materialize_resident_layers(
     runtime: &MlxRuntime,
     resident_source_tensors: &mut ResidentSourceTensorMap,
     layer_plans: &[QuantizedExpertLayerPlan],
-) -> Result<ResidentLayerMaterialization, Qwen3_5ExecutionError> {
+) -> Result<ResidentLayerMaterialization, TextExecutionError> {
     let mut resident_layers = Vec::with_capacity(layer_plans.len());
     let mut fused_gate_up_layer_count = 0_usize;
     let mut separate_gate_up_layer_count = 0_usize;
     for (layer_index, layer_plan) in layer_plans.iter().enumerate() {
         let complete_layer_payload_bytes = layer_plan
             .complete_expert_payload_byte_count()
-            .map_err(|plan_error| Qwen3_5ExecutionError::ExpertLayerPlan {
+            .map_err(|plan_error| TextExecutionError::ExpertLayerPlan {
                 description: plan_error.to_string(),
             })?;
         tracing::info!(
@@ -201,7 +201,7 @@ fn gather_resident_source_tensors(
     layer_plans: &[QuantizedExpertLayerPlan],
     resident_source_shards: &HashMap<PathBuf, MlxSafetensors>,
     positional_file_read_metrics: &Option<Arc<PositionalFileReadMetrics>>,
-) -> Result<ResidentSourceTensorMap, Qwen3_5ExecutionError> {
+) -> Result<ResidentSourceTensorMap, TextExecutionError> {
     let mut resident_source_tensors =
         detach_resident_source_tensors(layer_plans, resident_source_shards)?;
     insert_atlas_resident_source_tensors(
@@ -223,9 +223,9 @@ fn insert_atlas_resident_source_tensors(
     layer_plans: &[QuantizedExpertLayerPlan],
     positional_file_read_metrics: &Option<Arc<PositionalFileReadMetrics>>,
     resident_source_tensors: &mut ResidentSourceTensorMap,
-) -> Result<(), Qwen3_5ExecutionError> {
+) -> Result<(), TextExecutionError> {
     let expert_page_error = |page_error: crate::qwen3_5_core::artifacts::ExpertManifestError| {
-        Qwen3_5ExecutionError::ExpertSourceFailure {
+        TextExecutionError::ExpertSourceFailure {
             description: format!("loading a complete Atlas expert layer failed: {page_error}"),
         }
     };
@@ -262,7 +262,7 @@ fn insert_atlas_resident_source_tensors(
             );
             let complete_tensor = complete_layer_tensors
                 .remove(&page_tensor_name)
-                .ok_or_else(|| Qwen3_5ExecutionError::MissingTensor {
+                .ok_or_else(|| TextExecutionError::MissingTensor {
                     tensor_name: tensor_source.tensor_name.clone(),
                 })?;
             resident_source_tensors.insert(
@@ -285,11 +285,11 @@ fn load_resident_source_shards(
     runtime: &MlxRuntime,
     source_file_paths: &BTreeSet<PathBuf>,
     positional_file_read_metrics: &Option<Arc<PositionalFileReadMetrics>>,
-) -> Result<HashMap<PathBuf, MlxSafetensors>, Qwen3_5ExecutionError> {
+) -> Result<HashMap<PathBuf, MlxSafetensors>, TextExecutionError> {
     let mut resident_source_shards = HashMap::new();
     for source_file_path in source_file_paths {
         let resident_source_file = std::fs::File::open(source_file_path).map_err(|open_error| {
-            Qwen3_5ExecutionError::ExpertSourceFailure {
+            TextExecutionError::ExpertSourceFailure {
                 description: format!(
                     "opening expert source file {} failed: {open_error}",
                     source_file_path.display()
@@ -311,18 +311,18 @@ fn load_resident_source_shards(
 /// storage is reserved.
 fn complete_model_payload_bytes(
     layer_plans: &[QuantizedExpertLayerPlan],
-) -> Result<u64, Qwen3_5ExecutionError> {
+) -> Result<u64, TextExecutionError> {
     layer_plans
         .iter()
         .try_fold(0_u64, |total_payload_bytes, layer_plan| {
             let layer_payload_bytes =
                 layer_plan
                     .complete_expert_payload_byte_count()
-                    .map_err(|plan_error| Qwen3_5ExecutionError::ExpertLayerPlan {
+                    .map_err(|plan_error| TextExecutionError::ExpertLayerPlan {
                         description: plan_error.to_string(),
                     })?;
             total_payload_bytes.checked_add(layer_payload_bytes).ok_or(
-                Qwen3_5ExecutionError::InvalidInput {
+                TextExecutionError::InvalidInput {
                     description: "complete expert payload byte count overflowed",
                 },
             )
@@ -333,7 +333,7 @@ fn load_resident_layer(
     runtime: &MlxRuntime,
     resident_source_tensors: &mut ResidentSourceTensorMap,
     layer_plan: &QuantizedExpertLayerPlan,
-) -> Result<Qwen3_5ResidentExpertLayerWeights, Qwen3_5ExecutionError> {
+) -> Result<Qwen3_5ResidentExpertLayerWeights, TextExecutionError> {
     let gate_projection =
         load_resident_projection(resident_source_tensors, layer_plan, "gate_proj")?;
     let up_projection = load_resident_projection(resident_source_tensors, layer_plan, "up_proj")?;
@@ -347,10 +347,10 @@ fn load_resident_projection(
     resident_source_tensors: &mut ResidentSourceTensorMap,
     layer_plan: &QuantizedExpertLayerPlan,
     projection_name: &str,
-) -> Result<Qwen3_5AffineWeights, Qwen3_5ExecutionError> {
+) -> Result<Qwen3_5AffineWeights, TextExecutionError> {
     let quantization_mode = layer_plan.quantization_mode_for_projection(projection_name);
     if quantization_mode == QuantizationMode::Jangtq2Codebook {
-        return Err(Qwen3_5ExecutionError::InvalidInput {
+        return Err(TextExecutionError::InvalidInput {
             description: "jangtq2 expert weights require the bounded streaming path",
         });
     }
@@ -377,7 +377,7 @@ fn load_resident_projection(
                 quantization_group_size: weight_source.quantization_group_size,
             })
         }
-        QuantizationMode::Jangtq2Codebook => Err(Qwen3_5ExecutionError::InvalidInput {
+        QuantizationMode::Jangtq2Codebook => Err(TextExecutionError::InvalidInput {
             description: "jangtq2 expert weights require the bounded streaming path",
         }),
     }
@@ -387,7 +387,7 @@ fn projection_parameter_source<'plan>(
     layer_plan: &'plan QuantizedExpertLayerPlan,
     projection_name: &str,
     parameter_name: &str,
-) -> Result<&'plan QuantizedTensorSource, Qwen3_5ExecutionError> {
+) -> Result<&'plan QuantizedTensorSource, TextExecutionError> {
     layer_plan
         .tensor_sources
         .iter()
@@ -395,7 +395,7 @@ fn projection_parameter_source<'plan>(
             tensor_source.projection_name == projection_name
                 && tensor_source.parameter_name == parameter_name
         })
-        .ok_or_else(|| Qwen3_5ExecutionError::MissingTensor {
+        .ok_or_else(|| TextExecutionError::MissingTensor {
             tensor_name: format!(
                 "{}.switch_mlp.{projection_name}.{parameter_name}",
                 layer_plan.layer_prefix
@@ -406,7 +406,7 @@ fn projection_parameter_source<'plan>(
 fn detach_resident_source_tensors(
     layer_plans: &[QuantizedExpertLayerPlan],
     resident_source_shards: &HashMap<PathBuf, MlxSafetensors>,
-) -> Result<ResidentSourceTensorMap, Qwen3_5ExecutionError> {
+) -> Result<ResidentSourceTensorMap, TextExecutionError> {
     let resident_source_tensor_capacity = layer_plans
         .iter()
         .map(|layer_plan| layer_plan.tensor_sources.len())
@@ -422,14 +422,14 @@ fn detach_resident_source_tensors(
             tensor_source.tensor_name.clone(),
         );
         if resident_source_tensors.contains_key(&source_tensor_key) {
-            return Err(Qwen3_5ExecutionError::InvalidTensor {
+            return Err(TextExecutionError::InvalidTensor {
                 tensor_name: tensor_source.tensor_name.clone(),
                 description: "resident expert tensor appears more than once in the layer plans",
             });
         }
         let resident_source_shard = resident_source_shards
             .get(&tensor_source.source_file)
-            .ok_or_else(|| Qwen3_5ExecutionError::MissingTensor {
+            .ok_or_else(|| TextExecutionError::MissingTensor {
                 tensor_name: tensor_source.tensor_name.clone(),
             })?;
         let source_tensor = resident_source_shard.tensor(&tensor_source.tensor_name)?;
@@ -441,13 +441,13 @@ fn detach_resident_source_tensors(
 fn take_validated_source_tensor(
     resident_source_tensors: &mut ResidentSourceTensorMap,
     tensor_source: &QuantizedTensorSource,
-) -> Result<MlxArray, Qwen3_5ExecutionError> {
+) -> Result<MlxArray, TextExecutionError> {
     let source_tensor = resident_source_tensors
         .remove(&(
             tensor_source.source_file.clone(),
             tensor_source.tensor_name.clone(),
         ))
-        .ok_or_else(|| Qwen3_5ExecutionError::MissingTensor {
+        .ok_or_else(|| TextExecutionError::MissingTensor {
             tensor_name: tensor_source.tensor_name.clone(),
         })?;
     validate_source_tensor(tensor_source, &source_tensor)?;
@@ -457,7 +457,7 @@ fn take_validated_source_tensor(
 fn validate_source_tensor(
     tensor_source: &QuantizedTensorSource,
     source_tensor: &MlxArray,
-) -> Result<(), Qwen3_5ExecutionError> {
+) -> Result<(), TextExecutionError> {
     // Plans came from bounded safetensors-header validation. Rechecking the MLX
     // view closes the boundary between header metadata and the array actually
     // retained by the resident owner.
@@ -465,20 +465,20 @@ fn validate_source_tensor(
         .full_shape
         .iter()
         .map(|dimension| {
-            i32::try_from(*dimension).map_err(|_| Qwen3_5ExecutionError::InvalidTensor {
+            i32::try_from(*dimension).map_err(|_| TextExecutionError::InvalidTensor {
                 tensor_name: tensor_source.tensor_name.clone(),
                 description: "resident expert tensor shape exceeds the MLX range",
             })
         })
         .collect::<Result<Vec<_>, _>>()?;
     if source_tensor.shape() != expected_shape {
-        return Err(Qwen3_5ExecutionError::InvalidTensor {
+        return Err(TextExecutionError::InvalidTensor {
             tensor_name: tensor_source.tensor_name.clone(),
             description: "resident expert tensor shape differs from the validated layer plan",
         });
     }
     if source_tensor.dtype() != mlx_dtype(tensor_source.dtype)? {
-        return Err(Qwen3_5ExecutionError::InvalidTensor {
+        return Err(TextExecutionError::InvalidTensor {
             tensor_name: tensor_source.tensor_name.clone(),
             description: "resident expert tensor dtype differs from the validated layer plan",
         });
@@ -490,18 +490,18 @@ fn validate_source_tensor(
                 .ok()
                 .and_then(|expert_capacity| bytes_per_expert.checked_mul(expert_capacity))
         })
-        .ok_or_else(|| Qwen3_5ExecutionError::InvalidTensor {
+        .ok_or_else(|| TextExecutionError::InvalidTensor {
             tensor_name: tensor_source.tensor_name.clone(),
             description: "resident expert tensor payload byte count overflowed",
         })?;
     let actual_payload_bytes = u64::try_from(source_tensor.byte_count()).map_err(|_| {
-        Qwen3_5ExecutionError::InvalidTensor {
+        TextExecutionError::InvalidTensor {
             tensor_name: tensor_source.tensor_name.clone(),
             description: "resident expert tensor payload exceeds the u64 range",
         }
     })?;
     if actual_payload_bytes != expected_payload_bytes {
-        return Err(Qwen3_5ExecutionError::TensorPayloadMismatch {
+        return Err(TextExecutionError::TensorPayloadMismatch {
             actual_payload_bytes,
             expected_payload_bytes,
         });
@@ -509,13 +509,13 @@ fn validate_source_tensor(
     Ok(())
 }
 
-fn mlx_dtype(safetensors_dtype: SafetensorsDtype) -> Result<MlxDtype, Qwen3_5ExecutionError> {
+fn mlx_dtype(safetensors_dtype: SafetensorsDtype) -> Result<MlxDtype, TextExecutionError> {
     match safetensors_dtype {
         SafetensorsDtype::Uint32 => Ok(MlxDtype::UInt32),
         SafetensorsDtype::Float16 => Ok(MlxDtype::Float16),
         SafetensorsDtype::BFloat16 => Ok(MlxDtype::BFloat16),
         SafetensorsDtype::Float32 => Ok(MlxDtype::Float32),
-        _ => Err(Qwen3_5ExecutionError::InvalidInput {
+        _ => Err(TextExecutionError::InvalidInput {
             description: "resident expert tensor plan contains an unsupported dtype",
         }),
     }

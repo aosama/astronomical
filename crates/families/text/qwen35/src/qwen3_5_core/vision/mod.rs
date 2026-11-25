@@ -25,11 +25,9 @@ pub mod visual_embeddings;
 pub mod visual_embeddings_runtime;
 
 #[cfg(any(test, feature = "direct-mlx"))]
-pub use image_processor::Qwen3_5ImageGrid;
+pub use image_processor::ImageGrid;
 
-pub use image_processor::{
-    Qwen3_5ImageProcessingError, Qwen3_5ImageProcessor, Qwen3_5ProcessedImage,
-};
+pub use image_processor::{ProcessedImage, Qwen3_5ImageProcessingError, Qwen3_5ImageProcessor};
 #[cfg(feature = "direct-mlx")]
 pub use vision_attention::Qwen3_5VisionPaddingZeroCache;
 pub use vision_config::Qwen3_5VisionConfig;
@@ -58,7 +56,7 @@ pub use visual_embeddings::{
 pub use super::artifacts::ValidatedQwen3_5Artifact;
 pub use super::configuration::Qwen3_5ConfigError;
 #[cfg(feature = "direct-mlx")]
-pub use super::model_math::error::Qwen3_5ExecutionError;
+pub use text_generation::execution_error::TextExecutionError;
 #[cfg(feature = "direct-mlx")]
 pub use visual_embeddings_runtime::{
     VisualEmbeddingEngineContext, resolve_visual_embeddings_for_processed_images,

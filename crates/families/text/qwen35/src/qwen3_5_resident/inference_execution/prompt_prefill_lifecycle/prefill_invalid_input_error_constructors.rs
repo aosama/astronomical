@@ -1,29 +1,29 @@
 //! Named invalid-input execution error constructors for the prefill phase.
 //!
 //! The forward dispatch and terminal seed reject malformed internal state with
-//! `Qwen3_5ExecutionError::InvalidInput`. Every function here exists so call
+//! `TextExecutionError::InvalidInput`. Every function here exists so call
 //! sites pass a name by path instead of writing a closure, and the tests lock
 //! each description byte-for-byte so replacing the inline closures stays
 //! provably behavior-preserving.
 
-use crate::Qwen3_5ExecutionError;
+use crate::TextExecutionError;
 
-pub(super) fn engine_lost_loaded_model_invalid_input() -> Qwen3_5ExecutionError {
-    Qwen3_5ExecutionError::InvalidInput {
+pub(super) fn engine_lost_loaded_model_invalid_input() -> TextExecutionError {
+    TextExecutionError::InvalidInput {
         description: "Qwen3.5 engine lost its loaded model",
     }
 }
 
 pub(super) fn visual_astro_ssd_prompt_cache_checkpoints_have_no_block_contract_invalid_input()
--> Qwen3_5ExecutionError {
-    Qwen3_5ExecutionError::InvalidInput {
+-> TextExecutionError {
+    TextExecutionError::InvalidInput {
         description: "planned visual astro-ssd-prompt-cache checkpoints have no block contract",
     }
 }
 
 pub(super) fn text_astro_ssd_prompt_cache_checkpoints_have_no_block_contract_invalid_input()
--> Qwen3_5ExecutionError {
-    Qwen3_5ExecutionError::InvalidInput {
+-> TextExecutionError {
+    TextExecutionError::InvalidInput {
         description: "planned text astro-ssd-prompt-cache checkpoints have no block contract",
     }
 }
@@ -36,12 +36,12 @@ pub(super) fn terminal_prefill_first_generated_token_sampling_failed_invalid_inp
     SamplingError: std::fmt::Display,
 >(
     sampling_error: SamplingError,
-) -> Qwen3_5ExecutionError {
+) -> TextExecutionError {
     tracing::warn!(
         error = %sampling_error,
         "failed to sample the first generated token from terminal prefill logits"
     );
-    Qwen3_5ExecutionError::InvalidInput {
+    TextExecutionError::InvalidInput {
         description: "failed to sample the first generated token from terminal prefill logits",
     }
 }

@@ -12,8 +12,7 @@ use crate::qwen3_5_core::model_math::gated_delta_boundary_checkpoints::qwen3_5_g
 use crate::qwen3_5_core::model_math::gated_delta_sequence::qwen3_5_gated_delta_sequence;
 
 use crate::{
-    ConvolutionState, GatedDeltaRecurrentState,
-    Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
+    AstroSsdPromptCacheBoundaryCheckpointCollector, ConvolutionState, GatedDeltaRecurrentState,
 };
 
 /// One gated-delta layer's live state for a forward, and, when the prompt
@@ -29,7 +28,7 @@ pub(in crate::prism_hadamard_qwen35::model) struct LinearLayerState<'a> {
 /// Where one layer records its boundary states.
 pub(in crate::prism_hadamard_qwen35::model) struct LayerBoundaryCheckpoints<'a> {
     pub(in crate::prism_hadamard_qwen35::model) collector:
-        &'a mut Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
+        &'a mut AstroSsdPromptCacheBoundaryCheckpointCollector,
     pub(in crate::prism_hadamard_qwen35::model) decoder_layer_index: usize,
 }
 

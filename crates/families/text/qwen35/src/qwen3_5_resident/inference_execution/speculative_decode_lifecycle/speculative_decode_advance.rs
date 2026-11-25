@@ -16,13 +16,13 @@
 
 use ipc_protocol::RequestId;
 
-use crate::qwen3_5_core::decoder::reply_token_mlx_buffer_cache_reclaim::reclaim_mlx_buffer_cache_between_draft_rounds;
-use crate::qwen3_5_core::shared_execution::decode_step::ActiveRequestAdvance;
-use crate::qwen3_5_core::shared_execution::generated_token_emission;
 use crate::qwen3_5_resident::inference_execution::memory_governance::completed_forward_memory::capture_completed_forward_memory_observation;
+use text_generation::decoder_state::reply_token_mlx_buffer_cache_reclaim::reclaim_mlx_buffer_cache_between_draft_rounds;
+use text_generation::generation_loop::decode_step::ActiveRequestAdvance;
+use text_generation::generation_loop::generated_token_emission;
 
-use super::super::engine_request::Qwen3_5EngineRequest;
-use super::super::{Qwen3_5EngineState, fatal_engine_error, qwen3_5_runtime_error};
+use super::super::engine_request::ResidentEngineRequest;
+use super::super::{Qwen3_5EngineState, fatal_engine_error, fatal_runtime_error};
 use super::draft_tree_round::{DraftTreeRoundRequest, run_draft_tree_round};
 
 impl Qwen3_5EngineState {
@@ -31,7 +31,7 @@ impl Qwen3_5EngineState {
     pub(in crate::qwen3_5_resident::inference_execution) fn advance_speculative_generation(
         &mut self,
         request_id: RequestId,
-        active_request: &mut Qwen3_5EngineRequest,
+        active_request: &mut ResidentEngineRequest,
     ) -> Result<ActiveRequestAdvance, crate::InferenceEngineError> {
         // The queue holds committed tokens in front and exactly one
         // uncommitted token at the tail: the last round's correction, which
@@ -84,7 +84,7 @@ impl Qwen3_5EngineState {
     /// speculative emission path.
     fn emit_one_speculative_token_id(
         &mut self,
-        active_request: &mut Qwen3_5EngineRequest,
+        active_request: &mut ResidentEngineRequest,
         current_generated_token_id: u32,
     ) -> Result<ActiveRequestAdvance, crate::InferenceEngineError> {
         let model = self.core.loaded_model()?;
@@ -132,12 +132,12 @@ impl Qwen3_5EngineState {
     fn reclaim_stale_buffers_and_run_one_round(
         &mut self,
         request_id: RequestId,
-        active_request: &mut Qwen3_5EngineRequest,
+        active_request: &mut ResidentEngineRequest,
         bonus_token_id: u32,
     ) -> Result<ActiveRequestAdvance, crate::InferenceEngineError> {
         if let Some(model) = self.core.model.as_ref() {
             reclaim_mlx_buffer_cache_between_draft_rounds(model.runtime())
-                .map_err(qwen3_5_runtime_error)?;
+                .map_err(fatal_runtime_error)?;
         }
         self.run_one_speculative_round(request_id, active_request, bonus_token_id)
     }
@@ -147,7 +147,7 @@ impl Qwen3_5EngineState {
     fn run_one_speculative_round(
         &mut self,
         request_id: RequestId,
-        active_request: &mut Qwen3_5EngineRequest,
+        active_request: &mut ResidentEngineRequest,
         bonus_token_id: u32,
     ) -> Result<ActiveRequestAdvance, crate::InferenceEngineError> {
         let model = self.core.loaded_model()?;
@@ -156,7 +156,7 @@ impl Qwen3_5EngineState {
         })?;
         // The prefill-seeded bonus reports a truthful zero for the first
         // decode-forward latency, exactly as the classic pending path does.
-        if crate::qwen3_5_core::shared_execution::decode_step_decisions::pending_successor_reports_zero_first_decode_time(
+        if text_generation::generation_loop::decode_step_decisions::pending_successor_reports_zero_first_decode_time(
             active_request.generated_token_count,
             active_request.first_decode_forward_elapsed_millis,
         ) {
@@ -192,7 +192,7 @@ impl Qwen3_5EngineState {
             &mut draft_session,
             &round_request,
         )
-        .map_err(qwen3_5_runtime_error)?;
+        .map_err(fatal_runtime_error)?;
         active_request.engine_extension.speculative_draft_session = Some(draft_session);
         let accepted_context_growth = round_outcome
             .context_length_after_round

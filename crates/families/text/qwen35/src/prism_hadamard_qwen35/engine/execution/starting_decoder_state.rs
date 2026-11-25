@@ -6,8 +6,8 @@ use ipc_protocol::RequestId;
 use crate::InferenceEngineError;
 use crate::PerformanceAttribution;
 use crate::RequestDecoderStateStack;
-use crate::qwen3_5_core::engine_errors::qwen3_5_runtime_error;
-use crate::qwen3_5_core::shared_execution::astro_ssd_prompt_cache_restore::{
+use text_generation::engine_errors::fatal_runtime_error;
+use text_generation::generation_loop::astro_ssd_prompt_cache_restore::{
     AstroSsdPromptCacheRestoreOutcome, AstroSsdPromptCacheRestoreRequest,
     restore_astro_ssd_prompt_cache_prefix,
 };
@@ -37,7 +37,7 @@ impl PrismHadamardQwen35InferenceExecution {
             &self.execution_core.loaded_model()?.astro_decoder_state_cache_layout,
             self.execution_core.full_attention_kv_state_growth_tokens,
         )
-        .map_err(qwen3_5_runtime_error)?;
+        .map_err(fatal_runtime_error)?;
         // The store is lent out for the restore so the engine itself can be
         // borrowed mutably beside it, and is put back whatever the outcome:
         // a failed restore must not leave later requests without a store.

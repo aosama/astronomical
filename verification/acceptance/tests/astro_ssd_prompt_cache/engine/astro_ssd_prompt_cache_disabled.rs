@@ -1,7 +1,7 @@
 use ipc_protocol::RequestId;
 use model_serving::{
-    GeneratedToken, InferenceEngine, Qwen3_5ArtifactValidator, Qwen3_5InferenceRequest,
-    Qwen3_5MlxEngineConstructors, Qwen3_5PromptProcessingChunkSizer, Qwen3_5ResidentEngine,
+    GeneratedToken, InferenceEngine, PromptProcessingChunkSizer, Qwen3_5ArtifactValidator,
+    Qwen3_5ResidentEngine, TextInferenceRequest, TextMlxEngineConstructors,
 };
 
 use super::engine_astro_ssd_prompt_cache::{
@@ -37,7 +37,7 @@ async fn run_astro_ssd_prompt_cache_disabled_cold_prefill_acceptance() {
         mlx_memory_limits.active_memory_limit_bytes(),
         mlx_memory_limits.mlx_buffer_cache_limit_bytes(),
         None,
-        Qwen3_5PromptProcessingChunkSizer::for_chunk_size_tokens(2_048)
+        PromptProcessingChunkSizer::for_chunk_size_tokens(2_048)
             .expect("the test resident prefill chunk size should be valid"),
         248_069,
         model_directory.to_path_buf(),
@@ -51,7 +51,7 @@ async fn run_astro_ssd_prompt_cache_disabled_cold_prefill_acceptance() {
     let request_id = RequestId::new(2_000);
     qwen3_5_engine
         .start_generation(
-            Qwen3_5InferenceRequest::new(
+            TextInferenceRequest::new(
                 request_id,
                 astro_ssd_prompt_cache_eligible_prompt_token_ids(15),
                 10,

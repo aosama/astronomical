@@ -12,16 +12,15 @@ use mlx_bridge::MlxArray;
 
 use super::layer_major_prefill::{LayerMajorCheckpointContract, LayerMajorSpan};
 use crate::AstroDecoderStateCacheState;
-use crate::qwen3_5_core::decoder::{
-    Qwen3_5AstroSsdPromptCacheBoundaryCheckpoint,
-    Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
+use text_generation::execution_error::TextExecutionError;
+use text_generation::{
+    AstroSsdPromptCacheBoundaryCheckpoint, AstroSsdPromptCacheBoundaryCheckpointCollector,
 };
-use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 
 /// The per-span bookkeeping that lives across the layer loop.
 pub(super) struct SpanState {
     pub(super) hidden_states: Option<MlxArray>,
-    pub(super) collector: Option<Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector>,
+    pub(super) collector: Option<AstroSsdPromptCacheBoundaryCheckpointCollector>,
     pub(super) end_state_snapshot: Option<HashMap<String, MlxArray>>,
 }
 
@@ -53,20 +52,18 @@ pub(super) fn forget_layer_end_state(
 pub(super) fn span_collector(
     span: &LayerMajorSpan,
     checkpoint_contract: Option<LayerMajorCheckpointContract>,
-) -> Result<Option<Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector>, Qwen3_5ExecutionError> {
+) -> Result<Option<AstroSsdPromptCacheBoundaryCheckpointCollector>, TextExecutionError> {
     let Some(checkpoint_contract) = checkpoint_contract else {
         return Ok(None);
     };
     if span.interior_boundary_tokens.is_empty() {
         return Ok(None);
     }
-    Ok(Some(
-        Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector::new(
-            span.interior_boundary_tokens.clone(),
-            checkpoint_contract.boundary_tensor_count,
-            checkpoint_contract.block_token_count,
-        )?,
-    ))
+    Ok(Some(AstroSsdPromptCacheBoundaryCheckpointCollector::new(
+        span.interior_boundary_tokens.clone(),
+        checkpoint_contract.boundary_tensor_count,
+        checkpoint_contract.block_token_count,
+    )?))
 }
 
 /// Keeps one linear-attention layer's state as a span leaves it: the same
@@ -75,7 +72,7 @@ pub(super) fn record_end_state_snapshot(
     end_state_snapshot: &mut HashMap<String, MlxArray>,
     layer_index: usize,
     layer_state: &AstroDecoderStateCacheState,
-) -> Result<(), Qwen3_5ExecutionError> {
+) -> Result<(), TextExecutionError> {
     let AstroDecoderStateCacheState::Composite {
         convolution,
         recurrent,
@@ -85,7 +82,7 @@ pub(super) fn record_end_state_snapshot(
     };
     let (Some(convolution_state), Some(recurrent_state)) = (convolution.state(), recurrent.state())
     else {
-        return Err(Qwen3_5ExecutionError::InvalidRequestDecoderState {
+        return Err(TextExecutionError::InvalidRequestDecoderState {
             layer_index,
             description: "a linear-attention layer left a span without its state",
         });
@@ -109,7 +106,7 @@ pub(super) fn completed_checkpoints(
     spans: &[LayerMajorSpan],
     span_states: Vec<SpanState>,
     checkpoint_contract: Option<LayerMajorCheckpointContract>,
-) -> Result<Vec<Qwen3_5AstroSsdPromptCacheBoundaryCheckpoint>, Qwen3_5ExecutionError> {
+) -> Result<Vec<AstroSsdPromptCacheBoundaryCheckpoint>, TextExecutionError> {
     let expected_tensor_count =
         checkpoint_contract.map_or(0, |contract| contract.boundary_tensor_count);
     let mut boundary_checkpoints = Vec::new();
@@ -122,11 +119,11 @@ pub(super) fn completed_checkpoints(
         }
         if let Some(recurrent_snapshot_tensors) = span_state.end_state_snapshot {
             if recurrent_snapshot_tensors.len() != expected_tensor_count {
-                return Err(Qwen3_5ExecutionError::InvalidInput {
+                return Err(TextExecutionError::InvalidInput {
                     description: "a layer-major end-state snapshot lacks part of the astro-decoder-state-cache tensor layout",
                 });
             }
-            boundary_checkpoints.push(Qwen3_5AstroSsdPromptCacheBoundaryCheckpoint {
+            boundary_checkpoints.push(AstroSsdPromptCacheBoundaryCheckpoint {
                 completed_prefill_chunk_tokens: span.end_token,
                 recurrent_snapshot_tensors,
             });

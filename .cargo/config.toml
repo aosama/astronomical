@@ -100,7 +100,7 @@ test-decision-gpu-training = "test -p decision-models --features direct-mlx --li
 # and wired memory climbs to the system ceiling during a long reply. Needs
 # MLX and the graphics processor (the tests are #[serial]); under a second
 # once built.
-test-reply-token-reclaim = "test -p qwen35 --features direct-mlx --lib reply_token_mlx_buffer_cache_reclaim"
+test-reply-token-reclaim = "test -p text-generation --features direct-mlx --lib reply_token_mlx_buffer_cache_reclaim"
 # Whole-model training (`decision train --whole-model`): MLX's own gradients
 # through every operation Laya's forward pass uses (an 8-bit projection with
 # an add-on, rotary embedding, masked attention, exact GELU), the micro-batch

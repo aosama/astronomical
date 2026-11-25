@@ -26,8 +26,8 @@ use crate::decision_models::decision_adapters::{
 use crate::linear_adapters::LinearAdapters;
 use crate::qwen3_5_core::model::layer_additions::Qwen3_5LayerAdditions;
 use crate::{
-    Qwen3_5ArtifactValidator, Qwen3_5ModelChunkingConfiguration, Qwen3_5ResidentModel,
-    RequestDecoderStateStack,
+    Qwen3_5ArtifactValidator, Qwen3_5ResidentModel, RequestDecoderStateStack,
+    TextModelChunkingConfiguration,
 };
 
 /// The `astro_decoder_state_cache` KV growth step and graph-submission intervals the chat engine
@@ -69,7 +69,7 @@ impl QwenDecisionBackbone {
                     "the decision model's backbone is not a valid Qwen3.5 checkpoint: {validation_error}"
                 ))
             })?;
-        let model_chunking = Qwen3_5ModelChunkingConfiguration::new(
+        let model_chunking = TextModelChunkingConfiguration::new(
             FULL_ATTENTION_KV_GROWTH_TOKENS,
             PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL,
             SSD_PAGING_GENERATION_LAYER_INTERVAL,

@@ -24,7 +24,6 @@
 use mlx_bridge::MlxArray;
 
 use super::feed_forward_weights::Qwen3_5MoEFeedForwardWeights;
-use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_streaming::expert_streaming::expert_pager::{
     Qwen3_5ExpertPager, Qwen3_5ExpertStreamingRequestShape, Qwen3_5PagedExpertWeights,
     codebook_page_multiplies_without_transient_decode,
@@ -35,6 +34,7 @@ use crate::{
     PerformanceAttribution, PerformanceCounter, should_commit_multi_token_union_as_complete_layer,
 };
 use engine_core::expert_paging::{QuantizedExpertLayerPlan, QuantizedExpertPageManifest};
+use text_generation::execution_error::TextExecutionError;
 
 /// Expected-coverage factor for "this chunk routes every expert".
 ///
@@ -326,7 +326,7 @@ impl Qwen3_5Model {
         selected_scores: &MlxArray,
         should_use_compiled_elementwise_graphs: bool,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<Option<MlxArray>, Qwen3_5ExecutionError> {
+    ) -> Result<Option<MlxArray>, TextExecutionError> {
         if let Some((prefetched_weights, prefetched_manifest)) =
             self.take_prefetched_complete_layer(layer_index)
         {
@@ -366,7 +366,7 @@ impl Qwen3_5Model {
         selected_scores: &MlxArray,
         should_use_compiled_elementwise_graphs: bool,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         let expert_capacity = expert_pager.layer_plan(layer_index)?.expert_capacity;
         let complete_expert_ids: Vec<usize> = (0..expert_capacity).collect();
         if let Some(astro_expert_cache) = self.astro_expert_cache.as_ref() {

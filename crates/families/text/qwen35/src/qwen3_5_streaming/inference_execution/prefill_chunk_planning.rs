@@ -7,7 +7,7 @@
 use crate::astro_ssd_prompt_cache_boundary_completed_prefill_chunk_tokens;
 
 use super::Qwen3_5EngineState;
-use super::engine_request::Qwen3_5EngineRequest;
+use super::engine_request::StreamingEngineRequest;
 use super::layer_major_span_plan::LayerMajorSpanPlan;
 use super::prompt_prefill_errors::PromptPrefillChunkAttemptError;
 /// Immutable decisions computed before a prompt forward runs.
@@ -39,7 +39,7 @@ impl Qwen3_5EngineState {
     /// The spans the prompt is read in from `prefill_start`.
     pub(super) fn layer_major_span_plan_for(
         &self,
-        active_request: &Qwen3_5EngineRequest,
+        active_request: &StreamingEngineRequest,
         prefill_start: usize,
         prefill_end_exclusive: usize,
     ) -> Option<LayerMajorSpanPlan> {
@@ -69,7 +69,7 @@ impl Qwen3_5EngineState {
     /// method performs no GPU work and no mutable engine state changes.
     pub(super) fn plan_prompt_prefill_chunk(
         &self,
-        active_request: &Qwen3_5EngineRequest,
+        active_request: &StreamingEngineRequest,
         prefill_start: usize,
         prefill_end: usize,
         layer_major_span_plan: LayerMajorSpanPlan,
@@ -102,7 +102,7 @@ impl Qwen3_5EngineState {
     /// owns.
     fn planned_astro_ssd_prompt_cache_boundaries(
         &self,
-        active_request: &Qwen3_5EngineRequest,
+        active_request: &StreamingEngineRequest,
         prefill_start: usize,
         prefill_end: usize,
     ) -> Result<(Vec<usize>, Option<usize>), PromptPrefillChunkAttemptError> {

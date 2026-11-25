@@ -18,10 +18,10 @@
 //! every per-chunk fixed cost, so throughput collapsed exactly when memory
 //! was tight; the configured chunk size is the only prefill chunk size.
 
-use crate::qwen3_5_core::shared_execution::prompt_reading_steps::{
+use std::time::{Duration, Instant};
+use text_generation::generation_loop::prompt_reading_steps::{
     self, PromptStretch, PromptStretchTiming,
 };
-use std::time::{Duration, Instant};
 
 use crate::{
     GeneratedToken, InferenceEngineError, ResidentForwardAdmissionRejection,
@@ -29,7 +29,7 @@ use crate::{
 };
 use ipc_protocol::RequestId;
 
-use super::super::engine_request::Qwen3_5EngineRequest;
+use super::super::engine_request::ResidentEngineRequest;
 use super::Qwen3_5EngineState;
 use super::prompt_prefill_errors::PromptPrefillChunkAttemptError;
 use crate::qwen3_5_resident::model::request_errors;
@@ -37,7 +37,7 @@ impl Qwen3_5EngineState {
     pub(in crate::qwen3_5_resident::inference_execution) fn advance_prompt_prefill_if_pending(
         &mut self,
         request_id: RequestId,
-        active_request: &mut Qwen3_5EngineRequest,
+        active_request: &mut ResidentEngineRequest,
     ) -> Result<Option<GeneratedToken>, InferenceEngineError> {
         // Target-only prefill consumes every prompt token and samples first
         // output from the last chunk.
@@ -134,7 +134,7 @@ impl Qwen3_5EngineState {
     fn handle_prompt_prefill_chunk_attempt_failure(
         &mut self,
         request_id: RequestId,
-        _active_request: &mut Qwen3_5EngineRequest,
+        _active_request: &mut ResidentEngineRequest,
         prefill_start: usize,
         attempted_prefill_chunk_token_count: usize,
         prompt_prefill_chunk_attempt_error: PromptPrefillChunkAttemptError,
@@ -317,7 +317,7 @@ impl Qwen3_5EngineState {
     /// included, since the governor keeps the largest figure per chunk size.
     fn report_completed_prompt_chunk(
         &mut self,
-        active_request: &Qwen3_5EngineRequest,
+        active_request: &ResidentEngineRequest,
         admitted_forward: super::forward_memory::AdmittedForward,
     ) -> Result<(), InferenceEngineError> {
         let model = self.core.loaded_model()?;

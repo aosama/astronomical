@@ -5,8 +5,8 @@
 use std::path::Path;
 
 use model_serving::{
-    Qwen3_5ArtifactValidator, Qwen3_5ModelChunkingConfiguration, Qwen3_5ResidentModel,
-    Qwen3_5Tokenizer,
+    Qwen3_5ArtifactValidator, Qwen3_5ResidentModel, Qwen3_5Tokenizer,
+    TextModelChunkingConfiguration,
 };
 
 use super::support::{ROMEO_AND_JULIET_SOURCE, journey_runtime};
@@ -33,7 +33,7 @@ pub(crate) fn generate_greedy_continuation(artifact_directory: &Path) -> String 
     let prompt_token_ids = tokenizer
         .encode_prompt(&romeo_and_juliet_prompt())
         .expect("the prompt should encode");
-    let chunking = Qwen3_5ModelChunkingConfiguration::new(
+    let chunking = TextModelChunkingConfiguration::new(
         FULL_ATTENTION_KV_GROWTH_TOKENS,
         PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL,
         SSD_PAGING_GENERATION_LAYER_INTERVAL,

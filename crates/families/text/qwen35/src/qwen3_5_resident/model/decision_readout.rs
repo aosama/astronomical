@@ -21,7 +21,7 @@ use crate::qwen3_5_core::model::target_forward_graph::{
 };
 use mlx_bridge::{MlxArray, MlxDtype};
 
-use super::{Qwen3_5ExecutionError, Qwen3_5ResidentModel, RequestDecoderStateStack};
+use super::{Qwen3_5ResidentModel, RequestDecoderStateStack, TextExecutionError};
 use crate::PerformanceAttribution;
 
 /// Runs one decoder layer of a training's batched forward pass so that
@@ -35,7 +35,7 @@ pub trait DecoderLayerRecomputation {
         hidden_states: &MlxArray,
         layer_index: usize,
         token_count: i32,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError>;
+    ) -> Result<MlxArray, TextExecutionError>;
 }
 
 impl Qwen3_5ResidentModel {
@@ -46,10 +46,10 @@ impl Qwen3_5ResidentModel {
         hidden_states: &MlxArray,
         layer_index: usize,
         token_count: i32,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         let Some(decoder_layer_weights) = self.weights.decoder_layer_weights.get(layer_index)
         else {
-            return Err(Qwen3_5ExecutionError::InvalidInput {
+            return Err(TextExecutionError::InvalidInput {
                 description: "a decoder layer index is past the model's layers",
             });
         };
@@ -92,7 +92,7 @@ impl Qwen3_5ResidentModel {
         token_ids: &[u32],
         starting_position_tokens: u32,
         request_decoder_state: &mut RequestDecoderStateStack,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         let (token_indices, token_count) = self.validated_token_indices(
             token_ids,
             starting_position_tokens,
@@ -144,7 +144,7 @@ impl Qwen3_5ResidentModel {
         &self,
         token_rows: &[&[u32]],
         layer_recomputation: Option<&dyn DecoderLayerRecomputation>,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         let (token_indices, token_count) = self.padded_token_indices(token_rows)?;
         let mut hidden_states = self.embedding_lookup(&token_indices)?;
         for layer_index in 0..self.weights.decoder_layer_weights.len() {
@@ -172,13 +172,13 @@ impl Qwen3_5ResidentModel {
     fn padded_token_indices(
         &self,
         token_rows: &[&[u32]],
-    ) -> Result<(MlxArray, i32), Qwen3_5ExecutionError> {
+    ) -> Result<(MlxArray, i32), TextExecutionError> {
         let mut longest_row = 0;
         for token_row in token_rows {
             longest_row = longest_row.max(token_row.len());
         }
         if token_rows.is_empty() || longest_row == 0 {
-            return Err(Qwen3_5ExecutionError::InvalidInput {
+            return Err(TextExecutionError::InvalidInput {
                 description: "a batched readout needs at least one token",
             });
         }
@@ -186,7 +186,7 @@ impl Qwen3_5ResidentModel {
         for (row_index, token_row) in token_rows.iter().enumerate() {
             for (position, token_id) in token_row.iter().enumerate() {
                 if *token_id >= self.config.vocabulary_size() {
-                    return Err(Qwen3_5ExecutionError::InvalidInput {
+                    return Err(TextExecutionError::InvalidInput {
                         description: "token ID is outside the vocabulary",
                     });
                 }
@@ -205,19 +205,16 @@ impl Qwen3_5ResidentModel {
     /// `[token_ids.len(), hidden_size]`, dequantized when the projection is
     /// stored quantized. With tied embeddings the projection is the
     /// embedding table, so these are the tokens' input embeddings.
-    pub fn output_embedding_rows(
-        &self,
-        token_ids: &[u32],
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    pub fn output_embedding_rows(&self, token_ids: &[u32]) -> Result<MlxArray, TextExecutionError> {
         if token_ids.is_empty() {
-            return Err(Qwen3_5ExecutionError::InvalidInput {
+            return Err(TextExecutionError::InvalidInput {
                 description: "an output-embedding read needs at least one token",
             });
         }
         let mut row_ids = Vec::with_capacity(token_ids.len());
         for token_id in token_ids {
             if *token_id >= self.config.vocabulary_size() {
-                return Err(Qwen3_5ExecutionError::InvalidInput {
+                return Err(TextExecutionError::InvalidInput {
                     description: "token ID is outside the output projection",
                 });
             }
@@ -228,7 +225,7 @@ impl Qwen3_5ResidentModel {
             .weights
             .language_model_head_weights
             .dequantized_rows(&self.runtime, &row_ids)
-            .ok_or(Qwen3_5ExecutionError::InvalidInput {
+            .ok_or(TextExecutionError::InvalidInput {
                 description: "a codebook-encoded output projection has no readable rows",
             })??;
         let float32_rows = self.runtime.astype(&selected_rows, MlxDtype::Float32)?;

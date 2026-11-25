@@ -26,13 +26,11 @@ use crate::qwen3_5_core::model_math::decoder_layer_weights::{
     Qwen3_5AttentionWeights, Qwen3_5DecoderLayerWeights, Qwen3_5FullAttentionWeights,
     Qwen3_5LinearAttentionWeights,
 };
-use crate::qwen3_5_core::model_math::error::{
-    Qwen3_5ExecutionError, invalid_request_decoder_state,
-};
 use crate::qwen3_5_core::model_math::gated_delta_tree::{
     UploadedTreeRowChains, qwen3_5_gated_delta_replay, qwen3_5_gated_delta_tree,
 };
 use crate::qwen3_5_core::model_math::row_exact_tree_attention;
+use text_generation::execution_error::{TextExecutionError, invalid_request_decoder_state};
 
 /// Context tokens from which a tree's attention goes through the row-exact
 /// kernel. Measured on the 35B-A3B target's 4-row rounds, every stage
@@ -78,7 +76,7 @@ pub enum TreeLayerRows {
 impl Qwen3_5ModelBase {
     /// Declares the tree recurrence kernel, so this model can verify draft
     /// trees. MLX compiles it on first use.
-    pub fn enable_draft_tree_verification(&mut self) -> Result<(), Qwen3_5ExecutionError> {
+    pub fn enable_draft_tree_verification(&mut self) -> Result<(), TextExecutionError> {
         self.optional_accelerators.gated_delta_tree_kernel = Some(
             crate::qwen3_5_core::model_math::gated_delta_tree::qwen3_5_gated_delta_tree_kernel()?,
         );
@@ -100,7 +98,7 @@ impl Qwen3_5ModelBase {
     /// inside the spread between seeds, which reached a whole token on one
     /// seed; `cargo measure-dflash2-tree-rounds`). A first comparison over
     /// six seeds read the same spread as a loss.
-    pub fn enable_row_exact_tree_attention(&mut self) -> Result<(), Qwen3_5ExecutionError> {
+    pub fn enable_row_exact_tree_attention(&mut self) -> Result<(), TextExecutionError> {
         if self.config.head_dimension() as i32 == row_exact_tree_attention::HEAD_SIZE
             && self.config.query_head_count()
                 == self.config.key_value_head_count()
@@ -127,7 +125,7 @@ impl Qwen3_5ModelBase {
         layer_index: usize,
         decoder_layer_weights: &Qwen3_5DecoderLayerWeights,
         layer_model_state: &mut AstroDecoderStateCacheState,
-    ) -> Result<(Qwen3_5DecoderLayerAttentionOutput, TreeLayerRows), Qwen3_5ExecutionError> {
+    ) -> Result<(Qwen3_5DecoderLayerAttentionOutput, TreeLayerRows), TextExecutionError> {
         let epsilon = f32::from_bits(self.config.rms_norm_epsilon_bits());
         let normalized_input = self.runtime.rms_norm(
             hidden_states,
@@ -185,7 +183,7 @@ impl Qwen3_5ModelBase {
             &mut ConvolutionState,
             &mut GatedDeltaRecurrentState,
         ),
-    ) -> Result<(MlxArray, TreeLayerRows), Qwen3_5ExecutionError> {
+    ) -> Result<(MlxArray, TreeLayerRows), TextExecutionError> {
         let mut attribution = PerformanceAttribution::disabled();
         let (mixed_queries_keys_values, output_gate, update_logits, decay_inputs) = self
             .project_linear_attention_inputs(
@@ -245,7 +243,7 @@ impl Qwen3_5ModelBase {
         tree: &TreeRowInputs,
         weights: &Qwen3_5LinearAttentionWeights,
         convolution_state: &ConvolutionState,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         let channel_count = mixed_queries_keys_values.shape()[2];
         let window = self.config.linear_convolution_kernel_dimension() as i32;
         let convolution_weight = normalize_linear_attention_convolution_weight(
@@ -279,7 +277,7 @@ impl Qwen3_5ModelBase {
         tree: &TreeRowInputs,
         weights: &Qwen3_5FullAttentionWeights,
         kv_state: &mut FullAttentionKeyValueState,
-    ) -> Result<(MlxArray, TreeLayerRows), Qwen3_5ExecutionError> {
+    ) -> Result<(MlxArray, TreeLayerRows), TextExecutionError> {
         let RotatedAttentionInputs {
             rotated_queries,
             rotated_keys,
@@ -340,7 +338,7 @@ impl Qwen3_5ModelBase {
         context_offset: i32,
         tree: &TreeRowInputs,
         scale: f32,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         if let (Some(kernels), Some(key_slab), Some(value_slab)) = (
             self.optional_accelerators
                 .row_exact_tree_attention_kernels
@@ -399,11 +397,11 @@ impl Qwen3_5ModelBase {
         )?)
     }
 
-    fn tree_kernel(&self) -> Result<&MlxMetalKernel, Qwen3_5ExecutionError> {
+    fn tree_kernel(&self) -> Result<&MlxMetalKernel, TextExecutionError> {
         self.optional_accelerators
             .gated_delta_tree_kernel
             .as_ref()
-            .ok_or(Qwen3_5ExecutionError::InvalidInput {
+            .ok_or(TextExecutionError::InvalidInput {
                 description: "draft-tree verification needs `enable_draft_tree_verification` first",
             })
     }
@@ -417,7 +415,7 @@ impl Qwen3_5ModelBase {
         layer_rows: TreeLayerRows,
         kept_rows: &MlxArray,
         context_offset: i32,
-    ) -> Result<(), Qwen3_5ExecutionError> {
+    ) -> Result<(), TextExecutionError> {
         match (layer_rows, layer_model_state) {
             (
                 linear_rows @ TreeLayerRows::LinearAttention { .. },
@@ -430,7 +428,7 @@ impl Qwen3_5ModelBase {
                 self.optional_accelerators
                     .gated_delta_replay_kernel
                     .as_ref()
-                    .ok_or(Qwen3_5ExecutionError::InvalidInput {
+                    .ok_or(TextExecutionError::InvalidInput {
                         description: "a tree commit needs `enable_draft_tree_verification` first",
                     })?,
                 linear_rows,
@@ -470,7 +468,7 @@ fn commit_linear_attention(
     linear_rows: TreeLayerRows,
     kept_rows: &MlxArray,
     (convolution_state, recurrent_state): (&mut ConvolutionState, &mut GatedDeltaRecurrentState),
-) -> Result<(), Qwen3_5ExecutionError> {
+) -> Result<(), TextExecutionError> {
     let TreeLayerRows::LinearAttention {
         mixed_queries_keys_values,
         queries,
@@ -480,7 +478,7 @@ fn commit_linear_attention(
         update_rates,
     } = linear_rows
     else {
-        return Err(Qwen3_5ExecutionError::InvalidInput {
+        return Err(TextExecutionError::InvalidInput {
             description: "a DeltaNet commit needs DeltaNet rows",
         });
     };

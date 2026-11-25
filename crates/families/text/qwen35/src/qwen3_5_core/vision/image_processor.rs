@@ -19,43 +19,18 @@ use image::{ImageReader, RgbImage, imageops::FilterType};
 use sha2::{Digest, Sha256};
 use thiserror::Error;
 
+pub use text_generation::{ImageGrid, ProcessedImage};
+
 use super::vision_config::Qwen3_5VisionConfig;
 
 const QWEN3_5_MOE_IMAGE_CHANNEL_COUNT: u32 = 3;
 const QWEN3_5_MOE_MAXIMUM_ASPECT_RATIO: f64 = 200.0;
-
-/// Patch grid produced by the Qwen3VL image processor.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Qwen3_5ImageGrid {
-    pub temporal_patch_count: u32,
-    pub height_patch_count: u32,
-    pub width_patch_count: u32,
-}
 
 /// Pixel dimensions in height-then-width order, matching Qwen3VL processor math.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Qwen3_5ImageDimensions {
     pub height_pixels: u32,
     pub width_pixels: u32,
-}
-
-/// CPU-side image processor output before the MLX vision tower consumes it.
-///
-/// Each row is one flattened patch in C,T,H,W order. Rows themselves use the
-/// spatial-merger block order expected by the vision tower. A still image is
-/// duplicated conceptually across the temporal patch dimension: both temporal
-/// slots read the same source RGB pixel, matching upstream `np.repeat`.
-#[derive(Debug, Clone, PartialEq)]
-pub struct Qwen3_5ProcessedImage {
-    /// SHA-256 of the exact encoded PNG, JPEG, or WebP bytes received at the request boundary.
-    pub encoded_image_sha256: [u8; 32],
-    pub pixel_values: Vec<f32>,
-    pub pixel_values_row_count: usize,
-    pub pixel_values_column_count: usize,
-    pub image_grid: Qwen3_5ImageGrid,
-    pub resized_height_pixels: u32,
-    pub resized_width_pixels: u32,
-    pub image_token_count_after_spatial_merge: usize,
 }
 
 /// Native Rust implementation of the Qwen3VL image preprocessing.
@@ -115,7 +90,7 @@ impl Qwen3_5ImageProcessor {
     pub fn process_image_bytes(
         &self,
         encoded_image_bytes: &[u8],
-    ) -> Result<Qwen3_5ProcessedImage, Qwen3_5ImageProcessingError> {
+    ) -> Result<ProcessedImage, Qwen3_5ImageProcessingError> {
         self.validate_config()?;
         let encoded_image_sha256 = Sha256::digest(encoded_image_bytes).into();
         let decoded_dynamic_image = ImageReader::new(Cursor::new(encoded_image_bytes))
@@ -164,7 +139,7 @@ impl Qwen3_5ImageProcessor {
         &self,
         decoded_rgb_image: RgbImage,
         encoded_image_sha256: [u8; 32],
-    ) -> Result<Qwen3_5ProcessedImage, Qwen3_5ImageProcessingError> {
+    ) -> Result<ProcessedImage, Qwen3_5ImageProcessingError> {
         let original_width_pixels = decoded_rgb_image.width();
         let original_height_pixels = decoded_rgb_image.height();
         let resized_dimensions =
@@ -177,7 +152,7 @@ impl Qwen3_5ImageProcessor {
             FilterType::CatmullRom,
         );
 
-        let image_grid = Qwen3_5ImageGrid {
+        let image_grid = ImageGrid {
             temporal_patch_count: 1,
             height_patch_count: resized_dimensions.height_pixels / self.patch_size_pixels,
             width_patch_count: resized_dimensions.width_pixels / self.patch_size_pixels,
@@ -200,7 +175,7 @@ impl Qwen3_5ImageProcessor {
             total_pixel_value_count,
         );
 
-        Ok(Qwen3_5ProcessedImage {
+        Ok(ProcessedImage {
             encoded_image_sha256,
             pixel_values,
             pixel_values_row_count,
@@ -274,7 +249,7 @@ impl Qwen3_5ImageProcessor {
     fn flatten_pixel_values(
         &self,
         resized_rgb_image: &RgbImage,
-        image_grid: Qwen3_5ImageGrid,
+        image_grid: ImageGrid,
         pixel_values_row_count: usize,
         pixel_values_column_count: usize,
         total_pixel_value_count: usize,
@@ -363,7 +338,7 @@ impl Qwen3_5ImageProcessor {
 
     fn pixel_values_row_count(
         &self,
-        image_grid: Qwen3_5ImageGrid,
+        image_grid: ImageGrid,
     ) -> Result<usize, Qwen3_5ImageProcessingError> {
         let row_count = u64::from(image_grid.temporal_patch_count)
             .checked_mul(u64::from(image_grid.height_patch_count))

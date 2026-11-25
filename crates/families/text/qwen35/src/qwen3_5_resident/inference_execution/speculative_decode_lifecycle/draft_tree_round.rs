@@ -14,8 +14,7 @@
 
 use mlx_bridge::MlxArray;
 
-use crate::qwen3_5_core::decoder::request_state::RequestDecoderStateStack;
-use crate::qwen3_5_resident::model::{Qwen3_5ExecutionError, Qwen3_5ResidentModel};
+use crate::qwen3_5_resident::model::{Qwen3_5ResidentModel, TextExecutionError};
 use engine_core::speculative_decoding::dflash_drafter::{
     DFlashDraftTarget, DraftLattice, DraftTreeOptions, DrafterContextStates, KeyedNoise,
     best_first_draft_tree, draft_lattice, drafted_hidden_rows, head_only_draft_lattice,
@@ -24,6 +23,7 @@ use engine_core::speculative_decoding::dflash_drafter::{
 use engine_core::speculative_decoding::keyed_sampling::{RequestKeyedNoise, keyed_sample};
 use engine_core::speculative_decoding::tree_rows::TreeRows;
 use engine_core::speculative_decoding::verification_decision::TargetDistribution;
+use text_generation::decoder_state::request_state::RequestDecoderStateStack;
 
 use super::engine_draft_runtime::Qwen3_5SpeculativeDraftRuntime;
 use super::speculation_session_admission::VerificationTokenChoice;
@@ -60,7 +60,7 @@ impl DraftSession {
         context_row_limit: Option<i32>,
         layer_taps: &[MlxArray],
         first_position: i32,
-    ) -> Result<(), Qwen3_5ExecutionError> {
+    ) -> Result<(), TextExecutionError> {
         let runtime = model.runtime();
         let tap_references: Vec<&MlxArray> = layer_taps.iter().collect();
         let joined_taps = runtime.concatenate_axis(&tap_references, -1)?;
@@ -92,7 +92,7 @@ impl DraftSession {
     pub fn evaluate_pending_tap_rows(
         &self,
         model: &Qwen3_5ResidentModel,
-    ) -> Result<(), Qwen3_5ExecutionError> {
+    ) -> Result<(), TextExecutionError> {
         if let Some(pending_tap_rows) = self.pending_tap_rows.as_ref() {
             model.runtime().evaluate_arrays(&[pending_tap_rows])?;
         }
@@ -145,9 +145,9 @@ pub fn run_draft_tree_round(
     draft_runtime: &Qwen3_5SpeculativeDraftRuntime,
     draft_session: &mut DraftSession,
     round_request: &DraftTreeRoundRequest,
-) -> Result<DraftTreeRoundOutcome, Qwen3_5ExecutionError> {
+) -> Result<DraftTreeRoundOutcome, TextExecutionError> {
     let anchor_position = i32::try_from(round_request.context_length_tokens).map_err(|_| {
-        Qwen3_5ExecutionError::InvalidInput {
+        TextExecutionError::InvalidInput {
             description: "the context length exceeds the MLX int32 range",
         }
     })?;
@@ -203,14 +203,14 @@ fn drafted_tree_rows(
     draft_runtime: &Qwen3_5SpeculativeDraftRuntime,
     draft_session: &mut DraftSession,
     round_request: &DraftTreeRoundRequest,
-) -> Result<TreeRows, Qwen3_5ExecutionError> {
+) -> Result<TreeRows, TextExecutionError> {
     let runtime = model.runtime();
     let configuration = &draft_runtime.drafter_configuration;
     let pending_tap_rows =
         draft_session
             .pending_tap_rows
             .take()
-            .ok_or(Qwen3_5ExecutionError::InvalidInput {
+            .ok_or(TextExecutionError::InvalidInput {
                 description: "a draft round needs the target's taps for the rows before it",
             })?;
     let first_pending_position = draft_session.first_pending_position;
@@ -221,7 +221,7 @@ fn drafted_tree_rows(
         ));
     }
     let Some(context_states) = draft_session.context_states.as_mut() else {
-        return Err(Qwen3_5ExecutionError::InvalidInput {
+        return Err(TextExecutionError::InvalidInput {
             description: "the drafter's context states were not created",
         });
     };
@@ -286,7 +286,7 @@ fn drafted_lattice(
     hidden_rows: &MlxArray,
     draft_logits: &MlxArray,
     bonus_token_id: u32,
-) -> Result<DraftLattice, Qwen3_5ExecutionError> {
+) -> Result<DraftLattice, TextExecutionError> {
     let runtime = model.runtime();
     let configuration = &draft_runtime.drafter_configuration;
     let lattice = match &draft_runtime.drafter_weights.candidate_selector {
@@ -311,7 +311,7 @@ fn target_picks(
     row_positions: &[i32],
     target_token_choice: VerificationTokenChoice,
     keyed_seed: u64,
-) -> Result<Vec<u32>, Qwen3_5ExecutionError> {
+) -> Result<Vec<u32>, TextExecutionError> {
     let runtime = model.runtime();
     let (temperature_thousandths, top_k, top_p_thousandths) = match target_token_choice {
         VerificationTokenChoice::HighestLogit => {
@@ -349,7 +349,7 @@ fn target_picks(
         };
         // A row's pick takes the position after the row's own.
         let pick = keyed_sample(keyed_seed, *row_position as u64 + 1, &distribution).ok_or(
-            Qwen3_5ExecutionError::InvalidInput {
+            TextExecutionError::InvalidInput {
                 description: "a verified row's sampling distribution kept no token",
             },
         )?;
@@ -358,8 +358,8 @@ fn target_picks(
     Ok(picks)
 }
 
-fn sampling_failure(sampling_error: crate::InferenceEngineError) -> Qwen3_5ExecutionError {
-    Qwen3_5ExecutionError::from(runtime_integration::MlxRuntimeError::RuntimeOperation {
+fn sampling_failure(sampling_error: crate::InferenceEngineError) -> TextExecutionError {
+    TextExecutionError::from(runtime_integration::MlxRuntimeError::RuntimeOperation {
         operation: "read the target's sampling distribution for a draft tree",
         description: sampling_error.to_string(),
     })

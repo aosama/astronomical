@@ -6,7 +6,7 @@
 use crate::astro_ssd_prompt_cache_boundary_completed_prefill_chunk_tokens;
 
 use super::Qwen3_5EngineState;
-use super::engine_request::Qwen3_5EngineRequest;
+use super::engine_request::ResidentEngineRequest;
 use super::prompt_prefill_errors::PromptPrefillChunkAttemptError;
 /// Immutable decisions computed before memory admission and forward execution.
 ///
@@ -41,7 +41,7 @@ impl Qwen3_5EngineState {
     /// no mutable engine state changes.
     pub(super) fn plan_prompt_prefill_chunk(
         &self,
-        active_request: &Qwen3_5EngineRequest,
+        active_request: &ResidentEngineRequest,
         prefill_start: usize,
         prefill_end: usize,
     ) -> Result<PrefillChunkPlan, PromptPrefillChunkAttemptError> {

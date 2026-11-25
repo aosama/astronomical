@@ -26,7 +26,7 @@ pub(in crate::qwen3_5_resident) use memory_governance::forward_memory;
 use crate::MlxInferenceEngine;
 pub use engine_construction::ResidentEngineSettings;
 pub use engine_error_helpers::fatal_engine_error;
-pub use engine_error_helpers::qwen3_5_runtime_error;
+pub use engine_error_helpers::fatal_runtime_error;
 pub use engine_state::Qwen3_5EngineState;
 pub use engine_state::Qwen3_5InferenceExecution;
 

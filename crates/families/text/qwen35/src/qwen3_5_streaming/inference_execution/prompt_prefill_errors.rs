@@ -3,9 +3,9 @@
 
 use std::convert::Infallible;
 
-pub(super) use crate::qwen3_5_core::shared_execution::prompt_prefill_errors::prefill_execution_error;
+pub(super) use text_generation::generation_loop::prompt_prefill_errors::prefill_execution_error;
 
 pub(super) type PromptPrefillChunkAttemptError =
-    crate::qwen3_5_core::shared_execution::prompt_prefill_errors::PromptPrefillChunkAttemptError<
+    text_generation::generation_loop::prompt_prefill_errors::PromptPrefillChunkAttemptError<
         Infallible,
     >;

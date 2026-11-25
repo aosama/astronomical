@@ -9,8 +9,8 @@ use super::layer_major_prefill::{
     LayerMajorCheckpointContract, LayerMajorSpan, LayerMajorVisualInputs,
 };
 use super::layer_major_span_state::{SpanState, span_collector};
-use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use std::collections::HashMap;
+use text_generation::execution_error::TextExecutionError;
 
 impl Qwen3_5Model {
     /// Looks up each span's embeddings, with image embeddings put in place
@@ -22,7 +22,7 @@ impl Qwen3_5Model {
         spans: &[LayerMajorSpan],
         checkpoint_contract: Option<LayerMajorCheckpointContract>,
         visual_inputs: Option<LayerMajorVisualInputs<'_>>,
-    ) -> Result<(Vec<SpanState>, usize), Qwen3_5ExecutionError> {
+    ) -> Result<(Vec<SpanState>, usize), TextExecutionError> {
         let mut consumed_visual_embedding_count = 0_usize;
         let mut span_states = Vec::with_capacity(spans.len());
         for span in spans {
@@ -30,13 +30,13 @@ impl Qwen3_5Model {
             let signed_token_ids = span_token_ids
                 .iter()
                 .map(|token_id| {
-                    i32::try_from(*token_id).map_err(|_| Qwen3_5ExecutionError::InvalidInput {
+                    i32::try_from(*token_id).map_err(|_| TextExecutionError::InvalidInput {
                         description: "token ID exceeds the MLX int32 range",
                     })
                 })
                 .collect::<Result<Vec<_>, _>>()?;
             let span_token_count = i32::try_from(span.token_count()).map_err(|_| {
-                Qwen3_5ExecutionError::InvalidInput {
+                TextExecutionError::InvalidInput {
                     description: "a layer-major span exceeds the MLX int32 range",
                 }
             })?;
@@ -68,7 +68,7 @@ impl Qwen3_5Model {
         span_token_ids: &[u32],
         visual_inputs: Option<LayerMajorVisualInputs<'_>>,
         consumed_visual_embedding_count: &mut usize,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         let text_embeddings = self.embedding_lookup(token_indices)?;
         let Some(visual_inputs) = visual_inputs else {
             return Ok(text_embeddings);

@@ -8,11 +8,10 @@ use runtime_integration::MlxRuntime;
 
 use super::PrismHadamardTextModel;
 use crate::AstroDecoderStateCacheLayout;
-use crate::qwen3_5_core::model::Qwen3_5ServingModel;
-use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
-use crate::qwen3_5_core::vision::Qwen3_5VisionModel;
+use text_generation::execution_error::TextExecutionError;
+use text_generation::model::TextServingModel;
 
-impl Qwen3_5ServingModel for PrismHadamardTextModel {
+impl TextServingModel for PrismHadamardTextModel {
     fn runtime(&self) -> &MlxRuntime {
         &self.runtime
     }
@@ -33,13 +32,13 @@ impl Qwen3_5ServingModel for PrismHadamardTextModel {
     fn select_highest_logit_token(
         &self,
         final_position_logits: &MlxArray,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         Ok(self.greedy_token_lazily(final_position_logits)?)
     }
 
     /// A folded pack carries text weights only.
-    fn vision_model(&self) -> Option<&Qwen3_5VisionModel> {
-        None
+    fn vision_tower_resident_payload_bytes(&self) -> u64 {
+        0
     }
 
     /// The compiled graphs Prism's own forward already runs on.

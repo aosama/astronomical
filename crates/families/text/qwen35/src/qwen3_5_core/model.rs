@@ -36,10 +36,6 @@ pub mod loading_geometry;
 #[cfg(feature = "direct-mlx")]
 pub mod loading_pipeline;
 #[cfg(feature = "direct-mlx")]
-pub mod memory_breakdown;
-#[cfg(feature = "direct-mlx")]
-pub mod model_chunking_configuration;
-#[cfg(feature = "direct-mlx")]
 pub mod output_gate_engine;
 #[cfg(feature = "direct-mlx")]
 pub mod prefill_forward;
@@ -65,4 +61,4 @@ pub use base::Qwen3_5ModelBase;
 #[cfg(feature = "direct-mlx")]
 pub use decoder_layer_attention::Qwen3_5DecoderLayerAttentionOutput;
 #[cfg(feature = "direct-mlx")]
-pub use serving_model::Qwen3_5ServingModel;
+pub use serving_model::Qwen3_5VisionTowerOwner;

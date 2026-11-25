@@ -4,10 +4,10 @@
 //! first decode token; remaining routes continue to use the pager.
 
 use crate::memory::decode_seating::{DecodeExpertSeating, seat_and_materialize_complete_layers};
-use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_streaming::model::Qwen3_5Model;
 use crate::{PerformanceAttribution, PerformanceCounter, kept_layer_indexes_to_seat_before_reply};
 use model_primitives::serving_phase::SessionStreamingPhase;
+use text_generation::execution_error::TextExecutionError;
 
 impl Qwen3_5Model {
     /// Layers the reply's plan keeps whole that the astro expert cache does not hold
@@ -37,7 +37,7 @@ impl Qwen3_5Model {
         &self,
         layer_indexes: &[usize],
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<u64, Qwen3_5ExecutionError> {
+    ) -> Result<u64, TextExecutionError> {
         if self.expert_pager.is_none() {
             return Ok(0);
         }
@@ -57,7 +57,7 @@ struct ModelDecodeExpertSeating<'model> {
 }
 
 impl DecodeExpertSeating for ModelDecodeExpertSeating<'_> {
-    type Error = Qwen3_5ExecutionError;
+    type Error = TextExecutionError;
 
     fn seat_complete_layer(&mut self, layer_index: usize) -> Result<Option<u64>, Self::Error> {
         let expert_pager = self
@@ -109,7 +109,7 @@ impl Qwen3_5Model {
     /// them. Decode handoff seating adopts lazy pages; without this eval the first
     /// generate token materializes those pages, admission records them as
     /// activation, and leftover publication evicts the same pages.
-    pub fn materialize_seated_complete_layers(&self) -> Result<(), Qwen3_5ExecutionError> {
+    pub fn materialize_seated_complete_layers(&self) -> Result<(), TextExecutionError> {
         let Some(astro_expert_cache) = self.astro_expert_cache.as_ref() else {
             return Ok(());
         };

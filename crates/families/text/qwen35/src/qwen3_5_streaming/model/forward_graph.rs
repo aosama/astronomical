@@ -4,17 +4,17 @@
 
 use mlx_bridge::MlxArray;
 
-use crate::qwen3_5_core::decoder::Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector;
 use crate::qwen3_5_core::model::target_forward_graph::{
     Qwen3_5ForwardPositions, Qwen3_5TargetForwardGraph, Qwen3_5TargetForwardOutput,
     validated_layer_decoder_state,
 };
 use crate::qwen3_5_streaming::Qwen3_5MoEPagedExecutionMode;
 use crate::{AstroDecoderStateCacheState, PerformanceAttribution};
+use text_generation::AstroSsdPromptCacheBoundaryCheckpointCollector;
 
 use super::Qwen3_5Model;
 use super::layer_submission::{CompletedLayerRoots, LayerGroupSubmission};
-use super::{Qwen3_5ExecutionError, RequestDecoderStateStack};
+use super::{RequestDecoderStateStack, TextExecutionError};
 
 impl Qwen3_5Model {
     /// Executes a target forward and retains pre-final-normalization rows for specialized consumers.
@@ -23,7 +23,7 @@ impl Qwen3_5Model {
         token_ids: &[u32],
         starting_position_tokens: u32,
         request_decoder_state: &mut RequestDecoderStateStack,
-    ) -> Result<Qwen3_5TargetForwardOutput, Qwen3_5ExecutionError> {
+    ) -> Result<Qwen3_5TargetForwardOutput, TextExecutionError> {
         let mut disabled_performance_attribution = PerformanceAttribution::disabled();
         let target_forward_output = self.build_target_forward_graph(
             token_ids,
@@ -64,11 +64,11 @@ impl Qwen3_5TargetForwardGraph for Qwen3_5Model {
         forward_positions: Qwen3_5ForwardPositions<'_>,
         request_decoder_state: &mut RequestDecoderStateStack,
         mut boundary_checkpoint_collector: Option<
-            &mut Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
+            &mut AstroSsdPromptCacheBoundaryCheckpointCollector,
         >,
         paged_execution_mode: Qwen3_5MoEPagedExecutionMode,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         self.discard_previous_forward_leftovers();
         let rope_offset_tokens = forward_positions.rope_offset_tokens()?;
         let token_count = forward_positions.token_count;
@@ -139,9 +139,7 @@ fn completed_layer_roots<'layer>(
     layer_output: &'layer MlxArray,
     layer_index: usize,
     request_decoder_state: &'layer RequestDecoderStateStack,
-    boundary_checkpoint_collector: Option<
-        &'layer Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
-    >,
+    boundary_checkpoint_collector: Option<&'layer AstroSsdPromptCacheBoundaryCheckpointCollector>,
 ) -> CompletedLayerRoots<'layer> {
     CompletedLayerRoots {
         layer_output,

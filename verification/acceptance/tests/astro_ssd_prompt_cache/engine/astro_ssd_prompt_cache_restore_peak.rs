@@ -4,9 +4,9 @@ use std::time::Duration;
 
 use ipc_protocol::RequestId;
 use model_serving::{
-    AstroSsdPromptCacheDiskStoreConfig, GeneratedToken, InferenceEngine, Qwen3_5ArtifactValidator,
-    Qwen3_5InferenceRequest, Qwen3_5MlxEngineConstructors, Qwen3_5PromptProcessingChunkSizer,
-    Qwen3_5ResidentEngine, Qwen3_5Tokenizer,
+    AstroSsdPromptCacheDiskStoreConfig, GeneratedToken, InferenceEngine,
+    PromptProcessingChunkSizer, Qwen3_5ArtifactValidator, Qwen3_5ResidentEngine, Qwen3_5Tokenizer,
+    TextInferenceRequest, TextMlxEngineConstructors,
 };
 use runtime_integration::MlxRuntime;
 use tokio::time::timeout;
@@ -86,7 +86,7 @@ async fn run_astro_ssd_prompt_cache_restore_peak_acceptance() {
     let mut worker_chunking_configuration = crate::common::standard_worker_chunking_configuration();
     worker_chunking_configuration.ssd_prompt_cache_block_tokens =
         Some(ASTRO_SSD_PROMPT_CACHE_RESTORE_PEAK_BLOCK_TOKENS);
-    let prompt_processing_chunk_sizer = Qwen3_5PromptProcessingChunkSizer::for_chunk_size_tokens(
+    let prompt_processing_chunk_sizer = PromptProcessingChunkSizer::for_chunk_size_tokens(
         ASTRO_SSD_PROMPT_CACHE_RESTORE_PEAK_PREFILL_CHUNK_TOKENS,
     )
     .expect("the selected prefill chunk size should be valid");
@@ -229,13 +229,13 @@ async fn run_astro_ssd_prompt_cache_restore_peak_acceptance() {
 }
 
 /// The journey asserts that cold and restored prefill give the same next token,
-/// which only holds under greedy decoding: `Qwen3_5InferenceRequest::new`
+/// which only holds under greedy decoding: `TextInferenceRequest::new`
 /// samples at temperature 1.0 with no seed, so it would compare two random draws.
 fn greedy_romeo_and_juliet_request(
     request_number: u64,
     prompt_token_ids: Vec<u32>,
-) -> Qwen3_5InferenceRequest {
-    Qwen3_5InferenceRequest::new_sampling(
+) -> TextInferenceRequest {
+    TextInferenceRequest::new_sampling(
         RequestId::new(request_number),
         prompt_token_ids,
         ASTRO_SSD_PROMPT_CACHE_RESTORE_PEAK_OUTPUT_TOKEN_COUNT,

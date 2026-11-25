@@ -3,9 +3,8 @@
 use ipc_protocol::WorkerDecodeAstroExpertCachePolicy;
 
 use crate::StreamingStartupResidencyFacts;
-use crate::qwen3_5_core::shared_execution::execution_core::{
-    Qwen3_5ExecutionCore, Qwen3_5ExecutionCoreOwner,
-};
+use crate::qwen3_5_core::shared_execution::execution_core::Qwen3_5ExecutionCore;
+use text_generation::generation_loop::execution_core::TextExecutionCoreOwner;
 
 use super::super::model::Qwen3_5Model;
 use super::engine_request::StreamingRequestExtension;
@@ -28,7 +27,7 @@ pub struct Qwen3_5InferenceExecution {
 
 pub type Qwen3_5EngineState = Qwen3_5InferenceExecution;
 
-impl Qwen3_5ExecutionCoreOwner for Qwen3_5InferenceExecution {
+impl TextExecutionCoreOwner for Qwen3_5InferenceExecution {
     /// Streaming loads the same Qwen 3.5 checkpoint the resident engine does.
     type Artifact = crate::qwen3_5_core::artifacts::ValidatedQwen3_5Artifact;
     type Model = Qwen3_5Model;

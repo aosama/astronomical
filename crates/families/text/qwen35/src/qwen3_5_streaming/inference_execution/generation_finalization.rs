@@ -4,14 +4,14 @@
 //! request, dense layers are kept again, and allocator cleanup runs. Final
 //! telemetry then reports the retained pager ownership after cleanup.
 
-use crate::qwen3_5_core::shared_execution::{generation_finalization_steps, request_end};
 use crate::{GenerationFinalization, PerformanceAttributionOutcome};
 use ipc_protocol::{ReplyMemoryRecord, RequestId};
+use text_generation::generation_loop::{generation_finalization_steps, request_end};
 
 use super::Qwen3_5EngineState;
-use super::engine_request::Qwen3_5EngineRequest;
+use super::engine_request::StreamingEngineRequest;
 
-impl generation_finalization_steps::Qwen3_5FinalizationHooks for Qwen3_5EngineState {
+impl generation_finalization_steps::TextFinalizationHooks for Qwen3_5EngineState {
     fn measured_prompt_mlx_working_buffer_bytes(&self) -> Option<u64> {
         self.core.model.as_ref().and_then(
             crate::qwen3_5_streaming::model::Qwen3_5Model::measured_prompt_mlx_working_buffer_bytes,
@@ -20,7 +20,7 @@ impl generation_finalization_steps::Qwen3_5FinalizationHooks for Qwen3_5EngineSt
 
     fn finalize_generation_request(
         &mut self,
-        active_request: Qwen3_5EngineRequest,
+        active_request: StreamingEngineRequest,
         performance_attribution_outcome: PerformanceAttributionOutcome,
         failure_description: Option<&'static str>,
     ) -> GenerationFinalization {
@@ -182,12 +182,12 @@ fn log_mlx_buffer_cache_over_the_reply(
     );
 }
 
-impl request_end::Qwen3_5RequestEndHooks for Qwen3_5EngineState {
+impl request_end::TextRequestEndHooks for Qwen3_5EngineState {
     type ReplyRecord = ReplyMemoryRecord;
 
     fn take_reply_record(
         &mut self,
-        active_request: &mut Qwen3_5EngineRequest,
+        active_request: &mut StreamingEngineRequest,
     ) -> ReplyMemoryRecord {
         let request_id = active_request.request_id;
         let mlx_buffer_cache_reply_record = active_request

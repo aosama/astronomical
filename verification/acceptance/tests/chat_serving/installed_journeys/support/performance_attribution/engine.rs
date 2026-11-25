@@ -1,8 +1,8 @@
 use std::{path::Path, time::Instant};
 
 use model_serving::{
-    InferenceEngine, PerformanceAttribution, PerformanceAttributionLog, Qwen3_5ArtifactValidator,
-    Qwen3_5MlxEngineConstructors, Qwen3_5PromptProcessingChunkSizer, Qwen3_5StreamingEngine,
+    InferenceEngine, PerformanceAttribution, PerformanceAttributionLog, PromptProcessingChunkSizer,
+    Qwen3_5ArtifactValidator, Qwen3_5StreamingEngine, TextMlxEngineConstructors,
 };
 use tokio::time::{MissedTickBehavior, interval};
 
@@ -44,7 +44,7 @@ pub(crate) fn create_attributed_engine_with_ssd_streaming_prefill(
             mlx_memory_limits.active_memory_limit_bytes(),
             mlx_memory_limits.mlx_buffer_cache_limit_bytes(),
             None,
-            Qwen3_5PromptProcessingChunkSizer::for_chunk_size_tokens(
+            PromptProcessingChunkSizer::for_chunk_size_tokens(
                 fixed_ssd_streaming_prompt_processing_chunk_size_tokens,
             )
             .expect("the benchmark streaming prefill chunk size should be valid"),

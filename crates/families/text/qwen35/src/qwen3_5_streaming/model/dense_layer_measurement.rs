@@ -10,10 +10,10 @@ use mlx_bridge::MlxArray;
 
 use super::Qwen3_5Model;
 use crate::PerformanceAttribution;
-use crate::qwen3_5_core::decoder::RequestDecoderStateStack;
 use crate::qwen3_5_core::model::bound_weight_dtype_flow::embedded_hidden_state_dtype;
-use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_streaming::model::paged_execution_mode::Qwen3_5MoEPagedExecutionMode;
+use text_generation::RequestDecoderStateStack;
+use text_generation::execution_error::TextExecutionError;
 
 impl Qwen3_5Model {
     /// Reads one decoder layer through the streamer's bounded-range reader
@@ -22,7 +22,7 @@ impl Qwen3_5Model {
     pub fn read_dense_layer_for_measurement(
         &self,
         layer_index: usize,
-    ) -> Result<u64, Qwen3_5ExecutionError> {
+    ) -> Result<u64, TextExecutionError> {
         let dense_layer_streamer = self.dense_layer_streamer()?;
         let layer_weights = dense_layer_streamer.read_layer(
             &self.runtime,
@@ -49,7 +49,7 @@ impl Qwen3_5Model {
         &self,
         layer_index: usize,
         token_count: usize,
-    ) -> Result<(), Qwen3_5ExecutionError> {
+    ) -> Result<(), TextExecutionError> {
         let layer_weights = self.dense_layer_streamer()?.read_layer(
             &self.runtime,
             &self.config,
@@ -57,7 +57,7 @@ impl Qwen3_5Model {
             layer_index,
         )?;
         let signed_token_count =
-            i32::try_from(token_count).map_err(|_| Qwen3_5ExecutionError::InvalidInput {
+            i32::try_from(token_count).map_err(|_| TextExecutionError::InvalidInput {
                 description: "the measured token count exceeds the MLX range",
             })?;
         let mut request_decoder_state =
@@ -71,7 +71,7 @@ impl Qwen3_5Model {
             embedded_hidden_state_dtype(&self.weights)?,
         )?;
         let layer_model_state = request_decoder_state.layer_mut(layer_index).ok_or(
-            Qwen3_5ExecutionError::InvalidRequestDecoderState {
+            TextExecutionError::InvalidRequestDecoderState {
                 layer_index,
                 description: "the measured decoder state lacks the layer",
             },
@@ -94,11 +94,10 @@ impl Qwen3_5Model {
 
     fn dense_layer_streamer(
         &self,
-    ) -> Result<&super::dense_layer_streamer::Qwen3_5DenseLayerStreamer, Qwen3_5ExecutionError>
-    {
+    ) -> Result<&super::dense_layer_streamer::Qwen3_5DenseLayerStreamer, TextExecutionError> {
         self.dense_layer_streamer
             .as_ref()
-            .ok_or(Qwen3_5ExecutionError::InvalidInput {
+            .ok_or(TextExecutionError::InvalidInput {
                 description: "only a dense model on the streaming engine reads its layers",
             })
     }

@@ -96,10 +96,11 @@ pub mod streaming_model;
 mod system_wired_governance;
 
 pub use crate::qwen3_5_core::model::Qwen3_5ModelBase;
-pub use crate::qwen3_5_core::model_math::{error, forward_contract, weights};
+pub use crate::qwen3_5_core::model_math::{forward_contract, weights};
 pub use crate::qwen3_5_streaming::model::streaming_model::Qwen3_5StreamingModel as Qwen3_5Model;
 #[cfg(feature = "direct-mlx")]
 pub use layer_probe_shape::LayerProbeShape;
+pub use text_generation::execution_error as error;
 
 #[cfg(all(test, feature = "direct-mlx"))]
 mod paged_execution_tests;
@@ -121,11 +122,11 @@ mod governed_leases;
 #[cfg(feature = "direct-mlx")]
 mod live_memory_limit;
 #[cfg(feature = "direct-mlx")]
-pub use crate::qwen3_5_core::model::model_chunking_configuration::Qwen3_5ModelChunkingConfiguration;
-#[cfg(feature = "direct-mlx")]
 pub use crate::qwen3_5_core::model::target_forward_graph::Qwen3_5TargetForwardOutput;
 #[cfg(feature = "direct-mlx")]
-pub use error::Qwen3_5ExecutionError;
+pub use error::TextExecutionError;
+#[cfg(feature = "direct-mlx")]
+pub use text_generation::model::model_chunking_configuration::TextModelChunkingConfiguration;
 #[cfg(feature = "direct-mlx")]
 pub use weights::Qwen3_5Weights;
 
@@ -134,9 +135,9 @@ pub use crate::qwen3_5_core::artifacts::{Qwen3_5ShardIndex, ValidatedQwen3_5Arti
 #[cfg(feature = "direct-mlx")]
 pub use crate::qwen3_5_core::configuration::Qwen3_5FeedForwardArchitecture;
 #[cfg(feature = "direct-mlx")]
-pub use crate::qwen3_5_core::decoder::RequestDecoderStateStack;
-#[cfg(feature = "direct-mlx")]
 pub use crate::qwen3_5_core::vision::{Qwen3_5VisionModel, visual_embedding_injection};
+#[cfg(feature = "direct-mlx")]
+pub use text_generation::RequestDecoderStateStack;
 
 #[cfg(feature = "direct-mlx")]
 pub use astro_expert_cache_plus_streamed_page_route::Qwen3_5MoEAstroExpertCachePlusStreamedPageRoute;

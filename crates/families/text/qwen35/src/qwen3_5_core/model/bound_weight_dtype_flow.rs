@@ -24,14 +24,14 @@ use crate::qwen3_5_core::model_math::decoder_layer_weights::{
     Qwen3_5AffineWeights, Qwen3_5AttentionWeights, Qwen3_5DecoderFeedForwardWeights,
 };
 use crate::qwen3_5_core::model_math::dense_projection::Qwen3_5DenseProjection;
-use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_core::model_math::weights::Qwen3_5Weights;
+use text_generation::execution_error::TextExecutionError;
 
 /// The dtype of the hidden states the embedding lookup hands the first
 /// decoder layer, which every later layer's input inherits.
 pub fn embedded_hidden_state_dtype(
     weights: &Qwen3_5Weights,
-) -> Result<mlx_bridge::MlxDtype, Qwen3_5ExecutionError> {
+) -> Result<mlx_bridge::MlxDtype, TextExecutionError> {
     embedding_output_dtype(&affine_contract(&weights.embedding_weights))
 }
 
@@ -42,7 +42,7 @@ pub fn embedded_hidden_state_dtype(
 pub fn derive_astro_decoder_state_cache_layer_dtypes(
     weights: &Qwen3_5Weights,
     expert_layer_plans: &[QuantizedExpertLayerPlan],
-) -> Result<Vec<Qwen3_5AstroDecoderStateCacheLayerDtypes>, Qwen3_5ExecutionError> {
+) -> Result<Vec<Qwen3_5AstroDecoderStateCacheLayerDtypes>, TextExecutionError> {
     let mut hidden_state_dtype = embedded_hidden_state_dtype(weights)?;
     let mut astro_decoder_state_cache_layer_dtypes =
         Vec::with_capacity(weights.decoder_layer_weights.len());
@@ -92,7 +92,7 @@ fn attention_dtypes(
         Qwen3_5AstroDecoderStateCacheLayerDtypes,
         mlx_bridge::MlxDtype,
     ),
-    Qwen3_5ExecutionError,
+    TextExecutionError,
 > {
     Ok(match attention_weights {
         Qwen3_5AttentionWeights::Linear(linear_attention_weights) => {
@@ -133,7 +133,7 @@ fn feed_forward_output_dtype(
     normalized_attention_dtype: mlx_bridge::MlxDtype,
     mlp_weights: &Qwen3_5DecoderFeedForwardWeights,
     expert_layer_plan: Option<&QuantizedExpertLayerPlan>,
-) -> Result<mlx_bridge::MlxDtype, Qwen3_5ExecutionError> {
+) -> Result<mlx_bridge::MlxDtype, TextExecutionError> {
     Ok(match mlp_weights {
         Qwen3_5DecoderFeedForwardWeights::Dense(dense_mlp_weights) => {
             dense_mlp_output_dtype(&DenseMlpDtypeFlow {
@@ -144,10 +144,9 @@ fn feed_forward_output_dtype(
             })?
         }
         Qwen3_5DecoderFeedForwardWeights::MixtureOfExperts(mixture_of_experts_weights) => {
-            let expert_layer_plan =
-                expert_layer_plan.ok_or(Qwen3_5ExecutionError::InvalidInput {
-                    description: "sparse astro-decoder-state-cache dtype derivation has no layer plan",
-                })?;
+            let expert_layer_plan = expert_layer_plan.ok_or(TextExecutionError::InvalidInput {
+                description: "sparse astro-decoder-state-cache dtype derivation has no layer plan",
+            })?;
             mixture_of_experts_output_dtype(
                 &MixtureOfExpertsDtypeFlow {
                     normalized_attention_dtype,

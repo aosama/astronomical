@@ -51,16 +51,6 @@ async fn should_keep_qwen3_5_imports_directed_through_shared_core() {
                 "sparse_experts_are_paged",
             ],
         );
-        // One chunk sizer serves both engines, so it names neither.
-        assert_source_excludes_source_fragments(
-            &qwen3_5_core.join("shared_execution/prompt_processing_chunk_sizer.rs"),
-            &[
-                "AdaptiveRamGrowthExecutionProfile",
-                "ssd_streaming",
-                "Resident",
-                "Streaming",
-            ],
-        );
         assert!(
             !qwen3_5_family_facade.exists(),
             "the transitional Qwen3.5 family re-export module should be removed",

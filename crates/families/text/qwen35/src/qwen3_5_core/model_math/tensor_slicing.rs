@@ -1,14 +1,14 @@
 use runtime_integration::MlxRuntime;
 
-use super::error::Qwen3_5ExecutionError;
 use mlx_bridge::MlxArray;
+use text_generation::execution_error::TextExecutionError;
 
 pub fn slice_last_dimension(
     runtime: &MlxRuntime,
     input: &MlxArray,
     final_dimension_start_index: i32,
     final_dimension_stop_index: i32,
-) -> Result<MlxArray, Qwen3_5ExecutionError> {
+) -> Result<MlxArray, TextExecutionError> {
     let input_shape = input.shape();
     let input_rank = input_shape.len();
     let mut slice_start_indices = vec![0; input_rank];
@@ -16,7 +16,7 @@ pub fn slice_last_dimension(
     let slice_strides = vec![1; input_rank];
     let final_axis = input_rank
         .checked_sub(1)
-        .ok_or(Qwen3_5ExecutionError::InvalidInput {
+        .ok_or(TextExecutionError::InvalidInput {
             description: "cannot slice the final dimension of a scalar",
         })?;
     slice_start_indices[final_axis] = final_dimension_start_index;

@@ -121,20 +121,21 @@ pub use qwen3_5_core::quantizations::producers::{
 };
 
 #[cfg(any(test, feature = "direct-mlx"))]
-pub use qwen3_5_core::text::thinking_budget::Qwen3_5ThinkingBudgetState;
+pub use text_generation::request::thinking_budget::ThinkingBudgetState;
+
+pub use text_generation::{TextInferenceRequest, TextSamplingStrategy};
 
 pub use qwen3_5_core::text::{
-    Qwen3_5GenerationProcessor, Qwen3_5InferenceRequest, Qwen3_5OutputEvent,
-    Qwen3_5OutputParserError, Qwen3_5PromptError, Qwen3_5PromptRenderer, Qwen3_5RenderedPrompt,
-    Qwen3_5RequestOutput, Qwen3_5SamplerConfig, Qwen3_5SamplingStrategy, Qwen3_5TokenDecoder,
-    Qwen3_5TokenIds, Qwen3_5Tokenizer, Qwen3_5TokenizerError, discover_sampler_config,
-    discover_token_ids, qwen3_5_request_enables_thinking, resolve_sampling_seed,
-    translate_qwen3_5_preparation_error, translate_request_output_error,
+    Qwen3_5GenerationProcessor, Qwen3_5OutputEvent, Qwen3_5OutputParserError, Qwen3_5PromptError,
+    Qwen3_5PromptRenderer, Qwen3_5RenderedPrompt, Qwen3_5RequestOutput, Qwen3_5SamplerConfig,
+    Qwen3_5TokenDecoder, Qwen3_5TokenIds, Qwen3_5Tokenizer, Qwen3_5TokenizerError,
+    discover_sampler_config, discover_token_ids, qwen3_5_request_enables_thinking,
+    resolve_sampling_seed, translate_qwen3_5_preparation_error, translate_request_output_error,
     validate_context_token_count,
 };
 
 pub use qwen3_5_core::vision::{
-    Qwen3_5ImageProcessor, Qwen3_5ProcessedImage, Qwen3_5VisionConfig,
+    ProcessedImage, Qwen3_5ImageProcessor, Qwen3_5VisionConfig,
     Qwen3_5VisualAstroSsdPromptCacheIdentityPlan,
     Qwen3_5VisualAstroSsdPromptCacheIdentityPlanError, Qwen3_5VisualEmbeddingSuffixPlan,
     Qwen3_5VisualEmbeddingSuffixPlanError, plan_qwen3_5_visual_astro_ssd_prompt_cache_block_inputs,
@@ -149,10 +150,13 @@ pub use qwen3_5_core::artifacts::{
 };
 
 #[cfg(feature = "direct-mlx")]
-pub use qwen3_5_core::decoder::{
-    Qwen3_5AstroSsdPromptCacheBoundaryCheckpoint,
-    Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector, RequestDecoderStateStack,
-    RequestDecoderStateStackAllocationCheckpoint, RequestDecoderStateStackCheckpoint,
+pub use qwen3_5_core::decoder::request_decoder_state_from_config::request_decoder_state_from_qwen3_5_config;
+
+#[cfg(feature = "direct-mlx")]
+pub use text_generation::{
+    AstroSsdPromptCacheBoundaryCheckpoint, AstroSsdPromptCacheBoundaryCheckpointCollector,
+    RequestDecoderStateStack, RequestDecoderStateStackAllocationCheckpoint,
+    RequestDecoderStateStackCheckpoint,
 };
 
 #[cfg(feature = "direct-mlx")]
@@ -162,10 +166,10 @@ pub use qwen3_5_core::model::differentiable_attention::Qwen3_5AttentionKernel;
 pub use qwen3_5_core::model::full_attention::qwen3_5_full_attention_step;
 
 #[cfg(feature = "direct-mlx")]
-pub use qwen3_5_core::model::model_chunking_configuration::Qwen3_5ModelChunkingConfiguration;
+pub use text_generation::model::model_chunking_configuration::TextModelChunkingConfiguration;
 
 #[cfg(feature = "direct-mlx")]
-pub use qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
+pub use text_generation::execution_error::TextExecutionError;
 
 #[cfg(feature = "direct-mlx")]
 pub use qwen3_5_core::model_math::gated_delta_boundary_checkpoints::{
@@ -204,21 +208,21 @@ pub use qwen3_5_core::vision::{
 };
 
 #[cfg(feature = "direct-mlx")]
-pub use qwen3_5_core::shared_execution::engine_construction::Qwen3_5MlxEngineConstructors;
-#[cfg(feature = "direct-mlx")]
-pub use qwen3_5_core::shared_execution::execution_core::Qwen3_5ExecutionCoreSettings;
-#[cfg(feature = "direct-mlx")]
-pub use qwen3_5_core::shared_execution::prompt_processing_chunk_sizer::{
-    Qwen3_5PromptProcessingChunkSizer, Qwen3_5PromptProcessingChunkSizerError,
-};
-#[cfg(feature = "direct-mlx")]
-pub use qwen3_5_core::shared_execution::test_controls::{
-    Qwen3_5MlxEngineTestControls, Qwen3_5TextModelTestControls,
-};
-#[cfg(feature = "direct-mlx")]
 pub use qwen3_5_resident::{
     Qwen3_5ResidentEngine, Qwen3_5ResidentEngineTestControls, Qwen3_5ResidentModel,
     ResidentEngineSettings,
+};
+#[cfg(feature = "direct-mlx")]
+pub use text_generation::generation_loop::engine_construction::TextMlxEngineConstructors;
+#[cfg(feature = "direct-mlx")]
+pub use text_generation::generation_loop::execution_core::TextExecutionCoreSettings;
+#[cfg(feature = "direct-mlx")]
+pub use text_generation::generation_loop::prompt_processing_chunk_sizer::{
+    PromptProcessingChunkSizer, PromptProcessingChunkSizerError,
+};
+#[cfg(feature = "direct-mlx")]
+pub use text_generation::generation_loop::test_controls::{
+    TextMlxEngineTestControls, TextModelTestControls,
 };
 
 #[cfg(feature = "direct-mlx")]
@@ -256,7 +260,7 @@ pub use qwen3_5_streaming::{
 };
 
 #[cfg(feature = "direct-mlx")]
-pub use qwen3_5_core::astro_ssd_prompt_cache_capture::astro_ssd_prompt_cache_publication_advances_parent_chain;
+pub use text_generation::astro_ssd_prompt_cache_capture::astro_ssd_prompt_cache_publication_advances_parent_chain;
 
 pub use qwen3_5_streaming::{
     RouteObservationRecord, RouteObservationRing, sorted_unique_layer_routed_expert_ids,

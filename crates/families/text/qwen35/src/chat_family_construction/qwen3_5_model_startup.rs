@@ -2,16 +2,16 @@
 //! artifacts, derive the RAM geometry and the complete-residency decision,
 //! build the tokenizer and processor, and select and initialize the engine.
 
-use crate::Qwen3_5MlxEngineConstructors;
+use crate::TextMlxEngineConstructors;
 use std::path::PathBuf;
 
 use crate::{
     AstroSsdPromptCacheDiskStoreConfig, CompleteResidencyRequirements, EnginePlacement,
     ModelFamilyInferenceEngine, ModelLoadingPerformanceAttributionMetadata, PerformanceAttribution,
     PerformanceAttributionLog, PerformanceAttributionOutcome, PerformanceOperation,
-    Qwen3_5ArtifactValidator, Qwen3_5ExecutionCoreSettings, Qwen3_5GenerationProcessor,
-    Qwen3_5MemoryGeometryError, Qwen3_5PromptProcessingChunkSizer, Qwen3_5ResidentEngine,
-    Qwen3_5StreamingEngine, ResidentEngineSettings, StreamingEngineSettings,
+    PromptProcessingChunkSizer, Qwen3_5ArtifactValidator, Qwen3_5GenerationProcessor,
+    Qwen3_5MemoryGeometryError, Qwen3_5ResidentEngine, Qwen3_5StreamingEngine,
+    ResidentEngineSettings, StreamingEngineSettings, TextExecutionCoreSettings,
     ValidatedQwen3_5Artifact, boxed_chat_engine, model_memory_geometry_from_validated_artifact,
 };
 use ipc_protocol::{
@@ -387,33 +387,32 @@ fn construct_resident_engine(
     artifact_payload_bytes: u64,
     artifact_shard_count: usize,
 ) -> Result<ModelFamilyInferenceEngine, Qwen3_5ModelStartupError> {
-    let prompt_processing_chunk_sizer =
-        match Qwen3_5PromptProcessingChunkSizer::for_chunk_size_tokens(
-            chunking.fixed_prompt_processing_chunk_size_tokens,
-        ) {
-            Ok(prompt_processing_chunk_sizer) => prompt_processing_chunk_sizer,
-            Err(prompt_processing_chunk_sizer_error) => {
-                record_reviewed_artifact_startup_failure(
-                    model_loading_performance_attribution,
-                    &mut performance_attribution_log,
-                    artifact_model_id,
-                    artifact_model_revision,
-                    artifact_payload_bytes,
-                    artifact_shard_count,
-                    "prompt-processing chunk configuration failed",
-                );
-                return Err(
-                    Qwen3_5ModelStartupError::ResidentPromptProcessingChunkSizing(
-                        prompt_processing_chunk_sizer_error,
-                    ),
-                );
-            }
-        };
+    let prompt_processing_chunk_sizer = match PromptProcessingChunkSizer::for_chunk_size_tokens(
+        chunking.fixed_prompt_processing_chunk_size_tokens,
+    ) {
+        Ok(prompt_processing_chunk_sizer) => prompt_processing_chunk_sizer,
+        Err(prompt_processing_chunk_sizer_error) => {
+            record_reviewed_artifact_startup_failure(
+                model_loading_performance_attribution,
+                &mut performance_attribution_log,
+                artifact_model_id,
+                artifact_model_revision,
+                artifact_payload_bytes,
+                artifact_shard_count,
+                "prompt-processing chunk configuration failed",
+            );
+            return Err(
+                Qwen3_5ModelStartupError::ResidentPromptProcessingChunkSizing(
+                    prompt_processing_chunk_sizer_error,
+                ),
+            );
+        }
+    };
     // DFlash speculative decoding is disabled by design: no draft
     // is ever constructed for the resident engine (see the
     // speculative-decode lifecycle module for the full rationale).
     Qwen3_5ResidentEngine::new_with_execution_core_settings(
-        Qwen3_5ExecutionCoreSettings {
+        TextExecutionCoreSettings {
             validated_artifact,
             active_memory_limit_bytes,
             mlx_buffer_cache_limit_bytes,
@@ -457,30 +456,29 @@ fn construct_streaming_engine(
     artifact_payload_bytes: u64,
     artifact_shard_count: usize,
 ) -> Result<ModelFamilyInferenceEngine, Qwen3_5ModelStartupError> {
-    let prompt_processing_chunk_sizer =
-        match Qwen3_5PromptProcessingChunkSizer::for_chunk_size_tokens(
-            chunking.fixed_ssd_streaming_prompt_processing_chunk_size_tokens,
-        ) {
-            Ok(prompt_processing_chunk_sizer) => prompt_processing_chunk_sizer,
-            Err(prompt_processing_chunk_sizer_error) => {
-                record_reviewed_artifact_startup_failure(
-                    model_loading_performance_attribution,
-                    &mut performance_attribution_log,
-                    artifact_model_id,
-                    artifact_model_revision,
-                    artifact_payload_bytes,
-                    artifact_shard_count,
-                    "prompt-processing chunk configuration failed",
-                );
-                return Err(
-                    Qwen3_5ModelStartupError::StreamingPromptProcessingChunkSizing(
-                        prompt_processing_chunk_sizer_error,
-                    ),
-                );
-            }
-        };
+    let prompt_processing_chunk_sizer = match PromptProcessingChunkSizer::for_chunk_size_tokens(
+        chunking.fixed_ssd_streaming_prompt_processing_chunk_size_tokens,
+    ) {
+        Ok(prompt_processing_chunk_sizer) => prompt_processing_chunk_sizer,
+        Err(prompt_processing_chunk_sizer_error) => {
+            record_reviewed_artifact_startup_failure(
+                model_loading_performance_attribution,
+                &mut performance_attribution_log,
+                artifact_model_id,
+                artifact_model_revision,
+                artifact_payload_bytes,
+                artifact_shard_count,
+                "prompt-processing chunk configuration failed",
+            );
+            return Err(
+                Qwen3_5ModelStartupError::StreamingPromptProcessingChunkSizing(
+                    prompt_processing_chunk_sizer_error,
+                ),
+            );
+        }
+    };
     Qwen3_5StreamingEngine::new_with_execution_core_settings(
-        Qwen3_5ExecutionCoreSettings {
+        TextExecutionCoreSettings {
             validated_artifact,
             active_memory_limit_bytes,
             mlx_buffer_cache_limit_bytes,

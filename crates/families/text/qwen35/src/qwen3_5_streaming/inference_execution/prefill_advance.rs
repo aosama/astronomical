@@ -23,10 +23,10 @@
 //! span is read again from the `astro_ssd_prompt_cache`. Either is terminal
 //! only once the governor's attempts are spent.
 
-use crate::qwen3_5_core::shared_execution::prompt_reading_steps::{
+use std::time::Instant;
+use text_generation::generation_loop::prompt_reading_steps::{
     self, PromptStretch, PromptStretchTiming,
 };
-use std::time::Instant;
 
 use ipc_protocol::RequestId;
 
@@ -40,7 +40,7 @@ impl Qwen3_5EngineState {
     pub(super) fn advance_prompt_prefill_if_pending(
         &mut self,
         request_id: RequestId,
-        active_request: &mut super::engine_request::Qwen3_5EngineRequest,
+        active_request: &mut super::engine_request::StreamingEngineRequest,
     ) -> Result<Option<GeneratedToken>, InferenceEngineError> {
         if active_request
             .engine_extension
@@ -100,7 +100,7 @@ impl Qwen3_5EngineState {
     pub(super) fn complete_prefill_attempt(
         &mut self,
         request_id: RequestId,
-        active_request: &mut super::engine_request::Qwen3_5EngineRequest,
+        active_request: &mut super::engine_request::StreamingEngineRequest,
         prefill_start: usize,
         prefill_end: usize,
         prompt_prefill_chunk_outcome: PromptPrefillChunkOutcome,
@@ -174,7 +174,7 @@ impl Qwen3_5EngineState {
     /// a time over its spans, so a layer read from storage is read once.
     fn next_prompt_spans_to_read(
         &self,
-        active_request: &super::engine_request::Qwen3_5EngineRequest,
+        active_request: &super::engine_request::StreamingEngineRequest,
         prefill_end_exclusive: usize,
     ) -> Option<PrefillAttempt> {
         let engine_core::astro_ssd_prompt_cache::ResolvedPrefillChunkSpan { prefill_start, .. } =
@@ -197,7 +197,7 @@ impl Qwen3_5EngineState {
     /// final chunk's boosted assignment weight. Mirrors the inlined block.
     fn open_expert_demand_window_for_prefill(
         &mut self,
-        active_request: &mut super::engine_request::Qwen3_5EngineRequest,
+        active_request: &mut super::engine_request::StreamingEngineRequest,
         prefill_start: usize,
         attempted_prefill_chunk_token_count: usize,
         prefill_end_exclusive: usize,
@@ -248,7 +248,7 @@ impl Qwen3_5EngineState {
     /// Measures one completed prompt forward and tells the memory governor.
     fn record_completed_forward_memory(
         &mut self,
-        active_request: &mut super::engine_request::Qwen3_5EngineRequest,
+        active_request: &mut super::engine_request::StreamingEngineRequest,
         measured_forward_token_count: usize,
         active_memory_bytes_before_forward: usize,
     ) -> Result<(), InferenceEngineError> {

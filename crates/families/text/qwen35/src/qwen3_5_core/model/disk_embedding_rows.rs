@@ -22,7 +22,7 @@ use super::embedding_row_reads::{
 };
 use crate::qwen3_5_core::artifacts::ValidatedQwen3_5Artifact;
 use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights;
-use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
+use text_generation::execution_error::TextExecutionError;
 
 /// One row-major table of the embedding: its file, layout and stored form.
 #[derive(Debug)]
@@ -62,12 +62,12 @@ impl Qwen3_5DiskEmbeddingRows {
     /// from row reads.
     pub fn from_validated_artifact(
         validated_artifact: &ValidatedQwen3_5Artifact,
-    ) -> Result<Option<Self>, Qwen3_5ExecutionError> {
+    ) -> Result<Option<Self>, TextExecutionError> {
         if validated_artifact.config().has_tied_embeddings() {
             return Ok(None);
         }
         let Some(weight_table) = disk_embedding_table(validated_artifact, "weight")? else {
-            return Err(Qwen3_5ExecutionError::MissingTensor {
+            return Err(TextExecutionError::MissingTensor {
                 tensor_name: format!("{EMBEDDING_TENSOR_PREFIX}.weight"),
             });
         };
@@ -112,10 +112,10 @@ impl Qwen3_5DiskEmbeddingRows {
         runtime: &MlxRuntime,
         token_indices: &MlxArray,
         bound_embedding_weights: &Qwen3_5AffineWeights,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         let token_indices_shape = token_indices.shape();
         if token_indices_shape.len() != 2 || token_indices_shape[0] != 1 {
-            return Err(Qwen3_5ExecutionError::InvalidInput {
+            return Err(TextExecutionError::InvalidInput {
                 description: "on-disk embedding rows take token indices shaped [1, tokens]",
             });
         }
@@ -145,7 +145,7 @@ impl Qwen3_5DiskEmbeddingRows {
         row_selection: &EmbeddingRowSelection,
         selected_row_indices: &MlxArray,
         bound_embedding_weights: &Qwen3_5AffineWeights,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         let packed_rows = read_table_rows(runtime, &self.weight_table, row_selection)?;
         match (bound_embedding_weights, &self.affine_tables) {
             (Qwen3_5AffineWeights::NativeBfloat16 { .. }, None) => {
@@ -183,7 +183,7 @@ pub(super) fn rows_in_bound_embedding_dtype(
     runtime: &MlxRuntime,
     embedding_rows: MlxArray,
     bound_embedding_weights: &Qwen3_5AffineWeights,
-) -> Result<MlxArray, Qwen3_5ExecutionError> {
+) -> Result<MlxArray, TextExecutionError> {
     let bound_embedding_dtype = match bound_embedding_weights {
         Qwen3_5AffineWeights::NativeBfloat16 { weight } => weight.dtype(),
         Qwen3_5AffineWeights::Quantized {
@@ -198,15 +198,15 @@ pub(super) fn rows_in_bound_embedding_dtype(
     Ok(runtime.astype(&embedding_rows, bound_embedding_dtype)?)
 }
 
-fn invalid_embedding_table(description: &'static str) -> Qwen3_5ExecutionError {
-    Qwen3_5ExecutionError::InvalidTensor {
+fn invalid_embedding_table(description: &'static str) -> TextExecutionError {
+    TextExecutionError::InvalidTensor {
         tensor_name: format!("{EMBEDDING_TENSOR_PREFIX}.weight"),
         description,
     }
 }
 
-fn duplicated_descriptor_error(source: std::io::Error) -> Qwen3_5ExecutionError {
-    Qwen3_5ExecutionError::WeightSourceDescriptor {
+fn duplicated_descriptor_error(source: std::io::Error) -> TextExecutionError {
+    TextExecutionError::WeightSourceDescriptor {
         description: "could not duplicate the embedding shard descriptor",
         source,
     }
@@ -217,7 +217,7 @@ fn duplicated_descriptor_error(source: std::io::Error) -> Qwen3_5ExecutionError 
 fn disk_embedding_table(
     validated_artifact: &ValidatedQwen3_5Artifact,
     parameter_name: &str,
-) -> Result<Option<DiskEmbeddingTable>, Qwen3_5ExecutionError> {
+) -> Result<Option<DiskEmbeddingTable>, TextExecutionError> {
     let canonical_name = format!("{EMBEDDING_TENSOR_PREFIX}.{parameter_name}");
     let Some((tensor_file_range, safetensors_source)) =
         validated_artifact.tensor_file_range(&canonical_name)
@@ -226,7 +226,7 @@ fn disk_embedding_table(
     };
     let row_count = tensor_file_range.shape.first().copied().unwrap_or(0);
     if row_count == 0 {
-        return Err(Qwen3_5ExecutionError::InvalidTensor {
+        return Err(TextExecutionError::InvalidTensor {
             tensor_name: canonical_name,
             description: "an embedding table needs at least one row",
         });
@@ -235,7 +235,7 @@ fn disk_embedding_table(
         .file_end_offset
         .saturating_sub(tensor_file_range.file_start_offset);
     if table_byte_count % row_count as u64 != 0 {
-        return Err(Qwen3_5ExecutionError::InvalidTensor {
+        return Err(TextExecutionError::InvalidTensor {
             tensor_name: canonical_name,
             description: "embedding table rows do not divide its byte range evenly",
         });
@@ -260,7 +260,7 @@ fn read_table_rows(
     runtime: &MlxRuntime,
     embedding_table: &DiskEmbeddingTable,
     row_selection: &EmbeddingRowSelection,
-) -> Result<MlxArray, Qwen3_5ExecutionError> {
+) -> Result<MlxArray, TextExecutionError> {
     let read_intervals: Vec<BoundedReadInterval> =
         embedding_row_intervals(embedding_table.layout, &row_selection.distinct_row_ids);
     let rows_payload_bytes =

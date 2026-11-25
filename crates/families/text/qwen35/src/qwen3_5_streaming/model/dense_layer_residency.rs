@@ -18,8 +18,8 @@ use super::Qwen3_5Model;
 use super::dense_layer_counts::leading_layer_count_within;
 use super::expert_layer_mlx_working_buffer_probe::ProbedPromptLayerMlxWorkingBuffers;
 use super::layer_probe_shape::LayerProbeShape;
-use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_core::model_math::weights::DecoderLayerResidency;
+use text_generation::execution_error::TextExecutionError;
 
 /// What probing a dense model's streamed layer found.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -36,7 +36,7 @@ impl Qwen3_5Model {
     /// Materializes the target weights as this engine serves them: a dense
     /// model's decoder layers stay with the streamer, which keeps or reads
     /// them itself.
-    pub fn materialize_target_weights(&self) -> Result<(), Qwen3_5ExecutionError> {
+    pub fn materialize_target_weights(&self) -> Result<(), TextExecutionError> {
         let decoder_layer_residency = match self.dense_layer_streamer {
             Some(_) => DecoderLayerResidency::DenseLayerStreamer,
             None => DecoderLayerResidency::BoundWeights,
@@ -51,7 +51,7 @@ impl Qwen3_5Model {
     pub fn materialize_target_weights_and_probe_dense_layers(
         &self,
         probe_shape: LayerProbeShape,
-    ) -> Result<(), Qwen3_5ExecutionError> {
+    ) -> Result<(), TextExecutionError> {
         self.materialize_target_weights()?;
         self.probe_dense_layers(probe_shape, None).map(drop)
     }
@@ -69,7 +69,7 @@ impl Qwen3_5Model {
         &self,
         probe_shape: LayerProbeShape,
         pinned_kept_layer_count: Option<usize>,
-    ) -> Result<Option<DenseLayerProbe>, Qwen3_5ExecutionError> {
+    ) -> Result<Option<DenseLayerProbe>, TextExecutionError> {
         let Some(dense_layer_streamer) = &self.dense_layer_streamer else {
             return Ok(None);
         };
@@ -146,7 +146,7 @@ impl Qwen3_5Model {
     /// request runs: after loading, when a request ends, after the limit is
     /// raised. It never gives a layer back; the governor's capacity does
     /// that. During a request, or for a sparse model, it does nothing.
-    pub fn keep_dense_layers_the_governor_has_room_for(&self) -> Result<(), Qwen3_5ExecutionError> {
+    pub fn keep_dense_layers_the_governor_has_room_for(&self) -> Result<(), TextExecutionError> {
         let Some(dense_layer_streamer) = &self.dense_layer_streamer else {
             return Ok(());
         };

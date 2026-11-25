@@ -16,9 +16,9 @@ use crate::qwen3_5_core::artifacts::expert_gate_up_fusion_plan::{
 };
 use crate::qwen3_5_core::artifacts::{QuantizationMode, QuantizedExpertLayerPlan};
 use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights;
-use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_core::model_math::expert_gate_up_fusion::fuse_compatible_expert_gate_up_projections;
 use mlx_bridge::MlxArray;
+use text_generation::execution_error::TextExecutionError;
 
 /// Resident gate/up ownership selected from startup-validated source geometry.
 #[derive(Debug)]
@@ -42,7 +42,7 @@ impl Qwen3_5ResidentGateUpWeights {
         layer_plan: &QuantizedExpertLayerPlan,
         gate_projection: Qwen3_5AffineWeights,
         up_projection: Qwen3_5AffineWeights,
-    ) -> Result<Self, Qwen3_5ExecutionError> {
+    ) -> Result<Self, TextExecutionError> {
         let fusion_plan =
             ExpertGateUpFusionPlan::from_layer_plan(layer_plan).map_err(map_fusion_plan_error)?;
         match fusion_plan {
@@ -108,17 +108,17 @@ impl Qwen3_5ResidentGateUpWeights {
 /// Maximum temporary duplicate needed while materializing one compatible layer.
 pub fn maximum_resident_gate_up_fusion_transient_payload_bytes(
     layer_plans: &[QuantizedExpertLayerPlan],
-) -> Result<u64, Qwen3_5ExecutionError> {
+) -> Result<u64, TextExecutionError> {
     maximum_expert_gate_up_fusion_transient_payload_bytes(layer_plans)
         .map_err(map_fusion_plan_error)
 }
 
-fn map_fusion_plan_error(fusion_plan_error: ExpertGateUpFusionPlanError) -> Qwen3_5ExecutionError {
+fn map_fusion_plan_error(fusion_plan_error: ExpertGateUpFusionPlanError) -> TextExecutionError {
     match fusion_plan_error {
         ExpertGateUpFusionPlanError::MissingTensor { tensor_name } => {
-            Qwen3_5ExecutionError::MissingTensor { tensor_name }
+            TextExecutionError::MissingTensor { tensor_name }
         }
-        ExpertGateUpFusionPlanError::PayloadOverflow => Qwen3_5ExecutionError::InvalidInput {
+        ExpertGateUpFusionPlanError::PayloadOverflow => TextExecutionError::InvalidInput {
             description: "resident gate/up fusion transient payload overflowed",
         },
     }
@@ -164,22 +164,22 @@ pub fn resident_layer_arrays_for_tests(
     gate: ResidentProjectionArraysForTests,
     up: ResidentProjectionArraysForTests,
     down: ResidentProjectionArraysForTests,
-) -> Result<ResidentLayerArraysForTests, Qwen3_5ExecutionError> {
+) -> Result<ResidentLayerArraysForTests, TextExecutionError> {
     let affine_projection = |projection_name: &str,
                              projection: ResidentProjectionArraysForTests|
-     -> Result<Qwen3_5AffineWeights, Qwen3_5ExecutionError> {
+     -> Result<Qwen3_5AffineWeights, TextExecutionError> {
         match layer_plan.quantization_mode_for_projection(projection_name) {
             QuantizationMode::NativeBfloat16 => Ok(Qwen3_5AffineWeights::NativeBfloat16 {
                 weight: projection.packed_weight,
             }),
             QuantizationMode::Affine => {
                 let quantization_scales = projection.quantization_scales.ok_or_else(|| {
-                    Qwen3_5ExecutionError::InvalidInput {
+                    TextExecutionError::InvalidInput {
                         description: "affine construction requires quantization scales",
                     }
                 })?;
                 let quantization_biases = projection.quantization_biases.ok_or_else(|| {
-                    Qwen3_5ExecutionError::InvalidInput {
+                    TextExecutionError::InvalidInput {
                         description: "affine construction requires quantization biases",
                     }
                 })?;
@@ -191,7 +191,7 @@ pub fn resident_layer_arrays_for_tests(
                     quantization_group_size: layer_plan.quantization_group_size,
                 })
             }
-            QuantizationMode::Jangtq2Codebook => Err(Qwen3_5ExecutionError::InvalidInput {
+            QuantizationMode::Jangtq2Codebook => Err(TextExecutionError::InvalidInput {
                 description: "jangtq2 expert weights require the bounded streaming path",
             }),
         }
@@ -225,11 +225,11 @@ pub fn resident_layer_arrays_for_tests(
 
 fn projection_arrays_for_tests(
     projection: &Qwen3_5AffineWeights,
-) -> Result<ResidentProjectionArraysForTests, Qwen3_5ExecutionError> {
+) -> Result<ResidentProjectionArraysForTests, TextExecutionError> {
     // Retain through the production accessor so the returned arrays are the
     // ones the resident owner would hold, not borrowed views.
     let retained = projection.retained_reference().map_err(|_runtime_error| {
-        Qwen3_5ExecutionError::InvalidInput {
+        TextExecutionError::InvalidInput {
             description: "a resident projection could not be retained for parity comparison",
         }
     })?;

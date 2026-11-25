@@ -3,7 +3,6 @@
 use super::prefill_partial_layer_read::{
     prefill_read_expert_ids, prefill_storage_read_scope, should_remember_prefill_completion_refusal,
 };
-use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_streaming::expert_streaming::RoutedExpertCoverage;
 use crate::qwen3_5_streaming::expert_streaming::expert_pager::{
     Qwen3_5ExpertPager, Qwen3_5ExpertStreamingRequestShape, Qwen3_5PagedExpertWeights,
@@ -15,6 +14,7 @@ use crate::{
 };
 use engine_core::expert_paging::{ExpertWeightPage, QuantizedExpertPageManifest};
 use model_primitives::serving_phase::SessionStreamingPhase;
+use text_generation::execution_error::TextExecutionError;
 
 /// How one forward should execute one mixture-of-experts layer.
 pub enum ExpertPageDisposition {
@@ -154,10 +154,8 @@ impl Qwen3_5Model {
         layer_index: usize,
         routed_expert_ids: &[usize],
         expert_capacity: usize,
-    ) -> Result<
-        Option<(Qwen3_5PagedExpertWeights, QuantizedExpertPageManifest)>,
-        Qwen3_5ExecutionError,
-    > {
+    ) -> Result<Option<(Qwen3_5PagedExpertWeights, QuantizedExpertPageManifest)>, TextExecutionError>
+    {
         let Some((complete_page, complete_manifest)) =
             self.astro_expert_cache_packed_page(layer_index, routed_expert_ids, expert_capacity)
         else {
@@ -172,7 +170,7 @@ impl Qwen3_5Model {
                     .copied()
                     .filter(|slot| *slot != u32::MAX)
                     .map(|slot| slot as usize)
-                    .ok_or(Qwen3_5ExecutionError::InvalidInput {
+                    .ok_or(TextExecutionError::InvalidInput {
                         description: "a seated complete layer lost a routed expert's slot",
                     })
             })
@@ -185,7 +183,7 @@ impl Qwen3_5Model {
                     %error,
                     "the routed subset of a seated layer could not be built"
                 );
-                Qwen3_5ExecutionError::InvalidInput {
+                TextExecutionError::InvalidInput {
                     description: "the routed subset of a seated layer could not be built",
                 }
             })?;
@@ -222,8 +220,7 @@ impl Qwen3_5Model {
         production_default_paging: bool,
         serving_phase: SessionStreamingPhase,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<(Qwen3_5PagedExpertWeights, QuantizedExpertPageManifest), Qwen3_5ExecutionError>
-    {
+    ) -> Result<(Qwen3_5PagedExpertWeights, QuantizedExpertPageManifest), TextExecutionError> {
         let complete_expert_ids: Vec<usize> = (0..expert_capacity).collect();
         let (streamed_weights, streamed_manifest) = self.stream_expert_page_from_storage_in_phase(
             expert_pager,
@@ -301,8 +298,7 @@ impl Qwen3_5Model {
         routed_expert_ids: &[usize],
         production_default_paging: bool,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<(Qwen3_5PagedExpertWeights, QuantizedExpertPageManifest), Qwen3_5ExecutionError>
-    {
+    ) -> Result<(Qwen3_5PagedExpertWeights, QuantizedExpertPageManifest), TextExecutionError> {
         let expert_capacity = expert_pager.layer_plan(layer_index)?.expert_capacity;
         // Multi-token chunks consult the warm table before touching storage:
         // streaming only the route's missing experts and growing the table
@@ -392,10 +388,8 @@ impl Qwen3_5Model {
         production_default_paging: bool,
         routed_expert_ids: &[usize],
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<
-        Option<(Qwen3_5PagedExpertWeights, QuantizedExpertPageManifest)>,
-        Qwen3_5ExecutionError,
-    > {
+    ) -> Result<Option<(Qwen3_5PagedExpertWeights, QuantizedExpertPageManifest)>, TextExecutionError>
+    {
         let Some(astro_expert_cache) = self.astro_expert_cache.as_ref() else {
             return Ok(None);
         };
@@ -463,7 +457,7 @@ impl Qwen3_5Model {
             .borrow()
             .missing_route_expert_ids(layer_index, routed_expert_ids)
         else {
-            return Err(Qwen3_5ExecutionError::InvalidInput {
+            return Err(TextExecutionError::InvalidInput {
                 description: "a partial prefill layer lost its warm table during the read",
             });
         };
@@ -515,8 +509,7 @@ impl Qwen3_5Model {
         routed_expert_ids: &[usize],
         read_expert_ids: &[usize],
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<(Qwen3_5PagedExpertWeights, QuantizedExpertPageManifest), Qwen3_5ExecutionError>
-    {
+    ) -> Result<(Qwen3_5PagedExpertWeights, QuantizedExpertPageManifest), TextExecutionError> {
         let (streamed_weights, streamed_manifest) = self.stream_expert_page_from_storage(
             expert_pager,
             layer_index,
@@ -574,10 +567,8 @@ impl Qwen3_5Model {
         routed_expert_ids: &[usize],
         expert_capacity: usize,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<
-        Option<(Qwen3_5PagedExpertWeights, QuantizedExpertPageManifest)>,
-        Qwen3_5ExecutionError,
-    > {
+    ) -> Result<Option<(Qwen3_5PagedExpertWeights, QuantizedExpertPageManifest)>, TextExecutionError>
+    {
         let Some(astro_expert_cache) = self.astro_expert_cache.as_ref() else {
             return Ok(None);
         };

@@ -7,7 +7,6 @@
 //! what was read. When it does not apply the caller serves the token the
 //! copying way, exactly as before.
 
-use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_streaming::expert_streaming::ExpertSlotStorageFiller;
 use crate::qwen3_5_streaming::expert_streaming::RoutedExpertCoverage;
 use crate::qwen3_5_streaming::expert_streaming::expert_pager::Qwen3_5ExpertPager;
@@ -16,6 +15,7 @@ use crate::qwen3_5_streaming::model::direct_expert_fetch_tally::{
     DirectExpertFetchOutcome, DirectExpertFetchTally,
 };
 use crate::{PerformanceAttribution, should_commit_mandatory_routed_page};
+use text_generation::execution_error::TextExecutionError;
 
 /// What a model needs to read a reply token's missing experts straight into
 /// their tables, and the record of how often it could.
@@ -75,7 +75,7 @@ impl Qwen3_5Model {
         route_coverage: &RoutedExpertCoverage,
         production_default_paging: bool,
         performance_attribution: &PerformanceAttribution,
-    ) -> Result<bool, Qwen3_5ExecutionError> {
+    ) -> Result<bool, TextExecutionError> {
         let (Some(slot_filler), Some(astro_expert_cache)) = (
             self.direct_expert_fetching.slot_filler.as_ref(),
             self.astro_expert_cache.as_ref(),

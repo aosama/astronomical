@@ -103,8 +103,8 @@ pub(crate) fn standard_worker_chunking_configuration() -> ipc_protocol::WorkerCh
 #[cfg(feature = "direct-mlx")]
 #[allow(dead_code)]
 pub(crate) fn standard_qwen3_5_model_chunking_configuration()
--> model_serving::Qwen3_5ModelChunkingConfiguration {
-    model_serving::Qwen3_5ModelChunkingConfiguration::new(256, 0, 3)
+-> model_serving::TextModelChunkingConfiguration {
+    model_serving::TextModelChunkingConfiguration::new(256, 0, 3)
         .expect("the standard test model chunking configuration should be valid")
 }
 
@@ -113,11 +113,8 @@ pub(crate) fn standard_qwen3_5_model_chunking_configuration()
 pub(crate) fn standard_request_decoder_state(
     qwen3_5_config: &model_serving::Qwen3_5Config,
 ) -> model_serving::RequestDecoderStateStack {
-    model_serving::RequestDecoderStateStack::empty_from_config_with_full_attention_kv_state_growth_tokens(
-        qwen3_5_config,
-        256,
-    )
-    .expect("the standard test decoder-state growth should be valid")
+    model_serving::request_decoder_state_from_qwen3_5_config(qwen3_5_config, 256)
+        .expect("the standard test decoder-state growth should be valid")
 }
 
 #[allow(dead_code)]

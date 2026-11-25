@@ -5,7 +5,7 @@
 use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
 use crate::InferenceEngineError;
-use crate::qwen3_5_core::engine_errors::{fatal_engine_error, qwen3_5_runtime_error};
+use text_generation::engine_errors::{fatal_engine_error, fatal_runtime_error};
 
 /// The live runtime facts one ceiling-change decision reads: limits currently
 /// installed, the ceiling they imply, the model's geometry-safe minimum, and
@@ -30,7 +30,7 @@ pub fn observe_live_memory(
     let current_active_memory_bytes = u64::try_from(
         runtime
             .memory_snapshot()
-            .map_err(qwen3_5_runtime_error)?
+            .map_err(fatal_runtime_error)?
             .active_memory_bytes(),
     )
     .map_err(|_| fatal_engine_error("current MLX active memory exceeds the u64 range"))?;
@@ -61,7 +61,7 @@ pub fn requested_mlx_memory_limits_when_changed(
         requested_mlx_memory_ceiling_bytes_as_usize,
     )
     .map(Some)
-    .map_err(qwen3_5_runtime_error)
+    .map_err(fatal_runtime_error)
 }
 
 /// Releases the MLX buffer cache under the old ceiling and reads the active
@@ -72,7 +72,7 @@ pub fn post_reclamation_active_memory_bytes(
     let post_reclamation_mlx_memory_snapshot = runtime
         .synchronize_gpu_stream_and_clear_mlx_buffer_cache()
         .and_then(|()| runtime.memory_snapshot())
-        .map_err(qwen3_5_runtime_error)?;
+        .map_err(fatal_runtime_error)?;
     u64::try_from(post_reclamation_mlx_memory_snapshot.active_memory_bytes())
         .map_err(|_| fatal_engine_error("post-reclamation MLX active memory exceeds the u64 range"))
 }

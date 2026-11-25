@@ -134,7 +134,7 @@ fn should_prepare_a_zero_budget_chat_to_generate_outside_the_thinking_block() {
 fn should_preserve_a_positive_budget_for_generation_that_starts_inside_thinking() {
     let forced_transition_token_ids = vec![50, 51, 52];
     let inference_request =
-        super::super::Qwen3_5InferenceRequest::new(RequestId::new(702), vec![1, 2, 3], 100)
+        text_generation::TextInferenceRequest::new(RequestId::new(702), vec![1, 2, 3], 100)
             .with_thinking_configuration(
                 true,
                 Some(64),

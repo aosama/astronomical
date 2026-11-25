@@ -22,8 +22,8 @@
 //! output projections are read along different paths.
 
 use model_serving::{
-    Qwen3_5ArtifactValidator, Qwen3_5ModelChunkingConfiguration, Qwen3_5ResidentModel,
-    Qwen3_5Tokenizer, RequestDecoderStateStack,
+    Qwen3_5ArtifactValidator, Qwen3_5ResidentModel, Qwen3_5Tokenizer, RequestDecoderStateStack,
+    TextModelChunkingConfiguration,
 };
 use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use test_harness::test_run::TestRunContext;
@@ -58,9 +58,8 @@ fn load_backbone() -> LoadedBackbone {
         .expect("the Qwen3.5 model should pass production validation");
     let tokenizer = Qwen3_5Tokenizer::from_validated_artifact(&validated_artifact)
         .expect("the tokenizer should load from the validated artifact");
-    let model_chunking =
-        Qwen3_5ModelChunkingConfiguration::new(FULL_ATTENTION_KV_GROWTH_TOKENS, 0, 3)
-            .expect("the standard chunking tuple should be valid");
+    let model_chunking = TextModelChunkingConfiguration::new(FULL_ATTENTION_KV_GROWTH_TOKENS, 0, 3)
+        .expect("the standard chunking tuple should be valid");
     let memory_limits =
         MlxMemoryLimits::new(TEST_MLX_MEMORY_CEILING_BYTES, TEST_MLX_MEMORY_CEILING_BYTES)
             .expect("the test memory limits should be valid");

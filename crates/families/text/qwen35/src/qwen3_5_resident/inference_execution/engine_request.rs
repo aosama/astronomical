@@ -1,8 +1,8 @@
 //! The resident engine's request: the shared Qwen3.5 request plus the state
 //! of draft-and-verify speculative decoding, which only this engine runs.
 
-pub(in crate::qwen3_5_resident) type Qwen3_5EngineRequest =
-    crate::qwen3_5_core::engine_request::Qwen3_5EngineRequest<ResidentRequestExtension>;
+pub(in crate::qwen3_5_resident) type ResidentEngineRequest =
+    text_generation::engine_request::TextEngineRequest<ResidentRequestExtension>;
 
 /// Request state only the resident engine reads.
 pub struct ResidentRequestExtension {
@@ -38,7 +38,7 @@ impl ResidentRequestExtension {
         speculative_session_admitted: bool,
         restored_prompt_token_count: usize,
         prompt_token_count: usize,
-        sampling_strategy: crate::Qwen3_5SamplingStrategy,
+        sampling_strategy: crate::TextSamplingStrategy,
     ) -> Self {
         use crate::qwen3_5_resident::inference_execution::speculative_decode_lifecycle::{
             draft_tree_round::DraftSession,
@@ -50,8 +50,8 @@ impl ResidentRequestExtension {
             prompt_token_count,
         );
         let keyed_seed = match sampling_strategy {
-            crate::Qwen3_5SamplingStrategy::HighestLogit => 0,
-            crate::Qwen3_5SamplingStrategy::TopKTopP { seed, .. } => {
+            crate::TextSamplingStrategy::HighestLogit => 0,
+            crate::TextSamplingStrategy::TopKTopP { seed, .. } => {
                 crate::qwen3_5_core::text::resolve_sampling_seed(
                     seed,
                     crate::sampling_seed::current_time_millis_since_unix_epoch,
@@ -68,13 +68,13 @@ impl ResidentRequestExtension {
     }
 }
 
-impl Qwen3_5EngineRequest {
+/// What the resident engine asks of its request beyond the shell's request
+/// state: the speculative decoding kept in its extension. A trait, because
+/// the request type belongs to the shell and takes no inherent methods here.
+pub(in crate::qwen3_5_resident) trait ResidentSpeculativeRequest {
     /// Whether a speculative round has anything to advance: a pending
     /// successor to verify from, or accepted tokens still owed the caller.
-    pub(in crate::qwen3_5_resident) fn has_speculative_tokens_to_advance(&self) -> bool {
-        self.pending_generated_token.is_some()
-            || !self.engine_extension.speculative_emission_queue.is_empty()
-    }
+    fn has_speculative_tokens_to_advance(&self) -> bool;
 
     /// Suspends speculative decoding for this session's remainder.
     ///
@@ -84,10 +84,16 @@ impl Qwen3_5EngineRequest {
     /// grows the draft's context key-value state. The queue (including its uncommitted
     /// tail) and the draft states drop; the classic path owns everything
     /// from here.
-    pub(in crate::qwen3_5_resident) fn suspend_speculative_session(
-        &mut self,
-        suspension_reason: &'static str,
-    ) {
+    fn suspend_speculative_session(&mut self, suspension_reason: &'static str);
+}
+
+impl ResidentSpeculativeRequest for ResidentEngineRequest {
+    fn has_speculative_tokens_to_advance(&self) -> bool {
+        self.pending_generated_token.is_some()
+            || !self.engine_extension.speculative_emission_queue.is_empty()
+    }
+
+    fn suspend_speculative_session(&mut self, suspension_reason: &'static str) {
         if !self.engine_extension.speculative_session_admitted {
             return;
         }

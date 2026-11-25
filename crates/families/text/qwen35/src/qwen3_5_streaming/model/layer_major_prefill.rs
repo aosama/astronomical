@@ -22,10 +22,10 @@ use super::layer_major_span_state::{
     SpanState, completed_checkpoints, layer_snapshot_arrays, record_end_state_snapshot,
 };
 use super::layer_submission::{CompletedLayerRoots, LayerGroupSubmission};
-use crate::qwen3_5_core::decoder::Qwen3_5AstroSsdPromptCacheBoundaryCheckpoint;
-use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_streaming::Qwen3_5MoEPagedExecutionMode;
 use crate::{AstroDecoderStateCacheState, PerformanceAttribution, RequestDecoderStateStack};
+use text_generation::AstroSsdPromptCacheBoundaryCheckpoint;
+use text_generation::execution_error::TextExecutionError;
 
 /// One span of a layer-major prefill: the tokens one chunk would have run.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -86,7 +86,7 @@ pub struct LayerMajorPrefillOutcome {
     pub final_logits: Option<MlxArray>,
     /// Checkpoints at boundaries before the last span's end, in order, with
     /// positions relative to the first span.
-    pub boundary_checkpoints: Vec<Qwen3_5AstroSsdPromptCacheBoundaryCheckpoint>,
+    pub boundary_checkpoints: Vec<AstroSsdPromptCacheBoundaryCheckpoint>,
 }
 
 /// Bytes per element of the widest floating activation MLX produces, used
@@ -124,7 +124,7 @@ impl Qwen3_5Model {
         layer_major_prefill_request: LayerMajorPrefillRequest<'_>,
         request_decoder_state: &mut RequestDecoderStateStack,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<LayerMajorPrefillOutcome, Qwen3_5ExecutionError> {
+    ) -> Result<LayerMajorPrefillOutcome, TextExecutionError> {
         let mut layer_major_prefill_run = self.begin_layer_major_prefill(
             token_ids,
             starting_position_tokens,
@@ -150,7 +150,7 @@ impl Qwen3_5Model {
         token_ids: &[u32],
         starting_position_tokens: u32,
         layer_major_prefill_request: LayerMajorPrefillRequest<'_>,
-    ) -> Result<LayerMajorPrefillRun, Qwen3_5ExecutionError> {
+    ) -> Result<LayerMajorPrefillRun, TextExecutionError> {
         let LayerMajorPrefillRequest {
             spans,
             checkpoint_contract,
@@ -190,7 +190,7 @@ impl Qwen3_5Model {
         layer_major_prefill_run: &mut LayerMajorPrefillRun,
         request_decoder_state: &mut RequestDecoderStateStack,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<Option<LayerMajorPrefillOutcome>, Qwen3_5ExecutionError> {
+    ) -> Result<Option<LayerMajorPrefillOutcome>, TextExecutionError> {
         let advance_outcome = self.advance_layer_major_prefill_unguarded(
             layer_major_prefill_run,
             request_decoder_state,
@@ -208,7 +208,7 @@ impl Qwen3_5Model {
         layer_major_prefill_run: &mut LayerMajorPrefillRun,
         request_decoder_state: &mut RequestDecoderStateStack,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<Option<LayerMajorPrefillOutcome>, Qwen3_5ExecutionError> {
+    ) -> Result<Option<LayerMajorPrefillOutcome>, TextExecutionError> {
         let layer_count = self.config.layer_count() as usize;
         if std::mem::take(&mut layer_major_prefill_run.is_rewound_to_failed_span) {
             // The failure ended the measurement of the layer in flight.
@@ -245,7 +245,7 @@ impl Qwen3_5Model {
         layer_major_prefill_run: &mut LayerMajorPrefillRun,
         request_decoder_state: &mut RequestDecoderStateStack,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<LayerMajorPrefillOutcome, Qwen3_5ExecutionError> {
+    ) -> Result<LayerMajorPrefillOutcome, TextExecutionError> {
         self.end_prompt_layer_measurement();
         self.release_held_prompt_expert_layer();
         self.discard_prefill_complete_layer_prefetch();
@@ -300,7 +300,7 @@ impl Qwen3_5Model {
         starting_position_tokens: u32,
         span_token_count: usize,
         request_decoder_state: &mut RequestDecoderStateStack,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         let spans = even_layer_major_spans(token_ids.len(), span_token_count);
         let layer_major_outcome = self.prefill_layer_major(
             token_ids,
@@ -316,7 +316,7 @@ impl Qwen3_5Model {
         )?;
         layer_major_outcome
             .final_logits
-            .ok_or(Qwen3_5ExecutionError::InvalidInput {
+            .ok_or(TextExecutionError::InvalidInput {
                 description: "a layer-major prefill of a prompt produced no logits",
             })
     }
@@ -343,7 +343,7 @@ impl Qwen3_5Model {
         layer_major_prefill_run: &mut LayerMajorPrefillRun,
         request_decoder_state: &mut RequestDecoderStateStack,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<(), Qwen3_5ExecutionError> {
+    ) -> Result<(), TextExecutionError> {
         let forward_layer_weights = self.forward_layer_weights(layer_pass.layer_index)?;
         let span_count = layer_major_prefill_run.spans.len();
         let spans_token_count = i32::try_from(
@@ -418,7 +418,7 @@ impl Qwen3_5Model {
         span_index: usize,
         layer_major_prefill_run: &mut LayerMajorPrefillRun,
         request_decoder_state: &RequestDecoderStateStack,
-    ) -> Result<(), Qwen3_5ExecutionError> {
+    ) -> Result<(), TextExecutionError> {
         if self.astro_expert_cache.is_none() {
             return Ok(());
         }
@@ -445,7 +445,7 @@ impl Qwen3_5Model {
         request_decoder_state: &mut RequestDecoderStateStack,
         previous_layer_output: &mut Option<MlxArray>,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<(), Qwen3_5ExecutionError> {
+    ) -> Result<(), TextExecutionError> {
         let span_output = self.run_span_through_layer(
             layer_pass,
             forward_layer_weights,
@@ -506,22 +506,22 @@ impl Qwen3_5Model {
         span_state: &mut SpanState,
         request_decoder_state: &mut RequestDecoderStateStack,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         let layer_index = layer_pass.layer_index;
         let span_input =
             span_state
                 .hidden_states
                 .take()
-                .ok_or(Qwen3_5ExecutionError::InvalidInput {
+                .ok_or(TextExecutionError::InvalidInput {
                     description: "a layer-major span lost its hidden states",
                 })?;
         let rope_offset_tokens =
             i32::try_from(u64::from(layer_pass.starting_position_tokens) + span.start_token as u64)
-                .map_err(|_| Qwen3_5ExecutionError::InvalidInput {
+                .map_err(|_| TextExecutionError::InvalidInput {
                     description: "a layer-major span starts beyond the MLX int32 range",
                 })?;
         let layer_model_state = request_decoder_state.layer_mut(layer_index).ok_or(
-            Qwen3_5ExecutionError::InvalidRequestDecoderState {
+            TextExecutionError::InvalidRequestDecoderState {
                 layer_index,
                 description: "decoder layer entry is missing",
             },
@@ -593,18 +593,18 @@ fn even_layer_major_spans(token_count: usize, span_token_count: usize) -> Vec<La
 fn validate_layer_major_spans(
     token_count: usize,
     spans: &[LayerMajorSpan],
-) -> Result<(), Qwen3_5ExecutionError> {
+) -> Result<(), TextExecutionError> {
     let mut expected_start_token = 0;
     for span in spans {
         if span.start_token != expected_start_token || span.end_token <= span.start_token {
-            return Err(Qwen3_5ExecutionError::InvalidInput {
+            return Err(TextExecutionError::InvalidInput {
                 description: "layer-major spans must tile the prompt in order",
             });
         }
         expected_start_token = span.end_token;
     }
     if expected_start_token != token_count || spans.is_empty() {
-        return Err(Qwen3_5ExecutionError::InvalidInput {
+        return Err(TextExecutionError::InvalidInput {
             description: "layer-major spans must cover every prompt token",
         });
     }

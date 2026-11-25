@@ -13,7 +13,7 @@ use mlx_bridge::MlxArray;
 use super::Qwen3_5Model;
 use super::feed_forward_weights::Qwen3_5MoEFeedForwardWeights;
 use super::paged_route_resolution::OptimisticLayerServing;
-use super::{Qwen3_5ExecutionError, RequestDecoderStateStack};
+use super::{RequestDecoderStateStack, TextExecutionError};
 use crate::qwen3_5_streaming::expert_streaming::expert_pager::Qwen3_5ExpertPager;
 use crate::qwen3_5_streaming::{PagedRouteValidationOutcome, Qwen3_5MoEPagedExecutionMode};
 use crate::{PerformanceAttribution, PerformanceCounter};
@@ -49,7 +49,7 @@ impl Qwen3_5Model {
         hidden_states: &MlxArray,
         should_use_compiled_elementwise_graphs: bool,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<Option<MlxArray>, Qwen3_5ExecutionError> {
+    ) -> Result<Option<MlxArray>, TextExecutionError> {
         let missing_route_collector = &self.paged_forward_missing_route_collector;
         if !missing_route_collector.is_optimistic() {
             return Ok(None);
@@ -118,7 +118,7 @@ impl Qwen3_5Model {
         hidden_states: &MlxArray,
         should_use_compiled_elementwise_graphs: bool,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<Option<MlxArray>, Qwen3_5ExecutionError> {
+    ) -> Result<Option<MlxArray>, TextExecutionError> {
         if let Some(handled) = self.dispatch_optimistic_table_page(
             expert_pager,
             layer_index,
@@ -154,9 +154,9 @@ impl Qwen3_5Model {
         &self,
         missing_expert_mask: &[u32],
         selected_indices: &MlxArray,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         let expert_capacity = i32::try_from(missing_expert_mask.len()).map_err(|_| {
-            Qwen3_5ExecutionError::InvalidInput {
+            TextExecutionError::InvalidInput {
                 description: "expert capacity exceeds the MLX shape range",
             }
         })?;
@@ -179,7 +179,7 @@ impl Qwen3_5Model {
         starting_position_tokens: u32,
         request_decoder_state: &mut RequestDecoderStateStack,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         let storage_read_bytes_before = self
             .request_expert_storage_read_tally
             .expert_storage_read_byte_count();
@@ -217,7 +217,7 @@ impl Qwen3_5Model {
                 }
                 PagedRouteValidationOutcome::MissedExperts => {
                     let Some(checkpoint) = optimistic_checkpoint.take() else {
-                        return Err(Qwen3_5ExecutionError::InvalidInput {
+                        return Err(TextExecutionError::InvalidInput {
                             description: "an exact forward reported experts missing from memory",
                         });
                     };
@@ -247,7 +247,7 @@ impl Qwen3_5Model {
         starting_position_tokens: u32,
         request_decoder_state: &mut RequestDecoderStateStack,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<(MlxArray, PagedRouteValidationOutcome), Qwen3_5ExecutionError> {
+    ) -> Result<(MlxArray, PagedRouteValidationOutcome), TextExecutionError> {
         let logits = self.build_forward_graph(
             token_indices,
             token_count,

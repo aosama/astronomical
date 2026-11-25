@@ -5,11 +5,10 @@ use crate::{
 };
 
 use super::Qwen3_5Config;
-
-pub const QWEN_CONVOLUTION_TENSOR_ROLE: &str = "linear.convolution";
-pub const QWEN_RECURRENCE_TENSOR_ROLE: &str = "linear.gated_delta_recurrent";
-pub const QWEN_ATTENTION_KEYS_TENSOR_ROLE: &str = "attention.keys";
-pub const QWEN_ATTENTION_VALUES_TENSOR_ROLE: &str = "attention.values";
+use text_generation::decoder_state::tensor_roles::{
+    ATTENTION_KEYS_TENSOR_ROLE, ATTENTION_VALUES_TENSOR_ROLE, LINEAR_CONVOLUTION_TENSOR_ROLE,
+    LINEAR_RECURRENCE_TENSOR_ROLE,
+};
 
 /// Exact live execution dtypes for one Qwen decoder layer's persistent state.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -111,13 +110,13 @@ fn full_attention_layer_layout(
 ) -> Result<AstroDecoderStateCacheLayerLayout, AstroDecoderStateCacheLayoutError> {
     Ok(AstroDecoderStateCacheLayerLayout::append_only_attention(
         AstroDecoderStateCacheTensorLayout::sequence(
-            QWEN_ATTENTION_KEYS_TENSOR_ROLE,
+            ATTENTION_KEYS_TENSOR_ROLE,
             keys,
             full_attention_key_value_dimensions.to_vec(),
             2,
         ),
         AstroDecoderStateCacheTensorLayout::sequence(
-            QWEN_ATTENTION_VALUES_TENSOR_ROLE,
+            ATTENTION_VALUES_TENSOR_ROLE,
             values,
             full_attention_key_value_dimensions.to_vec(),
             2,
@@ -137,14 +136,14 @@ fn linear_attention_layer_layout(
     Ok(AstroDecoderStateCacheLayerLayout::composite(vec![
         AstroDecoderStateCacheLayerLayout::recurrent_tensor(
             AstroDecoderStateCacheTensorLayout::fixed(
-                QWEN_CONVOLUTION_TENSOR_ROLE,
+                LINEAR_CONVOLUTION_TENSOR_ROLE,
                 convolution,
                 linear_convolution_dimensions.to_vec(),
             ),
         ),
         AstroDecoderStateCacheLayerLayout::recurrent_tensor(
             AstroDecoderStateCacheTensorLayout::fixed(
-                QWEN_RECURRENCE_TENSOR_ROLE,
+                LINEAR_RECURRENCE_TENSOR_ROLE,
                 AstroDecoderStateCacheTensorDtype::Float32,
                 linear_recurrent_dimensions.to_vec(),
             ),

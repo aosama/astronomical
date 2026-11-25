@@ -10,7 +10,7 @@ use mlx_bridge::MlxArray;
 
 use super::base::Qwen3_5ModelBase;
 use super::tree_layer_attention::TreeRowInputs;
-use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
+use text_generation::execution_error::TextExecutionError;
 
 /// One full-attention layer's tree attention against float32, rounded to bf16.
 #[derive(Debug, Clone, Copy, Default)]
@@ -70,7 +70,7 @@ impl Qwen3_5ModelBase {
         (active_keys, active_values): (&MlxArray, &MlxArray),
         tree: &TreeRowInputs,
         scale: f32,
-    ) -> Result<(), Qwen3_5ExecutionError> {
+    ) -> Result<(), TextExecutionError> {
         let mlx_attended = self.runtime.masked_scaled_dot_product_attention(
             rotated_queries,
             active_keys,
@@ -125,7 +125,7 @@ impl Qwen3_5ModelBase {
         Ok(())
     }
 
-    fn host_float32_values(&self, array: &MlxArray) -> Result<Vec<f32>, Qwen3_5ExecutionError> {
+    fn host_float32_values(&self, array: &MlxArray) -> Result<Vec<f32>, TextExecutionError> {
         let single_precision = self.runtime.astype(array, mlx_bridge::MlxDtype::Float32)?;
         Ok(self.runtime.array_to_vec_f32(&single_precision)?)
     }
@@ -138,7 +138,7 @@ impl Qwen3_5ModelBase {
         (active_keys, active_values): (&MlxArray, &MlxArray),
         tree: &TreeRowInputs,
         scale: f32,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         let float32 = mlx_bridge::MlxDtype::Float32;
         let attended = self.runtime.masked_scaled_dot_product_attention(
             &self.runtime.astype(rotated_queries, float32)?,

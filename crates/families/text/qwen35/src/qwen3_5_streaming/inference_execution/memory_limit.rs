@@ -3,11 +3,11 @@
 
 use runtime_integration::MlxMemoryLimits;
 
-use crate::qwen3_5_core::engine_errors::{
+use crate::{InferenceEngineError, safe_minimum_active_memory_ceiling_bytes};
+use text_generation::engine_errors::{
     mlx_memory_ceiling_change_before_load_error, mlx_memory_ceiling_exceeds_u64_range_error,
 };
-use crate::qwen3_5_core::shared_execution::mlx_memory_limit_change::Qwen3_5MlxMemoryLimitHooks;
-use crate::{InferenceEngineError, safe_minimum_active_memory_ceiling_bytes};
+use text_generation::generation_loop::mlx_memory_limit_change::TextMlxMemoryLimitHooks;
 
 use super::Qwen3_5EngineState;
 
@@ -28,7 +28,7 @@ pub const fn safe_minimum_mlx_memory_ceiling_bytes(
     )
 }
 
-impl Qwen3_5MlxMemoryLimitHooks for Qwen3_5EngineState {
+impl TextMlxMemoryLimitHooks for Qwen3_5EngineState {
     /// A raise that now admits complete expert residency must not be
     /// absorbed in place: this engine structurally never reports complete
     /// ownership, and the startup selection a replacement worker runs

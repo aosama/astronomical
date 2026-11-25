@@ -5,12 +5,12 @@ use crate::prism_hadamard_qwen35::engine::fixture_engine_test_support::{
     FixtureAstroSsdPromptCache, LoadedFixtureEngine,
     loaded_fixture_engine_with_astro_ssd_prompt_cache,
 };
-use crate::qwen3_5_core::astro_ssd_prompt_cache_capture::Qwen3_5AstroSsdPromptCacheCapture;
 use crate::{
     AstroSsdPromptCacheModelContract, EngineGenerationStart, GeneratedToken, MlxInferenceExecution,
-    Qwen3_5InferenceRequest,
+    TextInferenceRequest,
 };
 use engine_core::astro_ssd_prompt_cache::quota_bounded_contract::resolve_quota_bounded_astro_ssd_prompt_cache_contract;
+use text_generation::astro_ssd_prompt_cache_capture::TextAstroSsdPromptCacheCapture;
 
 /// Blocks of 256 tokens, the fixture layout's persistence alignment, read in
 /// chunks of 300 so every chunk holds one block boundary before its end and
@@ -33,7 +33,7 @@ fn start_greedy(
 ) -> EngineGenerationStart {
     fixture_engine
         .execution
-        .start_generation(Qwen3_5InferenceRequest::new_sampling(
+        .start_generation(TextInferenceRequest::new_sampling(
             RequestId::new(request_id),
             repeated_prompt_token_ids(),
             2,

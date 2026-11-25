@@ -126,7 +126,7 @@ fn released_tensor_profiles() -> Vec<crate::TensorProfile> {
 pub fn vision_weights_over(
     runtime: &MlxRuntime,
     tensor_source: Qwen3_5VisionTensorSource,
-) -> Result<Qwen3_5VisionWeights, super::Qwen3_5ExecutionError> {
+) -> Result<Qwen3_5VisionWeights, super::TextExecutionError> {
     let tensor_profiles = released_tensor_profiles();
     let (bound_tensors, total_payload_bytes) =
         super::bind_vision_tensors(runtime, &tensor_profiles, &tensor_source)?;
@@ -366,7 +366,7 @@ fn should_keep_the_bound_tensors_when_the_source_file_changed_size() {
     assert!(
         matches!(
             rebind_error,
-            super::Qwen3_5ExecutionError::InvalidTensor { .. }
+            super::TextExecutionError::InvalidTensor { .. }
         ),
         "the shape check must reject the changed tensor, got {rebind_error}"
     );
@@ -402,7 +402,7 @@ fn should_reject_a_location_outside_the_source_files() {
 
     assert!(matches!(
         binding_error,
-        super::Qwen3_5ExecutionError::InvalidTensor { tensor_name, .. }
+        super::TextExecutionError::InvalidTensor { tensor_name, .. }
             if tensor_name == RELEASED_TENSOR_NAME
     ));
 }

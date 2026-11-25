@@ -68,11 +68,11 @@ pub fn should_admit_speculation_for_session(
 /// so this returns `None` only for future strategies.
 #[must_use]
 pub fn verification_token_choice_for_strategy(
-    sampling_strategy: &crate::Qwen3_5SamplingStrategy,
+    sampling_strategy: &crate::TextSamplingStrategy,
 ) -> Option<VerificationTokenChoice> {
     match sampling_strategy {
-        crate::Qwen3_5SamplingStrategy::HighestLogit => Some(VerificationTokenChoice::HighestLogit),
-        crate::Qwen3_5SamplingStrategy::TopKTopP {
+        crate::TextSamplingStrategy::HighestLogit => Some(VerificationTokenChoice::HighestLogit),
+        crate::TextSamplingStrategy::TopKTopP {
             temperature_thousandths,
             top_k,
             top_p_thousandths,

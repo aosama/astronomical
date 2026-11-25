@@ -11,18 +11,18 @@
 use ipc_protocol::{WorkerAstroSsdPromptCacheLookupOutcome, WorkerInMemoryPrefixAdoptionOutcome};
 
 use crate::astro_decoder_state_cache::AstroDecoderStateCacheState;
-use crate::qwen3_5_core::decoder::RequestDecoderStateStack;
 use crate::{
     AstroSsdPromptCachePrefixLookupResult, InferenceEngineError, PerformanceAttribution,
     PerformanceOperation,
 };
 use engine_core::astro_ssd_prompt_cache::AstroSsdPromptCacheDiskStore;
+use text_generation::RequestDecoderStateStack;
 
 use engine_core::astro_ssd_prompt_cache::restore_support::astro_ssd_prompt_cache_request_diagnostics;
 
 use super::retained_live_prefix::RetainedLiveDecoderPrefix;
 use super::{Qwen3_5EngineState, fatal_engine_error};
-use crate::qwen3_5_core::shared_execution::astro_ssd_prompt_cache_restore::AstroSsdPromptCacheRestoreOutcome;
+use text_generation::generation_loop::astro_ssd_prompt_cache_restore::AstroSsdPromptCacheRestoreOutcome;
 
 impl Qwen3_5EngineState {
     pub(super) fn install_adopted_live_prefix(

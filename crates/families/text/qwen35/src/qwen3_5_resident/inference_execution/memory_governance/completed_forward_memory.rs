@@ -5,7 +5,7 @@ use runtime_integration::MlxMemorySnapshot;
 use crate::InferenceEngineError;
 use crate::qwen3_5_resident::model::Qwen3_5ResidentModel;
 
-use super::qwen3_5_runtime_error;
+use super::fatal_runtime_error;
 
 /// One MLX sample taken on the owner thread after a forward. The residency
 /// claim published with it is derived from the breakdown of this exact
@@ -22,7 +22,7 @@ pub(in crate::qwen3_5_resident) fn capture_completed_forward_memory_observation(
     let mlx_memory_snapshot = model
         .runtime()
         .memory_snapshot()
-        .map_err(qwen3_5_runtime_error)?;
+        .map_err(fatal_runtime_error)?;
     Ok(CompletedForwardMemoryObservation {
         mlx_memory_snapshot,
     })

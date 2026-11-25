@@ -6,7 +6,7 @@ fn should_carry_the_exact_engine_lost_loaded_model_invalid_input_description() {
 
     assert!(matches!(
         execution_error,
-        crate::Qwen3_5ExecutionError::InvalidInput { description } if description == "Qwen3.5 engine lost its loaded model"
+        crate::TextExecutionError::InvalidInput { description } if description == "Qwen3.5 engine lost its loaded model"
     ));
 }
 
@@ -17,7 +17,7 @@ fn should_carry_the_exact_visual_block_contract_invalid_input_description() {
 
     assert!(matches!(
         execution_error,
-        crate::Qwen3_5ExecutionError::InvalidInput { description } if description == "planned visual astro-ssd-prompt-cache checkpoints have no block contract"
+        crate::TextExecutionError::InvalidInput { description } if description == "planned visual astro-ssd-prompt-cache checkpoints have no block contract"
     ));
 }
 
@@ -28,7 +28,7 @@ fn should_carry_the_exact_text_block_contract_invalid_input_description() {
 
     assert!(matches!(
         execution_error,
-        crate::Qwen3_5ExecutionError::InvalidInput { description } if description == "planned text astro-ssd-prompt-cache checkpoints have no block contract"
+        crate::TextExecutionError::InvalidInput { description } if description == "planned text astro-ssd-prompt-cache checkpoints have no block contract"
     ));
 }
 
@@ -40,6 +40,6 @@ fn should_carry_the_exact_terminal_seed_sampling_invalid_input_description() {
 
     assert!(matches!(
         execution_error,
-        crate::Qwen3_5ExecutionError::InvalidInput { description } if description == "failed to sample the first generated token from terminal prefill logits"
+        crate::TextExecutionError::InvalidInput { description } if description == "failed to sample the first generated token from terminal prefill logits"
     ));
 }

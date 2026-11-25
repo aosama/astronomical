@@ -2,7 +2,7 @@
 //!
 //! The children hold the resident engine's part of the answer-generation
 //! loop: its decode-step hooks (`advance_generation`; the step itself is
-//! shared in `qwen3_5_core::shared_execution::decode_step`) and model-visible
+//! shared in `text_generation::generation_loop::decode_step`) and model-visible
 //! feedback injection. This root only wires them into the engine's
 //! inference_execution module and re-binds the engine-level owners so the
 //! children keep one-level `super::` paths.

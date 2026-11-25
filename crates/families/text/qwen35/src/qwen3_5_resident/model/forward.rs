@@ -1,10 +1,10 @@
 use mlx_bridge::MlxArray;
 
-use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_core::model_math::feed_forward_weights::Qwen3_5MoEFeedForwardWeights;
 use crate::qwen3_5_resident::experts::Qwen3_5ResidentExpertLayerWeights;
 use crate::qwen3_5_resident::model::Qwen3_5ResidentModel;
 use crate::{PerformanceAttribution, PerformanceOperation};
+use text_generation::execution_error::TextExecutionError;
 
 impl Qwen3_5ResidentModel {
     pub fn forward_qwen3_5_moe(
@@ -14,7 +14,7 @@ impl Qwen3_5ResidentModel {
         resident_expert_layer_weights: &Qwen3_5ResidentExpertLayerWeights,
         should_use_compiled_elementwise_graphs: bool,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         let (selected_indices, selected_scores) = performance_attribution.measure_operation(
             PerformanceOperation::ResidentMoeGraphConstruction,
             |_performance_attribution| {

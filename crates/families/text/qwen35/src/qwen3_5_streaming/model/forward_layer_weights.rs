@@ -8,7 +8,7 @@ use super::Qwen3_5Model;
 use super::dense_layer_streamer::DenseLayerWeights;
 use super::layer_submission::{LayerGroupSubmission, LayerSubmission};
 use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5DecoderLayerWeights;
-use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
+use text_generation::execution_error::TextExecutionError;
 
 /// Where a forward finds one decoder layer.
 pub enum ForwardLayerWeights<'model> {
@@ -49,14 +49,14 @@ impl Qwen3_5Model {
     pub fn forward_layer_weights(
         &self,
         layer_index: usize,
-    ) -> Result<ForwardLayerWeights<'_>, Qwen3_5ExecutionError> {
+    ) -> Result<ForwardLayerWeights<'_>, TextExecutionError> {
         let Some(dense_layer_streamer) = &self.dense_layer_streamer else {
             return self
                 .weights
                 .decoder_layer_weights
                 .get(layer_index)
                 .map(ForwardLayerWeights::Bound)
-                .ok_or(Qwen3_5ExecutionError::MissingDecoderLayerWeights { layer_index });
+                .ok_or(TextExecutionError::MissingDecoderLayerWeights { layer_index });
         };
         Ok(ForwardLayerWeights::Dense(
             dense_layer_streamer.layer_weights(

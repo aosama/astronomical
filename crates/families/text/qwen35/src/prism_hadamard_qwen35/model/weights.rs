@@ -17,8 +17,8 @@ use std::collections::BTreeMap;
 use mlx_bridge::{MlxArray, MlxCError, MlxCompiledElementwiseGraphs, MlxMetalKernel};
 use runtime_integration::{MlxRuntime, MlxSafetensors};
 
-use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_core::model_math::tensor_slicing;
+use text_generation::execution_error::TextExecutionError;
 
 use super::super::artifacts::ValidatedFoldedPack;
 use super::PrismHadamardModelError;
@@ -607,7 +607,7 @@ pub fn slice_last_dimension(
     end: i32,
 ) -> Result<MlxArray, PrismHadamardModelError> {
     tensor_slicing::slice_last_dimension(runtime, array, start, end).map_err(
-        |execution_error: Qwen3_5ExecutionError| PrismHadamardModelError::WeightSlicing {
+        |execution_error: TextExecutionError| PrismHadamardModelError::WeightSlicing {
             description: execution_error.to_string(),
         },
     )

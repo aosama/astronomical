@@ -10,15 +10,15 @@ use ipc_protocol::WorkerChunkingConfiguration;
 
 use crate::AstroSsdPromptCacheDiskStoreConfig;
 use crate::MlxInferenceEngine;
-use crate::Qwen3_5ExecutionCoreSettings;
 use crate::Qwen3_5GenerationProcessor;
+use crate::TextExecutionCoreSettings;
 use crate::prism_hadamard_qwen35::artifacts::FoldedPackValidator;
 use crate::prism_hadamard_qwen35::engine::{
     PrismHadamardQwen35Engine, PrismHadamardQwen35InferenceExecution,
     PrismHadamardQwen35PendingStartup,
 };
-use crate::qwen3_5_core::shared_execution::prompt_processing_chunk_sizer::Qwen3_5PromptProcessingChunkSizer;
 use crate::{PerformanceAttribution, PerformanceAttributionLog, PerformanceOperation};
+use text_generation::generation_loop::prompt_processing_chunk_sizer::PromptProcessingChunkSizer;
 
 /// Serving settings the worker hands to the folded-ternary startup.
 #[derive(Debug, Clone)]
@@ -111,7 +111,7 @@ pub fn initialize_prism_hadamard_qwen35_model_with_serving_settings(
         astro_ssd_prompt_cache_disk_store_config_for(&serving_settings, &model_id, &model_revision);
     // The validated pack, limits and processor facts the shared Qwen 3.5
     // core keeps; the shared load starts the MLX runtime at these limits.
-    let validated_execution_core_settings = Qwen3_5ExecutionCoreSettings {
+    let validated_execution_core_settings = TextExecutionCoreSettings {
         validated_artifact: pack,
         active_memory_limit_bytes: effective_mlx_memory_ceiling_bytes,
         mlx_buffer_cache_limit_bytes,
@@ -206,8 +206,8 @@ fn astro_ssd_prompt_cache_disk_store_config_for(
 /// engine has always floored it, so the sizer never refuses it.
 pub(super) fn prompt_processing_chunk_sizer_for(
     serving_settings: &PrismHadamardQwen35ServingSettings,
-) -> Result<Qwen3_5PromptProcessingChunkSizer, PrismHadamardQwen35StartupError> {
-    Qwen3_5PromptProcessingChunkSizer::for_chunk_size_tokens(
+) -> Result<PromptProcessingChunkSizer, PrismHadamardQwen35StartupError> {
+    PromptProcessingChunkSizer::for_chunk_size_tokens(
         serving_settings.prompt_processing_chunk_tokens.max(1),
     )
     .map_err(|sizer_error| PrismHadamardQwen35StartupError::EngineOwner {

@@ -66,7 +66,7 @@ pub enum ExpertPagingError {
 /// so the kernel never depends on streaming types (issue #1132). Memory-budget
 /// rejections surface as the kernel's admission variant; native runtime
 /// failures surface as the kernel's runtime variant.
-impl From<ExpertPagingError> for crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError {
+impl From<ExpertPagingError> for text_generation::execution_error::TextExecutionError {
     fn from(expert_paging_error: ExpertPagingError) -> Self {
         match expert_paging_error {
             ExpertPagingError::MemoryBudget(memory_admission_error) => {
@@ -369,3 +369,6 @@ fn layer_routed_page_peak_bytes(
     })?;
     Ok(largest_page_peak_bytes.max(routed_page_peak_bytes))
 }
+
+#[cfg(all(test, feature = "direct-mlx"))]
+mod execution_error_conversion_tests;

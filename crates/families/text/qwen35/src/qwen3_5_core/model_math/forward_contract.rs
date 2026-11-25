@@ -1,19 +1,18 @@
-use super::error;
-use super::error::Qwen3_5ExecutionError;
 use crate::AstroDecoderStateCacheState;
-use crate::qwen3_5_core::decoder::RequestDecoderStateStack;
 use mlx_bridge::{MlxArray, MlxDtype};
+use text_generation::RequestDecoderStateStack;
+use text_generation::execution_error::{self, TextExecutionError};
 
 pub fn forward_state_arrays<'state>(
     output: &'state MlxArray,
     request_decoder_state: &'state RequestDecoderStateStack,
-) -> Result<Vec<&'state MlxArray>, Qwen3_5ExecutionError> {
+) -> Result<Vec<&'state MlxArray>, TextExecutionError> {
     collect_evaluation_arrays(Some(output), request_decoder_state, false)
 }
 
 pub fn decoder_state_arrays(
     request_decoder_state: &RequestDecoderStateStack,
-) -> Result<Vec<&MlxArray>, Qwen3_5ExecutionError> {
+) -> Result<Vec<&MlxArray>, TextExecutionError> {
     collect_evaluation_arrays(None, request_decoder_state, true)
 }
 
@@ -21,7 +20,7 @@ fn collect_evaluation_arrays<'state>(
     output: Option<&'state MlxArray>,
     request_decoder_state: &'state RequestDecoderStateStack,
     include_forward_reachable_state_arrays: bool,
-) -> Result<Vec<&'state MlxArray>, Qwen3_5ExecutionError> {
+) -> Result<Vec<&'state MlxArray>, TextExecutionError> {
     // Forward outputs already reach attention storage and the recurrent kernel's sibling state.
     // Convolution state branches from its input, so it always remains an explicit evaluation root.
     let decoder_layer_count = request_decoder_state.layer_count();
@@ -35,13 +34,13 @@ fn collect_evaluation_arrays<'state>(
                 recurrent,
             }) if convolution.state().is_some() && recurrent.state().is_some() => {
                 let convolution = convolution.state().ok_or_else(|| {
-                    error::invalid_request_decoder_state(
+                    execution_error::invalid_request_decoder_state(
                         layer_index,
                         "model forward did not populate the convolution state array",
                     )
                 })?;
                 let recurrent = recurrent.state().ok_or_else(|| {
-                    error::invalid_request_decoder_state(
+                    execution_error::invalid_request_decoder_state(
                         layer_index,
                         "model forward did not populate the recurrent state array",
                     )
@@ -55,13 +54,13 @@ fn collect_evaluation_arrays<'state>(
                 if attention.keys_state().is_some() && attention.values_state().is_some() =>
             {
                 let attention_keys = attention.keys_state().ok_or_else(|| {
-                    error::invalid_request_decoder_state(
+                    execution_error::invalid_request_decoder_state(
                         layer_index,
                         "model forward did not populate the attention key state array",
                     )
                 })?;
                 let attention_values = attention.values_state().ok_or_else(|| {
-                    error::invalid_request_decoder_state(
+                    execution_error::invalid_request_decoder_state(
                         layer_index,
                         "model forward did not populate the attention value state array",
                     )
@@ -72,7 +71,7 @@ fn collect_evaluation_arrays<'state>(
                 }
             }
             _ => {
-                return Err(error::invalid_request_decoder_state(
+                return Err(execution_error::invalid_request_decoder_state(
                     layer_index,
                     "model forward did not populate both required state arrays",
                 ));
@@ -88,20 +87,20 @@ pub fn validate_generated_token_forward(
     layer_model_state_count: usize,
     expected_decoder_layer_count: usize,
     maximum_position_count: u32,
-) -> Result<(), Qwen3_5ExecutionError> {
+) -> Result<(), TextExecutionError> {
     if generated_token.shape() != [1, 1] {
-        return Err(Qwen3_5ExecutionError::InvalidInput {
+        return Err(TextExecutionError::InvalidInput {
             description: "generated token array must have shape [1, 1]",
         });
     }
     if layer_model_state_count != expected_decoder_layer_count {
-        return Err(Qwen3_5ExecutionError::DecoderLayerCountMismatch {
+        return Err(TextExecutionError::DecoderLayerCountMismatch {
             actual_decoder_layer_count: layer_model_state_count,
             expected_decoder_layer_count,
         });
     }
     if starting_position_tokens >= maximum_position_count {
-        return Err(Qwen3_5ExecutionError::InvalidInput {
+        return Err(TextExecutionError::InvalidInput {
             description: "forward chunk exceeds the model maximum position count",
         });
     }
@@ -116,14 +115,14 @@ pub fn validate_forward_input(
     expected_decoder_layer_count: usize,
     vocabulary_size: u32,
     maximum_position_count: u32,
-) -> Result<i32, Qwen3_5ExecutionError> {
+) -> Result<i32, TextExecutionError> {
     if token_ids.is_empty() {
-        return Err(Qwen3_5ExecutionError::InvalidInput {
+        return Err(TextExecutionError::InvalidInput {
             description: "forward chunk must contain at least one token",
         });
     }
     if layer_model_state_count != expected_decoder_layer_count {
-        return Err(Qwen3_5ExecutionError::DecoderLayerCountMismatch {
+        return Err(TextExecutionError::DecoderLayerCountMismatch {
             actual_decoder_layer_count: layer_model_state_count,
             expected_decoder_layer_count,
         });
@@ -132,25 +131,25 @@ pub fn validate_forward_input(
         .iter()
         .any(|token_id| *token_id >= vocabulary_size)
     {
-        return Err(Qwen3_5ExecutionError::InvalidInput {
+        return Err(TextExecutionError::InvalidInput {
             description: "forward chunk contains an out-of-vocabulary token ID",
         });
     }
     let token_count =
-        u32::try_from(token_ids.len()).map_err(|_| Qwen3_5ExecutionError::InvalidInput {
+        u32::try_from(token_ids.len()).map_err(|_| TextExecutionError::InvalidInput {
             description: "forward chunk token count exceeds the u32 range",
         })?;
     if let Some(token_position_offsets) = token_position_offsets {
         let expected_position_shape =
             [
-                i32::try_from(token_count).map_err(|_| Qwen3_5ExecutionError::InvalidInput {
+                i32::try_from(token_count).map_err(|_| TextExecutionError::InvalidInput {
                     description: "forward position count exceeds the MLX integer range",
                 })?,
             ];
         if token_position_offsets.shape() != expected_position_shape
             || token_position_offsets.dtype() != MlxDtype::Int32
         {
-            return Err(Qwen3_5ExecutionError::InvalidInput {
+            return Err(TextExecutionError::InvalidInput {
                 description: "token position offsets must be an int32 vector matching the forward token count",
             });
         }
@@ -158,11 +157,11 @@ pub fn validate_forward_input(
         .checked_add(token_count)
         .is_none_or(|ending_position| ending_position > maximum_position_count)
     {
-        return Err(Qwen3_5ExecutionError::InvalidInput {
+        return Err(TextExecutionError::InvalidInput {
             description: "forward chunk exceeds the model maximum position count",
         });
     }
-    i32::try_from(token_count).map_err(|_| Qwen3_5ExecutionError::InvalidInput {
+    i32::try_from(token_count).map_err(|_| TextExecutionError::InvalidInput {
         description: "forward chunk token count exceeds the MLX integer range",
     })
 }

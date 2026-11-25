@@ -18,8 +18,8 @@ use super::layer_major_checkpoint_parity::{
 use super::layer_major_prefill::{
     LayerMajorCheckpointContract, LayerMajorPrefillRequest, LayerMajorSpan, LayerMajorVisualInputs,
 };
-use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::{PerformanceAttribution, RequestDecoderStateStack};
+use text_generation::execution_error::TextExecutionError;
 
 /// What both paths published for one prompt with images.
 pub struct ImagePromptBoundaries {
@@ -46,7 +46,7 @@ impl Qwen3_5Model {
         image_pad_token_id: u32,
         chunk_path_decoder_state: &mut RequestDecoderStateStack,
         layer_at_a_time_decoder_state: &mut RequestDecoderStateStack,
-    ) -> Result<ImagePromptBoundaries, Qwen3_5ExecutionError> {
+    ) -> Result<ImagePromptBoundaries, TextExecutionError> {
         let (group_token_ids, spans) =
             planned_spans(token_ids, chunk_token_count, block_token_count)?;
         let image_pad_token_count = group_token_ids
@@ -85,12 +85,9 @@ impl Qwen3_5Model {
     }
 
     /// `row_count` rows of the embedding table, as a `[rows, width]` array.
-    fn stand_in_image_embeddings(
-        &self,
-        row_count: usize,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    fn stand_in_image_embeddings(&self, row_count: usize) -> Result<MlxArray, TextExecutionError> {
         let signed_row_count =
-            i32::try_from(row_count).map_err(|_| Qwen3_5ExecutionError::InvalidInput {
+            i32::try_from(row_count).map_err(|_| TextExecutionError::InvalidInput {
                 description: "the image-pad token count exceeds the MLX int32 range",
             })?;
         let stand_in_token_ids: Vec<i32> = (0..signed_row_count).collect();
@@ -113,16 +110,15 @@ impl Qwen3_5Model {
         block_token_count: usize,
         image_inputs: LayerMajorVisualInputs<'_>,
         request_decoder_state: &mut RequestDecoderStateStack,
-    ) -> Result<(Vec<PublishedBoundarySnapshot>, usize), Qwen3_5ExecutionError> {
+    ) -> Result<(Vec<PublishedBoundarySnapshot>, usize), TextExecutionError> {
         let mut performance_attribution = PerformanceAttribution::disabled();
         let mut consumed_image_embedding_count = 0_usize;
         let mut boundary_checkpoints = Vec::new();
         for span in spans {
-            let starting_position_tokens = u32::try_from(span.start_token).map_err(|_| {
-                Qwen3_5ExecutionError::InvalidInput {
+            let starting_position_tokens =
+                u32::try_from(span.start_token).map_err(|_| TextExecutionError::InvalidInput {
                     description: "a planned span starts beyond the u32 range",
-                }
-            })?;
+                })?;
             let span_token_ids = &group_token_ids[span.start_token..span.end_token];
             if span.interior_boundary_tokens.is_empty() {
                 consumed_image_embedding_count += self
@@ -176,7 +172,7 @@ impl Qwen3_5Model {
         block_token_count: usize,
         image_inputs: LayerMajorVisualInputs<'_>,
         request_decoder_state: &mut RequestDecoderStateStack,
-    ) -> Result<(Vec<PublishedBoundarySnapshot>, usize), Qwen3_5ExecutionError> {
+    ) -> Result<(Vec<PublishedBoundarySnapshot>, usize), TextExecutionError> {
         let layer_major_outcome = self.prefill_layer_major(
             group_token_ids,
             0,

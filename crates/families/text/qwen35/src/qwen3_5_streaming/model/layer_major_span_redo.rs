@@ -18,8 +18,8 @@
 use mlx_bridge::MlxArray;
 
 use super::layer_major_span_state::{SpanState, forget_layer_end_state};
-use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::{AstroDecoderStateCacheStateAllocationCheckpoint, RequestDecoderStateStack};
+use text_generation::execution_error::TextExecutionError;
 
 /// What one span found when it began to run through one layer.
 struct SpanRedoPoint {
@@ -45,17 +45,17 @@ impl UnconfirmedSpans {
         span_states: &[SpanState],
         request_decoder_state: &RequestDecoderStateStack,
         previous_layer_output: Option<&MlxArray>,
-    ) -> Result<(), Qwen3_5ExecutionError> {
+    ) -> Result<(), TextExecutionError> {
         let span_input = span_states
             .get(span_index)
             .and_then(|span_state| span_state.hidden_states.as_ref())
-            .ok_or(Qwen3_5ExecutionError::InvalidInput {
+            .ok_or(TextExecutionError::InvalidInput {
                 description: "a layer-major span lost its hidden states",
             })?
             .retain()?;
         let layer_state = request_decoder_state
             .layer(layer_index)
-            .ok_or(Qwen3_5ExecutionError::InvalidRequestDecoderState {
+            .ok_or(TextExecutionError::InvalidRequestDecoderState {
                 layer_index,
                 description: "decoder layer entry is missing",
             })?
@@ -97,11 +97,11 @@ impl UnconfirmedSpans {
         span_states: &mut [SpanState],
         request_decoder_state: &mut RequestDecoderStateStack,
         previous_layer_output: &mut Option<MlxArray>,
-    ) -> Result<Option<usize>, Qwen3_5ExecutionError> {
+    ) -> Result<Option<usize>, TextExecutionError> {
         let mut oldest_unconfirmed_span_index = None;
         while let Some(redo_point) = self.redo_points.pop() {
             let span_state = span_states.get_mut(redo_point.span_index).ok_or(
-                Qwen3_5ExecutionError::InvalidInput {
+                TextExecutionError::InvalidInput {
                     description: "a span redo point names a span the prompt does not have",
                 },
             )?;
@@ -114,7 +114,7 @@ impl UnconfirmedSpans {
             }
             request_decoder_state
                 .layer_mut(layer_index)
-                .ok_or(Qwen3_5ExecutionError::InvalidRequestDecoderState {
+                .ok_or(TextExecutionError::InvalidRequestDecoderState {
                     layer_index,
                     description: "decoder layer entry is missing",
                 })?

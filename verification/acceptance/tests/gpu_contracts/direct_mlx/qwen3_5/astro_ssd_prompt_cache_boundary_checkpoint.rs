@@ -1,4 +1,4 @@
-use model_serving::Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector;
+use model_serving::AstroSsdPromptCacheBoundaryCheckpointCollector;
 use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
 use crate::common::{
@@ -18,7 +18,7 @@ async fn should_collect_complete_astro_ssd_prompt_cache_boundary_tensors_in_prom
     )
     .expect("the direct MLX runtime should initialize");
     let mut collector =
-        Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector::new(vec![2_048, 4_096], 2, 2_048)
+        AstroSsdPromptCacheBoundaryCheckpointCollector::new(vec![2_048, 4_096], 2, 2_048)
             .expect("two ordered checkpoint positions should create a collector");
     let convolution_boundary_states = vec![
         runtime
@@ -84,9 +84,8 @@ async fn should_reject_mismatched_or_incomplete_boundary_tensors() {
     let recurrent_boundary_state = runtime
         .zeros(&[1, 2, 2, 2], MlxDtype::Float32)
         .expect("the recurrent boundary should be valid");
-    let mut collector =
-        Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector::new(vec![2_048], 4, 2_048)
-            .expect("one checkpoint position should create a collector");
+    let mut collector = AstroSsdPromptCacheBoundaryCheckpointCollector::new(vec![2_048], 4, 2_048)
+        .expect("one checkpoint position should create a collector");
 
     assert!(
         collector

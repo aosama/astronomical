@@ -1,42 +1,14 @@
-//! What the shared generation loop reads from a validated model artifact
-//! before and while it loads (issue #2473): the limits the engine derives at
-//! construction, the identity it reports, and the vision configuration.
-//!
-//! The loop used to hold a `ValidatedQwen3_5Artifact`, which only a Qwen 3.5
-//! checkpoint can produce. Asking this trait instead lets an engine whose
-//! artifact is validated differently, the folded Prism Hadamard pack, use the
-//! same core. The Qwen 3.5 artifact answers from its configuration exactly
-//! as the core read it before.
+//! How a validated Qwen 3.5 artifact answers the text shell's generation
+//! loop: its identity and limits from its configuration, and the geometry of
+//! its vision tower's embeddings when it has one.
 
-use crate::qwen3_5_core::artifacts::Qwen3_5VisionConfig;
+use engine_core::astro_ssd_prompt_cache::PersistentVisualEmbeddingModelContract;
+use text_generation::generation_loop::serving_artifact::TextServingArtifact;
+
 use crate::qwen3_5_core::artifacts::ValidatedQwen3_5Artifact;
+use crate::qwen3_5_core::vision::{Qwen3_5ImageProcessor, Qwen3_5VisionConfig};
 
-pub trait Qwen3_5ServingArtifact {
-    fn model_id(&self) -> &str;
-
-    fn revision(&self) -> &str;
-
-    /// The bytes of every weight file the artifact holds.
-    fn total_payload_bytes(&self) -> u64;
-
-    fn shard_count(&self) -> usize;
-
-    /// The vision tower's configuration, absent for a text-only artifact.
-    fn vision_config(&self) -> Option<&Qwen3_5VisionConfig>;
-
-    /// The model's own position range, the hard limit of a request.
-    fn maximum_position_count(&self) -> u32;
-
-    fn vocabulary_size(&self) -> u32;
-
-    fn end_of_sequence_token_ids(&self) -> &[u32];
-
-    /// The memory `context_token_count` tokens of context reserve, or `None`
-    /// when the product overflows.
-    fn context_memory_reservation_bytes(&self, context_token_count: usize) -> Option<usize>;
-}
-
-impl Qwen3_5ServingArtifact for ValidatedQwen3_5Artifact {
+impl TextServingArtifact for ValidatedQwen3_5Artifact {
     fn model_id(&self) -> &str {
         ValidatedQwen3_5Artifact::model_id(self)
     }
@@ -53,8 +25,14 @@ impl Qwen3_5ServingArtifact for ValidatedQwen3_5Artifact {
         ValidatedQwen3_5Artifact::shard_count(self)
     }
 
-    fn vision_config(&self) -> Option<&Qwen3_5VisionConfig> {
-        ValidatedQwen3_5Artifact::vision_config(self)
+    fn persistent_visual_embedding_model_contract(
+        &self,
+    ) -> Option<PersistentVisualEmbeddingModelContract> {
+        resolve_visual_embedding_model_contract(
+            self.vision_config(),
+            self.model_id(),
+            self.revision(),
+        )
     }
 
     fn maximum_position_count(&self) -> u32 {
@@ -73,4 +51,24 @@ impl Qwen3_5ServingArtifact for ValidatedQwen3_5Artifact {
         self.config()
             .context_memory_reservation_bytes(context_token_count)
     }
+}
+
+/// Pure: builds the in-memory vision tensor geometry contract used to
+/// validate both direct visual embeddings and optional disk entries. It
+/// creates no storage owner; scanning and all other disk work remain inside
+/// the branch where the `astro_ssd_prompt_cache` is enabled.
+fn resolve_visual_embedding_model_contract(
+    qwen3_5_vision_config: Option<&Qwen3_5VisionConfig>,
+    resolved_model_id: &str,
+    resolved_model_revision: &str,
+) -> Option<PersistentVisualEmbeddingModelContract> {
+    qwen3_5_vision_config.map(|vision_config| {
+        let qwen3_5_image_processor = Qwen3_5ImageProcessor::from_vision_config(vision_config);
+        PersistentVisualEmbeddingModelContract::new(
+            resolved_model_id.to_owned(),
+            resolved_model_revision.to_owned(),
+            vision_config.out_hidden_size() as usize,
+            qwen3_5_image_processor.maximum_image_token_count_after_spatial_merge(),
+        )
+    })
 }

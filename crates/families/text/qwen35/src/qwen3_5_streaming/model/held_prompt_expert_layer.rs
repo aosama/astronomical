@@ -21,7 +21,6 @@ use mlx_bridge::MlxArray;
 
 use super::feed_forward_weights::Qwen3_5MoEFeedForwardWeights;
 use super::prefill_complete_layer_prefetch::PartlyKeptLayers;
-use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_streaming::expert_streaming::expert_pager::{
     Qwen3_5ExpertPager, Qwen3_5ExpertStreamingRequestShape, Qwen3_5PagedExpertWeights,
 };
@@ -30,6 +29,7 @@ use crate::{
     PerformanceAttribution, PerformanceCounter, should_commit_multi_token_union_as_complete_layer,
 };
 use engine_core::expert_paging::QuantizedExpertPageManifest;
+use text_generation::execution_error::TextExecutionError;
 
 /// The complete page of the layer a layer-at-a-time prompt is working on.
 #[derive(Debug)]
@@ -230,7 +230,7 @@ impl Qwen3_5Model {
         selected_scores: &MlxArray,
         should_use_compiled_elementwise_graphs: bool,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<Option<MlxArray>, Qwen3_5ExecutionError> {
+    ) -> Result<Option<MlxArray>, TextExecutionError> {
         if let Some(handled) = self.dispatch_held_prompt_expert_layer(
             layer_index,
             hidden_states,
@@ -268,7 +268,7 @@ impl Qwen3_5Model {
         selected_scores: &MlxArray,
         should_use_compiled_elementwise_graphs: bool,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<Option<MlxArray>, Qwen3_5ExecutionError> {
+    ) -> Result<Option<MlxArray>, TextExecutionError> {
         let held_prompt_expert_layer = self.prompt_expert_pages_in_hand.held_layer.borrow();
         let Some(held_layer) = held_prompt_expert_layer
             .as_ref()
@@ -315,7 +315,7 @@ impl Qwen3_5Model {
         &self,
         previous_layer_output: &mut Option<MlxArray>,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<(), Qwen3_5ExecutionError> {
+    ) -> Result<(), TextExecutionError> {
         if self.astro_expert_cache.is_none() {
             return Ok(());
         }

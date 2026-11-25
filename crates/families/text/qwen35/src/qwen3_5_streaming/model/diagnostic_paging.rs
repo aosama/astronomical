@@ -3,8 +3,8 @@
 use mlx_bridge::MlxArray;
 
 use crate::PerformanceAttribution;
-use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_streaming::model::Qwen3_5Model;
+use text_generation::execution_error::TextExecutionError;
 
 use super::super::expert_streaming::expert_pager::{
     Qwen3_5ExpertPager, Qwen3_5ExpertStreamingRequestShape,
@@ -26,7 +26,7 @@ impl Qwen3_5Model {
         selected_scores: &MlxArray,
         should_use_compiled_elementwise_graphs: bool,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         let sorted_unique_expert_ids = self.copy_sorted_unique_expert_ids(selected_indices)?;
         let (streamed_expert_weights, page_manifest) = self.stream_expert_page_from_storage(
             expert_pager,
@@ -63,20 +63,23 @@ impl Qwen3_5Model {
         selected_scores: &MlxArray,
         should_use_compiled_elementwise_graphs: bool,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         let hidden_state_shape = hidden_states.shape();
         if hidden_state_shape.len() != 3 || hidden_state_shape[0] != 1 {
-            return Err(Qwen3_5ExecutionError::InvalidInput {
+            return Err(TextExecutionError::InvalidInput {
                 description: "paged prefill MoE currently expects [1, tokens, hidden] states",
             });
         }
         let token_count = hidden_state_shape[1];
         let hidden_dimension = hidden_state_shape[2];
-        let expert_count_per_token = selected_indices.shape().last().copied().ok_or(
-            Qwen3_5ExecutionError::InvalidInput {
-                description: "paged MoE selected indices must include an expert dimension",
-            },
-        )?;
+        let expert_count_per_token =
+            selected_indices
+                .shape()
+                .last()
+                .copied()
+                .ok_or(TextExecutionError::InvalidInput {
+                    description: "paged MoE selected indices must include an expert dimension",
+                })?;
         let mut token_moe_outputs = Vec::with_capacity(token_count as usize);
         for token_index in 0..token_count {
             let token_hidden_states = self.runtime.slice(

@@ -25,7 +25,7 @@ use super::Qwen3_5Model;
 use super::Qwen3_5ModelBase;
 use super::direct_expert_fetch::DirectExpertFetching;
 use super::{
-    Qwen3_5ExecutionError, Qwen3_5FeedForwardArchitecture, Qwen3_5VisionModel, Qwen3_5Weights,
+    Qwen3_5FeedForwardArchitecture, Qwen3_5VisionModel, Qwen3_5Weights, TextExecutionError,
     ValidatedQwen3_5Artifact,
 };
 use mlx_bridge::{MlxCompiledElementwiseGraphs, MlxCompiledSwiGlu, MlxMetalKernel};
@@ -40,8 +40,8 @@ impl Qwen3_5Model {
         runtime: MlxRuntime,
         validated_artifact: ValidatedQwen3_5Artifact,
         model_directory: &Path,
-        chunking: super::Qwen3_5ModelChunkingConfiguration,
-    ) -> Result<Self, Qwen3_5ExecutionError> {
+        chunking: super::TextModelChunkingConfiguration,
+    ) -> Result<Self, TextExecutionError> {
         let mut disabled_performance_attribution = PerformanceAttribution::disabled();
         Self::load_with_performance_attribution(
             runtime,
@@ -67,9 +67,9 @@ impl Qwen3_5Model {
         validated_artifact: ValidatedQwen3_5Artifact,
         model_directory: &Path,
         should_bind_vision_weights: bool,
-        chunking: super::Qwen3_5ModelChunkingConfiguration,
+        chunking: super::TextModelChunkingConfiguration,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<Self, Qwen3_5ExecutionError> {
+    ) -> Result<Self, TextExecutionError> {
         Self::load_with_performance_attribution_and_decode_astro_expert_cache_policy(
             runtime,
             validated_artifact,
@@ -91,10 +91,10 @@ impl Qwen3_5Model {
         mut validated_artifact: ValidatedQwen3_5Artifact,
         model_directory: &Path,
         should_bind_vision_weights: bool,
-        chunking: super::Qwen3_5ModelChunkingConfiguration,
+        chunking: super::TextModelChunkingConfiguration,
         decode_astro_expert_cache_policy: WorkerDecodeAstroExpertCachePolicy,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<Self, Qwen3_5ExecutionError> {
+    ) -> Result<Self, TextExecutionError> {
         // Both taken before binding, which consumes parts of the artifact.
         let expert_atlas = validated_artifact.expert_atlas().cloned();
         let (disk_embedding_rows, dense_layer_streamer) =
@@ -201,7 +201,7 @@ impl Qwen3_5Model {
 
 /// The compiled SwiGLU and elementwise graphs every forward reuses.
 fn compiled_model_graphs()
--> Result<(MlxCompiledSwiGlu, MlxCompiledElementwiseGraphs), Qwen3_5ExecutionError> {
+-> Result<(MlxCompiledSwiGlu, MlxCompiledElementwiseGraphs), TextExecutionError> {
     Ok((
         MlxCompiledSwiGlu::new()?,
         MlxCompiledElementwiseGraphs::new()?,
@@ -260,7 +260,7 @@ fn dense_streaming_sources(
         Option<Qwen3_5DiskEmbeddingRows>,
         Option<Qwen3_5DenseLayerStreamer>,
     ),
-    Qwen3_5ExecutionError,
+    TextExecutionError,
 > {
     Ok((
         dense_disk_embedding_rows(validated_artifact)?,
@@ -272,7 +272,7 @@ fn dense_streaming_sources(
 /// serves only when its text weights do not fit the limit.
 fn dense_layer_streamer(
     validated_artifact: &ValidatedQwen3_5Artifact,
-) -> Result<Option<Qwen3_5DenseLayerStreamer>, Qwen3_5ExecutionError> {
+) -> Result<Option<Qwen3_5DenseLayerStreamer>, TextExecutionError> {
     match validated_artifact.config().feed_forward_architecture() {
         Qwen3_5FeedForwardArchitecture::Dense => {
             Qwen3_5DenseLayerStreamer::from_validated_artifact(validated_artifact).map(Some)
@@ -296,7 +296,7 @@ const fn embedding_residency_of(
 /// model keeps its resident table, which its expert budget already plans.
 fn dense_disk_embedding_rows(
     validated_artifact: &ValidatedQwen3_5Artifact,
-) -> Result<Option<Qwen3_5DiskEmbeddingRows>, Qwen3_5ExecutionError> {
+) -> Result<Option<Qwen3_5DiskEmbeddingRows>, TextExecutionError> {
     match validated_artifact.config().feed_forward_architecture() {
         Qwen3_5FeedForwardArchitecture::Dense => {
             Qwen3_5DiskEmbeddingRows::from_validated_artifact(validated_artifact)
@@ -326,7 +326,7 @@ fn load_streaming_expert_runtime(
     expert_atlas: Option<&expert_atlas::AtlasManifest>,
     decode_astro_expert_cache_policy: WorkerDecodeAstroExpertCachePolicy,
     performance_attribution: &mut PerformanceAttribution,
-) -> Result<StreamingExpertRuntimeTrio, Qwen3_5ExecutionError> {
+) -> Result<StreamingExpertRuntimeTrio, TextExecutionError> {
     let ExpertTensorNameMaps {
         tensor_name_to_shard_file_name,
         stored_tensor_name_by_canonical_name,
@@ -420,7 +420,7 @@ fn build_streaming_expert_budget(
     dense_layer_streamer: Option<&Qwen3_5DenseLayerStreamer>,
     astro_decoder_state_cache_layout: &crate::AstroDecoderStateCacheLayout,
     performance_attribution: &mut PerformanceAttribution,
-) -> Result<StreamingExpertBudgetOutcome, Qwen3_5ExecutionError> {
+) -> Result<StreamingExpertBudgetOutcome, TextExecutionError> {
     let DenseStreamingGeometry {
         model_core_payload_bytes,
         dense_streaming_workspace_bytes,
@@ -435,7 +435,7 @@ fn build_streaming_expert_budget(
     let complete_expert_payload_bytes = match expert_pager {
         Some(expert_pager) => expert_pager
             .complete_expert_payload_byte_count()
-            .map_err(|_| Qwen3_5ExecutionError::InvalidInput {
+            .map_err(|_| TextExecutionError::InvalidInput {
                 description: "complete expert payload byte count overflowed during model load",
             })?,
         None => 0,
@@ -446,7 +446,7 @@ fn build_streaming_expert_budget(
     let largest_complete_expert_layer_bytes = match expert_pager {
         Some(expert_pager) => expert_pager
             .maximum_complete_expert_source_payload_bytes()
-            .map_err(|_| Qwen3_5ExecutionError::InvalidInput {
+            .map_err(|_| TextExecutionError::InvalidInput {
                 description: "complete expert source layer byte count overflowed during model load",
             })?,
         None => 0,

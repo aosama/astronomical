@@ -17,15 +17,11 @@ use std::ops::Deref;
 use mlx_bridge::{MlxArray, MlxDtype};
 use runtime_integration::{MlxRuntime, MlxRuntimeError};
 
-use crate::qwen3_5_core::decoder::{
-    Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector, RequestDecoderStateStack,
-};
 use crate::qwen3_5_core::model::Qwen3_5ModelBase;
-use crate::qwen3_5_core::model_math::error::{
-    Qwen3_5ExecutionError, invalid_request_decoder_state,
-};
 use crate::qwen3_5_core::model_math::forward_contract;
 use crate::{AstroDecoderStateCacheState, PerformanceAttribution, PerformanceOperation};
+use text_generation::execution_error::{TextExecutionError, invalid_request_decoder_state};
+use text_generation::{AstroSsdPromptCacheBoundaryCheckpointCollector, RequestDecoderStateStack};
 
 /// Target-model graph outputs retained for specialized consumers.
 pub struct Qwen3_5TargetForwardOutput {
@@ -70,11 +66,9 @@ pub struct Qwen3_5ForwardPositions<'forward> {
 
 impl Qwen3_5ForwardPositions<'_> {
     /// The rotary position offset of the forward's first token.
-    pub fn rope_offset_tokens(&self) -> Result<i32, Qwen3_5ExecutionError> {
-        i32::try_from(self.starting_position_tokens).map_err(|_| {
-            Qwen3_5ExecutionError::InvalidInput {
-                description: "starting position exceeds the MLX int32 range",
-            }
+    pub fn rope_offset_tokens(&self) -> Result<i32, TextExecutionError> {
+        i32::try_from(self.starting_position_tokens).map_err(|_| TextExecutionError::InvalidInput {
+            description: "starting position exceeds the MLX int32 range",
         })
     }
 }
@@ -94,12 +88,10 @@ pub trait Qwen3_5TargetForwardGraph: Deref<Target = Qwen3_5ModelBase> {
         hidden_states: MlxArray,
         forward_positions: Qwen3_5ForwardPositions<'_>,
         request_decoder_state: &mut RequestDecoderStateStack,
-        boundary_checkpoint_collector: Option<
-            &mut Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
-        >,
+        boundary_checkpoint_collector: Option<&mut AstroSsdPromptCacheBoundaryCheckpointCollector>,
         forward_mode: Self::ForwardMode,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError>;
+    ) -> Result<MlxArray, TextExecutionError>;
 
     /// The final-position logits of a forward over token indices.
     fn build_forward_graph(
@@ -110,7 +102,7 @@ pub trait Qwen3_5TargetForwardGraph: Deref<Target = Qwen3_5ModelBase> {
         request_decoder_state: &mut RequestDecoderStateStack,
         forward_mode: Self::ForwardMode,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         Ok(self
             .build_target_forward_graph_from_token_indices(
                 token_indices,
@@ -136,12 +128,10 @@ pub trait Qwen3_5TargetForwardGraph: Deref<Target = Qwen3_5ModelBase> {
         token_count: i32,
         starting_position_tokens: u32,
         request_decoder_state: &mut RequestDecoderStateStack,
-        boundary_checkpoint_collector: Option<
-            &mut Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
-        >,
+        boundary_checkpoint_collector: Option<&mut AstroSsdPromptCacheBoundaryCheckpointCollector>,
         forward_mode: Self::ForwardMode,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<(), Qwen3_5ExecutionError> {
+    ) -> Result<(), TextExecutionError> {
         drop(
             self.build_target_forward_graph_from_token_indices_with_position_offsets(
                 token_indices,
@@ -165,12 +155,10 @@ pub trait Qwen3_5TargetForwardGraph: Deref<Target = Qwen3_5ModelBase> {
         token_ids: &[u32],
         starting_position_tokens: u32,
         request_decoder_state: &mut RequestDecoderStateStack,
-        boundary_checkpoint_collector: Option<
-            &mut Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
-        >,
+        boundary_checkpoint_collector: Option<&mut AstroSsdPromptCacheBoundaryCheckpointCollector>,
         forward_mode: Self::ForwardMode,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<Qwen3_5TargetForwardOutput, Qwen3_5ExecutionError> {
+    ) -> Result<Qwen3_5TargetForwardOutput, TextExecutionError> {
         self.build_target_forward_graph_with_position_offsets(
             token_ids,
             starting_position_tokens,
@@ -189,12 +177,10 @@ pub trait Qwen3_5TargetForwardGraph: Deref<Target = Qwen3_5ModelBase> {
         starting_position_tokens: u32,
         token_position_offsets: Option<&MlxArray>,
         request_decoder_state: &mut RequestDecoderStateStack,
-        boundary_checkpoint_collector: Option<
-            &mut Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
-        >,
+        boundary_checkpoint_collector: Option<&mut AstroSsdPromptCacheBoundaryCheckpointCollector>,
         forward_mode: Self::ForwardMode,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<Qwen3_5TargetForwardOutput, Qwen3_5ExecutionError> {
+    ) -> Result<Qwen3_5TargetForwardOutput, TextExecutionError> {
         let (token_indices, token_count) = self.validated_token_indices(
             token_ids,
             starting_position_tokens,
@@ -223,12 +209,10 @@ pub trait Qwen3_5TargetForwardGraph: Deref<Target = Qwen3_5ModelBase> {
         token_count: i32,
         starting_position_tokens: u32,
         request_decoder_state: &mut RequestDecoderStateStack,
-        boundary_checkpoint_collector: Option<
-            &mut Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
-        >,
+        boundary_checkpoint_collector: Option<&mut AstroSsdPromptCacheBoundaryCheckpointCollector>,
         forward_mode: Self::ForwardMode,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<Qwen3_5TargetForwardOutput, Qwen3_5ExecutionError> {
+    ) -> Result<Qwen3_5TargetForwardOutput, TextExecutionError> {
         self.build_target_forward_graph_from_token_indices_with_position_offsets(
             token_indices,
             Qwen3_5ForwardPositions {
@@ -250,13 +234,11 @@ pub trait Qwen3_5TargetForwardGraph: Deref<Target = Qwen3_5ModelBase> {
         token_indices: &MlxArray,
         forward_positions: Qwen3_5ForwardPositions<'_>,
         request_decoder_state: &mut RequestDecoderStateStack,
-        boundary_checkpoint_collector: Option<
-            &mut Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
-        >,
+        boundary_checkpoint_collector: Option<&mut AstroSsdPromptCacheBoundaryCheckpointCollector>,
         forward_mode: Self::ForwardMode,
         performance_attribution: &mut PerformanceAttribution,
         should_materialize_vocabulary_logits: bool,
-    ) -> Result<Qwen3_5TargetForwardOutput, Qwen3_5ExecutionError> {
+    ) -> Result<Qwen3_5TargetForwardOutput, TextExecutionError> {
         let hidden_states = self.embedding_lookup(token_indices)?;
         self.build_target_forward_graph_from_embeddings_with_position_offsets(
             hidden_states,
@@ -276,12 +258,10 @@ pub trait Qwen3_5TargetForwardGraph: Deref<Target = Qwen3_5ModelBase> {
         token_count: i32,
         starting_position_tokens: u32,
         request_decoder_state: &mut RequestDecoderStateStack,
-        boundary_checkpoint_collector: Option<
-            &mut Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
-        >,
+        boundary_checkpoint_collector: Option<&mut AstroSsdPromptCacheBoundaryCheckpointCollector>,
         forward_mode: Self::ForwardMode,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         Ok(self
             .build_target_forward_graph_from_embeddings(
                 hidden_states,
@@ -302,12 +282,10 @@ pub trait Qwen3_5TargetForwardGraph: Deref<Target = Qwen3_5ModelBase> {
         token_count: i32,
         starting_position_tokens: u32,
         request_decoder_state: &mut RequestDecoderStateStack,
-        boundary_checkpoint_collector: Option<
-            &mut Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
-        >,
+        boundary_checkpoint_collector: Option<&mut AstroSsdPromptCacheBoundaryCheckpointCollector>,
         forward_mode: Self::ForwardMode,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<Qwen3_5TargetForwardOutput, Qwen3_5ExecutionError> {
+    ) -> Result<Qwen3_5TargetForwardOutput, TextExecutionError> {
         self.build_target_forward_graph_from_embeddings_with_position_offsets(
             hidden_states,
             Qwen3_5ForwardPositions {
@@ -331,13 +309,11 @@ pub trait Qwen3_5TargetForwardGraph: Deref<Target = Qwen3_5ModelBase> {
         hidden_states: MlxArray,
         forward_positions: Qwen3_5ForwardPositions<'_>,
         request_decoder_state: &mut RequestDecoderStateStack,
-        boundary_checkpoint_collector: Option<
-            &mut Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
-        >,
+        boundary_checkpoint_collector: Option<&mut AstroSsdPromptCacheBoundaryCheckpointCollector>,
         forward_mode: Self::ForwardMode,
         performance_attribution: &mut PerformanceAttribution,
         should_materialize_vocabulary_logits: bool,
-    ) -> Result<Qwen3_5TargetForwardOutput, Qwen3_5ExecutionError> {
+    ) -> Result<Qwen3_5TargetForwardOutput, TextExecutionError> {
         let hidden_states = self.build_decoder_layers(
             hidden_states,
             forward_positions,
@@ -348,9 +324,7 @@ pub trait Qwen3_5TargetForwardGraph: Deref<Target = Qwen3_5ModelBase> {
         )?;
         if !should_materialize_vocabulary_logits {
             return Ok(Qwen3_5TargetForwardOutput {
-                final_logits: hidden_states
-                    .retain()
-                    .map_err(Qwen3_5ExecutionError::from)?,
+                final_logits: hidden_states.retain().map_err(TextExecutionError::from)?,
                 pre_final_normalization_hidden_states: hidden_states,
             });
         }
@@ -376,7 +350,7 @@ impl Qwen3_5ModelBase {
         starting_position_tokens: u32,
         token_position_offsets: Option<&MlxArray>,
         request_decoder_state: &RequestDecoderStateStack,
-    ) -> Result<(MlxArray, i32), Qwen3_5ExecutionError> {
+    ) -> Result<(MlxArray, i32), TextExecutionError> {
         let token_count = forward_contract::validate_forward_input(
             token_ids,
             starting_position_tokens,
@@ -389,7 +363,7 @@ impl Qwen3_5ModelBase {
         let mut signed_token_ids = Vec::with_capacity(token_ids.len());
         for token_id in token_ids {
             signed_token_ids.push(i32::try_from(*token_id).map_err(|_| {
-                Qwen3_5ExecutionError::InvalidInput {
+                TextExecutionError::InvalidInput {
                     description: "token ID exceeds the MLX int32 range",
                 }
             })?);
@@ -407,7 +381,7 @@ impl Qwen3_5ModelBase {
         &self,
         hidden_states: &MlxArray,
         token_count: i32,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         let normalized_states = self.runtime.rms_norm(
             hidden_states,
             &self.weights.final_normalization_weight,
@@ -426,7 +400,7 @@ impl Qwen3_5ModelBase {
         )?;
         self.runtime
             .astype(&final_logits, MlxDtype::Float32)
-            .map_err(Qwen3_5ExecutionError::from)
+            .map_err(TextExecutionError::from)
     }
 
     /// How many decoder layers a forward runs before submitting the finished
@@ -449,9 +423,9 @@ impl Qwen3_5ModelBase {
 pub fn validated_layer_decoder_state(
     request_decoder_state: &mut RequestDecoderStateStack,
     layer_index: usize,
-) -> Result<&mut AstroDecoderStateCacheState, Qwen3_5ExecutionError> {
+) -> Result<&mut AstroDecoderStateCacheState, TextExecutionError> {
     let layer_model_state = request_decoder_state.layer_mut(layer_index).ok_or(
-        Qwen3_5ExecutionError::InvalidRequestDecoderState {
+        TextExecutionError::InvalidRequestDecoderState {
             layer_index,
             description: "decoder layer entry is missing",
         },

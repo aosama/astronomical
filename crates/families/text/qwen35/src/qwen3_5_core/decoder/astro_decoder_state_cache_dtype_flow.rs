@@ -21,7 +21,7 @@ use crate::qwen3_5_core::artifacts::{
     QuantizationMode, QuantizedExpertLayerPlan, SafetensorsDtype,
 };
 use crate::qwen3_5_core::decoder::Qwen3_5AstroDecoderStateCacheLayerDtypes;
-use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
+use text_generation::execution_error::TextExecutionError;
 
 /// The dtype contract one affine weight carries into the type flow. Each
 /// engine's weight enum reduces to this before the shared replay runs, so the
@@ -92,7 +92,7 @@ pub struct MixtureOfExpertsDtypeFlow {
 /// attention output dtype for one layer.
 pub fn linear_attention_dtypes(
     flow: &LinearAttentionDtypeFlow,
-) -> Result<(Qwen3_5AstroDecoderStateCacheLayerDtypes, MlxDtype), Qwen3_5ExecutionError> {
+) -> Result<(Qwen3_5AstroDecoderStateCacheLayerDtypes, MlxDtype), TextExecutionError> {
     let convolution_state_dtype = affine_output_dtype(
         flow.normalized_input_dtype,
         &flow.input_queries_keys_values_projection,
@@ -122,7 +122,7 @@ pub fn linear_attention_dtypes(
 /// output dtype for one layer.
 pub fn full_attention_dtypes(
     flow: &FullAttentionDtypeFlow,
-) -> Result<(Qwen3_5AstroDecoderStateCacheLayerDtypes, MlxDtype), Qwen3_5ExecutionError> {
+) -> Result<(Qwen3_5AstroDecoderStateCacheLayerDtypes, MlxDtype), TextExecutionError> {
     let query_projection_dtype =
         affine_output_dtype(flow.normalized_input_dtype, &flow.query_projection)?;
     let normalized_query_dtype = promote_floating_dtypes(
@@ -150,7 +150,7 @@ pub fn full_attention_dtypes(
 }
 
 /// Derives the output dtype of one dense MLP.
-pub fn dense_mlp_output_dtype(flow: &DenseMlpDtypeFlow) -> Result<MlxDtype, Qwen3_5ExecutionError> {
+pub fn dense_mlp_output_dtype(flow: &DenseMlpDtypeFlow) -> Result<MlxDtype, TextExecutionError> {
     let gate_dtype = affine_output_dtype(flow.normalized_attention_dtype, &flow.gate_projection)?;
     let up_dtype = affine_output_dtype(flow.normalized_attention_dtype, &flow.up_projection)?;
     let activated_dtype = promote_floating_dtypes(gate_dtype, up_dtype)?;
@@ -164,7 +164,7 @@ pub fn dense_mlp_output_dtype(flow: &DenseMlpDtypeFlow) -> Result<MlxDtype, Qwen
 pub fn mixture_of_experts_output_dtype(
     flow: &MixtureOfExpertsDtypeFlow,
     expert_layer_plan: &QuantizedExpertLayerPlan,
-) -> Result<MlxDtype, Qwen3_5ExecutionError> {
+) -> Result<MlxDtype, TextExecutionError> {
     let sparse_gate_dtype = expert_projection_output_dtype(
         flow.normalized_attention_dtype,
         expert_layer_plan,
@@ -204,7 +204,7 @@ pub fn mixture_of_experts_output_dtype(
 /// contract.
 pub fn embedding_output_dtype(
     embedding_contract: &AffineDtypeContract,
-) -> Result<MlxDtype, Qwen3_5ExecutionError> {
+) -> Result<MlxDtype, TextExecutionError> {
     match embedding_contract {
         AffineDtypeContract::Native { weight } => Ok(*weight),
         // A codebook page is never an embedding table; it only appears on the
@@ -221,7 +221,7 @@ pub fn embedding_output_dtype(
 pub fn affine_output_dtype(
     activation_dtype: MlxDtype,
     affine_contract: &AffineDtypeContract,
-) -> Result<MlxDtype, Qwen3_5ExecutionError> {
+) -> Result<MlxDtype, TextExecutionError> {
     let affine_parameter_dtype = match affine_contract {
         AffineDtypeContract::Native { weight } => *weight,
         // Codebook levels decode to bfloat16 weights on the materializing path
@@ -241,7 +241,7 @@ pub fn expert_projection_output_dtype(
     activation_dtype: MlxDtype,
     expert_layer_plan: &QuantizedExpertLayerPlan,
     projection_name: &str,
-) -> Result<MlxDtype, Qwen3_5ExecutionError> {
+) -> Result<MlxDtype, TextExecutionError> {
     if matches!(
         expert_layer_plan.quantization_mode_for_projection(projection_name),
         QuantizationMode::NativeBfloat16 | QuantizationMode::Jangtq2Codebook
@@ -261,7 +261,7 @@ pub fn expert_parameter_dtype(
     expert_layer_plan: &QuantizedExpertLayerPlan,
     projection_name: &str,
     parameter_name: &str,
-) -> Result<MlxDtype, Qwen3_5ExecutionError> {
+) -> Result<MlxDtype, TextExecutionError> {
     let tensor_source = expert_layer_plan
         .tensor_sources
         .iter()
@@ -269,14 +269,14 @@ pub fn expert_parameter_dtype(
             tensor_source.projection_name == projection_name
                 && tensor_source.parameter_name == parameter_name
         })
-        .ok_or(Qwen3_5ExecutionError::InvalidInput {
+        .ok_or(TextExecutionError::InvalidInput {
             description: "expert layer plan is missing an affine parameter dtype",
         })?;
     match tensor_source.dtype {
         SafetensorsDtype::Float16 => Ok(MlxDtype::Float16),
         SafetensorsDtype::BFloat16 => Ok(MlxDtype::BFloat16),
         SafetensorsDtype::Float32 => Ok(MlxDtype::Float32),
-        _ => Err(Qwen3_5ExecutionError::InvalidInput {
+        _ => Err(TextExecutionError::InvalidInput {
             description: "expert affine parameter has a non-floating dtype",
         }),
     }
@@ -286,7 +286,7 @@ pub fn expert_parameter_dtype(
 pub fn promote_floating_dtypes(
     left_dtype: MlxDtype,
     right_dtype: MlxDtype,
-) -> Result<MlxDtype, Qwen3_5ExecutionError> {
+) -> Result<MlxDtype, TextExecutionError> {
     // MLX promotes mixed FP16/BF16 to FP32 because neither 16-bit format can
     // represent the other's complete range and precision contract.
     match (left_dtype, right_dtype) {
@@ -296,7 +296,7 @@ pub fn promote_floating_dtypes(
         }
         (MlxDtype::Float16, MlxDtype::Float16) => Ok(MlxDtype::Float16),
         (MlxDtype::BFloat16, MlxDtype::BFloat16) => Ok(MlxDtype::BFloat16),
-        _ => Err(Qwen3_5ExecutionError::InvalidInput {
+        _ => Err(TextExecutionError::InvalidInput {
             description: "decoder dtype flow encountered an unsupported MLX dtype",
         }),
     }
@@ -305,12 +305,12 @@ pub fn promote_floating_dtypes(
 /// Narrows one MLX dtype to the dtype set the `astro_decoder_state_cache` can serialize.
 pub fn astro_decoder_state_cache_tensor_dtype(
     mlx_dtype: MlxDtype,
-) -> Result<AstroDecoderStateCacheTensorDtype, Qwen3_5ExecutionError> {
+) -> Result<AstroDecoderStateCacheTensorDtype, TextExecutionError> {
     match mlx_dtype {
         MlxDtype::Float16 => Ok(AstroDecoderStateCacheTensorDtype::Float16),
         MlxDtype::BFloat16 => Ok(AstroDecoderStateCacheTensorDtype::BFloat16),
         MlxDtype::Float32 => Ok(AstroDecoderStateCacheTensorDtype::Float32),
-        _ => Err(Qwen3_5ExecutionError::InvalidInput {
+        _ => Err(TextExecutionError::InvalidInput {
             description: "astro decoder state cache state has an unsupported MLX dtype",
         }),
     }

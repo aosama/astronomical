@@ -3,21 +3,21 @@
 //! the contract the store is opened with.
 
 use crate::prism_hadamard_qwen35::model::PrismHadamardTextModel;
-use crate::qwen3_5_core::astro_ssd_prompt_cache_capture::Qwen3_5AstroSsdPromptCacheCapture;
-use crate::qwen3_5_core::shared_execution::astro_ssd_prompt_cache_restore::Qwen3_5AstroSsdPromptCacheRestoreHooks;
 use crate::{
     AstroDecoderStateCacheLayout, AstroSsdPromptCacheModelContract,
     AstroSsdPromptCacheModelContractError, InferenceEngineError,
 };
 use engine_core::astro_ssd_prompt_cache::quota_bounded_contract::resolve_quota_bounded_astro_ssd_prompt_cache_contract;
+use text_generation::astro_ssd_prompt_cache_capture::TextAstroSsdPromptCacheCapture;
+use text_generation::generation_loop::astro_ssd_prompt_cache_restore::TextAstroSsdPromptCacheRestoreHooks;
 
 use super::{PrismHadamardQwen35ActiveGeneration, PrismHadamardQwen35InferenceExecution};
 
 /// A folded pack keeps no prefix between replies and leases no room from a
 /// memory governor, so every restore hook keeps its default.
-impl Qwen3_5AstroSsdPromptCacheRestoreHooks for PrismHadamardQwen35InferenceExecution {}
+impl TextAstroSsdPromptCacheRestoreHooks for PrismHadamardQwen35InferenceExecution {}
 
-impl Qwen3_5AstroSsdPromptCacheCapture for PrismHadamardQwen35InferenceExecution {
+impl TextAstroSsdPromptCacheCapture for PrismHadamardQwen35InferenceExecution {
     /// The folded pack holds every weight and has nothing to evict, so the
     /// one retry after a publication blocked by the MLX active-memory limit
     /// repeats the publication unchanged, as the resident engine's does.

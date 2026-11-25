@@ -30,8 +30,8 @@ use crate::decision_models::qwen_backbone::HoldsDecisionBackbone;
 use crate::linear_adapters::LinearAdapters;
 use crate::qwen3_5_core::model::layer_additions::Qwen3_5LayerAdditions;
 use crate::qwen3_5_core::model_math::differentiable_gated_delta::DifferentiableGatedDelta;
-use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_resident::{DecoderLayerRecomputation, Qwen3_5ResidentModel};
+use qwen35::TextExecutionError;
 
 /// Every decoder layer of a decision model's backbone, recomputed during
 /// the backward pass.
@@ -108,9 +108,9 @@ impl DecoderLayerRecomputation for CheckpointedDecoderLayers {
         hidden_states: &MlxArray,
         layer_index: usize,
         token_count: i32,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         self.checkpointed_layer(hidden_states, layer_index, token_count)
-            .map_err(Qwen3_5ExecutionError::from)
+            .map_err(TextExecutionError::from)
     }
 }
 
@@ -257,7 +257,7 @@ fn check_adapter_input_count(
     )))
 }
 
-fn layer_failure(layer_error: Qwen3_5ExecutionError) -> MlxCError {
+fn layer_failure(layer_error: TextExecutionError) -> MlxCError {
     recomputation_failure(&layer_error.to_string())
 }
 

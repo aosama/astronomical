@@ -1,5 +1,5 @@
 use model_serving::{
-    ExpertPagingError, InferenceEngineError, Qwen3_5ExecutionError, WorkerRuntimeError,
+    ExpertPagingError, InferenceEngineError, TextExecutionError, WorkerRuntimeError,
 };
 use runtime_integration::MlxRuntimeError;
 
@@ -9,7 +9,7 @@ fn should_include_underlying_mlx_operation_in_worker_fatal_error_text() {
         operation: "evaluate Qwen3.5-MoE gated-delta decay graph",
         description: "simulated native MLX graph execution failure".to_owned(),
     };
-    let qwen3_5_execution_error = Qwen3_5ExecutionError::from(mlx_runtime_error);
+    let qwen3_5_execution_error = TextExecutionError::from(mlx_runtime_error);
     let inference_engine_error = InferenceEngineError::from(qwen3_5_execution_error);
     let worker_runtime_error = WorkerRuntimeError::InferenceEngineGenerationFailed {
         reason: inference_engine_error.to_string(),
@@ -34,7 +34,7 @@ fn should_include_underlying_mlx_operation_in_worker_fatal_error_text() {
 #[test]
 fn should_translate_native_mlx_capacity_rejection_to_an_invalid_request() {
     let qwen3_5_execution_error =
-        Qwen3_5ExecutionError::from(MlxRuntimeError::ActiveMemoryLimitExceeded {
+        TextExecutionError::from(MlxRuntimeError::ActiveMemoryLimitExceeded {
             active_memory_bytes: 9_900_000_000,
             attempted_allocation_bytes: 300_000_000,
             allowed_active_memory_bytes: 10_100_000_000,
@@ -51,7 +51,7 @@ fn should_translate_native_mlx_capacity_rejection_to_an_invalid_request() {
 
 #[test]
 fn should_translate_prefixed_native_capacity_rejection_to_an_invalid_request() {
-    let qwen3_5_execution_error = Qwen3_5ExecutionError::from(ExpertPagingError::NativeRuntime(
+    let qwen3_5_execution_error = TextExecutionError::from(ExpertPagingError::NativeRuntime(
         MlxRuntimeError::ActiveMemoryLimitExceeded {
             active_memory_bytes: 35_346_771_214,
             attempted_allocation_bytes: 3_538_944,

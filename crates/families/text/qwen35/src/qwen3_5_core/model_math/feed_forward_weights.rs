@@ -3,9 +3,9 @@ use std::collections::HashMap;
 use mlx_bridge::MlxArray;
 
 use super::decoder_layer_weights::Qwen3_5AffineWeights;
-use super::error::Qwen3_5ExecutionError;
 use super::weights;
 use crate::qwen3_5_core::configuration::Qwen3_5Config;
+use text_generation::execution_error::TextExecutionError;
 
 /// Router gate weights that can be affine-quantized or plain bfloat16.
 #[derive(Debug)]
@@ -49,7 +49,7 @@ pub fn bind_qwen3_5_moe_feed_forward_weights(
     bound_tensors: &mut HashMap<String, MlxArray>,
     qwen3_5_config: &Qwen3_5Config,
     decoder_layer_prefix: &str,
-) -> Result<Qwen3_5MoEFeedForwardWeights, Qwen3_5ExecutionError> {
+) -> Result<Qwen3_5MoEFeedForwardWeights, TextExecutionError> {
     let mixture_of_experts_prefix = format!("{decoder_layer_prefix}.mlp");
     let gate_module_name = format!("{mixture_of_experts_prefix}.gate");
     let gate_scales_name = format!("{gate_module_name}.scales");

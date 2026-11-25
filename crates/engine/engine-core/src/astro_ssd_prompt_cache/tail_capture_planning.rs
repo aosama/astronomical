@@ -2,7 +2,7 @@
 //! streaming and resident engines: which tail span a terminal prefill chunk
 //! can capture, which causal input the tail block binds, and the tail block's
 //! identity. Extraction and publication of the tail live in
-//! `qwen3_5_core::astro_ssd_prompt_cache_capture::tail_capture`.
+//! `text_generation::astro_ssd_prompt_cache_capture::tail_capture`.
 
 use crate::astro_ssd_prompt_cache::block_causal_input::AstroSsdPromptCacheBlockCausalInput;
 use crate::astro_ssd_prompt_cache::block_key::{

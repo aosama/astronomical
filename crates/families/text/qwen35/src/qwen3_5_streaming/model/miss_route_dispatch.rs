@@ -7,9 +7,9 @@
 
 use mlx_bridge::MlxArray;
 
-use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_streaming::model::Qwen3_5Model;
 use crate::{PerformanceAttribution, PerformanceCounter};
+use text_generation::execution_error::TextExecutionError;
 
 use super::super::expert_streaming::expert_pager::Qwen3_5ExpertPager;
 use super::Qwen3_5MoEPagedExecutionMode;
@@ -34,7 +34,7 @@ impl Qwen3_5Model {
         paged_execution_mode: Qwen3_5MoEPagedExecutionMode,
         should_use_compiled_elementwise_graphs: bool,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         performance_attribution.record_counter(
             PerformanceCounter::RetainedRouteAssignmentMissCount,
             u64::try_from(selected_expert_ids.len()).unwrap_or(u64::MAX),
@@ -104,7 +104,7 @@ impl Qwen3_5Model {
         paged_execution_mode: Qwen3_5MoEPagedExecutionMode,
         should_use_compiled_elementwise_graphs: bool,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         let production_default_paging =
             paged_execution_mode == Qwen3_5MoEPagedExecutionMode::ProductionDefault;
         let route_coverage = self.record_decode_route_coverage(

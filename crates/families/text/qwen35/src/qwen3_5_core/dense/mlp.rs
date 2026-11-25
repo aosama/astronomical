@@ -5,8 +5,8 @@ use mlx_bridge::MlxArray;
 use crate::qwen3_5_core::configuration::Qwen3_5Config;
 use crate::qwen3_5_core::model::Qwen3_5ModelBase;
 use crate::qwen3_5_core::model_math::dense_projection::Qwen3_5DenseProjection;
-use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_core::model_math::weights;
+use text_generation::execution_error::TextExecutionError;
 
 /// Pre-bound projections for one dense Qwen3.5 SwiGLU MLP layer.
 #[derive(Debug)]
@@ -28,7 +28,7 @@ pub fn bind_qwen3_5_dense_mlp_weights(
     bound_tensors: &mut HashMap<String, MlxArray>,
     qwen3_5_config: &Qwen3_5Config,
     decoder_layer_prefix: &str,
-) -> Result<Qwen3_5DenseMlpWeights, Qwen3_5ExecutionError> {
+) -> Result<Qwen3_5DenseMlpWeights, TextExecutionError> {
     let dense_mlp_prefix = format!("{decoder_layer_prefix}.mlp");
     Ok(Qwen3_5DenseMlpWeights {
         gate_projection: weights::take_dense_projection(
@@ -54,7 +54,7 @@ impl Qwen3_5ModelBase {
         &self,
         normalized_attention: &MlxArray,
         dense_mlp_weights: &Qwen3_5DenseMlpWeights,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         let gate_activations =
             self.quantized_linear(normalized_attention, &dense_mlp_weights.gate_projection)?;
         let up_activations =

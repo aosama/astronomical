@@ -16,14 +16,14 @@ use super::{PrismHadamardTextModel, request_decoder_state_evaluation_arrays};
 use crate::inference_engine::contract::ExpertResidencyTelemetry;
 use crate::memory::MemoryReserveSnapshot;
 use crate::memory::telemetry::MlxActiveMemoryBreakdown;
-use crate::qwen3_5_core::engine_errors::qwen3_5_runtime_error;
-use crate::qwen3_5_core::model::memory_breakdown::Qwen3_5MemoryOwnership;
-use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
-use crate::qwen3_5_core::shared_execution::text_model::Qwen3_5TextModel;
 use crate::{InferenceEngineError, PerformanceAttribution, PerformanceOperation};
 use crate::{RequestDecoderStateStack, memory};
+use text_generation::engine_errors::fatal_runtime_error;
+use text_generation::execution_error::TextExecutionError;
+use text_generation::model::memory_breakdown::TextModelMemoryOwnership;
+use text_generation::model::text_model::TextModel;
 
-impl Qwen3_5MemoryOwnership for PrismHadamardTextModel {
+impl TextModelMemoryOwnership for PrismHadamardTextModel {
     /// The ceiling MLX enforces right now. The Prism engine applies every
     /// ceiling change to this runtime, so the native limit is the engine's
     /// ceiling; an unreadable limit reads as zero, leaving no headroom to
@@ -51,7 +51,7 @@ impl Qwen3_5MemoryOwnership for PrismHadamardTextModel {
 
 // Named calls: method syntax inside these bodies would resolve to the trait
 // itself if an inherent method were ever renamed, recursing forever.
-impl Qwen3_5TextModel for PrismHadamardTextModel {
+impl TextModel for PrismHadamardTextModel {
     fn observed_expert_memory_mode(&self) -> ExpertMemoryMode {
         ExpertMemoryMode::Resident
     }
@@ -73,9 +73,7 @@ impl Qwen3_5TextModel for PrismHadamardTextModel {
     }
 
     fn memory_snapshot_for_telemetry(&self) -> Result<MlxMemorySnapshot, InferenceEngineError> {
-        self.runtime
-            .memory_snapshot()
-            .map_err(qwen3_5_runtime_error)
+        self.runtime.memory_snapshot().map_err(fatal_runtime_error)
     }
 
     /// The same floor the Prism engine computes at load.
@@ -100,7 +98,7 @@ impl Qwen3_5TextModel for PrismHadamardTextModel {
         starting_position_tokens: u32,
         request_decoder_state: &mut RequestDecoderStateStack,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<(), Qwen3_5ExecutionError> {
+    ) -> Result<(), TextExecutionError> {
         let token_indices = self.token_indices(prompt_chunk_token_ids)?;
         let final_hidden_state_row = performance_attribution.measure_operation(
             PerformanceOperation::PromptPrefillAdvanceSpan,
@@ -129,7 +127,7 @@ impl Qwen3_5TextModel for PrismHadamardTextModel {
         starting_position_tokens: u32,
         request_decoder_state: &mut RequestDecoderStateStack,
         _performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         let token_indices = self.token_indices(forwarded_token_ids)?;
         Ok(PrismHadamardTextModel::forward_pass(
             self,
@@ -145,7 +143,7 @@ impl Qwen3_5TextModel for PrismHadamardTextModel {
         &self,
         sampled_generated_token: &MlxArray,
         request_decoder_state: &RequestDecoderStateStack,
-    ) -> Result<(), Qwen3_5ExecutionError> {
+    ) -> Result<(), TextExecutionError> {
         self.runtime
             .async_eval_arrays(&request_decoder_state_evaluation_arrays(
                 request_decoder_state,
@@ -159,7 +157,7 @@ impl PrismHadamardTextModel {
     /// The `[1, token_count]` index array of `token_ids`. Each id keeps its
     /// bits, as the Prism engine's own conversion does; the serving checks
     /// already hold every id inside the vocabulary.
-    fn token_indices(&self, token_ids: &[u32]) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    fn token_indices(&self, token_ids: &[u32]) -> Result<MlxArray, TextExecutionError> {
         let signed_token_ids: Vec<i32> = token_ids.iter().copied().map(u32::cast_signed).collect();
         Ok(self
             .runtime

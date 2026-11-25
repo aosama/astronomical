@@ -8,15 +8,15 @@ use crate::prism_hadamard_qwen35::engine::execution::PrismRequestExtension;
 use crate::prism_hadamard_qwen35::engine::fixture_engine_test_support::{
     LoadedFixtureEngine, loaded_fixture_engine,
 };
-use crate::qwen3_5_core::engine_request_test_support::test_engine_request;
 use crate::structured_generation::StructuredTokenConstraint;
-use crate::{GeneratedToken, InferenceEngineError, MlxInferenceExecution, Qwen3_5InferenceRequest};
+use crate::{GeneratedToken, InferenceEngineError, MlxInferenceExecution, TextInferenceRequest};
+use text_generation::engine_request_test_support::test_engine_request;
 
 const PROMPT_TOKEN_IDS: [u32; 3] = [11, 12, 13];
 
 /// A greedy request: temperature zero selects the highest logit.
-fn greedy_request(request_id: u64, maximum_output_tokens: u16) -> Qwen3_5InferenceRequest {
-    Qwen3_5InferenceRequest::new_sampling(
+fn greedy_request(request_id: u64, maximum_output_tokens: u16) -> TextInferenceRequest {
+    TextInferenceRequest::new_sampling(
         RequestId::new(request_id),
         PROMPT_TOKEN_IDS.to_vec(),
         maximum_output_tokens,
@@ -153,7 +153,7 @@ fn should_force_the_thinking_transition_once_the_budget_is_spent() {
 fn should_finalize_the_request_at_once_when_a_step_fails() {
     let mut fixture_engine = loaded_fixture_engine(|_| {});
     let sampled_request =
-        Qwen3_5InferenceRequest::new(RequestId::new(74), PROMPT_TOKEN_IDS.to_vec(), 4);
+        TextInferenceRequest::new(RequestId::new(74), PROMPT_TOKEN_IDS.to_vec(), 4);
     fixture_engine
         .execution
         .start_generation(sampled_request)

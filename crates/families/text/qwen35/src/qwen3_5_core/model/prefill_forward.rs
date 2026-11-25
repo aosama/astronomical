@@ -10,14 +10,14 @@
 use mlx_bridge::MlxArray;
 
 use crate::PerformanceAttribution;
-use crate::qwen3_5_core::decoder::{
-    Qwen3_5AstroSsdPromptCacheBoundaryCheckpoint,
-    Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector, RequestDecoderStateStack,
-};
 use crate::qwen3_5_core::model::Qwen3_5ModelBase;
-use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_core::model_math::forward_contract;
 use crate::qwen3_5_core::vision::visual_embedding_injection;
+use text_generation::execution_error::TextExecutionError;
+use text_generation::{
+    AstroSsdPromptCacheBoundaryCheckpoint, AstroSsdPromptCacheBoundaryCheckpointCollector,
+    RequestDecoderStateStack,
+};
 
 use super::target_forward_graph::Qwen3_5TargetForwardGraph;
 
@@ -25,7 +25,7 @@ use super::target_forward_graph::Qwen3_5TargetForwardGraph;
 /// read, and the `astro_ssd_prompt_cache` boundary checkpoints it captured.
 pub struct Qwen3_5BoundaryCheckpointPrefillOutcome {
     pub consumed_visual_embedding_count: usize,
-    pub boundary_checkpoints: Vec<Qwen3_5AstroSsdPromptCacheBoundaryCheckpoint>,
+    pub boundary_checkpoints: Vec<AstroSsdPromptCacheBoundaryCheckpoint>,
 }
 
 /// A Qwen3.5 text model's prefill forwards. A model supplies how it
@@ -40,11 +40,9 @@ pub trait Qwen3_5PrefillForward: Qwen3_5TargetForwardGraph {
     fn evaluate_prefill_decoder_state(
         &self,
         request_decoder_state: &RequestDecoderStateStack,
-        boundary_checkpoint_collector: Option<
-            &Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
-        >,
+        boundary_checkpoint_collector: Option<&AstroSsdPromptCacheBoundaryCheckpointCollector>,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<(), Qwen3_5ExecutionError>;
+    ) -> Result<(), TextExecutionError>;
 
     // Visual-prefill inputs stay explicit rather than introducing a parameter facade.
     #[allow(clippy::too_many_arguments)]
@@ -57,7 +55,7 @@ pub trait Qwen3_5PrefillForward: Qwen3_5TargetForwardGraph {
         request_decoder_state: &mut RequestDecoderStateStack,
         image_pad_token_id: u32,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<usize, Qwen3_5ExecutionError> {
+    ) -> Result<usize, TextExecutionError> {
         let consumed_visual_embedding_count = self.build_visual_prefill_graph(
             chunk_token_ids,
             starting_position_tokens,
@@ -81,11 +79,9 @@ pub trait Qwen3_5PrefillForward: Qwen3_5TargetForwardGraph {
         starting_visual_embedding_index: usize,
         request_decoder_state: &mut RequestDecoderStateStack,
         image_pad_token_id: u32,
-        boundary_checkpoint_collector: Option<
-            &mut Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
-        >,
+        boundary_checkpoint_collector: Option<&mut AstroSsdPromptCacheBoundaryCheckpointCollector>,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<usize, Qwen3_5ExecutionError> {
+    ) -> Result<usize, TextExecutionError> {
         let token_count = forward_contract::validate_forward_input(
             chunk_token_ids,
             starting_position_tokens,
@@ -130,9 +126,9 @@ pub trait Qwen3_5PrefillForward: Qwen3_5TargetForwardGraph {
         completed_prefill_chunk_tokens: Vec<usize>,
         checkpoint_interval_token_count: usize,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<Qwen3_5BoundaryCheckpointPrefillOutcome, Qwen3_5ExecutionError> {
+    ) -> Result<Qwen3_5BoundaryCheckpointPrefillOutcome, TextExecutionError> {
         let mut boundary_checkpoint_collector =
-            Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector::new(
+            AstroSsdPromptCacheBoundaryCheckpointCollector::new(
                 completed_prefill_chunk_tokens.clone(),
                 self.astro_decoder_state_cache_layout
                     .boundary_tensor_count(),
@@ -165,7 +161,7 @@ pub trait Qwen3_5PrefillForward: Qwen3_5TargetForwardGraph {
         starting_position_tokens: u32,
         request_decoder_state: &mut RequestDecoderStateStack,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<(), Qwen3_5ExecutionError> {
+    ) -> Result<(), TextExecutionError> {
         let token_indices = self.token_indices_without_validation(token_ids)?;
         let graph_started_at = std::time::Instant::now();
         self.build_prefill_decoder_state_graph(
@@ -200,9 +196,9 @@ pub trait Qwen3_5PrefillForward: Qwen3_5TargetForwardGraph {
         completed_prefill_chunk_tokens: Vec<usize>,
         checkpoint_interval_token_count: usize,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<Qwen3_5BoundaryCheckpointPrefillOutcome, Qwen3_5ExecutionError> {
+    ) -> Result<Qwen3_5BoundaryCheckpointPrefillOutcome, TextExecutionError> {
         let mut boundary_checkpoint_collector =
-            Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector::new(
+            AstroSsdPromptCacheBoundaryCheckpointCollector::new(
                 completed_prefill_chunk_tokens.clone(),
                 self.astro_decoder_state_cache_layout
                     .boundary_tensor_count(),
@@ -236,11 +232,11 @@ impl Qwen3_5ModelBase {
     pub fn token_indices_without_validation(
         &self,
         token_ids: &[u32],
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         let mut signed_token_ids = Vec::with_capacity(token_ids.len());
         for token_id in token_ids {
             signed_token_ids.push(i32::try_from(*token_id).map_err(|_| {
-                Qwen3_5ExecutionError::InvalidInput {
+                TextExecutionError::InvalidInput {
                     description: "token ID exceeds the MLX int32 range",
                 }
             })?);

@@ -10,8 +10,8 @@ use crate::prism_hadamard_qwen35::artifacts::tests::pack_fixture::{
 use crate::prism_hadamard_qwen35::engine::fixture_engine_test_support::{
     FixtureMemoryLimits, loaded_fixture_engine, pending_fixture_execution, serving_settings_with,
 };
-use crate::qwen3_5_core::shared_execution::text_model::Qwen3_5TextModel;
-use crate::{InferenceEngineError, MlxInferenceExecution, Qwen3_5InferenceRequest};
+use crate::{InferenceEngineError, MlxInferenceExecution, TextInferenceRequest};
+use text_generation::model::text_model::TextModel;
 
 const ONE_GB: u64 = 1_073_741_824;
 
@@ -165,7 +165,7 @@ fn should_refuse_a_change_while_a_request_runs_or_below_the_floor() {
     let installed_mlx_memory_limits = fixture_engine.execution.execution_core.memory_limits;
     fixture_engine
         .execution
-        .start_generation(Qwen3_5InferenceRequest::new_sampling(
+        .start_generation(TextInferenceRequest::new_sampling(
             RequestId::new(61),
             vec![11, 12, 13],
             4,

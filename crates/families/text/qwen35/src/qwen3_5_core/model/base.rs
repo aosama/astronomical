@@ -13,12 +13,12 @@ use std::cell::RefCell;
 
 use crate::qwen3_5_core::configuration::Qwen3_5Config;
 use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights;
-use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_core::model_math::weights::{EmbeddingResidency, Qwen3_5Weights};
 use crate::qwen3_5_core::vision::Qwen3_5VisionModel;
 use crate::{AstroDecoderStateCacheLayout, ModelMemoryFacts};
+use text_generation::execution_error::TextExecutionError;
 
-use super::model_chunking_configuration::Qwen3_5ModelChunkingConfiguration;
+use text_generation::model::model_chunking_configuration::TextModelChunkingConfiguration;
 
 /// Faster paths a model turns on only after proving them on this machine.
 /// The resident loader turns on the fused expert combination when its
@@ -88,7 +88,7 @@ pub struct Qwen3_5ModelBase {
     pub sorted_expert_weighted_sum_kernel: Option<MlxMetalKernel>,
     pub compiled_swiglu: MlxCompiledSwiGlu,
     pub compiled_elementwise_graphs: MlxCompiledElementwiseGraphs,
-    pub chunking: Qwen3_5ModelChunkingConfiguration,
+    pub chunking: TextModelChunkingConfiguration,
     /// Model-owned BF16 scalar for the query normalization scale in every
     /// linear-attention forward pass.
     pub inverse_linear_head_dimension_scale: MlxArray,
@@ -113,7 +113,7 @@ impl Qwen3_5ModelBase {
     pub fn highest_logit_token_ids(
         &self,
         position_logits: &MlxArray,
-    ) -> Result<Vec<u32>, Qwen3_5ExecutionError> {
+    ) -> Result<Vec<u32>, TextExecutionError> {
         let selected_tokens = self.select_highest_logit_token(position_logits)?;
         Ok(selected_tokens.to_vec_u32()?)
     }
@@ -121,7 +121,7 @@ impl Qwen3_5ModelBase {
     pub fn select_highest_logit_token(
         &self,
         final_position_logits: &MlxArray,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         Ok(self.runtime.argmax_axis(final_position_logits, -1)?)
     }
 
@@ -143,12 +143,10 @@ impl Qwen3_5ModelBase {
         self.memory_facts.borrow().mlx_active_memory_ceiling_bytes()
     }
 
-    pub fn sorted_expert_weighted_sum_kernel(
-        &self,
-    ) -> Result<&MlxMetalKernel, Qwen3_5ExecutionError> {
+    pub fn sorted_expert_weighted_sum_kernel(&self) -> Result<&MlxMetalKernel, TextExecutionError> {
         self.sorted_expert_weighted_sum_kernel
             .as_ref()
-            .ok_or(Qwen3_5ExecutionError::InvalidInput {
+            .ok_or(TextExecutionError::InvalidInput {
                 description: "sparse Qwen3.5 execution requires a sorted expert output kernel",
             })
     }
@@ -220,7 +218,7 @@ impl Qwen3_5ModelBase {
     pub fn materialize_target_weights_with(
         &self,
         decoder_layer_residency: crate::qwen3_5_core::model_math::weights::DecoderLayerResidency,
-    ) -> Result<(), Qwen3_5ExecutionError> {
+    ) -> Result<(), TextExecutionError> {
         self.weights.materialize(
             &self.runtime,
             self.embedding_residency(),
@@ -246,7 +244,7 @@ impl Qwen3_5ModelBase {
     pub fn embedding_lookup(
         &self,
         token_indices: &MlxArray,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         match &self.disk_embedding_rows {
             Some(disk_embedding_rows) => disk_embedding_rows.embed_tokens(
                 &self.runtime,
@@ -260,16 +258,14 @@ impl Qwen3_5ModelBase {
     fn resident_embedding_lookup(
         &self,
         token_indices: &MlxArray,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         match &self.weights.embedding_weights {
             Qwen3_5AffineWeights::NativeBfloat16 { weight } => {
                 Ok(self.runtime.take_axis(weight, token_indices, 0)?)
             }
-            Qwen3_5AffineWeights::Jangtq2Codebook { .. } => {
-                Err(Qwen3_5ExecutionError::InvalidInput {
-                    description: "jangtq2 codebook pages hold routed experts, never embeddings",
-                })
-            }
+            Qwen3_5AffineWeights::Jangtq2Codebook { .. } => Err(TextExecutionError::InvalidInput {
+                description: "jangtq2 codebook pages hold routed experts, never embeddings",
+            }),
             Qwen3_5AffineWeights::Quantized {
                 packed_weight,
                 quantization_scales,
@@ -295,7 +291,7 @@ impl Qwen3_5ModelBase {
         &self,
         activations: &MlxArray,
         projection_weights: &impl Qwen3_5LinearWeights,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         projection_weights.project_rows(self, activations)
     }
 
@@ -304,16 +300,14 @@ impl Qwen3_5ModelBase {
         &self,
         activations: &MlxArray,
         affine_weights: &Qwen3_5AffineWeights,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         match affine_weights {
             Qwen3_5AffineWeights::NativeBfloat16 { weight } => {
                 self.native_bfloat16_linear(activations, weight)
             }
-            Qwen3_5AffineWeights::Jangtq2Codebook { .. } => {
-                Err(Qwen3_5ExecutionError::InvalidInput {
-                    description: "jangtq2 codebook pages hold routed experts, never dense linears",
-                })
-            }
+            Qwen3_5AffineWeights::Jangtq2Codebook { .. } => Err(TextExecutionError::InvalidInput {
+                description: "jangtq2 codebook pages hold routed experts, never dense linears",
+            }),
             Qwen3_5AffineWeights::Quantized {
                 packed_weight,
                 quantization_scales,
@@ -336,7 +330,7 @@ impl Qwen3_5ModelBase {
         &self,
         activations: &MlxArray,
         weight: &MlxArray,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         let transposed_weight = self.runtime.transpose_axes(weight, &[1, 0])?;
         Ok(self.runtime.matmul(activations, &transposed_weight)?)
     }
@@ -349,7 +343,7 @@ pub trait Qwen3_5LinearWeights {
         &self,
         model: &Qwen3_5ModelBase,
         activations: &MlxArray,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError>;
+    ) -> Result<MlxArray, TextExecutionError>;
 }
 
 impl Qwen3_5LinearWeights for Qwen3_5AffineWeights {
@@ -357,7 +351,7 @@ impl Qwen3_5LinearWeights for Qwen3_5AffineWeights {
         &self,
         model: &Qwen3_5ModelBase,
         activations: &MlxArray,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         model.bound_linear(activations, self)
     }
 }
@@ -373,7 +367,7 @@ pub fn gather_quantized_embedding_rows(
     selected_row_indices: &MlxArray,
     quantization_group_size: i32,
     quantization_bits: i32,
-) -> Result<MlxArray, Qwen3_5ExecutionError> {
+) -> Result<MlxArray, TextExecutionError> {
     Ok(runtime.dequantize_affine(
         &runtime.take_axis(packed_rows, selected_row_indices, 0)?,
         &runtime.take_axis(scale_rows, selected_row_indices, 0)?,

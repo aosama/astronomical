@@ -34,7 +34,7 @@ pub use inference_execution::{Qwen3_5ResidentEngine, ResidentEngineSettings};
 pub use model::Qwen3_5ResidentModel;
 #[cfg(feature = "direct-mlx")]
 pub use model::RecordedDecoderLayerInput;
-pub use model::{DecoderLayerRecomputation, Qwen3_5ExecutionError};
+pub use model::{DecoderLayerRecomputation, TextExecutionError};
 pub use model::{
     Qwen3_5DraftTreeVerification, Qwen3_5DraftedRowsVerification,
     Qwen3_5SpeculativeVerificationOutput, VerificationLogitsMode,

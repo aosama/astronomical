@@ -18,7 +18,7 @@ use crate::qwen3_5_core::model::loading_geometry::{
 
 use super::Qwen3_5ResidentModel;
 use super::{
-    Qwen3_5ExecutionError, Qwen3_5FeedForwardArchitecture, Qwen3_5VisionModel, Qwen3_5Weights,
+    Qwen3_5FeedForwardArchitecture, Qwen3_5VisionModel, Qwen3_5Weights, TextExecutionError,
     ValidatedQwen3_5Artifact,
 };
 use mlx_bridge::{MlxCompiledElementwiseGraphs, MlxCompiledSwiGlu, MlxMetalKernel};
@@ -33,8 +33,8 @@ impl Qwen3_5ResidentModel {
         runtime: MlxRuntime,
         validated_artifact: ValidatedQwen3_5Artifact,
         model_directory: &Path,
-        chunking: super::Qwen3_5ModelChunkingConfiguration,
-    ) -> Result<Self, Qwen3_5ExecutionError> {
+        chunking: super::TextModelChunkingConfiguration,
+    ) -> Result<Self, TextExecutionError> {
         let mut disabled_performance_attribution = PerformanceAttribution::disabled();
         Self::load_with_performance_attribution(
             runtime,
@@ -58,9 +58,9 @@ impl Qwen3_5ResidentModel {
         mut validated_artifact: ValidatedQwen3_5Artifact,
         model_directory: &Path,
         should_bind_vision_weights: bool,
-        chunking: super::Qwen3_5ModelChunkingConfiguration,
+        chunking: super::TextModelChunkingConfiguration,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<Self, Qwen3_5ExecutionError> {
+    ) -> Result<Self, TextExecutionError> {
         // Taken before binding, which consumes parts of the artifact.
         let expert_atlas = validated_artifact.expert_atlas().cloned();
         let BoundLanguageArtifact {
@@ -183,7 +183,7 @@ fn load_resident_mixture_of_experts_parts(
     tensor_inventory: &crate::TensorInventory,
     expert_atlas: Option<&expert_atlas::AtlasManifest>,
     performance_attribution: &mut PerformanceAttribution,
-) -> Result<ResidentMixtureOfExpertsParts, Qwen3_5ExecutionError> {
+) -> Result<ResidentMixtureOfExpertsParts, TextExecutionError> {
     let ExpertTensorNameMaps {
         tensor_name_to_shard_file_name,
         stored_tensor_name_by_canonical_name,
@@ -199,7 +199,7 @@ fn load_resident_mixture_of_experts_parts(
                 config,
                 config.layer_count() as usize,
             )
-            .map_err(|layer_plan_error| Qwen3_5ExecutionError::ExpertLayerPlan {
+            .map_err(|layer_plan_error| TextExecutionError::ExpertLayerPlan {
                 description: layer_plan_error.to_string(),
             })
         },
@@ -226,7 +226,7 @@ fn load_resident_mixture_of_experts_parts(
 /// MoE forward takes the unsorted MLX route for the worker's lifetime.
 fn retained_sorted_expert_weighted_sum_kernel(
     worker_kernel_capabilities: &crate::kernel_capability::WorkerKernelCapabilities,
-) -> Result<Option<MlxMetalKernel>, Qwen3_5ExecutionError> {
+) -> Result<Option<MlxMetalKernel>, TextExecutionError> {
     let sorted_reduction_family = crate::kernel_capability::SORTED_EXPERT_WEIGHTED_SUM;
     if !worker_kernel_capabilities.is_custom_kernel_supported(sorted_reduction_family) {
         tracing::info!(
@@ -248,7 +248,7 @@ fn retained_sorted_expert_weighted_sum_kernel(
 fn retained_sorted_expert_shared_combination_kernel(
     worker_kernel_capabilities: &crate::kernel_capability::WorkerKernelCapabilities,
     is_sorted_reduction_retained: bool,
-) -> Result<Option<MlxMetalKernel>, Qwen3_5ExecutionError> {
+) -> Result<Option<MlxMetalKernel>, TextExecutionError> {
     if !is_sorted_reduction_retained {
         return Ok(None);
     }
@@ -275,7 +275,7 @@ fn build_resident_model_memory_facts(
     vision_model: &Option<Qwen3_5VisionModel>,
     expert_layer_plans: &[QuantizedExpertLayerPlan],
     astro_decoder_state_cache_layout: &crate::AstroDecoderStateCacheLayout,
-) -> Result<ModelMemoryFacts, Qwen3_5ExecutionError> {
+) -> Result<ModelMemoryFacts, TextExecutionError> {
     let model_core_payload_bytes =
         crate::qwen3_5_core::model::loading_pipeline::model_core_payload_bytes(
             weights,
@@ -289,12 +289,12 @@ fn build_resident_model_memory_facts(
                 let layer_payload_bytes =
                     layer_plan
                         .complete_expert_payload_byte_count()
-                        .map_err(|plan_error| Qwen3_5ExecutionError::ExpertLayerPlan {
+                        .map_err(|plan_error| TextExecutionError::ExpertLayerPlan {
                             description: plan_error.to_string(),
                         })?;
                 total_payload_bytes
                 .checked_add(layer_payload_bytes)
-                .ok_or(Qwen3_5ExecutionError::InvalidInput {
+                .ok_or(TextExecutionError::InvalidInput {
                     description: "complete expert payload byte count overflowed during model load",
                 })
             })?;
@@ -303,7 +303,7 @@ fn build_resident_model_memory_facts(
         .map(|layer_plan| {
             layer_plan
                 .complete_expert_payload_byte_count()
-                .map_err(|plan_error| Qwen3_5ExecutionError::ExpertLayerPlan {
+                .map_err(|plan_error| TextExecutionError::ExpertLayerPlan {
                     description: plan_error.to_string(),
                 })
         })
@@ -313,10 +313,10 @@ fn build_resident_model_memory_facts(
         .unwrap_or(0);
     let largest_routed_expert_page_bytes = expert_layer_plans.iter().try_fold(
         0_u64,
-        |largest_page_bytes, layer_plan| -> Result<u64, Qwen3_5ExecutionError> {
+        |largest_page_bytes, layer_plan| -> Result<u64, TextExecutionError> {
             let complete_layer_payload_bytes = layer_plan
                 .complete_expert_payload_byte_count()
-                .map_err(|plan_error| Qwen3_5ExecutionError::ExpertLayerPlan {
+                .map_err(|plan_error| TextExecutionError::ExpertLayerPlan {
                     description: plan_error.to_string(),
                 })?;
             let routed_expert_count = usize::try_from(config.experts_per_token())

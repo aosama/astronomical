@@ -16,7 +16,7 @@ macro_rules! qwen3_5_shared_model_evaluation_methods {
         pub fn highest_logit_token_id(
             &self,
             final_position_logits: &::mlx_bridge::MlxArray,
-        ) -> Result<u32, $crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError> {
+        ) -> Result<u32, ::text_generation::execution_error::TextExecutionError> {
             let selected_token = self.select_highest_logit_token(final_position_logits)?;
             Ok(selected_token.item_u32()?)
         }
@@ -25,8 +25,8 @@ macro_rules! qwen3_5_shared_model_evaluation_methods {
         pub fn evaluate_forward_state(
             &self,
             final_logits: &::mlx_bridge::MlxArray,
-            request_decoder_state: &$crate::qwen3_5_core::decoder::RequestDecoderStateStack,
-        ) -> Result<(), $crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError> {
+            request_decoder_state: &::text_generation::RequestDecoderStateStack,
+        ) -> Result<(), ::text_generation::execution_error::TextExecutionError> {
             let mut disabled_performance_attribution = $crate::PerformanceAttribution::disabled();
             self.evaluate_forward_state_with_performance_attribution(
                 final_logits,
@@ -40,8 +40,8 @@ macro_rules! qwen3_5_shared_model_evaluation_methods {
         pub fn async_evaluate_generation(
             &self,
             generated_token: &::mlx_bridge::MlxArray,
-            request_decoder_state: &$crate::qwen3_5_core::decoder::RequestDecoderStateStack,
-        ) -> Result<(), $crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError> {
+            request_decoder_state: &::text_generation::RequestDecoderStateStack,
+        ) -> Result<(), ::text_generation::execution_error::TextExecutionError> {
             let evaluation_arrays =
                 $crate::qwen3_5_core::model_math::forward_contract::forward_state_arrays(
                     generated_token,
@@ -53,7 +53,7 @@ macro_rules! qwen3_5_shared_model_evaluation_methods {
     };
 }
 
-/// Expands, inside a model's `impl Qwen3_5TextModel`, the methods both models
+/// Expands, inside a model's `impl TextModel`, the methods both models
 /// forward to the same place. Calls name the model type, not method syntax,
 /// so a renamed inherent method fails to compile instead of recursing into
 /// the trait.
@@ -78,9 +78,9 @@ macro_rules! qwen3_5_shared_text_model_forwarding {
             &self,
             token_ids: &[u32],
             starting_position_tokens: u32,
-            request_decoder_state: &mut $crate::qwen3_5_core::decoder::RequestDecoderStateStack,
+            request_decoder_state: &mut ::text_generation::RequestDecoderStateStack,
             performance_attribution: &mut $crate::PerformanceAttribution,
-        ) -> Result<(), $crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError> {
+        ) -> Result<(), ::text_generation::execution_error::TextExecutionError> {
             $crate::qwen3_5_core::model::prefill_forward::Qwen3_5PrefillForward::prefill_chunk_with_performance_attribution(
                 self,
                 token_ids,
@@ -94,9 +94,9 @@ macro_rules! qwen3_5_shared_text_model_forwarding {
             &self,
             token_ids: &[u32],
             starting_position_tokens: u32,
-            request_decoder_state: &mut $crate::qwen3_5_core::decoder::RequestDecoderStateStack,
+            request_decoder_state: &mut ::text_generation::RequestDecoderStateStack,
             performance_attribution: &mut $crate::PerformanceAttribution,
-        ) -> Result<::mlx_bridge::MlxArray, $crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError> {
+        ) -> Result<::mlx_bridge::MlxArray, ::text_generation::execution_error::TextExecutionError> {
             $model::build_forward_chunk_with_performance_attribution(
                 self,
                 token_ids,
@@ -109,8 +109,8 @@ macro_rules! qwen3_5_shared_text_model_forwarding {
         fn async_evaluate_generation(
             &self,
             generated_token: &::mlx_bridge::MlxArray,
-            request_decoder_state: &$crate::qwen3_5_core::decoder::RequestDecoderStateStack,
-        ) -> Result<(), $crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError> {
+            request_decoder_state: &::text_generation::RequestDecoderStateStack,
+        ) -> Result<(), ::text_generation::execution_error::TextExecutionError> {
             $model::async_evaluate_generation(self, generated_token, request_decoder_state)
         }
     };

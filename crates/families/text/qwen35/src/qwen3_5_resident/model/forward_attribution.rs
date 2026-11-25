@@ -9,10 +9,9 @@ use mlx_bridge::MlxArray;
 use crate::PerformanceAttribution;
 
 use super::Qwen3_5ResidentModel;
-use super::{Qwen3_5ExecutionError, Qwen3_5TargetForwardOutput, RequestDecoderStateStack};
-use crate::qwen3_5_core::decoder::{
-    Qwen3_5AstroSsdPromptCacheBoundaryCheckpoint,
-    Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
+use super::{Qwen3_5TargetForwardOutput, RequestDecoderStateStack, TextExecutionError};
+use text_generation::{
+    AstroSsdPromptCacheBoundaryCheckpoint, AstroSsdPromptCacheBoundaryCheckpointCollector,
 };
 
 /// Outcome of a terminal prefill that produces both boundary checkpoints and logits.
@@ -22,7 +21,7 @@ use crate::qwen3_5_core::decoder::{
 /// `astro_ssd_prompt_cache` checkpoints and the logits needed for first-token seeding.
 pub struct Qwen3_5TerminalCheckpointPrefillOutcome {
     pub target_forward_output: Qwen3_5TargetForwardOutput,
-    pub boundary_checkpoints: Vec<Qwen3_5AstroSsdPromptCacheBoundaryCheckpoint>,
+    pub boundary_checkpoints: Vec<AstroSsdPromptCacheBoundaryCheckpoint>,
 }
 
 impl Qwen3_5ResidentModel {
@@ -41,9 +40,9 @@ impl Qwen3_5ResidentModel {
         completed_prefill_chunk_tokens: Vec<usize>,
         checkpoint_interval_token_count: usize,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<Qwen3_5TerminalCheckpointPrefillOutcome, Qwen3_5ExecutionError> {
+    ) -> Result<Qwen3_5TerminalCheckpointPrefillOutcome, TextExecutionError> {
         let mut boundary_checkpoint_collector =
-            Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector::new(
+            AstroSsdPromptCacheBoundaryCheckpointCollector::new(
                 completed_prefill_chunk_tokens.clone(),
                 self.astro_decoder_state_cache_layout
                     .boundary_tensor_count(),
@@ -75,11 +74,11 @@ impl Qwen3_5ResidentModel {
         starting_position_tokens: u32,
         request_decoder_state: &mut RequestDecoderStateStack,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         let signed_token_ids = token_ids
             .iter()
             .map(|token_id| {
-                i32::try_from(*token_id).map_err(|_| Qwen3_5ExecutionError::InvalidInput {
+                i32::try_from(*token_id).map_err(|_| TextExecutionError::InvalidInput {
                     description: "token ID exceeds the MLX int32 range",
                 })
             })
@@ -110,11 +109,9 @@ impl Qwen3_5PrefillForward for Qwen3_5ResidentModel {
     fn evaluate_prefill_decoder_state(
         &self,
         request_decoder_state: &RequestDecoderStateStack,
-        boundary_checkpoint_collector: Option<
-            &Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
-        >,
+        boundary_checkpoint_collector: Option<&AstroSsdPromptCacheBoundaryCheckpointCollector>,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<(), Qwen3_5ExecutionError> {
+    ) -> Result<(), TextExecutionError> {
         self.evaluate_decoder_state_with_performance_attribution(
             request_decoder_state,
             boundary_checkpoint_collector,

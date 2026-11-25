@@ -1,12 +1,12 @@
 //! Whether a request's whole context fits, asked before the first forward.
 
-use crate::qwen3_5_core::shared_execution::generation_finalization_steps;
 use crate::qwen3_5_resident::model::request_errors;
 use crate::{
     InferenceEngineError, PerformanceAttribution, PerformanceAttributionOutcome,
     StreamingEngineRequirement,
 };
 use ipc_protocol::RequestId;
+use text_generation::generation_loop::generation_finalization_steps;
 
 use super::Qwen3_5EngineState;
 use super::forward_memory::fixed_weight_bytes;
@@ -67,7 +67,7 @@ impl Qwen3_5EngineState {
         let active_bytes = model
             .runtime()
             .memory_snapshot()
-            .map_err(super::qwen3_5_runtime_error)?
+            .map_err(super::fatal_runtime_error)?
             .active_memory_bytes() as u64;
         let stored_state_bytes = active_bytes
             .saturating_sub(fixed_weight_bytes(model))

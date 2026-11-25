@@ -26,7 +26,7 @@ impl Qwen3_5EngineState {
     pub(super) fn prepare_decode_expert_residency_after_prefill(
         &mut self,
         request_id: RequestId,
-        active_request: &mut super::engine_request::Qwen3_5EngineRequest,
+        active_request: &mut super::engine_request::StreamingEngineRequest,
     ) -> Result<(), InferenceEngineError> {
         let Some(model) = self.core.model.as_mut() else {
             return Err(super::fatal_engine_error(

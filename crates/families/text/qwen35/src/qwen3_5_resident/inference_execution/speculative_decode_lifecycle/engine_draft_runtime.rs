@@ -208,7 +208,7 @@ pub enum Qwen3_5SpeculativeDraftLoadingError {
     #[error("the graphics-processor runtime rejected the DFlash drafter load: {0}")]
     Runtime(#[source] runtime_integration::MlxRuntimeError),
     #[error("the target could not be prepared for drafting: {0}")]
-    Target(#[source] crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError),
+    Target(#[source] text_generation::execution_error::TextExecutionError),
     #[error("the DFlash drafter's model.safetensors is unreadable: {source}")]
     WeightsUnreadable { source: std::io::Error },
     #[error("the DFlash drafter weights did not bind: {0}")]

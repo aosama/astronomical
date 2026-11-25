@@ -1,7 +1,7 @@
 use std::io::Cursor;
 
+use super::ImageGrid;
 use super::Qwen3_5ImageDimensions;
-use super::Qwen3_5ImageGrid;
 use image::{DynamicImage, ImageBuffer, ImageFormat, Rgb};
 use sha2::{Digest, Sha256};
 
@@ -23,7 +23,7 @@ fn should_preprocess_the_synthetic_red_fixture_into_vision_patches() {
 
     assert_eq!(
         processed_image.image_grid,
-        Qwen3_5ImageGrid {
+        ImageGrid {
             temporal_patch_count: 1,
             height_patch_count: 16,
             width_patch_count: 16,
@@ -142,7 +142,7 @@ fn should_round_trip_a_webp_encoding_through_the_vision_processor() {
 
     assert_eq!(
         processed_webp_image.image_grid,
-        Qwen3_5ImageGrid {
+        ImageGrid {
             temporal_patch_count: 1,
             height_patch_count: 16,
             width_patch_count: 16,

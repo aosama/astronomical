@@ -12,11 +12,11 @@ use runtime_integration::MlxMemoryLimits;
 
 use super::PrismHadamardQwen35InferenceExecution;
 use crate::InferenceEngineError;
-use crate::qwen3_5_core::engine_errors::mlx_memory_ceiling_change_before_load_error;
-use crate::qwen3_5_core::shared_execution::mlx_memory_limit_change::Qwen3_5MlxMemoryLimitHooks;
-use crate::qwen3_5_core::shared_execution::text_model::Qwen3_5TextModel;
+use text_generation::engine_errors::mlx_memory_ceiling_change_before_load_error;
+use text_generation::generation_loop::mlx_memory_limit_change::TextMlxMemoryLimitHooks;
+use text_generation::model::text_model::TextModel;
 
-impl Qwen3_5MlxMemoryLimitHooks for PrismHadamardQwen35InferenceExecution {
+impl TextMlxMemoryLimitHooks for PrismHadamardQwen35InferenceExecution {
     fn change_model_mlx_memory_ceiling(
         &mut self,
         requested_mlx_memory_ceiling_bytes: u64,

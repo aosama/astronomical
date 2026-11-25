@@ -12,10 +12,10 @@ use mlx_bridge::{MlxArray, MlxDtype};
 use super::Qwen3_5ResidentModel;
 use super::verification_forward::VerificationLogitsMode;
 use crate::qwen3_5_core::model::tree_layer_attention::{TreeLayerRows, TreeRowInputs};
-use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_core::model_math::gated_delta_tree::TreeRowChains;
 use crate::{PerformanceAttribution, RequestDecoderStateStack};
 use engine_core::speculative_decoding::tree_rows::TreeRows;
+use text_generation::execution_error::TextExecutionError;
 
 /// Layers built between asynchronous starts. Building the pass's graph
 /// takes about 4 ms of CPU for the 27B's 64 layers (some 40 nodes a layer),
@@ -43,9 +43,9 @@ impl Qwen3_5ResidentModel {
         anchor_position: u32,
         request_decoder_state: &mut RequestDecoderStateStack,
         target_hidden_state_tap_layer_ids: &[i32],
-    ) -> Result<Qwen3_5DraftTreeVerification, Qwen3_5ExecutionError> {
+    ) -> Result<Qwen3_5DraftTreeVerification, TextExecutionError> {
         let context_offset =
-            i32::try_from(anchor_position).map_err(|_| Qwen3_5ExecutionError::InvalidInput {
+            i32::try_from(anchor_position).map_err(|_| TextExecutionError::InvalidInput {
                 description: "the anchor position exceeds the MLX int32 range",
             })?;
         let mut hidden_states = self.tree_row_embeddings(tree_rows)?;
@@ -73,7 +73,7 @@ impl Qwen3_5ResidentModel {
                 VerificationLogitsMode::AllPositions,
                 tree.row_count,
             )?
-            .ok_or(Qwen3_5ExecutionError::InvalidInput {
+            .ok_or(TextExecutionError::InvalidInput {
                 description: "a draft tree must produce logits",
             })?;
         Ok(Qwen3_5DraftTreeVerification {
@@ -84,7 +84,7 @@ impl Qwen3_5ResidentModel {
         })
     }
 
-    fn tree_row_embeddings(&self, tree_rows: &TreeRows) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    fn tree_row_embeddings(&self, tree_rows: &TreeRows) -> Result<MlxArray, TextExecutionError> {
         let mut token_ids = Vec::with_capacity(tree_rows.row_count());
         for token_id in &tree_rows.token_ids {
             token_ids.push(*token_id as i32);
@@ -102,7 +102,7 @@ impl Qwen3_5ResidentModel {
         request_decoder_state: &mut RequestDecoderStateStack,
         verification: Qwen3_5DraftTreeVerification,
         kept_rows: &[usize],
-    ) -> Result<(), Qwen3_5ExecutionError> {
+    ) -> Result<(), TextExecutionError> {
         let mut kept_row_ids = Vec::with_capacity(kept_rows.len());
         for kept_row in kept_rows {
             kept_row_ids.push(*kept_row as i32);
@@ -112,7 +112,7 @@ impl Qwen3_5ResidentModel {
             .array_from_i32(&kept_row_ids, &[kept_rows.len() as i32])?;
         for (layer_index, layer_rows) in verification.layer_rows.into_iter().enumerate() {
             let layer_model_state = request_decoder_state.layer_mut(layer_index).ok_or(
-                Qwen3_5ExecutionError::InvalidRequestDecoderState {
+                TextExecutionError::InvalidRequestDecoderState {
                     layer_index,
                     description: "decoder layer entry is missing",
                 },
@@ -134,14 +134,14 @@ impl Qwen3_5ResidentModel {
         tree: &TreeRowInputs,
         layer_index: usize,
         request_decoder_state: &mut RequestDecoderStateStack,
-    ) -> Result<(MlxArray, TreeLayerRows), Qwen3_5ExecutionError> {
+    ) -> Result<(MlxArray, TreeLayerRows), TextExecutionError> {
         let decoder_layer_weights = self
             .weights
             .decoder_layer_weights
             .get(layer_index)
-            .ok_or(Qwen3_5ExecutionError::MissingDecoderLayerWeights { layer_index })?;
+            .ok_or(TextExecutionError::MissingDecoderLayerWeights { layer_index })?;
         let layer_model_state = request_decoder_state.layer_mut(layer_index).ok_or(
-            Qwen3_5ExecutionError::InvalidRequestDecoderState {
+            TextExecutionError::InvalidRequestDecoderState {
                 layer_index,
                 description: "decoder layer entry is missing",
             },
@@ -170,7 +170,7 @@ impl Qwen3_5ResidentModel {
         tree_rows: &TreeRows,
         context_offset: i32,
         activation_dtype: MlxDtype,
-    ) -> Result<TreeRowInputs, Qwen3_5ExecutionError> {
+    ) -> Result<TreeRowInputs, TextExecutionError> {
         let row_count = tree_rows.row_count() as i32;
         let window = self.config.linear_convolution_kernel_dimension() as usize;
         let window_sources = tree_rows.convolution_window_sources(window);
@@ -200,7 +200,7 @@ impl Qwen3_5ResidentModel {
         tree_rows: &TreeRows,
         context_offset: i32,
         activation_dtype: MlxDtype,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         let row_count = tree_rows.row_count();
         let context = context_offset as usize;
         let visibility = tree_rows.ancestor_visibility();
@@ -219,12 +219,10 @@ impl Qwen3_5ResidentModel {
     }
 }
 
-fn collected_taps(
-    tap_slots: Vec<Option<MlxArray>>,
-) -> Result<Vec<MlxArray>, Qwen3_5ExecutionError> {
+fn collected_taps(tap_slots: Vec<Option<MlxArray>>) -> Result<Vec<MlxArray>, TextExecutionError> {
     let mut taps = Vec::with_capacity(tap_slots.len());
     for tap_slot in tap_slots {
-        taps.push(tap_slot.ok_or(Qwen3_5ExecutionError::InvalidInput {
+        taps.push(tap_slot.ok_or(TextExecutionError::InvalidInput {
             description: "a requested DFlash target hidden-state tap was never captured",
         })?);
     }

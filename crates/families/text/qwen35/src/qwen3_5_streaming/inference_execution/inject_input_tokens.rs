@@ -1,22 +1,22 @@
 //! The streaming engine's part of model-visible feedback injection. The
 //! injection itself is shared with the resident engine in
-//! `qwen3_5_core::shared_execution::input_injection`.
+//! `text_generation::generation_loop::input_injection`.
 
-use crate::qwen3_5_core::shared_execution::input_injection::Qwen3_5InputInjectionHooks;
+use text_generation::generation_loop::input_injection::TextInputInjectionHooks;
 
 use crate::InferenceEngineError;
 
 use super::Qwen3_5EngineState;
-use super::engine_request::Qwen3_5EngineRequest;
+use super::engine_request::StreamingEngineRequest;
 
-impl Qwen3_5InputInjectionHooks for Qwen3_5EngineState {
+impl TextInputInjectionHooks for Qwen3_5EngineState {
     /// Injection extends the request's stored state between measured steps.
     /// The memory governor grows the context account to the projected extent
     /// first, so the kept weights have made room before the injected tokens
     /// run.
     fn prepare_for_injected_input(
         &mut self,
-        _active_request: &mut Qwen3_5EngineRequest,
+        _active_request: &mut StreamingEngineRequest,
         projected_context_tokens: usize,
     ) -> Result<(), InferenceEngineError> {
         let model = self.core.loaded_model()?;

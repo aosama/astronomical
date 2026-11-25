@@ -13,7 +13,7 @@ use crate::qwen3_5_core::artifacts::{
     QuantizationMode, QuantizedExpertLayerPlan, QuantizedTensorSource, SafetensorsDtype,
 };
 use crate::qwen3_5_core::decoder::Qwen3_5AstroDecoderStateCacheLayerDtypes;
-use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
+use text_generation::execution_error::TextExecutionError;
 
 use super::astro_decoder_state_cache_dtype_flow::{
     AffineDtypeContract, DenseMlpDtypeFlow, FullAttentionDtypeFlow, LinearAttentionDtypeFlow,
@@ -94,10 +94,10 @@ fn native_bfloat16_expert_layer_plan() -> QuantizedExpertLayerPlan {
 }
 
 fn assert_invalid_input_description(
-    result: Result<MlxDtype, Qwen3_5ExecutionError>,
+    result: Result<MlxDtype, TextExecutionError>,
     expected_description: &str,
 ) {
-    let Err(Qwen3_5ExecutionError::InvalidInput { description }) = result else {
+    let Err(TextExecutionError::InvalidInput { description }) = result else {
         panic!("expected an InvalidInput error, got {result:?}");
     };
     assert_eq!(description, expected_description);
@@ -354,7 +354,7 @@ fn should_reject_a_missing_expert_affine_parameter() {
         .retain(|tensor_source| tensor_source.parameter_name != "biases");
 
     let result = expert_parameter_dtype(&expert_layer_plan, "gate_proj", "biases");
-    let Err(Qwen3_5ExecutionError::InvalidInput { description }) = result else {
+    let Err(TextExecutionError::InvalidInput { description }) = result else {
         panic!("expected an InvalidInput error");
     };
     assert_eq!(
@@ -369,7 +369,7 @@ fn should_reject_non_floating_expert_parameters() {
         affine_expert_layer_plan(SafetensorsDtype::Int32, SafetensorsDtype::Float16);
 
     let result = expert_parameter_dtype(&expert_layer_plan, "gate_proj", "scales");
-    let Err(Qwen3_5ExecutionError::InvalidInput { description }) = result else {
+    let Err(TextExecutionError::InvalidInput { description }) = result else {
         panic!("expected an InvalidInput error");
     };
     assert_eq!(
@@ -399,7 +399,7 @@ fn should_narrow_only_floating_astro_decoder_state_cache_dtypes() {
         AstroDecoderStateCacheTensorDtype::Float32
     );
     let result = astro_decoder_state_cache_tensor_dtype(MlxDtype::Int32);
-    let Err(Qwen3_5ExecutionError::InvalidInput { description }) = result else {
+    let Err(TextExecutionError::InvalidInput { description }) = result else {
         panic!("expected an InvalidInput error");
     };
     assert_eq!(
