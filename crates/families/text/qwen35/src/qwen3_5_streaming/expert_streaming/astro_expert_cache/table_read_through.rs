@@ -27,8 +27,10 @@ use engine_core::expert_paging::QuantizedExpertLayerPlan;
 /// Why a layer's table could not serve a route from inside an evaluation.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TableRefusal {
-    /// The layer has no table, or the caller's slots do not match the route.
-    NoTable,
+    /// There is no table this lookup may use: the layer has none, the
+    /// caller's slots do not match the route, the table was replaced after
+    /// the graph took its arrays, or the model's thread holds the tables.
+    TableUnavailable,
     /// A fetch from the model's thread would first grow the table.
     WouldGrow,
     /// The table cannot seat every missing expert: too few slots hold an
@@ -109,9 +111,9 @@ impl AstroExpertCache {
     /// Both lists are native-endian `u32` values as bytes, which is how a
     /// host step is handed a route and hands back the slots.
     ///
-    /// Returns the refusal, with `table_slots` unwritten, when the route
-    /// cannot be served here. Experts read before a refusal stay in the
-    /// table; they were routed to.
+    /// Returns the refusal when the route cannot be served here, after which
+    /// `table_slots` may be partly written and must not be used. Experts
+    /// read before a refusal stay in the table; they were routed to.
     ///
     /// The caller must have evaluated every graph that reads this layer's
     /// table other than the one waiting on these slots.
@@ -131,10 +133,10 @@ impl AstroExpertCache {
         table_slots: &mut [[u8; 4]],
     ) -> Result<Result<TableReadThrough, TableRefusal>, MlxRuntimeError> {
         let Some(Some(table)) = self.tables_by_layer.get(layer_index) else {
-            return Ok(Err(TableRefusal::NoTable));
+            return Ok(Err(TableRefusal::TableUnavailable));
         };
         if table_slots.len() != routed_expert_assignments.len() {
-            return Ok(Err(TableRefusal::NoTable));
+            return Ok(Err(TableRefusal::TableUnavailable));
         }
         // A fetch grows a table only while it has fewer slots than the count
         // it is given. Capping that count at the slots the table has now

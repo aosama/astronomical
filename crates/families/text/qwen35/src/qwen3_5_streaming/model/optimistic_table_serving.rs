@@ -51,7 +51,7 @@ impl Qwen3_5Model {
     /// cannot be served the forward's way; an optimistic forward is then
     /// marked to be run again.
     #[allow(clippy::too_many_arguments)]
-    pub(super) fn dispatch_optimistic_table_page(
+    pub(super) fn dispatch_speculative_table_page(
         &self,
         expert_pager: &Qwen3_5ExpertPager,
         layer_index: usize,
@@ -143,7 +143,7 @@ impl Qwen3_5Model {
         should_use_compiled_elementwise_graphs: bool,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<Option<MlxArray>, TextExecutionError> {
-        if let Some(handled) = self.dispatch_optimistic_table_page(
+        if let Some(handled) = self.dispatch_speculative_table_page(
             expert_pager,
             layer_index,
             token_count,

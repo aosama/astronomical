@@ -215,6 +215,15 @@ impl InGraphTableServing {
         self.exact_tokens_after_next_refusal.set(1);
     }
 
+    /// Closes the window and forgets the forward's layers. An evaluated
+    /// forward has already recorded or discarded them; one whose build or
+    /// evaluation failed has not, and left behind they would be concluded
+    /// with the next forward, failing an exact one for lookups it never had.
+    fn end_forward(&self) {
+        self.window.close();
+        self.layer_servings.borrow_mut().clear();
+    }
+
     /// Whether a lookup of the forward in progress has refused its layer.
     pub(super) fn forward_was_refused(&self) -> bool {
         self.window.is_open() && self.window.was_refused()
@@ -378,7 +387,7 @@ impl Qwen3_5Model {
     /// Closes the forward's window, after which a lookup that has not run
     /// refuses. Called whether the forward was evaluated or failed.
     pub(super) fn end_in_graph_forward(&self) {
-        self.in_graph_table_serving().window.close();
+        self.in_graph_table_serving().end_forward();
     }
 
     /// Serves one layer of an in-graph forward from its table, with a host
@@ -481,14 +490,14 @@ impl Qwen3_5Model {
             self.direct_expert_fetching.slot_filler.as_ref(),
             self.expert_pager.as_ref(),
         ) else {
-            return Ok(Err(TableRefusal::NoTable));
+            return Ok(Err(TableRefusal::TableUnavailable));
         };
         let layer_plan = expert_pager.layer_plan(layer_index)?;
         // The model's thread holds no borrow of the tables across an
         // evaluation; if that ever stops being true the lookup refuses
         // instead of panicking inside MLX.
         let Ok(mut astro_expert_cache) = astro_expert_cache.try_borrow_mut() else {
-            return Ok(Err(TableRefusal::NoTable));
+            return Ok(Err(TableRefusal::TableUnavailable));
         };
         // The graph multiplies from the table arrays it was built with. A
         // table replaced since (grown by a layer that stopped at the host)
@@ -496,7 +505,7 @@ impl Qwen3_5Model {
         if astro_expert_cache.table_slot_count(layer_index)
             != Some(lookup_table.slot_count_when_built)
         {
-            return Ok(Err(TableRefusal::NoTable));
+            return Ok(Err(TableRefusal::TableUnavailable));
         }
         Ok(astro_expert_cache.read_route_through_table(
             &self.runtime,

@@ -234,8 +234,12 @@ fn finish_streaming_model_load(
     model.base.optional_accelerators.mtp_head = mtp_head_load?.map(Box::new);
     // Reply tokens of a model that streams experts look their routes up
     // inside the graph, which needs MLX's fast synch to pay. A dense model
-    // has no routes to look up and keeps MLX's default.
-    model.set_in_graph_table_serving(model.expert_pager.is_some());
+    // has no routes to look up and leaves the setting alone: it is
+    // process-wide, and turning it off here would slow a streaming model
+    // already loaded beside this one.
+    if model.expert_pager.is_some() {
+        model.set_in_graph_table_serving(true);
+    }
     Ok(model)
 }
 

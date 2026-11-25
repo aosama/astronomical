@@ -151,6 +151,24 @@ fn should_fail_a_forward_nobody_refused_whose_lookup_never_ran() {
 }
 
 #[test]
+fn should_not_fail_the_next_exact_forward_after_an_in_graph_forward_failed() {
+    let in_graph_serving = InGraphTableServing::default();
+    in_graph_serving.window.open();
+    // The evaluation failed before this lookup ran, so nothing concluded it.
+    add_layer_with_outcome(&in_graph_serving, InGraphLayerOutcome::NotRun);
+
+    in_graph_serving.end_forward();
+
+    assert!(in_graph_serving.layer_servings.borrow().is_empty());
+    assert!(
+        !in_graph_serving
+            .conclude_forward()
+            .expect("the exact forward has no lookups of its own"),
+        "an exact forward is not refused"
+    );
+}
+
+#[test]
 fn should_count_a_refusal_for_want_of_seats_by_its_own_reason() {
     let in_graph_serving = InGraphTableServing::default();
     in_graph_serving.window.open();

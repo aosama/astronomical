@@ -198,7 +198,7 @@ fn should_refuse_a_layer_with_no_table_and_a_route_that_needs_every_slot_and_one
             )
             .expect("the lookup runs")
             .err()
-            == Some(TableRefusal::NoTable),
+            == Some(TableRefusal::TableUnavailable),
         "a layer with no table is served another way"
     );
 
@@ -234,7 +234,7 @@ fn should_refuse_a_layer_with_no_table_and_a_route_that_needs_every_slot_and_one
             )
             .expect("the lookup runs")
             .err()
-            == Some(TableRefusal::NoTable),
+            == Some(TableRefusal::TableUnavailable),
         "a slot for every assignment or none"
     );
 }
