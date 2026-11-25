@@ -794,7 +794,9 @@ measure-expert-rows-per-read = "run -p xtask -- test-run --package astronomical-
 # reply's stages), so this is the floor of its fixed cost. It also prices a
 # one-row 4-bit weight multiply at the shapes a token runs, alone and as a
 # chain in which each waits for the one before, beside the time its weight
-# bytes need at the GPU's memory bandwidth. No model. Seconds.
+# bytes need at the GPU's memory bandwidth, and the pieces of a routed expert
+# layer: the gathered multiply over the routed experts and the selection of
+# those experts. No model. Seconds.
 measure-primitive-dispatch-cost = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter primitive_dispatch_cost"
 measure-graph-host-step = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --exact --filter direct_mlx::graph_host_step_cost::should_price_a_host_stop_a_layer_against_a_step_inside_the_graph"
 # The row-batched kernel's GPU contracts: matches MLX's quantized matmul on
