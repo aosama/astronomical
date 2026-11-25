@@ -115,9 +115,37 @@ fn row_logits(runtime: &MlxRuntime, per_row_logits: &MlxArray, row: usize) -> Ml
         .expect("one row slices")
 }
 
+/// How far the target's own logits move when three tokens are fed as one
+/// chunk instead of one at a time: MLX picks its quantized kernels by row
+/// count, and they round differently. A tree pass is several rows, so this
+/// is the difference it may show without anything being wrong. The small
+/// dense model moves by under 0.25; a 35B-A3B's expert layers by about 1.6.
+pub(super) fn chunk_against_step_logit_difference<Model: DraftTreeTarget>(
+    target: &SmallTarget<Model>,
+) -> f32
+where
+    SmallTarget<Model>: TreeContractTarget,
+{
+    let first_position = anchor_position(target);
+    let mut chunk_state = target.prefilled_state();
+    let as_a_chunk = target.logits_after(&BLOCK[..3], first_position, &mut chunk_state);
+    let mut step_state = target.prefilled_state();
+    target.logits_after(&BLOCK[..1], first_position, &mut step_state);
+    target.logits_after(&BLOCK[1..2], first_position + 1, &mut step_state);
+    let one_at_a_time = target.logits_after(&BLOCK[2..3], first_position + 2, &mut step_state);
+    let difference = largest_logit_difference(
+        target.model.draft_tree_model_base().runtime(),
+        &as_a_chunk,
+        &one_at_a_time,
+    );
+    eprintln!("[draft-tree] three tokens as a chunk against one at a time: {difference:.4}");
+    difference
+}
+
 /// Every row of the tree must have the logits feeding its chain alone gives.
 pub(super) fn assert_every_tree_row_matches_its_chain<Model: DraftTreeTarget>(
     target: &SmallTarget<Model>,
+    maximum_logit_difference: f32,
 ) where
     SmallTarget<Model>: TreeContractTarget,
 {
@@ -153,7 +181,7 @@ pub(super) fn assert_every_tree_row_matches_its_chain<Model: DraftTreeTarget>(
         );
         eprintln!("[draft-tree] row {row}: largest logit difference {difference:.4}");
         assert!(
-            difference <= MAXIMUM_LOGIT_DIFFERENCE,
+            difference <= maximum_logit_difference,
             "row {row}: logits differ by {difference}"
         );
     }
@@ -203,6 +231,7 @@ where
 /// Committing a branch must leave the state feeding that branch leaves.
 pub(super) fn assert_a_commit_leaves_the_state_feeding_the_branch_leaves<Model: DraftTreeTarget>(
     target: &SmallTarget<Model>,
+    maximum_logit_difference: f32,
 ) where
     SmallTarget<Model>: TreeContractTarget,
 {
@@ -219,7 +248,7 @@ pub(super) fn assert_a_commit_leaves_the_state_feeding_the_branch_leaves<Model: 
         );
         eprintln!("[draft-tree] kept rows {kept_rows:?}: largest logit difference {difference:.4}");
         assert!(
-            difference <= MAXIMUM_LOGIT_DIFFERENCE,
+            difference <= maximum_logit_difference,
             "kept rows {kept_rows:?}: logits differ by {difference}"
         );
     }
@@ -228,6 +257,7 @@ pub(super) fn assert_a_commit_leaves_the_state_feeding_the_branch_leaves<Model: 
 /// The control: a commit of one branch must not look like feeding another.
 pub(super) fn assert_a_commit_differs_from_feeding_another_branch<Model: DraftTreeTarget>(
     target: &SmallTarget<Model>,
+    smallest_wrong_branch_difference: f32,
 ) where
     SmallTarget<Model>: TreeContractTarget,
 {
@@ -242,7 +272,7 @@ pub(super) fn assert_a_commit_differs_from_feeding_another_branch<Model: DraftTr
     );
     eprintln!("[draft-tree] control, other branch: largest logit difference {difference:.4}");
     assert!(
-        difference > MAXIMUM_LOGIT_DIFFERENCE * 4.0,
+        difference > smallest_wrong_branch_difference,
         "the control must expose a commit of the wrong branch"
     );
 }
@@ -260,19 +290,25 @@ fn tree_target() -> SmallTarget {
 #[ignore = "loads the small dense Qwen3.5 on the GPU"]
 #[serial]
 fn should_give_every_tree_row_the_logits_its_chain_alone_gives() {
-    assert_every_tree_row_matches_its_chain(&tree_target());
+    assert_every_tree_row_matches_its_chain(&tree_target(), MAXIMUM_LOGIT_DIFFERENCE);
 }
 
 #[test]
 #[ignore = "loads the small dense Qwen3.5 on the GPU"]
 #[serial]
 fn should_leave_the_state_feeding_the_kept_branch_alone_leaves() {
-    assert_a_commit_leaves_the_state_feeding_the_branch_leaves(&tree_target());
+    assert_a_commit_leaves_the_state_feeding_the_branch_leaves(
+        &tree_target(),
+        MAXIMUM_LOGIT_DIFFERENCE,
+    );
 }
 
 #[test]
 #[ignore = "loads the small dense Qwen3.5 on the GPU"]
 #[serial]
 fn should_differ_from_feeding_a_branch_it_did_not_commit() {
-    assert_a_commit_differs_from_feeding_another_branch(&tree_target());
+    assert_a_commit_differs_from_feeding_another_branch(
+        &tree_target(),
+        MAXIMUM_LOGIT_DIFFERENCE * 4.0,
+    );
 }

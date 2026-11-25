@@ -97,6 +97,9 @@ pub struct ReplyMeasurement {
     /// copies its route to the host even when its table holds the layer
     /// whole.
     pub brings_every_route_to_the_host: Cell<bool>,
+    /// On only while a contract writes the plain reply a drafted one is
+    /// held to: a hosted drafter then stays loaded and proposes nothing.
+    pub writes_replies_without_the_hosted_drafter: Cell<bool>,
 }
 
 fn nanoseconds(duration: Duration) -> u64 {

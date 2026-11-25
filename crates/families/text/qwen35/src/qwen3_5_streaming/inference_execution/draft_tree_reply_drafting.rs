@@ -67,7 +67,11 @@ impl Qwen3_5EngineState {
         let Some(draft_runtime) = model.optional_accelerators.draft_runtime.as_deref() else {
             return;
         };
-        if !request_can_draft(active_request) {
+        let is_held_back_by_a_contract = model
+            .reply_measurement
+            .writes_replies_without_the_hosted_drafter
+            .get();
+        if is_held_back_by_a_contract || !request_can_draft(active_request) {
             return;
         }
         if active_request

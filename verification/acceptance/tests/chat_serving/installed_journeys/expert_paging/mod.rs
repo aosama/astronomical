@@ -5,6 +5,7 @@ mod decode_retention;
 mod direct_expert_read_parity;
 mod expert_miss_count;
 mod failed_span_redo;
+mod hosted_drafter_reply;
 mod in_graph_route_lookup_reply;
 mod in_memory_ledger_reconciliation;
 mod mtp_reply_drafting_speed;
