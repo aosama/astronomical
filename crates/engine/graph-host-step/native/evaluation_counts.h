@@ -18,6 +18,8 @@ typedef struct astro_evaluation_counts {
   uint64_t asynchronous_evaluations;
   uint64_t waits_for_submitted_arrays;
   uint64_t cross_stream_waits;
+  uint64_t gpu_primitives;
+  uint64_t cpu_primitives;
 } astro_evaluation_counts;
 
 void astro_evaluation_counts_read(astro_evaluation_counts* counts);

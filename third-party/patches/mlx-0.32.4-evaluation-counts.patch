@@ -8,7 +8,7 @@ diff --git a/mlx/transforms.cpp b/mlx/transforms.cpp
  #include <deque>
  #include <future>
  #include <numeric>
-@@ -77,6 +78,21 @@
+@@ -77,6 +78,25 @@
  }
  thread_local int detail::RetainGraph::tracing_counter{0};
  
@@ -18,19 +18,23 @@ diff --git a/mlx/transforms.cpp b/mlx/transforms.cpp
 +static std::atomic<uint64_t> asynchronous_evaluation_count{0};
 +static std::atomic<uint64_t> submitted_array_wait_count{0};
 +static std::atomic<uint64_t> cross_stream_wait_count{0};
++static std::atomic<uint64_t> gpu_primitive_count{0};
++static std::atomic<uint64_t> cpu_primitive_count{0};
 +
 +EvaluationCounts evaluation_counts() {
 +  return EvaluationCounts{
 +      blocking_evaluation_count.load(std::memory_order_relaxed),
 +      asynchronous_evaluation_count.load(std::memory_order_relaxed),
 +      submitted_array_wait_count.load(std::memory_order_relaxed),
-+      cross_stream_wait_count.load(std::memory_order_relaxed)};
++      cross_stream_wait_count.load(std::memory_order_relaxed),
++      gpu_primitive_count.load(std::memory_order_relaxed),
++      cpu_primitive_count.load(std::memory_order_relaxed)};
 +}
 +
  array eval_impl(std::vector<array> outputs, bool async) {
    std::deque<array> tape;
  
-@@ -259,6 +275,7 @@
+@@ -259,6 +279,7 @@
            // output arrays stream
            auto& info = it->second;
            fences.at(info.stream_index).wait(stream, in, info.value);
@@ -38,7 +42,18 @@ diff --git a/mlx/transforms.cpp b/mlx/transforms.cpp
          } else if (in.event().valid()) {
            if (in.event().is_signaled()) {
              in.detach_event();
-@@ -375,6 +392,7 @@
+@@ -271,8 +292,10 @@
+ 
+       if (arr.primitive().device() == Device::gpu) {
+         gpu::eval(arr);
++        gpu_primitive_count.fetch_add(1, std::memory_order_relaxed);
+       } else {
+         cpu::eval(arr);
++        cpu_primitive_count.fetch_add(1, std::memory_order_relaxed);
+       }
+ 
+       if (scheduler::n_active_tasks() > MAX_ACTIVE_TASKS ||
+@@ -375,6 +398,7 @@
      return;
    }
  
@@ -46,7 +61,7 @@ diff --git a/mlx/transforms.cpp b/mlx/transforms.cpp
    eval_impl(std::move(outputs), true);
  }
  
-@@ -386,12 +404,14 @@
+@@ -386,12 +410,14 @@
    if (std::none_of(outputs.begin(), outputs.end(), [](array& x) {
          return x.status() == array::Status::unscheduled;
        })) {
@@ -64,7 +79,7 @@ diff --git a/mlx/transforms.cpp b/mlx/transforms.cpp
 diff --git a/mlx/transforms.h b/mlx/transforms.h
 --- a/mlx/transforms.h
 +++ b/mlx/transforms.h
-@@ -9,6 +9,22 @@
+@@ -9,6 +9,26 @@
  
  namespace mlx::core {
  
@@ -81,6 +96,10 @@ diff --git a/mlx/transforms.h b/mlx/transforms.h
 +  uint64_t waits_for_submitted_arrays;
 +  // Times one stream waited inside an evaluation for another's output.
 +  uint64_t cross_stream_waits;
++  // Primitives the evaluator ran on the GPU and on the CPU: each is one
++  // kernel dispatch, with a cost that does not depend on its tensor's size.
++  uint64_t gpu_primitives;
++  uint64_t cpu_primitives;
 +};
 +MLX_API EvaluationCounts evaluation_counts();
 +

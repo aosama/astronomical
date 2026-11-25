@@ -20,6 +20,12 @@ pub struct EvaluationCounts {
     /// Times one stream waited inside an evaluation for another's output:
     /// two for each host step, one in and one out.
     pub cross_stream_waits: u64,
+    /// Primitives the evaluator ran on the GPU: each is one kernel
+    /// dispatch, whose cost does not shrink with its tensor. A reply token
+    /// is thousands of them, so their count is a token's fixed cost.
+    pub gpu_primitives: u64,
+    /// Primitives the evaluator ran on the CPU stream.
+    pub cpu_primitives: u64,
 }
 
 impl EvaluationCounts {
@@ -40,6 +46,8 @@ impl EvaluationCounts {
             cross_stream_waits: self
                 .cross_stream_waits
                 .saturating_sub(earlier.cross_stream_waits),
+            gpu_primitives: self.gpu_primitives.saturating_sub(earlier.gpu_primitives),
+            cpu_primitives: self.cpu_primitives.saturating_sub(earlier.cpu_primitives),
         }
     }
 }
@@ -52,7 +60,7 @@ unsafe extern "C" {
 #[must_use]
 pub fn evaluation_counts() -> EvaluationCounts {
     let mut counts = EvaluationCounts::default();
-    // SAFETY: the native side writes the four fields of the struct it is
+    // SAFETY: the native side writes the six fields of the struct it is
     // handed, whose layout `repr(C)` matches field for field.
     unsafe { astro_evaluation_counts_read(&mut counts) };
     counts
