@@ -192,9 +192,33 @@ struct StreamingForwardShape {
     layer_probe_shape: crate::qwen3_5_streaming::model::LayerProbeShape,
 }
 
+/// Loads, materializes and measures the streaming model, then bounds the
+/// `mlx_buffer_cache` to the working buffers it measured.
+fn load_and_materialize_streaming_model(
+    runtime: MlxRuntime,
+    validated_artifact: ValidatedQwen3_5Artifact,
+    model_directory: &std::path::Path,
+    streaming_forward_shape: StreamingForwardShape,
+    decode_astro_expert_cache_policy: WorkerDecodeAstroExpertCachePolicy,
+    model_loading_performance_attribution: &mut PerformanceAttribution,
+) -> Result<Qwen3_5Model, InferenceEngineError> {
+    let mut model = load_materialize_and_probe_streaming_model(
+        runtime,
+        validated_artifact,
+        model_directory,
+        streaming_forward_shape,
+        decode_astro_expert_cache_policy,
+        model_loading_performance_attribution,
+    )?;
+    model
+        .bound_mlx_buffer_cache_to_measured_working_buffers()
+        .map_err(text_generation::engine_errors::fatal_runtime_error)?;
+    Ok(model)
+}
+
 /// Loads the streaming model from the validated artifact under the engine's
 /// decode astro expert cache policy and materializes its target weights.
-fn load_and_materialize_streaming_model(
+fn load_materialize_and_probe_streaming_model(
     runtime: MlxRuntime,
     validated_artifact: ValidatedQwen3_5Artifact,
     model_directory: &std::path::Path,

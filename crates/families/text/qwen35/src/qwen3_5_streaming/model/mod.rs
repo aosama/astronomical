@@ -50,6 +50,7 @@ pub mod layer_probe_shape;
 pub mod layer_submission;
 #[cfg(feature = "direct-mlx")]
 pub mod memory_governance;
+mod mlx_buffer_cache_bound;
 // Holds one streamed layer for every span of a layer-at-a-time prompt.
 pub mod held_prompt_expert_layer;
 // Reads the next streamed layer while the graphics processor computes.

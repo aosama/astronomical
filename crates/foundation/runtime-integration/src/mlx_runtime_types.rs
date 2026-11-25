@@ -132,6 +132,51 @@ pub struct MlxMemorySnapshot {
 /// behaves identically on every Mac.
 pub const MLX_BUFFER_CACHE_RECLAIM_THRESHOLD_BYTES: usize = 256_000_000;
 
+/// The least the `mlx_buffer_cache` limit is bounded to once a model's working
+/// buffers are measured: small steps still reuse their buffers.
+pub const MLX_BUFFER_CACHE_MEASURED_LIMIT_FLOOR_BYTES: usize = 1_073_741_824;
+
+/// The `mlx_buffer_cache` limit for a loaded model: one measured step's MLX
+/// working buffers, at least the floor, never above the active limit.
+///
+/// A limit equal to the active limit let the `mlx_buffer_cache` keep every
+/// freed buffer while a prompt was read. With the `astro_expert_cache`
+/// filling the rest of the limit, MLX then held the whole limit, all of it
+/// wired, and on a 48 GB Mac at a 36 GB limit macOS swapped about 1.6 GB per
+/// 10,000-token prompt (issue #2533). Holding one step's buffers keeps their
+/// reuse, which is what the `mlx_buffer_cache` is for; with the limit at one
+/// measured step the same prompt swapped nothing and was read faster.
+#[must_use]
+pub fn measured_mlx_buffer_cache_limit_bytes(
+    active_memory_limit_bytes: usize,
+    measured_step_mlx_working_buffer_bytes: u64,
+) -> usize {
+    let measured_bytes =
+        usize::try_from(measured_step_mlx_working_buffer_bytes).unwrap_or(usize::MAX);
+    measured_bytes
+        .max(MLX_BUFFER_CACHE_MEASURED_LIMIT_FLOOR_BYTES)
+        .min(active_memory_limit_bytes)
+}
+
+/// The `mlx_buffer_cache` limit after the active limit moves to
+/// `requested_active_memory_limit_bytes`. A limit that followed the active
+/// limit keeps following it; one bounded to measured working buffers keeps
+/// its bound, capped by the new active limit.
+#[must_use]
+pub fn mlx_buffer_cache_limit_after_active_limit_change(
+    current_memory_limits: MlxMemoryLimits,
+    requested_active_memory_limit_bytes: usize,
+) -> usize {
+    if current_memory_limits.mlx_buffer_cache_limit_bytes
+        >= current_memory_limits.active_memory_limit_bytes
+    {
+        return requested_active_memory_limit_bytes;
+    }
+    current_memory_limits
+        .mlx_buffer_cache_limit_bytes
+        .min(requested_active_memory_limit_bytes)
+}
+
 /// Returns whether a synchronized MLX buffer cache is large enough to reclaim.
 ///
 /// Boundary semantics: exactly at the threshold counts as reclaimable. The

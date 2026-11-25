@@ -2,7 +2,9 @@
 //! ceiling changes share (issue #2473). Each engine decides differently what
 //! it may give back and how it rolls back, so only these steps live here.
 
-use runtime_integration::{MlxMemoryLimits, MlxRuntime};
+use runtime_integration::{
+    MlxMemoryLimits, MlxRuntime, mlx_buffer_cache_limit_after_active_limit_change,
+};
 
 use crate::InferenceEngineError;
 use text_generation::engine_errors::{fatal_engine_error, fatal_runtime_error};
@@ -47,8 +49,10 @@ pub fn observe_live_memory(
 /// first, so an unrepresentable request fails even when it matches.
 pub fn requested_mlx_memory_limits_when_changed(
     requested_mlx_memory_ceiling_bytes: u64,
-    current_mlx_memory_ceiling_bytes: u64,
+    current_mlx_memory_limits: MlxMemoryLimits,
 ) -> Result<Option<MlxMemoryLimits>, InferenceEngineError> {
+    let current_mlx_memory_ceiling_bytes =
+        current_mlx_memory_limits.active_memory_limit_bytes() as u64;
     let requested_mlx_memory_ceiling_bytes_as_usize =
         usize::try_from(requested_mlx_memory_ceiling_bytes).map_err(|_| {
             fatal_engine_error("requested MLX memory ceiling exceeds the platform range")
@@ -58,7 +62,10 @@ pub fn requested_mlx_memory_limits_when_changed(
     }
     MlxMemoryLimits::new(
         requested_mlx_memory_ceiling_bytes_as_usize,
-        requested_mlx_memory_ceiling_bytes_as_usize,
+        mlx_buffer_cache_limit_after_active_limit_change(
+            current_mlx_memory_limits,
+            requested_mlx_memory_ceiling_bytes_as_usize,
+        ),
     )
     .map(Some)
     .map_err(fatal_runtime_error)

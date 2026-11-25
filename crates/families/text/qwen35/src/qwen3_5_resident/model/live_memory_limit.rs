@@ -68,7 +68,7 @@ impl Qwen3_5ResidentModel {
         }
         let Some(requested_mlx_memory_limits) = requested_mlx_memory_limits_when_changed(
             requested_mlx_memory_ceiling_bytes,
-            current_mlx_memory_ceiling_bytes,
+            current_mlx_memory_limits,
         )?
         else {
             return Ok((minimum_mlx_memory_ceiling_bytes, current_mlx_memory_limits));

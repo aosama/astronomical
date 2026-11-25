@@ -163,6 +163,9 @@ fn load_model_parts<Engine: TextModelLoadingHooks>(
         model_chunking,
         model_loading_performance_attribution,
     )?;
+    // Loading may bound the `mlx_buffer_cache` to what the model measured;
+    // the core keeps the installed limits, so a reload installs the same.
+    engine.execution_core_mut().memory_limits = model.runtime().memory_limits();
     let (resolved_model_id, resolved_model_revision) =
         resolve_validated_model_identity(&artifact_facts.model_id, &artifact_facts.model_revision)?;
     let execution_core = engine.execution_core();
