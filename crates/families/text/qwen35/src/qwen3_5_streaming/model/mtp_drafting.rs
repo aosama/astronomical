@@ -145,6 +145,7 @@ impl Qwen3_5Model {
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<MtpRoundOutcome, TextExecutionError> {
         let head_row_count_before_round = session.head_state.row_count();
+        let round_started_at = std::time::Instant::now();
         let draft_token_ids = self.draft_reply_tokens(
             session,
             round_start,
@@ -154,12 +155,14 @@ impl Qwen3_5Model {
         let mut verified_token_ids = Vec::with_capacity(draft_token_ids.len() + 1);
         verified_token_ids.push(round_start.last_chosen_token_id);
         verified_token_ids.extend_from_slice(&draft_token_ids);
+        let drafted_at = std::time::Instant::now();
         let verification = self.verify_drafted_rows(
             &verified_token_ids,
             round_start.starting_position_tokens,
             request_decoder_state,
             performance_attribution,
         )?;
+        let verified_at = std::time::Instant::now();
         // The target's own choice after each row; the reply keeps the
         // drafts that match it and then the first choice that does not.
         let target_token_ids = self.target_token_picks(
@@ -167,6 +170,7 @@ impl Qwen3_5Model {
             round_start.starting_position_tokens,
             target_token_choice,
         )?;
+        let picked_at = std::time::Instant::now();
         let mut accepted_draft_count = 0;
         while accepted_draft_count < draft_token_ids.len()
             && target_token_ids[accepted_draft_count] == draft_token_ids[accepted_draft_count]
@@ -199,6 +203,14 @@ impl Qwen3_5Model {
             &kept_lanes,
             performance_attribution,
         )?;
+        self.reply_measurement.stage_tally.record_draft_round(
+            crate::qwen3_5_streaming::model::reply_stage_tally::DraftRoundStages {
+                draft: drafted_at - round_started_at,
+                verify: verified_at - drafted_at,
+                pick: picked_at - verified_at,
+                keep: picked_at.elapsed(),
+            },
+        );
         Ok(MtpRoundOutcome {
             reply_token_ids,
             drafted_token_count: draft_token_ids.len(),

@@ -110,10 +110,15 @@ The desired state is that every level carries standing instruments, so nobody ad
 4. Name the rung that will measure it and the guard model.
 5. Say what would make the idea wrong, and measure that first.
 
+## Standing instruments that exist
+
+- **Hand-offs:** `graph_host_step::evaluation_counts` reads MLX's own count of blocking evaluations, asynchronous evaluations, waits for submitted arrays and cross-stream waits (the `evaluation-counts` patch). A host readback of a lazy array counts as a blocking evaluation.
+- **A reply's stages:** `ReplyStageTally` in the streaming model keeps, per reply, the forwards and rows it ran, the in-graph lookups' time split into storage reads and bookkeeping, a drafted round's draft, verify, pick and keep times, and the hand-offs. The worker logs it once per reply ("the reply's stages"), and the speed journeys print it as `[reply-stages]`.
+- **First readings, so nobody repeats the wrong guess:** a lookup's bookkeeping is about 2.4 microseconds, not the tenth of a millisecond once assumed; a lookup whose slots four kernels read made five cross-stream waits until its slots were read once on the GPU; a plain reply token makes two to three blocking evaluations where one would do.
+
 ## Known gaps between today and the desired state
 
-- A draft round and an in-graph lookup have no standing stage tally; their stages were timed with temporary code.
-- The lookup's host bookkeeping (about a tenth of a millisecond a layer) is not separated from its read in any counter.
-- Hand-offs a token are not a reported figure.
 - Prediction recall and precision have no standing contract; the last measurement used temporary code.
 - One model-level speed alias still measures a model without decode tables and understates reply speed; it should move onto the engine's reply loop.
+- No contract prices a whole token's kernels alone for a given model geometry, so the kernel share of a token is still what is left after the measured parts.
+- The blocking evaluations a plain token makes beyond its one forward are counted but not yet named by cause.

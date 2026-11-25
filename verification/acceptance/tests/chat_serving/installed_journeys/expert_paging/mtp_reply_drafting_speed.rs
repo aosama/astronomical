@@ -228,6 +228,7 @@ async fn measure_reply(reply_case: ReplyCase) {
             .await
             .expect("the engine counts its fetches")
     );
+    report_reply_stages(&reply_case.phase_name, &engine).await;
     if let (RequestAttribution::Enabled, Some(evidence_directory)) = (
         reply_case.request_attribution,
         TestRunContext::current().configuration.evidence_directory,
@@ -238,5 +239,45 @@ async fn measure_reply(reply_case: ReplyCase) {
             evidence_directory.join(format!("{}.jsonl", reply_case.phase_name)),
         )
         .expect("the attribution report copies to the evidence directory");
+    }
+}
+
+/// Prints where the measured reply's time went inside the engine, a
+/// forward: the standing stage tally, so no case needs timers of its own.
+async fn report_reply_stages(phase_name: &str, engine: &impl Qwen3_5StreamingEngineTestControls) {
+    let Some(stages) = engine
+        .last_reply_stage_counts_for_tests()
+        .await
+        .expect("the engine keeps the last reply's stages")
+    else {
+        return;
+    };
+    let forward_count = stages.reply_forward_count.max(1) as f64;
+    let round_count = stages.draft_round_count.max(1) as f64;
+    let milliseconds = |nanoseconds: u64, count: f64| nanoseconds as f64 / 1_000_000.0 / count;
+    eprintln!(
+        "[reply-stages] phase={phase_name} forwards={} rows={} lookups_per_forward={:.1} lookup_read_ms_per_forward={:.3} lookup_bookkeeping_ms_per_forward={:.3} lookup_bookkeeping_microseconds_per_lookup={:.1} blocking_evaluations_per_forward={:.2} asynchronous_evaluations_per_forward={:.2} waits_for_submitted_per_forward={:.2} cross_stream_waits_per_forward={:.1}",
+        stages.reply_forward_count,
+        stages.reply_row_count,
+        stages.lookup_count as f64 / forward_count,
+        milliseconds(stages.lookup_storage_read_nanoseconds, forward_count),
+        milliseconds(stages.lookup_bookkeeping_nanoseconds(), forward_count),
+        stages.lookup_bookkeeping_nanoseconds() as f64
+            / 1_000.0
+            / (stages.lookup_count.max(1) as f64),
+        stages.hand_offs.blocking_evaluations as f64 / forward_count,
+        stages.hand_offs.asynchronous_evaluations as f64 / forward_count,
+        stages.hand_offs.waits_for_submitted_arrays as f64 / forward_count,
+        stages.hand_offs.cross_stream_waits as f64 / forward_count,
+    );
+    if stages.draft_round_count > 0 {
+        eprintln!(
+            "[reply-stages] phase={phase_name} draft_rounds={} draft_ms_per_round={:.2} verify_ms_per_round={:.2} pick_ms_per_round={:.2} keep_ms_per_round={:.2}",
+            stages.draft_round_count,
+            milliseconds(stages.draft_nanoseconds, round_count),
+            milliseconds(stages.verify_nanoseconds, round_count),
+            milliseconds(stages.pick_nanoseconds, round_count),
+            milliseconds(stages.keep_nanoseconds, round_count),
+        );
     }
 }

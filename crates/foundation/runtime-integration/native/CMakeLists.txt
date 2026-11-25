@@ -135,6 +135,10 @@ FetchContent_Declare(
         "-DPATCH_EXECUTABLE=${PATCH_EXECUTABLE}"
         "-DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/../../../../third-party/patches/mlx-0.32.4-fast-synch-setting.patch"
         -P "${CMAKE_CURRENT_LIST_DIR}/apply_patch_if_needed.cmake"
+        COMMAND "${CMAKE_COMMAND}"
+        "-DPATCH_EXECUTABLE=${PATCH_EXECUTABLE}"
+        "-DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/../../../../third-party/patches/mlx-0.32.4-evaluation-counts.patch"
+        -P "${CMAKE_CURRENT_LIST_DIR}/apply_patch_if_needed.cmake"
 )
 # The pinned mlx-c v0.8.0 release pairs with the pinned MLX v0.32.4, so no version-gap
 # bridge is needed. The one patch adds mlx_array_detach, which the C API does not offer.

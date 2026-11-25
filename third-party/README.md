@@ -91,6 +91,16 @@ MLX patches (`mlx-0.32.4-*.patch`):
   published the awaited value fails: upstream's CPU stream would spin on it
   forever, where the patched one lets the evaluation report the failure.
   Retires if upstream offers the same control and ends that wait.
+- `evaluation-counts` — Astronomical feature. Counts, since the process
+  started, the evaluations that walked a graph and waited, the ones that
+  returned without waiting, the waits for arrays already handed to an
+  earlier evaluation, and the times one stream waited inside an evaluation
+  for another's output (`mlx::core::evaluation_counts`). Each is a hand-off
+  between the caller, the GPU and the CPU stream, and a reply token's speed
+  depends on how many it makes; the engine reports them a token
+  (`crates/engine/graph-host-step`, `evaluation_counts`). Counted inside MLX
+  because a host readback evaluates there too, where no caller can see it.
+  Retires if upstream reports the same counts.
 - `stable-prefill-split-k` — serving performance. Keeps the quantized matmul
   split-K topology stable once row tiles already expose parallelism, so
   prefill numerics do not change with batch shape. Retires if upstream

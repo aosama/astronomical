@@ -14,6 +14,14 @@
 //! MLX has two ways to order a CPU step among GPU steps, Metal shared events
 //! and its fast synch, so the step inside the graph is priced under each.
 //!
+//! Every pass gathers the looked-up rows three times, as a real expert layer
+//! does for its gate, up and down projections. MLX makes each GPU step that
+//! reads a host step's output wait for it on its own, so three readers are
+//! three waits, and a fourth is the host step's wait for its route. The last
+//! pass puts one GPU copy between the step and its readers, which leaves two
+//! waits a layer however many kernels read the rows. Each pass prints the
+//! waits MLX counted a layer beside its time.
+//!
 //! Run with `cargo measure-graph-host-step`. Seconds.
 
 use std::sync::Arc;
@@ -45,6 +53,9 @@ enum RouteLookup {
     StepInsideTheGraph,
     /// The same step, ordered by MLX's fast synch.
     StepInsideTheGraphFastSynch,
+    /// The same step under fast synch, its output copied once on the GPU
+    /// so only the copy waits for the host.
+    StepInsideTheGraphReadOnce,
     /// The routes index the table directly: no host at all.
     GpuOnly,
 }
@@ -55,6 +66,7 @@ impl RouteLookup {
             Self::HostStopALayer => "host stop a layer (today)",
             Self::StepInsideTheGraph => "step in graph, shared events",
             Self::StepInsideTheGraphFastSynch => "step in graph, fast synch",
+            Self::StepInsideTheGraphReadOnce => "step in graph, read once",
             Self::GpuOnly => "GPU only (floor)",
         }
     }
@@ -66,6 +78,10 @@ struct SyntheticLayer {
     projection: MlxArray,
     expert_rows: MlxArray,
     routed_row_scale: MlxArray,
+    /// Added to looked-up rows to copy them on the GPU, and multiplied into
+    /// the second and third gathers so they are computed and change nothing.
+    zero_row: MlxArray,
+    zero_scale: MlxArray,
     /// The host's side of the lookup: the table row that holds each expert.
     row_of_expert: Arc<[u32]>,
 }
@@ -100,14 +116,27 @@ fn synthetic_layer(runtime: &MlxRuntime) -> SyntheticLayer {
     let routed_row_scale = runtime
         .array_from_f32(&[1.0 / ROUTED_EXPERT_COUNT as f32], &[1])
         .expect("the scale uploads");
+    let zero_row = MlxArray::from_u32(&[0], &[1]).expect("the zero row uploads");
+    let zero_scale = runtime
+        .array_from_f32(&[0.0], &[1])
+        .expect("the zero scale uploads");
     runtime
-        .evaluate_arrays(&[&router, &projection, &expert_rows, &routed_row_scale])
+        .evaluate_arrays(&[
+            &router,
+            &projection,
+            &expert_rows,
+            &routed_row_scale,
+            &zero_row,
+            &zero_scale,
+        ])
         .expect("the weights evaluate");
     SyntheticLayer {
         router,
         projection,
         expert_rows,
         routed_row_scale,
+        zero_row,
+        zero_scale,
         row_of_expert: (0..EXPERT_COUNT as u32).collect(),
     }
 }
@@ -145,20 +174,43 @@ fn routed_rows(layer: &SyntheticLayer, routes: &MlxArray, route_lookup: RouteLoo
             }
             MlxArray::from_u32(&rows, &[ROUTED_EXPERT_COUNT]).expect("the rows upload")
         }
-        RouteLookup::StepInsideTheGraph | RouteLookup::StepInsideTheGraphFastSynch => {
-            append_host_step(
-                &[routes],
-                HostStepOutput {
-                    shape: &[ROUTED_EXPERT_COUNT],
-                    dtype: MlxDtype::UInt32,
-                },
-                Box::new(ExpertRowLookup {
-                    row_of_expert: Arc::clone(&layer.row_of_expert),
-                }),
-            )
-            .expect("the step joins the graph")
-        }
+        RouteLookup::StepInsideTheGraph
+        | RouteLookup::StepInsideTheGraphFastSynch
+        | RouteLookup::StepInsideTheGraphReadOnce => append_host_step(
+            &[routes],
+            HostStepOutput {
+                shape: &[ROUTED_EXPERT_COUNT],
+                dtype: MlxDtype::UInt32,
+            },
+            Box::new(ExpertRowLookup {
+                row_of_expert: Arc::clone(&layer.row_of_expert),
+            }),
+        )
+        .expect("the step joins the graph"),
     }
+}
+
+/// The rows gathered once for each of an expert layer's three projections.
+/// The second and third gathers are scaled by zero: they read `rows` and
+/// run, and the sum is the first gather exactly.
+fn gathered_three_times(runtime: &MlxRuntime, layer: &SyntheticLayer, rows: &MlxArray) -> MlxArray {
+    let mut gathered = runtime
+        .take_axis(&layer.expert_rows, rows, 0)
+        .expect("the first gather builds");
+    for _ in 0..2 {
+        let further_gather = runtime
+            .take_axis(&layer.expert_rows, rows, 0)
+            .expect("a further gather builds");
+        gathered = runtime
+            .add(
+                &gathered,
+                &runtime
+                    .multiply(&further_gather, &layer.zero_scale)
+                    .expect("the further gather scales to nothing"),
+            )
+            .expect("the gathers sum");
+    }
+    gathered
 }
 
 /// One layer: route, look up, gather, project.
@@ -188,9 +240,14 @@ fn forward_layer(
         )
         .expect("the routes flatten");
     let rows = routed_rows(layer, &routes, route_lookup);
-    let gathered = runtime
-        .take_axis(&layer.expert_rows, &rows, 0)
-        .expect("the gather builds");
+    let rows = if route_lookup == RouteLookup::StepInsideTheGraphReadOnce {
+        runtime
+            .add(&rows, &layer.zero_row)
+            .expect("the GPU copy of the rows builds")
+    } else {
+        rows
+    };
+    let gathered = gathered_three_times(runtime, layer, &rows);
     let routed_sum = runtime
         .sum_axis(&gathered, 0, true)
         .expect("the routed sum builds");
@@ -228,6 +285,9 @@ fn forward_token(
 /// A pass's median token, and the last token it computed.
 struct PassTiming {
     median_token_milliseconds: f64,
+    /// Times one stream waited for another's output, a layer, as MLX
+    /// counted them over the timed tokens.
+    cross_stream_waits_a_layer: f64,
     last_hidden: Vec<f32>,
 }
 
@@ -237,11 +297,15 @@ fn time_pass(
     first_hidden: &MlxArray,
     route_lookup: RouteLookup,
 ) -> PassTiming {
-    set_fast_synch(route_lookup == RouteLookup::StepInsideTheGraphFastSynch);
+    set_fast_synch(matches!(
+        route_lookup,
+        RouteLookup::StepInsideTheGraphFastSynch | RouteLookup::StepInsideTheGraphReadOnce
+    ));
     let mut last_hidden = Vec::new();
     for _ in 0..WARMUP_TOKEN_COUNT {
         last_hidden = forward_token(runtime, layer, first_hidden, route_lookup);
     }
+    let counts_before = graph_host_step::evaluation_counts();
     let mut token_milliseconds = Vec::with_capacity(TIMED_TOKEN_COUNT);
     let pass_started = Instant::now();
     let mut last_report = Instant::now();
@@ -262,7 +326,12 @@ fn time_pass(
         }
     }
     token_milliseconds.sort_by(f64::total_cmp);
+    let cross_stream_wait_count = graph_host_step::evaluation_counts()
+        .since(counts_before)
+        .cross_stream_waits;
     PassTiming {
+        cross_stream_waits_a_layer: cross_stream_wait_count as f64
+            / (TIMED_TOKEN_COUNT * LAYERS_PER_TOKEN) as f64,
         median_token_milliseconds: token_milliseconds[token_milliseconds.len() / 2],
         last_hidden,
     }
@@ -272,10 +341,11 @@ fn report_pass(route_lookup: RouteLookup, timing: &PassTiming, floor_millisecond
     let hand_off_microseconds_a_layer =
         (timing.median_token_milliseconds - floor_milliseconds) * 1000.0 / LAYERS_PER_TOKEN as f64;
     eprintln!(
-        "[graph-host-step-cost] {:<28} token_milliseconds={:.3} tokens_per_second={:.1} hand_off_microseconds_a_layer={hand_off_microseconds_a_layer:.1}",
+        "[graph-host-step-cost] {:<28} token_milliseconds={:.3} tokens_per_second={:.1} hand_off_microseconds_a_layer={hand_off_microseconds_a_layer:.1} cross_stream_waits_a_layer={:.1}",
         route_lookup.description(),
         timing.median_token_milliseconds,
-        1000.0 / timing.median_token_milliseconds
+        1000.0 / timing.median_token_milliseconds,
+        timing.cross_stream_waits_a_layer
     );
 }
 
@@ -303,6 +373,7 @@ fn should_price_a_host_stop_a_layer_against_a_step_inside_the_graph() {
         RouteLookup::HostStopALayer,
         RouteLookup::StepInsideTheGraph,
         RouteLookup::StepInsideTheGraphFastSynch,
+        RouteLookup::StepInsideTheGraphReadOnce,
     ];
     let mut timings = Vec::with_capacity(route_lookups.len());
     for route_lookup in route_lookups {

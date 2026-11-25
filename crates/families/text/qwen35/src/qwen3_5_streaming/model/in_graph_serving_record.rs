@@ -26,6 +26,14 @@ impl Qwen3_5Model {
                 continue;
             };
             counts.served_layer_count += 1;
+            self.reply_measurement.stage_tally.record_lookup(
+                table_read_through.lookup_elapsed,
+                table_read_through
+                    .table_fetch_report
+                    .map_or(std::time::Duration::ZERO, |table_fetch_report| {
+                        table_fetch_report.storage_read_elapsed
+                    }),
+            );
             counts.fetching_layer_count +=
                 u64::from(table_read_through.table_fetch_report.is_some());
             if let Err(accounting_error) = self.record_in_graph_layer_serving(

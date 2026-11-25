@@ -15,6 +15,10 @@
 //! shows that the step only pays under MLX's fast synch, which
 //! [`set_fast_synch`] turns on.
 //!
+//! The crate also reads how often MLX handed work between the caller, the
+//! GPU and its CPU stream ([`evaluation_counts`]), which is what a host step
+//! exists to lower.
+//!
 //! The step itself is native code (`native/graph_host_step.cpp`), an MLX
 //! primitive compiled against the patched MLX sources; `host_step` is its
 //! safe owner. Everything here needs MLX, so the crate is empty without the
@@ -27,6 +31,13 @@
 #[allow(unsafe_code)]
 mod host_step;
 
+// Reads four counters MLX's evaluator keeps (the `evaluation-counts` patch).
+#[cfg(feature = "direct-mlx")]
+#[allow(unsafe_code)]
+mod evaluation_counts;
+
+#[cfg(feature = "direct-mlx")]
+pub use evaluation_counts::{EvaluationCounts, evaluation_counts};
 #[cfg(feature = "direct-mlx")]
 pub use host_step::{
     HostStep, HostStepFailed, HostStepInputs, HostStepOutput, append_host_step, set_fast_synch,

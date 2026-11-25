@@ -50,6 +50,9 @@ pub struct TableReadThrough {
     pub table_fetch_report: Option<TableFetchReport>,
     /// How long the whole fetch took, planning and reads together.
     pub fetch_elapsed: std::time::Duration,
+    /// How long the whole lookup took, from the route arriving to the slots
+    /// being written; set by the host step that ran it.
+    pub lookup_elapsed: std::time::Duration,
     /// Routed experts a previous token's prefetch had put in the table, and
     /// routed experts it had been asked for and did not deliver.
     pub prefetch_hit_count: u64,

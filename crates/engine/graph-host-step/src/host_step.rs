@@ -212,4 +212,4 @@ unsafe extern "C" fn release_host_step(host_state: *mut c_void) {
 
 #[cfg(test)]
 #[path = "host_step_tests.rs"]
-mod host_step_tests;
+pub(crate) mod host_step_tests;

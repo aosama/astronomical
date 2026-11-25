@@ -177,7 +177,11 @@ impl HostStep for InGraphRouteLookup {
     /// which layer it was.
     fn run(&mut self, inputs: HostStepInputs<'_>, output: &mut [u8]) -> Result<(), HostStepFailed> {
         let (table_slots, _) = output.as_chunks_mut::<4>();
-        let outcome = self.look_up(inputs, table_slots);
+        let lookup_started_at = std::time::Instant::now();
+        let mut outcome = self.look_up(inputs, table_slots);
+        if let InGraphLayerOutcome::Served(table_read_through) = &mut outcome {
+            table_read_through.lookup_elapsed = lookup_started_at.elapsed();
+        }
         if !matches!(outcome, InGraphLayerOutcome::Served(_)) {
             self.window.mark_refused();
             // The GPU multiplies from whatever slots it is handed. Slot zero

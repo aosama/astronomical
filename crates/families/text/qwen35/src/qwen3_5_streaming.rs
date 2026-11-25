@@ -27,6 +27,7 @@ pub use inference_execution::{
 pub use model::direct_expert_fetch_tally::DirectExpertFetchCounts;
 #[cfg(feature = "direct-mlx")]
 pub use model::in_graph_table_serving::InGraphServingCounts;
+pub use model::reply_stage_tally::ReplyStageCounts;
 #[cfg(feature = "direct-mlx")]
 pub use model::routed_reply_recording::RoutedReplyRecording;
 #[cfg(feature = "direct-mlx")]
