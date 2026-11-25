@@ -9,11 +9,11 @@
 //! follow. `speculative_decode_advance` drains each round's tokens through
 //! the ordinary emission machinery, one per engine advance.
 
-pub mod draft_model_status_report;
 pub mod speculative_decode_advance;
 
 pub use crate::qwen3_5_core::draft_tree_decode::{
-    draft_tree_round, engine_draft_runtime, speculation_session_admission,
+    draft_model_status_report, draft_tree_round, engine_draft_runtime,
+    speculation_session_admission,
 };
 
 pub use engine_draft_runtime::Qwen3_5SpeculativeDraftRuntime;

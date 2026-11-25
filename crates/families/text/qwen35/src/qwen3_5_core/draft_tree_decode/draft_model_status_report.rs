@@ -1,13 +1,12 @@
-//! What the resident engine tells status about its drafter. The streaming
-//! engine's answer, which shares the wording, is
-//! `engine_core::speculative_decoding::unused_drafter_status`.
+//! What an engine tells status about its drafter, for both engines: the
+//! resident engine keeps its drafter on the engine, the streaming engine on
+//! the model, and both load it the same way, so both report it the same way.
 //!
 //! Kept apart from loading so every answer is testable without a graphics
 //! processor: each depends only on what loading found (a failed load is also
-//! logged). Reasons are
-//! written for the person reading status and never carry a local path. Each
-//! starts at the cause, because every surface that shows one already says a
-//! drafter is installed and not in use.
+//! logged). Reasons are written for the person reading status and never carry
+//! a local path. Each starts at the cause, because every surface that shows
+//! one already says a drafter is installed and not in use.
 
 use ipc_protocol::{DraftModelGeneration, DraftModelStatus};
 
@@ -57,7 +56,7 @@ pub fn draft_runtime_and_status(
         Err(draft_loading_error) => {
             tracing::warn!(
                 %draft_loading_error,
-                "the installed DFlash drafter could not be loaded; decoding stays classic"
+                "the installed DFlash drafter could not be loaded; replies are written one token a forward"
             );
             (None, failed_load_status(&draft_loading_error))
         }
