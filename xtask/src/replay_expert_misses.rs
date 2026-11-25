@@ -307,10 +307,12 @@ fn report_replay(
         * MEASURED_MISS_MILLISECONDS
         + replay_outcome.partly_held_layers_per_token() * MEASURED_ROUTE_STOP_MILLISECONDS;
     format!(
-        "[replay-expert-misses] workload={workload_name} division={division_name} rule=\"{}\" misses_per_token={:.2} partly_held_layers_per_token={:.2} estimated_expert_milliseconds_per_token={estimated_milliseconds_per_token:.1}",
+        "[replay-expert-misses] workload={workload_name} division={division_name} rule=\"{}\" misses_per_token={:.2} partly_held_layers_per_token={:.2} estimated_expert_milliseconds_per_token={estimated_milliseconds_per_token:.1} misses_per_token_in_the_first_48={:.2} misses_per_token_after_them={:.2}",
         keeping_rule.name(),
         replay_outcome.misses_per_token(),
         replay_outcome.partly_held_layers_per_token(),
+        replay_outcome.early_misses_per_token(),
+        replay_outcome.later_misses_per_token(),
     )
 }
 

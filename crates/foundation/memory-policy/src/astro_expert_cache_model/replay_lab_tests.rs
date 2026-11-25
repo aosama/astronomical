@@ -338,3 +338,48 @@ fn should_never_miss_more_as_it_sees_further_ahead_on_a_recorded_reply() {
         previous_misses = misses;
     }
 }
+
+/// A reply of `token_count` tokens that asks for a new expert at every
+/// one of its first `new_expert_token_count` tokens and then only for the
+/// first expert again, with room for all of them.
+fn opening_heavy_outcome(
+    token_count: usize,
+    new_expert_token_count: usize,
+) -> super::ReplayOutcome {
+    let mut expert_sequence = Vec::with_capacity(token_count);
+    for token_index in 0..token_count {
+        expert_sequence.push(if token_index < new_expert_token_count {
+            token_index as u16 % 8
+        } else {
+            0
+        });
+    }
+    replay(
+        &single_layer_case(&expert_sequence, 8),
+        &mut LeastRecentlyUsed::default(),
+    )
+}
+
+#[test]
+fn should_count_the_misses_of_a_reply_s_opening_apart_from_the_rest() {
+    let outcome = opening_heavy_outcome(96, 8);
+    assert_eq!(outcome.miss_count, 8);
+    assert_eq!(outcome.early_miss_count, 8);
+    assert!((outcome.early_misses_per_token() - 8.0 / 48.0).abs() < 1e-9);
+    assert_eq!(outcome.later_misses_per_token(), 0.0);
+}
+
+#[test]
+fn should_count_a_reply_shorter_than_its_opening_as_all_opening() {
+    let outcome = opening_heavy_outcome(4, 4);
+    assert_eq!(outcome.early_miss_count, 4);
+    assert_eq!(outcome.early_misses_per_token(), 1.0);
+    assert_eq!(outcome.later_misses_per_token(), 0.0);
+}
+
+#[test]
+fn should_count_no_opening_misses_for_an_empty_reply() {
+    let outcome = opening_heavy_outcome(0, 0);
+    assert_eq!(outcome.early_misses_per_token(), 0.0);
+    assert_eq!(outcome.later_misses_per_token(), 0.0);
+}

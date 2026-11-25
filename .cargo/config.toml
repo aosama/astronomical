@@ -963,7 +963,9 @@ attribute-in-graph-route-lookup = "run -p xtask -- test-run --package astronomic
 # admission, and Belady's MIN, the bound no rule can beat), with the
 # astro_expert_cache capacity shared across layers and divided by layer as the
 # engine held it when the reply began. Prints misses per reply token per rule
-# and progress with an ETA; runs in seconds.
+# and progress with an ETA; runs in seconds. Each line also gives the misses a
+# token over the reply's first 48 tokens and after them: the opening is set by
+# what is held when the reply begins, which no keeping rule changes.
 replay-expert-misses = "run -p xtask --release -- replay-expert-misses"
 
 # Cold SSD-streaming prefill as production serves it: the in-process engine
