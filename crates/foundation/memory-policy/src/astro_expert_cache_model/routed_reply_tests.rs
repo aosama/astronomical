@@ -157,3 +157,32 @@ fn should_refuse_to_build_routes_naming_an_expert_beyond_the_layer() {
         Err(RoutedReplyDecodeError::ExpertBeyondLayer { expert_id: 8, .. })
     ));
 }
+
+#[test]
+fn should_write_and_read_back_routes_of_a_layer_past_256_experts() {
+    // Expert 511 and 256 do not fit one byte; 3 would read the same either way.
+    let token_routes = vec![vec![vec![511, 3], vec![256, 300]]];
+    let routed_reply =
+        RoutedReply::from_token_routes(512, &token_routes).expect("a 512-expert layer builds");
+
+    let read_back = RoutedReply::from_recording_bytes(&routed_reply.to_recording_bytes())
+        .expect("the wide recording reads back");
+
+    assert_eq!(read_back, routed_reply);
+    assert_eq!(read_back.layer_route(0, 0), &[511, 3]);
+    assert_eq!(read_back.layer_route(0, 1), &[256, 300]);
+}
+
+#[test]
+fn should_refuse_a_wide_recording_cut_in_the_middle_of_an_identifier() {
+    let token_routes = vec![vec![vec![511, 3]]];
+    let mut recording_bytes = RoutedReply::from_token_routes(512, &token_routes)
+        .expect("a 512-expert layer builds")
+        .to_recording_bytes();
+    recording_bytes.pop();
+
+    assert!(matches!(
+        RoutedReply::from_recording_bytes(&recording_bytes),
+        Err(RoutedReplyDecodeError::WrongRouteByteCount { .. })
+    ));
+}

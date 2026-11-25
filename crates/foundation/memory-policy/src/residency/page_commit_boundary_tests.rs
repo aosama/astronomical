@@ -223,7 +223,8 @@ fn should_not_complete_an_empty_complete_or_unfunded_layer() {
 mod decode_whole_layer_keep {
     use crate::residency::{
         CurrentExpertLayerResidency, DECODE_TABLE_TARGET_SLOT_COUNT, RetainedExpertPageClass,
-        complete_layers_beyond_keep_count, decode_whole_layer_keep_count,
+        complete_layers_beyond_keep_count, decode_table_target_slot_count,
+        decode_whole_layer_keep_count,
     };
 
     const EXPERT_BYTES: u64 = 1_000;
@@ -294,6 +295,38 @@ mod decode_whole_layer_keep {
         assert_eq!(
             decode_whole_layer_keep_count(capacity_of(64 * 10 - 1), EXPERT_BYTES, 64, 10),
             0
+        );
+    }
+
+    #[test]
+    fn should_protect_three_eighths_of_a_layer_larger_than_256_experts() {
+        assert_eq!(decode_table_target_slot_count(512), 192);
+        assert_eq!(decode_table_target_slot_count(1_024), 384);
+    }
+
+    #[test]
+    fn should_protect_the_measured_96_experts_for_layers_of_up_to_256() {
+        assert_eq!(decode_table_target_slot_count(256), 96);
+        assert_eq!(decode_table_target_slot_count(128), 96);
+        // One expert past 256 still rounds down to the measured target.
+        assert_eq!(decode_table_target_slot_count(257), 96);
+        assert_eq!(decode_table_target_slot_count(64), 64, "at most the layer");
+        assert_eq!(decode_table_target_slot_count(0), 0);
+    }
+
+    #[test]
+    fn should_keep_no_layer_whole_for_512_expert_layers_at_a_third_of_the_model() {
+        // Qwen3.8-Flash-Next at a 34 GB limit: about 9,140 experts of room,
+        // 48 layers of 512. One whole layer would leave 47 tables 183 each,
+        // short of 192; the fixed 96 kept ten layers whole here.
+        assert_eq!(
+            decode_whole_layer_keep_count(capacity_of(9_140), EXPERT_BYTES, 512, 48),
+            0
+        );
+        // A little more room keeps one.
+        assert_eq!(
+            decode_whole_layer_keep_count(capacity_of(9_800), EXPERT_BYTES, 512, 48),
+            1
         );
     }
 
