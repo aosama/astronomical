@@ -23,7 +23,7 @@
         {"title": "Prompt processing", "description": "How a prompt is split into pieces while the model reads it. These trade memory for speed.", "tier": "advanced", "settings": ["chunking.fixed_prompt_processing_chunk_size_tokens", "chunking.fixed_ssd_streaming_prompt_processing_chunk_size_tokens", "chunking.prefill_graph_submission_layer_interval", "chunking.full_attention_key_value_growth_tokens"]},
         {"title": "Prompt cache blocks", "description": "How a prompt is divided when it is stored in the prompt cache.", "tier": "advanced", "settings": ["chunking.ssd_prompt_cache_block_tokens", "chunking.ssd_prompt_cache_common_prefix_stride_blocks"]},
         {"title": "SSD streaming", "description": "Used only while part of a model is read from the SSD because it does not fit in memory.", "tier": "advanced", "settings": ["chunking.experimental_ssd_paging_generation_graph_submission_layer_interval"]},
-        {"title": "Speculative decoding", "description": "Drafting several tokens at once with a small helper model, when one is installed beside this model.", "tier": "advanced", "settings": ["chunking.speculative_decoding_block_length_tokens"]},
+        {"title": "Speculative decoding", "description": "Drafting more than one token at a time, with the model's own prediction head or a small helper model installed beside it.", "tier": "advanced", "settings": ["chunking.multi_token_prediction_draft_tokens", "chunking.speculative_decoding_block_length_tokens"]},
         {"title": "Experimental", "description": "Features still being proven. They can change or go away.", "tier": "advanced", "settings": ["chunking.experimental_neural_engine_prefill_enabled", "chunking.experimental_in_memory_prefix_adoption_enabled"]},
         {"title": "Diagnostics", "description": "Measurement modes for investigating speed. They slow the model down, so leave them off in normal use.", "tier": "diagnostic", "note": "Slows serving. Leave off.", "settings": ["chunking.experimental_decode_stage_attribution_enabled", "chunking.experimental_prefill_stage_attribution_enabled"]}
     ]
@@ -282,6 +282,24 @@
           ],
           "x-astronomical-unit": "tokens",
           "x-astronomical-explanation": "A saved prompt is stored in blocks. This is the length of each block. Leave it automatic to let each model choose; a fixed length is only for comparing runs.",
+          "x-astronomical-apply-mode": "model-reload"
+        },
+        "multi_token_prediction_draft_tokens": {
+          "title": "Tokens drafted ahead",
+          "description": "Tokens a model with a multi-token-prediction head drafts after each reply token while its experts stream from the SSD; null leaves the count to the engine, 0 drafts none.",
+          "default": null,
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 3
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "x-astronomical-unit": "tokens",
+          "x-astronomical-explanation": "Some models can guess the next few words and then check all of them in one step, which makes replies faster when the guesses are right. Automatic uses the count measured fastest, which is 1. Choose 0 to turn drafting off. It only applies to models that ship this ability and are too large to hold in memory whole.",
           "x-astronomical-apply-mode": "model-reload"
         },
         "speculative_decoding_block_length_tokens": {

@@ -221,6 +221,10 @@ struct WorkerChunkingConfiguration: Codable, Equatable {
   let experimentalPrefillStageAttributionEnabled: Bool
   let experimentalInMemoryPrefixAdoptionEnabled: Bool
   let experimentalNeuralEnginePrefillEnabled: Bool
+  // Tokens drafted after each reply token by a model with a
+  // multi-token-prediction head. nil is the engine's own count; a worker
+  // built before the setting existed sends no key at all.
+  let multiTokenPredictionDraftTokens: UInt32?
 
   enum CodingKeys: String, CodingKey, CaseIterable {
     case fixedPromptProcessingChunkSizeTokens = "fixed_prompt_processing_chunk_size_tokens"
@@ -235,6 +239,7 @@ struct WorkerChunkingConfiguration: Codable, Equatable {
     case experimentalPrefillStageAttributionEnabled = "experimental_prefill_stage_attribution_enabled"
     case experimentalInMemoryPrefixAdoptionEnabled = "experimental_in_memory_prefix_adoption_enabled"
     case experimentalNeuralEnginePrefillEnabled = "experimental_neural_engine_prefill_enabled"
+    case multiTokenPredictionDraftTokens = "multi_token_prediction_draft_tokens"
   }
 
   init(from decoder: Decoder) throws {
@@ -265,5 +270,7 @@ struct WorkerChunkingConfiguration: Codable, Equatable {
       Bool.self, forKey: .experimentalInMemoryPrefixAdoptionEnabled)
     experimentalNeuralEnginePrefillEnabled = try container.decode(
       Bool.self, forKey: .experimentalNeuralEnginePrefillEnabled)
+    multiTokenPredictionDraftTokens = try container.decodeIfPresent(
+      UInt32.self, forKey: .multiTokenPredictionDraftTokens)
   }
 }
