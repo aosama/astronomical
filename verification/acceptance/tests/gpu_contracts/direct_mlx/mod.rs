@@ -23,6 +23,7 @@ mod gpu_wired_ceiling_probe;
 mod graph_host_step_cost;
 mod kernel_capability;
 mod model_artifact_memory_limits_tests;
+mod primitive_dispatch_cost;
 mod qwen3_5;
 mod qwen3_5_moe;
 mod register_ordered_matmul;

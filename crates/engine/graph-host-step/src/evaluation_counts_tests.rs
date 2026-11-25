@@ -54,12 +54,16 @@ fn should_give_zeros_for_readings_taken_out_of_order() {
         asynchronous_evaluations: 4,
         waits_for_submitted_arrays: 2,
         cross_stream_waits: 80,
+        gpu_primitives: 5_000,
+        cpu_primitives: 90,
     };
     let earlier = EvaluationCounts {
         blocking_evaluations: 3,
         asynchronous_evaluations: 1,
         waits_for_submitted_arrays: 0,
         cross_stream_waits: 10,
+        gpu_primitives: 1_000,
+        cpu_primitives: 30,
     };
 
     assert_eq!(
@@ -69,6 +73,8 @@ fn should_give_zeros_for_readings_taken_out_of_order() {
             asynchronous_evaluations: 3,
             waits_for_submitted_arrays: 2,
             cross_stream_waits: 70,
+            gpu_primitives: 4_000,
+            cpu_primitives: 60,
         }
     );
     assert_eq!(earlier.since(later), EvaluationCounts::default());

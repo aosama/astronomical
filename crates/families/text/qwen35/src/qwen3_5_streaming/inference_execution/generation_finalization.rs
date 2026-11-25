@@ -200,6 +200,10 @@ fn log_stages_over_the_reply(
             "{:.1}",
             per_reply_token(forward_count, hand_offs.cross_stream_waits)
         ),
+        gpu_primitives_per_forward = format_args!(
+            "{:.0}",
+            per_reply_token(forward_count, hand_offs.gpu_primitives)
+        ),
         "the reply's stages"
     );
 }

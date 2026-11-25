@@ -787,6 +787,15 @@ measure-expert-rows-per-read = "run -p xtask -- test-run --package astronomical-
 # 35B-A3B's shape, 40 layers a token; the three passes must compute the same
 # token. The step is priced under each of MLX's two orderings of a CPU step
 # among GPU steps: Metal shared events and its fast synch. Seconds.
+# What one GPU primitive costs when its tensor is small: chains of 2,000
+# reshapes, scalar multiplies, sigmoids and casts over a residual-sized vector,
+# each built once and evaluated once, priced a primitive from MLX's own count.
+# A reply token evaluates thousands of them (`gpu_primitives_per_forward` in a
+# reply's stages), so this is the floor of its fixed cost. It also prices a
+# one-row 4-bit weight multiply at the shapes a token runs, alone and as a
+# chain in which each waits for the one before, beside the time its weight
+# bytes need at the GPU's memory bandwidth. No model. Seconds.
+measure-primitive-dispatch-cost = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter primitive_dispatch_cost"
 measure-graph-host-step = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --exact --filter direct_mlx::graph_host_step_cost::should_price_a_host_stop_a_layer_against_a_step_inside_the_graph"
 # The row-batched kernel's GPU contracts: matches MLX's quantized matmul on
 # every 27B shape at 1 to 32 rows, gives each row the same bits alone and
