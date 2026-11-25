@@ -48,10 +48,11 @@ pub fn served_conditions(
     })
 }
 
-/// A mixture-of-experts model reports how its experts are held; anything
-/// other than all of them in memory streams. A model that reports no expert
-/// mode (a dense one) streams when it is larger than the limit, which is when
-/// the engine serves it from the SSD.
+/// The engine reports how the loaded model's weights are held: `resident`
+/// when all of them are in memory (a dense model reports it too), `hybrid` or
+/// `paged` when some stream from the SSD. An engine that reports no mode is
+/// judged by the model's size against the limit, which is when the engine
+/// would serve it from the SSD.
 fn weights_placement(status_document: &Value, mlx_memory_limit_bytes: u64) -> WeightsPlacement {
     match status_document["expert_memory_mode"].as_str() {
         Some("resident") => WeightsPlacement::InMemory,
