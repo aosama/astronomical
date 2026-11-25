@@ -8,6 +8,7 @@
 //! start their recurrence from different parents.
 
 use mlx_bridge::MlxArray;
+use model_serving::DraftTreeTarget;
 use model_serving::speculative_decoding::dflash_drafter::DraftTree;
 use model_serving::speculative_decoding::tree_rows::TreeRows;
 use serial_test::serial;

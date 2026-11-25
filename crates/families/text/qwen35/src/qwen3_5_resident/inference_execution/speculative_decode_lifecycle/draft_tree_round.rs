@@ -14,6 +14,7 @@
 
 use mlx_bridge::MlxArray;
 
+use crate::qwen3_5_core::model::draft_tree_verification::DraftTreeTarget;
 use crate::qwen3_5_resident::model::{Qwen3_5ResidentModel, TextExecutionError};
 use engine_core::speculative_decoding::dflash_drafter::{
     DFlashDraftTarget, DraftLattice, DraftTreeOptions, DrafterContextStates, KeyedNoise,

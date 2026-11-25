@@ -231,6 +231,8 @@ pub use text_generation::generation_loop::test_controls::{
 };
 
 #[cfg(feature = "direct-mlx")]
+pub use qwen3_5_core::model::draft_tree_verification::DraftTreeTarget;
+#[cfg(feature = "direct-mlx")]
 pub use qwen3_5_resident::{
     Qwen3_5DraftTreeVerification, Qwen3_5DraftedRowsVerification,
     Qwen3_5SpeculativeVerificationOutput, VerificationLogitsMode, VerificationTokenChoice,

@@ -14,6 +14,7 @@ pub mod disk_embedding_rows;
 #[path = "model/disk_embedding_rows_tests.rs"]
 mod disk_embedding_rows_tests;
 #[cfg(feature = "direct-mlx")]
+pub mod draft_tree_verification;
 pub mod drafted_row_boundaries;
 #[cfg(feature = "direct-mlx")]
 pub mod embedding_row_reads;

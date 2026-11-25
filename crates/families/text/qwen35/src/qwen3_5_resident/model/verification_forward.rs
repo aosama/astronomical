@@ -10,6 +10,7 @@
 //! captures and the caller-selected head scope.
 
 use crate::performance_attribution::PerformanceAttribution;
+use crate::qwen3_5_core::model::draft_tree_verification::request_layer_state;
 use mlx_bridge::{MlxArray, MlxDtype};
 use text_generation::decoder_state::request_state::RequestDecoderStateStack;
 use text_generation::{
@@ -218,12 +219,7 @@ impl Qwen3_5ResidentModel {
                 .decoder_layer_weights
                 .get(layer_index)
                 .ok_or(TextExecutionError::MissingDecoderLayerWeights { layer_index })?;
-            let layer_model_state = request_decoder_state.layer_mut(layer_index).ok_or(
-                TextExecutionError::InvalidRequestDecoderState {
-                    layer_index,
-                    description: "decoder layer entry is missing",
-                },
-            )?;
+            let layer_model_state = request_layer_state(request_decoder_state, layer_index)?;
             if !layer_model_state.tensors_are_allocated_consistently() {
                 return Err(TextExecutionError::InvalidRequestDecoderState {
                     layer_index,
