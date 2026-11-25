@@ -120,7 +120,7 @@ pub(crate) async fn send_problem_report(
         ReportSendOutcome::NotSetUp => (
             StatusCode::SERVICE_UNAVAILABLE,
             "not_set_up",
-            "Sending reports is not set up in this version yet. Nothing was sent.".to_owned(),
+            "This copy of Astronomical does not send reports. Nothing was sent.".to_owned(),
         ),
         ReportSendOutcome::Failed(send_error) => {
             tracing::warn!(error = %send_error, "a problem report did not go");

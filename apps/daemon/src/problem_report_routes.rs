@@ -75,7 +75,8 @@ pub(crate) fn registered_problem_report_desk(
 }
 
 /// The report desk for an instance, logging sent reports in its state
-/// folder and sending to the receiver compiled into this build.
+/// folder and sending to the instance's receiver: the one compiled into this
+/// build for Stable, none for Development (`ReportReceiver::for_instance`).
 ///
 /// The Mac App Store build gets none: its privacy manifest and its App
 /// Privacy answers in App Store Connect declare that no data is collected,
@@ -84,14 +85,12 @@ pub(crate) fn registered_problem_report_desk(
 pub(crate) fn problem_report_desk_for(
     runtime_config_resolver: &ResolvedRuntimeConfigResolver,
 ) -> Option<Arc<crate::problem_reports::ProblemReportDesk>> {
-    if runtime_config_resolver
-        .instance_paths()
-        .keeps_state_in_app_container()
-    {
+    let instance_paths = runtime_config_resolver.instance_paths();
+    if instance_paths.keeps_state_in_app_container() {
         return None;
     }
     Some(Arc::new(crate::problem_reports::ProblemReportDesk::new(
         runtime_config_resolver.state_directory(),
-        crate::problem_reports::ReportReceiver::compiled_in(),
+        crate::problem_reports::ReportReceiver::for_instance(instance_paths.runtime_instance()),
     )))
 }

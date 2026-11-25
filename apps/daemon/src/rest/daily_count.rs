@@ -29,15 +29,12 @@ pub(crate) async fn show_daily_count(
     State(application_state): State<ApplicationState>,
 ) -> Response {
     // No report desk means the Mac App Store build, which counts nothing.
-    let state_directory = application_state
+    let instance_paths = application_state
         .runtime_config_resolver
         .as_ref()
         .filter(|_| application_state.problem_report_desk.is_some())
-        .map(|runtime_config_resolver| runtime_config_resolver.state_directory().to_path_buf());
-    let Some(daily_counter) = state_directory
-        .as_deref()
-        .and_then(DailyCounter::for_this_mac)
-    else {
+        .map(|runtime_config_resolver| runtime_config_resolver.instance_paths().clone());
+    let Some(daily_counter) = instance_paths.as_ref().and_then(DailyCounter::for_this_mac) else {
         return (StatusCode::NOT_FOUND, "the daily count is unavailable").into_response();
     };
     let today_unix_day = unix_day_now();

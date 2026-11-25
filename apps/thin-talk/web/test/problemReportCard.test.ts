@@ -16,7 +16,7 @@ function standInEngine(listBody: unknown, sendStatus = 200): { fetchFunction: Fe
       return new Response(JSON.stringify(listBody), { status: 200 });
     }
     const status = input.endsWith("/send") ? sendStatus : 200;
-    return new Response(JSON.stringify({ status: "x", message: status === 200 ? "Report sent. Thank you." : "Sending reports is not set up in this version yet. Nothing was sent." }), { status });
+    return new Response(JSON.stringify({ status: "x", message: status === 200 ? "Report sent. Thank you." : "This copy of Astronomical does not send reports. Nothing was sent." }), { status });
   };
   return { fetchFunction, calls };
 }
@@ -95,7 +95,7 @@ test("should_keep_the_report_on_screen_with_the_reason_when_it_did_not_go", asyn
   click(card, "problem-report-send");
   await settle();
   assert.equal(card.element.hidden, false);
-  assert.match(card.element.querySelector('[data-testid="problem-report-outcome"]')?.textContent ?? "", /not set up/);
+  assert.match(card.element.querySelector('[data-testid="problem-report-outcome"]')?.textContent ?? "", /does not send reports/);
 });
 
 test("should_keep_only_well_formed_reports_from_the_engine", () => {

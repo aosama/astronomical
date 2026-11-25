@@ -60,6 +60,25 @@ fn should_send_to_the_compiled_in_project_over_https() {
 }
 
 #[test]
+fn should_give_only_a_stable_instance_somewhere_to_send() {
+    assert_eq!(
+        ReportReceiver::for_instance(Some(config::AstronomicalRuntimeInstance::Stable)),
+        ReportReceiver::compiled_in(),
+        "Stable sends to the compiled-in project"
+    );
+    assert_eq!(
+        ReportReceiver::for_instance(Some(config::AstronomicalRuntimeInstance::Development)),
+        None,
+        "Development's reports and counts must not reach the real project"
+    );
+    assert_eq!(
+        ReportReceiver::for_instance(None),
+        None,
+        "an engine with an explicit state directory and no instance sends nothing"
+    );
+}
+
+#[test]
 fn should_send_only_the_report_fields_in_the_envelope() {
     let envelope_body = sentry_envelope_body(&load_failure_report(), "0123abcd", 1_700_000_000);
     let envelope_lines: Vec<&str> = envelope_body.lines().collect();
@@ -104,10 +123,6 @@ fn should_send_only_the_report_fields_in_the_envelope() {
         event["user"],
         serde_json::json!({"ip_address": "0.0.0.0"}),
         "the only user field is a placeholder address that maps to no place"
-    );
-    assert_eq!(
-        event["sdk"]["settings"]["infer_ip"], "never",
-        "Sentry must not work out an address or a city from the connection"
     );
     assert_eq!(
         event["sdk"]["settings"]["infer_ip"], "never",
