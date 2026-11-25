@@ -25,12 +25,22 @@ pub(super) const BLOCK: [u32; 8] = [279, 3_822, 315, 264, 1_550, 11, 323, 279];
 /// different row count. A missed rewind moves logits by whole units.
 pub(super) const MAXIMUM_LOGIT_DIFFERENCE: f32 = 0.25;
 
-pub(super) struct SmallTarget {
-    pub(super) model: Qwen3_5ResidentModel,
+/// The small dense model loaded on one engine, with the prompt its tests
+/// prefill. The resident model unless a contract names the other.
+pub(super) struct SmallTarget<Model = Qwen3_5ResidentModel> {
+    pub(super) model: Model,
     pub(super) prompt_token_ids: Vec<u32>,
 }
 
-pub(super) fn load_small_target() -> SmallTarget {
+/// What loading the small dense target on either engine starts from.
+pub(super) struct SmallTargetSources {
+    pub(super) runtime: MlxRuntime,
+    pub(super) artifact: model_serving::ValidatedQwen3_5Artifact,
+    pub(super) model_directory: std::path::PathBuf,
+    pub(super) prompt_token_ids: Vec<u32>,
+}
+
+pub(super) fn small_target_sources() -> SmallTargetSources {
     let model_directory = configured_installed_model_directory_by_id(small_dense_model_id());
     let runtime = MlxRuntime::initialize(
         MlxMemoryLimits::new(6 * 1024 * 1024 * 1024, 512 * 1024 * 1024)
@@ -43,6 +53,21 @@ pub(super) fn load_small_target() -> SmallTarget {
     let tokenizer =
         Qwen3_5Tokenizer::from_validated_artifact(&artifact).expect("the tokenizer builds");
     let prompt_token_ids = tokenizer.encode_prompt(PROMPT).expect("the prompt encodes");
+    SmallTargetSources {
+        runtime,
+        artifact,
+        model_directory,
+        prompt_token_ids,
+    }
+}
+
+pub(super) fn load_small_target() -> SmallTarget {
+    let SmallTargetSources {
+        runtime,
+        artifact,
+        model_directory,
+        prompt_token_ids,
+    } = small_target_sources();
     let chunking = TextModelChunkingConfiguration::new(256, 0, 0).expect("the chunking is valid");
     let mut model = Qwen3_5ResidentModel::load_with_performance_attribution(
         runtime,

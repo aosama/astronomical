@@ -14,7 +14,9 @@
 
 use mlx_bridge::MlxArray;
 
-use crate::qwen3_5_resident::model::{Qwen3_5ResidentModel, TextExecutionError};
+use text_generation::execution_error::TextExecutionError;
+
+use super::draft_round_target::{DraftRoundTarget, RoundTree};
 use engine_core::speculative_decoding::dflash_drafter::{
     DFlashDraftTarget, DraftLattice, DraftTreeOptions, DrafterContextStates, KeyedNoise,
     best_first_draft_tree, draft_lattice, drafted_hidden_rows, head_only_draft_lattice,
@@ -54,14 +56,14 @@ impl DraftSession {
     /// drafter's window will never show are dropped as they fall out of it:
     /// a long prompt would otherwise hold about 50 MB of taps per thousand
     /// tokens until the first round, for rows no drafter layer reads.
-    pub fn append_tap_rows(
+    pub fn append_tap_rows<Target: DraftRoundTarget>(
         &mut self,
-        model: &Qwen3_5ResidentModel,
+        model: &Target,
         context_row_limit: Option<i32>,
         layer_taps: &[MlxArray],
         first_position: i32,
     ) -> Result<(), TextExecutionError> {
-        let runtime = model.runtime();
+        let runtime = model.draft_tree_model_base().runtime();
         let tap_references: Vec<&MlxArray> = layer_taps.iter().collect();
         let joined_taps = runtime.concatenate_axis(&tap_references, -1)?;
         let pending_tap_rows = match self.pending_tap_rows.take() {
@@ -89,12 +91,15 @@ impl DraftSession {
 
     /// Runs the pending tap rows so they hold no graph of the forward that
     /// produced them.
-    pub fn evaluate_pending_tap_rows(
+    pub fn evaluate_pending_tap_rows<Target: DraftRoundTarget>(
         &self,
-        model: &Qwen3_5ResidentModel,
+        model: &Target,
     ) -> Result<(), TextExecutionError> {
         if let Some(pending_tap_rows) = self.pending_tap_rows.as_ref() {
-            model.runtime().evaluate_arrays(&[pending_tap_rows])?;
+            model
+                .draft_tree_model_base()
+                .runtime()
+                .evaluate_arrays(&[pending_tap_rows])?;
         }
         Ok(())
     }
@@ -139,8 +144,8 @@ pub struct DraftTreeRoundOutcome {
 
 /// Runs one round and leaves `request_decoder_state` advanced over the
 /// bonus token and the kept drafts.
-pub fn run_draft_tree_round(
-    model: &Qwen3_5ResidentModel,
+pub fn run_draft_tree_round<Target: DraftRoundTarget>(
+    model: &Target,
     request_decoder_state: &mut RequestDecoderStateStack,
     draft_runtime: &Qwen3_5SpeculativeDraftRuntime,
     draft_session: &mut DraftSession,
@@ -153,11 +158,13 @@ pub fn run_draft_tree_round(
     })?;
     let tree_rows = drafted_tree_rows(model, draft_runtime, draft_session, round_request)?;
     let tap_layer_ids = &draft_runtime.drafter_configuration.target_tap_layer_ids;
-    let verification = model.verify_draft_tree(
-        &tree_rows,
-        round_request.context_length_tokens,
+    let verification = model.verify_round_tree(
+        RoundTree {
+            tree_rows: &tree_rows,
+            anchor_position: round_request.context_length_tokens,
+            tap_layer_ids,
+        },
         request_decoder_state,
-        tap_layer_ids,
     )?;
     let picks = target_picks(
         model,
@@ -175,11 +182,16 @@ pub fn run_draft_tree_round(
     }
     emitted_token_ids.push(kept.next_token_id);
     let kept_row_array = model
+        .draft_tree_model_base()
         .runtime()
         .array_from_i32(&kept_row_ids, &[kept_row_ids.len() as i32])?;
     let mut kept_taps = Vec::with_capacity(verification.hidden_state_taps.len());
     for layer_tap in &verification.hidden_state_taps {
-        kept_taps.push(model.runtime().take_axis(layer_tap, &kept_row_array, 1)?);
+        kept_taps.push(model.draft_tree_model_base().runtime().take_axis(
+            layer_tap,
+            &kept_row_array,
+            1,
+        )?);
     }
     draft_session.append_tap_rows(
         model,
@@ -198,13 +210,13 @@ pub fn run_draft_tree_round(
 
 /// Drafts one block from the bonus token and searches its lattice: the
 /// tree's rows, the bonus first.
-fn drafted_tree_rows(
-    model: &Qwen3_5ResidentModel,
+fn drafted_tree_rows<Target: DraftRoundTarget>(
+    model: &Target,
     draft_runtime: &Qwen3_5SpeculativeDraftRuntime,
     draft_session: &mut DraftSession,
     round_request: &DraftTreeRoundRequest,
 ) -> Result<TreeRows, TextExecutionError> {
-    let runtime = model.runtime();
+    let runtime = model.draft_tree_model_base().runtime();
     let configuration = &draft_runtime.drafter_configuration;
     let pending_tap_rows =
         draft_session
@@ -231,7 +243,7 @@ fn drafted_tree_rows(
     let mut block_ids = vec![configuration.mask_token_id; block_row_count];
     block_ids[0] = round_request.bonus_token_id;
     let block = runtime.array_from_u32(&block_ids, &[1, block_row_count as i32])?;
-    let target: &dyn DFlashDraftTarget = model;
+    let target: &dyn DFlashDraftTarget = model.draft_tree_model_base();
     let hidden_rows = drafted_hidden_rows(
         runtime,
         &draft_runtime.drafter_weights,
@@ -280,14 +292,14 @@ fn drafted_tree_rows(
 
 /// The block's candidate lattice: scored by DFlash2's candidate selector,
 /// or by the target head alone for a DFlash drafter, which has none.
-fn drafted_lattice(
-    model: &Qwen3_5ResidentModel,
+fn drafted_lattice<Target: DraftRoundTarget>(
+    model: &Target,
     draft_runtime: &Qwen3_5SpeculativeDraftRuntime,
     hidden_rows: &MlxArray,
     draft_logits: &MlxArray,
     bonus_token_id: u32,
 ) -> Result<DraftLattice, TextExecutionError> {
-    let runtime = model.runtime();
+    let runtime = model.draft_tree_model_base().runtime();
     let configuration = &draft_runtime.drafter_configuration;
     let lattice = match &draft_runtime.drafter_weights.candidate_selector {
         Some(selector_weights) => draft_lattice(
@@ -305,14 +317,14 @@ fn drafted_lattice(
 
 /// The target's pick after every row of `per_row_logits` [1, rows, V]: the
 /// argmax, or the keyed sample at the position after the row's own.
-fn target_picks(
-    model: &Qwen3_5ResidentModel,
+fn target_picks<Target: DraftRoundTarget>(
+    model: &Target,
     per_row_logits: &MlxArray,
     row_positions: &[i32],
     target_token_choice: VerificationTokenChoice,
     keyed_seed: u64,
 ) -> Result<Vec<u32>, TextExecutionError> {
-    let runtime = model.runtime();
+    let runtime = model.draft_tree_model_base().runtime();
     let (temperature_thousandths, top_k, top_p_thousandths) = match target_token_choice {
         VerificationTokenChoice::HighestLogit => {
             let argmax = runtime.astype(
@@ -328,13 +340,15 @@ fn target_picks(
             top_p_thousandths,
         } => (temperature_thousandths, top_k, top_p_thousandths),
     };
-    let (distribution_ids, distribution_probabilities) = model
-        .sampling_distribution_rows(
+    let (distribution_ids, distribution_probabilities) =
+        crate::gpu_token_sampling::sampling_distribution_rows(
+            runtime,
             per_row_logits,
             temperature_thousandths,
             top_p_thousandths,
             top_k,
         )
+        .map_err(crate::InferenceEngineError::from)
         .map_err(sampling_failure)?;
     runtime.evaluate_arrays(&[&distribution_ids, &distribution_probabilities])?;
     let kept_ids = distribution_ids.to_vec_u32()?;

@@ -56,6 +56,9 @@ pub struct PagedForwardMissingRouteCollector {
     /// forward must be run again whatever the counts say.
     has_abandoned_optimistic_serving: Cell<bool>,
     optimistic_layer_servings: RefCell<Vec<OptimisticLayerServing>>,
+    /// The hidden rows a hosted drafter asked the forward in progress to
+    /// keep (`draft_tap_capture`); empty unless a caller asked.
+    pub(super) draft_tap_capture: super::draft_tap_capture::DraftTapCapture,
     /// The other speculative way: layers that look their routes up inside
     /// the graph, and what recent tokens say about attempting it.
     pub(super) in_graph_table_serving: super::in_graph_table_serving::InGraphTableServing,

@@ -401,6 +401,49 @@ impl Qwen3_5Model {
         }
     }
 
+    /// Runs one forward of `reply_row_count` reply rows to completion: first
+    /// with each partly held layer looking its routes up inside the graph,
+    /// when that is likely to serve it, and again the exact way from the
+    /// state it began with when a lookup refuses.
+    ///
+    /// `forward_reply_rows` builds and evaluates the forward and returns
+    /// `None` when its outputs cannot be used. It is a closure because the
+    /// two callers (a drafted block, a draft tree) differ in everything but
+    /// this loop, and it has to run twice.
+    pub(super) fn serve_reply_rows_resolving_expert_routes<ForwardOutput>(
+        &self,
+        reply_row_count: usize,
+        request_decoder_state: &mut text_generation::decoder_state::request_state::RequestDecoderStateStack,
+        mut forward_reply_rows: impl FnMut(
+            &mut text_generation::decoder_state::request_state::RequestDecoderStateStack,
+        ) -> Result<Option<ForwardOutput>, TextExecutionError>,
+    ) -> Result<ForwardOutput, TextExecutionError> {
+        let mut state_before_in_graph_attempt = if self.should_serve_reply_rows_in_graph() {
+            Some(request_decoder_state.checkpoint()?)
+        } else {
+            None
+        };
+        loop {
+            if state_before_in_graph_attempt.is_some() {
+                self.begin_in_graph_forward(reply_row_count);
+            }
+            self.reply_measurement
+                .stage_tally
+                .record_forward(reply_row_count);
+            let attempt = forward_reply_rows(request_decoder_state);
+            self.end_in_graph_forward();
+            if let Some(forward_output) = attempt? {
+                return Ok(forward_output);
+            }
+            let Some(state_before) = state_before_in_graph_attempt.take() else {
+                return Err(TextExecutionError::InvalidInput {
+                    description: "an exact forward of reply rows reported experts missing from memory",
+                });
+            };
+            request_decoder_state.restore_checkpoint(state_before)?;
+        }
+    }
+
     /// Closes the forward's window, after which a lookup that has not run
     /// refuses. Called whether the forward was evaluated or failed.
     pub(super) fn end_in_graph_forward(&self) {

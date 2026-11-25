@@ -390,17 +390,25 @@ impl Qwen3_5ModelBase {
         }
     }
 
+    /// Qwen 3.5's final norm over every row of the last layer's output.
+    pub fn final_normalized_states(
+        &self,
+        hidden_states: &MlxArray,
+    ) -> Result<MlxArray, TextExecutionError> {
+        Ok(self.runtime.rms_norm(
+            hidden_states,
+            &self.weights.final_normalization_weight,
+            f32::from_bits(self.config.rms_norm_epsilon_bits()),
+        )?)
+    }
+
     /// Qwen 3.5's head input: the final norm of the last position.
     fn normalized_vocabulary_logits(
         &self,
         hidden_states: &MlxArray,
         token_count: i32,
     ) -> Result<MlxArray, TextExecutionError> {
-        let normalized_states = self.runtime.rms_norm(
-            hidden_states,
-            &self.weights.final_normalization_weight,
-            f32::from_bits(self.config.rms_norm_epsilon_bits()),
-        )?;
+        let normalized_states = self.final_normalized_states(hidden_states)?;
         let hidden_size = self.config.hidden_size() as i32;
         let final_hidden_state = self.runtime.slice(
             &normalized_states,

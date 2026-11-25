@@ -28,6 +28,26 @@ use runtime_integration::MlxRuntimeError;
 use text_generation::execution_error::TextExecutionError;
 
 impl Qwen3_5ModelBase {
+    /// Whether this GPU runs the row-batched matrix-unit kernels: the ones a
+    /// register-ordered projection multiplies with, and the ones a draft
+    /// tree's row-exact attention is built on.
+    pub fn runs_row_batched_matrix_unit_kernels(
+        &self,
+        performance_attribution: &mut PerformanceAttribution,
+    ) -> bool {
+        worker_process_kernel_capabilities(&self.runtime, performance_attribution)
+            .is_custom_kernel_supported(crate::kernel_capability::ROW_BATCHED_MATMUL)
+    }
+
+    /// Declares the register-ordered kernels without converting any of the
+    /// model's own projections, for a model that hosts weights already in
+    /// register order (a drafter's) beside projections it keeps as they are.
+    pub fn declare_register_ordered_kernels(&mut self) -> Result<(), TextExecutionError> {
+        self.optional_accelerators.register_ordered_matmul_kernels =
+            Some(RowBatchedMatmulKernels::declare()?);
+        Ok(())
+    }
+
     /// Converts every dense 4-bit, group-64 projection with bf16 scales, and
     /// an output head not tied to the embedding, into register order, once
     /// this worker's capability probe has run the kernel on this GPU. Each
@@ -43,9 +63,7 @@ impl Qwen3_5ModelBase {
         &mut self,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<Option<usize>, TextExecutionError> {
-        let capabilities =
-            worker_process_kernel_capabilities(&self.runtime, performance_attribution);
-        if !capabilities.is_custom_kernel_supported(crate::kernel_capability::ROW_BATCHED_MATMUL) {
+        if !self.runs_row_batched_matrix_unit_kernels(performance_attribution) {
             return Ok(None);
         }
         let kernels = RowBatchedMatmulKernels::declare()?;

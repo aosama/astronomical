@@ -11,6 +11,7 @@
 //! back), so this is the speed a straightforward tree loop reaches, not a
 //! pipelined serving loop's.
 
+use model_serving::DraftTreeTarget;
 use std::time::Instant;
 
 use mlx_bridge::MlxArray;

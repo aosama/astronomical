@@ -6,6 +6,7 @@
 //! These explain the decode speeds `dflash2_tree_rounds` reports; they
 //! assert nothing.
 
+use model_serving::DraftTreeTarget;
 use std::time::Instant;
 
 use mlx_bridge::MlxArray;

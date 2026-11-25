@@ -15,8 +15,8 @@ use std::path::Path;
 use ipc_protocol::DraftModelLocation;
 use runtime_integration::MlxSafetensors;
 
+use super::draft_round_target::DraftRoundTarget;
 use crate::PerformanceAttribution;
-use crate::qwen3_5_resident::Qwen3_5ResidentModel;
 use engine_core::speculative_decoding::dflash_drafter::{
     DFlashDrafterConfiguration, DFlashDrafterWeights, DFlashDrafterWeightsError, DraftTreeOptions,
     bind_drafter_weights,
@@ -68,16 +68,16 @@ impl Qwen3_5SpeculativeDraftRuntime {
     /// holds none that pairs with it from a GPU that cannot run the
     /// register-ordered kernels a drafting session needs, because status
     /// reports the second as a drafter installed but unused.
-    pub fn load_for_target(
-        model: &mut Qwen3_5ResidentModel,
+    pub fn load_for_target<Target: DraftRoundTarget>(
+        model: &mut Target,
         active_memory_limit_bytes: usize,
         target_model_directory: &Path,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<Qwen3_5DraftRuntimeLoadOutcome, Qwen3_5SpeculativeDraftLoadingError> {
         let pairing = DrafterPairing {
-            target_layer_count: model.config().layer_count() as i32,
-            target_hidden_size: model.config().hidden_size() as i32,
-            target_vocabulary_size: model.config().vocabulary_size() as i32,
+            target_layer_count: model.draft_tree_model_base().config().layer_count() as i32,
+            target_hidden_size: model.draft_tree_model_base().config().hidden_size() as i32,
+            target_vocabulary_size: model.draft_tree_model_base().config().vocabulary_size() as i32,
         };
         let Some((drafter_directory, drafter_configuration)) =
             paired_drafter_directory(target_model_directory, &pairing)?
@@ -86,20 +86,22 @@ impl Qwen3_5SpeculativeDraftRuntime {
         };
         let drafter_location = drafter_location(target_model_directory, &drafter_directory);
         ensure_memory_headroom_for_drafter(model, active_memory_limit_bytes, &drafter_directory)?;
-        let Some(converted_projection_count) =
-            prepare_target_for_draft_trees(model, performance_attribution)?
+        let Some(converted_projection_count) = model
+            .prepare_for_draft_trees(performance_attribution)
+            .map_err(Qwen3_5SpeculativeDraftLoadingError::Target)?
         else {
             return Ok(Qwen3_5DraftRuntimeLoadOutcome::KernelsUnavailable);
         };
         let (drafter_weights, drafter_checkpoint) =
             load_drafter_weights(model, &drafter_directory, &drafter_configuration)?;
-        let tree_options = draft_tree_options_for_target(model.config().expert_count());
+        let tree_options =
+            draft_tree_options_for_target(model.draft_tree_model_base().config().expert_count());
         tracing::info!(
             drafter_directory = %drafter_directory.display(),
             drafter_generation = ?drafter_configuration.generation,
             converted_projection_count,
             tree_node_budget = tree_options.node_budget,
-            "resident engine decode path: DFlash draft trees"
+            "decode path: DFlash draft trees"
         );
         Ok(Qwen3_5DraftRuntimeLoadOutcome::Loaded(Box::new(Self {
             drafter_configuration,
@@ -111,41 +113,9 @@ impl Qwen3_5SpeculativeDraftRuntime {
     }
 }
 
-/// Converts the target's dense projections into register order and
-/// declares the tree kernels, the row-exact tree attention among them where
-/// the target's attention shape fits it: the count converted, or `None` on a
-/// GPU that cannot run the register-ordered kernels.
-///
-/// Conversion only speeds up verification; the tree kernels are what make
-/// it possible. So a target with nothing to convert still drafts: an 8-bit
-/// or mixed build, or a mixture-of-experts model whose experts stay in MLX's
-/// layout for the gathered expert kernels and whose attention may be 8-bit.
-fn prepare_target_for_draft_trees(
-    model: &mut Qwen3_5ResidentModel,
-    performance_attribution: &mut PerformanceAttribution,
-) -> Result<Option<usize>, Qwen3_5SpeculativeDraftLoadingError> {
-    let Some(converted_projection_count) = model
-        .convert_projections_to_register_order(performance_attribution)
-        .map_err(Qwen3_5SpeculativeDraftLoadingError::Target)?
-    else {
-        tracing::info!(
-            "a paired DFlash drafter is installed, but this GPU cannot run the \
-             register-ordered kernels drafting needs; decoding stays classic"
-        );
-        return Ok(None);
-    };
-    model
-        .enable_draft_tree_verification()
-        .map_err(Qwen3_5SpeculativeDraftLoadingError::Target)?;
-    model
-        .enable_row_exact_tree_attention()
-        .map_err(Qwen3_5SpeculativeDraftLoadingError::Target)?;
-    Ok(Some(converted_projection_count))
-}
-
 /// Binds the drafter's checkpoint and requantizes its linears for serving.
-fn load_drafter_weights(
-    model: &Qwen3_5ResidentModel,
+fn load_drafter_weights<Target: DraftRoundTarget>(
+    model: &Target,
     drafter_directory: &Path,
     drafter_configuration: &DFlashDrafterConfiguration,
 ) -> Result<(DFlashDrafterWeights, MlxSafetensors), Qwen3_5SpeculativeDraftLoadingError> {
@@ -157,25 +127,29 @@ fn load_drafter_weights(
         }
     };
     let drafter_checkpoint = model
+        .draft_tree_model_base()
         .runtime()
         .load_safetensors(weights_file, None)
         .map_err(Qwen3_5SpeculativeDraftLoadingError::Runtime)?;
-    let mut drafter_weights =
-        bind_drafter_weights(model.runtime(), &drafter_checkpoint, drafter_configuration)
-            .map_err(Qwen3_5SpeculativeDraftLoadingError::Weights)?;
+    let mut drafter_weights = bind_drafter_weights(
+        model.draft_tree_model_base().runtime(),
+        &drafter_checkpoint,
+        drafter_configuration,
+    )
+    .map_err(Qwen3_5SpeculativeDraftLoadingError::Weights)?;
     // Served at 4 bits in register order: about 1 GB streamed a round
     // instead of the checkpoint's 3.6 GB of bf16, with no kept-token
     // loss measured against the bf16 drafter on the 27B.
     drafter_weights
-        .quantize_linears(model.runtime(), true)
+        .quantize_linears(model.draft_tree_model_base().runtime(), true)
         .map_err(Qwen3_5SpeculativeDraftLoadingError::Runtime)?;
     Ok((drafter_weights, drafter_checkpoint))
 }
 
 /// Refuses the drafter when the active limit cannot hold its weights plus
 /// headroom beside everything already resident.
-fn ensure_memory_headroom_for_drafter(
-    model: &Qwen3_5ResidentModel,
+fn ensure_memory_headroom_for_drafter<Target: DraftRoundTarget>(
+    model: &Target,
     active_memory_limit_bytes: usize,
     drafter_directory: &Path,
 ) -> Result<(), Qwen3_5SpeculativeDraftLoadingError> {
@@ -184,6 +158,7 @@ fn ensure_memory_headroom_for_drafter(
             .map_err(|source| Qwen3_5SpeculativeDraftLoadingError::WeightsUnreadable { source })?
             .len();
     let memory_snapshot = model
+        .draft_tree_model_base()
         .runtime()
         .memory_snapshot()
         .map_err(Qwen3_5SpeculativeDraftLoadingError::Runtime)?;

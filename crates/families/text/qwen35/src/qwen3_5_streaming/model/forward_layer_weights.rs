@@ -43,6 +43,14 @@ impl ForwardLayerWeights<'_> {
     }
 }
 
+impl crate::qwen3_5_core::model::draft_tree_verification::TreeLayerWeights
+    for ForwardLayerWeights<'_>
+{
+    fn decoder_layer_weights(&self) -> &Qwen3_5DecoderLayerWeights {
+        ForwardLayerWeights::decoder_layer_weights(self)
+    }
+}
+
 impl Qwen3_5Model {
     /// The weights a forward uses for one decoder layer: the bound weights,
     /// or for a dense model the streamer's kept or freshly read layer.

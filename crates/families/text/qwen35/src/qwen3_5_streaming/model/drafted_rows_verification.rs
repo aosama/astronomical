@@ -67,42 +67,26 @@ impl Qwen3_5Model {
             });
         }
         let family_state_before = request_decoder_state.family_state_snapshot()?;
-        let mut state_before_in_graph_attempt = if self.should_serve_reply_rows_in_graph() {
-            Some(request_decoder_state.checkpoint()?)
-        } else {
-            None
-        };
-        loop {
-            if state_before_in_graph_attempt.is_some() {
-                self.begin_in_graph_forward(token_ids.len());
-            }
-            self.reply_measurement
-                .stage_tally
-                .record_forward(token_ids.len());
-            let attempt = self.forward_drafted_rows(
-                token_ids,
-                starting_position_tokens,
-                request_decoder_state,
-                performance_attribution,
-            );
-            self.end_in_graph_forward();
-            if let Some(forwarded_rows) = attempt? {
-                return Ok(DraftedRowsVerification {
-                    per_row_logits: forwarded_rows.per_row_logits,
-                    lanes: forwarded_rows.lanes,
-                    row_boundaries: forwarded_rows.row_boundaries,
-                    family_state_before,
-                    token_ids: token_ids.to_vec(),
+        let forwarded_rows = self.serve_reply_rows_resolving_expert_routes(
+            token_ids.len(),
+            request_decoder_state,
+            |request_decoder_state| {
+                self.forward_drafted_rows(
+                    token_ids,
                     starting_position_tokens,
-                });
-            }
-            let Some(state_before) = state_before_in_graph_attempt.take() else {
-                return Err(TextExecutionError::InvalidInput {
-                    description: "an exact drafted block reported experts missing from memory",
-                });
-            };
-            request_decoder_state.restore_checkpoint(state_before)?;
-        }
+                    request_decoder_state,
+                    performance_attribution,
+                )
+            },
+        )?;
+        Ok(DraftedRowsVerification {
+            per_row_logits: forwarded_rows.per_row_logits,
+            lanes: forwarded_rows.lanes,
+            row_boundaries: forwarded_rows.row_boundaries,
+            family_state_before,
+            token_ids: token_ids.to_vec(),
+            starting_position_tokens,
+        })
     }
 
     /// One forward of the block and its one evaluation. `None` when an
