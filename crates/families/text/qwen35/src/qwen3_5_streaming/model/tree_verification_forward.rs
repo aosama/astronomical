@@ -77,20 +77,32 @@ impl DraftTreeTarget for Qwen3_5StreamingModel {
 }
 
 impl Qwen3_5StreamingModel {
-    /// Asks the next forward to keep the hidden rows after `tap_layer_ids`
-    /// for a hosted drafter; `take_draft_taps` collects them.
-    pub fn begin_draft_tap_capture(&self, tap_layer_ids: &[i32]) {
+    /// Asks the forwards that follow to keep the hidden rows after
+    /// `tap_layer_ids` for a hosted drafter, at most the newest `row_limit`
+    /// a tap; `take_draft_taps` collects them.
+    pub fn begin_draft_tap_capture(&self, tap_layer_ids: &[i32], row_limit: usize) {
         self.paged_forward_missing_route_collector
             .draft_tap_capture
-            .begin(tap_layer_ids);
+            .begin(tap_layer_ids, row_limit);
     }
 
-    /// The rows the forward kept since `begin_draft_tap_capture`, one
-    /// `[1, rows, hidden]` array a tap; `None` when none were asked for.
-    pub fn take_draft_taps(&self) -> Option<Vec<MlxArray>> {
-        self.paged_forward_missing_route_collector
+    /// The rows kept since `begin_draft_tap_capture`: the position of the
+    /// first, and one `[1, rows, hidden]` array a tap. `None` when none
+    /// were asked for or a tap fell short.
+    pub fn take_draft_taps(&self) -> Result<Option<(i32, Vec<MlxArray>)>, TextExecutionError> {
+        let Some(captured_taps) = self
+            .paged_forward_missing_route_collector
             .draft_tap_capture
             .take()
+        else {
+            return Ok(None);
+        };
+        let mut tap_rows = Vec::with_capacity(captured_taps.span_rows_by_tap.len());
+        for span_rows in &captured_taps.span_rows_by_tap {
+            let span_row_references: Vec<&MlxArray> = span_rows.iter().collect();
+            tap_rows.push(self.runtime.concatenate_axis(&span_row_references, 1)?);
+        }
+        Ok(Some((captured_taps.first_position, tap_rows)))
     }
 
     /// Verifies `tree_rows` and evaluates the result: the logits after
