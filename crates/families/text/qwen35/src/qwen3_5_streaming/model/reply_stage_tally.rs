@@ -75,7 +75,9 @@ pub struct DraftRoundStages {
 #[derive(Debug, Default)]
 pub struct ReplyStageTally {
     counts: Cell<ReplyStageCounts>,
-    hand_offs_when_the_reply_began: Cell<EvaluationCounts>,
+    /// `None` while no reply is being written: a request that ends while
+    /// its prompt is still being read has no reply to close.
+    hand_offs_when_the_reply_began: Cell<Option<EvaluationCounts>>,
     last_reply: Cell<Option<ReplyStageCounts>>,
 }
 
@@ -100,7 +102,8 @@ impl ReplyStageTally {
     /// stay out of it: they were made before this.
     pub fn begin_reply(&self) {
         self.counts.set(ReplyStageCounts::default());
-        self.hand_offs_when_the_reply_began.set(evaluation_counts());
+        self.hand_offs_when_the_reply_began
+            .set(Some(evaluation_counts()));
     }
 
     pub fn record_forward(&self, row_count: usize) {
@@ -129,12 +132,14 @@ impl ReplyStageTally {
         self.counts.set(counts);
     }
 
-    /// Closes the reply's tally, keeps it as the last reply's and returns it.
-    pub fn end_reply(&self) -> ReplyStageCounts {
+    /// Closes the reply's tally, keeps it as the last reply's and returns
+    /// it; `None`, changing nothing, when no reply was begun.
+    pub fn end_reply(&self) -> Option<ReplyStageCounts> {
+        let hand_offs_when_the_reply_began = self.hand_offs_when_the_reply_began.take()?;
         let mut counts = self.counts.take();
-        counts.hand_offs = evaluation_counts().since(self.hand_offs_when_the_reply_began.get());
+        counts.hand_offs = evaluation_counts().since(hand_offs_when_the_reply_began);
         self.last_reply.set(Some(counts));
-        counts
+        Some(counts)
     }
 
     /// The last finished reply's stages, or `None` before any reply.

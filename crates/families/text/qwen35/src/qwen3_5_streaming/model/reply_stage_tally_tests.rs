@@ -23,7 +23,7 @@ fn should_total_a_replys_forwards_lookups_and_rounds() {
         keep: Duration::from_micros(150),
     });
 
-    let counts = tally.end_reply();
+    let counts = tally.end_reply().expect("a reply was begun");
 
     assert_eq!(counts.reply_forward_count, 2);
     assert_eq!(counts.reply_row_count, 5);
@@ -47,14 +47,20 @@ fn should_keep_the_last_reply_while_the_next_is_written() {
     assert_eq!(tally.last_reply(), None, "no reply yet");
     tally.begin_reply();
     tally.record_forward(1);
-    let first_reply = tally.end_reply();
+    let first_reply = tally.end_reply().expect("a reply was begun");
 
     tally.begin_reply();
     tally.record_forward(1);
     tally.record_forward(1);
 
     assert_eq!(tally.last_reply(), Some(first_reply));
-    assert_eq!(tally.end_reply().reply_forward_count, 2);
+    assert_eq!(
+        tally
+            .end_reply()
+            .expect("the second reply was begun")
+            .reply_forward_count,
+        2
+    );
 }
 
 #[test]
@@ -68,4 +74,18 @@ fn should_never_report_negative_bookkeeping_when_a_read_outlasts_its_lookup_cloc
     };
 
     assert_eq!(counts.lookup_bookkeeping_nanoseconds(), 0);
+}
+
+#[test]
+#[file_serial]
+fn should_close_nothing_for_a_request_that_ended_before_its_reply_began() {
+    let tally = ReplyStageTally::default();
+
+    assert_eq!(tally.end_reply(), None);
+    assert_eq!(tally.last_reply(), None, "no reply to remember");
+
+    // And a finished reply is not closed a second time.
+    tally.begin_reply();
+    assert!(tally.end_reply().is_some());
+    assert_eq!(tally.end_reply(), None);
 }

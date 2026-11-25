@@ -246,11 +246,10 @@ impl request_end::TextRequestEndHooks for Qwen3_5EngineState {
             std::mem::take(&mut active_request.engine_extension.reply_expert_route_record),
         );
         log_astro_expert_cache_over_the_reply(request_id.value(), &reply_memory_record);
-        if let Some(model) = self.core.model.as_ref() {
-            log_stages_over_the_reply(
-                request_id.value(),
-                &model.reply_measurement.stage_tally.end_reply(),
-            );
+        if let Some(model) = self.core.model.as_ref()
+            && let Some(reply_stages) = model.reply_measurement.stage_tally.end_reply()
+        {
+            log_stages_over_the_reply(request_id.value(), &reply_stages);
         }
         reply_memory_record
     }
