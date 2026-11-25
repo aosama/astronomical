@@ -53,7 +53,9 @@ use engine_setup::{
 };
 use measure_speed_options::{MeasureSpeedOptions, this_mac, this_mac_description};
 use measured_case::MeasuredCase;
-use measurement_cases::{MeasurementCase, MemoryLimitRequest, measurement_cases};
+use measurement_cases::{
+    MeasurementCase, MemoryLimitRequest, measurement_cases, refuse_unless_served_as_requested,
+};
 use speed_catalog::{MeasurementPlace, catalog_identity, write_measured_speed};
 use speed_progress::SpeedProgress;
 use speed_prompts::{SpeedPrompts, SpeedTask};
@@ -147,6 +149,13 @@ fn measure_one_case(
             .and_then(|()| engine_requests::fetch_status(base_url))
             .and_then(|status_document| {
                 served_conditions::served_conditions(&status_document, model_id)
+            })
+            .and_then(|served_conditions| {
+                refuse_unless_served_as_requested(
+                    measurement_case.memory_limit_request,
+                    served_conditions.maximum_mlx_memory_gb,
+                )
+                .map(|()| served_conditions)
             });
     speed_progress.complete_step();
     let served_conditions = match warmup_outcome {

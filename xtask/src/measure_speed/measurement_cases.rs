@@ -73,6 +73,25 @@ pub fn reference_cases_for(
     Ok(chosen_cases)
 }
 
+/// A reference case is recorded under the limit it asked for, so the limit
+/// the engine served under must be that one: an adjusted or still-pending
+/// limit would file the figures under another workload.
+pub fn refuse_unless_served_as_requested(
+    memory_limit_request: MemoryLimitRequest,
+    served_maximum_mlx_memory_gb: Option<u64>,
+) -> Result<(), String> {
+    match memory_limit_request {
+        MemoryLimitRequest::ServeUnder(requested_gb)
+            if requested_gb != served_maximum_mlx_memory_gb =>
+        {
+            Err(format!(
+                "the engine served under {served_maximum_mlx_memory_gb:?} GB, the case asked for {requested_gb:?} GB"
+            ))
+        }
+        _ => Ok(()),
+    }
+}
+
 #[cfg(test)]
 #[path = "measurement_cases_tests.rs"]
 mod measurement_cases_tests;

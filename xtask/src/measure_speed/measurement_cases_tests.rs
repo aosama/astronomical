@@ -1,4 +1,6 @@
-use super::{MeasurementCase, MemoryLimitRequest, reference_cases_for};
+use super::{
+    MeasurementCase, MemoryLimitRequest, reference_cases_for, refuse_unless_served_as_requested,
+};
 use crate::measure_speed::reference_set::ReferenceCase;
 
 fn reference_case(model_id: &str, maximum_mlx_memory_gb: Option<u64>) -> ReferenceCase {
@@ -61,5 +63,29 @@ fn should_refuse_a_named_model_the_set_does_not_hold() {
             &["Model-A".to_owned(), "Model-C".to_owned()]
         )
         .is_err()
+    );
+}
+
+#[test]
+fn should_accept_only_the_limit_a_reference_case_asked_for() {
+    assert_eq!(
+        refuse_unless_served_as_requested(MemoryLimitRequest::ServeUnder(Some(16)), Some(16)),
+        Ok(())
+    );
+    assert_eq!(
+        refuse_unless_served_as_requested(MemoryLimitRequest::ServeUnder(None), None),
+        Ok(())
+    );
+    assert_eq!(
+        refuse_unless_served_as_requested(MemoryLimitRequest::KeepEngineLimit, Some(20)),
+        Ok(()),
+        "a named model keeps whatever limit the engine has"
+    );
+    assert!(
+        refuse_unless_served_as_requested(MemoryLimitRequest::ServeUnder(Some(34)), Some(32))
+            .is_err()
+    );
+    assert!(
+        refuse_unless_served_as_requested(MemoryLimitRequest::ServeUnder(None), Some(16)).is_err()
     );
 }
