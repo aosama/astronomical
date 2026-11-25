@@ -36,6 +36,7 @@ When a step finishes, MLX does not hand its buffers back to the system. It keeps
 - It is not counted in MLX's active memory, but it does occupy memory under the limit.
 - MLX starts releasing it once active memory plus the cache reaches its collection line, which stock MLX places at 95% of the working set Metal recommends for the Mac. Past that line no buffer is reused and every step allocates afresh; a large sparse model then replies at about a third of its speed.
 - While a reply is written, the memory ledger keeps room for it in the account `mlx_buffer_cache_bytes`: one reply step's measured working buffers, taken from what would otherwise be kept experts, and never more than fits. Reading a prompt keeps no such room yet.
+- Its limit starts equal to the memory limit. Once a streamed model has measured one prompt step's `mlx_working_buffers` at load, the limit drops to that step, at least 1 GiB (`measured_mlx_buffer_cache_limit_bytes`). Without that bound, reading a long prompt kept every freed step buffer beside a full `astro_expert_cache`, MLX held the whole limit wired, and macOS swapped (issue #2533).
 
 ## `metal_kernel_cache`
 
@@ -44,6 +45,13 @@ MLX compiles its GPU programs (kernels) the first time each is used on a Mac. ma
 - It is small and it is not memory the limit governs.
 - Its only visible effect is that the first use of a kernel after an MLX or macOS update is slower.
 - It is not the `mlx_buffer_cache`. "Kernel cache" must never be used for memory MLX holds while a model runs.
+
+## The n-gram table of Qwen3.8-Flash-Next
+
+Qwen3.8-Flash-Next adds to its second layer rows looked up in a table of about 30 GB, chosen by hashing the last two and three tokens. The table is model weights, not a cache, and it has no room under the memory limit.
+
+- Each token's rows are read from storage when the token is processed (`crates/families/text/qwen35/src/qwen4_exp/ngram_table.rs`); only those rows become MLX arrays, for that step.
+- It is never held in the `astro_expert_cache`. Rows read again come from the `macos_file_cache`, which macOS sizes and empties on its own.
 
 ## How the limit is divided
 
