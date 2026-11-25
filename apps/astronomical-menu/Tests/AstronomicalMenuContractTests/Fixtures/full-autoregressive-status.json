@@ -64,6 +64,12 @@
           "effective": null,
           "is_configured": false
         },
+        "multi_token_prediction_draft_tokens": {
+          "configured": null,
+          "default": null,
+          "effective": null,
+          "is_configured": false
+        },
         "ssd_prompt_cache_common_prefix_stride_blocks": {
           "configured": null,
           "default": 4,
@@ -172,6 +178,7 @@
           "experimental_prefill_stage_attribution_enabled": false,
           "experimental_in_memory_prefix_adoption_enabled": false,
           "experimental_neural_engine_prefill_enabled": false,
+          "multi_token_prediction_draft_tokens": null,
           "fixed_ssd_streaming_prompt_processing_chunk_size_tokens": 2048
         },
         "maximum_context_tokens": 65536,

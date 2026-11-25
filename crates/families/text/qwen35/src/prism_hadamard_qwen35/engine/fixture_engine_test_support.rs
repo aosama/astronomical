@@ -34,6 +34,7 @@ pub(super) fn serving_settings_with(
         enable_thinking: true,
         chunking: WorkerChunkingConfiguration {
             experimental_neural_engine_prefill_enabled: true,
+            multi_token_prediction_draft_tokens: None,
             ssd_prompt_cache_common_prefix_stride_blocks,
             ssd_prompt_cache_block_tokens: Some(128),
             full_attention_key_value_growth_tokens: 1024,

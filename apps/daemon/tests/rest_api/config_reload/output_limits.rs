@@ -1,9 +1,7 @@
 use std::collections::HashMap;
 
 use astronomical_daemon::{RuntimeModelGenerationDefaults, RuntimeModelPolicy};
-use ipc_protocol::{
-    WorkerAutoregressiveModelConfiguration, WorkerChunkingConfiguration, WorkerModelConfiguration,
-};
+use ipc_protocol::{WorkerAutoregressiveModelConfiguration, WorkerModelConfiguration};
 
 use super::*;
 
@@ -247,19 +245,7 @@ fn runtime_model_policy(
                 model_id: model_id.to_owned(),
                 maximum_context_tokens: 262_144,
                 maximum_output_tokens: u32::from(u16::MAX),
-                chunking: WorkerChunkingConfiguration {
-                    fixed_prompt_processing_chunk_size_tokens: 2_048,
-                    fixed_ssd_streaming_prompt_processing_chunk_size_tokens: 2_048,
-                    full_attention_key_value_growth_tokens: 256,
-                    prefill_graph_submission_layer_interval: 0,
-                    experimental_ssd_paging_generation_graph_submission_layer_interval: 3,
-                    ssd_prompt_cache_block_tokens: None,
-                    ssd_prompt_cache_common_prefix_stride_blocks: 4,
-                    experimental_decode_stage_attribution_enabled: false,
-                    experimental_prefill_stage_attribution_enabled: false,
-                    experimental_in_memory_prefix_adoption_enabled: false,
-                    experimental_neural_engine_prefill_enabled: false,
-                },
+                chunking: crate::support::worker_chunking_with_prompt_chunk_tokens(2_048, 2_048),
             },
         ),
     }

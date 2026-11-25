@@ -209,6 +209,53 @@ fn should_reject_zero_for_chunking_boundaries_that_cannot_be_disabled() {
     }
 }
 
+fn drafted_tokens_configured_as(
+    draft_tokens_json: &str,
+) -> Result<Option<u32>, AstronomicalConfigError> {
+    let temporary_home_directory = tempfile::tempdir().expect("temp home should be created");
+    write_config(
+        temporary_home_directory.path(),
+        &format!(
+            r#"{{"chunking": {{"multi_token_prediction_draft_tokens": {draft_tokens_json}}}}}"#
+        ),
+    );
+    AstronomicalConfig::load_from_home_directory(temporary_home_directory.path())?
+        .chunking()
+        .map(|chunking| chunking.multi_token_prediction_draft_tokens())
+}
+
+#[test]
+fn should_leave_the_draft_count_to_the_engine_when_it_is_null_or_absent() {
+    assert_eq!(
+        drafted_tokens_configured_as("null").expect("null loads"),
+        None
+    );
+    let temporary_home_directory = tempfile::tempdir().expect("temp home should be created");
+    write_config(temporary_home_directory.path(), r#"{"chunking": {}}"#);
+    let chunking = AstronomicalConfig::load_from_home_directory(temporary_home_directory.path())
+        .expect("an empty chunking object loads")
+        .chunking()
+        .expect("chunking resolves");
+    assert_eq!(chunking.multi_token_prediction_draft_tokens(), None);
+}
+
+#[test]
+fn should_accept_no_drafting_and_the_largest_draft_count() {
+    assert_eq!(drafted_tokens_configured_as("0").expect("0 loads"), Some(0));
+    assert_eq!(drafted_tokens_configured_as("3").expect("3 loads"), Some(3));
+}
+
+#[test]
+fn should_reject_a_draft_count_beyond_what_a_head_drafts() {
+    let refusal = drafted_tokens_configured_as("4").expect_err("4 drafted tokens are refused");
+    assert!(
+        refusal
+            .to_string()
+            .contains("multi_token_prediction_draft_tokens"),
+        "the refusal names the setting: {refusal}"
+    );
+}
+
 /// A file saved by 0.2.90 can hold these, and refusing it would stop the daemon on update.
 #[test]
 fn should_load_a_config_holding_settings_retired_after_0_2_90() {

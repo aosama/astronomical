@@ -66,6 +66,7 @@ struct ChunkingConfigurationSummary {
     prefill_graph_submission_layer_interval: ConfigurationValue<u32>,
     experimental_ssd_paging_generation_graph_submission_layer_interval: ConfigurationValue<u32>,
     ssd_prompt_cache_block_tokens: NullableConfigurationValue<u32>,
+    multi_token_prediction_draft_tokens: NullableConfigurationValue<u32>,
     ssd_prompt_cache_common_prefix_stride_blocks: ConfigurationValue<u32>,
 }
 
@@ -286,6 +287,11 @@ fn chunking_summary(
             configured_fields.ssd_prompt_cache_block_tokens,
             configured_chunking.and_then(|chunking| chunking.ssd_prompt_cache_block_tokens),
             effective_chunking.and_then(|chunking| chunking.ssd_prompt_cache_block_tokens),
+        ),
+        multi_token_prediction_draft_tokens: reported_nullable_chunking_configuration_value(
+            configured_fields.multi_token_prediction_draft_tokens,
+            configured_chunking.and_then(|chunking| chunking.multi_token_prediction_draft_tokens),
+            effective_chunking.and_then(|chunking| chunking.multi_token_prediction_draft_tokens),
         ),
         ssd_prompt_cache_common_prefix_stride_blocks: reported_chunking_configuration_value(
             configured_fields.ssd_prompt_cache_common_prefix_stride_blocks,

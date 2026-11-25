@@ -46,6 +46,11 @@ pub struct WorkerChunkingConfiguration {
     /// during prefill; costs memory beyond the MLX ceiling's own accounting.
     #[serde(default)]
     pub experimental_neural_engine_prefill_enabled: bool,
+    /// How many tokens a model with a multi-token-prediction head drafts
+    /// after each reply token while its experts stream from storage: zero
+    /// drafts none, and `None` leaves the count to the engine.
+    #[serde(default)]
+    pub multi_token_prediction_draft_tokens: Option<u32>,
 }
 
 /// Returns the command-buffer submission interval for one forward.

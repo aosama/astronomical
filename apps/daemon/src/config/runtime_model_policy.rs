@@ -74,5 +74,6 @@ pub(crate) fn worker_chunking_configuration(
             .experimental_in_memory_prefix_adoption_enabled(),
         experimental_neural_engine_prefill_enabled: chunking
             .experimental_neural_engine_prefill_enabled(),
+        multi_token_prediction_draft_tokens: chunking.multi_token_prediction_draft_tokens(),
     }
 }

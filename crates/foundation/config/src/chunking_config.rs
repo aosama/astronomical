@@ -21,6 +21,12 @@ pub(crate) struct ChunkingConfigFile {
         skip_serializing_if = "Option::is_none"
     )]
     pub(crate) ssd_prompt_cache_block_tokens: Option<Option<u32>>,
+    #[serde(
+        default,
+        deserialize_with = "deserialize_present_nullable_draft_tokens",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub(crate) multi_token_prediction_draft_tokens: Option<Option<u32>>,
     // DFlash speculative decoding is disabled by design, so this key is
     // accepted and deliberately ignored wherever it appears (global or
     // per-model). The field stays on the parse surface only because this
@@ -53,6 +59,7 @@ pub struct ConfiguredChunkingFields {
     pub prefill_graph_submission_layer_interval: bool,
     pub experimental_ssd_paging_generation_graph_submission_layer_interval: bool,
     pub ssd_prompt_cache_block_tokens: bool,
+    pub multi_token_prediction_draft_tokens: bool,
     pub ssd_prompt_cache_common_prefix_stride_blocks: bool,
     pub experimental_decode_stage_attribution_enabled: bool,
     pub experimental_prefill_stage_attribution_enabled: bool,
@@ -67,6 +74,27 @@ where
     Deserializer: serde::Deserializer<'de>,
 {
     Option::<u32>::deserialize(deserializer).map(Some)
+}
+
+/// A draft count is refused where it is read, so no configuration holding
+/// more drafts than a head can make ever resolves.
+fn deserialize_present_nullable_draft_tokens<'de, Deserializer>(
+    deserializer: Deserializer,
+) -> Result<Option<Option<u32>>, Deserializer::Error>
+where
+    Deserializer: serde::Deserializer<'de>,
+{
+    let draft_tokens = Option::<u32>::deserialize(deserializer)?;
+    if draft_tokens.is_some_and(exceeds_what_a_head_drafts) {
+        return Err(serde::de::Error::custom(
+            "chunking.multi_token_prediction_draft_tokens must be null for the engine's own count, 0 for none, or at most 3",
+        ));
+    }
+    Ok(Some(draft_tokens))
+}
+
+const fn exceeds_what_a_head_drafts(draft_tokens: u32) -> bool {
+    draft_tokens > MAXIMUM_MULTI_TOKEN_PREDICTION_DRAFT_TOKENS
 }
 
 fn deserialize_present_nullable_usize<'de, Deserializer>(
@@ -97,6 +125,7 @@ impl ChunkingConfigFile {
                 .experimental_ssd_paging_generation_graph_submission_layer_interval
                 .is_some(),
             ssd_prompt_cache_block_tokens: self.ssd_prompt_cache_block_tokens.is_some(),
+            multi_token_prediction_draft_tokens: self.multi_token_prediction_draft_tokens.is_some(),
             ssd_prompt_cache_common_prefix_stride_blocks: self
                 .ssd_prompt_cache_common_prefix_stride_blocks
                 .is_some(),
@@ -142,6 +171,9 @@ impl ChunkingConfigFile {
             ssd_prompt_cache_block_tokens: model
                 .ssd_prompt_cache_block_tokens
                 .or(global.ssd_prompt_cache_block_tokens),
+            multi_token_prediction_draft_tokens: model
+                .multi_token_prediction_draft_tokens
+                .or(global.multi_token_prediction_draft_tokens),
             ssd_prompt_cache_common_prefix_stride_blocks: model
                 .ssd_prompt_cache_common_prefix_stride_blocks
                 .or(global.ssd_prompt_cache_common_prefix_stride_blocks),
@@ -264,6 +296,10 @@ pub const DEFAULT_EXPERIMENTAL_SSD_PAGING_GENERATION_GRAPH_SUBMISSION_LAYER_INTE
 /// Resident multi-token prefill keeps one lazy tape unless the user raises this.
 pub const DEFAULT_PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL: u32 = 0;
 pub const DEFAULT_ASTRO_SSD_PROMPT_CACHE_COMMON_PREFIX_STRIDE_BLOCKS: u32 = 4;
+/// The most tokens a multi-token-prediction head may draft a round. The
+/// head was trained to draft three, and each further draft is verified by
+/// one more row of the model whether it is kept or not.
+pub const MAXIMUM_MULTI_TOKEN_PREDICTION_DRAFT_TOKENS: u32 = 3;
 
 /// Resolved user-visible boundaries that partition model-serving work.
 ///
@@ -278,6 +314,7 @@ pub struct ChunkingConfig {
     prefill_graph_submission_layer_interval: u32,
     experimental_ssd_paging_generation_graph_submission_layer_interval: u32,
     ssd_prompt_cache_block_tokens: Option<u32>,
+    multi_token_prediction_draft_tokens: Option<u32>,
     ssd_prompt_cache_common_prefix_stride_blocks: u32,
     experimental_decode_stage_attribution_enabled: bool,
     experimental_prefill_stage_attribution_enabled: bool,
@@ -320,6 +357,9 @@ impl ChunkingConfig {
                     DEFAULT_EXPERIMENTAL_SSD_PAGING_GENERATION_GRAPH_SUBMISSION_LAYER_INTERVAL,
                 ),
             ssd_prompt_cache_block_tokens: configured.ssd_prompt_cache_block_tokens.unwrap_or(None),
+            multi_token_prediction_draft_tokens: configured
+                .multi_token_prediction_draft_tokens
+                .unwrap_or(None),
             ssd_prompt_cache_common_prefix_stride_blocks: configured
                 .ssd_prompt_cache_common_prefix_stride_blocks
                 .unwrap_or(DEFAULT_ASTRO_SSD_PROMPT_CACHE_COMMON_PREFIX_STRIDE_BLOCKS),
@@ -415,6 +455,13 @@ impl ChunkingConfig {
         self.ssd_prompt_cache_block_tokens
     }
 
+    /// Tokens drafted after each reply token by a model with a
+    /// multi-token-prediction head; `None` leaves the count to the engine.
+    #[must_use]
+    pub const fn multi_token_prediction_draft_tokens(&self) -> Option<u32> {
+        self.multi_token_prediction_draft_tokens
+    }
+
     #[must_use]
     pub const fn ssd_prompt_cache_common_prefix_stride_blocks(&self) -> u32 {
         self.ssd_prompt_cache_common_prefix_stride_blocks
@@ -480,6 +527,7 @@ impl Default for ChunkingConfig {
             experimental_ssd_paging_generation_graph_submission_layer_interval:
                 DEFAULT_EXPERIMENTAL_SSD_PAGING_GENERATION_GRAPH_SUBMISSION_LAYER_INTERVAL,
             ssd_prompt_cache_block_tokens: None,
+            multi_token_prediction_draft_tokens: None,
             ssd_prompt_cache_common_prefix_stride_blocks:
                 DEFAULT_ASTRO_SSD_PROMPT_CACHE_COMMON_PREFIX_STRIDE_BLOCKS,
         }
