@@ -126,6 +126,12 @@ impl Qwen3_5Model {
                 .model_core_payload_bytes
                 .saturating_add(head.payload_byte_count);
         }
+        // A hosted DFlash drafter never pages either.
+        if let Some(draft_runtime) = self.optional_accelerators.draft_runtime.as_deref() {
+            model_geometry.model_core_payload_bytes = model_geometry
+                .model_core_payload_bytes
+                .saturating_add(draft_runtime.hosted_weight_bytes);
+        }
         model_geometry
     }
 

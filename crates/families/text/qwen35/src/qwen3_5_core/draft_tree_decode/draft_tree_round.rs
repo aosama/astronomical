@@ -89,6 +89,12 @@ impl DraftSession {
         Ok(())
     }
 
+    /// Whether the drafter has rows to read: a round cannot start without
+    /// the target's taps for the tokens before it.
+    pub const fn has_pending_tap_rows(&self) -> bool {
+        self.pending_tap_rows.is_some()
+    }
+
     /// Runs the pending tap rows so they hold no graph of the forward that
     /// produced them.
     pub fn evaluate_pending_tap_rows<Target: DraftRoundTarget>(

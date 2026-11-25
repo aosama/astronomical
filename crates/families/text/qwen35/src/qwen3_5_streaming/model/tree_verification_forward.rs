@@ -192,7 +192,9 @@ impl DraftRoundTarget for Qwen3_5StreamingModel {
         &mut self,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<Option<usize>, TextExecutionError> {
-        if !self.runs_row_batched_matrix_unit_kernels(performance_attribution) {
+        let gpu_runs_the_tree_kernels =
+            self.runs_row_batched_matrix_unit_kernels(performance_attribution);
+        if !gpu_runs_the_tree_kernels {
             return Ok(None);
         }
         self.declare_register_ordered_kernels()?;

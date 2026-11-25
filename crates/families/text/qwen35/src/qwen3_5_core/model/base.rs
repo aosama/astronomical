@@ -34,6 +34,12 @@ pub struct Qwen3_5OptionalAccelerators {
     pub output_gate_engine: Option<
         Box<dyn crate::qwen3_5_core::model::output_gate_engine::LinearAttentionOutputGateEngine>,
     >,
+    /// The DFlash drafter the streaming engine hosts beside this model,
+    /// when one that pairs with it is installed. The resident engine keeps
+    /// its own on the engine.
+    pub draft_runtime: Option<
+        Box<crate::qwen3_5_core::draft_tree_decode::engine_draft_runtime::Qwen3_5SpeculativeDraftRuntime>,
+    >,
     /// The register-ordered 4-bit matmul's kernels; set once
     /// `convert_projections_to_register_order` has converted this model's
     /// dense projections, which then multiply through it.

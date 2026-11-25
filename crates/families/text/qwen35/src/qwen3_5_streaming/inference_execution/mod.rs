@@ -6,6 +6,7 @@ mod decode_expert_memory_handoff;
 /// How many layers a reply keeps whole, and giving up the rest.
 mod decode_whole_layer_keep;
 mod decoder_state_reuse;
+mod draft_tree_reply_drafting;
 mod engine_construction;
 pub mod engine_request;
 mod engine_state;

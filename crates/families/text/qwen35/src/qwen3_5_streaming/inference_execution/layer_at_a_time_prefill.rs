@@ -120,6 +120,7 @@ impl Qwen3_5EngineState {
             .performance_attribution
             .record_counter(PerformanceCounter::PrefillChunkCount, 1);
         let memory_baseline = self.begin_forward_memory_measurement()?;
+        self.begin_draft_taps_for_prompt_stretch(active_request);
         let span_to_fail_once = self.prompt_span_to_fail_once_for_tests.take();
         let model = self.core.loaded_model()?;
         let spans = plan.layer_major_span_plan.spans.as_slice();
