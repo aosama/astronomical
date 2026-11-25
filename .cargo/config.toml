@@ -603,7 +603,7 @@ test-quantization-mixture-of-experts = "run -p xtask -- test-run --package astro
 # streamed, drafter in use. --write-catalog writes the cases measured at the
 # Mac's own memory limit into registry/download_catalog.json as each entry's
 # measured_speed, which the Models page shows. Progress and time left print
-# every five seconds; the whole reference set takes about 40 minutes. It
+# every five seconds; the whole reference set takes about 30 minutes. It
 # refuses to start until Development's config.json sets "ssd_prompt_cache":
 # {"enabled": false} and "skill": {"declare_to_models": false} (restart it
 # after editing, and put them back afterwards). It loads real models on the

@@ -13,12 +13,12 @@
         {
             "model_id": "Ornith-1.5-35B-A3B-OptiQ-4bit-vision-DFLASH",
             "maximum_mlx_memory_gb": 16,
-            "why": "The same model on a 16 GB budget, streaming experts from the SSD while it drafts."
+            "why": "The same model on a 16 GB budget, streaming experts from the SSD with its drafter loaded."
         },
         {
             "model_id": "Qwen3.8-27B-MLX-4bit-vision-DFLASH2",
             "maximum_mlx_memory_gb": 18,
-            "why": "A dense model with a DFlash2 drafter, streaming layers from the SSD."
+            "why": "A dense model with a DFlash2 drafter at a limit just above its own weights, where the drafter and the weights compete for memory and the engine decides what streams."
         },
         {
             "model_id": "Qwen3.8-Flash-Next-4bit-mtp",
