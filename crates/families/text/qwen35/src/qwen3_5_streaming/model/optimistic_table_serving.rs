@@ -18,6 +18,18 @@ use crate::qwen3_5_streaming::expert_streaming::expert_pager::Qwen3_5ExpertPager
 use crate::qwen3_5_streaming::{PagedRouteValidationOutcome, Qwen3_5MoEPagedExecutionMode};
 use crate::{PerformanceAttribution, PerformanceCounter};
 
+/// A way to serve a reply token in one evaluation that can turn out wrong,
+/// in which case the token is served again the exact way.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum SpeculativeWay {
+    /// Each partly held layer looks its route up in its table inside the
+    /// graph, reading missing experts into the table
+    /// (`in_graph_table_serving`). Wrong only when a lookup refuses.
+    InGraphLookups,
+    /// Every routed expert is assumed held. Wrong whenever one was not.
+    Optimistic,
+}
+
 /// What recent reply tokens say about serving the next one optimistically.
 #[derive(Debug, Default)]
 pub struct OptimisticServingHistory {
@@ -32,10 +44,12 @@ pub struct OptimisticServingHistory {
 }
 
 impl Qwen3_5Model {
-    /// Serves one layer of an optimistic reply token from its table, whatever
-    /// part of the layer the table holds. `Ok(None)` when this forward is not
-    /// serving optimistically, or when the layer cannot be served this way, in which
-    /// case the forward is marked to be run again.
+    /// Serves one layer of a speculative reply token from its table, whatever
+    /// part of the layer the table holds: optimistically here, or by a lookup
+    /// inside the graph (`dispatch_in_graph_table_page`) when the forward is
+    /// in-graph. `Ok(None)` when the forward is exact, or when the layer
+    /// cannot be served the forward's way; an optimistic forward is then
+    /// marked to be run again.
     #[allow(clippy::too_many_arguments)]
     pub(super) fn dispatch_optimistic_table_page(
         &self,
@@ -52,7 +66,17 @@ impl Qwen3_5Model {
     ) -> Result<Option<MlxArray>, TextExecutionError> {
         let missing_route_collector = &self.paged_forward_missing_route_collector;
         if !missing_route_collector.is_optimistic() {
-            return Ok(None);
+            // The other speculative way, when this forward is taking it; an
+            // exact forward gets `None` from there as it did from here.
+            return self.dispatch_in_graph_table_page(
+                layer_index,
+                selected_indices,
+                selected_scores,
+                hidden_states,
+                mixture_of_experts_weights,
+                should_use_compiled_elementwise_graphs,
+                performance_attribution,
+            );
         }
         let expert_capacity = expert_pager.layer_plan(layer_index)?.expert_capacity;
         let Some(astro_expert_cache) = self.astro_expert_cache.as_ref() else {
@@ -170,8 +194,9 @@ impl Qwen3_5Model {
         Ok(self.runtime.sum_axis(&flat_routed_missing_flags, 0, true)?)
     }
 
-    /// Runs one forward to completion, optimistically first when that is likely
-    /// to be right and running the token again the exact way when it was not.
+    /// Runs one forward to completion: speculatively first when a way that
+    /// keeps the token one evaluation is likely to be right, and again the
+    /// exact way when it was not.
     pub(super) fn forward_resolving_expert_routes(
         &self,
         token_indices: &MlxArray,
@@ -183,22 +208,11 @@ impl Qwen3_5Model {
         let storage_read_bytes_before = self
             .request_expert_storage_read_tally
             .expert_storage_read_byte_count();
-        let mut optimistic_checkpoint = if self.should_serve_optimistically(token_count) {
-            Some(request_decoder_state.checkpoint()?)
-        } else {
-            None
-        };
+        let mut speculative_attempt =
+            self.speculative_attempt(token_count, request_decoder_state)?;
         loop {
-            let is_optimistic = optimistic_checkpoint.is_some();
-            self.paged_forward_missing_route_collector
-                .set_optimistic(is_optimistic);
-            if is_optimistic {
-                performance_attribution
-                    .record_counter(PerformanceCounter::OptimisticReplyTokenCount, 1);
-                let history = &self.optimistic_serving_history;
-                history
-                    .optimistic_token_count
-                    .set(history.optimistic_token_count.get() + 1);
+            if let Some((speculative_way, _)) = speculative_attempt.as_ref() {
+                self.begin_speculative_forward(*speculative_way, performance_attribution);
             }
             let attempt = self.build_and_evaluate_forward(
                 token_indices,
@@ -207,8 +221,7 @@ impl Qwen3_5Model {
                 request_decoder_state,
                 performance_attribution,
             );
-            self.paged_forward_missing_route_collector
-                .set_optimistic(false);
+            self.end_speculative_forward();
             let (logits, validation_outcome) = attempt?;
             match validation_outcome {
                 PagedRouteValidationOutcome::CompleteHit => {
@@ -216,28 +229,100 @@ impl Qwen3_5Model {
                     return Ok(logits);
                 }
                 PagedRouteValidationOutcome::MissedExperts => {
-                    let Some(checkpoint) = optimistic_checkpoint.take() else {
+                    let Some((speculative_way, checkpoint)) = speculative_attempt.take() else {
                         return Err(TextExecutionError::InvalidInput {
                             description: "an exact forward reported experts missing from memory",
                         });
                     };
                     request_decoder_state.restore_checkpoint(checkpoint)?;
-                    performance_attribution
-                        .record_counter(PerformanceCounter::OptimisticReplyTokenMissCount, 1);
-                    let history = &self.optimistic_serving_history;
-                    history
-                        .rerun_token_count
-                        .set(history.rerun_token_count.get() + 1);
-                    // A warming astro expert cache can miss on many tokens of one reply,
-                    // so this stays out of the default log.
-                    tracing::debug!(
-                        optimistic_token_count = history.optimistic_token_count.get(),
-                        rerun_token_count = history.rerun_token_count.get(),
-                        "an optimistic reply token routed to an expert not in memory; running it again"
-                    );
+                    self.record_speculative_miss(speculative_way, performance_attribution);
                 }
             }
         }
+    }
+
+    /// The speculative way to try first, with the state to return to should
+    /// it turn out wrong; `None` for a token served exactly from the start.
+    fn speculative_attempt(
+        &self,
+        token_count: i32,
+        request_decoder_state: &RequestDecoderStateStack,
+    ) -> Result<
+        Option<(
+            SpeculativeWay,
+            text_generation::RequestDecoderStateStackCheckpoint,
+        )>,
+        TextExecutionError,
+    > {
+        let Some(speculative_way) = self.speculative_way(token_count) else {
+            return Ok(None);
+        };
+        Ok(Some((speculative_way, request_decoder_state.checkpoint()?)))
+    }
+
+    /// The speculative way to try first, if any. Looking routes up inside
+    /// the graph comes before optimism: it serves the token when experts are
+    /// missing, where optimism only finds out that they were.
+    fn speculative_way(&self, token_count: i32) -> Option<SpeculativeWay> {
+        if self.should_serve_in_graph(token_count) {
+            Some(SpeculativeWay::InGraphLookups)
+        } else if self.should_serve_optimistically(token_count) {
+            Some(SpeculativeWay::Optimistic)
+        } else {
+            None
+        }
+    }
+
+    fn begin_speculative_forward(
+        &self,
+        speculative_way: SpeculativeWay,
+        performance_attribution: &mut PerformanceAttribution,
+    ) {
+        match speculative_way {
+            SpeculativeWay::InGraphLookups => self.begin_in_graph_forward(),
+            SpeculativeWay::Optimistic => {
+                self.paged_forward_missing_route_collector
+                    .set_optimistic(true);
+                performance_attribution
+                    .record_counter(PerformanceCounter::OptimisticReplyTokenCount, 1);
+                let history = &self.optimistic_serving_history;
+                history
+                    .optimistic_token_count
+                    .set(history.optimistic_token_count.get() + 1);
+            }
+        }
+    }
+
+    /// Ends whichever speculative forward was in progress; harmless after an
+    /// exact one.
+    fn end_speculative_forward(&self) {
+        self.paged_forward_missing_route_collector
+            .set_optimistic(false);
+        self.end_in_graph_forward();
+    }
+
+    fn record_speculative_miss(
+        &self,
+        speculative_way: SpeculativeWay,
+        performance_attribution: &mut PerformanceAttribution,
+    ) {
+        let SpeculativeWay::Optimistic = speculative_way else {
+            // In-graph serving counted its own refusal when it was found.
+            return;
+        };
+        performance_attribution
+            .record_counter(PerformanceCounter::OptimisticReplyTokenMissCount, 1);
+        let history = &self.optimistic_serving_history;
+        history
+            .rerun_token_count
+            .set(history.rerun_token_count.get() + 1);
+        // A warming astro expert cache can miss on many tokens of one reply,
+        // so this stays out of the default log.
+        tracing::debug!(
+            optimistic_token_count = history.optimistic_token_count.get(),
+            rerun_token_count = history.rerun_token_count.get(),
+            "an optimistic reply token routed to an expert not in memory; running it again"
+        );
     }
 
     fn build_and_evaluate_forward(

@@ -294,6 +294,50 @@ pub(super) enum PlannedRowSource<'page> {
     Storage,
 }
 
+/// A growth the budget allows: how many slots the table will have, and
+/// what the added slots are estimated to weigh.
+pub(super) struct PlannedTableGrowth {
+    pub(super) target_slot_count: usize,
+    pub(super) estimated_payload_bytes: u64,
+}
+
+/// The growth `table` would get for `free_slot_deficit` more experts, or
+/// `None` when it stays as it is: it is already as large as the reply's plan
+/// allows, or the added slots do not fit under the `astro_expert_cache`
+/// ceiling. Pure, so a caller that cannot grow a table (a lookup running
+/// inside an evaluation) can ask whether one would be grown.
+pub(super) fn planned_table_growth(
+    table: &ExpertSlotTable,
+    resident_payload_bytes: u64,
+    astro_expert_cache_ceiling_bytes: u64,
+    warm_slot_count: usize,
+    free_slot_deficit: usize,
+) -> Option<PlannedTableGrowth> {
+    if warm_slot_count == 0 || table.slot_count() >= warm_slot_count {
+        return None;
+    }
+    let target_slot_count = (table
+        .slot_count()
+        .saturating_mul(2)
+        .max(table.slot_count() + free_slot_deficit))
+    .min(warm_slot_count);
+    // Budget gate before allocation: the per-expert estimate refuses a growth
+    // the ceiling cannot hold without allocating the tensor first.
+    let estimated_payload_bytes = table
+        .per_expert_payload_bytes
+        .saturating_mul(u64::try_from(target_slot_count - table.slot_count()).unwrap_or(0));
+    if estimated_payload_bytes > 0
+        && resident_payload_bytes.saturating_add(estimated_payload_bytes)
+            > astro_expert_cache_ceiling_bytes
+    {
+        return None;
+    }
+    Some(PlannedTableGrowth {
+        target_slot_count,
+        estimated_payload_bytes,
+    })
+}
+
 pub(super) fn grow_table_within_budget(
     runtime: &MlxRuntime,
     table: &mut ExpertSlotTable,
@@ -302,25 +346,19 @@ pub(super) fn grow_table_within_budget(
     warm_slot_count: usize,
     free_slot_deficit: usize,
 ) -> Result<Option<u64>, MlxRuntimeError> {
-    if warm_slot_count == 0 || table.slot_count() >= warm_slot_count {
+    let Some(PlannedTableGrowth {
+        target_slot_count: growth_target_slot_count,
+        estimated_payload_bytes: estimated_growth_payload_bytes,
+    }) = planned_table_growth(
+        table,
+        resident_payload_bytes,
+        astro_expert_cache_ceiling_bytes,
+        warm_slot_count,
+        free_slot_deficit,
+    )
+    else {
         return Ok(None);
-    }
-    let growth_target_slot_count = (table
-        .slot_count()
-        .saturating_mul(2)
-        .max(table.slot_count() + free_slot_deficit))
-    .min(warm_slot_count);
-    // Budget gate before allocation: the per-expert estimate refuses a growth
-    // the ceiling cannot hold without allocating the tensor first.
-    let estimated_growth_payload_bytes = table
-        .per_expert_payload_bytes
-        .saturating_mul(u64::try_from(growth_target_slot_count - table.slot_count()).unwrap_or(0));
-    if estimated_growth_payload_bytes > 0
-        && resident_payload_bytes.saturating_add(estimated_growth_payload_bytes)
-            > astro_expert_cache_ceiling_bytes
-    {
-        return Ok(None);
-    }
+    };
     let previous_slot_count = table.slot_count();
     let previous_full_padded_payload_bytes = table.full_padded_payload_bytes;
     let mut grown_weights =

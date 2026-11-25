@@ -70,14 +70,30 @@ impl Qwen3_5Model {
                 missing_expert_ids: routed_expert_ids.to_vec(),
             },
         };
+        self.record_route_coverage_counts(
+            u64::try_from(route_coverage.retained_expert_ids.len()).unwrap_or(u64::MAX),
+            u64::try_from(route_coverage.missing_expert_ids.len()).unwrap_or(u64::MAX),
+            performance_attribution,
+        );
+        route_coverage
+    }
+
+    /// Records how much of one reply route its table held, however the
+    /// route was looked up: on the host, or by a lookup inside the graph.
+    pub(super) fn record_route_coverage_counts(
+        &self,
+        retained_assignment_count: u64,
+        storage_assignment_count: u64,
+        performance_attribution: &mut PerformanceAttribution,
+    ) {
         // One classification answer feeds both the opt-in attribution
         // counters and the always-on observatory session counters, so the
         // two can never disagree about the same token.
-        let session_coverage_class = if route_coverage.missing_expert_ids.is_empty() {
+        let session_coverage_class = if storage_assignment_count == 0 {
             performance_attribution
                 .record_counter(PerformanceCounter::HotExpertRouteFullyCoveredCount, 1);
             crate::memory::RouteCoverageClass::FullyCovered
-        } else if route_coverage.retained_expert_ids.is_empty() {
+        } else if retained_assignment_count == 0 {
             performance_attribution
                 .record_counter(PerformanceCounter::HotExpertRouteFullyMissedCount, 1);
             crate::memory::RouteCoverageClass::Missed
@@ -86,10 +102,6 @@ impl Qwen3_5Model {
                 .record_counter(PerformanceCounter::HotExpertRoutePartiallyCoveredCount, 1);
             crate::memory::RouteCoverageClass::PartiallyCovered
         };
-        let retained_assignment_count =
-            u64::try_from(route_coverage.retained_expert_ids.len()).unwrap_or(u64::MAX);
-        let storage_assignment_count =
-            u64::try_from(route_coverage.missing_expert_ids.len()).unwrap_or(u64::MAX);
         performance_attribution.record_counter(
             PerformanceCounter::HotExpertRouteRetainedAssignmentCount,
             retained_assignment_count,
@@ -103,7 +115,6 @@ impl Qwen3_5Model {
             storage_assignment_count,
             session_coverage_class,
         );
-        route_coverage
     }
 
     /// Session counters stay always-on, including when attribution diagnostics

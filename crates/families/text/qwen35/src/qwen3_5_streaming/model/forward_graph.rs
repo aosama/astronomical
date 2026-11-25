@@ -80,7 +80,7 @@ impl Qwen3_5TargetForwardGraph for Qwen3_5Model {
             .paged_forward_missing_route_collector
             .pacing_token_count(token_count);
         let graph_submission_layer_interval =
-            self.graph_submission_layer_interval(pacing_token_count, true);
+            self.reply_graph_submission_layer_interval(pacing_token_count);
         let mut previous_layer_output = None;
         for layer_index in 0..decoder_layer_count {
             // A dense model's streamer supplies its layers: a kept layer, or

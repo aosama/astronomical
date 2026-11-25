@@ -76,6 +76,15 @@ mod forward;
 mod miss_route_dispatch;
 #[cfg(feature = "direct-mlx")]
 mod mixed_decode_execution;
+// The one module of in-graph serving with unsafe code: its host step
+// reaches the model from MLX's thread. The module says why that is sound.
+#[cfg(feature = "direct-mlx")]
+#[allow(unsafe_code)]
+mod in_graph_route_lookup;
+#[cfg(feature = "direct-mlx")]
+mod in_graph_serving_record;
+#[cfg(feature = "direct-mlx")]
+pub mod in_graph_table_serving;
 #[cfg(feature = "direct-mlx")]
 mod optimistic_table_serving;
 mod paged_execution;

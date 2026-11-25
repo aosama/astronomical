@@ -85,7 +85,7 @@ impl Qwen3_5Model {
                 .record_outcome(DirectExpertFetchOutcome::NoDirectReader);
             return Ok(false);
         };
-        if !self.direct_expert_fetching.is_enabled.get() {
+        if !self.reads_host_routes_straight_into_tables() {
             self.direct_expert_fetching
                 .tally
                 .record_outcome(DirectExpertFetchOutcome::NoDirectReader);
@@ -125,14 +125,37 @@ impl Qwen3_5Model {
                 .record_outcome(DirectExpertFetchOutcome::TableCouldNotTakeThem);
             return Ok(false);
         };
-        let fetch_elapsed = fetch_started_at.elapsed();
         let missing_expert_count = route_coverage.missing_expert_ids.len();
         astro_expert_cache
             .borrow_mut()
             .record_disk_load(missing_expert_count, 1);
+        self.record_direct_table_fetch(
+            layer_index,
+            missing_expert_count,
+            table_fetch_report,
+            fetch_started_at.elapsed(),
+            performance_attribution,
+        )?;
+        Ok(true)
+    }
+
+    /// Records one fetch of `missing_expert_count` experts into a layer's
+    /// table, whichever thread made it: this one, or a lookup inside the
+    /// graph whose report is read here after the token's evaluation.
+    pub(super) fn record_direct_table_fetch(
+        &self,
+        layer_index: usize,
+        missing_expert_count: usize,
+        table_fetch_report: crate::qwen3_5_streaming::expert_streaming::TableFetchReport,
+        fetch_elapsed: std::time::Duration,
+        performance_attribution: &PerformanceAttribution,
+    ) -> Result<(), TextExecutionError> {
+        let Some(expert_pager) = self.expert_pager.as_ref() else {
+            return Ok(());
+        };
         let fetched_payload_bytes =
             crate::qwen3_5_streaming::expert_streaming::retained_expert_layer_page_payload_bytes(
-                layer_plan,
+                expert_pager.layer_plan(layer_index)?,
                 missing_expert_count,
             )?;
         self.direct_expert_fetching
@@ -154,6 +177,6 @@ impl Qwen3_5Model {
             fetched_payload_bytes,
             fetch_elapsed,
         );
-        Ok(true)
+        Ok(())
     }
 }

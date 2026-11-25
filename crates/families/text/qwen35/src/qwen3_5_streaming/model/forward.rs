@@ -34,6 +34,12 @@
 //!    whole routed set from RAM (`hot_expert_partial_page` in
 //!    `expert_reuse.rs`); a total miss falls through to outcome 3's streaming.
 //!
+//! A reply token may skip the host route of outcomes 4 and 5 altogether: a
+//! layer held in part is then served from its table with a lookup inside
+//! the token's graph, which reads the missing experts into the table itself
+//! (`dispatch_in_graph_table_page` in `in_graph_table_serving.rs`), and the
+//! token stays one evaluation.
+//!
 //! The warm tables themselves live in
 //! `expert_streaming/astro_expert_cache.rs`; the byte plans and the
 //! bounded SSD reader are family-neutral under `crate::expert_paging` and

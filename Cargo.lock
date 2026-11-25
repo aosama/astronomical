@@ -2037,6 +2037,7 @@ dependencies = [
  "engine-core",
  "expert-atlas",
  "expert-record-reader",
+ "graph-host-step",
  "image",
  "ipc-protocol",
  "jangtq2-qwen35",

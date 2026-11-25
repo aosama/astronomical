@@ -96,36 +96,54 @@ async fn should_attribute_essay_reply_time_with_one_drafted_token() {
 /// report in `evidence_directory`; attribution slows the reply, so only the
 /// shares of its time are to be read, not its speed.
 async fn run_attributed_case(draft_token_count: u32) {
-    timeout(
-        CASE_TIMEOUT,
-        measure_reply(
-            GenerationSampling::Seeded,
-            draft_token_count,
-            RequestAttribution::Enabled,
-        ),
-    )
-    .await
-    .expect("the attributed drafting case must finish within its budget");
+    run_reply_case(ReplyCase {
+        generation_sampling: GenerationSampling::Seeded,
+        draft_token_count,
+        route_lookup: RouteLookup::InsideTheGraph,
+        request_attribution: RequestAttribution::Enabled,
+        phase_name: format!("mtp_drafts_{draft_token_count}"),
+    })
+    .await;
 }
 
 async fn run_case(generation_sampling: GenerationSampling, draft_token_count: u32) {
-    timeout(
-        CASE_TIMEOUT,
-        measure_reply(
-            generation_sampling,
-            draft_token_count,
-            RequestAttribution::Disabled,
-        ),
-    )
-    .await
-    .expect("the drafting speed case must finish within its budget");
+    run_reply_case(ReplyCase {
+        generation_sampling,
+        draft_token_count,
+        route_lookup: RouteLookup::InsideTheGraph,
+        request_attribution: RequestAttribution::Disabled,
+        phase_name: format!("mtp_drafts_{draft_token_count}"),
+    })
+    .await;
 }
 
-async fn measure_reply(
-    generation_sampling: GenerationSampling,
-    draft_token_count: u32,
-    request_attribution: RequestAttribution,
-) {
+/// How a reply token finds the table slots of its routed experts.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum RouteLookup {
+    /// A lookup inside the token's graph, as the engine serves.
+    InsideTheGraph,
+    /// Each layer's route copied to the host, as the engine served before.
+    OnTheHost,
+}
+
+/// One measured reply: how its tokens are sampled, drafted and routed.
+pub(super) struct ReplyCase {
+    pub(super) generation_sampling: GenerationSampling,
+    pub(super) draft_token_count: u32,
+    pub(super) route_lookup: RouteLookup,
+    pub(super) request_attribution: RequestAttribution,
+    /// Names the case in its `[performance-attribution] phase=` line and its
+    /// evidence file.
+    pub(super) phase_name: String,
+}
+
+pub(super) async fn run_reply_case(reply_case: ReplyCase) {
+    timeout(CASE_TIMEOUT, measure_reply(reply_case))
+        .await
+        .expect("the reply speed case must finish within its budget");
+}
+
+async fn measure_reply(reply_case: ReplyCase) {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let PagingExperimentEngine {
         mut engine,
@@ -134,9 +152,15 @@ async fn measure_reply(
         attribution_directory,
     } = load_paging_experiment_engine("mtp_drafting_model_load").await;
     engine
-        .set_multi_token_prediction_draft_tokens_for_tests(draft_token_count)
+        .set_multi_token_prediction_draft_tokens_for_tests(reply_case.draft_token_count)
         .await
         .expect("the engine takes the draft count");
+    engine
+        .set_routes_looked_up_in_the_graph_for_tests(
+            reply_case.route_lookup == RouteLookup::InsideTheGraph,
+        )
+        .await
+        .expect("the engine takes the route lookup");
     let model_id = model_directory
         .file_name()
         .and_then(|name| name.to_str())
@@ -157,7 +181,7 @@ async fn measure_reply(
         "mtp_drafting_warmup",
         WARMUP_OUTPUT_TOKEN_COUNT,
         &end_of_sequence_token_ids,
-        generation_sampling,
+        reply_case.generation_sampling,
         RequestAttribution::Disabled,
     )
     .await;
@@ -170,32 +194,48 @@ async fn measure_reply(
             MEASURED_OUTPUT_TOKEN_COUNT,
         );
     eprintln!(
-        "[mtp-drafting] draft_tokens={draft_token_count} temperature_thousandths={}",
-        generation_sampling.temperature_thousandths()
+        "[reply-speed] phase={} draft_tokens={} route_lookup={:?} temperature_thousandths={}",
+        reply_case.phase_name,
+        reply_case.draft_token_count,
+        reply_case.route_lookup,
+        reply_case.generation_sampling.temperature_thousandths()
     );
     let reply_token_ids = run_generation_with_request_attribution(
         &mut engine,
         MEASURED_REQUEST_ID,
         &prompt_token_ids,
-        &format!("mtp_drafts_{draft_token_count}"),
+        &reply_case.phase_name,
         MEASURED_OUTPUT_TOKEN_COUNT,
         &end_of_sequence_token_ids,
-        generation_sampling,
-        request_attribution,
+        reply_case.generation_sampling,
+        reply_case.request_attribution,
     )
     .await;
     assert!(
         !reply_token_ids.is_empty(),
-        "a reply with {draft_token_count} drafted tokens a round must produce tokens"
+        "the {} reply must produce tokens",
+        reply_case.phase_name
+    );
+    eprintln!(
+        "[reply-speed] phase={} in_graph_counts={:?} direct_fetch_counts={:?}",
+        reply_case.phase_name,
+        engine
+            .in_graph_serving_counts_for_tests()
+            .await
+            .expect("the engine counts its lookups"),
+        engine
+            .take_direct_expert_fetch_counts_for_tests()
+            .await
+            .expect("the engine counts its fetches")
     );
     if let (RequestAttribution::Enabled, Some(evidence_directory)) = (
-        request_attribution,
+        reply_case.request_attribution,
         TestRunContext::current().configuration.evidence_directory,
     ) {
         std::fs::create_dir_all(&evidence_directory).expect("the evidence directory is writable");
         std::fs::copy(
             attribution_directory.path().join("attribution.jsonl"),
-            evidence_directory.join(format!("mtp_drafts_{draft_token_count}.jsonl")),
+            evidence_directory.join(format!("{}.jsonl", reply_case.phase_name)),
         )
         .expect("the attribution report copies to the evidence directory");
     }

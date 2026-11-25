@@ -57,7 +57,7 @@ fn next_projection(
 
 /// An `astro_expert_cache` whose layer 0 table holds experts 0 and 1,
 /// inserted the copying way with room to grow to `warm_slot_count`.
-fn cache_holding_experts_zero_and_one(
+pub(super) fn cache_holding_experts_zero_and_one(
     runtime: &MlxRuntime,
     warm_slot_count: usize,
 ) -> AstroExpertCache {
@@ -79,7 +79,7 @@ fn cache_holding_experts_zero_and_one(
 
 /// The words the table holds for `expert_id`, one entry per tensor, read
 /// through the page a token would multiply from.
-fn words_held_for(astro_expert_cache: &AstroExpertCache, expert_id: usize) -> Vec<u32> {
+pub(super) fn words_held_for(astro_expert_cache: &AstroExpertCache, expert_id: usize) -> Vec<u32> {
     let (page, manifest) = astro_expert_cache
         .full_coverage_page(0, &[expert_id], EXPERT_COUNT)
         .expect("the table holds the expert");
@@ -91,7 +91,7 @@ fn words_held_for(astro_expert_cache: &AstroExpertCache, expert_id: usize) -> Ve
     first_word_by_tensor
 }
 
-fn expected_words_for(expert_id: usize) -> Vec<u32> {
+pub(super) fn expected_words_for(expert_id: usize) -> Vec<u32> {
     let mut expected_words = Vec::with_capacity(TENSOR_NAMES.len());
     for tensor_index in 0..TENSOR_NAMES.len() {
         expected_words.push(tagged_word(tensor_index, expert_id));

@@ -17,6 +17,9 @@ use engine_core::expert_paging::{
 
 use slot_writes::RetainedReferenceOk;
 
+pub use direct_fetch::TableFetchReport;
+pub use table_read_through::{PartlyHeldTable, TableReadThrough, TableRefusal};
+
 mod decode_astro_expert_cache_policy;
 mod demand_history;
 mod demand_phase;
@@ -28,6 +31,7 @@ mod insert_planning;
 mod previous_token_prefetch;
 mod reclamation;
 mod slot_writes;
+mod table_read_through;
 mod topology_snapshot;
 
 #[cfg(all(test, feature = "direct-mlx"))]
@@ -53,6 +57,9 @@ mod slot_writes_tests;
 
 #[cfg(all(test, feature = "direct-mlx"))]
 mod direct_fetch_tests;
+
+#[cfg(all(test, feature = "direct-mlx"))]
+mod table_read_through_tests;
 
 /// Warm-table coverage of one decode token's routed experts.
 #[derive(Debug, Eq, PartialEq)]

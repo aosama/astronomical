@@ -33,6 +33,20 @@ pub(super) enum RoutedExpertAssignmentOutputs {
     Unsorted { assignment_outputs: MlxArray },
 }
 
+/// Where a page's slot of each routed expert comes from.
+pub(super) enum PageSlots<'route> {
+    /// Remapped on the GPU from the routed expert ids, through the page's
+    /// manifest as it stood when the graph was built.
+    RemappedOnDevice {
+        selected_indices: &'route MlxArray,
+        sorted_unique_expert_ids: &'route [usize],
+        page_manifest: &'route QuantizedExpertPageManifest,
+    },
+    /// Named by a lookup inside the graph (`in_graph_table_serving`), which
+    /// may seat experts in the page while the graph is evaluated.
+    LookedUp(&'route MlxArray),
+}
+
 impl Qwen3_5Model {
     #[allow(clippy::too_many_arguments)]
     pub(super) fn forward_moe_paged_with_performance_attribution(
@@ -47,6 +61,34 @@ impl Qwen3_5Model {
         should_use_compiled_elementwise_graphs: bool,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<MlxArray, TextExecutionError> {
+        self.forward_moe_from_page_slots(
+            PageSlots::RemappedOnDevice {
+                selected_indices,
+                sorted_unique_expert_ids,
+                page_manifest,
+            },
+            selected_scores,
+            paged_expert_weights,
+            hidden_states,
+            mixture_of_experts_weights,
+            should_use_compiled_elementwise_graphs,
+            performance_attribution,
+        )
+    }
+
+    /// One layer's sparse expert output multiplied from a page, with the
+    /// shared (non-expert) outputs folded in, measured as one step.
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn forward_moe_from_page_slots(
+        &self,
+        page_slots: PageSlots<'_>,
+        selected_scores: &MlxArray,
+        paged_expert_weights: &Qwen3_5PagedExpertWeights,
+        hidden_states: &MlxArray,
+        mixture_of_experts_weights: &Qwen3_5MoEFeedForwardWeights,
+        should_use_compiled_elementwise_graphs: bool,
+        performance_attribution: &mut PerformanceAttribution,
+    ) -> Result<MlxArray, TextExecutionError> {
         let paged_output = performance_attribution.measure_operation(
             PerformanceOperation::PagedMoeGraphConstruction,
             |measured_attribution| {
@@ -54,9 +96,7 @@ impl Qwen3_5Model {
                     hidden_states,
                     mixture_of_experts_weights,
                     paged_expert_weights,
-                    page_manifest,
-                    selected_indices,
-                    sorted_unique_expert_ids,
+                    page_slots,
                     selected_scores,
                     should_use_compiled_elementwise_graphs,
                     measured_attribution,
@@ -70,9 +110,9 @@ impl Qwen3_5Model {
         Ok(paged_output)
     }
 
-    /// Builds the paged sparse expert output for one decode forward: remaps
-    /// the routed experts to their page slots, streams the weights through
-    /// the gathered projection, and folds the shared (non-expert) outputs in.
+    /// Builds the paged sparse expert output for one decode forward: finds
+    /// the routed experts' page slots, streams the weights through the
+    /// gathered projection, and folds the shared (non-expert) outputs in.
     ///
     /// Extracted from the `PagedMoeGraphConstruction` measurement so the
     /// measured region reads as one named step instead of an inline closure.
@@ -82,20 +122,12 @@ impl Qwen3_5Model {
         hidden_states: &MlxArray,
         mixture_of_experts_weights: &Qwen3_5MoEFeedForwardWeights,
         paged_expert_weights: &Qwen3_5PagedExpertWeights,
-        page_manifest: &QuantizedExpertPageManifest,
-        selected_indices: &MlxArray,
-        sorted_unique_expert_ids: &[usize],
+        page_slots: PageSlots<'_>,
         selected_scores: &MlxArray,
         should_use_compiled_elementwise_graphs: bool,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<MlxArray, TextExecutionError> {
-        let page_slot_indices =
-            astro_expert_cache_plus_streamed_page_route::qwen3_5_moe_remap_expert_page_slots(
-                &self.runtime,
-                selected_indices,
-                sorted_unique_expert_ids,
-                page_manifest,
-            )?;
+        let page_slot_indices = self.resolved_page_slots(page_slots)?;
         let sparse_output = self.forward_moe_with_streamed_weights(
             hidden_states,
             paged_expert_weights,
@@ -109,6 +141,28 @@ impl Qwen3_5Model {
             &sparse_output,
             should_use_compiled_elementwise_graphs,
         )
+    }
+
+    /// The page slot of every routed assignment, as a lazy array.
+    fn resolved_page_slots(
+        &self,
+        page_slots: PageSlots<'_>,
+    ) -> Result<MlxArray, TextExecutionError> {
+        match page_slots {
+            PageSlots::LookedUp(table_slots) => Ok(table_slots.retain()?),
+            PageSlots::RemappedOnDevice {
+                selected_indices,
+                sorted_unique_expert_ids,
+                page_manifest,
+            } => Ok(
+                astro_expert_cache_plus_streamed_page_route::qwen3_5_moe_remap_expert_page_slots(
+                    &self.runtime,
+                    selected_indices,
+                    sorted_unique_expert_ids,
+                    page_manifest,
+                )?,
+            ),
+        }
     }
 
     #[allow(clippy::too_many_arguments)]
