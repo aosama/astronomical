@@ -679,7 +679,10 @@ test-drafted-rewind = "run -p xtask -- test-run --package astronomical-acceptanc
 # `test-streaming-draft-tree-verification` is the same contract on the
 # streaming model, whose layer step and evaluation differ: every row's logits
 # match feeding its chain alone there, and committing a branch leaves the
-# streamed state feeding that branch leaves. Seconds.
+# streamed state feeding that branch leaves. Seconds. With --configuration
+# PATH naming a model_directory it also runs the contract on that model,
+# holding each row to that model's own rounding between a three-token chunk
+# and single tokens (1.6 on a 35B-A3B, whose wrong-branch control moves 3.6).
 test-streaming-draft-tree-verification = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter _streamed_"
 test-draft-tree-verification = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter draft_tree_verification"
 # Gate 2 baseline: where one DFlash2 draft-and-verify round's time goes on the
@@ -934,6 +937,21 @@ measure-mtp-reply-drafting = "run -p xtask -- test-run --package astronomical-ac
 # multi-token-prediction head: the two in-graph replies draft three tokens a
 # round, so each verified block of four rows has its routes looked up in the
 # graph, and both must equal the plain reply resolved on the host.
+# A streamed model packaged with a DFlash drafter, writing replies in draft
+# tree rounds (issue #2330). `test-hosted-drafter-reply` writes one greedy
+# reply with the drafter silent and with it proposing, checks that rounds
+# ran and reports how many tokens the two agree on: they part where two
+# tokens are nearly tied, because a several-row pass rounds differently.
+# `measure-hosted-drafter-reply` measures both, one process a case, with the
+# drafter loaded in each: an essay at temperature 1.0 and 0.7 and real Python
+# source continued at 0.7. Each case serves its prompt once unmeasured first,
+# so the model has timed its plain tokens and rounds and the measured reply
+# is decided as every reply after a first one is (`draft_round_payoff`).
+# Compare the `phase=hosted_drafter_silent` and
+# `phase=hosted_drafter_proposing` lines. Pass --configuration PATH as for
+# `measure-expert-misses`. About thirty seconds a case.
+test-hosted-drafter-reply = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --filter drafted_greedy_reply_as_the_plain_reply_begins"
+measure-hosted-drafter-reply = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --case-budget-seconds 150 --filter reply_speed_with_the_hosted_drafter"
 test-in-graph-drafted-blocks = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --filter drafted_blocks_are_looked_up_in_the_graph"
 test-in-graph-route-lookup = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --filter whichever_way_routes_are_looked_up"
 measure-in-graph-route-lookup = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --case-budget-seconds 150 --filter reply_speed_with_routes_"

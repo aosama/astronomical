@@ -216,7 +216,67 @@ fn load_and_materialize_streaming_model(
         decode_astro_expert_cache_policy,
         model_loading_performance_attribution,
     )?;
-    finish_streaming_model_load(model, mtp_head_load)
+    let mut model = finish_streaming_model_load(model, mtp_head_load)?;
+    host_paired_drafter(
+        &mut model,
+        model_directory,
+        model_loading_performance_attribution,
+    );
+    Ok(model)
+}
+
+/// Hosts the DFlash drafter that pairs with `model`, when one is installed
+/// and this GPU runs the tree kernels, and counts what it holds with the
+/// model's core weights so the `astro_expert_cache` is planned around it.
+/// A drafter that cannot load is logged and replies are written one token
+/// a forward, as without one.
+fn host_paired_drafter(
+    model: &mut Qwen3_5Model,
+    model_directory: &std::path::Path,
+    model_loading_performance_attribution: &mut PerformanceAttribution,
+) {
+    use crate::qwen3_5_core::draft_tree_decode::engine_draft_runtime::{
+        Qwen3_5DraftRuntimeLoadOutcome, Qwen3_5SpeculativeDraftRuntime,
+    };
+    let active_memory_bytes_before = active_memory_bytes(model);
+    let active_memory_limit_bytes = model.runtime().memory_limits().active_memory_limit_bytes();
+    let load_outcome = Qwen3_5SpeculativeDraftRuntime::load_for_target(
+        model,
+        active_memory_limit_bytes,
+        model_directory,
+        model_loading_performance_attribution,
+    );
+    let mut draft_runtime = match load_outcome {
+        Ok(Qwen3_5DraftRuntimeLoadOutcome::Loaded(draft_runtime)) => draft_runtime,
+        Ok(_) => return,
+        Err(draft_loading_error) => {
+            tracing::warn!(
+                %draft_loading_error,
+                "the installed DFlash drafter could not be loaded; replies are written one token a forward"
+            );
+            return;
+        }
+    };
+    draft_runtime.hosted_weight_bytes =
+        active_memory_bytes(model).saturating_sub(active_memory_bytes_before);
+    tracing::info!(
+        hosted_drafter_weight_bytes = draft_runtime.hosted_weight_bytes,
+        "the streaming engine hosts a DFlash drafter"
+    );
+    model.base.optional_accelerators.draft_runtime = Some(draft_runtime);
+    // The drafter's weights joined the core: the governor plans again.
+    model.open_memory_governor();
+}
+
+/// MLX's active memory, or zero when it cannot be read: the difference
+/// across the drafter's load is then zero and nothing is counted.
+fn active_memory_bytes(model: &Qwen3_5Model) -> u64 {
+    model
+        .runtime()
+        .memory_snapshot()
+        .map_or(0, |memory_snapshot| {
+            u64::try_from(memory_snapshot.active_memory_bytes()).unwrap_or(0)
+        })
 }
 
 /// Bounds the `mlx_buffer_cache` to what the loaded model measured and

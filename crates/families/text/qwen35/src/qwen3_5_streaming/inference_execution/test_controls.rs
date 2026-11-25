@@ -75,6 +75,21 @@ impl Qwen3_5EngineState {
         Ok(())
     }
 
+    fn set_hosted_drafter_writes_replies_for_tests(
+        &self,
+        is_enabled: bool,
+    ) -> Result<(), InferenceEngineError> {
+        let loaded_model =
+            self.core.model.as_ref().ok_or_else(|| {
+                fatal_engine_error("cannot choose the drafter's part before load")
+            })?;
+        loaded_model
+            .reply_measurement
+            .writes_replies_without_the_hosted_drafter
+            .set(!is_enabled);
+        Ok(())
+    }
+
     fn set_decode_misses_fetched_into_tables_for_tests(
         &self,
         is_enabled: bool,
@@ -220,6 +235,14 @@ pub trait Qwen3_5StreamingEngineTestControls {
         is_enabled: bool,
     ) -> Result<(), InferenceEngineError>;
 
+    /// Lets a hosted drafter write replies in draft rounds (the default) or
+    /// keeps it loaded and silent, so the same engine writes the plain reply
+    /// a drafted one is compared with.
+    async fn set_hosted_drafter_writes_replies_for_tests(
+        &self,
+        is_enabled: bool,
+    ) -> Result<(), InferenceEngineError>;
+
     /// Chooses how a reply token's missing experts arrive: read straight into
     /// their tables (the default) or loaded as a page and copied afterwards.
     async fn set_decode_misses_fetched_into_tables_for_tests(
@@ -349,6 +372,16 @@ impl Qwen3_5StreamingEngineTestControls for MlxInferenceEngine<Qwen3_5InferenceE
     ) -> Result<(), InferenceEngineError> {
         self.run_owner_test_operation(move |qwen_inference_execution| {
             qwen_inference_execution.set_every_route_brought_to_the_host_for_tests(is_enabled)
+        })
+        .await
+    }
+
+    async fn set_hosted_drafter_writes_replies_for_tests(
+        &self,
+        is_enabled: bool,
+    ) -> Result<(), InferenceEngineError> {
+        self.run_owner_test_operation(move |qwen_inference_execution| {
+            qwen_inference_execution.set_hosted_drafter_writes_replies_for_tests(is_enabled)
         })
         .await
     }

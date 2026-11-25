@@ -18,7 +18,7 @@ use engine_core::expert_paging::{
 use slot_writes::RetainedReferenceOk;
 
 pub use direct_fetch::TableFetchReport;
-pub use table_read_through::{PartlyHeldTable, TableReadThrough, TableRefusal};
+pub use table_read_through::{PartlyHeldTable, TableNotLookedUp, TableReadThrough, TableRefusal};
 
 mod decode_astro_expert_cache_policy;
 mod demand_history;
@@ -95,6 +95,11 @@ struct ExpertSlotTable {
     payload_bytes: u64,
     /// GPU memory consumed by the weight tensors.
     full_padded_payload_bytes: u64,
+    /// How many reply rows the decode step in progress serves: one for a
+    /// reply token, several for a drafted forward. The limits on what one
+    /// step may seat and replace are per reply token, so a step of several
+    /// rows gets that many times each.
+    decode_step_row_count: usize,
 }
 
 impl ExpertSlotTable {
@@ -210,6 +215,12 @@ impl AstroExpertCache {
     }
 
     pub fn begin_decode_forward(&mut self) {
+        self.begin_decode_forward_of_rows(1);
+    }
+
+    /// Begins a decode step that serves `reply_row_count` reply rows in one
+    /// forward: a reply token, or the rows of a drafted forward.
+    pub fn begin_decode_forward_of_rows(&mut self, reply_row_count: usize) {
         self.decode_forward_active = true;
         // The first decode forward of a generation switches the demand
         // stream: prefill evidence served its admission purpose, and decode
@@ -221,6 +232,7 @@ impl AstroExpertCache {
         if self.decode_astro_expert_cache_policy == WorkerDecodeAstroExpertCachePolicy::Candidate {
             self.decode_step_epoch = self.decode_step_epoch.saturating_add(1);
             for table in self.tables_by_layer.iter_mut().flatten() {
+                table.decode_step_row_count = reply_row_count.max(1);
                 for decode_policy_state in &mut table.decode_policy_by_slot {
                     decode_policy_state.expire_probationary_admission(self.decode_step_epoch);
                 }

@@ -111,6 +111,7 @@ impl Qwen3_5EngineState {
         // chunk's window-open sets its own weight before recording.
         let forward_chunk_elapsed_millis =
             prompt_prefill_chunk_outcome.forward_chunk_elapsed_millis;
+        self.hand_prompt_stretch_taps_to_the_drafter(active_request);
         let read_stretch = PromptStretch {
             prefill_start,
             prefill_end,

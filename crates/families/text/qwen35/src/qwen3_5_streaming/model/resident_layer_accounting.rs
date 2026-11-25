@@ -87,7 +87,14 @@ impl Qwen3_5Model {
         complete_layer_payload_bytes: u64,
         performance_attribution: &mut PerformanceAttribution,
     ) {
-        match resident_packed_full_hit_accounting(token_count) {
+        // A drafted forward's rows are reply tokens: their routes join the
+        // forward's one evaluation, as a single token's do. Counted as a
+        // prompt chunk, each whole layer's route was read back on its own,
+        // 16 waits a round on a 35B-A3B at a 16 GB limit.
+        let accounted_token_count = self
+            .paged_forward_missing_route_collector
+            .pacing_token_count(token_count);
+        match resident_packed_full_hit_accounting(accounted_token_count) {
             ResidentPackedFullHitAccounting::CreditDecodeTokenNow => {
                 self.defer_expert_demand(layer_index, expert_capacity, selected_indices);
                 self.record_resident_layer_decode_hit(

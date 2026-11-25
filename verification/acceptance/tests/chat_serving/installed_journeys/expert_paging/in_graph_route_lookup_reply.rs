@@ -27,19 +27,16 @@ use model_serving::Qwen3_5StreamingEngineTestControls;
 use serial_test::serial;
 use tokio::time::timeout;
 
-use super::mtp_reply_drafting_speed::{ReplyCase, RouteLookup, run_reply_case};
+use super::mtp_reply_drafting_speed::{
+    ReplyCase, RouteLookup, run_reply_case, write_compared_greedy_reply,
+};
 use crate::serving_acceptance::support::performance_attribution::{
     GenerationSampling, PagingExperimentEngine, RequestAttribution, load_paging_experiment_engine,
-    run_generation_with_request_attribution,
 };
 
 const REFUSING_REQUEST_ID: RequestId = RequestId::new(98_601);
 const IN_GRAPH_REQUEST_ID: RequestId = RequestId::new(98_602);
 const ON_HOST_REQUEST_ID: RequestId = RequestId::new(98_603);
-/// Past the sparse-attention budget of a lane-mixing model, and short
-/// enough to read twice in the proof's budget.
-const COMPARED_PROMPT_TOKEN_COUNT: usize = 2_600;
-const COMPARED_OUTPUT_TOKEN_COUNT: u16 = 96;
 /// Three drafts and the token before them: a block of four rows.
 const PROOF_DRAFT_TOKEN_COUNT: u32 = 3;
 const PROOF_TIMEOUT: Duration = Duration::from_secs(120);
@@ -141,6 +138,9 @@ fn speed_case(generation_sampling: GenerationSampling, route_lookup: RouteLookup
         generation_sampling,
         draft_token_count: 0,
         route_lookup,
+        hosted_drafter_writes_replies: true,
+        reply_task: super::mtp_reply_drafting_speed::ReplyTask::Essay,
+        serves_the_prompt_once_before_measuring: false,
         request_attribution: RequestAttribution::Disabled,
         phase_name: phase_name(route_lookup),
     }
@@ -295,29 +295,10 @@ async fn write_greedy_reply(
         .set_tables_grown_ahead_of_lookups_for_tests(compared_reply.grows_tables_ahead_of_lookups)
         .await
         .expect("the engine takes the table growth");
-    let model_id = paging_engine
-        .model_directory
-        .file_name()
-        .and_then(|name| name.to_str())
-        .expect("the model directory has a UTF-8 name")
-        .to_owned();
-    let prompt_token_ids =
-        crate::serving_acceptance::support::romeo_and_juliet::prepare_romeo_and_juliet_three_paragraph_summary_prompt(
-            &paging_engine.model_directory,
-            &model_id,
-            compared_reply.request_id,
-            COMPARED_PROMPT_TOKEN_COUNT,
-            COMPARED_OUTPUT_TOKEN_COUNT,
-        );
-    run_generation_with_request_attribution(
-        &mut paging_engine.engine,
+    write_compared_greedy_reply(
+        paging_engine,
         compared_reply.request_id,
-        &prompt_token_ids,
         &phase_name(compared_reply.route_lookup),
-        COMPARED_OUTPUT_TOKEN_COUNT,
-        &paging_engine.end_of_sequence_token_ids,
-        GenerationSampling::Greedy,
-        RequestAttribution::Disabled,
     )
     .await
 }

@@ -41,14 +41,22 @@ impl TextDecodeStepHooks for Qwen3_5EngineState {
         Qwen3_5EngineState::begin_generation_preparation(self, request_id, active_request)
     }
 
-    /// Drafts with the model's multi-token-prediction head when the engine
-    /// is set to and this step allows it.
+    /// The one place a reply is drafted: with a hosted DFlash drafter when
+    /// the reply opened drafting with one, otherwise with the model's
+    /// multi-token-prediction head when the engine is set to. `None` hands
+    /// the step to the plain path.
     fn advance_drafted_generation_if_admitted(
         &mut self,
         _request_id: RequestId,
         active_request: &mut StreamingEngineRequest,
         forced_thinking_transition_token_id: Option<u32>,
     ) -> Result<Option<ActiveRequestAdvance>, InferenceEngineError> {
+        if let Some(drafted_advance) = self.advance_draft_tree_generation_if_admitted(
+            active_request,
+            forced_thinking_transition_token_id,
+        )? {
+            return Ok(Some(drafted_advance));
+        }
         self.advance_mtp_drafted_generation_if_admitted(
             active_request,
             forced_thinking_transition_token_id,

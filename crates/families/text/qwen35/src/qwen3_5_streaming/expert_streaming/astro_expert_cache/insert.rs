@@ -333,6 +333,7 @@ impl AstroExpertCache {
             per_expert_payload_bytes,
             payload_bytes,
             full_padded_payload_bytes,
+            decode_step_row_count: 1,
         };
         if let Some(slot) = self.tables_by_layer.get_mut(layer_index) {
             *slot = Some(table);
@@ -429,6 +430,7 @@ impl AstroExpertCache {
             per_expert_payload_bytes,
             payload_bytes: occupied_payload_bytes,
             full_padded_payload_bytes,
+            decode_step_row_count: 1,
         };
         if let Some(table_slot) = self.tables_by_layer.get_mut(layer_index) {
             *table_slot = Some(table);

@@ -59,8 +59,24 @@ pub struct Qwen3_5SpeculativeDraftRuntime {
     pub tree_options: DraftTreeOptions,
     /// Whether the drafter came from the model's own folder or the library.
     pub drafter_location: DraftModelLocation,
+    /// What the drafter's weights hold in memory, when the engine that
+    /// hosts it measured that; zero where nobody plans memory around it.
+    pub hosted_weight_bytes: u64,
     /// Keeps the drafter's lazily mapped codebooks alive.
     _drafter_checkpoint: MlxSafetensors,
+}
+
+/// Printed where a model's accelerators are: the weights themselves say
+/// nothing a log line wants.
+impl std::fmt::Debug for Qwen3_5SpeculativeDraftRuntime {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("Qwen3_5SpeculativeDraftRuntime")
+            .field("generation", &self.drafter_configuration.generation)
+            .field("tree_node_budget", &self.tree_options.node_budget)
+            .field("hosted_weight_bytes", &self.hosted_weight_bytes)
+            .finish_non_exhaustive()
+    }
 }
 
 impl Qwen3_5SpeculativeDraftRuntime {
@@ -108,6 +124,7 @@ impl Qwen3_5SpeculativeDraftRuntime {
             drafter_weights,
             tree_options,
             drafter_location,
+            hosted_weight_bytes: 0,
             _drafter_checkpoint: drafter_checkpoint,
         })))
     }

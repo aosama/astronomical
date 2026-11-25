@@ -43,7 +43,9 @@ pub(in crate::qwen3_5_streaming) struct MtpReplyDrafting {
 }
 
 /// The request's sampling as the verify forward reproduces it.
-fn target_token_choice_for(sampling_strategy: &TextSamplingStrategy) -> TargetTokenChoice {
+pub(super) fn target_token_choice_for(
+    sampling_strategy: &TextSamplingStrategy,
+) -> TargetTokenChoice {
     match sampling_strategy {
         TextSamplingStrategy::HighestLogit => TargetTokenChoice::highest_scoring(),
         TextSamplingStrategy::TopKTopP {
@@ -126,10 +128,10 @@ impl Qwen3_5EngineState {
                     "a drafted reply had no queued token to emit",
                 )
             })?;
-        self.emit_mtp_token(active_request, queued_token_id)
+        self.emit_drafted_token(active_request, queued_token_id)
     }
 
-    fn emit_mtp_token(
+    pub(super) fn emit_drafted_token(
         &mut self,
         active_request: &mut StreamingEngineRequest,
         reply_token_id: u32,
@@ -142,6 +144,22 @@ impl Qwen3_5EngineState {
             None,
         )?
         .into_active_request_advance())
+    }
+
+    /// Measures the memory the round's forward left, then emits the token
+    /// that started the round: the end of a drafted step, whoever drafted.
+    pub(super) fn measure_round_and_emit(
+        &mut self,
+        active_request: &mut StreamingEngineRequest,
+        active_memory_bytes_before_round: usize,
+        round_first_token_id: u32,
+    ) -> Result<ActiveRequestAdvance, InferenceEngineError> {
+        measure_completed_reply_forward(
+            self.core.loaded_model()?,
+            active_request,
+            active_memory_bytes_before_round,
+        )?;
+        self.emit_drafted_token(active_request, round_first_token_id)
     }
 
     /// Runs `last_chosen_token_id` through the target, with drafts after it
@@ -159,7 +177,7 @@ impl Qwen3_5EngineState {
             last_chosen_token_id,
         ) {
             // The reply ends with this token; nothing after it is needed.
-            return self.emit_mtp_token(active_request, last_chosen_token_id);
+            return self.emit_drafted_token(active_request, last_chosen_token_id);
         }
         let memory_baseline = self.begin_forward_memory_measurement()?;
         let model = self.core.loaded_model()?;
@@ -173,7 +191,8 @@ impl Qwen3_5EngineState {
                 emission_queue: VecDeque::new(),
                 target_token_choice: target_token_choice_for(&active_request.sampling_strategy),
             });
-        model.begin_decode_astro_expert_cache_forward();
+        // The last chosen token and every draft after it are reply rows.
+        model.begin_decode_astro_expert_cache_forward_of_rows(maximum_draft_count + 1);
         let step_outcome = run_target_step(
             model,
             active_request,
@@ -186,17 +205,50 @@ impl Qwen3_5EngineState {
         active_request.advance_position(decided_token_ids.len())?;
         drafting.emission_queue.extend(decided_token_ids);
         active_request.engine_extension.mtp_reply_drafting = Some(drafting);
-        measure_completed_reply_forward(
-            model,
+        self.measure_round_and_emit(
             active_request,
             memory_baseline.active_memory_bytes,
-        )?;
-        self.emit_mtp_token(active_request, last_chosen_token_id)
+            last_chosen_token_id,
+        )
     }
 }
 
+/// Counts one drafted round, whichever drafter proposed it.
+pub(super) fn record_drafted_round(
+    active_request: &mut StreamingEngineRequest,
+    drafted_token_count: usize,
+    accepted_draft_count: usize,
+) {
+    let attribution = &mut active_request.performance_attribution;
+    attribution.record_counter(crate::PerformanceCounter::SpeculativeRoundCount, 1);
+    attribution.record_counter(
+        crate::PerformanceCounter::SpeculativeProposedTokenCount,
+        drafted_token_count as u64,
+    );
+    attribution.record_counter(
+        crate::PerformanceCounter::SpeculativeAcceptedTokenCount,
+        accepted_draft_count as u64,
+    );
+}
+
+/// The token a round starts from: the one taken from the reply's queue,
+/// or else the one the prompt's read or a plain step left pending, read
+/// from the device once; `None` before the reply's first token exists.
+pub(super) fn queued_or_pending_token(
+    queued_token_id: Option<u32>,
+    active_request: &mut StreamingEngineRequest,
+) -> Result<Option<u32>, InferenceEngineError> {
+    if queued_token_id.is_some() {
+        return Ok(queued_token_id);
+    }
+    let Some(pending_generated_token) = active_request.pending_generated_token.take() else {
+        return Ok(None);
+    };
+    synchronize_generated_token_id(active_request, &pending_generated_token).map(Some)
+}
+
 /// Whether the request's own settings let a round stand in for plain steps.
-fn request_can_draft(active_request: &StreamingEngineRequest) -> bool {
+pub(super) fn request_can_draft(active_request: &StreamingEngineRequest) -> bool {
     active_request.structured_generation.is_none()
         && active_request.repetition_penalty_thousandths == 1_000
         && !active_request.has_visual_inputs
@@ -212,13 +264,7 @@ fn next_token_to_run(
         .mtp_reply_drafting
         .as_mut()
         .and_then(|drafting| drafting.emission_queue.pop_front());
-    if queued_token_id.is_some() {
-        return Ok(queued_token_id);
-    }
-    let Some(pending_generated_token) = active_request.pending_generated_token.take() else {
-        return Ok(None);
-    };
-    synchronize_generated_token_id(active_request, &pending_generated_token).map(Some)
+    queued_or_pending_token(queued_token_id, active_request)
 }
 
 /// One target forward from `last_chosen_token_id`: the first keeps the
@@ -265,15 +311,10 @@ fn run_target_step(
         drafting.target_token_choice,
         &mut active_request.performance_attribution,
     )?;
-    let attribution = &mut active_request.performance_attribution;
-    attribution.record_counter(crate::PerformanceCounter::SpeculativeRoundCount, 1);
-    attribution.record_counter(
-        crate::PerformanceCounter::SpeculativeProposedTokenCount,
-        round_outcome.drafted_token_count as u64,
-    );
-    attribution.record_counter(
-        crate::PerformanceCounter::SpeculativeAcceptedTokenCount,
-        round_outcome.accepted_draft_count as u64,
+    record_drafted_round(
+        active_request,
+        round_outcome.drafted_token_count,
+        round_outcome.accepted_draft_count,
     );
     Ok(round_outcome.reply_token_ids)
 }

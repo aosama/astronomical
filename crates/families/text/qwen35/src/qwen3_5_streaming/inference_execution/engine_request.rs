@@ -29,6 +29,11 @@ pub struct StreamingRequestExtension {
     /// `None` while the reply is written one token a forward.
     pub(in crate::qwen3_5_streaming) mtp_reply_drafting:
         Option<super::mtp_reply_drafting::MtpReplyDrafting>,
+    /// The reply's drafting with a hosted DFlash drafter, opened while the
+    /// prompt is read; `None` when no drafter is hosted or the reply is
+    /// written one token a forward.
+    pub(in crate::qwen3_5_streaming) draft_tree_drafting:
+        Option<super::draft_tree_reply_drafting::DraftTreeReplyDrafting>,
 }
 
 impl StreamingRequestExtension {
@@ -42,6 +47,7 @@ impl StreamingRequestExtension {
             mlx_buffer_cache_reply_record: Default::default(),
             reply_expert_route_record: Default::default(),
             mtp_reply_drafting: None,
+            draft_tree_drafting: None,
         }
     }
 }

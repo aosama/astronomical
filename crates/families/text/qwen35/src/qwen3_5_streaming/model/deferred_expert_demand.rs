@@ -138,12 +138,33 @@ impl Qwen3_5Model {
         let prefill_demand_assignment_weight = astro_expert_cache
             .borrow()
             .prefill_demand_assignment_weight();
+        let host_readable_route =
+            self.route_readable_without_a_further_evaluation(selected_indices);
         self.deferred_expert_demand.borrow_mut().retain_layer_route(
             layer_index,
             expert_capacity,
-            selected_indices,
+            host_readable_route.as_ref().unwrap_or(selected_indices),
             prefill_demand_assignment_weight,
         );
+    }
+
+    /// A route of several rows is a strided view of the router's partition,
+    /// and copying a view to the host first evaluates a contiguous copy of
+    /// it: one more blocking evaluation a layer after the forward's own,
+    /// 40 a draft round on a 35B-A3B held whole (0.5 ms of a 22.7 ms round).
+    /// Built here, the copy joins the forward's one evaluation. One row is
+    /// already contiguous. `None` keeps the route as it is.
+    fn route_readable_without_a_further_evaluation(
+        &self,
+        selected_indices: &MlxArray,
+    ) -> Option<MlxArray> {
+        let assignments_per_row = selected_indices.shape().last().copied().unwrap_or(0) as usize;
+        if selected_indices.element_count() <= assignments_per_row {
+            return None;
+        }
+        self.runtime
+            .build_contiguous_row_major_copy(selected_indices)
+            .ok()
     }
 
     /// Queues one route served wholly from a seated complete layer so its

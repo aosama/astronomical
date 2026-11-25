@@ -41,10 +41,23 @@ pub(super) struct SmallTargetSources {
 }
 
 pub(super) fn small_target_sources() -> SmallTargetSources {
-    let model_directory = configured_installed_model_directory_by_id(small_dense_model_id());
+    target_sources(
+        configured_installed_model_directory_by_id(small_dense_model_id()),
+        6,
+    )
+}
+
+/// The sources of any installed Qwen3.5 target, under `memory_limit_gigabytes`.
+pub(super) fn target_sources(
+    model_directory: std::path::PathBuf,
+    memory_limit_gigabytes: usize,
+) -> SmallTargetSources {
     let runtime = MlxRuntime::initialize(
-        MlxMemoryLimits::new(6 * 1024 * 1024 * 1024, 512 * 1024 * 1024)
-            .expect("memory limits are valid"),
+        MlxMemoryLimits::new(
+            memory_limit_gigabytes * 1024 * 1024 * 1024,
+            512 * 1024 * 1024,
+        )
+        .expect("memory limits are valid"),
     )
     .expect("the MLX runtime initializes");
     let artifact = Qwen3_5ArtifactValidator::new()

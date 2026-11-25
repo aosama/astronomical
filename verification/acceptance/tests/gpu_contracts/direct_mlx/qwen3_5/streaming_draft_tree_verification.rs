@@ -19,14 +19,29 @@ use super::draft_tree_verification::{
     State, TreeContractTarget, Verified, anchor_position,
     assert_a_commit_differs_from_feeding_another_branch,
     assert_a_commit_leaves_the_state_feeding_the_branch_leaves,
-    assert_every_tree_row_matches_its_chain,
+    assert_every_tree_row_matches_its_chain, chunk_against_step_logit_difference,
 };
-use super::drafted_rewind::{SmallTarget, small_target_sources};
+use super::drafted_rewind::{
+    MAXIMUM_LOGIT_DIFFERENCE, SmallTarget, small_target_sources, target_sources,
+};
 
 type SmallStreamedTarget = SmallTarget<Qwen3_5StreamingModel>;
 
 fn load_small_streamed_target() -> SmallStreamedTarget {
-    let sources = small_target_sources();
+    load_streamed_target(small_target_sources())
+}
+
+/// The test run's own model (`--configuration`'s `model_directory`), all of
+/// it in memory: the contract then runs over that model's expert layers.
+fn load_configured_streamed_target() -> SmallStreamedTarget {
+    let model_directory = test_harness::test_run::TestRunContext::current()
+        .configuration
+        .model_directory
+        .expect("the configured-model contract needs --configuration with a model_directory");
+    load_streamed_target(target_sources(model_directory, 40))
+}
+
+fn load_streamed_target(sources: super::drafted_rewind::SmallTargetSources) -> SmallStreamedTarget {
     let mut model = Qwen3_5StreamingModel::load(
         sources.runtime,
         sources.artifact,
@@ -82,19 +97,66 @@ impl TreeContractTarget for SmallStreamedTarget {
 #[ignore = "loads the small dense Qwen3.5 on the streaming engine"]
 #[serial]
 fn should_give_every_streamed_tree_row_the_logits_its_chain_alone_gives() {
-    assert_every_tree_row_matches_its_chain(&load_small_streamed_target());
+    assert_every_tree_row_matches_its_chain(
+        &load_small_streamed_target(),
+        MAXIMUM_LOGIT_DIFFERENCE,
+    );
 }
 
 #[test]
 #[ignore = "loads the small dense Qwen3.5 on the streaming engine"]
 #[serial]
 fn should_leave_the_streamed_state_feeding_the_kept_branch_alone_leaves() {
-    assert_a_commit_leaves_the_state_feeding_the_branch_leaves(&load_small_streamed_target());
+    assert_a_commit_leaves_the_state_feeding_the_branch_leaves(
+        &load_small_streamed_target(),
+        MAXIMUM_LOGIT_DIFFERENCE,
+    );
 }
 
 #[test]
 #[ignore = "loads the small dense Qwen3.5 on the streaming engine"]
 #[serial]
 fn should_differ_from_feeding_a_branch_the_streamed_commit_did_not_keep() {
-    assert_a_commit_differs_from_feeding_another_branch(&load_small_streamed_target());
+    assert_a_commit_differs_from_feeding_another_branch(
+        &load_small_streamed_target(),
+        MAXIMUM_LOGIT_DIFFERENCE * 4.0,
+    );
+}
+
+/// One chunk's rounding is a sample, not a bound: on a 35B-A3B the sample
+/// is 1.62, tree rows differ from their chains by 1.06 to 1.62 and a commit
+/// by up to 1.78, where a wrong branch moves the logits by 3.55.
+const ROUNDING_SAMPLE_SPREAD: f32 = 1.5;
+
+/// A configured model's rows are held to that model's own rounding between
+/// a chunk and single tokens, never to less than the small model's.
+fn configured_target_and_its_rounding() -> (SmallStreamedTarget, f32) {
+    let target = load_configured_streamed_target();
+    let rounding = (chunk_against_step_logit_difference(&target) * ROUNDING_SAMPLE_SPREAD)
+        .max(MAXIMUM_LOGIT_DIFFERENCE);
+    (target, rounding)
+}
+
+#[test]
+#[ignore = "loads the configured Qwen3.5 model on the streaming engine"]
+#[serial]
+fn should_give_every_streamed_tree_row_of_the_configured_model_the_logits_its_chain_gives() {
+    let (target, rounding) = configured_target_and_its_rounding();
+    assert_every_tree_row_matches_its_chain(&target, rounding);
+}
+
+#[test]
+#[ignore = "loads the configured Qwen3.5 model on the streaming engine"]
+#[serial]
+fn should_leave_the_configured_model_s_streamed_state_feeding_the_kept_branch_leaves() {
+    let (target, rounding) = configured_target_and_its_rounding();
+    assert_a_commit_leaves_the_state_feeding_the_branch_leaves(&target, rounding);
+}
+
+#[test]
+#[ignore = "loads the configured Qwen3.5 model on the streaming engine"]
+#[serial]
+fn should_differ_from_feeding_a_branch_the_configured_model_s_streamed_commit_did_not_keep() {
+    let (target, rounding) = configured_target_and_its_rounding();
+    assert_a_commit_differs_from_feeding_another_branch(&target, rounding);
 }

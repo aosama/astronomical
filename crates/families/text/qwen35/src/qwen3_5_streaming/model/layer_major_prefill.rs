@@ -492,6 +492,13 @@ impl Qwen3_5Model {
             },
             performance_attribution,
         )?;
+        self.paged_forward_missing_route_collector
+            .draft_tap_capture
+            .keep_layer_rows(
+                layer_pass.layer_index,
+                span_first_position(layer_pass, span),
+                &span_output,
+            );
         span_state.hidden_states = Some(span_output);
         Ok(())
     }
@@ -549,6 +556,13 @@ struct LayerPass {
     /// Whether the last span ends the prompt, which makes it the span whose
     /// expert routes best predict the reply's.
     last_span_ends_the_prompt: bool,
+}
+
+/// Where a span's first token sits in the prompt, saturating past the
+/// int32 range, which no served context reaches.
+fn span_first_position(layer_pass: LayerPass, span: &LayerMajorSpan) -> i32 {
+    i32::try_from(u64::from(layer_pass.starting_position_tokens) + span.start_token as u64)
+        .unwrap_or(i32::MAX)
 }
 
 /// The weight one span's expert routes are recorded under as prompt demand.

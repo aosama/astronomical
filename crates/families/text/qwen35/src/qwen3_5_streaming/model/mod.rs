@@ -72,9 +72,12 @@ mod request_expert_storage_read_tally;
 pub use crate::qwen3_5_core::model_math::{feed_forward_weights, output_combination, routing};
 pub mod direct_expert_fetch;
 pub mod direct_expert_fetch_tally;
+pub mod draft_round_costs;
 pub mod draft_tap_capture;
 #[cfg(feature = "direct-mlx")]
 mod forward;
+#[cfg(feature = "direct-mlx")]
+mod in_graph_lookup_admission;
 mod miss_route_dispatch;
 #[cfg(feature = "direct-mlx")]
 mod mixed_decode_execution;

@@ -30,6 +30,7 @@ use crate::serving_acceptance::support::performance_attribution::{
 
 const WARMUP_REQUEST_ID: RequestId = RequestId::new(98_501);
 const MEASURED_REQUEST_ID: RequestId = RequestId::new(98_502);
+const LEARNING_REQUEST_ID: RequestId = RequestId::new(98_503);
 const WARMUP_PROMPT_TOKEN_COUNT: usize = 500;
 const WARMUP_OUTPUT_TOKEN_COUNT: u16 = 50;
 const MEASURED_PROMPT_TOKEN_COUNT: usize = 10_000;
@@ -100,6 +101,9 @@ async fn run_attributed_case(draft_token_count: u32) {
         generation_sampling: GenerationSampling::Seeded,
         draft_token_count,
         route_lookup: RouteLookup::InsideTheGraph,
+        hosted_drafter_writes_replies: true,
+        reply_task: ReplyTask::Essay,
+        serves_the_prompt_once_before_measuring: false,
         request_attribution: RequestAttribution::Enabled,
         phase_name: format!("mtp_drafts_{draft_token_count}"),
     })
@@ -111,10 +115,53 @@ async fn run_case(generation_sampling: GenerationSampling, draft_token_count: u3
         generation_sampling,
         draft_token_count,
         route_lookup: RouteLookup::InsideTheGraph,
+        hosted_drafter_writes_replies: true,
+        reply_task: ReplyTask::Essay,
+        serves_the_prompt_once_before_measuring: false,
         request_attribution: RequestAttribution::Disabled,
         phase_name: format!("mtp_drafts_{draft_token_count}"),
     })
     .await;
+}
+
+/// A short reply two ways of serving are compared on: past the
+/// sparse-attention budget of a lane-mixing model, and short enough to
+/// read twice in a comparison's budget.
+pub(super) const COMPARED_PROMPT_TOKEN_COUNT: usize = 2_600;
+pub(super) const COMPARED_OUTPUT_TOKEN_COUNT: u16 = 96;
+
+/// Writes the greedy reply to the compared Romeo and Juliet summary on the
+/// engine as it is set up, and returns its tokens.
+pub(super) async fn write_compared_greedy_reply(
+    paging_engine: &mut PagingExperimentEngine,
+    request_id: RequestId,
+    phase_name: &str,
+) -> Vec<u32> {
+    let model_id = paging_engine
+        .model_directory
+        .file_name()
+        .and_then(|name| name.to_str())
+        .expect("the model directory has a UTF-8 name")
+        .to_owned();
+    let prompt_token_ids =
+        crate::serving_acceptance::support::romeo_and_juliet::prepare_romeo_and_juliet_three_paragraph_summary_prompt(
+            &paging_engine.model_directory,
+            &model_id,
+            request_id,
+            COMPARED_PROMPT_TOKEN_COUNT,
+            COMPARED_OUTPUT_TOKEN_COUNT,
+        );
+    run_generation_with_request_attribution(
+        &mut paging_engine.engine,
+        request_id,
+        &prompt_token_ids,
+        phase_name,
+        COMPARED_OUTPUT_TOKEN_COUNT,
+        &paging_engine.end_of_sequence_token_ids,
+        GenerationSampling::Greedy,
+        RequestAttribution::Disabled,
+    )
+    .await
 }
 
 /// How a reply token finds the table slots of its routed experts.
@@ -126,11 +173,53 @@ pub(super) enum RouteLookup {
     OnTheHost,
 }
 
+/// What the measured reply is asked to write.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum ReplyTask {
+    /// A three-paragraph summary of Romeo and Juliet.
+    Essay,
+    /// The continuation of real Python source.
+    Code,
+}
+
+impl ReplyTask {
+    fn prompt_token_ids(
+        self,
+        model_directory: &std::path::Path,
+        model_id: &str,
+        request_id: RequestId,
+        prompt_token_count: usize,
+        output_token_count: u16,
+    ) -> Vec<u32> {
+        use crate::serving_acceptance::support::{romeo_and_juliet, source_code_prompt};
+        let instructed_source = match self {
+            Self::Essay => romeo_and_juliet::ROMEO_AND_JULIET_SUMMARY,
+            Self::Code => source_code_prompt::SOURCE_CODE_CONTINUATION,
+        };
+        romeo_and_juliet::prepare_instructed_source_prompt(
+            instructed_source,
+            model_directory,
+            model_id,
+            request_id,
+            prompt_token_count,
+            output_token_count,
+        )
+    }
+}
+
 /// One measured reply: how its tokens are sampled, drafted and routed.
 pub(super) struct ReplyCase {
     pub(super) generation_sampling: GenerationSampling,
     pub(super) draft_token_count: u32,
     pub(super) route_lookup: RouteLookup,
+    /// Off keeps a hosted DFlash drafter loaded and silent, for the plain
+    /// reply its rounds are compared with; nothing to a model without one.
+    pub(super) hosted_drafter_writes_replies: bool,
+    pub(super) reply_task: ReplyTask,
+    /// Serves the measured prompt once before it is measured, so a model
+    /// with a hosted drafter has timed its plain tokens and rounds and the
+    /// measured reply is decided as every reply after a first one is.
+    pub(super) serves_the_prompt_once_before_measuring: bool,
     pub(super) request_attribution: RequestAttribution,
     /// Names the case in its `[performance-attribution] phase=` line and its
     /// evidence file.
@@ -143,14 +232,11 @@ pub(super) async fn run_reply_case(reply_case: ReplyCase) {
         .expect("the reply speed case must finish within its budget");
 }
 
-async fn measure_reply(reply_case: ReplyCase) {
-    let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
-    let PagingExperimentEngine {
-        mut engine,
-        end_of_sequence_token_ids,
-        model_directory,
-        attribution_directory,
-    } = load_paging_experiment_engine("mtp_drafting_model_load").await;
+/// Sets the engine up as the case says, before anything is served.
+async fn set_engine_up_for(
+    engine: &impl Qwen3_5StreamingEngineTestControls,
+    reply_case: &ReplyCase,
+) {
     engine
         .set_multi_token_prediction_draft_tokens_for_tests(reply_case.draft_token_count)
         .await
@@ -161,19 +247,33 @@ async fn measure_reply(reply_case: ReplyCase) {
         )
         .await
         .expect("the engine takes the route lookup");
+    engine
+        .set_hosted_drafter_writes_replies_for_tests(reply_case.hosted_drafter_writes_replies)
+        .await
+        .expect("the engine takes the drafter's part");
+}
+
+async fn measure_reply(reply_case: ReplyCase) {
+    let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
+    let PagingExperimentEngine {
+        mut engine,
+        end_of_sequence_token_ids,
+        model_directory,
+        attribution_directory,
+    } = load_paging_experiment_engine("mtp_drafting_model_load").await;
+    set_engine_up_for(&engine, &reply_case).await;
     let model_id = model_directory
         .file_name()
         .and_then(|name| name.to_str())
         .expect("the model directory has a UTF-8 name")
         .to_owned();
-    let warmup_prompt_token_ids =
-        crate::serving_acceptance::support::romeo_and_juliet::prepare_romeo_and_juliet_three_paragraph_summary_prompt(
-            &model_directory,
-            &model_id,
-            WARMUP_REQUEST_ID,
-            WARMUP_PROMPT_TOKEN_COUNT,
-            WARMUP_OUTPUT_TOKEN_COUNT,
-        );
+    let warmup_prompt_token_ids = reply_case.reply_task.prompt_token_ids(
+        &model_directory,
+        &model_id,
+        WARMUP_REQUEST_ID,
+        WARMUP_PROMPT_TOKEN_COUNT,
+        WARMUP_OUTPUT_TOKEN_COUNT,
+    );
     run_generation_with_request_attribution(
         &mut engine,
         WARMUP_REQUEST_ID,
@@ -185,14 +285,26 @@ async fn measure_reply(reply_case: ReplyCase) {
         RequestAttribution::Disabled,
     )
     .await;
-    let prompt_token_ids =
-        crate::serving_acceptance::support::romeo_and_juliet::prepare_romeo_and_juliet_three_paragraph_summary_prompt(
-            &model_directory,
-            &model_id,
-            MEASURED_REQUEST_ID,
-            MEASURED_PROMPT_TOKEN_COUNT,
+    let prompt_token_ids = reply_case.reply_task.prompt_token_ids(
+        &model_directory,
+        &model_id,
+        MEASURED_REQUEST_ID,
+        MEASURED_PROMPT_TOKEN_COUNT,
+        MEASURED_OUTPUT_TOKEN_COUNT,
+    );
+    if reply_case.serves_the_prompt_once_before_measuring {
+        run_generation_with_request_attribution(
+            &mut engine,
+            LEARNING_REQUEST_ID,
+            &prompt_token_ids,
+            "reply_before_the_measured_one",
             MEASURED_OUTPUT_TOKEN_COUNT,
-        );
+            &end_of_sequence_token_ids,
+            reply_case.generation_sampling,
+            RequestAttribution::Disabled,
+        )
+        .await;
+    }
     eprintln!(
         "[reply-speed] phase={} draft_tokens={} route_lookup={:?} temperature_thousandths={}",
         reply_case.phase_name,
@@ -272,12 +384,16 @@ async fn report_reply_stages(phase_name: &str, engine: &impl Qwen3_5StreamingEng
     );
     if stages.draft_round_count > 0 {
         eprintln!(
-            "[reply-stages] phase={phase_name} draft_rounds={} draft_ms_per_round={:.2} verify_ms_per_round={:.2} pick_ms_per_round={:.2} keep_ms_per_round={:.2}",
+            "[reply-stages] phase={phase_name} draft_rounds={} draft_ms_per_round={:.2} verify_ms_per_round={:.2} pick_ms_per_round={:.2} keep_ms_per_round={:.2} blocking_evaluations_per_round_draft_verify_pick_keep={:.2}/{:.2}/{:.2}/{:.2}",
             stages.draft_round_count,
             milliseconds(stages.draft_nanoseconds, round_count),
             milliseconds(stages.verify_nanoseconds, round_count),
             milliseconds(stages.pick_nanoseconds, round_count),
             milliseconds(stages.keep_nanoseconds, round_count),
+            stages.draft_blocking_evaluations as f64 / round_count,
+            stages.verify_blocking_evaluations as f64 / round_count,
+            stages.pick_blocking_evaluations as f64 / round_count,
+            stages.keep_blocking_evaluations as f64 / round_count,
         );
     }
 }

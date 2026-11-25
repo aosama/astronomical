@@ -89,6 +89,12 @@ impl DraftSession {
         Ok(())
     }
 
+    /// Whether the drafter has rows to read: a round cannot start without
+    /// the target's taps for the tokens before it.
+    pub const fn has_pending_tap_rows(&self) -> bool {
+        self.pending_tap_rows.is_some()
+    }
+
     /// Runs the pending tap rows so they hold no graph of the forward that
     /// produced them.
     pub fn evaluate_pending_tap_rows<Target: DraftRoundTarget>(
@@ -140,6 +146,55 @@ pub struct DraftTreeRoundOutcome {
     pub drafted_token_count: usize,
     /// Tokens in the target's state after the round.
     pub context_length_after_round: u32,
+    /// Where the round's time and waits went.
+    pub stages: DraftTreeRoundStages,
+}
+
+/// One round's stages: how long each took and how many blocking
+/// evaluations it made. A stage that is lazy on an engine shows its work in
+/// the stage that first reads it.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct DraftTreeRoundStages {
+    /// The drafter's block and the search of its lattice for a tree.
+    pub draft: StageCost,
+    /// The target's pass over the tree's rows.
+    pub verify: StageCost,
+    /// The target's choice after every row.
+    pub pick: StageCost,
+    /// Handing the kept rows' taps to the drafter and committing the chain.
+    pub keep: StageCost,
+}
+
+/// What one stage of a round cost.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct StageCost {
+    pub elapsed: std::time::Duration,
+    pub blocking_evaluation_count: u64,
+}
+
+/// A point between two stages: the clock and MLX's evaluation count there.
+struct StageMark {
+    at: std::time::Instant,
+    blocking_evaluations: u64,
+}
+
+impl StageMark {
+    fn now() -> Self {
+        Self {
+            at: std::time::Instant::now(),
+            blocking_evaluations: graph_host_step::evaluation_counts().blocking_evaluations,
+        }
+    }
+
+    /// The cost of the stage between `self` and `later`.
+    fn until(&self, later: &Self) -> StageCost {
+        StageCost {
+            elapsed: later.at.duration_since(self.at),
+            blocking_evaluation_count: later
+                .blocking_evaluations
+                .saturating_sub(self.blocking_evaluations),
+        }
+    }
 }
 
 /// Runs one round and leaves `request_decoder_state` advanced over the
@@ -156,7 +211,9 @@ pub fn run_draft_tree_round<Target: DraftRoundTarget>(
             description: "the context length exceeds the MLX int32 range",
         }
     })?;
+    let round_began = StageMark::now();
     let tree_rows = drafted_tree_rows(model, draft_runtime, draft_session, round_request)?;
+    let drafted = StageMark::now();
     let tap_layer_ids = &draft_runtime.drafter_configuration.target_tap_layer_ids;
     let verification = model.verify_round_tree(
         RoundTree {
@@ -166,6 +223,7 @@ pub fn run_draft_tree_round<Target: DraftRoundTarget>(
         },
         request_decoder_state,
     )?;
+    let verified = StageMark::now();
     let picks = target_picks(
         model,
         &verification.per_row_logits,
@@ -173,6 +231,7 @@ pub fn run_draft_tree_round<Target: DraftRoundTarget>(
         round_request.target_token_choice,
         draft_session.keyed_seed,
     )?;
+    let picked = StageMark::now();
     let kept = tree_rows.kept_chain(&picks);
     let mut kept_row_ids = Vec::with_capacity(kept.rows.len());
     let mut emitted_token_ids = Vec::with_capacity(kept.rows.len() + 1);
@@ -205,6 +264,12 @@ pub fn run_draft_tree_round<Target: DraftRoundTarget>(
         accepted_proposal_count: kept.rows.len() - 1,
         drafted_token_count: tree_rows.row_count() - 1,
         context_length_after_round: round_request.context_length_tokens + kept.rows.len() as u32,
+        stages: DraftTreeRoundStages {
+            draft: round_began.until(&drafted),
+            verify: drafted.until(&verified),
+            pick: verified.until(&picked),
+            keep: picked.until(&StageMark::now()),
+        },
     })
 }
 

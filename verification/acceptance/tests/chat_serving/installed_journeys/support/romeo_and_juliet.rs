@@ -9,7 +9,41 @@ const REPRESENTATIVE_SOURCE_TEXT: &str = include_str!(
     "../../../../../../verification/acceptance/tests/fixtures/model_metrics_5000_romeo_and_juliet_words.txt"
 );
 
+/// The three-paragraph summary every essay journey asks for.
+pub(crate) const ROMEO_AND_JULIET_SUMMARY: InstructedSource = InstructedSource {
+    instruction: "Summarize the supplied Romeo and Juliet source in exactly three concise paragraphs. Do not use a heading, bullets, or a numbered list. Preserve the central conflict, the major decisions, and the tragic outcome.\n\nSource material:\n",
+    source_text: REPRESENTATIVE_SOURCE_TEXT,
+};
+
 pub(crate) fn prepare_romeo_and_juliet_three_paragraph_summary_prompt(
+    model_directory: &Path,
+    target_model_id: &str,
+    request_id: RequestId,
+    required_prompt_token_count: usize,
+    maximum_output_token_count: u16,
+) -> Vec<u32> {
+    prepare_instructed_source_prompt(
+        ROMEO_AND_JULIET_SUMMARY,
+        model_directory,
+        target_model_id,
+        request_id,
+        required_prompt_token_count,
+        maximum_output_token_count,
+    )
+}
+
+/// What a long prompt is made of: an instruction, then a source repeated
+/// until the prompt is long enough.
+pub(crate) struct InstructedSource {
+    pub(crate) instruction: &'static str,
+    pub(crate) source_text: &'static str,
+}
+
+/// A chat prompt of exactly `required_prompt_token_count` tokens: the
+/// instruction, as much of the repeated source as fits, and the template's
+/// own assistant suffix.
+pub(crate) fn prepare_instructed_source_prompt(
+    instructed_source: InstructedSource,
     model_directory: &Path,
     target_model_id: &str,
     request_id: RequestId,
@@ -30,7 +64,7 @@ pub(crate) fn prepare_romeo_and_juliet_three_paragraph_summary_prompt(
         if !repeated_source_material.is_empty() {
             repeated_source_material.push_str("\n\n");
         }
-        repeated_source_material.push_str(REPRESENTATIVE_SOURCE_TEXT);
+        repeated_source_material.push_str(instructed_source.source_text);
         let prepared_chat_request = tokenizer
             .prepare_chat(
                 &ChatGenerationCommand {
@@ -38,7 +72,8 @@ pub(crate) fn prepare_romeo_and_juliet_three_paragraph_summary_prompt(
                     model: target_model_id.to_owned(),
                     messages: vec![ChatMessage::User {
                         content: format!(
-                            "Summarize the supplied Romeo and Juliet source in exactly three concise prose paragraphs. Do not use a heading, bullets, or a numbered list. Preserve the central conflict, the major decisions, and the tragic outcome.\n\nSource material:\n{repeated_source_material}"
+                            "{}{repeated_source_material}",
+                            instructed_source.instruction
                         ),
                         images: Vec::new(),
                     }],
