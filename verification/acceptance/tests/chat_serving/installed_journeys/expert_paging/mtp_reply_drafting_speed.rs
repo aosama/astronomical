@@ -371,7 +371,7 @@ async fn report_reply_stages(phase_name: &str, engine: &impl Qwen3_5StreamingEng
     let round_count = stages.draft_round_count.max(1) as f64;
     let milliseconds = |nanoseconds: u64, count: f64| nanoseconds as f64 / 1_000_000.0 / count;
     eprintln!(
-        "[reply-stages] phase={phase_name} forwards={} rows={} lookups_per_forward={:.1} lookup_read_ms_per_forward={:.3} lookup_bookkeeping_ms_per_forward={:.3} lookup_bookkeeping_microseconds_per_lookup={:.1} blocking_evaluations_per_forward={:.2} asynchronous_evaluations_per_forward={:.2} waits_for_submitted_per_forward={:.2} cross_stream_waits_per_forward={:.1} gpu_primitives_per_forward={:.0} cpu_primitives_per_forward={:.0}",
+        "[reply-stages] phase={phase_name} forwards={} rows={} lookups_per_forward={:.1} lookup_read_ms_per_forward={:.3} lookup_bookkeeping_ms_per_forward={:.3} lookup_bookkeeping_microseconds_per_lookup={:.1} blocking_evaluations_per_forward={:.2} asynchronous_evaluations_per_forward={:.2} waits_for_submitted_per_forward={:.2} cross_stream_waits_per_forward={:.1} gpu_primitives_per_forward={:.0} cpu_primitives_per_forward={:.0} gpu_command_buffers_per_forward={:.1} gpu_busy_ms_per_forward={:.2}",
         stages.reply_forward_count,
         stages.reply_row_count,
         stages.lookup_count as f64 / forward_count,
@@ -386,6 +386,8 @@ async fn report_reply_stages(phase_name: &str, engine: &impl Qwen3_5StreamingEng
         stages.hand_offs.cross_stream_waits as f64 / forward_count,
         stages.hand_offs.gpu_primitives as f64 / forward_count,
         stages.hand_offs.cpu_primitives as f64 / forward_count,
+        stages.hand_offs.gpu_command_buffers as f64 / forward_count,
+        milliseconds(stages.hand_offs.gpu_busy_nanoseconds, forward_count),
     );
     if stages.draft_round_count > 0 {
         eprintln!(

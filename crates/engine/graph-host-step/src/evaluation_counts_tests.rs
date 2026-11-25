@@ -56,6 +56,8 @@ fn should_give_zeros_for_readings_taken_out_of_order() {
         cross_stream_waits: 80,
         gpu_primitives: 5_000,
         cpu_primitives: 90,
+        gpu_command_buffers: 12,
+        gpu_busy_nanoseconds: 9_000,
     };
     let earlier = EvaluationCounts {
         blocking_evaluations: 3,
@@ -64,6 +66,8 @@ fn should_give_zeros_for_readings_taken_out_of_order() {
         cross_stream_waits: 10,
         gpu_primitives: 1_000,
         cpu_primitives: 30,
+        gpu_command_buffers: 2,
+        gpu_busy_nanoseconds: 1_000,
     };
 
     assert_eq!(
@@ -75,6 +79,8 @@ fn should_give_zeros_for_readings_taken_out_of_order() {
             cross_stream_waits: 70,
             gpu_primitives: 4_000,
             cpu_primitives: 60,
+            gpu_command_buffers: 10,
+            gpu_busy_nanoseconds: 8_000,
         }
     );
     assert_eq!(earlier.since(later), EvaluationCounts::default());

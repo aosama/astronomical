@@ -26,6 +26,12 @@ pub struct EvaluationCounts {
     pub gpu_primitives: u64,
     /// Primitives the evaluator ran on the CPU stream.
     pub cpu_primitives: u64,
+    /// Command buffers the GPU finished.
+    pub gpu_command_buffers: u64,
+    /// Time the GPU spent executing them, from Metal's own timestamps.
+    /// What is left of a span's wall time is the GPU waiting for the host
+    /// or idle, which no count of kernels or bytes explains.
+    pub gpu_busy_nanoseconds: u64,
 }
 
 impl EvaluationCounts {
@@ -48,6 +54,12 @@ impl EvaluationCounts {
                 .saturating_sub(earlier.cross_stream_waits),
             gpu_primitives: self.gpu_primitives.saturating_sub(earlier.gpu_primitives),
             cpu_primitives: self.cpu_primitives.saturating_sub(earlier.cpu_primitives),
+            gpu_command_buffers: self
+                .gpu_command_buffers
+                .saturating_sub(earlier.gpu_command_buffers),
+            gpu_busy_nanoseconds: self
+                .gpu_busy_nanoseconds
+                .saturating_sub(earlier.gpu_busy_nanoseconds),
         }
     }
 }
@@ -60,7 +72,7 @@ unsafe extern "C" {
 #[must_use]
 pub fn evaluation_counts() -> EvaluationCounts {
     let mut counts = EvaluationCounts::default();
-    // SAFETY: the native side writes the six fields of the struct it is
+    // SAFETY: the native side writes the eight fields of the struct it is
     // handed, whose layout `repr(C)` matches field for field.
     unsafe { astro_evaluation_counts_read(&mut counts) };
     counts

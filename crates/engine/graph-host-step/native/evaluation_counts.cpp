@@ -10,4 +10,6 @@ extern "C" void astro_evaluation_counts_read(astro_evaluation_counts* counts) {
   counts->cross_stream_waits = mlx_counts.cross_stream_waits;
   counts->gpu_primitives = mlx_counts.gpu_primitives;
   counts->cpu_primitives = mlx_counts.cpu_primitives;
+  counts->gpu_command_buffers = mlx_counts.gpu_command_buffers;
+  counts->gpu_busy_nanoseconds = mlx_counts.gpu_busy_nanoseconds;
 }
