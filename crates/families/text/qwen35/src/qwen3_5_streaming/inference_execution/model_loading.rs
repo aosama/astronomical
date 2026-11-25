@@ -292,6 +292,14 @@ fn finish_streaming_model_load(
         .bound_mlx_buffer_cache_to_measured_working_buffers()
         .map_err(text_generation::engine_errors::fatal_runtime_error)?;
     model.base.optional_accelerators.mtp_head = mtp_head_load?.map(Box::new);
+    // The memory governor opened while the model loaded, before it had its
+    // head. A head that drafts is 1.6 GB of core weights on Flash-Next;
+    // left out, the `astro_expert_cache` was given that room too, and MLX
+    // refused an ordinary expert read mid-reply (a multi-turn chat at a
+    // 34 GB limit, four runs in eight). Opened again, the governor counts it.
+    if model.mtp_head().is_some() {
+        model.open_memory_governor();
+    }
     // Reply tokens of a model that streams experts look their routes up
     // inside the graph, which needs MLX's fast synch to pay. A dense model
     // has no routes to look up and leaves the setting alone: it is

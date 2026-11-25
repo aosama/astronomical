@@ -299,7 +299,7 @@
             }
           ],
           "x-astronomical-unit": "tokens",
-          "x-astronomical-explanation": "Some models can guess the next few words and then check all of them in one step, which makes replies faster when the guesses are right. Automatic leaves drafting off for now. 1 is the count measured fastest; 2 and 3 were slower. It only applies to models that ship this ability and are too large to hold in memory whole.",
+          "x-astronomical-explanation": "Some models can guess the next few words and then check all of them in one step, which makes replies faster when the guesses are right. Automatic uses the count measured fastest, which is 1. Choose 0 to turn drafting off. It only applies to models that ship this ability and are too large to hold in memory whole.",
           "x-astronomical-apply-mode": "model-reload"
         },
         "speculative_decoding_block_length_tokens": {
