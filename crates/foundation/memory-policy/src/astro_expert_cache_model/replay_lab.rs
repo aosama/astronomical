@@ -56,9 +56,44 @@ pub struct ReplayOutcome {
     /// every other layer-token stops to copy its route to the host, so this
     /// is the stop count a rule costs.
     pub partly_held_layer_token_count: u64,
+    /// Misses while the first `EARLY_REPLY_TOKEN_COUNT` tokens were served.
+    pub early_miss_count: u64,
 }
 
+/// The opening of a reply, counted apart: what is held when a reply begins
+/// was chosen by the prompt, and the engine's first reply tokens are slower
+/// than the rest (about 33 ms against 18 on a 35B-A3B at a 16 GB limit).
+pub const EARLY_REPLY_TOKEN_COUNT: usize = 48;
+
 impl ReplayOutcome {
+    /// Called once a token is served: keeps the miss count as it stood at
+    /// the end of the reply's opening.
+    pub(super) fn note_token_served(&mut self, token_index: usize) {
+        if token_index < EARLY_REPLY_TOKEN_COUNT {
+            self.early_miss_count = self.miss_count;
+        }
+    }
+
+    /// Misses a token over the reply's opening; zero for an empty reply.
+    #[must_use]
+    pub fn early_misses_per_token(&self) -> f64 {
+        per_reply_token(
+            self.early_miss_count,
+            self.reply_token_count.min(EARLY_REPLY_TOKEN_COUNT),
+        )
+    }
+
+    /// Misses a token after the reply's opening; zero when the reply ends
+    /// inside it.
+    #[must_use]
+    pub fn later_misses_per_token(&self) -> f64 {
+        per_reply_token(
+            self.miss_count.saturating_sub(self.early_miss_count),
+            self.reply_token_count
+                .saturating_sub(EARLY_REPLY_TOKEN_COUNT),
+        )
+    }
+
     /// Misses per reply token, the lab's score; zero for an empty reply.
     #[must_use]
     pub fn misses_per_token(&self) -> f64 {
@@ -159,6 +194,7 @@ pub fn replay(replay_case: &ReplayCase, keeping_rule: &mut dyn KeepingRule) -> R
             token_index,
             &mut replay_outcome,
         );
+        replay_outcome.note_token_served(token_index);
     }
     replay_outcome
 }
