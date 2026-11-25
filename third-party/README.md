@@ -101,8 +101,10 @@ MLX patches (`mlx-0.32.4-*.patch`):
   depends on how many it makes; the engine reports them a token
   (`crates/engine/graph-host-step`, `evaluation_counts`). Counted inside MLX
   because a host readback evaluates there too, where no caller can see it.
-  A primitive is one kernel dispatch whose cost does not shrink with its
-  tensor, so their count is the fixed cost of a reply token.
+  It also counts the command buffers the GPU finished and the time it spent
+  executing them, from Metal's own timestamps (recorded in the Metal
+  backend's completion handler), so a span's wall time can be split into
+  the GPU working and the GPU waiting.
   Retires if upstream reports the same counts.
 - `stable-prefill-split-k` — serving performance. Keeps the quantized matmul
   split-K topology stable once row tiles already expose parallelism, so

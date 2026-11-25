@@ -31,7 +31,7 @@
 #[allow(unsafe_code)]
 mod host_step;
 
-// Reads six counters MLX's evaluator keeps (the `evaluation-counts` patch).
+// Reads eight counters MLX's evaluator and GPU backend keep (the `evaluation-counts` patch).
 #[cfg(feature = "direct-mlx")]
 #[allow(unsafe_code)]
 mod evaluation_counts;

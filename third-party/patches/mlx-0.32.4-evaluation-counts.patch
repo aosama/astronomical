@@ -1,3 +1,26 @@
+diff --git a/mlx/backend/metal/device.cpp b/mlx/backend/metal/device.cpp
+--- a/mlx/backend/metal/device.cpp
++++ b/mlx/backend/metal/device.cpp
+@@ -1,5 +1,6 @@
+ // Copyright © 2023-2024 Apple Inc.
+ 
++#include "mlx/transforms.h"
+ #include <cstdlib>
+ #include <sstream>
+ 
+@@ -548,6 +549,12 @@
+        wait_events = std::move(wait_events_),
+        signal_events = std::move(signal_events_),
+        completion = std::move(completion)](MTL::CommandBuffer* cbuf) mutable {
++        // Astronomical: see EvaluationCounts in transforms.h.
++        const double busy_seconds = cbuf->GPUEndTime() - cbuf->GPUStartTime();
++        if (busy_seconds > 0) {
++          record_completed_gpu_command_buffer(
++              static_cast<uint64_t>(busy_seconds * 1e9));
++        }
+         if (completion) {
+           completion();
+         }
 diff --git a/mlx/transforms.cpp b/mlx/transforms.cpp
 --- a/mlx/transforms.cpp
 +++ b/mlx/transforms.cpp
@@ -8,7 +31,7 @@ diff --git a/mlx/transforms.cpp b/mlx/transforms.cpp
  #include <deque>
  #include <future>
  #include <numeric>
-@@ -77,6 +78,25 @@
+@@ -77,6 +78,35 @@
  }
  thread_local int detail::RetainGraph::tracing_counter{0};
  
@@ -20,6 +43,14 @@ diff --git a/mlx/transforms.cpp b/mlx/transforms.cpp
 +static std::atomic<uint64_t> cross_stream_wait_count{0};
 +static std::atomic<uint64_t> gpu_primitive_count{0};
 +static std::atomic<uint64_t> cpu_primitive_count{0};
++static std::atomic<uint64_t> gpu_command_buffer_count{0};
++static std::atomic<uint64_t> gpu_busy_nanosecond_count{0};
++
++void record_completed_gpu_command_buffer(uint64_t busy_nanoseconds) {
++  gpu_command_buffer_count.fetch_add(1, std::memory_order_relaxed);
++  gpu_busy_nanosecond_count.fetch_add(
++      busy_nanoseconds, std::memory_order_relaxed);
++}
 +
 +EvaluationCounts evaluation_counts() {
 +  return EvaluationCounts{
@@ -28,13 +59,15 @@ diff --git a/mlx/transforms.cpp b/mlx/transforms.cpp
 +      submitted_array_wait_count.load(std::memory_order_relaxed),
 +      cross_stream_wait_count.load(std::memory_order_relaxed),
 +      gpu_primitive_count.load(std::memory_order_relaxed),
-+      cpu_primitive_count.load(std::memory_order_relaxed)};
++      cpu_primitive_count.load(std::memory_order_relaxed),
++      gpu_command_buffer_count.load(std::memory_order_relaxed),
++      gpu_busy_nanosecond_count.load(std::memory_order_relaxed)};
 +}
 +
  array eval_impl(std::vector<array> outputs, bool async) {
    std::deque<array> tape;
  
-@@ -259,6 +279,7 @@
+@@ -259,6 +289,7 @@
            // output arrays stream
            auto& info = it->second;
            fences.at(info.stream_index).wait(stream, in, info.value);
@@ -42,7 +75,7 @@ diff --git a/mlx/transforms.cpp b/mlx/transforms.cpp
          } else if (in.event().valid()) {
            if (in.event().is_signaled()) {
              in.detach_event();
-@@ -271,8 +292,10 @@
+@@ -271,8 +302,10 @@
  
        if (arr.primitive().device() == Device::gpu) {
          gpu::eval(arr);
@@ -53,7 +86,7 @@ diff --git a/mlx/transforms.cpp b/mlx/transforms.cpp
        }
  
        if (scheduler::n_active_tasks() > MAX_ACTIVE_TASKS ||
-@@ -375,6 +398,7 @@
+@@ -375,6 +408,7 @@
      return;
    }
  
@@ -61,7 +94,7 @@ diff --git a/mlx/transforms.cpp b/mlx/transforms.cpp
    eval_impl(std::move(outputs), true);
  }
  
-@@ -386,12 +410,14 @@
+@@ -386,12 +420,14 @@
    if (std::none_of(outputs.begin(), outputs.end(), [](array& x) {
          return x.status() == array::Status::unscheduled;
        })) {
@@ -79,7 +112,7 @@ diff --git a/mlx/transforms.cpp b/mlx/transforms.cpp
 diff --git a/mlx/transforms.h b/mlx/transforms.h
 --- a/mlx/transforms.h
 +++ b/mlx/transforms.h
-@@ -9,6 +9,26 @@
+@@ -9,6 +9,33 @@
  
  namespace mlx::core {
  
@@ -100,8 +133,15 @@ diff --git a/mlx/transforms.h b/mlx/transforms.h
 +  // kernel dispatch, with a cost that does not depend on its tensor's size.
 +  uint64_t gpu_primitives;
 +  uint64_t cpu_primitives;
++  // Command buffers the GPU finished, and the time it spent executing
++  // them (Metal's GPUEndTime less GPUStartTime). What is left of a span's
++  // wall time is the GPU waiting for the host, or idle.
++  uint64_t gpu_command_buffers;
++  uint64_t gpu_busy_nanoseconds;
 +};
 +MLX_API EvaluationCounts evaluation_counts();
++// Called by the GPU backend when a command buffer completes.
++MLX_API void record_completed_gpu_command_buffer(uint64_t busy_nanoseconds);
 +
  MLX_API void async_eval(std::vector<array> outputs);
  
