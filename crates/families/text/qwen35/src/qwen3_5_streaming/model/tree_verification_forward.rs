@@ -202,4 +202,15 @@ impl DraftRoundTarget for Qwen3_5StreamingModel {
         self.enable_row_exact_tree_attention()?;
         Ok(Some(0))
     }
+
+    /// The kept layers and experts fill the limit by the time a drafter
+    /// loads, so the room is never already there: a dense 27B at a 12 GB
+    /// limit held 11.1 GB and its drafter, which writes code 2.7 times
+    /// faster where the model streams, was refused at every limit under
+    /// 18 GB. The governor plans the kept weights around the drafter
+    /// instead and they are given back to make the room.
+    fn make_room_for_a_drafter(&mut self, drafter_load_bytes: u64) -> bool {
+        self.reserve_room_for_a_loading_drafter(drafter_load_bytes);
+        true
+    }
 }

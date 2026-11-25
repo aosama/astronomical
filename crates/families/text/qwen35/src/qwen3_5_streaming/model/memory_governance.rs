@@ -32,6 +32,9 @@ pub struct CompletedForwardMemoryReadings {
 /// The memory governor and what this engine holds from it between events.
 #[derive(Debug, Default)]
 pub struct GovernedMemory {
+    /// Room set aside for a drafter while it loads; zero once it is hosted
+    /// and its own measured weights are counted instead.
+    pub(super) drafter_load_reserve_bytes: std::cell::Cell<u64>,
     /// The owner of this model's memory ledger, opened once loading has
     /// measured what it can.
     pub(super) governor: std::cell::RefCell<Option<MemoryGovernor>>,

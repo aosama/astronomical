@@ -101,7 +101,7 @@ impl Qwen3_5SpeculativeDraftRuntime {
             return Ok(Qwen3_5DraftRuntimeLoadOutcome::NoPairedDrafter);
         };
         let drafter_location = drafter_location(target_model_directory, &drafter_directory);
-        ensure_memory_headroom_for_drafter(model, active_memory_limit_bytes, &drafter_directory)?;
+        secure_room_for_the_drafter(model, active_memory_limit_bytes, &drafter_directory)?;
         let Some(converted_projection_count) = model
             .prepare_for_draft_trees(performance_attribution)
             .map_err(Qwen3_5SpeculativeDraftLoadingError::Target)?
@@ -163,17 +163,39 @@ fn load_drafter_weights<Target: DraftRoundTarget>(
     Ok((drafter_weights, drafter_checkpoint))
 }
 
+/// Has the target make room for the drafter's load, or, on an engine that
+/// cannot, refuses the drafter unless the room is already there.
+fn secure_room_for_the_drafter<Target: DraftRoundTarget>(
+    model: &mut Target,
+    active_memory_limit_bytes: usize,
+    drafter_directory: &Path,
+) -> Result<(), Qwen3_5SpeculativeDraftLoadingError> {
+    let drafter_load_bytes = drafter_load_byte_count(drafter_directory)?;
+    if model.make_room_for_a_drafter(drafter_load_bytes) {
+        return Ok(());
+    }
+    ensure_memory_headroom_for_drafter(model, active_memory_limit_bytes, drafter_load_bytes)
+}
+
+/// What loading the drafter needs under the limit: its checkpoint, which
+/// is held whole until its linears are requantized, and the headroom.
+fn drafter_load_byte_count(
+    drafter_directory: &Path,
+) -> Result<u64, Qwen3_5SpeculativeDraftLoadingError> {
+    let drafter_weights_bytes =
+        std::fs::metadata(drafter_directory.join(DRAFTER_WEIGHTS_FILE_NAME))
+            .map_err(|source| Qwen3_5SpeculativeDraftLoadingError::WeightsUnreadable { source })?
+            .len();
+    Ok(drafter_weights_bytes + DRAFTER_LOAD_HEADROOM_BYTES)
+}
+
 /// Refuses the drafter when the active limit cannot hold its weights plus
 /// headroom beside everything already resident.
 fn ensure_memory_headroom_for_drafter<Target: DraftRoundTarget>(
     model: &Target,
     active_memory_limit_bytes: usize,
-    drafter_directory: &Path,
+    drafter_load_bytes: u64,
 ) -> Result<(), Qwen3_5SpeculativeDraftLoadingError> {
-    let drafter_weights_bytes =
-        std::fs::metadata(drafter_directory.join(DRAFTER_WEIGHTS_FILE_NAME))
-            .map_err(|source| Qwen3_5SpeculativeDraftLoadingError::WeightsUnreadable { source })?
-            .len();
     let memory_snapshot = model
         .draft_tree_model_base()
         .runtime()
@@ -182,10 +204,10 @@ fn ensure_memory_headroom_for_drafter<Target: DraftRoundTarget>(
     let active_limit_bytes = u64::try_from(active_memory_limit_bytes).unwrap_or(u64::MAX);
     let active_memory_bytes = u64::try_from(memory_snapshot.active_memory_bytes()).unwrap_or(0);
     let free_bytes = active_limit_bytes.saturating_sub(active_memory_bytes);
-    if free_bytes < drafter_weights_bytes + DRAFTER_LOAD_HEADROOM_BYTES {
+    if free_bytes < drafter_load_bytes {
         return Err(Qwen3_5SpeculativeDraftLoadingError::InsufficientHeadroom {
             free_bytes,
-            required_bytes: drafter_weights_bytes + DRAFTER_LOAD_HEADROOM_BYTES,
+            required_bytes: drafter_load_bytes,
         });
     }
     Ok(())

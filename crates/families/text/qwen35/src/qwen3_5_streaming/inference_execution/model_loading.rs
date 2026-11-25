@@ -248,12 +248,16 @@ fn host_paired_drafter(
     );
     let mut draft_runtime = match load_outcome {
         Ok(Qwen3_5DraftRuntimeLoadOutcome::Loaded(draft_runtime)) => draft_runtime,
-        Ok(_) => return,
+        Ok(_) => {
+            model.reserve_room_for_a_loading_drafter(0);
+            return;
+        }
         Err(draft_loading_error) => {
             tracing::warn!(
                 %draft_loading_error,
                 "the installed DFlash drafter could not be loaded; replies are written one token a forward"
             );
+            model.reserve_room_for_a_loading_drafter(0);
             return;
         }
     };
@@ -264,8 +268,9 @@ fn host_paired_drafter(
         "the streaming engine hosts a DFlash drafter"
     );
     model.base.optional_accelerators.draft_runtime = Some(draft_runtime);
-    // The drafter's weights joined the core: the governor plans again.
-    model.open_memory_governor();
+    // The drafter's measured weights joined the core in place of the room
+    // set aside for its load: the governor plans again.
+    model.reserve_room_for_a_loading_drafter(0);
 }
 
 /// MLX's active memory, or zero when it cannot be read: the difference
