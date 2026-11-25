@@ -29,9 +29,11 @@ fn should_read_every_option_and_keep_models_in_order() {
         MeasureSpeedOptions {
             base_url: "http://127.0.0.1:9999".to_owned(),
             round_count: 5,
-            temperature: 0.7,
+            temperature_override: Some(0.7),
             measured_on: Some("Mac with an M4 Max and 128 GB".to_owned()),
             should_write_catalog: true,
+            should_use_reference_set: false,
+            should_write_ledger: false,
             model_ids: vec!["Model-B".to_owned(), "Model-A".to_owned()],
         }
     );
@@ -47,10 +49,11 @@ fn should_default_to_development_three_rounds_and_no_catalog_write() {
     );
     assert_eq!(parsed_options.round_count, 3);
     assert_eq!(
-        parsed_options.temperature, 0.6,
-        "the temperature people chat at"
+        parsed_options.temperature_override, None,
+        "each task's own temperature"
     );
     assert!(!parsed_options.should_write_catalog);
+    assert!(!parsed_options.should_write_ledger);
     assert_eq!(
         parsed_options.measured_on, None,
         "parsing leaves the Mac's description to the run"
@@ -90,6 +93,34 @@ fn should_accept_the_temperature_bounds_of_a_chat_request() {
         let parsed_options =
             MeasureSpeedOptions::parse(&arguments(&["--temperature", temperature_text, "Model-A"]))
                 .expect("a temperature within the chat bounds");
-        assert_eq!(parsed_options.temperature, expected_temperature);
+        assert_eq!(
+            parsed_options.temperature_override,
+            Some(expected_temperature)
+        );
+    }
+}
+
+#[test]
+fn should_measure_the_reference_set_with_or_without_named_models() {
+    let whole_set = MeasureSpeedOptions::parse(&arguments(&["--reference-set", "--write-ledger"]))
+        .expect("the whole reference set into the ledger");
+    let one_model = MeasureSpeedOptions::parse(&arguments(&["--reference-set", "Model-A"]))
+        .expect("the reference set narrowed to one model");
+
+    assert!(whole_set.should_use_reference_set && whole_set.should_write_ledger);
+    assert!(whole_set.model_ids.is_empty());
+    assert_eq!(one_model.model_ids, vec!["Model-A".to_owned()]);
+}
+
+#[test]
+fn should_refuse_a_ledger_outside_the_reference_set_or_at_one_temperature() {
+    for refused_arguments in [
+        vec!["--write-ledger", "Model-A"],
+        vec!["--reference-set", "--write-ledger", "--temperature", "0.6"],
+    ] {
+        assert!(
+            MeasureSpeedOptions::parse(&arguments(&refused_arguments)).is_err(),
+            "should refuse {refused_arguments:?}"
+        );
     }
 }

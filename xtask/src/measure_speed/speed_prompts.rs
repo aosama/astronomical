@@ -62,6 +62,19 @@ impl SpeedTask {
             Self::LongPromptCode => "code_long_prompt",
         }
     }
+
+    /// The temperature people use for the task, as the repository's
+    /// measurement rules ask (the `desired_state_architecture` skill):
+    /// 0.7 for writing code, 1.0 for general writing. Greedy is never a speed
+    /// a person sees, and a drafter keeps more tokens at lower temperatures,
+    /// so a lower one would overstate drafting.
+    #[must_use]
+    pub const fn default_temperature(self) -> f64 {
+        match self {
+            Self::ShortPromptCode | Self::LongPromptCode => 0.7,
+            Self::ShortPromptEssay | Self::LongPromptEssay => 1.0,
+        }
+    }
 }
 
 /// The fixture texts the prompts are cut from, read once.

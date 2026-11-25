@@ -2,26 +2,31 @@
 
 use std::process::Command;
 
+use crate::release_speed::speed_ledger::MeasuringMachine;
 use crate::small_mac_matrix::matrix_cells::DEVELOPMENT_BASE_URL;
 
 const DEFAULT_ROUND_COUNT: usize = 3;
-/// Temperature people chat at; never greedy for figures people read.
-const DEFAULT_MEASUREMENT_TEMPERATURE: f64 = 0.6;
 /// The widest temperature a chat request accepts.
 const MAXIMUM_MEASUREMENT_TEMPERATURE: f64 = 2.0;
 const BYTES_PER_GIGABYTE: u64 = 1_073_741_824;
+const MEASURE_SPEED_USAGE: &str = "usage: cargo xtask measure-speed [--base-url URL] [--rounds N] [--temperature T] [--measured-on TEXT] [--reference-set] [--write-ledger] [--write-catalog] [MODEL_ID...]";
 
 #[derive(Debug, PartialEq)]
 pub struct MeasureSpeedOptions {
     pub base_url: String,
     pub round_count: usize,
-    /// Sampling temperature of every measured reply: 0.6 by default, 0.7
-    /// for coding work and 1.0 for general work when a measurement asks.
-    pub temperature: f64,
+    /// One sampling temperature for every reply, when given; each task's own
+    /// otherwise (`SpeedTask::default_temperature`). A release ledger is only
+    /// written at the tasks' own temperatures, so releases stay comparable.
+    pub temperature_override: Option<f64>,
     /// Where the figures were measured, when given; `run` reads this Mac
     /// otherwise, so parsing never touches the hardware.
     pub measured_on: Option<String>,
     pub should_write_catalog: bool,
+    /// Measure the cases of `registry/release_speed/reference_set.json`,
+    /// narrowed to the named models when any are named.
+    pub should_use_reference_set: bool,
+    pub should_write_ledger: bool,
     pub model_ids: Vec<String>,
 }
 
@@ -30,9 +35,11 @@ impl MeasureSpeedOptions {
         let mut parsed_options = Self {
             base_url: DEVELOPMENT_BASE_URL.to_owned(),
             round_count: DEFAULT_ROUND_COUNT,
-            temperature: DEFAULT_MEASUREMENT_TEMPERATURE,
+            temperature_override: None,
             measured_on: None,
             should_write_catalog: false,
+            should_use_reference_set: false,
+            should_write_ledger: false,
             model_ids: Vec::new(),
         };
         let mut remaining_arguments = arguments.iter();
@@ -43,21 +50,42 @@ impl MeasureSpeedOptions {
                     parsed_options.apply_valued_option(argument, value)?;
                 }
                 "--write-catalog" => parsed_options.should_write_catalog = true,
+                "--reference-set" => parsed_options.should_use_reference_set = true,
+                "--write-ledger" => parsed_options.should_write_ledger = true,
                 flag if flag.starts_with("--") => return Err(format!("unknown option {flag}")),
                 model_id => parsed_options.model_ids.push(model_id.to_owned()),
             }
         }
-        if parsed_options.model_ids.is_empty() {
-            return Err("usage: cargo xtask measure-speed [--base-url URL] [--rounds N] [--temperature T] [--measured-on TEXT] [--write-catalog] MODEL_ID...".to_owned());
-        }
+        parsed_options.check_combination()?;
         Ok(parsed_options)
+    }
+
+    /// A ledger holds only reference cases at the tasks' own temperatures:
+    /// anything else could not be compared with the next release.
+    fn check_combination(&self) -> Result<(), String> {
+        if self.model_ids.is_empty() && !self.should_use_reference_set {
+            return Err(MEASURE_SPEED_USAGE.to_owned());
+        }
+        if self.should_write_ledger && !self.should_use_reference_set {
+            return Err(
+                "--write-ledger needs --reference-set: a release ledger holds only reference cases"
+                    .to_owned(),
+            );
+        }
+        if self.should_write_ledger && self.temperature_override.is_some() {
+            return Err(
+                "--write-ledger measures at each task's own temperature; leave out --temperature"
+                    .to_owned(),
+            );
+        }
+        Ok(())
     }
 
     fn apply_valued_option(&mut self, option_name: &str, value: String) -> Result<(), String> {
         match option_name {
             "--base-url" => self.base_url = value,
             "--rounds" => self.round_count = parse_round_count(&value)?,
-            "--temperature" => self.temperature = parse_temperature(&value)?,
+            "--temperature" => self.temperature_override = Some(parse_temperature(&value)?),
             _ => self.measured_on = Some(value),
         }
         Ok(())
@@ -101,14 +129,22 @@ fn parse_round_count(round_text: &str) -> Result<usize, String> {
 /// "Mac with an M5 Pro and 48 GB", read from this Mac, so the figures always
 /// say where they were measured without anyone typing it.
 pub(crate) fn this_mac_description() -> String {
-    let chip_name = sysctl_value("machdep.cpu.brand_string").map_or_else(
-        || "Mac".to_owned(),
-        |brand| brand.trim_start_matches("Apple ").to_owned(),
-    );
-    let memory_gigabytes = sysctl_value("hw.memsize")
-        .and_then(|memory_text| memory_text.parse::<u64>().ok())
-        .map_or(0, |memory_bytes| memory_bytes / BYTES_PER_GIGABYTE);
-    describe_mac(&chip_name, memory_gigabytes)
+    let this_mac = this_mac();
+    describe_mac(&this_mac.chip, this_mac.memory_bytes / BYTES_PER_GIGABYTE)
+}
+
+/// This Mac's chip ("M5 Pro") and memory, the only facts about the machine a
+/// measurement records.
+pub(crate) fn this_mac() -> MeasuringMachine {
+    MeasuringMachine {
+        chip: sysctl_value("machdep.cpu.brand_string").map_or_else(
+            || "Mac".to_owned(),
+            |brand| brand.trim_start_matches("Apple ").to_owned(),
+        ),
+        memory_bytes: sysctl_value("hw.memsize")
+            .and_then(|memory_text| memory_text.parse::<u64>().ok())
+            .unwrap_or(0),
+    }
 }
 
 pub(crate) fn describe_mac(chip_name: &str, memory_gigabytes: u64) -> String {

@@ -46,9 +46,15 @@ impl SpeedProgress {
     }
 
     pub fn complete_step(&self) {
+        self.skip_steps(1);
+    }
+
+    /// Counts the steps of a case that cannot run (its model did not load) as
+    /// done, so the time left keeps describing the cases still to come.
+    pub fn skip_steps(&self, step_count: usize) {
         self.progress_state
             .completed_steps
-            .fetch_add(1, Ordering::Relaxed);
+            .fetch_add(step_count, Ordering::Relaxed);
     }
 
     pub fn finish(mut self) {

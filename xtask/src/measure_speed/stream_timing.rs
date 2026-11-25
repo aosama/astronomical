@@ -18,6 +18,18 @@ pub struct ReplyMeasurement {
     pub reply_tokens_per_second: Option<f64>,
 }
 
+impl ReplyMeasurement {
+    /// Prompt tokens over the time to the first token: the speed a person
+    /// waits on before anything appears, request overhead included.
+    #[must_use]
+    pub fn prefill_tokens_per_second(&self) -> f64 {
+        if self.seconds_to_first_token <= 0.0 {
+            return 0.0;
+        }
+        self.prompt_tokens as f64 / self.seconds_to_first_token
+    }
+}
+
 /// Collects the lines of one streamed reply, each with when it arrived
 /// relative to the request.
 #[derive(Debug, Default)]
