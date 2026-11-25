@@ -60,14 +60,18 @@ impl Qwen3_5Model {
     /// What this model occupies and could keep, from the geometry measured
     /// at load.
     fn memory_ledger_shape(&self) -> ModelMemoryShape {
-        let model_geometry = self.memory_facts().model_geometry();
+        // A drafting head and a hosted drafter are core weights of either
+        // kind of model. Counted for sparse models only, a dense model's
+        // drafter (about 1 GB) was in no account and its kept layers were
+        // given that room too.
+        let model_geometry = self.geometry_with_drafting_head(self.memory_facts().model_geometry());
         match self.dense_layer_streamer.as_ref() {
             Some(dense_layer_streamer) => dense_model_memory_shape(
                 model_geometry.model_core_payload_bytes,
                 dense_layer_streamer.layer_payload_bytes(),
                 dense_layer_streamer.streaming_slot_bytes(),
             ),
-            None => sparse_model_memory_shape(self.geometry_with_drafting_head(model_geometry)),
+            None => sparse_model_memory_shape(model_geometry),
         }
     }
 
