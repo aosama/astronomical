@@ -773,6 +773,10 @@ measure-dflash2-serving-throughput = "run -p xtask -- test-run --package astrono
 # verification/acceptance/tests/fixtures/dflash_reference); hidden rows and
 # logits must match, and for DFlash2 the greedy path and kept candidates too.
 # Seconds.
+# The drafter's kept context, held in a slab that grows in place, shows a
+# block the same rows a concatenation does, round after round, past the
+# cut-back of a sliding-window layer to its window. No model. Seconds.
+test-dflash-drafter-context-slab = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter dflash_drafter_context_slab"
 test-dflash-drafter-reference = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter dflash_drafter_reference"
 # What a routed-expert projection costs by how its rows are laid out: one row
 # a gathered expert (how a draft round's rows are verified) against several
@@ -787,6 +791,11 @@ measure-expert-rows-per-read = "run -p xtask -- test-run --package astronomical-
 # 35B-A3B's shape, 40 layers a token; the three passes must compute the same
 # token. The step is priced under each of MLX's two orderings of a CPU step
 # among GPU steps: Metal shared events and its fast synch. Seconds.
+# What finding the best tokens of a vocabulary-wide row costs (the drafter's
+# candidates and a sampled verify's top-k), one call alone and fifty
+# overlapped, at 1, 3, 4 and 16 rows, beside reading the rows once. No model.
+# Seconds.
+measure-vocabulary-top-k-cost = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter vocabulary_top_k_cost"
 # Flash-Next's fused lane-mixing kernels (the mix gate, the write-back weights
 # and the write-back) against the composed steps they replace: the same bits
 # on random bfloat16 operands, for one row and for a drafted block's rows. A

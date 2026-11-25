@@ -16,6 +16,7 @@ mod astro_ssd_prompt_cache_startup_cleanup_evidence;
 mod astro_ssd_prompt_cache_state_bridge;
 mod astro_ssd_prompt_cache_visual_embeddings;
 mod attention;
+mod dflash_drafter_context_slab;
 mod dflash_drafter_reference;
 mod expert_rows_per_read_cost;
 mod flux2_klein;
@@ -34,6 +35,7 @@ mod sparse_expert_projection_page_independence;
 mod sparse_expert_projection_sorted_stride;
 mod sparse_experts;
 mod synthetic_values;
+mod vocabulary_top_k_cost;
 // Metal wired residency exists only on macOS.
 #[cfg(target_os = "macos")]
 mod worker_wired_residency_tests;

@@ -41,6 +41,8 @@ fn should_find_each_rows_best_tokens_in_order_as_a_full_sort_does() {
     for (row_count, vocabulary_size, kept_count) in [
         (16, 248_320, 20),
         (7, 248_320, 16),
+        (2, 248_320, 20),
+        (4, 248_320, 16),
         (3, 4_096, 32),
         (2, 50, 1),
     ] {

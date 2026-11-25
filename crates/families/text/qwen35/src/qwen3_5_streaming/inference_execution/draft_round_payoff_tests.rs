@@ -2,7 +2,7 @@ use std::time::{Duration, Instant};
 
 use super::{
     DraftRoundPayoff, NextReplyStep, ROUNDS_A_DECISION, SETTLING_REPLY_TOKEN_COUNT,
-    SETTLING_ROUND_COUNT,
+    SETTLING_ROUND_COUNT, SHORT_COUNTS_BEFORE_STOPPING,
 };
 use crate::qwen3_5_streaming::model::draft_round_costs::DraftRoundCosts;
 
@@ -55,7 +55,7 @@ fn should_go_back_to_plain_tokens_when_rounds_decide_fewer_than_the_break_even()
     let next_step = step_after_rounds(
         &mut payoff,
         &measured_costs(),
-        SETTLING_ROUND_COUNT + ROUNDS_A_DECISION,
+        SETTLING_ROUND_COUNT + SHORT_COUNTS_BEFORE_STOPPING * ROUNDS_A_DECISION,
         2,
     );
     assert_eq!(next_step, NextReplyStep::PlainToken);
@@ -102,7 +102,7 @@ fn should_never_return_to_rounds_once_it_writes_plain_tokens() {
     step_after_rounds(
         &mut payoff,
         &costs,
-        SETTLING_ROUND_COUNT + ROUNDS_A_DECISION,
+        SETTLING_ROUND_COUNT + SHORT_COUNTS_BEFORE_STOPPING * ROUNDS_A_DECISION,
         1,
     );
     let mut now = Instant::now();
@@ -110,4 +110,28 @@ fn should_never_return_to_rounds_once_it_writes_plain_tokens() {
         now += PLAIN_TOKEN;
         assert_eq!(payoff.next_step(now, 1, &costs), NextReplyStep::PlainToken);
     }
+}
+
+#[test]
+fn should_keep_drafting_after_one_short_count_followed_by_a_good_one() {
+    let costs = measured_costs();
+    let mut payoff = DraftRoundPayoff::default();
+    let mut now = Instant::now();
+    let mut next_step = payoff.next_step(now, 0, &costs);
+    // Settling rounds, then counts of 2, 3 and 2 tokens a round against a
+    // break-even of 2.11: never two short counts in a row.
+    let mut tokens_by_round = vec![3; SETTLING_ROUND_COUNT as usize];
+    for tokens_a_round in [2, 3, 2] {
+        tokens_by_round.extend(std::iter::repeat_n(
+            tokens_a_round,
+            ROUNDS_A_DECISION as usize,
+        ));
+    }
+    for tokens_a_round in tokens_by_round {
+        assert_eq!(next_step, NextReplyStep::Round);
+        now += ROUND;
+        next_step = payoff.next_step(now, tokens_a_round, &costs);
+    }
+    assert_eq!(next_step, NextReplyStep::Round);
+    assert!(!payoff.writes_plain_tokens());
 }
