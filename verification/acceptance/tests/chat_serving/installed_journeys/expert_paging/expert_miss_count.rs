@@ -185,6 +185,13 @@ async fn count_expert_misses_with(
         model_directory,
         attribution_directory: _attribution_directory,
     } = load_paging_experiment_engine("expert_miss_model_load").await;
+    // A recorded reply is replayed one token a step, and misses a token
+    // are compared across runs, so the reply is written one token a
+    // forward whatever the model would draft by default.
+    engine
+        .set_multi_token_prediction_draft_tokens_for_tests(0)
+        .await
+        .expect("the engine takes the draft count");
     let cold_macos_file_cache = if macos_file_cache_state == MacosFileCacheState::Cold {
         Some(ColdMacosFileCache::start(&model_directory))
     } else {
