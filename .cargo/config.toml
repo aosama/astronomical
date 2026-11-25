@@ -945,7 +945,9 @@ measure-mtp-reply-drafting = "run -p xtask -- test-run --package astronomical-ac
 # `test-in-graph-drafted-blocks` is the same proof for a model with a
 # multi-token-prediction head: the two in-graph replies draft three tokens a
 # round, so each verified block of four rows has its routes looked up in the
-# graph, and both must equal the plain reply resolved on the host.
+# graph. The two drafted replies must be the same tokens; against the plain
+# reply they are held to rounding, because a several-row kernel rounds
+# differently from a one-row one, and the journey reports how far they agree.
 # A streamed model packaged with a DFlash drafter, writing replies in draft
 # tree rounds (issue #2330). `test-hosted-drafter-reply` writes one greedy
 # reply with the drafter silent and with it proposing, checks that rounds
