@@ -137,6 +137,7 @@ rest-contract = { path = "../../crates/contracts/rest-contract" }
 speech-contract = { path = "../../crates/contracts/speech-contract" }
 runtime-integration = { path = "../../crates/foundation/runtime-integration", features = ["mlx"] }
 expert-record-reader = { path = "../../crates/engine/expert-record-reader" }
+graph-host-step = { path = "../../crates/engine/graph-host-step", features = ["direct-mlx"] }
 test-harness = { path = "../../crates/foundation/test-harness", features = ["flux-reference-oracle", "test-fixtures"] }
 axum.workspace = true
 base64.workspace = true

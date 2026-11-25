@@ -80,7 +80,7 @@ Then fetch the native dependencies, build and test:
     cargo check --workspace --all-targets
     cargo test --workspace
 
-`provision-bindgen-headers` gives the MLX-C coverage contract the headers it checks the bindings against.
+`provision-bindgen-headers` gives the MLX-C coverage contract the headers it checks the bindings against, and gives `crates/engine/graph-host-step` the patched MLX C++ sources its native step compiles against.
 
 On Linux the build differs from macOS in these ways:
 

@@ -67,6 +67,7 @@ dependencies = [
  "decision-training",
  "expert-record-reader",
  "futures-util",
+ "graph-host-step",
  "image",
  "ipc-protocol",
  "libc",
@@ -1025,6 +1026,18 @@ name = "glob"
 version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e4eba85ea1d0a966a983acd07deee566e67395d2d96b6fb39e62b5a833f1eb0b"
+
+[[package]]
+name = "graph-host-step"
+version = "0.2.134"
+dependencies = [
+ "cc",
+ "mlx-bridge",
+ "native-build-orchestration",
+ "runtime-integration",
+ "serial_test",
+ "test-harness",
+]
 
 [[package]]
 name = "hashbrown"

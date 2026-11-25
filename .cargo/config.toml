@@ -772,6 +772,15 @@ test-dflash-drafter-reference = "run -p xtask -- test-run --package astronomical
 # expert shape, 40 projections an evaluation. Prices reading each expert once
 # for every row that picked it before any kernel is written. Seconds.
 measure-expert-rows-per-read = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --exact --filter direct_mlx::expert_rows_per_read_cost::should_price_rows_on_one_gathered_expert_against_one_row_a_slot"
+# What it costs a streamed reply token to look at each layer's routes on the
+# host: ending the evaluation at every layer (what the streaming engine does)
+# against a host step inside the graph (crates/engine/graph-host-step), with a
+# pass that never leaves the GPU as the floor. Random float32 tensors in the
+# 35B-A3B's shape, 40 layers a token; the three passes must compute the same
+# token. MLX orders a CPU step among GPU steps in one of two ways, chosen by
+# its own MLX_METAL_FAST_SYNCH setting, so prefix the command with
+# `MLX_METAL_FAST_SYNCH=1` to price the other one. Seconds.
+measure-graph-host-step = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --exact --filter direct_mlx::graph_host_step_cost::should_price_a_host_stop_a_layer_against_a_step_inside_the_graph"
 # The row-batched kernel's GPU contracts: matches MLX's quantized matmul on
 # every 27B shape at 1 to 32 rows, gives each row the same bits alone and
 # inside a 16-row block, and refuses packings it cannot read. Seconds.

@@ -241,6 +241,24 @@ cover extraction, patch application, idempotent reuse, self-healing,
 tampered-archive refusal, no-network behavior, and verification against local
 store fixtures.
 
+## Native code written against MLX's C++
+
+Astronomical's own C++ that has to run inside MLX, such as a primitive the
+evaluator calls while it walks a graph, lives in a crate of its own and
+compiles against the provisioned extraction above, never against a copy of
+MLX's sources and never as a target of the native MLX build. The extraction is
+the pinned archives with this repository's patches applied, so the headers are
+the ones the linked MLX image was built from; compiling in the crate, with
+`cc`, means an edit rebuilds one file and leaves the native build identity
+alone.
+
+`crates/engine/graph-host-step` is the first such crate: a step of a graph
+that runs on MLX's CPU stream between two GPU steps. Its build script finds
+the extraction through `native_build_orchestration::provisioned_mlx_sources`
+and fails with the provisioning command when it is missing. A hook such code
+needs inside MLX itself is a patch in `patches/`, recorded in the registry
+above like any other.
+
 ## Reproducing a native build from scratch
 
 Prerequisites: macOS on Apple Silicon, Xcode command line tools, Rust
