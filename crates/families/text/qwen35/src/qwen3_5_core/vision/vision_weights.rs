@@ -2,15 +2,15 @@ use std::collections::HashMap;
 
 use runtime_integration::MlxRuntime;
 
+use crate::TensorProfile;
 use crate::qwen3_5_core::configuration::Qwen3_5Config;
 use crate::qwen3_5_core::quantizations::mlx_quantization::{
     ModuleQuantizationProfile, ModuleWeightCodec,
 };
-use crate::{TensorDtype, TensorProfile};
 
 use super::vision_tensor_source::Qwen3_5VisionTensorSource;
 use super::{TextExecutionError, ValidatedQwen3_5Artifact};
-use mlx_bridge::{MlxArray, MlxDtype};
+use mlx_bridge::MlxArray;
 
 #[cfg(test)]
 pub mod tests;
@@ -357,20 +357,11 @@ fn validate_bound_vision_tensor(
     tensor_profile: &TensorProfile,
     tensor: &MlxArray,
 ) -> Result<(), TextExecutionError> {
-    let tensor_dtype_matches_profile = match tensor_profile.dtype {
-        TensorDtype::AffineQuantizationFloat => matches!(
+    let tensor_dtype_matches_profile =
+        crate::qwen3_5_core::model_math::weights_validation::bound_dtype_matches_profile(
+            tensor_profile.dtype,
             tensor.dtype(),
-            MlxDtype::Float16 | MlxDtype::BFloat16 | MlxDtype::Float32
-        ),
-        TensorDtype::ModelFloat => matches!(
-            tensor.dtype(),
-            MlxDtype::Float16 | MlxDtype::BFloat16 | MlxDtype::Float32
-        ),
-        TensorDtype::BFloat16 => tensor.dtype() == MlxDtype::BFloat16,
-        TensorDtype::Float16 => tensor.dtype() == MlxDtype::Float16,
-        TensorDtype::Float32 => tensor.dtype() == MlxDtype::Float32,
-        TensorDtype::UInt32 => tensor.dtype() == MlxDtype::UInt32,
-    };
+        );
     if !tensor_dtype_matches_profile {
         return Err(TextExecutionError::InvalidTensor {
             tensor_name: tensor_profile.name.clone(),

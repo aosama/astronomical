@@ -121,16 +121,20 @@ impl Qwen3_5Model {
         self.runtime.reset_peak_memory()?;
         // The input is made after the baseline: a real step holds its
         // hidden states too.
-        let probe_input = self.embedding_lookup(&self.runtime.array_from_i32(
-            &vocabulary_walking_token_ids(token_count, self.config.vocabulary_size()),
-            &[1, token_count],
-        )?)?;
-        let layer_model_state = request_decoder_state.layer_mut(layer_index).ok_or(
-            TextExecutionError::InvalidRequestDecoderState {
-                layer_index,
-                description: "the probe decoder state lacks the probed layer",
-            },
+        // For Flash-Next this also starts the residual lanes and gives the
+        // n-gram layer its tokens: they are part of a real step's buffers.
+        let probe_input = self.embed_forward_tokens(
+            &self.runtime.array_from_i32(
+                &vocabulary_walking_token_ids(token_count, self.config.vocabulary_size()),
+                &[1, token_count],
+            )?,
+            &mut request_decoder_state,
         )?;
+        let (layer_model_state, qwen4_exp_state) =
+            crate::qwen4_exp::request_state::layer_and_qwen4_exp_state(
+                &mut request_decoder_state,
+                layer_index,
+            )?;
         let probe_output = self.forward_decoder_layer(
             &probe_input,
             token_count,
@@ -141,6 +145,7 @@ impl Qwen3_5Model {
             None,
             None,
             Qwen3_5MoEPagedExecutionMode::ProductionDefault,
+            qwen4_exp_state,
             &mut PerformanceAttribution::disabled(),
         )?;
         self.runtime.evaluate_arrays(&[&probe_output])?;

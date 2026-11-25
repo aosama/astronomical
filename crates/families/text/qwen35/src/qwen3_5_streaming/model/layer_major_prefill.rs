@@ -520,18 +520,11 @@ impl Qwen3_5Model {
                 .map_err(|_| TextExecutionError::InvalidInput {
                     description: "a layer-major span starts beyond the MLX int32 range",
                 })?;
-        let layer_model_state = request_decoder_state.layer_mut(layer_index).ok_or(
-            TextExecutionError::InvalidRequestDecoderState {
-                layer_index,
-                description: "decoder layer entry is missing",
-            },
+        let (layer_model_state, qwen4_exp_state) = self.layer_states_for_tokens(
+            request_decoder_state,
+            layer_index,
+            &span_state.token_ids,
         )?;
-        if !layer_model_state.tensors_are_allocated_consistently() {
-            return Err(super::error::invalid_request_decoder_state(
-                layer_index,
-                "decoder layer tensors must be allocated together or absent together",
-            ));
-        }
         self.forward_decoder_layer(
             &span_input,
             i32::try_from(span.token_count()).unwrap_or(i32::MAX),
@@ -542,6 +535,7 @@ impl Qwen3_5Model {
             None,
             span_state.collector.as_mut(),
             Qwen3_5MoEPagedExecutionMode::ProductionDefault,
+            qwen4_exp_state,
             performance_attribution,
         )
     }

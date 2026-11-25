@@ -33,6 +33,7 @@ mod expert_storage_streaming;
 mod expert_streaming_stats;
 #[cfg(feature = "direct-mlx")]
 mod forward_layer_weights;
+mod lane_mixing_decoder_layer;
 #[cfg(feature = "direct-mlx")]
 mod layer_major_checkpoint_parity;
 mod layer_major_image_parity;

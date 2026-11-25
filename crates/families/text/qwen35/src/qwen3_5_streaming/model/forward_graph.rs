@@ -6,9 +6,9 @@ use mlx_bridge::MlxArray;
 
 use crate::qwen3_5_core::model::target_forward_graph::{
     Qwen3_5ForwardPositions, Qwen3_5TargetForwardGraph, Qwen3_5TargetForwardOutput,
-    validated_layer_decoder_state,
 };
 use crate::qwen3_5_streaming::Qwen3_5MoEPagedExecutionMode;
+use crate::qwen4_exp::request_state::layer_and_qwen4_exp_state;
 use crate::{AstroDecoderStateCacheState, PerformanceAttribution};
 use text_generation::AstroSsdPromptCacheBoundaryCheckpointCollector;
 
@@ -84,8 +84,8 @@ impl Qwen3_5TargetForwardGraph for Qwen3_5Model {
             // one read from the SSD for this forward alone.
             let forward_layer_weights = self.forward_layer_weights(layer_index)?;
             let decoder_layer_weights = forward_layer_weights.decoder_layer_weights();
-            let layer_model_state =
-                validated_layer_decoder_state(request_decoder_state, layer_index)?;
+            let (layer_model_state, qwen4_exp_state) =
+                layer_and_qwen4_exp_state(request_decoder_state, layer_index)?;
             hidden_states = self.forward_decoder_layer(
                 &hidden_states,
                 token_count,
@@ -96,6 +96,7 @@ impl Qwen3_5TargetForwardGraph for Qwen3_5Model {
                 forward_positions.token_position_offsets,
                 boundary_checkpoint_collector.as_deref_mut(),
                 paged_execution_mode,
+                qwen4_exp_state,
                 performance_attribution,
             )?;
             self.submit_completed_layer(

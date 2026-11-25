@@ -138,14 +138,14 @@ pub fn qwen3_5_full_attention_step(
     }
 }
 /// One forward's rotated queries and keys, head-first values, and output gate.
-pub(super) struct RotatedAttentionInputs {
+pub(crate) struct RotatedAttentionInputs {
     /// [batch, query heads, tokens, features]
-    pub(super) rotated_queries: MlxArray,
+    pub(crate) rotated_queries: MlxArray,
     /// [batch, key-value heads, tokens, features]
-    pub(super) rotated_keys: MlxArray,
-    pub(super) transposed_values: MlxArray,
+    pub(crate) rotated_keys: MlxArray,
+    pub(crate) transposed_values: MlxArray,
     /// [batch, tokens, query heads x features]
-    pub(super) output_gate: MlxArray,
+    pub(crate) output_gate: MlxArray,
 }
 
 #[derive(Clone, Copy)]
@@ -361,7 +361,7 @@ impl Qwen3_5ModelBase {
     /// Q, K and V for `token_count` new rows, projected, normalized, moved
     /// head-first and rotated to their positions, with Qwen's output gate:
     /// everything attention needs before the KV state is touched.
-    pub(super) fn rotated_attention_inputs(
+    pub(crate) fn rotated_attention_inputs(
         &self,
         hidden_states: &MlxArray,
         token_count: i32,
@@ -474,7 +474,7 @@ impl Qwen3_5ModelBase {
     /// tensors are stored; the owner grows storage in fixed steps to avoid
     /// copying all prior context for each generated token. The returned views
     /// span [0..offset] and already include this step's new positions.
-    fn append_rotated_tensors_to_kv_state(
+    pub(crate) fn append_rotated_tensors_to_kv_state(
         &self,
         kv_state: &mut FullAttentionKeyValueState,
         rotated_keys: &MlxArray,
@@ -533,7 +533,13 @@ impl Qwen3_5ModelBase {
         weight: &MlxArray,
         rms_norm_epsilon: f32,
     ) -> Result<MlxArray, TextExecutionError> {
-        Ok(self.runtime.rms_norm(input, weight, rms_norm_epsilon)?)
+        crate::qwen4_exp::centered_norm::attention_input_norm(
+            &self.runtime,
+            &self.config,
+            input,
+            weight,
+            rms_norm_epsilon,
+        )
     }
 
     /// Permutes the head axis forward for all three attention inputs. Linear

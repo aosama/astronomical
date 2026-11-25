@@ -13,10 +13,15 @@ use crate::qwen3_5_core::configuration::{Qwen3_5Config, Qwen3_5FeedForwardArchit
 use crate::{PerformanceAttribution, PerformanceOperation};
 
 mod attention_binding;
+mod connection_binding;
 #[cfg(test)]
 mod tests;
 
 use attention_binding::{take_full_attention_weights, take_linear_attention_weights};
+use connection_binding::{
+    LayerNormsAndAdditions, append_final_lane_mixer_arrays, apply_centered_norm_storage_convention,
+    take_layer_norms_and_additions, take_model_output_norm,
+};
 
 use super::weights_validation;
 use super::{
@@ -26,6 +31,7 @@ use super::{
     },
     feed_forward_weights,
 };
+use crate::qwen4_exp::hyper_connection::HyperConnectionWeights;
 use mlx_bridge::MlxArray;
 use text_generation::execution_error::TextExecutionError;
 
@@ -60,6 +66,8 @@ pub struct Qwen3_5Weights {
     /// dense layers, apply the same convention.
     raw_hugging_face_norm_offsets_apply: bool,
     model_shards: Vec<MlxSafetensors>,
+    /// Flash-Next's final lane mixer, after the final norm; absent on Qwen 3.5.
+    pub final_lane_mixer: Option<Box<HyperConnectionWeights>>,
     tensor_count: usize,
     total_payload_bytes: u64,
 }
@@ -215,10 +223,8 @@ impl Qwen3_5Weights {
                 decoder_layer_index,
             )?);
         }
-        let final_normalization_weight = take_tensor(
-            &mut bound_tensors,
-            "language_model.model.norm.weight".to_owned(),
-        )?;
+        let (final_normalization_weight, final_lane_mixer) =
+            take_model_output_norm(&mut bound_tensors, qwen3_5_config)?;
         let language_model_head_weights = Qwen3_5DenseProjection::named(
             "language_model.lm_head",
             if qwen3_5_config.has_tied_embeddings() {
@@ -245,6 +251,7 @@ impl Qwen3_5Weights {
             has_tied_embeddings: qwen3_5_config.has_tied_embeddings(),
             raw_hugging_face_norm_offsets_apply,
             model_shards,
+            final_lane_mixer,
             tensor_count,
             total_payload_bytes: actual_payload_bytes,
         })
@@ -317,6 +324,10 @@ impl Qwen3_5Weights {
                 expected_tensor_count.saturating_sub(decoder_layer_references.len());
         }
         bound_tensor_references.push(&self.final_normalization_weight);
+        append_final_lane_mixer_arrays(
+            self.final_lane_mixer.as_deref(),
+            &mut bound_tensor_references,
+        );
         if !self.has_tied_embeddings {
             self.language_model_head_weights
                 .append_array_references(&mut bound_tensor_references);
@@ -367,9 +378,15 @@ pub(super) fn take_decoder_layer_weights(
     decoder_layer_index: usize,
 ) -> Result<Qwen3_5DecoderLayerWeights, TextExecutionError> {
     let decoder_layer_prefix = format!("language_model.model.layers.{decoder_layer_index}");
-    let input_normalization_weight = take_tensor(
+    let LayerNormsAndAdditions {
+        input_normalization_weight,
+        post_attention_normalization_weight,
+        flash_next,
+    } = take_layer_norms_and_additions(
         bound_tensors,
-        format!("{decoder_layer_prefix}.input_layernorm.weight"),
+        qwen3_5_config,
+        decoder_layer_index,
+        &decoder_layer_prefix,
     )?;
     let attention_weights = if qwen3_5_config.decoder_layer_is_full_attention(decoder_layer_index) {
         Qwen3_5AttentionWeights::Full(take_full_attention_weights(
@@ -384,10 +401,6 @@ pub(super) fn take_decoder_layer_weights(
             &decoder_layer_prefix,
         )?)
     };
-    let post_attention_normalization_weight = take_tensor(
-        bound_tensors,
-        format!("{decoder_layer_prefix}.post_attention_layernorm.weight"),
-    )?;
     let mlp_weights = match qwen3_5_config.feed_forward_architecture() {
         Qwen3_5FeedForwardArchitecture::Dense => Qwen3_5DecoderFeedForwardWeights::Dense(
             crate::qwen3_5_core::dense::mlp::bind_qwen3_5_dense_mlp_weights(
@@ -411,6 +424,7 @@ pub(super) fn take_decoder_layer_weights(
         attention_weights,
         post_attention_normalization_weight,
         mlp_weights,
+        flash_next,
     })
 }
 
@@ -491,7 +505,7 @@ fn apply_rms_norm_storage_convention(
     {
         return add_unit_scale(runtime, tensor);
     }
-    Ok(tensor)
+    apply_centered_norm_storage_convention(runtime, qwen3_5_config, tensor_name, tensor)
 }
 
 fn jangtq2_unit_scale_applies(qwen3_5_config: &Qwen3_5Config, tensor_name: &str) -> bool {

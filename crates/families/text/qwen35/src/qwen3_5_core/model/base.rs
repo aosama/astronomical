@@ -75,6 +75,9 @@ pub struct Qwen3_5ModelBase {
     /// table; `None` keeps the table resident. Only a dense model the
     /// streaming engine serves sets it (issue #1985).
     pub disk_embedding_rows: Option<super::disk_embedding_rows::Qwen3_5DiskEmbeddingRows>,
+    /// Flash-Next's n-gram table, read row by row from the SSD; absent for
+    /// Qwen 3.5.
+    pub ngram_table: Option<crate::qwen4_exp::ngram_table::NgramTable>,
     pub vision_model: Option<Qwen3_5VisionModel>,
     /// Single-source MLX RAM split for context, activations, streaming, and experts.
     pub memory_facts: RefCell<ModelMemoryFacts>,

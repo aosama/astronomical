@@ -43,6 +43,17 @@ pub fn derive_astro_decoder_state_cache_layer_dtypes(
     weights: &Qwen3_5Weights,
     expert_layer_plans: &[QuantizedExpertLayerPlan],
 ) -> Result<Vec<Qwen3_5AstroDecoderStateCacheLayerDtypes>, TextExecutionError> {
+    if weights.final_lane_mixer.is_some() {
+        return derive_lane_mixing_layer_dtypes(weights, expert_layer_plans);
+    }
+    derive_normalized_layer_dtypes(weights, expert_layer_plans)
+}
+
+/// Qwen 3.5's flow: each norm promotes with its weight's dtype.
+fn derive_normalized_layer_dtypes(
+    weights: &Qwen3_5Weights,
+    expert_layer_plans: &[QuantizedExpertLayerPlan],
+) -> Result<Vec<Qwen3_5AstroDecoderStateCacheLayerDtypes>, TextExecutionError> {
     let mut hidden_state_dtype = embedded_hidden_state_dtype(weights)?;
     let mut astro_decoder_state_cache_layer_dtypes =
         Vec::with_capacity(weights.decoder_layer_weights.len());
@@ -83,6 +94,37 @@ pub fn derive_astro_decoder_state_cache_layer_dtypes(
     Ok(astro_decoder_state_cache_layer_dtypes)
 }
 
+/// Flash-Next's flow: its norms compute in float32 and cast back, so each
+/// block reads the residual lanes' own dtype, and its query and key norms
+/// leave the attention inputs in that dtype too.
+fn derive_lane_mixing_layer_dtypes(
+    weights: &Qwen3_5Weights,
+    expert_layer_plans: &[QuantizedExpertLayerPlan],
+) -> Result<Vec<Qwen3_5AstroDecoderStateCacheLayerDtypes>, TextExecutionError> {
+    let mut hidden_state_dtype = embedded_hidden_state_dtype(weights)?;
+    let mut layer_dtypes = Vec::with_capacity(weights.decoder_layer_weights.len());
+    for (decoder_layer_index, decoder_layer_weights) in
+        weights.decoder_layer_weights.iter().enumerate()
+    {
+        let (layer_dtype, attention_output_dtype) = attention_dtypes_with_norm_dtype(
+            hidden_state_dtype,
+            &decoder_layer_weights.attention_weights,
+            Some(hidden_state_dtype),
+        )?;
+        layer_dtypes.push(layer_dtype);
+        let attention_residual_dtype =
+            promote_floating_dtypes(hidden_state_dtype, attention_output_dtype)?;
+        let feed_forward_output_dtype = feed_forward_output_dtype(
+            attention_residual_dtype,
+            &decoder_layer_weights.mlp_weights,
+            expert_layer_plans.get(decoder_layer_index),
+        )?;
+        hidden_state_dtype =
+            promote_floating_dtypes(attention_residual_dtype, feed_forward_output_dtype)?;
+    }
+    Ok(layer_dtypes)
+}
+
 /// The astro decoder state cache dtypes one attention layer stores and the dtype it outputs.
 fn attention_dtypes(
     normalized_input_dtype: mlx_bridge::MlxDtype,
@@ -109,22 +151,57 @@ fn attention_dtypes(
                 output_projection: dense_contract(&linear_attention_weights.output_projection),
             })?
         }
-        Qwen3_5AttentionWeights::Full(full_attention_weights) => {
-            full_attention_dtypes(&FullAttentionDtypeFlow {
-                normalized_input_dtype,
-                query_projection: dense_contract(&full_attention_weights.query_projection),
-                query_normalization_weight_dtype: full_attention_weights
-                    .query_normalization_weight
-                    .dtype(),
-                key_projection: dense_contract(&full_attention_weights.key_projection),
-                key_normalization_weight_dtype: full_attention_weights
-                    .key_normalization_weight
-                    .dtype(),
-                value_projection: dense_contract(&full_attention_weights.value_projection),
-                output_projection: dense_contract(&full_attention_weights.output_projection),
-            })?
-        }
+        Qwen3_5AttentionWeights::Full(full_attention_weights) => full_attention_dtypes(
+            &full_attention_dtype_flow(normalized_input_dtype, full_attention_weights, None),
+        )?,
     })
+}
+
+/// [`attention_dtypes`] where the query and key norms return
+/// `norm_output_dtype` rather than promoting with their weights.
+fn attention_dtypes_with_norm_dtype(
+    normalized_input_dtype: mlx_bridge::MlxDtype,
+    attention_weights: &Qwen3_5AttentionWeights,
+    norm_output_dtype: Option<mlx_bridge::MlxDtype>,
+) -> Result<
+    (
+        Qwen3_5AstroDecoderStateCacheLayerDtypes,
+        mlx_bridge::MlxDtype,
+    ),
+    TextExecutionError,
+> {
+    match attention_weights {
+        Qwen3_5AttentionWeights::Full(full_attention_weights) => {
+            full_attention_dtypes(&full_attention_dtype_flow(
+                normalized_input_dtype,
+                full_attention_weights,
+                norm_output_dtype,
+            ))
+        }
+        Qwen3_5AttentionWeights::Linear(_) => {
+            attention_dtypes(normalized_input_dtype, attention_weights)
+        }
+    }
+}
+
+/// One full-attention layer's dtype flow; `norm_output_dtype` overrides the
+/// query and key norm weights' dtypes when the norms cast back.
+fn full_attention_dtype_flow(
+    normalized_input_dtype: mlx_bridge::MlxDtype,
+    full_attention_weights: &crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5FullAttentionWeights,
+    norm_output_dtype: Option<mlx_bridge::MlxDtype>,
+) -> FullAttentionDtypeFlow {
+    FullAttentionDtypeFlow {
+        normalized_input_dtype,
+        query_projection: dense_contract(&full_attention_weights.query_projection),
+        query_normalization_weight_dtype: norm_output_dtype
+            .unwrap_or(full_attention_weights.query_normalization_weight.dtype()),
+        key_projection: dense_contract(&full_attention_weights.key_projection),
+        key_normalization_weight_dtype: norm_output_dtype
+            .unwrap_or(full_attention_weights.key_normalization_weight.dtype()),
+        value_projection: dense_contract(&full_attention_weights.value_projection),
+        output_projection: dense_contract(&full_attention_weights.output_projection),
+    }
 }
 
 /// The dtype one feed-forward block outputs. A sparse block needs its expert

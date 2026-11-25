@@ -132,15 +132,42 @@ impl Qwen3_5ModelBase {
             &linear_attention_weights.normalization_weight,
             f32::from_bits(self.config.rms_norm_epsilon_bits()),
         )?;
-        let gated_output = self.runtime.apply_compiled_precise_swiglu(
-            &self.compiled_elementwise_graphs,
-            &normalized_output,
-            output_gate,
-        )?;
+        let gated_output = self.gate_linear_attention_output(&normalized_output, output_gate)?;
         let gated_output = self
             .runtime
             .reshape(&gated_output, &[-1, token_count, linear_value_dimension])?;
         self.quantized_linear(&gated_output, &linear_attention_weights.output_projection)
+    }
+
+    /// `normalized * activation(gate)` in float32, cast back: SiLU for Qwen
+    /// 3.5, sigmoid where Flash-Next's configuration names it.
+    fn gate_linear_attention_output(
+        &self,
+        normalized_output: &MlxArray,
+        output_gate: &MlxArray,
+    ) -> Result<MlxArray, TextExecutionError> {
+        let gates_with_sigmoid = self
+            .config
+            .qwen4_exp_architecture()
+            .is_some_and(|architecture| {
+                architecture.linear_attention_output_gate
+                    == crate::qwen3_5_core::configuration::LinearAttentionOutputGate::Sigmoid
+            });
+        if !gates_with_sigmoid {
+            return Ok(self.runtime.apply_compiled_precise_swiglu(
+                &self.compiled_elementwise_graphs,
+                normalized_output,
+                output_gate,
+            )?);
+        }
+        let float32 = mlx_bridge::MlxDtype::Float32;
+        let gate = self
+            .runtime
+            .sigmoid(&self.runtime.astype(output_gate, float32)?)?;
+        let gated = self
+            .runtime
+            .multiply(&self.runtime.astype(normalized_output, float32)?, &gate)?;
+        Ok(self.runtime.astype(&gated, output_gate.dtype())?)
     }
 
     /// Runs the four input projections under one evaluation section and

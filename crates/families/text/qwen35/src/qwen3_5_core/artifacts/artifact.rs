@@ -90,7 +90,7 @@ impl Qwen3_5ArtifactValidator {
         config.resolve_unquantized_modules_from_shard_index(&canonical_model_tensor_names);
         let language_tensor_profiles = tensor_spec::qwen3_5_language_tensor_profiles(&config)?;
         let shard_index =
-            Qwen3_5ShardIndex::from_json_bytes(&shard_index_bytes, &language_tensor_profiles)?;
+            shard_index_for_generation(&shard_index_bytes, &language_tensor_profiles, &config)?;
         let validated_vision_tower_storage = vision_validation::validate_vision_tower_inventory(
             &shard_index,
             vision_config.as_ref(),
@@ -189,7 +189,7 @@ fn parsed_artifact_config(
     let revision = derive_revision_from_config_bytes(config_bytes);
 
     let config = Qwen3_5Config::from_json_bytes(config_bytes)?;
-    let vision_config = Qwen3_5VisionConfig::from_optional_json_bytes(config_bytes)?;
+    let vision_config = served_vision_config(&config, config_bytes)?;
 
     validate_optional_optiq_metadata(required_files, &config)?;
     Ok(ParsedArtifactConfig {
@@ -197,6 +197,34 @@ fn parsed_artifact_config(
         vision_config,
         revision,
     })
+}
+
+/// The shard index, with the vision tower set aside for a generation whose
+/// tower this runtime does not serve yet.
+fn shard_index_for_generation(
+    shard_index_bytes: &[u8],
+    language_tensor_profiles: &[TensorProfile],
+    config: &Qwen3_5Config,
+) -> Result<Qwen3_5ShardIndex, Qwen3_5ArtifactError> {
+    let mut shard_index =
+        Qwen3_5ShardIndex::from_json_bytes(shard_index_bytes, language_tensor_profiles)?;
+    if config.qwen4_exp_architecture().is_some() {
+        shard_index.set_aside_vision_tower();
+    }
+    Ok(shard_index)
+}
+
+/// The vision configuration the runtime serves. Flash-Next's vision tower
+/// is not served yet (issue #2533): the model validates and runs as text
+/// only, and image requests are refused.
+fn served_vision_config(
+    config: &Qwen3_5Config,
+    config_bytes: &[u8],
+) -> Result<Option<Qwen3_5VisionConfig>, Qwen3_5ConfigError> {
+    if config.qwen4_exp_architecture().is_some() {
+        return Ok(None);
+    }
+    Qwen3_5VisionConfig::from_optional_json_bytes(config_bytes)
 }
 
 /// The validated safetensors sources and their overflow-checked total

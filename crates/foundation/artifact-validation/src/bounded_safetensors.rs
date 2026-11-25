@@ -12,7 +12,7 @@ use std::fs::File;
 use super::safetensors_dtype::{
     checked_safetensors_payload_bytes, dtype_bits_per_element, parse_safetensors_dtype,
 };
-use super::{ArtifactValidationError, TensorDtype, TensorProfile};
+use super::{ArtifactValidationError, TensorProfile};
 use memory_policy::safetensors::{
     BoundedSafetensorsHeaderError, SafetensorsTensorView, read_bounded_safetensors_json_header,
 };
@@ -389,18 +389,9 @@ fn validate_tensor_dtype(
     tensor_view: &SafetensorsTensorView,
     file_name: &str,
 ) -> Result<(), ArtifactValidationError> {
-    let tensor_dtype_matches_profile = match tensor_profile.dtype {
-        TensorDtype::AffineQuantizationFloat => {
-            matches!(tensor_view.dtype.as_str(), "F16" | "BF16" | "F32")
-        }
-        TensorDtype::ModelFloat => {
-            matches!(tensor_view.dtype.as_str(), "F16" | "BF16" | "F32")
-        }
-        TensorDtype::BFloat16 => tensor_view.dtype == "BF16",
-        TensorDtype::Float16 => tensor_view.dtype == "F16",
-        TensorDtype::Float32 => tensor_view.dtype == "F32",
-        TensorDtype::UInt32 => tensor_view.dtype == "U32",
-    };
+    let tensor_dtype_matches_profile = tensor_profile
+        .dtype
+        .accepts_safetensors_dtype(&tensor_view.dtype);
     if !tensor_dtype_matches_profile {
         let actual_dtype =
             parse_safetensors_dtype(&tensor_view.dtype, file_name, &tensor_profile.name)?;

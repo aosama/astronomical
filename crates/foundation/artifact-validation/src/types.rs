@@ -22,6 +22,26 @@ pub enum TensorDtype {
     Float32,
     /// Unsigned 32-bit integers used by MLX packed quantized weights.
     UInt32,
+    /// Signed 64-bit integers, used by hash tables a model ships with its
+    /// weights (the n-gram head sizes and multipliers of Qwen3.8-Flash-Next).
+    Int64,
+}
+
+impl TensorDtype {
+    /// Whether a SafeTensors header's dtype spelling satisfies this profile.
+    #[must_use]
+    pub fn accepts_safetensors_dtype(self, safetensors_dtype: &str) -> bool {
+        match self {
+            Self::AffineQuantizationFloat | Self::ModelFloat => {
+                matches!(safetensors_dtype, "F16" | "BF16" | "F32")
+            }
+            Self::BFloat16 => safetensors_dtype == "BF16",
+            Self::Float16 => safetensors_dtype == "F16",
+            Self::Float32 => safetensors_dtype == "F32",
+            Self::UInt32 => safetensors_dtype == "U32",
+            Self::Int64 => safetensors_dtype == "I64",
+        }
+    }
 }
 
 /// Expected metadata for one expected tensor in the model weight file.

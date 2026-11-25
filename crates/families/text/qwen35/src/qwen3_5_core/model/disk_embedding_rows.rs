@@ -218,7 +218,19 @@ fn disk_embedding_table(
     validated_artifact: &ValidatedQwen3_5Artifact,
     parameter_name: &str,
 ) -> Result<Option<DiskEmbeddingTable>, TextExecutionError> {
-    let canonical_name = format!("{EMBEDDING_TENSOR_PREFIX}.{parameter_name}");
+    disk_row_table(
+        validated_artifact,
+        format!("{EMBEDDING_TENSOR_PREFIX}.{parameter_name}"),
+    )
+}
+
+/// The file, layout and stored form of any row-major table the artifact
+/// ships under `canonical_name`, or `None` when it has no such tensor. The
+/// Flash-Next n-gram table reads its shards through the same path.
+pub(crate) fn disk_row_table(
+    validated_artifact: &ValidatedQwen3_5Artifact,
+    canonical_name: String,
+) -> Result<Option<DiskEmbeddingTable>, TextExecutionError> {
     let Some((tensor_file_range, safetensors_source)) =
         validated_artifact.tensor_file_range(&canonical_name)
     else {
@@ -256,7 +268,7 @@ fn disk_embedding_table(
 }
 
 /// Reads the selected rows of one table as a lazy `[rows, row_shape..]` array.
-fn read_table_rows(
+pub(crate) fn read_table_rows(
     runtime: &MlxRuntime,
     embedding_table: &DiskEmbeddingTable,
     row_selection: &EmbeddingRowSelection,

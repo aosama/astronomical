@@ -7,8 +7,10 @@ use super::{
         deserialize_optional_f32_bits, validate_exact_boolean, validate_exact_value,
     },
     quantizations::mlx_quantization::{MlxQuantizationDocument, QuantizationConfigSource},
+    qwen4_exp_fields::Qwen4ExpTextFields,
 };
 const EXPECTED_MOE_TEXT_MODEL_TYPE: &str = "qwen3_5_moe_text";
+const EXPECTED_QWEN4_EXP_TEXT_MODEL_TYPE: &str = "qwen4_exp_text";
 const EXPECTED_DENSE_TEXT_MODEL_TYPE: &str = "qwen3_5_text";
 const EXPECTED_HIDDEN_ACTIVATION: &str = "silu";
 
@@ -91,6 +93,9 @@ pub(super) struct Qwen3_5TextConfig {
     pub(super) intermediate_size: u32,
     #[serde(default)]
     mamba_ssm_dtype: Option<String>,
+    /// Flash-Next's additions; all absent on a Qwen 3.5 document.
+    #[serde(flatten)]
+    pub(super) qwen4_exp_fields: Qwen4ExpTextFields,
 }
 
 impl QuantizationConfigSource for Qwen3_5TextConfig {
@@ -109,11 +114,10 @@ impl Qwen3_5TextConfig {
     pub(super) fn validate(
         &self,
         feed_forward_architecture: Qwen3_5FeedForwardArchitecture,
+        is_qwen4_exp: bool,
     ) -> Result<(), Qwen3_5ConfigError> {
-        let expected_text_model_type = match feed_forward_architecture {
-            Qwen3_5FeedForwardArchitecture::Dense => EXPECTED_DENSE_TEXT_MODEL_TYPE,
-            Qwen3_5FeedForwardArchitecture::MixtureOfExperts => EXPECTED_MOE_TEXT_MODEL_TYPE,
-        };
+        let expected_text_model_type =
+            expected_text_model_type(feed_forward_architecture, is_qwen4_exp);
         validate_exact_text_values(self, expected_text_model_type)?;
         // The rope-parameter contract is checked between the pinned wire tokens
         // and the boolean flags so a config reporting both failures still
@@ -137,6 +141,18 @@ impl Qwen3_5TextConfig {
                 u64::from(self.linear_num_value_heads)
                     .saturating_mul(u64::from(self.linear_value_head_dim)),
             )
+    }
+}
+
+/// The text `model_type` a document of this generation must declare.
+const fn expected_text_model_type(
+    feed_forward_architecture: Qwen3_5FeedForwardArchitecture,
+    is_qwen4_exp: bool,
+) -> &'static str {
+    match (feed_forward_architecture, is_qwen4_exp) {
+        (_, true) => EXPECTED_QWEN4_EXP_TEXT_MODEL_TYPE,
+        (Qwen3_5FeedForwardArchitecture::Dense, false) => EXPECTED_DENSE_TEXT_MODEL_TYPE,
+        (Qwen3_5FeedForwardArchitecture::MixtureOfExperts, false) => EXPECTED_MOE_TEXT_MODEL_TYPE,
     }
 }
 

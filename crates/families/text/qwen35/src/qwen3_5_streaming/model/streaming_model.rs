@@ -351,26 +351,78 @@ impl Qwen3_5StreamingModel {
         token_position_offsets: Option<&MlxArray>,
         boundary_checkpoint_collector: Option<&mut AstroSsdPromptCacheBoundaryCheckpointCollector>,
         paged_execution_mode: Qwen3_5MoEPagedExecutionMode,
+        qwen4_exp_state: Option<&mut crate::qwen4_exp::request_state::Qwen4ExpRequestState>,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<MlxArray, TextExecutionError> {
-        let attention_output = self.forward_decoder_layer_attention(
+        let Some(flash_next) = decoder_layer_weights.flash_next() else {
+            return self.forward_qwen3_5_decoder_layer(Qwen3_5LayerCall {
+                hidden_states,
+                token_count,
+                rope_offset_tokens,
+                layer_index,
+                paged_execution_mode,
+                decoder_layer_weights,
+                layer_model_state,
+                token_position_offsets,
+                boundary_checkpoint_collector,
+                performance_attribution,
+            });
+        };
+        self.forward_flash_next_decoder_layer(
             hidden_states,
-            token_count,
-            rope_offset_tokens,
-            layer_index,
             decoder_layer_weights,
+            flash_next,
             layer_model_state,
-            token_position_offsets,
-            boundary_checkpoint_collector,
-            performance_attribution,
-        )?;
-        self.forward_decoder_layer_feed_forward(
-            &attention_output,
-            token_count,
-            layer_index,
-            decoder_layer_weights,
-            paged_execution_mode,
+            super::lane_mixing_decoder_layer::LaneMixingLayerInputs {
+                token_count,
+                rope_offset_tokens,
+                layer_index,
+                paged_execution_mode,
+                request_state: qwen4_exp_state,
+            },
             performance_attribution,
         )
     }
+
+    /// A Qwen 3.5 layer: the normalized attention and feed-forward halves.
+    fn forward_qwen3_5_decoder_layer(
+        &self,
+        layer_call: Qwen3_5LayerCall<'_>,
+    ) -> Result<MlxArray, TextExecutionError> {
+        let attention_output = self.forward_decoder_layer_attention(
+            layer_call.hidden_states,
+            layer_call.token_count,
+            layer_call.rope_offset_tokens,
+            layer_call.layer_index,
+            layer_call.decoder_layer_weights,
+            layer_call.layer_model_state,
+            layer_call.token_position_offsets,
+            layer_call.boundary_checkpoint_collector,
+            layer_call.performance_attribution,
+        )?;
+        self.forward_decoder_layer_feed_forward(
+            &attention_output,
+            layer_call.token_count,
+            layer_call.layer_index,
+            layer_call.decoder_layer_weights,
+            layer_call.paged_execution_mode,
+            layer_call.performance_attribution,
+        )
+    }
+}
+
+/// The inputs of one Qwen 3.5 layer forward, gathered so the Flash-Next
+/// dispatch in `forward_decoder_layer` hands them on in one piece.
+struct Qwen3_5LayerCall<'call> {
+    hidden_states: &'call MlxArray,
+    token_count: i32,
+    rope_offset_tokens: i32,
+    layer_index: usize,
+    paged_execution_mode: Qwen3_5MoEPagedExecutionMode,
+    decoder_layer_weights: &'call Qwen3_5DecoderLayerWeights,
+    layer_model_state: &'call mut AstroDecoderStateCacheState,
+    token_position_offsets: Option<&'call MlxArray>,
+    boundary_checkpoint_collector:
+        Option<&'call mut AstroSsdPromptCacheBoundaryCheckpointCollector>,
+    performance_attribution: &'call mut PerformanceAttribution,
 }

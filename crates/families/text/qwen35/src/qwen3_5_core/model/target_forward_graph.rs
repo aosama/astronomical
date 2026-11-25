@@ -239,7 +239,7 @@ pub trait Qwen3_5TargetForwardGraph: Deref<Target = Qwen3_5ModelBase> {
         performance_attribution: &mut PerformanceAttribution,
         should_materialize_vocabulary_logits: bool,
     ) -> Result<Qwen3_5TargetForwardOutput, TextExecutionError> {
-        let hidden_states = self.embedding_lookup(token_indices)?;
+        let hidden_states = self.embed_forward_tokens(token_indices, request_decoder_state)?;
         self.build_target_forward_graph_from_embeddings_with_position_offsets(
             hidden_states,
             forward_positions,
@@ -378,6 +378,20 @@ impl Qwen3_5ModelBase {
     /// normalize, slice the final token, project through the language-model
     /// head, and widen to Float32 for host sampling.
     pub fn final_vocabulary_logits(
+        &self,
+        hidden_states: &MlxArray,
+        token_count: i32,
+    ) -> Result<MlxArray, TextExecutionError> {
+        match self.weights.final_lane_mixer.as_deref() {
+            Some(lane_mixer) => {
+                self.lane_mixed_vocabulary_logits(hidden_states, lane_mixer, token_count)
+            }
+            None => self.normalized_vocabulary_logits(hidden_states, token_count),
+        }
+    }
+
+    /// Qwen 3.5's head input: the final norm of the last position.
+    fn normalized_vocabulary_logits(
         &self,
         hidden_states: &MlxArray,
         token_count: i32,

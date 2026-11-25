@@ -78,6 +78,7 @@ fn collect_evaluation_arrays<'state>(
             }
         }
     }
+    request_decoder_state.append_family_state_evaluation_arrays(&mut evaluation_arrays);
     Ok(evaluation_arrays)
 }
 

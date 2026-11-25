@@ -523,23 +523,23 @@ fn should_validate_the_full_text_config_for_both_feed_forward_families() {
 
     assert!(
         dense_text_config
-            .validate(Qwen3_5FeedForwardArchitecture::Dense)
+            .validate(Qwen3_5FeedForwardArchitecture::Dense, false)
             .is_ok()
     );
     assert!(
         moe_text_config
-            .validate(Qwen3_5FeedForwardArchitecture::MixtureOfExperts)
+            .validate(Qwen3_5FeedForwardArchitecture::MixtureOfExperts, false)
             .is_ok()
     );
     assert!(
         moe_with_rope_parameters
-            .validate(Qwen3_5FeedForwardArchitecture::MixtureOfExperts)
+            .validate(Qwen3_5FeedForwardArchitecture::MixtureOfExperts, false)
             .is_ok()
     );
 
     // The expected text model type follows the declared architecture argument.
     assert!(matches!(
-        dense_text_config.validate(Qwen3_5FeedForwardArchitecture::MixtureOfExperts),
+        dense_text_config.validate(Qwen3_5FeedForwardArchitecture::MixtureOfExperts, false),
         Err(Qwen3_5ConfigError::UnexpectedStringValue {
             field_name: "text_config.model_type",
             ..

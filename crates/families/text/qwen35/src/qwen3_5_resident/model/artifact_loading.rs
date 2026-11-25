@@ -83,17 +83,15 @@ impl Qwen3_5ResidentModel {
             sorted_expert_shared_combination_kernel,
         } = match config.feed_forward_architecture() {
             Qwen3_5FeedForwardArchitecture::Dense => ResidentMixtureOfExpertsParts::default(),
-            Qwen3_5FeedForwardArchitecture::MixtureOfExperts => {
-                load_resident_mixture_of_experts_parts(
-                    &runtime,
-                    model_directory,
-                    &config,
-                    &shard_index,
-                    &tensor_inventory,
-                    expert_atlas.as_ref(),
-                    performance_attribution,
-                )?
-            }
+            Qwen3_5FeedForwardArchitecture::MixtureOfExperts => resident_mixture_of_experts_parts(
+                &runtime,
+                model_directory,
+                &config,
+                &shard_index,
+                &tensor_inventory,
+                expert_atlas.as_ref(),
+                performance_attribution,
+            )?,
         };
         let astro_decoder_state_cache_layout = measured_astro_decoder_state_cache_layout(
             &config,
@@ -126,6 +124,7 @@ impl Qwen3_5ResidentModel {
         Ok(Self {
             base: super::Qwen3_5ModelBase {
                 disk_embedding_rows: None,
+                ngram_table: None,
                 runtime,
                 config,
                 astro_decoder_state_cache_layout,
@@ -337,5 +336,34 @@ fn build_resident_model_memory_facts(
             largest_routed_expert_page_bytes,
         },
         astro_decoder_state_cache_layout,
+    )
+}
+
+/// Flash-Next is served by the streaming engine only (issue #2533): its
+/// routed experts alone are 70 GB, and its lanes, indexer and n-gram table
+/// run only on the streaming layer path.
+#[allow(clippy::too_many_arguments)]
+fn resident_mixture_of_experts_parts(
+    runtime: &MlxRuntime,
+    model_directory: &Path,
+    config: &crate::Qwen3_5Config,
+    shard_index: &super::Qwen3_5ShardIndex,
+    tensor_inventory: &crate::TensorInventory,
+    expert_atlas: Option<&expert_atlas::AtlasManifest>,
+    performance_attribution: &mut PerformanceAttribution,
+) -> Result<ResidentMixtureOfExpertsParts, TextExecutionError> {
+    if config.qwen4_exp_architecture().is_some() {
+        return Err(TextExecutionError::InvalidInput {
+            description: "Qwen3.8-Flash-Next runs on the streaming engine only",
+        });
+    }
+    load_resident_mixture_of_experts_parts(
+        runtime,
+        model_directory,
+        config,
+        shard_index,
+        tensor_inventory,
+        expert_atlas,
+        performance_attribution,
     )
 }

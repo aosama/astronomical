@@ -8,6 +8,8 @@
 #[cfg(feature = "direct-mlx")]
 mod astro_ssd_prompt_cache_boundary_checkpoint;
 #[cfg(feature = "direct-mlx")]
+pub mod family_decoder_state;
+#[cfg(feature = "direct-mlx")]
 mod persistent_state_bridge;
 #[cfg(feature = "direct-mlx")]
 mod persistent_state_kv_restore;

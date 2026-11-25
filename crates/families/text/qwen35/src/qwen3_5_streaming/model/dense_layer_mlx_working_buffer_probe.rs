@@ -116,6 +116,8 @@ impl Qwen3_5Model {
             None,
             None,
             Qwen3_5MoEPagedExecutionMode::ProductionDefault,
+            // Dense layers are Qwen 3.5 only; Flash-Next routes to experts.
+            None,
             &mut PerformanceAttribution::disabled(),
         )
     }

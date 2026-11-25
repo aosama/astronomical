@@ -19,6 +19,7 @@ use crate::qwen3_5_core::model::loading_pipeline::{
 use crate::qwen3_5_streaming;
 use crate::qwen3_5_streaming::Qwen3_5ExpertPager;
 use crate::qwen3_5_streaming::model::dense_layer_streamer::Qwen3_5DenseLayerStreamer;
+use crate::qwen4_exp::ngram_table::{ngram_table_from_bound_weights, open_ngram_table_shards};
 use crate::{ModelMemoryFacts, PerformanceAttribution};
 
 use super::Qwen3_5Model;
@@ -99,6 +100,7 @@ impl Qwen3_5Model {
         let expert_atlas = validated_artifact.expert_atlas().cloned();
         let (disk_embedding_rows, dense_layer_streamer) =
             dense_streaming_sources(&validated_artifact)?;
+        let ngram_table_shards = open_ngram_table_shards(&validated_artifact)?;
         let BoundLanguageArtifact {
             config,
             shard_index,
@@ -113,19 +115,16 @@ impl Qwen3_5Model {
             performance_attribution,
         )?;
         let (expert_pager, astro_expert_cache, sorted_expert_weighted_sum_kernel) =
-            match config.feed_forward_architecture() {
-                Qwen3_5FeedForwardArchitecture::Dense => (None, None, None),
-                Qwen3_5FeedForwardArchitecture::MixtureOfExperts => load_streaming_expert_runtime(
-                    &runtime,
-                    model_directory,
-                    &config,
-                    &shard_index,
-                    &tensor_inventory,
-                    expert_atlas.as_ref(),
-                    decode_astro_expert_cache_policy,
-                    performance_attribution,
-                )?,
-            };
+            streaming_expert_runtime(
+                &runtime,
+                model_directory,
+                &config,
+                &shard_index,
+                &tensor_inventory,
+                expert_atlas.as_ref(),
+                decode_astro_expert_cache_policy,
+                performance_attribution,
+            )?;
         let astro_decoder_state_cache_layout = measured_astro_decoder_state_cache_layout(
             &config,
             &chunking,
@@ -133,6 +132,7 @@ impl Qwen3_5Model {
             pager_layer_plans(expert_pager.as_ref()),
             performance_attribution,
         )?;
+        let ngram_table = ngram_table_from_bound_weights(ngram_table_shards, &config, &weights)?;
         let kernel_verdicts =
             load_model_kernel_verdicts(&runtime, &config, performance_attribution)?;
         let (compiled_swiglu, compiled_elementwise_graphs) = compiled_model_graphs()?;
@@ -160,6 +160,7 @@ impl Qwen3_5Model {
                 astro_decoder_state_cache_layout,
                 weights,
                 disk_embedding_rows,
+                ngram_table,
                 vision_model,
                 memory_facts: RefCell::new(streaming_expert_budget.memory_facts),
                 gated_delta_kernel: kernel_verdicts.gated_delta_kernel,
@@ -312,6 +313,34 @@ type StreamingExpertRuntimeTrio = (
     Option<RefCell<qwen3_5_streaming::AstroExpertCache>>,
     Option<MlxMetalKernel>,
 );
+
+/// The expert runtime of a sparse model; a dense model streams its layers,
+/// not experts, and has none.
+#[allow(clippy::too_many_arguments)]
+fn streaming_expert_runtime(
+    runtime: &MlxRuntime,
+    model_directory: &Path,
+    config: &crate::Qwen3_5Config,
+    shard_index: &super::Qwen3_5ShardIndex,
+    tensor_inventory: &crate::TensorInventory,
+    expert_atlas: Option<&expert_atlas::AtlasManifest>,
+    decode_astro_expert_cache_policy: WorkerDecodeAstroExpertCachePolicy,
+    performance_attribution: &mut PerformanceAttribution,
+) -> Result<StreamingExpertRuntimeTrio, TextExecutionError> {
+    if config.feed_forward_architecture() == Qwen3_5FeedForwardArchitecture::Dense {
+        return Ok((None, None, None));
+    }
+    load_streaming_expert_runtime(
+        runtime,
+        model_directory,
+        config,
+        shard_index,
+        tensor_inventory,
+        expert_atlas,
+        decode_astro_expert_cache_policy,
+        performance_attribution,
+    )
+}
 
 /// Builds the streaming expert runtime for a sparse model. Mirrors the MoE
 /// branch of the inlined loader, including the warm-table seeding from the

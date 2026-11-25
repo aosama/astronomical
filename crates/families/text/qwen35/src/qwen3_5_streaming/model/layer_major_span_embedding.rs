@@ -50,6 +50,7 @@ impl Qwen3_5Model {
                     visual_inputs,
                     &mut consumed_visual_embedding_count,
                 )?),
+                token_ids: span_token_ids.to_vec(),
                 collector: span_collector(span, checkpoint_contract)?,
                 end_state_snapshot: (span.ends_at_inner_boundary && checkpoint_contract.is_some())
                     .then(HashMap::new),
@@ -61,7 +62,8 @@ impl Qwen3_5Model {
     /// One span's embeddings. A span that holds image-pad tokens has the
     /// request's image embeddings put in their place, continuing from the
     /// rows earlier spans and earlier forwards consumed; a pad run split
-    /// across two spans stays in order.
+    /// across two spans stays in order. Flash-Next starts its residual lanes
+    /// from the embeddings here.
     fn embed_span(
         &self,
         token_indices: &MlxArray,
@@ -71,10 +73,10 @@ impl Qwen3_5Model {
     ) -> Result<MlxArray, TextExecutionError> {
         let text_embeddings = self.embedding_lookup(token_indices)?;
         let Some(visual_inputs) = visual_inputs else {
-            return Ok(text_embeddings);
+            return self.decoder_layer_input(text_embeddings);
         };
         if !span_token_ids.contains(&visual_inputs.image_pad_token_id) {
-            return Ok(text_embeddings);
+            return self.decoder_layer_input(text_embeddings);
         }
         let (embeddings_with_images, span_visual_embedding_count) =
             super::visual_embedding_injection::qwen3_5_inject_visual_embeddings(
@@ -86,6 +88,6 @@ impl Qwen3_5Model {
                 visual_inputs.image_pad_token_id,
             )?;
         *consumed_visual_embedding_count += span_visual_embedding_count;
-        Ok(embeddings_with_images)
+        self.decoder_layer_input(embeddings_with_images)
     }
 }

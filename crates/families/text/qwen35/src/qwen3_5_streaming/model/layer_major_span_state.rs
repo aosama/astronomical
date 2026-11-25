@@ -22,6 +22,9 @@ pub(super) struct SpanState {
     pub(super) hidden_states: Option<MlxArray>,
     pub(super) collector: Option<AstroSsdPromptCacheBoundaryCheckpointCollector>,
     pub(super) end_state_snapshot: Option<HashMap<String, MlxArray>>,
+    /// The span's token ids, which Flash-Next's n-gram layer hashes when
+    /// this span reaches it.
+    pub(super) token_ids: Vec<u32>,
 }
 
 /// One linear-attention layer's arrays within an end-state snapshot.

@@ -10,6 +10,7 @@ pub mod expert_gate_up_fusion_plan;
 mod memory_geometry_measurements;
 mod optiq_metadata_validation;
 pub mod quantized_expert_layer_plan;
+pub mod qwen4_exp_tensor_spec;
 mod shard_index;
 pub mod tensor_spec;
 mod validated_artifact;

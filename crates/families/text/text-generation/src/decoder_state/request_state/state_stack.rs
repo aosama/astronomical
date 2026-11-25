@@ -6,6 +6,8 @@ use crate::astro_decoder_state_cache::{
 };
 use runtime_integration::MlxRuntimeError;
 
+use crate::decoder_state::family_decoder_state::FamilyDecoderState;
+
 use super::state_stack_layout::{
     astro_decoder_state_cache_layout_projection_error, request_decoder_layer_state_from_layout,
     request_decoder_state_error,
@@ -19,16 +21,20 @@ use super::state_stack_layout::{
 /// `&mut RequestDecoderStateStack` through every forward pass.
 pub struct RequestDecoderStateStack {
     layers: Vec<AstroDecoderStateCacheState>,
+    /// A family's extra per-request state, installed by its first forward.
+    family_state: Option<Box<dyn FamilyDecoderState>>,
 }
 
 /// Retained checkpoint of a request's complete decoder-state stack.
 pub struct RequestDecoderStateStackCheckpoint {
     layers: Vec<AstroDecoderStateCacheStateCheckpoint>,
+    family_state: Option<Box<dyn FamilyDecoderState>>,
 }
 
 /// Retained physical owner checkpoint of a request's complete decoder-state stack.
 pub struct RequestDecoderStateStackAllocationCheckpoint {
     layers: Vec<AstroDecoderStateCacheStateAllocationCheckpoint>,
+    family_state: Option<Box<dyn FamilyDecoderState>>,
 }
 
 impl RequestDecoderStateStack {
@@ -77,7 +83,10 @@ impl RequestDecoderStateStack {
                 full_attention_kv_state_growth_tokens_override,
             )?);
         }
-        Ok(Self { layers })
+        Ok(Self {
+            layers,
+            family_state: None,
+        })
     }
 
     #[must_use]
@@ -112,21 +121,89 @@ impl RequestDecoderStateStack {
     #[must_use]
     /// Returns logical payload bytes across all request-owned decoder states.
     pub fn payload_byte_count(&self) -> u64 {
+        let family_state_bytes = self
+            .family_state
+            .as_ref()
+            .map_or(0, |family_state| family_state.payload_byte_count());
         self.layers
             .iter()
             .map(AstroDecoderStateCacheState::payload_byte_count)
-            .fold(0, u64::saturating_add)
+            .fold(family_state_bytes, u64::saturating_add)
+    }
+
+    /// The family's extra state of type `FamilyState`, when installed.
+    #[must_use]
+    pub fn family_state_mut<FamilyState: FamilyDecoderState>(
+        &mut self,
+    ) -> Option<&mut FamilyState> {
+        self.family_state
+            .as_mut()
+            .and_then(|family_state| family_state.as_any_mut().downcast_mut::<FamilyState>())
+    }
+
+    /// The family's extra state of type `FamilyState`, when installed.
+    #[must_use]
+    pub fn family_state<FamilyState: FamilyDecoderState>(&self) -> Option<&FamilyState> {
+        self.family_state
+            .as_ref()
+            .and_then(|family_state| family_state.as_any().downcast_ref::<FamilyState>())
+    }
+
+    /// Arrays the family state needs evaluated with each forward.
+    pub fn append_family_state_evaluation_arrays<'state>(
+        &'state self,
+        arrays: &mut Vec<&'state mlx_bridge::MlxArray>,
+    ) {
+        if let Some(family_state) = &self.family_state {
+            family_state.append_evaluation_arrays(arrays);
+        }
+    }
+
+    /// One layer's state and the family state of type `FamilyState`
+    /// together, for a layer forward that reads both.
+    pub fn layer_and_family_state_mut<FamilyState: FamilyDecoderState>(
+        &mut self,
+        layer_index: usize,
+    ) -> Option<(&mut AstroDecoderStateCacheState, Option<&mut FamilyState>)> {
+        let family_state = self
+            .family_state
+            .as_mut()
+            .and_then(|family_state| family_state.as_any_mut().downcast_mut::<FamilyState>());
+        self.layers
+            .get_mut(layer_index)
+            .map(|layer_state| (layer_state, family_state))
+    }
+
+    /// Installs a family's extra state, replacing any earlier one.
+    pub fn install_family_state(&mut self, family_state: Box<dyn FamilyDecoderState>) {
+        self.family_state = Some(family_state);
+    }
+
+    fn family_state_snapshot(
+        &self,
+    ) -> Result<Option<Box<dyn FamilyDecoderState>>, MlxRuntimeError> {
+        self.family_state
+            .as_ref()
+            .map(|family_state| family_state.snapshot())
+            .transpose()
     }
 
     /// Retains all decoder-layer state owners for verified-prefix rollback.
     pub fn checkpoint(&self) -> Result<RequestDecoderStateStackCheckpoint, MlxRuntimeError> {
+        Ok(RequestDecoderStateStackCheckpoint {
+            layers: self.layer_checkpoints()?,
+            family_state: self.family_state_snapshot()?,
+        })
+    }
+
+    fn layer_checkpoints(
+        &self,
+    ) -> Result<Vec<AstroDecoderStateCacheStateCheckpoint>, MlxRuntimeError> {
         let mut layer_checkpoints = Vec::with_capacity(self.layers.len());
         for decoder_layer_state in &self.layers {
             layer_checkpoints.push(decoder_layer_state.checkpoint()?);
         }
-        Ok(RequestDecoderStateStackCheckpoint {
-            layers: layer_checkpoints,
-        })
+        Ok(layer_checkpoints)
     }
 
     /// Restores every decoder-layer state owner from a retained checkpoint.
@@ -162,6 +239,7 @@ impl RequestDecoderStateStack {
         {
             decoder_layer_state.restore_checkpoint(layer_checkpoint)?;
         }
+        self.family_state = checkpoint.family_state;
         Ok(())
     }
 
@@ -169,13 +247,20 @@ impl RequestDecoderStateStack {
     pub fn allocation_checkpoint(
         &self,
     ) -> Result<RequestDecoderStateStackAllocationCheckpoint, MlxRuntimeError> {
+        Ok(RequestDecoderStateStackAllocationCheckpoint {
+            layers: self.layer_allocation_checkpoints()?,
+            family_state: self.family_state_snapshot()?,
+        })
+    }
+
+    fn layer_allocation_checkpoints(
+        &self,
+    ) -> Result<Vec<AstroDecoderStateCacheStateAllocationCheckpoint>, MlxRuntimeError> {
         let mut layer_allocation_checkpoints = Vec::with_capacity(self.layers.len());
         for decoder_layer_state in &self.layers {
             layer_allocation_checkpoints.push(decoder_layer_state.allocation_checkpoint()?);
         }
-        Ok(RequestDecoderStateStackAllocationCheckpoint {
-            layers: layer_allocation_checkpoints,
-        })
+        Ok(layer_allocation_checkpoints)
     }
 
     /// Restores every physical decoder-state owner after a failed prompt attempt.
@@ -213,6 +298,7 @@ impl RequestDecoderStateStack {
             decoder_layer_state
                 .restore_allocation_checkpoint(decoder_layer_allocation_checkpoint)?;
         }
+        self.family_state = allocation_checkpoint.family_state;
         Ok(())
     }
 

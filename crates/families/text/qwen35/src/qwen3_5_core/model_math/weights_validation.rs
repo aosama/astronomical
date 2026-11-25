@@ -9,20 +9,8 @@ pub fn validate_bound_tensor(
     tensor_profile: &TensorProfile,
     bound_tensor: &MlxArray,
 ) -> Result<(), TextExecutionError> {
-    let tensor_dtype_matches_profile = match tensor_profile.dtype {
-        TensorDtype::AffineQuantizationFloat => matches!(
-            bound_tensor.dtype(),
-            MlxDtype::Float16 | MlxDtype::BFloat16 | MlxDtype::Float32
-        ),
-        TensorDtype::ModelFloat => matches!(
-            bound_tensor.dtype(),
-            MlxDtype::Float16 | MlxDtype::BFloat16 | MlxDtype::Float32
-        ),
-        TensorDtype::BFloat16 => bound_tensor.dtype() == MlxDtype::BFloat16,
-        TensorDtype::Float16 => bound_tensor.dtype() == MlxDtype::Float16,
-        TensorDtype::Float32 => bound_tensor.dtype() == MlxDtype::Float32,
-        TensorDtype::UInt32 => bound_tensor.dtype() == MlxDtype::UInt32,
-    };
+    let tensor_dtype_matches_profile =
+        bound_dtype_matches_profile(tensor_profile.dtype, bound_tensor.dtype());
     if !tensor_dtype_matches_profile {
         return Err(TextExecutionError::InvalidTensor {
             tensor_name: tensor_profile.name.clone(),
@@ -86,4 +74,24 @@ pub fn validate_quantized_tensor_bits(
         });
     }
     Ok(())
+}
+
+/// Whether a bound array's dtype satisfies its profile.
+pub(crate) fn bound_dtype_matches_profile(
+    profile_dtype: TensorDtype,
+    bound_dtype: MlxDtype,
+) -> bool {
+    match profile_dtype {
+        TensorDtype::AffineQuantizationFloat | TensorDtype::ModelFloat => {
+            matches!(
+                bound_dtype,
+                MlxDtype::Float16 | MlxDtype::BFloat16 | MlxDtype::Float32
+            )
+        }
+        TensorDtype::BFloat16 => bound_dtype == MlxDtype::BFloat16,
+        TensorDtype::Float16 => bound_dtype == MlxDtype::Float16,
+        TensorDtype::Float32 => bound_dtype == MlxDtype::Float32,
+        TensorDtype::UInt32 => bound_dtype == MlxDtype::UInt32,
+        TensorDtype::Int64 => bound_dtype == MlxDtype::Int64,
+    }
 }

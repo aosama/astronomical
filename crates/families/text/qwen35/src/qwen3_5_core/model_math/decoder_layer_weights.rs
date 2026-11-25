@@ -3,6 +3,7 @@ use runtime_integration::MlxRuntimeError;
 use super::dense_projection::Qwen3_5DenseProjection;
 use super::feed_forward_weights::Qwen3_5MoEFeedForwardWeights;
 use crate::qwen3_5_core::dense::mlp::Qwen3_5DenseMlpWeights;
+use crate::qwen4_exp::layer_weights::FlashNextLayerWeights;
 use mlx_bridge::MlxArray;
 
 /// One pre-bound affine module used directly by Qwen3.5 execution.
@@ -324,12 +325,18 @@ impl Qwen3_5DecoderFeedForwardWeights {
 }
 
 /// All pre-bound weights for one Qwen3.5 decoder layer.
+///
+/// For Flash-Next the two norms are its hyper-connections' lane norms (the
+/// norm before attention and the one before the experts, over all lanes),
+/// and `flash_next` holds the mixing projections that follow them.
 #[derive(Debug)]
 pub struct Qwen3_5DecoderLayerWeights {
     pub input_normalization_weight: MlxArray,
     pub attention_weights: Qwen3_5AttentionWeights,
     pub post_attention_normalization_weight: MlxArray,
     pub mlp_weights: Qwen3_5DecoderFeedForwardWeights,
+    /// What Flash-Next adds to the layer; absent on Qwen 3.5.
+    pub flash_next: Option<Box<FlashNextLayerWeights>>,
 }
 
 impl Qwen3_5DecoderLayerWeights {
@@ -338,5 +345,21 @@ impl Qwen3_5DecoderLayerWeights {
         self.attention_weights.append_array_references(arrays);
         arrays.push(&self.post_attention_normalization_weight);
         self.mlp_weights.append_array_references(arrays);
+        append_flash_next_layer_arrays(self.flash_next.as_deref(), arrays);
+    }
+
+    /// What Flash-Next adds to this layer, when it is a Flash-Next layer.
+    #[must_use]
+    pub fn flash_next(&self) -> Option<&FlashNextLayerWeights> {
+        self.flash_next.as_deref()
+    }
+}
+
+fn append_flash_next_layer_arrays<'weights>(
+    flash_next: Option<&'weights FlashNextLayerWeights>,
+    arrays: &mut Vec<&'weights MlxArray>,
+) {
+    if let Some(flash_next) = flash_next {
+        flash_next.append_array_references(arrays);
     }
 }

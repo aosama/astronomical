@@ -3,7 +3,7 @@ use std::path::Path;
 
 use super::safetensors_dtype;
 use super::{
-    ArtifactValidationError, RequiredFileProfile, TensorDtype, TensorInventory, TensorLocation,
+    ArtifactValidationError, RequiredFileProfile, TensorInventory, TensorLocation,
     TensorProfile, TensorSourceId, ValidatedRequiredFile, ValidatedWeightsFile,
     validate_required_file,
 };
@@ -361,15 +361,7 @@ fn validate_profile(
     profile: &TensorProfile,
     metadata: &SafetensorsTensorView,
 ) -> Result<(), ArtifactValidationError> {
-    let dtype_matches = match profile.dtype {
-        TensorDtype::AffineQuantizationFloat | TensorDtype::ModelFloat => {
-            matches!(metadata.dtype.as_str(), "F16" | "BF16" | "F32")
-        }
-        TensorDtype::BFloat16 => metadata.dtype == "BF16",
-        TensorDtype::Float16 => metadata.dtype == "F16",
-        TensorDtype::Float32 => metadata.dtype == "F32",
-        TensorDtype::UInt32 => metadata.dtype == "U32",
-    };
+    let dtype_matches = profile.dtype.accepts_safetensors_dtype(&metadata.dtype);
     if !dtype_matches {
         return Err(ArtifactValidationError::UnexpectedTensor {
             tensor_name: profile.name.clone(),
