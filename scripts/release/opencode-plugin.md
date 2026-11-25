@@ -1,6 +1,6 @@
 # Releasing the OpenCode plugin
 
-The OpenCode plugin in `integrations/opencode` is published to npm as `opencode-astronomical`. It is released apart from the app: its own version number, its own tags, no disk image, no Sparkle feed and no GitHub Release. Nothing here touches the app's release, and the app's release procedure (the `sparkle-release` skill) never touches the plugin.
+The OpenCode plugin in `integrations/opencode` is published to npm as `opencode-astronomical`. It is released apart from the app: its own version number, its own tags, no disk image, no Sparkle feed and no GitHub Release. Nothing here touches the app's release, and the app's release procedure (the `sparkle_release` skill) never touches the plugin.
 
 ## What a release is
 

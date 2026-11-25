@@ -31,6 +31,11 @@
 //! refused. Should refusals come anyway, the tokens after one are served
 //! exactly for a while, since each refusal costs a forward.
 //!
+//! A drafted block being verified is served the same way: its rows are
+//! reply tokens, each layer's lookup names the slots of every row's route
+//! at once, and tables are grown for one route a row before the block
+//! (`drafted_rows_verification`).
+//!
 //! `in_graph_route_lookup` holds the step and the argument for why it may
 //! reach the model from MLX's thread.
 
@@ -67,10 +72,12 @@ pub(super) struct InGraphLayerServing {
     pub(super) outcome: Arc<SharedLayerOutcome>,
 }
 
-/// How many reply tokens went which way since the model loaded.
+/// How many reply forwards went which way since the model loaded. A
+/// forward is one reply token, or one drafted block being verified, whose
+/// rows are counted as one.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct InGraphServingCounts {
-    /// Tokens attempted with in-graph lookups.
+    /// Forwards attempted with in-graph lookups.
     pub attempted_token_count: u64,
     /// Attempts a lookup refused, which were then served exactly.
     pub refused_token_count: u64,
@@ -283,13 +290,19 @@ impl Qwen3_5Model {
     }
 
     /// Whether the next forward is attempted with in-graph lookups: a single
-    /// reply token, on a model that can read experts straight into its
-    /// tables, with at least one layer a lookup can serve and no recent
-    /// refusal still being waited out.
+    /// reply token that `should_serve_reply_rows_in_graph` allows. A prompt
+    /// chunk is several rows too, and is always read the exact way.
     pub(super) fn should_serve_in_graph(&self, token_count: i32) -> bool {
+        token_count == 1 && self.should_serve_reply_rows_in_graph()
+    }
+
+    /// Whether the next forward of reply rows (one reply token, or a drafted
+    /// block being verified) is attempted with in-graph lookups: the model
+    /// can read experts straight into its tables, at least one layer is one
+    /// a lookup can serve, and no recent refusal is still being waited out.
+    pub(super) fn should_serve_reply_rows_in_graph(&self) -> bool {
         let in_graph_serving = self.in_graph_table_serving();
-        if token_count != 1
-            || !in_graph_serving.is_enabled.get()
+        if !in_graph_serving.is_enabled.get()
             || self.brings_every_route_to_the_host.get()
             || !self.direct_expert_fetching.is_enabled.get()
             || self.direct_expert_fetching.slot_filler.is_none()
@@ -342,10 +355,12 @@ impl Qwen3_5Model {
             )
     }
 
-    pub(super) fn begin_in_graph_forward(&self) {
+    /// Opens the window of a forward of `reply_row_count` reply rows: one
+    /// for a reply token, several for a drafted block being verified.
+    pub(super) fn begin_in_graph_forward(&self, reply_row_count: usize) {
         let in_graph_serving = self.in_graph_table_serving();
         if in_graph_serving.grows_tables_ahead_of_lookups.get() {
-            self.grow_tables_ahead_of_lookups();
+            self.grow_tables_ahead_of_lookups(reply_row_count);
         }
         in_graph_serving.layer_servings.borrow_mut().clear();
         in_graph_serving.window.open();
@@ -354,17 +369,19 @@ impl Qwen3_5Model {
         in_graph_serving.counts.set(counts);
     }
 
-    /// Grows, before the token is built, every table a lookup would
-    /// otherwise refuse to fetch into for want of free slots. A table that
-    /// cannot be grown is left to its lookup, which refuses, and the exact
-    /// way then reports whatever is wrong with it.
-    fn grow_tables_ahead_of_lookups(&self) {
+    /// Grows, before the forward is built, every table a lookup would
+    /// otherwise refuse to fetch into for want of free slots. Each row can
+    /// route to experts of its own, so the room asked for is one route a
+    /// row. A table that cannot be grown is left to its lookup, which
+    /// refuses, and the exact way then reports whatever is wrong with it.
+    fn grow_tables_ahead_of_lookups(&self, reply_row_count: usize) {
         let Some((astro_expert_cache, expert_pager)) = self.expert_tables_and_pager() else {
             return;
         };
         let warm_slot_count = self.hot_expert_warm_slot_count();
         let experts_per_token =
             usize::try_from(self.config.experts_per_token()).unwrap_or(usize::MAX);
+        let free_slot_floor = experts_per_token.saturating_mul(reply_row_count);
         for (layer_index, layer_plan) in expert_pager.layer_plans().iter().enumerate() {
             if !self.keeps_reply_experts_on(layer_index) {
                 continue;
@@ -373,7 +390,7 @@ impl Qwen3_5Model {
                 &self.runtime,
                 layer_index,
                 warm_slot_count.min(layer_plan.expert_capacity),
-                experts_per_token,
+                free_slot_floor,
             ) {
                 tracing::warn!(
                     layer_index,
@@ -424,11 +441,12 @@ impl Qwen3_5Model {
         else {
             return Ok(None);
         };
-        // An in-graph forward is one reply token.
+        // `[1, rows, experts per token]`: one row for a reply token, several
+        // for a drafted block, which a codebook page cannot multiply whole.
         if !partly_held_table
             .weights
             .multiplies_complete_page_without_transient_decode(
-                1,
+                selected_indices.shape()[1],
                 self.fused_jangtq2_gathered_projection_kernel.is_some(),
             )
         {

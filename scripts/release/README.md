@@ -1,6 +1,6 @@
 # Stable Release Operations
 
-The full release procedure is the `sparkle-release` skill at `.claude/skills/sparkle-release/SKILL.md`; a Mac App Store release is the `macos-appstore-release` skill at `.claude/skills/macos-appstore-release/SKILL.md`. This page lists the commands it uses.
+The full release procedure is the `sparkle_release` skill at `.claude/skills/sparkle_release/SKILL.md`; a Mac App Store release is the `macos_appstore_release` skill at `.claude/skills/macos_appstore_release/SKILL.md`. This page lists the commands it uses.
 
 Every release step is a typed `cargo xtask release <step>` command; ordinary development builds, commits, pushes, and pull requests must not invoke them. CI exercises their planning and checking functions through `cargo test -p xtask`, the typed packaging contracts through `cargo test-app-builder`, and the icon renderer through `swift scripts/internal/render-macos-app-icon-contract.swift`.
 

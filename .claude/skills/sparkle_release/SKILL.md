@@ -1,6 +1,6 @@
 ---
-name: sparkle-release
-description: Prepare, sign, notarize, publish and activate one Astronomical Stable release on the direct download and the Sparkle update feed. Use when asked to make, cut or ship a release, a Sparkle release, or a new version of Astronomical, and read it before tagging or running any `cargo xtask release` step. Never uploads to or submits to the Mac App Store, which is the macos-appstore-release skill. Not for ordinary builds, commits or pull requests.
+name: sparkle_release
+description: Prepare, sign, notarize, publish and activate one Astronomical Stable release on the direct download and the Sparkle update feed. Use when asked to make, cut or ship a release, a Sparkle release, or a new version of Astronomical, and read it before tagging or running any `cargo xtask release` step. Never uploads to or submits to the Mac App Store, which is the macos_appstore_release skill. Not for ordinary builds, commits or pull requests.
 ---
 
 # Release Astronomical Stable through Sparkle
@@ -119,7 +119,7 @@ cargo xtask app dev
 cargo xtask app package --channel app-store --signing-identity "$DISTRIBUTION_IDENTITY"; echo EXIT=$?
 ```
 
-`DISTRIBUTION_IDENTITY` is the Keychain identity whose quoted name starts with `Apple Distribution:` (the `macos-appstore-release` skill lists the store credentials). The build uploads nothing and changes nothing in the worktree. It ends with the store bundle check: both applications sandboxed, the engine and worker inheriting, no Sparkle, no terminal command, the privacy manifest, the export declaration, and an engine that belongs to this commit. A nonzero exit stops the release here, before any tag exists; fix the cause through its own pull request and start this section again. If this Mac has no distribution identity, stop and tell the user: do not skip the step. A store release, when the user asks for one, builds the bundle again from the tag through the `macos-appstore-release` skill; this run only proves the channel still builds and is not a store release.
+`DISTRIBUTION_IDENTITY` is the Keychain identity whose quoted name starts with `Apple Distribution:` (the `macos_appstore_release` skill lists the store credentials). The build uploads nothing and changes nothing in the worktree. It ends with the store bundle check: both applications sandboxed, the engine and worker inheriting, no Sparkle, no terminal command, the privacy manifest, the export declaration, and an engine that belongs to this commit. A nonzero exit stops the release here, before any tag exists; fix the cause through its own pull request and start this section again. If this Mac has no distribution identity, stop and tell the user: do not skip the step. A store release, when the user asks for one, builds the bundle again from the tag through the `macos_appstore_release` skill; this run only proves the channel still builds and is not a store release.
 
 6. Create a local lightweight tag with `git tag "$TAG"`. Do not push it until the publication approval gate passes.
 7. Prepare the release:
@@ -210,7 +210,7 @@ Tell the user that Astronomical `$VERSION` is available through the normal publi
 
 ## 8. The Mac App Store is a separate release
 
-This procedure ends at section 7. Shipping the same version to the Mac App Store is its own release, done only when the user asks for it in their own words, and never as part of a Sparkle release: follow the `macos-appstore-release` skill (`.claude/skills/macos-appstore-release/SKILL.md`). Section 3's store bundle build is a check that the store channel still builds; it uploads nothing and is not a store release.
+This procedure ends at section 7. Shipping the same version to the Mac App Store is its own release, done only when the user asks for it in their own words, and never as part of a Sparkle release: follow the `macos_appstore_release` skill (`.claude/skills/macos_appstore_release/SKILL.md`). Section 3's store bundle build is a check that the store channel still builds; it uploads nothing and is not a store release.
 
 ## Failure rules
 

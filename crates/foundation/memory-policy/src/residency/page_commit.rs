@@ -225,9 +225,39 @@ pub const fn minimum_decode_warm_slot_count(experts_per_token: usize) -> usize {
 /// the misses of every table by more once the tables drop below that size.
 pub const DECODE_TABLE_TARGET_SLOT_COUNT: usize = 96;
 
+/// The table size a reply protects before keeping another layer whole, for
+/// a layer of `experts_per_layer` experts: `DECODE_TABLE_TARGET_SLOT_COUNT`
+/// for layers of up to 256, and the same three eighths of the layer beyond.
+///
+/// The 96 was found on layers of 256 experts. Applied to Qwen3.8-Flash-Next
+/// (512 experts a layer, 10 a token) at a 34 GB limit it kept ten layers
+/// whole and left the other 38 tables of about 100 experts, under a fifth
+/// of a layer each. Replays of its recorded replies (`cargo
+/// replay-expert-misses`) put the misses a token at 32 / 41 / 41 (essay,
+/// code review, chat) with no layer whole against 39 / 66 / 84 with ten,
+/// and the engine measured 21 / 40 / 40 against 40 / 74 / 83, with the
+/// essay reply at 21.7 tokens a second against 19.2. A fixed "keep none
+/// whole" was measured too and is not the rule: it slowed the 35B-A3B at a
+/// 16 GB limit from 56.7 to 52.6 tokens a second, where a miss is cheap and
+/// each layer served from a table costs about a tenth of a millisecond.
+#[must_use]
+pub const fn decode_table_target_slot_count(experts_per_layer: usize) -> usize {
+    let three_eighths_of_the_layer = experts_per_layer.saturating_mul(3) / 8;
+    let target_slot_count = if three_eighths_of_the_layer > DECODE_TABLE_TARGET_SLOT_COUNT {
+        three_eighths_of_the_layer
+    } else {
+        DECODE_TABLE_TARGET_SLOT_COUNT
+    };
+    if target_slot_count > experts_per_layer {
+        experts_per_layer
+    } else {
+        target_slot_count
+    }
+}
+
 /// How many complete layers a reply keeps whole: the most it can while
-/// every other layer still gets a table of `DECODE_TABLE_TARGET_SLOT_COUNT`
-/// experts (or the whole layer, when that is smaller). Every layer stays
+/// every other layer still gets a table of `decode_table_target_slot_count`
+/// experts. Every layer stays
 /// whole when the capacity holds the whole model.
 #[must_use]
 pub fn decode_whole_layer_keep_count(
@@ -244,7 +274,7 @@ pub fn decode_whole_layer_keep_count(
     if capacity_experts >= experts_per_layer.saturating_mul(sparse_layer_count) {
         return sparse_layer_count;
     }
-    let table_slot_count = DECODE_TABLE_TARGET_SLOT_COUNT.min(experts_per_layer);
+    let table_slot_count = decode_table_target_slot_count(experts_per_layer);
     let mut whole_layer_count = 0;
     while whole_layer_count < sparse_layer_count {
         let next_whole_layer_count = whole_layer_count + 1;

@@ -8,12 +8,17 @@
 /// The bytes every recording starts with, so a truncated or unrelated file
 /// is refused instead of being replayed as nonsense.
 const RECORDING_MAGIC: &[u8] = b"ASTROROUTES1";
+/// The start of a recording whose layers hold more than 256 experts, where
+/// an identifier takes two little-endian bytes. A model of 512 experts a
+/// layer (Qwen3.8-Flash-Next) records this way; smaller layers keep the
+/// one-byte form, so recordings made before this form still read.
+const WIDE_RECORDING_MAGIC: &[u8] = b"ASTROROUTES2";
 /// Layer count, experts per token and experts per layer as `u16`, then the
 /// token count as `u32`, all little-endian.
 const RECORDING_HEADER_FIELD_BYTES: usize = 2 + 2 + 2 + 4;
-/// One byte per expert identifier is enough for every layer this recording
-/// form supports; larger layers are refused when decoding.
-const MAXIMUM_RECORDED_EXPERTS_PER_LAYER: u16 = 256;
+/// The most experts a layer may hold for one byte per identifier; the
+/// one-byte form refuses larger layers when decoding.
+const MAXIMUM_ONE_BYTE_EXPERTS_PER_LAYER: u16 = 256;
 
 /// Why a recording could not be decoded.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, thiserror::Error)]
@@ -48,6 +53,62 @@ pub enum RoutedReplyDecodeError {
     },
 }
 
+/// How many bytes a recording spends on each expert identifier.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ExpertIdentifierWidth {
+    OneByte,
+    TwoBytes,
+}
+
+impl ExpertIdentifierWidth {
+    /// The narrowest width that holds every identifier of such a layer.
+    const fn for_layer_of(experts_per_layer: u16) -> Self {
+        if experts_per_layer > MAXIMUM_ONE_BYTE_EXPERTS_PER_LAYER {
+            Self::TwoBytes
+        } else {
+            Self::OneByte
+        }
+    }
+
+    /// A recording's bytes after its magic, and the width the magic names;
+    /// `None` when the bytes start with neither magic.
+    fn of_recording(recording_bytes: &[u8]) -> Option<(&[u8], Self)> {
+        if let Some(header_bytes) = recording_bytes.strip_prefix(WIDE_RECORDING_MAGIC) {
+            return Some((header_bytes, Self::TwoBytes));
+        }
+        let header_bytes = recording_bytes.strip_prefix(RECORDING_MAGIC)?;
+        Some((header_bytes, Self::OneByte))
+    }
+
+    const fn recording_magic(self) -> &'static [u8] {
+        match self {
+            Self::OneByte => RECORDING_MAGIC,
+            Self::TwoBytes => WIDE_RECORDING_MAGIC,
+        }
+    }
+
+    const fn byte_count(self) -> usize {
+        match self {
+            Self::OneByte => 1,
+            Self::TwoBytes => 2,
+        }
+    }
+
+    const fn holds_layer_of(self, experts_per_layer: u16) -> bool {
+        matches!(self, Self::TwoBytes) || experts_per_layer <= MAXIMUM_ONE_BYTE_EXPERTS_PER_LAYER
+    }
+
+    /// The identifiers of a recording's route bytes, little-endian.
+    fn decoded_expert_ids(self, route_bytes: &[u8]) -> Vec<u16> {
+        let mut expert_ids = Vec::with_capacity(route_bytes.len() / self.byte_count());
+        for expert_id_bytes in route_bytes.chunks_exact(self.byte_count()) {
+            let high_byte = expert_id_bytes.get(1).copied().unwrap_or(0);
+            expert_ids.push(u16::from_le_bytes([expert_id_bytes[0], high_byte]));
+        }
+        expert_ids
+    }
+}
+
 /// One reply's routing: for each token, for each layer, the experts chosen.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RoutedReply {
@@ -67,8 +128,7 @@ impl RoutedReply {
     ///
     /// Returns the reason the bytes are not a complete, consistent recording.
     pub fn from_recording_bytes(recording_bytes: &[u8]) -> Result<Self, RoutedReplyDecodeError> {
-        let header_bytes = recording_bytes
-            .strip_prefix(RECORDING_MAGIC)
+        let (header_bytes, identifier_width) = ExpertIdentifierWidth::of_recording(recording_bytes)
             .ok_or(RoutedReplyDecodeError::NotARecording)?;
         if header_bytes.len() < RECORDING_HEADER_FIELD_BYTES {
             return Err(RoutedReplyDecodeError::IncompleteHeader);
@@ -83,10 +143,11 @@ impl RoutedReply {
             field_bytes[8],
             field_bytes[9],
         ]) as usize;
-        if experts_per_layer > MAXIMUM_RECORDED_EXPERTS_PER_LAYER {
+        if !identifier_width.holds_layer_of(experts_per_layer) {
             return Err(RoutedReplyDecodeError::TooManyExpertsPerLayer { experts_per_layer });
         }
-        let expected_bytes = token_count * layer_count * experts_per_token;
+        let expected_bytes =
+            token_count * layer_count * experts_per_token * identifier_width.byte_count();
         if route_bytes.len() != expected_bytes {
             return Err(RoutedReplyDecodeError::WrongRouteByteCount {
                 expected_bytes,
@@ -97,7 +158,7 @@ impl RoutedReply {
             layer_count,
             experts_per_token,
             experts_per_layer,
-            routed_expert_ids: route_bytes.iter().copied().map(u16::from).collect(),
+            routed_expert_ids: identifier_width.decoded_expert_ids(route_bytes),
         };
         routed_reply.require_every_expert_within_its_layer()?;
         Ok(routed_reply)
@@ -116,9 +177,6 @@ impl RoutedReply {
         experts_per_layer: u16,
         token_routes: &[Vec<Vec<u16>>],
     ) -> Result<Self, RoutedReplyDecodeError> {
-        if experts_per_layer > MAXIMUM_RECORDED_EXPERTS_PER_LAYER {
-            return Err(RoutedReplyDecodeError::TooManyExpertsPerLayer { experts_per_layer });
-        }
         let layer_count = token_routes.first().map_or(0, Vec::len);
         let experts_per_token = token_routes
             .first()
@@ -153,10 +211,14 @@ impl RoutedReply {
     /// The recording file's bytes, which `from_recording_bytes` reads back.
     #[must_use]
     pub fn to_recording_bytes(&self) -> Vec<u8> {
+        let identifier_width = ExpertIdentifierWidth::for_layer_of(self.experts_per_layer);
+        let recording_magic = identifier_width.recording_magic();
         let mut recording_bytes = Vec::with_capacity(
-            RECORDING_MAGIC.len() + RECORDING_HEADER_FIELD_BYTES + self.routed_expert_ids.len(),
+            recording_magic.len()
+                + RECORDING_HEADER_FIELD_BYTES
+                + self.routed_expert_ids.len() * identifier_width.byte_count(),
         );
-        recording_bytes.extend_from_slice(RECORDING_MAGIC);
+        recording_bytes.extend_from_slice(recording_magic);
         recording_bytes.extend_from_slice(&header_field_u16(self.layer_count).to_le_bytes());
         recording_bytes.extend_from_slice(&header_field_u16(self.experts_per_token).to_le_bytes());
         recording_bytes.extend_from_slice(&self.experts_per_layer.to_le_bytes());
@@ -166,9 +228,10 @@ impl RoutedReply {
                 .to_le_bytes(),
         );
         for &expert_id in &self.routed_expert_ids {
-            // `require_every_expert_within_its_layer` bounds every identifier
-            // by a layer of at most 256 experts.
-            recording_bytes.push(u8::try_from(expert_id).unwrap_or(u8::MAX));
+            // `require_every_expert_within_its_layer` bounds every
+            // identifier by its layer, which the width was chosen for.
+            recording_bytes
+                .extend_from_slice(&expert_id.to_le_bytes()[..identifier_width.byte_count()]);
         }
         recording_bytes
     }

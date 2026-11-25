@@ -1,6 +1,6 @@
 ---
-name: macos-appstore-release
-description: Build, test, validate, upload and submit the Mac App Store version of Astronomical, and look after its App Store Connect record. Use when asked about the store build, the sandbox, App Store Connect, App Review, a rejection, screenshots or listing text, or when a release has to go to the store. Read all of it before building or touching the record. Only when the user asks for a store release in their own words. Not for the direct download and Sparkle update, which is the sparkle-release skill.
+name: macos_appstore_release
+description: Build, test, validate, upload and submit the Mac App Store version of Astronomical, and look after its App Store Connect record. Use when asked about the store build, the sandbox, App Store Connect, App Review, a rejection, screenshots or listing text, or when a release has to go to the store. Read all of it before building or touching the record. Only when the user asks for a store release in their own words. Not for the direct download and Sparkle update, which is the sparkle_release skill.
 ---
 
 # Astronomical in the Mac App Store
@@ -16,15 +16,15 @@ Two files sit beside this one:
 
 ## Steps of a store release
 
-The Astronomical skill (`skill/astronomical`) is reviewed in the Sparkle release of the same version (section 1 of the `sparkle-release` skill). A store release of a version that never had a Sparkle release does that review first.
+The Astronomical skill (`skill/astronomical`) is reviewed in the Sparkle release of the same version (section 1 of the `sparkle_release` skill). A store release of a version that never had a Sparkle release does that review first.
 
-Start only when the user asks for a store release in their own words; a Sparkle release never implies one. Build from the tag of a version the `sparkle-release` skill has already published, so both channels carry one version number. A store release never changes the direct release.
+Start only when the user asks for a store release in their own words; a Sparkle release never implies one. Build from the tag of a version the `sparkle_release` skill has already published, so both channels carry one version number. A store release never changes the direct release.
 
 The sections below this one hold the detail behind each step: the decisions already made for the app record, how to run and try the sandboxed build on screen, what Apple's validation has said before, and how to work on the App Store Connect pages.
 
 Three steps need the user's word each time, and nothing else in this procedure does: uploading a build, submitting for review, and releasing to the public. Ask in the chat; approval for a Sparkle release, even approval given in advance, does not cover them.
 
-Store credentials, besides the Developer ID map in the `sparkle-release` skill:
+Store credentials, besides the Developer ID map in the `sparkle_release` skill:
 
 - **Distribution identity:** the Keychain identity whose quoted name starts with `Apple Distribution:`.
 - **Installer identity:** the one whose quoted name starts with `3rd Party Mac Developer Installer:`.

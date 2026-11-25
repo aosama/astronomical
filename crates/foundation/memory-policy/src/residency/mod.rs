@@ -42,9 +42,10 @@ pub use observed_mode::observed_expert_memory_mode;
 pub use ownership_mode::classify_expert_memory_mode;
 pub use page_commit::{
     DECODE_TABLE_TARGET_SLOT_COUNT, complete_layers_beyond_keep_count,
-    decode_warm_floor_eviction_indexes, decode_whole_layer_keep_count, hot_expert_warm_slot_count,
-    minimum_decode_warm_slot_count, should_commit_mandatory_complete_layer,
-    should_commit_mandatory_routed_page, should_commit_multi_token_union_as_complete_layer,
+    decode_table_target_slot_count, decode_warm_floor_eviction_indexes,
+    decode_whole_layer_keep_count, hot_expert_warm_slot_count, minimum_decode_warm_slot_count,
+    should_commit_mandatory_complete_layer, should_commit_mandatory_routed_page,
+    should_commit_multi_token_union_as_complete_layer,
     should_complete_partial_layer_on_prefill_read, should_seed_partial_layer_on_prefill_read,
 };
 pub use planner::plan_expert_residency;

@@ -279,7 +279,7 @@ impl Qwen3_5Model {
         performance_attribution: &mut PerformanceAttribution,
     ) {
         match speculative_way {
-            SpeculativeWay::InGraphLookups => self.begin_in_graph_forward(),
+            SpeculativeWay::InGraphLookups => self.begin_in_graph_forward(1),
             SpeculativeWay::Optimistic => {
                 self.paged_forward_missing_route_collector
                     .set_optimistic(true);
