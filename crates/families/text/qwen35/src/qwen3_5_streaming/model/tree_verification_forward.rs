@@ -17,6 +17,7 @@ use mlx_bridge::MlxArray;
 use text_generation::execution_error::TextExecutionError;
 
 use super::streaming_model::Qwen3_5StreamingModel;
+use crate::qwen3_5_core::draft_tree_decode::draft_round_target::{DraftRoundTarget, RoundTree};
 use crate::qwen3_5_core::model::Qwen3_5ModelBase;
 use crate::qwen3_5_core::model::draft_tree_verification::{
     DraftTreeTarget, Qwen3_5DraftTreeVerification, TreeLayerFeedForward, TreeLayerWeights,
@@ -134,5 +135,41 @@ impl Qwen3_5StreamingModel {
             PagedRouteValidationOutcome::CompleteHit => Some(verification),
             PagedRouteValidationOutcome::MissedExperts => None,
         })
+    }
+}
+
+impl DraftRoundTarget for Qwen3_5StreamingModel {
+    /// A streamed round's tree is evaluated where it is verified: its routes
+    /// are resolved in that evaluation, and a refused pass is run again.
+    fn verify_round_tree(
+        &self,
+        round_tree: RoundTree<'_>,
+        request_decoder_state: &mut RequestDecoderStateStack,
+    ) -> Result<Qwen3_5DraftTreeVerification, TextExecutionError> {
+        self.verify_draft_tree_resolving_expert_routes(
+            round_tree.tree_rows,
+            round_tree.anchor_position,
+            request_decoder_state,
+            round_tree.tap_layer_ids,
+            &mut PerformanceAttribution::disabled(),
+        )
+    }
+
+    /// Declares the tree kernels. Nothing is converted: the streaming
+    /// engine's dense projections keep MLX's layout, because converting
+    /// them needs the weights it converts to release only their own
+    /// mappings (issue #2330), and the tree kernels are what make a
+    /// drafted round possible, not the conversion.
+    fn prepare_for_draft_trees(
+        &mut self,
+        performance_attribution: &mut PerformanceAttribution,
+    ) -> Result<Option<usize>, TextExecutionError> {
+        if !self.runs_row_batched_matrix_unit_kernels(performance_attribution) {
+            return Ok(None);
+        }
+        self.declare_register_ordered_kernels()?;
+        self.enable_draft_tree_verification()?;
+        self.enable_row_exact_tree_attention()?;
+        Ok(Some(0))
     }
 }
