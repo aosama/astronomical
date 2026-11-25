@@ -15,7 +15,8 @@ use text_generation::decoder_state::family_decoder_state::FamilyDecoderState;
 use text_generation::execution_error::TextExecutionError;
 
 use crate::qwen3_5_core::model::target_forward_graph::Qwen3_5TargetForwardGraph;
-use crate::qwen3_5_streaming::Qwen3_5MoEPagedExecutionMode;
+use crate::qwen3_5_core::model_math::forward_contract::decoder_state_arrays;
+use crate::qwen3_5_streaming::{PagedRouteValidationOutcome, Qwen3_5MoEPagedExecutionMode};
 use crate::qwen4_exp::drafted_rows_rewind::KeptDraftedRows;
 use crate::qwen4_exp::request_state::Qwen4ExpRequestState;
 use crate::{PerformanceAttribution, RequestDecoderStateStack};
@@ -37,9 +38,22 @@ pub struct DraftedRowsVerification {
     starting_position_tokens: u32,
 }
 
+/// What one forward of a drafted block produced, before it is known to keep.
+struct ForwardedDraftedRows {
+    per_row_logits: MlxArray,
+    lanes: MlxArray,
+    row_boundaries: Vec<AstroSsdPromptCacheBoundaryCheckpoint>,
+}
+
 impl Qwen3_5Model {
     /// Forwards `token_ids` (the last chosen token, then the drafts) from
     /// `starting_position_tokens` and evaluates the result.
+    ///
+    /// The block is tried first with each partly held layer looking its
+    /// routes up inside the graph, as a single reply token is
+    /// (`in_graph_table_serving`): a block's rows seldom share experts, so
+    /// stopping at the host once a layer cost a round more than it cost a
+    /// token. A block a lookup refuses is forwarded again the exact way.
     pub fn verify_drafted_rows(
         &self,
         token_ids: &[u32],
@@ -53,6 +67,50 @@ impl Qwen3_5Model {
             });
         }
         let family_state_before = request_decoder_state.family_state_snapshot()?;
+        let mut state_before_in_graph_attempt = if self.should_serve_reply_rows_in_graph() {
+            Some(request_decoder_state.checkpoint()?)
+        } else {
+            None
+        };
+        loop {
+            if state_before_in_graph_attempt.is_some() {
+                self.begin_in_graph_forward(token_ids.len());
+            }
+            let attempt = self.forward_drafted_rows(
+                token_ids,
+                starting_position_tokens,
+                request_decoder_state,
+                performance_attribution,
+            );
+            self.end_in_graph_forward();
+            if let Some(forwarded_rows) = attempt? {
+                return Ok(DraftedRowsVerification {
+                    per_row_logits: forwarded_rows.per_row_logits,
+                    lanes: forwarded_rows.lanes,
+                    row_boundaries: forwarded_rows.row_boundaries,
+                    family_state_before,
+                    token_ids: token_ids.to_vec(),
+                    starting_position_tokens,
+                });
+            }
+            let Some(state_before) = state_before_in_graph_attempt.take() else {
+                return Err(TextExecutionError::InvalidInput {
+                    description: "an exact drafted block reported experts missing from memory",
+                });
+            };
+            request_decoder_state.restore_checkpoint(state_before)?;
+        }
+    }
+
+    /// One forward of the block and its one evaluation. `None` when an
+    /// in-graph lookup refused a layer, so the block's outputs are wrong.
+    fn forward_drafted_rows(
+        &self,
+        token_ids: &[u32],
+        starting_position_tokens: u32,
+        request_decoder_state: &mut RequestDecoderStateStack,
+        performance_attribution: &mut PerformanceAttribution,
+    ) -> Result<Option<ForwardedDraftedRows>, TextExecutionError> {
         let mut row_boundary_collector = self.drafted_row_boundary_collector(token_ids.len())?;
         // The rows are reply tokens, whatever their number.
         self.paged_forward_missing_route_collector
@@ -72,20 +130,25 @@ impl Qwen3_5Model {
             .pre_final_normalization_hidden_states()
             .retain()?;
         let per_row_logits = self.lane_mixed_vocabulary_logits_for_every_row(&lanes)?;
-        self.evaluate_decoder_state_for_paged_route_resolution(
-            request_decoder_state,
-            Some(&row_boundary_collector),
-            performance_attribution,
-        )?;
-        self.runtime.evaluate_arrays(&[&per_row_logits, &lanes])?;
-        Ok(DraftedRowsVerification {
+        // The logits and the lanes join the state's evaluation: a second
+        // evaluation would be a second wait every round, and the last
+        // layer's lookup, which only they depend on, has to run before the
+        // forward is judged.
+        let mut evaluation_arrays = decoder_state_arrays(request_decoder_state)?;
+        evaluation_arrays.extend(row_boundary_collector.evaluation_arrays());
+        evaluation_arrays.push(&per_row_logits);
+        evaluation_arrays.push(&lanes);
+        let validation_outcome = self
+            .evaluate_arrays_resolving_paged_routes(&evaluation_arrays, performance_attribution)?;
+        drop(evaluation_arrays);
+        if validation_outcome == PagedRouteValidationOutcome::MissedExperts {
+            return Ok(None);
+        }
+        Ok(Some(ForwardedDraftedRows {
             per_row_logits,
             lanes,
             row_boundaries: row_boundary_collector.complete()?,
-            family_state_before,
-            token_ids: token_ids.to_vec(),
-            starting_position_tokens,
-        })
+        }))
     }
 
     /// Leaves the request's state as if only the first `kept_row_count` rows

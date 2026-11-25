@@ -925,6 +925,11 @@ measure-mtp-reply-drafting = "run -p xtask -- test-run --package astronomical-ac
 # the same reply with attribution on, for the shares of its time. Pass
 # --configuration PATH as for `measure-expert-misses`. About seventy seconds
 # a case.
+# `test-in-graph-drafted-blocks` is the same proof for a model with a
+# multi-token-prediction head: the two in-graph replies draft three tokens a
+# round, so each verified block of four rows has its routes looked up in the
+# graph, and both must equal the plain reply resolved on the host.
+test-in-graph-drafted-blocks = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --filter drafted_blocks_are_looked_up_in_the_graph"
 test-in-graph-route-lookup = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --filter whichever_way_routes_are_looked_up"
 measure-in-graph-route-lookup = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --case-budget-seconds 150 --filter reply_speed_with_routes_"
 attribute-in-graph-route-lookup = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --case-budget-seconds 150 --filter reply_time_with_routes_"

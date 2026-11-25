@@ -386,3 +386,53 @@ fn should_report_a_tables_slot_count_and_none_without_a_table() {
         "a table that holds its whole layer needs no lookup"
     );
 }
+
+#[test]
+#[file_serial]
+fn should_serve_a_block_of_rows_reading_each_missing_expert_once() {
+    let ExpertStorage {
+        runtime,
+        plan,
+        filler,
+        expert_file: _expert_file,
+    } = expert_storage();
+    // A drafted block: two rows of two experts each, as one route. Both
+    // rows route to expert 3 and each to one more; experts 2 and 3 are
+    // missing. Room for two routes is grown before the block, as the model
+    // does between rounds.
+    let mut astro_expert_cache = cache_holding_experts_zero_and_one(&runtime, 4);
+    assert!(
+        astro_expert_cache
+            .grow_table_ahead_of_lookups(&runtime, 0, 4, 4)
+            .expect("the table grows for two routes")
+    );
+    let mut table_slots = vec![[0xFF_u8; 4]; 4];
+
+    let read_through = astro_expert_cache
+        .read_route_through_table(
+            &runtime,
+            0,
+            &plan,
+            &assignments(&[0, 3, 3, 2]),
+            4,
+            &filler,
+            &mut table_slots,
+        )
+        .expect("the lookup runs")
+        .expect("the table serves both rows");
+
+    assert_eq!(read_through.retained_expert_count, 1);
+    assert_eq!(
+        read_through.missing_expert_count, 2,
+        "expert 3 is read once for both rows"
+    );
+    let slots = slots_written(&table_slots);
+    assert_eq!(slots[1], slots[2], "both rows share expert 3's slot");
+    for expert_id in [0, 2, 3] {
+        assert_eq!(
+            words_held_for(&astro_expert_cache, expert_id),
+            expected_words_for(expert_id),
+            "expert {expert_id} is in the table with its own bytes"
+        );
+    }
+}
