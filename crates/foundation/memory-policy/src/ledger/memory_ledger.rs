@@ -16,7 +16,9 @@ use super::mlx_working_buffers::MlxWorkingBufferMeasurements;
 use super::model_shape::ModelMemoryShape;
 use super::phase::LedgerPhase;
 use super::reconciliation::{HeldMemory, LedgerReconciliation};
-use super::system_wired_ceiling::next_system_wired_reserve_bytes;
+use super::system_wired_ceiling::{
+    SystemWiredReading, limit_past_system_wired_ceiling_bytes, next_system_wired_reserve_bytes,
+};
 
 /// A request the ledger cannot carry out.
 #[derive(Clone, Copy, Debug, Eq, Error, PartialEq)]
@@ -158,20 +160,21 @@ impl MemoryLedger {
 
     /// Moves the system wired reserve after a reading of the memory macOS
     /// has wired across the whole system.
-    pub fn observe_system_wired(
-        &mut self,
-        system_wired_bytes: u64,
-        system_wire_limit_bytes: u64,
-    ) -> LedgerAccounts {
+    pub fn observe_system_wired(&mut self, reading: SystemWiredReading) -> LedgerAccounts {
         // What the limit cannot give is not carried forward, or a reserve
         // run up on a small limit would take many readings to come down.
         self.system_wired_reserve_bytes = next_system_wired_reserve_bytes(
             self.system_wired_reserve_bytes,
-            system_wired_bytes,
-            system_wire_limit_bytes,
+            reading.system_wired_bytes,
+            reading.system_wire_limit_bytes,
         )
+        .max(limit_past_system_wired_ceiling_bytes(
+            self.limit_bytes,
+            reading,
+        ))
         .min(self.limit_bytes);
-        self.latest_system_wired_reading = Some((system_wired_bytes, system_wire_limit_bytes));
+        self.latest_system_wired_reading =
+            Some((reading.system_wired_bytes, reading.system_wire_limit_bytes));
         self.accounts()
     }
 

@@ -96,6 +96,9 @@ impl Qwen3_5Model {
         let idle_capacity = memory_governor.kept_weight_capacity();
         *self.governed_memory.governor.borrow_mut() = Some(memory_governor);
         self.apply_kept_weight_capacity(idle_capacity);
+        // The first request's prompt must already fit under macOS's wired
+        // line; without a reading it would find out only after crossing it.
+        self.govern_system_wired_memory();
         if let Err(keep_error) = self.keep_dense_layers_the_governor_has_room_for() {
             // The layers stream instead, which is still correct.
             tracing::warn!(error = %keep_error, "could not keep dense layers at load");

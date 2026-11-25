@@ -20,6 +20,10 @@ mod expert_layer_at_a_time_checkpoint_parity;
 #[cfg(feature = "direct-mlx")]
 mod flash_next_greedy_parity;
 #[cfg(feature = "direct-mlx")]
+mod flash_next_loading;
+#[cfg(feature = "direct-mlx")]
+mod flash_next_sampled_forward_speed;
+#[cfg(feature = "direct-mlx")]
 mod kev_decision_latency;
 #[cfg(feature = "direct-mlx")]
 mod kev_engine_requests;

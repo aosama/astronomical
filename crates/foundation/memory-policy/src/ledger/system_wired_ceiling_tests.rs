@@ -1,4 +1,6 @@
-use super::next_system_wired_reserve_bytes;
+use super::{
+    SystemWiredReading, limit_past_system_wired_ceiling_bytes, next_system_wired_reserve_bytes,
+};
 
 const GIBIBYTE: u64 = 1 << 30;
 /// A kernel limit of 100 GiB keeps the arithmetic readable: the slack is
@@ -49,4 +51,47 @@ fn should_not_overflow_on_impossible_readings() {
         u64::MAX
     );
     assert_eq!(next_system_wired_reserve_bytes(0, 0, 0), 0);
+}
+
+fn reading(system_wired_bytes: u64, mlx_held_bytes: u64) -> SystemWiredReading {
+    SystemWiredReading {
+        system_wired_bytes,
+        system_wire_limit_bytes: CEILING_BYTES,
+        mlx_held_bytes,
+    }
+}
+
+#[test]
+fn should_keep_unused_the_part_of_the_limit_past_the_line_less_slack() {
+    // 99 GiB under the slack; 10 GiB wired outside MLX leaves MLX 89 GiB.
+    assert_eq!(
+        limit_past_system_wired_ceiling_bytes(95 * GIBIBYTE, reading(60 * GIBIBYTE, 50 * GIBIBYTE)),
+        6 * GIBIBYTE
+    );
+}
+
+#[test]
+fn should_keep_nothing_unused_when_the_limit_fits_under_the_line() {
+    assert_eq!(
+        limit_past_system_wired_ceiling_bytes(89 * GIBIBYTE, reading(60 * GIBIBYTE, 50 * GIBIBYTE)),
+        0,
+        "exactly the room left is no reserve"
+    );
+    assert_eq!(
+        limit_past_system_wired_ceiling_bytes(34 * GIBIBYTE, reading(36 * GIBIBYTE, 34 * GIBIBYTE)),
+        0
+    );
+}
+
+#[test]
+fn should_keep_the_whole_limit_unused_when_other_wiring_fills_the_line() {
+    assert_eq!(
+        limit_past_system_wired_ceiling_bytes(20 * GIBIBYTE, reading(120 * GIBIBYTE, GIBIBYTE)),
+        20 * GIBIBYTE
+    );
+    assert_eq!(
+        limit_past_system_wired_ceiling_bytes(20 * GIBIBYTE, reading(GIBIBYTE, 5 * GIBIBYTE)),
+        0,
+        "MLX holding more than the wired total counts nothing outside MLX"
+    );
 }

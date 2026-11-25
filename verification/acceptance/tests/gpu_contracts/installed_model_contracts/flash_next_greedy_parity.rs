@@ -12,16 +12,12 @@
 
 use std::time::Duration;
 
-use model_serving::{Qwen3_5ArtifactValidator, Qwen3_5StreamingModel};
-use runtime_integration::{MlxMemoryLimits, MlxRuntime};
+use model_serving::Qwen3_5StreamingModel;
 use serial_test::file_serial;
 use tokio::time::timeout;
 
 const REFERENCE_FIXTURE_JSON: &str =
     include_str!("../../fixtures/flash_next_greedy_reference.json");
-/// The memory limit the model is served at on a 48 GB Mac.
-const MLX_MEMORY_LIMIT_BYTES: usize = 34 * 1_073_741_824;
-const MLX_BUFFER_CACHE_LIMIT_BYTES: usize = 2 * 1_073_741_824;
 /// Prefill chunk: small enough that the long prompt crosses chunk edges
 /// while the sparse-attention block keys carry over between chunks.
 const PREFILL_CHUNK_TOKEN_COUNT: usize = 1024;
@@ -38,24 +34,9 @@ async fn should_choose_the_reference_greedy_tokens_on_the_streaming_engine() {
 
 async fn assert_greedy_tokens_match_the_reference() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
-    let model_directory = crate::common::configured_installed_model_directory_by_id(
-        crate::common::lane_mixing_sparse_moe_streaming_model_id(),
+    let streaming_model = super::flash_next_loading::load_flash_next(
+        &super::flash_next_loading::flash_next_model_directory(),
     );
-    let validated_artifact = Qwen3_5ArtifactValidator::new()
-        .validate(&model_directory, 64)
-        .expect("the Flash-Next artifact should validate");
-    let memory_limits = MlxMemoryLimits::new(MLX_MEMORY_LIMIT_BYTES, MLX_BUFFER_CACHE_LIMIT_BYTES)
-        .expect("the MLX memory limits should be valid");
-    let streaming_model = Qwen3_5StreamingModel::load(
-        MlxRuntime::initialize(memory_limits).expect("the runtime should initialize"),
-        validated_artifact,
-        &model_directory,
-        crate::common::standard_qwen3_5_model_chunking_configuration(),
-    )
-    .expect("Flash-Next should load on the streaming engine");
-    streaming_model
-        .materialize_target_weights()
-        .expect("the model weights should materialize");
     let reference_fixture: serde_json::Value =
         serde_json::from_str(REFERENCE_FIXTURE_JSON).expect("the reference fixture is JSON");
     let reference_prompts = reference_fixture["prompts"]
@@ -111,16 +92,13 @@ fn greedy_reply(
         crate::common::standard_request_decoder_state(&streaming_model.config);
     let mut last_logits = None;
     for chunk_start in (0..prompt_token_ids.len()).step_by(PREFILL_CHUNK_TOKEN_COUNT) {
-        let chunk_end = (chunk_start + PREFILL_CHUNK_TOKEN_COUNT).min(prompt_token_ids.len());
-        last_logits = Some(
-            streaming_model
-                .forward_chunk(
-                    &prompt_token_ids[chunk_start..chunk_end],
-                    chunk_start as u32,
-                    &mut request_decoder_state,
-                )
-                .expect("the prompt chunk should forward"),
-        );
+        last_logits = Some(super::flash_next_loading::forward_prompt_chunk(
+            streaming_model,
+            prompt_token_ids,
+            chunk_start,
+            PREFILL_CHUNK_TOKEN_COUNT,
+            &mut request_decoder_state,
+        ));
     }
     let mut next_logits = last_logits.expect("the prompt has at least one token");
     let mut chosen_token_ids = Vec::with_capacity(reply_token_count);

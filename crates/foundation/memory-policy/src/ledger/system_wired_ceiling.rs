@@ -46,6 +46,47 @@ pub const fn next_system_wired_reserve_bytes(
     previous_reserve_bytes.saturating_sub(room_under_limit_bytes.saturating_sub(slack_bytes))
 }
 
+/// One reading of the memory macOS has wired across the whole system.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct SystemWiredReading {
+    pub system_wired_bytes: u64,
+    /// The kernel's `vm.global_user_wire_limit`.
+    pub system_wire_limit_bytes: u64,
+    /// What MLX held at the reading: its active memory and its
+    /// `mlx_buffer_cache`. The rest of the wired total is the kernel's and
+    /// other applications'.
+    pub mlx_held_bytes: u64,
+}
+
+/// The part of the memory limit that would put the system's wired total
+/// past the kernel's limit, less the slack, if MLX used all of it while
+/// everything else stayed wired as it is.
+///
+/// The reserve that follows each reading only moves after a step has
+/// crossed the line, and the step that crosses it is the first layers of a
+/// prompt: a reply leaves the `astro_expert_cache` full, and the prompt's
+/// streamed layers and working buffers then come on top of it. On a 48 GB
+/// Mac at a 36 GB limit that put the wired total at 38.3 GB against a
+/// 37.92 GB line; macOS un-wired most of MLX's memory, compressed it and
+/// swapped up to 1.4 GB in the prompt's first seconds (issue #2533). Keeping
+/// this much of the limit unused from the start leaves room for any phase's
+/// peak; at a 34 GB limit it is zero.
+#[must_use]
+pub const fn limit_past_system_wired_ceiling_bytes(
+    limit_bytes: u64,
+    reading: SystemWiredReading,
+) -> u64 {
+    let wired_outside_mlx_bytes = reading
+        .system_wired_bytes
+        .saturating_sub(reading.mlx_held_bytes);
+    let slack_bytes = reading.system_wire_limit_bytes / 100 * SYSTEM_WIRED_SLACK_PARTS_PER_HUNDRED;
+    let room_for_mlx_bytes = reading
+        .system_wire_limit_bytes
+        .saturating_sub(slack_bytes)
+        .saturating_sub(wired_outside_mlx_bytes);
+    limit_bytes.saturating_sub(room_for_mlx_bytes)
+}
+
 #[cfg(test)]
 #[path = "system_wired_ceiling_tests.rs"]
 mod tests;
