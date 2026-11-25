@@ -29,6 +29,7 @@ use crate::qwen3_5_core::draft_tree_decode::draft_tree_round::{
 use crate::qwen3_5_core::draft_tree_decode::speculation_session_admission::verification_token_choice_for_strategy;
 
 use super::Qwen3_5EngineState;
+use super::draft_round_payoff::{DraftRoundPayoff, NextReplyStep};
 use super::engine_request::StreamingEngineRequest;
 use super::mtp_reply_drafting::{
     queued_or_pending_token, record_drafted_round, request_can_draft, target_token_choice_for,
@@ -47,6 +48,10 @@ pub(in crate::qwen3_5_streaming) struct DraftTreeReplyDrafting {
     /// Reply tokens decided and not yet emitted; the last has not run
     /// through the target.
     emission_queue: VecDeque<u32>,
+    /// Whether this reply's rounds are paying (`draft_round_payoff`).
+    payoff: DraftRoundPayoff,
+    /// Reply tokens the last forward decided, for the payoff's count.
+    tokens_decided_by_the_last_step: u32,
 }
 
 fn fatal(description: &'static str) -> InferenceEngineError {
@@ -84,6 +89,8 @@ impl Qwen3_5EngineState {
                     target_token_choice_for(&active_request.sampling_strategy).keyed_seed,
                 ),
                 emission_queue: VecDeque::new(),
+                payoff: DraftRoundPayoff::default(),
+                tokens_decided_by_the_last_step: 0,
             });
         }
         let drafter_configuration = &draft_runtime.drafter_configuration;
@@ -164,19 +171,72 @@ impl Qwen3_5EngineState {
                 .emit_drafted_token(active_request, queued_token_id)
                 .map(Some);
         }
-        let can_run_a_round = forced_thinking_transition_token_id.is_none()
-            && drafting.session.has_pending_tap_rows()
-            && request_can_draft(active_request);
+        let can_run_a_round = drafting.payoff.writes_plain_tokens()
+            || (forced_thinking_transition_token_id.is_none()
+                && drafting.session.has_pending_tap_rows()
+                && request_can_draft(active_request));
         if !can_run_a_round {
             return self
                 .leave_draft_tree_drafting(active_request)
                 .map(|()| None);
         }
-        let Some(bonus_token_id) = next_token_to_run(active_request)? else {
+        match self.next_step_of_the_reply(active_request)? {
+            Some(NextReplyStep::Round) => {
+                let Some(bonus_token_id) = next_token_to_run(active_request)? else {
+                    return Ok(None);
+                };
+                self.run_draft_tree_round_step(active_request, bonus_token_id)
+                    .map(Some)
+            }
+            Some(NextReplyStep::PlainToken) | None => Ok(None),
+        }
+    }
+
+    /// What the reply's next forward should be, once it has a token to
+    /// run; the payoff's count closes the step before it here. A reply
+    /// that goes back to plain tokens keeps only its count: the token no
+    /// forward has run becomes the plain step's pending token and the
+    /// drafter's rows are released.
+    fn next_step_of_the_reply(
+        &self,
+        active_request: &mut StreamingEngineRequest,
+    ) -> Result<Option<NextReplyStep>, InferenceEngineError> {
+        let model = self.core.loaded_model()?;
+        let has_a_pending_token = active_request.pending_generated_token.is_some();
+        let Some(drafting) = active_request.engine_extension.draft_tree_drafting.as_mut() else {
             return Ok(None);
         };
-        self.run_draft_tree_round_step(active_request, bonus_token_id)
-            .map(Some)
+        if drafting.emission_queue.is_empty() && !has_a_pending_token {
+            return Ok(None);
+        }
+        let wrote_plain_tokens = drafting.payoff.writes_plain_tokens();
+        let tokens_decided_by_the_last_step = if wrote_plain_tokens {
+            1
+        } else {
+            std::mem::take(&mut drafting.tokens_decided_by_the_last_step)
+        };
+        let next_reply_step = drafting.payoff.next_step(
+            std::time::Instant::now(),
+            tokens_decided_by_the_last_step,
+            &model.reply_measurement.draft_round_costs,
+        );
+        if next_reply_step == NextReplyStep::PlainToken && !wrote_plain_tokens {
+            tracing::info!(
+                break_even_tokens_a_round = ?model
+                    .reply_measurement
+                    .draft_round_costs
+                    .break_even_tokens_a_round(),
+                "the reply's draft rounds decided too few tokens to pay; it goes on plain"
+            );
+            drafting.session = DraftSession::new(
+                target_token_choice_for(&active_request.sampling_strategy).keyed_seed,
+            );
+            if let Some(unrun_token_id) = drafting.emission_queue.pop_front() {
+                active_request.pending_generated_token =
+                    Some(pending_token_array(model, unrun_token_id)?);
+            }
+        }
+        Ok(Some(next_reply_step))
     }
 
     /// Ends the reply's drafting where the plain step can take over: only
@@ -190,13 +250,10 @@ impl Qwen3_5EngineState {
             return Ok(());
         };
         if let Some(unrun_token_id) = drafting.emission_queue.pop_front() {
-            active_request.pending_generated_token = Some(
-                self.core
-                    .loaded_model()?
-                    .runtime()
-                    .array_from_u32(&[unrun_token_id], &[1])
-                    .map_err(text_generation::engine_errors::fatal_runtime_error)?,
-            );
+            active_request.pending_generated_token = Some(pending_token_array(
+                self.core.loaded_model()?,
+                unrun_token_id,
+            )?);
         }
         Ok(())
     }
@@ -261,6 +318,7 @@ impl Qwen3_5EngineState {
         drafting
             .emission_queue
             .extend(decided_token_ids.iter().copied());
+        drafting.tokens_decided_by_the_last_step = decided_token_ids.len() as u32;
         active_request.engine_extension.draft_tree_drafting = Some(drafting);
         record_drafted_round(
             active_request,
@@ -273,6 +331,17 @@ impl Qwen3_5EngineState {
             bonus_token_id,
         )
     }
+}
+
+/// A decided token as the plain step expects its pending token: `[1, 1]`.
+fn pending_token_array(
+    model: &crate::qwen3_5_streaming::model::Qwen3_5Model,
+    token_id: u32,
+) -> Result<mlx_bridge::MlxArray, InferenceEngineError> {
+    model
+        .runtime()
+        .array_from_u32(&[token_id], &[1, 1])
+        .map_err(text_generation::engine_errors::fatal_runtime_error)
 }
 
 /// The token the next round starts from: the queue's last, or the one the

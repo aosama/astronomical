@@ -100,6 +100,9 @@ pub struct ReplyMeasurement {
     /// On only while a contract writes the plain reply a drafted one is
     /// held to: a hosted drafter then stays loaded and proposes nothing.
     pub writes_replies_without_the_hosted_drafter: Cell<bool>,
+    /// What a plain token and a draft round cost, for a reply to tell
+    /// whether its rounds pay.
+    pub draft_round_costs: super::draft_round_costs::DraftRoundCosts,
 }
 
 fn nanoseconds(duration: Duration) -> u64 {

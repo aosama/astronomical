@@ -30,6 +30,7 @@ use crate::serving_acceptance::support::performance_attribution::{
 
 const WARMUP_REQUEST_ID: RequestId = RequestId::new(98_501);
 const MEASURED_REQUEST_ID: RequestId = RequestId::new(98_502);
+const LEARNING_REQUEST_ID: RequestId = RequestId::new(98_503);
 const WARMUP_PROMPT_TOKEN_COUNT: usize = 500;
 const WARMUP_OUTPUT_TOKEN_COUNT: u16 = 50;
 const MEASURED_PROMPT_TOKEN_COUNT: usize = 10_000;
@@ -101,6 +102,8 @@ async fn run_attributed_case(draft_token_count: u32) {
         draft_token_count,
         route_lookup: RouteLookup::InsideTheGraph,
         hosted_drafter_writes_replies: true,
+        reply_task: ReplyTask::Essay,
+        serves_the_prompt_once_before_measuring: false,
         request_attribution: RequestAttribution::Enabled,
         phase_name: format!("mtp_drafts_{draft_token_count}"),
     })
@@ -113,6 +116,8 @@ async fn run_case(generation_sampling: GenerationSampling, draft_token_count: u3
         draft_token_count,
         route_lookup: RouteLookup::InsideTheGraph,
         hosted_drafter_writes_replies: true,
+        reply_task: ReplyTask::Essay,
+        serves_the_prompt_once_before_measuring: false,
         request_attribution: RequestAttribution::Disabled,
         phase_name: format!("mtp_drafts_{draft_token_count}"),
     })
@@ -168,6 +173,42 @@ pub(super) enum RouteLookup {
     OnTheHost,
 }
 
+/// What the measured reply is asked to write.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum ReplyTask {
+    /// A three-paragraph summary of Romeo and Juliet.
+    Essay,
+    /// The continuation of real Python source.
+    Code,
+}
+
+impl ReplyTask {
+    fn prompt_token_ids(
+        self,
+        model_directory: &std::path::Path,
+        model_id: &str,
+        request_id: RequestId,
+        prompt_token_count: usize,
+        output_token_count: u16,
+    ) -> Vec<u32> {
+        use crate::serving_acceptance::support::romeo_and_juliet::{
+            prepare_romeo_and_juliet_three_paragraph_summary_prompt,
+            prepare_source_code_continuation_prompt,
+        };
+        let prepare = match self {
+            Self::Essay => prepare_romeo_and_juliet_three_paragraph_summary_prompt,
+            Self::Code => prepare_source_code_continuation_prompt,
+        };
+        prepare(
+            model_directory,
+            model_id,
+            request_id,
+            prompt_token_count,
+            output_token_count,
+        )
+    }
+}
+
 /// One measured reply: how its tokens are sampled, drafted and routed.
 pub(super) struct ReplyCase {
     pub(super) generation_sampling: GenerationSampling,
@@ -176,6 +217,11 @@ pub(super) struct ReplyCase {
     /// Off keeps a hosted DFlash drafter loaded and silent, for the plain
     /// reply its rounds are compared with; nothing to a model without one.
     pub(super) hosted_drafter_writes_replies: bool,
+    pub(super) reply_task: ReplyTask,
+    /// Serves the measured prompt once before it is measured, so a model
+    /// with a hosted drafter has timed its plain tokens and rounds and the
+    /// measured reply is decided as every reply after a first one is.
+    pub(super) serves_the_prompt_once_before_measuring: bool,
     pub(super) request_attribution: RequestAttribution,
     /// Names the case in its `[performance-attribution] phase=` line and its
     /// evidence file.
@@ -223,14 +269,13 @@ async fn measure_reply(reply_case: ReplyCase) {
         .and_then(|name| name.to_str())
         .expect("the model directory has a UTF-8 name")
         .to_owned();
-    let warmup_prompt_token_ids =
-        crate::serving_acceptance::support::romeo_and_juliet::prepare_romeo_and_juliet_three_paragraph_summary_prompt(
-            &model_directory,
-            &model_id,
-            WARMUP_REQUEST_ID,
-            WARMUP_PROMPT_TOKEN_COUNT,
-            WARMUP_OUTPUT_TOKEN_COUNT,
-        );
+    let warmup_prompt_token_ids = reply_case.reply_task.prompt_token_ids(
+        &model_directory,
+        &model_id,
+        WARMUP_REQUEST_ID,
+        WARMUP_PROMPT_TOKEN_COUNT,
+        WARMUP_OUTPUT_TOKEN_COUNT,
+    );
     run_generation_with_request_attribution(
         &mut engine,
         WARMUP_REQUEST_ID,
@@ -242,14 +287,26 @@ async fn measure_reply(reply_case: ReplyCase) {
         RequestAttribution::Disabled,
     )
     .await;
-    let prompt_token_ids =
-        crate::serving_acceptance::support::romeo_and_juliet::prepare_romeo_and_juliet_three_paragraph_summary_prompt(
-            &model_directory,
-            &model_id,
-            MEASURED_REQUEST_ID,
-            MEASURED_PROMPT_TOKEN_COUNT,
+    let prompt_token_ids = reply_case.reply_task.prompt_token_ids(
+        &model_directory,
+        &model_id,
+        MEASURED_REQUEST_ID,
+        MEASURED_PROMPT_TOKEN_COUNT,
+        MEASURED_OUTPUT_TOKEN_COUNT,
+    );
+    if reply_case.serves_the_prompt_once_before_measuring {
+        run_generation_with_request_attribution(
+            &mut engine,
+            LEARNING_REQUEST_ID,
+            &prompt_token_ids,
+            "reply_before_the_measured_one",
             MEASURED_OUTPUT_TOKEN_COUNT,
-        );
+            &end_of_sequence_token_ids,
+            reply_case.generation_sampling,
+            RequestAttribution::Disabled,
+        )
+        .await;
+    }
     eprintln!(
         "[reply-speed] phase={} draft_tokens={} route_lookup={:?} temperature_thousandths={}",
         reply_case.phase_name,

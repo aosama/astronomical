@@ -139,6 +139,8 @@ fn speed_case(generation_sampling: GenerationSampling, route_lookup: RouteLookup
         draft_token_count: 0,
         route_lookup,
         hosted_drafter_writes_replies: true,
+        reply_task: super::mtp_reply_drafting_speed::ReplyTask::Essay,
+        serves_the_prompt_once_before_measuring: false,
         request_attribution: RequestAttribution::Disabled,
         phase_name: phase_name(route_lookup),
     }
