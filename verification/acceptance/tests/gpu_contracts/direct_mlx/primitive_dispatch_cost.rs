@@ -407,3 +407,214 @@ fn should_price_quantized_multiplies_that_each_wait_for_the_one_before() {
         );
     }
 }
+
+/// Experts in the priced table. A gathered multiply reads only the experts
+/// it is given, so a table of 64 prices a layer of 256 or 512.
+const TABLE_EXPERT_COUNT: i32 = 64;
+
+/// A routed expert layer's shape: `routed` experts of `outer -> inner -> outer`.
+struct ExpertLayerShape {
+    name: &'static str,
+    layer_expert_count: i32,
+    routed_expert_count: i32,
+    outer_width: i32,
+    inner_width: i32,
+}
+
+const EXPERT_LAYER_SHAPES: [ExpertLayerShape; 2] = [
+    ExpertLayerShape {
+        name: "35B-A3B",
+        layer_expert_count: 256,
+        routed_expert_count: 8,
+        outer_width: 2_048,
+        inner_width: 512,
+    },
+    ExpertLayerShape {
+        name: "Flash-Next",
+        layer_expert_count: 512,
+        routed_expert_count: 10,
+        outer_width: 2_560,
+        inner_width: 640,
+    },
+];
+
+/// A 4-bit expert table `[experts, output, input]`.
+fn expert_table(runtime: &MlxRuntime, input_width: i32, output_width: i32) -> QuantizedProjection {
+    let random_key = runtime.random_key(2_568).expect("a random key");
+    let weight = runtime
+        .random_normal(
+            &[TABLE_EXPERT_COUNT, output_width, input_width],
+            MlxDtype::Float32,
+            0.0,
+            0.02,
+            &random_key,
+        )
+        .expect("the table is drawn");
+    let (packed_weight, scales, biases) = runtime
+        .quantize_affine(&weight, WEIGHTS_A_SCALE_GROUP, BITS_A_WEIGHT)
+        .expect("the table quantizes");
+    let activations = runtime
+        .astype(
+            &runtime
+                .random_normal(
+                    &[1, 1, input_width],
+                    MlxDtype::Float32,
+                    0.0,
+                    1.0,
+                    &random_key,
+                )
+                .expect("the activations are drawn"),
+            MlxDtype::BFloat16,
+        )
+        .expect("the activations narrow");
+    runtime
+        .evaluate_arrays(&[&activations, &packed_weight, &scales, &biases])
+        .expect("the table materializes");
+    let weight_byte_count = packed_weight.byte_count() + scales.byte_count() + biases.byte_count();
+    QuantizedProjection {
+        activations,
+        packed_weight,
+        scales,
+        biases,
+        weight_byte_count,
+    }
+}
+
+/// One gathered multiply: every routed expert's row through its own matrix.
+fn gathered_multiply(
+    runtime: &MlxRuntime,
+    rows: &MlxArray,
+    table: &QuantizedProjection,
+    routed_expert_ids: &MlxArray,
+) -> MlxArray {
+    runtime
+        .gather_quantized_matmul_affine(
+            rows,
+            &table.packed_weight,
+            &table.scales,
+            &table.biases,
+            None,
+            Some(routed_expert_ids),
+            true,
+            WEIGHTS_A_SCALE_GROUP,
+            BITS_A_WEIGHT,
+            true,
+        )
+        .expect("the gathered multiply builds")
+}
+
+/// Seconds for a chain of gathered multiplies alternating the gate and the
+/// down table over the routed experts' rows.
+fn gathered_chain_seconds(
+    runtime: &MlxRuntime,
+    shape: &ExpertLayerShape,
+    gate: &QuantizedProjection,
+    down: &QuantizedProjection,
+) -> f64 {
+    let mut routed_ids = Vec::with_capacity(shape.routed_expert_count as usize);
+    for routed_index in 0..shape.routed_expert_count {
+        routed_ids.push((routed_index * 5) as u32 % TABLE_EXPERT_COUNT as u32);
+    }
+    routed_ids.sort_unstable();
+    let routed_expert_ids = runtime
+        .array_from_u32(&routed_ids, &[shape.routed_expert_count])
+        .expect("the routed ids upload");
+    let mut current = runtime
+        .broadcast_to(
+            &gate.activations,
+            &[shape.routed_expert_count, 1, shape.outer_width],
+        )
+        .expect("the rows broadcast");
+    for step_index in 0..MULTIPLIES_A_PASS {
+        let table = if step_index % 2 == 0 { gate } else { down };
+        current = gathered_multiply(runtime, &current, table, &routed_expert_ids);
+    }
+    let started_at = Instant::now();
+    runtime
+        .evaluate_arrays(&[&current])
+        .expect("the chain evaluates");
+    started_at.elapsed().as_secs_f64()
+}
+
+/// Seconds for `MULTIPLIES_A_PASS` route selections in one evaluation:
+/// softmax, the partition that finds the best experts, and their scores.
+fn route_selection_seconds(runtime: &MlxRuntime, shape: &ExpertLayerShape) -> f64 {
+    let random_key = runtime.random_key(2_569).expect("a random key");
+    let router_logits = runtime
+        .random_normal(
+            &[1, 1, shape.layer_expert_count],
+            MlxDtype::BFloat16,
+            0.0,
+            2.0,
+            &random_key,
+        )
+        .expect("the logits are drawn");
+    runtime
+        .evaluate_arrays(&[&router_logits])
+        .expect("the logits evaluate");
+    let first_selected = shape.layer_expert_count - shape.routed_expert_count;
+    let mut selections = Vec::with_capacity(MULTIPLIES_A_PASS);
+    for _ in 0..MULTIPLIES_A_PASS {
+        let probabilities = runtime
+            .softmax_axis(&router_logits, -1)
+            .expect("softmax builds");
+        let partitioned = runtime
+            .argpartition_axis(&probabilities, first_selected, -1)
+            .expect("the partition builds");
+        let selected = runtime
+            .slice(
+                &partitioned,
+                &[0, 0, first_selected],
+                &[1, 1, shape.layer_expert_count],
+                &[1, 1, 1],
+            )
+            .expect("the slice builds");
+        selections.push(
+            runtime
+                .take_along_axis(&probabilities, &selected, -1)
+                .expect("the scores build"),
+        );
+    }
+    let selection_references: Vec<&MlxArray> = selections.iter().collect();
+    let started_at = Instant::now();
+    runtime
+        .evaluate_arrays(&selection_references)
+        .expect("the selections evaluate");
+    started_at.elapsed().as_secs_f64()
+}
+
+#[test]
+#[ignore = "prices the pieces of a routed expert layer on the local GPU"]
+#[serial]
+fn should_price_the_pieces_of_a_routed_expert_layer() {
+    let twelve_gigabytes = 12 * 1024 * 1024 * 1024;
+    let memory_limits = MlxMemoryLimits::new(twelve_gigabytes, twelve_gigabytes / 8);
+    let runtime =
+        MlxRuntime::initialize(memory_limits.expect("the limits are valid")).expect("MLX starts");
+    for shape in &EXPERT_LAYER_SHAPES {
+        let gate = expert_table(&runtime, shape.outer_width, shape.inner_width);
+        let down = expert_table(&runtime, shape.inner_width, shape.outer_width);
+        let mut chain_seconds = Vec::with_capacity(TIMED_PASS_COUNT);
+        let mut route_seconds = Vec::with_capacity(TIMED_PASS_COUNT);
+        gathered_chain_seconds(&runtime, shape, &gate, &down);
+        route_selection_seconds(&runtime, shape);
+        for _ in 0..TIMED_PASS_COUNT {
+            chain_seconds.push(gathered_chain_seconds(&runtime, shape, &gate, &down));
+            route_seconds.push(route_selection_seconds(&runtime, shape));
+        }
+        chain_seconds.sort_by(f64::total_cmp);
+        route_seconds.sort_by(f64::total_cmp);
+        let per_pass = 1e6 / MULTIPLIES_A_PASS as f64;
+        let routed_bytes = (gate.weight_byte_count + down.weight_byte_count) as f64
+            / 2.0
+            / TABLE_EXPERT_COUNT as f64
+            * shape.routed_expert_count as f64;
+        eprintln!(
+            "[primitive-dispatch-cost] expert_layer=\"{}\" gathered_multiply_microseconds={:.1} routed_weight_bytes_floor_microseconds={:.1} route_selection_microseconds={:.1}",
+            shape.name,
+            chain_seconds[TIMED_PASS_COUNT / 2] * per_pass,
+            routed_bytes / MEASURED_BYTES_A_SECOND * 1e6,
+            route_seconds[TIMED_PASS_COUNT / 2] * per_pass,
+        );
+    }
+}
