@@ -64,6 +64,12 @@
           "effective": null,
           "is_configured": false
         },
+        "multi_token_prediction_draft_tokens": {
+          "configured": null,
+          "default": null,
+          "effective": null,
+          "is_configured": false
+        },
         "ssd_prompt_cache_common_prefix_stride_blocks": {
           "configured": null,
           "default": 4,
