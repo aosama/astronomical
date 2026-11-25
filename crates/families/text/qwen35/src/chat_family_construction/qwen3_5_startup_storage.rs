@@ -64,6 +64,21 @@ pub(super) fn open_model_loading_attribution(
 /// enabled it. This keeps disabled operation from touching model/revision
 /// identity, opening directories, scanning files, or reserving publication
 /// workspace later in model loading.
+/// Whether the `astro_ssd_prompt_cache` serves this artifact. Its stored
+/// prompts hold the layers' state only, and Qwen3.8-Flash-Next also needs
+/// its n-gram window and sparse-attention keys, so restoring a Flash-Next
+/// prompt would continue from a state it never had (issue #2533).
+pub(super) fn astro_ssd_prompt_cache_serves_artifact(
+    astro_ssd_prompt_cache_enabled: bool,
+    validated_artifact: &crate::ValidatedQwen3_5Artifact,
+) -> bool {
+    astro_ssd_prompt_cache_enabled
+        && validated_artifact
+            .config()
+            .qwen4_exp_architecture()
+            .is_none()
+}
+
 pub(super) fn astro_ssd_prompt_cache_disk_store_config(
     astro_ssd_prompt_cache_enabled: bool,
     astro_ssd_prompt_cache_config: &AstroSsdPromptCacheConfig,

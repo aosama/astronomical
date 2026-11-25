@@ -179,13 +179,20 @@ impl RequestDecoderStateStack {
         self.family_state = Some(family_state);
     }
 
-    fn family_state_snapshot(
+    /// A copy of the family's extra state, or `None` when the family keeps
+    /// none; `restore_family_state` puts it back.
+    pub fn family_state_snapshot(
         &self,
     ) -> Result<Option<Box<dyn FamilyDecoderState>>, MlxRuntimeError> {
         self.family_state
             .as_ref()
             .map(|family_state| family_state.snapshot())
             .transpose()
+    }
+
+    /// Puts back a family state taken by `family_state_snapshot`.
+    pub fn restore_family_state(&mut self, family_state: Option<Box<dyn FamilyDecoderState>>) {
+        self.family_state = family_state;
     }
 
     /// Retains all decoder-layer state owners for verified-prefix rollback.

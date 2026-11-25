@@ -19,6 +19,7 @@ use mlx_bridge::MlxArray;
 
 use super::layer_major_span_state::{SpanState, forget_layer_end_state};
 use crate::{AstroDecoderStateCacheStateAllocationCheckpoint, RequestDecoderStateStack};
+use text_generation::decoder_state::family_decoder_state::FamilyDecoderState;
 use text_generation::execution_error::TextExecutionError;
 
 /// What one span found when it began to run through one layer.
@@ -26,6 +27,9 @@ struct SpanRedoPoint {
     span_index: usize,
     span_input: MlxArray,
     layer_state: AstroDecoderStateCacheStateAllocationCheckpoint,
+    /// The family's extra state (Flash-Next's n-gram window and
+    /// sparse-attention keys), which a layer's forward also advances.
+    family_state: Option<Box<dyn FamilyDecoderState>>,
     previous_layer_output: Option<MlxArray>,
 }
 
@@ -53,13 +57,7 @@ impl UnconfirmedSpans {
                 description: "a layer-major span lost its hidden states",
             })?
             .retain()?;
-        let layer_state = request_decoder_state
-            .layer(layer_index)
-            .ok_or(TextExecutionError::InvalidRequestDecoderState {
-                layer_index,
-                description: "decoder layer entry is missing",
-            })?
-            .allocation_checkpoint()?;
+        let (layer_state, family_state) = span_start_state(request_decoder_state, layer_index)?;
         let previous_layer_output = match previous_layer_output {
             Some(previous_layer_output) => Some(previous_layer_output.retain()?),
             None => None,
@@ -68,6 +66,7 @@ impl UnconfirmedSpans {
             span_index,
             span_input,
             layer_state,
+            family_state,
             previous_layer_output,
         });
         Ok(())
@@ -119,9 +118,31 @@ impl UnconfirmedSpans {
                     description: "decoder layer entry is missing",
                 })?
                 .restore_allocation_checkpoint(redo_point.layer_state)?;
+            request_decoder_state.restore_family_state(redo_point.family_state);
             *previous_layer_output = redo_point.previous_layer_output;
             oldest_unconfirmed_span_index = Some(redo_point.span_index);
         }
         Ok(oldest_unconfirmed_span_index)
     }
+}
+
+/// The layer's state and the family's extra state as a span begins the layer.
+fn span_start_state(
+    request_decoder_state: &RequestDecoderStateStack,
+    layer_index: usize,
+) -> Result<
+    (
+        AstroDecoderStateCacheStateAllocationCheckpoint,
+        Option<Box<dyn FamilyDecoderState>>,
+    ),
+    TextExecutionError,
+> {
+    let layer_state = request_decoder_state
+        .layer(layer_index)
+        .ok_or(TextExecutionError::InvalidRequestDecoderState {
+            layer_index,
+            description: "decoder layer entry is missing",
+        })?
+        .allocation_checkpoint()?;
+    Ok((layer_state, request_decoder_state.family_state_snapshot()?))
 }
