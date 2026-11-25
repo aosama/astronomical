@@ -78,6 +78,19 @@ MLX patches (`mlx-0.32.4-*.patch`):
 - `streaming-safetensors-writer` — Astronomical feature. Streams safetensors
   output through the bounded descriptor writer and orders payloads so the
   allocator can reuse one contiguous materialization. Retires never.
+- `fast-synch-setting` — Astronomical feature. MLX orders a CPU step among
+  GPU steps with a fence, and has two kinds: Metal shared events, or a
+  spin-wait on shared memory it calls fast synch, chosen once from its
+  `MLX_METAL_FAST_SYNCH` environment setting. The patch makes that choice a
+  setting code can change (`mlx::core::env::set_metal_fast_synch`), read by
+  each evaluation when it makes its fences, so the streaming engine turns
+  fast synch on for itself without an environment variable. A host step
+  inside a graph (`crates/engine/graph-host-step`) costs about 9 microseconds
+  a layer with it and about 170 without (`cargo measure-graph-host-step`).
+  It also ends a fast-synch wait when the command buffer that should have
+  published the awaited value fails: upstream's CPU stream would spin on it
+  forever, where the patched one lets the evaluation report the failure.
+  Retires if upstream offers the same control and ends that wait.
 - `stable-prefill-split-k` — serving performance. Keeps the quantized matmul
   split-K topology stable once row tiles already expose parallelism, so
   prefill numerics do not change with batch shape. Retires if upstream

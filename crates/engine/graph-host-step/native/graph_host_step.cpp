@@ -11,6 +11,7 @@
 #include "mlx/c/private/enums.h"
 #include "mlx/ops.h"
 #include "mlx/primitives.h"
+#include "mlx/utils.h"
 
 namespace {
 
@@ -158,4 +159,8 @@ extern "C" int astro_graph_host_step_append(
     return 1;
   }
   return 0;
+}
+
+extern "C" void astro_graph_host_step_set_fast_synch(bool is_enabled) {
+  mlx::core::env::set_metal_fast_synch(is_enabled);
 }

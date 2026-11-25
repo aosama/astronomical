@@ -97,6 +97,29 @@ unsafe extern "C" {
         request: *const NativeHostStepRequest,
         output_array: *mut raw::mlx_array,
     ) -> c_int;
+    fn astro_graph_host_step_set_fast_synch(is_enabled: bool);
+}
+
+/// Chooses how MLX orders a host step among GPU steps, from the next
+/// evaluation on.
+///
+/// MLX has two ways. Its default is Metal shared events, which cost a step
+/// about as much as ending the evaluation would: 173 microseconds a layer
+/// against 163 for a host stop. Its fast synch is a spin-wait on memory the
+/// GPU and the host share: 9 microseconds a layer
+/// (`cargo measure-graph-host-step`). Fast synch keeps one processor core
+/// and one GPU kernel spinning while each waits for the other, so a caller
+/// turns it on for work that stops at the host often and leaves MLX's
+/// default otherwise. MLX itself falls back to events on a GPU without
+/// Metal 3.
+///
+/// The setting is process-wide and a plain flag inside MLX: change it only
+/// from the thread that evaluates, between evaluations.
+pub fn set_fast_synch(is_enabled: bool) {
+    // SAFETY: the native side stores one flag that MLX reads when an
+    // evaluation makes its fences; the caller's contract keeps the store
+    // apart from any evaluation.
+    unsafe { astro_graph_host_step_set_fast_synch(is_enabled) };
 }
 
 /// Adds `host_step` to the graph after `inputs` and returns its lazy output.

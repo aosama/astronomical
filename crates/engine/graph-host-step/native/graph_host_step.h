@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <stdbool.h>
 #include <stddef.h>
 
 #include "mlx/c/array.h"
@@ -61,6 +62,12 @@ typedef struct astro_graph_host_step_request {
 int astro_graph_host_step_append(
     const astro_graph_host_step_request* request,
     mlx_array* output_array);
+
+// Chooses how MLX orders a host step among GPU steps from the next
+// evaluation on: by its fast synch (a spin-wait on memory both sides share)
+// when `is_enabled`, by Metal shared events otherwise. Call it only while no
+// evaluation is running.
+void astro_graph_host_step_set_fast_synch(bool is_enabled);
 
 #ifdef __cplusplus
 }

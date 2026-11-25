@@ -777,9 +777,8 @@ measure-expert-rows-per-read = "run -p xtask -- test-run --package astronomical-
 # against a host step inside the graph (crates/engine/graph-host-step), with a
 # pass that never leaves the GPU as the floor. Random float32 tensors in the
 # 35B-A3B's shape, 40 layers a token; the three passes must compute the same
-# token. MLX orders a CPU step among GPU steps in one of two ways, chosen by
-# its own MLX_METAL_FAST_SYNCH setting, so prefix the command with
-# `MLX_METAL_FAST_SYNCH=1` to price the other one. Seconds.
+# token. The step is priced under each of MLX's two orderings of a CPU step
+# among GPU steps: Metal shared events and its fast synch. Seconds.
 measure-graph-host-step = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --exact --filter direct_mlx::graph_host_step_cost::should_price_a_host_stop_a_layer_against_a_step_inside_the_graph"
 # The row-batched kernel's GPU contracts: matches MLX's quantized matmul on
 # every 27B shape at 1 to 32 rows, gives each row the same bits alone and

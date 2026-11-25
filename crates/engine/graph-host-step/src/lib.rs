@@ -11,7 +11,9 @@
 //! A host step keeps the look inside the graph. [`append_host_step`] adds a
 //! node that MLX's evaluator runs on its CPU stream after the GPU steps it
 //! reads and before the GPU steps that read it, so the whole token is one
-//! graph and one evaluation. `cargo measure-graph-host-step` prices both.
+//! graph and one evaluation. `cargo measure-graph-host-step` prices both, and
+//! shows that the step only pays under MLX's fast synch, which
+//! [`set_fast_synch`] turns on.
 //!
 //! The step itself is native code (`native/graph_host_step.cpp`), an MLX
 //! primitive compiled against the patched MLX sources; `host_step` is its
@@ -26,4 +28,6 @@
 mod host_step;
 
 #[cfg(feature = "direct-mlx")]
-pub use host_step::{HostStep, HostStepFailed, HostStepInputs, HostStepOutput, append_host_step};
+pub use host_step::{
+    HostStep, HostStepFailed, HostStepInputs, HostStepOutput, append_host_step, set_fast_synch,
+};

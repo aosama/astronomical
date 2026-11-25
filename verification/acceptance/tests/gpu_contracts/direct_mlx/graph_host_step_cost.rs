@@ -11,16 +11,17 @@
 //! storage here: this prices the hand-off between the GPU and the host, which
 //! is paid on every layer whether or not an expert is missing.
 //!
-//! MLX has two ways to order a CPU step among GPU steps and chooses by its
-//! own `MLX_METAL_FAST_SYNCH` setting when it first needs one, so each way is
-//! one run of this test; the report says which it measured.
+//! MLX has two ways to order a CPU step among GPU steps, Metal shared events
+//! and its fast synch, so the step inside the graph is priced under each.
 //!
 //! Run with `cargo measure-graph-host-step`. Seconds.
 
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use graph_host_step::{HostStep, HostStepFailed, HostStepInputs, HostStepOutput, append_host_step};
+use graph_host_step::{
+    HostStep, HostStepFailed, HostStepInputs, HostStepOutput, append_host_step, set_fast_synch,
+};
 use mlx_bridge::{MlxArray, MlxDtype};
 use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use serial_test::serial;
@@ -33,10 +34,6 @@ const WARMUP_TOKEN_COUNT: usize = 20;
 const TIMED_TOKEN_COUNT: usize = 300;
 const PROGRESS_INTERVAL: Duration = Duration::from_secs(5);
 const BYTES_PER_EXPERT_ID: usize = std::mem::size_of::<u32>();
-/// MLX's own switch between its two orderings of a CPU step among GPU steps;
-/// read here only to label the report.
-const MLX_FAST_SYNCH_VARIABLE: &str = "MLX_METAL_FAST_SYNCH";
-
 /// How a layer turns the experts its router chose into rows of the table.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum RouteLookup {
@@ -44,8 +41,10 @@ enum RouteLookup {
     /// up, and uploaded for the rest of the layer.
     HostStopALayer,
     /// A host step inside the graph looks the routes up; the token is one
-    /// evaluation.
+    /// evaluation. Ordered by Metal shared events, MLX's default.
     StepInsideTheGraph,
+    /// The same step, ordered by MLX's fast synch.
+    StepInsideTheGraphFastSynch,
     /// The routes index the table directly: no host at all.
     GpuOnly,
 }
@@ -54,7 +53,8 @@ impl RouteLookup {
     fn description(self) -> &'static str {
         match self {
             Self::HostStopALayer => "host stop a layer (today)",
-            Self::StepInsideTheGraph => "host step inside the graph",
+            Self::StepInsideTheGraph => "step in graph, shared events",
+            Self::StepInsideTheGraphFastSynch => "step in graph, fast synch",
             Self::GpuOnly => "GPU only (floor)",
         }
     }
@@ -145,17 +145,19 @@ fn routed_rows(layer: &SyntheticLayer, routes: &MlxArray, route_lookup: RouteLoo
             }
             MlxArray::from_u32(&rows, &[ROUTED_EXPERT_COUNT]).expect("the rows upload")
         }
-        RouteLookup::StepInsideTheGraph => append_host_step(
-            &[routes],
-            HostStepOutput {
-                shape: &[ROUTED_EXPERT_COUNT],
-                dtype: MlxDtype::UInt32,
-            },
-            Box::new(ExpertRowLookup {
-                row_of_expert: Arc::clone(&layer.row_of_expert),
-            }),
-        )
-        .expect("the step joins the graph"),
+        RouteLookup::StepInsideTheGraph | RouteLookup::StepInsideTheGraphFastSynch => {
+            append_host_step(
+                &[routes],
+                HostStepOutput {
+                    shape: &[ROUTED_EXPERT_COUNT],
+                    dtype: MlxDtype::UInt32,
+                },
+                Box::new(ExpertRowLookup {
+                    row_of_expert: Arc::clone(&layer.row_of_expert),
+                }),
+            )
+            .expect("the step joins the graph")
+        }
     }
 }
 
@@ -235,6 +237,7 @@ fn time_pass(
     first_hidden: &MlxArray,
     route_lookup: RouteLookup,
 ) -> PassTiming {
+    set_fast_synch(route_lookup == RouteLookup::StepInsideTheGraphFastSynch);
     let mut last_hidden = Vec::new();
     for _ in 0..WARMUP_TOKEN_COUNT {
         last_hidden = forward_token(runtime, layer, first_hidden, route_lookup);
@@ -293,33 +296,28 @@ fn should_price_a_host_stop_a_layer_against_a_step_inside_the_graph() {
         )
         .expect("the first hidden row uploads");
     eprintln!(
-        "[graph-host-step-cost] layers_per_token={LAYERS_PER_TOKEN} timed_tokens={TIMED_TOKEN_COUNT} mlx_fast_synch={}",
-        std::env::var(MLX_FAST_SYNCH_VARIABLE).unwrap_or_else(|_| "unset".to_owned())
+        "[graph-host-step-cost] layers_per_token={LAYERS_PER_TOKEN} timed_tokens={TIMED_TOKEN_COUNT}"
     );
-
-    let gpu_only = time_pass(&runtime, &layer, &first_hidden, RouteLookup::GpuOnly);
-    let host_stop = time_pass(&runtime, &layer, &first_hidden, RouteLookup::HostStopALayer);
-    let step_inside = time_pass(
-        &runtime,
-        &layer,
-        &first_hidden,
+    let route_lookups = [
+        RouteLookup::GpuOnly,
+        RouteLookup::HostStopALayer,
         RouteLookup::StepInsideTheGraph,
-    );
+        RouteLookup::StepInsideTheGraphFastSynch,
+    ];
+    let mut timings = Vec::with_capacity(route_lookups.len());
+    for route_lookup in route_lookups {
+        timings.push(time_pass(&runtime, &layer, &first_hidden, route_lookup));
+    }
+    set_fast_synch(false);
 
-    let floor_milliseconds = gpu_only.median_token_milliseconds;
-    report_pass(RouteLookup::GpuOnly, &gpu_only, floor_milliseconds);
-    report_pass(RouteLookup::HostStopALayer, &host_stop, floor_milliseconds);
-    report_pass(
-        RouteLookup::StepInsideTheGraph,
-        &step_inside,
-        floor_milliseconds,
-    );
-    assert_eq!(
-        host_stop.last_hidden, gpu_only.last_hidden,
-        "a host stop a layer computes the GPU-only token"
-    );
-    assert_eq!(
-        step_inside.last_hidden, gpu_only.last_hidden,
-        "a step inside the graph computes the GPU-only token"
-    );
+    let floor_milliseconds = timings[0].median_token_milliseconds;
+    for (route_lookup, timing) in route_lookups.into_iter().zip(&timings) {
+        report_pass(route_lookup, timing, floor_milliseconds);
+        assert_eq!(
+            timing.last_hidden,
+            timings[0].last_hidden,
+            "{} computes the GPU-only token",
+            route_lookup.description()
+        );
+    }
 }
