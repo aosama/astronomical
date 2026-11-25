@@ -9,6 +9,12 @@ const REPRESENTATIVE_SOURCE_TEXT: &str = include_str!(
     "../../../../../../verification/acceptance/tests/fixtures/model_metrics_5000_romeo_and_juliet_words.txt"
 );
 
+/// The three-paragraph summary every essay journey asks for.
+pub(crate) const ROMEO_AND_JULIET_SUMMARY: InstructedSource = InstructedSource {
+    instruction: "Summarize the supplied Romeo and Juliet source in exactly three concise paragraphs. Do not use a heading, bullets, or a numbered list. Preserve the central conflict, the major decisions, and the tragic outcome.\n\nSource material:\n",
+    source_text: REPRESENTATIVE_SOURCE_TEXT,
+};
+
 pub(crate) fn prepare_romeo_and_juliet_three_paragraph_summary_prompt(
     model_directory: &Path,
     target_model_id: &str,
@@ -17,10 +23,7 @@ pub(crate) fn prepare_romeo_and_juliet_three_paragraph_summary_prompt(
     maximum_output_token_count: u16,
 ) -> Vec<u32> {
     prepare_instructed_source_prompt(
-        InstructedSource {
-            instruction: "Summarize the supplied Romeo and Juliet source in exactly three concise prose paragraphs. Do not use a heading, bullets, or a numbered list. Preserve the central conflict, the major decisions, and the tragic outcome.\n\nSource material:\n",
-            source_text: REPRESENTATIVE_SOURCE_TEXT,
-        },
+        ROMEO_AND_JULIET_SUMMARY,
         model_directory,
         target_model_id,
         request_id,
@@ -109,30 +112,4 @@ pub(crate) fn prepare_instructed_source_prompt(
     prompt_token_ids.extend_from_slice(assistant_suffix_token_ids);
     assert_eq!(prompt_token_ids.len(), required_prompt_token_count);
     prompt_token_ids
-}
-
-const PROGRESSIVE_SOURCE_CODE: &str = include_str!(
-    "../../../../../../verification/acceptance/tests/fixtures/model_metrics_progressive_source_code.txt"
-);
-
-/// A prompt whose reply is code: real Python source, cut where the prompt
-/// is long enough, for the model to continue.
-pub(crate) fn prepare_source_code_continuation_prompt(
-    model_directory: &Path,
-    target_model_id: &str,
-    request_id: RequestId,
-    required_prompt_token_count: usize,
-    maximum_output_token_count: u16,
-) -> Vec<u32> {
-    prepare_instructed_source_prompt(
-        InstructedSource {
-            instruction: "Continue this Python source from exactly where it stops. Write only code, with no explanation before or after it.\n\n",
-            source_text: PROGRESSIVE_SOURCE_CODE,
-        },
-        model_directory,
-        target_model_id,
-        request_id,
-        required_prompt_token_count,
-        maximum_output_token_count,
-    )
 }

@@ -4,6 +4,7 @@ pub(crate) mod exact_model_prompt;
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod performance_attribution;
 pub(crate) mod romeo_and_juliet;
+pub(crate) mod source_code_prompt;
 
 pub(crate) const IMAGE_PAD_TOKEN_ID: u32 = 248_069;
 pub(crate) const LOCAL_AI_PROMPT_TOKEN_IDS: [u32; 20] = [

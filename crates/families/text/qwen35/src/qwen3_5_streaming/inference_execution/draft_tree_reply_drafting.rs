@@ -12,6 +12,10 @@
 //! (`qwen3_5_core::draft_tree_decode`), keeping the chain its own choices
 //! follow. Every emitted token is one the target chose itself.
 //!
+//! A reply stays in rounds only while they decide enough tokens to pay
+//! for themselves (`draft_round_payoff`); below that it goes on plain and
+//! only its count of plain tokens is kept.
+//!
 //! A reply drafts only when the drafter has rows to read. The taps are
 //! captured while the prompt is read; a prompt restored whole from the
 //! `astro_ssd_prompt_cache` leaves none, and that reply is written one
@@ -171,11 +175,11 @@ impl Qwen3_5EngineState {
                 .emit_drafted_token(active_request, queued_token_id)
                 .map(Some);
         }
-        let can_run_a_round = drafting.payoff.writes_plain_tokens()
+        let keeps_its_place_in_the_step = drafting.payoff.writes_plain_tokens()
             || (forced_thinking_transition_token_id.is_none()
                 && drafting.session.has_pending_tap_rows()
                 && request_can_draft(active_request));
-        if !can_run_a_round {
+        if !keeps_its_place_in_the_step {
             return self
                 .leave_draft_tree_drafting(active_request)
                 .map(|()| None);

@@ -191,15 +191,13 @@ impl ReplyTask {
         prompt_token_count: usize,
         output_token_count: u16,
     ) -> Vec<u32> {
-        use crate::serving_acceptance::support::romeo_and_juliet::{
-            prepare_romeo_and_juliet_three_paragraph_summary_prompt,
-            prepare_source_code_continuation_prompt,
+        use crate::serving_acceptance::support::{romeo_and_juliet, source_code_prompt};
+        let instructed_source = match self {
+            Self::Essay => romeo_and_juliet::ROMEO_AND_JULIET_SUMMARY,
+            Self::Code => source_code_prompt::SOURCE_CODE_CONTINUATION,
         };
-        let prepare = match self {
-            Self::Essay => prepare_romeo_and_juliet_three_paragraph_summary_prompt,
-            Self::Code => prepare_source_code_continuation_prompt,
-        };
-        prepare(
+        romeo_and_juliet::prepare_instructed_source_prompt(
+            instructed_source,
             model_directory,
             model_id,
             request_id,

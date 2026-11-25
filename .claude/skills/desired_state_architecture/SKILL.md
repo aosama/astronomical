@@ -116,6 +116,8 @@ The desired state is that every level carries standing instruments, so nobody ad
 - **A reply's stages:** `ReplyStageTally` in the streaming model keeps, per reply, the forwards and rows it ran, the in-graph lookups' time split into storage reads and bookkeeping, a drafted round's draft, verify, pick and keep times, and the hand-offs. The worker logs it once per reply ("the reply's stages"), and the speed journeys print it as `[reply-stages]`.
 - **First readings, so nobody repeats the wrong guess:** a lookup's bookkeeping is about 2.4 microseconds, not the tenth of a millisecond once assumed; a lookup whose slots four kernels read made five cross-stream waits until its slots were read once on the GPU; a plain reply token makes two to three blocking evaluations where one would do.
 
+- **Readings from drafting on the streaming engine (issue #2330):** copying a several-row route to the host evaluated a contiguous copy first, one blocking evaluation a layer, yet all 40 of them cost 0.5 ms of a 22.7 ms round: count hand-offs, then price them before chasing them. Timing two ways of writing against each other inside one reply does not work: over a dozen tokens either reads from 15 to 39 ms a token, and the first tokens after any prompt cost about twice the steady ones. Decide on a count the content sets (tokens a round keeps) against costs smoothed across replies. Several-row kernels round differently from one-row ones (1.6 in a 35B-A3B's logits), so a drafted greedy reply is held to the model's own rounding, not to token identity.
+
 ## Known gaps between today and the desired state
 
 - Prediction recall and precision have no standing contract; the last measurement used temporary code.
