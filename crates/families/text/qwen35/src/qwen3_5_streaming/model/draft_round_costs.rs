@@ -14,11 +14,22 @@ use std::time::Duration;
 /// about ten steps and follows a change in a few dozen.
 const NEW_STEP_WEIGHT: f64 = 0.1;
 
-/// Smoothed seconds of a plain reply token and of a draft round.
+/// How far above the most tokens a round has kept the break-even may sit
+/// before rounds are not tried: counts of sixteen rounds vary by about a
+/// tenth between replies of one kind.
+const BREAK_EVEN_TOLERANCE: f64 = 1.1;
+/// Replies written plain before rounds are tried again, in case what is
+/// being written now keeps more than anything before it did.
+const REPLIES_BETWEEN_NEW_TRIES: u32 = 16;
+
+/// Smoothed seconds of a plain reply token and of a draft round, and the
+/// most tokens a round its rounds have decided.
 #[derive(Debug, Default)]
 pub struct DraftRoundCosts {
     plain_token_seconds: Cell<Option<f64>>,
     round_seconds: Cell<Option<f64>>,
+    most_tokens_a_round: Cell<Option<f64>>,
+    replies_since_rounds_were_tried: Cell<u32>,
 }
 
 impl DraftRoundCosts {
@@ -28,6 +39,36 @@ impl DraftRoundCosts {
 
     pub fn record_round(&self, elapsed: Duration) {
         record(&self.round_seconds, elapsed);
+    }
+
+    /// Records what one count of rounds decided, a round.
+    pub fn record_tokens_a_round(&self, tokens_a_round: f64) {
+        let most_so_far = self.most_tokens_a_round.get().unwrap_or(0.0);
+        self.most_tokens_a_round
+            .set(Some(most_so_far.max(tokens_a_round)));
+    }
+
+    /// Whether a new reply should try rounds. It should not when the
+    /// break-even is beyond anything rounds have decided on this model:
+    /// a dense 27B's tree pass in MLX's layout costs four tokens' time
+    /// where its rounds keep two and a half, and trying sixteen rounds a
+    /// reply to learn that again cost each reply about two seconds. Such a
+    /// model still tries once every few replies.
+    pub fn should_a_reply_try_rounds(&self) -> bool {
+        let (Some(break_even), Some(most_tokens_a_round)) = (
+            self.break_even_tokens_a_round(),
+            self.most_tokens_a_round.get(),
+        ) else {
+            return true;
+        };
+        if most_tokens_a_round * BREAK_EVEN_TOLERANCE >= break_even {
+            return true;
+        }
+        let replies_since_a_try = self.replies_since_rounds_were_tried.get() + 1;
+        let tries_again = replies_since_a_try >= REPLIES_BETWEEN_NEW_TRIES;
+        self.replies_since_rounds_were_tried
+            .set(if tries_again { 0 } else { replies_since_a_try });
+        tries_again
     }
 
     /// How many reply tokens a round must decide to cost what plain tokens

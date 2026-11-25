@@ -69,6 +69,7 @@ impl DraftRoundPayoff {
         if !self.writes_plain_tokens && self.rounds_since_the_last_decision >= ROUNDS_A_DECISION {
             let tokens_a_round = f64::from(self.tokens_since_the_last_decision)
                 / f64::from(self.rounds_since_the_last_decision);
+            costs.record_tokens_a_round(tokens_a_round);
             let rounds_pay = costs
                 .break_even_tokens_a_round()
                 .is_some_and(|break_even| tokens_a_round > break_even);

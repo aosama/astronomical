@@ -83,11 +83,19 @@ impl Qwen3_5EngineState {
         if is_held_back_by_a_contract || !request_can_draft(active_request) {
             return;
         }
-        if active_request
+        let opens_the_reply_s_drafting = active_request
             .engine_extension
             .draft_tree_drafting
-            .is_none()
+            .is_none();
+        if opens_the_reply_s_drafting
+            && !model
+                .reply_measurement
+                .draft_round_costs
+                .should_a_reply_try_rounds()
         {
+            return;
+        }
+        if opens_the_reply_s_drafting {
             active_request.engine_extension.draft_tree_drafting = Some(DraftTreeReplyDrafting {
                 session: DraftSession::new(
                     target_token_choice_for(&active_request.sampling_strategy).keyed_seed,
