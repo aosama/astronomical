@@ -1,6 +1,6 @@
 ---
 name: desired_state_architecture
-description: The desired state of Astronomical's performance architecture - where a measurement is taken (physical limit, kernel, MLX evaluation, native C++ step, model stage, engine reply loop, policy replay) and what to build at each level. Use before measuring, instrumenting, or speeding up prefill or decode, before deciding whether work belongs in C++ inside MLX or in Rust, and before running any app-level or REST-level speed test. Read it before adding a timer, a counter, a `cargo measure-*` alias or temporary diagnostic code.
+description: The desired state of Astronomical's performance architecture - where a measurement is taken (physical limit, kernel, MLX evaluation, native C++ step, model stage, engine reply loop, policy replay) and what to build at each level. Use before measuring, instrumenting, or speeding up prefill or decode, before deciding whether work belongs in C++ inside MLX or in Rust, and before running any app-level or REST-level speed test. Read it before adding a timer, a counter, a measurement alias or temporary diagnostic code.
 ---
 
 # Desired state architecture: measuring and speeding up inference
