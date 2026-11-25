@@ -21,6 +21,8 @@ pub mod dense_layer_streamer;
 #[cfg(feature = "direct-mlx")]
 mod diagnostic_paging;
 #[cfg(feature = "direct-mlx")]
+pub mod drafted_rows_verification;
+#[cfg(feature = "direct-mlx")]
 pub mod expert_layer_mlx_working_buffer_probe;
 #[cfg(feature = "direct-mlx")]
 mod expert_memory_mode;
@@ -48,9 +50,10 @@ mod layer_major_span_state;
 pub mod layer_probe_shape;
 #[cfg(feature = "direct-mlx")]
 pub mod layer_submission;
-#[cfg(feature = "direct-mlx")]
 pub mod memory_governance;
 mod mlx_buffer_cache_bound;
+pub mod mtp_drafting;
+pub mod mtp_head;
 // Holds one streamed layer for every span of a layer-at-a-time prompt.
 pub mod held_prompt_expert_layer;
 // Reads the next streamed layer while the graphics processor computes.

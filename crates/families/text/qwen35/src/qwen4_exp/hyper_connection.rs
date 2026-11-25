@@ -202,6 +202,32 @@ impl Qwen3_5ModelBase {
             .astype(&logits, mlx_bridge::MlxDtype::Float32)?)
     }
 
+    /// Float32 logits for every row of `lanes`, `[1, rows, vocabulary]`: what
+    /// verifying a drafted block compares each draft against.
+    pub fn lane_mixed_vocabulary_logits_for_every_row(
+        &self,
+        lanes: &MlxArray,
+    ) -> Result<MlxArray, TextExecutionError> {
+        let (Some(lane_mixer), Some(architecture)) = (
+            self.weights.final_lane_mixer.as_deref(),
+            self.config.qwen4_exp_architecture(),
+        ) else {
+            return Err(TextExecutionError::InvalidInput {
+                description: "only a Flash-Next model mixes residual lanes",
+            });
+        };
+        let (mixed, _) = self.read_lanes(
+            lanes,
+            &self.weights.final_normalization_weight,
+            lane_mixer,
+            &architecture,
+        )?;
+        let logits = self.quantized_linear(&mixed, &self.weights.language_model_head_weights)?;
+        Ok(self
+            .runtime
+            .astype(&logits, mlx_bridge::MlxDtype::Float32)?)
+    }
+
     /// What the first decoder layer reads: the embeddings themselves, or for
     /// Flash-Next the residual lanes they start. Embeddings already widened
     /// into lanes pass through, so every forward entry can call this.

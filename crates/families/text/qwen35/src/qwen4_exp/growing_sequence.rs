@@ -71,6 +71,13 @@ impl GrowingSequence {
         Ok(runtime.slice(&self.storage, &starts, &stops, &strides)?)
     }
 
+    /// Forgets the rows after the first `kept_rows`. Their storage stays
+    /// reserved and the next append writes over it, so dropping the rows of
+    /// refused draft tokens allocates nothing.
+    pub fn truncate_rows(&mut self, kept_rows: i32) {
+        self.used_rows = self.used_rows.min(kept_rows.max(0));
+    }
+
     #[must_use]
     pub const fn used_rows(&self) -> i32 {
         self.used_rows

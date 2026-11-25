@@ -110,7 +110,7 @@ fn append_decoder_layer_profiles(
 /// down to one hidden state through a low-rank projection, and, inside a
 /// decoder layer, weights how the block's output is written back to each
 /// lane (`block_inject_weight`). The final mixer only mixes.
-fn append_hyper_connection_profiles(
+pub(super) fn append_hyper_connection_profiles(
     profiles: &mut Vec<TensorProfile>,
     connection_prefix: &str,
     config: &Qwen3_5Config,
@@ -148,7 +148,7 @@ fn append_hyper_connection_profiles(
     Ok(())
 }
 
-fn append_indexer_profiles(
+pub(super) fn append_indexer_profiles(
     profiles: &mut Vec<TensorProfile>,
     layer_prefix: &str,
     config: &Qwen3_5Config,

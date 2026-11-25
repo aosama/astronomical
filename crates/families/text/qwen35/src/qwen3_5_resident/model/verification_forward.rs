@@ -287,12 +287,7 @@ impl Qwen3_5ResidentModel {
                 description: "a drafted block verifies the anchor and at least one draft",
             });
         }
-        let mut row_boundary_collector = AstroSsdPromptCacheBoundaryCheckpointCollector::new(
-            (1..token_ids.len()).collect(),
-            self.astro_decoder_state_cache_layout
-                .boundary_tensor_count(),
-            1,
-        )?;
+        let mut row_boundary_collector = self.drafted_row_boundary_collector(token_ids.len())?;
         let (hidden_states, hidden_state_taps) = self.run_verification_layers(
             self.embedding_lookup(&token_indices)?,
             token_count,

@@ -5,11 +5,15 @@
 #[cfg(feature = "direct-mlx")]
 pub mod centered_norm;
 #[cfg(feature = "direct-mlx")]
+pub mod drafted_rows_rewind;
+#[cfg(feature = "direct-mlx")]
 pub mod growing_sequence;
 #[cfg(feature = "direct-mlx")]
 pub mod hyper_connection;
 #[cfg(feature = "direct-mlx")]
 pub mod layer_weights;
+#[cfg(feature = "direct-mlx")]
+pub mod mtp_head_weights;
 pub mod ngram_hashing;
 #[cfg(feature = "direct-mlx")]
 pub mod ngram_layer;

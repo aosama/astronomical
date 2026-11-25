@@ -21,6 +21,16 @@ pub struct AstroSsdPromptCacheBoundaryCheckpointCollector {
 }
 
 impl AstroSsdPromptCacheBoundaryCheckpointCollector {
+    /// A collector that captures the state after every row of a `row_count`
+    /// row forward but the last: what rewinding a verified drafted block to
+    /// its kept rows needs.
+    pub fn after_every_row_but_the_last(
+        row_count: usize,
+        expected_boundary_tensor_count: usize,
+    ) -> Result<Self, MlxRuntimeError> {
+        Self::new((1..row_count).collect(), expected_boundary_tensor_count, 1)
+    }
+
     pub fn new(
         completed_prefill_chunk_tokens: Vec<usize>,
         expected_boundary_tensor_count: usize,

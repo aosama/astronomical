@@ -118,6 +118,8 @@ pub(super) fn is_qwen4_exp_centered_norm_weight_tensor(tensor_name: &str) -> boo
         ".ple.norm_conv.weight",
         ".indexer.q_layernorm.weight",
         ".indexer.k_layernorm.weight",
+        ".pre_fc_norm_embedding.weight",
+        ".pre_fc_norm_hidden.weight",
     ]
     .iter()
     .any(|suffix| tensor_name.ends_with(suffix))

@@ -26,6 +26,9 @@ use text_generation::model::model_chunking_configuration::TextModelChunkingConfi
 /// kernels until something enables it.
 #[derive(Debug, Default)]
 pub struct Qwen3_5OptionalAccelerators {
+    /// Flash-Next's multi-token-prediction head, when the checkpoint ships
+    /// one; its arrays stay lazy until a request first drafts.
+    pub mtp_head: Option<Box<crate::qwen4_exp::mtp_head_weights::MtpHeadWeights>>,
     /// Opt-in engine for linear-attention output gates during prefill; `None`
     /// keeps them on the GPU.
     pub output_gate_engine: Option<

@@ -112,7 +112,7 @@ impl Qwen3_5Model {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn forward_moe_with_streamed_weights(
+    pub(super) fn forward_moe_with_streamed_weights(
         &self,
         hidden_states: &MlxArray,
         paged_expert_weights: &Qwen3_5PagedExpertWeights,

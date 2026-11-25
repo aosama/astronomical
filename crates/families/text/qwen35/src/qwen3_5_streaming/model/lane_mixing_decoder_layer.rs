@@ -19,6 +19,7 @@ use crate::qwen3_5_streaming::model::streaming_model::Qwen3_5StreamingModel;
 use crate::qwen4_exp::layer_weights::FlashNextLayerWeights;
 use crate::qwen4_exp::request_state::Qwen4ExpRequestState;
 use crate::{AstroDecoderStateCacheState, PerformanceAttribution};
+use text_generation::AstroSsdPromptCacheBoundaryCheckpointCollector;
 
 /// Where one layer forward runs and what it reads beyond its lanes.
 pub struct LaneMixingLayerInputs<'forward> {
@@ -27,6 +28,10 @@ pub struct LaneMixingLayerInputs<'forward> {
     pub layer_index: usize,
     pub paged_execution_mode: Qwen3_5MoEPagedExecutionMode,
     pub request_state: Option<&'forward mut Qwen4ExpRequestState>,
+    /// Captures a linear-attention layer's state at the row boundaries it
+    /// names, so a drafted block can be rewound to its kept rows.
+    pub boundary_checkpoint_collector:
+        Option<&'forward mut AstroSsdPromptCacheBoundaryCheckpointCollector>,
 }
 
 impl Qwen3_5StreamingModel {
@@ -71,7 +76,7 @@ impl Qwen3_5StreamingModel {
             decoder_layer_weights,
             flash_next,
             layer_model_state,
-            &inputs,
+            &mut inputs,
             request_state,
             &architecture,
             performance_attribution,
@@ -117,7 +122,7 @@ impl Qwen3_5StreamingModel {
         decoder_layer_weights: &Qwen3_5DecoderLayerWeights,
         flash_next: &FlashNextLayerWeights,
         layer_model_state: &mut AstroDecoderStateCacheState,
-        inputs: &LaneMixingLayerInputs<'_>,
+        inputs: &mut LaneMixingLayerInputs<'_>,
         request_state: &mut Qwen4ExpRequestState,
         architecture: &Qwen4ExpArchitecture,
         performance_attribution: &mut PerformanceAttribution,
@@ -136,7 +141,7 @@ impl Qwen3_5StreamingModel {
                 linear_attention_weights,
                 convolution,
                 recurrent,
-                None,
+                inputs.boundary_checkpoint_collector.as_deref_mut(),
                 performance_attribution,
             ),
             (

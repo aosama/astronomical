@@ -14,6 +14,7 @@ use crate::{PerformanceAttribution, PerformanceOperation};
 
 mod attention_binding;
 mod connection_binding;
+mod mtp_head_binding;
 #[cfg(test)]
 mod tests;
 
@@ -22,6 +23,7 @@ use connection_binding::{
     LayerNormsAndAdditions, append_final_lane_mixer_arrays, apply_centered_norm_storage_convention,
     take_layer_norms_and_additions, take_model_output_norm,
 };
+pub use mtp_head_binding::bind_mtp_head_weights;
 
 use super::weights_validation;
 use super::{

@@ -379,6 +379,7 @@ impl Qwen3_5StreamingModel {
                 layer_index,
                 paged_execution_mode,
                 request_state: qwen4_exp_state,
+                boundary_checkpoint_collector,
             },
             performance_attribution,
         )
