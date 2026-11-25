@@ -196,4 +196,4 @@ impl HostStep for InGraphRouteLookup {
 
 #[cfg(test)]
 #[path = "in_graph_route_lookup_tests.rs"]
-mod in_graph_route_lookup_tests;
+pub(super) mod in_graph_route_lookup_tests;

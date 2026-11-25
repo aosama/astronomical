@@ -102,6 +102,9 @@ impl Qwen3_5TargetForwardGraph for Qwen3_5Model {
                 qwen4_exp_state,
                 performance_attribution,
             )?;
+            self.paged_forward_missing_route_collector
+                .draft_tap_capture
+                .keep_layer_output(layer_index, &hidden_states);
             self.submit_completed_layer(
                 &forward_layer_weights,
                 completed_layer_roots(

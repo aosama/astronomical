@@ -17,7 +17,7 @@ use super::{
 };
 use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
-fn test_runtime() -> MlxRuntime {
+pub(crate) fn test_runtime() -> MlxRuntime {
     MlxRuntime::initialize(
         MlxMemoryLimits::new(512 * 1024 * 1024, 512 * 1024 * 1024)
             .expect("the test memory limits are valid"),

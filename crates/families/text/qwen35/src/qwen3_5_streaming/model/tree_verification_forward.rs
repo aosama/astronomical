@@ -77,6 +77,22 @@ impl DraftTreeTarget for Qwen3_5StreamingModel {
 }
 
 impl Qwen3_5StreamingModel {
+    /// Asks the next forward to keep the hidden rows after `tap_layer_ids`
+    /// for a hosted drafter; `take_draft_taps` collects them.
+    pub fn begin_draft_tap_capture(&self, tap_layer_ids: &[i32]) {
+        self.paged_forward_missing_route_collector
+            .draft_tap_capture
+            .begin(tap_layer_ids);
+    }
+
+    /// The rows the forward kept since `begin_draft_tap_capture`, one
+    /// `[1, rows, hidden]` array a tap; `None` when none were asked for.
+    pub fn take_draft_taps(&self) -> Option<Vec<MlxArray>> {
+        self.paged_forward_missing_route_collector
+            .draft_tap_capture
+            .take()
+    }
+
     /// Verifies `tree_rows` and evaluates the result: the logits after
     /// every row and the requested taps are ready to read when this
     /// returns, and every route the pass took was served from its table.
