@@ -3,9 +3,8 @@ use std::path::Path;
 
 use super::safetensors_dtype;
 use super::{
-    ArtifactValidationError, RequiredFileProfile, TensorInventory, TensorLocation,
-    TensorProfile, TensorSourceId, ValidatedRequiredFile, ValidatedWeightsFile,
-    validate_required_file,
+    ArtifactValidationError, RequiredFileProfile, TensorInventory, TensorLocation, TensorProfile,
+    TensorSourceId, ValidatedRequiredFile, ValidatedWeightsFile, validate_required_file,
 };
 use memory_policy::safetensors::{
     BoundedSafetensorsHeaderError, SafetensorsTensorView, read_bounded_safetensors_json_header,

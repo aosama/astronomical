@@ -5,12 +5,19 @@ use std::process::Command;
 use crate::small_mac_matrix::matrix_cells::DEVELOPMENT_BASE_URL;
 
 const DEFAULT_ROUND_COUNT: usize = 3;
+/// Temperature people chat at; never greedy for figures people read.
+const DEFAULT_MEASUREMENT_TEMPERATURE: f64 = 0.6;
+/// The widest temperature a chat request accepts.
+const MAXIMUM_MEASUREMENT_TEMPERATURE: f64 = 2.0;
 const BYTES_PER_GIGABYTE: u64 = 1_073_741_824;
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct MeasureSpeedOptions {
     pub base_url: String,
     pub round_count: usize,
+    /// Sampling temperature of every measured reply: 0.6 by default, 0.7
+    /// for coding work and 1.0 for general work when a measurement asks.
+    pub temperature: f64,
     /// Where the figures were measured, when given; `run` reads this Mac
     /// otherwise, so parsing never touches the hardware.
     pub measured_on: Option<String>,
@@ -23,6 +30,7 @@ impl MeasureSpeedOptions {
         let mut parsed_options = Self {
             base_url: DEVELOPMENT_BASE_URL.to_owned(),
             round_count: DEFAULT_ROUND_COUNT,
+            temperature: DEFAULT_MEASUREMENT_TEMPERATURE,
             measured_on: None,
             should_write_catalog: false,
             model_ids: Vec::new(),
@@ -30,16 +38,9 @@ impl MeasureSpeedOptions {
         let mut remaining_arguments = arguments.iter();
         while let Some(argument) = remaining_arguments.next() {
             match argument.as_str() {
-                "--base-url" => {
-                    parsed_options.base_url = option_value(&mut remaining_arguments, "--base-url")?
-                }
-                "--rounds" => {
-                    parsed_options.round_count =
-                        parse_round_count(&option_value(&mut remaining_arguments, "--rounds")?)?
-                }
-                "--measured-on" => {
-                    parsed_options.measured_on =
-                        Some(option_value(&mut remaining_arguments, "--measured-on")?)
+                "--base-url" | "--rounds" | "--measured-on" | "--temperature" => {
+                    let value = option_value(&mut remaining_arguments, argument)?;
+                    parsed_options.apply_valued_option(argument, value)?;
                 }
                 "--write-catalog" => parsed_options.should_write_catalog = true,
                 flag if flag.starts_with("--") => return Err(format!("unknown option {flag}")),
@@ -47,9 +48,32 @@ impl MeasureSpeedOptions {
             }
         }
         if parsed_options.model_ids.is_empty() {
-            return Err("usage: cargo xtask measure-speed [--base-url URL] [--rounds N] [--measured-on TEXT] [--write-catalog] MODEL_ID...".to_owned());
+            return Err("usage: cargo xtask measure-speed [--base-url URL] [--rounds N] [--temperature T] [--measured-on TEXT] [--write-catalog] MODEL_ID...".to_owned());
         }
         Ok(parsed_options)
+    }
+
+    fn apply_valued_option(&mut self, option_name: &str, value: String) -> Result<(), String> {
+        match option_name {
+            "--base-url" => self.base_url = value,
+            "--rounds" => self.round_count = parse_round_count(&value)?,
+            "--temperature" => self.temperature = parse_temperature(&value)?,
+            _ => self.measured_on = Some(value),
+        }
+        Ok(())
+    }
+}
+
+/// A temperature above zero: greedy decoding is a diagnostic, not a speed
+/// people see, and the chat API takes nothing above 2.
+fn parse_temperature(temperature_text: &str) -> Result<f64, String> {
+    match temperature_text.parse::<f64>() {
+        Ok(temperature) if temperature > 0.0 && temperature <= MAXIMUM_MEASUREMENT_TEMPERATURE => {
+            Ok(temperature)
+        }
+        _ => Err(format!(
+            "--temperature needs a number above 0 and at most {MAXIMUM_MEASUREMENT_TEMPERATURE}, got {temperature_text}"
+        )),
     }
 }
 

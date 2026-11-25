@@ -109,6 +109,7 @@ fn measure_one_model(
         model_id,
         &speed_prompts.warmup_prompt(),
         WARMUP_OUTPUT_TOKENS,
+        measure_speed_options.temperature,
     )?;
     speed_progress.complete_step();
     let mut speed_rounds = ModelSpeedRounds::default();
@@ -124,6 +125,7 @@ fn measure_one_model(
                 model_id,
                 &speed_prompts.task_prompt(speed_task, round_index),
                 MEASURED_OUTPUT_TOKENS,
+                measure_speed_options.temperature,
             )?;
             println!(
                 "{STATUS_PREFIX} reply model={model_id} task={} round={} prompt_tokens={} reply_tokens={} seconds_to_first_token={:.2} reply_tokens_per_second={}",
