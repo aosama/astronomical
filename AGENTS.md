@@ -50,8 +50,8 @@
 ## Release Scripts Folder
 
 - All **Release-related scripts** must live under "<repo-root>/scripts/release", they will help you through the release process.
-- Follow the `sparkle-release` skill (`.claude/skills/sparkle-release/SKILL.md`) for every Stable release on the direct download and Sparkle feed, and read all of it before the first step.
-- A Mac App Store release is separate and happens only when the user asks for it: follow the `macos-appstore-release` skill (`.claude/skills/macos-appstore-release/SKILL.md`).
+- Follow the `sparkle_release` skill (`.claude/skills/sparkle_release/SKILL.md`) for every Stable release on the direct download and Sparkle feed, and read all of it before the first step.
+- A Mac App Store release is separate and happens only when the user asks for it: follow the `macos_appstore_release` skill (`.claude/skills/macos_appstore_release/SKILL.md`).
 
 ## Repository Tooling Lives In xtask
 

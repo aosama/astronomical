@@ -1,0 +1,29 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "thin-talk-preview",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "apps/thin-talk/web/dev-server.mjs",
+        "--port",
+        "6790"
+      ],
+      "port": 6790
+    },
+    {
+      "name": "website",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "6791",
+        "--bind",
+        "127.0.0.1",
+        "--directory",
+        "site"
+      ],
+      "port": 6791
+    }
+  ]
+}
