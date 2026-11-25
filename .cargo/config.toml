@@ -787,6 +787,12 @@ measure-expert-rows-per-read = "run -p xtask -- test-run --package astronomical-
 # 35B-A3B's shape, 40 layers a token; the three passes must compute the same
 # token. The step is priced under each of MLX's two orderings of a CPU step
 # among GPU steps: Metal shared events and its fast synch. Seconds.
+# Flash-Next's fused lane-mixing kernels (the mix gate, the write-back weights
+# and the write-back) against the composed steps they replace: the same bits
+# on random bfloat16 operands, for one row and for a drafted block's rows. A
+# model turns the kernels on only after the same comparison passes on its
+# GPU. No model. Seconds.
+test-fused-lane-mixing = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter fused_lane_mixing"
 # What one GPU primitive costs when its tensor is small: chains of 2,000
 # reshapes, scalar multiplies, sigmoids and casts over a residual-sized vector,
 # each built once and evaluated once, priced a primitive from MLX's own count.

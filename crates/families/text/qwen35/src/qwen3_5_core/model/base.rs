@@ -29,6 +29,10 @@ pub struct Qwen3_5OptionalAccelerators {
     /// Flash-Next's multi-token-prediction head, when the checkpoint ships
     /// one; its arrays stay lazy until a request first drafts.
     pub mtp_head: Option<Box<crate::qwen4_exp::mtp_head_weights::MtpHeadWeights>>,
+    /// Flash-Next's fused lane-mixing kernels, once
+    /// `enable_fused_lane_mixing` has found them bit for bit equal to the
+    /// composed steps on this GPU.
+    pub lane_mixing_kernels: Option<crate::qwen4_exp::lane_mixing_kernels::LaneMixingKernels>,
     /// Opt-in engine for linear-attention output gates during prefill; `None`
     /// keeps them on the GPU.
     pub output_gate_engine: Option<

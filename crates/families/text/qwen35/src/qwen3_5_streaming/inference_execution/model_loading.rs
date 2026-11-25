@@ -297,6 +297,9 @@ fn finish_streaming_model_load(
         .bound_mlx_buffer_cache_to_measured_working_buffers()
         .map_err(text_generation::engine_errors::fatal_runtime_error)?;
     model.base.optional_accelerators.mtp_head = mtp_head_load?.map(Box::new);
+    if model.base.enable_fused_lane_mixing() {
+        tracing::info!("decode path: fused lane-mixing kernels");
+    }
     // The memory governor opened while the model loaded, before it had its
     // head. A head that drafts is 1.6 GB of core weights on Flash-Next;
     // left out, the `astro_expert_cache` was given that room too, and MLX

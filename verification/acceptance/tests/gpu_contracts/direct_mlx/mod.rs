@@ -19,6 +19,7 @@ mod attention;
 mod dflash_drafter_reference;
 mod expert_rows_per_read_cost;
 mod flux2_klein;
+mod fused_lane_mixing;
 mod gpu_wired_ceiling_probe;
 mod graph_host_step_cost;
 mod kernel_capability;
