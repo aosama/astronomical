@@ -35,7 +35,10 @@ const WARMUP_PROMPT_TOKEN_COUNT: usize = 500;
 const WARMUP_OUTPUT_TOKEN_COUNT: u16 = 50;
 const MEASURED_PROMPT_TOKEN_COUNT: usize = 10_000;
 const MEASURED_OUTPUT_TOKEN_COUNT: u16 = 500;
-const CASE_TIMEOUT: Duration = Duration::from_secs(150);
+/// A dense model that streams its layers writes about ten tokens a second
+/// and reads a 10,000-token prompt slowly; a case that serves its prompt
+/// twice needs about six minutes there.
+const CASE_TIMEOUT: Duration = Duration::from_secs(480);
 
 #[tokio::test]
 #[ignore = "measures essay reply speed one token a forward on an installed streamed model"]

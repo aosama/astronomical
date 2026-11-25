@@ -37,4 +37,13 @@ pub trait DraftRoundTarget: DraftTreeTarget + Sized {
         &mut self,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<Option<usize>, TextExecutionError>;
+
+    /// Frees `drafter_load_bytes` under the memory limit for a drafter
+    /// about to load, and says whether this engine did. An engine that
+    /// holds every weight cannot, and its drafter is refused when the room
+    /// is not already there; one that keeps streamed weights only while
+    /// there is room gives some of them back.
+    fn make_room_for_a_drafter(&mut self, _drafter_load_bytes: u64) -> bool {
+        false
+    }
 }

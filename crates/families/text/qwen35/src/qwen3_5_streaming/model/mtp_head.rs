@@ -111,6 +111,16 @@ impl Qwen3_5Model {
         self.optional_accelerators.mtp_head.as_deref()
     }
 
+    /// Sets `reserve_bytes` aside for a drafter that is loading and plans
+    /// the kept weights around it, giving back what no longer fits; zero
+    /// ends the reservation.
+    pub fn reserve_room_for_a_loading_drafter(&self, reserve_bytes: u64) {
+        self.governed_memory
+            .drafter_load_reserve_bytes
+            .set(reserve_bytes);
+        self.open_memory_governor();
+    }
+
     /// The model's geometry as the memory ledger should see it: while
     /// replies draft, the head's weights are core weights, always in memory,
     /// and the `astro_expert_cache` gets what is left after them.
@@ -126,12 +136,15 @@ impl Qwen3_5Model {
                 .model_core_payload_bytes
                 .saturating_add(head.payload_byte_count);
         }
-        // A hosted DFlash drafter never pages either.
-        if let Some(draft_runtime) = self.optional_accelerators.draft_runtime.as_deref() {
-            model_geometry.model_core_payload_bytes = model_geometry
-                .model_core_payload_bytes
-                .saturating_add(draft_runtime.hosted_weight_bytes);
-        }
+        // A hosted DFlash drafter never pages either; one that is loading
+        // is counted by the room set aside for it.
+        let drafter_bytes = match self.optional_accelerators.draft_runtime.as_deref() {
+            Some(draft_runtime) => draft_runtime.hosted_weight_bytes,
+            None => self.governed_memory.drafter_load_reserve_bytes.get(),
+        };
+        model_geometry.model_core_payload_bytes = model_geometry
+            .model_core_payload_bytes
+            .saturating_add(drafter_bytes);
         model_geometry
     }
 

@@ -34,3 +34,44 @@ fn should_move_a_tenth_of_the_way_to_each_new_step() {
         "42 ms a round over 20 ms a token, got {break_even}"
     );
 }
+
+/// 40 ms a round over 10 ms a token: a round breaks even at four tokens.
+fn costs_breaking_even_at_four_tokens() -> DraftRoundCosts {
+    let costs = DraftRoundCosts::default();
+    costs.record_round(Duration::from_millis(40));
+    costs.record_plain_token(Duration::from_millis(10));
+    costs
+}
+
+#[test]
+fn should_try_rounds_while_nothing_is_known_about_them() {
+    assert!(DraftRoundCosts::default().should_a_reply_try_rounds());
+    assert!(costs_breaking_even_at_four_tokens().should_a_reply_try_rounds());
+}
+
+#[test]
+fn should_try_rounds_when_they_have_decided_about_the_break_even() {
+    let costs = costs_breaking_even_at_four_tokens();
+    costs.record_tokens_a_round(3.7);
+    assert!(costs.should_a_reply_try_rounds());
+}
+
+#[test]
+fn should_not_try_rounds_that_never_decided_near_the_break_even() {
+    let costs = costs_breaking_even_at_four_tokens();
+    costs.record_tokens_a_round(2.5);
+    costs.record_tokens_a_round(1.9);
+    assert!(!costs.should_a_reply_try_rounds());
+}
+
+#[test]
+fn should_try_again_after_sixteen_replies_without_rounds() {
+    let costs = costs_breaking_even_at_four_tokens();
+    costs.record_tokens_a_round(2.5);
+    let mut tries = Vec::new();
+    for _ in 0..32 {
+        tries.push(costs.should_a_reply_try_rounds());
+    }
+    assert_eq!(tries.iter().filter(|tried| **tried).count(), 2);
+    assert!(tries[15] && tries[31]);
+}
