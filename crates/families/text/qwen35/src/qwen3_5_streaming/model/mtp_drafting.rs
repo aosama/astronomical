@@ -14,29 +14,54 @@
 //! round its rows are cut back to where the round began and the kept tokens
 //! are run again with the lanes the verify forward produced.
 
+use engine_core::speculative_decoding::keyed_sampling::keyed_sample;
+use engine_core::speculative_decoding::verification_decision::TargetDistribution;
 use mlx_bridge::{MlxArray, MlxDtype};
 use text_generation::execution_error::TextExecutionError;
+
+use crate::gpu_token_sampling::sampling_distribution_rows;
 
 use crate::{PerformanceAttribution, RequestDecoderStateStack};
 
 use super::Qwen3_5Model;
 use super::mtp_head::MtpHeadState;
 
-/// Chooses the reply's next token from the target's logits at one position,
-/// with whatever sampling the request asked for. Called once per reply
-/// token, in order, so a sampler's own state advances exactly as it would
-/// without drafting.
-pub trait ReplyTokenChooser {
-    /// `position_logits` is `[1, 1, vocabulary]` float32.
-    fn choose_reply_token(&mut self, position_logits: &MlxArray)
-    -> Result<u32, TextExecutionError>;
+/// How the target chooses the reply's token after each verified row: the
+/// request's own sampling, so a drafted reply follows the same law as an
+/// undrafted one.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TargetTokenChoice {
+    /// `None` takes the highest-scoring token.
+    pub sampling: Option<TopKTopPSampling>,
+    /// Keys every sampled position, so a position's choice does not depend
+    /// on how many rows were verified with it.
+    pub keyed_seed: u64,
+}
+
+/// Top-k, then top-p, then temperature, as the reply path samples.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TopKTopPSampling {
+    pub temperature_thousandths: u16,
+    pub top_k: u16,
+    pub top_p_thousandths: u16,
+}
+
+impl TargetTokenChoice {
+    /// The choice for the highest-scoring token.
+    #[must_use]
+    pub const fn highest_scoring() -> Self {
+        Self {
+            sampling: None,
+            keyed_seed: 0,
+        }
+    }
 }
 
 /// The head's first guess for the next round and the lanes it continues from.
 struct NextDraft {
-    /// `[1, 1]` int32, lazy: the head's choice for the token after the one
-    /// the target last chose.
-    first_draft_token: MlxArray,
+    /// `[1, 1, vocabulary]`, lazy: the head's logits for the token after
+    /// the one the target last chose.
+    head_logits: MlxArray,
     /// `[1, 1, lanes * hidden]`: the head's lanes at that position.
     head_lanes: MlxArray,
 }
@@ -68,6 +93,9 @@ pub struct MtpRoundOutcome {
     /// the target's own choice after them. The last one has not been run
     /// through the target yet and starts the next round.
     pub reply_token_ids: Vec<u32>,
+    /// Tokens the head drafted this round and how many the target kept.
+    pub drafted_token_count: usize,
+    pub accepted_draft_count: usize,
 }
 
 impl Qwen3_5Model {
@@ -113,13 +141,14 @@ impl Qwen3_5Model {
         session: &mut MtpDraftingSession,
         round_start: MtpRoundStart,
         request_decoder_state: &mut RequestDecoderStateStack,
-        token_chooser: &mut dyn ReplyTokenChooser,
+        target_token_choice: TargetTokenChoice,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<MtpRoundOutcome, TextExecutionError> {
         let head_row_count_before_round = session.head_state.row_count();
         let draft_token_ids = self.draft_reply_tokens(
             session,
-            round_start.maximum_draft_count,
+            round_start,
+            target_token_choice,
             performance_attribution,
         )?;
         let mut verified_token_ids = Vec::with_capacity(draft_token_ids.len() + 1);
@@ -131,25 +160,20 @@ impl Qwen3_5Model {
             request_decoder_state,
             performance_attribution,
         )?;
-        // The target's own choice after each row, until one differs from
-        // the draft that was run in its place.
-        let mut reply_token_ids = Vec::with_capacity(verified_token_ids.len());
+        // The target's own choice after each row; the reply keeps the
+        // drafts that match it and then the first choice that does not.
+        let target_token_ids = self.target_token_picks(
+            &verification.per_row_logits,
+            round_start.starting_position_tokens,
+            target_token_choice,
+        )?;
         let mut accepted_draft_count = 0;
-        for (row_index, draft_token_id) in draft_token_ids.iter().enumerate() {
-            let target_token_id = token_chooser.choose_reply_token(
-                &self.verified_row_logits(&verification.per_row_logits, row_index)?,
-            )?;
-            reply_token_ids.push(target_token_id);
-            if target_token_id != *draft_token_id {
-                break;
-            }
+        while accepted_draft_count < draft_token_ids.len()
+            && target_token_ids[accepted_draft_count] == draft_token_ids[accepted_draft_count]
+        {
             accepted_draft_count += 1;
         }
-        if accepted_draft_count == draft_token_ids.len() {
-            reply_token_ids.push(token_chooser.choose_reply_token(
-                &self.verified_row_logits(&verification.per_row_logits, accepted_draft_count)?,
-            )?);
-        }
+        let reply_token_ids = target_token_ids[..=accepted_draft_count].to_vec();
         session.round_count += 1;
         session.drafted_token_count += draft_token_ids.len() as u64;
         session.accepted_draft_count += accepted_draft_count as u64;
@@ -175,7 +199,67 @@ impl Qwen3_5Model {
             &kept_lanes,
             performance_attribution,
         )?;
-        Ok(MtpRoundOutcome { reply_token_ids })
+        Ok(MtpRoundOutcome {
+            reply_token_ids,
+            drafted_token_count: draft_token_ids.len(),
+            accepted_draft_count,
+        })
+    }
+
+    /// The target's choice after every row of `per_row_logits`
+    /// (`[1, rows, vocabulary]`), the first row being at
+    /// `first_row_position`. A row's choice takes the position after its own.
+    pub fn target_token_picks(
+        &self,
+        per_row_logits: &MlxArray,
+        first_row_position: u32,
+        target_token_choice: TargetTokenChoice,
+    ) -> Result<Vec<u32>, TextExecutionError> {
+        let runtime = &self.runtime;
+        let Some(sampling) = target_token_choice.sampling else {
+            let highest_scoring =
+                runtime.astype(&runtime.argmax_axis(per_row_logits, -1)?, MlxDtype::UInt32)?;
+            runtime.evaluate_arrays(&[&highest_scoring])?;
+            return Ok(highest_scoring.to_vec_u32()?);
+        };
+        let (kept_token_ids, kept_probabilities) = sampling_distribution_rows(
+            runtime,
+            per_row_logits,
+            sampling.temperature_thousandths,
+            sampling.top_p_thousandths,
+            sampling.top_k,
+        )
+        .map_err(|sampling_error| {
+            TextExecutionError::from(runtime_integration::MlxRuntimeError::RuntimeOperation {
+                operation: "read the target's sampling distribution for drafted rows",
+                description: sampling_error.reason,
+            })
+        })?;
+        runtime.evaluate_arrays(&[&kept_token_ids, &kept_probabilities])?;
+        let kept_token_ids = kept_token_ids.to_vec_u32()?;
+        let kept_probabilities = runtime.array_to_vec_f32(&kept_probabilities)?;
+        let row_count = per_row_logits.shape()[1] as usize;
+        let kept_per_row = kept_token_ids.len() / row_count.max(1);
+        let mut picks = Vec::with_capacity(row_count);
+        for row_index in 0..row_count {
+            let row_range = row_index * kept_per_row..(row_index + 1) * kept_per_row;
+            let row_distribution = TargetDistribution {
+                token_ids: &kept_token_ids[row_range.clone()],
+                probabilities: &kept_probabilities[row_range],
+            };
+            let sampled_position = u64::from(first_row_position) + row_index as u64 + 1;
+            picks.push(
+                keyed_sample(
+                    target_token_choice.keyed_seed,
+                    sampled_position,
+                    &row_distribution,
+                )
+                .ok_or(TextExecutionError::InvalidInput {
+                    description: "a verified row's sampling distribution kept no token",
+                })?,
+            );
+        }
+        Ok(picks)
     }
 
     /// `[1, 1, vocabulary]`: the target's logits after one verified row.
@@ -231,30 +315,25 @@ impl Qwen3_5Model {
         let last_row_logits =
             self.verified_row_logits(&head_output.logits, kept_token_ids.len() - 1)?;
         session.next_draft = Some(NextDraft {
-            first_draft_token: self.highest_scoring_token(&last_row_logits)?,
+            head_logits: last_row_logits,
             head_lanes: last_row_lanes,
         });
         Ok(())
     }
 
-    /// `[1, 1]` int32: the highest-scoring token of `[1, 1, vocabulary]` logits.
-    fn highest_scoring_token(
-        &self,
-        position_logits: &MlxArray,
-    ) -> Result<MlxArray, TextExecutionError> {
-        Ok(self.runtime.astype(
-            &self.runtime.argmax_axis(position_logits, -1)?,
-            MlxDtype::Int32,
-        )?)
-    }
-
-    /// The head's drafts for this round, read to the host in one wait. The
-    /// first comes from the last round; each further one feeds the head its
-    /// own previous guess and lanes.
+    /// The head's drafts for this round. Each draft is chosen from the
+    /// head's logits the way the target will choose at the same position:
+    /// the highest-scoring token, or the request's sampling with the same
+    /// keyed noise. Sharing the noise is what makes a sampled draft agree
+    /// with the target whenever the two distributions are close; drafting
+    /// the head's top token instead was kept only 52% of the time at
+    /// temperature 1.0. Each further draft feeds the head its previous draft
+    /// and its own lanes.
     fn draft_reply_tokens(
         &self,
         session: &mut MtpDraftingSession,
-        maximum_draft_count: usize,
+        round_start: MtpRoundStart,
+        target_token_choice: TargetTokenChoice,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<Vec<u32>, TextExecutionError> {
         let head = self.mtp_head().ok_or(TextExecutionError::InvalidInput {
@@ -266,40 +345,38 @@ impl Qwen3_5Model {
             .ok_or(TextExecutionError::InvalidInput {
                 description: "a drafting round needs the head's guess from the round before",
             })?;
-        if maximum_draft_count == 0 {
+        if round_start.maximum_draft_count == 0 {
             return Err(TextExecutionError::InvalidInput {
                 description: "a drafting round drafts at least one token",
             });
         }
-        let mut draft_tokens = vec![next_draft.first_draft_token];
+        let mut head_logits = next_draft.head_logits;
         let mut head_lanes = next_draft.head_lanes;
-        while draft_tokens.len() < maximum_draft_count {
-            let previous_draft = &draft_tokens[draft_tokens.len() - 1];
+        let mut draft_token_ids = Vec::with_capacity(round_start.maximum_draft_count);
+        loop {
+            // The draft stands where the target's choice after the row
+            // before it will stand, so both read the same keyed noise.
+            let preceding_row_position =
+                round_start.starting_position_tokens + draft_token_ids.len() as u32;
+            let draft_token_id =
+                self.target_token_picks(&head_logits, preceding_row_position, target_token_choice)?
+                    [0];
+            draft_token_ids.push(draft_token_id);
+            if draft_token_ids.len() == round_start.maximum_draft_count {
+                return Ok(draft_token_ids);
+            }
+            let draft_token_index = self
+                .runtime
+                .array_from_i32(&[draft_token_id as i32], &[1, 1])?;
             let head_output = self.forward_mtp_head(
                 head,
-                previous_draft,
+                &draft_token_index,
                 &head_lanes,
                 &mut session.head_state,
                 performance_attribution,
             )?;
-            draft_tokens.push(self.highest_scoring_token(&head_output.logits)?);
+            head_logits = head_output.logits;
             head_lanes = head_output.lanes;
         }
-        let draft_token_references: Vec<&MlxArray> = draft_tokens.iter().collect();
-        let joined_drafts = self.runtime.concatenate_axis(&draft_token_references, 1)?;
-        let mut evaluation_arrays = vec![&joined_drafts];
-        session
-            .head_state
-            .append_evaluation_arrays(&mut evaluation_arrays);
-        self.runtime.evaluate_arrays(&evaluation_arrays)?;
-        let mut draft_token_ids = Vec::with_capacity(draft_tokens.len());
-        for draft_token_id in joined_drafts.to_vec_i32()? {
-            draft_token_ids.push(u32::try_from(draft_token_id).map_err(|_| {
-                TextExecutionError::InvalidInput {
-                    description: "the head drafted a negative token id",
-                }
-            })?);
-        }
-        Ok(draft_token_ids)
     }
 }

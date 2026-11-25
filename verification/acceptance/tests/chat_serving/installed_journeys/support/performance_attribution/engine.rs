@@ -75,3 +75,47 @@ pub(crate) async fn load_engine_with_progress(
         }
     }
 }
+
+/// A streaming engine loaded as the test run's configuration names it:
+/// `model_directory` and `paging_experiment`'s MLX limit and prompt chunk.
+pub(crate) struct PagingExperimentEngine {
+    pub(crate) engine: Qwen3_5StreamingEngine,
+    pub(crate) end_of_sequence_token_ids: Vec<u32>,
+    pub(crate) model_directory: std::path::PathBuf,
+    /// Holds `attribution.jsonl`, where attributed requests are reported.
+    pub(crate) attribution_directory: tempfile::TempDir,
+}
+
+/// Loads the configured model on the streaming engine, reporting progress
+/// under `load_phase_name`.
+pub(crate) async fn load_paging_experiment_engine(load_phase_name: &str) -> PagingExperimentEngine {
+    let test_run_configuration = test_harness::test_run::TestRunContext::current().configuration;
+    let model_directory = test_run_configuration
+        .model_directory
+        .expect("model_directory names the sparse model");
+    let paging_experiment = test_run_configuration.paging_experiment;
+    let mlx_limit_bytes = usize::try_from(
+        paging_experiment
+            .maximum_mlx_memory_bytes()
+            .expect("paging_experiment sets a valid MLX limit"),
+    )
+    .expect("the MLX limit should fit usize");
+    let attribution_directory =
+        tempfile::tempdir().expect("the journey should create an attribution directory");
+    let mlx_memory_limits =
+        runtime_integration::MlxMemoryLimits::new(mlx_limit_bytes, mlx_limit_bytes)
+            .expect("the configured limit should be a valid MLX limit");
+    let (mut engine, end_of_sequence_token_ids) = create_attributed_engine(
+        &model_directory,
+        &attribution_directory.path().join("attribution.jsonl"),
+        &mlx_memory_limits,
+        paging_experiment.streaming_prompt_processing_chunk_tokens,
+    );
+    load_engine_with_progress(&mut engine, load_phase_name).await;
+    PagingExperimentEngine {
+        engine,
+        end_of_sequence_token_ids,
+        model_directory,
+        attribution_directory,
+    }
+}

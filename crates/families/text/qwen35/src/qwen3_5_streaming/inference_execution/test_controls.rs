@@ -41,6 +41,24 @@ impl Qwen3_5EngineState {
         Ok(loaded_model.take_routed_reply_recording())
     }
 
+    fn set_multi_token_prediction_draft_tokens_for_tests(
+        &mut self,
+        draft_tokens: u32,
+    ) -> Result<(), InferenceEngineError> {
+        let loaded_model = self
+            .core
+            .model
+            .as_mut()
+            .ok_or_else(|| fatal_engine_error("cannot set drafting before load"))?;
+        loaded_model.base.chunking = loaded_model
+            .base
+            .chunking
+            .with_multi_token_prediction_draft_tokens(draft_tokens);
+        // The head's weights enter or leave the ledger's core weights.
+        loaded_model.open_memory_governor();
+        Ok(())
+    }
+
     fn set_every_route_brought_to_the_host_for_tests(
         &self,
         is_enabled: bool,
@@ -137,6 +155,13 @@ pub trait Qwen3_5StreamingEngineTestControls {
         &self,
     ) -> Result<Option<crate::RoutedReplyRecording>, InferenceEngineError>;
 
+    /// Sets how many tokens a model with a multi-token-prediction head
+    /// drafts after each reply token; zero writes one token a forward.
+    async fn set_multi_token_prediction_draft_tokens_for_tests(
+        &self,
+        draft_tokens: u32,
+    ) -> Result<(), InferenceEngineError>;
+
     /// Makes every layer copy its route to the host, even a layer held
     /// whole, so a measurement can price the stop on its own.
     async fn set_every_route_brought_to_the_host_for_tests(
@@ -227,6 +252,16 @@ impl Qwen3_5StreamingEngineTestControls for MlxInferenceEngine<Qwen3_5InferenceE
         recording_receiver.recv().map_err(|_| {
             fatal_engine_error("reply recording owner operation returned no response")
         })?
+    }
+
+    async fn set_multi_token_prediction_draft_tokens_for_tests(
+        &self,
+        draft_tokens: u32,
+    ) -> Result<(), InferenceEngineError> {
+        self.run_owner_test_operation(move |qwen_inference_execution| {
+            qwen_inference_execution.set_multi_token_prediction_draft_tokens_for_tests(draft_tokens)
+        })
+        .await
     }
 
     async fn set_every_route_brought_to_the_host_for_tests(

@@ -111,6 +111,24 @@ impl Qwen3_5Model {
         self.optional_accelerators.mtp_head.as_deref()
     }
 
+    /// The model's geometry as the memory ledger should see it: while
+    /// replies draft, the head's weights are core weights, always in memory,
+    /// and the `astro_expert_cache` gets what is left after them.
+    #[must_use]
+    pub fn geometry_with_drafting_head(
+        &self,
+        mut model_geometry: crate::ModelMemoryGeometry,
+    ) -> crate::ModelMemoryGeometry {
+        if self.chunking.multi_token_prediction_draft_tokens > 0
+            && let Some(head) = self.mtp_head()
+        {
+            model_geometry.model_core_payload_bytes = model_geometry
+                .model_core_payload_bytes
+                .saturating_add(head.payload_byte_count);
+        }
+        model_geometry
+    }
+
     /// Runs the head over `token_indices` (`[1, tokens]` int32), each paired
     /// with the lanes at the position before it (`preceding_lanes`,
     /// `[1, tokens, lanes * hidden]`).

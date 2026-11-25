@@ -883,6 +883,17 @@ measure-cold-decode-residency-attribution-copying = "run -p xtask -- test-run --
 measure-expert-misses = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --filter should_count_expert_misses_while_recording"
 measure-expert-misses-speed = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --filter should_count_expert_misses_and_decode_speed"
 
+# Reply speed with and without drafted tokens on a streamed model that ships
+# a multi-token-prediction head (Qwen3.8-Flash-Next, issue #2533). Each case
+# loads the model under the configured MLX limit through the real streaming
+# engine, sets the draft count before anything is served, serves a 500/50
+# warmup and then one 10,000-token Romeo and Juliet summary; compare the
+# `[performance-attribution] status=success phase=mtp_drafts_N` lines. Cases:
+# no drafting, one, two and three drafted tokens a round at temperature 1.0,
+# and none and one at 0.7. Pass --configuration PATH as for
+# `measure-expert-misses`. About seventy seconds a case.
+measure-mtp-reply-drafting = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --case-budget-seconds 150 --filter drafted_token"
+
 # The replay lab's report: every reply `measure-expert-misses` recorded under
 # EVIDENCE_DIRECTORY is served again, without a GPU, under each keeping rule
 # (least recently and least frequently used, decayed frequency, frequency

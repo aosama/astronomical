@@ -25,6 +25,19 @@ pub struct GeneratedTokenEmission {
     pub is_terminal: bool,
 }
 
+impl GeneratedTokenEmission {
+    /// The decode step's answer for this emission: complete when the token
+    /// ends the reply, otherwise continue.
+    #[must_use]
+    pub fn into_active_request_advance(self) -> super::decode_step::ActiveRequestAdvance {
+        if self.is_terminal {
+            super::decode_step::ActiveRequestAdvance::Complete(self.generated_token)
+        } else {
+            super::decode_step::ActiveRequestAdvance::Continue(self.generated_token)
+        }
+    }
+}
+
 /// Whether emitting `generated_token_id` next would end the reply, judged
 /// before the token is counted.
 pub fn generated_token_will_be_terminal<RequestExtension>(

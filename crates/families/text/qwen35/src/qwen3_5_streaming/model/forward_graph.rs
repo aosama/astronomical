@@ -76,8 +76,11 @@ impl Qwen3_5TargetForwardGraph for Qwen3_5Model {
         // A multi-token forward finishes each layer before the next
         // (`LayerSubmission::PromptLayer`), so the interval resolved here
         // only ever paces a one-token forward's command buffers.
+        let pacing_token_count = self
+            .paged_forward_missing_route_collector
+            .pacing_token_count(token_count);
         let graph_submission_layer_interval =
-            self.graph_submission_layer_interval(token_count, true);
+            self.graph_submission_layer_interval(pacing_token_count, true);
         let mut previous_layer_output = None;
         for layer_index in 0..decoder_layer_count {
             // A dense model's streamer supplies its layers: a kept layer, or
@@ -112,14 +115,14 @@ impl Qwen3_5TargetForwardGraph for Qwen3_5Model {
                     completed_layer_count: layer_index + 1,
                     decoder_layer_count,
                     graph_submission_layer_interval,
-                    forward_token_count: token_count,
+                    forward_token_count: pacing_token_count,
                 },
                 performance_attribution,
             )?;
             // Expert pages are lazy loads on MLX's own stream, so this read
             // overlaps the layers still computing instead of stalling graph
             // submission; its bytes are the plan's second prefill stream slot.
-            if token_count > 1
+            if pacing_token_count > 1
                 && matches!(
                     paged_execution_mode,
                     Qwen3_5MoEPagedExecutionMode::ProductionDefault

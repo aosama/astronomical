@@ -62,9 +62,10 @@ pub fn bind_mtp_head_weights(
             description: artifact_error.to_string(),
         })?;
     let mut bound_tensors = HashMap::with_capacity(head_tensor_profiles.len());
+    let mut payload_byte_count = 0_u64;
     for tensor_profile in &head_tensor_profiles {
         let stored_tensor = stored_head_tensor(shard_index, &head_shards, &tensor_profile.name)?;
-        let (bound_tensor, _) = bind_language_tensor(
+        let (bound_tensor, tensor_payload_bytes) = bind_language_tensor(
             runtime,
             &head_config,
             false,
@@ -72,9 +73,12 @@ pub fn bind_mtp_head_weights(
             stored_tensor,
             WeightBindingDtype::AsStored,
         )?;
+        payload_byte_count = payload_byte_count.saturating_add(tensor_payload_bytes);
         bound_tensors.insert(tensor_profile.name.clone(), bound_tensor);
     }
-    take_mtp_head_weights(&mut bound_tensors, &head_config, head_shards).map(Some)
+    let mut head_weights = take_mtp_head_weights(&mut bound_tensors, &head_config, head_shards)?;
+    head_weights.payload_byte_count = payload_byte_count;
+    Ok(Some(head_weights))
 }
 
 fn stored_head_tensor(
@@ -141,6 +145,7 @@ fn take_mtp_head_weights(
             false,
         )?,
         head_shards,
+        payload_byte_count: 0,
     })
 }
 

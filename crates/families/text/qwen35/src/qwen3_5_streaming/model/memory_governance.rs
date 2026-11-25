@@ -67,7 +67,7 @@ impl Qwen3_5Model {
                 dense_layer_streamer.layer_payload_bytes(),
                 dense_layer_streamer.streaming_slot_bytes(),
             ),
-            None => sparse_model_memory_shape(model_geometry),
+            None => sparse_model_memory_shape(self.geometry_with_drafting_head(model_geometry)),
         }
     }
 

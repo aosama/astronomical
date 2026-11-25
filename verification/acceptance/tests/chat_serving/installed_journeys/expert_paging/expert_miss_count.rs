@@ -36,14 +36,13 @@ use model_serving::{
     Qwen3_5ArtifactValidator, Qwen3_5StreamingEngine, Qwen3_5StreamingEngineTestControls,
     Qwen3_5Tokenizer, RoutedReplyRecording, SessionExpertRouteSample,
 };
-use runtime_integration::MlxMemoryLimits;
 use serial_test::serial;
 use test_harness::test_run::TestRunContext;
 use tokio::time::timeout;
 
 use super::cold_macos_file_cache::ColdMacosFileCache;
 use crate::serving_acceptance::support::performance_attribution::{
-    GenerationSampling, RequestAttribution, create_attributed_engine, load_engine_with_progress,
+    GenerationSampling, PagingExperimentEngine, RequestAttribution, load_paging_experiment_engine,
     run_generation_with_request_attribution,
 };
 
@@ -180,28 +179,12 @@ async fn count_expert_misses_with(
     macos_file_cache_state: MacosFileCacheState,
 ) {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
-    let test_run_configuration = TestRunContext::current().configuration;
-    let model_directory = test_run_configuration
-        .model_directory
-        .expect("model_directory names the sparse model");
-    let paging_experiment = test_run_configuration.paging_experiment;
-    let mlx_limit_bytes = usize::try_from(
-        paging_experiment
-            .maximum_mlx_memory_bytes()
-            .expect("paging_experiment sets a valid MLX limit"),
-    )
-    .expect("the MLX limit should fit usize");
-    let attribution_directory =
-        tempfile::tempdir().expect("the case should create an attribution directory");
-    let mlx_memory_limits = MlxMemoryLimits::new(mlx_limit_bytes, mlx_limit_bytes)
-        .expect("the configured limit should be a valid MLX limit");
-    let (mut engine, end_of_sequence_token_ids) = create_attributed_engine(
-        &model_directory,
-        &attribution_directory.path().join("unused.jsonl"),
-        &mlx_memory_limits,
-        paging_experiment.streaming_prompt_processing_chunk_tokens,
-    );
-    load_engine_with_progress(&mut engine, "expert_miss_model_load").await;
+    let PagingExperimentEngine {
+        mut engine,
+        end_of_sequence_token_ids,
+        model_directory,
+        attribution_directory: _attribution_directory,
+    } = load_paging_experiment_engine("expert_miss_model_load").await;
     let cold_macos_file_cache = if macos_file_cache_state == MacosFileCacheState::Cold {
         Some(ColdMacosFileCache::start(&model_directory))
     } else {
@@ -250,7 +233,7 @@ async fn count_expert_misses_with(
             .take_routed_reply_recording_for_tests()
             .await
             .expect("the engine hands over its reply recording"),
-        test_run_configuration.evidence_directory,
+        TestRunContext::current().configuration.evidence_directory,
     ) {
         // The first reply token comes out of the prompt's last step, so the
         // routes cover every token after it; anything else means the ring

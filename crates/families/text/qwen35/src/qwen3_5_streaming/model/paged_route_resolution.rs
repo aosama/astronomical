@@ -38,6 +38,13 @@ pub struct OptimisticLayerServing {
 #[derive(Debug, Default)]
 pub struct PagedForwardMissingRouteCollector {
     is_optimistic: Cell<bool>,
+    /// Set while a forward of several rows writes a reply (a verified
+    /// drafted block): its rows are reply tokens, so a layer not held whole
+    /// reads only the experts its table lacks, into the table, as it does
+    /// for one reply token. Without it the rows were served as a prompt
+    /// chunk, which streams the whole routed union every forward and keeps
+    /// none of it (measured: 9.8 against 17.8 tokens per second).
+    serves_reply_rows: Cell<bool>,
     /// Set when a layer could not be served optimistically after all, so the
     /// forward must be run again whatever the counts say.
     has_abandoned_optimistic_serving: Cell<bool>,
@@ -48,6 +55,28 @@ impl PagedForwardMissingRouteCollector {
     pub fn clear(&self) {
         self.has_abandoned_optimistic_serving.set(false);
         self.optimistic_layer_servings.borrow_mut().clear();
+    }
+
+    pub fn set_serves_reply_rows(&self, serves_reply_rows: bool) {
+        self.serves_reply_rows.set(serves_reply_rows);
+    }
+
+    /// Whether a forward of `token_count` rows serves its misses as reply
+    /// tokens do: one row always, several only for a reply's own rows.
+    pub fn serves_misses_as_reply_tokens(&self, token_count: i32) -> bool {
+        token_count == 1 || self.serves_reply_rows.get()
+    }
+
+    /// The token count a forward is paced by: a reply's rows are paced as
+    /// one reply token is. Their activations are a few rows, so no layer
+    /// has to finish before the next starts and nothing is read ahead for a
+    /// following chunk, as a prompt chunk of the same size would have it.
+    pub fn pacing_token_count(&self, token_count: i32) -> i32 {
+        if self.serves_reply_rows.get() {
+            1
+        } else {
+            token_count
+        }
     }
 
     pub fn set_optimistic(&self, is_optimistic: bool) {

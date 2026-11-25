@@ -25,6 +25,10 @@ pub struct StreamingRequestExtension {
     /// Where each reply token found its routed experts.
     pub(in crate::qwen3_5_streaming) reply_expert_route_record:
         crate::memory::reply_expert_route_record::ReplyExpertRouteRecord,
+    /// The reply's drafting with the model's multi-token-prediction head;
+    /// `None` while the reply is written one token a forward.
+    pub(in crate::qwen3_5_streaming) mtp_reply_drafting:
+        Option<super::mtp_reply_drafting::MtpReplyDrafting>,
 }
 
 impl StreamingRequestExtension {
@@ -37,6 +41,7 @@ impl StreamingRequestExtension {
             layer_at_a_time_prefill: None,
             mlx_buffer_cache_reply_record: Default::default(),
             reply_expert_route_record: Default::default(),
+            mtp_reply_drafting: None,
         }
     }
 }

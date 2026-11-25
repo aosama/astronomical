@@ -66,6 +66,22 @@ pub(in crate::qwen3_5_streaming) fn capture_completed_forward_memory_observation
     })
 }
 
+/// Measures a completed forward that wrote reply tokens, against the
+/// active memory before it and the request's stored state.
+pub(in crate::qwen3_5_streaming) fn measure_completed_reply_forward(
+    model: &Qwen3_5Model,
+    active_request: &mut super::engine_request::StreamingEngineRequest,
+    active_memory_bytes_before_forward: usize,
+) -> Result<CompletedForwardMemoryObservation, InferenceEngineError> {
+    measure_completed_forward(
+        model,
+        MeasuredForward::reply_token(),
+        active_request.request_decoder_state.payload_byte_count(),
+        active_memory_bytes_before_forward,
+        &mut active_request.performance_attribution,
+    )
+}
+
 /// Samples MLX after a forward, tells the memory governor what the forward
 /// measured, and returns the sample.
 ///

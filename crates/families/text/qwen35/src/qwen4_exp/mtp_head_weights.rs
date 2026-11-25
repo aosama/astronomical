@@ -45,6 +45,8 @@ pub struct MtpHeadWeights {
     pub final_mixer: HyperConnectionWeights,
     /// The opened shards, which the lazy arrays above read from.
     pub head_shards: MtpHeadShards,
+    /// What the head occupies once a reply drafts with it.
+    pub payload_byte_count: u64,
 }
 
 /// Loads the head when the checkpoint ships one; `None` for Qwen 3.5 and

@@ -39,7 +39,10 @@ impl Qwen3_5Model {
             PerformanceCounter::RetainedRouteAssignmentMissCount,
             u64::try_from(selected_expert_ids.len()).unwrap_or(u64::MAX),
         );
-        if token_count == 1 {
+        if self
+            .paged_forward_missing_route_collector
+            .serves_misses_as_reply_tokens(token_count)
+        {
             return self.dispatch_reply_token_miss(
                 expert_pager,
                 layer_index,
@@ -157,7 +160,9 @@ impl Qwen3_5Model {
             None => self.stream_operation_local_routed_experts(
                 expert_pager,
                 layer_index,
-                1,
+                // `[1, rows, experts per token]`: one row for a reply
+                // token, several for a verified drafted block.
+                selected_indices.shape()[1],
                 routed_expert_ids,
                 production_default_paging,
                 performance_attribution,

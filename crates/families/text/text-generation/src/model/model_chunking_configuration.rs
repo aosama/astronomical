@@ -13,9 +13,20 @@ pub struct TextModelChunkingConfiguration {
     pub prefill_graph_submission_layer_interval: u32,
     /// Experimental one-token layer interval used only during solid-state-drive paging.
     pub experimental_ssd_paging_generation_graph_submission_layer_interval: u32,
+    /// The most tokens a model with a multi-token-prediction head drafts
+    /// after each reply token while its experts stream from storage. Zero,
+    /// the default, drafts nothing.
+    pub multi_token_prediction_draft_tokens: u32,
 }
 
 impl TextModelChunkingConfiguration {
+    /// The same configuration drafting up to `draft_tokens` tokens a round.
+    #[must_use]
+    pub const fn with_multi_token_prediction_draft_tokens(mut self, draft_tokens: u32) -> Self {
+        self.multi_token_prediction_draft_tokens = draft_tokens;
+        self
+    }
+
     pub fn new(
         full_attention_key_value_growth_tokens: u32,
         prefill_graph_submission_layer_interval: u32,
@@ -35,6 +46,7 @@ impl TextModelChunkingConfiguration {
             })?,
             prefill_graph_submission_layer_interval,
             experimental_ssd_paging_generation_graph_submission_layer_interval,
+            multi_token_prediction_draft_tokens: 0,
         })
     }
 }

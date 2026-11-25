@@ -19,7 +19,7 @@ use crate::{GeneratedToken, InferenceEngineError};
 
 use super::Qwen3_5EngineState;
 use super::completed_forward_memory::{
-    CompletedForwardMemoryObservation, MeasuredForward, measure_completed_forward,
+    CompletedForwardMemoryObservation, measure_completed_reply_forward,
 };
 use super::engine_request::StreamingEngineRequest;
 
@@ -39,6 +39,20 @@ impl TextDecodeStepHooks for Qwen3_5EngineState {
         active_request: &mut StreamingEngineRequest,
     ) -> Result<Option<ActiveRequestAdvance>, InferenceEngineError> {
         Qwen3_5EngineState::begin_generation_preparation(self, request_id, active_request)
+    }
+
+    /// Drafts with the model's multi-token-prediction head when the engine
+    /// is set to and this step allows it.
+    fn advance_drafted_generation_if_admitted(
+        &mut self,
+        _request_id: RequestId,
+        active_request: &mut StreamingEngineRequest,
+        forced_thinking_transition_token_id: Option<u32>,
+    ) -> Result<Option<ActiveRequestAdvance>, InferenceEngineError> {
+        self.advance_mtp_drafted_generation_if_admitted(
+            active_request,
+            forced_thinking_transition_token_id,
+        )
     }
 
     /// Warms the hot experts the token used and records the warm-insert and
@@ -174,12 +188,10 @@ impl Qwen3_5EngineState {
             final_prompt_token_id,
             &mut active_request.performance_attribution,
         );
-        measure_completed_forward(
+        measure_completed_reply_forward(
             model,
-            MeasuredForward::reply_token(),
-            active_request.request_decoder_state.payload_byte_count(),
+            active_request,
             memory_baseline.active_memory_bytes,
-            &mut active_request.performance_attribution,
         )?;
         Ok(first_generated_token)
     }
@@ -269,12 +281,10 @@ impl Qwen3_5EngineState {
             );
             next_generated_token
         };
-        let completed_forward_memory = measure_completed_forward(
+        let completed_forward_memory = measure_completed_reply_forward(
             model,
-            MeasuredForward::reply_token(),
-            active_request.request_decoder_state.payload_byte_count(),
+            active_request,
             memory_baseline.active_memory_bytes,
-            &mut active_request.performance_attribution,
         )?;
         finish_reply_token_expert_routes(model, active_request, &expert_route_sample_before);
         active_request

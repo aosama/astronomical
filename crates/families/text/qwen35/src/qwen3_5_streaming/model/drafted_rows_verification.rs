@@ -54,14 +54,20 @@ impl Qwen3_5Model {
         }
         let family_state_before = request_decoder_state.family_state_snapshot()?;
         let mut row_boundary_collector = self.drafted_row_boundary_collector(token_ids.len())?;
-        let target_forward_output = self.build_target_forward_graph(
+        // The rows are reply tokens, whatever their number.
+        self.paged_forward_missing_route_collector
+            .set_serves_reply_rows(true);
+        let target_forward_graph = self.build_target_forward_graph(
             token_ids,
             starting_position_tokens,
             request_decoder_state,
             Some(&mut row_boundary_collector),
             Qwen3_5MoEPagedExecutionMode::ProductionDefault,
             performance_attribution,
-        )?;
+        );
+        self.paged_forward_missing_route_collector
+            .set_serves_reply_rows(false);
+        let target_forward_output = target_forward_graph?;
         let lanes = target_forward_output
             .pre_final_normalization_hidden_states()
             .retain()?;
