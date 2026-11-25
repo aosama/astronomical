@@ -10,13 +10,13 @@
 //! are done after each one, and lets a request be cancelled between layers
 //! instead of only when the whole prompt has been read.
 
-use crate::qwen3_5_core::shared_execution::prompt_reading_steps;
 use std::time::Instant;
+use text_generation::generation_loop::prompt_reading_steps;
 
 use ipc_protocol::WorkerPromptLayerProgress;
 
 use super::Qwen3_5EngineState;
-use super::engine_request::Qwen3_5EngineRequest;
+use super::engine_request::StreamingEngineRequest;
 use super::forward_memory_baseline::ForwardMemoryBaseline;
 use super::layer_major_span_plan::LayerMajorSpanPlan;
 use super::prefill_chunk_planning::PrefillChunkPlan;
@@ -56,7 +56,7 @@ impl LayerAtATimePrefillInFlight {
 /// counts as an image row only when the request supplied an image. A text
 /// suffix of an image request, after every pad has been read, needs none.
 fn visual_inputs_for_prompt<'request>(
-    active_request: &'request Qwen3_5EngineRequest,
+    active_request: &'request StreamingEngineRequest,
     prompt_token_ids: &[u32],
 ) -> Result<Option<LayerMajorVisualInputs<'request>>, PromptPrefillChunkAttemptError> {
     if !active_request.has_visual_inputs
@@ -84,7 +84,7 @@ pub(super) struct PromptPrefillChunkOutcome {
     /// The tokens the forward's memory is measured under: one span's,
     /// whose MLX working buffers the peak is.
     pub(super) measured_forward_token_count: usize,
-    pub(super) boundary_checkpoints: Vec<crate::Qwen3_5AstroSsdPromptCacheBoundaryCheckpoint>,
+    pub(super) boundary_checkpoints: Vec<crate::AstroSsdPromptCacheBoundaryCheckpoint>,
 }
 
 /// What one step of a layer-at-a-time prompt left.
@@ -105,7 +105,7 @@ impl Qwen3_5EngineState {
     /// leaving the request ready to run its first layer.
     pub(super) fn begin_layer_at_a_time_prefill(
         &mut self,
-        active_request: &mut Qwen3_5EngineRequest,
+        active_request: &mut StreamingEngineRequest,
         prefill_start: usize,
         prefill_end: usize,
         layer_major_span_plan: LayerMajorSpanPlan,
@@ -165,7 +165,7 @@ impl Qwen3_5EngineState {
     /// span again; any other failure drops the prompt in flight.
     pub(super) fn advance_layer_at_a_time_prefill(
         &mut self,
-        active_request: &mut Qwen3_5EngineRequest,
+        active_request: &mut StreamingEngineRequest,
     ) -> Result<LayerAtATimePrefillStep, PromptPrefillChunkAttemptError> {
         let mut prefill_in_flight = active_request
             .engine_extension
@@ -227,7 +227,7 @@ impl Qwen3_5EngineState {
             ..
         } = prefill_in_flight;
         let mut boundary_checkpoints = layer_major_prefill_outcome.boundary_checkpoints;
-        crate::qwen3_5_core::astro_ssd_prompt_cache_capture::record_astro_ssd_prompt_cache_boundary_checkpoint(
+        text_generation::astro_ssd_prompt_cache_capture::record_astro_ssd_prompt_cache_boundary_checkpoint(
             active_request,
             plan.prefill_token_count,
             &plan.all_completed_prefill_chunk_tokens,
@@ -252,7 +252,7 @@ impl Qwen3_5EngineState {
     pub(super) fn continue_layer_at_a_time_prefill(
         &mut self,
         request_id: RequestId,
-        active_request: &mut super::engine_request::Qwen3_5EngineRequest,
+        active_request: &mut super::engine_request::StreamingEngineRequest,
     ) -> Result<Option<GeneratedToken>, InferenceEngineError> {
         let prefill_attempt_failure = active_request
             .engine_extension
@@ -293,7 +293,7 @@ impl Qwen3_5EngineState {
     /// now. No token is finished yet, so none is reported as read.
     fn prompt_layer_progress_token(
         &self,
-        active_request: &Qwen3_5EngineRequest,
+        active_request: &StreamingEngineRequest,
         prompt_layer_progress: WorkerPromptLayerProgress,
     ) -> Result<GeneratedToken, InferenceEngineError> {
         let model = self.core.loaded_model()?;

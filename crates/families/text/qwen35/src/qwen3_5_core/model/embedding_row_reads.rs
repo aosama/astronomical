@@ -107,3 +107,13 @@ pub fn embedding_row_intervals(
     }
     row_intervals
 }
+
+/// The shell's execution error carries a family's row-read failure by its
+/// rendering, because how rows are read from disk is the family's own.
+impl From<EmbeddingRowReadError> for text_generation::TextExecutionError {
+    fn from(embedding_row_read_error: EmbeddingRowReadError) -> Self {
+        Self::EmbeddingRowRead {
+            description: embedding_row_read_error.to_string(),
+        }
+    }
+}

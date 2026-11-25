@@ -3,7 +3,7 @@ use serial_test::file_serial;
 
 use super::{PrismRequestStart, prism_active_generation};
 use crate::prism_hadamard_qwen35::model::fixture_model_test_support::load_fixture_text_model;
-use crate::{PerformanceAttribution, Qwen3_5InferenceRequest, Qwen3_5ThinkingBudgetState};
+use crate::{PerformanceAttribution, TextInferenceRequest, ThinkingBudgetState};
 
 /// A five-token prompt started with no `astro_ssd_prompt_cache` open.
 const PROMPT_TOKEN_IDS: [u32; 5] = [11, 12, 13, 14, 15];
@@ -14,7 +14,7 @@ const MAXIMUM_OUTPUT_TOKENS: u16 = 7;
 fn should_start_the_shared_record_at_the_prompt_start_without_a_store() {
     let fixture = load_fixture_text_model();
     let text_model = &fixture.text_model;
-    let mut inference_request = Qwen3_5InferenceRequest::new(
+    let mut inference_request = TextInferenceRequest::new(
         RequestId::new(41),
         PROMPT_TOKEN_IDS.to_vec(),
         MAXIMUM_OUTPUT_TOKENS,
@@ -31,7 +31,7 @@ fn should_start_the_shared_record_at_the_prompt_start_without_a_store() {
                 .random_key(7)
                 .expect("the random key should build"),
         ),
-        thinking_budget_state: Qwen3_5ThinkingBudgetState::new(false, None, Vec::new(), Vec::new())
+        thinking_budget_state: ThinkingBudgetState::new(false, None, Vec::new(), Vec::new())
             .expect("a request outside thinking needs no forced transition"),
         performance_attribution: PerformanceAttribution::disabled(),
         can_use_astro_ssd_prompt_cache: false,

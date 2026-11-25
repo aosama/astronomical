@@ -18,10 +18,10 @@
 //! runs, which is what those layers held at that point of a fresh forward.
 
 use crate::performance_attribution::PerformanceAttribution;
-use crate::qwen3_5_core::decoder::request_state::RequestDecoderStateStack;
 use mlx_bridge::MlxArray;
+use text_generation::decoder_state::request_state::RequestDecoderStateStack;
 
-use super::{Qwen3_5ExecutionError, Qwen3_5ResidentModel};
+use super::{Qwen3_5ResidentModel, TextExecutionError};
 
 /// The rows entering one decoder layer during a recorded forward. A record
 /// whose index equals the layer count holds the rows leaving the last layer,
@@ -48,7 +48,7 @@ impl Qwen3_5ResidentModel {
         token_ids: &[u32],
         recording_layer_stride: usize,
         request_decoder_state: &mut RequestDecoderStateStack,
-    ) -> Result<Vec<RecordedDecoderLayerInput>, Qwen3_5ExecutionError> {
+    ) -> Result<Vec<RecordedDecoderLayerInput>, TextExecutionError> {
         let (token_indices, token_count) =
             self.validated_token_indices(token_ids, 0, None, request_decoder_state)?;
         let embedded_tokens = self.embedding_lookup(&token_indices)?;
@@ -82,10 +82,10 @@ impl Qwen3_5ResidentModel {
         &self,
         recorded_layer_input: &RecordedDecoderLayerInput,
         request_decoder_state: &mut RequestDecoderStateStack,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         let hidden_state_shape = recorded_layer_input.hidden_states.shape();
         let [_, token_count, _] = hidden_state_shape[..] else {
-            return Err(Qwen3_5ExecutionError::InvalidInput {
+            return Err(TextExecutionError::InvalidInput {
                 description: "a recorded decoder layer input must have three axes",
             });
         };
@@ -111,7 +111,7 @@ impl Qwen3_5ResidentModel {
         token_count: i32,
         request_decoder_state: &mut RequestDecoderStateStack,
         mut layer_input_recording: Option<LayerInputRecording<'_>>,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         let mut disabled_performance_attribution = PerformanceAttribution::disabled();
         let decoder_layer_count = self.config.layer_count() as usize;
         for layer_index in first_layer_index..decoder_layer_count {
@@ -129,9 +129,9 @@ impl Qwen3_5ResidentModel {
                 .weights
                 .decoder_layer_weights
                 .get(layer_index)
-                .ok_or(Qwen3_5ExecutionError::MissingDecoderLayerWeights { layer_index })?;
+                .ok_or(TextExecutionError::MissingDecoderLayerWeights { layer_index })?;
             let layer_model_state = request_decoder_state.layer_mut(layer_index).ok_or(
-                Qwen3_5ExecutionError::InvalidRequestDecoderState {
+                TextExecutionError::InvalidRequestDecoderState {
                     layer_index,
                     description: "decoder layer entry is missing",
                 },

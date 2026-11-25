@@ -6,10 +6,10 @@
 //! keeps the single-page prefill forward, which decodes exactly the page it
 //! multiplies, so the page contains only the routed union.
 
-use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_streaming::expert_streaming::expert_pager::Qwen3_5PagedExpertWeights;
 use crate::{PerformanceAttribution, PerformanceCounter};
 use engine_core::expert_paging::{ExpertWeightPage, QuantizedExpertPageManifest};
+use text_generation::execution_error::TextExecutionError;
 
 use super::Qwen3_5Model;
 use super::prefill_partial_layer_read::{
@@ -31,11 +31,10 @@ impl Qwen3_5Model {
         streamed_weights: &Qwen3_5PagedExpertWeights,
         streamed_manifest: &QuantizedExpertPageManifest,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<(Qwen3_5PagedExpertWeights, QuantizedExpertPageManifest), Qwen3_5ExecutionError>
-    {
+    ) -> Result<(Qwen3_5PagedExpertWeights, QuantizedExpertPageManifest), TextExecutionError> {
         let route_split = split_prefill_route(routed_expert_ids, missing_route_expert_ids);
         if route_split.missing_expert_ids.is_empty() {
-            return Err(Qwen3_5ExecutionError::InvalidInput {
+            return Err(TextExecutionError::InvalidInput {
                 description: "a covered prefill route had no warm-table page",
             });
         }
@@ -59,7 +58,7 @@ impl Qwen3_5Model {
             expert_capacity,
         )?
         else {
-            return Err(Qwen3_5ExecutionError::InvalidInput {
+            return Err(TextExecutionError::InvalidInput {
                 description: "a retained prefill expert was missing from the warm table",
             });
         };
@@ -103,17 +102,17 @@ fn select_streamed_prefill_experts(
     streamed_weights: &Qwen3_5PagedExpertWeights,
     streamed_manifest: &QuantizedExpertPageManifest,
     expert_ids: &[usize],
-) -> Result<Qwen3_5PagedExpertWeights, Qwen3_5ExecutionError> {
+) -> Result<Qwen3_5PagedExpertWeights, TextExecutionError> {
     let Some(page_slots) =
         page_slots_for_expert_ids(&streamed_manifest.page_slot_by_global_expert_id, expert_ids)
     else {
-        return Err(Qwen3_5ExecutionError::InvalidInput {
+        return Err(TextExecutionError::InvalidInput {
             description: "a streamed prefill expert is absent from its page",
         });
     };
     streamed_weights
         .select_experts(runtime, &page_slots)
-        .map_err(Qwen3_5ExecutionError::from)
+        .map_err(TextExecutionError::from)
 }
 
 fn manifest_for_assembled_page(
@@ -121,11 +120,11 @@ fn manifest_for_assembled_page(
     retained_expert_ids: &[usize],
     missing_expert_ids: &[usize],
     assembled_page: Qwen3_5PagedExpertWeights,
-) -> Result<(Qwen3_5PagedExpertWeights, QuantizedExpertPageManifest), Qwen3_5ExecutionError> {
+) -> Result<(Qwen3_5PagedExpertWeights, QuantizedExpertPageManifest), TextExecutionError> {
     let Some(expert_order) =
         assembled_prefill_expert_order(retained_expert_ids, missing_expert_ids, expert_capacity)
     else {
-        return Err(Qwen3_5ExecutionError::InvalidInput {
+        return Err(TextExecutionError::InvalidInput {
             description: "a prefill expert id is outside its layer",
         });
     };

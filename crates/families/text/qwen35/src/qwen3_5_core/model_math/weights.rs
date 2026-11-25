@@ -13,10 +13,17 @@ use crate::qwen3_5_core::configuration::{Qwen3_5Config, Qwen3_5FeedForwardArchit
 use crate::{PerformanceAttribution, PerformanceOperation};
 
 mod attention_binding;
+mod connection_binding;
+mod mtp_head_binding;
 #[cfg(test)]
 mod tests;
 
 use attention_binding::{take_full_attention_weights, take_linear_attention_weights};
+use connection_binding::{
+    LayerNormsAndAdditions, append_final_lane_mixer_arrays, apply_centered_norm_storage_convention,
+    take_layer_norms_and_additions, take_model_output_norm,
+};
+pub use mtp_head_binding::bind_mtp_head_weights;
 
 use super::weights_validation;
 use super::{
@@ -24,10 +31,11 @@ use super::{
         Qwen3_5AffineWeights, Qwen3_5AttentionWeights, Qwen3_5DecoderFeedForwardWeights,
         Qwen3_5DecoderLayerWeights,
     },
-    error::Qwen3_5ExecutionError,
     feed_forward_weights,
 };
+use crate::qwen4_exp::hyper_connection::HyperConnectionWeights;
 use mlx_bridge::MlxArray;
+use text_generation::execution_error::TextExecutionError;
 
 use super::dense_projection::Qwen3_5DenseProjection;
 
@@ -60,6 +68,8 @@ pub struct Qwen3_5Weights {
     /// dense layers, apply the same convention.
     raw_hugging_face_norm_offsets_apply: bool,
     model_shards: Vec<MlxSafetensors>,
+    /// Flash-Next's final lane mixer, after the final norm; absent on Qwen 3.5.
+    pub final_lane_mixer: Option<Box<HyperConnectionWeights>>,
     tensor_count: usize,
     total_payload_bytes: u64,
 }
@@ -84,7 +94,7 @@ impl Qwen3_5Weights {
     pub fn load(
         runtime: &MlxRuntime,
         validated_artifact: ValidatedQwen3_5Artifact,
-    ) -> Result<Self, Qwen3_5ExecutionError> {
+    ) -> Result<Self, TextExecutionError> {
         let mut disabled_performance_attribution = PerformanceAttribution::disabled();
         Self::load_with_performance_attribution(
             runtime,
@@ -98,7 +108,7 @@ impl Qwen3_5Weights {
         runtime: &MlxRuntime,
         mut validated_artifact: ValidatedQwen3_5Artifact,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<Self, Qwen3_5ExecutionError> {
+    ) -> Result<Self, TextExecutionError> {
         let qwen3_5_config = validated_artifact.config().clone();
         let shard_index = validated_artifact.shard_index().clone();
         let model_shard_source_ids =
@@ -107,7 +117,7 @@ impl Qwen3_5Weights {
             validated_artifact.take_safetensors_sources(&model_shard_source_ids)?;
         let model_shards = performance_attribution.measure_operation(
             PerformanceOperation::ModelSafetensorsMapping,
-            |performance_attribution| -> Result<_, Qwen3_5ExecutionError> {
+            |performance_attribution| -> Result<_, TextExecutionError> {
                 let mut model_shards = Vec::with_capacity(model_shard_files.len());
                 let positional_file_read_metrics =
                     performance_attribution.positional_file_read_metrics();
@@ -150,9 +160,9 @@ impl Qwen3_5Weights {
         shard_index: &crate::qwen3_5_core::artifacts::Qwen3_5ShardIndex,
         model_shards: Vec<MlxSafetensors>,
         weight_binding_dtype: WeightBindingDtype,
-    ) -> Result<Self, Qwen3_5ExecutionError> {
+    ) -> Result<Self, TextExecutionError> {
         let language_tensor_profiles = qwen3_5_resident_language_tensor_profiles(qwen3_5_config)
-            .map_err(|artifact_error| Qwen3_5ExecutionError::ExpertLayerPlan {
+            .map_err(|artifact_error| TextExecutionError::ExpertLayerPlan {
                 description: artifact_error.to_string(),
             })?;
         let mut bound_tensors = HashMap::with_capacity(language_tensor_profiles.len());
@@ -185,7 +195,7 @@ impl Qwen3_5Weights {
             )?;
             actual_payload_bytes = actual_payload_bytes
                 .checked_add(tensor_payload_bytes)
-                .ok_or(Qwen3_5ExecutionError::InvalidTensor {
+                .ok_or(TextExecutionError::InvalidTensor {
                     tensor_name: tensor_profile.name.clone(),
                     description: "total tensor payload byte count overflowed",
                 })?;
@@ -193,7 +203,7 @@ impl Qwen3_5Weights {
                 .insert(tensor_profile.name.clone(), tensor)
                 .is_some()
             {
-                return Err(Qwen3_5ExecutionError::InvalidTensor {
+                return Err(TextExecutionError::InvalidTensor {
                     tensor_name: tensor_profile.name.clone(),
                     description: "tensor was bound more than once",
                 });
@@ -215,10 +225,8 @@ impl Qwen3_5Weights {
                 decoder_layer_index,
             )?);
         }
-        let final_normalization_weight = take_tensor(
-            &mut bound_tensors,
-            "language_model.model.norm.weight".to_owned(),
-        )?;
+        let (final_normalization_weight, final_lane_mixer) =
+            take_model_output_norm(&mut bound_tensors, qwen3_5_config)?;
         let language_model_head_weights = Qwen3_5DenseProjection::named(
             "language_model.lm_head",
             if qwen3_5_config.has_tied_embeddings() {
@@ -232,7 +240,7 @@ impl Qwen3_5Weights {
             },
         );
         if let Some(unassigned_tensor_name) = bound_tensors.keys().next() {
-            return Err(Qwen3_5ExecutionError::UnassignedTensor {
+            return Err(TextExecutionError::UnassignedTensor {
                 tensor_name: unassigned_tensor_name.clone(),
             });
         }
@@ -245,6 +253,7 @@ impl Qwen3_5Weights {
             has_tied_embeddings: qwen3_5_config.has_tied_embeddings(),
             raw_hugging_face_norm_offsets_apply,
             model_shards,
+            final_lane_mixer,
             tensor_count,
             total_payload_bytes: actual_payload_bytes,
         })
@@ -282,7 +291,7 @@ impl Qwen3_5Weights {
         runtime: &MlxRuntime,
         embedding_residency: EmbeddingResidency,
         decoder_layer_residency: DecoderLayerResidency,
-    ) -> Result<(), Qwen3_5ExecutionError> {
+    ) -> Result<(), TextExecutionError> {
         let materialized_tensor_references =
             self.materialized_tensor_references(embedding_residency, decoder_layer_residency)?;
         Ok(runtime.evaluate_arrays(&materialized_tensor_references)?)
@@ -294,7 +303,7 @@ impl Qwen3_5Weights {
         &self,
         embedding_residency: EmbeddingResidency,
         decoder_layer_residency: DecoderLayerResidency,
-    ) -> Result<Vec<&MlxArray>, Qwen3_5ExecutionError> {
+    ) -> Result<Vec<&MlxArray>, TextExecutionError> {
         let mut embedding_references = Vec::new();
         self.embedding_weights
             .append_array_references(&mut embedding_references);
@@ -317,12 +326,16 @@ impl Qwen3_5Weights {
                 expected_tensor_count.saturating_sub(decoder_layer_references.len());
         }
         bound_tensor_references.push(&self.final_normalization_weight);
+        append_final_lane_mixer_arrays(
+            self.final_lane_mixer.as_deref(),
+            &mut bound_tensor_references,
+        );
         if !self.has_tied_embeddings {
             self.language_model_head_weights
                 .append_array_references(&mut bound_tensor_references);
         }
         if bound_tensor_references.len() != expected_tensor_count {
-            return Err(Qwen3_5ExecutionError::TypedTensorCountMismatch {
+            return Err(TextExecutionError::TypedTensorCountMismatch {
                 actual_tensor_count: bound_tensor_references.len(),
                 expected_tensor_count,
             });
@@ -365,11 +378,17 @@ pub(super) fn take_decoder_layer_weights(
     bound_tensors: &mut HashMap<String, MlxArray>,
     qwen3_5_config: &Qwen3_5Config,
     decoder_layer_index: usize,
-) -> Result<Qwen3_5DecoderLayerWeights, Qwen3_5ExecutionError> {
+) -> Result<Qwen3_5DecoderLayerWeights, TextExecutionError> {
     let decoder_layer_prefix = format!("language_model.model.layers.{decoder_layer_index}");
-    let input_normalization_weight = take_tensor(
+    let LayerNormsAndAdditions {
+        input_normalization_weight,
+        post_attention_normalization_weight,
+        flash_next,
+    } = take_layer_norms_and_additions(
         bound_tensors,
-        format!("{decoder_layer_prefix}.input_layernorm.weight"),
+        qwen3_5_config,
+        decoder_layer_index,
+        &decoder_layer_prefix,
     )?;
     let attention_weights = if qwen3_5_config.decoder_layer_is_full_attention(decoder_layer_index) {
         Qwen3_5AttentionWeights::Full(take_full_attention_weights(
@@ -384,10 +403,6 @@ pub(super) fn take_decoder_layer_weights(
             &decoder_layer_prefix,
         )?)
     };
-    let post_attention_normalization_weight = take_tensor(
-        bound_tensors,
-        format!("{decoder_layer_prefix}.post_attention_layernorm.weight"),
-    )?;
     let mlp_weights = match qwen3_5_config.feed_forward_architecture() {
         Qwen3_5FeedForwardArchitecture::Dense => Qwen3_5DecoderFeedForwardWeights::Dense(
             crate::qwen3_5_core::dense::mlp::bind_qwen3_5_dense_mlp_weights(
@@ -411,6 +426,7 @@ pub(super) fn take_decoder_layer_weights(
         attention_weights,
         post_attention_normalization_weight,
         mlp_weights,
+        flash_next,
     })
 }
 
@@ -436,7 +452,7 @@ pub(super) fn bind_language_tensor(
     tensor_profile: &crate::TensorProfile,
     tensor: MlxArray,
     weight_binding_dtype: WeightBindingDtype,
-) -> Result<(MlxArray, u64), Qwen3_5ExecutionError> {
+) -> Result<(MlxArray, u64), TextExecutionError> {
     weights_validation::validate_bound_tensor(tensor_profile, &tensor)?;
     weights_validation::validate_quantized_tensor_bits(qwen3_5_config, tensor_profile)?;
     let tensor = bound_with_storage_conventions(
@@ -448,7 +464,7 @@ pub(super) fn bind_language_tensor(
         weight_binding_dtype,
     )?;
     let tensor_payload_bytes =
-        u64::try_from(tensor.byte_count()).map_err(|_| Qwen3_5ExecutionError::InvalidTensor {
+        u64::try_from(tensor.byte_count()).map_err(|_| TextExecutionError::InvalidTensor {
             tensor_name: tensor_profile.name.clone(),
             description: "tensor payload byte count exceeds the u64 range",
         })?;
@@ -466,7 +482,7 @@ fn bound_with_storage_conventions(
     tensor_name: &str,
     tensor: MlxArray,
     weight_binding_dtype: WeightBindingDtype,
-) -> Result<MlxArray, Qwen3_5ExecutionError> {
+) -> Result<MlxArray, TextExecutionError> {
     apply_rms_norm_storage_convention(
         runtime,
         qwen3_5_config,
@@ -482,7 +498,7 @@ fn apply_rms_norm_storage_convention(
     raw_hugging_face_norm_offsets_apply: bool,
     tensor_name: &str,
     tensor: MlxArray,
-) -> Result<MlxArray, Qwen3_5ExecutionError> {
+) -> Result<MlxArray, TextExecutionError> {
     if jangtq2_unit_scale_applies(qwen3_5_config, tensor_name) {
         return add_unit_scale(runtime, tensor);
     }
@@ -491,7 +507,7 @@ fn apply_rms_norm_storage_convention(
     {
         return add_unit_scale(runtime, tensor);
     }
-    Ok(tensor)
+    apply_centered_norm_storage_convention(runtime, qwen3_5_config, tensor_name, tensor)
 }
 
 fn jangtq2_unit_scale_applies(qwen3_5_config: &Qwen3_5Config, tensor_name: &str) -> bool {
@@ -516,10 +532,7 @@ fn is_raw_hugging_face_norm_offset_weight_tensor(tensor_name: &str) -> bool {
 /// Materializes `1 + deviation` once at binding so every forward path reads
 /// the true RMSNorm scale; JANGH2's AWQ-folded deviations and raw Hugging
 /// Face offset norms both need it.
-fn add_unit_scale(
-    runtime: &MlxRuntime,
-    tensor: MlxArray,
-) -> Result<MlxArray, Qwen3_5ExecutionError> {
+fn add_unit_scale(runtime: &MlxRuntime, tensor: MlxArray) -> Result<MlxArray, TextExecutionError> {
     let unit_scale = runtime.full(&[], 1.0, tensor.dtype())?;
     Ok(runtime.add(&unit_scale, &tensor)?)
 }
@@ -530,24 +543,24 @@ fn bound_language_tensor_from_model_shards(
     shard_index: &crate::qwen3_5_core::artifacts::Qwen3_5ShardIndex,
     model_shards: &[MlxSafetensors],
     canonical_tensor_name: &str,
-) -> Result<MlxArray, Qwen3_5ExecutionError> {
+) -> Result<MlxArray, TextExecutionError> {
     let shard_file_name = shard_index
         .shard_file_name_for_tensor(canonical_tensor_name)
-        .ok_or_else(|| Qwen3_5ExecutionError::MissingTensor {
+        .ok_or_else(|| TextExecutionError::MissingTensor {
             tensor_name: canonical_tensor_name.to_owned(),
         })?;
     let shard_position = shard_index
         .model_shard_file_names()
         .iter()
         .position(|indexed_shard_file_name| *indexed_shard_file_name == shard_file_name)
-        .ok_or_else(|| Qwen3_5ExecutionError::InvalidTensor {
+        .ok_or_else(|| TextExecutionError::InvalidTensor {
             tensor_name: canonical_tensor_name.to_owned(),
             description: "tensor resolves outside the loaded model shards",
         })?;
     let model_shard =
         model_shards
             .get(shard_position)
-            .ok_or_else(|| Qwen3_5ExecutionError::InvalidTensor {
+            .ok_or_else(|| TextExecutionError::InvalidTensor {
                 tensor_name: canonical_tensor_name.to_owned(),
                 description: "loaded model shard is missing",
             })?;
@@ -566,7 +579,7 @@ fn should_apply_raw_hugging_face_norm_offsets(
     model_shards: &[MlxSafetensors],
     qwen3_5_config: &Qwen3_5Config,
     convolution_profile_name: &str,
-) -> Result<bool, Qwen3_5ExecutionError> {
+) -> Result<bool, TextExecutionError> {
     let convolution_weight = bound_language_tensor_from_model_shards(
         shard_index,
         model_shards,
@@ -574,12 +587,12 @@ fn should_apply_raw_hugging_face_norm_offsets(
     )?;
     let channel_count =
         i32::try_from(qwen3_5_config.linear_convolution_dimension()).map_err(|_| {
-            Qwen3_5ExecutionError::InvalidInput {
+            TextExecutionError::InvalidInput {
                 description: "linear convolution dimension exceeds the MLX shape range",
             }
         })?;
     let kernel_width = i32::try_from(qwen3_5_config.linear_convolution_kernel_dimension())
-        .map_err(|_| Qwen3_5ExecutionError::InvalidInput {
+        .map_err(|_| TextExecutionError::InvalidInput {
             description: "linear convolution kernel width exceeds the MLX shape range",
         })?;
     Ok(is_published_pytorch_convolution_layout(
@@ -614,7 +627,7 @@ pub fn take_dense_projection(
     bound_tensors: &mut HashMap<String, MlxArray>,
     qwen3_5_config: &Qwen3_5Config,
     module_name: &str,
-) -> Result<Qwen3_5DenseProjection, Qwen3_5ExecutionError> {
+) -> Result<Qwen3_5DenseProjection, TextExecutionError> {
     Ok(Qwen3_5DenseProjection::named(
         module_name,
         take_quantized_affine_weights(bound_tensors, qwen3_5_config, module_name)?,
@@ -625,10 +638,10 @@ pub fn take_quantized_affine_weights(
     bound_tensors: &mut HashMap<String, MlxArray>,
     qwen3_5_config: &Qwen3_5Config,
     module_name: &str,
-) -> Result<Qwen3_5AffineWeights, Qwen3_5ExecutionError> {
+) -> Result<Qwen3_5AffineWeights, TextExecutionError> {
     let quantization_profile = qwen3_5_config.quantization_profile_for_module(module_name);
     if quantization_profile.is_jangtq2_codebook() {
-        return Err(Qwen3_5ExecutionError::InvalidInput {
+        return Err(TextExecutionError::InvalidInput {
             description: "jangtq2 codebook weights are only decoded by the streamed expert path",
         });
     }
@@ -638,13 +651,13 @@ pub fn take_quantized_affine_weights(
         });
     }
     let quantization_bits = i32::try_from(quantization_profile.bits).map_err(|_| {
-        Qwen3_5ExecutionError::InvalidTensor {
+        TextExecutionError::InvalidTensor {
             tensor_name: format!("{module_name}.weight"),
             description: "quantization bit width exceeds the MLX integer range",
         }
     })?;
     let quantization_group_size = i32::try_from(quantization_profile.group_size).map_err(|_| {
-        Qwen3_5ExecutionError::InvalidTensor {
+        TextExecutionError::InvalidTensor {
             tensor_name: format!("{module_name}.weight"),
             description: "quantization group size exceeds the MLX integer range",
         }
@@ -661,8 +674,8 @@ pub fn take_quantized_affine_weights(
 pub fn take_tensor(
     bound_tensors: &mut HashMap<String, MlxArray>,
     tensor_name: String,
-) -> Result<MlxArray, Qwen3_5ExecutionError> {
+) -> Result<MlxArray, TextExecutionError> {
     bound_tensors
         .remove(&tensor_name)
-        .ok_or(Qwen3_5ExecutionError::MissingTensor { tensor_name })
+        .ok_or(TextExecutionError::MissingTensor { tensor_name })
 }

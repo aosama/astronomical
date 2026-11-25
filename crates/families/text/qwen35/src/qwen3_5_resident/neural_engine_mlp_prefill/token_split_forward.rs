@@ -9,15 +9,15 @@ use thiserror::Error;
 
 use super::{NEURAL_ENGINE_FINISH_TIMEOUT, NeuralEngineMlpPrefill};
 use crate::qwen3_5_core::dense::mlp::Qwen3_5DenseMlpWeights;
-use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_resident::model::Qwen3_5ResidentModel;
+use text_generation::execution_error::TextExecutionError;
 
 #[derive(Debug, Error)]
 enum TokenSplitForwardError {
     #[error(transparent)]
     HandOff(#[from] MlxHandOffError),
     #[error(transparent)]
-    Gpu(#[from] Qwen3_5ExecutionError),
+    Gpu(#[from] TextExecutionError),
     #[error(transparent)]
     Mlx(#[from] mlx_bridge::MlxCError),
     #[error(transparent)]
@@ -47,7 +47,7 @@ impl Qwen3_5ResidentModel {
         dense_mlp_weights: &Qwen3_5DenseMlpWeights,
         token_count: i32,
         layer_index: usize,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         if let Some(prefill) = self.neural_engine_mlp_prefill.as_ref()
             && prefill.handles(token_count)
         {

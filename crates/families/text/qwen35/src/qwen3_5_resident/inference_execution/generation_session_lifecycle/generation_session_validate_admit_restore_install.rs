@@ -1,27 +1,28 @@
-use crate::qwen3_5_core::shared_execution::astro_ssd_prompt_cache_restore;
-use crate::qwen3_5_core::shared_execution::generation_start_steps;
-use crate::qwen3_5_core::shared_execution::generation_visual_embedding_validation;
+use crate::qwen3_5_core::shared_execution::session_visual_embeddings;
 use crate::{
-    EngineGenerationStart, InferenceEngineError, PerformanceAttribution, Qwen3_5InferenceRequest,
-    Qwen3_5SamplingStrategy, Qwen3_5ThinkingBudgetState,
+    EngineGenerationStart, InferenceEngineError, PerformanceAttribution, TextInferenceRequest,
+    TextSamplingStrategy, ThinkingBudgetState,
 };
+use text_generation::generation_loop::astro_ssd_prompt_cache_restore;
+use text_generation::generation_loop::generation_start_steps;
+use text_generation::generation_loop::generation_visual_embedding_validation;
 
 use mlx_bridge::MlxArray;
 
 use super::engine_request::ResidentRequestExtension;
-use super::{Qwen3_5EngineState, qwen3_5_runtime_error};
-use crate::qwen3_5_core::decoder::RequestDecoderStateStack;
+use super::{Qwen3_5EngineState, fatal_runtime_error};
 use crate::qwen3_5_core::shared_execution::astro_ssd_prompt_cache_visual_identity::{
     Qwen3_5AstroSsdPromptCacheVisualIdentity, Qwen3_5AstroSsdPromptCacheVisualIdentityInput,
 };
-use crate::qwen3_5_core::shared_execution::engine_request_installation::{
+use engine_core::astro_ssd_prompt_cache::block_causal_input::AstroSsdPromptCacheBlockCausalInput;
+use text_generation::RequestDecoderStateStack;
+use text_generation::generation_loop::engine_request_installation::{
     AdmittedGenerationSession, new_engine_request,
 };
-use crate::qwen3_5_core::shared_execution::generation_request_validation::{self};
-use crate::qwen3_5_core::shared_execution::generation_session_position::{
+use text_generation::generation_loop::generation_request_validation::{self};
+use text_generation::generation_loop::generation_session_position::{
     GenerationSessionPosition, derive_generation_session_position,
 };
-use engine_core::astro_ssd_prompt_cache::block_causal_input::AstroSsdPromptCacheBlockCausalInput;
 
 /// The prompt-side identity of a generation session: token list, image-pad
 /// accounting, `astro_ssd_prompt_cache` eligibility flags, speculative admission, and the
@@ -45,10 +46,10 @@ struct InstallActiveGenerationRequest<'a> {
     request_decoder_state: RequestDecoderStateStack,
     prompt_identity: GenerationPromptIdentity,
     visual_embeddings: Option<MlxArray>,
-    sampling_strategy: Qwen3_5SamplingStrategy,
+    sampling_strategy: TextSamplingStrategy,
     random_state: Option<MlxArray>,
-    inference_request: &'a mut Qwen3_5InferenceRequest,
-    thinking_budget_state: Qwen3_5ThinkingBudgetState,
+    inference_request: &'a mut TextInferenceRequest,
+    thinking_budget_state: ThinkingBudgetState,
     generation_position: GenerationSessionPosition,
     performance_attribution: PerformanceAttribution,
 }
@@ -64,7 +65,7 @@ impl Qwen3_5EngineState {
     /// installs the per-request session that later steps drive.
     pub(in crate::qwen3_5_resident::inference_execution) fn start_generation(
         &mut self,
-        mut inference_request: Qwen3_5InferenceRequest,
+        mut inference_request: TextInferenceRequest,
     ) -> Result<EngineGenerationStart, InferenceEngineError> {
         // An `astro_ssd_prompt_cache` restore or the vision encoder uses the GPU before any forward.
         self.tell_neural_engine_preparation_the_gpu_is_in_use();
@@ -167,12 +168,12 @@ impl Qwen3_5EngineState {
         // If the request instead carries raw processed images, the vision
         // encoder runs now: plan where each image's embedding rows land in
         // the not-yet-restored suffix, then encode pixels into rows.
-        let visual_embeddings = generation_start_steps::resolve_session_visual_embeddings(
+        let visual_embeddings = session_visual_embeddings::resolve_session_visual_embeddings(
             self,
             &inference_request,
             precomputed_visual_embeddings,
             prompt_identity.has_processed_visual_images,
-            generation_start_steps::SessionVisualEmbeddingPlacement {
+            session_visual_embeddings::SessionVisualEmbeddingPlacement {
                 prompt_token_ids: &prompt_identity.prompt_token_ids,
                 prefill_cursor: generation_position.prefill_cursor,
                 ordered_image_visual_embedding_row_counts: &prompt_identity
@@ -211,7 +212,7 @@ impl Qwen3_5EngineState {
             astro_decoder_state_cache_layout,
             self.core.full_attention_kv_state_growth_tokens,
         )
-        .map_err(qwen3_5_runtime_error)
+        .map_err(fatal_runtime_error)
     }
 
     /// Resolves the prompt-side session identity: token list, image-pad
@@ -219,8 +220,8 @@ impl Qwen3_5EngineState {
     /// astro SSD prompt cache identity text and image reuse share.
     fn resolve_prompt_identity(
         &mut self,
-        inference_request: &Qwen3_5InferenceRequest,
-        sampling_strategy: Qwen3_5SamplingStrategy,
+        inference_request: &TextInferenceRequest,
+        sampling_strategy: TextSamplingStrategy,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<GenerationPromptIdentity, InferenceEngineError> {
         // The conversation as the model sees it: a list of integer token
@@ -313,7 +314,7 @@ impl Qwen3_5EngineState {
     #[allow(clippy::too_many_arguments)]
     fn restore_astro_ssd_prompt_cache_prefix_outcome(
         &mut self,
-        inference_request: &Qwen3_5InferenceRequest,
+        inference_request: &TextInferenceRequest,
         prompt_token_ids: &[u32],
         astro_ssd_prompt_cache_block_causal_inputs: &[AstroSsdPromptCacheBlockCausalInput],
         can_use_astro_ssd_prompt_cache: bool,

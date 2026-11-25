@@ -8,7 +8,7 @@
 use mlx_bridge::MlxArray;
 use runtime_integration::MlxRuntime;
 
-use super::error::Qwen3_5ExecutionError;
+use text_generation::execution_error::TextExecutionError;
 
 /// Which dtype an engine binds its tensors in.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -56,7 +56,7 @@ pub fn binds_widened_to_float32(
 pub fn bound_dtype_of(
     stored_dtype: mlx_bridge::MlxDtype,
     weight_binding_dtype: WeightBindingDtype,
-) -> Result<mlx_bridge::MlxDtype, Qwen3_5ExecutionError> {
+) -> Result<mlx_bridge::MlxDtype, TextExecutionError> {
     let mlx_computes_on_cpu = runtime_integration::mlx_computes_on_cpu()?;
     if binds_widened_to_float32(stored_dtype, weight_binding_dtype, mlx_computes_on_cpu) {
         Ok(mlx_bridge::MlxDtype::Float32)
@@ -69,7 +69,7 @@ pub(super) fn bound_in_binding_dtype(
     runtime: &MlxRuntime,
     tensor: MlxArray,
     weight_binding_dtype: WeightBindingDtype,
-) -> Result<MlxArray, Qwen3_5ExecutionError> {
+) -> Result<MlxArray, TextExecutionError> {
     if weight_binding_dtype == WeightBindingDtype::AsStored {
         return Ok(tensor);
     }

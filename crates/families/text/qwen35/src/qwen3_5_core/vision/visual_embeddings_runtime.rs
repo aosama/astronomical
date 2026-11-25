@@ -5,7 +5,7 @@
 //! This keeps the engine modules from importing each other while the
 //! astro SSD prompt cache store and counters stay shared in this module (issue #1132).
 
-use super::Qwen3_5ProcessedImage;
+use super::ProcessedImage;
 use super::vision_model::Qwen3_5VisionModel;
 use super::visual_embeddings::Qwen3_5VisualEmbeddingRequiredImage;
 use super::visual_embeddings::Qwen3_5VisualEmbeddingSuffixPlan;
@@ -43,7 +43,7 @@ pub fn resolve_visual_embeddings_for_processed_images(
     visual_embedding_context: VisualEmbeddingEngineContext<'_>,
     astro_ssd_prompt_cache_counters: &mut AstroSsdPromptCacheCounters,
     request_id: RequestId,
-    processed_visual_images: &[Qwen3_5ProcessedImage],
+    processed_visual_images: &[ProcessedImage],
     visual_embedding_suffix_plan: &Qwen3_5VisualEmbeddingSuffixPlan,
     performance_attribution: &mut PerformanceAttribution,
 ) -> Result<Option<MlxArray>, InferenceEngineError> {
@@ -128,12 +128,12 @@ pub fn resolve_visual_embeddings_for_processed_images(
 fn collect_astro_ssd_prompt_cache_visual_embeddings(
     visual_embedding_context: &VisualEmbeddingEngineContext<'_>,
     required_images: &[Qwen3_5VisualEmbeddingRequiredImage],
-    processed_visual_images: &[Qwen3_5ProcessedImage],
+    processed_visual_images: &[ProcessedImage],
     request_id: RequestId,
     visual_embedding_hidden_size: usize,
     visual_embeddings_by_required_image: &mut [Option<MlxArray>],
     missing_required_image_indexes: &mut Vec<usize>,
-    missing_processed_visual_images: &mut Vec<Qwen3_5ProcessedImage>,
+    missing_processed_visual_images: &mut Vec<ProcessedImage>,
     astro_ssd_prompt_cache_visual_embedding_hit_row_counts: &mut Vec<usize>,
     astro_ssd_prompt_cache_visual_embedding_miss_count: &mut u64,
 ) -> Result<(), InferenceEngineError> {
@@ -182,7 +182,7 @@ fn collect_astro_ssd_prompt_cache_visual_embeddings(
 /// caller recomputes through the vision forward.
 fn load_astro_ssd_prompt_cache_visual_embedding_for_image(
     visual_embedding_context: &VisualEmbeddingEngineContext<'_>,
-    processed_visual_image: &Qwen3_5ProcessedImage,
+    processed_visual_image: &ProcessedImage,
     required_image: &Qwen3_5VisualEmbeddingRequiredImage,
     request_id: RequestId,
     visual_embedding_hidden_size: usize,
@@ -247,7 +247,7 @@ fn load_astro_ssd_prompt_cache_visual_embedding_for_image(
 /// synchronizes the evaluation under attribution.
 fn compute_missing_visual_embeddings(
     visual_embedding_context: &VisualEmbeddingEngineContext<'_>,
-    missing_processed_visual_images: &[Qwen3_5ProcessedImage],
+    missing_processed_visual_images: &[ProcessedImage],
     performance_attribution: &mut PerformanceAttribution,
 ) -> Result<MlxArray, InferenceEngineError> {
     let vision_model = visual_embedding_context.vision_model.ok_or_else(|| {
@@ -304,7 +304,7 @@ fn fold_missing_visual_embedding_row_count(
 #[allow(clippy::too_many_arguments)]
 fn publish_and_slice_missing_visual_embeddings(
     visual_embedding_context: &VisualEmbeddingEngineContext<'_>,
-    processed_visual_images: &[Qwen3_5ProcessedImage],
+    processed_visual_images: &[ProcessedImage],
     required_images: &[Qwen3_5VisualEmbeddingRequiredImage],
     missing_required_image_indexes: &[usize],
     computed_missing_visual_embeddings: &MlxArray,

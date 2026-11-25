@@ -15,23 +15,22 @@ use ipc_protocol::{ExpertMemoryMode, RequestId};
 use mlx_bridge::MlxArray;
 use runtime_integration::MlxMemorySnapshot;
 
+use super::active_generation::PrismForwardingRequest;
 use super::{PrismHadamardQwen35ActiveGeneration, PrismHadamardQwen35InferenceExecution};
 use crate::prism_hadamard_qwen35::model::PrismHadamardTextModel;
-use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
-use crate::qwen3_5_core::shared_execution::decode_step::{
-    ActiveRequestAdvance, Qwen3_5DecodeStepHooks,
-};
-use crate::qwen3_5_core::shared_execution::generation_finalization_steps::{
-    GenerationAttributionRecord, Qwen3_5FinalizationHooks, collect_current_mlx_memory_telemetry,
-    record_generation_performance_attribution,
-};
-use crate::qwen3_5_core::shared_execution::text_model::Qwen3_5TextModel;
 use crate::{
     GeneratedToken, GenerationFinalization, InferenceEngineError, PerformanceAttribution,
     PerformanceAttributionOutcome, PerformanceOperation,
 };
+use text_generation::execution_error::TextExecutionError;
+use text_generation::generation_loop::decode_step::{ActiveRequestAdvance, TextDecodeStepHooks};
+use text_generation::generation_loop::generation_finalization_steps::{
+    GenerationAttributionRecord, TextFinalizationHooks, collect_current_mlx_memory_telemetry,
+    record_generation_performance_attribution,
+};
+use text_generation::model::text_model::TextModel;
 
-impl Qwen3_5FinalizationHooks for PrismHadamardQwen35InferenceExecution {
+impl TextFinalizationHooks for PrismHadamardQwen35InferenceExecution {
     /// The folded-ternary prefill measures no prompt working buffers.
     fn measured_prompt_mlx_working_buffer_bytes(&self) -> Option<u64> {
         None
@@ -73,7 +72,7 @@ impl Qwen3_5FinalizationHooks for PrismHadamardQwen35InferenceExecution {
     }
 }
 
-impl Qwen3_5DecodeStepHooks for PrismHadamardQwen35InferenceExecution {
+impl TextDecodeStepHooks for PrismHadamardQwen35InferenceExecution {
     fn advance_prompt_prefill_if_pending(
         &mut self,
         request_id: RequestId,
@@ -157,7 +156,7 @@ fn forward_and_submit_successor(
 ) -> Result<(MlxArray, MlxMemorySnapshot), InferenceEngineError> {
     let successor_logits = active_generation
         .forward_pass(model, current_generated_token)
-        .map_err(Qwen3_5ExecutionError::from)?;
+        .map_err(TextExecutionError::from)?;
     let successor = active_generation.build_generated_token(model, &successor_logits)?;
     active_generation
         .performance_attribution

@@ -29,8 +29,8 @@ use crate::qwen3_5_core::model_math::decoder_layer_weights::{
     Qwen3_5AttentionWeights, Qwen3_5DecoderFeedForwardWeights, Qwen3_5DecoderLayerWeights,
     Qwen3_5FullAttentionWeights, Qwen3_5LinearAttentionWeights,
 };
-use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_core::model_math::gated_delta_sequence::qwen3_5_gated_delta_sequence;
+use text_generation::execution_error::TextExecutionError;
 
 impl Qwen3_5ModelBase {
     /// One decoder layer over `[rows, token_count, hidden]` hidden states.
@@ -40,7 +40,7 @@ impl Qwen3_5ModelBase {
         token_count: i32,
         layer_index: usize,
         decoder_layer_weights: &Qwen3_5DecoderLayerWeights,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         let rms_norm_epsilon = f32::from_bits(self.config.rms_norm_epsilon_bits());
         let normalized_input = self.runtime.rms_norm(
             hidden_states,
@@ -71,7 +71,7 @@ impl Qwen3_5ModelBase {
         let Qwen3_5DecoderFeedForwardWeights::Dense(dense_mlp_weights) =
             &decoder_layer_weights.mlp_weights
         else {
-            return Err(Qwen3_5ExecutionError::InvalidInput {
+            return Err(TextExecutionError::InvalidInput {
                 description: "a mixture-of-experts layer has no empty-state forward",
             });
         };
@@ -88,7 +88,7 @@ impl Qwen3_5ModelBase {
         token_count: i32,
         layer_index: usize,
         linear_attention_weights: &Qwen3_5LinearAttentionWeights,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         let mut disabled_performance_attribution = PerformanceAttribution::disabled();
         let (mixed_queries_keys_values, output_gate, update_logits, decay_inputs) = self
             .project_linear_attention_inputs(
@@ -180,7 +180,7 @@ impl Qwen3_5ModelBase {
         normalized_input: &MlxArray,
         token_count: i32,
         full_attention_weights: &Qwen3_5FullAttentionWeights,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         let RotatedAttentionInputs {
             rotated_queries,
             rotated_keys,

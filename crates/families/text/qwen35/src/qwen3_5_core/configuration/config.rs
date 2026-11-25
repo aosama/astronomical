@@ -4,6 +4,7 @@ use super::config_document::{Qwen3_5ConfigDocument, Qwen3_5TextConfig};
 use super::config_validation;
 use super::config_validation::{QWEN_CHAT_EOS_TOKEN_ID, Qwen3_5ConfigError};
 use super::quantizations::mlx_quantization::ModuleQuantizationProfile;
+use super::qwen4_exp_fields::Qwen4ExpArchitecture;
 use jangtq2_qwen35::configuration::Jangtq2RmsNormConvention;
 
 #[cfg(test)]
@@ -13,6 +14,8 @@ const EXPECTED_MOE_ARCHITECTURE: &str = "Qwen3_5MoeForConditionalGeneration";
 const EXPECTED_DENSE_ARCHITECTURE: &str = "Qwen3_5ForConditionalGeneration";
 const EXPECTED_MOE_MODEL_TYPE: &str = "qwen3_5_moe";
 const EXPECTED_DENSE_MODEL_TYPE: &str = "qwen3_5";
+const EXPECTED_QWEN4_EXP_ARCHITECTURE: &str = "Qwen4ExpForConditionalGeneration";
+const EXPECTED_QWEN4_EXP_MODEL_TYPE: &str = "qwen4_exp";
 const EXPECTED_TORCH_DTYPE: &str = "bfloat16";
 
 /// Physical representation of executable model weights.
@@ -32,6 +35,18 @@ pub enum Qwen3_5FeedForwardArchitecture {
     MixtureOfExperts,
 }
 
+/// Which generation of the Qwen 3.5 layout a checkpoint is.
+///
+/// Qwen3.8-Flash-Next (`qwen4_exp`) is the Qwen 3.5 decoder stack with a
+/// multi-lane residual, a sparse-attention indexer and an n-gram table
+/// added; every path that differs asks for the architecture through
+/// [`Qwen3_5Config::qwen4_exp_architecture`].
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Qwen3_5ModelGeneration {
+    Qwen3_5,
+    Qwen4Exp(Qwen4ExpArchitecture),
+}
+
 /// Validated Qwen3.5 text configuration used to derive execution shapes and behavior.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Qwen3_5Config {
@@ -45,6 +60,7 @@ pub struct Qwen3_5Config {
     pub(super) text_config: Qwen3_5TextConfig,
     pub(super) activation_dtype: String,
     pub(super) feed_forward_architecture: Qwen3_5FeedForwardArchitecture,
+    pub(super) model_generation: Qwen3_5ModelGeneration,
 }
 
 impl Qwen3_5Config {
@@ -64,14 +80,11 @@ impl Qwen3_5Config {
             )?;
         let feed_forward_architecture =
             feed_forward_architecture_for_model_type(&config_document.model_type)?;
-        let expected_architecture = match feed_forward_architecture {
-            Qwen3_5FeedForwardArchitecture::Dense => EXPECTED_DENSE_ARCHITECTURE,
-            Qwen3_5FeedForwardArchitecture::MixtureOfExperts => EXPECTED_MOE_ARCHITECTURE,
-        };
+        let is_qwen4_exp = config_document.model_type == EXPECTED_QWEN4_EXP_MODEL_TYPE;
         config_validation::validate_exact_value(
             "architectures",
             &config_document.architectures.join(","),
-            expected_architecture,
+            expected_architecture(feed_forward_architecture, is_qwen4_exp),
         )?;
         // Resolve activation dtype: prefer top-level, fall back to text_config.dtype.
         // Qwen3.6 places dtype inside text_config instead of at the top level.
@@ -82,9 +95,11 @@ impl Qwen3_5Config {
             .ok_or(Qwen3_5ConfigError::MissingActivationDtype)?;
         config_validation::validate_exact_value("dtype", &activation_dtype, EXPECTED_TORCH_DTYPE)?;
         let eos_token_ids = resolved_eos_token_ids(&config_document)?;
-        config_document
-            .text_config
-            .validate(feed_forward_architecture)?;
+        let model_generation = validated_model_generation(
+            &config_document.text_config,
+            feed_forward_architecture,
+            is_qwen4_exp,
+        )?;
         let ResolvedQuantization {
             quantized_module_profiles,
             model_weight_storage,
@@ -102,8 +117,57 @@ impl Qwen3_5Config {
             text_config: config_document.text_config,
             activation_dtype,
             feed_forward_architecture,
+            model_generation,
         })
     }
+}
+
+/// The `architectures` entry a document of this generation must declare.
+const fn expected_architecture(
+    feed_forward_architecture: Qwen3_5FeedForwardArchitecture,
+    is_qwen4_exp: bool,
+) -> &'static str {
+    match (feed_forward_architecture, is_qwen4_exp) {
+        (_, true) => EXPECTED_QWEN4_EXP_ARCHITECTURE,
+        (Qwen3_5FeedForwardArchitecture::Dense, false) => EXPECTED_DENSE_ARCHITECTURE,
+        (Qwen3_5FeedForwardArchitecture::MixtureOfExperts, false) => EXPECTED_MOE_ARCHITECTURE,
+    }
+}
+
+/// Validates the text configuration, then reads its generation.
+fn validated_model_generation(
+    text_config: &Qwen3_5TextConfig,
+    feed_forward_architecture: Qwen3_5FeedForwardArchitecture,
+    is_qwen4_exp: bool,
+) -> Result<Qwen3_5ModelGeneration, Qwen3_5ConfigError> {
+    text_config.validate(feed_forward_architecture, is_qwen4_exp)?;
+    model_generation(text_config, is_qwen4_exp)
+}
+
+/// The generation a document declares, with Flash-Next's additions
+/// validated against the decoder stack they attach to.
+fn model_generation(
+    text_config: &Qwen3_5TextConfig,
+    is_qwen4_exp: bool,
+) -> Result<Qwen3_5ModelGeneration, Qwen3_5ConfigError> {
+    if !is_qwen4_exp {
+        return Ok(Qwen3_5ModelGeneration::Qwen3_5);
+    }
+    let architecture = text_config.qwen4_exp_fields.validated_architecture(
+        text_config.hidden_size,
+        text_config.num_hidden_layers,
+        text_config
+            .text_config_eos_token_id
+            .as_ref()
+            .and_then(|token_ids| token_ids.first().copied()),
+        |layer_index| {
+            text_config
+                .layer_types
+                .get(layer_index)
+                .is_some_and(|layer_type| layer_type == "linear_attention")
+        },
+    )?;
+    Ok(Qwen3_5ModelGeneration::Qwen4Exp(architecture))
 }
 
 /// Maps the document's `model_type` to the feed-forward architecture this
@@ -114,10 +178,12 @@ fn feed_forward_architecture_for_model_type(
 ) -> Result<Qwen3_5FeedForwardArchitecture, Qwen3_5ConfigError> {
     match model_type {
         EXPECTED_DENSE_MODEL_TYPE => Ok(Qwen3_5FeedForwardArchitecture::Dense),
-        EXPECTED_MOE_MODEL_TYPE => Ok(Qwen3_5FeedForwardArchitecture::MixtureOfExperts),
+        EXPECTED_MOE_MODEL_TYPE | EXPECTED_QWEN4_EXP_MODEL_TYPE => {
+            Ok(Qwen3_5FeedForwardArchitecture::MixtureOfExperts)
+        }
         _ => Err(Qwen3_5ConfigError::InvalidConfigValueDynamic {
             description: format!(
-                "model_type must be '{EXPECTED_DENSE_MODEL_TYPE}' or '{EXPECTED_MOE_MODEL_TYPE}'"
+                "model_type must be '{EXPECTED_DENSE_MODEL_TYPE}', '{EXPECTED_MOE_MODEL_TYPE}' or '{EXPECTED_QWEN4_EXP_MODEL_TYPE}'"
             ),
         }),
     }

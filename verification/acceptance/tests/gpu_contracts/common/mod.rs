@@ -1,8 +1,9 @@
 #[allow(unused_imports)]
 pub(crate) use test_harness::fixtures::{
     dense_vision_model_id, e2e_test_model_ids, flux2_klein_model_id,
-    large_sparse_moe_streaming_model_id, required_e2e_test_model_ids, resident_sparse_moe_model_id,
-    small_dense_model_id, small_sparse_moe_streaming_model_id, streamed_dense_model_id,
+    lane_mixing_sparse_moe_streaming_model_id, large_sparse_moe_streaming_model_id,
+    required_e2e_test_model_ids, resident_sparse_moe_model_id, small_dense_model_id,
+    small_sparse_moe_streaming_model_id, streamed_dense_model_id,
 };
 
 #[cfg(feature = "direct-mlx")]
@@ -103,8 +104,8 @@ pub(crate) fn standard_worker_chunking_configuration() -> ipc_protocol::WorkerCh
 #[cfg(feature = "direct-mlx")]
 #[allow(dead_code)]
 pub(crate) fn standard_qwen3_5_model_chunking_configuration()
--> model_serving::Qwen3_5ModelChunkingConfiguration {
-    model_serving::Qwen3_5ModelChunkingConfiguration::new(256, 0, 3)
+-> model_serving::TextModelChunkingConfiguration {
+    model_serving::TextModelChunkingConfiguration::new(256, 0, 3)
         .expect("the standard test model chunking configuration should be valid")
 }
 
@@ -113,11 +114,8 @@ pub(crate) fn standard_qwen3_5_model_chunking_configuration()
 pub(crate) fn standard_request_decoder_state(
     qwen3_5_config: &model_serving::Qwen3_5Config,
 ) -> model_serving::RequestDecoderStateStack {
-    model_serving::RequestDecoderStateStack::empty_from_config_with_full_attention_kv_state_growth_tokens(
-        qwen3_5_config,
-        256,
-    )
-    .expect("the standard test decoder-state growth should be valid")
+    model_serving::request_decoder_state_from_qwen3_5_config(qwen3_5_config, 256)
+        .expect("the standard test decoder-state growth should be valid")
 }
 
 #[allow(dead_code)]

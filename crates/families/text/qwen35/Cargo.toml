@@ -19,7 +19,7 @@ workspace = true
 
 [features]
 default = []
-direct-mlx = ["dep:neural-engine", "dep:runtime-integration", "dep:mlx-bridge", "dep:mlx-c-fork", "jangtq2-qwen35/direct-mlx", "engine-core/direct-mlx", "model-primitives/direct-mlx", "artifact-validation/direct-mlx"]
+direct-mlx = ["text-generation/direct-mlx", "dep:neural-engine", "dep:graph-host-step", "graph-host-step/direct-mlx", "dep:runtime-integration", "dep:mlx-bridge", "dep:mlx-c-fork", "jangtq2-qwen35/direct-mlx", "engine-core/direct-mlx", "model-primitives/direct-mlx", "artifact-validation/direct-mlx"]
 
 # The Qwen 3.5 family (issue #2340). One-way edge: nothing here may depend on
 # model-serving or on the decision models above it;
@@ -30,7 +30,12 @@ config = { path = "../../../foundation/config" }
 engine-core = { path = "../../../engine/engine-core" }
 expert-atlas = { path = "../../../engine/expert-atlas" }
 expert-record-reader = { path = "../../../engine/expert-record-reader" }
+# The host step a streamed reply token looks its routes up with, inside the
+# token's graph.
+graph-host-step = { path = "../../../engine/graph-host-step", optional = true }
 model-primitives = { path = "../../../engine/model-primitives" }
+# The text shell: the generation loop this family plugs its engines into.
+text-generation = { path = "../text-generation" }
 ipc-protocol = { path = "../../../contracts/ipc-protocol" }
 # The jangtq2 weight family (issue #1427), consumed one way.
 jangtq2-qwen35 = { path = "../../../weight-formats/jangtq2-qwen35" }
@@ -52,6 +57,7 @@ tokio.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
+text-generation = { path = "../text-generation", features = ["test-support"] }
 model-primitives = { path = "../../../engine/model-primitives", features = ["test-support"] }
 test-harness = { path = "../../../foundation/test-harness", features = ["test-fixtures"] }
 libc.workspace = true

@@ -6,15 +6,15 @@ use crate::{InferenceEngineError, PerformanceAttribution, PerformanceOperation};
 use super::speculative_decode_lifecycle::{
     Qwen3_5SpeculativeDraftRuntime, draft_model_status_report,
 };
-use super::{Qwen3_5EngineState, qwen3_5_runtime_error};
+use super::{Qwen3_5EngineState, fatal_runtime_error};
 use crate::qwen3_5_core::artifacts::ValidatedQwen3_5Artifact;
-use crate::qwen3_5_core::model::model_chunking_configuration::Qwen3_5ModelChunkingConfiguration;
-use crate::qwen3_5_core::shared_execution::model_loading_lifecycle::Qwen3_5ModelLoadingHooks;
 use crate::qwen3_5_resident::model::Qwen3_5ResidentModel;
 use crate::qwen3_5_resident::neural_engine_prefill_loading::{
     NeuralEnginePreparationStep, begin_neural_engine_prefill_preparation,
 };
 use crate::qwen3_5_resident::neural_engine_program_settlement::settle_neural_engine_programs;
+use text_generation::generation_loop::model_loading_lifecycle::TextModelLoadingHooks;
+use text_generation::model::model_chunking_configuration::TextModelChunkingConfiguration;
 
 impl Qwen3_5EngineState {
     /// The model's last parts, once its core weights are in place. Programs come
@@ -92,7 +92,7 @@ impl Qwen3_5EngineState {
     }
 }
 
-impl Qwen3_5ModelLoadingHooks for Qwen3_5EngineState {
+impl TextModelLoadingHooks for Qwen3_5EngineState {
     /// The resident engine reads nothing from the artifact ahead of the model.
     fn observe_artifact_before_load(
         &mut self,
@@ -106,7 +106,7 @@ impl Qwen3_5ModelLoadingHooks for Qwen3_5EngineState {
         &mut self,
         runtime: MlxRuntime,
         validated_artifact: ValidatedQwen3_5Artifact,
-        model_chunking: Qwen3_5ModelChunkingConfiguration,
+        model_chunking: TextModelChunkingConfiguration,
         model_loading_performance_attribution: &mut PerformanceAttribution,
     ) -> Result<Qwen3_5ResidentModel, InferenceEngineError> {
         load_and_materialize_resident_model(
@@ -152,7 +152,7 @@ fn synchronize_gpu_stream_then_load_experts(
     model
         .runtime()
         .synchronize_gpu_stream_and_clear_mlx_buffer_cache()
-        .map_err(qwen3_5_runtime_error)?;
+        .map_err(fatal_runtime_error)?;
     load_resident_expert_weights_when_planned(model, model_loading_performance_attribution)
 }
 
@@ -162,7 +162,7 @@ fn load_and_materialize_resident_model(
     runtime: MlxRuntime,
     validated_artifact: ValidatedQwen3_5Artifact,
     model_directory: &std::path::Path,
-    model_chunking: Qwen3_5ModelChunkingConfiguration,
+    model_chunking: TextModelChunkingConfiguration,
     model_loading_performance_attribution: &mut PerformanceAttribution,
 ) -> Result<Qwen3_5ResidentModel, InferenceEngineError> {
     let model = Qwen3_5ResidentModel::load_with_performance_attribution(
@@ -178,7 +178,7 @@ fn load_and_materialize_resident_model(
             PerformanceOperation::ResidentWeightMaterializationSynchronizationWait,
             |_performance_attribution| model.materialize_target_weights(),
         )
-        .map_err(qwen3_5_runtime_error)?;
+        .map_err(fatal_runtime_error)?;
     Ok(model)
 }
 
@@ -204,7 +204,7 @@ fn load_resident_expert_weights_when_planned(
                 )
             },
         )
-        .map_err(qwen3_5_runtime_error)?;
+        .map_err(fatal_runtime_error)?;
     model.resident_expert_weights = Some(resident_expert_weights);
     Ok(())
 }

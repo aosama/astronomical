@@ -18,14 +18,13 @@ use crate::InferenceEngineError;
 use crate::PerformanceOperation;
 use crate::astro_ssd_prompt_cache_boundary_completed_prefill_chunk_tokens;
 use crate::prism_hadamard_qwen35::model::PrismHadamardTextModel;
-use crate::qwen3_5_core::astro_ssd_prompt_cache_capture::record_astro_ssd_prompt_cache_boundary_checkpoint;
-use crate::qwen3_5_core::engine_errors::qwen3_5_runtime_error;
-use crate::qwen3_5_core::shared_execution::prompt_reading_steps::{
-    self, PromptStretch, PromptStretchTiming,
-};
 use crate::{
-    Qwen3_5AstroSsdPromptCacheBoundaryCheckpoint,
-    Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
+    AstroSsdPromptCacheBoundaryCheckpoint, AstroSsdPromptCacheBoundaryCheckpointCollector,
+};
+use text_generation::astro_ssd_prompt_cache_capture::record_astro_ssd_prompt_cache_boundary_checkpoint;
+use text_generation::engine_errors::fatal_runtime_error;
+use text_generation::generation_loop::prompt_reading_steps::{
+    self, PromptStretch, PromptStretchTiming,
 };
 
 use super::engine_trait_impl::gpu_error;
@@ -36,7 +35,7 @@ use super::{PrismHadamardQwen35ActiveGeneration, PrismHadamardQwen35InferenceExe
 /// only boundary or crosses none.
 struct ChunkBoundaryPlan {
     all_completed_prefill_chunk_tokens: Vec<usize>,
-    intermediate_boundary_collector: Option<Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector>,
+    intermediate_boundary_collector: Option<AstroSsdPromptCacheBoundaryCheckpointCollector>,
 }
 
 impl PrismHadamardQwen35InferenceExecution {
@@ -88,7 +87,7 @@ impl PrismHadamardQwen35InferenceExecution {
         &self,
         active: &mut PrismHadamardQwen35ActiveGeneration,
         read_stretch: PromptStretch,
-    ) -> Result<Vec<Qwen3_5AstroSsdPromptCacheBoundaryCheckpoint>, InferenceEngineError> {
+    ) -> Result<Vec<AstroSsdPromptCacheBoundaryCheckpoint>, InferenceEngineError> {
         let model = self.execution_core.loaded_model()?;
         let ChunkBoundaryPlan {
             all_completed_prefill_chunk_tokens,
@@ -116,7 +115,7 @@ impl PrismHadamardQwen35InferenceExecution {
             submit_prefill_state_evaluation(model, active, &hidden_states, chunk_ends_the_prompt)?;
         queue_prefill_first_token(model, active, final_logits.as_ref())?;
         let mut boundary_checkpoints = match intermediate_boundary_collector {
-            Some(collector) => collector.complete().map_err(qwen3_5_runtime_error)?,
+            Some(collector) => collector.complete().map_err(fatal_runtime_error)?,
             None => Vec::new(),
         };
         record_astro_ssd_prompt_cache_boundary_checkpoint(
@@ -163,14 +162,14 @@ impl PrismHadamardQwen35InferenceExecution {
                 None
             } else {
                 Some(
-                    Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector::new(
+                    AstroSsdPromptCacheBoundaryCheckpointCollector::new(
                         intermediate_completed_prefill_chunk_tokens,
                         model
                             .astro_decoder_state_cache_layout
                             .boundary_tensor_count(),
                         astro_ssd_prompt_cache_block_token_count,
                     )
-                    .map_err(qwen3_5_runtime_error)?,
+                    .map_err(fatal_runtime_error)?,
                 )
             };
         Ok(ChunkBoundaryPlan {

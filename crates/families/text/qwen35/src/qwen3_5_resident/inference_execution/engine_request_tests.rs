@@ -1,7 +1,7 @@
 use std::collections::VecDeque;
 
-use super::ResidentRequestExtension;
-use crate::qwen3_5_core::engine_request_test_support::test_engine_request;
+use super::{ResidentRequestExtension, ResidentSpeculativeRequest};
+use text_generation::engine_request_test_support::test_engine_request;
 
 fn speculative_extension(queued_token_ids: &[u32]) -> ResidentRequestExtension {
     ResidentRequestExtension {

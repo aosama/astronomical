@@ -16,9 +16,9 @@ mod starting_decoder_state;
 
 use crate::prism_hadamard_qwen35::artifacts::ValidatedFoldedPack;
 use crate::prism_hadamard_qwen35::model::PrismHadamardTextModel;
-use crate::qwen3_5_core::engine_request::Qwen3_5EngineRequest;
-use crate::qwen3_5_core::shared_execution::execution_core::{
-    Qwen3_5ExecutionCore, Qwen3_5ExecutionCoreOwner, Qwen3_5ValidatedExecutionCoreSettings,
+use text_generation::engine_request::TextEngineRequest;
+use text_generation::generation_loop::execution_core::{
+    TextExecutionCore, TextExecutionCoreOwner, TextValidatedExecutionCoreSettings,
 };
 
 pub use active_generation::PrismRequestExtension;
@@ -27,20 +27,19 @@ pub use active_generation::PrismRequestExtension;
 /// owner thread starts: the validated shared settings and the one load knob
 /// only the folded-ternary engine reads.
 pub struct PrismHadamardQwen35PendingStartup {
-    pub validated_execution_core_settings:
-        Qwen3_5ValidatedExecutionCoreSettings<ValidatedFoldedPack>,
+    pub validated_execution_core_settings: TextValidatedExecutionCoreSettings<ValidatedFoldedPack>,
     /// Lets `load` explain that this engine has no Neural Engine path.
     pub neural_engine_mlp_prefill_requested: bool,
 }
 
 /// One folded-ternary request in the shared request record: chunked prefill
 /// plus one-token decode.
-pub(super) type PrismHadamardQwen35ActiveGeneration = Qwen3_5EngineRequest<PrismRequestExtension>;
+pub(super) type PrismHadamardQwen35ActiveGeneration = TextEngineRequest<PrismRequestExtension>;
 
 /// The folded-ternary execution core: the state both Qwen 3.5 engines keep,
 /// holding the Prism model, request extension and validated pack.
 pub(super) type PrismHadamardQwen35ExecutionCore =
-    Qwen3_5ExecutionCore<PrismHadamardTextModel, PrismRequestExtension, ValidatedFoldedPack>;
+    TextExecutionCore<PrismHadamardTextModel, PrismRequestExtension, ValidatedFoldedPack>;
 
 /// The synchronous folded-ternary execution owned by the MLX owner thread.
 pub struct PrismHadamardQwen35InferenceExecution {
@@ -51,7 +50,7 @@ pub struct PrismHadamardQwen35InferenceExecution {
     pub(super) neural_engine_mlp_prefill_requested: bool,
 }
 
-impl Qwen3_5ExecutionCoreOwner for PrismHadamardQwen35InferenceExecution {
+impl TextExecutionCoreOwner for PrismHadamardQwen35InferenceExecution {
     type Model = PrismHadamardTextModel;
     type RequestExtension = PrismRequestExtension;
     type Artifact = ValidatedFoldedPack;
@@ -71,7 +70,7 @@ impl PrismHadamardQwen35InferenceExecution {
             validated_execution_core_settings,
             neural_engine_mlp_prefill_requested,
         } = pending_startup;
-        let execution_core = Qwen3_5ExecutionCore::new(validated_execution_core_settings);
+        let execution_core = TextExecutionCore::new(validated_execution_core_settings);
         Self {
             configured_mlx_buffer_cache_bytes: execution_core
                 .memory_limits

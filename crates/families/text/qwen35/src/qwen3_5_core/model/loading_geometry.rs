@@ -12,13 +12,13 @@ use runtime_integration::MlxRuntime;
 use crate::qwen3_5_core::artifacts::{QuantizedExpertLayerPlan, Qwen3_5ShardIndex};
 use crate::qwen3_5_core::configuration::Qwen3_5Config;
 use crate::qwen3_5_core::model::bound_weight_dtype_flow::derive_astro_decoder_state_cache_layer_dtypes;
-use crate::qwen3_5_core::model::model_chunking_configuration::Qwen3_5ModelChunkingConfiguration;
-use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_core::model_math::weights::Qwen3_5Weights;
 use crate::{
     AstroDecoderStateCacheLayout, ModelMemoryFacts, ModelMemoryGeometry, PerformanceAttribution,
     PerformanceOperation, TensorInventory,
 };
+use text_generation::execution_error::TextExecutionError;
+use text_generation::model::model_chunking_configuration::TextModelChunkingConfiguration;
 
 /// The lookups an expert plan needs to find each expert tensor on disk.
 pub struct ExpertTensorNameMaps {
@@ -66,10 +66,10 @@ pub fn model_memory_facts(
     model_core_payload_bytes: u64,
     expert_payload_geometry: ExpertPayloadGeometry,
     astro_decoder_state_cache_layout: &AstroDecoderStateCacheLayout,
-) -> Result<ModelMemoryFacts, Qwen3_5ExecutionError> {
+) -> Result<ModelMemoryFacts, TextExecutionError> {
     let active_memory_limit_bytes =
         u64::try_from(runtime.memory_limits().active_memory_limit_bytes()).map_err(|_| {
-            Qwen3_5ExecutionError::InvalidInput {
+            TextExecutionError::InvalidInput {
                 description: "MLX active memory ceiling exceeds the u64 range",
             }
         })?;
@@ -91,7 +91,7 @@ pub fn model_memory_facts(
             sequence_state_bytes_per_token,
         },
     )
-    .map_err(|_| Qwen3_5ExecutionError::InvalidInput {
+    .map_err(|_| TextExecutionError::InvalidInput {
         description: "the MLX memory limit must be positive",
     })
 }
@@ -106,11 +106,11 @@ pub fn model_memory_facts(
 /// plan" text.
 pub fn measured_astro_decoder_state_cache_layout(
     config: &Qwen3_5Config,
-    chunking: &Qwen3_5ModelChunkingConfiguration,
+    chunking: &TextModelChunkingConfiguration,
     weights: &Qwen3_5Weights,
     expert_layer_plans: &[QuantizedExpertLayerPlan],
     performance_attribution: &mut PerformanceAttribution,
-) -> Result<AstroDecoderStateCacheLayout, Qwen3_5ExecutionError> {
+) -> Result<AstroDecoderStateCacheLayout, TextExecutionError> {
     performance_attribution.measure_operation(
         PerformanceOperation::ModelTensorBinding,
         |_performance_attribution| {
@@ -126,15 +126,15 @@ pub fn measured_astro_decoder_state_cache_layout(
 
 fn astro_decoder_state_cache_layout_at_tensor_binding(
     config: &Qwen3_5Config,
-    chunking: &Qwen3_5ModelChunkingConfiguration,
+    chunking: &TextModelChunkingConfiguration,
     weights: &Qwen3_5Weights,
     expert_layer_plans: &[QuantizedExpertLayerPlan],
-) -> Result<AstroDecoderStateCacheLayout, Qwen3_5ExecutionError> {
+) -> Result<AstroDecoderStateCacheLayout, TextExecutionError> {
     let astro_decoder_state_cache_layer_dtypes =
         derive_astro_decoder_state_cache_layer_dtypes(weights, expert_layer_plans)?;
     let full_attention_key_value_growth_tokens =
         usize::try_from(chunking.full_attention_key_value_growth_tokens).map_err(|_| {
-            Qwen3_5ExecutionError::InvalidInput {
+            TextExecutionError::InvalidInput {
                 description: "full-attention key/value growth tokens exceed the usize range",
             }
         })?;
@@ -144,7 +144,7 @@ fn astro_decoder_state_cache_layout_at_tensor_binding(
         &astro_decoder_state_cache_layer_dtypes,
     )
     .map_err(|astro_decoder_state_cache_layout_error| {
-        Qwen3_5ExecutionError::InvalidAstroDecoderStateCacheLayout {
+        TextExecutionError::InvalidAstroDecoderStateCacheLayout {
             description: astro_decoder_state_cache_layout_error.to_string(),
         }
     })

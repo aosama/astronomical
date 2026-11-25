@@ -12,24 +12,24 @@ use memory_policy::ledger::{
     HeldMemory, LedgerAccounts, LedgerPhase, MeasuredStep, MemoryGovernor,
 };
 
-use crate::qwen3_5_core::decoder::RequestDecoderStateStack;
-use crate::qwen3_5_core::model::memory_breakdown::Qwen3_5MemoryOwnership;
 use crate::qwen3_5_resident::model::Qwen3_5ResidentModel;
 use crate::qwen3_5_resident::model::request_errors::invalid_request_error;
 use crate::{
     InferenceEngineError, ResidentForwardAdmissionDecision, ResidentForwardAdmissionRejection,
     StreamingEngineRequirement,
 };
+use text_generation::RequestDecoderStateStack;
+use text_generation::model::memory_breakdown::TextModelMemoryOwnership;
 
-use crate::qwen3_5_core::shared_execution::forward_memory_governance::{
-    Qwen3_5ForwardKind, Qwen3_5ForwardMemoryGovernance,
+use text_generation::generation_loop::forward_memory_governance::{
+    TextForwardKind, TextForwardMemoryGovernance,
 };
 
 use super::Qwen3_5EngineState;
 use super::completed_forward_memory::{
     CompletedForwardMemoryObservation, capture_completed_forward_memory_observation,
 };
-use super::qwen3_5_runtime_error;
+use super::fatal_runtime_error;
 use super::resident_memory_governor::nothing_to_give_back;
 
 /// One forward the engine is about to run.
@@ -140,12 +140,12 @@ impl Qwen3_5EngineState {
                 model.astro_decoder_state_cache_layout(),
                 forward_shape.token_count,
             )
-            .map_err(qwen3_5_runtime_error)?
+            .map_err(fatal_runtime_error)?
             .saturating_add(additional_stored_state_growth_bytes);
         let active_bytes_before_forward = model
             .runtime()
             .memory_snapshot()
-            .map_err(qwen3_5_runtime_error)?
+            .map_err(fatal_runtime_error)?
             .active_memory_bytes() as u64;
         if let Some(memory_governor) = model.memory_governor.borrow_mut().as_mut() {
             if memory_governor.phase() != forward_shape.phase {
@@ -175,7 +175,7 @@ impl Qwen3_5EngineState {
         model
             .runtime()
             .reset_peak_memory()
-            .map_err(qwen3_5_runtime_error)?;
+            .map_err(fatal_runtime_error)?;
         Ok(AdmittedForward {
             forward_shape,
             active_bytes_before_forward,
@@ -318,19 +318,17 @@ mod tests;
 
 /// The resident engine asks its memory governor before each forward and may
 /// refuse it; afterwards it reports what the forward used.
-impl Qwen3_5ForwardMemoryGovernance for Qwen3_5EngineState {
+impl TextForwardMemoryGovernance for Qwen3_5EngineState {
     type ForwardInProgress = AdmittedForward;
 
     fn begin_governed_forward(
         &mut self,
-        forward_kind: Qwen3_5ForwardKind,
+        forward_kind: TextForwardKind,
         request_decoder_state: &RequestDecoderStateStack,
     ) -> Result<AdmittedForward, InferenceEngineError> {
         let forward_shape = match forward_kind {
-            Qwen3_5ForwardKind::PromptChunk { token_count } => {
-                ForwardShape::prompt_chunk(token_count)
-            }
-            Qwen3_5ForwardKind::ReplyToken => ForwardShape::reply_token(),
+            TextForwardKind::PromptChunk { token_count } => ForwardShape::prompt_chunk(token_count),
+            TextForwardKind::ReplyToken => ForwardShape::reply_token(),
         };
         Ok(self.admit_forward(forward_shape, request_decoder_state, 0, 0)?)
     }

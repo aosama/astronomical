@@ -10,7 +10,6 @@
 use runtime_integration::MlxRuntime;
 
 use super::paged_execution::RoutedExpertAssignmentOutputs;
-use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_streaming::expert_streaming::RoutedExpertCoverage;
 use crate::qwen3_5_streaming::expert_streaming::expert_pager::Qwen3_5ExpertPager;
 use crate::qwen3_5_streaming::expert_streaming::expert_pager::Qwen3_5PagedExpertWeights;
@@ -22,6 +21,7 @@ use crate::qwen3_5_streaming::model::routing;
 use crate::{PerformanceAttribution, PerformanceCounter, PerformanceOperation};
 use engine_core::expert_paging::ExpertPageRoutePartition;
 use mlx_bridge::MlxArray;
+use text_generation::execution_error::TextExecutionError;
 
 /// Reshapes one partial route side to the batched assignment layout the gather
 /// consumes. The route builder emits compact one-dimensional arrays; the
@@ -31,20 +31,19 @@ fn route_side_arrays(
     runtime: &MlxRuntime,
     page_slot_indices: &MlxArray,
     scores: &MlxArray,
-) -> Result<(MlxArray, MlxArray), Qwen3_5ExecutionError> {
+) -> Result<(MlxArray, MlxArray), TextExecutionError> {
     let slot_shape = page_slot_indices.shape();
     let score_shape = scores.shape();
     if slot_shape.len() != 1 || score_shape.len() != 1 || slot_shape != score_shape {
-        return Err(Qwen3_5ExecutionError::InvalidInput {
+        return Err(TextExecutionError::InvalidInput {
             description: "a partial route side must pair one-dimensional slots and scores",
         });
     }
-    let assignment_count =
-        *slot_shape
-            .first()
-            .ok_or_else(|| Qwen3_5ExecutionError::InvalidInput {
-                description: "a partial route side must not be empty",
-            })?;
+    let assignment_count = *slot_shape
+        .first()
+        .ok_or_else(|| TextExecutionError::InvalidInput {
+            description: "a partial route side must not be empty",
+        })?;
     let batched_shape = [1, 1, assignment_count];
     Ok((
         runtime.reshape(page_slot_indices, &batched_shape)?,
@@ -75,7 +74,7 @@ impl Qwen3_5Model {
         concatenated_assignment_order: &[usize],
         should_use_compiled_elementwise_graphs: bool,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         let sparse_output = performance_attribution.measure_operation(
             PerformanceOperation::PagedMoeGraphConstruction,
             |measured_attribution| {
@@ -115,7 +114,7 @@ impl Qwen3_5Model {
         concatenated_assignment_order: &[usize],
         should_use_compiled_elementwise_graphs: bool,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         let (retained_slot_indices, _retained_scores) = route_side_arrays(
             &self.runtime,
             &astro_expert_cache_plus_streamed_route.retained_page_slot_indices,
@@ -170,7 +169,7 @@ impl Qwen3_5Model {
         expert_weights: &Qwen3_5PagedExpertWeights,
         page_slot_indices: &MlxArray,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         match self.streamed_expert_assignment_outputs(
             hidden_states,
             expert_weights,
@@ -180,11 +179,9 @@ impl Qwen3_5Model {
             RoutedExpertAssignmentOutputs::Unsorted { assignment_outputs } => {
                 Ok(assignment_outputs)
             }
-            RoutedExpertAssignmentOutputs::Sorted { .. } => {
-                Err(Qwen3_5ExecutionError::InvalidInput {
-                    description: "mixed decode routing must stay unsorted",
-                })
-            }
+            RoutedExpertAssignmentOutputs::Sorted { .. } => Err(TextExecutionError::InvalidInput {
+                description: "mixed decode routing must stay unsorted",
+            }),
         }
     }
 
@@ -211,7 +208,7 @@ impl Qwen3_5Model {
         paged_execution_mode: Qwen3_5MoEPagedExecutionMode,
         should_use_compiled_elementwise_graphs: bool,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         let retained_expert_ids = &route_coverage.retained_expert_ids;
         let missing_expert_ids = &route_coverage.missing_expert_ids;
         // With the fused kernel the warm table is multiplied in place; without
@@ -226,7 +223,7 @@ impl Qwen3_5Model {
             )?
         };
         let (retained_expert_weights, retained_page_manifest) =
-            retained_page.ok_or(Qwen3_5ExecutionError::InvalidInput {
+            retained_page.ok_or(TextExecutionError::InvalidInput {
                 description: "a partially covered route lost its retained warm experts",
             })?;
         let (missing_expert_weights, missing_page_manifest) = self
@@ -249,7 +246,7 @@ impl Qwen3_5Model {
                 &retained_page_manifest,
                 &missing_page_manifest,
             )
-            .map_err(|_route_error| Qwen3_5ExecutionError::InvalidInput {
+            .map_err(|_route_error| TextExecutionError::InvalidInput {
                 description: "the astro-expert-cache-plus-streamed route could not be built",
             })?;
         let concatenated_assignment_order =
@@ -268,9 +265,9 @@ impl Qwen3_5Model {
     }
 }
 
-fn row_count_before_last(shape: &[i32]) -> Result<i32, Qwen3_5ExecutionError> {
+fn row_count_before_last(shape: &[i32]) -> Result<i32, TextExecutionError> {
     if shape.len() < 2 {
-        return Err(Qwen3_5ExecutionError::InvalidInput {
+        return Err(TextExecutionError::InvalidInput {
             description: "a partial route output must include an assignment axis",
         });
     }
@@ -279,7 +276,7 @@ fn row_count_before_last(shape: &[i32]) -> Result<i32, Qwen3_5ExecutionError> {
         .try_fold(1_i32, |product, dimension| {
             product
                 .checked_mul(*dimension)
-                .ok_or_else(|| Qwen3_5ExecutionError::InvalidInput {
+                .ok_or_else(|| TextExecutionError::InvalidInput {
                     description: "a partial route assignment count overflowed",
                 })
         })
@@ -316,17 +313,17 @@ pub fn qwen3_5_moe_combine_partial_route_outputs_for_tests(
     retained_output: &MlxArray,
     missing_output: &MlxArray,
     concatenated_assignment_order: &[usize],
-) -> Result<MlxArray, Qwen3_5ExecutionError> {
+) -> Result<MlxArray, TextExecutionError> {
     let retained_shape = retained_output.shape();
     let missing_shape = missing_output.shape();
     let feature_dimension =
         *retained_shape
             .last()
-            .ok_or_else(|| Qwen3_5ExecutionError::InvalidInput {
+            .ok_or_else(|| TextExecutionError::InvalidInput {
                 description: "a partial route output must not be scalar",
             })?;
     if missing_shape.last() != Some(&feature_dimension) {
-        return Err(Qwen3_5ExecutionError::InvalidInput {
+        return Err(TextExecutionError::InvalidInput {
             description: "partial route outputs must share one feature dimension",
         });
     }
@@ -343,14 +340,14 @@ pub fn qwen3_5_moe_combine_partial_route_outputs_for_tests(
     let concatenated_rows = runtime.concatenate_axis(&[&retained_rows, &missing_rows], 0)?;
     let total_assignment_count = retained_assignment_count + missing_assignment_count;
     if concatenated_assignment_order.len() != total_assignment_count as usize {
-        return Err(Qwen3_5ExecutionError::InvalidInput {
+        return Err(TextExecutionError::InvalidInput {
             description: "the partial-route assignment order must cover every assignment",
         });
     }
     let assignment_order = concatenated_assignment_order
         .iter()
         .map(|concatenated_position| {
-            u32::try_from(*concatenated_position).map_err(|_| Qwen3_5ExecutionError::InvalidInput {
+            u32::try_from(*concatenated_position).map_err(|_| TextExecutionError::InvalidInput {
                 description: "a partial-route assignment position exceeds the u32 range",
             })
         })
@@ -367,7 +364,7 @@ pub fn qwen3_5_moe_combine_partial_route_outputs_for_tests(
             feature_dimension,
         ],
     );
-    restored_rows.map_err(|_runtime_error| Qwen3_5ExecutionError::InvalidInput {
+    restored_rows.map_err(|_runtime_error| TextExecutionError::InvalidInput {
         description: "the restored partial-route rows could not be reshaped",
     })
 }

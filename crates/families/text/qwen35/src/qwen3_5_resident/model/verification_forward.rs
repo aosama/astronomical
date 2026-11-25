@@ -10,14 +10,13 @@
 //! captures and the caller-selected head scope.
 
 use crate::performance_attribution::PerformanceAttribution;
-use crate::qwen3_5_core::decoder::request_state::RequestDecoderStateStack;
-use crate::qwen3_5_core::decoder::{
-    Qwen3_5AstroSsdPromptCacheBoundaryCheckpoint,
-    Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
-};
 use mlx_bridge::{MlxArray, MlxDtype};
+use text_generation::decoder_state::request_state::RequestDecoderStateStack;
+use text_generation::{
+    AstroSsdPromptCacheBoundaryCheckpoint, AstroSsdPromptCacheBoundaryCheckpointCollector,
+};
 
-use super::{Qwen3_5ExecutionError, Qwen3_5ResidentModel};
+use super::{Qwen3_5ResidentModel, TextExecutionError};
 
 /// What the verification forward does with the language-model head.
 ///
@@ -42,7 +41,7 @@ pub struct Qwen3_5DraftedRowsVerification {
     pub per_position_logits: MlxArray,
     pub hidden_state_taps: Vec<MlxArray>,
     /// Entry `n - 1` holds the DeltaNet state after the first `n` rows.
-    pub row_boundaries: Vec<Qwen3_5AstroSsdPromptCacheBoundaryCheckpoint>,
+    pub row_boundaries: Vec<AstroSsdPromptCacheBoundaryCheckpoint>,
 }
 
 /// One verification forward's outputs.
@@ -77,7 +76,7 @@ impl Qwen3_5ResidentModel {
         target_hidden_state_tap_layer_ids: &[i32],
         logits_mode: VerificationLogitsMode,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<Qwen3_5SpeculativeVerificationOutput, Qwen3_5ExecutionError> {
+    ) -> Result<Qwen3_5SpeculativeVerificationOutput, TextExecutionError> {
         self.speculative_verification_forward(
             token_ids,
             starting_position_tokens,
@@ -108,14 +107,14 @@ impl Qwen3_5ResidentModel {
     ) -> Result<
         (
             Qwen3_5SpeculativeVerificationOutput,
-            Vec<Qwen3_5AstroSsdPromptCacheBoundaryCheckpoint>,
+            Vec<AstroSsdPromptCacheBoundaryCheckpoint>,
         ),
-        Qwen3_5ExecutionError,
+        TextExecutionError,
     > {
         let mut boundary_checkpoint_collector = if completed_prefill_chunk_tokens.is_empty() {
             None
         } else {
-            Some(Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector::new(
+            Some(AstroSsdPromptCacheBoundaryCheckpointCollector::new(
                 completed_prefill_chunk_tokens.to_vec(),
                 self.astro_decoder_state_cache_layout
                     .boundary_tensor_count(),
@@ -162,11 +161,9 @@ impl Qwen3_5ResidentModel {
         request_decoder_state: &mut RequestDecoderStateStack,
         target_hidden_state_tap_layer_ids: &[i32],
         logits_mode: VerificationLogitsMode,
-        boundary_checkpoint_collector: Option<
-            &mut Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
-        >,
+        boundary_checkpoint_collector: Option<&mut AstroSsdPromptCacheBoundaryCheckpointCollector>,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<Qwen3_5SpeculativeVerificationOutput, Qwen3_5ExecutionError> {
+    ) -> Result<Qwen3_5SpeculativeVerificationOutput, TextExecutionError> {
         let SpeculativeVerificationInputs {
             rope_offset_tokens,
             token_count,
@@ -207,10 +204,10 @@ impl Qwen3_5ResidentModel {
         request_decoder_state: &mut RequestDecoderStateStack,
         target_hidden_state_tap_layer_ids: &[i32],
         mut boundary_checkpoint_collector: Option<
-            &mut Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
+            &mut AstroSsdPromptCacheBoundaryCheckpointCollector,
         >,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<(MlxArray, Vec<MlxArray>), Qwen3_5ExecutionError> {
+    ) -> Result<(MlxArray, Vec<MlxArray>), TextExecutionError> {
         let mut hidden_state_tap_slots: Vec<Option<MlxArray>> = (0
             ..target_hidden_state_tap_layer_ids.len())
             .map(|_| None)
@@ -220,15 +217,15 @@ impl Qwen3_5ResidentModel {
                 .weights
                 .decoder_layer_weights
                 .get(layer_index)
-                .ok_or(Qwen3_5ExecutionError::MissingDecoderLayerWeights { layer_index })?;
+                .ok_or(TextExecutionError::MissingDecoderLayerWeights { layer_index })?;
             let layer_model_state = request_decoder_state.layer_mut(layer_index).ok_or(
-                Qwen3_5ExecutionError::InvalidRequestDecoderState {
+                TextExecutionError::InvalidRequestDecoderState {
                     layer_index,
                     description: "decoder layer entry is missing",
                 },
             )?;
             if !layer_model_state.tensors_are_allocated_consistently() {
-                return Err(Qwen3_5ExecutionError::InvalidRequestDecoderState {
+                return Err(TextExecutionError::InvalidRequestDecoderState {
                     layer_index,
                     description: "decoder layer tensors must be allocated together or absent together",
                 });
@@ -256,7 +253,7 @@ impl Qwen3_5ResidentModel {
         }
         let mut hidden_state_taps = Vec::with_capacity(hidden_state_tap_slots.len());
         for tap_slot in hidden_state_tap_slots {
-            hidden_state_taps.push(tap_slot.ok_or(Qwen3_5ExecutionError::InvalidInput {
+            hidden_state_taps.push(tap_slot.ok_or(TextExecutionError::InvalidInput {
                 description: "a requested DFlash target hidden-state tap was never captured",
             })?);
         }
@@ -275,7 +272,7 @@ impl Qwen3_5ResidentModel {
         request_decoder_state: &mut RequestDecoderStateStack,
         target_hidden_state_tap_layer_ids: &[i32],
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<Qwen3_5DraftedRowsVerification, Qwen3_5ExecutionError> {
+    ) -> Result<Qwen3_5DraftedRowsVerification, TextExecutionError> {
         let SpeculativeVerificationInputs {
             rope_offset_tokens,
             token_count,
@@ -286,17 +283,11 @@ impl Qwen3_5ResidentModel {
             target_hidden_state_tap_layer_ids,
         )?;
         if token_count < 2 {
-            return Err(Qwen3_5ExecutionError::InvalidInput {
+            return Err(TextExecutionError::InvalidInput {
                 description: "a drafted block verifies the anchor and at least one draft",
             });
         }
-        let mut row_boundary_collector =
-            Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector::new(
-                (1..token_ids.len()).collect(),
-                self.astro_decoder_state_cache_layout
-                    .boundary_tensor_count(),
-                1,
-            )?;
+        let mut row_boundary_collector = self.drafted_row_boundary_collector(token_ids.len())?;
         let (hidden_states, hidden_state_taps) = self.run_verification_layers(
             self.embedding_lookup(&token_indices)?,
             token_count,
@@ -312,7 +303,7 @@ impl Qwen3_5ResidentModel {
                 VerificationLogitsMode::AllPositions,
                 token_count,
             )?
-            .ok_or(Qwen3_5ExecutionError::InvalidInput {
+            .ok_or(TextExecutionError::InvalidInput {
                 description: "a drafted block must produce logits",
             })?;
         Ok(Qwen3_5DraftedRowsVerification {
@@ -332,20 +323,20 @@ impl Qwen3_5ResidentModel {
         token_ids: &[u32],
         starting_position_tokens: u32,
         target_hidden_state_tap_layer_ids: &[i32],
-    ) -> Result<SpeculativeVerificationInputs, Qwen3_5ExecutionError> {
+    ) -> Result<SpeculativeVerificationInputs, TextExecutionError> {
         let rope_offset_tokens = i32::try_from(starting_position_tokens).map_err(|_| {
-            Qwen3_5ExecutionError::InvalidInput {
+            TextExecutionError::InvalidInput {
                 description: "starting position exceeds the MLX int32 range",
             }
         })?;
         let token_count =
-            i32::try_from(token_ids.len()).map_err(|_| Qwen3_5ExecutionError::InvalidInput {
+            i32::try_from(token_ids.len()).map_err(|_| TextExecutionError::InvalidInput {
                 description: "verification token count exceeds the MLX int32 range",
             })?;
         let signed_token_ids = token_ids
             .iter()
             .map(|token_id| {
-                i32::try_from(*token_id).map_err(|_| Qwen3_5ExecutionError::InvalidInput {
+                i32::try_from(*token_id).map_err(|_| TextExecutionError::InvalidInput {
                     description: "token ID exceeds the MLX int32 range",
                 })
             })
@@ -358,7 +349,7 @@ impl Qwen3_5ResidentModel {
                 .ok()
                 .filter(|tap_layer_index| *tap_layer_index < self.config.layer_count() as usize);
             if tap_layer_index.is_none() {
-                return Err(Qwen3_5ExecutionError::InvalidInput {
+                return Err(TextExecutionError::InvalidInput {
                     description: "a DFlash target hidden-state tap names a layer outside the target model",
                 });
             }
@@ -381,7 +372,7 @@ impl Qwen3_5ResidentModel {
         hidden_states: &MlxArray,
         logits_mode: VerificationLogitsMode,
         token_count: i32,
-    ) -> Result<Option<MlxArray>, Qwen3_5ExecutionError> {
+    ) -> Result<Option<MlxArray>, TextExecutionError> {
         let per_position_logits = match logits_mode {
             VerificationLogitsMode::NoLogits => None,
             VerificationLogitsMode::LastRowOnly | VerificationLogitsMode::AllPositions => {

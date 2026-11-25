@@ -40,7 +40,7 @@ impl Qwen3_5Model {
         self.apply_kept_weight_capacity(capacity);
         self.runtime()
             .synchronize_gpu_stream_and_clear_mlx_buffer_cache()
-            .map_err(crate::qwen3_5_core::engine_errors::qwen3_5_runtime_error)
+            .map_err(text_generation::engine_errors::fatal_runtime_error)
     }
 
     /// A forward measured layer by layer still ends the publication its

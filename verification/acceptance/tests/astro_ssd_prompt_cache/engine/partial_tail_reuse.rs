@@ -10,7 +10,7 @@ use ipc_protocol::{
     WorkerEvent,
 };
 use model_serving::{
-    InferenceEngine, Qwen3_5ArtifactValidator, Qwen3_5InferenceRequest, Qwen3_5Tokenizer,
+    InferenceEngine, Qwen3_5ArtifactValidator, Qwen3_5Tokenizer, TextInferenceRequest,
     astro_ssd_prompt_cache_partial_tail_capture_end,
 };
 
@@ -186,8 +186,8 @@ fn romeo_and_juliet_conversation_token_ids(
 fn extended_conversation_request(
     request_id: RequestId,
     prompt_token_ids: Vec<u32>,
-) -> Qwen3_5InferenceRequest {
-    Qwen3_5InferenceRequest::new_sampling(request_id, prompt_token_ids, 1, 1_000, 1_000, None)
+) -> TextInferenceRequest {
+    TextInferenceRequest::new_sampling(request_id, prompt_token_ids, 1, 1_000, 1_000, None)
         .with_image_pad_token_id(248_069)
         .with_thinking_configuration(false, None, Vec::new(), Vec::new())
 }

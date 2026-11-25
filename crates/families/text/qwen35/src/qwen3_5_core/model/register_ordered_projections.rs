@@ -20,12 +20,12 @@ use crate::qwen3_5_core::model_math::decoder_layer_weights::{
 use crate::qwen3_5_core::model_math::dense_projection::{
     Qwen3_5DenseProjection, Qwen3_5ProjectionStorage,
 };
-use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::row_batched_matmul::{
     RegisterOrderedWeight, RowBatchedMatmulKernels, RowBatchedProjectionError,
     register_ordered_matmul_any_rows,
 };
 use runtime_integration::MlxRuntimeError;
+use text_generation::execution_error::TextExecutionError;
 
 impl Qwen3_5ModelBase {
     /// Converts every dense 4-bit, group-64 projection with bf16 scales, and
@@ -42,7 +42,7 @@ impl Qwen3_5ModelBase {
     pub fn convert_projections_to_register_order(
         &mut self,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<Option<usize>, Qwen3_5ExecutionError> {
+    ) -> Result<Option<usize>, TextExecutionError> {
         let capabilities =
             worker_process_kernel_capabilities(&self.runtime, performance_attribution);
         if !capabilities.is_custom_kernel_supported(crate::kernel_capability::ROW_BATCHED_MATMUL) {
@@ -73,12 +73,12 @@ impl Qwen3_5ModelBase {
         &self,
         activations: &MlxArray,
         weight: &RegisterOrderedWeight,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         let kernels = self
             .optional_accelerators
             .register_ordered_matmul_kernels
             .as_ref()
-            .ok_or(Qwen3_5ExecutionError::InvalidInput {
+            .ok_or(TextExecutionError::InvalidInput {
                 description: "a register-ordered projection needs the kernels that converted it",
             })?;
         register_ordered_matmul_any_rows(&self.runtime, kernels, activations, weight)
@@ -123,7 +123,7 @@ fn convert_one(
     runtime: &runtime_integration::MlxRuntime,
     kernels: &RowBatchedMatmulKernels,
     projection: &mut Qwen3_5DenseProjection,
-) -> Result<usize, Qwen3_5ExecutionError> {
+) -> Result<usize, TextExecutionError> {
     let Some(Qwen3_5AffineWeights::Quantized {
         packed_weight,
         quantization_scales,
@@ -151,8 +151,8 @@ fn convert_one(
     Ok(1)
 }
 
-fn projection_failure(projection_error: RowBatchedProjectionError) -> Qwen3_5ExecutionError {
-    Qwen3_5ExecutionError::from(MlxRuntimeError::RuntimeOperation {
+fn projection_failure(projection_error: RowBatchedProjectionError) -> TextExecutionError {
+    TextExecutionError::from(MlxRuntimeError::RuntimeOperation {
         operation: "project rows through the register-ordered matmul",
         description: projection_error.to_string(),
     })
@@ -163,7 +163,7 @@ impl Qwen3_5LinearWeights for Qwen3_5DenseProjection {
         &self,
         model: &Qwen3_5ModelBase,
         activations: &MlxArray,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         let base_output = match &self.storage {
             Qwen3_5ProjectionStorage::Bound(bound_weights) => {
                 model.bound_linear(activations, bound_weights)?

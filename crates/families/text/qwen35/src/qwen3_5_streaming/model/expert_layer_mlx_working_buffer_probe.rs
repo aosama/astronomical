@@ -15,10 +15,10 @@
 use super::Qwen3_5Model;
 use super::layer_probe_shape::LayerProbeShape;
 use crate::PerformanceAttribution;
-use crate::qwen3_5_core::decoder::RequestDecoderStateStack;
 use crate::qwen3_5_core::model::probe_token_ids::vocabulary_walking_token_ids;
-use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_streaming::model::paged_execution_mode::Qwen3_5MoEPagedExecutionMode;
+use text_generation::RequestDecoderStateStack;
+use text_generation::execution_error::TextExecutionError;
 
 /// One measured expert-layer prompt step.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -69,7 +69,7 @@ impl Qwen3_5Model {
     fn measure_expert_layer_mlx_working_buffers(
         &self,
         probe_shape: LayerProbeShape,
-    ) -> Result<ProbedPromptLayerMlxWorkingBuffers, Qwen3_5ExecutionError> {
+    ) -> Result<ProbedPromptLayerMlxWorkingBuffers, TextExecutionError> {
         let reply_token_shape = LayerProbeShape {
             prefill_chunk_token_count: 1,
             ..probe_shape
@@ -96,9 +96,9 @@ impl Qwen3_5Model {
         &self,
         layer_index: usize,
         probe_shape: LayerProbeShape,
-    ) -> Result<u64, Qwen3_5ExecutionError> {
+    ) -> Result<u64, TextExecutionError> {
         let token_count = i32::try_from(probe_shape.prefill_chunk_token_count).map_err(|_| {
-            Qwen3_5ExecutionError::InvalidInput {
+            TextExecutionError::InvalidInput {
                 description: "the MLX working-buffer probe token count exceeds the MLX range",
             }
         })?;
@@ -106,7 +106,7 @@ impl Qwen3_5Model {
             .weights
             .decoder_layer_weights
             .get(layer_index)
-            .ok_or(Qwen3_5ExecutionError::MissingDecoderLayerWeights { layer_index })?;
+            .ok_or(TextExecutionError::MissingDecoderLayerWeights { layer_index })?;
         let mut request_decoder_state =
             RequestDecoderStateStack::empty_from_astro_decoder_state_cache_layout_with_full_attention_kv_state_growth_tokens(
                 &self.astro_decoder_state_cache_layout,
@@ -121,16 +121,20 @@ impl Qwen3_5Model {
         self.runtime.reset_peak_memory()?;
         // The input is made after the baseline: a real step holds its
         // hidden states too.
-        let probe_input = self.embedding_lookup(&self.runtime.array_from_i32(
-            &vocabulary_walking_token_ids(token_count, self.config.vocabulary_size()),
-            &[1, token_count],
-        )?)?;
-        let layer_model_state = request_decoder_state.layer_mut(layer_index).ok_or(
-            Qwen3_5ExecutionError::InvalidRequestDecoderState {
-                layer_index,
-                description: "the probe decoder state lacks the probed layer",
-            },
+        // For Flash-Next this also starts the residual lanes and gives the
+        // n-gram layer its tokens: they are part of a real step's buffers.
+        let probe_input = self.embed_forward_tokens(
+            &self.runtime.array_from_i32(
+                &vocabulary_walking_token_ids(token_count, self.config.vocabulary_size()),
+                &[1, token_count],
+            )?,
+            &mut request_decoder_state,
         )?;
+        let (layer_model_state, qwen4_exp_state) =
+            crate::qwen4_exp::request_state::layer_and_qwen4_exp_state(
+                &mut request_decoder_state,
+                layer_index,
+            )?;
         let probe_output = self.forward_decoder_layer(
             &probe_input,
             token_count,
@@ -141,6 +145,7 @@ impl Qwen3_5Model {
             None,
             None,
             Qwen3_5MoEPagedExecutionMode::ProductionDefault,
+            qwen4_exp_state,
             &mut PerformanceAttribution::disabled(),
         )?;
         self.runtime.evaluate_arrays(&[&probe_output])?;

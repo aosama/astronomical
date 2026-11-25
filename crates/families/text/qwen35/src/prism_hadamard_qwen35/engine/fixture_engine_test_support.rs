@@ -14,7 +14,7 @@ use crate::prism_hadamard_qwen35::artifacts::FoldedPackValidator;
 use crate::prism_hadamard_qwen35::artifacts::tests::pack_fixture::{
     FIXTURE_VOCAB_SIZE, FixturePackMutation, remove_fixture_directory, write_fixture_pack,
 };
-use crate::{AstroSsdPromptCacheDiskStoreConfig, Qwen3_5ExecutionCoreSettings};
+use crate::{AstroSsdPromptCacheDiskStoreConfig, TextExecutionCoreSettings};
 use crate::{MlxInferenceExecution, PerformanceAttribution, PerformanceAttributionLog};
 
 /// The fixture's think-end marker: the last vocabulary id, so a thinking
@@ -70,7 +70,7 @@ pub(super) fn pending_fixture_execution(
     let validated_pack = FoldedPackValidator::new()
         .validate(fixture_directory, 4096)
         .expect("the fixture pack should validate");
-    let validated_execution_core_settings = Qwen3_5ExecutionCoreSettings {
+    let validated_execution_core_settings = TextExecutionCoreSettings {
         validated_artifact: validated_pack,
         active_memory_limit_bytes: fixture_memory_limits.mlx_memory_ceiling_bytes,
         mlx_buffer_cache_limit_bytes: fixture_memory_limits.mlx_buffer_cache_bytes,

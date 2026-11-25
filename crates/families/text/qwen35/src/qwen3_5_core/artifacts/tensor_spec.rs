@@ -19,6 +19,19 @@ const PACKING_WORD_BITS: usize = 32;
 pub fn qwen3_5_language_tensor_profiles(
     qwen3_5_config: &Qwen3_5Config,
 ) -> Result<Vec<TensorProfile>, Qwen3_5ArtifactError> {
+    match qwen3_5_config.qwen4_exp_architecture() {
+        Some(architecture) => super::qwen4_exp_tensor_spec::qwen4_exp_language_tensor_profiles(
+            qwen3_5_config,
+            &architecture,
+        ),
+        None => normalized_layer_language_tensor_profiles(qwen3_5_config),
+    }
+}
+
+/// The inventory of a Qwen 3.5 checkpoint, with a norm before each block.
+fn normalized_layer_language_tensor_profiles(
+    qwen3_5_config: &Qwen3_5Config,
+) -> Result<Vec<TensorProfile>, Qwen3_5ArtifactError> {
     let hidden_size = qwen3_5_config.hidden_size() as usize;
     let layer_count = qwen3_5_config.layer_count() as usize;
     let vocabulary_size = qwen3_5_config.vocabulary_size() as usize;
@@ -67,7 +80,12 @@ pub fn qwen3_5_resident_language_tensor_profiles(
         Qwen3_5FeedForwardArchitecture::Dense => Ok(complete_language_tensor_profiles),
         Qwen3_5FeedForwardArchitecture::MixtureOfExperts => Ok(complete_language_tensor_profiles
             .into_iter()
-            .filter(|tensor_profile| !is_sparse_selected_expert_tensor_name(&tensor_profile.name))
+            .filter(|tensor_profile| {
+                !is_sparse_selected_expert_tensor_name(&tensor_profile.name)
+                    && !super::qwen4_exp_tensor_spec::is_ngram_table_shard_tensor_name(
+                        &tensor_profile.name,
+                    )
+            })
             .collect()),
     }
 }
@@ -158,7 +176,7 @@ fn append_qwen3_5_decoder_layer_tensor_profiles(
     Ok(())
 }
 
-fn append_qwen3_5_moe_feed_forward_tensor_profiles(
+pub(super) fn append_qwen3_5_moe_feed_forward_tensor_profiles(
     tensor_profiles: &mut Vec<TensorProfile>,
     decoder_layer_prefix: &str,
     hidden_size: usize,
@@ -253,7 +271,7 @@ fn is_sparse_selected_expert_tensor_name(tensor_name: &str) -> bool {
     tensor_name.contains(".mlp.switch_mlp.")
 }
 
-fn append_qwen3_5_full_attention_tensor_profiles(
+pub(super) fn append_qwen3_5_full_attention_tensor_profiles(
     tensor_profiles: &mut Vec<TensorProfile>,
     layer_prefix: &str,
     hidden_size: usize,
@@ -290,7 +308,7 @@ fn append_qwen3_5_full_attention_tensor_profiles(
     Ok(())
 }
 
-fn append_qwen3_5_linear_attention_tensor_profiles(
+pub(super) fn append_qwen3_5_linear_attention_tensor_profiles(
     tensor_profiles: &mut Vec<TensorProfile>,
     layer_prefix: &str,
     hidden_size: usize,

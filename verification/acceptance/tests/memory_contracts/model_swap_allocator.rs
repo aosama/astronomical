@@ -3,8 +3,8 @@ use std::{fs, path::Path, time::Instant};
 use ipc_protocol::RequestId;
 use model_serving::{
     GeneratedToken, InferenceEngine, PerformanceAttribution, PerformanceAttributionLog,
-    Qwen3_5ArtifactValidator, Qwen3_5InferenceRequest, Qwen3_5MlxEngineConstructors,
-    Qwen3_5PromptProcessingChunkSizer, Qwen3_5StreamingEngine,
+    PromptProcessingChunkSizer, Qwen3_5ArtifactValidator, Qwen3_5StreamingEngine,
+    TextInferenceRequest, TextMlxEngineConstructors,
 };
 use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use serde_json::Value;
@@ -190,7 +190,7 @@ fn create_engine(
         mlx_memory_limits.active_memory_limit_bytes(),
         mlx_memory_limits.mlx_buffer_cache_limit_bytes(),
         None,
-        Qwen3_5PromptProcessingChunkSizer::for_chunk_size_tokens(FIXED_PREFILL_CHUNCK_TOKENS)
+        PromptProcessingChunkSizer::for_chunk_size_tokens(FIXED_PREFILL_CHUNCK_TOKENS)
             .expect("the fixed prefill chunk size should be valid"),
         IMAGE_PAD_TOKEN_ID,
         model_directory.to_path_buf(),
@@ -232,7 +232,7 @@ async fn run_bounded_generation(
 ) {
     qwen3_5_engine
         .start_generation(
-            Qwen3_5InferenceRequest::new(
+            TextInferenceRequest::new(
                 request_id,
                 SAY_HI_PROMPT_TOKEN_IDS.to_vec(),
                 GENERATION_OUTPUT_TOKEN_COUNT,

@@ -1,11 +1,11 @@
 //! How the resident engine builds itself on the MLX owner thread. The
 //! constructors it shares with the streaming engine live in
-//! `qwen3_5_core::shared_execution::engine_construction`.
+//! `text_generation::generation_loop::engine_construction`.
 
 use std::path::PathBuf;
 
-use crate::qwen3_5_core::shared_execution::engine_construction::Qwen3_5EngineConstruction;
 use crate::qwen3_5_core::shared_execution::execution_core::Qwen3_5ExecutionCore;
+use text_generation::generation_loop::engine_construction::TextEngineConstruction;
 
 use super::super::model::Qwen3_5ResidentModel;
 use super::Qwen3_5InferenceExecution;
@@ -19,7 +19,7 @@ pub struct ResidentEngineSettings {
     pub astro_neural_engine_program_cache_directory: Option<PathBuf>,
 }
 
-impl Qwen3_5EngineConstruction for Qwen3_5InferenceExecution {
+impl TextEngineConstruction for Qwen3_5InferenceExecution {
     type EngineSettings = ResidentEngineSettings;
 
     fn new_on_owner_thread(

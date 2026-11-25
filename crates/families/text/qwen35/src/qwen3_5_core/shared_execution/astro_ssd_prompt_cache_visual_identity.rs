@@ -5,12 +5,12 @@
 
 use crate::{
     AstroSsdPromptCacheDiskStore, InferenceEngineError, PerformanceAttribution,
-    PerformanceOperation, Qwen3_5InferenceRequest,
+    PerformanceOperation, TextInferenceRequest,
     plan_qwen3_5_visual_astro_ssd_prompt_cache_block_inputs,
 };
 use engine_core::astro_ssd_prompt_cache::block_causal_input::AstroSsdPromptCacheBlockCausalInput;
 
-use crate::qwen3_5_core::engine_errors::{fatal_engine_error, invalid_request_error};
+use text_generation::engine_errors::{fatal_engine_error, invalid_request_error};
 
 pub struct Qwen3_5AstroSsdPromptCacheVisualIdentity {
     pub ordered_image_visual_embedding_row_counts: Vec<usize>,
@@ -28,7 +28,7 @@ pub struct Qwen3_5AstroSsdPromptCacheVisualIdentityInput<'a> {
 
 impl Qwen3_5AstroSsdPromptCacheVisualIdentity {
     pub fn prepare(
-        inference_request: &Qwen3_5InferenceRequest,
+        inference_request: &TextInferenceRequest,
         visual_identity_input: Qwen3_5AstroSsdPromptCacheVisualIdentityInput<'_>,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<Self, InferenceEngineError> {

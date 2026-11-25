@@ -24,20 +24,6 @@ const QUANTIZATION_GROUP_SIZE: i32 = 64;
 const LAYERS_PER_EVALUATION: usize = 40;
 const TIMED_EVALUATIONS: usize = 12;
 
-/// Deterministic values in [-1, 1): a linear congruential stream, so the
-/// test needs no random-number dependency.
-fn pseudo_random_values(count: usize, seed: u64) -> Vec<f32> {
-    let mut state = seed;
-    let mut values = Vec::with_capacity(count);
-    for _ in 0..count {
-        state = state
-            .wrapping_mul(6_364_136_223_846_793_005)
-            .wrapping_add(1_442_695_040_888_963_407);
-        values.push(((state >> 40) as f32 / (1u64 << 23) as f32) - 1.0);
-    }
-    values
-}
-
 struct QuantizedExperts {
     packed_weights: MlxArray,
     scales: MlxArray,
@@ -48,7 +34,7 @@ fn quantized_experts(runtime: &MlxRuntime) -> QuantizedExperts {
     let value_count = (EXPERT_COUNT * OUTPUT_WIDTH * INPUT_WIDTH) as usize;
     let weights = runtime
         .array_from_f32(
-            &pseudo_random_values(value_count, 7),
+            &super::synthetic_values::pseudo_random_values(value_count, 7),
             &[EXPERT_COUNT, OUTPUT_WIDTH, INPUT_WIDTH],
         )
         .expect("the weights upload");
@@ -73,8 +59,10 @@ fn median_milliseconds(
     slot_count: i32,
     rows_per_slot: i32,
 ) -> f64 {
-    let activation_values =
-        pseudo_random_values((slot_count * rows_per_slot * INPUT_WIDTH) as usize, 11);
+    let activation_values = super::synthetic_values::pseudo_random_values(
+        (slot_count * rows_per_slot * INPUT_WIDTH) as usize,
+        11,
+    );
     let activations = runtime
         .astype(
             &runtime

@@ -30,6 +30,7 @@ pub mod native_linking;
 pub mod native_parallelism;
 pub mod native_progress;
 pub mod native_store;
+pub mod provisioned_mlx_sources;
 
 // Root re-exports so consumers address the orchestration surface through
 // the crate root; the module paths stay public for narrower imports.
@@ -46,6 +47,9 @@ pub use native_host_platform::{
 pub use native_linking::configure_rust_linking;
 pub use native_progress::{NATIVE_BUILD_PROGRESS_FILE_VARIABLE, NativeBuildProgress};
 pub use native_store::{NativeBuildProfile, NativeBuildStore};
+pub use provisioned_mlx_sources::{
+    ProvisionedMlxSources, pinned_mlx_macos_deployment_target, provisioned_mlx_sources,
+};
 // The build script finds the workspace root the same way the identity's
 // own tests do, through the one function that owns the rule.
 pub use native_identity::workspace_root_above;

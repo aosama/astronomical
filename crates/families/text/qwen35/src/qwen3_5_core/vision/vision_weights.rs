@@ -2,15 +2,15 @@ use std::collections::HashMap;
 
 use runtime_integration::MlxRuntime;
 
+use crate::TensorProfile;
 use crate::qwen3_5_core::configuration::Qwen3_5Config;
 use crate::qwen3_5_core::quantizations::mlx_quantization::{
     ModuleQuantizationProfile, ModuleWeightCodec,
 };
-use crate::{TensorDtype, TensorProfile};
 
 use super::vision_tensor_source::Qwen3_5VisionTensorSource;
-use super::{Qwen3_5ExecutionError, ValidatedQwen3_5Artifact};
-use mlx_bridge::{MlxArray, MlxDtype};
+use super::{TextExecutionError, ValidatedQwen3_5Artifact};
+use mlx_bridge::MlxArray;
 
 #[cfg(test)]
 pub mod tests;
@@ -53,12 +53,12 @@ impl Qwen3_5VisionWeights {
     pub fn load_from_sidecar(
         runtime: &MlxRuntime,
         validated_artifact: &mut ValidatedQwen3_5Artifact,
-    ) -> Result<Option<Self>, Qwen3_5ExecutionError> {
+    ) -> Result<Option<Self>, TextExecutionError> {
         // The config is cloned so the artifact's mutable source-handoff below
         // never conflicts with the bound-tensor loop's config reads.
         let vision_config = validated_artifact
             .vision_config()
-            .ok_or(Qwen3_5ExecutionError::InvalidInput {
+            .ok_or(TextExecutionError::InvalidInput {
                 description: "validated visual sidecar has no vision configuration",
             })?
             .clone();
@@ -116,7 +116,7 @@ impl Qwen3_5VisionWeights {
         qwen3_5_config: &Qwen3_5Config,
         model_shard_files: Vec<std::fs::File>,
         vision_tensor_name_to_shard_location: HashMap<String, VisionTensorLocation>,
-    ) -> Result<Self, Qwen3_5ExecutionError> {
+    ) -> Result<Self, TextExecutionError> {
         let tensor_source = Qwen3_5VisionTensorSource::keeping_referenced_files(
             model_shard_files,
             vision_tensor_name_to_shard_location,
@@ -129,10 +129,10 @@ impl Qwen3_5VisionWeights {
         vision_config: &super::Qwen3_5VisionConfig,
         qwen3_5_config: &Qwen3_5Config,
         tensor_source: Qwen3_5VisionTensorSource,
-    ) -> Result<Self, Qwen3_5ExecutionError> {
+    ) -> Result<Self, TextExecutionError> {
         let tensor_profiles =
             super::qwen3_5_vision_tensor_profiles_for_model(vision_config, qwen3_5_config)
-                .map_err(|artifact_error| Qwen3_5ExecutionError::ExpertLayerPlan {
+                .map_err(|artifact_error| TextExecutionError::ExpertLayerPlan {
                     description: artifact_error.to_string(),
                 })?;
         let quantization_profiles =
@@ -158,14 +158,11 @@ impl Qwen3_5VisionWeights {
     /// handles, and results stay correct either way; the caller releases after
     /// the visual embeddings were evaluated, when nothing does. On error the
     /// previous handles stay bound.
-    pub(super) fn rebind_lazily(
-        &mut self,
-        runtime: &MlxRuntime,
-    ) -> Result<(), Qwen3_5ExecutionError> {
+    pub(super) fn rebind_lazily(&mut self, runtime: &MlxRuntime) -> Result<(), TextExecutionError> {
         let (bound_tensors, total_payload_bytes) =
             bind_vision_tensors(runtime, &self.tensor_profiles, &self.tensor_source)?;
         if total_payload_bytes != self.total_payload_bytes {
-            return Err(Qwen3_5ExecutionError::TensorPayloadMismatch {
+            return Err(TextExecutionError::TensorPayloadMismatch {
                 actual_payload_bytes: total_payload_bytes,
                 expected_payload_bytes: self.total_payload_bytes,
             });
@@ -175,10 +172,10 @@ impl Qwen3_5VisionWeights {
     }
 
     /// Returns one exact vision tower tensor by name.
-    pub fn tensor(&self, tensor_name: &str) -> Result<&MlxArray, Qwen3_5ExecutionError> {
+    pub fn tensor(&self, tensor_name: &str) -> Result<&MlxArray, TextExecutionError> {
         self.bound_tensors
             .get(tensor_name)
-            .ok_or_else(|| Qwen3_5ExecutionError::MissingTensor {
+            .ok_or_else(|| TextExecutionError::MissingTensor {
                 tensor_name: tensor_name.to_owned(),
             })
     }
@@ -195,9 +192,9 @@ impl Qwen3_5VisionWeights {
         runtime: &MlxRuntime,
         input_states: &MlxArray,
         module_name: &str,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         let module_quantization_profile = self.quantization_profile_for_module(module_name).ok_or(
-            Qwen3_5ExecutionError::InvalidInput {
+            TextExecutionError::InvalidInput {
                 description: "vision linear module is missing its quantization profile",
             },
         )?;
@@ -219,16 +216,16 @@ impl Qwen3_5VisionWeights {
             module_quantization_profile.weight_codec,
             ModuleWeightCodec::MlxAffineQuantized
         ) {
-            return Err(Qwen3_5ExecutionError::InvalidInput {
+            return Err(TextExecutionError::InvalidInput {
                 description: "vision linear module declares an unsupported weight codec",
             });
         }
         let quantization_group_size = i32::try_from(module_quantization_profile.group_size)
-            .map_err(|_| Qwen3_5ExecutionError::InvalidInput {
+            .map_err(|_| TextExecutionError::InvalidInput {
                 description: "vision affine group size exceeds the MLX integer range",
             })?;
         let quantization_bits = i32::try_from(module_quantization_profile.bits).map_err(|_| {
-            Qwen3_5ExecutionError::InvalidInput {
+            TextExecutionError::InvalidInput {
                 description: "vision affine bit width exceeds the MLX integer range",
             }
         })?;
@@ -262,7 +259,7 @@ impl Qwen3_5VisionWeights {
     }
 
     #[allow(dead_code)]
-    pub(super) fn materialize(&self, runtime: &MlxRuntime) -> Result<(), Qwen3_5ExecutionError> {
+    pub(super) fn materialize(&self, runtime: &MlxRuntime) -> Result<(), TextExecutionError> {
         let bound_tensor_references = self.bound_tensors.values().collect::<Vec<_>>();
         Ok(runtime.evaluate_arrays(&bound_tensor_references)?)
     }
@@ -275,7 +272,7 @@ fn bind_vision_tensors(
     runtime: &MlxRuntime,
     tensor_profiles: &[TensorProfile],
     tensor_source: &Qwen3_5VisionTensorSource,
-) -> Result<(HashMap<String, MlxArray>, u64), Qwen3_5ExecutionError> {
+) -> Result<(HashMap<String, MlxArray>, u64), TextExecutionError> {
     let source_safetensors = tensor_source.load_lazy_safetensors(runtime)?;
     let mut bound_tensors = HashMap::with_capacity(tensor_profiles.len());
     let mut total_payload_bytes = 0_u64;
@@ -283,22 +280,21 @@ fn bind_vision_tensors(
         let tensor_location = tensor_source.location(&tensor_profile.name)?;
         let source_map = source_safetensors
             .get(tensor_location.source_file_position)
-            .ok_or_else(|| Qwen3_5ExecutionError::InvalidTensor {
+            .ok_or_else(|| TextExecutionError::InvalidTensor {
                 tensor_name: tensor_profile.name.clone(),
                 description: "vision tensor resolves outside the loaded vision source files",
             })?;
         let tensor = source_map.tensor(&tensor_location.stored_tensor_name)?;
         let tensor = normalize_published_patch_embed_layout(runtime, tensor_profile, tensor)?;
         validate_bound_vision_tensor(tensor_profile, &tensor)?;
-        let tensor_payload_bytes = u64::try_from(tensor.byte_count()).map_err(|_| {
-            Qwen3_5ExecutionError::InvalidTensor {
+        let tensor_payload_bytes =
+            u64::try_from(tensor.byte_count()).map_err(|_| TextExecutionError::InvalidTensor {
                 tensor_name: tensor_profile.name.clone(),
                 description: "vision tensor payload byte count exceeds the u64 range",
-            }
-        })?;
+            })?;
         total_payload_bytes = total_payload_bytes
             .checked_add(tensor_payload_bytes)
-            .ok_or(Qwen3_5ExecutionError::InvalidTensor {
+            .ok_or(TextExecutionError::InvalidTensor {
                 tensor_name: tensor_profile.name.clone(),
                 description: "vision tensor total payload byte count overflowed",
             })?;
@@ -306,7 +302,7 @@ fn bind_vision_tensors(
             .insert(tensor_profile.name.clone(), tensor)
             .is_some()
         {
-            return Err(Qwen3_5ExecutionError::InvalidTensor {
+            return Err(TextExecutionError::InvalidTensor {
                 tensor_name: tensor_profile.name.clone(),
                 description: "vision tensor was bound more than once",
             });
@@ -326,7 +322,7 @@ fn normalize_published_patch_embed_layout(
     runtime: &MlxRuntime,
     tensor_profile: &TensorProfile,
     tensor: MlxArray,
-) -> Result<MlxArray, Qwen3_5ExecutionError> {
+) -> Result<MlxArray, TextExecutionError> {
     let is_patch_embed_weight = tensor_profile.name == "vision_tower.patch_embed.proj.weight";
     if !is_patch_embed_weight {
         return Ok(tensor);
@@ -360,23 +356,14 @@ fn normalize_published_patch_embed_layout(
 fn validate_bound_vision_tensor(
     tensor_profile: &TensorProfile,
     tensor: &MlxArray,
-) -> Result<(), Qwen3_5ExecutionError> {
-    let tensor_dtype_matches_profile = match tensor_profile.dtype {
-        TensorDtype::AffineQuantizationFloat => matches!(
+) -> Result<(), TextExecutionError> {
+    let tensor_dtype_matches_profile =
+        crate::qwen3_5_core::model_math::weights_validation::bound_dtype_matches_profile(
+            tensor_profile.dtype,
             tensor.dtype(),
-            MlxDtype::Float16 | MlxDtype::BFloat16 | MlxDtype::Float32
-        ),
-        TensorDtype::ModelFloat => matches!(
-            tensor.dtype(),
-            MlxDtype::Float16 | MlxDtype::BFloat16 | MlxDtype::Float32
-        ),
-        TensorDtype::BFloat16 => tensor.dtype() == MlxDtype::BFloat16,
-        TensorDtype::Float16 => tensor.dtype() == MlxDtype::Float16,
-        TensorDtype::Float32 => tensor.dtype() == MlxDtype::Float32,
-        TensorDtype::UInt32 => tensor.dtype() == MlxDtype::UInt32,
-    };
+        );
     if !tensor_dtype_matches_profile {
-        return Err(Qwen3_5ExecutionError::InvalidTensor {
+        return Err(TextExecutionError::InvalidTensor {
             tensor_name: tensor_profile.name.clone(),
             description: "vision tensor dtype differs from the expected profile",
         });
@@ -385,14 +372,14 @@ fn validate_bound_vision_tensor(
         .shape
         .iter()
         .map(|dimension| {
-            i32::try_from(*dimension).map_err(|_| Qwen3_5ExecutionError::InvalidTensor {
+            i32::try_from(*dimension).map_err(|_| TextExecutionError::InvalidTensor {
                 tensor_name: tensor_profile.name.clone(),
                 description: "vision tensor dimension exceeds the MLX integer range",
             })
         })
         .collect::<Result<Vec<_>, _>>()?;
     if tensor.shape() != expected_shape {
-        return Err(Qwen3_5ExecutionError::InvalidTensor {
+        return Err(TextExecutionError::InvalidTensor {
             tensor_name: tensor_profile.name.clone(),
             description: "vision tensor shape differs from the expected profile",
         });

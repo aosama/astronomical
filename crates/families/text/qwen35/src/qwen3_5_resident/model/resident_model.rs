@@ -4,14 +4,14 @@ use crate::qwen3_5_core::model::prefill_forward::Qwen3_5PrefillForward;
 use mlx_bridge::MlxArray;
 
 use crate::qwen3_5_core::artifacts::QuantizedExpertLayerPlan;
-use crate::qwen3_5_core::decoder::RequestDecoderStateStack;
 use crate::qwen3_5_core::model::Qwen3_5ModelBase;
 use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5DecoderLayerWeights;
-use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_resident::Qwen3_5ResidentExpertWeights;
 use crate::{AstroDecoderStateCacheState, AstroExpertCacheStatistics, PerformanceAttribution};
+use text_generation::RequestDecoderStateStack;
+use text_generation::execution_error::TextExecutionError;
 
-use crate::qwen3_5_core::decoder::Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector;
+use text_generation::AstroSsdPromptCacheBoundaryCheckpointCollector;
 
 /// The resident engine's model: shared base plus complete expert arrays.
 #[derive(Debug)]
@@ -30,6 +30,10 @@ pub struct Qwen3_5ResidentModel {
     pub memory_governor: std::cell::RefCell<Option<memory_policy::ledger::MemoryGovernor>>,
 }
 
+crate::qwen3_5_core::model::serving_model::serve_text_from_wrapped_model_base!(
+    Qwen3_5ResidentModel
+);
+
 impl std::ops::Deref for Qwen3_5ResidentModel {
     type Target = Qwen3_5ModelBase;
 
@@ -38,7 +42,7 @@ impl std::ops::Deref for Qwen3_5ResidentModel {
     }
 }
 
-impl crate::qwen3_5_core::model::memory_breakdown::Qwen3_5MemoryOwnership for Qwen3_5ResidentModel {
+impl text_generation::model::memory_breakdown::TextModelMemoryOwnership for Qwen3_5ResidentModel {
     fn mlx_active_memory_ceiling_bytes(&self) -> u64 {
         self.base.mlx_active_memory_ceiling_bytes()
     }
@@ -70,7 +74,7 @@ impl crate::qwen3_5_core::model::memory_breakdown::Qwen3_5MemoryOwnership for Qw
 
 // Named calls: method syntax inside these bodies would resolve to the trait
 // itself if an inherent method were ever renamed, recursing forever.
-impl crate::qwen3_5_core::shared_execution::text_model::Qwen3_5TextModel for Qwen3_5ResidentModel {
+impl text_generation::model::text_model::TextModel for Qwen3_5ResidentModel {
     fn observed_expert_memory_mode(&self) -> ipc_protocol::ExpertMemoryMode {
         Qwen3_5ResidentModel::expert_memory_mode(self)
     }
@@ -84,7 +88,7 @@ impl crate::qwen3_5_core::shared_execution::text_model::Qwen3_5TextModel for Qwe
     ) -> Result<runtime_integration::MlxMemorySnapshot, crate::InferenceEngineError> {
         self.runtime()
             .memory_snapshot()
-            .map_err(crate::qwen3_5_core::engine_errors::qwen3_5_runtime_error)
+            .map_err(text_generation::engine_errors::fatal_runtime_error)
     }
 
     /// The resident engine holds the whole shared base in memory.
@@ -162,7 +166,7 @@ fn resident_layer_seating(
 impl Qwen3_5ResidentModel {
     /// Materializes every bound target weight: the resident engine keeps the
     /// whole model in memory.
-    pub fn materialize_target_weights(&self) -> Result<(), Qwen3_5ExecutionError> {
+    pub fn materialize_target_weights(&self) -> Result<(), TextExecutionError> {
         self.base.materialize_target_weights_with(
             crate::qwen3_5_core::model_math::weights::DecoderLayerResidency::BoundWeights,
         )
@@ -266,7 +270,7 @@ impl Qwen3_5ResidentModel {
     #[cfg(feature = "direct-mlx")]
     pub fn materialize_complete_weights_matching_production(
         &mut self,
-    ) -> Result<(), Qwen3_5ExecutionError> {
+    ) -> Result<(), TextExecutionError> {
         self.materialize_target_weights()?;
         self.runtime()
             .synchronize_gpu_stream_and_clear_mlx_buffer_cache()?;
@@ -335,7 +339,7 @@ impl Qwen3_5ResidentModel {
         starting_visual_embedding_index: usize,
         request_decoder_state: &mut RequestDecoderStateStack,
         image_pad_token_id: u32,
-    ) -> Result<usize, Qwen3_5ExecutionError> {
+    ) -> Result<usize, TextExecutionError> {
         let mut disabled_performance_attribution = PerformanceAttribution::disabled();
         self.prefill_chunk_with_visual_embeddings_and_performance_attribution(
             chunk_token_ids,
@@ -354,7 +358,7 @@ impl Qwen3_5ResidentModel {
         token_ids: &[u32],
         starting_position_tokens: u32,
         request_decoder_state: &mut RequestDecoderStateStack,
-    ) -> Result<(), Qwen3_5ExecutionError> {
+    ) -> Result<(), TextExecutionError> {
         let mut disabled_performance_attribution = PerformanceAttribution::disabled();
         self.prefill_chunk_with_performance_attribution(
             token_ids,
@@ -370,7 +374,7 @@ impl Qwen3_5ResidentModel {
         token_ids: &[u32],
         starting_position_tokens: u32,
         request_decoder_state: &mut RequestDecoderStateStack,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         let mut disabled_performance_attribution = PerformanceAttribution::disabled();
         self.forward_chunk_with_performance_attribution(
             token_ids,
@@ -391,11 +395,9 @@ impl Qwen3_5ResidentModel {
         decoder_layer_weights: &Qwen3_5DecoderLayerWeights,
         layer_model_state: &mut AstroDecoderStateCacheState,
         token_position_offsets: Option<&MlxArray>,
-        boundary_checkpoint_collector: Option<
-            &mut Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
-        >,
+        boundary_checkpoint_collector: Option<&mut AstroSsdPromptCacheBoundaryCheckpointCollector>,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         let attention_output = self.forward_decoder_layer_attention(
             hidden_states,
             token_count,

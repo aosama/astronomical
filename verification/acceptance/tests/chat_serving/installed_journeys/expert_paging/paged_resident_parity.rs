@@ -28,9 +28,9 @@ use std::{path::Path, process::Stdio, time::Duration};
 
 use ipc_protocol::{ExpertMemoryMode, RequestId};
 use model_serving::{
-    CompleteResidencyHeadroomBoundary, GeneratedToken, InferenceEngine, Qwen3_5ArtifactValidator,
-    Qwen3_5InferenceRequest, Qwen3_5MlxEngineConstructors, Qwen3_5PromptProcessingChunkSizer,
-    Qwen3_5ResidentEngine, Qwen3_5StreamingEngine, Qwen3_5TextModelTestControls,
+    CompleteResidencyHeadroomBoundary, GeneratedToken, InferenceEngine, PromptProcessingChunkSizer,
+    Qwen3_5ArtifactValidator, Qwen3_5ResidentEngine, Qwen3_5StreamingEngine, TextInferenceRequest,
+    TextMlxEngineConstructors, TextModelTestControls,
     model_memory_geometry_from_validated_artifact,
 };
 use runtime_integration::MlxMemoryLimits;
@@ -143,8 +143,8 @@ fn resident_request(
     question: ParityQuestion,
     request_id: RequestId,
     prompt_token_ids: &[u32],
-) -> Qwen3_5InferenceRequest {
-    Qwen3_5InferenceRequest::new_sampling(
+) -> TextInferenceRequest {
+    TextInferenceRequest::new_sampling(
         request_id,
         prompt_token_ids.to_vec(),
         OUTPUT_TOKEN_COUNT,
@@ -157,7 +157,7 @@ fn resident_request(
 
 async fn resident_token_ids(
     qwen3_5_engine: &mut Qwen3_5ResidentEngine,
-    qwen3_5_request: Qwen3_5InferenceRequest,
+    qwen3_5_request: TextInferenceRequest,
     end_of_sequence_token_ids: &[u32],
 ) -> Vec<u32> {
     let request_id = qwen3_5_request.request_id();
@@ -194,7 +194,7 @@ async fn load_resident_engine(model_directory: &Path) -> (Qwen3_5ResidentEngine,
         .end_of_sequence_token_ids()
         .to_vec();
     let prefill_chunk_sizer =
-        Qwen3_5PromptProcessingChunkSizer::for_chunk_size_tokens(PREFILL_CHUNK_TOKEN_COUNT as u32)
+        PromptProcessingChunkSizer::for_chunk_size_tokens(PREFILL_CHUNK_TOKEN_COUNT as u32)
             .expect("the selected resident prefill size should be valid");
     let mlx_memory_limits =
         crate::common::sample_machine_serving_acceptance_mlx_memory_limits().await;

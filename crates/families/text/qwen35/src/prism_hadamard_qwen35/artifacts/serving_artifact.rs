@@ -3,18 +3,18 @@
 //! reads from the pack and its configuration when it is constructed.
 
 use super::ValidatedFoldedPack;
+use crate::PersistentVisualEmbeddingModelContract;
 use crate::prism_hadamard_qwen35::astro_decoder_state_cache_layout::{
     full_attention_key_value_bytes_per_context_token,
     prism_hadamard_qwen35_astro_decoder_state_cache_layout,
 };
-use crate::qwen3_5_core::artifacts::Qwen3_5VisionConfig;
-use crate::qwen3_5_core::shared_execution::serving_artifact::Qwen3_5ServingArtifact;
+use text_generation::generation_loop::serving_artifact::TextServingArtifact;
 
 /// A folded pack stores every weight in one safetensors file, which is the
 /// shard count the Prism engine's loading attribution reports.
 const FOLDED_PACK_WEIGHT_FILE_COUNT: usize = 1;
 
-impl Qwen3_5ServingArtifact for ValidatedFoldedPack {
+impl TextServingArtifact for ValidatedFoldedPack {
     fn model_id(&self) -> &str {
         ValidatedFoldedPack::model_id(self)
     }
@@ -32,7 +32,9 @@ impl Qwen3_5ServingArtifact for ValidatedFoldedPack {
     }
 
     /// A folded pack carries text weights only.
-    fn vision_config(&self) -> Option<&Qwen3_5VisionConfig> {
+    fn persistent_visual_embedding_model_contract(
+        &self,
+    ) -> Option<PersistentVisualEmbeddingModelContract> {
         None
     }
 

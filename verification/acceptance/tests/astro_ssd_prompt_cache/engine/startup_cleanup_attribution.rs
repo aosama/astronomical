@@ -6,7 +6,7 @@ use ipc_protocol::{
     WorkerAstroSsdPromptCacheStartupCleanupEvidence,
 };
 use model_serving::{
-    InferenceEngine, Qwen3_5ArtifactValidator, Qwen3_5InferenceRequest, Qwen3_5Tokenizer,
+    InferenceEngine, Qwen3_5ArtifactValidator, Qwen3_5Tokenizer, TextInferenceRequest,
 };
 use tokio::time::timeout;
 
@@ -67,7 +67,7 @@ async fn run_startup_cleanup_attribution_journey() {
     let short_request_id = RequestId::new(41_001);
     let short_generation_start = qwen3_5_engine
         .start_generation(
-            Qwen3_5InferenceRequest::new(short_request_id, short_prompt_token_ids, 1)
+            TextInferenceRequest::new(short_request_id, short_prompt_token_ids, 1)
                 .with_image_pad_token_id(248_069),
         )
         .await
@@ -85,7 +85,7 @@ async fn run_startup_cleanup_attribution_journey() {
     let cold_request_id = RequestId::new(41_002);
     let cold_generation_start = qwen3_5_engine
         .start_generation(
-            Qwen3_5InferenceRequest::new(cold_request_id, prompt_token_ids.clone(), 1)
+            TextInferenceRequest::new(cold_request_id, prompt_token_ids.clone(), 1)
                 .with_image_pad_token_id(248_069),
         )
         .await
@@ -119,7 +119,7 @@ async fn run_startup_cleanup_attribution_journey() {
     let warm_request_id = RequestId::new(41_003);
     let warm_generation_start = qwen3_5_engine
         .start_generation(
-            Qwen3_5InferenceRequest::new(warm_request_id, prompt_token_ids, 1)
+            TextInferenceRequest::new(warm_request_id, prompt_token_ids, 1)
                 .with_image_pad_token_id(248_069),
         )
         .await

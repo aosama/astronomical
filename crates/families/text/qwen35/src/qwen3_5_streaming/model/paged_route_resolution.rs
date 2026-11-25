@@ -1,6 +1,6 @@
 //! The single evaluation that completes a paged forward, and what it found.
 //!
-//! A reply token can be served two ways. The exact way resolves every sparse
+//! A reply token can be served three ways. The exact way resolves every sparse
 //! layer's route on the host before building that layer, reading whatever is
 //! missing from storage; it always succeeds and costs one graphics-processor
 //! wait per layer that is not held whole. The optimistic way assumes every
@@ -12,13 +12,20 @@
 //! way. Optimistic serving is what lets memory be shared across layers: an `astro_expert_cache`
 //! that takes a few idle experts out of nearly every layer would otherwise
 //! make nearly every layer pay the wait.
+//!
+//! The third way is tried first and needs no assumption: each layer held in
+//! part looks its route up in its table from inside the graph, reading what
+//! is missing into the table, so the token is one evaluation whether or not
+//! experts were missing (`in_graph_table_serving`). Its layers are checked
+//! here too: a lookup that refused means the token is run again the exact
+//! way, as an optimistic token with a missing expert is.
 
 use std::cell::{Cell, RefCell};
 
-use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_streaming::model::Qwen3_5Model;
 use crate::{PerformanceAttribution, PerformanceCounter, PerformanceOperation};
 use mlx_bridge::MlxArray;
+use text_generation::execution_error::TextExecutionError;
 
 /// One layer served on the graphics processor on the assumption that its
 /// table held every routed expert.
@@ -38,16 +45,48 @@ pub struct OptimisticLayerServing {
 #[derive(Debug, Default)]
 pub struct PagedForwardMissingRouteCollector {
     is_optimistic: Cell<bool>,
+    /// Set while a forward of several rows writes a reply (a verified
+    /// drafted block): its rows are reply tokens, so a layer not held whole
+    /// reads only the experts its table lacks, into the table, as it does
+    /// for one reply token. Without it the rows were served as a prompt
+    /// chunk, which streams the whole routed union every forward and keeps
+    /// none of it (measured: 9.8 against 17.8 tokens per second).
+    serves_reply_rows: Cell<bool>,
     /// Set when a layer could not be served optimistically after all, so the
     /// forward must be run again whatever the counts say.
     has_abandoned_optimistic_serving: Cell<bool>,
     optimistic_layer_servings: RefCell<Vec<OptimisticLayerServing>>,
+    /// The other speculative way: layers that look their routes up inside
+    /// the graph, and what recent tokens say about attempting it.
+    pub(super) in_graph_table_serving: super::in_graph_table_serving::InGraphTableServing,
 }
 
 impl PagedForwardMissingRouteCollector {
     pub fn clear(&self) {
         self.has_abandoned_optimistic_serving.set(false);
         self.optimistic_layer_servings.borrow_mut().clear();
+    }
+
+    pub fn set_serves_reply_rows(&self, serves_reply_rows: bool) {
+        self.serves_reply_rows.set(serves_reply_rows);
+    }
+
+    /// Whether a forward of `token_count` rows serves its misses as reply
+    /// tokens do: one row always, several only for a reply's own rows.
+    pub fn serves_misses_as_reply_tokens(&self, token_count: i32) -> bool {
+        token_count == 1 || self.serves_reply_rows.get()
+    }
+
+    /// The token count a forward is paced by: a reply's rows are paced as
+    /// one reply token is. Their activations are a few rows, so no layer
+    /// has to finish before the next starts and nothing is read ahead for a
+    /// following chunk, as a prompt chunk of the same size would have it.
+    pub fn pacing_token_count(&self, token_count: i32) -> i32 {
+        if self.serves_reply_rows.get() {
+            1
+        } else {
+            token_count
+        }
     }
 
     pub fn set_optimistic(&self, is_optimistic: bool) {
@@ -103,7 +142,7 @@ impl Qwen3_5Model {
         &self,
         evaluation_arrays: &[&MlxArray],
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<PagedRouteValidationOutcome, Qwen3_5ExecutionError> {
+    ) -> Result<PagedRouteValidationOutcome, TextExecutionError> {
         // Copy references, not arrays. `completion_roots` merely gives MLX one
         // explicit list of graph roots whose dependencies include every eagerly
         // loaded expert page used by this forward.
@@ -161,8 +200,8 @@ impl Qwen3_5Model {
         eval_elapsed: std::time::Duration,
         completion_root_count: usize,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<PagedRouteValidationOutcome, Qwen3_5ExecutionError> {
-        if self.optimistic_forward_missed_experts(optimistic_layer_servings)? {
+    ) -> Result<PagedRouteValidationOutcome, TextExecutionError> {
+        if self.speculative_forward_was_wrong(optimistic_layer_servings)? {
             // Nothing this forward learned is true: its routes came from
             // wrong hidden states after the first missing expert.
             self.deferred_expert_demand
@@ -175,6 +214,7 @@ impl Qwen3_5Model {
             return Ok(PagedRouteValidationOutcome::MissedExperts);
         }
         self.credit_optimistic_layer_hits(optimistic_layer_servings, performance_attribution);
+        self.record_in_graph_layer_servings(performance_attribution);
         self.record_deferred_expert_demand(performance_attribution);
         if eval_elapsed > std::time::Duration::from_millis(500) {
             tracing::info!(
@@ -209,7 +249,7 @@ impl Qwen3_5Model {
     pub fn record_warm_insert_and_prefetch_statistics(
         &self,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<(), Qwen3_5ExecutionError> {
+    ) -> Result<(), TextExecutionError> {
         let written_expert_count = self.flush_pending_expert_slot_inserts_internal()?;
         if written_expert_count > 0 {
             performance_attribution.record_counter(
@@ -263,25 +303,36 @@ impl Qwen3_5Model {
     }
 
     /// Counted variant of the post-evaluation warm insert flush.
-    fn flush_pending_expert_slot_inserts_internal(&self) -> Result<u64, Qwen3_5ExecutionError> {
+    fn flush_pending_expert_slot_inserts_internal(&self) -> Result<u64, TextExecutionError> {
         if let Some(astro_expert_cache) = self.astro_expert_cache.as_ref() {
             return astro_expert_cache
                 .borrow_mut()
                 .flush_pending_inserts(&self.runtime)
-                .map_err(Qwen3_5ExecutionError::from);
+                .map_err(TextExecutionError::from);
         }
         Ok(0)
     }
 }
 
 impl Qwen3_5Model {
+    /// Whether the forward just evaluated has to be served again: an
+    /// optimistic one that routed to an expert its tables did not hold, or
+    /// an in-graph one whose lookup refused a layer.
+    fn speculative_forward_was_wrong(
+        &self,
+        optimistic_layer_servings: &[OptimisticLayerServing],
+    ) -> Result<bool, TextExecutionError> {
+        Ok(self.in_graph_forward_was_refused()?
+            || self.optimistic_forward_missed_experts(optimistic_layer_servings)?)
+    }
+
     /// Whether an optimistic forward routed to any expert its tables did not
     /// hold. The counts were roots of the evaluation that just finished, so
     /// reading them is a host copy, not another wait.
     fn optimistic_forward_missed_experts(
         &self,
         optimistic_layer_servings: &[OptimisticLayerServing],
-    ) -> Result<bool, Qwen3_5ExecutionError> {
+    ) -> Result<bool, TextExecutionError> {
         if self
             .paged_forward_missing_route_collector
             .has_abandoned_optimistic_serving

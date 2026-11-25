@@ -4,9 +4,7 @@ use runtime_integration::MlxRuntime;
 use super::base::Qwen3_5ModelBase;
 use crate::astro_decoder_state_cache::{ConvolutionState, GatedDeltaRecurrentState};
 use crate::performance_attribution::{PerformanceAttribution, PerformanceOperation};
-use crate::qwen3_5_core::decoder::Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector;
 use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5LinearAttentionWeights;
-use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_core::model_math::gated_delta_boundary_checkpoints;
 use crate::qwen3_5_core::model_math::gated_delta_sequence;
 use crate::qwen3_5_core::model_math::gated_delta_step::{
@@ -16,6 +14,8 @@ use crate::qwen3_5_core::model_math::gdn_decode_prework_kernel::{
     is_gdn_decode_prework_eligible, qwen3_5_gdn_decode_prework,
 };
 use crate::qwen3_5_core::model_math::tensor_slicing;
+use text_generation::AstroSsdPromptCacheBoundaryCheckpointCollector;
+use text_generation::execution_error::TextExecutionError;
 
 #[cfg(test)]
 mod tests;
@@ -30,11 +30,9 @@ impl Qwen3_5ModelBase {
         linear_attention_weights: &Qwen3_5LinearAttentionWeights,
         convolution_state: &mut ConvolutionState,
         recurrent_state: &mut GatedDeltaRecurrentState,
-        boundary_checkpoint_collector: Option<
-            &mut Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
-        >,
+        boundary_checkpoint_collector: Option<&mut AstroSsdPromptCacheBoundaryCheckpointCollector>,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         let (mixed_queries_keys_values, output_gate, update_logits, decay_inputs) = self
             .project_linear_attention_inputs(
                 hidden_states,
@@ -127,22 +125,49 @@ impl Qwen3_5ModelBase {
         output_gate: &MlxArray,
         token_count: i32,
         linear_attention_weights: &Qwen3_5LinearAttentionWeights,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         let linear_value_dimension = self.config.linear_value_dimension() as i32;
         let normalized_output = self.runtime.rms_norm(
             recurrent_output,
             &linear_attention_weights.normalization_weight,
             f32::from_bits(self.config.rms_norm_epsilon_bits()),
         )?;
-        let gated_output = self.runtime.apply_compiled_precise_swiglu(
-            &self.compiled_elementwise_graphs,
-            &normalized_output,
-            output_gate,
-        )?;
+        let gated_output = self.gate_linear_attention_output(&normalized_output, output_gate)?;
         let gated_output = self
             .runtime
             .reshape(&gated_output, &[-1, token_count, linear_value_dimension])?;
         self.quantized_linear(&gated_output, &linear_attention_weights.output_projection)
+    }
+
+    /// `normalized * activation(gate)` in float32, cast back: SiLU for Qwen
+    /// 3.5, sigmoid where Flash-Next's configuration names it.
+    fn gate_linear_attention_output(
+        &self,
+        normalized_output: &MlxArray,
+        output_gate: &MlxArray,
+    ) -> Result<MlxArray, TextExecutionError> {
+        let gates_with_sigmoid = self
+            .config
+            .qwen4_exp_architecture()
+            .is_some_and(|architecture| {
+                architecture.linear_attention_output_gate
+                    == crate::qwen3_5_core::configuration::LinearAttentionOutputGate::Sigmoid
+            });
+        if !gates_with_sigmoid {
+            return Ok(self.runtime.apply_compiled_precise_swiglu(
+                &self.compiled_elementwise_graphs,
+                normalized_output,
+                output_gate,
+            )?);
+        }
+        let float32 = mlx_bridge::MlxDtype::Float32;
+        let gate = self
+            .runtime
+            .sigmoid(&self.runtime.astype(output_gate, float32)?)?;
+        let gated = self
+            .runtime
+            .multiply(&self.runtime.astype(normalized_output, float32)?, &gate)?;
+        Ok(self.runtime.astype(&gated, output_gate.dtype())?)
     }
 
     /// Runs the four input projections under one evaluation section and
@@ -154,7 +179,7 @@ impl Qwen3_5ModelBase {
         token_count: i32,
         decoder_layer_index: usize,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<(MlxArray, MlxArray, MlxArray, MlxArray), Qwen3_5ExecutionError> {
+    ) -> Result<(MlxArray, MlxArray, MlxArray, MlxArray), TextExecutionError> {
         let linear_value_head_count = self.config.linear_value_head_count() as i32;
         let linear_head_dimension = self.config.linear_key_head_dimension() as i32;
         let mixed_queries_keys_values = self.quantized_linear(
@@ -214,7 +239,7 @@ impl Qwen3_5ModelBase {
         token_count: i32,
         decoder_layer_index: usize,
         gpu_work: &[&MlxArray],
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         if let Some(output_gate_engine) = self.optional_accelerators.output_gate_engine.as_ref()
             && output_gate_engine.handles(token_count)
         {
@@ -251,7 +276,7 @@ impl Qwen3_5ModelBase {
         linear_attention_weights: &Qwen3_5LinearAttentionWeights,
         completed_prefill_chunk_tokens: Option<&[i32]>,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<(MlxArray, MlxArray, MlxArray, Vec<MlxArray>), Qwen3_5ExecutionError> {
+    ) -> Result<(MlxArray, MlxArray, MlxArray, Vec<MlxArray>), TextExecutionError> {
         let linear_key_head_count = self.config.linear_key_head_count() as i32;
         let linear_value_head_count = self.config.linear_value_head_count() as i32;
         let linear_head_dimension = self.config.linear_key_head_dimension() as i32;
@@ -260,7 +285,7 @@ impl Qwen3_5ModelBase {
             &linear_attention_weights.convolution_weight,
             mixed_queries_keys_values.shape()[2],
             i32::try_from(self.config.linear_convolution_kernel_dimension()).map_err(|_| {
-                Qwen3_5ExecutionError::InvalidInput {
+                TextExecutionError::InvalidInput {
                     description: "linear convolution kernel width exceeds the MLX shape range",
                 }
             })?,
@@ -341,9 +366,7 @@ impl Qwen3_5ModelBase {
     #[allow(clippy::too_many_arguments)]
     fn run_recurrence_phase(
         &self,
-        boundary_checkpoint_collector: Option<
-            &Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
-        >,
+        boundary_checkpoint_collector: Option<&AstroSsdPromptCacheBoundaryCheckpointCollector>,
         queries: &MlxArray,
         keys: &MlxArray,
         values: &MlxArray,
@@ -351,7 +374,7 @@ impl Qwen3_5ModelBase {
         update_rates: &MlxArray,
         current_recurrent_state: &MlxArray,
         completed_prefill_chunk_tokens: Option<&[i32]>,
-    ) -> Result<(MlxArray, MlxArray, Vec<MlxArray>), Qwen3_5ExecutionError> {
+    ) -> Result<(MlxArray, MlxArray, Vec<MlxArray>), TextExecutionError> {
         match completed_prefill_chunk_tokens {
             Some(completed_prefill_chunk_tokens) => {
                 let checkpoint_interval_token_count = boundary_checkpoint_collector
@@ -407,7 +430,7 @@ impl Qwen3_5ModelBase {
         token_count: i32,
         convolution_weight: &MlxArray,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<(MlxArray, MlxArray, MlxArray), Qwen3_5ExecutionError> {
+    ) -> Result<(MlxArray, MlxArray, MlxArray), TextExecutionError> {
         let linear_convolution_dimension = self.config.linear_convolution_dimension() as i32;
         let convolution_output = self.runtime.conv1d(
             convolution_input,
@@ -432,7 +455,7 @@ impl Qwen3_5ModelBase {
         convolution_output: &MlxArray,
         token_count: i32,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<(MlxArray, MlxArray, MlxArray), Qwen3_5ExecutionError> {
+    ) -> Result<(MlxArray, MlxArray, MlxArray), TextExecutionError> {
         let linear_key_head_count = self.config.linear_key_head_count() as i32;
         let linear_value_head_count = self.config.linear_value_head_count() as i32;
         let linear_head_dimension = self.config.linear_key_head_dimension() as i32;
@@ -523,7 +546,7 @@ pub(super) fn normalize_linear_attention_convolution_weight(
     convolution_weight: &MlxArray,
     output_channel_count: i32,
     convolution_kernel_width: i32,
-) -> Result<MlxArray, Qwen3_5ExecutionError> {
+) -> Result<MlxArray, TextExecutionError> {
     let execution_shape = [output_channel_count, convolution_kernel_width, 1];
     let published_pytorch_shape = [output_channel_count, 1, convolution_kernel_width];
     let actual_weight_shape = convolution_weight.shape();
@@ -537,7 +560,7 @@ pub(super) fn normalize_linear_attention_convolution_weight(
         // standard and fused convolution paths.
         return Ok(runtime.transpose_axes(convolution_weight, &[0, 2, 1])?);
     }
-    Err(Qwen3_5ExecutionError::InvalidTensor {
+    Err(TextExecutionError::InvalidTensor {
         tensor_name: "linear_attention.conv1d.weight".to_owned(),
         description: "convolution weight shape is neither the MLX nor published PyTorch layout",
     })

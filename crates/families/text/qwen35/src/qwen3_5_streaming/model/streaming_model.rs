@@ -8,10 +8,8 @@ use mlx_bridge::MlxArray;
 
 use std::cell::{Cell, RefCell};
 
-use crate::qwen3_5_core::decoder::RequestDecoderStateStack;
 use crate::qwen3_5_core::model::Qwen3_5ModelBase;
 use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5DecoderLayerWeights;
-use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_core::model_math::forward_contract;
 use crate::qwen3_5_streaming::model::route_observation::RouteObservationCollector;
 use crate::qwen3_5_streaming::{
@@ -20,8 +18,10 @@ use crate::qwen3_5_streaming::{
 };
 use crate::{AstroDecoderStateCacheState, ExpertResidencyPlan, PerformanceAttribution};
 use engine_core::expert_paging::AstroExpertCacheStatistics;
+use text_generation::RequestDecoderStateStack;
+use text_generation::execution_error::TextExecutionError;
 
-use crate::qwen3_5_core::decoder::Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector;
+use text_generation::AstroSsdPromptCacheBoundaryCheckpointCollector;
 
 /// The streaming engine's model: shared base plus residency-forked state.
 #[derive(Debug)]
@@ -97,6 +97,10 @@ pub struct Qwen3_5StreamingModel {
     >,
 }
 
+crate::qwen3_5_core::model::serving_model::serve_text_from_wrapped_model_base!(
+    Qwen3_5StreamingModel
+);
+
 impl std::ops::Deref for Qwen3_5StreamingModel {
     type Target = Qwen3_5ModelBase;
 
@@ -105,9 +109,7 @@ impl std::ops::Deref for Qwen3_5StreamingModel {
     }
 }
 
-impl crate::qwen3_5_core::model::memory_breakdown::Qwen3_5MemoryOwnership
-    for Qwen3_5StreamingModel
-{
+impl text_generation::model::memory_breakdown::TextModelMemoryOwnership for Qwen3_5StreamingModel {
     fn mlx_active_memory_ceiling_bytes(&self) -> u64 {
         self.base.mlx_active_memory_ceiling_bytes()
     }
@@ -132,7 +134,7 @@ impl crate::qwen3_5_core::model::memory_breakdown::Qwen3_5MemoryOwnership
 
 // Named calls: method syntax inside these bodies would resolve to the trait
 // itself if an inherent method were ever renamed, recursing forever.
-impl crate::qwen3_5_core::shared_execution::text_model::Qwen3_5TextModel for Qwen3_5StreamingModel {
+impl text_generation::model::text_model::TextModel for Qwen3_5StreamingModel {
     fn observed_expert_memory_mode(&self) -> ipc_protocol::ExpertMemoryMode {
         Qwen3_5StreamingModel::observed_expert_memory_mode(self)
     }
@@ -145,7 +147,7 @@ impl crate::qwen3_5_core::shared_execution::text_model::Qwen3_5TextModel for Qwe
         &self,
     ) -> Result<runtime_integration::MlxMemorySnapshot, crate::InferenceEngineError> {
         self.memory_snapshot_with_forward_peak()
-            .map_err(crate::qwen3_5_core::engine_errors::qwen3_5_runtime_error)
+            .map_err(text_generation::engine_errors::fatal_runtime_error)
     }
 
     fn resident_model_payload_byte_count(&self) -> u64 {
@@ -210,7 +212,7 @@ impl Qwen3_5StreamingModel {
         starting_visual_embedding_index: usize,
         request_decoder_state: &mut RequestDecoderStateStack,
         image_pad_token_id: u32,
-    ) -> Result<usize, Qwen3_5ExecutionError> {
+    ) -> Result<usize, TextExecutionError> {
         let mut disabled_performance_attribution = PerformanceAttribution::disabled();
         self.prefill_chunk_with_visual_embeddings_and_performance_attribution(
             chunk_token_ids,
@@ -229,7 +231,7 @@ impl Qwen3_5StreamingModel {
         token_ids: &[u32],
         starting_position_tokens: u32,
         request_decoder_state: &mut RequestDecoderStateStack,
-    ) -> Result<(), Qwen3_5ExecutionError> {
+    ) -> Result<(), TextExecutionError> {
         let mut disabled_performance_attribution = PerformanceAttribution::disabled();
         self.prefill_chunk_with_performance_attribution(
             token_ids,
@@ -251,7 +253,7 @@ impl Qwen3_5StreamingModel {
         starting_position_tokens: u32,
         request_decoder_state: &mut RequestDecoderStateStack,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<(), Qwen3_5ExecutionError> {
+    ) -> Result<(), TextExecutionError> {
         self.prefill_chunk_with_performance_attribution(
             token_ids,
             starting_position_tokens,
@@ -266,7 +268,7 @@ impl Qwen3_5StreamingModel {
         token_ids: &[u32],
         starting_position_tokens: u32,
         request_decoder_state: &mut RequestDecoderStateStack,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         let mut disabled_performance_attribution = PerformanceAttribution::disabled();
         self.forward_chunk_with_performance_attribution(
             token_ids,
@@ -284,7 +286,7 @@ impl Qwen3_5StreamingModel {
         starting_position_tokens: u32,
         request_decoder_state: &mut RequestDecoderStateStack,
         paged_execution_mode: Qwen3_5MoEPagedExecutionMode,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         let mut disabled_performance_attribution = PerformanceAttribution::disabled();
         let final_logits = self
             .build_forward_chunk_with_paged_execution_mode_and_performance_attribution(
@@ -305,7 +307,7 @@ impl Qwen3_5StreamingModel {
         request_decoder_state: &mut RequestDecoderStateStack,
         paged_execution_mode: Qwen3_5MoEPagedExecutionMode,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         let token_count = forward_contract::validate_forward_input(
             token_ids,
             starting_position_tokens,
@@ -318,7 +320,7 @@ impl Qwen3_5StreamingModel {
         let signed_token_ids = token_ids
             .iter()
             .map(|token_id| {
-                i32::try_from(*token_id).map_err(|_| Qwen3_5ExecutionError::InvalidInput {
+                i32::try_from(*token_id).map_err(|_| TextExecutionError::InvalidInput {
                     description: "token ID exceeds the MLX int32 range",
                 })
             })
@@ -347,30 +349,81 @@ impl Qwen3_5StreamingModel {
         decoder_layer_weights: &Qwen3_5DecoderLayerWeights,
         layer_model_state: &mut AstroDecoderStateCacheState,
         token_position_offsets: Option<&MlxArray>,
-        boundary_checkpoint_collector: Option<
-            &mut Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
-        >,
+        boundary_checkpoint_collector: Option<&mut AstroSsdPromptCacheBoundaryCheckpointCollector>,
         paged_execution_mode: Qwen3_5MoEPagedExecutionMode,
+        qwen4_exp_state: Option<&mut crate::qwen4_exp::request_state::Qwen4ExpRequestState>,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
-        let attention_output = self.forward_decoder_layer_attention(
+    ) -> Result<MlxArray, TextExecutionError> {
+        let Some(flash_next) = decoder_layer_weights.flash_next() else {
+            return self.forward_qwen3_5_decoder_layer(Qwen3_5LayerCall {
+                hidden_states,
+                token_count,
+                rope_offset_tokens,
+                layer_index,
+                paged_execution_mode,
+                decoder_layer_weights,
+                layer_model_state,
+                token_position_offsets,
+                boundary_checkpoint_collector,
+                performance_attribution,
+            });
+        };
+        self.forward_flash_next_decoder_layer(
             hidden_states,
-            token_count,
-            rope_offset_tokens,
-            layer_index,
             decoder_layer_weights,
+            flash_next,
             layer_model_state,
-            token_position_offsets,
-            boundary_checkpoint_collector,
-            performance_attribution,
-        )?;
-        self.forward_decoder_layer_feed_forward(
-            &attention_output,
-            token_count,
-            layer_index,
-            decoder_layer_weights,
-            paged_execution_mode,
+            super::lane_mixing_decoder_layer::LaneMixingLayerInputs {
+                token_count,
+                rope_offset_tokens,
+                layer_index,
+                paged_execution_mode,
+                request_state: qwen4_exp_state,
+                boundary_checkpoint_collector,
+            },
             performance_attribution,
         )
     }
+
+    /// A Qwen 3.5 layer: the normalized attention and feed-forward halves.
+    fn forward_qwen3_5_decoder_layer(
+        &self,
+        layer_call: Qwen3_5LayerCall<'_>,
+    ) -> Result<MlxArray, TextExecutionError> {
+        let attention_output = self.forward_decoder_layer_attention(
+            layer_call.hidden_states,
+            layer_call.token_count,
+            layer_call.rope_offset_tokens,
+            layer_call.layer_index,
+            layer_call.decoder_layer_weights,
+            layer_call.layer_model_state,
+            layer_call.token_position_offsets,
+            layer_call.boundary_checkpoint_collector,
+            layer_call.performance_attribution,
+        )?;
+        self.forward_decoder_layer_feed_forward(
+            &attention_output,
+            layer_call.token_count,
+            layer_call.layer_index,
+            layer_call.decoder_layer_weights,
+            layer_call.paged_execution_mode,
+            layer_call.performance_attribution,
+        )
+    }
+}
+
+/// The inputs of one Qwen 3.5 layer forward, gathered so the Flash-Next
+/// dispatch in `forward_decoder_layer` hands them on in one piece.
+struct Qwen3_5LayerCall<'call> {
+    hidden_states: &'call MlxArray,
+    token_count: i32,
+    rope_offset_tokens: i32,
+    layer_index: usize,
+    paged_execution_mode: Qwen3_5MoEPagedExecutionMode,
+    decoder_layer_weights: &'call Qwen3_5DecoderLayerWeights,
+    layer_model_state: &'call mut AstroDecoderStateCacheState,
+    token_position_offsets: Option<&'call MlxArray>,
+    boundary_checkpoint_collector:
+        Option<&'call mut AstroSsdPromptCacheBoundaryCheckpointCollector>,
+    performance_attribution: &'call mut PerformanceAttribution,
 }

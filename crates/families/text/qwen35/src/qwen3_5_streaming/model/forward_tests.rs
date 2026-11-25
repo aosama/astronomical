@@ -3,7 +3,7 @@
 //! lane against real arrays.
 
 use super::paged_token_count;
-use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
+use text_generation::execution_error::TextExecutionError;
 
 #[test]
 fn should_read_the_token_count_from_the_second_to_last_dimension() {
@@ -26,7 +26,7 @@ fn should_reject_an_empty_shape_as_invalid_input() {
 
     assert!(matches!(
         outcome,
-        Err(Qwen3_5ExecutionError::InvalidInput { description })
+        Err(TextExecutionError::InvalidInput { description })
             if description == "paged MoE hidden states must include token and hidden dimensions"
     ));
 }

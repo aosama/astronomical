@@ -18,22 +18,16 @@ pub const ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID: &str = "Ornith-1.0-35B-OptiQ-4bit"
 pub const ORNITH_1_0_35B_OPTIQ_4BIT_REVISION: &str = "ce62c23d34b91d84f838e0b292d517dbe4b9b60f";
 
 pub mod artifacts;
-#[cfg(feature = "direct-mlx")]
-pub mod astro_ssd_prompt_cache_capture;
 pub mod configuration;
 pub mod decoder;
 pub mod dense;
-#[cfg(feature = "direct-mlx")]
-pub mod engine_errors;
-#[cfg(feature = "direct-mlx")]
-pub mod engine_request;
-#[cfg(all(test, feature = "direct-mlx"))]
-pub mod engine_request_test_support;
 #[cfg(test)]
 pub mod frozen_config_test_support;
 pub mod model;
 pub mod model_math;
 pub mod quantizations;
+#[cfg(test)]
+pub mod qwen4_exp_config_test_support;
 #[cfg(feature = "direct-mlx")]
 pub mod shared_execution;
 pub use model_primitives::route_observation;

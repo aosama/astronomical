@@ -9,7 +9,6 @@
 //! capacity does.
 
 use crate::memory::residency::ExpertLayerGeometry;
-use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_streaming::expert_streaming::expert_pager::ExpertPagingError;
 use crate::qwen3_5_streaming::expert_streaming::retained_expert_layer_page_payload_bytes;
 use crate::{
@@ -18,6 +17,7 @@ use crate::{
     plan_expert_residency, seated_complete_layer_count,
 };
 use engine_core::expert_paging::QuantizedExpertLayerPlan;
+use text_generation::execution_error::TextExecutionError;
 
 use super::streaming_model::Qwen3_5StreamingModel;
 
@@ -55,7 +55,7 @@ impl Qwen3_5StreamingModel {
         context_token_count: u64,
         operation_token_count: u64,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<(), Qwen3_5ExecutionError> {
+    ) -> Result<(), TextExecutionError> {
         self.govern_memory_as_the_engine_would_for_tests(
             phase,
             context_token_count,
@@ -111,7 +111,7 @@ impl Qwen3_5StreamingModel {
     pub fn plan_expert_layer_states_for_reply(
         &self,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<(), Qwen3_5ExecutionError> {
+    ) -> Result<(), TextExecutionError> {
         let (Some(expert_pager), Some(astro_expert_cache)) =
             (self.expert_pager.as_ref(), self.astro_expert_cache.as_ref())
         else {

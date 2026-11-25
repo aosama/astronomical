@@ -11,12 +11,12 @@ use runtime_integration::MlxRuntime;
 use crate::kernel_capability;
 use crate::qwen3_5_core::artifacts::{Qwen3_5ShardIndex, ValidatedQwen3_5Artifact};
 use crate::qwen3_5_core::configuration::Qwen3_5Config;
-use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_core::model_math::weights::{
     Qwen3_5Weights, WeightBindingDtype, bound_dtype_of,
 };
 use crate::qwen3_5_core::vision::Qwen3_5VisionModel;
 use crate::{PerformanceAttribution, PerformanceOperation, TensorInventory};
+use text_generation::execution_error::TextExecutionError;
 
 /// The bound language artifact both engines construct identically before their
 /// expert-handling paths diverge (streaming builds a pager; resident builds
@@ -36,7 +36,7 @@ pub fn bind_language_artifact(
     validated_artifact: &mut ValidatedQwen3_5Artifact,
     should_bind_vision_weights: bool,
     performance_attribution: &mut PerformanceAttribution,
-) -> Result<BoundLanguageArtifact, Qwen3_5ExecutionError> {
+) -> Result<BoundLanguageArtifact, TextExecutionError> {
     bind_language_artifact_for(
         runtime,
         validated_artifact,
@@ -58,7 +58,7 @@ pub fn bind_language_artifact_for(
     should_bind_vision_weights: bool,
     weight_binding_dtype: WeightBindingDtype,
     performance_attribution: &mut PerformanceAttribution,
-) -> Result<BoundLanguageArtifact, Qwen3_5ExecutionError> {
+) -> Result<BoundLanguageArtifact, TextExecutionError> {
     let config = validated_artifact.config().clone();
     let vision_config = validated_artifact.vision_config().cloned();
     let has_separate_vision_sidecar =
@@ -73,7 +73,7 @@ pub fn bind_language_artifact_for(
     let sidecar_vision_model = if has_separate_vision_sidecar {
         performance_attribution.measure_operation(
             PerformanceOperation::ModelSafetensorsMapping,
-            |_performance_attribution| -> Result<_, Qwen3_5ExecutionError> {
+            |_performance_attribution| -> Result<_, TextExecutionError> {
                 Qwen3_5VisionModel::load_from_sidecar(runtime, validated_artifact)
             },
         )?
@@ -86,7 +86,7 @@ pub fn bind_language_artifact_for(
     let mut embedded_vision_shard_files = Vec::new();
     let model_shards = performance_attribution.measure_operation(
         PerformanceOperation::ModelSafetensorsMapping,
-        |performance_attribution| -> Result<_, Qwen3_5ExecutionError> {
+        |performance_attribution| -> Result<_, TextExecutionError> {
             let model_shard_files =
                 validated_artifact.take_safetensors_sources(&model_shard_source_ids)?;
             let mut model_shards = Vec::with_capacity(model_shard_files.len());
@@ -96,7 +96,7 @@ pub fn bind_language_artifact_for(
                 let shard_source_file = model_shard_file.into_file();
                 if has_embedded_vision_tower {
                     embedded_vision_shard_files.push(shard_source_file.try_clone().map_err(
-                        |source| Qwen3_5ExecutionError::WeightSourceDescriptor {
+                        |source| TextExecutionError::WeightSourceDescriptor {
                             description: "could not duplicate a model shard descriptor for the vision tower",
                             source,
                         },
@@ -116,14 +116,14 @@ pub fn bind_language_artifact_for(
     )?;
     let (weights, vision_model) = performance_attribution.measure_operation(
         PerformanceOperation::ModelTensorBinding,
-        |_performance_attribution| -> Result<_, Qwen3_5ExecutionError> {
+        |_performance_attribution| -> Result<_, TextExecutionError> {
             let vision_model = if has_separate_vision_sidecar {
                 sidecar_vision_model
             } else if has_embedded_vision_tower {
                 let vision_config =
                     vision_config
                         .as_ref()
-                        .ok_or(Qwen3_5ExecutionError::InvalidInput {
+                        .ok_or(TextExecutionError::InvalidInput {
                             description: "validated visual tensors have no vision configuration",
                         })?;
                 let vision_tensor_name_to_shard_location =
@@ -202,7 +202,7 @@ pub fn load_model_kernel_verdicts(
     runtime: &MlxRuntime,
     config: &Qwen3_5Config,
     performance_attribution: &mut PerformanceAttribution,
-) -> Result<ModelKernelVerdicts, Qwen3_5ExecutionError> {
+) -> Result<ModelKernelVerdicts, TextExecutionError> {
     // The two gated-delta kernels are independent capability families. A
     // demoted kernel is None and the gated-delta dispatch falls back to
     // the ops-based public MLX route for the worker's lifetime — the
@@ -286,7 +286,7 @@ pub fn load_invariant_linear_scales(
     runtime: &MlxRuntime,
     config: &Qwen3_5Config,
     weight_binding_dtype: WeightBindingDtype,
-) -> Result<InvariantLinearScales, Qwen3_5ExecutionError> {
+) -> Result<InvariantLinearScales, TextExecutionError> {
     invariant_linear_scales_in(
         runtime,
         config,
@@ -298,7 +298,7 @@ fn invariant_linear_scales_in(
     runtime: &MlxRuntime,
     config: &Qwen3_5Config,
     scale_dtype: MlxDtype,
-) -> Result<InvariantLinearScales, Qwen3_5ExecutionError> {
+) -> Result<InvariantLinearScales, TextExecutionError> {
     let linear_head_dimension = config.linear_key_head_dimension() as f32;
     let inverse_linear_head_dimension_scale = runtime
         .array_from_f32(&[linear_head_dimension.recip()], &[])

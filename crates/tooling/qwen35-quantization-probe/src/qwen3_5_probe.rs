@@ -18,7 +18,7 @@ use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use qwen35::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights;
 use qwen35::qwen3_5_core::model_math::dense_projection::Qwen3_5ProjectionStorage;
 use qwen35::qwen3_5_resident::{Qwen3_5ResidentModel, RecordedDecoderLayerInput};
-use qwen35::{Qwen3_5ArtifactValidator, Qwen3_5ModelChunkingConfiguration};
+use qwen35::{Qwen3_5ArtifactValidator, TextModelChunkingConfiguration};
 
 use super::expert_swaps::SwappedOutWeights;
 use super::module_locations::{FeedForwardProjection, ModuleLocation, module_location_for};
@@ -136,7 +136,7 @@ fn load_resident_model(
     let validated_artifact = Qwen3_5ArtifactValidator::new()
         .validate(model_directory, PROBE_MAXIMUM_OUTPUT_TOKENS)
         .map_err(probe_validation_failure)?;
-    let chunking = probe_step(Qwen3_5ModelChunkingConfiguration::new(
+    let chunking = probe_step(TextModelChunkingConfiguration::new(
         FULL_ATTENTION_KV_GROWTH_TOKENS,
         PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL,
         SSD_PAGING_GENERATION_LAYER_INTERVAL,
@@ -252,7 +252,7 @@ impl Qwen3_5SensitivityProbe {
     /// A fresh decoder state for one forward from position zero.
     fn empty_probe_decoder_state(
         &self,
-    ) -> Result<qwen35::qwen3_5_core::decoder::RequestDecoderStateStack, QuantizationError> {
+    ) -> Result<qwen35::RequestDecoderStateStack, QuantizationError> {
         mlx_step(
             self.model
                 .empty_request_decoder_state_matching_loaded_weights(

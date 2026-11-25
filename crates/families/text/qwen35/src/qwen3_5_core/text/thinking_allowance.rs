@@ -11,7 +11,7 @@
 #[cfg(test)]
 mod tests;
 
-use super::thinking_budget;
+use text_generation::request::thinking_budget;
 
 /// Resolves the effective thinking allowance for one request.
 ///

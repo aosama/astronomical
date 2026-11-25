@@ -2,20 +2,20 @@
 //! the disk store is read, the live prefix kept from the last reply may take
 //! the restore over (in-memory prefix adoption, issue #1167). The rest of the
 //! restore is shared with the streaming engine in
-//! `qwen3_5_core::shared_execution::astro_ssd_prompt_cache_restore`.
+//! `text_generation::generation_loop::astro_ssd_prompt_cache_restore`.
 
 use ipc_protocol::WorkerInMemoryPrefixAdoptionOutcome;
 
-use crate::qwen3_5_core::decoder::RequestDecoderStateStack;
-use crate::qwen3_5_core::shared_execution::astro_ssd_prompt_cache_restore::{
-    AstroSsdPromptCacheRestoreRequest, LivePrefixAdoption, Qwen3_5AstroSsdPromptCacheRestoreHooks,
-};
 use crate::{InferenceEngineError, PerformanceAttribution};
 use engine_core::astro_ssd_prompt_cache::prefix_lookup::AstroSsdPromptCachePrefixLookup;
+use text_generation::RequestDecoderStateStack;
+use text_generation::generation_loop::astro_ssd_prompt_cache_restore::{
+    AstroSsdPromptCacheRestoreRequest, LivePrefixAdoption, TextAstroSsdPromptCacheRestoreHooks,
+};
 
 use super::Qwen3_5EngineState;
 
-impl Qwen3_5AstroSsdPromptCacheRestoreHooks for Qwen3_5EngineState {
+impl TextAstroSsdPromptCacheRestoreHooks for Qwen3_5EngineState {
     /// Matches the prompt's chain against the retained live state and, when the
     /// retained state wins, installs it as the restore outcome directly.
     fn adopt_retained_live_prefix(

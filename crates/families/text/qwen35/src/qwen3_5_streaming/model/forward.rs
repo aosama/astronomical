@@ -34,6 +34,12 @@
 //!    whole routed set from RAM (`hot_expert_partial_page` in
 //!    `expert_reuse.rs`); a total miss falls through to outcome 3's streaming.
 //!
+//! A reply token may skip the host route of outcomes 4 and 5 altogether: a
+//! layer held in part is then served from its table with a lookup inside
+//! the token's graph, which reads the missing experts into the table itself
+//! (`dispatch_in_graph_table_page` in `in_graph_table_serving.rs`), and the
+//! token stays one evaluation.
+//!
 //! The warm tables themselves live in
 //! `expert_streaming/astro_expert_cache.rs`; the byte plans and the
 //! bounded SSD reader are family-neutral under `crate::expert_paging` and
@@ -41,9 +47,9 @@
 
 use mlx_bridge::MlxArray;
 
-use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_streaming::model::Qwen3_5Model;
 use crate::{PerformanceAttribution, PerformanceCounter, PerformanceOperation};
+use text_generation::execution_error::TextExecutionError;
 
 use super::super::expert_streaming::expert_pager::Qwen3_5ExpertPager;
 use super::Qwen3_5MoEPagedExecutionMode;
@@ -63,7 +69,7 @@ impl Qwen3_5Model {
         should_use_compiled_elementwise_graphs: bool,
         paged_execution_mode: Qwen3_5MoEPagedExecutionMode,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         let token_count = paged_token_count(&hidden_states.shape())?;
         let (selected_indices, selected_scores) = performance_attribution.measure_operation(
             PerformanceOperation::PagedRouterGraphConstruction,
@@ -176,7 +182,7 @@ impl Qwen3_5Model {
         selected_scores: &MlxArray,
         should_use_compiled_elementwise_graphs: bool,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<Option<MlxArray>, Qwen3_5ExecutionError> {
+    ) -> Result<Option<MlxArray>, TextExecutionError> {
         if token_count > 1
             && let Some(handled) = self.dispatch_complete_layer_page_in_hand(
                 expert_pager,
@@ -252,7 +258,7 @@ impl Qwen3_5Model {
         hidden_states: &MlxArray,
         should_use_compiled_elementwise_graphs: bool,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<Option<MlxArray>, Qwen3_5ExecutionError> {
+    ) -> Result<Option<MlxArray>, TextExecutionError> {
         let expert_capacity = expert_pager.layer_plan(layer_index)?.expert_capacity;
         if !matches!(
             self.expert_page_disposition(layer_index, expert_capacity),
@@ -305,7 +311,7 @@ impl Qwen3_5Model {
         token_count: i32,
         selected_indices: &MlxArray,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<Option<Vec<usize>>, Qwen3_5ExecutionError> {
+    ) -> Result<Option<Vec<usize>>, TextExecutionError> {
         if !should_use_loaded_model_mode {
             return Ok(None);
         }
@@ -343,7 +349,7 @@ impl Qwen3_5Model {
         paged_execution_mode: Qwen3_5MoEPagedExecutionMode,
         should_use_compiled_elementwise_graphs: bool,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<Option<MlxArray>, Qwen3_5ExecutionError> {
+    ) -> Result<Option<MlxArray>, TextExecutionError> {
         let expert_capacity = expert_pager.layer_plan(layer_index)?.expert_capacity;
         if let Some(astro_expert_cache) = self.astro_expert_cache.as_ref() {
             astro_expert_cache.borrow_mut().record_expert_demand(
@@ -403,7 +409,7 @@ impl Qwen3_5Model {
         hidden_states: &MlxArray,
         should_use_compiled_elementwise_graphs: bool,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         performance_attribution.record_counter(
             PerformanceCounter::RetainedRouteAssignmentHitCount,
             u64::try_from(selected_expert_ids.len()).unwrap_or(u64::MAX),
@@ -417,7 +423,7 @@ impl Qwen3_5Model {
                     routed_expert_ids,
                     expert_capacity,
                 )?
-                .ok_or(Qwen3_5ExecutionError::InvalidInput {
+                .ok_or(TextExecutionError::InvalidInput {
                     description: "astro_expert_cache hit reported a page that vanished",
                 })?;
             self.account_resident_subset_hit(
@@ -441,7 +447,7 @@ impl Qwen3_5Model {
         let complete_expert_ids: Vec<usize> = (0..expert_capacity).collect();
         let (packed_weights, packed_manifest) = self
             .astro_expert_cache_packed_page(layer_index, &complete_expert_ids, expert_capacity)
-            .ok_or(Qwen3_5ExecutionError::InvalidInput {
+            .ok_or(TextExecutionError::InvalidInput {
                 description: "astro_expert_cache hit reported a page that vanished",
             })?;
         self.record_resident_layer_decode_hit(
@@ -480,7 +486,7 @@ impl Qwen3_5Model {
         paged_execution_mode: Qwen3_5MoEPagedExecutionMode,
         sorted_unique_expert_ids: Option<&[usize]>,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         if token_count > 1 {
             return match paged_execution_mode {
                 Qwen3_5MoEPagedExecutionMode::ProductionDefault => self
@@ -541,11 +547,11 @@ impl Qwen3_5Model {
 /// Pure: the paged token count is the second-to-last shape dimension with the
 /// hidden dimension trailing it; a single-dimension shape falls back to index
 /// zero and an empty shape is invalid input.
-fn paged_token_count(hidden_state_shape: &[i32]) -> Result<i32, Qwen3_5ExecutionError> {
+fn paged_token_count(hidden_state_shape: &[i32]) -> Result<i32, TextExecutionError> {
     hidden_state_shape
         .get(hidden_state_shape.len().saturating_sub(2))
         .copied()
-        .ok_or(Qwen3_5ExecutionError::InvalidInput {
+        .ok_or(TextExecutionError::InvalidInput {
             description: "paged MoE hidden states must include token and hidden dimensions",
         })
 }

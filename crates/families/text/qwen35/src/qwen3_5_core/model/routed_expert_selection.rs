@@ -6,11 +6,11 @@
 use mlx_bridge::MlxArray;
 
 use crate::qwen3_5_core::model::base::Qwen3_5ModelBase;
-use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_core::model_math::feed_forward_weights::{
     Qwen3_5MoEFeedForwardWeights, Qwen3_5MoERouterGateWeights,
 };
 use crate::qwen3_5_core::model_math::routing;
+use text_generation::execution_error::TextExecutionError;
 
 impl Qwen3_5ModelBase {
     /// Runs the router gate and top-k expert routing for one MoE forward,
@@ -19,7 +19,7 @@ impl Qwen3_5ModelBase {
         &self,
         hidden_states: &MlxArray,
         mixture_of_experts_weights: &Qwen3_5MoEFeedForwardWeights,
-    ) -> Result<(MlxArray, MlxArray), Qwen3_5ExecutionError> {
+    ) -> Result<(MlxArray, MlxArray), TextExecutionError> {
         let router_logits = match &mixture_of_experts_weights.router_projection {
             Qwen3_5MoERouterGateWeights::Affine(quantized_weights) => {
                 self.quantized_linear(hidden_states, quantized_weights)?
@@ -37,6 +37,6 @@ impl Qwen3_5ModelBase {
             self.config.experts_per_token() as i32,
             self.config.normalizes_top_k_probabilities(),
         )
-        .map_err(Qwen3_5ExecutionError::from)
+        .map_err(TextExecutionError::from)
     }
 }

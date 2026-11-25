@@ -4,23 +4,23 @@
 //! dropped; allocator cleanup follows, then the memory governor ends the
 //! request, and the final telemetry reports what remains. The telemetry, the
 //! attribution record and the after-error path are shared with the streaming
-//! engine in `qwen3_5_core::shared_execution::generation_finalization_steps`.
+//! engine in `text_generation::generation_loop::generation_finalization_steps`.
 
 use crate::astro_decoder_state_cache::AstroDecoderStateCacheState;
-use crate::qwen3_5_core::decoder::RequestDecoderStateStack;
-use crate::qwen3_5_core::shared_execution::{generation_finalization_steps, request_end};
 use crate::{
     AstroSsdPromptCacheBlockKey, GenerationFinalization, PerformanceAttributionOutcome,
     RetainedPrefixRetentionDecision, RetainedPrefixRetentionRequirements,
 };
 use engine_core::astro_ssd_prompt_cache::block_causal_input::AstroSsdPromptCacheBlockCausalInput;
 use ipc_protocol::RequestDraftingStatistics;
+use text_generation::RequestDecoderStateStack;
+use text_generation::generation_loop::{generation_finalization_steps, request_end};
 
 use super::Qwen3_5EngineState;
-use super::engine_request::Qwen3_5EngineRequest;
+use super::engine_request::ResidentEngineRequest;
 use super::retained_live_prefix::RetainedLiveDecoderPrefix;
 
-impl generation_finalization_steps::Qwen3_5FinalizationHooks for Qwen3_5EngineState {
+impl generation_finalization_steps::TextFinalizationHooks for Qwen3_5EngineState {
     fn retained_live_context_state_payload_bytes(&self) -> u64 {
         Qwen3_5EngineState::live_retained_context_state_payload_bytes(self)
     }
@@ -31,7 +31,7 @@ impl generation_finalization_steps::Qwen3_5FinalizationHooks for Qwen3_5EngineSt
 
     fn finalize_generation_request(
         &mut self,
-        active_request: Qwen3_5EngineRequest,
+        active_request: ResidentEngineRequest,
         performance_attribution_outcome: PerformanceAttributionOutcome,
         failure_description: Option<&'static str>,
     ) -> GenerationFinalization {
@@ -44,12 +44,12 @@ impl generation_finalization_steps::Qwen3_5FinalizationHooks for Qwen3_5EngineSt
     }
 }
 
-impl request_end::Qwen3_5RequestEndHooks for Qwen3_5EngineState {
+impl request_end::TextRequestEndHooks for Qwen3_5EngineState {
     type ReplyRecord = RequestDraftingStatistics;
 
     fn take_reply_record(
         &mut self,
-        active_request: &mut Qwen3_5EngineRequest,
+        active_request: &mut ResidentEngineRequest,
     ) -> RequestDraftingStatistics {
         // Retain the completed generation's live state for in-memory prefix
         // adoption (issue #1167) before the request drops. The memory package
@@ -94,7 +94,7 @@ impl Qwen3_5EngineState {
     /// regions behind its processed offset.
     fn retain_completed_live_prefix(
         &mut self,
-        active_request: &mut Qwen3_5EngineRequest,
+        active_request: &mut ResidentEngineRequest,
     ) -> Option<RetainedLiveDecoderPrefix> {
         let model_contract = self.core.astro_ssd_prompt_cache_model_contract.as_ref()?;
         if !active_request.can_use_astro_ssd_prompt_cache {

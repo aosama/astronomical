@@ -6,9 +6,9 @@
 
 use ipc_protocol::RequestId;
 use model_serving::{
-    GeneratedToken, GenerationFinalization, InferenceEngine, Qwen3_5ArtifactValidator,
-    Qwen3_5InferenceRequest, Qwen3_5MlxEngineConstructors, Qwen3_5PromptProcessingChunkSizer,
-    Qwen3_5ResidentEngine, Qwen3_5StreamingEngine, Qwen3_5Tokenizer,
+    GeneratedToken, GenerationFinalization, InferenceEngine, PromptProcessingChunkSizer,
+    Qwen3_5ArtifactValidator, Qwen3_5ResidentEngine, Qwen3_5StreamingEngine, Qwen3_5Tokenizer,
+    TextInferenceRequest, TextMlxEngineConstructors,
 };
 
 pub(super) const RESIDENCY_LIFECYCLE_PROMPT_TOKEN_COUNT: usize = 256;
@@ -66,7 +66,7 @@ pub(super) fn construct_resident_engine(
             active_memory_limit_bytes,
             mlx_buffer_cache_limit_bytes,
             None,
-            Qwen3_5PromptProcessingChunkSizer::for_chunk_size_tokens(2_048)
+            PromptProcessingChunkSizer::for_chunk_size_tokens(2_048)
                 .expect("the test prefill_chunk_tokens should be valid"),
             think_end_token_id,
             model_directory,
@@ -124,7 +124,7 @@ pub(super) fn construct_automatic_residency_engine(
             active_memory_limit_bytes,
             mlx_buffer_cache_limit_bytes,
             None,
-            Qwen3_5PromptProcessingChunkSizer::for_chunk_size_tokens(2_048)
+            PromptProcessingChunkSizer::for_chunk_size_tokens(2_048)
                 .expect("the test streaming prefill chunk size should be valid"),
             think_end_token_id,
             model_directory,
@@ -149,7 +149,7 @@ pub(super) async fn serve_romeo_and_juliet_request<Engine>(
     progress_log_prefix: &str,
 ) -> GenerationFinalization
 where
-    Engine: InferenceEngine<Request = Qwen3_5InferenceRequest>,
+    Engine: InferenceEngine<Request = TextInferenceRequest>,
 {
     eprintln!(
         "[{progress_log_prefix} 2/5] status=progress phase=romeo_and_juliet_generation prompt_tokens={}",
@@ -157,7 +157,7 @@ where
     );
     qwen3_5_engine
         .start_generation(
-            Qwen3_5InferenceRequest::new(request_id, prompt_token_ids, 2)
+            TextInferenceRequest::new(request_id, prompt_token_ids, 2)
                 .with_image_pad_token_id(image_pad_token_id),
         )
         .await
@@ -171,7 +171,7 @@ pub(super) async fn complete_started_romeo_and_juliet_request<Engine>(
     progress_log_prefix: &str,
 ) -> GenerationFinalization
 where
-    Engine: InferenceEngine<Request = Qwen3_5InferenceRequest>,
+    Engine: InferenceEngine<Request = TextInferenceRequest>,
 {
     loop {
         match qwen3_5_engine

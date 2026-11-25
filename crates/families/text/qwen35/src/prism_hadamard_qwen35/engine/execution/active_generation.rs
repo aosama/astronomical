@@ -1,6 +1,6 @@
 //! One folded-ternary request in the shared Qwen 3.5 request record.
 //!
-//! The request lives in [`Qwen3_5EngineRequest`] like a resident or
+//! The request lives in [`TextEngineRequest`] like a resident or
 //! streaming request; the extension holds what only the folded-ternary loop
 //! reads. The forward helpers here are the folded-ternary engine's own: the
 //! position advances by the forwarded token count after every forward,
@@ -11,12 +11,12 @@ use mlx_bridge::MlxArray;
 
 use super::PrismHadamardQwen35ActiveGeneration;
 use crate::prism_hadamard_qwen35::model::{PrismHadamardModelError, PrismHadamardTextModel};
-use crate::qwen3_5_core::engine_request::Qwen3_5EngineRequest;
-use crate::qwen3_5_core::shared_execution::astro_ssd_prompt_cache_restore::AstroSsdPromptCacheRestoreOutcome;
 use crate::{
-    AstroSsdPromptCacheBlockKey, PerformanceAttribution, Qwen3_5InferenceRequest,
-    Qwen3_5ThinkingBudgetState, RequestDecoderStateStack,
+    AstroSsdPromptCacheBlockKey, PerformanceAttribution, RequestDecoderStateStack,
+    TextInferenceRequest, ThinkingBudgetState,
 };
+use text_generation::engine_request::TextEngineRequest;
+use text_generation::generation_loop::astro_ssd_prompt_cache_restore::AstroSsdPromptCacheRestoreOutcome;
 
 /// The per-request state only the folded-ternary loop reads: none since its
 /// prompt reading moved onto the shared cursor (issue #2473, Prism step 9).
@@ -34,7 +34,7 @@ pub(super) struct PrismRequestStart {
     pub(super) restore_outcome: Option<AstroSsdPromptCacheRestoreOutcome>,
     /// The sampler's random state; none for a greedy request.
     pub(super) random_state: Option<MlxArray>,
-    pub(super) thinking_budget_state: Qwen3_5ThinkingBudgetState,
+    pub(super) thinking_budget_state: ThinkingBudgetState,
     pub(super) performance_attribution: PerformanceAttribution,
     pub(super) can_use_astro_ssd_prompt_cache: bool,
 }
@@ -62,7 +62,7 @@ fn restored_prefix_facts(
 }
 
 pub(super) fn prism_active_generation(
-    inference_request: &mut Qwen3_5InferenceRequest,
+    inference_request: &mut TextInferenceRequest,
     request_start: PrismRequestStart,
 ) -> PrismHadamardQwen35ActiveGeneration {
     let (restored_token_count, last_restored_block_key, astro_ssd_prompt_cache_diagnostics) =
@@ -71,7 +71,7 @@ pub(super) fn prism_active_generation(
         target_eligible_token_count: request_start.prompt_token_ids.len() as u64,
         target_restored_token_count: u64::from(restored_token_count),
     };
-    Qwen3_5EngineRequest {
+    TextEngineRequest {
         request_decoder_state: request_start.request_decoder_state,
         generated_token_count: 0,
         input_token_ids: request_start.prompt_token_ids,
@@ -105,10 +105,20 @@ pub(super) fn prism_active_generation(
     }
 }
 
-impl PrismHadamardQwen35ActiveGeneration {
+/// The forward the Prism engine runs on its request. A trait, because the
+/// request type belongs to the text shell and takes no inherent methods here.
+pub(super) trait PrismForwardingRequest {
     /// Runs one whole forward from the next position and returns its final
     /// logits, then advances the position by the forwarded token count.
-    pub(super) fn forward_pass(
+    fn forward_pass(
+        &mut self,
+        model: &PrismHadamardTextModel,
+        token_indices: &MlxArray,
+    ) -> Result<MlxArray, PrismHadamardModelError>;
+}
+
+impl PrismForwardingRequest for PrismHadamardQwen35ActiveGeneration {
+    fn forward_pass(
         &mut self,
         model: &PrismHadamardTextModel,
         token_indices: &MlxArray,
@@ -118,17 +128,13 @@ impl PrismHadamardQwen35ActiveGeneration {
             self.next_position_tokens,
             &mut self.request_decoder_state,
         )?;
-        self.advance_position_after_forward(token_indices);
-        Ok(logits)
-    }
-
-    /// The serving checks cap every request at the model's context window,
-    /// far inside u32, so the position never saturates in practice.
-    fn advance_position_after_forward(&mut self, forwarded_token_indices: &MlxArray) {
-        let forwarded_token_count = forwarded_token_indices.shape()[1];
+        // The serving checks cap every request at the model's context
+        // window, far inside u32, so the position never saturates in practice.
+        let forwarded_token_count = token_indices.shape()[1];
         self.next_position_tokens = self
             .next_position_tokens
             .saturating_add_signed(forwarded_token_count);
+        Ok(logits)
     }
 }
 

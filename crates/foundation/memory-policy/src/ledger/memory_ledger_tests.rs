@@ -356,8 +356,11 @@ fn should_move_the_system_wired_reserve_with_each_reading_and_take_it_from_capac
     let capacity_before_bytes = memory_ledger.accounts().kept_weight_capacity_bytes;
     let system_wire_limit_bytes = 100 * GIBIBYTE;
 
-    let accounts_over_the_limit = memory_ledger
-        .observe_system_wired(system_wire_limit_bytes + GIBIBYTE, system_wire_limit_bytes);
+    let accounts_over_the_limit =
+        memory_ledger.observe_system_wired(reading_with_nothing_else_wired(
+            system_wire_limit_bytes + GIBIBYTE,
+            system_wire_limit_bytes,
+        ));
     assert_eq!(accounts_over_the_limit.system_wired_reserve_bytes, GIBIBYTE);
     assert_eq!(
         accounts_over_the_limit.kept_weight_capacity_bytes,
@@ -365,10 +368,11 @@ fn should_move_the_system_wired_reserve_with_each_reading_and_take_it_from_capac
     );
 
     // Well under the limit: everything beyond the 1 GiB slack is given back.
-    let accounts_under_the_limit = memory_ledger.observe_system_wired(
-        system_wire_limit_bytes - 3 * GIBIBYTE,
-        system_wire_limit_bytes,
-    );
+    let accounts_under_the_limit =
+        memory_ledger.observe_system_wired(reading_with_nothing_else_wired(
+            system_wire_limit_bytes - 3 * GIBIBYTE,
+            system_wire_limit_bytes,
+        ));
     assert_eq!(accounts_under_the_limit.system_wired_reserve_bytes, 0);
     assert_eq!(
         accounts_under_the_limit.kept_weight_capacity_bytes,
@@ -381,16 +385,16 @@ fn should_never_carry_a_system_wired_reserve_larger_than_the_limit() {
     let mut memory_ledger = ledger_at_16_gibibytes();
     let system_wire_limit_bytes = 100 * GIBIBYTE;
 
-    let _ = memory_ledger.observe_system_wired(
+    let _ = memory_ledger.observe_system_wired(reading_with_nothing_else_wired(
         system_wire_limit_bytes + 60 * GIBIBYTE,
         system_wire_limit_bytes,
-    );
+    ));
     // One reading at the slack's edge keeps the reserve; had 60 GiB been
     // carried, the next reading under the limit could not bring it down.
-    let accounts = memory_ledger.observe_system_wired(
+    let accounts = memory_ledger.observe_system_wired(reading_with_nothing_else_wired(
         system_wire_limit_bytes - 18 * GIBIBYTE,
         system_wire_limit_bytes,
-    );
+    ));
 
     assert_eq!(accounts.system_wired_reserve_bytes, 0);
     assert_eq!(accounts.shortfall_bytes, 0);
@@ -401,11 +405,50 @@ fn should_remember_the_latest_system_wired_reading_and_none_before_the_first() {
     let mut memory_ledger = ledger_at_16_gibibytes();
     assert_eq!(memory_ledger.latest_system_wired_reading(), None);
 
-    let _ = memory_ledger.observe_system_wired(20 * GIBIBYTE, 38 * GIBIBYTE);
-    let _ = memory_ledger.observe_system_wired(21 * GIBIBYTE, 38 * GIBIBYTE);
+    let _ = memory_ledger.observe_system_wired(reading_with_nothing_else_wired(
+        20 * GIBIBYTE,
+        38 * GIBIBYTE,
+    ));
+    let _ = memory_ledger.observe_system_wired(reading_with_nothing_else_wired(
+        21 * GIBIBYTE,
+        38 * GIBIBYTE,
+    ));
 
     assert_eq!(
         memory_ledger.latest_system_wired_reading(),
         Some((21 * GIBIBYTE, 38 * GIBIBYTE))
     );
+}
+
+/// A reading where MLX holds everything wired, so the reserve follows the
+/// readings alone.
+fn reading_with_nothing_else_wired(
+    system_wired_bytes: u64,
+    system_wire_limit_bytes: u64,
+) -> crate::ledger::system_wired_ceiling::SystemWiredReading {
+    crate::ledger::system_wired_ceiling::SystemWiredReading {
+        system_wired_bytes,
+        system_wire_limit_bytes,
+        mlx_held_bytes: system_wired_bytes,
+    }
+}
+
+#[test]
+fn should_reserve_up_front_what_other_wired_memory_leaves_no_room_for() {
+    let mut memory_ledger = ledger_at_16_gibibytes();
+    let capacity_before_bytes = memory_ledger.accounts().kept_weight_capacity_bytes;
+    // A 10 GiB line is 9.9 GiB under its slack; with 2 GiB wired outside
+    // MLX, MLX has 7.9 GiB, so 8.1 GiB of the 16 GiB limit stays unused
+    // although the system is under the line when read.
+    let accounts = memory_ledger.observe_system_wired(
+        crate::ledger::system_wired_ceiling::SystemWiredReading {
+            system_wired_bytes: 9 * GIBIBYTE,
+            system_wire_limit_bytes: 10 * GIBIBYTE,
+            mlx_held_bytes: 7 * GIBIBYTE,
+        },
+    );
+    let expected_reserve_bytes =
+        16 * GIBIBYTE - (10 * GIBIBYTE - 10 * GIBIBYTE / 100 - 2 * GIBIBYTE);
+    assert_eq!(accounts.system_wired_reserve_bytes, expected_reserve_bytes);
+    assert!(accounts.kept_weight_capacity_bytes < capacity_before_bytes);
 }

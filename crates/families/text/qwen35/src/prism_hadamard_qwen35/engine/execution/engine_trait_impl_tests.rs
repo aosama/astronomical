@@ -5,7 +5,7 @@ use crate::prism_hadamard_qwen35::artifacts::tests::pack_fixture::FIXTURE_VOCAB_
 use crate::prism_hadamard_qwen35::engine::fixture_engine_test_support::{
     FIXTURE_THINK_END_TOKEN_ID, LoadedFixtureEngine, loaded_fixture_engine,
 };
-use crate::{InferenceEngineError, MlxInferenceExecution, Qwen3_5InferenceRequest};
+use crate::{InferenceEngineError, MlxInferenceExecution, TextInferenceRequest};
 
 const PROMPT_TOKEN_IDS: [u32; 3] = [11, 12, 13];
 
@@ -16,7 +16,7 @@ fn start_greedy(
 ) -> Result<crate::EngineGenerationStart, InferenceEngineError> {
     fixture_engine
         .execution
-        .start_generation(Qwen3_5InferenceRequest::new_sampling(
+        .start_generation(TextInferenceRequest::new_sampling(
             RequestId::new(81),
             prompt_token_ids,
             maximum_output_tokens,
@@ -94,7 +94,7 @@ fn should_hold_no_random_state_for_greedy_and_refuse_an_impossible_sampling_stra
         .cancel_generation(RequestId::new(81))
         .expect("the request should cancel");
 
-    let zero_top_k_request = Qwen3_5InferenceRequest::new_sampling_with_top_k(
+    let zero_top_k_request = TextInferenceRequest::new_sampling_with_top_k(
         RequestId::new(82),
         PROMPT_TOKEN_IDS.to_vec(),
         4,
@@ -115,7 +115,7 @@ fn should_hold_no_random_state_for_greedy_and_refuse_an_impossible_sampling_stra
 #[file_serial]
 fn should_require_a_thinking_transition_that_ends_with_the_model_marker() {
     let mut fixture_engine = loaded_fixture_engine(|_| {});
-    let unmarked_transition_request = Qwen3_5InferenceRequest::new_sampling(
+    let unmarked_transition_request = TextInferenceRequest::new_sampling(
         RequestId::new(83),
         PROMPT_TOKEN_IDS.to_vec(),
         8,
@@ -133,7 +133,7 @@ fn should_require_a_thinking_transition_that_ends_with_the_model_marker() {
 
     // Negative: a marked transition still needs room for itself and an
     // answer inside the output budget (2 thinking + 2 forced + 1 answer).
-    let cramped_budget_request = Qwen3_5InferenceRequest::new_sampling(
+    let cramped_budget_request = TextInferenceRequest::new_sampling(
         RequestId::new(84),
         PROMPT_TOKEN_IDS.to_vec(),
         4,

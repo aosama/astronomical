@@ -13,7 +13,7 @@ use std::fs::File;
 
 use runtime_integration::{MlxRuntime, MlxSafetensors};
 
-use super::{Qwen3_5ExecutionError, VisionTensorLocation};
+use super::{TextExecutionError, VisionTensorLocation};
 
 #[cfg(test)]
 #[path = "vision_tensor_source_tests.rs"]
@@ -92,11 +92,11 @@ impl Qwen3_5VisionTensorSource {
     pub fn load_lazy_safetensors(
         &self,
         runtime: &MlxRuntime,
-    ) -> Result<Vec<MlxSafetensors>, Qwen3_5ExecutionError> {
+    ) -> Result<Vec<MlxSafetensors>, TextExecutionError> {
         let mut source_safetensors = Vec::with_capacity(self.source_files.len());
         for source_file in &self.source_files {
             let duplicated_source_file = source_file.try_clone().map_err(|source| {
-                Qwen3_5ExecutionError::WeightSourceDescriptor {
+                TextExecutionError::WeightSourceDescriptor {
                     description: "could not duplicate a vision weight file descriptor",
                     source,
                 }
@@ -110,10 +110,10 @@ impl Qwen3_5VisionTensorSource {
     pub fn location(
         &self,
         vision_tensor_name: &str,
-    ) -> Result<&VisionTensorLocation, Qwen3_5ExecutionError> {
+    ) -> Result<&VisionTensorLocation, TextExecutionError> {
         self.vision_tensor_name_to_location
             .get(vision_tensor_name)
-            .ok_or_else(|| Qwen3_5ExecutionError::MissingTensor {
+            .ok_or_else(|| TextExecutionError::MissingTensor {
                 tensor_name: vision_tensor_name.to_owned(),
             })
     }

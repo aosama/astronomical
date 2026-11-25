@@ -7,9 +7,9 @@
 use runtime_integration::MlxRuntimeError;
 
 use super::PrismHadamardModelError;
-use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
+use text_generation::execution_error::TextExecutionError;
 
-impl From<PrismHadamardModelError> for Qwen3_5ExecutionError {
+impl From<PrismHadamardModelError> for TextExecutionError {
     fn from(prism_model_error: PrismHadamardModelError) -> Self {
         match prism_model_error {
             PrismHadamardModelError::Forward(captured_error) => {

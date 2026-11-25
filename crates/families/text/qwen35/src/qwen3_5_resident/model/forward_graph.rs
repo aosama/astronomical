@@ -4,15 +4,15 @@
 
 use mlx_bridge::{MlxArray, MlxDtype};
 
-use crate::qwen3_5_core::decoder::Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector;
 use crate::qwen3_5_core::model::target_forward_graph::{
     Qwen3_5ForwardPositions, Qwen3_5TargetForwardGraph, Qwen3_5TargetForwardOutput,
     validated_layer_decoder_state,
 };
 use crate::{PerformanceAttribution, PerformanceOperation};
+use text_generation::AstroSsdPromptCacheBoundaryCheckpointCollector;
 
 use super::Qwen3_5ResidentModel;
-use super::{Qwen3_5ExecutionError, RequestDecoderStateStack};
+use super::{RequestDecoderStateStack, TextExecutionError};
 
 impl Qwen3_5ResidentModel {
     /// Executes a target forward and retains pre-final-normalization rows for specialized consumers.
@@ -21,7 +21,7 @@ impl Qwen3_5ResidentModel {
         token_ids: &[u32],
         starting_position_tokens: u32,
         request_decoder_state: &mut RequestDecoderStateStack,
-    ) -> Result<Qwen3_5TargetForwardOutput, Qwen3_5ExecutionError> {
+    ) -> Result<Qwen3_5TargetForwardOutput, TextExecutionError> {
         let mut disabled_performance_attribution = PerformanceAttribution::disabled();
         let target_forward_output = self.build_target_forward_graph(
             token_ids,
@@ -52,7 +52,7 @@ impl Qwen3_5ResidentModel {
     pub fn all_position_vocabulary_logits(
         &self,
         pre_final_normalization_hidden_states: &MlxArray,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         let normalized_states = self.runtime.rms_norm(
             pre_final_normalization_hidden_states,
             &self.weights.final_normalization_weight,
@@ -78,11 +78,11 @@ impl Qwen3_5TargetForwardGraph for Qwen3_5ResidentModel {
         forward_positions: Qwen3_5ForwardPositions<'_>,
         request_decoder_state: &mut RequestDecoderStateStack,
         mut boundary_checkpoint_collector: Option<
-            &mut Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
+            &mut AstroSsdPromptCacheBoundaryCheckpointCollector,
         >,
         _forward_mode: (),
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         let rope_offset_tokens = forward_positions.rope_offset_tokens()?;
         let token_count = forward_positions.token_count;
         let decoder_layer_count = self.config.layer_count() as usize;
@@ -93,7 +93,7 @@ impl Qwen3_5TargetForwardGraph for Qwen3_5ResidentModel {
                 .weights
                 .decoder_layer_weights
                 .get(layer_index)
-                .ok_or(Qwen3_5ExecutionError::MissingDecoderLayerWeights { layer_index })?;
+                .ok_or(TextExecutionError::MissingDecoderLayerWeights { layer_index })?;
             let layer_model_state =
                 validated_layer_decoder_state(request_decoder_state, layer_index)?;
             hidden_states = self.forward_decoder_layer(

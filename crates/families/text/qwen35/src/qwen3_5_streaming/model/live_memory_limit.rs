@@ -60,7 +60,7 @@ impl Qwen3_5Model {
         }
         let Some(requested_mlx_memory_limits) = requested_mlx_memory_limits_when_changed(
             requested_mlx_memory_ceiling_bytes,
-            current_mlx_memory_ceiling_bytes,
+            current_mlx_memory_limits,
         )?
         else {
             return Ok((minimum_mlx_memory_ceiling_bytes, current_mlx_memory_limits));
@@ -150,7 +150,7 @@ impl Qwen3_5Model {
             post_reclamation_active_memory_bytes(&self.runtime)?;
         if post_reclamation_active_memory_bytes > requested_mlx_memory_ceiling_bytes {
             self.restore_memory_ceiling_policy(previous_memory_ceiling_bytes)?;
-            return Err(crate::qwen3_5_core::engine_errors::fatal_engine_error(
+            return Err(text_generation::engine_errors::fatal_engine_error(
                 "retained model memory remained above the requested MLX ceiling after expert reclamation",
             ));
         }
@@ -171,7 +171,7 @@ impl Qwen3_5Model {
             .update_memory_limits(requested_mlx_memory_limits)
         {
             self.restore_memory_ceiling_policy(previous_memory_ceiling_bytes)?;
-            return Err(crate::qwen3_5_core::engine_errors::qwen3_5_runtime_error(
+            return Err(text_generation::engine_errors::fatal_runtime_error(
                 runtime_update_error,
             ));
         }
@@ -186,7 +186,7 @@ impl Qwen3_5Model {
             .borrow_mut()
             .update_mlx_active_memory_ceiling_bytes(requested_mlx_memory_ceiling_bytes)
             .map_err(|model_memory_facts_error| {
-                crate::qwen3_5_core::engine_errors::fatal_engine_error(
+                text_generation::engine_errors::fatal_engine_error(
                     model_memory_facts_error.to_string(),
                 )
             })?;
@@ -223,7 +223,7 @@ impl Qwen3_5Model {
             .borrow_mut()
             .update_mlx_active_memory_ceiling_bytes(requested_mlx_memory_ceiling_bytes)
             .map_err(|model_memory_facts_error| {
-                crate::qwen3_5_core::engine_errors::fatal_engine_error(
+                text_generation::engine_errors::fatal_engine_error(
                     model_memory_facts_error.to_string(),
                 )
             })?;
@@ -254,7 +254,7 @@ impl Qwen3_5Model {
         match (policy_restore_result, runtime_restore_result) {
             (Ok(()), Ok(())) => transition_error,
             (policy_restore_result, runtime_restore_result) => {
-                crate::qwen3_5_core::engine_errors::fatal_engine_error(format!(
+                text_generation::engine_errors::fatal_engine_error(format!(
                     "raised MLX memory transition failed and rollback was incomplete: transition_error={transition_error}; policy_restore_error={:?}; runtime_restore_error={:?}",
                     policy_restore_result.err(),
                     runtime_restore_result.err(),

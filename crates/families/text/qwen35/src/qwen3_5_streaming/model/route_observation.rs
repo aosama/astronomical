@@ -14,7 +14,6 @@
 
 use mlx_bridge::MlxArray;
 
-use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_core::route_observation::ObservedExpertRoute;
 use crate::qwen3_5_streaming::expert_streaming::route_observation::{
     RouteObservationRecord, RouteObservationRing, sorted_unique_layer_routed_expert_ids,
@@ -22,6 +21,7 @@ use crate::qwen3_5_streaming::expert_streaming::route_observation::{
 use crate::qwen3_5_streaming::model::Qwen3_5Model;
 use crate::qwen3_5_streaming::model::routed_reply_recording::ReplyStartSnapshot;
 use crate::{PerformanceAttribution, PerformanceCounter, PerformanceOperation};
+use text_generation::execution_error::TextExecutionError;
 
 /// Model-owned decode route capture: the lazy pending arrays for the token
 /// being forwarded plus the bounded observation history every request feeds.
@@ -211,7 +211,7 @@ impl Qwen3_5Model {
     fn evaluate_pending_route_arrays(
         &self,
         pending_layer_route_arrays: &[Option<MlxArray>],
-    ) -> Result<Option<ObservedExpertRoute>, Qwen3_5ExecutionError> {
+    ) -> Result<Option<ObservedExpertRoute>, TextExecutionError> {
         if pending_layer_route_arrays
             .iter()
             .all(|pending_route_array| pending_route_array.is_none())

@@ -12,11 +12,11 @@ use mlx_bridge::MlxArray;
 use runtime_integration::MlxRuntime;
 
 use super::decoder_layer_weights::Qwen3_5DecoderLayerWeights;
-use super::error::Qwen3_5ExecutionError;
 use super::weights::{bind_language_tensor, take_decoder_layer_weights};
 use crate::TensorProfile;
 use crate::qwen3_5_core::artifacts::qwen3_5_resident_language_tensor_profiles;
 use crate::qwen3_5_core::configuration::Qwen3_5Config;
+use text_generation::execution_error::TextExecutionError;
 
 /// The language tensor profiles of each decoder layer, in layer order.
 ///
@@ -24,10 +24,10 @@ use crate::qwen3_5_core::configuration::Qwen3_5Config;
 /// model's profile list for every layer it reads.
 pub fn decoder_layer_tensor_profiles(
     qwen3_5_config: &Qwen3_5Config,
-) -> Result<Vec<Vec<TensorProfile>>, Qwen3_5ExecutionError> {
+) -> Result<Vec<Vec<TensorProfile>>, TextExecutionError> {
     // Same mapping the resident binder uses for an unprofilable config.
     let language_tensor_profiles = qwen3_5_resident_language_tensor_profiles(qwen3_5_config)
-        .map_err(|artifact_error| Qwen3_5ExecutionError::ExpertLayerPlan {
+        .map_err(|artifact_error| TextExecutionError::ExpertLayerPlan {
             description: artifact_error.to_string(),
         })?;
     let decoder_layer_count = qwen3_5_config.layer_count() as usize;
@@ -60,11 +60,11 @@ pub fn bind_decoder_layer_from_tensors(
     layer_tensor_profiles: &[TensorProfile],
     raw_hugging_face_norm_offsets_apply: bool,
     mut layer_tensors: HashMap<String, MlxArray>,
-) -> Result<Qwen3_5DecoderLayerWeights, Qwen3_5ExecutionError> {
+) -> Result<Qwen3_5DecoderLayerWeights, TextExecutionError> {
     let mut bound_tensors = HashMap::with_capacity(layer_tensor_profiles.len());
     for tensor_profile in layer_tensor_profiles {
         let tensor = layer_tensors.remove(&tensor_profile.name).ok_or_else(|| {
-            Qwen3_5ExecutionError::MissingTensor {
+            TextExecutionError::MissingTensor {
                 tensor_name: tensor_profile.name.clone(),
             }
         })?;
@@ -81,14 +81,14 @@ pub fn bind_decoder_layer_from_tensors(
         bound_tensors.insert(tensor_profile.name.clone(), tensor);
     }
     if let Some(unrequested_tensor_name) = layer_tensors.keys().next() {
-        return Err(Qwen3_5ExecutionError::UnassignedTensor {
+        return Err(TextExecutionError::UnassignedTensor {
             tensor_name: unrequested_tensor_name.clone(),
         });
     }
     let decoder_layer_weights =
         take_decoder_layer_weights(&mut bound_tensors, qwen3_5_config, layer_index)?;
     if let Some(unassigned_tensor_name) = bound_tensors.keys().next() {
-        return Err(Qwen3_5ExecutionError::UnassignedTensor {
+        return Err(TextExecutionError::UnassignedTensor {
             tensor_name: unassigned_tensor_name.clone(),
         });
     }

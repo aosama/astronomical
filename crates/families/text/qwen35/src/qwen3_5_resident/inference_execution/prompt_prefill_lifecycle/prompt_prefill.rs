@@ -10,13 +10,13 @@
 //! `prefill_advance.rs`.
 
 use super::Qwen3_5EngineState;
-use super::engine_request::Qwen3_5EngineRequest;
+use super::engine_request::ResidentEngineRequest;
 use super::prefill_forward_dispatch::PrefillForwardError;
 use super::prompt_prefill_errors;
 use super::prompt_prefill_errors::PromptPrefillChunkAttemptError;
 
 use super::forward_memory::{AdmittedForward, ForwardShape};
-use crate::{PerformanceCounter, Qwen3_5AstroSsdPromptCacheBoundaryCheckpoint};
+use crate::{AstroSsdPromptCacheBoundaryCheckpoint, PerformanceCounter};
 
 /// Outcome of executing one prompt-processing chunk.
 pub(super) struct PromptPrefillChunkOutcome {
@@ -24,14 +24,14 @@ pub(super) struct PromptPrefillChunkOutcome {
     /// the chunk has been measured.
     pub(super) admitted_forward: AdmittedForward,
     pub(super) forward_chunk_elapsed_millis: u64,
-    pub(super) boundary_checkpoints: Vec<Qwen3_5AstroSsdPromptCacheBoundaryCheckpoint>,
+    pub(super) boundary_checkpoints: Vec<AstroSsdPromptCacheBoundaryCheckpoint>,
 }
 
 impl Qwen3_5EngineState {
     /// Execute one prompt-processing chunk: plan → admit → forward.
     pub(super) fn execute_prompt_prefill_chunk(
         &mut self,
-        active_request: &mut Qwen3_5EngineRequest,
+        active_request: &mut ResidentEngineRequest,
         prefill_start: usize,
         prefill_end: usize,
     ) -> Result<PromptPrefillChunkOutcome, PromptPrefillChunkAttemptError> {
@@ -78,7 +78,7 @@ impl Qwen3_5EngineState {
         }
 
         let mut boundary_checkpoints = dispatch_outcome.boundary_checkpoints;
-        crate::qwen3_5_core::astro_ssd_prompt_cache_capture::record_astro_ssd_prompt_cache_boundary_checkpoint(
+        text_generation::astro_ssd_prompt_cache_capture::record_astro_ssd_prompt_cache_boundary_checkpoint(
             active_request,
             plan.prefill_token_count,
             &plan.all_completed_prefill_chunk_tokens,

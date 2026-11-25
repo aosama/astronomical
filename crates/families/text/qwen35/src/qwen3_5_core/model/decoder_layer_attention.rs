@@ -7,12 +7,10 @@
 
 use mlx_bridge::MlxArray;
 
-use crate::qwen3_5_core::decoder::Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector;
 use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AttentionWeights;
-use crate::qwen3_5_core::model_math::error::{
-    Qwen3_5ExecutionError, invalid_request_decoder_state,
-};
 use crate::{AstroDecoderStateCacheState, PerformanceAttribution, PerformanceOperation};
+use text_generation::AstroSsdPromptCacheBoundaryCheckpointCollector;
+use text_generation::execution_error::{TextExecutionError, invalid_request_decoder_state};
 
 use super::base::Qwen3_5ModelBase;
 use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5DecoderLayerWeights;
@@ -36,11 +34,9 @@ impl Qwen3_5ModelBase {
         decoder_layer_weights: &Qwen3_5DecoderLayerWeights,
         layer_model_state: &mut AstroDecoderStateCacheState,
         token_position_offsets: Option<&MlxArray>,
-        boundary_checkpoint_collector: Option<
-            &mut Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
-        >,
+        boundary_checkpoint_collector: Option<&mut AstroSsdPromptCacheBoundaryCheckpointCollector>,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<Qwen3_5DecoderLayerAttentionOutput, Qwen3_5ExecutionError> {
+    ) -> Result<Qwen3_5DecoderLayerAttentionOutput, TextExecutionError> {
         let normalized_input = self.runtime.rms_norm(
             hidden_states,
             &decoder_layer_weights.input_normalization_weight,

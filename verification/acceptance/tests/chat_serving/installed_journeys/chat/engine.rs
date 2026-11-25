@@ -4,9 +4,8 @@ use ipc_protocol::{
     ChatGenerationCommand, ChatGenerationSettings, ChatMessage, ChatToolChoice, RequestId,
 };
 use model_serving::{
-    GeneratedToken, InferenceEngine, Qwen3_5ArtifactValidator, Qwen3_5InferenceRequest,
-    Qwen3_5MlxEngineConstructors, Qwen3_5PromptProcessingChunkSizer, Qwen3_5StreamingEngine,
-    Qwen3_5Tokenizer,
+    GeneratedToken, InferenceEngine, PromptProcessingChunkSizer, Qwen3_5ArtifactValidator,
+    Qwen3_5StreamingEngine, Qwen3_5Tokenizer, TextInferenceRequest, TextMlxEngineConstructors,
 };
 use tokio::time::timeout;
 
@@ -43,7 +42,7 @@ async fn run_romeo_continuation() {
         mlx_memory_limits.active_memory_limit_bytes(),
         mlx_memory_limits.mlx_buffer_cache_limit_bytes(),
         None,
-        Qwen3_5PromptProcessingChunkSizer::for_chunk_size_tokens(16)
+        PromptProcessingChunkSizer::for_chunk_size_tokens(16)
             .expect("the test streaming prefill chunk size should be valid"),
         image_pad_token_id,
         model_directory.to_path_buf(),
@@ -131,7 +130,7 @@ async fn should_generate_a_sampled_continuation_through_the_engine_trait() {
         mlx_memory_limits.active_memory_limit_bytes(),
         mlx_memory_limits.mlx_buffer_cache_limit_bytes(),
         None,
-        Qwen3_5PromptProcessingChunkSizer::for_chunk_size_tokens(16)
+        PromptProcessingChunkSizer::for_chunk_size_tokens(16)
             .expect("the test streaming prefill chunk size should be valid"),
         IMAGE_PAD_TOKEN_ID,
         model_directory.to_path_buf(),
@@ -145,7 +144,7 @@ async fn should_generate_a_sampled_continuation_through_the_engine_trait() {
     let request_id = RequestId::new(1_001);
     qwen3_5_engine
         .start_generation(
-            Qwen3_5InferenceRequest::new_sampling(
+            TextInferenceRequest::new_sampling(
                 request_id,
                 LOCAL_AI_PROMPT_TOKEN_IDS.to_vec(),
                 16,

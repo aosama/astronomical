@@ -82,8 +82,9 @@ mod safetensors;
 
 pub use mlx_metallib_path::resolve_mlx_metallib_path;
 pub use mlx_runtime_types::{
-    MLX_BUFFER_CACHE_RECLAIM_THRESHOLD_BYTES, MlxMemoryLimits, MlxMemorySnapshot, MlxRuntimeError,
-    mlx_buffer_cache_exceeds_reclaim_threshold,
+    MLX_BUFFER_CACHE_MEASURED_LIMIT_FLOOR_BYTES, MLX_BUFFER_CACHE_RECLAIM_THRESHOLD_BYTES,
+    MlxMemoryLimits, MlxMemorySnapshot, MlxRuntimeError, measured_mlx_buffer_cache_limit_bytes,
+    mlx_buffer_cache_exceeds_reclaim_threshold, mlx_buffer_cache_limit_after_active_limit_change,
 };
 
 #[cfg(feature = "mlx")]

@@ -1,12 +1,12 @@
 use model_serving::{
     ExpertPagingError, InferenceEngineError, MemoryBoundary, MlxAllocationAdmissionError,
-    Qwen3_5ExecutionError,
+    TextExecutionError,
 };
 use runtime_integration::MlxRuntimeError;
 
 #[test]
 fn should_translate_expert_page_memory_budget_rejection_to_an_invalid_request() {
-    let qwen3_5_execution_error = Qwen3_5ExecutionError::from(ExpertPagingError::MemoryBudget(
+    let qwen3_5_execution_error = TextExecutionError::from(ExpertPagingError::MemoryBudget(
         MlxAllocationAdmissionError::Rejected {
             stage: "expert_page_layer_20".to_owned(),
             boundary: MemoryBoundary::AllocationProjection,
@@ -28,7 +28,7 @@ fn should_translate_expert_page_memory_budget_rejection_to_an_invalid_request() 
 
 #[test]
 fn should_keep_expert_page_memory_counter_failure_fatal() {
-    let qwen3_5_execution_error = Qwen3_5ExecutionError::from(ExpertPagingError::MemoryBudget(
+    let qwen3_5_execution_error = TextExecutionError::from(ExpertPagingError::MemoryBudget(
         MlxAllocationAdmissionError::MlxRuntime(MlxRuntimeError::RuntimeOperation {
             operation: "read MLX memory counters",
             description: "simulated counter failure".to_owned(),

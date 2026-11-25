@@ -10,8 +10,8 @@ use std::{fs, path::Path, time::Duration};
 
 use ipc_protocol::RequestId;
 use model_serving::{
-    InferenceEngine, Qwen3_5ArtifactValidator, Qwen3_5InferenceRequest, Qwen3_5ResidentEngine,
-    Qwen3_5Tokenizer,
+    InferenceEngine, Qwen3_5ArtifactValidator, Qwen3_5ResidentEngine, Qwen3_5Tokenizer,
+    TextInferenceRequest,
 };
 use serial_test::serial;
 use tokio::time::timeout;
@@ -193,7 +193,7 @@ async fn run_greedy_request(
             // `new` samples at temperature 1.0 with no seed, so two runs would compare two
             // random draws. Greedy makes the token a function of the logits alone, so a
             // changed token means the restored `astro_ssd_prompt_cache` changed them.
-            Qwen3_5InferenceRequest::new_sampling(
+            TextInferenceRequest::new_sampling(
                 request_id,
                 prompt_token_ids.to_vec(),
                 COMPARED_OUTPUT_TOKEN_COUNT,

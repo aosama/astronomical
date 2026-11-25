@@ -1,4 +1,4 @@
-use super::super::image_processor::Qwen3_5ImageGrid;
+use super::super::image_processor::ImageGrid;
 use super::Qwen3_5VisionInputPlan;
 use crate::Qwen3_5VisionConfig;
 
@@ -26,7 +26,7 @@ const FROZEN_VISION_CONFIG_JSON: &str = r#"
 fn should_plan_rectangular_vision_positions_in_spatial_merge_order() {
     let vision_config = Qwen3_5VisionConfig::from_json_bytes(FROZEN_VISION_CONFIG_JSON.as_bytes())
         .expect("the frozen Ornith 1.0 vision config should parse");
-    let image_grid = Qwen3_5ImageGrid {
+    let image_grid = ImageGrid {
         temporal_patch_count: 1,
         height_patch_count: 4,
         width_patch_count: 2,

@@ -148,6 +148,18 @@ impl Qwen3_5ShardIndex {
         &self.vision_tensor_name_to_shard_file_name
     }
 
+    /// Files the vision tower as auxiliary: kept in the inventory so every
+    /// shard still validates exactly, but neither checked against a vision
+    /// contract nor loaded. Used for a generation whose vision tower this
+    /// runtime does not serve yet (Flash-Next, issue #2533), so a text
+    /// request runs and an image request is refused before it reaches one.
+    pub fn set_aside_vision_tower(&mut self) {
+        let vision_tensors = std::mem::take(&mut self.vision_tensor_name_to_shard_file_name);
+        self.auxiliary_tensor_name_to_shard_file_name
+            .extend(vision_tensors);
+        self.vision_sidecar_file_names.clear();
+    }
+
     /// Returns the MTP tensors preserved by the artifact but not loaded by this runtime.
     #[must_use]
     pub fn auxiliary_tensor_name_to_shard_file_name(&self) -> &BTreeMap<String, String> {

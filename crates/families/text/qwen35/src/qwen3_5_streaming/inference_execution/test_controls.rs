@@ -41,6 +41,24 @@ impl Qwen3_5EngineState {
         Ok(loaded_model.take_routed_reply_recording())
     }
 
+    fn set_multi_token_prediction_draft_tokens_for_tests(
+        &mut self,
+        draft_tokens: u32,
+    ) -> Result<(), InferenceEngineError> {
+        let loaded_model = self
+            .core
+            .model
+            .as_mut()
+            .ok_or_else(|| fatal_engine_error("cannot set drafting before load"))?;
+        loaded_model.base.chunking = loaded_model
+            .base
+            .chunking
+            .with_multi_token_prediction_draft_tokens(draft_tokens);
+        // The head's weights enter or leave the ledger's core weights.
+        loaded_model.open_memory_governor();
+        Ok(())
+    }
+
     fn set_every_route_brought_to_the_host_for_tests(
         &self,
         is_enabled: bool,
@@ -67,6 +85,43 @@ impl Qwen3_5EngineState {
             .is_enabled
             .set(is_enabled);
         Ok(())
+    }
+
+    fn set_routes_looked_up_in_the_graph_for_tests(
+        &self,
+        is_enabled: bool,
+    ) -> Result<(), InferenceEngineError> {
+        let loaded_model = self
+            .core
+            .model
+            .as_ref()
+            .ok_or_else(|| fatal_engine_error("cannot choose the route lookup before load"))?;
+        loaded_model.set_in_graph_table_serving(is_enabled);
+        Ok(())
+    }
+
+    fn set_tables_grown_ahead_of_lookups_for_tests(
+        &self,
+        is_enabled: bool,
+    ) -> Result<(), InferenceEngineError> {
+        let loaded_model = self
+            .core
+            .model
+            .as_ref()
+            .ok_or_else(|| fatal_engine_error("cannot choose table growth before load"))?;
+        loaded_model.set_tables_grown_ahead_of_lookups_for_tests(is_enabled);
+        Ok(())
+    }
+
+    fn in_graph_serving_counts_for_tests(
+        &self,
+    ) -> Result<crate::InGraphServingCounts, InferenceEngineError> {
+        let loaded_model = self
+            .core
+            .model
+            .as_ref()
+            .ok_or_else(|| fatal_engine_error("cannot count in-graph lookups before load"))?;
+        Ok(loaded_model.in_graph_table_serving().counts())
     }
 
     fn astro_expert_cache_statistics_for_tests(
@@ -137,6 +192,13 @@ pub trait Qwen3_5StreamingEngineTestControls {
         &self,
     ) -> Result<Option<crate::RoutedReplyRecording>, InferenceEngineError>;
 
+    /// Sets how many tokens a model with a multi-token-prediction head
+    /// drafts after each reply token; zero writes one token a forward.
+    async fn set_multi_token_prediction_draft_tokens_for_tests(
+        &self,
+        draft_tokens: u32,
+    ) -> Result<(), InferenceEngineError>;
+
     /// Makes every layer copy its route to the host, even a layer held
     /// whole, so a measurement can price the stop on its own.
     async fn set_every_route_brought_to_the_host_for_tests(
@@ -150,6 +212,28 @@ pub trait Qwen3_5StreamingEngineTestControls {
         &self,
         is_enabled: bool,
     ) -> Result<(), InferenceEngineError>;
+
+    /// Chooses how a reply token finds its routed experts' table slots: by a
+    /// lookup inside the token's graph (the default for a model that streams
+    /// experts) or by copying each layer's route to the host.
+    async fn set_routes_looked_up_in_the_graph_for_tests(
+        &self,
+        is_enabled: bool,
+    ) -> Result<(), InferenceEngineError>;
+
+    /// Stops or resumes growing tables between reply tokens. With it off,
+    /// in-graph lookups refuse routes that need a larger table and those
+    /// tokens are served again the exact way, which a contract checks.
+    async fn set_tables_grown_ahead_of_lookups_for_tests(
+        &self,
+        is_enabled: bool,
+    ) -> Result<(), InferenceEngineError>;
+
+    /// Reply tokens attempted with in-graph lookups since the model loaded,
+    /// how many were refused, and the layers the lookups served.
+    async fn in_graph_serving_counts_for_tests(
+        &self,
+    ) -> Result<crate::InGraphServingCounts, InferenceEngineError>;
 
     /// Returns mode-neutral expert ownership plus cumulative paging statistics.
     async fn astro_expert_cache_statistics_for_tests(
@@ -229,6 +313,16 @@ impl Qwen3_5StreamingEngineTestControls for MlxInferenceEngine<Qwen3_5InferenceE
         })?
     }
 
+    async fn set_multi_token_prediction_draft_tokens_for_tests(
+        &self,
+        draft_tokens: u32,
+    ) -> Result<(), InferenceEngineError> {
+        self.run_owner_test_operation(move |qwen_inference_execution| {
+            qwen_inference_execution.set_multi_token_prediction_draft_tokens_for_tests(draft_tokens)
+        })
+        .await
+    }
+
     async fn set_every_route_brought_to_the_host_for_tests(
         &self,
         is_enabled: bool,
@@ -247,6 +341,42 @@ impl Qwen3_5StreamingEngineTestControls for MlxInferenceEngine<Qwen3_5InferenceE
             qwen_inference_execution.set_decode_misses_fetched_into_tables_for_tests(is_enabled)
         })
         .await
+    }
+
+    async fn set_routes_looked_up_in_the_graph_for_tests(
+        &self,
+        is_enabled: bool,
+    ) -> Result<(), InferenceEngineError> {
+        self.run_owner_test_operation(move |qwen_inference_execution| {
+            qwen_inference_execution.set_routes_looked_up_in_the_graph_for_tests(is_enabled)
+        })
+        .await
+    }
+
+    async fn set_tables_grown_ahead_of_lookups_for_tests(
+        &self,
+        is_enabled: bool,
+    ) -> Result<(), InferenceEngineError> {
+        self.run_owner_test_operation(move |qwen_inference_execution| {
+            qwen_inference_execution.set_tables_grown_ahead_of_lookups_for_tests(is_enabled)
+        })
+        .await
+    }
+
+    async fn in_graph_serving_counts_for_tests(
+        &self,
+    ) -> Result<crate::InGraphServingCounts, InferenceEngineError> {
+        let (counts_sender, counts_receiver) = std::sync::mpsc::sync_channel(1);
+        self.run_owner_test_operation(move |qwen_inference_execution| {
+            let counts = qwen_inference_execution.in_graph_serving_counts_for_tests();
+            counts_sender
+                .send(counts)
+                .map_err(|_| fatal_engine_error("lookup counts receiver stopped unexpectedly"))
+        })
+        .await?;
+        counts_receiver
+            .recv()
+            .map_err(|_| fatal_engine_error("lookup counts owner operation returned no response"))?
     }
 
     async fn astro_expert_cache_statistics_for_tests(

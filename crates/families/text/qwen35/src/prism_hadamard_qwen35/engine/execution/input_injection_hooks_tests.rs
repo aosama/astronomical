@@ -5,7 +5,7 @@ use crate::prism_hadamard_qwen35::artifacts::tests::pack_fixture::FIXTURE_VOCAB_
 use crate::prism_hadamard_qwen35::engine::fixture_engine_test_support::{
     LoadedFixtureEngine, loaded_fixture_engine,
 };
-use crate::{GeneratedToken, InferenceEngineError, MlxInferenceExecution, Qwen3_5InferenceRequest};
+use crate::{GeneratedToken, InferenceEngineError, MlxInferenceExecution, TextInferenceRequest};
 
 const PROMPT_TOKEN_IDS: [u32; 3] = [11, 12, 13];
 const FEEDBACK_TOKEN_IDS: [u32; 3] = [20, 21, 22];
@@ -19,7 +19,7 @@ fn engine_with_first_reply_token(
     let mut fixture_engine = loaded_fixture_engine(|_| {});
     fixture_engine
         .execution
-        .start_generation(Qwen3_5InferenceRequest::new_sampling(
+        .start_generation(TextInferenceRequest::new_sampling(
             RequestId::new(request_id),
             PROMPT_TOKEN_IDS.to_vec(),
             maximum_output_tokens,

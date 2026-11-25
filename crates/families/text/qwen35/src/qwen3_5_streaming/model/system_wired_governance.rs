@@ -3,6 +3,7 @@
 
 use super::Qwen3_5Model;
 use crate::memory::macos_wired_memory::read_macos_wired_memory;
+use memory_policy::ledger::system_wired_ceiling::SystemWiredReading;
 
 impl Qwen3_5Model {
     /// Reads the system's wired memory and lets the memory governor move
@@ -20,10 +21,11 @@ impl Qwen3_5Model {
                 return;
             };
             let reserve_before_bytes = memory_governor.accounts().system_wired_reserve_bytes;
-            let kept_weight_capacity = memory_governor.observe_system_wired(
-                wired_memory_reading.system_wired_bytes,
-                wired_memory_reading.system_wire_limit_bytes,
-            );
+            let kept_weight_capacity = memory_governor.observe_system_wired(SystemWiredReading {
+                system_wired_bytes: wired_memory_reading.system_wired_bytes,
+                system_wire_limit_bytes: wired_memory_reading.system_wire_limit_bytes,
+                mlx_held_bytes: self.mlx_held_bytes(),
+            });
             (
                 reserve_before_bytes,
                 kept_weight_capacity,
@@ -37,6 +39,22 @@ impl Qwen3_5Model {
                 reserve_after_bytes,
             );
         }
+    }
+
+    /// MLX's active memory and `mlx_buffer_cache` now; zero when MLX cannot
+    /// say, which counts every wired byte as someone else's and so errs
+    /// toward a larger reserve.
+    fn mlx_held_bytes(&self) -> u64 {
+        self.runtime
+            .memory_snapshot()
+            .map_or(0, |mlx_memory_snapshot| {
+                u64::try_from(
+                    mlx_memory_snapshot
+                        .active_memory_bytes()
+                        .saturating_add(mlx_memory_snapshot.mlx_buffer_cache_bytes()),
+                )
+                .unwrap_or(u64::MAX)
+            })
     }
 
     /// Experts the astro expert cache gives back go to the MLX buffer cache,

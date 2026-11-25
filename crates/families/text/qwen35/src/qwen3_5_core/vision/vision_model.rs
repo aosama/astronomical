@@ -18,8 +18,8 @@ use super::vision_attention;
 use super::vision_attention::Qwen3_5VisionPaddingZeroCache;
 use super::vision_rotary_embedding::Qwen3_5VisionRotaryEmbedding;
 use super::{
-    Qwen3_5ExecutionError, Qwen3_5ProcessedImage, Qwen3_5VisionConfig, Qwen3_5VisionInputPlan,
-    Qwen3_5VisionWeights, ValidatedQwen3_5Artifact,
+    ProcessedImage, Qwen3_5VisionConfig, Qwen3_5VisionInputPlan, Qwen3_5VisionWeights,
+    TextExecutionError, ValidatedQwen3_5Artifact,
 };
 use mlx_bridge::{MlxArray, MlxCompiledElementwiseGraphs};
 
@@ -53,9 +53,9 @@ impl Qwen3_5VisionModel {
     pub fn load_from_sidecar(
         runtime: &MlxRuntime,
         validated_artifact: &mut ValidatedQwen3_5Artifact,
-    ) -> Result<Option<Self>, Qwen3_5ExecutionError> {
+    ) -> Result<Option<Self>, TextExecutionError> {
         let config = validated_artifact.vision_config().cloned().ok_or(
-            Qwen3_5ExecutionError::InvalidInput {
+            TextExecutionError::InvalidInput {
                 description: "validated visual sidecar has no vision configuration",
             },
         )?;
@@ -82,7 +82,7 @@ impl Qwen3_5VisionModel {
             String,
             super::VisionTensorLocation,
         >,
-    ) -> Result<Self, Qwen3_5ExecutionError> {
+    ) -> Result<Self, TextExecutionError> {
         let weights = Qwen3_5VisionWeights::load_from_model_shard_files(
             runtime,
             vision_config,
@@ -113,7 +113,7 @@ impl Qwen3_5VisionModel {
     pub fn release_used_weights(
         &mut self,
         runtime: &MlxRuntime,
-    ) -> Result<bool, Qwen3_5ExecutionError> {
+    ) -> Result<bool, TextExecutionError> {
         if !self.weights_have_been_used.get() {
             return Ok(false);
         }
@@ -132,14 +132,14 @@ impl Qwen3_5VisionModel {
         &self,
         runtime: &MlxRuntime,
         compiled_elementwise_graphs: &MlxCompiledElementwiseGraphs,
-        processed_images: &[Qwen3_5ProcessedImage],
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+        processed_images: &[ProcessedImage],
+    ) -> Result<MlxArray, TextExecutionError> {
         let image_grids = processed_images
             .iter()
             .map(|processed_image| processed_image.image_grid)
             .collect::<Vec<_>>();
         let vision_input_plan = Qwen3_5VisionInputPlan::new(&image_grids, &self.config).map_err(
-            |_vision_input_plan_error| Qwen3_5ExecutionError::InvalidInput {
+            |_vision_input_plan_error| TextExecutionError::InvalidInput {
                 description: "processed image grids are invalid for Qwen3.5 vision execution",
             },
         )?;
@@ -178,9 +178,9 @@ impl Qwen3_5VisionModel {
     fn upload_pixel_values(
         &self,
         runtime: &MlxRuntime,
-        processed_images: &[Qwen3_5ProcessedImage],
+        processed_images: &[ProcessedImage],
         vision_input_plan: &Qwen3_5VisionInputPlan,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         let pixel_values_column_count = self.pixel_values_column_count()?;
         let mut image_pixel_value_arrays = Vec::with_capacity(processed_images.len());
         for processed_image in processed_images {
@@ -188,7 +188,7 @@ impl Qwen3_5VisionModel {
                 || processed_image.pixel_values.len()
                     != processed_image.pixel_values_row_count * pixel_values_column_count
             {
-                return Err(Qwen3_5ExecutionError::InvalidInput {
+                return Err(TextExecutionError::InvalidInput {
                     description: "processed image pixel values have an invalid shape",
                 });
             }
@@ -205,11 +205,11 @@ impl Qwen3_5VisionModel {
             .try_fold(0_usize, |uploaded_patch_count, pixel_value_array| {
                 uploaded_patch_count.checked_add(pixel_value_array.shape()[0] as usize)
             })
-            .ok_or(Qwen3_5ExecutionError::InvalidInput {
+            .ok_or(TextExecutionError::InvalidInput {
                 description: "processed image patch count overflowed",
             })?;
         if uploaded_patch_count != vision_input_plan.patch_count() {
-            return Err(Qwen3_5ExecutionError::InvalidInput {
+            return Err(TextExecutionError::InvalidInput {
                 description: "processed image pixel rows do not match the image grids",
             });
         }
@@ -221,7 +221,7 @@ impl Qwen3_5VisionModel {
         runtime: &MlxRuntime,
         pixel_values: &MlxArray,
         patch_count: usize,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         let patch_count = usize_to_i32(patch_count)?;
         let in_channels = u32_to_i32(self.config.in_channels())?;
         let temporal_patch_size = u32_to_i32(self.config.temporal_patch_size())?;
@@ -265,7 +265,7 @@ impl Qwen3_5VisionModel {
         &self,
         runtime: &MlxRuntime,
         vision_input_plan: &Qwen3_5VisionInputPlan,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         let position_embedding_weight = self.weights.tensor("vision_tower.pos_embed.weight")?;
         let patch_count = usize_to_i32(vision_input_plan.patch_count())?;
         // The learned position table is square, while runtime images are usually
@@ -316,7 +316,7 @@ impl Qwen3_5VisionModel {
         attention_sequence_boundaries: &[u32],
         rotary_cosines: &MlxArray,
         rotary_sines: &MlxArray,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         let vision_block_prefix = format!("vision_tower.blocks.{vision_block_index}");
         let norm1_output =
             self.layer_norm(runtime, hidden_states, &vision_block_prefix, "norm1")?;
@@ -363,7 +363,7 @@ impl Qwen3_5VisionModel {
         hidden_states: &MlxArray,
         vision_block_prefix: &str,
         normalization_name: &str,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         let normalization_prefix = format!("{vision_block_prefix}.{normalization_name}");
         let normalization_weight = self
             .weights
@@ -383,7 +383,7 @@ impl Qwen3_5VisionModel {
         runtime: &MlxRuntime,
         hidden_states: &MlxArray,
         merged_patch_count: usize,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         let merger_normalization_weight = self.weights.tensor("vision_tower.merger.norm.weight")?;
         let merger_normalization_bias = self.weights.tensor("vision_tower.merger.norm.bias")?;
         let normalized_hidden_states = runtime.layer_norm(
@@ -400,7 +400,7 @@ impl Qwen3_5VisionModel {
             .config
             .hidden_size()
             .checked_mul(spatial_merge_area)
-            .ok_or(Qwen3_5ExecutionError::InvalidInput {
+            .ok_or(TextExecutionError::InvalidInput {
                 description: "vision merger input dimension overflowed",
             })?;
         let merged_hidden_states = runtime.reshape(
@@ -430,11 +430,11 @@ impl Qwen3_5VisionModel {
         runtime: &MlxRuntime,
         input_states: &MlxArray,
         linear_prefix: &str,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         self.weights.linear(runtime, input_states, linear_prefix)
     }
 
-    fn pixel_values_column_count(&self) -> Result<usize, Qwen3_5ExecutionError> {
+    fn pixel_values_column_count(&self) -> Result<usize, TextExecutionError> {
         [
             self.config.in_channels(),
             self.config.temporal_patch_size(),
@@ -445,20 +445,20 @@ impl Qwen3_5VisionModel {
         .try_fold(1_usize, |element_count, dimension| {
             element_count.checked_mul(dimension as usize)
         })
-        .ok_or(Qwen3_5ExecutionError::InvalidInput {
+        .ok_or(TextExecutionError::InvalidInput {
             description: "vision patch element count overflowed",
         })
     }
 }
 
-fn usize_to_i32(dimension_size: usize) -> Result<i32, Qwen3_5ExecutionError> {
-    i32::try_from(dimension_size).map_err(|_conversion_error| Qwen3_5ExecutionError::InvalidInput {
+fn usize_to_i32(dimension_size: usize) -> Result<i32, TextExecutionError> {
+    i32::try_from(dimension_size).map_err(|_conversion_error| TextExecutionError::InvalidInput {
         description: "vision dimension exceeds the MLX integer range",
     })
 }
 
-fn u32_to_i32(dimension_size: u32) -> Result<i32, Qwen3_5ExecutionError> {
-    i32::try_from(dimension_size).map_err(|_conversion_error| Qwen3_5ExecutionError::InvalidInput {
+fn u32_to_i32(dimension_size: u32) -> Result<i32, TextExecutionError> {
+    i32::try_from(dimension_size).map_err(|_conversion_error| TextExecutionError::InvalidInput {
         description: "vision dimension exceeds the MLX integer range",
     })
 }

@@ -7,7 +7,7 @@
 
 use runtime_integration::MlxRuntime;
 
-use super::{Qwen3_5ExecutionError, Qwen3_5VisionConfig, Qwen3_5VisionInputPlan};
+use super::{Qwen3_5VisionConfig, Qwen3_5VisionInputPlan, TextExecutionError};
 use mlx_bridge::MlxArray;
 
 const VISION_ROTARY_FREQUENCY_BASE: f32 = 10_000.0;
@@ -24,7 +24,7 @@ impl Qwen3_5VisionRotaryEmbedding {
         runtime: &MlxRuntime,
         vision_input_plan: &Qwen3_5VisionInputPlan,
         vision_config: &Qwen3_5VisionConfig,
-    ) -> Result<(MlxArray, MlxArray), Qwen3_5ExecutionError> {
+    ) -> Result<(MlxArray, MlxArray), TextExecutionError> {
         let head_dimension = vision_config.hidden_size() / vision_config.head_count();
         let per_axis_rotary_dimension = head_dimension / 2;
         let patch_count = usize_to_i32(vision_input_plan.patch_count())?;
@@ -44,7 +44,7 @@ impl Qwen3_5VisionRotaryEmbedding {
             .flat_map(|position_coordinates| position_coordinates.iter().copied())
             .max()
             .and_then(|maximum_spatial_coordinate| maximum_spatial_coordinate.checked_add(1))
-            .ok_or(Qwen3_5ExecutionError::InvalidInput {
+            .ok_or(TextExecutionError::InvalidInput {
                 description: "vision rotary coordinates must be nonempty and fit the MLX range",
             })?;
         let row_coordinate_indices = runtime.array_from_u32(&row_coordinates, &[patch_count])?;
@@ -100,14 +100,14 @@ impl Qwen3_5VisionRotaryEmbedding {
     }
 }
 
-fn usize_to_i32(dimension_size: usize) -> Result<i32, Qwen3_5ExecutionError> {
-    i32::try_from(dimension_size).map_err(|_conversion_error| Qwen3_5ExecutionError::InvalidInput {
+fn usize_to_i32(dimension_size: usize) -> Result<i32, TextExecutionError> {
+    i32::try_from(dimension_size).map_err(|_conversion_error| TextExecutionError::InvalidInput {
         description: "vision dimension exceeds the MLX integer range",
     })
 }
 
-fn u32_to_i32(dimension_size: u32) -> Result<i32, Qwen3_5ExecutionError> {
-    i32::try_from(dimension_size).map_err(|_conversion_error| Qwen3_5ExecutionError::InvalidInput {
+fn u32_to_i32(dimension_size: u32) -> Result<i32, TextExecutionError> {
+    i32::try_from(dimension_size).map_err(|_conversion_error| TextExecutionError::InvalidInput {
         description: "vision dimension exceeds the MLX integer range",
     })
 }

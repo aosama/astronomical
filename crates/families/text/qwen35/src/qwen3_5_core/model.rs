@@ -14,6 +14,8 @@ pub mod disk_embedding_rows;
 #[path = "model/disk_embedding_rows_tests.rs"]
 mod disk_embedding_rows_tests;
 #[cfg(feature = "direct-mlx")]
+pub mod drafted_row_boundaries;
+#[cfg(feature = "direct-mlx")]
 pub mod embedding_row_reads;
 #[cfg(all(test, feature = "direct-mlx"))]
 #[path = "model/embedding_row_reads_tests.rs"]
@@ -35,10 +37,6 @@ mod live_memory_observation_tests;
 pub mod loading_geometry;
 #[cfg(feature = "direct-mlx")]
 pub mod loading_pipeline;
-#[cfg(feature = "direct-mlx")]
-pub mod memory_breakdown;
-#[cfg(feature = "direct-mlx")]
-pub mod model_chunking_configuration;
 #[cfg(feature = "direct-mlx")]
 pub mod output_gate_engine;
 #[cfg(feature = "direct-mlx")]
@@ -65,4 +63,4 @@ pub use base::Qwen3_5ModelBase;
 #[cfg(feature = "direct-mlx")]
 pub use decoder_layer_attention::Qwen3_5DecoderLayerAttentionOutput;
 #[cfg(feature = "direct-mlx")]
-pub use serving_model::Qwen3_5ServingModel;
+pub use serving_model::Qwen3_5VisionTowerOwner;

@@ -1,13 +1,13 @@
 use runtime_integration::MlxRuntime;
 
 use super::decoder_layer_weights::Qwen3_5AffineWeights;
-use super::error::Qwen3_5ExecutionError;
+use text_generation::execution_error::TextExecutionError;
 
 pub fn fuse_compatible_expert_gate_up_projections(
     runtime: &MlxRuntime,
     gate_projection: Qwen3_5AffineWeights,
     up_projection: Qwen3_5AffineWeights,
-) -> Result<Qwen3_5AffineWeights, Qwen3_5ExecutionError> {
+) -> Result<Qwen3_5AffineWeights, TextExecutionError> {
     match (gate_projection, up_projection) {
         (
             Qwen3_5AffineWeights::NativeBfloat16 {
@@ -46,7 +46,7 @@ pub fn fuse_compatible_expert_gate_up_projections(
                 quantization_group_size: gate_quantization_group_size,
             })
         }
-        _ => Err(Qwen3_5ExecutionError::InvalidInput {
+        _ => Err(TextExecutionError::InvalidInput {
             description: "validated expert gate/up fusion plan disagreed with loaded weights",
         }),
     }

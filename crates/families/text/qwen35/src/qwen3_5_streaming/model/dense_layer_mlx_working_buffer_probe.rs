@@ -11,11 +11,11 @@ use mlx_bridge::MlxArray;
 use super::Qwen3_5Model;
 use super::layer_probe_shape::LayerProbeShape;
 use crate::PerformanceAttribution;
-use crate::qwen3_5_core::decoder::RequestDecoderStateStack;
 use crate::qwen3_5_core::model::bound_weight_dtype_flow::embedded_hidden_state_dtype;
 use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5DecoderLayerWeights;
-use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_streaming::model::paged_execution_mode::Qwen3_5MoEPagedExecutionMode;
+use text_generation::RequestDecoderStateStack;
+use text_generation::execution_error::TextExecutionError;
 
 impl Qwen3_5Model {
     /// The largest transient either layer kind's forward adds at the probe
@@ -26,7 +26,7 @@ impl Qwen3_5Model {
     pub fn measure_dense_layer_mlx_working_buffers(
         &self,
         probe_shape: LayerProbeShape,
-    ) -> Result<u64, Qwen3_5ExecutionError> {
+    ) -> Result<u64, TextExecutionError> {
         let mut mlx_working_buffer_bytes = 0_u64;
         for probe_layer_index in self.probe_layer_indexes() {
             mlx_working_buffer_bytes = mlx_working_buffer_bytes
@@ -41,7 +41,7 @@ impl Qwen3_5Model {
         &self,
         layer_index: usize,
         probe_shape: LayerProbeShape,
-    ) -> Result<u64, Qwen3_5ExecutionError> {
+    ) -> Result<u64, TextExecutionError> {
         let Some(dense_layer_streamer) = &self.dense_layer_streamer else {
             return Ok(0);
         };
@@ -52,7 +52,7 @@ impl Qwen3_5Model {
             layer_index,
         )?;
         let token_count = i32::try_from(probe_shape.prefill_chunk_token_count).map_err(|_| {
-            Qwen3_5ExecutionError::InvalidInput {
+            TextExecutionError::InvalidInput {
                 description: "the MLX working-buffer probe token count exceeds the MLX range",
             }
         })?;
@@ -99,9 +99,9 @@ impl Qwen3_5Model {
         layer_index: usize,
         layer_weights: &Qwen3_5DecoderLayerWeights,
         request_decoder_state: &mut RequestDecoderStateStack,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         let layer_model_state = request_decoder_state.layer_mut(layer_index).ok_or(
-            Qwen3_5ExecutionError::InvalidRequestDecoderState {
+            TextExecutionError::InvalidRequestDecoderState {
                 layer_index,
                 description: "the probe decoder state lacks the probed layer",
             },
@@ -116,6 +116,8 @@ impl Qwen3_5Model {
             None,
             None,
             Qwen3_5MoEPagedExecutionMode::ProductionDefault,
+            // Dense layers are Qwen 3.5 only; Flash-Next routes to experts.
+            None,
             &mut PerformanceAttribution::disabled(),
         )
     }

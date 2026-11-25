@@ -11,13 +11,13 @@ use crate::qwen3_5_core::configuration::Qwen3_5Config;
 use crate::qwen3_5_core::model_math::decoder_layer_weights::{
     Qwen3_5FullAttentionWeights, Qwen3_5LinearAttentionWeights,
 };
-use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
+use text_generation::execution_error::TextExecutionError;
 
 pub(super) fn take_linear_attention_weights(
     bound_tensors: &mut HashMap<String, MlxArray>,
     qwen3_5_config: &Qwen3_5Config,
     decoder_layer_prefix: &str,
-) -> Result<Qwen3_5LinearAttentionWeights, Qwen3_5ExecutionError> {
+) -> Result<Qwen3_5LinearAttentionWeights, TextExecutionError> {
     let linear_attention_prefix = format!("{decoder_layer_prefix}.linear_attn");
     Ok(Qwen3_5LinearAttentionWeights {
         input_queries_keys_values_projection: take_dense_projection(
@@ -68,7 +68,7 @@ pub(super) fn take_full_attention_weights(
     bound_tensors: &mut HashMap<String, MlxArray>,
     qwen3_5_config: &Qwen3_5Config,
     decoder_layer_prefix: &str,
-) -> Result<Qwen3_5FullAttentionWeights, Qwen3_5ExecutionError> {
+) -> Result<Qwen3_5FullAttentionWeights, TextExecutionError> {
     let full_attention_prefix = format!("{decoder_layer_prefix}.self_attn");
     Ok(Qwen3_5FullAttentionWeights {
         query_projection: take_dense_projection(

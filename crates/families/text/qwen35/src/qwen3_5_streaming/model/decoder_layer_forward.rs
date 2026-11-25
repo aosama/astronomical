@@ -8,9 +8,9 @@ use crate::qwen3_5_core::model::Qwen3_5DecoderLayerAttentionOutput;
 use crate::qwen3_5_core::model_math::decoder_layer_weights::{
     Qwen3_5DecoderFeedForwardWeights, Qwen3_5DecoderLayerWeights,
 };
-use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_streaming::Qwen3_5MoEPagedExecutionMode;
 use crate::{PerformanceAttribution, PerformanceOperation};
+use text_generation::execution_error::TextExecutionError;
 
 use crate::qwen3_5_streaming::model::streaming_model::Qwen3_5StreamingModel;
 
@@ -23,7 +23,7 @@ impl Qwen3_5StreamingModel {
         decoder_layer_weights: &Qwen3_5DecoderLayerWeights,
         paged_execution_mode: Qwen3_5MoEPagedExecutionMode,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         let should_use_compiled_elementwise_graphs = token_count != 1;
         // One-token decode keeps the low-overhead existing graph.
         let mlp_forward_span_started_at = performance_attribution.begin_operation_span();
@@ -38,7 +38,7 @@ impl Qwen3_5StreamingModel {
                 // layer, while source geometry and bounded loading live in the
                 // pager. Both are required to execute exact routed experts.
                 let expert_pager = self.expert_pager.as_ref().ok_or_else(|| {
-                    Qwen3_5ExecutionError::MissingTensor {
+                    TextExecutionError::MissingTensor {
                         tensor_name: "sparse model expert pager".to_owned(),
                     }
                 })?;

@@ -9,8 +9,8 @@
 
 use mlx_bridge::{MlxArray, MlxDtype};
 use model_serving::{
-    PerformanceAttribution, Qwen3_5ArtifactValidator, Qwen3_5ModelChunkingConfiguration,
-    Qwen3_5ResidentModel, Qwen3_5Tokenizer, RequestDecoderStateStack, VerificationLogitsMode,
+    PerformanceAttribution, Qwen3_5ArtifactValidator, Qwen3_5ResidentModel, Qwen3_5Tokenizer,
+    RequestDecoderStateStack, TextModelChunkingConfiguration, VerificationLogitsMode,
 };
 use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use serial_test::serial;
@@ -43,8 +43,7 @@ pub(super) fn load_small_target() -> SmallTarget {
     let tokenizer =
         Qwen3_5Tokenizer::from_validated_artifact(&artifact).expect("the tokenizer builds");
     let prompt_token_ids = tokenizer.encode_prompt(PROMPT).expect("the prompt encodes");
-    let chunking =
-        Qwen3_5ModelChunkingConfiguration::new(256, 0, 0).expect("the chunking is valid");
+    let chunking = TextModelChunkingConfiguration::new(256, 0, 0).expect("the chunking is valid");
     let mut model = Qwen3_5ResidentModel::load_with_performance_attribution(
         runtime,
         artifact,

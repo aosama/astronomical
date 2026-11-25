@@ -9,8 +9,8 @@ use crate::qwen3_5_core::model::Qwen3_5DecoderLayerAttentionOutput;
 use crate::qwen3_5_core::model_math::decoder_layer_weights::{
     Qwen3_5DecoderFeedForwardWeights, Qwen3_5DecoderLayerWeights,
 };
-use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::{PerformanceAttribution, PerformanceOperation};
+use text_generation::execution_error::TextExecutionError;
 
 use crate::qwen3_5_resident::model::Qwen3_5ResidentModel;
 
@@ -22,7 +22,7 @@ impl Qwen3_5ResidentModel {
         layer_index: usize,
         decoder_layer_weights: &Qwen3_5DecoderLayerWeights,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         let should_use_compiled_elementwise_graphs = token_count != 1;
         // One-token decode keeps the low-overhead existing graph.
         let mlp_forward_span_started_at = performance_attribution.begin_operation_span();
@@ -39,7 +39,7 @@ impl Qwen3_5ResidentModel {
                     .resident_expert_weights
                     .as_ref()
                     .and_then(|resident_expert_weights| resident_expert_weights.layer(layer_index))
-                    .ok_or_else(|| Qwen3_5ExecutionError::MissingTensor {
+                    .ok_or_else(|| TextExecutionError::MissingTensor {
                         tensor_name: format!("resident expert weights for layer {layer_index}"),
                     })?;
                 self.forward_qwen3_5_moe(

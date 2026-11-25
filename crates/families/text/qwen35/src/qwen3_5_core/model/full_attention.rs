@@ -44,8 +44,8 @@ use super::differentiable_attention::{Qwen3_5AttentionKernel, plain_operation_at
 use crate::astro_decoder_state_cache::FullAttentionKeyValueState;
 use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5FullAttentionWeights;
 use crate::qwen3_5_core::model_math::dense_projection::Qwen3_5DenseProjection;
-use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_core::model_math::tensor_slicing;
+use text_generation::execution_error::TextExecutionError;
 
 const FULL_ATTENTION_OPERATION: &str = "apply one Qwen3.5 full-attention step";
 
@@ -138,14 +138,14 @@ pub fn qwen3_5_full_attention_step(
     }
 }
 /// One forward's rotated queries and keys, head-first values, and output gate.
-pub(super) struct RotatedAttentionInputs {
+pub(crate) struct RotatedAttentionInputs {
     /// [batch, query heads, tokens, features]
-    pub(super) rotated_queries: MlxArray,
+    pub(crate) rotated_queries: MlxArray,
     /// [batch, key-value heads, tokens, features]
-    pub(super) rotated_keys: MlxArray,
-    pub(super) transposed_values: MlxArray,
+    pub(crate) rotated_keys: MlxArray,
+    pub(crate) transposed_values: MlxArray,
     /// [batch, tokens, query heads x features]
-    pub(super) output_gate: MlxArray,
+    pub(crate) output_gate: MlxArray,
 }
 
 #[derive(Clone, Copy)]
@@ -321,7 +321,7 @@ impl Qwen3_5ModelBase {
         full_attention_weights: &Qwen3_5FullAttentionWeights,
         kv_state: &mut FullAttentionKeyValueState,
         token_position_offsets: Option<&MlxArray>,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         let RotatedAttentionInputs {
             rotated_queries,
             rotated_keys,
@@ -361,14 +361,14 @@ impl Qwen3_5ModelBase {
     /// Q, K and V for `token_count` new rows, projected, normalized, moved
     /// head-first and rotated to their positions, with Qwen's output gate:
     /// everything attention needs before the KV state is touched.
-    pub(super) fn rotated_attention_inputs(
+    pub(crate) fn rotated_attention_inputs(
         &self,
         hidden_states: &MlxArray,
         token_count: i32,
         rope_offset_tokens: i32,
         full_attention_weights: &Qwen3_5FullAttentionWeights,
         token_position_offsets: Option<&MlxArray>,
-    ) -> Result<RotatedAttentionInputs, Qwen3_5ExecutionError> {
+    ) -> Result<RotatedAttentionInputs, TextExecutionError> {
         // The model configuration supplies the dimensions for this layer. Qwen
         // has more Q heads than K/V heads, which is grouped-query attention.
         // Every head still uses the same number of features.
@@ -474,12 +474,12 @@ impl Qwen3_5ModelBase {
     /// tensors are stored; the owner grows storage in fixed steps to avoid
     /// copying all prior context for each generated token. The returned views
     /// span [0..offset] and already include this step's new positions.
-    fn append_rotated_tensors_to_kv_state(
+    pub(crate) fn append_rotated_tensors_to_kv_state(
         &self,
         kv_state: &mut FullAttentionKeyValueState,
         rotated_keys: &MlxArray,
         transposed_values: &MlxArray,
-    ) -> Result<(MlxArray, MlxArray), Qwen3_5ExecutionError> {
+    ) -> Result<(MlxArray, MlxArray), TextExecutionError> {
         let previous_storage_offset_tokens = kv_state.offset_tokens();
         let (active_keys, active_values) = kv_state.update_and_fetch(
             &self.runtime,
@@ -504,7 +504,7 @@ impl Qwen3_5ModelBase {
         output_gate: &MlxArray,
         score_scale: f32,
         output_projection_weights: &Qwen3_5DenseProjection,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         let gated_output = qwen3_5_full_attention_step(
             &self.runtime,
             &self.compiled_elementwise_graphs,
@@ -532,8 +532,14 @@ impl Qwen3_5ModelBase {
         input: &MlxArray,
         weight: &MlxArray,
         rms_norm_epsilon: f32,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
-        Ok(self.runtime.rms_norm(input, weight, rms_norm_epsilon)?)
+    ) -> Result<MlxArray, TextExecutionError> {
+        crate::qwen4_exp::centered_norm::attention_input_norm(
+            &self.runtime,
+            &self.config,
+            input,
+            weight,
+            rms_norm_epsilon,
+        )
     }
 
     /// Permutes the head axis forward for all three attention inputs. Linear
@@ -546,7 +552,7 @@ impl Qwen3_5ModelBase {
         queries: &MlxArray,
         keys: &MlxArray,
         values: &MlxArray,
-    ) -> Result<(MlxArray, MlxArray, MlxArray), Qwen3_5ExecutionError> {
+    ) -> Result<(MlxArray, MlxArray, MlxArray), TextExecutionError> {
         let transposed_queries = self.runtime.transpose_axes(queries, &[0, 2, 1, 3])?;
         let transposed_keys = self.runtime.transpose_axes(keys, &[0, 2, 1, 3])?;
         let transposed_values = self.runtime.transpose_axes(values, &[0, 2, 1, 3])?;
@@ -566,7 +572,7 @@ impl Qwen3_5ModelBase {
         token_position_offsets: Option<&MlxArray>,
         rotary_dimension: i32,
         rope_offset_tokens: i32,
-    ) -> Result<(MlxArray, MlxArray), Qwen3_5ExecutionError> {
+    ) -> Result<(MlxArray, MlxArray), TextExecutionError> {
         // Rope base is the model's rotary theta, read from configuration the
         // same way it was read at the layer's start.
         let rope_base = f32::from_bits(self.config.rope_theta_bits());
@@ -613,7 +619,7 @@ impl Qwen3_5ModelBase {
         query_head_count: i32,
         attention_head_dimension: i32,
         attention_projection_head_dimension: i32,
-    ) -> Result<(MlxArray, MlxArray), Qwen3_5ExecutionError> {
+    ) -> Result<(MlxArray, MlxArray), TextExecutionError> {
         // First learned projection: turn each hidden-state vector into the
         // combined query-and-gate features. Quantization changes how the matrix
         // is stored and evaluated, not the mathematical role of this projection.
@@ -671,7 +677,7 @@ impl Qwen3_5ModelBase {
         token_count: i32,
         key_value_head_count: i32,
         attention_head_dimension: i32,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         let projected_values = self.quantized_linear(hidden_states, projection_weights)?;
         let projected_values = self.runtime.reshape(
             &projected_values,

@@ -4,9 +4,9 @@ use std::time::Duration;
 use ipc_protocol::{ExpertMemoryMode, RequestId, WorkerAstroSsdPromptCacheLookupOutcome};
 use model_serving::{
     AstroSsdPromptCacheDiskStoreConfig, AstroSsdPromptCacheModelContract, InferenceEngine,
-    Qwen3_5ArtifactValidator, Qwen3_5InferenceRequest, Qwen3_5MlxEngineConstructors,
-    Qwen3_5PromptProcessingChunkSizer, Qwen3_5ResidentEngine, Qwen3_5ResidentEngineTestControls,
-    Qwen3_5TextModelTestControls, Qwen3_5Tokenizer, qwen3_5_astro_decoder_state_cache_layout,
+    PromptProcessingChunkSizer, Qwen3_5ArtifactValidator, Qwen3_5ResidentEngine,
+    Qwen3_5ResidentEngineTestControls, Qwen3_5Tokenizer, TextInferenceRequest,
+    TextMlxEngineConstructors, TextModelTestControls, qwen3_5_astro_decoder_state_cache_layout,
 };
 use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use tokio::time::{Instant, MissedTickBehavior, interval, sleep};
@@ -216,7 +216,7 @@ async fn measure_initial_request_expert_reclamation(
         measured_expert_payload_bytes(&qwen3_5_engine, expert_memory_mode_before_request).await;
     let generation_start = qwen3_5_engine
         .start_generation(
-            Qwen3_5InferenceRequest::new(RequestId::new(request_id), prompt_token_ids.to_vec(), 1)
+            TextInferenceRequest::new(RequestId::new(request_id), prompt_token_ids.to_vec(), 1)
                 .with_image_pad_token_id(248_069),
         )
         .await
@@ -296,10 +296,9 @@ async fn load_memory_acceptance_engine(
     let validated_artifact = Qwen3_5ArtifactValidator::new()
         .validate(model_directory, 20_480)
         .expect("the model-artifact checkpoint should validate before engine loading");
-    let prefill_chunk_sizer = Qwen3_5PromptProcessingChunkSizer::for_chunk_size_tokens(
-        MEMORY_ACCEPTANCE_PREFILL_CHUNK_TOKENS,
-    )
-    .expect("the selected fixed prefill size should be valid");
+    let prefill_chunk_sizer =
+        PromptProcessingChunkSizer::for_chunk_size_tokens(MEMORY_ACCEPTANCE_PREFILL_CHUNK_TOKENS)
+            .expect("the selected fixed prefill size should be valid");
     let mut worker_chunking_configuration = crate::common::standard_worker_chunking_configuration();
     worker_chunking_configuration.ssd_prompt_cache_block_tokens =
         Some(MEMORY_ACCEPTANCE_PREFILL_CHUNK_TOKENS);

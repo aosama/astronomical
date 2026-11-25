@@ -6,7 +6,7 @@
 //! attribution. What stays here is how a folded pack becomes a model, the
 //! quota-bounded contract its store is opened with, and what the worker
 //! learns from the load. The minimum ceiling comes from the model's own
-//! dense-resident floor (`Qwen3_5TextModel::minimum_mlx_memory_ceiling_bytes`).
+//! dense-resident floor (`TextModel::minimum_mlx_memory_ceiling_bytes`).
 
 use ipc_protocol::ExpertMemoryMode;
 use runtime_integration::MlxRuntime;
@@ -17,12 +17,12 @@ use super::engine_trait_impl::gpu_error;
 use crate::inference_engine::load_result::EngineLoadResult;
 use crate::prism_hadamard_qwen35::artifacts::ValidatedFoldedPack;
 use crate::prism_hadamard_qwen35::model::PrismHadamardTextModel;
-use crate::qwen3_5_core::model::model_chunking_configuration::Qwen3_5ModelChunkingConfiguration;
-use crate::qwen3_5_core::shared_execution::model_loading_lifecycle::Qwen3_5ModelLoadingHooks;
-use crate::qwen3_5_core::shared_execution::model_loading_steps::AstroSsdPromptCacheContractResolver;
 use crate::{InferenceEngineError, PerformanceAttribution, PerformanceOperation};
+use text_generation::generation_loop::model_loading_lifecycle::TextModelLoadingHooks;
+use text_generation::generation_loop::model_loading_steps::AstroSsdPromptCacheContractResolver;
+use text_generation::model::model_chunking_configuration::TextModelChunkingConfiguration;
 
-impl Qwen3_5ModelLoadingHooks for PrismHadamardQwen35InferenceExecution {
+impl TextModelLoadingHooks for PrismHadamardQwen35InferenceExecution {
     /// A pack with a long position range keeps a store instead of failing to
     /// load: the contract is fitted to the disk quota.
     const ASTRO_SSD_PROMPT_CACHE_CONTRACT_RESOLVER: AstroSsdPromptCacheContractResolver =
@@ -46,7 +46,7 @@ impl Qwen3_5ModelLoadingHooks for PrismHadamardQwen35InferenceExecution {
         &mut self,
         runtime: MlxRuntime,
         validated_pack: ValidatedFoldedPack,
-        _model_chunking: Qwen3_5ModelChunkingConfiguration,
+        _model_chunking: TextModelChunkingConfiguration,
         model_loading_performance_attribution: &mut PerformanceAttribution,
     ) -> Result<PrismHadamardTextModel, InferenceEngineError> {
         model_loading_performance_attribution

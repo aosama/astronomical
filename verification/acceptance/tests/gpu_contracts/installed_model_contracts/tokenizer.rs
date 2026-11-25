@@ -9,8 +9,8 @@ use ipc_protocol::{
     RequestId,
 };
 use model_serving::{
-    Qwen3_5ArtifactValidator, Qwen3_5OutputEvent, Qwen3_5RequestOutput, Qwen3_5SamplingStrategy,
-    Qwen3_5Tokenizer,
+    Qwen3_5ArtifactValidator, Qwen3_5OutputEvent, Qwen3_5RequestOutput, Qwen3_5Tokenizer,
+    TextSamplingStrategy,
 };
 
 const ROMEO_AND_JULIET_SOURCE: &str = include_str!(
@@ -133,7 +133,7 @@ fn should_prepare_a_validated_structured_chat_command_for_prefill() {
     assert_eq!(engine_request.max_output_tokens(), 512);
     assert_eq!(
         engine_request.sampling_strategy(),
-        Qwen3_5SamplingStrategy::TopKTopP {
+        TextSamplingStrategy::TopKTopP {
             temperature_thousandths: 600,
             top_k: 20,
             top_p_thousandths: 950,

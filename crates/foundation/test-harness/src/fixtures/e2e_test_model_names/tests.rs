@@ -38,6 +38,10 @@ fn should_return_registry_model_ids_in_the_declared_role_order() {
     assert_eq!(flux2_klein_4bit_model_id(), expected_model_ids[6]);
     assert_eq!(streamed_dense_model_id(), expected_model_ids[7]);
     assert_eq!(small_sparse_moe_streaming_model_id(), expected_model_ids[8]);
+    assert_eq!(
+        lane_mixing_sparse_moe_streaming_model_id(),
+        expected_model_ids[9]
+    );
     assert_eq!(e2e_test_model_ids(), expected_model_ids);
     assert_eq!(
         required_e2e_test_model_ids(),

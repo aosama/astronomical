@@ -21,6 +21,8 @@ pub mod dense_layer_streamer;
 #[cfg(feature = "direct-mlx")]
 mod diagnostic_paging;
 #[cfg(feature = "direct-mlx")]
+pub mod drafted_rows_verification;
+#[cfg(feature = "direct-mlx")]
 pub mod expert_layer_mlx_working_buffer_probe;
 #[cfg(feature = "direct-mlx")]
 mod expert_memory_mode;
@@ -33,6 +35,7 @@ mod expert_storage_streaming;
 mod expert_streaming_stats;
 #[cfg(feature = "direct-mlx")]
 mod forward_layer_weights;
+mod lane_mixing_decoder_layer;
 #[cfg(feature = "direct-mlx")]
 mod layer_major_checkpoint_parity;
 mod layer_major_image_parity;
@@ -47,8 +50,10 @@ mod layer_major_span_state;
 pub mod layer_probe_shape;
 #[cfg(feature = "direct-mlx")]
 pub mod layer_submission;
-#[cfg(feature = "direct-mlx")]
 pub mod memory_governance;
+mod mlx_buffer_cache_bound;
+pub mod mtp_drafting;
+pub mod mtp_head;
 // Holds one streamed layer for every span of a layer-at-a-time prompt.
 pub mod held_prompt_expert_layer;
 // Reads the next streamed layer while the graphics processor computes.
@@ -71,6 +76,15 @@ mod forward;
 mod miss_route_dispatch;
 #[cfg(feature = "direct-mlx")]
 mod mixed_decode_execution;
+// The one module of in-graph serving with unsafe code: its host step
+// reaches the model from MLX's thread. The module says why that is sound.
+#[cfg(feature = "direct-mlx")]
+#[allow(unsafe_code)]
+mod in_graph_route_lookup;
+#[cfg(feature = "direct-mlx")]
+mod in_graph_serving_record;
+#[cfg(feature = "direct-mlx")]
+pub mod in_graph_table_serving;
 #[cfg(feature = "direct-mlx")]
 mod optimistic_table_serving;
 mod paged_execution;
@@ -96,10 +110,11 @@ pub mod streaming_model;
 mod system_wired_governance;
 
 pub use crate::qwen3_5_core::model::Qwen3_5ModelBase;
-pub use crate::qwen3_5_core::model_math::{error, forward_contract, weights};
+pub use crate::qwen3_5_core::model_math::{forward_contract, weights};
 pub use crate::qwen3_5_streaming::model::streaming_model::Qwen3_5StreamingModel as Qwen3_5Model;
 #[cfg(feature = "direct-mlx")]
 pub use layer_probe_shape::LayerProbeShape;
+pub use text_generation::execution_error as error;
 
 #[cfg(all(test, feature = "direct-mlx"))]
 mod paged_execution_tests;
@@ -121,11 +136,11 @@ mod governed_leases;
 #[cfg(feature = "direct-mlx")]
 mod live_memory_limit;
 #[cfg(feature = "direct-mlx")]
-pub use crate::qwen3_5_core::model::model_chunking_configuration::Qwen3_5ModelChunkingConfiguration;
-#[cfg(feature = "direct-mlx")]
 pub use crate::qwen3_5_core::model::target_forward_graph::Qwen3_5TargetForwardOutput;
 #[cfg(feature = "direct-mlx")]
-pub use error::Qwen3_5ExecutionError;
+pub use error::TextExecutionError;
+#[cfg(feature = "direct-mlx")]
+pub use text_generation::model::model_chunking_configuration::TextModelChunkingConfiguration;
 #[cfg(feature = "direct-mlx")]
 pub use weights::Qwen3_5Weights;
 
@@ -134,9 +149,9 @@ pub use crate::qwen3_5_core::artifacts::{Qwen3_5ShardIndex, ValidatedQwen3_5Arti
 #[cfg(feature = "direct-mlx")]
 pub use crate::qwen3_5_core::configuration::Qwen3_5FeedForwardArchitecture;
 #[cfg(feature = "direct-mlx")]
-pub use crate::qwen3_5_core::decoder::RequestDecoderStateStack;
-#[cfg(feature = "direct-mlx")]
 pub use crate::qwen3_5_core::vision::{Qwen3_5VisionModel, visual_embedding_injection};
+#[cfg(feature = "direct-mlx")]
+pub use text_generation::RequestDecoderStateStack;
 
 #[cfg(feature = "direct-mlx")]
 pub use astro_expert_cache_plus_streamed_page_route::Qwen3_5MoEAstroExpertCachePlusStreamedPageRoute;

@@ -7,7 +7,7 @@
 use ipc_protocol::ChatMessage;
 
 use super::tokenizer_error::Qwen3_5TokenizerError;
-use crate::qwen3_5_core::vision::{Qwen3_5ImageProcessor, Qwen3_5ProcessedImage};
+use crate::qwen3_5_core::vision::{ProcessedImage, Qwen3_5ImageProcessor};
 
 /// Extracts one token-count vector per user message from the conversation history.
 ///
@@ -16,7 +16,7 @@ use crate::qwen3_5_core::vision::{Qwen3_5ImageProcessor, Qwen3_5ProcessedImage};
 /// after spatial merge. Text-only user messages produce an empty vector.
 pub(super) struct PreparedChatImages {
     pub(super) image_token_counts_per_user_message: Vec<Vec<usize>>,
-    pub(super) processed_visual_images: Vec<Qwen3_5ProcessedImage>,
+    pub(super) processed_visual_images: Vec<ProcessedImage>,
 }
 
 pub(super) fn prepare_chat_images(

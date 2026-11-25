@@ -6,8 +6,8 @@ use super::super::{PrismHadamardTextModel, request_decoder_state_evaluation_arra
 use crate::PerformanceAttribution;
 use crate::inference_engine::contract::ExpertResidencyTelemetry;
 use crate::memory::telemetry::MlxActiveMemoryBreakdown;
-use crate::qwen3_5_core::model::memory_breakdown::Qwen3_5MemoryOwnership;
-use crate::qwen3_5_core::shared_execution::text_model::Qwen3_5TextModel;
+use text_generation::model::memory_breakdown::TextModelMemoryOwnership;
+use text_generation::model::text_model::TextModel;
 
 /// The fixture prompt: two tokens read as a prompt chunk, then one more
 /// forwarded for its logits, as the shared loop does for injected feedback.

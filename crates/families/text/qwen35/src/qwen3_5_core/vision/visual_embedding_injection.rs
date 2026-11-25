@@ -8,7 +8,7 @@
 
 use runtime_integration::MlxRuntime;
 
-use super::Qwen3_5ExecutionError;
+use super::TextExecutionError;
 use mlx_bridge::MlxArray;
 
 /// Replaces image-pad token embeddings in one prefill chunk with ordered visual embeddings.
@@ -23,14 +23,14 @@ fn validated_visual_embeddings_in_text_dtype(
     text_embeddings: &MlxArray,
     chunk_token_count: usize,
     visual_embeddings: &MlxArray,
-) -> Result<Option<MlxArray>, Qwen3_5ExecutionError> {
+) -> Result<Option<MlxArray>, TextExecutionError> {
     let text_embedding_shape = text_embeddings.shape();
     let visual_embedding_shape = visual_embeddings.shape();
     if text_embedding_shape.len() != 3
         || text_embedding_shape[0] != 1
         || text_embedding_shape[1] as usize != chunk_token_count
     {
-        return Err(Qwen3_5ExecutionError::InvalidInput {
+        return Err(TextExecutionError::InvalidInput {
             description: "text embedding shape does not match the prefill chunk",
         });
     }
@@ -40,7 +40,7 @@ fn validated_visual_embeddings_in_text_dtype(
         || visual_embedding_shape[1] != text_embedding_shape[2]
         || (visual_embeddings.dtype() != text_embeddings.dtype() && !widens_to_text_dtype)
     {
-        return Err(Qwen3_5ExecutionError::InvalidInput {
+        return Err(TextExecutionError::InvalidInput {
             description: "visual embeddings do not match the text embedding width and dtype",
         });
     }
@@ -60,7 +60,7 @@ pub fn qwen3_5_inject_visual_embeddings(
     visual_embeddings: &MlxArray,
     starting_visual_embedding_index: usize,
     image_pad_token_id: u32,
-) -> Result<(MlxArray, usize), Qwen3_5ExecutionError> {
+) -> Result<(MlxArray, usize), TextExecutionError> {
     let widened_visual_embeddings = validated_visual_embeddings_in_text_dtype(
         runtime,
         text_embeddings,
@@ -81,11 +81,11 @@ pub fn qwen3_5_inject_visual_embeddings(
         .count();
     let ending_visual_embedding_index = starting_visual_embedding_index
         .checked_add(image_pad_token_count)
-        .ok_or(Qwen3_5ExecutionError::InvalidInput {
+        .ok_or(TextExecutionError::InvalidInput {
             description: "visual embedding cursor overflowed",
         })?;
     if ending_visual_embedding_index > visual_embedding_shape[0] as usize {
-        return Err(Qwen3_5ExecutionError::InvalidInput {
+        return Err(TextExecutionError::InvalidInput {
             description: "image-pad tokens exceed the available visual embeddings",
         });
     }
@@ -138,8 +138,8 @@ pub fn qwen3_5_inject_visual_embeddings(
     Ok((injected_embeddings, image_pad_token_count))
 }
 
-fn usize_to_i32(dimension_size: usize) -> Result<i32, Qwen3_5ExecutionError> {
-    i32::try_from(dimension_size).map_err(|_conversion_error| Qwen3_5ExecutionError::InvalidInput {
+fn usize_to_i32(dimension_size: usize) -> Result<i32, TextExecutionError> {
+    i32::try_from(dimension_size).map_err(|_conversion_error| TextExecutionError::InvalidInput {
         description: "visual embedding index exceeds the MLX integer range",
     })
 }

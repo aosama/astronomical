@@ -1,0 +1,54 @@
+diff --git a/mlx/backend/metal/fence.cpp b/mlx/backend/metal/fence.cpp
+--- a/mlx/backend/metal/fence.cpp
++++ b/mlx/backend/metal/fence.cpp
+@@ -131,8 +131,21 @@
+   compute_encoder.set_bytes(f.count, 1);
+   compute_encoder.dispatch_threads(kernel_dims, kernel_dims);
+ 
++  // Astronomical: a command buffer that fails never runs the kernel above,
++  // and a CPU stream waiting on this value would then spin forever. Publish
++  // the value from the completion handler instead, so the wait ends and the
++  // evaluation reports the command buffer's error.
+   compute_encoder.get_command_buffer()->addCompletedHandler(
+-      [fence_ = fence_](MTL::CommandBuffer* cbuf) {});
++      [fence_ = fence_, count = f.count](MTL::CommandBuffer* cbuf) {
++        if (cbuf->status() != MTL::CommandBufferStatusError) {
++          return;
++        }
++        auto& f = *static_cast<FenceImpl*>(fence_.get());
++        uint32_t published = f.cpu_value()[0].load();
++        while (published < count &&
++               !f.cpu_value()[0].compare_exchange_weak(published, count)) {
++        }
++      });
+   return f.count;
+ }
+ 
+diff --git a/mlx/utils.h b/mlx/utils.h
+--- a/mlx/utils.h
++++ b/mlx/utils.h
+@@ -217,9 +217,22 @@
+   return residency_debug_;
+ }
+ 
++// Astronomical: how a fence orders a CPU step among GPU steps is a setting a
++// caller can change from code, not only one read from the environment when
++// the first fence is made. Each evaluation makes its own fences and reads the
++// setting then, so a change applies to the next evaluation. It is a plain
++// flag: change it only while no evaluation is running.
++inline bool& metal_fast_synch_setting() {
++  static bool metal_fast_synch_ = get_var("MLX_METAL_FAST_SYNCH", 0);
++  return metal_fast_synch_;
++}
++
+ inline bool metal_fast_synch() {
+-  static bool metal_fast_synch = get_var("MLX_METAL_FAST_SYNCH", 0);
+-  return metal_fast_synch;
++  return metal_fast_synch_setting();
++}
++
++inline void set_metal_fast_synch(bool enabled) {
++  metal_fast_synch_setting() = enabled;
+ }
+ 
+ inline bool enable_tf32() {

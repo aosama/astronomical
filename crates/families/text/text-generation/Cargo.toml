@@ -1,0 +1,45 @@
+[package]
+name = "text-generation"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+# The test lanes this package runs in. `cargo xtask lane-cargo` builds each
+# lane's command from these declarations (issue #2473, Step 6), so no alias
+# lists packages by hand; an empty list says the package is in no lane.
+[package.metadata.astronomical]
+test-lanes = ["integration", "integration-and-rest", "nextest", "direct-mlx"]
+direct-mlx-lane-feature = "direct-mlx"
+
+[lints]
+workspace = true
+
+[features]
+default = []
+# The request and decoder-state fixtures the text family crates' tests share.
+test-support = ["direct-mlx"]
+direct-mlx = ["dep:runtime-integration", "dep:mlx-bridge", "engine-core/direct-mlx", "model-primitives/direct-mlx", "artifact-validation/direct-mlx"]
+
+# The text shell (issue #2533): the generation loop every text family runs
+# through, with the request state, decoder state and hook traits a family
+# plugs its own model into. Each family is a crate of its own beside it.
+# One-way edge: nothing here may depend on model-serving or on a text family;
+# `cargo xtask check-architecture` enforces both.
+[dependencies]
+artifact-validation = { path = "../../../foundation/artifact-validation" }
+engine-core = { path = "../../../engine/engine-core" }
+model-primitives = { path = "../../../engine/model-primitives" }
+ipc-protocol = { path = "../../../contracts/ipc-protocol" }
+memory-policy = { path = "../../../foundation/memory-policy" }
+runtime-integration = { path = "../../../foundation/runtime-integration", features = ["mlx"], optional = true }
+mlx-bridge = { workspace = true, optional = true }
+thiserror.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+model-primitives = { path = "../../../engine/model-primitives", features = ["test-support"] }
+# The GPU tests sample the process-global MLX allocator, so they serialize.
+serial_test.workspace = true

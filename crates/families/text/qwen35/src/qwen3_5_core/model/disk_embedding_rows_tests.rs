@@ -14,7 +14,7 @@ use super::disk_embedding_rows::{
 };
 use super::embedding_row_reads::{EmbeddingRowReadError, EmbeddingTableLayout};
 use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights;
-use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
+use text_generation::execution_error::TextExecutionError;
 
 const VOCABULARY_ROW_COUNT: usize = 16;
 const HIDDEN_SIZE: usize = 128;
@@ -327,12 +327,14 @@ fn should_reject_a_token_one_past_the_last_row() {
         )
         .expect_err("a token past the table must not embed");
 
+    let expected_description = EmbeddingRowReadError::TokenOutsideTable {
+        token_id: 16,
+        row_count: 16,
+    }
+    .to_string();
     assert!(matches!(
         embedding_error,
-        Qwen3_5ExecutionError::EmbeddingRowRead(EmbeddingRowReadError::TokenOutsideTable {
-            token_id: 16,
-            row_count: 16,
-        })
+        TextExecutionError::EmbeddingRowRead { description } if description == expected_description
     ));
 }
 
@@ -357,7 +359,7 @@ fn should_reject_tables_that_do_not_match_the_bound_form() {
 
     assert!(matches!(
         embedding_error,
-        Qwen3_5ExecutionError::InvalidTensor { .. }
+        TextExecutionError::InvalidTensor { .. }
     ));
 }
 
@@ -429,7 +431,7 @@ fn should_reject_token_indices_that_are_not_shaped_one_by_tokens() {
 
     assert!(matches!(
         embedding_error,
-        Qwen3_5ExecutionError::InvalidInput { .. }
+        TextExecutionError::InvalidInput { .. }
     ));
 }
 

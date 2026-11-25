@@ -5,12 +5,12 @@
 //! at the next position is a different graph and diverges from an astro SSD prompt cache restore
 //! whose leftover tail is short enough to seed directly.
 
-use super::engine_request::Qwen3_5EngineRequest;
-use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
+use super::engine_request::ResidentEngineRequest;
 use crate::qwen3_5_resident::model::{Qwen3_5ResidentModel, Qwen3_5TargetForwardOutput};
+use text_generation::execution_error::TextExecutionError;
 
 pub(super) fn chunk_requires_visual_embeddings(
-    active_request: &Qwen3_5EngineRequest,
+    active_request: &ResidentEngineRequest,
     chunk_token_ids: &[u32],
 ) -> bool {
     // The artifact's image-pad vocabulary ID can occur in ordinary ChatML token
@@ -20,13 +20,13 @@ pub(super) fn chunk_requires_visual_embeddings(
 }
 
 pub(super) fn seed_terminal_text_prefill_after_astro_ssd_prompt_cache_boundaries(
-    active_request: &mut Qwen3_5EngineRequest,
+    active_request: &mut ResidentEngineRequest,
     model: &Qwen3_5ResidentModel,
     prefill_start: usize,
     prefill_end: usize,
     intermediate_completed_prefill_chunk_tokens: &[usize],
     astro_ssd_prompt_cache_block_token_count: usize,
-) -> Result<Vec<crate::Qwen3_5AstroSsdPromptCacheBoundaryCheckpoint>, Qwen3_5ExecutionError> {
+) -> Result<Vec<crate::AstroSsdPromptCacheBoundaryCheckpoint>, TextExecutionError> {
     // A terminal text chunk can still contain `astro_ssd_prompt_cache` block boundaries. The terminal
     // forward builds the vocabulary head while also collecting boundary checkpoints,
     // so the chunk is a single forward pass. This avoids the prefix+tail split that
@@ -50,10 +50,10 @@ pub(super) fn seed_terminal_text_prefill_after_astro_ssd_prompt_cache_boundaries
 
 pub(super) fn seed_first_generated_token_from_terminal_prefill_chunk(
     model: &Qwen3_5ResidentModel,
-    active_request: &mut Qwen3_5EngineRequest,
+    active_request: &mut ResidentEngineRequest,
     prefill_start: usize,
     prefill_end: usize,
-) -> Result<(), Qwen3_5ExecutionError> {
+) -> Result<(), TextExecutionError> {
     let prompt_token_ids = active_request.input_token_ids[prefill_start..prefill_end].to_vec();
     let final_prompt_logits = model.forward_chunk_with_performance_attribution(
         &prompt_token_ids,
@@ -75,9 +75,9 @@ pub(super) fn seed_first_generated_token_from_terminal_prefill_chunk(
 /// astro SSD prompt cache checkpoints in a single forward.
 fn seed_first_generated_token_from_terminal_forward_output(
     model: &Qwen3_5ResidentModel,
-    active_request: &mut Qwen3_5EngineRequest,
+    active_request: &mut ResidentEngineRequest,
     target_forward_output: &Qwen3_5TargetForwardOutput,
-) -> Result<(), Qwen3_5ExecutionError> {
+) -> Result<(), TextExecutionError> {
     let first_generated_token = active_request
         .build_generated_token(model, target_forward_output.final_logits())
 .map_err(super::prefill_invalid_input_error_constructors::terminal_prefill_first_generated_token_sampling_failed_invalid_input)?;

@@ -25,10 +25,10 @@ use crate::artifact_validation::TensorSemanticRole;
 use crate::qwen3_5_core::artifacts::ValidatedQwen3_5Artifact;
 use crate::qwen3_5_core::configuration::Qwen3_5Config;
 use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5DecoderLayerWeights;
-use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_core::model_math::streamed_layer_binding::{
     bind_decoder_layer_from_tensors, decoder_layer_index_of, decoder_layer_tensor_profiles,
 };
+use text_generation::execution_error::TextExecutionError;
 
 /// Layers a streamed forward holds at once: the one computing and the one
 /// being read for it next. A structural count, not a memory amount; the
@@ -80,7 +80,7 @@ impl Qwen3_5DenseLayerStreamer {
     /// duplicates the shard descriptors, before the engine takes the sources.
     pub fn from_validated_artifact(
         validated_artifact: &ValidatedQwen3_5Artifact,
-    ) -> Result<Self, Qwen3_5ExecutionError> {
+    ) -> Result<Self, TextExecutionError> {
         let qwen3_5_config = validated_artifact.config();
         let layer_count = qwen3_5_config.layer_count() as usize;
         let shard_position_by_source_id = shard_position_by_source_id(validated_artifact)?;
@@ -104,7 +104,7 @@ impl Qwen3_5DenseLayerStreamer {
             )?;
             tensor_ranges_by_layer_then_shard
                 .get_mut(layer_index)
-                .ok_or_else(|| Qwen3_5ExecutionError::MissingDecoderLayerWeights { layer_index })?
+                .ok_or_else(|| TextExecutionError::MissingDecoderLayerWeights { layer_index })?
                 .entry(shard_position)
                 .or_default()
                 .push(tensor_range);
@@ -120,7 +120,7 @@ impl Qwen3_5DenseLayerStreamer {
         qwen3_5_config: &Qwen3_5Config,
         shard_files: Vec<Option<File>>,
         tensor_ranges_by_layer_then_shard: Vec<BTreeMap<usize, Vec<DenseLayerTensorRange>>>,
-    ) -> Result<Self, Qwen3_5ExecutionError> {
+    ) -> Result<Self, TextExecutionError> {
         let mut layer_shard_reads = Vec::with_capacity(tensor_ranges_by_layer_then_shard.len());
         let mut layer_payload_bytes = Vec::with_capacity(tensor_ranges_by_layer_then_shard.len());
         for layer_ranges in tensor_ranges_by_layer_then_shard {
@@ -225,7 +225,7 @@ impl Qwen3_5DenseLayerStreamer {
         qwen3_5_config: &Qwen3_5Config,
         raw_hugging_face_norm_offsets_apply: bool,
         layer_index: usize,
-    ) -> Result<DenseLayerWeights, Qwen3_5ExecutionError> {
+    ) -> Result<DenseLayerWeights, TextExecutionError> {
         if let Some(kept_layer_weights) = self.kept_layer_weights.borrow().get(layer_index) {
             return Ok(DenseLayerWeights::Kept(Rc::clone(kept_layer_weights)));
         }
@@ -245,7 +245,7 @@ impl Qwen3_5DenseLayerStreamer {
         qwen3_5_config: &Qwen3_5Config,
         raw_hugging_face_norm_offsets_apply: bool,
         kept_layer_count: usize,
-    ) -> Result<(), Qwen3_5ExecutionError> {
+    ) -> Result<(), TextExecutionError> {
         let kept_layer_count = kept_layer_count.min(self.layer_payload_bytes.len());
         self.kept_layer_weights
             .borrow_mut()
@@ -274,11 +274,11 @@ impl Qwen3_5DenseLayerStreamer {
         qwen3_5_config: &Qwen3_5Config,
         raw_hugging_face_norm_offsets_apply: bool,
         layer_index: usize,
-    ) -> Result<Qwen3_5DecoderLayerWeights, Qwen3_5ExecutionError> {
+    ) -> Result<Qwen3_5DecoderLayerWeights, TextExecutionError> {
         let shard_reads = self
             .layer_shard_reads
             .get(layer_index)
-            .ok_or(Qwen3_5ExecutionError::MissingDecoderLayerWeights { layer_index })?;
+            .ok_or(TextExecutionError::MissingDecoderLayerWeights { layer_index })?;
         let mut layer_tensors = HashMap::new();
         for shard_read in shard_reads {
             self.read_shard_tensors(runtime, shard_read, &mut layer_tensors)?;
@@ -298,16 +298,16 @@ impl Qwen3_5DenseLayerStreamer {
         runtime: &MlxRuntime,
         shard_read: &DenseLayerShardRead,
         layer_tensors: &mut HashMap<String, MlxArray>,
-    ) -> Result<(), Qwen3_5ExecutionError> {
+    ) -> Result<(), TextExecutionError> {
         let shard_file = self
             .shard_files
             .get(shard_read.shard_position)
             .and_then(Option::as_ref)
-            .ok_or(Qwen3_5ExecutionError::InvalidInput {
+            .ok_or(TextExecutionError::InvalidInput {
                 description: "a dense layer read names a shard without a retained descriptor",
             })?;
         let duplicated_shard_file = shard_file.try_clone().map_err(|source| {
-            Qwen3_5ExecutionError::WeightSourceDescriptor {
+            TextExecutionError::WeightSourceDescriptor {
                 description: "could not duplicate a dense layer shard descriptor",
                 source,
             }
@@ -330,7 +330,7 @@ impl Qwen3_5DenseLayerStreamer {
 /// Model shard position of every validated source.
 fn shard_position_by_source_id(
     validated_artifact: &ValidatedQwen3_5Artifact,
-) -> Result<HashMap<crate::artifact_validation::TensorSourceId, usize>, Qwen3_5ExecutionError> {
+) -> Result<HashMap<crate::artifact_validation::TensorSourceId, usize>, TextExecutionError> {
     let model_shard_source_ids = validated_artifact
         .source_ids_for_file_names(validated_artifact.shard_index().model_shard_file_names())?;
     let mut shard_position_by_source_id = HashMap::with_capacity(model_shard_source_ids.len());
@@ -347,7 +347,7 @@ fn located_layer_tensor(
     canonical_name: &str,
     shard_position_by_source_id: &HashMap<crate::artifact_validation::TensorSourceId, usize>,
     shard_files: &mut [Option<File>],
-) -> Result<(DenseLayerTensorRange, usize), Qwen3_5ExecutionError> {
+) -> Result<(DenseLayerTensorRange, usize), TextExecutionError> {
     let (tensor_file_range, safetensors_source) = validated_artifact
         .tensor_file_range(canonical_name)
         .ok_or_else(|| missing_layer_tensor(canonical_name))?;
@@ -364,7 +364,7 @@ fn located_layer_tensor(
         .ok_or_else(|| missing_layer_tensor(canonical_name))?;
     if shard_file_slot.is_none() {
         *shard_file_slot = Some(safetensors_source.duplicate_file().map_err(|source| {
-            Qwen3_5ExecutionError::WeightSourceDescriptor {
+            TextExecutionError::WeightSourceDescriptor {
                 description: "could not duplicate a dense layer shard descriptor",
                 source,
             }
@@ -382,8 +382,8 @@ fn located_layer_tensor(
     ))
 }
 
-fn missing_layer_tensor(canonical_name: &str) -> Qwen3_5ExecutionError {
-    Qwen3_5ExecutionError::MissingTensor {
+fn missing_layer_tensor(canonical_name: &str) -> TextExecutionError {
+    TextExecutionError::MissingTensor {
         tensor_name: canonical_name.to_owned(),
     }
 }

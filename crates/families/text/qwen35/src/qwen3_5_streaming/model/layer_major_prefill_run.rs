@@ -9,7 +9,7 @@ use super::layer_major_prefill::{LayerMajorCheckpointContract, LayerMajorSpan};
 use super::layer_major_span_redo::UnconfirmedSpans;
 use super::layer_major_span_state::SpanState;
 use crate::RequestDecoderStateStack;
-use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
+use text_generation::execution_error::TextExecutionError;
 
 /// A layer-major prefill between its first layer and its last. It advances
 /// one layer per call (`advance_layer_major_prefill`).
@@ -59,14 +59,14 @@ impl LayerMajorPrefillRun {
         &mut self,
         layer_index: usize,
         span_index: usize,
-    ) -> Result<(), Qwen3_5ExecutionError> {
+    ) -> Result<(), TextExecutionError> {
         if self.span_to_fail_once != Some((layer_index, span_index)) {
             return Ok(());
         }
         self.span_to_fail_once = None;
         // Worded as MLX words a command buffer that ran out of memory, so
         // the engine classifies it as it classifies the real thing.
-        Err(Qwen3_5ExecutionError::Runtime(
+        Err(TextExecutionError::Runtime(
             MlxRuntimeError::RuntimeOperation {
                 operation: "run a prompt span failed on purpose by a test",
                 description: "[METAL] Command buffer execution failed: Insufficient Memory (00000008:kIOGPUCommandBufferCallbackErrorOutOfMemory)".to_owned(),

@@ -20,6 +20,7 @@ mod dflash_drafter_reference;
 mod expert_rows_per_read_cost;
 mod flux2_klein;
 mod gpu_wired_ceiling_probe;
+mod graph_host_step_cost;
 mod kernel_capability;
 mod model_artifact_memory_limits_tests;
 mod qwen3_5;
@@ -30,6 +31,7 @@ mod sparse_expert_projection;
 mod sparse_expert_projection_page_independence;
 mod sparse_expert_projection_sorted_stride;
 mod sparse_experts;
+mod synthetic_values;
 // Metal wired residency exists only on macOS.
 #[cfg(target_os = "macos")]
 mod worker_wired_residency_tests;

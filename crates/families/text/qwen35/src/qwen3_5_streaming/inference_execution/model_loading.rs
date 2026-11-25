@@ -7,13 +7,13 @@ use crate::{
     StreamingStartupResidencyFacts,
 };
 
-use super::{Qwen3_5EngineState, fatal_engine_error, qwen3_5_runtime_error};
+use super::{Qwen3_5EngineState, fatal_engine_error, fatal_runtime_error};
 use crate::qwen3_5_core::artifacts::ValidatedQwen3_5Artifact;
-use crate::qwen3_5_core::model::model_chunking_configuration::Qwen3_5ModelChunkingConfiguration;
-use crate::qwen3_5_core::shared_execution::model_loading_lifecycle::Qwen3_5ModelLoadingHooks;
 use crate::qwen3_5_streaming::model::Qwen3_5Model;
+use text_generation::generation_loop::model_loading_lifecycle::TextModelLoadingHooks;
+use text_generation::model::model_chunking_configuration::TextModelChunkingConfiguration;
 
-impl Qwen3_5ModelLoadingHooks for Qwen3_5EngineState {
+impl TextModelLoadingHooks for Qwen3_5EngineState {
     /// Captures the startup engine-selection facts before the artifact moves
     /// into the model: a later live raise consults them to decide whether the
     /// raised ceiling would select the resident engine in a replacement
@@ -37,7 +37,7 @@ impl Qwen3_5ModelLoadingHooks for Qwen3_5EngineState {
         &mut self,
         runtime: MlxRuntime,
         validated_artifact: ValidatedQwen3_5Artifact,
-        model_chunking: Qwen3_5ModelChunkingConfiguration,
+        model_chunking: TextModelChunkingConfiguration,
         model_loading_performance_attribution: &mut PerformanceAttribution,
     ) -> Result<Qwen3_5Model, InferenceEngineError> {
         let model = load_and_materialize_streaming_model(
@@ -62,7 +62,7 @@ impl Qwen3_5ModelLoadingHooks for Qwen3_5EngineState {
         model
             .runtime()
             .synchronize_gpu_stream_and_clear_mlx_buffer_cache()
-            .map_err(qwen3_5_runtime_error)
+            .map_err(fatal_runtime_error)
     }
 
     /// The memory governor already opened as the model loaded.
@@ -79,7 +79,7 @@ impl Qwen3_5EngineState {
     /// chunk and the attention slab granularity requests use.
     fn streaming_forward_shape(
         &self,
-        model_chunking: Qwen3_5ModelChunkingConfiguration,
+        model_chunking: TextModelChunkingConfiguration,
     ) -> StreamingForwardShape {
         StreamingForwardShape {
             model_chunking,
@@ -188,13 +188,64 @@ fn with_loaded_sequence_state_rate(
 /// How the engine will run forwards: the chunking the model loads with, and
 /// the prefill shape a dense model's MLX working buffers are measured at.
 struct StreamingForwardShape {
-    model_chunking: Qwen3_5ModelChunkingConfiguration,
+    model_chunking: TextModelChunkingConfiguration,
     layer_probe_shape: crate::qwen3_5_streaming::model::LayerProbeShape,
+}
+
+/// Loads, materializes and measures the streaming model, then bounds the
+/// `mlx_buffer_cache` to the working buffers it measured.
+fn load_and_materialize_streaming_model(
+    runtime: MlxRuntime,
+    mut validated_artifact: ValidatedQwen3_5Artifact,
+    model_directory: &std::path::Path,
+    streaming_forward_shape: StreamingForwardShape,
+    decode_astro_expert_cache_policy: WorkerDecodeAstroExpertCachePolicy,
+    model_loading_performance_attribution: &mut PerformanceAttribution,
+) -> Result<Qwen3_5Model, InferenceEngineError> {
+    // The head has a shard of its own, taken before the load consumes the
+    // artifact; a failure to load it surfaces once the model itself loaded.
+    let mtp_head_load = crate::qwen4_exp::mtp_head_weights::load_mtp_head_weights(
+        &runtime,
+        &mut validated_artifact,
+    );
+    let model = load_materialize_and_probe_streaming_model(
+        runtime,
+        validated_artifact,
+        model_directory,
+        streaming_forward_shape,
+        decode_astro_expert_cache_policy,
+        model_loading_performance_attribution,
+    )?;
+    finish_streaming_model_load(model, mtp_head_load)
+}
+
+/// Bounds the `mlx_buffer_cache` to what the loaded model measured and
+/// hands it the multi-token-prediction head its checkpoint ships, if any.
+fn finish_streaming_model_load(
+    mut model: Qwen3_5Model,
+    mtp_head_load: Result<
+        Option<crate::qwen4_exp::mtp_head_weights::MtpHeadWeights>,
+        crate::TextExecutionError,
+    >,
+) -> Result<Qwen3_5Model, InferenceEngineError> {
+    model
+        .bound_mlx_buffer_cache_to_measured_working_buffers()
+        .map_err(text_generation::engine_errors::fatal_runtime_error)?;
+    model.base.optional_accelerators.mtp_head = mtp_head_load?.map(Box::new);
+    // Reply tokens of a model that streams experts look their routes up
+    // inside the graph, which needs MLX's fast synch to pay. A dense model
+    // has no routes to look up and leaves the setting alone: it is
+    // process-wide, and turning it off here would slow a streaming model
+    // already loaded beside this one.
+    if model.expert_pager.is_some() {
+        model.set_in_graph_table_serving(true);
+    }
+    Ok(model)
 }
 
 /// Loads the streaming model from the validated artifact under the engine's
 /// decode astro expert cache policy and materializes its target weights.
-fn load_and_materialize_streaming_model(
+fn load_materialize_and_probe_streaming_model(
     runtime: MlxRuntime,
     validated_artifact: ValidatedQwen3_5Artifact,
     model_directory: &std::path::Path,

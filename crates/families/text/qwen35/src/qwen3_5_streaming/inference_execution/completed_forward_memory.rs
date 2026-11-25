@@ -18,7 +18,7 @@ use crate::qwen3_5_streaming::model::Qwen3_5Model;
 use crate::qwen3_5_streaming::model::memory_governance::CompletedForwardMemoryReadings;
 use crate::{InferenceEngineError, MemoryPhase, PerformanceAttribution, PerformanceOperation};
 
-use super::qwen3_5_runtime_error;
+use super::fatal_runtime_error;
 
 /// A memory observation whose raw MLX snapshot is captured at one owner-thread
 /// instant. The residency claim paired with this snapshot is derived from the
@@ -60,10 +60,26 @@ pub(in crate::qwen3_5_streaming) fn capture_completed_forward_memory_observation
 ) -> Result<CompletedForwardMemoryObservation, InferenceEngineError> {
     let mlx_memory_snapshot = model
         .memory_snapshot_with_forward_peak()
-        .map_err(qwen3_5_runtime_error)?;
+        .map_err(fatal_runtime_error)?;
     Ok(CompletedForwardMemoryObservation {
         mlx_memory_snapshot,
     })
+}
+
+/// Measures a completed forward that wrote reply tokens, against the
+/// active memory before it and the request's stored state.
+pub(in crate::qwen3_5_streaming) fn measure_completed_reply_forward(
+    model: &Qwen3_5Model,
+    active_request: &mut super::engine_request::StreamingEngineRequest,
+    active_memory_bytes_before_forward: usize,
+) -> Result<CompletedForwardMemoryObservation, InferenceEngineError> {
+    measure_completed_forward(
+        model,
+        MeasuredForward::reply_token(),
+        active_request.request_decoder_state.payload_byte_count(),
+        active_memory_bytes_before_forward,
+        &mut active_request.performance_attribution,
+    )
 }
 
 /// Samples MLX after a forward, tells the memory governor what the forward

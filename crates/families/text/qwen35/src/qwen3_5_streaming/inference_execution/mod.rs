@@ -18,6 +18,7 @@ pub mod layer_major_span_plan;
 mod memory_limit;
 mod model_loading;
 mod model_loading_finalization;
+mod mtp_reply_drafting;
 mod prefill_advance;
 mod prefill_chunk_planning;
 mod prefill_memory_recovery;
@@ -39,4 +40,4 @@ pub use memory_limit::safe_minimum_mlx_memory_ceiling_bytes;
 /// Qwen3.5 inference engine backed by the architecture-neutral MLX owner driver.
 pub type Qwen3_5StreamingEngine = MlxInferenceEngine<Qwen3_5InferenceExecution>;
 
-pub use crate::qwen3_5_core::engine_errors::{fatal_engine_error, qwen3_5_runtime_error};
+pub use text_generation::engine_errors::{fatal_engine_error, fatal_runtime_error};

@@ -4,33 +4,31 @@
 //! because its expert routes must be resolved before the token may become
 //! visible; unlike the resident engine, nothing is submitted to the graphics
 //! processor ahead of time. The step itself is shared with the resident
-//! engine in `qwen3_5_core::shared_execution::decode_step`.
+//! engine in `text_generation::generation_loop::decode_step`.
 
-use crate::qwen3_5_core::model::memory_breakdown::Qwen3_5MemoryOwnership;
 use std::time::Instant;
+use text_generation::model::memory_breakdown::TextModelMemoryOwnership;
 
 use ipc_protocol::RequestId;
 use runtime_integration::MlxMemorySnapshot;
 
-use crate::qwen3_5_core::shared_execution::decode_step::{
-    ActiveRequestAdvance, Qwen3_5DecodeStepHooks,
-};
 use mlx_bridge::MlxArray;
+use text_generation::generation_loop::decode_step::{ActiveRequestAdvance, TextDecodeStepHooks};
 
 use crate::{GeneratedToken, InferenceEngineError};
 
 use super::Qwen3_5EngineState;
 use super::completed_forward_memory::{
-    CompletedForwardMemoryObservation, MeasuredForward, measure_completed_forward,
+    CompletedForwardMemoryObservation, measure_completed_reply_forward,
 };
-use super::engine_request::Qwen3_5EngineRequest;
+use super::engine_request::StreamingEngineRequest;
 
 use crate::qwen3_5_streaming::model::Qwen3_5Model;
-impl Qwen3_5DecodeStepHooks for Qwen3_5EngineState {
+impl TextDecodeStepHooks for Qwen3_5EngineState {
     fn advance_prompt_prefill_if_pending(
         &mut self,
         request_id: RequestId,
-        active_request: &mut Qwen3_5EngineRequest,
+        active_request: &mut StreamingEngineRequest,
     ) -> Result<Option<GeneratedToken>, InferenceEngineError> {
         Qwen3_5EngineState::advance_prompt_prefill_if_pending(self, request_id, active_request)
     }
@@ -38,16 +36,30 @@ impl Qwen3_5DecodeStepHooks for Qwen3_5EngineState {
     fn begin_generation_preparation(
         &mut self,
         request_id: RequestId,
-        active_request: &mut Qwen3_5EngineRequest,
+        active_request: &mut StreamingEngineRequest,
     ) -> Result<Option<ActiveRequestAdvance>, InferenceEngineError> {
         Qwen3_5EngineState::begin_generation_preparation(self, request_id, active_request)
+    }
+
+    /// Drafts with the model's multi-token-prediction head when the engine
+    /// is set to and this step allows it.
+    fn advance_drafted_generation_if_admitted(
+        &mut self,
+        _request_id: RequestId,
+        active_request: &mut StreamingEngineRequest,
+        forced_thinking_transition_token_id: Option<u32>,
+    ) -> Result<Option<ActiveRequestAdvance>, InferenceEngineError> {
+        self.advance_mtp_drafted_generation_if_admitted(
+            active_request,
+            forced_thinking_transition_token_id,
+        )
     }
 
     /// Warms the hot experts the token used and records the warm-insert and
     /// prefetch statistics of the forward that produced it.
     fn after_reply_token_synchronized(
         &self,
-        active_request: &mut Qwen3_5EngineRequest,
+        active_request: &mut StreamingEngineRequest,
     ) -> Result<(), InferenceEngineError> {
         if let Some(model) = self.core.model.as_ref() {
             self.warm_hot_experts_and_record_utilization(model, active_request);
@@ -63,7 +75,7 @@ impl Qwen3_5DecodeStepHooks for Qwen3_5EngineState {
     fn decode_first_token_from_final_prompt(
         &mut self,
         request_id: RequestId,
-        active_request: &mut Qwen3_5EngineRequest,
+        active_request: &mut StreamingEngineRequest,
         final_prompt_index: usize,
         first_decode_forward_started_at: &mut Option<Instant>,
     ) -> Result<MlxArray, InferenceEngineError> {
@@ -78,7 +90,7 @@ impl Qwen3_5DecodeStepHooks for Qwen3_5EngineState {
 
     fn decode_next_token(
         &mut self,
-        active_request: &mut Qwen3_5EngineRequest,
+        active_request: &mut StreamingEngineRequest,
         current_generated_token: &MlxArray,
         current_generated_token_id: u32,
     ) -> Result<(MlxArray, MlxMemorySnapshot), InferenceEngineError> {
@@ -106,7 +118,7 @@ impl Qwen3_5EngineState {
     fn begin_generation_preparation(
         &mut self,
         request_id: RequestId,
-        active_request: &mut super::engine_request::Qwen3_5EngineRequest,
+        active_request: &mut super::engine_request::StreamingEngineRequest,
     ) -> Result<Option<ActiveRequestAdvance>, InferenceEngineError> {
         if !active_request.generation_preparation_announced {
             active_request.generation_preparation_announced = true;
@@ -131,7 +143,7 @@ impl Qwen3_5EngineState {
     fn decode_first_token_from_final_prompt(
         &mut self,
         request_id: RequestId,
-        active_request: &mut super::engine_request::Qwen3_5EngineRequest,
+        active_request: &mut super::engine_request::StreamingEngineRequest,
         final_prompt_index: usize,
         first_decode_forward_started_at: &mut Option<Instant>,
     ) -> Result<MlxArray, InferenceEngineError> {
@@ -176,12 +188,10 @@ impl Qwen3_5EngineState {
             final_prompt_token_id,
             &mut active_request.performance_attribution,
         );
-        measure_completed_forward(
+        measure_completed_reply_forward(
             model,
-            MeasuredForward::reply_token(),
-            active_request.request_decoder_state.payload_byte_count(),
+            active_request,
             memory_baseline.active_memory_bytes,
-            &mut active_request.performance_attribution,
         )?;
         Ok(first_generated_token)
     }
@@ -193,7 +203,7 @@ impl Qwen3_5EngineState {
     fn warm_hot_experts_and_record_utilization(
         &self,
         model: &Qwen3_5Model,
-        active_request: &mut super::engine_request::Qwen3_5EngineRequest,
+        active_request: &mut super::engine_request::StreamingEngineRequest,
     ) {
         if let Ok(memory_snapshot) = model.memory_snapshot_with_forward_peak() {
             // Issue #507: record why the ceiling is not fully in use at this
@@ -216,7 +226,7 @@ impl Qwen3_5EngineState {
     /// is in flight while the `mlx_buffer_cache` is released.
     fn reclaim_outgrown_slabs_and_decode_next_token(
         &mut self,
-        active_request: &mut super::engine_request::Qwen3_5EngineRequest,
+        active_request: &mut super::engine_request::StreamingEngineRequest,
         current_generated_token: &MlxArray,
         current_generated_token_id: u32,
     ) -> Result<(MlxArray, CompletedForwardMemoryObservation), InferenceEngineError> {
@@ -234,7 +244,7 @@ impl Qwen3_5EngineState {
     /// measures it when it completes.
     fn decode_next_token_and_collect_memory(
         &mut self,
-        active_request: &mut super::engine_request::Qwen3_5EngineRequest,
+        active_request: &mut super::engine_request::StreamingEngineRequest,
         current_generated_token: &MlxArray,
         current_generated_token_id: u32,
     ) -> Result<(MlxArray, CompletedForwardMemoryObservation), InferenceEngineError> {
@@ -271,12 +281,10 @@ impl Qwen3_5EngineState {
             );
             next_generated_token
         };
-        let completed_forward_memory = measure_completed_forward(
+        let completed_forward_memory = measure_completed_reply_forward(
             model,
-            MeasuredForward::reply_token(),
-            active_request.request_decoder_state.payload_byte_count(),
+            active_request,
             memory_baseline.active_memory_bytes,
-            &mut active_request.performance_attribution,
         )?;
         finish_reply_token_expert_routes(model, active_request, &expert_route_sample_before);
         active_request
@@ -298,7 +306,7 @@ impl Qwen3_5EngineState {
 /// reply (its first token only) and samples the session's expert counters.
 fn begin_reply_token_expert_routes(
     model: &crate::qwen3_5_streaming::model::Qwen3_5Model,
-    active_request: &super::engine_request::Qwen3_5EngineRequest,
+    active_request: &super::engine_request::StreamingEngineRequest,
 ) -> crate::memory::reply_expert_route_record::SessionExpertRouteSample {
     if active_request
         .engine_extension
@@ -316,7 +324,7 @@ fn begin_reply_token_expert_routes(
 /// `astro_expert_cache`, the change in the session's counters across it.
 fn finish_reply_token_expert_routes(
     model: &crate::qwen3_5_streaming::model::Qwen3_5Model,
-    active_request: &mut super::engine_request::Qwen3_5EngineRequest,
+    active_request: &mut super::engine_request::StreamingEngineRequest,
     expert_route_sample_before: &crate::memory::reply_expert_route_record::SessionExpertRouteSample,
 ) {
     let expert_route_token_change = model

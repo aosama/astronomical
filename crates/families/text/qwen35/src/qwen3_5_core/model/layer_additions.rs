@@ -30,8 +30,8 @@ use crate::qwen3_5_core::model_math::dense_projection::{
     Qwen3_5DenseProjection, Qwen3_5ProjectionStorage,
 };
 use crate::qwen3_5_core::model_math::differentiable_gated_delta::DifferentiableGatedDelta;
-use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use model_primitives::adapter_target::AdapterTarget;
+use text_generation::execution_error::TextExecutionError;
 
 /// What a decision model adds to the forward pass.
 pub struct Qwen3_5LayerAdditions {
@@ -70,7 +70,7 @@ impl Qwen3_5ModelBase {
         module_name: &str,
         activations: &MlxArray,
         base_output: MlxArray,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         let layer_additions = self.layer_additions.borrow();
         let Some(layer_additions) = layer_additions.as_ref() else {
             return Ok(base_output);
@@ -107,7 +107,7 @@ impl Qwen3_5ModelBase {
     ///
     /// # Errors
     /// See [`Self::adapter_targets_by_layer`].
-    pub fn adapter_targets(&self) -> Result<Vec<AdapterTarget>, Qwen3_5ExecutionError> {
+    pub fn adapter_targets(&self) -> Result<Vec<AdapterTarget>, TextExecutionError> {
         Ok(self
             .adapter_targets_by_layer()?
             .into_iter()
@@ -123,9 +123,7 @@ impl Qwen3_5ModelBase {
     /// Refuses a model whose feed-forward layers are mixtures of experts, or
     /// whose projections are stored in a form an add-on cannot be sized
     /// from: whole-model training covers dense Qwen3.5 backbones.
-    pub fn adapter_targets_by_layer(
-        &self,
-    ) -> Result<Vec<Vec<AdapterTarget>>, Qwen3_5ExecutionError> {
+    pub fn adapter_targets_by_layer(&self) -> Result<Vec<Vec<AdapterTarget>>, TextExecutionError> {
         let mut targets_by_layer = Vec::with_capacity(self.weights.decoder_layer_weights.len());
         for decoder_layer_weights in &self.weights.decoder_layer_weights {
             let mut layer_projections: Vec<&Qwen3_5DenseProjection> = Vec::with_capacity(8);
@@ -174,7 +172,7 @@ impl Qwen3_5ModelBase {
 /// `32 / bits` inputs per 32-bit word).
 fn adapter_target_of(
     projection: &Qwen3_5DenseProjection,
-) -> Result<AdapterTarget, Qwen3_5ExecutionError> {
+) -> Result<AdapterTarget, TextExecutionError> {
     let (output_width, input_width) = match &projection.storage {
         Qwen3_5ProjectionStorage::Bound(Qwen3_5AffineWeights::NativeBfloat16 { weight }) => {
             let weight_shape = weight.shape();
@@ -201,6 +199,6 @@ fn adapter_target_of(
     })
 }
 
-fn unsized_add_on(description: &'static str) -> Qwen3_5ExecutionError {
-    Qwen3_5ExecutionError::InvalidInput { description }
+fn unsized_add_on(description: &'static str) -> TextExecutionError {
+    TextExecutionError::InvalidInput { description }
 }

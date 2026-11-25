@@ -8,9 +8,9 @@ use ipc_protocol::{
     RequestId, WorkerEvent,
 };
 use model_serving::{
-    AstroSsdPromptCacheDiskStoreConfig, GeneratedToken, InferenceEngine, Qwen3_5ArtifactValidator,
-    Qwen3_5MlxEngineConstructors, Qwen3_5PromptProcessingChunkSizer, Qwen3_5ResidentEngine,
-    Qwen3_5Tokenizer,
+    AstroSsdPromptCacheDiskStoreConfig, GeneratedToken, InferenceEngine,
+    PromptProcessingChunkSizer, Qwen3_5ArtifactValidator, Qwen3_5ResidentEngine, Qwen3_5Tokenizer,
+    TextMlxEngineConstructors,
 };
 use tokio::time::{Instant, sleep, timeout};
 
@@ -179,10 +179,8 @@ async fn load_visual_acceptance_engine(
             // the journey writes a single block.
             crate::common::configured_model_artifact_astro_ssd_prompt_cache_maximum_size_bytes(),
         )),
-        Qwen3_5PromptProcessingChunkSizer::for_chunk_size_tokens(
-            VISUAL_ACCEPTANCE_PREFILL_CHUNK_TOKENS,
-        )
-        .expect("the visual acceptance prefill size should be valid"),
+        PromptProcessingChunkSizer::for_chunk_size_tokens(VISUAL_ACCEPTANCE_PREFILL_CHUNK_TOKENS)
+            .expect("the visual acceptance prefill size should be valid"),
         tokenizer.think_end_token_id(),
         model_directory,
         worker_chunking_configuration,
@@ -199,14 +197,14 @@ async fn load_visual_acceptance_engine(
 fn representative_visual_request(
     tokenizer: &Qwen3_5Tokenizer,
     request_id: RequestId,
-) -> model_serving::Qwen3_5InferenceRequest {
+) -> model_serving::TextInferenceRequest {
     representative_visual_request_with_optional_later_image(tokenizer, request_id, false)
 }
 
 fn representative_appended_visual_request(
     tokenizer: &Qwen3_5Tokenizer,
     request_id: RequestId,
-) -> model_serving::Qwen3_5InferenceRequest {
+) -> model_serving::TextInferenceRequest {
     representative_visual_request_with_optional_later_image(tokenizer, request_id, true)
 }
 
@@ -214,7 +212,7 @@ fn representative_visual_request_with_optional_later_image(
     tokenizer: &Qwen3_5Tokenizer,
     request_id: RequestId,
     should_append_later_image: bool,
-) -> model_serving::Qwen3_5InferenceRequest {
+) -> model_serving::TextInferenceRequest {
     let context_sentence =
         "Two households, both alike in dignity, in fair Verona, where we lay our scene. ";
     for context_sentence_repetition_count in (512..=2_048).step_by(128) {

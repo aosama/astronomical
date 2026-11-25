@@ -1,28 +1,29 @@
-use crate::qwen3_5_core::shared_execution::astro_ssd_prompt_cache_restore;
-use crate::qwen3_5_core::shared_execution::generation_start_steps;
+use crate::qwen3_5_core::shared_execution::session_visual_embeddings;
 use crate::{
-    EngineGenerationStart, InferenceEngineError, PerformanceAttribution, Qwen3_5InferenceRequest,
-    Qwen3_5SamplingStrategy, Qwen3_5ThinkingBudgetState,
+    EngineGenerationStart, InferenceEngineError, PerformanceAttribution, TextInferenceRequest,
+    TextSamplingStrategy, ThinkingBudgetState,
 };
+use text_generation::generation_loop::astro_ssd_prompt_cache_restore;
+use text_generation::generation_loop::generation_start_steps;
 
 use mlx_bridge::MlxArray;
 
 use super::engine_request::StreamingRequestExtension;
-use super::{Qwen3_5EngineState, qwen3_5_runtime_error};
+use super::{Qwen3_5EngineState, fatal_runtime_error};
 use crate::astro_decoder_state_cache::AstroDecoderStateCacheLayout;
-use crate::qwen3_5_core::decoder::RequestDecoderStateStack;
-use crate::qwen3_5_core::engine_errors::invalid_request_error;
 use crate::qwen3_5_core::shared_execution::astro_ssd_prompt_cache_visual_identity::{
     Qwen3_5AstroSsdPromptCacheVisualIdentity, Qwen3_5AstroSsdPromptCacheVisualIdentityInput,
 };
-use crate::qwen3_5_core::shared_execution::engine_request_installation::{
+use engine_core::astro_ssd_prompt_cache::block_causal_input::AstroSsdPromptCacheBlockCausalInput;
+use text_generation::RequestDecoderStateStack;
+use text_generation::engine_errors::invalid_request_error;
+use text_generation::generation_loop::engine_request_installation::{
     AdmittedGenerationSession, new_engine_request,
 };
-use crate::qwen3_5_core::shared_execution::generation_request_validation;
-use crate::qwen3_5_core::shared_execution::generation_session_position::{
+use text_generation::generation_loop::generation_request_validation;
+use text_generation::generation_loop::generation_session_position::{
     GenerationSessionPosition, derive_generation_session_position,
 };
-use engine_core::astro_ssd_prompt_cache::block_causal_input::AstroSsdPromptCacheBlockCausalInput;
 
 /// Everything the active-request installation consumes, grouped so the
 /// installation reads as one named phase instead of a positional argument
@@ -30,10 +31,10 @@ use engine_core::astro_ssd_prompt_cache::block_causal_input::AstroSsdPromptCache
 struct InstallActiveGenerationRequest<'a> {
     request_decoder_state: RequestDecoderStateStack,
     prompt_token_ids: Vec<u32>,
-    sampling_strategy: Qwen3_5SamplingStrategy,
+    sampling_strategy: TextSamplingStrategy,
     random_state: Option<MlxArray>,
-    inference_request: &'a mut Qwen3_5InferenceRequest,
-    thinking_budget_state: Qwen3_5ThinkingBudgetState,
+    inference_request: &'a mut TextInferenceRequest,
+    thinking_budget_state: ThinkingBudgetState,
     reserved_context_tokens: usize,
     can_use_astro_ssd_prompt_cache: bool,
     astro_ssd_prompt_cache_block_causal_inputs: Vec<AstroSsdPromptCacheBlockCausalInput>,
@@ -48,7 +49,7 @@ struct InstallActiveGenerationRequest<'a> {
 impl Qwen3_5EngineState {
     pub(super) fn start_generation(
         &mut self,
-        mut inference_request: Qwen3_5InferenceRequest,
+        mut inference_request: TextInferenceRequest,
     ) -> Result<EngineGenerationStart, InferenceEngineError> {
         let request_id = inference_request.request_id();
         let taken_performance_attribution = inference_request.take_performance_attribution();
@@ -93,7 +94,7 @@ impl Qwen3_5EngineState {
 
     /// Tells the memory governor a request starts reading its prompt, in
     /// spans of at most the configured chunk.
-    fn govern_request_start(&self, inference_request: &Qwen3_5InferenceRequest) {
+    fn govern_request_start(&self, inference_request: &TextInferenceRequest) {
         let Some(model) = self.core.model.as_ref() else {
             return;
         };
@@ -112,8 +113,8 @@ impl Qwen3_5EngineState {
     /// start step.
     fn build_thinking_budget_state(
         &self,
-        inference_request: &Qwen3_5InferenceRequest,
-    ) -> Result<Qwen3_5ThinkingBudgetState, InferenceEngineError> {
+        inference_request: &TextInferenceRequest,
+    ) -> Result<ThinkingBudgetState, InferenceEngineError> {
         generation_start_steps::build_thinking_budget_state(
             self.core.think_end_token_id,
             inference_request,
@@ -126,10 +127,10 @@ impl Qwen3_5EngineState {
     /// retention in the caller.
     fn assemble_admitted_generation_session(
         &mut self,
-        inference_request: &mut Qwen3_5InferenceRequest,
+        inference_request: &mut TextInferenceRequest,
         astro_decoder_state_cache_layout: &AstroDecoderStateCacheLayout,
         reserved_context_tokens: usize,
-        thinking_budget_state: Qwen3_5ThinkingBudgetState,
+        thinking_budget_state: ThinkingBudgetState,
         mut performance_attribution: PerformanceAttribution,
     ) -> Result<EngineGenerationStart, InferenceEngineError> {
         let sampling_strategy = inference_request.sampling_strategy();
@@ -178,7 +179,7 @@ impl Qwen3_5EngineState {
                 astro_decoder_state_cache_layout,
                 self.core.full_attention_kv_state_growth_tokens,
             )
-            .map_err(qwen3_5_runtime_error)?;
+            .map_err(fatal_runtime_error)?;
         let restored_prompt_prefix_session = self.restore_astro_ssd_prompt_cache_prefix_session(
             inference_request,
             &prompt_token_ids,
@@ -188,12 +189,12 @@ impl Qwen3_5EngineState {
             &mut request_decoder_state,
             &mut performance_attribution,
         )?;
-        let visual_embeddings = generation_start_steps::resolve_session_visual_embeddings(
+        let visual_embeddings = session_visual_embeddings::resolve_session_visual_embeddings(
             self,
             inference_request,
             precomputed_visual_embeddings,
             has_processed_visual_images,
-            generation_start_steps::SessionVisualEmbeddingPlacement {
+            session_visual_embeddings::SessionVisualEmbeddingPlacement {
                 prompt_token_ids: &prompt_token_ids,
                 prefill_cursor: restored_prompt_prefix_session.prefill_cursor,
                 ordered_image_visual_embedding_row_counts:
@@ -227,7 +228,7 @@ impl Qwen3_5EngineState {
     #[allow(clippy::too_many_arguments)]
     fn restore_astro_ssd_prompt_cache_prefix_session(
         &mut self,
-        inference_request: &Qwen3_5InferenceRequest,
+        inference_request: &TextInferenceRequest,
         prompt_token_ids: &[u32],
         astro_ssd_prompt_cache_block_causal_inputs: &[AstroSsdPromptCacheBlockCausalInput],
         can_use_astro_ssd_prompt_cache: bool,

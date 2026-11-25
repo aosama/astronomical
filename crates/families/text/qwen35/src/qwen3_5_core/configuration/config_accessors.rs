@@ -1,10 +1,28 @@
 use std::collections::BTreeMap;
 
-use super::config::{ModelWeightStorage, Qwen3_5Config, Qwen3_5FeedForwardArchitecture};
+use super::config::{
+    ModelWeightStorage, Qwen3_5Config, Qwen3_5FeedForwardArchitecture, Qwen3_5ModelGeneration,
+};
 use super::quantizations::mlx_quantization::ModuleQuantizationProfile;
+use super::qwen4_exp_fields::Qwen4ExpArchitecture;
 use jangtq2_qwen35::configuration::Jangtq2RmsNormConvention;
 
 impl Qwen3_5Config {
+    /// Which generation of the Qwen 3.5 layout this checkpoint is.
+    #[must_use]
+    pub const fn model_generation(&self) -> Qwen3_5ModelGeneration {
+        self.model_generation
+    }
+
+    /// Flash-Next's additions, absent for a Qwen 3.5 checkpoint.
+    #[must_use]
+    pub const fn qwen4_exp_architecture(&self) -> Option<Qwen4ExpArchitecture> {
+        match self.model_generation {
+            Qwen3_5ModelGeneration::Qwen4Exp(architecture) => Some(architecture),
+            Qwen3_5ModelGeneration::Qwen3_5 => None,
+        }
+    }
+
     /// Returns the explicitly declared jangtq2 RMSNorm storage convention.
     #[must_use]
     pub const fn jangtq2_rms_norm_convention(&self) -> Option<Jangtq2RmsNormConvention> {

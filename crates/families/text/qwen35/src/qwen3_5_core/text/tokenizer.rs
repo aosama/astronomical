@@ -7,7 +7,7 @@ use ipc_protocol::ChatGenerationCommand;
 use sha2::{Digest, Sha256};
 use tokenizers::Tokenizer;
 
-use crate::{PerformanceAttribution, PerformanceOperation, Qwen3_5InferenceRequest};
+use crate::{PerformanceAttribution, PerformanceOperation, TextInferenceRequest};
 
 use super::{Qwen3_5ImageProcessor, Qwen3_5PromptRenderer, ValidatedQwen3_5Artifact};
 
@@ -327,7 +327,7 @@ impl Qwen3_5Tokenizer {
         &self,
         chat_generation_command: &ChatGenerationCommand,
         enable_thinking: bool,
-    ) -> Result<Qwen3_5InferenceRequest, Qwen3_5TokenizerError> {
+    ) -> Result<TextInferenceRequest, Qwen3_5TokenizerError> {
         let mut disabled_performance_attribution = PerformanceAttribution::disabled();
         self.prepare_chat_with_performance_attribution(
             chat_generation_command,
@@ -341,7 +341,7 @@ impl Qwen3_5Tokenizer {
         chat_generation_command: &ChatGenerationCommand,
         enable_thinking: bool,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<Qwen3_5InferenceRequest, Qwen3_5TokenizerError> {
+    ) -> Result<TextInferenceRequest, Qwen3_5TokenizerError> {
         performance_attribution
             .measure_operation(
                 PerformanceOperation::ChatCommandValidation,
@@ -445,9 +445,9 @@ impl Qwen3_5Tokenizer {
         enable_thinking: bool,
         effective_thinking_allowance: Option<u16>,
         input_token_ids: Vec<u32>,
-    ) -> Qwen3_5InferenceRequest {
+    ) -> TextInferenceRequest {
         let model_top_k = clamp_model_top_k(self.model_sampler_config.model_top_k);
-        Qwen3_5InferenceRequest::new_sampling_with_top_k(
+        TextInferenceRequest::new_sampling_with_top_k(
             chat_generation_command.request_id,
             input_token_ids,
             chat_generation_command.settings.max_output_tokens,
@@ -484,9 +484,9 @@ impl Qwen3_5Tokenizer {
     /// the chat command requests one.
     fn attach_structured_generation_constraint(
         &self,
-        inference_request: Qwen3_5InferenceRequest,
+        inference_request: TextInferenceRequest,
         structured_generation: &ipc_protocol::StructuredGenerationConstraint,
-    ) -> Result<Qwen3_5InferenceRequest, Qwen3_5TokenizerError> {
+    ) -> Result<TextInferenceRequest, Qwen3_5TokenizerError> {
         let structured_token_constraint =
             crate::structured_generation::StructuredTokenConstraint::compile(
                 structured_generation,

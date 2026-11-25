@@ -9,7 +9,7 @@ use std::cell::RefCell;
 
 use runtime_integration::MlxRuntime;
 
-use super::{Qwen3_5ExecutionError, Qwen3_5VisionConfig, Qwen3_5VisionWeights};
+use super::{Qwen3_5VisionConfig, Qwen3_5VisionWeights, TextExecutionError};
 use mlx_bridge::{MlxArray, MlxCompiledElementwiseGraphs, MlxDtype};
 
 /// Retains the attention head-dimension padding zeros so the 27 vision blocks
@@ -54,7 +54,7 @@ impl Qwen3_5VisionPaddingZeroCache {
         head_count: i32,
         patch_count: i32,
         fused_head_dimension: i32,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         let head_dimension = attention_states.shape()[3];
         if head_dimension == fused_head_dimension {
             return Ok(runtime.reshape(attention_states, &attention_states.shape())?);
@@ -80,7 +80,7 @@ impl Qwen3_5VisionPaddingZeroCache {
             });
         }
         let Some(retained) = retained_slot.as_ref() else {
-            return Err(Qwen3_5ExecutionError::InvalidInput {
+            return Err(TextExecutionError::InvalidInput {
                 description: "vision padding zeros must be retained before reuse",
             });
         };
@@ -101,7 +101,7 @@ pub(super) fn qwen3_5_vision_self_attention(
     rotary_cosines: &MlxArray,
     rotary_sines: &MlxArray,
     vision_padding_zero_cache: &Qwen3_5VisionPaddingZeroCache,
-) -> Result<MlxArray, Qwen3_5ExecutionError> {
+) -> Result<MlxArray, TextExecutionError> {
     let patch_count = normalized_hidden_states.shape()[0];
     let head_count = u32_to_i32(vision_config.head_count())?;
     let hidden_size = u32_to_i32(vision_config.hidden_size())?;
@@ -205,7 +205,7 @@ fn project_vision_qkv_states(
     patch_count: i32,
     head_count: i32,
     head_dimension: i32,
-) -> Result<(MlxArray, MlxArray, MlxArray), Qwen3_5ExecutionError> {
+) -> Result<(MlxArray, MlxArray, MlxArray), TextExecutionError> {
     let qkv_projection = linear(
         runtime,
         vision_weights,
@@ -231,7 +231,7 @@ fn transpose_vision_states_to_sdpa_layout(
     query_states: MlxArray,
     key_states: MlxArray,
     value_states: MlxArray,
-) -> Result<(MlxArray, MlxArray, MlxArray), Qwen3_5ExecutionError> {
+) -> Result<(MlxArray, MlxArray, MlxArray), TextExecutionError> {
     let query_states =
         runtime.expand_dims(&runtime.transpose_axes(&query_states, &[1, 0, 2])?, 0)?;
     let key_states = runtime.expand_dims(&runtime.transpose_axes(&key_states, &[1, 0, 2])?, 0)?;
@@ -267,7 +267,7 @@ fn run_segmented_sdpa(
     head_count: i32,
     fused_head_dimension: i32,
     attention_scale: f32,
-) -> Result<MlxArray, Qwen3_5ExecutionError> {
+) -> Result<MlxArray, TextExecutionError> {
     let mut segmented_attention_outputs = Vec::new();
     for sequence_boundary_pair in attention_sequence_boundaries.windows(2) {
         let sequence_start = u32_to_i32(sequence_boundary_pair[0])?;
@@ -309,7 +309,7 @@ fn qkv_component(
     runtime: &MlxRuntime,
     qkv_by_projection: &MlxArray,
     projection_index: i32,
-) -> Result<MlxArray, Qwen3_5ExecutionError> {
+) -> Result<MlxArray, TextExecutionError> {
     let qkv_shape = qkv_by_projection.shape();
     let selected_projection = runtime.slice(
         qkv_by_projection,
@@ -331,7 +331,7 @@ fn apply_rotary_embedding(
     attention_states: &MlxArray,
     rotary_cosines: &MlxArray,
     rotary_sines: &MlxArray,
-) -> Result<MlxArray, Qwen3_5ExecutionError> {
+) -> Result<MlxArray, TextExecutionError> {
     let attention_shape = attention_states.shape();
     // `rotate_half([x1,x2])=[-x2,x1]`; then x*cos + rotate_half(x)*sin.
     // [patch,1,head_dimension] trigonometric arrays broadcast across heads.
@@ -366,12 +366,12 @@ fn linear(
     vision_weights: &Qwen3_5VisionWeights,
     input_states: &MlxArray,
     linear_prefix: &str,
-) -> Result<MlxArray, Qwen3_5ExecutionError> {
+) -> Result<MlxArray, TextExecutionError> {
     vision_weights.linear(runtime, input_states, linear_prefix)
 }
 
-fn u32_to_i32(dimension_size: u32) -> Result<i32, Qwen3_5ExecutionError> {
-    i32::try_from(dimension_size).map_err(|_conversion_error| Qwen3_5ExecutionError::InvalidInput {
+fn u32_to_i32(dimension_size: u32) -> Result<i32, TextExecutionError> {
+    i32::try_from(dimension_size).map_err(|_conversion_error| TextExecutionError::InvalidInput {
         description: "vision dimension exceeds the MLX integer range",
     })
 }

@@ -774,6 +774,36 @@
             "upstream_license": "MIT"
         },
         {
+            "huggingface_id": "mlx-community/Qwen3.8-Flash-Next-4bit-mtp",
+            "revision": "825df623302aeebc434f44ca9122827b04f9a0f1",
+            "summary": "A very large Qwen model that runs from the SSD: slow but capable, text only for now.",
+            "family": "qwen3_5",
+            "approximate_size_bytes": 113273816235,
+            "approximate_memory_bytes": 113273816235,
+            "minimum_memory_bytes": 5729056792,
+            "role": "chat",
+            "public": true,
+            "experimental": true,
+            "description": "Qwen 3.8 Flash-Next in a 4-bit build. It is far larger than a Mac's memory (about 105 GB on disk), so Astronomical keeps the parts in use in memory and reads the rest from the SSD as it works; it needs a fast internal SSD with that much room. It reasons before answering and calls tools. Text only for now: it does not read pictures yet, and its built-in draft model is not used yet. On an M5 Pro Mac with 48 GB and a 34 GB memory limit it wrote about 13 to 16 tokens a second.",
+            "capabilities": {
+                "supports_reasoning": true,
+                "supports_tool_calls": true,
+                "context_window": 262144
+            },
+            "quantization_label": "4-bit affine (group 32)",
+            "upstream_license": "Other (see the Qwen/Qwen3.8-Flash-Next model card)",
+            "measured_speed": {
+                "measured_on": "Mac with an M5 Pro and 48 GB",
+                "astronomical_version": "0.2.134",
+                "tokens_per_second": {
+                    "essay_short_prompt": 15,
+                    "essay_long_prompt": 13,
+                    "code_short_prompt": 16,
+                    "code_long_prompt": 14
+                }
+            }
+        },
+        {
             "huggingface_id": "mlx-community/Kokoro-82M-bf16",
             "revision": "a71e4d38b236d968966a2002c4c895dbd12b1c3c",
             "summary": "Reads text aloud in natural American English voices.",

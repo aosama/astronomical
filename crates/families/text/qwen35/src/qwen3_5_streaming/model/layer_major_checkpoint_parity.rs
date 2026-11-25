@@ -17,11 +17,11 @@ use super::Qwen3_5Model;
 use super::layer_major_prefill::{
     LayerMajorCheckpointContract, LayerMajorPrefillRequest, LayerMajorSpan,
 };
-use crate::qwen3_5_core::decoder::Qwen3_5AstroSsdPromptCacheBoundaryCheckpoint;
-use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_streaming::inference_execution::layer_major_span_plan::layer_major_span_plan;
 use crate::{PerformanceAttribution, RequestDecoderStateStack};
 use engine_core::astro_ssd_prompt_cache::astro_ssd_prompt_cache_boundary_completed_prefill_chunk_tokens;
+use text_generation::AstroSsdPromptCacheBoundaryCheckpoint;
+use text_generation::execution_error::TextExecutionError;
 
 /// One published boundary: its token position and every snapshot tensor.
 pub type PublishedBoundarySnapshot = (usize, BTreeMap<String, Vec<f32>>);
@@ -37,7 +37,7 @@ impl Qwen3_5Model {
         chunk_token_count: usize,
         block_token_count: usize,
         request_decoder_state: &mut RequestDecoderStateStack,
-    ) -> Result<Vec<PublishedBoundarySnapshot>, Qwen3_5ExecutionError> {
+    ) -> Result<Vec<PublishedBoundarySnapshot>, TextExecutionError> {
         let (published_boundaries, _) = self.prefill_layer_major_redoing_failed_spans(
             token_ids,
             chunk_token_count,
@@ -60,7 +60,7 @@ impl Qwen3_5Model {
         block_token_count: usize,
         span_to_fail_once: Option<(usize, usize)>,
         request_decoder_state: &mut RequestDecoderStateStack,
-    ) -> Result<(Vec<PublishedBoundarySnapshot>, usize), Qwen3_5ExecutionError> {
+    ) -> Result<(Vec<PublishedBoundarySnapshot>, usize), TextExecutionError> {
         let (group_token_ids, spans) =
             planned_spans(token_ids, chunk_token_count, block_token_count)?;
         let mut layer_major_prefill_run = self.begin_layer_major_prefill(
@@ -119,17 +119,16 @@ impl Qwen3_5Model {
         chunk_token_count: usize,
         block_token_count: usize,
         request_decoder_state: &mut RequestDecoderStateStack,
-    ) -> Result<Vec<PublishedBoundarySnapshot>, Qwen3_5ExecutionError> {
+    ) -> Result<Vec<PublishedBoundarySnapshot>, TextExecutionError> {
         let (group_token_ids, spans) =
             planned_spans(token_ids, chunk_token_count, block_token_count)?;
         let mut boundary_checkpoints = Vec::new();
         for span in &spans {
             let span_token_ids = &group_token_ids[span.start_token..span.end_token];
-            let starting_position_tokens = u32::try_from(span.start_token).map_err(|_| {
-                Qwen3_5ExecutionError::InvalidInput {
+            let starting_position_tokens =
+                u32::try_from(span.start_token).map_err(|_| TextExecutionError::InvalidInput {
                     description: "a planned span starts beyond the u32 range",
-                }
-            })?;
+                })?;
             let mut span_checkpoints = self.prefill_planned_chunk(
                 span_token_ids,
                 starting_position_tokens,
@@ -159,7 +158,7 @@ impl Qwen3_5Model {
         span: &LayerMajorSpan,
         block_token_count: usize,
         request_decoder_state: &mut RequestDecoderStateStack,
-    ) -> Result<Vec<Qwen3_5AstroSsdPromptCacheBoundaryCheckpoint>, Qwen3_5ExecutionError> {
+    ) -> Result<Vec<AstroSsdPromptCacheBoundaryCheckpoint>, TextExecutionError> {
         let mut performance_attribution = PerformanceAttribution::disabled();
         if span.interior_boundary_tokens.is_empty() {
             self.prefill_chunk_with_performance_attribution(
@@ -185,8 +184,8 @@ impl Qwen3_5Model {
     /// Copies every snapshot tensor to the host as Float32, in boundary order.
     pub(super) fn host_snapshots(
         &self,
-        boundary_checkpoints: Vec<Qwen3_5AstroSsdPromptCacheBoundaryCheckpoint>,
-    ) -> Result<Vec<PublishedBoundarySnapshot>, Qwen3_5ExecutionError> {
+        boundary_checkpoints: Vec<AstroSsdPromptCacheBoundaryCheckpoint>,
+    ) -> Result<Vec<PublishedBoundarySnapshot>, TextExecutionError> {
         let mut published_boundary_snapshots = Vec::with_capacity(boundary_checkpoints.len());
         for boundary_checkpoint in boundary_checkpoints {
             let mut host_tensors = BTreeMap::new();
@@ -202,7 +201,7 @@ impl Qwen3_5Model {
         Ok(published_boundary_snapshots)
     }
 
-    fn host_float32(&self, snapshot_tensor: &MlxArray) -> Result<Vec<f32>, Qwen3_5ExecutionError> {
+    fn host_float32(&self, snapshot_tensor: &MlxArray) -> Result<Vec<f32>, TextExecutionError> {
         Ok(self
             .runtime
             .astype(snapshot_tensor, MlxDtype::Float32)?
@@ -215,14 +214,14 @@ pub(super) fn planned_spans(
     token_ids: &[u32],
     chunk_token_count: usize,
     block_token_count: usize,
-) -> Result<(&[u32], Vec<LayerMajorSpan>), Qwen3_5ExecutionError> {
+) -> Result<(&[u32], Vec<LayerMajorSpan>), TextExecutionError> {
     let span_plan = layer_major_span_plan(
         0,
         token_ids.len(),
         chunk_token_count,
         Some(block_token_count),
     )
-    .ok_or(Qwen3_5ExecutionError::InvalidInput {
+    .ok_or(TextExecutionError::InvalidInput {
         description: "the prompt plans fewer than two spans",
     })?;
     Ok((&token_ids[..span_plan.group_end_token], span_plan.spans))
@@ -231,11 +230,11 @@ pub(super) fn planned_spans(
 /// Adds the boundary a forward ending at `end_token` publishes from its
 /// final state, as the engine does after each chunk, when one falls there.
 pub(super) fn push_final_state_boundary(
-    boundary_checkpoints: &mut Vec<Qwen3_5AstroSsdPromptCacheBoundaryCheckpoint>,
+    boundary_checkpoints: &mut Vec<AstroSsdPromptCacheBoundaryCheckpoint>,
     end_token: usize,
     block_token_count: usize,
     request_decoder_state: &RequestDecoderStateStack,
-) -> Result<(), Qwen3_5ExecutionError> {
+) -> Result<(), TextExecutionError> {
     let ends_on_boundary = astro_ssd_prompt_cache_boundary_completed_prefill_chunk_tokens(
         0,
         end_token,
@@ -252,15 +251,15 @@ pub(super) fn push_final_state_boundary(
         .iter()
         .any(|checkpoint| checkpoint.completed_prefill_chunk_tokens == end_token)
     {
-        return Err(Qwen3_5ExecutionError::InvalidInput {
+        return Err(TextExecutionError::InvalidInput {
             description: "a boundary was captured twice",
         });
     }
-    boundary_checkpoints.push(Qwen3_5AstroSsdPromptCacheBoundaryCheckpoint {
+    boundary_checkpoints.push(AstroSsdPromptCacheBoundaryCheckpoint {
         completed_prefill_chunk_tokens: end_token,
         recurrent_snapshot_tensors: request_decoder_state
             .extract_astro_ssd_prompt_cache_recurrent_snapshot_tensors()
-            .map_err(|_| Qwen3_5ExecutionError::InvalidInput {
+            .map_err(|_| TextExecutionError::InvalidInput {
                 description: "the decoder state lacks a published snapshot tensor",
             })?,
     });

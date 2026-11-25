@@ -1,8 +1,8 @@
 use super::{IMAGE_PAD_TOKEN_ID, PROGRESS_INTERVAL};
 use ipc_protocol::RequestId;
 use model_serving::{
-    GeneratedToken, InferenceEngine, PerformanceAttribution, Qwen3_5InferenceRequest,
-    Qwen3_5StreamingEngine,
+    GeneratedToken, InferenceEngine, PerformanceAttribution, Qwen3_5StreamingEngine,
+    TextInferenceRequest,
 };
 use std::time::Instant;
 use tokio::time::{MissedTickBehavior, interval};
@@ -100,7 +100,7 @@ pub(crate) async fn run_generation_with_request_attribution(
     request_attribution: RequestAttribution,
 ) -> Vec<u32> {
     let request_started_at = Instant::now();
-    let inference_request = Qwen3_5InferenceRequest::new_sampling(
+    let inference_request = TextInferenceRequest::new_sampling(
         request_id,
         prompt_token_ids.to_vec(),
         output_token_count,

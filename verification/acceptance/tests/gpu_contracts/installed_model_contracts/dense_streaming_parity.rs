@@ -152,7 +152,7 @@ trait DenseForward {
         token_ids: &[u32],
         starting_position_tokens: u32,
         request_decoder_state: &mut model_serving::RequestDecoderStateStack,
-    ) -> Result<mlx_bridge::MlxArray, model_serving::Qwen3_5ExecutionError>;
+    ) -> Result<mlx_bridge::MlxArray, model_serving::TextExecutionError>;
 
     /// Materializes the model as its engine would and reads MLX active memory.
     fn materialized_active_bytes(&self) -> u64;
@@ -167,7 +167,7 @@ impl DenseForward for StreamingForward<'_> {
         token_ids: &[u32],
         starting_position_tokens: u32,
         request_decoder_state: &mut model_serving::RequestDecoderStateStack,
-    ) -> Result<mlx_bridge::MlxArray, model_serving::Qwen3_5ExecutionError> {
+    ) -> Result<mlx_bridge::MlxArray, model_serving::TextExecutionError> {
         self.0
             .forward_chunk(token_ids, starting_position_tokens, request_decoder_state)
     }
@@ -190,7 +190,7 @@ impl DenseForward for ResidentForward<'_> {
         token_ids: &[u32],
         starting_position_tokens: u32,
         request_decoder_state: &mut model_serving::RequestDecoderStateStack,
-    ) -> Result<mlx_bridge::MlxArray, model_serving::Qwen3_5ExecutionError> {
+    ) -> Result<mlx_bridge::MlxArray, model_serving::TextExecutionError> {
         self.0
             .forward_chunk(token_ids, starting_position_tokens, request_decoder_state)
     }
@@ -338,7 +338,7 @@ fn greedy_decode(
 }
 
 fn logits_of(
-    forward_result: Result<mlx_bridge::MlxArray, model_serving::Qwen3_5ExecutionError>,
+    forward_result: Result<mlx_bridge::MlxArray, model_serving::TextExecutionError>,
 ) -> Vec<f32> {
     let final_logits = forward_result
         .expect("the forward should run")

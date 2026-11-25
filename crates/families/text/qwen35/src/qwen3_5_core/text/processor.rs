@@ -6,7 +6,7 @@ use ipc_protocol::{
     ChatModelCapabilities, WorkerEvent,
 };
 
-use crate::{PerformanceAttribution, Qwen3_5InferenceRequest};
+use crate::{PerformanceAttribution, TextInferenceRequest};
 
 use super::{
     Qwen3_5OutputEvent, Qwen3_5RequestOutput, Qwen3_5RequestOutputError, Qwen3_5Tokenizer,
@@ -132,7 +132,7 @@ impl Qwen3_5GenerationProcessor {
 }
 
 impl ModelGenerationProcessor for Qwen3_5GenerationProcessor {
-    type InferenceRequest = Qwen3_5InferenceRequest;
+    type InferenceRequest = TextInferenceRequest;
     type RequestOutput = Qwen3_5RequestOutput;
 
     fn ready_event(&self) -> WorkerEvent {

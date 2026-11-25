@@ -13,9 +13,6 @@ use super::stream_timing::{ReplyMeasurement, StreamTiming};
 /// Generous for a 10,000-token prompt on a slow Mac; a stuck reply still ends.
 const REPLY_TIMEOUT_SECONDS: &str = "900";
 const STATUS_TIMEOUT_SECONDS: &str = "10";
-/// Temperature people chat at (AGENTS.md and the measurement notes: never
-/// greedy for figures people read).
-const MEASUREMENT_TEMPERATURE: f64 = 0.6;
 
 pub fn fetch_status(base_url: &str) -> Result<serde_json::Value, String> {
     let status_output = Command::new("curl")
@@ -38,12 +35,13 @@ pub fn stream_chat_reply(
     model_id: &str,
     prompt_text: &str,
     output_tokens: u32,
+    temperature: f64,
 ) -> Result<ReplyMeasurement, String> {
     let request_body = serde_json::json!({
         "model": model_id,
         "stream": true,
         "stream_options": {"include_usage": true},
-        "temperature": MEASUREMENT_TEMPERATURE,
+        "temperature": temperature,
         "max_tokens": output_tokens,
         "messages": [{"role": "user", "content": prompt_text}],
     })

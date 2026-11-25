@@ -17,16 +17,16 @@ use crate::MlxInferenceExecution;
 use crate::MlxMemoryLimitAdjustment;
 use crate::MlxMemoryTelemetry;
 use crate::inference_engine::load_result::EngineLoadResult;
-use crate::qwen3_5_core::engine_errors::fatal_engine_error;
-use crate::qwen3_5_core::shared_execution::decode_step::advance_generation;
-use crate::qwen3_5_core::shared_execution::{
+use ipc_protocol::WorkerEvent;
+use text_generation::engine_errors::fatal_engine_error;
+use text_generation::generation_loop::decode_step::advance_generation;
+use text_generation::generation_loop::{
     generation_finalization_steps, generation_request_validation, generation_start_steps,
     input_injection, mlx_memory_limit_change, model_loading_lifecycle,
 };
-use ipc_protocol::WorkerEvent;
 
 impl MlxInferenceExecution for PrismHadamardQwen35InferenceExecution {
-    type Request = crate::Qwen3_5InferenceRequest;
+    type Request = crate::TextInferenceRequest;
 
     fn load(&mut self) -> Result<EngineLoadResult, InferenceEngineError> {
         model_loading_lifecycle::load_model(self)

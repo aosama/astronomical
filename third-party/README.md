@@ -78,6 +78,19 @@ MLX patches (`mlx-0.32.4-*.patch`):
 - `streaming-safetensors-writer` — Astronomical feature. Streams safetensors
   output through the bounded descriptor writer and orders payloads so the
   allocator can reuse one contiguous materialization. Retires never.
+- `fast-synch-setting` — Astronomical feature. MLX orders a CPU step among
+  GPU steps with a fence, and has two kinds: Metal shared events, or a
+  spin-wait on shared memory it calls fast synch, chosen once from its
+  `MLX_METAL_FAST_SYNCH` environment setting. The patch makes that choice a
+  setting code can change (`mlx::core::env::set_metal_fast_synch`), read by
+  each evaluation when it makes its fences, so the streaming engine turns
+  fast synch on for itself without an environment variable. A host step
+  inside a graph (`crates/engine/graph-host-step`) costs about 9 microseconds
+  a layer with it and about 170 without (`cargo measure-graph-host-step`).
+  It also ends a fast-synch wait when the command buffer that should have
+  published the awaited value fails: upstream's CPU stream would spin on it
+  forever, where the patched one lets the evaluation report the failure.
+  Retires if upstream offers the same control and ends that wait.
 - `stable-prefill-split-k` — serving performance. Keeps the quantized matmul
   split-K topology stable once row tiles already expose parallelism, so
   prefill numerics do not change with batch shape. Retires if upstream
@@ -240,6 +253,24 @@ The `bindgen_headers` tests in the xtask crate (`cargo test -p xtask --bin xtask
 cover extraction, patch application, idempotent reuse, self-healing,
 tampered-archive refusal, no-network behavior, and verification against local
 store fixtures.
+
+## Native code written against MLX's C++
+
+Astronomical's own C++ that has to run inside MLX, such as a primitive the
+evaluator calls while it walks a graph, lives in a crate of its own and
+compiles against the provisioned extraction above, never against a copy of
+MLX's sources and never as a target of the native MLX build. The extraction is
+the pinned archives with this repository's patches applied, so the headers are
+the ones the linked MLX image was built from; compiling in the crate, with
+`cc`, means an edit rebuilds one file and leaves the native build identity
+alone.
+
+`crates/engine/graph-host-step` is the first such crate: a step of a graph
+that runs on MLX's CPU stream between two GPU steps. Its build script finds
+the extraction through `native_build_orchestration::provisioned_mlx_sources`
+and fails with the provisioning command when it is missing. A hook such code
+needs inside MLX itself is a patch in `patches/`, recorded in the registry
+above like any other.
 
 ## Reproducing a native build from scratch
 

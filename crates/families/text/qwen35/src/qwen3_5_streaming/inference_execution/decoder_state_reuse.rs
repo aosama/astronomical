@@ -1,14 +1,14 @@
 //! The streaming engine's part of an `astro_ssd_prompt_cache` restore: room
 //! leased from the memory governor for the blocks a restore loads beside the
 //! stored state they become. The rest of the restore is shared with the
-//! resident engine in `qwen3_5_core::shared_execution::astro_ssd_prompt_cache_restore`.
+//! resident engine in `text_generation::generation_loop::astro_ssd_prompt_cache_restore`.
 
 use crate::InferenceEngineError;
-use crate::qwen3_5_core::shared_execution::astro_ssd_prompt_cache_restore::Qwen3_5AstroSsdPromptCacheRestoreHooks;
+use text_generation::generation_loop::astro_ssd_prompt_cache_restore::TextAstroSsdPromptCacheRestoreHooks;
 
 use super::Qwen3_5EngineState;
 
-impl Qwen3_5AstroSsdPromptCacheRestoreHooks for Qwen3_5EngineState {
+impl TextAstroSsdPromptCacheRestoreHooks for Qwen3_5EngineState {
     /// Leases room from the memory governor for the blocks a restore loads
     /// beside the stored state they become, and returns the kept weight
     /// bytes given back for it. A restore that fails leaves the lease to

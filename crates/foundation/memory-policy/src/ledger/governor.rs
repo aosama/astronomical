@@ -251,13 +251,9 @@ impl MemoryGovernor {
     /// capacity moves so that total stays under the system's wired ceiling.
     pub fn observe_system_wired(
         &mut self,
-        system_wired_bytes: u64,
-        system_wire_limit_bytes: u64,
+        reading: super::system_wired_ceiling::SystemWiredReading,
     ) -> KeptWeightCapacity {
-        capacity_of(
-            self.ledger
-                .observe_system_wired(system_wired_bytes, system_wire_limit_bytes),
-        )
+        capacity_of(self.ledger.observe_system_wired(reading))
     }
 
     pub fn change_limit(

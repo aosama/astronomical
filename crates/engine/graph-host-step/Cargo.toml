@@ -1,0 +1,48 @@
+[package]
+name = "graph-host-step"
+description = "A step of an MLX graph that runs on the host between two GPU steps, so a caller that must look at what the GPU computed does not end the evaluation to do it."
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+version.workspace = true
+build = "build.rs"
+
+# The test lanes this package runs in. `cargo xtask lane-cargo` builds each
+# lane's command from these declarations (issue #2473, Step 6), so no alias
+# lists packages by hand; an empty list says the package is in no lane.
+[package.metadata.astronomical]
+test-lanes = ["direct-mlx"]
+direct-mlx-lane-feature = "direct-mlx"
+
+[package.metadata.cargo-machete]
+# cargo-machete reports these build dependencies as unused, but build.rs uses them.
+ignored = ["cc", "native-build-orchestration"]
+
+[lints]
+workspace = true
+
+[features]
+default = []
+# The whole crate: the native step is an MLX primitive, so without the patched
+# MLX image there is nothing to compile or link, and a default build of the
+# workspace stays free of the native toolchain.
+direct-mlx = ["dep:runtime-integration", "dep:mlx-bridge"]
+
+[dependencies]
+# Links the patched MLX image the native step's symbols resolve against; the
+# dependency edge also puts this crate's archive ahead of MLX's on the link line.
+runtime-integration = { path = "../../foundation/runtime-integration", features = ["mlx"], optional = true }
+mlx-bridge = { workspace = true, optional = true }
+
+[build-dependencies]
+cc = "1.2"
+# Finds the patched MLX sources the native step compiles against.
+native-build-orchestration = { path = "../../foundation/native-build-orchestration" }
+
+[dev-dependencies]
+# Skips the GPU tests where there is no Metal.
+test-harness = { path = "../../foundation/test-harness" }
+# The GPU tests share the process-global MLX runtime, so they serialize.
+serial_test.workspace = true

@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::fs::File;
 
 use super::Qwen3_5VisionTensorSource;
-use crate::qwen3_5_core::vision::{Qwen3_5ExecutionError, VisionTensorLocation};
+use crate::qwen3_5_core::vision::{TextExecutionError, VisionTensorLocation};
 
 /// Opens `file_count` empty files; the source only keeps their descriptors.
 fn empty_source_files(directory: &std::path::Path, file_count: usize) -> Vec<File> {
@@ -114,7 +114,7 @@ fn should_report_a_tensor_the_source_does_not_locate_as_missing() {
 
     assert!(matches!(
         location_error,
-        Qwen3_5ExecutionError::MissingTensor { tensor_name }
+        TextExecutionError::MissingTensor { tensor_name }
             if tensor_name == "vision_tower.merger.linear_fc1.weight"
     ));
 }

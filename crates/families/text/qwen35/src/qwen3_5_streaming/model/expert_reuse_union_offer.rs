@@ -6,7 +6,6 @@
 
 use std::cell::RefCell;
 
-use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_streaming::expert_streaming::AstroExpertCache;
 use crate::qwen3_5_streaming::expert_streaming::expert_pager::Qwen3_5PagedExpertWeights;
 use crate::qwen3_5_streaming::model::Qwen3_5Model;
@@ -15,6 +14,7 @@ use crate::{
     should_commit_multi_token_union_as_complete_layer, should_seed_partial_layer_on_prefill_read,
 };
 use engine_core::expert_paging::QuantizedExpertPageManifest;
+use text_generation::execution_error::TextExecutionError;
 
 impl Qwen3_5Model {
     /// Offers a just-streamed multi-token union to retained ownership: either
@@ -40,7 +40,7 @@ impl Qwen3_5Model {
         streamed_weights: &Qwen3_5PagedExpertWeights,
         streamed_manifest: &QuantizedExpertPageManifest,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<(), Qwen3_5ExecutionError> {
+    ) -> Result<(), TextExecutionError> {
         if !layer_has_complete_table
             && should_commit_multi_token_union_as_complete_layer(
                 route_token_count,
@@ -116,7 +116,7 @@ impl Qwen3_5Model {
         warm_slot_count: usize,
         layer_has_complete_table: bool,
         performance_attribution: &PerformanceAttribution,
-    ) -> Result<(), Qwen3_5ExecutionError> {
+    ) -> Result<(), TextExecutionError> {
         if route_token_count == 1 && warm_slot_count > 0 && !layer_has_complete_table {
             if should_commit_mandatory_routed_page(
                 route_token_count,

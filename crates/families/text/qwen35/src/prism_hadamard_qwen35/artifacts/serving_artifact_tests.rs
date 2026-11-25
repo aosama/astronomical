@@ -2,7 +2,7 @@ use crate::prism_hadamard_qwen35::artifacts::tests::pack_fixture::{
     FIXTURE_VOCAB_SIZE, remove_fixture_directory, write_fixture_pack,
 };
 use crate::prism_hadamard_qwen35::artifacts::{FoldedPackValidator, ValidatedFoldedPack};
-use crate::qwen3_5_core::shared_execution::serving_artifact::Qwen3_5ServingArtifact;
+use text_generation::generation_loop::serving_artifact::TextServingArtifact;
 
 /// The fixture pack's one full-attention layer stores 2 key-value heads of
 /// 128 Float16 elements for its keys and again for its values.
@@ -20,7 +20,7 @@ fn with_validated_fixture_pack(check_validated_pack: fn(&ValidatedFoldedPack)) {
 #[test]
 fn should_answer_the_identity_and_limits_the_prism_engine_reads() {
     with_validated_fixture_pack(|validated_pack| {
-        let serving_artifact: &dyn Qwen3_5ServingArtifact = validated_pack;
+        let serving_artifact: &dyn TextServingArtifact = validated_pack;
         assert_eq!(serving_artifact.model_id(), validated_pack.model_id());
         assert_eq!(serving_artifact.revision(), validated_pack.revision());
         assert_eq!(
@@ -28,7 +28,11 @@ fn should_answer_the_identity_and_limits_the_prism_engine_reads() {
             validated_pack.total_payload_bytes()
         );
         assert_eq!(serving_artifact.shard_count(), 1);
-        assert!(serving_artifact.vision_config().is_none());
+        assert!(
+            serving_artifact
+                .persistent_visual_embedding_model_contract()
+                .is_none()
+        );
         assert_eq!(serving_artifact.maximum_position_count(), 4096);
         assert_eq!(serving_artifact.vocabulary_size(), FIXTURE_VOCAB_SIZE);
         assert_eq!(serving_artifact.end_of_sequence_token_ids(), &[248_044]);

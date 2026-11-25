@@ -16,7 +16,7 @@ mod tests;
 
 use thiserror::Error;
 
-use super::{Qwen3_5ImageGrid, Qwen3_5VisionConfig};
+use super::{ImageGrid, Qwen3_5VisionConfig};
 
 const BILINEAR_CORNER_COUNT: usize = 4;
 
@@ -38,7 +38,7 @@ pub struct Qwen3_5VisionInputPlan {
 impl Qwen3_5VisionInputPlan {
     /// Builds the data-dependent position plan used by the pinned vision architecture.
     pub fn new(
-        image_grids: &[Qwen3_5ImageGrid],
+        image_grids: &[ImageGrid],
         vision_config: &Qwen3_5VisionConfig,
     ) -> Result<Self, Qwen3_5VisionInputPlanError> {
         if image_grids.is_empty() {
@@ -143,7 +143,7 @@ pub enum Qwen3_5VisionInputPlanError {
 
 #[allow(clippy::too_many_arguments)]
 fn append_image_grid_plan(
-    image_grid: Qwen3_5ImageGrid,
+    image_grid: ImageGrid,
     spatial_merge_size: u32,
     position_embedding_grid_side: u32,
     patch_count: &mut usize,
@@ -297,7 +297,7 @@ fn interpolated_position(
 }
 
 fn validate_image_grid(
-    image_grid: Qwen3_5ImageGrid,
+    image_grid: ImageGrid,
     spatial_merge_size: u32,
 ) -> Result<(), Qwen3_5VisionInputPlanError> {
     if image_grid.temporal_patch_count == 0

@@ -1,0 +1,159 @@
+use crate::astro_decoder_state_cache::{
+    AstroDecoderStateCacheLayerLayout, AstroDecoderStateCacheState, ConvolutionState,
+    FullAttentionKeyValueState, GatedDeltaRecurrentState,
+};
+use runtime_integration::MlxRuntimeError;
+
+pub(super) fn astro_decoder_state_cache_layout_projection_error(
+    astro_decoder_state_cache_layout_error: crate::astro_decoder_state_cache::AstroDecoderStateCacheLayoutError,
+) -> MlxRuntimeError {
+    request_decoder_state_error_from_string(format!(
+        "validated astro-decoder-state-cache tensor payload geometry is invalid: {astro_decoder_state_cache_layout_error}"
+    ))
+}
+
+pub(super) fn request_decoder_layer_state_from_layout(
+    astro_decoder_state_cache_layer_layout: &AstroDecoderStateCacheLayerLayout,
+    full_attention_kv_state_growth_tokens_override: Option<i32>,
+) -> Result<AstroDecoderStateCacheState, MlxRuntimeError> {
+    match astro_decoder_state_cache_layer_layout {
+        AstroDecoderStateCacheLayerLayout::AppendOnlyAttention {
+            capacity_growth_tokens,
+            ..
+        } => append_only_attention_state(
+            *capacity_growth_tokens,
+            full_attention_kv_state_growth_tokens_override,
+        ),
+        AstroDecoderStateCacheLayerLayout::Composite { components } => {
+            qwen_composite_state(components)
+        }
+        AstroDecoderStateCacheLayerLayout::RecurrentTensor { .. } => {
+            Err(request_decoder_state_error(
+                "decoder layers cannot contain a standalone recurrent tensor",
+            ))
+        }
+        AstroDecoderStateCacheLayerLayout::RotatingWindowAttention { .. } => {
+            Err(request_decoder_state_error(
+                "decoder layers cannot contain rotating window attention state",
+            ))
+        }
+    }
+}
+
+/// Builds one append-only full-attention layer's KV state. The growth step
+/// comes from the override when the operator pinned one, else from the
+/// artifact's validated capacity growth; either way it must fit i32 and be
+/// positive, because the KV owner grows storage in fixed steps of exactly
+/// this size.
+fn append_only_attention_state(
+    capacity_growth_tokens: usize,
+    full_attention_kv_state_growth_tokens_override: Option<i32>,
+) -> Result<AstroDecoderStateCacheState, MlxRuntimeError> {
+    let full_attention_kv_state_growth_tokens = full_attention_kv_state_growth_tokens_override
+        .map_or_else(
+            || {
+                i32::try_from(capacity_growth_tokens).map_err(|_| {
+                    request_decoder_state_error(
+                        "append-only attention growth exceeds the i32 range",
+                    )
+                })
+            },
+            Ok,
+        )?;
+    if full_attention_kv_state_growth_tokens <= 0 {
+        return Err(request_decoder_state_error(
+            "append-only attention growth must be positive",
+        ));
+    }
+    Ok(AstroDecoderStateCacheState::AppendOnlyAttention {
+        attention: FullAttentionKeyValueState::empty_with_validated_growth_tokens(
+            full_attention_kv_state_growth_tokens,
+        ),
+    })
+}
+
+/// Builds one linear-attention layer's composite state from its two
+/// recurrent tensor components. The convolution and recurrence roles must
+/// match the model contract in order, the states must carry their exact
+/// ranks with batch size one, and every dimension must fit i32 — the runtime
+/// states are constructed from these exact shapes.
+fn qwen_composite_state(
+    components: &[AstroDecoderStateCacheLayerLayout],
+) -> Result<AstroDecoderStateCacheState, MlxRuntimeError> {
+    let [
+        AstroDecoderStateCacheLayerLayout::RecurrentTensor {
+            tensor: convolution_tensor,
+        },
+        AstroDecoderStateCacheLayerLayout::RecurrentTensor {
+            tensor: recurrent_tensor,
+        },
+    ] = components
+    else {
+        return Err(request_decoder_state_error(
+            "linear attention requires convolution and recurrent tensor components",
+        ));
+    };
+    if convolution_tensor.tensor_role_name()
+        != crate::decoder_state::tensor_roles::LINEAR_CONVOLUTION_TENSOR_ROLE
+        || recurrent_tensor.tensor_role_name()
+            != crate::decoder_state::tensor_roles::LINEAR_RECURRENCE_TENSOR_ROLE
+    {
+        return Err(request_decoder_state_error(
+            "linear attention tensor roles do not match the model contract",
+        ));
+    }
+    let [1, convolution_history_tokens, convolution_dimension] = convolution_tensor.dimensions()
+    else {
+        return Err(request_decoder_state_error(
+            "convolution state must have rank three with batch size one",
+        ));
+    };
+    let [
+        1,
+        recurrent_value_head_count,
+        recurrent_value_head_dimension,
+        recurrent_key_head_dimension,
+    ] = recurrent_tensor.dimensions()
+    else {
+        return Err(request_decoder_state_error(
+            "recurrent state must have rank four with batch size one",
+        ));
+    };
+    let convolution_kernel_dimension = convolution_history_tokens
+        .checked_add(1)
+        .ok_or_else(|| request_decoder_state_error("convolution history length overflowed"))?;
+    Ok(AstroDecoderStateCacheState::Composite {
+        convolution: ConvolutionState::empty_with_shape(
+            i32::try_from(convolution_kernel_dimension).map_err(|_| {
+                request_decoder_state_error("convolution kernel dimension exceeds i32")
+            })?,
+            i32::try_from(*convolution_dimension)
+                .map_err(|_| request_decoder_state_error("convolution dimension exceeds i32"))?,
+        ),
+        recurrent: GatedDeltaRecurrentState::empty_with_shape(
+            i32::try_from(*recurrent_value_head_count).map_err(|_| {
+                request_decoder_state_error("recurrent value head count exceeds i32")
+            })?,
+            i32::try_from(*recurrent_value_head_dimension).map_err(|_| {
+                request_decoder_state_error("recurrent value head dimension exceeds i32")
+            })?,
+            i32::try_from(*recurrent_key_head_dimension).map_err(|_| {
+                request_decoder_state_error("recurrent key head dimension exceeds i32")
+            })?,
+        ),
+    })
+}
+
+pub(super) fn request_decoder_state_error(description: &'static str) -> MlxRuntimeError {
+    MlxRuntimeError::RuntimeOperation {
+        operation: "create request decoder state",
+        description: description.to_owned(),
+    }
+}
+
+pub(super) fn request_decoder_state_error_from_string(description: String) -> MlxRuntimeError {
+    MlxRuntimeError::RuntimeOperation {
+        operation: "create request decoder state",
+        description,
+    }
+}

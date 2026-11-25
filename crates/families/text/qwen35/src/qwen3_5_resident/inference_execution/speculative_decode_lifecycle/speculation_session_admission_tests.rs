@@ -70,18 +70,18 @@ fn should_reject_sessions_the_token_equality_contract_cannot_preserve() {
 
 #[test]
 fn should_map_request_strategies_onto_verification_token_choices() {
-    use crate::Qwen3_5SamplingStrategy;
+    use crate::TextSamplingStrategy;
 
     // Greedy maps to per-position argmax.
     assert_eq!(
-        verification_token_choice_for_strategy(&Qwen3_5SamplingStrategy::HighestLogit),
+        verification_token_choice_for_strategy(&TextSamplingStrategy::HighestLogit),
         Some(VerificationTokenChoice::HighestLogit)
     );
 
     // The sampled strategy carries its parameters across exactly, so the
     // verifier reproduces the classic per-token choice bit for bit.
     assert_eq!(
-        verification_token_choice_for_strategy(&Qwen3_5SamplingStrategy::TopKTopP {
+        verification_token_choice_for_strategy(&TextSamplingStrategy::TopKTopP {
             temperature_thousandths: 700,
             top_k: 40,
             top_p_thousandths: 950,

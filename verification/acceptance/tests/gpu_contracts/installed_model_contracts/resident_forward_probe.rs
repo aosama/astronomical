@@ -30,8 +30,8 @@ use std::time::{Duration, Instant};
 
 use config::AstronomicalConfig;
 use model_serving::{
-    Qwen3_5ArtifactValidator, Qwen3_5ModelChunkingConfiguration, Qwen3_5ResidentModel,
-    Qwen3_5Tokenizer,
+    Qwen3_5ArtifactValidator, Qwen3_5ResidentModel, Qwen3_5Tokenizer,
+    TextModelChunkingConfiguration,
 };
 use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use serial_test::serial;
@@ -100,7 +100,7 @@ async fn drive_raw_resident_model_forwards() {
         "the Romeo and Juliet fixture must tokenize to at least one warmup plus one measured chunk"
     );
 
-    let model_chunking = Qwen3_5ModelChunkingConfiguration::new(
+    let model_chunking = TextModelChunkingConfiguration::new(
         FULL_ATTENTION_KV_GROWTH_TOKENS,
         PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL,
         SSD_PAGING_GENERATION_LAYER_INTERVAL,

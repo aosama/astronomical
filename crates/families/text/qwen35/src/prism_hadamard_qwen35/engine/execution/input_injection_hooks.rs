@@ -11,22 +11,22 @@ use runtime_integration::MlxMemorySnapshot;
 
 use super::{PrismHadamardQwen35ActiveGeneration, PrismHadamardQwen35InferenceExecution};
 use crate::RequestDecoderStateStack;
-use crate::qwen3_5_core::shared_execution::forward_memory_governance::{
-    Qwen3_5ForwardKind, Qwen3_5ForwardMemoryGovernance,
-};
-use crate::qwen3_5_core::shared_execution::input_injection::Qwen3_5InputInjectionHooks;
-use crate::qwen3_5_core::shared_execution::text_model::Qwen3_5TextModel;
 use crate::{InferenceEngineError, PerformanceAttribution};
+use text_generation::generation_loop::forward_memory_governance::{
+    TextForwardKind, TextForwardMemoryGovernance,
+};
+use text_generation::generation_loop::input_injection::TextInputInjectionHooks;
+use text_generation::model::text_model::TextModel;
 
 /// The dense pack is resident from load on, so no forward is admitted or
 /// measured against a governor; the reading after a forward is the plain MLX
 /// memory reading.
-impl Qwen3_5ForwardMemoryGovernance for PrismHadamardQwen35InferenceExecution {
+impl TextForwardMemoryGovernance for PrismHadamardQwen35InferenceExecution {
     type ForwardInProgress = ();
 
     fn begin_governed_forward(
         &mut self,
-        _forward_kind: Qwen3_5ForwardKind,
+        _forward_kind: TextForwardKind,
         _request_decoder_state: &RequestDecoderStateStack,
     ) -> Result<(), InferenceEngineError> {
         Ok(())
@@ -44,7 +44,7 @@ impl Qwen3_5ForwardMemoryGovernance for PrismHadamardQwen35InferenceExecution {
     }
 }
 
-impl Qwen3_5InputInjectionHooks for PrismHadamardQwen35InferenceExecution {
+impl TextInputInjectionHooks for PrismHadamardQwen35InferenceExecution {
     /// There is no drafting to suspend and no governed context to grow; the
     /// shared projection against the pack's position range is the whole
     /// check.

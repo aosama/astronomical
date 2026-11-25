@@ -9,11 +9,11 @@
 
 use super::Qwen3_5ResidentModel;
 use crate::PerformanceAttribution;
-use crate::qwen3_5_core::decoder::RequestDecoderStateStack;
 use crate::qwen3_5_core::model::prefill_forward::Qwen3_5PrefillForward;
 use crate::qwen3_5_core::model::probe_token_ids::vocabulary_walking_token_ids;
-use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_core::model_math::forward_contract::forward_state_arrays;
+use text_generation::RequestDecoderStateStack;
+use text_generation::execution_error::TextExecutionError;
 
 /// What one prompt chunk and one reply token needed beyond the weights and
 /// the stored state they left behind.
@@ -32,7 +32,7 @@ impl Qwen3_5ResidentModel {
         &self,
         prompt_chunk_token_count: usize,
         full_attention_kv_state_growth_tokens: i32,
-    ) -> Result<ProbedForwardMlxWorkingBuffers, Qwen3_5ExecutionError> {
+    ) -> Result<ProbedForwardMlxWorkingBuffers, TextExecutionError> {
         let probe_token_ids = self.probe_token_ids(prompt_chunk_token_count)?;
         let mut probe_decoder_state =
             RequestDecoderStateStack::empty_from_astro_decoder_state_cache_layout_with_full_attention_kv_state_growth_tokens(
@@ -59,7 +59,7 @@ impl Qwen3_5ResidentModel {
         &self,
         probe_token_ids: &[u32],
         probe_decoder_state: &mut RequestDecoderStateStack,
-    ) -> Result<u64, Qwen3_5ExecutionError> {
+    ) -> Result<u64, TextExecutionError> {
         self.runtime
             .synchronize_gpu_stream_and_clear_mlx_buffer_cache()?;
         let active_bytes_before_chunk = self.runtime.memory_snapshot()?.active_memory_bytes();
@@ -79,7 +79,7 @@ impl Qwen3_5ResidentModel {
         &self,
         probe_token_ids: &[u32],
         probe_decoder_state: &mut RequestDecoderStateStack,
-    ) -> Result<u64, Qwen3_5ExecutionError> {
+    ) -> Result<u64, TextExecutionError> {
         let active_bytes_before_reply_token = self.runtime.memory_snapshot()?.active_memory_bytes();
         self.runtime.reset_peak_memory()?;
         let reply_logits = self.build_forward_chunk_with_performance_attribution(
@@ -104,7 +104,7 @@ impl Qwen3_5ResidentModel {
     fn peak_beyond_held_after_settling(
         &self,
         active_bytes_before_step: usize,
-    ) -> Result<u64, Qwen3_5ExecutionError> {
+    ) -> Result<u64, TextExecutionError> {
         self.runtime
             .synchronize_gpu_stream_and_clear_mlx_buffer_cache()?;
         let memory_after_step = self.runtime.memory_snapshot()?;
@@ -117,14 +117,14 @@ impl Qwen3_5ResidentModel {
     fn probe_token_ids(
         &self,
         prompt_chunk_token_count: usize,
-    ) -> Result<Vec<u32>, Qwen3_5ExecutionError> {
+    ) -> Result<Vec<u32>, TextExecutionError> {
         let signed_token_count = i32::try_from(prompt_chunk_token_count).map_err(|_| {
-            Qwen3_5ExecutionError::InvalidInput {
+            TextExecutionError::InvalidInput {
                 description: "the MLX working-buffer probe token count exceeds the MLX range",
             }
         })?;
         if signed_token_count == 0 {
-            return Err(Qwen3_5ExecutionError::InvalidInput {
+            return Err(TextExecutionError::InvalidInput {
                 description: "the MLX working-buffer probe needs at least one token",
             });
         }

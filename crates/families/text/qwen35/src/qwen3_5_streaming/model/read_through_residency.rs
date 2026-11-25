@@ -2,12 +2,12 @@
 
 use mlx_bridge::MlxArray;
 
-use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_streaming::expert_streaming::expert_pager::{
     ExpertPagingError, Qwen3_5ExpertPager, Qwen3_5ExpertStreamingRequestShape,
 };
 use crate::qwen3_5_streaming::model::Qwen3_5Model;
 use crate::{PerformanceAttribution, PerformanceOperation};
+use text_generation::execution_error::TextExecutionError;
 
 use super::Qwen3_5MoEPagedExecutionMode;
 use super::feed_forward_weights::Qwen3_5MoEFeedForwardWeights;
@@ -28,7 +28,7 @@ impl Qwen3_5Model {
         paged_execution_mode: Qwen3_5MoEPagedExecutionMode,
         known_sorted_unique_expert_ids: Option<&[usize]>,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         let copied_sorted_unique_expert_ids;
         let sorted_unique_expert_ids = match known_sorted_unique_expert_ids {
             Some(sorted_unique_expert_ids) => sorted_unique_expert_ids,

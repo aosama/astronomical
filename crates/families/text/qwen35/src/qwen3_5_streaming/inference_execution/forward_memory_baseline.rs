@@ -7,11 +7,11 @@
 
 use crate::InferenceEngineError;
 
-use crate::qwen3_5_core::shared_execution::forward_memory_governance::{
-    Qwen3_5ForwardKind, Qwen3_5ForwardMemoryGovernance,
+use text_generation::generation_loop::forward_memory_governance::{
+    TextForwardKind, TextForwardMemoryGovernance,
 };
 
-use super::{Qwen3_5EngineState, qwen3_5_runtime_error};
+use super::{Qwen3_5EngineState, fatal_runtime_error};
 
 /// What was held when a forward began.
 pub(in crate::qwen3_5_streaming) struct ForwardMemoryBaseline {
@@ -29,11 +29,11 @@ impl Qwen3_5EngineState {
         let memory_snapshot_before_forward = model
             .runtime()
             .memory_snapshot()
-            .map_err(qwen3_5_runtime_error)?;
+            .map_err(fatal_runtime_error)?;
         model
             .runtime()
             .reset_peak_memory()
-            .map_err(qwen3_5_runtime_error)?;
+            .map_err(fatal_runtime_error)?;
         model.begin_measuring_a_new_forward();
         Ok(ForwardMemoryBaseline {
             active_memory_bytes: memory_snapshot_before_forward.active_memory_bytes(),
@@ -50,19 +50,19 @@ pub struct StreamingForwardInProgress {
 
 /// The streaming engine never refuses a forward: it measures memory before
 /// it and tells its governor afterwards what the forward used.
-impl Qwen3_5ForwardMemoryGovernance for Qwen3_5EngineState {
+impl TextForwardMemoryGovernance for Qwen3_5EngineState {
     type ForwardInProgress = StreamingForwardInProgress;
 
     fn begin_governed_forward(
         &mut self,
-        forward_kind: Qwen3_5ForwardKind,
-        _request_decoder_state: &crate::qwen3_5_core::decoder::RequestDecoderStateStack,
+        forward_kind: TextForwardKind,
+        _request_decoder_state: &text_generation::RequestDecoderStateStack,
     ) -> Result<StreamingForwardInProgress, InferenceEngineError> {
         let measured_forward = match forward_kind {
-            Qwen3_5ForwardKind::PromptChunk { token_count } => {
+            TextForwardKind::PromptChunk { token_count } => {
                 super::completed_forward_memory::MeasuredForward::prompt(token_count)
             }
-            Qwen3_5ForwardKind::ReplyToken => {
+            TextForwardKind::ReplyToken => {
                 super::completed_forward_memory::MeasuredForward::reply_token()
             }
         };

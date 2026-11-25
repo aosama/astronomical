@@ -3,7 +3,7 @@
 //! The children own one concern: durable prompt-prefix reuse. The restore
 //! path (`decoder_state_reuse`) rebuilds decoder state from on-disk blocks,
 //! capture publishes new blocks after durable boundaries through the shared
-//! `qwen3_5_core::astro_ssd_prompt_cache_capture`, with this engine's retry behaviour
+//! `text_generation::astro_ssd_prompt_cache_capture`, with this engine's retry behaviour
 //! in `astro_ssd_prompt_cache_capture_engine`, identity (`visual_identity`) decides
 //! block eligibility, in-memory adoption (`retained_live_prefix`, adopt)
 //! reuses the still-live previous state, and startup logging reports the

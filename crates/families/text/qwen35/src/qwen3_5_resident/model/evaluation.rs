@@ -2,8 +2,8 @@ use mlx_bridge::MlxArray;
 
 use crate::{PerformanceAttribution, PerformanceOperation};
 
-use super::{Qwen3_5ExecutionError, Qwen3_5ResidentModel, RequestDecoderStateStack};
-use crate::qwen3_5_core::decoder::Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector;
+use super::{Qwen3_5ResidentModel, RequestDecoderStateStack, TextExecutionError};
+use text_generation::AstroSsdPromptCacheBoundaryCheckpointCollector;
 
 impl Qwen3_5ResidentModel {
     crate::qwen3_5_core::model::shared_model_methods::qwen3_5_shared_model_evaluation_methods!();
@@ -14,7 +14,7 @@ impl Qwen3_5ResidentModel {
         final_logits: &MlxArray,
         request_decoder_state: &RequestDecoderStateStack,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<(), Qwen3_5ExecutionError> {
+    ) -> Result<(), TextExecutionError> {
         let evaluation_arrays =
             super::forward_contract::forward_state_arrays(final_logits, request_decoder_state)?;
         performance_attribution.measure_operation(
@@ -28,11 +28,9 @@ impl Qwen3_5ResidentModel {
     pub fn evaluate_decoder_state_with_performance_attribution(
         &self,
         request_decoder_state: &RequestDecoderStateStack,
-        boundary_checkpoint_collector: Option<
-            &Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
-        >,
+        boundary_checkpoint_collector: Option<&AstroSsdPromptCacheBoundaryCheckpointCollector>,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<(), Qwen3_5ExecutionError> {
+    ) -> Result<(), TextExecutionError> {
         let mut evaluation_arrays =
             super::forward_contract::decoder_state_arrays(request_decoder_state)?;
         if let Some(boundary_checkpoint_collector) = boundary_checkpoint_collector {
@@ -54,11 +52,9 @@ impl Qwen3_5ResidentModel {
         &self,
         final_logits: &MlxArray,
         request_decoder_state: &RequestDecoderStateStack,
-        boundary_checkpoint_collector: Option<
-            &Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
-        >,
+        boundary_checkpoint_collector: Option<&AstroSsdPromptCacheBoundaryCheckpointCollector>,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<(), Qwen3_5ExecutionError> {
+    ) -> Result<(), TextExecutionError> {
         let mut evaluation_arrays =
             super::forward_contract::decoder_state_arrays(request_decoder_state)?;
         evaluation_arrays.push(final_logits);

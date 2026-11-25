@@ -9,13 +9,13 @@
 use mlx_bridge::MlxArray;
 
 use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights;
-use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_resident::experts::{
     Qwen3_5ResidentExpertLayerWeights, Qwen3_5ResidentGateUpWeights,
 };
 use crate::qwen3_5_resident::model::Qwen3_5ResidentModel;
 use crate::sparse_experts::{StackedExpertProjection, gather_expert_projection};
 use crate::{PerformanceAttribution, PerformanceOperation};
+use text_generation::execution_error::TextExecutionError;
 
 use super::feed_forward_weights::Qwen3_5MoEFeedForwardWeights;
 use super::output_combination;
@@ -40,7 +40,7 @@ impl Qwen3_5ResidentModel {
         selected_scores: &MlxArray,
         should_use_compiled_elementwise_graphs: bool,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         performance_attribution.measure_operation(
             PerformanceOperation::ResidentMoeGraphConstruction,
             |performance_attribution| {
@@ -67,7 +67,7 @@ impl Qwen3_5ResidentModel {
         selected_scores: &MlxArray,
         should_use_compiled_elementwise_graphs: bool,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         // Add projection and expert-selection axes expected by MLX gather_mm.
         // Sorting larger assignment sets groups reads by the leading expert axis
         // and the inverse order later restores router-score alignment.
@@ -131,7 +131,7 @@ impl Qwen3_5ResidentModel {
         selected_expert_indices: &MlxArray,
         are_expert_indices_sorted: bool,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         let (selected_gate, selected_up) = match gate_up_weights {
             Qwen3_5ResidentGateUpWeights::Fused { projection, .. } => {
                 let selected_gate_up = self.resident_expert_linear(
@@ -177,16 +177,16 @@ impl Qwen3_5ResidentModel {
     fn split_resident_gate_up_output(
         &self,
         selected_gate_up: &MlxArray,
-    ) -> Result<(MlxArray, MlxArray), Qwen3_5ExecutionError> {
+    ) -> Result<(MlxArray, MlxArray), TextExecutionError> {
         let output_shape = selected_gate_up.shape();
         let Some(last_dimension_index) = output_shape.len().checked_sub(1) else {
-            return Err(Qwen3_5ExecutionError::InvalidInput {
+            return Err(TextExecutionError::InvalidInput {
                 description: "resident fused gate/up output must have at least one dimension",
             });
         };
         let output_dimension = output_shape[last_dimension_index];
         if output_dimension <= 0 || output_dimension % 2 != 0 {
-            return Err(Qwen3_5ExecutionError::InvalidInput {
+            return Err(TextExecutionError::InvalidInput {
                 description: "resident fused gate/up output dimension must be positive and even",
             });
         }
@@ -213,7 +213,7 @@ impl Qwen3_5ResidentModel {
         selected_expert_indices: &MlxArray,
         are_expert_indices_sorted: bool,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         // Both variants select directly from complete arrays with original
         // expert IDs. Quantized companions retain their independent source dtype.
         // This method is only a Qwen-to-neutral adapter: Qwen still owns weight
@@ -226,11 +226,9 @@ impl Qwen3_5ResidentModel {
             self.config.expert_count() as usize,
         );
         match affine_weights {
-            Qwen3_5AffineWeights::Jangtq2Codebook { .. } => {
-                Err(Qwen3_5ExecutionError::InvalidInput {
-                    description: "the resident engine never loads jangtq2 codebook expert pages",
-                })
-            }
+            Qwen3_5AffineWeights::Jangtq2Codebook { .. } => Err(TextExecutionError::InvalidInput {
+                description: "the resident engine never loads jangtq2 codebook expert pages",
+            }),
             Qwen3_5AffineWeights::NativeBfloat16 { weight } => {
                 // Qwen stores native rows as `[expert, output, input]`; expose the
                 // lazy `[expert, input, output]` view required by gather_mm.
@@ -280,7 +278,7 @@ impl Qwen3_5ResidentModel {
         mixture_of_experts_weights: &Qwen3_5MoEFeedForwardWeights,
         routed_expert_outputs: &RoutedExpertOutputs<'_>,
         should_use_compiled_elementwise_graphs: bool,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         let (shared_expert_output, shared_expert_gate_logits) = self
             .resident_shared_expert_output_and_gate_logits(
                 hidden_states,
@@ -325,7 +323,7 @@ impl Qwen3_5ResidentModel {
         routed_expert_outputs: &RoutedExpertOutputs<'_>,
         shared_expert_output: &MlxArray,
         shared_expert_gate_logits: &MlxArray,
-    ) -> Result<Option<MlxArray>, Qwen3_5ExecutionError> {
+    ) -> Result<Option<MlxArray>, TextExecutionError> {
         let (Some(combination_kernel), RoutedAssignmentOrder::Sorted { inverse_order }) = (
             self.optional_accelerators
                 .sorted_expert_shared_combination_kernel
@@ -356,7 +354,7 @@ impl Qwen3_5ResidentModel {
     fn resident_sparse_expert_output(
         &self,
         routed_expert_outputs: &RoutedExpertOutputs<'_>,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         match routed_expert_outputs.assignment_order {
             RoutedAssignmentOrder::Sorted { inverse_order } => {
                 Ok(qwen3_5_moe_sorted_expert_weighted_sum(
@@ -385,7 +383,7 @@ impl Qwen3_5ResidentModel {
         &self,
         hidden_states: &MlxArray,
         mixture_of_experts_weights: &Qwen3_5MoEFeedForwardWeights,
-    ) -> Result<(MlxArray, MlxArray), Qwen3_5ExecutionError> {
+    ) -> Result<(MlxArray, MlxArray), TextExecutionError> {
         let shared_gate = self.quantized_linear(
             hidden_states,
             &mixture_of_experts_weights.shared_expert_gate_projection,

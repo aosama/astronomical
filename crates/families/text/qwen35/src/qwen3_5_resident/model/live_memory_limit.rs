@@ -68,7 +68,7 @@ impl Qwen3_5ResidentModel {
         }
         let Some(requested_mlx_memory_limits) = requested_mlx_memory_limits_when_changed(
             requested_mlx_memory_ceiling_bytes,
-            current_mlx_memory_ceiling_bytes,
+            current_mlx_memory_limits,
         )?
         else {
             return Ok((minimum_mlx_memory_ceiling_bytes, current_mlx_memory_limits));
@@ -93,7 +93,7 @@ impl Qwen3_5ResidentModel {
             .runtime
             .update_memory_limits(requested_mlx_memory_limits)
         {
-            return Err(crate::qwen3_5_core::engine_errors::qwen3_5_runtime_error(
+            return Err(text_generation::engine_errors::fatal_runtime_error(
                 runtime_update_error,
             ));
         }

@@ -3,7 +3,6 @@
 use mlx_bridge::MlxArray;
 use runtime_integration::MlxRuntime;
 
-use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_streaming::model::Qwen3_5Model;
 use crate::sparse_experts::{
     ExpertAssignmentOrder, StackedExpertProjection, gather_expert_projection,
@@ -11,6 +10,7 @@ use crate::sparse_experts::{
 use crate::{PerformanceAttribution, PerformanceCounter, PerformanceOperation};
 use engine_core::expert_paging::QuantizedExpertPageManifest;
 use jangtq2_qwen35::configuration::Jangtq2CodebookRotation;
+use text_generation::execution_error::TextExecutionError;
 
 use super::super::expert_streaming::expert_pager::Qwen3_5PagedExpertWeights;
 use super::astro_expert_cache_plus_streamed_page_route;
@@ -33,6 +33,20 @@ pub(super) enum RoutedExpertAssignmentOutputs {
     Unsorted { assignment_outputs: MlxArray },
 }
 
+/// Where a page's slot of each routed expert comes from.
+pub(super) enum PageSlots<'route> {
+    /// Remapped on the GPU from the routed expert ids, through the page's
+    /// manifest as it stood when the graph was built.
+    RemappedOnDevice {
+        selected_indices: &'route MlxArray,
+        sorted_unique_expert_ids: &'route [usize],
+        page_manifest: &'route QuantizedExpertPageManifest,
+    },
+    /// Named by a lookup inside the graph (`in_graph_table_serving`), which
+    /// may seat experts in the page while the graph is evaluated.
+    LookedUp(&'route MlxArray),
+}
+
 impl Qwen3_5Model {
     #[allow(clippy::too_many_arguments)]
     pub(super) fn forward_moe_paged_with_performance_attribution(
@@ -46,7 +60,35 @@ impl Qwen3_5Model {
         selected_scores: &MlxArray,
         should_use_compiled_elementwise_graphs: bool,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
+        self.forward_moe_from_page_slots(
+            PageSlots::RemappedOnDevice {
+                selected_indices,
+                sorted_unique_expert_ids,
+                page_manifest,
+            },
+            selected_scores,
+            paged_expert_weights,
+            hidden_states,
+            mixture_of_experts_weights,
+            should_use_compiled_elementwise_graphs,
+            performance_attribution,
+        )
+    }
+
+    /// One layer's sparse expert output multiplied from a page, with the
+    /// shared (non-expert) outputs folded in, measured as one step.
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn forward_moe_from_page_slots(
+        &self,
+        page_slots: PageSlots<'_>,
+        selected_scores: &MlxArray,
+        paged_expert_weights: &Qwen3_5PagedExpertWeights,
+        hidden_states: &MlxArray,
+        mixture_of_experts_weights: &Qwen3_5MoEFeedForwardWeights,
+        should_use_compiled_elementwise_graphs: bool,
+        performance_attribution: &mut PerformanceAttribution,
+    ) -> Result<MlxArray, TextExecutionError> {
         let paged_output = performance_attribution.measure_operation(
             PerformanceOperation::PagedMoeGraphConstruction,
             |measured_attribution| {
@@ -54,9 +96,7 @@ impl Qwen3_5Model {
                     hidden_states,
                     mixture_of_experts_weights,
                     paged_expert_weights,
-                    page_manifest,
-                    selected_indices,
-                    sorted_unique_expert_ids,
+                    page_slots,
                     selected_scores,
                     should_use_compiled_elementwise_graphs,
                     measured_attribution,
@@ -70,9 +110,9 @@ impl Qwen3_5Model {
         Ok(paged_output)
     }
 
-    /// Builds the paged sparse expert output for one decode forward: remaps
-    /// the routed experts to their page slots, streams the weights through
-    /// the gathered projection, and folds the shared (non-expert) outputs in.
+    /// Builds the paged sparse expert output for one decode forward: finds
+    /// the routed experts' page slots, streams the weights through the
+    /// gathered projection, and folds the shared (non-expert) outputs in.
     ///
     /// Extracted from the `PagedMoeGraphConstruction` measurement so the
     /// measured region reads as one named step instead of an inline closure.
@@ -82,20 +122,12 @@ impl Qwen3_5Model {
         hidden_states: &MlxArray,
         mixture_of_experts_weights: &Qwen3_5MoEFeedForwardWeights,
         paged_expert_weights: &Qwen3_5PagedExpertWeights,
-        page_manifest: &QuantizedExpertPageManifest,
-        selected_indices: &MlxArray,
-        sorted_unique_expert_ids: &[usize],
+        page_slots: PageSlots<'_>,
         selected_scores: &MlxArray,
         should_use_compiled_elementwise_graphs: bool,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
-        let page_slot_indices =
-            astro_expert_cache_plus_streamed_page_route::qwen3_5_moe_remap_expert_page_slots(
-                &self.runtime,
-                selected_indices,
-                sorted_unique_expert_ids,
-                page_manifest,
-            )?;
+    ) -> Result<MlxArray, TextExecutionError> {
+        let page_slot_indices = self.resolved_page_slots(page_slots)?;
         let sparse_output = self.forward_moe_with_streamed_weights(
             hidden_states,
             paged_expert_weights,
@@ -111,15 +143,37 @@ impl Qwen3_5Model {
         )
     }
 
+    /// The page slot of every routed assignment, as a lazy array.
+    fn resolved_page_slots(
+        &self,
+        page_slots: PageSlots<'_>,
+    ) -> Result<MlxArray, TextExecutionError> {
+        match page_slots {
+            PageSlots::LookedUp(table_slots) => Ok(table_slots.retain()?),
+            PageSlots::RemappedOnDevice {
+                selected_indices,
+                sorted_unique_expert_ids,
+                page_manifest,
+            } => Ok(
+                astro_expert_cache_plus_streamed_page_route::qwen3_5_moe_remap_expert_page_slots(
+                    &self.runtime,
+                    selected_indices,
+                    sorted_unique_expert_ids,
+                    page_manifest,
+                )?,
+            ),
+        }
+    }
+
     #[allow(clippy::too_many_arguments)]
-    fn forward_moe_with_streamed_weights(
+    pub(super) fn forward_moe_with_streamed_weights(
         &self,
         hidden_states: &MlxArray,
         paged_expert_weights: &Qwen3_5PagedExpertWeights,
         selected_expert_indices: &MlxArray,
         selected_scores: &MlxArray,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         let selected_outputs = self.streamed_expert_assignment_outputs(
             hidden_states,
             paged_expert_weights,
@@ -163,7 +217,7 @@ impl Qwen3_5Model {
         paged_expert_weights: &Qwen3_5PagedExpertWeights,
         selected_expert_indices: &MlxArray,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<RoutedExpertAssignmentOutputs, Qwen3_5ExecutionError> {
+    ) -> Result<RoutedExpertAssignmentOutputs, TextExecutionError> {
         let expanded_states = self.runtime.expand_dims(hidden_states, -2)?;
         let expanded_states = self.runtime.expand_dims(&expanded_states, -3)?;
         let sorted_assignments = if sparse_experts::should_use_sorted_expert_reduction(
@@ -246,7 +300,7 @@ impl Qwen3_5Model {
         )?;
         if indices_are_sorted {
             let Some((_, _, inverse_order)) = sorted_assignments else {
-                return Err(Qwen3_5ExecutionError::InvalidInput {
+                return Err(TextExecutionError::InvalidInput {
                     description: "sorted routed assignments lost their inverse order",
                 });
             };
@@ -268,7 +322,7 @@ impl Qwen3_5Model {
         selected_expert_indices: &MlxArray,
         are_expert_indices_sorted: bool,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights;
         // Streamed pages and resident layers intentionally converge here on the
         // same canonical operation. Paging decides which arrays are alive; this
@@ -345,7 +399,7 @@ impl Qwen3_5Model {
         activations: &MlxArray,
         activation_rotation: jangtq2_qwen35::configuration::Jangtq2CodebookRotation,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<Option<MlxArray>, Qwen3_5ExecutionError> {
+    ) -> Result<Option<MlxArray>, TextExecutionError> {
         let rotated_activation_owner = match activation_rotation {
             jangtq2_qwen35::configuration::Jangtq2CodebookRotation::NoRotation => None,
             jangtq2_qwen35::configuration::Jangtq2CodebookRotation::Hadamard32 => {
@@ -371,7 +425,7 @@ impl Qwen3_5Model {
         projection_inputs: &StreamedProjectionInputs<'_>,
         codebook_slices: &Jangtq2CodebookProjectionSlices<'_>,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         if let Some(projected) = self.project_through_fused_jangtq2_decode_kernel(
             projection_inputs,
             codebook_slices,
@@ -394,7 +448,7 @@ impl Qwen3_5Model {
         projection_inputs: &StreamedProjectionInputs<'_>,
         codebook_slices: &Jangtq2CodebookProjectionSlices<'_>,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<Option<MlxArray>, Qwen3_5ExecutionError> {
+    ) -> Result<Option<MlxArray>, TextExecutionError> {
         if let Some(fused_kernel) = self.fused_jangtq2_gathered_projection_kernel.as_ref()
             && let Some(activation_rows) = decode_token_activation_rows(
                 &self.runtime,
@@ -437,7 +491,7 @@ impl Qwen3_5Model {
         projection_inputs: &StreamedProjectionInputs<'_>,
         codebook_slices: &Jangtq2CodebookProjectionSlices<'_>,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         // Multi-token prefill (or a worker without the fused kernel):
         // decode a transient bfloat16 copy and gather through
         // gather_mm, whose matrix multiply amortizes the decode over
@@ -485,7 +539,7 @@ impl Qwen3_5Model {
         projection_inputs: &StreamedProjectionInputs<'_>,
         weight: &MlxArray,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         // The transpose is a lazy view from checkpoint linear layout to
         // the `[expert, input, output]` layout expected by gather_mm.
         let transposed_weights = self.runtime.transpose_axes(weight, &[0, 2, 1])?;
@@ -506,7 +560,7 @@ impl Qwen3_5Model {
         projection_inputs: &StreamedProjectionInputs<'_>,
         quantized_slices: &QuantizedProjectionSlices<'_>,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         Ok(gather_expert_projection(
             &self.runtime,
             projection_inputs.projection_activations,
@@ -532,7 +586,7 @@ impl Qwen3_5Model {
         mixture_of_experts_weights: &Qwen3_5MoEFeedForwardWeights,
         sparse_expert_output: &MlxArray,
         should_use_compiled_elementwise_graphs: bool,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    ) -> Result<MlxArray, TextExecutionError> {
         let shared_gate = self.quantized_linear(
             hidden_states,
             &mixture_of_experts_weights.shared_expert_gate_projection,
@@ -611,7 +665,7 @@ pub(super) fn decode_token_activation_rows(
     projection_activations: &MlxArray,
     selected_expert_indices: &MlxArray,
     experts_per_token: usize,
-) -> Result<Option<MlxArray>, Qwen3_5ExecutionError> {
+) -> Result<Option<MlxArray>, TextExecutionError> {
     let activation_shape = projection_activations.shape();
     let Some(&input_width) = activation_shape.last() else {
         return Ok(None);
