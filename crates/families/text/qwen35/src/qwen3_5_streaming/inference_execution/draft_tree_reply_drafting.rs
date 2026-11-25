@@ -233,7 +233,10 @@ impl Qwen3_5EngineState {
             )
             .ok_or_else(|| fatal("a draft tree round needs a sampling it can reproduce"))?,
         };
-        model.begin_decode_astro_expert_cache_forward();
+        // The anchor and every node of the tree are reply rows.
+        model.begin_decode_astro_expert_cache_forward_of_rows(
+            draft_runtime.tree_options.node_budget + 1,
+        );
         let round_outcome = run_draft_tree_round(
             model,
             &mut active_request.request_decoder_state,
@@ -243,6 +246,10 @@ impl Qwen3_5EngineState {
         );
         model.end_decode_astro_expert_cache_forward();
         let round_outcome = round_outcome?;
+        model
+            .reply_measurement
+            .stage_tally
+            .record_draft_tree_round(&round_outcome.stages);
         // The bonus token is emitted now; the rest wait in the queue, the
         // last of them the target's own next choice, which no forward ran.
         let decided_token_ids = &round_outcome.emitted_token_ids[1..];

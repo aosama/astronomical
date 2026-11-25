@@ -272,12 +272,16 @@ async fn report_reply_stages(phase_name: &str, engine: &impl Qwen3_5StreamingEng
     );
     if stages.draft_round_count > 0 {
         eprintln!(
-            "[reply-stages] phase={phase_name} draft_rounds={} draft_ms_per_round={:.2} verify_ms_per_round={:.2} pick_ms_per_round={:.2} keep_ms_per_round={:.2}",
+            "[reply-stages] phase={phase_name} draft_rounds={} draft_ms_per_round={:.2} verify_ms_per_round={:.2} pick_ms_per_round={:.2} keep_ms_per_round={:.2} blocking_evaluations_per_round_draft_verify_pick_keep={:.2}/{:.2}/{:.2}/{:.2}",
             stages.draft_round_count,
             milliseconds(stages.draft_nanoseconds, round_count),
             milliseconds(stages.verify_nanoseconds, round_count),
             milliseconds(stages.pick_nanoseconds, round_count),
             milliseconds(stages.keep_nanoseconds, round_count),
+            stages.draft_blocking_evaluations as f64 / round_count,
+            stages.verify_blocking_evaluations as f64 / round_count,
+            stages.pick_blocking_evaluations as f64 / round_count,
+            stages.keep_blocking_evaluations as f64 / round_count,
         );
     }
 }

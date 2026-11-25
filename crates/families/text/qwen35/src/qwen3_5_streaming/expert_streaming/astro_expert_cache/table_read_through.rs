@@ -39,6 +39,22 @@ pub enum TableRefusal {
     CannotSeatEveryExpert,
 }
 
+/// Why a layer's table is not one a lookup inside the graph can serve
+/// routes through, so the layer is served some other way.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TableNotLookedUp {
+    /// The layer has no table.
+    NoTable,
+    /// The table has slots and holds no expert yet.
+    HoldsNothing,
+    /// The table holds the whole layer: its route is remapped on the GPU
+    /// and needs no lookup.
+    HoldsWholeLayer,
+    /// The table's experts are in an encoding the reader cannot write
+    /// straight into.
+    CannotBeFilledFromStorage,
+}
+
 /// What one route's lookup found and did.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct TableReadThrough {
@@ -82,14 +98,29 @@ impl AstroExpertCache {
         layer_index: usize,
         expert_capacity: usize,
     ) -> Option<PartlyHeldTable> {
-        let table = self.tables_by_layer.get(layer_index)?.as_ref()?;
-        if table.occupied_slot_count == 0
-            || table.occupied_slot_count >= expert_capacity
-            || !ExpertSlotStorageFiller::can_fill(&table.weights)
-        {
-            return None;
+        self.partly_held_table_or_why_not(layer_index, expert_capacity)
+            .ok()
+    }
+
+    /// `partly_held_table`, saying why when there is none.
+    pub fn partly_held_table_or_why_not(
+        &self,
+        layer_index: usize,
+        expert_capacity: usize,
+    ) -> Result<PartlyHeldTable, TableNotLookedUp> {
+        let Some(Some(table)) = self.tables_by_layer.get(layer_index) else {
+            return Err(TableNotLookedUp::NoTable);
+        };
+        if table.occupied_slot_count == 0 {
+            return Err(TableNotLookedUp::HoldsNothing);
         }
-        Some(PartlyHeldTable {
+        if table.occupied_slot_count >= expert_capacity {
+            return Err(TableNotLookedUp::HoldsWholeLayer);
+        }
+        if !ExpertSlotStorageFiller::can_fill(&table.weights) {
+            return Err(TableNotLookedUp::CannotBeFilledFromStorage);
+        }
+        Ok(PartlyHeldTable {
             weights: table.weights.retained_reference_ok(),
             payload_bytes: table.payload_bytes,
             slot_count: table.slot_count(),

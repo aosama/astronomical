@@ -37,7 +37,9 @@ pub use astro_expert_cache::AstroExpertCache;
 #[cfg(feature = "direct-mlx")]
 pub use astro_expert_cache::RoutedExpertCoverage;
 #[cfg(feature = "direct-mlx")]
-pub use astro_expert_cache::{PartlyHeldTable, TableFetchReport, TableReadThrough, TableRefusal};
+pub use astro_expert_cache::{
+    PartlyHeldTable, TableFetchReport, TableNotLookedUp, TableReadThrough, TableRefusal,
+};
 #[cfg(feature = "direct-mlx")]
 pub use expert_pager::{ExpertPagingError, Qwen3_5ExpertPager};
 #[cfg(feature = "direct-mlx")]

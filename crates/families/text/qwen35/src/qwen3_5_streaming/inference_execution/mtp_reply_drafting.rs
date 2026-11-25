@@ -191,7 +191,8 @@ impl Qwen3_5EngineState {
                 emission_queue: VecDeque::new(),
                 target_token_choice: target_token_choice_for(&active_request.sampling_strategy),
             });
-        model.begin_decode_astro_expert_cache_forward();
+        // The last chosen token and every draft after it are reply rows.
+        model.begin_decode_astro_expert_cache_forward_of_rows(maximum_draft_count + 1);
         let step_outcome = run_target_step(
             model,
             active_request,

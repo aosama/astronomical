@@ -98,8 +98,9 @@ impl Qwen3_5Model {
         Ok(())
     }
 
-    /// Queues a single-token decode page for warm retention when hot slots are
-    /// funded and the layer is not already complete. Under the active residency
+    /// Queues a reply forward's page (one token, or a drafted forward's rows)
+    /// for warm retention when hot slots are funded and the layer is not
+    /// already complete. Under the active residency
     /// plan the routed page is queued mandatorily; when attribution is enabled
     /// the plan's refusal is instead served by the leftover-slot prefetch path
     /// (issue #537) so the token's streamed route still warms.
@@ -117,9 +118,17 @@ impl Qwen3_5Model {
         layer_has_complete_table: bool,
         performance_attribution: &PerformanceAttribution,
     ) -> Result<(), TextExecutionError> {
-        if route_token_count == 1 && warm_slot_count > 0 && !layer_has_complete_table {
+        // A drafted forward's rows are reply tokens too. Counted as a prompt
+        // chunk, their experts were read and dropped, a layer that had no
+        // table when the reply began never got one, and every round read
+        // the same experts again: 14 of 40 layers on a 35B-A3B at a 16 GB
+        // limit, 34 waits a round where a plain token makes 2.
+        let rows_are_reply_tokens = self
+            .paged_forward_missing_route_collector
+            .serves_misses_as_reply_tokens(route_token_count);
+        if rows_are_reply_tokens && warm_slot_count > 0 && !layer_has_complete_table {
             if should_commit_mandatory_routed_page(
-                route_token_count,
+                1,
                 production_default_paging,
                 self.expert_layer_state(layer_index),
                 false,

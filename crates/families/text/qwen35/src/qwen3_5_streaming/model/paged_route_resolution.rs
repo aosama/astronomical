@@ -134,6 +134,16 @@ impl Qwen3_5Model {
         }
     }
 
+    /// Begins a decode step whose one forward serves `reply_row_count`
+    /// reply rows, so the tables' per-token limits apply to each row.
+    pub fn begin_decode_astro_expert_cache_forward_of_rows(&self, reply_row_count: usize) {
+        if let Some(astro_expert_cache) = self.astro_expert_cache.as_ref() {
+            astro_expert_cache
+                .borrow_mut()
+                .begin_decode_forward_of_rows(reply_row_count);
+        }
+    }
+
     pub fn end_decode_astro_expert_cache_forward(&self) {
         if let Some(astro_expert_cache) = self.astro_expert_cache.as_ref() {
             astro_expert_cache.borrow_mut().end_decode_forward();

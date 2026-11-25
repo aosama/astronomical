@@ -123,7 +123,17 @@ pub(super) fn assert_every_tree_row_matches_its_chain<Model: DraftTreeTarget>(
 {
     let tree = branching_tree();
     let mut state = target.prefilled_state();
+    let hand_offs_before = graph_host_step::evaluation_counts();
     let verification = target.verified_tree(&tree, &mut state);
+    let pass_hand_offs = graph_host_step::evaluation_counts().since(hand_offs_before);
+    // A pass wants at most one blocking evaluation, its own; every further
+    // one is a wait a round pays on every layer that makes it.
+    eprintln!(
+        "[draft-tree] one pass: blocking_evaluations={} asynchronous_evaluations={} cross_stream_waits={}",
+        pass_hand_offs.blocking_evaluations,
+        pass_hand_offs.asynchronous_evaluations,
+        pass_hand_offs.cross_stream_waits
+    );
     for row in 0..tree.row_count() {
         let mut chain_state = target.prefilled_state();
         let alone = target.logits_after(

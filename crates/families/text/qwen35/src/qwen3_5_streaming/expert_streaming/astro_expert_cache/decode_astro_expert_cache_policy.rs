@@ -125,15 +125,21 @@ impl DecodeExpertSlotState {
     }
 }
 
+/// How many more experts a layer may take on probation in a decode step
+/// that serves `reply_row_count` reply rows: the per-token allowance for
+/// each row, less the experts still on probation.
 pub(super) fn available_probationary_slot_count(
     decode_policy_states: &[DecodeExpertSlotState],
     decode_step_epoch: u64,
+    reply_row_count: usize,
 ) -> usize {
     let active_probationary_slot_count = decode_policy_states
         .iter()
         .filter(|decode_policy_state| decode_policy_state.is_probationary(decode_step_epoch))
         .count();
-    MAXIMUM_PROBATIONARY_EXPERT_SLOTS_PER_LAYER.saturating_sub(active_probationary_slot_count)
+    MAXIMUM_PROBATIONARY_EXPERT_SLOTS_PER_LAYER
+        .saturating_mul(reply_row_count.max(1))
+        .saturating_sub(active_probationary_slot_count)
 }
 
 #[cfg(test)]

@@ -61,8 +61,11 @@ pub(super) fn plan_new_expert_rows(
         .filter(|(_, expert_id)| !table.slot_by_expert_id.contains_key(expert_id))
         .collect();
     if let Some(decode_step_epoch) = candidate_decode_step_epoch {
-        let available_probationary_slot_count =
-            available_probationary_slot_count(&table.decode_policy_by_slot, decode_step_epoch);
+        let available_probationary_slot_count = available_probationary_slot_count(
+            &table.decode_policy_by_slot,
+            decode_step_epoch,
+            table.decode_step_row_count,
+        );
         new_expert_rows.truncate(available_probationary_slot_count);
     }
     new_expert_rows
@@ -138,7 +141,11 @@ pub(super) fn plan_evictable_slots(
         // the insert refuses and the streamed page stays
         // operation-local. Unbounded swap-for-admission measured 492
         // evictions in 200 tokens and a 4.4x decode source-byte blowup.
-        evictable_slots.truncate(MAXIMUM_CANDIDATE_SLOT_REPLACEMENTS_PER_DECODE_STEP);
+        // The cap is per reply token; a drafted forward's rows are several.
+        evictable_slots.truncate(
+            MAXIMUM_CANDIDATE_SLOT_REPLACEMENTS_PER_DECODE_STEP
+                .saturating_mul(table.decode_step_row_count),
+        );
         evictable_slots.sort_unstable_by(|left_slot, right_slot| {
             table.decode_policy_by_slot[*left_slot].compare_eviction_priority(
                 *left_slot,

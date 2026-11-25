@@ -19,11 +19,11 @@ fn should_limit_live_probationary_experts_to_the_routed_set_per_layer() {
     }
 
     assert_eq!(
-        available_probationary_slot_count(&decode_policy_states, 3),
+        available_probationary_slot_count(&decode_policy_states, 3, 1),
         0
     );
     assert_eq!(
-        available_probationary_slot_count(&decode_policy_states[..7], 3),
+        available_probationary_slot_count(&decode_policy_states[..7], 3, 1),
         1
     );
 }
@@ -123,5 +123,30 @@ fn should_rank_lower_reuse_per_byte_before_higher_raw_reuse() {
             4,
         ),
         std::cmp::Ordering::Less
+    );
+}
+
+#[test]
+fn should_give_a_step_of_several_rows_each_rows_probationary_allowance() {
+    let mut decode_policy_states = Vec::new();
+    for _ in 0..MAXIMUM_PROBATIONARY_EXPERT_SLOTS_PER_LAYER {
+        let mut decode_policy_state = DecodeExpertSlotState::default();
+        decode_policy_state.mark_probationary(3);
+        decode_policy_states.push(decode_policy_state);
+    }
+
+    // One reply token has used its allowance; a forward of four rows has
+    // three rows' worth left, and no rows counts as one.
+    assert_eq!(
+        available_probationary_slot_count(&decode_policy_states, 3, 1),
+        0
+    );
+    assert_eq!(
+        available_probationary_slot_count(&decode_policy_states, 3, 4),
+        3 * MAXIMUM_PROBATIONARY_EXPERT_SLOTS_PER_LAYER
+    );
+    assert_eq!(
+        available_probationary_slot_count(&decode_policy_states, 3, 0),
+        0
     );
 }

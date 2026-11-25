@@ -47,6 +47,12 @@ pub struct ReplyStageCounts {
     /// Moving the state back to the kept rows and queuing the head's
     /// forward over them.
     pub keep_nanoseconds: u64,
+    /// Blocking evaluations inside a hosted drafter's rounds, by stage:
+    /// each is a wait, and a round wants one, in its verify.
+    pub draft_blocking_evaluations: u64,
+    pub verify_blocking_evaluations: u64,
+    pub pick_blocking_evaluations: u64,
+    pub keep_blocking_evaluations: u64,
     /// What MLX handed between the caller, the GPU and its CPU stream
     /// while the reply was written.
     pub hand_offs: EvaluationCounts,
@@ -119,6 +125,25 @@ impl ReplyStageTally {
         counts.lookup_count += 1;
         counts.lookup_nanoseconds += nanoseconds(lookup_elapsed);
         counts.lookup_storage_read_nanoseconds += nanoseconds(storage_read_elapsed);
+        self.counts.set(counts);
+    }
+
+    /// One round with a hosted drafter: its stages' times and waits.
+    pub fn record_draft_tree_round(
+        &self,
+        stages: &crate::qwen3_5_core::draft_tree_decode::draft_tree_round::DraftTreeRoundStages,
+    ) {
+        self.record_draft_round(DraftRoundStages {
+            draft: stages.draft.elapsed,
+            verify: stages.verify.elapsed,
+            pick: stages.pick.elapsed,
+            keep: stages.keep.elapsed,
+        });
+        let mut counts = self.counts.get();
+        counts.draft_blocking_evaluations += stages.draft.blocking_evaluation_count;
+        counts.verify_blocking_evaluations += stages.verify.blocking_evaluation_count;
+        counts.pick_blocking_evaluations += stages.pick.blocking_evaluation_count;
+        counts.keep_blocking_evaluations += stages.keep.blocking_evaluation_count;
         self.counts.set(counts);
     }
 

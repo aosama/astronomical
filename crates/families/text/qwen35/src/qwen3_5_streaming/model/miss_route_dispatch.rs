@@ -128,7 +128,10 @@ impl Qwen3_5Model {
             )?;
         if route_has_misses
             && !misses_were_fetched_into_table
-            && !route_coverage.retained_expert_ids.is_empty()
+            && serves_one_row_partly_from_its_table(
+                selected_indices,
+                &route_coverage.retained_expert_ids,
+            )
         {
             // Mixed serving: serve the covered assignments from retained RAM
             // and stream only the missing experts.
@@ -182,4 +185,16 @@ impl Qwen3_5Model {
             performance_attribution,
         )
     }
+}
+
+/// Whether a route its table could not take is served mixed: the experts
+/// the table holds from memory, the rest streamed. Mixed serving orders one
+/// row's assignments, so the rows of a drafted forward (which reach here
+/// only when a lookup refused and the forward is run again) stream their
+/// routed union instead.
+fn serves_one_row_partly_from_its_table(
+    selected_indices: &MlxArray,
+    retained_expert_ids: &[usize],
+) -> bool {
+    selected_indices.shape().get(1) == Some(&1) && !retained_expert_ids.is_empty()
 }

@@ -47,6 +47,7 @@ use mlx_bridge::{MlxArray, MlxDtype};
 
 use super::Qwen3_5Model;
 use super::feed_forward_weights::Qwen3_5MoEFeedForwardWeights;
+use super::in_graph_lookup_admission::LayerNotLookedUp;
 use super::in_graph_route_lookup::{
     InGraphForwardWindow, InGraphLayerOutcome, InGraphLookupTable, InGraphRouteLookup,
     SharedLayerOutcome,
@@ -88,6 +89,17 @@ pub struct InGraphServingCounts {
     /// table, or more seats than its table would give.
     pub would_grow_refusal_count: u64,
     pub cannot_seat_refusal_count: u64,
+    /// Tables replaced by a larger one before a forward so its lookups
+    /// would have room. Each copies the whole table.
+    pub tables_grown_ahead_count: u64,
+    /// Layers of in-graph forwards that no lookup served, by why. Each is
+    /// served some other way, and all but a whole layer stop at the host.
+    pub layers_the_plan_keeps_nothing_on: u64,
+    pub layers_without_a_table: u64,
+    pub layers_whose_table_holds_nothing: u64,
+    pub layers_held_whole: u64,
+    pub layers_the_reader_cannot_fill: u64,
+    pub layers_whose_page_would_decode: u64,
 }
 
 /// A model's in-graph serving: whether it is on, the forward in progress,
@@ -314,7 +326,7 @@ impl Qwen3_5Model {
     }
 
     /// The tables and the pager of a model that streams experts.
-    fn expert_tables_and_pager(
+    pub(super) fn expert_tables_and_pager(
         &self,
     ) -> Option<(
         &RefCell<crate::qwen3_5_streaming::expert_streaming::AstroExpertCache>,
@@ -345,7 +357,7 @@ impl Qwen3_5Model {
 
     /// The rule a fetch from the model's thread applies: a layer the reply's
     /// plan keeps nothing new on is not refilled behind it.
-    fn keeps_reply_experts_on(&self, layer_index: usize) -> bool {
+    pub(super) fn keeps_reply_experts_on(&self, layer_index: usize) -> bool {
         self.hot_expert_warm_slot_count() > 0
             && should_commit_mandatory_routed_page(
                 1,
@@ -386,18 +398,13 @@ impl Qwen3_5Model {
             if !self.keeps_reply_experts_on(layer_index) {
                 continue;
             }
-            if let Err(growth_error) = astro_expert_cache.borrow_mut().grow_table_ahead_of_lookups(
+            let growth = astro_expert_cache.borrow_mut().grow_table_ahead_of_lookups(
                 &self.runtime,
                 layer_index,
                 warm_slot_count.min(layer_plan.expert_capacity),
                 free_slot_floor,
-            ) {
-                tracing::warn!(
-                    layer_index,
-                    %growth_error,
-                    "a table could not be grown ahead of its lookup"
-                );
-            }
+            );
+            self.count_table_growth(layer_index, growth);
         }
     }
 
@@ -468,22 +475,14 @@ impl Qwen3_5Model {
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<Option<MlxArray>, TextExecutionError> {
         let in_graph_serving = self.in_graph_table_serving();
-        if !in_graph_serving.is_serving_forward()
-            || selected_indices.dtype() != MlxDtype::UInt32
-            || !self.keeps_reply_experts_on(layer_index)
-        {
+        if !in_graph_serving.is_serving_forward() || selected_indices.dtype() != MlxDtype::UInt32 {
             return Ok(None);
         }
-        let Some((astro_expert_cache, expert_pager)) = self.expert_tables_and_pager() else {
+        let Some(partly_held_table) = self.table_a_lookup_can_serve(layer_index)? else {
             return Ok(None);
         };
-        let expert_capacity = expert_pager.layer_plan(layer_index)?.expert_capacity;
-        let Some(partly_held_table) = astro_expert_cache
-            .borrow()
-            .partly_held_table(layer_index, expert_capacity)
-        else {
-            return Ok(None);
-        };
+        let expert_capacity = partly_held_table.expert_capacity;
+        let partly_held_table = partly_held_table.table;
         // `[1, rows, experts per token]`: one row for a reply token, several
         // for a drafted block, which a codebook page cannot multiply whole.
         if !partly_held_table
@@ -493,6 +492,7 @@ impl Qwen3_5Model {
                 self.fused_jangtq2_gathered_projection_kernel.is_some(),
             )
         {
+            self.count_layer_not_looked_up(LayerNotLookedUp::PageWouldDecode);
             return Ok(None);
         }
         let outcome = Arc::new(SharedLayerOutcome::default());
