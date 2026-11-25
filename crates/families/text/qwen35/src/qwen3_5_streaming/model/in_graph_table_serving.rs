@@ -303,7 +303,7 @@ impl Qwen3_5Model {
     pub(super) fn should_serve_reply_rows_in_graph(&self) -> bool {
         let in_graph_serving = self.in_graph_table_serving();
         if !in_graph_serving.is_enabled.get()
-            || self.brings_every_route_to_the_host.get()
+            || self.reply_measurement.brings_every_route_to_the_host.get()
             || !self.direct_expert_fetching.is_enabled.get()
             || self.direct_expert_fetching.slot_filler.is_none()
             || !self.has_a_layer_a_lookup_can_serve()
@@ -470,6 +470,7 @@ impl Qwen3_5Model {
                 Arc::clone(&outcome),
             )),
         )?;
+        let table_slots = self.read_once_on_the_graphics_processor(&table_slots)?;
         in_graph_serving
             .layer_servings
             .borrow_mut()
@@ -492,6 +493,27 @@ impl Qwen3_5Model {
             performance_attribution,
         )?;
         Ok(Some(layer_output))
+    }
+
+    /// The lookup's slots as an array the GPU stream made, so the kernels
+    /// that read them wait for the host once between them.
+    ///
+    /// MLX makes every GPU step that reads a host step's output wait for
+    /// it on its own. An expert layer reads its slots from four kernels,
+    /// which with the lookup's own wait for its route was five cross-stream
+    /// waits a layer, 240 a token on a 48-layer model. Two reshapes (there
+    /// and back; MLX drops a reshape to the shape an array already has)
+    /// share the buffer and run no kernel, and leave the first as the only
+    /// GPU step that waits: two waits a layer. `cargo measure-graph-host-step`
+    /// prices it at 9 microseconds a layer against 16 for three readers.
+    fn read_once_on_the_graphics_processor(
+        &self,
+        table_slots: &MlxArray,
+    ) -> Result<MlxArray, TextExecutionError> {
+        let flat_table_slots = self.runtime.reshape(table_slots, &[-1])?;
+        Ok(self
+            .runtime
+            .reshape(&flat_table_slots, &table_slots.shape())?)
     }
 
     /// The lookup itself, called by `InGraphRouteLookup` on MLX's thread

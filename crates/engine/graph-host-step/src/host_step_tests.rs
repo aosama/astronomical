@@ -16,7 +16,7 @@ use super::{
 const ELEMENT_COUNT: usize = 4_096;
 const BYTES_PER_ELEMENT: usize = std::mem::size_of::<i32>();
 
-fn test_runtime() -> MlxRuntime {
+pub(crate) fn test_runtime() -> MlxRuntime {
     MlxRuntime::initialize(
         MlxMemoryLimits::new(1024 * 1024 * 1024, 256 * 1024 * 1024)
             .expect("the host step test memory limits are valid"),

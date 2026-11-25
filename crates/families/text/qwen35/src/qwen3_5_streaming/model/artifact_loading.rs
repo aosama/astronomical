@@ -181,7 +181,7 @@ impl Qwen3_5Model {
             expert_pager,
             dense_layer_streamer,
             astro_expert_cache,
-            brings_every_route_to_the_host: std::cell::Cell::new(false),
+            reply_measurement: Default::default(),
             route_observation: RefCell::new(RouteObservationCollector::new()),
             deferred_expert_demand: RefCell::default(),
             prompt_expert_pages_in_hand: Default::default(),

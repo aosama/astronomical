@@ -214,6 +214,12 @@ impl Qwen3_5Model {
             if let Some((speculative_way, _)) = speculative_attempt.as_ref() {
                 self.begin_speculative_forward(*speculative_way, performance_attribution);
             }
+            if self
+                .paged_forward_missing_route_collector
+                .serves_misses_as_reply_tokens(token_count)
+            {
+                self.reply_measurement.stage_tally.record_forward(1);
+            }
             let attempt = self.build_and_evaluate_forward(
                 token_indices,
                 token_count,

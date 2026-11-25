@@ -76,6 +76,9 @@ impl Qwen3_5Model {
             if state_before_in_graph_attempt.is_some() {
                 self.begin_in_graph_forward(token_ids.len());
             }
+            self.reply_measurement
+                .stage_tally
+                .record_forward(token_ids.len());
             let attempt = self.forward_drafted_rows(
                 token_ids,
                 starting_position_tokens,

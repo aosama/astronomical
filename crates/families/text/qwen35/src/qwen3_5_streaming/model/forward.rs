@@ -200,7 +200,9 @@ impl Qwen3_5Model {
         }
         // A measurement that prices a route stop sends every layer on to the
         // host, held whole or not.
-        if self.astro_expert_cache.is_none() || self.brings_every_route_to_the_host.get() {
+        if self.astro_expert_cache.is_none()
+            || self.reply_measurement.brings_every_route_to_the_host.get()
+        {
             return Ok(None);
         }
         self.dispatch_table_page_without_host_route(

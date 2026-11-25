@@ -68,7 +68,10 @@ impl Qwen3_5EngineState {
             .model
             .as_ref()
             .ok_or_else(|| fatal_engine_error("cannot choose route stops before load"))?;
-        loaded_model.brings_every_route_to_the_host.set(is_enabled);
+        loaded_model
+            .reply_measurement
+            .brings_every_route_to_the_host
+            .set(is_enabled);
         Ok(())
     }
 
@@ -122,6 +125,17 @@ impl Qwen3_5EngineState {
             .as_ref()
             .ok_or_else(|| fatal_engine_error("cannot count in-graph lookups before load"))?;
         Ok(loaded_model.in_graph_table_serving().counts())
+    }
+
+    fn last_reply_stage_counts_for_tests(
+        &self,
+    ) -> Result<Option<crate::ReplyStageCounts>, InferenceEngineError> {
+        let loaded_model = self
+            .core
+            .model
+            .as_ref()
+            .ok_or_else(|| fatal_engine_error("cannot read a reply's stages before load"))?;
+        Ok(loaded_model.reply_measurement.stage_tally.last_reply())
     }
 
     fn astro_expert_cache_statistics_for_tests(
@@ -234,6 +248,12 @@ pub trait Qwen3_5StreamingEngineTestControls {
     async fn in_graph_serving_counts_for_tests(
         &self,
     ) -> Result<crate::InGraphServingCounts, InferenceEngineError>;
+
+    /// Where the last finished reply's time went, by stage; `None` before
+    /// any reply.
+    async fn last_reply_stage_counts_for_tests(
+        &self,
+    ) -> Result<Option<crate::ReplyStageCounts>, InferenceEngineError>;
 
     /// Returns mode-neutral expert ownership plus cumulative paging statistics.
     async fn astro_expert_cache_statistics_for_tests(
@@ -377,6 +397,22 @@ impl Qwen3_5StreamingEngineTestControls for MlxInferenceEngine<Qwen3_5InferenceE
         counts_receiver
             .recv()
             .map_err(|_| fatal_engine_error("lookup counts owner operation returned no response"))?
+    }
+
+    async fn last_reply_stage_counts_for_tests(
+        &self,
+    ) -> Result<Option<crate::ReplyStageCounts>, InferenceEngineError> {
+        let (counts_sender, counts_receiver) = std::sync::mpsc::sync_channel(1);
+        self.run_owner_test_operation(move |qwen_inference_execution| {
+            let counts = qwen_inference_execution.last_reply_stage_counts_for_tests();
+            counts_sender
+                .send(counts)
+                .map_err(|_| fatal_engine_error("stage counts receiver stopped unexpectedly"))
+        })
+        .await?;
+        counts_receiver
+            .recv()
+            .map_err(|_| fatal_engine_error("stage counts owner operation returned no response"))?
     }
 
     async fn astro_expert_cache_statistics_for_tests(

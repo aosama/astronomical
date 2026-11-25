@@ -1,0 +1,89 @@
+diff --git a/mlx/transforms.cpp b/mlx/transforms.cpp
+--- a/mlx/transforms.cpp
++++ b/mlx/transforms.cpp
+@@ -1,5 +1,6 @@
+ // Copyright © 2023-2024 Apple Inc.
+ #include <algorithm>
++#include <atomic>
+ #include <deque>
+ #include <future>
+ #include <numeric>
+@@ -77,6 +78,21 @@
+ }
+ thread_local int detail::RetainGraph::tracing_counter{0};
+ 
++// Astronomical: see EvaluationCounts in transforms.h. Relaxed atomics: the
++// counts are read between evaluations and only ever compared as totals.
++static std::atomic<uint64_t> blocking_evaluation_count{0};
++static std::atomic<uint64_t> asynchronous_evaluation_count{0};
++static std::atomic<uint64_t> submitted_array_wait_count{0};
++static std::atomic<uint64_t> cross_stream_wait_count{0};
++
++EvaluationCounts evaluation_counts() {
++  return EvaluationCounts{
++      blocking_evaluation_count.load(std::memory_order_relaxed),
++      asynchronous_evaluation_count.load(std::memory_order_relaxed),
++      submitted_array_wait_count.load(std::memory_order_relaxed),
++      cross_stream_wait_count.load(std::memory_order_relaxed)};
++}
++
+ array eval_impl(std::vector<array> outputs, bool async) {
+   std::deque<array> tape;
+ 
+@@ -259,6 +275,7 @@
+           // output arrays stream
+           auto& info = it->second;
+           fences.at(info.stream_index).wait(stream, in, info.value);
++          cross_stream_wait_count.fetch_add(1, std::memory_order_relaxed);
+         } else if (in.event().valid()) {
+           if (in.event().is_signaled()) {
+             in.detach_event();
+@@ -375,6 +392,7 @@
+     return;
+   }
+ 
++  asynchronous_evaluation_count.fetch_add(1, std::memory_order_relaxed);
+   eval_impl(std::move(outputs), true);
+ }
+ 
+@@ -386,12 +404,14 @@
+   if (std::none_of(outputs.begin(), outputs.end(), [](array& x) {
+         return x.status() == array::Status::unscheduled;
+       })) {
++    submitted_array_wait_count.fetch_add(1, std::memory_order_relaxed);
+     for (auto& x : outputs) {
+       x.wait();
+     }
+     return;
+   }
+ 
++  blocking_evaluation_count.fetch_add(1, std::memory_order_relaxed);
+   eval_impl(std::move(outputs), false).wait();
+ }
+ 
+diff --git a/mlx/transforms.h b/mlx/transforms.h
+--- a/mlx/transforms.h
++++ b/mlx/transforms.h
+@@ -9,6 +9,22 @@
+ 
+ namespace mlx::core {
+ 
++// Astronomical: how often work was handed between the caller, the GPU and
++// the CPU stream since the process started. Every one is a wait somewhere,
++// and a reply token's speed depends on how many it makes, so the engine
++// reports the counts beside its timings instead of inferring them.
++struct EvaluationCounts {
++  // Evaluations that walked a graph and waited for it.
++  uint64_t blocking_evaluations;
++  // Evaluations that walked a graph and returned without waiting.
++  uint64_t asynchronous_evaluations;
++  // Waits for arrays an earlier evaluation had already been handed.
++  uint64_t waits_for_submitted_arrays;
++  // Times one stream waited inside an evaluation for another's output.
++  uint64_t cross_stream_waits;
++};
++MLX_API EvaluationCounts evaluation_counts();
++
+ MLX_API void async_eval(std::vector<array> outputs);
+ 
+ template <typename... Arrays, typename = enable_for_arrays_t<Arrays...>>

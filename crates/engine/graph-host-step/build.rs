@@ -39,6 +39,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         .cpp(true)
         .std("c++20")
         .file("native/graph_host_step.cpp")
+        .file("native/evaluation_counts.cpp")
         .include("native")
         .warnings_into_errors(true);
     // System include paths: the warnings this crate turns into errors are for
@@ -67,8 +68,14 @@ fn main() -> Result<(), Box<dyn Error>> {
 /// patches do, because those select a different MLX source tree.
 fn emit_rerun_contracts(repository_root: &Path) {
     println!("cargo:rerun-if-env-changed={ASTRO_NATIVE_BUILD_CACHE_DEPENDENCIES_VARIABLE}");
-    println!("cargo:rerun-if-changed=native/graph_host_step.cpp");
-    println!("cargo:rerun-if-changed=native/graph_host_step.h");
+    for native_source in [
+        "graph_host_step.cpp",
+        "graph_host_step.h",
+        "evaluation_counts.cpp",
+        "evaluation_counts.h",
+    ] {
+        println!("cargo:rerun-if-changed=native/{native_source}");
+    }
     for identity_input in ["third-party/pins", "third-party/patches"] {
         println!(
             "cargo:rerun-if-changed={}",

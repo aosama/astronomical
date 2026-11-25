@@ -39,9 +39,9 @@ pub struct Qwen3_5StreamingModel {
     /// tables of the `astro_expert_cache`, and counts how often it could.
     pub direct_expert_fetching:
         crate::qwen3_5_streaming::model::direct_expert_fetch::DirectExpertFetching,
-    /// On only while a measurement prices a route stop: every layer then
-    /// copies its route to the host even when its table holds the layer whole.
-    pub brings_every_route_to_the_host: std::cell::Cell<bool>,
+    /// What measuring a reply needs from the model: where its time went, by
+    /// stage, and the switch that prices a route stop.
+    pub reply_measurement: crate::qwen3_5_streaming::model::reply_stage_tally::ReplyMeasurement,
     /// Where each expert layer should end up for the reply being written;
     /// `None` while a prompt is read, when every layer may be kept whole.
     pub active_expert_residency_plan: RefCell<Option<ExpertResidencyPlan>>,

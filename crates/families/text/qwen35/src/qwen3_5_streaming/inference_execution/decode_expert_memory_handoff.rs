@@ -34,6 +34,7 @@ impl Qwen3_5EngineState {
             ));
         };
         model.govern_reply_start();
+        model.reply_measurement.stage_tally.begin_reply();
         let context_token_count =
             u64::try_from(active_request.input_token_ids.len()).unwrap_or(u64::MAX);
         let residency_preparation_result =

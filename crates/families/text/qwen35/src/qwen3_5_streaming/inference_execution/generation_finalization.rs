@@ -156,6 +156,54 @@ fn log_astro_expert_cache_over_the_reply(
     );
 }
 
+/// One line per reply with where its time went inside the engine: the
+/// forwards it ran, the in-graph lookups' reads and bookkeeping, a drafted
+/// round's stages, and the hand-offs MLX made. Always on, like the line
+/// above, so a slow reply names its own stage before anyone adds a timer.
+fn log_stages_over_the_reply(
+    request_id: u64,
+    stages: &crate::qwen3_5_streaming::model::reply_stage_tally::ReplyStageCounts,
+) {
+    if stages.reply_forward_count == 0 {
+        return;
+    }
+    let forward_count = usize::try_from(stages.reply_forward_count).unwrap_or(usize::MAX);
+    let hand_offs = stages.hand_offs;
+    tracing::info!(
+        request_id,
+        reply_forward_count = stages.reply_forward_count,
+        reply_row_count = stages.reply_row_count,
+        lookups_per_forward =
+            format_args!("{:.1}", per_reply_token(forward_count, stages.lookup_count)),
+        lookup_read_milliseconds_per_forward = format_args!(
+            "{:.3}",
+            per_reply_token(forward_count, stages.lookup_storage_read_nanoseconds) / 1_000_000.0
+        ),
+        lookup_bookkeeping_milliseconds_per_forward = format_args!(
+            "{:.3}",
+            per_reply_token(forward_count, stages.lookup_bookkeeping_nanoseconds()) / 1_000_000.0
+        ),
+        draft_round_count = stages.draft_round_count,
+        draft_milliseconds = stages.draft_nanoseconds / 1_000_000,
+        verify_milliseconds = stages.verify_nanoseconds / 1_000_000,
+        pick_milliseconds = stages.pick_nanoseconds / 1_000_000,
+        keep_milliseconds = stages.keep_nanoseconds / 1_000_000,
+        blocking_evaluations_per_forward = format_args!(
+            "{:.2}",
+            per_reply_token(forward_count, hand_offs.blocking_evaluations)
+        ),
+        asynchronous_evaluations_per_forward = format_args!(
+            "{:.2}",
+            per_reply_token(forward_count, hand_offs.asynchronous_evaluations)
+        ),
+        cross_stream_waits_per_forward = format_args!(
+            "{:.1}",
+            per_reply_token(forward_count, hand_offs.cross_stream_waits)
+        ),
+        "the reply's stages"
+    );
+}
+
 /// `total` shared out over the reply's tokens.
 fn per_reply_token(reply_token_count: usize, total: u64) -> f64 {
     total as f64 / reply_token_count as f64
@@ -198,6 +246,11 @@ impl request_end::TextRequestEndHooks for Qwen3_5EngineState {
             std::mem::take(&mut active_request.engine_extension.reply_expert_route_record),
         );
         log_astro_expert_cache_over_the_reply(request_id.value(), &reply_memory_record);
+        if let Some(model) = self.core.model.as_ref()
+            && let Some(reply_stages) = model.reply_measurement.stage_tally.end_reply()
+        {
+            log_stages_over_the_reply(request_id.value(), &reply_stages);
+        }
         reply_memory_record
     }
 
