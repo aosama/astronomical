@@ -78,12 +78,13 @@ pub fn attend_block_to_context(
         context_position,
     )?;
     let context_values = head_shaper.value_heads(&layer.value_projection, &new_context_rows)?;
-    let (kept_keys, kept_values) =
-        context_state.append_and_fetch(runtime, context_keys, context_values)?;
-
-    let kept_row_count = kept_keys.shape()[2];
-    let keys = runtime.concatenate_axis(&[&kept_keys, &block_keys], 2)?;
-    let values = runtime.concatenate_axis(&[&kept_values, &block_values], 2)?;
+    let attended_rows = context_state.attended_rows(
+        runtime,
+        (&context_keys, &context_values),
+        (&block_keys, &block_values),
+    )?;
+    let kept_row_count = attended_rows.kept_row_count;
+    let (keys, values) = (attended_rows.keys, attended_rows.values);
     let mask = additive_mask(
         runtime,
         configuration,

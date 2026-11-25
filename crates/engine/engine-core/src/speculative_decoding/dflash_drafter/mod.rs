@@ -55,7 +55,7 @@ pub use drafter_configuration::{
     DrafterGeneration, DrafterLayerAttention, GroupedConvolutionShape, HEAD_ONLY_CANDIDATE_COUNT,
 };
 #[cfg(feature = "direct-mlx")]
-pub use drafter_context_state::DrafterContextStates;
+pub use drafter_context_state::{AttendedRows, DrafterContextStates};
 #[cfg(feature = "direct-mlx")]
 pub use drafter_forward::{DFlashDraftTarget, drafted_hidden_rows};
 #[cfg(feature = "direct-mlx")]

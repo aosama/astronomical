@@ -10,8 +10,9 @@
 //!
 //! So a reply counts the tokens its rounds decide and compares them with
 //! the break-even its model has measured (`DraftRoundCosts`): the smoothed
-//! time of a round over the smoothed time of a plain token. Below it, the
-//! rest of the reply is written plain. A reply cannot time the two against
+//! time of a round over the smoothed time of a plain token. After two
+//! counts in a row below it, the rest of the reply is written plain. A
+//! reply cannot time the two against
 //! each other itself: over a dozen tokens either reads anywhere from 15 to
 //! 39 ms a token, more than the difference being decided.
 //!
@@ -30,6 +31,13 @@ const SETTLING_REPLY_TOKEN_COUNT: u32 = 48;
 const SETTLING_ROUND_COUNT: u32 = 8;
 /// Rounds counted for each decision.
 const ROUNDS_A_DECISION: u32 = 16;
+/// Counts in a row that must fall short of the break-even before a reply
+/// goes back to plain tokens for good. On a 35B-A3B at a 16 GB limit code
+/// keeps 2.45 tokens a round against a break-even near 2.0, yet one count
+/// of sixteen rounds in about three fell short; stopping on it left the
+/// reply at 53 to 54 tokens a second where rounds throughout wrote 65 to
+/// 70. An essay, which keeps about 1.9 on average, still stops after two.
+const SHORT_COUNTS_BEFORE_STOPPING: u32 = 2;
 
 /// What a reply's next forward should be.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -47,6 +55,7 @@ pub(super) struct DraftRoundPayoff {
     round_count: u32,
     rounds_since_the_last_decision: u32,
     tokens_since_the_last_decision: u32,
+    short_counts_in_a_row: u32,
     step_started_at: Option<Instant>,
 }
 
@@ -70,10 +79,7 @@ impl DraftRoundPayoff {
             let tokens_a_round = f64::from(self.tokens_since_the_last_decision)
                 / f64::from(self.rounds_since_the_last_decision);
             costs.record_tokens_a_round(tokens_a_round);
-            let rounds_pay = costs
-                .break_even_tokens_a_round()
-                .is_some_and(|break_even| tokens_a_round > break_even);
-            self.writes_plain_tokens = !rounds_pay;
+            self.writes_plain_tokens = self.stops_after_this_count(tokens_a_round, costs);
             self.rounds_since_the_last_decision = 0;
             self.tokens_since_the_last_decision = 0;
         }
@@ -83,6 +89,21 @@ impl DraftRoundPayoff {
         } else {
             NextReplyStep::Round
         }
+    }
+
+    /// Whether this count ends the reply's rounds: at once while the model
+    /// has no break-even yet, so the plain tokens after it give it one, and
+    /// otherwise after `SHORT_COUNTS_BEFORE_STOPPING` short counts in a row.
+    fn stops_after_this_count(&mut self, tokens_a_round: f64, costs: &DraftRoundCosts) -> bool {
+        let Some(break_even) = costs.break_even_tokens_a_round() else {
+            return true;
+        };
+        if tokens_a_round > break_even {
+            self.short_counts_in_a_row = 0;
+            return false;
+        }
+        self.short_counts_in_a_row += 1;
+        self.short_counts_in_a_row >= SHORT_COUNTS_BEFORE_STOPPING
     }
 
     fn close_the_last_step(
