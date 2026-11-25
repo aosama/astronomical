@@ -134,6 +134,27 @@ async fn should_try_again_later_when_the_receiver_refuses_the_count() {
 }
 
 #[tokio::test]
+async fn should_send_nothing_from_a_development_instance_even_after_the_person_agreed() {
+    let home_directory = tempfile::tempdir().expect("temporary folder");
+    let development_paths = config::AstronomicalInstancePaths::for_home_directory(
+        home_directory.path(),
+        config::AstronomicalRuntimeInstance::Development,
+    );
+    let daily_counter =
+        DailyCounter::for_this_mac(&development_paths).expect("this Mac can be described");
+
+    assert_eq!(
+        daily_counter.send_if_due(Some(true), 20_001).await,
+        DailyCountOutcome::NotSetUp
+    );
+    assert_eq!(
+        daily_counter.state(20_001).last_sent_unix_day,
+        None,
+        "nothing was sent, so no day is marked sent"
+    );
+}
+
+#[tokio::test]
 async fn should_stop_sending_once_the_switch_is_turned_off() {
     let state_directory = tempfile::tempdir().expect("temporary folder");
     let (daily_counter, received_envelopes) =

@@ -23,6 +23,25 @@ pub(crate) struct ReportReceiver {
 }
 
 impl ReportReceiver {
+    /// Where an instance sends problem reports and the daily count: the
+    /// compiled-in receiver for Stable, and nowhere for any other instance.
+    ///
+    /// Development is built from the same version number as the Stable
+    /// release it follows, so its reports and counts arrived in Sentry
+    /// looking like a second Stable Mac: a developer's Mac running both was
+    /// counted twice a day. An explicit state directory with no instance is
+    /// a test or a one-off engine, which no person agreed for either.
+    /// Development keeps its report screens and log, so the flow can still
+    /// be tried there; nothing leaves the Mac.
+    pub(crate) fn for_instance(
+        runtime_instance: Option<config::AstronomicalRuntimeInstance>,
+    ) -> Option<Self> {
+        match runtime_instance {
+            Some(config::AstronomicalRuntimeInstance::Stable) => Self::compiled_in(),
+            Some(config::AstronomicalRuntimeInstance::Development) | None => None,
+        }
+    }
+
     /// The receiver compiled into this build, or `None` while it has none.
     pub(crate) fn compiled_in() -> Option<Self> {
         let receiver_file: serde_json::Value = serde_json::from_str(RECEIVER_FILE_TEXT).ok()?;

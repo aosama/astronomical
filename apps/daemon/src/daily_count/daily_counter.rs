@@ -53,16 +53,18 @@ impl DailyCounter {
         }
     }
 
-    /// The counter for this Mac and this build, or `None` when the Mac
-    /// cannot be described, in which case no count is offered or sent.
-    pub(crate) fn for_this_mac(state_directory: &Path) -> Option<Self> {
+    /// The counter for this Mac and this instance, or `None` when the Mac
+    /// cannot be described, in which case no count is offered or sent. Only
+    /// a Stable instance has somewhere to send it
+    /// (`ReportReceiver::for_instance`).
+    pub(crate) fn for_this_mac(instance_paths: &config::AstronomicalInstancePaths) -> Option<Self> {
         let line = DailyCountLine {
             app_version: env!("CARGO_PKG_VERSION").to_owned(),
             mac: this_mac()?,
         };
         Some(Self::new(
-            state_directory,
-            ReportReceiver::compiled_in(),
+            instance_paths.state_directory(),
+            ReportReceiver::for_instance(instance_paths.runtime_instance()),
             line,
         ))
     }
@@ -150,7 +152,7 @@ pub async fn keep_daily_count(
     if instance_paths.keeps_state_in_app_container() {
         return;
     }
-    let Some(daily_counter) = DailyCounter::for_this_mac(instance_paths.state_directory()) else {
+    let Some(daily_counter) = DailyCounter::for_this_mac(&instance_paths) else {
         tracing::warn!("the daily count is off: this Mac could not be described");
         return;
     };
