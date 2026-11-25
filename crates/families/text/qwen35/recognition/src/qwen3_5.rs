@@ -22,11 +22,30 @@ pub(super) struct Qwen3_5DiscoveredModelMetadata {
 }
 
 /// Recognizes every Qwen model type served by the existing runtime.
+/// Qwen3.8-Flash-Next (`qwen4_exp`) is the Qwen 3.5 stack with additions
+/// and is served as a generation of this family (issue #2533).
 pub fn recognizes_model_type(model_type: Option<&str>) -> bool {
     matches!(
         model_type,
-        Some("qwen3_5") | Some("qwen3_5_moe") | Some("qwen3_5_moe_vision")
+        Some("qwen3_5")
+            | Some("qwen3_5_moe")
+            | Some("qwen3_5_moe_vision")
+            | Some(QWEN4_EXP_MODEL_TYPE)
     )
+}
+
+/// The `model_type` of Qwen3.8-Flash-Next.
+pub const QWEN4_EXP_MODEL_TYPE: &str = "qwen4_exp";
+
+/// Whether the folder's image input is served. Flash-Next ships a vision
+/// tower, but its text path is what runs today, so discovery must not
+/// advertise image input for it.
+#[must_use]
+pub fn serves_vision(has_vision_tower: bool, config_value: &serde_json::Value) -> bool {
+    let model_type = config_value
+        .get("model_type")
+        .and_then(serde_json::Value::as_str);
+    has_vision_tower && model_type != Some(QWEN4_EXP_MODEL_TYPE)
 }
 
 /// Validates shallow Qwen completeness and derives public discovery metadata.
@@ -210,3 +229,7 @@ fn measure_model_weight_payload_bytes(model_directory: &Path) -> Option<u64> {
 
 /// The Qwen 3.5 chat family, resident or streamed.
 pub const QWEN3_5_MODEL_FAMILY: ModelFamily = ModelFamily::named("qwen3_5");
+
+#[cfg(test)]
+#[path = "qwen3_5_tests.rs"]
+mod qwen3_5_tests;

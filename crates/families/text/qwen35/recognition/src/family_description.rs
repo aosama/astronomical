@@ -48,7 +48,7 @@ pub fn discover_qwen3_5_model(model_directory: &Path, model_id: &str) -> Option<
             context_window: family_metadata.context_window,
             max_input_tokens: family_metadata.max_input_tokens,
             max_output_tokens: family_metadata.max_output_tokens,
-            supports_vision: family_metadata.has_vision,
+            supports_vision: qwen3_5::serves_vision(family_metadata.has_vision, &config_value),
             supports_reasoning: family_metadata.supports_reasoning,
             supports_tool_calls: family_metadata.supports_tool_calls,
         }),
