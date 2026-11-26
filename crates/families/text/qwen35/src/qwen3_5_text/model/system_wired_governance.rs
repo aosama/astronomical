@@ -107,6 +107,8 @@ fn report_reserve_move(
             system_wired_bytes,
             system_wire_limit_bytes,
             mlx_held_bytes,
+            process_footprint_bytes =
+                crate::memory::macos_wired_memory::read_process_footprint_bytes().unwrap_or(0),
             reserve_before_bytes,
             reserve_after_bytes,
             "the system wired reserve moved"

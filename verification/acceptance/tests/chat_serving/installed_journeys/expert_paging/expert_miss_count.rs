@@ -146,11 +146,27 @@ async fn should_count_expert_misses_and_decode_speed_with_a_warm_macos_file_cach
         count_expert_misses_with(
             MeasuredWorkload::ShakespeareSummary,
             RequestAttribution::Disabled,
-            MacosFileCacheState::Warm,
+            (MacosFileCacheState::Warm, ReplyDrafting::OneTokenAForward),
         ),
     )
     .await
     .expect("the expert miss case must finish within 120 seconds");
+}
+
+#[tokio::test]
+#[ignore = "serves a 10,000-token Shakespeare summary drafted as served, with a warm macOS file cache, and counts the tables the astro_expert_cache drops"]
+#[serial]
+async fn should_count_dropped_tables_while_drafting_as_served_with_a_warm_macos_file_cache() {
+    timeout(
+        CASE_TIMEOUT,
+        count_expert_misses_with(
+            MeasuredWorkload::ShakespeareSummary,
+            RequestAttribution::Disabled,
+            (MacosFileCacheState::Warm, ReplyDrafting::AsServed),
+        ),
+    )
+    .await
+    .expect("the drafted case must finish within 120 seconds");
 }
 
 /// Whether the model's files are kept out of the `macos_file_cache` while
@@ -161,13 +177,21 @@ enum MacosFileCacheState {
     Warm,
 }
 
+/// Whether the reply is written one token a forward, so its routes replay
+/// token by token, or drafted as the engine serves it by default.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ReplyDrafting {
+    OneTokenAForward,
+    AsServed,
+}
+
 async fn run_case(measured_workload: MeasuredWorkload, request_attribution: RequestAttribution) {
     timeout(
         CASE_TIMEOUT,
         count_expert_misses_with(
             measured_workload,
             request_attribution,
-            MacosFileCacheState::Cold,
+            (MacosFileCacheState::Cold, ReplyDrafting::OneTokenAForward),
         ),
     )
     .await
@@ -177,7 +201,7 @@ async fn run_case(measured_workload: MeasuredWorkload, request_attribution: Requ
 async fn count_expert_misses_with(
     measured_workload: MeasuredWorkload,
     request_attribution: RequestAttribution,
-    macos_file_cache_state: MacosFileCacheState,
+    (macos_file_cache_state, reply_drafting): (MacosFileCacheState, ReplyDrafting),
 ) {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     show_memory_governance_lines();
@@ -188,13 +212,7 @@ async fn count_expert_misses_with(
         attribution_directory: _attribution_directory,
         ..
     } = load_paging_experiment_engine("expert_miss_model_load").await;
-    // A recorded reply is replayed one token a step, and misses a token
-    // are compared across runs, so the reply is written one token a
-    // forward whatever the model would draft by default.
-    engine
-        .set_multi_token_prediction_draft_tokens_for_tests(0)
-        .await
-        .expect("the engine takes the draft count");
+    set_reply_drafting(&engine, reply_drafting).await;
     let cold_macos_file_cache = if macos_file_cache_state == MacosFileCacheState::Cold {
         Some(ColdMacosFileCache::start(&model_directory))
     } else {
@@ -233,10 +251,7 @@ async fn count_expert_misses_with(
     )
     .await;
     report_measured_reply(measured_workload, request_attribution, &measured_reply);
-    eprintln!(
-        "[expert-misses] table_evictions={}",
-        table_eviction_count(&engine).await - table_evictions_before
-    );
+    report_table_evictions_since(&engine, table_evictions_before).await;
     if let Some(cold_macos_file_cache) = cold_macos_file_cache {
         eprintln!(
             "[expert-misses] macos_file_cache_sweeps={}",
@@ -430,6 +445,25 @@ fn chat_prompt_token_ids(model_directory: &Path, messages: Vec<ChatMessage>) -> 
         .to_vec()
 }
 
+/// A recorded reply is replayed one token a step, and misses a token are
+/// compared across runs, so the reply is written one token a forward unless
+/// the case asks for drafting as served.
+async fn set_reply_drafting(engine: &Qwen3_5TextEngine, reply_drafting: ReplyDrafting) {
+    if reply_drafting == ReplyDrafting::OneTokenAForward {
+        engine
+            .set_multi_token_prediction_draft_tokens_for_tests(0)
+            .await
+            .expect("the engine takes the draft count");
+    }
+}
+
+async fn report_table_evictions_since(engine: &Qwen3_5TextEngine, table_evictions_before: u64) {
+    eprintln!(
+        "[expert-misses] table_evictions={}",
+        table_eviction_count(engine).await - table_evictions_before
+    );
+}
+
 /// Whole layer tables the `astro_expert_cache` has dropped since load.
 async fn table_eviction_count(engine: &Qwen3_5TextEngine) -> u64 {
     engine
@@ -444,6 +478,7 @@ async fn table_eviction_count(engine: &Qwen3_5TextEngine) -> u64 {
 fn show_memory_governance_lines() {
     let governance_filter = tracing_subscriber::EnvFilter::new(
         "qwen35::qwen3_5_text::model::memory_governance=info,\
+         qwen35::qwen3_5_text::model::capacity_reporting=info,\
          qwen35::qwen3_5_text::model::system_wired_governance=info,\
          qwen35::qwen3_5_text::expert_streaming::astro_expert_cache::reclamation=info,\
          qwen35::qwen3_5_text::model::phase_aware_expert_residency=info,\

@@ -1024,6 +1024,12 @@ measure-cold-decode-residency-attribution-copying = "run -p xtask -- test-run --
 # and optional `evidence_directory` set the case. Each case runs in about one
 # to two minutes.
 measure-expert-misses = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --filter should_count_expert_misses_while_recording"
+# Tables the astro_expert_cache drops when a drafted reply is followed by a
+# new prompt: the Shakespeare case drafted as served, with a warm
+# macos_file_cache (the cold one's sweeps wire kernel memory and move the
+# reserve for macOS's wired line). Prints table_evictions and the governor's
+# lines naming the account behind each drop. About a minute.
+measure-dropped-tables-while-drafting = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --case-budget-seconds 170 --filter should_count_dropped_tables_while_drafting_as_served"
 measure-expert-misses-speed = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --filter should_count_expert_misses_and_decode_speed"
 
 # Reply speed with and without drafted tokens on a streamed model that ships

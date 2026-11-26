@@ -93,6 +93,39 @@ fn read_system_wire_limit_bytes() -> Option<u64> {
     (status == 0 && system_wire_limit_bytes > 0).then_some(system_wire_limit_bytes)
 }
 
+/// This process's physical footprint now: the figure Activity Monitor shows
+/// as its memory, which on Apple silicon includes what the graphics
+/// processor holds for it. `None` when the kernel refuses it.
+///
+/// Read beside the system's wired total so a rise in "wired outside MLX" can
+/// be told apart: if this process's footprint rises with it, the memory is
+/// this process's own and MLX's counters do not see it; if not, it belongs
+/// to the kernel or another application.
+#[cfg(target_os = "macos")]
+pub fn read_process_footprint_bytes() -> Option<u64> {
+    let mut resource_usage = std::mem::MaybeUninit::<libc::rusage_info_v4>::zeroed();
+    // SAFETY: the buffer is a zeroed, uniquely owned `rusage_info_v4`, the
+    // flavour asks for exactly that version, and the pid is this process's.
+    let call_result = unsafe {
+        libc::proc_pid_rusage(
+            libc::getpid(),
+            libc::RUSAGE_INFO_V4,
+            resource_usage.as_mut_ptr().cast(),
+        )
+    };
+    if call_result != 0 {
+        return None;
+    }
+    // SAFETY: the call succeeded, so the kernel initialized the structure.
+    Some(unsafe { resource_usage.assume_init() }.ri_phys_footprint)
+}
+
+/// No footprint figure off macOS.
+#[cfg(not(target_os = "macos"))]
+pub fn read_process_footprint_bytes() -> Option<u64> {
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::read_macos_wired_memory;
