@@ -1,8 +1,7 @@
 diff --git a/mlx/backend/metal/quantized.cpp b/mlx/backend/metal/quantized.cpp
-index 1ae99a8e5..8671db84d 100644
 --- a/mlx/backend/metal/quantized.cpp
 +++ b/mlx/backend/metal/quantized.cpp
-@@ -1135,7 +1135,14 @@ void qmm_splitk(
+@@ -1508,7 +1508,14 @@
    int bm = 32, bn = 32;
    int n_tiles = (N + bn - 1) / bn;
    int m_tiles = (M + bm - 1) / bm;

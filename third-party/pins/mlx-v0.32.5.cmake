@@ -3,15 +3,15 @@
 # instead of fetching source during configure, so native builds remain auditable.
 
 set(ASTRONOMICAL_MLX_PROJECT_NAME "mlx")
-set(ASTRONOMICAL_MLX_VERSION "0.32.4")
+set(ASTRONOMICAL_MLX_VERSION "0.32.5")
 set(ASTRONOMICAL_MLX_GIT_REPOSITORY "https://github.com/ml-explore/mlx.git")
-set(ASTRONOMICAL_MLX_GIT_COMMIT "36969c094354086e15d2a327a9c50feb20b9cf11")
+set(ASTRONOMICAL_MLX_GIT_COMMIT "cfc675e9e59cb6ee29a647cf8fe87ef844eff879")
 set(ASTRONOMICAL_MLX_MACOS_DEPLOYMENT_TARGET "26.2")
-set(ASTRONOMICAL_MLX_SOURCE_ARCHIVE_URL "https://github.com/ml-explore/mlx/archive/36969c094354086e15d2a327a9c50feb20b9cf11.tar.gz")
-set(ASTRONOMICAL_MLX_SOURCE_ARCHIVE_SHA256 "391b1e41414cddebe7a4fb5c55bf193ea5edd70e26adcfb0e1d6a5e5e86ec34a")
-set(ASTRONOMICAL_MLX_SOURCE_ARCHIVE_FILE_NAME "mlx-0.32.4-36969c094354086e15d2a327a9c50feb20b9cf11.tar.gz")
+set(ASTRONOMICAL_MLX_SOURCE_ARCHIVE_URL "https://github.com/ml-explore/mlx/archive/cfc675e9e59cb6ee29a647cf8fe87ef844eff879.tar.gz")
+set(ASTRONOMICAL_MLX_SOURCE_ARCHIVE_SHA256 "932473c50f96f776b60cb75914840c3e472c412558c3c9cb95c8c6fe87a93c44")
+set(ASTRONOMICAL_MLX_SOURCE_ARCHIVE_FILE_NAME "mlx-0.32.5-cfc675e9e59cb6ee29a647cf8fe87ef844eff879.tar.gz")
 
-# MLX v0.32.4 declares these transitive source dependencies in its root CMake
+# MLX v0.32.5 declares these transitive source dependencies in its root CMake
 # project. Astronomical requires their archives to be provisioned explicitly and
 # verifies each digest before MLX configuration, preventing nested live fetches.
 set(ASTRONOMICAL_METAL_CPP_VERSION "26")

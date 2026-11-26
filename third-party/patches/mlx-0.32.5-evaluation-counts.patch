@@ -8,7 +8,7 @@ diff --git a/mlx/backend/metal/device.cpp b/mlx/backend/metal/device.cpp
  #include <cstdlib>
  #include <sstream>
  
-@@ -548,6 +549,12 @@
+@@ -580,6 +581,12 @@
         wait_events = std::move(wait_events_),
         signal_events = std::move(signal_events_),
         completion = std::move(completion)](MTL::CommandBuffer* cbuf) mutable {
@@ -24,14 +24,15 @@ diff --git a/mlx/backend/metal/device.cpp b/mlx/backend/metal/device.cpp
 diff --git a/mlx/transforms.cpp b/mlx/transforms.cpp
 --- a/mlx/transforms.cpp
 +++ b/mlx/transforms.cpp
-@@ -1,5 +1,6 @@
+@@ -1,6 +1,7 @@
  // Copyright © 2023-2024 Apple Inc.
+ 
  #include <algorithm>
 +#include <atomic>
  #include <deque>
  #include <future>
  #include <numeric>
-@@ -77,6 +78,35 @@
+@@ -134,6 +135,35 @@
  }
  thread_local int detail::RetainGraph::tracing_counter{0};
  
@@ -67,7 +68,7 @@ diff --git a/mlx/transforms.cpp b/mlx/transforms.cpp
  array eval_impl(std::vector<array> outputs, bool async) {
    std::deque<array> tape;
  
-@@ -259,6 +289,7 @@
+@@ -316,6 +346,7 @@
            // output arrays stream
            auto& info = it->second;
            fences.at(info.stream_index).wait(stream, in, info.value);
@@ -75,7 +76,7 @@ diff --git a/mlx/transforms.cpp b/mlx/transforms.cpp
          } else if (in.event().valid()) {
            if (in.event().is_signaled()) {
              in.detach_event();
-@@ -271,8 +302,10 @@
+@@ -328,8 +359,10 @@
  
        if (arr.primitive().device() == Device::gpu) {
          gpu::eval(arr);
@@ -85,8 +86,8 @@ diff --git a/mlx/transforms.cpp b/mlx/transforms.cpp
 +        cpu_primitive_count.fetch_add(1, std::memory_order_relaxed);
        }
  
-       if (scheduler::n_active_tasks() > MAX_ACTIVE_TASKS ||
-@@ -375,6 +408,7 @@
+ #ifndef NDEBUG
+@@ -425,6 +458,7 @@
      return;
    }
  
@@ -94,7 +95,7 @@ diff --git a/mlx/transforms.cpp b/mlx/transforms.cpp
    eval_impl(std::move(outputs), true);
  }
  
-@@ -386,12 +420,14 @@
+@@ -436,12 +470,14 @@
    if (std::none_of(outputs.begin(), outputs.end(), [](array& x) {
          return x.status() == array::Status::unscheduled;
        })) {

@@ -23,7 +23,7 @@ cmake_minimum_required(VERSION 3.24)
 project(astronomical_runtime_integration LANGUAGES C CXX)
 
 include(FetchContent)
-include("${CMAKE_CURRENT_LIST_DIR}/../../../../third-party/pins/mlx-v0.32.4.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/../../../../third-party/pins/mlx-v0.32.5.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/../../../../third-party/pins/mlx-c-v0.8.0.cmake")
 find_program(PATCH_EXECUTABLE patch REQUIRED)
 
@@ -102,10 +102,11 @@ FetchContent_Declare(json URL "${ASTRONOMICAL_JSON_SOURCE_ARCHIVE}" URL_HASH "SH
 FetchContent_Declare(fmt URL "${ASTRONOMICAL_FMT_SOURCE_ARCHIVE}" URL_HASH "SHA256=${ASTRONOMICAL_FMT_SOURCE_ARCHIVE_SHA256}")
 # Every patch in the two PATCH_COMMAND lists below is documented with its
 # purpose and retirement condition in the patch registry of
-# third-party/README.md. The jit-qmv-template-arity patch retired at the
-# v0.32.4 bump: upstream's partial-row qmv fast-kernel restructure declares
-# the full template arity on every qmv/qmv_fast template, which is the
-# defect the patch carried.
+# third-party/README.md. Two patches retired at the v0.32.5 bump:
+# jit-sdpa-dsplit-template-arity, whose defect upstream fixed in the same
+# generator, and nax-qmm-tile-variants, whose 4x1 simdgroup tile for
+# transposed prefill upstream now selects itself through its staged
+# qmm_t_nax kernel.
 FetchContent_Declare(
     mlx
     URL "${ASTRONOMICAL_MLX_SOURCE_ARCHIVE}"
@@ -113,35 +114,30 @@ FetchContent_Declare(
     PATCH_COMMAND
         "${CMAKE_COMMAND}"
         "-DPATCH_EXECUTABLE=${PATCH_EXECUTABLE}"
-        "-DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/../../../../third-party/patches/mlx-0.32.4-stable-prefill-split-k.patch"
+        "-DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/../../../../third-party/patches/mlx-0.32.5-stable-prefill-split-k.patch"
         -P "${CMAKE_CURRENT_LIST_DIR}/apply_patch_if_needed.cmake"
         COMMAND "${CMAKE_COMMAND}"
         "-DPATCH_EXECUTABLE=${PATCH_EXECUTABLE}"
-        "-DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/../../../../third-party/patches/mlx-0.32.4-nax-qmm-tile-variants.patch"
+        "-DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/../../../../third-party/patches/mlx-0.32.5-astronomical-active-memory-ceiling.patch"
         -P "${CMAKE_CURRENT_LIST_DIR}/apply_patch_if_needed.cmake"
         COMMAND "${CMAKE_COMMAND}"
         "-DPATCH_EXECUTABLE=${PATCH_EXECUTABLE}"
-        "-DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/../../../../third-party/patches/mlx-0.32.4-jit-sdpa-dsplit-template-arity.patch"
+        "-DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/../../../../third-party/patches/mlx-0.32.5-streaming-safetensors-writer.patch"
         -P "${CMAKE_CURRENT_LIST_DIR}/apply_patch_if_needed.cmake"
         COMMAND "${CMAKE_COMMAND}"
         "-DPATCH_EXECUTABLE=${PATCH_EXECUTABLE}"
-        "-DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/../../../../third-party/patches/mlx-0.32.4-astronomical-active-memory-ceiling.patch"
+        "-DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/../../../../third-party/patches/mlx-0.32.5-fast-synch-setting.patch"
         -P "${CMAKE_CURRENT_LIST_DIR}/apply_patch_if_needed.cmake"
         COMMAND "${CMAKE_COMMAND}"
         "-DPATCH_EXECUTABLE=${PATCH_EXECUTABLE}"
-        "-DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/../../../../third-party/patches/mlx-0.32.4-streaming-safetensors-writer.patch"
-        -P "${CMAKE_CURRENT_LIST_DIR}/apply_patch_if_needed.cmake"
-        COMMAND "${CMAKE_COMMAND}"
-        "-DPATCH_EXECUTABLE=${PATCH_EXECUTABLE}"
-        "-DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/../../../../third-party/patches/mlx-0.32.4-fast-synch-setting.patch"
-        -P "${CMAKE_CURRENT_LIST_DIR}/apply_patch_if_needed.cmake"
-        COMMAND "${CMAKE_COMMAND}"
-        "-DPATCH_EXECUTABLE=${PATCH_EXECUTABLE}"
-        "-DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/../../../../third-party/patches/mlx-0.32.4-evaluation-counts.patch"
+        "-DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/../../../../third-party/patches/mlx-0.32.5-evaluation-counts.patch"
         -P "${CMAKE_CURRENT_LIST_DIR}/apply_patch_if_needed.cmake"
 )
-# The pinned mlx-c v0.8.0 release pairs with the pinned MLX v0.32.4, so no version-gap
-# bridge is needed. The one patch adds mlx_array_detach, which the C API does not offer.
+# No mlx-c release pairs with MLX v0.32.5 yet, so the pinned mlx-c v0.8.0
+# carries one version-gap bridge: MLX inserted window_size into
+# scaled_dot_product_attention, and the bridge passes MLX's own default so the
+# C signature is unchanged. It is deleted at the next mlx-c bump. The other
+# patch adds mlx_array_detach, which the C API does not offer.
 FetchContent_Declare(
     mlx_c
     URL "${ASTRONOMICAL_MLX_C_SOURCE_ARCHIVE}"
@@ -150,6 +146,10 @@ FetchContent_Declare(
         "${CMAKE_COMMAND}"
         "-DPATCH_EXECUTABLE=${PATCH_EXECUTABLE}"
         "-DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/../../../../third-party/patches/mlx-c-0.8.0-expose-array-detach.patch"
+        -P "${CMAKE_CURRENT_LIST_DIR}/apply_patch_if_needed.cmake"
+        COMMAND "${CMAKE_COMMAND}"
+        "-DPATCH_EXECUTABLE=${PATCH_EXECUTABLE}"
+        "-DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/../../../../third-party/patches/mlx-c-0.8.0-attention-window-size-for-mlx-0.32.5.patch"
         -P "${CMAKE_CURRENT_LIST_DIR}/apply_patch_if_needed.cmake"
 )
 

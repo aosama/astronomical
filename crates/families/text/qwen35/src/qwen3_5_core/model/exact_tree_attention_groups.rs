@@ -8,9 +8,11 @@ use super::Qwen3_5ModelBase;
 use super::tree_layer_attention::TreeRowInputs;
 
 /// Query vectors one call of MLX's vector attention kernel serves, and the
-/// most query rows it takes: `scaled_dot_product_attention.cpp` in MLX 0.32.4
+/// most query rows it takes: `scaled_dot_product_attention.cpp` in MLX 0.32.5
 /// uses that kernel while the rows are at most 8 and rows times query heads
-/// a key-value head are at most 32, and a matrix kernel beyond.
+/// a key-value head are at most 32. Beyond that a call with an array mask,
+/// which a tree's attention passes, takes a matrix kernel (MLX 0.32.5's
+/// split kernel for more query vectors serves unmasked calls only).
 const MLX_VECTOR_ATTENTION_QUERY_VECTORS: u32 = 32;
 const MLX_VECTOR_ATTENTION_MOST_ROWS: u32 = 8;
 
