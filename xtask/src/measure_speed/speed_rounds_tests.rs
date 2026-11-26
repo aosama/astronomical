@@ -11,6 +11,7 @@ fn reply(prompt_tokens: u64, seconds_to_first_token: f64, reply_rate: f64) -> Re
         completion_tokens: 500,
         seconds_to_first_token,
         reply_tokens_per_second: Some(reply_rate),
+        drafting: None,
     }
 }
 
@@ -93,6 +94,7 @@ fn should_draw_every_figure_of_a_task_from_its_rounds() {
                 lowest: 60.0,
                 highest: 64.0
             },
+            drafting: None,
         })
     );
     assert_eq!(speed_rounds.task_figures(SpeedTask::LongPromptEssay), None);
@@ -109,6 +111,7 @@ fn should_not_count_a_reply_that_gave_no_rate_as_a_round() {
                 completion_tokens: 1,
                 seconds_to_first_token: 0.2,
                 reply_tokens_per_second: None,
+                drafting: None,
             },
         );
     }

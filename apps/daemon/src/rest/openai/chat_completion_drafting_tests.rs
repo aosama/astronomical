@@ -19,7 +19,7 @@ fn should_report_kept_and_thrown_away_guesses_for_a_reply_that_drafted() {
     }));
     assert!(
         usage_json.contains(
-            r#""completion_tokens_details":{"accepted_prediction_tokens":74,"rejected_prediction_tokens":4}"#
+            r#""completion_tokens_details":{"accepted_prediction_tokens":74,"rejected_prediction_tokens":4,"draft_rounds":26}"#
         ),
         "{usage_json}"
     );

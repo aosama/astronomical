@@ -8,6 +8,8 @@
 
 use std::time::Duration;
 
+use super::reply_drafting::ReplyDrafting;
+
 /// One measured reply.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ReplyMeasurement {
@@ -16,6 +18,8 @@ pub struct ReplyMeasurement {
     pub seconds_to_first_token: f64,
     /// `None` when fewer than two tokens arrived, so no rate exists.
     pub reply_tokens_per_second: Option<f64>,
+    /// `None` for a reply that never drafted.
+    pub drafting: Option<ReplyDrafting>,
 }
 
 impl ReplyMeasurement {
@@ -38,6 +42,7 @@ pub struct StreamTiming {
     last_token_after: Option<Duration>,
     prompt_tokens: u64,
     completion_tokens: u64,
+    drafting: Option<ReplyDrafting>,
 }
 
 impl StreamTiming {
@@ -56,6 +61,7 @@ impl StreamTiming {
         {
             self.prompt_tokens = usage_counts["prompt_tokens"].as_u64().unwrap_or(0);
             self.completion_tokens = usage_counts["completion_tokens"].as_u64().unwrap_or(0);
+            self.drafting = ReplyDrafting::from_usage(usage_counts);
         }
         if chunk_carries_token(&chunk_document) {
             self.first_token_after.get_or_insert(arrived_after);
@@ -78,6 +84,7 @@ impl StreamTiming {
             completion_tokens: self.completion_tokens,
             seconds_to_first_token: first_token_after.as_secs_f64(),
             reply_tokens_per_second,
+            drafting: self.drafting,
         }
     }
 }

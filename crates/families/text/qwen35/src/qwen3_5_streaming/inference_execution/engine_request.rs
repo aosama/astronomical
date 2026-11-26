@@ -34,6 +34,9 @@ pub struct StreamingRequestExtension {
     /// written one token a forward.
     pub(in crate::qwen3_5_streaming) draft_tree_drafting:
         Option<super::draft_tree_reply_drafting::DraftTreeReplyDrafting>,
+    /// The rounds this reply drafted and the drafts it kept, whichever
+    /// drafter proposed them; status and the reply's usage report it.
+    pub(in crate::qwen3_5_streaming) drafting_statistics: ipc_protocol::RequestDraftingStatistics,
 }
 
 impl StreamingRequestExtension {
@@ -48,6 +51,7 @@ impl StreamingRequestExtension {
             reply_expert_route_record: Default::default(),
             mtp_reply_drafting: None,
             draft_tree_drafting: None,
+            drafting_statistics: ipc_protocol::RequestDraftingStatistics::NONE,
         }
     }
 }

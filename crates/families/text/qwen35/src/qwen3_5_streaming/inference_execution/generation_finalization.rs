@@ -5,7 +5,7 @@
 //! telemetry then reports the retained pager ownership after cleanup.
 
 use crate::{GenerationFinalization, PerformanceAttributionOutcome};
-use ipc_protocol::{ReplyMemoryRecord, RequestId};
+use ipc_protocol::{ReplyMemoryRecord, RequestDraftingStatistics, RequestId};
 use text_generation::generation_loop::{generation_finalization_steps, request_end};
 
 use super::Qwen3_5EngineState;
@@ -234,13 +234,20 @@ fn log_mlx_buffer_cache_over_the_reply(
     );
 }
 
+/// What a finished reply reports beside its text: where its memory went and
+/// what drafting did for it.
+pub struct StreamingReplyRecord {
+    reply_memory_record: ReplyMemoryRecord,
+    drafting_statistics: RequestDraftingStatistics,
+}
+
 impl request_end::TextRequestEndHooks for Qwen3_5EngineState {
-    type ReplyRecord = ReplyMemoryRecord;
+    type ReplyRecord = StreamingReplyRecord;
 
     fn take_reply_record(
         &mut self,
         active_request: &mut StreamingEngineRequest,
-    ) -> ReplyMemoryRecord {
+    ) -> StreamingReplyRecord {
         let request_id = active_request.request_id;
         let mlx_buffer_cache_reply_record = active_request
             .engine_extension
@@ -255,7 +262,12 @@ impl request_end::TextRequestEndHooks for Qwen3_5EngineState {
         {
             log_stages_over_the_reply(request_id.value(), &reply_stages);
         }
-        reply_memory_record
+        StreamingReplyRecord {
+            reply_memory_record,
+            drafting_statistics: super::reply_drafting_record::reply_drafting_statistics(
+                active_request,
+            ),
+        }
     }
 
     /// Request-owned lazy arrays are gone by now. Hot-expert warmed tables
@@ -284,8 +296,10 @@ impl request_end::TextRequestEndHooks for Qwen3_5EngineState {
 
     fn attach_reply_record(
         generation_finalization: GenerationFinalization,
-        reply_memory_record: ReplyMemoryRecord,
+        reply_record: StreamingReplyRecord,
     ) -> GenerationFinalization {
-        generation_finalization.with_reply_memory_record(reply_memory_record)
+        generation_finalization
+            .with_reply_memory_record(reply_record.reply_memory_record)
+            .with_drafting_statistics(reply_record.drafting_statistics)
     }
 }

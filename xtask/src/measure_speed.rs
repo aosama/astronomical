@@ -35,6 +35,8 @@ mod measured_case;
 mod measurement_cases;
 #[path = "measure_speed/reference_set.rs"]
 mod reference_set;
+#[path = "measure_speed/reply_drafting.rs"]
+mod reply_drafting;
 #[path = "measure_speed/served_conditions.rs"]
 mod served_conditions;
 #[path = "measure_speed/speed_catalog.rs"]
@@ -314,7 +316,7 @@ fn measure_one_reply(
         measured_case.task_temperature(speed_task),
     )?;
     println!(
-        "{STATUS_PREFIX} reply model={model_id} task={} round={} prompt_tokens={} reply_tokens={} seconds_to_first_token={:.2} prefill_tokens_per_second={:.0} reply_tokens_per_second={}",
+        "{STATUS_PREFIX} reply model={model_id} task={} round={} prompt_tokens={} reply_tokens={} seconds_to_first_token={:.2} prefill_tokens_per_second={:.0} reply_tokens_per_second={} draft_rounds={} kept_drafts={}",
         speed_task.catalog_field(),
         round_index + 1,
         reply_measurement.prompt_tokens,
@@ -324,6 +326,12 @@ fn measure_one_reply(
         reply_measurement
             .reply_tokens_per_second
             .map_or_else(|| "none".to_owned(), |rate| format!("{rate:.2}")),
+        reply_measurement
+            .drafting
+            .map_or(0, |reply_drafting| reply_drafting.round_count),
+        reply_measurement
+            .drafting
+            .map_or(0, |reply_drafting| reply_drafting.kept_draft_count),
     );
     if reply_measurement.completion_tokens >= MINIMUM_TIMED_TOKENS
         && reply_measurement.reply_tokens_per_second.is_some()

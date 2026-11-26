@@ -610,7 +610,9 @@ test-quantization-mixture-of-experts = "run -p xtask -- test-run --package astro
 # Mac refuses is reported and skipped. --write-ledger writes them into
 # registry/release_speed/<version>.json, the release speed ledger for the
 # engine's version (a clean build only), with the conditions the engine
-# reported: memory limit, weights in memory or streamed, drafter in use.
+# reported: memory limit, weights in memory or streamed, drafter in use, and
+# for a task whose replies drafted, the rounds a reply, the drafts kept a
+# round and the share of the reply that was kept drafts.
 # --write-catalog writes the cases measured at the Mac's own memory limit
 # into registry/download_catalog.json as each entry's measured_speed, which
 # the Models page shows. Progress and time left print every five seconds;
