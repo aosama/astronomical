@@ -170,6 +170,14 @@ fn assert_composite_github_actions_cache_owner(
     );
 }
 
+/// How the shared astronomical-cache action classifies an operation, as the
+/// one expression its report step evaluates (issue #2635 replaced the shell
+/// reporter that decided it): a save is published or an error; a failed
+/// restore is an error; an exact hit on the primary key is primary; a hit on a
+/// restore-keys prefix is fallback; anything else is a miss. Branch order is
+/// the rule, so the whole expression is pinned.
+const EXPECTED_CACHE_CLASSIFICATION: &str = "${{ inputs.operation == 'save' && (steps.save.outcome == 'success' && 'published' || 'error') || steps.restore.outcome != 'success' && 'error' || steps.restore.outputs.cache-hit == 'true' && 'primary' || steps.restore.outputs.cache-matched-key != '' && 'fallback' || 'miss' }}";
+
 #[test]
 fn github_actions_cache_owners_are_disjoint_composite_users() {
     let workflow = workflow_contract();
@@ -462,22 +470,18 @@ fn shared_astronomical_cache_action_is_pinned_and_reported() {
         .contains("inputs.owner"),
         "shared astronomical-cache action report does not forward the owner"
     );
-    let reported_outcome = required_text(
-        report_environment,
-        "CACHE_STEP_OUTCOME",
-        "shared astronomical-cache action report env",
+    assert_eq!(
+        required_text(
+            report_environment,
+            "CACHE_CLASSIFICATION",
+            "shared astronomical-cache action report env"
+        ),
+        EXPECTED_CACHE_CLASSIFICATION,
+        "the github_actions_cache classification rules changed; update this pin only on purpose"
     );
     assert!(
-        reported_outcome.contains("steps.restore.outcome"),
-        "shared astronomical-cache action report does not forward the restore outcome"
-    );
-    assert!(
-        reported_outcome.contains("steps.save.outcome"),
-        "shared astronomical-cache action report does not forward the save outcome"
-    );
-    assert!(
-        run_text_of(composite_report, "report").contains("report-build-cache-restoration.sh"),
-        "shared astronomical-cache action report must call the restoration reporter"
+        run_text_of(composite_report, "report").contains(">> \"$GITHUB_STEP_SUMMARY\""),
+        "shared astronomical-cache action report must write its classification to the job summary"
     );
     assert!(
         required_text(

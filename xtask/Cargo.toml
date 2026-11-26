@@ -74,6 +74,14 @@ name = "integration_source_size_journeys"
 path = "tests/integration_source_size_journeys.rs"
 
 [[test]]
+name = "workflow_run_timeline_contract"
+path = "tests/workflow_run_timeline_contract.rs"
+
+[[test]]
+name = "workflow_shell_script_contract"
+path = "tests/workflow_shell_script_contract.rs"
+
+[[test]]
 name = "workflow_code_shape_ratchet_contract"
 path = "tests/workflow_code_shape_ratchet_contract.rs"
 
