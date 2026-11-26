@@ -140,7 +140,7 @@ test-dense-text-weights = "run -p xtask -- test-run --package astronomical-accep
 # forward holds must be left alone, and converting twice must find nothing.
 # About fifteen seconds.
 test-dense-kept-layer-register-order = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter should_begin_the_same_reply_with_kept_layers_in_register_order"
-# The streaming engine's fused expert combination on a served
+# The engine's fused expert combination on a served
 # mixture-of-experts model (#2585): one load answers the Shakespeare prompt
 # with the two-step combination and with the fused one; replies and every
 # logit's bits must be equal. Under a minute.
@@ -170,11 +170,11 @@ test-expert-layer-at-a-time-parity = "run -p xtask -- test-run --package astrono
 test-dense-prompt-forward-memory = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter should_keep_a_streamed_prompt_forward_within_the_planned_reserve"
 
 # Qwen3.8-Flash-Next greedy parity (issue #2533): the
-# lane_mixing_sparse_moe_streaming model on the streaming engine at a 34 GiB
+# lane_mixing_sparse_moe_streaming model on the engine at a 34 GiB
 # limit must choose the reference implementation's greedy tokens for a short
 # Romeo and Juliet prompt and for one past the sparse-attention budget
 # (fixture flash_next_greedy_reference.json). About thirty seconds.
-test-flash-next-parity = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter should_choose_the_reference_greedy_tokens_on_the_streaming_engine"
+test-flash-next-parity = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter should_choose_the_reference_greedy_tokens"
 
 # Qwen3.8-Flash-Next forward speed at the lowest layer (issue #2533): the
 # streaming model's own forwards in the engine's memory state at a 34 GiB
@@ -836,7 +836,7 @@ test-dflash-drafter-reference = "run -p xtask -- test-run --package astronomical
 # for every row that picked it before any kernel is written. Seconds.
 measure-expert-rows-per-read = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --exact --filter direct_mlx::expert_rows_per_read_cost::should_price_rows_on_one_gathered_expert_against_one_row_a_slot"
 # What it costs a streamed reply token to look at each layer's routes on the
-# host: ending the evaluation at every layer (what the streaming engine does)
+# host: ending the evaluation at every layer (what the engine does)
 # against a host step inside the graph (crates/engine/graph-host-step), with a
 # pass that never leaves the GPU as the floor. Random float32 tensors in the
 # 35B-A3B's shape, 40 layers a token; the three passes must compute the same
@@ -1095,13 +1095,13 @@ measure-long-prompt-reading = "run -p xtask -- test-run --package astronomical-a
 # request_elapsed_seconds less generation_elapsed_seconds in the
 # `phase=chat_read_follow_up_turn` line is the time to the first token.
 measure-chat-follow-up-turn = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --case-budget-seconds 170 --filter should_measure_a_chat_follow_up_turn"
-# Neural Engine prompt reading on the streaming engine (#2585): a dense model
+# Neural Engine prompt reading (#2585): a dense model
 # with every layer kept in memory builds its programs, attaches them, and
 # reads a 10,000-token prompt; then the same prompt on the GPU alone, a
 # process each. The limit must hold the model and its programs. Building
 # takes about five minutes when macOS holds no prepared copy; progress and
 # time left print every five seconds.
-measure-neural-engine-streaming-prompt-reading = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --case-budget-seconds 560 --filter a_long_prompt_on_the_streaming_engine_with_"
+measure-neural-engine-prompt-reading = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --case-budget-seconds 560 --filter should_read_a_long_prompt_with_"
 measure-hosted-drafter-reply = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --case-budget-seconds 500 --filter reply_speed_with_the_hosted_drafter"
 test-in-graph-drafted-blocks = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --filter drafted_blocks_are_looked_up_in_the_graph"
 test-in-graph-route-lookup = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --filter whichever_way_routes_are_looked_up"

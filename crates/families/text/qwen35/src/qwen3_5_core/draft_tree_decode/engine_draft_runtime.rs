@@ -1,6 +1,6 @@
 //! The engine-owned DFlash drafter runtime, of either generation.
 //!
-//! One resident engine may host one drafter beside its target. Loading is
+//! The text engine may host one drafter beside its target. Loading is
 //! permissive about absence (a library with no drafter runs the classic
 //! decode path) and strict about pairing: a drafter is used only when its
 //! configuration names this target's layer count, hidden width and

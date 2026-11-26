@@ -1,9 +1,8 @@
-//! Shared visual-embedding resolution for both Qwen3.5 engines.
+//! Visual-embedding resolution for the Qwen3.5 engine.
 //!
 //! The function owns the `astro_ssd_prompt_cache` hit/miss policy and the vision-forward path;
-//! each engine supplies its loaded state through `VisualEmbeddingEngineContext`.
-//! This keeps the engine modules from importing each other while the
-//! astro SSD prompt cache store and counters stay shared in this module (issue #1132).
+//! the engine supplies its loaded state through `VisualEmbeddingEngineContext`.
+//! The astro SSD prompt cache store and counters stay in this module (issue #1132).
 
 use super::ProcessedImage;
 use super::vision_model::Qwen3_5VisionModel;

@@ -32,8 +32,8 @@ mod vision_astro_ssd_prompt_cache;
 /// cold reply with a restored one token for token, so the drafter stays
 /// hosted and silent and only the `astro_ssd_prompt_cache` is judged.
 #[cfg(feature = "direct-mlx")]
-async fn keep_the_hosted_drafter_silent(qwen3_5_engine: &model_serving::Qwen3_5StreamingEngine) {
-    use model_serving::Qwen3_5StreamingEngineTestControls;
+async fn keep_the_hosted_drafter_silent(qwen3_5_engine: &model_serving::Qwen3_5TextEngine) {
+    use model_serving::Qwen3_5TextEngineTestControls;
     qwen3_5_engine
         .set_hosted_drafter_writes_replies_for_tests(false)
         .await

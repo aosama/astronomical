@@ -1,7 +1,7 @@
 //! The chat engine contract in a form a worker can hold behind a box
 //! (issue #2473, Step 4).
 //!
-//! `InferenceEngine` returns `impl Future`, which keeps each engine's futures
+//! `InferenceEngine` returns `impl Future`, which keeps the engine's futures
 //! unboxed but cannot be a trait object. `DynInferenceEngine` is the same
 //! contract with boxed futures: every `InferenceEngine` implements it, and a
 //! `Box<dyn DynInferenceEngine<Request>>` is itself an `InferenceEngine`, so

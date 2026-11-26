@@ -2,7 +2,7 @@
 //! ships a multi-token-prediction head (issue #2533).
 //!
 //! Each case loads the sparse model under the configured MLX limit through
-//! the real streaming engine, sets how many tokens a round drafts before
+//! the real text engine, sets how many tokens a round drafts before
 //! anything is served (as the app's setting would be known at load), serves
 //! a 500/50 warmup and then one 10,000-token Romeo and Juliet summary. The
 //! engine's own reply loop runs every token, so the figures are what the

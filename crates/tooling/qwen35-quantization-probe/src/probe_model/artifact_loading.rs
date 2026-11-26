@@ -310,9 +310,9 @@ fn build_held_model_memory_facts(
     )
 }
 
-/// Flash-Next is served by the streaming engine only (issue #2533): its
-/// routed experts alone are 70 GB, and its lanes, indexer and n-gram table
-/// run only on the streaming layer path.
+/// The probe refuses Flash-Next (issue #2533): its routed experts alone are
+/// 70 GB, and its lanes, indexer and n-gram table run only in the text
+/// model's layer path, which reads them from the SSD.
 #[allow(clippy::too_many_arguments)]
 fn held_mixture_of_experts_parts(
     runtime: &MlxRuntime,
@@ -325,7 +325,7 @@ fn held_mixture_of_experts_parts(
 ) -> Result<ProbeMixtureOfExpertsParts, TextExecutionError> {
     if config.qwen4_exp_architecture().is_some() {
         return Err(TextExecutionError::InvalidInput {
-            description: "Qwen3.8-Flash-Next runs on the streaming engine only",
+            description: "the sensitivity probe does not load Qwen3.8-Flash-Next; the text engine serves it",
         });
     }
     load_held_mixture_of_experts_parts(

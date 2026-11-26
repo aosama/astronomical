@@ -54,7 +54,7 @@ pub trait ChatFamilyConstruction {
     ) -> Result<ChatRuntimeParts, String>;
 }
 
-/// The Qwen 3.5 chat family, served by the one streaming engine, which
+/// The Qwen 3.5 chat family, served by the one text engine, which
 /// keeps in memory what the MLX memory limit holds and streams the rest.
 pub struct Qwen3_5ChatFamily;
 

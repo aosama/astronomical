@@ -30,7 +30,7 @@ use crate::decision_models::qwen_backbone::HoldsDecisionBackbone;
 use crate::linear_adapters::LinearAdapters;
 use crate::qwen3_5_core::model::layer_additions::Qwen3_5LayerAdditions;
 use crate::qwen3_5_core::model_math::differentiable_gated_delta::DifferentiableGatedDelta;
-use crate::qwen3_5_streaming::{DecoderLayerRecomputation, Qwen3_5StreamingModel};
+use crate::qwen3_5_text::{DecoderLayerRecomputation, Qwen3_5TextModel};
 use qwen35::TextExecutionError;
 
 /// Every decoder layer of a decision model's backbone, recomputed during
@@ -232,7 +232,7 @@ impl LayerRun {
 /// Puts the add-ons that were in force back when a recomputed layer ends,
 /// however it ends; otherwise the next layer would run with this one's.
 struct OuterAdditionsRestorer<'model> {
-    model: &'model Qwen3_5StreamingModel,
+    model: &'model Qwen3_5TextModel,
     outer_additions: Option<Rc<Qwen3_5LayerAdditions>>,
 }
 

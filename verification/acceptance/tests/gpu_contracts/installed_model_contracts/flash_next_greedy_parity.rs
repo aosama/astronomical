@@ -1,4 +1,4 @@
-//! Qwen3.8-Flash-Next on the streaming engine must choose the same greedy
+//! Qwen3.8-Flash-Next on the engine must choose the same greedy
 //! tokens as the reference implementation (issue #2533).
 //!
 //! The reference fixture was written by the mlx-vlm `qwen4_exp` language
@@ -12,7 +12,7 @@
 
 use std::time::Duration;
 
-use model_serving::Qwen3_5StreamingModel;
+use model_serving::Qwen3_5TextModel;
 use serial_test::file_serial;
 use tokio::time::timeout;
 
@@ -26,7 +26,7 @@ const PARITY_BUDGET: Duration = Duration::from_secs(120);
 #[tokio::test]
 #[ignore = "loads Qwen3.8-Flash-Next and runs real greedy replies"]
 #[file_serial]
-async fn should_choose_the_reference_greedy_tokens_on_the_streaming_engine() {
+async fn should_choose_the_reference_greedy_tokens() {
     timeout(PARITY_BUDGET, assert_greedy_tokens_match_the_reference())
         .await
         .expect("the Flash-Next parity journey must finish within its budget");
@@ -62,7 +62,7 @@ async fn assert_greedy_tokens_match_the_reference() {
         );
         assert_eq!(
             chosen_token_ids, reference_token_ids,
-            "prompt {prompt_name}: the streaming engine must choose the reference tokens"
+            "prompt {prompt_name}: the engine must choose the reference tokens"
         );
     }
 }
@@ -84,7 +84,7 @@ fn token_ids(token_id_list: &serde_json::Value) -> Vec<u32> {
 /// Prefills in chunks and then decodes `reply_token_count` tokens, each the
 /// highest-scoring one.
 fn greedy_reply(
-    streaming_model: &Qwen3_5StreamingModel,
+    streaming_model: &Qwen3_5TextModel,
     prompt_token_ids: &[u32],
     reply_token_count: usize,
 ) -> Vec<u32> {

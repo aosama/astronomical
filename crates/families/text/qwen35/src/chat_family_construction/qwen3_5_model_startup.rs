@@ -9,9 +9,8 @@ use crate::{
     AstroSsdPromptCacheDiskStoreConfig, EnginePlacement, ModelFamilyInferenceEngine,
     ModelLoadingPerformanceAttributionMetadata, PerformanceAttribution, PerformanceAttributionLog,
     PerformanceAttributionOutcome, PerformanceOperation, PromptProcessingChunkSizer,
-    Qwen3_5ArtifactValidator, Qwen3_5GenerationProcessor, Qwen3_5StreamingEngine,
-    StreamingEngineSettings, TextExecutionCoreSettings, ValidatedQwen3_5Artifact,
-    boxed_chat_engine,
+    Qwen3_5ArtifactValidator, Qwen3_5GenerationProcessor, Qwen3_5TextEngine, TextEngineSettings,
+    TextExecutionCoreSettings, ValidatedQwen3_5Artifact, boxed_chat_engine,
 };
 use ipc_protocol::{
     WorkerAutoregressiveModelConfiguration, WorkerChunkingConfiguration,
@@ -19,7 +18,7 @@ use ipc_protocol::{
 };
 
 use super::qwen3_5_engine_selection::{
-    StreamingStart, prompt_chunk_tokens_for, select_qwen3_5_engine_from_artifact,
+    EngineStart, prompt_chunk_tokens_for, select_qwen3_5_engine_from_artifact,
 };
 use super::qwen3_5_model_startup_error::Qwen3_5ModelStartupError;
 use super::qwen3_5_startup_storage::{
@@ -138,7 +137,7 @@ pub(super) fn initialize_qwen3_5_model(
 /// an engine-initialization failure onto the startup error.
 #[allow(clippy::too_many_arguments)]
 fn construct_selected_qwen3_5_engine(
-    streaming_start: StreamingStart,
+    streaming_start: EngineStart,
     validated_artifact: ValidatedQwen3_5Artifact,
     active_memory_limit_bytes: usize,
     mlx_buffer_cache_limit_bytes: usize,
@@ -156,7 +155,7 @@ fn construct_selected_qwen3_5_engine(
     artifact_payload_bytes: u64,
     artifact_shard_count: usize,
 ) -> Result<ModelFamilyInferenceEngine, Qwen3_5ModelStartupError> {
-    construct_streaming_engine(
+    construct_text_engine(
         prompt_chunk_tokens_for(&chunking, streaming_start.holds_whole_model),
         validated_artifact,
         active_memory_limit_bytes,
@@ -168,7 +167,7 @@ fn construct_selected_qwen3_5_engine(
         chunking,
         model_loading_performance_attribution,
         performance_attribution_log,
-        StreamingEngineSettings {
+        TextEngineSettings {
             decode_astro_expert_cache_policy,
             astro_neural_engine_program_cache_directory,
         },
@@ -234,7 +233,7 @@ fn select_startup_engine(
     artifact_model_revision: &str,
     artifact_payload_bytes: u64,
     artifact_shard_count: usize,
-) -> Result<((StreamingStart, EnginePlacement), PerformanceAttribution), Qwen3_5ModelStartupError> {
+) -> Result<((EngineStart, EnginePlacement), PerformanceAttribution), Qwen3_5ModelStartupError> {
     match model_loading_performance_attribution.measure_operation(
         PerformanceOperation::ArtifactMemoryGeometry,
         |_performance_attribution| {
@@ -316,10 +315,10 @@ fn initialize_generation_processor(
     }
 }
 
-/// Constructs the streaming engine with its SSD-streaming chunk sizer; a
+/// Constructs the engine with its SSD-streaming chunk sizer; a
 /// sizing failure records the failed loading attribution first.
 #[allow(clippy::too_many_arguments)]
-fn construct_streaming_engine(
+fn construct_text_engine(
     prompt_chunk_tokens: u32,
     validated_artifact: ValidatedQwen3_5Artifact,
     active_memory_limit_bytes: usize,
@@ -331,7 +330,7 @@ fn construct_streaming_engine(
     chunking: WorkerChunkingConfiguration,
     model_loading_performance_attribution: PerformanceAttribution,
     mut performance_attribution_log: PerformanceAttributionLog,
-    streaming_engine_settings: StreamingEngineSettings,
+    text_engine_settings: TextEngineSettings,
     artifact_model_id: &str,
     artifact_model_revision: &str,
     artifact_payload_bytes: u64,
@@ -350,14 +349,12 @@ fn construct_streaming_engine(
                     artifact_shard_count,
                     "prompt-processing chunk configuration failed",
                 );
-                return Err(
-                    Qwen3_5ModelStartupError::StreamingPromptProcessingChunkSizing(
-                        prompt_processing_chunk_sizer_error,
-                    ),
-                );
+                return Err(Qwen3_5ModelStartupError::PromptProcessingChunkSizing(
+                    prompt_processing_chunk_sizer_error,
+                ));
             }
         };
-    Qwen3_5StreamingEngine::new_with_execution_core_settings(
+    Qwen3_5TextEngine::new_with_execution_core_settings(
         TextExecutionCoreSettings {
             validated_artifact,
             active_memory_limit_bytes,
@@ -371,7 +368,7 @@ fn construct_streaming_engine(
             model_loading_performance_attribution,
             performance_attribution_log,
         },
-        streaming_engine_settings,
+        text_engine_settings,
     )
     .map(boxed_chat_engine)
     .map_err(|source| Qwen3_5ModelStartupError::EngineInitialization {

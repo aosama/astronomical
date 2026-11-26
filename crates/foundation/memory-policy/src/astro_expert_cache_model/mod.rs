@@ -11,7 +11,7 @@
 //!
 //! Nothing here touches a model or a GPU, so a recorded reply can be
 //! replayed through this code on every commit
-//! (`recorded_reply_replay_tests`). The streaming engine does not follow
+//! (`recorded_reply_replay_tests`). The engine does not follow
 //! these decisions yet: its tables are still laid out by its own rules, and
 //! this module is the measured design it is to be moved onto.
 //!

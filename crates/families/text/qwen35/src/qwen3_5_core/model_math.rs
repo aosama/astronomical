@@ -1,6 +1,6 @@
 //! Shared Qwen3.5 family model math and typed weight structures (issue #1132).
 //!
-//! These are the pieces both engines execute identically and neither may fork:
+//! These are the pieces every Qwen3.5 model executes:
 //! the family execution error, the forward input/output contract, tensor
 //! slicing helpers, typed decoder-layer weights (dense and mixture-of-experts),
 //! the MoE routing and expert-output combination math, the GDN (gated delta

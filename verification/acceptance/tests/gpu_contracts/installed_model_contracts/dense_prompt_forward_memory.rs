@@ -12,7 +12,7 @@
 
 use std::time::Duration;
 
-use model_serving::{LayerProbeShape, Qwen3_5ArtifactValidator, Qwen3_5StreamingModel};
+use model_serving::{LayerProbeShape, Qwen3_5ArtifactValidator, Qwen3_5TextModel};
 use runtime_integration::MlxRuntime;
 use serial_test::serial;
 use tokio::time::timeout;
@@ -71,13 +71,13 @@ async fn assert_prompt_forwards_stay_within_reserve() {
         .validate(&model_directory, 64)
         .expect("the streamed dense artifact should validate");
     let qwen3_5_config = validated_artifact.config().clone();
-    let streaming_model = Qwen3_5StreamingModel::load(
+    let streaming_model = Qwen3_5TextModel::load(
         MlxRuntime::initialize(mlx_memory_limits).expect("the runtime should initialize"),
         validated_artifact,
         &model_directory,
         crate::common::standard_qwen3_5_model_chunking_configuration(),
     )
-    .expect("the dense model should load on the streaming engine");
+    .expect("the dense model should load on the engine");
     streaming_model
         .materialize_target_weights()
         .expect("the model weights should materialize");
@@ -124,7 +124,7 @@ async fn assert_prompt_forwards_stay_within_reserve() {
 /// The whole prompt in one layer-major prefill over probe-sized spans holds
 /// one span's MLX working buffers plus every span's hidden states.
 fn assert_layer_major_prefill_stays_within_reserve(
-    streaming_model: &Qwen3_5StreamingModel,
+    streaming_model: &Qwen3_5TextModel,
     qwen3_5_config: &model_serving::Qwen3_5Config,
     prompt_token_ids: &[u32],
     streamed_forward_reserve_bytes: u64,
@@ -179,7 +179,7 @@ fn assert_layer_major_prefill_stays_within_reserve(
 /// the weights and the decoder state it leaves behind; the preceding tokens
 /// run first, unmeasured, to fill that state.
 fn measure_chunk_forward_growth(
-    streaming_model: &Qwen3_5StreamingModel,
+    streaming_model: &Qwen3_5TextModel,
     qwen3_5_config: &model_serving::Qwen3_5Config,
     prompt_token_ids: &[u32],
     preceding_token_count: usize,

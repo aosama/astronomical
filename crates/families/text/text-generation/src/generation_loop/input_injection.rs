@@ -1,11 +1,10 @@
-//! Model-visible feedback injected into an active request, for either
+//! Model-visible feedback injected into an active request, for any text
 //! engine: the feedback's prefix is read as one prompt chunk and its final
 //! token is forwarded to sample the next reply token.
 //!
 //! Each forward is governed through [`TextForwardMemoryGovernance`]. Before
 //! the feedback runs, the engine prepares through
-//! [`TextInputInjectionHooks`]: the resident engine checks the projected
-//! context fits and suspends drafting, the streaming engine grows its
+//! [`TextInputInjectionHooks`]: the Qwen3.5 text engine grows its
 //! governed context to make room.
 
 use ipc_protocol::RequestId;
@@ -151,7 +150,7 @@ fn prefill_injected_feedback_prefix<Engine: TextInputInjectionHooks>(
 /// the pending successor.
 ///
 /// The final feedback token runs the lazy forward and is submitted ahead,
-/// unlike a streaming reply token. It is still exact on the streaming engine:
+/// unlike a streamed reply token. It is still exact on the Qwen3.5 text engine:
 /// outside optimistic serving every sparse layer either serves from a table
 /// that holds all its experts or brings its route to the host and reads what
 /// is missing. What it skips there is bookkeeping for this one token: the

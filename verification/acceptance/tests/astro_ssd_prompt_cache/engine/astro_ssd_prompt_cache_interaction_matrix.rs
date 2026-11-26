@@ -10,7 +10,7 @@ use std::{fs, path::Path, time::Duration};
 
 use ipc_protocol::RequestId;
 use model_serving::{
-    InferenceEngine, Qwen3_5ArtifactValidator, Qwen3_5StreamingEngine, Qwen3_5Tokenizer,
+    InferenceEngine, Qwen3_5ArtifactValidator, Qwen3_5TextEngine, Qwen3_5Tokenizer,
     TextInferenceRequest,
 };
 use serial_test::serial;
@@ -184,7 +184,7 @@ fn romeo_and_juliet_prompt_token_ids(
 }
 
 async fn run_greedy_request(
-    qwen3_5_engine: &mut Qwen3_5StreamingEngine,
+    qwen3_5_engine: &mut Qwen3_5TextEngine,
     request_id: RequestId,
     prompt_token_ids: &[u32],
 ) -> (u32, Vec<u32>) {

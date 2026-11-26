@@ -1,6 +1,5 @@
-//! The runtime readings and limit arithmetic both Qwen3.5 engines' live MLX
-//! ceiling changes share (issue #2473). Each engine decides differently what
-//! it may give back and how it rolls back, so only these steps live here.
+//! The runtime readings and limit arithmetic the Qwen3.5 engine's live MLX
+//! ceiling changes use (issue #2473).
 
 use runtime_integration::{
     MlxMemoryLimits, MlxRuntime, mlx_buffer_cache_limit_after_active_limit_change,

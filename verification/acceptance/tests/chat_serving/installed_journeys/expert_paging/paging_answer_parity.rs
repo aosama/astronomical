@@ -27,8 +27,8 @@ use std::{path::Path, process::Stdio, time::Duration};
 
 use ipc_protocol::{ExpertMemoryMode, RequestId};
 use model_serving::{
-    CompleteResidencyHeadroomBoundary, Qwen3_5ArtifactValidator, Qwen3_5StreamingEngine,
-    Qwen3_5StreamingEngineTestControls, TextModelTestControls,
+    CompleteResidencyHeadroomBoundary, Qwen3_5ArtifactValidator, Qwen3_5TextEngine,
+    Qwen3_5TextEngineTestControls, TextModelTestControls,
     model_memory_geometry_from_validated_artifact,
 };
 use runtime_integration::MlxMemoryLimits;
@@ -136,7 +136,7 @@ fn paging_ceiling_bytes(model_directory: &Path, paging_depth: PagingDepth) -> u6
 }
 
 async fn ask_twice(
-    qwen3_5_engine: &mut Qwen3_5StreamingEngine,
+    qwen3_5_engine: &mut Qwen3_5TextEngine,
     question: ParityQuestion,
     prompt_token_ids: &[u32],
     end_of_sequence_token_ids: &[u32],
@@ -172,7 +172,7 @@ async fn ask_twice(
 /// that span fails on its first ask, and what running it again cost is returned with
 /// the answers.
 async fn ask_twice_counting_redos(
-    qwen3_5_engine: &mut Qwen3_5StreamingEngine,
+    qwen3_5_engine: &mut Qwen3_5TextEngine,
     (question, fails_spans): (ParityQuestion, bool),
     prompt_token_ids: &[u32],
     end_of_sequence_token_ids: &[u32],

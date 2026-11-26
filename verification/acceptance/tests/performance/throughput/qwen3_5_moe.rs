@@ -114,8 +114,8 @@ fn should_measure_resident_sparse_moe_prompt_processing_and_decode_throughput() 
     );
 }
 
-/// The streaming engine's >=10,000-token lane with the same floor guard: the
-/// streaming path seats complete layers across chunks too, and its
+/// The engine's >=10,000-token lane with the same floor guard: the
+/// engine seats complete layers across chunks too, and its
 /// prompt-processing rate is the utilization signal for that family.
 #[test]
 #[ignore = "loads the streaming 35B sparse-MoE model and measures prompt-processing throughput"]

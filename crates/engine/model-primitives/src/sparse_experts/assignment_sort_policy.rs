@@ -26,8 +26,8 @@ use super::gathered_projection::ExpertAssignmentOrder;
 
 /// Sorting gathered expert reads pays off only once the assignment set is
 /// large enough to group reads by the leading expert axis. Everything in this
-/// file executes only in the direct-MLX engine world, where the resident and
-/// streaming engines route gathered expert projections.
+/// file executes only in the direct-MLX engine world, where the text engine
+/// routes gathered expert projections.
 pub const MINIMUM_SORTED_EXPERT_ASSIGNMENTS: usize = 64;
 
 /// MLX `GatherQMM` runs its tiled sorted kernel only when assignments per
@@ -46,7 +46,7 @@ pub fn should_use_sorted_expert_reduction(
     assignment_count >= MINIMUM_SORTED_EXPERT_ASSIGNMENTS && is_sorted_reduction_kernel_available
 }
 
-/// The order both engines declare to the gathered projection.
+/// The order the engine declares to the gathered projection.
 ///
 /// `are_expert_indices_sorted` says whether the caller already permuted the
 /// IDs and their activation rows by expert; this never sorts anything.

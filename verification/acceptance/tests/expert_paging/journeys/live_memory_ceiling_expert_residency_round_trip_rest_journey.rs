@@ -165,9 +165,9 @@ async fn raise_the_limit_and_serve_the_second_turn(
     let server_address = conversation.server_address;
     let resident_ceiling_bytes =
         apply_memory_ceiling(server_address, 38, RESIDENT_MLX_MEMORY_CEILING_BYTES).await;
-    // Promotion replaces the worker so the in-memory engine loads under the
-    // raised limit. The settle wait tolerates the replacement's loading
-    // window and asserts the resident contract against the applied limit.
+    // The worker applies the raised limit in place and reseats experts. The
+    // settle wait tolerates that reseating and asserts the resident contract
+    // against the applied limit.
     let resident_status = wait_for_settled_resident_status(
         server_address,
         "resident_before_turn_2",

@@ -1,8 +1,6 @@
 //! How each text engine governs memory around one forward.
 //!
-//! The engines govern in two different patterns. The resident engine asks
-//! its memory governor before a forward runs and may refuse it, moving the
-//! request to the streaming engine; the streaming engine starts a
+//! The Qwen3.5 text engine starts a
 //! measurement before the forward and tells its governor afterwards what the
 //! forward used. Shared steps only say where a forward begins and ends; the
 //! engine decides what that means, and carries what it needs from one to the

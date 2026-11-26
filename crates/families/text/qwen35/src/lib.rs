@@ -28,7 +28,7 @@ pub mod prism_hadamard_qwen35;
 pub mod qwen3_5_core;
 
 // Qwen3.8-Flash-Next (`qwen4_exp`), served as a generation of the Qwen 3.5
-// layout so it shares the streaming engine (issue #2533). It imports the
+// layout so it shares the engine (issue #2533). It imports the
 // shared core; the core never imports it.
 pub mod qwen4_exp;
 
@@ -37,7 +37,7 @@ pub mod qwen4_exp;
 #[cfg(test)]
 mod qwen3_5_import_direction_tests;
 
-pub mod qwen3_5_streaming;
+pub mod qwen3_5_text;
 
 // The crates below this family, imported at the root so the family's
 // `crate::...` paths into them read as they did inside the serving crate.
@@ -228,9 +228,9 @@ pub use qwen3_5_core::model::draft_tree_verification::DraftTreeTarget;
 pub use qwen3_5_core::model::draft_tree_verification::Qwen3_5DraftTreeVerification;
 
 #[cfg(feature = "direct-mlx")]
-pub use qwen3_5_streaming::Qwen3_5StreamingEngineTestControls;
+pub use qwen3_5_text::Qwen3_5TextEngineTestControls;
 #[cfg(feature = "direct-mlx")]
-pub use qwen3_5_streaming::{
+pub use qwen3_5_text::{
     ExpertPagingError, Qwen3_5ExpertPager, Qwen3_5MoEAstroExpertCachePlusStreamedPageRoute,
     Qwen3_5MoEPagedExecutionMode, build_source_manifests, contiguous_selected_runs,
     qwen3_5_moe_combine_experts, qwen3_5_moe_combine_partial_route_outputs_for_tests,
@@ -239,20 +239,18 @@ pub use qwen3_5_streaming::{
     qwen3_5_moe_sorted_expert_weighted_sum_kernel, qwen3_5_moe_unsorted_expert_weighted_sum,
 };
 
-pub use qwen3_5_streaming::{
-    ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID, ORNITH_1_0_35B_OPTIQ_4BIT_REVISION,
-};
+pub use qwen3_5_text::{ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID, ORNITH_1_0_35B_OPTIQ_4BIT_REVISION};
 
 #[cfg(feature = "direct-mlx")]
-pub use qwen3_5_streaming::{
-    DirectExpertFetchCounts, InGraphServingCounts, LayerProbeShape, Qwen3_5StreamingEngine,
-    Qwen3_5StreamingModel, Qwen3_5StreamingTargetForwardOutput, ReplyStageCounts,
-    RoutedReplyRecording, StreamingEngineSettings, safe_minimum_mlx_memory_ceiling_bytes,
+pub use qwen3_5_text::{
+    DirectExpertFetchCounts, InGraphServingCounts, LayerProbeShape, Qwen3_5TargetForwardOutput,
+    Qwen3_5TextEngine, Qwen3_5TextModel, ReplyStageCounts, RoutedReplyRecording,
+    TextEngineSettings, safe_minimum_mlx_memory_ceiling_bytes,
 };
 
 #[cfg(feature = "direct-mlx")]
 pub use text_generation::astro_ssd_prompt_cache_capture::astro_ssd_prompt_cache_publication_advances_parent_chain;
 
-pub use qwen3_5_streaming::{
+pub use qwen3_5_text::{
     RouteObservationRecord, RouteObservationRing, sorted_unique_layer_routed_expert_ids,
 };

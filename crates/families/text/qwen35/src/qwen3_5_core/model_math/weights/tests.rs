@@ -243,7 +243,7 @@ fn should_widen_half_precision_only_when_binding_for_a_cpu_compute_device() {
         );
         assert!(
             !binds_widened_to_float32(stored_dtype, WeightBindingDtype::AsStored, true),
-            "the streaming engine plans from stored bytes"
+            "the engine plans from stored bytes"
         );
     }
 }

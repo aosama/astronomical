@@ -7,11 +7,10 @@
 //! after the context; `commit_draft_tree` then advances every layer over the
 //! kept chain only. Nothing is captured per row and nothing runs twice.
 //!
-//! The pass lives in the shared core so the resident engine and the
-//! streaming engine verify the same way: a speed-up only one engine can run
-//! leaves every Mac that streams a model without it. The engines differ in
-//! where a layer finds its weights (all in memory, or read through the
-//! `astro_expert_cache`) and in how the pass's graph is handed to the GPU,
+//! The pass lives in the shared core so every Mac verifies the same way,
+//! whether it keeps the model in memory or streams it. Only where a layer
+//! finds its weights (all in memory, or read through the
+//! `astro_expert_cache`) and how the pass's graph is handed to the GPU differ,
 //! so those steps alone are the `DraftTreeTarget` trait.
 
 use mlx_bridge::{MlxArray, MlxDtype};
@@ -71,7 +70,7 @@ pub struct TreeLayerFeedForward<'pass> {
 }
 
 /// A model a draft tree can be verified against: the shared base, plus the
-/// steps each engine does its own way.
+/// steps that depend on where the weights live.
 pub trait DraftTreeTarget {
     /// The shared model the tree's embedding, attention and commit run on.
     fn draft_tree_model_base(&self) -> &Qwen3_5ModelBase;

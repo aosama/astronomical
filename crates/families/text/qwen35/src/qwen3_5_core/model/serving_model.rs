@@ -1,7 +1,6 @@
 //! How the Qwen 3.5 models answer the text shell's generation loop (issue
-//! #2473): the model base answers from its own fields, and the resident and
-//! streaming models answer from the base they wrap, so both engines read
-//! exactly what they read before.
+//! #2473): the model base answers from its own fields, and the text model
+//! answers from the base it wraps.
 //!
 //! The shell's trait asks only what any text model can answer. The vision
 //! tower itself is a Qwen 3.5 type, so the steps that run it reach it
@@ -30,7 +29,7 @@ impl Qwen3_5VisionTowerOwner for Qwen3_5ModelBase {
     }
 }
 
-/// A resident or streaming model hands out the tower of the base it wraps.
+/// A text model hands out the tower of the base it wraps.
 impl<Model> Qwen3_5VisionTowerOwner for Model
 where
     Model: Deref<Target = Qwen3_5ModelBase> + TextServingModel,

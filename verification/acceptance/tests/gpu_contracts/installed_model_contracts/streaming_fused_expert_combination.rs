@@ -1,4 +1,4 @@
-//! The streaming engine joins a prompt chunk's routed experts and its
+//! The engine joins a prompt chunk's routed experts and its
 //! shared expert in one fused Metal pass (issue #2585), as the in-memory
 //! engine does. The kernel is proven bit for bit against the two steps it
 //! replaces on synthetic rows; this proves the same on a served model's own
@@ -11,13 +11,12 @@
 
 use std::time::Duration;
 
-use model_serving::Qwen3_5StreamingModel;
+use model_serving::Qwen3_5TextModel;
 use serial_test::serial;
 use tokio::time::timeout;
 
-use super::streaming_greedy_answer::{
-    GreedyAnswer, load_materialized_streaming_model, shakespeare_prompt_token_ids,
-    streaming_greedy_answer,
+use super::greedy_answer::{
+    GreedyAnswer, greedy_answer, load_materialized_streaming_model, shakespeare_prompt_token_ids,
 };
 
 const COMBINATION_BUDGET: Duration = Duration::from_secs(120);
@@ -45,17 +44,15 @@ async fn assert_fused_combination_changes_nothing() {
     // load, with nothing asked of the person.
     assert!(
         fused_kernel_is_kept(&streaming_model),
-        "the streaming engine should keep the fused expert combination at load"
+        "the engine should keep the fused expert combination at load"
     );
-    let fused_answer =
-        streaming_greedy_answer(&streaming_model, &qwen3_5_config, &prompt_token_ids);
+    let fused_answer = greedy_answer(&streaming_model, &qwen3_5_config, &prompt_token_ids);
 
     // Negative: without the kernel the two-step path serves, and it is the
     // reference the fused pass must equal.
     streaming_model.disable_fused_sorted_expert_shared_combination();
     assert!(!fused_kernel_is_kept(&streaming_model));
-    let two_step_answer =
-        streaming_greedy_answer(&streaming_model, &qwen3_5_config, &prompt_token_ids);
+    let two_step_answer = greedy_answer(&streaming_model, &qwen3_5_config, &prompt_token_ids);
     assert_eq!(
         fused_answer.generated_token_ids, two_step_answer.generated_token_ids,
         "the fused combination must write the reply the two-step one writes"
@@ -71,8 +68,7 @@ async fn assert_fused_combination_changes_nothing() {
     streaming_model
         .enable_fused_sorted_expert_shared_combination()
         .expect("the fused kernel should build");
-    let fused_again_answer =
-        streaming_greedy_answer(&streaming_model, &qwen3_5_config, &prompt_token_ids);
+    let fused_again_answer = greedy_answer(&streaming_model, &qwen3_5_config, &prompt_token_ids);
     assert_eq!(logit_bits(&fused_again_answer), logit_bits(&fused_answer));
     report_alternated_answer_times(&mut streaming_model, &qwen3_5_config, &prompt_token_ids);
     eprintln!(
@@ -90,7 +86,7 @@ const TIMED_PAIR_COUNT: usize = 4;
 /// few tokens) each way, alternated in one process so drift lands on both.
 /// It asserts nothing: the kernel's gain is a fraction of a percent.
 fn report_alternated_answer_times(
-    streaming_model: &mut Qwen3_5StreamingModel,
+    streaming_model: &mut Qwen3_5TextModel,
     qwen3_5_config: &model_serving::Qwen3_5Config,
     prompt_token_ids: &[u32],
 ) {
@@ -105,7 +101,7 @@ fn report_alternated_answer_times(
                 streaming_model.disable_fused_sorted_expert_shared_combination();
             }
             let started_at = std::time::Instant::now();
-            streaming_greedy_answer(streaming_model, qwen3_5_config, prompt_token_ids);
+            greedy_answer(streaming_model, qwen3_5_config, prompt_token_ids);
             let answer_seconds = started_at.elapsed().as_secs_f64();
             if is_fused {
                 fused_seconds.push(answer_seconds);
@@ -140,7 +136,7 @@ fn mixture_of_experts_model_directory() -> std::path::PathBuf {
         .unwrap_or_else(crate::common::configured_small_sparse_moe_streaming_model_directory)
 }
 
-fn fused_kernel_is_kept(streaming_model: &Qwen3_5StreamingModel) -> bool {
+fn fused_kernel_is_kept(streaming_model: &Qwen3_5TextModel) -> bool {
     streaming_model
         .optional_accelerators
         .sorted_expert_shared_combination_kernel

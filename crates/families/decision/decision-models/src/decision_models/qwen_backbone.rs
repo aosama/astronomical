@@ -28,7 +28,7 @@ use crate::decision_models::decision_adapters::{
 use crate::linear_adapters::LinearAdapters;
 use crate::qwen3_5_core::model::layer_additions::Qwen3_5LayerAdditions;
 use crate::{
-    Qwen3_5ArtifactValidator, Qwen3_5StreamingModel, RequestDecoderStateStack,
+    Qwen3_5ArtifactValidator, Qwen3_5TextModel, RequestDecoderStateStack,
     TextModelChunkingConfiguration,
 };
 
@@ -47,7 +47,7 @@ pub const PREFILL_CHUNK_TOKENS: usize = 2_048;
 
 /// One loaded backbone.
 pub struct QwenDecisionBackbone {
-    pub model: Qwen3_5StreamingModel,
+    pub model: Qwen3_5TextModel,
     /// Whether the folder's add-ons are in force.
     pub has_add_ons: bool,
 }
@@ -80,13 +80,9 @@ impl QwenDecisionBackbone {
         let runtime = MlxRuntime::initialize(memory_limits).map_err(|runtime_error| {
             backbone_failure("runtime start", &runtime_error.to_string())
         })?;
-        let model = Qwen3_5StreamingModel::load(
-            runtime,
-            validated_artifact,
-            model_directory,
-            model_chunking,
-        )
-        .map_err(|load_error| backbone_failure("load", &load_error.to_string()))?;
+        let model =
+            Qwen3_5TextModel::load(runtime, validated_artifact, model_directory, model_chunking)
+                .map_err(|load_error| backbone_failure("load", &load_error.to_string()))?;
         // Every layer stays in memory: a training runs each one many times,
         // and a decision reads a whole state, so reading layers from the SSD
         // on every forward would cost far more than holding them.
@@ -157,7 +153,7 @@ pub fn backbone_memory_limit_bytes(
 /// Reads, checks and uploads the folder's add-ons, if it has any, and puts
 /// them in force. Returns whether there were any.
 fn put_folder_add_ons_in_force(
-    model: &Qwen3_5StreamingModel,
+    model: &Qwen3_5TextModel,
     model_directory: &Path,
 ) -> Result<bool, DecisionFailure> {
     let decision_adapters = read_decision_adapters(model_directory)?;

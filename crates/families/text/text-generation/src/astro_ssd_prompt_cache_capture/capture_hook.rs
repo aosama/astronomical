@@ -6,12 +6,10 @@ use crate::generation_loop::execution_core::TextExecutionCoreOwner;
 
 /// The engine-specific half of astro SSD prompt cache capture.
 ///
-/// Extraction and publication are identical in both engines; only the
+/// Extraction and publication are identical for every engine; only the
 /// response to a publication blocked by the MLX active-memory limit
-/// differs. The streaming engine evicts retained expert pages before its
-/// single retry. The resident engine holds every expert by design and has
-/// nothing to evict, so its retry repeats the first attempt unchanged; the
-/// divergence between the engines is recorded on issue #1637.
+/// differs. The Qwen3.5 text engine evicts retained expert pages before its
+/// single retry (issue #1637).
 pub trait TextAstroSsdPromptCacheCapture: TextExecutionCoreOwner {
     /// Frees what this engine can before the one publication retry, given
     /// the bytes the MLX active-memory limit was short by, and records what

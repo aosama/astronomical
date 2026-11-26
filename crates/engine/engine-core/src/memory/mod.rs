@@ -6,7 +6,7 @@
 //! family code ──measures──▶ memory decides ──decision──▶ family code enacts
 //! ```
 //!
-//! Family modules (`qwen3_5`, `qwen3_5_streaming`) measure byte facts from
+//! Family modules (`qwen3_5`, `qwen3_5_text`) measure byte facts from
 //! MLX and the artifact, hand them to the pure arithmetic in
 //! `memory-policy` (re-exported below) and to the MLX-facing
 //! owners in this package, and enact the typed decisions they receive. This
@@ -24,7 +24,7 @@
 //!   `Idle`. The residency planner treats `GenerationPreparation` like
 //!   `Decode`.
 //! - **1 owner of the limit** — the memory governor
-//!   (`memory_policy::ledger`). Each engine opens one, tells
+//!   (`memory_policy::ledger`). The engine opens one, tells
 //!   it what happens and applies the capacity it answers with.
 //! - **3 layer states** — when a reply begins, `residency` plans one
 //!   `ExpertLayerState` per sparse decoder layer: `Kept`, `Hot` or
@@ -62,15 +62,15 @@ mod decode_seating_tests;
 mod astro_expert_cache_arithmetic;
 #[cfg(feature = "direct-mlx")]
 mod dense_resident;
-// Only the direct-MLX streaming engine reads it; the unit tests read it
+// Only the direct-MLX text engine reads it; the unit tests read it
 // without the graphics-processor runtime.
 #[cfg(any(feature = "direct-mlx", test))]
 pub mod macos_wired_memory;
-// Only the direct-MLX streaming engine records replies through it; the unit
+// Only the direct-MLX text engine records replies through it; the unit
 // tests own it without the graphics-processor runtime.
 #[cfg(any(feature = "direct-mlx", test))]
 pub mod mlx_buffer_cache_reply_record;
-// Only the direct-MLX streaming engine records replies through it; the unit
+// Only the direct-MLX text engine records replies through it; the unit
 // tests own it without the graphics-processor runtime.
 #[cfg(any(feature = "direct-mlx", test))]
 pub mod reply_expert_route_record;
@@ -115,7 +115,7 @@ pub use memory_policy::phase::MemoryPhase;
 pub use memory_policy::placement::EnginePlacement;
 pub use memory_policy::reclamation::ExpertMemoryAdmissionError;
 pub use memory_policy::residency::seated_complete_layer_count;
-// The direct-MLX streaming planner (qwen3_5_streaming's gated
+// The direct-MLX streaming planner (qwen3_5_text's gated
 // phase_aware_expert_residency) imports residency by module path
 // (`crate::memory::residency::ExpertLayerGeometry`), so the module stays
 // nameable at this path under the same feature gate.
@@ -123,8 +123,8 @@ pub use memory_policy::residency::seated_complete_layer_count;
 pub use memory_policy::residency;
 pub use memory_policy::residency::{
     CompleteResidencyHeadroomBoundary, CurrentExpertLayerResidency, ExpertLayerState,
-    ExpertResidencyPlan, ExpertResidencyPlanError, RetainedExpertPageClass,
-    StreamingStartupResidencyFacts, classify_expert_memory_mode, complete_layers_beyond_keep_count,
+    ExpertResidencyPlan, ExpertResidencyPlanError, RetainedExpertPageClass, StartupResidencyFacts,
+    classify_expert_memory_mode, complete_layers_beyond_keep_count,
     decode_warm_floor_eviction_indexes, decode_whole_layer_keep_count, hot_expert_warm_slot_count,
     kept_layer_indexes_to_seat_before_reply, minimum_decode_warm_slot_count,
     observed_expert_memory_mode, plan_expert_residency, should_commit_mandatory_complete_layer,

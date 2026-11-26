@@ -25,9 +25,9 @@ pub enum ThroughputJourneyKind {
     Vision,
     MemoryCeilingSweep,
     DecodeFullFit,
-    /// The directed 5,000-input/300-output resident-model summarization under
-    /// the automatic engine choice at every assigned memory ceiling, whether
-    /// it selects the resident or the streaming engine; kept distinct from
+    /// The directed 5,000-input/300-output resident-model summarization at
+    /// every assigned memory ceiling, whether the engine holds the whole model
+    /// or reads part of it from the SSD; kept distinct from
     /// Text, whose shape is 10,000 tokens in and 500 out.
     ResidentMemoryCeilingProbe,
     /// One row of the streaming scoreboard (issue #2221). Those rows are

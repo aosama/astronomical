@@ -1,5 +1,4 @@
-//! Exact decoder-state dtype derivation, shared by the streaming and resident
-//! engines.
+//! Exact decoder-state dtype derivation, used by the text engine.
 //!
 //! A configuration activation label is insufficient for persistent state: MLX
 //! promotes each operation from live activation, normalization, affine-scale,
@@ -7,12 +6,9 @@
 //! evaluating arrays, so astro decoder state cache serialization and memory admission describe the
 //! tensors the production graph actually creates.
 //!
-//! The replay lives here, in `qwen3_5_core`, because the streaming and resident
-//! engines previously carried two byte-identical copies of it: every
-//! promotion-rule correction had to land twice, and a correction that landed
-//! once left the copies silently divergent. The engines now reduce their
-//! per-crate weight types to the small dtype contracts below and share this
-//! single replay.
+//! The replay lives here, in `qwen3_5_core`, so the engine reduces its
+//! weight types to the small dtype contracts below and a promotion-rule
+//! correction lands in one place.
 
 use mlx_bridge::MlxDtype;
 
@@ -77,8 +73,8 @@ pub struct DenseMlpDtypeFlow {
 
 /// The normalized post-attention activation plus the shared-expert projections
 /// of a mixture-of-experts layer. The routed experts' dtype contract arrives
-/// separately as the layer's quantized expert plan, because each engine
-/// resolves that plan differently.
+/// separately as the layer's quantized expert plan, because the engine
+/// resolves that plan from its own weights.
 #[derive(Debug, Clone, Copy)]
 pub struct MixtureOfExpertsDtypeFlow {
     pub normalized_attention_dtype: MlxDtype,

@@ -1,7 +1,7 @@
 //! Per-chunk attribution of paged prompt prefill at the model layer.
 //!
 //! Bottom-up probe, one level above the storage boundary: the production
-//! `Qwen3_5StreamingModel` executes real 2,048-token Romeo and Juliet prefill
+//! `Qwen3_5TextModel` executes real 2,048-token Romeo and Juliet prefill
 //! chunks under the artifact's derived paging ceiling (SSD streaming active,
 //! no resident complete layers), and each chunk receives its own
 //! `PerformanceAttribution` so the probe reports, per chunk:
@@ -20,7 +20,7 @@ use std::time::Duration;
 
 use model_serving::{
     CompleteResidencyHeadroomBoundary, PerformanceAttribution, PerformanceCounter,
-    PerformanceOperation, Qwen3_5ArtifactValidator, Qwen3_5StreamingModel,
+    PerformanceOperation, Qwen3_5ArtifactValidator, Qwen3_5TextModel,
     model_memory_geometry_from_validated_artifact,
 };
 use runtime_integration::MlxRuntime;
@@ -85,7 +85,7 @@ async fn attribute_paged_prefill_chunks() {
     )
     .expect("the attributed runtime should initialize");
     eprintln!("[paged-prefill-attribution] status=progress phase=model_load ETA_seconds=30");
-    let qwen3_5_model = Qwen3_5StreamingModel::load(
+    let qwen3_5_model = Qwen3_5TextModel::load(
         runtime,
         validated_artifact,
         &model_directory,

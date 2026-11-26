@@ -5,7 +5,7 @@
 //! or an exact block was already present. Capacity pressure gets one narrowly
 //! typed retry, after allocator cleanup and whatever the engine's
 //! `reclaim_before_publication_retry` frees: retained expert pages in the
-//! streaming engine, nothing in the resident engine. Storage, quota,
+//! Qwen3.5 text engine. Storage, quota,
 //! validation, and topology failures stop the request without retry.
 
 use crate::{

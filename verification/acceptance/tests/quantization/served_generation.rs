@@ -5,8 +5,7 @@
 use std::path::Path;
 
 use model_serving::{
-    Qwen3_5ArtifactValidator, Qwen3_5StreamingModel, Qwen3_5Tokenizer,
-    TextModelChunkingConfiguration,
+    Qwen3_5ArtifactValidator, Qwen3_5TextModel, Qwen3_5Tokenizer, TextModelChunkingConfiguration,
 };
 
 use super::support::{ROMEO_AND_JULIET_SOURCE, journey_runtime};
@@ -40,7 +39,7 @@ pub(crate) fn generate_greedy_continuation(artifact_directory: &Path) -> String 
         SSD_PAGING_GENERATION_LAYER_INTERVAL,
     )
     .expect("the production chunking tuple is valid");
-    let model = Qwen3_5StreamingModel::load(
+    let model = Qwen3_5TextModel::load(
         journey_runtime(),
         validated_artifact,
         artifact_directory,
@@ -55,7 +54,7 @@ pub(crate) fn generate_greedy_continuation(artifact_directory: &Path) -> String 
 }
 
 /// Forwards the prompt once, then one token at a time, taking the argmax.
-fn greedy_decode(model: &Qwen3_5StreamingModel, prompt_token_ids: &[u32]) -> Vec<u32> {
+fn greedy_decode(model: &Qwen3_5TextModel, prompt_token_ids: &[u32]) -> Vec<u32> {
     let mut decoder_state = model
         .empty_request_decoder_state_matching_loaded_weights(
             i32::try_from(FULL_ATTENTION_KV_GROWTH_TOKENS).expect("fits"),

@@ -111,7 +111,7 @@ pub fn dense_vision_model_id() -> &'static str {
     model_id_for_role(DENSE_VISION_ROLE)
 }
 
-/// The dense model placed on the streaming engine when its text weights do
+/// The dense model placed on the engine when its text weights do
 /// not fit under the MLX limit (issue #1985): the public text-only Ornith 1.5
 /// 9B MLX 6-bit build from the ornith-ai Hugging Face organization, discovered
 /// from the Hugging Face hub cache rather than the download catalog.
@@ -127,8 +127,7 @@ pub fn small_sparse_moe_streaming_model_id() -> &'static str {
 }
 
 /// Qwen3.8-Flash-Next, whose residual stream has several lanes and whose
-/// n-gram table stays on the SSD; it runs on the streaming engine only
-/// (issue #2533). Not required: its acceptance contract fails at discovery
+/// n-gram table stays on the SSD (issue #2533). Not required: its acceptance contract fails at discovery
 /// on a Mac without it.
 pub fn lane_mixing_sparse_moe_streaming_model_id() -> &'static str {
     model_id_for_role(LANE_MIXING_SPARSE_MOE_STREAMING_ROLE)

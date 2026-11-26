@@ -128,7 +128,7 @@ impl PrismHadamardQwen35InferenceExecution {
     }
 
     /// The block boundaries a chunk crosses when its blocks will be
-    /// published, as the resident engine plans them.
+    /// published.
     fn chunk_boundary_plan(
         &self,
         model: &PrismHadamardTextModel,

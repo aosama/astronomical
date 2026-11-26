@@ -1,16 +1,14 @@
-//! The target forward graph both Qwen3.5 text models build: token checks,
+//! The target forward graph the Qwen3.5 text model builds: token checks,
 //! the embedding lookup, the decoder layers, and the vocabulary head.
 //!
-//! Only the decoder-layer loop differs between the engines. The resident model
-//! runs layers it holds and may submit finished layer groups so macOS can
-//! schedule other graphics work between command buffers. The streaming model
-//! clears what a previous forward left, reads streamed layers and expert pages,
-//! and submits each finished layer itself. Each model supplies its loop
-//! through [`Qwen3_5TargetForwardGraph::build_decoder_layers`]; everything
-//! around it is written here once.
+//! Only the decoder-layer loop is model specific. The model clears what a
+//! previous forward left, reads streamed layers and expert pages, and submits
+//! each finished layer itself. It supplies its loop through
+//! [`Qwen3_5TargetForwardGraph::build_decoder_layers`]; everything around it
+//! is written here once.
 //!
 //! The trait is reached through static generics, so each model compiles its
-//! own copy of these steps, exactly as when each model wrote them out.
+//! own copy of these steps.
 
 use std::ops::Deref;
 
@@ -76,9 +74,8 @@ impl Qwen3_5ForwardPositions<'_> {
 /// A Qwen3.5 text model's forward graph. A model supplies its decoder-layer
 /// loop; the default methods build every kind of forward around it.
 pub trait Qwen3_5TargetForwardGraph: Deref<Target = Qwen3_5ModelBase> {
-    /// How a forward runs beyond its tokens: the streaming model's paged
-    /// execution mode. The resident model runs every forward one way, so its
-    /// mode is `()`.
+    /// How a forward runs beyond its tokens: the model's paged
+    /// execution mode.
     type ForwardMode: Copy;
 
     /// Runs every decoder layer over `hidden_states` and returns the last

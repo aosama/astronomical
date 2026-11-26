@@ -5,7 +5,7 @@
 //! layers only appended keys and values, so moving their offset back drops the
 //! refused rows. DeltaNet layers fold every row into one running state, which
 //! cannot be undone, so the verify pass captured that state after each row
-//! (`Qwen3_5StreamingModel::verify_drafted_rows`) and the kept row's capture is
+//! (`Qwen3_5TextModel::verify_drafted_rows`) and the kept row's capture is
 //! put back. Nothing runs through the model again: the old rewind restored a
 //! checkpoint and ran the kept rows a second time, 71 ms a round on the 27B.
 

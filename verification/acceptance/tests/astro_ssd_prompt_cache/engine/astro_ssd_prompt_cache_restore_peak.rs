@@ -5,7 +5,7 @@ use std::time::Duration;
 use ipc_protocol::RequestId;
 use model_serving::{
     AstroSsdPromptCacheDiskStoreConfig, GeneratedToken, InferenceEngine,
-    PromptProcessingChunkSizer, Qwen3_5ArtifactValidator, Qwen3_5StreamingEngine, Qwen3_5Tokenizer,
+    PromptProcessingChunkSizer, Qwen3_5ArtifactValidator, Qwen3_5TextEngine, Qwen3_5Tokenizer,
     TextInferenceRequest, TextMlxEngineConstructors,
 };
 use runtime_integration::MlxRuntime;
@@ -90,7 +90,7 @@ async fn run_astro_ssd_prompt_cache_restore_peak_acceptance() {
         ASTRO_SSD_PROMPT_CACHE_RESTORE_PEAK_PREFILL_CHUNK_TOKENS,
     )
     .expect("the selected prefill chunk size should be valid");
-    let mut qwen3_5_engine = Qwen3_5StreamingEngine::new_with_prompt_processing_chunk_sizer(
+    let mut qwen3_5_engine = Qwen3_5TextEngine::new_with_prompt_processing_chunk_sizer(
         validated_artifact,
         memory_limits.active_memory_limit_bytes(),
         memory_limits.mlx_buffer_cache_limit_bytes(),
@@ -251,7 +251,7 @@ fn greedy_romeo_and_juliet_request(
 /// The ten-second memory ticker answers the paired question of whether the GPU
 /// is wired and computing while no event arrives.
 async fn generate_token_ids_with_event_timing(
-    qwen3_5_engine: &mut Qwen3_5StreamingEngine,
+    qwen3_5_engine: &mut Qwen3_5TextEngine,
     request_id: RequestId,
     generated_token_count: usize,
     phase_label: &'static str,

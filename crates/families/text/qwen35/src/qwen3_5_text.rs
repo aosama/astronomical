@@ -1,0 +1,54 @@
+pub mod expert_streaming;
+#[cfg(feature = "direct-mlx")]
+pub mod inference_execution;
+#[cfg(feature = "direct-mlx")]
+pub mod model;
+
+#[cfg(feature = "direct-mlx")]
+pub use crate::qwen3_5_core::artifacts::ValidatedQwen3_5Artifact;
+#[cfg(feature = "direct-mlx")]
+pub use engine_core::expert_paging::build_source_manifests;
+#[cfg(feature = "direct-mlx")]
+pub use engine_core::expert_paging::contiguous_selected_runs;
+#[cfg(feature = "direct-mlx")]
+pub use expert_streaming::AstroExpertCache;
+pub use expert_streaming::route_observation::{
+    RouteObservationRecord, RouteObservationRing, sorted_unique_layer_routed_expert_ids,
+};
+#[cfg(feature = "direct-mlx")]
+pub use expert_streaming::{ExpertPagingError, Qwen3_5ExpertPager};
+#[cfg(feature = "direct-mlx")]
+pub use inference_execution::Qwen3_5TextEngineTestControls;
+#[cfg(feature = "direct-mlx")]
+pub use inference_execution::{
+    Qwen3_5TextEngine, TextEngineSettings, safe_minimum_mlx_memory_ceiling_bytes,
+};
+#[cfg(feature = "direct-mlx")]
+pub use model::decision_readout::DecoderLayerRecomputation;
+#[cfg(feature = "direct-mlx")]
+pub use model::direct_expert_fetch_tally::DirectExpertFetchCounts;
+#[cfg(feature = "direct-mlx")]
+pub use model::in_graph_table_serving::InGraphServingCounts;
+#[cfg(feature = "direct-mlx")]
+pub use model::reply_stage_tally::ReplyStageCounts;
+#[cfg(feature = "direct-mlx")]
+pub use model::routed_reply_recording::RoutedReplyRecording;
+#[cfg(feature = "direct-mlx")]
+pub use model::{LayerProbeShape, Qwen3_5Model as Qwen3_5TextModel, Qwen3_5TargetForwardOutput};
+#[cfg(feature = "direct-mlx")]
+pub use model::{PagedForwardMissingRouteCollector, PagedRouteValidationOutcome};
+#[cfg(feature = "direct-mlx")]
+pub use model::{
+    Qwen3_5MoEAstroExpertCachePlusStreamedPageRoute, Qwen3_5MoEPagedExecutionMode,
+    qwen3_5_moe_combine_experts, qwen3_5_moe_combine_partial_route_outputs_for_tests,
+    qwen3_5_moe_restore_expert_assignment_order, qwen3_5_moe_route_experts,
+    qwen3_5_moe_sort_expert_assignments, qwen3_5_moe_sorted_expert_weighted_sum,
+    qwen3_5_moe_sorted_expert_weighted_sum_kernel, qwen3_5_moe_unsorted_expert_weighted_sum,
+};
+
+/// Model identity constants for the frozen Ornith 1.0 sparse artifact; defined
+/// in the shared family core so every engine and test fixture can reach them
+/// without crossing engine boundaries. Re-exported here for path stability.
+pub use crate::qwen3_5_core::{
+    ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID, ORNITH_1_0_35B_OPTIQ_4BIT_REVISION,
+};

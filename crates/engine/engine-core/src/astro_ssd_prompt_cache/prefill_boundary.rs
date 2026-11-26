@@ -142,17 +142,14 @@ pub fn astro_ssd_prompt_cache_boundary_clamped_prefill_chunk_end(
     requested_prefill_chunk_end.min(next_astro_ssd_prompt_cache_boundary)
 }
 
-/// The next prompt-prefill chunk span, resolved identically by both Qwen3.5
-/// engines: `None` when no prompt work is pending, otherwise the configured
+/// The next prompt-prefill chunk span: `None` when no prompt work is pending, otherwise the configured
 /// chunk end clamped at the durable astro SSD prompt cache boundary when one applies.
 ///
-/// Extracted from the two engines' `advance_prompt_prefill_if_pending` twins,
-/// which had drifted toward repeating this composition; the boundary clamp was
-/// silently discarded once by an innocent refactor, so the whole span
-/// resolution — availability, permission, and clamp — lives in this one
+/// The boundary clamp was silently discarded once by an innocent refactor, so
+/// the whole span resolution — availability, permission, and clamp — lives in this one
 /// tested pure function.
 ///
-/// Only the direct-MLX Qwen3.5 engines consume the resolved span, so the
+/// Only the direct-MLX Qwen3.5 engine consumes the resolved span, so the
 /// resolver and its span stay feature-gated with them.
 #[must_use]
 #[cfg(feature = "direct-mlx")]

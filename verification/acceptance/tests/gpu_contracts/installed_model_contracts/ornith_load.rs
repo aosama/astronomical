@@ -11,7 +11,7 @@ use std::time::Duration;
 use ipc_protocol::RequestId;
 use model_serving::{
     PerformanceAttribution, PerformanceAttributionLog, PromptProcessingChunkSizer,
-    Qwen3_5ArtifactValidator, Qwen3_5StreamingEngine, Qwen3_5Tokenizer, TextMlxEngineConstructors,
+    Qwen3_5ArtifactValidator, Qwen3_5TextEngine, Qwen3_5Tokenizer, TextMlxEngineConstructors,
 };
 use tokio::time::timeout;
 
@@ -72,7 +72,7 @@ async fn load_and_generate_with_configured_ornith_artifact() {
         .expect("the Ornith journey should create a performance-attribution directory");
     let mlx_memory_limits = crate::common::sample_serving_acceptance_mlx_memory_limits().await;
     let mut ornith_engine =
-        Qwen3_5StreamingEngine::new_with_runtime_chunking_and_performance_attribution(
+        Qwen3_5TextEngine::new_with_runtime_chunking_and_performance_attribution(
             validated_artifact,
             mlx_memory_limits.active_memory_limit_bytes(),
             mlx_memory_limits.mlx_buffer_cache_limit_bytes(),

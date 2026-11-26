@@ -1,8 +1,7 @@
 //! Prompt-chunk boundaries for every text engine.
 //!
-//! The resident and streaming engines cut a prompt the same way: chunks of
-//! the configured size, with a shorter final chunk. They differ only in what
-//! the configured size is tuned for, which the worker decides.
+//! Every engine cuts a prompt the same way: chunks of the configured size,
+//! with a shorter final chunk. The worker decides what the size is tuned for.
 
 #[cfg(test)]
 mod tests;

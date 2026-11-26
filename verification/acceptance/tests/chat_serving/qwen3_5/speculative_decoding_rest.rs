@@ -1,8 +1,8 @@
-//! Speculative-decoding serving journey for the resident Qwen3.5 engine.
+//! Speculative-decoding serving journey for the Qwen3.5 text engine holding the whole model in memory.
 //!
 //! This journey proves the production wiring end to end: the daemon resolves
 //! the chunking configuration's speculative block length, the worker passes
-//! it into the resident engine, the engine loads the paired DFlash draft
+//! it into the engine, the engine loads the paired DFlash draft
 //! beside its target, an admitted session prefills through the
 //! tap-capturing path, and decode runs draft-and-verify rounds — greedily
 //! at temperature zero, or with one tempered target sample per position at
@@ -45,7 +45,7 @@ const SPECULATIVE_OUTPUT_TOKEN_COUNT: u64 = 64;
 const DRAFT_RESIDENCY_HEADROOM_BYTES: u64 = 2_000_000_000;
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "written for the in-memory engine's speculative block-length wiring, which went with that engine (#2585); the streaming engine drafts with DFlash2 trees, measured by cargo measure-dflash2-kept-per-round, so this journey cannot pass as written"]
+#[ignore = "written for the in-memory engine's speculative block-length wiring, which went with the removed in-memory engine (#2585); the engine drafts with DFlash2 trees, measured by cargo measure-dflash2-kept-per-round, so this journey cannot pass as written"]
 #[serial]
 async fn should_serve_a_chat_through_speculative_decoding_with_the_paired_draft() {
     timeout(
@@ -57,7 +57,7 @@ async fn should_serve_a_chat_through_speculative_decoding_with_the_paired_draft(
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "written for the in-memory engine's speculative block-length wiring, which went with that engine (#2585); the streaming engine drafts with DFlash2 trees, measured by cargo measure-dflash2-kept-per-round, so this journey cannot pass as written"]
+#[ignore = "written for the in-memory engine's speculative block-length wiring, which went with the removed in-memory engine (#2585); the engine drafts with DFlash2 trees, measured by cargo measure-dflash2-kept-per-round, so this journey cannot pass as written"]
 #[serial]
 async fn should_serve_a_sampled_chat_through_speculative_decoding() {
     timeout(
@@ -117,7 +117,7 @@ async fn should_serve_through_speculative_decoding(
         get_json_endpoint(real_model_rest_server.server_address, "/v1/status").await;
     assert_eq!(
         status_document["expert_memory_mode"], "resident",
-        "the speculative journey must serve on the resident engine: {status_document}"
+        "the speculative journey must serve with every expert resident: {status_document}"
     );
     stop_real_model_rest_server(real_model_rest_server).await;
 

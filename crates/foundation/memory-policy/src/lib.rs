@@ -14,7 +14,7 @@
 //! depend on it, one way: the runtime-backed allocation admission and the
 //! direct-MLX admission logging in `engine-core`, and the
 //! retained astro expert cache slot tables and streaming readers in the
-//! Qwen 3.5 streaming engine.
+//! Qwen 3.5 text engine.
 //!
 //! # Module map
 //!

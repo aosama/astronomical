@@ -1,12 +1,10 @@
 //! Pure planning units for request-side persistent astro SSD prompt cache capture,
-//! shared by the streaming and resident engines.
+//! used by the text engine.
 //!
 //! Boundary validation, causal-input selection, block-key construction
-//! parents, and the publication workspace decision previously lived as two
-//! byte-identical copies inside the engines' capture functions; a correction
-//! that landed in one engine silently missed the other. The engines now call
-//! these single units, and each engine's capture function keeps only the
-//! engine-specific extraction, measurement, and publication plumbing.
+//! parents, and the publication workspace decision live here as single tested
+//! units, so the engine's capture function keeps only the extraction,
+//! measurement, and publication plumbing.
 
 use crate::astro_ssd_prompt_cache::block_causal_input::AstroSsdPromptCacheBlockCausalInput;
 // Block-key parents exist only for the direct-MLX engines' capture helper
@@ -137,8 +135,8 @@ pub fn select_block_causal_input(
 
 /// Builds the identity key of one captured block: the root key for the first
 /// captured block, chained from the restored parent for every later one.
-/// Only the direct-MLX streaming engine drives block capture, so the helper
-/// is gated with it.
+/// Only the direct-MLX text engine drives block capture, so the helper is
+/// gated with it.
 #[cfg(feature = "direct-mlx")]
 pub fn block_key_for_captured_block(
     parent_astro_ssd_prompt_cache_block_key: Option<&AstroSsdPromptCacheBlockKey>,

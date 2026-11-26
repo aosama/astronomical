@@ -31,7 +31,7 @@ use model_serving::speculative_decoding::verification_decision::{
     decide_by_token_equality,
 };
 use model_serving::{
-    PerformanceAttribution, Qwen3_5ArtifactValidator, Qwen3_5StreamingModel, Qwen3_5Tokenizer,
+    PerformanceAttribution, Qwen3_5ArtifactValidator, Qwen3_5TextModel, Qwen3_5Tokenizer,
     RequestDecoderStateStack, TextModelChunkingConfiguration,
 };
 use runtime_integration::{MlxMemoryLimits, MlxRuntime, MlxSafetensors};
@@ -132,7 +132,7 @@ const CELLS: [Cell; 4] = [
 ];
 
 pub(crate) struct JourneyPair {
-    pub(crate) target: Qwen3_5StreamingModel,
+    pub(crate) target: Qwen3_5TextModel,
     /// The model ID chat commands name: the loaded target's folder leaf.
     pub(crate) target_model_id: String,
     pub(crate) tokenizer: Qwen3_5Tokenizer,
@@ -252,7 +252,7 @@ pub(crate) fn load_pair() -> JourneyPair {
         Qwen3_5Tokenizer::from_validated_artifact(&artifact).expect("the tokenizer builds");
     let chunking = TextModelChunkingConfiguration::new(256, 0, 0).expect("the chunking is valid");
     let mut attribution = PerformanceAttribution::disabled();
-    let mut target = Qwen3_5StreamingModel::load_with_performance_attribution(
+    let mut target = Qwen3_5TextModel::load_with_performance_attribution(
         runtime,
         artifact,
         &target_directory,

@@ -3,10 +3,8 @@
 //! reclaiming the `mlx_buffer_cache`, and reporting the stretch as read.
 //!
 //! How a stretch is read and what a failed read does stay with each engine.
-//! The resident engine reads it in one admitted forward and moves the request
-//! to the streaming engine when it does not fit. The streaming engine reads
-//! it one layer at a time and redoes a failed span with room leased from its
-//! memory governor.
+//! The Qwen3.5 text engine reads it one layer at a time and redoes a failed
+//! span with room leased from its memory governor.
 //!
 //! The order of the steps is a correctness contract: publication to the
 //! `astro_ssd_prompt_cache` comes before the cursor moves, and progress is
@@ -267,7 +265,7 @@ pub fn prefill_mlx_memory_telemetry_from_snapshot<Model: TextModel>(
         active_memory_breakdown,
     )
     // The claim derives from the breakdown of this exact reading so the
-    // progress pair cannot straddle a promotion or demotion (issue #337).
+    // progress pair cannot straddle a change of expert memory mode (issue #337).
     .with_expert_residency_telemetry(
         model.expert_residency_telemetry_for_breakdown(&active_memory_breakdown),
     )

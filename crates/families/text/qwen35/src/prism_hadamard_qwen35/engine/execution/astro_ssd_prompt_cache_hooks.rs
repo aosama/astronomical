@@ -20,7 +20,7 @@ impl TextAstroSsdPromptCacheRestoreHooks for PrismHadamardQwen35InferenceExecuti
 impl TextAstroSsdPromptCacheCapture for PrismHadamardQwen35InferenceExecution {
     /// The folded pack holds every weight and has nothing to evict, so the
     /// one retry after a publication blocked by the MLX active-memory limit
-    /// repeats the publication unchanged, as the resident engine's does.
+    /// repeats the publication unchanged.
     fn reclaim_before_publication_retry(
         &self,
         _model: &PrismHadamardTextModel,

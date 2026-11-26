@@ -3,10 +3,9 @@
 //! under measurement, collect the finalization, and record the request's
 //! attribution.
 //!
-//! The engines differ in when their governed work ends. The streaming engine
-//! ends it and keeps its dense layers again before the memory is released;
-//! the resident engine ends it after. Each says which through the two
-//! `end_governed_request_*` hooks, so the order of every step stays as it was.
+//! Engines differ in when their governed work ends. The Qwen3.5 text engine
+//! ends it and keeps its dense layers again before the memory is released.
+//! Each engine says which through the two `end_governed_request_*` hooks.
 
 use ipc_protocol::RequestId;
 
@@ -27,8 +26,7 @@ pub trait TextRequestEndHooks: TextFinalizationHooks {
     /// What the engine reports about the reply beyond the shared figures.
     type ReplyRecord;
 
-    /// Takes the reply record from the request before it is dropped; the
-    /// resident engine also keeps the request's live prefix here.
+    /// Takes the reply record from the request before it is dropped.
     fn take_reply_record(
         &mut self,
         active_request: &mut TextEngineRequest<Self::RequestExtension>,

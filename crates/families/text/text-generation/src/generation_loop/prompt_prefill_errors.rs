@@ -1,16 +1,15 @@
 //! Why reading one chunk of a prompt failed, for any text engine
 //! (issue #2473): an MLX memory limit or exhaustion the engine can recover
 //! from by reading smaller chunks or more layers at a time, or an engine
-//! error. The resident engine also refuses a chunk its memory governor
-//! will not admit; the streaming engine has no such refusal, so it names
+//! error. An engine whose memory governor can refuse a chunk uses the admission
+//! rejection type; the Qwen3.5 text engine has no such refusal, so it names
 //! `Infallible` and its matches leave that case out.
 
 use crate::{InferenceEngineError, TextExecutionError};
 
 pub enum PromptPrefillChunkAttemptError<AdmissionRejection> {
     /// The memory governor found that this chunk does not fit. The typed
-    /// rejection says which shortfall moves the request to the streaming
-    /// engine.
+    /// rejection says which shortfall caused it.
     ForwardAdmissionRejected {
         rejection: AdmissionRejection,
         reason: String,

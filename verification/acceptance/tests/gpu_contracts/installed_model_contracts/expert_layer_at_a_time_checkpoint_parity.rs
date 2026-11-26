@@ -15,7 +15,7 @@
 use std::time::Duration;
 
 use model_serving::{
-    MemoryPhase, PerformanceAttribution, Qwen3_5ArtifactValidator, Qwen3_5StreamingModel,
+    MemoryPhase, PerformanceAttribution, Qwen3_5ArtifactValidator, Qwen3_5TextModel,
 };
 use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use serial_test::serial;
@@ -61,7 +61,7 @@ async fn assert_checkpoint_parity() {
         .validate(&model_directory, 64)
         .expect("the small sparse artifact should validate");
     let qwen3_5_config = validated_artifact.config().clone();
-    let streaming_model = Qwen3_5StreamingModel::load(
+    let streaming_model = Qwen3_5TextModel::load(
         MlxRuntime::initialize(
             MlxMemoryLimits::new(MLX_MEMORY_LIMIT_BYTES, MLX_MEMORY_LIMIT_BYTES)
                 .expect("the acceptance limit should be a valid MLX limit"),
@@ -71,7 +71,7 @@ async fn assert_checkpoint_parity() {
         &model_directory,
         crate::common::standard_qwen3_5_model_chunking_configuration(),
     )
-    .expect("the small sparse model should load on the streaming engine");
+    .expect("the small sparse model should load on the engine");
     streaming_model
         .materialize_target_weights()
         .expect("the model's kept weights should materialize");
@@ -110,7 +110,7 @@ async fn assert_checkpoint_parity() {
 /// every image row, and the state must differ from the same prompt without
 /// images, or the rows were never put in.
 fn assert_parity_with_image_embeddings(
-    streaming_model: &Qwen3_5StreamingModel,
+    streaming_model: &Qwen3_5TextModel,
     qwen3_5_config: &model_serving::Qwen3_5Config,
     prompt_token_ids: &[u32],
     boundaries_without_images: &PublishedBoundaries,
@@ -173,7 +173,7 @@ fn assert_parity_with_image_embeddings(
 /// published state must be the undisturbed prefill's bit for bit, and the
 /// only experts read twice are the failed layer's.
 fn assert_parity_after_a_span_is_run_again(
-    streaming_model: &Qwen3_5StreamingModel,
+    streaming_model: &Qwen3_5TextModel,
     qwen3_5_config: &model_serving::Qwen3_5Config,
     prompt_token_ids: &[u32],
     streamed_boundaries: &PublishedBoundaries,
@@ -229,7 +229,7 @@ type PublishedBoundaries = Vec<(usize, std::collections::BTreeMap<String, Vec<f3
 /// `astro_expert_cache` admits nothing and every layer streams. Returns the chunk path's
 /// boundaries for the second half to compare against.
 fn assert_parity_with_every_layer_streamed(
-    streaming_model: &Qwen3_5StreamingModel,
+    streaming_model: &Qwen3_5TextModel,
     qwen3_5_config: &model_serving::Qwen3_5Config,
     prompt_token_ids: &[u32],
 ) -> PublishedBoundaries {
@@ -286,7 +286,7 @@ fn assert_parity_with_every_layer_streamed(
 /// stream. Fresh state each way, with the plan published as a request open
 /// publishes it.
 fn assert_parity_with_planned_layers_kept(
-    streaming_model: &Qwen3_5StreamingModel,
+    streaming_model: &Qwen3_5TextModel,
     qwen3_5_config: &model_serving::Qwen3_5Config,
     prompt_token_ids: &[u32],
     streamed_boundaries: &PublishedBoundaries,
@@ -350,7 +350,7 @@ struct ExpertReadCount {
 }
 
 impl ExpertReadCount {
-    fn starting(streaming_model: &Qwen3_5StreamingModel) -> Self {
+    fn starting(streaming_model: &Qwen3_5TextModel) -> Self {
         Self {
             experts_read_before: streaming_model
                 .astro_expert_cache_statistics()
@@ -358,7 +358,7 @@ impl ExpertReadCount {
         }
     }
 
-    fn since(&self, streaming_model: &Qwen3_5StreamingModel) -> u64 {
+    fn since(&self, streaming_model: &Qwen3_5TextModel) -> u64 {
         streaming_model
             .astro_expert_cache_statistics()
             .disk_page_load_count

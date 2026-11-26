@@ -10,7 +10,7 @@
 
 use mlx_bridge::{MlxArray, MlxDtype};
 use model_serving::{
-    PerformanceAttribution, Qwen3_5ArtifactValidator, Qwen3_5StreamingModel, Qwen3_5Tokenizer,
+    PerformanceAttribution, Qwen3_5ArtifactValidator, Qwen3_5TextModel, Qwen3_5Tokenizer,
     RequestDecoderStateStack,
 };
 use runtime_integration::{MlxMemoryLimits, MlxRuntime};
@@ -28,7 +28,7 @@ pub(super) const MAXIMUM_LOGIT_DIFFERENCE: f32 = 0.25;
 
 /// The small dense model loaded on the streaming model, with the prompt its
 /// tests prefill.
-pub(super) struct SmallTarget<Model = Qwen3_5StreamingModel> {
+pub(super) struct SmallTarget<Model = Qwen3_5TextModel> {
     pub(super) model: Model,
     pub(super) prompt_token_ids: Vec<u32>,
 }
@@ -82,13 +82,13 @@ pub(super) fn load_small_target() -> SmallTarget {
 /// A target on the streaming model with its weights materialized; a dense
 /// model's layers are read from the SSD for each forward.
 pub(super) fn load_target(sources: SmallTargetSources) -> SmallTarget {
-    let model = Qwen3_5StreamingModel::load(
+    let model = Qwen3_5TextModel::load(
         sources.runtime,
         sources.artifact,
         &sources.model_directory,
         crate::common::standard_qwen3_5_model_chunking_configuration(),
     )
-    .expect("the model loads on the streaming engine");
+    .expect("the model loads on the engine");
     model
         .materialize_target_weights()
         .expect("the weights materialize");

@@ -1,7 +1,7 @@
 //! The stock label and the reply sentence every Observatory surface and the menu share.
 //!
 //! Stock describes where the expert library sits right now, from the seated
-//! byte counts, or for a dense model on the streaming engine, how much of
+//! byte counts, or for a dense model on the engine, how much of
 //! its decoder layers it reads from the SSD (issue #1985). It is a short label rather than a full sentence: the menu
 //! shows it in a half-width monospaced cell, so every stock label stays
 //! within MAXIMUM_STOCK_LABEL_CHARACTERS to fit on one line there. The reply
@@ -16,9 +16,8 @@ use crate::{ExpertResidencySnapshot, WorkerActivity, WorkerHealthSnapshot};
 const APPLE_GIGABYTE_BYTES: f64 = 1_073_741_824.0;
 
 /// What a dense model says instead of a sentence about experts it does not
-/// have, when it reports no decoder layers: the resident engine serves only
-/// a dense model that fits whole, and says so in these words, where the
-/// streaming engine, which may stream, counts its layers instead.
+/// have, when it reports no decoder layer counts: a dense model that reports
+/// its layers gets the layer-count sentence instead.
 const DENSE_MODEL_REPLY_SENTENCE: &str = "Dense model, no experts.";
 
 /// Copy budget for the stock label, in characters. The menu's Residency cell

@@ -4,8 +4,8 @@ use std::time::Duration;
 use ipc_protocol::{ExpertMemoryMode, RequestId, WorkerAstroSsdPromptCacheLookupOutcome};
 use model_serving::{
     AstroSsdPromptCacheDiskStoreConfig, AstroSsdPromptCacheModelContract, InferenceEngine,
-    PromptProcessingChunkSizer, Qwen3_5ArtifactValidator, Qwen3_5StreamingEngine,
-    Qwen3_5StreamingEngineTestControls, Qwen3_5Tokenizer, TextInferenceRequest,
+    PromptProcessingChunkSizer, Qwen3_5ArtifactValidator, Qwen3_5TextEngine,
+    Qwen3_5TextEngineTestControls, Qwen3_5Tokenizer, TextInferenceRequest,
     TextMlxEngineConstructors, TextModelTestControls, qwen3_5_astro_decoder_state_cache_layout,
 };
 use runtime_integration::{MlxMemoryLimits, MlxRuntime};
@@ -271,7 +271,7 @@ fn repeat_fixture_prompt_to_token_count(
 }
 
 async fn measured_expert_payload_bytes(
-    qwen3_5_engine: &Qwen3_5StreamingEngine,
+    qwen3_5_engine: &Qwen3_5TextEngine,
     expert_memory_mode: ExpertMemoryMode,
 ) -> u64 {
     if expert_memory_mode == ExpertMemoryMode::Resident {
@@ -292,7 +292,7 @@ async fn load_memory_acceptance_engine(
     model_directory: &Path,
     astro_ssd_prompt_cache_directory: Option<&Path>,
     mlx_memory_limits: MlxMemoryLimits,
-) -> Qwen3_5StreamingEngine {
+) -> Qwen3_5TextEngine {
     let validated_artifact = Qwen3_5ArtifactValidator::new()
         .validate(model_directory, 20_480)
         .expect("the model-artifact checkpoint should validate before engine loading");
@@ -302,7 +302,7 @@ async fn load_memory_acceptance_engine(
     let mut worker_chunking_configuration = crate::common::standard_worker_chunking_configuration();
     worker_chunking_configuration.ssd_prompt_cache_block_tokens =
         Some(MEMORY_ACCEPTANCE_PREFILL_CHUNK_TOKENS);
-    let mut qwen3_5_engine = Qwen3_5StreamingEngine::new_with_prompt_processing_chunk_sizer(
+    let mut qwen3_5_engine = Qwen3_5TextEngine::new_with_prompt_processing_chunk_sizer(
         validated_artifact,
         mlx_memory_limits.active_memory_limit_bytes(),
         mlx_memory_limits.mlx_buffer_cache_limit_bytes(),

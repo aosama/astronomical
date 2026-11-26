@@ -4,7 +4,7 @@
 //! an error.
 //!
 //! The order in which an engine drops its request, ends its governed request
-//! and releases MLX memory differs between the engines, so the finalization
+//! and releases MLX memory differs between engines, so the finalization
 //! itself stays with each engine; these steps are what it calls.
 
 use runtime_integration::MlxMemorySnapshot;
@@ -28,8 +28,8 @@ use crate::model::text_model::TextModel;
 
 /// What an engine supplies to the shared finalization steps.
 pub trait TextFinalizationHooks: TextExecutionCoreOwner<Model: TextModel> {
-    /// Decoder-state bytes kept from the last reply for the next one; only
-    /// the resident engine keeps any.
+    /// Decoder-state bytes kept from the last reply for the next one;
+    /// zero for an engine that keeps none.
     fn retained_live_context_state_payload_bytes(&self) -> u64 {
         0
     }
@@ -39,7 +39,7 @@ pub trait TextFinalizationHooks: TextExecutionCoreOwner<Model: TextModel> {
     fn measured_prompt_mlx_working_buffer_bytes(&self) -> Option<u64>;
 
     /// Adds what this engine reports beyond the shared finalization; the
-    /// streaming engine adds its expert streaming figures.
+    /// Qwen3.5 text engine adds its expert streaming figures.
     fn complete_generation_finalization(
         &self,
         generation_finalization: GenerationFinalization,

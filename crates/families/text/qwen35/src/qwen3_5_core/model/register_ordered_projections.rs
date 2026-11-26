@@ -1,7 +1,7 @@
 //! Converts dense 4-bit projections held in memory into register order and
 //! multiplies them through the register-ordered matmul: the output head and
 //! the decoder layers a model keeps
-//! (`Qwen3_5StreamingModel::convert_projections_to_register_order`).
+//! (`Qwen3_5TextModel::convert_projections_to_register_order`).
 //!
 //! Measured over the 27B's 64 layers on an M5 Pro, the converted projections
 //! cost 59 ms for an 8-row verify pass against MLX's 133 ms, and 57 ms for

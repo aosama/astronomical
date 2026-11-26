@@ -4,7 +4,7 @@
 //!
 //! A change waits until no request is running and needs a loaded model.
 //! Every change is taken in place; each engine moves its model to the new
-//! ceiling its own way: the streaming engine moves its expert pager, kept
+//! ceiling its own way: the Qwen3.5 text engine moves its expert pager, kept
 //! layers and memory governor, and the folded-ternary engine caps its
 //! `mlx_buffer_cache` at the configured limit. The adjustment then reports
 //! the memory reading taken after the change.

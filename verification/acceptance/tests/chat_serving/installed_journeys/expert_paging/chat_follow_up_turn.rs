@@ -18,7 +18,7 @@ use tokio::time::{Duration, timeout};
 
 use super::reply_speed_cases::{read_the_follow_up_turn, serve_warmup_and_read_a_long_prompt};
 use crate::serving_acceptance::support::performance_attribution::{
-    StreamingJourneyOptions, load_paging_experiment_engine_with,
+    EngineJourneyOptions, load_paging_experiment_engine_with,
 };
 
 const CASE_TIMEOUT: Duration = Duration::from_secs(150);
@@ -39,9 +39,9 @@ async fn should_measure_a_chat_follow_up_turn() {
     timeout(CASE_TIMEOUT, async {
         let mut paging = load_paging_experiment_engine_with(
             "follow_up_model_load",
-            StreamingJourneyOptions {
+            EngineJourneyOptions {
                 astro_ssd_prompt_cache_store: store_in(&store_directory),
-                ..StreamingJourneyOptions::default()
+                ..EngineJourneyOptions::default()
             },
         )
         .await;

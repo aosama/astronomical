@@ -1,11 +1,11 @@
 //! Evidence-driven expert memory mode: residency observed, not just claimed.
 //!
 //! `classify_expert_memory_mode` labels ownership from structural facts
-//! (which engine owns the experts and how many paged bytes are retained).
-//! That claim can disagree with what a request actually did: a paged engine
-//! whose every expert page was already warm read no expert storage at all,
-//! and a claimed-resident engine that streamed even one expert page was not
-//! fully resident for that request. This module derives the label from
+//! (who owns the experts and how many paged bytes are retained).
+//! That claim can disagree with what a request actually did: a model whose
+//! every expert page was already warm read no expert storage at all, and a
+//! model claimed resident that streamed even one expert page was not fully
+//! resident for that request. This module derives the label from
 //! observed expert storage-read bytes, so the user-facing residency label
 //! cannot disagree with what actually happened — and it works with
 //! performance attribution disabled, because the byte tally is always-on.
@@ -16,9 +16,9 @@ use ipc_protocol::ExpertMemoryMode;
 /// during one request.
 ///
 /// Zero observed bytes means every expert weight the request touched was
-/// already resident, so the request was served resident regardless of which
-/// engine owns the pager. Any observed byte defers to the ownership
-/// classification, with one defensive correction: a claimed-resident engine
+/// already resident, so the request was served resident regardless of how the
+/// experts are owned. Any observed byte defers to the ownership
+/// classification, with one defensive correction: a model claimed resident
 /// that still read expert storage was hybrid for that request, because some
 /// expert weight arrived from storage mid-request.
 #[must_use]

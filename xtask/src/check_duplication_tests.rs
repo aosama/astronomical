@@ -69,7 +69,7 @@ fn should_return_no_lines_for_an_empty_or_comment_only_source() {
 #[test]
 fn should_mask_family_names_in_camel_and_snake_case() {
     assert_eq!(
-        mask_family_names("let model: Qwen3_5StreamingModel = qwen3_5_streaming::load();"),
+        mask_family_names("let model: Qwen3_5TextModel = qwen3_5_text::load();"),
         "let model: FAMILYModel = FAMILY::load();"
     );
     assert_eq!(
@@ -84,7 +84,7 @@ fn should_mask_family_names_in_camel_and_snake_case() {
 
 #[test]
 fn should_mask_a_compound_family_name_once_rather_than_by_its_parts() {
-    assert_eq!(mask_family_names("Qwen3_5Streaming"), "FAMILY");
+    assert_eq!(mask_family_names("Qwen3_5Text"), "FAMILY");
     assert_eq!(mask_family_names("prism_hadamard_qwen35"), "FAMILY");
 }
 
@@ -148,8 +148,8 @@ fn should_name_the_area_by_crate_app_and_family_folder() {
     );
     assert_eq!(area_of("xtask/src/check_duplication.rs"), "xtask");
     assert_eq!(
-        area_of("crates/families/text/qwen35/src/qwen3_5_streaming/inference_execution/mod.rs"),
-        "crates/families/text/qwen35/qwen3_5_streaming"
+        area_of("crates/families/text/qwen35/src/qwen3_5_text/inference_execution/mod.rs"),
+        "crates/families/text/qwen35/qwen3_5_text"
     );
     assert_eq!(
         area_of("crates/families/text/qwen35/src/qwen3_5_core.rs"),

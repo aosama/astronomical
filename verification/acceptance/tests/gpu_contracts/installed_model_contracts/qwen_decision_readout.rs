@@ -22,7 +22,7 @@
 //! output projections are read along different paths.
 
 use model_serving::{
-    Qwen3_5ArtifactValidator, Qwen3_5StreamingModel, Qwen3_5Tokenizer, RequestDecoderStateStack,
+    Qwen3_5ArtifactValidator, Qwen3_5TextModel, Qwen3_5Tokenizer, RequestDecoderStateStack,
     TextModelChunkingConfiguration,
 };
 use runtime_integration::{MlxMemoryLimits, MlxRuntime};
@@ -47,7 +47,7 @@ const FULL_ATTENTION_KV_GROWTH_TOKENS: u32 = 256;
 const MAXIMUM_LOGIT_DIFFERENCE: f32 = 0.25;
 
 struct LoadedBackbone {
-    model: Qwen3_5StreamingModel,
+    model: Qwen3_5TextModel,
     tokenizer: Qwen3_5Tokenizer,
 }
 
@@ -65,7 +65,7 @@ fn load_backbone() -> LoadedBackbone {
             .expect("the test memory limits should be valid");
     let runtime = MlxRuntime::initialize(memory_limits).expect("the MLX runtime should start");
     // Every layer kept, as a decision model's backbone holds them.
-    let model = Qwen3_5StreamingModel::load(
+    let model = Qwen3_5TextModel::load(
         runtime,
         validated_artifact,
         &model_directory,
@@ -78,7 +78,7 @@ fn load_backbone() -> LoadedBackbone {
     LoadedBackbone { model, tokenizer }
 }
 
-fn fresh_state(model: &Qwen3_5StreamingModel) -> RequestDecoderStateStack {
+fn fresh_state(model: &Qwen3_5TextModel) -> RequestDecoderStateStack {
     model
         .empty_request_decoder_state_matching_loaded_weights(FULL_ATTENTION_KV_GROWTH_TOKENS as i32)
         .expect("a decoder state should allocate")
@@ -98,7 +98,7 @@ fn question_tokens(tokenizer: &Qwen3_5Tokenizer, question_text: &str) -> Vec<u32
 
 /// The readout of `token_ids` continuing `state` from `starting_position`, on the host.
 fn hidden_rows(
-    model: &Qwen3_5StreamingModel,
+    model: &Qwen3_5TextModel,
     token_ids: &[u32],
     starting_position: u32,
     state: &mut RequestDecoderStateStack,
@@ -238,7 +238,7 @@ async fn should_read_a_question_row_from_a_shared_state_as_if_it_followed_the_st
 /// The readout of `straight_tokens[split_point..]` after prefilling the
 /// tokens before `split_point`: how a question row continues a shared state.
 fn row_readout_after_split(
-    model: &Qwen3_5StreamingModel,
+    model: &Qwen3_5TextModel,
     straight_tokens: &[u32],
     split_point: usize,
 ) -> Vec<f32> {

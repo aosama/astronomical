@@ -4,13 +4,12 @@
 //! embedding table resident: 0.83 GB for the Ornith 9B 6-bit build, of which a
 //! forward touches one row per token. This reader fetches only those rows
 //! through the bounded-range reader and then runs the same gather and
-//! dequantization the resident lookup runs, so the embeddings are identical.
+//! dequantization the in-memory lookup runs, so the embeddings are identical.
 //!
-//! The reader needs the token ids on the host. The streaming engine already
+//! The reader needs the token ids on the host. The engine already
 //! has them there (it decodes from a host token id), so reading them back
-//! costs a small round trip. The resident engine keeps its sampled token on
-//! the GPU and submits the next forward before it is known, so a host read
-//! would stall it; that is why a model that fits keeps the resident table.
+//! costs a small round trip. The text model reads every dense model's rows
+//! this way, whether or not its weights fit the limit.
 
 use std::fs::File;
 

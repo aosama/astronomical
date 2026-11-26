@@ -18,7 +18,7 @@ use astronomical_neural_engine_research::process_memory::{
 };
 use config::AstronomicalConfig;
 use ipc_protocol::NeuralEnginePrefillStatus;
-use model_serving::Qwen3_5StreamingModel;
+use model_serving::Qwen3_5TextModel;
 use serial_test::serial;
 use tokio::time::timeout;
 
@@ -133,7 +133,7 @@ fn gibibytes(byte_count: u64) -> f64 {
 
 /// A settled start, then prefill passes with the sampler running.
 fn measure_arm(
-    model: &Qwen3_5StreamingModel,
+    model: &Qwen3_5TextModel,
     prompt_token_ids: &[u32],
     programs_run: bool,
 ) -> (MemoryExtremes, MemoryExtremes, f64) {
@@ -172,7 +172,7 @@ fn report_arm(
 /// What the programs hold alone: settled, then cycled with the GPU idle and nothing of
 /// MLX's working set in the reading. The driver wires with a delay, so this reports
 /// over time until well after the reading has settled.
-fn measure_programs_alone(model: &Qwen3_5StreamingModel) -> u64 {
+fn measure_programs_alone(model: &Qwen3_5TextModel) -> u64 {
     settle_reporting_progress("programs-alone");
     let settled_wired_bytes = MemorySnapshot::capture().system_wired_bytes;
     let sampler = MemorySampler::start("programs-alone");
