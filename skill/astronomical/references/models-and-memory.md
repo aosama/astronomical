@@ -44,9 +44,15 @@ of all for code, and every word is still the main model's own. Their names
 contain `DFLASH` or `DFLASH2`; the listing's measured speeds say how much each
 gains.
 
-- **It needs an M5-family Mac with room for the whole model.** A model read
-  partly from the SSD, or a Mac without an M5 chip, runs it without the
-  helper, at its normal speed.
+- **It needs an M5-family Mac.** A Mac without an M5 chip runs the model
+  without the helper, at its normal speed.
+- **A model read partly from the SSD drafts too,** when its memory limit
+  leaves room for the draft model beside it. Drafting there pauses on its own
+  when guesses stop paying off, and resumes later. If the limit leaves no
+  room, the model runs at its normal speed and `astronomical status` says so.
+- **Some models predict ahead by themselves.** A model with its own
+  prediction head, such as Qwen3.8-Flash-Next, guesses one word ahead by
+  default, with no separate draft model.
 - **Some requests never use it:** a picture in the prompt, structured output
   and a repetition penalty all decode one word at a time.
 - **`astronomical status` shows what it is doing.** The `drafter:` line says
