@@ -12,7 +12,11 @@ fn should_ask_for_three_eighths_of_a_drafter_checkpoint() {
 
 #[test]
 fn should_round_a_partial_eighth_up_rather_than_ask_for_too_little() {
-    assert_eq!(drafter_load_peak_bytes(9), 6, "two eighths rounded up, times three");
+    assert_eq!(
+        drafter_load_peak_bytes(9),
+        6,
+        "two eighths rounded up, times three"
+    );
     assert_eq!(drafter_load_peak_bytes(1), 3);
 }
 

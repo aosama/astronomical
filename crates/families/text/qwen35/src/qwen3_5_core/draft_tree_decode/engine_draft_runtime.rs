@@ -132,7 +132,8 @@ impl Qwen3_5SpeculativeDraftRuntime {
 /// tensor keeps MLX's reader alive on its own, so the tensors that stay bf16
 /// still read; and a linear's bf16 copy, once requantized, is held by nothing
 /// and freed. Kept, the checkpoint held every bf16 linear it had been asked
-/// for: 4.29 GB hosted for the 27B's drafter where 0.94 GB is served, which
+/// for: 4.29 GB held after load for the 27B's drafter where 0.94 GB is
+/// served, which
 /// refused that drafter at an 18 GB limit and displaced layers below it
 /// (#2578).
 fn load_drafter_weights<Target: DraftRoundTarget>(
