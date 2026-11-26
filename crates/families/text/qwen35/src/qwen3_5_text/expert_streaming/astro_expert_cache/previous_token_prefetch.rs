@@ -64,7 +64,7 @@ impl AstroExpertCache {
             )?;
             table.expert_id_by_slot[slot] = Some(expert_id);
             table.slot_by_expert_id.insert(expert_id, slot);
-            table.read_count_by_slot[slot] = 0;
+            table.slot_reads.seat(slot);
             table.decode_policy_by_slot[slot] = Default::default();
             table.occupied_slot_count += 1;
             table.payload_bytes = table

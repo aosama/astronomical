@@ -146,13 +146,7 @@ pub(super) fn plan_evictable_slots(
                 .saturating_mul(table.decode_step_row_count),
         );
     } else {
-        evictable_slots.sort_unstable_by_key(|slot| {
-            table
-                .read_count_by_slot
-                .get(*slot)
-                .copied()
-                .unwrap_or(u64::MAX)
-        });
+        evictable_slots.sort_unstable_by_key(|slot| table.slot_reads.giving_up_order(*slot));
     }
     evictable_slots
 }
@@ -252,7 +246,7 @@ pub(super) fn write_planned_experts(
         )?;
         table.expert_id_by_slot[slot] = Some(expert_id);
         table.slot_by_expert_id.insert(expert_id, slot);
-        table.read_count_by_slot[slot] = 0;
+        table.slot_reads.seat(slot);
         if let Some(decode_step_epoch) = candidate_decode_step_epoch {
             if historically_hot_expert_ids.contains(&expert_id) {
                 table.decode_policy_by_slot[slot].mark_historically_hot(decode_step_epoch);
@@ -426,7 +420,7 @@ pub(super) fn grow_table_within_budget(
     table
         .expert_id_by_slot
         .resize(growth_target_slot_count, None);
-    table.read_count_by_slot.resize(growth_target_slot_count, 0);
+    table.slot_reads.grow_to(growth_target_slot_count);
     table
         .decode_policy_by_slot
         .resize(growth_target_slot_count, DecodeExpertSlotState::default());

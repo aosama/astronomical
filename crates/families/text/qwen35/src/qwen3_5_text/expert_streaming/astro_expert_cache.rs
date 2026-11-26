@@ -30,6 +30,7 @@ mod insert;
 mod insert_planning;
 mod previous_token_prefetch;
 mod reclamation;
+mod slot_reads;
 mod slot_writes;
 mod table_read_through;
 mod topology_snapshot;
@@ -85,7 +86,9 @@ struct ExpertSlotTable {
     weights: Qwen3_5PagedExpertWeights,
     expert_id_by_slot: Vec<Option<usize>>,
     slot_by_expert_id: HashMap<usize, usize>,
-    read_count_by_slot: Vec<u64>,
+    /// How often and how lately each slot was read: the baseline policy's
+    /// order for giving experts up.
+    slot_reads: slot_reads::SlotReads,
     decode_policy_by_slot: Vec<decode_astro_expert_cache_policy::DecodeExpertSlotState>,
     occupied_slot_count: usize,
     /// Per-expert payload bytes. Used when decode inserts or evicts a slot.
@@ -227,6 +230,11 @@ impl AstroExpertCache {
         // evidence — the lifetime stream — takes over. The final-chunk boost
         // multiplier is prefill-scoped, so the switch also restores plain
         // weight (see `demand_phase` and `demand_recording`).
+        if self.demand_phase != demand_phase::ExpertDemandPhase::Decode {
+            for table in self.tables_by_layer.iter_mut().flatten() {
+                table.slot_reads.start_reply();
+            }
+        }
         self.demand_phase = demand_phase::ExpertDemandPhase::Decode;
         self.demand_assignment_weight = 1;
         if self.decode_astro_expert_cache_policy == WorkerDecodeAstroExpertCachePolicy::Candidate {
@@ -491,18 +499,18 @@ impl AstroExpertCache {
         let Some(Some(table)) = self.tables_by_layer.get_mut(layer_index) else {
             return;
         };
+        let mut read_slots = Vec::with_capacity(expert_ids.len());
         for expert_id in expert_ids {
-            if let Some(slot) = table.slot_by_expert_id.get(expert_id)
-                && let Some(read_count) = table.read_count_by_slot.get_mut(*slot)
-            {
-                *read_count = read_count.saturating_add(1);
+            if let Some(&slot) = table.slot_by_expert_id.get(expert_id) {
+                read_slots.push(slot);
                 if record_candidate_decode_reuse
-                    && let Some(decode_policy_state) = table.decode_policy_by_slot.get_mut(*slot)
+                    && let Some(decode_policy_state) = table.decode_policy_by_slot.get_mut(slot)
                 {
                     decode_policy_state.record_decode_reuse(decode_step_epoch);
                 }
             }
         }
+        table.slot_reads.read(&read_slots);
     }
 
     /// Probes warm-table coverage for one decode token's routed experts.
