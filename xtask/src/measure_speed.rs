@@ -4,10 +4,11 @@
 //!
 //! Each case loads its model with a warm-up request (about 500 tokens in, 50
 //! out), then measures four tasks (an essay and code, after a short prompt
-//! and after about 10,000 tokens), 500 tokens out, in interleaved rounds:
-//! prompt reading, the first token and the reply, each as a median with its
-//! range. Essays run at temperature 1.0 and code at 0.7 unless --temperature
-//! sets one for all.
+//! and after a long one), 200 tokens out: prompt reading, the first token
+//! and the reply, each as a median with its range. A case is sized to two
+//! minutes of waiting (`case_time_budget`): one round always, up to three
+//! only while they fit. Essays run at temperature 1.0 and code at 0.7 unless
+//! --temperature sets one for all.
 //!
 //! `--reference-set` measures the cases of
 //! `registry/release_speed/reference_set.json`, setting each case's memory
@@ -20,6 +21,8 @@
 //! that engine has the `astro_ssd_prompt_cache` and the skill declaration
 //! switched off, as AGENTS.md requires of throughput measurements.
 
+#[path = "measure_speed/case_time_budget.rs"]
+mod case_time_budget;
 #[path = "measure_speed/engine_requests.rs"]
 mod engine_requests;
 #[path = "measure_speed/engine_setup.rs"]
@@ -61,14 +64,18 @@ use speed_progress::SpeedProgress;
 use speed_prompts::{SpeedPrompts, SpeedTask};
 use speed_rounds::ModelSpeedRounds;
 
-use crate::release_speed::speed_ledger::{ReleaseSpeedLedger, write_ledger};
+use case_time_budget::another_round_fits;
+
+use crate::release_speed::speed_ledger::{DrafterInUse, ReleaseSpeedLedger, write_ledger};
 
 const STATUS_PREFIX: &str = "[measure-speed]";
 const WARMUP_OUTPUT_TOKENS: u32 = 50;
-const MEASURED_OUTPUT_TOKENS: u32 = 500;
+/// Enough tokens for a steady reply rate; more only lengthens the wait (a
+/// dense 27B writes 500 in over half a minute).
+const MEASURED_OUTPUT_TOKENS: u32 = 200;
 /// A reply that stopped on its own before this many tokens is too short to
 /// time fairly and is left out of the figures.
-const MINIMUM_TIMED_TOKENS: u64 = 200;
+const MINIMUM_TIMED_TOKENS: u64 = 100;
 const CATALOG_PATH: &str = "registry/download_catalog.json";
 
 pub fn run(repository_root: &Path, arguments: &[String]) -> Result<(), String> {
@@ -143,6 +150,7 @@ fn measure_one_case(
 ) -> Result<MeasuredCase, String> {
     let base_url = &measure_speed_options.base_url;
     let model_id = &measurement_case.model_id;
+    let case_started_at = std::time::Instant::now();
     speed_progress.set_stage(&format!("{model_id} warm-up, which also loads it"));
     let warmup_outcome =
         load_under_requested_limit(measure_speed_options, speed_prompts, measurement_case)
@@ -171,30 +179,91 @@ fn measure_one_case(
         speed_rounds: ModelSpeedRounds::default(),
         temperature_override: measure_speed_options.temperature_override,
         reply_tokens_requested: MEASURED_OUTPUT_TOKENS,
+        long_prompt_tokens: measurement_case.long_prompt_tokens,
     };
-    let reply_step_count = steps_a_case(measure_speed_options) - 1;
-    let mut completed_reply_steps = 0;
-    for round_index in 0..measure_speed_options.round_count {
-        for speed_task in SpeedTask::ALL {
-            if let Err(reply_error) = measure_one_reply(
-                measure_speed_options,
-                speed_prompts,
-                &mut measured_case,
-                (speed_task, round_index),
-                speed_progress,
-            ) {
-                speed_progress.skip_steps(reply_step_count - completed_reply_steps);
-                return Err(reply_error);
-            }
-            completed_reply_steps += 1;
-        }
-    }
+    measure_rounds_within_budget(
+        measure_speed_options,
+        speed_prompts,
+        &mut measured_case,
+        speed_progress,
+        case_started_at,
+    )?;
     println!(
         "{STATUS_PREFIX} medians model={model_id} memory_limit_gb={:?} {:?}",
         measured_case.served_conditions.maximum_mlx_memory_gb,
         measured_case.speed_rounds.medians()
     );
     Ok(measured_case)
+}
+
+/// Measures rounds of the four tasks until the case's time budget is used:
+/// one round always, another only while the longest so far still fits. A
+/// model that drafts first writes one unmeasured reply, because a drafting
+/// model gives up its first reply's rounds to time its plain tokens and that
+/// reply would otherwise be the first one measured.
+fn measure_rounds_within_budget(
+    measure_speed_options: &MeasureSpeedOptions,
+    speed_prompts: &SpeedPrompts,
+    measured_case: &mut MeasuredCase,
+    speed_progress: &SpeedProgress,
+    case_started_at: std::time::Instant,
+) -> Result<(), String> {
+    let step_count_a_round = SpeedTask::ALL.len();
+    let mut unrun_steps = measure_speed_options.round_count * step_count_a_round;
+    let mut longest_round_seconds = 0.0_f64;
+    let mut measuring_outcome =
+        write_the_learning_reply(measure_speed_options, speed_prompts, measured_case);
+    for round_index in 0..measure_speed_options.round_count {
+        if measuring_outcome.is_err()
+            || (round_index > 0
+                && !another_round_fits(
+                    case_started_at.elapsed().as_secs_f64(),
+                    longest_round_seconds,
+                ))
+        {
+            break;
+        }
+        let round_started_at = std::time::Instant::now();
+        for speed_task in SpeedTask::ALL {
+            if measuring_outcome.is_ok() {
+                measuring_outcome = measure_one_reply(
+                    measure_speed_options,
+                    speed_prompts,
+                    measured_case,
+                    (speed_task, round_index),
+                    speed_progress,
+                );
+            }
+        }
+        unrun_steps -= step_count_a_round;
+        longest_round_seconds = longest_round_seconds.max(round_started_at.elapsed().as_secs_f64());
+    }
+    speed_progress.skip_steps(unrun_steps);
+    measuring_outcome
+}
+
+/// One unmeasured reply for a model that drafts; nothing for one that does
+/// not.
+fn write_the_learning_reply(
+    measure_speed_options: &MeasureSpeedOptions,
+    speed_prompts: &SpeedPrompts,
+    measured_case: &MeasuredCase,
+) -> Result<(), String> {
+    if measured_case.served_conditions.drafter == DrafterInUse::None {
+        return Ok(());
+    }
+    engine_requests::stream_chat_reply(
+        &measure_speed_options.base_url,
+        &measured_case.model_id,
+        &speed_prompts.task_prompt(
+            SpeedTask::ShortPromptEssay,
+            0,
+            measured_case.long_prompt_tokens,
+        ),
+        MEASURED_OUTPUT_TOKENS,
+        measured_case.task_temperature(SpeedTask::ShortPromptEssay),
+    )
+    .map(|_| ())
 }
 
 /// Sets the case's memory limit when it asks for one, then loads the model
@@ -240,7 +309,7 @@ fn measure_one_reply(
     let reply_measurement = engine_requests::stream_chat_reply(
         &measure_speed_options.base_url,
         model_id,
-        &speed_prompts.task_prompt(speed_task, round_index),
+        &speed_prompts.task_prompt(speed_task, round_index, measured_case.long_prompt_tokens),
         MEASURED_OUTPUT_TOKENS,
         measured_case.task_temperature(speed_task),
     )?;

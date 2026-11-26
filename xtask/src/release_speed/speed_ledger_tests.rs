@@ -181,3 +181,18 @@ fn should_refuse_a_file_with_unknown_fields() {
 
     assert!(read_ledger(&ledger_file).is_err());
 }
+
+#[test]
+fn should_ask_single_round_figures_to_differ_by_the_run_to_run_spread() {
+    let earlier_single_round = spread(16.0, 16.0, 16.0);
+
+    assert!(
+        !spread(16.9, 16.9, 16.9).is_apart_from(&earlier_single_round),
+        "5% apart is inside one round's spread"
+    );
+    assert!(spread(19.3, 19.3, 19.3).is_apart_from(&earlier_single_round));
+    assert!(
+        !spread(16.9, 16.8, 17.0).is_apart_from(&earlier_single_round),
+        "a range on one side does not excuse the single round on the other"
+    );
+}

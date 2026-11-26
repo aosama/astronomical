@@ -12,6 +12,8 @@ const LONG_ESSAY_CHARACTERS: usize = 37_000;
 /// Characters of the MLX source fixture for about 10,000 tokens: Python source
 /// packs about 4.5 characters a token.
 const LONG_CODE_CHARACTERS: usize = 45_000;
+/// The long prompts' usual size, which the character counts above give.
+pub const USUAL_LONG_PROMPT_TOKENS: u32 = 10_000;
 const FIXTURES_DIRECTORY: &str = "verification/acceptance/tests/fixtures";
 
 const ESSAY_TOPICS: [&str; 3] = [
@@ -114,7 +116,12 @@ impl SpeedPrompts {
     /// that keeps a prompt it has already read would otherwise read rounds
     /// two and three at a speed no person's first prompt sees.
     #[must_use]
-    pub fn task_prompt(&self, speed_task: SpeedTask, round_index: usize) -> String {
+    pub fn task_prompt(
+        &self,
+        speed_task: SpeedTask,
+        round_index: usize,
+        long_prompt_tokens: u32,
+    ) -> String {
         let round_slot = round_index % 3;
         match speed_task {
             SpeedTask::ShortPromptEssay => format!(
@@ -127,12 +134,18 @@ impl SpeedPrompts {
             SpeedTask::LongPromptEssay => format!(
                 "Read the story below, then write an essay of about 400 words on it, focusing on {}.\n\n{}",
                 ESSAY_ASPECTS[round_slot],
-                leading_characters(&self.romeo_and_juliet_text, LONG_ESSAY_CHARACTERS)
+                leading_characters(
+                    &self.romeo_and_juliet_text,
+                    characters_for(LONG_ESSAY_CHARACTERS, long_prompt_tokens)
+                )
             ),
             SpeedTask::LongPromptCode => format!(
                 "Read the code below, then in the same style write a new function that {}.\n\n{}",
                 LONG_CODE_TASKS[round_slot],
-                leading_characters(&self.source_code_text, LONG_CODE_CHARACTERS)
+                leading_characters(
+                    &self.source_code_text,
+                    characters_for(LONG_CODE_CHARACTERS, long_prompt_tokens)
+                )
             ),
         }
     }
@@ -145,8 +158,18 @@ fn read_fixture(repository_root: &Path, file_name: &str) -> Result<String, Strin
 }
 
 /// The first characters of a text, cut on a character boundary.
+/// The characters of a fixture for `long_prompt_tokens`, scaled from the
+/// count that gives the usual 10,000.
+fn characters_for(usual_character_count: usize, long_prompt_tokens: u32) -> usize {
+    usual_character_count * long_prompt_tokens as usize / USUAL_LONG_PROMPT_TOKENS as usize
+}
+
 fn leading_characters(text: &str, character_count: usize) -> &str {
     text.char_indices()
         .nth(character_count)
         .map_or(text, |(byte_index, _)| &text[..byte_index])
 }
+
+#[cfg(test)]
+#[path = "speed_prompts_tests.rs"]
+mod speed_prompts_tests;

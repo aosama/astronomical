@@ -709,12 +709,12 @@
             "upstream_license": "Apache-2.0",
             "measured_speed": {
                 "measured_on": "Mac with an M5 Pro and 48 GB",
-                "astronomical_version": "0.2.129",
+                "astronomical_version": "0.2.134",
                 "tokens_per_second": {
-                    "essay_short_prompt": 40,
-                    "essay_long_prompt": 35,
-                    "code_short_prompt": 55,
-                    "code_long_prompt": 42
+                    "essay_short_prompt": 46,
+                    "essay_long_prompt": 56,
+                    "code_short_prompt": 60,
+                    "code_long_prompt": 54
                 }
             }
         },

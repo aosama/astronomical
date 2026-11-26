@@ -5,7 +5,7 @@ fn should_read_each_case_with_its_memory_limit() {
     let reference_cases = parse_reference_set(
         r#"{"cases": [
             {"model_id": "Model-A", "maximum_mlx_memory_gb": null, "why": "fits in memory"},
-            {"model_id": "Model-A", "maximum_mlx_memory_gb": 16, "why": "streams"}
+            {"model_id": "Model-A", "maximum_mlx_memory_gb": 16, "long_prompt_tokens": 2000, "why": "streams"}
         ]}"#,
     )
     .expect("a valid set");
@@ -16,11 +16,13 @@ fn should_read_each_case_with_its_memory_limit() {
             ReferenceCase {
                 model_id: "Model-A".to_owned(),
                 maximum_mlx_memory_gb: None,
+                long_prompt_tokens: None,
                 why: "fits in memory".to_owned(),
             },
             ReferenceCase {
                 model_id: "Model-A".to_owned(),
                 maximum_mlx_memory_gb: Some(16),
+                long_prompt_tokens: Some(2_000),
                 why: "streams".to_owned(),
             },
         ]
@@ -56,4 +58,20 @@ fn should_read_the_shipped_reference_set() {
             .iter()
             .all(|reference_case| !reference_case.why.is_empty())
     );
+}
+
+#[test]
+fn should_measure_the_slow_reading_dense_cases_on_a_shorter_long_prompt() {
+    let repository_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+    let reference_cases = load_reference_set(&repository_root).expect("the shipped set reads");
+
+    for reference_case in &reference_cases {
+        let is_the_dense_model = reference_case.model_id.starts_with("Qwen3.8-27B");
+        assert_eq!(
+            reference_case.long_prompt_tokens,
+            is_the_dense_model.then_some(2_000),
+            "{}: only the dense 27B reads slowly enough to need a shorter prompt",
+            reference_case.model_id
+        );
+    }
 }

@@ -588,26 +588,31 @@ test-quantization-mixture-of-experts = "run -p xtask -- test-run --package astro
 # which never touch an instance.
 # `cargo xtask measure-speed [--base-url URL] [--rounds N] [--temperature T] [--measured-on TEXT]
 # [--reference-set] [--write-ledger] [--write-catalog] [MODEL_ID...]` measures
-# how fast models reply. Against the Development instance only: each model is
-# warmed up once, then measured writing an essay (temperature 1.0) and writing
-# code (0.7) after a short and a ~10,000-token prompt, 500 tokens out, three
-# interleaved rounds by default, keeping prompt reading, the first token and
-# the reply as a median with its range; --temperature T sets one temperature
-# for all. --reference-set measures the cases in
-# registry/release_speed/reference_set.json (narrowed to any MODEL_IDs named),
-# setting each case's memory limit and restoring the engine's own afterwards;
-# a case whose model is missing or whose limit the Mac refuses is reported and
-# skipped. --write-ledger writes them into registry/release_speed/<version>.json,
-# the release speed ledger for the engine's version (a clean build only), with
-# the conditions the engine reported: memory limit, weights in memory or
-# streamed, drafter in use. --write-catalog writes the cases measured at the
-# Mac's own memory limit into registry/download_catalog.json as each entry's
-# measured_speed, which the Models page shows. Progress and time left print
-# every five seconds; the whole reference set takes about 30 minutes. It
-# refuses to start until Development's config.json sets "ssd_prompt_cache":
-# {"enabled": false} and "skill": {"declare_to_models": false} (restart it
-# after editing, and put them back afterwards). It loads real models on the
-# GPU, so check Development and Stable are idle first.
+# how fast models reply. Against the Development instance only. A case (a
+# model under one memory limit) is sized to two minutes of waiting: it is
+# warmed up once, then writes an essay (temperature 1.0) and code (0.7)
+# after a short and a long prompt, 200 tokens out, for one round always and
+# up to three (--rounds N) only while the longest round so far still fits
+# the two minutes. It keeps prompt reading, the first token and the reply as
+# a median with its range. A model that drafts writes one unmeasured reply
+# first. --temperature T sets one temperature for all. --reference-set
+# measures the cases in registry/release_speed/reference_set.json (narrowed
+# to any MODEL_IDs named), setting each case's memory limit and restoring
+# the engine's own afterwards; a long prompt is 10,000 tokens unless the
+# case sets long_prompt_tokens (the dense 27B reads 250 to 300 tokens a
+# second and uses 2,000). A case whose model is missing or whose limit the
+# Mac refuses is reported and skipped. --write-ledger writes them into
+# registry/release_speed/<version>.json, the release speed ledger for the
+# engine's version (a clean build only), with the conditions the engine
+# reported: memory limit, weights in memory or streamed, drafter in use.
+# --write-catalog writes the cases measured at the Mac's own memory limit
+# into registry/download_catalog.json as each entry's measured_speed, which
+# the Models page shows. Progress and time left print every five seconds;
+# the whole reference set takes about ten minutes. It refuses to start until
+# Development's config.json sets "ssd_prompt_cache": {"enabled": false} and
+# "skill": {"declare_to_models": false} (restart it after editing, and put
+# them back afterwards). It loads real models on the GPU, so check
+# Development and Stable are idle first.
 # `cargo xtask release-speed-table [--previous VERSION|FILE --current VERSION|FILE]`
 # prints the "Speed" section of a release's notes from two ledgers (the two
 # newest when none is named); `cargo xtask release-speed-table --check-catalog`
