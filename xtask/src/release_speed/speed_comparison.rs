@@ -22,8 +22,9 @@ use crate::measure_speed::measure_speed_options::describe_mac;
 
 const BYTES_PER_GIGABYTE: u64 = 1_073_741_824;
 /// Below this, a prompt is read in a fraction of a second and its speed says
-/// nothing about prompt reading; only the first token is shown.
-const LONG_PROMPT_TOKENS: u64 = 1_000;
+/// nothing about prompt reading; only the first token is shown. Short
+/// prompts are about 30 tokens and the shortest long one about 1,000.
+const LONG_PROMPT_TOKENS: u64 = 500;
 
 /// Whether a larger figure is better (tokens a second) or a smaller one is
 /// (seconds to the first token): it decides nothing about the wording, only

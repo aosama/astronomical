@@ -69,7 +69,7 @@ fn should_measure_the_slow_reading_dense_cases_on_a_shorter_long_prompt() {
         let is_the_dense_model = reference_case.model_id.starts_with("Qwen3.8-27B");
         assert_eq!(
             reference_case.long_prompt_tokens,
-            is_the_dense_model.then_some(2_000),
+            is_the_dense_model.then_some(1_000),
             "{}: only the dense 27B reads slowly enough to need a shorter prompt",
             reference_case.model_id
         );
