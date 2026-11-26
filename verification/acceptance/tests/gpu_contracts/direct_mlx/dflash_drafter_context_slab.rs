@@ -154,3 +154,51 @@ fn should_advance_the_context_position_by_the_rows_kept() {
         .expect("the slab attends");
     assert_eq!(layer_state.next_context_position(), 103);
 }
+
+/// What the memory ledger is told the kept context holds (issue #2572):
+/// nothing before a round, then the slabs as allocated, which is a whole
+/// number of growth steps of two bfloat16 arrays a layer and never less
+/// than the rows kept.
+#[test]
+#[ignore = "runs MLX on the local GPU"]
+#[serial]
+fn should_report_the_bytes_its_slabs_hold_for_the_memory_ledger() {
+    const BFLOAT16_BYTES: u64 = 2;
+    let runtime = slab_runtime();
+    let mut context_states = DrafterContextStates::new(&two_layer_configuration(), 0);
+    // Edge: no round has run, so nothing is held.
+    assert_eq!(context_states.payload_byte_count(), 0);
+
+    let random_key = runtime.random_key(72).expect("a key");
+    let kept_row_count = 3;
+    let mut every_layer_bytes = 0;
+    for layer_state in &mut context_states.layers {
+        let context_keys = random_rows(&runtime, &random_key, kept_row_count);
+        let context_values = random_rows(&runtime, &random_key, kept_row_count);
+        let block_keys = random_rows(&runtime, &random_key, BLOCK_ROW_COUNT);
+        let block_values = random_rows(&runtime, &random_key, BLOCK_ROW_COUNT);
+        layer_state
+            .attended_rows(
+                &runtime,
+                (&context_keys, &context_values),
+                (&block_keys, &block_values),
+            )
+            .expect("the slab attends");
+        let layer_bytes = layer_state.payload_byte_count();
+        let kept_row_bytes =
+            2 * BFLOAT16_BYTES * (HEAD_COUNT * kept_row_count * HEAD_DIMENSION) as u64;
+        let one_row_bytes = 2 * BFLOAT16_BYTES * (HEAD_COUNT * HEAD_DIMENSION) as u64;
+        assert!(
+            layer_bytes >= kept_row_bytes,
+            "a layer holds at least its kept rows: {layer_bytes} against {kept_row_bytes}"
+        );
+        assert_eq!(
+            layer_bytes % one_row_bytes,
+            0,
+            "a slab is a whole number of key and value rows"
+        );
+        every_layer_bytes += layer_bytes;
+    }
+    // Positive: the request's figure is the sum over its layers.
+    assert_eq!(context_states.payload_byte_count(), every_layer_bytes);
+}

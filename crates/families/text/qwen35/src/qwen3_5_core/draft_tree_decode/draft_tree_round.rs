@@ -91,6 +91,21 @@ impl DraftSession {
 
     /// Whether the drafter has rows to read: a round cannot start without
     /// the target's taps for the tokens before it.
+    /// Bytes the session holds for the drafter: its layers' kept context
+    /// and the target's taps waiting for the next round.
+    #[must_use]
+    pub fn kept_row_byte_count(&self) -> u64 {
+        let context_bytes = self
+            .context_states
+            .as_ref()
+            .map_or(0, DrafterContextStates::payload_byte_count);
+        let pending_tap_bytes = self
+            .pending_tap_rows
+            .as_ref()
+            .map_or(0, |pending_tap_rows| pending_tap_rows.byte_count() as u64);
+        context_bytes.saturating_add(pending_tap_bytes)
+    }
+
     pub const fn has_pending_tap_rows(&self) -> bool {
         self.pending_tap_rows.is_some()
     }

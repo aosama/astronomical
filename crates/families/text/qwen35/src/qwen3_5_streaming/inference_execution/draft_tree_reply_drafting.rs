@@ -59,6 +59,11 @@ pub(in crate::qwen3_5_streaming) struct DraftTreeReplyDrafting {
 }
 
 impl DraftTreeReplyDrafting {
+    /// Bytes this reply's drafting holds for the drafter.
+    pub(super) fn kept_row_byte_count(&self) -> u64 {
+        self.session.kept_row_byte_count()
+    }
+
     /// Reply tokens decided and not yet emitted.
     pub(super) fn undelivered_token_count(&self) -> usize {
         self.emission_queue.len()
