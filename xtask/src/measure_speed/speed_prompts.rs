@@ -71,7 +71,7 @@ impl SpeedTask {
     }
 
     /// The temperature people use for the task, as the repository's
-    /// measurement rules ask (the `desired_state_architecture` skill):
+    /// measurement rules ask (the `performance_measurement` skill):
     /// 0.7 for writing code, 1.0 for general writing. Greedy is never a speed
     /// a person sees, and a drafter keeps more tokens at lower temperatures,
     /// so a lower one would overstate drafting.
