@@ -222,3 +222,72 @@ fn should_print_peak_memory_alone_when_the_previous_release_did_not_measure_it()
         "{section_text}"
     );
 }
+
+#[test]
+fn should_not_compare_long_prompts_of_different_lengths() {
+    let previous = ledger(
+        "0.2.134",
+        vec![measurement("Model-A", "code_long_prompt", 40.0)],
+    );
+    let mut halved_prompt = measurement("Model-A", "code_long_prompt", 60.0);
+    halved_prompt.figures.prompt_tokens = 5_096;
+    let current = ledger("0.2.135", vec![halved_prompt]);
+
+    let section_text = release_speed_section(&previous, &current);
+
+    let halved_row = row_for(&section_text, "Model-A");
+    assert!(halved_row.contains("after a 5,000-token prompt"));
+    assert!(halved_row.ends_with("| 60 (new) | – |"), "{halved_row}");
+    assert!(section_text.contains(
+        "Not measured in this release: Model-A, 16 GB limit, writing code after a 10,000-token prompt."
+    ));
+}
+
+#[test]
+fn should_compare_long_prompts_a_tenth_apart_and_not_further() {
+    let previous = ledger(
+        "0.2.134",
+        vec![measurement("Model-A", "code_long_prompt", 40.0)],
+    );
+    let mut a_tenth_shorter = measurement("Model-A", "code_long_prompt", 60.0);
+    a_tenth_shorter.figures.prompt_tokens = 9_108;
+    let mut just_past_a_tenth = measurement("Model-A", "code_long_prompt", 60.0);
+    just_past_a_tenth.figures.prompt_tokens = 9_107;
+
+    let compared_text = release_speed_section(&previous, &ledger("0.2.135", vec![a_tenth_shorter]));
+    let separate_text =
+        release_speed_section(&previous, &ledger("0.2.135", vec![just_past_a_tenth]));
+
+    assert!(row_for(&compared_text, "Model-A").ends_with("| 40 → 60 (+50%) | – |"));
+    assert!(row_for(&separate_text, "Model-A").ends_with("| 60 (new) | – |"));
+}
+
+#[test]
+fn should_never_compare_a_short_prompt_with_a_long_one() {
+    let previous = ledger(
+        "0.2.134",
+        vec![measurement("Model-A", "code_long_prompt", 40.0)],
+    );
+    let mut short_prompt = measurement("Model-A", "code_long_prompt", 60.0);
+    short_prompt.figures.prompt_tokens = 499;
+
+    let section_text = release_speed_section(&previous, &ledger("0.2.135", vec![short_prompt]));
+
+    assert!(row_for(&section_text, "Model-A").ends_with("| 60 (new) | – |"));
+}
+
+#[test]
+fn should_say_one_reply_a_task_when_each_task_was_measured_once() {
+    let previous = ledger(
+        "0.2.134",
+        vec![measurement("Model-A", "code_long_prompt", 55.0)],
+    );
+    let mut measured_once = measurement("Model-A", "code_long_prompt", 65.0);
+    measured_once.figures.round_count = 1;
+    let current = ledger("0.2.135", vec![measured_once]);
+
+    let section_text = release_speed_section(&previous, &current);
+
+    assert!(section_text.contains("code at temperature 0.7, one reply a task. A change"));
+    assert!(!section_text.contains("median shown"));
+}
