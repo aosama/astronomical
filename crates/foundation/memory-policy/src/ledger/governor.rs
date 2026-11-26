@@ -189,8 +189,14 @@ impl MemoryGovernor {
 
     /// The memory wired outside MLX at the last reading, as read.
     #[must_use]
-    pub const fn latest_wired_outside_mlx_bytes(&self) -> Option<u64> {
+    pub fn latest_wired_outside_mlx_bytes(&self) -> Option<u64> {
         self.ledger.latest_wired_outside_mlx_bytes()
+    }
+
+    /// When the last wired reading was made, in milliseconds.
+    #[must_use]
+    pub fn latest_wired_reading_milliseconds(&self) -> Option<u64> {
+        self.ledger.latest_wired_reading_milliseconds()
     }
 
     /// What the model is doing, as far as memory is concerned.

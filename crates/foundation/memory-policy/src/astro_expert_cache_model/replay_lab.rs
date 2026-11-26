@@ -168,12 +168,13 @@ impl HeldExperts {
         self.held_bytes
     }
 
-    /// The layer holding the fewest experts, of those holding any; the
-    /// lowest index among equals, as the engine scans its tables in order.
-    pub(super) fn least_occupied_layer(&self) -> Option<usize> {
+    /// The layer holding the fewest experts, of those holding any and not
+    /// in `spared_layer_indexes`; the lowest index among equals, as the
+    /// engine scans its tables in order.
+    pub(super) fn least_occupied_layer(&self, spared_layer_indexes: &[usize]) -> Option<usize> {
         let mut least: Option<(usize, usize)> = None;
         for (&layer_index, &held_count) in &self.held_count_by_layer {
-            if held_count == 0 {
+            if held_count == 0 || spared_layer_indexes.contains(&layer_index) {
                 continue;
             }
             let is_fewer = match least {
@@ -190,9 +191,15 @@ impl HeldExperts {
         least.map(|(layer_index, _)| layer_index)
     }
 
-    /// The held expert the rule values least.
-    pub(super) fn lowest_priority_expert(&self) -> Option<ExpertKey> {
-        self.experts_by_priority.first().map(|&(_, expert)| expert)
+    /// The held expert the rule values least, outside `spared_layer_indexes`.
+    pub(super) fn lowest_priority_expert(
+        &self,
+        spared_layer_indexes: &[usize],
+    ) -> Option<ExpertKey> {
+        self.experts_by_priority
+            .iter()
+            .map(|&(_, expert)| expert)
+            .find(|expert| !spared_layer_indexes.contains(&expert.layer_index))
     }
 
     pub(super) fn held_count(&self, layer_index: usize) -> usize {

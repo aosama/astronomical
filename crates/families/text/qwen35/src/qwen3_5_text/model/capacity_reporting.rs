@@ -8,7 +8,7 @@ use memory_policy::ledger::{KeptWeightCapacity, MemoryGovernor};
 use super::Qwen3_5Model;
 
 impl Qwen3_5Model {
-    /// Says which account took the room back when the astro expert cache
+    /// Says which account took the room back when the `astro_expert_cache`
     /// gives experts back. The capacity is the limit less every need, so
     /// comparing two of these lines names the need that grew; without them a
     /// table dropped and read again a few tokens later cannot be explained.
@@ -27,7 +27,7 @@ impl Qwen3_5Model {
             tracing::info!(
                 kept_weight_capacity_bytes = capacity.bytes(),
                 released_expert_bytes,
-                "the astro expert cache gave back what its new capacity no longer holds"
+                "the astro_expert_cache gave back what its new capacity no longer holds"
             );
             return;
         };
@@ -43,7 +43,7 @@ impl Qwen3_5Model {
             stream_slot_bytes = accounts.stream_slot_bytes,
             lease_bytes = accounts.lease_bytes,
             margin_bytes = accounts.margin_bytes,
-            "the astro expert cache gave back what its new capacity no longer holds"
+            "the astro_expert_cache gave back what its new capacity no longer holds"
         );
     }
 
@@ -67,6 +67,9 @@ impl Qwen3_5Model {
             system_wired_reserve_bytes: accounts.system_wired_reserve_bytes,
             wired_outside_mlx_bytes: memory_governor
                 .latest_wired_outside_mlx_bytes()
+                .unwrap_or(0),
+            wired_reading_milliseconds: memory_governor
+                .latest_wired_reading_milliseconds()
                 .unwrap_or(0),
             limit_bytes: accounts.limit_bytes,
             system_wire_limit_bytes: match memory_governor.latest_system_wired_reading() {

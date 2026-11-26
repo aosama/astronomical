@@ -97,3 +97,70 @@ fn should_give_up_everything_when_the_capacity_falls_to_zero() {
         "only the first token, served before the fall, finds its experts"
     );
 }
+
+#[test]
+fn should_keep_the_last_scheduled_capacity_for_tokens_past_the_schedule() {
+    let replay_case = two_layer_case(4);
+    let short = replay_under_capacity_schedule(
+        &replay_case,
+        &[3 * EXPERT_BYTES, 2 * EXPERT_BYTES],
+        &mut LeastRecentlyUsed::default(),
+        CapacityTrim::DropLeastOccupiedLayer,
+    );
+    let full = replay_under_capacity_schedule(
+        &replay_case,
+        &[
+            3 * EXPERT_BYTES,
+            2 * EXPERT_BYTES,
+            2 * EXPERT_BYTES,
+            2 * EXPERT_BYTES,
+        ],
+        &mut LeastRecentlyUsed::default(),
+        CapacityTrim::DropLeastOccupiedLayer,
+    );
+    assert_eq!(short, full);
+}
+
+#[test]
+fn should_trim_a_dip_at_the_first_token_by_the_rule_not_by_seating() {
+    let replay_case = two_layer_case(2);
+    let scheduled = replay_under_capacity_schedule(
+        &replay_case,
+        &[2 * EXPERT_BYTES, 2 * EXPERT_BYTES],
+        &mut LeastRecentlyUsed::default(),
+        CapacityTrim::DropLeastOccupiedLayer,
+    );
+    assert_eq!(
+        scheduled.dropped_layer_count, 1,
+        "the least occupied layer goes"
+    );
+    assert_eq!(scheduled.trimmed_expert_count, 1);
+}
+
+#[test]
+fn should_give_up_a_pinned_layer_only_when_nothing_else_is_held() {
+    let mut replay_case = two_layer_case(2);
+    replay_case.pinned_layer_indexes = vec![1];
+    let scheduled = replay_under_capacity_schedule(
+        &replay_case,
+        &[3 * EXPERT_BYTES, EXPERT_BYTES],
+        &mut LeastRecentlyUsed::default(),
+        CapacityTrim::DropLeastOccupiedLayer,
+    );
+    // Layer 1 holds the fewest but is pinned: layer 0 goes, then fits.
+    assert_eq!(scheduled.dropped_layer_count, 1);
+    assert_eq!(scheduled.trimmed_expert_count, 2);
+}
+
+#[test]
+fn should_give_up_every_expert_one_by_one_when_the_capacity_falls_to_zero() {
+    let replay_case = two_layer_case(2);
+    let scheduled = replay_under_capacity_schedule(
+        &replay_case,
+        &[3 * EXPERT_BYTES, 0],
+        &mut LeastRecentlyUsed::default(),
+        CapacityTrim::GiveUpLowestPriorityExpert,
+    );
+    assert_eq!(scheduled.trimmed_expert_count, 3);
+    assert_eq!(scheduled.dropped_layer_count, 0);
+}

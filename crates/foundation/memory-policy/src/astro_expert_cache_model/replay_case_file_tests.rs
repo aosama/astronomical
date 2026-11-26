@@ -129,3 +129,34 @@ fn should_refuse_to_list_a_directory_that_does_not_exist() {
         Err(ReplayCaseFileError::Unreadable { .. })
     ));
 }
+
+#[test]
+fn should_read_no_capacity_moments_from_a_case_saved_before_they_were_kept() {
+    let evidence_directory = tempfile::tempdir().expect("scratch");
+    write_case(evidence_directory.path(), "chat", CASE_DOCUMENT);
+    let saved_case =
+        read_saved_replay_case(&evidence_directory.path().join("chat.case.json")).expect("reads");
+    assert!(saved_case.capacity_moments.is_empty());
+}
+
+#[test]
+fn should_read_the_capacity_moments_a_case_was_saved_with() {
+    let evidence_directory = tempfile::tempdir().expect("scratch");
+    let case_document = CASE_DOCUMENT.replace(
+        "\"warm_slot_count\": 2,",
+        r#""warm_slot_count": 2,
+    "capacity_moments": [{"reply_token_index": 1, "kept_expert_capacity_bytes": 900,
+        "system_wired_reserve_bytes": 100, "wired_outside_mlx_bytes": 50,
+        "wired_reading_milliseconds": 7, "limit_bytes": 1000,
+        "system_wire_limit_bytes": 2000, "released_expert_bytes": 100}],"#,
+    );
+    write_case(evidence_directory.path(), "chat", &case_document);
+    let saved_case =
+        read_saved_replay_case(&evidence_directory.path().join("chat.case.json")).expect("reads");
+    assert_eq!(saved_case.capacity_moments.len(), 1);
+    let moment = saved_case.capacity_moments[0];
+    assert_eq!(moment.reply_token_index, 1);
+    assert_eq!(moment.kept_expert_capacity_bytes, 900);
+    assert_eq!(moment.wired_reading_milliseconds, 7);
+    assert_eq!(moment.released_expert_bytes, 100);
+}

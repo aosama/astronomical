@@ -15,18 +15,19 @@ impl Qwen3_5Model {
             tracing::debug!("macOS did not report its wired memory; the plan stands");
             return;
         };
-        let mlx_held_bytes = self.mlx_held_bytes();
+        let system_wired_reading = SystemWiredReading {
+            system_wired_bytes: wired_memory_reading.system_wired_bytes,
+            system_wire_limit_bytes: wired_memory_reading.system_wire_limit_bytes,
+            mlx_held_bytes: self.mlx_held_bytes(),
+            reading_milliseconds: crate::memory::macos_wired_memory::wired_reading_milliseconds(),
+        };
         let (reserve_before_bytes, kept_weight_capacity, reserve_after_bytes) = {
             let mut memory_governor = self.governed_memory.governor.borrow_mut();
             let Some(memory_governor) = memory_governor.as_mut() else {
                 return;
             };
             let reserve_before_bytes = memory_governor.accounts().system_wired_reserve_bytes;
-            let kept_weight_capacity = memory_governor.observe_system_wired(SystemWiredReading {
-                system_wired_bytes: wired_memory_reading.system_wired_bytes,
-                system_wire_limit_bytes: wired_memory_reading.system_wire_limit_bytes,
-                mlx_held_bytes,
-            });
+            let kept_weight_capacity = memory_governor.observe_system_wired(system_wired_reading);
             (
                 reserve_before_bytes,
                 kept_weight_capacity,
@@ -34,11 +35,7 @@ impl Qwen3_5Model {
             )
         };
         report_reserve_move(
-            (
-                wired_memory_reading.system_wired_bytes,
-                wired_memory_reading.system_wire_limit_bytes,
-                mlx_held_bytes,
-            ),
+            system_wired_reading,
             reserve_before_bytes,
             reserve_after_bytes,
         );
@@ -93,20 +90,20 @@ impl Qwen3_5Model {
     }
 }
 
-/// Says when a reading moved the reserve, with what it read: `(system wired
-/// total, kernel wire limit, MLX held)`. The reserve takes its room from the
-/// `astro_expert_cache`, so a table dropped and read back soon after is
-/// explained by these lines.
+/// Says when a reading moved the reserve, with the reading. The reserve
+/// takes its room from the `astro_expert_cache`, so a table dropped and read
+/// back soon after is explained by these lines.
 fn report_reserve_move(
-    (system_wired_bytes, system_wire_limit_bytes, mlx_held_bytes): (u64, u64, u64),
+    system_wired_reading: SystemWiredReading,
     reserve_before_bytes: u64,
     reserve_after_bytes: u64,
 ) {
     if reserve_after_bytes != reserve_before_bytes {
         tracing::info!(
-            system_wired_bytes,
-            system_wire_limit_bytes,
-            mlx_held_bytes,
+            system_wired_bytes = system_wired_reading.system_wired_bytes,
+            system_wire_limit_bytes = system_wired_reading.system_wire_limit_bytes,
+            mlx_held_bytes = system_wired_reading.mlx_held_bytes,
+            reading_milliseconds = system_wired_reading.reading_milliseconds,
             process_footprint_bytes =
                 crate::memory::macos_wired_memory::read_process_footprint_bytes().unwrap_or(0),
             reserve_before_bytes,

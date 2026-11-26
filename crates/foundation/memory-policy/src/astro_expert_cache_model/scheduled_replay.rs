@@ -9,6 +9,12 @@
 //! capacity that dips for one reading and comes back costs a whole table's
 //! reads. Replaying the same routes under the same schedule with each rule
 //! shows what a dip costs and what another rule would have saved.
+//!
+//! The lab differs from the engine in two ways worth knowing when its rows
+//! are read: the engine may drop a table that holds no experts and frees a
+//! table's whole padded array, while the lab drops only layers that hold
+//! experts and frees exactly their experts' bytes. Pinned layers (held whole
+//! so their routes never stop) are given up only when nothing else is left.
 
 use super::keeping_rules::KeepingRule;
 use super::replay_lab::{
@@ -37,8 +43,11 @@ pub struct ScheduledReplayOutcome {
     pub trimmed_expert_count: u64,
 }
 
-/// Serves `replay_case` with token `t` under `capacity_by_token[t]` (the
-/// case's own capacity for tokens past the schedule).
+/// Serves `replay_case` with token `t` under `capacity_by_token[t]`; tokens
+/// past the end of the schedule keep its last capacity. The starting experts
+/// are seated under the case's own capacity, the one the reply began with, so
+/// a capacity that dips at the first token goes through `capacity_trim` like
+/// any other.
 #[must_use]
 pub fn replay_under_capacity_schedule(
     replay_case: &ReplayCase,
@@ -47,9 +56,6 @@ pub fn replay_under_capacity_schedule(
     capacity_trim: CapacityTrim,
 ) -> ScheduledReplayOutcome {
     let mut scheduled_case = replay_case.clone();
-    if let Some(&first_capacity_bytes) = capacity_by_token.first() {
-        scheduled_case.capacity_bytes = first_capacity_bytes;
-    }
     let mut held_experts = begin_replay(&scheduled_case, keeping_rule);
     let mut scheduled_outcome = ScheduledReplayOutcome {
         replay_outcome: empty_outcome(&scheduled_case),
@@ -90,14 +96,24 @@ fn trim_to_capacity(
     while held_experts.held_bytes() > scheduled_case.capacity_bytes {
         let given_up_count = match capacity_trim {
             CapacityTrim::DropLeastOccupiedLayer => {
-                let Some(layer_index) = held_experts.least_occupied_layer() else {
+                let unpinned_layer =
+                    held_experts.least_occupied_layer(&scheduled_case.pinned_layer_indexes);
+                let Some(layer_index) = (match unpinned_layer {
+                    Some(layer_index) => Some(layer_index),
+                    None => held_experts.least_occupied_layer(&[]),
+                }) else {
                     return;
                 };
                 scheduled_outcome.dropped_layer_count += 1;
                 give_up_layer(scheduled_case, keeping_rule, held_experts, layer_index)
             }
             CapacityTrim::GiveUpLowestPriorityExpert => {
-                let Some(expert) = held_experts.lowest_priority_expert() else {
+                let unpinned_expert =
+                    held_experts.lowest_priority_expert(&scheduled_case.pinned_layer_indexes);
+                let Some(expert) = (match unpinned_expert {
+                    Some(expert) => Some(expert),
+                    None => held_experts.lowest_priority_expert(&[]),
+                }) else {
                     return;
                 };
                 held_experts.remove(expert, expert_bytes_of(scheduled_case, expert.layer_index));

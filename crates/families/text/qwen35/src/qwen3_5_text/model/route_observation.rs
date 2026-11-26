@@ -39,8 +39,8 @@ pub struct RouteObservationCollector {
     capacity_moments: Vec<memory_policy::astro_expert_cache_model::CapacityMoment>,
 }
 
-/// More capacity moments than a recorded reply of the ring's length would
-/// make even at one moment a layer; past it the rest are not kept.
+/// A bound on what one recorded reply keeps, about 3 MB; a reply that makes
+/// more moments keeps its first ones and records no more.
 const MAXIMUM_CAPACITY_MOMENTS: usize = 1 << 16;
 
 impl Default for RouteObservationCollector {
@@ -273,3 +273,7 @@ impl Qwen3_5Model {
         Ok(Some(observed_route))
     }
 }
+
+#[cfg(test)]
+#[path = "route_observation_tests.rs"]
+mod tests;

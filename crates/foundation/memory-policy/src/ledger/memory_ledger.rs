@@ -18,8 +18,9 @@ use super::phase::LedgerPhase;
 use super::reconciliation::{HeldMemory, LedgerReconciliation};
 use super::system_wired_ceiling::{
     SystemWiredReading, limit_past_system_wired_ceiling_bytes, next_system_wired_reserve_bytes,
-    steady_wired_outside_mlx_bytes, wired_outside_mlx_bytes, with_wired_outside_mlx_bytes,
+    wired_outside_mlx_bytes, with_wired_outside_mlx_bytes,
 };
+use super::wired_outside_mlx_window::WiredOutsideMlxWindow;
 
 /// A request the ledger cannot carry out.
 #[derive(Clone, Copy, Debug, Eq, Error, PartialEq)]
@@ -43,9 +44,9 @@ pub struct MemoryLedger {
     /// The last reading of the system's wired total and the kernel's wire
     /// limit; `None` before any reading.
     latest_system_wired_reading: Option<(u64, u64)>,
-    /// The memory wired outside MLX at the last reading, so a rise that one
-    /// reading alone shows does not move the reserve.
-    previous_wired_outside_mlx_bytes: Option<u64>,
+    /// The recent readings of the memory wired outside MLX, so a rise that
+    /// lasts no longer than macOS's release lag does not move the reserve.
+    wired_outside_mlx_window: WiredOutsideMlxWindow,
 }
 
 impl MemoryLedger {
@@ -64,7 +65,7 @@ impl MemoryLedger {
             leases: LeaseBook::default(),
             system_wired_reserve_bytes: 0,
             latest_system_wired_reading: None,
-            previous_wired_outside_mlx_bytes: None,
+            wired_outside_mlx_window: WiredOutsideMlxWindow::default(),
         })
     }
 
@@ -166,24 +167,26 @@ impl MemoryLedger {
     /// Moves the system wired reserve after a reading of the memory macOS
     /// has wired across the whole system.
     pub fn observe_system_wired(&mut self, reading: SystemWiredReading) -> LedgerAccounts {
-        let current_wired_outside_mlx_bytes = wired_outside_mlx_bytes(reading);
-        let steady_wired_outside_mlx_bytes = steady_wired_outside_mlx_bytes(
-            self.previous_wired_outside_mlx_bytes,
-            current_wired_outside_mlx_bytes,
+        // Both terms see the steady reading: a release's inflated readings
+        // would otherwise still grow the reserve through the over-the-line
+        // term.
+        let steady_wired_outside_mlx_bytes = self.wired_outside_mlx_window.observe(
+            reading.reading_milliseconds,
+            wired_outside_mlx_bytes(reading),
         );
+        let steady_reading = with_wired_outside_mlx_bytes(reading, steady_wired_outside_mlx_bytes);
         // What the limit cannot give is not carried forward, or a reserve
         // run up on a small limit would take many readings to come down.
         self.system_wired_reserve_bytes = next_system_wired_reserve_bytes(
             self.system_wired_reserve_bytes,
-            reading.system_wired_bytes,
-            reading.system_wire_limit_bytes,
+            steady_reading.system_wired_bytes,
+            steady_reading.system_wire_limit_bytes,
         )
         .max(limit_past_system_wired_ceiling_bytes(
             self.limit_bytes,
-            with_wired_outside_mlx_bytes(reading, steady_wired_outside_mlx_bytes),
+            steady_reading,
         ))
         .min(self.limit_bytes);
-        self.previous_wired_outside_mlx_bytes = Some(current_wired_outside_mlx_bytes);
         self.latest_system_wired_reading =
             Some((reading.system_wired_bytes, reading.system_wire_limit_bytes));
         self.accounts()
@@ -199,8 +202,16 @@ impl MemoryLedger {
     /// The memory wired outside MLX at the last reading, as read (before
     /// the two-reading rule); `None` before any reading.
     #[must_use]
-    pub const fn latest_wired_outside_mlx_bytes(&self) -> Option<u64> {
-        self.previous_wired_outside_mlx_bytes
+    pub fn latest_wired_outside_mlx_bytes(&self) -> Option<u64> {
+        self.wired_outside_mlx_window
+            .latest_wired_outside_mlx_bytes()
+    }
+
+    /// When the last wired reading was made, in milliseconds on the
+    /// reading's monotonic clock; `None` before any reading.
+    #[must_use]
+    pub fn latest_wired_reading_milliseconds(&self) -> Option<u64> {
+        self.wired_outside_mlx_window.latest_reading_milliseconds()
     }
 
     /// Sets memory aside for a need outside the normal pattern.

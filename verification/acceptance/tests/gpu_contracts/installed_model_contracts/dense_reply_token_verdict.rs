@@ -27,7 +27,6 @@ use super::greedy_answer::{load_materialized_streaming_model, shakespeare_prompt
 
 const REPLY_TOKENS_PER_RUN: usize = 8;
 const PROMPT_CHUNK_TOKENS: usize = 256;
-const SERVED_REPLY_SUBMISSION_INTERVAL_LAYERS: u32 = 3;
 const REPORT_SUBDIRECTORY: &str = "dense-reply-token-verdict";
 
 /// One thing a reply token can do differently from how it is served.
@@ -59,6 +58,8 @@ struct SharedReplyBench {
     >,
     prompt_token_count: u32,
     first_reply_token_id: u32,
+    /// The reply submission interval the model loaded with: what "as served" restores.
+    served_reply_submission_interval_layers: u32,
 }
 
 impl SharedReplyBench {
@@ -69,7 +70,7 @@ impl SharedReplyBench {
             .chunking
             .experimental_ssd_paging_generation_graph_submission_layer_interval = match variant {
             ReplyTokenVariant::OneGraphPerToken => 0,
-            _ => SERVED_REPLY_SUBMISSION_INTERVAL_LAYERS,
+            _ => self.served_reply_submission_interval_layers,
         };
         let mut set_aside = self.set_aside_disk_embedding_rows.borrow_mut();
         if variant == ReplyTokenVariant::EmbeddingTableInMemory {
@@ -195,7 +196,11 @@ async fn prepared_bench(model_directory: &Path) -> SharedReplyBench {
         .expect("the first reply token is picked")
         .last()
         .expect("the prompt's last position has a token");
+    let served_reply_submission_interval_layers = model
+        .chunking
+        .experimental_ssd_paging_generation_graph_submission_layer_interval;
     SharedReplyBench {
+        served_reply_submission_interval_layers,
         model: RefCell::new(model),
         decoder_state: RefCell::new(decoder_state),
         stored_state: RefCell::new(None),

@@ -460,7 +460,9 @@ async fn set_reply_drafting(engine: &Qwen3_5TextEngine, reply_drafting: ReplyDra
 async fn report_table_evictions_since(engine: &Qwen3_5TextEngine, table_evictions_before: u64) {
     eprintln!(
         "[expert-misses] table_evictions={}",
-        table_eviction_count(engine).await - table_evictions_before
+        table_eviction_count(engine)
+            .await
+            .saturating_sub(table_evictions_before)
     );
 }
 

@@ -27,8 +27,13 @@ pub struct CapacityMoment {
     pub system_wired_reserve_bytes: u64,
     /// The system's wired total less what MLX held, at the latest reading.
     pub wired_outside_mlx_bytes: u64,
-    /// The memory limit and the kernel's wire limit the reserve was
-    /// computed against.
+    /// When that reading was made, in milliseconds on the engine's monotonic
+    /// clock; moments that share one reading share this.
+    #[serde(default)]
+    pub wired_reading_milliseconds: u64,
+    /// The memory limit and the kernel's wire limit the reserve was computed
+    /// against. A wire limit of zero means no wired reading had been made
+    /// yet, so the reserve the engine held is the only one there is.
     pub limit_bytes: u64,
     pub system_wire_limit_bytes: u64,
     /// What the `astro_expert_cache` gave back because of this capacity.
@@ -63,7 +68,8 @@ pub fn capacity_by_token(
 }
 
 /// The same schedule as if the engine had held `reserve_by_moment[i]` for
-/// macOS's wired line at moment `i` instead of what it held.
+/// macOS's wired line at moment `i` instead of what it held. A moment with no
+/// entry in `reserve_by_moment` keeps the reserve the engine held.
 #[must_use]
 pub fn capacity_by_token_under_reserve(
     capacity_moments: &[CapacityMoment],
@@ -72,7 +78,11 @@ pub fn capacity_by_token_under_reserve(
     starting_capacity_bytes: u64,
 ) -> Vec<u64> {
     let mut moment_capacities = Vec::with_capacity(capacity_moments.len());
-    for (moment, &reserve_bytes) in capacity_moments.iter().zip(reserve_by_moment) {
+    for (moment_index, moment) in capacity_moments.iter().enumerate() {
+        let reserve_bytes = match reserve_by_moment.get(moment_index) {
+            Some(&candidate_reserve_bytes) => candidate_reserve_bytes,
+            None => moment.system_wired_reserve_bytes,
+        };
         moment_capacities.push(
             moment
                 .kept_expert_capacity_bytes
@@ -94,7 +104,7 @@ fn schedule_by_token(
     reply_token_count: usize,
     starting_capacity_bytes: u64,
 ) -> Vec<u64> {
-    let mut capacities = Vec::with_capacity(reply_token_count);
+    let mut capacity_bytes_by_token = Vec::with_capacity(reply_token_count);
     let mut carried_capacity_bytes = starting_capacity_bytes;
     let mut moment_index = 0;
     for token_index in 0..reply_token_count {
@@ -111,25 +121,50 @@ fn schedule_by_token(
             carried_capacity_bytes = capacity_bytes;
             moment_index += 1;
         }
-        capacities.push(lowest_moment_capacity_bytes.unwrap_or(carried_capacity_bytes));
+        capacity_bytes_by_token
+            .push(lowest_moment_capacity_bytes.unwrap_or(carried_capacity_bytes));
     }
-    capacities
+    capacity_bytes_by_token
 }
 
-/// The reserve the engine's rule holds for one reading: the part of the
-/// limit past the room macOS's wired line leaves MLX, less a slack of one
-/// part in a hundred of the wire limit. It leaves out the reserve the engine
-/// grows while the wired total is over the line, which the recordings this
-/// lab reads do not reach.
+/// The moments of a reply whose first `dropped_token_count` tokens' routes
+/// are no longer kept, indexed against the routes that are: the engine keeps
+/// only a reply's newest routes, so a long reply's recording starts part way
+/// through. A moment applied before the kept routes began is carried as one
+/// at the first kept token, so the capacity those routes started under is
+/// still known.
+#[must_use]
+pub fn rebased_capacity_moments(
+    capacity_moments: &[CapacityMoment],
+    dropped_token_count: u32,
+) -> Vec<CapacityMoment> {
+    let mut rebased_moments = Vec::with_capacity(capacity_moments.len());
+    for moment in capacity_moments {
+        let mut rebased_moment = *moment;
+        rebased_moment.reply_token_index =
+            moment.reply_token_index.saturating_sub(dropped_token_count);
+        rebased_moments.push(rebased_moment);
+    }
+    rebased_moments
+}
+
+/// The reserve the ledger's rule holds against macOS's wired line for one
+/// moment, had `wired_outside_mlx_bytes` been the memory wired outside MLX.
+/// It is the ledger's own formula, so the lab cannot drift from the engine.
+/// It leaves out the reserve the ledger grows while the system's wired total
+/// is over the line, which the recordings this lab reads do not reach.
 #[must_use]
 pub const fn limit_past_wired_line_bytes(
     moment: &CapacityMoment,
     wired_outside_mlx_bytes: u64,
 ) -> u64 {
-    let slack_bytes = moment.system_wire_limit_bytes / 100;
-    let room_for_mlx_bytes = moment
-        .system_wire_limit_bytes
-        .saturating_sub(slack_bytes)
-        .saturating_sub(wired_outside_mlx_bytes);
-    moment.limit_bytes.saturating_sub(room_for_mlx_bytes)
+    crate::ledger::system_wired_ceiling::limit_past_system_wired_ceiling_bytes(
+        moment.limit_bytes,
+        crate::ledger::system_wired_ceiling::SystemWiredReading {
+            system_wired_bytes: wired_outside_mlx_bytes,
+            system_wire_limit_bytes: moment.system_wire_limit_bytes,
+            mlx_held_bytes: 0,
+            reading_milliseconds: moment.wired_reading_milliseconds,
+        },
+    )
 }

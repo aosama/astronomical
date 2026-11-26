@@ -27,6 +27,18 @@ pub struct ReplyStartSnapshot {
 }
 
 impl ReplyStartSnapshot {
+    /// A snapshot holding nothing, at `stored_observation_count_at_reply_start`.
+    #[cfg(test)]
+    pub(crate) const fn empty_at(stored_observation_count_at_reply_start: u64) -> Self {
+        Self {
+            held_expert_ids_by_layer: Vec::new(),
+            prompt_demand_by_layer: Vec::new(),
+            reply_demand_by_layer: Vec::new(),
+            kept_expert_capacity_bytes: 0,
+            stored_observation_count_at_reply_start,
+        }
+    }
+
     pub const fn stored_observation_count_at_reply_start(&self) -> u64 {
         self.stored_observation_count_at_reply_start
     }
@@ -103,6 +115,16 @@ impl Qwen3_5Model {
         let token_routes = route_observation.newest_token_routes(
             usize::try_from(reply_token_count).unwrap_or(usize::MAX),
             expert_pager.layer_plans().len(),
+        );
+        // The ring keeps only the newest routes; moments are indexed from the
+        // reply's start, so they move back by the tokens no longer kept.
+        let dropped_token_count = u32::try_from(
+            reply_token_count.saturating_sub(u64::try_from(token_routes.len()).unwrap_or(u64::MAX)),
+        )
+        .unwrap_or(u32::MAX);
+        let capacity_moments = memory_policy::astro_expert_cache_model::rebased_capacity_moments(
+            &capacity_moments,
+            dropped_token_count,
         );
         let mut expert_payload_bytes_by_layer = Vec::new();
         for layer_plan in expert_pager.layer_plans() {

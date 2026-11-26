@@ -62,7 +62,8 @@ pub use astro_expert_cache_record::{
     AstroExpertCacheRecord, EvictionEvent, ExpertUse, LayerAstroExpertCacheSummary,
 };
 pub use capacity_schedule::{
-    CapacityMoment, capacity_by_token, capacity_by_token_under_reserve, limit_past_wired_line_bytes,
+    CapacityMoment, capacity_by_token, capacity_by_token_under_reserve,
+    limit_past_wired_line_bytes, rebased_capacity_moments,
 };
 pub use expert_tables::{AstroExpertCacheTableRules, AstroExpertCacheTables, TableChange};
 pub use keeping_rules::{

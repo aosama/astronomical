@@ -9,6 +9,10 @@ use memory_policy::astro_expert_cache_model::{
     capacity_by_token_under_reserve, limit_past_wired_line_bytes, replay_under_capacity_schedule,
 };
 
+use memory_policy::ledger::wired_outside_mlx_window::{
+    RELEASE_LAG_WINDOW_MILLISECONDS, WiredOutsideMlxWindow,
+};
+
 use super::capacity_divisions::divided_like_todays_engine;
 use super::todays_engine_rule;
 
@@ -17,31 +21,30 @@ const GIBIBYTE: f64 = (1_u64 << 30) as f64;
 /// How the memory wired outside MLX is read before the reserve is computed.
 #[derive(Clone, Copy)]
 enum WiredOutsideMlxReading {
-    /// Each reading as read: today's engine before the two-reading rule.
+    /// Each reading as read: the engine before the release-lag window.
     AsRead,
-    /// A rise counts once two readings in a row show it.
-    TwoReadingsInARow,
-    /// A rise counts once four readings in a row show it.
-    FourReadingsInARow,
+    /// The lowest reading of a window of this many milliseconds, as the
+    /// ledger's `WiredOutsideMlxWindow` reads it; 300 is today's engine.
+    LowestOfWindow(u64),
     /// No reserve at all: the bound on what the reserve costs.
     NoReserve,
 }
 
 impl WiredOutsideMlxReading {
-    const fn name(self) -> &'static str {
+    fn name(self) -> String {
         match self {
-            Self::AsRead => "reserve_as_read",
-            Self::TwoReadingsInARow => "reserve_two_readings",
-            Self::FourReadingsInARow => "reserve_four_readings",
-            Self::NoReserve => "no_reserve",
+            Self::AsRead => "reserve_as_read".to_owned(),
+            Self::LowestOfWindow(window_milliseconds) => {
+                format!("reserve_lowest_of_{window_milliseconds}_ms")
+            }
+            Self::NoReserve => "no_reserve".to_owned(),
         }
     }
 
-    const fn readings_in_a_row(self) -> usize {
+    const fn window_milliseconds(self) -> u64 {
         match self {
-            Self::AsRead | Self::NoReserve => 1,
-            Self::TwoReadingsInARow => 2,
-            Self::FourReadingsInARow => 4,
+            Self::AsRead | Self::NoReserve => 0,
+            Self::LowestOfWindow(window_milliseconds) => window_milliseconds,
         }
     }
 }
@@ -73,8 +76,8 @@ pub(super) fn report_capacity_schedule(saved_replay_case: &SavedReplayCase) -> V
     }
     for wired_outside_mlx_reading in [
         WiredOutsideMlxReading::AsRead,
-        WiredOutsideMlxReading::TwoReadingsInARow,
-        WiredOutsideMlxReading::FourReadingsInARow,
+        WiredOutsideMlxReading::LowestOfWindow(RELEASE_LAG_WINDOW_MILLISECONDS),
+        WiredOutsideMlxReading::LowestOfWindow(2 * RELEASE_LAG_WINDOW_MILLISECONDS),
         WiredOutsideMlxReading::NoReserve,
     ] {
         let reserve_by_moment = reserve_by_moment(capacity_moments, wired_outside_mlx_reading);
@@ -87,7 +90,7 @@ pub(super) fn report_capacity_schedule(saved_replay_case: &SavedReplayCase) -> V
         report_lines.push(scheduled_row(
             saved_replay_case,
             &engine_division,
-            (wired_outside_mlx_reading.name(), &schedule),
+            (&wired_outside_mlx_reading.name(), &schedule),
             CapacityTrim::DropLeastOccupiedLayer,
         ));
     }
@@ -114,6 +117,9 @@ fn schedule_summary_line(saved_replay_case: &SavedReplayCase, recorded_schedule:
     let mut engine_released_bytes = 0_u64;
     for moment in &saved_replay_case.capacity_moments {
         engine_released_bytes = engine_released_bytes.saturating_add(moment.released_expert_bytes);
+    }
+    if recorded_schedule.is_empty() {
+        lowest_bytes = 0;
     }
     format!(
         "[replay-expert-misses] workload={} capacity_schedule moments={} capacity_gb=[{:.2}, {:.2}] tokens_where_capacity_fell={falling_token_count} engine_released_gb={:.2}",
@@ -152,24 +158,31 @@ fn scheduled_row(
 /// The reserve each moment would have held had the memory wired outside MLX
 /// been read under `wired_outside_mlx_reading`.
 ///
-/// A moment is recorded every time a capacity is applied, so one wired
-/// reading appears in several moments in a row; a run of equal values is
-/// taken as one reading.
+/// A moment is recorded every time a capacity is applied, so several moments
+/// share one wired reading; the window takes each reading once, by its time.
+/// A moment made before any wired reading keeps the reserve the engine held.
 fn reserve_by_moment(
     capacity_moments: &[CapacityMoment],
     wired_outside_mlx_reading: WiredOutsideMlxReading,
 ) -> Vec<u64> {
     let mut reserves = Vec::with_capacity(capacity_moments.len());
-    let mut recent_readings: Vec<u64> = Vec::new();
+    let mut window = WiredOutsideMlxWindow::with_window_milliseconds(
+        wired_outside_mlx_reading.window_milliseconds(),
+    );
+    let mut counted_outside_bytes = 0;
+    let mut last_reading_milliseconds: Option<u64> = None;
     for moment in capacity_moments {
-        if recent_readings.last() != Some(&moment.wired_outside_mlx_bytes) {
-            recent_readings.push(moment.wired_outside_mlx_bytes);
+        if moment.system_wire_limit_bytes == 0 {
+            reserves.push(moment.system_wired_reserve_bytes);
+            continue;
         }
-        let readings_in_a_row = wired_outside_mlx_reading.readings_in_a_row();
-        if recent_readings.len() > readings_in_a_row {
-            recent_readings.remove(0);
+        if last_reading_milliseconds != Some(moment.wired_reading_milliseconds) {
+            counted_outside_bytes = window.observe(
+                moment.wired_reading_milliseconds,
+                moment.wired_outside_mlx_bytes,
+            );
+            last_reading_milliseconds = Some(moment.wired_reading_milliseconds);
         }
-        let counted_outside_bytes = recent_readings.iter().copied().min().unwrap_or(0);
         reserves.push(match wired_outside_mlx_reading {
             WiredOutsideMlxReading::NoReserve => 0,
             _ => limit_past_wired_line_bytes(moment, counted_outside_bytes),

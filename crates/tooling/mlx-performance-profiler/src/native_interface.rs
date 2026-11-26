@@ -219,6 +219,12 @@ pub(crate) fn measurement_outcome(
             description: job_failure,
         });
     }
+    native_status(status)
+}
+
+/// `Ok` for a zero status, otherwise the library's own description of what
+/// failed on this thread.
+pub(crate) fn native_status(status: c_int) -> Result<(), ProfilerError> {
     if status == 0 {
         return Ok(());
     }

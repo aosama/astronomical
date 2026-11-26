@@ -93,6 +93,15 @@ fn read_system_wire_limit_bytes() -> Option<u64> {
     (status == 0 && system_wire_limit_bytes > 0).then_some(system_wire_limit_bytes)
 }
 
+/// Milliseconds since this process first asked, on a monotonic clock: the
+/// time a wired reading is weighed by against the ones before it.
+pub fn wired_reading_milliseconds() -> u64 {
+    static READING_CLOCK_ORIGIN: std::sync::OnceLock<std::time::Instant> =
+        std::sync::OnceLock::new();
+    let origin = READING_CLOCK_ORIGIN.get_or_init(std::time::Instant::now);
+    u64::try_from(origin.elapsed().as_millis()).unwrap_or(u64::MAX)
+}
+
 /// This process's physical footprint now: the figure Activity Monitor shows
 /// as its memory, which on Apple silicon includes what the graphics
 /// processor holds for it. `None` when the kernel refuses it.

@@ -56,6 +56,10 @@ pub struct SystemWiredReading {
     /// `mlx_buffer_cache`. The rest of the wired total is the kernel's and
     /// other applications'.
     pub mlx_held_bytes: u64,
+    /// When the reading was made, on a monotonic clock, in milliseconds: the
+    /// reserve weighs a reading against the ones before it
+    /// (`wired_outside_mlx_window`).
+    pub reading_milliseconds: u64,
 }
 
 /// The part of the memory limit that would put the system's wired total
@@ -94,31 +98,6 @@ pub const fn wired_outside_mlx_bytes(reading: SystemWiredReading) -> u64 {
     reading
         .system_wired_bytes
         .saturating_sub(reading.mlx_held_bytes)
-}
-
-/// The memory wired outside MLX that the reserve plans around: a rise
-/// counts once two readings in a row show it, a fall counts at once.
-///
-/// The wired total and what MLX holds are read a moment apart, and macOS
-/// un-wires the buffers MLX gives back a moment after MLX stops counting
-/// them. So where MLX's holding changes sharply, at a prompt's start or end
-/// or when the `astro_expert_cache` gives tables back, one reading counts up
-/// to 2.5 GB of MLX's own memory as someone else's. Measured on Flash-Next at
-/// a 34 GB limit on a 48 GB Mac: the estimate's median was 3.65 GB over 119
-/// readings, single readings reached 5.8 GB and the next was back near
-/// 3.3 GB. Each such reading raised the reserve by about 2 GB, dropped a whole
-/// layer table, and the table was read back from the SSD a moment later.
-/// Memory another application really wires stays wired, so it is counted
-/// from the second reading, one forward later.
-#[must_use]
-pub const fn steady_wired_outside_mlx_bytes(
-    previous_wired_outside_mlx_bytes: Option<u64>,
-    current_wired_outside_mlx_bytes: u64,
-) -> u64 {
-    match previous_wired_outside_mlx_bytes {
-        Some(previous_bytes) if previous_bytes < current_wired_outside_mlx_bytes => previous_bytes,
-        _ => current_wired_outside_mlx_bytes,
-    }
 }
 
 /// The same reading with its wired total set so that the memory wired
