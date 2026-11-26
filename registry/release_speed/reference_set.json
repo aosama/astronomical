@@ -6,12 +6,12 @@
             "why": "A small model held fully in memory, as on most Macs: the engine's own speed with nothing streamed and no drafter."
         },
         {
-            "model_id": "Ornith-1.5-35B-A3B-OptiQ-4bit-vision-DFLASH",
+            "model_id": "Ornith-1.5-35B-A3B-OptiQ-4bit-vision-DFLASH2",
             "maximum_mlx_memory_gb": null,
-            "why": "A mixture-of-experts model with a DFlash drafter, held fully in memory."
+            "why": "A mixture-of-experts model with a DFlash2 drafter, held fully in memory."
         },
         {
-            "model_id": "Ornith-1.5-35B-A3B-OptiQ-4bit-vision-DFLASH",
+            "model_id": "Ornith-1.5-35B-A3B-OptiQ-4bit-vision-DFLASH2",
             "maximum_mlx_memory_gb": 16,
             "why": "The same model on a 16 GB budget, streaming experts from the SSD with its drafter loaded."
         },
