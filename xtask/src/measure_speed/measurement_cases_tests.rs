@@ -30,12 +30,12 @@ fn should_measure_every_reference_case_under_its_own_limit_when_none_is_named() 
             MeasurementCase {
                 model_id: "Model-A".to_owned(),
                 memory_limit_request: MemoryLimitRequest::ServeUnder(None),
-                long_prompt_tokens: 10_000,
+                long_prompt_tokens: 5_000,
             },
             MeasurementCase {
                 model_id: "Model-A".to_owned(),
                 memory_limit_request: MemoryLimitRequest::ServeUnder(Some(16)),
-                long_prompt_tokens: 10_000,
+                long_prompt_tokens: 5_000,
             },
             MeasurementCase {
                 model_id: "Model-B".to_owned(),

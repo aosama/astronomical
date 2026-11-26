@@ -10,8 +10,6 @@ fn arguments(argument_texts: &[&str]) -> Vec<String> {
 #[test]
 fn should_read_every_option_and_keep_models_in_order() {
     let parsed_options = MeasureSpeedOptions::parse(&arguments(&[
-        "--rounds",
-        "5",
         "--measured-on",
         "Mac with an M4 Max and 128 GB",
         "--write-catalog",
@@ -28,7 +26,6 @@ fn should_read_every_option_and_keep_models_in_order() {
         parsed_options,
         MeasureSpeedOptions {
             base_url: "http://127.0.0.1:9999".to_owned(),
-            round_count: 5,
             temperature_override: Some(0.7),
             measured_on: Some("Mac with an M4 Max and 128 GB".to_owned()),
             should_write_catalog: true,
@@ -40,14 +37,13 @@ fn should_read_every_option_and_keep_models_in_order() {
 }
 
 #[test]
-fn should_default_to_development_three_rounds_and_no_catalog_write() {
+fn should_default_to_development_and_no_catalog_write() {
     let parsed_options = MeasureSpeedOptions::parse(&arguments(&["Model-A"])).expect("valid");
 
     assert_eq!(
         parsed_options.base_url, "http://127.0.0.1:6733",
         "Development, never Stable"
     );
-    assert_eq!(parsed_options.round_count, 3);
     assert_eq!(
         parsed_options.temperature_override, None,
         "each task's own temperature"
@@ -61,11 +57,11 @@ fn should_default_to_development_three_rounds_and_no_catalog_write() {
 }
 
 #[test]
-fn should_refuse_no_models_too_few_rounds_unknown_options_and_missing_values() {
+fn should_refuse_no_models_a_rounds_switch_unknown_options_and_missing_values() {
     for refused_arguments in [
         vec![],
-        vec!["--rounds", "0", "Model-A"],
-        vec!["--rounds", "three", "Model-A"],
+        // There is one round, always: the switch is gone.
+        vec!["--rounds", "3", "Model-A"],
         vec!["--fast", "Model-A"],
         vec!["Model-A", "--base-url"],
         vec!["--temperature", "0", "Model-A"],
@@ -123,12 +119,4 @@ fn should_refuse_a_ledger_outside_the_reference_set_or_at_one_temperature() {
             "should refuse {refused_arguments:?}"
         );
     }
-}
-
-#[test]
-fn should_accept_a_single_round_since_a_slow_models_budget_allows_no_more() {
-    let parsed_options = MeasureSpeedOptions::parse(&arguments(&["--rounds", "1", "Model-A"]))
-        .expect("one round is a measurement");
-
-    assert_eq!(parsed_options.round_count, 1);
 }
