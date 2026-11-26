@@ -3,7 +3,8 @@
 //! give the same bits, for one reply token and for a drafted block's rows.
 //!
 //! Random bfloat16 operands at Flash-Next's widths (four lanes of 2,560)
-//! and at a small width that leaves a threadgroup partly empty. No model on
+//! and at a small width that leaves a threadgroup partly empty, spread
+//! near zero and far past where a sigmoid saturates. No model on
 //! disk. Run with `cargo test-fused-lane-mixing`. Seconds.
 
 use model_serving::qwen4_exp::hyper_connection::fused_lane_mixing_matches_the_composed_steps;

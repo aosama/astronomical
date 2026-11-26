@@ -31,6 +31,9 @@ const HEAD_SIZE: i32 = 256;
 const TREE_ROW_COUNT: usize = 4;
 /// Bf16 rounding of attention outputs near 1 in magnitude.
 const MAXIMUM_DIFFERENCE_FROM_MLX: f32 = 0.02;
+/// Query scales from flat attention to one where a few keys take all of it.
+const SWEPT_QUERY_SHARPNESS: [f32; 4] = [1.0, 8.0, 24.0, 96.0];
+const SHARPENED_CONTEXT_LENGTH: i32 = 3_000;
 const TIMED_CONTEXTS: [i32; 4] = [1_024, 10_240, 32_768, 65_536];
 const TIMED_REPETITIONS: usize = 30;
 const FULL_ATTENTION_LAYER_COUNT: f64 = 10.0;
@@ -105,6 +108,51 @@ fn should_report_accuracy_against_float32_attention_as_attention_sharpens() {
         eprintln!(
             "[row-exact-tree-attention] {context_length} keys, queries x{query_sharpness}: largest error against float32, kernel {kernel_error:.5}, MLX bf16 {mlx_error:.5}"
         );
+    }
+}
+
+/// Queries scaled up until attention is sharply peaked: the kernel's
+/// exponential then runs far from zero, where an exponential that only
+/// agrees with another near zero parts from it (the one-token DeltaNet
+/// kernel's did, issue #2599). The kernel does not promise MLX's bits, so
+/// what is held is its own promise, a tree row's bits equal to its one-row
+/// step's, and an error against float32 attention no worse than MLX's own
+/// bf16 attention by more than bf16 rounding.
+#[test]
+#[ignore = "runs MLX kernels on the GPU; run through cargo measure-row-exact-tree-attention"]
+#[serial]
+fn should_keep_every_tree_row_its_one_row_steps_bits_as_attention_sharpens() {
+    let runtime = direct_mlx_runtime();
+    let kernels = RowExactTreeAttentionKernels::declare().expect("the kernels declare");
+    for query_sharpness in SWEPT_QUERY_SHARPNESS {
+        for (shape_label, parent_rows) in TREE_SHAPES {
+            let mut case = AttentionCase::random(SHARPENED_CONTEXT_LENGTH, &parent_rows);
+            for query_value in &mut case.queries {
+                *query_value *= query_sharpness;
+            }
+            let tree_output = case.tree_output(&runtime, &kernels);
+            for row in 0..TREE_ROW_COUNT {
+                let tree_row = row_of(&runtime, &tree_output, row);
+                assert_eq!(
+                    tree_row,
+                    case.one_row_step_output(&runtime, &kernels, row),
+                    "{shape_label}, queries x{query_sharpness}: row {row} must equal its one-row step"
+                );
+                let exact = case.reference_row(&runtime, row, MlxDtype::Float32);
+                let kernel_error = largest_difference(&exact, &tree_row);
+                let mlx_error = largest_difference(
+                    &exact,
+                    &case.reference_row(&runtime, row, MlxDtype::BFloat16),
+                );
+                assert!(
+                    kernel_error <= mlx_error + MAXIMUM_DIFFERENCE_FROM_MLX,
+                    "{shape_label}, queries x{query_sharpness}: row {row} is {kernel_error} from float32 attention where MLX's bf16 is {mlx_error}"
+                );
+            }
+            eprintln!(
+                "[row-exact-tree-attention] {shape_label}, queries x{query_sharpness}: every row equals its one-row step"
+            );
+        }
     }
 }
 

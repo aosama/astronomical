@@ -8,7 +8,11 @@ use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use crate::common::{
     DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_MLX_BUFFER_CACHE_LIMIT_BYTES,
 };
-use mlx_bridge::MlxDtype;
+use mlx_bridge::{MlxArray, MlxDtype};
+
+use super::synthetic_values::{
+    largest_relative_difference, swept_unit_interval_values, swept_values,
+};
 
 fn test_runtime() -> MlxRuntime {
     MlxRuntime::initialize(
@@ -327,4 +331,118 @@ async fn should_reject_sorted_reduction_when_scores_are_not_floating_point() {
         &mut PerformanceAttribution::disabled(),
     )
     .expect_err("integer routing scores must fail before kernel execution");
+}
+
+const SWEPT_TOKEN_COUNT: i32 = 16;
+const SWEPT_EXPERTS_A_TOKEN: i32 = 8;
+const SWEPT_EXPERT_COUNT: u64 = 256;
+const SWEPT_HIDDEN_WIDTH: i32 = 512;
+const SWEPT_OUTPUT_MAGNITUDES: [f32; 4] = [0.05, 0.5, 3.0, 20.0];
+/// The kernel adds a token's eight weighted outputs in float32 in its own
+/// order; a wrong score or a wrong expert moves the sum by its own size.
+const LARGEST_SWEPT_RELATIVE_DIFFERENCE: f32 = 1e-5;
+
+/// The sorted weighted-sum kernel against restoring the assignment order
+/// and reducing with MLX's own multiply and sum, on pseudo-random expert
+/// outputs near zero and far from it (issue #2599's lesson: patterned
+/// inputs near zero are not a proof), at a 256-expert layer's top eight.
+#[tokio::test]
+async fn should_match_the_unsorted_reduction_to_rounding_on_outputs_far_from_zero() {
+    let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
+    let runtime = test_runtime();
+    let kernel = sorted_expert_weighted_sum_kernel().expect("kernel should initialize");
+    let mut generator_state = 0xD1B5_4A32_D192_ED03_u64;
+    let assignment_count = (SWEPT_TOKEN_COUNT * SWEPT_EXPERTS_A_TOKEN) as usize;
+    for output_magnitude in SWEPT_OUTPUT_MAGNITUDES {
+        let expert_ids = swept_unit_interval_values(assignment_count, &mut generator_state)
+            .into_iter()
+            .map(|unit_value| (f64::from(unit_value) * SWEPT_EXPERT_COUNT as f64) as u32)
+            .collect::<Vec<_>>();
+        let selected_indices = runtime
+            .array_from_u32(&expert_ids, &[1, SWEPT_TOKEN_COUNT, SWEPT_EXPERTS_A_TOKEN])
+            .expect("assignments should be valid");
+        let selected_scores = runtime
+            .array_from_f32(
+                &swept_unit_interval_values(assignment_count, &mut generator_state),
+                &[1, SWEPT_TOKEN_COUNT, SWEPT_EXPERTS_A_TOKEN],
+            )
+            .expect("scores should be valid");
+        let sorted_expert_outputs = runtime
+            .array_from_f32(
+                &swept_values(
+                    assignment_count * SWEPT_HIDDEN_WIDTH as usize,
+                    output_magnitude,
+                    &mut generator_state,
+                ),
+                &[assignment_count as i32, 1, SWEPT_HIDDEN_WIDTH],
+            )
+            .expect("sorted outputs should be valid");
+        let (relative_difference, differing_element_count) = swept_reduction_difference(
+            &runtime,
+            &kernel,
+            (&selected_indices, &selected_scores, &sorted_expert_outputs),
+        );
+        eprintln!(
+            "[sorted-weighted-sum-sweep] magnitude={output_magnitude} relative_difference={relative_difference:e} differing_elements={differing_element_count}"
+        );
+        assert!(
+            relative_difference <= LARGEST_SWEPT_RELATIVE_DIFFERENCE,
+            "at magnitude {output_magnitude} the sorted reduction parts from the unsorted one by {relative_difference:e}"
+        );
+    }
+}
+
+/// The sorted kernel's sum against the unsorted reduction of the same
+/// outputs put back in assignment order.
+fn swept_reduction_difference(
+    runtime: &MlxRuntime,
+    kernel: &mlx_bridge::MlxMetalKernel,
+    (selected_indices, selected_scores, sorted_expert_outputs): (&MlxArray, &MlxArray, &MlxArray),
+) -> (f32, usize) {
+    let hidden_states = runtime
+        .zeros(
+            &[1, SWEPT_TOKEN_COUNT, SWEPT_HIDDEN_WIDTH],
+            MlxDtype::Float32,
+        )
+        .expect("hidden states should be valid");
+    let expanded_states = runtime
+        .expand_dims(&hidden_states, -2)
+        .and_then(|states| runtime.expand_dims(&states, -3))
+        .expect("gather dimensions should expand");
+    let sorted_assignments = sort_expert_assignments(
+        runtime,
+        &expanded_states,
+        selected_indices,
+        &mut PerformanceAttribution::disabled(),
+    )
+    .expect("assignments should sort");
+    let sorted_sum = sorted_expert_weighted_sum(
+        runtime,
+        kernel,
+        sorted_expert_outputs,
+        &sorted_assignments.inverse_order,
+        selected_scores,
+        &mut PerformanceAttribution::disabled(),
+    )
+    .expect("sorted reduction should succeed");
+    let restored = restore_expert_assignment_order(
+        runtime,
+        sorted_expert_outputs,
+        &sorted_assignments.inverse_order,
+        &selected_indices.shape(),
+    )
+    .expect("the assignment order should restore");
+    let unsorted_sum = unsorted_expert_weighted_sum(
+        runtime,
+        &restored,
+        selected_scores,
+        &mut PerformanceAttribution::disabled(),
+    )
+    .expect("unsorted reduction should succeed");
+    largest_relative_difference(
+        &sorted_sum.to_vec_f32().expect("the sorted sum evaluates"),
+        &unsorted_sum
+            .to_vec_f32()
+            .expect("the unsorted sum evaluates"),
+    )
 }
