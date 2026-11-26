@@ -53,6 +53,7 @@ impl ModelSpeedRounds {
             prefill_tokens_per_second: FigureSpread::of_rounds(&prefill_rates)?,
             seconds_to_first_token: FigureSpread::of_rounds(&first_token_seconds)?,
             reply_tokens_per_second: FigureSpread::of_rounds(&reply_rates)?,
+            drafting: super::reply_drafting::drafting_figures(task_replies),
         })
     }
 

@@ -42,6 +42,13 @@ pub(in crate::qwen3_5_streaming) struct MtpReplyDrafting {
     target_token_choice: TargetTokenChoice,
 }
 
+impl MtpReplyDrafting {
+    /// Reply tokens decided and not yet emitted.
+    pub(super) fn undelivered_token_count(&self) -> usize {
+        self.emission_queue.len()
+    }
+}
+
 /// The request's sampling as the verify forward reproduces it.
 pub(super) fn target_token_choice_for(
     sampling_strategy: &TextSamplingStrategy,
@@ -229,6 +236,13 @@ pub(super) fn record_drafted_round(
         crate::PerformanceCounter::SpeculativeAcceptedTokenCount,
         accepted_draft_count as u64,
     );
+    active_request
+        .engine_extension
+        .drafting_statistics
+        .record_round(
+            u32::try_from(drafted_token_count).unwrap_or(u32::MAX),
+            u32::try_from(accepted_draft_count).unwrap_or(u32::MAX),
+        );
 }
 
 /// The token a round starts from: the one taken from the reply's queue,

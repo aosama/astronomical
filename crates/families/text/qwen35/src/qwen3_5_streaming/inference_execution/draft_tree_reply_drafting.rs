@@ -58,6 +58,13 @@ pub(in crate::qwen3_5_streaming) struct DraftTreeReplyDrafting {
     tokens_decided_by_the_last_step: u32,
 }
 
+impl DraftTreeReplyDrafting {
+    /// Reply tokens decided and not yet emitted.
+    pub(super) fn undelivered_token_count(&self) -> usize {
+        self.emission_queue.len()
+    }
+}
+
 fn fatal(description: &'static str) -> InferenceEngineError {
     text_generation::engine_errors::fatal_engine_error(description)
 }

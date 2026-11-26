@@ -83,6 +83,21 @@ pub struct TaskFigures {
     pub prefill_tokens_per_second: FigureSpread,
     pub seconds_to_first_token: FigureSpread,
     pub reply_tokens_per_second: FigureSpread,
+    /// What drafting did for the task's replies; absent when none drafted,
+    /// and in ledgers written before replies reported it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub drafting: Option<DraftingFigures>,
+}
+
+/// A task's drafting over its rounds: what explains a drafted reply speed,
+/// and what shows a reply that stopped drafting.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct DraftingFigures {
+    pub rounds_a_reply: FigureSpread,
+    pub kept_drafts_a_round: FigureSpread,
+    /// Kept drafts as a share of the reply's tokens, between 0 and 1.
+    pub drafted_share_of_reply: FigureSpread,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]

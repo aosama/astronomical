@@ -300,6 +300,7 @@ pub(crate) fn with_drafted_tokens(
         Some(reply_drafting) => token_usage.with_drafted_tokens(
             reply_drafting.accepted_token_count,
             reply_drafting.rejected_token_count(),
+            reply_drafting.round_count,
         ),
         None => token_usage,
     }

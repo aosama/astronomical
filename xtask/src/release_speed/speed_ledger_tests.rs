@@ -1,7 +1,7 @@
 use super::{
-    DrafterInUse, FigureSpread, MeasuringMachine, ReleaseSpeedLedger, SpeedMeasurement,
-    TaskFigures, WeightsPlacement, merged_ledger, newest_ledger, read_ledger, version_parts,
-    write_ledger,
+    DrafterInUse, DraftingFigures, FigureSpread, MeasuringMachine, ReleaseSpeedLedger,
+    SpeedMeasurement, TaskFigures, WeightsPlacement, merged_ledger, newest_ledger, read_ledger,
+    version_parts, write_ledger,
 };
 
 pub(crate) fn spread(median: f64, lowest: f64, highest: f64) -> FigureSpread {
@@ -30,6 +30,7 @@ pub(crate) fn measurement(model_id: &str, task: &str, reply_median: f64) -> Spee
             prefill_tokens_per_second: spread(2_400.0, 2_350.0, 2_450.0),
             seconds_to_first_token: spread(4.2, 4.1, 4.3),
             reply_tokens_per_second: spread(reply_median, reply_median - 2.0, reply_median + 2.0),
+            drafting: None,
         },
     }
 }
@@ -195,4 +196,42 @@ fn should_ask_single_round_figures_to_differ_by_the_run_to_run_spread() {
         !spread(16.9, 16.8, 17.0).is_apart_from(&earlier_single_round),
         "a range on one side does not excuse the single round on the other"
     );
+}
+
+#[test]
+fn should_keep_drafting_figures_through_a_write_and_a_read() {
+    let mut drafted_measurement = measurement("model-a", "long_prompt_code", 60.0);
+    drafted_measurement.figures.drafting = Some(DraftingFigures {
+        rounds_a_reply: spread(50.0, 40.0, 100.0),
+        kept_drafts_a_round: spread(3.0, 1.0, 4.0),
+        drafted_share_of_reply: spread(0.75, 0.5, 0.8),
+    });
+    let ledger_text = serde_json::to_string(&ledger("0.2.200", vec![drafted_measurement.clone()]))
+        .expect("the ledger serializes");
+
+    let read_ledger: ReleaseSpeedLedger =
+        serde_json::from_str(&ledger_text).expect("the ledger reads back");
+
+    assert_eq!(read_ledger.measurements, vec![drafted_measurement]);
+}
+
+#[test]
+fn should_write_no_drafting_field_for_a_task_that_never_drafted_and_read_a_ledger_without_one() {
+    // Edge: a ledger written before replies reported drafting has no field.
+    let plain_measurement = measurement("model-a", "long_prompt_code", 60.0);
+    let ledger_text = serde_json::to_string(&ledger("0.2.200", vec![plain_measurement.clone()]))
+        .expect("the ledger serializes");
+
+    assert!(!ledger_text.contains("drafting"), "{ledger_text}");
+    let read_ledger: ReleaseSpeedLedger =
+        serde_json::from_str(&ledger_text).expect("the ledger reads back");
+    assert_eq!(read_ledger.measurements, vec![plain_measurement]);
+}
+
+#[test]
+fn should_refuse_a_drafting_entry_with_an_unknown_figure() {
+    let unknown_figure =
+        r#"{"rounds_a_reply":{"median":1.0,"lowest":1.0,"highest":1.0},"guesses":3}"#;
+
+    assert!(serde_json::from_str::<DraftingFigures>(unknown_figure).is_err());
 }

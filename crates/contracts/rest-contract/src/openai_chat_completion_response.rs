@@ -324,11 +324,14 @@ pub struct OpenAiTokenUsage {
 /// Breakdown of the reply's tokens. OpenAI reports a predicted output's
 /// guesses here: the ones the model kept and the ones it threw away. A draft
 /// model's guesses are the same thing, so drafting reports through the same
-/// fields any OpenAI client already reads.
+/// fields any OpenAI client already reads. `draft_rounds` is Astronomical's
+/// own: how many rounds proposed those guesses, so kept guesses a round can
+/// be read from one reply (issue #2582).
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
 struct OpenAiCompletionTokenDetails {
     accepted_prediction_tokens: u32,
     rejected_prediction_tokens: u32,
+    draft_rounds: u32,
 }
 
 /// Breakdown of prompt token costs, following the OpenAI convention.
@@ -365,17 +368,20 @@ impl OpenAiTokenUsage {
         self
     }
 
-    /// Attaches a draft model's kept and thrown-away guesses. Omitted for a
-    /// reply that never drafted, so its response shape is unchanged.
+    /// Attaches a draft model's kept and thrown-away guesses and the rounds
+    /// that proposed them. Omitted for a reply that never drafted, so its
+    /// response shape is unchanged.
     #[must_use]
     pub fn with_drafted_tokens(
         mut self,
         accepted_prediction_tokens: u32,
         rejected_prediction_tokens: u32,
+        draft_rounds: u32,
     ) -> Self {
         self.completion_tokens_details = Some(OpenAiCompletionTokenDetails {
             accepted_prediction_tokens,
             rejected_prediction_tokens,
+            draft_rounds,
         });
         self
     }

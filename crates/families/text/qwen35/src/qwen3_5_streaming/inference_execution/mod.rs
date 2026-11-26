@@ -25,6 +25,7 @@ mod prefill_advance;
 mod prefill_chunk_planning;
 mod prefill_memory_recovery;
 mod prompt_prefill_errors;
+mod reply_drafting_record;
 mod start_generation;
 mod test_controls;
 pub use test_controls::Qwen3_5StreamingEngineTestControls;
