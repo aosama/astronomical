@@ -169,7 +169,9 @@ fn convert_one(
     Ok(1)
 }
 
-fn projection_failure(projection_error: RowBatchedProjectionError) -> TextExecutionError {
+pub(super) fn projection_failure(
+    projection_error: RowBatchedProjectionError,
+) -> TextExecutionError {
     TextExecutionError::from(MlxRuntimeError::RuntimeOperation {
         operation: "project rows through the register-ordered matmul",
         description: projection_error.to_string(),
