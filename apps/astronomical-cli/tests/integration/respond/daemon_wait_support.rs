@@ -1,41 +1,19 @@
 //! What the journeys share when `respond` waits on a daemon that sends no frames: a
 //! silence bound short enough to outlast, and a stub whose first frame comes late.
 
-use std::{
-    io::Write,
-    path::PathBuf,
-    time::{Duration, Instant},
-};
+use std::time::{Duration, Instant};
 
-use astronomical_cli::{RespondDependencies, RespondError};
-use config::AstronomicalRuntimeInstance;
+use astronomical_cli::RespondError;
 use tokio::time::timeout;
 
+use super::respond_dependency_fixtures::respond_dependencies;
 use crate::integration::support::environment::{
-    DAEMON_WORK_POLL_INTERVAL, DOWNLOAD_POLL_INTERVAL, SILENCE_BOUND, SOCKET_FILE_NAME,
-    TEST_TIMEOUT, fresh_test_directory, respond_arguments,
+    DAEMON_WORK_POLL_INTERVAL, SILENCE_BOUND, SOCKET_FILE_NAME, TEST_TIMEOUT, fresh_test_directory,
+    respond_arguments,
 };
 use crate::integration::support::stub_daemon::{
     StubDaemonConfig, StubInstalledModel, spawn_stub_daemon,
 };
-
-fn wait_dependencies<'a>(
-    candidate_socket_paths: Vec<PathBuf>,
-    stdout: &'a mut Vec<u8>,
-    stderr: &'a mut Vec<u8>,
-) -> RespondDependencies<'a> {
-    RespondDependencies {
-        candidate_socket_paths,
-        runtime_instance: AstronomicalRuntimeInstance::Development,
-        stdout: stdout as &mut dyn Write,
-        stderr: stderr as &mut dyn Write,
-        request_timeout: SILENCE_BOUND,
-        download_stall_bound: TEST_TIMEOUT,
-        download_poll_interval: DOWNLOAD_POLL_INTERVAL,
-        daemon_work_poll_interval: DAEMON_WORK_POLL_INTERVAL,
-        model_load_stall_bound: TEST_TIMEOUT,
-    }
-}
 
 pub(super) fn stub_config_with_first_frame_delay(
     chat_first_frame_delay: Duration,
@@ -96,7 +74,9 @@ async fn run_respond_with_bounds(
     let stub_daemon_task = spawn_stub_daemon(socket_path.clone(), stub_config);
     let mut stdout = Vec::new();
     let mut stderr = Vec::new();
-    let mut respond_dependencies = wait_dependencies(vec![socket_path], &mut stdout, &mut stderr);
+    let mut respond_dependencies =
+        respond_dependencies(vec![socket_path], &mut stdout, &mut stderr);
+    respond_dependencies.daemon_work_poll_interval = DAEMON_WORK_POLL_INTERVAL;
     respond_dependencies.request_timeout = silence_bound;
     respond_dependencies.model_load_stall_bound = model_load_stall_bound;
 

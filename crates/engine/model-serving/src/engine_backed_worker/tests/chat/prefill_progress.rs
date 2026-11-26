@@ -1,15 +1,15 @@
+use super::chat_request_exchange::send_chat_request;
+use super::ipc_worker_transport::open_ipc_worker_transport;
 use super::scripted_chat_test_doubles::{ScriptedChatEngine, ScriptedChatProcessor};
-use super::support::{chat_command, close_worker_transport, next_event, ready_event};
+use super::support::{close_worker_transport, next_event, ready_event};
 use crate::{
     EngineBackedWorker, ExpertResidencyTelemetry, GeneratedToken, MlxActiveMemoryBreakdown,
     MlxMemoryTelemetry,
 };
 use ipc_protocol::{
-    MAX_IPC_FRAME_BYTES, MlxMemorySnapshotSource, ProtocolReader, ProtocolWriter, RequestId,
-    WorkerCommand, WorkerEvent, WorkerExpertResidencySnapshot, WorkerMlxMemorySnapshot,
-    WorkerPromptWorkReuse,
+    MlxMemorySnapshotSource, RequestId, WorkerEvent, WorkerExpertResidencySnapshot,
+    WorkerMlxMemorySnapshot, WorkerPromptWorkReuse,
 };
-use tokio::io::{duplex, split};
 #[tokio::test]
 #[expect(clippy::too_many_lines)]
 async fn should_exclude_the_complete_restored_prompt_prefix_from_progress_without_inflating_astro_ssd_prompt_cache_usage()
@@ -93,22 +93,13 @@ async fn should_exclude_the_complete_restored_prompt_prefix_from_progress_withou
         )
         .with_restored_prompt_prefix_token_count(10),
     );
-    let (daemon_transport, worker_transport) = duplex(MAX_IPC_FRAME_BYTES * 2);
-    let (daemon_reader_transport, daemon_writer_transport) = split(daemon_transport);
-    let (worker_reader_transport, worker_writer_transport) = split(worker_transport);
-    let mut daemon_reader = ProtocolReader::new(daemon_reader_transport);
-    let mut daemon_writer = ProtocolWriter::new(daemon_writer_transport);
-    let worker_task = tokio::spawn(async move {
-        engine_worker
-            .run(worker_reader_transport, worker_writer_transport)
-            .await
-    });
+    let (mut daemon_reader, mut daemon_writer, worker_reader_transport, worker_writer_transport) =
+        open_ipc_worker_transport();
+    let worker_task =
+        tokio::spawn(engine_worker.run(worker_reader_transport, worker_writer_transport));
 
     assert_eq!(next_event(&mut daemon_reader).await, ready_event());
-    daemon_writer
-        .send_command(&WorkerCommand::Generate(chat_command(742, 12)))
-        .await
-        .expect("the worker should receive a chat request");
+    send_chat_request(&mut daemon_writer, 742, 12).await;
 
     let initial_prefill_progress_event = next_event(&mut daemon_reader).await;
     match initial_prefill_progress_event {
@@ -256,22 +247,13 @@ async fn should_report_where_a_chunk_ran_when_the_model_has_programs() {
             }],
         ),
     );
-    let (daemon_transport, worker_transport) = duplex(MAX_IPC_FRAME_BYTES * 2);
-    let (daemon_reader_transport, daemon_writer_transport) = split(daemon_transport);
-    let (worker_reader_transport, worker_writer_transport) = split(worker_transport);
-    let mut daemon_reader = ProtocolReader::new(daemon_reader_transport);
-    let mut daemon_writer = ProtocolWriter::new(daemon_writer_transport);
-    let worker_task = tokio::spawn(async move {
-        engine_worker
-            .run(worker_reader_transport, worker_writer_transport)
-            .await
-    });
+    let (mut daemon_reader, mut daemon_writer, worker_reader_transport, worker_writer_transport) =
+        open_ipc_worker_transport();
+    let worker_task =
+        tokio::spawn(engine_worker.run(worker_reader_transport, worker_writer_transport));
 
     assert_eq!(next_event(&mut daemon_reader).await, ready_event());
-    daemon_writer
-        .send_command(&WorkerCommand::Generate(chat_command(743, 12)))
-        .await
-        .expect("the worker should receive a chat request");
+    send_chat_request(&mut daemon_writer, 743, 12).await;
 
     loop {
         match next_event(&mut daemon_reader).await {

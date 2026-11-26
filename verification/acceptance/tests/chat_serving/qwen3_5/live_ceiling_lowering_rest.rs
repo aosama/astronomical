@@ -7,14 +7,6 @@
 //! and keeps serving the same conversation. This is the user-facing behavior
 //! behind the Settings "Maximum model RAM" control.
 
-use super::automatic_engine_selection_rest::prompt_chunk_mlx_working_buffer_allowance_bytes;
-use std::{fs, path::Path};
-
-use futures_util::StreamExt;
-use model_serving::{
-    CompleteResidencyHeadroomBoundary, ModelMemoryGeometry, Qwen3_5ArtifactValidator,
-    model_memory_geometry_from_validated_artifact,
-};
 use serde_json::{Value, json};
 use serial_test::serial;
 use tokio::time::timeout;
@@ -28,13 +20,16 @@ use crate::support::worker_process_observation::{
     WorkerProcessTimeline, is_process_running, sole_worker_child_process_identifier,
 };
 use crate::support::{
-    artifact_bytes::acceptance_model_scan_root, configured_installed_model_directory_by_id,
-    exact_model_prompt, resident_sparse_moe_model_id,
+    configured_installed_model_directory_by_id, exact_model_prompt, resident_sparse_moe_model_id,
 };
 
-const MAXIMUM_REAL_MODEL_MEMORY_BYTES: u64 = 36_000_000_000;
-const FIXED_PREFILL_CHUNK_SIZE_TOKENS: u32 = 2_048;
-const MAXIMUM_OUTPUT_TOKEN_COUNT: u32 = 8;
+use super::acceptance_worker_config::write_acceptance_config;
+use super::one_token_chat_request::complete_one_token_chat_request;
+use super::sparse_artifact_residency::{
+    MAXIMUM_REAL_MODEL_MEMORY_BYTES, artifact_payload_bytes, context_memory_reservation_bytes,
+    measure_sparse_artifact_residency_geometry, prompt_chunk_mlx_working_buffer_allowance_bytes,
+};
+
 const SMALL_PROMPT_TOKEN_COUNT: usize = 256;
 /// Context the whole-model phase reserves: the small prompt, its chat template,
 /// and the generated tokens, rounded up so template growth cannot overflow it.
@@ -113,6 +108,7 @@ async fn start_resident_ceiling_journey() -> ResidentCeilingJourney {
         &model_directory,
         model_id,
         resident_memory_ceiling_bytes,
+        false,
     );
     let real_model_rest_server = launch_real_model_rest_server(
         model_id,
@@ -259,88 +255,6 @@ fn assert_worker_process_kept(
     );
 }
 
-struct SparseArtifactResidencyGeometry {
-    complete_residency_with_headroom_bytes: u64,
-    model_geometry: ModelMemoryGeometry,
-}
-
-fn measure_sparse_artifact_residency_geometry(
-    model_directory: &Path,
-) -> SparseArtifactResidencyGeometry {
-    let validated_artifact = Qwen3_5ArtifactValidator::new()
-        .validate(model_directory, MAXIMUM_OUTPUT_TOKEN_COUNT)
-        .expect("the configured sparse artifact should validate");
-    let (model_geometry, required_headroom_bytes) =
-        model_memory_geometry_from_validated_artifact(&validated_artifact, model_directory)
-            .expect("the configured sparse artifact should expose disk RAM geometry");
-    let complete_residency_boundary = CompleteResidencyHeadroomBoundary::from_model_geometry(
-        model_geometry,
-        required_headroom_bytes,
-    );
-    SparseArtifactResidencyGeometry {
-        complete_residency_with_headroom_bytes: complete_residency_boundary
-            .static_complete_residency_bytes
-            .saturating_add(complete_residency_boundary.required_headroom_bytes),
-        model_geometry,
-    }
-}
-
-fn context_memory_reservation_bytes(model_directory: &Path, context_token_count: usize) -> u64 {
-    let validated_artifact = Qwen3_5ArtifactValidator::new()
-        .validate(model_directory, MAXIMUM_OUTPUT_TOKEN_COUNT)
-        .expect("the configured sparse artifact should validate");
-    let reservation_bytes = validated_artifact
-        .config()
-        .context_memory_reservation_bytes(context_token_count)
-        .expect("the acceptance prompt context should fit the model geometry");
-    u64::try_from(reservation_bytes)
-        .expect("the acceptance prompt context reservation should fit u64")
-}
-
-fn artifact_payload_bytes(model_directory: &Path) -> u64 {
-    let validated_artifact = Qwen3_5ArtifactValidator::new()
-        .validate(model_directory, MAXIMUM_OUTPUT_TOKEN_COUNT)
-        .expect("the configured sparse artifact should validate");
-    validated_artifact.total_payload_bytes()
-}
-
-fn write_acceptance_config(
-    worker_home: &Path,
-    model_directory: &Path,
-    model_id: &str,
-    mlx_memory_ceiling_bytes: u64,
-) {
-    let configuration_directory = worker_home.join(".astronomical-dev");
-    fs::create_dir_all(&configuration_directory)
-        .expect("the isolated acceptance configuration directory should be created");
-    let configuration_document = json!({
-        "$schema": "./astronomical-config.schema.json",
-        "schema_version": 1,
-        "runtime": {
-            "model_directories": [acceptance_model_scan_root(model_directory)],
-            "maximum_mlx_memory_gb": mlx_memory_ceiling_bytes.div_ceil(BYTES_PER_MARKETED_GIGABYTE),
-        },
-        "ssd_prompt_cache": {"enabled": false},
-        "diagnostics": {"performance_attribution_enabled": true},
-        "chunking": {
-            "fixed_prompt_processing_chunk_size_tokens": FIXED_PREFILL_CHUNK_SIZE_TOKENS
-        },
-        "models": {
-            (model_id): {
-                "generation_defaults": {
-                    "maximum_output_tokens": MAXIMUM_OUTPUT_TOKEN_COUNT,
-                },
-            },
-        },
-    });
-    fs::write(
-        configuration_directory.join("config.json"),
-        serde_json::to_vec_pretty(&configuration_document)
-            .expect("the acceptance configuration should serialize"),
-    )
-    .expect("the acceptance configuration should be written");
-}
-
 async fn serve_and_require_output(
     server_address: std::net::SocketAddr,
     openai_client: &LocalOpenAiClient,
@@ -348,40 +262,12 @@ async fn serve_and_require_output(
     messages: Value,
     request_label: &str,
 ) {
-    let completion_request = json!({
-        "model": model_id,
-        "messages": messages,
-        "stream": true,
-        "stream_options": {"include_usage": true},
-        "temperature": 1,
-        "thinking_budget": 0,
-        "max_tokens": 1
-    });
-    let mut streamed_completion = match openai_client
-        .create_streaming_chat_completion(&completion_request)
-        .await
-    {
-        Ok(streamed_completion) => streamed_completion,
-        Err(request_error) => {
-            let status_document = get_json_endpoint(server_address, "/v1/status").await;
-            panic!(
-                "{request_label} should start: {request_error}; worker_status={status_document}"
-            );
-        }
-    };
-    let mut assistant_response = String::new();
-    while let Some(stream_item) = streamed_completion.next().await {
-        let stream_chunk = stream_item.unwrap_or_else(|stream_error| {
-            panic!("{request_label} should stream a valid response: {stream_error}")
-        });
-        for choice in stream_chunk["choices"].as_array().into_iter().flatten() {
-            if let Some(text_fragment) = choice["delta"]["content"].as_str() {
-                assistant_response.push_str(text_fragment);
-            }
-        }
-    }
-    assert!(
-        !assistant_response.trim().is_empty(),
-        "{request_label} should return visible model output"
-    );
+    complete_one_token_chat_request(
+        server_address,
+        openai_client,
+        model_id,
+        messages,
+        request_label,
+    )
+    .await;
 }

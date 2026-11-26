@@ -2,9 +2,13 @@
 
 use std::{io::Cursor, ops::Range};
 
+use super::{
+    assert_invalid_png_encoding, image_completion_event, png_chunk_range,
+    valid_image_result_metadata,
+};
 use crate::{
-    GeneratedImage, ImageGenerationCompletionValidationError, ImageGenerationResultMetadata,
-    ProtocolError, RequestId, WorkerEvent, decode_event, encode_event,
+    ImageGenerationCompletionValidationError, ImageGenerationResultMetadata, ProtocolError,
+    decode_event, encode_event,
 };
 use image::{ExtendedColorType, ImageEncoder, codecs::png::PngEncoder};
 
@@ -156,62 +160,10 @@ fn png_chunk_bytes(chunk_type: &[u8; 4], chunk_data: &[u8]) -> Vec<u8> {
     chunk_bytes
 }
 
-fn png_chunk_range(png_bytes: &[u8], expected_chunk_type: &[u8; 4]) -> Range<usize> {
-    let mut chunk_start = 8;
-    while chunk_start < png_bytes.len() {
-        let chunk_data_bytes = u32::from_be_bytes(
-            png_bytes[chunk_start..chunk_start + 4]
-                .try_into()
-                .expect("the encoded PNG should contain a chunk length"),
-        ) as usize;
-        let chunk_end = chunk_start + 12 + chunk_data_bytes;
-        if &png_bytes[chunk_start + 4..chunk_start + 8] == expected_chunk_type {
-            return chunk_start..chunk_end;
-        }
-        chunk_start = chunk_end;
-    }
-    panic!("the encoded PNG should contain the requested chunk")
-}
-
 fn rewrite_png_chunk_crc(png_bytes: &mut [u8], chunk_range: Range<usize>) {
     let chunk_type_start = chunk_range.start + 4;
     let crc_start = chunk_range.end - 4;
     let mut crc_hasher = crc32fast::Hasher::new();
     crc_hasher.update(&png_bytes[chunk_type_start..crc_start]);
     png_bytes[crc_start..chunk_range.end].copy_from_slice(&crc_hasher.finalize().to_be_bytes());
-}
-
-fn image_completion_event(
-    encoded_bytes: Vec<u8>,
-    result_metadata: ImageGenerationResultMetadata,
-) -> WorkerEvent {
-    WorkerEvent::ImageGenerationCompleted {
-        request_id: RequestId::new(501),
-        generated_image: GeneratedImage {
-            mime_type: "image/png".to_owned(),
-            encoded_bytes,
-        },
-        result_metadata,
-    }
-}
-
-fn valid_image_result_metadata() -> ImageGenerationResultMetadata {
-    ImageGenerationResultMetadata {
-        width_pixels: 1_024,
-        height_pixels: 768,
-        steps: 4,
-        guidance_thousandths: 1_000,
-        seed: 42,
-        elapsed_millis: 1_800,
-    }
-}
-
-fn assert_invalid_png_encoding(encoded_bytes: Vec<u8>) {
-    let worker_event = image_completion_event(encoded_bytes, valid_image_result_metadata());
-    assert!(matches!(
-        decode_event(&encode_event(&worker_event).expect("event should serialize")),
-        Err(ProtocolError::InvalidImageGenerationCompletion(
-            ImageGenerationCompletionValidationError::InvalidPngEncoding
-        ))
-    ));
 }

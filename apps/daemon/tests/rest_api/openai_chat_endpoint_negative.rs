@@ -4,14 +4,13 @@ use astronomical_daemon::{
     ChatGenerationExecutor, ChatGenerationStreamEvent, GenerationStartError, WorkerHealthSnapshot,
     build_application, build_application_with_discovered_models,
 };
-use axum::{
-    body::{Body, to_bytes},
-    http::{Request, StatusCode, header},
-};
+use axum::{body::to_bytes, http::StatusCode};
 use config::DiscoveredModel;
 use ipc_protocol::{ChatGenerationCommand, ChatModelCapabilities, MAX_IPC_FRAME_BYTES};
 use tokio::sync::mpsc;
 use tower::ServiceExt;
+
+use crate::rest_api::chat_endpoint_fixtures::chat_completion_request;
 
 const READY_MODEL_ID: &str = "astronomical/negative-chat-test-worker";
 
@@ -104,14 +103,7 @@ async fn should_canonicalize_a_provider_prefixed_model_for_an_idle_worker() {
     );
     let chat_response = application
         .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/v1/chat/completions")
-                .header(header::CONTENT_TYPE, "application/json")
-                .body(Body::from(
-                    r#"{"model":"mlx-community/requested-model","messages":[{"role":"user","content":"hello"}],"stream":true}"#,
-                ))
-                .expect("the chat request should be well formed"),
+            chat_completion_request(r#"{"model":"mlx-community/requested-model","messages":[{"role":"user","content":"hello"}],"stream":true}"#),
         )
         .await
         .expect("the in-process application should return a chat response");
@@ -129,14 +121,7 @@ where
 {
     let application = build_application(generation_executor);
     let chat_response = application
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/v1/chat/completions")
-                .header(header::CONTENT_TYPE, "application/json")
-                .body(Body::from(request_body))
-                .expect("the chat request should be well formed"),
-        )
+        .oneshot(chat_completion_request(request_body))
         .await
         .expect("the in-process application should return a chat response");
 

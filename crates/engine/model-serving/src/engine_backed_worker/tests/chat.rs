@@ -2,9 +2,11 @@
 //! scripted engines, factories, and processors.
 
 mod astro_ssd_prompt_cache_stats;
+mod chat_request_exchange;
 mod count_chat_tokens;
 mod expert_memory_mode;
 mod generation_lifecycle;
+pub(super) mod ipc_worker_transport;
 mod live_memory_limit_wired_budget;
 mod model_visible_correction;
 mod neural_engine_preparation;

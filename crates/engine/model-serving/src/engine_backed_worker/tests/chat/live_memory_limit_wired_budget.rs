@@ -1,14 +1,12 @@
 //! Live MLX memory ceiling updates against the worker-lifetime wired budget.
 
+use super::ipc_worker_transport::open_ipc_worker_transport;
 use super::scripted_model_factory_test_doubles::LazyScriptedModelFactory;
 use super::support::{close_worker_transport, next_event};
 use crate::EngineBackedWorker;
-use ipc_protocol::{
-    MAX_IPC_FRAME_BYTES, ProtocolReader, ProtocolWriter, WorkerCommand, WorkerEvent,
-};
+use ipc_protocol::{WorkerCommand, WorkerEvent};
 use std::sync::atomic::AtomicUsize;
 use std::sync::{Arc, Mutex};
-use tokio::io::{duplex, split};
 
 const MACHINE_MLX_MEMORY_CEILING_BYTES: u64 = 42_949_672_960;
 const WIRED_RESIDENCY_BUDGET_BYTES: u64 = 42_097_180_672;
@@ -36,16 +34,10 @@ async fn applied_live_mlx_memory_ceiling_bytes(
         STARTUP_MLX_MEMORY_CEILING_BYTES,
     )
     .with_wired_residency_budget_bytes(wired_residency_budget_bytes);
-    let (daemon_transport, worker_transport) = duplex(MAX_IPC_FRAME_BYTES * 2);
-    let (daemon_reader_transport, daemon_writer_transport) = split(daemon_transport);
-    let (worker_reader_transport, worker_writer_transport) = split(worker_transport);
-    let mut daemon_reader = ProtocolReader::new(daemon_reader_transport);
-    let mut daemon_writer = ProtocolWriter::new(daemon_writer_transport);
-    let worker_task = tokio::spawn(async move {
-        engine_worker
-            .run(worker_reader_transport, worker_writer_transport)
-            .await
-    });
+    let (mut daemon_reader, mut daemon_writer, worker_reader_transport, worker_writer_transport) =
+        open_ipc_worker_transport();
+    let worker_task =
+        tokio::spawn(engine_worker.run(worker_reader_transport, worker_writer_transport));
 
     let _idle_event = next_event(&mut daemon_reader).await;
     daemon_writer

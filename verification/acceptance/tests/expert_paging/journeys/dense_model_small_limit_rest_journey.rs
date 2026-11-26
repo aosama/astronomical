@@ -15,18 +15,21 @@
 //! engine when a step did not fit. The second journey sends a short and a
 //! long prompt at that limit and asserts both are served.
 
-use std::{fs, net::SocketAddr, path::Path};
+use std::net::SocketAddr;
 
-use futures_util::StreamExt;
 use serde_json::{Value, json};
 use serial_test::serial;
 use tokio::time::{Duration, Instant, sleep, timeout};
 
+use super::story_continuation_requests::{
+    consume_completion, story_prompt, story_request, write_everyday_configuration,
+};
 use crate::support::{
-    openai_client::{ChatCompletionStream, LocalOpenAiClient},
+    openai_client::LocalOpenAiClient,
     serving_rest::{get_json_endpoint, launch_real_model_rest_server, stop_real_model_rest_server},
 };
 
+const JOURNEY_LOG_LABEL: &str = "dense-small-limit";
 const JOURNEY_BUDGET: Duration = Duration::from_secs(115);
 /// The limit this acceptance cell runs under. Production code must not
 /// assume it.
@@ -42,8 +45,6 @@ const MAXIMUM_OUTPUT_TOKENS: u64 = 16;
 const STATUS_POLL_INTERVAL: Duration = Duration::from_millis(100);
 /// How long the engine may take to read layers back once it is idle.
 const SETTLE_BUDGET: Duration = Duration::from_secs(20);
-const ROMEO_AND_JULIET_SOURCE: &str =
-    include_str!("../../fixtures/model_metrics_50000_romeo_and_juliet_words.txt");
 
 /// How many decoder layers the status page reports as kept, and of how many.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -93,10 +94,14 @@ async fn serve_a_dense_model_at_a_barely_fitting_limit() {
     let mut served_prompt_count = 0_usize;
     for prompt in &prompts {
         let stream = client
-            .create_streaming_chat_completion(&story_request(model_id, prompt))
+            .create_streaming_chat_completion(&story_request(
+                model_id,
+                prompt,
+                MAXIMUM_OUTPUT_TOKENS,
+            ))
             .await
             .expect("the request should start");
-        if consume_completion(stream).await {
+        if consume_completion(stream, JOURNEY_LOG_LABEL).await {
             served_prompt_count += 1;
         }
     }
@@ -129,11 +134,15 @@ async fn serve_a_dense_model_under_a_small_limit() {
     // The model loads with the first request, so the first reading of its
     // kept layers is taken once that request is over.
     let short_stream = client
-        .create_streaming_chat_completion(&story_request(model_id, &short_prompt))
+        .create_streaming_chat_completion(&story_request(
+            model_id,
+            &short_prompt,
+            MAXIMUM_OUTPUT_TOKENS,
+        ))
         .await
         .expect("the short request should start");
     assert!(
-        consume_completion(short_stream).await,
+        consume_completion(short_stream, JOURNEY_LOG_LABEL).await,
         "the short request must be served"
     );
     let kept_layers_after_load = settled_kept_dense_layers(server_address, None).await;
@@ -143,11 +152,15 @@ async fn serve_a_dense_model_under_a_small_limit() {
         "a limit below the model's size must keep some layers and stream the others: {kept_layers_after_load:?}"
     );
     let long_stream = client
-        .create_streaming_chat_completion(&story_request(model_id, &long_prompt))
+        .create_streaming_chat_completion(&story_request(
+            model_id,
+            &long_prompt,
+            MAXIMUM_OUTPUT_TOKENS,
+        ))
         .await
         .expect("the long request should start");
     let (long_request_was_served, largest_active_memory_bytes) = tokio::join!(
-        consume_completion(long_stream),
+        consume_completion(long_stream, JOURNEY_LOG_LABEL),
         largest_active_memory_while_busy(server_address),
     );
     assert!(long_request_was_served, "the long request must be served");
@@ -233,59 +246,6 @@ async fn largest_active_memory_while_busy(server_address: SocketAddr) -> u64 {
         sleep(STATUS_POLL_INTERVAL).await;
     }
     largest_active_memory_bytes
-}
-
-/// True when the stream finished with a finish reason and carried no error.
-async fn consume_completion(mut stream: ChatCompletionStream) -> bool {
-    let mut finished = false;
-    while let Some(fragment) = stream.next().await {
-        let fragment = fragment.expect("the completion stream must stay readable");
-        if !fragment["error"].is_null() {
-            eprintln!("[dense-small-limit] request failed: {}", fragment["error"]);
-            return false;
-        }
-        for choice in fragment["choices"].as_array().into_iter().flatten() {
-            finished |= matches!(choice["finish_reason"].as_str(), Some("stop" | "length"));
-        }
-    }
-    finished
-}
-
-/// The settings a fresh install runs with; only the model folders are named.
-fn write_everyday_configuration(worker_home: &Path) {
-    let configuration_document = json!({
-        "$schema": "./astronomical-config.schema.json",
-        "schema_version": 1,
-        "runtime": {"model_directories": crate::support::configured_model_directory_roots()},
-        "diagnostics": {"log_level": "info"},
-    });
-    let state_directory = worker_home.join(".astronomical-dev");
-    fs::create_dir_all(&state_directory).expect("the state directory should exist");
-    fs::write(
-        state_directory.join("config.json"),
-        serde_json::to_vec_pretty(&configuration_document)
-            .expect("the configuration should serialize"),
-    )
-    .expect("the configuration should be written");
-}
-
-fn story_prompt(model_directory: &Path, prompt_token_count: usize) -> String {
-    crate::support::exact_model_prompt::build_model_prompt_content_at_most(
-        model_directory,
-        ROMEO_AND_JULIET_SOURCE,
-        "Continue the supplied Romeo and Juliet story.",
-        prompt_token_count,
-    )
-}
-
-fn story_request(model_id: &str, prompt: &str) -> Value {
-    json!({
-        "model": model_id,
-        "messages": [{"role": "user", "content": prompt}],
-        "stream": true,
-        "max_tokens": MAXIMUM_OUTPUT_TOKENS,
-        "temperature": 0,
-    })
 }
 
 #[test]

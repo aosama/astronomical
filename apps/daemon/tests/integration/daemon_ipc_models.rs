@@ -2,54 +2,39 @@
 //! catalog projection, download endpoints without a coordinator, and the
 //! default-model set/reject round trip.
 
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 
 use astronomical_daemon::DownloadCatalog;
-use ipc_protocol::{
-    DaemonIpcClient, DaemonRequest, DaemonResponse, DaemonWorkerStatus, ModelLoadInFlight,
-};
-use tokio::time::timeout;
+use ipc_protocol::{DaemonRequest, DaemonResponse, ModelLoadInFlight};
 
+use crate::integration::daemon_ipc_exchange::request_and_read_first_response;
+use crate::integration::daemon_ipc_service_fixtures::{
+    ready_idle_status_response, shut_down_and_remove_state_directory, start_ready_chat_service,
+    start_service_with_installed_models,
+};
 use crate::support::daemon_ipc::{
-    HANDSHAKE_TEST_TIMEOUT, fresh_instance_state_directory, ipc_chat_discovered_model,
-    ipc_decision_discovered_model, ipc_runtime_config, ready_stub_executor,
-    start_stub_daemon_ipc_service, start_stub_daemon_ipc_service_with_runtime_config,
+    fresh_instance_state_directory, ipc_chat_discovered_model, ipc_decision_discovered_model,
+    ready_stub_executor,
 };
 
 #[tokio::test]
 async fn should_list_discovered_models_over_daemon_ipc() {
     let state_directory = fresh_instance_state_directory("models-list");
-    let discovered_model = ipc_chat_discovered_model("test/local-chatter");
-    let reloadable_config = Arc::new(RwLock::new(ipc_runtime_config(
-        vec![discovered_model],
-        &["test/local-chatter"],
-    )));
     // The worker is ready with exactly this model, so the listing must mark
     // it resident.
-    let stub_executor = ready_stub_executor("test/local-chatter");
-    let daemon_ipc_service = start_stub_daemon_ipc_service_with_runtime_config(
+    let daemon_ipc_service = start_service_with_installed_models(
         &state_directory,
-        stub_executor,
-        Some(reloadable_config),
+        ready_stub_executor("test/local-chatter"),
+        vec![ipc_chat_discovered_model("test/local-chatter")],
+        &["test/local-chatter"],
     )
     .await;
 
-    let mut daemon_client =
-        DaemonIpcClient::connect(daemon_ipc_service.socket_path().to_path_buf())
-            .await
-            .expect("the client should connect to the running daemon IPC service");
-    timeout(
-        HANDSHAKE_TEST_TIMEOUT,
-        daemon_client.send_request(&DaemonRequest::ModelsList),
+    let list_response = request_and_read_first_response(
+        daemon_ipc_service.socket_path(),
+        &DaemonRequest::ModelsList,
     )
-    .await
-    .expect("the models list send should finish inside the test timeout")
-    .expect("the models list request should transmit");
-    let list_response = timeout(HANDSHAKE_TEST_TIMEOUT, daemon_client.next_response())
-        .await
-        .expect("the models list response should arrive inside the test timeout")
-        .expect("the models list read should not fail at the transport layer")
-        .expect("the daemon should answer the models list request");
+    .await;
     assert_eq!(
         list_response,
         DaemonResponse::ModelsList {
@@ -67,40 +52,24 @@ async fn should_list_discovered_models_over_daemon_ipc() {
         }
     );
 
-    timeout(HANDSHAKE_TEST_TIMEOUT, daemon_ipc_service.shutdown())
-        .await
-        .expect("the daemon IPC service shutdown should finish inside the test timeout")
-        .expect("the daemon IPC service should shut down cleanly");
-    let _ = std::fs::remove_dir_all(&state_directory);
+    shut_down_and_remove_state_directory(daemon_ipc_service, &state_directory).await;
 }
 
 #[tokio::test]
 async fn should_list_a_decision_model_with_its_capability_and_no_context_window() {
     let state_directory = fresh_instance_state_directory("models-decider");
-    let reloadable_config = Arc::new(RwLock::new(ipc_runtime_config(
-        vec![ipc_decision_discovered_model("test-local-decider")],
-        &[],
-    )));
-    let daemon_ipc_service = start_stub_daemon_ipc_service_with_runtime_config(
+    let daemon_ipc_service = start_service_with_installed_models(
         &state_directory,
         ready_stub_executor("test/local-chatter"),
-        Some(reloadable_config),
+        vec![ipc_decision_discovered_model("test-local-decider")],
+        &[],
     )
     .await;
-    let mut daemon_client =
-        DaemonIpcClient::connect(daemon_ipc_service.socket_path().to_path_buf())
-            .await
-            .expect("the client should connect to the running daemon IPC service");
-
-    daemon_client
-        .send_request(&DaemonRequest::ModelsList)
-        .await
-        .expect("the models list request should transmit");
-    let list_response = timeout(HANDSHAKE_TEST_TIMEOUT, daemon_client.next_response())
-        .await
-        .expect("the models list response should arrive inside the test timeout")
-        .expect("the models list read should not fail at the transport layer")
-        .expect("the daemon should answer the models list request");
+    let list_response = request_and_read_first_response(
+        daemon_ipc_service.socket_path(),
+        &DaemonRequest::ModelsList,
+    )
+    .await;
 
     assert_eq!(
         list_response,
@@ -118,11 +87,7 @@ async fn should_list_a_decision_model_with_its_capability_and_no_context_window(
             }],
         }
     );
-    timeout(HANDSHAKE_TEST_TIMEOUT, daemon_ipc_service.shutdown())
-        .await
-        .expect("the daemon IPC service shutdown should finish inside the test timeout")
-        .expect("the daemon IPC service should shut down cleanly");
-    let _ = std::fs::remove_dir_all(&state_directory);
+    shut_down_and_remove_state_directory(daemon_ipc_service, &state_directory).await;
 }
 
 /// The worker has already dropped the previous model by the time a swap reports, so
@@ -130,35 +95,23 @@ async fn should_list_a_decision_model_with_its_capability_and_no_context_window(
 #[tokio::test]
 async fn should_list_nothing_as_resident_during_a_model_load() {
     let state_directory = fresh_instance_state_directory("models-load");
-    let reloadable_config = Arc::new(RwLock::new(ipc_runtime_config(
-        vec![ipc_chat_discovered_model("test/local-chatter")],
-        &["test/local-chatter"],
-    )));
     let mut stub_executor = ready_stub_executor("test/local-chatter");
     Arc::get_mut(&mut stub_executor)
         .expect("the stub executor should be uniquely owned here")
         .health_snapshot
         .model_load_in_flight = Some(ModelLoadInFlight::for_model("test/next"));
-    let daemon_ipc_service = start_stub_daemon_ipc_service_with_runtime_config(
+    let daemon_ipc_service = start_service_with_installed_models(
         &state_directory,
         stub_executor,
-        Some(reloadable_config),
+        vec![ipc_chat_discovered_model("test/local-chatter")],
+        &["test/local-chatter"],
     )
     .await;
-    let mut daemon_client =
-        DaemonIpcClient::connect(daemon_ipc_service.socket_path().to_path_buf())
-            .await
-            .expect("the client should connect to the running daemon IPC service");
-
-    daemon_client
-        .send_request(&DaemonRequest::ModelsList)
-        .await
-        .expect("the models list request should transmit");
-    let list_response = timeout(HANDSHAKE_TEST_TIMEOUT, daemon_client.next_response())
-        .await
-        .expect("the models list response should arrive inside the test timeout")
-        .expect("the models list read should not fail at the transport layer")
-        .expect("the daemon should answer the models list request");
+    let list_response = request_and_read_first_response(
+        daemon_ipc_service.socket_path(),
+        &DaemonRequest::ModelsList,
+    )
+    .await;
 
     match list_response {
         DaemonResponse::ModelsList { models } => {
@@ -167,35 +120,17 @@ async fn should_list_nothing_as_resident_during_a_model_load() {
         }
         unexpected_response => panic!("expected a model list: {unexpected_response:?}"),
     }
-    timeout(HANDSHAKE_TEST_TIMEOUT, daemon_ipc_service.shutdown())
-        .await
-        .expect("the daemon IPC service shutdown should finish inside the test timeout")
-        .expect("the daemon IPC service should shut down cleanly");
-    let _ = std::fs::remove_dir_all(&state_directory);
+    shut_down_and_remove_state_directory(daemon_ipc_service, &state_directory).await;
 }
 
 #[tokio::test]
 async fn should_project_the_release_catalog_over_daemon_ipc() {
-    let state_directory = fresh_instance_state_directory("catalog");
-    let stub_executor = ready_stub_executor("test/local-chatter");
-    let daemon_ipc_service = start_stub_daemon_ipc_service(&state_directory, stub_executor).await;
+    let (daemon_ipc_service, _stub_executor, state_directory) =
+        start_ready_chat_service("catalog").await;
 
-    let mut daemon_client =
-        DaemonIpcClient::connect(daemon_ipc_service.socket_path().to_path_buf())
-            .await
-            .expect("the client should connect to the running daemon IPC service");
-    timeout(
-        HANDSHAKE_TEST_TIMEOUT,
-        daemon_client.send_request(&DaemonRequest::Catalog),
-    )
-    .await
-    .expect("the catalog send should finish inside the test timeout")
-    .expect("the catalog request should transmit");
-    let catalog_response = timeout(HANDSHAKE_TEST_TIMEOUT, daemon_client.next_response())
-        .await
-        .expect("the catalog response should arrive inside the test timeout")
-        .expect("the catalog read should not fail at the transport layer")
-        .expect("the daemon should answer the catalog request");
+    let catalog_response =
+        request_and_read_first_response(daemon_ipc_service.socket_path(), &DaemonRequest::Catalog)
+            .await;
     let DaemonResponse::Catalog { entries } = catalog_response else {
         panic!("the daemon should answer with a catalog response");
     };
@@ -225,35 +160,19 @@ async fn should_project_the_release_catalog_over_daemon_ipc() {
         );
     }
 
-    timeout(HANDSHAKE_TEST_TIMEOUT, daemon_ipc_service.shutdown())
-        .await
-        .expect("the daemon IPC service shutdown should finish inside the test timeout")
-        .expect("the daemon IPC service should shut down cleanly");
-    let _ = std::fs::remove_dir_all(&state_directory);
+    shut_down_and_remove_state_directory(daemon_ipc_service, &state_directory).await;
 }
 
 #[tokio::test]
 async fn should_report_no_active_download_without_a_coordinator() {
-    let state_directory = fresh_instance_state_directory("download-status");
-    let stub_executor = ready_stub_executor("test/local-chatter");
-    let daemon_ipc_service = start_stub_daemon_ipc_service(&state_directory, stub_executor).await;
+    let (daemon_ipc_service, _stub_executor, state_directory) =
+        start_ready_chat_service("download-status").await;
 
-    let mut daemon_client =
-        DaemonIpcClient::connect(daemon_ipc_service.socket_path().to_path_buf())
-            .await
-            .expect("the client should connect to the running daemon IPC service");
-    timeout(
-        HANDSHAKE_TEST_TIMEOUT,
-        daemon_client.send_request(&DaemonRequest::DownloadStatus),
+    let status_response = request_and_read_first_response(
+        daemon_ipc_service.socket_path(),
+        &DaemonRequest::DownloadStatus,
     )
-    .await
-    .expect("the download status send should finish inside the test timeout")
-    .expect("the download status request should transmit");
-    let status_response = timeout(HANDSHAKE_TEST_TIMEOUT, daemon_client.next_response())
-        .await
-        .expect("the download status response should arrive inside the test timeout")
-        .expect("the download status read should not fail at the transport layer")
-        .expect("the daemon should answer the download status request");
+    .await;
     assert_eq!(
         status_response,
         DaemonResponse::DownloadStatus {
@@ -263,37 +182,21 @@ async fn should_report_no_active_download_without_a_coordinator() {
         "without a download coordinator the daemon reports no active job"
     );
 
-    timeout(HANDSHAKE_TEST_TIMEOUT, daemon_ipc_service.shutdown())
-        .await
-        .expect("the daemon IPC service shutdown should finish inside the test timeout")
-        .expect("the daemon IPC service should shut down cleanly");
-    let _ = std::fs::remove_dir_all(&state_directory);
+    shut_down_and_remove_state_directory(daemon_ipc_service, &state_directory).await;
 }
 
 #[tokio::test]
 async fn should_start_a_download_rejection_without_a_coordinator() {
-    let state_directory = fresh_instance_state_directory("download-start");
-    let stub_executor = ready_stub_executor("test/local-chatter");
-    let daemon_ipc_service = start_stub_daemon_ipc_service(&state_directory, stub_executor).await;
+    let (daemon_ipc_service, _stub_executor, state_directory) =
+        start_ready_chat_service("download-start").await;
 
-    let mut daemon_client =
-        DaemonIpcClient::connect(daemon_ipc_service.socket_path().to_path_buf())
-            .await
-            .expect("the client should connect to the running daemon IPC service");
-    timeout(
-        HANDSHAKE_TEST_TIMEOUT,
-        daemon_client.send_request(&DaemonRequest::DownloadStart {
+    let start_response = request_and_read_first_response(
+        daemon_ipc_service.socket_path(),
+        &DaemonRequest::DownloadStart {
             model_id: "test/any-model".to_owned(),
-        }),
+        },
     )
-    .await
-    .expect("the download start send should finish inside the test timeout")
-    .expect("the download start request should transmit");
-    let start_response = timeout(HANDSHAKE_TEST_TIMEOUT, daemon_client.next_response())
-        .await
-        .expect("the download start response should arrive inside the test timeout")
-        .expect("the download start read should not fail at the transport layer")
-        .expect("the daemon should answer the download start request");
+    .await;
     assert!(
         matches!(
             &start_response,
@@ -303,18 +206,13 @@ async fn should_start_a_download_rejection_without_a_coordinator() {
         "a download start without a coordinator must be rejected: {start_response:?}"
     );
 
-    timeout(HANDSHAKE_TEST_TIMEOUT, daemon_ipc_service.shutdown())
-        .await
-        .expect("the daemon IPC service shutdown should finish inside the test timeout")
-        .expect("the daemon IPC service should shut down cleanly");
-    let _ = std::fs::remove_dir_all(&state_directory);
+    shut_down_and_remove_state_directory(daemon_ipc_service, &state_directory).await;
 }
 
 #[tokio::test]
 async fn should_set_and_report_the_default_model_over_daemon_ipc() {
-    let state_directory = fresh_instance_state_directory("default-model");
-    let stub_executor = ready_stub_executor("test/local-chatter");
-    let daemon_ipc_service = start_stub_daemon_ipc_service(&state_directory, stub_executor).await;
+    let (daemon_ipc_service, _stub_executor, state_directory) =
+        start_ready_chat_service("default-model").await;
 
     // Derive the expected normalized id from the bundled catalog itself so the
     // test survives catalog repackaging.
@@ -326,23 +224,13 @@ async fn should_set_and_report_the_default_model_over_daemon_ipc() {
 
     // A requestable leaf id is accepted and normalized to the catalog entry's
     // requestable id.
-    let mut set_client = DaemonIpcClient::connect(daemon_ipc_service.socket_path().to_path_buf())
-        .await
-        .expect("the client should connect to the running daemon IPC service");
-    timeout(
-        HANDSHAKE_TEST_TIMEOUT,
-        set_client.send_request(&DaemonRequest::DefaultModelSet {
+    let set_response = request_and_read_first_response(
+        daemon_ipc_service.socket_path(),
+        &DaemonRequest::DefaultModelSet {
             model_id: requestable_model_id.clone(),
-        }),
+        },
     )
-    .await
-    .expect("the default model set send should finish inside the test timeout")
-    .expect("the default model set request should transmit");
-    let set_response = timeout(HANDSHAKE_TEST_TIMEOUT, set_client.next_response())
-        .await
-        .expect("the default model set response should arrive inside the test timeout")
-        .expect("the default model set read should not fail at the transport layer")
-        .expect("the daemon should answer the default model set request");
+    .await;
     assert_eq!(
         set_response,
         DaemonResponse::DefaultModelSet {
@@ -352,68 +240,29 @@ async fn should_set_and_report_the_default_model_over_daemon_ipc() {
 
     // The persisted default is visible to a fresh status probe, proving the
     // write round-trips through the instance config file.
-    drop(set_client);
-    let mut status_client =
-        DaemonIpcClient::connect(daemon_ipc_service.socket_path().to_path_buf())
-            .await
-            .expect("the status client should connect to the running daemon IPC service");
-    timeout(
-        HANDSHAKE_TEST_TIMEOUT,
-        status_client.send_request(&DaemonRequest::Status),
-    )
-    .await
-    .expect("the status send should finish inside the test timeout")
-    .expect("the status request should transmit");
-    let status_response = timeout(HANDSHAKE_TEST_TIMEOUT, status_client.next_response())
-        .await
-        .expect("the status response should arrive inside the test timeout")
-        .expect("the status read should not fail at the transport layer")
-        .expect("the daemon should answer the status request");
+    let status_response =
+        request_and_read_first_response(daemon_ipc_service.socket_path(), &DaemonRequest::Status)
+            .await;
     assert_eq!(
         status_response,
-        DaemonResponse::Status {
-            worker_status: DaemonWorkerStatus::Ready,
-            ready_model_id: Some("test/local-chatter".to_owned()),
-            default_model_id: Some(requestable_model_id),
-            model_load_in_flight: None,
-            request_progress_count: 0,
-            neural_engine_prefill: None,
-            draft_model: None,
-            last_reply_drafting: None,
-        }
+        ready_idle_status_response("test/local-chatter", &requestable_model_id)
     );
 
-    timeout(HANDSHAKE_TEST_TIMEOUT, daemon_ipc_service.shutdown())
-        .await
-        .expect("the daemon IPC service shutdown should finish inside the test timeout")
-        .expect("the daemon IPC service should shut down cleanly");
-    let _ = std::fs::remove_dir_all(&state_directory);
+    shut_down_and_remove_state_directory(daemon_ipc_service, &state_directory).await;
 }
 
 #[tokio::test]
 async fn should_reject_an_unknown_default_model_over_daemon_ipc() {
-    let state_directory = fresh_instance_state_directory("default-model-reject");
-    let stub_executor = ready_stub_executor("test/local-chatter");
-    let daemon_ipc_service = start_stub_daemon_ipc_service(&state_directory, stub_executor).await;
+    let (daemon_ipc_service, _stub_executor, state_directory) =
+        start_ready_chat_service("default-model-reject").await;
 
-    let mut daemon_client =
-        DaemonIpcClient::connect(daemon_ipc_service.socket_path().to_path_buf())
-            .await
-            .expect("the client should connect to the running daemon IPC service");
-    timeout(
-        HANDSHAKE_TEST_TIMEOUT,
-        daemon_client.send_request(&DaemonRequest::DefaultModelSet {
+    let set_response = request_and_read_first_response(
+        daemon_ipc_service.socket_path(),
+        &DaemonRequest::DefaultModelSet {
             model_id: "nope/unknown-model".to_owned(),
-        }),
+        },
     )
-    .await
-    .expect("the default model set send should finish inside the test timeout")
-    .expect("the default model set request should transmit");
-    let set_response = timeout(HANDSHAKE_TEST_TIMEOUT, daemon_client.next_response())
-        .await
-        .expect("the default model set response should arrive inside the test timeout")
-        .expect("the default model set read should not fail at the transport layer")
-        .expect("the daemon should answer the default model set request");
+    .await;
     assert!(
         matches!(
             &set_response,
@@ -423,9 +272,5 @@ async fn should_reject_an_unknown_default_model_over_daemon_ipc() {
         "an unknown default model must be rejected with its id named: {set_response:?}"
     );
 
-    timeout(HANDSHAKE_TEST_TIMEOUT, daemon_ipc_service.shutdown())
-        .await
-        .expect("the daemon IPC service shutdown should finish inside the test timeout")
-        .expect("the daemon IPC service should shut down cleanly");
-    let _ = std::fs::remove_dir_all(&state_directory);
+    shut_down_and_remove_state_directory(daemon_ipc_service, &state_directory).await;
 }

@@ -1,3 +1,4 @@
+use crate::chat_generation_command_test_fixtures::{standard_settings, user_messages};
 use crate::{
     ChatAssistantToolCall, ChatAssistantToolFunction, ChatGenerationCommand,
     ChatGenerationSettings, ChatGenerationValidationError, ChatMessage, ChatToolChoice,
@@ -9,20 +10,10 @@ fn should_reject_an_empty_model_id_before_worker_preprocessing() {
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(60),
         model: String::new(),
-        messages: vec![ChatMessage::User {
-            content: "Inspect the repository.".to_owned(),
-            images: Vec::new(),
-        }],
+        messages: user_messages(),
         tools: Vec::new(),
         tool_choice: ChatToolChoice::None,
-        settings: ChatGenerationSettings {
-            max_output_tokens: 512,
-            temperature_thousandths: Some(600),
-            top_p_thousandths: Some(950),
-            repetition_penalty_thousandths: None,
-            seed: Some(7),
-            thinking_budget: None,
-        },
+        settings: standard_settings(),
         structured_generation: None,
     };
 
@@ -37,20 +28,10 @@ fn should_accept_a_large_model_id_when_the_ipc_frame_fits() {
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(60),
         model: "m".repeat(257),
-        messages: vec![ChatMessage::User {
-            content: "Inspect the repository.".to_owned(),
-            images: Vec::new(),
-        }],
+        messages: user_messages(),
         tools: Vec::new(),
         tool_choice: ChatToolChoice::None,
-        settings: ChatGenerationSettings {
-            max_output_tokens: 512,
-            temperature_thousandths: Some(600),
-            top_p_thousandths: Some(950),
-            repetition_penalty_thousandths: None,
-            seed: Some(7),
-            thinking_budget: None,
-        },
+        settings: standard_settings(),
         structured_generation: None,
     };
 
@@ -64,19 +45,12 @@ fn should_reject_a_temperature_above_the_supported_sampling_range() {
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(60),
         model: "astronomical/fake-mixture-of-experts".to_owned(),
-        messages: vec![ChatMessage::User {
-            content: "Inspect the repository.".to_owned(),
-            images: Vec::new(),
-        }],
+        messages: user_messages(),
         tools: Vec::new(),
         tool_choice: ChatToolChoice::None,
         settings: ChatGenerationSettings {
-            max_output_tokens: 512,
             temperature_thousandths: Some(2_001),
-            top_p_thousandths: Some(950),
-            repetition_penalty_thousandths: None,
-            seed: Some(7),
-            thinking_budget: None,
+            ..standard_settings()
         },
         structured_generation: None,
     };
@@ -95,19 +69,12 @@ fn should_reject_a_top_p_above_the_supported_sampling_range() {
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(60),
         model: "astronomical/fake-mixture-of-experts".to_owned(),
-        messages: vec![ChatMessage::User {
-            content: "Inspect the repository.".to_owned(),
-            images: Vec::new(),
-        }],
+        messages: user_messages(),
         tools: Vec::new(),
         tool_choice: ChatToolChoice::None,
         settings: ChatGenerationSettings {
-            max_output_tokens: 512,
-            temperature_thousandths: Some(600),
             top_p_thousandths: Some(1_001),
-            repetition_penalty_thousandths: None,
-            seed: Some(7),
-            thinking_budget: None,
+            ..standard_settings()
         },
         structured_generation: None,
     };
@@ -139,14 +106,7 @@ fn should_reject_malformed_assistant_tool_call_arguments() {
         }],
         tools: Vec::new(),
         tool_choice: ChatToolChoice::None,
-        settings: ChatGenerationSettings {
-            max_output_tokens: 512,
-            temperature_thousandths: Some(600),
-            top_p_thousandths: Some(950),
-            repetition_penalty_thousandths: None,
-            seed: Some(7),
-            thinking_budget: None,
-        },
+        settings: standard_settings(),
         structured_generation: None,
     };
 
@@ -178,14 +138,7 @@ fn should_reject_an_assistant_tool_call_argument_json_value_that_is_not_an_objec
         }],
         tools: Vec::new(),
         tool_choice: ChatToolChoice::None,
-        settings: ChatGenerationSettings {
-            max_output_tokens: 512,
-            temperature_thousandths: Some(600),
-            top_p_thousandths: Some(950),
-            repetition_penalty_thousandths: None,
-            seed: Some(7),
-            thinking_budget: None,
-        },
+        settings: standard_settings(),
         structured_generation: None,
     };
 
@@ -204,24 +157,14 @@ fn should_reject_an_empty_declared_tool_name_before_prompt_rendering() {
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(60),
         model: "astronomical/fake-mixture-of-experts".to_owned(),
-        messages: vec![ChatMessage::User {
-            content: "Inspect the repository.".to_owned(),
-            images: Vec::new(),
-        }],
+        messages: user_messages(),
         tools: vec![ChatToolDefinition {
             name: String::new(),
             description: None,
             parameters_json: "{}".to_owned(),
         }],
         tool_choice: ChatToolChoice::Auto,
-        settings: ChatGenerationSettings {
-            max_output_tokens: 512,
-            temperature_thousandths: Some(600),
-            top_p_thousandths: Some(950),
-            repetition_penalty_thousandths: None,
-            seed: Some(7),
-            thinking_budget: None,
-        },
+        settings: standard_settings(),
         structured_generation: None,
     };
 
@@ -264,14 +207,7 @@ fn should_reject_a_duplicate_assistant_tool_call_id() {
         ],
         tools: Vec::new(),
         tool_choice: ChatToolChoice::None,
-        settings: ChatGenerationSettings {
-            max_output_tokens: 512,
-            temperature_thousandths: Some(600),
-            top_p_thousandths: Some(950),
-            repetition_penalty_thousandths: None,
-            seed: Some(7),
-            thinking_budget: None,
-        },
+        settings: standard_settings(),
         structured_generation: None,
     };
 
@@ -362,14 +298,7 @@ fn should_reject_a_system_message_after_conversation_history_begins() {
         ],
         tools: Vec::new(),
         tool_choice: ChatToolChoice::None,
-        settings: ChatGenerationSettings {
-            max_output_tokens: 512,
-            temperature_thousandths: Some(600),
-            top_p_thousandths: Some(950),
-            repetition_penalty_thousandths: None,
-            seed: Some(7),
-            thinking_budget: None,
-        },
+        settings: standard_settings(),
         structured_generation: None,
     };
 
@@ -396,14 +325,7 @@ fn should_reject_a_tool_result_without_a_prior_assistant_tool_call() {
         ],
         tools: Vec::new(),
         tool_choice: ChatToolChoice::None,
-        settings: ChatGenerationSettings {
-            max_output_tokens: 512,
-            temperature_thousandths: Some(600),
-            top_p_thousandths: Some(950),
-            repetition_penalty_thousandths: None,
-            seed: Some(7),
-            thinking_budget: None,
-        },
+        settings: standard_settings(),
         structured_generation: None,
     };
 

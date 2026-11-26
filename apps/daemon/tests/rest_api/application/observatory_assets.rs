@@ -1,3 +1,4 @@
+use crate::rest_api::http_exchange_fixtures::get_response;
 use axum::{
     body::{Body, to_bytes},
     http::{Request, StatusCode, header},
@@ -26,15 +27,7 @@ const EXPECTED_CONNECT_SCRIPT_MARKER: &str = "src=\"/connect.js\"";
 #[tokio::test]
 async fn should_serve_the_embedded_observatory_index_html_at_root() {
     let application = astronomical_daemon::build_application(ScriptedExecutor::ready(Vec::new()));
-    let response = application
-        .oneshot(
-            Request::builder()
-                .uri("/")
-                .body(Body::empty())
-                .expect("the root request should be valid"),
-        )
-        .await
-        .expect("the application should return the observatory shell");
+    let response = get_response(&application, "/").await;
 
     assert_eq!(response.status(), StatusCode::OK);
     let content_type = response
@@ -145,15 +138,7 @@ async fn should_not_serve_removed_cache_and_optimizer_destinations() {
 #[tokio::test]
 async fn should_return_not_found_for_an_unknown_rest_path() {
     let application = astronomical_daemon::build_application(ScriptedExecutor::ready(Vec::new()));
-    let response = application
-        .oneshot(
-            Request::builder()
-                .uri("/v1/unknown-observatory-review-probe")
-                .body(Body::empty())
-                .expect("the unknown REST request should be valid"),
-        )
-        .await
-        .expect("the application should return an HTTP response");
+    let response = get_response(&application, "/v1/unknown-observatory-review-probe").await;
 
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
 }
@@ -161,15 +146,7 @@ async fn should_return_not_found_for_an_unknown_rest_path() {
 #[tokio::test]
 async fn should_expose_the_thin_talk_handoff_with_a_menu_bar_fallback() {
     let application = astronomical_daemon::build_application(ScriptedExecutor::ready(Vec::new()));
-    let response = application
-        .oneshot(
-            Request::builder()
-                .uri("/")
-                .body(Body::empty())
-                .expect("the root request should be valid"),
-        )
-        .await
-        .expect("the application should return the observatory shell");
+    let response = get_response(&application, "/").await;
     let response_body = to_bytes(response.into_body(), 1024 * 1024)
         .await
         .expect("the observatory shell body should be readable");
@@ -193,15 +170,7 @@ async fn should_expose_the_thin_talk_handoff_with_a_menu_bar_fallback() {
 #[tokio::test]
 async fn should_expose_named_observatory_navigation_and_overview_region() {
     let application = astronomical_daemon::build_application(ScriptedExecutor::ready(Vec::new()));
-    let response = application
-        .oneshot(
-            Request::builder()
-                .uri("/")
-                .body(Body::empty())
-                .expect("the root request should be valid"),
-        )
-        .await
-        .expect("the application should return the observatory shell");
+    let response = get_response(&application, "/").await;
     let response_body = to_bytes(response.into_body(), 1024 * 1024)
         .await
         .expect("the observatory shell body should be readable");
@@ -233,15 +202,7 @@ async fn should_expose_named_observatory_navigation_and_overview_region() {
 #[tokio::test]
 async fn should_serve_the_embedded_observatory_javascript_with_correct_content_type() {
     let application = astronomical_daemon::build_application(ScriptedExecutor::ready(Vec::new()));
-    let response = application
-        .oneshot(
-            Request::builder()
-                .uri("/console.js")
-                .body(Body::empty())
-                .expect("the console.js request should be valid"),
-        )
-        .await
-        .expect("the application should return the console script");
+    let response = get_response(&application, "/console.js").await;
 
     assert_eq!(response.status(), StatusCode::OK);
     let content_type = response
@@ -267,15 +228,7 @@ async fn should_serve_the_embedded_observatory_javascript_with_correct_content_t
 #[tokio::test]
 async fn should_serve_the_embedded_neural_engine_panel_javascript() {
     let application = astronomical_daemon::build_application(ScriptedExecutor::ready(Vec::new()));
-    let response = application
-        .oneshot(
-            Request::builder()
-                .uri("/neural-engine-panel.js")
-                .body(Body::empty())
-                .expect("the panel script request should be valid"),
-        )
-        .await
-        .expect("the application should return the panel script");
+    let response = get_response(&application, "/neural-engine-panel.js").await;
 
     assert_eq!(response.status(), StatusCode::OK);
 }
@@ -283,15 +236,7 @@ async fn should_serve_the_embedded_neural_engine_panel_javascript() {
 #[tokio::test]
 async fn should_serve_the_embedded_overview_javascript() {
     let application = astronomical_daemon::build_application(ScriptedExecutor::ready(Vec::new()));
-    let response = application
-        .oneshot(
-            Request::builder()
-                .uri("/overview.js")
-                .body(Body::empty())
-                .expect("the overview script request should be valid"),
-        )
-        .await
-        .expect("the application should return the overview script");
+    let response = get_response(&application, "/overview.js").await;
 
     assert_eq!(response.status(), StatusCode::OK);
     assert!(
@@ -313,15 +258,7 @@ async fn should_serve_the_embedded_overview_javascript() {
 #[tokio::test]
 async fn should_serve_the_embedded_connection_material_script() {
     let application = astronomical_daemon::build_application(ScriptedExecutor::ready(Vec::new()));
-    let response = application
-        .oneshot(
-            Request::builder()
-                .uri("/connect.js")
-                .body(Body::empty())
-                .expect("the connect script request should be valid"),
-        )
-        .await
-        .expect("the application should return the connection material script");
+    let response = get_response(&application, "/connect.js").await;
 
     assert_eq!(response.status(), StatusCode::OK);
     assert!(
@@ -418,15 +355,7 @@ async fn should_serve_the_embedded_experts_and_overview_assets() {
 #[tokio::test]
 async fn should_expose_the_experts_view_region_in_the_shell() {
     let application = astronomical_daemon::build_application(ScriptedExecutor::ready(Vec::new()));
-    let response = application
-        .oneshot(
-            Request::builder()
-                .uri("/experts")
-                .body(Body::empty())
-                .expect("the experts deep-link request should be valid"),
-        )
-        .await
-        .expect("the application should return the Observatory shell");
+    let response = get_response(&application, "/experts").await;
     let response_body = to_bytes(response.into_body(), 1024 * 1024)
         .await
         .expect("the Observatory shell body should be readable");
@@ -449,15 +378,7 @@ async fn should_expose_the_experts_view_region_in_the_shell() {
 #[tokio::test]
 async fn should_serve_the_embedded_memory_control_script() {
     let application = astronomical_daemon::build_application(ScriptedExecutor::ready(Vec::new()));
-    let response = application
-        .oneshot(
-            Request::builder()
-                .uri("/memory-control.js")
-                .body(Body::empty())
-                .expect("the memory-control request should be valid"),
-        )
-        .await
-        .expect("the application should return the memory-control script");
+    let response = get_response(&application, "/memory-control.js").await;
 
     assert_eq!(response.status(), StatusCode::OK);
     let response_body = to_bytes(response.into_body(), 1024 * 1024)
@@ -474,15 +395,7 @@ async fn should_serve_the_embedded_memory_control_script() {
 #[tokio::test]
 async fn should_no_longer_serve_the_retired_playground_script() {
     let application = astronomical_daemon::build_application(ScriptedExecutor::ready(Vec::new()));
-    let response = application
-        .oneshot(
-            Request::builder()
-                .uri("/playground.js")
-                .body(Body::empty())
-                .expect("the playground.js request should be valid"),
-        )
-        .await
-        .expect("the application should answer the playground.js request");
+    let response = get_response(&application, "/playground.js").await;
 
     // Chat lives in Thin Talk now; the console embeds no chat script, so the
     // retired route must 404 instead of serving a stale payload.
@@ -492,15 +405,7 @@ async fn should_no_longer_serve_the_retired_playground_script() {
 #[tokio::test]
 async fn should_serve_the_embedded_observatory_stylesheet_with_correct_content_type() {
     let application = astronomical_daemon::build_application(ScriptedExecutor::ready(Vec::new()));
-    let response = application
-        .oneshot(
-            Request::builder()
-                .uri("/console.css")
-                .body(Body::empty())
-                .expect("the console.css request should be valid"),
-        )
-        .await
-        .expect("the application should return the console stylesheet");
+    let response = get_response(&application, "/console.css").await;
 
     assert_eq!(response.status(), StatusCode::OK);
     let content_type = response
@@ -525,15 +430,7 @@ async fn should_serve_the_embedded_observatory_stylesheet_with_correct_content_t
 
 async fn observatory_shell_text() -> String {
     let application = astronomical_daemon::build_application(ScriptedExecutor::ready(Vec::new()));
-    let response = application
-        .oneshot(
-            Request::builder()
-                .uri("/")
-                .body(Body::empty())
-                .expect("the root request should be valid"),
-        )
-        .await
-        .expect("the application should return the observatory shell");
+    let response = get_response(&application, "/").await;
     let shell_bytes = to_bytes(response.into_body(), 1024 * 1024)
         .await
         .expect("the observatory shell should be readable");

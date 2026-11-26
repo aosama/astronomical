@@ -7,5 +7,6 @@ mod modernbert_reference_similarity;
 pub(crate) mod openai_rest;
 mod public_chat_rest;
 mod structured_output_rest;
+mod thinking_budget_journey;
 mod thinking_budget_support;
 mod thinking_controls_rest;

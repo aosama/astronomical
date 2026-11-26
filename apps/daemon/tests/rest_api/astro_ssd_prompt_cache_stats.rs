@@ -1,10 +1,7 @@
+use crate::rest_api::http_exchange_fixtures::get_response;
 use astronomical_daemon::{WorkerHealthSnapshot, WorkerHealthStatus};
-use axum::{
-    body::{Body, to_bytes},
-    http::{Request, StatusCode},
-};
+use axum::{body::to_bytes, http::StatusCode};
 use ipc_protocol::{ChatModelCapabilities, WorkerEvent};
-use tower::ServiceExt;
 
 const MODEL_ID: &str = "astronomical/astro-ssd-prompt-cache-stats-test-model";
 const TEST_CONFIGURED_ASTRO_SSD_PROMPT_CACHE_MAXIMUM_SIZE_BYTES: u64 = 123_456_789;
@@ -46,15 +43,7 @@ async fn should_return_populated_astro_ssd_prompt_cache_stats_for_a_ready_worker
         Some(POPULATED_ASTRO_SSD_PROMPT_CACHE_STATS_EVENT.clone());
     let application =
         astronomical_daemon::build_application(StatsScriptedExecutor::ready(health_snapshot));
-    let response = application
-        .oneshot(
-            Request::builder()
-                .uri("/v1/ssd-prompt-cache/stats")
-                .body(Body::empty())
-                .expect("the astro SSD prompt cache stats request should be valid"),
-        )
-        .await
-        .expect("the application should return an astro SSD prompt cache stats response");
+    let response = get_response(&application, "/v1/ssd-prompt-cache/stats").await;
     assert_eq!(response.status(), StatusCode::OK);
     let response_body = to_bytes(response.into_body(), 8 * 1024)
         .await
@@ -119,15 +108,7 @@ async fn should_return_zeroed_astro_ssd_prompt_cache_stats_when_worker_is_unavai
     let health_snapshot = WorkerHealthSnapshot::unavailable(WorkerHealthStatus::Unavailable);
     let application =
         astronomical_daemon::build_application(StatsScriptedExecutor::ready(health_snapshot));
-    let response = application
-        .oneshot(
-            Request::builder()
-                .uri("/v1/ssd-prompt-cache/stats")
-                .body(Body::empty())
-                .expect("the astro SSD prompt cache stats request should be valid"),
-        )
-        .await
-        .expect("the application should return an astro SSD prompt cache stats response");
+    let response = get_response(&application, "/v1/ssd-prompt-cache/stats").await;
     assert_eq!(response.status(), StatusCode::OK);
     let response_body = to_bytes(response.into_body(), 8 * 1024)
         .await
@@ -212,15 +193,7 @@ async fn should_compute_hit_rate_as_hits_over_total_queries() {
     });
     let application =
         astronomical_daemon::build_application(StatsScriptedExecutor::ready(health_snapshot));
-    let response = application
-        .oneshot(
-            Request::builder()
-                .uri("/v1/ssd-prompt-cache/stats")
-                .body(Body::empty())
-                .expect("the astro SSD prompt cache stats request should be valid"),
-        )
-        .await
-        .expect("the application should return an astro SSD prompt cache stats response");
+    let response = get_response(&application, "/v1/ssd-prompt-cache/stats").await;
     let response_body = to_bytes(response.into_body(), 8 * 1024)
         .await
         .expect("the astro SSD prompt cache stats body should be readable");

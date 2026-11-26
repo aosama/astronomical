@@ -1,3 +1,4 @@
+use crate::rest_api::http_exchange_fixtures::get_response;
 use astronomical_daemon::{
     ActiveRequestProgress, ChatGenerationStreamEvent, WorkerActivity, build_application,
     build_application_with_discovered_models,
@@ -25,15 +26,7 @@ async fn should_report_health_readiness_and_the_loaded_model() {
         StatusCode::OK
     );
 
-    let models_response = application
-        .oneshot(
-            Request::builder()
-                .uri("/v1/models")
-                .body(Body::empty())
-                .expect("the model-list request should be valid"),
-        )
-        .await
-        .expect("the application should return a model list");
+    let models_response = get_response(&application, "/v1/models").await;
     let models_body = to_bytes(models_response.into_body(), 8 * 1024)
         .await
         .expect("the model-list body should be readable");
@@ -297,15 +290,7 @@ async fn should_report_ready_status_idle_activity_and_model_id_for_a_ready_worke
             model_size_bytes: 18_420_000_000,
         }],
     );
-    let response = application
-        .oneshot(
-            Request::builder()
-                .uri("/v1/status")
-                .body(Body::empty())
-                .expect("the status request should be valid"),
-        )
-        .await
-        .expect("the application should return a status response");
+    let response = get_response(&application, "/v1/status").await;
     assert_eq!(response.status(), StatusCode::OK);
     let status_body = to_bytes(response.into_body(), 8 * 1024)
         .await
@@ -373,15 +358,7 @@ async fn should_report_generating_activity_for_an_active_worker() {
     let mut executor = ScriptedExecutor::ready(Vec::new());
     executor.health_snapshot.activity = WorkerActivity::Generating;
     let application = build_application(executor);
-    let response = application
-        .oneshot(
-            Request::builder()
-                .uri("/v1/status")
-                .body(Body::empty())
-                .expect("the status request should be valid"),
-        )
-        .await
-        .expect("the application should return a status response");
+    let response = get_response(&application, "/v1/status").await;
     let status_body = to_bytes(response.into_body(), 8 * 1024)
         .await
         .expect("the status body should be readable");
@@ -406,15 +383,7 @@ async fn should_report_completed_prefill_chunk_tokens_for_prompt_processing_prog
         prompt_layer_progress: None,
     });
     let application = build_application(executor);
-    let response = application
-        .oneshot(
-            Request::builder()
-                .uri("/v1/status")
-                .body(Body::empty())
-                .expect("the status request should be valid"),
-        )
-        .await
-        .expect("the application should return a status response");
+    let response = get_response(&application, "/v1/status").await;
     let status_body = to_bytes(response.into_body(), 8 * 1024)
         .await
         .expect("the status body should be readable");
@@ -447,15 +416,7 @@ async fn should_report_layers_done_while_a_prompt_is_read_one_layer_at_a_time() 
         }),
     });
     let application = build_application(executor);
-    let response = application
-        .oneshot(
-            Request::builder()
-                .uri("/v1/status")
-                .body(Body::empty())
-                .expect("the status request should be valid"),
-        )
-        .await
-        .expect("the application should return a response");
+    let response = get_response(&application, "/v1/status").await;
     let status_body = to_bytes(response.into_body(), usize::MAX)
         .await
         .expect("the status body should be readable");
@@ -482,15 +443,7 @@ async fn should_omit_completed_prefill_chunk_tokens_before_the_first_measurement
         prompt_layer_progress: None,
     });
     let application = build_application(executor);
-    let response = application
-        .oneshot(
-            Request::builder()
-                .uri("/v1/status")
-                .body(Body::empty())
-                .expect("the status request should be valid"),
-        )
-        .await
-        .expect("the application should return a status response");
+    let response = get_response(&application, "/v1/status").await;
     let status_body = to_bytes(response.into_body(), 8 * 1024)
         .await
         .expect("the status body should be readable");

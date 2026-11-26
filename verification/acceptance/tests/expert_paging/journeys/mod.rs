@@ -9,3 +9,5 @@ mod live_memory_ceiling_expert_residency_round_trip_rest_journey;
 mod prefill_memory_progress_rest_journey;
 mod prefill_memory_recovery_rest_journey;
 mod ssd_paging_decode_expert_reuse_rest_journey;
+mod story_continuation_requests;
+mod thinking_budget_completion_stream;

@@ -4,12 +4,10 @@
 use std::time::Duration;
 
 use ipc_protocol::{ExpertMemoryMode, RequestId};
-use model_serving::{
-    CompleteResidencyHeadroomBoundary, InferenceEngine, TextModelTestControls,
-    model_memory_geometry_from_validated_artifact,
-};
+use model_serving::{InferenceEngine, TextModelTestControls};
 use tokio::time::timeout;
 
+use super::paging_ceiling::derive_paging_ceiling;
 use super::support::{
     RESIDENCY_LIFECYCLE_PROMPT_TOKEN_COUNT, construct_automatic_residency_engine,
     initialize_automatic_residency_tracing, serve_romeo_and_juliet_request,
@@ -24,23 +22,10 @@ async fn should_not_claim_complete_residency_when_activation_headroom_does_not_f
         let request_id = RequestId::new(1_041);
         let model_directory =
             crate::common::configured_large_sparse_moe_streaming_model_directory();
-        let validated_artifact = model_serving::Qwen3_5ArtifactValidator::new()
-            .validate(&model_directory, 20_480)
-            .expect("the configured sparse artifact should validate");
-        let (model_geometry, required_headroom_bytes) =
-            model_memory_geometry_from_validated_artifact(
-                &validated_artifact,
-                &model_directory,
-            )
-            .expect("the sparse artifact should expose disk RAM geometry");
-        let paging_ceiling_bytes = CompleteResidencyHeadroomBoundary::from_model_geometry(
-            model_geometry,
-            required_headroom_bytes,
-        )
-        .paging_ceiling_bytes()
-        .expect(
-            "this sparse artifact must have a ceiling that fits expert weights but not activation headroom",
-        );
+        let derived_ceiling = derive_paging_ceiling(&model_directory);
+        let paging_ceiling_bytes = derived_ceiling.paging_ceiling_bytes;
+        let required_headroom_bytes = derived_ceiling.required_headroom_bytes;
+        let model_geometry = derived_ceiling.model_geometry;
         let machine_mlx_memory_ceiling_bytes = u64::try_from(
             crate::common::sample_machine_serving_acceptance_mlx_memory_limits()
                 .await
@@ -51,8 +36,7 @@ async fn should_not_claim_complete_residency_when_activation_headroom_does_not_f
             paging_ceiling_bytes <= machine_mlx_memory_ceiling_bytes,
             "this machine's MLX ceiling is below the artifact's expert payload, so the headroom-boundary journey cannot run"
         );
-        let paging_ceiling_limit_bytes = usize::try_from(paging_ceiling_bytes)
-            .expect("the paging ceiling should fit usize");
+        let paging_ceiling_limit_bytes = derived_ceiling.paging_ceiling_limit_bytes();
         eprintln!(
             "[complete-residency-headroom] status=progress phase=derived_ceiling core_bytes={} expert_bytes={} headroom_bytes={required_headroom_bytes} ceiling_bytes={paging_ceiling_bytes}",
             model_geometry.model_core_payload_bytes,

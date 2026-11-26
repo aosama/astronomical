@@ -1,26 +1,21 @@
-use std::{future::Future, pin::Pin};
-
-use astronomical_daemon::{
-    ChatGenerationExecutor, ChatGenerationStreamEvent, GenerationStartError, WorkerHealthSnapshot,
-    build_application,
-};
-use axum::{
-    body::{Body, to_bytes},
-    http::{Request, StatusCode, header},
-};
-use ipc_protocol::{ChatGenerationCommand, ChatGenerationCompletionReason, ChatModelCapabilities};
+use astronomical_daemon::{ChatGenerationStreamEvent, build_application};
+use axum::http::StatusCode;
+use ipc_protocol::ChatGenerationCompletionReason;
 use serde_json::Value;
-use tokio::sync::mpsc;
-use tower::ServiceExt;
+
+use crate::rest_api::chat_endpoint_fixtures::{ScriptedChatExecutor, post_chat_completion};
 
 const MODEL_ID: &str = "astronomical/streaming-test-model";
 
 #[tokio::test]
 async fn should_stream_openai_compatible_text_lifecycle_for_opencode() {
-    let application = build_application(ScriptedExecutor::ready(vec![
-        ChatGenerationStreamEvent::TextFragment("Visible title".to_owned()),
-        completed_generation_event(ChatGenerationCompletionReason::EndOfSequence),
-    ]));
+    let application = build_application(ScriptedChatExecutor::ready(
+        MODEL_ID,
+        vec![
+            ChatGenerationStreamEvent::TextFragment("Visible title".to_owned()),
+            completed_generation_event(ChatGenerationCompletionReason::EndOfSequence),
+        ],
+    ));
 
     let (status, response_body) = post_chat_with_body(
         application,
@@ -55,10 +50,13 @@ async fn should_stream_openai_compatible_text_lifecycle_for_opencode() {
 
 #[tokio::test]
 async fn should_not_expose_reasoning_only_stream_as_opencode_visible_text() {
-    let application = build_application(ScriptedExecutor::ready(vec![
-        ChatGenerationStreamEvent::ReasoningFragment("thinking only".to_owned()),
-        completed_generation_event(ChatGenerationCompletionReason::EndOfSequence),
-    ]));
+    let application = build_application(ScriptedChatExecutor::ready(
+        MODEL_ID,
+        vec![
+            ChatGenerationStreamEvent::ReasoningFragment("thinking only".to_owned()),
+            completed_generation_event(ChatGenerationCompletionReason::EndOfSequence),
+        ],
+    ));
 
     let (status, response_body) = post_chat_with_body(
         application,
@@ -83,10 +81,13 @@ async fn should_not_expose_reasoning_only_stream_as_opencode_visible_text() {
 
 #[tokio::test]
 async fn should_not_fallback_reasoning_only_non_streaming_output_to_message_content() {
-    let application = build_application(ScriptedExecutor::ready(vec![
-        ChatGenerationStreamEvent::ReasoningFragment("thinking only".to_owned()),
-        completed_generation_event(ChatGenerationCompletionReason::EndOfSequence),
-    ]));
+    let application = build_application(ScriptedChatExecutor::ready(
+        MODEL_ID,
+        vec![
+            ChatGenerationStreamEvent::ReasoningFragment("thinking only".to_owned()),
+            completed_generation_event(ChatGenerationCompletionReason::EndOfSequence),
+        ],
+    ));
 
     let (status, response_body) = post_chat_with_body(
         application,
@@ -109,11 +110,14 @@ async fn should_not_fallback_reasoning_only_non_streaming_output_to_message_cont
 
 #[tokio::test]
 async fn should_expose_only_text_fragment_as_visible_content_when_reasoning_precedes_text() {
-    let application = build_application(ScriptedExecutor::ready(vec![
-        ChatGenerationStreamEvent::ReasoningFragment("internal thought".to_owned()),
-        ChatGenerationStreamEvent::TextFragment("Visible title".to_owned()),
-        completed_generation_event(ChatGenerationCompletionReason::EndOfSequence),
-    ]));
+    let application = build_application(ScriptedChatExecutor::ready(
+        MODEL_ID,
+        vec![
+            ChatGenerationStreamEvent::ReasoningFragment("internal thought".to_owned()),
+            ChatGenerationStreamEvent::TextFragment("Visible title".to_owned()),
+            completed_generation_event(ChatGenerationCompletionReason::EndOfSequence),
+        ],
+    ));
 
     let (status, response_body) = post_chat_with_body(
         application,
@@ -134,11 +138,14 @@ async fn should_expose_only_text_fragment_as_visible_content_when_reasoning_prec
 
 #[tokio::test]
 async fn should_withhold_reasoning_deltas_from_the_stream_when_excluded() {
-    let application = build_application(ScriptedExecutor::ready(vec![
-        ChatGenerationStreamEvent::ReasoningFragment("internal thought".to_owned()),
-        ChatGenerationStreamEvent::TextFragment("Visible title".to_owned()),
-        completed_generation_event(ChatGenerationCompletionReason::EndOfSequence),
-    ]));
+    let application = build_application(ScriptedChatExecutor::ready(
+        MODEL_ID,
+        vec![
+            ChatGenerationStreamEvent::ReasoningFragment("internal thought".to_owned()),
+            ChatGenerationStreamEvent::TextFragment("Visible title".to_owned()),
+            completed_generation_event(ChatGenerationCompletionReason::EndOfSequence),
+        ],
+    ));
 
     let (status, response_body) = post_chat_with_body(
         application,
@@ -163,11 +170,14 @@ async fn should_withhold_reasoning_deltas_from_the_stream_when_excluded() {
 
 #[tokio::test]
 async fn should_withhold_reasoning_content_from_non_streaming_responses_when_excluded() {
-    let application = build_application(ScriptedExecutor::ready(vec![
-        ChatGenerationStreamEvent::ReasoningFragment("internal thought".to_owned()),
-        ChatGenerationStreamEvent::TextFragment("Visible title".to_owned()),
-        completed_generation_event(ChatGenerationCompletionReason::EndOfSequence),
-    ]));
+    let application = build_application(ScriptedChatExecutor::ready(
+        MODEL_ID,
+        vec![
+            ChatGenerationStreamEvent::ReasoningFragment("internal thought".to_owned()),
+            ChatGenerationStreamEvent::TextFragment("Visible title".to_owned()),
+            completed_generation_event(ChatGenerationCompletionReason::EndOfSequence),
+        ],
+    ));
 
     let (status, response_body) = post_chat_with_body(
         application,
@@ -190,19 +200,22 @@ async fn should_withhold_reasoning_content_from_non_streaming_responses_when_exc
 
 #[tokio::test]
 async fn should_stream_parallel_tool_calls_in_openai_compatible_chunks_for_opencode() {
-    let application = build_application(ScriptedExecutor::ready(vec![
-        ChatGenerationStreamEvent::ToolCall {
-            tool_call_index: 0,
-            function_name: "read".to_owned(),
-            arguments_json: r#"{"filePath":"README.md"}"#.to_owned(),
-        },
-        ChatGenerationStreamEvent::ToolCall {
-            tool_call_index: 1,
-            function_name: "glob".to_owned(),
-            arguments_json: r#"{"pattern":"tests/**/*.rs"}"#.to_owned(),
-        },
-        completed_generation_event(ChatGenerationCompletionReason::ToolCalls),
-    ]));
+    let application = build_application(ScriptedChatExecutor::ready(
+        MODEL_ID,
+        vec![
+            ChatGenerationStreamEvent::ToolCall {
+                tool_call_index: 0,
+                function_name: "read".to_owned(),
+                arguments_json: r#"{"filePath":"README.md"}"#.to_owned(),
+            },
+            ChatGenerationStreamEvent::ToolCall {
+                tool_call_index: 1,
+                function_name: "glob".to_owned(),
+                arguments_json: r#"{"pattern":"tests/**/*.rs"}"#.to_owned(),
+            },
+            completed_generation_event(ChatGenerationCompletionReason::ToolCalls),
+        ],
+    ));
 
     let (status, response_body) = post_chat_with_body(
         application,
@@ -256,16 +269,19 @@ async fn should_stream_the_complete_tool_call_journey_reasoning_then_text_then_c
     // late reasoning after visible text starts, so the phases must reach the
     // wire strictly ordered; pin that ordering so a serialization change cannot
     // merge or reorder them silently.
-    let application = build_application(ScriptedExecutor::ready(vec![
-        ChatGenerationStreamEvent::ReasoningFragment("locating the plugin".to_owned()),
-        ChatGenerationStreamEvent::TextFragment("Found it. Let me look.".to_owned()),
-        ChatGenerationStreamEvent::ToolCall {
-            tool_call_index: 0,
-            function_name: "read".to_owned(),
-            arguments_json: r#"{"filePath":"plugins/thread-rename/package.json"}"#.to_owned(),
-        },
-        completed_generation_event(ChatGenerationCompletionReason::ToolCalls),
-    ]));
+    let application = build_application(ScriptedChatExecutor::ready(
+        MODEL_ID,
+        vec![
+            ChatGenerationStreamEvent::ReasoningFragment("locating the plugin".to_owned()),
+            ChatGenerationStreamEvent::TextFragment("Found it. Let me look.".to_owned()),
+            ChatGenerationStreamEvent::ToolCall {
+                tool_call_index: 0,
+                function_name: "read".to_owned(),
+                arguments_json: r#"{"filePath":"plugins/thread-rename/package.json"}"#.to_owned(),
+            },
+            completed_generation_event(ChatGenerationCompletionReason::ToolCalls),
+        ],
+    ));
 
     let (status, response_body) = post_chat_with_body(
         application,
@@ -335,14 +351,17 @@ async fn should_stream_a_model_invented_tool_call_name_faithfully_for_the_harnes
     // wire must carry the invented name unchanged — rewriting or dropping it
     // would hide the model's actual output from the harness — and the turn
     // still terminates with the tool_calls reason.
-    let application = build_application(ScriptedExecutor::ready(vec![
-        ChatGenerationStreamEvent::ToolCall {
-            tool_call_index: 0,
-            function_name: "shell".to_owned(),
-            arguments_json: r#"{"command":"ls plugins"}"#.to_owned(),
-        },
-        completed_generation_event(ChatGenerationCompletionReason::ToolCalls),
-    ]));
+    let application = build_application(ScriptedChatExecutor::ready(
+        MODEL_ID,
+        vec![
+            ChatGenerationStreamEvent::ToolCall {
+                tool_call_index: 0,
+                function_name: "shell".to_owned(),
+                arguments_json: r#"{"command":"ls plugins"}"#.to_owned(),
+            },
+            completed_generation_event(ChatGenerationCompletionReason::ToolCalls),
+        ],
+    ));
 
     let (status, response_body) = post_chat_with_body(
         application,
@@ -387,26 +406,9 @@ async fn post_chat_with_body(
     application: axum::Router,
     request_body: &'static str,
 ) -> (StatusCode, String) {
-    let chat_response = application
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/v1/chat/completions")
-                .header(header::CONTENT_TYPE, "application/json")
-                .body(Body::from(request_body))
-                .expect("the chat request should be valid"),
-        )
-        .await
-        .expect("the application should return a chat response");
-    let status = chat_response.status();
-    let response_body = to_bytes(chat_response.into_body(), 64 * 1024)
-        .await
-        .expect("the chat response body should be readable");
-    (
-        status,
-        String::from_utf8(response_body.to_vec())
-            .expect("the chat response body should contain UTF-8"),
-    )
+    let (status, _content_type, response_body) =
+        post_chat_completion(application, request_body, 64 * 1024).await;
+    (status, response_body)
 }
 
 struct ParsedChatSseStream {
@@ -471,62 +473,3 @@ impl ParsedChatSseStream {
         }
     }
 }
-
-struct ScriptedExecutor {
-    health_snapshot: WorkerHealthSnapshot,
-    stream_events: Vec<ChatGenerationStreamEvent>,
-}
-
-impl ScriptedExecutor {
-    fn ready(stream_events: Vec<ChatGenerationStreamEvent>) -> Self {
-        Self {
-            health_snapshot: WorkerHealthSnapshot::ready_with_model(
-                MODEL_ID.to_owned(),
-                ChatModelCapabilities {
-                    supports_reasoning: true,
-                    supports_tool_calls: true,
-                    has_vision: true,
-                    max_input_tokens: 241_664,
-                    max_output_tokens: 20_480,
-                    context_window: 262_144,
-                },
-            ),
-            stream_events,
-        }
-    }
-}
-
-impl ChatGenerationExecutor for ScriptedExecutor {
-    fn start_chat_generation(
-        &self,
-        _generation_command: ChatGenerationCommand,
-    ) -> Pin<
-        Box<
-            dyn Future<
-                    Output = Result<
-                        mpsc::Receiver<ChatGenerationStreamEvent>,
-                        GenerationStartError,
-                    >,
-                > + Send
-                + '_,
-        >,
-    > {
-        Box::pin(async move {
-            let (stream_event_sender, stream_event_receiver) =
-                mpsc::channel(self.stream_events.len().max(1));
-            for stream_event in &self.stream_events {
-                stream_event_sender
-                    .send(stream_event.clone())
-                    .await
-                    .map_err(|_| GenerationStartError::WorkerUnavailable)?;
-            }
-            Ok(stream_event_receiver)
-        })
-    }
-
-    fn worker_health_snapshot(&self) -> WorkerHealthSnapshot {
-        self.health_snapshot.clone()
-    }
-}
-
-impl astronomical_daemon::ImageGenerationExecutor for ScriptedExecutor {}

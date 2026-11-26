@@ -1,3 +1,4 @@
+use crate::rest_api::http_exchange_fixtures::get_response;
 use std::time::Duration;
 
 use astronomical_daemon::{ChatGenerationExecutor, WorkerHandle, build_application};
@@ -219,16 +220,7 @@ async fn delete_astro_ssd_prompt_cache(
 }
 
 async fn get_astro_ssd_prompt_cache_stats(application: &axum::Router) -> serde_json::Value {
-    let stats_response = application
-        .clone()
-        .oneshot(
-            Request::builder()
-                .uri("/v1/ssd-prompt-cache/stats")
-                .body(Body::empty())
-                .expect("astro SSD prompt cache stats request should be valid"),
-        )
-        .await
-        .expect("application should return astro SSD prompt cache stats");
+    let stats_response = get_response(application, "/v1/ssd-prompt-cache/stats").await;
     response_json(stats_response).await
 }
 

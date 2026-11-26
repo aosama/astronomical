@@ -2,24 +2,23 @@
 //! executor over the real socket, and rejecting the ones that cannot succeed
 //! before they reach it. The CLI reaches image generation only this way.
 
-use std::{
-    path::Path,
-    sync::{Arc, RwLock},
-};
+use std::sync::Arc;
 
 use astronomical_daemon::{
     ImageGenerationExecutionError, ImageGenerationOutput, WorkerHealthSnapshot, WorkerHealthStatus,
 };
 use ipc_protocol::{
-    DaemonIpcClient, DaemonListedModel, DaemonRequest, DaemonResponse, GeneratedImage,
-    ImageGenerateRequest, ImageGenerationFailureReason, ImageGenerationResultMetadata, RequestId,
+    DaemonListedModel, DaemonRequest, DaemonResponse, GeneratedImage, ImageGenerateRequest,
+    ImageGenerationFailureReason, ImageGenerationResultMetadata, RequestId,
 };
-use tokio::time::timeout;
 
+use crate::integration::daemon_ipc_exchange::request_and_read_first_response;
+use crate::integration::daemon_ipc_service_fixtures::{
+    shut_down_and_remove_state_directory, start_service_with_installed_models,
+};
 use crate::support::daemon_ipc::{
-    HANDSHAKE_TEST_TIMEOUT, StubGenerationExecutor, fresh_instance_state_directory,
-    ipc_chat_discovered_model, ipc_image_discovered_model, ipc_runtime_config, ready_stub_executor,
-    ready_stub_executor_with_image, start_stub_daemon_ipc_service_with_runtime_config,
+    StubGenerationExecutor, fresh_instance_state_directory, ipc_chat_discovered_model,
+    ipc_image_discovered_model, ready_stub_executor, ready_stub_executor_with_image,
 };
 
 const IMAGE_MODEL_ID: &str = "test-flux";
@@ -57,26 +56,6 @@ fn image_request(
     })
 }
 
-/// Sends one request on a fresh connection and returns the daemon's single
-/// terminal reply.
-async fn send_and_receive(socket_path: &Path, daemon_request: &DaemonRequest) -> DaemonResponse {
-    let mut daemon_client = DaemonIpcClient::connect(socket_path.to_path_buf())
-        .await
-        .expect("the client should connect to the running daemon IPC service");
-    timeout(
-        HANDSHAKE_TEST_TIMEOUT,
-        daemon_client.send_request(daemon_request),
-    )
-    .await
-    .expect("the request send should finish inside the test timeout")
-    .expect("the request should transmit");
-    timeout(HANDSHAKE_TEST_TIMEOUT, daemon_client.next_response())
-        .await
-        .expect("the reply should arrive inside the test timeout")
-        .expect("the reply read should not fail at the transport layer")
-        .expect("the daemon should answer the request")
-}
-
 /// Starts a daemon that knows one image model and one chat model, sends the
 /// requests in order, and returns every reply plus the executor, so a test
 /// can also see what reached the worker.
@@ -86,29 +65,23 @@ async fn serve_requests(
     daemon_requests: Vec<DaemonRequest>,
 ) -> (Vec<DaemonResponse>, Arc<StubGenerationExecutor>) {
     let state_directory = fresh_instance_state_directory(test_name);
-    let reloadable_config = Arc::new(RwLock::new(ipc_runtime_config(
+    let daemon_ipc_service = start_service_with_installed_models(
+        &state_directory,
+        Arc::clone(&stub_executor),
         vec![
             ipc_image_discovered_model(IMAGE_MODEL_ID),
             ipc_chat_discovered_model(CHAT_MODEL_ID),
         ],
         &[CHAT_MODEL_ID],
-    )));
-    let daemon_ipc_service = start_stub_daemon_ipc_service_with_runtime_config(
-        &state_directory,
-        Arc::clone(&stub_executor),
-        Some(reloadable_config),
     )
     .await;
     let mut daemon_replies = Vec::new();
     for daemon_request in &daemon_requests {
-        daemon_replies
-            .push(send_and_receive(daemon_ipc_service.socket_path(), daemon_request).await);
+        daemon_replies.push(
+            request_and_read_first_response(daemon_ipc_service.socket_path(), daemon_request).await,
+        );
     }
-    timeout(HANDSHAKE_TEST_TIMEOUT, daemon_ipc_service.shutdown())
-        .await
-        .expect("the daemon IPC service shutdown should finish inside the test timeout")
-        .expect("the daemon IPC service should shut down cleanly");
-    let _ = std::fs::remove_dir_all(&state_directory);
+    shut_down_and_remove_state_directory(daemon_ipc_service, &state_directory).await;
     (daemon_replies, stub_executor)
 }
 

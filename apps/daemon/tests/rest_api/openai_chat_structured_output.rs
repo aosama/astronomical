@@ -1,23 +1,21 @@
-use std::{future::Future, pin::Pin};
-
-use astronomical_daemon::{
-    ChatGenerationExecutor, ChatGenerationStreamEvent, GenerationStartError, WorkerHealthSnapshot,
-    build_application,
-};
+use astronomical_daemon::{ChatGenerationStreamEvent, build_application};
 use axum::{
-    body::{Body, to_bytes},
-    http::{Request, StatusCode, header},
+    body::to_bytes,
+    http::{StatusCode, header},
 };
-use ipc_protocol::{ChatGenerationCommand, ChatGenerationCompletionReason, ChatModelCapabilities};
+use ipc_protocol::ChatGenerationCompletionReason;
 use rest_contract::UNENFORCED_RESPONSE_FORMAT_WARNING;
-use tokio::sync::mpsc;
 use tower::ServiceExt;
+
+use crate::rest_api::chat_endpoint_fixtures::{ScriptedChatExecutor, chat_completion_request};
 
 const MODEL_ID: &str = "astronomical/non-streaming-test-model";
 
 #[tokio::test]
 async fn should_return_extracted_json_and_a_warning_for_json_schema_chat() {
-    let application = build_application(ScriptedExecutor::ready(vec![
+    let application = build_application(ScriptedChatExecutor::ready(
+        MODEL_ID,
+        vec![
         ChatGenerationStreamEvent::TextFragment(
             "Juliet answers:\n```json\n{\"speaker\":\"Juliet\",\"play\":\"Romeo and Juliet\"}\n```"
                 .to_owned(),
@@ -29,16 +27,12 @@ async fn should_return_extracted_json_and_a_warning_for_json_schema_chat() {
             astro_ssd_prompt_cache_restored_token_count: 0,
             reason: ChatGenerationCompletionReason::EndOfSequence,
         },
-    ]));
+    ],
+    ));
 
     let chat_response = application
         .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/v1/chat/completions")
-                .header(header::CONTENT_TYPE, "application/json")
-                .body(Body::from(
-                    r#"{
+            chat_completion_request(r#"{
                         "model":"astronomical/non-streaming-test-model",
                         "messages":[{"role":"user","content":"O Romeo, Romeo, wherefore art thou Romeo?"}],
                         "response_format":{
@@ -49,9 +43,7 @@ async fn should_return_extracted_json_and_a_warning_for_json_schema_chat() {
                             }
                         },
                         "stream":false
-                    }"#,
-                ))
-                .expect("the structured chat request should be valid"),
+                    }"#),
         )
         .await
         .expect("the application should return a chat response");
@@ -81,34 +73,30 @@ async fn should_return_extracted_json_and_a_warning_for_json_schema_chat() {
 
 #[tokio::test]
 async fn should_keep_original_text_when_json_cannot_be_extracted() {
-    let application = build_application(ScriptedExecutor::ready(vec![
-        ChatGenerationStreamEvent::TextFragment(
-            "Two households, both alike in dignity.".to_owned(),
-        ),
-        ChatGenerationStreamEvent::Completed {
-            prompt_token_count: 8,
-            generated_token_count: 8,
-            reasoning_token_count: 0,
-            astro_ssd_prompt_cache_restored_token_count: 0,
-            reason: ChatGenerationCompletionReason::EndOfSequence,
-        },
-    ]));
+    let application = build_application(ScriptedChatExecutor::ready(
+        MODEL_ID,
+        vec![
+            ChatGenerationStreamEvent::TextFragment(
+                "Two households, both alike in dignity.".to_owned(),
+            ),
+            ChatGenerationStreamEvent::Completed {
+                prompt_token_count: 8,
+                generated_token_count: 8,
+                reasoning_token_count: 0,
+                astro_ssd_prompt_cache_restored_token_count: 0,
+                reason: ChatGenerationCompletionReason::EndOfSequence,
+            },
+        ],
+    ));
 
     let chat_response = application
         .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/v1/chat/completions")
-                .header(header::CONTENT_TYPE, "application/json")
-                .body(Body::from(
-                    r#"{
+            chat_completion_request(r#"{
                         "model":"astronomical/non-streaming-test-model",
                         "messages":[{"role":"user","content":"O Romeo, Romeo, wherefore art thou Romeo?"}],
                         "response_format":{"type":"json_object"},
                         "stream":false
-                    }"#,
-                ))
-                .expect("the json_object chat request should be valid"),
+                    }"#),
         )
         .await
         .expect("the application should return a chat response");
@@ -127,35 +115,31 @@ async fn should_keep_original_text_when_json_cannot_be_extracted() {
 
 #[tokio::test]
 async fn should_forward_enforced_regex_constraint_to_the_worker() {
-    let executor = ScriptedExecutor::ready(vec![
-        ChatGenerationStreamEvent::TextFragment("Romeo".to_owned()),
-        ChatGenerationStreamEvent::Completed {
-            prompt_token_count: 8,
-            generated_token_count: 1,
-            reasoning_token_count: 0,
-            astro_ssd_prompt_cache_restored_token_count: 0,
-            reason: ChatGenerationCompletionReason::EndOfSequence,
-        },
-    ]);
+    let executor = ScriptedChatExecutor::ready(
+        MODEL_ID,
+        vec![
+            ChatGenerationStreamEvent::TextFragment("Romeo".to_owned()),
+            ChatGenerationStreamEvent::Completed {
+                prompt_token_count: 8,
+                generated_token_count: 1,
+                reasoning_token_count: 0,
+                astro_ssd_prompt_cache_restored_token_count: 0,
+                reason: ChatGenerationCompletionReason::EndOfSequence,
+            },
+        ],
+    );
     let received_constraint = executor.received_structured_constraint_handle();
     let application = build_application(executor);
 
     let chat_response = application
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/v1/chat/completions")
-                .header(header::CONTENT_TYPE, "application/json")
-                .body(Body::from(
-                    r#"{
+        .oneshot(chat_completion_request(
+            r#"{
                         "model":"astronomical/non-streaming-test-model",
                         "messages":[{"role":"user","content":"Who answers?"}],
                         "structured_outputs":{"regex":"Romeo|Juliet"},
                         "stream":false
                     }"#,
-                ))
-                .expect("the regex extra-body request should be valid JSON"),
-        )
+        ))
         .await
         .expect("the application should return a chat response");
 
@@ -176,77 +160,3 @@ async fn should_forward_enforced_regex_constraint_to_the_worker() {
         "an enforced extra-body constraint must not carry the unenforced degradation warning"
     );
 }
-
-struct ScriptedExecutor {
-    health_snapshot: WorkerHealthSnapshot,
-    stream_events: Vec<ChatGenerationStreamEvent>,
-    received_structured_constraint:
-        std::sync::Arc<std::sync::Mutex<Option<ipc_protocol::StructuredGenerationConstraint>>>,
-}
-
-impl ScriptedExecutor {
-    fn ready(stream_events: Vec<ChatGenerationStreamEvent>) -> Self {
-        Self {
-            health_snapshot: WorkerHealthSnapshot::ready_with_model(
-                MODEL_ID.to_owned(),
-                ChatModelCapabilities {
-                    supports_reasoning: true,
-                    supports_tool_calls: true,
-                    has_vision: true,
-                    max_input_tokens: 241_664,
-                    max_output_tokens: 20_480,
-                    context_window: 262_144,
-                },
-            ),
-            stream_events,
-            received_structured_constraint: std::sync::Arc::new(std::sync::Mutex::new(None)),
-        }
-    }
-
-    fn received_structured_constraint_handle(
-        &self,
-    ) -> std::sync::Arc<std::sync::Mutex<Option<ipc_protocol::StructuredGenerationConstraint>>>
-    {
-        std::sync::Arc::clone(&self.received_structured_constraint)
-    }
-}
-
-impl ChatGenerationExecutor for ScriptedExecutor {
-    fn start_chat_generation(
-        &self,
-        generation_command: ChatGenerationCommand,
-    ) -> Pin<
-        Box<
-            dyn Future<
-                    Output = Result<
-                        mpsc::Receiver<ChatGenerationStreamEvent>,
-                        GenerationStartError,
-                    >,
-                > + Send
-                + '_,
-        >,
-    > {
-        Box::pin(async move {
-            *self
-                .received_structured_constraint
-                .lock()
-                .expect("the structured constraint log should not be poisoned") =
-                generation_command.structured_generation.clone();
-            let (stream_event_sender, stream_event_receiver) =
-                mpsc::channel(self.stream_events.len().max(1));
-            for stream_event in &self.stream_events {
-                stream_event_sender
-                    .send(stream_event.clone())
-                    .await
-                    .map_err(|_| GenerationStartError::WorkerUnavailable)?;
-            }
-            Ok(stream_event_receiver)
-        })
-    }
-
-    fn worker_health_snapshot(&self) -> WorkerHealthSnapshot {
-        self.health_snapshot.clone()
-    }
-}
-
-impl astronomical_daemon::ImageGenerationExecutor for ScriptedExecutor {}
