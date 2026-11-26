@@ -9,8 +9,9 @@ use super::info_plist::{render_agent_info_plist, render_info_plist};
 use super::instance_control::{InstanceAction, run_instance_action};
 use super::package_pipeline::{PackageRequest, run_package, validate_package_request};
 use super::smoke_test::{SmokeTestRequest, run_smoke_test};
+use super::thin_talk_pipeline::run_thin_talk_pipeline;
 
-pub(crate) const APP_USAGE: &str = "usage: cargo xtask app dev [--background] | app draft TEXT | app export-to FOLDER | app instance status|start|stop|restart | app package --channel stable|app-store [--signing-identity NAME] | app smoke-test --app-bundle PATH [--real-model MODEL_ID] | app info-plist --channel development|stable|app-store [--agent]";
+pub(crate) const APP_USAGE: &str = "usage: cargo xtask app dev [--background] | app thin-talk [--background] | app draft TEXT | app export-to FOLDER | app instance status|start|stop|restart | app package --channel stable|app-store [--signing-identity NAME] | app smoke-test --app-bundle PATH [--real-model MODEL_ID] | app info-plist --channel development|stable|app-store [--agent]";
 
 /// `info-plist --channel NAME` prints the main app's plist; a trailing
 /// `--agent` prints the menu-bar agent's instead.
@@ -68,16 +69,29 @@ pub(crate) enum AppCommand {
     Package(PackageRequest),
     /// Launch a built bundle in isolation and check what it serves.
     SmokeTest(SmokeTestRequest),
+    /// Build the standalone Thin Talk chat app against Development and open
+    /// it: in front, or behind every other window.
+    ThinTalk(DevOpenPlacement),
 }
 
 /// `dev` opens the rebuilt app in front; `dev --background` behind the others.
 fn parse_dev_command(dev_arguments: &[String]) -> Result<AppCommand, String> {
-    match dev_arguments {
-        [] => Ok(AppCommand::Dev(DevOpenPlacement::InFront)),
+    match parse_open_placement(dev_arguments) {
+        Some(open_placement) => Ok(AppCommand::Dev(open_placement)),
+        None => Err(APP_USAGE.to_owned()),
+    }
+}
+
+/// Where a rebuilt app opens: in front with no argument, behind every other
+/// window with `--background`; anything else is not a placement. `dev` and
+/// `thin-talk` share it, so the flag means the same for both.
+fn parse_open_placement(placement_arguments: &[String]) -> Option<DevOpenPlacement> {
+    match placement_arguments {
+        [] => Some(DevOpenPlacement::InFront),
         [background_flag] if background_flag == "--background" => {
-            Ok(AppCommand::Dev(DevOpenPlacement::InBackground))
+            Some(DevOpenPlacement::InBackground)
         }
-        _ => Err(APP_USAGE.to_owned()),
+        _ => None,
     }
 }
 
@@ -135,7 +149,27 @@ pub(crate) fn parse_app_command(arguments: &[String]) -> Result<AppCommand, Stri
         ("smoke-test", smoke_test_arguments) => Ok(AppCommand::SmokeTest(
             parse_smoke_test_request(smoke_test_arguments)?,
         )),
-        _ => Err(APP_USAGE.to_owned()),
+        (other_subcommand, other_arguments) => {
+            parse_standalone_app_command(other_subcommand, other_arguments)
+        }
+    }
+}
+
+/// The standalone apps built from this checkout beside the main bundle, parsed
+/// apart from `parse_app_command` so its match does not grow. `thin-talk`
+/// takes only `--background`, as `dev` does; it always targets Development.
+fn parse_standalone_app_command(
+    subcommand: &str,
+    subcommand_arguments: &[String],
+) -> Result<AppCommand, String> {
+    if subcommand != "thin-talk" {
+        return Err(APP_USAGE.to_owned());
+    }
+    match parse_open_placement(subcommand_arguments) {
+        Some(open_placement) => Ok(AppCommand::ThinTalk(open_placement)),
+        None => Err(format!(
+            "app thin-talk takes only --background; it always targets Development\n{APP_USAGE}"
+        )),
     }
 }
 
@@ -211,9 +245,26 @@ pub fn run(repository_root: &Path, arguments: &[String]) -> Result<(), String> {
         AppCommand::SmokeTest(smoke_test_request) => {
             run_smoke_test(repository_root, &smoke_test_request)
         }
+        inspection_or_standalone_command => {
+            run_inspection_or_standalone_command(repository_root, inspection_or_standalone_command)
+        }
+    }
+}
+
+/// `info-plist` and the standalone app builds, run apart from `run` so its
+/// match does not grow.
+fn run_inspection_or_standalone_command(
+    repository_root: &Path,
+    app_command: AppCommand,
+) -> Result<(), String> {
+    match app_command {
         AppCommand::InfoPlist(channel, plist_subject) => {
             print_info_plist(repository_root, channel, plist_subject)
         }
+        AppCommand::ThinTalk(open_placement) => {
+            run_thin_talk_pipeline(repository_root, open_placement)
+        }
+        _ => Err(APP_USAGE.to_owned()),
     }
 }
 

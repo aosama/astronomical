@@ -4,7 +4,8 @@
 //! then a swap of the running app. `app instance` controls that instance
 //! headless. `app package` builds Stable and App Store bundles from a clean
 //! commit in a disposable target directory, and `app smoke-test` launches a
-//! built bundle in isolation.
+//! built bundle in isolation. `app thin-talk` builds the standalone Thin Talk
+//! chat app against Development, for iterating on the chat window alone.
 
 mod application_group;
 mod build_identity;
@@ -26,6 +27,7 @@ mod rendered_icon_memo;
 mod running_instance;
 mod smoke_test;
 mod step_reporter;
+mod thin_talk_pipeline;
 mod tool_command;
 
 #[cfg(test)]
@@ -60,6 +62,9 @@ mod app_package_two_process_tests;
 #[cfg(test)]
 #[path = "app_running_instance_tests.rs"]
 mod app_running_instance_tests;
+#[cfg(test)]
+#[path = "app_thin_talk_tests.rs"]
+mod app_thin_talk_tests;
 
 pub use command::run;
 // Stable installation re-checks a bundle with the same rules that built it.

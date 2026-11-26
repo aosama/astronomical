@@ -12,7 +12,9 @@ use std::process::Command;
 
 use super::application_group::{application_group_identifier, stamp_application_group};
 use super::build_identity::{BuildIdentity, github_pages_feed_url};
-use super::bundle_assembly::{BundleInputs, BundlePlists, assemble_bundle, missing_inputs};
+use super::bundle_assembly::{
+    BundleInputs, BundlePlists, assemble_bundle, create_directory, missing_inputs,
+};
 use super::bundle_check::check_bundle;
 use super::channel_profile::{Channel, ChannelProfile};
 use super::code_signing::{SigningRequest, sign_bundle};
@@ -334,16 +336,6 @@ fn remove_previous_bundle(bundle_path: &Path) -> Result<(), String> {
         Err(remove_error) => Err(format!(
             "could not remove the previous bundle {}: {remove_error}",
             bundle_path.display()
-        )),
-    }
-}
-
-fn create_directory(directory_path: &Path) -> Result<(), String> {
-    match std::fs::create_dir_all(directory_path) {
-        Ok(()) => Ok(()),
-        Err(create_error) => Err(format!(
-            "could not create {}: {create_error}",
-            directory_path.display()
         )),
     }
 }
