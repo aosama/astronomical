@@ -89,8 +89,10 @@ impl StreamingStartupResidencyFacts {
     /// costing two model swaps for no resident token. Charging the request's
     /// context on top of the startup headroom rejects that case up front.
     /// It is a necessary condition, not a guarantee: the resident forward's
-    /// learned transient workspace can still demote the request, which the
-    /// worker's one-swap-per-direction bound contains.
+    /// learned transient workspace can still demote the request. The gate's
+    /// shortfall check (`resident_promotion`) closes that for any request
+    /// too little smaller than the demoting one, and the worker's
+    /// one-swap-per-direction bound contains the rest.
     #[must_use]
     pub fn complete_residency_admits_request_context(
         &self,
