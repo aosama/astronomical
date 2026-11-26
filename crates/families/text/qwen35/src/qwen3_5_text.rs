@@ -10,11 +10,11 @@ pub use crate::qwen3_5_core::artifacts::ValidatedQwen3_5Artifact;
 pub use engine_core::expert_paging::build_source_manifests;
 #[cfg(feature = "direct-mlx")]
 pub use engine_core::expert_paging::contiguous_selected_runs;
-#[cfg(feature = "direct-mlx")]
-pub use expert_streaming::AstroExpertCache;
 pub use expert_streaming::route_observation::{
     RouteObservationRecord, RouteObservationRing, sorted_unique_layer_routed_expert_ids,
 };
+#[cfg(feature = "direct-mlx")]
+pub use expert_streaming::{AstroExpertCache, RoutedExpertProjection};
 #[cfg(feature = "direct-mlx")]
 pub use expert_streaming::{ExpertPagingError, Qwen3_5ExpertPager};
 #[cfg(feature = "direct-mlx")]
@@ -25,6 +25,8 @@ pub use inference_execution::{
 };
 #[cfg(feature = "direct-mlx")]
 pub use model::decision_readout::DecoderLayerRecomputation;
+#[cfg(feature = "direct-mlx")]
+pub use model::decoder_stack_suffix_forward::RecordedDecoderLayerInput;
 #[cfg(feature = "direct-mlx")]
 pub use model::direct_expert_fetch_tally::DirectExpertFetchCounts;
 #[cfg(feature = "direct-mlx")]

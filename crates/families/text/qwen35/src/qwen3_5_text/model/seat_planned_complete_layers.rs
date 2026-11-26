@@ -22,7 +22,11 @@ impl Qwen3_5Model {
         }
     }
 
-    fn has_seated_complete_layer(&self, layer_index: usize, expert_capacity: usize) -> bool {
+    pub(super) fn has_seated_complete_layer(
+        &self,
+        layer_index: usize,
+        expert_capacity: usize,
+    ) -> bool {
         self.astro_expert_cache
             .as_ref()
             .is_some_and(|astro_expert_cache| {

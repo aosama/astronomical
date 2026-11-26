@@ -15,11 +15,13 @@ use engine_core::expert_paging::{
     ExpertWeightPage, QuantizedExpertPageManifest, RetainedExpertReclamation,
 };
 
+pub use complete_layer_projections::RoutedExpertProjection;
 use slot_writes::RetainedReferenceOk;
 
 pub use direct_fetch::TableFetchReport;
 pub use table_read_through::{PartlyHeldTable, TableNotLookedUp, TableReadThrough, TableRefusal};
 
+mod complete_layer_projections;
 mod decode_astro_expert_cache_policy;
 mod demand_history;
 mod demand_phase;
