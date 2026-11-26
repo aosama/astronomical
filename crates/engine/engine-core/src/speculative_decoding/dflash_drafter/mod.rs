@@ -59,6 +59,8 @@ pub use drafter_context_state::{AttendedRows, DrafterContextStates};
 #[cfg(feature = "direct-mlx")]
 pub use drafter_forward::{DFlashDraftTarget, drafted_hidden_rows};
 #[cfg(feature = "direct-mlx")]
-pub use drafter_weights::{DFlashDrafterWeights, DFlashDrafterWeightsError, bind_drafter_weights};
+pub use drafter_weights::{
+    DFlashDrafterWeights, DFlashDrafterWeightsError, bind_drafter_weights, drafter_load_peak_bytes,
+};
 #[cfg(feature = "direct-mlx")]
 pub use head_only_draft_lattice::head_only_draft_lattice;
