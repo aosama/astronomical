@@ -597,14 +597,15 @@ test-quantization-mixture-of-experts = "run -p xtask -- test-run --package astro
 # Development is idle first and name one small model with --model for a short
 # run. `cargo test -p xtask --bin xtask small_mac_matrix` runs its tests,
 # which never touch an instance.
-# `cargo xtask measure-speed [--base-url URL] [--rounds N] [--temperature T] [--measured-on TEXT]
+# `cargo xtask measure-speed [--base-url URL] [--temperature T] [--measured-on TEXT]
 # [--reference-set] [--write-ledger] [--write-catalog] [MODEL_ID...]` measures
 # how fast models reply. Against the Development instance only. A case (a
-# model under one memory limit) is sized to two minutes of waiting: it is
-# warmed up once, then writes an essay (temperature 1.0) and code (0.7)
-# after a short and a long prompt, 200 tokens out, for one round always and
-# up to three (--rounds N) only while the longest round so far still fits
-# the two minutes. It keeps prompt reading, the first token and the reply as
+# model under one memory limit) is warmed up once, then writes an essay
+# (temperature 1.0) and code (0.7) after a short and a long prompt, 200
+# tokens out, one reply a task: repeating every task three times made the
+# reference set about ten minutes of waiting for nothing one reply did not
+# say. Name the MODEL_IDs in question rather than running the whole set. It
+# keeps prompt reading, the first token and the reply as
 # a median with its range. A model that drafts writes one unmeasured reply
 # first. --temperature T sets one temperature for all. --reference-set
 # measures the cases in registry/release_speed/reference_set.json (narrowed
@@ -622,7 +623,7 @@ test-quantization-mixture-of-experts = "run -p xtask -- test-run --package astro
 # --write-catalog writes the cases measured at the Mac's own memory limit
 # into registry/download_catalog.json as each entry's measured_speed, which
 # the Models page shows. Progress and time left print every five seconds;
-# the whole reference set takes about ten minutes. It refuses to start until
+# the whole reference set takes about three minutes. It refuses to start until
 # Development's config.json sets "ssd_prompt_cache": {"enabled": false} and
 # "skill": {"declare_to_models": false} (restart it after editing, and put
 # them back afterwards). It loads real models on the GPU, so check

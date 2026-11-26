@@ -5,18 +5,14 @@ use std::process::Command;
 use crate::release_speed::speed_ledger::MeasuringMachine;
 use crate::small_mac_matrix::matrix_cells::DEVELOPMENT_BASE_URL;
 
-use super::case_time_budget::MOST_ROUNDS_A_CASE;
-
 /// The widest temperature a chat request accepts.
 const MAXIMUM_MEASUREMENT_TEMPERATURE: f64 = 2.0;
 const BYTES_PER_GIGABYTE: u64 = 1_073_741_824;
-const MEASURE_SPEED_USAGE: &str = "usage: cargo xtask measure-speed [--base-url URL] [--rounds N] [--temperature T] [--measured-on TEXT] [--reference-set] [--write-ledger] [--write-catalog] [MODEL_ID...]";
+const MEASURE_SPEED_USAGE: &str = "usage: cargo xtask measure-speed [--base-url URL] [--temperature T] [--measured-on TEXT] [--reference-set] [--write-ledger] [--write-catalog] [MODEL_ID...]";
 
 #[derive(Debug, PartialEq)]
 pub struct MeasureSpeedOptions {
     pub base_url: String,
-    /// The most rounds a case runs; `case_time_budget` may stop it sooner.
-    pub round_count: usize,
     /// One sampling temperature for every reply, when given; each task's own
     /// otherwise (`SpeedTask::default_temperature`). A release ledger is only
     /// written at the tasks' own temperatures, so releases stay comparable.
@@ -36,7 +32,6 @@ impl MeasureSpeedOptions {
     pub fn parse(arguments: &[String]) -> Result<Self, String> {
         let mut parsed_options = Self {
             base_url: DEVELOPMENT_BASE_URL.to_owned(),
-            round_count: MOST_ROUNDS_A_CASE,
             temperature_override: None,
             measured_on: None,
             should_write_catalog: false,
@@ -47,7 +42,7 @@ impl MeasureSpeedOptions {
         let mut remaining_arguments = arguments.iter();
         while let Some(argument) = remaining_arguments.next() {
             match argument.as_str() {
-                "--base-url" | "--rounds" | "--measured-on" | "--temperature" => {
+                "--base-url" | "--measured-on" | "--temperature" => {
                     let value = option_value(&mut remaining_arguments, argument)?;
                     parsed_options.apply_valued_option(argument, value)?;
                 }
@@ -86,7 +81,6 @@ impl MeasureSpeedOptions {
     fn apply_valued_option(&mut self, option_name: &str, value: String) -> Result<(), String> {
         match option_name {
             "--base-url" => self.base_url = value,
-            "--rounds" => self.round_count = parse_round_count(&value)?,
             "--temperature" => self.temperature_override = Some(parse_temperature(&value)?),
             _ => self.measured_on = Some(value),
         }
@@ -115,17 +109,6 @@ fn option_value(
         .next()
         .cloned()
         .ok_or_else(|| format!("{option_name} needs a value"))
-}
-
-/// The most rounds a case may run; its time budget may stop it sooner, and
-/// one round always runs.
-fn parse_round_count(round_text: &str) -> Result<usize, String> {
-    match round_text.parse::<usize>() {
-        Ok(round_count) if round_count >= 1 => Ok(round_count),
-        _ => Err(format!(
-            "--rounds needs a whole number of at least 1, got {round_text}"
-        )),
-    }
 }
 
 /// "Mac with an M5 Pro and 48 GB", read from this Mac, so the figures always
