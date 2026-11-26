@@ -300,11 +300,13 @@ final class TelemetryStore: ObservableObject {
   }
 
   private func apply(_ nextStatusDocument: DaemonStatusDocument) {
+    let previouslyAppliedWholeGigabytes = appliedMaximumMlxMemoryWholeGigabytes(for: statusDocument)
     statusDocument = nextStatusDocument
-    if !popoverIsVisible {
-      editableMaximumMlxMemoryGigabytes = appliedMaximumMlxMemoryWholeGigabytes(
-        for: nextStatusDocument)
-    }
+    editableMaximumMlxMemoryGigabytes = maximumModelMemoryThumbAfterStatusPoll(
+      chosenWholeGigabytes: editableMaximumMlxMemoryGigabytes,
+      previouslyAppliedWholeGigabytes: previouslyAppliedWholeGigabytes,
+      appliedWholeGigabytes: appliedMaximumMlxMemoryWholeGigabytes(for: nextStatusDocument),
+      popoverIsVisible: popoverIsVisible)
     let engineIsDown = engineDowntimePolicy.engineIsDown(for: nextStatusDocument, at: Date())
     if let journalEntry = statusPollJournal.entry(
       statusDocument: nextStatusDocument, pollErrorMessage: lastStatusRefreshErrorMessage,

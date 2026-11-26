@@ -28,6 +28,47 @@ final class MaximumMlxMemoryControlPresentationTests: XCTestCase {
     )
   }
 
+  /// Positive: the limit was changed elsewhere, from 18 GB to 34 GB, while the popover was
+  /// open and the thumb untouched; the thumb follows, so no Apply is offered for a stale 18.
+  func test_should_move_an_untouched_thumb_to_a_limit_changed_elsewhere_while_the_popover_is_open() {
+    XCTAssertEqual(
+      maximumModelMemoryThumbAfterStatusPoll(
+        chosenWholeGigabytes: 18, previouslyAppliedWholeGigabytes: 18,
+        appliedWholeGigabytes: 34, popoverIsVisible: true),
+      34)
+  }
+
+  /// Negative: a thumb the person has moved is not pulled away by a poll while the popover
+  /// is open, whether the limit in force changed or not.
+  func test_should_not_move_a_thumb_the_person_has_moved_while_the_popover_is_open() {
+    XCTAssertEqual(
+      maximumModelMemoryThumbAfterStatusPoll(
+        chosenWholeGigabytes: 24, previouslyAppliedWholeGigabytes: 18,
+        appliedWholeGigabytes: 18, popoverIsVisible: true),
+      24)
+    XCTAssertEqual(
+      maximumModelMemoryThumbAfterStatusPoll(
+        chosenWholeGigabytes: 24, previouslyAppliedWholeGigabytes: 18,
+        appliedWholeGigabytes: 34, popoverIsVisible: true),
+      24)
+  }
+
+  /// Edge: with the popover closed the thumb takes the limit in force even after an edit
+  /// that was never applied, and the first status after launch (nothing in force yet,
+  /// thumb at zero) is adopted with the popover already open.
+  func test_should_take_the_limit_in_force_when_the_popover_is_closed_and_on_the_first_status() {
+    XCTAssertEqual(
+      maximumModelMemoryThumbAfterStatusPoll(
+        chosenWholeGigabytes: 24, previouslyAppliedWholeGigabytes: 18,
+        appliedWholeGigabytes: 18, popoverIsVisible: false),
+      18)
+    XCTAssertEqual(
+      maximumModelMemoryThumbAfterStatusPoll(
+        chosenWholeGigabytes: 0, previouslyAppliedWholeGigabytes: 0,
+        appliedWholeGigabytes: 36, popoverIsVisible: true),
+      36)
+  }
+
   /// While a change waits for the reply being written, a second one would be refused, so
   /// Apply is withheld even though the thumb differs from the limit in force.
   func test_should_withhold_apply_while_a_change_is_queued_and_offer_it_again_after() {
