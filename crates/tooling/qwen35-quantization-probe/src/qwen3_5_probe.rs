@@ -154,13 +154,19 @@ fn load_held_model(
         model_directory,
         chunking,
     ))?;
-    let holds_every_expert_layer = probe_step(model.hold_every_layer_in_memory())?;
-    if !holds_every_expert_layer {
+    hold_every_layer_in_memory(&mut model)?;
+    Ok(model)
+}
+
+/// Holds the whole model in memory for swapping, and says when its routed
+/// experts did not all fit: their projections are then skipped.
+fn hold_every_layer_in_memory(model: &mut Qwen3_5TextModel) -> Result<(), QuantizationError> {
+    if !probe_step(model.hold_every_layer_in_memory())? {
         tracing::warn!(
             "the model's routed experts do not all fit under the probe's memory limit; their projections will be skipped"
         );
     }
-    Ok(model)
+    Ok(())
 }
 
 impl Qwen3_5SensitivityProbe {
