@@ -9,7 +9,7 @@ use ipc_protocol::{
 };
 use model_serving::{
     AstroSsdPromptCacheDiskStoreConfig, GeneratedToken, InferenceEngine,
-    PromptProcessingChunkSizer, Qwen3_5ArtifactValidator, Qwen3_5ResidentEngine, Qwen3_5Tokenizer,
+    PromptProcessingChunkSizer, Qwen3_5ArtifactValidator, Qwen3_5StreamingEngine, Qwen3_5Tokenizer,
     TextMlxEngineConstructors,
 };
 use tokio::time::{Instant, sleep, timeout};
@@ -68,8 +68,9 @@ async fn run_visual_astro_ssd_prompt_cache_acceptance() {
     let (cold_token_id, cold_prefill_chunk_token_counts) =
         generate_one_token(&mut qwen3_5_engine, RequestId::new(9_100)).await;
     assert!(
-        cold_prefill_chunk_token_counts.contains(&VISUAL_ACCEPTANCE_PREFILL_CHUNK_TOKENS),
-        "the visual request must complete one full prefill chunk forward"
+        cold_prefill_chunk_token_counts.iter().sum::<u32>()
+            >= VISUAL_ACCEPTANCE_PREFILL_CHUNK_TOKENS,
+        "the cold visual request must read at least one full prompt chunk"
     );
     wait_for_visual_astro_ssd_prompt_cache_block(&qwen3_5_engine).await;
 
@@ -152,7 +153,7 @@ async fn run_appended_visual_astro_ssd_prompt_cache_acceptance() {
 
 async fn load_visual_acceptance_engine(
     astro_ssd_prompt_cache_directory: &Path,
-) -> (Qwen3_5ResidentEngine, Qwen3_5Tokenizer) {
+) -> (Qwen3_5StreamingEngine, Qwen3_5Tokenizer) {
     let model_directory = crate::common::configured_resident_sparse_moe_model_directory();
     let validated_artifact = Qwen3_5ArtifactValidator::new()
         .validate(&model_directory, 20_480)
@@ -164,7 +165,7 @@ async fn load_visual_acceptance_engine(
     let mut worker_chunking_configuration = crate::common::standard_worker_chunking_configuration();
     worker_chunking_configuration.ssd_prompt_cache_block_tokens =
         Some(VISUAL_ACCEPTANCE_PREFILL_CHUNK_TOKENS);
-    let mut qwen3_5_engine = Qwen3_5ResidentEngine::new_with_prompt_processing_chunk_sizer(
+    let mut qwen3_5_engine = Qwen3_5StreamingEngine::new_with_prompt_processing_chunk_sizer(
         validated_artifact,
         mlx_memory_limits.active_memory_limit_bytes(),
         mlx_memory_limits.mlx_buffer_cache_limit_bytes(),
@@ -191,6 +192,7 @@ async fn load_visual_acceptance_engine(
         .load()
         .await
         .expect("the visual acceptance engine should load");
+    super::keep_the_hosted_drafter_silent(&qwen3_5_engine).await;
     (qwen3_5_engine, tokenizer)
 }
 
@@ -269,7 +271,7 @@ fn representative_visual_request_with_optional_later_image(
 }
 
 async fn generate_one_token(
-    qwen3_5_engine: &mut Qwen3_5ResidentEngine,
+    qwen3_5_engine: &mut Qwen3_5StreamingEngine,
     request_id: RequestId,
 ) -> (u32, Vec<u32>) {
     let mut completed_prefill_chunk_token_counts = Vec::new();
@@ -307,7 +309,7 @@ async fn generate_one_token(
     }
 }
 
-async fn wait_for_visual_astro_ssd_prompt_cache_block(qwen3_5_engine: &Qwen3_5ResidentEngine) {
+async fn wait_for_visual_astro_ssd_prompt_cache_block(qwen3_5_engine: &Qwen3_5StreamingEngine) {
     let wait_started_at = Instant::now();
     loop {
         let astro_ssd_prompt_cache_sequence_state_block_count =
@@ -327,7 +329,7 @@ async fn wait_for_visual_astro_ssd_prompt_cache_block(qwen3_5_engine: &Qwen3_5Re
 }
 
 async fn astro_ssd_prompt_cache_sequence_state_block_count(
-    qwen3_5_engine: &Qwen3_5ResidentEngine,
+    qwen3_5_engine: &Qwen3_5StreamingEngine,
 ) -> u64 {
     let astro_ssd_prompt_cache_stats = qwen3_5_engine
         .collect_astro_ssd_prompt_cache_stats()

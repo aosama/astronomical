@@ -1073,31 +1073,26 @@ measure-mtp-reply-drafting = "run -p xtask -- test-run --package astronomical-ac
 # `measure-expert-misses`. About thirty seconds a case on a mixture-of-experts
 # model, and up to six minutes on a dense model that streams its layers.
 test-hosted-drafter-reply = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --filter drafted_greedy_reply_as_the_plain_reply_begins"
-# The streaming reply-speed journeys' replies asked of the resident engine
-# under the same paging_experiment limit (#2585): essay, code temperature and
-# code writing, each after a warm-up and one unmeasured reply. Alternate with
-# measure-hosted-drafter-reply's silent cases on a model with no drafter.
-measure-resident-reply-speed = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --case-budget-seconds 500 --filter reply_speed_on_the_resident_engine"
-# How fast each engine reads one 10,000-token prompt under the same
-# paging_experiment limit (#2585): the resident case, then the streaming one,
-# a process each, 16 tokens written after the prompt. Run it twice and
-# compare within a sitting. request_elapsed_seconds less
-# generation_elapsed_seconds in each `phase=long_prompt_read_by_` line is the
-# time to the first token. Under a minute a case.
-measure-long-prompt-reading = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --case-budget-seconds 170 --filter long_prompt_reading_on_the_"
-# A conversation's next turn on each engine under the same paging_experiment
-# limit (#2585): a 10,000-token prompt, its reply, then that prompt with the
-# reply and a 40-token message, with an astro_ssd_prompt_cache store as
-# serving has. The resident case, then the streaming one, a process each.
-# request_elapsed_seconds less generation_elapsed_seconds in each
-# `phase=..._follow_up_turn` line is the time to the first token.
-measure-chat-follow-up-turn = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --case-budget-seconds 170 --filter a_chat_follow_up_turn_on_the_"
-# Which text engine reads a prompt faster, with a verdict (#2585): both
-# engines hold the model in one process and each reads the same 4,096-token
-# prompt as a procedure of the MLX performance profiler, twelve interleaved
-# rounds with the order flipped. The paging_experiment limit must hold the
-# model twice. About three minutes on a 9B, ten on a dense 27B.
-measure-engine-prompt-reading-verdict = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --case-budget-seconds 900 --filter a_verdict_on_prompt_reading_between_the_two_text_engines"
+# Paging must not change the answer: three Shakespeare questions asked twice
+# under a limit that holds the whole model and again under ceilings that force
+# paging, token for token. The three-span question's first paged ask has one
+# prompt span fail on purpose (issue #2221): it must be run again exactly once
+# and leave at least 80% of the kept experts. Each journey spawns its
+# whole-model recording test in a child process (MLX fixes its memory limit
+# once per process) and reads the answers from its standard output.
+test-paging-answer-parity = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --filter should_give_the_whole_model_answer --ignored"
+# How fast the text engine reads one 10,000-token prompt under the
+# paging_experiment limit, 16 tokens written after the prompt. Run it twice
+# and compare within a sitting. request_elapsed_seconds less
+# generation_elapsed_seconds in the `phase=long_prompt_read` line is the time
+# to the first token. Under a minute.
+measure-long-prompt-reading = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --case-budget-seconds 170 --filter should_measure_long_prompt_reading"
+# A conversation's next turn under the paging_experiment limit: a
+# 10,000-token prompt, its reply, then that prompt with the reply and a
+# 40-token message, with an astro_ssd_prompt_cache store as serving has.
+# request_elapsed_seconds less generation_elapsed_seconds in the
+# `phase=chat_read_follow_up_turn` line is the time to the first token.
+measure-chat-follow-up-turn = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --case-budget-seconds 170 --filter should_measure_a_chat_follow_up_turn"
 # Neural Engine prompt reading on the streaming engine (#2585): a dense model
 # with every layer kept in memory builds its programs, attaches them, and
 # reads a 10,000-token prompt; then the same prompt on the GPU alone, a
@@ -1241,12 +1236,3 @@ measure-fused-expert-combination-prefill = "run -p xtask -- test-run --package a
 # target/acceptance-evidence/streaming-scoreboard/streaming-scoreboard.jsonl.
 measure-streaming-scoreboard = "run -p xtask -- test-run --package astronomical-acceptance --features performance_throughput --test performance_throughput --release --ignored --case-budget-seconds 1320 --filter streaming_scoreboard"
 
-# Paged-versus-resident parity (issue #1679): the 35B sparse-MoE answers a long
-# greedy question, a short seeded one and a three-span greedy one resident and
-# paged, and both engines must give identical tokens. The three-span question's
-# first paged ask has one prompt span fail on purpose (issue #2221): it must be
-# run again exactly once and leave at least 80% of the kept experts. Each journey spawns its resident recording test in a
-# child process (MLX fixes its memory limit once per process) and reads the
-# answers from its standard output. The kernel-level guard for the same defect
-# runs without a model in `test-direct-mlx` (sparse_expert_projection_page_independence).
-test-paged-resident-parity = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --filter should_give_the_resident_answer --ignored"

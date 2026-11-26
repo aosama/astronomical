@@ -7,8 +7,8 @@
 use ipc_protocol::RequestId;
 use model_serving::{
     GeneratedToken, GenerationFinalization, InferenceEngine, PromptProcessingChunkSizer,
-    Qwen3_5ArtifactValidator, Qwen3_5ResidentEngine, Qwen3_5StreamingEngine, Qwen3_5Tokenizer,
-    TextInferenceRequest, TextMlxEngineConstructors,
+    Qwen3_5ArtifactValidator, Qwen3_5StreamingEngine, Qwen3_5Tokenizer, TextInferenceRequest,
+    TextMlxEngineConstructors,
 };
 
 pub(super) const RESIDENCY_LIFECYCLE_PROMPT_TOKEN_COUNT: usize = 256;
@@ -23,64 +23,6 @@ pub(crate) fn initialize_automatic_residency_tracing() {
             "[automatic-residency] status=progress tracing=already_initialized reason={test_tracing_initialization_error}"
         );
     }
-}
-
-pub(super) fn construct_resident_engine(
-    model_directory: std::path::PathBuf,
-    active_memory_limit_bytes: usize,
-    mlx_buffer_cache_limit_bytes: usize,
-    request_id: RequestId,
-    required_prompt_token_count: usize,
-) -> (Qwen3_5ResidentEngine, Vec<u32>, u32, usize) {
-    assert!(
-        model_directory.is_dir(),
-        "the configured sparse checkpoint must be available"
-    );
-    eprintln!("[automatic-residency 0/5] status=progress phase=artifact_validation");
-    let validated_artifact = Qwen3_5ArtifactValidator::new()
-        .validate(&model_directory, 20_480)
-        .expect("the configured sparse artifact should validate");
-    let model_id = validated_artifact.model_id().to_owned();
-    let tokenizer = Qwen3_5Tokenizer::from_validated_artifact(&validated_artifact)
-        .expect("the tokenizer should expose validated control tokens");
-    let think_end_token_id = tokenizer.think_end_token_id();
-    let image_pad_token_id = tokenizer.image_pad_token_id();
-    let prompt_token_ids = crate::serving_acceptance::support::romeo_and_juliet::prepare_romeo_and_juliet_three_paragraph_summary_prompt(
-        &model_directory,
-        &model_id,
-        request_id,
-        required_prompt_token_count,
-        2,
-    );
-    let total_context_token_count = prompt_token_ids
-        .len()
-        .checked_add(2)
-        .expect("the request context token count should fit usize");
-    let context_memory_reservation_bytes = validated_artifact
-        .config()
-        .context_memory_reservation_bytes(total_context_token_count)
-        .expect("the request context memory reservation should fit usize");
-    let qwen3_5_engine =
-        Qwen3_5ResidentEngine::new_with_runtime_chunking_and_performance_attribution(
-            validated_artifact,
-            active_memory_limit_bytes,
-            mlx_buffer_cache_limit_bytes,
-            None,
-            PromptProcessingChunkSizer::for_chunk_size_tokens(2_048)
-                .expect("the test prefill_chunk_tokens should be valid"),
-            think_end_token_id,
-            model_directory,
-            crate::common::standard_worker_chunking_configuration(),
-            model_serving::PerformanceAttribution::disabled(),
-            model_serving::PerformanceAttributionLog::disabled(),
-        )
-        .expect("the resident expert engine settings should be valid");
-    (
-        qwen3_5_engine,
-        prompt_token_ids,
-        image_pad_token_id,
-        context_memory_reservation_bytes,
-    )
 }
 
 pub(super) fn construct_automatic_residency_engine(

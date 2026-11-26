@@ -3,7 +3,7 @@ use std::{path::Path, time::Instant};
 use model_serving::{
     AstroSsdPromptCacheDiskStoreConfig, InferenceEngine, PerformanceAttribution,
     PerformanceAttributionLog, PromptProcessingChunkSizer, Qwen3_5ArtifactValidator,
-    Qwen3_5ResidentEngine, Qwen3_5StreamingEngine, TextMlxEngineConstructors,
+    Qwen3_5StreamingEngine, TextMlxEngineConstructors,
 };
 use tokio::time::{MissedTickBehavior, interval};
 
@@ -174,69 +174,5 @@ pub(crate) async fn load_paging_experiment_engine_with(
         end_of_sequence_token_ids,
         model_directory,
         attribution_directory,
-    }
-}
-
-/// The resident engine's prompt chunk, as Development serves it: the
-/// production default `chunking.fixed_prompt_processing_chunk_size_tokens`.
-const RESIDENT_PROMPT_CHUNK_TOKENS: u32 = 2_048;
-
-/// The configured model loaded on the resident engine under the same
-/// `paging_experiment` limit the streaming journeys use, so one reply can be
-/// asked of both engines (issue #2585). A model the limit cannot hold whole
-/// is refused at load, which is the answer that the resident engine cannot
-/// serve it there.
-pub(crate) struct ConfiguredResidentEngine {
-    pub(crate) engine: Qwen3_5ResidentEngine,
-    pub(crate) end_of_sequence_token_ids: Vec<u32>,
-    pub(crate) model_directory: std::path::PathBuf,
-}
-
-pub(crate) async fn load_configured_resident_engine(
-    load_phase_name: &str,
-) -> ConfiguredResidentEngine {
-    load_configured_resident_engine_keeping_prompts(load_phase_name, None).await
-}
-
-/// The same engine with, when given, an `astro_ssd_prompt_cache` store.
-pub(crate) async fn load_configured_resident_engine_keeping_prompts(
-    load_phase_name: &str,
-    astro_ssd_prompt_cache_store: Option<AstroSsdPromptCacheDiskStoreConfig>,
-) -> ConfiguredResidentEngine {
-    let test_run_configuration = test_harness::test_run::TestRunContext::current().configuration;
-    let model_directory = test_run_configuration
-        .model_directory
-        .expect("model_directory names the model");
-    let mlx_limit_bytes = usize::try_from(
-        test_run_configuration
-            .paging_experiment
-            .maximum_mlx_memory_bytes()
-            .expect("paging_experiment sets a valid MLX limit"),
-    )
-    .expect("the MLX limit should fit usize");
-    let validated_artifact = Qwen3_5ArtifactValidator::new()
-        .validate(&model_directory, 20_480)
-        .expect("the configured artifact should validate");
-    let end_of_sequence_token_ids = validated_artifact
-        .config()
-        .end_of_sequence_token_ids()
-        .to_vec();
-    let mut engine = Qwen3_5ResidentEngine::new_with_prompt_processing_chunk_sizer(
-        validated_artifact,
-        mlx_limit_bytes,
-        mlx_limit_bytes,
-        astro_ssd_prompt_cache_store,
-        PromptProcessingChunkSizer::for_chunk_size_tokens(RESIDENT_PROMPT_CHUNK_TOKENS)
-            .expect("the resident prompt chunk should be valid"),
-        IMAGE_PAD_TOKEN_ID,
-        model_directory.clone(),
-        crate::common::standard_worker_chunking_configuration(),
-    )
-    .expect("the resident engine settings should be valid");
-    load_engine_with_progress(&mut engine, load_phase_name).await;
-    ConfiguredResidentEngine {
-        engine,
-        end_of_sequence_token_ids,
-        model_directory,
     }
 }

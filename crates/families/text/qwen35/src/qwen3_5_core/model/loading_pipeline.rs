@@ -41,7 +41,7 @@ pub fn bind_language_artifact(
         runtime,
         validated_artifact,
         should_bind_vision_weights,
-        WeightBindingDtype::AsStored,
+        WeightBindingDtype::ForComputeDevice,
         performance_attribution,
     )
 }

@@ -54,17 +54,12 @@ A measurement the limit cannot hold does not fail the load. The phase stays unme
 - At every layer boundary the ledger's accounts are compared with what MLX reports. On the models measured, the largest difference is 64 MB, 0.2% of the limit.
 - The status page's memory breakdown is composed from the same accounts.
 
-## The in-memory engine
+## A model that fits
 
-A model that fits is served by the in-memory engine (`crates/families/text/qwen35/src/qwen3_5_resident`), which keeps every weight. Its governor's ledger has every weight as fixed and nothing to stream, so the capacity plays no part and there is nothing to give back.
-
-- At load it runs one prompt chunk of the serving size and one reply token and records what each needed.
-- Before each forward it asks the governor one question: do the weights, the stored state after this forward, the forward's MLX working buffers and the margin fit the limit? (`inference_execution/memory_governance/forward_memory.rs`)
-- A forward that does not fit is never made smaller. The request moves to the streaming engine, which serves it as described above.
-- After each forward it reports what MLX measured, so its ledger is compared with MLX too.
+A model the limit holds whole is served by the same engine. Every layer is kept, nothing is given back, and the prompt is still read a layer at a time; only the prompt chunk is the in-memory size rather than the streaming one.
 
 ## Where the rules are tested
 
 - The ledger is plain arithmetic, so whole requests are replayed against it without a model or a GPU in `crates/foundation/memory-policy/src/simulation`. Each real memory incident is one named scenario there, and they run on every commit.
-- Streamed and in-memory serving are compared token for token by `cargo test-paged-resident-parity`, including a question where one span is failed on purpose and run again.
+- Serving under a paging ceiling is compared token for token with serving the whole model in memory by `cargo test-paging-answer-parity`, including a question where one span is failed on purpose and run again.
 - The journeys under `verification/acceptance/tests/expert_paging/journeys` each assert one outcome a person would notice, on real models.

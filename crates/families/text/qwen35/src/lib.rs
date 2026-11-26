@@ -213,10 +213,7 @@ pub use qwen3_5_core::vision::{
 };
 
 #[cfg(feature = "direct-mlx")]
-pub use qwen3_5_resident::{
-    Qwen3_5ResidentEngine, Qwen3_5ResidentEngineTestControls, Qwen3_5ResidentModel,
-    ResidentEngineSettings,
-};
+pub use qwen3_5_resident::Qwen3_5ResidentModel;
 #[cfg(feature = "direct-mlx")]
 pub use text_generation::generation_loop::engine_construction::TextMlxEngineConstructors;
 #[cfg(feature = "direct-mlx")]
@@ -235,7 +232,7 @@ pub use qwen3_5_core::model::draft_tree_verification::DraftTreeTarget;
 #[cfg(feature = "direct-mlx")]
 pub use qwen3_5_resident::{
     Qwen3_5DraftTreeVerification, Qwen3_5DraftedRowsVerification,
-    Qwen3_5SpeculativeVerificationOutput, VerificationLogitsMode, VerificationTokenChoice,
+    Qwen3_5SpeculativeVerificationOutput, VerificationLogitsMode,
 };
 
 #[cfg(feature = "direct-mlx")]
