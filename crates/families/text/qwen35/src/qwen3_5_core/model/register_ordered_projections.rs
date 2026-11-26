@@ -195,14 +195,29 @@ impl Qwen3_5LinearWeights for Qwen3_5DenseProjection {
         model: &Qwen3_5ModelBase,
         activations: &MlxArray,
     ) -> Result<MlxArray, TextExecutionError> {
-        let base_output = match &self.storage {
+        let base_output = self.stored_weights_output(model, activations)?;
+        model.with_layer_add_on(&self.module_name, activations, base_output)
+    }
+}
+
+impl Qwen3_5DenseProjection {
+    /// `activations` times the projection's weights in whichever form it
+    /// holds them, before any add-on.
+    fn stored_weights_output(
+        &self,
+        model: &Qwen3_5ModelBase,
+        activations: &MlxArray,
+    ) -> Result<MlxArray, TextExecutionError> {
+        match &self.storage {
             Qwen3_5ProjectionStorage::Bound(bound_weights) => {
-                model.bound_linear(activations, bound_weights)?
+                model.bound_linear(activations, bound_weights)
             }
             Qwen3_5ProjectionStorage::RegisterOrdered(converted) => {
-                model.register_ordered_projection(activations, converted)?
+                model.register_ordered_projection(activations, converted)
             }
-        };
-        model.with_layer_add_on(&self.module_name, activations, base_output)
+            Qwen3_5ProjectionStorage::HadamardRotated(rotated) => {
+                model.hadamard_rotated_linear(activations, rotated)
+            }
+        }
     }
 }

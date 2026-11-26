@@ -54,6 +54,10 @@ pub struct Qwen3_5OptionalAccelerators {
     /// `declare_register_ordered_kernels` has declared them for a drafter,
     /// and every dense projection converted since multiplies through them.
     pub register_ordered_matmul_kernels: Option<crate::row_batched_matmul::RowBatchedMatmulKernels>,
+    /// The one-launch signed Hadamard rotation, for a folded pack's rotated
+    /// modules, once its probe on this GPU reproduced the composed rotation
+    /// bit for bit; `None` keeps the composed three-launch route.
+    pub signed_hadamard_rotation_kernel: Option<mlx_bridge::MlxMetalKernel>,
     /// The gated-delta recurrence over a draft tree's rows; set by
     /// `enable_draft_tree_verification`.
     pub gated_delta_tree_kernel: Option<mlx_bridge::MlxMetalKernel>,
@@ -290,7 +294,33 @@ impl Qwen3_5ModelBase {
         }
     }
 
+    /// The hidden rows of `token_indices`. A folded pack stores its table in
+    /// the rotated basis, so its rows take the inverse rotation here, where
+    /// every reader of embedding rows (prompt chunks, draft trees, the
+    /// drafter, decision readouts) gets them.
     pub fn embedding_lookup(
+        &self,
+        token_indices: &MlxArray,
+    ) -> Result<MlxArray, TextExecutionError> {
+        let stored_rows = self.stored_embedding_rows(token_indices)?;
+        self.embedding_rows_in_hidden_basis(stored_rows)
+    }
+
+    /// Stored embedding rows in the hidden basis the layers read: as stored,
+    /// or through the inverse rotation of a folded pack's table.
+    fn embedding_rows_in_hidden_basis(
+        &self,
+        stored_rows: MlxArray,
+    ) -> Result<MlxArray, TextExecutionError> {
+        match &self.weights.embedding_rotation {
+            Some(embedding_rotation) => {
+                Ok(embedding_rotation.rotate_inverse(&self.runtime, &stored_rows)?)
+            }
+            None => Ok(stored_rows),
+        }
+    }
+
+    fn stored_embedding_rows(
         &self,
         token_indices: &MlxArray,
     ) -> Result<MlxArray, TextExecutionError> {
@@ -374,6 +404,26 @@ impl Qwen3_5ModelBase {
                 },
             ),
         }
+    }
+
+    /// `activations` through a rotated module: the pack's signed block
+    /// Hadamard rotation at the module's input width (one launch when the
+    /// signed rotation kernel passed its probe on this GPU), then the stored
+    /// affine weights.
+    pub fn hadamard_rotated_linear(
+        &self,
+        activations: &MlxArray,
+        rotated: &crate::qwen3_5_core::model_math::dense_projection::HadamardRotatedWeights,
+    ) -> Result<MlxArray, TextExecutionError> {
+        let rotated_activations = rotated.rotation.rotate(
+            &self.runtime,
+            &self.compiled_elementwise_graphs,
+            self.optional_accelerators
+                .signed_hadamard_rotation_kernel
+                .as_ref(),
+            activations,
+        )?;
+        self.bound_linear(rotated_activations.activations(), &rotated.weights)
     }
 
     fn native_bfloat16_linear(
