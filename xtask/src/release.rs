@@ -20,6 +20,7 @@ mod scratch_space;
 mod sparkle_acceptance;
 mod stable_installation;
 mod system_step;
+mod update_window_notes;
 
 #[cfg(test)]
 #[path = "release_installation_tests.rs"]

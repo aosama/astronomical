@@ -5,6 +5,7 @@
 //! `target/` and renamed into the output directory only when complete, so a
 //! failed preparation never leaves something that looks reviewable.
 
+use super::update_window_notes::{holds_markdown_table, update_window_notes};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command};
 
@@ -167,7 +168,7 @@ pub(crate) fn prepare_release(
         repository_root,
         release_identity,
         &staging_directory.directory_path,
-        &disk_image,
+        (&disk_image, &notes_copy),
     )?;
     let release_manifest = ReleaseManifest {
         release_tag: release_identity.release_tag.clone(),
@@ -247,40 +248,98 @@ fn sign_appcast(
     repository_root: &Path,
     release_identity: &ReleaseIdentity,
     staging_directory: &Path,
-    disk_image: &Path,
+    (disk_image, notes_copy): (&Path, &Path),
 ) -> Result<PathBuf, String> {
     let appcast_step = start_step("sign-dmg-and-appcast");
     let appcast_tool = locate_appcast_tool(repository_root)?;
     let download_prefix = release_download_prefix(release_identity);
     let appcast = staging_directory.join("appcast.xml");
+    let appcast_input =
+        stage_appcast_input(release_identity, staging_directory, disk_image, notes_copy)?;
+    generate_appcast(&appcast_tool, &download_prefix, &appcast_input, &appcast)?;
+    let asset_name = disk_image.file_name().map_or(String::new(), os_text);
+    check_generated_appcast(&appcast, &download_prefix, &asset_name)?;
+    appcast_step.finish("success");
+    Ok(appcast)
+}
+
+/// Refuses a generated feed that is not well-formed XML or fails any of
+/// `appcast_problems`, before anything is published.
+fn check_generated_appcast(
+    appcast: &Path,
+    download_prefix: &str,
+    asset_name: &str,
+) -> Result<(), String> {
+    if !matches!(Command::new("xmllint").arg("--noout").arg(appcast).status(), Ok(exit_status) if exit_status.success())
+    {
+        return Err("the generated appcast is not well-formed XML".to_owned());
+    }
+    let appcast_text = std::fs::read_to_string(appcast).unwrap_or_default();
+    match appcast_problems(&appcast_text, download_prefix, asset_name).first() {
+        Some(appcast_problem) => Err(appcast_problem.clone()),
+        None => Ok(()),
+    }
+}
+
+/// Runs Sparkle's `generate_appcast` over `appcast_input`, writing the signed
+/// feed to `appcast`, then removes the input folder so the prepared release
+/// holds only the files the manifest names.
+fn generate_appcast(
+    appcast_tool: &Path,
+    download_prefix: &str,
+    appcast_input: &Path,
+    appcast: &Path,
+) -> Result<(), String> {
     let appcast_status = Command::new(appcast_tool)
         .args([
             "--download-url-prefix",
-            &download_prefix,
+            download_prefix,
             "--embed-release-notes",
             "--maximum-deltas",
             "0",
             "-o",
         ])
-        .arg(&appcast)
-        .arg(staging_directory)
+        .arg(appcast)
+        .arg(appcast_input)
         .status();
-    if !matches!(appcast_status, Ok(exit_status) if exit_status.success()) {
-        return Err("Sparkle could not generate the appcast".to_owned());
+    let _ = std::fs::remove_dir_all(appcast_input);
+    match appcast_status {
+        Ok(exit_status) if exit_status.success() => Ok(()),
+        _ => Err("Sparkle could not generate the appcast".to_owned()),
     }
-    if !matches!(Command::new("xmllint").arg("--noout").arg(&appcast).status(), Ok(exit_status) if exit_status.success())
-    {
-        return Err("the generated appcast is not well-formed XML".to_owned());
-    }
-    let appcast_text = std::fs::read_to_string(&appcast).unwrap_or_default();
-    let asset_name = disk_image.file_name().map_or(String::new(), os_text);
-    if let Some(appcast_problem) =
-        appcast_problems(&appcast_text, &download_prefix, &asset_name).first()
-    {
-        return Err(appcast_problem.clone());
-    }
-    appcast_step.finish("success");
-    Ok(appcast)
+}
+
+/// The folder `generate_appcast` reads: the disk image, hard-linked so the
+/// signed bytes are the very ones published, beside the update window's copy
+/// of the notes under the disk image's name, which is how Sparkle pairs
+/// notes with an archive. The GitHub release keeps the notes as written.
+fn stage_appcast_input(
+    release_identity: &ReleaseIdentity,
+    staging_directory: &Path,
+    disk_image: &Path,
+    notes_copy: &Path,
+) -> Result<PathBuf, String> {
+    let appcast_input = staging_directory.join("appcast-input");
+    std::fs::create_dir_all(&appcast_input)
+        .map_err(|create_error| format!("could not stage the appcast input: {create_error}"))?;
+    let (Some(disk_image_name), Some(notes_name)) =
+        (disk_image.file_name(), notes_copy.file_name())
+    else {
+        return Err("the disk image and notes need file names".to_owned());
+    };
+    std::fs::hard_link(disk_image, appcast_input.join(disk_image_name))
+        .map_err(|link_error| format!("could not link the disk image: {link_error}"))?;
+    let release_notes = std::fs::read_to_string(notes_copy)
+        .map_err(|read_error| format!("could not read the release notes: {read_error}"))?;
+    let release_page_url = format!(
+        "https://github.com/{}/releases/tag/{}",
+        release_identity.repository_slug, release_identity.release_tag
+    );
+    write_text(
+        &appcast_input.join(notes_name),
+        &update_window_notes(&release_notes, &release_page_url),
+    )?;
+    Ok(appcast_input)
 }
 
 fn os_text(os_name: &std::ffi::OsStr) -> String {
@@ -302,18 +361,33 @@ pub(crate) fn appcast_problems(
     download_prefix: &str,
     asset_name: &str,
 ) -> Vec<String> {
+    let problem_checks = [
+        (
+            appcast_text.is_empty(),
+            "Sparkle did not generate an appcast",
+        ),
+        (
+            !appcast_text.contains("sparkle:edSignature="),
+            "appcast archive signature is missing",
+        ),
+        (
+            !appcast_text.contains("sparkle-signatures:"),
+            "signed appcast envelope is missing",
+        ),
+        (
+            !appcast_text.contains(&format!("{download_prefix}{asset_name}")),
+            "appcast release URL is incorrect",
+        ),
+        (
+            holds_markdown_table(appcast_text),
+            "appcast release notes hold a table, which Sparkle's update window cannot show",
+        ),
+    ];
     let mut appcast_problems = Vec::new();
-    if appcast_text.is_empty() {
-        appcast_problems.push("Sparkle did not generate an appcast".to_owned());
-    }
-    if !appcast_text.contains("sparkle:edSignature=") {
-        appcast_problems.push("appcast archive signature is missing".to_owned());
-    }
-    if !appcast_text.contains("sparkle-signatures:") {
-        appcast_problems.push("signed appcast envelope is missing".to_owned());
-    }
-    if !appcast_text.contains(&format!("{download_prefix}{asset_name}")) {
-        appcast_problems.push("appcast release URL is incorrect".to_owned());
+    for (is_problem, problem_text) in problem_checks {
+        if is_problem {
+            appcast_problems.push(problem_text.to_owned());
+        }
     }
     appcast_problems
 }
