@@ -139,3 +139,23 @@ impl RegisterOrderedWeight {
         })
     }
 }
+
+/// `rows` [..., input] times `weight` through MLX's own quantized matmul,
+/// on a copy of the weight restored to MLX's layout for this pass alone.
+/// The copy is one projection's bytes and is freed with the pass.
+pub fn restored_layout_matmul(
+    runtime: &MlxRuntime,
+    rows: &MlxArray,
+    weight: &RegisterOrderedWeight,
+) -> Result<MlxArray, RowBatchedProjectionError> {
+    let restored = weight.restored_mlx_layout(runtime)?;
+    Ok(runtime.quantized_matmul_affine_on_platform(
+        rows,
+        &restored.packed_weight,
+        &restored.scales,
+        &restored.biases,
+        true,
+        QUANTIZATION_GROUP_SIZE,
+        4,
+    )?)
+}

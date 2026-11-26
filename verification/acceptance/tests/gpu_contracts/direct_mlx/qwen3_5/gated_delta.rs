@@ -11,14 +11,7 @@ use crate::common::{
 #[tokio::test]
 async fn should_apply_one_ops_based_gated_delta_recurrent_step() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
-    let runtime = MlxRuntime::initialize(
-        MlxMemoryLimits::new(
-            DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES,
-            DIRECT_MLX_TEST_MLX_BUFFER_CACHE_LIMIT_BYTES,
-        )
-        .expect("the gated-delta test memory limits should be valid"),
-    )
-    .expect("the direct MLX runtime should initialize");
+    let runtime = gated_delta_runtime();
     let queries = runtime
         .array_from_f32(&[1.0, 2.0], &[1, 1, 2])
         .expect("the queries should be valid");
@@ -72,14 +65,7 @@ async fn should_match_ops_loop_when_dispatching_one_complete_prefill_sequence() 
     const HEAD_DIMENSION: i32 = 128;
 
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
-    let runtime = MlxRuntime::initialize(
-        MlxMemoryLimits::new(
-            DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES,
-            DIRECT_MLX_TEST_MLX_BUFFER_CACHE_LIMIT_BYTES,
-        )
-        .expect("the gated-delta test memory limits should be valid"),
-    )
-    .expect("the direct MLX runtime should initialize");
+    let runtime = gated_delta_runtime();
     let query_values = patterned_values(
         (TOKEN_COUNT * KEY_HEAD_COUNT * HEAD_DIMENSION) as usize,
         0.001,
@@ -197,14 +183,7 @@ async fn should_apply_fused_gated_delta_tail_after_full_astro_ssd_prompt_cache_b
     const HEAD_DIMENSION: i32 = 128;
 
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
-    let runtime = MlxRuntime::initialize(
-        MlxMemoryLimits::new(
-            DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES,
-            DIRECT_MLX_TEST_MLX_BUFFER_CACHE_LIMIT_BYTES,
-        )
-        .expect("the gated-delta test memory limits should be valid"),
-    )
-    .expect("the direct MLX runtime should initialize");
+    let runtime = gated_delta_runtime();
     let compiled_elementwise_graphs = MlxCompiledElementwiseGraphs::new()
         .expect("the compiled elementwise graphs should initialize");
     let gated_delta_kernel =
@@ -267,8 +246,20 @@ async fn should_apply_fused_gated_delta_tail_after_full_astro_ssd_prompt_cache_b
     );
 }
 
+/// The runtime every gated-delta contract runs on.
+pub(super) fn gated_delta_runtime() -> MlxRuntime {
+    MlxRuntime::initialize(
+        MlxMemoryLimits::new(
+            DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES,
+            DIRECT_MLX_TEST_MLX_BUFFER_CACHE_LIMIT_BYTES,
+        )
+        .expect("the gated-delta test memory limits should be valid"),
+    )
+    .expect("the direct MLX runtime should initialize")
+}
+
 #[allow(clippy::too_many_arguments)]
-fn apply_ops_loop(
+pub(super) fn apply_ops_loop(
     runtime: &MlxRuntime,
     queries: &MlxArray,
     keys: &MlxArray,

@@ -10,7 +10,9 @@
 //!
 //! Each cell is one of the dense Qwen3.8 27B's projection shapes, sixteen
 //! distinct copies so a pass reads DRAM, at a row count the engine serves: a
-//! reply token's one row, a draft tree's sixteen, a prompt chunk's 2,048.
+//! reply token's one row, a draft tree's sixteen, a prompt chunk's 512 and
+//! 2,048 (a chunk restores MLX's layout for the pass, so its cells price
+//! that restoration).
 //! Asserts nothing; prints each cell's verdict and writes its comparison
 //! page and JSON.
 //!
@@ -32,8 +34,9 @@ use super::k_row_verify_cost::{
     random_rows, shape_copies_pass,
 };
 
-/// A reply token, a dense draft tree and a prompt chunk.
-const SERVED_ROW_COUNTS: [i32; 3] = [1, 16, 2_048];
+/// A reply token, a dense draft tree, and the smallest and a usual prompt
+/// chunk that restore MLX's layout for the pass.
+const SERVED_ROW_COUNTS: [i32; 4] = [1, 16, 512, 2_048];
 const REPORT_SUBDIRECTORY: &str = "register-order-layout-verdict";
 
 /// One pass over a shape's copies through one layout.

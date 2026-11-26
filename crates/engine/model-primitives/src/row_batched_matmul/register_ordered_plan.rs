@@ -10,6 +10,30 @@ use super::dispatch_plan::{
 /// TensorFold's figure (`reg_rows`); a prompt chunk with more rows takes
 /// several dispatches, each reading the weight once for its 128 rows.
 pub const REGISTER_ORDERED_ROWS_PER_DISPATCH: i32 = 128;
+/// The fewest rows for which a pass restores MLX's layout for itself and
+/// multiplies with MLX's own kernel (`restored_layout_matmul`).
+///
+/// A prompt chunk's bits need not match a reply token's, so a chunk is free
+/// to take whichever kernel is fastest, and for many rows that is MLX's on
+/// MLX's layout. Restoring costs one read and one write of the projection,
+/// the same whatever the rows, so it pays once the rows are many. Dense 27B
+/// shapes on MLX 0.32.5, against MLX's layout
+/// (`cargo measure-register-order-verdict`, twelve interleaved rounds):
+///
+/// | Rows  | Register-ordered kernel | Restored for the pass |
+/// |-------|-------------------------|-----------------------|
+/// | 256   | +13 to +29%             | +16 to +22%           |
+/// | 512   | +13 to +33%             | +7 to +11%            |
+/// | 1,024 | +12 to +38%             | +4 to +7%             |
+/// | 2,048 | +11 to +38%             | +1 to +4%             |
+pub const FEWEST_ROWS_A_PASS_RESTORES_MLX_LAYOUT_FOR: i32 = 512;
+
+/// Whether a pass of `row_count` rows restores MLX's layout for itself.
+#[must_use]
+pub const fn pass_restores_mlx_layout(row_count: i32) -> bool {
+    row_count >= FEWEST_ROWS_A_PASS_RESTORES_MLX_LAYOUT_FOR
+}
+
 const ROW_BLOCK_HEIGHT: i32 = 16;
 const SIMDGROUP_WIDTH: i32 = 32;
 /// Words of register-ordered codes per 32-column tile and 64-value group.

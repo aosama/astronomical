@@ -790,8 +790,7 @@ measure-row-exact-tree-attention = "run -p xtask -- test-run --package astronomi
 # boundary,
 # with the worker finding the drafter the way serving does (the target's own
 # `drafter` folder first). Append --configuration PATH with model_directory
-# set to the target's folder (and throughput_history_path to keep the durable
-# history untouched). Run it once more on the same model without a drafter
+# set to the target's folder. Run it once more on the same model without a drafter
 # for the plain side of the A/B; the decode rate says which path ran. Set
 # `paging_experiment.maximum_mlx_memory_gigabytes` in the configuration to
 # serve under a limit below the model's size, which measures the worker while
@@ -857,7 +856,11 @@ test-row-batched-matmul = "run -p xtask -- test-run --package astronomical-accep
 # The register-ordered kernel's GPU contracts: its one-time conversion
 # matches a CPU transcription of TensorFold's regBlock word for word, its
 # values match MLX's quantized matmul on every 27B shape at 1 to 128 rows,
-# and each row gets the same bits alone and inside a 128-row dispatch. Seconds.
+# each row gets the same bits alone and inside a 128-row dispatch, a prompt
+# chunk comes out with the bits MLX's layout gives (it restores that layout
+# for the pass) while one row fewer keeps the row-exact kernel, and
+# projections sharing one prepared input give the bits each gives alone.
+# Seconds.
 test-register-ordered-matmul = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter register_ordered_matmul"
 # Speculative decoding: what a verify pass over K drafted rows costs against
 # one row. Times the dense Qwen3.8 27B's real 4-bit projection shapes for
@@ -877,6 +880,16 @@ measure-k-row-verify-cost = "run -p xtask -- test-run --package astronomical-acc
 # one dropped round, median and range each. No model; about a minute and a
 # half.
 measure-register-order-served-rows = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx,performance-measurement --test performance_measurement --release --ignored --case-budget-seconds 240 --filter should_compare_stock_register_ordered_and_restored_layouts_at_served_row_counts"
+# The same question answered with a verdict (#2601): for each of the 27B's
+# projection shapes at one row, a draft tree's 16 rows, and prompt chunks of
+# 512 and 2,048 rows, MLX's layout against register order as two jobs of the
+# MLX performance profiler: 12 rounds with the order flipped every round, and
+# "faster", "slower" or "within spread" only when the interval for the median
+# difference excludes zero. A chunk restores MLX's layout for the pass, so
+# its cells price that restoration. Writes a comparison page, with the two
+# jobs' execution graphs, and its JSON for every cell under the test's target
+# directory and prints where. No model; about two minutes.
+measure-register-order-verdict = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx,performance-measurement --test performance_measurement --release --ignored --case-budget-seconds 300 --filter register_order_layout_verdict"
 # What a reply token saves when register-ordered projections that read the
 # same row share one preparation of it (#2568): stock, each copy preparing
 # its own input, and one preparation for all sixteen copies, alternated for
@@ -1105,8 +1118,7 @@ test-claude-code-launch = "run -p xtask -- test-run --package astronomical-accep
 # JANGH2 lanes: plan contracts against real bundles, GPU decode-throughput
 # (memory-traffic bound, so the optimized build is part of the alias; serial
 # by rule), correctness contracts, and serving throughput over the daemon
-# IPC boundary persisted to the durable throughput history; append
-# --configuration PATH containing model_directory.
+# IPC boundary; append --configuration PATH containing model_directory.
 test-jangtq2-plan = "run -p xtask -- test-run --package qwen35 --features direct-mlx --lib --filter quantized_expert_layer_plan --ignored"
 test-jangtq2-decode-throughput = "test --release --no-fail-fast -p jangtq2-qwen35 --features direct-mlx --test direct_mlx throughput -- --ignored --nocapture --test-threads=1"
 test-jangtq2-direct-mlx = "test --no-fail-fast -p jangtq2-qwen35 --features direct-mlx --lib --test direct_mlx -- --test-threads=1"
