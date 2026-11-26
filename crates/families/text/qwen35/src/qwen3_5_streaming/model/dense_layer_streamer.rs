@@ -20,6 +20,7 @@ use super::dense_layer_counts::{kept_layer_count_after_release, streaming_slot_c
 use super::dense_layer_reads::{
     DenseLayerShardRead, DenseLayerTensorRange, dense_layer_shard_reads,
 };
+use super::dense_layer_register_order::LayerBinding;
 use crate::TensorProfile;
 use crate::artifact_validation::TensorSemanticRole;
 use crate::qwen3_5_core::artifacts::ValidatedQwen3_5Artifact;
@@ -28,6 +29,7 @@ use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5DecoderLayerW
 use crate::qwen3_5_core::model_math::streamed_layer_binding::{
     bind_decoder_layer_from_tensors, decoder_layer_index_of, decoder_layer_tensor_profiles,
 };
+use crate::row_batched_matmul::RowBatchedMatmulKernels;
 use text_generation::execution_error::TextExecutionError;
 
 /// Layers a streamed forward holds at once: the one computing and the one
@@ -47,7 +49,7 @@ pub struct Qwen3_5DenseLayerStreamer {
     /// Layers `0..kept_layer_weights.len()` stay resident. Interior
     /// mutability lets request admission give kept layers back, so they
     /// stream, when a request needs their room.
-    kept_layer_weights: RefCell<Vec<Rc<Qwen3_5DecoderLayerWeights>>>,
+    pub(super) kept_layer_weights: RefCell<Vec<Rc<Qwen3_5DecoderLayerWeights>>>,
     /// MLX working buffers the load-time probe measured, reused whenever the kept
     /// layers are planned again; `None` when the probe could not run, and
     /// then nothing is kept, since a plan without it would overrun.
@@ -238,28 +240,31 @@ impl Qwen3_5DenseLayerStreamer {
     }
 
     /// Makes layers `0..kept_layer_count` resident, reading and evaluating
-    /// any not yet kept and dropping any beyond the new count.
+    /// any not yet kept and dropping any beyond the new count. With
+    /// `register_order_kernels`, a layer read here is converted to register
+    /// order before it is kept (`dense_layer_register_order`).
     pub fn keep_layers(
         &self,
         runtime: &MlxRuntime,
         qwen3_5_config: &Qwen3_5Config,
         raw_hugging_face_norm_offsets_apply: bool,
         kept_layer_count: usize,
+        register_order_kernels: Option<&RowBatchedMatmulKernels>,
     ) -> Result<(), TextExecutionError> {
         let kept_layer_count = kept_layer_count.min(self.layer_payload_bytes.len());
         self.kept_layer_weights
             .borrow_mut()
             .truncate(kept_layer_count);
         while self.kept_layer_count() < kept_layer_count {
-            let layer_weights = self.read_layer(
+            let layer_weights = self.read_layer_to_keep(
                 runtime,
-                qwen3_5_config,
-                raw_hugging_face_norm_offsets_apply,
+                LayerBinding {
+                    qwen3_5_config,
+                    raw_hugging_face_norm_offsets_apply,
+                },
                 self.kept_layer_count(),
+                register_order_kernels,
             )?;
-            let mut layer_arrays = Vec::new();
-            layer_weights.append_array_references(&mut layer_arrays);
-            runtime.evaluate_arrays(&layer_arrays)?;
             self.kept_layer_weights
                 .borrow_mut()
                 .push(Rc::new(layer_weights));

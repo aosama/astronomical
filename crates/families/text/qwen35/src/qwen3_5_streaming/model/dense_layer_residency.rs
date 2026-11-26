@@ -99,6 +99,7 @@ impl Qwen3_5Model {
                 &self.config,
                 self.weights.raw_hugging_face_norm_offsets_apply(),
                 pinned_kept_layer_count,
+                self.kept_layer_register_order_kernels(),
             )?,
             None => self.keep_dense_layers_the_governor_has_room_for()?,
         }
@@ -165,6 +166,7 @@ impl Qwen3_5Model {
             &self.config,
             self.weights.raw_hugging_face_norm_offsets_apply(),
             kept_layer_count,
+            self.kept_layer_register_order_kernels(),
         )?;
         tracing::info!(
             kept_layer_count,

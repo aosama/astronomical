@@ -183,11 +183,11 @@ impl DraftRoundTarget for Qwen3_5StreamingModel {
         )
     }
 
-    /// Declares the tree kernels. Nothing is converted: the streaming
-    /// engine's dense projections keep MLX's layout, because converting
-    /// them needs the weights it converts to release only their own
-    /// mappings (issue #2330), and the tree kernels are what make a
-    /// drafted round possible, not the conversion.
+    /// Declares the tree kernels and converts a dense model's output head
+    /// and the layers kept now to register order; a layer kept later
+    /// converts as it is read. The tree kernels are what make a drafted
+    /// round possible, so a model with nothing kept, or a sparse one, still
+    /// drafts with 0 converted.
     fn prepare_for_draft_trees(
         &mut self,
         performance_attribution: &mut PerformanceAttribution,
@@ -198,9 +198,11 @@ impl DraftRoundTarget for Qwen3_5StreamingModel {
             return Ok(None);
         }
         self.declare_register_ordered_kernels()?;
+        let converted_projection_count = self.convert_dense_output_head_to_register_order()?
+            + self.convert_kept_dense_layers_to_register_order()?;
         self.enable_draft_tree_verification()?;
         self.enable_row_exact_tree_attention()?;
-        Ok(Some(0))
+        Ok(Some(converted_projection_count))
     }
 
     /// The kept layers and experts fill the limit by the time a drafter

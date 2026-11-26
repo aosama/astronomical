@@ -141,6 +141,12 @@ test-dense-text-weights = "run -p xtask -- test-run --package astronomical-accep
 # and on the resident engine; tokens and final logits must be bit-identical.
 # Loads the 9B model twice, about fifteen seconds.
 test-dense-streaming-parity = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter should_give_the_resident_logits"
+# Kept dense layers in register order (issues #2568, #2585): one load of the
+# 4-bit dense_vision model with half its layers kept answers a Shakespeare prompt
+# before and after the kept layers convert; the tokens must match, a layer a
+# forward holds must be left alone, and converting twice must find nothing.
+# About fifteen seconds.
+test-dense-kept-layer-register-order = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter should_choose_the_same_tokens_with_kept_layers_in_register_order"
 
 # Dense layer-major checkpoint parity (issue #1985): one Shakespeare prompt
 # prefilled layer by layer and chunk by chunk over the engine's span plan, at
