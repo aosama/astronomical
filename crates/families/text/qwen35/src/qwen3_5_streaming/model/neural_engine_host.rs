@@ -12,6 +12,7 @@ use crate::qwen3_5_core::model::base::Qwen3_5ModelBase;
 use crate::qwen3_5_core::neural_engine::neural_engine_host::{
     LAYER_READ_FAILURE, LayerRead, LayerReader, NeuralEngineHost,
 };
+use crate::qwen3_5_core::neural_engine::neural_engine_prefill_loading::prepare_neural_engine_prefill;
 use crate::qwen3_5_streaming::model::streaming_model::Qwen3_5StreamingModel;
 
 impl NeuralEngineHost for Qwen3_5StreamingModel {
@@ -56,6 +57,33 @@ impl NeuralEngineHost for Qwen3_5StreamingModel {
 }
 
 impl Qwen3_5StreamingModel {
+    /// Builds the opt-in Neural Engine programs through the same steps
+    /// serving does, from the layers this model keeps, and waits for them,
+    /// so a journey can measure one loaded model with and without. A dense
+    /// model builds them only with every layer kept
+    /// (`materialize_and_keep_every_dense_layer`).
+    pub fn prepare_neural_engine_prefill_matching_production(
+        &mut self,
+        chunking: &ipc_protocol::WorkerChunkingConfiguration,
+        astro_neural_engine_program_cache_directory: Option<&std::path::Path>,
+    ) -> ipc_protocol::NeuralEnginePrefillStatus {
+        prepare_neural_engine_prefill(
+            self,
+            chunking,
+            astro_neural_engine_program_cache_directory,
+            None,
+        )
+    }
+
+    /// The same steps with a chosen token split, so a journey can sweep it.
+    pub fn prepare_neural_engine_prefill_with_token_count(
+        &mut self,
+        chunking: &ipc_protocol::WorkerChunkingConfiguration,
+        neural_engine_token_count: u32,
+    ) -> ipc_protocol::NeuralEnginePrefillStatus {
+        prepare_neural_engine_prefill(self, chunking, None, Some(neural_engine_token_count))
+    }
+
     /// Decides whether the coming prompt span uses the programs.
     ///
     /// The memory ledger has already set aside everything this model needs

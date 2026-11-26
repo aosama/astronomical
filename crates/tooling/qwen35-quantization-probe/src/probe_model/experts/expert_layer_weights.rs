@@ -1,8 +1,8 @@
 use mlx_bridge::MlxArray;
 
-use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights;
+use qwen35::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights;
 
-use super::Qwen3_5ResidentGateUpWeights;
+use super::Qwen3_5ProbeGateUpWeights;
 
 /// Complete contiguous sparse-expert arrays for one Qwen3.5 layer.
 ///
@@ -10,14 +10,14 @@ use super::Qwen3_5ResidentGateUpWeights;
 /// router's global expert identifiers index these arrays directly, with no page
 /// table or compact-slot remapping between routing and matrix multiplication.
 #[derive(Debug)]
-pub struct Qwen3_5ResidentExpertLayerWeights {
-    pub gate_up_weights: Qwen3_5ResidentGateUpWeights,
+pub struct Qwen3_5ProbeExpertLayerWeights {
+    pub gate_up_weights: Qwen3_5ProbeGateUpWeights,
     pub down_projection: Qwen3_5AffineWeights,
 }
 
-impl Qwen3_5ResidentExpertLayerWeights {
+impl Qwen3_5ProbeExpertLayerWeights {
     pub(super) fn new(
-        gate_up_weights: Qwen3_5ResidentGateUpWeights,
+        gate_up_weights: Qwen3_5ProbeGateUpWeights,
         down_projection: Qwen3_5AffineWeights,
     ) -> Self {
         Self {

@@ -69,7 +69,7 @@ fn should_return_no_lines_for_an_empty_or_comment_only_source() {
 #[test]
 fn should_mask_family_names_in_camel_and_snake_case() {
     assert_eq!(
-        mask_family_names("let model: Qwen3_5ResidentModel = qwen3_5_streaming::load();"),
+        mask_family_names("let model: Qwen3_5StreamingModel = qwen3_5_streaming::load();"),
         "let model: FAMILYModel = FAMILY::load();"
     );
     assert_eq!(
@@ -209,17 +209,11 @@ fn should_count_a_block_shared_by_two_files_on_both_sides() {
 
 #[test]
 fn should_count_copies_that_differ_only_by_family_name() {
-    let resident_copy = SHARED_BLOCK_TEXT.replace("runtime", "resident_runtime");
-    let streaming_copy = SHARED_BLOCK_TEXT.replace("runtime", "streaming_runtime");
+    let kev_copy = SHARED_BLOCK_TEXT.replace("runtime", "kev_runtime");
+    let clef_copy = SHARED_BLOCK_TEXT.replace("runtime", "clef_runtime");
     let measurement = measure_repeated_blocks(&[
-        source_file(
-            "crates/families/text/qwen35/src/qwen3_5_resident/load.rs",
-            &resident_copy,
-        ),
-        source_file(
-            "crates/families/text/qwen35/src/qwen3_5_streaming/load.rs",
-            &streaming_copy,
-        ),
+        source_file("crates/families/decision/kev/src/load.rs", &kev_copy),
+        source_file("crates/families/decision/clef/src/load.rs", &clef_copy),
     ]);
     assert_eq!(measurement.repeated_line_count, 12);
 }

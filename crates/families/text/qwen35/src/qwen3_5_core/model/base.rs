@@ -51,12 +51,11 @@ pub struct Qwen3_5OptionalAccelerators {
     >,
     /// What the streaming engine's search for a drafter found, for status:
     /// drafting when `draft_runtime` holds one, otherwise why not. `None`
-    /// until the streaming engine has looked; the resident engine keeps its
-    /// own on the engine.
+    /// until the streaming engine has looked.
     pub draft_model_status: Option<ipc_protocol::DraftModelStatus>,
     /// The register-ordered 4-bit matmul's kernels; set once
-    /// `convert_projections_to_register_order` has converted this model's
-    /// dense projections, which then multiply through it.
+    /// `declare_register_ordered_kernels` has declared them for a drafter,
+    /// and every dense projection converted since multiplies through them.
     pub register_ordered_matmul_kernels: Option<crate::row_batched_matmul::RowBatchedMatmulKernels>,
     /// The gated-delta recurrence over a draft tree's rows; set by
     /// `enable_draft_tree_verification`.
@@ -191,6 +190,29 @@ impl Qwen3_5ModelBase {
     #[must_use]
     pub const fn astro_decoder_state_cache_layout(&self) -> &AstroDecoderStateCacheLayout {
         &self.astro_decoder_state_cache_layout
+    }
+
+    /// Creates an empty per-request decoder state whose per-layer
+    /// `astro_decoder_state_cache` dtypes match this model's loaded weights,
+    /// exactly as production generation does.
+    ///
+    /// Direct-MLX callers (decision backbones, probes, journeys) drive raw
+    /// forwards without the engine's request plumbing; this constructor keeps
+    /// their decoder state identical to production. The public config-only
+    /// constructor instead assumes BFloat16 in the `astro_decoder_state_cache`,
+    /// which can diverge from a loaded artifact's dtypes and would quietly
+    /// measure a different graph than the one serving.
+    #[cfg(feature = "direct-mlx")]
+    pub fn empty_request_decoder_state_matching_loaded_weights(
+        &self,
+        full_attention_kv_state_growth_tokens: i32,
+    ) -> Result<text_generation::RequestDecoderStateStack, runtime_integration::MlxRuntimeError>
+    {
+        text_generation::RequestDecoderStateStack::
+            empty_from_astro_decoder_state_cache_layout_with_full_attention_kv_state_growth_tokens(
+                &self.astro_decoder_state_cache_layout,
+                full_attention_kv_state_growth_tokens,
+            )
     }
 
     /// Returns the optional vision tower loaded beside the language model.

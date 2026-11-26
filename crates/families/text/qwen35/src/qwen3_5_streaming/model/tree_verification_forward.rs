@@ -73,11 +73,15 @@ impl DraftTreeTarget for Qwen3_5StreamingModel {
     /// while the next is built would run its lookups while this thread reads
     /// the same tables (`in_graph_route_lookup`). A dense model's layers run
     /// no host step inside the graph, so the GPU starts on each few layers
-    /// while the next are built, as the in-memory engine's pass does: on the
-    /// dense 27B with every layer kept, building the 64-layer pass before
-    /// the GPU began cost a drafted round about 8 ms of its 96.
+    /// while the next are built: on the dense 27B with every layer kept,
+    /// building the 64-layer pass before the GPU began cost a drafted round
+    /// about 8 ms of its 96. A measurement that profiles the pass asks for
+    /// it whole, since a profiler sees only the graph it is handed.
     fn starts_tree_layers_asynchronously(&self) -> bool {
         self.config.feed_forward_architecture() == Qwen3_5FeedForwardArchitecture::Dense
+            && !self
+                .optional_accelerators
+                .tree_pass_built_whole_for_measurement
     }
 }
 
@@ -197,14 +201,11 @@ impl DraftRoundTarget for Qwen3_5StreamingModel {
         &mut self,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<Option<usize>, TextExecutionError> {
-        let gpu_runs_the_tree_kernels =
-            self.runs_row_batched_matrix_unit_kernels(performance_attribution);
-        if !gpu_runs_the_tree_kernels {
+        let Some(converted_projection_count) =
+            self.convert_projections_to_register_order(performance_attribution)?
+        else {
             return Ok(None);
-        }
-        self.declare_register_ordered_kernels()?;
-        let converted_projection_count = self.convert_dense_output_head_to_register_order()?
-            + self.convert_kept_dense_layers_to_register_order()?;
+        };
         self.enable_draft_tree_verification()?;
         self.enable_row_exact_tree_attention()?;
         Ok(Some(converted_projection_count))

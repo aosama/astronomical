@@ -1,17 +1,17 @@
 use mlx_bridge::MlxArray;
 
-use crate::qwen3_5_core::model_math::feed_forward_weights::Qwen3_5MoEFeedForwardWeights;
-use crate::qwen3_5_resident::experts::Qwen3_5ResidentExpertLayerWeights;
-use crate::qwen3_5_resident::model::Qwen3_5ResidentModel;
+use crate::probe_model::Qwen3_5ProbeModel;
+use crate::probe_model::experts::Qwen3_5ProbeExpertLayerWeights;
 use crate::{PerformanceAttribution, PerformanceOperation};
+use qwen35::qwen3_5_core::model_math::feed_forward_weights::Qwen3_5MoEFeedForwardWeights;
 use text_generation::execution_error::TextExecutionError;
 
-impl Qwen3_5ResidentModel {
+impl Qwen3_5ProbeModel {
     pub fn forward_qwen3_5_moe(
         &self,
         hidden_states: &MlxArray,
         mixture_of_experts_weights: &Qwen3_5MoEFeedForwardWeights,
-        resident_expert_layer_weights: &Qwen3_5ResidentExpertLayerWeights,
+        held_expert_layer_weights: &Qwen3_5ProbeExpertLayerWeights,
         should_use_compiled_elementwise_graphs: bool,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<MlxArray, TextExecutionError> {
@@ -21,10 +21,10 @@ impl Qwen3_5ResidentModel {
                 self.routed_expert_selection(hidden_states, mixture_of_experts_weights)
             },
         )?;
-        self.forward_moe_resident_with_performance_attribution(
+        self.forward_moe_held_with_performance_attribution(
             hidden_states,
             mixture_of_experts_weights,
-            resident_expert_layer_weights,
+            held_expert_layer_weights,
             &selected_indices,
             &selected_scores,
             should_use_compiled_elementwise_graphs,

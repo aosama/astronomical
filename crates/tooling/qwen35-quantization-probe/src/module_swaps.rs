@@ -1,19 +1,17 @@
-//! Where the probe reaches into the resident model to swap one module's
+//! Where the probe reaches into the probe model to swap one module's
 //! weights and put them back: plain affine weights in the decoder layers,
 //! the mixture-of-experts router, and routed-expert projections held by the
-//! resident expert owner.
+//! held expert owner.
 
 use quantization::bit_width::{BitWidth, GroupSize};
 use quantization::error::QuantizationError;
 
+use crate::probe_model::experts::{Qwen3_5ProbeExpertLayerWeights, Qwen3_5ProbeGateUpWeights};
 use qwen35::qwen3_5_core::model_math::decoder_layer_weights::{
     Qwen3_5AffineWeights, Qwen3_5DecoderFeedForwardWeights,
 };
 use qwen35::qwen3_5_core::model_math::feed_forward_weights::{
     Qwen3_5MoEFeedForwardWeights, Qwen3_5MoERouterGateWeights,
-};
-use qwen35::qwen3_5_resident::experts::{
-    Qwen3_5ResidentExpertLayerWeights, Qwen3_5ResidentGateUpWeights,
 };
 
 use super::super::expert_swaps::{
@@ -43,7 +41,7 @@ impl Qwen3_5SensitivityProbe {
 
     /// The affine weights a module name resolves to, mutably: a module in
     /// the decoder layers, or a routed-expert down projection, which the
-    /// resident expert owner holds as an ordinary affine weight.
+    /// held expert owner holds as an ordinary affine weight.
     pub(super) fn affine_weights_mut(
         &mut self,
         module_name: &str,
@@ -63,7 +61,7 @@ impl Qwen3_5SensitivityProbe {
             projection: FeedForwardProjection::Down,
         } = location
         {
-            let expert_layer = self.resident_expert_layer_mut(module_name, decoder_layer_index)?;
+            let expert_layer = self.held_expert_layer_mut(module_name, decoder_layer_index)?;
             return Ok(&mut expert_layer.down_projection);
         }
         match affine_weights_at_mut(&mut self.model.base.weights, location) {
@@ -75,23 +73,23 @@ impl Qwen3_5SensitivityProbe {
         }
     }
 
-    /// One layer's resident routed-expert arrays. A model whose experts did
-    /// not fit in memory pages them from disk and holds no resident owner;
+    /// One layer's held routed-expert arrays. A model whose experts did
+    /// not fit in memory pages them from disk and holds no held-expert owner;
     /// its experts cannot be swapped, and the sweep's guard reports it.
-    pub(super) fn resident_expert_layer_mut(
+    pub(super) fn held_expert_layer_mut(
         &mut self,
         module_name: &str,
         decoder_layer_index: usize,
-    ) -> Result<&mut Qwen3_5ResidentExpertLayerWeights, QuantizationError> {
-        let resident_layer = match self.model.resident_expert_weights.as_mut() {
-            Some(resident_expert_weights) => resident_expert_weights.layer_mut(decoder_layer_index),
+    ) -> Result<&mut Qwen3_5ProbeExpertLayerWeights, QuantizationError> {
+        let held_layer = match self.model.held_expert_weights.as_mut() {
+            Some(held_expert_weights) => held_expert_weights.layer_mut(decoder_layer_index),
             None => None,
         };
-        match resident_layer {
-            Some(resident_layer) => Ok(resident_layer),
+        match held_layer {
+            Some(held_layer) => Ok(held_layer),
             None => Err(unresolvable(
                 module_name,
-                "its routed experts are not resident in memory",
+                "its routed experts are not held in memory",
             )),
         }
     }
@@ -205,20 +203,18 @@ impl Qwen3_5SensitivityProbe {
         bit_width: BitWidth,
         group_size: GroupSize,
     ) -> Result<(), QuantizationError> {
-        let resident_layer = match &self.model.resident_expert_weights {
-            Some(resident_expert_weights) => resident_expert_weights.layer(decoder_layer_index),
+        let held_layer = match &self.model.held_expert_weights {
+            Some(held_expert_weights) => held_expert_weights.layer(decoder_layer_index),
             None => None,
         };
-        let Some(resident_layer) = resident_layer else {
+        let Some(held_layer) = held_layer else {
             return Err(unresolvable(
                 module_name,
-                "its routed experts are not resident in memory",
+                "its routed experts are not held in memory",
             ));
         };
-        let (current_gate, current_up) = separate_gate_and_up_projections(
-            self.model.runtime(),
-            &resident_layer.gate_up_weights,
-        )?;
+        let (current_gate, current_up) =
+            separate_gate_and_up_projections(self.model.runtime(), &held_layer.gate_up_weights)?;
         let (gate_projection, up_projection) = if projection == FeedForwardProjection::Gate {
             let replacement =
                 self.replacement_weights(module_name, &current_gate, bit_width, group_size)?;
@@ -228,10 +224,10 @@ impl Qwen3_5SensitivityProbe {
                 self.replacement_weights(module_name, &current_up, bit_width, group_size)?;
             (current_gate, replacement)
         };
-        let expert_layer = self.resident_expert_layer_mut(module_name, decoder_layer_index)?;
+        let expert_layer = self.held_expert_layer_mut(module_name, decoder_layer_index)?;
         let previous = std::mem::replace(
             &mut expert_layer.gate_up_weights,
-            Qwen3_5ResidentGateUpWeights::Separate {
+            Qwen3_5ProbeGateUpWeights::Separate {
                 gate_projection,
                 up_projection,
                 incompatibility_reason: PROBE_SEPARATION_REASON,
@@ -271,7 +267,7 @@ impl Qwen3_5SensitivityProbe {
                     ..
                 },
             ) => {
-                self.resident_expert_layer_mut(module_name, decoder_layer_index)?
+                self.held_expert_layer_mut(module_name, decoder_layer_index)?
                     .gate_up_weights = previous;
             }
             _ => {

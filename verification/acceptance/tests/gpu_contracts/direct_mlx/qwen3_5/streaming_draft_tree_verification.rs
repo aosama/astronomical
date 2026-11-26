@@ -1,14 +1,16 @@
 //! The draft tree contract of `draft_tree_verification`, run on the
-//! streaming model: every row matches feeding its chain alone there, a
-//! commit leaves the streamed state feeding that branch leaves, and a
-//! commit of another branch differs.
+//! streaming model, the one text model: every row matches feeding its chain
+//! alone there, a commit leaves the streamed state feeding that branch
+//! leaves, and a commit of another branch differs.
 //!
 //! On the same small dense Qwen3.5 and the same branching tree. The pass is
 //! the shared core's; this proves the streaming model's own layer step and
 //! evaluation under it. Layers of experts held in part are proven through
 //! the engine's reply loop, where their tables exist.
 //!
-//! Run with `cargo test-streaming-draft-tree-verification`. Seconds.
+//! Run with `cargo test-streaming-draft-tree-verification`, seconds; the
+//! same contract on another model with
+//! `cargo test-configured-streaming-draft-tree-verification --configuration PATH`.
 
 use mlx_bridge::MlxArray;
 use model_serving::speculative_decoding::tree_rows::TreeRows;
@@ -22,7 +24,7 @@ use super::draft_tree_verification::{
     assert_every_tree_row_matches_its_chain, chunk_against_step_logit_difference,
 };
 use super::drafted_rewind::{
-    MAXIMUM_LOGIT_DIFFERENCE, SmallTarget, small_target_sources, target_sources,
+    MAXIMUM_LOGIT_DIFFERENCE, SmallTarget, load_target, small_target_sources, target_sources,
 };
 
 type SmallStreamedTarget = SmallTarget<Qwen3_5StreamingModel>;
@@ -42,23 +44,12 @@ fn load_configured_streamed_target() -> SmallStreamedTarget {
 }
 
 fn load_streamed_target(sources: super::drafted_rewind::SmallTargetSources) -> SmallStreamedTarget {
-    let mut model = Qwen3_5StreamingModel::load(
-        sources.runtime,
-        sources.artifact,
-        &sources.model_directory,
-        crate::common::standard_qwen3_5_model_chunking_configuration(),
-    )
-    .expect("the model loads on the streaming engine");
-    model
-        .materialize_target_weights()
-        .expect("the weights materialize");
-    model
+    let mut target = load_target(sources);
+    target
+        .model
         .enable_draft_tree_verification()
         .expect("the tree kernel declares");
-    SmallTarget {
-        model,
-        prompt_token_ids: sources.prompt_token_ids,
-    }
+    target
 }
 
 impl TreeContractTarget for SmallStreamedTarget {
@@ -96,7 +87,7 @@ impl TreeContractTarget for SmallStreamedTarget {
 #[test]
 #[ignore = "loads the small dense Qwen3.5 on the streaming engine"]
 #[serial]
-fn should_give_every_streamed_tree_row_the_logits_its_chain_alone_gives() {
+fn should_give_every_row_of_the_small_model_s_streamed_tree_the_logits_its_chain_alone_gives() {
     assert_every_tree_row_matches_its_chain(
         &load_small_streamed_target(),
         MAXIMUM_LOGIT_DIFFERENCE,
@@ -106,7 +97,7 @@ fn should_give_every_streamed_tree_row_the_logits_its_chain_alone_gives() {
 #[test]
 #[ignore = "loads the small dense Qwen3.5 on the streaming engine"]
 #[serial]
-fn should_leave_the_streamed_state_feeding_the_kept_branch_alone_leaves() {
+fn should_leave_the_small_model_s_streamed_state_feeding_the_kept_branch_alone_leaves() {
     assert_a_commit_leaves_the_state_feeding_the_branch_leaves(
         &load_small_streamed_target(),
         MAXIMUM_LOGIT_DIFFERENCE,
@@ -116,7 +107,7 @@ fn should_leave_the_streamed_state_feeding_the_kept_branch_alone_leaves() {
 #[test]
 #[ignore = "loads the small dense Qwen3.5 on the streaming engine"]
 #[serial]
-fn should_differ_from_feeding_a_branch_the_streamed_commit_did_not_keep() {
+fn should_differ_from_feeding_a_branch_the_small_model_s_streamed_commit_did_not_keep() {
     assert_a_commit_differs_from_feeding_another_branch(
         &load_small_streamed_target(),
         MAXIMUM_LOGIT_DIFFERENCE * 4.0,
@@ -140,7 +131,7 @@ fn configured_target_and_its_rounding() -> (SmallStreamedTarget, f32) {
 #[test]
 #[ignore = "loads the configured Qwen3.5 model on the streaming engine"]
 #[serial]
-fn should_give_every_streamed_tree_row_of_the_configured_model_the_logits_its_chain_gives() {
+fn should_give_every_row_of_the_configured_model_s_streamed_tree_the_logits_its_chain_gives() {
     let (target, rounding) = configured_target_and_its_rounding();
     assert_every_tree_row_matches_its_chain(&target, rounding);
 }

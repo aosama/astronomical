@@ -18,11 +18,11 @@ use mlx_bridge::MlxArray;
 use model_serving::RequestDecoderStateStack;
 use model_serving::speculative_decoding::dflash_drafter::DraftTreeOptions;
 use model_serving::speculative_decoding::tree_rows::TreeRows;
-use model_serving::{PerformanceAttribution, VerificationLogitsMode};
 use serial_test::serial;
 
 use model_serving::speculative_decoding::context_copy::{ContextCopier, ContextCopySettings};
 
+use super::dflash2_journey_support::{TargetLogitRows, forward_with_taps};
 use super::dflash2_kept_per_round::{
     Cell, ENGINE_CHILDREN_PER_NODE, ENGINE_NODE_BUDGET, JourneyPair, OUTPUT_TOKENS, RoundState,
     completion_token_ids, load_pair, prompt_token_ids,
@@ -405,18 +405,15 @@ pub(super) fn report_plain_decode(cell: &Cell, seed_count: u64) {
         let mut fed_token_count = round.fed_token_count;
         let decode_started_at = Instant::now();
         for _ in 0..OUTPUT_TOKENS {
-            let step = pair
-                .target
-                .build_speculative_verification_forward(
-                    &[last_token_id],
-                    fed_token_count,
-                    &mut decoder_state,
-                    &[],
-                    VerificationLogitsMode::AllPositions,
-                    &mut PerformanceAttribution::disabled(),
-                )
-                .expect("the plain step runs");
-            let logits = step.per_position_logits.expect("the step has logits");
+            let step = forward_with_taps(
+                &pair.target,
+                &[last_token_id],
+                fed_token_count,
+                &mut decoder_state,
+                &[],
+                TargetLogitRows::EveryRow,
+            );
+            let logits = step.logits;
             fed_token_count += 1;
             last_token_id =
                 target_picks(&pair, &seeded_cell, &logits, &[u64::from(fed_token_count)])[0];

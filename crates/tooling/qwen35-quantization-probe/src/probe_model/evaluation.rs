@@ -2,11 +2,23 @@ use mlx_bridge::MlxArray;
 
 use crate::{PerformanceAttribution, PerformanceOperation};
 
-use super::{Qwen3_5ResidentModel, RequestDecoderStateStack, TextExecutionError};
+use super::{Qwen3_5ProbeModel, RequestDecoderStateStack, TextExecutionError};
 use text_generation::AstroSsdPromptCacheBoundaryCheckpointCollector;
 
-impl Qwen3_5ResidentModel {
-    crate::qwen3_5_core::model::shared_model_methods::qwen3_5_shared_model_evaluation_methods!();
+impl Qwen3_5ProbeModel {
+    /// Materializes final logits and mutable decoder state for one forward pass.
+    pub fn evaluate_forward_state(
+        &self,
+        final_logits: &MlxArray,
+        request_decoder_state: &RequestDecoderStateStack,
+    ) -> Result<(), TextExecutionError> {
+        let mut disabled_performance_attribution = PerformanceAttribution::disabled();
+        self.evaluate_forward_state_with_performance_attribution(
+            final_logits,
+            request_decoder_state,
+            &mut disabled_performance_attribution,
+        )
+    }
 
     /// Evaluates forward roots and resolves deferred GPU missing-route bitmaps.
     pub fn evaluate_forward_state_with_performance_attribution(
@@ -33,31 +45,6 @@ impl Qwen3_5ResidentModel {
     ) -> Result<(), TextExecutionError> {
         let mut evaluation_arrays =
             super::forward_contract::decoder_state_arrays(request_decoder_state)?;
-        if let Some(boundary_checkpoint_collector) = boundary_checkpoint_collector {
-            evaluation_arrays.extend(boundary_checkpoint_collector.evaluation_arrays());
-        }
-        performance_attribution.measure_operation(
-            PerformanceOperation::PrefillStateGraphicsProcessorCompletionWait,
-            |_performance_attribution| self.runtime.evaluate_arrays(&evaluation_arrays),
-        )?;
-        Ok(())
-    }
-
-    /// Evaluates terminal prefill roots: logits, decoder state, and checkpoint arrays.
-    ///
-    /// The terminal chunk needs vocabulary logits for first-token seeding while also
-    /// publishing astro SSD prompt cache boundary checkpoints. Evaluating all roots in one pass
-    /// keeps the terminal chunk as a single forward instead of a prefix+tail split.
-    pub fn evaluate_terminal_prefill_state_with_performance_attribution(
-        &self,
-        final_logits: &MlxArray,
-        request_decoder_state: &RequestDecoderStateStack,
-        boundary_checkpoint_collector: Option<&AstroSsdPromptCacheBoundaryCheckpointCollector>,
-        performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<(), TextExecutionError> {
-        let mut evaluation_arrays =
-            super::forward_contract::decoder_state_arrays(request_decoder_state)?;
-        evaluation_arrays.push(final_logits);
         if let Some(boundary_checkpoint_collector) = boundary_checkpoint_collector {
             evaluation_arrays.extend(boundary_checkpoint_collector.evaluation_arrays());
         }

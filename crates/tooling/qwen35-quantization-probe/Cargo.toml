@@ -27,3 +27,15 @@ quantization = { path = "../quantization", features = ["direct-mlx"] }
 qwen35 = { path = "../../families/text/qwen35", features = ["direct-mlx"] }
 runtime-integration = { path = "../../foundation/runtime-integration", features = ["mlx"] }
 mlx-bridge.workspace = true
+# The probe model (`probe_model`) is built from the Qwen 3.5 crate's shared
+# pieces and the engine crates beneath it, as the family's own models are.
+artifact-validation = { path = "../../foundation/artifact-validation", features = ["direct-mlx"] }
+engine-core = { path = "../../engine/engine-core", features = ["direct-mlx"] }
+expert-atlas = { path = "../../engine/expert-atlas" }
+memory-policy = { path = "../../foundation/memory-policy" }
+model-primitives = { path = "../../engine/model-primitives", features = ["direct-mlx"] }
+text-generation = { path = "../../families/text/text-generation", features = ["direct-mlx"] }
+tracing.workspace = true
+
+[dev-dependencies]
+tempfile = "=3.27.0"

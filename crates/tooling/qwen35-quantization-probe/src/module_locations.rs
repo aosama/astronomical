@@ -25,7 +25,7 @@ pub enum ModuleLocation {
         decoder_layer_index: usize,
         projection: FeedForwardProjection,
     },
-    /// Fused resident expert arrays for one layer and projection.
+    /// Fused in-memory expert arrays for one layer and projection.
     DecoderLayerRoutedExperts {
         decoder_layer_index: usize,
         projection: FeedForwardProjection,

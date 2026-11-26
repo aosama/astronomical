@@ -1,5 +1,6 @@
-//! Verifying a drafted block on the streamed Flash-Next target, and keeping
-//! only the rows the target agrees with.
+//! Verifying a drafted block on a streamed target, and keeping only the
+//! rows the target agrees with: a Flash-Next model's multi-token-prediction
+//! drafts, or a block drafted for a plain Qwen 3.5 model.
 //!
 //! One forward runs the last chosen token and the drafts after it. Shared
 //! experts are read from storage once for the whole block and every layer
@@ -7,7 +8,9 @@
 //! The forward leaves every row in the request's state, so it also captures
 //! what a rewind needs: each linear-attention layer's state after every row
 //! but the last, and the Flash-Next state before the forward. Keeping fewer
-//! rows then moves the state back without running the target again.
+//! rows then moves the state back without running the target again. A plain
+//! Qwen 3.5 model has no Flash-Next state, so its rewind is the
+//! linear-attention state and the attention layers' offset alone.
 
 use mlx_bridge::MlxArray;
 use text_generation::AstroSsdPromptCacheBoundaryCheckpoint;
@@ -29,7 +32,8 @@ pub struct DraftedRowsVerification {
     /// `[1, rows, vocabulary]` float32: the target's logits after each row.
     pub per_row_logits: MlxArray,
     /// `[1, rows, lanes * hidden]`: the target's final lanes after each row,
-    /// which the draft head continues from.
+    /// which the draft head continues from; a plain Qwen 3.5 model's one
+    /// final hidden row, before the final normalization.
     pub lanes: MlxArray,
     /// Entry `n - 1` holds the linear-attention state after the first `n` rows.
     row_boundaries: Vec<AstroSsdPromptCacheBoundaryCheckpoint>,
@@ -116,7 +120,7 @@ impl Qwen3_5Model {
         let lanes = target_forward_output
             .pre_final_normalization_hidden_states()
             .retain()?;
-        let per_row_logits = self.lane_mixed_vocabulary_logits_for_every_row(&lanes)?;
+        let per_row_logits = self.drafted_row_logits(&lanes)?;
         // The logits and the lanes join the state's evaluation: a second
         // evaluation would be a second wait every round, and the last
         // layer's lookup, which only they depend on, has to run before the
@@ -176,12 +180,24 @@ impl Qwen3_5Model {
             &mut kept_row_boundary.recurrent_snapshot_tensors,
             kept_token_offset,
         )?;
+        if self.config.qwen4_exp_architecture().is_none() {
+            return Ok(());
+        }
         self.rewind_flash_next_state_to_kept_rows(
             family_state_before.as_deref(),
             &token_ids[..kept_row_count],
             forwarded_row_count,
             request_decoder_state,
         )
+    }
+
+    /// `[1, rows, vocabulary]` float32 logits after every row: through the
+    /// lane mixer for Flash-Next, through the final norm and head otherwise.
+    fn drafted_row_logits(&self, final_rows: &MlxArray) -> Result<MlxArray, TextExecutionError> {
+        match self.config.qwen4_exp_architecture() {
+            Some(_) => self.lane_mixed_vocabulary_logits_for_every_row(final_rows),
+            None => self.normalized_vocabulary_logits_for_every_row(final_rows),
+        }
     }
 
     fn rewind_flash_next_state_to_kept_rows(

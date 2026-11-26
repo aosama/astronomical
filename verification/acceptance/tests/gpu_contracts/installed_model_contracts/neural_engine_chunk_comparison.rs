@@ -11,7 +11,7 @@ use std::time::{Duration, Instant};
 
 use config::AstronomicalConfig;
 use ipc_protocol::NeuralEnginePrefillStatus;
-use model_serving::Qwen3_5ResidentModel;
+use model_serving::Qwen3_5StreamingModel;
 use serial_test::serial;
 
 use super::neural_engine_mlp_prefill::{
@@ -25,14 +25,14 @@ const LARGEST_CHUNK_COUNT_PER_PASS: usize = 12;
 // Longer than the driver keeps programs wired after their last use.
 const COLD_PASS_IDLE: Duration = Duration::from_secs(25);
 
-fn set_engines(model: &Qwen3_5ResidentModel, is_gpu_alone: bool) {
+fn set_engines(model: &Qwen3_5StreamingModel, is_gpu_alone: bool) {
     model.set_neural_engine_mlp_prefill_paused(is_gpu_alone);
     model.set_neural_engine_output_gate_paused(is_gpu_alone);
 }
 
 /// One prompt's chunks in turn, returning each chunk's milliseconds in order.
 fn one_pass_chunk_millis(
-    model: &Qwen3_5ResidentModel,
+    model: &Qwen3_5StreamingModel,
     prompt_token_ids: &[u32],
     chunk_count: usize,
     does_gpu_go_first: bool,

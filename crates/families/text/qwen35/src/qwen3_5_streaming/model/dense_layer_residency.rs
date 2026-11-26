@@ -45,6 +45,27 @@ impl Qwen3_5Model {
             .materialize_target_weights_with(decoder_layer_residency)
     }
 
+    /// Materializes the target weights and keeps every decoder layer of a
+    /// dense model in memory, with no memory governor deciding: what a
+    /// caller that runs the model without the engine needs when every layer
+    /// fits, such as a decision model's backbone, whose training runs each
+    /// layer many times, or a journey that times a whole model. A layer is
+    /// kept in register order once a drafter has declared its kernels, as
+    /// the engine keeps it. A sparse model's experts stay with its pager.
+    pub fn materialize_and_keep_every_dense_layer(&self) -> Result<(), TextExecutionError> {
+        self.materialize_target_weights()?;
+        let Some(dense_layer_streamer) = &self.dense_layer_streamer else {
+            return Ok(());
+        };
+        dense_layer_streamer.keep_layers(
+            &self.runtime,
+            &self.config,
+            self.weights.raw_hugging_face_norm_offsets_apply(),
+            dense_layer_streamer.layer_payload_bytes().len(),
+            self.kept_layer_register_order_kernels(),
+        )
+    }
+
     /// Materializes the target weights, then measures a dense model's
     /// MLX working buffers at `probe_shape`. The layers are kept once the memory
     /// governor opens and says how many fit.

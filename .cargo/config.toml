@@ -134,13 +134,6 @@ test-vision-tower-hub = "test -p vision-tower --test integration_tests -- --igno
 # both roles discoverable from the Development model_directories.
 test-dense-text-weights = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter dense_text_weights"
 
-# Dense streaming parity (issue #1985): the streamed_dense model answers one
-# Shakespeare prompt plus a short greedy decode on the streaming engine, which
-# reads embedding rows and decoder layers from the SSD (with every layer
-# streamed, then half kept, each prefilled chunk by chunk and layer by layer),
-# and on the resident engine; tokens and final logits must be bit-identical.
-# Loads the 9B model twice, about fifteen seconds.
-test-dense-streaming-parity = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter should_give_the_resident_logits"
 # Kept dense layers in register order (issues #2568, #2585): one load of the
 # 4-bit dense_vision model with half its layers kept answers a Shakespeare prompt
 # before and after the kept layers convert; the replies must begin alike, a layer a
@@ -711,21 +704,19 @@ test-acceptance = "run -p xtask -- test-run --package astronomical-acceptance --
 # strategies; append --filter NAME to pick cases.
 # A drafted block rewound to its kept rows leaves the target exactly where
 # forwarding only those rows would (small dense Qwen3.5 from the Development
-# library, every kept count 1 to 7, plus a control without the rewind). Seconds.
+# library on the streaming model, every kept count 1 to 7, plus a control
+# without the rewind). Seconds.
 test-drafted-rewind = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter drafted_rewind"
-# A draft tree verified in one pass on the small dense Qwen3.5: every row's
-# logits match feeding its chain alone, committing a branch leaves the state
-# feeding that branch leaves, and a control that commits the other branch
-# differs. Seconds.
-# `test-streaming-draft-tree-verification` is the same contract on the
-# streaming model, whose layer step and evaluation differ: every row's logits
-# match feeding its chain alone there, and committing a branch leaves the
-# streamed state feeding that branch leaves. Seconds. With --configuration
-# PATH naming a model_directory it also runs the contract on that model,
-# holding each row to that model's own rounding between a three-token chunk
-# and single tokens (1.6 on a 35B-A3B, whose wrong-branch control moves 3.6).
-test-streaming-draft-tree-verification = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter _streamed_"
-test-draft-tree-verification = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter draft_tree_verification"
+# A draft tree verified in one pass on the small dense Qwen3.5 on the
+# streaming model: every row's logits match feeding its chain alone, committing
+# a branch leaves the streamed state feeding that branch leaves, and a control
+# that commits the other branch differs. Seconds.
+# `test-configured-streaming-draft-tree-verification --configuration PATH`
+# runs the same contract on the model_directory PATH names, holding each row
+# to that model's own rounding between a three-token chunk and single tokens
+# (1.6 on a 35B-A3B, whose wrong-branch control moves 3.6).
+test-streaming-draft-tree-verification = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter small_model_s_streamed"
+test-configured-streaming-draft-tree-verification = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter configured_model_s_streamed"
 # Gate 2 baseline: where one DFlash2 draft-and-verify round's time goes on the
 # real 27B pair (drafter, draft head, selector, 8-row verify, readback, rewind)
 # beside a plain one-row step. Each stage is timed alone. Asserts nothing;
@@ -1223,15 +1214,6 @@ test-neural-engine = "test --no-fail-fast -p neural-engine --all-targets"
 # (startup at 24, 22, 21, 20 and 19 GB); narrow with --filter, add --configuration PATH with
 # {"diagnostics": true} for performance attribution.
 test-engine-versus-memory-ceiling = "run -p xtask -- test-run --package astronomical-acceptance --features performance_throughput --test performance_throughput --release --filter engine_versus_memory_ceiling --ignored"
-
-# Fused MoE expert combination A/B on the resident Ornith-1.5-35B-A3B 4-bit
-# model (Development model list): the two-step sorted weighted sum plus
-# compiled shared-expert graph against the one-pass fused kernel, on one
-# loaded model. Checks both arms' logits are equal, then prints min, median
-# and max prefill seconds per arm for 2,048, 3,072 and 4,096-token chunks and
-# the whole ~10,000-token Shakespeare prompt. About two minutes; stop the
-# Development daemon first so both do not hold the model's memory.
-measure-fused-expert-combination-prefill = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --case-budget-seconds 600 --filter should_report_fused_expert_combination_prefill_ab_across_chunk_sizes"
 
 # Streaming scoreboard (issue #2221): the rows the streaming memory redesign is
 # judged by, one model under one limit per row, taken at the product's default

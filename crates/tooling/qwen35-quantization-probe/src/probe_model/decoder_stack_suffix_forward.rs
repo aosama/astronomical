@@ -18,11 +18,11 @@
 //! runs, which is what those layers held at that point of a fresh forward.
 
 use crate::performance_attribution::PerformanceAttribution;
-use crate::qwen3_5_core::model::draft_tree_verification::request_layer_state;
 use mlx_bridge::MlxArray;
+use qwen35::qwen3_5_core::model::draft_tree_verification::request_layer_state;
 use text_generation::decoder_state::request_state::RequestDecoderStateStack;
 
-use super::{Qwen3_5ResidentModel, TextExecutionError};
+use super::{Qwen3_5ProbeModel, TextExecutionError};
 
 /// The rows entering one decoder layer during a recorded forward. A record
 /// whose index equals the layer count holds the rows leaving the last layer,
@@ -39,7 +39,7 @@ struct LayerInputRecording<'records> {
     recorded_layer_inputs: &'records mut Vec<RecordedDecoderLayerInput>,
 }
 
-impl Qwen3_5ResidentModel {
+impl Qwen3_5ProbeModel {
     /// Runs the whole decoder stack over `token_ids` from position zero and
     /// returns the recorded layer inputs, evaluated: one for every layer
     /// whose index is a multiple of `recording_layer_stride` (so always

@@ -8,7 +8,7 @@ use std::time::Instant;
 
 use config::AstronomicalConfig;
 use ipc_protocol::NeuralEnginePrefillStatus;
-use model_serving::Qwen3_5ResidentModel;
+use model_serving::Qwen3_5StreamingModel;
 use serial_test::serial;
 
 use super::neural_engine_mlp_prefill::{load_named_dense_model, prefill_only_tokens_per_second};
@@ -24,7 +24,7 @@ enum Arm {
 }
 
 /// The median of the arm's passes, after one pass that lets the driver wire the programs.
-fn arm_tokens_per_second(model: &Qwen3_5ResidentModel, prompt_token_ids: &[u32], arm: Arm) -> f64 {
+fn arm_tokens_per_second(model: &Qwen3_5StreamingModel, prompt_token_ids: &[u32], arm: Arm) -> f64 {
     model.set_neural_engine_mlp_prefill_paused(matches!(arm, Arm::GpuAlone));
     model.set_neural_engine_output_gate_paused(!matches!(arm, Arm::MlpProgramsAndOutputGates));
     let _warming_pass = prefill_only_tokens_per_second(model, prompt_token_ids);

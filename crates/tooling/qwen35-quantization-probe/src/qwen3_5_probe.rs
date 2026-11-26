@@ -1,4 +1,7 @@
-//! The Qwen3.5 probe: one resident model whose modules can be swapped.
+//! The Qwen3.5 probe: one in-memory model (`Qwen3_5ProbeModel`) whose
+//! modules can be swapped. Serving runs the streaming model, which keeps
+//! routed experts in the `astro_expert_cache` and reads the rest from the
+//! SSD, so it has no place a swapped expert projection could go.
 //!
 //! The swap-forward-restore cycle is ported from OptiQ's `_exact_with_bf16_reference` (`optiq/core/sensitivity.py`); the model side is Astronomical's own Qwen3.5 engine.
 
@@ -15,9 +18,9 @@ use quantization::sensitivity::{
 };
 use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
+use crate::probe_model::{Qwen3_5ProbeModel, RecordedDecoderLayerInput};
 use qwen35::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights;
 use qwen35::qwen3_5_core::model_math::dense_projection::Qwen3_5ProjectionStorage;
-use qwen35::qwen3_5_resident::{Qwen3_5ResidentModel, RecordedDecoderLayerInput};
 use qwen35::{Qwen3_5ArtifactValidator, TextModelChunkingConfiguration};
 
 use super::expert_swaps::SwappedOutWeights;
@@ -32,8 +35,8 @@ mod layer_input_reuse;
 #[path = "module_swaps.rs"]
 mod module_swaps;
 
-/// The production standard chunking tuple the daemon resolves for the
-/// resident engine, so probes run the shapes a served request runs.
+/// The production standard chunking tuple the daemon resolves, so probes
+/// run the shapes a served request runs.
 const FULL_ATTENTION_KV_GROWTH_TOKENS: u32 = 256;
 const PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL: u32 = 0;
 const SSD_PAGING_GENERATION_LAYER_INTERVAL: u32 = 3;
@@ -46,9 +49,9 @@ const PROBE_MAXIMUM_OUTPUT_TOKENS: u32 = 4_096;
 /// same way the pipeline inventories it.
 const PROBE_INVENTORY_GROUP_SIZE: u32 = 64;
 
-/// The probe over one loaded resident model.
+/// The probe over one loaded held model.
 pub struct Qwen3_5SensitivityProbe {
-    model: Qwen3_5ResidentModel,
+    model: Qwen3_5ProbeModel,
     /// Every quantizable module of the probed directory, as the quantization
     /// crate's inventory names it, so the sweep's names match the pipeline's.
     module_descriptors: Vec<QuantizableModuleDescriptor>,
@@ -79,7 +82,7 @@ struct Bfloat16Source {
     shard_maps: SourceShardMaps,
 }
 
-/// Loads a resident model from `model_directory` for probing: validated by
+/// Loads a held model from `model_directory` for probing: validated by
 /// the daemon's own validator, loaded and materialized as production does,
 /// under `memory_limits` (the runtime is process-global, so these must match
 /// any runtime the caller already initialized). With
@@ -106,7 +109,7 @@ pub fn load_qwen3_5_probe_model(
         }),
         None => None,
     };
-    let model = load_resident_model(model_directory, memory_limits)?;
+    let model = load_held_model(model_directory, memory_limits)?;
     let mut module_descriptors = Vec::new();
     let mut module_locations = BTreeMap::new();
     // The allocation set, not every module: OptiQ's sweep walks linear
@@ -129,10 +132,10 @@ pub fn load_qwen3_5_probe_model(
     })
 }
 
-fn load_resident_model(
+fn load_held_model(
     model_directory: &Path,
     memory_limits: MlxMemoryLimits,
-) -> Result<Qwen3_5ResidentModel, QuantizationError> {
+) -> Result<Qwen3_5ProbeModel, QuantizationError> {
     let validated_artifact = Qwen3_5ArtifactValidator::new()
         .validate(model_directory, PROBE_MAXIMUM_OUTPUT_TOKENS)
         .map_err(probe_validation_failure)?;
@@ -145,13 +148,13 @@ fn load_resident_model(
         MlxRuntime::initialize(memory_limits),
         "initialize the probe runtime",
     )?;
-    let mut model = probe_step(Qwen3_5ResidentModel::load(
+    let mut model = probe_step(Qwen3_5ProbeModel::load(
         runtime,
         validated_artifact,
         model_directory,
         chunking,
     ))?;
-    probe_step(model.materialize_complete_weights_matching_production())?;
+    probe_step(model.materialize_every_weight())?;
     Ok(model)
 }
 

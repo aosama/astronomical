@@ -14,6 +14,7 @@ use model_serving::RequestDecoderStateStack;
 use model_serving::speculative_decoding::tree_rows::TreeRows;
 use serial_test::serial;
 
+use super::dflash2_journey_support::{TargetLogitRows, forward_with_taps};
 use super::dflash2_kept_per_round::{Cell, JourneyPair, RoundState, load_pair};
 use super::dflash2_tree_oracle::{ORACLE_CELLS, prefill, target_picks};
 use super::dflash2_tree_rounds::kept_tap_rows;
@@ -357,7 +358,7 @@ const CHAIN_COMPARISON_ROUNDS: usize = 12;
 #[serial]
 fn should_compare_a_chain_tree_verify_with_the_plain_forward_over_as_many_rows() {
     use model_serving::speculative_decoding::dflash_drafter::DraftTree;
-    use model_serving::{PerformanceAttribution, VerificationLogitsMode};
+
     let mut pair = load_pair();
     pair.target
         .enable_draft_tree_verification()
@@ -378,19 +379,16 @@ fn should_compare_a_chain_tree_verify_with_the_plain_forward_over_as_many_rows()
     for _ in 0..CHAIN_COMPARISON_ROUNDS {
         let (round, mut state, _) = prefill(&pair, cell);
         let started_at = Instant::now();
-        let plain = pair
-            .target
-            .build_speculative_verification_forward(
-                &row_tokens,
-                round.fed_token_count,
-                &mut state,
-                &pair.drafter_configuration.target_tap_layer_ids,
-                VerificationLogitsMode::AllPositions,
-                &mut PerformanceAttribution::disabled(),
-            )
-            .expect("the plain forward runs");
+        let plain = forward_with_taps(
+            &pair.target,
+            &row_tokens,
+            round.fed_token_count,
+            &mut state,
+            &pair.drafter_configuration.target_tap_layer_ids,
+            TargetLogitRows::EveryRow,
+        );
         let mut plain_arrays: Vec<&MlxArray> = plain.hidden_state_taps.iter().collect();
-        let plain_logits = plain.per_position_logits.expect("the rows have logits");
+        let plain_logits = plain.logits;
         plain_arrays.push(&plain_logits);
         pair.target
             .runtime()
@@ -433,7 +431,7 @@ fn should_compare_a_chain_tree_verify_with_the_plain_forward_over_as_many_rows()
 #[ignore = "loads a real target and its DFlash2 drafter (the 27B pair unless configured); run through cargo measure-dflash2-tree-rounds"]
 #[serial]
 fn should_attribute_a_sixteen_row_forward_to_its_layer_stages() {
-    use model_serving::{PerformanceAttribution, PerformanceOperation, VerificationLogitsMode};
+    use model_serving::{PerformanceAttribution, PerformanceOperation};
     let pair = load_pair();
     let cell = &ORACLE_CELLS[3];
     let row_tokens: Vec<u32> = (1_000..1_016).collect();
@@ -457,18 +455,15 @@ fn should_attribute_a_sixteen_row_forward_to_its_layer_stages() {
             let (round, mut state, _) = prefill(&pair, cell);
             let mut attribution = PerformanceAttribution::enabled();
             let started_at = Instant::now();
-            let forward = pair
+            let logits = pair
                 .target
-                .build_speculative_verification_forward(
+                .forward_chunk_with_performance_attribution(
                     &row_tokens[..row_count],
                     round.fed_token_count,
                     &mut state,
-                    &[],
-                    VerificationLogitsMode::AllPositions,
                     &mut attribution,
                 )
-                .expect("the forward runs");
-            let logits = forward.per_position_logits.expect("the rows have logits");
+                .expect("the rows forward");
             pair.target
                 .runtime()
                 .evaluate_arrays(&[&logits])
@@ -492,7 +487,7 @@ fn should_attribute_a_sixteen_row_forward_to_its_layer_stages() {
     let labels = stages
         .iter()
         .map(|(label, _)| *label)
-        .chain(["whole pass with the head"]);
+        .chain(["whole pass with the last row's head"]);
     for (stage_index, label) in labels.enumerate() {
         let (two_rows, sixteen_rows) = (
             medians_by_row_count[0][stage_index],
@@ -544,7 +539,7 @@ fn should_leave_the_trained_rows_unchanged_when_the_block_is_longer() {
                 .array_from_u32(&block_ids, &[1, block_row_count as i32])
                 .expect("the block builds");
             let mut context_states = DrafterContextStates::new(configuration, 0);
-            let target: &dyn DFlashDraftTarget = &pair.target;
+            let target: &dyn DFlashDraftTarget = &*pair.target;
             let hidden_rows = drafted_hidden_rows(
                 runtime,
                 &pair.drafter_weights,

@@ -1,4 +1,4 @@
-//! Resident-only ownership for one routed expert gate/up pair.
+//! In-memory ownership for one routed expert gate/up pair.
 //!
 //! Durable complete experts can pay for one physical concatenation while loading
 //! and then remove one gathered projection from every forward. Streamed pages do
@@ -10,19 +10,19 @@ mod tests;
 
 use runtime_integration::MlxRuntime;
 
-use crate::qwen3_5_core::artifacts::expert_gate_up_fusion_plan::{
+use mlx_bridge::MlxArray;
+use qwen35::qwen3_5_core::artifacts::expert_gate_up_fusion_plan::{
     ExpertGateUpFusionPlan, ExpertGateUpFusionPlanError,
     maximum_expert_gate_up_fusion_transient_payload_bytes,
 };
-use crate::qwen3_5_core::artifacts::{QuantizationMode, QuantizedExpertLayerPlan};
-use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights;
-use crate::qwen3_5_core::model_math::expert_gate_up_fusion::fuse_compatible_expert_gate_up_projections;
-use mlx_bridge::MlxArray;
+use qwen35::qwen3_5_core::artifacts::{QuantizationMode, QuantizedExpertLayerPlan};
+use qwen35::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights;
+use qwen35::qwen3_5_core::model_math::expert_gate_up_fusion::fuse_compatible_expert_gate_up_projections;
 use text_generation::execution_error::TextExecutionError;
 
-/// Resident gate/up ownership selected from startup-validated source geometry.
+/// Held gate/up ownership selected from startup-validated source geometry.
 #[derive(Debug)]
-pub enum Qwen3_5ResidentGateUpWeights {
+pub enum Qwen3_5ProbeGateUpWeights {
     /// One `[gate, up]` projection concatenated on expert output axis 1.
     Fused {
         projection: Qwen3_5AffineWeights,
@@ -36,7 +36,7 @@ pub enum Qwen3_5ResidentGateUpWeights {
     },
 }
 
-impl Qwen3_5ResidentGateUpWeights {
+impl Qwen3_5ProbeGateUpWeights {
     pub(super) fn build(
         runtime: &MlxRuntime,
         layer_plan: &QuantizedExpertLayerPlan,
@@ -106,7 +106,7 @@ impl Qwen3_5ResidentGateUpWeights {
 }
 
 /// Maximum temporary duplicate needed while materializing one compatible layer.
-pub fn maximum_resident_gate_up_fusion_transient_payload_bytes(
+pub fn maximum_gate_up_fusion_transient_payload_bytes(
     layer_plans: &[QuantizedExpertLayerPlan],
 ) -> Result<u64, TextExecutionError> {
     maximum_expert_gate_up_fusion_transient_payload_bytes(layer_plans)
@@ -119,7 +119,7 @@ fn map_fusion_plan_error(fusion_plan_error: ExpertGateUpFusionPlanError) -> Text
             TextExecutionError::MissingTensor { tensor_name }
         }
         ExpertGateUpFusionPlanError::PayloadOverflow => TextExecutionError::InvalidInput {
-            description: "resident gate/up fusion transient payload overflowed",
+            description: "held gate/up fusion transient payload overflowed",
         },
     }
 }
@@ -130,43 +130,43 @@ fn map_fusion_plan_error(fusion_plan_error: ExpertGateUpFusionPlanError) -> Text
 /// floating-point projection and `Some` for an affine-quantized one.
 #[doc(hidden)]
 #[derive(Debug)]
-pub struct ResidentProjectionArraysForTests {
+pub struct ExpertProjectionArraysForTests {
     pub packed_weight: MlxArray,
     pub quantization_scales: Option<MlxArray>,
     pub quantization_biases: Option<MlxArray>,
 }
 
-/// The arrays one resident expert layer retains, as the production construction
+/// The arrays one held expert layer retains, as the production construction
 /// produced them.
 ///
 /// `gate_up` holds one entry when the plan fused the pair and two entries
 /// (gate, then up) when the plan kept them separate.
 #[doc(hidden)]
 #[derive(Debug)]
-pub struct ResidentLayerArraysForTests {
-    pub gate_up: Vec<ResidentProjectionArraysForTests>,
+pub struct ExpertLayerArraysForTests {
+    pub gate_up: Vec<ExpertProjectionArraysForTests>,
     pub is_fused: bool,
-    pub down: ResidentProjectionArraysForTests,
+    pub down: ExpertProjectionArraysForTests,
 }
 
-/// Runs the production resident layer construction on caller-supplied arrays.
+/// Runs the production held layer construction on caller-supplied arrays.
 ///
 /// Issue #503 compares two array provenances for one layer: the whole-shard
-/// read the resident loader performs and the bounded source-interval read the
+/// read the held loader performs and the bounded source-interval read the
 /// pager performs. The construction decision and the gate/up fusion stay in
 /// production code; this adapter only wraps the arrays a test read into the
 /// owner's input type and hands the retained arrays back, because the owner
 /// types are crate-private and an integration test cannot name them.
 #[doc(hidden)]
-pub fn resident_layer_arrays_for_tests(
+pub fn expert_layer_arrays_for_tests(
     runtime: &MlxRuntime,
     layer_plan: &QuantizedExpertLayerPlan,
-    gate: ResidentProjectionArraysForTests,
-    up: ResidentProjectionArraysForTests,
-    down: ResidentProjectionArraysForTests,
-) -> Result<ResidentLayerArraysForTests, TextExecutionError> {
+    gate: ExpertProjectionArraysForTests,
+    up: ExpertProjectionArraysForTests,
+    down: ExpertProjectionArraysForTests,
+) -> Result<ExpertLayerArraysForTests, TextExecutionError> {
     let affine_projection = |projection_name: &str,
-                             projection: ResidentProjectionArraysForTests|
+                             projection: ExpertProjectionArraysForTests|
      -> Result<Qwen3_5AffineWeights, TextExecutionError> {
         match layer_plan.quantization_mode_for_projection(projection_name) {
             QuantizationMode::NativeBfloat16 => Ok(Qwen3_5AffineWeights::NativeBfloat16 {
@@ -201,18 +201,18 @@ pub fn resident_layer_arrays_for_tests(
     let down_projection = affine_projection("down_proj", down)?;
 
     let gate_up_weights =
-        Qwen3_5ResidentGateUpWeights::build(runtime, layer_plan, gate_projection, up_projection)?;
+        Qwen3_5ProbeGateUpWeights::build(runtime, layer_plan, gate_projection, up_projection)?;
     Ok(match gate_up_weights {
-        Qwen3_5ResidentGateUpWeights::Fused { projection, .. } => ResidentLayerArraysForTests {
+        Qwen3_5ProbeGateUpWeights::Fused { projection, .. } => ExpertLayerArraysForTests {
             gate_up: vec![projection_arrays_for_tests(&projection)?],
             is_fused: true,
             down: projection_arrays_for_tests(&down_projection)?,
         },
-        Qwen3_5ResidentGateUpWeights::Separate {
+        Qwen3_5ProbeGateUpWeights::Separate {
             gate_projection,
             up_projection,
             incompatibility_reason: _,
-        } => ResidentLayerArraysForTests {
+        } => ExpertLayerArraysForTests {
             gate_up: vec![
                 projection_arrays_for_tests(&gate_projection)?,
                 projection_arrays_for_tests(&up_projection)?,
@@ -225,16 +225,16 @@ pub fn resident_layer_arrays_for_tests(
 
 fn projection_arrays_for_tests(
     projection: &Qwen3_5AffineWeights,
-) -> Result<ResidentProjectionArraysForTests, TextExecutionError> {
+) -> Result<ExpertProjectionArraysForTests, TextExecutionError> {
     // Retain through the production accessor so the returned arrays are the
-    // ones the resident owner would hold, not borrowed views.
+    // ones the held-expert owner would hold, not borrowed views.
     let retained = projection.retained_reference().map_err(|_runtime_error| {
         TextExecutionError::InvalidInput {
-            description: "a resident projection could not be retained for parity comparison",
+            description: "a held projection could not be retained for parity comparison",
         }
     })?;
     Ok(match retained {
-        Qwen3_5AffineWeights::NativeBfloat16 { weight } => ResidentProjectionArraysForTests {
+        Qwen3_5AffineWeights::NativeBfloat16 { weight } => ExpertProjectionArraysForTests {
             packed_weight: weight,
             quantization_scales: None,
             quantization_biases: None,
@@ -243,7 +243,7 @@ fn projection_arrays_for_tests(
             packed_code_words,
             row_scales,
             ..
-        } => ResidentProjectionArraysForTests {
+        } => ExpertProjectionArraysForTests {
             packed_weight: packed_code_words,
             quantization_scales: Some(row_scales),
             quantization_biases: None,
@@ -253,7 +253,7 @@ fn projection_arrays_for_tests(
             quantization_scales,
             quantization_biases,
             ..
-        } => ResidentProjectionArraysForTests {
+        } => ExpertProjectionArraysForTests {
             packed_weight,
             quantization_scales: Some(quantization_scales),
             quantization_biases: Some(quantization_biases),
