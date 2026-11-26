@@ -9,6 +9,7 @@ endif()
 
 include("${CMAKE_CURRENT_LIST_DIR}/pins/mlx-v0.32.5.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/pins/mlx-c-v0.8.0.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/pins/mlx-performance-profiler-v0.3.0.cmake")
 
 function(append_native_dependency_manifest_entry archive_file_name archive_url archive_sha256 dependency_description)
     file(
@@ -48,4 +49,10 @@ append_native_dependency_manifest_entry(
     "${ASTRONOMICAL_FMT_SOURCE_ARCHIVE_URL}"
     "${ASTRONOMICAL_FMT_SOURCE_ARCHIVE_SHA256}"
     "fmt ${ASTRONOMICAL_FMT_VERSION}"
+)
+append_native_dependency_manifest_entry(
+    "${ASTRONOMICAL_MLX_PERFORMANCE_PROFILER_SOURCE_ARCHIVE_FILE_NAME}"
+    "${ASTRONOMICAL_MLX_PERFORMANCE_PROFILER_SOURCE_ARCHIVE_URL}"
+    "${ASTRONOMICAL_MLX_PERFORMANCE_PROFILER_SOURCE_ARCHIVE_SHA256}"
+    "Performance profiler for MLX ${ASTRONOMICAL_MLX_PERFORMANCE_PROFILER_VERSION}"
 )

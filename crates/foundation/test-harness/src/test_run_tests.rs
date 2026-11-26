@@ -118,7 +118,6 @@ fn should_resolve_all_relative_inputs_against_the_configuration_directory() {
         model_directory: Some(PathBuf::from("model")),
         reference_artifact_path: Some(PathBuf::from("reference")),
         evidence_directory: Some(PathBuf::from("evidence")),
-        throughput_history_path: Some(PathBuf::from("throughput.jsonl")),
         coverage_inventory_output: Some(PathBuf::from("inventory")),
         ..TestRunConfiguration::default()
     };
@@ -134,10 +133,6 @@ fn should_resolve_all_relative_inputs_against_the_configuration_directory() {
     assert_eq!(
         configuration.evidence_directory,
         Some(configuration_directory.path().join("evidence"))
-    );
-    assert_eq!(
-        configuration.throughput_history_path,
-        Some(configuration_directory.path().join("throughput.jsonl"))
     );
     assert_eq!(
         configuration.coverage_inventory_output,

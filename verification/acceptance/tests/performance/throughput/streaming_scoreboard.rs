@@ -16,9 +16,8 @@
 //! figures are read once, when the measured request has finished.
 //!
 //! Rows are printed and appended to `streaming-scoreboard.jsonl` under the
-//! acceptance evidence root. They are not added to the durable throughput
-//! history: that series is recorded at a fixed 2,048-token chunk and these
-//! rows are not.
+//! acceptance evidence root. They do not compare with the throughput
+//! journeys' records, which are taken at a fixed 2,048-token chunk.
 //!
 //! Each cell is its own process because MLX limits are process-global. The
 //! `measure-streaming-scoreboard` alias in `.cargo/config.toml` runs them.
@@ -33,12 +32,12 @@ use ipc_protocol::{ChatImageInput, WorkerDecodeAstroExpertCachePolicy};
 use serde::Serialize;
 use serial_test::serial;
 
-use crate::performance_throughput::historical_record::{
-    ThroughputJourneyKind, WorkerBuildIdentity, current_unix_epoch_millis, format_utc_timestamp,
-    recorded_worker_build_identity,
-};
 use crate::performance_throughput::support::{
     self as throughput_support, JourneyRunOutcome, PromptChunking, ThroughputJourney,
+};
+use crate::performance_throughput::throughput_record::{
+    ThroughputJourneyKind, WorkerBuildIdentity, current_unix_epoch_millis, format_utc_timestamp,
+    recorded_worker_build_identity,
 };
 use crate::support;
 

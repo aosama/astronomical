@@ -20,6 +20,7 @@ never resolves an upstream repository live.
 | metal-cpp | 26 | Apple release download `metal-cpp_26.zip` | declared inside `pins/mlx-v0.32.5.cmake` | MLX transitive |
 | nlohmann/json | 3.11.3 | release artifact `v3.11.3/json.tar.xz` | declared inside `pins/mlx-v0.32.5.cmake` | MLX transitive |
 | fmt | 12.1.0 | release tag archive `12.1.0.tar.gz` | declared inside `pins/mlx-v0.32.5.cmake` | MLX transitive |
+| MLX performance profiler | 0.3.0 | release tag `v0.3.0` (commit `1af6418d8`) | `pins/mlx-performance-profiler-v0.3.0.cmake` | measurement tooling, not shipped |
 
 metal-cpp, nlohmann/json, and fmt are source dependencies that MLX's own
 CMake declares through FetchContent. Astronomical pre-declares them with
@@ -35,6 +36,7 @@ recorded here for review:
 - metal-cpp `26`: `https://developer.apple.com/metal/cpp/files/metal-cpp_26.zip` — SHA-256 `4df3c078b9aadcb516212e9cb03004cbc5ce9a3e9c068fa3144d021db585a3a4`
 - nlohmann/json `3.11.3`: `https://github.com/nlohmann/json/releases/download/v3.11.3/json.tar.xz` — SHA-256 `d6c65aca6b1ed68e7a182f4757257b107ae403032760ed6ef121c9d55e81757d`
 - fmt `12.1.0`: `https://github.com/fmtlib/fmt/archive/refs/tags/12.1.0.tar.gz` — SHA-256 `ea7de4299689e12b6dddd392f9896f08fb0777ac7168897a244a6d6085043fea`
+- MLX performance profiler `0.3.0`: `https://github.com/aosama/mlx-performance-profiler/releases/download/v0.3.0/mlx-performance-profiler-0.3.0.tar.gz` — SHA-256 `f8c0b7695e3925fd9be0355cecc7b45ed8f5473f27725853d54d977f7f579cc4`
 
 Tooling pins (not part of the native runtime image): `tool-pins/Cargo.toml`
 pins `sccache 0.19.0` and `cargo-about 0.9.3`, the latter for the
@@ -235,8 +237,8 @@ To bump a pinned dependency:
  5. Run the integration lanes, then invoke each real-model acceptance Cargo
    command directly with `--test-threads=1` (GPU journeys are never parallel).
 6. Prove performance parity for the `resident_sparse_moe` registry model
-   with the performance-throughput journeys and compare against the recorded
-   band in `apps/inference-worker/tests/performance_throughput/throughput-history.jsonl`.
+   with `cargo xtask measure-speed --reference-set` and compare against the
+   release's ledger under `registry/release_speed`.
 7. Update this registry and the repo discovery guide, then commit
    after `cargo fmt --all -- --check` and
    `cargo test-integration-and-rest` pass.
@@ -305,6 +307,36 @@ the extraction through `native_build_orchestration::provisioned_mlx_sources`
 and fails with the provisioning command when it is missing. A hook such code
 needs inside MLX itself is a patch in `patches/`, recorded in the registry
 above like any other.
+
+## The MLX performance profiler
+
+`crates/tooling/mlx-performance-profiler` compiles the pinned MLX performance
+profiler (Apache-2.0) the same way: with `cc`, from its digest-verified
+release archive, against the provisioned extraction, so it never links a
+second MLX. It is measurement tooling: only the acceptance crate's
+measurement tests depend on it, and nothing of it enters the worker or the
+app bundle, which is why it has no entry in `THIRD_PARTY_NOTICES`.
+
+It measures one MLX job node by node, and compares two implementations of
+one job over twelve interleaved rounds with a verdict
+(`cargo measure-register-order-verdict` is the first journey built on it).
+Every page it writes opens the job's execution graph as an interactive view:
+each operation coloured by where its time went, a hot path, and a large job
+shown as its stages. The viewer is embedded in the page, so a report is one
+HTML file that opens offline. Its release archive vendors Cytoscape.js and
+cytoscape-dagre (MIT) for that view; the crate's build embeds them with the
+profiler's own CMake script, run in script mode, and they travel only inside
+the pages a measurement writes.
+Beyond MLX's public API it relies on five behaviours its README lists
+(the Metal command encoder's command buffer, `array::is_available`,
+`Primitive::name` and `stream`, MLX-C's array handle layout, and
+`CustomKernel`'s state holding the kernel's name); none of the patches above
+touches them, and a patch that would has to be checked against that list.
+
+To bump it: replace its pin file with the new release's archive and digest
+(the build finds the pin by the variables it sets, not by its file name),
+bring the source list and the embedded asset list in the crate's `build.rs`
+in line with the release's `CMakeLists.txt`, and run the crate's tests.
 
 ## Reproducing a native build from scratch
 

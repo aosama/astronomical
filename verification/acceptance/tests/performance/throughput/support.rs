@@ -40,12 +40,11 @@ pub(crate) use crate::performance_throughput::completion::{
 pub(crate) use crate::performance_throughput::completion::{
     CompletionIndex, ThroughputMeasurement, read_completion_by_index,
 };
-use crate::performance_throughput::historical_record::{
-    MemoryCellBudgetExhaustedStage, ThroughputJourneyKind, ThroughputRecord,
-    append_throughput_history, current_unix_epoch_millis, format_utc_timestamp, history_log_path,
-    recorded_git_commit, throughput_record_json,
-};
 use crate::performance_throughput::machine_specs::MachineSpecs;
+use crate::performance_throughput::throughput_record::{
+    MemoryCellBudgetExhaustedStage, ThroughputJourneyKind, ThroughputRecord,
+    current_unix_epoch_millis, format_utc_timestamp, recorded_git_commit, throughput_record_json,
+};
 pub(crate) use crate::performance_throughput::worker_environment::{
     PromptChunking, diagnostics_enabled, perf_worker_environment,
 };
@@ -95,7 +94,7 @@ pub(crate) const READY_ATTEMPT_LIMIT: u8 = 70;
 const WORKER_LOG_DUMP_LINE_LIMIT: usize = 60;
 
 /// The test case for one throughput journey: the journey family recorded in
-/// the durable history line, the internal decode `astro_expert_cache` policy arm, the short
+/// its printed record, the internal decode `astro_expert_cache` policy arm, the short
 /// warmup completion (its prompt, images, and output cap), the measured
 /// completion (its prompt, images, and output cap), the sampling temperature,
 /// the per-cell MLX ceiling override, whether the worker runs with performance
@@ -248,7 +247,7 @@ pub(crate) fn run_journey_with_timeout(
     measured_throughput
 }
 
-/// Runs one full throughput journey and persists a durable historical record.
+/// Runs one full throughput journey and prints its record.
 pub(crate) async fn run_throughput_journey(
     model_id: &str,
     journey: &ThroughputJourney,
@@ -264,7 +263,7 @@ pub(crate) async fn run_throughput_journey(
         prefill_tokens_per_second: (measurement.prefill_tokens_per_second.round()) as u32,
         decode_tokens_per_second: (measurement.decode_tokens_per_second.round()) as u32,
         git_commit: recorded_git_commit(),
-        worker_build_identity: super::historical_record::recorded_worker_build_identity(),
+        worker_build_identity: super::throughput_record::recorded_worker_build_identity(),
         machine: machine_specs,
         total_input_tokens: measurement.total_input_tokens,
         total_output_tokens: measurement.total_output_tokens,
@@ -280,31 +279,6 @@ pub(crate) async fn run_throughput_journey(
         serde_json::to_string_pretty(&throughput_record_json(&record))
             .unwrap_or_else(|_| "{ \"error\": \"record serialization failed\" }".to_owned())
     );
-    if diagnostics_enabled() || journey.attribution_enabled {
-        eprintln!(
-            "[performance-throughput] diagnostics run: durable history append skipped because attribution distorts throughput"
-        );
-        return measurement;
-    }
-    if journey.diagnostic_qwen3_5_engine_override
-        != WorkerDiagnosticQwen3_5EngineOverride::Automatic
-    {
-        eprintln!(
-            "[performance-throughput] forced-engine diagnostic run ({:?}): durable history append skipped because production never runs this configuration",
-            journey.diagnostic_qwen3_5_engine_override
-        );
-        return measurement;
-    }
-    let history_path = history_log_path();
-    match append_throughput_history(&record, &history_path) {
-        Ok(()) => eprintln!(
-            "[performance-throughput] appended durable record to {}",
-            history_path.display()
-        ),
-        Err(error) => eprintln!(
-            "[performance-throughput] durable history append failed (measurement still reported): {error}"
-        ),
-    }
     measurement
 }
 

@@ -19,8 +19,8 @@ use std::time::Duration;
 
 use serial_test::serial;
 
-use crate::performance_throughput::historical_record::ThroughputJourneyKind;
 use crate::performance_throughput::support::{self as throughput_support, ThroughputJourney};
+use crate::performance_throughput::throughput_record::ThroughputJourneyKind;
 
 const WARMUP_INPUT_INSTRUCTION: &str = "Continue the supplied Romeo and Juliet story above.";
 const MEASURED_INPUT_INSTRUCTION: &str =
@@ -44,8 +44,7 @@ fn pack_directory() -> PathBuf {
 /// Measures the folded ternary pack's serving prompt-processing and decode
 /// throughput over IPC: after a short warmup, a >=10,000-token Romeo and
 /// Juliet input drives 500 output tokens with the `astro_ssd_prompt_cache` disabled, and the
-/// measured completion's server-attributed rates are persisted to the
-/// durable historical record.
+/// measured completion's server-attributed rates are printed in its record.
 #[test]
 #[ignore = "loads the real roughly 8 GB folded ternary pack and measures serving prompt-processing and decode throughput over IPC"]
 #[serial]

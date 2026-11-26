@@ -1,5 +1,5 @@
 //! Capture of the host specifications that a throughput measurement is taken
-//! against, so a historical record can be interpreted against the machine that
+//! against, so a throughput record can be interpreted against the machine that
 //! produced it.
 
 use astronomical_inference_worker::worker_startup;

@@ -2,9 +2,8 @@
 //! the folded ternary dense pack, and a dense 27B decoding with DFlash2 draft
 //! trees.
 //!
-//! The surface measures serving throughput over the worker IPC boundary, records
-//! the numbers against this machine's specifications, and appends them to a
-//! durable historical log. It asserts the measured token counts and `astro_expert_cache` state.
+//! The surface measures serving throughput over the worker IPC boundary and
+//! prints the numbers against this machine's specifications. It asserts the measured token counts and `astro_expert_cache` state.
 
 #[cfg(feature = "performance_throughput")]
 mod completion;
@@ -22,7 +21,7 @@ mod dflash2_draft_trees;
 mod engine_versus_memory_ceiling;
 
 #[cfg(feature = "performance_throughput")]
-mod historical_record;
+mod throughput_record;
 
 #[cfg(feature = "performance_throughput")]
 mod jangtq2_qwen35;

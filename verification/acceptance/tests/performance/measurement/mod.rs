@@ -13,4 +13,6 @@ mod model_load_to_prefill;
 #[cfg(feature = "performance-measurement")]
 pub(crate) mod model_process_metrics;
 #[cfg(feature = "performance-measurement")]
+mod register_order_layout_verdict;
+#[cfg(feature = "performance-measurement")]
 mod register_order_served_rows_cost;
