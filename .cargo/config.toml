@@ -854,6 +854,13 @@ test-register-ordered-matmul = "run -p xtask -- test-run --package astronomical-
 # read rate; asserts nothing. Needs about 6 GB of free GPU memory and no
 # model; runs in about 15 seconds.
 measure-k-row-verify-cost = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx,performance-measurement --test performance_measurement --release --ignored --filter k_row_verify_cost"
+# Whether register order costs the rows that are not a draft tree (#2568):
+# the 27B's projection shapes at one row and at a prompt chunk's 2,048 rows,
+# through MLX's layout, the register-ordered kernel, and register-ordered
+# weights restored to MLX's layout for the pass; the three alternated after
+# one dropped round, median and range each. No model; about a minute and a
+# half.
+measure-register-order-served-rows = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx,performance-measurement --test performance_measurement --release --ignored --case-budget-seconds 240 --filter should_compare_stock_register_ordered_and_restored_layouts_at_served_row_counts"
 measure-paged-prefill = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx,expert-paging,performance-measurement --test performance_measurement --release --ignored --filter paged_prefill"
 
 # Routed-expert page reads from the SSD (not the macOS file cache) through MLX: the
