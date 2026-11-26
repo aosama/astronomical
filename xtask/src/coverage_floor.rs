@@ -137,7 +137,8 @@ pub fn run(repository_root: &Path, arguments: &[String]) -> Result<(), String> {
         invocation.package_name, invocation.minimum_line_coverage_percent, MAXIMUM_ELAPSED_SECONDS
     );
     let started_at = Instant::now();
-    let coverage_summary = measure_line_coverage(repository_root, &invocation, started_at)?;
+    let coverage_summary =
+        measure_this_checkouts_line_coverage(repository_root, &invocation, started_at)?;
     println!(
         "[coverage-floor] status=measured regions_cover={:.2}% functions_cover={:.2}% lines_cover={:.2}%",
         coverage_summary.region_coverage_percent,
@@ -170,6 +171,48 @@ impl Drop for SummaryFileGuard {
     fn drop(&mut self) {
         let _ = std::fs::remove_file(&self.0);
     }
+}
+
+/// Measures after clearing coverage objects other checkouts left behind.
+fn measure_this_checkouts_line_coverage(
+    repository_root: &Path,
+    invocation: &CoverageFloorInvocation,
+    started_at: Instant,
+) -> Result<CoverageSummary, String> {
+    clean_coverage_objects(repository_root)?;
+    measure_line_coverage(repository_root, invocation, started_at)
+}
+
+/// Coverage objects left in the shared build folder by another checkout of
+/// the repository (an agent's worktree that builds with the same target
+/// directory) are counted by the next report at 0%, which read 45 to 52%
+/// against a true 90.9% (#2580). Cleaning this workspace's coverage objects
+/// first makes the measurement this checkout's alone; rebuilding the
+/// instrumented crate costs a few seconds.
+fn clean_coverage_objects(repository_root: &Path) -> Result<(), String> {
+    let clean_status = coverage_clean_command(repository_root)
+        .status()
+        .map_err(|error| {
+            format!("[coverage-floor] status=failed reason=clean-spawn-failed error={error}")
+        })?;
+    if !clean_status.success() {
+        return Err(format!(
+            "[coverage-floor] status=failed reason=clean-failed exit_status={clean_status}"
+        ));
+    }
+    Ok(())
+}
+
+/// `cargo llvm-cov clean --workspace`: only coverage's own objects, never
+/// the ordinary build.
+pub fn coverage_clean_command(repository_root: &Path) -> Command {
+    let mut clean_command = Command::new("cargo");
+    clean_command
+        .args(["llvm-cov", "clean", "--workspace"])
+        .current_dir(repository_root)
+        .stdout(Stdio::null())
+        .stderr(Stdio::inherit());
+    clean_command
 }
 
 fn measure_line_coverage(

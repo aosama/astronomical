@@ -1,6 +1,6 @@
 use crate::coverage_floor::{
     CoverageFloorInvocation, CoverageSummary, DEFAULT_MINIMUM_LINE_COVERAGE_PERCENT,
-    DEFAULT_PACKAGE_NAME, parse_summary_total_row,
+    DEFAULT_PACKAGE_NAME, coverage_clean_command, parse_summary_total_row,
 };
 
 /// A real cargo-llvm-cov summary excerpt, captured from this repository.
@@ -133,4 +133,15 @@ fn should_fail_closed_on_a_missing_percentage_cell() {
     // that cell must fail the parse rather than count as zero.
     let missing_cell_row = "TOTAL 10 0 100.00% 2 0 100.00% 5 0 - 0 0 -\n";
     assert!(parse_summary_total_row(missing_cell_row).is_err());
+}
+
+#[test]
+fn should_clean_only_coverage_objects_of_this_workspace_before_measuring() {
+    let repository_root = std::path::Path::new("/repository");
+    let clean_command = coverage_clean_command(repository_root);
+
+    let clean_arguments: Vec<&std::ffi::OsStr> = clean_command.get_args().collect();
+    assert_eq!(clean_command.get_program(), "cargo");
+    assert_eq!(clean_arguments, ["llvm-cov", "clean", "--workspace"]);
+    assert_eq!(clean_command.get_current_dir(), Some(repository_root));
 }

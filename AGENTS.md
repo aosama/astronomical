@@ -53,6 +53,11 @@
 - Follow the `sparkle_release` skill (`.claude/skills/sparkle_release/SKILL.md`) for every Stable release on the direct download and Sparkle feed, and read all of it before the first step.
 - A Mac App Store release is separate and happens only when the user asks for it: follow the `macos_appstore_release` skill (`.claude/skills/macos_appstore_release/SKILL.md`).
 
+## Never Stash, Use A Worktree
+
+- Agents never run `git stash`, `git stash pop` or `git stash apply`. The stash list belongs to the person whose repository it is: `git stash pop` with nothing of the caller's own stashed applies whatever entry is on top, which once left this checkout mid-merge across 137 files (issue #2580).
+- When a clean tree is needed (to build another commit, to measure main against a branch), make a separate worktree with `git worktree add`, and move it to the Trash when done. A worktree leaves the person's working tree and stash list untouched.
+
 ## Repository Tooling Lives In xtask
 
 - `<repo-root>/xtask` exists so that repository tooling is typed, unit-tested Rust invoked as `cargo xtask <command>` instead of untested shell, with each subcommand keeping the output lines and exit codes of the shell tool it replaced so hooks and CI steps survive unchanged. Whenever you add or change such tooling, put it in xtask as a new or extended subcommand with its tests and document the invocation in the `xtask` alias comment of `.cargo/config.toml`;
