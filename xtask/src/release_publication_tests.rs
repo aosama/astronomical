@@ -179,6 +179,14 @@ fn should_require_signed_archive_signed_feed_and_exact_release_url_in_the_appcas
             "appcast release URL is incorrect"
         ]
     );
+    assert_eq!(
+        appcast_problems(
+            &format!("{signed_appcast}\n| Model | Reply |\n|---|---|\n"),
+            &download_prefix,
+            "Astronomical-0.2.88-macOS-arm64.dmg"
+        ),
+        vec!["appcast release notes hold a table, which Sparkle's update window cannot show"]
+    );
 }
 
 #[test]
