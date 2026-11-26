@@ -29,6 +29,7 @@ use memory_policy::astro_expert_cache_model::{
 };
 
 mod capacity_divisions;
+mod capacity_schedule_report;
 
 use capacity_divisions::{
     divided_by_demand, divided_equally, divided_like_todays_engine, shared_pinning_whole_layers,
@@ -114,6 +115,9 @@ fn report_saved_case(saved_replay_case: &SavedReplayCase) -> Vec<String> {
     report_lines.extend(report_other_divisions(saved_replay_case));
     report_lines.extend(report_rebalanced_tables(saved_replay_case));
     report_lines.extend(report_lookahead(saved_replay_case));
+    report_lines.extend(capacity_schedule_report::report_capacity_schedule(
+        saved_replay_case,
+    ));
     report_lines
 }
 

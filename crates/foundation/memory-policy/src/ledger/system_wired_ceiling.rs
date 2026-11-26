@@ -56,6 +56,10 @@ pub struct SystemWiredReading {
     /// `mlx_buffer_cache`. The rest of the wired total is the kernel's and
     /// other applications'.
     pub mlx_held_bytes: u64,
+    /// When the reading was made, on a monotonic clock, in milliseconds: the
+    /// reserve weighs a reading against the ones before it
+    /// (`wired_outside_mlx_window`).
+    pub reading_milliseconds: u64,
 }
 
 /// The part of the memory limit that would put the system's wired total
@@ -85,6 +89,30 @@ pub const fn limit_past_system_wired_ceiling_bytes(
         .saturating_sub(slack_bytes)
         .saturating_sub(wired_outside_mlx_bytes);
     limit_bytes.saturating_sub(room_for_mlx_bytes)
+}
+
+/// The memory wired outside MLX at one reading: the system's wired total
+/// less what MLX holds, never below zero.
+#[must_use]
+pub const fn wired_outside_mlx_bytes(reading: SystemWiredReading) -> u64 {
+    reading
+        .system_wired_bytes
+        .saturating_sub(reading.mlx_held_bytes)
+}
+
+/// The same reading with its wired total set so that the memory wired
+/// outside MLX is `wired_outside_mlx_bytes`.
+#[must_use]
+pub const fn with_wired_outside_mlx_bytes(
+    reading: SystemWiredReading,
+    wired_outside_mlx_bytes: u64,
+) -> SystemWiredReading {
+    SystemWiredReading {
+        system_wired_bytes: reading
+            .mlx_held_bytes
+            .saturating_add(wired_outside_mlx_bytes),
+        ..reading
+    }
 }
 
 #[cfg(test)]

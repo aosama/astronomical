@@ -26,15 +26,19 @@
 
 mod astro_expert_cache;
 mod astro_expert_cache_record;
+mod capacity_schedule;
 mod expert_tables;
 mod keeping_rules;
 mod rebalanced_replay;
 mod replay_case_file;
 mod replay_lab;
 mod routed_reply;
+mod scheduled_replay;
 
 #[cfg(test)]
 mod astro_expert_cache_tests;
+#[cfg(test)]
+mod capacity_schedule_tests;
 #[cfg(test)]
 mod expert_tables_tests;
 #[cfg(test)]
@@ -47,6 +51,8 @@ mod replay_case_file_tests;
 mod replay_lab_tests;
 #[cfg(test)]
 mod routed_reply_tests;
+#[cfg(test)]
+mod scheduled_replay_tests;
 
 pub use astro_expert_cache::{
     AstroExpertCacheLayerGeometry, DivisibleAstroExpertCache, EvictionOrder, ExpertKey,
@@ -54,6 +60,10 @@ pub use astro_expert_cache::{
 };
 pub use astro_expert_cache_record::{
     AstroExpertCacheRecord, EvictionEvent, ExpertUse, LayerAstroExpertCacheSummary,
+};
+pub use capacity_schedule::{
+    CapacityMoment, capacity_by_token, capacity_by_token_under_reserve,
+    limit_past_wired_line_bytes, rebased_capacity_moments,
 };
 pub use expert_tables::{AstroExpertCacheTableRules, AstroExpertCacheTables, TableChange};
 pub use keeping_rules::{
@@ -67,3 +77,4 @@ pub use replay_case_file::{
 };
 pub use replay_lab::{ReplayCase, ReplayOutcome, replay};
 pub use routed_reply::{RoutedReply, RoutedReplyDecodeError};
+pub use scheduled_replay::{CapacityTrim, ScheduledReplayOutcome, replay_under_capacity_schedule};

@@ -1,5 +1,6 @@
 #[cfg(feature = "direct-mlx")]
 mod astro_expert_cache_plus_streamed_page_route;
+mod capacity_reporting;
 #[cfg(feature = "direct-mlx")]
 pub mod decision_readout;
 #[cfg(feature = "direct-mlx")]

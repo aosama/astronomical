@@ -150,12 +150,9 @@ impl Qwen3_5Model {
             .set_capacity(capacity.bytes())
             .released_payload_bytes();
         if released_expert_bytes > 0 {
-            tracing::info!(
-                kept_weight_capacity_bytes = capacity.bytes(),
-                released_expert_bytes,
-                "the astro expert cache gave back what its new capacity no longer holds"
-            );
+            self.report_released_experts(capacity, released_expert_bytes);
         }
+        self.note_capacity_moment(capacity, released_expert_bytes);
     }
 
     /// The capacity the astro expert cache has now.

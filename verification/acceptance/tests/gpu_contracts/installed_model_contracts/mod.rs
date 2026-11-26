@@ -18,6 +18,8 @@ mod dense_layer_major_checkpoint_parity;
 #[cfg(feature = "direct-mlx")]
 mod dense_prompt_forward_memory;
 #[cfg(feature = "direct-mlx")]
+mod dense_reply_token_verdict;
+#[cfg(feature = "direct-mlx")]
 mod dense_streaming_speed_ladder;
 #[cfg(feature = "direct-mlx")]
 mod dflash_drafter_load_memory;

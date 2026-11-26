@@ -1,5 +1,6 @@
 use super::{
     SystemWiredReading, limit_past_system_wired_ceiling_bytes, next_system_wired_reserve_bytes,
+    wired_outside_mlx_bytes, with_wired_outside_mlx_bytes,
 };
 
 const GIBIBYTE: u64 = 1 << 30;
@@ -58,6 +59,7 @@ fn reading(system_wired_bytes: u64, mlx_held_bytes: u64) -> SystemWiredReading {
         system_wired_bytes,
         system_wire_limit_bytes: CEILING_BYTES,
         mlx_held_bytes,
+        reading_milliseconds: 0,
     }
 }
 
@@ -94,4 +96,21 @@ fn should_keep_the_whole_limit_unused_when_other_wiring_fills_the_line() {
         0,
         "MLX holding more than the wired total counts nothing outside MLX"
     );
+}
+
+#[test]
+fn should_read_the_memory_wired_outside_mlx_and_never_below_zero() {
+    assert_eq!(
+        wired_outside_mlx_bytes(reading(36 * GIBIBYTE, 32 * GIBIBYTE)),
+        4 * GIBIBYTE
+    );
+    assert_eq!(wired_outside_mlx_bytes(reading(GIBIBYTE, 5 * GIBIBYTE)), 0);
+}
+
+#[test]
+fn should_rewrite_the_wired_total_to_the_steady_outside_share() {
+    let rewritten =
+        with_wired_outside_mlx_bytes(reading(40 * GIBIBYTE, 32 * GIBIBYTE), 3 * GIBIBYTE);
+    assert_eq!(rewritten.system_wired_bytes, 35 * GIBIBYTE);
+    assert_eq!(rewritten.mlx_held_bytes, 32 * GIBIBYTE);
 }

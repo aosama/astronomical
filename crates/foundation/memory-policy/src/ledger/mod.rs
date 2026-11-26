@@ -33,6 +33,7 @@ pub mod model_shape;
 pub mod phase;
 pub mod reconciliation;
 pub mod system_wired_ceiling;
+pub mod wired_outside_mlx_window;
 
 pub use accounts::LedgerAccounts;
 pub use governor::{

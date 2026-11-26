@@ -180,6 +180,25 @@ impl MemoryGovernor {
         self.ledger.accounts()
     }
 
+    /// The last reading of the system's wired total and the kernel's wire
+    /// limit, in that order; `None` before any reading.
+    #[must_use]
+    pub const fn latest_system_wired_reading(&self) -> Option<(u64, u64)> {
+        self.ledger.latest_system_wired_reading()
+    }
+
+    /// The memory wired outside MLX at the last reading, as read.
+    #[must_use]
+    pub fn latest_wired_outside_mlx_bytes(&self) -> Option<u64> {
+        self.ledger.latest_wired_outside_mlx_bytes()
+    }
+
+    /// When the last wired reading was made, in milliseconds.
+    #[must_use]
+    pub fn latest_wired_reading_milliseconds(&self) -> Option<u64> {
+        self.ledger.latest_wired_reading_milliseconds()
+    }
+
     /// What the model is doing, as far as memory is concerned.
     #[must_use]
     pub const fn phase(&self) -> LedgerPhase {

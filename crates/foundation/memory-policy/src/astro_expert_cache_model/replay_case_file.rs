@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
-use super::{ReplayCase, RoutedReply, RoutedReplyDecodeError};
+use super::{CapacityMoment, ReplayCase, RoutedReply, RoutedReplyDecodeError};
 
 /// Why a saved case could not be read.
 #[derive(Debug, thiserror::Error)]
@@ -41,6 +41,8 @@ struct CaseDocument {
     prompt_demand_by_layer_at_reply_start: Vec<Vec<u64>>,
     #[serde(default)]
     reply_demand_by_layer_at_reply_start: Vec<Vec<u64>>,
+    #[serde(default)]
+    capacity_moments: Vec<CapacityMoment>,
 }
 
 /// One saved case: its workload name, its replay case, and what each layer
@@ -58,6 +60,9 @@ pub struct SavedReplayCase {
     /// How often earlier replies routed to each expert of each layer when
     /// this reply began (empty when not kept).
     pub reply_demand_by_layer: Vec<Vec<u64>>,
+    /// Each capacity the engine applied while the reply was served (empty
+    /// for a recording that did not keep them).
+    pub capacity_moments: Vec<CapacityMoment>,
 }
 
 /// Reads the case whose document is `case_document_path`; its routes are
@@ -92,6 +97,7 @@ pub fn read_saved_replay_case(
         warm_slot_count: case_document.warm_slot_count,
         prompt_demand_by_layer: case_document.prompt_demand_by_layer_at_reply_start,
         reply_demand_by_layer: case_document.reply_demand_by_layer_at_reply_start,
+        capacity_moments: case_document.capacity_moments,
         replay_case: ReplayCase {
             routed_reply,
             expert_payload_bytes_by_layer: case_document.expert_payload_bytes_by_layer,
