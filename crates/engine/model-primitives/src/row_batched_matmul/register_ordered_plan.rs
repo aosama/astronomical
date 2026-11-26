@@ -43,13 +43,22 @@ pub const REGISTER_BLOCK_WORDS: i32 = 256;
 /// projection shapes `(output, input)`, streamed over every layer. Shapes not
 /// listed take `input_slice_count`. Fused shapes are listed by their fused
 /// width: 6,240 is the DeltaNet z | b | a stack and 2,048 attention's k | v.
-const MEASURED_SLICE_COUNTS: [(i32, i32, i32); 6] = [
+/// Every shape was measured again at a verify pass's 16 rows and at one by
+/// `cargo measure-register-order-slice-verdict` (#2601); the counts that
+/// changed won all or nearly all of twelve interleaved rounds at both: gate
+/// and up 4 (4% faster than 2), down 8 (12% faster than 4 at 16 rows),
+/// 12,288 wide 8 (6% faster than 2), 6,144 wide 1 and 1,024 wide 4 (5%
+/// faster than the default 8).
+const MEASURED_SLICE_COUNTS: [(i32, i32, i32); 9] = [
     (10240, 5120, 2),
     (6240, 5120, 4),
     (5120, 6144, 4),
-    (12288, 5120, 2),
+    (12288, 5120, 8),
     (2048, 5120, 8),
-    (5120, 17408, 4),
+    (17408, 5120, 4),
+    (5120, 17408, 8),
+    (6144, 5120, 1),
+    (1024, 5120, 4),
 ];
 
 /// The input slices a register-ordered weight of this shape always takes.

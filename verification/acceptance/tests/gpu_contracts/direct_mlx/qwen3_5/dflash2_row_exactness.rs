@@ -20,7 +20,9 @@ use model_serving::{PerformanceAttribution, VerificationLogitsMode};
 use serial_test::serial;
 
 use super::dflash2_journey_support::host_values;
-use super::dflash2_kept_per_round::{Cell, JourneyPair, load_pair};
+use super::dflash2_kept_per_round::{
+    Cell, JourneyPair, load_pair, load_pair_verifying_trees_as_served,
+};
 use super::dflash2_tree_oracle::{Drafting, ORACLE_CELLS, draft_tree, prefill};
 
 const COMPARED_ROW_COUNT: usize = 16;
@@ -149,13 +151,7 @@ fn should_give_a_real_tree_the_same_logits_through_the_kernel_and_mlx_attention(
 #[ignore = "loads a real target and its DFlash2 drafter; run through cargo measure-dflash2-row-exactness"]
 #[serial]
 fn should_count_where_tree_attention_paths_leave_float32_on_real_data() {
-    let mut pair = load_pair();
-    pair.target
-        .enable_draft_tree_verification()
-        .expect("the tree kernels declare");
-    pair.target
-        .enable_row_exact_tree_attention()
-        .expect("the tree attention kernel declares");
+    let mut pair = load_pair_verifying_trees_as_served();
     pair.target
         .start_recording_tree_attention_errors_for_measurement();
     let journey_prompt: &'static str = Box::leak(

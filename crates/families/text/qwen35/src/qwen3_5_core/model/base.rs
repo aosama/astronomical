@@ -70,6 +70,10 @@ pub struct Qwen3_5OptionalAccelerators {
     /// exact reference, for measurements of how attention precision moves
     /// the drafted tokens a round keeps. Serving leaves it off.
     pub tree_attention_in_float32_for_measurement: bool,
+    /// Builds a whole verify pass before the GPU starts on it, so a
+    /// profiler handed the pass sees every kernel in it. Serving starts the
+    /// GPU on each few layers while the next are built, and leaves it off.
+    pub tree_pass_built_whole_for_measurement: bool,
     /// When set, every tree attention through the row-exact kernel also runs
     /// MLX's bf16 and float32 attention on the same inputs and records how
     /// many output elements each path's bf16 result differs from float32's.

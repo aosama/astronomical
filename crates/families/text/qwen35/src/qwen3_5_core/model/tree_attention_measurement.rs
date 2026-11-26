@@ -42,6 +42,14 @@ impl Qwen3_5ModelBase {
             .tree_attention_in_float32_for_measurement = in_float32;
     }
 
+    /// Builds every verify pass whole before the GPU starts on it (true), or
+    /// starts each few layers as serving does (false), for profiling a pass.
+    #[doc(hidden)]
+    pub fn set_tree_pass_built_whole_for_measurement(&mut self, built_whole: bool) {
+        self.optional_accelerators
+            .tree_pass_built_whole_for_measurement = built_whole;
+    }
+
     /// Starts recording, for every tree attention through the row-exact
     /// kernel, how its output and MLX's bf16 output each differ from float32
     /// attention. Measurement only: every layer is evaluated on the spot.

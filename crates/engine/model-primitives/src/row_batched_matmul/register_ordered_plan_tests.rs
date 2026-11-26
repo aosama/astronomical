@@ -15,11 +15,13 @@ fn should_put_each_sixteen_row_block_on_the_grids_second_axis() {
 
 #[test]
 fn should_take_the_measured_slices_for_listed_shapes_and_the_rule_for_others() {
-    assert_eq!(register_ordered_slice_count(5120, 17408), 4);
+    assert_eq!(register_ordered_slice_count(5120, 17408), 8);
+    assert_eq!(register_ordered_slice_count(17408, 5120), 4);
+    assert_eq!(register_ordered_slice_count(6144, 5120), 1);
     assert_eq!(register_ordered_slice_count(10240, 5120), 2);
     assert_eq!(
-        register_ordered_slice_count(17408, 5120),
-        input_slice_count(17408, 5120)
+        register_ordered_slice_count(64, 5120),
+        input_slice_count(64, 5120)
     );
 }
 

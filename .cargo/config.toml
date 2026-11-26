@@ -776,6 +776,10 @@ measure-dflash2-tree-rounds = "run -p xtask -- test-run --package astronomical-a
 # PATH whose model_directory is a model folder holding its own drafter in a
 # `drafter` folder; without one they load the 27B pair. About a minute.
 measure-dflash2-row-exactness = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter dflash2_row_exactness"
+# Where one draft round's verify pass spends its GPU time, kernel by kernel
+# (#2601): the dense 27B pair's tree after a short code prompt, through the
+# MLX performance profiler, which writes the job's page and per-node JSON.
+measure-dflash2-verify-pass-profile = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter one_draft_rounds_verify_pass_kernel_by_kernel"
 # The rung below it: whether MLX's quantized matmul (4- and 8-bit, group 64,
 # at the 35B-A3B target's widths) and its attention kernel give a row the same
 # bits inside a window of 2, 4, 8 and 16 rows as alone. Random inputs, no
@@ -898,6 +902,10 @@ measure-register-order-served-rows = "run -p xtask -- test-run --package astrono
 # jobs' execution graphs, and its JSON for every cell under the test's target
 # directory and prints where. No model; about two minutes.
 measure-register-order-verdict = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx,performance-measurement --test performance_measurement --release --ignored --case-budget-seconds 300 --filter register_order_layout_verdict"
+# How many input slices the register-ordered kernel should split each dense
+# 27B projection shape into (#2601): each other count against today's,
+# at 16 rows and 1, through the MLX performance profiler. No model; twenty seconds.
+measure-register-order-slice-verdict = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx,performance-measurement --test performance_measurement --release --ignored --case-budget-seconds 240 --filter each_slice_count_for_the_dense_27b_shapes"
 # What fusing a routed expert's gate and up projections buys at the kernel
 # (#2585): one gathered multiply of the joined weights against two, as two
 # jobs of the MLX performance profiler, at a 35B-A3B layer's shapes, for a

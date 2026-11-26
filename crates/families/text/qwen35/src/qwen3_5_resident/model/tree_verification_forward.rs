@@ -62,8 +62,11 @@ impl DraftTreeTarget for Qwen3_5ResidentModel {
     }
 
     /// Nothing in a resident pass waits for the host, so the GPU starts on
-    /// each few layers while the next are built.
+    /// each few layers while the next are built, unless a measurement asked
+    /// for the pass whole.
     fn starts_tree_layers_asynchronously(&self) -> bool {
-        true
+        !self
+            .optional_accelerators
+            .tree_pass_built_whole_for_measurement
     }
 }

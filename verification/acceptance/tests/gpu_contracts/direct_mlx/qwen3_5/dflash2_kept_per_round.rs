@@ -224,6 +224,19 @@ fn pair_directories() -> (PathBuf, PathBuf, String) {
     }
 }
 
+/// The pair with draft-tree verification and the row-exact tree attention
+/// kernel on, as serving verifies a dense target's trees.
+pub(crate) fn load_pair_verifying_trees_as_served() -> JourneyPair {
+    let mut pair = load_pair();
+    pair.target
+        .enable_draft_tree_verification()
+        .expect("the tree kernels declare");
+    pair.target
+        .enable_row_exact_tree_attention()
+        .expect("the tree attention kernel declares");
+    pair
+}
+
 pub(crate) fn load_pair() -> JourneyPair {
     let (target_directory, drafter_directory, target_model_id) = pair_directories();
     eprintln!(
