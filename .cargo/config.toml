@@ -874,6 +874,15 @@ measure-k-row-verify-cost = "run -p xtask -- test-run --package astronomical-acc
 # one dropped round, median and range each. No model; about a minute and a
 # half.
 measure-register-order-served-rows = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx,performance-measurement --test performance_measurement --release --ignored --case-budget-seconds 240 --filter should_compare_stock_register_ordered_and_restored_layouts_at_served_row_counts"
+# The same question answered with a verdict (#2601): for each of the 27B's
+# projection shapes at one row, a draft tree's 16 rows and a prompt chunk's
+# 2,048, MLX's layout against register order as two jobs of the MLX
+# performance profiler: 12 rounds with the order flipped every round, and
+# "faster", "slower" or "within spread" only when the interval for the median
+# difference excludes zero. Writes a comparison page and its JSON for every
+# cell under the test's target directory and prints where. No model; about
+# two minutes.
+measure-register-order-verdict = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx,performance-measurement --test performance_measurement --release --ignored --case-budget-seconds 300 --filter register_order_layout_verdict"
 # What a reply token saves when register-ordered projections that read the
 # same row share one preparation of it (#2568): stock, each copy preparing
 # its own input, and one preparation for all sixteen copies, alternated for

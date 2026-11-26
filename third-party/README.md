@@ -20,6 +20,7 @@ never resolves an upstream repository live.
 | metal-cpp | 26 | Apple release download `metal-cpp_26.zip` | declared inside `pins/mlx-v0.32.5.cmake` | MLX transitive |
 | nlohmann/json | 3.11.3 | release artifact `v3.11.3/json.tar.xz` | declared inside `pins/mlx-v0.32.5.cmake` | MLX transitive |
 | fmt | 12.1.0 | release tag archive `12.1.0.tar.gz` | declared inside `pins/mlx-v0.32.5.cmake` | MLX transitive |
+| MLX performance profiler | 0.2.0 | release tag `v0.2.0` (commit `126db3a3c`) | `pins/mlx-performance-profiler-v0.2.0.cmake` | measurement tooling, not shipped |
 
 metal-cpp, nlohmann/json, and fmt are source dependencies that MLX's own
 CMake declares through FetchContent. Astronomical pre-declares them with
@@ -35,6 +36,7 @@ recorded here for review:
 - metal-cpp `26`: `https://developer.apple.com/metal/cpp/files/metal-cpp_26.zip` — SHA-256 `4df3c078b9aadcb516212e9cb03004cbc5ce9a3e9c068fa3144d021db585a3a4`
 - nlohmann/json `3.11.3`: `https://github.com/nlohmann/json/releases/download/v3.11.3/json.tar.xz` — SHA-256 `d6c65aca6b1ed68e7a182f4757257b107ae403032760ed6ef121c9d55e81757d`
 - fmt `12.1.0`: `https://github.com/fmtlib/fmt/archive/refs/tags/12.1.0.tar.gz` — SHA-256 `ea7de4299689e12b6dddd392f9896f08fb0777ac7168897a244a6d6085043fea`
+- MLX performance profiler `0.2.0`: `https://github.com/aosama/mlx-performance-profiler/releases/download/v0.2.0/mlx-performance-profiler-0.2.0.tar.gz` — SHA-256 `d8ad4c93a449abee130a1bdac6f759542ae9dd297694104959aa3abd27d04fe5`
 
 Tooling pins (not part of the native runtime image): `tool-pins/Cargo.toml`
 pins `sccache 0.19.0` and `cargo-about 0.9.3`, the latter for the
@@ -305,6 +307,28 @@ the extraction through `native_build_orchestration::provisioned_mlx_sources`
 and fails with the provisioning command when it is missing. A hook such code
 needs inside MLX itself is a patch in `patches/`, recorded in the registry
 above like any other.
+
+## The MLX performance profiler
+
+`crates/tooling/mlx-performance-profiler` compiles the pinned MLX performance
+profiler (Apache-2.0) the same way: with `cc`, from its digest-verified
+release archive, against the provisioned extraction, so it never links a
+second MLX. It is measurement tooling: only the acceptance crate's
+measurement tests depend on it, and nothing of it enters the worker or the
+app bundle, which is why it has no entry in `THIRD_PARTY_NOTICES`.
+
+It measures one MLX job node by node, and compares two implementations of
+one job over twelve interleaved rounds with a verdict
+(`cargo measure-register-order-verdict` is the first journey built on it).
+Beyond MLX's public API it relies on five behaviours its README lists
+(the Metal command encoder's command buffer, `array::is_available`,
+`Primitive::name` and `stream`, MLX-C's array handle layout, and
+`CustomKernel`'s state holding the kernel's name); none of the patches above
+touches them, and a patch that would has to be checked against that list.
+
+To bump it: replace its pin file with the new release's archive and digest,
+update `PROFILER_PIN` and the source list in the crate's `build.rs` from the
+release's `CMakeLists.txt`, and run the crate's tests.
 
 ## Reproducing a native build from scratch
 
