@@ -13,7 +13,6 @@ mod dense_kept_layer_register_order;
 mod dense_layer_major_checkpoint_parity;
 #[cfg(feature = "direct-mlx")]
 mod dense_prompt_forward_memory;
-mod dense_streaming_parity;
 #[cfg(feature = "direct-mlx")]
 mod dense_streaming_speed_ladder;
 #[cfg(feature = "direct-mlx")]
@@ -70,6 +69,8 @@ mod qwen_image_21_vae;
 mod speech_audio_checks;
 #[cfg(feature = "direct-mlx")]
 mod streaming_fused_expert_combination;
+#[cfg(feature = "direct-mlx")]
+mod streaming_greedy_answer;
 mod tokenizer;
 mod validate;
 mod weights;

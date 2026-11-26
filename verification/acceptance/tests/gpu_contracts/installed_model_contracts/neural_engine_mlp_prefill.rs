@@ -8,7 +8,7 @@
 //! includes attention, recurrent state, the per-layer synchronization a hand-off
 //! forces, and real weights.
 //!
-//! Run with no model loaded in either instance, because a resident model competes
+//! Run with no model loaded in either instance, because a loaded model competes
 //! for the same memory and GPU and would contaminate the comparison.
 
 use std::time::{Duration, Instant};
@@ -20,7 +20,7 @@ use config::{AstronomicalConfig, ModelCapabilities};
 use ipc_protocol::NeuralEnginePrefillStatus;
 use memory_policy::serving_ceiling::machine_ceiling_from_physical_ram_bytes;
 use mlx_bridge::{MlxArray, MlxDtype};
-use model_serving::{Qwen3_5ArtifactValidator, Qwen3_5ResidentModel, Qwen3_5Tokenizer};
+use model_serving::{Qwen3_5ArtifactValidator, Qwen3_5StreamingModel, Qwen3_5Tokenizer};
 use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use serial_test::serial;
 use tokio::time::timeout;
@@ -102,7 +102,7 @@ fn cosine_similarity(left: &[f32], right: &[f32]) -> f64 {
 }
 
 /// First-use kernels must not inflate either arm's first measured chunk or token.
-fn warm_up(model: &Qwen3_5ResidentModel, prompt_token_ids: &[u32], label: &str) {
+fn warm_up(model: &Qwen3_5StreamingModel, prompt_token_ids: &[u32], label: &str) {
     let mut decoder_state = model
         .empty_request_decoder_state_matching_loaded_weights(FULL_ATTENTION_KV_GROWTH_TOKENS)
         .expect("the warm-up state allocates");
@@ -132,7 +132,7 @@ fn warm_up(model: &Qwen3_5ResidentModel, prompt_token_ids: &[u32], label: &str) 
     eprintln!("[{JOURNEY_NAME}] status=progress arm={label} phase=warm_up_complete");
 }
 
-fn run_arm(model: &Qwen3_5ResidentModel, prompt_token_ids: &[u32], label: &str) -> ArmEvidence {
+fn run_arm(model: &Qwen3_5StreamingModel, prompt_token_ids: &[u32], label: &str) -> ArmEvidence {
     warm_up(model, prompt_token_ids, label);
     let mut decoder_state = model
         .empty_request_decoder_state_matching_loaded_weights(FULL_ATTENTION_KV_GROWTH_TOKENS)
@@ -181,7 +181,7 @@ fn run_arm(model: &Qwen3_5ResidentModel, prompt_token_ids: &[u32], label: &str) 
 }
 
 pub(super) fn greedy_continuation(
-    model: &Qwen3_5ResidentModel,
+    model: &Qwen3_5StreamingModel,
     final_logits: &[f32],
     decoder_state: &mut model_serving::RequestDecoderStateStack,
     first_position: usize,
@@ -205,14 +205,14 @@ pub(super) fn greedy_continuation(
 
 pub(super) fn load_dense_model(
     development_config: &AstronomicalConfig,
-) -> (Qwen3_5ResidentModel, Vec<u32>) {
+) -> (Qwen3_5StreamingModel, Vec<u32>) {
     load_named_dense_model(development_config, DENSE_MODEL_ID)
 }
 
 pub(super) fn load_named_dense_model(
     development_config: &AstronomicalConfig,
     dense_model_id: &str,
-) -> (Qwen3_5ResidentModel, Vec<u32>) {
+) -> (Qwen3_5StreamingModel, Vec<u32>) {
     let discovered_model =
         crate::common::configured_discovered_model_by_id(development_config, dense_model_id);
     let ModelCapabilities::Chat(_) = &discovered_model.capabilities else {
@@ -235,16 +235,17 @@ pub(super) fn load_named_dense_model(
             .expect("the configured limits are valid"),
     )
     .expect("the MLX runtime initializes");
-    let mut model = Qwen3_5ResidentModel::load(
+    let model = Qwen3_5StreamingModel::load(
         runtime,
         validated_artifact,
         &model_directory,
         crate::common::standard_qwen3_5_model_chunking_configuration(),
     )
     .expect("the dense model binds");
+    // The programs are built from kept layers only, as serving builds them.
     model
-        .materialize_complete_weights_matching_production()
-        .expect("the dense weights materialize");
+        .materialize_and_keep_every_dense_layer()
+        .expect("the dense weights materialize and every layer is kept");
     (model, prompt_token_ids)
 }
 
@@ -274,7 +275,7 @@ fn median(mut samples: Vec<f64>) -> f64 {
 }
 
 fn run_paused_arm(
-    model: &Qwen3_5ResidentModel,
+    model: &Qwen3_5StreamingModel,
     prompt_token_ids: &[u32],
     is_paused: bool,
     round_index: usize,
@@ -297,7 +298,7 @@ fn run_paused_arm(
 /// Runs every round and returns the GPU arm's and both engines' evidence, with
 /// the order swapped each round so neither arm always benefits from going second.
 fn run_alternating_rounds(
-    model: &Qwen3_5ResidentModel,
+    model: &Qwen3_5StreamingModel,
     prompt_token_ids: &[u32],
 ) -> (Vec<ArmEvidence>, Vec<ArmEvidence>) {
     let measurement_started_at = Instant::now();
@@ -384,7 +385,7 @@ fn report_comparison(gpu_evidence: &[ArmEvidence], both_engines_evidence: &[ArmE
 /// Builds the programs through serving's own steps and waits, keeping compiled ones in
 /// `astro_neural_engine_program_cache_directory` when given.
 pub(super) fn prepare_programs(
-    model: &mut Qwen3_5ResidentModel,
+    model: &mut Qwen3_5StreamingModel,
     astro_neural_engine_program_cache_directory: Option<&std::path::Path>,
 ) -> NeuralEnginePrefillStatus {
     let mut chunking = crate::common::standard_worker_chunking_configuration();
@@ -427,7 +428,7 @@ async fn compare_prefill_arms() {
 /// Prefill alone, for a change that cannot affect decode. A 500-token decode in
 /// every arm would more than double a run that asks nothing about decode.
 pub(super) fn prefill_only_tokens_per_second(
-    model: &Qwen3_5ResidentModel,
+    model: &Qwen3_5StreamingModel,
     prompt_token_ids: &[u32],
 ) -> f64 {
     let mut decoder_state = model
@@ -451,7 +452,7 @@ pub(super) fn prefill_only_tokens_per_second(
 /// The paired speedup of the loaded programs over the GPU alone, prefill only. The
 /// first round is a warm-up for both arms and is not counted.
 fn report_paired_prefill_speedup(
-    model: &Qwen3_5ResidentModel,
+    model: &Qwen3_5StreamingModel,
     prompt_token_ids: &[u32],
     setup_label: &str,
 ) {

@@ -1,11 +1,11 @@
 //! Serving a converted artifact through Astronomical's own engine: the
-//! daemon's validator, a resident load, and a greedy Romeo and Juliet
-//! continuation. Shared by every journey that ends in an artifact.
+//! daemon's validator, the one text model's load, and a greedy Romeo and
+//! Juliet continuation. Shared by every journey that ends in an artifact.
 
 use std::path::Path;
 
 use model_serving::{
-    Qwen3_5ArtifactValidator, Qwen3_5ResidentModel, Qwen3_5Tokenizer,
+    Qwen3_5ArtifactValidator, Qwen3_5StreamingModel, Qwen3_5Tokenizer,
     TextModelChunkingConfiguration,
 };
 
@@ -16,14 +16,15 @@ const PROMPT_WORD_COUNT: usize = 360;
 const DECODED_TOKEN_COUNT: usize = 50;
 const MAXIMUM_OUTPUT_TOKENS: u32 = 4_096;
 
-/// The production standard worker chunking tuple the daemon resolves for
-/// the resident engine.
+/// The production standard worker chunking tuple the daemon resolves.
 const FULL_ATTENTION_KV_GROWTH_TOKENS: u32 = 256;
 const PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL: u32 = 0;
 const SSD_PAGING_GENERATION_LAYER_INTERVAL: u32 = 3;
 
-/// Validates the artifact through the daemon's own validator, loads it as a
-/// resident model, forwards a Romeo and Juliet prompt, and decodes greedily.
+/// Validates the artifact through the daemon's own validator, loads it with
+/// a dense model's every layer kept, forwards a Romeo and Juliet prompt, and
+/// decodes greedily. A sparse model's experts are read from the SSD for each
+/// forward, which changes how long a forward takes, never its answer.
 pub(crate) fn generate_greedy_continuation(artifact_directory: &Path) -> String {
     let validated_artifact = Qwen3_5ArtifactValidator::new()
         .validate(artifact_directory, MAXIMUM_OUTPUT_TOKENS)
@@ -39,22 +40,22 @@ pub(crate) fn generate_greedy_continuation(artifact_directory: &Path) -> String 
         SSD_PAGING_GENERATION_LAYER_INTERVAL,
     )
     .expect("the production chunking tuple is valid");
-    let mut model = Qwen3_5ResidentModel::load(
+    let model = Qwen3_5StreamingModel::load(
         journey_runtime(),
         validated_artifact,
         artifact_directory,
         chunking,
     )
-    .expect("the converted artifact should load as a resident model");
+    .expect("the converted artifact should load");
     model
-        .materialize_complete_weights_matching_production()
+        .materialize_and_keep_every_dense_layer()
         .expect("the converted weights should materialize");
     let generated_token_ids = greedy_decode(&model, &prompt_token_ids);
     decode_text(artifact_directory, &generated_token_ids)
 }
 
 /// Forwards the prompt once, then one token at a time, taking the argmax.
-fn greedy_decode(model: &Qwen3_5ResidentModel, prompt_token_ids: &[u32]) -> Vec<u32> {
+fn greedy_decode(model: &Qwen3_5StreamingModel, prompt_token_ids: &[u32]) -> Vec<u32> {
     let mut decoder_state = model
         .empty_request_decoder_state_matching_loaded_weights(
             i32::try_from(FULL_ATTENTION_KV_GROWTH_TOKENS).expect("fits"),

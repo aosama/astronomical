@@ -19,7 +19,7 @@ use model_serving::Qwen3_5StreamingModel;
 use serial_test::serial;
 use tokio::time::timeout;
 
-use super::dense_streaming_parity::{
+use super::streaming_greedy_answer::{
     keep_dense_layers, load_materialized_streaming_model, shakespeare_prompt_token_ids,
     streaming_greedy_answer,
 };
