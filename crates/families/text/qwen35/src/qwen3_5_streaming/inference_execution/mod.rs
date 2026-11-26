@@ -22,6 +22,7 @@ mod memory_limit;
 mod model_loading;
 mod model_loading_finalization;
 mod mtp_reply_drafting;
+mod neural_engine_prompt_spans;
 mod prefill_advance;
 mod prefill_chunk_planning;
 mod prefill_memory_recovery;

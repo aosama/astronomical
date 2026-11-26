@@ -35,22 +35,35 @@ pub(crate) fn create_attributed_engine_with_ssd_streaming_prefill(
         mlx_memory_limits,
         (
             fixed_ssd_streaming_prompt_processing_chunk_size_tokens,
-            None,
+            StreamingJourneyOptions::default(),
         ),
     )
 }
 
-/// The streaming engine with, when given, an `astro_ssd_prompt_cache` store,
-/// so a conversation's next turn can restore what the last one read.
+/// What a journey may ask of the streaming engine beyond the test run's
+/// configuration; the default asks nothing.
+#[derive(Default)]
+pub(crate) struct StreamingJourneyOptions {
+    /// An `astro_ssd_prompt_cache` store, so a conversation's next turn can
+    /// restore what the last one read.
+    pub(crate) astro_ssd_prompt_cache_store: Option<AstroSsdPromptCacheDiskStoreConfig>,
+    /// Turns on the opt-in Neural Engine prompt reading (issue #2585).
+    pub(crate) reads_prompts_on_the_neural_engine: bool,
+}
+
+/// The streaming engine with a journey's options.
 fn create_attributed_engine_keeping_prompts(
     model_directory: &Path,
     performance_attribution_log_path: &Path,
     mlx_memory_limits: &runtime_integration::MlxMemoryLimits,
-    (fixed_ssd_streaming_prompt_processing_chunk_size_tokens, astro_ssd_prompt_cache_store): (
+    (fixed_ssd_streaming_prompt_processing_chunk_size_tokens, journey_options): (
         u32,
-        Option<AstroSsdPromptCacheDiskStoreConfig>,
+        StreamingJourneyOptions,
     ),
 ) -> (Qwen3_5StreamingEngine, Vec<u32>) {
+    let mut worker_chunking = crate::common::standard_worker_chunking_configuration();
+    worker_chunking.experimental_neural_engine_prefill_enabled =
+        journey_options.reads_prompts_on_the_neural_engine;
     let validated_artifact = Qwen3_5ArtifactValidator::new()
         .validate(model_directory, 20_480)
         .expect("the configured Ornith artifact should validate before benchmark loading");
@@ -66,14 +79,14 @@ fn create_attributed_engine_keeping_prompts(
             validated_artifact,
             mlx_memory_limits.active_memory_limit_bytes(),
             mlx_memory_limits.mlx_buffer_cache_limit_bytes(),
-            astro_ssd_prompt_cache_store,
+            journey_options.astro_ssd_prompt_cache_store,
             PromptProcessingChunkSizer::for_chunk_size_tokens(
                 fixed_ssd_streaming_prompt_processing_chunk_size_tokens,
             )
             .expect("the benchmark streaming prefill chunk size should be valid"),
             IMAGE_PAD_TOKEN_ID,
             model_directory.to_path_buf(),
-            crate::common::standard_worker_chunking_configuration(),
+            worker_chunking,
             PerformanceAttribution::enabled(),
             performance_attribution_log,
         )
@@ -84,7 +97,7 @@ fn create_attributed_engine_keeping_prompts(
 pub(crate) async fn load_engine_with_progress(
     qwen3_5_engine: &mut impl InferenceEngine,
     phase_name: &str,
-) {
+) -> Option<ipc_protocol::WorkerEvent> {
     let phase_started_at = Instant::now();
     let mut progress_interval = interval(PROGRESS_INTERVAL);
     progress_interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
@@ -93,7 +106,13 @@ pub(crate) async fn load_engine_with_progress(
     tokio::pin!(load_future);
     loop {
         tokio::select! {
-            load_outcome = &mut load_future => { load_outcome.expect("the benchmark engine should load"); return; }
+            load_outcome = &mut load_future => {
+                // What the load says about Neural Engine prompt reading,
+                // when the setting is on.
+                return load_outcome
+                    .expect("the benchmark engine should load")
+                    .neural_engine_prefill_event();
+            }
             _ = progress_interval.tick() => eprintln!("[performance-attribution] status=progress phase={phase_name} elapsed_seconds={:.1} ETA_seconds=unknown", phase_started_at.elapsed().as_secs_f64()),
         }
     }
@@ -102,6 +121,8 @@ pub(crate) async fn load_engine_with_progress(
 /// A streaming engine loaded as the test run's configuration names it:
 /// `model_directory` and `paging_experiment`'s MLX limit and prompt chunk.
 pub(crate) struct PagingExperimentEngine {
+    /// The load's Neural Engine prompt-reading event; `None` with it off.
+    pub(crate) neural_engine_prefill_at_load: Option<ipc_protocol::WorkerEvent>,
     pub(crate) engine: Qwen3_5StreamingEngine,
     pub(crate) end_of_sequence_token_ids: Vec<u32>,
     pub(crate) model_directory: std::path::PathBuf,
@@ -112,13 +133,13 @@ pub(crate) struct PagingExperimentEngine {
 /// Loads the configured model on the streaming engine, reporting progress
 /// under `load_phase_name`.
 pub(crate) async fn load_paging_experiment_engine(load_phase_name: &str) -> PagingExperimentEngine {
-    load_paging_experiment_engine_keeping_prompts(load_phase_name, None).await
+    load_paging_experiment_engine_with(load_phase_name, StreamingJourneyOptions::default()).await
 }
 
-/// The same engine with, when given, an `astro_ssd_prompt_cache` store.
-pub(crate) async fn load_paging_experiment_engine_keeping_prompts(
+/// The same engine with a journey's options.
+pub(crate) async fn load_paging_experiment_engine_with(
     load_phase_name: &str,
-    astro_ssd_prompt_cache_store: Option<AstroSsdPromptCacheDiskStoreConfig>,
+    journey_options: StreamingJourneyOptions,
 ) -> PagingExperimentEngine {
     let test_run_configuration = test_harness::test_run::TestRunContext::current().configuration;
     let model_directory = test_run_configuration
@@ -142,11 +163,13 @@ pub(crate) async fn load_paging_experiment_engine_keeping_prompts(
         &mlx_memory_limits,
         (
             paging_experiment.streaming_prompt_processing_chunk_tokens,
-            astro_ssd_prompt_cache_store,
+            journey_options,
         ),
     );
-    load_engine_with_progress(&mut engine, load_phase_name).await;
+    let neural_engine_prefill_at_load =
+        load_engine_with_progress(&mut engine, load_phase_name).await;
     PagingExperimentEngine {
+        neural_engine_prefill_at_load,
         engine,
         end_of_sequence_token_ids,
         model_directory,

@@ -51,6 +51,7 @@ async fn measure_cold_prefill() {
         end_of_sequence_token_ids,
         model_directory,
         attribution_directory: _attribution_directory,
+        neural_engine_prefill_at_load: _,
     } = load_paging_experiment_engine("unattributed_prefill_model_load").await;
     let cold_macos_file_cache = ColdMacosFileCache::start(&model_directory);
     for (request_id, prompt_token_count, output_token_count, phase_name) in [

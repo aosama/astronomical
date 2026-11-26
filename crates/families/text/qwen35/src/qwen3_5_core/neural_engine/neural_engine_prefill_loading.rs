@@ -28,6 +28,9 @@ use super::neural_engine_program_preparation::{
     NeuralEngineProgramFamily, ProgramIdentity, ProgramPackageWriter, ProgramPreparation,
 };
 use crate::qwen3_5_core::model::base::Qwen3_5ModelBase;
+use crate::qwen3_5_core::neural_engine::neural_engine_host::{
+    LayerPackageRequest, NeuralEngineHost,
+};
 
 /// How often the blocking path looks for finished programs. Short beside a build,
 /// which takes from a tenth of a second to several seconds.
@@ -41,7 +44,7 @@ const MOST_UNSETTLED_MEASUREMENTS: u32 = 3;
 
 /// Reads compile input from the model on the MLX owner thread for the plans in hand.
 struct ModelProgramPackages<'preparation> {
-    model: &'preparation Qwen3_5ModelBase,
+    host: &'preparation dyn NeuralEngineHost,
     mlp_plan: &'preparation MlpProgramPlan,
     output_gate_plan: Option<&'preparation OutputGateProgramPlan>,
 }
@@ -52,14 +55,15 @@ impl ProgramPackageWriter for ModelProgramPackages<'_> {
         identity: ProgramIdentity,
         package_directory: &Path,
     ) -> Result<PathBuf, &'static str> {
-        let decoder_layer_index = identity.decoder_layer_index;
+        let package_request = LayerPackageRequest {
+            host: self.host,
+            decoder_layer_index: identity.decoder_layer_index,
+            package_directory,
+        };
         match (identity.family, self.output_gate_plan) {
-            (NeuralEngineProgramFamily::Mlp, _) => {
-                self.mlp_plan
-                    .write_package(self.model, decoder_layer_index, package_directory)
-            }
+            (NeuralEngineProgramFamily::Mlp, _) => self.mlp_plan.write_package(&package_request),
             (NeuralEngineProgramFamily::OutputGate, Some(output_gate_plan)) => {
-                output_gate_plan.write_package(self.model, decoder_layer_index, package_directory)
+                output_gate_plan.write_package(&package_request)
             }
             (NeuralEngineProgramFamily::OutputGate, None) => {
                 Err("no output gate programs were planned")
@@ -98,7 +102,7 @@ pub struct NeuralEnginePrefillPreparation {
 /// Decides whether the programs may run and starts building them. The status is the
 /// one to report now; a preparation comes back only while it says `Preparing`.
 pub fn begin_neural_engine_prefill_preparation(
-    model: &Qwen3_5ModelBase,
+    host: &dyn NeuralEngineHost,
     chunking: &WorkerChunkingConfiguration,
     astro_neural_engine_program_cache_directory: Option<&Path>,
     neural_engine_token_count_override: Option<u32>,
@@ -107,7 +111,7 @@ pub fn begin_neural_engine_prefill_preparation(
     Option<NeuralEnginePrefillPreparation>,
 ) {
     let mlp_plan = match plan_neural_engine_mlp_programs(
-        model,
+        host,
         chunking,
         astro_neural_engine_program_cache_directory,
         neural_engine_token_count_override,
@@ -116,7 +120,7 @@ pub fn begin_neural_engine_prefill_preparation(
         Err(settled_status) => return (settled_status, None),
     };
     let output_gate_plan = plan_output_gates_or_stay_on_the_gpu(
-        model,
+        host.model_base(),
         chunking,
         astro_neural_engine_program_cache_directory,
     );
@@ -194,8 +198,8 @@ impl NeuralEnginePrefillPreparation {
 
     /// Moves the programs along. Called on the MLX owner thread between requests,
     /// so a chunk already running never sees a program appear part way through.
-    pub fn advance(&mut self, model: &mut Qwen3_5ModelBase) -> NeuralEnginePreparationStep {
-        let was_used_this_step = self.advance_build(model);
+    pub fn advance(&mut self, host: &mut dyn NeuralEngineHost) -> NeuralEnginePreparationStep {
+        let was_used_this_step = self.advance_build(&*host);
         let is_idle_long_enough = self.idle_watch.step(Instant::now(), was_used_this_step);
         let phase = std::mem::replace(&mut self.phase, ProgramMemoryPhase::Building);
         self.phase = match phase {
@@ -203,7 +207,7 @@ impl NeuralEnginePrefillPreparation {
                 if !self.is_build_over() {
                     return self.report_build_progress();
                 }
-                self.begin_memory_phase(model)
+                self.begin_memory_phase(&*host)
             }
             ProgramMemoryPhase::WaitingForIdle(programs) if is_idle_long_enough => {
                 self.begin_measuring(programs)
@@ -227,7 +231,7 @@ impl NeuralEnginePrefillPreparation {
             ProgramMemoryPhase::Known {
                 programs,
                 wired_bytes,
-            } => self.engage_programs(model, programs, wired_bytes),
+            } => self.engage_programs(host, programs, wired_bytes),
             unchanged_phase => unchanged_phase,
         };
         match self.phase {
@@ -241,18 +245,18 @@ impl NeuralEnginePrefillPreparation {
     /// Steps the build and says whether anything it did used the GPU or Neural Engine.
     /// A kept program's first run on the build thread wires its weights with no package
     /// to write, which is why a finished program counts too.
-    fn advance_build(&mut self, model: &Qwen3_5ModelBase) -> bool {
+    fn advance_build(&mut self, host: &dyn NeuralEngineHost) -> bool {
         if !matches!(self.phase, ProgramMemoryPhase::Building) {
             return false;
         }
         let completed_before = self.program_preparation.completed_program_count();
         let package_writer = ModelProgramPackages {
-            model,
+            host,
             mlp_plan: &self.mlp_plan,
             output_gate_plan: self.output_gate_plan.as_ref(),
         };
         self.program_preparation.advance(&package_writer);
-        let has_read_weights = self.release_weight_copies(model);
+        let has_read_weights = self.release_weight_copies(host.model_base());
         if let Some(reason) = self
             .program_preparation
             .first_failure_of(NeuralEngineProgramFamily::OutputGate)
@@ -295,7 +299,7 @@ impl NeuralEnginePrefillPreparation {
     }
 
     /// Takes the built programs and decides how their memory will become known.
-    fn begin_memory_phase(&mut self, model: &Qwen3_5ModelBase) -> ProgramMemoryPhase {
+    fn begin_memory_phase(&mut self, host: &dyn NeuralEngineHost) -> ProgramMemoryPhase {
         if let Some(reason) = self
             .program_preparation
             .first_failure_of(NeuralEngineProgramFamily::Mlp)
@@ -311,7 +315,7 @@ impl NeuralEnginePrefillPreparation {
             // them would otherwise stay wrong until the next macOS build.
             Some(wired_bytes)
                 if self.mlp_plan.fits_ceiling(
-                    model,
+                    host,
                     wired_bytes.saturating_add(self.surface_bytes_of(&programs)),
                 ) =>
             {
@@ -447,7 +451,7 @@ impl NeuralEnginePrefillPreparation {
     /// on refusal gives its memory straight back.
     fn engage_programs(
         &mut self,
-        model: &mut Qwen3_5ModelBase,
+        host: &mut dyn NeuralEngineHost,
         programs: ProgramsToMeasure<CoreMlProgram>,
         wired_bytes: u64,
     ) -> ProgramMemoryPhase {
@@ -460,10 +464,11 @@ impl NeuralEnginePrefillPreparation {
         );
         if let Some(refused_status) = self
             .mlp_plan
-            .refusal_for_measured_bytes(model, measured_program_bytes)
+            .refusal_for_measured_bytes(&*host, measured_program_bytes)
         {
             return ProgramMemoryPhase::Finished(refused_status);
         }
+        let model = host.model_base_mut();
         let active_status = self.mlp_plan.attach(
             model,
             programs.mlp_programs,
@@ -561,13 +566,13 @@ fn estimated_remaining_ms(
 /// Builds the programs and waits for them. For measurements that need a known
 /// starting point; serving uses the preparation so a user never waits on this.
 pub fn prepare_neural_engine_prefill(
-    model: &mut Qwen3_5ModelBase,
+    host: &mut dyn NeuralEngineHost,
     chunking: &WorkerChunkingConfiguration,
     astro_neural_engine_program_cache_directory: Option<&Path>,
     neural_engine_token_count_override: Option<u32>,
 ) -> NeuralEnginePrefillStatus {
     let (settled_status, preparation) = begin_neural_engine_prefill_preparation(
-        model,
+        &*host,
         chunking,
         astro_neural_engine_program_cache_directory,
         neural_engine_token_count_override,
@@ -577,7 +582,7 @@ pub fn prepare_neural_engine_prefill(
     };
     loop {
         if matches!(
-            preparation.advance(model),
+            preparation.advance(host),
             NeuralEnginePreparationStep::ReadyToFinish
         ) {
             return preparation.finish();

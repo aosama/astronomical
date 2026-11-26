@@ -185,6 +185,7 @@ async fn count_expert_misses_with(
         end_of_sequence_token_ids,
         model_directory,
         attribution_directory: _attribution_directory,
+        ..
     } = load_paging_experiment_engine("expert_miss_model_load").await;
     // A recorded reply is replayed one token a step, and misses a token
     // are compared across runs, so the reply is written one token a

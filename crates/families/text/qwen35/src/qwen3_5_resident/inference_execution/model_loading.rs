@@ -8,10 +8,6 @@ use super::speculative_decode_lifecycle::{
 };
 use super::{Qwen3_5EngineState, fatal_runtime_error};
 use crate::qwen3_5_core::artifacts::ValidatedQwen3_5Artifact;
-use crate::qwen3_5_core::neural_engine::neural_engine_prefill_loading::{
-    NeuralEnginePreparationStep, begin_neural_engine_prefill_preparation,
-};
-use crate::qwen3_5_core::neural_engine::neural_engine_program_settlement::settle_neural_engine_programs;
 use crate::qwen3_5_resident::model::Qwen3_5ResidentModel;
 use text_generation::generation_loop::model_loading_lifecycle::TextModelLoadingHooks;
 use text_generation::model::model_chunking_configuration::TextModelChunkingConfiguration;
@@ -26,24 +22,15 @@ impl Qwen3_5EngineState {
         model_loading_performance_attribution: &mut PerformanceAttribution,
     ) -> Result<(), InferenceEngineError> {
         synchronize_gpu_stream_then_load_experts(model, model_loading_performance_attribution)?;
-        (
-            self.neural_engine_prefill_status,
-            self.neural_engine_prefill_preparation,
-        ) = begin_neural_engine_prefill_preparation(
-            model,
-            &self.core.chunking,
-            self.astro_neural_engine_program_cache_directory.as_deref(),
-            None,
-        );
+        self.neural_engine_prefill
+            .begin(&model.base, &self.core.chunking);
         Ok(())
     }
 
     /// A request's start and every forward call this on the owner thread, which together
     /// cover the GPU work a waiting measurement must not read through.
     pub(super) fn tell_neural_engine_preparation_the_gpu_is_in_use(&mut self) {
-        if let Some(preparation) = self.neural_engine_prefill_preparation.as_mut() {
-            preparation.note_gpu_used();
-        }
+        self.neural_engine_prefill.note_gpu_used();
     }
 
     /// Moves the programs one step along, or settles what the last request learned about
@@ -53,22 +40,7 @@ impl Qwen3_5EngineState {
         &mut self,
     ) -> Option<ipc_protocol::NeuralEnginePrefillStatus> {
         let model = self.core.model.as_mut()?;
-        let Some(preparation) = self.neural_engine_prefill_preparation.as_mut() else {
-            let settled_status =
-                settle_neural_engine_programs(model, &self.neural_engine_prefill_status)?;
-            self.neural_engine_prefill_status = settled_status.clone();
-            return Some(settled_status);
-        };
-        let reported_status = match preparation.advance(model) {
-            NeuralEnginePreparationStep::Unchanged => return None,
-            NeuralEnginePreparationStep::Progressed(status) => status,
-            NeuralEnginePreparationStep::ReadyToFinish => {
-                let finished_preparation = self.neural_engine_prefill_preparation.take()?;
-                finished_preparation.finish()
-            }
-        };
-        self.neural_engine_prefill_status = reported_status.clone();
-        Some(reported_status)
+        self.neural_engine_prefill.advance(&mut model.base)
     }
 
     /// A DFlash drafter of either generation installed beside the target
