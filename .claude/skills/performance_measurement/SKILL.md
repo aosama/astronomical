@@ -78,7 +78,7 @@ A kernel question never needs a model on disk. A policy question never needs a G
 - **Every level keeps standing instruments.** Counts that cost nothing (misses, reads, bytes, rounds, hand-offs) are always on and are the first thing to read. Nobody should add a temporary timer to answer a question a second time.
 - **A new way of serving reports itself**: how often it was tried, how often it served, and how often it gave way to the old path, by reason. Something that falls back silently cannot be measured.
 - **A stage must be runnable alone**, from a known starting state, so it can be handed to the profiler. When writing a hot path, write the seam with it.
-- **Measurement code is kept.** A comparison that answered a question becomes a named `cargo measure-...` alias with a comment saying what it answers and how long it takes, so the answer can be checked again in seconds.
+- **Measurement code is kept.** A comparison that answered a question becomes a named measurement alias in `.cargo/config.toml`, with a comment saying what it answers and how long it takes, so the answer can be checked again in seconds.
 
 ## Where the fix belongs
 
