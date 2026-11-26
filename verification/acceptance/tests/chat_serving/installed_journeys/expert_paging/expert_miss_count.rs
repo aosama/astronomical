@@ -41,6 +41,7 @@ use test_harness::test_run::TestRunContext;
 use tokio::time::timeout;
 
 use super::cold_macos_file_cache::ColdMacosFileCache;
+use super::reply_speed_cases::model_id_of;
 use crate::serving_acceptance::support::performance_attribution::{
     GenerationSampling, PagingExperimentEngine, RequestAttribution, load_paging_experiment_engine,
     run_generation_with_request_attribution,
@@ -419,12 +420,4 @@ fn chat_prompt_token_ids(model_directory: &Path, messages: Vec<ChatMessage>) -> 
         .expect("the chat prompt should prepare")
         .input_token_ids()
         .to_vec()
-}
-
-fn model_id_of(model_directory: &Path) -> String {
-    model_directory
-        .file_name()
-        .and_then(|name| name.to_str())
-        .expect("the model directory has a UTF-8 name")
-        .to_owned()
 }

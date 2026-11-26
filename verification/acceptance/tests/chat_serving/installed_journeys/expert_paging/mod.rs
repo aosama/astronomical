@@ -8,6 +8,7 @@ mod failed_span_redo;
 mod hosted_drafter_reply;
 mod in_graph_route_lookup_reply;
 mod in_memory_ledger_reconciliation;
+mod long_prompt_reading;
 mod mtp_reply_drafting_speed;
 mod no_replay;
 mod paged_decode;
