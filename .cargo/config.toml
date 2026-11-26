@@ -761,7 +761,9 @@ measure-dflash2-tree-rounds = "run -p xtask -- test-run --package astronomical-a
 # 4-row chain after a short and a 10,000-token prompt; a real drafted tree
 # through the row-exact tree attention kernel and through MLX's attention;
 # and, on real data, how many attention outputs each path leaves float32
-# attention's, by tree row and head half. Every DFlash2
+# attention's, by tree row and head half; and, layer by layer, where a plain
+# window and a chain through the tree verify first leave the one-token step
+# (issue #2599). Every DFlash2
 # journey above takes another target the same way: append --configuration
 # PATH whose model_directory is a model folder holding its own drafter in a
 # `drafter` folder; without one they load the 27B pair. About a minute.

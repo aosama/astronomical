@@ -254,6 +254,23 @@ fn one_token_steps(pair: &JourneyPair, cell: &Cell, row_count: usize) -> (Vec<u3
 
 /// The same tokens as one chain through the tree verify, split into rows.
 fn chain_tree_rows(pair: &JourneyPair, cell: &Cell, tokens: &[u32]) -> Vec<Vec<f32>> {
+    let verified = verify_chain(
+        pair,
+        cell,
+        tokens,
+        &pair.drafter_configuration.target_tap_layer_ids,
+    );
+    split_rows(pair, &verified.per_row_logits)
+}
+
+/// `tokens` as one chain through the tree verify after `cell`'s prompt:
+/// every row's parent is the row before it.
+pub(super) fn verify_chain(
+    pair: &JourneyPair,
+    cell: &Cell,
+    tokens: &[u32],
+    tap_layer_ids: &[i32],
+) -> model_serving::Qwen3_5DraftTreeVerification {
     let (round, mut state, _) = prefill(pair, cell);
     let mut chain = DraftTree::default();
     for (row_index, token_id) in tokens.iter().enumerate().skip(1) {
@@ -262,16 +279,9 @@ fn chain_tree_rows(pair: &JourneyPair, cell: &Cell, tokens: &[u32]) -> Vec<Vec<f
         chain.depths.push(row_index - 1);
     }
     let rows = TreeRows::from_draft_tree(tokens[0], &chain);
-    let verified = pair
-        .target
-        .verify_draft_tree(
-            &rows,
-            round.fed_token_count,
-            &mut state,
-            &pair.drafter_configuration.target_tap_layer_ids,
-        )
-        .expect("the chain tree verifies");
-    split_rows(pair, &verified.per_row_logits)
+    pair.target
+        .verify_draft_tree(&rows, round.fed_token_count, &mut state, tap_layer_ids)
+        .expect("the chain tree verifies")
 }
 
 /// The same tokens as one plain 16-row forward, split into rows.
