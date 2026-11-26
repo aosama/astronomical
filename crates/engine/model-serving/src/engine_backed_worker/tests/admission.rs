@@ -1,4 +1,5 @@
-use std::time::Duration;
+use super::chat::ipc_worker_transport::open_ipc_worker_transport;
+use super::chat::support::{close_worker_transport, next_event};
 
 use crate::{
     EngineBackedWorker, EngineGenerationStart, EngineLoadResult, GeneratedToken,
@@ -8,25 +9,17 @@ use crate::{
 };
 use ipc_protocol::{
     ChatGenerationCommand, ChatGenerationFailureReason, ChatGenerationOutput,
-    ChatGenerationSettings, ChatMessage, ChatModelCapabilities, ChatToolChoice,
-    MAX_IPC_FRAME_BYTES, ProtocolReader, ProtocolWriter, RequestId, WorkerCommand, WorkerEvent,
+    ChatGenerationSettings, ChatMessage, ChatModelCapabilities, ChatToolChoice, RequestId,
+    WorkerCommand, WorkerEvent,
 };
-use tokio::io::{duplex, split};
-use tokio::time::timeout;
 
 #[tokio::test]
 async fn should_report_memory_admission_failure_without_stopping_the_worker() {
     let engine_worker = EngineBackedWorker::new(PassthroughProcessor, RejectingEngine);
-    let (daemon_transport, worker_transport) = duplex(MAX_IPC_FRAME_BYTES * 2);
-    let (daemon_reader_transport, daemon_writer_transport) = split(daemon_transport);
-    let (worker_reader_transport, worker_writer_transport) = split(worker_transport);
-    let mut daemon_reader = ProtocolReader::new(daemon_reader_transport);
-    let mut daemon_writer = ProtocolWriter::new(daemon_writer_transport);
-    let worker_task = tokio::spawn(async move {
-        engine_worker
-            .run(worker_reader_transport, worker_writer_transport)
-            .await
-    });
+    let (mut daemon_reader, mut daemon_writer, worker_reader_transport, worker_writer_transport) =
+        open_ipc_worker_transport();
+    let worker_task =
+        tokio::spawn(engine_worker.run(worker_reader_transport, worker_writer_transport));
 
     assert!(matches!(
         next_event(&mut daemon_reader).await,
@@ -48,32 +41,16 @@ async fn should_report_memory_admission_failure_without_stopping_the_worker() {
         );
     }
 
-    daemon_writer
-        .close()
-        .await
-        .expect("the daemon should close the worker transport");
-    assert!(
-        timeout(Duration::from_secs(1), worker_task)
-            .await
-            .expect("the worker should stop after transport closure")
-            .expect("the worker task should not panic")
-            .is_ok()
-    );
+    close_worker_transport(daemon_writer, worker_task).await;
 }
 
 #[tokio::test]
 async fn should_report_mid_generation_memory_growth_rejection_without_stopping_the_worker() {
     let engine_worker = EngineBackedWorker::new(PassthroughProcessor, GrowthRejectingEngine);
-    let (daemon_transport, worker_transport) = duplex(MAX_IPC_FRAME_BYTES * 2);
-    let (daemon_reader_transport, daemon_writer_transport) = split(daemon_transport);
-    let (worker_reader_transport, worker_writer_transport) = split(worker_transport);
-    let mut daemon_reader = ProtocolReader::new(daemon_reader_transport);
-    let mut daemon_writer = ProtocolWriter::new(daemon_writer_transport);
-    let worker_task = tokio::spawn(async move {
-        engine_worker
-            .run(worker_reader_transport, worker_writer_transport)
-            .await
-    });
+    let (mut daemon_reader, mut daemon_writer, worker_reader_transport, worker_writer_transport) =
+        open_ipc_worker_transport();
+    let worker_task =
+        tokio::spawn(engine_worker.run(worker_reader_transport, worker_writer_transport));
 
     assert!(matches!(
         next_event(&mut daemon_reader).await,
@@ -95,32 +72,16 @@ async fn should_report_mid_generation_memory_growth_rejection_without_stopping_t
         );
     }
 
-    daemon_writer
-        .close()
-        .await
-        .expect("the daemon should close the worker transport");
-    assert!(
-        timeout(Duration::from_secs(1), worker_task)
-            .await
-            .expect("the worker should stop after transport closure")
-            .expect("the worker task should not panic")
-            .is_ok()
-    );
+    close_worker_transport(daemon_writer, worker_task).await;
 }
 
 #[tokio::test]
 async fn should_report_injected_token_memory_growth_rejection_without_stopping_the_worker() {
     let engine_worker = EngineBackedWorker::new(FeedbackProcessor, FeedbackGrowthRejectingEngine);
-    let (daemon_transport, worker_transport) = duplex(MAX_IPC_FRAME_BYTES * 2);
-    let (daemon_reader_transport, daemon_writer_transport) = split(daemon_transport);
-    let (worker_reader_transport, worker_writer_transport) = split(worker_transport);
-    let mut daemon_reader = ProtocolReader::new(daemon_reader_transport);
-    let mut daemon_writer = ProtocolWriter::new(daemon_writer_transport);
-    let worker_task = tokio::spawn(async move {
-        engine_worker
-            .run(worker_reader_transport, worker_writer_transport)
-            .await
-    });
+    let (mut daemon_reader, mut daemon_writer, worker_reader_transport, worker_writer_transport) =
+        open_ipc_worker_transport();
+    let worker_task =
+        tokio::spawn(engine_worker.run(worker_reader_transport, worker_writer_transport));
 
     assert!(matches!(
         next_event(&mut daemon_reader).await,
@@ -155,17 +116,7 @@ async fn should_report_injected_token_memory_growth_rejection_without_stopping_t
         );
     }
 
-    daemon_writer
-        .close()
-        .await
-        .expect("the daemon should close the worker transport");
-    assert!(
-        timeout(Duration::from_secs(1), worker_task)
-            .await
-            .expect("the worker should stop after transport closure")
-            .expect("the worker task should not panic")
-            .is_ok()
-    );
+    close_worker_transport(daemon_writer, worker_task).await;
 }
 
 fn chat_command(request_number: u64) -> ChatGenerationCommand {
@@ -190,17 +141,6 @@ fn chat_command(request_number: u64) -> ChatGenerationCommand {
     }
 }
 
-async fn next_event<ReadTransport>(daemon_reader: &mut ProtocolReader<ReadTransport>) -> WorkerEvent
-where
-    ReadTransport: tokio::io::AsyncRead + Unpin,
-{
-    super::next_event_skipping_load_progress(daemon_reader).await
-}
-
-struct PassthroughProcessor;
-
-struct FeedbackProcessor;
-
 struct TestInferenceRequest {
     prompt_token_count: usize,
 }
@@ -216,6 +156,10 @@ impl PreparedInferenceRequest for TestInferenceRequest {
         self.prompt_token_count
     }
 }
+
+struct PassthroughProcessor;
+
+struct FeedbackProcessor;
 
 impl ModelGenerationProcessor for PassthroughProcessor {
     type InferenceRequest = TestInferenceRequest;

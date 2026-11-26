@@ -7,8 +7,8 @@ use std::time::Duration;
 
 use astronomical_daemon::{
     ChatGenerationExecutor, GenerationPerformanceLog, ResolvedRuntimeConfig,
-    ResolvedRuntimeConfigResolver, ShutdownController, WorkerHandle, WorkerHealthStatus,
-    build_application_with_full_control, build_application_with_shutdown,
+    ResolvedRuntimeConfigResolver, RuntimeModelPolicy, ShutdownController, WorkerHandle,
+    WorkerHealthStatus, build_application_with_full_control, build_application_with_shutdown,
     build_development_application_with_reload,
 };
 use axum::{
@@ -23,6 +23,7 @@ use crate::support::ScriptedExecutor;
 mod config_document;
 mod configuration_status;
 mod generation_admission;
+mod idle_worker_fixtures;
 mod maximum_mlx_memory;
 mod menu_bar_setting;
 mod mixed_reload_configuration_generation;
@@ -33,4 +34,5 @@ mod shutdown;
 mod support;
 mod transactional_replacement;
 
+use idle_worker_fixtures::*;
 use support::*;

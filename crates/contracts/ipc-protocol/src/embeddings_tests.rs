@@ -1,5 +1,6 @@
 //! IPC round-trip and validation coverage for native embeddings commands.
 
+use crate::protocol_round_trip_test_support::assert_command_round_trips;
 use crate::{
     EmbeddingEncodingFormat, EmbeddingsCommand, EmbeddingsFailureReason, ProtocolReader,
     ProtocolWriter, RequestId, WorkerCommand, WorkerEvent,
@@ -20,22 +21,7 @@ async fn should_round_trip_one_embeddings_command() {
         encoding_format: EmbeddingEncodingFormat::Base64,
         dimensions: Some(256),
     });
-    let (daemon_transport, worker_transport) = duplex(TEST_TRANSPORT_CAPACITY_BYTES);
-    let mut daemon_writer = ProtocolWriter::new(daemon_transport);
-    let mut worker_reader = ProtocolReader::new(worker_transport);
-
-    daemon_writer
-        .send_command(&worker_command)
-        .await
-        .expect("a bounded embeddings command should be written");
-
-    assert_eq!(
-        worker_reader
-            .next_command()
-            .await
-            .expect("the embeddings command frame should decode"),
-        Some(worker_command)
-    );
+    assert_command_round_trips(&worker_command, "a bounded embeddings command").await;
 }
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]

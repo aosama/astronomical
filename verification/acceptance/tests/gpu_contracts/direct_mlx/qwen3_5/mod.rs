@@ -39,4 +39,5 @@ mod vision_padding_fusion_probe;
 mod vision_padding_zero_cache;
 mod vision_rope;
 mod vision_rope_fusion_probe;
+mod vision_rope_operands;
 mod visual_embedding_injection;

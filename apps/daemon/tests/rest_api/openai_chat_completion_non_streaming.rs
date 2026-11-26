@@ -1,34 +1,28 @@
-use std::{future::Future, pin::Pin};
-
 use astronomical_daemon::{
-    ChatGenerationExecutor, ChatGenerationStreamErrorCode, ChatGenerationStreamEvent,
-    GenerationStartError, WorkerHealthSnapshot, build_application,
+    ChatGenerationStreamErrorCode, ChatGenerationStreamEvent, build_application,
 };
-use axum::{
-    body::{Body, to_bytes},
-    http::{Request, StatusCode, header},
-};
-use ipc_protocol::{
-    ChatGenerationCommand, ChatGenerationCompletionReason, ChatGenerationFailureReason,
-    ChatModelCapabilities,
-};
-use tokio::sync::mpsc;
-use tower::ServiceExt;
+use axum::http::StatusCode;
+use ipc_protocol::{ChatGenerationCompletionReason, ChatGenerationFailureReason};
+
+use crate::rest_api::chat_endpoint_fixtures::{ScriptedChatExecutor, post_chat_completion};
 
 const MODEL_ID: &str = "astronomical/non-streaming-test-model";
 
 #[tokio::test]
 async fn should_return_a_non_streaming_chat_completion_json_response() {
-    let application = build_application(ScriptedExecutor::ready(vec![
-        ChatGenerationStreamEvent::TextFragment("done".to_owned()),
-        ChatGenerationStreamEvent::Completed {
-            prompt_token_count: 3,
-            generated_token_count: 2,
-            reasoning_token_count: 0,
-            astro_ssd_prompt_cache_restored_token_count: 0,
-            reason: ChatGenerationCompletionReason::EndOfSequence,
-        },
-    ]));
+    let application = build_application(ScriptedChatExecutor::ready(
+        MODEL_ID,
+        vec![
+            ChatGenerationStreamEvent::TextFragment("done".to_owned()),
+            ChatGenerationStreamEvent::Completed {
+                prompt_token_count: 3,
+                generated_token_count: 2,
+                reasoning_token_count: 0,
+                astro_ssd_prompt_cache_restored_token_count: 0,
+                reason: ChatGenerationCompletionReason::EndOfSequence,
+            },
+        ],
+    ));
 
     let (status, content_type, response_body) = post_non_streaming_chat(application).await;
 
@@ -64,16 +58,19 @@ async fn should_return_a_non_streaming_chat_completion_json_response() {
 
 #[tokio::test]
 async fn should_accept_a_chat_request_with_the_stream_field_omitted() {
-    let application = build_application(ScriptedExecutor::ready(vec![
-        ChatGenerationStreamEvent::TextFragment("done".to_owned()),
-        ChatGenerationStreamEvent::Completed {
-            prompt_token_count: 3,
-            generated_token_count: 2,
-            reasoning_token_count: 0,
-            astro_ssd_prompt_cache_restored_token_count: 0,
-            reason: ChatGenerationCompletionReason::EndOfSequence,
-        },
-    ]));
+    let application = build_application(ScriptedChatExecutor::ready(
+        MODEL_ID,
+        vec![
+            ChatGenerationStreamEvent::TextFragment("done".to_owned()),
+            ChatGenerationStreamEvent::Completed {
+                prompt_token_count: 3,
+                generated_token_count: 2,
+                reasoning_token_count: 0,
+                astro_ssd_prompt_cache_restored_token_count: 0,
+                reason: ChatGenerationCompletionReason::EndOfSequence,
+            },
+        ],
+    ));
 
     let (status, _content_type, response_body) = post_chat_with_body(
         application,
@@ -94,17 +91,20 @@ async fn should_accept_a_chat_request_with_the_stream_field_omitted() {
 
 #[tokio::test]
 async fn should_assemble_reasoning_and_text_in_a_non_streaming_response() {
-    let application = build_application(ScriptedExecutor::ready(vec![
-        ChatGenerationStreamEvent::ReasoningFragment("inspect first".to_owned()),
-        ChatGenerationStreamEvent::TextFragment("done".to_owned()),
-        ChatGenerationStreamEvent::Completed {
-            prompt_token_count: 3,
-            generated_token_count: 2,
-            reasoning_token_count: 1,
-            astro_ssd_prompt_cache_restored_token_count: 0,
-            reason: ChatGenerationCompletionReason::EndOfSequence,
-        },
-    ]));
+    let application = build_application(ScriptedChatExecutor::ready(
+        MODEL_ID,
+        vec![
+            ChatGenerationStreamEvent::ReasoningFragment("inspect first".to_owned()),
+            ChatGenerationStreamEvent::TextFragment("done".to_owned()),
+            ChatGenerationStreamEvent::Completed {
+                prompt_token_count: 3,
+                generated_token_count: 2,
+                reasoning_token_count: 1,
+                astro_ssd_prompt_cache_restored_token_count: 0,
+                reason: ChatGenerationCompletionReason::EndOfSequence,
+            },
+        ],
+    ));
 
     let (status, _content_type, response_body) = post_non_streaming_chat(application).await;
 
@@ -124,20 +124,23 @@ async fn should_assemble_reasoning_and_text_in_a_non_streaming_response() {
 
 #[tokio::test]
 async fn should_assemble_tool_calls_in_a_non_streaming_response() {
-    let application = build_application(ScriptedExecutor::ready(vec![
-        ChatGenerationStreamEvent::ToolCall {
-            tool_call_index: 0,
-            function_name: "read".to_owned(),
-            arguments_json: r#"{"filePath":"README.md"}"#.to_owned(),
-        },
-        ChatGenerationStreamEvent::Completed {
-            prompt_token_count: 1,
-            generated_token_count: 1,
-            reasoning_token_count: 0,
-            astro_ssd_prompt_cache_restored_token_count: 0,
-            reason: ChatGenerationCompletionReason::ToolCalls,
-        },
-    ]));
+    let application = build_application(ScriptedChatExecutor::ready(
+        MODEL_ID,
+        vec![
+            ChatGenerationStreamEvent::ToolCall {
+                tool_call_index: 0,
+                function_name: "read".to_owned(),
+                arguments_json: r#"{"filePath":"README.md"}"#.to_owned(),
+            },
+            ChatGenerationStreamEvent::Completed {
+                prompt_token_count: 1,
+                generated_token_count: 1,
+                reasoning_token_count: 0,
+                astro_ssd_prompt_cache_restored_token_count: 0,
+                reason: ChatGenerationCompletionReason::ToolCalls,
+            },
+        ],
+    ));
 
     let (status, _content_type, response_body) = post_non_streaming_chat(application).await;
 
@@ -165,15 +168,16 @@ async fn should_assemble_tool_calls_in_a_non_streaming_response() {
 
 #[tokio::test]
 async fn should_include_cached_tokens_in_non_streaming_usage_when_nonzero() {
-    let application = build_application(ScriptedExecutor::ready(vec![
-        ChatGenerationStreamEvent::Completed {
+    let application = build_application(ScriptedChatExecutor::ready(
+        MODEL_ID,
+        vec![ChatGenerationStreamEvent::Completed {
             prompt_token_count: 4_096,
             generated_token_count: 100,
             reasoning_token_count: 0,
             astro_ssd_prompt_cache_restored_token_count: 2_048,
             reason: ChatGenerationCompletionReason::EndOfSequence,
-        },
-    ]));
+        }],
+    ));
 
     let (status, _content_type, response_body) = post_non_streaming_chat(application).await;
 
@@ -188,13 +192,14 @@ async fn should_include_cached_tokens_in_non_streaming_usage_when_nonzero() {
 
 #[tokio::test]
 async fn should_return_a_service_unavailable_error_body_for_a_failed_non_streaming_chat() {
-    let application = build_application(ScriptedExecutor::ready(vec![
-        ChatGenerationStreamEvent::Failed {
+    let application = build_application(ScriptedChatExecutor::ready(
+        MODEL_ID,
+        vec![ChatGenerationStreamEvent::Failed {
             reason: ChatGenerationFailureReason::InvalidRequest {
                 reason: "rendered prompt exceeds the 262144-byte worker limit".to_owned(),
             },
-        },
-    ]));
+        }],
+    ));
 
     let (status, _content_type, response_body) = post_non_streaming_chat(application).await;
 
@@ -211,9 +216,12 @@ async fn should_return_a_service_unavailable_error_body_for_a_failed_non_streami
 #[tokio::test]
 async fn should_return_a_service_unavailable_error_body_when_the_worker_becomes_unavailable_mid_chat()
  {
-    let application = build_application(ScriptedExecutor::ready(vec![
-        ChatGenerationStreamEvent::Error(ChatGenerationStreamErrorCode::WorkerUnavailable),
-    ]));
+    let application = build_application(ScriptedChatExecutor::ready(
+        MODEL_ID,
+        vec![ChatGenerationStreamEvent::Error(
+            ChatGenerationStreamErrorCode::WorkerUnavailable,
+        )],
+    ));
 
     let (status, _content_type, response_body) = post_non_streaming_chat(application).await;
 
@@ -232,11 +240,12 @@ async fn should_return_a_service_unavailable_error_body_when_the_worker_becomes_
 
 #[tokio::test]
 async fn should_report_out_of_graphics_memory_with_its_own_code_for_a_non_streaming_chat() {
-    let application = build_application(ScriptedExecutor::ready(vec![
-        ChatGenerationStreamEvent::Failed {
+    let application = build_application(ScriptedChatExecutor::ready(
+        MODEL_ID,
+        vec![ChatGenerationStreamEvent::Failed {
             reason: ChatGenerationFailureReason::OutOfGraphicsMemory,
-        },
-    ]));
+        }],
+    ));
 
     let (status, _content_type, response_body) = post_non_streaming_chat(application).await;
 
@@ -254,13 +263,14 @@ async fn should_report_out_of_graphics_memory_with_its_own_code_for_a_non_stream
 async fn should_report_fatal_worker_execution_as_unavailable_for_a_non_streaming_chat() {
     let bounded_fatal_execution_reason =
         "GPU allocation exceeded the platform buffer limit; reduce the prompt size";
-    let application = build_application(ScriptedExecutor::ready(vec![
-        ChatGenerationStreamEvent::Failed {
+    let application = build_application(ScriptedChatExecutor::ready(
+        MODEL_ID,
+        vec![ChatGenerationStreamEvent::Failed {
             reason: ChatGenerationFailureReason::FatalExecution {
                 reason: bounded_fatal_execution_reason.to_owned(),
             },
-        },
-    ]));
+        }],
+    ));
 
     let (status, _content_type, response_body) = post_non_streaming_chat(application).await;
 
@@ -281,14 +291,15 @@ async fn should_report_fatal_worker_execution_as_unavailable_for_a_non_streaming
 
 #[tokio::test]
 async fn should_return_context_length_exceeded_for_a_non_streaming_chat() {
-    let application = build_application(ScriptedExecutor::ready(vec![
-        ChatGenerationStreamEvent::Failed {
+    let application = build_application(ScriptedChatExecutor::ready(
+        MODEL_ID,
+        vec![ChatGenerationStreamEvent::Failed {
             reason: ChatGenerationFailureReason::ContextLengthExceeded {
                 actual_total_context_tokens: 262_145,
                 maximum_context_tokens: 262_144,
             },
-        },
-    ]));
+        }],
+    ));
 
     let (status, _content_type, response_body) = post_non_streaming_chat(application).await;
 
@@ -316,89 +327,5 @@ async fn post_chat_with_body(
     application: axum::Router,
     request_body: &'static str,
 ) -> (StatusCode, Option<String>, String) {
-    let chat_response = application
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/v1/chat/completions")
-                .header(header::CONTENT_TYPE, "application/json")
-                .body(Body::from(request_body))
-                .expect("the chat request should be valid"),
-        )
-        .await
-        .expect("the application should return a chat response");
-    let status = chat_response.status();
-    let content_type = chat_response
-        .headers()
-        .get(axum::http::header::CONTENT_TYPE)
-        .and_then(|header_value| header_value.to_str().ok())
-        .map(str::to_owned);
-    let response_body = to_bytes(chat_response.into_body(), 16 * 1024)
-        .await
-        .expect("the chat response body should be readable");
-    (
-        status,
-        content_type,
-        String::from_utf8(response_body.to_vec())
-            .expect("the chat response body should contain UTF-8"),
-    )
+    post_chat_completion(application, request_body, 16 * 1024).await
 }
-
-struct ScriptedExecutor {
-    health_snapshot: WorkerHealthSnapshot,
-    stream_events: Vec<ChatGenerationStreamEvent>,
-}
-
-impl ScriptedExecutor {
-    fn ready(stream_events: Vec<ChatGenerationStreamEvent>) -> Self {
-        Self {
-            health_snapshot: WorkerHealthSnapshot::ready_with_model(
-                MODEL_ID.to_owned(),
-                ChatModelCapabilities {
-                    supports_reasoning: true,
-                    supports_tool_calls: true,
-                    has_vision: true,
-                    max_input_tokens: 241_664,
-                    max_output_tokens: 20_480,
-                    context_window: 262_144,
-                },
-            ),
-            stream_events,
-        }
-    }
-}
-
-impl ChatGenerationExecutor for ScriptedExecutor {
-    fn start_chat_generation(
-        &self,
-        _generation_command: ChatGenerationCommand,
-    ) -> Pin<
-        Box<
-            dyn Future<
-                    Output = Result<
-                        mpsc::Receiver<ChatGenerationStreamEvent>,
-                        GenerationStartError,
-                    >,
-                > + Send
-                + '_,
-        >,
-    > {
-        Box::pin(async move {
-            let (stream_event_sender, stream_event_receiver) =
-                mpsc::channel(self.stream_events.len().max(1));
-            for stream_event in &self.stream_events {
-                stream_event_sender
-                    .send(stream_event.clone())
-                    .await
-                    .map_err(|_| GenerationStartError::WorkerUnavailable)?;
-            }
-            Ok(stream_event_receiver)
-        })
-    }
-
-    fn worker_health_snapshot(&self) -> WorkerHealthSnapshot {
-        self.health_snapshot.clone()
-    }
-}
-
-impl astronomical_daemon::ImageGenerationExecutor for ScriptedExecutor {}

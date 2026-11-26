@@ -3,12 +3,10 @@
 use std::time::Duration;
 
 use ipc_protocol::{ExpertMemoryMode, RequestId};
-use model_serving::{
-    CompleteResidencyHeadroomBoundary, InferenceEngine, TextModelTestControls,
-    model_memory_geometry_from_validated_artifact,
-};
+use model_serving::{InferenceEngine, TextModelTestControls};
 use tokio::time::timeout;
 
+use super::paging_ceiling::derive_paging_ceiling;
 use super::support::{
     RESIDENCY_LIFECYCLE_PROMPT_TOKEN_COUNT, construct_automatic_residency_engine,
     initialize_automatic_residency_tracing, serve_romeo_and_juliet_request,
@@ -27,27 +25,13 @@ async fn should_keep_serving_on_streaming_after_the_memory_ceiling_rises() {
                 .expect("the machine MLX ceiling should fit u64");
         let model_directory =
             crate::serving_acceptance::support::configured_resident_sparse_moe_model_directory();
-        let validated_artifact = model_serving::Qwen3_5ArtifactValidator::new()
-            .validate(&model_directory, 20_480)
-            .expect("the resident sparse artifact should validate");
-        let (model_geometry, required_headroom_bytes) =
-            model_memory_geometry_from_validated_artifact(
-                &validated_artifact,
-                &model_directory,
-            )
-            .expect("the resident sparse artifact should expose disk RAM geometry");
-        let residency_boundary = CompleteResidencyHeadroomBoundary::from_model_geometry(
-            model_geometry,
-            required_headroom_bytes,
-        );
-        let paging_ceiling_bytes = residency_boundary.paging_ceiling_bytes().expect(
-            "this sparse artifact must have a ceiling that fits expert weights but not activation headroom",
-        );
-        let paging_ceiling_limit_bytes = usize::try_from(paging_ceiling_bytes)
-            .expect("the paging ceiling should fit usize");
+        let derived_ceiling = derive_paging_ceiling(&model_directory);
+        let paging_ceiling_bytes = derived_ceiling.paging_ceiling_bytes;
+        let paging_ceiling_limit_bytes = derived_ceiling.paging_ceiling_limit_bytes();
+        let required_headroom_bytes = derived_ceiling.required_headroom_bytes;
         eprintln!(
             "[seating-failure] status=progress phase=derived_ceiling expert_bytes={} headroom_bytes={required_headroom_bytes} paging_ceiling_bytes={paging_ceiling_bytes} machine_ceiling_bytes={machine_mlx_memory_ceiling_bytes}",
-            model_geometry.complete_expert_payload_bytes
+            derived_ceiling.model_geometry.complete_expert_payload_bytes
         );
         let request_id = RequestId::new(1_008);
         let (

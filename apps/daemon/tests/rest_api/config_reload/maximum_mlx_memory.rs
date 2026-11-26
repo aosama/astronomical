@@ -15,42 +15,13 @@ const ROMEO_AND_JULIET: &str = include_str!(
 
 #[tokio::test]
 async fn should_require_full_reload_when_other_configuration_changes_are_pending() {
-    let worker_executable_path = PathBuf::from(
-        std::env::var("CARGO_BIN_EXE_astronomical-daemon-idle-worker")
-            .expect("Cargo should provide the idle worker fixture path"),
-    );
-    let config_home_directory = tempfile::tempdir()
-        .expect("a config home should be created")
-        .keep();
-    write_config_file(&config_home_directory, r#"{}"#);
-    let performance_log_directory = config_home_directory.join("performance");
-    std::fs::create_dir_all(&performance_log_directory)
-        .expect("the performance-log directory should be created");
-    let worker_handle = WorkerHandle::launch(
-        &worker_executable_path,
-        Duration::from_secs(2),
-        GenerationPerformanceLog::open(&performance_log_directory)
-            .expect("the performance log should open"),
-        Arc::new(HashMap::new()),
-    )
-    .await
-    .expect("the idle worker should launch");
-    wait_for_idle_worker(&worker_handle).await;
-    let runtime_config_resolver = ResolvedRuntimeConfigResolver::for_development_home_directory(
-        config_home_directory.clone(),
-        worker_executable_path.clone(),
-    );
-    let mut initial_resolved_config = runtime_config_resolver
-        .load()
-        .expect("initial config should resolve");
-    initial_resolved_config.worker_executable_path = worker_executable_path;
-    let reloadable_config = Arc::new(RwLock::new(initial_resolved_config));
-    let application = build_application_with_full_control(
-        worker_handle.clone(),
-        Arc::clone(&reloadable_config),
-        runtime_config_resolver,
-        ShutdownController::new(),
-    );
+    let MemoryJourney {
+        worker_handle,
+        application,
+        reloadable_config,
+        config_home_directory,
+        ..
+    } = start_memory_journey(MemoryJourneyModels::None).await;
     write_config_file(
         &config_home_directory,
         r#"{"diagnostics":{"log_level":"info"}}"#,
@@ -71,50 +42,17 @@ async fn should_require_full_reload_when_other_configuration_changes_are_pending
             .maximum_mlx_memory_bytes
             .is_none()
     );
-    worker_handle
-        .shutdown()
-        .await
-        .expect("the worker should shut down");
+    shut_down_worker(worker_handle).await;
 }
 
 #[tokio::test]
 async fn should_not_let_a_rejected_update_restore_over_a_newer_memory_setting() {
-    let worker_executable_path = PathBuf::from(
-        std::env::var("CARGO_BIN_EXE_astronomical-daemon-idle-worker")
-            .expect("Cargo should provide the idle worker fixture path"),
-    );
-    let config_home_directory = tempfile::tempdir()
-        .expect("a config home should be created")
-        .keep();
-    write_config_file(&config_home_directory, r#"{}"#);
-    let performance_log_directory = config_home_directory.join("performance");
-    std::fs::create_dir_all(&performance_log_directory)
-        .expect("the performance-log directory should be created");
-    let worker_handle = WorkerHandle::launch(
-        &worker_executable_path,
-        Duration::from_secs(2),
-        GenerationPerformanceLog::open(&performance_log_directory)
-            .expect("the performance log should open"),
-        Arc::new(std::collections::HashMap::new()),
-    )
-    .await
-    .expect("the idle worker should launch");
-    wait_for_idle_worker(&worker_handle).await;
-    let runtime_config_resolver = ResolvedRuntimeConfigResolver::for_development_home_directory(
-        config_home_directory.clone(),
-        worker_executable_path.clone(),
-    );
-    let mut initial_resolved_config = runtime_config_resolver
-        .load()
-        .expect("initial config should resolve");
-    initial_resolved_config.worker_executable_path = worker_executable_path;
-    let reloadable_config = Arc::new(RwLock::new(initial_resolved_config));
-    let application = build_application_with_full_control(
-        worker_handle.clone(),
-        reloadable_config,
-        runtime_config_resolver,
-        ShutdownController::new(),
-    );
+    let MemoryJourney {
+        worker_handle,
+        application,
+        config_home_directory,
+        ..
+    } = start_memory_journey(MemoryJourneyModels::None).await;
 
     let rejected_application = application.clone();
     let rejected_update_task =
@@ -130,54 +68,18 @@ async fn should_not_let_a_rejected_update_restore_over_a_newer_memory_setting() 
 
     assert_eq!(rejected_response.status(), StatusCode::BAD_REQUEST);
     wait_for_persisted_maximum(&config_home_directory, 32).await;
-    worker_handle
-        .shutdown()
-        .await
-        .expect("the worker should shut down");
+    shut_down_worker(worker_handle).await;
 }
 
 #[tokio::test]
 async fn should_preserve_persisted_intent_when_queued_application_is_rejected() {
     timeout(Duration::from_secs(10), async {
-        let worker_executable_path = PathBuf::from(
-            std::env::var("CARGO_BIN_EXE_astronomical-daemon-idle-worker")
-                .expect("Cargo should provide the idle worker fixture path"),
-        );
-        let config_home_directory = tempfile::tempdir()
-            .expect("a config home should be created")
-            .keep();
-        write_config_file(&config_home_directory, r#"{}"#);
-        let model_policy_catalog = Arc::new(HashMap::from([(
-            DELAYED_MEMORY_MODEL_ID.to_owned(),
-            delayed_memory_model_policy(&config_home_directory),
-        )]));
-        let performance_log_directory = config_home_directory.join("performance");
-        std::fs::create_dir_all(&performance_log_directory)
-            .expect("the performance log directory should be created");
-        let worker_handle = WorkerHandle::launch(
-            &worker_executable_path,
-            Duration::from_secs(2),
-            GenerationPerformanceLog::open(&performance_log_directory)
-                .expect("the performance log should open"),
-            Arc::clone(&model_policy_catalog),
-        )
-        .await
-        .expect("the idle worker should launch");
-        wait_for_idle_worker(&worker_handle).await;
-        let runtime_config_resolver = ResolvedRuntimeConfigResolver::for_development_home_directory(
-            config_home_directory.clone(),
-            worker_executable_path.clone(),
-        );
-        let mut initial_resolved_config = runtime_config_resolver
-            .load()
-            .expect("initial config should resolve");
-        initial_resolved_config.worker_executable_path = worker_executable_path;
-        let application = build_application_with_full_control(
-            worker_handle.clone(),
-            Arc::new(RwLock::new(initial_resolved_config)),
-            runtime_config_resolver,
-            ShutdownController::new(),
-        );
+        let MemoryJourney {
+            worker_handle,
+            application,
+            config_home_directory,
+            ..
+        } = start_memory_journey(MemoryJourneyModels::DelayedCompletion).await;
         let mut generation_events = worker_handle
             .start_chat_generation(delayed_memory_generation_command())
             .await
@@ -213,10 +115,7 @@ async fn should_preserve_persisted_intent_when_queued_application_is_rejected() 
         wait_for_memory_rejection(&worker_handle).await;
         wait_for_persisted_maximum(&config_home_directory, 33).await;
 
-        worker_handle
-            .shutdown()
-            .await
-            .expect("the worker should shut down");
+        shut_down_worker(worker_handle).await;
     })
     .await
     .expect("the queued memory rejection journey should finish");
@@ -225,47 +124,13 @@ async fn should_preserve_persisted_intent_when_queued_application_is_rejected() 
 #[tokio::test]
 async fn should_rollback_live_state_when_a_reloaded_memory_setting_is_rejected_after_queueing() {
     timeout(Duration::from_secs(10), async {
-        let worker_executable_path = PathBuf::from(
-            std::env::var("CARGO_BIN_EXE_astronomical-daemon-idle-worker")
-                .expect("Cargo should provide the idle worker fixture path"),
-        );
-        let config_home_directory = tempfile::tempdir()
-            .expect("a config home should be created")
-            .keep();
-        write_config_file(&config_home_directory, r#"{}"#);
-        let model_policy_catalog = Arc::new(HashMap::from([(
-            DELAYED_MEMORY_MODEL_ID.to_owned(),
-            delayed_memory_model_policy(&config_home_directory),
-        )]));
-        let performance_log_directory = config_home_directory.join("performance");
-        std::fs::create_dir_all(&performance_log_directory)
-            .expect("the performance log directory should be created");
-        let worker_handle = WorkerHandle::launch(
-            &worker_executable_path,
-            Duration::from_secs(2),
-            GenerationPerformanceLog::open(&performance_log_directory)
-                .expect("the performance log should open"),
-            Arc::clone(&model_policy_catalog),
-        )
-        .await
-        .expect("the idle worker should launch");
-        wait_for_idle_worker(&worker_handle).await;
-        let runtime_config_resolver = ResolvedRuntimeConfigResolver::for_development_home_directory(
-            config_home_directory.clone(),
-            worker_executable_path.clone(),
-        );
-        let mut initial_resolved_config = runtime_config_resolver
-            .load()
-            .expect("initial config should resolve");
-        initial_resolved_config.worker_executable_path = worker_executable_path;
-        let initial_generation = initial_resolved_config.configuration_generation.clone();
-        let reloadable_config = Arc::new(RwLock::new(initial_resolved_config));
-        let application = build_application_with_full_control(
-            worker_handle.clone(),
-            Arc::clone(&reloadable_config),
-            runtime_config_resolver,
-            ShutdownController::new(),
-        );
+        let MemoryJourney {
+            worker_handle,
+            application,
+            reloadable_config,
+            config_home_directory,
+            initial_generation,
+        } = start_memory_journey(MemoryJourneyModels::DelayedCompletion).await;
         let mut generation_events = worker_handle
             .start_chat_generation(delayed_memory_generation_command())
             .await
@@ -288,13 +153,65 @@ async fn should_rollback_live_state_when_a_reloaded_memory_setting_is_rejected_a
         wait_for_resolved_generation(&reloadable_config, &initial_generation).await;
         wait_for_persisted_maximum(&config_home_directory, 31).await;
 
-        worker_handle
-            .shutdown()
-            .await
-            .expect("the worker should shut down");
+        shut_down_worker(worker_handle).await;
     })
     .await
     .expect("the queued reload rollback journey should finish");
+}
+
+enum MemoryJourneyModels {
+    None,
+    DelayedCompletion,
+}
+
+struct MemoryJourney {
+    worker_handle: WorkerHandle,
+    application: axum::Router,
+    reloadable_config: Arc<RwLock<ResolvedRuntimeConfig>>,
+    config_home_directory: PathBuf,
+    initial_generation: String,
+}
+
+/// Brings up an idle worker and a daemon application over an empty config
+/// file, optionally hosting the delayed-completion model so a generation can
+/// hold the memory-limit change in the queue.
+async fn start_memory_journey(models: MemoryJourneyModels) -> MemoryJourney {
+    let worker_executable_path = idle_worker_executable_path();
+    let config_home_directory = tempfile::tempdir()
+        .expect("a config home should be created")
+        .keep();
+    write_config_file(&config_home_directory, r#"{}"#);
+    let model_policy_catalog = match models {
+        MemoryJourneyModels::None => Arc::new(HashMap::new()),
+        MemoryJourneyModels::DelayedCompletion => Arc::new(HashMap::from([(
+            DELAYED_MEMORY_MODEL_ID.to_owned(),
+            delayed_memory_model_policy(&config_home_directory),
+        )])),
+    };
+    let worker_handle = launch_idle_worker(
+        &worker_executable_path,
+        &config_home_directory,
+        model_policy_catalog,
+    )
+    .await;
+    wait_for_idle_worker(&worker_handle).await;
+    let (runtime_config_resolver, initial_resolved_config) =
+        resolve_initial_config(&config_home_directory, &worker_executable_path);
+    let initial_generation = initial_resolved_config.configuration_generation.clone();
+    let reloadable_config = Arc::new(RwLock::new(initial_resolved_config));
+    let application = build_application_with_full_control(
+        worker_handle.clone(),
+        Arc::clone(&reloadable_config),
+        runtime_config_resolver,
+        ShutdownController::new(),
+    );
+    MemoryJourney {
+        worker_handle,
+        application,
+        reloadable_config,
+        config_home_directory,
+        initial_generation,
+    }
 }
 
 fn delayed_memory_model_policy(model_root: &std::path::Path) -> RuntimeModelPolicy {

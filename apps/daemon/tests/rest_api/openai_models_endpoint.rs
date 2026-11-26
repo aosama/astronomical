@@ -1,3 +1,4 @@
+use crate::rest_api::http_exchange_fixtures::{get_response, read_json_body};
 use std::{fs, path::PathBuf};
 
 use axum::{
@@ -42,15 +43,7 @@ async fn should_list_the_independent_token_limits_produced_by_model_discovery() 
         discovered_models,
     );
 
-    let models_response = application
-        .oneshot(
-            Request::builder()
-                .uri("/v1/models")
-                .body(Body::empty())
-                .expect("the model-list request should be valid"),
-        )
-        .await
-        .expect("the application should return a model list");
+    let models_response = get_response(&application, "/v1/models").await;
 
     assert_eq!(models_response.status(), StatusCode::OK);
     let models_body = to_bytes(models_response.into_body(), 8 * 1024)
@@ -78,15 +71,7 @@ async fn should_list_complete_capabilities_for_a_ready_worker_model() {
             context_window: 262_144,
         }));
     let application = astronomical_daemon::build_application(scripted_executor);
-    let models_response = application
-        .oneshot(
-            Request::builder()
-                .uri("/v1/models")
-                .body(Body::empty())
-                .expect("the model-list request should be valid"),
-        )
-        .await
-        .expect("the application should return a model list");
+    let models_response = get_response(&application, "/v1/models").await;
 
     assert_eq!(models_response.status(), StatusCode::OK);
     let models_body = to_bytes(models_response.into_body(), 8 * 1024)
@@ -146,11 +131,7 @@ async fn should_get_a_discovered_model_by_provider_prefixed_id() {
         .expect("the application should return a model-detail response");
 
     assert_eq!(model_response.status(), StatusCode::OK);
-    let model_body = to_bytes(model_response.into_body(), 8 * 1024)
-        .await
-        .expect("the model-detail body should be readable");
-    let advertised_model: serde_json::Value =
-        serde_json::from_slice(&model_body).expect("the model-detail body should contain JSON");
+    let advertised_model = read_json_body(model_response, 8 * 1024).await;
 
     assert_eq!(advertised_model["id"], DISCOVERED_VISION_MODEL_ID);
     assert_eq!(
@@ -173,15 +154,7 @@ async fn should_list_text_only_input_modality_for_a_discovered_model_without_vis
         ScriptedExecutor::ready(Vec::new()),
         vec![discovered_model_with_vision_support(false)],
     );
-    let models_response = application
-        .oneshot(
-            Request::builder()
-                .uri("/v1/models")
-                .body(Body::empty())
-                .expect("the model-list request should be valid"),
-        )
-        .await
-        .expect("the application should return a model list");
+    let models_response = get_response(&application, "/v1/models").await;
 
     assert_eq!(models_response.status(), StatusCode::OK);
     let models_body = to_bytes(models_response.into_body(), 8 * 1024)
@@ -213,15 +186,7 @@ async fn should_list_image_model_metadata_without_autoregressive_token_limits() 
         vec![discovered_image_model()],
     );
 
-    let models_response = application
-        .oneshot(
-            Request::builder()
-                .uri("/v1/models")
-                .body(Body::empty())
-                .expect("the model-list request should be valid"),
-        )
-        .await
-        .expect("the application should return a model list");
+    let models_response = get_response(&application, "/v1/models").await;
     let models_body = to_bytes(models_response.into_body(), 8 * 1024)
         .await
         .expect("the model-list body should be readable");
@@ -324,15 +289,7 @@ async fn should_project_family_derived_reasoning_and_tool_capabilities() {
         vec![discovered_model],
     );
 
-    let models_response = application
-        .oneshot(
-            Request::builder()
-                .uri("/v1/models")
-                .body(Body::empty())
-                .expect("the model-list request should be valid"),
-        )
-        .await
-        .expect("the application should return a model list");
+    let models_response = get_response(&application, "/v1/models").await;
     let models_body = to_bytes(models_response.into_body(), 8 * 1024)
         .await
         .expect("the model-list body should be readable");
@@ -349,15 +306,7 @@ async fn should_project_family_derived_reasoning_and_tool_capabilities() {
 #[tokio::test]
 async fn should_return_an_openai_model_not_found_error_for_an_unknown_model() {
     let application = astronomical_daemon::build_application(ScriptedExecutor::ready(Vec::new()));
-    let model_response = application
-        .oneshot(
-            Request::builder()
-                .uri("/v1/models/unknown-local-model")
-                .body(Body::empty())
-                .expect("the model-detail request should be valid"),
-        )
-        .await
-        .expect("the application should return a model-detail response");
+    let model_response = get_response(&application, "/v1/models/unknown-local-model").await;
 
     assert_eq!(model_response.status(), StatusCode::NOT_FOUND);
     let model_response_body = to_bytes(model_response.into_body(), 8 * 1024)
@@ -372,15 +321,7 @@ async fn should_return_an_openai_model_not_found_error_for_an_unknown_model() {
 #[tokio::test]
 async fn should_not_advertise_stale_model_metadata_when_the_worker_is_unavailable() {
     let application = astronomical_daemon::build_application(ScriptedExecutor::unavailable());
-    let models_response = application
-        .oneshot(
-            Request::builder()
-                .uri("/v1/models")
-                .body(Body::empty())
-                .expect("the model-list request should be valid"),
-        )
-        .await
-        .expect("the application should return a model list");
+    let models_response = get_response(&application, "/v1/models").await;
 
     assert_eq!(models_response.status(), StatusCode::OK);
     let models_body = to_bytes(models_response.into_body(), 8 * 1024)
@@ -404,15 +345,7 @@ async fn should_fail_closed_when_discovered_model_capabilities_are_invalid() {
         ScriptedExecutor::ready(Vec::new()),
         vec![invalid_discovered_model],
     );
-    let models_response = application
-        .oneshot(
-            Request::builder()
-                .uri("/v1/models")
-                .body(Body::empty())
-                .expect("the model-list request should be valid"),
-        )
-        .await
-        .expect("the application should return a model list");
+    let models_response = get_response(&application, "/v1/models").await;
 
     assert_eq!(models_response.status(), StatusCode::SERVICE_UNAVAILABLE);
     let models_body = to_bytes(models_response.into_body(), 8 * 1024)

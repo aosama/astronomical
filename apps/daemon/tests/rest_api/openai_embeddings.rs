@@ -1,10 +1,12 @@
 //! Acceptance coverage for the native OpenAI embeddings HTTP journey.
 
+use crate::rest_api::discovered_model_fixtures::chat_only_model;
+use crate::rest_api::http_exchange_fixtures::{post_json_request, read_json_body};
 use std::path::PathBuf;
 
 use astronomical_daemon::EmbeddingsExecutionError;
 use axum::{
-    body::{Body, to_bytes},
+    body::Body,
     http::{Request, StatusCode},
 };
 use config::{DiscoveredModel, EmbeddingModelCapabilities, ModelCapabilities, ModelLicense};
@@ -55,8 +57,10 @@ async fn should_embed_romeo_and_juliet_through_the_public_http_journey() {
 async fn should_reject_a_chat_model_before_embeddings_dispatch() {
     let executor = ScriptedExecutor::ready(Vec::new());
     let received_commands = executor.received_embeddings_commands();
-    let application =
-        astronomical_daemon::build_application_with_discovered_models(executor, vec![chat_model()]);
+    let application = astronomical_daemon::build_application_with_discovered_models(
+        executor,
+        vec![chat_only_model()],
+    );
 
     let response = application
         .oneshot(embeddings_request(serde_json::json!({
@@ -150,19 +154,11 @@ fn valid_request_document() -> serde_json::Value {
 }
 
 fn embeddings_request(request_document: serde_json::Value) -> Request<Body> {
-    Request::builder()
-        .method("POST")
-        .uri("/v1/embeddings")
-        .header("content-type", "application/json")
-        .body(Body::from(request_document.to_string()))
-        .expect("the embeddings request should be valid")
+    post_json_request("/v1/embeddings", request_document)
 }
 
 async fn response_json(response: axum::response::Response) -> serde_json::Value {
-    let response_body = to_bytes(response.into_body(), 16 * 1024)
-        .await
-        .expect("the bounded response body should be readable");
-    serde_json::from_slice(&response_body).expect("the response should contain JSON")
+    read_json_body(response, 16 * 1024).await
 }
 
 fn embedding_model() -> DiscoveredModel {
@@ -177,26 +173,6 @@ fn embedding_model() -> DiscoveredModel {
             max_input_tokens: 8_192,
         }),
         license: Some(ModelLicense::Apache20),
-        model_size_bytes: 1,
-    }
-}
-
-fn chat_model() -> DiscoveredModel {
-    DiscoveredModel {
-        model_id: "chat-only-model".to_owned(),
-        provider_model_id: None,
-        model_family: config::QWEN3_5_MODEL_FAMILY,
-        revision: "fixture-revision".to_owned(),
-        model_directory: PathBuf::from("fixtures/models/chat-only"),
-        capabilities: ModelCapabilities::Chat(config::ChatModelCapabilities {
-            context_window: 2_048,
-            max_input_tokens: 1_024,
-            max_output_tokens: 128,
-            supports_vision: false,
-            supports_reasoning: true,
-            supports_tool_calls: true,
-        }),
-        license: None,
         model_size_bytes: 1,
     }
 }

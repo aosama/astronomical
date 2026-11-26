@@ -1,15 +1,12 @@
 //! The catalog response carries the suggestions for this Mac, worded by the
 //! engine, once the worker has reported the memory it loads models within.
 
+use crate::rest_api::http_exchange_fixtures::{get_response, read_json_body};
 use std::time::Duration;
 
 use astronomical_daemon::DownloadCatalog;
-use axum::{
-    body::{Body, to_bytes},
-    http::{Request, StatusCode},
-};
+use axum::http::StatusCode;
 use tokio::time::timeout;
-use tower::ServiceExt;
 
 use crate::support::ScriptedExecutor;
 
@@ -54,20 +51,9 @@ async fn catalog_suggestions_with_ceiling(mlx_memory_ceiling_bytes: u64) -> serd
         scripted_executor,
         ladder_catalog(),
     );
-    let catalog_response = application
-        .oneshot(
-            Request::builder()
-                .uri("/v1/library/catalog")
-                .body(Body::empty())
-                .expect("a valid request"),
-        )
-        .await
-        .expect("the catalog response should be available");
+    let catalog_response = get_response(&application, "/v1/library/catalog").await;
     assert_eq!(catalog_response.status(), StatusCode::OK);
-    let catalog_body = to_bytes(catalog_response.into_body(), 64 * 1024)
-        .await
-        .expect("a readable body");
-    let catalog_document: serde_json::Value = serde_json::from_slice(&catalog_body).expect("JSON");
+    let catalog_document = read_json_body(catalog_response, 64 * 1024).await;
     catalog_document["suggestions"].clone()
 }
 

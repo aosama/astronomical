@@ -1,17 +1,13 @@
+use super::chat_request_exchange::send_chat_request;
+use super::ipc_worker_transport::open_ipc_worker_transport;
 use super::scripted_chat_test_doubles::CorrectionRequestingProcessor;
-use super::support::{
-    ScriptedInferenceRequest, chat_command, close_worker_transport, next_event, ready_event,
-};
+use super::support::{ScriptedInferenceRequest, close_worker_transport, next_event, ready_event};
 use crate::{
     EngineBackedWorker, EngineGenerationStart, EngineLoadResult, GeneratedToken,
     GenerationFinalization, InferenceEngine, InferenceEngineError,
 };
-use ipc_protocol::{
-    ChatGenerationCompletionReason, MAX_IPC_FRAME_BYTES, ProtocolReader, ProtocolWriter, RequestId,
-    WorkerCommand, WorkerEvent,
-};
+use ipc_protocol::{ChatGenerationCompletionReason, RequestId, WorkerEvent};
 use std::sync::{Arc, Mutex};
-use tokio::io::{duplex, split};
 
 #[tokio::test]
 async fn should_inject_model_visible_correction_tokens_and_continue_generation() {
@@ -20,22 +16,13 @@ async fn should_inject_model_visible_correction_tokens_and_continue_generation()
         CorrectionRequestingProcessor,
         CorrectionAwareChatEngine::new(Arc::clone(&injected_model_feedback_token_batches)),
     );
-    let (daemon_transport, worker_transport) = duplex(MAX_IPC_FRAME_BYTES * 2);
-    let (daemon_reader_transport, daemon_writer_transport) = split(daemon_transport);
-    let (worker_reader_transport, worker_writer_transport) = split(worker_transport);
-    let mut daemon_reader = ProtocolReader::new(daemon_reader_transport);
-    let mut daemon_writer = ProtocolWriter::new(daemon_writer_transport);
-    let worker_task = tokio::spawn(async move {
-        engine_worker
-            .run(worker_reader_transport, worker_writer_transport)
-            .await
-    });
+    let (mut daemon_reader, mut daemon_writer, worker_reader_transport, worker_writer_transport) =
+        open_ipc_worker_transport();
+    let worker_task =
+        tokio::spawn(engine_worker.run(worker_reader_transport, worker_writer_transport));
 
     assert_eq!(next_event(&mut daemon_reader).await, ready_event());
-    daemon_writer
-        .send_command(&WorkerCommand::Generate(chat_command(751, 13)))
-        .await
-        .expect("the worker should receive a chat request");
+    send_chat_request(&mut daemon_writer, 751, 13).await;
     assert!(matches!(
         next_event(&mut daemon_reader).await,
         WorkerEvent::Output {

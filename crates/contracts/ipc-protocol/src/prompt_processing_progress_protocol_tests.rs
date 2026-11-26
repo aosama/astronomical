@@ -1,11 +1,8 @@
+use crate::protocol_round_trip_test_support::assert_event_round_trips;
 use crate::{
-    MlxMemorySnapshotSource, ProtocolReader, ProtocolWriter, RequestId, WorkerEvent,
-    WorkerExpertResidencySnapshot, WorkerMlxMemorySnapshot, WorkerPromptLayerProgress,
-    WorkerPromptProcessingPhase,
+    MlxMemorySnapshotSource, RequestId, WorkerEvent, WorkerExpertResidencySnapshot,
+    WorkerMlxMemorySnapshot, WorkerPromptLayerProgress, WorkerPromptProcessingPhase,
 };
-use tokio::io::duplex;
-
-const TEST_TRANSPORT_CAPACITY_BYTES: usize = 256 * 1024;
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn should_round_trip_prefill_progress_event() {
@@ -62,21 +59,7 @@ async fn should_round_trip_prefill_progress_before_the_first_completed_forward()
 }
 
 async fn assert_round_tripped_worker_event(worker_event: WorkerEvent) {
-    let (daemon_transport, worker_transport) = duplex(TEST_TRANSPORT_CAPACITY_BYTES);
-    let mut worker_writer = ProtocolWriter::new(worker_transport);
-    let mut daemon_reader = ProtocolReader::new(daemon_transport);
-
-    worker_writer
-        .send_event(&worker_event)
-        .await
-        .expect("a prompt-processing progress event should be written");
-    assert_eq!(
-        daemon_reader
-            .next_event()
-            .await
-            .expect("the prompt-processing progress event should decode"),
-        Some(worker_event)
-    );
+    assert_event_round_trips(&worker_event, "a prompt-processing progress event").await;
 }
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]

@@ -1,67 +1,28 @@
 use std::{
     ffi::OsString,
-    io::Cursor,
-    os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
     process::Command,
-    time::Duration,
 };
 
 use astronomical_cli::{
-    LaunchArguments, LaunchDependencies, LaunchError, PreparedLaunch, prepare_launch,
-    verbs::launch::opencode_config::OPENCODE_CONFIG_CONTENT_VARIABLE,
+    LaunchError, PreparedLaunch, verbs::launch::opencode_config::OPENCODE_CONFIG_CONTENT_VARIABLE,
 };
 use tempfile::TempDir;
 
+use super::launch_session_fixtures::{
+    install_fake_harness, path_value_of, prepare_session, two_chat_models_json,
+};
 use crate::integration::support::stub_loopback_http::{
     StubAstronomical, chat_models_json, embedding_model_json, image_model_json, mixed_library_json,
     ready_status_json,
 };
 
-const HTTP_TIMEOUT: Duration = Duration::from_secs(2);
-
 fn install_fake_opencode(parent_directory: &Path) -> PathBuf {
-    let program_path = parent_directory.join("opencode");
-    std::fs::write(
-        &program_path,
+    install_fake_harness(
+        parent_directory,
+        "opencode",
         "#!/bin/sh\nprintf '%s\\n' \"$OPENCODE_CONFIG_CONTENT\"\n",
     )
-    .expect("fake OpenCode script");
-    let mut permissions = std::fs::metadata(&program_path)
-        .expect("fake OpenCode metadata")
-        .permissions();
-    permissions.set_mode(0o755);
-    std::fs::set_permissions(&program_path, permissions).expect("fake OpenCode executable bit");
-    program_path
-}
-
-fn prepare_session(
-    tool_slug: Option<&str>,
-    model_id: Option<&str>,
-    bind_address: std::net::SocketAddr,
-    path_value: OsString,
-    is_interactive: bool,
-    stdin_text: &str,
-) -> Result<(PreparedLaunch, String), LaunchError> {
-    let mut stdin = Cursor::new(stdin_text.as_bytes().to_vec());
-    let mut stderr_bytes = Vec::new();
-    let prepared_launch = prepare_launch(
-        LaunchArguments {
-            tool_slug: tool_slug.map(str::to_owned),
-            model_id: model_id.map(str::to_owned),
-            harness_arguments: Vec::new(),
-        },
-        LaunchDependencies {
-            candidate_bind_addresses: vec![bind_address],
-            path_value,
-            is_interactive,
-            stdin: &mut stdin,
-            stderr: &mut stderr_bytes,
-            http_timeout: HTTP_TIMEOUT,
-        },
-    )?;
-    let stderr_text = String::from_utf8(stderr_bytes).expect("stderr utf8");
-    Ok((prepared_launch, stderr_text))
 }
 
 fn config_from_prepared_launch(prepared_launch: &PreparedLaunch) -> serde_json::Value {
@@ -100,7 +61,7 @@ fn should_reject_an_unsupported_tool_name() {
         Some("copilot"),
         None,
         "127.0.0.1:1".parse().expect("unused port"),
-        temporary_directory.path().as_os_str().to_os_string(),
+        path_value_of(&temporary_directory),
         false,
         "",
     )
@@ -120,7 +81,7 @@ fn should_fail_when_astronomical_is_not_running() {
         Some("opencode"),
         None,
         "127.0.0.1:1".parse().expect("unused port"),
-        temporary_directory.path().as_os_str().to_os_string(),
+        path_value_of(&temporary_directory),
         false,
         "",
     )
@@ -141,7 +102,7 @@ fn should_fail_when_the_library_has_no_chat_models() {
         Some("opencode"),
         None,
         stub_server.bind_address,
-        temporary_directory.path().as_os_str().to_os_string(),
+        path_value_of(&temporary_directory),
         false,
         "",
     )
@@ -165,7 +126,7 @@ fn should_not_offer_embedding_models_as_launch_targets() {
         None,
         None,
         stub_server.bind_address,
-        temporary_directory.path().as_os_str().to_os_string(),
+        path_value_of(&temporary_directory),
         true,
         "1\n",
     )
@@ -185,7 +146,7 @@ fn should_use_the_only_chat_model_without_prompting() {
         Some("opencode"),
         None,
         stub_server.bind_address,
-        temporary_directory.path().as_os_str().to_os_string(),
+        path_value_of(&temporary_directory),
         true,
         "this stdin must be ignored\n",
     )
@@ -225,7 +186,7 @@ fn should_treat_bare_launch_like_launch_opencode_when_opencode_is_installed() {
         Some("opencode"),
         None,
         stub_server.bind_address,
-        temporary_directory.path().as_os_str().to_os_string(),
+        path_value_of(&temporary_directory),
         false,
         "",
     )
@@ -234,7 +195,7 @@ fn should_treat_bare_launch_like_launch_opencode_when_opencode_is_installed() {
         None,
         None,
         stub_server.bind_address,
-        temporary_directory.path().as_os_str().to_os_string(),
+        path_value_of(&temporary_directory),
         false,
         "",
     )
@@ -254,7 +215,7 @@ fn should_skip_image_and_embedding_rows_when_one_chat_model_exists() {
         Some("opencode"),
         None,
         stub_server.bind_address,
-        temporary_directory.path().as_os_str().to_os_string(),
+        path_value_of(&temporary_directory),
         true,
         "",
     )
@@ -270,18 +231,12 @@ fn should_skip_image_and_embedding_rows_when_one_chat_model_exists() {
 fn should_require_model_flag_when_several_chat_models_exist_without_a_terminal() {
     let temporary_directory = TempDir::new().expect("temp dir");
     install_fake_opencode(temporary_directory.path());
-    let stub_server = StubAstronomical::spawn(
-        ready_status_json(),
-        &chat_models_json(&[
-            ("library-chat-model", 131_072),
-            ("second-library-chat-model", 32_768),
-        ]),
-    );
+    let stub_server = StubAstronomical::spawn(ready_status_json(), &two_chat_models_json());
     let error = prepare_session(
         Some("opencode"),
         None,
         stub_server.bind_address,
-        temporary_directory.path().as_os_str().to_os_string(),
+        path_value_of(&temporary_directory),
         false,
         "",
     )
@@ -297,18 +252,12 @@ fn should_require_model_flag_when_several_chat_models_exist_without_a_terminal()
 fn should_pick_a_chat_model_from_a_tty_list() {
     let temporary_directory = TempDir::new().expect("temp dir");
     install_fake_opencode(temporary_directory.path());
-    let stub_server = StubAstronomical::spawn(
-        ready_status_json(),
-        &chat_models_json(&[
-            ("library-chat-model", 131_072),
-            ("second-library-chat-model", 32_768),
-        ]),
-    );
+    let stub_server = StubAstronomical::spawn(ready_status_json(), &two_chat_models_json());
     let (prepared_launch, stderr_text) = prepare_session(
         Some("opencode"),
         None,
         stub_server.bind_address,
-        temporary_directory.path().as_os_str().to_os_string(),
+        path_value_of(&temporary_directory),
         true,
         "2\n",
     )
@@ -326,18 +275,12 @@ fn should_pick_a_chat_model_from_a_tty_list() {
 fn should_accept_a_model_id_typed_into_the_picker() {
     let temporary_directory = TempDir::new().expect("temp dir");
     install_fake_opencode(temporary_directory.path());
-    let stub_server = StubAstronomical::spawn(
-        ready_status_json(),
-        &chat_models_json(&[
-            ("library-chat-model", 131_072),
-            ("second-library-chat-model", 32_768),
-        ]),
-    );
+    let stub_server = StubAstronomical::spawn(ready_status_json(), &two_chat_models_json());
     let (prepared_launch, _) = prepare_session(
         Some("opencode"),
         None,
         stub_server.bind_address,
-        temporary_directory.path().as_os_str().to_os_string(),
+        path_value_of(&temporary_directory),
         true,
         "library-chat-model\n",
     )
@@ -352,18 +295,12 @@ fn should_accept_a_model_id_typed_into_the_picker() {
 fn should_reject_an_invalid_picker_choice() {
     let temporary_directory = TempDir::new().expect("temp dir");
     install_fake_opencode(temporary_directory.path());
-    let stub_server = StubAstronomical::spawn(
-        ready_status_json(),
-        &chat_models_json(&[
-            ("library-chat-model", 131_072),
-            ("second-library-chat-model", 32_768),
-        ]),
-    );
+    let stub_server = StubAstronomical::spawn(ready_status_json(), &two_chat_models_json());
     let error = prepare_session(
         Some("opencode"),
         None,
         stub_server.bind_address,
-        temporary_directory.path().as_os_str().to_os_string(),
+        path_value_of(&temporary_directory),
         true,
         "0\n",
     )
@@ -375,18 +312,12 @@ fn should_reject_an_invalid_picker_choice() {
 fn should_honor_model_flag_without_prompting() {
     let temporary_directory = TempDir::new().expect("temp dir");
     install_fake_opencode(temporary_directory.path());
-    let stub_server = StubAstronomical::spawn(
-        ready_status_json(),
-        &chat_models_json(&[
-            ("library-chat-model", 131_072),
-            ("second-library-chat-model", 32_768),
-        ]),
-    );
+    let stub_server = StubAstronomical::spawn(ready_status_json(), &two_chat_models_json());
     let (prepared_launch, stderr_text) = prepare_session(
         Some("opencode"),
         Some("second-library-chat-model"),
         stub_server.bind_address,
-        temporary_directory.path().as_os_str().to_os_string(),
+        path_value_of(&temporary_directory),
         true,
         "1\n",
     )
@@ -410,7 +341,7 @@ fn should_reject_a_model_flag_that_is_not_a_library_chat_model() {
         Some("opencode"),
         Some("missing-chat-model"),
         stub_server.bind_address,
-        temporary_directory.path().as_os_str().to_os_string(),
+        path_value_of(&temporary_directory),
         false,
         "",
     )
@@ -430,7 +361,7 @@ fn should_warn_when_the_selected_model_context_is_under_64k() {
         Some("opencode"),
         None,
         stub_server.bind_address,
-        temporary_directory.path().as_os_str().to_os_string(),
+        path_value_of(&temporary_directory),
         false,
         "",
     )
@@ -452,7 +383,7 @@ fn should_overlay_opencode_config_in_the_child_environment_without_writing_user_
         Some("opencode"),
         None,
         stub_server.bind_address,
-        temporary_directory.path().as_os_str().to_os_string(),
+        path_value_of(&temporary_directory),
         false,
         "",
     )
@@ -494,7 +425,7 @@ fn should_not_treat_a_json_listener_without_application_as_astronomical() {
         Some("opencode"),
         None,
         stub_server.bind_address,
-        temporary_directory.path().as_os_str().to_os_string(),
+        path_value_of(&temporary_directory),
         false,
         "",
     )
@@ -515,7 +446,7 @@ fn should_say_the_model_list_failed_when_status_is_healthy() {
         Some("opencode"),
         None,
         stub_server.bind_address,
-        temporary_directory.path().as_os_str().to_os_string(),
+        path_value_of(&temporary_directory),
         false,
         "",
     )

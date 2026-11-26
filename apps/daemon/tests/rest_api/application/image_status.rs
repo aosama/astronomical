@@ -1,13 +1,9 @@
 //! Public status contracts for image activity stay separate from text Observatory contracts so
 //! each cross-language progress shape remains small and directly reviewable.
 
+use crate::rest_api::http_exchange_fixtures::{get_response, read_json_body};
 use astronomical_daemon::{ActiveRequestProgress, WorkerActivity};
-use axum::{
-    body::{Body, to_bytes},
-    http::Request,
-};
 use ipc_protocol::ImageGenerationPhase;
-use tower::ServiceExt;
 
 use super::observatory_contracts;
 use super::observatory_contracts::ContractScriptedExecutor;
@@ -24,20 +20,8 @@ async fn should_expose_image_generation_progress_with_completed_and_total_steps_
     });
     let application =
         astronomical_daemon::build_application(ContractScriptedExecutor::ready(health_snapshot));
-    let response = application
-        .oneshot(
-            Request::builder()
-                .uri("/v1/status")
-                .body(Body::empty())
-                .expect("the image status request should be valid"),
-        )
-        .await
-        .expect("the application should return image progress status");
-    let response_body = to_bytes(response.into_body(), 16 * 1024)
-        .await
-        .expect("the image progress status body should be readable");
-    let status_document: serde_json::Value = serde_json::from_slice(&response_body)
-        .expect("the image progress status body should contain JSON");
+    let response = get_response(&application, "/v1/status").await;
+    let status_document = read_json_body(response, 16 * 1024).await;
 
     assert_eq!(status_document["activity"], "image_generation");
     assert_eq!(status_document["progress"]["phase"], "denoising");

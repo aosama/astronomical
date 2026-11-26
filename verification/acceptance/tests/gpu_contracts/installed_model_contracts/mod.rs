@@ -4,7 +4,11 @@ mod clef_decision_latency;
 mod clef_reference_decisions;
 mod config;
 #[cfg(feature = "direct-mlx")]
+mod decision_latency_requests;
+#[cfg(feature = "direct-mlx")]
 mod decision_memory_peak;
+#[cfg(feature = "direct-mlx")]
+mod decision_parity_measurement;
 #[cfg(feature = "direct-mlx")]
 mod decision_reference_fixture;
 #[cfg(feature = "direct-mlx")]

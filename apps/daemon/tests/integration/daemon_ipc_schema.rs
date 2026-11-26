@@ -2,27 +2,19 @@
 //! travels as a parsed, canonical worker constraint or is rejected at the
 //! daemon trust boundary before the worker ever sees it.
 
-use std::sync::Arc;
+use ipc_protocol::{ChatMessage, DaemonRequest, DaemonResponse, StructuredGenerationConstraint};
 
-use ipc_protocol::{
-    ChatGenerationSettings, ChatMessage, DaemonIpcClient, DaemonRequest, DaemonResponse,
-    StructuredGenerationConstraint,
-};
-use tokio::time::timeout;
-
-use crate::support::daemon_ipc::{
-    HANDSHAKE_TEST_TIMEOUT, fresh_instance_state_directory, ready_stub_executor,
-    start_stub_daemon_ipc_service,
+use crate::integration::daemon_ipc_exchange::{handshake_then_send_request, read_final_frame};
+use crate::integration::daemon_ipc_service_fixtures::{
+    say_hello_chat_request, shut_down_and_remove_state_directory, start_ready_chat_service,
 };
 
 /// A CLI schema travels through the daemon as a parsed, canonical JSON-schema
 /// constraint on the worker command: the daemon owns schema enforcement.
 #[tokio::test]
 async fn should_forward_a_valid_cli_schema_as_a_structured_generation_command() {
-    let state_directory = fresh_instance_state_directory("schema-valid");
-    let stub_executor = ready_stub_executor("test/local-chatter");
-    let daemon_ipc_service =
-        start_stub_daemon_ipc_service(&state_directory, Arc::clone(&stub_executor)).await;
+    let (daemon_ipc_service, stub_executor, state_directory) =
+        start_ready_chat_service("schema-valid").await;
 
     // Keys are already in the order serde_json serializes object keys, so the
     // canonical constraint text equals this input text.
@@ -31,7 +23,7 @@ async fn should_forward_a_valid_cli_schema_as_a_structured_generation_command() 
         chat_generate_with_schema("test/local-chatter", Some(canonical_schema_text.to_owned()));
 
     let mut request_client =
-        connect_handshake_and_send(daemon_ipc_service.socket_path(), &schema_request).await;
+        handshake_then_send_request(daemon_ipc_service.socket_path(), &schema_request).await;
     let completion_frame = read_final_frame(&mut request_client).await;
     assert!(
         matches!(
@@ -60,26 +52,20 @@ async fn should_forward_a_valid_cli_schema_as_a_structured_generation_command() 
         "the schema instruction must carry the schema text: {content}"
     );
 
-    timeout(HANDSHAKE_TEST_TIMEOUT, daemon_ipc_service.shutdown())
-        .await
-        .expect("the daemon IPC service shutdown should finish inside the test timeout")
-        .expect("the daemon IPC service should shut down cleanly");
-    let _ = std::fs::remove_dir_all(&state_directory);
+    shut_down_and_remove_state_directory(daemon_ipc_service, &state_directory).await;
 }
 
 /// An empty object schema means "any JSON object": the daemon maps it to the
 /// JSON-object constraint the workers already enforce, not a schema mask.
 #[tokio::test]
 async fn should_map_an_empty_object_schema_to_the_json_object_constraint() {
-    let state_directory = fresh_instance_state_directory("schema-empty-object");
-    let stub_executor = ready_stub_executor("test/local-chatter");
-    let daemon_ipc_service =
-        start_stub_daemon_ipc_service(&state_directory, Arc::clone(&stub_executor)).await;
+    let (daemon_ipc_service, stub_executor, state_directory) =
+        start_ready_chat_service("schema-empty-object").await;
 
     let schema_request = chat_generate_with_schema("test/local-chatter", Some("{}".to_owned()));
 
     let mut request_client =
-        connect_handshake_and_send(daemon_ipc_service.socket_path(), &schema_request).await;
+        handshake_then_send_request(daemon_ipc_service.socket_path(), &schema_request).await;
     let completion_frame = read_final_frame(&mut request_client).await;
     assert!(matches!(
         completion_frame,
@@ -92,11 +78,7 @@ async fn should_map_an_empty_object_schema_to_the_json_object_constraint() {
         Some(StructuredGenerationConstraint::JsonObject),
     );
 
-    timeout(HANDSHAKE_TEST_TIMEOUT, daemon_ipc_service.shutdown())
-        .await
-        .expect("the daemon IPC service shutdown should finish inside the test timeout")
-        .expect("the daemon IPC service should shut down cleanly");
-    let _ = std::fs::remove_dir_all(&state_directory);
+    shut_down_and_remove_state_directory(daemon_ipc_service, &state_directory).await;
 }
 
 /// A schema the daemon cannot parse is a request-shape error: the daemon
@@ -104,16 +86,14 @@ async fn should_map_an_empty_object_schema_to_the_json_object_constraint() {
 /// worker, regardless of worker health.
 #[tokio::test]
 async fn should_reject_a_chat_generate_request_with_an_unparseable_schema() {
-    let state_directory = fresh_instance_state_directory("schema-unparseable");
-    let stub_executor = ready_stub_executor("test/local-chatter");
-    let daemon_ipc_service =
-        start_stub_daemon_ipc_service(&state_directory, Arc::clone(&stub_executor)).await;
+    let (daemon_ipc_service, stub_executor, state_directory) =
+        start_ready_chat_service("schema-unparseable").await;
 
     let schema_request =
         chat_generate_with_schema("test/local-chatter", Some("{not json".to_owned()));
 
     let mut request_client =
-        connect_handshake_and_send(daemon_ipc_service.socket_path(), &schema_request).await;
+        handshake_then_send_request(daemon_ipc_service.socket_path(), &schema_request).await;
     let rejected_frame = read_final_frame(&mut request_client).await;
     match rejected_frame {
         Some(DaemonResponse::GenerationRejected { reason }) => {
@@ -131,11 +111,7 @@ async fn should_reject_a_chat_generate_request_with_an_unparseable_schema() {
         "an unparseable schema must never reach the worker executor"
     );
 
-    timeout(HANDSHAKE_TEST_TIMEOUT, daemon_ipc_service.shutdown())
-        .await
-        .expect("the daemon IPC service shutdown should finish inside the test timeout")
-        .expect("the daemon IPC service should shut down cleanly");
-    let _ = std::fs::remove_dir_all(&state_directory);
+    shut_down_and_remove_state_directory(daemon_ipc_service, &state_directory).await;
 }
 
 /// Direct checks of the daemon-side schema validator for the narrow risks
@@ -177,70 +153,5 @@ fn should_validate_chat_schema_constraints_directly() {
 /// Builds a chat generate request that carries the given schema text, for
 /// the schema journeys; everything else matches the shared text-only builder.
 fn chat_generate_with_schema(model: &str, schema_text: Option<String>) -> DaemonRequest {
-    DaemonRequest::ChatGenerate {
-        model: model.to_owned(),
-        messages: vec![ChatMessage::User {
-            content: "Say hello".to_owned(),
-            images: vec![],
-        }],
-        settings: ChatGenerationSettings {
-            max_output_tokens: 128,
-            temperature_thousandths: None,
-            top_p_thousandths: None,
-            repetition_penalty_thousandths: None,
-            seed: None,
-            thinking_budget: None,
-        },
-        schema_json: schema_text,
-    }
-}
-
-/// Performs the handshake on one connection, then sends the request on a
-/// fresh connection per the wire contract, and returns the request client
-/// for the caller to read the streamed frames.
-async fn connect_handshake_and_send(
-    socket_path: &std::path::Path,
-    request: &DaemonRequest,
-) -> DaemonIpcClient {
-    let mut handshake_client = DaemonIpcClient::connect(socket_path.to_path_buf())
-        .await
-        .expect("the handshake client should connect to the running daemon IPC service");
-    timeout(
-        HANDSHAKE_TEST_TIMEOUT,
-        handshake_client.send_request(&DaemonRequest::Handshake),
-    )
-    .await
-    .expect("the handshake send should finish inside the test timeout")
-    .expect("the handshake request should transmit");
-    let _handshake_accepted = timeout(HANDSHAKE_TEST_TIMEOUT, handshake_client.next_response())
-        .await
-        .expect("the handshake response should arrive inside the test timeout")
-        .expect("the handshake response read should not fail at the transport layer")
-        .expect("the daemon should answer the handshake");
-    drop(handshake_client);
-
-    let mut request_client = DaemonIpcClient::connect(socket_path.to_path_buf())
-        .await
-        .expect("the request client should connect to the running daemon IPC service");
-    timeout(HANDSHAKE_TEST_TIMEOUT, request_client.send_request(request))
-        .await
-        .expect("the request send should finish inside the test timeout")
-        .expect("the request should transmit");
-    request_client
-}
-
-/// Reads frames until the daemon closes the connection and returns the final
-/// frame: the completion for an accepted journey, or the single rejection.
-async fn read_final_frame(daemon_client: &mut DaemonIpcClient) -> Option<DaemonResponse> {
-    let mut final_frame = None;
-    loop {
-        let next_frame = timeout(HANDSHAKE_TEST_TIMEOUT, daemon_client.next_response())
-            .await
-            .expect("the response frame should arrive inside the test timeout")
-            .expect("the response frame read should not fail at the transport layer");
-        match next_frame {
-            Some(frame) => final_frame = Some(frame),
-            None => return final_frame,
-        }
-    }
+    say_hello_chat_request(model, 128, schema_text)
 }
