@@ -22,16 +22,16 @@
 use std::path::Path;
 
 use mlx_bridge::MlxArray;
-use mlx_performance_profiler::{JobComparison, MeasuredJob, ReportLocation, compare_jobs};
+use mlx_performance_profiler::{JobComparison, ReportLocation, compare_jobs};
 use model_serving::row_batched_matmul::RowBatchedMatmulKernels;
 use runtime_integration::MlxRuntime;
 use serial_test::serial;
 
+use super::projection_verdict_support::{ProjectionVerdictFixture, ShapeCopiesPass};
 use super::verdict_text::metric_text;
 
 use super::k_row_verify_cost::{
-    MatmulPath, PROJECTION_SHAPES, PackedProjection, distinct_shape_copies, initialize_runtime,
-    random_rows, shape_copies_pass,
+    MatmulPath, PROJECTION_SHAPES, PackedProjection, distinct_shape_copies,
 };
 
 /// A reply token, a dense draft tree, and the smallest and a usual prompt
@@ -39,60 +39,32 @@ use super::k_row_verify_cost::{
 const SERVED_ROW_COUNTS: [i32; 4] = [1, 16, 512, 2_048];
 const REPORT_SUBDIRECTORY: &str = "register-order-layout-verdict";
 
-/// One pass over a shape's copies through one layout.
-struct LayoutPass<'fixture> {
-    name: &'static str,
-    runtime: &'fixture MlxRuntime,
-    matmul_path: MatmulPath<'fixture>,
-    shape_copies: &'fixture [PackedProjection],
-    input_rows: &'fixture MlxArray,
-}
-
-impl MeasuredJob for LayoutPass<'_> {
-    fn name(&self) -> &str {
-        self.name
-    }
-
-    fn fresh_outputs(&mut self) -> Result<Vec<MlxArray>, String> {
-        Ok(vec![shape_copies_pass(
-            self.runtime,
-            self.matmul_path,
-            self.shape_copies,
-            self.input_rows,
-        )])
-    }
-}
-
 #[test]
 #[ignore = "performance measurement on the GPU; run through cargo measure-register-order-verdict"]
 #[serial]
 fn should_give_a_verdict_on_register_order_against_mlx_layout_at_served_row_counts() {
-    let runtime = initialize_runtime();
-    let kernels = RowBatchedMatmulKernels::declare().expect("the kernels are declared");
-    let random_key = runtime.random_key(1234).expect("a key builds");
-    let report_directory = Path::new(env!("CARGO_TARGET_TMPDIR")).join(REPORT_SUBDIRECTORY);
-    std::fs::create_dir_all(&report_directory).expect("the report directory is made");
+    let fixture = ProjectionVerdictFixture::prepare(1234, REPORT_SUBDIRECTORY);
+    let (runtime, kernels) = (&fixture.runtime, &fixture.kernels);
+    let report_directory = &fixture.report_directory;
     let cell_count = PROJECTION_SHAPES.len() * SERVED_ROW_COUNTS.len();
     let mut finished_cell_count = 0;
     for projection_shape in PROJECTION_SHAPES {
-        let shape_copies = distinct_shape_copies(&runtime, &kernels, &random_key, projection_shape);
+        let shape_copies =
+            distinct_shape_copies(runtime, kernels, &fixture.random_key, projection_shape);
         for row_count in SERVED_ROW_COUNTS {
-            let input_rows = random_rows(&runtime, &random_key, row_count, projection_shape.1);
-            runtime
-                .evaluate_arrays(&[&input_rows])
-                .expect("the input rows evaluate");
+            let input_rows = fixture.evaluated_rows(row_count, projection_shape.1);
             let file_base = format!(
                 "{}x{}_rows_{row_count}",
                 projection_shape.0, projection_shape.1
             );
             let comparison = compare_layouts(
                 LayoutCell {
-                    runtime: &runtime,
-                    kernels: &kernels,
+                    runtime,
+                    kernels,
                     shape_copies: &shape_copies,
                     input_rows: &input_rows,
                 },
-                &report_directory,
+                report_directory,
                 &file_base,
             );
             finished_cell_count += 1;
@@ -124,14 +96,14 @@ fn compare_layouts(
     report_directory: &Path,
     file_base: &str,
 ) -> JobComparison {
-    let mut mlx_layout = LayoutPass {
+    let mut mlx_layout = ShapeCopiesPass {
         name: "mlx_layout",
         runtime: cell.runtime,
         matmul_path: MatmulPath::Mlx,
         shape_copies: cell.shape_copies,
         input_rows: cell.input_rows,
     };
-    let mut register_order = LayoutPass {
+    let mut register_order = ShapeCopiesPass {
         name: "register_order",
         runtime: cell.runtime,
         matmul_path: MatmulPath::RegisterOrdered(cell.kernels),

@@ -1,8 +1,8 @@
 //! Gate 1 of speculative decoding: how many tokens a verify round keeps with
 //! Astronomical's DFlash2 drafter on a real pair. By default that is the
-//! dense Qwen3.8 27B (`TensorFold/Qwen3.8-27B-MLX-4bit` and
-//! `z-lab/Qwen3.8-27B-DFlash2`); a test run that configures a target with its
-//! own `drafter` folder measures that pair instead.
+//! installed dense Qwen3.8 27B package, which carries its DFlash2 drafter in
+//! its own `drafter` folder; a test run that configures another target with
+//! its own `drafter` folder measures that pair instead.
 //!
 //! Kept per round = tokens emitted / verify rounds, the bonus token included,
 //! as the drafter's model card defines it. z-lab's own reference loop kept
@@ -37,12 +37,8 @@ use model_serving::{
 use runtime_integration::{MlxMemoryLimits, MlxRuntime, MlxSafetensors};
 use serial_test::serial;
 
-use super::dflash2_journey_support::{
-    UniformStream, host_values, huggingface_hub_snapshot, tap_rows,
-};
+use super::dflash2_journey_support::{UniformStream, host_values, tap_rows};
 
-const TARGET_REPOSITORY: &str = "TensorFold/Qwen3.8-27B-MLX-4bit";
-const DRAFTER_REPOSITORY: &str = "z-lab/Qwen3.8-27B-DFlash2";
 pub(crate) const CODE_PROMPT: &str =
     "Write a short Python function that computes the Fibonacci sequence and explain it.";
 pub(crate) const CHAT_PROMPT: &str = "Explain how matrix multiplication uses a GPU in plain English, then give a small numerical example.";
@@ -198,30 +194,40 @@ fn should_keep_as_many_drafted_tokens_per_round_as_z_labs_reference() {
     );
 }
 
-/// The target and drafter directories: the test-run configuration's
-/// `model_directory` with its bundled drafter when one is selected, so the
-/// same journeys measure any paired target, otherwise the 27B pair from the
-/// Hugging Face hub folder.
+/// The target and drafter directories: one model folder and the drafter
+/// inside it, as the engine serves them. The folder is the test-run
+/// configuration's `model_directory` when one is selected, so the same
+/// journeys measure any paired target, otherwise the installed dense 27B
+/// package (`dense_drafting` in `registry/e2e_test_model_names.json`).
 fn pair_directories() -> (PathBuf, PathBuf, String) {
-    let configured_target = test_harness::test_run::TestRunContext::current()
+    let target_directory = test_harness::test_run::TestRunContext::current()
         .configuration
-        .model_directory;
-    match configured_target {
-        Some(target_directory) => {
-            let drafter_directory = target_directory.join(BUNDLED_DRAFTER_DIRECTORY_NAME);
-            let target_model_id = target_directory
-                .file_name()
-                .expect("the configured target names a folder")
-                .to_string_lossy()
-                .into_owned();
-            (target_directory, drafter_directory, target_model_id)
-        }
-        None => (
-            huggingface_hub_snapshot(TARGET_REPOSITORY),
-            huggingface_hub_snapshot(DRAFTER_REPOSITORY),
-            TARGET_REPOSITORY.to_owned(),
-        ),
-    }
+        .model_directory
+        .unwrap_or_else(|| {
+            crate::common::configured_installed_model_directory_by_id(
+                test_harness::fixtures::dense_drafting_model_id(),
+            )
+        });
+    let drafter_directory = target_directory.join(BUNDLED_DRAFTER_DIRECTORY_NAME);
+    let target_model_id = target_directory
+        .file_name()
+        .expect("the target names a folder")
+        .to_string_lossy()
+        .into_owned();
+    (target_directory, drafter_directory, target_model_id)
+}
+
+/// The pair with draft-tree verification and the row-exact tree attention
+/// kernel on, as serving verifies a dense target's trees.
+pub(crate) fn load_pair_verifying_trees_as_served() -> JourneyPair {
+    let mut pair = load_pair();
+    pair.target
+        .enable_draft_tree_verification()
+        .expect("the tree kernels declare");
+    pair.target
+        .enable_row_exact_tree_attention()
+        .expect("the tree attention kernel declares");
+    pair
 }
 
 pub(crate) fn load_pair() -> JourneyPair {

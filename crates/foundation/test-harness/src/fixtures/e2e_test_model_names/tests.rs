@@ -42,6 +42,7 @@ fn should_return_registry_model_ids_in_the_declared_role_order() {
         lane_mixing_sparse_moe_streaming_model_id(),
         expected_model_ids[9]
     );
+    assert_eq!(dense_drafting_model_id(), expected_model_ids[10]);
     assert_eq!(e2e_test_model_ids(), expected_model_ids);
     assert_eq!(
         required_e2e_test_model_ids(),

@@ -23,7 +23,8 @@ const FLUX2_KLEIN_4BIT_ROLE: &str = "flux2_klein_4bit";
 const STREAMED_DENSE_ROLE: &str = "streamed_dense";
 const SMALL_SPARSE_MOE_STREAMING_ROLE: &str = "small_sparse_moe_streaming";
 const LANE_MIXING_SPARSE_MOE_STREAMING_ROLE: &str = "lane_mixing_sparse_moe_streaming";
-const E2E_TEST_MODEL_ROLES: [&str; 10] = [
+const DENSE_DRAFTING_ROLE: &str = "dense_drafting";
+const E2E_TEST_MODEL_ROLES: [&str; 11] = [
     LARGE_SPARSE_MOE_STREAMING_ROLE,
     RESIDENT_SPARSE_MOE_ROLE,
     SMALL_DENSE_ROLE,
@@ -34,6 +35,7 @@ const E2E_TEST_MODEL_ROLES: [&str; 10] = [
     STREAMED_DENSE_ROLE,
     SMALL_SPARSE_MOE_STREAMING_ROLE,
     LANE_MIXING_SPARSE_MOE_STREAMING_ROLE,
+    DENSE_DRAFTING_ROLE,
 ];
 
 fn e2e_test_model_names() -> &'static BTreeMap<String, String> {
@@ -132,12 +134,19 @@ pub fn lane_mixing_sparse_moe_streaming_model_id() -> &'static str {
     model_id_for_role(LANE_MIXING_SPARSE_MOE_STREAMING_ROLE)
 }
 
+/// The dense Qwen3.8 27B package that carries its DFlash2 drafter in its
+/// own `drafter` folder, for the draft-round journeys: one installed folder
+/// holds the target and its drafter, as the engine serves them.
+pub fn dense_drafting_model_id() -> &'static str {
+    model_id_for_role(DENSE_DRAFTING_ROLE)
+}
+
 /// The 4-bit MLX build of FLUX.2 Klein 4B (issue #1904).
 pub fn flux2_klein_4bit_model_id() -> &'static str {
     model_id_for_role(FLUX2_KLEIN_4BIT_ROLE)
 }
 
-pub fn e2e_test_model_ids() -> [&'static str; 10] {
+pub fn e2e_test_model_ids() -> [&'static str; 11] {
     [
         large_sparse_moe_streaming_model_id(),
         resident_sparse_moe_model_id(),
@@ -149,6 +158,7 @@ pub fn e2e_test_model_ids() -> [&'static str; 10] {
         streamed_dense_model_id(),
         small_sparse_moe_streaming_model_id(),
         lane_mixing_sparse_moe_streaming_model_id(),
+        dense_drafting_model_id(),
     ]
 }
 

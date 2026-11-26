@@ -1,25 +1,7 @@
 //! Small helpers for the DFlash2 journeys on a real target and drafter pair.
 
-use std::path::PathBuf;
-
 use mlx_bridge::{MlxArray, MlxDtype};
 use runtime_integration::MlxRuntime;
-
-/// The active snapshot of `repository_id` (`org/name`) in the standard
-/// Hugging Face hub folder under the user's home, where `hf download` and
-/// TensorFold both put it. The pair is not in Astronomical's library, so the
-/// Development configuration cannot resolve it.
-pub(crate) fn huggingface_hub_snapshot(repository_id: &str) -> PathBuf {
-    let home_directory = std::env::var_os("HOME").expect("HOME names the user's home directory");
-    let repository_directory = PathBuf::from(home_directory)
-        .join(".cache/huggingface/hub")
-        .join(format!("models--{}", repository_id.replace('/', "--")));
-    let revision =
-        std::fs::read_to_string(repository_directory.join("refs/main")).unwrap_or_else(|_| {
-            panic!("{repository_id} must be downloaded: hf download {repository_id}")
-        });
-    repository_directory.join("snapshots").join(revision.trim())
-}
 
 /// Every value of `array`, read to the host as float32.
 pub(crate) fn host_values(runtime: &MlxRuntime, array: &MlxArray) -> Vec<f32> {
