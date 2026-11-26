@@ -16,6 +16,8 @@ mod dense_streaming_parity;
 #[cfg(feature = "direct-mlx")]
 mod dense_streaming_speed_ladder;
 #[cfg(feature = "direct-mlx")]
+mod dflash_drafter_load_memory;
+#[cfg(feature = "direct-mlx")]
 mod expert_layer_at_a_time_checkpoint_parity;
 #[cfg(feature = "direct-mlx")]
 mod flash_next_greedy_parity;

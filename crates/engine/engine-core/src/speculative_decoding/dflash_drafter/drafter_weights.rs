@@ -264,6 +264,22 @@ impl TensorBinder<'_> {
     }
 }
 
+/// The most a drafter's load holds at once, as a share of its checkpoint
+/// file, when the checkpoint is let go right after binding so each linear's
+/// full-precision copy is freed once it is requantized: the 4-bit linears
+/// (9/32 of their bf16 bytes with group-64 scales and biases), the tensors
+/// that stay bf16, and one linear still in bf16. Measured at 0.32 of the
+/// checkpoint on both shipped drafters (`dflash_drafter_load_memory`); 3/8
+/// leaves room for a drafter whose largest linear is a larger share.
+const LOAD_PEAK_EIGHTHS_OF_CHECKPOINT: u64 = 3;
+
+/// What loading a drafter whose checkpoint file is `checkpoint_bytes` holds at
+/// its peak, so a load check asks for that room and no more.
+#[must_use]
+pub fn drafter_load_peak_bytes(checkpoint_bytes: u64) -> u64 {
+    checkpoint_bytes.div_ceil(8) * LOAD_PEAK_EIGHTHS_OF_CHECKPOINT
+}
+
 impl DFlashDrafterWeights {
     /// Quantizes every linear layer to 4 bits, group 64, in place: about
     /// 1 GB to stream a round instead of the checkpoint's 3.6 GB for the 27B's
@@ -340,3 +356,7 @@ impl LayerConvolutionWeights {
             .quantize_in_place(runtime, use_register_order)
     }
 }
+
+#[cfg(test)]
+#[path = "drafter_weights_tests.rs"]
+mod drafter_weights_tests;

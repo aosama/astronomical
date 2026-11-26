@@ -13,13 +13,12 @@
 use std::path::Path;
 
 use ipc_protocol::DraftModelLocation;
-use runtime_integration::MlxSafetensors;
 
 use super::draft_round_target::DraftRoundTarget;
 use crate::PerformanceAttribution;
 use engine_core::speculative_decoding::dflash_drafter::{
     DFlashDrafterConfiguration, DFlashDrafterWeights, DFlashDrafterWeightsError, DraftTreeOptions,
-    bind_drafter_weights,
+    bind_drafter_weights, drafter_load_peak_bytes,
 };
 
 use super::draft_tree_size::draft_tree_options_for_target;
@@ -62,8 +61,6 @@ pub struct Qwen3_5SpeculativeDraftRuntime {
     /// What the drafter's weights hold in memory, when the engine that
     /// hosts it measured that; zero where nobody plans memory around it.
     pub hosted_weight_bytes: u64,
-    /// Keeps the drafter's lazily mapped codebooks alive.
-    _drafter_checkpoint: MlxSafetensors,
 }
 
 /// Printed where a model's accelerators are: the weights themselves say
@@ -108,7 +105,7 @@ impl Qwen3_5SpeculativeDraftRuntime {
         else {
             return Ok(Qwen3_5DraftRuntimeLoadOutcome::KernelsUnavailable);
         };
-        let (drafter_weights, drafter_checkpoint) =
+        let drafter_weights =
             load_drafter_weights(model, &drafter_directory, &drafter_configuration)?;
         let tree_options =
             draft_tree_options_for_target(model.draft_tree_model_base().config().expert_count());
@@ -125,17 +122,25 @@ impl Qwen3_5SpeculativeDraftRuntime {
             tree_options,
             drafter_location,
             hosted_weight_bytes: 0,
-            _drafter_checkpoint: drafter_checkpoint,
         })))
     }
 }
 
 /// Binds the drafter's checkpoint and requantizes its linears for serving.
+///
+/// The checkpoint is let go as soon as its tensors are bound. Each bound
+/// tensor keeps MLX's reader alive on its own, so the tensors that stay bf16
+/// still read; and a linear's bf16 copy, once requantized, is held by nothing
+/// and freed. Kept, the checkpoint held every bf16 linear it had been asked
+/// for: 4.29 GB held after load for the 27B's drafter where 0.94 GB is
+/// served, which
+/// refused that drafter at an 18 GB limit and displaced layers below it
+/// (#2578).
 fn load_drafter_weights<Target: DraftRoundTarget>(
     model: &Target,
     drafter_directory: &Path,
     drafter_configuration: &DFlashDrafterConfiguration,
-) -> Result<(DFlashDrafterWeights, MlxSafetensors), Qwen3_5SpeculativeDraftLoadingError> {
+) -> Result<DFlashDrafterWeights, Qwen3_5SpeculativeDraftLoadingError> {
     let weights_file = match std::fs::File::open(drafter_directory.join(DRAFTER_WEIGHTS_FILE_NAME))
     {
         Ok(weights_file) => weights_file,
@@ -143,24 +148,21 @@ fn load_drafter_weights<Target: DraftRoundTarget>(
             return Err(Qwen3_5SpeculativeDraftLoadingError::WeightsUnreadable { source });
         }
     };
-    let drafter_checkpoint = model
-        .draft_tree_model_base()
-        .runtime()
+    let runtime = model.draft_tree_model_base().runtime();
+    let drafter_checkpoint = runtime
         .load_safetensors(weights_file, None)
         .map_err(Qwen3_5SpeculativeDraftLoadingError::Runtime)?;
-    let mut drafter_weights = bind_drafter_weights(
-        model.draft_tree_model_base().runtime(),
-        &drafter_checkpoint,
-        drafter_configuration,
-    )
-    .map_err(Qwen3_5SpeculativeDraftLoadingError::Weights)?;
+    let mut drafter_weights =
+        bind_drafter_weights(runtime, &drafter_checkpoint, drafter_configuration)
+            .map_err(Qwen3_5SpeculativeDraftLoadingError::Weights)?;
+    drop(drafter_checkpoint);
     // Served at 4 bits in register order: about 1 GB streamed a round
     // instead of the checkpoint's 3.6 GB of bf16, with no kept-token
     // loss measured against the bf16 drafter on the 27B.
     drafter_weights
-        .quantize_linears(model.draft_tree_model_base().runtime(), true)
+        .quantize_linears(runtime, true)
         .map_err(Qwen3_5SpeculativeDraftLoadingError::Runtime)?;
-    Ok((drafter_weights, drafter_checkpoint))
+    Ok(drafter_weights)
 }
 
 /// Has the target make room for the drafter's load, or, on an engine that
@@ -177,8 +179,9 @@ fn secure_room_for_the_drafter<Target: DraftRoundTarget>(
     ensure_memory_headroom_for_drafter(model, active_memory_limit_bytes, drafter_load_bytes)
 }
 
-/// What loading the drafter needs under the limit: its checkpoint, which
-/// is held whole until its linears are requantized, and the headroom.
+/// What loading the drafter needs under the limit: the peak of its load
+/// (`drafter_load_peak_bytes`, about a third of its checkpoint) and the
+/// headroom.
 fn drafter_load_byte_count(
     drafter_directory: &Path,
 ) -> Result<u64, Qwen3_5SpeculativeDraftLoadingError> {
@@ -186,7 +189,7 @@ fn drafter_load_byte_count(
         std::fs::metadata(drafter_directory.join(DRAFTER_WEIGHTS_FILE_NAME))
             .map_err(|source| Qwen3_5SpeculativeDraftLoadingError::WeightsUnreadable { source })?
             .len();
-    Ok(drafter_weights_bytes + DRAFTER_LOAD_HEADROOM_BYTES)
+    Ok(drafter_load_peak_bytes(drafter_weights_bytes) + DRAFTER_LOAD_HEADROOM_BYTES)
 }
 
 /// Refuses the drafter when the active limit cannot hold its weights plus

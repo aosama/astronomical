@@ -791,6 +791,12 @@ measure-dflash2-serving-throughput = "run -p xtask -- test-run --package astrono
 # block the same rows a concatenation does, round after round, past the
 # cut-back of a sliding-window layer to its window. No model. Seconds.
 test-dflash-drafter-context-slab = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter dflash_drafter_context_slab"
+# What loading a real DFlash drafter holds: once with its checkpoint kept
+# through requantizing (the old order, a measurement) and once with it let go
+# after binding (the engine's order), whose peak must stay within what the
+# drafter's load check asks for (#2578). --configuration names a model whose
+# folder holds a `drafter`. Seconds.
+test-dflash-drafter-load-memory = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --filter dflash_drafter_load_memory"
 test-dflash-drafter-reference = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter dflash_drafter_reference"
 # What a routed-expert projection costs by how its rows are laid out: one row
 # a gathered expert (how a draft round's rows are verified) against several
