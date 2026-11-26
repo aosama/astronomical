@@ -120,6 +120,19 @@ pub(crate) fn record_reply_drafting(
     }
 }
 
+/// Keeps the most MLX memory the last finished reply had in use. MLX's own
+/// peak counter starts again at every memory check the engine makes, so it
+/// is not a reply's figure; this is the highest of every reading the engine
+/// sent while the reply was read and written (issue #2582).
+pub(crate) fn record_reply_peak_mlx_memory(
+    health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
+    reply_peak_mlx_memory_bytes: Option<u64>,
+) {
+    if let Ok(mut worker_health_snapshot) = health_snapshot.write() {
+        worker_health_snapshot.last_reply_peak_mlx_memory_bytes = reply_peak_mlx_memory_bytes;
+    }
+}
+
 pub(crate) fn publish_draft_model(
     health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
     draft_model: Option<ipc_protocol::DraftModelStatus>,

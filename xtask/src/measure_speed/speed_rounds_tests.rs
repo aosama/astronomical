@@ -12,6 +12,7 @@ fn reply(prompt_tokens: u64, seconds_to_first_token: f64, reply_rate: f64) -> Re
         seconds_to_first_token,
         reply_tokens_per_second: Some(reply_rate),
         drafting: None,
+        peak_mlx_memory_bytes: None,
     }
 }
 
@@ -95,6 +96,7 @@ fn should_draw_every_figure_of_a_task_from_its_rounds() {
                 highest: 64.0
             },
             drafting: None,
+            peak_mlx_memory_bytes: None,
         })
     );
     assert_eq!(speed_rounds.task_figures(SpeedTask::LongPromptEssay), None);
@@ -112,6 +114,7 @@ fn should_not_count_a_reply_that_gave_no_rate_as_a_round() {
                 seconds_to_first_token: 0.2,
                 reply_tokens_per_second: None,
                 drafting: None,
+                peak_mlx_memory_bytes: None,
             },
         );
     }
@@ -126,4 +129,23 @@ fn should_read_no_prompt_speed_from_a_reply_with_no_first_token_time() {
         reply(10_000, 4.0, 50.0).prefill_tokens_per_second(),
         2_500.0
     );
+}
+
+#[test]
+fn should_give_peak_memory_over_the_replies_that_reported_one() {
+    let mut speed_rounds = ModelSpeedRounds::default();
+    for peak_mlx_memory_bytes in [Some(18_000_000_000), None, Some(20_000_000_000)] {
+        let mut task_reply = reply(10_000, 4.0, 60.0);
+        task_reply.peak_mlx_memory_bytes = peak_mlx_memory_bytes;
+        speed_rounds.record(SpeedTask::LongPromptCode, task_reply);
+    }
+
+    let peak_figures = speed_rounds
+        .task_figures(SpeedTask::LongPromptCode)
+        .expect("three rounds give figures")
+        .peak_mlx_memory_bytes
+        .expect("two replies reported a peak");
+
+    assert!((peak_figures.lowest - 18_000_000_000.0).abs() < 1.0);
+    assert!((peak_figures.highest - 20_000_000_000.0).abs() < 1.0);
 }

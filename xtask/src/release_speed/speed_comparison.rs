@@ -32,6 +32,8 @@ const LONG_PROMPT_TOKENS: u64 = 1_000;
 enum FigureUnit {
     TokensPerSecond,
     Seconds,
+    /// Bytes, printed in GB of 2^30 bytes.
+    MemoryBytes,
 }
 
 /// The markdown section the release notes and the release issue open with.
@@ -49,7 +51,7 @@ pub fn release_speed_section(
     );
     let _ = writeln!(
         section_text,
-        "| Model and workload | Prompt reading (tokens a second) | First token | Reply (tokens a second) |\n|---|---|---|---|"
+        "| Model and workload | Prompt reading (tokens a second) | First token | Reply (tokens a second) | Peak memory |\n|---|---|---|---|---|"
     );
     for current_measurement in &current_ledger.measurements {
         let previous_measurement =
@@ -169,8 +171,33 @@ fn comparison_row(
         is_same_machine,
     );
     format!(
-        "| {} | {prompt_reading_cell} | {first_token_cell} | {reply_cell} |",
-        workload_label(previous_measurement, current_measurement)
+        "| {} | {prompt_reading_cell} | {first_token_cell} | {reply_cell} | {} |",
+        workload_label(previous_measurement, current_measurement),
+        peak_memory_cell(previous_measurement, current_measurement, is_same_machine)
+    )
+}
+
+/// The most MLX memory a reply had in use; a dash for a release measured
+/// before the engine reported it.
+fn peak_memory_cell(
+    previous_measurement: Option<&SpeedMeasurement>,
+    current_measurement: &SpeedMeasurement,
+    is_same_machine: bool,
+) -> String {
+    let Some(current_peak) = current_measurement.figures.peak_mlx_memory_bytes.as_ref() else {
+        return "–".to_owned();
+    };
+    let previous_peak =
+        previous_measurement.and_then(|previous| previous.figures.peak_mlx_memory_bytes.as_ref());
+    if previous_measurement.is_some() && previous_peak.is_none() {
+        // The row is not new; only its memory figure is.
+        return figure_text(current_peak.median, FigureUnit::MemoryBytes);
+    }
+    figure_cell(
+        previous_peak,
+        current_peak,
+        FigureUnit::MemoryBytes,
+        is_same_machine,
     )
 }
 
@@ -204,6 +231,7 @@ fn figure_cell(
 fn figure_text(figure: f64, figure_unit: FigureUnit) -> String {
     match figure_unit {
         FigureUnit::Seconds => format!("{figure:.1} s"),
+        FigureUnit::MemoryBytes => format!("{:.1} GB", figure / BYTES_PER_GIGABYTE as f64),
         FigureUnit::TokensPerSecond => with_thousands_separators(figure.round() as i64),
     }
 }

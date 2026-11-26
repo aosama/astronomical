@@ -87,6 +87,11 @@ pub struct TaskFigures {
     /// and in ledgers written before replies reported it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub drafting: Option<DraftingFigures>,
+    /// The most MLX memory in use during a reply, prompt reading included,
+    /// in bytes; absent when the engine reported none, and in ledgers
+    /// written before it did.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub peak_mlx_memory_bytes: Option<FigureSpread>,
 }
 
 /// A task's drafting over its rounds: what explains a drafted reply speed,

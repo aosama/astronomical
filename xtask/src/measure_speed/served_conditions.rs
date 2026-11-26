@@ -48,6 +48,13 @@ pub fn served_conditions(
     })
 }
 
+/// The most MLX memory the last finished reply had in use, from the engine's
+/// status; `None` from an engine that reports none.
+#[must_use]
+pub fn last_reply_peak_mlx_memory_bytes(status_document: &Value) -> Option<u64> {
+    status_document["last_reply_peak_mlx_memory_bytes"].as_u64()
+}
+
 /// The engine reports how the loaded model's weights are held: `resident`
 /// when all of them are in memory (a dense model reports it too), `hybrid` or
 /// `paged` when some stream from the SSD. An engine that reports no mode is

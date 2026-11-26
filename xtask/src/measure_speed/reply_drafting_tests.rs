@@ -8,6 +8,7 @@ fn reply(completion_tokens: u64, drafting: Option<ReplyDrafting>) -> ReplyMeasur
         seconds_to_first_token: 0.3,
         reply_tokens_per_second: Some(60.0),
         drafting,
+        peak_mlx_memory_bytes: None,
     }
 }
 

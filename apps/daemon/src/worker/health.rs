@@ -19,6 +19,9 @@ mod neural_engine_prefill_tests;
 #[cfg(test)]
 mod reply_drafting_tests;
 #[cfg(test)]
+#[path = "health/reply_peak_memory_tests.rs"]
+mod reply_peak_memory_tests;
+#[cfg(test)]
 #[path = "health/request_progress_count_tests.rs"]
 mod request_progress_count_tests;
 
@@ -34,7 +37,7 @@ pub(crate) use publisher::{
     publish_model_load_in_flight, publish_neural_engine_prefill,
     publish_pending_astro_ssd_prompt_cache_clear, publish_pending_mlx_memory_ceiling,
     publish_worker_expert_residency, record_neural_engine_chunk, record_prompt_work_reuse,
-    record_reply_drafting, record_serving_session,
+    record_reply_drafting, record_reply_peak_mlx_memory, record_serving_session,
 };
 
 /// Coarse worker availability state exposed by the daemon readiness endpoint.
@@ -293,6 +296,10 @@ pub struct WorkerHealthSnapshot {
     pub last_reply_drafting: Option<ipc_protocol::RequestDraftingStatistics>,
     /// Drafting summed over every reply since this model loaded.
     pub session_drafting: ipc_protocol::RequestDraftingStatistics,
+    /// The most MLX memory in use at any moment of the last finished reply,
+    /// prompt reading included; `None` before a reply finishes or when the
+    /// engine sent no memory reading during it.
+    pub last_reply_peak_mlx_memory_bytes: Option<u64>,
     /// Which model is loading. Every wholesale health replacement (ready, idle,
     /// unavailable) rebuilds this as `None`, so a finished or failed load never leaves
     /// a stale report behind.
@@ -356,6 +363,7 @@ impl WorkerHealthSnapshot {
             draft_model: None,
             last_reply_drafting: None,
             session_drafting: ipc_protocol::RequestDraftingStatistics::NONE,
+            last_reply_peak_mlx_memory_bytes: None,
             model_load_in_flight: None,
             request_progress_count: 0,
             expert_residency: None,
@@ -435,6 +443,7 @@ impl WorkerHealthSnapshot {
             draft_model: None,
             last_reply_drafting: None,
             session_drafting: ipc_protocol::RequestDraftingStatistics::NONE,
+            last_reply_peak_mlx_memory_bytes: None,
             model_load_in_flight: None,
             request_progress_count: 0,
             expert_residency: None,
@@ -469,6 +478,7 @@ impl WorkerHealthSnapshot {
             draft_model: None,
             last_reply_drafting: None,
             session_drafting: ipc_protocol::RequestDraftingStatistics::NONE,
+            last_reply_peak_mlx_memory_bytes: None,
             model_load_in_flight: None,
             request_progress_count: 0,
             expert_residency: None,
