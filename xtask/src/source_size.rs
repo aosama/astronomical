@@ -1,6 +1,8 @@
 //! Typed port of `scripts/check-source-size.sh`: enforces the repository's
 //! file-length budgets for workspace sources, with the same progress and
-//! ETA reporting the shell tool emitted.
+//! ETA reporting the shell tool emitted. Its rules and the workspace scan are
+//! unit-tested in `source_size_tests.rs`; the staged scan, which reads the
+//! calling repository's index, in `tests/integration_source_size_journeys.rs`.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -66,7 +68,7 @@ impl Progress {
 
 /// A source file whose first line marks it as deterministically generated is
 /// exempt: nobody authors those lines here.
-fn is_deterministically_generated_binding(source_text: &str) -> bool {
+pub(crate) fn is_deterministically_generated_binding(source_text: &str) -> bool {
     let Some(first_line) = source_text.lines().next() else {
         return false;
     };
@@ -82,7 +84,7 @@ fn is_deterministically_generated_binding(source_text: &str) -> bool {
 
 /// `sed -n '$='` semantics: newline count, plus one when the file ends
 /// without a trailing newline on a nonempty final line.
-fn count_source_lines(source_text: &str) -> usize {
+pub(crate) fn count_source_lines(source_text: &str) -> usize {
     let newline_count = source_text.matches('\n').count();
     if source_text.is_empty() {
         0
@@ -93,7 +95,7 @@ fn count_source_lines(source_text: &str) -> usize {
     }
 }
 
-fn is_vendored_asset_path(relative_path: &str) -> bool {
+pub(crate) fn is_vendored_asset_path(relative_path: &str) -> bool {
     relative_path.contains("/vendor/") || relative_path.starts_with("vendor/")
 }
 
@@ -183,11 +185,17 @@ fn run_workspace_mode(repository_root: &Path) -> Result<(), String> {
     Ok(())
 }
 
-fn is_staged_source_file_path(path_text: &str) -> bool {
-    path_text
-        .rsplit('.')
-        .next()
-        .is_some_and(|extension| SOURCE_FILE_EXTENSIONS.contains(&extension))
+/// Judged by the file's extension. Splitting the path on its last dot read a
+/// file with no extension, such as one named `h` or `rs`, as source code.
+pub(crate) fn is_staged_source_file_path(path_text: &str) -> bool {
+    Path::new(path_text)
+        .extension()
+        .and_then(std::ffi::OsStr::to_str)
+        .is_some_and(is_source_file_extension)
+}
+
+fn is_source_file_extension(extension: &str) -> bool {
+    SOURCE_FILE_EXTENSIONS.contains(&extension)
 }
 
 fn run_staged_mode() -> Result<(), String> {

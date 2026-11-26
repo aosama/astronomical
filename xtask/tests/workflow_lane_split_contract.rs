@@ -657,12 +657,14 @@ fn should_run_every_xtask_test_target_in_ci() {
         "config-contracts",
     );
     let config_step = find_step_by_name(&config_steps, "Run workflow contracts");
+    let repository_contracts_step = find_step_by_name(&config_steps, "Run repository contracts");
     let neural_engine_steps = steps_of(required_job(&workflow, "neural-engine"), "neural-engine");
     let xtask_tests_step =
         find_step_by_name(&neural_engine_steps, "Run the xtask unit and journey tests");
     let lanes_text = format!(
-        "{}\n{}",
+        "{}\n{}\n{}",
         run_text_of(config_step, "config-contracts"),
+        run_text_of(repository_contracts_step, "repository-contracts"),
         run_text_of(xtask_tests_step, "xtask-unit-tests")
     );
     assert_eq!(

@@ -10,16 +10,17 @@ Repository tooling is typed Rust in the `xtask` crate (`cargo xtask <command>`, 
 | `publish-ci-timing-summary.sh` | Writes the timing table to the run summary | It is each job's final `if: always()` step, so it must work even when the job failed before a toolchain was set up. |
 | `report-build-cache-restoration.sh` | Reports `github_actions_cache` restore outcomes in action logs | It runs inside the `astronomical-cache` composite action, before any toolchain exists. |
 | `tests/test-ci-native-cache-coordination.sh` | Contract for the `github_actions_cache` restoration reporter | It tests the shell reporter above directly, so it lives and dies with it. |
-| `timeout` | POSIX `timeout` for runners without GNU coreutils | The remaining shell contracts in `verification/tooling_contracts/` bound their subjects with it. |
 
 ## Tooling that moved to xtask
 
-Former scripts in this folder and at the root of `scripts/` are now xtask commands:
+Former scripts in this folder, at the root of `scripts/` and in `verification/tooling_contracts/` are now xtask commands or xtask tests:
 - `cargo xtask prewarm-native-build`
 - `cargo xtask check-test-channel-isolation`, which now also scans `verification/*/tests` and runs on the real repository in CI
 - `cargo xtask menu-contracts`, for local use; CI runs the same `swift test` inline because its Swift job has no Rust
 - `cargo xtask mlx-c-coverage-inventory`
 - `cargo xtask vendor-thin-talk-assets [--verify-only]`, which vendors and verifies the Thin Talk canvas's pinned web assets
+- `cargo xtask check-cargo-citations`, which replaced `verification/tooling_contracts/test-cargo-citation-contract.sh` and accepts a `cargo measure-...` alias family
+- `cargo test -p xtask --test cargo_alias_nested_config_contract` and `--test integration_source_size_journeys`, which replaced the other two scripts in `verification/tooling_contracts/`
 
 The tier pyramid is local: `cargo xtask tier-pyramid` reports the repository's per-tier test distribution against `tier-pyramid-baseline.json`. Its behaviour on a fixture tree is an xtask unit test.
 
