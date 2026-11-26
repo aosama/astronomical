@@ -19,8 +19,8 @@
 
 use mlx_bridge::MlxArray;
 
-use super::feed_forward_weights::Qwen3_5MoEFeedForwardWeights;
 use super::prefill_complete_layer_prefetch::PartlyKeptLayers;
+use super::routed_layer_input::RoutedLayerInput;
 use crate::qwen3_5_text::expert_streaming::expert_pager::{
     Qwen3_5ExpertPager, Qwen3_5ExpertStreamingRequestShape, Qwen3_5PagedExpertWeights,
 };
@@ -218,57 +218,36 @@ impl Qwen3_5Model {
     /// all of its spans, or the page a chunk forward read ahead for this one
     /// use. `Ok(None)` falls through to the retained and routed dispatch
     /// paths.
-    #[allow(clippy::too_many_arguments)]
     pub(super) fn dispatch_complete_layer_page_in_hand(
         &self,
-        expert_pager: &Qwen3_5ExpertPager,
-        layer_index: usize,
-        token_count: i32,
-        hidden_states: &MlxArray,
-        mixture_of_experts_weights: &Qwen3_5MoEFeedForwardWeights,
-        selected_indices: &MlxArray,
-        selected_scores: &MlxArray,
-        should_use_compiled_elementwise_graphs: bool,
+        routed_layer_input: &RoutedLayerInput<'_>,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<Option<MlxArray>, TextExecutionError> {
-        if let Some(handled) = self.dispatch_held_prompt_expert_layer(
-            layer_index,
-            hidden_states,
-            mixture_of_experts_weights,
-            selected_indices,
-            selected_scores,
-            should_use_compiled_elementwise_graphs,
-            performance_attribution,
-        )? {
+        if let Some(handled) =
+            self.dispatch_held_prompt_expert_layer(routed_layer_input, performance_attribution)?
+        {
             return Ok(Some(handled));
         }
-        self.dispatch_prefetched_complete_layer(
-            expert_pager,
-            layer_index,
-            token_count,
-            hidden_states,
-            mixture_of_experts_weights,
-            selected_indices,
-            selected_scores,
-            should_use_compiled_elementwise_graphs,
-            performance_attribution,
-        )
+        self.dispatch_prefetched_complete_layer(routed_layer_input, performance_attribution)
     }
 
     /// Multiplies one span by the held page with its route remapped
     /// on-device, when the page in hand is this layer's. `Ok(None)` leaves
     /// the layer to the other dispatch paths.
-    #[allow(clippy::too_many_arguments)]
     fn dispatch_held_prompt_expert_layer(
         &self,
-        layer_index: usize,
-        hidden_states: &MlxArray,
-        mixture_of_experts_weights: &Qwen3_5MoEFeedForwardWeights,
-        selected_indices: &MlxArray,
-        selected_scores: &MlxArray,
-        should_use_compiled_elementwise_graphs: bool,
+        routed_layer_input: &RoutedLayerInput<'_>,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<Option<MlxArray>, TextExecutionError> {
+        let RoutedLayerInput {
+            layer_index,
+            selected_indices,
+            selected_scores,
+            mixture_of_experts_weights,
+            hidden_states,
+            should_use_compiled_elementwise_graphs,
+            ..
+        } = *routed_layer_input;
         let held_prompt_expert_layer = self.prompt_expert_pages_in_hand.held_layer.borrow();
         let Some(held_layer) = held_prompt_expert_layer
             .as_ref()
