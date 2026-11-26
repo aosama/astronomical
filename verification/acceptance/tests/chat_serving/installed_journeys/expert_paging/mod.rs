@@ -1,3 +1,4 @@
+mod chat_follow_up_turn;
 mod cold_macos_file_cache;
 mod compact_prefill;
 mod decode_residency_attribution;

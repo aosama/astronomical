@@ -54,7 +54,7 @@ async fn read_on_the_resident_engine() {
     let mut loaded = load_configured_resident_engine("long_prompt_resident_model_load").await;
     let served_model = (&*loaded.model_directory, &*loaded.end_of_sequence_token_ids);
     let phase_name = "long_prompt_read_by_the_resident_engine";
-    serve_warmup_and_read_a_long_prompt(&mut loaded.engine, served_model, phase_name).await;
+    let _ = serve_warmup_and_read_a_long_prompt(&mut loaded.engine, served_model, phase_name).await;
 }
 
 /// A hosted drafter stays loaded and proposes nothing, so the few tokens
