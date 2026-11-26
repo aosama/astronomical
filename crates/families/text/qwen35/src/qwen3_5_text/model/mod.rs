@@ -123,6 +123,7 @@ mod seat_planned_complete_layers;
 mod streamed_expert_assignment_steps;
 pub mod streaming_model;
 mod system_wired_governance;
+mod whole_model_holding;
 
 pub use crate::qwen3_5_core::model::Qwen3_5ModelBase;
 pub use crate::qwen3_5_core::model_math::{forward_contract, weights};
@@ -138,6 +139,7 @@ mod paged_execution_tests;
 mod artifact_loading;
 #[cfg(feature = "direct-mlx")]
 mod decoder_layer_forward;
+pub mod decoder_stack_suffix_forward;
 #[cfg(feature = "direct-mlx")]
 mod dense_streaming_loading;
 #[cfg(feature = "direct-mlx")]

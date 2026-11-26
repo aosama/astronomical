@@ -244,8 +244,9 @@ pub use qwen3_5_text::{ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID, ORNITH_1_0_35B_OPTIQ_
 #[cfg(feature = "direct-mlx")]
 pub use qwen3_5_text::{
     DirectExpertFetchCounts, InGraphServingCounts, LayerProbeShape, Qwen3_5TargetForwardOutput,
-    Qwen3_5TextEngine, Qwen3_5TextModel, ReplyStageCounts, RoutedReplyRecording,
-    TextEngineSettings, safe_minimum_mlx_memory_ceiling_bytes,
+    Qwen3_5TextEngine, Qwen3_5TextModel, RecordedDecoderLayerInput, ReplyStageCounts,
+    RoutedExpertProjection, RoutedReplyRecording, TextEngineSettings,
+    safe_minimum_mlx_memory_ceiling_bytes,
 };
 
 #[cfg(feature = "direct-mlx")]
