@@ -576,3 +576,117 @@ fn convolution_weight_array(runtime: &MlxRuntime, dtype: MlxDtype) -> MlxArray {
         )
         .expect("the convolution weight should cast to the requested dtype")
 }
+
+/// Magnitudes of the swept inputs. The largest reaches where SiLU's
+/// exponential is far from 1: with Metal's fast `exp` in place of the precise
+/// one MLX's sigmoid uses, the fused kernel left the composed path on 58 of
+/// about 200,000 values there and on none below it, which is how a model's
+/// one-token step came to differ from its draft tree's rows (issue #2599).
+const SWEPT_INPUT_MAGNITUDES: [f32; 4] = [0.05, 0.5, 3.0, 20.0];
+const SWEEP_TRIALS_A_MAGNITUDE: usize = 16;
+
+/// Negative inputs far from zero are the edge; small ones are the common
+/// case. Pseudo-random values, because the patterned inputs above repeat
+/// every 97 elements and never met the values that differed.
+#[tokio::test]
+async fn should_match_the_composed_path_bit_for_bit_on_inputs_far_from_zero() {
+    let (runtime, graphs, kernel) = prepare_runtime_and_kernel().await;
+    let dtype = MlxDtype::BFloat16;
+    let query_scale = scale_array(&runtime, HEAD_DIMENSION as f32, dtype);
+    let key_scale = scale_array(&runtime, (HEAD_DIMENSION as f32).sqrt(), dtype);
+    let mut generator_state = 0x2545_F491_4F6C_DD1D_u64;
+    let mut mismatch_report = Vec::new();
+    for input_magnitude in SWEPT_INPUT_MAGNITUDES {
+        for _trial in 0..SWEEP_TRIALS_A_MAGNITUDE {
+            let mut swept = SweptInputs {
+                runtime: &runtime,
+                generator_state: &mut generator_state,
+            };
+            let mixed_queries_keys_values =
+                swept.array(&[1, 1, CONVOLUTION_DIMENSION], input_magnitude);
+            let convolution_state = swept.array(
+                &[1, KEPT_STATE_ROW_COUNT, CONVOLUTION_DIMENSION],
+                input_magnitude,
+            );
+            let convolution_weight = swept.array(
+                &[CONVOLUTION_DIMENSION, CONVOLUTION_KERNEL_DIMENSION, 1],
+                1.0,
+            );
+            let fused = qwen3_5_gdn_decode_prework(
+                &runtime,
+                &kernel,
+                KEY_HEAD_COUNT,
+                VALUE_HEAD_COUNT,
+                HEAD_DIMENSION,
+                &mixed_queries_keys_values,
+                &convolution_state,
+                &convolution_weight,
+                &query_scale,
+                &key_scale,
+            )
+            .expect("the fused decode prework launch should succeed");
+            let composed = composed_prework_reference(
+                &runtime,
+                &graphs,
+                1,
+                &mixed_queries_keys_values,
+                &convolution_state,
+                &convolution_weight,
+                &query_scale,
+                &key_scale,
+            );
+            for (fused_output, composed_output, label) in [
+                (&fused.queries, &composed.queries, "queries"),
+                (&fused.keys, &composed.keys, "keys"),
+                (&fused.values, &composed.values, "values"),
+            ] {
+                collect_bitwise_mismatches(
+                    &runtime,
+                    fused_output,
+                    composed_output,
+                    label,
+                    &mut mismatch_report,
+                );
+            }
+        }
+    }
+    assert!(
+        mismatch_report.is_empty(),
+        "the fused prework must match the composed path bitwise at every magnitude: {} values differ, first {:?}",
+        mismatch_report.len(),
+        mismatch_report.first()
+    );
+}
+
+/// Pseudo-random bf16 arrays from one xorshift state, so a failure repeats.
+struct SweptInputs<'sweep> {
+    runtime: &'sweep MlxRuntime,
+    generator_state: &'sweep mut u64,
+}
+
+impl SweptInputs<'_> {
+    /// Values spread evenly over `-magnitude..magnitude`.
+    fn array(&mut self, shape: &[i32], magnitude: f32) -> MlxArray {
+        let mut element_count = 1_usize;
+        for dimension in shape {
+            element_count *= *dimension as usize;
+        }
+        let mut sample_values = Vec::with_capacity(element_count);
+        for _ in 0..element_count {
+            *self.generator_state ^= *self.generator_state << 13;
+            *self.generator_state ^= *self.generator_state >> 7;
+            *self.generator_state ^= *self.generator_state << 17;
+            let unit_interval_value = (*self.generator_state >> 40) as f32 / (1_u64 << 24) as f32;
+            sample_values.push((unit_interval_value * 2.0 - 1.0) * magnitude);
+        }
+        self.runtime
+            .astype(
+                &self
+                    .runtime
+                    .array_from_f32(&sample_values, shape)
+                    .expect("the swept array should be valid"),
+                MlxDtype::BFloat16,
+            )
+            .expect("the swept array should cast to bf16")
+    }
+}

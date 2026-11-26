@@ -7,7 +7,9 @@
 //! and MLX rounds a several-row kernel differently from a one-row one, so
 //! the two replies part where two tokens are nearly tied (on a 35B-A3B the
 //! logits move by up to 1.6 between row counts; `cargo
-//! test-streaming-draft-tree-verification` holds each tree row to that).
+//! test-streaming-draft-tree-verification` holds each tree row to that). On
+//! a dense model the one stage left that does so is full attention above
+//! five rows a call (issue #2599).
 //! The journey reports how far they agree and fails only when they part at
 //! the first token, which rounding does not explain. The drafted reply
 //! must have run rounds and the plain

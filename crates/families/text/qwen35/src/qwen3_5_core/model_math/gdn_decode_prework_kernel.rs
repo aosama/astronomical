@@ -10,8 +10,11 @@
 //! Numerics mirror the composed production path exactly, kernel by kernel:
 //! the conv accumulates four taps in float32 and rounds once like MLX's
 //! implicit-GEMM depthwise conv; the in-kernel SiLU uses MLX's own unary
-//! sigmoid formula (exp-of-abs), swept bit-exact over all finite inputs by
-//! the donor kernel; the RMS reduction follows `rms_single_row` from MLX's
+//! sigmoid formula (exp-of-abs) with MLX's `metal::precise::exp`: the fast
+//! `metal::exp` gives another result far from zero, which once left this
+//! kernel a bf16 step away from the composed path on strongly negative
+//! values and so a one-token step away from a draft tree's rows (issue
+//! #2599); the RMS reduction follows `rms_single_row` from MLX's
 //! Metal kernels — contiguous four-element lanes, one simd-group sum, and
 //! `rsqrt(sum_of_squares / head_dimension + epsilon)` with this model's
 //! configured epsilon — followed by the ones-weight rounding cast and the
@@ -377,7 +380,7 @@ fn gdn_decode_prework_kernel_source(rms_norm_epsilon: f32) -> String {
             tap_accumulator += float(window_value) * float(convolution_weight[channel * 4 + tap]);
         }}
         const T convolved = T(tap_accumulator);
-        T sigmoid_branch = T(1) / (T(1) + metal::exp(metal::abs(convolved)));
+        T sigmoid_branch = T(1) / (T(1) + metal::precise::exp(metal::abs(convolved)));
         const T silu_value = convolved * ((convolved < T(0)) ? sigmoid_branch : T(1) - sigmoid_branch);
         activated[element_index] = silu_value;
         float activated_value = float(silu_value);
