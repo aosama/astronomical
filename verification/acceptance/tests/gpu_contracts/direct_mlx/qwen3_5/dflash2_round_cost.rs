@@ -10,16 +10,16 @@
 use std::time::{Duration, Instant};
 
 use mlx_bridge::MlxArray;
+use model_serving::RequestDecoderStateStack;
 use model_serving::speculative_decoding::dflash_drafter::{
     DFlashDraftTarget, DrafterContextStates, PathChoice, drafted_hidden_rows, select_path,
 };
-use model_serving::{
-    PerformanceAttribution, Qwen3_5SpeculativeVerificationOutput, RequestDecoderStateStack,
-    VerificationLogitsMode,
-};
 use serial_test::serial;
 
-use super::dflash2_journey_support::{host_values, tap_rows};
+use super::dflash2_journey_support::{
+    TargetForward, TargetLogitRows, forward_with_taps, host_values, tap_rows,
+    verify_block_with_taps,
+};
 use super::dflash2_kept_per_round::{JourneyPair, load_pair, prompt_token_ids};
 
 const MEASURED_ROUND_COUNT: usize = 12;
@@ -98,7 +98,7 @@ fn time_one_round(pair: &JourneyPair, prompt: &[u32]) -> [Duration; 8] {
         0,
         &mut decoder_state,
         tap_layer_ids,
-        VerificationLogitsMode::LastRowOnly,
+        TargetLogitRows::LastRowOnly,
     );
     let pending_taps = tap_rows(runtime, &prefill.hidden_state_taps, prompt.len() as i32);
     evaluate(runtime, &[&pending_taps]);
@@ -142,12 +142,10 @@ fn time_verify_without_row_states(
         fed,
         decoder_state,
         &pair.drafter_configuration.target_tap_layer_ids,
-        VerificationLogitsMode::AllPositions,
+        TargetLogitRows::EveryRow,
     );
     let mut evaluated_arrays: Vec<&MlxArray> = verification.hidden_state_taps.iter().collect();
-    if let Some(logits) = &verification.per_position_logits {
-        evaluated_arrays.push(logits);
-    }
+    evaluated_arrays.push(&verification.logits);
     evaluate(pair.target.runtime(), &evaluated_arrays);
     started.elapsed()
 }
@@ -158,18 +156,16 @@ fn forward(
     starting_position: u32,
     decoder_state: &mut RequestDecoderStateStack,
     tap_layer_ids: &[i32],
-    logits_mode: VerificationLogitsMode,
-) -> Qwen3_5SpeculativeVerificationOutput {
-    pair.target
-        .build_speculative_verification_forward(
-            token_ids,
-            starting_position,
-            decoder_state,
-            tap_layer_ids,
-            logits_mode,
-            &mut PerformanceAttribution::disabled(),
-        )
-        .expect("the target forward runs")
+    logit_rows: TargetLogitRows,
+) -> TargetForward {
+    forward_with_taps(
+        &pair.target,
+        token_ids,
+        starting_position,
+        decoder_state,
+        tap_layer_ids,
+        logit_rows,
+    )
 }
 
 /// One plain row, then the state is put back for the drafted round.
@@ -186,12 +182,9 @@ fn time_plain_step(
         fed,
         decoder_state,
         &[],
-        VerificationLogitsMode::LastRowOnly,
+        TargetLogitRows::LastRowOnly,
     );
-    evaluate(
-        pair.target.runtime(),
-        &[plain.per_position_logits.as_ref().expect("logits")],
-    );
+    evaluate(pair.target.runtime(), &[&plain.logits]);
     let plain_decode_step = started.elapsed();
     decoder_state
         .restore_checkpoint(checkpoint)
@@ -215,7 +208,7 @@ fn time_drafting(
     let block = runtime
         .array_from_u32(&block_ids, &[1, configuration.block_size])
         .expect("block");
-    let target: &dyn DFlashDraftTarget = &pair.target;
+    let target: &dyn DFlashDraftTarget = &*pair.target;
     let started = Instant::now();
     let hidden = drafted_hidden_rows(
         runtime,
@@ -269,36 +262,30 @@ fn time_verify_and_rewind(
     let mut verified_ids = vec![ANCHOR_TOKEN_ID];
     verified_ids.extend_from_slice(drafted_ids);
     let started = Instant::now();
-    let mut verification = pair
-        .target
-        .verify_drafted_rows(
-            &verified_ids,
-            fed,
-            decoder_state,
-            &pair.drafter_configuration.target_tap_layer_ids,
-            &mut PerformanceAttribution::disabled(),
-        )
-        .expect("the block verifies");
-    let mut evaluated_arrays = vec![&verification.per_position_logits];
-    for row_boundary in &verification.row_boundaries {
-        evaluated_arrays.extend(row_boundary.recurrent_snapshot_tensors.values());
-    }
+    // The streaming model evaluates the block, its row states among it,
+    // before it returns, as a drafting engine's verify does.
+    let verified = verify_block_with_taps(
+        &pair.target,
+        &verified_ids,
+        fed,
+        decoder_state,
+        &pair.drafter_configuration.target_tap_layer_ids,
+    );
+    let mut evaluated_arrays: Vec<&MlxArray> = verified.hidden_state_taps.iter().collect();
+    evaluated_arrays.push(&verified.verification.per_row_logits);
     evaluate(runtime, &evaluated_arrays);
     let verify_eight_rows = started.elapsed();
     let started = Instant::now();
     let _argmax = host_values(
         runtime,
         &runtime
-            .argmax_axis(&verification.per_position_logits, -1)
+            .argmax_axis(&verified.verification.per_row_logits, -1)
             .expect("argmax"),
     );
     let verify_logits_readback = started.elapsed();
     let started = Instant::now();
-    decoder_state
-        .rewind_to_kept_row_boundary(
-            &mut verification.row_boundaries[3].recurrent_snapshot_tensors,
-            fed as i32 + 4,
-        )
+    pair.target
+        .keep_drafted_rows(verified.verification, 4, decoder_state)
         .expect("the state rewinds");
     [verify_eight_rows, verify_logits_readback, started.elapsed()]
 }

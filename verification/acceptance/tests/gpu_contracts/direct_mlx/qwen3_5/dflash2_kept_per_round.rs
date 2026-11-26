@@ -21,6 +21,7 @@ use std::time::Instant;
 
 use ipc_protocol::RequestId;
 use mlx_bridge::MlxArray;
+use model_serving::gpu_token_sampling::sampling_distribution_rows;
 use model_serving::speculative_decoding::dflash_drafter::{
     DFlashDraftTarget, DFlashDrafterConfiguration, DFlashDrafterWeights, DrafterContextStates,
     PathChoice, bind_drafter_weights, drafted_hidden_rows, select_path,
@@ -30,14 +31,16 @@ use model_serving::speculative_decoding::verification_decision::{
     decide_by_token_equality,
 };
 use model_serving::{
-    PerformanceAttribution, Qwen3_5ArtifactValidator, Qwen3_5DraftedRowsVerification,
-    Qwen3_5ResidentModel, Qwen3_5Tokenizer, RequestDecoderStateStack,
-    TextModelChunkingConfiguration, VerificationLogitsMode,
+    PerformanceAttribution, Qwen3_5ArtifactValidator, Qwen3_5StreamingModel, Qwen3_5Tokenizer,
+    RequestDecoderStateStack, TextModelChunkingConfiguration,
 };
 use runtime_integration::{MlxMemoryLimits, MlxRuntime, MlxSafetensors};
 use serial_test::serial;
 
-use super::dflash2_journey_support::{UniformStream, host_values, tap_rows};
+use super::dflash2_journey_support::{
+    TargetLogitRows, UniformStream, VerifiedBlock, forward_with_taps, host_values, tap_rows,
+    verify_block_with_taps,
+};
 
 pub(crate) const CODE_PROMPT: &str =
     "Write a short Python function that computes the Fibonacci sequence and explain it.";
@@ -129,7 +132,7 @@ const CELLS: [Cell; 4] = [
 ];
 
 pub(crate) struct JourneyPair {
-    pub(crate) target: Qwen3_5ResidentModel,
+    pub(crate) target: Qwen3_5StreamingModel,
     /// The model ID chat commands name: the loaded target's folder leaf.
     pub(crate) target_model_id: String,
     pub(crate) tokenizer: Qwen3_5Tokenizer,
@@ -249,7 +252,7 @@ pub(crate) fn load_pair() -> JourneyPair {
         Qwen3_5Tokenizer::from_validated_artifact(&artifact).expect("the tokenizer builds");
     let chunking = TextModelChunkingConfiguration::new(256, 0, 0).expect("the chunking is valid");
     let mut attribution = PerformanceAttribution::disabled();
-    let mut target = Qwen3_5ResidentModel::load_with_performance_attribution(
+    let mut target = Qwen3_5StreamingModel::load_with_performance_attribution(
         runtime,
         artifact,
         &target_directory,
@@ -257,12 +260,12 @@ pub(crate) fn load_pair() -> JourneyPair {
         chunking,
         &mut attribution,
     )
-    .expect("the target loads in the resident engine");
+    .expect("the target loads");
     target
-        .materialize_complete_weights_matching_production()
-        .expect("the target weights materialize");
-    // A drafting engine converts its projections into register order once
-    // this GPU's probe proves the kernel; every row count then uses it.
+        .materialize_and_keep_every_dense_layer()
+        .expect("the target weights materialize and every layer is kept");
+    // A drafting engine converts its kept projections into register order
+    // once this GPU's probe proves the kernel; every row count then uses it.
     let converted_projection_count = target
         .convert_projections_to_register_order(&mut attribution)
         .expect("the projections convert")
@@ -367,20 +370,15 @@ pub(crate) fn run_cell(pair: &JourneyPair, cell: &Cell, sampling_seed: u64) -> C
         .runtime()
         .random_key(sampling_seed)
         .expect("a key builds");
-    let prefill = pair
-        .target
-        .build_speculative_verification_forward(
-            &prompt,
-            0,
-            &mut decoder_state,
-            tap_layer_ids,
-            VerificationLogitsMode::LastRowOnly,
-            &mut PerformanceAttribution::disabled(),
-        )
-        .expect("the prompt prefills with taps");
-    let first_logits = prefill
-        .per_position_logits
-        .expect("the last row has logits");
+    let prefill = forward_with_taps(
+        &pair.target,
+        &prompt,
+        0,
+        &mut decoder_state,
+        tap_layer_ids,
+        TargetLogitRows::LastRowOnly,
+    );
+    let first_logits = prefill.logits;
     let mut round = RoundState {
         last_token_id: decide(pair, cell, &[], &first_logits, None, &mut uniforms).next_token_id,
         fed_token_count: prompt.len() as u32,
@@ -441,7 +439,7 @@ fn run_round(
     let block = runtime
         .array_from_u32(&block_ids, &[1, configuration.block_size])
         .expect("the block builds");
-    let target: &dyn DFlashDraftTarget = &pair.target;
+    let target: &dyn DFlashDraftTarget = &*pair.target;
     let hidden = drafted_hidden_rows(
         runtime,
         &pair.drafter_weights,
@@ -485,18 +483,16 @@ fn run_round(
         .collect();
     let mut verified_ids = vec![round.last_token_id];
     verified_ids.extend_from_slice(&drafted_ids);
-    let verification = pair
-        .target
-        .verify_drafted_rows(
-            &verified_ids,
-            round.fed_token_count,
-            decoder_state,
-            &configuration.target_tap_layer_ids,
-            &mut PerformanceAttribution::disabled(),
-        )
-        .expect("the target verifies the block");
-    let logits = verification
-        .per_position_logits
+    let verified = verify_block_with_taps(
+        &pair.target,
+        &verified_ids,
+        round.fed_token_count,
+        decoder_state,
+        &configuration.target_tap_layer_ids,
+    );
+    let logits = verified
+        .verification
+        .per_row_logits
         .retain()
         .expect("the logits handle");
     let drafter_distribution = match &path.candidate_probabilities {
@@ -517,7 +513,7 @@ fn run_round(
         drafter_distribution.as_ref(),
         uniforms,
     );
-    settle_round(pair, round, decoder_state, verification, decision);
+    settle_round(pair, round, decoder_state, verified, decision);
     let mut emitted = drafted_ids[..decision.kept_draft_count].to_vec();
     emitted.push(decision.next_token_id);
     emitted
@@ -530,22 +526,17 @@ pub(crate) fn settle_round(
     pair: &JourneyPair,
     round: &mut RoundState,
     decoder_state: &mut RequestDecoderStateStack,
-    mut verification: Qwen3_5DraftedRowsVerification,
+    verified: VerifiedBlock,
     decision: VerificationDecision,
 ) {
     let kept_row_count = decision.kept_draft_count + 1;
     let kept_token_offset = round.fed_token_count + kept_row_count as u32;
-    if kept_row_count <= verification.row_boundaries.len() {
-        decoder_state
-            .rewind_to_kept_row_boundary(
-                &mut verification.row_boundaries[kept_row_count - 1].recurrent_snapshot_tensors,
-                kept_token_offset as i32,
-            )
-            .expect("the decoder state rewinds to the kept rows");
-    }
+    pair.target
+        .keep_drafted_rows(verified.verification, kept_row_count, decoder_state)
+        .expect("the decoder state rewinds to the kept rows");
     round.pending_tap_rows = tap_rows(
         pair.target.runtime(),
-        &verification.hidden_state_taps,
+        &verified.hidden_state_taps,
         kept_row_count as i32,
     );
     round.fed_token_count = kept_token_offset;
@@ -582,15 +573,14 @@ fn decide(
         );
     }
     // Only each row's top-k tokens can be sampled, so only they are read back.
-    let (distribution_ids, distribution_probabilities) = pair
-        .target
-        .sampling_distribution_rows(
-            logits,
-            cell.temperature_thousandths,
-            TOP_P_THOUSANDTHS,
-            TOP_K,
-        )
-        .expect("the target's sampling law applies");
+    let (distribution_ids, distribution_probabilities) = sampling_distribution_rows(
+        runtime,
+        logits,
+        cell.temperature_thousandths,
+        TOP_P_THOUSANDTHS,
+        TOP_K,
+    )
+    .expect("the target's sampling law applies");
     let kept_ids: Vec<u32> = host_values(runtime, &distribution_ids)
         .iter()
         .map(|value| *value as u32)

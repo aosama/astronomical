@@ -3,7 +3,9 @@
 //! about a loaded model (kept layers in register order, the fused expert
 //! combination) compare the answers before and after the change.
 
-use model_serving::{LayerProbeShape, Qwen3_5ArtifactValidator, Qwen3_5Config, Qwen3_5StreamingModel};
+use model_serving::{
+    LayerProbeShape, Qwen3_5ArtifactValidator, Qwen3_5Config, Qwen3_5StreamingModel,
+};
 use runtime_integration::MlxRuntime;
 
 #[path = "../../support/romeo_and_juliet.rs"]

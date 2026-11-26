@@ -1,7 +1,7 @@
 //! The draft tree contract of `draft_tree_verification`, run on the
-//! streaming model: every row matches feeding its chain alone there, a
-//! commit leaves the streamed state feeding that branch leaves, and a
-//! commit of another branch differs.
+//! streaming model, the one text model: every row matches feeding its chain
+//! alone there, a commit leaves the streamed state feeding that branch
+//! leaves, and a commit of another branch differs.
 //!
 //! On the same small dense Qwen3.5 and the same branching tree. The pass is
 //! the shared core's; this proves the streaming model's own layer step and
@@ -22,7 +22,7 @@ use super::draft_tree_verification::{
     assert_every_tree_row_matches_its_chain, chunk_against_step_logit_difference,
 };
 use super::drafted_rewind::{
-    MAXIMUM_LOGIT_DIFFERENCE, SmallTarget, small_target_sources, target_sources,
+    MAXIMUM_LOGIT_DIFFERENCE, SmallTarget, load_target, small_target_sources, target_sources,
 };
 
 type SmallStreamedTarget = SmallTarget<Qwen3_5StreamingModel>;
@@ -42,23 +42,12 @@ fn load_configured_streamed_target() -> SmallStreamedTarget {
 }
 
 fn load_streamed_target(sources: super::drafted_rewind::SmallTargetSources) -> SmallStreamedTarget {
-    let mut model = Qwen3_5StreamingModel::load(
-        sources.runtime,
-        sources.artifact,
-        &sources.model_directory,
-        crate::common::standard_qwen3_5_model_chunking_configuration(),
-    )
-    .expect("the model loads on the streaming engine");
-    model
-        .materialize_target_weights()
-        .expect("the weights materialize");
-    model
+    let mut target = load_target(sources);
+    target
+        .model
         .enable_draft_tree_verification()
         .expect("the tree kernel declares");
-    SmallTarget {
-        model,
-        prompt_token_ids: sources.prompt_token_ids,
-    }
+    target
 }
 
 impl TreeContractTarget for SmallStreamedTarget {

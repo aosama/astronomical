@@ -13,7 +13,7 @@ use mlx_bridge::MlxArray;
 use mlx_performance_profiler::{MeasuredJob, ReportLocation, measure_job};
 use model_serving::DraftTreeTarget;
 use model_serving::speculative_decoding::tree_rows::TreeRows;
-use model_serving::{Qwen3_5ResidentModel, RequestDecoderStateStack};
+use model_serving::{Qwen3_5StreamingModel, RequestDecoderStateStack};
 use serial_test::serial;
 
 use super::dflash2_kept_per_round::load_pair_verifying_trees_as_served;
@@ -25,7 +25,7 @@ const REPORT_SUBDIRECTORY: &str = "dflash2-verify-pass-profile";
 
 /// One verify pass from the same stored state every time it is built.
 struct VerifyPass<'pair> {
-    target: &'pair Qwen3_5ResidentModel,
+    target: &'pair Qwen3_5StreamingModel,
     tree_rows: &'pair TreeRows,
     anchor_position: u32,
     decoder_state: &'pair mut RequestDecoderStateStack,

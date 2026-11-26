@@ -2,15 +2,16 @@
 //! where forwarding only those rows would.
 //!
 //! On the small dense Qwen3.5 (the same DeltaNet and attention mix as the
-//! 27B): for every kept count n from 1 to 7, verify 8 rows and rewind to n,
-//! then compare the next token's logits with a request that forwarded just
-//! the n rows. A control that skips the rewind must differ, so the test
-//! cannot pass by comparing two states that never moved.
+//! 27B), loaded on the streaming model: for every kept count n from 1 to 7,
+//! verify 8 rows and keep n, then compare the next token's logits with a
+//! request that forwarded just the n rows. A control that skips the rewind
+//! must differ, so the test cannot pass by comparing two states that never
+//! moved.
 
 use mlx_bridge::{MlxArray, MlxDtype};
 use model_serving::{
-    PerformanceAttribution, Qwen3_5ArtifactValidator, Qwen3_5ResidentModel, Qwen3_5Tokenizer,
-    RequestDecoderStateStack, TextModelChunkingConfiguration, VerificationLogitsMode,
+    PerformanceAttribution, Qwen3_5ArtifactValidator, Qwen3_5StreamingModel, Qwen3_5Tokenizer,
+    RequestDecoderStateStack,
 };
 use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use serial_test::serial;
@@ -25,14 +26,14 @@ pub(super) const BLOCK: [u32; 8] = [279, 3_822, 315, 264, 1_550, 11, 323, 279];
 /// different row count. A missed rewind moves logits by whole units.
 pub(super) const MAXIMUM_LOGIT_DIFFERENCE: f32 = 0.25;
 
-/// The small dense model loaded on one engine, with the prompt its tests
-/// prefill. The resident model unless a contract names the other.
-pub(super) struct SmallTarget<Model = Qwen3_5ResidentModel> {
+/// The small dense model loaded on the streaming model, with the prompt its
+/// tests prefill.
+pub(super) struct SmallTarget<Model = Qwen3_5StreamingModel> {
     pub(super) model: Model,
     pub(super) prompt_token_ids: Vec<u32>,
 }
 
-/// What loading the small dense target on either engine starts from.
+/// What loading a target starts from.
 pub(super) struct SmallTargetSources {
     pub(super) runtime: MlxRuntime,
     pub(super) artifact: model_serving::ValidatedQwen3_5Artifact,
@@ -75,28 +76,25 @@ pub(super) fn target_sources(
 }
 
 pub(super) fn load_small_target() -> SmallTarget {
-    let SmallTargetSources {
-        runtime,
-        artifact,
-        model_directory,
-        prompt_token_ids,
-    } = small_target_sources();
-    let chunking = TextModelChunkingConfiguration::new(256, 0, 0).expect("the chunking is valid");
-    let mut model = Qwen3_5ResidentModel::load_with_performance_attribution(
-        runtime,
-        artifact,
-        &model_directory,
-        true,
-        chunking,
-        &mut PerformanceAttribution::disabled(),
+    load_target(small_target_sources())
+}
+
+/// A target on the streaming model with its weights materialized; a dense
+/// model's layers are read from the SSD for each forward.
+pub(super) fn load_target(sources: SmallTargetSources) -> SmallTarget {
+    let model = Qwen3_5StreamingModel::load(
+        sources.runtime,
+        sources.artifact,
+        &sources.model_directory,
+        crate::common::standard_qwen3_5_model_chunking_configuration(),
     )
-    .expect("the model loads");
+    .expect("the model loads on the streaming engine");
     model
-        .materialize_complete_weights_matching_production()
+        .materialize_target_weights()
         .expect("the weights materialize");
     SmallTarget {
         model,
-        prompt_token_ids,
+        prompt_token_ids: sources.prompt_token_ids,
     }
 }
 
@@ -118,17 +116,8 @@ pub(super) fn forward(
 ) -> MlxArray {
     target
         .model
-        .build_speculative_verification_forward(
-            token_ids,
-            first_position,
-            state,
-            &[],
-            VerificationLogitsMode::LastRowOnly,
-            &mut PerformanceAttribution::disabled(),
-        )
+        .forward_chunk(token_ids, first_position, state)
         .expect("the forward runs")
-        .per_position_logits
-        .expect("the last row has logits")
 }
 
 pub(super) fn largest_difference(target: &SmallTarget, left: &MlxArray, right: &MlxArray) -> f32 {
@@ -156,23 +145,20 @@ fn next_logits_after_verify(
 ) -> MlxArray {
     let mut state = prefilled_state(target);
     let first_position = target.prompt_token_ids.len() as u32;
-    let mut verification = target
+    let verification = target
         .model
         .verify_drafted_rows(
             &BLOCK,
             first_position,
             &mut state,
-            &[],
             &mut PerformanceAttribution::disabled(),
         )
         .expect("the block verifies");
     let kept_token_offset = first_position as i32 + kept_row_count as i32;
     if should_rewind {
-        state
-            .rewind_to_kept_row_boundary(
-                &mut verification.row_boundaries[kept_row_count - 1].recurrent_snapshot_tensors,
-                kept_token_offset,
-            )
+        target
+            .model
+            .keep_drafted_rows(verification, kept_row_count, &mut state)
             .expect("the state rewinds");
     }
     forward(

@@ -16,10 +16,9 @@ use mlx_bridge::MlxArray;
 use model_serving::DraftTreeTarget;
 use model_serving::speculative_decoding::dflash_drafter::DraftTree;
 use model_serving::speculative_decoding::tree_rows::TreeRows;
-use model_serving::{PerformanceAttribution, VerificationLogitsMode};
 use serial_test::serial;
 
-use super::dflash2_journey_support::host_values;
+use super::dflash2_journey_support::{TargetLogitRows, forward_with_taps, host_values};
 use super::dflash2_kept_per_round::{
     Cell, JourneyPair, load_pair, load_pair_verifying_trees_as_served,
 };
@@ -244,18 +243,15 @@ fn one_token_steps(pair: &JourneyPair, cell: &Cell, row_count: usize) -> (Vec<u3
     let mut tokens = vec![first_token_id];
     let mut rows = Vec::with_capacity(row_count);
     for step_index in 0..row_count {
-        let step = pair
-            .target
-            .build_speculative_verification_forward(
-                &tokens[step_index..=step_index],
-                fed_token_count,
-                &mut state,
-                &pair.drafter_configuration.target_tap_layer_ids,
-                VerificationLogitsMode::AllPositions,
-                &mut PerformanceAttribution::disabled(),
-            )
-            .expect("the one-token step runs");
-        let logits = step.per_position_logits.expect("the step has logits");
+        let step = forward_with_taps(
+            &pair.target,
+            &tokens[step_index..=step_index],
+            fed_token_count,
+            &mut state,
+            &pair.drafter_configuration.target_tap_layer_ids,
+            TargetLogitRows::EveryRow,
+        );
+        let logits = step.logits;
         let row = host_values(pair.target.runtime(), &logits);
         tokens.push(highest_logit_token(&row));
         rows.push(row);
@@ -300,21 +296,15 @@ pub(super) fn verify_chain(
 /// The same tokens as one plain 16-row forward, split into rows.
 fn plain_forward_rows(pair: &JourneyPair, cell: &Cell, tokens: &[u32]) -> Vec<Vec<f32>> {
     let (round, mut state, _) = prefill(pair, cell);
-    let forward = pair
-        .target
-        .build_speculative_verification_forward(
-            tokens,
-            round.fed_token_count,
-            &mut state,
-            &pair.drafter_configuration.target_tap_layer_ids,
-            VerificationLogitsMode::AllPositions,
-            &mut PerformanceAttribution::disabled(),
-        )
-        .expect("the plain forward runs");
-    split_rows(
-        pair,
-        &forward.per_position_logits.expect("the rows have logits"),
-    )
+    let forward = forward_with_taps(
+        &pair.target,
+        tokens,
+        round.fed_token_count,
+        &mut state,
+        &pair.drafter_configuration.target_tap_layer_ids,
+        TargetLogitRows::EveryRow,
+    );
+    split_rows(pair, &forward.logits)
 }
 
 fn split_rows(pair: &JourneyPair, logits: &MlxArray) -> Vec<Vec<f32>> {

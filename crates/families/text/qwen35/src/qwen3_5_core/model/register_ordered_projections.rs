@@ -1,6 +1,7 @@
 //! Converts dense 4-bit projections held in memory into register order and
-//! multiplies them through the register-ordered matmul: every layer of a
-//! resident model, and the layers a streaming model keeps.
+//! multiplies them through the register-ordered matmul: the output head and
+//! the decoder layers a model keeps
+//! (`Qwen3_5StreamingModel::convert_projections_to_register_order`).
 //!
 //! Measured over the 27B's 64 layers on an M5 Pro, the converted projections
 //! cost 59 ms for an 8-row verify pass against MLX's 133 ms, and 57 ms for
@@ -48,43 +49,6 @@ impl Qwen3_5ModelBase {
         self.optional_accelerators.register_ordered_matmul_kernels =
             Some(RowBatchedMatmulKernels::declare()?);
         Ok(())
-    }
-
-    /// Converts every dense 4-bit, group-64 projection with bf16 scales, and
-    /// an output head not tied to the embedding, into register order, once
-    /// this worker's capability probe has run the kernel on this GPU. Each
-    /// projection's MLX arrays are released as soon as its converted copy
-    /// exists, so the load never holds more than one extra projection. For a
-    /// model whose decoder layers are all bound and materialized (the
-    /// resident engine's); a model that reads its layers from the SSD
-    /// converts them one at a time as it keeps them
-    /// (`convert_layer_projections_to_register_order`). Returns how many
-    /// projections were converted, which is 0 for a model with none of that
-    /// packing (an 8-bit or mixed build, or a mixture-of-experts model whose
-    /// attention is not 4-bit), or `None` on a GPU without M5 matrix units,
-    /// where nothing can convert.
-    pub fn convert_projections_to_register_order(
-        &mut self,
-        performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<Option<usize>, TextExecutionError> {
-        if !self.runs_row_batched_matrix_unit_kernels(performance_attribution) {
-            return Ok(None);
-        }
-        let kernels = RowBatchedMatmulKernels::declare()?;
-        // Before the first layer converts, so each original frees as its
-        // converted copy replaces it.
-        self.weights.release_model_shard_maps();
-        let mut converted_count = 0;
-        for layer_weights in &mut self.weights.decoder_layer_weights {
-            converted_count += convert_layer_projections_to_register_order(
-                &self.runtime,
-                &kernels,
-                layer_weights,
-            )?;
-        }
-        converted_count += self.convert_output_head_to_register_order(&kernels)?;
-        self.optional_accelerators.register_ordered_matmul_kernels = Some(kernels);
-        Ok(Some(converted_count))
     }
 
     /// Converts an output head not tied to the embedding and returns how many

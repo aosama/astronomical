@@ -704,21 +704,17 @@ test-acceptance = "run -p xtask -- test-run --package astronomical-acceptance --
 # strategies; append --filter NAME to pick cases.
 # A drafted block rewound to its kept rows leaves the target exactly where
 # forwarding only those rows would (small dense Qwen3.5 from the Development
-# library, every kept count 1 to 7, plus a control without the rewind). Seconds.
+# library on the streaming model, every kept count 1 to 7, plus a control
+# without the rewind). Seconds.
 test-drafted-rewind = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter drafted_rewind"
-# A draft tree verified in one pass on the small dense Qwen3.5: every row's
-# logits match feeding its chain alone, committing a branch leaves the state
-# feeding that branch leaves, and a control that commits the other branch
-# differs. Seconds.
-# `test-streaming-draft-tree-verification` is the same contract on the
-# streaming model, whose layer step and evaluation differ: every row's logits
-# match feeding its chain alone there, and committing a branch leaves the
-# streamed state feeding that branch leaves. Seconds. With --configuration
+# A draft tree verified in one pass on the small dense Qwen3.5 on the
+# streaming model: every row's logits match feeding its chain alone, committing
+# a branch leaves the streamed state feeding that branch leaves, and a control
+# that commits the other branch differs. Seconds. With --configuration
 # PATH naming a model_directory it also runs the contract on that model,
 # holding each row to that model's own rounding between a three-token chunk
 # and single tokens (1.6 on a 35B-A3B, whose wrong-branch control moves 3.6).
 test-streaming-draft-tree-verification = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter _streamed_"
-test-draft-tree-verification = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter draft_tree_verification"
 # Gate 2 baseline: where one DFlash2 draft-and-verify round's time goes on the
 # real 27B pair (drafter, draft head, selector, 8-row verify, readback, rewind)
 # beside a plain one-row step. Each stage is timed alone. Asserts nothing;

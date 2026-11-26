@@ -14,6 +14,8 @@
 //! (chat, greedy and 1.0).
 
 use mlx_bridge::MlxArray;
+use model_serving::RequestDecoderStateStack;
+use model_serving::gpu_token_sampling::sampling_distribution_rows;
 use model_serving::speculative_decoding::dflash_drafter::{
     DFlashDraftTarget, DraftTree, DraftTreeOptions, DrafterContextStates, KeyedNoise,
     TENSORFOLD_TREE_BLOCK_ROW_COUNT, best_first_draft_tree, draft_lattice, drafted_hidden_rows,
@@ -23,10 +25,11 @@ use model_serving::speculative_decoding::keyed_sampling::{RequestKeyedNoise, key
 use model_serving::speculative_decoding::verification_decision::{
     TargetDistribution, VerificationDecision,
 };
-use model_serving::{PerformanceAttribution, RequestDecoderStateStack, VerificationLogitsMode};
 use serial_test::serial;
 
-use super::dflash2_journey_support::{host_values, tap_rows};
+use super::dflash2_journey_support::{
+    TargetLogitRows, forward_with_taps, host_values, tap_rows, verify_block_with_taps,
+};
 use super::dflash2_kept_per_round::{
     CHAT_PROMPT, CODE_PROMPT, Cell, ENGINE_CHILDREN_PER_NODE, ENGINE_NODE_BUDGET, JourneyPair,
     OUTPUT_TOKENS, RoundState, TOP_K, TOP_P_THOUSANDTHS, completion_token_ids, load_pair,
@@ -190,20 +193,15 @@ pub(super) fn prefill(
         256,
     )
     .expect("the decoder state allocates");
-    let prefill = pair
-        .target
-        .build_speculative_verification_forward(
-            &prompt,
-            0,
-            &mut decoder_state,
-            &pair.drafter_configuration.target_tap_layer_ids,
-            VerificationLogitsMode::LastRowOnly,
-            &mut PerformanceAttribution::disabled(),
-        )
-        .expect("the prompt prefills with taps");
-    let last_logits = prefill
-        .per_position_logits
-        .expect("the last row has logits");
+    let prefill = forward_with_taps(
+        &pair.target,
+        &prompt,
+        0,
+        &mut decoder_state,
+        &pair.drafter_configuration.target_tap_layer_ids,
+        TargetLogitRows::LastRowOnly,
+    );
+    let last_logits = prefill.logits;
     let first_token_id = target_picks(pair, cell, &last_logits, &[prompt.len() as u64])[0];
     let round = RoundState {
         last_token_id: first_token_id,
@@ -230,16 +228,13 @@ fn verify_round(
 ) -> Vec<u32> {
     let mut verified_ids = vec![round.last_token_id];
     verified_ids.extend_from_slice(continuation);
-    let verification = pair
-        .target
-        .verify_drafted_rows(
-            &verified_ids,
-            round.fed_token_count,
-            decoder_state,
-            &pair.drafter_configuration.target_tap_layer_ids,
-            &mut PerformanceAttribution::disabled(),
-        )
-        .expect("the target verifies the continuation");
+    let verified = verify_block_with_taps(
+        &pair.target,
+        &verified_ids,
+        round.fed_token_count,
+        decoder_state,
+        &pair.drafter_configuration.target_tap_layer_ids,
+    );
     // Row `i` holds the anchor's position plus `i`; its pick takes the next.
     let mut pick_positions = Vec::with_capacity(verified_ids.len());
     for row_index in 0..verified_ids.len() as u64 {
@@ -248,7 +243,7 @@ fn verify_round(
     let picks = target_picks(
         pair,
         cell,
-        &verification.per_position_logits,
+        &verified.verification.per_row_logits,
         &pick_positions,
     );
     let picks = match forced_picks {
@@ -262,7 +257,7 @@ fn verify_round(
         kept_draft_count,
         next_token_id: picks[kept_draft_count],
     };
-    settle_round(pair, round, decoder_state, verification, decision);
+    settle_round(pair, round, decoder_state, verified, decision);
     kept
 }
 
@@ -283,15 +278,14 @@ pub(super) fn target_picks(
             .map(|value| *value as u32)
             .collect();
     }
-    let (distribution_ids, distribution_probabilities) = pair
-        .target
-        .sampling_distribution_rows(
-            logits,
-            cell.temperature_thousandths,
-            TOP_P_THOUSANDTHS,
-            TOP_K,
-        )
-        .expect("the target's sampling law applies");
+    let (distribution_ids, distribution_probabilities) = sampling_distribution_rows(
+        runtime,
+        logits,
+        cell.temperature_thousandths,
+        TOP_P_THOUSANDTHS,
+        TOP_K,
+    )
+    .expect("the target's sampling law applies");
     let kept_ids: Vec<u32> = host_values(runtime, &distribution_ids)
         .iter()
         .map(|value| *value as u32)
@@ -415,7 +409,7 @@ fn drafted_block(
     let block = runtime
         .array_from_u32(&block_ids, &[1, block_row_count as i32])
         .expect("the block builds");
-    let target: &dyn DFlashDraftTarget = &pair.target;
+    let target: &dyn DFlashDraftTarget = &*pair.target;
     let hidden = drafted_hidden_rows(
         runtime,
         &pair.drafter_weights,

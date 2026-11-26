@@ -103,6 +103,26 @@ impl Qwen3_5StreamingModel {
             .as_ref()
     }
 
+    /// Converts what this model holds into register order for a drafter
+    /// that is binding, once this GPU's capability probe has run the
+    /// kernels: a dense model's output head and the layers kept now, while a
+    /// layer kept later converts as it is read. Returns how many projections
+    /// converted, 0 for a sparse model, or `None` on a GPU without the
+    /// matrix units, where nothing can convert.
+    pub fn convert_projections_to_register_order(
+        &mut self,
+        performance_attribution: &mut crate::PerformanceAttribution,
+    ) -> Result<Option<usize>, TextExecutionError> {
+        if !self.runs_row_batched_matrix_unit_kernels(performance_attribution) {
+            return Ok(None);
+        }
+        self.declare_register_ordered_kernels()?;
+        Ok(Some(
+            self.convert_dense_output_head_to_register_order()?
+                + self.convert_kept_dense_layers_to_register_order()?,
+        ))
+    }
+
     /// Converts the dense layers kept now, for a drafter that is binding.
     /// Returns 0 for a sparse model, whose expert stacks stay in MLX's
     /// layout for the gathered expert kernels, and before the kernels are

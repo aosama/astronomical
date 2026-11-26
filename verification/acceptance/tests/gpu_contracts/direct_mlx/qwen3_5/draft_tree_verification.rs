@@ -7,49 +7,30 @@
 //! sibling rows share a position, read different convolution windows and
 //! start their recurrence from different parents.
 //!
-//! The contract is written once, over `TreeContractTarget`, and run on the
-//! resident model here and on the streaming model in
-//! `streaming_draft_tree_verification`: the pass is the shared core's, and
-//! each engine brings its own layer step and evaluation to it.
+//! The contract is written here, over `TreeContractTarget`, and run on the
+//! streaming model in `streaming_draft_tree_verification`: the pass is the
+//! shared core's, and the model brings its own layer step and evaluation to
+//! it.
 
 use mlx_bridge::MlxArray;
 use model_serving::speculative_decoding::dflash_drafter::DraftTree;
 use model_serving::speculative_decoding::tree_rows::TreeRows;
 use model_serving::{DraftTreeTarget, Qwen3_5DraftTreeVerification, RequestDecoderStateStack};
 use runtime_integration::MlxRuntime;
-use serial_test::serial;
 
-use super::drafted_rewind::{
-    BLOCK, MAXIMUM_LOGIT_DIFFERENCE, SmallTarget, forward, load_small_target, prefilled_state,
-};
+use super::drafted_rewind::{BLOCK, SmallTarget};
 
 /// A request's decoder state, and a verified tree, as the contract names them.
 pub(super) type State = RequestDecoderStateStack;
 pub(super) type Verified = Qwen3_5DraftTreeVerification;
 
-/// What the contract needs from a loaded target that the two engines do
-/// their own way. The runtime and the commit come from `DraftTreeTarget`.
+/// What the contract needs from a loaded target that the model does its
+/// own way. The runtime and the commit come from `DraftTreeTarget`.
 pub(super) trait TreeContractTarget {
     fn prefilled_state(&self) -> State;
     /// `[1, 1, vocabulary]`: the logits after the last of `token_ids`.
     fn logits_after(&self, token_ids: &[u32], first_position: u32, state: &mut State) -> MlxArray;
     fn verified_tree(&self, tree: &TreeRows, state: &mut State) -> Verified;
-}
-
-impl TreeContractTarget for SmallTarget {
-    fn prefilled_state(&self) -> State {
-        prefilled_state(self)
-    }
-
-    fn logits_after(&self, token_ids: &[u32], first_position: u32, state: &mut State) -> MlxArray {
-        forward(self, token_ids, first_position, state)
-    }
-
-    fn verified_tree(&self, tree: &TreeRows, state: &mut State) -> Verified {
-        self.model
-            .verify_draft_tree(tree, anchor_position(self), state, &[])
-            .expect("the tree verifies")
-    }
 }
 
 /// The position after the target's prompt, where a tree's anchor sits.
@@ -274,41 +255,5 @@ pub(super) fn assert_a_commit_differs_from_feeding_another_branch<Model: DraftTr
     assert!(
         difference > smallest_wrong_branch_difference,
         "the control must expose a commit of the wrong branch"
-    );
-}
-
-fn tree_target() -> SmallTarget {
-    let mut target = load_small_target();
-    target
-        .model
-        .enable_draft_tree_verification()
-        .expect("the tree kernel declares");
-    target
-}
-
-#[test]
-#[ignore = "loads the small dense Qwen3.5 on the GPU"]
-#[serial]
-fn should_give_every_tree_row_the_logits_its_chain_alone_gives() {
-    assert_every_tree_row_matches_its_chain(&tree_target(), MAXIMUM_LOGIT_DIFFERENCE);
-}
-
-#[test]
-#[ignore = "loads the small dense Qwen3.5 on the GPU"]
-#[serial]
-fn should_leave_the_state_feeding_the_kept_branch_alone_leaves() {
-    assert_a_commit_leaves_the_state_feeding_the_branch_leaves(
-        &tree_target(),
-        MAXIMUM_LOGIT_DIFFERENCE,
-    );
-}
-
-#[test]
-#[ignore = "loads the small dense Qwen3.5 on the GPU"]
-#[serial]
-fn should_differ_from_feeding_a_branch_it_did_not_commit() {
-    assert_a_commit_differs_from_feeding_another_branch(
-        &tree_target(),
-        MAXIMUM_LOGIT_DIFFERENCE * 4.0,
     );
 }

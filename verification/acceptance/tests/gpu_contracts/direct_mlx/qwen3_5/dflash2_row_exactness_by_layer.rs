@@ -7,10 +7,9 @@
 //! `batched_kernel_row_exactness` measures each kernel alone below this.
 //! It reports; it asserts nothing.
 
-use model_serving::{PerformanceAttribution, VerificationLogitsMode};
 use serial_test::serial;
 
-use super::dflash2_journey_support::host_values;
+use super::dflash2_journey_support::{TargetLogitRows, forward_with_taps, host_values};
 use super::dflash2_kept_per_round::{JourneyPair, load_pair};
 use super::dflash2_row_exactness::verify_chain;
 use super::dflash2_tree_oracle::{ORACLE_CELLS, prefill};
@@ -99,24 +98,18 @@ fn one_token_step_layers(pair: &JourneyPair, tap_layer_ids: &[i32]) -> (Vec<u32>
     let mut tokens = vec![first_token_id];
     let mut layers: LayerRows = vec![Vec::new(); tap_layer_ids.len()];
     for step_index in 0..LONGEST_WINDOW_ROW_COUNT {
-        let step = pair
-            .target
-            .build_speculative_verification_forward(
-                &tokens[step_index..=step_index],
-                fed_token_count,
-                &mut state,
-                tap_layer_ids,
-                VerificationLogitsMode::AllPositions,
-                &mut PerformanceAttribution::disabled(),
-            )
-            .expect("the one-token step runs");
+        let step = forward_with_taps(
+            &pair.target,
+            &tokens[step_index..=step_index],
+            fed_token_count,
+            &mut state,
+            tap_layer_ids,
+            TargetLogitRows::EveryRow,
+        );
         for (layer_index, tap) in step.hidden_state_taps.iter().enumerate() {
             layers[layer_index].push(host_values(pair.target.runtime(), tap));
         }
-        let logits = host_values(
-            pair.target.runtime(),
-            &step.per_position_logits.expect("the step has logits"),
-        );
+        let logits = host_values(pair.target.runtime(), &step.logits);
         tokens.push(highest_logit_token(&logits));
         fed_token_count += 1;
     }
@@ -126,17 +119,14 @@ fn one_token_step_layers(pair: &JourneyPair, tap_layer_ids: &[i32]) -> (Vec<u32>
 /// The same tokens as one plain forward over a window: `[layer][row]`.
 fn window_forward_layers(pair: &JourneyPair, tap_layer_ids: &[i32], tokens: &[u32]) -> LayerRows {
     let (round, mut state, _) = prefill(pair, &ORACLE_CELLS[GREEDY_CHAT_CELL_INDEX]);
-    let forward = pair
-        .target
-        .build_speculative_verification_forward(
-            tokens,
-            round.fed_token_count,
-            &mut state,
-            tap_layer_ids,
-            VerificationLogitsMode::LastRowOnly,
-            &mut PerformanceAttribution::disabled(),
-        )
-        .expect("the window forward runs");
+    let forward = forward_with_taps(
+        &pair.target,
+        tokens,
+        round.fed_token_count,
+        &mut state,
+        tap_layer_ids,
+        TargetLogitRows::LastRowOnly,
+    );
     layer_rows_of(pair, &forward.hidden_state_taps, tokens.len())
 }
 

@@ -51,12 +51,11 @@ pub struct Qwen3_5OptionalAccelerators {
     >,
     /// What the streaming engine's search for a drafter found, for status:
     /// drafting when `draft_runtime` holds one, otherwise why not. `None`
-    /// until the streaming engine has looked; the resident engine keeps its
-    /// own on the engine.
+    /// until the streaming engine has looked.
     pub draft_model_status: Option<ipc_protocol::DraftModelStatus>,
     /// The register-ordered 4-bit matmul's kernels; set once
-    /// `convert_projections_to_register_order` has converted this model's
-    /// dense projections, which then multiply through it.
+    /// `declare_register_ordered_kernels` has declared them for a drafter,
+    /// and every dense projection converted since multiplies through them.
     pub register_ordered_matmul_kernels: Option<crate::row_batched_matmul::RowBatchedMatmulKernels>,
     /// The gated-delta recurrence over a draft tree's rows; set by
     /// `enable_draft_tree_verification`.
