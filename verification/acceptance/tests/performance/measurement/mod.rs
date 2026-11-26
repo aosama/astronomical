@@ -1,4 +1,6 @@
 #[cfg(feature = "performance-measurement")]
+mod expert_gate_up_fusion_verdict;
+#[cfg(feature = "performance-measurement")]
 mod k_row_fused_projection_cost;
 #[cfg(feature = "performance-measurement")]
 mod k_row_verify_cost;
@@ -16,3 +18,5 @@ pub(crate) mod model_process_metrics;
 mod register_order_layout_verdict;
 #[cfg(feature = "performance-measurement")]
 mod register_order_served_rows_cost;
+#[cfg(feature = "performance-measurement")]
+mod verdict_text;
