@@ -1,15 +1,11 @@
-//! Durable, append-only historical record of throughput measurements.
+//! The record one throughput journey prints for the measurement it took.
 //!
-//! Each measurement appends a single JSON object as one line of a JSONL file so
-//! that a machine's throughput can be compared across commits and dates. The log
-//! lives beside the surface that produces it and is source-controlled, so the
-//! trend travels with the code. The runner configuration's
-//! `throughput_history_path` selects a destination, falling back to the
-//! source-controlled ledger under `verification/acceptance/tests/performance/throughput/`.
+//! A journey prints one JSON object naming the model, the rates, the worker
+//! build and the machine, so a run's output is enough to read the measurement
+//! by. Nothing is kept on disk: release speed is recorded by
+//! `cargo xtask measure-speed` in the ledger under `registry/release_speed`
+//! (issue #2582), which replaced the history file these records once appended to.
 
-use std::fs::{self, OpenOptions};
-use std::io::Write;
-use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::Serialize;
@@ -20,28 +16,8 @@ use test_harness::test_run::TestRunContext;
 
 use crate::performance_throughput::machine_specs::MachineSpecs;
 
-/// Repo-root-relative path of the source-controlled throughput history.
-///
-/// The default is anchored to the compile-time manifest directory of the
-/// acceptance package rather than to the test process's working directory: the
-/// standard acceptance launcher starts test binaries with the package
-/// directory as their working directory, so a launch-directory-relative
-/// default resolved to the package's own path repeated inside itself and
-/// measurements forked into an unintended doubled nested copy instead of this
-/// ledger. `CARGO_MANIFEST_DIR` is baked in at compile time, so every launch
-/// directory resolves to the same canonical file. It must stay in sync with
-/// the file's actual location under
-/// `verification/acceptance/tests/performance/throughput/`; the Oct-13 test-tree
-/// reorganization moved that file and left this constant stale, forking new
-/// measurements into an untracked sibling until the drift was noticed.
-const DEFAULT_HISTORY_RELATIVE_PATH: &str =
-    "verification/acceptance/tests/performance/throughput/throughput-history.jsonl";
-
-/// The journey family one throughput record came from. Every line of the
-/// shared history log carries this field so text, vision, and memory-cell
-/// measurements delineate themselves without separate files; lines written
-/// before this field existed are text-journey measurements. Historical rows
-/// without an explicit decode `astro_expert_cache` policy were produced by the baseline path.
+/// The journey family one throughput record came from, so text, vision and
+/// memory-cell measurements name themselves in a run's output.
 #[derive(Clone, Copy, Debug, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ThroughputJourneyKind {
@@ -52,14 +28,11 @@ pub enum ThroughputJourneyKind {
     /// The directed 5,000-input/300-output resident-model summarization under
     /// the automatic engine choice at every assigned memory ceiling, whether
     /// it selects the resident or the streaming engine; kept distinct from
-    /// Text so the canonical >=10,000-input/500-output series stays clean.
-    /// The name predates the streaming cells and is kept so earlier history
-    /// lines stay in the same series. Forced-engine diagnostic runs are never
-    /// appended, so this kind only ever holds production engine choices.
+    /// Text, whose shape is 10,000 tokens in and 500 out.
     ResidentMemoryCeilingProbe,
     /// One row of the streaming scoreboard (issue #2221). Those rows are
     /// taken at the product's default prompt chunk and are written to their
-    /// own file, never to this history.
+    /// own file.
     StreamingScoreboard,
 }
 
@@ -137,22 +110,20 @@ pub struct ThroughputRecord {
     /// The MLX memory ceiling the journey assigned to the worker, in bytes.
     /// Several ceilings share one journey kind (the engine-versus-ceiling
     /// cells all record as `resident_memory_ceiling_probe`), so without it
-    /// their history lines could not be told apart. Omitted when the journey
+    /// their records could not be told apart. Omitted when the journey
     /// ran under the default serving ceiling.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub configured_maximum_mlx_memory_bytes: Option<u64>,
     /// Which completion of the worker's life this measured run was: the
     /// in-worker warmup is ordinal one, the first measured completion ordinal
     /// two, later measured completions count on. Early ordinals are
-    /// systematically slower (first-use graph compilation, cold warm tables),
-    /// and the durable record once let a cold worker's 607 tokens/s sit
-    /// beside a warmed worker's 2,445 tokens/s from the same minute with
-    /// nothing to tell them apart — the misreading that motivated this field.
+    /// systematically slower (first-use graph compilation, cold warm tables):
+    /// a cold worker's 607 tokens/s once sat beside a warmed worker's 2,445
+    /// tokens/s from the same minute with nothing to tell them apart.
     /// First-touch rates and warmed rates must never be compared as if they
     /// were the same measurement configuration.
     pub completion_ordinal_in_worker: u32,
-    /// Present only on memory-ceiling-sweep records; omitted on every other
-    /// journey so historical lines stay additive-compatible.
+    /// Present only on memory-ceiling-sweep records.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub memory_cell: Option<MemoryCellRecord>,
 }
@@ -197,59 +168,9 @@ pub fn format_utc_timestamp(millis_since_unix_epoch: u64) -> String {
     )
 }
 
-/// Builds a JSON document for one measurement without persisting it, so callers
-/// can print the record to stdout regardless of whether the history log is
-/// writable.
+/// The JSON document a journey prints for one measurement.
 pub fn throughput_record_json(record: &ThroughputRecord) -> Value {
     serde_json::to_value(record).unwrap_or(Value::Null)
-}
-
-/// Resolves the history log path from explicit runner inputs or the workspace default.
-pub fn history_log_path() -> PathBuf {
-    resolve_history_log_path(
-        TestRunContext::current()
-            .configuration
-            .throughput_history_path
-            .as_deref(),
-    )
-}
-
-fn resolve_history_log_path(configured_history_path: Option<&Path>) -> PathBuf {
-    configured_history_path
-        .map(Path::to_path_buf)
-        .unwrap_or_else(default_history_log_path)
-}
-
-/// Anchors the default ledger location to the acceptance package's manifest
-/// directory (two levels above it is the workspace root), so the resolution
-/// cannot depend on the launch directory.
-fn default_history_log_path() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("..")
-        .join("..")
-        .join(DEFAULT_HISTORY_RELATIVE_PATH)
-}
-
-/// Appends one measurement to the durable history log.
-///
-/// Persistence is best-effort: if the history directory cannot be created or the
-/// log cannot be opened, the failure is returned to the caller, which reports it
-/// but does not treat it as a measurement failure.
-pub fn append_throughput_history(
-    record: &ThroughputRecord,
-    history_path: &std::path::Path,
-) -> std::io::Result<()> {
-    if let Some(parent) = history_path.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    let document = serde_json::to_string(record).map_err(std::io::Error::other)?;
-    let mut file = OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(history_path)
-        .map_err(std::io::Error::other)?;
-    writeln!(file, "{document}")?;
-    Ok(())
 }
 
 /// Records the source identity captured by the runner for the built executable.
@@ -289,5 +210,5 @@ pub fn current_unix_epoch_millis() -> u64 {
 }
 
 #[cfg(test)]
-#[path = "historical_record_tests.rs"]
-mod historical_record_tests;
+#[path = "throughput_record_tests.rs"]
+mod throughput_record_tests;

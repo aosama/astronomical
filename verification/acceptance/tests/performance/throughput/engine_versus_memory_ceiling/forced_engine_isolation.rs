@@ -7,10 +7,9 @@
 //! ceilings run near resident speed. The forced resident engine at 22 GB shows
 //! what the tighter ceiling alone costs when the engine does not change.
 //!
-//! These cells print their throughput record and keep their worker evidence,
-//! but the runner never appends them to the durable history: the record
-//! carries no engine identity, so a forced line would be indistinguishable
-//! from an automatic one at the same ceiling. Compare forced cells from the
+//! These cells print their throughput record and keep their worker evidence.
+//! The record carries no engine identity, so a forced line is
+//! indistinguishable from an automatic one at the same ceiling. Compare forced cells from the
 //! printed record or the evidence directory of the same run.
 
 use ipc_protocol::WorkerDiagnosticQwen3_5EngineOverride;

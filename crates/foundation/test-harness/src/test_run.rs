@@ -78,7 +78,6 @@ pub struct TestRunConfiguration {
     pub prefix_adoption_enabled: Option<bool>,
     pub prompt_processing_chunk_tokens: Option<u32>,
     pub sweep_cell_order: u32,
-    pub throughput_history_path: Option<PathBuf>,
     pub coverage_inventory_output: Option<PathBuf>,
 }
 
@@ -101,7 +100,6 @@ impl TestRunConfiguration {
             &mut self.model_directory,
             &mut self.reference_artifact_path,
             &mut self.evidence_directory,
-            &mut self.throughput_history_path,
             &mut self.coverage_inventory_output,
         ] {
             if let Some(relative_path) = configured_path.as_ref().filter(|path| path.is_relative())
@@ -111,7 +109,7 @@ impl TestRunConfiguration {
         }
     }
 
-    fn configured_paths(&self) -> [(&'static str, Option<&Path>); 5] {
+    fn configured_paths(&self) -> [(&'static str, Option<&Path>); 4] {
         [
             ("model directory", self.model_directory.as_deref()),
             (
@@ -119,10 +117,6 @@ impl TestRunConfiguration {
                 self.reference_artifact_path.as_deref(),
             ),
             ("evidence directory", self.evidence_directory.as_deref()),
-            (
-                "throughput history path",
-                self.throughput_history_path.as_deref(),
-            ),
             (
                 "coverage inventory output",
                 self.coverage_inventory_output.as_deref(),

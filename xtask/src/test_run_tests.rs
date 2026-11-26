@@ -22,7 +22,6 @@ fn should_resolve_explicit_configuration_inputs_against_the_configuration_file()
         r#"{
             "model_directory": "model",
             "evidence_directory": "evidence",
-            "throughput_history_path": "measurements.jsonl",
             "coverage_inventory_output": "inventory",
             "diagnostics": true
         }"#,

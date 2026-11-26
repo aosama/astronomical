@@ -17,7 +17,7 @@
 //!   through [`MlxRuntime::update_memory_limits`] when the user moves the
 //!   live ceiling control.
 //! - `MlxMemorySnapshot` feeds the Observatory memory attribution and the
-//!   throughput-history journeys.
+//!   throughput journeys.
 //! - `MlxRuntimeError::ActiveMemoryLimitExceeded` is the typed, recoverable
 //!   signal that drives adaptive prefill chunk shrinking in the qwen3.5
 //!   engines; `is_recoverable_graphics_processor_out_of_memory` drives the

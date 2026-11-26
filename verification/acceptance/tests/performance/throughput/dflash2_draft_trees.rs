@@ -25,8 +25,8 @@ use std::time::Duration;
 
 use serial_test::serial;
 
-use crate::performance_throughput::historical_record::ThroughputJourneyKind;
 use crate::performance_throughput::support::{self as throughput_support, ThroughputJourney};
+use crate::performance_throughput::throughput_record::ThroughputJourneyKind;
 
 const WARMUP_INPUT_INSTRUCTION: &str = "Continue the supplied Romeo and Juliet story above.";
 const MEASURED_INPUT_INSTRUCTION: &str =
