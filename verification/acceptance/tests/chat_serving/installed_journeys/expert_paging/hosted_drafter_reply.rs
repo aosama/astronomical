@@ -33,7 +33,7 @@ use model_serving::Qwen3_5StreamingEngineTestControls;
 use serial_test::serial;
 use tokio::time::{Duration, timeout};
 
-use super::mtp_reply_drafting_speed as reply_cases;
+use super::reply_speed_cases as reply_cases;
 use crate::serving_acceptance::support::performance_attribution as engine_support;
 use engine_support::{GenerationSampling, PagingExperimentEngine};
 use reply_cases::{ReplyCase, run_reply_case};

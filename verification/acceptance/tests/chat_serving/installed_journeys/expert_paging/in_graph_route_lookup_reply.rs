@@ -27,7 +27,7 @@ use model_serving::Qwen3_5StreamingEngineTestControls;
 use serial_test::serial;
 use tokio::time::timeout;
 
-use super::mtp_reply_drafting_speed::{
+use super::reply_speed_cases::{
     ReplyCase, RouteLookup, run_reply_case, write_compared_greedy_reply,
 };
 use crate::serving_acceptance::support::performance_attribution::{
@@ -140,7 +140,7 @@ fn speed_case(generation_sampling: GenerationSampling, route_lookup: RouteLookup
         draft_token_count: 0,
         route_lookup,
         hosted_drafter_writes_replies: true,
-        reply_task: super::mtp_reply_drafting_speed::ReplyTask::Essay,
+        reply_task: super::reply_speed_cases::ReplyTask::Essay,
         serves_the_prompt_once_before_measuring: false,
         request_attribution: RequestAttribution::Disabled,
         phase_name: phase_name(route_lookup),
