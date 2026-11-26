@@ -199,7 +199,7 @@ impl PrismHadamardTextModel {
         activations: &MlxArray,
     ) -> Result<MlxArray, PrismHadamardModelError> {
         self.rotate(activations)
-            .map(super::fwht::RotatedActivations::into_activations)
+            .map(crate::qwen3_5_core::model_math::hadamard_rotation::RotatedActivations::into_activations)
             .map_err(PrismHadamardModelError::Forward)
     }
 

@@ -1,7 +1,8 @@
-//! The Hadamard activation transform for folded ternary projections.
+//! The Hadamard activation transform for rotated projections.
 //!
-//! Folded packs store projection weights in a rotated basis; every activation
-//! passing through a rotated projection must carry the matching transform.
+//! A folded ternary pack (the `prism_hadamard_qwen35` family) stores its
+//! projection weights in a rotated basis; every activation passing through a
+//! rotated projection must carry the matching transform.
 //! The arithmetic mirrors the upstream reference exactly: cast to float32,
 //! apply the explicit ±1 signs (before the transform on the forward side,
 //! after it on the inverse side), apply the normalized block Hadamard, and
@@ -21,21 +22,11 @@
 use mlx_bridge::{MlxArray, MlxCError, MlxCompiledElementwiseGraphs, MlxDtype, MlxMetalKernel};
 use runtime_integration::MlxRuntime;
 
-use super::super::configuration::FOLDED_MODULE_DTYPE;
 use super::signed_rotation_kernel::apply_signed_rotation;
 
 /// The float32 working domain of the transform, matching the upstream
 /// reference's cast discipline.
 const TRANSFORM_DTYPE: MlxDtype = MlxDtype::Float32;
-
-/// The activation dtype every packed module declares. The wire schema pins
-/// the folded modules to float16; this keeps the pin in one place.
-pub fn activation_dtype() -> MlxDtype {
-    match FOLDED_MODULE_DTYPE {
-        "float16" => MlxDtype::Float16,
-        _ => MlxDtype::Float16,
-    }
-}
 
 /// One validated sign vector and block size for a given activation width:
 /// the complete activation-side contract a rotated projection of that input

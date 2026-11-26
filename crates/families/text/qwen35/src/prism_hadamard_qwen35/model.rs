@@ -25,10 +25,8 @@ use weights::{PrismHadamardWeights, build_gdn_normalization_scale_weights, load_
 mod execution_error;
 mod forward;
 mod fused_projection;
-mod fwht;
 mod measurement;
 mod serving_model;
-pub mod signed_rotation_kernel;
 mod text_model;
 mod weights;
 
@@ -166,7 +164,10 @@ impl PrismHadamardTextModel {
     pub fn rotate(
         &self,
         activations: &MlxArray,
-    ) -> Result<fwht::RotatedActivations, mlx_bridge::MlxCError> {
+    ) -> Result<
+        crate::qwen3_5_core::model_math::hadamard_rotation::RotatedActivations,
+        mlx_bridge::MlxCError,
+    > {
         self.weights.rotate(
             &self.runtime,
             &self.compiled_elementwise_graphs,
@@ -263,11 +264,15 @@ fn retained_fused_rotation_kernel(
 ) -> Result<Option<MlxMetalKernel>, PrismHadamardModelError> {
     if kernel_capabilities
         .is_custom_kernel_supported(crate::kernel_capability::PRISM_HADAMARD_SIGNED_ROTATION)
-        && signed_rotation_kernel::is_signed_rotation_eligible(hadamard_block_size)
+        && crate::qwen3_5_core::model_math::signed_rotation_kernel::is_signed_rotation_eligible(
+            hadamard_block_size,
+        )
     {
-        return signed_rotation_kernel::signed_rotation_kernel(hadamard_block_size)
-            .map(Some)
-            .map_err(PrismHadamardModelError::Forward);
+        return crate::qwen3_5_core::model_math::signed_rotation_kernel::signed_rotation_kernel(
+            hadamard_block_size,
+        )
+        .map(Some)
+        .map_err(PrismHadamardModelError::Forward);
     }
     tracing::info!(
         "fused Hadamard rotation demoted to the composed MLX route for this worker process"

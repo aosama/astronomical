@@ -293,7 +293,7 @@ fn fixture_linear_layer_states(
 
 #[test]
 fn should_accept_only_single_stage_power_of_two_blocks_for_the_fused_rotation() {
-    use super::signed_rotation_kernel::is_signed_rotation_eligible;
+    use crate::qwen3_5_core::model_math::signed_rotation_kernel::is_signed_rotation_eligible;
     // One radix wide up to MLX's single-stage limit is reproducible.
     assert!(is_signed_rotation_eligible(16));
     assert!(is_signed_rotation_eligible(512));
