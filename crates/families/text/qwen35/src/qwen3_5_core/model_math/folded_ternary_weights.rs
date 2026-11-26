@@ -46,6 +46,9 @@ pub struct FoldedTernaryRotations {
     rotated_weight_names: BTreeSet<String>,
     hidden_size: u32,
     embedding_is_inverse_rotated: bool,
+    /// The pack's Hadamard block, which decides whether the one-launch
+    /// signed rotation can reproduce the composed route.
+    block_size: u32,
 }
 
 impl FoldedTernaryRotations {
@@ -71,6 +74,7 @@ impl FoldedTernaryRotations {
             hidden_size: config.hidden_size(),
             embedding_is_inverse_rotated: hadamard_contract
                 .is_inverse(&format!("{EMBEDDING_MODULE_NAME}.weight")),
+            block_size: hadamard_contract.block_size(),
         })
     }
 
@@ -132,6 +136,35 @@ impl FoldedTernaryRotations {
             rotation,
         });
         Ok(())
+    }
+
+    /// The one-launch signed rotation for this pack's block, when this GPU's
+    /// probe found it bit for bit equal to the composed three-launch route;
+    /// `None` keeps the composed route, which gives the same bits. Decode on
+    /// a folded pack is bound by launches a token, and the composed route is
+    /// about 500 of them. A kernel that fails to build costs that speed, never
+    /// the model's load.
+    pub fn signed_rotation_kernel(
+        &self,
+        runtime: &MlxRuntime,
+        performance_attribution: &mut crate::PerformanceAttribution,
+    ) -> Option<mlx_bridge::MlxMetalKernel> {
+        let kernel_capabilities = crate::kernel_capability::worker_process_kernel_capabilities(
+            runtime,
+            performance_attribution,
+        );
+        let is_retained = kernel_capabilities
+            .is_custom_kernel_supported(crate::kernel_capability::PRISM_HADAMARD_SIGNED_ROTATION)
+            && super::signed_rotation_kernel::is_signed_rotation_eligible(self.block_size);
+        if !is_retained {
+            tracing::info!("the signed Hadamard rotation stays on the composed MLX route");
+            return None;
+        }
+        super::signed_rotation_kernel::signed_rotation_kernel(self.block_size)
+            .inspect_err(|build_error| {
+                tracing::warn!(%build_error, "the signed Hadamard rotation kernel did not build; the composed route serves");
+            })
+            .ok()
     }
 
     fn rotation_for_width(

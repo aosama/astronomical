@@ -733,13 +733,13 @@ measure-dflash2-round-cost = "run -p xtask -- test-run --package astronomical-ac
 # verify round by the DFlash2 drafter on the real pair: the installed 27B
 # package with its drafter inside (`dense_drafting` in
 # registry/e2e_test_model_names.json, resolved through Development's library;
-# `--configuration PATH` names another). Code at 0.7, chat at 1.0, greedy as a diagnostic;
-# floors sit about 10% under z-lab's reference (6.07 and 3.00). Needs about
+# `--configuration PATH` names another). Code at 0.7 (floor about 10% under
+# z-lab's 6.07), TensorFold's raw code cell, and the story at 1.0. Needs about
 # 22 GB of free memory; about one minute.
 measure-dflash2-kept-per-round = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter dflash2_kept_per_round"
 # Gate 4's first measurement: kept per round if each round verified
 # TensorFold's draft tree (15 nodes, 4 children) instead of one path, on the
-# code-completion and chat cells, greedy and keyed-sampled (0.7 and 1.0).
+# code-completion cells and the story, greedy and keyed-sampled (0.7 and 1.0).
 # Replays a recorded single-path reference, so it needs no tree forward. It
 # also forces TensorFold's own greedy code text (a fixture) through this
 # drafter and tree, the one count that is on the same text as its 5.95.
@@ -747,13 +747,14 @@ measure-dflash2-kept-per-round = "run -p xtask -- test-run --package astronomica
 measure-dflash2-tree-oracle = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter dflash2_tree_oracle"
 # Gate 4 end to end on the 27B pair: every round verifies TensorFold's draft
 # tree in one target pass and commits the kept chain; prints kept per round,
-# decode tok/s and ms a round for the code-completion and chat cells, greedy
-# and keyed-sampled, then where a round's time goes (each stage synced, after
+# decode tok/s and ms a round for the code-completion cells, greedy and
+# keyed-sampled, then where a round's time goes (each stage synced, after
 # a short and a long prompt, and by layer stage). Same pair and memory as
 # above; about three minutes, or one test with --filter NAME. With a
 # mixture-of-experts target (see the configuration note below) it also has:
-# the tree-size ladder against plain one-token steps; a story continued after a
-# 10,000-token prompt; synced rounds through the row-exact tree attention
+# the tree-size ladder against plain one-token steps; a story continued after
+# its prompt (about 2,000 tokens on a dense target, 10,000 on a
+# mixture-of-experts one, `story_cell`); synced rounds through the row-exact tree attention
 # kernel and MLX's attention from 14 to 11,292 context tokens (where the
 # kernel starts to pay); trees against chains three and four tokens deep;
 # and the kernel against MLX's bf16 and float32
@@ -761,10 +762,10 @@ measure-dflash2-tree-oracle = "run -p xtask -- test-run --package astronomical-a
 # a round vary between sampled texts more than between attention paths.
 # Those are long: pass --exact --filter with the test's full path.
 # The same harness's sweeps for either drafter generation: tree and chain
-# sizes from 1 to 15 drafted tokens for code and chat at the publisher's
-# recommended 0.6 and chat at 1.0, and 3- to 6-node trees at 0.6 (each case
+# sizes from 1 to 15 drafted tokens for code and the story at the publisher's
+# recommended 0.6 and the story at 1.0, and 3- to 6-node trees at 0.6 (each case
 # prints kept tokens a round, milliseconds a round and decode tok/s). Pass
-# --exact --filter direct_mlx::qwen3_5::dflash_tree_size_sweeps::should_sweep_tree_sizes_and_chains_for_code_and_chat_at_real_temperatures
+# --exact --filter direct_mlx::qwen3_5::dflash_tree_size_sweeps::should_sweep_tree_sizes_and_chains_for_code_and_story_at_real_temperatures
 # (about 10 minutes) or dflash_tree_size_sweeps::should_compare_three_to_six_node_trees_at_the_recommended_temperature
 # (about 2 minutes), with --configuration naming a target whose drafter
 # folder holds a DFlash or DFlash2 drafter.

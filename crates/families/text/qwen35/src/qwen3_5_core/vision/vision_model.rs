@@ -173,7 +173,7 @@ impl Qwen3_5VisionModel {
             vision_input_plan.merged_patch_count(),
         )?;
         self.weights_have_been_used.set(true);
-        Ok(visual_embeddings)
+        stored_visual_embedding_rows(runtime, visual_embeddings)
     }
     fn upload_pixel_values(
         &self,
@@ -461,4 +461,19 @@ fn u32_to_i32(dimension_size: u32) -> Result<i32, TextExecutionError> {
     i32::try_from(dimension_size).map_err(|_conversion_error| TextExecutionError::InvalidInput {
         description: "vision dimension exceeds the MLX integer range",
     })
+}
+
+/// The tower's rows in BF16, the dtype the text model and the
+/// `astro_ssd_prompt_cache` take visual embeddings in. A float16 tower (a
+/// folded ternary pack keeps its tower in float16) rounds its rows to BF16
+/// here, the precision a BF16 tower computes them in throughout; every other
+/// tower's rows pass unchanged.
+fn stored_visual_embedding_rows(
+    runtime: &MlxRuntime,
+    visual_embeddings: MlxArray,
+) -> Result<MlxArray, TextExecutionError> {
+    if visual_embeddings.dtype() != mlx_bridge::MlxDtype::Float16 {
+        return Ok(visual_embeddings);
+    }
+    Ok(runtime.astype(&visual_embeddings, mlx_bridge::MlxDtype::BFloat16)?)
 }

@@ -3,9 +3,10 @@
 //! every round drafts a tree, verifies all of it in one target pass, picks
 //! with the keyed sampler (or greedily), and commits the kept chain. Prints
 //! kept per round and the decode speed (prefill excluded) for TensorFold's
-//! code-completion and chat cells. On the 27B pair TensorFold's own engine
-//! measured 78.7 and 44.0 tok/s on those cells, on the Mac these journeys
-//! were first run on; compare against a TensorFold run on the Mac at hand.
+//! code-completion cell and the story (`story_cell`). On the 27B pair
+//! TensorFold's own engine measured 78.7 tok/s on that code cell, on the Mac
+//! these journeys were first run on; compare against a TensorFold run on the
+//! Mac at hand.
 //!
 //! Each stage still waits for the GPU (the lattice and the picks are read
 //! back), so this is the speed a straightforward tree loop reaches, not a
@@ -22,7 +23,7 @@ use serial_test::serial;
 
 use model_serving::speculative_decoding::context_copy::{ContextCopier, ContextCopySettings};
 
-use super::dflash2_journey_support::{TargetLogitRows, forward_with_taps};
+use super::dflash2_journey_support::{TargetLogitRows, forward_with_taps, story_cell};
 use super::dflash2_kept_per_round::{
     Cell, ENGINE_CHILDREN_PER_NODE, ENGINE_NODE_BUDGET, JourneyPair, OUTPUT_TOKENS, RoundState,
     completion_token_ids, load_pair, prompt_token_ids,
@@ -45,17 +46,6 @@ fn should_decode_code_cells_with_draft_trees_verified_in_one_target_pass() {
     decode_cells_with_trees(&ORACLE_CELLS[..3], SAMPLED_SEED_COUNT);
 }
 
-/// The chat cells on their own: a run heats the GPU, and rounds late in a
-/// 90-second run measured 6 to 10 ms slower than the same rounds from a
-/// cool start, so each family of cells gets its own process.
-#[test]
-#[ignore = "loads a real target and its DFlash2 drafter (the 27B pair unless configured); run through cargo measure-dflash2-tree-rounds"]
-#[serial]
-fn should_decode_chat_cells_with_draft_trees_verified_in_one_target_pass() {
-    // Sampled first: it is the cell compared with TensorFold's 44.0.
-    decode_cells_with_trees(&[ORACLE_CELLS[4], ORACLE_CELLS[3]], SAMPLED_SEED_COUNT);
-}
-
 /// A story continued after a long prompt, sampled: the cell a long chat or a
 /// document question lands in, where few drafted tokens are kept a round
 /// and every verified row attends to the whole prompt.
@@ -63,19 +53,8 @@ fn should_decode_chat_cells_with_draft_trees_verified_in_one_target_pass() {
 #[ignore = "loads a real target and its DFlash2 drafter (the 27B pair unless configured); run through cargo measure-dflash2-tree-rounds"]
 #[serial]
 fn should_decode_a_story_after_a_long_prompt_with_draft_trees() {
-    let long_prompt: &'static str = Box::leak(
-        include_str!("../../../fixtures/model_metrics_10000_romeo_and_juliet_words.txt")
-            .split_whitespace()
-            .take(2_000)
-            .collect::<Vec<_>>()
-            .join(" ")
-            .into_boxed_str(),
-    );
-    let mut cell = ORACLE_CELLS[2];
-    cell.label = "story after a long prompt, 1.0";
-    cell.prompt = long_prompt;
-    // One seed: every decode prefills the long prompt again.
-    decode_cells_with_trees(&[cell], 1);
+    // One seed: every decode reads the story prompt again.
+    decode_cells_with_trees(&[story_cell("story after a long prompt, 1.0", 1_000)], 1);
 }
 
 /// Node budgets for the tree-size ladder: 2- to 8-row rounds, where the
@@ -85,30 +64,24 @@ const LADDER_NODE_BUDGETS: [usize; 6] = [1, 2, 3, 4, 5, 7];
 /// Seeds pooled at each budget of the ladder.
 const LADDER_SEED_COUNT: u64 = 2;
 
-/// The sampled chat cell at a ladder of tree sizes. On a mixture-of-experts
+/// The sampled story at a ladder of tree sizes. On a mixture-of-experts
 /// target every verified row pays its own expert reads, so a round's cost
 /// grows with its rows while the tokens it keeps level off; this finds the
 /// size where the two meet. One process, smallest first.
 #[test]
 #[ignore = "loads a real target and its DFlash2 drafter; run through cargo measure-dflash2-tree-rounds"]
 #[serial]
-fn should_decode_chat_at_a_ladder_of_tree_sizes() {
-    report_plain_decode(&ORACLE_CELLS[4], LADDER_SEED_COUNT);
+fn should_decode_the_story_at_a_ladder_of_tree_sizes() {
+    report_plain_decode(&story_cell("story 1.0", 1_000), LADDER_SEED_COUNT);
     let mut cells = Vec::with_capacity(LADDER_NODE_BUDGETS.len());
     for node_budget in LADDER_NODE_BUDGETS {
-        let mut cell = ORACLE_CELLS[4];
-        cell.label = Box::leak(format!("chat 1.0, {node_budget}-node tree").into_boxed_str());
+        let mut cell = story_cell("story 1.0", 1_000);
+        cell.label = Box::leak(format!("story 1.0, {node_budget}-node tree").into_boxed_str());
         cell.node_budget = node_budget;
         cells.push(cell);
     }
     decode_cells_with_trees(&cells, LADDER_SEED_COUNT);
 }
-
-/// Romeo and Juliet words that make about 10,000 prompt tokens with the
-/// instruction, the size the serving throughput journey sends.
-const JOURNEY_PROMPT_WORD_COUNT: usize = 7_400;
-const JOURNEY_INSTRUCTION: &str =
-    "Continue the supplied Romeo and Juliet story above for approximately 500 tokens.";
 
 /// The serving journey's own cell in this harness: about 10,000 prompt
 /// tokens, a story at temperature 1.0, plain against the small trees a
@@ -119,16 +92,8 @@ const JOURNEY_INSTRUCTION: &str =
 #[ignore = "loads a real target and its DFlash2 drafter; run through cargo measure-dflash2-tree-rounds"]
 #[serial]
 fn should_decode_a_story_after_a_journey_sized_prompt_plain_and_with_small_trees() {
-    let words: Vec<&str> =
-        include_str!("../../../fixtures/model_metrics_10000_romeo_and_juliet_words.txt")
-            .split_whitespace()
-            .take(JOURNEY_PROMPT_WORD_COUNT)
-            .collect();
-    let prompt: &'static str =
-        Box::leak(format!("{}\n\n{JOURNEY_INSTRUCTION}", words.join(" ")).into_boxed_str());
-    let mut cell = ORACLE_CELLS[4];
+    let mut cell = story_cell("story 1.0", 1_000);
     cell.label = "story after a journey-sized prompt, 1.0";
-    cell.prompt = prompt;
     report_plain_decode(&cell, 1);
     let mut cells = Vec::new();
     for node_budget in [3, 7] {
@@ -155,15 +120,7 @@ const KERNEL_COMPARISON_SEED_COUNT: u64 = 6;
 #[ignore = "loads a real target and its DFlash2 drafter; run through cargo measure-dflash2-tree-rounds"]
 #[serial]
 fn should_compare_the_tree_attention_kernel_with_mlx_after_a_journey_sized_prompt() {
-    let words: Vec<&str> =
-        include_str!("../../../fixtures/model_metrics_10000_romeo_and_juliet_words.txt")
-            .split_whitespace()
-            .take(JOURNEY_PROMPT_WORD_COUNT)
-            .collect();
-    let prompt: &'static str =
-        Box::leak(format!("{}\n\n{JOURNEY_INSTRUCTION}", words.join(" ")).into_boxed_str());
-    let mut cell = ORACLE_CELLS[4];
-    cell.prompt = prompt;
+    let mut cell = story_cell("story 1.0", 1_000);
     cell.node_budget = 3;
     cell.label = "story after a journey-sized prompt, 1.0, 3-node tree";
     compare_tree_attention_paths(
@@ -176,15 +133,14 @@ fn should_compare_the_tree_attention_kernel_with_mlx_after_a_journey_sized_promp
     );
 }
 
-/// The same comparison on the short chat prompt, where every row's keys fit
-/// one chunk, to tell a long-context effect from one at any length.
+/// The same comparison on the story prompt at every seed.
 #[test]
 #[ignore = "loads a real target and its DFlash2 drafter; run through cargo measure-dflash2-tree-rounds"]
 #[serial]
 fn should_compare_the_tree_attention_kernel_with_mlx_after_a_short_prompt() {
-    let mut cell = ORACLE_CELLS[4];
+    let mut cell = story_cell("story 1.0", 1_000);
     cell.node_budget = 3;
-    cell.label = "chat 1.0, 3-node tree";
+    cell.label = "story 1.0, 3-node tree";
     compare_tree_attention_per_seed(&cell, KERNEL_COMPARISON_SEED_COUNT);
 }
 
@@ -230,16 +186,15 @@ const NOISE_CHECK_SEED_COUNT: u64 = 24;
 /// tokens: half the seeds keep the run near four minutes.
 const JOURNEY_NOISE_CHECK_SEED_COUNT: u64 = 12;
 
-/// The kernel against serving's attention over many seeds of the short
-/// chat prompt, each seed printed, to tell the kernel's effect on kept
+/// The kernel against serving's attention over many seeds of the story, each seed printed, to tell the kernel's effect on kept
 /// tokens from the spread between sampled texts.
 #[test]
 #[ignore = "loads a real target and its DFlash2 drafter; run through cargo measure-dflash2-tree-rounds"]
 #[serial]
 fn should_tell_the_kernels_effect_on_kept_tokens_from_the_spread_between_seeds() {
-    let mut cell = ORACLE_CELLS[4];
+    let mut cell = story_cell("story 1.0", 1_000);
     cell.node_budget = 3;
-    cell.label = "chat 1.0, 3-node tree";
+    cell.label = "story 1.0, 3-node tree";
     compare_tree_attention_paths(
         &cell,
         NOISE_CHECK_SEED_COUNT,
@@ -306,7 +261,7 @@ fn print_pooled(label: &str, seed_count: u64, pooled_decode: &PooledTreeDecode) 
 /// Seeds for the depth comparison, interleaved per seed.
 const DEPTH_COMPARISON_SEED_COUNT: u64 = 16;
 
-/// Looking four tokens ahead against today's three, on the short chat at
+/// Looking four tokens ahead against today's three, on the story at
 /// temperature 1.0: the 3-node tree serving uses, a 4-node tree (the same
 /// search, reaching depth 4 where the drafter is confident) and a 4-deep
 /// chain (one candidate a node, always depth 4), each seed through all three,
@@ -315,14 +270,14 @@ const DEPTH_COMPARISON_SEED_COUNT: u64 = 16;
 #[ignore = "loads a real target and its DFlash2 drafter; run through cargo measure-dflash2-tree-rounds"]
 #[serial]
 fn should_compare_drafting_three_and_four_tokens_ahead() {
-    report_plain_decode(&ORACLE_CELLS[4], DEPTH_COMPARISON_SEED_COUNT);
+    report_plain_decode(&story_cell("story 1.0", 1_000), DEPTH_COMPARISON_SEED_COUNT);
     let mut cells = Vec::new();
     for (label, node_budget, children_per_node) in [
         ("3-node tree (serving)", 3, ENGINE_CHILDREN_PER_NODE),
         ("4-node tree", 4, ENGINE_CHILDREN_PER_NODE),
         ("4-deep chain", 4, 1),
     ] {
-        let mut cell = ORACLE_CELLS[4];
+        let mut cell = story_cell("story 1.0", 1_000);
         cell.label = label;
         cell.node_budget = node_budget;
         cell.children_per_node = children_per_node;
@@ -344,7 +299,7 @@ fn should_compare_a_three_node_tree_with_a_three_node_chain() {
         ("3-node tree (serving)", ENGINE_CHILDREN_PER_NODE),
         ("3-node chain", 1),
     ] {
-        let mut cell = ORACLE_CELLS[4];
+        let mut cell = story_cell("story 1.0", 1_000);
         cell.label = label;
         cell.node_budget = 3;
         cell.children_per_node = children_per_node;

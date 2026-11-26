@@ -23,6 +23,7 @@ mod dense_reply_token_verdict;
 mod dense_streaming_speed_ladder;
 #[cfg(feature = "direct-mlx")]
 mod dflash_drafter_load_memory;
+mod dflash_drafter_serving_packing;
 #[cfg(feature = "direct-mlx")]
 mod expert_layer_at_a_time_checkpoint_parity;
 #[cfg(feature = "direct-mlx")]

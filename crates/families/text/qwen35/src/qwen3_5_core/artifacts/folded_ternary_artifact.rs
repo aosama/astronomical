@@ -10,8 +10,9 @@
 //! Expert Atlas branch does, so the shared core's inventory and binding
 //! contracts run unchanged. The pack's per-module `.signs` tensors repeat the
 //! sign table and are left out of that index; the rotations come from the
-//! contract the validated artifact carries. The vision tower is left out:
-//! these packs are served as text models.
+//! contract the validated artifact carries. The pack's float16 vision tower
+//! is indexed and checked like any Qwen 3.5 tower, so the core reads images
+//! with it.
 
 use std::collections::HashMap;
 use std::path::Path;
@@ -24,9 +25,12 @@ use super::artifact_helpers::{
 use super::artifact_inventory::{build_index_tensor_inventory, source_id_by_file_name};
 use super::tensor_spec;
 use super::validated_artifact::ValidatedQwen3_5Artifact;
+use super::vision_validation;
 use super::{
     Qwen3_5ArtifactValidationError, Qwen3_5ArtifactValidator, Qwen3_5Config, Qwen3_5ShardIndex,
+    Qwen3_5VisionConfig,
 };
+use crate::qwen3_5_core::vision::vision_tensor_spec;
 use std::collections::BTreeMap;
 
 use crate::artifact_validation::{
@@ -47,11 +51,8 @@ const SHARED_CORE_ARCHITECTURE: &str = "Qwen3_5ForConditionalGeneration";
 const MAXIMUM_CONFIG_BYTES: u64 = 4 * 1024 * 1024;
 /// The suffix of the per-module sign tensors the sign table already holds.
 const MODULE_SIGNS_SUFFIX: &str = ".signs";
-/// The prefix of the vision tower's tensors in the pack's namespace.
-const VISION_TOWER_PREFIX: &str = "vision_tower.";
-/// The configuration keys only the folded pack and its vision tower use.
-const FOLDED_PACK_ONLY_KEYS: [&str; 6] = [
-    "vision_config",
+/// The configuration keys only the folded pack uses.
+const FOLDED_PACK_ONLY_KEYS: [&str; 5] = [
     "modules",
     "hadamard_config",
     "requires_runtime",
@@ -113,32 +114,23 @@ impl Qwen3_5ArtifactValidator {
         let required_files = collect_folded_pack_required_files(model_directory)?;
         let config_bytes = captured_required_file_bytes(&required_files, "config.json")?;
         let revision = derive_revision_from_config_bytes(config_bytes);
-        let mut config = Qwen3_5Config::from_json_bytes(&shared_core_config_bytes(config_bytes)?)?;
-        let weights_header = engine_core::expert_paging::parse_safetensors_header(
-            &model_directory.join(PACK_WEIGHTS_FILE_NAME),
-        )
-        .map_err(|header_error| {
-            folded_pack_error(format!(
-                "its weights file header is invalid: {header_error}"
-            ))
-        })?;
-        let weights_file_bytes = std::fs::metadata(model_directory.join(PACK_WEIGHTS_FILE_NAME))
-            .map_err(|source| {
-                folded_pack_error(format!(
-                    "the folded pack's weights file cannot be read: {source}"
-                ))
-            })?
-            .len();
+        let shared_config_bytes = shared_core_config_bytes(config_bytes)?;
+        let mut config = Qwen3_5Config::from_json_bytes(&shared_config_bytes)?;
+        let vision_config = Qwen3_5VisionConfig::from_optional_json_bytes(&shared_config_bytes)?;
+        let (weights_header, weights_file_bytes) = folded_pack_weights_header(model_directory)?;
         let shard_index =
             synthesize_folded_pack_shard_index(&weights_header, weights_file_bytes, &mut config)?;
-        let source_validation =
-            validate_folded_pack_source(model_directory, &shard_index, &config)?;
+        let source_validation = validate_folded_pack_source(
+            model_directory,
+            &shard_index,
+            (&config, vision_config.as_ref()),
+        )?;
         Ok(ValidatedQwen3_5Artifact {
             hadamard_contract: Some(folded_pack.into_hadamard_contract()),
             expert_atlas: None,
-            vision_config: None,
+            vision_config,
             has_separate_vision_sidecar: false,
-            has_validated_vision_tower: false,
+            has_validated_vision_tower: source_validation.has_validated_vision_tower,
             model_id: artifact_model_id(model_directory),
             revision,
             max_output_tokens,
@@ -179,7 +171,7 @@ fn collect_folded_pack_required_files(
 
 /// The pack's configuration as the Qwen 3.5 text configuration it extends:
 /// the model type and architecture of the base model, without the keys only
-/// the folded pack and its vision tower read.
+/// the folded pack reads.
 pub(super) fn shared_core_config_bytes(
     config_bytes: &[u8],
 ) -> Result<Vec<u8>, Qwen3_5ArtifactValidationError> {
@@ -209,13 +201,30 @@ pub(super) fn shared_core_config_bytes(
         .map_err(|serialize_error| folded_pack_error(serialize_error.to_string()))
 }
 
-/// Whether a pack tensor belongs in the shared core's index: every language
-/// tensor except the per-module sign copies.
-pub(super) fn is_indexed_language_tensor(tensor_name: &str) -> bool {
-    !tensor_name.ends_with(MODULE_SIGNS_SUFFIX) && !tensor_name.starts_with(VISION_TOWER_PREFIX)
+/// Whether a pack tensor belongs in the shared core's index: every tensor
+/// except the per-module sign copies, which the sign table already holds.
+pub(super) fn is_indexed_tensor(tensor_name: &str) -> bool {
+    !tensor_name.ends_with(MODULE_SIGNS_SUFFIX)
 }
 
-/// The shard index of the pack's single file, over its language tensors.
+/// The header of the pack's one weights file, and the file's size.
+fn folded_pack_weights_header(
+    model_directory: &Path,
+) -> Result<(SafetensorsHeader, u64), Qwen3_5ArtifactValidationError> {
+    let weights_path = model_directory.join(PACK_WEIGHTS_FILE_NAME);
+    let weights_header = engine_core::expert_paging::parse_safetensors_header(&weights_path)
+        .map_err(|header_error| {
+            folded_pack_error(format!(
+                "its weights file header is invalid: {header_error}"
+            ))
+        })?;
+    let weights_file_bytes = std::fs::metadata(&weights_path)
+        .map_err(|source| folded_pack_error(format!("its weights file cannot be read: {source}")))?
+        .len();
+    Ok((weights_header, weights_file_bytes))
+}
+
+/// The shard index of the pack's single file, over its indexed tensors.
 fn synthesize_folded_pack_shard_index(
     weights_header: &SafetensorsHeader,
     weights_file_bytes: u64,
@@ -223,7 +232,7 @@ fn synthesize_folded_pack_shard_index(
 ) -> Result<Qwen3_5ShardIndex, Qwen3_5ArtifactValidationError> {
     let mut weight_map = serde_json::Map::new();
     for tensor_entry in &weights_header.tensor_entries {
-        if is_indexed_language_tensor(&tensor_entry.tensor_name) {
+        if is_indexed_tensor(&tensor_entry.tensor_name) {
             weight_map.insert(
                 tensor_entry.tensor_name.clone(),
                 PACK_WEIGHTS_FILE_NAME.into(),
@@ -238,13 +247,13 @@ fn synthesize_folded_pack_shard_index(
     shard_index_from_synthesized_document(&index_bytes, config)
 }
 
-/// The language payload the shared core binds: the indexed tensors' bytes,
-/// without the sign copies and the vision tower it never loads.
+/// The payload the shared core binds: the indexed tensors' bytes, without
+/// the sign copies it never loads.
 fn indexed_payload_bytes(weights_header: &SafetensorsHeader) -> u64 {
     weights_header
         .tensor_entries
         .iter()
-        .filter(|tensor_entry| is_indexed_language_tensor(&tensor_entry.tensor_name))
+        .filter(|tensor_entry| is_indexed_tensor(&tensor_entry.tensor_name))
         .map(|tensor_entry| tensor_entry.data_end_offset - tensor_entry.data_start_offset)
         .sum()
 }
@@ -254,25 +263,33 @@ struct FoldedPackSourceValidation {
     tensor_inventory: TensorInventory,
     safetensors_sources: HashMap<TensorSourceId, ValidatedSafetensorsSource>,
     source_id_by_file_name: BTreeMap<String, TensorSourceId>,
+    has_validated_vision_tower: bool,
 }
 
-/// Checks every indexed language tensor against the shared core's profiles,
-/// passing over the tensors the index leaves out, which the pack's own
-/// contract has already checked.
+/// Checks every indexed tensor against the shared core's language and
+/// vision profiles, passing over the sign copies the index leaves out,
+/// which the pack's own contract has already checked.
 fn validate_folded_pack_source(
     model_directory: &Path,
     shard_index: &Qwen3_5ShardIndex,
-    config: &Qwen3_5Config,
+    (config, vision_config): (&Qwen3_5Config, Option<&Qwen3_5VisionConfig>),
 ) -> Result<FoldedPackSourceValidation, Qwen3_5ArtifactValidationError> {
+    let vision_tower_storage =
+        vision_validation::validate_vision_tower_inventory(shard_index, vision_config, config)?;
     let tensor_inventory = build_index_tensor_inventory(shard_index)?;
-    let language_tensor_profiles = tensor_spec::qwen3_5_language_tensor_profiles(config)?;
+    let mut recognized_tensor_profiles = tensor_spec::qwen3_5_language_tensor_profiles(config)?;
+    if let Some(vision_config) = vision_config {
+        recognized_tensor_profiles.extend(
+            vision_tensor_spec::qwen3_5_vision_tensor_profiles_for_model(vision_config, config)?,
+        );
+    }
     let source_id_by_file_name = source_id_by_file_name(shard_index)?;
     let mut safetensors_sources = HashMap::new();
     for (file_name, source_id) in &source_id_by_file_name {
         let source = parsed_index_source(model_directory, file_name, *source_id)?;
         source.validate_inventory_profiles_leaving_out(
             &tensor_inventory,
-            &language_tensor_profiles,
+            &recognized_tensor_profiles,
             is_left_out_of_the_index,
         )?;
         safetensors_sources.insert(*source_id, source);
@@ -281,11 +298,12 @@ fn validate_folded_pack_source(
         tensor_inventory,
         safetensors_sources,
         source_id_by_file_name,
+        has_validated_vision_tower: vision_tower_storage.has_validated_vision_tower(),
     })
 }
 
 fn is_left_out_of_the_index(tensor_name: &str) -> bool {
-    !is_indexed_language_tensor(tensor_name)
+    !is_indexed_tensor(tensor_name)
 }
 
 fn folded_pack_error(description: String) -> Qwen3_5ArtifactValidationError {

@@ -30,6 +30,8 @@ pub mod drafter_forward;
 #[cfg(feature = "direct-mlx")]
 pub mod drafter_linear;
 #[cfg(feature = "direct-mlx")]
+pub mod drafter_serving_packing;
+#[cfg(feature = "direct-mlx")]
 pub mod drafter_weights;
 #[cfg(feature = "direct-mlx")]
 mod grouped_dynamic_convolution;
@@ -65,6 +67,8 @@ pub use drafter_configuration::{
 pub use drafter_context_state::{AttendedRows, DrafterContextStates};
 #[cfg(feature = "direct-mlx")]
 pub use drafter_forward::{DFlashDraftTarget, drafted_hidden_rows};
+#[cfg(feature = "direct-mlx")]
+pub use drafter_serving_packing::drafter_tensors_at_serving_packing;
 #[cfg(feature = "direct-mlx")]
 pub use drafter_weights::{DFlashDrafterWeights, DFlashDrafterWeightsError, bind_drafter_weights};
 #[cfg(feature = "direct-mlx")]

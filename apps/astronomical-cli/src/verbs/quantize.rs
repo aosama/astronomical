@@ -27,6 +27,8 @@ mod quantize_arguments;
 #[cfg(feature = "quantize-convert")]
 mod quantize_convert;
 #[cfg(feature = "quantize-convert")]
+mod quantize_drafter;
+#[cfg(feature = "quantize-convert")]
 mod quantize_evaluate;
 mod quantize_reports;
 
@@ -34,11 +36,14 @@ pub use quantize_arguments::{
     DEFAULT_CALIBRATION_SEQUENCE_COUNT, DEFAULT_CANDIDATE_BITS, DEFAULT_FLOOR_COMPONENTS_PER_BLOCK,
     DEFAULT_GROUP_SIZE, DEFAULT_MAXIMUM_LOW_BIT_BLOCK_RUN, DEFAULT_RANGE_SEARCH_MAXIMUM_BITS,
     DEFAULT_TARGET_BITS_PER_WEIGHT, QuantizeCommand, QuantizeConvertArguments,
-    QuantizeEvaluateArguments, QuantizeInspectArguments, QuantizeMethodArgument,
-    QuantizePlanArguments, QuantizeReferenceArgument, parse_candidate_bits, parse_quantize_command,
+    QuantizeDrafterArguments, QuantizeEvaluateArguments, QuantizeInspectArguments,
+    QuantizeMethodArgument, QuantizePlanArguments, QuantizeReferenceArgument, parse_candidate_bits,
+    parse_quantize_command,
 };
 #[cfg(feature = "quantize-convert")]
 pub use quantize_convert::run_quantize_convert;
+#[cfg(feature = "quantize-convert")]
+pub use quantize_drafter::run_quantize_drafter;
 #[cfg(feature = "quantize-convert")]
 pub use quantize_evaluate::run_quantize_evaluate;
 
@@ -64,6 +69,12 @@ pub enum QuantizeError {
     },
     #[error("the machine's physical memory size could not be read: {description}")]
     PhysicalMemoryUnreadable { description: String },
+    #[error("the drafter could not be packed: {description}")]
+    DrafterPacking { description: String },
+    #[error(
+        "astronomical quantize drafter is not compiled into this binary; build the CLI with the quantize-convert feature (cargo build -p astronomical-cli --features quantize-convert) to pack drafters in-process"
+    )]
+    DrafterNotCompiledIn,
 }
 
 /// Collaborators injected so the journeys can capture output.
@@ -146,11 +157,27 @@ pub fn run_quantize_command(
         QuantizeCommand::Inspect(inspect_arguments) => {
             run_quantize_inspect(inspect_arguments, dependencies)
         }
+        in_process_command => run_in_process_quantize_command(in_process_command, dependencies),
+    }
+}
+
+/// The sub-verbs that load weights into MLX in this process.
+fn run_in_process_quantize_command(
+    quantize_command: &QuantizeCommand,
+    dependencies: &mut QuantizeDependencies<'_>,
+) -> Result<(), QuantizeError> {
+    match quantize_command {
         QuantizeCommand::Convert(convert_arguments) => {
             run_quantize_convert(convert_arguments, dependencies)
         }
         QuantizeCommand::Evaluate(evaluate_arguments) => {
             run_quantize_evaluate(evaluate_arguments, dependencies)
+        }
+        QuantizeCommand::Drafter(drafter_arguments) => {
+            run_quantize_drafter(drafter_arguments, dependencies)
+        }
+        QuantizeCommand::Plan(_) | QuantizeCommand::Inspect(_) => {
+            unreachable!("plan and inspect run in run_quantize_command")
         }
     }
 }
@@ -208,9 +235,19 @@ pub fn run_quantize_evaluate(
     Err(QuantizeError::EvaluateNotCompiledIn)
 }
 
+/// Without the feature the verb explains how to get a build that has it.
+#[cfg(not(feature = "quantize-convert"))]
+pub fn run_quantize_drafter(
+    drafter_arguments: &QuantizeDrafterArguments,
+    dependencies: &mut QuantizeDependencies<'_>,
+) -> Result<(), QuantizeError> {
+    let _ = (drafter_arguments, dependencies);
+    Err(QuantizeError::DrafterNotCompiledIn)
+}
+
 impl QuantizeError {
     /// Named so `map_err` takes a function rather than a closure.
-    fn stdout_unwritable(write_error: std::io::Error) -> Self {
+    pub(super) fn stdout_unwritable(write_error: std::io::Error) -> Self {
         Self::StdoutUnwritable {
             cause: write_error.to_string(),
         }

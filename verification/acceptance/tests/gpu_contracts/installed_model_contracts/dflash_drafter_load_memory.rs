@@ -148,7 +148,7 @@ fn should_peak_within_the_room_the_load_check_asks_for() {
 
 /// The configured model's own drafter folder: `drafter` in Astronomical's
 /// packages, `dflash` in community packs.
-fn bundled_drafter_directory() -> std::path::PathBuf {
+pub(super) fn bundled_drafter_directory() -> std::path::PathBuf {
     let model_directory = TestRunContext::current().required_model_directory();
     ipc_protocol::BUNDLED_DRAFTER_FOLDER_NAMES
         .iter()

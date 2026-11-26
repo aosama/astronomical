@@ -10,8 +10,8 @@
 //! target's picks along it are the truth, and the round keeps as deep as
 //! that truth runs through the tree, plus the target's next token: exactly
 //! what a tree verify of the same rows keeps. TensorFold's rounds on this
-//! pair kept 5.95 and 6.2 (code completion, greedy and 0.7) and 4.2 and 3.46
-//! (chat, greedy and 1.0).
+//! pair kept 5.95 and 6.2 (code completion, greedy and 0.7). The story
+//! (greedy and 1.0) is replayed after the code cells.
 
 use mlx_bridge::MlxArray;
 use model_serving::RequestDecoderStateStack;
@@ -28,24 +28,32 @@ use model_serving::speculative_decoding::verification_decision::{
 use serial_test::serial;
 
 use super::dflash2_journey_support::{
-    TargetLogitRows, forward_with_taps, host_values, tap_rows, verify_block_with_taps,
+    TargetLogitRows, forward_with_taps, host_values, story_cell, tap_rows, verify_block_with_taps,
 };
 use super::dflash2_kept_per_round::{
-    CHAT_PROMPT, CODE_PROMPT, Cell, ENGINE_CHILDREN_PER_NODE, ENGINE_NODE_BUDGET, JourneyPair,
-    OUTPUT_TOKENS, RoundState, TOP_K, TOP_P_THOUSANDTHS, completion_token_ids, load_pair,
-    prompt_token_ids, settle_round,
+    CODE_PROMPT, Cell, ENGINE_CHILDREN_PER_NODE, ENGINE_NODE_BUDGET, JourneyPair, OUTPUT_TOKENS,
+    RoundState, TOP_K, TOP_P_THOUSANDTHS, completion_token_ids, load_pair, prompt_token_ids,
+    settle_round,
 };
 
 /// TensorFold's community benchmark seeds its repetitions from 1234.
 pub(super) const FIRST_KEYED_SEED: u64 = 1234;
 
-pub(super) const ORACLE_CELLS: [Cell; 5] = [
+/// The code cells; the story cells (`story_cell`) are sized by the target.
+pub(super) const ORACLE_CELLS: [Cell; 3] = [
     oracle_cell("code completion greedy", true, CODE_PROMPT, 0),
     oracle_cell("code completion 0.7", true, CODE_PROMPT, 700),
     oracle_cell("code completion 1.0", true, CODE_PROMPT, 1_000),
-    oracle_cell("chat greedy", false, CHAT_PROMPT, 0),
-    oracle_cell("chat 1.0", false, CHAT_PROMPT, 1_000),
 ];
+
+/// Every cell the oracle replays: the code cells, then the story greedy and
+/// at 1.0.
+fn oracle_and_story_cells() -> Vec<Cell> {
+    let mut cells = ORACLE_CELLS.to_vec();
+    cells.push(story_cell("story greedy", 0));
+    cells.push(story_cell("story 1.0", 1_000));
+    cells
+}
 
 const fn oracle_cell(
     label: &'static str,
@@ -70,7 +78,8 @@ const fn oracle_cell(
 #[serial]
 fn should_measure_how_many_tokens_a_draft_tree_keeps_per_round_on_recorded_references() {
     let pair = load_pair();
-    for (cell_index, cell) in ORACLE_CELLS.iter().enumerate() {
+    let cells = oracle_and_story_cells();
+    for (cell_index, cell) in cells.iter().enumerate() {
         let reference = decode(&pair, cell, Drafting::SinglePath, &[]);
         eprintln!(
             "[dflash2-tree-oracle] {} reference text: {:?}",
@@ -82,7 +91,7 @@ fn should_measure_how_many_tokens_a_draft_tree_keeps_per_round_on_recorded_refer
             "[dflash2-tree-oracle {}/{}] {}: path {:.2} kept per round, tree {:.2} \
              ({} tokens in {} rounds, {} reference divergences)",
             cell_index + 1,
-            ORACLE_CELLS.len(),
+            cells.len(),
             cell.label,
             reference.kept_per_round(),
             replay.kept_per_round(),

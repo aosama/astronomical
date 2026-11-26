@@ -23,6 +23,17 @@ pub fn recognizes_model_type(model_type: Option<&str>) -> bool {
     matches!(model_type, Some("prism_hadamard_qwen35"))
 }
 
+/// Whether a folded pack carries the vision tower the shared core serves:
+/// its configuration declares the vision component and its settings.
+pub fn serves_vision(config_value: &serde_json::Value) -> bool {
+    let declares_vision_component = config_value
+        .get("components")
+        .and_then(|components| components.get("vision"))
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false);
+    declares_vision_component && config_value.get("vision_config").is_some()
+}
+
 /// Validates shallow folded-pack completeness and derives public discovery
 /// metadata. The pack is a four-file artifact — config, Hadamard contract,
 /// tokenizer, and single-file weights — and anything less is not executable.
@@ -67,3 +78,7 @@ pub(super) fn discover_model_metadata(
 /// The folded ternary Qwen 3.5 pack family.
 pub const PRISM_HADAMARD_QWEN35_MODEL_FAMILY: ModelFamily =
     ModelFamily::named("prism_hadamard_qwen35");
+
+#[cfg(test)]
+#[path = "prism_hadamard_qwen35_tests.rs"]
+mod tests;

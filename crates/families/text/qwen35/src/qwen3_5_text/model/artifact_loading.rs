@@ -180,6 +180,7 @@ impl Qwen3_5Model {
             expert_pager,
             astro_expert_cache,
             expert_kernels,
+            signed_rotation_kernel,
         } = bound_sources;
         let StartupKernelResources {
             invariant_linear_scales,
@@ -200,7 +201,10 @@ impl Qwen3_5Model {
                 gated_delta_kernel: kernel_verdicts.gated_delta_kernel,
                 gated_delta_checkpoint_kernel: kernel_verdicts.gated_delta_checkpoint_kernel,
                 gdn_decode_prework_kernel: kernel_verdicts.gdn_decode_prework_kernel,
-                optional_accelerators: accelerators_with(expert_kernels.sorted_shared_combination),
+                optional_accelerators: accelerators_with(
+                    expert_kernels.sorted_shared_combination,
+                    signed_rotation_kernel,
+                ),
                 sorted_expert_weighted_sum_kernel: expert_kernels.sorted_weighted_sum,
                 compiled_swiglu,
                 compiled_elementwise_graphs,
@@ -249,6 +253,9 @@ struct BoundModelSources {
     expert_pager: Option<Qwen3_5ExpertPager>,
     astro_expert_cache: Option<RefCell<qwen3_5_text::AstroExpertCache>>,
     expert_kernels: ExpertCombinationKernels,
+    /// A folded ternary pack's one-launch signed rotation, when this GPU
+    /// passed its probe; `None` for every other model.
+    signed_rotation_kernel: Option<mlx_bridge::MlxMetalKernel>,
 }
 
 /// The kernels, compiled graphs and invariant scales every forward reuses,
@@ -308,6 +315,11 @@ fn bind_model_sources(
         folded_ternary_rotations,
         ..
     } = bound_language;
+    let signed_rotation_kernel = folded_signed_rotation_kernel(
+        runtime,
+        folded_ternary_rotations.as_deref(),
+        performance_attribution,
+    );
     let bound_sources = BoundModelSources {
         config,
         weights,
@@ -317,6 +329,7 @@ fn bind_model_sources(
         expert_pager,
         astro_expert_cache,
         expert_kernels,
+        signed_rotation_kernel,
     };
     Ok((bound_sources, ngram_table_shards))
 }
@@ -513,4 +526,16 @@ fn with_folded_rotations(
         }
         (dense_layer_streamer, _) => dense_layer_streamer,
     }
+}
+
+/// A folded ternary pack's one-launch signed rotation; `None` for every other
+/// model, or where this GPU's probe kept the composed route.
+fn folded_signed_rotation_kernel(
+    runtime: &MlxRuntime,
+    folded_ternary_rotations: Option<
+        &crate::qwen3_5_core::model_math::folded_ternary_weights::FoldedTernaryRotations,
+    >,
+    performance_attribution: &mut PerformanceAttribution,
+) -> Option<mlx_bridge::MlxMetalKernel> {
+    folded_ternary_rotations?.signed_rotation_kernel(runtime, performance_attribution)
 }

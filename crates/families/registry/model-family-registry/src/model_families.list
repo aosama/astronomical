@@ -35,7 +35,7 @@
     ),
     model_family!(
         PRISM_HADAMARD_QWEN35_FAMILY_DESCRIPTION,
-        Chat(build_chat_runtime::<model_serving::PrismHadamardQwen35ChatFamily>)
+        Chat(build_chat_runtime::<model_serving::Qwen3_5ChatFamily>)
     ),
     model_family!(
         MODERNBERT_FAMILY_DESCRIPTION,

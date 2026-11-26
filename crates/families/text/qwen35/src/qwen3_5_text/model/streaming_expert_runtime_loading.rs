@@ -136,9 +136,11 @@ pub(super) struct ExpertCombinationKernels {
 /// The model's optional accelerators with only the fused combination set.
 pub(super) fn accelerators_with(
     sorted_expert_shared_combination_kernel: Option<MlxMetalKernel>,
+    signed_hadamard_rotation_kernel: Option<MlxMetalKernel>,
 ) -> crate::qwen3_5_core::model::base::Qwen3_5OptionalAccelerators {
     crate::qwen3_5_core::model::base::Qwen3_5OptionalAccelerators {
         sorted_expert_shared_combination_kernel,
+        signed_hadamard_rotation_kernel,
         ..Default::default()
     }
 }
