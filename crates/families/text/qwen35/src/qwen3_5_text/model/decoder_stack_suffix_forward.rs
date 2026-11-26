@@ -17,12 +17,14 @@
 //! resumed forward starts with an empty decoder state for the layers it
 //! runs, which is what those layers held at that point of a fresh forward.
 
-use crate::performance_attribution::PerformanceAttribution;
 use mlx_bridge::MlxArray;
-use qwen35::qwen3_5_core::model::draft_tree_verification::request_layer_state;
 use text_generation::decoder_state::request_state::RequestDecoderStateStack;
+use text_generation::execution_error::TextExecutionError;
 
-use super::{Qwen3_5ProbeModel, TextExecutionError};
+use super::Qwen3_5Model;
+use super::paged_execution_mode::Qwen3_5MoEPagedExecutionMode;
+use crate::PerformanceAttribution;
+use crate::qwen3_5_core::model::draft_tree_verification::request_layer_state;
 
 /// The rows entering one decoder layer during a recorded forward. A record
 /// whose index equals the layer count holds the rows leaving the last layer,
@@ -39,7 +41,7 @@ struct LayerInputRecording<'records> {
     recorded_layer_inputs: &'records mut Vec<RecordedDecoderLayerInput>,
 }
 
-impl Qwen3_5ProbeModel {
+impl Qwen3_5Model {
     /// Runs the whole decoder stack over `token_ids` from position zero and
     /// returns the recorded layer inputs, evaluated: one for every layer
     /// whose index is a multiple of `recording_layer_stride` (so always
@@ -126,20 +128,18 @@ impl Qwen3_5ProbeModel {
                         hidden_states: hidden_states.retain()?,
                     });
             }
-            let decoder_layer_weights = self
-                .weights
-                .decoder_layer_weights
-                .get(layer_index)
-                .ok_or(TextExecutionError::MissingDecoderLayerWeights { layer_index })?;
+            let forward_layer_weights = self.forward_layer_weights(layer_index)?;
             let layer_model_state = request_layer_state(request_decoder_state, layer_index)?;
             hidden_states = self.forward_decoder_layer(
                 &hidden_states,
                 token_count,
                 0,
                 layer_index,
-                decoder_layer_weights,
+                forward_layer_weights.decoder_layer_weights(),
                 layer_model_state,
                 None,
+                None,
+                Qwen3_5MoEPagedExecutionMode::ProductionDefault,
                 None,
                 &mut disabled_performance_attribution,
             )?;

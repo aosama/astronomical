@@ -9,11 +9,8 @@
 //!
 //! The paged path is exactly what `Qwen3_5ExpertPager::stream_selected_expert_page_from_ssd`
 //! does (build a page manifest from the validated plan, then load it through
-//! bounded ranges). The whole-shard path is what the quantization
-//! sensitivity probe's model loads its held experts with
-//! (`Qwen3_5ProbeExpertWeights::load`: load the shard, take the named
-//! tensor, validate it against the plan), so the probe measures the bytes
-//! serving pages in.
+//! bounded ranges); the whole-shard path loads the shard and takes the named
+//! tensor.
 
 use std::collections::HashMap;
 use std::fs::File;
@@ -21,20 +18,17 @@ use std::io::Write;
 use std::path::Path;
 
 use model_serving::{
-    QuantizationMode, QuantizedExpertLayerPlan, build_quantized_expert_layer_plan,
+    QuantizedExpertLayerPlan, build_quantized_expert_layer_plan,
     build_quantized_expert_page_manifest_from_plan, load_quantized_expert_page,
 };
-use qwen35_quantization_probe::probe_model::experts::{
-    ExpertProjectionArraysForTests, expert_layer_arrays_for_tests,
-};
-use runtime_integration::{MlxMemoryLimits, MlxRuntime, MlxSafetensors};
+use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use serde_json::json;
 
 use crate::common::{
     DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_MLX_BUFFER_CACHE_LIMIT_BYTES,
     qwen3_5_moe::frozen_ornith_1_0_config_bytes,
 };
-use mlx_bridge::{MlxArray, MlxDtype};
+use mlx_bridge::MlxDtype;
 
 const EXPERT_CAPACITY: usize = 2;
 const OUTPUT_DIMENSION: usize = 4;
@@ -178,7 +172,7 @@ async fn should_read_identical_expert_tensor_bytes_from_shard_and_bounded_page()
     let layer_plan = parity_layer_plan(model_directory.path());
     let runtime = test_runtime();
 
-    // Whole-shard route: the load the probe model's expert loader performs.
+    // Whole-shard route: load the shard and take the named tensor.
     let shard = runtime
         .load_safetensors(
             File::open(model_directory.path().join(SHARD_FILE_NAME))
@@ -232,227 +226,5 @@ async fn should_read_identical_expert_tensor_bytes_from_shard_and_bounded_page()
             "tensor {} values must be bit-identical between the shard and bounded reads",
             tensor_source.tensor_name
         );
-    }
-}
-
-/// Per-projection arrays read through one provenance.
-struct ProjectionRead {
-    packed_weight: MlxArray,
-    quantization_scales: Option<MlxArray>,
-    quantization_biases: Option<MlxArray>,
-}
-
-/// Reads one projection through one provenance.
-///
-/// `shard` yields arrays by artifact tensor name; the bounded page yields them
-/// by `projection.parameter`. Both are the production reads, so this adapter
-/// only maps names, never values.
-fn read_projection(
-    _runtime: &MlxRuntime,
-    layer_plan: &QuantizedExpertLayerPlan,
-    projection_name: &str,
-    shard: Option<&MlxSafetensors>,
-    page_tensors: &HashMap<String, MlxArray>,
-) -> ProjectionRead {
-    let quantization_mode = layer_plan.quantization_mode_for_projection(projection_name);
-    let read_parameter = |parameter_name: &str| -> MlxArray {
-        match shard {
-            Some(shard) => {
-                let tensor_name =
-                    format!("{LAYER_PREFIX}.switch_mlp.{projection_name}.{parameter_name}");
-                shard
-                    .tensor(&tensor_name)
-                    .unwrap_or_else(|_| panic!("the shard must expose {tensor_name}"))
-                    .retain()
-                    .expect("the shard tensor should retain")
-            }
-            None => {
-                let page_tensor_name = format!("{projection_name}.{parameter_name}");
-                page_tensors
-                    .get(&page_tensor_name)
-                    .unwrap_or_else(|| panic!("the bounded page must expose {page_tensor_name}"))
-                    .retain()
-                    .expect("the page tensor should retain")
-            }
-        }
-    };
-    let packed_weight = read_parameter("weight");
-    if quantization_mode == QuantizationMode::NativeBfloat16 {
-        return ProjectionRead {
-            packed_weight,
-            quantization_scales: None,
-            quantization_biases: None,
-        };
-    }
-    ProjectionRead {
-        packed_weight,
-        quantization_scales: Some(read_parameter("scales")),
-        quantization_biases: Some(read_parameter("biases")),
-    }
-}
-
-fn assert_arrays_identical(
-    runtime: &MlxRuntime,
-    label: &str,
-    shard_array: &MlxArray,
-    page_array: &MlxArray,
-) {
-    assert_eq!(
-        shard_array.shape(),
-        page_array.shape(),
-        "{label} shape must match between the shard and bounded constructions"
-    );
-    assert_eq!(
-        shard_array.dtype(),
-        page_array.dtype(),
-        "{label} dtype must match between the shard and bounded constructions"
-    );
-    assert_eq!(
-        evaluated_values(runtime, shard_array),
-        evaluated_values(runtime, page_array),
-        "{label} values must be bit-identical between the shard and bounded constructions"
-    );
-}
-
-#[tokio::test]
-#[expect(clippy::too_many_lines)]
-async fn should_build_identical_held_expert_layers_from_shard_and_bounded_reads() {
-    let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
-    let model_directory = tempfile::tempdir().expect("the parity model directory should create");
-    let layer_plan = parity_layer_plan(model_directory.path());
-    let runtime = test_runtime();
-
-    let shard = runtime
-        .load_safetensors(
-            File::open(model_directory.path().join(SHARD_FILE_NAME))
-                .expect("the parity shard should open"),
-            None,
-        )
-        .expect("the parity shard should load through the production reader");
-
-    let complete_expert_ids = (0..EXPERT_CAPACITY).collect::<Vec<_>>();
-    let page_manifest =
-        build_quantized_expert_page_manifest_from_plan(&layer_plan, &complete_expert_ids)
-            .expect("the complete-layer page manifest should build from the validated plan");
-    let page_tensors = load_quantized_expert_page(&runtime, &page_manifest, None)
-        .expect("the complete-layer page should load through bounded ranges");
-
-    // Build the held layer through the probe model's construction twice: once
-    // from the whole-shard arrays its loader reads, once from the
-    // bounded arrays the pager reads.
-    let build_from = |shard: Option<&MlxSafetensors>| {
-        let to_owner_input = |read: ProjectionRead| ExpertProjectionArraysForTests {
-            packed_weight: read.packed_weight,
-            quantization_scales: read.quantization_scales,
-            quantization_biases: read.quantization_biases,
-        };
-        let gate = to_owner_input(read_projection(
-            &runtime,
-            &layer_plan,
-            "gate_proj",
-            shard,
-            &page_tensors,
-        ));
-        let up = to_owner_input(read_projection(
-            &runtime,
-            &layer_plan,
-            "up_proj",
-            shard,
-            &page_tensors,
-        ));
-        let down = to_owner_input(read_projection(
-            &runtime,
-            &layer_plan,
-            "down_proj",
-            shard,
-            &page_tensors,
-        ));
-        expert_layer_arrays_for_tests(&runtime, &layer_plan, gate, up, down)
-            .expect("the held expert layer construction should build")
-    };
-    let shard_built = build_from(Some(&shard));
-    let page_built = build_from(None);
-
-    assert_eq!(
-        shard_built.is_fused, page_built.is_fused,
-        "both provenances must reach the same gate/up fusion decision"
-    );
-    assert_eq!(
-        shard_built.gate_up.len(),
-        page_built.gate_up.len(),
-        "both provenances must retain the same gate/up entry count"
-    );
-    for (entry_index, (shard_entry, page_entry)) in shard_built
-        .gate_up
-        .iter()
-        .zip(&page_built.gate_up)
-        .enumerate()
-    {
-        let label = format!("gate_up entry {entry_index} packed weight");
-        assert_arrays_identical(
-            &runtime,
-            &label,
-            &shard_entry.packed_weight,
-            &page_entry.packed_weight,
-        );
-        for (companion_name, shard_companion, page_companion) in [
-            (
-                "scales",
-                &shard_entry.quantization_scales,
-                &page_entry.quantization_scales,
-            ),
-            (
-                "biases",
-                &shard_entry.quantization_biases,
-                &page_entry.quantization_biases,
-            ),
-        ] {
-            assert_eq!(
-                shard_companion.is_some(),
-                page_companion.is_some(),
-                "{label} {companion_name} presence must match between provenances"
-            );
-            if let (Some(shard_companion), Some(page_companion)) = (shard_companion, page_companion)
-            {
-                assert_arrays_identical(
-                    &runtime,
-                    &format!("{label} {companion_name}"),
-                    shard_companion,
-                    page_companion,
-                );
-            }
-        }
-    }
-    assert_arrays_identical(
-        &runtime,
-        "down packed weight",
-        &shard_built.down.packed_weight,
-        &page_built.down.packed_weight,
-    );
-    for (companion_name, shard_companion, page_companion) in [
-        (
-            "scales",
-            &shard_built.down.quantization_scales,
-            &page_built.down.quantization_scales,
-        ),
-        (
-            "biases",
-            &shard_built.down.quantization_biases,
-            &page_built.down.quantization_biases,
-        ),
-    ] {
-        assert_eq!(
-            shard_companion.is_some(),
-            page_companion.is_some(),
-            "down {companion_name} presence must match between provenances"
-        );
-        if let (Some(shard_companion), Some(page_companion)) = (shard_companion, page_companion) {
-            assert_arrays_identical(
-                &runtime,
-                &format!("down {companion_name}"),
-                shard_companion,
-                page_companion,
-            );
-        }
     }
 }

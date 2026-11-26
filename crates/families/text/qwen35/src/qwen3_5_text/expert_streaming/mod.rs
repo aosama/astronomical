@@ -33,9 +33,9 @@ pub use expert_usage_history::PersistedExpertUsage;
 pub use expert_usage_history::{expert_usage_file_path, read_expert_usage, write_expert_usage};
 
 #[cfg(feature = "direct-mlx")]
-pub use astro_expert_cache::AstroExpertCache;
-#[cfg(feature = "direct-mlx")]
 pub use astro_expert_cache::RoutedExpertCoverage;
+#[cfg(feature = "direct-mlx")]
+pub use astro_expert_cache::{AstroExpertCache, RoutedExpertProjection};
 #[cfg(feature = "direct-mlx")]
 pub use astro_expert_cache::{
     PartlyHeldTable, TableFetchReport, TableNotLookedUp, TableReadThrough, TableRefusal,

@@ -2,7 +2,7 @@
 //! loop. The steps around it live in
 //! `qwen3_5_core::model::target_forward_graph`.
 
-use mlx_bridge::MlxArray;
+use mlx_bridge::{MlxArray, MlxDtype};
 
 use crate::qwen3_5_core::model::target_forward_graph::{
     Qwen3_5ForwardPositions, Qwen3_5TargetForwardGraph, Qwen3_5TargetForwardOutput,
@@ -37,6 +37,33 @@ impl Qwen3_5Model {
         self.runtime
             .evaluate_arrays(&[target_forward_output.pre_final_normalization_hidden_states()])?;
         Ok(target_forward_output)
+    }
+
+    /// Vocabulary logits at every position of a forward, for the
+    /// quantization probe's KL divergence, which averages over positions:
+    /// the same final normalization and head as `final_vocabulary_logits`
+    /// without its last-row slice.
+    ///
+    /// The head runs in Float32 and the result is stored as Float16.
+    /// bf16 logits were measured to put a KL floor of about 5e-4 under every
+    /// probe (at logit magnitudes of 16 to 32 bf16 resolves 0.125, and the
+    /// reference and the probe round independently), which buried the
+    /// 4-bit versus 8-bit signal. Float16 keeps three more mantissa bits,
+    /// cutting that floor about 64-fold, at half the memory of Float32 for
+    /// the reference logits the sweep holds across every module.
+    pub fn all_position_vocabulary_logits(
+        &self,
+        pre_final_normalization_hidden_states: &MlxArray,
+    ) -> Result<MlxArray, TextExecutionError> {
+        let normalized_states = self.runtime.rms_norm(
+            pre_final_normalization_hidden_states,
+            &self.weights.final_normalization_weight,
+            f32::from_bits(self.config.rms_norm_epsilon_bits()),
+        )?;
+        let float32_states = self.runtime.astype(&normalized_states, MlxDtype::Float32)?;
+        let float32_logits =
+            self.quantized_linear(&float32_states, &self.weights.language_model_head_weights)?;
+        Ok(self.runtime.astype(&float32_logits, MlxDtype::Float16)?)
     }
 
     /// Each forward owns one deferred missing-route collection. Clears any
