@@ -20,6 +20,7 @@ pub mod draft_lattice;
 pub mod draft_tree;
 #[cfg(feature = "direct-mlx")]
 mod drafter_attention;
+pub mod drafter_checkpoint_format;
 pub mod drafter_configuration;
 mod drafter_configuration_fields;
 #[cfg(feature = "direct-mlx")]
@@ -40,6 +41,8 @@ mod block_attention_mask_tests;
 #[cfg(test)]
 mod draft_tree_tests;
 #[cfg(test)]
+mod drafter_checkpoint_format_tests;
+#[cfg(test)]
 mod drafter_configuration_tests;
 
 #[cfg(feature = "direct-mlx")]
@@ -50,6 +53,10 @@ pub use draft_tree::{
     DraftLattice, DraftTree, DraftTreeOptions, KeyedNoise, TENSORFOLD_TREE_BLOCK_ROW_COUNT,
     best_first_draft_tree, tree_block_row_count,
 };
+pub use drafter_checkpoint_format::{
+    AffinePacking, DrafterCheckpointFormat, DrafterCheckpointFormatError, drafter_load_peak_bytes,
+    read_drafter_checkpoint_format,
+};
 pub use drafter_configuration::{
     CandidateSelectorShape, DFlashDrafterConfiguration, DFlashDrafterConfigurationError,
     DrafterGeneration, DrafterLayerAttention, GroupedConvolutionShape, HEAD_ONLY_CANDIDATE_COUNT,
@@ -59,8 +66,6 @@ pub use drafter_context_state::{AttendedRows, DrafterContextStates};
 #[cfg(feature = "direct-mlx")]
 pub use drafter_forward::{DFlashDraftTarget, drafted_hidden_rows};
 #[cfg(feature = "direct-mlx")]
-pub use drafter_weights::{
-    DFlashDrafterWeights, DFlashDrafterWeightsError, bind_drafter_weights, drafter_load_peak_bytes,
-};
+pub use drafter_weights::{DFlashDrafterWeights, DFlashDrafterWeightsError, bind_drafter_weights};
 #[cfg(feature = "direct-mlx")]
 pub use head_only_draft_lattice::head_only_draft_lattice;

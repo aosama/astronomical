@@ -7,12 +7,13 @@
 //! the dense 27B at an 18 GB limit (#2578).
 //!
 //! The configuration names the target model's directory; its drafter is the
-//! `drafter` folder inside it.
+//! drafter folder inside it (`drafter`, or `dflash` in a community pack).
 
 use std::fs::File;
 
 use model_serving::speculative_decoding::dflash_drafter::{
     DFlashDrafterConfiguration, bind_drafter_weights, drafter_load_peak_bytes,
+    read_drafter_checkpoint_format,
 };
 use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use serial_test::file_serial;
@@ -37,9 +38,7 @@ fn active_gigabytes(runtime: &MlxRuntime) -> f64 {
 #[ignore = "loads a real drafter on the GPU; run with --configuration naming a model with a drafter"]
 #[file_serial]
 fn should_report_what_holding_the_checkpoint_through_the_load_costs() {
-    let drafter_directory = TestRunContext::current()
-        .required_model_directory()
-        .join("drafter");
+    let drafter_directory = bundled_drafter_directory();
     let runtime = MlxRuntime::initialize(
         MlxMemoryLimits::new(16 * 1024 * 1024 * 1024, 256 * 1024 * 1024)
             .expect("memory limits are valid"),
@@ -92,9 +91,7 @@ fn should_report_what_holding_the_checkpoint_through_the_load_costs() {
 #[ignore = "loads a real drafter on the GPU; run with --configuration naming a model with a drafter"]
 #[file_serial]
 fn should_peak_within_the_room_the_load_check_asks_for() {
-    let drafter_directory = TestRunContext::current()
-        .required_model_directory()
-        .join("drafter");
+    let drafter_directory = bundled_drafter_directory();
     let runtime = MlxRuntime::initialize(
         MlxMemoryLimits::new(16 * 1024 * 1024 * 1024, 256 * 1024 * 1024)
             .expect("memory limits are valid"),
@@ -131,7 +128,13 @@ fn should_peak_within_the_room_the_load_check_asks_for() {
         .expect("the drafter's weights exist")
         .len();
     let allowed_peak_gigabytes = gigabytes(
-        usize::try_from(drafter_load_peak_bytes(checkpoint_file_bytes)).unwrap_or(usize::MAX),
+        usize::try_from(drafter_load_peak_bytes(
+            checkpoint_file_bytes,
+            read_drafter_checkpoint_format(&drafter_directory.join("model.safetensors"))
+                .expect("the checkpoint's header reads"),
+            &configuration,
+        ))
+        .unwrap_or(usize::MAX),
     );
     println!(
         "[dflash-drafter-load-memory] order=let-go-before-requantizing after_quantize_gb={after_quantize_gigabytes:.2} peak_gb={peak_gigabytes:.2} allowed_peak_gb={allowed_peak_gigabytes:.2}"
@@ -141,4 +144,15 @@ fn should_peak_within_the_room_the_load_check_asks_for() {
         "the load peaked at {peak_gigabytes:.2} GB, above the {allowed_peak_gigabytes:.2} GB the load check asks for"
     );
     drop(drafter_weights);
+}
+
+/// The configured model's own drafter folder: `drafter` in Astronomical's
+/// packages, `dflash` in community packs.
+fn bundled_drafter_directory() -> std::path::PathBuf {
+    let model_directory = TestRunContext::current().required_model_directory();
+    ipc_protocol::BUNDLED_DRAFTER_FOLDER_NAMES
+        .iter()
+        .map(|bundled_folder_name| model_directory.join(bundled_folder_name))
+        .find(|candidate_directory| candidate_directory.join("config.json").is_file())
+        .expect("the configured model carries a drafter folder")
 }

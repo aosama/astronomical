@@ -18,12 +18,13 @@ use super::draft_round_target::DraftRoundTarget;
 use crate::PerformanceAttribution;
 use engine_core::speculative_decoding::dflash_drafter::{
     DFlashDrafterConfiguration, DFlashDrafterWeights, DFlashDrafterWeightsError, DraftTreeOptions,
-    bind_drafter_weights, drafter_load_peak_bytes,
+    DrafterCheckpointFormatError, bind_drafter_weights, drafter_load_peak_bytes,
+    read_drafter_checkpoint_format,
 };
 
 use super::draft_tree_size::draft_tree_options_for_target;
 use engine_core::speculative_decoding::drafter_discovery::{
-    BUNDLED_DRAFTER_DIRECTORY_NAME, DrafterPairing, paired_drafter_directory,
+    DrafterPairing, is_bundled_drafter_directory, paired_drafter_directory,
 };
 
 /// Headroom the drafter load insists on beyond its own weight bytes, so the
@@ -41,9 +42,9 @@ pub enum Qwen3_5DraftRuntimeLoadOutcome {
     KernelsUnavailable,
 }
 
-/// `Bundled` when the drafter is the model's own `drafter` folder.
+/// `Bundled` when the drafter is one of the model's own drafter folders.
 fn drafter_location(target_model_directory: &Path, drafter_directory: &Path) -> DraftModelLocation {
-    if drafter_directory == target_model_directory.join(BUNDLED_DRAFTER_DIRECTORY_NAME) {
+    if is_bundled_drafter_directory(target_model_directory, drafter_directory) {
         DraftModelLocation::Bundled
     } else {
         DraftModelLocation::Library
@@ -98,7 +99,12 @@ impl Qwen3_5SpeculativeDraftRuntime {
             return Ok(Qwen3_5DraftRuntimeLoadOutcome::NoPairedDrafter);
         };
         let drafter_location = drafter_location(target_model_directory, &drafter_directory);
-        secure_room_for_the_drafter(model, active_memory_limit_bytes, &drafter_directory)?;
+        secure_room_for_the_drafter(
+            model,
+            active_memory_limit_bytes,
+            &drafter_directory,
+            &drafter_configuration,
+        )?;
         let Some(converted_projection_count) = model
             .prepare_for_draft_trees(performance_attribution)
             .map_err(Qwen3_5SpeculativeDraftLoadingError::Target)?
@@ -171,8 +177,9 @@ fn secure_room_for_the_drafter<Target: DraftRoundTarget>(
     model: &mut Target,
     active_memory_limit_bytes: usize,
     drafter_directory: &Path,
+    drafter_configuration: &DFlashDrafterConfiguration,
 ) -> Result<(), Qwen3_5SpeculativeDraftLoadingError> {
-    let drafter_load_bytes = drafter_load_byte_count(drafter_directory)?;
+    let drafter_load_bytes = drafter_load_byte_count(drafter_directory, drafter_configuration)?;
     if model.make_room_for_a_drafter(drafter_load_bytes) {
         return Ok(());
     }
@@ -180,16 +187,23 @@ fn secure_room_for_the_drafter<Target: DraftRoundTarget>(
 }
 
 /// What loading the drafter needs under the limit: the peak of its load
-/// (`drafter_load_peak_bytes`, about a third of its checkpoint) and the
-/// headroom.
+/// (`drafter_load_peak_bytes`: about a third of a bf16 checkpoint, all of a
+/// checkpoint published already quantized) and the headroom.
 fn drafter_load_byte_count(
     drafter_directory: &Path,
+    drafter_configuration: &DFlashDrafterConfiguration,
 ) -> Result<u64, Qwen3_5SpeculativeDraftLoadingError> {
-    let drafter_weights_bytes =
-        std::fs::metadata(drafter_directory.join(DRAFTER_WEIGHTS_FILE_NAME))
-            .map_err(|source| Qwen3_5SpeculativeDraftLoadingError::WeightsUnreadable { source })?
-            .len();
-    Ok(drafter_load_peak_bytes(drafter_weights_bytes) + DRAFTER_LOAD_HEADROOM_BYTES)
+    let drafter_weights_path = drafter_directory.join(DRAFTER_WEIGHTS_FILE_NAME);
+    let drafter_weights_bytes = std::fs::metadata(&drafter_weights_path)
+        .map_err(|source| Qwen3_5SpeculativeDraftLoadingError::WeightsUnreadable { source })?
+        .len();
+    let checkpoint_format = read_drafter_checkpoint_format(&drafter_weights_path)
+        .map_err(Qwen3_5SpeculativeDraftLoadingError::CheckpointFormat)?;
+    Ok(drafter_load_peak_bytes(
+        drafter_weights_bytes,
+        checkpoint_format,
+        drafter_configuration,
+    ) + DRAFTER_LOAD_HEADROOM_BYTES)
 }
 
 /// Refuses the drafter when the active limit cannot hold its weights plus
@@ -230,6 +244,8 @@ pub enum Qwen3_5SpeculativeDraftLoadingError {
     WeightsUnreadable { source: std::io::Error },
     #[error("the DFlash drafter weights did not bind: {0}")]
     Weights(#[source] DFlashDrafterWeightsError),
+    #[error("the DFlash drafter's model.safetensors header is unreadable: {0}")]
+    CheckpointFormat(#[source] DrafterCheckpointFormatError),
     #[error(
         "the active memory limit cannot host the DFlash drafter: {free_bytes} bytes free, {required_bytes} bytes required"
     )]

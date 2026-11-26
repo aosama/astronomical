@@ -57,3 +57,22 @@ fn should_find_no_drafter_in_a_model_folder_without_one() {
     );
     let _ = std::fs::remove_dir_all(&model_directory);
 }
+
+#[test]
+fn should_find_a_community_pack_drafter_in_its_dflash_folder() {
+    let model_directory = std::env::temp_dir().join(format!(
+        "astronomical-community-drafter-{}",
+        std::process::id()
+    ));
+    std::fs::create_dir_all(model_directory.join("dflash")).expect("the test folder is writable");
+    std::fs::write(
+        model_directory.join("dflash/config.json"),
+        r#"{"architectures":["DFlash2DraftModel"],"dflash_config":{}}"#,
+    )
+    .expect("the test folder is writable");
+    assert_eq!(
+        bundled_drafter_generation(&model_directory),
+        Some(DraftModelGeneration::Dflash2)
+    );
+    let _ = std::fs::remove_dir_all(&model_directory);
+}
