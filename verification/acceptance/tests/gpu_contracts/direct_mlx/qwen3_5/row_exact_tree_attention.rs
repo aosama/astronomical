@@ -25,12 +25,24 @@ use crate::common::{
     DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_MLX_BUFFER_CACHE_LIMIT_BYTES,
 };
 
-const QUERY_HEAD_COUNT: i32 = 16;
-const KEY_VALUE_HEAD_COUNT: i32 = 2;
-const HEAD_SIZE: i32 = 256;
+pub(super) const HEAD_SIZE: i32 = 256;
 const TREE_ROW_COUNT: usize = 4;
+
+/// A target's attention heads: how many query heads share a key-value head
+/// decides how many matrix tiles a tree's rows fill.
+#[derive(Clone, Copy)]
+pub(super) struct AttentionShape {
+    pub(super) query_head_count: i32,
+    pub(super) key_value_head_count: i32,
+}
+
+/// The 35B-A3B: 8 query heads a key-value head, rounds of 4 rows.
+const EXPERT_TARGET_SHAPE: AttentionShape = AttentionShape {
+    query_head_count: 16,
+    key_value_head_count: 2,
+};
 /// Bf16 rounding of attention outputs near 1 in magnitude.
-const MAXIMUM_DIFFERENCE_FROM_MLX: f32 = 0.02;
+pub(super) const MAXIMUM_DIFFERENCE_FROM_MLX: f32 = 0.02;
 /// Query scales from flat attention to one where a few keys take all of it.
 const SWEPT_QUERY_SHARPNESS: [f32; 4] = [1.0, 8.0, 24.0, 96.0];
 const SHARPENED_CONTEXT_LENGTH: i32 = 3_000;
@@ -158,23 +170,34 @@ fn should_keep_every_tree_row_its_one_row_steps_bits_as_attention_sharpens() {
 
 /// One random attention problem: host keys and values for the context and
 /// the tree's rows, queries for every row, and the tree's shape.
-struct AttentionCase {
+pub(super) struct AttentionCase {
+    shape: AttentionShape,
     context_length: i32,
     parent_rows: Vec<Option<usize>>,
     /// `[key-value head][token][dimension]`, context then tree rows.
-    keys: Vec<f32>,
-    values: Vec<f32>,
+    pub(super) keys: Vec<f32>,
+    pub(super) values: Vec<f32>,
     /// `[query head][row][dimension]`.
-    queries: Vec<f32>,
+    pub(super) queries: Vec<f32>,
 }
 
 impl AttentionCase {
+    /// A 35B-A3B round's case.
     fn random(context_length: i32, parent_rows: &[Option<usize>]) -> Self {
-        let token_count = context_length as usize + TREE_ROW_COUNT;
-        let slab_values = KEY_VALUE_HEAD_COUNT as usize * token_count * HEAD_SIZE as usize;
-        let query_values = QUERY_HEAD_COUNT as usize * TREE_ROW_COUNT * HEAD_SIZE as usize;
+        Self::random_of_shape(EXPERT_TARGET_SHAPE, context_length, parent_rows)
+    }
+
+    pub(super) fn random_of_shape(
+        shape: AttentionShape,
+        context_length: i32,
+        parent_rows: &[Option<usize>],
+    ) -> Self {
+        let token_count = context_length as usize + parent_rows.len();
+        let slab_values = shape.key_value_head_count as usize * token_count * HEAD_SIZE as usize;
+        let query_values = shape.query_head_count as usize * parent_rows.len() * HEAD_SIZE as usize;
         let mut stream = SplitMix64(context_length as u64);
         Self {
+            shape,
             context_length,
             parent_rows: parent_rows.to_vec(),
             keys: (0..slab_values).map(|_| stream.next_signed()).collect(),
@@ -183,26 +206,35 @@ impl AttentionCase {
         }
     }
 
-    fn tree_output(
+    fn row_count(&self) -> usize {
+        self.parent_rows.len()
+    }
+
+    pub(super) fn tree_output(
         &self,
         runtime: &MlxRuntime,
         kernels: &RowExactTreeAttentionKernels,
     ) -> MlxArray {
-        let token_count = self.context_length + TREE_ROW_COUNT as i32;
+        let token_count = self.context_length + self.row_count() as i32;
         let keys = bf16_array(
             runtime,
             &self.keys,
-            &[1, KEY_VALUE_HEAD_COUNT, token_count, HEAD_SIZE],
+            &[1, self.shape.key_value_head_count, token_count, HEAD_SIZE],
         );
         let values = bf16_array(
             runtime,
             &self.values,
-            &[1, KEY_VALUE_HEAD_COUNT, token_count, HEAD_SIZE],
+            &[1, self.shape.key_value_head_count, token_count, HEAD_SIZE],
         );
         let queries = bf16_array(
             runtime,
             &self.queries,
-            &[1, QUERY_HEAD_COUNT, TREE_ROW_COUNT as i32, HEAD_SIZE],
+            &[
+                1,
+                self.shape.query_head_count,
+                self.row_count() as i32,
+                HEAD_SIZE,
+            ],
         );
         attend(
             runtime,
@@ -217,7 +249,7 @@ impl AttentionCase {
 
     /// Row `row` as a one-row step: its ancestors' keys and values right
     /// after the context, then attention for its query alone.
-    fn one_row_step_output(
+    pub(super) fn one_row_step_output(
         &self,
         runtime: &MlxRuntime,
         kernels: &RowExactTreeAttentionKernels,
@@ -226,12 +258,21 @@ impl AttentionCase {
         let chain = chain_of(&self.parent_rows, row);
         let step_context = self.context_length + chain.len() as i32 - 1;
         let (keys, values) = self.step_slabs(&chain);
-        let shape = [1, KEY_VALUE_HEAD_COUNT, step_context + 1, HEAD_SIZE];
+        let shape = [
+            1,
+            self.shape.key_value_head_count,
+            step_context + 1,
+            HEAD_SIZE,
+        ];
         let query = self.row_queries(row);
         let output = attend(
             runtime,
             kernels,
-            &bf16_array(runtime, &query, &[1, QUERY_HEAD_COUNT, 1, HEAD_SIZE]),
+            &bf16_array(
+                runtime,
+                &query,
+                &[1, self.shape.query_head_count, 1, HEAD_SIZE],
+            ),
             &bf16_array(runtime, &keys, &shape),
             &bf16_array(runtime, &values, &shape),
             step_context,
@@ -244,9 +285,9 @@ impl AttentionCase {
     fn step_slabs(&self, chain: &[usize]) -> (Vec<f32>, Vec<f32>) {
         let head_size = HEAD_SIZE as usize;
         let context = self.context_length as usize;
-        let source_tokens = context + TREE_ROW_COUNT;
+        let source_tokens = context + self.row_count();
         let (mut keys, mut values) = (Vec::new(), Vec::new());
-        for head in 0..KEY_VALUE_HEAD_COUNT as usize {
+        for head in 0..self.shape.key_value_head_count as usize {
             let head_start = head * source_tokens * head_size;
             keys.extend_from_slice(&self.keys[head_start..head_start + context * head_size]);
             values.extend_from_slice(&self.values[head_start..head_start + context * head_size]);
@@ -259,14 +300,46 @@ impl AttentionCase {
         (keys, values)
     }
 
-    fn row_queries(&self, row: usize) -> Vec<f32> {
+    pub(super) fn row_queries(&self, row: usize) -> Vec<f32> {
         let head_size = HEAD_SIZE as usize;
-        let mut query = Vec::with_capacity(QUERY_HEAD_COUNT as usize * head_size);
-        for head in 0..QUERY_HEAD_COUNT as usize {
-            let start = (head * TREE_ROW_COUNT + row) * head_size;
+        let mut query = Vec::with_capacity(self.shape.query_head_count as usize * head_size);
+        for head in 0..self.shape.query_head_count as usize {
+            let start = (head * self.row_count() + row) * head_size;
             query.extend_from_slice(&self.queries[start..start + head_size]);
         }
         query
+    }
+
+    /// The additive mask of tree rows `first_row..end_row` over the context
+    /// and every tree row, `[1, 1, rows, tokens]` bf16: a row sees the
+    /// context and its own chain.
+    pub(super) fn tree_mask(
+        &self,
+        runtime: &MlxRuntime,
+        first_row: usize,
+        end_row: usize,
+    ) -> MlxArray {
+        let token_count = self.context_length as usize + self.row_count();
+        let mut additive = vec![0.0_f32; (end_row - first_row) * token_count];
+        for row in first_row..end_row {
+            let chain = chain_of(&self.parent_rows, row);
+            for tree_row in 0..self.row_count() {
+                if !chain.contains(&tree_row) {
+                    additive[(row - first_row) * token_count
+                        + self.context_length as usize
+                        + tree_row] = f32::NEG_INFINITY;
+                }
+            }
+        }
+        let mask = runtime
+            .array_from_f32(
+                &additive,
+                &[1, 1, (end_row - first_row) as i32, token_count as i32],
+            )
+            .expect("the mask uploads");
+        runtime
+            .astype(&mask, MlxDtype::BFloat16)
+            .expect("the mask converts")
     }
 
     /// MLX's masked attention over the context and the row's ancestors.
@@ -276,12 +349,17 @@ impl AttentionCase {
 
     /// MLX's masked attention over the row's keys, its inputs the case's bf16
     /// values cast to `dtype`: float32 is the exact reference.
-    fn reference_row(&self, runtime: &MlxRuntime, row: usize, dtype: MlxDtype) -> Vec<f32> {
-        let token_count = self.context_length + TREE_ROW_COUNT as i32;
-        let shape = [1, KEY_VALUE_HEAD_COUNT, token_count, HEAD_SIZE];
+    pub(super) fn reference_row(
+        &self,
+        runtime: &MlxRuntime,
+        row: usize,
+        dtype: MlxDtype,
+    ) -> Vec<f32> {
+        let token_count = self.context_length + self.row_count() as i32;
+        let shape = [1, self.shape.key_value_head_count, token_count, HEAD_SIZE];
         let chain = chain_of(&self.parent_rows, row);
         let mut additive = vec![0.0_f32; token_count as usize];
-        for tree_row in 0..TREE_ROW_COUNT {
+        for tree_row in 0..self.row_count() {
             if !chain.contains(&tree_row) {
                 additive[self.context_length as usize + tree_row] = f32::NEG_INFINITY;
             }
@@ -299,7 +377,7 @@ impl AttentionCase {
                 &bf16_array(
                     runtime,
                     &self.row_queries(row),
-                    &[1, QUERY_HEAD_COUNT, 1, HEAD_SIZE],
+                    &[1, self.shape.query_head_count, 1, HEAD_SIZE],
                 ),
                 &cast(runtime, &bf16_array(runtime, &self.keys, &shape), dtype),
                 &cast(runtime, &bf16_array(runtime, &self.values, &shape), dtype),
@@ -311,7 +389,7 @@ impl AttentionCase {
     }
 }
 
-fn attend(
+pub(super) fn attend(
     runtime: &MlxRuntime,
     kernels: &RowExactTreeAttentionKernels,
     queries: &MlxArray,
@@ -351,19 +429,20 @@ fn chain_of(parent_rows: &[Option<usize>], row: usize) -> Vec<usize> {
 }
 
 /// Every query head's output for `row` of a `[1, heads, rows, 256]` output.
-fn row_of(runtime: &MlxRuntime, output: &MlxArray, row: usize) -> Vec<f32> {
+pub(super) fn row_of(runtime: &MlxRuntime, output: &MlxArray, row: usize) -> Vec<f32> {
     let row_count = output.shape()[2] as usize;
     let values = host_values(runtime, output);
     let head_size = HEAD_SIZE as usize;
-    let mut row_values = Vec::with_capacity(QUERY_HEAD_COUNT as usize * head_size);
-    for head in 0..QUERY_HEAD_COUNT as usize {
+    let query_head_count = output.shape()[1] as usize;
+    let mut row_values = Vec::with_capacity(query_head_count * head_size);
+    for head in 0..query_head_count {
         let start = (head * row_count + row) * head_size;
         row_values.extend_from_slice(&values[start..start + head_size]);
     }
     row_values
 }
 
-fn attention_scale() -> f32 {
+pub(super) fn attention_scale() -> f32 {
     1.0 / (HEAD_SIZE as f32).sqrt()
 }
 
@@ -371,7 +450,7 @@ fn cast(runtime: &MlxRuntime, array: &MlxArray, dtype: MlxDtype) -> MlxArray {
     runtime.astype(array, dtype).expect("values convert")
 }
 
-fn bf16_array(runtime: &MlxRuntime, values: &[f32], shape: &[i32]) -> MlxArray {
+pub(super) fn bf16_array(runtime: &MlxRuntime, values: &[f32], shape: &[i32]) -> MlxArray {
     let array = runtime
         .array_from_f32(values, shape)
         .expect("values upload");
@@ -389,7 +468,7 @@ fn host_values(runtime: &MlxRuntime, array: &MlxArray) -> Vec<f32> {
         .expect("values read back")
 }
 
-fn largest_difference(reference: &[f32], candidate: &[f32]) -> f32 {
+pub(super) fn largest_difference(reference: &[f32], candidate: &[f32]) -> f32 {
     let mut largest = 0.0_f32;
     for (reference_value, candidate_value) in reference.iter().zip(candidate) {
         largest = largest.max((reference_value - candidate_value).abs());
@@ -421,18 +500,23 @@ fn should_time_row_exact_tree_attention_against_mlx_as_the_context_grows() {
     for context_length in TIMED_CONTEXTS {
         let case = AttentionCase::random(context_length, &chain);
         let token_count = context_length + TREE_ROW_COUNT as i32;
-        let shape = [1, KEY_VALUE_HEAD_COUNT, token_count, HEAD_SIZE];
+        let shape = [
+            1,
+            EXPERT_TARGET_SHAPE.key_value_head_count,
+            token_count,
+            HEAD_SIZE,
+        ];
         let keys = bf16_array(&runtime, &case.keys, &shape);
         let values = bf16_array(&runtime, &case.values, &shape);
         let tree_queries = bf16_array(
             &runtime,
             &case.queries,
-            &[1, QUERY_HEAD_COUNT, 4, HEAD_SIZE],
+            &[1, EXPERT_TARGET_SHAPE.query_head_count, 4, HEAD_SIZE],
         );
         let one_query = bf16_array(
             &runtime,
             &case.row_queries(0),
-            &[1, QUERY_HEAD_COUNT, 1, HEAD_SIZE],
+            &[1, EXPERT_TARGET_SHAPE.query_head_count, 1, HEAD_SIZE],
         );
         let scale = attention_scale();
         let mlx_one_row = median_milliseconds(&runtime, &|| {
@@ -477,7 +561,7 @@ fn should_time_row_exact_tree_attention_against_mlx_as_the_context_grows() {
     }
 }
 
-fn median_milliseconds(runtime: &MlxRuntime, build: &dyn Fn() -> MlxArray) -> f64 {
+pub(super) fn median_milliseconds(runtime: &MlxRuntime, build: &dyn Fn() -> MlxArray) -> f64 {
     let warm_up = build();
     runtime.evaluate_arrays(&[&warm_up]).expect("evaluates");
     let mut timings = Vec::with_capacity(TIMED_REPETITIONS);
@@ -491,7 +575,7 @@ fn median_milliseconds(runtime: &MlxRuntime, build: &dyn Fn() -> MlxArray) -> f6
     timings[timings.len() / 2]
 }
 
-fn direct_mlx_runtime() -> MlxRuntime {
+pub(super) fn direct_mlx_runtime() -> MlxRuntime {
     MlxRuntime::initialize(
         MlxMemoryLimits::new(
             DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES,

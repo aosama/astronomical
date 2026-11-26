@@ -30,6 +30,7 @@ mod quantized_matmul_prefill_performance;
 mod request_decoder_state;
 mod restore_workspace;
 mod row_exact_tree_attention;
+mod row_exact_tree_attention_dense;
 mod sampler;
 mod streaming_draft_tree_verification;
 mod tree_attention_context_cost;

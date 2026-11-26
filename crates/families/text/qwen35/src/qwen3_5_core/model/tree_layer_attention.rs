@@ -87,8 +87,11 @@ impl Qwen3_5ModelBase {
     }
 
     /// Verifies trees' full attention with the row-exact matrix-unit kernel
-    /// where the target's attention shape fits it, once the context reaches
-    /// `ROW_EXACT_TREE_ATTENTION_MINIMUM_CONTEXT_TOKENS`. Call it after
+    /// where the target's attention shape fits it: once the context reaches
+    /// `ROW_EXACT_TREE_ATTENTION_MINIMUM_CONTEXT_TOKENS` on a
+    /// mixture-of-experts target, and at every context length on a dense
+    /// one, which then attends its one-token steps through the same kernel
+    /// (`one_row_exact_attention`). Call it after
     /// `enable_draft_tree_verification`, on a GPU that runs the row-batched
     /// matrix-unit kernels.
     ///
@@ -99,11 +102,11 @@ impl Qwen3_5ModelBase {
     /// seed; `cargo measure-dflash2-tree-rounds`). A first comparison over
     /// six seeds read the same spread as a loss.
     pub fn enable_row_exact_tree_attention(&mut self) -> Result<(), TextExecutionError> {
-        if self.config.head_dimension() as i32 == row_exact_tree_attention::HEAD_SIZE
-            && self.config.query_head_count()
-                == self.config.key_value_head_count()
-                    * row_exact_tree_attention::SUPPORTED_QUERY_GROUP as u32
-        {
+        if row_exact_tree_attention::fits_attention_shape(
+            self.config.head_dimension(),
+            self.config.query_head_count(),
+            self.config.key_value_head_count(),
+        ) {
             self.optional_accelerators.row_exact_tree_attention_kernels =
                 Some(row_exact_tree_attention::RowExactTreeAttentionKernels::declare()?);
         }
@@ -345,7 +348,8 @@ impl Qwen3_5ModelBase {
                 .as_ref(),
             kv_state.keys_state(),
             kv_state.values_state(),
-        ) && context_offset >= ROW_EXACT_TREE_ATTENTION_MINIMUM_CONTEXT_TOKENS
+        ) && (context_offset >= ROW_EXACT_TREE_ATTENTION_MINIMUM_CONTEXT_TOKENS
+            || self.attends_row_exactly_at_every_position())
         {
             let kernel_inputs = row_exact_tree_attention::RowExactTreeAttentionInputs {
                 queries: rotated_queries,

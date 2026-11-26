@@ -334,7 +334,6 @@ impl Qwen3_5ModelBase {
             full_attention_weights,
             token_position_offsets,
         )?;
-        let attention_head_dimension = self.config.head_dimension() as i32;
 
         // Store only the new K and V tensors in the append-only KV state. The
         // owner returns views over the complete used prefix, including this
@@ -343,18 +342,15 @@ impl Qwen3_5ModelBase {
         let (active_keys, active_values) =
             self.append_rotated_tensors_to_kv_state(kv_state, &rotated_keys, &transposed_values)?;
 
-        // Execute the foundational attention formula against the active prefix,
-        // then project the gated output back into the decoder's hidden-size
-        // space. 1 / sqrt(features_per_head) is the conventional score scale.
-        // The caller adds this result to the residual stream before continuing
-        // with the rest of the layer.
-        self.run_full_attention_computation(
-            &rotated_queries,
-            &active_keys,
-            &active_values,
-            &output_gate,
-            (attention_head_dimension as f32).sqrt().recip(),
-            &full_attention_weights.output_projection,
+        // A dense target that verifies draft trees attends its one-token
+        // steps through the row-exact kernel; everything else through MLX's
+        // attention against the active prefix. Either way the gated output
+        // is projected back into the decoder's hidden-size space.
+        self.attended_gated_and_projected(
+            (&rotated_queries, &output_gate),
+            (&active_keys, &active_values),
+            kv_state,
+            full_attention_weights,
         )
     }
 

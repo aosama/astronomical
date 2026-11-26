@@ -10,7 +10,7 @@ use serial_test::file_serial;
 
 use super::gated_delta_tree::TreeRowChains;
 use super::row_exact_tree_attention::{
-    RowExactTreeAttentionInputs, row_exact_tree_attention_accepts,
+    RowExactTreeAttentionInputs, fits_attention_shape, row_exact_tree_attention_accepts,
 };
 
 const HEAD_SIZE: i32 = 256;
@@ -107,12 +107,39 @@ fn should_accept_a_single_row() {
     assert!(shapes.accepted(&test_runtime()));
 }
 
+/// A dense target's tree: 16 rows of 6 query heads a key-value head fill 6
+/// matrix tiles.
 #[test]
 #[file_serial]
-fn should_refuse_more_rows_than_two_matrix_tiles_hold() {
+fn should_accept_a_dense_targets_sixteen_row_tree() {
     let shapes = Shapes {
-        rows: 5,
-        slab_capacity: CONTEXT_LENGTH + 5,
+        query_heads: 6 * KEY_VALUE_HEAD_COUNT,
+        rows: 16,
+        slab_capacity: CONTEXT_LENGTH + 16,
+        ..Shapes::fitting()
+    };
+    assert!(shapes.accepted(&test_runtime()));
+}
+
+/// Edge: 16 rows of 8 query heads fill the 8 tiles a threadgroup holds.
+#[test]
+#[file_serial]
+fn should_accept_sixteen_rows_that_fill_every_matrix_tile() {
+    let shapes = Shapes {
+        rows: 16,
+        slab_capacity: CONTEXT_LENGTH + 16,
+        ..Shapes::fitting()
+    };
+    assert!(shapes.accepted(&test_runtime()));
+}
+
+#[test]
+#[file_serial]
+fn should_refuse_more_than_sixteen_rows() {
+    let shapes = Shapes {
+        query_heads: 6 * KEY_VALUE_HEAD_COUNT,
+        rows: 17,
+        slab_capacity: CONTEXT_LENGTH + 17,
         ..Shapes::fitting()
     };
     assert!(!shapes.accepted(&test_runtime()));
@@ -130,7 +157,7 @@ fn should_refuse_a_slab_without_room_for_every_row() {
 
 #[test]
 #[file_serial]
-fn should_refuse_a_query_group_other_than_eight() {
+fn should_refuse_a_query_group_other_than_six_or_eight() {
     let shapes = Shapes {
         query_heads: 8,
         ..Shapes::fitting()
@@ -156,4 +183,21 @@ fn should_refuse_a_head_size_other_than_256() {
         ..Shapes::fitting()
     };
     assert!(!shapes.accepted(&test_runtime()));
+}
+
+#[test]
+fn should_fit_the_two_attention_shapes_the_kernel_is_proven_on() {
+    // The 35B-A3B (16 query heads on 2) and the dense 27B (24 on 4).
+    assert!(fits_attention_shape(256, 16, 2));
+    assert!(fits_attention_shape(256, 24, 4));
+}
+
+#[test]
+fn should_not_fit_another_head_size_group_or_an_uneven_grouping() {
+    assert!(!fits_attention_shape(128, 16, 2));
+    assert!(!fits_attention_shape(256, 8, 2));
+    // Edge: 10 query heads do not divide over 4 key-value heads, and a
+    // model with no key-value head has no group at all.
+    assert!(!fits_attention_shape(256, 10, 4));
+    assert!(!fits_attention_shape(256, 16, 0));
 }

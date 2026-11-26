@@ -1,5 +1,11 @@
-//! A draft tree's full attention scored a few rows a call, so that every
-//! row gets the bits its one-row step gives (issue #2599).
+//! A draft tree's full attention scored a few rows a call through MLX, so
+//! that every row gets the bits MLX's one-row step gives (issue #2599).
+//!
+//! This is the path of a target the row-exact kernel does not serve: a GPU
+//! without the matrix-unit kernels, or an attention shape the kernel is not
+//! proven on. A dense target the kernel serves attends its trees and its
+//! one-token steps through the kernel instead (`one_row_exact_attention`),
+//! because these groups read the whole context once a call.
 
 use mlx_bridge::MlxArray;
 use text_generation::execution_error::TextExecutionError;
@@ -46,14 +52,14 @@ impl Qwen3_5ModelBase {
     /// the projections and the DeltaNet steps already row-exact, a drafted
     /// greedy reply then equals the plain one.
     ///
-    /// It is not free. Dense 27B at an 18 GB limit, the two ways alternated
-    /// twice in one sitting, four calls a full-attention layer against one:
-    /// the verify pass cost 90 and 92 ms a round against 81 and 81, a round
-    /// kept 3.19 tokens against 2.98, and the reply drafted at 31.0 and 30.3
-    /// tokens a second against 31.3 and 31.6. The one-row kernel is slower a
-    /// row than the matrix kernel a sixteen-row call takes; an attention
-    /// kernel that is exact at sixteen rows would give the exactness back
-    /// its two percent.
+    /// It is not free, and its cost grows with the context, because every
+    /// call reads all of it. Dense 27B, four calls a full-attention layer
+    /// against one: the verify pass cost 88 ms a round against 79 after a
+    /// 2,000-token prompt, and over the 16 attention layers alone 34.6 ms
+    /// against 19.2 at 2,048 keys and 61.7 against 33.9 at 10,240
+    /// (`cargo measure-row-exact-tree-attention`). The row-exact kernel
+    /// costs 11.0 and 18.1 ms there, which is why a target it serves does
+    /// not come this way.
     pub(super) fn masked_attention_in_exact_row_groups(
         &self,
         tree: &TreeRowInputs,
