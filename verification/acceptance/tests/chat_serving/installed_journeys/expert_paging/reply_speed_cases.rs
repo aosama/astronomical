@@ -398,6 +398,42 @@ pub(super) async fn read_the_follow_up_turn(
     .await;
 }
 
+/// An essay prompt of `prompt_token_count` tokens for the model, as the
+/// long-prompt journeys read it.
+pub(super) fn essay_prompt_token_ids(
+    model_directory: &Path,
+    prompt_token_count: usize,
+) -> Vec<u32> {
+    ReplyTask::Essay.prompt_token_ids(
+        model_directory,
+        &model_id_of(model_directory),
+        LONG_PROMPT_REQUEST_ID,
+        prompt_token_count,
+        TOKENS_WRITTEN_AFTER_A_LONG_PROMPT,
+    )
+}
+
+/// Reads `prompt_token_ids` once on `engine` and writes the few tokens the
+/// long-prompt journeys write, as request `request_id`.
+pub(super) async fn read_a_prompt_once(
+    engine: &mut impl InferenceEngine<Request = TextInferenceRequest>,
+    (prompt_token_ids, end_of_sequence_token_ids): (&[u32], &[u32]),
+    request_id: RequestId,
+    phase_name: &str,
+) -> Vec<u32> {
+    run_generation_with_request_attribution(
+        engine,
+        request_id,
+        prompt_token_ids,
+        phase_name,
+        TOKENS_WRITTEN_AFTER_A_LONG_PROMPT,
+        end_of_sequence_token_ids,
+        GenerationSampling::Seeded,
+        RequestAttribution::Disabled,
+    )
+    .await
+}
+
 /// One request of `(request id, prompt tokens, tokens to write)`, for
 /// `(task, sampling, attribution)`, on the model `(folder, end tokens)`.
 async fn serve_one_prompt(

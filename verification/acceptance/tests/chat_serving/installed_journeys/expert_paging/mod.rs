@@ -4,6 +4,7 @@ mod compact_prefill;
 mod decode_residency_attribution;
 mod decode_retention;
 mod direct_expert_read_parity;
+mod engine_prompt_reading_verdict;
 mod expert_miss_count;
 mod failed_span_redo;
 mod hosted_drafter_reply;

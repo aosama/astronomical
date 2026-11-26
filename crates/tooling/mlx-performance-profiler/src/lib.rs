@@ -30,6 +30,18 @@ mod native_interface;
 mod measurement;
 
 #[cfg(feature = "direct-mlx")]
+#[allow(unsafe_code)]
+mod native_procedures;
+
+#[cfg(feature = "direct-mlx")]
+mod procedure_measurement;
+
+#[cfg(feature = "direct-mlx")]
+pub use procedure_measurement::{
+    MeasuredProcedure, ProcedureComparison, ProcedureHandOffs, compare_procedures,
+};
+
+#[cfg(feature = "direct-mlx")]
 pub use measurement::{
     JobComparison, JobSummary, MeasuredJob, MetricComparison, ProfilerError, ReportLocation,
     Verdict, compare_jobs, measure_job,
@@ -37,3 +49,6 @@ pub use measurement::{
 
 #[cfg(all(test, feature = "direct-mlx"))]
 mod measurement_tests;
+
+#[cfg(all(test, feature = "direct-mlx"))]
+mod procedure_measurement_tests;

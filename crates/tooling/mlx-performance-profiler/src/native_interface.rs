@@ -30,7 +30,7 @@ struct NativeJobSummary {
 /// `mlx_perf_metric_comparison`, field for field.
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
-struct NativeMetricComparison {
+pub(crate) struct NativeMetricComparison {
     baseline_median_us: f64,
     baseline_min_us: f64,
     baseline_max_us: f64,
@@ -92,8 +92,8 @@ unsafe extern "C" {
         report_file_base: *const c_char,
         summary: *mut NativeComparisonSummary,
     ) -> c_int;
-    fn mlx_perf_set_console_output(is_enabled: c_int);
-    fn mlx_perf_last_error() -> *const c_char;
+    pub(crate) fn mlx_perf_set_console_output(is_enabled: c_int);
+    pub(crate) fn mlx_perf_last_error() -> *const c_char;
 }
 
 /// What the callback needs: the caller's job, and where to leave the reason
@@ -104,14 +104,14 @@ struct JobCall<'job> {
 }
 
 /// The report's strings as the C interface takes them.
-struct NativeReportLocation {
-    title: CString,
-    directory: CString,
-    file_base: CString,
+pub(crate) struct NativeReportLocation {
+    pub(crate) title: CString,
+    pub(crate) directory: CString,
+    pub(crate) file_base: CString,
 }
 
 impl NativeReportLocation {
-    fn new(report: ReportLocation<'_>) -> Result<Self, ProfilerError> {
+    pub(crate) fn new(report: ReportLocation<'_>) -> Result<Self, ProfilerError> {
         let directory = report.directory.to_str().ok_or_else(|| ProfilerError {
             description: "the report directory is not UTF-8".to_owned(),
         })?;
@@ -123,7 +123,7 @@ impl NativeReportLocation {
     }
 }
 
-fn c_string(text: &str, described_as: &str) -> Result<CString, ProfilerError> {
+pub(crate) fn c_string(text: &str, described_as: &str) -> Result<CString, ProfilerError> {
     CString::new(text).map_err(|_| ProfilerError {
         description: format!("{described_as} holds a NUL byte"),
     })
@@ -209,7 +209,7 @@ pub(crate) fn compare_jobs(
 }
 
 /// A job's own reason when it could not build its graph, else the library's.
-fn measurement_outcome(
+pub(crate) fn measurement_outcome(
     status: c_int,
     job_failures: [Option<String>; 2],
 ) -> Result<(), ProfilerError> {
@@ -240,18 +240,13 @@ unsafe extern "C" fn build_fresh_graph(
     // SAFETY: the payload is the `JobCall` the entry point lent for the
     // whole measurement, and the library calls this on the thread that
     // entered it, one call at a time, so this is the only reference.
-    let job_call = unsafe { &mut *builder_payload.cast::<JobCall<'_>>() };
-    let built_outputs = catch_unwind(AssertUnwindSafe(|| job_call.job.fresh_outputs()));
-    let output_arrays = match built_outputs {
-        Ok(Ok(output_arrays)) => output_arrays,
-        Ok(Err(build_failure)) => {
-            job_call.failure = Some(build_failure);
-            return 1;
-        }
-        Err(_) => {
-            job_call.failure = Some("the job panicked while building its graph".to_owned());
-            return 1;
-        }
+    let JobCall { job, failure } = unsafe { &mut *builder_payload.cast::<JobCall<'_>>() };
+    let Some(output_arrays) =
+        guarded_step(failure, "the job panicked while building its graph", || {
+            job.fresh_outputs()
+        })
+    else {
+        return 1;
     };
     for output_array in &output_arrays {
         // SAFETY: the vector is the library's, valid for this call, and
@@ -259,11 +254,32 @@ unsafe extern "C" fn build_fresh_graph(
         let append_status =
             unsafe { raw::mlx_vector_array_append_value(fresh_outputs, output_array.raw()) };
         if append_status != 0 {
-            job_call.failure = Some("MLX could not take one of the job's outputs".to_owned());
+            *failure = Some("MLX could not take one of the job's outputs".to_owned());
             return 1;
         }
     }
     0
+}
+
+/// Takes one step of the caller's code on behalf of a C callback. A failure
+/// or a panic is left in `failure` and answered with `None`, because
+/// unwinding into C++ would abort the process.
+pub(crate) fn guarded_step<StepOutcome>(
+    failure: &mut Option<String>,
+    panic_description: &str,
+    step: impl FnOnce() -> Result<StepOutcome, String>,
+) -> Option<StepOutcome> {
+    match catch_unwind(AssertUnwindSafe(step)) {
+        Ok(Ok(step_outcome)) => Some(step_outcome),
+        Ok(Err(step_failure)) => {
+            *failure = Some(step_failure);
+            None
+        }
+        Err(_) => {
+            *failure = Some(panic_description.to_owned());
+            None
+        }
+    }
 }
 
 fn job_summary(native_summary: &NativeJobSummary) -> JobSummary {
@@ -277,7 +293,7 @@ fn job_summary(native_summary: &NativeJobSummary) -> JobSummary {
     }
 }
 
-fn metric_comparison(native_metric: &NativeMetricComparison) -> MetricComparison {
+pub(crate) fn metric_comparison(native_metric: &NativeMetricComparison) -> MetricComparison {
     let verdict = match native_metric.verdict {
         verdict_value if verdict_value < 0 => Verdict::CandidateFaster,
         0 => Verdict::WithinSpread,

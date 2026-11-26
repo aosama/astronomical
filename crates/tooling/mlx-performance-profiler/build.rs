@@ -39,16 +39,28 @@ const PROFILER_VERSION_VARIABLE: &str = "ASTRONOMICAL_MLX_PERFORMANCE_PROFILER_V
 const MLX_CONSUMER_DEFINITIONS: [&str; 4] =
     ["MLX_STATIC", "_METAL_", "ACCELERATE_NEW_LAPACK", "NDEBUG"];
 /// The library target of the profiler's `CMakeLists.txt` at the pinned
-/// release: capture, timelines, reports and the C API, without its demo,
-/// server or model code. One more source is generated
+/// release: capture, timelines, reports, procedure comparisons, kernel
+/// launch records and the C API, without its demo, server or model code. One more source is generated
 /// (`embedded_graph_view_assets`).
-const PROFILER_LIBRARY_SOURCES: [&str; 38] = [
+const PROFILER_LIBRARY_SOURCES: [&str; 53] = [
     "graph_model.cpp",
     "graph_build_timer.cpp",
     "telemetry.cpp",
     "latency_breakdown.cpp",
     "progress_reporter.cpp",
     "metal_command_buffer_probe.cpp",
+    "dispatch_occupancy.cpp",
+    "gpu_device_facts.cpp",
+    "metal_dispatch_recorder.cpp",
+    "metal_object_classes.cpp",
+    "metal_host_clock.cpp",
+    "metal_submission_recorder.cpp",
+    "gpu_busy_time.cpp",
+    "procedure_measurement.cpp",
+    "report_procedure_page.cpp",
+    "procedure_comparison_record.cpp",
+    "procedure_report_files.cpp",
+    "kernel_launch_summary.cpp",
     "gpu_timeline.cpp",
     "timeline_dependencies.cpp",
     "timed_units.cpp",
@@ -66,6 +78,7 @@ const PROFILER_LIBRARY_SOURCES: [&str; 38] = [
     "report_stage_table_section.cpp",
     "report_gantt_section.cpp",
     "report_comparison_page.cpp",
+    "report_launch_comparison_section.cpp",
     "report_verdict_section.cpp",
     "comparison_record.cpp",
     "report_writer.cpp",
@@ -80,7 +93,9 @@ const PROFILER_LIBRARY_SOURCES: [&str; 38] = [
     "json_writer.cpp",
     "console_output.cpp",
     "mlx_c_interop.cpp",
+    "c_api_support.cpp",
     "mlx_perf_c_api.cpp",
+    "mlx_perf_c_api_procedures.cpp",
 ];
 
 /// The report's interactive graph view: the function each embedded file is
