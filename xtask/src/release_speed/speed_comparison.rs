@@ -10,7 +10,9 @@
 //! - figures taken on different Macs are listed side by side with no
 //!   percentages, since the difference would be the Mac's;
 //! - a workload measured in only one of the two releases is labelled, never
-//!   compared with something else.
+//!   compared with something else;
+//! - a long prompt is compared only with one of about the same length, since
+//!   a prompt twice as long takes twice as long to read and slows the reply.
 
 use std::fmt::Write as _;
 
@@ -25,6 +27,12 @@ const BYTES_PER_GIGABYTE: u64 = 1_073_741_824;
 /// nothing about prompt reading; only the first token is shown. Short
 /// prompts are about 30 tokens and the shortest long one about 1,000.
 const LONG_PROMPT_TOKENS: u64 = 500;
+/// How far apart two long prompts may be and still be compared. The prompts
+/// are cut from the same fixture to a target length, so one workload lands
+/// within a few percent of itself between releases; a changed target (10,000
+/// to 5,000 tokens in 0.2.135) lands far outside, and comparing across it
+/// published a halved prompt as a 58% faster first token.
+const COMPARABLE_PROMPT_LENGTH_FRACTION: f64 = 0.10;
 
 /// Whether a larger figure is better (tokens a second) or a smaller one is
 /// (seconds to the first token): it decides nothing about the wording, only
@@ -55,8 +63,7 @@ pub fn release_speed_section(
         "| Model and workload | Prompt reading (tokens a second) | First token | Reply (tokens a second) | Peak memory |\n|---|---|---|---|---|"
     );
     for current_measurement in &current_ledger.measurements {
-        let previous_measurement =
-            matching_measurement(previous_ledger, &current_measurement.comparison_key());
+        let previous_measurement = matching_measurement(previous_ledger, current_measurement);
         let _ = writeln!(
             section_text,
             "{}",
@@ -84,7 +91,7 @@ fn caption(
         current_ledger.machine.memory_bytes / BYTES_PER_GIGABYTE,
     );
     let mut caption_text = format!(
-        "{} against {}, measured on a {machine_text}. {}, median shown. A change is shown only when the two releases' ranges do not overlap.",
+        "{} against {}, measured on a {machine_text}. {}. A change is shown only when the two releases' ranges do not overlap.",
         current_ledger.astronomical_version,
         previous_ledger.astronomical_version,
         reply_conditions_text(current_ledger)
@@ -103,7 +110,8 @@ fn caption(
 }
 
 /// "Replies of 500 tokens, essays at temperature 1.0 and code at 0.7, 3
-/// interleaved rounds", read from the measurements themselves.
+/// interleaved rounds, median shown" (or "one reply a task" when each task
+/// was measured once), read from the measurements themselves.
 fn reply_conditions_text(current_ledger: &ReleaseSpeedLedger) -> String {
     let measurements = &current_ledger.measurements;
     let reply_tokens = measurements
@@ -128,20 +136,48 @@ fn reply_conditions_text(current_ledger: &ReleaseSpeedLedger) -> String {
             ));
         }
     }
+    let rounds_text = if round_count == 1 {
+        "one reply a task".to_owned()
+    } else {
+        format!("{round_count} interleaved rounds, median shown")
+    };
     format!(
-        "Replies of {reply_tokens} tokens, {}, {round_count} interleaved rounds",
+        "Replies of {reply_tokens} tokens, {}, {rounds_text}",
         temperature_texts.join(" and ")
     )
 }
 
+/// The other release's measurement of the same workload: the same model,
+/// revision, memory limit and task, after a prompt of about the same length.
 fn matching_measurement<'ledger>(
     ledger: &'ledger ReleaseSpeedLedger,
-    comparison_key: &ComparisonKey,
+    wanted_measurement: &SpeedMeasurement,
 ) -> Option<&'ledger SpeedMeasurement> {
-    ledger
-        .measurements
-        .iter()
-        .find(|measurement| measurement.comparison_key() == *comparison_key)
+    let wanted_key: ComparisonKey = wanted_measurement.comparison_key();
+    ledger.measurements.iter().find(|measurement| {
+        measurement.comparison_key() == wanted_key
+            && prompts_are_comparable(
+                measurement.figures.prompt_tokens,
+                wanted_measurement.figures.prompt_tokens,
+            )
+    })
+}
+
+/// Two short prompts always compare; two long ones only within
+/// `COMPARABLE_PROMPT_LENGTH_FRACTION` of the longer.
+#[expect(
+    clippy::cast_precision_loss,
+    reason = "prompt token counts, far inside f64's exact range"
+)]
+fn prompts_are_comparable(first_prompt_tokens: u64, second_prompt_tokens: u64) -> bool {
+    let is_first_short = first_prompt_tokens < LONG_PROMPT_TOKENS;
+    let is_second_short = second_prompt_tokens < LONG_PROMPT_TOKENS;
+    if is_first_short || is_second_short {
+        return is_first_short == is_second_short;
+    }
+    let longer_prompt_tokens = first_prompt_tokens.max(second_prompt_tokens) as f64;
+    let length_difference = first_prompt_tokens.abs_diff(second_prompt_tokens) as f64;
+    length_difference <= longer_prompt_tokens * COMPARABLE_PROMPT_LENGTH_FRACTION
 }
 
 fn comparison_row(
@@ -348,9 +384,7 @@ fn workloads_measured_only_before(
     previous_ledger
         .measurements
         .iter()
-        .filter(|previous| {
-            matching_measurement(current_ledger, &previous.comparison_key()).is_none()
-        })
+        .filter(|previous| matching_measurement(current_ledger, previous).is_none())
         .map(|previous| {
             format!(
                 "{}, {}, {}",
