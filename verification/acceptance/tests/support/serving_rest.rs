@@ -332,6 +332,10 @@ pub(crate) struct ServingRestServer {
     shutdown_sender: oneshot::Sender<()>,
     server_task: JoinHandle<Result<(), std::io::Error>>,
     isolated_development_home: Option<tempfile::TempDir>,
+    /// The worker keeps appending to its performance log in this directory for as long as
+    /// the server runs, so it must be deleted only when the server is dropped. It is the
+    /// last field so it drops after the worker handle.
+    _default_performance_log_directory: Option<tempfile::TempDir>,
 }
 
 pub(crate) async fn launch_serving_rest_server_for_model(
@@ -398,40 +402,24 @@ pub(crate) async fn launch_serving_rest_server_for_artifact_with_memory_limit(
     let owned_isolated_development_home = isolated_worker_home_directory
         .is_none()
         .then(super::isolated_development_home_from_user_config);
-    let worker_configuration_home_directory = isolated_worker_home_directory
-        .map(Path::to_path_buf)
-        .or_else(|| {
-            owned_isolated_development_home
-                .as_ref()
-                .map(|isolated_home| isolated_home.path().to_path_buf())
-        })
-        .expect("acceptance should own or receive an isolated Development home");
-    let runtime_config_resolver = ResolvedRuntimeConfigResolver::for_development_home_directory(
-        worker_configuration_home_directory,
-        production_worker_executable_path.clone(),
+    let worker_configuration_home_directory = worker_configuration_home_directory(
+        isolated_worker_home_directory,
+        owned_isolated_development_home.as_ref(),
     );
-    let worker_runtime_config = runtime_config_resolver
-        .load()
-        .expect("the serving REST worker configuration should resolve");
-    let default_log_directory =
-        tempfile::tempdir().expect("the serving REST log directory should be created");
-    let performance_log_directory =
-        performance_log_directory.unwrap_or_else(|| default_log_directory.path());
-    let mut worker_startup_configuration = worker_runtime_config.worker_startup_configuration();
-    if let Some(maximum_mlx_memory_bytes) = maximum_mlx_memory_bytes {
-        worker_startup_configuration.configured_maximum_mlx_memory_bytes =
-            Some(maximum_mlx_memory_bytes);
-    }
-    let worker_handle = WorkerHandle::launch_with_startup_configuration(
+    let default_performance_log_directory = performance_log_directory
+        .is_none()
+        .then(create_default_performance_log_directory);
+    let performance_log_directory = performance_log_directory_for_server(
+        performance_log_directory,
+        default_performance_log_directory.as_ref(),
+    );
+    let worker_handle = launch_serving_rest_worker(
         &production_worker_executable_path,
-        Duration::from_secs(60),
-        GenerationPerformanceLog::open(performance_log_directory)
-            .expect("the serving REST performance log should open"),
-        Arc::clone(&worker_runtime_config.model_policy_catalog),
-        worker_startup_configuration,
+        worker_configuration_home_directory,
+        performance_log_directory,
+        maximum_mlx_memory_bytes,
     )
-    .await
-    .expect("the production worker should launch for serving REST");
+    .await;
     let listener = TcpListener::bind("127.0.0.1:0")
         .await
         .expect("the serving REST listener should bind");
@@ -439,7 +427,89 @@ pub(crate) async fn launch_serving_rest_server_for_artifact_with_memory_limit(
         .local_addr()
         .expect("the serving REST listener should expose its address");
     let (shutdown_sender, shutdown_receiver) = oneshot::channel();
-    let application = match isolated_worker_home_directory {
+    let application = build_serving_rest_application(
+        &worker_handle,
+        isolated_worker_home_directory,
+        production_worker_executable_path,
+        discovered_model_artifact,
+    );
+    let server = axum::serve(listener, application).with_graceful_shutdown(async {
+        let _ = shutdown_receiver.await;
+    });
+    let server_task = tokio::spawn(async move { server.await });
+    wait_until_ready(server_address).await;
+    ServingRestServer {
+        worker_handle,
+        server_address,
+        shutdown_sender,
+        server_task,
+        isolated_development_home: owned_isolated_development_home,
+        _default_performance_log_directory: default_performance_log_directory,
+    }
+}
+
+fn create_default_performance_log_directory() -> tempfile::TempDir {
+    tempfile::tempdir().expect("the serving REST log directory should be created")
+}
+
+fn performance_log_directory_for_server<'directory>(
+    requested_performance_log_directory: Option<&'directory Path>,
+    default_performance_log_directory: Option<&'directory tempfile::TempDir>,
+) -> &'directory Path {
+    requested_performance_log_directory
+        .or(default_performance_log_directory.map(tempfile::TempDir::path))
+        .expect("the serving REST harness should own or receive a performance log directory")
+}
+
+fn worker_configuration_home_directory(
+    isolated_worker_home_directory: Option<&Path>,
+    owned_isolated_development_home: Option<&tempfile::TempDir>,
+) -> PathBuf {
+    isolated_worker_home_directory
+        .map(Path::to_path_buf)
+        .or_else(|| {
+            owned_isolated_development_home.map(|isolated_home| isolated_home.path().to_path_buf())
+        })
+        .expect("acceptance should own or receive an isolated Development home")
+}
+
+async fn launch_serving_rest_worker(
+    production_worker_executable_path: &Path,
+    worker_configuration_home_directory: PathBuf,
+    performance_log_directory: &Path,
+    maximum_mlx_memory_bytes: Option<u64>,
+) -> WorkerHandle {
+    let runtime_config_resolver = ResolvedRuntimeConfigResolver::for_development_home_directory(
+        worker_configuration_home_directory,
+        production_worker_executable_path.to_path_buf(),
+    );
+    let worker_runtime_config = runtime_config_resolver
+        .load()
+        .expect("the serving REST worker configuration should resolve");
+    let mut worker_startup_configuration = worker_runtime_config.worker_startup_configuration();
+    if let Some(maximum_mlx_memory_bytes) = maximum_mlx_memory_bytes {
+        worker_startup_configuration.configured_maximum_mlx_memory_bytes =
+            Some(maximum_mlx_memory_bytes);
+    }
+    WorkerHandle::launch_with_startup_configuration(
+        production_worker_executable_path,
+        Duration::from_secs(60),
+        GenerationPerformanceLog::open(performance_log_directory)
+            .expect("the serving REST performance log should open"),
+        Arc::clone(&worker_runtime_config.model_policy_catalog),
+        worker_startup_configuration,
+    )
+    .await
+    .expect("the production worker should launch for serving REST")
+}
+
+fn build_serving_rest_application(
+    worker_handle: &WorkerHandle,
+    isolated_worker_home_directory: Option<&Path>,
+    production_worker_executable_path: PathBuf,
+    discovered_model_artifact: config::DiscoveredModel,
+) -> axum::Router {
+    match isolated_worker_home_directory {
         Some(isolated_worker_home_directory) => {
             let runtime_config_resolver =
                 ResolvedRuntimeConfigResolver::for_development_home_directory(
@@ -459,18 +529,6 @@ pub(crate) async fn launch_serving_rest_server_for_artifact_with_memory_limit(
             worker_handle.clone(),
             vec![discovered_model_artifact],
         ),
-    };
-    let server = axum::serve(listener, application).with_graceful_shutdown(async {
-        let _ = shutdown_receiver.await;
-    });
-    let server_task = tokio::spawn(async move { server.await });
-    wait_until_ready(server_address).await;
-    ServingRestServer {
-        worker_handle,
-        server_address,
-        shutdown_sender,
-        server_task,
-        isolated_development_home: owned_isolated_development_home,
     }
 }
 
@@ -480,6 +538,7 @@ pub(crate) async fn stop_serving_rest_server(serving_rest_server: ServingRestSer
         shutdown_sender,
         server_task,
         isolated_development_home,
+        _default_performance_log_directory: default_performance_log_directory,
         ..
     } = serving_rest_server;
     let _ = shutdown_sender.send(());
@@ -492,4 +551,5 @@ pub(crate) async fn stop_serving_rest_server(serving_rest_server: ServingRestSer
         .await
         .expect("the serving worker should terminate and be reaped");
     drop(isolated_development_home);
+    drop(default_performance_log_directory);
 }

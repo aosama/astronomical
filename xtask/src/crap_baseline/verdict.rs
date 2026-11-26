@@ -14,7 +14,7 @@ use serde_json::Value;
 /// Fifteen was the 99th percentile of every function on `main` when this
 /// gate was introduced (2026-11-09): new code may be as branchy as the most
 /// complex one percent of the code that existed then, and no more. The
-/// 100-line clippy budget bounds length; this bounds branching.
+/// 80-line clippy budget bounds length; this bounds branching.
 pub(crate) const MAXIMUM_NEW_FUNCTION_CYCLOMATIC_COMPLEXITY: f64 = 15.0;
 
 const KNOWN_ENTRY_STATUSES: &[&str] = &["unchanged", "improved", "regressed", "new", "moved"];

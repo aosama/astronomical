@@ -77,64 +77,26 @@ impl SyntheticFlux2KleinArtifact {
     }
 
     pub(super) fn write(&self, model_directory: &Path) {
-        for nested_directory in [
-            "scheduler",
-            "text_encoder",
-            "tokenizer",
-            "transformer",
-            "vae",
-        ] {
-            fs::create_dir_all(model_directory.join(nested_directory))
-                .expect("the nested fixture directory should be created");
-        }
+        create_nested_directories(model_directory);
         write(model_directory, "model_index.json", &model_index_json());
         write(model_directory, "LICENSE.md", &apache_license_bytes());
+        write_component_configurations(model_directory);
+        write_tokenizer_sidecars(model_directory);
+        self.write_text_encoder_weights(model_directory);
+        self.write_transformer_weights(model_directory);
         write(
             model_directory,
-            "scheduler/scheduler_config.json",
-            &scheduler_config_json(),
+            "vae/diffusion_pytorch_model.safetensors",
+            &safetensors_bytes(&vae_tensors()),
         );
         write(
             model_directory,
-            "text_encoder/config.json",
-            &text_encoder_config_json(),
+            "flux-2-klein-4b.safetensors",
+            &self.root_transformer_bytes,
         );
-        write(
-            model_directory,
-            "text_encoder/generation_config.json",
-            &serde_json::to_vec(&json!({
-                "bos_token_id": 151643,
-                "do_sample": true,
-                "eos_token_id": [151645, 151643],
-                "pad_token_id": 151643,
-                "temperature": 0.6,
-                "top_k": 20,
-                "top_p": 0.95,
-                "transformers_version": "4.56.1"
-            }))
-            .expect("the generation config should serialize"),
-        );
-        write(
-            model_directory,
-            "transformer/config.json",
-            &transformer_config_json(),
-        );
-        write(model_directory, "vae/config.json", &vae_config_json());
-        for sidecar_name in [
-            "added_tokens.json",
-            "chat_template.jinja",
-            "merges.txt",
-            "special_tokens_map.json",
-            "tokenizer.json",
-            "tokenizer_config.json",
-            "vocab.json",
-        ] {
-            write(
-                model_directory,
-                &format!("tokenizer/{sidecar_name}"),
-                b"{}\n",
-            );
-        }
+    }
+
+    fn write_text_encoder_weights(&self, model_directory: &Path) {
         let text_index = json!({
             "metadata": {
                 "total_parameters": self.text_tensors_by_shard.values().flatten().map(SyntheticTensor::parameter_count).sum::<usize>(),
@@ -150,6 +112,9 @@ impl SyntheticFlux2KleinArtifact {
         for (relative_name, tensors) in &self.text_tensors_by_shard {
             write(model_directory, relative_name, &safetensors_bytes(tensors));
         }
+    }
+
+    fn write_transformer_weights(&self, model_directory: &Path) {
         let mut transformer_tensors = transformer_tensors();
         if self.invalid_transformer_shape {
             transformer_tensors[0].shape[0] += 1;
@@ -162,15 +127,70 @@ impl SyntheticFlux2KleinArtifact {
             "transformer/diffusion_pytorch_model.safetensors",
             &transformer_tensors,
         );
+    }
+}
+
+fn create_nested_directories(model_directory: &Path) {
+    for nested_directory in [
+        "scheduler",
+        "text_encoder",
+        "tokenizer",
+        "transformer",
+        "vae",
+    ] {
+        fs::create_dir_all(model_directory.join(nested_directory))
+            .expect("the nested fixture directory should be created");
+    }
+}
+
+fn write_component_configurations(model_directory: &Path) {
+    write(
+        model_directory,
+        "scheduler/scheduler_config.json",
+        &scheduler_config_json(),
+    );
+    write(
+        model_directory,
+        "text_encoder/config.json",
+        &text_encoder_config_json(),
+    );
+    write(
+        model_directory,
+        "text_encoder/generation_config.json",
+        &serde_json::to_vec(&json!({
+            "bos_token_id": 151643,
+            "do_sample": true,
+            "eos_token_id": [151645, 151643],
+            "pad_token_id": 151643,
+            "temperature": 0.6,
+            "top_k": 20,
+            "top_p": 0.95,
+            "transformers_version": "4.56.1"
+        }))
+        .expect("the generation config should serialize"),
+    );
+    write(
+        model_directory,
+        "transformer/config.json",
+        &transformer_config_json(),
+    );
+    write(model_directory, "vae/config.json", &vae_config_json());
+}
+
+fn write_tokenizer_sidecars(model_directory: &Path) {
+    for sidecar_name in [
+        "added_tokens.json",
+        "chat_template.jinja",
+        "merges.txt",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "vocab.json",
+    ] {
         write(
             model_directory,
-            "vae/diffusion_pytorch_model.safetensors",
-            &safetensors_bytes(&vae_tensors()),
-        );
-        write(
-            model_directory,
-            "flux-2-klein-4b.safetensors",
-            &self.root_transformer_bytes,
+            &format!("tokenizer/{sidecar_name}"),
+            b"{}\n",
         );
     }
 }

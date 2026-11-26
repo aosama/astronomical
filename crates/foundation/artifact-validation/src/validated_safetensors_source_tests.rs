@@ -3,8 +3,8 @@
 
 use std::io::Write;
 
-use super::ValidatedSafetensorsSource;
-use crate::{RequiredFileProfile, TensorSourceId, validate_required_file};
+use super::{ValidatedSafetensorsSource, parse_tensor_metadata};
+use crate::{ArtifactValidationError, RequiredFileProfile, TensorSourceId, validate_required_file};
 
 /// Writes a shard with a 4096-byte `U8` tensor and a zero-length tensor, and
 /// validates it as one source.
@@ -95,4 +95,65 @@ fn should_make_a_stored_tensor_range_absolute_by_adding_the_data_section_start()
             .stored_tensor_file_range("language_model.lm_head.weight")
             .is_none()
     );
+}
+
+fn header_entries(header_json: &str) -> serde_json::Map<String, serde_json::Value> {
+    serde_json::from_str(header_json).expect("the test header should be a JSON object")
+}
+
+#[test]
+fn should_parse_each_tensor_entry_under_its_stored_name() {
+    let tensor_metadata = parse_tensor_metadata(
+        header_entries(
+            r#"{
+                "embed.weight": {"dtype": "BF16", "shape": [2, 3], "data_offsets": [0, 12]},
+                "norm.weight": {"dtype": "F32", "shape": [3], "data_offsets": [12, 24]}
+            }"#,
+        ),
+        "model.safetensors",
+    )
+    .expect("well-formed entries should parse");
+
+    assert_eq!(tensor_metadata.len(), 2);
+    let embedding = &tensor_metadata["embed.weight"];
+    assert_eq!(embedding.dtype, "BF16");
+    assert_eq!(embedding.shape, [2, 3]);
+    assert_eq!(embedding.data_offsets, [0, 12]);
+    assert_eq!(tensor_metadata["norm.weight"].data_start_offset(), 12);
+}
+
+#[test]
+fn should_parse_a_header_with_no_tensors_to_an_empty_map() {
+    let tensor_metadata = parse_tensor_metadata(header_entries("{}"), "model.safetensors")
+        .expect("an empty header should parse");
+
+    assert!(tensor_metadata.is_empty());
+}
+
+#[test]
+fn should_name_the_file_when_a_tensor_entry_lacks_its_dtype() {
+    let parse_failure = parse_tensor_metadata(
+        header_entries(r#"{"embed.weight": {"shape": [2], "data_offsets": [0, 4]}}"#),
+        "model-00002.safetensors",
+    )
+    .expect_err("an entry without a dtype should not parse");
+
+    assert!(matches!(
+        parse_failure,
+        ArtifactValidationError::InvalidSafetensorsHeader { file_name, .. }
+            if file_name == "model-00002.safetensors"
+    ));
+}
+
+#[test]
+fn should_reject_a_tensor_entry_that_is_not_an_object() {
+    let parse_failure = parse_tensor_metadata(
+        header_entries(r#"{"embed.weight": 7}"#),
+        "model.safetensors",
+    );
+
+    assert!(matches!(
+        parse_failure,
+        Err(ArtifactValidationError::InvalidSafetensorsHeader { .. })
+    ));
 }

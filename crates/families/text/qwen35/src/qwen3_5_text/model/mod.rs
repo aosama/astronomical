@@ -119,6 +119,8 @@ pub mod route_observation;
 pub mod routed_reply_recording;
 #[cfg(feature = "direct-mlx")]
 mod seat_planned_complete_layers;
+#[cfg(feature = "direct-mlx")]
+mod streamed_expert_assignment_steps;
 pub mod streaming_model;
 mod system_wired_governance;
 mod whole_model_holding;
@@ -139,6 +141,8 @@ mod artifact_loading;
 mod decoder_layer_forward;
 pub mod decoder_stack_suffix_forward;
 #[cfg(feature = "direct-mlx")]
+mod dense_streaming_loading;
+#[cfg(feature = "direct-mlx")]
 mod evaluation;
 #[cfg(feature = "direct-mlx")]
 mod forward_attribution;
@@ -150,6 +154,8 @@ mod forward_graph;
 mod governed_leases;
 #[cfg(feature = "direct-mlx")]
 mod live_memory_limit;
+#[cfg(feature = "direct-mlx")]
+mod streaming_expert_runtime_loading;
 #[cfg(feature = "direct-mlx")]
 pub use crate::qwen3_5_core::model::target_forward_graph::Qwen3_5TargetForwardOutput;
 #[cfg(feature = "direct-mlx")]

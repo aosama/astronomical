@@ -9,13 +9,12 @@ use crate::sparse_experts::{
 };
 use crate::{PerformanceAttribution, PerformanceCounter, PerformanceOperation};
 use engine_core::expert_paging::QuantizedExpertPageManifest;
-use jangtq2_qwen35::configuration::Jangtq2CodebookRotation;
 use text_generation::execution_error::TextExecutionError;
 
 use super::super::expert_streaming::expert_pager::Qwen3_5PagedExpertWeights;
 use super::astro_expert_cache_plus_streamed_page_route;
 use super::feed_forward_weights::Qwen3_5MoEFeedForwardWeights;
-use super::routing::qwen3_5_moe_sort_expert_assignments;
+use super::streamed_expert_assignment_steps::remaining_gate_up_rotations;
 use crate::sparse_experts;
 
 /// Per-assignment routed expert rows before any weighted reduction.
@@ -196,18 +195,8 @@ impl Qwen3_5Model {
     ) -> Result<RoutedExpertAssignmentOutputs, TextExecutionError> {
         let expanded_states = self.runtime.expand_dims(hidden_states, -2)?;
         let expanded_states = self.runtime.expand_dims(&expanded_states, -3)?;
-        let sorted_assignments = if sparse_experts::should_use_sorted_expert_reduction(
-            selected_expert_indices.element_count(),
-            self.sorted_expert_weighted_sum_kernel.is_some(),
-        ) {
-            Some(qwen3_5_moe_sort_expert_assignments(
-                &self.runtime,
-                &expanded_states,
-                selected_expert_indices,
-            )?)
-        } else {
-            None
-        };
+        let sorted_assignments =
+            self.sorted_assignments_when_worthwhile(&expanded_states, selected_expert_indices)?;
         let (expert_inputs, expert_indices, indices_are_sorted) = match sorted_assignments.as_ref()
         {
             Some((sorted_states, sorted_indices, _)) => (sorted_states, sorted_indices, true),
@@ -215,36 +204,18 @@ impl Qwen3_5Model {
         };
         let gate_activation_rotation = paged_expert_weights.gate_activation_rotation;
         let up_activation_rotation = paged_expert_weights.up_activation_rotation;
-        let shared_gate_up_activations = if gate_activation_rotation
-            == Jangtq2CodebookRotation::Hadamard32
-            && up_activation_rotation == Jangtq2CodebookRotation::Hadamard32
-        {
-            // Both projections use the same input and transform, so build
-            // one rotated tensor and share it instead of repeating the
-            // blockwise Hadamard work for gate and up independently.
-            Some(performance_attribution.measure_operation(
-                PerformanceOperation::Jangtq2ActivationRotationHadamard32,
-                |_| {
-                    jangtq2_qwen35::mlx_decode::rotate_activations_hadamard32(
-                        &self.runtime,
-                        expert_inputs,
-                    )
-                },
-            )?)
-        } else {
-            None
-        };
+        let shared_gate_up_activations = self.shared_gate_up_activations(
+            expert_inputs,
+            gate_activation_rotation,
+            up_activation_rotation,
+            performance_attribution,
+        )?;
         let gate_up_activations = shared_gate_up_activations.as_ref().unwrap_or(expert_inputs);
-        let gate_projection_rotation = if shared_gate_up_activations.is_some() {
-            Jangtq2CodebookRotation::NoRotation
-        } else {
-            gate_activation_rotation
-        };
-        let up_projection_rotation = if shared_gate_up_activations.is_some() {
-            Jangtq2CodebookRotation::NoRotation
-        } else {
-            up_activation_rotation
-        };
+        let (gate_projection_rotation, up_projection_rotation) = remaining_gate_up_rotations(
+            shared_gate_up_activations.is_some(),
+            gate_activation_rotation,
+            up_activation_rotation,
+        );
         let selected_up = self.streamed_expert_linear(
             gate_up_activations,
             &paged_expert_weights.up_projection,
@@ -274,20 +245,11 @@ impl Qwen3_5Model {
             indices_are_sorted,
             performance_attribution,
         )?;
-        if indices_are_sorted {
-            let Some((_, _, inverse_order)) = sorted_assignments else {
-                return Err(TextExecutionError::InvalidInput {
-                    description: "sorted routed assignments lost their inverse order",
-                });
-            };
-            Ok(RoutedExpertAssignmentOutputs::Sorted {
-                sorted_outputs: selected_outputs,
-                inverse_order,
-            })
-        } else {
-            let assignment_outputs = self.runtime.squeeze_axis(&selected_outputs, -2)?;
-            Ok(RoutedExpertAssignmentOutputs::Unsorted { assignment_outputs })
-        }
+        self.routed_assignment_outputs_from(
+            selected_outputs,
+            sorted_assignments,
+            indices_are_sorted,
+        )
     }
 
     fn streamed_expert_linear(

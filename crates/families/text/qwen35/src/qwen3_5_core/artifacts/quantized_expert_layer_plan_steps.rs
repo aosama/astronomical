@@ -1,7 +1,7 @@
 //! Named planning steps for one quantized expert decoder layer.
 //!
 //! Split out of `quantized_expert_layer_plan.rs` so each unit stays under
-//! the workspace's 100-code-line function budget: this module owns the
+//! the workspace's 80-code-line function budget: this module owns the
 //! per-projection pipeline (storage contract, shard resolution, geometry
 //! validation, drain) and the final cross-projection plan assembly.
 

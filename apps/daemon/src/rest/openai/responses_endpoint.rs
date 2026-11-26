@@ -47,36 +47,38 @@ pub(crate) async fn create_response(
             Ok(resolved_model_id) => resolved_model_id,
             Err(rejection_response) => return rejection_response,
         };
-    let should_stream_response = request_parts.stream;
-    let reasoning_excluded = request_parts.reasoning_excluded;
-    let structured_output = request_parts.structured_output.clone();
-    let response_instructions = request_parts.instructions.clone();
-    let response_request_configuration = request_parts.response_configuration();
-    let settings_presence = request_generation_settings_presence(
-        request_parts.requested_maximum_output_tokens,
-        request_parts.temperature,
-        request_parts.top_p,
-    );
-    let request_id = match allocate_chat_request_identifier(&application_state) {
-        Ok(request_id) => request_id,
-        Err(rejection_response) => return rejection_response,
-    };
-    let mut chat_generation_command = match translate_responses_request(request_id, request_parts) {
-        Ok(chat_generation_command) => chat_generation_command,
-        Err(rejection_response) => return rejection_response,
-    };
-    chat_generation_command = finalize_responses_generation_command(
+    let prepared_generation = match prepare_responses_generation(
         &application_state,
-        chat_generation_command,
+        request_parts,
         resolved_model_id,
-        request_id,
-        should_stream_response,
         request_body_bytes.len(),
-        settings_presence,
-    );
+    ) {
+        Ok(prepared_generation) => prepared_generation,
+        Err(rejection_response) => return rejection_response,
+    };
+    start_responses_generation_and_respond(
+        &application_state,
+        prepared_generation,
+        configuration_transition_guard,
+    )
+    .await
+}
+
+/// Admits the prepared generation to the worker queue and answers with its
+/// response, or with the rejection that stopped it.
+async fn start_responses_generation_and_respond(
+    application_state: &ApplicationState,
+    prepared_generation: PreparedResponsesGeneration,
+    configuration_transition_guard: tokio::sync::MutexGuard<'_, ()>,
+) -> Response {
+    let PreparedResponsesGeneration {
+        chat_generation_command,
+        request_id,
+        reply_plan,
+    } = prepared_generation;
     let model_id = chat_generation_command.model.clone();
     let generation_start_result = start_chat_generation_after_admission(
-        &application_state,
+        application_state,
         chat_generation_command,
         configuration_transition_guard,
     )
@@ -101,17 +103,81 @@ pub(crate) async fn create_response(
         ),
         created_at_unix_seconds,
         model_id,
-        instructions: response_instructions,
-        request_configuration: response_request_configuration,
+        instructions: reply_plan.instructions,
+        request_configuration: reply_plan.request_configuration,
     };
     respond_with_responses_completion(
         stream_event_receiver,
         response_presentation,
-        should_stream_response,
-        reasoning_excluded,
-        &structured_output,
+        reply_plan.should_stream_response,
+        reply_plan.reasoning_excluded,
+        &reply_plan.structured_output,
     )
     .await
+}
+
+/// How the answer is delivered and presented once the generation has started.
+struct ResponsesReplyPlan {
+    should_stream_response: bool,
+    reasoning_excluded: bool,
+    structured_output: Option<rest_contract::OpenAiStructuredOutput>,
+    instructions: Option<String>,
+    request_configuration: OpenAiResponseRequestConfiguration,
+}
+
+/// A Responses request that has been translated and given its request
+/// identifier, ready for queue admission.
+struct PreparedResponsesGeneration {
+    chat_generation_command: ipc_protocol::ChatGenerationCommand,
+    request_id: u64,
+    reply_plan: ResponsesReplyPlan,
+}
+
+/// Reads what the reply needs from the request parts before translation
+/// consumes them.
+fn responses_reply_plan(request_parts: &OpenAiResponsesRequestParts) -> ResponsesReplyPlan {
+    ResponsesReplyPlan {
+        should_stream_response: request_parts.stream,
+        reasoning_excluded: request_parts.reasoning_excluded,
+        structured_output: request_parts.structured_output.clone(),
+        instructions: request_parts.instructions.clone(),
+        request_configuration: request_parts.response_configuration(),
+    }
+}
+
+/// Turns the validated request parts into the IPC generation command,
+/// allocating the request identifier after the reply plan is read.
+// The Err variant carries the fully built axum response; it is large but
+// constructed once and moved once, so boxing it would only add indirection.
+#[allow(clippy::result_large_err)]
+fn prepare_responses_generation(
+    application_state: &ApplicationState,
+    request_parts: OpenAiResponsesRequestParts,
+    resolved_model_id: String,
+    request_body_byte_count: usize,
+) -> Result<PreparedResponsesGeneration, Response> {
+    let reply_plan = responses_reply_plan(&request_parts);
+    let settings_presence = request_generation_settings_presence(
+        request_parts.requested_maximum_output_tokens,
+        request_parts.temperature,
+        request_parts.top_p,
+    );
+    let request_id = allocate_chat_request_identifier(application_state)?;
+    let chat_generation_command = translate_responses_request(request_id, request_parts)?;
+    let chat_generation_command = finalize_responses_generation_command(
+        application_state,
+        chat_generation_command,
+        resolved_model_id,
+        request_id,
+        reply_plan.should_stream_response,
+        request_body_byte_count,
+        settings_presence,
+    );
+    Ok(PreparedResponsesGeneration {
+        chat_generation_command,
+        request_id,
+        reply_plan,
+    })
 }
 
 /// Parses the request body, rejecting malformed JSON before any state is
@@ -401,3 +467,7 @@ fn assembly_failure_response(message: String) -> Response {
     )
         .into_response()
 }
+
+#[cfg(test)]
+#[path = "responses_endpoint_tests.rs"]
+mod responses_endpoint_tests;

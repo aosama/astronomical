@@ -165,12 +165,9 @@ pub fn frozen_optiq_metadata_bytes() -> Vec<u8> {
     .expect("the frozen OptiQ metadata should serialize as JSON")
 }
 
-/// Freezes a sparse mixed-precision quantization configuration shape:
-/// a 6-bit affine default with a sparse override map whose unlisted expected
-/// modules (router gates) are stored as native floating point and
-/// resolved through the shard-index scan.
-pub fn frozen_sparse_mixed_precision_config_bytes() -> Vec<u8> {
-    let config_bytes = br#"
+/// The model document of the sparse mixed-precision shape before its
+/// quantization map and layer types are added.
+const SPARSE_MIXED_PRECISION_BASE_CONFIG_JSON: &[u8] = br#"
     {
         "architectures": ["Qwen3_5MoeForConditionalGeneration"],
         "model_type": "qwen3_5_moe",
@@ -213,15 +210,33 @@ pub fn frozen_sparse_mixed_precision_config_bytes() -> Vec<u8> {
         }
     }
     "#;
-    let mut config_value = serde_json::from_slice::<Value>(config_bytes)
+
+/// Freezes a sparse mixed-precision quantization configuration shape:
+/// a 6-bit affine default with a sparse override map whose unlisted expected
+/// modules (router gates) are stored as native floating point and
+/// resolved through the shard-index scan.
+pub fn frozen_sparse_mixed_precision_config_bytes() -> Vec<u8> {
+    let mut config_value = serde_json::from_slice::<Value>(SPARSE_MIXED_PRECISION_BASE_CONFIG_JSON)
         .expect("the frozen test config should decode as JSON");
     let mut quantization = json!({
         "group_size": 64,
         "bits": 6,
         "mode": "affine",
     });
-    // Every layer lifts the shared expert to 8-bit; the gate stays at group 64
-    // while its projections widen to group 128.
+    lift_shared_experts_to_eight_bit(&mut quantization);
+    widen_linear_attention_output_projections(&mut quantization);
+    lift_sparse_attention_input_projections_to_eight_bit(&mut quantization);
+    quantization["language_model.model.embed_tokens"] = json!({"group_size": 64, "bits": 8});
+    quantization["language_model.lm_head"] = json!({"group_size": 64, "bits": 8});
+    config_value["quantization"] = quantization.clone();
+    config_value["quantization_config"] = quantization;
+    config_value["text_config"]["layer_types"] = json!(expected_layer_types());
+    serde_json::to_vec(&config_value).expect("the frozen test config should serialize as JSON")
+}
+
+/// Every layer lifts the shared expert to 8-bit; the gate stays at group 64
+/// while its projections widen to group 128.
+fn lift_shared_experts_to_eight_bit(quantization: &mut Value) {
     for decoder_layer_index in 0..40 {
         let layer_prefix = format!("language_model.model.layers.{decoder_layer_index}");
         quantization[format!("{layer_prefix}.mlp.shared_expert_gate")] =
@@ -231,8 +246,11 @@ pub fn frozen_sparse_mixed_precision_config_bytes() -> Vec<u8> {
                 json!({"group_size": 128, "bits": 8});
         }
     }
-    // Linear-attention output projections all widen to group 128 at the default
-    // 6-bit width.
+}
+
+/// Linear-attention output projections all widen to group 128 at the default
+/// 6-bit width.
+fn widen_linear_attention_output_projections(quantization: &mut Value) {
     for decoder_layer_index in 0..40 {
         if decoder_layer_index % 4 == 3 {
             continue;
@@ -241,9 +259,12 @@ pub fn frozen_sparse_mixed_precision_config_bytes() -> Vec<u8> {
             [format!("language_model.model.layers.{decoder_layer_index}.linear_attn.out_proj")] =
             json!({"group_size": 128, "bits": 6});
     }
-    // Only a sparse subset of attention input projections is lifted to 8-bit;
-    // the remaining full-attention and linear-attention layers keep the 6-bit
-    // group-64 default.
+}
+
+/// Only a sparse subset of attention input projections is lifted to 8-bit;
+/// the remaining full-attention and linear-attention layers keep the 6-bit
+/// group-64 default.
+fn lift_sparse_attention_input_projections_to_eight_bit(quantization: &mut Value) {
     for decoder_layer_index in [3, 7, 31, 35, 39] {
         for projection_name in ["q_proj", "k_proj", "v_proj", "o_proj"] {
             quantization[format!(
@@ -258,12 +279,6 @@ pub fn frozen_sparse_mixed_precision_config_bytes() -> Vec<u8> {
             )] = json!({"group_size": 64, "bits": 8});
         }
     }
-    quantization["language_model.model.embed_tokens"] = json!({"group_size": 64, "bits": 8});
-    quantization["language_model.lm_head"] = json!({"group_size": 64, "bits": 8});
-    config_value["quantization"] = quantization.clone();
-    config_value["quantization_config"] = quantization;
-    config_value["text_config"]["layer_types"] = json!(expected_layer_types());
-    serde_json::to_vec(&config_value).expect("the frozen test config should serialize as JSON")
 }
 
 pub fn frozen_ornith_1_0_optiq_vision_config_bytes() -> Vec<u8> {
@@ -339,3 +354,7 @@ pub fn expected_layer_types() -> Vec<&'static str> {
         })
         .collect()
 }
+
+#[cfg(test)]
+#[path = "frozen_ornith_1_0_fixture_tests.rs"]
+mod tests;

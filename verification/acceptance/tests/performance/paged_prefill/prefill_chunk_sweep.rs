@@ -1,5 +1,6 @@
 //! Compares fixed prompt-processing chunk sizes on the same SSD-streamed model workload.
 
+use std::path::Path;
 use std::time::Duration;
 
 use astronomical_daemon::ResolvedRuntimeConfigResolver;
@@ -7,6 +8,7 @@ use astronomical_inference_worker::worker_startup;
 use ipc_protocol::{
     ChatGenerationCommand, ChatGenerationSettings, ChatMessage, ChatToolChoice,
     MAX_IPC_FRAME_BYTES, ProtocolReader, ProtocolWriter, RequestId, WorkerCommand, WorkerEvent,
+    WorkerModelConfiguration, WorkerStartupConfiguration,
 };
 use serial_test::serial;
 use tokio::time::{Instant, timeout};
@@ -75,7 +77,6 @@ fn assert_valid_prefill_chunk_sweep_result(prefill_chunk_metrics: PrefillChunkMe
 }
 
 /// Loads the Ornith model over duplex pipes with one neutral fixed chunk policy.
-#[expect(clippy::too_many_lines)]
 async fn run_model_with_prefill_chunk_tokens(prefill_chunk_tokens: u32) -> PrefillChunkMetrics {
     let (test_to_worker, worker_from_test) = tokio::io::duplex(MAX_IPC_FRAME_BYTES * 4);
     let (worker_to_test, test_from_worker) = tokio::io::duplex(MAX_IPC_FRAME_BYTES * 4);
@@ -89,88 +90,16 @@ async fn run_model_with_prefill_chunk_tokens(prefill_chunk_tokens: u32) -> Prefi
     let mut protocol_reader = ProtocolReader::new(test_from_worker);
 
     let isolated_development_home = crate::support::isolated_development_home_from_user_config();
-    let worker_runtime_config = ResolvedRuntimeConfigResolver::for_development_home_directory(
-        isolated_development_home.path().to_path_buf(),
-        std::path::PathBuf::new(),
+    let model_id = load_benchmark_model(
+        &mut protocol_writer,
+        &mut protocol_reader,
+        isolated_development_home.path(),
+        prefill_chunk_tokens,
     )
-    .load()
-    .expect("the prefill sweep worker configuration should resolve");
-    let worker_startup_configuration = worker_runtime_config.worker_startup_configuration();
-    let model_policy = worker_runtime_config
-        .model_policy_catalog
-        .get(model_id())
-        .expect("the configured benchmark model should have a resolved policy");
-    let mut worker_model_configuration = model_policy.worker_model_configuration.clone();
-    worker_model_configuration
-        .autoregressive_mut()
-        .expect("the model SSD streaming benchmark requires an autoregressive model")
-        .chunking
-        .fixed_prompt_processing_chunk_size_tokens = prefill_chunk_tokens;
-    protocol_writer
-        .send_command(&WorkerCommand::InitializeWorker(
-            worker_startup_configuration,
-        ))
-        .await
-        .expect("the benchmark should initialize its worker");
-
-    let startup_event = protocol_reader
-        .next_event()
-        .await
-        .expect("the worker event stream should be readable")
-        .expect("the worker should report idle startup before closing");
-    if !matches!(startup_event, WorkerEvent::Idle { .. }) {
-        panic!("the first worker event should be Idle, got {startup_event:?}");
-    }
-    let configured_model_directory = &model_policy.model_directory;
-    protocol_writer
-        .send_command(&WorkerCommand::SwapModel {
-            model_directory: configured_model_directory.to_string_lossy().into_owned(),
-            model_configuration: worker_model_configuration,
-        })
-        .await
-        .expect("the benchmark should select its configured model");
-    // Idle startup can leave its process-scoped configuration event queued;
-    // model-swap acknowledgement remains the boundary that permits generation.
-    let model_id = loop {
-        let model_loaded_event = protocol_reader
-            .next_event()
-            .await
-            .expect("the worker event stream should remain readable")
-            .expect("the worker should report model loading before closing");
-        match model_loaded_event {
-            WorkerEvent::ModelSwapped { model_id, .. } => break model_id,
-            WorkerEvent::RuntimeFeatureConfigurationApplied { .. }
-            | WorkerEvent::ModelLoadInFlight { .. } => {}
-            unexpected_event => {
-                panic!("the worker should load the benchmark model, got {unexpected_event:?}");
-            }
-        }
-    };
+    .await;
     eprintln!("[model-ssd-streaming-prefill-{prefill_chunk_tokens}] worker ready: {model_id}");
 
-    let source_document = static_source_document();
-    let user_prompt = format!(
-        "Summarize the following document in exactly three concise paragraphs. Do not use headings or bullet points.\n\n{source_document}"
-    );
-    let chat_command = ChatGenerationCommand {
-        request_id: RequestId::new(1),
-        model: model_id,
-        messages: vec![ChatMessage::User {
-            content: user_prompt,
-            images: Vec::new(),
-        }],
-        tools: Vec::new(),
-        tool_choice: ChatToolChoice::None,
-        settings: ChatGenerationSettings {
-            max_output_tokens: MAXIMUM_SUMMARY_TOKENS,
-            temperature_thousandths: None,
-            top_p_thousandths: None,
-            repetition_penalty_thousandths: None,
-            seed: None,
-            thinking_budget: Some(256),
-        },
-        structured_generation: None,
-    };
+    let chat_command = summarization_chat_command(model_id);
 
     eprintln!("[model-ssd-streaming-prefill-{prefill_chunk_tokens}] sending generate command");
     let request_started_at = Instant::now();
@@ -179,86 +108,7 @@ async fn run_model_with_prefill_chunk_tokens(prefill_chunk_tokens: u32) -> Prefi
         .await
         .expect("the test should send the generate command");
 
-    let mut first_output_at: Option<Instant> = None;
-    let mut prompt_token_count: Option<u64> = None;
-    let mut completion_token_count: Option<u64> = None;
-
-    loop {
-        let Some(worker_event) = protocol_reader
-            .next_event()
-            .await
-            .expect("the worker event stream should be readable")
-        else {
-            break;
-        };
-        match worker_event {
-            WorkerEvent::Output { .. } => {
-                if first_output_at.is_none() {
-                    first_output_at = Some(Instant::now());
-                    eprintln!(
-                        "[model-ssd-streaming-prefill-{prefill_chunk_tokens}] first output received"
-                    );
-                }
-            }
-            WorkerEvent::Completed {
-                prompt_token_count: completed_prompt_tokens,
-                generated_token_count,
-                ..
-            } => {
-                prompt_token_count = Some(u64::from(completed_prompt_tokens));
-                completion_token_count = Some(u64::from(generated_token_count));
-                break;
-            }
-            WorkerEvent::Failed { reason, .. } => {
-                panic!("the worker failed the model SSD streaming prefill sweep: {reason:?}");
-            }
-            WorkerEvent::ModelSwapFailed { .. } => {
-                panic!("the worker failed to load the prefill sweep model");
-            }
-            WorkerEvent::PrefillProgress { .. }
-            | WorkerEvent::GenerationPreparationStarted { .. }
-            | WorkerEvent::FirstDecodeCompleted { .. }
-            | WorkerEvent::GenerationProgress { .. }
-            | WorkerEvent::PromptWorkReuse { .. }
-            | WorkerEvent::MlxMemorySample { .. }
-            | WorkerEvent::MlxMemoryLimitChanged { .. }
-            | WorkerEvent::MlxMemoryLimitRejected { .. }
-            | WorkerEvent::GenerationFinalized { .. }
-            | WorkerEvent::ExpertMemoryModeChanged { .. }
-            | WorkerEvent::NeuralEnginePrefillChanged { .. }
-            | WorkerEvent::DraftModelChanged { .. }
-            | WorkerEvent::DraftingReport { .. }
-            | WorkerEvent::NeuralEngineChunkFinished { .. }
-            | WorkerEvent::ModelLoadInFlight { .. }
-            | WorkerEvent::AstroSsdPromptCacheStats { .. }
-            | WorkerEvent::ExpertStreamingStats { .. }
-            | WorkerEvent::AstroSsdPromptCacheCleared { .. }
-            | WorkerEvent::ModelSwapped { .. }
-            | WorkerEvent::Idle { .. }
-            | WorkerEvent::RuntimeFeatureConfigurationApplied { .. }
-            | WorkerEvent::Ready { .. } => {}
-            WorkerEvent::ImageGenerationProgress { .. }
-            | WorkerEvent::ImageGenerationCompleted { .. }
-            | WorkerEvent::ImageGenerationFailed { .. }
-            | WorkerEvent::ImageGenerationFinalized { .. }
-            | WorkerEvent::EmbeddingsCompleted { .. }
-            | WorkerEvent::EmbeddingsFailed { .. }
-            | WorkerEvent::EmbeddingsFinalized { .. }
-            | WorkerEvent::DecisionsCompleted { .. }
-            | WorkerEvent::DecisionTrainingProgress { .. }
-            | WorkerEvent::DecisionModelTrained { .. }
-            | WorkerEvent::DecisionsFailed { .. }
-            | WorkerEvent::DecisionsFinalized { .. }
-            | WorkerEvent::SpeechSegmentSpoken { .. }
-            | WorkerEvent::SpeechCompleted { .. }
-            | WorkerEvent::SpeechFailed { .. }
-            | WorkerEvent::SpeechFinalized { .. } => {
-                panic!(
-                    "an autoregressive model SSD streaming benchmark received an image, embeddings, decisions or speech event"
-                )
-            }
-        }
-    }
+    let sweep_observations = read_sweep_events(&mut protocol_reader, prefill_chunk_tokens).await;
     let response_completed_at = Instant::now();
 
     // Each sweep cell must release its MLX process state before another fixed-size
@@ -271,11 +121,15 @@ async fn run_model_with_prefill_chunk_tokens(prefill_chunk_tokens: u32) -> Prefi
         .await
         .expect("the in-process benchmark worker should not panic");
 
-    let first_output_at = first_output_at.expect("the benchmark should receive generated output");
-    let prompt_token_count =
-        prompt_token_count.expect("the terminal event should report prompt tokens");
-    let completion_token_count =
-        completion_token_count.expect("the terminal event should report generated tokens");
+    let first_output_at = sweep_observations
+        .first_output_at
+        .expect("the benchmark should receive generated output");
+    let prompt_token_count = sweep_observations
+        .prompt_token_count
+        .expect("the terminal event should report prompt tokens");
+    let completion_token_count = sweep_observations
+        .completion_token_count
+        .expect("the terminal event should report generated tokens");
     let prompt_processing_duration = first_output_at.duration_since(request_started_at);
     let generation_duration = response_completed_at.duration_since(first_output_at);
     let prompt_tokens_per_second =
@@ -295,6 +149,235 @@ async fn run_model_with_prefill_chunk_tokens(prefill_chunk_tokens: u32) -> Prefi
         prompt_processing_seconds: prompt_processing_duration.as_secs_f64(),
         generation_seconds: generation_duration.as_secs_f64(),
     }
+}
+
+type SweepWriter = ProtocolWriter<tokio::io::DuplexStream>;
+type SweepReader = ProtocolReader<tokio::io::DuplexStream>;
+
+/// Initializes the in-process worker and swaps the configured model in with
+/// the sweep cell's fixed chunk size. Returns the id the worker loaded.
+async fn load_benchmark_model(
+    protocol_writer: &mut SweepWriter,
+    protocol_reader: &mut SweepReader,
+    isolated_development_home_path: &Path,
+    prefill_chunk_tokens: u32,
+) -> String {
+    let worker_runtime_config = ResolvedRuntimeConfigResolver::for_development_home_directory(
+        isolated_development_home_path.to_path_buf(),
+        std::path::PathBuf::new(),
+    )
+    .load()
+    .expect("the prefill sweep worker configuration should resolve");
+    let worker_startup_configuration = worker_runtime_config.worker_startup_configuration();
+    let model_policy = worker_runtime_config
+        .model_policy_catalog
+        .get(model_id())
+        .expect("the configured benchmark model should have a resolved policy");
+    let mut worker_model_configuration = model_policy.worker_model_configuration.clone();
+    worker_model_configuration
+        .autoregressive_mut()
+        .expect("the model SSD streaming benchmark requires an autoregressive model")
+        .chunking
+        .fixed_prompt_processing_chunk_size_tokens = prefill_chunk_tokens;
+    initialize_worker(
+        protocol_writer,
+        protocol_reader,
+        worker_startup_configuration,
+    )
+    .await;
+    swap_in_benchmark_model(
+        protocol_writer,
+        protocol_reader,
+        &model_policy.model_directory,
+        worker_model_configuration,
+    )
+    .await
+}
+
+async fn initialize_worker(
+    protocol_writer: &mut SweepWriter,
+    protocol_reader: &mut SweepReader,
+    worker_startup_configuration: WorkerStartupConfiguration,
+) {
+    protocol_writer
+        .send_command(&WorkerCommand::InitializeWorker(
+            worker_startup_configuration,
+        ))
+        .await
+        .expect("the benchmark should initialize its worker");
+
+    let startup_event = protocol_reader
+        .next_event()
+        .await
+        .expect("the worker event stream should be readable")
+        .expect("the worker should report idle startup before closing");
+    if !matches!(startup_event, WorkerEvent::Idle { .. }) {
+        panic!("the first worker event should be Idle, got {startup_event:?}");
+    }
+}
+
+async fn swap_in_benchmark_model(
+    protocol_writer: &mut SweepWriter,
+    protocol_reader: &mut SweepReader,
+    configured_model_directory: &Path,
+    worker_model_configuration: WorkerModelConfiguration,
+) -> String {
+    protocol_writer
+        .send_command(&WorkerCommand::SwapModel {
+            model_directory: configured_model_directory.to_string_lossy().into_owned(),
+            model_configuration: worker_model_configuration,
+        })
+        .await
+        .expect("the benchmark should select its configured model");
+    // Idle startup can leave its process-scoped configuration event queued;
+    // model-swap acknowledgement remains the boundary that permits generation.
+    loop {
+        let model_loaded_event = protocol_reader
+            .next_event()
+            .await
+            .expect("the worker event stream should remain readable")
+            .expect("the worker should report model loading before closing");
+        match model_loaded_event {
+            WorkerEvent::ModelSwapped { model_id, .. } => break model_id,
+            WorkerEvent::RuntimeFeatureConfigurationApplied { .. }
+            | WorkerEvent::ModelLoadInFlight { .. } => {}
+            unexpected_event => {
+                panic!("the worker should load the benchmark model, got {unexpected_event:?}");
+            }
+        }
+    }
+}
+
+fn summarization_chat_command(model_id: String) -> ChatGenerationCommand {
+    let source_document = static_source_document();
+    let user_prompt = format!(
+        "Summarize the following document in exactly three concise paragraphs. Do not use headings or bullet points.\n\n{source_document}"
+    );
+    ChatGenerationCommand {
+        request_id: RequestId::new(1),
+        model: model_id,
+        messages: vec![ChatMessage::User {
+            content: user_prompt,
+            images: Vec::new(),
+        }],
+        tools: Vec::new(),
+        tool_choice: ChatToolChoice::None,
+        settings: ChatGenerationSettings {
+            max_output_tokens: MAXIMUM_SUMMARY_TOKENS,
+            temperature_thousandths: None,
+            top_p_thousandths: None,
+            repetition_penalty_thousandths: None,
+            seed: None,
+            thinking_budget: Some(256),
+        },
+        structured_generation: None,
+    }
+}
+
+/// What reading the worker's events gathered: when the first output arrived
+/// and the terminal event's token counts.
+#[derive(Default)]
+struct SweepObservations {
+    first_output_at: Option<Instant>,
+    prompt_token_count: Option<u64>,
+    completion_token_count: Option<u64>,
+}
+
+async fn read_sweep_events(
+    protocol_reader: &mut SweepReader,
+    prefill_chunk_tokens: u32,
+) -> SweepObservations {
+    let mut sweep_observations = SweepObservations::default();
+    loop {
+        let Some(worker_event) = protocol_reader
+            .next_event()
+            .await
+            .expect("the worker event stream should be readable")
+        else {
+            break;
+        };
+        if observe_sweep_worker_event(&mut sweep_observations, worker_event, prefill_chunk_tokens) {
+            break;
+        }
+    }
+    sweep_observations
+}
+
+/// Folds one worker event into the observations. Returns whether the event
+/// was the terminal one.
+fn observe_sweep_worker_event(
+    sweep_observations: &mut SweepObservations,
+    worker_event: WorkerEvent,
+    prefill_chunk_tokens: u32,
+) -> bool {
+    match worker_event {
+        WorkerEvent::Output { .. } => {
+            if sweep_observations.first_output_at.is_none() {
+                sweep_observations.first_output_at = Some(Instant::now());
+                eprintln!(
+                    "[model-ssd-streaming-prefill-{prefill_chunk_tokens}] first output received"
+                );
+            }
+        }
+        WorkerEvent::Completed {
+            prompt_token_count: completed_prompt_tokens,
+            generated_token_count,
+            ..
+        } => {
+            sweep_observations.prompt_token_count = Some(u64::from(completed_prompt_tokens));
+            sweep_observations.completion_token_count = Some(u64::from(generated_token_count));
+            return true;
+        }
+        WorkerEvent::Failed { reason, .. } => {
+            panic!("the worker failed the model SSD streaming prefill sweep: {reason:?}");
+        }
+        WorkerEvent::ModelSwapFailed { .. } => {
+            panic!("the worker failed to load the prefill sweep model");
+        }
+        WorkerEvent::PrefillProgress { .. }
+        | WorkerEvent::GenerationPreparationStarted { .. }
+        | WorkerEvent::FirstDecodeCompleted { .. }
+        | WorkerEvent::GenerationProgress { .. }
+        | WorkerEvent::PromptWorkReuse { .. }
+        | WorkerEvent::MlxMemorySample { .. }
+        | WorkerEvent::MlxMemoryLimitChanged { .. }
+        | WorkerEvent::MlxMemoryLimitRejected { .. }
+        | WorkerEvent::GenerationFinalized { .. }
+        | WorkerEvent::ExpertMemoryModeChanged { .. }
+        | WorkerEvent::NeuralEnginePrefillChanged { .. }
+        | WorkerEvent::DraftModelChanged { .. }
+        | WorkerEvent::DraftingReport { .. }
+        | WorkerEvent::NeuralEngineChunkFinished { .. }
+        | WorkerEvent::ModelLoadInFlight { .. }
+        | WorkerEvent::AstroSsdPromptCacheStats { .. }
+        | WorkerEvent::ExpertStreamingStats { .. }
+        | WorkerEvent::AstroSsdPromptCacheCleared { .. }
+        | WorkerEvent::ModelSwapped { .. }
+        | WorkerEvent::Idle { .. }
+        | WorkerEvent::RuntimeFeatureConfigurationApplied { .. }
+        | WorkerEvent::Ready { .. } => {}
+        WorkerEvent::ImageGenerationProgress { .. }
+        | WorkerEvent::ImageGenerationCompleted { .. }
+        | WorkerEvent::ImageGenerationFailed { .. }
+        | WorkerEvent::ImageGenerationFinalized { .. }
+        | WorkerEvent::EmbeddingsCompleted { .. }
+        | WorkerEvent::EmbeddingsFailed { .. }
+        | WorkerEvent::EmbeddingsFinalized { .. }
+        | WorkerEvent::DecisionsCompleted { .. }
+        | WorkerEvent::DecisionTrainingProgress { .. }
+        | WorkerEvent::DecisionModelTrained { .. }
+        | WorkerEvent::DecisionsFailed { .. }
+        | WorkerEvent::DecisionsFinalized { .. }
+        | WorkerEvent::SpeechSegmentSpoken { .. }
+        | WorkerEvent::SpeechCompleted { .. }
+        | WorkerEvent::SpeechFailed { .. }
+        | WorkerEvent::SpeechFinalized { .. } => {
+            panic!(
+                "an autoregressive model SSD streaming benchmark received an image, embeddings, decisions or speech event"
+            )
+        }
+    }
+    false
 }
 
 fn static_source_document() -> String {

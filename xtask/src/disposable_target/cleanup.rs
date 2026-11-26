@@ -7,6 +7,7 @@
 //! the parent module.
 
 use std::io::Read;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::Mutex;
 use std::sync::mpsc::TryRecvError;
@@ -21,6 +22,27 @@ use super::{
 };
 
 const PROGRESS_INTERVAL_SECONDS: u64 = 5;
+
+/// The sibling path the owned target is renamed to before removal: the
+/// target's own file name, `.removing.`, then the process id.
+fn removal_handoff_path(target_directory: &Path, process_id: u32) -> PathBuf {
+    target_directory.with_file_name(format!(
+        "{}.removing.{}",
+        target_directory
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_default(),
+        process_id
+    ))
+}
+
+/// A lifecycle status line that names the target directory it concerns.
+fn target_directory_status_line(status_label: &str, target_directory: &Path) -> String {
+    format!(
+        "{status_label} target_directory={}",
+        target_directory.display()
+    )
+}
 
 pub(super) struct ProgressReporter {
     cancellation_flag: std::sync::Arc<Mutex<bool>>,
@@ -77,67 +99,12 @@ impl DisposableJourney {
             lifecycle_line(&self.lane_name, "already-removed elapsed_seconds=0", false);
             return Ok(());
         }
-        if let Err(refusal_message) = validate_owned_target(&self.target_directory, &self.lane_name)
-        {
-            self.is_cleanup_pending = false;
-            print_error(&refusal_message);
-            lifecycle_line(
-                &self.lane_name,
-                &format!(
-                    "cleanup-refused target_directory={}",
-                    self.target_directory.display()
-                ),
-                true,
-            );
-            return Err(());
-        }
-        let removal_target_directory = self.target_directory.with_file_name(format!(
-            "{}.removing.{}",
-            self.target_directory
-                .file_name()
-                .map(|name| name.to_string_lossy().into_owned())
-                .unwrap_or_default(),
-            std::process::id()
-        ));
-        if removal_target_directory.exists() || removal_target_directory.is_symlink() {
-            self.is_cleanup_pending = false;
-            print_error(&format!(
-                "refusing occupied Cargo cleanup handoff path: {}",
-                removal_target_directory.display()
-            ));
-            return Err(());
-        }
-        if let Err(handoff_error) =
-            std::fs::rename(&self.target_directory, &removal_target_directory)
-        {
-            self.is_cleanup_pending = false;
-            print_error(&format!(
-                "failed to hand off owned Cargo target for cleanup: {}: {handoff_error}",
-                self.target_directory.display()
-            ));
-            return Err(());
-        }
-        self.target_directory = removal_target_directory;
-        if let Err(refusal_message) = validate_owned_target(&self.target_directory, &self.lane_name)
-        {
-            self.is_cleanup_pending = false;
-            print_error(&refusal_message);
-            lifecycle_line(
-                &self.lane_name,
-                &format!(
-                    "cleanup-refused-after-handoff target_directory={}",
-                    self.target_directory.display()
-                ),
-                true,
-            );
-            return Err(());
-        }
+        self.refuse_target_not_owned("cleanup-refused")?;
+        self.hand_off_target_for_removal()?;
+        self.refuse_target_not_owned("cleanup-refused-after-handoff")?;
         lifecycle_line(
             &self.lane_name,
-            &format!(
-                "cleanup-start target_directory={}",
-                self.target_directory.display()
-            ),
+            &target_directory_status_line("cleanup-start", &self.target_directory),
             false,
         );
 
@@ -166,6 +133,53 @@ impl DisposableJourney {
             ),
             false,
         );
+        Ok(())
+    }
+
+    /// Stops cleanup, after reporting under `refusal_status_label`, when the
+    /// directory does not pass the owned-target check (a lifecycle marker
+    /// carrying this lane's identity). Cleanup runs the check before the
+    /// rename and again on the renamed directory.
+    fn refuse_target_not_owned(&mut self, refusal_status_label: &str) -> Result<(), ()> {
+        if let Err(refusal_message) = validate_owned_target(&self.target_directory, &self.lane_name)
+        {
+            self.is_cleanup_pending = false;
+            print_error(&refusal_message);
+            lifecycle_line(
+                &self.lane_name,
+                &target_directory_status_line(refusal_status_label, &self.target_directory),
+                true,
+            );
+            return Err(());
+        }
+        Ok(())
+    }
+
+    /// Renames the owned target to its `.removing` sibling and points
+    /// `target_directory` at the renamed path. An occupied handoff path or a
+    /// failed rename stops cleanup.
+    fn hand_off_target_for_removal(&mut self) -> Result<(), ()> {
+        let removal_target_directory =
+            removal_handoff_path(&self.target_directory, std::process::id());
+        if removal_target_directory.exists() || removal_target_directory.is_symlink() {
+            self.is_cleanup_pending = false;
+            print_error(&format!(
+                "refusing occupied Cargo cleanup handoff path: {}",
+                removal_target_directory.display()
+            ));
+            return Err(());
+        }
+        if let Err(handoff_error) =
+            std::fs::rename(&self.target_directory, &removal_target_directory)
+        {
+            self.is_cleanup_pending = false;
+            print_error(&format!(
+                "failed to hand off owned Cargo target for cleanup: {}: {handoff_error}",
+                self.target_directory.display()
+            ));
+            return Err(());
+        }
+        self.target_directory = removal_target_directory;
         Ok(())
     }
 
@@ -354,3 +368,7 @@ impl DisposableJourney {
         std::process::exit(signal_exit_status);
     }
 }
+
+#[cfg(test)]
+#[path = "cleanup_tests.rs"]
+mod cleanup_tests;

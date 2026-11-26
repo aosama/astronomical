@@ -27,7 +27,6 @@ async fn should_measure_isolated_convolution_chain_costs_at_prefill_shapes() {
         .expect("the isolated convolution bench must finish within 115 seconds");
 }
 
-#[expect(clippy::too_many_lines)]
 async fn measure_convolution_chain_costs() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     // Production-shaped memory limits: the tiny direct-MLX test defaults (8 MB
@@ -39,21 +38,57 @@ async fn measure_convolution_chain_costs() {
     )
     .expect("the direct MLX runtime should initialize");
 
+    let mixed_queries_keys_values = mixed_queries_keys_values_activations(&runtime);
+    let convolution_weight = depthwise_convolution_weight(&runtime);
+    let convolution_input =
+        steady_state_convolution_input(&runtime, &mixed_queries_keys_values, &convolution_weight);
+    let operands = ConvolutionBenchOperands {
+        mixed_queries_keys_values,
+        convolution_weight,
+        convolution_input,
+    };
+
+    report_convolution_and_silu_chain(&runtime, &operands);
+    let zero_rolling_buffer = zero_rolling_buffer_operand(&runtime);
+    report_composite_chain(&runtime, &operands, &zero_rolling_buffer);
+    // The scratch arrays the sections below create stay alive to the end of the
+    // bench: the strided-state and memory-pressure sections measure under the
+    // memory state those arrays leave behind.
+    let _fusion_probe_input = report_elementwise_fusion_probe(&runtime, &operands);
+    report_concat_silu_chain(&runtime, &operands, &zero_rolling_buffer);
+    let _conv1d_output = report_isolated_operation_chains(&runtime, &operands);
+    let (_float32_convolution_input, _float32_convolution_weight, _floor_token) =
+        report_float32_and_floor_chains(&runtime, &operands);
+    let production_state = report_strided_state_concat(&runtime, &operands);
+    report_chains_under_memory_pressure(&runtime, &operands, &production_state);
+}
+
+/// The operands every section of the bench reads.
+struct ConvolutionBenchOperands {
+    mixed_queries_keys_values: MlxArray,
+    convolution_weight: MlxArray,
+    convolution_input: MlxArray,
+}
+
+fn mixed_queries_keys_values_activations(runtime: &MlxRuntime) -> MlxArray {
     let token_values: Vec<f32> = (0..TOKEN_COUNT * CONVOLUTION_DIMENSION)
         .map(|element_index| (element_index % 251) as f32 * 0.004 - 0.5)
         .collect();
-    let mixed_queries_keys_values = runtime
+    runtime
         .astype(
             &runtime
                 .array_from_f32(&token_values, &[1, TOKEN_COUNT, CONVOLUTION_DIMENSION])
                 .expect("the mixed qkv activations should be valid"),
             MlxDtype::BFloat16,
         )
-        .expect("the mixed qkv activations should cast to bfloat16");
+        .expect("the mixed qkv activations should cast to bfloat16")
+}
+
+fn depthwise_convolution_weight(runtime: &MlxRuntime) -> MlxArray {
     let weight_values: Vec<f32> = (0..CONVOLUTION_DIMENSION * CONVOLUTION_KERNEL_DIMENSION)
         .map(|element_index| ((element_index % 17) as f32 - 8.0) * 0.1)
         .collect();
-    let convolution_weight = runtime
+    runtime
         .astype(
             &runtime
                 .reshape(
@@ -68,20 +103,26 @@ async fn measure_convolution_chain_costs() {
                 .expect("the conv weight should reshape"),
             MlxDtype::BFloat16,
         )
-        .expect("the conv weight should cast to bfloat16");
+        .expect("the conv weight should cast to bfloat16")
+}
 
+fn steady_state_convolution_input(
+    runtime: &MlxRuntime,
+    mixed_queries_keys_values: &MlxArray,
+    convolution_weight: &MlxArray,
+) -> MlxArray {
     // Two state-priming updates so the bench measures the steady state (a
     // populated rolling buffer), not the first-chunk zero initialization.
     for _ in 0..2 {
         let mut convolution_state =
             ConvolutionState::empty_with_shape(CONVOLUTION_KERNEL_DIMENSION, CONVOLUTION_DIMENSION);
         let convolution_input = convolution_state
-            .update(&runtime, &mixed_queries_keys_values, TOKEN_COUNT)
+            .update(runtime, mixed_queries_keys_values, TOKEN_COUNT)
             .expect("the priming convolution update should be valid");
         let convolution_output = runtime
             .conv1d(
                 &convolution_input,
-                &convolution_weight,
+                convolution_weight,
                 1,
                 0,
                 1,
@@ -96,17 +137,20 @@ async fn measure_convolution_chain_costs() {
     let mut convolution_state =
         ConvolutionState::empty_with_shape(CONVOLUTION_KERNEL_DIMENSION, CONVOLUTION_DIMENSION);
     let convolution_input = convolution_state
-        .update(&runtime, &mixed_queries_keys_values, TOKEN_COUNT)
+        .update(runtime, mixed_queries_keys_values, TOKEN_COUNT)
         .expect("the steady-state convolution input should be valid");
     runtime
         .evaluate_arrays(&[&convolution_input])
         .expect("the steady-state convolution input should evaluate");
+    convolution_input
+}
 
-    let section_millis = bench_chain(&runtime, || {
+fn report_convolution_and_silu_chain(runtime: &MlxRuntime, operands: &ConvolutionBenchOperands) {
+    let section_millis = bench_chain(runtime, || {
         let convolution_output = runtime
             .conv1d(
-                &convolution_input,
-                &convolution_weight,
+                &operands.convolution_input,
+                &operands.convolution_weight,
                 1,
                 0,
                 1,
@@ -124,11 +168,9 @@ async fn measure_convolution_chain_costs() {
         "[gdn-conv-bench] conv1d+silu {section_millis:.3} ms/call ({:.2} us/token)",
         section_millis * 1000.0 / f64::from(TOKEN_COUNT)
     );
+}
 
-    // The exact conv-section composite: fresh zero rolling buffer, lazy
-    // concat, depthwise conv1d, SiLU, one evaluation. The Python microbench
-    // measures precisely this chain, so this is the matched apples-to-apples
-    // comparison for the convolution section.
+fn zero_rolling_buffer_operand(runtime: &MlxRuntime) -> MlxArray {
     let zero_rolling_buffer = runtime
         .zeros(
             &[1, CONVOLUTION_KERNEL_DIMENSION - 1, CONVOLUTION_DIMENSION],
@@ -138,14 +180,29 @@ async fn measure_convolution_chain_costs() {
     runtime
         .evaluate_arrays(&[&zero_rolling_buffer])
         .expect("the zero rolling buffer should evaluate");
-    let composite_millis = bench_chain(&runtime, || {
+    zero_rolling_buffer
+}
+
+fn report_composite_chain(
+    runtime: &MlxRuntime,
+    operands: &ConvolutionBenchOperands,
+    zero_rolling_buffer: &MlxArray,
+) {
+    // The exact conv-section composite: fresh zero rolling buffer, lazy
+    // concat, depthwise conv1d, SiLU, one evaluation. The Python microbench
+    // measures precisely this chain, so this is the matched apples-to-apples
+    // comparison for the convolution section.
+    let composite_millis = bench_chain(runtime, || {
         let conv_input = runtime
-            .concatenate_axis(&[&zero_rolling_buffer, &mixed_queries_keys_values], 1)
+            .concatenate_axis(
+                &[zero_rolling_buffer, &operands.mixed_queries_keys_values],
+                1,
+            )
             .expect("the composite concat should be valid");
         let convolution_output = runtime
             .conv1d(
                 &conv_input,
-                &convolution_weight,
+                &operands.convolution_weight,
                 1,
                 0,
                 1,
@@ -163,17 +220,23 @@ async fn measure_convolution_chain_costs() {
         "[gdn-conv-bench] full chain concat+conv1d+silu {composite_millis:.3} ms/call ({:.2} us/token)",
         composite_millis * 1000.0 / f64::from(TOKEN_COUNT)
     );
+}
 
+/// Returns the fusion probe input, which the caller keeps alive.
+fn report_elementwise_fusion_probe(
+    runtime: &MlxRuntime,
+    operands: &ConvolutionBenchOperands,
+) -> MlxArray {
     // Elementwise-fusion probe: silu is sigmoid+multiply (two graph nodes).
     // Fused, doubling the node count barely moves time; unfused it roughly
     // doubles. The within-rig ratio is self-normalizing across rigs.
     let fusion_probe_input = runtime
-        .astype(&convolution_input, MlxDtype::BFloat16)
+        .astype(&operands.convolution_input, MlxDtype::BFloat16)
         .expect("the fusion probe input should cast");
     runtime
         .evaluate_arrays(&[&fusion_probe_input])
         .expect("the fusion probe input should evaluate");
-    let silu_once_millis = bench_chain(&runtime, || {
+    let silu_once_millis = bench_chain(runtime, || {
         let activated = runtime
             .silu(&fusion_probe_input)
             .expect("single silu should be valid");
@@ -182,7 +245,7 @@ async fn measure_convolution_chain_costs() {
             .expect("single silu should evaluate");
     });
     eprintln!("[gdn-conv-bench] fusion probe silu(x) {silu_once_millis:.3} ms/call");
-    let silu_twice_millis = bench_chain(&runtime, || {
+    let silu_twice_millis = bench_chain(runtime, || {
         let activated = runtime
             .silu(&fusion_probe_input)
             .expect("first silu should be valid");
@@ -198,7 +261,7 @@ async fn measure_convolution_chain_costs() {
         silu_twice_millis / silu_once_millis
     );
 
-    let sigmoid_alone_millis = bench_chain(&runtime, || {
+    let sigmoid_alone_millis = bench_chain(runtime, || {
         let activated = runtime
             .sigmoid(&fusion_probe_input)
             .expect("sigmoid probe should be valid");
@@ -207,12 +270,22 @@ async fn measure_convolution_chain_costs() {
             .expect("sigmoid probe should evaluate");
     });
     eprintln!("[gdn-conv-bench] fusion probe sigmoid(x) alone {sigmoid_alone_millis:.3} ms/call");
+    fusion_probe_input
+}
 
+fn report_concat_silu_chain(
+    runtime: &MlxRuntime,
+    operands: &ConvolutionBenchOperands,
+    zero_rolling_buffer: &MlxArray,
+) {
     // Chain B: concat+silu without conv1d, so subtracting it from the full
     // chain isolates the depthwise conv1d cost in both rigs.
-    let concat_silu_millis = bench_chain(&runtime, || {
+    let concat_silu_millis = bench_chain(runtime, || {
         let conv_input = runtime
-            .concatenate_axis(&[&zero_rolling_buffer, &mixed_queries_keys_values], 1)
+            .concatenate_axis(
+                &[zero_rolling_buffer, &operands.mixed_queries_keys_values],
+                1,
+            )
             .expect("the concat-silu concat should be valid");
         let activated = runtime
             .silu(&conv_input)
@@ -225,12 +298,19 @@ async fn measure_convolution_chain_costs() {
         "[gdn-conv-bench] chain concat+silu {concat_silu_millis:.3} ms/call ({:.2} us/token)",
         concat_silu_millis * 1000.0 / f64::from(TOKEN_COUNT)
     );
+}
 
-    let conv1d_only_millis = bench_chain(&runtime, || {
+/// Returns the conv1d output the silu-only bench reads, which the caller keeps
+/// alive.
+fn report_isolated_operation_chains(
+    runtime: &MlxRuntime,
+    operands: &ConvolutionBenchOperands,
+) -> MlxArray {
+    let conv1d_only_millis = bench_chain(runtime, || {
         let convolution_output = runtime
             .conv1d(
-                &convolution_input,
-                &convolution_weight,
+                &operands.convolution_input,
+                &operands.convolution_weight,
                 1,
                 0,
                 1,
@@ -248,8 +328,8 @@ async fn measure_convolution_chain_costs() {
 
     let conv1d_output = runtime
         .conv1d(
-            &convolution_input,
-            &convolution_weight,
+            &operands.convolution_input,
+            &operands.convolution_weight,
             1,
             0,
             1,
@@ -259,7 +339,7 @@ async fn measure_convolution_chain_costs() {
     runtime
         .evaluate_arrays(&[&conv1d_output])
         .expect("the conv1d output should evaluate");
-    let silu_only_millis = bench_chain(&runtime, || {
+    let silu_only_millis = bench_chain(runtime, || {
         let silu_output = runtime
             .silu(&conv1d_output)
             .expect("the silu should be valid");
@@ -272,9 +352,15 @@ async fn measure_convolution_chain_costs() {
         silu_only_millis * 1000.0 / f64::from(TOKEN_COUNT)
     );
 
-    let concat_millis = bench_chain(&runtime, || {
+    let concat_millis = bench_chain(runtime, || {
         let concatenated = runtime
-            .concatenate_axis(&[&convolution_input, &mixed_queries_keys_values], 1)
+            .concatenate_axis(
+                &[
+                    &operands.convolution_input,
+                    &operands.mixed_queries_keys_values,
+                ],
+                1,
+            )
             .expect("the concat should be valid");
         runtime
             .evaluate_arrays(&[&concatenated])
@@ -284,19 +370,27 @@ async fn measure_convolution_chain_costs() {
         "[gdn-conv-bench] concat [1,3,8192]+[1,2048,8192] {concat_millis:.3} ms/call ({:.2} us/token)",
         concat_millis * 1000.0 / f64::from(TOKEN_COUNT)
     );
+    conv1d_output
+}
 
+/// Returns the float32 convolution input, the float32 convolution weight and
+/// the floor token, in that order, which the caller keeps alive.
+fn report_float32_and_floor_chains(
+    runtime: &MlxRuntime,
+    operands: &ConvolutionBenchOperands,
+) -> (MlxArray, MlxArray, MlxArray) {
     // Dtype sensitivity: the same conv1d with float32 input and weight, in
     // case the production path silently upcasts.
     let float32_convolution_input = runtime
-        .astype(&convolution_input, MlxDtype::Float32)
+        .astype(&operands.convolution_input, MlxDtype::Float32)
         .expect("the float32 conv input should cast");
     let float32_convolution_weight = runtime
-        .astype(&convolution_weight, MlxDtype::Float32)
+        .astype(&operands.convolution_weight, MlxDtype::Float32)
         .expect("the float32 conv weight should cast");
     runtime
         .evaluate_arrays(&[&float32_convolution_input, &float32_convolution_weight])
         .expect("the float32 conv operands should evaluate");
-    let float32_millis = bench_chain(&runtime, || {
+    let float32_millis = bench_chain(runtime, || {
         let convolution_output = runtime
             .conv1d(
                 &float32_convolution_input,
@@ -322,20 +416,31 @@ async fn measure_convolution_chain_costs() {
     let floor_token = runtime
         .array_from_f32(&[1.0], &[1])
         .expect("the floor token should be valid");
-    let floor_millis = bench_chain(&runtime, || {
+    let floor_millis = bench_chain(runtime, || {
         runtime
             .evaluate_arrays(&[&floor_token])
             .expect("the floor eval should pass");
     });
     eprintln!("[gdn-conv-bench] eval floor {floor_millis:.3} ms/call");
+    (
+        float32_convolution_input,
+        float32_convolution_weight,
+        floor_token,
+    )
+}
 
+/// Returns the strided production state, which the pressure section reuses.
+fn report_strided_state_concat(
+    runtime: &MlxRuntime,
+    operands: &ConvolutionBenchOperands,
+) -> MlxArray {
     // Production rolling-state shape: the state operand is a strided slice of
     // the previous chunk's wider buffer, not a contiguous array. A reference
     // implementation's rolling-state API materializes its window instead; if concat on the strided view
     // is slower, that difference is the convolution-section excess.
     let production_state = runtime
         .slice(
-            &convolution_input,
+            &operands.convolution_input,
             &[0, TOKEN_COUNT, 0],
             &[
                 1,
@@ -348,9 +453,9 @@ async fn measure_convolution_chain_costs() {
     runtime
         .evaluate_arrays(&[&production_state])
         .expect("the strided production state should evaluate");
-    let strided_state_concat_millis = bench_chain(&runtime, || {
+    let strided_state_concat_millis = bench_chain(runtime, || {
         let concatenated = runtime
-            .concatenate_axis(&[&production_state, &mixed_queries_keys_values], 1)
+            .concatenate_axis(&[&production_state, &operands.mixed_queries_keys_values], 1)
             .expect("the strided-state concat should be valid");
         runtime
             .evaluate_arrays(&[&concatenated])
@@ -360,7 +465,14 @@ async fn measure_convolution_chain_costs() {
         "[gdn-conv-bench] concat strided-state {strided_state_concat_millis:.3} ms/call ({:.2} us/token)",
         strided_state_concat_millis * 1000.0 / f64::from(TOKEN_COUNT)
     );
+    production_state
+}
 
+fn report_chains_under_memory_pressure(
+    runtime: &MlxRuntime,
+    operands: &ConvolutionBenchOperands,
+    production_state: &MlxArray,
+) {
     // Server-context simulation: the production worker keeps the model's
     // wired weights resident while prefill runs. Hold a comparable amount of
     // live memory and re-bench the chain; if the chain degrades, the
@@ -382,11 +494,11 @@ async fn measure_convolution_chain_costs() {
         64.0 * f64::from(8192 * 8192) * 2.0 / 1_073_741_824.0
     );
 
-    let pressured_chain_millis = bench_chain(&runtime, || {
+    let pressured_chain_millis = bench_chain(runtime, || {
         let convolution_output = runtime
             .conv1d(
-                &convolution_input,
-                &convolution_weight,
+                &operands.convolution_input,
+                &operands.convolution_weight,
                 1,
                 0,
                 1,
@@ -404,9 +516,9 @@ async fn measure_convolution_chain_costs() {
         "[gdn-conv-bench] conv1d+silu under pressure {pressured_chain_millis:.3} ms/call ({:.2} us/token)",
         pressured_chain_millis * 1000.0 / f64::from(TOKEN_COUNT)
     );
-    let pressured_concat_millis = bench_chain(&runtime, || {
+    let pressured_concat_millis = bench_chain(runtime, || {
         let concatenated = runtime
-            .concatenate_axis(&[&production_state, &mixed_queries_keys_values], 1)
+            .concatenate_axis(&[production_state, &operands.mixed_queries_keys_values], 1)
             .expect("the pressured concat should be valid");
         runtime
             .evaluate_arrays(&[&concatenated])

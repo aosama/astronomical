@@ -119,22 +119,7 @@ async fn should_apply_a_live_ceiling_within_the_machine_bound_to_the_next_model(
         })
         .await
         .expect("the live memory limit should reach the worker");
-    assert!(matches!(
-        next_event(&mut daemon_reader).await,
-        WorkerEvent::MlxMemoryLimitChanged {
-            effective_mlx_memory_ceiling_bytes: 40_000_000_000,
-            expert_residency: Some(WorkerExpertResidencySnapshot {
-                dense_layers: None,
-                total_layer_count: 2,
-                resident_expert_count: 2,
-                resident_expert_payload_bytes: 8_000,
-                complete_expert_payload_byte_count: 8_000,
-                expert_capacity: 2,
-                ..
-            }),
-            ..
-        }
-    ));
+    assert_live_limit_event_seats_every_expert(next_event(&mut daemon_reader).await);
 
     daemon_writer
         .send_command(&WorkerCommand::SwapModel {
@@ -154,6 +139,32 @@ async fn should_apply_a_live_ceiling_within_the_machine_bound_to_the_next_model(
         } if worker_runtime_feature_configuration.configuration_generation
             == "generation-after-memory-update"
     ));
+    assert_second_model_was_created_with_the_updated_limit_pair(&model_creation_memory_limits);
+    close_worker_transport(daemon_writer, worker_task).await;
+}
+
+fn assert_live_limit_event_seats_every_expert(live_limit_event: WorkerEvent) {
+    assert!(matches!(
+        live_limit_event,
+        WorkerEvent::MlxMemoryLimitChanged {
+            effective_mlx_memory_ceiling_bytes: 40_000_000_000,
+            expert_residency: Some(WorkerExpertResidencySnapshot {
+                dense_layers: None,
+                total_layer_count: 2,
+                resident_expert_count: 2,
+                resident_expert_payload_bytes: 8_000,
+                complete_expert_payload_byte_count: 8_000,
+                expert_capacity: 2,
+                ..
+            }),
+            ..
+        }
+    ));
+}
+
+fn assert_second_model_was_created_with_the_updated_limit_pair(
+    model_creation_memory_limits: &Mutex<Vec<(u64, u64)>>,
+) {
     assert_eq!(
         *model_creation_memory_limits
             .lock()
@@ -163,7 +174,6 @@ async fn should_apply_a_live_ceiling_within_the_machine_bound_to_the_next_model(
             (40_000_000_000, 32_000_000_000),
         ]
     );
-    close_worker_transport(daemon_writer, worker_task).await;
 }
 
 #[tokio::test]
@@ -298,32 +308,9 @@ async fn should_remain_idle_after_the_first_model_creation_fails() {
 }
 
 #[tokio::test]
-#[expect(clippy::too_many_lines)]
 async fn should_publish_the_unused_ceiling_split_on_model_loaded_and_limit_adjusted_samples() {
     let model_factory_call_count = Arc::new(AtomicUsize::new(0));
-    let utilization_split = MemoryCeilingUtilization {
-        mlx_active_memory_ceiling_bytes: 23_000_000_000,
-        active_memory_bytes: 16_000_000_000,
-        unused_headroom_bytes: 7_000_000_000,
-        reserved_model_core_slack_bytes: 0,
-        reserved_context_growth_bytes: 2_000_000_000,
-        reserved_activation_and_workspace_bytes: 1_000_000_000,
-        unseated_expert_entitlement_bytes: 4_000_000_000,
-        unneeded_headroom_bytes: 0,
-        unexplained_headroom_bytes: 0,
-        owner_overrun_bytes: 0,
-    };
-    let created_engine_idle_mlx_memory_telemetry = MlxMemoryTelemetry::new(
-        16_000_000_000,
-        0,
-        16_000_000_000,
-        MlxActiveMemoryBreakdown {
-            expert_payload_bytes: 12_000_000_000,
-            model_core_payload_bytes: 3_000_000_000,
-            context_state_payload_bytes: 0,
-        },
-    )
-    .with_memory_ceiling_utilization(utilization_split);
+    let created_engine_idle_mlx_memory_telemetry = idle_telemetry_with_unused_ceiling_split();
     let engine_worker = EngineBackedWorker::idle_with_model_factory_and_machine_mlx_memory_ceiling(
         LazyScriptedModelFactory {
             model_factory_call_count,
@@ -361,10 +348,56 @@ async fn should_publish_the_unused_ceiling_split_on_model_loaded_and_limit_adjus
     let _model_swapped_event = next_event(&mut daemon_reader).await;
     let _model_runtime_configuration = next_event(&mut daemon_reader).await;
 
+    assert_model_loaded_sample_keeps_the_unused_ceiling_split(next_event(&mut daemon_reader).await);
+
+    // The live-limit event lands after the ModelLoaded sample, so a split-less
+    // telemetry here would overwrite the load-complete split on the status the
+    // menu paints (issue #510).
+    daemon_writer
+        .send_command(&WorkerCommand::UpdateMlxMemoryLimit {
+            effective_mlx_memory_ceiling_bytes: 24_000_000_000,
+            configuration_generation: "limit-adjusted-generation".to_owned(),
+        })
+        .await
+        .expect("the live memory limit should reach the worker");
+    assert_limit_adjusted_sample_keeps_the_unused_ceiling_split(
+        next_event(&mut daemon_reader).await,
+    );
+
+    close_worker_transport(daemon_writer, worker_task).await;
+}
+
+fn idle_telemetry_with_unused_ceiling_split() -> MlxMemoryTelemetry {
+    let utilization_split = MemoryCeilingUtilization {
+        mlx_active_memory_ceiling_bytes: 23_000_000_000,
+        active_memory_bytes: 16_000_000_000,
+        unused_headroom_bytes: 7_000_000_000,
+        reserved_model_core_slack_bytes: 0,
+        reserved_context_growth_bytes: 2_000_000_000,
+        reserved_activation_and_workspace_bytes: 1_000_000_000,
+        unseated_expert_entitlement_bytes: 4_000_000_000,
+        unneeded_headroom_bytes: 0,
+        unexplained_headroom_bytes: 0,
+        owner_overrun_bytes: 0,
+    };
+    MlxMemoryTelemetry::new(
+        16_000_000_000,
+        0,
+        16_000_000_000,
+        MlxActiveMemoryBreakdown {
+            expert_payload_bytes: 12_000_000_000,
+            model_core_payload_bytes: 3_000_000_000,
+            context_state_payload_bytes: 0,
+        },
+    )
+    .with_memory_ceiling_utilization(utilization_split)
+}
+
+fn assert_model_loaded_sample_keeps_the_unused_ceiling_split(model_loaded_event: WorkerEvent) {
     let WorkerEvent::MlxMemorySample {
         mlx_memory_snapshot: Some(model_loaded_snapshot),
         ..
-    } = next_event(&mut daemon_reader).await
+    } = model_loaded_event
     else {
         panic!("load-complete must emit an MLX memory sample after the swap");
     };
@@ -381,21 +414,13 @@ async fn should_publish_the_unused_ceiling_split_on_model_loaded_and_limit_adjus
     );
     assert_eq!(model_loaded_utilization.unexplained_headroom_bytes, 0);
     assert_eq!(model_loaded_utilization.owner_overrun_bytes, 0);
+}
 
-    // The live-limit event lands after the ModelLoaded sample, so a split-less
-    // telemetry here would overwrite the load-complete split on the status the
-    // menu paints (issue #510).
-    daemon_writer
-        .send_command(&WorkerCommand::UpdateMlxMemoryLimit {
-            effective_mlx_memory_ceiling_bytes: 24_000_000_000,
-            configuration_generation: "limit-adjusted-generation".to_owned(),
-        })
-        .await
-        .expect("the live memory limit should reach the worker");
+fn assert_limit_adjusted_sample_keeps_the_unused_ceiling_split(limit_adjusted_event: WorkerEvent) {
     let WorkerEvent::MlxMemoryLimitChanged {
         mlx_memory_snapshot: Some(limit_adjusted_snapshot),
         ..
-    } = next_event(&mut daemon_reader).await
+    } = limit_adjusted_event
     else {
         panic!("the live limit must publish an MLX memory sample");
     };
@@ -412,8 +437,6 @@ async fn should_publish_the_unused_ceiling_split_on_model_loaded_and_limit_adjus
     );
     assert_eq!(limit_adjusted_utilization.unexplained_headroom_bytes, 0);
     assert_eq!(limit_adjusted_utilization.owner_overrun_bytes, 0);
-
-    close_worker_transport(daemon_writer, worker_task).await;
 }
 
 /// The daemon's status relies on the opening report arriving before the swap's

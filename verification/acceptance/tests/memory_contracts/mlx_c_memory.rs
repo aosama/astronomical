@@ -1,4 +1,4 @@
-use mlx_bridge::MlxDtype;
+use mlx_bridge::{MlxArray, MlxDtype};
 use runtime_integration::{MlxMemoryLimits, MlxMemorySnapshot, MlxRuntime, MlxRuntimeError};
 
 const GRAPH_DIMENSION: i32 = 4096;
@@ -15,7 +15,6 @@ fn should_preserve_native_memory_transitions_through_the_mlx_c_boundary() {
     );
 }
 
-#[expect(clippy::too_many_lines)]
 fn run_native_memory_transitions_contract() {
     eprintln!("[mlx-c-memory-contract] status=start phase=runtime_initialization");
     let runtime = crate::runtime_common::runtime_test_support::runtime();
@@ -31,66 +30,7 @@ fn run_native_memory_transitions_contract() {
         .expect("the Rust MLX-C boundary should read the baseline memory snapshot");
     print_memory_snapshot("baseline", &before_graph);
 
-    let live_sum = {
-        let left_array = runtime
-            .zeros(&[GRAPH_DIMENSION, GRAPH_DIMENSION], MlxDtype::Float32)
-            .expect("the Rust MLX-C boundary should construct the left lazy array");
-        let right_array = runtime
-            .zeros(&[GRAPH_DIMENSION, GRAPH_DIMENSION], MlxDtype::Float32)
-            .expect("the Rust MLX-C boundary should construct the right lazy array");
-        let lazy_sum = runtime
-            .add(&left_array, &right_array)
-            .expect("the Rust MLX-C boundary should construct the lazy sum");
-        let lazy_sum_payload_byte_count = lazy_sum.byte_count();
-        let after_lazy_graph = runtime
-            .memory_snapshot()
-            .expect("the Rust MLX-C boundary should read lazy graph memory");
-        print_memory_snapshot("lazy_graph", &after_lazy_graph);
-        assert!(
-            after_lazy_graph.active_memory_bytes()
-                < before_graph
-                    .active_memory_bytes()
-                    .saturating_add(lazy_sum_payload_byte_count),
-            "lazy graph construction must not allocate the final sum payload"
-        );
-        assert_eq!(
-            after_lazy_graph.mlx_buffer_cache_bytes(),
-            before_graph.mlx_buffer_cache_bytes(),
-            "lazy graph construction must not change reclaimable MLX buffer-cache bytes"
-        );
-        eprintln!("[mlx-c-memory-contract] status=progress phase=evaluate_lazy_sum");
-        runtime
-            .evaluate_arrays(&[&lazy_sum])
-            .expect("the Rust MLX-C boundary should evaluate the lazy sum");
-        runtime
-            .synchronize_gpu_stream()
-            .expect("the Rust MLX-C boundary should synchronize the evaluated sum");
-        let after_evaluation = runtime
-            .memory_snapshot()
-            .expect("the Rust MLX-C boundary should read evaluated memory");
-        print_memory_snapshot("evaluated_sum", &after_evaluation);
-        assert!(
-            after_evaluation.active_memory_bytes() > before_graph.active_memory_bytes(),
-            "evaluation should increase active MLX bytes"
-        );
-        assert!(
-            after_evaluation.peak_memory_bytes() >= after_evaluation.active_memory_bytes(),
-            "peak MLX bytes should include the live evaluated array"
-        );
-        runtime
-            .reset_peak_memory()
-            .expect("the Rust MLX-C boundary should reset peak memory with a live array");
-        let after_peak_reset = runtime
-            .memory_snapshot()
-            .expect("the Rust MLX-C boundary should read memory after peak reset");
-        print_memory_snapshot("peak_reset", &after_peak_reset);
-        assert_eq!(after_peak_reset.peak_memory_bytes(), 0);
-        assert!(
-            after_peak_reset.active_memory_bytes() > before_graph.active_memory_bytes(),
-            "peak reset should preserve non-baseline active residency for the live array"
-        );
-        lazy_sum
-    };
+    let live_sum = observe_lazy_graph_then_evaluated_sum(&runtime, &before_graph);
 
     drop(live_sum);
     let after_owner_drop = runtime
@@ -107,6 +47,77 @@ fn run_native_memory_transitions_contract() {
         "dropping the evaluated array should retain reclaimable allocator bytes"
     );
 
+    observe_asynchronous_array_cleanup(&runtime, &before_graph);
+    eprintln!("[mlx-c-memory-contract] status=success");
+}
+
+/// Returns the evaluated sum still alive, so the caller decides when its last
+/// owner drops and can check the baseline is restored afterwards.
+fn observe_lazy_graph_then_evaluated_sum(
+    runtime: &MlxRuntime,
+    before_graph: &MlxMemorySnapshot,
+) -> MlxArray {
+    let left_array = runtime
+        .zeros(&[GRAPH_DIMENSION, GRAPH_DIMENSION], MlxDtype::Float32)
+        .expect("the Rust MLX-C boundary should construct the left lazy array");
+    let right_array = runtime
+        .zeros(&[GRAPH_DIMENSION, GRAPH_DIMENSION], MlxDtype::Float32)
+        .expect("the Rust MLX-C boundary should construct the right lazy array");
+    let lazy_sum = runtime
+        .add(&left_array, &right_array)
+        .expect("the Rust MLX-C boundary should construct the lazy sum");
+    let lazy_sum_payload_byte_count = lazy_sum.byte_count();
+    let after_lazy_graph = runtime
+        .memory_snapshot()
+        .expect("the Rust MLX-C boundary should read lazy graph memory");
+    print_memory_snapshot("lazy_graph", &after_lazy_graph);
+    assert!(
+        after_lazy_graph.active_memory_bytes()
+            < before_graph
+                .active_memory_bytes()
+                .saturating_add(lazy_sum_payload_byte_count),
+        "lazy graph construction must not allocate the final sum payload"
+    );
+    assert_eq!(
+        after_lazy_graph.mlx_buffer_cache_bytes(),
+        before_graph.mlx_buffer_cache_bytes(),
+        "lazy graph construction must not change reclaimable MLX buffer-cache bytes"
+    );
+    eprintln!("[mlx-c-memory-contract] status=progress phase=evaluate_lazy_sum");
+    runtime
+        .evaluate_arrays(&[&lazy_sum])
+        .expect("the Rust MLX-C boundary should evaluate the lazy sum");
+    runtime
+        .synchronize_gpu_stream()
+        .expect("the Rust MLX-C boundary should synchronize the evaluated sum");
+    let after_evaluation = runtime
+        .memory_snapshot()
+        .expect("the Rust MLX-C boundary should read evaluated memory");
+    print_memory_snapshot("evaluated_sum", &after_evaluation);
+    assert!(
+        after_evaluation.active_memory_bytes() > before_graph.active_memory_bytes(),
+        "evaluation should increase active MLX bytes"
+    );
+    assert!(
+        after_evaluation.peak_memory_bytes() >= after_evaluation.active_memory_bytes(),
+        "peak MLX bytes should include the live evaluated array"
+    );
+    runtime
+        .reset_peak_memory()
+        .expect("the Rust MLX-C boundary should reset peak memory with a live array");
+    let after_peak_reset = runtime
+        .memory_snapshot()
+        .expect("the Rust MLX-C boundary should read memory after peak reset");
+    print_memory_snapshot("peak_reset", &after_peak_reset);
+    assert_eq!(after_peak_reset.peak_memory_bytes(), 0);
+    assert!(
+        after_peak_reset.active_memory_bytes() > before_graph.active_memory_bytes(),
+        "peak reset should preserve non-baseline active residency for the live array"
+    );
+    lazy_sum
+}
+
+fn observe_asynchronous_array_cleanup(runtime: &MlxRuntime, before_graph: &MlxMemorySnapshot) {
     let async_array = runtime
         .zeros(&[GRAPH_DIMENSION, GRAPH_DIMENSION], MlxDtype::Float32)
         .expect("the Rust MLX-C boundary should construct an asynchronous array");
@@ -141,7 +152,6 @@ fn run_native_memory_transitions_contract() {
         "dropping the final asynchronous array should restore baseline active MLX bytes"
     );
     assert_eq!(after_final_owner_drop.mlx_buffer_cache_bytes(), 0);
-    eprintln!("[mlx-c-memory-contract] status=success");
 }
 
 #[test]

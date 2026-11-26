@@ -7,11 +7,13 @@
 //! test binary; the per-tier lane split in `workflow_lane_split_contract`.
 
 mod contract_support;
+mod workflow_verdict_scenarios;
 
 use contract_support::{
     find_step_by_name, required_field, required_job, required_text, required_u64, run_text_of,
     steps_of, workflow_contract,
 };
+use workflow_verdict_scenarios::assert_verdict_script_decides_every_scenario;
 
 /// The lanes the verdict must fan in, in workflow order: the classifier, the
 /// macOS build job, the four per-tier test lanes it feeds, the Neural Engine
@@ -119,20 +121,6 @@ fn verdict_fan_in_fails_closed_over_every_lane() {
     }
 }
 
-/// A scenario's per-lane results for the seven macOS-gated lanes; scenarios
-/// omit a lane to mean `success`.
-struct Scenario<'a> {
-    name: &'static str,
-    classification: &'static str,
-    macos_required: &'static str,
-    macos_lane_results: &'a [(&'static str, &'static str)],
-    static_checks: &'static str,
-    config_contracts: &'static str,
-    notices_required: &'static str,
-    notices_freshness: &'static str,
-    expected_pass: bool,
-}
-
 const MACOS_GATED_LANES: [&str; 7] = [
     "rust-core",
     "unit-tests",
@@ -144,7 +132,6 @@ const MACOS_GATED_LANES: [&str; 7] = [
 ];
 
 #[test]
-#[expect(clippy::too_many_lines)]
 fn verdict_script_decides_every_scenario_correctly() {
     let workflow = workflow_contract();
     let verdict_job = required_job(&workflow, "verdict");
@@ -154,255 +141,7 @@ fn verdict_script_decides_every_scenario_correctly() {
         "Fail closed unless every lane is green or legitimately skipped",
     );
     let verdict_template = run_text_of(verdict_step, "verdict");
-    let scenarios = [
-        Scenario {
-            name: "every lane green",
-            classification: "success",
-            macos_required: "true",
-            macos_lane_results: &[],
-            static_checks: "success",
-            config_contracts: "success",
-            notices_required: "false",
-            notices_freshness: "skipped",
-            expected_pass: true,
-        },
-        Scenario {
-            name: "classifier-approved macOS skips for a site-only change",
-            classification: "success",
-            macos_required: "false",
-            macos_lane_results: &MACOS_GATED_LANES.map(|lane| (lane, "skipped")),
-            static_checks: "success",
-            config_contracts: "success",
-            notices_required: "false",
-            notices_freshness: "skipped",
-            expected_pass: true,
-        },
-        Scenario {
-            name: "a failed build job fails the gate",
-            classification: "success",
-            macos_required: "true",
-            macos_lane_results: &[("rust-core", "failure")],
-            static_checks: "success",
-            config_contracts: "success",
-            notices_required: "false",
-            notices_freshness: "skipped",
-            expected_pass: false,
-        },
-        Scenario {
-            name: "a failed unit-test lane fails the gate",
-            classification: "success",
-            macos_required: "true",
-            macos_lane_results: &[("unit-tests", "failure")],
-            static_checks: "success",
-            config_contracts: "success",
-            notices_required: "false",
-            notices_freshness: "skipped",
-            expected_pass: false,
-        },
-        Scenario {
-            name: "a failed integration-test lane fails the gate",
-            classification: "success",
-            macos_required: "true",
-            macos_lane_results: &[("integration-tests", "failure")],
-            static_checks: "success",
-            config_contracts: "success",
-            notices_required: "false",
-            notices_freshness: "skipped",
-            expected_pass: false,
-        },
-        Scenario {
-            name: "a lane skipped while classification requires macOS work",
-            classification: "success",
-            macos_required: "true",
-            macos_lane_results: &[("e2e-journeys", "skipped")],
-            static_checks: "success",
-            config_contracts: "success",
-            notices_required: "false",
-            notices_freshness: "skipped",
-            expected_pass: false,
-        },
-        Scenario {
-            name: "a failed neural-engine lane fails the gate",
-            classification: "success",
-            macos_required: "true",
-            macos_lane_results: &[("neural-engine", "failure")],
-            static_checks: "success",
-            config_contracts: "success",
-            notices_required: "false",
-            notices_freshness: "skipped",
-            expected_pass: false,
-        },
-        Scenario {
-            name: "a neural-engine lane skipped while classification requires macOS work",
-            classification: "success",
-            macos_required: "true",
-            macos_lane_results: &[("neural-engine", "skipped")],
-            static_checks: "success",
-            config_contracts: "success",
-            notices_required: "false",
-            notices_freshness: "skipped",
-            expected_pass: false,
-        },
-        Scenario {
-            name: "classification failure fails the gate",
-            classification: "failure",
-            macos_required: "true",
-            macos_lane_results: &[],
-            static_checks: "success",
-            config_contracts: "success",
-            notices_required: "false",
-            notices_freshness: "skipped",
-            expected_pass: false,
-        },
-        Scenario {
-            name: "a skipped static lane fails the gate",
-            classification: "success",
-            macos_required: "false",
-            macos_lane_results: &MACOS_GATED_LANES.map(|lane| (lane, "skipped")),
-            static_checks: "skipped",
-            config_contracts: "success",
-            notices_required: "false",
-            notices_freshness: "skipped",
-            expected_pass: false,
-        },
-        Scenario {
-            name: "a cancelled lane fails the gate",
-            classification: "success",
-            macos_required: "true",
-            macos_lane_results: &[("swift-node", "cancelled")],
-            static_checks: "success",
-            config_contracts: "success",
-            notices_required: "false",
-            notices_freshness: "skipped",
-            expected_pass: false,
-        },
-        Scenario {
-            name: "a failed config-contracts lane fails the gate",
-            classification: "success",
-            macos_required: "true",
-            macos_lane_results: &[],
-            static_checks: "success",
-            config_contracts: "failure",
-            notices_required: "false",
-            notices_freshness: "skipped",
-            expected_pass: false,
-        },
-        Scenario {
-            name: "a lockfile change with fresh notices passes",
-            classification: "success",
-            macos_required: "true",
-            macos_lane_results: &[],
-            static_checks: "success",
-            config_contracts: "success",
-            notices_required: "true",
-            notices_freshness: "success",
-            expected_pass: true,
-        },
-        Scenario {
-            name: "a lockfile change with stale notices fails the gate",
-            classification: "success",
-            macos_required: "true",
-            macos_lane_results: &[],
-            static_checks: "success",
-            config_contracts: "success",
-            notices_required: "true",
-            notices_freshness: "failure",
-            expected_pass: false,
-        },
-        Scenario {
-            name: "a notices lane skipped while classification requires it fails the gate",
-            classification: "success",
-            macos_required: "true",
-            macos_lane_results: &[],
-            static_checks: "success",
-            config_contracts: "success",
-            notices_required: "true",
-            notices_freshness: "skipped",
-            expected_pass: false,
-        },
-        Scenario {
-            name: "a cancelled notices lane fails the gate",
-            classification: "success",
-            macos_required: "true",
-            macos_lane_results: &[],
-            static_checks: "success",
-            config_contracts: "success",
-            notices_required: "true",
-            notices_freshness: "cancelled",
-            expected_pass: false,
-        },
-    ];
-    for scenario in scenarios {
-        let mut scenario_script = verdict_template
-            .replace(
-                "${{ needs.detect-changes.outputs.macos_verification_required }}",
-                scenario.macos_required,
-            )
-            .replace(
-                "${{ needs.detect-changes.outputs.swift_node_required }}",
-                scenario.macos_required,
-            )
-            .replace(
-                "${{ needs.detect-changes.result }}",
-                scenario.classification,
-            )
-            .replace("${{ needs.static.result }}", scenario.static_checks)
-            .replace(
-                "${{ needs.config-contracts.result }}",
-                scenario.config_contracts,
-            )
-            .replace(
-                "${{ needs.detect-changes.outputs.notices_inputs_changed }}",
-                scenario.notices_required,
-            )
-            .replace(
-                "${{ needs.notices-freshness.result }}",
-                scenario.notices_freshness,
-            );
-        // These scenarios change no catalog or plugin input, so those lanes skip.
-        scenario_script = with_untouched_linux_lanes_skipped(scenario_script);
-        for lane in MACOS_GATED_LANES {
-            let lane_result = scenario
-                .macos_lane_results
-                .iter()
-                .find(|(result_lane, _)| *result_lane == lane)
-                .map(|(_, lane_result)| *lane_result)
-                .unwrap_or("success");
-            scenario_script =
-                scenario_script.replace(&format!("${{{{ needs.{lane}.result }}}}"), lane_result);
-        }
-        let script_path = std::env::temp_dir().join("astronomical-verdict-scenario.sh");
-        std::fs::write(&script_path, scenario_script)
-            .expect("the verdict scenario script should persist");
-        let verdict_output = std::process::Command::new("bash")
-            .arg(&script_path)
-            .output()
-            .unwrap_or_else(|failure| {
-                panic!("scenario {} should execute: {failure}", scenario.name)
-            });
-        assert_eq!(
-            verdict_output.status.success(),
-            scenario.expected_pass,
-            "scenario {} decided wrong; stdout:\n{}",
-            scenario.name,
-            String::from_utf8_lossy(&verdict_output.stdout)
-        );
-        let verdict_stdout = String::from_utf8_lossy(&verdict_output.stdout);
-        if scenario.expected_pass {
-            assert!(
-                verdict_stdout.contains("[ci-verdict] status=pass"),
-                "scenario {} passed without the pass marker",
-                scenario.name
-            );
-        } else {
-            assert!(
-                verdict_stdout.contains("[ci-verdict] status=fail")
-                    || String::from_utf8_lossy(&verdict_output.stderr).contains("status=fail"),
-                "scenario {} failed without an attributable reason",
-                scenario.name
-            );
-        }
-    }
+    assert_verdict_script_decides_every_scenario(verdict_template);
 }
 
 /// The verdict with every lane green except what these name.

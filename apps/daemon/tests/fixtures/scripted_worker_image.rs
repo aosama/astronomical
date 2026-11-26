@@ -34,7 +34,6 @@ pub(super) enum ScriptedImageCommandOutcome {
     CancellationPending { should_acknowledge: bool },
 }
 
-#[expect(clippy::too_many_lines)]
 pub(super) async fn handle_image_command<WriteTransport>(
     generation_command: ImageGenerationCommand,
     event_writer: &mut ProtocolWriter<WriteTransport>,
@@ -54,120 +53,135 @@ where
             })
         }
         "progress-stall-image-fixture" => {
-            event_writer
-                .send_event(&WorkerEvent::ImageGenerationProgress {
-                    request_id: generation_command.request_id,
-                    phase: ImageGenerationPhase::Preparing,
-                    completed_steps: 0,
-                    total_steps: generation_command.settings.steps,
-                    elapsed_millis: 1,
-                    mlx_memory_snapshot: None,
-                })
-                .await?;
+            send_preparing_progress(&generation_command, 1, event_writer).await?;
             Ok(ScriptedImageCommandOutcome::CancellationPending {
                 should_acknowledge: true,
             })
         }
         "duplicate-progress-stall-image-fixture" => {
-            for _duplicate_index in 0..3 {
-                event_writer
-                    .send_event(&WorkerEvent::ImageGenerationProgress {
-                        request_id: generation_command.request_id,
-                        phase: ImageGenerationPhase::Preparing,
-                        completed_steps: 0,
-                        total_steps: generation_command.settings.steps,
-                        elapsed_millis: 1,
-                        mlx_memory_snapshot: None,
-                    })
-                    .await?;
-                tokio::time::sleep(Duration::from_millis(70)).await;
-            }
+            send_duplicate_preparing_progress(&generation_command, event_writer).await?;
             Ok(ScriptedImageCommandOutcome::CancellationPending {
                 should_acknowledge: true,
             })
         }
-        "elapsed-progress-refresh-image-fixture" => {
-            for (progress_index, elapsed_millis) in [1, 2, 3].into_iter().enumerate() {
-                event_writer
-                    .send_event(&WorkerEvent::ImageGenerationProgress {
-                        request_id: generation_command.request_id,
-                        phase: ImageGenerationPhase::Preparing,
-                        completed_steps: 0,
-                        total_steps: generation_command.settings.steps,
-                        elapsed_millis,
-                        mlx_memory_snapshot: None,
-                    })
-                    .await?;
-                if progress_index < 2 {
-                    tokio::time::sleep(Duration::from_millis(600)).await;
-                }
-            }
-            send_completed_image(generation_command, Duration::ZERO, event_writer).await?;
-            Ok(ScriptedImageCommandOutcome::Finished)
-        }
-        "progress-snapshot-image-fixture" => {
-            event_writer
-                .send_event(&WorkerEvent::ImageGenerationProgress {
-                    request_id: generation_command.request_id,
-                    phase: ImageGenerationPhase::Denoising,
-                    completed_steps: 1,
-                    total_steps: generation_command.settings.steps,
-                    elapsed_millis: 5,
-                    mlx_memory_snapshot: Some(WorkerMlxMemorySnapshot {
-                        source: MlxMemorySnapshotSource::ImageGenerationStep,
-                        active_memory_bytes: 10_480_000_000,
-                        mlx_buffer_cache_bytes: 120_000_000,
-                        peak_memory_bytes: 10_600_000_000,
-                        expert_payload_bytes: 0,
-                        model_core_payload_bytes: 0,
-                        context_state_payload_bytes: 0,
-                        memory_ceiling_utilization: None,
-                        memory_ledger: None,
-                    }),
-                })
-                .await?;
-            tokio::time::sleep(Duration::from_millis(300)).await;
-            send_completed_image(generation_command, Duration::ZERO, event_writer).await?;
-            Ok(ScriptedImageCommandOutcome::Finished)
-        }
-        "failed-image-generation-fixture" => {
-            send_failed_image(generation_command.request_id, event_writer).await?;
-            Ok(ScriptedImageCommandOutcome::Finished)
-        }
-        "completion-before-finalization-fixture" => {
-            send_completed_image(generation_command, Duration::from_millis(150), event_writer)
-                .await?;
-            Ok(ScriptedImageCommandOutcome::Finished)
-        }
-        "phase-regression-image-fixture" => {
-            send_malformed_progress(generation_command, "phase", event_writer).await?;
-            Ok(ScriptedImageCommandOutcome::Finished)
-        }
-        "step-regression-image-fixture" => {
-            send_malformed_progress(generation_command, "steps", event_writer).await?;
-            Ok(ScriptedImageCommandOutcome::Finished)
-        }
-        "elapsed-regression-image-fixture" => {
-            send_malformed_progress(generation_command, "elapsed", event_writer).await?;
-            Ok(ScriptedImageCommandOutcome::Finished)
-        }
-        "guidance-mismatch-image-fixture" => {
-            send_guidance_mismatch(generation_command, event_writer).await?;
-            Ok(ScriptedImageCommandOutcome::Finished)
-        }
-        "malformed-png-image-fixture" => {
-            send_invalid_png_completion(generation_command, false, event_writer).await?;
-            Ok(ScriptedImageCommandOutcome::Finished)
-        }
-        "png-dimension-mismatch-image-fixture" => {
-            send_invalid_png_completion(generation_command, true, event_writer).await?;
-            Ok(ScriptedImageCommandOutcome::Finished)
-        }
         _ => {
-            send_completed_image(generation_command, Duration::ZERO, event_writer).await?;
+            send_finishing_image_script(generation_command, event_writer).await?;
             Ok(ScriptedImageCommandOutcome::Finished)
         }
     }
+}
+
+/// The image fixtures that run to a terminal event, whatever it is: a
+/// completion, a failure, or a malformed sequence the daemon must reject.
+async fn send_finishing_image_script<WriteTransport>(
+    generation_command: ImageGenerationCommand,
+    event_writer: &mut ProtocolWriter<WriteTransport>,
+) -> Result<(), ProtocolError>
+where
+    WriteTransport: tokio::io::AsyncWrite + Unpin,
+{
+    match generation_command.prompt.as_str() {
+        "elapsed-progress-refresh-image-fixture" => {
+            send_elapsed_progress_refresh(generation_command, event_writer).await
+        }
+        "progress-snapshot-image-fixture" => {
+            send_progress_snapshot_image(generation_command, event_writer).await
+        }
+        "failed-image-generation-fixture" => {
+            send_failed_image(generation_command.request_id, event_writer).await
+        }
+        "completion-before-finalization-fixture" => {
+            send_completed_image(generation_command, Duration::from_millis(150), event_writer).await
+        }
+        "phase-regression-image-fixture" => {
+            send_malformed_progress(generation_command, "phase", event_writer).await
+        }
+        "step-regression-image-fixture" => {
+            send_malformed_progress(generation_command, "steps", event_writer).await
+        }
+        "elapsed-regression-image-fixture" => {
+            send_malformed_progress(generation_command, "elapsed", event_writer).await
+        }
+        "guidance-mismatch-image-fixture" => {
+            send_guidance_mismatch(generation_command, event_writer).await
+        }
+        "malformed-png-image-fixture" => {
+            send_invalid_png_completion(generation_command, false, event_writer).await
+        }
+        "png-dimension-mismatch-image-fixture" => {
+            send_invalid_png_completion(generation_command, true, event_writer).await
+        }
+        _ => send_completed_image(generation_command, Duration::ZERO, event_writer).await,
+    }
+}
+
+async fn send_preparing_progress(
+    generation_command: &ImageGenerationCommand,
+    elapsed_millis: u64,
+    event_writer: &mut ProtocolWriter<impl tokio::io::AsyncWrite + Unpin>,
+) -> Result<(), ProtocolError> {
+    event_writer
+        .send_event(&WorkerEvent::ImageGenerationProgress {
+            request_id: generation_command.request_id,
+            phase: ImageGenerationPhase::Preparing,
+            completed_steps: 0,
+            total_steps: generation_command.settings.steps,
+            elapsed_millis,
+            mlx_memory_snapshot: None,
+        })
+        .await
+}
+
+async fn send_duplicate_preparing_progress(
+    generation_command: &ImageGenerationCommand,
+    event_writer: &mut ProtocolWriter<impl tokio::io::AsyncWrite + Unpin>,
+) -> Result<(), ProtocolError> {
+    for _duplicate_index in 0..3 {
+        send_preparing_progress(generation_command, 1, event_writer).await?;
+        tokio::time::sleep(Duration::from_millis(70)).await;
+    }
+    Ok(())
+}
+
+async fn send_elapsed_progress_refresh(
+    generation_command: ImageGenerationCommand,
+    event_writer: &mut ProtocolWriter<impl tokio::io::AsyncWrite + Unpin>,
+) -> Result<(), ProtocolError> {
+    for (progress_index, elapsed_millis) in [1, 2, 3].into_iter().enumerate() {
+        send_preparing_progress(&generation_command, elapsed_millis, event_writer).await?;
+        if progress_index < 2 {
+            tokio::time::sleep(Duration::from_millis(600)).await;
+        }
+    }
+    send_completed_image(generation_command, Duration::ZERO, event_writer).await
+}
+
+async fn send_progress_snapshot_image(
+    generation_command: ImageGenerationCommand,
+    event_writer: &mut ProtocolWriter<impl tokio::io::AsyncWrite + Unpin>,
+) -> Result<(), ProtocolError> {
+    event_writer
+        .send_event(&WorkerEvent::ImageGenerationProgress {
+            request_id: generation_command.request_id,
+            phase: ImageGenerationPhase::Denoising,
+            completed_steps: 1,
+            total_steps: generation_command.settings.steps,
+            elapsed_millis: 5,
+            mlx_memory_snapshot: Some(WorkerMlxMemorySnapshot {
+                source: MlxMemorySnapshotSource::ImageGenerationStep,
+                active_memory_bytes: 10_480_000_000,
+                mlx_buffer_cache_bytes: 120_000_000,
+                peak_memory_bytes: 10_600_000_000,
+                expert_payload_bytes: 0,
+                model_core_payload_bytes: 0,
+                context_state_payload_bytes: 0,
+                memory_ceiling_utilization: None,
+                memory_ledger: None,
+            }),
+        })
+        .await?;
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    send_completed_image(generation_command, Duration::ZERO, event_writer).await
 }
 
 async fn send_guidance_mismatch<WriteTransport>(

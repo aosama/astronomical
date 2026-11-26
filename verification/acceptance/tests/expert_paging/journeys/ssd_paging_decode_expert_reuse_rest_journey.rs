@@ -22,9 +22,10 @@
 use std::path::Path;
 
 use super::ssd_paging_decode_expert_reuse_rest_journey::support::{
-    assert_decode_expert_reuse_attribution, decode_streamed_layer_indices,
-    generation_attribution_report_count, generation_expert_source_read_bytes, log_status_progress,
-    preserve_memory_utilization_evidence, record_expert_payload_increase,
+    DecodeExpertReuseCounters, assert_decode_expert_reuse_attribution,
+    decode_streamed_layer_indices, generation_attribution_report_count,
+    generation_expert_source_read_bytes, log_status_progress, preserve_memory_utilization_evidence,
+    record_expert_payload_increase,
 };
 
 mod support;
@@ -34,7 +35,8 @@ use serial_test::serial;
 use tokio::time::{Duration, Instant, sleep, timeout};
 
 use super::thinking_budget_completion_stream::{
-    consume_completed_stream, thinking_budget_completion_request, write_worker_configuration,
+    CompletedStream, consume_completed_stream, thinking_budget_completion_request,
+    write_worker_configuration,
 };
 use crate::support::openai_client::{ChatCompletionStream, LocalOpenAiClient};
 use crate::support::serving_rest::{
@@ -70,19 +72,12 @@ async fn should_reuse_retained_decode_experts_while_staying_within_the_mlx_memor
     .expect("the progressive expert-memory SSD journey must finish within 120 seconds");
 }
 
-#[expect(clippy::too_many_lines)]
 async fn run_ssd_paging_decode_expert_reuse_journey() {
     let model_directory = crate::support::configured_installed_model_directory_by_id(model_id());
     let isolated_worker_home =
         tempfile::tempdir().expect("the memory-management worker home should be created");
     write_acceptance_config(isolated_worker_home.path(), &model_directory);
-    let repeated_source = ROMEO_AND_JULIET_SOURCE.repeat(3);
-    let user_message = crate::support::exact_model_prompt::build_exact_model_prompt_content(
-        &model_directory,
-        &repeated_source,
-        "Summarize Romeo and Juliet in one concise paragraph. Include the central conflict, major decisions, and tragic outcome.",
-        PROMPT_TOKEN_COUNT,
-    );
+    let user_message = build_decode_reuse_prompt(&model_directory);
     let real_model_rest_server = launch_real_model_rest_server(
         model_id(),
         model_directory,
@@ -91,10 +86,73 @@ async fn run_ssd_paging_decode_expert_reuse_journey() {
     )
     .await;
     let server_address = real_model_rest_server.server_address;
+    let (completed_stream, memory_evidence) =
+        stream_reply_while_observing_status(server_address, &user_message).await;
+
+    // --- Structural assertion 1: generation completes with real output ---
+    completed_stream.assert_produced_output_and_finished();
+
+    let final_memory = assert_paging_mode_and_memory_ceiling(&memory_evidence.final_status);
+
+    // --- Structural assertion 4: leftover RAM keeps expert ownership ---
+    // Seating complete layers is the preferred reuse. Routed-page hits remain
+    // valid when leftover cannot hold a complete-layer foundation.
+    stop_real_model_rest_server(real_model_rest_server).await;
+    let attribution_home = isolated_worker_home.path();
+    let reuse_counters =
+        assert_decode_expert_reuse_attribution(attribution_home, &memory_evidence.final_status);
+    assert!(
+        final_memory.final_expert_payload_bytes >= 1_000_000_000
+            || reuse_counters.retained_route_assignment_hit_count > 0,
+        "decode must keep leftover complete layers or reuse retained routed pages; expert_payload_bytes={} retained_route_assignment_hit_count={}",
+        final_memory.final_expert_payload_bytes,
+        reuse_counters.retained_route_assignment_hit_count,
+    );
+
+    // --- Measured assertion 5: throughput remains portable evidence ---
+    let average_throughput = assert_decode_throughput_is_positive(&memory_evidence.final_status);
+
+    // --- Measured assertion 7: the status document carries the same split the
+    // attribution counters do (issue #510 observability parity) ---
+    crate::support::memory_utilization_parity::assert_status_memory_ceiling_utilization_closes(
+        &memory_evidence.final_status,
+    );
+
+    let reply_phase_gain_bytes = assert_reply_phase_kept_more_experts(&memory_evidence);
+
+    // --- Structural assertion 7: exactly one generation attribution report ---
+    assert_eq!(
+        generation_attribution_report_count(isolated_worker_home.path()),
+        1,
+        "exactly one generation attribution report should be written"
+    );
+
+    print_success_evidence(
+        isolated_worker_home.path(),
+        &DecodeReuseSuccessReport {
+            reuse_counters: &reuse_counters,
+            final_memory: &final_memory,
+            average_throughput: &average_throughput,
+            reply_phase_gain_bytes,
+            prompt_window_payload_increments: memory_evidence.retained_expert_payload_bytes.len(),
+            output_character_count: completed_stream.model_text.len(),
+        },
+    );
+    preserve_memory_utilization_evidence(
+        isolated_worker_home.path(),
+        &memory_evidence.final_status,
+        &reuse_counters.memory_ceiling_utilization_evidence_counters(),
+    );
+}
+
+async fn stream_reply_while_observing_status(
+    server_address: std::net::SocketAddr,
+    user_message: &str,
+) -> (CompletedStream, ProgressiveExpertMemoryEvidence) {
     let openai_client = LocalOpenAiClient::new(server_address, "local-acceptance-client");
     let completion_request = thinking_budget_completion_request(
         model_id(),
-        &user_message,
+        user_message,
         MAXIMUM_OUTPUT_TOKEN_COUNT,
         THINKING_BUDGET_TOKEN_COUNT,
     );
@@ -102,34 +160,47 @@ async fn run_ssd_paging_decode_expert_reuse_journey() {
         .create_streaming_chat_completion(&completion_request)
         .await
         .expect("the public REST summary request should start");
-    let (completed_stream, memory_evidence) = tokio::join!(
+    tokio::join!(
         consume_completed_stream(streamed_completion),
         observe_ssd_paging_decode_expert_reuse(server_address),
-    );
+    )
+}
 
-    // --- Structural assertion 1: generation completes with real output ---
-    completed_stream.assert_produced_output_and_finished();
+fn build_decode_reuse_prompt(model_directory: &Path) -> String {
+    let repeated_source = ROMEO_AND_JULIET_SOURCE.repeat(3);
+    crate::support::exact_model_prompt::build_exact_model_prompt_content(
+        model_directory,
+        &repeated_source,
+        "Summarize Romeo and Juliet in one concise paragraph. Include the central conflict, major decisions, and tragic outcome.",
+        PROMPT_TOKEN_COUNT,
+    )
+}
 
+/// What the finalized status reported about memory once the reply finished.
+struct FinalMemoryObservation {
+    final_expert_payload_bytes: u64,
+    final_active_memory_bytes: u64,
+    peak_memory_bytes: u64,
+}
+
+fn assert_paging_mode_and_memory_ceiling(final_status: &Value) -> FinalMemoryObservation {
     // --- Structural assertion 2: the model is in paging mode (some experts
     // retained, not all-zero, confirming the test exercises SSD streaming) ---
-    let final_expert_payload_bytes =
-        memory_evidence.final_status["mlx_memory_snapshot"]["expert_payload_bytes"]
-            .as_u64()
-            .unwrap_or(0);
+    let final_expert_payload_bytes = final_status["mlx_memory_snapshot"]["expert_payload_bytes"]
+        .as_u64()
+        .unwrap_or(0);
     assert!(
         final_expert_payload_bytes > 0,
         "the paged model should retain some expert payload in memory"
     );
 
     // --- Structural assertion 3: memory stays within the configured ceiling ---
-    let final_active_memory_bytes =
-        memory_evidence.final_status["mlx_memory_snapshot"]["active_memory_bytes"]
-            .as_u64()
-            .expect("the completed status should report final active MLX memory");
-    let peak_memory_bytes =
-        memory_evidence.final_status["mlx_memory_snapshot"]["peak_memory_bytes"]
-            .as_u64()
-            .expect("the completed status should report peak MLX memory");
+    let final_active_memory_bytes = final_status["mlx_memory_snapshot"]["active_memory_bytes"]
+        .as_u64()
+        .expect("the completed status should report final active MLX memory");
+    let peak_memory_bytes = final_status["mlx_memory_snapshot"]["peak_memory_bytes"]
+        .as_u64()
+        .expect("the completed status should report peak MLX memory");
     assert!(
         final_active_memory_bytes <= MAXIMUM_MLX_MEMORY_BYTES,
         "final active memory {final_active_memory_bytes} must stay within ceiling {MAXIMUM_MLX_MEMORY_BYTES}"
@@ -140,28 +211,25 @@ async fn run_ssd_paging_decode_expert_reuse_journey() {
         "peak memory {peak_memory_bytes} must stay within ceiling plus tolerance {}",
         MAXIMUM_MLX_MEMORY_BYTES.saturating_add(MAXIMUM_MLX_MEMORY_TOLERANCE_BYTES)
     );
+    FinalMemoryObservation {
+        final_expert_payload_bytes,
+        final_active_memory_bytes,
+        peak_memory_bytes,
+    }
+}
 
-    // --- Structural assertion 4: leftover RAM keeps expert ownership ---
-    // Seating complete layers is the preferred reuse. Routed-page hits remain
-    // valid when leftover cannot hold a complete-layer foundation.
-    stop_real_model_rest_server(real_model_rest_server).await;
-    let attribution_home = isolated_worker_home.path();
-    let reuse_counters =
-        assert_decode_expert_reuse_attribution(attribution_home, &memory_evidence.final_status);
-    assert!(
-        final_expert_payload_bytes >= 1_000_000_000
-            || reuse_counters.retained_route_assignment_hit_count > 0,
-        "decode must keep leftover complete layers or reuse retained routed pages; expert_payload_bytes={final_expert_payload_bytes} retained_route_assignment_hit_count={}",
-        reuse_counters.retained_route_assignment_hit_count,
-    );
+struct AverageThroughput {
+    generation_tokens_per_second: f64,
+    prefill_tokens_per_second: f64,
+}
 
-    // --- Measured assertion 5: throughput remains portable evidence ---
+fn assert_decode_throughput_is_positive(final_status: &Value) -> AverageThroughput {
     let average_generation_tokens_per_second =
-        memory_evidence.final_status["serving_session"]["average_generation_tok_per_second"]
+        final_status["serving_session"]["average_generation_tok_per_second"]
             .as_f64()
             .expect("the completed status should report average generation throughput");
     let average_prefill_tokens_per_second =
-        memory_evidence.final_status["serving_session"]["average_prefill_tok_per_second"]
+        final_status["serving_session"]["average_prefill_tok_per_second"]
             .as_f64()
             .expect("the completed status should report average prefill throughput");
     assert!(
@@ -169,13 +237,14 @@ async fn run_ssd_paging_decode_expert_reuse_journey() {
             && average_generation_tokens_per_second > 0.0,
         "decode throughput must be a positive finite measurement"
     );
+    AverageThroughput {
+        generation_tokens_per_second: average_generation_tokens_per_second,
+        prefill_tokens_per_second: average_prefill_tokens_per_second,
+    }
+}
 
-    // --- Measured assertion 7: the status document carries the same split the
-    // attribution counters do (issue #510 observability parity) ---
-    crate::support::memory_utilization_parity::assert_status_memory_ceiling_utilization_closes(
-        &memory_evidence.final_status,
-    );
-
+/// Returns how many bytes of experts the reply phase kept beyond the prompt phase.
+fn assert_reply_phase_kept_more_experts(memory_evidence: &ProgressiveExpertMemoryEvidence) -> u64 {
     // --- Measured assertion 8: the reply phase keeps more experts than the
     // prompt phase could (issue #512). Reading a prompt needs one layer's
     // MLX working buffers for a whole chunk and writing a reply needs them for one
@@ -204,90 +273,72 @@ async fn run_ssd_paging_decode_expert_reuse_journey() {
         reply_phase_gain_bytes > 500_000_000,
         "the reply phase must keep more experts than the prompt phase; prompt_peak={peak_prompt_expert_payload_bytes} generation_peak={peak_generation_expert_payload_bytes} gain={reply_phase_gain_bytes}"
     );
+    reply_phase_gain_bytes
+}
 
-    // --- Structural assertion 7: exactly one generation attribution report ---
-    assert_eq!(
-        generation_attribution_report_count(isolated_worker_home.path()),
-        1,
-        "exactly one generation attribution report should be written"
-    );
+/// Everything the success line reports that the assertions above produced.
+struct DecodeReuseSuccessReport<'report> {
+    reuse_counters: &'report DecodeExpertReuseCounters,
+    final_memory: &'report FinalMemoryObservation,
+    average_throughput: &'report AverageThroughput,
+    reply_phase_gain_bytes: u64,
+    prompt_window_payload_increments: usize,
+    output_character_count: usize,
+}
 
-    let hot_expert_mixed_route_count = reuse_counters.hot_expert_mixed_route_count;
-    let hot_expert_partial_route_hit_count = reuse_counters.hot_expert_partial_route_hit_count;
-    let hot_expert_route_fully_covered_count = reuse_counters.hot_expert_route_fully_covered_count;
-    let hot_expert_route_fully_missed_count = reuse_counters.hot_expert_route_fully_missed_count;
-    let hot_expert_route_missing_assignment_count =
-        reuse_counters.hot_expert_route_missing_assignment_count;
-    let hot_expert_route_partially_covered_count =
-        reuse_counters.hot_expert_route_partially_covered_count;
-    let hot_expert_route_retained_assignment_count =
-        reuse_counters.hot_expert_route_retained_assignment_count;
-    let hot_expert_warm_insert_count = reuse_counters.hot_expert_warm_insert_count;
-    let previous_token_prefetch_byte_count = reuse_counters.previous_token_prefetch_byte_count;
-    let previous_token_prefetch_capacity_drop_count =
-        reuse_counters.previous_token_prefetch_capacity_drop_count;
-    let previous_token_prefetch_hit_count = reuse_counters.previous_token_prefetch_hit_count;
-    let previous_token_prefetch_issue_count = reuse_counters.previous_token_prefetch_issue_count;
-    let previous_token_prefetch_miss_count = reuse_counters.previous_token_prefetch_miss_count;
-    let retained_route_assignment_hit_count = reuse_counters.retained_route_assignment_hit_count;
-    let route_observation_captured_layer_count =
-        reuse_counters.route_observation_captured_layer_count;
-    let route_observation_evicted_record_count =
-        reuse_counters.route_observation_evicted_record_count;
-    let route_observation_stored_record_count =
-        reuse_counters.route_observation_stored_record_count;
-
+fn print_success_evidence(
+    isolated_worker_home: &Path,
+    success_report: &DecodeReuseSuccessReport<'_>,
+) {
+    let reuse_counters = success_report.reuse_counters;
+    let final_memory = success_report.final_memory;
     // Diagnostic output: useful for debugging but not asserted. The prompt
     // window records each increase of the experts kept while the prompt is
     // read.
-    let expert_source_read_bytes = generation_expert_source_read_bytes(isolated_worker_home.path());
-    let decode_streamed_layer_indices = decode_streamed_layer_indices(isolated_worker_home.path());
-    let prompt_window_payload_increments = memory_evidence.retained_expert_payload_bytes.len();
+    let expert_source_read_bytes = generation_expert_source_read_bytes(isolated_worker_home);
+    let decode_streamed_layer_indices = decode_streamed_layer_indices(isolated_worker_home);
     eprintln!(
-        "[ssd-paging-decode-expert-reuse] status=success \
-         prompt_tokens={PROMPT_TOKEN_COUNT} \
-         maximum_mlx_memory_gb={} \
-         final_expert_payload_gb={:.2} \
-         final_active_memory_gb={:.2} \
-         peak_memory_gb={:.2} \
-         expert_source_read_gb={:.2} \
-         retained_route_hits={retained_route_assignment_hit_count} \
-         hot_expert_partial_route_hits={hot_expert_partial_route_hit_count} \
-         reuse_counters.hot_expert_warm_insert_count={hot_expert_warm_insert_count} \
-         hot_expert_route_fully_covered={hot_expert_route_fully_covered_count} \
-         hot_expert_route_partially_covered={hot_expert_route_partially_covered_count} \
-         hot_expert_route_fully_missed={hot_expert_route_fully_missed_count} \
-         hot_expert_route_retained_assignments={hot_expert_route_retained_assignment_count} \
-         hot_expert_route_missing_assignments={hot_expert_route_missing_assignment_count} \
-         hot_expert_mixed_routes={hot_expert_mixed_route_count} \
-         route_observation_stored={route_observation_stored_record_count} \
-         route_observation_captured_layers={route_observation_captured_layer_count} \
-         route_observation_evicted={route_observation_evicted_record_count} \
-         previous_token_prefetch_issues={previous_token_prefetch_issue_count} \
-         previous_token_prefetch_hits={previous_token_prefetch_hit_count} \
-         previous_token_prefetch_misses={previous_token_prefetch_miss_count} \
-         previous_token_prefetch_bytes={previous_token_prefetch_byte_count} \
-         previous_token_prefetch_drops={previous_token_prefetch_capacity_drop_count} \
-         mem_ceiling_gb={:.2} \
-         mem_active_gb={:.2} \
-         mem_unused_gb={:.2} \
-         mem_reserved_core_slack_gb={:.2} \
-         mem_reserved_context_gb={:.2} \
-         mem_reserved_workspace_gb={:.2} \
-         mem_unseated_entitlement_gb={:.2} \
-         mem_unexplained_gb={:.2} \
-         mem_owner_overrun_gb={:.2} \
-         reply_phase_gain_gb={:.2} \
-         decode_streamed_layer_count={} \
-         prompt_window_payload_increments={} \
-         average_prefill_tok_per_second={average_prefill_tokens_per_second:.2} \
-         average_generation_tok_per_second={average_generation_tokens_per_second:.2} \
+        "[ssd-paging-decode-expert-reuse] status=success prompt_tokens={PROMPT_TOKEN_COUNT} \
+         maximum_mlx_memory_gb={} final_expert_payload_gb={:.2} final_active_memory_gb={:.2} \
+         peak_memory_gb={:.2} expert_source_read_gb={:.2} \
+         retained_route_hits={} hot_expert_partial_route_hits={} \
+         hot_expert_warm_insert_count={} \
+         hot_expert_route_fully_covered={} hot_expert_route_partially_covered={} \
+         hot_expert_route_fully_missed={} hot_expert_route_retained_assignments={} \
+         hot_expert_route_missing_assignments={} hot_expert_mixed_routes={} \
+         route_observation_stored={} route_observation_captured_layers={} \
+         route_observation_evicted={} previous_token_prefetch_issues={} \
+         previous_token_prefetch_hits={} previous_token_prefetch_misses={} \
+         previous_token_prefetch_bytes={} previous_token_prefetch_drops={} \
+         mem_ceiling_gb={:.2} mem_active_gb={:.2} mem_unused_gb={:.2} \
+         mem_reserved_core_slack_gb={:.2} mem_reserved_context_gb={:.2} \
+         mem_reserved_workspace_gb={:.2} mem_unseated_entitlement_gb={:.2} \
+         mem_unexplained_gb={:.2} mem_owner_overrun_gb={:.2} reply_phase_gain_gb={:.2} \
+         decode_streamed_layer_count={} prompt_window_payload_increments={} \
+         average_prefill_tok_per_second={:.2} average_generation_tok_per_second={:.2} \
          output_characters={}",
         MAXIMUM_MLX_MEMORY_BYTES / 1_000_000_000,
-        final_expert_payload_bytes as f64 / 1_073_741_824.0,
-        final_active_memory_bytes as f64 / 1_073_741_824.0,
-        peak_memory_bytes as f64 / 1_073_741_824.0,
+        final_memory.final_expert_payload_bytes as f64 / 1_073_741_824.0,
+        final_memory.final_active_memory_bytes as f64 / 1_073_741_824.0,
+        final_memory.peak_memory_bytes as f64 / 1_073_741_824.0,
         expert_source_read_bytes as f64 / 1_073_741_824.0,
+        reuse_counters.retained_route_assignment_hit_count,
+        reuse_counters.hot_expert_partial_route_hit_count,
+        reuse_counters.hot_expert_warm_insert_count,
+        reuse_counters.hot_expert_route_fully_covered_count,
+        reuse_counters.hot_expert_route_partially_covered_count,
+        reuse_counters.hot_expert_route_fully_missed_count,
+        reuse_counters.hot_expert_route_retained_assignment_count,
+        reuse_counters.hot_expert_route_missing_assignment_count,
+        reuse_counters.hot_expert_mixed_route_count,
+        reuse_counters.route_observation_stored_record_count,
+        reuse_counters.route_observation_captured_layer_count,
+        reuse_counters.route_observation_evicted_record_count,
+        reuse_counters.previous_token_prefetch_issue_count,
+        reuse_counters.previous_token_prefetch_hit_count,
+        reuse_counters.previous_token_prefetch_miss_count,
+        reuse_counters.previous_token_prefetch_byte_count,
+        reuse_counters.previous_token_prefetch_capacity_drop_count,
         reuse_counters.memory_ceiling_utilization_ceiling_bytes as f64 / 1_073_741_824.0,
         reuse_counters.memory_ceiling_utilization_active_bytes as f64 / 1_073_741_824.0,
         reuse_counters.memory_ceiling_utilization_unused_headroom_bytes as f64 / 1_073_741_824.0,
@@ -302,58 +353,20 @@ async fn run_ssd_paging_decode_expert_reuse_journey() {
         reuse_counters.memory_ceiling_utilization_unexplained_headroom_bytes as f64
             / 1_073_741_824.0,
         reuse_counters.memory_ceiling_utilization_owner_overrun_bytes as f64 / 1_073_741_824.0,
-        reply_phase_gain_bytes as f64 / 1_073_741_824.0,
+        success_report.reply_phase_gain_bytes as f64 / 1_073_741_824.0,
         decode_streamed_layer_indices.len(),
-        prompt_window_payload_increments,
-        completed_stream.model_text.len(),
-    );
-    preserve_memory_utilization_evidence(
-        isolated_worker_home.path(),
-        &memory_evidence.final_status,
-        &[
-            (
-                "memory_ceiling_utilization_ceiling_bytes",
-                reuse_counters.memory_ceiling_utilization_ceiling_bytes,
-            ),
-            (
-                "memory_ceiling_utilization_active_bytes",
-                reuse_counters.memory_ceiling_utilization_active_bytes,
-            ),
-            (
-                "memory_ceiling_utilization_unused_headroom_bytes",
-                reuse_counters.memory_ceiling_utilization_unused_headroom_bytes,
-            ),
-            (
-                "memory_ceiling_utilization_reserved_model_core_slack_bytes",
-                reuse_counters.memory_ceiling_utilization_reserved_model_core_slack_bytes,
-            ),
-            (
-                "memory_ceiling_utilization_reserved_context_growth_bytes",
-                reuse_counters.memory_ceiling_utilization_reserved_context_growth_bytes,
-            ),
-            (
-                "memory_ceiling_utilization_reserved_activation_and_workspace_bytes",
-                reuse_counters.memory_ceiling_utilization_reserved_activation_and_workspace_bytes,
-            ),
-            (
-                "memory_ceiling_utilization_unseated_expert_entitlement_bytes",
-                reuse_counters.memory_ceiling_utilization_unseated_expert_entitlement_bytes,
-            ),
-            (
-                "memory_ceiling_utilization_unexplained_headroom_bytes",
-                reuse_counters.memory_ceiling_utilization_unexplained_headroom_bytes,
-            ),
-            (
-                "memory_ceiling_utilization_owner_overrun_bytes",
-                reuse_counters.memory_ceiling_utilization_owner_overrun_bytes,
-            ),
-        ],
+        success_report.prompt_window_payload_increments,
+        success_report.average_throughput.prefill_tokens_per_second,
+        success_report
+            .average_throughput
+            .generation_tokens_per_second,
+        success_report.output_character_count,
     );
 }
 
-/// Writes the utilization decomposition and attribution counters into evidence
-/// that survives the run (issue #510), so runs can be compared later instead of
-/// the numbers living only in this test's stdout.
+/// What the status observer collected (issue #510): each increase of the expert
+/// payload while the prompt was read and while the reply was written, and the
+/// status read once the worker went idle after the request.
 struct ProgressiveExpertMemoryEvidence {
     retained_expert_payload_bytes: Vec<u64>,
     generation_expert_payload_bytes: Vec<u64>,

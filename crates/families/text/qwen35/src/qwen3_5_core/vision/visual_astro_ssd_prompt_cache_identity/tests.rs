@@ -166,3 +166,159 @@ fn should_reject_noncontiguous_rows_for_one_image() {
 
     assert!(plan.is_err());
 }
+
+#[test]
+fn should_accept_inputs_that_pair_up_and_have_rows() {
+    let validation = super::validate_visual_identity_inputs(4, &[[1_u8; 32], [2_u8; 32]], &[3, 1]);
+
+    assert_eq!(validation, Ok(()));
+}
+
+#[test]
+fn should_reject_a_zero_block_token_count() {
+    let validation = super::validate_visual_identity_inputs(0, &[], &[]);
+
+    assert_eq!(
+        validation,
+        Err(super::Qwen3_5VisualAstroSsdPromptCacheIdentityPlanError::ZeroBlockTokenCount)
+    );
+}
+
+#[test]
+fn should_reject_digests_that_do_not_pair_with_row_counts() {
+    let validation = super::validate_visual_identity_inputs(4, &[[1_u8; 32]], &[2, 2]);
+
+    assert_eq!(
+        validation,
+        Err(
+            super::Qwen3_5VisualAstroSsdPromptCacheIdentityPlanError::ImageIdentityCountMismatch {
+                image_digest_count: 1,
+                image_row_count_entry_count: 2,
+            }
+        )
+    );
+}
+
+#[test]
+fn should_name_the_first_image_that_has_no_rows() {
+    let validation = super::validate_visual_identity_inputs(
+        4,
+        &[[1_u8; 32], [2_u8; 32], [3_u8; 32]],
+        &[2, 0, 0],
+    );
+
+    assert_eq!(
+        validation,
+        Err(
+            super::Qwen3_5VisualAstroSsdPromptCacheIdentityPlanError::ZeroImageRows {
+                image_index: 1
+            }
+        )
+    );
+}
+
+#[test]
+fn should_list_image_pad_positions_in_prompt_order() {
+    let prompt_tokens = [
+        10,
+        IMAGE_PAD_TOKEN_ID,
+        11,
+        IMAGE_PAD_TOKEN_ID,
+        IMAGE_PAD_TOKEN_ID,
+    ];
+
+    assert_eq!(
+        super::find_image_pad_token_positions(&prompt_tokens, IMAGE_PAD_TOKEN_ID),
+        [1, 3, 4]
+    );
+    assert!(super::find_image_pad_token_positions(&[10, 11], IMAGE_PAD_TOKEN_ID).is_empty());
+    assert!(super::find_image_pad_token_positions(&[], IMAGE_PAD_TOKEN_ID).is_empty());
+}
+
+#[test]
+fn should_sum_image_row_counts_and_refuse_an_overflowing_sum() {
+    assert_eq!(super::sum_image_row_counts(&[3, 4, 5]), Ok(12));
+    assert_eq!(super::sum_image_row_counts(&[]), Ok(0));
+    assert_eq!(
+        super::sum_image_row_counts(&[usize::MAX, 1]),
+        Err(super::Qwen3_5VisualAstroSsdPromptCacheIdentityPlanError::ImageRowCountOverflow)
+    );
+}
+
+#[test]
+fn should_accept_adjacent_pad_positions_and_a_single_pad_row() {
+    assert_eq!(
+        super::ensure_contiguous_image_pad_rows(&[5, 6, 7], 0),
+        Ok(())
+    );
+    assert_eq!(super::ensure_contiguous_image_pad_rows(&[5], 0), Ok(()));
+}
+
+#[test]
+fn should_reject_pad_positions_with_a_gap_and_name_the_image() {
+    assert_eq!(
+        super::ensure_contiguous_image_pad_rows(&[5, 6, 8], 2),
+        Err(
+            super::Qwen3_5VisualAstroSsdPromptCacheIdentityPlanError::NoncontiguousImagePadRows {
+                image_index: 2
+            }
+        )
+    );
+}
+
+#[test]
+fn should_keep_an_image_that_fits_inside_one_block_as_one_segment() {
+    let mut block_segments = vec![Vec::new(); 2];
+
+    super::push_image_block_segments(&mut block_segments, [4_u8; 32], 1, 2, 4);
+
+    assert_eq!(
+        block_segments[0],
+        [super::Qwen3_5VisualBlockSegment {
+            image_sha256_digest: [4_u8; 32],
+            block_token_offset: 1,
+            image_row_start: 0,
+            row_count: 2,
+        }]
+    );
+    assert!(block_segments[1].is_empty());
+}
+
+#[test]
+fn should_cut_an_image_at_every_block_boundary_it_crosses() {
+    let mut block_segments = vec![Vec::new(); 3];
+
+    super::push_image_block_segments(&mut block_segments, [5_u8; 32], 3, 7, 4);
+
+    let segment_geometry = block_segments
+        .iter()
+        .map(|segments| {
+            segments
+                .iter()
+                .map(|segment| {
+                    (
+                        segment.block_token_offset,
+                        segment.image_row_start,
+                        segment.row_count,
+                    )
+                })
+                .collect::<Vec<_>>()
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        segment_geometry,
+        [vec![(3, 0, 1)], vec![(0, 1, 4)], vec![(0, 5, 2)]]
+    );
+}
+
+#[test]
+fn should_start_a_segment_at_offset_zero_when_an_image_begins_on_a_block_boundary() {
+    let mut block_segments = vec![Vec::new(); 2];
+
+    super::push_image_block_segments(&mut block_segments, [6_u8; 32], 4, 4, 4);
+
+    assert!(block_segments[0].is_empty());
+    assert_eq!(block_segments[1].len(), 1);
+    assert_eq!(block_segments[1][0].block_token_offset, 0);
+    assert_eq!(block_segments[1][0].row_count, 4);
+}

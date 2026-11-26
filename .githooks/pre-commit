@@ -86,13 +86,14 @@ fi
 # The clippy pass below only matters when Rust source changed, so a commit
 # touching only the baseline, the admissions or .cargo-crap.toml skips it.
 if git diff --cached --name-only | grep -q '\.rs$'; then
-    # The 100-code-line budget (clippy.toml, issue #1637) — enforced HERE
-    # and only here: no clippy runs in GitHub Actions. The workspace lints
-    # tables deny clippy::too_many_lines, and the 68 pre-existing
-    # over-budget functions carry #[expect], so this single default-world
-    # pass fails when a function crosses the budget without an expect, and
-    # an #[expect] self-cleans when its function shrinks below the budget.
-    # The pass is `cargo xtask function-length-budget`: on macOS exactly
+    # The 80-code-line budget (clippy.toml, issue #1637; AGENTS.md sets the
+    # limit for production and test code alike) — enforced HERE and only
+    # here: no clippy runs in GitHub Actions. The workspace lints tables
+    # deny clippy::too_many_lines, so this single default-world pass fails
+    # when any function crosses the budget.
+    # The pass is `cargo xtask function-length-budget`. It first refuses any
+    # allow or expect of clippy::too_many_lines in any Rust source, which
+    # would let a long function through; then, on macOS, exactly
     # `cargo clippy --workspace --all-targets`; on other hosts it leaves out
     # the crates whose manifest declares macOS-only host platforms, and
     # their dependents, which cannot build there.
@@ -108,7 +109,7 @@ if git diff --cached --name-only | grep -q '\.rs$'; then
     else
         budget_elapsed_seconds=$(( $(date +%s) - budget_started_epoch_seconds ))
         printf '%s\n' "[pre-commit] status=failed check=function-length-budget elapsed_seconds=${budget_elapsed_seconds}" >&2
-        printf '%s\n' '[pre-commit] hint=a function crossed the 100-line budget, or an #[expect] became unfulfilled after a function shrank — fix the function or drop the expect' >&2
+        printf '%s\n' '[pre-commit] hint=a function crossed the 80-line budget, or code exempted itself with an allow or expect of clippy::too_many_lines — split the function into named steps and drop the attribute' >&2
         exit 1
     fi
 fi
@@ -143,7 +144,7 @@ fi
 # Gated on any staged Rust source, not on acceptance paths, because the
 # breaks it guards against came from crates the acceptance tests only
 # consume (issues #2052 and #2076). Feature-gated acceptance code is thereby
-# held to the same 100-line function budget as the default world.
+# held to the same 80-line function budget as the default world.
 if git diff --cached --name-only | grep -q '\.rs$'; then
     printf '%s\n' "[pre-commit] status=start check=acceptance-all-features root=${REPOSITORY_ROOT}"
     acceptance_started_epoch_seconds="$(date +%s)"

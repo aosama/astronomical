@@ -423,72 +423,43 @@ pub fn qwen3_5_gated_delta_sequence_with_boundary_checkpoints_ops_fallback(
         sequence_shape.token_count,
     )?;
     let query_shape = queries.shape();
-    let (key_head_count, key_head_dimension) = (query_shape[2], query_shape[3]);
-    let value_head_count = values.shape()[2];
-    let value_head_dimension = values.shape()[3];
+    let value_shape = values.shape();
+    let sequence_operands = SequenceOperands {
+        queries,
+        keys,
+        values,
+        decays,
+        update_rates,
+        key_head_count: query_shape[2],
+        key_head_dimension: query_shape[3],
+        value_head_count: value_shape[2],
+        value_head_dimension: value_shape[3],
+    };
     let mut token_outputs = Vec::with_capacity(sequence_shape.token_count as usize);
     let mut recurrent_boundary_states = Vec::with_capacity(completed_prefill_chunk_tokens.len());
     let mut next_checkpoint_position_index = 0_usize;
     let mut current_recurrent_state =
         runtime.astype(recurrent_state, mlx_bridge::MlxDtype::Float32)?;
     for token_index in 0..sequence_shape.token_count {
-        let token_queries = runtime
-            .slice(
-                queries,
-                &[0, token_index, 0, 0],
-                &[1, token_index + 1, key_head_count, key_head_dimension],
-                &[1, 1, 1, 1],
-            )
-            .and_then(|sliced| runtime.squeeze_axis(&sliced, 1))?;
-        let token_keys = runtime
-            .slice(
-                keys,
-                &[0, token_index, 0, 0],
-                &[1, token_index + 1, key_head_count, key_head_dimension],
-                &[1, 1, 1, 1],
-            )
-            .and_then(|sliced| runtime.squeeze_axis(&sliced, 1))?;
-        let token_values = runtime
-            .slice(
-                values,
-                &[0, token_index, 0, 0],
-                &[1, token_index + 1, value_head_count, value_head_dimension],
-                &[1, 1, 1, 1],
-            )
-            .and_then(|sliced| runtime.squeeze_axis(&sliced, 1))?;
-        let token_decays = runtime
-            .slice(
-                decays,
-                &[0, token_index, 0],
-                &[1, token_index + 1, value_head_count],
-                &[1, 1, 1],
-            )
-            .and_then(|sliced| runtime.squeeze_axis(&sliced, 1))?;
-        let token_update_rates = runtime
-            .slice(
-                update_rates,
-                &[0, token_index, 0],
-                &[1, token_index + 1, value_head_count],
-                &[1, 1, 1],
-            )
-            .and_then(|sliced| runtime.squeeze_axis(&sliced, 1))?;
+        let token_operands = sequence_operands.token_operands(runtime, token_index)?;
         let (token_output, next_recurrent_state) =
             super::gated_delta_step::qwen3_5_gated_delta_step(
                 runtime,
-                &token_queries,
-                &token_keys,
-                &token_values,
-                &token_decays,
-                &token_update_rates,
+                &token_operands.queries,
+                &token_operands.keys,
+                &token_operands.values,
+                &token_operands.decays,
+                &token_operands.update_rates,
                 &current_recurrent_state,
             )?;
         token_outputs.push(token_output);
         current_recurrent_state = next_recurrent_state;
         let completed_token_count = token_index + 1;
-        if next_checkpoint_position_index < completed_prefill_chunk_tokens.len()
-            && completed_prefill_chunk_tokens[next_checkpoint_position_index]
-                == completed_token_count
-        {
+        if completes_next_boundary_checkpoint(
+            completed_prefill_chunk_tokens,
+            next_checkpoint_position_index,
+            completed_token_count,
+        ) {
             // The fused kernel publishes float32 boundary states; the aliasing
             // float32 cast yields an owned handle without a data copy.
             recurrent_boundary_states
@@ -503,4 +474,121 @@ pub fn qwen3_5_gated_delta_sequence_with_boundary_checkpoints_ops_fallback(
         next_recurrent_state: current_recurrent_state,
         recurrent_boundary_states,
     })
+}
+
+/// The five whole-sequence operands of the ops fallback with the head geometry
+/// every one-token slice of them needs.
+struct SequenceOperands<'a> {
+    queries: &'a MlxArray,
+    keys: &'a MlxArray,
+    values: &'a MlxArray,
+    decays: &'a MlxArray,
+    update_rates: &'a MlxArray,
+    key_head_count: i32,
+    key_head_dimension: i32,
+    value_head_count: i32,
+    value_head_dimension: i32,
+}
+
+/// One token of every sequence operand.
+struct TokenOperands {
+    queries: MlxArray,
+    keys: MlxArray,
+    values: MlxArray,
+    decays: MlxArray,
+    update_rates: MlxArray,
+}
+
+impl SequenceOperands<'_> {
+    /// Slices the token at `token_index` out of every operand, in the order
+    /// queries, keys, values, decays, update rates.
+    fn token_operands(
+        &self,
+        runtime: &MlxRuntime,
+        token_index: i32,
+    ) -> Result<TokenOperands, MlxRuntimeError> {
+        Ok(TokenOperands {
+            queries: single_token_head_slice(
+                runtime,
+                self.queries,
+                token_index,
+                self.key_head_count,
+                self.key_head_dimension,
+            )?,
+            keys: single_token_head_slice(
+                runtime,
+                self.keys,
+                token_index,
+                self.key_head_count,
+                self.key_head_dimension,
+            )?,
+            values: single_token_head_slice(
+                runtime,
+                self.values,
+                token_index,
+                self.value_head_count,
+                self.value_head_dimension,
+            )?,
+            decays: single_token_rate_slice(
+                runtime,
+                self.decays,
+                token_index,
+                self.value_head_count,
+            )?,
+            update_rates: single_token_rate_slice(
+                runtime,
+                self.update_rates,
+                token_index,
+                self.value_head_count,
+            )?,
+        })
+    }
+}
+
+/// One token of a `[batch, tokens, heads, dimension]` operand, with the token
+/// axis dropped so the one-token step reads it as `[batch, heads, dimension]`.
+fn single_token_head_slice(
+    runtime: &MlxRuntime,
+    operand: &MlxArray,
+    token_index: i32,
+    head_count: i32,
+    head_dimension: i32,
+) -> Result<MlxArray, MlxRuntimeError> {
+    let token_with_axis = runtime.slice(
+        operand,
+        &[0, token_index, 0, 0],
+        &[1, token_index + 1, head_count, head_dimension],
+        &[1, 1, 1, 1],
+    )?;
+    Ok(runtime.squeeze_axis(&token_with_axis, 1)?)
+}
+
+/// One token of a `[batch, tokens, heads]` rate operand, with the token axis
+/// dropped.
+fn single_token_rate_slice(
+    runtime: &MlxRuntime,
+    operand: &MlxArray,
+    token_index: i32,
+    head_count: i32,
+) -> Result<MlxArray, MlxRuntimeError> {
+    let token_with_axis = runtime.slice(
+        operand,
+        &[0, token_index, 0],
+        &[1, token_index + 1, head_count],
+        &[1, 1, 1],
+    )?;
+    Ok(runtime.squeeze_axis(&token_with_axis, 1)?)
+}
+
+/// Whether the token just completed is the next boundary the caller asked to
+/// keep. Boundaries are visited in order, so only the entry at
+/// `next_checkpoint_position_index` can match, and none can once every
+/// requested boundary has been kept.
+pub(super) fn completes_next_boundary_checkpoint(
+    completed_prefill_chunk_tokens: &[i32],
+    next_checkpoint_position_index: usize,
+    completed_token_count: i32,
+) -> bool {
+    completed_prefill_chunk_tokens.get(next_checkpoint_position_index)
+        == Some(&completed_token_count)
 }

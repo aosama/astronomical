@@ -18,6 +18,7 @@ use super::disk_store_file::{
 use super::disk_store_global_quota_candidate::{
     GlobalAstroSsdPromptCacheCleanupClassification, GlobalAstroSsdPromptCacheEvictionCandidate,
 };
+use super::disk_store_global_quota_demand::{CommitQuotaDemand, GlobalQuotaTotals};
 use super::disk_store_global_quota_scan::{
     directory_file_size_and_paths, scan_global_astro_ssd_prompt_cache_quota,
 };
@@ -340,41 +341,27 @@ impl AstroSsdPromptCacheDiskStore {
             &self.global_astro_ssd_prompt_cache_root_directory,
             excluded_directory,
         )?;
-        let mut global_astro_ssd_prompt_cache_total_size_bytes = global_quota_scan.total_size_bytes;
-        let mut global_visual_embedding_total_size_bytes =
-            global_quota_scan.visual_embedding_total_size_bytes;
-        self.global_astro_ssd_prompt_cache_total_size_bytes.store(
-            global_astro_ssd_prompt_cache_total_size_bytes,
-            Ordering::Relaxed,
-        );
-        self.global_visual_embedding_total_size_bytes
-            .store(global_visual_embedding_total_size_bytes, Ordering::Relaxed);
+        let commit_quota_demand = CommitQuotaDemand {
+            additional_committed_size_bytes,
+            post_commit_reclaimable_size_bytes,
+            protected_block_directory_paths,
+            maximum_size_bytes: self.global_astro_ssd_prompt_cache_maximum_size_bytes,
+            global_astro_ssd_prompt_cache_root_directory: &self
+                .global_astro_ssd_prompt_cache_root_directory,
+        };
+        let mut global_quota_totals = GlobalQuotaTotals {
+            total_size_bytes: global_quota_scan.total_size_bytes,
+            visual_embedding_total_size_bytes: global_quota_scan.visual_embedding_total_size_bytes,
+        };
+        self.store_global_quota_totals(global_quota_totals);
         let mut removed_eviction_paths = HashSet::<PathBuf>::new();
         let mut startup_cleanup_evidence = AstroSsdPromptCacheStartupCleanupEvidence::default();
         for eviction_candidate in global_quota_scan.eviction_candidates_oldest_written_first {
-            if eviction_candidate_was_already_removed(&eviction_candidate, &removed_eviction_paths)
-            {
-                continue;
-            }
-            // Interrupted transactions and obsolete formats are removed even
-            // when the committed projection already fits.
-            if !eviction_candidate.is_unconditionally_removable()
-                && eviction_candidate
-                    .contains_protected_block_directory(protected_block_directory_paths)
-            {
-                continue;
-            }
-            // Stop deleting committed value once the post-commit projection
-            // fits. `post_commit_reclaimable_size_bytes` is subtracted only in
-            // arithmetic; its actual file remains until commit becomes durable.
-            if !eviction_candidate.is_unconditionally_removable()
-                && committed_size_after_addition(
-                    global_astro_ssd_prompt_cache_total_size_bytes,
-                    additional_committed_size_bytes,
-                    post_commit_reclaimable_size_bytes,
-                    &self.global_astro_ssd_prompt_cache_root_directory,
-                )? <= self.global_astro_ssd_prompt_cache_maximum_size_bytes
-            {
+            if commit_quota_demand.keeps_eviction_candidate(
+                &eviction_candidate,
+                &removed_eviction_paths,
+                global_quota_totals.total_size_bytes,
+            )? {
                 continue;
             }
             remove_global_astro_ssd_prompt_cache_eviction_candidate(&eviction_candidate)?;
@@ -387,44 +374,47 @@ impl AstroSsdPromptCacheDiskStore {
                     &eviction_candidate,
                 );
             }
-            self.lock_tracked_files()
-                .remove_files_by_path(eviction_candidate.tracked_file_paths());
-            self.lock_tracked_files()
-                .remove_blocks_by_directory_paths(eviction_candidate.block_directory_paths());
-            global_astro_ssd_prompt_cache_total_size_bytes =
-                global_astro_ssd_prompt_cache_total_size_bytes
-                    .saturating_sub(eviction_candidate.file_size_bytes());
-            global_visual_embedding_total_size_bytes = global_visual_embedding_total_size_bytes
-                .saturating_sub(eviction_candidate.visual_embedding_size_bytes());
-            removed_eviction_paths.insert(eviction_candidate.tie_breaker_path().to_path_buf());
-            for removed_block_directory_path in eviction_candidate.block_directory_paths() {
-                removed_eviction_paths.insert(removed_block_directory_path.clone());
-            }
-            self.global_astro_ssd_prompt_cache_total_size_bytes.store(
-                global_astro_ssd_prompt_cache_total_size_bytes,
-                Ordering::Relaxed,
-            );
-            self.global_visual_embedding_total_size_bytes
-                .store(global_visual_embedding_total_size_bytes, Ordering::Relaxed);
-        }
-        let final_committed_size_bytes = committed_size_after_addition(
-            global_astro_ssd_prompt_cache_total_size_bytes,
-            additional_committed_size_bytes,
-            post_commit_reclaimable_size_bytes,
-            &self.global_astro_ssd_prompt_cache_root_directory,
-        )?;
-        if final_committed_size_bytes > self.global_astro_ssd_prompt_cache_maximum_size_bytes {
-            return Err(
-                AstroSsdPromptCacheDiskStoreError::GlobalAstroSsdPromptCacheQuotaNotSatisfied {
-                    maximum_size_bytes: self.global_astro_ssd_prompt_cache_maximum_size_bytes,
-                    remaining_size_bytes: final_committed_size_bytes,
-                },
+            self.forget_removed_eviction_candidate(
+                &eviction_candidate,
+                &mut removed_eviction_paths,
+                &mut global_quota_totals,
             );
         }
+        commit_quota_demand.ensure_satisfied_at(global_quota_totals.total_size_bytes)?;
         if should_record_startup_cleanup {
             self.record_startup_cleanup_evidence(startup_cleanup_evidence);
         }
         Ok(())
+    }
+
+    /// Drops a removed candidate's files and blocks from the tracked index,
+    /// takes its bytes out of the running totals, remembers its paths so
+    /// overlapping candidates are skipped, and publishes the new totals.
+    fn forget_removed_eviction_candidate(
+        &self,
+        removed_candidate: &GlobalAstroSsdPromptCacheEvictionCandidate,
+        removed_eviction_paths: &mut HashSet<PathBuf>,
+        global_quota_totals: &mut GlobalQuotaTotals,
+    ) {
+        self.lock_tracked_files()
+            .remove_files_by_path(removed_candidate.tracked_file_paths());
+        self.lock_tracked_files()
+            .remove_blocks_by_directory_paths(removed_candidate.block_directory_paths());
+        global_quota_totals.subtract_candidate(removed_candidate);
+        removed_eviction_paths.insert(removed_candidate.tie_breaker_path().to_path_buf());
+        for removed_block_directory_path in removed_candidate.block_directory_paths() {
+            removed_eviction_paths.insert(removed_block_directory_path.clone());
+        }
+        self.store_global_quota_totals(*global_quota_totals);
+    }
+
+    fn store_global_quota_totals(&self, global_quota_totals: GlobalQuotaTotals) {
+        self.global_astro_ssd_prompt_cache_total_size_bytes
+            .store(global_quota_totals.total_size_bytes, Ordering::Relaxed);
+        self.global_visual_embedding_total_size_bytes.store(
+            global_quota_totals.visual_embedding_total_size_bytes,
+            Ordering::Relaxed,
+        );
     }
 }
 
@@ -451,20 +441,6 @@ fn record_removed_startup_candidate(
     cleanup_category.byte_count = cleanup_category
         .byte_count
         .saturating_add(removed_candidate.file_size_bytes());
-}
-
-fn eviction_candidate_was_already_removed(
-    global_astro_ssd_prompt_cache_eviction_candidate: &GlobalAstroSsdPromptCacheEvictionCandidate,
-    removed_eviction_paths: &HashSet<PathBuf>,
-) -> bool {
-    // Subtree candidates overlap by construction. A removed ancestor can cover
-    // a later candidate even when their root paths differ, hence the member scan.
-    removed_eviction_paths
-        .contains(global_astro_ssd_prompt_cache_eviction_candidate.tie_breaker_path())
-        || global_astro_ssd_prompt_cache_eviction_candidate
-            .block_directory_paths()
-            .iter()
-            .any(|block_directory_path| removed_eviction_paths.contains(block_directory_path))
 }
 
 fn remove_global_astro_ssd_prompt_cache_eviction_candidate(
@@ -494,25 +470,6 @@ fn remove_global_astro_ssd_prompt_cache_eviction_candidate(
             Ok(())
         }
     }
-}
-
-fn committed_size_after_addition(
-    current_committed_size_bytes: u64,
-    additional_committed_size_bytes: u64,
-    post_commit_reclaimable_size_bytes: u64,
-    global_astro_ssd_prompt_cache_root_directory: &Path,
-) -> Result<u64, AstroSsdPromptCacheDiskStoreError> {
-    current_committed_size_bytes
-        .checked_add(additional_committed_size_bytes)
-        .map(|size_before_post_commit_reclamation| {
-            size_before_post_commit_reclamation.saturating_sub(post_commit_reclaimable_size_bytes)
-        })
-        .ok_or_else(
-            || AstroSsdPromptCacheDiskStoreError::GlobalAstroSsdPromptCacheSizeOverflow {
-                global_astro_ssd_prompt_cache_root_directory:
-                    global_astro_ssd_prompt_cache_root_directory.to_path_buf(),
-            },
-        )
 }
 
 fn subtract_atomic_size_bytes(atomic_size_bytes: &AtomicU64, removed_size_bytes: u64) {

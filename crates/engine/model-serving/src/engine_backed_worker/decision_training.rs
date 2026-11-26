@@ -6,6 +6,7 @@
 use std::time::Instant;
 
 use decision_contract::DecisionFailure;
+use decision_contract::decision_training_job::DecisionTrainingOutcome;
 use ipc_protocol::{
     DecisionTrainingCommand, ProtocolReader, ProtocolWriter, RequestId, WorkerEvent,
 };
@@ -135,43 +136,9 @@ where
                     .await?;
                 Ok(Some(active_training))
             }
-            Ok(DecisionTrainingStep::Completed(outcome)) => {
-                // One message may not hold a 9B model's add-ons; the
-                // tensors go through a file the command-line tool reads.
-                let handover_directory = std::env::temp_dir();
-                let outcome = match hand_over_trained_tensors(outcome, &handover_directory) {
-                    Ok(outcome) => outcome,
-                    Err(handover_failure) => {
-                        let elapsed_millis = active_training.elapsed_millis();
-                        self.fail_decision_training(
-                            request_id,
-                            DecisionFailure::fatal_execution(&handover_failure),
-                            elapsed_millis,
-                            event_writer,
-                        )
-                        .await?;
-                        return Ok(None);
-                    }
-                };
-                let handover_file_name = outcome.trained_tensors_file.clone();
-                let sent = event_writer
-                    .send_event(&WorkerEvent::DecisionModelTrained {
-                        request_id,
-                        outcome,
-                        elapsed_millis: active_training.elapsed_millis(),
-                    })
-                    .await;
-                if let Err(send_error) = sent {
-                    // No reader will come for a file whose message never left.
-                    discard_handover_file(handover_file_name.as_deref(), &handover_directory);
-                    return Err(send_error.into());
-                }
-                self.emit_decisions_finalization(
-                    request_id,
-                    active_training.elapsed_millis(),
-                    event_writer,
-                )
-                .await?;
+            Ok(DecisionTrainingStep::Completed(trained_outcome)) => {
+                self.complete_decision_training(&active_training, trained_outcome, event_writer)
+                    .await?;
                 Ok(None)
             }
             Err(failure_reason) => {
@@ -186,6 +153,53 @@ where
                 Ok(None)
             }
         }
+    }
+
+    /// Hands the trained tensors over, sends the result, and finalizes. A
+    /// failed hand-over ends the training as a failure instead.
+    async fn complete_decision_training<WriteTransport>(
+        &mut self,
+        active_training: &ActiveDecisionTraining,
+        trained_outcome: Box<DecisionTrainingOutcome>,
+        event_writer: &mut ProtocolWriter<WriteTransport>,
+    ) -> Result<(), WorkerRuntimeError>
+    where
+        WriteTransport: AsyncWrite + Unpin,
+    {
+        let request_id = active_training.request_id;
+        // One message may not hold a 9B model's add-ons; the
+        // tensors go through a file the command-line tool reads.
+        let handover_directory = std::env::temp_dir();
+        let handed_over_outcome =
+            match hand_over_trained_tensors(trained_outcome, &handover_directory) {
+                Ok(handed_over_outcome) => handed_over_outcome,
+                Err(handover_failure) => {
+                    let elapsed_millis = active_training.elapsed_millis();
+                    return self
+                        .fail_decision_training(
+                            request_id,
+                            DecisionFailure::fatal_execution(&handover_failure),
+                            elapsed_millis,
+                            event_writer,
+                        )
+                        .await;
+                }
+            };
+        let handover_file_name = handed_over_outcome.trained_tensors_file.clone();
+        let sent = event_writer
+            .send_event(&WorkerEvent::DecisionModelTrained {
+                request_id,
+                outcome: handed_over_outcome,
+                elapsed_millis: active_training.elapsed_millis(),
+            })
+            .await;
+        if let Err(send_error) = sent {
+            // No reader will come for a file whose message never left.
+            discard_handover_file(handover_file_name.as_deref(), &handover_directory);
+            return Err(send_error.into());
+        }
+        self.emit_decisions_finalization(request_id, active_training.elapsed_millis(), event_writer)
+            .await
     }
 
     /// Trains one step per otherwise idle loop turn; a command that arrives

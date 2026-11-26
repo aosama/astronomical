@@ -125,7 +125,6 @@ async fn should_measure_paged_prefill_with_a_cold_macos_file_cache_at_fifty_thou
     );
 }
 
-#[expect(clippy::too_many_lines)]
 async fn run_cold_prefill_measurement(measurement_case: ColdPrefillMeasurementCase) {
     let configured_model_directory = configured_model_directory_from_user_config();
     let production_worker_executable_path =
@@ -140,27 +139,12 @@ async fn run_cold_prefill_measurement(measurement_case: ColdPrefillMeasurementCa
         .expect("the machine MLX memory ceiling should be available");
 
     eprintln!("[performance-measurement] launching the model-artifact Ornith worker");
-    let performance_log_directory = isolated_worker_home.path().join("logs");
-    fs::create_dir_all(&performance_log_directory)
-        .expect("the metrics performance log directory should be created");
-    let worker_runtime_config = ResolvedRuntimeConfigResolver::for_development_home_directory(
-        isolated_worker_home.path().to_path_buf(),
-        PathBuf::from(&production_worker_executable_path),
-    )
-    .load()
-    .expect("the isolated metrics worker configuration should resolve");
-    let model_policy_catalog = worker_runtime_config.model_policy_catalog.clone();
-    let worker_handle = WorkerHandle::launch_with_startup_configuration(
+    let worker_handle = launch_idle_worker(
+        isolated_worker_home.path(),
+        Path::new(&production_worker_executable_path),
         worker_executable_path,
-        Duration::from_secs(60),
-        GenerationPerformanceLog::open(&performance_log_directory)
-            .expect("the metrics performance log should open"),
-        model_policy_catalog,
-        worker_runtime_config.worker_startup_configuration(),
     )
-    .await
-    .expect("the daemon should launch the real worker");
-    wait_until_idle(&worker_handle).await;
+    .await;
     let worker_process_id = find_worker_process_id().await;
     let source_document = static_source_document(measurement_case.source_document);
     eprintln!(
@@ -182,6 +166,50 @@ async fn run_cold_prefill_measurement(measurement_case: ColdPrefillMeasurementCa
         source_document.split_whitespace().count(),
         measurement_case.source_word_count
     );
+    assert_measurement_shape(&streaming_measurement, &measurement_case);
+
+    let metrics_report = cold_prefill_metrics_report(
+        &streaming_measurement,
+        &measurement_case,
+        machine_mlx_memory_ceiling_bytes,
+        physical_footprint.peak_bytes,
+    );
+    eprintln!("[performance-measurement] {metrics_report}");
+}
+
+async fn launch_idle_worker(
+    isolated_worker_home_path: &Path,
+    production_worker_executable_path: &Path,
+    worker_executable_path: PathBuf,
+) -> WorkerHandle {
+    let performance_log_directory = isolated_worker_home_path.join("logs");
+    fs::create_dir_all(&performance_log_directory)
+        .expect("the metrics performance log directory should be created");
+    let worker_runtime_config = ResolvedRuntimeConfigResolver::for_development_home_directory(
+        isolated_worker_home_path.to_path_buf(),
+        PathBuf::from(production_worker_executable_path),
+    )
+    .load()
+    .expect("the isolated metrics worker configuration should resolve");
+    let model_policy_catalog = worker_runtime_config.model_policy_catalog.clone();
+    let worker_handle = WorkerHandle::launch_with_startup_configuration(
+        worker_executable_path,
+        Duration::from_secs(60),
+        GenerationPerformanceLog::open(&performance_log_directory)
+            .expect("the metrics performance log should open"),
+        model_policy_catalog,
+        worker_runtime_config.worker_startup_configuration(),
+    )
+    .await
+    .expect("the daemon should launch the real worker");
+    wait_until_idle(&worker_handle).await;
+    worker_handle
+}
+
+fn assert_measurement_shape(
+    streaming_measurement: &StreamingMeasurement,
+    measurement_case: &ColdPrefillMeasurementCase,
+) {
     if measurement_case.maximum_output_tokens > 1 {
         assert!(!streaming_measurement.generated_text.trim().is_empty());
     }
@@ -202,7 +230,14 @@ async fn run_cold_prefill_measurement(measurement_case: ColdPrefillMeasurementCa
         streaming_measurement.astro_ssd_prompt_cache_restored_token_count, 0,
         "the performance test must measure model prefill rather than astro SSD prompt cache restoration"
     );
+}
 
+fn cold_prefill_metrics_report(
+    streaming_measurement: &StreamingMeasurement,
+    measurement_case: &ColdPrefillMeasurementCase,
+    machine_mlx_memory_ceiling_bytes: usize,
+    peak_worker_physical_footprint_bytes: u64,
+) -> serde_json::Value {
     let prompt_processing_duration = streaming_measurement
         .first_output_at
         .duration_since(streaming_measurement.request_started_at);
@@ -225,7 +260,7 @@ async fn run_cold_prefill_measurement(measurement_case: ColdPrefillMeasurementCa
         .filter(|paragraph| !paragraph.trim().is_empty())
         .count();
 
-    let metrics_report = json!({
+    json!({
         "completion_tokens": streaming_measurement.completion_token_count,
         "cached_tokens": streaming_measurement.astro_ssd_prompt_cache_restored_token_count,
         "generation_seconds": generation_duration.as_secs_f64(),
@@ -237,7 +272,7 @@ async fn run_cold_prefill_measurement(measurement_case: ColdPrefillMeasurementCa
         "maximum_prefill_mlx_peak_memory_bytes": streaming_measurement.maximum_prefill_mlx_peak_memory_bytes,
         "model": model_id(),
         "output_paragraphs": output_paragraph_count,
-        "peak_worker_physical_footprint_bytes": physical_footprint.peak_bytes,
+        "peak_worker_physical_footprint_bytes": peak_worker_physical_footprint_bytes,
         "prompt_processing_seconds": prompt_processing_duration.as_secs_f64(),
         "prompt_processing_tokens_per_second": prompt_tokens_per_second,
         "prompt_tokens": streaming_measurement.prompt_token_count,
@@ -246,8 +281,7 @@ async fn run_cold_prefill_measurement(measurement_case: ColdPrefillMeasurementCa
         "temperature": 1.0,
         "top_p": 0.95,
         "total_request_seconds": total_request_duration.as_secs_f64(),
-    });
-    eprintln!("[performance-measurement] {metrics_report}");
+    })
 }
 
 fn configured_model_directory_from_user_config() -> PathBuf {
@@ -310,7 +344,6 @@ async fn wait_until_idle(worker_handle: &WorkerHandle) {
     panic!("the real worker did not become idle before the metrics deadline");
 }
 
-#[expect(clippy::too_many_lines)]
 async fn measure_worker_summarization(
     worker_handle: &WorkerHandle,
     source_document: &str,
@@ -319,35 +352,10 @@ async fn measure_worker_summarization(
     let user_prompt = format!("{}\n\n{source_document}", measurement_case.instruction);
     let request_started_at = Instant::now();
     let mut stream_receiver = worker_handle
-        .start_chat_generation(ChatGenerationCommand {
-            request_id: RequestId::new(1),
-            model: model_id().to_owned(),
-            messages: vec![ChatMessage::User {
-                content: user_prompt,
-                images: Vec::new(),
-            }],
-            tools: Vec::new(),
-            tool_choice: ChatToolChoice::None,
-            settings: ChatGenerationSettings {
-                max_output_tokens: measurement_case.maximum_output_tokens,
-                temperature_thousandths: None,
-                top_p_thousandths: None,
-                repetition_penalty_thousandths: None,
-                seed: None,
-                thinking_budget: Some(256),
-            },
-            structured_generation: None,
-        })
+        .start_chat_generation(summary_generation_command(user_prompt, measurement_case))
         .await
         .expect("the worker should start the metrics generation request");
-    let mut first_output_at: Option<Instant> = None;
-    let mut generated_text = String::new();
-    let mut prompt_token_count: Option<u64> = None;
-    let mut completion_token_count: Option<u64> = None;
-    let mut astro_ssd_prompt_cache_restored_token_count: Option<u64> = None;
-    let mut maximum_prefill_mlx_active_memory_bytes: Option<u64> = None;
-    let mut maximum_prefill_mlx_buffer_cache_bytes: Option<u64> = None;
-    let mut maximum_prefill_mlx_peak_memory_bytes: Option<u64> = None;
+    let mut stream_observations = StreamObservations::default();
     let mut progress_interval = interval(Duration::from_secs(10));
     progress_interval.tick().await;
     eprintln!(
@@ -356,7 +364,7 @@ async fn measure_worker_summarization(
     loop {
         let stream_event = tokio::select! {
             stream_event = stream_receiver.recv() => stream_event,
-            _ = progress_interval.tick(), if first_output_at.is_none() => {
+            _ = progress_interval.tick(), if stream_observations.first_output_at.is_none() => {
                 let elapsed = request_started_at.elapsed();
                 let remaining = BENCHMARK_TIMEOUT.saturating_sub(elapsed);
                 eprintln!(
@@ -370,83 +378,146 @@ async fn measure_worker_summarization(
         let Some(stream_event) = stream_event else {
             break;
         };
-        match stream_event {
-            ChatGenerationStreamEvent::ReasoningFragment(text)
-            | ChatGenerationStreamEvent::TextFragment(text) => {
-                record_generated_output(&mut first_output_at, &mut generated_text, &text, "output");
-            }
-            ChatGenerationStreamEvent::ToolCall {
-                function_name,
-                arguments_json,
-                ..
-            } => {
-                record_generated_output(
-                    &mut first_output_at,
-                    &mut generated_text,
-                    &function_name,
-                    "tool call",
-                );
-                generated_text.push_str(&arguments_json);
-            }
-            ChatGenerationStreamEvent::PrefillProgress {
-                mlx_active_memory_bytes,
-                mlx_buffer_cache_bytes,
-                mlx_peak_memory_bytes,
-                ..
-            } => {
-                maximum_prefill_mlx_active_memory_bytes = maximum_optional_u64(
-                    maximum_prefill_mlx_active_memory_bytes,
-                    mlx_active_memory_bytes,
-                );
-                maximum_prefill_mlx_buffer_cache_bytes = maximum_optional_u64(
-                    maximum_prefill_mlx_buffer_cache_bytes,
-                    mlx_buffer_cache_bytes,
-                );
-                maximum_prefill_mlx_peak_memory_bytes = maximum_optional_u64(
-                    maximum_prefill_mlx_peak_memory_bytes,
-                    mlx_peak_memory_bytes,
-                );
-            }
-            // A measurement of prefill, which drafting never touches.
-            ChatGenerationStreamEvent::DraftingReport(_) => {}
-            ChatGenerationStreamEvent::Completed {
-                prompt_token_count: completed_prompt_token_count,
-                generated_token_count,
-                astro_ssd_prompt_cache_restored_token_count:
-                    completed_astro_ssd_prompt_cache_restored_token_count,
-                ..
-            } => {
-                prompt_token_count = Some(u64::from(completed_prompt_token_count));
-                completion_token_count = Some(u64::from(generated_token_count));
-                astro_ssd_prompt_cache_restored_token_count = Some(u64::from(
-                    completed_astro_ssd_prompt_cache_restored_token_count,
-                ));
-                break;
-            }
-            ChatGenerationStreamEvent::Failed { reason } => {
-                panic!("the worker failed the metrics generation request: {reason:?}");
-            }
-            ChatGenerationStreamEvent::Error(error_code) => {
-                panic!("the worker stream reported an error: {error_code:?}");
-            }
+        if observe_stream_event(&mut stream_observations, stream_event) {
+            break;
         }
     }
     let response_completed_at = Instant::now();
     StreamingMeasurement {
         request_started_at,
-        first_output_at: first_output_at.unwrap_or(response_completed_at),
+        first_output_at: stream_observations
+            .first_output_at
+            .unwrap_or(response_completed_at),
         response_completed_at,
-        completion_token_count: completion_token_count
+        completion_token_count: stream_observations
+            .completion_token_count
             .expect("the terminal worker event should report completion tokens"),
-        astro_ssd_prompt_cache_restored_token_count: astro_ssd_prompt_cache_restored_token_count
+        astro_ssd_prompt_cache_restored_token_count: stream_observations
+            .astro_ssd_prompt_cache_restored_token_count
             .expect("the terminal worker event should report prompt tokens restored from the astro SSD prompt cache"),
-        generated_text,
-        maximum_prefill_mlx_active_memory_bytes,
-        maximum_prefill_mlx_buffer_cache_bytes,
-        maximum_prefill_mlx_peak_memory_bytes,
-        prompt_token_count: prompt_token_count
+        generated_text: stream_observations.generated_text,
+        maximum_prefill_mlx_active_memory_bytes: stream_observations
+            .maximum_prefill_mlx_active_memory_bytes,
+        maximum_prefill_mlx_buffer_cache_bytes: stream_observations
+            .maximum_prefill_mlx_buffer_cache_bytes,
+        maximum_prefill_mlx_peak_memory_bytes: stream_observations
+            .maximum_prefill_mlx_peak_memory_bytes,
+        prompt_token_count: stream_observations
+            .prompt_token_count
             .expect("the terminal worker event should report prompt tokens"),
     }
+}
+
+fn summary_generation_command(
+    user_prompt: String,
+    measurement_case: &ColdPrefillMeasurementCase,
+) -> ChatGenerationCommand {
+    ChatGenerationCommand {
+        request_id: RequestId::new(1),
+        model: model_id().to_owned(),
+        messages: vec![ChatMessage::User {
+            content: user_prompt,
+            images: Vec::new(),
+        }],
+        tools: Vec::new(),
+        tool_choice: ChatToolChoice::None,
+        settings: ChatGenerationSettings {
+            max_output_tokens: measurement_case.maximum_output_tokens,
+            temperature_thousandths: None,
+            top_p_thousandths: None,
+            repetition_penalty_thousandths: None,
+            seed: None,
+            thinking_budget: Some(256),
+        },
+        structured_generation: None,
+    }
+}
+
+/// What reading the worker's stream has gathered so far.
+#[derive(Default)]
+struct StreamObservations {
+    first_output_at: Option<Instant>,
+    generated_text: String,
+    prompt_token_count: Option<u64>,
+    completion_token_count: Option<u64>,
+    astro_ssd_prompt_cache_restored_token_count: Option<u64>,
+    maximum_prefill_mlx_active_memory_bytes: Option<u64>,
+    maximum_prefill_mlx_buffer_cache_bytes: Option<u64>,
+    maximum_prefill_mlx_peak_memory_bytes: Option<u64>,
+}
+
+/// Folds one worker stream event into the observations. Returns whether the
+/// event was the terminal one.
+fn observe_stream_event(
+    stream_observations: &mut StreamObservations,
+    stream_event: ChatGenerationStreamEvent,
+) -> bool {
+    match stream_event {
+        ChatGenerationStreamEvent::ReasoningFragment(text)
+        | ChatGenerationStreamEvent::TextFragment(text) => {
+            record_generated_output(
+                &mut stream_observations.first_output_at,
+                &mut stream_observations.generated_text,
+                &text,
+                "output",
+            );
+        }
+        ChatGenerationStreamEvent::ToolCall {
+            function_name,
+            arguments_json,
+            ..
+        } => {
+            record_generated_output(
+                &mut stream_observations.first_output_at,
+                &mut stream_observations.generated_text,
+                &function_name,
+                "tool call",
+            );
+            stream_observations.generated_text.push_str(&arguments_json);
+        }
+        ChatGenerationStreamEvent::PrefillProgress {
+            mlx_active_memory_bytes,
+            mlx_buffer_cache_bytes,
+            mlx_peak_memory_bytes,
+            ..
+        } => {
+            stream_observations.maximum_prefill_mlx_active_memory_bytes = maximum_optional_u64(
+                stream_observations.maximum_prefill_mlx_active_memory_bytes,
+                mlx_active_memory_bytes,
+            );
+            stream_observations.maximum_prefill_mlx_buffer_cache_bytes = maximum_optional_u64(
+                stream_observations.maximum_prefill_mlx_buffer_cache_bytes,
+                mlx_buffer_cache_bytes,
+            );
+            stream_observations.maximum_prefill_mlx_peak_memory_bytes = maximum_optional_u64(
+                stream_observations.maximum_prefill_mlx_peak_memory_bytes,
+                mlx_peak_memory_bytes,
+            );
+        }
+        // A measurement of prefill, which drafting never touches.
+        ChatGenerationStreamEvent::DraftingReport(_) => {}
+        ChatGenerationStreamEvent::Completed {
+            prompt_token_count: completed_prompt_token_count,
+            generated_token_count,
+            astro_ssd_prompt_cache_restored_token_count:
+                completed_astro_ssd_prompt_cache_restored_token_count,
+            ..
+        } => {
+            stream_observations.prompt_token_count = Some(u64::from(completed_prompt_token_count));
+            stream_observations.completion_token_count = Some(u64::from(generated_token_count));
+            stream_observations.astro_ssd_prompt_cache_restored_token_count = Some(u64::from(
+                completed_astro_ssd_prompt_cache_restored_token_count,
+            ));
+            return true;
+        }
+        ChatGenerationStreamEvent::Failed { reason } => {
+            panic!("the worker failed the metrics generation request: {reason:?}");
+        }
+        ChatGenerationStreamEvent::Error(error_code) => {
+            panic!("the worker stream reported an error: {error_code:?}");
+        }
+    }
+    false
 }
 
 fn maximum_optional_u64(current_maximum: Option<u64>, candidate: Option<u64>) -> Option<u64> {

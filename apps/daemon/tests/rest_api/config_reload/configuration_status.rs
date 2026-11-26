@@ -23,26 +23,8 @@ async fn should_expose_configured_and_worker_effective_generation_with_path_free
         )];
     let configured_worker_model_configuration = worker_model_configuration();
     let effective_worker_model_configuration = worker_model_configuration();
-    resolved_config.model_policy_catalog = Arc::new(HashMap::from([(
-        crate::support::MODEL_ID.to_owned(),
-        RuntimeModelPolicy {
-            model_directory: PathBuf::from("/fictional/private/target"),
-            generation_defaults: RuntimeModelGenerationDefaults {
-                maximum_output_tokens: 1_024,
-                configured_maximum_output_tokens: Some(1_024),
-                temperature_thousandths: Some(700),
-                top_p_thousandths: Some(900),
-                repetition_penalty_thousandths: None,
-            },
-            configured_maximum_context_tokens: Some(16_384),
-            default_maximum_context_tokens: 32_768,
-            configured_chunking_fields: config::ConfiguredChunkingFields {
-                fixed_prompt_processing_chunk_size_tokens: true,
-                ..Default::default()
-            },
-            worker_model_configuration: configured_worker_model_configuration,
-        },
-    )]));
+    resolved_config.model_policy_catalog =
+        configured_policy_catalog(configured_worker_model_configuration);
     let mut executor = ScriptedExecutor::ready(Vec::new());
     executor
         .health_snapshot
@@ -88,25 +70,7 @@ async fn should_expose_configured_and_worker_effective_generation_with_path_free
         }])
     );
     assert!(!String::from_utf8_lossy(&status_bytes).contains("/fictional/private"));
-    assert_eq!(
-        status_document["configuration"]["ready_model"]["temperature"]["configured"],
-        0.7
-    );
-    assert_eq!(
-        status_document["configuration"]["ready_model"]["chunking"]["fixed_prompt_processing_chunk_size_tokens"]
-            ["configured"],
-        2_048
-    );
-    assert!(
-        status_document["configuration"]["ready_model"]["chunking"]
-            ["full_attention_key_value_growth_tokens"]["configured"]
-            .is_null()
-    );
-    assert_eq!(
-        status_document["configuration"]["ready_model"]["chunking"]["ssd_prompt_cache_block_tokens"]
-            ["is_configured"],
-        false
-    );
+    assert_ready_model_summary_separates_configured_from_default_values(&status_document);
     let status_text = String::from_utf8(status_bytes.to_vec()).expect("status should be UTF-8");
     assert!(!status_text.contains("/fictional/private"));
     assert!(!status_text.contains("astro-ssd-prompt-cache"));
@@ -142,6 +106,58 @@ async fn should_expose_unavailable_model_directory_diagnostics_without_paths() {
     assert!(
         !String::from_utf8_lossy(&status_bytes)
             .contains(temporary_home.path().to_string_lossy().as_ref())
+    );
+}
+
+/// The policy catalog of a daemon whose one model has a configured
+/// temperature, top-p, context limit and fixed prompt processing chunk size,
+/// stored under a directory the status page must never reveal.
+fn configured_policy_catalog(
+    configured_worker_model_configuration: WorkerModelConfiguration,
+) -> Arc<HashMap<String, RuntimeModelPolicy>> {
+    Arc::new(HashMap::from([(
+        crate::support::MODEL_ID.to_owned(),
+        RuntimeModelPolicy {
+            model_directory: PathBuf::from("/fictional/private/target"),
+            generation_defaults: RuntimeModelGenerationDefaults {
+                maximum_output_tokens: 1_024,
+                configured_maximum_output_tokens: Some(1_024),
+                temperature_thousandths: Some(700),
+                top_p_thousandths: Some(900),
+                repetition_penalty_thousandths: None,
+            },
+            configured_maximum_context_tokens: Some(16_384),
+            default_maximum_context_tokens: 32_768,
+            configured_chunking_fields: config::ConfiguredChunkingFields {
+                fixed_prompt_processing_chunk_size_tokens: true,
+                ..Default::default()
+            },
+            worker_model_configuration: configured_worker_model_configuration,
+        },
+    )]))
+}
+
+fn assert_ready_model_summary_separates_configured_from_default_values(
+    status_document: &serde_json::Value,
+) {
+    assert_eq!(
+        status_document["configuration"]["ready_model"]["temperature"]["configured"],
+        0.7
+    );
+    assert_eq!(
+        status_document["configuration"]["ready_model"]["chunking"]["fixed_prompt_processing_chunk_size_tokens"]
+            ["configured"],
+        2_048
+    );
+    assert!(
+        status_document["configuration"]["ready_model"]["chunking"]
+            ["full_attention_key_value_growth_tokens"]["configured"]
+            .is_null()
+    );
+    assert_eq!(
+        status_document["configuration"]["ready_model"]["chunking"]["ssd_prompt_cache_block_tokens"]
+            ["is_configured"],
+        false
     );
 }
 

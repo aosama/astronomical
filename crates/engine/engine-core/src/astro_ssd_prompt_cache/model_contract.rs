@@ -6,6 +6,7 @@
 
 use sha2::{Digest, Sha256};
 
+mod block_geometry;
 #[cfg(test)]
 mod tests;
 
@@ -13,8 +14,9 @@ use crate::{AstroDecoderStateCacheLayout, AstroDecoderStateCachePersistedTensorL
 
 use super::block_format::ASTRO_SSD_PROMPT_CACHE_FORMAT_VERSION;
 use super::model_contract_error::AstroSsdPromptCacheModelContractError;
-use super::model_contract_storage_geometry::{
-    exact_state_file_bytes, maximum_block_manifest_file_bytes,
+use super::model_contract_storage_geometry::exact_state_file_bytes;
+use block_geometry::{
+    BlockPayloadByteCounts, capture_payload_byte_counts, resolve_block_file_geometry,
 };
 
 /// Architecture-neutral decoder-state storage contract derived from validated model metadata.
@@ -70,43 +72,27 @@ impl AstroSsdPromptCacheModelContract {
             astro_decoder_state_cache_layout.boundary_snapshot_payload_byte_count()?;
         let persistence_alignment_token_count =
             astro_decoder_state_cache_layout.persistence_alignment_token_count()?;
-        // The block length belongs to the immutable artifact contract, not a deployment-wide
-        // tuning constant. Matching append-only allocation growth avoids capture boundaries that
-        // force incompatible state reshaping, while the quota-derived size prevents a laptop
-        // with less SSD capacity from accepting a state block it can never retain.
-        let block_token_count_is_user_configured = configured_block_token_count.is_some();
-        let initial_block_token_count = configured_or_derived_block_token_count(
-            configured_block_token_count,
-            &BlockTokenCountSizingInputs {
-                maximum_context_token_count,
-                persistence_alignment_token_count,
-                sequence_state_payload_bytes_per_token,
-                boundary_state_payload_bytes,
-                global_ssd_quota_bytes,
-            },
-        )?;
-        let maximum_block_manifest_file_bytes =
-            maximum_block_manifest_file_bytes(maximum_context_token_count)?;
-        let resolved_block_file_geometry = block_file_geometry_within_ssd_quota(
-            initial_block_token_count,
-            &BlockFileSizingInputs {
-                astro_decoder_state_cache_layout: &astro_decoder_state_cache_layout,
-                maximum_context_token_count,
-                persistence_alignment_token_count,
-                global_ssd_quota_bytes,
-                block_token_count_is_user_configured,
-                maximum_block_manifest_file_bytes,
-            },
-        )?;
-        let block_token_count = resolved_block_file_geometry.block_token_count;
-        let sequence_state_payload_bytes_per_block = sequence_state_payload_bytes_per_token
-            .checked_mul(block_token_count)
-            .ok_or(
-                AstroSsdPromptCacheModelContractError::SequenceStateBlockPayloadByteCountOverflow,
+        let (resolved_block_file_geometry, maximum_block_manifest_file_bytes) =
+            resolve_block_file_geometry(
+                configured_block_token_count,
+                &astro_decoder_state_cache_layout,
+                &BlockTokenCountSizingInputs {
+                    maximum_context_token_count,
+                    persistence_alignment_token_count,
+                    sequence_state_payload_bytes_per_token,
+                    boundary_state_payload_bytes,
+                    global_ssd_quota_bytes,
+                },
             )?;
-        let capture_payload_bytes = sequence_state_payload_bytes_per_block
-            .checked_add(boundary_state_payload_bytes)
-            .ok_or(AstroSsdPromptCacheModelContractError::CapturePayloadByteCountOverflow)?;
+        let block_token_count = resolved_block_file_geometry.block_token_count;
+        let BlockPayloadByteCounts {
+            sequence_state_payload_bytes_per_block,
+            capture_payload_bytes,
+        } = capture_payload_byte_counts(
+            sequence_state_payload_bytes_per_token,
+            block_token_count,
+            boundary_state_payload_bytes,
+        )?;
         let direct_publication_workspace_bytes =
             direct_publication_workspace_bytes_for_block_token_count(
                 &astro_decoder_state_cache_layout,

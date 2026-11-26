@@ -79,13 +79,40 @@ pub(crate) async fn create_decisions(
             );
         }
     };
+    let decisions_start_result = start_decisions_after_admission(
+        &application_state,
+        decisions_command,
+        configuration_transition_guard,
+    )
+    .await;
+    let mut decisions_result_receiver = match decisions_start_result {
+        Ok(decisions_result_receiver) => decisions_result_receiver,
+        Err(start_error) => return generation_start_error_response(start_error),
+    };
+    decisions_reply_response(
+        &resolved_model_id,
+        request_identifier,
+        decisions_result_receiver.recv().await,
+    )
+}
+
+/// Starts the decisions request and releases the configuration lock as soon
+/// as the request owns its place in the queue, or as soon as its start fails.
+async fn start_decisions_after_admission(
+    application_state: &ApplicationState,
+    decisions_command: ipc_protocol::DecisionsCommand,
+    configuration_transition_guard: tokio::sync::MutexGuard<'_, ()>,
+) -> Result<
+    tokio::sync::mpsc::Receiver<Result<DecisionsOutput, DecisionsExecutionError>>,
+    GenerationStartError,
+> {
     let (admission_sender, mut admission_receiver) = tokio::sync::oneshot::channel();
     let mut decisions_start_future = application_state
         .generation_executor
         .start_decisions_generation_with_admission_signal(decisions_command, admission_sender);
     // The configuration lock is held only until the request owns its place
     // in the queue, so a reload cannot slip between resolution and admission.
-    let decisions_start_result = tokio::select! {
+    tokio::select! {
         admission_result = &mut admission_receiver => {
             drop(configuration_transition_guard);
             match admission_result {
@@ -97,18 +124,23 @@ pub(crate) async fn create_decisions(
             drop(configuration_transition_guard);
             decisions_start_result
         }
-    };
-    let mut decisions_result_receiver = match decisions_start_result {
-        Ok(decisions_result_receiver) => decisions_result_receiver,
-        Err(start_error) => return generation_start_error_response(start_error),
-    };
-    match decisions_result_receiver.recv().await {
+    }
+}
+
+/// Maps the worker's one reply to the HTTP answer: the System One response,
+/// or the rejection for a failure, a protocol break or a closed channel.
+fn decisions_reply_response(
+    resolved_model_id: &str,
+    request_identifier: u64,
+    decisions_reply: Option<Result<DecisionsOutput, DecisionsExecutionError>>,
+) -> Response {
+    match decisions_reply {
         Some(Ok(DecisionsOutput::Answered {
             question_outcomes,
             input_token_count,
             ..
         })) => Json(system_one_response(
-            &resolved_model_id,
+            resolved_model_id,
             &question_outcomes,
             input_token_count,
         ))

@@ -4,7 +4,7 @@
 //! worker answer control commands around it.
 
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
@@ -49,7 +49,45 @@ pub(super) async fn launch_stand_in_worker_application() -> StandInWorkerTestCon
     );
     let temporary_directory = tempfile::tempdir().expect("test directory should be created");
     let model_directory = temporary_directory.path().join("delayed-completion-model");
-    let model_policy_catalog = Arc::new(HashMap::from([(
+    let model_policy_catalog = delayed_model_policy_catalog(model_directory);
+    let worker_handle = WorkerHandle::launch(
+        &worker_executable_path,
+        Duration::from_secs(2),
+        GenerationPerformanceLog::open(temporary_directory.path())
+            .expect("test performance log should open"),
+        Arc::clone(&model_policy_catalog),
+    )
+    .await
+    .expect("idle worker fixture should launch");
+    wait_for_ready_worker(&worker_handle).await;
+
+    let resolved_runtime_config = stand_in_resolved_runtime_config(
+        temporary_directory.path(),
+        worker_executable_path.clone(),
+        model_policy_catalog,
+    );
+    let runtime_config_resolver = ResolvedRuntimeConfigResolver::for_development_home_directory(
+        temporary_directory.path().to_path_buf(),
+        worker_executable_path,
+    );
+    let application = build_application_with_full_control(
+        worker_handle.clone(),
+        Arc::new(RwLock::new(resolved_runtime_config)),
+        runtime_config_resolver,
+        ShutdownController::new(),
+    );
+    StandInWorkerTestContext {
+        application,
+        worker_handle,
+        _temporary_directory: temporary_directory,
+    }
+}
+
+/// A policy catalog holding the one model the stand-in worker serves slowly.
+fn delayed_model_policy_catalog(
+    model_directory: PathBuf,
+) -> Arc<HashMap<String, RuntimeModelPolicy>> {
+    Arc::new(HashMap::from([(
         DELAYED_MODEL_ID.to_owned(),
         RuntimeModelPolicy {
             model_directory,
@@ -65,23 +103,19 @@ pub(super) async fn launch_stand_in_worker_application() -> StandInWorkerTestCon
             configured_chunking_fields: Default::default(),
             worker_model_configuration: test_worker_model_configuration(DELAYED_MODEL_ID),
         },
-    )]));
-    let worker_handle = WorkerHandle::launch(
-        &worker_executable_path,
-        Duration::from_secs(2),
-        GenerationPerformanceLog::open(temporary_directory.path())
-            .expect("test performance log should open"),
-        Arc::clone(&model_policy_catalog),
-    )
-    .await
-    .expect("idle worker fixture should launch");
-    wait_for_ready_worker(&worker_handle).await;
+    )]))
+}
 
-    let resolved_runtime_config = ResolvedRuntimeConfig {
+fn stand_in_resolved_runtime_config(
+    temporary_directory: &Path,
+    worker_executable_path: PathBuf,
+    model_policy_catalog: Arc<HashMap<String, RuntimeModelPolicy>>,
+) -> ResolvedRuntimeConfig {
+    ResolvedRuntimeConfig {
         neural_engine_program_directory: "neural-engine-programs".into(),
         configuration_generation:
             "1111111111111111111111111111111111111111111111111111111111111111".to_owned(),
-        worker_executable_path: worker_executable_path.clone(),
+        worker_executable_path,
         discovered_models: Vec::new(),
         model_discovery_diagnostics: Vec::new(),
         configured_model_directories: Vec::new(),
@@ -99,30 +133,15 @@ pub(super) async fn launch_stand_in_worker_application() -> StandInWorkerTestCon
         configured_astro_ssd_prompt_cache_maximum_size_bytes: None,
         performance_attribution_enabled: false,
         astro_ssd_prompt_cache_config: config::AstroSsdPromptCacheConfig::new(
-            temporary_directory.path().join("cache"),
+            temporary_directory.join("cache"),
             50_000_000_000,
         ),
         bind_address: "127.0.0.1:6733".to_owned(),
         logging_config: config::LoggingConfig::new(
-            temporary_directory.path().join("logs"),
+            temporary_directory.join("logs"),
             config::LogLevel::Warn,
             2,
         ),
-    };
-    let runtime_config_resolver = ResolvedRuntimeConfigResolver::for_development_home_directory(
-        temporary_directory.path().to_path_buf(),
-        worker_executable_path,
-    );
-    let application = build_application_with_full_control(
-        worker_handle.clone(),
-        Arc::new(RwLock::new(resolved_runtime_config)),
-        runtime_config_resolver,
-        ShutdownController::new(),
-    );
-    StandInWorkerTestContext {
-        application,
-        worker_handle,
-        _temporary_directory: temporary_directory,
     }
 }
 

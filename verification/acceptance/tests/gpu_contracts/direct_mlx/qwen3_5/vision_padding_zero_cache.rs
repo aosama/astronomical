@@ -51,17 +51,26 @@ async fn compare_memoized_padding_with_per_call_zeros() {
     .expect("the direct MLX runtime should initialize");
     let vision_padding_zero_cache = Qwen3_5VisionPaddingZeroCache::new();
 
+    assert_every_component_pads_like_per_call_zeros(&runtime, &vision_padding_zero_cache);
+    assert_wider_fused_width_replaces_retained_zeros(&runtime, &vision_padding_zero_cache);
+    assert_already_fused_head_dimension_takes_identity_path(&runtime, &vision_padding_zero_cache);
+}
+
+fn assert_every_component_pads_like_per_call_zeros(
+    runtime: &MlxRuntime,
+    vision_padding_zero_cache: &Qwen3_5VisionPaddingZeroCache,
+) {
     for patch_count in [64, 129] {
         for component_index in 0..3 {
             let attention_states = patterned_head_array(
-                &runtime,
+                runtime,
                 patch_count,
                 0.004,
                 -0.37 + component_index as f32 * 0.11,
             );
             let memoized_padded = vision_padding_zero_cache
                 .pad_attention_head_dimension(
-                    &runtime,
+                    runtime,
                     &attention_states,
                     HEAD_COUNT,
                     patch_count,
@@ -69,26 +78,31 @@ async fn compare_memoized_padding_with_per_call_zeros() {
                 )
                 .expect("the memoized padding should build");
             let per_call_padded = per_call_zeros_padding(
-                &runtime,
+                runtime,
                 &attention_states,
                 HEAD_COUNT,
                 patch_count,
                 FUSED_HEAD_DIMENSION,
             );
             assert_bitwise_equal(
-                &runtime,
+                runtime,
                 &memoized_padded,
                 &per_call_padded,
                 &format!("padded component {component_index} at {patch_count} patches"),
             );
         }
     }
+}
 
-    // A different fused width must replace the retained zeros, not reuse them.
-    let attention_states = patterned_head_array(&runtime, 64, 0.004, -0.37);
+/// A different fused width must replace the retained zeros, not reuse them.
+fn assert_wider_fused_width_replaces_retained_zeros(
+    runtime: &MlxRuntime,
+    vision_padding_zero_cache: &Qwen3_5VisionPaddingZeroCache,
+) {
+    let attention_states = patterned_head_array(runtime, 64, 0.004, -0.37);
     let memoized_wider_padded = vision_padding_zero_cache
         .pad_attention_head_dimension(
-            &runtime,
+            runtime,
             &attention_states,
             HEAD_COUNT,
             64,
@@ -96,25 +110,30 @@ async fn compare_memoized_padding_with_per_call_zeros() {
         )
         .expect("the wider memoized padding should build");
     let per_call_wider_padded = per_call_zeros_padding(
-        &runtime,
+        runtime,
         &attention_states,
         HEAD_COUNT,
         64,
         WIDER_FUSED_HEAD_DIMENSION,
     );
     assert_bitwise_equal(
-        &runtime,
+        runtime,
         &memoized_wider_padded,
         &per_call_wider_padded,
         "padded component at the wider fused width",
     );
+}
 
-    // An already-fused head dimension takes the identity path without padding.
+/// An already-fused head dimension takes the identity path without padding.
+fn assert_already_fused_head_dimension_takes_identity_path(
+    runtime: &MlxRuntime,
+    vision_padding_zero_cache: &Qwen3_5VisionPaddingZeroCache,
+) {
     let fused_states =
-        patterned_head_array_with_dimension(&runtime, 64, WIDER_FUSED_HEAD_DIMENSION, 0.004, -0.37);
+        patterned_head_array_with_dimension(runtime, 64, WIDER_FUSED_HEAD_DIMENSION, 0.004, -0.37);
     let identity_padded = vision_padding_zero_cache
         .pad_attention_head_dimension(
-            &runtime,
+            runtime,
             &fused_states,
             HEAD_COUNT,
             64,
@@ -122,7 +141,7 @@ async fn compare_memoized_padding_with_per_call_zeros() {
         )
         .expect("the identity padding should build");
     assert_bitwise_equal(
-        &runtime,
+        runtime,
         &identity_padded,
         &fused_states,
         "identity-shaped attention states",

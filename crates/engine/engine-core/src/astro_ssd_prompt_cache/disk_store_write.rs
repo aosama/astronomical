@@ -64,82 +64,25 @@ impl AstroSsdPromptCacheDiskStore {
         // another process or by the user, so existing content is revalidated.
         let _write_operation_guard = self.lock_write_operations();
         self.prepare_active_model_storage_directories()?;
-        validate_state_kind_tensor_presence(
-            "sequence",
-            self.model_contract.has_sequence_state(),
-            sequence_state_tensors.len(),
+        self.validate_publication_request(
+            block_key,
+            parent_block_key,
+            sequence_state_tensors,
+            boundary_state_tensors,
         )?;
-        validate_state_kind_tensor_presence(
-            "boundary",
-            self.model_contract.has_boundary_state(),
-            boundary_state_tensors.len(),
-        )?;
-        validate_requested_block_ancestry(block_key, parent_block_key)?;
 
-        let block_hash = block_key.block_hash();
-        // The index is an acceleration structure, never authority. If its path
-        // disappeared, discard the stale entry and account from disk again.
-        let mut existing_block = self.lock_tracked_files().block(&block_hash).cloned();
-        if existing_block
-            .as_ref()
-            .is_some_and(|tracked_block| !tracked_block.block_directory_path.is_dir())
-        {
-            self.lock_tracked_files().remove_block(&block_hash);
-            self.refresh_global_astro_ssd_prompt_cache_accounting()?;
-            existing_block = None;
-        }
-        if let Some(existing_block) = existing_block {
-            self.validate_existing_block_for_publication(
+        if let Some(existing_block) = self.indexed_block_still_on_disk(&block_key.block_hash())? {
+            return self.publish_over_existing_block(
+                runtime,
                 block_key,
                 parent_block_key,
                 &existing_block,
-            )?;
-            if existing_block.block_index != block_key.block_index()
-                || existing_block.parent_block_hash
-                    != parent_block_key.map(AstroSsdPromptCacheBlockKey::block_hash)
-            {
-                return Err(
-                    AstroSsdPromptCacheDiskStoreError::ExistingBlockTopologyMismatch { block_hash },
-                );
-            }
-            let sequence_state_is_complete = !self.model_contract.has_sequence_state()
-                || existing_block.sequence_state_file.is_some();
-            let boundary_state_is_complete = !self.model_contract.has_boundary_state()
-                || existing_block.boundary_state_file.is_some();
-            // Idempotency is granted only after manifest and present state files
-            // pass full validation. Hash equality alone cannot prove topology.
-            if sequence_state_is_complete && boundary_state_is_complete {
-                return Ok(AstroSsdPromptCachePublicationOutcome::AlreadyPublished);
-            }
-            if !sequence_state_is_complete {
-                return Err(
-                    AstroSsdPromptCacheDiskStoreError::ExistingBlockTopologyMismatch { block_hash },
-                );
-            }
-            // Sequence state may remain valid after retention compacts a parent
-            // boundary. Reaching the same block as a leaf restores that single
-            // missing file without replacing the sequence state.
-            self.publish_missing_boundary_state_transaction(
-                runtime,
-                block_key,
                 boundary_state_tensors,
                 performance_attribution,
-            )?;
-            return Ok(AstroSsdPromptCachePublicationOutcome::Published);
+            );
         }
 
-        // Children are never admitted speculatively. Requiring the parent in the
-        // validated index guarantees every published non-root remains restorable.
-        if let Some(parent_block_key) = parent_block_key
-            && self
-                .lock_tracked_files()
-                .block(&parent_block_key.block_hash())
-                .is_none()
-        {
-            return Err(AstroSsdPromptCacheDiskStoreError::ParentStateNotPublished {
-                block_index: block_key.block_index(),
-            });
-        }
+        self.require_published_parent(block_key, parent_block_key)?;
         self.publish_new_block_transaction(
             runtime,
             block_key,
@@ -154,6 +97,116 @@ impl AstroSsdPromptCacheDiskStore {
             performance_attribution,
         )?;
         Ok(AstroSsdPromptCachePublicationOutcome::Published)
+    }
+
+    fn validate_publication_request(
+        &self,
+        block_key: &AstroSsdPromptCacheBlockKey,
+        parent_block_key: Option<&AstroSsdPromptCacheBlockKey>,
+        sequence_state_tensors: &HashMap<String, MlxArray>,
+        boundary_state_tensors: &HashMap<String, MlxArray>,
+    ) -> Result<(), AstroSsdPromptCacheDiskStoreError> {
+        validate_state_kind_tensor_presence(
+            "sequence",
+            self.model_contract.has_sequence_state(),
+            sequence_state_tensors.len(),
+        )?;
+        validate_state_kind_tensor_presence(
+            "boundary",
+            self.model_contract.has_boundary_state(),
+            boundary_state_tensors.len(),
+        )?;
+        validate_requested_block_ancestry(block_key, parent_block_key)
+    }
+
+    /// The block the index holds for `block_hash`, or `None` when it holds none
+    /// or when the block's directory is gone from disk.
+    fn indexed_block_still_on_disk(
+        &self,
+        block_hash: &[u8; 32],
+    ) -> Result<Option<TrackedAstroSsdPromptCacheBlock>, AstroSsdPromptCacheDiskStoreError> {
+        // The index is an acceleration structure, never authority. If its path
+        // disappeared, discard the stale entry and account from disk again.
+        let Some(existing_block) = self.lock_tracked_files().block(block_hash).cloned() else {
+            return Ok(None);
+        };
+        if existing_block.block_directory_path.is_dir() {
+            return Ok(Some(existing_block));
+        }
+        self.lock_tracked_files().remove_block(block_hash);
+        self.refresh_global_astro_ssd_prompt_cache_accounting()?;
+        Ok(None)
+    }
+
+    /// Publishing a block the index already holds: nothing to do when it is
+    /// complete, a repair when only its boundary snapshot is missing, and a
+    /// refusal when what is stored disagrees with the request.
+    fn publish_over_existing_block(
+        &self,
+        runtime: &MlxRuntime,
+        block_key: &AstroSsdPromptCacheBlockKey,
+        parent_block_key: Option<&AstroSsdPromptCacheBlockKey>,
+        existing_block: &TrackedAstroSsdPromptCacheBlock,
+        boundary_state_tensors: &HashMap<String, MlxArray>,
+        performance_attribution: &mut PerformanceAttribution,
+    ) -> Result<AstroSsdPromptCachePublicationOutcome, AstroSsdPromptCacheDiskStoreError> {
+        let block_hash = block_key.block_hash();
+        self.validate_existing_block_for_publication(block_key, parent_block_key, existing_block)?;
+        if !existing_block_matches_requested_topology(
+            existing_block,
+            block_key.block_index(),
+            parent_block_key.map(AstroSsdPromptCacheBlockKey::block_hash),
+        ) {
+            return Err(
+                AstroSsdPromptCacheDiskStoreError::ExistingBlockTopologyMismatch { block_hash },
+            );
+        }
+        // Idempotency is granted only after manifest and present state files
+        // pass full validation. Hash equality alone cannot prove topology.
+        match existing_block_completeness(
+            self.model_contract.has_sequence_state(),
+            self.model_contract.has_boundary_state(),
+            existing_block,
+        ) {
+            ExistingBlockCompleteness::Complete => {
+                Ok(AstroSsdPromptCachePublicationOutcome::AlreadyPublished)
+            }
+            ExistingBlockCompleteness::SequenceStateMissing => {
+                Err(AstroSsdPromptCacheDiskStoreError::ExistingBlockTopologyMismatch { block_hash })
+            }
+            ExistingBlockCompleteness::BoundaryStateMissing => {
+                // Sequence state may remain valid after retention compacts a parent
+                // boundary. Reaching the same block as a leaf restores that single
+                // missing file without replacing the sequence state.
+                self.publish_missing_boundary_state_transaction(
+                    runtime,
+                    block_key,
+                    boundary_state_tensors,
+                    performance_attribution,
+                )?;
+                Ok(AstroSsdPromptCachePublicationOutcome::Published)
+            }
+        }
+    }
+
+    fn require_published_parent(
+        &self,
+        block_key: &AstroSsdPromptCacheBlockKey,
+        parent_block_key: Option<&AstroSsdPromptCacheBlockKey>,
+    ) -> Result<(), AstroSsdPromptCacheDiskStoreError> {
+        // Children are never admitted speculatively. Requiring the parent in the
+        // validated index guarantees every published non-root remains restorable.
+        if let Some(parent_block_key) = parent_block_key
+            && self
+                .lock_tracked_files()
+                .block(&parent_block_key.block_hash())
+                .is_none()
+        {
+            return Err(AstroSsdPromptCacheDiskStoreError::ParentStateNotPublished {
+                block_index: block_key.block_index(),
+            });
+        }
+        Ok(())
     }
 
     /// Removes strictly shorter tail siblings sharing the new tail's chain
@@ -251,6 +304,47 @@ impl AstroSsdPromptCacheDiskStore {
     }
 }
 
+/// What an already-indexed block lacks, judged against the state kinds the
+/// model contract requires of every block.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ExistingBlockCompleteness {
+    Complete,
+    /// The sequence state is missing. Retention removes only a boundary
+    /// snapshot and keeps sequence state, so publishing a boundary cannot
+    /// repair this block and the request is refused.
+    SequenceStateMissing,
+    /// Only the boundary snapshot is missing, as retention leaves a compacted
+    /// parent. Publishing it again restores the block.
+    BoundaryStateMissing,
+}
+
+fn existing_block_completeness(
+    model_requires_sequence_state: bool,
+    model_requires_boundary_state: bool,
+    existing_block: &TrackedAstroSsdPromptCacheBlock,
+) -> ExistingBlockCompleteness {
+    let sequence_state_is_complete =
+        !model_requires_sequence_state || existing_block.sequence_state_file.is_some();
+    let boundary_state_is_complete =
+        !model_requires_boundary_state || existing_block.boundary_state_file.is_some();
+    if sequence_state_is_complete && boundary_state_is_complete {
+        ExistingBlockCompleteness::Complete
+    } else if !sequence_state_is_complete {
+        ExistingBlockCompleteness::SequenceStateMissing
+    } else {
+        ExistingBlockCompleteness::BoundaryStateMissing
+    }
+}
+
+fn existing_block_matches_requested_topology(
+    existing_block: &TrackedAstroSsdPromptCacheBlock,
+    requested_block_index: u32,
+    requested_parent_block_hash: Option<[u8; 32]>,
+) -> bool {
+    existing_block.block_index == requested_block_index
+        && existing_block.parent_block_hash == requested_parent_block_hash
+}
+
 fn validate_existing_state_file(
     tracked_file: Option<&super::disk_store_index::TrackedAstroSsdPromptCacheFile>,
     file_kind: AstroSsdPromptCacheFileKind,
@@ -319,3 +413,7 @@ fn validate_state_kind_tensor_presence(
         },
     )
 }
+
+#[cfg(test)]
+#[path = "disk_store_write_tests.rs"]
+mod disk_store_write_tests;

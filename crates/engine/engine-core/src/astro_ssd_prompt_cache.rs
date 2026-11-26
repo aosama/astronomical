@@ -34,9 +34,13 @@ pub mod disk_store_global_quota;
 #[cfg(feature = "direct-mlx")]
 pub mod disk_store_global_quota_candidate;
 #[cfg(feature = "direct-mlx")]
+mod disk_store_global_quota_demand;
+#[cfg(feature = "direct-mlx")]
 pub mod disk_store_global_quota_scan;
 #[cfg(feature = "direct-mlx")]
 pub mod disk_store_index;
+#[cfg(feature = "direct-mlx")]
+mod disk_store_missing_boundary_transaction;
 #[cfg(feature = "direct-mlx")]
 mod disk_store_retention_reconciliation;
 #[cfg(feature = "direct-mlx")]

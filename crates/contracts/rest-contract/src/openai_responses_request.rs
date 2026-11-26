@@ -268,10 +268,17 @@ fn is_responses_size_rejection(validation_error: &OpenAiResponsesValidationError
 fn validate_compatibility_fields(
     request: &OpenAiResponsesRequest,
 ) -> Result<(), OpenAiResponsesValidationError> {
+    if let Some(option_name) = first_unsupported_option_name(request) {
+        return Err(OpenAiResponsesValidationError::UnsupportedOption { option_name });
+    }
+    validate_metadata_limits(&request.metadata)
+}
+
+/// The first request option this server refuses, checked in a fixed order so
+/// a request with several unsupported options always names the same one.
+fn first_unsupported_option_name(request: &OpenAiResponsesRequest) -> Option<&'static str> {
     if request.store == Some(true) {
-        return Err(OpenAiResponsesValidationError::UnsupportedOption {
-            option_name: "store=true",
-        });
+        return Some("store=true");
     }
     for (option_name, is_present) in [
         (
@@ -292,59 +299,59 @@ fn validate_compatibility_fields(
         ),
     ] {
         if is_present {
-            return Err(OpenAiResponsesValidationError::UnsupportedOption { option_name });
+            return Some(option_name);
         }
     }
+    first_unsupported_option_setting(request)
+}
+
+/// Options that are accepted when absent or at their default and refused once
+/// they are set to a value this server does not support.
+fn first_unsupported_option_setting(request: &OpenAiResponsesRequest) -> Option<&'static str> {
     if request.parallel_tool_calls == Some(false) {
-        return Err(OpenAiResponsesValidationError::UnsupportedOption {
-            option_name: "parallel_tool_calls=false",
-        });
+        return Some("parallel_tool_calls=false");
     }
     if request
         .top_logprobs
         .is_some_and(|top_logprobs| top_logprobs > 0)
     {
-        return Err(OpenAiResponsesValidationError::UnsupportedOption {
-            option_name: "top_logprobs",
-        });
+        return Some("top_logprobs");
     }
     if request
         .text
         .as_ref()
         .is_some_and(|text_configuration| text_configuration.get("verbosity").is_some())
     {
-        return Err(OpenAiResponsesValidationError::UnsupportedOption {
-            option_name: "text.verbosity",
-        });
+        return Some("text.verbosity");
     }
     if request.background == Some(true) {
-        return Err(OpenAiResponsesValidationError::UnsupportedOption {
-            option_name: "background=true",
-        });
+        return Some("background=true");
     }
     if request
         .truncation
         .as_deref()
         .is_some_and(|truncation| truncation != "disabled")
     {
-        return Err(OpenAiResponsesValidationError::UnsupportedOption {
-            option_name: "truncation",
-        });
+        return Some("truncation");
     }
     if request
         .service_tier
         .as_deref()
         .is_some_and(|service_tier| !matches!(service_tier, "auto" | "default"))
     {
-        return Err(OpenAiResponsesValidationError::UnsupportedOption {
-            option_name: "service_tier",
-        });
+        return Some("service_tier");
     }
-    if request.metadata.len() > 16 {
+    None
+}
+
+/// Rejects metadata over the Responses API limits: at most 16 entries, with keys of at most 64 bytes and values of at most 512 bytes.
+fn validate_metadata_limits(
+    metadata: &BTreeMap<String, String>,
+) -> Result<(), OpenAiResponsesValidationError> {
+    if metadata.len() > 16 {
         return Err(OpenAiResponsesValidationError::MetadataEntryCountExceeded);
     }
-    if request
-        .metadata
+    if metadata
         .iter()
         .any(|(metadata_name, metadata_text)| metadata_name.len() > 64 || metadata_text.len() > 512)
     {
@@ -361,3 +368,6 @@ mod prompt_cache_fields;
 
 #[cfg(test)]
 mod tool_output_images;
+
+#[cfg(test)]
+mod compatibility_fields;

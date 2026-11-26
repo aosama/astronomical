@@ -26,10 +26,29 @@ fn should_serialize_generated_image_bytes_as_base64_json() {
 }
 
 #[test]
-#[expect(clippy::too_many_lines)]
 fn should_reject_invalid_image_generation_commands_and_settings() {
     let valid_command = super::valid_image_generation_command();
-    let invalid_commands = [
+    let mut invalid_commands = invalid_model_prompt_and_width_commands(&valid_command);
+    invalid_commands.extend(invalid_height_steps_and_guidance_commands(&valid_command));
+
+    for (invalid_command, expected_error) in invalid_commands {
+        assert_eq!(invalid_command.validate(), Err(expected_error));
+    }
+
+    let maximum_seed_command = ImageGenerationCommand {
+        settings: ImageGenerationSettings {
+            seed: u64::MAX,
+            ..super::valid_image_generation_command().settings
+        },
+        ..super::valid_image_generation_command()
+    };
+    assert_eq!(maximum_seed_command.validate(), Ok(()));
+}
+
+fn invalid_model_prompt_and_width_commands(
+    valid_command: &ImageGenerationCommand,
+) -> Vec<(ImageGenerationCommand, ImageGenerationValidationError)> {
+    vec![
         (
             ImageGenerationCommand {
                 model: " \t".to_owned(),
@@ -71,6 +90,13 @@ fn should_reject_invalid_image_generation_commands_and_settings() {
                 required_multiple_pixels: 8,
             },
         ),
+    ]
+}
+
+fn invalid_height_steps_and_guidance_commands(
+    valid_command: &ImageGenerationCommand,
+) -> Vec<(ImageGenerationCommand, ImageGenerationValidationError)> {
+    vec![
         (
             ImageGenerationCommand {
                 settings: ImageGenerationSettings {
@@ -118,27 +144,14 @@ fn should_reject_invalid_image_generation_commands_and_settings() {
                     guidance_thousandths: 100_001,
                     ..valid_command.settings
                 },
-                ..valid_command
+                ..valid_command.clone()
             },
             ImageGenerationValidationError::GuidanceOutOfRange {
                 actual_guidance_thousandths: 100_001,
                 maximum_guidance_thousandths: 100_000,
             },
         ),
-    ];
-
-    for (invalid_command, expected_error) in invalid_commands {
-        assert_eq!(invalid_command.validate(), Err(expected_error));
-    }
-
-    let maximum_seed_command = ImageGenerationCommand {
-        settings: ImageGenerationSettings {
-            seed: u64::MAX,
-            ..super::valid_image_generation_command().settings
-        },
-        ..super::valid_image_generation_command()
-    };
-    assert_eq!(maximum_seed_command.validate(), Ok(()));
+    ]
 }
 
 #[test]

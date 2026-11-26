@@ -1,4 +1,8 @@
-use std::{fs, path::Path, time::Instant};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+    time::Instant,
+};
 
 use ipc_protocol::RequestId;
 use model_serving::{
@@ -6,7 +10,7 @@ use model_serving::{
     PromptProcessingChunkSizer, Qwen3_5ArtifactValidator, Qwen3_5TextEngine, TextInferenceRequest,
     TextMlxEngineConstructors,
 };
-use runtime_integration::{MlxMemoryLimits, MlxRuntime};
+use runtime_integration::{MlxMemoryLimits, MlxMemorySnapshot, MlxRuntime};
 use serde_json::Value;
 use tokio::time::{Duration as TokioDuration, MissedTickBehavior, interval, timeout};
 
@@ -39,27 +43,72 @@ async fn should_clear_stale_mlx_allocator_memory_before_loading_the_replacement_
         .expect("the 35B Ornith 1.5 MLX allocator contract must finish within 105 seconds");
 }
 
-#[expect(clippy::too_many_lines)]
 async fn run_model_swap_allocator_contract() {
     let _direct_mlx_test_guard = crate::common::direct_mlx_test_guard().await;
     let first_model_id = first_model_id();
     let replacement_model_id = replacement_model_id();
-    let first_model_directory = crate::common::configured_model_directory_by_id(first_model_id)
-        .unwrap_or_else(|| {
-            panic!(
-                "the memory contract requires the local {first_model_id} artifact; configure it in ~/.astronomical-dev/config.json"
-            )
-        });
-    let replacement_model_directory =
-        crate::common::configured_model_directory_by_id(replacement_model_id).unwrap_or_else(|| {
-            panic!(
-                "the memory contract requires the local {replacement_model_id} artifact; configure it in ~/.astronomical-dev/config.json"
-            )
-        });
+    let first_model_directory = required_model_directory(first_model_id);
+    let replacement_model_directory = required_model_directory(replacement_model_id);
     let mlx_memory_limits = crate::common::sample_serving_acceptance_mlx_memory_limits().await;
+    let post_drop_snapshot =
+        load_first_model_then_drop_it(&first_model_directory, first_model_id, mlx_memory_limits)
+            .await;
+
+    let temporary_log_directory =
+        tempfile::tempdir().expect("the memory contract should create a temporary log directory");
+    let performance_attribution_log_path = temporary_log_directory
+        .path()
+        .join("performance-attribution.jsonl");
+    let performance_attribution_log =
+        PerformanceAttributionLog::open(&performance_attribution_log_path, true)
+            .expect("the memory contract should open the replacement attribution log");
+    eprintln!(
+        "[memory-contract] status=progress phase=load_replacement_model model={replacement_model_id}"
+    );
+    let mut replacement_model_engine = create_engine(
+        &replacement_model_directory,
+        &mlx_memory_limits,
+        PerformanceAttribution::enabled(),
+        performance_attribution_log,
+    );
+    load_engine_with_progress(&mut replacement_model_engine, replacement_model_id).await;
+    assert_replacement_loading_removed_the_stale_mlx_buffer_cache(
+        &performance_attribution_log_path,
+        replacement_model_id,
+        &post_drop_snapshot,
+    );
+
+    run_bounded_generation(
+        &mut replacement_model_engine,
+        RequestId::new(REPLACEMENT_REQUEST_ID),
+    )
+    .await;
+    drop(replacement_model_engine);
+
+    assert_replacement_generation_cleaned_up_the_mlx_buffer_cache(
+        &performance_attribution_log_path,
+    );
+    eprintln!("[memory-contract] status=success phase=model_swap");
+}
+
+fn required_model_directory(model_id: &str) -> PathBuf {
+    crate::common::configured_model_directory_by_id(model_id).unwrap_or_else(|| {
+        panic!(
+            "the memory contract requires the local {model_id} artifact; configure it in ~/.astronomical-dev/config.json"
+        )
+    })
+}
+
+/// Returns the allocator snapshot taken after the first model's engine was
+/// dropped, which the replacement load is later compared against.
+async fn load_first_model_then_drop_it(
+    first_model_directory: &Path,
+    first_model_id: &str,
+    mlx_memory_limits: MlxMemoryLimits,
+) -> MlxMemorySnapshot {
     eprintln!("[memory-contract] status=progress phase=load_first_model model={first_model_id}");
     let mut first_model_engine = create_engine(
-        &first_model_directory,
+        first_model_directory,
         &mlx_memory_limits,
         PerformanceAttribution::disabled(),
         PerformanceAttributionLog::disabled(),
@@ -89,28 +138,16 @@ async fn run_model_swap_allocator_contract() {
         "dropping {first_model_id} must release every active model allocation before replacement loading"
     );
     drop(post_drop_runtime);
+    post_drop_snapshot
+}
 
-    let temporary_log_directory =
-        tempfile::tempdir().expect("the memory contract should create a temporary log directory");
-    let performance_attribution_log_path = temporary_log_directory
-        .path()
-        .join("performance-attribution.jsonl");
-    let performance_attribution_log =
-        PerformanceAttributionLog::open(&performance_attribution_log_path, true)
-            .expect("the memory contract should open the replacement attribution log");
-    eprintln!(
-        "[memory-contract] status=progress phase=load_replacement_model model={replacement_model_id}"
-    );
-    let mut replacement_model_engine = create_engine(
-        &replacement_model_directory,
-        &mlx_memory_limits,
-        PerformanceAttribution::enabled(),
-        performance_attribution_log,
-    );
-    load_engine_with_progress(&mut replacement_model_engine, replacement_model_id).await;
-
+fn assert_replacement_loading_removed_the_stale_mlx_buffer_cache(
+    performance_attribution_log_path: &Path,
+    replacement_model_id: &str,
+    post_drop_snapshot: &MlxMemorySnapshot,
+) {
     let attribution_report_documents =
-        read_attribution_report_documents(&performance_attribution_log_path);
+        read_attribution_report_documents(performance_attribution_log_path);
     let replacement_model_loading_report =
         model_loading_report(&attribution_report_documents, replacement_model_id);
     assert_replacement_cleanup_order(replacement_model_loading_report);
@@ -141,16 +178,13 @@ async fn run_model_swap_allocator_contract() {
         replacement_model_loading_active_memory_bytes > 0,
         "replacement model loading must retain active model residency"
     );
+}
 
-    run_bounded_generation(
-        &mut replacement_model_engine,
-        RequestId::new(REPLACEMENT_REQUEST_ID),
-    )
-    .await;
-    drop(replacement_model_engine);
-
+fn assert_replacement_generation_cleaned_up_the_mlx_buffer_cache(
+    performance_attribution_log_path: &Path,
+) {
     let attribution_report_documents =
-        read_attribution_report_documents(&performance_attribution_log_path);
+        read_attribution_report_documents(performance_attribution_log_path);
     let replacement_generation_report =
         generation_report(&attribution_report_documents, REPLACEMENT_REQUEST_ID);
     assert_eq!(replacement_generation_report["outcome"], "success");
@@ -173,7 +207,6 @@ async fn run_model_swap_allocator_contract() {
         replacement_generation_active_memory_bytes > 0,
         "completed replacement generation must preserve active model residency"
     );
-    eprintln!("[memory-contract] status=success phase=model_swap");
 }
 
 fn create_engine(

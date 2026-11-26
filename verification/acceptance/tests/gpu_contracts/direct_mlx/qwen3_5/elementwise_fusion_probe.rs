@@ -16,16 +16,19 @@
 //! - `concat+silu` and `concat+conv1d+silu` — the production convolution
 //!   section chains
 
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use mlx_bridge::{MlxArray, MlxDtype};
 use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use tokio::time::timeout;
 
+use super::interleaved_probe_support::{
+    NamedProbe, collect_interleaved_samples, sorted_median, warm_every_probe,
+};
+
 const TOKEN_COUNT: i32 = 8_192;
 const CONVOLUTION_DIMENSION: i32 = 8_192;
 const CONVOLUTION_KERNEL_DIMENSION: i32 = 4;
-const PROBE_ITERATIONS: usize = 31;
 
 #[tokio::test]
 #[ignore = "measures elementwise-chain graphics-processor timing with interleaved medians"]
@@ -35,7 +38,6 @@ async fn should_probe_elementwise_chain_costs_at_scaled_prefill_shapes() {
         .expect("the elementwise probe must finish within 115 seconds");
 }
 
-#[expect(clippy::too_many_lines)]
 async fn probe_elementwise_chains() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let runtime = MlxRuntime::initialize(
@@ -44,6 +46,29 @@ async fn probe_elementwise_chains() {
     )
     .expect("the direct MLX runtime should initialize");
 
+    let operands = build_probe_operands(&runtime);
+    let compiled_elementwise_graphs = mlx_bridge::MlxCompiledElementwiseGraphs::new()
+        .expect("the compiled elementwise graphs should build");
+    let probes = build_probes(&runtime, &operands, &compiled_elementwise_graphs);
+
+    // Warm every probe once, then interleave: one iteration of each probe per
+    // round, so machine drift lands on all probes equally.
+    warm_every_probe(&runtime, &probes);
+    let mut samples = collect_interleaved_samples(&runtime, &probes);
+
+    let medians = report_probe_medians(&probes, &mut samples);
+    report_fusion_ratios(&medians);
+    assert_compiled_silu_matches_raw_composition(&runtime, &compiled_elementwise_graphs);
+}
+
+/// The scaled prefill-shaped operands every probe reads.
+struct ProbeOperands {
+    input: MlxArray,
+    rolling_state: MlxArray,
+    weight: MlxArray,
+}
+
+fn build_probe_operands(runtime: &MlxRuntime) -> ProbeOperands {
     let element_count = (TOKEN_COUNT * CONVOLUTION_DIMENSION) as usize;
     let sample_values: Vec<f32> = (0..element_count)
         .map(|element_index| (element_index % 251) as f32 * 0.004 - 0.5)
@@ -80,30 +105,48 @@ async fn probe_elementwise_chains() {
     runtime
         .evaluate_arrays(&[&input, &rolling_state, &weight])
         .expect("the probe operands should evaluate");
-    let compiled_elementwise_graphs = mlx_bridge::MlxCompiledElementwiseGraphs::new()
-        .expect("the compiled elementwise graphs should build");
+    ProbeOperands {
+        input,
+        rolling_state,
+        weight,
+    }
+}
 
-    let probes: Vec<(&str, Box<dyn Fn() -> MlxArray + '_>)> = vec![
+/// The probe order is load-bearing: `report_fusion_ratios` reads the medians of
+/// `silu(x)` (2), `silu(silu(x))` (3), `sigmoid(x)` (1) and `compiled-silu(x)`
+/// (6) by position.
+fn build_probes<'a>(
+    runtime: &'a MlxRuntime,
+    operands: &'a ProbeOperands,
+    compiled_elementwise_graphs: &'a mlx_bridge::MlxCompiledElementwiseGraphs,
+) -> Vec<NamedProbe<'a>> {
+    vec![
         (
             "x*1.0",
             Box::new(|| {
                 runtime
-                    .multiply_scalar(&input, 1.0)
+                    .multiply_scalar(&operands.input, 1.0)
                     .expect("multiply scalar should build")
             }),
         ),
         (
             "sigmoid(x)",
-            Box::new(|| runtime.sigmoid(&input).expect("sigmoid should build")),
+            Box::new(|| {
+                runtime
+                    .sigmoid(&operands.input)
+                    .expect("sigmoid should build")
+            }),
         ),
         (
             "silu(x)",
-            Box::new(|| runtime.silu(&input).expect("silu should build")),
+            Box::new(|| runtime.silu(&operands.input).expect("silu should build")),
         ),
         (
             "silu(silu(x))",
             Box::new(|| {
-                let inner = runtime.silu(&input).expect("inner silu should build");
+                let inner = runtime
+                    .silu(&operands.input)
+                    .expect("inner silu should build");
                 runtime.silu(&inner).expect("outer silu should build")
             }),
         ),
@@ -111,7 +154,7 @@ async fn probe_elementwise_chains() {
             "concat+silu",
             Box::new(|| {
                 let concatenated = runtime
-                    .concatenate_axis(&[&rolling_state, &input], 1)
+                    .concatenate_axis(&[&operands.rolling_state, &operands.input], 1)
                     .expect("concat should build");
                 runtime.silu(&concatenated).expect("silu should build")
             }),
@@ -120,10 +163,17 @@ async fn probe_elementwise_chains() {
             "concat+conv1d+silu",
             Box::new(|| {
                 let concatenated = runtime
-                    .concatenate_axis(&[&rolling_state, &input], 1)
+                    .concatenate_axis(&[&operands.rolling_state, &operands.input], 1)
                     .expect("concat should build");
                 let convolved = runtime
-                    .conv1d(&concatenated, &weight, 1, 0, 1, CONVOLUTION_DIMENSION)
+                    .conv1d(
+                        &concatenated,
+                        &operands.weight,
+                        1,
+                        0,
+                        1,
+                        CONVOLUTION_DIMENSION,
+                    )
                     .expect("conv1d should build");
                 runtime.silu(&convolved).expect("silu should build")
             }),
@@ -132,52 +182,19 @@ async fn probe_elementwise_chains() {
             "compiled-silu(x)",
             Box::new(|| {
                 runtime
-                    .apply_compiled_silu(&compiled_elementwise_graphs, &input)
+                    .apply_compiled_silu(compiled_elementwise_graphs, &operands.input)
                     .expect("compiled silu should build")
             }),
         ),
-    ];
+    ]
+}
 
-    // Warm every probe once, then interleave: one iteration of each probe per
-    // round, so machine drift lands on all probes equally.
-    for (_, probe) in &probes {
-        let output = probe();
-        runtime
-            .evaluate_arrays(&[&output])
-            .expect("the warmup probe should evaluate");
-    }
-    runtime
-        .synchronize_gpu_stream()
-        .expect("the warmup probes should drain");
-
-    let probe_count = probes.len();
-    let mut samples: Vec<Vec<f64>> = vec![Vec::new(); probe_count];
-    let ramp_started_at = Instant::now();
-    let mut round_index = 0;
-    while ramp_started_at.elapsed() < Duration::from_millis(1500) || round_index < PROBE_ITERATIONS
-    {
-        for (probe_index, (_, probe)) in probes.iter().enumerate() {
-            let started_at = Instant::now();
-            let output = probe();
-            runtime
-                .evaluate_arrays(&[&output])
-                .expect("the probe should evaluate");
-            samples[probe_index].push(started_at.elapsed().as_secs_f64() * 1000.0);
-        }
-        round_index += 1;
-        if round_index >= PROBE_ITERATIONS * 4 {
-            break;
-        }
-    }
-    runtime
-        .synchronize_gpu_stream()
-        .expect("the probes should drain");
-
-    let mut medians = Vec::with_capacity(probe_count);
-    for (probe_name, _) in &probes {
+/// Prints each probe's median and returns the medians in probe order.
+fn report_probe_medians(probes: &[NamedProbe<'_>], samples: &mut [Vec<f64>]) -> Vec<f64> {
+    let mut medians = Vec::with_capacity(probes.len());
+    for (probe_name, _) in probes {
         let probe_samples = &mut samples[medians.len()];
-        probe_samples.sort_by(|left, right| left.partial_cmp(right).expect("finite times"));
-        let median = probe_samples[probe_samples.len() / 2];
+        let median = sorted_median(probe_samples);
         medians.push(median);
         eprintln!(
             "[elementwise-probe] {probe_name} median {median:.3} ms ({:.2} us/token) samples={}",
@@ -185,6 +202,10 @@ async fn probe_elementwise_chains() {
             probe_samples.len()
         );
     }
+    medians
+}
+
+fn report_fusion_ratios(medians: &[f64]) {
     let silu_median = medians[2];
     let double_silu_median = medians[3];
     eprintln!(
@@ -196,9 +217,14 @@ async fn probe_elementwise_chains() {
         "[elementwise-probe] compiled-silu/sigmoid ratio = {:.2} (1.0 means the compiled graph fused to one kernel)",
         compiled_silu_median / medians[1]
     );
+}
 
-    // Numerics: the compiled graph must agree with the raw two-op composition
-    // within bf16 rounding of the same op sequence.
+/// Numerics: the compiled graph must agree with the raw two-op composition
+/// within bf16 rounding of the same op sequence.
+fn assert_compiled_silu_matches_raw_composition(
+    runtime: &MlxRuntime,
+    compiled_elementwise_graphs: &mlx_bridge::MlxCompiledElementwiseGraphs,
+) {
     let numerics_element_count = 64 * 64;
     let numerics_values: Vec<f32> = (0..numerics_element_count)
         .map(|element_index| (element_index % 61) as f32 * 0.02 - 0.6)
@@ -215,7 +241,7 @@ async fn probe_elementwise_chains() {
         .silu(&numerics_input)
         .expect("raw silu should build");
     let compiled_output = runtime
-        .apply_compiled_silu(&compiled_elementwise_graphs, &numerics_input)
+        .apply_compiled_silu(compiled_elementwise_graphs, &numerics_input)
         .expect("compiled silu should build");
     let raw_float32_output = runtime
         .astype(&raw_output, MlxDtype::Float32)

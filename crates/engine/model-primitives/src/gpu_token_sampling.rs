@@ -11,12 +11,14 @@ use mlx_bridge::MlxArray;
 
 mod sampling_distribution;
 mod token_sampling_error;
+mod top_p_mask;
 mod vocabulary_top_k;
 #[cfg(test)]
 #[path = "gpu_token_sampling/vocabulary_top_k_tests.rs"]
 mod vocabulary_top_k_tests;
 pub use sampling_distribution::sampling_distribution_rows;
 pub use token_sampling_error::TokenSamplingError;
+pub use top_p_mask::apply_top_p_mask;
 pub use vocabulary_top_k::vocabulary_top_k;
 
 /// Builds one lazy sampled token using a fully GPU-resident top-k + top-p pipeline.
@@ -401,131 +403,6 @@ fn softmax_last_axis(
 ) -> Result<MlxArray, TokenSamplingError> {
     runtime
         .softmax_axis(logits, -1)
-        .map_err(sampling_runtime_error)
-}
-
-/// Applies the top-p (nucleus) mask entirely on the GPU using MLX graph operations.
-///
-/// This applies the standard top-p boundary while operating on pre-selected top-k
-/// candidates. The algorithm:
-///
-/// 1. Sort probabilities in descending order.
-/// 2. Compute the exclusive cumulative mass of more-probable candidates.
-/// 3. Map the cumulative sums back to the original (unsorted) order.
-/// 4. Keep a candidate only while the preceding mass is below top-p.
-pub fn apply_top_p_mask(
-    runtime: &MlxRuntime,
-    selected_probabilities: &MlxArray,
-    selected_logits: &MlxArray,
-    top_p_thousandths: u16,
-) -> Result<MlxArray, TokenSamplingError> {
-    let selected_shape = selected_probabilities.shape();
-    if selected_shape.len() != 3 || selected_shape[0] != 1 || selected_shape[1] == 0 {
-        return Err(sampling_failure(
-            "selected probabilities must have shape [1, rows, top_k] with a positive row count",
-        ));
-    }
-    let selected_row_count = selected_shape[1];
-    let top_k = selected_shape[2];
-    if top_p_thousandths == 0 || top_p_thousandths >= 1_000 {
-        // No top-p filtering needed. Use where_select with an always-true
-        // condition to return a new lazy array that preserves the logits.
-        let true_condition = runtime
-            .array_from_f32(&[1.0], &[])
-            .map_err(sampling_runtime_error)?;
-        let true_broadcast = runtime
-            .broadcast_to(&true_condition, &[1, 1, top_k])
-            .map_err(sampling_runtime_error)?;
-        let neg_inf = runtime
-            .array_from_f32(&[f32::NEG_INFINITY], &[])
-            .map_err(sampling_runtime_error)?;
-        let neg_inf_broadcast = runtime
-            .broadcast_to(&neg_inf, &[1, 1, top_k])
-            .map_err(sampling_runtime_error)?;
-        return runtime
-            .where_select(&true_broadcast, selected_logits, &neg_inf_broadcast)
-            .map_err(sampling_runtime_error);
-    }
-
-    let top_p = f32::from(top_p_thousandths) / 1_000.0;
-
-    // Sort probabilities in descending order by negating and argsort(ascending).
-    let negated_probabilities = runtime
-        .negative(selected_probabilities)
-        .map_err(sampling_runtime_error)?;
-    let sorted_indices = runtime
-        .argsort_axis(&negated_probabilities, -1)
-        .map_err(sampling_runtime_error)?;
-    // Cast indices to int32 to ensure compatibility with put_along_axis.
-    let sorted_indices_i32 = runtime
-        .astype(&sorted_indices, mlx_bridge::MlxDtype::Int32)
-        .map_err(sampling_runtime_error)?;
-    let sorted_probabilities = runtime
-        .take_along_axis(selected_probabilities, &sorted_indices_i32, -1)
-        .map_err(sampling_runtime_error)?;
-
-    // A candidate survives while the probability mass of all more-probable
-    // candidates is still below top-p. The exclusive scan keeps the candidate
-    // that crosses the threshold in ascending-tail order.
-    let preceding_probability_mass = runtime
-        .cumsum(&sorted_probabilities, -1, false, false)
-        .map_err(sampling_runtime_error)?;
-
-    // Build the mask in sorted order: keep where preceding mass < top-p.
-    let top_p_constant = runtime
-        .array_from_f32(&[top_p], &[])
-        .map_err(sampling_runtime_error)?;
-    let top_p_broadcast = runtime
-        .broadcast_to(&top_p_constant, &[1, selected_row_count, top_k])
-        .map_err(sampling_runtime_error)?;
-    let keep_mask_sorted = runtime
-        .greater(&top_p_broadcast, &preceding_probability_mass)
-        .map_err(sampling_runtime_error)?;
-
-    // Gather logits in sorted order and apply the mask.
-    let sorted_logits = runtime
-        .take_along_axis(selected_logits, &sorted_indices_i32, -1)
-        .map_err(sampling_runtime_error)?;
-    let negative_infinity = runtime
-        .array_from_f32(&[f32::NEG_INFINITY], &[])
-        .map_err(sampling_runtime_error)?;
-    let neg_inf_broadcast = runtime
-        .broadcast_to(&negative_infinity, &[1, selected_row_count, top_k])
-        .map_err(sampling_runtime_error)?;
-    let masked_sorted_logits = runtime
-        .where_select(&keep_mask_sorted, &sorted_logits, &neg_inf_broadcast)
-        .map_err(sampling_runtime_error)?;
-
-    // Scatter back to original order using inverse permutation.
-    // inverse_indices[sorted_indices[i]] = i
-    // The range pattern is row-independent: build one row and broadcast it to
-    // every row instead of reshaping a flat arange (which only works when the
-    // caller supplies exactly one row).
-    let range_indices = runtime
-        .arange_i32(0, top_k)
-        .map_err(sampling_runtime_error)?;
-    let range_row = runtime
-        .reshape(&range_indices, &[1, 1, top_k])
-        .map_err(sampling_runtime_error)?;
-    let range_indices_reshaped = runtime
-        .broadcast_to(&range_row, &[1, selected_row_count, top_k])
-        .map_err(sampling_runtime_error)?;
-    let zeros_template = runtime
-        .array_from_i32(
-            &vec![0_i32; selected_row_count as usize * top_k as usize],
-            &[1, selected_row_count, top_k],
-        )
-        .map_err(sampling_runtime_error)?;
-    let inverse_indices = runtime
-        .put_along_axis(
-            &zeros_template,
-            &sorted_indices_i32,
-            &range_indices_reshaped,
-            -1,
-        )
-        .map_err(sampling_runtime_error)?;
-    runtime
-        .take_along_axis(&masked_sorted_logits, &inverse_indices, -1)
         .map_err(sampling_runtime_error)
 }
 

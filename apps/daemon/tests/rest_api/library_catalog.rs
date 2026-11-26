@@ -101,89 +101,105 @@ fn expected_validated_catalog_document() -> serde_json::Value {
         "schema_version": 5,
         "suggestions": [],
         "entries": [
-            {
-                "huggingface_id": "astronomical-test/example-qwen",
-                "revision": "0123456789abcdef0123456789abcdef01234567",
-                "model_id": "example-qwen",
-                "summary": "A quick everyday assistant.",
-                "family": "qwen3_5",
-                "approximate_size_bytes": 4_000_000_000_u64,
-                "approximate_memory_bytes": 1_825_361_094_u64,
-                "role": "chat",
-                "get_started": true,
-                "experimental": false,
-                "removable_from_disk": false,
-                "public": true,
-                "ready_on_this_mac": false,
-                "served_on_this_mac": false,
-                "download_state": null,
-                "capabilities": capabilities_with(&[])
-            },
-            {
-                "huggingface_id": "astronomical-test/example-prism",
-                "revision": "89abcdef0123456789abcdef0123456789abcdef",
-                "model_id": "example-prism",
-                "family": "prism_hadamard_qwen35",
-                "approximate_size_bytes": 5_000_000_000_u64,
-                "approximate_memory_bytes": 25_769_803_680_u64,
-                "role": "coding",
-                "get_started": false,
-                "experimental": true,
-                "removable_from_disk": false,
-                "minimum_memory_bytes": 4_451_287_808_u64,
-                "public": true,
-                "ready_on_this_mac": false,
-                "served_on_this_mac": false,
-                "download_state": null,
-                "capabilities": capabilities_with(&[])
-            },
-            {
-                "huggingface_id": "astronomical-test/example-embedder",
-                "revision": "fedcba9876543210fedcba9876543210fedcba98",
-                "model_id": "example-embedder",
-                "family": "modernbert",
-                "approximate_size_bytes": 200_000_000_u64,
-                "approximate_memory_bytes": 536_870_910_u64,
-                "role": "helper",
-                "get_started": false,
-                "experimental": false,
-                "removable_from_disk": false,
-                "public": true,
-                "ready_on_this_mac": false,
-                "served_on_this_mac": false,
-                "download_state": null,
-                "capabilities": capabilities_with(&["supports_embeddings"])
-            },
-            {
-                "huggingface_id": "astronomical-test/example-qwen-6bit",
-                "revision": "76543210fedcba9876543210fedcba9876543210",
-                "model_id": "example-qwen-6bit",
-                "family": "qwen3_5",
-                "approximate_size_bytes": 6_000_000_000_u64,
-                "approximate_memory_bytes": 2_825_361_094_u64,
-                "role": "chat",
-                "get_started": false,
-                "experimental": false,
-                "removable_from_disk": false,
-                "public": true,
-                "ready_on_this_mac": false,
-                "served_on_this_mac": false,
-                "download_state": null,
-                "build_of": "example-qwen",
-                "build_difference": "more_detail",
-                "measured_speed": {
-                    "measured_on": "Mac with an M5 Pro and 48 GB",
-                    "astronomical_version": "0.2.129",
-                    "tokens_per_second": {
-                        "essay_short_prompt": 72,
-                        "essay_long_prompt": 66,
-                        "code_short_prompt": 72,
-                        "code_long_prompt": 67
-                    }
-                },
-                "capabilities": capabilities_with(&[])
-            }
+            expected_qwen_entry(),
+            expected_prism_entry(),
+            expected_embedder_entry(),
+            expected_qwen_6bit_entry()
         ]
+    })
+}
+
+fn expected_qwen_entry() -> serde_json::Value {
+    serde_json::json!({
+        "huggingface_id": "astronomical-test/example-qwen",
+        "revision": "0123456789abcdef0123456789abcdef01234567",
+        "model_id": "example-qwen",
+        "summary": "A quick everyday assistant.",
+        "family": "qwen3_5",
+        "approximate_size_bytes": 4_000_000_000_u64,
+        "approximate_memory_bytes": 1_825_361_094_u64,
+        "role": "chat",
+        "get_started": true,
+        "experimental": false,
+        "removable_from_disk": false,
+        "public": true,
+        "ready_on_this_mac": false,
+        "served_on_this_mac": false,
+        "download_state": null,
+        "capabilities": capabilities_with(&[])
+    })
+}
+
+fn expected_prism_entry() -> serde_json::Value {
+    serde_json::json!({
+        "huggingface_id": "astronomical-test/example-prism",
+        "revision": "89abcdef0123456789abcdef0123456789abcdef",
+        "model_id": "example-prism",
+        "family": "prism_hadamard_qwen35",
+        "approximate_size_bytes": 5_000_000_000_u64,
+        "approximate_memory_bytes": 25_769_803_680_u64,
+        "role": "coding",
+        "get_started": false,
+        "experimental": true,
+        "removable_from_disk": false,
+        "minimum_memory_bytes": 4_451_287_808_u64,
+        "public": true,
+        "ready_on_this_mac": false,
+        "served_on_this_mac": false,
+        "download_state": null,
+        "capabilities": capabilities_with(&[])
+    })
+}
+
+fn expected_embedder_entry() -> serde_json::Value {
+    serde_json::json!({
+        "huggingface_id": "astronomical-test/example-embedder",
+        "revision": "fedcba9876543210fedcba9876543210fedcba98",
+        "model_id": "example-embedder",
+        "family": "modernbert",
+        "approximate_size_bytes": 200_000_000_u64,
+        "approximate_memory_bytes": 536_870_910_u64,
+        "role": "helper",
+        "get_started": false,
+        "experimental": false,
+        "removable_from_disk": false,
+        "public": true,
+        "ready_on_this_mac": false,
+        "served_on_this_mac": false,
+        "download_state": null,
+        "capabilities": capabilities_with(&["supports_embeddings"])
+    })
+}
+
+fn expected_qwen_6bit_entry() -> serde_json::Value {
+    serde_json::json!({
+        "huggingface_id": "astronomical-test/example-qwen-6bit",
+        "revision": "76543210fedcba9876543210fedcba9876543210",
+        "model_id": "example-qwen-6bit",
+        "family": "qwen3_5",
+        "approximate_size_bytes": 6_000_000_000_u64,
+        "approximate_memory_bytes": 2_825_361_094_u64,
+        "role": "chat",
+        "get_started": false,
+        "experimental": false,
+        "removable_from_disk": false,
+        "public": true,
+        "ready_on_this_mac": false,
+        "served_on_this_mac": false,
+        "download_state": null,
+        "build_of": "example-qwen",
+        "build_difference": "more_detail",
+        "measured_speed": {
+            "measured_on": "Mac with an M5 Pro and 48 GB",
+            "astronomical_version": "0.2.129",
+            "tokens_per_second": {
+                "essay_short_prompt": 72,
+                "essay_long_prompt": 66,
+                "code_short_prompt": 72,
+                "code_long_prompt": 67
+            }
+        },
+        "capabilities": capabilities_with(&[])
     })
 }
 
@@ -253,13 +269,6 @@ async fn should_reject_catalog_mutation_and_leave_unknown_library_paths_unmatche
     .expect("the immutable catalog routing journey must finish within five seconds");
 }
 
-// The /download-models page renders one card per catalog entry and degrades the WHOLE
-// page to "unavailable" when even one entry misses a field its renderer
-// requires, so a shipped entry that parses in Rust but cannot render would
-// take every model's download surface down with it. This journey walks the
-// real shipped registry file through every seam a user-visible entry crosses —
-// bundled parse, endpoint projection, and the browser renderability contract —
-// so a hand-edited catalog entry cannot silently vanish from Download Models.
 /// One published entry carries the leaf of its Hugging Face identity as its
 /// model ID, and none of the names the catalog used to carry beside it.
 fn assert_named_only_by_its_model_id(
@@ -283,46 +292,23 @@ fn assert_named_only_by_its_model_id(
     }
 }
 
+// The /download-models page renders one card per catalog entry and degrades the WHOLE
+// page to "unavailable" when even one entry misses a field its renderer
+// requires, so a shipped entry that parses in Rust but cannot render would
+// take every model's download surface down with it. This journey walks the
+// real shipped registry file through every seam a user-visible entry crosses —
+// bundled parse, endpoint projection, and the browser renderability contract —
+// so a hand-edited catalog entry cannot silently vanish from Download Models.
 #[tokio::test]
 async fn should_publish_every_shipped_catalog_entry_to_the_library_catalog_endpoint() {
     timeout(Duration::from_secs(5), async {
-        let shipped_catalog_text = std::fs::read_to_string(
-            std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-                .join("../../registry/download_catalog.json"),
-        )
-        .expect("the shipped download catalog should be readable");
-        let shipped_catalog: serde_json::Value = serde_json::from_str(&shipped_catalog_text)
-            .expect("the shipped download catalog should be valid JSON");
-        let shipped_entry_ids: Vec<&str> = shipped_catalog["entries"]
-            .as_array()
-            .expect("the shipped catalog should contain an entries array")
-            .iter()
-            .map(|shipped_entry| {
-                shipped_entry["huggingface_id"]
-                    .as_str()
-                    .expect("every shipped entry should declare a string huggingface_id")
-            })
-            .collect();
+        let shipped_entry_ids = shipped_catalog_entry_ids();
         assert!(
             !shipped_entry_ids.is_empty(),
             "the shipped catalog should declare at least one entry"
         );
 
-        let download_catalog =
-            DownloadCatalog::load_bundled().expect("the shipped catalog should parse and validate");
-        let application = astronomical_daemon::build_application_with_download_catalog(
-            ScriptedExecutor::unavailable(),
-            download_catalog,
-        );
-
-        let catalog_response = get_response(&application, "/v1/library/catalog").await;
-
-        assert_eq!(catalog_response.status(), StatusCode::OK);
-        let catalog_body = to_bytes(catalog_response.into_body(), 256 * 1024)
-            .await
-            .expect("the catalog response body should be readable");
-        let catalog_document: serde_json::Value =
-            serde_json::from_slice(&catalog_body).expect("the catalog response should contain JSON");
+        let catalog_document = bundled_catalog_response_document().await;
 
         let published_entries = catalog_document["entries"]
             .as_array()
@@ -337,7 +323,7 @@ async fn should_publish_every_shipped_catalog_entry_to_the_library_catalog_endpo
         {
             assert_eq!(
                 published_entry["huggingface_id"].as_str(),
-                Some(*shipped_entry_id),
+                Some(shipped_entry_id.as_str()),
                 "published entry {published_entry_index} must be the shipped entry in authored order"
             );
         }
@@ -346,50 +332,98 @@ async fn should_publish_every_shipped_catalog_entry_to_the_library_catalog_endpo
         // exactly the fields every card needs, so each published entry must
         // carry them with renderable values.
         for (published_entry_index, published_entry) in published_entries.iter().enumerate() {
-            let huggingface_id = published_entry["huggingface_id"]
-                .as_str()
-                .unwrap_or_else(|| panic!("published entry {published_entry_index} must carry a string huggingface_id"));
-            assert!(
-                !huggingface_id.trim().is_empty(),
-                "published entry {published_entry_index} must carry a non-empty huggingface_id"
-            );
-            let revision = published_entry["revision"]
-                .as_str()
-                .unwrap_or_else(|| panic!("published entry {published_entry_index} must carry a string revision"));
-            assert!(
-                lowercase_hex::is_lowercase_hex_of_length(revision, 40),
-                "published entry {published_entry_index} revision must be 40 lowercase hex digits"
-            );
-            assert_named_only_by_its_model_id(published_entry, huggingface_id, published_entry_index);
-            let family = published_entry["family"]
-                .as_str()
-                .unwrap_or_else(|| panic!("published entry {published_entry_index} must carry a string family"));
-            assert!(
-                !family.trim().is_empty(),
-                "published entry {published_entry_index} must carry a non-empty family"
-            );
-            let approximate_size_bytes = published_entry["approximate_size_bytes"]
-                .as_u64()
-                .unwrap_or_else(|| {
-                    panic!("published entry {published_entry_index} must carry an integer approximate_size_bytes")
-                });
-            assert!(
-                approximate_size_bytes > 0
-                    && approximate_size_bytes <= 9_007_199_254_740_991,
-                "published entry {published_entry_index} size must be a positive JavaScript-safe integer"
-            );
-            assert_eq!(
-                published_entry["public"], serde_json::json!(true),
-                "published entry {published_entry_index} must be public"
-            );
-            assert_published_entry_carries_role_memory_and_flags(
-                published_entry,
-                published_entry_index,
-            );
+            assert_published_entry_is_renderable(published_entry, published_entry_index);
         }
     })
     .await
     .expect("the bundled catalog publication journey must finish within five seconds");
+}
+
+/// The Hugging Face identity of every entry in the shipped registry file, in
+/// authored order.
+fn shipped_catalog_entry_ids() -> Vec<String> {
+    let shipped_catalog_text = std::fs::read_to_string(
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../registry/download_catalog.json"),
+    )
+    .expect("the shipped download catalog should be readable");
+    let shipped_catalog: serde_json::Value = serde_json::from_str(&shipped_catalog_text)
+        .expect("the shipped download catalog should be valid JSON");
+    shipped_catalog["entries"]
+        .as_array()
+        .expect("the shipped catalog should contain an entries array")
+        .iter()
+        .map(|shipped_entry| {
+            shipped_entry["huggingface_id"]
+                .as_str()
+                .expect("every shipped entry should declare a string huggingface_id")
+                .to_owned()
+        })
+        .collect()
+}
+
+/// The catalog endpoint's JSON for the bundled catalog, served by an
+/// application whose worker is unavailable.
+async fn bundled_catalog_response_document() -> serde_json::Value {
+    let download_catalog =
+        DownloadCatalog::load_bundled().expect("the shipped catalog should parse and validate");
+    let application = astronomical_daemon::build_application_with_download_catalog(
+        ScriptedExecutor::unavailable(),
+        download_catalog,
+    );
+
+    let catalog_response = get_response(&application, "/v1/library/catalog").await;
+
+    assert_eq!(catalog_response.status(), StatusCode::OK);
+    let catalog_body = to_bytes(catalog_response.into_body(), 256 * 1024)
+        .await
+        .expect("the catalog response body should be readable");
+    serde_json::from_slice(&catalog_body).expect("the catalog response should contain JSON")
+}
+
+fn assert_published_entry_is_renderable(
+    published_entry: &serde_json::Value,
+    published_entry_index: usize,
+) {
+    let huggingface_id = published_entry["huggingface_id"]
+        .as_str()
+        .unwrap_or_else(|| {
+            panic!("published entry {published_entry_index} must carry a string huggingface_id")
+        });
+    assert!(
+        !huggingface_id.trim().is_empty(),
+        "published entry {published_entry_index} must carry a non-empty huggingface_id"
+    );
+    let revision = published_entry["revision"].as_str().unwrap_or_else(|| {
+        panic!("published entry {published_entry_index} must carry a string revision")
+    });
+    assert!(
+        lowercase_hex::is_lowercase_hex_of_length(revision, 40),
+        "published entry {published_entry_index} revision must be 40 lowercase hex digits"
+    );
+    assert_named_only_by_its_model_id(published_entry, huggingface_id, published_entry_index);
+    let family = published_entry["family"].as_str().unwrap_or_else(|| {
+        panic!("published entry {published_entry_index} must carry a string family")
+    });
+    assert!(
+        !family.trim().is_empty(),
+        "published entry {published_entry_index} must carry a non-empty family"
+    );
+    let approximate_size_bytes = published_entry["approximate_size_bytes"]
+        .as_u64()
+        .unwrap_or_else(|| {
+            panic!("published entry {published_entry_index} must carry an integer approximate_size_bytes")
+        });
+    assert!(
+        approximate_size_bytes > 0 && approximate_size_bytes <= 9_007_199_254_740_991,
+        "published entry {published_entry_index} size must be a positive JavaScript-safe integer"
+    );
+    assert_eq!(
+        published_entry["public"],
+        serde_json::json!(true),
+        "published entry {published_entry_index} must be public"
+    );
+    assert_published_entry_carries_role_memory_and_flags(published_entry, published_entry_index);
 }
 
 const PUBLISHED_ROLE_NAMES: [&str; 6] = [

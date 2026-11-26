@@ -6,6 +6,9 @@ use std::{fs, path::Path};
 
 use serde_json::Value;
 
+/// Writes the utilization decomposition and attribution counters into evidence
+/// that survives the run (issue #510), so runs can be compared later instead of
+/// the numbers living only in this test's stdout.
 pub(super) fn preserve_memory_utilization_evidence(
     isolated_worker_home: &Path,
     final_status: &Value,
@@ -269,21 +272,81 @@ pub(super) struct DecodeExpertReuseCounters {
     pub(super) memory_ceiling_utilization_owner_overrun_bytes: u64,
 }
 
+impl DecodeExpertReuseCounters {
+    /// The ceiling-utilization decomposition, named as the preserved evidence
+    /// document names each amount.
+    pub(super) fn memory_ceiling_utilization_evidence_counters(&self) -> [(&'static str, u64); 9] {
+        [
+            (
+                "memory_ceiling_utilization_ceiling_bytes",
+                self.memory_ceiling_utilization_ceiling_bytes,
+            ),
+            (
+                "memory_ceiling_utilization_active_bytes",
+                self.memory_ceiling_utilization_active_bytes,
+            ),
+            (
+                "memory_ceiling_utilization_unused_headroom_bytes",
+                self.memory_ceiling_utilization_unused_headroom_bytes,
+            ),
+            (
+                "memory_ceiling_utilization_reserved_model_core_slack_bytes",
+                self.memory_ceiling_utilization_reserved_model_core_slack_bytes,
+            ),
+            (
+                "memory_ceiling_utilization_reserved_context_growth_bytes",
+                self.memory_ceiling_utilization_reserved_context_growth_bytes,
+            ),
+            (
+                "memory_ceiling_utilization_reserved_activation_and_workspace_bytes",
+                self.memory_ceiling_utilization_reserved_activation_and_workspace_bytes,
+            ),
+            (
+                "memory_ceiling_utilization_unseated_expert_entitlement_bytes",
+                self.memory_ceiling_utilization_unseated_expert_entitlement_bytes,
+            ),
+            (
+                "memory_ceiling_utilization_unexplained_headroom_bytes",
+                self.memory_ceiling_utilization_unexplained_headroom_bytes,
+            ),
+            (
+                "memory_ceiling_utilization_owner_overrun_bytes",
+                self.memory_ceiling_utilization_owner_overrun_bytes,
+            ),
+        ]
+    }
+}
+
 /// Fetches the generation-attribution counters and asserts the routed-reuse
 /// behavior they prove: the hot-expert warm table is live (#372), route
 /// coverage is classified per token and mixed routes serve from retained RAM
 /// (#373), true routes are observed (#536), the predictor surface stays
 /// retired (#537, #594), and the ceiling-utilization identity closes with no
 /// unexplained residual (#507).
-#[expect(clippy::too_many_lines)]
 pub(super) fn assert_decode_expert_reuse_attribution(
     attribution_home: &Path,
     final_status: &Value,
 ) -> DecodeExpertReuseCounters {
+    let counters = fetch_decode_expert_reuse_counters(attribution_home);
+    assert_hot_expert_table_is_live_and_routes_are_classified(&counters);
+    assert_true_routes_were_observed(&counters);
+
+    // Previous-token prefetch survives; the predictor surface stays retired
+    // (#537, #594).
+    assert_predictor_surface_absent(
+        final_status,
+        &generation_attribution_counter_identifiers(attribution_home),
+    );
+
+    assert_unused_ceiling_has_named_owners(&counters);
+    counters
+}
+
+fn fetch_decode_expert_reuse_counters(attribution_home: &Path) -> DecodeExpertReuseCounters {
     let fetch_counter = |counter_identifier: &str| {
         generation_attribution_counter(attribution_home, counter_identifier)
     };
-    let counters = DecodeExpertReuseCounters {
+    DecodeExpertReuseCounters {
         retained_route_assignment_hit_count: fetch_counter("retained_route_assignment_hit_count"),
         hot_expert_partial_route_hit_count: fetch_counter("hot_expert_partial_route_hit_count"),
         hot_expert_warm_insert_count: fetch_counter("hot_expert_warm_insert_count"),
@@ -342,8 +405,10 @@ pub(super) fn assert_decode_expert_reuse_attribution(
         memory_ceiling_utilization_owner_overrun_bytes: fetch_counter(
             "memory_ceiling_utilization_owner_overrun_bytes",
         ),
-    };
+    }
+}
 
+fn assert_hot_expert_table_is_live_and_routes_are_classified(counters: &DecodeExpertReuseCounters) {
     // The routed-reuse branch is live (#372): unseated layers must warm routed
     // experts during decode and serve later tokens from the hot set instead of
     // re-reading storage every token.
@@ -379,7 +444,9 @@ pub(super) fn assert_decode_expert_reuse_attribution(
         counters.hot_expert_route_retained_assignment_count,
         counters.hot_expert_route_missing_assignment_count,
     );
+}
 
+fn assert_true_routes_were_observed(counters: &DecodeExpertReuseCounters) {
     // True-route observation history (#536): paged decode with attribution
     // enabled must capture real layer routes, not just table statistics.
     assert!(
@@ -392,14 +459,9 @@ pub(super) fn assert_decode_expert_reuse_attribution(
         "captured observations must include at least one sparse layer route; captured_layers={}",
         counters.route_observation_captured_layer_count,
     );
+}
 
-    // Previous-token prefetch survives; the predictor surface stays retired
-    // (#537, #594).
-    assert_predictor_surface_absent(
-        final_status,
-        &generation_attribution_counter_identifiers(attribution_home),
-    );
-
+fn assert_unused_ceiling_has_named_owners(counters: &DecodeExpertReuseCounters) {
     // The unused ceiling has a named owner (#507): every unused byte must be
     // attributed and the utilization identity must close with no residual.
     assert!(
@@ -425,5 +487,4 @@ pub(super) fn assert_decode_expert_reuse_attribution(
         counters.memory_ceiling_utilization_unused_headroom_bytes,
         counters.memory_ceiling_utilization_unexplained_headroom_bytes,
     );
-    counters
 }

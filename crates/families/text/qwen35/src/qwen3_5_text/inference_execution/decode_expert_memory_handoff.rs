@@ -11,7 +11,7 @@
 
 use ipc_protocol::RequestId;
 
-use crate::{InferenceEngineError, PerformanceOperation};
+use crate::{InferenceEngineError, PerformanceAttribution, PerformanceOperation};
 
 use super::Qwen3_5EngineState;
 use crate::qwen3_5_text::model::Qwen3_5Model;
@@ -37,24 +37,11 @@ impl Qwen3_5EngineState {
         model.reply_measurement.stage_tally.begin_reply();
         let context_token_count =
             u64::try_from(active_request.input_token_ids.len()).unwrap_or(u64::MAX);
-        let residency_preparation_result =
-            active_request.performance_attribution.measure_operation(
-                PerformanceOperation::GenerationPreparation,
-                |performance_attribution| {
-                    model.plan_expert_layer_states_for_reply(performance_attribution)
-                },
-            );
-        if let Err(residency_preparation_error) = residency_preparation_result {
-            // The plan is an accelerator, not a correctness gate. Without
-            // one no extra layer is read in at the reply's start, which is
-            // slower but preserves exact model execution and the user's request.
-            model.forget_expert_layer_states();
-            tracing::warn!(
-                request_id = request_id.value(),
-                error = %residency_preparation_error,
-                "continued decode with operation-local expert streaming after optional residency planning failed"
-            );
-        }
+        plan_expert_layer_states_for_reply_or_forget(
+            request_id,
+            model,
+            &mut active_request.performance_attribution,
+        );
         let planned_complete_layer_indexes_to_seat = model.expert_layers_to_seat_before_reply();
         // The warm floor must survive seating, so seating is capped to the
         // budget the floor leaves free BEFORE any layer streams: otherwise
@@ -67,27 +54,13 @@ impl Qwen3_5EngineState {
                     &planned_complete_layer_indexes_to_seat,
                 ),
             );
-        match model.seat_complete_layers_before_decode(
-            &complete_layer_indexes_to_seat,
+        seat_planned_complete_layers_and_report(
+            request_id,
+            model,
             &mut active_request.performance_attribution,
-        ) {
-            Ok(seated_payload_bytes) => {
-                tracing::info!(
-                    request_id = request_id.value(),
-                    planned_complete_layer_count = planned_complete_layer_indexes_to_seat.len(),
-                    warm_floor_capped_complete_layer_count = complete_layer_indexes_to_seat.len(),
-                    seated_payload_bytes,
-                    "seated planned complete layers before decode"
-                );
-            }
-            Err(seating_error) => {
-                tracing::warn!(
-                    request_id = request_id.value(),
-                    error = %seating_error,
-                    "continued decode after planned complete-layer seating failed"
-                );
-            }
-        }
+            planned_complete_layer_indexes_to_seat.len(),
+            &complete_layer_indexes_to_seat,
+        );
         // astro expert cache bookkeeping after seating and materialization. Decode admission
         // takes its own MLX snapshot next.
         let expert_statistics = model.astro_expert_cache_statistics();
@@ -123,6 +96,62 @@ impl Qwen3_5EngineState {
             "decode hot-expert warm capacity decided at handoff"
         );
         Ok(())
+    }
+}
+
+/// Plans which expert layers the reply keeps, and forgets any plan when
+/// planning fails.
+fn plan_expert_layer_states_for_reply_or_forget(
+    request_id: RequestId,
+    model: &Qwen3_5Model,
+    performance_attribution: &mut PerformanceAttribution,
+) {
+    let residency_preparation_result = performance_attribution.measure_operation(
+        PerformanceOperation::GenerationPreparation,
+        |performance_attribution| model.plan_expert_layer_states_for_reply(performance_attribution),
+    );
+    if let Err(residency_preparation_error) = residency_preparation_result {
+        // The plan is an accelerator, not a correctness gate. Without
+        // one no extra layer is read in at the reply's start, which is
+        // slower but preserves exact model execution and the user's request.
+        model.forget_expert_layer_states();
+        tracing::warn!(
+            request_id = request_id.value(),
+            error = %residency_preparation_error,
+            "continued decode with operation-local expert streaming after optional residency planning failed"
+        );
+    }
+}
+
+/// Seats the complete layers chosen for the reply start and logs the outcome.
+/// A seating failure is logged and decode continues, because a layer left
+/// unseated is still served correctly by operation-local streaming.
+fn seat_planned_complete_layers_and_report(
+    request_id: RequestId,
+    model: &Qwen3_5Model,
+    performance_attribution: &mut PerformanceAttribution,
+    planned_complete_layer_count: usize,
+    complete_layer_indexes_to_seat: &[usize],
+) {
+    match model
+        .seat_complete_layers_before_decode(complete_layer_indexes_to_seat, performance_attribution)
+    {
+        Ok(seated_payload_bytes) => {
+            tracing::info!(
+                request_id = request_id.value(),
+                planned_complete_layer_count,
+                warm_floor_capped_complete_layer_count = complete_layer_indexes_to_seat.len(),
+                seated_payload_bytes,
+                "seated planned complete layers before decode"
+            );
+        }
+        Err(seating_error) => {
+            tracing::warn!(
+                request_id = request_id.value(),
+                error = %seating_error,
+                "continued decode after planned complete-layer seating failed"
+            );
+        }
     }
 }
 

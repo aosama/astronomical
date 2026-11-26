@@ -7,6 +7,7 @@ use jangtq2_qwen35::codebook;
 use jangtq2_qwen35::hadamard32;
 use jangtq2_qwen35::mlx_decode::{decode_expert_weight_rows, rotate_activations_hadamard32};
 use mlx_bridge::{MlxArray, MlxDtype};
+use runtime_integration::MlxRuntime;
 
 use super::support::contract_runtime;
 
@@ -25,6 +26,94 @@ fn reference_golden_u32_values(key: &str) -> Vec<u32> {
         .collect()
 }
 
+/// Forty experts on a 3-bit, 64-wide page: every row of the page is decoded
+/// by its own threads, and a per-expert reference decode pins bit-exact parity
+/// between a large grid and a one-expert grid, so row indexing inside the
+/// kernel cannot drift with the page size.
+struct MultiExpertPageFixture {
+    expert_count: usize,
+    output_rows: usize,
+    packed_words_per_row: usize,
+    packed_words_host: Vec<u32>,
+    row_scales_host: Vec<f32>,
+}
+
+impl MultiExpertPageFixture {
+    fn forty_experts_at_three_bits() -> Self {
+        let expert_count = 40_usize;
+        let output_rows = 2_usize;
+        let packed_words_per_row = 6_usize;
+        let packed_words_host: Vec<u32> = (0..expert_count * output_rows * packed_words_per_row)
+            .map(|word_index| {
+                (word_index as u32)
+                    .wrapping_mul(2_654_435_761)
+                    .rotate_left(7)
+            })
+            .collect();
+        let row_scales_host: Vec<f32> = (0..expert_count * output_rows)
+            .map(|scale_index| ((scale_index % 7) as f32 + 1.0) / 4.0)
+            .collect();
+        Self {
+            expert_count,
+            output_rows,
+            packed_words_per_row,
+            packed_words_host,
+            row_scales_host,
+        }
+    }
+
+    fn decoded_width(&self) -> usize {
+        self.packed_words_per_row * u32::BITS as usize / 3
+    }
+
+    /// The whole page's packed words and float16 row scales, uploaded.
+    fn upload_whole_page(&self, runtime: &MlxRuntime) -> (MlxArray, MlxArray) {
+        let packed_page = MlxArray::from_u32(
+            &self.packed_words_host,
+            &[
+                self.expert_count as i32,
+                self.output_rows as i32,
+                self.packed_words_per_row as i32,
+            ],
+        )
+        .expect("the synthetic multi-block page should form a valid tensor");
+        let page_scales = runtime
+            .array_from_f32(
+                &self.row_scales_host,
+                &[self.expert_count as i32, self.output_rows as i32],
+            )
+            .and_then(|float32_scales| runtime.astype(&float32_scales, MlxDtype::Float16))
+            .expect("the synthetic multi-block row scales should upload");
+        (packed_page, page_scales)
+    }
+
+    /// One expert's rows decoded as a page of their own, read back as float32.
+    fn decode_expert_alone(&self, runtime: &MlxRuntime, expert_index: usize) -> Vec<f32> {
+        let expert_packed_words =
+            &self.packed_words_host[expert_index * self.output_rows * self.packed_words_per_row
+                ..(expert_index + 1) * self.output_rows * self.packed_words_per_row];
+        let expert_packed_page = MlxArray::from_u32(
+            expert_packed_words,
+            &[1, self.output_rows as i32, self.packed_words_per_row as i32],
+        )
+        .expect("one expert's packed rows should form a valid tensor");
+        let expert_row_scales = &self.row_scales_host
+            [expert_index * self.output_rows..(expert_index + 1) * self.output_rows];
+        let expert_scales = runtime
+            .array_from_f32(expert_row_scales, &[1, self.output_rows as i32])
+            .and_then(|float32_scales| runtime.astype(&float32_scales, MlxDtype::Float16))
+            .expect("one expert's row scales should upload");
+        let decoded_expert =
+            decode_expert_weight_rows(runtime, &expert_packed_page, &expert_scales, 3)
+                .expect("the per-expert reference page should decode");
+        runtime
+            .astype(&decoded_expert, MlxDtype::Float32)
+            .expect("the per-expert decode should convert for comparison")
+            .to_vec_f32()
+            .expect("the per-expert decoded values should be readable")
+    }
+}
+
 #[test]
 fn should_decode_a_multi_expert_page_identically_to_per_expert_pages() {
     if test_harness::skip_without(
@@ -34,45 +123,17 @@ fn should_decode_a_multi_expert_page_identically_to_per_expert_pages() {
         return;
     }
     let runtime = contract_runtime();
-    // Forty experts on a 3-bit, 64-wide page: every row of the page is
-    // decoded by its own threads, and a per-expert reference decode pins
-    // bit-exact parity between a large grid and a one-expert grid, so
-    // row indexing inside the kernel cannot drift with the page size.
-    let expert_count = 40_usize;
-    let output_rows = 2_usize;
-    let packed_words_per_row = 6_usize;
-    let decoded_width = packed_words_per_row * u32::BITS as usize / 3;
-    let packed_words_host: Vec<u32> = (0..expert_count * output_rows * packed_words_per_row)
-        .map(|word_index| {
-            (word_index as u32)
-                .wrapping_mul(2_654_435_761)
-                .rotate_left(7)
-        })
-        .collect();
-    let row_scales_host: Vec<f32> = (0..expert_count * output_rows)
-        .map(|scale_index| ((scale_index % 7) as f32 + 1.0) / 4.0)
-        .collect();
-    let packed_page = MlxArray::from_u32(
-        &packed_words_host,
-        &[
-            expert_count as i32,
-            output_rows as i32,
-            packed_words_per_row as i32,
-        ],
-    )
-    .expect("the synthetic multi-block page should form a valid tensor");
-    let page_scales = runtime
-        .array_from_f32(&row_scales_host, &[expert_count as i32, output_rows as i32])
-        .and_then(|float32_scales| runtime.astype(&float32_scales, MlxDtype::Float16))
-        .expect("the synthetic multi-block row scales should upload");
+    let page_fixture = MultiExpertPageFixture::forty_experts_at_three_bits();
+    let decoded_width = page_fixture.decoded_width();
+    let (packed_page, page_scales) = page_fixture.upload_whole_page(&runtime);
 
     let decoded_page = decode_expert_weight_rows(&runtime, &packed_page, &page_scales, 3)
         .expect("the multi-block page should decode");
     assert_eq!(
         decoded_page.shape(),
         [
-            expert_count as i32,
-            output_rows as i32,
+            page_fixture.expert_count as i32,
+            page_fixture.output_rows as i32,
             decoded_width as i32
         ]
     );
@@ -82,30 +143,9 @@ fn should_decode_a_multi_expert_page_identically_to_per_expert_pages() {
         .to_vec_f32()
         .expect("the decoded page values should be readable");
 
-    for expert_index in 0..expert_count {
-        let expert_packed_words =
-            &packed_words_host[expert_index * output_rows * packed_words_per_row
-                ..(expert_index + 1) * output_rows * packed_words_per_row];
-        let expert_packed_page = MlxArray::from_u32(
-            expert_packed_words,
-            &[1, output_rows as i32, packed_words_per_row as i32],
-        )
-        .expect("one expert's packed rows should form a valid tensor");
-        let expert_row_scales =
-            &row_scales_host[expert_index * output_rows..(expert_index + 1) * output_rows];
-        let expert_scales = runtime
-            .array_from_f32(expert_row_scales, &[1, output_rows as i32])
-            .and_then(|float32_scales| runtime.astype(&float32_scales, MlxDtype::Float16))
-            .expect("one expert's row scales should upload");
-        let decoded_expert =
-            decode_expert_weight_rows(&runtime, &expert_packed_page, &expert_scales, 3)
-                .expect("the per-expert reference page should decode");
-        let decoded_expert_values = runtime
-            .astype(&decoded_expert, MlxDtype::Float32)
-            .expect("the per-expert decode should convert for comparison")
-            .to_vec_f32()
-            .expect("the per-expert decoded values should be readable");
-        let page_offset = expert_index * output_rows * decoded_width;
+    for expert_index in 0..page_fixture.expert_count {
+        let decoded_expert_values = page_fixture.decode_expert_alone(&runtime, expert_index);
+        let page_offset = expert_index * page_fixture.output_rows * decoded_width;
         for (decoded_position, reference_value) in decoded_expert_values.iter().enumerate() {
             assert_eq!(
                 decoded_page_values[page_offset + decoded_position],

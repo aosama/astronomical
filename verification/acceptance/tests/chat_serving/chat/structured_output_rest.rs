@@ -38,49 +38,71 @@ async fn run_structured_output_gpu_journey() {
     .await;
     let server_address = rest_server.server_address;
 
+    assert_models_capability_phase(server_address, &selected_model.model_id).await;
+    assert_chat_json_schema_phase(server_address, &selected_model.model_id).await;
+    assert_chat_json_object_phase(server_address, &selected_model.model_id).await;
+    assert_responses_json_schema_phase(server_address, &selected_model.model_id).await;
+    assert_chat_json_schema_stream_phase(server_address, &selected_model.model_id).await;
+    assert_chat_choice_mask_phase(server_address, &selected_model.model_id).await;
+    assert_chat_regex_mask_phase(server_address, &selected_model.model_id).await;
+
+    stop_serving_rest_server(rest_server).await;
+    eprintln!(
+        "[structured-output-rest] status=success model={}",
+        selected_model.model_id
+    );
+}
+
+async fn assert_models_capability_phase(server_address: std::net::SocketAddr, model_id: &str) {
     eprintln!("[structured-output-rest 1/7] status=progress phase=models_capability");
     let models_response = get_endpoint(server_address, "/v1/models").await;
     assert_http_ok(&models_response);
     let models_document = http_json_body(&models_response);
-    let advertised_model = advertised_model_document(&models_document, &selected_model.model_id);
+    let advertised_model = advertised_model_document(&models_document, model_id);
     assert_eq!(advertised_model["supports_structured_outputs"], true);
     assert_eq!(
         advertised_model["structured_output_enforcement"],
         "logits_mask"
     );
     eprintln!("[structured-output-rest 1/7] status=success phase=models_capability");
+}
 
+async fn assert_chat_json_schema_phase(server_address: std::net::SocketAddr, model_id: &str) {
     eprintln!("[structured-output-rest 2/7] status=progress phase=chat_json_schema");
     let chat_schema_response = post_chat_completion(
         server_address,
-        chat_json_schema_request_body(&selected_model.model_id, false),
+        chat_json_schema_request_body(model_id, false),
     )
     .await;
     assert_structured_json_http_response(&chat_schema_response, chat_visible_content);
     eprintln!("[structured-output-rest 2/7] status=success phase=chat_json_schema");
+}
 
+async fn assert_chat_json_object_phase(server_address: std::net::SocketAddr, model_id: &str) {
     eprintln!("[structured-output-rest 3/7] status=progress phase=chat_json_object");
-    let chat_object_response = post_chat_completion(
-        server_address,
-        chat_json_object_request_body(&selected_model.model_id),
-    )
-    .await;
+    let chat_object_response =
+        post_chat_completion(server_address, chat_json_object_request_body(model_id)).await;
     assert_structured_json_http_response(&chat_object_response, chat_visible_content);
     eprintln!("[structured-output-rest 3/7] status=success phase=chat_json_object");
+}
 
+async fn assert_responses_json_schema_phase(server_address: std::net::SocketAddr, model_id: &str) {
     eprintln!("[structured-output-rest 4/7] status=progress phase=responses_json_schema");
-    let responses_schema_response = post_responses_completion(
-        server_address,
-        responses_json_schema_request_body(&selected_model.model_id),
-    )
-    .await;
+    let responses_schema_response =
+        post_responses_completion(server_address, responses_json_schema_request_body(model_id))
+            .await;
     assert_structured_json_http_response(&responses_schema_response, responses_visible_content);
     eprintln!("[structured-output-rest 4/7] status=success phase=responses_json_schema");
+}
 
+async fn assert_chat_json_schema_stream_phase(
+    server_address: std::net::SocketAddr,
+    model_id: &str,
+) {
     eprintln!("[structured-output-rest 5/7] status=progress phase=chat_json_schema_stream");
     let chat_stream_response = post_chat_completion(
         server_address,
-        chat_json_schema_request_body(&selected_model.model_id, true),
+        chat_json_schema_request_body(model_id, true),
     )
     .await;
     assert_http_ok(&chat_stream_response);
@@ -90,13 +112,12 @@ async fn run_structured_output_gpu_journey() {
         "streaming structured chat must finish cleanly: {chat_stream_response}"
     );
     eprintln!("[structured-output-rest 5/7] status=success phase=chat_json_schema_stream");
+}
 
+async fn assert_chat_choice_mask_phase(server_address: std::net::SocketAddr, model_id: &str) {
     eprintln!("[structured-output-rest 6/7] status=progress phase=chat_choice_mask");
-    let choice_response = post_chat_completion(
-        server_address,
-        chat_choice_request_body(&selected_model.model_id),
-    )
-    .await;
+    let choice_response =
+        post_chat_completion(server_address, chat_choice_request_body(model_id)).await;
     assert_http_ok(&choice_response);
     let choice_document = http_json_body(&choice_response);
     let choice_text = chat_visible_content(&choice_document).trim();
@@ -105,13 +126,12 @@ async fn run_structured_output_gpu_journey() {
         "choice masking must emit an allowed name, got {choice_text:?} body={choice_document}"
     );
     eprintln!("[structured-output-rest 6/7] status=success phase=chat_choice_mask");
+}
 
+async fn assert_chat_regex_mask_phase(server_address: std::net::SocketAddr, model_id: &str) {
     eprintln!("[structured-output-rest 7/7] status=progress phase=chat_regex_mask");
-    let regex_response = post_chat_completion(
-        server_address,
-        chat_regex_request_body(&selected_model.model_id),
-    )
-    .await;
+    let regex_response =
+        post_chat_completion(server_address, chat_regex_request_body(model_id)).await;
     assert_http_ok(&regex_response);
     let regex_document = http_json_body(&regex_response);
     let regex_text = chat_visible_content(&regex_document).trim();
@@ -120,12 +140,6 @@ async fn run_structured_output_gpu_journey() {
         "regex masking must emit exactly one allowed name, got {regex_text:?} body={regex_document}"
     );
     eprintln!("[structured-output-rest 7/7] status=success phase=chat_regex_mask");
-
-    stop_serving_rest_server(rest_server).await;
-    eprintln!(
-        "[structured-output-rest] status=success model={}",
-        selected_model.model_id
-    );
 }
 
 fn configured_structured_output_chat_model() -> DiscoveredModel {

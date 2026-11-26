@@ -11,6 +11,7 @@
 //! retaining exactly one marker-owned target.
 
 mod disposable_journey_support;
+mod disposable_measurement_support;
 
 use disposable_journey_support::process::{
     LIFECYCLE_MARKER_NAME, arm_termination_watchdog, du_kibibytes, exit_status_code,
@@ -18,10 +19,13 @@ use disposable_journey_support::process::{
 };
 use disposable_journey_support::sandbox::{
     DisposableSandbox, assert_lane_root_is_empty, assert_path_is_absent, canonicalized,
-    capture_fixture_body, file_text, journey_log_text, make_executable, run_journey,
-    sanitized_runner_command, wait_for_file,
+    capture_fixture_body, file_text, journey_log_text, run_journey, sanitized_runner_command,
+    wait_for_file,
 };
-use std::path::{Path, PathBuf};
+use disposable_measurement_support::{
+    retained_handoff_target_directories, spawn_cleanup_signal_journey, write_blocking_du_shim,
+};
+use std::path::Path;
 use std::process::Stdio;
 
 #[test]
@@ -508,48 +512,12 @@ fn should_reject_an_invalid_lane_name_without_touching_the_lane_root() {
 fn should_retain_one_owned_target_when_measurement_is_interrupted() {
     let sandbox = DisposableSandbox::install();
     let shim_directory = sandbox.root_directory.join("shim-bin");
-    std::fs::create_dir_all(&shim_directory).expect("the shim directory should be creatable");
     let cleanup_ready_path = sandbox.root_directory.join("cleanup-ready");
-    let du_shim_path = {
-        let du_shim_path = shim_directory.join("du");
-        std::fs::write(
-            &du_shim_path,
-            format!(
-                "#!/bin/sh\n\
-                 set -eu\n\
-                 printf '4\\t%s\\n' \"$2\"\n\
-                 printf '%s\\n' ready > \"{cleanup_ready}\"\n\
-                 exec sleep 30\n",
-                cleanup_ready = cleanup_ready_path.display()
-            ),
-        )
-        .expect("the du shim should be writable");
-        make_executable(&du_shim_path);
-        du_shim_path
-    };
-    let _ = du_shim_path;
+    write_blocking_du_shim(&shim_directory, &cleanup_ready_path);
     let record_path = sandbox.root_directory.join("signal-target-record");
     let fixture_path = sandbox.write_executable("capture-fixture.sh", &capture_fixture_body());
-    let mut command_builder = sanitized_runner_command(&sandbox);
-    command_builder
-        .arg("--lane")
-        .arg("cleanup-signal")
-        .arg("--")
-        .arg(&fixture_path)
-        .arg(&record_path)
-        .env(
-            "PATH",
-            format!(
-                "{}:{}",
-                shim_directory.display(),
-                std::env::var("PATH").unwrap_or_default()
-            ),
-        )
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-    let journey_process = command_builder
-        .spawn()
-        .expect("the cleanup-signal journey should spawn");
+    let journey_process =
+        spawn_cleanup_signal_journey(&sandbox, &shim_directory, &fixture_path, &record_path);
     wait_for_file(&cleanup_ready_path);
     send_terminate(journey_process.id());
     arm_termination_watchdog(journey_process.id());
@@ -567,28 +535,8 @@ fn should_retain_one_owned_target_when_measurement_is_interrupted() {
         "the interrupted measurement did not report retained cleanup ownership: {log_text}"
     );
     let original_target = file_text(&record_path).trim().to_owned();
-    let original_target_name = Path::new(&original_target)
-        .file_name()
-        .map(|name| name.to_string_lossy().into_owned())
-        .unwrap_or_default();
-    let retained_target_directories: Vec<PathBuf> = std::fs::read_dir(&sandbox.lane_root_directory)
-        .expect("the lane root should be listable after retention")
-        .map(|lane_entry| {
-            lane_entry
-                .expect("the lane entry should be readable")
-                .path()
-        })
-        .filter(|lane_entry_path| {
-            lane_entry_path
-                .file_name()
-                .map(|entry_name| {
-                    entry_name
-                        .to_string_lossy()
-                        .starts_with(&format!("{original_target_name}.removing."))
-                })
-                .unwrap_or(false)
-        })
-        .collect();
+    let retained_target_directories =
+        retained_handoff_target_directories(&sandbox.lane_root_directory, &original_target);
     assert_eq!(
         retained_target_directories.len(),
         1,

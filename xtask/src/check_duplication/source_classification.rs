@@ -3,13 +3,6 @@
 //! here works on repository-relative paths with `/` separators, so none of it
 //! touches the filesystem.
 
-/// The top-level folders whose Rust sources are measured.
-pub(crate) const MEASURED_ROOT_DIRECTORIES: [&str; 4] = ["crates", "apps", "verification", "xtask"];
-
-/// Folders never descended into: build output, and vendored or pinned code
-/// this repository does not author.
-const SKIPPED_DIRECTORY_NAMES: [&str; 2] = ["target", "third-party"];
-
 /// Crates that hold several model families side by side, with how many
 /// folders below the crate's own folder the family's folder sits. Reporting
 /// them as one area would hide the copies between their families, which are
@@ -21,11 +14,6 @@ const FAMILY_HOLDING_CRATE_AREA_OFFSETS: [(&str, usize); 4] = [
     ("speech", 3),
     ("decision-models", 3),
 ];
-
-/// Whether the walk should skip a directory with this name.
-pub(crate) fn is_skipped_directory_name(directory_name: &str) -> bool {
-    SKIPPED_DIRECTORY_NAMES.contains(&directory_name)
-}
 
 /// Production code is any Rust file whose name mentions neither "test" nor
 /// "fixture" and that does not sit under a `tests` folder.

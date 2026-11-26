@@ -10,8 +10,8 @@ use ipc_protocol::{
     WorkerEvent,
 };
 use model_serving::{
-    InferenceEngine, Qwen3_5ArtifactValidator, Qwen3_5Tokenizer, TextInferenceRequest,
-    astro_ssd_prompt_cache_partial_tail_capture_end,
+    InferenceEngine, Qwen3_5ArtifactValidator, Qwen3_5TextEngine, Qwen3_5Tokenizer,
+    TextInferenceRequest, astro_ssd_prompt_cache_partial_tail_capture_end,
 };
 
 use super::engine_astro_ssd_prompt_cache::{
@@ -48,8 +48,41 @@ async fn run_partial_tail_reuse_acceptance() {
         )
         .await;
 
+    let (turn_one_prompt_token_ids, turn_two_prompt_token_ids) =
+        two_turn_prompt_token_ids(&model_directory, block_token_count);
+    run_first_turn_cold(&mut qwen3_5_engine, turn_one_prompt_token_ids).await;
+    run_second_turn_expecting_partial_tail_restore(
+        &mut qwen3_5_engine,
+        turn_two_prompt_token_ids,
+        block_token_count,
+    )
+    .await;
+
+    let astro_ssd_prompt_cache_stats = qwen3_5_engine
+        .collect_astro_ssd_prompt_cache_stats()
+        .await
+        .expect("the engine should report persistent astro-ssd-prompt-cache stats")
+        .expect("the acceptance engine should have the astro SSD prompt cache enabled");
+    let WorkerEvent::AstroSsdPromptCacheStats {
+        astro_ssd_prompt_cache_partial_tail_hits,
+        ..
+    } = astro_ssd_prompt_cache_stats
+    else {
+        panic!("the engine returned an unexpected astro-ssd-prompt-cache stats event")
+    };
+    assert!(
+        astro_ssd_prompt_cache_partial_tail_hits >= 1,
+        "the second turn's tail restore should be counted as a partial tail hit"
+    );
+}
+
+/// Returns the first turn's prompt and the second turn's prompt that extends it.
+fn two_turn_prompt_token_ids(
+    model_directory: &Path,
+    block_token_count: usize,
+) -> (Vec<u32>, Vec<u32>) {
     let conversation_token_ids = romeo_and_juliet_conversation_token_ids(
-        &model_directory,
+        model_directory,
         2 * block_token_count + TURN_ONE_TAIL_TOKEN_COUNT + TURN_TWO_EXTENSION_TOKEN_COUNT,
     );
     let turn_one_prompt_token_ids =
@@ -62,7 +95,13 @@ async fn run_partial_tail_reuse_acceptance() {
         turn_one_prompt_token_ids[..],
         "the second turn must extend the first turn's prompt without changing its prefix"
     );
+    (turn_one_prompt_token_ids, turn_two_prompt_token_ids)
+}
 
+async fn run_first_turn_cold(
+    qwen3_5_engine: &mut Qwen3_5TextEngine,
+    turn_one_prompt_token_ids: Vec<u32>,
+) {
     // Turn 1: two complete blocks plus a trailing partial block. The cold run
     // publishes both full blocks and captures the trailing tail.
     let turn_one_request_id = RequestId::new(TURN_ONE_REQUEST_ID);
@@ -79,11 +118,17 @@ async fn run_partial_tail_reuse_acceptance() {
         "the first turn on a fresh astro SSD prompt cache directory must prefill cold"
     );
     let (turn_one_generated_token_ids, _) =
-        generate_token_ids(&mut qwen3_5_engine, turn_one_request_id, 1).await;
+        generate_token_ids(qwen3_5_engine, turn_one_request_id, 1).await;
     assert_eq!(turn_one_generated_token_ids.len(), 1);
     // Two full blocks plus the captured tail each carry sequence state.
-    wait_for_astro_ssd_prompt_cache_blocks(&qwen3_5_engine, 3).await;
+    wait_for_astro_ssd_prompt_cache_blocks(qwen3_5_engine, 3).await;
+}
 
+async fn run_second_turn_expecting_partial_tail_restore(
+    qwen3_5_engine: &mut Qwen3_5TextEngine,
+    turn_two_prompt_token_ids: Vec<u32>,
+    block_token_count: usize,
+) {
     // Turn 2: extend the same conversation by fewer tokens than one block. The
     // lookup must restore both complete blocks AND the first turn's tail, so
     // the second turn prefills only the newly added suffix. The tail ends one
@@ -117,25 +162,8 @@ async fn run_partial_tail_reuse_acceptance() {
         "the second turn should restore both complete blocks and the first turn's partial tail"
     );
     let (turn_two_generated_token_ids, _) =
-        generate_token_ids(&mut qwen3_5_engine, turn_two_request_id, 1).await;
+        generate_token_ids(qwen3_5_engine, turn_two_request_id, 1).await;
     assert_eq!(turn_two_generated_token_ids.len(), 1);
-
-    let astro_ssd_prompt_cache_stats = qwen3_5_engine
-        .collect_astro_ssd_prompt_cache_stats()
-        .await
-        .expect("the engine should report persistent astro-ssd-prompt-cache stats")
-        .expect("the acceptance engine should have the astro SSD prompt cache enabled");
-    let WorkerEvent::AstroSsdPromptCacheStats {
-        astro_ssd_prompt_cache_partial_tail_hits,
-        ..
-    } = astro_ssd_prompt_cache_stats
-    else {
-        panic!("the engine returned an unexpected astro-ssd-prompt-cache stats event")
-    };
-    assert!(
-        astro_ssd_prompt_cache_partial_tail_hits >= 1,
-        "the second turn's tail restore should be counted as a partial tail hit"
-    );
 }
 
 fn romeo_and_juliet_conversation_token_ids(
