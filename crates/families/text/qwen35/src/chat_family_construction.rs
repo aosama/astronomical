@@ -14,6 +14,8 @@ mod qwen3_5_dense_engine_placement;
 #[cfg(all(test, feature = "direct-mlx"))]
 mod qwen3_5_dense_engine_placement_tests;
 #[cfg(feature = "direct-mlx")]
+mod qwen3_5_engine_selection;
+#[cfg(feature = "direct-mlx")]
 mod qwen3_5_model_startup;
 #[cfg(feature = "direct-mlx")]
 mod qwen3_5_model_startup_error;

@@ -6,31 +6,27 @@ use crate::TextMlxEngineConstructors;
 use std::path::PathBuf;
 
 use crate::{
-    AstroSsdPromptCacheDiskStoreConfig, CompleteResidencyRequirements, EnginePlacement,
-    ModelFamilyInferenceEngine, ModelLoadingPerformanceAttributionMetadata, PerformanceAttribution,
-    PerformanceAttributionLog, PerformanceAttributionOutcome, PerformanceOperation,
-    PromptProcessingChunkSizer, Qwen3_5ArtifactValidator, Qwen3_5GenerationProcessor,
-    Qwen3_5MemoryGeometryError, Qwen3_5ResidentEngine, Qwen3_5StreamingEngine,
-    ResidentEngineSettings, StreamingEngineSettings, TextExecutionCoreSettings,
-    ValidatedQwen3_5Artifact, boxed_chat_engine, model_memory_geometry_from_validated_artifact,
+    AstroSsdPromptCacheDiskStoreConfig, EnginePlacement, ModelFamilyInferenceEngine,
+    ModelLoadingPerformanceAttributionMetadata, PerformanceAttribution, PerformanceAttributionLog,
+    PerformanceAttributionOutcome, PerformanceOperation, PromptProcessingChunkSizer,
+    Qwen3_5ArtifactValidator, Qwen3_5GenerationProcessor, Qwen3_5ResidentEngine,
+    Qwen3_5StreamingEngine, ResidentEngineSettings, StreamingEngineSettings,
+    TextExecutionCoreSettings, ValidatedQwen3_5Artifact, boxed_chat_engine,
 };
 use ipc_protocol::{
     WorkerAutoregressiveModelConfiguration, WorkerChunkingConfiguration,
     WorkerDecodeAstroExpertCachePolicy, WorkerDiagnosticQwen3_5EngineOverride,
 };
 
+use super::qwen3_5_engine_selection::{
+    Qwen3_5SelectedEngine, prompt_chunk_tokens_for, select_qwen3_5_engine_from_artifact,
+};
 use super::qwen3_5_model_startup_error::Qwen3_5ModelStartupError;
 use super::qwen3_5_startup_storage::{
     astro_ssd_prompt_cache_disk_store_config, astro_ssd_prompt_cache_serves_artifact,
     model_astro_neural_engine_program_cache_directory, open_model_loading_attribution,
 };
 use super::{ChatEngineSelection, ChatFamilySettings, ChatRuntimeParts};
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum Qwen3_5SelectedEngine {
-    Resident,
-    Streaming,
-}
 
 /// Validates the folder, selects and starts the engine, and builds the
 /// processor, from the worker's chat settings and the model's policy.
@@ -180,7 +176,8 @@ fn construct_selected_qwen3_5_engine(
             artifact_payload_bytes,
             artifact_shard_count,
         ),
-        Qwen3_5SelectedEngine::Streaming => construct_streaming_engine(
+        Qwen3_5SelectedEngine::Streaming { holds_whole_model } => construct_streaming_engine(
+            prompt_chunk_tokens_for(&chunking, holds_whole_model),
             validated_artifact,
             active_memory_limit_bytes,
             mlx_buffer_cache_limit_bytes,
@@ -310,7 +307,12 @@ fn select_startup_engine(
             }
         }
         ChatEngineSelection::StreamingRetry => Ok((
-            (Qwen3_5SelectedEngine::Streaming, None),
+            (
+                Qwen3_5SelectedEngine::Streaming {
+                    holds_whole_model: false,
+                },
+                None,
+            ),
             model_loading_performance_attribution,
         )),
         ChatEngineSelection::ResidentPromotion => Ok((
@@ -443,6 +445,7 @@ fn construct_resident_engine(
 /// sizing failure records the failed loading attribution first.
 #[allow(clippy::too_many_arguments)]
 fn construct_streaming_engine(
+    prompt_chunk_tokens: u32,
     validated_artifact: ValidatedQwen3_5Artifact,
     active_memory_limit_bytes: usize,
     mlx_buffer_cache_limit_bytes: usize,
@@ -459,27 +462,26 @@ fn construct_streaming_engine(
     artifact_payload_bytes: u64,
     artifact_shard_count: usize,
 ) -> Result<ModelFamilyInferenceEngine, Qwen3_5ModelStartupError> {
-    let prompt_processing_chunk_sizer = match PromptProcessingChunkSizer::for_chunk_size_tokens(
-        chunking.fixed_ssd_streaming_prompt_processing_chunk_size_tokens,
-    ) {
-        Ok(prompt_processing_chunk_sizer) => prompt_processing_chunk_sizer,
-        Err(prompt_processing_chunk_sizer_error) => {
-            record_reviewed_artifact_startup_failure(
-                model_loading_performance_attribution,
-                &mut performance_attribution_log,
-                artifact_model_id,
-                artifact_model_revision,
-                artifact_payload_bytes,
-                artifact_shard_count,
-                "prompt-processing chunk configuration failed",
-            );
-            return Err(
-                Qwen3_5ModelStartupError::StreamingPromptProcessingChunkSizing(
-                    prompt_processing_chunk_sizer_error,
-                ),
-            );
-        }
-    };
+    let prompt_processing_chunk_sizer =
+        match PromptProcessingChunkSizer::for_chunk_size_tokens(prompt_chunk_tokens) {
+            Ok(prompt_processing_chunk_sizer) => prompt_processing_chunk_sizer,
+            Err(prompt_processing_chunk_sizer_error) => {
+                record_reviewed_artifact_startup_failure(
+                    model_loading_performance_attribution,
+                    &mut performance_attribution_log,
+                    artifact_model_id,
+                    artifact_model_revision,
+                    artifact_payload_bytes,
+                    artifact_shard_count,
+                    "prompt-processing chunk configuration failed",
+                );
+                return Err(
+                    Qwen3_5ModelStartupError::StreamingPromptProcessingChunkSizing(
+                        prompt_processing_chunk_sizer_error,
+                    ),
+                );
+            }
+        };
     Qwen3_5StreamingEngine::new_with_execution_core_settings(
         TextExecutionCoreSettings {
             validated_artifact,
@@ -510,7 +512,9 @@ fn apply_diagnostic_engine_override(
     let forced_engine = match diagnostic_engine_override {
         WorkerDiagnosticQwen3_5EngineOverride::Automatic => return automatically_selected_engine,
         WorkerDiagnosticQwen3_5EngineOverride::Resident => Qwen3_5SelectedEngine::Resident,
-        WorkerDiagnosticQwen3_5EngineOverride::Streaming => Qwen3_5SelectedEngine::Streaming,
+        WorkerDiagnosticQwen3_5EngineOverride::Streaming => Qwen3_5SelectedEngine::Streaming {
+            holds_whole_model: false,
+        },
     };
     tracing::warn!(
         automatically_selected_engine = ?automatically_selected_engine,
@@ -518,108 +522,6 @@ fn apply_diagnostic_engine_override(
         "diagnostic Qwen3.5 engine override applied at startup"
     );
     forced_engine
-}
-
-/// The engine the artifact's memory geometry chooses, except that
-/// Qwen3.8-Flash-Next runs on the streaming engine only: the resident
-/// engine refuses it at load, so a Mac with room for every expert must
-/// still stream it rather than fail (issue #2533).
-fn select_qwen3_5_engine_from_artifact(
-    validated_artifact: &crate::ValidatedQwen3_5Artifact,
-    model_directory_path: &std::path::Path,
-    active_memory_limit_bytes: usize,
-) -> Result<(Qwen3_5SelectedEngine, EnginePlacement), Qwen3_5ModelStartupError> {
-    let geometry_choice = select_qwen3_5_engine_from_artifact_geometry(
-        validated_artifact,
-        model_directory_path,
-        active_memory_limit_bytes,
-    )?;
-    Ok(streaming_only_generation_choice(
-        geometry_choice,
-        validated_artifact
-            .config()
-            .qwen4_exp_architecture()
-            .is_some(),
-    ))
-}
-
-/// Keeps a streaming choice; turns a resident one into streaming for a
-/// generation only the streaming engine serves. No expert is short of
-/// room, so the placement reports no shortfall.
-fn streaming_only_generation_choice(
-    geometry_choice: (Qwen3_5SelectedEngine, EnginePlacement),
-    is_streaming_only_generation: bool,
-) -> (Qwen3_5SelectedEngine, EnginePlacement) {
-    if !is_streaming_only_generation || !geometry_choice.1.runs_resident_engine() {
-        return geometry_choice;
-    }
-    (
-        Qwen3_5SelectedEngine::Streaming,
-        EnginePlacement::CompleteResidencyDoesNotFit { shortfall_bytes: 0 },
-    )
-}
-
-fn select_qwen3_5_engine_from_artifact_geometry(
-    validated_artifact: &crate::ValidatedQwen3_5Artifact,
-    model_directory_path: &std::path::Path,
-    active_memory_limit_bytes: usize,
-) -> Result<(Qwen3_5SelectedEngine, EnginePlacement), Qwen3_5ModelStartupError> {
-    let (model_geometry, required_headroom_bytes) =
-        match model_memory_geometry_from_validated_artifact(
-            validated_artifact,
-            model_directory_path,
-        ) {
-            Ok(geometry) => geometry,
-            Err(Qwen3_5MemoryGeometryError::NotSparseMixtureOfExperts) => {
-                let engine_placement = super::qwen3_5_dense_engine_placement::place_dense_artifact(
-                    validated_artifact,
-                    model_directory_path,
-                    active_memory_limit_bytes,
-                )?;
-                return Ok((selected_engine_for(engine_placement), engine_placement));
-            }
-            Err(source) => {
-                return Err(Qwen3_5ModelStartupError::ArtifactRamGeometry {
-                    model_directory: model_directory_path.to_path_buf(),
-                    source,
-                });
-            }
-        };
-    let complete_residency_decision = CompleteResidencyRequirements {
-        current_active_memory_bytes: model_geometry.model_core_payload_bytes,
-        retained_paged_expert_payload_bytes: 0,
-        complete_expert_payload_bytes: model_geometry.complete_expert_payload_bytes,
-        required_headroom_bytes,
-        active_memory_ceiling_bytes: u64::try_from(active_memory_limit_bytes).unwrap_or(u64::MAX),
-    }
-    .decide();
-    tracing::info!(
-        model_core_payload_bytes = model_geometry.model_core_payload_bytes,
-        complete_expert_payload_bytes = model_geometry.complete_expert_payload_bytes,
-        largest_complete_expert_layer_bytes = model_geometry.largest_complete_expert_layer_bytes,
-        required_headroom_bytes,
-        active_memory_limit_bytes,
-        complete_residency_decision = ?complete_residency_decision,
-        "Qwen3.5 startup complete-residency decision"
-    );
-    let engine_placement =
-        EnginePlacement::from_startup_complete_residency_decision(complete_residency_decision)
-            .map_err(
-                |source| Qwen3_5ModelStartupError::CompleteResidencyDecision {
-                    model_directory: model_directory_path.to_path_buf(),
-                    source,
-                },
-            )?;
-    Ok((selected_engine_for(engine_placement), engine_placement))
-}
-
-/// The engine family a startup placement runs on.
-const fn selected_engine_for(engine_placement: EnginePlacement) -> Qwen3_5SelectedEngine {
-    if engine_placement.runs_resident_engine() {
-        Qwen3_5SelectedEngine::Resident
-    } else {
-        Qwen3_5SelectedEngine::Streaming
-    }
 }
 
 /// Records a failed loading attribution whose artifact metadata was already
@@ -682,7 +584,3 @@ fn record_failed_model_loading_performance_attribution(
         );
     }
 }
-
-#[cfg(test)]
-#[path = "qwen3_5_model_startup_tests.rs"]
-mod qwen3_5_model_startup_tests;
