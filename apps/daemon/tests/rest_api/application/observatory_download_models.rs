@@ -1,5 +1,6 @@
 //! REST acceptance coverage for the embedded Observatory Download Models destination and script.
 
+use crate::rest_api::http_exchange_fixtures::get_response;
 use std::time::Duration;
 
 use axum::{
@@ -16,15 +17,7 @@ async fn should_serve_a_labelled_download_models_destination_at_its_deep_link() 
     timeout(Duration::from_secs(5), async {
         let application =
             astronomical_daemon::build_application(ScriptedExecutor::ready(Vec::new()));
-        let response = application
-            .oneshot(
-                Request::builder()
-                    .uri("/download-models")
-                    .body(Body::empty())
-                    .expect("the Download Models deep-link request should be valid"),
-            )
-            .await
-            .expect("the application should return the Observatory shell");
+        let response = get_response(&application, "/download-models").await;
 
         assert_eq!(response.status(), StatusCode::OK);
         assert!(
@@ -89,15 +82,7 @@ async fn should_serve_the_embedded_download_models_javascript() {
     timeout(Duration::from_secs(5), async {
         let application =
             astronomical_daemon::build_application(ScriptedExecutor::ready(Vec::new()));
-        let response = application
-            .oneshot(
-                Request::builder()
-                    .uri("/download-models.js")
-                    .body(Body::empty())
-                    .expect("the download-models.js request should be valid"),
-            )
-            .await
-            .expect("the application should return the Download Models script");
+        let response = get_response(&application, "/download-models.js").await;
 
         assert_eq!(response.status(), StatusCode::OK);
         assert!(
@@ -124,15 +109,7 @@ async fn should_serve_the_embedded_linked_model_javascript() {
     timeout(Duration::from_secs(5), async {
         let application =
             astronomical_daemon::build_application(ScriptedExecutor::ready(Vec::new()));
-        let response = application
-            .oneshot(
-                Request::builder()
-                    .uri("/download-models-linked.js")
-                    .body(Body::empty())
-                    .expect("the download-models-linked.js request should be valid"),
-            )
-            .await
-            .expect("the application should return the linked-model script");
+        let response = get_response(&application, "/download-models-linked.js").await;
 
         assert_eq!(response.status(), StatusCode::OK);
         let response_body = to_bytes(response.into_body(), 1024 * 1024)

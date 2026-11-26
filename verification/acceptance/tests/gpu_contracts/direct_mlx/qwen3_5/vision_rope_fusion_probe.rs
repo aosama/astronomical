@@ -14,8 +14,8 @@ use mlx_bridge::{MlxArray, MlxCompiledElementwiseGraphs, MlxDtype};
 use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use tokio::time::timeout;
 
-const HEAD_COUNT: i32 = 16;
-const HEAD_DIMENSION: i32 = 72;
+use super::vision_rope_operands::VisionRopeOperands;
+
 // Qwen3.5 vision processes thousands of patches per image; 8192 keeps the
 // elementwise traffic large enough to clear run-to-run noise.
 const PATCH_COUNT: i32 = 8_192;
@@ -40,60 +40,19 @@ async fn probe_vision_rope_fusion() {
     let compiled_elementwise_graphs =
         MlxCompiledElementwiseGraphs::new().expect("the compiled elementwise graphs should build");
 
-    let attention_states = bf16_array(
-        &runtime,
-        &patterned_values(
-            (PATCH_COUNT * HEAD_COUNT * HEAD_DIMENSION) as usize,
-            0.01,
-            -0.5,
-        ),
-        &[PATCH_COUNT, HEAD_COUNT, HEAD_DIMENSION],
-    );
-    let rotary_cosines = f32_array(
-        &runtime,
-        &patterned_values((PATCH_COUNT * HEAD_DIMENSION) as usize, 0.02, -1.0),
-        &[PATCH_COUNT, 1, HEAD_DIMENSION],
-    );
-    let rotary_sines = f32_array(
-        &runtime,
-        &patterned_values((PATCH_COUNT * HEAD_DIMENSION) as usize, 0.03, 0.25),
-        &[PATCH_COUNT, 1, HEAD_DIMENSION],
-    );
+    let operands = VisionRopeOperands::patterned(&runtime, PATCH_COUNT);
     runtime
-        .evaluate_arrays(&[&attention_states, &rotary_cosines, &rotary_sines])
+        .evaluate_arrays(&[
+            &operands.attention_states,
+            &operands.rotary_cosines,
+            &operands.rotary_sines,
+        ])
         .expect("the probe operands should evaluate");
-
-    let half_head_dimension = HEAD_DIMENSION / 2;
-    let first_half = runtime
-        .slice(
-            &attention_states,
-            &[0, 0, 0],
-            &[PATCH_COUNT, HEAD_COUNT, half_head_dimension],
-            &[1, 1, 1],
-        )
-        .expect("the first head half should slice");
-    let second_half = runtime
-        .slice(
-            &attention_states,
-            &[0, 0, half_head_dimension],
-            &[PATCH_COUNT, HEAD_COUNT, HEAD_DIMENSION],
-            &[1, 1, 1],
-        )
-        .expect("the second head half should slice");
 
     let probes: Vec<(&str, Box<dyn Fn() -> MlxArray + '_>)> = vec![
         (
             "composed-rope",
-            Box::new(|| {
-                composed_vision_rope(
-                    &runtime,
-                    &attention_states,
-                    &rotary_cosines,
-                    &rotary_sines,
-                    &first_half,
-                    &second_half,
-                )
-            }),
+            Box::new(|| operands.composed_rope(&runtime)),
         ),
         (
             "compiled-rope",
@@ -101,11 +60,11 @@ async fn probe_vision_rope_fusion() {
                 runtime
                     .apply_compiled_vision_rope(
                         &compiled_elementwise_graphs,
-                        &attention_states,
-                        &rotary_cosines,
-                        &rotary_sines,
-                        &first_half,
-                        &second_half,
+                        &operands.attention_states,
+                        &operands.rotary_cosines,
+                        &operands.rotary_sines,
+                        &operands.first_half,
+                        &operands.second_half,
                     )
                     .expect("the compiled vision rope should build")
             }),
@@ -181,57 +140,4 @@ async fn probe_vision_rope_fusion() {
         maximum_difference == 0.0,
         "the compiled vision rope must be bit-exact with the composed path: {maximum_difference}"
     );
-}
-
-// Mirrors the production composed RoPE op sequence (the path the compiled
-// graph replaces) so the probe measures old-vs-new dispatch cost directly.
-fn composed_vision_rope(
-    runtime: &MlxRuntime,
-    attention_states: &MlxArray,
-    rotary_cosines: &MlxArray,
-    rotary_sines: &MlxArray,
-    first_half: &MlxArray,
-    second_half: &MlxArray,
-) -> MlxArray {
-    let negative_second_half = runtime
-        .negative(second_half)
-        .expect("the second half should negate");
-    let rotated_states = runtime
-        .concatenate_axis(&[&negative_second_half, first_half], 2)
-        .expect("the rotated halves should concatenate");
-    let cosine_component = runtime
-        .multiply(attention_states, rotary_cosines)
-        .expect("the cosine component should build");
-    let sine_component = runtime
-        .multiply(&rotated_states, rotary_sines)
-        .expect("the sine component should build");
-    let summed_components = runtime
-        .add(&cosine_component, &sine_component)
-        .expect("the components should add");
-    runtime
-        .astype(&summed_components, attention_states.dtype())
-        .expect("the composed rope should restore the input dtype")
-}
-
-fn bf16_array(runtime: &MlxRuntime, values: &[f32], shape: &[i32]) -> mlx_bridge::MlxArray {
-    runtime
-        .astype(
-            &runtime
-                .array_from_f32(values, shape)
-                .expect("the bfloat16 source should be valid"),
-            MlxDtype::BFloat16,
-        )
-        .expect("the array should cast to bfloat16")
-}
-
-fn f32_array(runtime: &MlxRuntime, values: &[f32], shape: &[i32]) -> mlx_bridge::MlxArray {
-    runtime
-        .array_from_f32(values, shape)
-        .expect("the float32 array should be valid")
-}
-
-fn patterned_values(element_count: usize, scale: f32, offset: f32) -> Vec<f32> {
-    (0..element_count)
-        .map(|value_index| ((value_index % 23) as f32 - 11.0) * scale + offset)
-        .collect()
 }

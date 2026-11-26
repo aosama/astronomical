@@ -1,3 +1,4 @@
+use crate::rest_api::http_exchange_fixtures::get_response;
 use std::collections::HashMap;
 
 use astronomical_daemon::{RuntimeModelGenerationDefaults, RuntimeModelPolicy};
@@ -9,7 +10,6 @@ use ipc_protocol::{
 use super::*;
 
 #[tokio::test]
-#[expect(clippy::too_many_lines)]
 async fn should_expose_configured_and_worker_effective_generation_with_path_free_model_summary() {
     let configured_generation = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     let effective_generation = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
@@ -59,15 +59,7 @@ async fn should_expose_configured_and_worker_effective_generation_with_path_free
         temporary_home.path().to_path_buf(),
     );
 
-    let status_response = application
-        .oneshot(
-            Request::builder()
-                .uri("/v1/status")
-                .body(Body::empty())
-                .expect("status request should be valid"),
-        )
-        .await
-        .expect("status response should be returned");
+    let status_response = get_response(&application, "/v1/status").await;
     let status_bytes = to_bytes(status_response.into_body(), 64 * 1024)
         .await
         .expect("status response should be readable");
@@ -132,15 +124,7 @@ async fn should_expose_unavailable_model_directory_diagnostics_without_paths() {
         temporary_home.path().to_path_buf(),
     );
 
-    let status_response = application
-        .oneshot(
-            Request::builder()
-                .uri("/v1/status")
-                .body(Body::empty())
-                .expect("status request should be valid"),
-        )
-        .await
-        .expect("status response should be returned");
+    let status_response = get_response(&application, "/v1/status").await;
     let status_bytes = to_bytes(status_response.into_body(), 64 * 1024)
         .await
         .expect("status response should be readable");

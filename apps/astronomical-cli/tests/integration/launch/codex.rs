@@ -1,68 +1,29 @@
 use std::{
     ffi::OsString,
-    io::Cursor,
-    os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
     process::Command,
-    time::Duration,
 };
 
 use astronomical_cli::{
-    LaunchArguments, LaunchDependencies, LaunchError, PreparedLaunch, prepare_launch,
-    verbs::launch::codex_config::CODEX_HOME_VARIABLE,
+    LaunchError, PreparedLaunch, verbs::launch::codex_config::CODEX_HOME_VARIABLE,
 };
 use tempfile::TempDir;
 
+use super::launch_session_fixtures::{
+    install_fake_harness, path_value_of, prepare_session, two_chat_models_json,
+};
 use crate::integration::support::stub_loopback_http::{
     StubAstronomical, chat_models_json, embedding_model_json, image_model_json, ready_status_json,
 };
 
-const HTTP_TIMEOUT: Duration = Duration::from_secs(2);
-
 /// The fake Codex prints the generated session configuration so tests assert
 /// what the real Codex CLI would read from its CODEX_HOME.
 fn install_fake_codex(parent_directory: &Path) -> PathBuf {
-    let program_path = parent_directory.join("codex");
-    std::fs::write(
-        &program_path,
+    install_fake_harness(
+        parent_directory,
+        "codex",
         "#!/bin/sh\ncat \"$CODEX_HOME/config.toml\"\n",
     )
-    .expect("fake Codex script");
-    let mut permissions = std::fs::metadata(&program_path)
-        .expect("fake Codex metadata")
-        .permissions();
-    permissions.set_mode(0o755);
-    std::fs::set_permissions(&program_path, permissions).expect("fake Codex executable bit");
-    program_path
-}
-
-fn prepare_session(
-    tool_slug: Option<&str>,
-    model_id: Option<&str>,
-    bind_address: std::net::SocketAddr,
-    path_value: OsString,
-    is_interactive: bool,
-    stdin_text: &str,
-) -> Result<(PreparedLaunch, String), LaunchError> {
-    let mut stdin = Cursor::new(stdin_text.as_bytes().to_vec());
-    let mut stderr_bytes = Vec::new();
-    let prepared_launch = prepare_launch(
-        LaunchArguments {
-            tool_slug: tool_slug.map(str::to_owned),
-            model_id: model_id.map(str::to_owned),
-            harness_arguments: Vec::new(),
-        },
-        LaunchDependencies {
-            candidate_bind_addresses: vec![bind_address],
-            path_value,
-            is_interactive,
-            stdin: &mut stdin,
-            stderr: &mut stderr_bytes,
-            http_timeout: HTTP_TIMEOUT,
-        },
-    )?;
-    let stderr_text = String::from_utf8(stderr_bytes).expect("stderr utf8");
-    Ok((prepared_launch, stderr_text))
 }
 
 fn codex_home_path(prepared_launch: &PreparedLaunch) -> PathBuf {
@@ -105,7 +66,7 @@ fn should_reject_an_unknown_tool_by_listing_the_supported_tools() {
         Some("copilot"),
         None,
         "127.0.0.1:1".parse().expect("unused port"),
-        temporary_directory.path().as_os_str().to_os_string(),
+        path_value_of(&temporary_directory),
         false,
         "",
     )
@@ -129,7 +90,7 @@ fn should_start_codex_on_the_only_chat_model_without_prompting() {
         Some("codex"),
         None,
         stub_server.bind_address,
-        temporary_directory.path().as_os_str().to_os_string(),
+        path_value_of(&temporary_directory),
         true,
         "this stdin must be ignored\n",
     )
@@ -175,7 +136,7 @@ fn should_leave_the_users_codex_configuration_untouched() {
         Some("codex"),
         None,
         stub_server.bind_address,
-        temporary_directory.path().as_os_str().to_os_string(),
+        path_value_of(&temporary_directory),
         false,
         "",
     )
@@ -204,18 +165,12 @@ fn should_leave_the_users_codex_configuration_untouched() {
 fn should_require_the_model_flag_for_codex_when_several_chat_models_exist_without_a_terminal() {
     let temporary_directory = TempDir::new().expect("temp dir");
     install_fake_codex(temporary_directory.path());
-    let stub_server = StubAstronomical::spawn(
-        ready_status_json(),
-        &chat_models_json(&[
-            ("library-chat-model", 131_072),
-            ("second-library-chat-model", 32_768),
-        ]),
-    );
+    let stub_server = StubAstronomical::spawn(ready_status_json(), &two_chat_models_json());
     let error = prepare_session(
         Some("codex"),
         None,
         stub_server.bind_address,
-        temporary_directory.path().as_os_str().to_os_string(),
+        path_value_of(&temporary_directory),
         false,
         "",
     )
@@ -239,7 +194,7 @@ fn should_word_the_narrow_context_advisory_for_codex() {
         Some("codex"),
         None,
         stub_server.bind_address,
-        temporary_directory.path().as_os_str().to_os_string(),
+        path_value_of(&temporary_directory),
         false,
         "",
     )
@@ -260,7 +215,7 @@ fn should_not_offer_image_or_embedding_advertisements_to_codex() {
         Some("codex"),
         None,
         image_only_server.bind_address,
-        temporary_directory.path().as_os_str().to_os_string(),
+        path_value_of(&temporary_directory),
         true,
         "1\n",
     )
@@ -274,7 +229,7 @@ fn should_not_offer_image_or_embedding_advertisements_to_codex() {
         Some("codex"),
         None,
         embedding_only_server.bind_address,
-        temporary_directory.path().as_os_str().to_os_string(),
+        path_value_of(&temporary_directory),
         true,
         "1\n",
     )
@@ -294,7 +249,7 @@ fn should_generate_the_exact_session_config_document() {
         Some("codex"),
         None,
         stub_server.bind_address,
-        temporary_directory.path().as_os_str().to_os_string(),
+        path_value_of(&temporary_directory),
         false,
         "",
     )
@@ -325,7 +280,7 @@ fn should_keep_the_default_harness_opencode_when_only_codex_is_installed() {
         None,
         None,
         stub_server.bind_address,
-        temporary_directory.path().as_os_str().to_os_string(),
+        path_value_of(&temporary_directory),
         false,
         "",
     )
@@ -337,18 +292,12 @@ fn should_keep_the_default_harness_opencode_when_only_codex_is_installed() {
 fn should_honor_the_model_flag_for_codex_without_prompting() {
     let temporary_directory = TempDir::new().expect("temp dir");
     install_fake_codex(temporary_directory.path());
-    let stub_server = StubAstronomical::spawn(
-        ready_status_json(),
-        &chat_models_json(&[
-            ("library-chat-model", 131_072),
-            ("second-library-chat-model", 32_768),
-        ]),
-    );
+    let stub_server = StubAstronomical::spawn(ready_status_json(), &two_chat_models_json());
     let (prepared_launch, stderr_text) = prepare_session(
         Some("codex"),
         Some("second-library-chat-model"),
         stub_server.bind_address,
-        temporary_directory.path().as_os_str().to_os_string(),
+        path_value_of(&temporary_directory),
         true,
         "1\n",
     )

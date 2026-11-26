@@ -1,10 +1,8 @@
 use std::{
     ffi::OsString,
     io::Cursor,
-    os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
     process::Command,
-    time::Duration,
 };
 
 use astronomical_cli::{
@@ -16,6 +14,7 @@ use astronomical_cli::{
 };
 use tempfile::TempDir;
 
+use super::launch_session_fixtures::{HTTP_TIMEOUT, install_fake_harness};
 use crate::integration::support::stub_loopback_http::{
     StubAstronomical, chat_completions_only_model_json, chat_models_json, mixed_library_json,
     ready_status_json,
@@ -40,23 +39,14 @@ fn should_not_offer_a_model_that_cannot_serve_the_messages_protocol() {
     assert!(matches!(launch_error, LaunchError::NoChatModels));
 }
 
-const HTTP_TIMEOUT: Duration = Duration::from_secs(2);
-
 /// The fake Claude Code prints the environment and arguments it was started
 /// with, so a journey asserts what the real Claude Code would read.
 fn install_fake_claude_code(parent_directory: &Path) -> PathBuf {
-    let program_path = parent_directory.join("claude");
-    std::fs::write(
-        &program_path,
+    install_fake_harness(
+        parent_directory,
+        "claude",
         "#!/bin/sh\necho \"base=$ANTHROPIC_BASE_URL model=$ANTHROPIC_MODEL window=$CLAUDE_CODE_MAX_CONTEXT_TOKENS arguments=$*\"\n",
     )
-    .expect("fake Claude Code script");
-    let mut permissions = std::fs::metadata(&program_path)
-        .expect("fake Claude Code metadata")
-        .permissions();
-    permissions.set_mode(0o755);
-    std::fs::set_permissions(&program_path, permissions).expect("fake Claude Code executable bit");
-    program_path
 }
 
 fn prepare_claude_session(

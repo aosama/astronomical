@@ -18,13 +18,15 @@ use std::time::Duration;
 
 use ipc_protocol::RequestId;
 use model_serving::{
-    GeneratedToken, InferenceEngine, PerformanceAttribution, PromptProcessingChunkSizer,
-    Qwen3_5ArtifactValidator, Qwen3_5TextEngine, TextInferenceRequest, TextMlxEngineConstructors,
+    InferenceEngine, PerformanceAttribution, Qwen3_5ArtifactValidator, TextInferenceRequest,
     install_forced_worker_verdicts_for_tests, worker_process_kernel_capabilities,
 };
 use runtime_integration::MlxRuntime;
 use tokio::time::timeout;
 
+use super::small_chunk_text_engine::{
+    construct_small_chunk_text_engine, count_tokens_within_vocabulary,
+};
 use crate::serving_acceptance::support::{IMAGE_PAD_TOKEN_ID, LOCAL_AI_PROMPT_TOKEN_IDS};
 
 const FORCED_FALLBACK_MAX_TOKENS: usize = 16;
@@ -74,18 +76,12 @@ async fn run_forced_fallback_romeo_continuation() {
         .validate(&model_directory, 20_480)
         .expect("the Ornith artifact should validate before engine loading");
     let model_vocabulary_size = validated_artifact.config().vocabulary_size();
-    let mut qwen3_5_engine = Qwen3_5TextEngine::new_with_prompt_processing_chunk_sizer(
+    let mut qwen3_5_engine = construct_small_chunk_text_engine(
         validated_artifact,
-        mlx_memory_limits.active_memory_limit_bytes(),
-        mlx_memory_limits.mlx_buffer_cache_limit_bytes(),
-        None,
-        PromptProcessingChunkSizer::for_chunk_size_tokens(16)
-            .expect("the test streaming prefill chunk size should be valid"),
+        &mlx_memory_limits,
+        &model_directory,
         IMAGE_PAD_TOKEN_ID,
-        model_directory.to_path_buf(),
-        crate::common::standard_worker_chunking_configuration(),
-    )
-    .expect("the demoted-kernel engine settings should be valid");
+    );
     qwen3_5_engine
         .load()
         .await
@@ -107,30 +103,17 @@ async fn run_forced_fallback_romeo_continuation() {
         .expect("the engine should accept one forced-fallback request");
 
     // Structural validity: the fallback path must produce at least one token
-    // within the artifact's declared vocabulary and finish cleanly. Exact
-    // token values are deliberately not asserted so the test does not couple
-    // to one quantization artifact; numeric equivalence of the fallback route
-    // is proven per family by the direct-MLX demotion parity journeys.
-    let mut generated_token_count = 0usize;
-    while generated_token_count < FORCED_FALLBACK_MAX_TOKENS {
-        match qwen3_5_engine
-            .decode_next_token(request_id)
-            .await
-            .expect("each engine boundary should advance the forced-fallback request")
-        {
-            GeneratedToken::TokenId { token_id, .. } => {
-                assert!(
-                    token_id < model_vocabulary_size,
-                    "forced-fallback token id {token_id} must stay within vocabulary size {model_vocabulary_size}"
-                );
-                generated_token_count += 1;
-            }
-            GeneratedToken::PrefillProgress { .. } => {}
-            GeneratedToken::PromptProcessingPhaseStarted { .. } => {}
-            GeneratedToken::GenerationPreparationStarted { .. } => {}
-            GeneratedToken::EndOfSequence => break,
-        }
-    }
+    // within the artifact's declared vocabulary and finish cleanly. Numeric
+    // equivalence of the fallback route is proven per family by the direct-MLX
+    // demotion parity journeys.
+    let generated_token_count = count_tokens_within_vocabulary(
+        &mut qwen3_5_engine,
+        request_id,
+        FORCED_FALLBACK_MAX_TOKENS,
+        model_vocabulary_size,
+        "forced-fallback",
+    )
+    .await;
     assert!(
         generated_token_count > 0,
         "the forced-fallback path must produce at least one token"

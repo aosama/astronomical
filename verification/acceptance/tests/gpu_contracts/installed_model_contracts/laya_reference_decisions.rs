@@ -28,9 +28,9 @@ use decision_contract::{
 use model_serving::{DecisionEngine, LayaDecisionEngine, laya_question_sequences};
 use test_harness::test_run::TestRunContext;
 
+use super::decision_parity_measurement::ParityMeasurement;
 use super::decision_reference_fixture::{
-    answer_probabilities, most_probable_index, reference_array, reference_field, reference_number,
-    reference_numbers,
+    reference_array, reference_field, reference_number, reference_numbers,
 };
 
 /// The whole Laya repository is under 2 GB; this leaves ample forward workspace.
@@ -50,17 +50,6 @@ const REFERENCE_DECISIONS_JSON: &str = include_str!(concat!(
     "/tests/fixtures/laya_reference_decisions.json"
 ));
 
-/// What one checkpoint's comparison measured.
-#[derive(Default)]
-struct ParityMeasurement {
-    question_count: usize,
-    same_answer_count: usize,
-    largest_probability_difference: f64,
-    probability_difference_total: f64,
-    probability_count: usize,
-    largest_logit_difference: f64,
-}
-
 fn compare_question(
     case_name: &str,
     question_outcome: &QuestionOutcome,
@@ -77,38 +66,14 @@ fn compare_question(
         question_outcome.question_name,
         question_outcome.applied_temperature
     );
-    let probabilities = answer_probabilities(&question_outcome.answer);
-    assert_eq!(probabilities.len(), reference_probabilities.len());
-    for (probability, reference_probability) in probabilities.iter().zip(&reference_probabilities) {
-        let probability_difference = (probability - reference_probability).abs();
-        measurement.largest_probability_difference = measurement
-            .largest_probability_difference
-            .max(probability_difference);
-        measurement.probability_difference_total += probability_difference;
-        measurement.probability_count += 1;
-    }
-    for (option_logit, reference_logit) in
-        question_outcome.option_logits.iter().zip(&reference_logits)
-    {
-        measurement.largest_logit_difference = measurement
-            .largest_logit_difference
-            .max((f64::from(*option_logit) - reference_logit).abs());
-    }
-    let mut question_probability_difference = 0.0_f64;
-    for (probability, reference_probability) in probabilities.iter().zip(&reference_probabilities) {
-        question_probability_difference =
-            question_probability_difference.max((probability - reference_probability).abs());
-    }
-    eprintln!(
-        "[laya-parity] case={case_name} question={} options={} temperature={:.3} largest_probability_difference={question_probability_difference:.5}",
-        question_outcome.question_name,
-        probabilities.len(),
-        question_outcome.applied_temperature,
+    measurement.record_question(
+        "laya",
+        case_name,
+        question_outcome,
+        &reference_probabilities,
+        &reference_logits,
+        &format!(" temperature={:.3}", question_outcome.applied_temperature),
     );
-    measurement.question_count += 1;
-    if most_probable_index(&probabilities) == most_probable_index(&reference_probabilities) {
-        measurement.same_answer_count += 1;
-    }
 }
 
 fn compare_checkpoint(checkpoint_name: &str, checkpoint_directory: &Path) -> ParityMeasurement {
@@ -136,14 +101,7 @@ fn compare_checkpoint(checkpoint_name: &str, checkpoint_directory: &Path) -> Par
     for reference_case in reference_array(reference_checkpoint, "cases") {
         compare_case(&mut decision_engine, reference_case, &mut measurement);
     }
-    eprintln!(
-        "[laya-parity] checkpoint={checkpoint_name} questions={} same_answer={} largest_probability_difference={:.5} mean_probability_difference={:.5} largest_logit_difference={:.5}",
-        measurement.question_count,
-        measurement.same_answer_count,
-        measurement.largest_probability_difference,
-        measurement.probability_difference_total / measurement.probability_count as f64,
-        measurement.largest_logit_difference,
-    );
+    measurement.report(&format!("[laya-parity] checkpoint={checkpoint_name}"));
     measurement
 }
 
@@ -196,11 +154,7 @@ fn compare_case(
 }
 
 fn assert_within_tolerance(measurement: &ParityMeasurement) {
-    assert!(
-        measurement.largest_probability_difference <= MAXIMUM_PROBABILITY_DIFFERENCE,
-        "the largest probability difference {:.5} exceeds {MAXIMUM_PROBABILITY_DIFFERENCE}",
-        measurement.largest_probability_difference
-    );
+    measurement.assert_within_tolerance(MAXIMUM_PROBABILITY_DIFFERENCE);
 }
 
 #[ignore = "requires the MLX Laya repository model_directory in the explicit test-run configuration"]

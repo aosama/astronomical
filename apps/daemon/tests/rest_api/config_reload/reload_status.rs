@@ -1,4 +1,5 @@
 use super::*;
+use crate::rest_api::http_exchange_fixtures::get_response;
 
 #[tokio::test]
 async fn should_apply_astro_ssd_prompt_cache_policy_after_config_file_reload() {
@@ -68,15 +69,7 @@ async fn should_apply_astro_ssd_prompt_cache_policy_after_config_file_reload() {
         true
     );
 
-    let status_response = application
-        .oneshot(
-            Request::builder()
-                .uri("/v1/status")
-                .body(Body::empty())
-                .expect("the status request should be valid"),
-        )
-        .await
-        .expect("the application should return status");
+    let status_response = get_response(&application, "/v1/status").await;
     let status_body = to_bytes(status_response.into_body(), 4 * 1024)
         .await
         .expect("the status response should be readable");
@@ -243,16 +236,7 @@ async fn should_not_report_a_mixed_reload_effective_when_only_memory_applied() {
 
     let reload_response = post_config_reload(&application).await;
     assert_eq!(reload_response.status(), StatusCode::OK);
-    let status_response = application
-        .clone()
-        .oneshot(
-            Request::builder()
-                .uri("/v1/status")
-                .body(Body::empty())
-                .expect("status request should be valid"),
-        )
-        .await
-        .expect("status should be returned");
+    let status_response = get_response(&application, "/v1/status").await;
     let status_body = to_bytes(status_response.into_body(), 8 * 1024)
         .await
         .expect("status should be readable");
@@ -452,16 +436,7 @@ async fn should_use_the_same_reloaded_discovery_snapshot_for_listing_and_routing
         .expect("the reloadable config should remain writable")
         .discovered_models = vec![reloaded_model];
 
-    let model_list_response = application
-        .clone()
-        .oneshot(
-            Request::builder()
-                .uri("/v1/models")
-                .body(Body::empty())
-                .expect("the model-list request should be well formed"),
-        )
-        .await
-        .expect("the model-list request should receive a response");
+    let model_list_response = get_response(&application, "/v1/models").await;
     let model_list_body = to_bytes(model_list_response.into_body(), 16 * 1024)
         .await
         .expect("the model-list response should be readable");
@@ -543,15 +518,7 @@ async fn should_reject_astro_ssd_prompt_cache_reload_when_worker_replacement_is_
     assert_eq!(reload_document["reloaded_fields"], serde_json::json!([]));
     assert_eq!(reload_document["status"], "failed");
 
-    let status_response = application
-        .oneshot(
-            Request::builder()
-                .uri("/v1/status")
-                .body(Body::empty())
-                .expect("the status request should be valid"),
-        )
-        .await
-        .expect("the application should return status");
+    let status_response = get_response(&application, "/v1/status").await;
     let status_body = to_bytes(status_response.into_body(), 16 * 1024)
         .await
         .expect("the status response should be readable");

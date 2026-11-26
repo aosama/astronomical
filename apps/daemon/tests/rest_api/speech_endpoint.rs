@@ -1,5 +1,6 @@
 //! Acceptance coverage for the speech HTTP journey, `POST /v1/audio/speech`.
 
+use crate::rest_api::http_exchange_fixtures::post_json_request;
 use std::path::PathBuf;
 
 use astronomical_daemon::SpeechExecutionError;
@@ -55,12 +56,7 @@ fn installed_speech_models() -> Vec<DiscoveredModel> {
 }
 
 fn speech_request(request_document: serde_json::Value) -> Request<Body> {
-    Request::builder()
-        .method("POST")
-        .uri("/v1/audio/speech")
-        .header("content-type", "application/json")
-        .body(Body::from(request_document.to_string()))
-        .expect("the speech request should be valid")
+    post_json_request("/v1/audio/speech", request_document)
 }
 
 async fn response_bytes(response: axum::response::Response) -> Vec<u8> {

@@ -70,7 +70,7 @@ pub(super) fn ready_event() -> WorkerEvent {
     }
 }
 
-pub(super) async fn next_event<ReadTransport>(
+pub(crate) async fn next_event<ReadTransport>(
     daemon_reader: &mut ProtocolReader<ReadTransport>,
 ) -> WorkerEvent
 where
@@ -92,7 +92,7 @@ where
         .expect("the worker transport should remain open")
 }
 
-pub(super) async fn close_worker_transport<WriteTransport>(
+pub(crate) async fn close_worker_transport<WriteTransport>(
     daemon_writer: ProtocolWriter<WriteTransport>,
     worker_task: JoinHandle<Result<(), WorkerRuntimeError>>,
 ) where

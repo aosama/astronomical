@@ -1,6 +1,7 @@
 //! End-to-end reload coverage for transactional worker replacement failures.
 
 use super::*;
+use crate::rest_api::http_exchange_fixtures::read_json_body;
 
 #[tokio::test]
 async fn should_reject_mismatched_candidate_without_changing_effective_serving_state() {
@@ -52,11 +53,7 @@ async fn should_reject_mismatched_candidate_without_changing_effective_serving_s
 
     let reload_response = post_config_reload(&application).await;
     let reload_status = reload_response.status();
-    let reload_body = to_bytes(reload_response.into_body(), 8 * 1024)
-        .await
-        .expect("reload response should be readable");
-    let reload_document: serde_json::Value =
-        serde_json::from_slice(&reload_body).expect("reload response should contain JSON");
+    let reload_document = read_json_body(reload_response, 8 * 1024).await;
 
     assert_eq!(reload_status, StatusCode::INTERNAL_SERVER_ERROR);
     assert_ne!(

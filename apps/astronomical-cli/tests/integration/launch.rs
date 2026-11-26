@@ -2,4 +2,5 @@
 
 mod claude_code;
 mod codex;
+mod launch_session_fixtures;
 mod opencode;

@@ -1,14 +1,11 @@
+use crate::rest_api::http_exchange_fixtures::get_response;
 use astronomical_daemon::{
     ActiveRequestProgress, ExpertResidencySnapshot, WorkerActivity, WorkerHealthSnapshot,
     build_application, parse_macos_memory_pressure_level,
 };
-use axum::{
-    body::{Body, to_bytes},
-    http::{Request, StatusCode},
-};
+use axum::{body::to_bytes, http::StatusCode};
 use ipc_protocol::ChatModelCapabilities;
 use tokio::time::{Duration, Instant};
-use tower::ServiceExt;
 
 const OBSERVATORY_CONTRACT_MODEL_ID: &str = "astronomical/observatory-contract-model";
 
@@ -31,15 +28,7 @@ async fn should_expose_ready_model_id_and_serving_session_in_status_when_ready_a
     let application = build_application(ContractScriptedExecutor::ready(
         ready_health_snapshot_with_model(),
     ));
-    let response = application
-        .oneshot(
-            Request::builder()
-                .uri("/v1/status")
-                .body(Body::empty())
-                .expect("the status request should be valid"),
-        )
-        .await
-        .expect("the application should return a status response");
+    let response = get_response(&application, "/v1/status").await;
     assert_eq!(response.status(), StatusCode::OK);
     let response_body = to_bytes(response.into_body(), 16 * 1024)
         .await
@@ -80,15 +69,7 @@ async fn should_expose_prefill_progress_with_processed_and_total_tokens_when_act
         prompt_layer_progress: None,
     });
     let application = build_application(ContractScriptedExecutor::ready(health_snapshot));
-    let response = application
-        .oneshot(
-            Request::builder()
-                .uri("/v1/status")
-                .body(Body::empty())
-                .expect("the status request should be valid"),
-        )
-        .await
-        .expect("the application should return a status response");
+    let response = get_response(&application, "/v1/status").await;
     let response_body = to_bytes(response.into_body(), 16 * 1024)
         .await
         .expect("the status body should be readable");
@@ -121,15 +102,7 @@ async fn should_advance_live_prefill_elapsed_time_before_the_first_completed_for
     });
     let application = build_application(ContractScriptedExecutor::ready(health_snapshot));
 
-    let response = application
-        .oneshot(
-            Request::builder()
-                .uri("/v1/status")
-                .body(Body::empty())
-                .expect("the status request should be valid"),
-        )
-        .await
-        .expect("the application should return a status response");
+    let response = get_response(&application, "/v1/status").await;
     let response_body = to_bytes(response.into_body(), 16 * 1024)
         .await
         .expect("the status body should be readable");
@@ -156,15 +129,7 @@ async fn should_expose_generation_progress_with_processed_and_total_tokens_when_
         elapsed_millis: 3_200,
     });
     let application = build_application(ContractScriptedExecutor::ready(health_snapshot));
-    let response = application
-        .oneshot(
-            Request::builder()
-                .uri("/v1/status")
-                .body(Body::empty())
-                .expect("the status request should be valid"),
-        )
-        .await
-        .expect("the application should return a status response");
+    let response = get_response(&application, "/v1/status").await;
     let response_body = to_bytes(response.into_body(), 16 * 1024)
         .await
         .expect("the status body should be readable");
@@ -206,15 +171,7 @@ async fn should_expose_generation_preparation_without_inventing_token_progress()
         preparation_residency_counts: health_snapshot.expert_residency.map(Into::into),
     });
     let application = build_application(ContractScriptedExecutor::ready(health_snapshot));
-    let response = application
-        .oneshot(
-            Request::builder()
-                .uri("/v1/status")
-                .body(Body::empty())
-                .expect("the preparation status request should be valid"),
-        )
-        .await
-        .expect("the application should return preparation status");
+    let response = get_response(&application, "/v1/status").await;
     let response_body = to_bytes(response.into_body(), 16 * 1024)
         .await
         .expect("the preparation status body should be readable");
@@ -258,15 +215,7 @@ async fn should_expose_generation_preparation_announced_before_residency_is_reco
         preparation_residency_counts: None,
     });
     let application = build_application(ContractScriptedExecutor::ready(health_snapshot));
-    let response = application
-        .oneshot(
-            Request::builder()
-                .uri("/v1/status")
-                .body(Body::empty())
-                .expect("the preparation status request should be valid"),
-        )
-        .await
-        .expect("the application should return preparation status");
+    let response = get_response(&application, "/v1/status").await;
     let response_body = to_bytes(response.into_body(), 16 * 1024)
         .await
         .expect("the preparation status body should be readable");
@@ -295,15 +244,7 @@ async fn should_report_an_unavailable_experts_document_before_any_streaming_even
     let application = build_application(ContractScriptedExecutor::ready(
         ready_health_snapshot_with_model(),
     ));
-    let response = application
-        .oneshot(
-            Request::builder()
-                .uri("/v1/experts/stats")
-                .body(Body::empty())
-                .expect("the experts-stats request should be valid"),
-        )
-        .await
-        .expect("the application should return an experts-stats response");
+    let response = get_response(&application, "/v1/experts/stats").await;
     assert_eq!(response.status(), StatusCode::OK);
     let response_body = to_bytes(response.into_body(), 8 * 1024)
         .await
@@ -322,15 +263,7 @@ async fn should_zero_fill_astro_ssd_prompt_cache_stats_when_no_worker_data_so_th
     let application = build_application(ContractScriptedExecutor::ready(
         ready_health_snapshot_with_model(),
     ));
-    let response = application
-        .oneshot(
-            Request::builder()
-                .uri("/v1/ssd-prompt-cache/stats")
-                .body(Body::empty())
-                .expect("the astro SSD prompt cache stats request should be valid"),
-        )
-        .await
-        .expect("the application should return an astro SSD prompt cache stats response");
+    let response = get_response(&application, "/v1/ssd-prompt-cache/stats").await;
     assert_eq!(response.status(), StatusCode::OK);
     let response_body = to_bytes(response.into_body(), 8 * 1024)
         .await
@@ -378,15 +311,7 @@ async fn should_expose_gpu_utilization_and_memory_pressure_through_system_teleme
     let application = build_application(ContractScriptedExecutor::ready(
         ready_health_snapshot_with_model(),
     ));
-    let response = application
-        .oneshot(
-            Request::builder()
-                .uri("/v1/system/telemetry")
-                .body(Body::empty())
-                .expect("the telemetry request should be valid"),
-        )
-        .await
-        .expect("the application should return a telemetry response");
+    let response = get_response(&application, "/v1/system/telemetry").await;
     assert_eq!(response.status(), StatusCode::OK);
     let response_body = to_bytes(response.into_body(), 4 * 1024)
         .await

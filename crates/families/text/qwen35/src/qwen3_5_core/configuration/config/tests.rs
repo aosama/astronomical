@@ -22,77 +22,64 @@ mod model_contract_tests;
 mod optiq_metadata_tests;
 mod quantization_tests;
 
+/// The frozen Ornith 1.0 config written the way newer conversions write it:
+/// `dtype` rather than `torch_dtype`, the rope settings under
+/// `rope_parameters` rather than a bare `rope_theta`, and no `pad_token_id`.
+/// Deriving it from the one frozen document keeps every other field from
+/// drifting, while these contracts still parse the newer spellings.
 pub fn minimal_valid_config_json() -> Value {
-    let config_bytes = br#"
-    {
-        "architectures": ["Qwen3_5MoeForConditionalGeneration"],
-        "model_type": "qwen3_5_moe",
-        "dtype": "bfloat16",
-        "eos_token_id": [248046, 248044],
-        "tie_word_embeddings": false,
-        "text_config": {
-            "model_type": "qwen3_5_moe_text",
-            "hidden_act": "silu",
-            "hidden_size": 2048,
-            "num_hidden_layers": 40,
-            "num_attention_heads": 16,
-            "num_key_value_heads": 2,
-            "head_dim": 256,
-            "rms_norm_eps": 0.000001,
-            "rope_parameters": {
-                "mrope_interleaved": true,
-                "mrope_section": [11, 11, 10],
-                "partial_rotary_factor": 0.25,
-                "rope_theta": 10000000.0,
-                "type": "default"
-            },
+    let mut config_value = serde_json::from_slice::<Value>(&frozen_ornith_1_0_config_bytes())
+        .expect("the frozen Ornith 1.0 config should decode as JSON");
+    let config_fields = config_value
+        .as_object_mut()
+        .expect("the frozen Ornith 1.0 config should be a JSON object");
+    let torch_dtype = config_fields
+        .remove("torch_dtype")
+        .expect("the frozen Ornith 1.0 config names its torch_dtype");
+    config_fields.insert("dtype".to_owned(), torch_dtype);
+    config_fields.remove("pad_token_id");
+    let text_config_fields = config_value["text_config"]
+        .as_object_mut()
+        .expect("the frozen Ornith 1.0 text_config should be a JSON object");
+    let rope_theta = text_config_fields
+        .remove("rope_theta")
+        .expect("the frozen Ornith 1.0 text_config names its rope_theta");
+    text_config_fields.insert(
+        "rope_parameters".to_owned(),
+        json!({
+            "mrope_interleaved": true,
+            "mrope_section": [11, 11, 10],
             "partial_rotary_factor": 0.25,
-            "attention_bias": false,
-            "mlp_bias": false,
-            "norm_topk_prob": true,
-            "output_router_logits": false,
-            "vocab_size": 248320,
-            "max_position_embeddings": 262144,
-            "full_attention_interval": 4,
-            "linear_conv_kernel_dim": 4,
-            "linear_num_key_heads": 16,
-            "linear_num_value_heads": 32,
-            "linear_key_head_dim": 128,
-            "linear_value_head_dim": 128,
-            "num_experts": 256,
-            "num_experts_per_tok": 8,
-            "moe_intermediate_size": 512,
-            "shared_expert_intermediate_size": 512
-        },
-        "quantization": {
-            "group_size": 64,
-            "bits": 4,
-            "mode": "affine"
-        },
-        "quantization_config": {
-            "group_size": 64,
-            "bits": 4,
-            "mode": "affine"
-        }
-    }
-    "#;
-    let mut config_value = serde_json::from_slice::<Value>(config_bytes)
-        .expect("the minimal test config should decode as JSON");
-    // Add the decoder attention schedule.
-    config_value["text_config"]["layer_types"] = json!(
-        (0..40)
-            .map(|i| if i % 4 == 3 {
-                "full_attention"
-            } else {
-                "linear_attention"
-            })
-            .collect::<Vec<_>>()
+            "rope_theta": rope_theta,
+            "type": "default"
+        }),
     );
-    // Add quantization per-layer overrides (required by the parser).
-    let mut quantization = json!({"group_size": 64, "bits": 4, "mode": "affine"});
-    quantization["language_model.model.embed_tokens"] = json!({"group_size": 64, "bits": 8});
-    quantization["language_model.lm_head"] = json!({"group_size": 64, "bits": 8});
+    config_value["text_config"]["layer_types"] = json!(decoder_attention_schedule(40));
+    let quantization = uniform_four_bit_quantization_with_eight_bit_embeddings();
     config_value["quantization"] = quantization.clone();
     config_value["quantization_config"] = quantization;
     config_value
+}
+
+/// Every fourth decoder layer attends over the full context; the rest are
+/// linear attention, as in the Qwen 3.5 MoE layout.
+fn decoder_attention_schedule(layer_count: usize) -> Vec<&'static str> {
+    let mut layer_types = Vec::with_capacity(layer_count);
+    for layer_position in 0..layer_count {
+        if layer_position % 4 == 3 {
+            layer_types.push("full_attention");
+        } else {
+            layer_types.push("linear_attention");
+        }
+    }
+    layer_types
+}
+
+/// The parser requires per-layer overrides, so the embedding and output
+/// projections carry their own 8-bit entries beside the 4-bit default.
+fn uniform_four_bit_quantization_with_eight_bit_embeddings() -> Value {
+    let mut quantization = json!({"group_size": 64, "bits": 4, "mode": "affine"});
+    quantization["language_model.model.embed_tokens"] = json!({"group_size": 64, "bits": 8});
+    quantization["language_model.lm_head"] = json!({"group_size": 64, "bits": 8});
+    quantization
 }

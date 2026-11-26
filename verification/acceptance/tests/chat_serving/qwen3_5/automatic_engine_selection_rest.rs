@@ -2,11 +2,6 @@
 
 use std::{fs, path::Path, time::Duration};
 
-use futures_util::StreamExt;
-use model_serving::{
-    CompleteResidencyHeadroomBoundary, ModelMemoryGeometry, Qwen3_5ArtifactValidator,
-    model_memory_geometry_from_validated_artifact,
-};
 use serde_json::{Value, json};
 use serial_test::serial;
 use tokio::time::timeout;
@@ -17,13 +12,18 @@ use crate::support::serving_rest::{
     stop_real_model_rest_server,
 };
 use crate::support::{
-    artifact_bytes::acceptance_model_scan_root, configured_installed_model_directory_by_id,
-    exact_model_prompt, large_sparse_moe_streaming_model_id, resident_sparse_moe_model_id,
+    configured_installed_model_directory_by_id, exact_model_prompt,
+    large_sparse_moe_streaming_model_id, resident_sparse_moe_model_id,
 };
 
-pub(super) const MAXIMUM_REAL_MODEL_MEMORY_BYTES: u64 = 36_000_000_000;
-const FIXED_PREFILL_CHUNK_SIZE_TOKENS: u32 = 2_048;
-const MAXIMUM_OUTPUT_TOKEN_COUNT: u32 = 8;
+use super::acceptance_worker_config::write_acceptance_config;
+use super::one_token_chat_request::complete_one_token_chat_request;
+pub(super) use super::sparse_artifact_residency::MAXIMUM_REAL_MODEL_MEMORY_BYTES;
+use super::sparse_artifact_residency::{
+    context_memory_reservation_bytes, measure_sparse_artifact_residency_geometry,
+    prompt_chunk_mlx_working_buffer_allowance_bytes,
+};
+
 const SMALL_PROMPT_TOKEN_COUNT: usize = 256;
 const SHORT_PROMPT_TOKEN_COUNT: usize = 40;
 const MULTI_CHUNK_PROMPT_TOKEN_COUNT: usize = 5_000;
@@ -248,86 +248,6 @@ async fn should_select_streaming_engine_when_complete_residency_headroom_does_no
     .expect("the engine-selection SSD journey must finish within 120 seconds");
 }
 
-pub(super) struct SparseArtifactResidencyGeometry {
-    pub(super) complete_residency_with_headroom_bytes: u64,
-    /// The measured geometry the memory governor (and therefore the request-time
-    /// activation reserve) is composed from.
-    pub(super) model_geometry: ModelMemoryGeometry,
-}
-
-pub(super) fn measure_sparse_artifact_residency_geometry(
-    model_directory: &Path,
-) -> SparseArtifactResidencyGeometry {
-    let validated_artifact = Qwen3_5ArtifactValidator::new()
-        .validate(model_directory, MAXIMUM_OUTPUT_TOKEN_COUNT)
-        .expect("the configured sparse artifact should validate");
-    let (model_geometry, required_headroom_bytes) =
-        model_memory_geometry_from_validated_artifact(&validated_artifact, model_directory)
-            .expect("the configured sparse artifact should expose disk RAM geometry");
-    let complete_residency_boundary = CompleteResidencyHeadroomBoundary::from_model_geometry(
-        model_geometry,
-        required_headroom_bytes,
-    );
-    SparseArtifactResidencyGeometry {
-        complete_residency_with_headroom_bytes: complete_residency_boundary
-            .static_complete_residency_bytes
-            .saturating_add(complete_residency_boundary.required_headroom_bytes),
-        model_geometry,
-    }
-}
-
-fn context_memory_reservation_bytes(model_directory: &Path, context_token_count: usize) -> u64 {
-    let validated_artifact = Qwen3_5ArtifactValidator::new()
-        .validate(model_directory, MAXIMUM_OUTPUT_TOKEN_COUNT)
-        .expect("the configured sparse artifact should validate");
-    let reservation_bytes = validated_artifact
-        .config()
-        .context_memory_reservation_bytes(context_token_count)
-        .expect("the acceptance prompt context should fit the model geometry");
-    u64::try_from(reservation_bytes)
-        .expect("the acceptance prompt context reservation should fit u64")
-}
-
-fn write_acceptance_config(
-    worker_home: &Path,
-    model_directory: &Path,
-    model_id: &str,
-    mlx_memory_ceiling_bytes: u64,
-    astro_ssd_prompt_cache_enabled: bool,
-) {
-    let configuration_directory = worker_home.join(".astronomical-dev");
-    fs::create_dir_all(&configuration_directory)
-        .expect("the isolated acceptance configuration directory should be created");
-    let configuration_document = json!({
-        "$schema": "./astronomical-config.schema.json",
-        "schema_version": 1,
-        "runtime": {
-            "model_directories": [acceptance_model_scan_root(model_directory)],
-            "maximum_mlx_memory_gb": crate::support::marketed_gigabytes::marketed_gigabytes_at_least(mlx_memory_ceiling_bytes),
-        },
-        "ssd_prompt_cache": {
-            "enabled": astro_ssd_prompt_cache_enabled,
-        },
-        "diagnostics": {"performance_attribution_enabled": true},
-        "chunking": {
-            "fixed_prompt_processing_chunk_size_tokens": FIXED_PREFILL_CHUNK_SIZE_TOKENS
-        },
-        "models": {
-            (model_id): {
-                "generation_defaults": {
-                    "maximum_output_tokens": MAXIMUM_OUTPUT_TOKEN_COUNT,
-                },
-            },
-        },
-    });
-    fs::write(
-        configuration_directory.join("config.json"),
-        serde_json::to_vec_pretty(&configuration_document)
-            .expect("the acceptance configuration should serialize"),
-    )
-    .expect("the acceptance configuration should be written");
-}
-
 async fn complete_chat_request(
     server_address: std::net::SocketAddr,
     model_id: &str,
@@ -335,43 +255,14 @@ async fn complete_chat_request(
     request_label: &str,
 ) -> String {
     let openai_client = LocalOpenAiClient::new(server_address, "local-acceptance-client");
-    let completion_request = json!({
-        "model": model_id,
-        "messages": messages,
-        "stream": true,
-        "stream_options": {"include_usage": true},
-        "temperature": 1,
-        "thinking_budget": 0,
-        "max_tokens": 1
-    });
-    let mut streamed_completion = match openai_client
-        .create_streaming_chat_completion(&completion_request)
-        .await
-    {
-        Ok(streamed_completion) => streamed_completion,
-        Err(request_error) => {
-            let status_document = get_json_endpoint(server_address, "/v1/status").await;
-            panic!(
-                "{request_label} should start: {request_error}; worker_status={status_document}"
-            );
-        }
-    };
-    let mut assistant_response = String::new();
-    while let Some(stream_item) = streamed_completion.next().await {
-        let stream_chunk = stream_item.unwrap_or_else(|stream_error| {
-            panic!("{request_label} should stream a valid response: {stream_error}")
-        });
-        for choice in stream_chunk["choices"].as_array().into_iter().flatten() {
-            if let Some(text_fragment) = choice["delta"]["content"].as_str() {
-                assistant_response.push_str(text_fragment);
-            }
-        }
-    }
-    assert!(
-        !assistant_response.trim().is_empty(),
-        "{request_label} should return visible model output"
-    );
-    assistant_response
+    complete_one_token_chat_request(
+        server_address,
+        &openai_client,
+        model_id,
+        messages,
+        request_label,
+    )
+    .await
 }
 
 pub(super) fn read_generation_attribution_reports(worker_home: &Path) -> Vec<Value> {
@@ -391,16 +282,4 @@ pub(super) fn read_generation_attribution_reports(worker_home: &Path) -> Vec<Val
         })
         .filter(|report| report["report_kind"] == "generation")
         .collect()
-}
-
-/// Room these journeys leave for one prompt chunk's MLX working buffers when
-/// they pick a limit that should hold the whole model. The engine
-/// measures the real figure at load; three times the largest expert layer
-/// has been ample for the models these journeys load.
-pub(super) const fn prompt_chunk_mlx_working_buffer_allowance_bytes(
-    model_geometry: &ModelMemoryGeometry,
-) -> u64 {
-    model_geometry
-        .largest_complete_expert_layer_bytes
-        .saturating_mul(3)
 }

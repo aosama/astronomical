@@ -1,3 +1,4 @@
+use super::ipc_worker_transport::open_ipc_worker_transport;
 use super::scripted_model_factory_test_doubles::{
     FirstCreationFailsScriptedModelFactory, LazyScriptedModelFactory,
 };
@@ -8,13 +9,12 @@ use crate::{
     EngineBackedWorker, MemoryCeilingUtilization, MlxActiveMemoryBreakdown, MlxMemoryTelemetry,
 };
 use ipc_protocol::{
-    ExpertMemoryMode, MAX_IPC_FRAME_BYTES, MlxMemorySnapshotSource, ProtocolReader, ProtocolWriter,
-    WorkerCommand, WorkerEvent, WorkerExpertResidencySnapshot, WorkerRuntimeFeatureConfiguration,
+    ExpertMemoryMode, MlxMemorySnapshotSource, WorkerCommand, WorkerEvent,
+    WorkerExpertResidencySnapshot, WorkerRuntimeFeatureConfiguration,
 };
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use tokio::io::{duplex, split};
 use tokio::time::timeout;
 #[tokio::test]
 async fn should_wait_for_a_swap_command_before_loading_an_idle_worker_model() {
@@ -31,16 +31,10 @@ async fn should_wait_for_a_swap_command_before_loading_an_idle_worker_model() {
         },
         0,
     );
-    let (daemon_transport, worker_transport) = duplex(MAX_IPC_FRAME_BYTES * 2);
-    let (daemon_reader_transport, daemon_writer_transport) = split(daemon_transport);
-    let (worker_reader_transport, worker_writer_transport) = split(worker_transport);
-    let mut daemon_reader = ProtocolReader::new(daemon_reader_transport);
-    let mut daemon_writer = ProtocolWriter::new(daemon_writer_transport);
-    let worker_task = tokio::spawn(async move {
-        engine_worker
-            .run(worker_reader_transport, worker_writer_transport)
-            .await
-    });
+    let (mut daemon_reader, mut daemon_writer, worker_reader_transport, worker_writer_transport) =
+        open_ipc_worker_transport();
+    let worker_task =
+        tokio::spawn(engine_worker.run(worker_reader_transport, worker_writer_transport));
 
     assert_eq!(
         next_event(&mut daemon_reader).await,
@@ -102,16 +96,10 @@ async fn should_apply_a_live_ceiling_within_the_machine_bound_to_the_next_model(
         astro_ssd_prompt_cache_maximum_size_bytes: 0,
         loaded_model: None,
     });
-    let (daemon_transport, worker_transport) = duplex(MAX_IPC_FRAME_BYTES * 2);
-    let (daemon_reader_transport, daemon_writer_transport) = split(daemon_transport);
-    let (worker_reader_transport, worker_writer_transport) = split(worker_transport);
-    let mut daemon_reader = ProtocolReader::new(daemon_reader_transport);
-    let mut daemon_writer = ProtocolWriter::new(daemon_writer_transport);
-    let worker_task = tokio::spawn(async move {
-        engine_worker
-            .run(worker_reader_transport, worker_writer_transport)
-            .await
-    });
+    let (mut daemon_reader, mut daemon_writer, worker_reader_transport, worker_writer_transport) =
+        open_ipc_worker_transport();
+    let worker_task =
+        tokio::spawn(engine_worker.run(worker_reader_transport, worker_writer_transport));
     let _idle_event = next_event(&mut daemon_reader).await;
     let _idle_runtime_configuration = next_event(&mut daemon_reader).await;
     daemon_writer
@@ -200,16 +188,10 @@ async fn should_apply_live_memory_updates_to_the_idle_worker_up_to_the_machine_b
         astro_ssd_prompt_cache_maximum_size_bytes: 0,
         loaded_model: None,
     });
-    let (daemon_transport, worker_transport) = duplex(MAX_IPC_FRAME_BYTES * 2);
-    let (daemon_reader_transport, daemon_writer_transport) = split(daemon_transport);
-    let (worker_reader_transport, worker_writer_transport) = split(worker_transport);
-    let mut daemon_reader = ProtocolReader::new(daemon_reader_transport);
-    let mut daemon_writer = ProtocolWriter::new(daemon_writer_transport);
-    let worker_task = tokio::spawn(async move {
-        engine_worker
-            .run(worker_reader_transport, worker_writer_transport)
-            .await
-    });
+    let (mut daemon_reader, mut daemon_writer, worker_reader_transport, worker_writer_transport) =
+        open_ipc_worker_transport();
+    let worker_task =
+        tokio::spawn(engine_worker.run(worker_reader_transport, worker_writer_transport));
 
     let _idle_event = next_event(&mut daemon_reader).await;
     let _idle_runtime_configuration = next_event(&mut daemon_reader).await;
@@ -265,16 +247,10 @@ async fn should_remain_idle_after_the_first_model_creation_fails() {
         },
         0,
     );
-    let (daemon_transport, worker_transport) = duplex(MAX_IPC_FRAME_BYTES * 2);
-    let (daemon_reader_transport, daemon_writer_transport) = split(daemon_transport);
-    let (worker_reader_transport, worker_writer_transport) = split(worker_transport);
-    let mut daemon_reader = ProtocolReader::new(daemon_reader_transport);
-    let mut daemon_writer = ProtocolWriter::new(daemon_writer_transport);
-    let worker_task = tokio::spawn(async move {
-        engine_worker
-            .run(worker_reader_transport, worker_writer_transport)
-            .await
-    });
+    let (mut daemon_reader, mut daemon_writer, worker_reader_transport, worker_writer_transport) =
+        open_ipc_worker_transport();
+    let worker_task =
+        tokio::spawn(engine_worker.run(worker_reader_transport, worker_writer_transport));
 
     assert_eq!(
         next_event(&mut daemon_reader).await,
@@ -368,16 +344,10 @@ async fn should_publish_the_unused_ceiling_split_on_model_loaded_and_limit_adjus
         astro_ssd_prompt_cache_maximum_size_bytes: 0,
         loaded_model: None,
     });
-    let (daemon_transport, worker_transport) = duplex(MAX_IPC_FRAME_BYTES * 2);
-    let (daemon_reader_transport, daemon_writer_transport) = split(daemon_transport);
-    let mut daemon_writer = ProtocolWriter::new(daemon_writer_transport);
-    let (worker_reader_transport, worker_writer_transport) = split(worker_transport);
-    let mut daemon_reader = ProtocolReader::new(daemon_reader_transport);
-    let worker_task = tokio::spawn(async move {
-        engine_worker
-            .run(worker_reader_transport, worker_writer_transport)
-            .await
-    });
+    let (mut daemon_reader, mut daemon_writer, worker_reader_transport, worker_writer_transport) =
+        open_ipc_worker_transport();
+    let worker_task =
+        tokio::spawn(engine_worker.run(worker_reader_transport, worker_writer_transport));
 
     let _idle_event = next_event(&mut daemon_reader).await;
     let _idle_runtime_configuration = next_event(&mut daemon_reader).await;
@@ -461,16 +431,10 @@ async fn should_open_a_requested_swap_by_naming_the_model() {
         },
         0,
     );
-    let (daemon_transport, worker_transport) = duplex(MAX_IPC_FRAME_BYTES * 2);
-    let (daemon_reader_transport, daemon_writer_transport) = split(daemon_transport);
-    let (worker_reader_transport, worker_writer_transport) = split(worker_transport);
-    let mut daemon_reader = ProtocolReader::new(daemon_reader_transport);
-    let mut daemon_writer = ProtocolWriter::new(daemon_writer_transport);
-    let worker_task = tokio::spawn(async move {
-        engine_worker
-            .run(worker_reader_transport, worker_writer_transport)
-            .await
-    });
+    let (mut daemon_reader, mut daemon_writer, worker_reader_transport, worker_writer_transport) =
+        open_ipc_worker_transport();
+    let worker_task =
+        tokio::spawn(engine_worker.run(worker_reader_transport, worker_writer_transport));
     assert!(matches!(
         next_raw_event(&mut daemon_reader).await,
         WorkerEvent::Idle { .. }

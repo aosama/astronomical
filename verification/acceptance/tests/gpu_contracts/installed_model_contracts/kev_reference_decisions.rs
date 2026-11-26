@@ -26,9 +26,8 @@ use decision_contract::{
 use model_serving::{DecisionEngine, KevDecisionEngine, KevRowLayout, kev_question_row_layouts};
 use test_harness::test_run::TestRunContext;
 
-use super::decision_reference_fixture::{
-    answer_probabilities, most_probable_index, reference_array, reference_field, reference_numbers,
-};
+use super::decision_parity_measurement::ParityMeasurement;
+use super::decision_reference_fixture::{reference_array, reference_field, reference_numbers};
 
 /// Kev-9B in bfloat16 is about 18 GB; this leaves its forward workspace.
 const TEST_MLX_MEMORY_CEILING_BYTES: usize = 32 * 1024 * 1024 * 1024;
@@ -57,17 +56,6 @@ const REFERENCE_FIXTURES: [(&str, &str); 2] = [
         )),
     ),
 ];
-
-/// What one checkpoint's comparison measured.
-#[derive(Default)]
-struct ParityMeasurement {
-    question_count: usize,
-    same_answer_count: usize,
-    largest_probability_difference: f64,
-    probability_difference_total: f64,
-    probability_count: usize,
-    largest_logit_difference: f64,
-}
 
 /// The fixture for the converted folder's base model.
 fn reference_for(model_directory: &Path) -> OrderedJsonValue {
@@ -120,35 +108,14 @@ fn compare_question(
 ) {
     let reference_probabilities = reference_numbers(reference_row, "probabilities");
     let reference_logits = reference_numbers(reference_row, "option_logits");
-    let probabilities = answer_probabilities(&question_outcome.answer);
-    assert_eq!(probabilities.len(), reference_probabilities.len());
-    let mut question_probability_difference = 0.0_f64;
-    for (probability, reference_probability) in probabilities.iter().zip(&reference_probabilities) {
-        let probability_difference = (probability - reference_probability).abs();
-        question_probability_difference =
-            question_probability_difference.max(probability_difference);
-        measurement.probability_difference_total += probability_difference;
-        measurement.probability_count += 1;
-    }
-    measurement.largest_probability_difference = measurement
-        .largest_probability_difference
-        .max(question_probability_difference);
-    for (option_logit, reference_logit) in
-        question_outcome.option_logits.iter().zip(&reference_logits)
-    {
-        measurement.largest_logit_difference = measurement
-            .largest_logit_difference
-            .max((f64::from(*option_logit) - reference_logit).abs());
-    }
-    eprintln!(
-        "[kev-parity] case={case_name} question={} options={} largest_probability_difference={question_probability_difference:.5}",
-        question_outcome.question_name,
-        probabilities.len(),
+    measurement.record_question(
+        "kev",
+        case_name,
+        question_outcome,
+        &reference_probabilities,
+        &reference_logits,
+        "",
     );
-    measurement.question_count += 1;
-    if most_probable_index(&probabilities) == most_probable_index(&reference_probabilities) {
-        measurement.same_answer_count += 1;
-    }
 }
 
 fn compare_case(
@@ -200,24 +167,15 @@ async fn should_match_the_reference_decisions_within_the_stated_tolerance() {
     for reference_case in reference_array(&reference, "cases") {
         compare_case(&mut decision_engine, reference_case, &mut measurement);
     }
-    eprintln!(
-        "[kev-parity] checkpoint={} questions={} same_answer={} largest_probability_difference={:.5} mean_probability_difference={:.5} largest_logit_difference={:.5}",
+    measurement.report(&format!(
+        "[kev-parity] checkpoint={}",
         reference_field(&reference, "checkpoint")
             .as_text()
-            .unwrap_or("?"),
-        measurement.question_count,
-        measurement.same_answer_count,
-        measurement.largest_probability_difference,
-        measurement.probability_difference_total / measurement.probability_count as f64,
-        measurement.largest_logit_difference,
-    );
+            .unwrap_or("?")
+    ));
     assert!(
         measurement.question_count > 0,
         "the fixture compared no questions"
     );
-    assert!(
-        measurement.largest_probability_difference <= MAXIMUM_PROBABILITY_DIFFERENCE,
-        "the largest probability difference {:.5} exceeds {MAXIMUM_PROBABILITY_DIFFERENCE}",
-        measurement.largest_probability_difference
-    );
+    measurement.assert_within_tolerance(MAXIMUM_PROBABILITY_DIFFERENCE);
 }

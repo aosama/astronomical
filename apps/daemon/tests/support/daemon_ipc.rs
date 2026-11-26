@@ -35,19 +35,38 @@ use tokio::{sync::mpsc, time::timeout};
 
 pub(crate) const HANDSHAKE_TEST_TIMEOUT: Duration = Duration::from_secs(10);
 
+/// Numbers every state folder this test process creates. The clock did not
+/// keep names apart: two tests with the same name that started in the same
+/// clock tick shared a folder, and the second daemon failed to bind its socket
+/// (`AddrInUse`).
+static STATE_DIRECTORY_SEQUENCE: std::sync::atomic::AtomicU64 =
+    std::sync::atomic::AtomicU64::new(0);
+
+/// The process id and a per-process sequence number name a folder no other
+/// running test can share, and the name stays short because the daemon's socket
+/// lives inside it: a Unix socket path must fit in about a hundred bytes, and a
+/// clock value beside the sequence number pushed the longer test names over. A
+/// folder left by
+/// an earlier run whose process id was reused is removed first, so the folder
+/// is always fresh.
 pub(crate) fn fresh_instance_state_directory(test_name: &str) -> PathBuf {
-    let nanos_since_epoch = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .expect("system clock should provide time after the epoch")
-        .as_nanos();
+    let directory_sequence_number =
+        STATE_DIRECTORY_SEQUENCE.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let state_directory = std::env::temp_dir().join(format!(
-        "ast-dipc-{}-{}-{test_name}",
-        std::process::id(),
-        nanos_since_epoch % 1_000_000_000
+        "ast-dipc-{}-{directory_sequence_number}-{test_name}",
+        std::process::id()
     ));
+    remove_leftover_state_directory(&state_directory);
     std::fs::create_dir_all(&state_directory)
         .expect("the instance state directory should be creatable");
     state_directory
+}
+
+fn remove_leftover_state_directory(state_directory: &Path) {
+    if state_directory.exists() {
+        std::fs::remove_dir_all(state_directory)
+            .expect("a state folder left by an earlier run should be removable");
+    }
 }
 
 pub(crate) fn disabled_daemon_attribution_log(
@@ -197,6 +216,25 @@ pub(crate) struct StubGenerationExecutor {
 }
 
 impl StubGenerationExecutor {
+    /// A stub that reports `health_snapshot`, streams nothing and serves no
+    /// embeddings, decisions, speech or image requests; tests set only the
+    /// fields their journey needs on top of it.
+    pub(crate) fn with_health_snapshot(health_snapshot: WorkerHealthSnapshot) -> Self {
+        Self {
+            health_snapshot,
+            stream_events: Vec::new(),
+            received_commands: Mutex::new(Vec::new()),
+            embeddings_output: None,
+            received_embeddings_commands: Mutex::new(Vec::new()),
+            decisions_output: None,
+            received_decisions_commands: Mutex::new(Vec::new()),
+            speech_output: None,
+            received_speech_commands: Mutex::new(Vec::new()),
+            image_output: None,
+            received_image_commands: Mutex::new(Vec::new()),
+        }
+    }
+
     /// An owned snapshot of the logged chat commands. Returning a snapshot
     /// instead of sharing the guard keeps `MutexGuard` values out of scopes
     /// that await, which `clippy::await_holding_lock` rightly flags in tests
@@ -417,10 +455,6 @@ pub(crate) fn ready_stub_executor(ready_model_id: &str) -> Arc<StubGenerationExe
         context_window: 2_048,
     };
     Arc::new(StubGenerationExecutor {
-        health_snapshot: WorkerHealthSnapshot::ready_with_model(
-            ready_model_id.to_owned(),
-            model_capabilities,
-        ),
         stream_events: vec![
             ChatGenerationStreamEvent::TextFragment("Hello".to_owned()),
             ChatGenerationStreamEvent::TextFragment(" world".to_owned()),
@@ -432,15 +466,10 @@ pub(crate) fn ready_stub_executor(ready_model_id: &str) -> Arc<StubGenerationExe
                 reason: ChatGenerationCompletionReason::EndOfSequence,
             },
         ],
-        received_commands: Mutex::new(Vec::new()),
-        embeddings_output: None,
-        received_embeddings_commands: Mutex::new(Vec::new()),
-        decisions_output: None,
-        received_decisions_commands: Mutex::new(Vec::new()),
-        speech_output: None,
-        received_speech_commands: Mutex::new(Vec::new()),
-        image_output: None,
-        received_image_commands: Mutex::new(Vec::new()),
+        ..StubGenerationExecutor::with_health_snapshot(WorkerHealthSnapshot::ready_with_model(
+            ready_model_id.to_owned(),
+            model_capabilities,
+        ))
     })
 }
 

@@ -2,20 +2,23 @@
 //! executor, streaming the audio in bounded frames, and refusing what cannot
 //! be spoken before dispatch.
 
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 
 use astronomical_daemon::{SpeechExecutionError, SpeechOutput};
 use ipc_protocol::{
-    DaemonIpcClient, DaemonRequest, DaemonResponse, MAXIMUM_SPEECH_AUDIO_FRAME_BYTES,
-    SpeakGenerateRequest, SpeechResultMetadata,
+    DaemonRequest, DaemonResponse, MAXIMUM_SPEECH_AUDIO_FRAME_BYTES, SpeakGenerateRequest,
+    SpeechResultMetadata,
 };
 use speech_contract::SpeechFailure;
 use tokio::time::timeout;
 
+use crate::integration::daemon_ipc_exchange::connect_and_send_request;
+use crate::integration::daemon_ipc_service_fixtures::{
+    shut_down_and_remove_state_directory, start_service_with_installed_models,
+};
 use crate::support::daemon_ipc::{
     HANDSHAKE_TEST_TIMEOUT, StubGenerationExecutor, fresh_instance_state_directory,
-    ipc_chat_discovered_model, ipc_runtime_config, ipc_speech_discovered_model,
-    ready_stub_executor_with_speech, start_stub_daemon_ipc_service_with_runtime_config,
+    ipc_chat_discovered_model, ipc_speech_discovered_model, ready_stub_executor_with_speech,
 };
 
 const SPEECH_MODEL_ID: &str = "Kokoro-82M-bf16";
@@ -54,32 +57,22 @@ async fn speak_once(
     speak_request: DaemonRequest,
 ) -> Vec<DaemonResponse> {
     let state_directory = fresh_instance_state_directory(test_name);
-    let runtime_config = ipc_runtime_config(discovered_models, &[CHAT_MODEL_ID]);
-    let daemon_ipc_service = start_stub_daemon_ipc_service_with_runtime_config(
+    let daemon_ipc_service = start_service_with_installed_models(
         &state_directory,
         stub_executor,
-        Some(Arc::new(RwLock::new(runtime_config))),
+        discovered_models,
+        &[CHAT_MODEL_ID],
     )
     .await;
     let mut daemon_client =
-        DaemonIpcClient::connect(daemon_ipc_service.socket_path().to_path_buf())
-            .await
-            .expect("the client should connect to the running daemon IPC service");
-    daemon_client
-        .send_request(&speak_request)
-        .await
-        .expect("the speak request should transmit");
+        connect_and_send_request(daemon_ipc_service.socket_path(), &speak_request).await;
     let mut speech_frames = Vec::new();
     while let Ok(Ok(Some(daemon_response))) =
         timeout(HANDSHAKE_TEST_TIMEOUT, daemon_client.next_response()).await
     {
         speech_frames.push(daemon_response);
     }
-    timeout(HANDSHAKE_TEST_TIMEOUT, daemon_ipc_service.shutdown())
-        .await
-        .expect("the daemon IPC service shutdown should finish inside the test timeout")
-        .expect("the daemon IPC service should shut down cleanly");
-    let _ = std::fs::remove_dir_all(&state_directory);
+    shut_down_and_remove_state_directory(daemon_ipc_service, &state_directory).await;
     speech_frames
 }
 

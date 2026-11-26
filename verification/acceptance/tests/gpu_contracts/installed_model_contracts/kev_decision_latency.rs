@@ -19,12 +19,11 @@
 
 use std::time::Instant;
 
-use decision_contract::{
-    DecisionQuestion, HeadInputRequest, OrderedJsonValue, parse_system_one_questions,
-};
+use decision_contract::OrderedJsonValue;
 use model_serving::{DecisionEngine, KevDecisionEngine, kev_question_row_layouts};
 use test_harness::test_run::TestRunContext;
 
+use super::decision_latency_requests::{questions_of_count, timed_request_milliseconds};
 use super::decision_memory_peak::{peak_memory_bytes_after_request, peak_memory_report};
 
 /// Kev-9B in bfloat16 is about 18 GB; a 65,536-token prefill needs room beside it.
@@ -43,24 +42,6 @@ const ROMEO_AND_JULIET_WORDS: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/tests/fixtures/model_metrics_100000_romeo_and_juliet_words.txt"
 ));
-
-fn questions_of_count(question_count: usize) -> Vec<DecisionQuestion> {
-    let subjects = [
-        "death", "love", "a sword", "the sea", "a feud", "night", "a prince", "poison", "a letter",
-        "a tomb",
-    ];
-    let mut question_members = Vec::with_capacity(question_count);
-    for question_index in 0..question_count {
-        question_members.push(format!(
-            r#""q{question_index}": {{"type": "noul", "instructions": "Does the passage mention {}?"}}"#,
-            subjects[question_index % subjects.len()]
-        ));
-    }
-    let questions: OrderedJsonValue =
-        serde_json::from_str(&format!("{{{}}}", question_members.join(",")))
-            .expect("the measurement questions are well formed");
-    parse_system_one_questions(&questions).expect("the measurement questions are valid")
-}
 
 fn state_of_words(word_count: usize) -> OrderedJsonValue {
     OrderedJsonValue::Text(
@@ -97,23 +78,6 @@ fn state_at_the_limit(decision_engine: &KevDecisionEngine) -> (OrderedJsonValue,
         .expect("the bisected state fits")[0]
         .state_token_count;
     (state, state_token_count)
-}
-
-fn timed_request_milliseconds(
-    decision_engine: &mut KevDecisionEngine,
-    state: &OrderedJsonValue,
-    question_count: usize,
-) -> (f64, u32) {
-    let questions = questions_of_count(question_count);
-    let request_started_at = Instant::now();
-    let decision_output = decision_engine
-        .decide(state, &questions, HeadInputRequest::Omit)
-        .expect("the timed request should be answered");
-    assert_eq!(decision_output.question_outcomes.len(), question_count);
-    (
-        request_started_at.elapsed().as_secs_f64() * 1_000.0,
-        decision_output.input_token_count,
-    )
 }
 
 #[ignore = "requires a converted Kev folder as model_directory in the explicit test-run configuration"]

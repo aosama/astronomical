@@ -1,16 +1,14 @@
 //! Round-trip contract for the complete worker startup configuration boundary.
 
+use crate::protocol_round_trip_test_support::assert_command_round_trips;
 use std::path::PathBuf;
 
 use crate::{
-    ProtocolReader, ProtocolWriter, WorkerAutoregressiveModelConfiguration,
-    WorkerChunkingConfiguration, WorkerCommand, WorkerDecodeAstroExpertCachePolicy,
-    WorkerImageGenerationModelConfiguration, WorkerLoadedModelRuntimeConfiguration, WorkerLogLevel,
-    WorkerModelConfiguration, WorkerStartupConfiguration,
+    WorkerAutoregressiveModelConfiguration, WorkerChunkingConfiguration, WorkerCommand,
+    WorkerDecodeAstroExpertCachePolicy, WorkerImageGenerationModelConfiguration,
+    WorkerLoadedModelRuntimeConfiguration, WorkerLogLevel, WorkerModelConfiguration,
+    WorkerStartupConfiguration,
 };
-use tokio::io::duplex;
-
-const TEST_TRANSPORT_CAPACITY_BYTES: usize = 256 * 1024;
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn should_round_trip_worker_startup_configuration() {
@@ -32,22 +30,7 @@ async fn should_round_trip_worker_startup_configuration() {
         retained_log_file_count: 1,
         metal_residency_refresh_enabled: false,
     });
-    let (daemon_transport, worker_transport) = duplex(TEST_TRANSPORT_CAPACITY_BYTES);
-    let mut daemon_writer = ProtocolWriter::new(daemon_transport);
-    let mut worker_reader = ProtocolReader::new(worker_transport);
-
-    daemon_writer
-        .send_command(&worker_command)
-        .await
-        .expect("worker startup configuration should be written");
-
-    assert_eq!(
-        worker_reader
-            .next_command()
-            .await
-            .expect("worker startup configuration should decode"),
-        Some(worker_command)
-    );
+    assert_command_round_trips(&worker_command, "worker startup configuration").await;
 }
 
 #[test]
@@ -90,22 +73,7 @@ async fn should_round_trip_selected_model_policy_on_swap_model() {
             },
         ),
     };
-    let (daemon_transport, worker_transport) = duplex(TEST_TRANSPORT_CAPACITY_BYTES);
-    let mut daemon_writer = ProtocolWriter::new(daemon_transport);
-    let mut worker_reader = ProtocolReader::new(worker_transport);
-
-    daemon_writer
-        .send_command(&worker_command)
-        .await
-        .expect("swap policy should be written");
-
-    assert_eq!(
-        worker_reader
-            .next_command()
-            .await
-            .expect("swap policy should decode"),
-        Some(worker_command)
-    );
+    assert_command_round_trips(&worker_command, "swap policy").await;
 }
 
 #[test]
