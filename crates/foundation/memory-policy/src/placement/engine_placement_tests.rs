@@ -77,6 +77,7 @@ fn should_report_demotion_facts_only_for_request_demotion_placement() {
     let demoted_placement = EnginePlacement::DemotedForRequest {
         cause: demotion_cause,
         demoted_total_context_token_count: 9_000,
+        effective_ceiling_bytes_at_demotion: 0,
     };
     assert!(demoted_placement.is_demoted_for_request());
     assert_eq!(demoted_placement.demotion_cause(), Some(demotion_cause));
@@ -104,6 +105,7 @@ fn should_log_a_distinct_label_for_every_placement_variant() {
         EnginePlacement::DemotedForRequest {
             cause: StreamingEngineRequirement::StableShortfall { shortfall_bytes: 1 },
             demoted_total_context_token_count: 1,
+            effective_ceiling_bytes_at_demotion: 0,
         }
         .log_label(),
         EnginePlacement::PromotedAfterPressureResolved.log_label(),
@@ -128,6 +130,7 @@ fn should_run_the_resident_engine_only_for_complete_residency_placements() {
         !EnginePlacement::DemotedForRequest {
             cause: StreamingEngineRequirement::StableShortfall { shortfall_bytes: 1 },
             demoted_total_context_token_count: 1,
+            effective_ceiling_bytes_at_demotion: 0,
         }
         .runs_resident_engine()
     );

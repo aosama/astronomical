@@ -68,6 +68,10 @@ where
             request_id,
         );
 
+        // The ceiling the request was refused under, before serving the
+        // streamed model can raise it: the promotion gate counts any raise
+        // above it as freed room.
+        let effective_ceiling_bytes_at_demotion = self.effective_mlx_memory_ceiling_bytes;
         drop(self.loaded_runtime.take());
         let factory_runtime = model_factory
             .create_streaming_retry(&model_directory, model_configuration.clone())
@@ -118,6 +122,7 @@ where
         let demoted_engine_placement = crate::EnginePlacement::DemotedForRequest {
             cause: demotion_cause,
             demoted_total_context_token_count,
+            effective_ceiling_bytes_at_demotion,
         };
         self.engine_placement = Some(demoted_engine_placement);
         self.startup_residency_facts = engine_load_result.startup_residency_facts();

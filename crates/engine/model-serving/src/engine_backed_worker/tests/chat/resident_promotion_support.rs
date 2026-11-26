@@ -29,7 +29,7 @@ use tokio::io::{AsyncWrite, duplex, split};
 use tokio::task::JoinHandle;
 use tokio::time::timeout;
 
-const GIBIBYTE_BYTES: u64 = 1 << 30;
+pub(super) const GIBIBYTE_BYTES: u64 = 1 << 30;
 const REQUEST_CONTEXT_SHORTFALL_BYTES: usize = 1 << 30;
 const WORKER_EFFECTIVE_CEILING_BYTES: u64 = 64 * GIBIBYTE_BYTES;
 const RESIDENT_FORK_PROMPT_TOKEN_COUNT: usize = 100;
@@ -54,6 +54,11 @@ pub(super) struct PromotionScenario {
     pub(super) resident_promotion_creation_succeeds: bool,
     pub(super) resident_promotion_load_succeeds: bool,
     pub(super) startup_runtime_carries_engine_placement: bool,
+    /// A resident engine short for every request, by these bytes, whatever
+    /// its context: what a hosted drafter or a prompt chunk's working
+    /// buffers do, which the startup arithmetic cannot see. `None` keeps the
+    /// shortfall to prompts at or above the fork threshold.
+    pub(super) resident_short_for_every_request_bytes: Option<usize>,
 }
 
 impl PromotionScenario {
@@ -64,6 +69,7 @@ impl PromotionScenario {
             resident_promotion_creation_succeeds: true,
             resident_promotion_load_succeeds: true,
             startup_runtime_carries_engine_placement: true,
+            resident_short_for_every_request_bytes: None,
         }
     }
 }
@@ -150,8 +156,21 @@ impl ModelGenerationProcessor for PromotionProcessor {
 struct PromotionEngine {
     role: PromotionEngineRole,
     load_succeeds: bool,
+    resident_short_for_every_request_bytes: Option<usize>,
     startup_residency_facts: StreamingStartupResidencyFacts,
     serving_engine_roles: Arc<Mutex<Vec<PromotionEngineRole>>>,
+}
+
+impl PromotionEngine {
+    /// What a resident engine is short for a prompt of this size: every
+    /// request when the scenario says so, otherwise prompts at or above the
+    /// fork threshold.
+    fn resident_shortfall_bytes(&self, prompt_token_count: usize) -> Option<usize> {
+        self.resident_short_for_every_request_bytes.or_else(|| {
+            (prompt_token_count >= RESIDENT_FORK_PROMPT_TOKEN_COUNT)
+                .then_some(REQUEST_CONTEXT_SHORTFALL_BYTES)
+        })
+    }
 }
 
 impl InferenceEngine for PromotionEngine {
@@ -176,13 +195,13 @@ impl InferenceEngine for PromotionEngine {
         &mut self,
         inference_request: Self::Request,
     ) -> Result<EngineGenerationStart, InferenceEngineError> {
-        if self.role == PromotionEngineRole::Resident
-            && inference_request.prompt_token_count >= RESIDENT_FORK_PROMPT_TOKEN_COUNT
+        let resident_shortfall_bytes =
+            self.resident_shortfall_bytes(inference_request.prompt_token_count);
+        if let (PromotionEngineRole::Resident, Some(shortfall_bytes)) =
+            (self.role, resident_shortfall_bytes)
         {
             return Err(InferenceEngineError::ResidentForkRequired {
-                cause: StreamingEngineRequirement::RequestContextShortfall {
-                    shortfall_bytes: REQUEST_CONTEXT_SHORTFALL_BYTES,
-                },
+                cause: StreamingEngineRequirement::RequestContextShortfall { shortfall_bytes },
                 reason: "complete resident experts do not fit the request memory budget".to_owned(),
             });
         }
@@ -292,6 +311,9 @@ impl PromotionModelFactory {
         PromotionEngine {
             role,
             load_succeeds,
+            resident_short_for_every_request_bytes: self
+                .scenario
+                .resident_short_for_every_request_bytes,
             startup_residency_facts: self.startup_residency_facts(),
             serving_engine_roles: Arc::clone(&self.counters.serving_engine_roles),
         }
