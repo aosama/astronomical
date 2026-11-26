@@ -944,13 +944,19 @@ jobs:
         timeout-minutes: 3
       # The pyramid count over this repository is local-only (cargo xtask
       # tier-pyramid); its behavior on a fixture tree is an xtask unit test.
-      - name: Run repository contract scripts
+      - name: Run repository contracts
         run: |
           trap 'scripts/ci/ci-step-timing.sh end repository-contracts' EXIT
           scripts/ci/ci-step-timing.sh begin repository-contracts
-          export PATH="$PWD/scripts/ci:$PATH"
-          verification/tooling_contracts/test-cargo-citation-contract.sh
-          verification/tooling_contracts/test-source-size-check.sh
+          # Every cargo command cited in Markdown must exist; `cargo
+          # measure-...` names a family of aliases.
+          cargo xtask check-cargo-citations
+          # Every alias must expand the same with .cargo/config.toml found
+          # twice in cargo's config ancestry, as in a nested worktree.
+          cargo test --locked -p xtask --test cargo_alias_nested_config_contract
+          # The pre-commit source-size check through a real git index; its
+          # rules are xtask unit tests on the macOS build job.
+          cargo test --locked -p xtask --test integration_source_size_journeys
           cargo xtask check-test-channel-isolation
           cargo xtask check-architecture
           # Every website page carries the one shared header and footer;
