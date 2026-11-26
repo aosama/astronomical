@@ -19,4 +19,6 @@ mod register_order_layout_verdict;
 #[cfg(feature = "performance-measurement")]
 mod register_order_served_rows_cost;
 #[cfg(feature = "performance-measurement")]
+mod row_exact_attention_verdict;
+#[cfg(feature = "performance-measurement")]
 mod verdict_text;

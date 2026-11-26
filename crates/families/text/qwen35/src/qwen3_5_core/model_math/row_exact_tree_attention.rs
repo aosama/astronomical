@@ -119,8 +119,13 @@ const PARTIALS_SOURCE: &str = r#"
   // This lane's elements belong to two query vectors, 8 apart in the tile.
   const int first_vector = row_tile * 16 + fragment_row;
   const int second_vector = first_vector + 8;
-  const int first_tree_row = first_vector < vector_count ? first_vector % row_count : -1;
-  const int second_tree_row = second_vector < vector_count ? second_vector % row_count : -1;
+  // Query vectors pack row by row (`vector = row * QUERY_GROUP + head`), so
+  // a matrix tile holds a few rows' vectors and sits out the passes of the
+  // rest.
+  const int first_tree_row = first_vector < vector_count ? first_vector / QUERY_GROUP : -1;
+  const int second_tree_row = second_vector < vector_count ? second_vector / QUERY_GROUP : -1;
+  const int tile_first_row = (row_tile * 16) / QUERY_GROUP;
+  const int tile_last_row = (row_tile * 16 + 15) / QUERY_GROUP;
   const int first_seen = first_tree_row >= 0 ? context + chain_lengths[first_tree_row] : 0;
   const int second_seen = second_tree_row >= 0 ? context + chain_lengths[second_tree_row] : 0;
   int longest_seen = context;
@@ -164,61 +169,67 @@ const PARTIALS_SOURCE: &str = r#"
       stage_tile(staged_tile, key_slab, head_offset, tile_start, context, shared_tile,
           pass, chain_lengths, row_chains, MAXIMUM_CHAIN, thread_index, thread_count);
       threadgroup_barrier(mem_flags::mem_threadgroup);
-      auto scores = score_operation.template get_destination_cooperative_tensor<
-          decltype(query_rows), decltype(tile_tensor), float>();
-      score_operation.run(query_rows, tile_tensor, scores);
-      const bool first_in_pass = shared_tile || first_tree_row == pass;
-      const bool second_in_pass = shared_tile || second_tree_row == pass;
-      float tile_scores[tile_keys / 2];
-      for (int element = 0; element < tile_keys / 2; ++element) {
-        const int key = tile_start + (element >> 3) * 16 + fragment_column + (element & 3);
-        const bool is_second = (element & 4) != 0;
-        const bool is_seen = is_second ? (second_in_pass && key < second_seen)
-                                       : (first_in_pass && key < first_seen);
-        tile_scores[element] = is_seen ? scores[element] * scale[0] : -INFINITY;
-      }
-      float first_tile_maximum = -INFINITY, second_tile_maximum = -INFINITY;
-      for (int element = 0; element < tile_keys / 2; ++element) {
-        if (element & 4) second_tile_maximum = max(second_tile_maximum, tile_scores[element]);
-        else first_tile_maximum = max(first_tile_maximum, tile_scores[element]);
-      }
-      first_tile_maximum = max(first_tile_maximum, simd_shuffle_xor(first_tile_maximum, 1));
-      first_tile_maximum = max(first_tile_maximum, simd_shuffle_xor(first_tile_maximum, 8));
-      second_tile_maximum = max(second_tile_maximum, simd_shuffle_xor(second_tile_maximum, 1));
-      second_tile_maximum = max(second_tile_maximum, simd_shuffle_xor(second_tile_maximum, 8));
-      const float first_next = max(first_maximum, first_tile_maximum);
-      const float second_next = max(second_maximum, second_tile_maximum);
-      const float first_rescale = first_tile_maximum == -INFINITY ? 1.0f : fast::exp(first_maximum - first_next);
-      const float second_rescale = second_tile_maximum == -INFINITY ? 1.0f : fast::exp(second_maximum - second_next);
-      float weights[tile_keys / 2];
-      for (int element = 0; element < tile_keys / 2; ++element) {
-        weights[element] = tile_scores[element] == -INFINITY ? 0.0f
-            : fast::exp(tile_scores[element] - ((element & 4) ? second_next : first_next));
-      }
-      float first_tile_sum = 0.0f, second_tile_sum = 0.0f;
-      for (int block = 0; block < tile_keys / 16; ++block) {
-        first_tile_sum += (weights[block * 8] + weights[block * 8 + 1]) + (weights[block * 8 + 2] + weights[block * 8 + 3]);
-        second_tile_sum += (weights[block * 8 + 4] + weights[block * 8 + 5]) + (weights[block * 8 + 6] + weights[block * 8 + 7]);
-      }
-      first_tile_sum += simd_shuffle_xor(first_tile_sum, 1);
-      first_tile_sum += simd_shuffle_xor(first_tile_sum, 8);
-      second_tile_sum += simd_shuffle_xor(second_tile_sum, 1);
-      second_tile_sum += simd_shuffle_xor(second_tile_sum, 8);
-      if (first_tile_maximum != -INFINITY) { first_sum = first_sum * first_rescale + first_tile_sum; first_maximum = first_next; }
-      if (second_tile_maximum != -INFINITY) { second_sum = second_sum * second_rescale + second_tile_sum; second_maximum = second_next; }
+      // A pass staged for a row this tile holds no vector of would leave
+      // every one of its lanes exactly as it was (no key seen: rescale 1,
+      // weights 0, nothing added), so the tile does no arithmetic for it.
+      const bool tile_in_pass = shared_tile || (pass >= tile_first_row && pass <= tile_last_row);
       auto probabilities = score_operation.template get_destination_cooperative_tensor<
           decltype(query_rows), decltype(tile_tensor), half>();
-      for (int element = 0; element < tile_keys / 2; ++element) {
-        probabilities[element] = half(weights[element] * probability_scale);
+      if (tile_in_pass) {
+        auto scores = score_operation.template get_destination_cooperative_tensor<
+            decltype(query_rows), decltype(tile_tensor), float>();
+        score_operation.run(query_rows, tile_tensor, scores);
+        const bool first_in_pass = shared_tile || first_tree_row == pass;
+        const bool second_in_pass = shared_tile || second_tree_row == pass;
+        float tile_scores[tile_keys / 2];
+        for (int element = 0; element < tile_keys / 2; ++element) {
+          const int key = tile_start + (element >> 3) * 16 + fragment_column + (element & 3);
+          const bool is_second = (element & 4) != 0;
+          const bool is_seen = is_second ? (second_in_pass && key < second_seen)
+                                         : (first_in_pass && key < first_seen);
+          tile_scores[element] = is_seen ? scores[element] * scale[0] : -INFINITY;
+        }
+        float first_tile_maximum = -INFINITY, second_tile_maximum = -INFINITY;
+        for (int element = 0; element < tile_keys / 2; ++element) {
+          if (element & 4) second_tile_maximum = max(second_tile_maximum, tile_scores[element]);
+          else first_tile_maximum = max(first_tile_maximum, tile_scores[element]);
+        }
+        first_tile_maximum = max(first_tile_maximum, simd_shuffle_xor(first_tile_maximum, 1));
+        first_tile_maximum = max(first_tile_maximum, simd_shuffle_xor(first_tile_maximum, 8));
+        second_tile_maximum = max(second_tile_maximum, simd_shuffle_xor(second_tile_maximum, 1));
+        second_tile_maximum = max(second_tile_maximum, simd_shuffle_xor(second_tile_maximum, 8));
+        const float first_next = max(first_maximum, first_tile_maximum);
+        const float second_next = max(second_maximum, second_tile_maximum);
+        const float first_rescale = first_tile_maximum == -INFINITY ? 1.0f : fast::exp(first_maximum - first_next);
+        const float second_rescale = second_tile_maximum == -INFINITY ? 1.0f : fast::exp(second_maximum - second_next);
+        float weights[tile_keys / 2];
+        for (int element = 0; element < tile_keys / 2; ++element) {
+          weights[element] = tile_scores[element] == -INFINITY ? 0.0f
+              : fast::exp(tile_scores[element] - ((element & 4) ? second_next : first_next));
+        }
+        float first_tile_sum = 0.0f, second_tile_sum = 0.0f;
+        for (int block = 0; block < tile_keys / 16; ++block) {
+          first_tile_sum += (weights[block * 8] + weights[block * 8 + 1]) + (weights[block * 8 + 2] + weights[block * 8 + 3]);
+          second_tile_sum += (weights[block * 8 + 4] + weights[block * 8 + 5]) + (weights[block * 8 + 6] + weights[block * 8 + 7]);
+        }
+        first_tile_sum += simd_shuffle_xor(first_tile_sum, 1);
+        first_tile_sum += simd_shuffle_xor(first_tile_sum, 8);
+        second_tile_sum += simd_shuffle_xor(second_tile_sum, 1);
+        second_tile_sum += simd_shuffle_xor(second_tile_sum, 8);
+        if (first_tile_maximum != -INFINITY) { first_sum = first_sum * first_rescale + first_tile_sum; first_maximum = first_next; }
+        if (second_tile_maximum != -INFINITY) { second_sum = second_sum * second_rescale + second_tile_sum; second_maximum = second_next; }
+        for (int element = 0; element < tile_keys / 2; ++element) {
+          probabilities[element] = half(weights[element] * probability_scale);
+        }
+        for (int element = 0; element < 64; ++element) output[element] *= (element & 4) ? second_rescale : first_rescale;
       }
       auto probability_input = output_operation.template get_left_input_cooperative_tensor<
           half, bfloat, float>(probabilities);
-      for (int element = 0; element < 64; ++element) output[element] *= (element & 4) ? second_rescale : first_rescale;
       threadgroup_barrier(mem_flags::mem_threadgroup);
       stage_tile(staged_tile, value_slab, head_offset, tile_start, context, shared_tile,
           pass, chain_lengths, row_chains, MAXIMUM_CHAIN, thread_index, thread_count);
       threadgroup_barrier(mem_flags::mem_threadgroup);
-      output_operation.run(probability_input, value_half, output);
+      if (tile_in_pass) output_operation.run(probability_input, value_half, output);
     }
   }
   const size_t partial_base = ((size_t)key_value_head * chunk_count + chunk) * padded_vectors;
@@ -282,8 +293,8 @@ const MERGE_SOURCE: &str = r#"
     const int row_count = chain_lengths_shape[0];
     const int chunk_count = chunk_maxima_shape[1];
     const int padded_vectors = chunk_maxima_shape[2];
-    const int tree_row = query_vector % row_count;
-    const int head = key_value_head * QUERY_GROUP + query_vector / row_count;
+    const int tree_row = query_vector / QUERY_GROUP;
+    const int head = key_value_head * QUERY_GROUP + query_vector % QUERY_GROUP;
     const int seen_keys = context_length[0] + chain_lengths[tree_row];
     const int own_chunk_count = (seen_keys + CHUNK_KEYS - 1) / CHUNK_KEYS;
     float merged_maximum = -INFINITY;
@@ -484,20 +495,19 @@ fn validated_shape(
     })
 }
 
-/// `[key-value heads, padded vectors, 256]`: each key-value head's query
-/// heads one after another, every row of a head together, padded with zero
-/// vectors to whole matrix tiles. The queries' own layout already orders
-/// them so; a tree whose vectors do not fill whole tiles is padded.
+/// `[key-value heads, padded vectors, 256]`: each key-value head's vectors
+/// row by row, every query head of a row together, padded with zero vectors
+/// to whole matrix tiles. Packing a row's vectors together lets a tile sit
+/// out the passes of rows it does not hold: with heads one after another, a
+/// 16-row tree put every row in every tile, and each of the 16 passes over a
+/// key tile past the context multiplied all 96 vectors to use 6.
 fn packed_queries(
     runtime: &MlxRuntime,
     queries: &MlxArray,
     shape: &TreeAttentionShape,
 ) -> Result<MlxArray, MlxRuntimeError> {
     let vector_count = shape.vector_count();
-    let packed = runtime.reshape(
-        queries,
-        &[shape.key_value_head_count, vector_count, HEAD_SIZE],
-    )?;
+    let packed = queries_row_by_row(runtime, queries, shape)?;
     if vector_count == shape.padded_vector_count {
         return Ok(packed);
     }
@@ -510,6 +520,29 @@ fn packed_queries(
         MlxDtype::BFloat16,
     )?;
     Ok(runtime.concatenate_axis(&[&packed, &padding], 1)?)
+}
+
+/// `[1, heads, rows, 256]` as each key-value head's vectors row by row,
+/// `[key-value heads, rows * group, 256]` with `vector = row * group + head`.
+fn queries_row_by_row(
+    runtime: &MlxRuntime,
+    queries: &MlxArray,
+    shape: &TreeAttentionShape,
+) -> Result<MlxArray, MlxRuntimeError> {
+    let by_group = runtime.reshape(
+        queries,
+        &[
+            shape.key_value_head_count,
+            shape.query_group,
+            shape.row_count,
+            HEAD_SIZE,
+        ],
+    )?;
+    let row_by_row = runtime.transpose_axes(&by_group, &[0, 2, 1, 3])?;
+    Ok(runtime.reshape(
+        &row_by_row,
+        &[shape.key_value_head_count, shape.vector_count(), HEAD_SIZE],
+    )?)
 }
 
 fn template_arguments(
