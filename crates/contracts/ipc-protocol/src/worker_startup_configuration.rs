@@ -24,24 +24,6 @@ pub enum WorkerDecodeAstroExpertCachePolicy {
     Candidate,
 }
 
-/// Qwen3.5 engine family forced by controlled diagnostic journeys only.
-///
-/// Startup normally picks the resident or the SSD-streaming engine from the
-/// complete-residency fit at the configured ceiling, which couples two
-/// variables a throughput investigation must separate: the memory ceiling and
-/// the engine architecture. Forcing the engine lets one journey run the
-/// streaming engine under a roomy ceiling (or the resident engine under a
-/// tight one) so each variable's cost is measured on its own. The startup
-/// placement is still computed and recorded unchanged.
-#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum WorkerDiagnosticQwen3_5EngineOverride {
-    #[default]
-    Automatic,
-    Resident,
-    Streaming,
-}
-
 /// Worker-acknowledged feature settings safe to expose through local status.
 ///
 /// This intentionally excludes startup paths and model locations. It proves the
@@ -73,9 +55,6 @@ pub struct WorkerStartupConfiguration {
     /// Benchmark-only policy selector; never read from the user configuration.
     #[serde(default)]
     pub decode_astro_expert_cache_policy: WorkerDecodeAstroExpertCachePolicy,
-    /// Diagnostic-only engine override; never read from the user configuration.
-    #[serde(default)]
-    pub diagnostic_qwen3_5_engine_override: WorkerDiagnosticQwen3_5EngineOverride,
     pub logging_directory: PathBuf,
     pub logging_level: WorkerLogLevel,
     pub retained_log_file_count: usize,

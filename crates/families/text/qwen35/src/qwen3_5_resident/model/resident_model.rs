@@ -68,35 +68,6 @@ impl text_generation::model::memory_breakdown::TextModelMemoryOwnership for Qwen
     }
 }
 
-// Named calls: method syntax inside these bodies would resolve to the trait
-// itself if an inherent method were ever renamed, recursing forever.
-impl text_generation::model::text_model::TextModel for Qwen3_5ResidentModel {
-    fn observed_expert_memory_mode(&self) -> ipc_protocol::ExpertMemoryMode {
-        Qwen3_5ResidentModel::expert_memory_mode(self)
-    }
-
-    fn expert_memory_mode(&self) -> ipc_protocol::ExpertMemoryMode {
-        Qwen3_5ResidentModel::expert_memory_mode(self)
-    }
-
-    fn memory_snapshot_for_telemetry(
-        &self,
-    ) -> Result<runtime_integration::MlxMemorySnapshot, crate::InferenceEngineError> {
-        self.runtime()
-            .memory_snapshot()
-            .map_err(text_generation::engine_errors::fatal_runtime_error)
-    }
-
-    /// The resident engine holds the whole shared base in memory.
-    fn resident_model_payload_byte_count(&self) -> u64 {
-        Qwen3_5ModelBase::resident_model_payload_byte_count(&self.base)
-    }
-
-    crate::qwen3_5_core::model::shared_model_methods::qwen3_5_shared_text_model_forwarding!(
-        Qwen3_5ResidentModel
-    );
-}
-
 impl Qwen3_5ResidentModel {
     /// The memory governor's view after the last measured forward, with its
     /// accounts compared against what MLX reported; `None` before the first.

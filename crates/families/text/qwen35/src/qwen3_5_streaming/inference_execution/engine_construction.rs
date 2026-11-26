@@ -35,7 +35,6 @@ impl TextEngineConstruction for Qwen3_5InferenceExecution {
                 engine_settings.astro_neural_engine_program_cache_directory,
             ),
             prompt_span_to_fail_once_for_tests: None,
-            startup_residency_facts: None,
         }
     }
 }

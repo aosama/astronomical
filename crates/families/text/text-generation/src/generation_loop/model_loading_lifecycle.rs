@@ -42,14 +42,6 @@ pub trait TextModelLoadingHooks: TextFinalizationHooks {
     const ASTRO_SSD_PROMPT_CACHE_CONTRACT_RESOLVER: AstroSsdPromptCacheContractResolver =
         AstroSsdPromptCacheModelContract::resolve;
 
-    /// Reads what the engine needs from the artifact before the artifact
-    /// moves into the model.
-    fn observe_artifact_before_load(
-        &mut self,
-        validated_artifact: &Self::Artifact,
-        model_loading_performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<(), InferenceEngineError>;
-
     /// Loads the model from the artifact on `runtime` and materializes its
     /// weights.
     fn load_and_materialize_model(
@@ -150,8 +142,6 @@ fn load_model_parts<Engine: TextModelLoadingHooks>(
         total_artifact_payload_bytes: Some(validated_artifact.total_payload_bytes()),
         model_shard_count: Some(validated_artifact.shard_count()),
     };
-    engine
-        .observe_artifact_before_load(&validated_artifact, model_loading_performance_attribution)?;
     let runtime = initialize_mlx_runtime_with_cleanup(
         engine.execution_core().memory_limits,
         model_loading_performance_attribution,

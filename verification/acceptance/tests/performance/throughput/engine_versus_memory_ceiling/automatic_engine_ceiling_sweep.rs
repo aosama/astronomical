@@ -1,12 +1,10 @@
-//! The production engine choice as the assigned memory ceiling shrinks.
+//! Startup as the assigned memory ceiling shrinks.
 //!
-//! 24 GB holds every expert, so startup selects the resident engine; 22 GB is
-//! the first ceiling where startup selects the streaming engine; 21, 20, and
-//! 19 GB page progressively more expert layers from SSD. Read top to bottom,
-//! the cells show the cost of the engine swap and then the cost of each
-//! gigabyte of paging, under the identical summarization workload.
+//! 24 GB holds every expert; 22 GB is the first ceiling that does not; 21,
+//! 20, and 19 GB page progressively more expert layers from SSD. Read top to
+//! bottom, the cells show the cost of each gigabyte of paging, under the
+//! identical summarization workload.
 
-use ipc_protocol::WorkerDiagnosticQwen3_5EngineOverride;
 use serial_test::serial;
 
 use super::summarization_journey::{BYTES_PER_GIGABYTE, measure_summarization_throughput};
@@ -42,7 +40,6 @@ macro_rules! automatic_engine_ceiling_cell {
         fn $test_function_name() {
             measure_summarization_throughput(
                 AUTOMATIC_ENGINE_SWEEP_CEILING_GIGABYTES[$sweep_ceiling_index],
-                WorkerDiagnosticQwen3_5EngineOverride::Automatic,
             );
         }
     };
@@ -54,7 +51,7 @@ automatic_engine_ceiling_cell!(
     0,
     "loads the resident 35B sparse-MoE model and measures automatic-engine summarization throughput under a 24 GB memory ceiling"
 );
-// The first ceiling at which startup swaps to the streaming engine.
+// The first ceiling that does not hold every expert.
 automatic_engine_ceiling_cell!(
     should_measure_automatic_engine_summarization_throughput_under_a_22gb_memory_ceiling,
     1,

@@ -74,8 +74,7 @@ pub(super) fn handle_worker_event(
             apply_standalone_memory_sample(memory_sample_event, health_snapshot, active_request);
         }
         memory_limit_event @ (WorkerEvent::MlxMemoryLimitChanged { .. }
-        | WorkerEvent::MlxMemoryLimitRejected { .. }
-        | WorkerEvent::MlxMemoryLimitRestartRequired { .. }) => {
+        | WorkerEvent::MlxMemoryLimitRejected { .. }) => {
             apply_memory_limit_event(memory_limit_event, health_snapshot);
         }
         waited_for_event @ (WorkerEvent::ModelSwapped { .. }
@@ -200,7 +199,7 @@ fn apply_runtime_feature_configuration(
     Ok(())
 }
 
-/// Routes the three memory-limit outcomes, each of which owns its own handling.
+/// Routes the two memory-limit outcomes, each of which owns its own handling.
 fn apply_memory_limit_event(
     memory_limit_event: WorkerEvent,
     health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
@@ -212,10 +211,7 @@ fn apply_memory_limit_event(
         limit_rejected_event @ WorkerEvent::MlxMemoryLimitRejected { .. } => {
             apply_mlx_memory_limit_rejected(limit_rejected_event, health_snapshot);
         }
-        restart_required_event @ WorkerEvent::MlxMemoryLimitRestartRequired { .. } => {
-            apply_mlx_memory_limit_restart_required(restart_required_event, health_snapshot);
-        }
-        // The dispatch match routes only the three events above here.
+        // The dispatch match routes only the two events above here.
         _ => {}
     }
 }
@@ -285,37 +281,6 @@ fn apply_standalone_memory_sample(
     if let Some(expert_residency) = expert_residency {
         publish_worker_expert_residency(health_snapshot, expert_residency);
     }
-}
-
-/// Records that the live worker cannot reach the requested ceiling without a
-/// stop-first restart. The worker keeps its loaded runtime and old ceilings:
-/// an idle apply already returned to the endpoint, and a queued apply defers
-/// to the queued reconciliation, so only bounded health state changes here.
-fn apply_mlx_memory_limit_restart_required(
-    restart_required_event: WorkerEvent,
-    health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
-) {
-    // Routed from the dispatch match; total without a silent catch-all.
-    let WorkerEvent::MlxMemoryLimitRestartRequired {
-        requested_mlx_memory_ceiling_bytes,
-        effective_mlx_memory_ceiling_bytes,
-        reason,
-        ..
-    } = restart_required_event
-    else {
-        return;
-    };
-    tracing::warn!(
-        requested_mlx_memory_ceiling_bytes,
-        effective_mlx_memory_ceiling_bytes,
-        reason = %reason,
-        "worker reported that reaching the requested MLX ceiling requires a worker restart"
-    );
-    crate::worker::health::publish_mlx_memory_limit_restart_required(
-        health_snapshot,
-        requested_mlx_memory_ceiling_bytes,
-        &reason,
-    );
 }
 
 /// Applies a generation-finalized event to the matching active chat request:

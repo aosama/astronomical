@@ -3,8 +3,7 @@
 use std::path::PathBuf;
 
 use ipc_protocol::{
-    WorkerDecodeAstroExpertCachePolicy, WorkerDiagnosticQwen3_5EngineOverride, WorkerLogLevel,
-    WorkerStartupConfiguration,
+    WorkerDecodeAstroExpertCachePolicy, WorkerLogLevel, WorkerStartupConfiguration,
 };
 
 use super::startup_configuration_carrying_applied_memory_ceiling;
@@ -32,7 +31,6 @@ fn boot_startup_configuration() -> WorkerStartupConfiguration {
         configured_maximum_mlx_memory_bytes: Some(BOOT_CONFIGURED_CEILING_BYTES),
         performance_attribution_enabled: true,
         decode_astro_expert_cache_policy: WorkerDecodeAstroExpertCachePolicy::Candidate,
-        diagnostic_qwen3_5_engine_override: WorkerDiagnosticQwen3_5EngineOverride::Streaming,
         logging_directory: PathBuf::from("logs"),
         logging_level: WorkerLogLevel::Debug,
         retained_log_file_count: 4,

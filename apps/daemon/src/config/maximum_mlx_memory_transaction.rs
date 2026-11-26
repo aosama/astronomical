@@ -50,26 +50,6 @@ pub(crate) async fn reconcile_queued_memory_config(
         let worker_health_snapshot = application_state
             .generation_executor
             .worker_health_snapshot();
-        if let Some(restart_required_mlx_memory_ceiling_bytes) =
-            worker_health_snapshot.restart_required_mlx_memory_ceiling_bytes
-        {
-            // The queued application ran at an idle boundary and the resident
-            // engine cannot adopt the persisted ceiling in place. Reconciliation
-            // now owns the same stop-first demotion the endpoint performs for
-            // idle applies, instead of waiting forever for an acknowledgement
-            // that a resident worker can never produce.
-            tracing::info!(
-                restart_required_mlx_memory_ceiling_bytes,
-                "queued MLX memory reconciliation switched to demotion handling"
-            );
-            demote_restart_required_ceiling_and_finalize(
-                &application_state,
-                &candidate_resolved_config,
-                &candidate_config_bytes,
-            )
-            .await;
-            return;
-        }
         if worker_health_snapshot
             .pending_mlx_memory_ceiling_bytes
             .is_some()
@@ -88,63 +68,6 @@ pub(crate) async fn reconcile_queued_memory_config(
         .await;
         return;
     }
-}
-
-/// Runs the stop-first demotion for a restart-required persisted ceiling and
-/// finalizes the queued application under the transition locks. The demotion
-/// await completes before either lock is taken, matching the endpoint's idle
-/// apply ordering; then the configuration transition lock is acquired and the
-/// pending-generation lock inside it, and the outcome decides between
-/// committing the applied snapshots and retaining the rejected persisted
-/// configuration. Either way the queued generation is cleared so a later
-/// apply can start fresh.
-async fn demote_restart_required_ceiling_and_finalize(
-    application_state: &ApplicationState,
-    candidate_resolved_config: &ResolvedRuntimeConfig,
-    candidate_config_bytes: &[u8],
-) {
-    let demotion_outcome = match application_state.worker_control.as_ref() {
-        Some(worker_handle) => {
-            crate::config::queued_memory_demotion::demote_queued_restart_required_ceiling(
-                worker_handle,
-                candidate_resolved_config,
-            )
-            .await
-        }
-        None => Err(crate::WorkerControlError::MissingActiveWorker),
-    };
-    let _configuration_transition_guard =
-        application_state.configuration_transition_lock.lock().await;
-    let mut pending_generation = application_state
-        .pending_memory_config_generation
-        .lock()
-        .await;
-    match demotion_outcome {
-        Ok(()) => {
-            if let Some(runtime_config_resolver) =
-                application_state.runtime_config_resolver.as_ref()
-            {
-                commit_applied_config_snapshots(
-                    application_state,
-                    runtime_config_resolver,
-                    candidate_resolved_config,
-                    candidate_config_bytes,
-                );
-            }
-        }
-        Err(demotion_error) => {
-            tracing::error!(
-                error = %demotion_error,
-                "queued MLX memory demotion failed; the persisted setting stays intact for a retry"
-            );
-            if let Some(runtime_config_resolver) =
-                application_state.runtime_config_resolver.as_ref()
-            {
-                retain_rejected_persisted_config(application_state, runtime_config_resolver);
-            }
-        }
-    }
-    *pending_generation = None;
 }
 
 /// Finalizes the queued application once the worker is no longer pending:

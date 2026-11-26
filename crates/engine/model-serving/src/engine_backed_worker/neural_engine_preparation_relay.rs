@@ -16,7 +16,7 @@ use tokio::io::{AsyncRead, AsyncWrite};
 use super::support::{ModelFactory, WorkerRuntimeError};
 use super::{EngineBackedWorker, LoadedRuntime};
 use crate::model_generation_processor::ModelGenerationProcessor;
-use crate::{EngineLoadResult, ImageGenerationEngine, InferenceEngine};
+use crate::{ImageGenerationEngine, InferenceEngine};
 
 /// Often enough that a reused program, which takes about a tenth of a second, waits
 /// about as long again for the next one, and rare enough to cost an idle worker
@@ -62,7 +62,6 @@ where
         WriteTransport: AsyncWrite + Unpin,
     {
         loop {
-            self.send_unsent_load_status_events(event_writer).await?;
             if !self.is_neural_engine_preparation_running {
                 if std::mem::take(&mut self.has_request_run_since_settling) {
                     self.report_what_the_last_request_settled(event_writer)
@@ -78,34 +77,6 @@ where
                 }
             }
         }
-    }
-
-    /// Holds back a load's statuses (the Neural Engine's and the drafter's)
-    /// when the load happens during a generation, which has no event stream
-    /// to hand; the idle loop sends them.
-    pub(crate) fn hold_load_status_events(&mut self, engine_load_result: &EngineLoadResult) {
-        self.unsent_neural_engine_prefill_event = engine_load_result.neural_engine_prefill_event();
-        self.unsent_draft_model_event = engine_load_result.draft_model_event();
-    }
-
-    /// Sends the load statuses held back from a load made during a
-    /// generation (the Neural Engine's and the drafter's), now that the
-    /// worker is idle and the daemon reads them.
-    async fn send_unsent_load_status_events<WriteTransport>(
-        &mut self,
-        event_writer: &mut ProtocolWriter<WriteTransport>,
-    ) -> Result<(), WorkerRuntimeError>
-    where
-        WriteTransport: AsyncWrite + Unpin,
-    {
-        let unsent_events = [
-            self.unsent_neural_engine_prefill_event.take(),
-            self.unsent_draft_model_event.take(),
-        ];
-        for unsent_event in unsent_events.into_iter().flatten() {
-            event_writer.send_event(&unsent_event).await?;
-        }
-        Ok(())
     }
 
     /// A request can find that running programs failed or slow the model down, and they

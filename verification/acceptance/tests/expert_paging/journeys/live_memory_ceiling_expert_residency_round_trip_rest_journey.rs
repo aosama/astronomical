@@ -292,11 +292,10 @@ async fn execute_conversation_request(
 /// Applies a ceiling through the public endpoint and returns the effective
 /// ceiling the worker adopted.
 ///
-/// A raise that promotes the worker to the resident engine restarts it, and
-/// the resident engine reports its claimed wired-residency budget as the
-/// effective ceiling when that budget lands below the configured value, so
-/// callers must assert subsequent status against the applied value this
-/// returns rather than against the configured GB conversion.
+/// The worker reports its claimed wired-residency budget as the effective
+/// ceiling when that budget lands below the configured value, so callers
+/// must assert subsequent status against the applied value this returns
+/// rather than against the configured GB conversion.
 async fn apply_memory_ceiling(
     server_address: SocketAddr,
     maximum_mlx_memory_gb: u64,

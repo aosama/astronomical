@@ -35,11 +35,8 @@
 //! - `reclamation` — the checked arithmetic for replacing kept experts with
 //!   a complete set at load, and its error vocabulary
 //!   (`ExpertMemoryAdmissionError`).
-//! - `forward_admission` — the in-memory engine's typed answer for one
-//!   forward: run it, or say why the request moves to the streaming engine.
-//! - `placement` — the typed engine-placement lifecycle: startup selection,
-//!   request demotion with its typed cause, and the bounded re-promotion
-//!   gate back to the resident engine.
+//! - `placement` — the startup placement: whether the MLX memory limit holds
+//!   the whole model (`EnginePlacement`).
 //! - `model_memory` — the facts a memory governor is opened with: the limit
 //!   a model runs under and its measured geometry (`ModelMemoryFacts`), and
 //!   the snapshot the status breakdown is composed against.
@@ -69,7 +66,6 @@ pub mod admission;
 pub mod astro_expert_cache_model;
 pub mod ceiling;
 pub mod expert_paging;
-pub mod forward_admission;
 pub mod forward_pass_utilization;
 pub mod geometry_floor;
 pub mod ledger;
@@ -88,13 +84,7 @@ pub mod telemetry;
 pub mod utilization;
 pub mod vocabulary;
 
-pub use forward_admission::{
-    ResidentForwardAdmissionDecision, ResidentForwardAdmissionRejection, StreamingEngineRequirement,
-};
-pub use placement::{
-    EnginePlacement, ResidentPromotionBlocker, ResidentPromotionDecision,
-    should_promote_demoted_streaming_engine_to_resident,
-};
+pub use placement::EnginePlacement;
 pub use residency::observed_expert_memory_mode;
 
 #[cfg(test)]

@@ -38,10 +38,7 @@ where
         &mut self,
         worker_command: WorkerCommand,
         event_writer: &mut ProtocolWriter<WriteTransport>,
-    ) -> Result<
-        Option<ActiveWorkerRequest<Processor::RequestOutput, Processor::InferenceRequest>>,
-        WorkerRuntimeError,
-    >
+    ) -> Result<Option<ActiveWorkerRequest<Processor::RequestOutput>>, WorkerRuntimeError>
     where
         WriteTransport: AsyncWrite + Unpin,
     {

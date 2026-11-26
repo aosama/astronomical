@@ -37,7 +37,6 @@ impl WorkerEvent {
             Self::MlxMemorySample => "mlx_memory_sample",
             Self::MlxMemoryLimitChanged => "mlx_memory_limit_changed",
             Self::MlxMemoryLimitRejected => "mlx_memory_limit_rejected",
-            Self::MlxMemoryLimitRestartRequired => "mlx_memory_limit_restart_required",
             Self::ExpertMemoryModeChanged => "expert_memory_mode_changed",
             Self::NeuralEnginePrefillChanged => "neural_engine_prefill_changed",
             Self::DraftModelChanged => "draft_model_changed",
@@ -113,7 +112,6 @@ impl WorkerEvent {
             | Self::MlxMemorySample { .. }
             | Self::MlxMemoryLimitChanged { .. }
             | Self::MlxMemoryLimitRejected { .. }
-            | Self::MlxMemoryLimitRestartRequired { .. }
             | Self::ExpertMemoryModeChanged { .. }
             | Self::NeuralEnginePrefillChanged { .. }
             | Self::DraftModelChanged { .. }

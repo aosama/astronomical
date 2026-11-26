@@ -1,8 +1,8 @@
-//! The one summarization workload every engine-versus-ceiling cell serves, so
-//! any throughput difference between cells comes from the ceiling or the
-//! engine and never from the prompt.
+//! The one summarization workload every ceiling cell serves, so any
+//! throughput difference between cells comes from the ceiling and never
+//! from the prompt.
 
-use ipc_protocol::{WorkerDecodeAstroExpertCachePolicy, WorkerDiagnosticQwen3_5EngineOverride};
+use ipc_protocol::WorkerDecodeAstroExpertCachePolicy;
 
 use crate::performance_throughput::support::{self as throughput_support, ThroughputJourney};
 use crate::performance_throughput::throughput_record::ThroughputJourneyKind;
@@ -43,19 +43,11 @@ const TEMPERATURE_THOUSANDTHS: u16 = 1_000;
 pub(super) const BYTES_PER_GIGABYTE: u64 = 1 << 30;
 
 /// Serves the summarization workload once and verifies its measured shape.
-///
-/// Every cell carries the production probe kind, forced-engine ones
-/// included, so a forced cell's record must not be read as what the
-/// production engine choice delivers at that ceiling.
-pub(super) fn measure_summarization_throughput(
-    assigned_ceiling_gigabytes: u64,
-    engine_override: WorkerDiagnosticQwen3_5EngineOverride,
-) {
-    let mut journey = summarization_journey(
+pub(super) fn measure_summarization_throughput(assigned_ceiling_gigabytes: u64) {
+    let journey = summarization_journey(
         ThroughputJourneyKind::ResidentMemoryCeilingProbe,
         assigned_ceiling_gigabytes,
     );
-    journey.diagnostic_qwen3_5_engine_override = engine_override;
     let measured_throughput = throughput_support::run_journey_with_timeout(
         support::resident_sparse_moe_model_id(),
         journey,

@@ -35,7 +35,6 @@ use crate::worker::image_request::handle_generate_image_command;
 use crate::worker::loop_types::{
     ActiveWorkerRequest, WorkerLoopCommand, WorkerLoopRuntime, WorkerLoopState,
 };
-use crate::worker::memory::demotion::MemoryDemotionRestart;
 use crate::worker::memory::limit::take_generation_start_after_pending_memory_limit;
 use crate::worker::memory::limit_update_command::queue_or_apply_mlx_memory_limit_update;
 use crate::worker::model_unload_request::handle_model_unload_command;
@@ -277,10 +276,6 @@ pub(in crate::worker) async fn handle_worker_loop_command(
         }
         routed_command @ WorkerLoopCommand::UpdateMlxMemoryLimit { .. } => {
             queue_or_apply_mlx_memory_limit_update(runtime, routed_command).await;
-            WorkerLoopFlow::Continue
-        }
-        routed_command @ WorkerLoopCommand::RestartWorkerForMemoryDemotion { .. } => {
-            execute_memory_demotion_restart(runtime, routed_command).await;
             WorkerLoopFlow::Continue
         }
         routed_command @ WorkerLoopCommand::UpdateModelPolicyCatalog { .. } => {
@@ -530,58 +525,6 @@ async fn execute_worker_replacement(
         .idle_model_unload
         .record_activity(tokio::time::Instant::now());
     let _send_outcome = restart_sender.send(replacement_result);
-}
-
-/// Runs a memory-demotion restart and reports its result. Mirrors the inlined
-/// `RestartWorkerForMemoryDemotion` arm; the busy/unready guard is the same
-/// `reject_worker_replacement_request` the plain restart arm uses.
-async fn execute_memory_demotion_restart(
-    runtime: &mut WorkerLoopRuntime,
-    routed_command: WorkerLoopCommand,
-) {
-    // Stop-first replacement is invalid while a generation
-    // is active; the memory endpoint holds admission and
-    // waits for idle before sending this command.
-    let WorkerLoopCommand::RestartWorkerForMemoryDemotion {
-        worker_executable_path,
-        model_policy_catalog: replacement_model_policy_catalog,
-        worker_startup_configuration,
-        expected_configuration_generation,
-        demotion_sender,
-    } = routed_command
-    else {
-        return;
-    };
-    if let Some(control_error) =
-        reject_worker_replacement_request(runtime.active_generation.is_some(), runtime.is_ready)
-    {
-        let _send_outcome = demotion_sender.send(Err(control_error));
-        return;
-    }
-    let demotion_result = MemoryDemotionRestart::new(
-        worker_executable_path,
-        replacement_model_policy_catalog,
-        worker_startup_configuration,
-        expected_configuration_generation,
-        runtime.model_load_timeout,
-    )
-    .execute(
-        &mut runtime.worker_process,
-        &mut runtime.model_policy_catalog,
-        &runtime.health_snapshot,
-        &mut runtime.is_ready,
-        &mut runtime.model_load_deadline,
-        &mut runtime.active_generation,
-        &mut runtime.performance_log,
-        &mut runtime.completion_log,
-    )
-    .await;
-    // The demotion has just reloaded the model on purpose; restarting the idle
-    // clock keeps the next idle check from unloading it straight away.
-    runtime
-        .idle_model_unload
-        .record_activity(tokio::time::Instant::now());
-    let _send_outcome = demotion_sender.send(demotion_result);
 }
 
 /// Replaces the active model-policy catalog and reports success. Mirrors the

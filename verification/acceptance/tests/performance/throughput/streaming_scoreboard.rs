@@ -193,8 +193,6 @@ fn scoreboard_journey(limit_bytes: u64) -> ThroughputJourney {
         prompt_chunking: PromptChunking::ProductDefault,
         journey_timeout: SCOREBOARD_SERVING_BUDGET,
         model_directory: None,
-        diagnostic_qwen3_5_engine_override:
-            ipc_protocol::WorkerDiagnosticQwen3_5EngineOverride::Automatic,
     }
 }
 

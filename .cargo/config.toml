@@ -1219,8 +1219,8 @@ test-neural-engine-real-model = "test --release --no-fail-fast -p astronomical-a
 # runs only what is not #[ignore]d.
 test-neural-engine = "test --no-fail-fast -p neural-engine --all-targets"
 
-# Engine-versus-memory-ceiling isolation on the resident 35B sparse-MoE
-# model; narrow with --filter, add --configuration PATH with
+# Throughput against the MLX memory ceiling on the 35B sparse-MoE model
+# (startup at 24, 22, 21, 20 and 19 GB); narrow with --filter, add --configuration PATH with
 # {"diagnostics": true} for performance attribution.
 test-engine-versus-memory-ceiling = "run -p xtask -- test-run --package astronomical-acceptance --features performance_throughput --test performance_throughput --release --filter engine_versus_memory_ceiling --ignored"
 

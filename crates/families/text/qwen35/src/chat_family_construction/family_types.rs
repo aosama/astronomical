@@ -4,10 +4,7 @@
 use std::path::PathBuf;
 
 use config::AstroSsdPromptCacheConfig;
-use ipc_protocol::{
-    WorkerAutoregressiveModelConfiguration, WorkerDecodeAstroExpertCachePolicy,
-    WorkerDiagnosticQwen3_5EngineOverride,
-};
+use ipc_protocol::{WorkerAutoregressiveModelConfiguration, WorkerDecodeAstroExpertCachePolicy};
 
 use crate::{
     EnginePlacement, PrismHadamardQwen35ServingSettings, Qwen3_5GenerationProcessor,
@@ -32,27 +29,13 @@ pub struct ChatFamilySettings {
     pub astro_ssd_prompt_cache_enabled: bool,
 }
 
-/// Why a chat runtime is being built.
-#[derive(Clone, Copy)]
-pub enum ChatEngineSelection {
-    /// Startup selection from the complete-residency fit. A diagnostic
-    /// journey may force the engine family; the computed placement is kept
-    /// either way so the worker lifecycle stays identical to production.
-    Automatic(WorkerDiagnosticQwen3_5EngineOverride),
-    /// The worker swaps a resident engine for streaming after a lowered
-    /// ceiling no longer fits it.
-    StreamingRetry,
-    /// The worker swaps a streaming engine for resident after a raised
-    /// ceiling fits every expert again.
-    ResidentPromotion,
-}
-
 /// A chat family's unloaded runtime: its processor, its engine, and the
-/// startup placement (`None` for a runtime built for a swap).
+/// startup placement, which says whether the MLX memory limit holds the
+/// whole model.
 pub struct ChatRuntimeParts {
     pub generation_processor: Qwen3_5GenerationProcessor,
     pub inference_engine: ModelFamilyInferenceEngine,
-    pub engine_placement: Option<EnginePlacement>,
+    pub engine_placement: EnginePlacement,
 }
 
 /// What a chat family supplies so the worker can build it by kind.
@@ -68,11 +51,11 @@ pub trait ChatFamilyConstruction {
         chat_family_settings: ChatFamilySettings,
         model_directory_path: PathBuf,
         model_configuration: WorkerAutoregressiveModelConfiguration,
-        engine_selection: ChatEngineSelection,
     ) -> Result<ChatRuntimeParts, String>;
 }
 
-/// The Qwen 3.5 chat family, served resident or streaming by its fit.
+/// The Qwen 3.5 chat family, served by the one streaming engine, which
+/// keeps in memory what the MLX memory limit holds and streams the rest.
 pub struct Qwen3_5ChatFamily;
 
 impl ChatFamilyConstruction for Qwen3_5ChatFamily {
@@ -82,13 +65,11 @@ impl ChatFamilyConstruction for Qwen3_5ChatFamily {
         chat_family_settings: ChatFamilySettings,
         model_directory_path: PathBuf,
         model_configuration: WorkerAutoregressiveModelConfiguration,
-        engine_selection: ChatEngineSelection,
     ) -> Result<ChatRuntimeParts, String> {
         initialize_qwen3_5_model(
             model_directory_path,
             chat_family_settings,
             model_configuration,
-            engine_selection,
         )
         .map_err(|startup_error| startup_error.public_model_load_failure_reason())
     }
@@ -96,8 +77,7 @@ impl ChatFamilyConstruction for Qwen3_5ChatFamily {
 
 /// The folded-ternary Prism Hadamard chat family. The folded pack is dense,
 /// so complete residency is not a sparse-expert concern and the placement
-/// records that the resident engine fits by construction; it has no
-/// streaming engine to swap to or from.
+/// records that the whole model fits by construction.
 pub struct PrismHadamardQwen35ChatFamily;
 
 impl ChatFamilyConstruction for PrismHadamardQwen35ChatFamily {
@@ -107,11 +87,7 @@ impl ChatFamilyConstruction for PrismHadamardQwen35ChatFamily {
         chat_family_settings: ChatFamilySettings,
         model_directory_path: PathBuf,
         model_configuration: WorkerAutoregressiveModelConfiguration,
-        engine_selection: ChatEngineSelection,
     ) -> Result<ChatRuntimeParts, String> {
-        if !matches!(engine_selection, ChatEngineSelection::Automatic(_)) {
-            return Err(PRISM_HADAMARD_HAS_NO_ENGINE_SWAP.to_owned());
-        }
         let astro_ssd_prompt_cache_enabled = chat_family_settings.astro_ssd_prompt_cache_enabled;
         let (generation_processor, prism_engine) =
             initialize_prism_hadamard_qwen35_model_with_serving_settings(
@@ -142,11 +118,7 @@ impl ChatFamilyConstruction for PrismHadamardQwen35ChatFamily {
         Ok(ChatRuntimeParts {
             generation_processor,
             inference_engine: boxed_chat_engine(prism_engine),
-            engine_placement: Some(EnginePlacement::CompleteResidencyFits),
+            engine_placement: EnginePlacement::CompleteResidencyFits,
         })
     }
 }
-
-/// Why a swap is refused for a folded ternary model, which has one engine.
-pub const PRISM_HADAMARD_HAS_NO_ENGINE_SWAP: &str =
-    "a folded ternary model has no streaming or resident engine to swap to";

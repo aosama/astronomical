@@ -310,8 +310,6 @@ fn cell_journey(configured_maximum_mlx_memory_bytes: u64) -> ThroughputJourney {
         prompt_chunking: throughput_support::PromptChunking::MeasurementLane,
         journey_timeout: MEMORY_CELL_SERVING_BUDGET,
         model_directory: None,
-        diagnostic_qwen3_5_engine_override:
-            ipc_protocol::WorkerDiagnosticQwen3_5EngineOverride::Automatic,
     }
 }
 

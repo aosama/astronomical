@@ -1,7 +1,5 @@
 use ipc_protocol::{DraftModelStatus, ExpertMemoryMode, NeuralEnginePrefillStatus};
 
-use crate::StreamingStartupResidencyFacts;
-
 /// Immutable readiness metadata captured after all engine load transitions.
 ///
 /// The worker publishes this snapshot with `Ready` or `ModelSwapped`; callers do
@@ -10,7 +8,6 @@ use crate::StreamingStartupResidencyFacts;
 pub struct EngineLoadResult {
     expert_memory_mode: Option<ExpertMemoryMode>,
     minimum_mlx_memory_ceiling_bytes: u64,
-    startup_residency_facts: Option<StreamingStartupResidencyFacts>,
     neural_engine_prefill_status: NeuralEnginePrefillStatus,
     /// `None` for an engine that never looks for a drafter, so it announces nothing.
     draft_model_status: Option<DraftModelStatus>,
@@ -22,7 +19,6 @@ impl EngineLoadResult {
         Self {
             expert_memory_mode: None,
             minimum_mlx_memory_ceiling_bytes: 1,
-            startup_residency_facts: None,
             neural_engine_prefill_status: NeuralEnginePrefillStatus::Off,
             draft_model_status: None,
         }
@@ -45,20 +41,6 @@ impl EngineLoadResult {
         minimum_mlx_memory_ceiling_bytes: u64,
     ) -> Self {
         self.minimum_mlx_memory_ceiling_bytes = minimum_mlx_memory_ceiling_bytes;
-        self
-    }
-
-    /// Sets the startup residency selection facts of a loaded streaming model.
-    ///
-    /// Only the SSD-streaming engine records these: the re-promotion gate
-    /// replays its arithmetic against a later ceiling, so the worker must
-    /// keep the facts the streaming engine captured at load.
-    #[must_use]
-    pub const fn with_startup_residency_facts(
-        mut self,
-        startup_residency_facts: Option<StreamingStartupResidencyFacts>,
-    ) -> Self {
-        self.startup_residency_facts = startup_residency_facts;
         self
     }
 
@@ -134,12 +116,6 @@ impl EngineLoadResult {
     #[must_use]
     pub const fn minimum_mlx_memory_ceiling_bytes(&self) -> u64 {
         self.minimum_mlx_memory_ceiling_bytes
-    }
-
-    /// Returns the startup residency facts of a loaded streaming model.
-    #[must_use]
-    pub const fn startup_residency_facts(&self) -> Option<StreamingStartupResidencyFacts> {
-        self.startup_residency_facts
     }
 }
 

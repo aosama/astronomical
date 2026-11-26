@@ -7,7 +7,7 @@ use ipc_protocol::{
 use tokio::io::AsyncWrite;
 
 use super::load_announcement::announce_load_started;
-use super::support::{ModelFactory, ModelFactoryRuntime, SelectedModel, WorkerRuntimeError};
+use super::support::{ModelFactory, ModelFactoryRuntime, WorkerRuntimeError};
 use super::{EngineBackedWorker, LoadedModel, LoadedRuntime};
 use crate::model_generation_processor::ModelGenerationProcessor;
 use crate::{EnginePlacement, ImageGenerationEngine, InferenceEngine};
@@ -110,7 +110,6 @@ pub(super) struct LoadedReplacement<
     pub(super) minimum_mlx_memory_ceiling_bytes: u64,
     pub(super) runtime_configuration: ipc_protocol::WorkerLoadedModelRuntimeConfiguration,
     pub(super) engine_placement: Option<EnginePlacement>,
-    pub(super) startup_residency_facts: Option<crate::StreamingStartupResidencyFacts>,
     /// The statuses a load announces last; empty for runtimes that report
     /// neither a Neural Engine nor a drafter.
     pub(super) load_status_events: LoadStatusEvents,
@@ -194,20 +193,6 @@ where
                     "model factory returned a runtime for the wrong modality".to_owned(),
             });
         }
-        if matches!(
-            factory_runtime,
-            ModelFactoryRuntime::Autoregressive {
-                engine_placement: None,
-                ..
-            }
-        ) {
-            return Err(WorkerRuntimeError::ModelSwapFailed {
-                model_load_failure_reason:
-                    "model factory returned a swap-only runtime without a startup engine placement"
-                        .to_owned(),
-            });
-        }
-
         // Creation and modality validation preserve the prior runtime on a rejected selection.
         // Once validated, release it before load so large model payloads never overlap.
         drop(self.loaded_runtime.take());
@@ -217,21 +202,15 @@ where
             minimum_mlx_memory_ceiling_bytes,
             runtime_configuration,
             engine_placement,
-            startup_residency_facts,
             load_status_events,
         } = self
             .load_replacement_runtime(factory_runtime, &model_configuration, event_writer)
             .await?;
 
         self.loaded_runtime = Some(replacement_runtime);
-        self.selected_model = Some(SelectedModel {
-            model_directory: model_directory.to_owned(),
-            model_configuration: model_configuration.clone(),
-        });
         self.minimum_mlx_memory_ceiling_bytes = minimum_mlx_memory_ceiling_bytes;
         let floor_raise_event = self.serve_loaded_model_at_its_floor_when_allowed().await;
         self.engine_placement = engine_placement;
-        self.startup_residency_facts = startup_residency_facts;
         tracing::info!(
             model_id = model_configuration.model_id(),
             engine_placement = self.engine_placement.map_or(
@@ -362,7 +341,7 @@ where
         &self,
         processor: Processor,
         engine: Engine,
-        engine_placement: Option<EnginePlacement>,
+        engine_placement: EnginePlacement,
         model_configuration: &WorkerModelConfiguration,
         event_writer: &mut ProtocolWriter<WriteTransport>,
     ) -> Result<
@@ -398,8 +377,7 @@ where
             model_swapped_event: event,
             minimum_mlx_memory_ceiling_bytes: minimum,
             runtime_configuration,
-            engine_placement,
-            startup_residency_facts: engine_load_result.startup_residency_facts(),
+            engine_placement: Some(engine_placement),
             load_status_events: LoadStatusEvents {
                 neural_engine_prefill_event: engine_load_result.neural_engine_prefill_event(),
                 draft_model_event: engine_load_result.draft_model_event(),
@@ -452,7 +430,6 @@ where
             runtime_configuration: model_configuration.runtime_configuration(),
             // No autoregressive engine is loaded, so there is no placement.
             engine_placement: None,
-            startup_residency_facts: None,
             load_status_events: LoadStatusEvents::default(),
         })
     }
@@ -502,7 +479,6 @@ where
             runtime_configuration: model_configuration.runtime_configuration(),
             // No autoregressive engine is loaded, so there is no placement.
             engine_placement: None,
-            startup_residency_facts: None,
             load_status_events: LoadStatusEvents::default(),
         })
     }
@@ -554,7 +530,6 @@ where
             runtime_configuration: model_configuration.runtime_configuration(),
             // No autoregressive engine is loaded, so there is no placement.
             engine_placement: None,
-            startup_residency_facts: None,
             load_status_events: LoadStatusEvents::default(),
         })
     }

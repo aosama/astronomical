@@ -19,7 +19,7 @@ fn should_keep_a_dense_model_resident_when_its_weights_fit_under_the_limit() {
     .expect("dense placement should decide");
 
     assert_eq!(engine_placement, EnginePlacement::CompleteResidencyFits);
-    assert!(engine_placement.runs_resident_engine());
+    assert!(engine_placement.holds_whole_model());
 }
 
 #[test]
@@ -30,7 +30,7 @@ fn should_keep_a_dense_model_resident_when_its_weights_equal_the_limit() {
     )
     .expect("dense placement should decide");
 
-    assert!(engine_placement.runs_resident_engine());
+    assert!(engine_placement.holds_whole_model());
 }
 
 #[test]
@@ -45,7 +45,7 @@ fn should_stream_a_dense_model_whose_weights_exceed_the_limit_by_one_byte() {
         engine_placement,
         EnginePlacement::CompleteResidencyDoesNotFit { shortfall_bytes: 1 }
     );
-    assert!(!engine_placement.runs_resident_engine());
+    assert!(!engine_placement.holds_whole_model());
 }
 
 #[test]
@@ -82,5 +82,5 @@ fn should_keep_empty_dense_weights_resident_under_a_zero_limit() {
     let engine_placement =
         place_dense_weights_under_ceiling(0, 0).expect("dense placement should decide");
 
-    assert!(engine_placement.runs_resident_engine());
+    assert!(engine_placement.holds_whole_model());
 }

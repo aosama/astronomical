@@ -11,11 +11,9 @@ use crate::memory::telemetry::MlxMemoryTelemetry;
 use crate::model_generation_processor::{ModelGenerationOutputError, ModelGenerationProcessor};
 use crate::{
     ExpertMemoryMode, GeneratedToken, ImageGenerationEngine, InferenceEngine, InferenceEngineError,
-    StreamingEngineRequirement,
 };
 
 use super::{EngineBackedWorker, LoadedRuntime};
-use crate::inference_engine::contract::EngineGenerationStart;
 
 /// The outcome of translating one decoded token: either a usable translation
 /// split into public outputs and model-visible feedback tokens, or the
@@ -32,8 +30,8 @@ enum DecodedTokenTranslation {
 /// Increments the generation and reasoning token counters after one decoded
 /// token. Overflow on either counter is a generation failure, with the same
 /// reason strings the inline code carried.
-fn increment_decode_token_counters<RequestOutput, RetryRequest>(
-    active_generation: &mut ActiveEngineGeneration<RequestOutput, RetryRequest>,
+fn increment_decode_token_counters<RequestOutput>(
+    active_generation: &mut ActiveEngineGeneration<RequestOutput>,
     is_reasoning_token: bool,
 ) -> Result<(), WorkerRuntimeError> {
     if active_generation.generation_started_at.is_none() {
@@ -85,15 +83,9 @@ where
 {
     pub(crate) async fn advance_generation<WriteTransport>(
         &mut self,
-        active_generation: ActiveEngineGeneration<
-            Processor::RequestOutput,
-            Processor::InferenceRequest,
-        >,
+        active_generation: ActiveEngineGeneration<Processor::RequestOutput>,
         event_writer: &mut ProtocolWriter<WriteTransport>,
-    ) -> Result<
-        Option<ActiveEngineGeneration<Processor::RequestOutput, Processor::InferenceRequest>>,
-        WorkerRuntimeError,
-    >
+    ) -> Result<Option<ActiveEngineGeneration<Processor::RequestOutput>>, WorkerRuntimeError>
     where
         WriteTransport: AsyncWrite + Unpin,
     {
@@ -115,26 +107,6 @@ where
         let generated_token = match decode_result {
             Ok(generated_token) => generated_token,
             Err(InferenceEngineError::InvalidRequest { reason }) => {
-                Self::send_invalid_request_failure(request_id, reason, event_writer).await?;
-                return Ok(None);
-            }
-            Err(InferenceEngineError::ResidentForkRequired { cause, reason })
-                if active_generation.can_retry_streaming() =>
-            {
-                return self
-                    .retry_generation_on_streaming(
-                        active_generation,
-                        request_id,
-                        cause,
-                        reason,
-                        event_writer,
-                    )
-                    .await;
-            }
-            // The request already used its one streaming retry, so a second
-            // fork requirement is answered as an invalid request; the typed
-            // cause stays in the demotion record from the first fork.
-            Err(InferenceEngineError::ResidentForkRequired { reason, .. }) => {
                 Self::send_invalid_request_failure(request_id, reason, event_writer).await?;
                 return Ok(None);
             }
@@ -172,17 +144,11 @@ where
     /// carried as its final `match`.
     async fn advance_generated_token<WriteTransport>(
         &mut self,
-        active_generation: ActiveEngineGeneration<
-            Processor::RequestOutput,
-            Processor::InferenceRequest,
-        >,
+        active_generation: ActiveEngineGeneration<Processor::RequestOutput>,
         generated_token: GeneratedToken,
         request_id: RequestId,
         event_writer: &mut ProtocolWriter<WriteTransport>,
-    ) -> Result<
-        Option<ActiveEngineGeneration<Processor::RequestOutput, Processor::InferenceRequest>>,
-        WorkerRuntimeError,
-    >
+    ) -> Result<Option<ActiveEngineGeneration<Processor::RequestOutput>>, WorkerRuntimeError>
     where
         WriteTransport: AsyncWrite + Unpin,
     {
@@ -275,63 +241,6 @@ where
         }
     }
 
-    /// Handles a resident fork requirement while the request still owns its
-    /// one streaming retry. Mirrors the inlined guarded arm: takes the retry
-    /// request (an invalid request if it is somehow gone), marks the attempt,
-    /// retries on the streaming engine, and applies the demoted start or
-    /// reports the retry failure.
-    async fn retry_generation_on_streaming<WriteTransport>(
-        &mut self,
-        mut active_generation: ActiveEngineGeneration<
-            Processor::RequestOutput,
-            Processor::InferenceRequest,
-        >,
-        request_id: RequestId,
-        cause: StreamingEngineRequirement,
-        reason: String,
-        event_writer: &mut ProtocolWriter<WriteTransport>,
-    ) -> Result<
-        Option<ActiveEngineGeneration<Processor::RequestOutput, Processor::InferenceRequest>>,
-        WorkerRuntimeError,
-    >
-    where
-        WriteTransport: AsyncWrite + Unpin,
-    {
-        let Some(streaming_retry_request) = active_generation.streaming_retry_request.take() else {
-            Self::send_invalid_request_failure(request_id, reason, event_writer).await?;
-            return Ok(None);
-        };
-        active_generation.streaming_retry_attempted = true;
-        let demoted_total_context_token_count = active_generation.total_context_token_count();
-        match self
-            .retry_resident_generation_on_streaming(
-                request_id,
-                streaming_retry_request,
-                cause,
-                demoted_total_context_token_count,
-                reason,
-            )
-            .await
-        {
-            Ok(generation_start) => {
-                self.apply_streaming_retry_start(
-                    &mut active_generation,
-                    generation_start,
-                    event_writer,
-                )
-                .await?;
-                Ok(Some(active_generation))
-            }
-            Err(InferenceEngineError::InvalidRequest { reason }) => {
-                Self::send_invalid_request_failure(request_id, reason, event_writer).await?;
-                Ok(None)
-            }
-            Err(retry_error) => {
-                fatal::report_fatal_engine_error(request_id, retry_error, event_writer).await
-            }
-        }
-    }
-
     /// Advances one decoded token: records telemetry events, increments the
     /// counters, translates the token through the processor, emits the public
     /// outputs, injects any model feedback tokens, and finishes on end of
@@ -339,10 +248,7 @@ where
     #[allow(clippy::too_many_arguments)]
     async fn advance_decoded_token<WriteTransport>(
         &mut self,
-        mut active_generation: ActiveEngineGeneration<
-            Processor::RequestOutput,
-            Processor::InferenceRequest,
-        >,
+        mut active_generation: ActiveEngineGeneration<Processor::RequestOutput>,
         generated_token_id: u32,
         is_reasoning_token: bool,
         expert_memory_mode: Option<ExpertMemoryMode>,
@@ -351,14 +257,10 @@ where
         generation_finalization: Option<Box<crate::GenerationFinalization>>,
         request_id: RequestId,
         event_writer: &mut ProtocolWriter<WriteTransport>,
-    ) -> Result<
-        Option<ActiveEngineGeneration<Processor::RequestOutput, Processor::InferenceRequest>>,
-        WorkerRuntimeError,
-    >
+    ) -> Result<Option<ActiveEngineGeneration<Processor::RequestOutput>>, WorkerRuntimeError>
     where
         WriteTransport: AsyncWrite + Unpin,
     {
-        active_generation.streaming_retry_request = None;
         self.note_decode_step_telemetry(
             &mut active_generation,
             first_decode_forward_elapsed_millis,
@@ -433,10 +335,7 @@ where
     #[allow(clippy::too_many_arguments)]
     async fn note_decode_step_telemetry<WriteTransport>(
         &mut self,
-        active_generation: &mut ActiveEngineGeneration<
-            Processor::RequestOutput,
-            Processor::InferenceRequest,
-        >,
+        active_generation: &mut ActiveEngineGeneration<Processor::RequestOutput>,
         first_decode_forward_elapsed_millis: Option<u64>,
         generation_finalization: Option<Box<crate::GenerationFinalization>>,
         expert_memory_mode: Option<ExpertMemoryMode>,
@@ -487,10 +386,7 @@ where
     /// Mirrors the translation block of the inlined `TokenId` arm.
     async fn translate_decoded_token<WriteTransport>(
         &mut self,
-        active_generation: &mut ActiveEngineGeneration<
-            Processor::RequestOutput,
-            Processor::InferenceRequest,
-        >,
+        active_generation: &mut ActiveEngineGeneration<Processor::RequestOutput>,
         generated_token_id: u32,
         event_writer: &mut ProtocolWriter<WriteTransport>,
     ) -> Result<DecodedTokenTranslation, WorkerRuntimeError>
@@ -550,10 +446,7 @@ where
     /// `Ok(None)` means the generation is over (rejected or fatally reported).
     async fn inject_model_feedback_tokens<WriteTransport>(
         &mut self,
-        active_generation: &mut ActiveEngineGeneration<
-            Processor::RequestOutput,
-            Processor::InferenceRequest,
-        >,
+        active_generation: &mut ActiveEngineGeneration<Processor::RequestOutput>,
         request_id: RequestId,
         model_feedback_token_ids: Vec<u32>,
         event_writer: &mut ProtocolWriter<WriteTransport>,
@@ -580,58 +473,5 @@ where
                 fatal::report_fatal_engine_error(request_id, engine_error, event_writer).await
             }
         }
-    }
-
-    async fn apply_streaming_retry_start<WriteTransport>(
-        &self,
-        active_generation: &mut ActiveEngineGeneration<
-            Processor::RequestOutput,
-            Processor::InferenceRequest,
-        >,
-        generation_start: EngineGenerationStart,
-        event_writer: &mut ProtocolWriter<WriteTransport>,
-    ) -> Result<(), WorkerRuntimeError>
-    where
-        WriteTransport: AsyncWrite + Unpin,
-    {
-        self.emit_astro_ssd_prompt_cache_stats(event_writer).await?;
-        active_generation.astro_ssd_prompt_cache_restored_token_count =
-            generation_start.astro_ssd_prompt_cache_restored_token_count();
-        active_generation.required_prompt_processing_token_count = active_generation
-            .prompt_token_count
-            .saturating_sub(generation_start.restored_prompt_prefix_token_count());
-        active_generation.prompt_work_reuse = ipc_protocol::WorkerPromptWorkReuse::default();
-        active_generation.prefill_processed_tokens = 0;
-        active_generation.prefill_elapsed_millis = 0;
-        active_generation.generation_started_at = None;
-        active_generation.last_reported_expert_memory_mode = generation_start.expert_memory_mode();
-        active_generation.astro_ssd_prompt_cache_diagnostics = generation_start
-            .astro_ssd_prompt_cache_diagnostics()
-            .cloned();
-
-        if let Some(expert_memory_mode) = generation_start.expert_memory_mode() {
-            event_writer
-                .send_event(&WorkerEvent::ExpertMemoryModeChanged { expert_memory_mode })
-                .await?;
-        }
-        if active_generation.required_prompt_processing_token_count > 1
-            && let Some(prompt_processing_phase) = generation_start.prompt_processing_phase()
-        {
-            event_writer
-                .send_event(&WorkerEvent::PrefillProgress {
-                    request_id: active_generation.request_id,
-                    prompt_processing_phase,
-                    processed_tokens: 0,
-                    total_tokens: active_generation.required_prompt_processing_token_count,
-                    elapsed_millis: 0,
-                    forward_prefill_chunk_elapsed_millis: None,
-                    completed_prefill_chunk_tokens: None,
-                    mlx_memory_snapshot: None,
-                    expert_residency: None,
-                    prompt_layer_progress: None,
-                })
-                .await?;
-        }
-        Ok(())
     }
 }

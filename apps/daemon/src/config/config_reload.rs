@@ -258,8 +258,6 @@ impl ResolvedRuntimeConfig {
             configured_maximum_mlx_memory_bytes: self.maximum_mlx_memory_bytes,
             performance_attribution_enabled: self.performance_attribution_enabled,
             decode_astro_expert_cache_policy: WorkerDecodeAstroExpertCachePolicy::Baseline,
-            diagnostic_qwen3_5_engine_override:
-                ipc_protocol::WorkerDiagnosticQwen3_5EngineOverride::Automatic,
             logging_directory: self.logging_config.directory().to_path_buf(),
             logging_level: match self.logging_config.level() {
                 LogLevel::Error => WorkerLogLevel::Error,

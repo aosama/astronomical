@@ -1,47 +1,24 @@
-//! The typed engine-placement lifecycle for one loaded model worker.
+//! Whether the limit a model was loaded under holds it whole.
 //!
-//! Placement is decided once at load by startup engine selection and then
-//! only transitions through typed events: a request admission may demote the
-//! complete-residency engine to the SSD-streaming engine, and a bounded
-//! re-promotion gate may return a demoted worker to the resident engine once
-//! the pressure that caused the demotion has resolved. Free-form strings
-//! cannot express these states, so every transition is a typed variant an
-//! exhaustive match must acknowledge.
+//! Decided once at load by startup selection. One engine serves either way;
+//! the placement only says how it started, for the status surface and logs.
 
 use crate::admission::complete_residency::CompleteResidencyDecision;
-use crate::forward_admission::StreamingEngineRequirement;
 use crate::reclamation::ExpertMemoryAdmissionError;
 
 /// Why the loaded engine holds its current placement.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum EnginePlacement {
-    /// Startup selection admitted complete expert residency under the
-    /// startup ceiling; the resident engine owns every expert.
+    /// The startup limit holds the whole model: every expert of a sparse
+    /// model, or every text weight of a dense one.
     CompleteResidencyFits,
-    /// Startup selection could not admit complete residency (every expert of
-    /// a sparse model, or every text weight of a dense one); the streaming
-    /// engine serves the model, paging experts from the SSD.
+    /// The startup limit does not hold the whole model, so part of it is
+    /// read from the SSD as it is needed.
     CompleteResidencyDoesNotFit {
         /// Bytes short of complete residency plus its required headroom at
         /// the startup ceiling.
         shortfall_bytes: u64,
     },
-    /// A request's admission demoted an already-loaded resident engine to
-    /// the streaming engine.
-    DemotedForRequest {
-        /// The typed admission cause that forced the demotion.
-        cause: StreamingEngineRequirement,
-        /// Total context token count (prompt plus maximum output) of the
-        /// request whose admission demoted the engine. The re-promotion
-        /// gate compares every later request against this count.
-        demoted_total_context_token_count: usize,
-        /// The effective active-memory ceiling the demoting request was
-        /// refused under: a raise above it frees room the gate can count.
-        effective_ceiling_bytes_at_demotion: u64,
-    },
-    /// A demoted worker swapped back to the resident engine after the
-    /// memory pressure that caused the demotion resolved.
-    PromotedAfterPressureResolved,
 }
 
 impl EnginePlacement {
@@ -65,54 +42,10 @@ impl EnginePlacement {
         }
     }
 
-    /// Returns whether this placement runs the complete-residency resident
-    /// engine rather than the SSD-streaming engine.
+    /// Whether the startup limit holds the whole model.
     #[must_use]
-    pub const fn runs_resident_engine(self) -> bool {
-        matches!(
-            self,
-            Self::CompleteResidencyFits | Self::PromotedAfterPressureResolved
-        )
-    }
-
-    /// Returns whether a request demoted this worker to the streaming engine.
-    #[must_use]
-    pub const fn is_demoted_for_request(self) -> bool {
-        matches!(self, Self::DemotedForRequest { .. })
-    }
-
-    /// Returns the typed cause carried by a request demotion, if any.
-    #[must_use]
-    pub const fn demotion_cause(self) -> Option<StreamingEngineRequirement> {
-        match self {
-            Self::DemotedForRequest { cause, .. } => Some(cause),
-            _ => None,
-        }
-    }
-
-    /// Returns the total context token count recorded at the request
-    /// demotion, if any.
-    #[must_use]
-    pub const fn demoted_total_context_token_count(self) -> Option<usize> {
-        match self {
-            Self::DemotedForRequest {
-                demoted_total_context_token_count,
-                ..
-            } => Some(demoted_total_context_token_count),
-            _ => None,
-        }
-    }
-
-    /// Returns the effective ceiling recorded at the request demotion, if any.
-    #[must_use]
-    pub const fn effective_ceiling_bytes_at_demotion(self) -> Option<u64> {
-        match self {
-            Self::DemotedForRequest {
-                effective_ceiling_bytes_at_demotion,
-                ..
-            } => Some(effective_ceiling_bytes_at_demotion),
-            _ => None,
-        }
+    pub const fn holds_whole_model(self) -> bool {
+        matches!(self, Self::CompleteResidencyFits)
     }
 
     /// Returns the established placement label for worker lifecycle logs.
@@ -121,8 +54,6 @@ impl EnginePlacement {
         match self {
             Self::CompleteResidencyFits => "complete_residency_fits",
             Self::CompleteResidencyDoesNotFit { .. } => "complete_residency_does_not_fit",
-            Self::DemotedForRequest { .. } => "demoted_for_request",
-            Self::PromotedAfterPressureResolved => "promoted_after_pressure_resolved",
         }
     }
 }

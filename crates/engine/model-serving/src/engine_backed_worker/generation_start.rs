@@ -41,10 +41,7 @@ where
         &mut self,
         generation_command: ipc_protocol::ChatGenerationCommand,
         event_writer: &mut ProtocolWriter<WriteTransport>,
-    ) -> Result<
-        Option<ActiveEngineGeneration<Processor::RequestOutput, Processor::InferenceRequest>>,
-        WorkerRuntimeError,
-    >
+    ) -> Result<Option<ActiveEngineGeneration<Processor::RequestOutput>>, WorkerRuntimeError>
     where
         WriteTransport: AsyncWrite + Unpin,
     {
@@ -59,24 +56,6 @@ where
             prepared_generation.inference_request.prompt_token_count(),
         )?;
         let inference_request = prepared_generation.inference_request;
-        let mut streaming_retry_request = inference_request.clone_for_streaming_retry();
-        let mut streaming_retry_attempted = false;
-        // The bounded re-promotion gate runs before generation starts, so a
-        // demoted worker returns to the resident engine at most once per
-        // request and never mid-generation upward. The strict
-        // total-context inequality inside the gate is the anti-thrash
-        // hysteresis; the worker-level bound of one swap per direction per
-        // request is completed by `streaming_retry_attempted` below.
-        let incoming_total_context_token_count = super::support::request_total_context_token_count(
-            prompt_token_count,
-            generation_command.settings.max_output_tokens,
-        );
-        self.maybe_promote_demoted_engine_before_generation(
-            request_id,
-            incoming_total_context_token_count,
-            event_writer,
-        )
-        .await?;
         let generation_start_result = {
             let Some(LoadedRuntime::Autoregressive(loaded_model)) = self.loaded_runtime.as_mut()
             else {
@@ -104,36 +83,6 @@ where
                 Self::send_invalid_request_failure(request_id, reason, event_writer).await?;
                 return Ok(None);
             }
-            Err(InferenceEngineError::ResidentForkRequired { cause, reason }) => {
-                let retried_generation_start = match self
-                    .retry_on_streaming_after_resident_fork(
-                        request_id,
-                        &mut streaming_retry_request,
-                        cause,
-                        reason,
-                        incoming_total_context_token_count,
-                        event_writer,
-                    )
-                    .await?
-                {
-                    Ok(generation_start) => generation_start,
-                    Err(retry_error) => {
-                        return fatal::report_fatal_engine_error(
-                            request_id,
-                            retry_error,
-                            event_writer,
-                        )
-                        .await;
-                    }
-                };
-                match retried_generation_start {
-                    Some(generation_start) => {
-                        streaming_retry_attempted = true;
-                        generation_start
-                    }
-                    None => return Ok(None),
-                }
-            }
             Err(engine_error) => {
                 return fatal::report_fatal_engine_error(request_id, engine_error, event_writer)
                     .await;
@@ -146,8 +95,6 @@ where
             generation_start,
             prompt_token_count,
             prepared_generation.request_output,
-            streaming_retry_request,
-            streaming_retry_attempted,
             event_writer,
         )
         .await
@@ -210,119 +157,6 @@ where
         }
     }
 
-    /// Runs the bounded re-promotion gate before generation starts: a demoted
-    /// worker returns to the resident engine at most once per request and
-    /// never mid-generation upward.
-    async fn maybe_promote_demoted_engine_before_generation<WriteTransport>(
-        &mut self,
-        request_id: ipc_protocol::RequestId,
-        incoming_total_context_token_count: usize,
-        event_writer: &mut ProtocolWriter<WriteTransport>,
-    ) -> Result<(), WorkerRuntimeError>
-    where
-        WriteTransport: AsyncWrite + Unpin,
-    {
-        if let Some(demoted_engine_placement) = self
-            .engine_placement
-            .filter(|engine_placement| engine_placement.is_demoted_for_request())
-        {
-            let factory_supports_resident_promotion = self
-                .model_factory
-                .as_ref()
-                .is_some_and(ModelFactory::supports_resident_promotion);
-            if let Some(startup_residency_facts) = self.startup_residency_facts {
-                match crate::should_promote_demoted_streaming_engine_to_resident(
-                    demoted_engine_placement,
-                    factory_supports_resident_promotion,
-                    &startup_residency_facts,
-                    self.effective_mlx_memory_ceiling_bytes,
-                    incoming_total_context_token_count,
-                ) {
-                    crate::ResidentPromotionDecision::PromoteToResident => {
-                        match self.promote_demoted_engine_to_resident(request_id).await {
-                            Ok(was_promoted_to_resident) => {
-                                if was_promoted_to_resident {
-                                    tracing::info!(
-                                        request_id = request_id.value(),
-                                        engine_placement = self.engine_placement.map_or(
-                                            "no_autoregressive_engine",
-                                            crate::EnginePlacement::log_label,
-                                        ),
-                                        "demoted engine promoted to resident before generation"
-                                    );
-                                }
-                            }
-                            Err(promotion_error) => {
-                                let _ = fatal::report_fatal_engine_error::<
-                                    WriteTransport,
-                                    ActiveEngineGeneration<
-                                        Processor::RequestOutput,
-                                        Processor::InferenceRequest,
-                                    >,
-                                >(
-                                    request_id, promotion_error, event_writer
-                                )
-                                .await?;
-                                return Ok(());
-                            }
-                        }
-                    }
-                    crate::ResidentPromotionDecision::StayStreaming { cause } => {
-                        tracing::info!(
-                            request_id = request_id.value(),
-                            promotion_blocker = ?cause,
-                            "demoted engine stays streaming for this request"
-                        );
-                    }
-                }
-            } else {
-                tracing::info!(
-                    request_id = request_id.value(),
-                    "promotion skipped: startup residency facts are unavailable"
-                );
-            }
-        }
-        Ok(())
-    }
-
-    /// Retries a resident-forked generation on the streaming engine. The
-    /// `Ok(None)` outcome means the failure was already reported to the
-    /// client; the raw retry error returns for the caller's fatal report.
-    async fn retry_on_streaming_after_resident_fork<WriteTransport>(
-        &mut self,
-        request_id: ipc_protocol::RequestId,
-        streaming_retry_request: &mut Option<Processor::InferenceRequest>,
-        fork_cause: crate::StreamingEngineRequirement,
-        fork_reason: String,
-        incoming_total_context_token_count: usize,
-        event_writer: &mut ProtocolWriter<WriteTransport>,
-    ) -> Result<Result<Option<EngineGenerationStart>, InferenceEngineError>, WorkerRuntimeError>
-    where
-        WriteTransport: AsyncWrite + Unpin,
-    {
-        let Some(retry_request) = streaming_retry_request.take() else {
-            Self::send_invalid_request_failure(request_id, fork_reason, event_writer).await?;
-            return Ok(Ok(None));
-        };
-        match self
-            .retry_resident_generation_on_streaming(
-                request_id,
-                retry_request,
-                fork_cause,
-                incoming_total_context_token_count,
-                fork_reason,
-            )
-            .await
-        {
-            Ok(generation_start) => Ok(Ok(Some(generation_start))),
-            Err(InferenceEngineError::InvalidRequest { reason }) => {
-                Self::send_invalid_request_failure(request_id, reason, event_writer).await?;
-                Ok(Ok(None))
-            }
-            Err(retry_error) => Ok(Err(retry_error)),
-        }
-    }
-
     /// Emits the post-start events (`astro_ssd_prompt_cache` statistics, expert-memory mode,
     /// first prefill progress) and assembles the active generation state.
     #[allow(clippy::too_many_arguments)]
@@ -333,13 +167,8 @@ where
         generation_start: EngineGenerationStart,
         prompt_token_count: u32,
         prepared_request_output: Processor::RequestOutput,
-        streaming_retry_request: Option<Processor::InferenceRequest>,
-        streaming_retry_attempted: bool,
         event_writer: &mut ProtocolWriter<WriteTransport>,
-    ) -> Result<
-        Option<ActiveEngineGeneration<Processor::RequestOutput, Processor::InferenceRequest>>,
-        WorkerRuntimeError,
-    >
+    ) -> Result<Option<ActiveEngineGeneration<Processor::RequestOutput>>, WorkerRuntimeError>
     where
         WriteTransport: AsyncWrite + Unpin,
     {
@@ -387,8 +216,6 @@ where
             astro_ssd_prompt_cache_restored_token_count,
             required_prompt_processing_token_count,
             prepared_request_output,
-            streaming_retry_request,
-            streaming_retry_attempted,
         );
         active_engine_generation.last_reported_expert_memory_mode = initial_expert_memory_mode;
         active_engine_generation.astro_ssd_prompt_cache_diagnostics = generation_start

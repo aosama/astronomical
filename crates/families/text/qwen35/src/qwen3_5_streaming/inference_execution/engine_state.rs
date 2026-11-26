@@ -2,7 +2,6 @@
 
 use ipc_protocol::WorkerDecodeAstroExpertCachePolicy;
 
-use crate::StreamingStartupResidencyFacts;
 use crate::qwen3_5_core::shared_execution::execution_core::Qwen3_5ExecutionCore;
 use text_generation::generation_loop::execution_core::TextExecutionCoreOwner;
 
@@ -23,10 +22,6 @@ pub struct Qwen3_5InferenceExecution {
     /// A span, as (layer, span), that the next layer-at-a-time prompt fails
     /// once on purpose; set only by a test.
     pub(in crate::qwen3_5_streaming) prompt_span_to_fail_once_for_tests: Option<(usize, usize)>,
-    /// Startup engine-selection facts, memoized from the first load; a raised ceiling consults them
-    /// to decide whether a replacement worker must load the resident engine.
-    pub(in crate::qwen3_5_streaming::inference_execution) startup_residency_facts:
-        Option<StreamingStartupResidencyFacts>,
 }
 
 pub type Qwen3_5EngineState = Qwen3_5InferenceExecution;

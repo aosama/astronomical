@@ -26,7 +26,7 @@ use super::qwen3_5_startup_storage::{
     astro_ssd_prompt_cache_disk_store_config, astro_ssd_prompt_cache_serves_artifact,
     model_astro_neural_engine_program_cache_directory, open_model_loading_attribution,
 };
-use super::{ChatEngineSelection, ChatFamilySettings, ChatRuntimeParts};
+use super::{ChatFamilySettings, ChatRuntimeParts};
 
 /// Validates the folder, selects and starts the engine, and builds the
 /// processor, from the worker's chat settings and the model's policy.
@@ -34,7 +34,6 @@ pub(super) fn initialize_qwen3_5_model(
     model_directory_path: PathBuf,
     chat_family_settings: ChatFamilySettings,
     model_configuration: WorkerAutoregressiveModelConfiguration,
-    engine_selection: ChatEngineSelection,
 ) -> Result<ChatRuntimeParts, Qwen3_5ModelStartupError> {
     let ChatFamilySettings {
         effective_mlx_memory_ceiling_bytes: active_memory_limit_bytes,
@@ -74,7 +73,6 @@ pub(super) fn initialize_qwen3_5_model(
             &validated_artifact,
             &model_directory_path,
             active_memory_limit_bytes,
-            engine_selection,
             &artifact_model_id,
             &artifact_model_revision,
             artifact_payload_bytes,
@@ -221,12 +219,10 @@ fn validate_startup_artifact(
     }
 }
 
-/// Selects the startup engine: the computed complete-residency fit with any
-/// diagnostic override, or a worker-directed forced selection. Forced
-/// selections exist for one worker-directed swap; no startup selection runs,
-/// so they carry no placement — the worker records the typed transition
-/// (request demotion or resident promotion) itself. The attribution returns
-/// to the caller on both outcomes.
+/// Works out the startup placement from the artifact's memory geometry
+/// under attribution; a failure records the failed loading attribution with
+/// the validated artifact's metadata. The attribution returns to the caller
+/// on success so the next startup phase owns it.
 #[allow(clippy::too_many_arguments)]
 fn select_startup_engine(
     mut model_loading_performance_attribution: PerformanceAttribution,
@@ -234,64 +230,39 @@ fn select_startup_engine(
     validated_artifact: &ValidatedQwen3_5Artifact,
     model_directory_path: &std::path::Path,
     active_memory_limit_bytes: usize,
-    engine_selection: ChatEngineSelection,
     artifact_model_id: &str,
     artifact_model_revision: &str,
     artifact_payload_bytes: u64,
     artifact_shard_count: usize,
-) -> Result<
-    (
-        (StreamingStart, Option<EnginePlacement>),
-        PerformanceAttribution,
-    ),
-    Qwen3_5ModelStartupError,
-> {
-    match engine_selection {
-        ChatEngineSelection::Automatic(_) => {
-            match model_loading_performance_attribution.measure_operation(
-                PerformanceOperation::ArtifactMemoryGeometry,
-                |_performance_attribution| {
-                    select_qwen3_5_engine_from_artifact(
-                        validated_artifact,
-                        model_directory_path,
-                        active_memory_limit_bytes,
-                    )
-                },
-            ) {
-                Ok((streaming_start, engine_placement)) => Ok((
-                    (streaming_start, Some(engine_placement)),
-                    model_loading_performance_attribution,
-                )),
-                Err(selection_error) => {
-                    tracing::warn!(
-                        error = %selection_error,
-                        model_directory = ?model_directory_path,
-                        "Qwen3.5 engine selection failed during model initialization"
-                    );
-                    record_reviewed_artifact_startup_failure(
-                        model_loading_performance_attribution,
-                        performance_attribution_log,
-                        artifact_model_id,
-                        artifact_model_revision,
-                        artifact_payload_bytes,
-                        artifact_shard_count,
-                        "Qwen3.5 engine selection failed",
-                    );
-                    Err(selection_error)
-                }
-            }
+) -> Result<((StreamingStart, EnginePlacement), PerformanceAttribution), Qwen3_5ModelStartupError> {
+    match model_loading_performance_attribution.measure_operation(
+        PerformanceOperation::ArtifactMemoryGeometry,
+        |_performance_attribution| {
+            select_qwen3_5_engine_from_artifact(
+                validated_artifact,
+                model_directory_path,
+                active_memory_limit_bytes,
+            )
+        },
+    ) {
+        Ok(startup_selection) => Ok((startup_selection, model_loading_performance_attribution)),
+        Err(selection_error) => {
+            tracing::warn!(
+                error = %selection_error,
+                model_directory = ?model_directory_path,
+                "Qwen3.5 engine selection failed during model initialization"
+            );
+            record_reviewed_artifact_startup_failure(
+                model_loading_performance_attribution,
+                performance_attribution_log,
+                artifact_model_id,
+                artifact_model_revision,
+                artifact_payload_bytes,
+                artifact_shard_count,
+                "Qwen3.5 engine selection failed",
+            );
+            Err(selection_error)
         }
-        // A worker-directed swap carries no placement: the worker records
-        // the transition itself.
-        ChatEngineSelection::StreamingRetry | ChatEngineSelection::ResidentPromotion => Ok((
-            (
-                StreamingStart {
-                    holds_whole_model: false,
-                },
-                None,
-            ),
-            model_loading_performance_attribution,
-        )),
     }
 }
 

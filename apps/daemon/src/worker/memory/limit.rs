@@ -20,11 +20,6 @@ use tokio::sync::oneshot;
 pub enum MlxMemoryLimitUpdateOutcome {
     Applied,
     Queued,
-    /// The loaded engine cannot adopt the requested ceiling in place; the
-    /// caller must stop this worker and restart it under the requested
-    /// ceiling (resident-to-streaming when lowering, streaming-to-resident
-    /// when the raise admits complete residency).
-    RestartRequired,
     Rejected,
 }
 
@@ -63,9 +58,6 @@ pub(in crate::worker) async fn apply_mlx_memory_limit(
                 }
                 WorkerEvent::MlxMemoryLimitRejected { .. } => {
                     Some(MlxMemoryLimitUpdateOutcome::Rejected)
-                }
-                WorkerEvent::MlxMemoryLimitRestartRequired { .. } => {
-                    Some(MlxMemoryLimitUpdateOutcome::RestartRequired)
                 }
                 _ => None,
             };
@@ -131,8 +123,7 @@ fn adopt_applied_ceiling_into_relaunch_snapshot(
 /// Reports whether this update adopted a ceiling the running worker will keep.
 ///
 /// A queued raise has not landed yet, and the pending update still lives on
-/// the worker loop. A restart launches from its own candidate snapshot. A
-/// rejection or a control error must not overwrite the ceiling the next
+/// the worker loop. A rejection or a control error must not overwrite the ceiling the next
 /// process boots from.
 fn memory_limit_outcome_was_applied(
     memory_limit_update_outcome: &Result<MlxMemoryLimitUpdateOutcome, WorkerControlError>,
@@ -235,11 +226,9 @@ pub(in crate::worker) async fn take_generation_start_after_pending_memory_limit(
     .await
     {
         Ok(None)
-        | Ok(Some(
-            MlxMemoryLimitUpdateOutcome::Applied
-            | MlxMemoryLimitUpdateOutcome::Queued
-            | MlxMemoryLimitUpdateOutcome::RestartRequired,
-        )) => Some(start_sender),
+        | Ok(Some(MlxMemoryLimitUpdateOutcome::Applied | MlxMemoryLimitUpdateOutcome::Queued)) => {
+            Some(start_sender)
+        }
         Ok(Some(MlxMemoryLimitUpdateOutcome::Rejected)) => {
             let _send_outcome = start_sender.send(Err(GenerationStartError::WorkerUnavailable));
             None

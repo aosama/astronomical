@@ -28,16 +28,6 @@ impl TextModelLoadingHooks for PrismHadamardQwen35InferenceExecution {
     const ASTRO_SSD_PROMPT_CACHE_CONTRACT_RESOLVER: AstroSsdPromptCacheContractResolver =
         prism_quota_bounded_contract;
 
-    /// A folded pack is read whole by the model; nothing is learned from it
-    /// beforehand.
-    fn observe_artifact_before_load(
-        &mut self,
-        _validated_pack: &ValidatedFoldedPack,
-        _model_loading_performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<(), InferenceEngineError> {
-        Ok(())
-    }
-
     /// Maps the pack's one weights file and builds the dense model from it,
     /// measured as the safetensors mapping the folded-ternary load has
     /// always reported. The model reads its graph sizes from the pack, so

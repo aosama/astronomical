@@ -15,8 +15,6 @@ pub(super) struct LazyScriptedModelFactory {
     pub(super) expert_memory_mode: Option<ExpertMemoryMode>,
     /// Lets lifecycle tests prove memory-snapshot parity without model-serving.
     pub(super) created_engine_idle_mlx_memory_telemetry: Option<MlxMemoryTelemetry>,
-    /// Scripts a live ceiling the created engine cannot adopt in place.
-    pub(super) scripted_replacement_required_reason: Option<String>,
 }
 
 pub(super) struct FirstCreationFailsScriptedModelFactory {
@@ -44,12 +42,6 @@ impl ModelFactory<ScriptedChatProcessor, ScriptedChatEngine> for LazyScriptedMod
         }
         let (active_memory_limit_bytes, mlx_buffer_cache_limit_bytes) = self.mlx_memory_limits;
         scripted_engine.maximum_mlx_buffer_cache_limit_bytes = mlx_buffer_cache_limit_bytes;
-        if let Some(scripted_replacement_required_reason) =
-            &self.scripted_replacement_required_reason
-        {
-            scripted_engine = scripted_engine
-                .with_scripted_replacement_required_reason(scripted_replacement_required_reason);
-        }
         self.model_creation_memory_limits
             .lock()
             .unwrap_or_else(|poisoned_lock| poisoned_lock.into_inner())

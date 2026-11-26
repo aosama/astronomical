@@ -31,8 +31,7 @@ pub(super) fn remaining_journey_budget(cell_deadline: tokio::time::Instant) -> D
 }
 
 /// Applies the journey's worker-level overrides to the launch configuration:
-/// the per-cell MLX ceiling, the decode `astro_expert_cache` experiment arm, and the two
-/// diagnostic Qwen3.5 engine knobs.
+/// the per-cell MLX ceiling and the decode `astro_expert_cache` experiment arm.
 pub(super) fn apply_journey_overrides(
     worker_startup_configuration: &mut WorkerStartupConfiguration,
     journey: &ThroughputJourney,
@@ -41,8 +40,6 @@ pub(super) fn apply_journey_overrides(
         journey.maximum_mlx_memory_bytes;
     worker_startup_configuration.decode_astro_expert_cache_policy =
         journey.decode_astro_expert_cache_policy;
-    worker_startup_configuration.diagnostic_qwen3_5_engine_override =
-        journey.diagnostic_qwen3_5_engine_override;
 }
 
 /// A budget-exhausted completion wrote no performance-log sample, so its

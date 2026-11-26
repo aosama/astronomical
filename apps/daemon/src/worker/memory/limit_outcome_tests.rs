@@ -31,10 +31,3 @@ fn should_refuse_to_record_a_queued_memory_ceiling() {
         MlxMemoryLimitUpdateOutcome::Queued
     )));
 }
-
-#[test]
-fn should_refuse_to_record_a_restart_required_memory_ceiling() {
-    assert!(!memory_limit_outcome_was_applied(&Ok(
-        MlxMemoryLimitUpdateOutcome::RestartRequired
-    )));
-}

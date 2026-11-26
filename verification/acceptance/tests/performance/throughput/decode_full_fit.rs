@@ -44,8 +44,6 @@ async fn should_complete_decode_residency_at_37_gigabytes_after_multi_chunk_pref
         prompt_chunking: support::PromptChunking::MeasurementLane,
         journey_timeout: Duration::from_secs(110),
         model_directory: Some(model_directory),
-        diagnostic_qwen3_5_engine_override:
-            ipc_protocol::WorkerDiagnosticQwen3_5EngineOverride::Automatic,
     };
     let outcome = timeout(
         Duration::from_secs(115),

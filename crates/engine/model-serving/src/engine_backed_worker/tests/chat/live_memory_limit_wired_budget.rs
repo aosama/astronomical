@@ -31,7 +31,6 @@ async fn applied_live_mlx_memory_ceiling_bytes(
             model_configurations: Arc::new(Mutex::new(Vec::new())),
             expert_memory_mode: Some(ipc_protocol::ExpertMemoryMode::Resident),
             created_engine_idle_mlx_memory_telemetry: None,
-            scripted_replacement_required_reason: None,
         },
         MACHINE_MLX_MEMORY_CEILING_BYTES,
         STARTUP_MLX_MEMORY_CEILING_BYTES,

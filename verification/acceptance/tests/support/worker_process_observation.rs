@@ -1,10 +1,10 @@
 //! Observation of the worker subprocesses owned by a real-model test harness.
 //!
-//! The memory-demotion contract crosses a process boundary: the trusted worker
-//! must exit and be reaped before any replacement process exists. Proving that
-//! from the daemon's own control flow would only restate the implementation,
-//! so these helpers observe the boundary from outside it — by sampling which
-//! worker subprocesses the harness itself owns across the transition.
+//! A live MLX memory limit change must be adopted by the worker that holds
+//! the model. Proving that from the daemon's own control flow would only
+//! restate the implementation, so these helpers observe it from outside — by
+//! sampling which worker subprocesses the harness itself owns across the
+//! change.
 
 use std::{
     sync::{
@@ -52,7 +52,7 @@ pub(crate) fn worker_child_process_identifiers() -> Vec<u32> {
 
 /// Requires the harness to own exactly one worker process and returns its
 /// identifier, so a journey can pin the worker identity before and after a
-/// daemon-driven replacement.
+/// live change.
 pub(crate) fn sole_worker_child_process_identifier(context: &str) -> u32 {
     let mut worker_identifiers = worker_child_process_identifiers();
     worker_identifiers.sort_unstable();
@@ -65,8 +65,8 @@ pub(crate) fn sole_worker_child_process_identifier(context: &str) -> u32 {
 }
 
 /// Samples which worker subprocesses exist across a transition, so a journey
-/// can tell a stop-first restart (a gap with no worker) from a candidate-first
-/// overlap (two workers at once).
+/// can tell one worker kept throughout from a restart (a gap with no worker,
+/// or two workers at once).
 pub(crate) struct WorkerProcessTimeline {
     stop_requested: Arc<AtomicBool>,
     sampler_task: JoinHandle<Vec<Vec<u32>>>,
