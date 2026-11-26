@@ -9,7 +9,7 @@ use thiserror::Error;
 
 use super::{NEURAL_ENGINE_FINISH_TIMEOUT, NeuralEngineMlpPrefill};
 use crate::qwen3_5_core::dense::mlp::Qwen3_5DenseMlpWeights;
-use crate::qwen3_5_resident::model::Qwen3_5ResidentModel;
+use crate::qwen3_5_core::model::base::Qwen3_5ModelBase;
 use text_generation::execution_error::TextExecutionError;
 
 #[derive(Debug, Error)]
@@ -36,19 +36,22 @@ impl TokenSplitForwardError {
     }
 }
 
-impl Qwen3_5ResidentModel {
+impl Qwen3_5ModelBase {
     /// The dense MLP, on both engines when this chunk fits the programs.
     ///
     /// A runtime failure falls back to the GPU for this layer and every later
     /// chunk, so a misbehaving Neural Engine costs speed, never the request.
-    pub fn forward_resident_dense_mlp(
+    pub fn forward_dense_mlp_with_neural_engine_programs(
         &self,
         normalized_attention: &MlxArray,
         dense_mlp_weights: &Qwen3_5DenseMlpWeights,
         token_count: i32,
         layer_index: usize,
     ) -> Result<MlxArray, TextExecutionError> {
-        if let Some(prefill) = self.neural_engine_mlp_prefill.as_ref()
+        if let Some(prefill) = self
+            .optional_accelerators
+            .neural_engine_mlp_prefill
+            .as_ref()
             && prefill.handles(token_count)
         {
             match self.forward_dense_mlp_split_by_token(
@@ -77,8 +80,7 @@ impl Qwen3_5ResidentModel {
                 }
             }
         }
-        self.base
-            .forward_qwen3_5_dense_mlp(normalized_attention, dense_mlp_weights)
+        self.forward_qwen3_5_dense_mlp(normalized_attention, dense_mlp_weights)
     }
 
     fn forward_dense_mlp_split_by_token(
@@ -105,9 +107,7 @@ impl Qwen3_5ResidentModel {
             &[1, token_count, channel_count],
             &[1, 1, 1],
         )?;
-        let gpu_slice = self
-            .base
-            .forward_qwen3_5_dense_mlp(&gpu_input, dense_mlp_weights)?;
+        let gpu_slice = self.forward_qwen3_5_dense_mlp(&gpu_input, dense_mlp_weights)?;
         // The GPU starts first so the host copy below does not leave it idle.
         self.runtime.async_eval_arrays(&[&gpu_slice])?;
         let mut layer_programs = prefill.layer_programs.borrow_mut();

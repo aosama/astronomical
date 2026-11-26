@@ -1,7 +1,7 @@
 use std::fs;
 
 use super::{PROGRAM_SPEED_RECORD_FILE_NAME, ProgramSpeedRecord};
-use crate::qwen3_5_resident::neural_engine_chunk_comparison::ChunkComparisonVerdict;
+use crate::qwen3_5_core::neural_engine::neural_engine_chunk_comparison::ChunkComparisonVerdict;
 
 const MEASURED_FOR: &str = "macOS build; method 1";
 

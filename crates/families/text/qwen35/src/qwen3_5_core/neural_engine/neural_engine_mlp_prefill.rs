@@ -24,9 +24,9 @@ use ipc_protocol::{NeuralEngineChunkPlacement, NeuralEngineChunkReport};
 use memory_policy::neural_engine_admission::chunk_fits_beside_programs;
 use neural_engine::core_ml::CoreMlProgram;
 
-use super::model::Qwen3_5ResidentModel;
 use super::neural_engine_chunk_comparison::{ChunkComparison, ChunkEngines};
 use super::neural_engine_program_speed_record::ProgramSpeedRecord;
+use crate::qwen3_5_core::model::base::Qwen3_5ModelBase;
 
 // A prediction takes milliseconds, so this only bounds a wedged Neural Engine.
 pub const NEURAL_ENGINE_FINISH_TIMEOUT: Duration = Duration::from_secs(30);
@@ -63,7 +63,7 @@ pub struct NeuralEngineMlpPrefill {
     #[cfg_attr(not(feature = "direct-mlx"), allow(dead_code))]
     surface_bytes: u64,
     /// Set by the first failure of a program, so later chunks stay on the GPU.
-    pub(in crate::qwen3_5_resident) has_failed: Cell<bool>,
+    pub(crate) has_failed: Cell<bool>,
     /// Lets one loaded model alternate between arms in a measurement, because
     /// separate runs differ by warm-up and heat as much as the effects measured.
     is_paused: Cell<bool>,
@@ -73,11 +73,11 @@ pub struct NeuralEngineMlpPrefill {
     does_chunk_fit_memory: Cell<bool>,
     /// Whether the coming chunk runs on the programs, from its fit and the comparison.
     does_chunk_use_programs: Cell<bool>,
-    pub(in crate::qwen3_5_resident) chunk_comparison: RefCell<ChunkComparison>,
+    pub(crate) chunk_comparison: RefCell<ChunkComparison>,
     /// Where the comparison's answer is kept, when this set has a folder to keep it in.
-    pub(in crate::qwen3_5_resident) speed_record: Option<ProgramSpeedRecord>,
+    pub(crate) speed_record: Option<ProgramSpeedRecord>,
     /// A verdict reaches the status and the record once.
-    pub(in crate::qwen3_5_resident) has_reported_verdict: Cell<bool>,
+    pub(crate) has_reported_verdict: Cell<bool>,
 }
 
 impl std::fmt::Debug for NeuralEngineMlpPrefill {
@@ -178,11 +178,15 @@ impl NeuralEngineMlpPrefill {
     }
 }
 
-impl Qwen3_5ResidentModel {
+impl Qwen3_5ModelBase {
     /// The attached programs' surfaces, which a reading of wired growth cannot see.
     #[cfg(feature = "direct-mlx")]
     pub fn neural_engine_program_surface_bytes(&self) -> u64 {
-        match self.neural_engine_mlp_prefill.as_ref() {
+        match self
+            .optional_accelerators
+            .neural_engine_mlp_prefill
+            .as_ref()
+        {
             Some(prefill) => prefill.surface_bytes,
             None => 0,
         }
@@ -192,7 +196,11 @@ impl Qwen3_5ResidentModel {
     /// what the programs hold with none of MLX's own working set in the reading.
     #[cfg(feature = "direct-mlx")]
     pub fn run_every_neural_engine_program_once(&self) -> Result<(), String> {
-        if let Some(prefill) = self.neural_engine_mlp_prefill.as_ref() {
+        if let Some(prefill) = self
+            .optional_accelerators
+            .neural_engine_mlp_prefill
+            .as_ref()
+        {
             for program in prefill.layer_programs.borrow_mut().iter_mut() {
                 if let Err(program_error) = program.run_once_on_zeros(NEURAL_ENGINE_FINISH_TIMEOUT)
                 {
@@ -200,9 +208,7 @@ impl Qwen3_5ResidentModel {
                 }
             }
         }
-        if let Some(output_gate_engine) =
-            self.base.optional_accelerators.output_gate_engine.as_ref()
-        {
+        if let Some(output_gate_engine) = self.optional_accelerators.output_gate_engine.as_ref() {
             output_gate_engine.run_every_program_once()?;
         }
         Ok(())
@@ -218,7 +224,11 @@ impl Qwen3_5ResidentModel {
         projected_chunk_peak_bytes: u64,
         active_memory_ceiling_bytes: u64,
     ) {
-        let Some(prefill) = self.neural_engine_mlp_prefill.as_ref() else {
+        let Some(prefill) = self
+            .optional_accelerators
+            .neural_engine_mlp_prefill
+            .as_ref()
+        else {
             return;
         };
         let chunk_fit = prefill.decide_chunk(
@@ -236,9 +246,7 @@ impl Qwen3_5ResidentModel {
                 "Neural Engine prefill changed engines for the coming chunk"
             );
         }
-        if let Some(output_gate_engine) =
-            self.base.optional_accelerators.output_gate_engine.as_ref()
-        {
+        if let Some(output_gate_engine) = self.optional_accelerators.output_gate_engine.as_ref() {
             output_gate_engine.set_chunk_uses_programs(prefill.does_chunk_use_programs.get());
         }
     }
@@ -251,7 +259,10 @@ impl Qwen3_5ResidentModel {
         token_count: usize,
         elapsed: Duration,
     ) -> Option<NeuralEngineChunkReport> {
-        let prefill = self.neural_engine_mlp_prefill.as_ref()?;
+        let prefill = self
+            .optional_accelerators
+            .neural_engine_mlp_prefill
+            .as_ref()?;
         Some(prefill.note_finished_chunk(start_token, token_count, elapsed, Instant::now()))
     }
 }

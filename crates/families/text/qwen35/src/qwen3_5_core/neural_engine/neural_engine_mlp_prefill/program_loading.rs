@@ -21,25 +21,25 @@ use runtime_integration::MlxRuntime;
 
 use super::{NeuralEngineMlpPrefill, neural_engine_tokens_for_chunk};
 use crate::qwen3_5_core::dense::mlp::Qwen3_5DenseMlpWeights;
+use crate::qwen3_5_core::model::base::Qwen3_5ModelBase;
 use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5DecoderFeedForwardWeights;
-use crate::qwen3_5_resident::astro_neural_engine_program_cache::{
+use crate::qwen3_5_core::neural_engine::astro_neural_engine_program_cache::{
     AstroNeuralEngineProgramSetCache, kept_program_path,
 };
-use crate::qwen3_5_resident::host_description::current_host_environment;
-use crate::qwen3_5_resident::model::Qwen3_5ResidentModel;
-use crate::qwen3_5_resident::neural_engine_chunk_comparison::{
+use crate::qwen3_5_core::neural_engine::host_description::current_host_environment;
+use crate::qwen3_5_core::neural_engine::neural_engine_chunk_comparison::{
     ChunkComparison, ChunkComparisonVerdict, not_worthwhile_reason,
 };
-use crate::qwen3_5_resident::neural_engine_output_gate_prefill::{
+use crate::qwen3_5_core::neural_engine::neural_engine_output_gate_prefill::{
     OUTPUT_GATE_PROGRAM_FORMAT_VERSION, least_output_gate_bytes,
 };
-use crate::qwen3_5_resident::neural_engine_program_memory_record::{
+use crate::qwen3_5_core::neural_engine::neural_engine_program_memory_record::{
     record_program_memory_bytes, recorded_program_memory_bytes,
 };
-use crate::qwen3_5_resident::neural_engine_program_preparation::{
+use crate::qwen3_5_core::neural_engine::neural_engine_program_preparation::{
     NeuralEngineProgramFamily, PlannedProgram, ProgramIdentity,
 };
-use crate::qwen3_5_resident::neural_engine_program_speed_record::ProgramSpeedRecord;
+use crate::qwen3_5_core::neural_engine::neural_engine_program_speed_record::ProgramSpeedRecord;
 
 pub const FP16_BYTES_PER_WEIGHT: u64 = 2;
 const WEIGHT_READ_FAILURE: &str = "a model weight could not be read as fp16";
@@ -88,7 +88,7 @@ pub struct MlpProgramPlan {
 /// is the status to report. Whatever goes wrong leaves the model serving on the GPU,
 /// because an opt-in speedup must never stop a model from loading.
 pub fn plan_neural_engine_mlp_programs(
-    model: &Qwen3_5ResidentModel,
+    model: &Qwen3_5ModelBase,
     chunking: &WorkerChunkingConfiguration,
     astro_neural_engine_program_cache_directory: Option<&Path>,
     neural_engine_token_count_override: Option<u32>,
@@ -108,8 +108,8 @@ pub fn plan_neural_engine_mlp_programs(
     let Some(layer_weights) = dense_mlp_layer_weights(model) else {
         return Err(unavailable("only dense models are supported"));
     };
-    let hidden_channels = model.base.config().hidden_size() as usize;
-    let intermediate_channels = model.base.config().dense_intermediate_size() as usize;
+    let hidden_channels = model.config().hidden_size() as usize;
+    let intermediate_channels = model.config().dense_intermediate_size() as usize;
     let Some(contraction_part_width) =
         contraction_part_width(&[hidden_channels, intermediate_channels])
     else {
@@ -171,17 +171,16 @@ enum ProgramCostCertainty {
 
 /// What the programs compete with for the smallest prompt that uses them.
 fn memory_requirements_of(
-    model: &Qwen3_5ResidentModel,
+    model: &Qwen3_5ModelBase,
     chunk_token_count: u32,
     program_bytes: u64,
 ) -> NeuralEnginePrefillMemoryRequirements {
     let context_state_bytes_per_token = model
-        .base
         .astro_decoder_state_cache_layout()
         .sequence_state_payload_byte_count_per_token()
         .unwrap_or(0);
     NeuralEnginePrefillMemoryRequirements {
-        resident_model_payload_bytes: model.base.resident_model_payload_byte_count(),
+        resident_model_payload_bytes: model.resident_model_payload_byte_count(),
         one_chunk_state_bytes: u64::try_from(context_state_bytes_per_token)
             .unwrap_or(u64::MAX)
             .saturating_mul(u64::from(chunk_token_count)),
@@ -195,7 +194,7 @@ fn memory_requirements_of(
 
 /// The status to report when the programs cannot fit even for one chunk of a prompt.
 fn refusal_for_program_bytes(
-    model: &Qwen3_5ResidentModel,
+    model: &Qwen3_5ModelBase,
     chunk_token_count: u32,
     program_bytes: u64,
     program_cost_certainty: ProgramCostCertainty,
@@ -221,7 +220,7 @@ impl MlpProgramPlan {
     /// be lowered during the minute or more they take to build.
     pub fn refusal_for_measured_bytes(
         &self,
-        model: &Qwen3_5ResidentModel,
+        model: &Qwen3_5ModelBase,
         measured_program_bytes: u64,
     ) -> Option<NeuralEnginePrefillStatus> {
         refusal_for_program_bytes(
@@ -234,7 +233,7 @@ impl MlpProgramPlan {
 
     /// Whether a cost would be admitted, with no status to report. A record that fails
     /// this is measured again rather than taken at its word.
-    pub fn fits_ceiling(&self, model: &Qwen3_5ResidentModel, program_bytes: u64) -> bool {
+    pub fn fits_ceiling(&self, model: &Qwen3_5ModelBase, program_bytes: u64) -> bool {
         matches!(
             memory_requirements_of(model, self.chunk_token_count, program_bytes).decide(),
             NeuralEnginePrefillAdmission::Admitted
@@ -298,12 +297,11 @@ impl MlpProgramPlan {
     /// One layer's compile input, read from the model as fp16.
     pub fn write_package(
         &self,
-        model: &Qwen3_5ResidentModel,
+        model: &Qwen3_5ModelBase,
         decoder_layer_index: usize,
         package_directory: &Path,
     ) -> Result<PathBuf, &'static str> {
         let decoder_layer_weights = model
-            .base
             .weights
             .decoder_layer_weights
             .get(decoder_layer_index)
@@ -327,7 +325,7 @@ impl MlpProgramPlan {
     /// chunk, and reports the status a reader should now see.
     pub fn attach(
         &self,
-        model: &mut Qwen3_5ResidentModel,
+        model: &mut Qwen3_5ModelBase,
         layer_programs: Vec<CoreMlProgram>,
         measured_program_bytes: u64,
         surface_bytes: u64,
@@ -345,7 +343,7 @@ impl MlpProgramPlan {
             Some(verdict) => ChunkComparison::already_decided(full_chunk_token_count, verdict),
             None => ChunkComparison::new(full_chunk_token_count),
         };
-        model.neural_engine_mlp_prefill = Some(NeuralEngineMlpPrefill {
+        model.optional_accelerators.neural_engine_mlp_prefill = Some(NeuralEngineMlpPrefill {
             layer_programs: RefCell::new(layer_programs),
             chunk_token_count: self.chunk_token_count,
             neural_engine_token_count: self.neural_engine_token_count,
@@ -392,9 +390,9 @@ fn open_astro_neural_engine_program_cache(
     )
 }
 
-fn dense_mlp_layer_weights(model: &Qwen3_5ResidentModel) -> Option<Vec<&Qwen3_5DenseMlpWeights>> {
-    let mut layer_weights = Vec::with_capacity(model.base.weights.decoder_layer_weights.len());
-    for decoder_layer_weights in &model.base.weights.decoder_layer_weights {
+fn dense_mlp_layer_weights(model: &Qwen3_5ModelBase) -> Option<Vec<&Qwen3_5DenseMlpWeights>> {
+    let mut layer_weights = Vec::with_capacity(model.weights.decoder_layer_weights.len());
+    for decoder_layer_weights in &model.weights.decoder_layer_weights {
         match &decoder_layer_weights.mlp_weights {
             Qwen3_5DecoderFeedForwardWeights::Dense(dense_mlp_weights) => {
                 layer_weights.push(dense_mlp_weights);
@@ -420,8 +418,8 @@ pub fn program_surface_bytes(shape: ProgramShape) -> u64 {
 }
 
 /// What one layer's whole MLP holds as fp16.
-fn mlp_weight_bytes_per_layer(model: &Qwen3_5ResidentModel) -> u64 {
-    let config = model.base.config();
+fn mlp_weight_bytes_per_layer(model: &Qwen3_5ModelBase) -> u64 {
+    let config = model.config();
     INTERMEDIATE_BY_HIDDEN_BLOCKS_PER_LAYER
         .saturating_mul(u64::from(config.dense_intermediate_size()))
         .saturating_mul(u64::from(config.hidden_size()))

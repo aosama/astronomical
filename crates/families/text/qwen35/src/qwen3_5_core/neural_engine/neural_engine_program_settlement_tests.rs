@@ -1,7 +1,7 @@
 use ipc_protocol::NeuralEnginePrefillStatus;
 
 use super::{ProgramSettlement, program_settlement_of, status_after_verdict};
-use crate::qwen3_5_resident::neural_engine_chunk_comparison::{
+use crate::qwen3_5_core::neural_engine::neural_engine_chunk_comparison::{
     ChunkComparisonVerdict, not_worthwhile_reason,
 };
 

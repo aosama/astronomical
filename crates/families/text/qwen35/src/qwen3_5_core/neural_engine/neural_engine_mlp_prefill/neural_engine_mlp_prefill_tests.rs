@@ -4,7 +4,7 @@ use std::time::{Duration, Instant};
 use ipc_protocol::NeuralEngineChunkPlacement;
 
 use super::{ChunkFitDecision, NeuralEngineMlpPrefill, neural_engine_tokens_for_chunk};
-use crate::qwen3_5_resident::neural_engine_chunk_comparison::{
+use crate::qwen3_5_core::neural_engine::neural_engine_chunk_comparison::{
     ChunkComparison, ChunkComparisonVerdict,
 };
 

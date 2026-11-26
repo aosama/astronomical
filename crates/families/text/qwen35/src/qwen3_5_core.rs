@@ -27,6 +27,8 @@ pub mod draft_tree_decode;
 pub mod frozen_config_test_support;
 pub mod model;
 pub mod model_math;
+#[cfg(feature = "direct-mlx")]
+pub mod neural_engine;
 pub mod quantizations;
 #[cfg(test)]
 pub mod qwen4_exp_config_test_support;

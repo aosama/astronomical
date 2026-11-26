@@ -6,9 +6,9 @@
 
 use ipc_protocol::NeuralEnginePrefillStatus;
 
-use super::model::Qwen3_5ResidentModel;
 use super::neural_engine_chunk_comparison::{ChunkComparisonVerdict, not_worthwhile_reason};
 use super::neural_engine_mlp_prefill::unavailable;
+use crate::qwen3_5_core::model::base::Qwen3_5ModelBase;
 
 const PROGRAM_FAILED_REASON: &str =
     "a Neural Engine program failed, so prefill stays on the GPU until the model next loads";
@@ -69,16 +69,19 @@ fn status_after_verdict(
 /// released, which gives their memory back within the driver's 10 to 20 seconds. Failed
 /// gates go alone, because the MLP programs carry nearly all of the speedup.
 pub fn settle_neural_engine_programs(
-    model: &mut Qwen3_5ResidentModel,
+    model: &mut Qwen3_5ModelBase,
     current_status: &NeuralEnginePrefillStatus,
 ) -> Option<NeuralEnginePrefillStatus> {
-    if let Some(output_gate_engine) = model.base.optional_accelerators.output_gate_engine.as_ref()
+    if let Some(output_gate_engine) = model.optional_accelerators.output_gate_engine.as_ref()
         && output_gate_engine.has_failed()
     {
         tracing::warn!("releasing the Neural Engine output gate programs after a failure");
-        model.base.optional_accelerators.output_gate_engine = None;
+        model.optional_accelerators.output_gate_engine = None;
     }
-    let prefill = model.neural_engine_mlp_prefill.as_ref()?;
+    let prefill = model
+        .optional_accelerators
+        .neural_engine_mlp_prefill
+        .as_ref()?;
     let settlement = program_settlement_of(
         prefill.has_failed.get(),
         prefill.has_reported_verdict.get(),
@@ -105,9 +108,9 @@ pub fn settle_neural_engine_programs(
     Some(status_after_verdict(verdict, current_status))
 }
 
-fn release_programs(model: &mut Qwen3_5ResidentModel) {
-    model.neural_engine_mlp_prefill = None;
-    model.base.optional_accelerators.output_gate_engine = None;
+fn release_programs(model: &mut Qwen3_5ModelBase) {
+    model.optional_accelerators.neural_engine_mlp_prefill = None;
+    model.optional_accelerators.output_gate_engine = None;
 }
 
 #[cfg(test)]

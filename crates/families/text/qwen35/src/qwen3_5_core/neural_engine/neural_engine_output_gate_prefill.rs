@@ -23,7 +23,6 @@ use runtime_integration::MlxRuntime;
 use super::astro_neural_engine_program_cache::{
     AstroNeuralEngineProgramSetCache, kept_program_path,
 };
-use super::model::Qwen3_5ResidentModel;
 use super::neural_engine_mlp_prefill::{
     FP16_BYTES_PER_WEIGHT, NEURAL_ENGINE_FINISH_TIMEOUT, NEURAL_ENGINE_TOKEN_GRANULARITY,
     program_surface_bytes, weight_as_fp16_bits,
@@ -31,6 +30,7 @@ use super::neural_engine_mlp_prefill::{
 use super::neural_engine_program_preparation::{
     NeuralEngineProgramFamily, PlannedProgram, ProgramIdentity,
 };
+use crate::qwen3_5_core::model::base::Qwen3_5ModelBase;
 use crate::qwen3_5_core::model::output_gate_engine::LinearAttentionOutputGateEngine;
 use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AttentionWeights;
 
@@ -195,9 +195,9 @@ impl OutputGateProgramSource<'_> {
     }
 }
 
-fn linear_attention_layer_count(model: &Qwen3_5ResidentModel) -> u64 {
+fn linear_attention_layer_count(model: &Qwen3_5ModelBase) -> u64 {
     let mut layer_count = 0;
-    for decoder_layer_weights in &model.base.weights.decoder_layer_weights {
+    for decoder_layer_weights in &model.weights.decoder_layer_weights {
         if matches!(
             decoder_layer_weights.attention_weights,
             Qwen3_5AttentionWeights::Linear(_)
@@ -209,8 +209,8 @@ fn linear_attention_layer_count(model: &Qwen3_5ResidentModel) -> u64 {
 }
 
 /// What one output gate program holds as fp16.
-fn weight_bytes_per_output_gate(model: &Qwen3_5ResidentModel) -> u64 {
-    let config = model.base.config();
+fn weight_bytes_per_output_gate(model: &Qwen3_5ModelBase) -> u64 {
+    let config = model.config();
     u64::from(config.linear_value_dimension())
         .saturating_mul(u64::from(config.hidden_size()))
         .saturating_mul(FP16_BYTES_PER_WEIGHT)
@@ -219,8 +219,8 @@ fn weight_bytes_per_output_gate(model: &Qwen3_5ResidentModel) -> u64 {
 /// What every output gate program will cost at the least, weights and surfaces, or zero
 /// when this model and chunk would get no gates, so a refusal never counts programs that
 /// would not exist.
-pub fn least_output_gate_bytes(model: &Qwen3_5ResidentModel, chunk_token_count: u32) -> u64 {
-    let config = model.base.config();
+pub fn least_output_gate_bytes(model: &Qwen3_5ModelBase, chunk_token_count: u32) -> u64 {
+    let config = model.config();
     let hidden_channels = config.hidden_size() as usize;
     let shape = ProgramShape::new(
         hidden_channels,
@@ -240,9 +240,9 @@ pub fn least_output_gate_bytes(model: &Qwen3_5ResidentModel, chunk_token_count: 
 }
 
 /// Other layers have no output gate and get no program.
-fn linear_attention_layer_indices(model: &Qwen3_5ResidentModel) -> Vec<usize> {
+fn linear_attention_layer_indices(model: &Qwen3_5ModelBase) -> Vec<usize> {
     let mut layer_indices = Vec::new();
-    let decoder_layer_weights = &model.base.weights.decoder_layer_weights;
+    let decoder_layer_weights = &model.weights.decoder_layer_weights;
     for (decoder_layer_index, layer_weights) in decoder_layer_weights.iter().enumerate() {
         if matches!(
             layer_weights.attention_weights,
@@ -267,7 +267,7 @@ pub struct OutputGateProgramPlan {
 }
 
 pub fn plan_neural_engine_output_gate_programs(
-    model: &Qwen3_5ResidentModel,
+    model: &Qwen3_5ModelBase,
     chunking: &WorkerChunkingConfiguration,
     astro_neural_engine_program_cache_directory: Option<&Path>,
 ) -> Result<OutputGateProgramPlan, &'static str> {
@@ -275,7 +275,7 @@ pub fn plan_neural_engine_output_gate_programs(
     if !chunk_fits_surface_rows(chunk_token_count) {
         return Err("the prompt-processing chunk is not a multiple of the surface alignment");
     }
-    let config = model.base.config();
+    let config = model.config();
     let hidden_channels = config.hidden_size() as usize;
     let Ok(shape) = ProgramShape::new(
         hidden_channels,
@@ -306,7 +306,7 @@ pub fn plan_neural_engine_output_gate_programs(
         chunk_token_count,
         contraction_part_count: hidden_channels / contraction_part_width,
         weight_bytes_per_program: weight_bytes_per_output_gate(model),
-        decoder_layer_count: model.base.weights.decoder_layer_weights.len(),
+        decoder_layer_count: model.weights.decoder_layer_weights.len(),
         linear_attention_layer_indices,
         astro_neural_engine_program_cache,
     })
@@ -344,12 +344,11 @@ impl OutputGateProgramPlan {
     /// One layer's compile input, read from the model as fp16.
     pub fn write_package(
         &self,
-        model: &Qwen3_5ResidentModel,
+        model: &Qwen3_5ModelBase,
         decoder_layer_index: usize,
         package_directory: &Path,
     ) -> Result<PathBuf, &'static str> {
         let decoder_layer_weights = model
-            .base
             .weights
             .decoder_layer_weights
             .get(decoder_layer_index)
@@ -371,7 +370,7 @@ impl OutputGateProgramPlan {
     /// Puts the finished programs in the model's path and returns how many there are.
     pub fn attach(
         &self,
-        model: &mut Qwen3_5ResidentModel,
+        model: &mut Qwen3_5ModelBase,
         built_programs: Vec<(usize, CoreMlProgram)>,
     ) -> u32 {
         let layer_program_count = u32::try_from(built_programs.len()).unwrap_or(u32::MAX);
@@ -383,7 +382,7 @@ impl OutputGateProgramPlan {
         for (decoder_layer_index, program) in built_programs {
             layer_programs[decoder_layer_index] = Some(program);
         }
-        model.base.optional_accelerators.output_gate_engine =
+        model.optional_accelerators.output_gate_engine =
             Some(Box::new(NeuralEngineOutputGatePrefill {
                 layer_programs: RefCell::new(layer_programs),
                 chunk_token_count: self.chunk_token_count,
