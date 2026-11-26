@@ -147,6 +147,11 @@ test-dense-streaming-parity = "run -p xtask -- test-run --package astronomical-a
 # forward holds must be left alone, and converting twice must find nothing.
 # About fifteen seconds.
 test-dense-kept-layer-register-order = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter should_begin_the_same_reply_with_kept_layers_in_register_order"
+# The streaming engine's fused expert combination on a served
+# mixture-of-experts model (#2585): one load answers the Shakespeare prompt
+# with the two-step combination and with the fused one; replies and every
+# logit's bits must be equal. Under a minute.
+test-streaming-fused-expert-combination = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --filter with_the_fused_expert_combination"
 
 # Dense layer-major checkpoint parity (issue #1985): one Shakespeare prompt
 # prefilled layer by layer and chunk by chunk over the engine's span plan, at

@@ -15,11 +15,7 @@ use text_generation::execution_error::TextExecutionError;
 use super::super::expert_streaming::expert_pager::Qwen3_5PagedExpertWeights;
 use super::astro_expert_cache_plus_streamed_page_route;
 use super::feed_forward_weights::Qwen3_5MoEFeedForwardWeights;
-use super::output_combination;
-use super::routing::{
-    qwen3_5_moe_sort_expert_assignments, qwen3_5_moe_sorted_expert_weighted_sum,
-    qwen3_5_moe_unsorted_expert_weighted_sum,
-};
+use super::routing::qwen3_5_moe_sort_expert_assignments;
 use crate::sparse_experts;
 
 /// Per-assignment routed expert rows before any weighted reduction.
@@ -128,17 +124,16 @@ impl Qwen3_5Model {
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<MlxArray, TextExecutionError> {
         let page_slot_indices = self.resolved_page_slots(page_slots)?;
-        let sparse_output = self.forward_moe_with_streamed_weights(
+        let routed_assignment_outputs = self.streamed_expert_assignment_outputs(
             hidden_states,
             paged_expert_weights,
             &page_slot_indices,
-            selected_scores,
             performance_attribution,
         )?;
-        self.combine_paged_sparse_and_shared_outputs(
+        self.combine_routed_assignments_and_shared_outputs(
             hidden_states,
             mixture_of_experts_weights,
-            &sparse_output,
+            (&routed_assignment_outputs, selected_scores),
             should_use_compiled_elementwise_graphs,
         )
     }
@@ -180,26 +175,7 @@ impl Qwen3_5Model {
             selected_expert_indices,
             performance_attribution,
         )?;
-        let sparse_output = match selected_outputs {
-            RoutedExpertAssignmentOutputs::Sorted {
-                sorted_outputs,
-                inverse_order,
-            } => qwen3_5_moe_sorted_expert_weighted_sum(
-                &self.runtime,
-                self.sorted_expert_weighted_sum_kernel()?,
-                &sorted_outputs,
-                &inverse_order,
-                selected_scores,
-            )?,
-            RoutedExpertAssignmentOutputs::Unsorted { assignment_outputs } => {
-                qwen3_5_moe_unsorted_expert_weighted_sum(
-                    &self.runtime,
-                    &assignment_outputs,
-                    selected_scores,
-                )?
-            }
-        };
-        Ok(sparse_output)
+        self.reduced_routed_assignment_outputs(&selected_outputs, selected_scores)
     }
 
     /// Runs the routed expert chain through one page and returns one row per
@@ -577,50 +553,6 @@ impl Qwen3_5Model {
             projection_inputs.selected_expert_indices,
             projection_inputs.assignment_order,
             performance_attribution,
-        )?)
-    }
-
-    pub(super) fn combine_paged_sparse_and_shared_outputs(
-        &self,
-        hidden_states: &MlxArray,
-        mixture_of_experts_weights: &Qwen3_5MoEFeedForwardWeights,
-        sparse_expert_output: &MlxArray,
-        should_use_compiled_elementwise_graphs: bool,
-    ) -> Result<MlxArray, TextExecutionError> {
-        let shared_gate = self.quantized_linear(
-            hidden_states,
-            &mixture_of_experts_weights.shared_expert_gate_projection,
-        )?;
-        let shared_up = self.quantized_linear(
-            hidden_states,
-            &mixture_of_experts_weights.shared_expert_up_projection,
-        )?;
-        let shared_activated =
-            self.runtime
-                .apply_compiled_swiglu(&self.compiled_swiglu, &shared_gate, &shared_up)?;
-        let shared_output = self.quantized_linear(
-            &shared_activated,
-            &mixture_of_experts_weights.shared_expert_down_projection,
-        )?;
-        let shared_gate_logits = self.quantized_linear(
-            hidden_states,
-            &mixture_of_experts_weights.shared_expert_output_gate_projection,
-        )?;
-        if should_use_compiled_elementwise_graphs {
-            return Ok(self
-                .runtime
-                .apply_compiled_sparse_shared_expert_combination(
-                    &self.compiled_elementwise_graphs,
-                    sparse_expert_output,
-                    &shared_output,
-                    &shared_gate_logits,
-                )?);
-        }
-        Ok(output_combination::combine_sparse_and_shared_experts(
-            &self.runtime,
-            sparse_expert_output,
-            &shared_output,
-            &shared_gate_logits,
         )?)
     }
 }

@@ -114,17 +114,16 @@ impl Qwen3_5Model {
             should_bind_vision_weights,
             performance_attribution,
         )?;
-        let (expert_pager, astro_expert_cache, sorted_expert_weighted_sum_kernel) =
-            streaming_expert_runtime(
-                &runtime,
-                model_directory,
-                &config,
-                &shard_index,
-                &tensor_inventory,
-                expert_atlas.as_ref(),
-                decode_astro_expert_cache_policy,
-                performance_attribution,
-            )?;
+        let (expert_pager, astro_expert_cache, expert_kernels) = streaming_expert_runtime(
+            &runtime,
+            model_directory,
+            &config,
+            &shard_index,
+            &tensor_inventory,
+            expert_atlas.as_ref(),
+            decode_astro_expert_cache_policy,
+            performance_attribution,
+        )?;
         let astro_decoder_state_cache_layout = measured_astro_decoder_state_cache_layout(
             &config,
             &chunking,
@@ -166,8 +165,8 @@ impl Qwen3_5Model {
                 gated_delta_kernel: kernel_verdicts.gated_delta_kernel,
                 gated_delta_checkpoint_kernel: kernel_verdicts.gated_delta_checkpoint_kernel,
                 gdn_decode_prework_kernel: kernel_verdicts.gdn_decode_prework_kernel,
-                optional_accelerators: Default::default(),
-                sorted_expert_weighted_sum_kernel,
+                optional_accelerators: accelerators_with(expert_kernels.sorted_shared_combination),
+                sorted_expert_weighted_sum_kernel: expert_kernels.sorted_weighted_sum,
                 compiled_swiglu,
                 compiled_elementwise_graphs,
                 chunking,
@@ -307,11 +306,11 @@ fn dense_disk_embedding_rows(
 }
 
 /// The streaming engine's MoE-only runtime trio: pager, warm slot table, and
-/// the sorted-reduction kernel verdict.
+/// the kernels that reduce a layer's routed experts.
 type StreamingExpertRuntimeTrio = (
     Option<Qwen3_5ExpertPager>,
     Option<RefCell<qwen3_5_streaming::AstroExpertCache>>,
-    Option<MlxMetalKernel>,
+    ExpertCombinationKernels,
 );
 
 /// The expert runtime of a sparse model; a dense model streams its layers,
@@ -328,7 +327,7 @@ fn streaming_expert_runtime(
     performance_attribution: &mut PerformanceAttribution,
 ) -> Result<StreamingExpertRuntimeTrio, TextExecutionError> {
     if config.feed_forward_architecture() == Qwen3_5FeedForwardArchitecture::Dense {
-        return Ok((None, None, None));
+        return Ok((None, None, ExpertCombinationKernels::default()));
     }
     load_streaming_expert_runtime(
         runtime,
@@ -377,24 +376,8 @@ fn load_streaming_expert_runtime(
             )
         },
     )?;
-    // The GPU capability verdict decides whether this worker
-    // process retains the measured sorted-reduction kernel. A
-    // demoted kernel leaves None and every MoE forward takes the
-    // unsorted MLX route for the worker's lifetime.
-    let sorted_expert_weighted_sum_kernel =
-        if crate::kernel_capability::worker_process_kernel_capabilities(
-            runtime,
-            performance_attribution,
-        )
-        .is_custom_kernel_supported(crate::kernel_capability::SORTED_EXPERT_WEIGHTED_SUM)
-        {
-            Some(qwen3_5_streaming::qwen3_5_moe_sorted_expert_weighted_sum_kernel()?)
-        } else {
-            tracing::info!(
-                "sorted expert weighted-sum kernel demoted to the MLX fallback for this worker process"
-            );
-            None
-        };
+    let expert_combination_kernels =
+        kept_expert_combination_kernels(runtime, performance_attribution)?;
     let astro_expert_cache = RefCell::new(
         qwen3_5_streaming::AstroExpertCache::new_with_decode_astro_expert_cache_policy(
             expert_pager.layer_count(),
@@ -423,8 +406,62 @@ fn load_streaming_expert_runtime(
     Ok((
         Some(expert_pager),
         Some(astro_expert_cache),
-        sorted_expert_weighted_sum_kernel,
+        expert_combination_kernels,
     ))
+}
+
+/// The two kernels that reduce a layer's routed experts, kept by the GPU's
+/// capability verdicts.
+#[derive(Default)]
+struct ExpertCombinationKernels {
+    /// The sorted router-weighted sum. A demoted kernel leaves `None` and
+    /// every MoE forward takes the unsorted MLX route for the worker's
+    /// lifetime.
+    sorted_weighted_sum: Option<MlxMetalKernel>,
+    /// The sorted sum joined with the gated shared expert in one pass, for
+    /// prompt chunks. A chunk's routed rows are the same whether its experts
+    /// were held or streamed, so this engine keeps it as the in-memory
+    /// engine does (issue #2585).
+    sorted_shared_combination: Option<MlxMetalKernel>,
+}
+
+/// The model's optional accelerators with only the fused combination set.
+fn accelerators_with(
+    sorted_expert_shared_combination_kernel: Option<MlxMetalKernel>,
+) -> crate::qwen3_5_core::model::base::Qwen3_5OptionalAccelerators {
+    crate::qwen3_5_core::model::base::Qwen3_5OptionalAccelerators {
+        sorted_expert_shared_combination_kernel,
+        ..Default::default()
+    }
+}
+
+fn kept_expert_combination_kernels(
+    runtime: &MlxRuntime,
+    performance_attribution: &mut PerformanceAttribution,
+) -> Result<ExpertCombinationKernels, TextExecutionError> {
+    let worker_kernel_capabilities = crate::kernel_capability::worker_process_kernel_capabilities(
+        runtime,
+        performance_attribution,
+    );
+    let sorted_weighted_sum = if worker_kernel_capabilities
+        .is_custom_kernel_supported(crate::kernel_capability::SORTED_EXPERT_WEIGHTED_SUM)
+    {
+        Some(qwen3_5_streaming::qwen3_5_moe_sorted_expert_weighted_sum_kernel()?)
+    } else {
+        tracing::info!(
+            "sorted expert weighted-sum kernel demoted to the MLX fallback for this worker process"
+        );
+        None
+    };
+    let sorted_shared_combination =
+        crate::qwen3_5_core::model::sorted_expert_shared_combination_switch::retained_sorted_expert_shared_combination_kernel(
+            worker_kernel_capabilities,
+            sorted_weighted_sum.is_some(),
+        )?;
+    Ok(ExpertCombinationKernels {
+        sorted_weighted_sum,
+        sorted_shared_combination,
+    })
 }
 
 /// The streaming memory facts plus the fused jangtq2 verdict that the model

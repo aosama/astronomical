@@ -24,8 +24,7 @@ use super::routing::{
     qwen3_5_moe_unsorted_expert_weighted_sum,
 };
 use crate::qwen3_5_core::model_math::sorted_expert_shared_combination::{
-    SortedExpertSharedCombinationInputs, can_fuse_sorted_expert_shared_combination,
-    qwen3_5_sorted_expert_shared_combination,
+    SortedExpertSharedCombinationInputs, fused_sorted_expert_shared_combination_if_proven,
 };
 use crate::sparse_experts;
 
@@ -339,14 +338,11 @@ impl Qwen3_5ResidentModel {
             shared_expert_output,
             shared_expert_gate_logits,
         };
-        if !can_fuse_sorted_expert_shared_combination(&combination_inputs) {
-            return Ok(None);
-        }
-        Ok(Some(qwen3_5_sorted_expert_shared_combination(
+        Ok(fused_sorted_expert_shared_combination_if_proven(
             &self.runtime,
             combination_kernel,
             &combination_inputs,
-        )?))
+        )?)
     }
 
     /// Router-score weighted sum of the routed experts, through the sorted

@@ -99,6 +99,22 @@ pub fn can_fuse_sorted_expert_shared_combination(
         )
 }
 
+/// The fused combination when these inputs have the dtypes its bit-for-bit
+/// contract is proven for, and `None` otherwise, for a caller that then
+/// reduces first and combines after.
+pub fn fused_sorted_expert_shared_combination_if_proven(
+    runtime: &MlxRuntime,
+    kernel: &MlxMetalKernel,
+    inputs: &SortedExpertSharedCombinationInputs<'_>,
+) -> Result<Option<MlxArray>, MlxRuntimeError> {
+    if !can_fuse_sorted_expert_shared_combination(inputs) {
+        return Ok(None);
+    }
+    Ok(Some(qwen3_5_sorted_expert_shared_combination(
+        runtime, kernel, inputs,
+    )?))
+}
+
 /// Reduces sorted expert outputs and adds the sigmoid-gated shared expert.
 pub fn qwen3_5_sorted_expert_shared_combination(
     runtime: &MlxRuntime,

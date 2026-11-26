@@ -28,8 +28,6 @@ mod resident_execution;
 #[cfg(feature = "direct-mlx")]
 mod resident_model;
 #[cfg(feature = "direct-mlx")]
-mod sorted_expert_shared_combination_switch;
-#[cfg(feature = "direct-mlx")]
 mod tree_verification_forward;
 mod verification_forward;
 
