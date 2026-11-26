@@ -7,12 +7,15 @@ use native_identity::digest_bytes;
 use std::path::PathBuf;
 use std::process::Command;
 
-const FIXTURE_ARCHIVE_NAMES: [&str; 5] = [
+/// As many archives as the pinned manifest must name.
+const FIXTURE_ARCHIVE_COUNT: usize = 6;
+const FIXTURE_ARCHIVE_NAMES: [&str; FIXTURE_ARCHIVE_COUNT] = [
     "mlx.tar.gz",
     "mlx-c.tar.gz",
     "metal-cpp.tar.gz",
     "nlohmann-json.tar.gz",
     "fmt.tar.gz",
+    "performance-profiler.tar.gz",
 ];
 
 struct BootstrapSandbox {
@@ -79,7 +82,7 @@ impl BootstrapSandbox {
         digest_bytes(Self::archive_bytes(archive_index).as_bytes())
     }
 
-    fn seed_all_fixture_archives(&self) -> [String; 5] {
+    fn seed_all_fixture_archives(&self) -> [String; FIXTURE_ARCHIVE_COUNT] {
         let mut pinned_digests = Vec::new();
         for archive_index in 0..FIXTURE_ARCHIVE_NAMES.len() {
             pinned_digests.push(self.seed_archive(archive_index, false));
@@ -87,10 +90,10 @@ impl BootstrapSandbox {
         pinned_digests.try_into().unwrap()
     }
 
-    /// The pinned digests for the five fixture archives, without touching
+    /// The pinned digests for the fixture archives, without touching
     /// the astro native build cache dependencies folder: journeys that exercise the download path
     /// need it empty while the manifest still names the pinned digests.
-    fn pinned_digests() -> [String; 5] {
+    fn pinned_digests() -> [String; FIXTURE_ARCHIVE_COUNT] {
         core::array::from_fn(|archive_index| {
             digest_bytes(Self::archive_bytes(archive_index).as_bytes())
         })
@@ -98,7 +101,7 @@ impl BootstrapSandbox {
 
     /// The digest of whatever the curl shim serves, for journeys that
     /// exercise the download path end to end.
-    fn downloaded_payload_digests() -> [String; 5] {
+    fn downloaded_payload_digests() -> [String; FIXTURE_ARCHIVE_COUNT] {
         core::array::from_fn(|_| digest_bytes(b"downloaded-archive-payload"))
     }
 
@@ -191,7 +194,10 @@ fn verify_only_provisions_from_already_downloaded_archives() {
         command_text(&output)
     );
     let stdout_text = String::from_utf8_lossy(&output.stdout);
-    assert_eq!(stdout_text.matches("status=verified-cached").count(), 5);
+    assert_eq!(
+        stdout_text.matches("status=verified-cached").count(),
+        FIXTURE_ARCHIVE_COUNT
+    );
     assert!(stdout_text.contains("status=ready"));
     for (archive_index, archive_name) in FIXTURE_ARCHIVE_NAMES.into_iter().enumerate() {
         let archive_path = sandbox
@@ -256,7 +262,7 @@ fn download_verifies_and_installs_archives_atomically() {
         stdout_text
             .matches("status=downloaded-and-verified")
             .count(),
-        5
+        FIXTURE_ARCHIVE_COUNT
     );
     for archive_name in FIXTURE_ARCHIVE_NAMES {
         let archive_path = sandbox
