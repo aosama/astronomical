@@ -1,5 +1,6 @@
 //! The four measured tasks and their prompts: writing an essay and writing
-//! code, each after a short prompt and after one of about 10,000 tokens. The
+//! code, each after a short prompt and after a long one of about 5,000 tokens
+//! (1,000 for the dense 27B, which reads about 330 tokens a second). The
 //! long prompts are cut from the repository's Romeo and Juliet and MLX source
 //! fixtures (AGENTS.md prefers Shakespeare for text; code needs code), and each
 //! round asks about something different so no reply repeats another.
@@ -12,8 +13,12 @@ const LONG_ESSAY_CHARACTERS: usize = 37_000;
 /// Characters of the MLX source fixture for about 10,000 tokens: Python source
 /// packs about 4.5 characters a token.
 const LONG_CODE_CHARACTERS: usize = 45_000;
-/// The long prompts' usual size, which the character counts above give.
-pub const USUAL_LONG_PROMPT_TOKENS: u32 = 10_000;
+/// The prompt size the character counts above give.
+const CALIBRATED_LONG_PROMPT_TOKENS: u32 = 10_000;
+/// The long prompts' usual size. It was 10,000 tokens; every token of it is
+/// read on every measured long-prompt reply, and halving it halves that wait
+/// while 5,000 tokens still show prompt reading at a real length.
+pub const USUAL_LONG_PROMPT_TOKENS: u32 = 5_000;
 const FIXTURES_DIRECTORY: &str = "verification/acceptance/tests/fixtures";
 
 const ESSAY_TOPICS: [&str; 3] = [
@@ -161,7 +166,7 @@ fn read_fixture(repository_root: &Path, file_name: &str) -> Result<String, Strin
 /// The characters of a fixture for `long_prompt_tokens`, scaled from the
 /// count that gives the usual 10,000.
 fn characters_for(usual_character_count: usize, long_prompt_tokens: u32) -> usize {
-    usual_character_count * long_prompt_tokens as usize / USUAL_LONG_PROMPT_TOKENS as usize
+    usual_character_count * long_prompt_tokens as usize / CALIBRATED_LONG_PROMPT_TOKENS as usize
 }
 
 fn leading_characters(text: &str, character_count: usize) -> &str {

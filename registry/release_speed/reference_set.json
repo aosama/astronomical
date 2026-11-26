@@ -18,7 +18,7 @@
         {
             "model_id": "Qwen3.8-27B-MLX-4bit-vision-DFLASH2",
             "maximum_mlx_memory_gb": null,
-            "long_prompt_tokens": 2000,
+            "long_prompt_tokens": 1000,
             "why": "A dense model with a DFlash2 drafter held fully in memory, where it drafts fastest: the case a change of engine must not slow."
         },
         {
