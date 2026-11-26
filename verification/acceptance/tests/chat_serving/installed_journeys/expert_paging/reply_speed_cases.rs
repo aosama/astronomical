@@ -265,7 +265,7 @@ pub(super) async fn serve_warmup_learning_and_measured_replies(
         reply_case.route_lookup,
         reply_case.generation_sampling.temperature_thousandths()
     );
-    run_generation_with_request_attribution(
+    let measured_reply_token_ids = run_generation_with_request_attribution(
         engine,
         MEASURED_REQUEST_ID,
         &prompt_token_ids,
@@ -275,7 +275,24 @@ pub(super) async fn serve_warmup_learning_and_measured_replies(
         reply_case.generation_sampling,
         reply_case.request_attribution,
     )
-    .await
+    .await;
+    report_memory_after_the_reply(&reply_case.phase_name);
+    measured_reply_token_ids
+}
+
+/// MLX's active and peak memory once the measured reply is written, in GB of
+/// 2^30 bytes, so the same reply can be compared for memory between engines
+/// as well as for speed (issue #2585). The peak is MLX's since an engine last
+/// reset it, so it bounds the reply from above.
+fn report_memory_after_the_reply(phase_name: &str) {
+    const BYTES_PER_GIGABYTE: f64 = 1_073_741_824.0;
+    let active_bytes = mlx_bridge::active_memory_bytes().unwrap_or(0);
+    let peak_bytes = mlx_bridge::peak_memory_bytes().unwrap_or(0);
+    eprintln!(
+        "[reply-memory] phase={phase_name} active_gb={:.2} peak_gb={:.2}",
+        active_bytes as f64 / BYTES_PER_GIGABYTE,
+        peak_bytes as f64 / BYTES_PER_GIGABYTE
+    );
 }
 
 /// Prints where the measured reply's time went inside the engine, a
