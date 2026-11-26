@@ -68,8 +68,18 @@ test("should_offer_all_models_only_the_settings_every_model_starts_from", () => 
     assert.ok(!allModelsGroups.map((group) => group.title).includes("Generation"));
 });
 
-test("should_mark_the_slow_diagnostic_modes_and_say_so_once_on_their_group", () => {
-    const diagnostics = call("configurationPageGroups", bundledSchema, "tuning").find((group) => group.tier === "diagnostic");
+test("should_mark_a_slow_diagnostic_mode_and_say_so_once_on_its_group", () => {
+    // The bundled schema has no diagnostic mode today (issue #2579 removed the
+    // last two); the tier stays for the next one, so a schema adds one here.
+    const schemaWithDiagnosticMode = JSON.parse(JSON.stringify(bundledSchema));
+    schemaWithDiagnosticMode.$defs.chunking.properties.experimental_trace_every_forward_enabled = {
+        type: "boolean", title: "Trace every forward", default: false,
+    };
+    schemaWithDiagnosticMode["x-astronomical-layout"].tuning.push({
+        title: "Diagnostics", tier: "diagnostic", note: "Slows serving. Leave off.",
+        settings: ["chunking.experimental_trace_every_forward_enabled"],
+    });
+    const diagnostics = call("configurationPageGroups", schemaWithDiagnosticMode, "tuning").find((group) => group.tier === "diagnostic");
     assert.equal(diagnostics.title, "Diagnostics");
     assert.match(diagnostics.note, /Leave off/);
 });

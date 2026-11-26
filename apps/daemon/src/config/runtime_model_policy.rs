@@ -66,10 +66,6 @@ pub(crate) fn worker_chunking_configuration(
         ssd_prompt_cache_block_tokens: chunking.ssd_prompt_cache_block_tokens(),
         ssd_prompt_cache_common_prefix_stride_blocks: chunking
             .ssd_prompt_cache_common_prefix_stride_blocks(),
-        experimental_decode_stage_attribution_enabled: chunking
-            .experimental_decode_stage_attribution_enabled(),
-        experimental_prefill_stage_attribution_enabled: chunking
-            .experimental_prefill_stage_attribution_enabled(),
         experimental_in_memory_prefix_adoption_enabled: chunking
             .experimental_in_memory_prefix_adoption_enabled(),
         experimental_neural_engine_prefill_enabled: chunking

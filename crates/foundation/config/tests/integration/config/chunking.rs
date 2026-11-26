@@ -95,44 +95,6 @@ fn should_default_the_decode_levers_off_so_the_measured_fast_path_serves() {
         !chunking.experimental_neural_engine_prefill_enabled(),
         "Neural Engine prefill holds about twice its programs' weights in memory and must stay opt-in"
     );
-    assert!(
-        !chunking.experimental_decode_stage_attribution_enabled(),
-        "attribution-gated stage evaluations roughly double decode time and must stay diagnostic-only"
-    );
-    assert!(
-        !chunking.experimental_prefill_stage_attribution_enabled(),
-        "attribution-gated stage evaluations must stay diagnostic-only for prefill too"
-    );
-}
-
-#[test]
-fn should_resolve_the_prefill_stage_attribution_opt_in() {
-    let temporary_home_directory = tempfile::tempdir().expect("temp home should be created");
-    write_config(
-        temporary_home_directory.path(),
-        r#"{
-          "chunking": {
-            "experimental_prefill_stage_attribution_enabled": true
-          }
-        }"#,
-    );
-
-    let astronomical_config =
-        AstronomicalConfig::load_from_home_directory(temporary_home_directory.path())
-            .expect("prefill stage attribution configuration should load");
-    let chunking = astronomical_config
-        .chunking()
-        .expect("chunking configuration should resolve");
-
-    assert!(
-        chunking.experimental_prefill_stage_attribution_enabled(),
-        "the prefill stage-attribution opt-in must resolve true when configured"
-    );
-    let persisted_chunking = persisted_chunking_object(temporary_home_directory.path());
-    assert_eq!(
-        persisted_chunking["experimental_prefill_stage_attribution_enabled"],
-        true
-    );
 }
 
 #[test]
@@ -312,6 +274,52 @@ fn should_load_a_config_holding_settings_retired_after_0_2_90() {
     .expect("the rewritten config should be readable");
     assert!(!rewritten_config.contains("experimental_quantized_kv_cache_enabled"));
     assert!(!rewritten_config.contains("experimental_fused_moe_decode_enabled"));
+}
+
+/// The two stage attribution settings no engine read (issue #2579) are
+/// dropped wherever a settings file still holds them, so a file written by
+/// an earlier version still loads and is written back without them.
+#[test]
+fn should_load_a_config_holding_the_retired_stage_attribution_settings() {
+    let temporary_home_directory = tempfile::tempdir().expect("temp home should be created");
+    write_config(
+        temporary_home_directory.path(),
+        r#"{
+          "$schema": "./astronomical-config.schema.json",
+          "schema_version": 1,
+          "runtime": {"model_directories": []},
+          "chunking": {
+            "fixed_prompt_processing_chunk_size_tokens": 6144,
+            "experimental_decode_stage_attribution_enabled": true
+          },
+          "models": {
+            "target": {
+              "chunking": {"experimental_prefill_stage_attribution_enabled": true}
+            }
+          }
+        }"#,
+    );
+
+    let astronomical_config =
+        AstronomicalConfig::load_from_home_directory(temporary_home_directory.path())
+            .expect("retired stage attribution settings must never stop a config from loading");
+
+    assert_eq!(
+        astronomical_config
+            .resolved_model_config("target", 65_536)
+            .expect("the model policy should resolve")
+            .chunking()
+            .fixed_prompt_processing_chunk_size_tokens(),
+        6144,
+        "the setting beside a retired one must survive"
+    );
+    let rewritten_config = std::fs::read_to_string(
+        temporary_home_directory
+            .path()
+            .join(".astronomical/config.json"),
+    )
+    .expect("the rewritten config should be readable");
+    assert!(!rewritten_config.contains("stage_attribution"));
 }
 
 #[test]

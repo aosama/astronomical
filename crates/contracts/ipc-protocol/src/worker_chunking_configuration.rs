@@ -26,15 +26,6 @@ pub struct WorkerChunkingConfiguration {
     pub ssd_prompt_cache_block_tokens: Option<u32>,
     /// Number of astro SSD prompt cache blocks between retained branch restart checkpoints.
     pub ssd_prompt_cache_common_prefix_stride_blocks: u32,
-    /// Diagnostic mode that runs decode forwards as stage-split evaluations
-    /// for deep attribution. Roughly doubles decode time; never for serving.
-    #[serde(default)]
-    pub experimental_decode_stage_attribution_enabled: bool,
-    /// Diagnostic mode that runs prefill chunks as stage-split evaluations
-    /// for deep attribution. Synchronizes the graphics processor several
-    /// times per layer; never for serving.
-    #[serde(default)]
-    pub experimental_prefill_stage_attribution_enabled: bool,
     /// Retains the last completed generation's live decoder state and adopts
     /// it for the next turn of the same conversation instead of re-reading
     /// the prefix KV from the disk store. Adopted state is byte-identical to

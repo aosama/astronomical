@@ -217,8 +217,6 @@ struct WorkerChunkingConfiguration: Codable, Equatable {
   // key presence.
   let speculativeDecodingBlockLength: UInt64?
   let ssdPromptCacheCommonPrefixStrideBlocks: UInt32
-  let experimentalDecodeStageAttributionEnabled: Bool
-  let experimentalPrefillStageAttributionEnabled: Bool
   let experimentalInMemoryPrefixAdoptionEnabled: Bool
   let experimentalNeuralEnginePrefillEnabled: Bool
   // Tokens drafted after each reply token by a model with a
@@ -235,8 +233,6 @@ struct WorkerChunkingConfiguration: Codable, Equatable {
     case ssdPromptCacheBlockTokens = "ssd_prompt_cache_block_tokens"
     case speculativeDecodingBlockLength = "speculative_decoding_block_length"
     case ssdPromptCacheCommonPrefixStrideBlocks = "ssd_prompt_cache_common_prefix_stride_blocks"
-    case experimentalDecodeStageAttributionEnabled = "experimental_decode_stage_attribution_enabled"
-    case experimentalPrefillStageAttributionEnabled = "experimental_prefill_stage_attribution_enabled"
     case experimentalInMemoryPrefixAdoptionEnabled = "experimental_in_memory_prefix_adoption_enabled"
     case experimentalNeuralEnginePrefillEnabled = "experimental_neural_engine_prefill_enabled"
     case multiTokenPredictionDraftTokens = "multi_token_prediction_draft_tokens"
@@ -262,10 +258,6 @@ struct WorkerChunkingConfiguration: Codable, Equatable {
       UInt64.self, forKey: .speculativeDecodingBlockLength)
     ssdPromptCacheCommonPrefixStrideBlocks = try container.decode(
       UInt32.self, forKey: .ssdPromptCacheCommonPrefixStrideBlocks)
-    experimentalDecodeStageAttributionEnabled = try container.decode(
-      Bool.self, forKey: .experimentalDecodeStageAttributionEnabled)
-    experimentalPrefillStageAttributionEnabled = try container.decode(
-      Bool.self, forKey: .experimentalPrefillStageAttributionEnabled)
     experimentalInMemoryPrefixAdoptionEnabled = try container.decode(
       Bool.self, forKey: .experimentalInMemoryPrefixAdoptionEnabled)
     experimentalNeuralEnginePrefillEnabled = try container.decode(

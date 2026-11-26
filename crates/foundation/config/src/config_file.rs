@@ -64,13 +64,17 @@ pub(crate) fn parse_and_validate_v1(
     Ok(user_config_file)
 }
 
-const RETIRED_CHUNKING_FIELD_NAMES: [&str; 4] = [
+const RETIRED_CHUNKING_FIELD_NAMES: [&str; 6] = [
     // A streamed prompt finishes every layer before the next by rule since
     // issue #2221, so this interval no longer paces anything.
     "experimental_ssd_paging_prefill_graph_submission_layer_interval",
     "speculative_prefill_draft_forward_tokens",
     "experimental_quantized_kv_cache_enabled",
     "experimental_fused_moe_decode_enabled",
+    // Read by no engine (issue #2579); a reply's standing stage counts and
+    // the GPU's own busy time answer what they were for.
+    "experimental_decode_stage_attribution_enabled",
+    "experimental_prefill_stage_attribution_enabled",
 ];
 
 /// Moves renamed settings to their new keys and drops retired ones. Returns
