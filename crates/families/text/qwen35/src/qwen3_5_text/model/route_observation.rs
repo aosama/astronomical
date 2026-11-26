@@ -34,7 +34,14 @@ pub struct RouteObservationCollector {
     observation_ring: RouteObservationRing,
     /// Where the reply being recorded began (`routed_reply_recording`).
     reply_start_snapshot: Option<ReplyStartSnapshot>,
+    /// Each capacity applied while the reply is recorded, so the replay lab
+    /// can serve the reply under the capacity it really had.
+    capacity_moments: Vec<memory_policy::astro_expert_cache_model::CapacityMoment>,
 }
+
+/// More capacity moments than a recorded reply of the ring's length would
+/// make even at one moment a layer; past it the rest are not kept.
+const MAXIMUM_CAPACITY_MOMENTS: usize = 1 << 16;
 
 impl Default for RouteObservationCollector {
     fn default() -> Self {
@@ -50,11 +57,39 @@ impl RouteObservationCollector {
                 RouteObservationRing::DEFAULT_OBSERVATION_CAPACITY,
             ),
             reply_start_snapshot: None,
+            capacity_moments: Vec::new(),
         }
     }
 
     pub fn set_reply_start_snapshot(&mut self, reply_start_snapshot: ReplyStartSnapshot) {
+        self.capacity_moments.clear();
         self.reply_start_snapshot = Some(reply_start_snapshot);
+    }
+
+    /// Keeps `capacity_moment` at the reply token about to be served, when
+    /// a reply is being recorded.
+    pub fn note_capacity_moment(
+        &mut self,
+        mut capacity_moment: memory_policy::astro_expert_cache_model::CapacityMoment,
+    ) {
+        let Some(reply_start_snapshot) = self.reply_start_snapshot.as_ref() else {
+            return;
+        };
+        if self.capacity_moments.len() >= MAXIMUM_CAPACITY_MOMENTS {
+            return;
+        }
+        let recorded_token_count = self
+            .observation_ring
+            .stored_observation_count()
+            .saturating_sub(reply_start_snapshot.stored_observation_count_at_reply_start());
+        capacity_moment.reply_token_index = u32::try_from(recorded_token_count).unwrap_or(u32::MAX);
+        self.capacity_moments.push(capacity_moment);
+    }
+
+    pub fn take_capacity_moments(
+        &mut self,
+    ) -> Vec<memory_policy::astro_expert_cache_model::CapacityMoment> {
+        std::mem::take(&mut self.capacity_moments)
     }
 
     pub fn take_reply_start_snapshot(&mut self) -> Option<ReplyStartSnapshot> {

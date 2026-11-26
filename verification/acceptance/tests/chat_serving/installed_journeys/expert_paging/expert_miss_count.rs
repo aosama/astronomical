@@ -180,6 +180,7 @@ async fn count_expert_misses_with(
     macos_file_cache_state: MacosFileCacheState,
 ) {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
+    show_memory_governance_lines();
     let PagingExperimentEngine {
         mut engine,
         end_of_sequence_token_ids,
@@ -222,6 +223,7 @@ async fn count_expert_misses_with(
     // The warmup is unattributed, so it leaves no recording; this clears any
     // snapshot an earlier reply left behind.
     let _ = engine.take_routed_reply_recording_for_tests().await;
+    let table_evictions_before = table_eviction_count(&engine).await;
     let measured_reply = serve_measured_reply(
         &mut engine,
         measured_workload,
@@ -231,6 +233,10 @@ async fn count_expert_misses_with(
     )
     .await;
     report_measured_reply(measured_workload, request_attribution, &measured_reply);
+    eprintln!(
+        "[expert-misses] table_evictions={}",
+        table_eviction_count(&engine).await - table_evictions_before
+    );
     if let Some(cold_macos_file_cache) = cold_macos_file_cache {
         eprintln!(
             "[expert-misses] macos_file_cache_sweeps={}",
@@ -349,6 +355,7 @@ fn save_recording(
         "held_expert_ids_by_layer_at_reply_end": recording.held_expert_ids_by_layer_at_reply_end,
         "prompt_demand_by_layer_at_reply_start": recording.prompt_demand_by_layer_at_reply_start,
         "reply_demand_by_layer_at_reply_start": recording.reply_demand_by_layer_at_reply_start,
+        "capacity_moments": recording.capacity_moments,
     });
     let case_path = evidence_directory.join(format!("{}.case.json", measured_workload.name()));
     std::fs::write(
@@ -421,4 +428,29 @@ fn chat_prompt_token_ids(model_directory: &Path, messages: Vec<ChatMessage>) -> 
         .expect("the chat prompt should prepare")
         .input_token_ids()
         .to_vec()
+}
+
+/// Whole layer tables the `astro_expert_cache` has dropped since load.
+async fn table_eviction_count(engine: &Qwen3_5TextEngine) -> u64 {
+    engine
+        .astro_expert_cache_statistics_for_tests()
+        .await
+        .expect("the loaded model reports its astro_expert_cache")
+        .eviction_count
+}
+
+/// Prints the memory governor's lines about table capacity, so a table the
+/// `astro_expert_cache` drops can be traced to the account that took its room.
+fn show_memory_governance_lines() {
+    let governance_filter = tracing_subscriber::EnvFilter::new(
+        "qwen35::qwen3_5_text::model::memory_governance=info,\
+         qwen35::qwen3_5_text::model::system_wired_governance=info,\
+         qwen35::qwen3_5_text::expert_streaming::astro_expert_cache::reclamation=info,\
+         qwen35::qwen3_5_text::model::phase_aware_expert_residency=info,\
+         qwen35::qwen3_5_text::inference_execution::decode_expert_memory_handoff=info",
+    );
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter(governance_filter)
+        .with_writer(std::io::stderr)
+        .try_init();
 }

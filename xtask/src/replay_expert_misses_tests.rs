@@ -31,6 +31,7 @@ fn saved_case(held_at_end: Vec<Vec<u16>>) -> SavedReplayCase {
         warm_slot_count: Some(2),
         prompt_demand_by_layer: vec![vec![9, 0, 0, 1], vec![0, 4, 0, 0], vec![0, 0, 7, 0]],
         reply_demand_by_layer: vec![vec![0, 0, 0, 0], vec![0, 0, 0, 20], vec![0, 0, 0, 0]],
+        capacity_moments: Vec::new(),
     }
 }
 

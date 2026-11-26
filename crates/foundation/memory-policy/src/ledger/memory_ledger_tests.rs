@@ -452,3 +452,47 @@ fn should_reserve_up_front_what_other_wired_memory_leaves_no_room_for() {
     assert_eq!(accounts.system_wired_reserve_bytes, expected_reserve_bytes);
     assert!(accounts.kept_weight_capacity_bytes < capacity_before_bytes);
 }
+
+fn reading_with_wired_outside_mlx(
+    mlx_held_bytes: u64,
+    wired_outside_mlx_bytes: u64,
+) -> crate::ledger::system_wired_ceiling::SystemWiredReading {
+    crate::ledger::system_wired_ceiling::SystemWiredReading {
+        system_wired_bytes: mlx_held_bytes + wired_outside_mlx_bytes,
+        system_wire_limit_bytes: 20 * GIBIBYTE,
+        mlx_held_bytes,
+    }
+}
+
+#[test]
+fn should_not_take_room_from_kept_weights_for_one_reading_of_wiring_outside_mlx() {
+    let mut memory_ledger = ledger_at_16_gibibytes();
+    let steady = memory_ledger
+        .observe_system_wired(reading_with_wired_outside_mlx(12 * GIBIBYTE, 2 * GIBIBYTE));
+    assert_eq!(steady.system_wired_reserve_bytes, 0);
+    // MLX has just given back memory macOS has not un-wired yet.
+    let spike = memory_ledger
+        .observe_system_wired(reading_with_wired_outside_mlx(8 * GIBIBYTE, 6 * GIBIBYTE));
+    assert_eq!(spike.system_wired_reserve_bytes, 0);
+    assert_eq!(
+        spike.kept_weight_capacity_bytes,
+        steady.kept_weight_capacity_bytes
+    );
+}
+
+#[test]
+fn should_take_room_from_kept_weights_once_two_readings_show_more_wiring_outside_mlx() {
+    let mut memory_ledger = ledger_at_16_gibibytes();
+    let _ = memory_ledger
+        .observe_system_wired(reading_with_wired_outside_mlx(12 * GIBIBYTE, 2 * GIBIBYTE));
+    let first = memory_ledger
+        .observe_system_wired(reading_with_wired_outside_mlx(12 * GIBIBYTE, 6 * GIBIBYTE));
+    let second = memory_ledger
+        .observe_system_wired(reading_with_wired_outside_mlx(12 * GIBIBYTE, 6 * GIBIBYTE));
+    assert_eq!(first.system_wired_reserve_bytes, 0);
+    assert!(
+        second.system_wired_reserve_bytes > 0,
+        "wiring another application keeps must be planned around: {second:?}"
+    );
+    assert_accounts_add_up(second);
+}

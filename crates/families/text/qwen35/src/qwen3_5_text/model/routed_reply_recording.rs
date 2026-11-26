@@ -26,6 +26,12 @@ pub struct ReplyStartSnapshot {
     stored_observation_count_at_reply_start: u64,
 }
 
+impl ReplyStartSnapshot {
+    pub const fn stored_observation_count_at_reply_start(&self) -> u64 {
+        self.stored_observation_count_at_reply_start
+    }
+}
+
 /// One recorded reply, ready to replay.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct RoutedReplyRecording {
@@ -54,6 +60,8 @@ pub struct RoutedReplyRecording {
     /// Slots each layer not held whole may keep, when the recording was
     /// taken (the engine's warm slot count).
     pub warm_slot_count: usize,
+    /// Each capacity the engine applied while the reply was served.
+    pub capacity_moments: Vec<memory_policy::astro_expert_cache_model::CapacityMoment>,
     /// One expert's payload bytes in each layer.
     pub expert_payload_bytes_by_layer: Vec<u64>,
 }
@@ -88,6 +96,7 @@ impl Qwen3_5Model {
         let expert_pager = self.expert_pager.as_ref()?;
         let mut route_observation = self.route_observation.borrow_mut();
         let reply_start = route_observation.take_reply_start_snapshot()?;
+        let capacity_moments = route_observation.take_capacity_moments();
         let reply_token_count = route_observation
             .stored_observation_count()
             .saturating_sub(reply_start.stored_observation_count_at_reply_start);
@@ -121,6 +130,7 @@ impl Qwen3_5Model {
             },
             kept_expert_capacity_bytes: reply_start.kept_expert_capacity_bytes,
             warm_slot_count: self.hot_expert_warm_slot_count(),
+            capacity_moments,
             expert_payload_bytes_by_layer,
         })
     }

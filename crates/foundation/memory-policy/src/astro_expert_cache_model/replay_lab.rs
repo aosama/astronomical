@@ -164,6 +164,37 @@ impl HeldExperts {
             .or_insert(0) += 1;
     }
 
+    pub(super) const fn held_bytes(&self) -> u64 {
+        self.held_bytes
+    }
+
+    /// The layer holding the fewest experts, of those holding any; the
+    /// lowest index among equals, as the engine scans its tables in order.
+    pub(super) fn least_occupied_layer(&self) -> Option<usize> {
+        let mut least: Option<(usize, usize)> = None;
+        for (&layer_index, &held_count) in &self.held_count_by_layer {
+            if held_count == 0 {
+                continue;
+            }
+            let is_fewer = match least {
+                None => true,
+                Some((least_index, least_count)) => {
+                    held_count < least_count
+                        || (held_count == least_count && layer_index < least_index)
+                }
+            };
+            if is_fewer {
+                least = Some((layer_index, held_count));
+            }
+        }
+        least.map(|(layer_index, _)| layer_index)
+    }
+
+    /// The held expert the rule values least.
+    pub(super) fn lowest_priority_expert(&self) -> Option<ExpertKey> {
+        self.experts_by_priority.first().map(|&(_, expert)| expert)
+    }
+
     pub(super) fn held_count(&self, layer_index: usize) -> usize {
         self.held_count_by_layer
             .get(&layer_index)

@@ -18,6 +18,7 @@ use super::phase::LedgerPhase;
 use super::reconciliation::{HeldMemory, LedgerReconciliation};
 use super::system_wired_ceiling::{
     SystemWiredReading, limit_past_system_wired_ceiling_bytes, next_system_wired_reserve_bytes,
+    steady_wired_outside_mlx_bytes, wired_outside_mlx_bytes, with_wired_outside_mlx_bytes,
 };
 
 /// A request the ledger cannot carry out.
@@ -42,6 +43,9 @@ pub struct MemoryLedger {
     /// The last reading of the system's wired total and the kernel's wire
     /// limit; `None` before any reading.
     latest_system_wired_reading: Option<(u64, u64)>,
+    /// The memory wired outside MLX at the last reading, so a rise that one
+    /// reading alone shows does not move the reserve.
+    previous_wired_outside_mlx_bytes: Option<u64>,
 }
 
 impl MemoryLedger {
@@ -60,6 +64,7 @@ impl MemoryLedger {
             leases: LeaseBook::default(),
             system_wired_reserve_bytes: 0,
             latest_system_wired_reading: None,
+            previous_wired_outside_mlx_bytes: None,
         })
     }
 
@@ -161,6 +166,11 @@ impl MemoryLedger {
     /// Moves the system wired reserve after a reading of the memory macOS
     /// has wired across the whole system.
     pub fn observe_system_wired(&mut self, reading: SystemWiredReading) -> LedgerAccounts {
+        let current_wired_outside_mlx_bytes = wired_outside_mlx_bytes(reading);
+        let steady_wired_outside_mlx_bytes = steady_wired_outside_mlx_bytes(
+            self.previous_wired_outside_mlx_bytes,
+            current_wired_outside_mlx_bytes,
+        );
         // What the limit cannot give is not carried forward, or a reserve
         // run up on a small limit would take many readings to come down.
         self.system_wired_reserve_bytes = next_system_wired_reserve_bytes(
@@ -170,9 +180,10 @@ impl MemoryLedger {
         )
         .max(limit_past_system_wired_ceiling_bytes(
             self.limit_bytes,
-            reading,
+            with_wired_outside_mlx_bytes(reading, steady_wired_outside_mlx_bytes),
         ))
         .min(self.limit_bytes);
+        self.previous_wired_outside_mlx_bytes = Some(current_wired_outside_mlx_bytes);
         self.latest_system_wired_reading =
             Some((reading.system_wired_bytes, reading.system_wire_limit_bytes));
         self.accounts()
@@ -183,6 +194,13 @@ impl MemoryLedger {
     #[must_use]
     pub const fn latest_system_wired_reading(&self) -> Option<(u64, u64)> {
         self.latest_system_wired_reading
+    }
+
+    /// The memory wired outside MLX at the last reading, as read (before
+    /// the two-reading rule); `None` before any reading.
+    #[must_use]
+    pub const fn latest_wired_outside_mlx_bytes(&self) -> Option<u64> {
+        self.previous_wired_outside_mlx_bytes
     }
 
     /// Sets memory aside for a need outside the normal pattern.
