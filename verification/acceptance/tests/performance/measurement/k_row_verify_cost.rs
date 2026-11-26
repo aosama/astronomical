@@ -17,7 +17,8 @@ use std::time::{Duration, Instant};
 use mlx_bridge::{MlxArray, MlxDtype};
 use model_serving::row_batched_matmul::{
     RegisterOrderedWeight, RowBatchedMatmulKernels, register_ordered_matmul,
-    row_batched_quantized_matmul, row_batched_quantized_matmul_accepts,
+    register_ordered_matmul_any_rows, row_batched_quantized_matmul,
+    row_batched_quantized_matmul_accepts,
 };
 use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use serial_test::serial;
@@ -44,7 +45,7 @@ const BYTES_PER_GB: f64 = 1_073_741_824.0;
 /// Which kernel a pass multiplies with. A projection the row-batched kernel
 /// refuses (the 48-wide DeltaNet gates) takes MLX's, as serving would.
 #[derive(Clone, Copy)]
-enum MatmulPath<'kernels> {
+pub(super) enum MatmulPath<'kernels> {
     Mlx,
     RowBatched(&'kernels RowBatchedMatmulKernels),
     /// The weights converted once into TensorFold's register order.
@@ -63,17 +64,17 @@ impl MatmulPath<'_> {
 
 /// One packed 4-bit projection, `[output, input]` before packing, in MLX's
 /// layout, which both paths read as stored.
-struct PackedProjection {
-    weight: MlxArray,
-    scales: MlxArray,
-    biases: MlxArray,
+pub(super) struct PackedProjection {
+    pub(super) weight: MlxArray,
+    pub(super) scales: MlxArray,
+    pub(super) biases: MlxArray,
     /// The same weight in register order, when its shape tiles.
-    register_ordered: Option<RegisterOrderedWeight>,
-    stored_bytes: usize,
+    pub(super) register_ordered: Option<RegisterOrderedWeight>,
+    pub(super) stored_bytes: usize,
 }
 
 /// One decoder layer's projections in the 27B's shapes.
-struct MeasuredLayer {
+pub(super) struct MeasuredLayer {
     /// Projections reading the hidden row: DeltaNet qkv, z, a, b or attention q, k, v.
     mixer_inputs: Vec<PackedProjection>,
     mixer_output: PackedProjection,
@@ -155,7 +156,7 @@ fn should_measure_k_row_projection_cost_against_one_row_for_the_dense_27b() {
 /// Every distinct projection shape of the 27B as `(output, input)`. On M5,
 /// MLX runs its one-row kernel once per row up to 12 rows for these widths
 /// and its matrix-unit kernel from 13 rows, so 12 and 13 straddle the switch.
-const PROJECTION_SHAPES: [(i32, i32); 7] = [
+pub(super) const PROJECTION_SHAPES: [(i32, i32); 7] = [
     (10240, HIDDEN_WIDTH),
     (6144, HIDDEN_WIDTH),
     (12288, HIDDEN_WIDTH),
@@ -174,16 +175,8 @@ fn should_measure_k_row_cost_against_one_row_for_each_projection_shape() {
     let kernels = RowBatchedMatmulKernels::declare().expect("the kernels are declared");
     let random_key = runtime.random_key(1234).expect("a key builds");
     for (output_width, input_width) in PROJECTION_SHAPES {
-        let mut shape_copies = Vec::with_capacity(MEASURED_LAYER_COUNT);
-        for _ in 0..MEASURED_LAYER_COUNT {
-            shape_copies.push(pack_projection(
-                &runtime,
-                &kernels,
-                &random_key,
-                output_width,
-                input_width,
-            ));
-        }
+        let shape_copies =
+            distinct_shape_copies(&runtime, &kernels, &random_key, (output_width, input_width));
         for matmul_path in [
             MatmulPath::Mlx,
             MatmulPath::RowBatched(&kernels),
@@ -215,6 +208,27 @@ fn should_measure_k_row_cost_against_one_row_for_each_projection_shape() {
             );
         }
     }
+}
+
+/// `MEASURED_LAYER_COUNT` distinct projections of one `(output, input)`
+/// shape, so a pass over them reads DRAM as a pass over distinct layers does.
+pub(super) fn distinct_shape_copies(
+    runtime: &MlxRuntime,
+    kernels: &RowBatchedMatmulKernels,
+    random_key: &MlxArray,
+    (output_width, input_width): (i32, i32),
+) -> Vec<PackedProjection> {
+    let mut shape_copies = Vec::with_capacity(MEASURED_LAYER_COUNT);
+    for _ in 0..MEASURED_LAYER_COUNT {
+        shape_copies.push(pack_projection(
+            runtime,
+            kernels,
+            random_key,
+            output_width,
+            input_width,
+        ));
+    }
+    shape_copies
 }
 
 fn build_layer(
@@ -360,10 +374,14 @@ fn project(
         && let Some(register_ordered) = &projection.register_ordered
     {
         let row_count: i32 = rows.shape()[..rows.shape().len() - 1].iter().product();
-        if row_count <= 128 {
-            return register_ordered_matmul(runtime, kernels, rows, register_ordered)
-                .expect("the register-ordered matmul builds");
+        // More rows than one dispatch takes go 128 at a time, as a converted
+        // projection serves a prompt chunk.
+        return if row_count <= 128 {
+            register_ordered_matmul(runtime, kernels, rows, register_ordered)
+        } else {
+            register_ordered_matmul_any_rows(runtime, kernels, rows, register_ordered)
         }
+        .expect("the register-ordered matmul builds");
     }
     if let MatmulPath::RowBatched(kernels) = matmul_path
         && row_batched_quantized_matmul_accepts(
@@ -445,7 +463,7 @@ fn stack_pass(
 }
 
 /// What one timed pass runs over the K input rows.
-enum MeasuredPass<'weights> {
+pub(super) enum MeasuredPass<'weights> {
     LayerStack(&'weights [MeasuredLayer]),
     OutputHead(&'weights PackedProjection),
     /// Distinct copies of one shape, each read once a pass, with its input width.
@@ -454,7 +472,7 @@ enum MeasuredPass<'weights> {
 
 /// Projects every copy and sums the results to one scalar, so one evaluation
 /// runs them all and no output is dropped as unused.
-fn shape_copies_pass(
+pub(super) fn shape_copies_pass(
     runtime: &MlxRuntime,
     matmul_path: MatmulPath<'_>,
     shape_copies: &[PackedProjection],
@@ -480,7 +498,7 @@ fn shape_copies_pass(
 
 /// The pass's inputs are built and evaluated before the clock starts, so a
 /// timed pass holds only the projections and the small reductions.
-fn median_pass_time(
+pub(super) fn median_pass_time(
     runtime: &MlxRuntime,
     random_key: &MlxArray,
     row_count: i32,
@@ -496,7 +514,7 @@ fn median_pass_time(
     runtime
         .evaluate_arrays(&[&hidden_rows, &second_rows])
         .expect("input rows materialize");
-    let mut pass_times = Vec::with_capacity(MEASURED_PASS_COUNT);
+    let mut pass_times = MeasuredPassTimes::new();
     for pass_index in 0..WARM_UP_PASS_COUNT + MEASURED_PASS_COUNT {
         let pass_started_at = Instant::now();
         let pass_output = match measured_pass {
@@ -510,15 +528,39 @@ fn median_pass_time(
                 shape_copies_pass(runtime, matmul_path, shape_copies, &second_rows)
             }
         };
+        pass_times.keep_evaluated(runtime, &pass_output, pass_index, pass_started_at);
+    }
+    pass_times.median()
+}
+
+/// The times of a pass's measured repetitions. A repetition's clock stops
+/// once its output is evaluated; the warm-up repetitions are not kept.
+pub(super) struct MeasuredPassTimes(Vec<Duration>);
+
+impl MeasuredPassTimes {
+    pub(super) fn new() -> Self {
+        Self(Vec::with_capacity(MEASURED_PASS_COUNT))
+    }
+
+    pub(super) fn keep_evaluated(
+        &mut self,
+        runtime: &MlxRuntime,
+        pass_output: &MlxArray,
+        pass_index: usize,
+        pass_started_at: Instant,
+    ) {
         runtime
-            .evaluate_arrays(&[&pass_output])
+            .evaluate_arrays(&[pass_output])
             .expect("the pass evaluates");
         if pass_index >= WARM_UP_PASS_COUNT {
-            pass_times.push(pass_started_at.elapsed());
+            self.0.push(pass_started_at.elapsed());
         }
     }
-    pass_times.sort();
-    pass_times[pass_times.len() / 2]
+
+    pub(super) fn median(mut self) -> Duration {
+        self.0.sort();
+        self.0[self.0.len() / 2]
+    }
 }
 
 fn layer_stored_bytes(layer: &MeasuredLayer) -> usize {
@@ -571,16 +613,8 @@ fn should_sweep_register_ordered_slice_counts_for_each_projection_shape() {
     let kernels = RowBatchedMatmulKernels::declare().expect("the kernels are declared");
     let random_key = runtime.random_key(1234).expect("a key builds");
     for (output_width, input_width) in PROJECTION_SHAPES {
-        let mut shape_copies = Vec::with_capacity(MEASURED_LAYER_COUNT);
-        for _ in 0..MEASURED_LAYER_COUNT {
-            shape_copies.push(pack_projection(
-                &runtime,
-                &kernels,
-                &random_key,
-                output_width,
-                input_width,
-            ));
-        }
+        let mut shape_copies =
+            distinct_shape_copies(&runtime, &kernels, &random_key, (output_width, input_width));
         let shipped_slice_count = match &shape_copies[0].register_ordered {
             Some(converted) => converted.input_slice_count,
             None => 0,

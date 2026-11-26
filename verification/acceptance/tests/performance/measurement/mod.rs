@@ -12,3 +12,5 @@ mod model_astro_ssd_prompt_cache_warmup_worker;
 mod model_load_to_prefill;
 #[cfg(feature = "performance-measurement")]
 pub(crate) mod model_process_metrics;
+#[cfg(feature = "performance-measurement")]
+mod register_order_served_rows_cost;
