@@ -31,7 +31,7 @@ fn static_only_paths_span_site_docs_assets_and_the_pages_workflow() {
     assert!(is_static_only_path(".github/assets/banner.png"));
     assert!(is_static_only_path(".github/workflows/pages.yml"));
     assert!(!is_static_only_path(".github/workflows/ci.yml"));
-    assert!(!is_static_only_path("scripts/ci/ci-step-timing.sh"));
+    assert!(!is_static_only_path("tier-pyramid-baseline.json"));
     assert!(!is_static_only_path("docs/readme.txt"));
 }
 
@@ -353,7 +353,6 @@ fn should_call_everything_the_swift_and_node_lane_reads_an_input() {
         "apps/thin-talk/web/src/app.ts",
         "apps/daemon/console/console.js",
         "scripts/internal/render-macos-app-icon.swift",
-        "scripts/ci/ci-step-timing.sh",
         "site/schemas/config/v1/astronomical-config.schema.json",
         ".node-version",
         ".github/workflows/ci.yml",

@@ -48,7 +48,6 @@ const SWIFT_NODE_INPUT_PATH_PREFIXES: &[&str] = &[
     "apps/thin-talk/",
     "apps/daemon/console/",
     "scripts/internal/",
-    "scripts/ci/",
     "site/schemas/",
     ".node-version",
     ".github/workflows/ci.yml",

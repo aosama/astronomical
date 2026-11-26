@@ -1,13 +1,14 @@
 //! The workflow structural contract, as typed Rust: parses
 //! `.github/workflows/ci.yml` and pins the required check's triggers,
 //! fail-closed macOS authority, bounded timeouts, integration-lane compile
-//! contract, and attributable timing. The verdict fan-in that owns the
+//! contract. The verdict fan-in that owns the
 //! merge gate is pinned by the companion `workflow_verdict_contract` test;
 //! `github_actions_cache` ownership structure lives in the companion
-//! `workflow_github_actions_cache_owner_contract` test; both replace the Ruby-in-shell
-//! section of `scripts/ci/tests/test-ci-native-cache-coordination.sh`
-//! (issue #1250). The macOS Xcode pin and its shared resolution action are
-//! pinned by the companion `workflow_xcode_pin_contract` test.
+//! `workflow_github_actions_cache_owner_contract` test; both replaced a
+//! Ruby-in-shell contract script (issue #1250). The macOS Xcode pin and its shared resolution action are
+//! pinned by the companion `workflow_xcode_pin_contract` test, the run
+//! timeline by `workflow_run_timeline_contract`, and the absence of shell
+//! scripts by `workflow_shell_script_contract`.
 
 mod contract_support;
 
@@ -484,93 +485,6 @@ fn packaging_contracts_run_on_required_checks() {
         ) <= 4,
         "release contracts exceeded their bounded timeout"
     );
-}
-
-/// Collects one job's timed steps and asserts the begin call lives in the
-/// same run text, mirroring the shell contract's
-/// `ci-step-timing.sh end ([a-z0-9-]+)` extraction.
-fn assert_timed_steps_pair_begin_and_end(job_steps: &[&Value], job_id: &str) -> usize {
-    let mut timed_step_count: usize = 0;
-    for step in job_steps {
-        let Some(run_text) = step.get("run").and_then(Value::as_str) else {
-            continue;
-        };
-        let Some(segment_marker) = run_text.find("ci-step-timing.sh end ") else {
-            continue;
-        };
-        let segment_start = segment_marker + "ci-step-timing.sh end ".len();
-        let end_segment: String = run_text[segment_start..]
-            .chars()
-            .take_while(|character| {
-                character.is_ascii_lowercase() || character.is_ascii_digit() || *character == '-'
-            })
-            .collect();
-        let step_name = step
-            .get("name")
-            .and_then(Value::as_str)
-            .unwrap_or("<unnamed>");
-        assert!(
-            !end_segment.is_empty(),
-            "timed step {step_name} in {job_id} does not name its end segment"
-        );
-        assert!(
-            run_text.contains(&format!("ci-step-timing.sh begin {end_segment}")),
-            "timed step {step_name} ends {end_segment} without a begin call"
-        );
-        timed_step_count += 1;
-    }
-    timed_step_count
-}
-
-#[test]
-fn every_timed_step_pairs_its_begin_and_end_calls() {
-    let workflow = workflow_contract();
-    let mut total_timed_steps: usize = 0;
-    for (job_id, job) in [
-        ("rust-core", required_job(&workflow, "rust-core")),
-        ("swift-node", required_job(&workflow, "swift-node")),
-        ("neural-engine", required_job(&workflow, "neural-engine")),
-        ("static", required_job(&workflow, "static")),
-        (
-            "config-contracts",
-            required_job(&workflow, "config-contracts"),
-        ),
-    ] {
-        total_timed_steps += assert_timed_steps_pair_begin_and_end(&steps_of(job, job_id), job_id);
-    }
-    assert!(
-        total_timed_steps > 0,
-        "workflow has no timed steps to attribute"
-    );
-}
-
-#[test]
-fn macos_jobs_publish_the_timing_summary_even_when_failing() {
-    let workflow = workflow_contract();
-    for job_id in ["rust-core", "swift-node", "neural-engine"] {
-        let job = required_job(&workflow, job_id);
-        let job_name = required_text(job, "name", &format!("job {job_id}"));
-        let publish_steps: Vec<&Value> = steps_of(job, job_id)
-            .into_iter()
-            .filter(|step| {
-                step.get("run")
-                    .and_then(Value::as_str)
-                    .map(|run_text| run_text.contains("publish-ci-timing-summary.sh"))
-                    .unwrap_or(false)
-            })
-            .collect();
-        assert!(
-            !publish_steps.is_empty(),
-            "macOS job {job_name} never publishes the step timing summary"
-        );
-        for publish_step in publish_steps {
-            assert_eq!(
-                required_text(publish_step, "if", "timing summary step"),
-                "always()",
-                "step timing summary must publish even for failed runs"
-            );
-        }
-    }
 }
 
 const SWIFT_MTIME_ACTION: &str = "chetan/git-restore-mtime-action";
