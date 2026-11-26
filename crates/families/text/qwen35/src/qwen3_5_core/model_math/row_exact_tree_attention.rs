@@ -24,10 +24,18 @@
 //! row's arithmetic is the same instructions on the same values, so a row in
 //! a tree equals its one-row step.
 //!
-//! Serving verifies a tree through this kernel once the context reaches
-//! `ROW_EXACT_TREE_ATTENTION_MINIMUM_CONTEXT_TOKENS` (below it MLX's attention
-//! is as cheap), and falls back to MLX's attention for inputs it does not
-//! take (`row_exact_tree_attention_accepts`).
+//! A mixture-of-experts target verifies a tree through this kernel once the
+//! context reaches `ROW_EXACT_TREE_ATTENTION_MINIMUM_CONTEXT_TOKENS` (below
+//! it MLX's attention is as cheap). A dense target, whose drafted reply
+//! must equal its plain one, attends through it at every context length,
+//! its one-token steps included (`one_row_exact_attention`). Either falls
+//! back to MLX's attention for inputs the kernel does not take
+//! (`row_exact_tree_attention_accepts`).
+//!
+//! The query vectors of a key-value head are its query heads times the
+//! tree's rows, 16 to a matrix tile: 4 rows of the 35B-A3B's 8 heads fill
+//! two tiles, 16 rows of the dense 27B's 6 fill six, and a threadgroup
+//! holds eight.
 //!
 //! Earlier versions, all exact, were set aside on speed, measured with
 //! `cargo measure-row-exact-tree-attention` at 65,536 keys over 10 layers:
@@ -51,11 +59,32 @@ pub const HEAD_SIZE: i32 = 256;
 const SIMDGROUP_WIDTH: i32 = 32;
 /// Query vectors a matrix tile holds.
 const TILE_VECTOR_COUNT: i32 = 16;
-/// Query heads a key-value head serves. The 35B-A3B target has 8.
-pub const SUPPORTED_QUERY_GROUP: i32 = 8;
-/// Tree rows one dispatch verifies: the 4-row round a mixture-of-experts
-/// target drafts, two matrix tiles of 16 vectors.
-pub const MAXIMUM_ROW_COUNT: i32 = 4;
+/// Query heads a key-value head serves, for the targets the kernel is
+/// proven on: 8 on the 35B-A3B and 6 on the dense 27B. A row's vectors are
+/// `rows * group`, packed 16 to a matrix tile, and nothing in a lane's
+/// arithmetic depends on where in a tile its vector sits, so the group only
+/// decides how many tiles a tree fills.
+pub const SUPPORTED_QUERY_GROUPS: [i32; 2] = [6, 8];
+/// Tree rows one dispatch verifies: a dense target's 16-row tree.
+pub const MAXIMUM_ROW_COUNT: i32 = 16;
+/// Matrix tiles of query vectors one dispatch holds: a threadgroup has 64
+/// threads a tile and Metal allows 1,024. Sixteen rows of 8 heads fill 8.
+const MAXIMUM_ROW_TILE_COUNT: i32 = 8;
+
+/// Whether a target's attention has a shape the kernel is proven on: head
+/// size 256 and a whole, supported number of query heads a key-value head.
+#[must_use]
+pub fn fits_attention_shape(
+    head_dimension: u32,
+    query_head_count: u32,
+    key_value_head_count: u32,
+) -> bool {
+    if head_dimension != HEAD_SIZE as u32 || key_value_head_count == 0 {
+        return false;
+    }
+    query_head_count.is_multiple_of(key_value_head_count)
+        && SUPPORTED_QUERY_GROUPS.contains(&((query_head_count / key_value_head_count) as i32))
+}
 
 const PARTIALS_SOURCE: &str = r#"
   constexpr int head_size = 256;
@@ -78,7 +107,7 @@ const PARTIALS_SOURCE: &str = r#"
   const int chunk = threadgroup_position_in_grid.y;
   const int row_count = chain_lengths_shape[0];
   const int padded_vectors = packed_queries_shape[1];
-  const int vector_count = row_count * 8;
+  const int vector_count = row_count * QUERY_GROUP;
   const int capacity = key_slab_shape[2];
   // An input, not a template argument: the count grows with the context,
   // and a template argument would compile the kernel again at every size.
@@ -345,8 +374,8 @@ pub struct RowExactTreeAttentionInputs<'inputs> {
 }
 
 /// Whether the kernel takes these inputs: bf16 queries and slabs, head size
-/// 256, 8 query heads a key-value head, at most 4 rows, and the rows stored
-/// after the context. A caller falls back to MLX's attention otherwise.
+/// 256, 6 or 8 query heads a key-value head, at most 16 rows in at most 8
+/// matrix tiles, and the rows stored after the context. A caller falls back to MLX's attention otherwise.
 #[must_use]
 pub fn row_exact_tree_attention_accepts(inputs: &RowExactTreeAttentionInputs<'_>) -> bool {
     validated_shape(inputs).is_ok()
@@ -375,6 +404,8 @@ pub fn row_exact_tree_attention(
 
 struct TreeAttentionShape {
     key_value_head_count: i32,
+    /// Query heads a key-value head serves.
+    query_group: i32,
     row_count: i32,
     padded_vector_count: i32,
     chunk_count: i32,
@@ -384,6 +415,31 @@ impl TreeAttentionShape {
     fn row_tile_count(&self) -> i32 {
         self.padded_vector_count / TILE_VECTOR_COUNT
     }
+
+    /// Query vectors a key-value head attends for: every row of each of its
+    /// query heads.
+    fn vector_count(&self) -> i32 {
+        self.row_count * self.query_group
+    }
+}
+
+/// Query vectors padded to whole matrix tiles.
+fn padded_to_whole_tiles(vector_count: i32) -> i32 {
+    (vector_count + TILE_VECTOR_COUNT - 1) / TILE_VECTOR_COUNT * TILE_VECTOR_COUNT
+}
+
+/// The query heads a key-value head serves, when it is a whole number the
+/// kernel is proven on and the tree's vectors fit the matrix tiles a
+/// threadgroup holds.
+fn supported_query_group(query_shape: &[i32], slab_shape: &[i32], row_count: i32) -> Option<i32> {
+    let (query_head_count, key_value_head_count) = (*query_shape.get(1)?, *slab_shape.get(1)?);
+    if key_value_head_count <= 0 || query_head_count % key_value_head_count != 0 {
+        return None;
+    }
+    let query_group = query_head_count / key_value_head_count;
+    let fits_the_tiles = padded_to_whole_tiles(row_count * query_group)
+        <= MAXIMUM_ROW_TILE_COUNT * TILE_VECTOR_COUNT;
+    (SUPPORTED_QUERY_GROUPS.contains(&query_group) && fits_the_tiles).then_some(query_group)
 }
 
 fn validated_shape(
@@ -392,6 +448,7 @@ fn validated_shape(
     let query_shape = inputs.queries.shape();
     let slab_shape = inputs.key_slab.shape();
     let row_count = inputs.row_chains.row_count();
+    let query_group = supported_query_group(&query_shape, &slab_shape, row_count).unwrap_or(0);
     let is_valid = query_shape.len() == 4
         && slab_shape.len() == 4
         && query_shape[3] == HEAD_SIZE
@@ -400,7 +457,7 @@ fn validated_shape(
         && row_count <= MAXIMUM_ROW_COUNT
         && inputs.value_slab.shape() == slab_shape
         && slab_shape[1] > 0
-        && query_shape[1] == slab_shape[1] * SUPPORTED_QUERY_GROUP
+        && query_group > 0
         && inputs.queries.dtype() == MlxDtype::BFloat16
         && inputs.key_slab.dtype() == MlxDtype::BFloat16
         && inputs.value_slab.dtype() == MlxDtype::BFloat16
@@ -411,18 +468,18 @@ fn validated_shape(
     if !is_valid {
         return Err(attention_error(format!(
             "queries {query_shape:?} and slabs {slab_shape:?} do not fit {row_count} rows \
-             after {} context tokens: bf16, head size {HEAD_SIZE}, {SUPPORTED_QUERY_GROUP} \
-             query heads a key-value head and at most {MAXIMUM_ROW_COUNT} rows",
+             after {} context tokens: bf16, head size {HEAD_SIZE}, one of \
+             {SUPPORTED_QUERY_GROUPS:?} query heads a key-value head and at most \
+             {MAXIMUM_ROW_COUNT} rows",
             inputs.context_length
         )));
     }
-    let vector_count = row_count * SUPPORTED_QUERY_GROUP;
     let longest_sequence = inputs.context_length + row_count;
     Ok(TreeAttentionShape {
         key_value_head_count: slab_shape[1],
+        query_group,
         row_count,
-        padded_vector_count: (vector_count + TILE_VECTOR_COUNT - 1) / TILE_VECTOR_COUNT
-            * TILE_VECTOR_COUNT,
+        padded_vector_count: padded_to_whole_tiles(row_count * query_group),
         chunk_count: (longest_sequence + CHUNK_KEY_COUNT - 1) / CHUNK_KEY_COUNT,
     })
 }
@@ -430,13 +487,13 @@ fn validated_shape(
 /// `[key-value heads, padded vectors, 256]`: each key-value head's query
 /// heads one after another, every row of a head together, padded with zero
 /// vectors to whole matrix tiles. The queries' own layout already orders
-/// them so; only a 1-row tree needs padding.
+/// them so; a tree whose vectors do not fill whole tiles is padded.
 fn packed_queries(
     runtime: &MlxRuntime,
     queries: &MlxArray,
     shape: &TreeAttentionShape,
 ) -> Result<MlxArray, MlxRuntimeError> {
-    let vector_count = shape.row_count * SUPPORTED_QUERY_GROUP;
+    let vector_count = shape.vector_count();
     let packed = runtime.reshape(
         queries,
         &[shape.key_value_head_count, vector_count, HEAD_SIZE],
@@ -464,7 +521,7 @@ fn template_arguments(
             name: "T",
             dtype: MlxDtype::BFloat16,
         },
-        integer_argument("QUERY_GROUP", SUPPORTED_QUERY_GROUP),
+        integer_argument("QUERY_GROUP", shape.query_group),
         integer_argument("ROW_TILES", shape.row_tile_count()),
         integer_argument("CHUNK_KEYS", CHUNK_KEY_COUNT),
         integer_argument("MAXIMUM_CHAIN", maximum_chain),
@@ -535,7 +592,7 @@ fn run_merge(
             "the partials pass returned the wrong number of outputs".to_owned(),
         ));
     };
-    let vector_count = shape.row_count * SUPPORTED_QUERY_GROUP;
+    let vector_count = shape.vector_count();
     let mut outputs = runtime.apply_metal_kernel(
         &kernels.merge,
         &[

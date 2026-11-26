@@ -72,7 +72,9 @@ fn should_report_how_far_four_row_rounds_drift_after_a_short_and_a_journey_promp
         4,
         "4-row chain, short prompt",
     );
-    report_row_drift(&pair, &journey_cell, 4, "4-row chain, journey prompt");
+    if labelled_prompts_the_target_reads(&pair, journey_prompt).len() > 1 {
+        report_row_drift(&pair, &journey_cell, 4, "4-row chain, journey prompt");
+    }
 }
 
 /// One real drafted tree after the serving journey's prompt, verified twice
@@ -93,7 +95,7 @@ fn should_give_a_real_tree_the_same_logits_through_the_kernel_and_mlx_attention(
             .join(" ")
             .into_boxed_str(),
     );
-    for prompt in [ORACLE_CELLS[4].prompt, journey_prompt] {
+    for (_, prompt) in labelled_prompts_the_target_reads(&pair, journey_prompt) {
         let mut cell = ORACLE_CELLS[4];
         cell.prompt = prompt;
         cell.node_budget = 3;
@@ -164,10 +166,7 @@ fn should_count_where_tree_attention_paths_leave_float32_on_real_data() {
             .join(" ")
             .into_boxed_str(),
     );
-    for (label, prompt) in [
-        ("short prompt", ORACLE_CELLS[4].prompt),
-        ("journey prompt", journey_prompt),
-    ] {
+    for (label, prompt) in labelled_prompts_the_target_reads(&pair, journey_prompt) {
         let mut cell = ORACLE_CELLS[4];
         cell.prompt = prompt;
         cell.node_budget = 3;
@@ -203,6 +202,24 @@ fn should_count_where_tree_attention_paths_leave_float32_on_real_data() {
             );
         }
     }
+}
+
+/// The short prompt, and the journey prompt for a target that can read it
+/// here. These journeys read a prompt in one direct prefill under a 30 GB
+/// limit; the dense 27B's 64 layers outgrow that on the journey prompt's
+/// 10,000 tokens (it fails the same way before a tree is ever verified), so
+/// a dense target is measured after the short prompt only.
+fn labelled_prompts_the_target_reads(
+    pair: &JourneyPair,
+    journey_prompt: &'static str,
+) -> Vec<(&'static str, &'static str)> {
+    let mut labelled_prompts = vec![("short prompt", ORACLE_CELLS[4].prompt)];
+    if pair.target.config.feed_forward_architecture()
+        != model_serving::Qwen3_5FeedForwardArchitecture::Dense
+    {
+        labelled_prompts.push(("journey prompt", journey_prompt));
+    }
+    labelled_prompts
 }
 
 fn report_row_drift(pair: &JourneyPair, cell: &Cell, row_count: usize, label: &str) {

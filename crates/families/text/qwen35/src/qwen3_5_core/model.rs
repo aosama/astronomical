@@ -44,6 +44,8 @@ pub mod loading_pipeline;
 #[cfg(feature = "direct-mlx")]
 pub mod mlx_layout_projection;
 #[cfg(feature = "direct-mlx")]
+pub mod one_row_exact_attention;
+#[cfg(feature = "direct-mlx")]
 pub mod output_gate_engine;
 #[cfg(feature = "direct-mlx")]
 pub mod prefill_forward;

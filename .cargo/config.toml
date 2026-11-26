@@ -786,9 +786,12 @@ measure-batched-kernel-row-exactness = "run -p xtask -- test-run --package astro
 # rows with a tree verify's additive mask. Seconds.
 measure-tree-attention-context-cost = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter tree_attention_context_cost"
 # The row-exact tree attention kernel (crates/families/text/qwen35/src/qwen3_5_core/model_math/row_exact_tree_attention.rs):
-# every row of a 4-row chain and of a branching tree must equal its one-row
-# step bit for bit and agree with MLX's masked attention, after 1,000 and 9,000
-# keys; then its time against MLX over 1,024 to 65,536 keys. Seconds.
+# every row of a 4-row chain and of a branching tree at the 35B-A3B's shape,
+# and of a 16-row tree at the dense 27B's, must equal its one-row step bit
+# for bit and agree with MLX's masked attention, after short and long
+# contexts and with sharpened queries; then its time against MLX over 1,024
+# to 65,536 keys, and for the dense tree against MLX's one call and the
+# exact groups of 5 rows. Seconds.
 measure-row-exact-tree-attention = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter row_exact_tree_attention"
 # A target and its DFlash or DFlash2 drafter through the real worker: 10,000
 # Romeo and Juliet tokens in, 500 out at temperature 1.0, over the daemon IPC
