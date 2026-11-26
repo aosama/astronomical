@@ -84,6 +84,9 @@ fn should_compare_stock_register_ordered_and_restored_layouts_at_served_row_coun
     }
 }
 
+/// Passes built, never evaluated, for the host's share of a one-row pass.
+const GRAPH_BUILDING_REPETITIONS: usize = 51;
+
 /// Rounds for the one-row sharing comparison: passes take milliseconds.
 const SHARED_SUMS_ROUND_COUNT: usize = 10;
 
@@ -121,6 +124,15 @@ fn should_price_one_row_with_the_group_sums_shared() {
             }
         }
         eprintln!(
+            "[graph-building] {}x{} K=1, 16 copies: stock {:.3} ms | register {:.3} ms",
+            projection_shape.0,
+            projection_shape.1,
+            milliseconds(served_shape.median_graph_building_time(MatmulPath::Mlx)),
+            milliseconds(
+                served_shape.median_graph_building_time(MatmulPath::RegisterOrdered(&kernels))
+            )
+        );
+        eprintln!(
             "[shared-sums] {}x{} K=1: stock {} | own sums {} | shared sums {}",
             projection_shape.0,
             projection_shape.1,
@@ -148,6 +160,25 @@ impl ServedShape<'_> {
             &MeasuredPass::ShapeCopies(self.shape_copies, self.input_width),
             matmul_path,
         )
+    }
+
+    /// The time to build one row's pass over every copy without evaluating
+    /// it: the host's share of a pass, which the GPU's speed cannot hide.
+    fn median_graph_building_time(&self, matmul_path: MatmulPath<'_>) -> Duration {
+        let row = random_rows(self.runtime, self.random_key, 1, self.input_width);
+        self.runtime
+            .evaluate_arrays(&[&row])
+            .expect("the row materializes");
+        let mut building_times = Vec::with_capacity(GRAPH_BUILDING_REPETITIONS);
+        for _ in 0..GRAPH_BUILDING_REPETITIONS {
+            let building_started_at = Instant::now();
+            let unevaluated_pass =
+                shape_copies_pass(self.runtime, matmul_path, self.shape_copies, &row);
+            building_times.push(building_started_at.elapsed());
+            drop(unevaluated_pass);
+        }
+        building_times.sort();
+        building_times[building_times.len() / 2]
     }
 
     /// One row through every copy, the row prepared once for all of them.
