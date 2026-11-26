@@ -1,11 +1,10 @@
+use super::chat_request_exchange::send_chat_request;
+use super::ipc_worker_transport::open_ipc_worker_transport;
 use super::scripted_chat_test_doubles::{ScriptedChatEngine, ScriptedChatProcessor};
-use super::support::{chat_command, close_worker_transport, next_event, ready_event};
+use super::support::{close_worker_transport, next_event, ready_event};
 use crate::EngineBackedWorker;
-use ipc_protocol::{
-    MAX_IPC_FRAME_BYTES, ProtocolReader, ProtocolWriter, WorkerCommand, WorkerEvent,
-};
+use ipc_protocol::{WorkerCommand, WorkerEvent};
 use std::time::Duration;
-use tokio::io::{duplex, split};
 use tokio::time::timeout;
 #[tokio::test]
 async fn should_report_astro_ssd_prompt_cache_lookup_counters_when_generation_starts() {
@@ -32,22 +31,13 @@ async fn should_report_astro_ssd_prompt_cache_lookup_counters_when_generation_st
                 astro_ssd_prompt_cache_stats_after_lookup.clone(),
             ),
     );
-    let (daemon_transport, worker_transport) = duplex(MAX_IPC_FRAME_BYTES * 2);
-    let (daemon_reader_transport, daemon_writer_transport) = split(daemon_transport);
-    let (worker_reader_transport, worker_writer_transport) = split(worker_transport);
-    let mut daemon_reader = ProtocolReader::new(daemon_reader_transport);
-    let mut daemon_writer = ProtocolWriter::new(daemon_writer_transport);
-    let worker_task = tokio::spawn(async move {
-        engine_worker
-            .run(worker_reader_transport, worker_writer_transport)
-            .await
-    });
+    let (mut daemon_reader, mut daemon_writer, worker_reader_transport, worker_writer_transport) =
+        open_ipc_worker_transport();
+    let worker_task =
+        tokio::spawn(engine_worker.run(worker_reader_transport, worker_writer_transport));
 
     assert_eq!(next_event(&mut daemon_reader).await, ready_event());
-    daemon_writer
-        .send_command(&WorkerCommand::Generate(chat_command(91, 32)))
-        .await
-        .expect("the worker should receive a chat request");
+    send_chat_request(&mut daemon_writer, 91, 32).await;
 
     assert_eq!(
         next_event(&mut daemon_reader).await,
@@ -70,16 +60,14 @@ async fn should_delegate_a_loaded_model_astro_ssd_prompt_cache_clear_to_the_engi
             ScriptedChatEngine::new()
                 .with_astro_ssd_prompt_cache_clear_event(expected_clear_event.clone()),
         );
-        let (daemon_transport, worker_transport) = duplex(MAX_IPC_FRAME_BYTES * 2);
-        let (daemon_reader_transport, daemon_writer_transport) = split(daemon_transport);
-        let (worker_reader_transport, worker_writer_transport) = split(worker_transport);
-        let mut daemon_reader = ProtocolReader::new(daemon_reader_transport);
-        let mut daemon_writer = ProtocolWriter::new(daemon_writer_transport);
-        let worker_task = tokio::spawn(async move {
-            engine_worker
-                .run(worker_reader_transport, worker_writer_transport)
-                .await
-        });
+        let (
+            mut daemon_reader,
+            mut daemon_writer,
+            worker_reader_transport,
+            worker_writer_transport,
+        ) = open_ipc_worker_transport();
+        let worker_task =
+            tokio::spawn(engine_worker.run(worker_reader_transport, worker_writer_transport));
 
         assert_eq!(next_event(&mut daemon_reader).await, ready_event());
         daemon_writer

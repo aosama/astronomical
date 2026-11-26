@@ -1,18 +1,19 @@
 //! Daemon IPC decisions journeys: routing DecideGenerate requests to the
 //! worker executor and refusing them before dispatch when they cannot run.
 
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 
 use astronomical_daemon::{DecisionsExecutionError, DecisionsOutput};
 use decision_contract::{DecisionFailure, OrderedJsonValue};
-use ipc_protocol::{DaemonIpcClient, DaemonRequest, DaemonResponse};
-use tokio::time::timeout;
+use ipc_protocol::{DaemonRequest, DaemonResponse};
 
+use crate::integration::daemon_ipc_exchange::request_and_read_first_response;
+use crate::integration::daemon_ipc_service_fixtures::{
+    shut_down_and_remove_state_directory, start_service_with_installed_models,
+};
 use crate::support::daemon_ipc::{
-    HANDSHAKE_TEST_TIMEOUT, StubGenerationExecutor, fresh_instance_state_directory,
-    ipc_chat_discovered_model, ipc_decision_discovered_model, ipc_runtime_config,
-    ready_stub_executor, ready_stub_executor_with_decisions,
-    start_stub_daemon_ipc_service_with_runtime_config,
+    StubGenerationExecutor, fresh_instance_state_directory, ipc_chat_discovered_model,
+    ipc_decision_discovered_model, ready_stub_executor, ready_stub_executor_with_decisions,
 };
 
 const DECISION_MODEL_ID: &str = "test-local-decider";
@@ -34,40 +35,19 @@ async fn decide_once(
     decide_request: DaemonRequest,
 ) -> DaemonResponse {
     let state_directory = fresh_instance_state_directory(test_name);
-    let runtime_config = ipc_runtime_config(
+    let daemon_ipc_service = start_service_with_installed_models(
+        &state_directory,
+        stub_executor,
         vec![
             ipc_chat_discovered_model(CHAT_MODEL_ID),
             ipc_decision_discovered_model(DECISION_MODEL_ID),
         ],
         &[CHAT_MODEL_ID],
-    );
-    let daemon_ipc_service = start_stub_daemon_ipc_service_with_runtime_config(
-        &state_directory,
-        stub_executor,
-        Some(Arc::new(RwLock::new(runtime_config))),
     )
     .await;
-    let mut daemon_client =
-        DaemonIpcClient::connect(daemon_ipc_service.socket_path().to_path_buf())
-            .await
-            .expect("the client should connect to the running daemon IPC service");
-    timeout(
-        HANDSHAKE_TEST_TIMEOUT,
-        daemon_client.send_request(&decide_request),
-    )
-    .await
-    .expect("the decide request send should finish inside the test timeout")
-    .expect("the decide request should transmit");
-    let decide_response = timeout(HANDSHAKE_TEST_TIMEOUT, daemon_client.next_response())
-        .await
-        .expect("the decide response should arrive inside the test timeout")
-        .expect("the decide response read should not fail at the transport layer")
-        .expect("the daemon should answer the decide request");
-    timeout(HANDSHAKE_TEST_TIMEOUT, daemon_ipc_service.shutdown())
-        .await
-        .expect("the daemon IPC service shutdown should finish inside the test timeout")
-        .expect("the daemon IPC service should shut down cleanly");
-    let _ = std::fs::remove_dir_all(&state_directory);
+    let decide_response =
+        request_and_read_first_response(daemon_ipc_service.socket_path(), &decide_request).await;
+    shut_down_and_remove_state_directory(daemon_ipc_service, &state_directory).await;
     decide_response
 }
 

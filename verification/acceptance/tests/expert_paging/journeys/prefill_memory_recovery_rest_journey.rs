@@ -22,22 +22,23 @@
 
 use std::{fs, path::Path};
 
-use futures_util::StreamExt;
 use serde_json::json;
 use serial_test::serial;
 use test_harness::{sparse_decode_full_fit, test_run::TestRunContext};
 use tokio::time::{Duration, Instant, sleep, timeout};
 
+use super::story_continuation_requests::{
+    consume_completion, story_prompt, story_request, write_everyday_configuration,
+};
 use crate::support::{
-    openai_client::{ChatCompletionStream, LocalOpenAiClient},
+    openai_client::LocalOpenAiClient,
     serving_rest::{get_json_endpoint, launch_real_model_rest_server, stop_real_model_rest_server},
 };
 
+const JOURNEY_LOG_LABEL: &str = "prefill-memory-recovery";
 const JOURNEY_BUDGET: Duration = Duration::from_secs(115);
 const PROMPT_TOKENS: usize = 7_053;
 const MAXIMUM_OUTPUT_TOKENS: u64 = 16;
-const ROMEO_AND_JULIET_SOURCE: &str =
-    include_str!("../../fixtures/model_metrics_50000_romeo_and_juliet_words.txt");
 // The ceiling the refill was traced at. It defines this acceptance cell only;
 // production code must not assume it.
 const REFILL_MEMORY_CEILING_BYTES: u64 = 32 * (1 << 30);
@@ -75,12 +76,7 @@ async fn serve_prompt_through_prefill_memory_recovery() {
         .expect("the isolated worker home should exist")
         .keep();
     write_default_chunking_configuration(&worker_home, &model_directory);
-    let prompt = crate::support::exact_model_prompt::build_model_prompt_content_at_most(
-        &model_directory,
-        ROMEO_AND_JULIET_SOURCE,
-        "Continue the supplied Romeo and Juliet story.",
-        PROMPT_TOKENS,
-    );
+    let prompt = story_prompt(&model_directory, PROMPT_TOKENS);
     let server = launch_real_model_rest_server(
         model_id,
         model_directory,
@@ -105,7 +101,7 @@ async fn serve_prompt_through_prefill_memory_recovery() {
             .create_streaming_chat_completion(&request)
             .await
             .expect("the request should start");
-        if consume_completion(stream).await {
+        if consume_completion(stream, JOURNEY_LOG_LABEL).await {
             served_request_count += 1;
         }
     }
@@ -116,25 +112,6 @@ async fn serve_prompt_through_prefill_memory_recovery() {
         "both requests must be served through prefill memory recovery, not rejected; evidence in {}",
         worker_home.display()
     );
-}
-
-/// True when the stream finished with a finish reason and carried no error.
-async fn consume_completion(mut stream: ChatCompletionStream) -> bool {
-    let mut finished = false;
-    while let Some(fragment) = stream.next().await {
-        let fragment = fragment.expect("the completion stream must stay readable");
-        if !fragment["error"].is_null() {
-            println!(
-                "[prefill-memory-recovery] request failed: {}",
-                fragment["error"]
-            );
-            return false;
-        }
-        for choice in fragment["choices"].as_array().into_iter().flatten() {
-            finished |= matches!(choice["finish_reason"].as_str(), Some("stop" | "length"));
-        }
-    }
-    finished
 }
 
 /// The 37 GiB cell's configuration with the chunk sizes left at their
@@ -199,19 +176,27 @@ async fn read_a_long_prompt_after_a_short_one() {
     // A short request first seats complete expert layers, which is the
     // residency the long prompt's first full chunk then has no room beside.
     let warm_up_stream = client
-        .create_streaming_chat_completion(&story_request(model_id, &warm_up_prompt))
+        .create_streaming_chat_completion(&story_request(
+            model_id,
+            &warm_up_prompt,
+            MAXIMUM_OUTPUT_TOKENS,
+        ))
         .await
         .expect("the short request should start");
     assert!(
-        consume_completion(warm_up_stream).await,
+        consume_completion(warm_up_stream, JOURNEY_LOG_LABEL).await,
         "the short request must be served"
     );
     let long_stream = client
-        .create_streaming_chat_completion(&story_request(model_id, &long_prompt))
+        .create_streaming_chat_completion(&story_request(
+            model_id,
+            &long_prompt,
+            MAXIMUM_OUTPUT_TOKENS,
+        ))
         .await
         .expect("the long request should start");
     let (long_request_was_served, prefill_memory_observations) = tokio::join!(
-        consume_completion(long_stream),
+        consume_completion(long_stream, JOURNEY_LOG_LABEL),
         observe_prefill_memory(server_address),
     );
     stop_real_model_rest_server(server).await;
@@ -221,45 +206,6 @@ async fn read_a_long_prompt_after_a_short_one() {
         worker_home.display()
     );
     assert_memory_was_refilled_during_prefill(&prefill_memory_observations, &worker_home);
-}
-
-/// The settings a fresh install runs with: the `astro_ssd_prompt_cache` is on and
-/// performance attribution is off. Only the model folders are named, and the
-/// log level is raised so the evidence folder records when the freeze lifts.
-fn write_everyday_configuration(worker_home: &Path) {
-    let configuration_document = json!({
-        "$schema": "./astronomical-config.schema.json",
-        "schema_version": 1,
-        "runtime": {"model_directories": crate::support::configured_model_directory_roots()},
-        "diagnostics": {"log_level": "info"},
-    });
-    let state_directory = worker_home.join(".astronomical-dev");
-    fs::create_dir_all(&state_directory).expect("the state directory should exist");
-    fs::write(
-        state_directory.join("config.json"),
-        serde_json::to_vec_pretty(&configuration_document)
-            .expect("the configuration should serialize"),
-    )
-    .expect("the configuration should be written");
-}
-
-fn story_prompt(model_directory: &Path, prompt_token_count: usize) -> String {
-    crate::support::exact_model_prompt::build_model_prompt_content_at_most(
-        model_directory,
-        ROMEO_AND_JULIET_SOURCE,
-        "Continue the supplied Romeo and Juliet story.",
-        prompt_token_count,
-    )
-}
-
-fn story_request(model_id: &str, prompt: &str) -> serde_json::Value {
-    json!({
-        "model": model_id,
-        "messages": [{"role": "user", "content": prompt}],
-        "stream": true,
-        "max_tokens": MAXIMUM_OUTPUT_TOKENS,
-        "temperature": 0,
-    })
 }
 
 /// One reading of the engine's status while it was reading the prompt.

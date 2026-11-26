@@ -6,41 +6,20 @@
 mod daemon_wait_support;
 mod model_load;
 mod request_progress;
+mod respond_dependency_fixtures;
 mod schema;
 
-use std::{io::Write, path::PathBuf};
-
-use astronomical_cli::RespondDependencies;
 use astronomical_cli::RespondError;
-use config::AstronomicalRuntimeInstance;
 use ipc_protocol::{ChatImageInput, ChatMessage};
 use tokio::time::timeout;
 
+use self::respond_dependency_fixtures::{resident_default_stub_config, respond_dependencies};
 use crate::integration::support::environment::{
-    DOWNLOAD_POLL_INTERVAL, SOCKET_FILE_NAME, TEST_TIMEOUT, fresh_test_directory,
-    respond_arguments, respond_arguments_with,
+    SOCKET_FILE_NAME, TEST_TIMEOUT, fresh_test_directory, respond_arguments, respond_arguments_with,
 };
 use crate::integration::support::stub_daemon::{
     StubCatalogEntry, StubDaemonConfig, StubInstalledModel, spawn_stub_daemon, stub_download_job,
 };
-
-fn respond_dependencies<'a>(
-    candidate_socket_paths: Vec<PathBuf>,
-    stdout: &'a mut Vec<u8>,
-    stderr: &'a mut Vec<u8>,
-) -> RespondDependencies<'a> {
-    RespondDependencies {
-        candidate_socket_paths,
-        runtime_instance: AstronomicalRuntimeInstance::Development,
-        stdout: stdout as &mut dyn Write,
-        stderr: stderr as &mut dyn Write,
-        request_timeout: TEST_TIMEOUT,
-        download_stall_bound: TEST_TIMEOUT,
-        download_poll_interval: DOWNLOAD_POLL_INTERVAL,
-        daemon_work_poll_interval: DOWNLOAD_POLL_INTERVAL,
-        model_load_stall_bound: TEST_TIMEOUT,
-    }
-}
 
 #[tokio::test]
 async fn should_report_a_missing_daemon_as_not_running() {
@@ -73,17 +52,6 @@ async fn should_report_a_missing_daemon_as_not_running() {
         "the not-running error should name the socket it probed: {respond_outcome:?}"
     );
     let _ = std::fs::remove_dir_all(&test_directory);
-}
-
-/// Stub that has one resident chat model and names it as the effective
-/// default: the no-flag resolution path.
-fn resident_default_stub_config() -> StubDaemonConfig {
-    StubDaemonConfig {
-        installed_models: vec![StubInstalledModel::chat("test/local-chatter", true)],
-        default_model_id: Some("test/local-chatter".to_owned()),
-        chat_fragments: vec!["Hello".to_owned(), " world".to_owned()],
-        ..Default::default()
-    }
 }
 
 #[tokio::test]

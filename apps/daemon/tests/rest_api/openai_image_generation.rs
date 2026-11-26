@@ -1,12 +1,14 @@
 //! Acceptance coverage for the non-streaming OpenAI image-generation journey.
 
+use crate::rest_api::discovered_model_fixtures::chat_only_model;
+use crate::rest_api::http_exchange_fixtures::{post_json_request, read_json_body};
 use std::{io::Cursor, path::PathBuf};
 
 use astronomical_daemon::{
     ImageGenerationExecutionError, build_application_with_discovered_models,
 };
 use axum::{
-    body::{Body, to_bytes},
+    body::Body,
     http::{Request, StatusCode},
 };
 use base64::{Engine as _, engine::general_purpose::STANDARD};
@@ -199,7 +201,7 @@ async fn should_admit_an_in_envelope_request_at_the_envelope_boundaries() {
 async fn should_reject_a_chat_model_before_image_queue_admission() {
     let executor = ScriptedExecutor::ready(Vec::new());
     let received_commands = executor.received_image_generation_commands();
-    let application = build_application_with_discovered_models(executor, vec![chat_model()]);
+    let application = build_application_with_discovered_models(executor, vec![chat_only_model()]);
     let mut request_document = valid_request_document();
     request_document["model"] = serde_json::json!("chat-only-model");
 
@@ -439,28 +441,15 @@ fn valid_request_document() -> serde_json::Value {
 }
 
 fn image_request(request_document: serde_json::Value) -> Request<Body> {
-    Request::builder()
-        .method("POST")
-        .uri("/v1/images/generations")
-        .header("content-type", "application/json")
-        .body(Body::from(request_document.to_string()))
-        .expect("the image request should be valid")
+    post_json_request("/v1/images/generations", request_document)
 }
 
 fn text_generation_request(uri: &str, request_document: serde_json::Value) -> Request<Body> {
-    Request::builder()
-        .method("POST")
-        .uri(uri)
-        .header("content-type", "application/json")
-        .body(Body::from(request_document.to_string()))
-        .expect("the text generation request should be valid")
+    post_json_request(uri, request_document)
 }
 
 async fn response_json(response: axum::response::Response) -> serde_json::Value {
-    let response_body = to_bytes(response.into_body(), 16 * 1024)
-        .await
-        .expect("the bounded response body should be readable");
-    serde_json::from_slice(&response_body).expect("the response should contain JSON")
+    read_json_body(response, 16 * 1024).await
 }
 
 fn image_model() -> DiscoveredModel {
@@ -501,26 +490,6 @@ fn qwen_image_model() -> DiscoveredModel {
             dimension_multiple_pixels: 32,
         }),
         license: Some(ModelLicense::QwenResearch),
-        model_size_bytes: 1,
-    }
-}
-
-fn chat_model() -> DiscoveredModel {
-    DiscoveredModel {
-        model_id: "chat-only-model".to_owned(),
-        provider_model_id: None,
-        model_family: config::QWEN3_5_MODEL_FAMILY,
-        revision: "fixture-revision".to_owned(),
-        model_directory: PathBuf::from("fixtures/models/chat-only"),
-        capabilities: ModelCapabilities::Chat(config::ChatModelCapabilities {
-            context_window: 2_048,
-            max_input_tokens: 1_024,
-            max_output_tokens: 128,
-            supports_vision: false,
-            supports_reasoning: true,
-            supports_tool_calls: true,
-        }),
-        license: None,
         model_size_bytes: 1,
     }
 }

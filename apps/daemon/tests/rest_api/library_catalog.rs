@@ -1,5 +1,6 @@
 //! Library catalog REST contract coverage.
 
+use crate::rest_api::http_exchange_fixtures::get_response;
 use std::time::Duration;
 
 use astronomical_daemon::DownloadCatalog;
@@ -196,15 +197,7 @@ async fn should_return_the_validated_catalog_in_authored_order_when_the_worker_i
             download_catalog,
         );
 
-        let catalog_response = application
-            .oneshot(
-                Request::builder()
-                    .uri("/v1/library/catalog")
-                    .body(Body::empty())
-                    .expect("the catalog request should be valid"),
-            )
-            .await
-            .expect("the application should return a catalog response");
+        let catalog_response = get_response(&application, "/v1/library/catalog").await;
 
         assert_eq!(catalog_response.status(), StatusCode::OK);
         assert!(
@@ -291,7 +284,6 @@ fn assert_named_only_by_its_model_id(
 }
 
 #[tokio::test]
-#[expect(clippy::too_many_lines)]
 async fn should_publish_every_shipped_catalog_entry_to_the_library_catalog_endpoint() {
     timeout(Duration::from_secs(5), async {
         let shipped_catalog_text = std::fs::read_to_string(
@@ -323,15 +315,7 @@ async fn should_publish_every_shipped_catalog_entry_to_the_library_catalog_endpo
             download_catalog,
         );
 
-        let catalog_response = application
-            .oneshot(
-                Request::builder()
-                    .uri("/v1/library/catalog")
-                    .body(Body::empty())
-                    .expect("the catalog request should be valid"),
-            )
-            .await
-            .expect("the catalog response should be available");
+        let catalog_response = get_response(&application, "/v1/library/catalog").await;
 
         assert_eq!(catalog_response.status(), StatusCode::OK);
         let catalog_body = to_bytes(catalog_response.into_body(), 256 * 1024)

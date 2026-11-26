@@ -26,11 +26,13 @@
 
 use std::path::Path;
 
-use futures_util::StreamExt;
 use serde_json::{Value, json};
 use serial_test::serial;
 use tokio::time::{Duration, Instant, sleep, timeout};
 
+use super::thinking_budget_completion_stream::{
+    consume_completed_stream, thinking_budget_completion_request, write_worker_configuration,
+};
 use crate::support::openai_client::{ChatCompletionStream, LocalOpenAiClient};
 use crate::support::serving_rest::{
     SSD_JOURNEY_TIMEOUT, get_json_endpoint, launch_real_model_rest_server,
@@ -83,14 +85,12 @@ async fn run_mlx_memory_progress_rest_journey() {
     .await;
     let server_address = real_model_rest_server.server_address;
     let openai_client = LocalOpenAiClient::new(server_address, "local-acceptance-client");
-    let completion_request = json!({
-        "model": model_id(),
-        "messages": [{"role": "user", "content": user_message}],
-        "stream": true,
-        "stream_options": {"include_usage": true},
-        "max_tokens": MAXIMUM_OUTPUT_TOKEN_COUNT,
-        "thinking_budget": THINKING_BUDGET_TOKEN_COUNT,
-    });
+    let completion_request = thinking_budget_completion_request(
+        model_id(),
+        &user_message,
+        MAXIMUM_OUTPUT_TOKEN_COUNT,
+        THINKING_BUDGET_TOKEN_COUNT,
+    );
     let streamed_completion: ChatCompletionStream = openai_client
         .create_streaming_chat_completion(&completion_request)
         .await
@@ -100,14 +100,7 @@ async fn run_mlx_memory_progress_rest_journey() {
         observe_mlx_memory_progress(server_address),
     );
     // Acceptance criterion 1: the model produces output.
-    assert!(
-        !completed_stream.model_text.is_empty(),
-        "the model must produce output text"
-    );
-    assert!(matches!(
-        completed_stream.finish_reason.as_deref(),
-        Some("stop" | "length")
-    ));
+    completed_stream.assert_produced_output_and_finished();
     // Acceptance criterion 2: the status surface delivered at least two
     // prefill-sourced memory observations while prompt processing ran. If
     // fewer arrived, the memory bar would never refresh during prefill.
@@ -314,37 +307,7 @@ fn log_status_progress(status_document: &Value) {
     );
 }
 
-struct CompletedStream {
-    model_text: String,
-    finish_reason: Option<String>,
-}
-
-async fn consume_completed_stream(
-    mut streamed_completion: ChatCompletionStream,
-) -> CompletedStream {
-    let mut streamed_model_text = String::new();
-    let mut finish_reason = None;
-    while let Some(stream_item) = streamed_completion.next().await {
-        let stream_chunk = stream_item.expect("the public REST stream should remain healthy");
-        for choice in stream_chunk["choices"].as_array().into_iter().flatten() {
-            if let Some(content_fragment) = choice["delta"]["content"].as_str() {
-                streamed_model_text.push_str(content_fragment);
-            }
-            if let Some(reason) = choice["finish_reason"].as_str() {
-                finish_reason = Some(reason.to_owned());
-            }
-        }
-    }
-    CompletedStream {
-        model_text: streamed_model_text.trim().to_owned(),
-        finish_reason,
-    }
-}
-
 fn write_acceptance_config(isolated_worker_home: &Path, model_directory: &Path) {
-    let configuration_directory = isolated_worker_home.join(".astronomical-dev");
-    std::fs::create_dir(&configuration_directory)
-        .expect("the MLX memory progress configuration directory should be created");
     let configuration_document = json!({
         "model_directories": [model_directory],
         "maximum_mlx_memory_gb": MAXIMUM_MLX_MEMORY_GB,
@@ -359,10 +322,9 @@ fn write_acceptance_config(isolated_worker_home: &Path, model_directory: &Path) 
             "fixed_prompt_processing_chunk_size_tokens": 2_048,
         },
     });
-    std::fs::write(
-        configuration_directory.join("config.json"),
-        serde_json::to_vec_pretty(&configuration_document)
-            .expect("the MLX memory progress configuration should serialize"),
-    )
-    .expect("the MLX memory progress configuration should be written");
+    write_worker_configuration(
+        isolated_worker_home,
+        "MLX memory progress",
+        &configuration_document,
+    );
 }

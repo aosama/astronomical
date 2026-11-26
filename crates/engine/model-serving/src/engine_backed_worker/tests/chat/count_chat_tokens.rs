@@ -1,3 +1,4 @@
+use super::chat_request_exchange::{plain_completed_event, send_chat_request};
 use super::scripted_chat_test_doubles::ScriptedChatProcessor;
 use super::support::{chat_command, close_worker_transport, next_event};
 use super::tracking_chat_engine_test_doubles::TrackingChatEngine;
@@ -54,15 +55,7 @@ async fn should_answer_a_count_with_the_prepared_prompt_length_and_no_generation
 
     assert_eq!(
         next_event(&mut daemon_reader).await,
-        WorkerEvent::Completed {
-            request_id: RequestId::new(731),
-            prompt_token_count: 4_321,
-            generated_token_count: 0,
-            reasoning_token_count: 0,
-            astro_ssd_prompt_cache_restored_token_count: 0,
-            astro_ssd_prompt_cache_diagnostics: None,
-            reason: ChatGenerationCompletionReason::EndOfSequence,
-        }
+        plain_completed_event(731, 4_321, 0, ChatGenerationCompletionReason::EndOfSequence)
     );
     close_worker_transport(daemon_writer, worker_task).await;
 }
@@ -80,10 +73,7 @@ async fn should_leave_the_engine_idle_so_a_following_generation_starts() {
         WorkerEvent::Completed { .. }
     ));
 
-    daemon_writer
-        .send_command(&WorkerCommand::Generate(chat_command(733, 3)))
-        .await
-        .expect("the worker should receive the generation");
+    send_chat_request(&mut daemon_writer, 733, 3).await;
 
     // The tracking engine refuses a second start while one is active, so a
     // count that had started the engine would surface here as EngineBusy.

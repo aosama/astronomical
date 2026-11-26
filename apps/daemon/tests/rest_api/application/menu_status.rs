@@ -1,6 +1,7 @@
 //! Keeps the complete menu fixture coupled to the production status endpoint for every loaded
 //! model family. Swift consumes the same fixture through its real client and telemetry store.
 
+use crate::rest_api::http_exchange_fixtures::get_response;
 use std::{
     collections::HashMap,
     path::PathBuf,
@@ -10,18 +11,13 @@ use std::{
 use astronomical_daemon::{
     ResolvedRuntimeConfig, build_application, build_development_application_with_reload,
 };
-use axum::{
-    Router,
-    body::{Body, to_bytes},
-    http::Request,
-};
+use axum::{Router, body::to_bytes};
 use ipc_protocol::{
     ModelLoadInFlight, WorkerImageGenerationModelConfiguration,
     WorkerLoadedAutoregressiveModelRuntimeConfiguration, WorkerLoadedModelRuntimeConfiguration,
     WorkerRuntimeFeatureConfiguration,
 };
 use serde_json::Value;
-use tower::ServiceExt;
 
 use crate::support::ScriptedExecutor;
 
@@ -249,15 +245,7 @@ async fn production_status_document(
 }
 
 async fn request_status_document(application: Router) -> Value {
-    let response = application
-        .oneshot(
-            Request::builder()
-                .uri("/v1/status")
-                .body(Body::empty())
-                .expect("the status request should be valid"),
-        )
-        .await
-        .expect("the application should return a status response");
+    let response = get_response(&application, "/v1/status").await;
     let status_body = to_bytes(response.into_body(), 16 * 1_024)
         .await
         .expect("the status body should be readable");

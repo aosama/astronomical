@@ -4,11 +4,13 @@ use ipc_protocol::{
     ChatGenerationCommand, ChatGenerationSettings, ChatMessage, ChatToolChoice, RequestId,
 };
 use model_serving::{
-    GeneratedToken, InferenceEngine, PromptProcessingChunkSizer, Qwen3_5ArtifactValidator,
-    Qwen3_5TextEngine, Qwen3_5Tokenizer, TextInferenceRequest, TextMlxEngineConstructors,
+    InferenceEngine, Qwen3_5ArtifactValidator, Qwen3_5Tokenizer, TextInferenceRequest,
 };
 use tokio::time::timeout;
 
+use super::super::small_chunk_text_engine::{
+    construct_small_chunk_text_engine, count_tokens_within_vocabulary,
+};
 use crate::serving_acceptance::support::{IMAGE_PAD_TOKEN_ID, LOCAL_AI_PROMPT_TOKEN_IDS};
 
 const ROMEO_AND_JULIET_SOURCE: &str = include_str!(
@@ -37,18 +39,12 @@ async fn run_romeo_continuation() {
         .expect("the configured tokenizer should load");
     let image_pad_token_id = tokenizer.image_pad_token_id();
     let mlx_memory_limits = crate::common::sample_serving_acceptance_mlx_memory_limits().await;
-    let mut qwen3_5_engine = Qwen3_5TextEngine::new_with_prompt_processing_chunk_sizer(
+    let mut qwen3_5_engine = construct_small_chunk_text_engine(
         validated_artifact,
-        mlx_memory_limits.active_memory_limit_bytes(),
-        mlx_memory_limits.mlx_buffer_cache_limit_bytes(),
-        None,
-        PromptProcessingChunkSizer::for_chunk_size_tokens(16)
-            .expect("the test streaming prefill chunk size should be valid"),
+        &mlx_memory_limits,
+        &model_directory,
         image_pad_token_id,
-        model_directory.to_path_buf(),
-        crate::common::standard_worker_chunking_configuration(),
-    )
-    .expect("the dense engine settings should be valid");
+    );
     qwen3_5_engine
         .load()
         .await
@@ -89,26 +85,14 @@ async fn run_romeo_continuation() {
         .await
         .expect("the engine should accept one Romeo request");
 
-    let mut generated_token_count = 0usize;
-    while generated_token_count < ROMEO_CONTINUATION_MAX_TOKENS {
-        match qwen3_5_engine
-            .decode_next_token(request_id)
-            .await
-            .expect("each engine boundary should advance the request")
-        {
-            GeneratedToken::TokenId { token_id, .. } => {
-                assert!(
-                    token_id < model_vocabulary_size,
-                    "generated token id {token_id} must be within vocabulary size {model_vocabulary_size}"
-                );
-                generated_token_count += 1;
-            }
-            GeneratedToken::PrefillProgress { .. } => {}
-            GeneratedToken::PromptProcessingPhaseStarted { .. } => {}
-            GeneratedToken::GenerationPreparationStarted { .. } => {}
-            GeneratedToken::EndOfSequence => break,
-        }
-    }
+    let generated_token_count = count_tokens_within_vocabulary(
+        &mut qwen3_5_engine,
+        request_id,
+        ROMEO_CONTINUATION_MAX_TOKENS,
+        model_vocabulary_size,
+        "generated",
+    )
+    .await;
     assert!(
         generated_token_count > 0,
         "the engine must produce at least one token"
@@ -125,18 +109,12 @@ async fn should_generate_a_sampled_continuation_through_the_engine_trait() {
         .expect("the Ornith artifact should validate before engine loading");
     let model_vocabulary_size = validated_artifact.config().vocabulary_size();
     let mlx_memory_limits = crate::common::sample_serving_acceptance_mlx_memory_limits().await;
-    let mut qwen3_5_engine = Qwen3_5TextEngine::new_with_prompt_processing_chunk_sizer(
+    let mut qwen3_5_engine = construct_small_chunk_text_engine(
         validated_artifact,
-        mlx_memory_limits.active_memory_limit_bytes(),
-        mlx_memory_limits.mlx_buffer_cache_limit_bytes(),
-        None,
-        PromptProcessingChunkSizer::for_chunk_size_tokens(16)
-            .expect("the test streaming prefill chunk size should be valid"),
+        &mlx_memory_limits,
+        &model_directory,
         IMAGE_PAD_TOKEN_ID,
-        model_directory.to_path_buf(),
-        crate::common::standard_worker_chunking_configuration(),
-    )
-    .expect("the bounded Ornith engine settings should be valid");
+    );
     qwen3_5_engine
         .load()
         .await
@@ -160,26 +138,14 @@ async fn should_generate_a_sampled_continuation_through_the_engine_trait() {
     // Structural validity: the engine must produce at least one token and
     // finish cleanly, without asserting exact token values that couple the
     // test to one specific quantization artifact.
-    let mut generated_token_count = 0usize;
-    while generated_token_count < 16 {
-        match qwen3_5_engine
-            .decode_next_token(request_id)
-            .await
-            .expect("each engine boundary should advance the sampled request")
-        {
-            GeneratedToken::TokenId { token_id, .. } => {
-                assert!(
-                    token_id < model_vocabulary_size,
-                    "sampled token id {token_id} must be within vocabulary size {model_vocabulary_size}"
-                );
-                generated_token_count += 1;
-            }
-            GeneratedToken::PrefillProgress { .. } => {}
-            GeneratedToken::PromptProcessingPhaseStarted { .. } => {}
-            GeneratedToken::GenerationPreparationStarted { .. } => {}
-            GeneratedToken::EndOfSequence => break,
-        }
-    }
+    let generated_token_count = count_tokens_within_vocabulary(
+        &mut qwen3_5_engine,
+        request_id,
+        16,
+        model_vocabulary_size,
+        "sampled",
+    )
+    .await;
     assert!(
         generated_token_count > 0,
         "the engine must produce at least one sampled token"

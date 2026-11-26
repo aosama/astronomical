@@ -2,43 +2,37 @@
 //! model identity, chat requests stream frames, and rejections carry reasons.
 
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::Arc;
 
 use astronomical_daemon::{WorkerHealthSnapshot, WorkerHealthStatus};
 use ipc_protocol::{
-    ChatGenerationCompletionReason, ChatGenerationSettings, ChatMessage, DaemonIpcClient,
-    DaemonRequest, DaemonResponse, DaemonWorkerStatus, ModelLoadInFlight,
+    ChatGenerationCompletionReason, ChatMessage, DaemonRequest, DaemonResponse, ModelLoadInFlight,
 };
-use tokio::time::timeout;
 
+use crate::integration::daemon_ipc_exchange::{
+    connect_and_send_request, connect_client, next_response_or_close, next_response_within_timeout,
+    request_and_read_first_response,
+};
+use crate::integration::daemon_ipc_service_fixtures::{
+    ready_idle_status_response, say_hello_chat_request, shut_down_and_remove_state_directory,
+    start_ready_chat_service, start_service_with_installed_models,
+    stub_executor_with_health_snapshot,
+};
 use crate::support::daemon_ipc::{
-    HANDSHAKE_TEST_TIMEOUT, StubGenerationExecutor, fresh_instance_state_directory,
-    ipc_runtime_config, ready_stub_executor, start_stub_daemon_ipc_service,
-    start_stub_daemon_ipc_service_with_runtime_config, text_only_chat_generate_request,
+    fresh_instance_state_directory, ready_stub_executor, start_stub_daemon_ipc_service,
+    text_only_chat_generate_request,
 };
 
 #[tokio::test]
 async fn should_report_the_loaded_model_identity_for_status_requests() {
-    let state_directory = fresh_instance_state_directory("status");
-    let stub_executor = ready_stub_executor("test/local-chatter");
-    let daemon_ipc_service = start_stub_daemon_ipc_service(&state_directory, stub_executor).await;
+    let (daemon_ipc_service, _stub_executor, state_directory) =
+        start_ready_chat_service("status").await;
 
-    let mut daemon_client =
-        DaemonIpcClient::connect(daemon_ipc_service.socket_path().to_path_buf())
-            .await
-            .expect("the client should connect to the running daemon IPC service");
-    timeout(
-        HANDSHAKE_TEST_TIMEOUT,
-        daemon_client.send_request(&DaemonRequest::Handshake),
+    let handshake_response = request_and_read_first_response(
+        daemon_ipc_service.socket_path(),
+        &DaemonRequest::Handshake,
     )
-    .await
-    .expect("the handshake send should finish inside the test timeout")
-    .expect("the handshake request should transmit");
-    let handshake_response = timeout(HANDSHAKE_TEST_TIMEOUT, daemon_client.next_response())
-        .await
-        .expect("the handshake response should arrive inside the test timeout")
-        .expect("the handshake response read should not fail at the transport layer")
-        .expect("the daemon should answer the handshake");
+    .await;
     assert!(matches!(
         handshake_response,
         DaemonResponse::HandshakeAccepted { .. }
@@ -46,48 +40,22 @@ async fn should_report_the_loaded_model_identity_for_status_requests() {
 
     // The wire contract serves one request per connection: the CLI performs
     // its handshake, then opens a fresh connection for the status probe.
-    drop(daemon_client);
-    let mut status_client =
-        DaemonIpcClient::connect(daemon_ipc_service.socket_path().to_path_buf())
-            .await
-            .expect("the status client should connect to the running daemon IPC service");
-    timeout(
-        HANDSHAKE_TEST_TIMEOUT,
-        status_client.send_request(&DaemonRequest::Status),
-    )
-    .await
-    .expect("the status send should finish inside the test timeout")
-    .expect("the status request should transmit");
-    let status_response = timeout(HANDSHAKE_TEST_TIMEOUT, status_client.next_response())
-        .await
-        .expect("the status response should arrive inside the test timeout")
-        .expect("the status response read should not fail at the transport layer")
-        .expect("the daemon should answer the status request");
+    let status_response =
+        request_and_read_first_response(daemon_ipc_service.socket_path(), &DaemonRequest::Status)
+            .await;
     assert_eq!(
         status_response,
-        DaemonResponse::Status {
-            worker_status: DaemonWorkerStatus::Ready,
-            ready_model_id: Some("test/local-chatter".to_owned()),
-            default_model_id: Some("Qwen3.5-2B-4bit".to_owned()),
-            model_load_in_flight: None,
-            request_progress_count: 0,
-            neural_engine_prefill: None,
-            draft_model: None,
-            last_reply_drafting: None,
-        }
+        ready_idle_status_response("test/local-chatter", "Qwen3.5-2B-4bit")
     );
 
-    timeout(HANDSHAKE_TEST_TIMEOUT, daemon_ipc_service.shutdown())
-        .await
-        .expect("the daemon IPC service shutdown should finish inside the test timeout")
-        .expect("the daemon IPC service should shut down cleanly");
-    let _ = std::fs::remove_dir_all(&state_directory);
+    shut_down_and_remove_state_directory(daemon_ipc_service, &state_directory).await;
 }
 
-async fn start_status_test_service() -> (astronomical_daemon::DaemonIpcService, PathBuf) {
-    let state_directory = fresh_instance_state_directory("concurrent");
-    let stub_executor = ready_stub_executor("test/local-chatter");
-    let daemon_ipc_service = start_stub_daemon_ipc_service(&state_directory, stub_executor).await;
+async fn start_status_test_service(
+    test_name: &str,
+) -> (astronomical_daemon::DaemonIpcService, PathBuf) {
+    let (daemon_ipc_service, _stub_executor, state_directory) =
+        start_ready_chat_service(test_name).await;
     (daemon_ipc_service, state_directory)
 }
 
@@ -96,32 +64,15 @@ async fn start_status_test_service() -> (astronomical_daemon::DaemonIpcService, 
 /// is how a waiting `respond` learns the load is still moving.
 #[tokio::test]
 async fn should_answer_status_while_another_connection_is_still_open() {
-    let (daemon_ipc_service, state_directory) = start_status_test_service().await;
-    let _unfinished_connection =
-        DaemonIpcClient::connect(daemon_ipc_service.socket_path().to_path_buf())
-            .await
-            .expect("the first client should connect");
+    let (daemon_ipc_service, state_directory) = start_status_test_service("open-connection").await;
+    let _unfinished_connection = connect_client(daemon_ipc_service.socket_path()).await;
 
-    let mut status_client =
-        DaemonIpcClient::connect(daemon_ipc_service.socket_path().to_path_buf())
-            .await
-            .expect("the status client should connect");
-    status_client
-        .send_request(&DaemonRequest::Status)
-        .await
-        .expect("the status request should transmit");
-    let status_response = timeout(HANDSHAKE_TEST_TIMEOUT, status_client.next_response())
-        .await
-        .expect("status must not wait for the connection ahead of it")
-        .expect("the status response read should not fail at the transport layer")
-        .expect("the daemon should answer the status request");
+    let status_response =
+        request_and_read_first_response(daemon_ipc_service.socket_path(), &DaemonRequest::Status)
+            .await;
 
     assert!(matches!(status_response, DaemonResponse::Status { .. }));
-    timeout(HANDSHAKE_TEST_TIMEOUT, daemon_ipc_service.shutdown())
-        .await
-        .expect("shutdown must not wait for a connection that never finished")
-        .expect("the daemon IPC service should shut down cleanly");
-    let _ = std::fs::remove_dir_all(&state_directory);
+    shut_down_and_remove_state_directory(daemon_ipc_service, &state_directory).await;
 }
 
 #[tokio::test]
@@ -134,20 +85,9 @@ async fn should_report_a_load_in_flight_on_the_status_answer() {
         .health_snapshot
         .model_load_in_flight = Some(load_report.clone());
     let daemon_ipc_service = start_stub_daemon_ipc_service(&state_directory, stub_executor).await;
-    let mut status_client =
-        DaemonIpcClient::connect(daemon_ipc_service.socket_path().to_path_buf())
-            .await
-            .expect("the status client should connect");
-
-    status_client
-        .send_request(&DaemonRequest::Status)
-        .await
-        .expect("the status request should transmit");
-    let status_response = timeout(HANDSHAKE_TEST_TIMEOUT, status_client.next_response())
-        .await
-        .expect("the status response should arrive inside the test timeout")
-        .expect("the status response read should not fail at the transport layer")
-        .expect("the daemon should answer the status request");
+    let status_response =
+        request_and_read_first_response(daemon_ipc_service.socket_path(), &DaemonRequest::Status)
+            .await;
 
     match status_response {
         DaemonResponse::Status {
@@ -156,11 +96,7 @@ async fn should_report_a_load_in_flight_on_the_status_answer() {
         } => assert_eq!(model_load_in_flight, Some(load_report)),
         unexpected_response => panic!("expected a status answer: {unexpected_response:?}"),
     }
-    timeout(HANDSHAKE_TEST_TIMEOUT, daemon_ipc_service.shutdown())
-        .await
-        .expect("the daemon IPC service shutdown should finish inside the test timeout")
-        .expect("the daemon IPC service should shut down cleanly");
-    let _ = std::fs::remove_dir_all(&state_directory);
+    shut_down_and_remove_state_directory(daemon_ipc_service, &state_directory).await;
 }
 
 #[tokio::test]
@@ -172,20 +108,9 @@ async fn should_report_the_request_progress_count_on_the_status_answer() {
         .health_snapshot
         .request_progress_count = 41;
     let daemon_ipc_service = start_stub_daemon_ipc_service(&state_directory, stub_executor).await;
-    let mut status_client =
-        DaemonIpcClient::connect(daemon_ipc_service.socket_path().to_path_buf())
-            .await
-            .expect("the status client should connect");
-
-    status_client
-        .send_request(&DaemonRequest::Status)
-        .await
-        .expect("the status request should transmit");
-    let status_response = timeout(HANDSHAKE_TEST_TIMEOUT, status_client.next_response())
-        .await
-        .expect("the status response should arrive inside the test timeout")
-        .expect("the status response read should not fail at the transport layer")
-        .expect("the daemon should answer the status request");
+    let status_response =
+        request_and_read_first_response(daemon_ipc_service.socket_path(), &DaemonRequest::Status)
+            .await;
 
     match status_response {
         DaemonResponse::Status {
@@ -194,79 +119,38 @@ async fn should_report_the_request_progress_count_on_the_status_answer() {
         } => assert_eq!(request_progress_count, 41),
         unexpected_response => panic!("expected a status answer: {unexpected_response:?}"),
     }
-    timeout(HANDSHAKE_TEST_TIMEOUT, daemon_ipc_service.shutdown())
-        .await
-        .expect("the daemon IPC service shutdown should finish inside the test timeout")
-        .expect("the daemon IPC service should shut down cleanly");
-    let _ = std::fs::remove_dir_all(&state_directory);
+    shut_down_and_remove_state_directory(daemon_ipc_service, &state_directory).await;
 }
 
 /// A client that sends nothing and hangs up must not cost the next client anything.
 #[tokio::test]
 async fn should_keep_serving_after_a_client_disconnects_without_a_request() {
-    let (daemon_ipc_service, state_directory) = start_status_test_service().await;
-    drop(
-        DaemonIpcClient::connect(daemon_ipc_service.socket_path().to_path_buf())
-            .await
-            .expect("the first client should connect"),
-    );
+    let (daemon_ipc_service, state_directory) =
+        start_status_test_service("silent-disconnect").await;
+    drop(connect_client(daemon_ipc_service.socket_path()).await);
 
-    let mut status_client =
-        DaemonIpcClient::connect(daemon_ipc_service.socket_path().to_path_buf())
-            .await
-            .expect("the status client should connect");
-    status_client
-        .send_request(&DaemonRequest::Status)
-        .await
-        .expect("the status request should transmit");
-    let status_response = timeout(HANDSHAKE_TEST_TIMEOUT, status_client.next_response())
-        .await
-        .expect("the status response should arrive inside the test timeout")
-        .expect("the status response read should not fail at the transport layer")
-        .expect("the daemon should answer the status request");
+    let status_response =
+        request_and_read_first_response(daemon_ipc_service.socket_path(), &DaemonRequest::Status)
+            .await;
 
     assert!(matches!(status_response, DaemonResponse::Status { .. }));
-    timeout(HANDSHAKE_TEST_TIMEOUT, daemon_ipc_service.shutdown())
-        .await
-        .expect("the daemon IPC service shutdown should finish inside the test timeout")
-        .expect("the daemon IPC service should shut down cleanly");
-    let _ = std::fs::remove_dir_all(&state_directory);
+    shut_down_and_remove_state_directory(daemon_ipc_service, &state_directory).await;
 }
 
 #[tokio::test]
 async fn should_stream_chat_generation_frames_to_the_cli_client() {
-    let state_directory = fresh_instance_state_directory("stream-generate");
-    let stub_executor = ready_stub_executor("test/local-chatter");
-    let daemon_ipc_service =
-        start_stub_daemon_ipc_service(&state_directory, Arc::clone(&stub_executor)).await;
+    let (daemon_ipc_service, stub_executor, state_directory) =
+        start_ready_chat_service("stream-generate").await;
 
-    let mut daemon_client =
-        DaemonIpcClient::connect(daemon_ipc_service.socket_path().to_path_buf())
-            .await
-            .expect("the client should connect to the running daemon IPC service");
-    timeout(
-        HANDSHAKE_TEST_TIMEOUT,
-        daemon_client.send_request(&text_only_chat_generate_request("test/local-chatter")),
+    let mut daemon_client = connect_and_send_request(
+        daemon_ipc_service.socket_path(),
+        &text_only_chat_generate_request("test/local-chatter"),
     )
-    .await
-    .expect("the chat generate send should finish inside the test timeout")
-    .expect("the chat generate request should transmit");
+    .await;
 
-    let first_fragment = timeout(HANDSHAKE_TEST_TIMEOUT, daemon_client.next_response())
-        .await
-        .expect("the first fragment should arrive inside the test timeout")
-        .expect("the first fragment read should not fail at the transport layer")
-        .expect("the daemon should stream the first fragment");
-    let second_fragment = timeout(HANDSHAKE_TEST_TIMEOUT, daemon_client.next_response())
-        .await
-        .expect("the second fragment should arrive inside the test timeout")
-        .expect("the second fragment read should not fail at the transport layer")
-        .expect("the daemon should stream the second fragment");
-    let completion_frame = timeout(HANDSHAKE_TEST_TIMEOUT, daemon_client.next_response())
-        .await
-        .expect("the completion frame should arrive inside the test timeout")
-        .expect("the completion frame read should not fail at the transport layer")
-        .expect("the daemon should stream the completion frame");
+    let first_fragment = next_response_within_timeout(&mut daemon_client).await;
+    let second_fragment = next_response_within_timeout(&mut daemon_client).await;
+    let completion_frame = next_response_within_timeout(&mut daemon_client).await;
     assert!(matches!(
         first_fragment,
         DaemonResponse::ChatGenerationText { text } if text == "Hello"
@@ -285,10 +169,7 @@ async fn should_stream_chat_generation_frames_to_the_cli_client() {
             reason: ChatGenerationCompletionReason::EndOfSequence,
         }
     );
-    let connection_closed = timeout(HANDSHAKE_TEST_TIMEOUT, daemon_client.next_response())
-        .await
-        .expect("the terminal read should finish inside the test timeout")
-        .expect("the terminal read should not fail at the transport layer");
+    let connection_closed = next_response_or_close(&mut daemon_client).await;
     assert!(
         connection_closed.is_none(),
         "the daemon should close the connection after the terminal frame"
@@ -311,11 +192,7 @@ async fn should_stream_chat_generation_frames_to_the_cli_client() {
     );
     assert_eq!(received_command.settings.max_output_tokens, 128);
 
-    timeout(HANDSHAKE_TEST_TIMEOUT, daemon_ipc_service.shutdown())
-        .await
-        .expect("the daemon IPC service shutdown should finish inside the test timeout")
-        .expect("the daemon IPC service should shut down cleanly");
-    let _ = std::fs::remove_dir_all(&state_directory);
+    shut_down_and_remove_state_directory(daemon_ipc_service, &state_directory).await;
 }
 
 #[tokio::test]
@@ -325,46 +202,21 @@ async fn should_admit_chat_generation_for_a_model_the_worker_has_not_loaded_yet(
     // on demand. The stub's empty stream yields a failure terminal, which is
     // the proof the request passed the gate and reached the executor.
     let state_directory = fresh_instance_state_directory("admit-not-loaded");
-    let stub_executor = Arc::new(StubGenerationExecutor {
-        health_snapshot: WorkerHealthSnapshot::ready_without_model(0),
-        stream_events: vec![],
-        received_commands: Mutex::new(Vec::new()),
-        embeddings_output: None,
-        received_embeddings_commands: Mutex::new(Vec::new()),
-        decisions_output: None,
-        received_decisions_commands: Mutex::new(Vec::new()),
-        speech_output: None,
-        received_speech_commands: Mutex::new(Vec::new()),
-        image_output: None,
-        received_image_commands: Mutex::new(Vec::new()),
-    });
-    let reloadable_config = Arc::new(RwLock::new(ipc_runtime_config(
-        Vec::new(),
-        &["test/local-chatter"],
-    )));
-    let daemon_ipc_service = start_stub_daemon_ipc_service_with_runtime_config(
+    let stub_executor =
+        stub_executor_with_health_snapshot(WorkerHealthSnapshot::ready_without_model(0));
+    let daemon_ipc_service = start_service_with_installed_models(
         &state_directory,
         Arc::clone(&stub_executor),
-        Some(reloadable_config),
+        Vec::new(),
+        &["test/local-chatter"],
     )
     .await;
 
-    let mut daemon_client =
-        DaemonIpcClient::connect(daemon_ipc_service.socket_path().to_path_buf())
-            .await
-            .expect("the client should connect to the running daemon IPC service");
-    timeout(
-        HANDSHAKE_TEST_TIMEOUT,
-        daemon_client.send_request(&text_only_chat_generate_request("test/local-chatter")),
+    let terminal_frame = request_and_read_first_response(
+        daemon_ipc_service.socket_path(),
+        &text_only_chat_generate_request("test/local-chatter"),
     )
-    .await
-    .expect("the chat generate send should finish inside the test timeout")
-    .expect("the chat generate request should transmit");
-    let terminal_frame = timeout(HANDSHAKE_TEST_TIMEOUT, daemon_client.next_response())
-        .await
-        .expect("the terminal frame should arrive inside the test timeout")
-        .expect("the terminal frame read should not fail at the transport layer")
-        .expect("the daemon should answer the admitted request");
+    .await;
     assert!(
         matches!(&terminal_frame, DaemonResponse::ChatGenerationFailed { .. }),
         "a known model the worker has not loaded yet must be admitted to the \
@@ -378,56 +230,27 @@ async fn should_admit_chat_generation_for_a_model_the_worker_has_not_loaded_yet(
     );
     assert_eq!(received_commands[0].model, "test/local-chatter");
 
-    timeout(HANDSHAKE_TEST_TIMEOUT, daemon_ipc_service.shutdown())
-        .await
-        .expect("the daemon IPC service shutdown should finish inside the test timeout")
-        .expect("the daemon IPC service should shut down cleanly");
-    let _ = std::fs::remove_dir_all(&state_directory);
+    shut_down_and_remove_state_directory(daemon_ipc_service, &state_directory).await;
 }
 
 #[tokio::test]
 async fn should_reject_chat_generation_for_a_model_unknown_to_the_policy_catalog() {
     let state_directory = fresh_instance_state_directory("reject-unknown-model");
-    let stub_executor = Arc::new(StubGenerationExecutor {
-        health_snapshot: WorkerHealthSnapshot::ready_without_model(0),
-        stream_events: vec![],
-        received_commands: Mutex::new(Vec::new()),
-        embeddings_output: None,
-        received_embeddings_commands: Mutex::new(Vec::new()),
-        decisions_output: None,
-        received_decisions_commands: Mutex::new(Vec::new()),
-        speech_output: None,
-        received_speech_commands: Mutex::new(Vec::new()),
-        image_output: None,
-        received_image_commands: Mutex::new(Vec::new()),
-    });
-    let reloadable_config = Arc::new(RwLock::new(ipc_runtime_config(
-        Vec::new(),
-        &["test/local-chatter"],
-    )));
-    let daemon_ipc_service = start_stub_daemon_ipc_service_with_runtime_config(
+    let stub_executor =
+        stub_executor_with_health_snapshot(WorkerHealthSnapshot::ready_without_model(0));
+    let daemon_ipc_service = start_service_with_installed_models(
         &state_directory,
         Arc::clone(&stub_executor),
-        Some(reloadable_config),
+        Vec::new(),
+        &["test/local-chatter"],
     )
     .await;
 
-    let mut daemon_client =
-        DaemonIpcClient::connect(daemon_ipc_service.socket_path().to_path_buf())
-            .await
-            .expect("the client should connect to the running daemon IPC service");
-    timeout(
-        HANDSHAKE_TEST_TIMEOUT,
-        daemon_client.send_request(&text_only_chat_generate_request("nope/unknown-model")),
+    let rejection_frame = request_and_read_first_response(
+        daemon_ipc_service.socket_path(),
+        &text_only_chat_generate_request("nope/unknown-model"),
     )
-    .await
-    .expect("the chat generate send should finish inside the test timeout")
-    .expect("the chat generate request should transmit");
-    let rejection_frame = timeout(HANDSHAKE_TEST_TIMEOUT, daemon_client.next_response())
-        .await
-        .expect("the rejection frame should arrive inside the test timeout")
-        .expect("the rejection frame read should not fail at the transport layer")
-        .expect("the daemon should answer the rejected request");
+    .await;
     assert!(
         matches!(
             &rejection_frame,
@@ -442,47 +265,22 @@ async fn should_reject_chat_generation_for_a_model_unknown_to_the_policy_catalog
         "a rejected request must not reach the worker"
     );
 
-    timeout(HANDSHAKE_TEST_TIMEOUT, daemon_ipc_service.shutdown())
-        .await
-        .expect("the daemon IPC service shutdown should finish inside the test timeout")
-        .expect("the daemon IPC service should shut down cleanly");
-    let _ = std::fs::remove_dir_all(&state_directory);
+    shut_down_and_remove_state_directory(daemon_ipc_service, &state_directory).await;
 }
 
 #[tokio::test]
 async fn should_reject_chat_generation_when_the_worker_is_unavailable() {
     let state_directory = fresh_instance_state_directory("reject-unavailable");
-    let stub_executor = Arc::new(StubGenerationExecutor {
-        health_snapshot: WorkerHealthSnapshot::unavailable(WorkerHealthStatus::Unavailable),
-        stream_events: vec![],
-        received_commands: Mutex::new(Vec::new()),
-        embeddings_output: None,
-        received_embeddings_commands: Mutex::new(Vec::new()),
-        decisions_output: None,
-        received_decisions_commands: Mutex::new(Vec::new()),
-        speech_output: None,
-        received_speech_commands: Mutex::new(Vec::new()),
-        image_output: None,
-        received_image_commands: Mutex::new(Vec::new()),
-    });
+    let stub_executor = stub_executor_with_health_snapshot(WorkerHealthSnapshot::unavailable(
+        WorkerHealthStatus::Unavailable,
+    ));
     let daemon_ipc_service = start_stub_daemon_ipc_service(&state_directory, stub_executor).await;
 
-    let mut daemon_client =
-        DaemonIpcClient::connect(daemon_ipc_service.socket_path().to_path_buf())
-            .await
-            .expect("the client should connect to the running daemon IPC service");
-    timeout(
-        HANDSHAKE_TEST_TIMEOUT,
-        daemon_client.send_request(&text_only_chat_generate_request("test/local-chatter")),
+    let rejection_frame = request_and_read_first_response(
+        daemon_ipc_service.socket_path(),
+        &text_only_chat_generate_request("test/local-chatter"),
     )
-    .await
-    .expect("the chat generate send should finish inside the test timeout")
-    .expect("the chat generate request should transmit");
-    let rejection_frame = timeout(HANDSHAKE_TEST_TIMEOUT, daemon_client.next_response())
-        .await
-        .expect("the rejection frame should arrive inside the test timeout")
-        .expect("the rejection frame read should not fail at the transport layer")
-        .expect("the daemon should answer the rejected request");
+    .await;
     assert!(
         matches!(
             &rejection_frame,
@@ -491,37 +289,23 @@ async fn should_reject_chat_generation_when_the_worker_is_unavailable() {
         "a chat request against an unavailable worker must be rejected: {rejection_frame:?}"
     );
 
-    timeout(HANDSHAKE_TEST_TIMEOUT, daemon_ipc_service.shutdown())
-        .await
-        .expect("the daemon IPC service shutdown should finish inside the test timeout")
-        .expect("the daemon IPC service should shut down cleanly");
-    let _ = std::fs::remove_dir_all(&state_directory);
+    shut_down_and_remove_state_directory(daemon_ipc_service, &state_directory).await;
 }
 
 #[tokio::test]
 async fn should_allocate_distinct_request_ids_to_consecutive_chat_requests() {
-    let state_directory = fresh_instance_state_directory("distinct-request-ids");
-    let stub_executor = ready_stub_executor("test/local-chatter");
-    let daemon_ipc_service =
-        start_stub_daemon_ipc_service(&state_directory, Arc::clone(&stub_executor)).await;
+    let (daemon_ipc_service, stub_executor, state_directory) =
+        start_ready_chat_service("distinct-request-ids").await;
 
     for connection_round in 0..2 {
-        let mut daemon_client =
-            DaemonIpcClient::connect(daemon_ipc_service.socket_path().to_path_buf())
-                .await
-                .expect("the client should connect to the running daemon IPC service");
-        timeout(
-            HANDSHAKE_TEST_TIMEOUT,
-            daemon_client.send_request(&text_only_chat_generate_request("test/local-chatter")),
+        let mut daemon_client = connect_and_send_request(
+            daemon_ipc_service.socket_path(),
+            &text_only_chat_generate_request("test/local-chatter"),
         )
-        .await
-        .expect("the chat generate send should finish inside the test timeout")
-        .expect("the chat generate request should transmit");
+        .await;
         for _frame_index in 0..3 {
-            timeout(HANDSHAKE_TEST_TIMEOUT, daemon_client.next_response())
+            next_response_or_close(&mut daemon_client)
                 .await
-                .expect("the stream frame should arrive inside the test timeout")
-                .expect("the stream frame read should not fail at the transport layer")
                 .unwrap_or_else(|| panic!("round {connection_round} should stream three frames"));
         }
     }
@@ -535,52 +319,19 @@ async fn should_allocate_distinct_request_ids_to_consecutive_chat_requests() {
         "consecutive chat requests must receive distinct request identifiers: {first_request_id} and {second_request_id}"
     );
 
-    timeout(HANDSHAKE_TEST_TIMEOUT, daemon_ipc_service.shutdown())
-        .await
-        .expect("the daemon IPC service shutdown should finish inside the test timeout")
-        .expect("the daemon IPC service should shut down cleanly");
-    let _ = std::fs::remove_dir_all(&state_directory);
+    shut_down_and_remove_state_directory(daemon_ipc_service, &state_directory).await;
 }
 
 #[tokio::test]
 async fn should_fill_zero_max_output_tokens_from_the_worker_capabilities() {
-    let state_directory = fresh_instance_state_directory("sentinel-max-output");
-    let stub_executor = ready_stub_executor("test/local-chatter");
-    let daemon_ipc_service =
-        start_stub_daemon_ipc_service(&state_directory, Arc::clone(&stub_executor)).await;
+    let (daemon_ipc_service, stub_executor, state_directory) =
+        start_ready_chat_service("sentinel-max-output").await;
 
+    let sentinel_request = say_hello_chat_request("test/local-chatter", 0, None);
     let mut daemon_client =
-        DaemonIpcClient::connect(daemon_ipc_service.socket_path().to_path_buf())
-            .await
-            .expect("the client should connect to the running daemon IPC service");
-    let sentinel_request = DaemonRequest::ChatGenerate {
-        model: "test/local-chatter".to_owned(),
-        messages: vec![ChatMessage::User {
-            content: "Say hello".to_owned(),
-            images: vec![],
-        }],
-        settings: ChatGenerationSettings {
-            max_output_tokens: 0,
-            temperature_thousandths: None,
-            top_p_thousandths: None,
-            repetition_penalty_thousandths: None,
-            seed: None,
-            thinking_budget: None,
-        },
-        schema_json: None,
-    };
-    timeout(
-        HANDSHAKE_TEST_TIMEOUT,
-        daemon_client.send_request(&sentinel_request),
-    )
-    .await
-    .expect("the sentinel chat generate send should finish inside the test timeout")
-    .expect("the sentinel chat generate request should transmit");
+        connect_and_send_request(daemon_ipc_service.socket_path(), &sentinel_request).await;
     for _frame_index in 0..3 {
-        timeout(HANDSHAKE_TEST_TIMEOUT, daemon_client.next_response())
-            .await
-            .expect("the sentinel stream frame should arrive inside the test timeout")
-            .expect("the sentinel stream frame read should not fail at the transport layer");
+        next_response_or_close(&mut daemon_client).await;
     }
 
     let received_commands = stub_executor.logged_commands();
@@ -590,9 +341,5 @@ async fn should_fill_zero_max_output_tokens_from_the_worker_capabilities() {
         "a zero max_output_tokens sentinel must be filled from the worker-advertised capabilities"
     );
 
-    timeout(HANDSHAKE_TEST_TIMEOUT, daemon_ipc_service.shutdown())
-        .await
-        .expect("the daemon IPC service shutdown should finish inside the test timeout")
-        .expect("the daemon IPC service should shut down cleanly");
-    let _ = std::fs::remove_dir_all(&state_directory);
+    shut_down_and_remove_state_directory(daemon_ipc_service, &state_directory).await;
 }

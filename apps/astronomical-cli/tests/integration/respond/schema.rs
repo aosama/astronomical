@@ -5,49 +5,18 @@
 //! `respond_command.rs` to keep that file under the size limit.
 
 use std::{
-    io::Write,
     path::PathBuf,
     sync::{Arc, Mutex},
 };
 
-use astronomical_cli::RespondDependencies;
 use astronomical_cli::RespondError;
-use config::AstronomicalRuntimeInstance;
 use tokio::time::timeout;
 
+use super::respond_dependency_fixtures::{resident_default_stub_config, respond_dependencies};
 use crate::integration::support::environment::{
-    DOWNLOAD_POLL_INTERVAL, SOCKET_FILE_NAME, TEST_TIMEOUT, fresh_test_directory,
-    respond_arguments_with_schema,
+    SOCKET_FILE_NAME, TEST_TIMEOUT, fresh_test_directory, respond_arguments_with_schema,
 };
 use crate::integration::support::stub_daemon;
-use crate::integration::support::stub_daemon::{StubDaemonConfig, StubInstalledModel};
-
-fn respond_dependencies<'a>(
-    candidate_socket_paths: Vec<PathBuf>,
-    stdout: &'a mut Vec<u8>,
-    stderr: &'a mut Vec<u8>,
-) -> RespondDependencies<'a> {
-    RespondDependencies {
-        candidate_socket_paths,
-        runtime_instance: AstronomicalRuntimeInstance::Development,
-        stdout: stdout as &mut dyn Write,
-        stderr: stderr as &mut dyn Write,
-        request_timeout: TEST_TIMEOUT,
-        download_stall_bound: TEST_TIMEOUT,
-        download_poll_interval: DOWNLOAD_POLL_INTERVAL,
-        daemon_work_poll_interval: DOWNLOAD_POLL_INTERVAL,
-        model_load_stall_bound: TEST_TIMEOUT,
-    }
-}
-
-fn resident_default_stub_config() -> StubDaemonConfig {
-    StubDaemonConfig {
-        installed_models: vec![StubInstalledModel::chat("test/local-chatter", true)],
-        default_model_id: Some("test/local-chatter".to_owned()),
-        chat_fragments: vec!["Hello".to_owned(), " world".to_owned()],
-        ..Default::default()
-    }
-}
 
 #[tokio::test]
 async fn should_send_the_schema_file_text_to_the_daemon() {

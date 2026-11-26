@@ -1,4 +1,5 @@
 use super::*;
+use crate::rest_api::http_exchange_fixtures::get_response;
 
 #[tokio::test]
 async fn should_reject_invalid_config_reload_without_mutating_live_state() {
@@ -27,16 +28,7 @@ async fn should_reject_invalid_config_reload_without_mutating_live_state() {
         serde_json::from_slice(&response_body).expect("the reload error body should be JSON");
     assert_eq!(response_json["status"], "invalid_config");
 
-    let status_response = application
-        .clone()
-        .oneshot(
-            Request::builder()
-                .uri("/v1/status")
-                .body(Body::empty())
-                .expect("the status request should be valid"),
-        )
-        .await
-        .expect("status should remain available");
+    let status_response = get_response(&application, "/v1/status").await;
     let status_body = to_bytes(status_response.into_body(), 16 * 1024)
         .await
         .expect("the status response should be readable");
@@ -94,15 +86,7 @@ async fn should_preserve_live_serving_and_expose_path_safe_duplicate_model_feedb
         initial_resolved_config
     );
 
-    let status_response = application
-        .oneshot(
-            Request::builder()
-                .uri("/v1/status")
-                .body(Body::empty())
-                .expect("the status request should be valid"),
-        )
-        .await
-        .expect("status should remain available");
+    let status_response = get_response(&application, "/v1/status").await;
     let status_body = to_bytes(status_response.into_body(), 16 * 1024)
         .await
         .expect("status should remain readable");
@@ -143,15 +127,7 @@ async fn should_apply_reload_when_an_authored_model_directory_is_missing() {
     let response_text = String::from_utf8_lossy(&response_body);
     assert!(!response_text.contains(temporary_home.path().to_string_lossy().as_ref()));
 
-    let status_response = application
-        .oneshot(
-            Request::builder()
-                .uri("/v1/status")
-                .body(Body::empty())
-                .expect("the status request should be valid"),
-        )
-        .await
-        .expect("status should remain available");
+    let status_response = get_response(&application, "/v1/status").await;
     let status_body = to_bytes(status_response.into_body(), 16 * 1024)
         .await
         .expect("status should remain readable");

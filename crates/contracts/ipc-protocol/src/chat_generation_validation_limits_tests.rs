@@ -483,10 +483,10 @@ fn should_accept_large_assistant_tool_call_arguments_when_the_ipc_frame_fits() {
 
 mod support {
 
-    use crate::{
-        ChatGenerationCommand, ChatGenerationSettings, ChatMessage, ChatToolChoice,
-        ChatToolDefinition, RequestId,
+    pub(super) use crate::chat_generation_command_test_fixtures::{
+        standard_settings, user_messages,
     };
+    use crate::{ChatGenerationCommand, ChatToolChoice, ChatToolDefinition, RequestId};
 
     pub(super) fn command_with_tool_schema(
         request_id: u64,
@@ -505,21 +505,5 @@ mod support {
             settings: standard_settings(),
             structured_generation: None,
         }
-    }
-    pub(super) fn standard_settings() -> ChatGenerationSettings {
-        ChatGenerationSettings {
-            max_output_tokens: 512,
-            temperature_thousandths: Some(600),
-            top_p_thousandths: Some(950),
-            repetition_penalty_thousandths: None,
-            seed: Some(7),
-            thinking_budget: None,
-        }
-    }
-    pub(super) fn user_messages() -> Vec<ChatMessage> {
-        vec![ChatMessage::User {
-            content: "Inspect the repository.".to_owned(),
-            images: Vec::new(),
-        }]
     }
 }

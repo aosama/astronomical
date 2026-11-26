@@ -1,4 +1,5 @@
 use super::*;
+use crate::rest_api::http_exchange_fixtures::read_json_body;
 
 pub(super) async fn post_response(
     application: axum::Router,
@@ -32,11 +33,7 @@ pub(super) async fn assert_error_code(
     http_response: axum::response::Response,
     expected_error_code: &str,
 ) {
-    let response_body = to_bytes(http_response.into_body(), 16 * 1024)
-        .await
-        .expect("the error body should be readable");
-    let response_document: serde_json::Value =
-        serde_json::from_slice(&response_body).expect("the error should be JSON");
+    let response_document = read_json_body(http_response, 16 * 1024).await;
     assert_eq!(response_document["error"]["code"], expected_error_code);
 }
 

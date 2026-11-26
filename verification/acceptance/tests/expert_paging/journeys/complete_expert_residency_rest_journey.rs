@@ -19,6 +19,7 @@ use serde_json::{Value, json};
 use serial_test::serial;
 use tokio::time::{Duration, Instant, sleep, timeout};
 
+use super::thinking_budget_completion_stream::{CompletedStream, write_worker_configuration};
 use crate::support::openai_client::{ChatCompletionStream, LocalOpenAiClient};
 use crate::support::serving_rest::{
     get_json_endpoint, launch_real_model_rest_server, stop_real_model_rest_server,
@@ -99,11 +100,7 @@ async fn run_complete_expert_residency_rest_journey() {
         consume_completed_stream(streamed_completion),
         observe_resident_request_until_idle(server_address, &logging_directory),
     );
-    assert!(!completed_stream.model_text.is_empty());
-    assert!(matches!(
-        completed_stream.finish_reason.as_deref(),
-        Some("stop" | "length")
-    ));
+    completed_stream.assert_produced_output_and_finished();
     let average_prefill_tokens_per_second =
         final_status["serving_session"]["average_prefill_tok_per_second"]
             .as_f64()
@@ -196,11 +193,6 @@ async fn observe_resident_request_until_idle(
     }
 }
 
-struct CompletedStream {
-    model_text: String,
-    finish_reason: Option<String>,
-}
-
 async fn consume_completed_stream(
     mut streamed_completion: ChatCompletionStream,
 ) -> CompletedStream {
@@ -265,9 +257,6 @@ fn generation_expert_source_read_bytes(isolated_worker_home: &Path) -> u64 {
 }
 
 fn write_acceptance_config(isolated_worker_home: &Path, model_directory: &Path) {
-    let configuration_directory = isolated_worker_home.join(".astronomical-dev");
-    fs::create_dir(&configuration_directory)
-        .expect("the complete-residency configuration directory should be created");
     let configuration_document = json!({
         "model_directories": [model_directory],
         "maximum_mlx_memory_gb": crate::support::marketed_gigabytes::marketed_gigabytes_at_most(MAXIMUM_MLX_MEMORY_BYTES),
@@ -283,12 +272,11 @@ fn write_acceptance_config(isolated_worker_home: &Path, model_directory: &Path) 
             "fixed_prompt_processing_chunk_size_tokens": 2_048,
         },
     });
-    fs::write(
-        configuration_directory.join("config.json"),
-        serde_json::to_vec_pretty(&configuration_document)
-            .expect("the complete-residency configuration should serialize"),
-    )
-    .expect("the complete-residency configuration should be written");
+    write_worker_configuration(
+        isolated_worker_home,
+        "complete-residency",
+        &configuration_document,
+    );
 }
 
 fn isolated_complete_residency_worker_home() -> PathBuf {

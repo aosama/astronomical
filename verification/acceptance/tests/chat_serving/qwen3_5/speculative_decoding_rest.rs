@@ -29,8 +29,10 @@ use crate::support::{
 };
 
 use super::automatic_engine_selection_rest::{
-    MAXIMUM_REAL_MODEL_MEMORY_BYTES, ROMEO_AND_JULIET_SOURCE,
-    measure_sparse_artifact_residency_geometry, read_generation_attribution_reports,
+    ROMEO_AND_JULIET_SOURCE, read_generation_attribution_reports,
+};
+use super::sparse_artifact_residency::{
+    MAXIMUM_REAL_MODEL_MEMORY_BYTES, measure_sparse_artifact_residency_geometry,
 };
 
 /// The measured sweet spot for this target-and-draft pair (the direct-MLX

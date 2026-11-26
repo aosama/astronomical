@@ -6,6 +6,8 @@ mod astro_ssd_prompt_cache_diagnostics_tests;
 mod base64_bytes;
 mod chat_generation;
 #[cfg(test)]
+mod chat_generation_command_test_fixtures;
+#[cfg(test)]
 mod chat_generation_tests;
 mod chat_generation_validation;
 #[cfg(test)]
@@ -42,6 +44,8 @@ mod protocol_message;
 #[cfg(test)]
 mod protocol_message_tests;
 mod protocol_reader;
+#[cfg(test)]
+mod protocol_round_trip_test_support;
 mod protocol_writer;
 mod reply_memory_record;
 mod request_drafting_statistics;

@@ -1,10 +1,12 @@
 //! Acceptance coverage for the decisions HTTP journey, `POST /v1/systemone`.
 
+use crate::rest_api::discovered_model_fixtures::chat_only_model;
+use crate::rest_api::http_exchange_fixtures::{post_json_request, read_text_body};
 use std::path::PathBuf;
 
 use astronomical_daemon::{DecisionsExecutionError, DecisionsOutput};
 use axum::{
-    body::{Body, to_bytes},
+    body::Body,
     http::{Request, StatusCode},
 };
 use config::{DecisionModelCapabilities, DiscoveredModel, ModelCapabilities, ModelLicense};
@@ -163,7 +165,7 @@ async fn should_reject_a_chat_model_before_decisions_dispatch() {
     let received_commands = executor.received_decisions_commands();
     let application = astronomical_daemon::build_application_with_discovered_models(
         executor,
-        vec![chat_model(), decision_model(DECISION_MODEL_ID)],
+        vec![chat_only_model(), decision_model(DECISION_MODEL_ID)],
     );
     let mut request_document = valid_request_document();
     request_document["model"] = serde_json::json!("chat-only-model");
@@ -193,7 +195,7 @@ async fn should_reject_a_chat_model_before_decisions_dispatch() {
 async fn should_reject_a_request_when_no_decision_model_is_installed() {
     let application = astronomical_daemon::build_application_with_discovered_models(
         ScriptedExecutor::ready(Vec::new()),
-        vec![chat_model()],
+        vec![chat_only_model()],
     );
 
     let response = application
@@ -384,19 +386,11 @@ fn play_outcome() -> QuestionOutcome {
 }
 
 fn system_one_request(request_document: serde_json::Value) -> Request<Body> {
-    Request::builder()
-        .method("POST")
-        .uri("/v1/systemone")
-        .header("content-type", "application/json")
-        .body(Body::from(request_document.to_string()))
-        .expect("the decisions request should be valid")
+    post_json_request("/v1/systemone", request_document)
 }
 
 async fn response_text(response: axum::response::Response) -> String {
-    let response_body = to_bytes(response.into_body(), 16 * 1024)
-        .await
-        .expect("the bounded response body should be readable");
-    String::from_utf8(response_body.to_vec()).expect("the response should be UTF-8")
+    read_text_body(response, 16 * 1024).await
 }
 
 fn decision_model(model_id: &str) -> DiscoveredModel {
@@ -410,26 +404,6 @@ fn decision_model(model_id: &str) -> DiscoveredModel {
             maximum_tokens_per_question: 512,
         }),
         license: Some(ModelLicense::Apache20),
-        model_size_bytes: 1,
-    }
-}
-
-fn chat_model() -> DiscoveredModel {
-    DiscoveredModel {
-        model_id: "chat-only-model".to_owned(),
-        provider_model_id: None,
-        model_family: config::QWEN3_5_MODEL_FAMILY,
-        revision: "fixture-revision".to_owned(),
-        model_directory: PathBuf::from("fixtures/models/chat-only"),
-        capabilities: ModelCapabilities::Chat(config::ChatModelCapabilities {
-            context_window: 2_048,
-            max_input_tokens: 1_024,
-            max_output_tokens: 128,
-            supports_vision: false,
-            supports_reasoning: true,
-            supports_tool_calls: true,
-        }),
-        license: None,
         model_size_bytes: 1,
     }
 }

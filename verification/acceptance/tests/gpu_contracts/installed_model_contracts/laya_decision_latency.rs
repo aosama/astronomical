@@ -17,11 +17,11 @@
 use std::path::Path;
 use std::time::Instant;
 
-use decision_contract::{
-    DecisionQuestion, HeadInputRequest, OrderedJsonValue, parse_system_one_questions,
-};
+use decision_contract::{HeadInputRequest, OrderedJsonValue};
 use model_serving::{DecisionEngine, LayaDecisionEngine};
 use test_harness::test_run::TestRunContext;
+
+use super::decision_latency_requests::questions_of_count;
 
 #[path = "../../support/romeo_and_juliet.rs"]
 #[allow(dead_code)]
@@ -34,24 +34,6 @@ const QUESTION_COUNTS: [usize; 3] = [1, 5, 10];
 const TIMED_REQUESTS_PER_QUESTION_COUNT: usize = 20;
 /// Words of state; far more than either checkpoint's token limit holds.
 const STATE_WORD_COUNT: usize = 2_000;
-
-fn questions_of_count(question_count: usize) -> Vec<DecisionQuestion> {
-    let subjects = [
-        "death", "love", "a sword", "the sea", "a feud", "night", "a prince", "poison", "a letter",
-        "a tomb",
-    ];
-    let mut question_members = Vec::with_capacity(question_count);
-    for question_index in 0..question_count {
-        question_members.push(format!(
-            r#""q{question_index}": {{"type": "noul", "instructions": "Does the passage mention {}?"}}"#,
-            subjects[question_index % subjects.len()]
-        ));
-    }
-    let questions: OrderedJsonValue =
-        serde_json::from_str(&format!("{{{}}}", question_members.join(",")))
-            .expect("the measurement questions are well formed");
-    parse_system_one_questions(&questions).expect("the measurement questions are valid")
-}
 
 fn measure_checkpoint(checkpoint_name: &str, checkpoint_directory: &Path) {
     let load_started_at = Instant::now();

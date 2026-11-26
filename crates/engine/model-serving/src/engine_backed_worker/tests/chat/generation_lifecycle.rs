@@ -1,3 +1,5 @@
+use super::chat_request_exchange::{plain_completed_event, send_cancellation, send_chat_request};
+use super::ipc_worker_transport::open_ipc_worker_transport;
 use super::scripted_chat_test_doubles::{
     MalformedFinishProcessor, ScriptedChatEngine, ScriptedChatProcessor,
 };
@@ -5,32 +7,22 @@ use super::support::{chat_command, close_worker_transport, next_event, ready_eve
 use super::tracking_chat_engine_test_doubles::TrackingChatEngine;
 use crate::{EngineBackedWorker, GeneratedToken};
 use ipc_protocol::{
-    ChatGenerationCompletionReason, ChatGenerationFailureReason, ChatGenerationOutput,
-    MAX_IPC_FRAME_BYTES, ProtocolReader, ProtocolWriter, RequestId, WorkerCommand, WorkerEvent,
+    ChatGenerationCompletionReason, ChatGenerationFailureReason, ChatGenerationOutput, RequestId,
+    WorkerCommand, WorkerEvent,
 };
 use std::time::Duration;
-use tokio::io::{duplex, split};
 use tokio::time::timeout;
 #[tokio::test]
 async fn should_emit_ordered_outputs_and_reuse_capacity_after_cancellation() {
     let engine_worker =
         EngineBackedWorker::new(ScriptedChatProcessor::new(), ScriptedChatEngine::new());
-    let (daemon_transport, worker_transport) = duplex(MAX_IPC_FRAME_BYTES * 2);
-    let (daemon_reader_transport, daemon_writer_transport) = split(daemon_transport);
-    let (worker_reader_transport, worker_writer_transport) = split(worker_transport);
-    let mut daemon_reader = ProtocolReader::new(daemon_reader_transport);
-    let mut daemon_writer = ProtocolWriter::new(daemon_writer_transport);
-    let worker_task = tokio::spawn(async move {
-        engine_worker
-            .run(worker_reader_transport, worker_writer_transport)
-            .await
-    });
+    let (mut daemon_reader, mut daemon_writer, worker_reader_transport, worker_writer_transport) =
+        open_ipc_worker_transport();
+    let worker_task =
+        tokio::spawn(engine_worker.run(worker_reader_transport, worker_writer_transport));
 
     assert_eq!(next_event(&mut daemon_reader).await, ready_event());
-    daemon_writer
-        .send_command(&WorkerCommand::Generate(chat_command(711, 7)))
-        .await
-        .expect("the worker should receive a chat request");
+    send_chat_request(&mut daemon_writer, 711, 7).await;
 
     assert_eq!(
         next_event(&mut daemon_reader).await,
@@ -67,38 +59,14 @@ async fn should_emit_ordered_outputs_and_reuse_capacity_after_cancellation() {
     );
     assert_eq!(
         next_event(&mut daemon_reader).await,
-        WorkerEvent::Completed {
-            astro_ssd_prompt_cache_diagnostics: None,
-            request_id: RequestId::new(711),
-            prompt_token_count: 1,
-            generated_token_count: 2,
-            reasoning_token_count: 0,
-            astro_ssd_prompt_cache_restored_token_count: 0,
-            reason: ChatGenerationCompletionReason::ToolCalls,
-        }
+        plain_completed_event(711, 1, 2, ChatGenerationCompletionReason::ToolCalls)
     );
 
-    daemon_writer
-        .send_command(&WorkerCommand::Generate(chat_command(712, 8)))
-        .await
-        .expect("the worker should receive a follow-up request");
-    daemon_writer
-        .send_command(&WorkerCommand::Cancel {
-            request_id: RequestId::new(712),
-        })
-        .await
-        .expect("the worker should receive cancellation");
+    send_chat_request(&mut daemon_writer, 712, 8).await;
+    send_cancellation(&mut daemon_writer, 712).await;
     assert_eq!(
         next_event(&mut daemon_reader).await,
-        WorkerEvent::Completed {
-            astro_ssd_prompt_cache_diagnostics: None,
-            request_id: RequestId::new(712),
-            prompt_token_count: 1,
-            generated_token_count: 0,
-            reasoning_token_count: 0,
-            astro_ssd_prompt_cache_restored_token_count: 0,
-            reason: ChatGenerationCompletionReason::Cancelled,
-        }
+        plain_completed_event(712, 1, 0, ChatGenerationCompletionReason::Cancelled)
     );
 
     close_worker_transport(daemon_writer, worker_task).await;
@@ -145,16 +113,10 @@ async fn should_emit_every_parallel_tool_call_completed_after_thinking() {
             parallel_tool_call_script_tokens(),
         ),
     );
-    let (daemon_transport, worker_transport) = duplex(MAX_IPC_FRAME_BYTES * 2);
-    let (daemon_reader_transport, daemon_writer_transport) = split(daemon_transport);
-    let (worker_reader_transport, worker_writer_transport) = split(worker_transport);
-    let mut daemon_reader = ProtocolReader::new(daemon_reader_transport);
-    let mut daemon_writer = ProtocolWriter::new(daemon_writer_transport);
-    let worker_task = tokio::spawn(async move {
-        engine_worker
-            .run(worker_reader_transport, worker_writer_transport)
-            .await
-    });
+    let (mut daemon_reader, mut daemon_writer, worker_reader_transport, worker_writer_transport) =
+        open_ipc_worker_transport();
+    let worker_task =
+        tokio::spawn(engine_worker.run(worker_reader_transport, worker_writer_transport));
 
     assert_eq!(next_event(&mut daemon_reader).await, ready_event());
     let mut parallel_tool_call_command = chat_command(713, 7);
@@ -246,22 +208,13 @@ async fn should_report_a_bounded_actionable_reason_before_a_fatal_worker_exit() 
             "direct MLX execution failed: [metal::malloc] Attempting to allocate 34359738368 bytes which is greater than the maximum allowed buffer size of 30150672384 bytes. at /private/build/mlx/array.cpp:352",
         ),
     );
-    let (daemon_transport, worker_transport) = duplex(MAX_IPC_FRAME_BYTES * 2);
-    let (daemon_reader_transport, daemon_writer_transport) = split(daemon_transport);
-    let (worker_reader_transport, worker_writer_transport) = split(worker_transport);
-    let mut daemon_reader = ProtocolReader::new(daemon_reader_transport);
-    let mut daemon_writer = ProtocolWriter::new(daemon_writer_transport);
-    let worker_task = tokio::spawn(async move {
-        engine_worker
-            .run(worker_reader_transport, worker_writer_transport)
-            .await
-    });
+    let (mut daemon_reader, mut daemon_writer, worker_reader_transport, worker_writer_transport) =
+        open_ipc_worker_transport();
+    let worker_task =
+        tokio::spawn(engine_worker.run(worker_reader_transport, worker_writer_transport));
 
     assert_eq!(next_event(&mut daemon_reader).await, ready_event());
-    daemon_writer
-        .send_command(&WorkerCommand::Generate(chat_command(799, 7)))
-        .await
-        .expect("the worker should receive the fatal test request");
+    send_chat_request(&mut daemon_writer, 799, 7).await;
 
     assert_eq!(
         next_event(&mut daemon_reader).await,
@@ -283,26 +236,17 @@ async fn should_report_a_bounded_actionable_reason_before_a_fatal_worker_exit() 
 async fn should_cancel_and_remain_reusable_after_malformed_output() {
     let engine_worker =
         EngineBackedWorker::new(MalformedFinishProcessor, TrackingChatEngine::new());
-    let (daemon_transport, worker_transport) = duplex(MAX_IPC_FRAME_BYTES * 2);
-    let (daemon_reader_transport, daemon_writer_transport) = split(daemon_transport);
-    let (worker_reader_transport, worker_writer_transport) = split(worker_transport);
-    let mut daemon_reader = ProtocolReader::new(daemon_reader_transport);
-    let mut daemon_writer = ProtocolWriter::new(daemon_writer_transport);
-    let worker_task = tokio::spawn(async move {
-        engine_worker
-            .run(worker_reader_transport, worker_writer_transport)
-            .await
-    });
+    let (mut daemon_reader, mut daemon_writer, worker_reader_transport, worker_writer_transport) =
+        open_ipc_worker_transport();
+    let worker_task =
+        tokio::spawn(engine_worker.run(worker_reader_transport, worker_writer_transport));
 
     assert!(matches!(
         next_event(&mut daemon_reader).await,
         WorkerEvent::Ready { .. }
     ));
     for request_number in [721_u64, 722_u64] {
-        daemon_writer
-            .send_command(&WorkerCommand::Generate(chat_command(request_number, 9)))
-            .await
-            .expect("the worker should receive the malformed-output request");
+        send_chat_request(&mut daemon_writer, request_number, 9).await;
         let progress_event = next_event(&mut daemon_reader).await;
         match progress_event {
             WorkerEvent::GenerationProgress {
@@ -335,31 +279,17 @@ async fn should_cancel_and_remain_reusable_after_malformed_output() {
 async fn should_ignore_a_stale_cancellation_after_request_completion() {
     let engine_worker =
         EngineBackedWorker::new(ScriptedChatProcessor::new(), ScriptedChatEngine::new());
-    let (daemon_transport, worker_transport) = duplex(MAX_IPC_FRAME_BYTES * 2);
-    let (daemon_reader_transport, daemon_writer_transport) = split(daemon_transport);
-    let (worker_reader_transport, worker_writer_transport) = split(worker_transport);
-    let mut daemon_reader = ProtocolReader::new(daemon_reader_transport);
-    let mut daemon_writer = ProtocolWriter::new(daemon_writer_transport);
-    let worker_task = tokio::spawn(async move {
-        engine_worker
-            .run(worker_reader_transport, worker_writer_transport)
-            .await
-    });
+    let (mut daemon_reader, mut daemon_writer, worker_reader_transport, worker_writer_transport) =
+        open_ipc_worker_transport();
+    let worker_task =
+        tokio::spawn(engine_worker.run(worker_reader_transport, worker_writer_transport));
 
     assert_eq!(next_event(&mut daemon_reader).await, ready_event());
-    daemon_writer
-        .send_command(&WorkerCommand::Generate(chat_command(731, 10)))
-        .await
-        .expect("the worker should receive a chat request");
+    send_chat_request(&mut daemon_writer, 731, 10).await;
     for _expected_event_number in 0..3 {
         next_event(&mut daemon_reader).await;
     }
-    daemon_writer
-        .send_command(&WorkerCommand::Cancel {
-            request_id: RequestId::new(731),
-        })
-        .await
-        .expect("the worker should receive the stale cancellation");
+    send_cancellation(&mut daemon_writer, 731).await;
 
     assert!(
         timeout(Duration::from_millis(100), daemon_reader.next_event())
@@ -377,22 +307,13 @@ async fn should_report_engine_astro_ssd_prompt_cache_restored_token_count_in_com
         ScriptedChatProcessor::new(),
         ScriptedChatEngine::with_astro_ssd_prompt_cache_restored_token_count(2_048),
     );
-    let (daemon_transport, worker_transport) = duplex(MAX_IPC_FRAME_BYTES * 2);
-    let (daemon_reader_transport, daemon_writer_transport) = split(daemon_transport);
-    let (worker_reader_transport, worker_writer_transport) = split(worker_transport);
-    let mut daemon_reader = ProtocolReader::new(daemon_reader_transport);
-    let mut daemon_writer = ProtocolWriter::new(daemon_writer_transport);
-    let worker_task = tokio::spawn(async move {
-        engine_worker
-            .run(worker_reader_transport, worker_writer_transport)
-            .await
-    });
+    let (mut daemon_reader, mut daemon_writer, worker_reader_transport, worker_writer_transport) =
+        open_ipc_worker_transport();
+    let worker_task =
+        tokio::spawn(engine_worker.run(worker_reader_transport, worker_writer_transport));
 
     assert_eq!(next_event(&mut daemon_reader).await, ready_event());
-    daemon_writer
-        .send_command(&WorkerCommand::Generate(chat_command(741, 11)))
-        .await
-        .expect("the worker should receive a chat request");
+    send_chat_request(&mut daemon_writer, 741, 11).await;
     let _first_output_event = next_event(&mut daemon_reader).await;
     let _second_output_event = next_event(&mut daemon_reader).await;
 

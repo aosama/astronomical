@@ -1,4 +1,5 @@
 use super::*;
+use crate::rest_api::http_exchange_fixtures::read_json_body;
 
 #[tokio::test]
 async fn should_trigger_internal_shutdown_when_shutdown_endpoint_is_called() {
@@ -13,11 +14,7 @@ async fn should_trigger_internal_shutdown_when_shutdown_endpoint_is_called() {
         StatusCode::ACCEPTED,
         "the shutdown endpoint must return HTTP 202"
     );
-    let response_body = to_bytes(response.into_body(), 4 * 1024)
-        .await
-        .expect("the shutdown body should be readable");
-    let response_json: serde_json::Value =
-        serde_json::from_slice(&response_body).expect("the shutdown body should be JSON");
+    let response_json = read_json_body(response, 4 * 1024).await;
     assert_eq!(response_json["status"], "shutting_down");
 
     // The shutdown signal receiver must fire shortly after the POST.
