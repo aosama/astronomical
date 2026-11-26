@@ -13,8 +13,6 @@ fn graph_submission_chunking(
         experimental_ssd_paging_generation_graph_submission_layer_interval,
         ssd_prompt_cache_block_tokens: None,
         ssd_prompt_cache_common_prefix_stride_blocks: 4,
-        experimental_decode_stage_attribution_enabled: false,
-        experimental_prefill_stage_attribution_enabled: false,
         experimental_in_memory_prefix_adoption_enabled: false,
         experimental_neural_engine_prefill_enabled: false,
         multi_token_prediction_draft_tokens: None,

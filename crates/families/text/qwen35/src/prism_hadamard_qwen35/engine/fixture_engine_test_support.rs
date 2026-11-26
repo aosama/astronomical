@@ -42,8 +42,6 @@ pub(super) fn serving_settings_with(
             fixed_ssd_streaming_prompt_processing_chunk_size_tokens: 64,
             prefill_graph_submission_layer_interval: 0,
             experimental_ssd_paging_generation_graph_submission_layer_interval: 0,
-            experimental_decode_stage_attribution_enabled: false,
-            experimental_prefill_stage_attribution_enabled: false,
             experimental_in_memory_prefix_adoption_enabled: false,
         },
         astro_ssd_prompt_cache_enabled: false,

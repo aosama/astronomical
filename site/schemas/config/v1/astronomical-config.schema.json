@@ -24,8 +24,7 @@
         {"title": "Prompt cache blocks", "description": "How a prompt is divided when it is stored in the prompt cache.", "tier": "advanced", "settings": ["chunking.ssd_prompt_cache_block_tokens", "chunking.ssd_prompt_cache_common_prefix_stride_blocks"]},
         {"title": "SSD streaming", "description": "Used only while part of a model is read from the SSD because it does not fit in memory.", "tier": "advanced", "settings": ["chunking.experimental_ssd_paging_generation_graph_submission_layer_interval"]},
         {"title": "Speculative decoding", "description": "Drafting more than one token at a time, with the model's own prediction head or a small helper model installed beside it.", "tier": "advanced", "settings": ["chunking.multi_token_prediction_draft_tokens", "chunking.speculative_decoding_block_length_tokens"]},
-        {"title": "Experimental", "description": "Features still being proven. They can change or go away.", "tier": "advanced", "settings": ["chunking.experimental_neural_engine_prefill_enabled", "chunking.experimental_in_memory_prefix_adoption_enabled"]},
-        {"title": "Diagnostics", "description": "Measurement modes for investigating speed. They slow the model down, so leave them off in normal use.", "tier": "diagnostic", "note": "Slows serving. Leave off.", "settings": ["chunking.experimental_decode_stage_attribution_enabled", "chunking.experimental_prefill_stage_attribution_enabled"]}
+        {"title": "Experimental", "description": "Features still being proven. They can change or go away.", "tier": "advanced", "settings": ["chunking.experimental_neural_engine_prefill_enabled", "chunking.experimental_in_memory_prefix_adoption_enabled"]}
     ]
   },
   "properties": {
@@ -233,22 +232,6 @@
           "description": "Experimental one-token submission interval used only while sparse experts stream from SSD.",
           "x-astronomical-unit": "layers",
           "x-astronomical-explanation": "While writing a reply with part of the model read from the SSD, how many layers are computed before the work is handed to the graphics processor. It balances speed against how much of the model must be in memory at once.",
-          "x-astronomical-apply-mode": "model-reload"
-        },
-        "experimental_decode_stage_attribution_enabled": {
-          "title": "Decode stage attribution",
-          "type": "boolean",
-          "default": false,
-          "description": "Diagnostic mode that runs decode forwards as stage-split evaluations so one attribution report decomposes decode time. Roughly doubles decode time; never enable in normal serving.",
-          "x-astronomical-explanation": "A measuring mode that times each step of writing a reply, for investigating where time goes. It makes replies about twice as slow, so leave it off unless you are measuring.",
-          "x-astronomical-apply-mode": "model-reload"
-        },
-        "experimental_prefill_stage_attribution_enabled": {
-          "title": "Prefill stage attribution",
-          "type": "boolean",
-          "default": false,
-          "description": "Diagnostic mode that runs prefill chunks as stage-split evaluations so one attribution report decomposes prefill time across attention, mixture-of-values, and expert stages. Synchronizes the graphics processor several times per layer; never enable in normal serving.",
-          "x-astronomical-explanation": "A measuring mode that times each step of reading a prompt, for investigating where time goes. It slows prompt reading noticeably, so leave it off unless you are measuring.",
           "x-astronomical-apply-mode": "model-reload"
         },
         "experimental_in_memory_prefix_adoption_enabled": {

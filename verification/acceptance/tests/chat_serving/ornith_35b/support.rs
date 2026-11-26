@@ -110,8 +110,6 @@ fn isolated_home(
         serde_json::json!([model_directory.to_string_lossy()]);
     config_document["diagnostics"]["performance_attribution_enabled"] =
         serde_json::json!(performance_attribution_enabled);
-    config_document["chunking"]["experimental_decode_stage_attribution_enabled"] =
-        serde_json::json!(false);
     if let Some(astro_ssd_prompt_cache_enabled) = astro_ssd_prompt_cache_enabled {
         config_document["ssd_prompt_cache"]["enabled"] =
             serde_json::json!(astro_ssd_prompt_cache_enabled);

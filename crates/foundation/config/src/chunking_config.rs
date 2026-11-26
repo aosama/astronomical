@@ -41,10 +41,6 @@ pub(crate) struct ChunkingConfigFile {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) ssd_prompt_cache_common_prefix_stride_blocks: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) experimental_decode_stage_attribution_enabled: Option<bool>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) experimental_prefill_stage_attribution_enabled: Option<bool>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) experimental_in_memory_prefix_adoption_enabled: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) experimental_neural_engine_prefill_enabled: Option<bool>,
@@ -61,8 +57,6 @@ pub struct ConfiguredChunkingFields {
     pub ssd_prompt_cache_block_tokens: bool,
     pub multi_token_prediction_draft_tokens: bool,
     pub ssd_prompt_cache_common_prefix_stride_blocks: bool,
-    pub experimental_decode_stage_attribution_enabled: bool,
-    pub experimental_prefill_stage_attribution_enabled: bool,
     pub experimental_in_memory_prefix_adoption_enabled: bool,
     pub experimental_neural_engine_prefill_enabled: bool,
 }
@@ -129,12 +123,6 @@ impl ChunkingConfigFile {
             ssd_prompt_cache_common_prefix_stride_blocks: self
                 .ssd_prompt_cache_common_prefix_stride_blocks
                 .is_some(),
-            experimental_decode_stage_attribution_enabled: self
-                .experimental_decode_stage_attribution_enabled
-                .is_some(),
-            experimental_prefill_stage_attribution_enabled: self
-                .experimental_prefill_stage_attribution_enabled
-                .is_some(),
             experimental_in_memory_prefix_adoption_enabled: self
                 .experimental_in_memory_prefix_adoption_enabled
                 .is_some(),
@@ -177,12 +165,6 @@ impl ChunkingConfigFile {
             ssd_prompt_cache_common_prefix_stride_blocks: model
                 .ssd_prompt_cache_common_prefix_stride_blocks
                 .or(global.ssd_prompt_cache_common_prefix_stride_blocks),
-            experimental_decode_stage_attribution_enabled: model
-                .experimental_decode_stage_attribution_enabled
-                .or(global.experimental_decode_stage_attribution_enabled),
-            experimental_prefill_stage_attribution_enabled: model
-                .experimental_prefill_stage_attribution_enabled
-                .or(global.experimental_prefill_stage_attribution_enabled),
             experimental_in_memory_prefix_adoption_enabled: model
                 .experimental_in_memory_prefix_adoption_enabled
                 .or(global.experimental_in_memory_prefix_adoption_enabled),
@@ -316,8 +298,6 @@ pub struct ChunkingConfig {
     ssd_prompt_cache_block_tokens: Option<u32>,
     multi_token_prediction_draft_tokens: Option<u32>,
     ssd_prompt_cache_common_prefix_stride_blocks: u32,
-    experimental_decode_stage_attribution_enabled: bool,
-    experimental_prefill_stage_attribution_enabled: bool,
     experimental_in_memory_prefix_adoption_enabled: bool,
     experimental_neural_engine_prefill_enabled: bool,
 }
@@ -363,12 +343,6 @@ impl ChunkingConfig {
             ssd_prompt_cache_common_prefix_stride_blocks: configured
                 .ssd_prompt_cache_common_prefix_stride_blocks
                 .unwrap_or(DEFAULT_ASTRO_SSD_PROMPT_CACHE_COMMON_PREFIX_STRIDE_BLOCKS),
-            experimental_decode_stage_attribution_enabled: configured
-                .experimental_decode_stage_attribution_enabled
-                .unwrap_or(false),
-            experimental_prefill_stage_attribution_enabled: configured
-                .experimental_prefill_stage_attribution_enabled
-                .unwrap_or(false),
             experimental_in_memory_prefix_adoption_enabled: configured
                 .experimental_in_memory_prefix_adoption_enabled
                 .unwrap_or(true),
@@ -467,24 +441,6 @@ impl ChunkingConfig {
         self.ssd_prompt_cache_common_prefix_stride_blocks
     }
 
-    /// Returns whether decode forwards may run stage-split evaluations for
-    /// deep attribution. This diagnostic mode roughly doubles decode time and
-    /// must never be enabled in normal serving.
-    #[must_use]
-    pub const fn experimental_decode_stage_attribution_enabled(&self) -> bool {
-        self.experimental_decode_stage_attribution_enabled
-    }
-
-    /// Returns whether prefill chunks may run stage-split evaluations for
-    /// deep attribution. This diagnostic mode synchronizes the graphics
-    /// processor several times per layer and must never be enabled in
-    /// normal serving; it exists to attribute prefill time across the
-    /// attention, mixture-of-values, and expert stages.
-    #[must_use]
-    pub const fn experimental_prefill_stage_attribution_enabled(&self) -> bool {
-        self.experimental_prefill_stage_attribution_enabled
-    }
-
     /// Returns whether the engine may retain the just-completed generation's
     /// live decoder state and adopt it for the next turn of the same
     /// conversation instead of re-reading the prefix KV from the disk store.
@@ -513,8 +469,6 @@ impl ChunkingConfig {
 impl Default for ChunkingConfig {
     fn default() -> Self {
         Self {
-            experimental_decode_stage_attribution_enabled: false,
-            experimental_prefill_stage_attribution_enabled: false,
             experimental_in_memory_prefix_adoption_enabled: true,
             experimental_neural_engine_prefill_enabled: false,
             fixed_prompt_processing_chunk_size_tokens:
