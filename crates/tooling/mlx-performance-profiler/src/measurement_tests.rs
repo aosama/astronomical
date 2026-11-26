@@ -52,11 +52,11 @@ impl MeasuredJob for FailingJob {
     }
 }
 
-fn skip_without_metal(test_name: &str) -> bool {
+pub(crate) fn skip_without_metal(test_name: &str) -> bool {
     test_harness::skip_without(test_harness::PlatformRequirement::MetalGpu, test_name)
 }
 
-fn runtime_and_matrices() -> (MlxRuntime, MlxArray, MlxArray) {
+pub(crate) fn runtime_and_matrices() -> (MlxRuntime, MlxArray, MlxArray) {
     let runtime = MlxRuntime::initialize(
         MlxMemoryLimits::new(MEMORY_LIMIT_BYTES, MEMORY_LIMIT_BYTES)
             .expect("the memory limits are valid"),
@@ -83,7 +83,7 @@ fn runtime_and_matrices() -> (MlxRuntime, MlxArray, MlxArray) {
     (runtime, left, right)
 }
 
-fn report_in(directory: &Path) -> ReportLocation<'_> {
+pub(crate) fn report_in(directory: &Path) -> ReportLocation<'_> {
     ReportLocation {
         title: "Profiler contract",
         directory,
