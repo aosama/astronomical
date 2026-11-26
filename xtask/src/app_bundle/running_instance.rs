@@ -54,6 +54,21 @@ pub(crate) fn quit_bundled_applications(channel_profile: &ChannelProfile) -> Res
     })
 }
 
+/// Quits every running copy of a standalone app built from a checkout, such
+/// as Thin Talk Development, matched by the executable path inside its bundle
+/// so a copy built in another worktree quits too; returns whether one ran.
+pub(crate) fn quit_standalone_application(
+    description: &'static str,
+    bundle_identifier: &str,
+    command_line_pattern: String,
+) -> Result<bool, String> {
+    quit_bundled_application(&BundledApplication {
+        description,
+        bundle_identifier: bundle_identifier.to_owned(),
+        command_line_pattern,
+    })
+}
+
 /// Quits every running copy of one application of the channel; returns
 /// whether one was running.
 ///

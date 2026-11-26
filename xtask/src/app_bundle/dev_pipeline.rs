@@ -13,7 +13,9 @@ use super::build_steps::{
     build_rust_executables, build_swift_applications, build_thin_talk_web_assets,
     prewarm_native_runtime, rust_executable_directory,
 };
-use super::bundle_assembly::{BundleInputs, BundlePlists, assemble_bundle, missing_inputs};
+use super::bundle_assembly::{
+    BundleInputs, BundlePlists, assemble_bundle, create_directory, missing_inputs,
+};
 use super::bundle_check::check_bundle;
 use super::channel_profile::{Channel, ChannelProfile};
 use super::code_signing::{SigningRequest, sign_bundle};
@@ -270,16 +272,6 @@ fn rename_path(source_path: &Path, destination_path: &Path) -> Result<(), String
             "could not move {} to {}: {rename_error}",
             source_path.display(),
             destination_path.display()
-        )),
-    }
-}
-
-fn create_directory(directory_path: &Path) -> Result<(), String> {
-    match std::fs::create_dir_all(directory_path) {
-        Ok(()) => Ok(()),
-        Err(create_error) => Err(format!(
-            "could not create {}: {create_error}",
-            directory_path.display()
         )),
     }
 }

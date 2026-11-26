@@ -272,7 +272,7 @@ fn assemble_agent_bundle(
     Ok(())
 }
 
-fn create_directory(directory_path: &Path) -> Result<(), String> {
+pub(crate) fn create_directory(directory_path: &Path) -> Result<(), String> {
     match std::fs::create_dir_all(directory_path) {
         Ok(()) => Ok(()),
         Err(create_error) => Err(format!(
@@ -282,7 +282,7 @@ fn create_directory(directory_path: &Path) -> Result<(), String> {
     }
 }
 
-fn write_file(file_path: &Path, file_text: &str) -> Result<(), String> {
+pub(crate) fn write_file(file_path: &Path, file_text: &str) -> Result<(), String> {
     match std::fs::write(file_path, file_text) {
         Ok(()) => Ok(()),
         Err(write_error) => Err(format!(
@@ -293,7 +293,7 @@ fn write_file(file_path: &Path, file_text: &str) -> Result<(), String> {
 }
 
 /// `fs::copy` keeps the executable permission bits, so no `chmod` follows.
-fn copy_file(source_path: &Path, destination_path: &Path) -> Result<(), String> {
+pub(crate) fn copy_file(source_path: &Path, destination_path: &Path) -> Result<(), String> {
     match std::fs::copy(source_path, destination_path) {
         Ok(_) => Ok(()),
         Err(copy_error) => Err(format!(
@@ -306,6 +306,6 @@ fn copy_file(source_path: &Path, destination_path: &Path) -> Result<(), String> 
 
 /// `ditto` keeps the symlinks a framework's `Versions/Current` layout relies
 /// on; a plain recursive copy would duplicate them and break the signature.
-fn copy_tree(source_path: &Path, destination_path: &Path) -> Result<(), String> {
+pub(crate) fn copy_tree(source_path: &Path, destination_path: &Path) -> Result<(), String> {
     run_quiet_tool(Command::new("ditto").arg(source_path).arg(destination_path)).map(drop)
 }
