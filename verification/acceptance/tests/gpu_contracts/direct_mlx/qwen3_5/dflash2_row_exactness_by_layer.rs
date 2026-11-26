@@ -12,6 +12,7 @@ use serial_test::serial;
 
 use super::dflash2_journey_support::host_values;
 use super::dflash2_kept_per_round::{JourneyPair, load_pair};
+use super::dflash2_row_exactness::verify_chain;
 use super::dflash2_tree_oracle::{ORACLE_CELLS, prefill};
 
 const LONGEST_WINDOW_ROW_COUNT: usize = 16;
@@ -34,8 +35,60 @@ fn should_locate_the_layer_where_window_rows_first_leave_the_one_token_step() {
     let (tokens, step_layers) = one_token_step_layers(&pair, &every_layer);
     for window_row_count in WINDOW_ROW_COUNTS {
         let window_layers = window_forward_layers(&pair, &every_layer, &tokens[..window_row_count]);
-        report_layers(window_row_count, &step_layers, &window_layers);
+        report_layers(
+            &format!("{window_row_count}-row window"),
+            &step_layers,
+            &window_layers,
+        );
     }
+}
+
+/// The same question for the pass a draft round really runs: the greedy
+/// continuation as one chain through the tree verify, where every row after
+/// the first has ancestors in the pass. A plain window that is exact where
+/// the chain is not puts the drift in the tree's own steps (its DeltaNet
+/// replay of a row's ancestors, its masked attention), not in the row count.
+#[test]
+#[ignore = "loads a real target and its DFlash2 drafter; run through cargo measure-dflash2-row-exactness"]
+#[serial]
+fn should_locate_the_layer_where_tree_rows_first_leave_the_one_token_step() {
+    let mut pair = load_pair();
+    pair.target
+        .enable_draft_tree_verification()
+        .expect("the tree kernel declares");
+    let layer_count = pair.drafter_configuration.target_layer_count as usize;
+    let every_layer: Vec<i32> = (0..layer_count as i32).collect();
+    let (tokens, step_layers) = one_token_step_layers(&pair, &every_layer);
+    for tree_row_count in WINDOW_ROW_COUNTS {
+        let tree_layers = chain_tree_layers(&pair, &every_layer, &tokens[..tree_row_count]);
+        report_layers(
+            &format!("{tree_row_count}-row tree chain"),
+            &step_layers,
+            &tree_layers,
+        );
+    }
+}
+
+/// The same tokens as one chain through the tree verify: `[layer][row]`.
+fn chain_tree_layers(pair: &JourneyPair, tap_layer_ids: &[i32], tokens: &[u32]) -> LayerRows {
+    let verified = verify_chain(
+        pair,
+        &ORACLE_CELLS[GREEDY_CHAT_CELL_INDEX],
+        tokens,
+        tap_layer_ids,
+    );
+    layer_rows_of(pair, &verified.hidden_state_taps, tokens.len())
+}
+
+/// Each tap `[1, rows, hidden]` split into its rows: `[layer][row]`.
+fn layer_rows_of(pair: &JourneyPair, taps: &[mlx_bridge::MlxArray], row_count: usize) -> LayerRows {
+    let mut layers = Vec::with_capacity(taps.len());
+    for tap in taps {
+        let values = host_values(pair.target.runtime(), tap);
+        let hidden_size = values.len() / row_count;
+        layers.push(values.chunks(hidden_size).map(<[f32]>::to_vec).collect());
+    }
+    layers
 }
 
 /// The greedy continuation fed one token a step, with every layer's output
@@ -84,16 +137,10 @@ fn window_forward_layers(pair: &JourneyPair, tap_layer_ids: &[i32], tokens: &[u3
             &mut PerformanceAttribution::disabled(),
         )
         .expect("the window forward runs");
-    let mut layers = Vec::with_capacity(forward.hidden_state_taps.len());
-    for tap in &forward.hidden_state_taps {
-        let values = host_values(pair.target.runtime(), tap);
-        let hidden_size = values.len() / tokens.len();
-        layers.push(values.chunks(hidden_size).map(<[f32]>::to_vec).collect());
-    }
-    layers
+    layer_rows_of(pair, &forward.hidden_state_taps, tokens.len())
 }
 
-fn report_layers(window_row_count: usize, step_layers: &LayerRows, window_layers: &LayerRows) {
+fn report_layers(pass_label: &str, step_layers: &LayerRows, window_layers: &LayerRows) {
     let mut first_differing_layer = None;
     let mut summary = String::new();
     for (layer_index, window_rows) in window_layers.iter().enumerate() {
@@ -119,7 +166,7 @@ fn report_layers(window_row_count: usize, step_layers: &LayerRows, window_layers
         ));
     }
     eprintln!(
-        "[dflash2-row-exactness-by-layer] {window_row_count}-row window: first differing layer {first_differing_layer:?} (D = DeltaNet, A = full attention; max diff/rows differing):{summary}"
+        "[dflash2-row-exactness-by-layer] {pass_label}: first differing layer {first_differing_layer:?} (D = DeltaNet, A = full attention; max diff/rows differing):{summary}"
     );
 }
 

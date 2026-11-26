@@ -3,13 +3,15 @@
 //!
 //! The first journey compares: one loaded model writes one greedy reply
 //! twice, with the drafter silent and with it proposing. Every token of
-//! either reply is the target's own pick, but a tree pass is several rows
-//! and MLX rounds a several-row kernel differently from a one-row one, so
-//! the two replies part where two tokens are nearly tied (on a 35B-A3B the
-//! logits move by up to 1.6 between row counts; `cargo
-//! test-streaming-draft-tree-verification` holds each tree row to that).
-//! The journey reports how far they agree and fails only when they part at
-//! the first token, which rounding does not explain. The drafted reply
+//! either reply is the target's own pick. On a dense model the two replies
+//! must be equal: its tree pass gives every row the bits its one-token step
+//! gives (issue #2599). On a mixture-of-experts model a tree pass is several
+//! rows through the gathered expert kernels, which round a several-row pass
+//! differently from a one-row one, so the two replies part where two tokens
+//! are nearly tied (on a 35B-A3B the logits move by up to 1.6 between row
+//! counts; `cargo test-streaming-draft-tree-verification` holds each tree
+//! row to that); there the journey reports how far they agree and fails
+//! only when they part at the first token. The drafted reply
 //! must have run rounds and the plain
 //! one none, or the comparison proves nothing. The others are the
 //! measurement, one process a case so neither starts from tables the other
@@ -166,6 +168,17 @@ async fn compare_greedy_replies() {
         agreeing_token_count > 0,
         "a drafted reply must begin as the plain reply does"
     );
+    // A dense model's tree pass gives every row the bits its one-token step
+    // gives (issue #2599): its projections are row-exact, its attention is
+    // scored a few rows a call, and its one-token DeltaNet kernel matches
+    // the composed steps a tree runs.
+    if !reply_cases::model_has_experts(&paging_engine.model_directory) {
+        assert_eq!(
+            agreeing_token_count,
+            plain_reply.len(),
+            "a dense model's drafted greedy reply must equal the plain one"
+        );
+    }
 }
 
 /// Writes the greedy reply with the drafter proposing or silent; returns

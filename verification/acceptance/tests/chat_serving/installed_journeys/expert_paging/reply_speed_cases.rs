@@ -29,12 +29,17 @@ const MEASURED_PROMPT_TOKEN_COUNT: usize = 10_000;
 /// reply for nothing a shorter prompt does not show.
 const DENSE_MEASURED_PROMPT_TOKEN_COUNT: usize = 2_000;
 
-/// The measured prompt's size for the configured model: shorter for a model
-/// whose configuration names no experts.
+/// Whether the configured model routes tokens to experts; a dense model's
+/// configuration names none.
+pub fn model_has_experts(model_directory: &Path) -> bool {
+    std::fs::read_to_string(model_directory.join("config.json"))
+        .is_ok_and(|config_text| config_text.contains("\"num_experts\""))
+}
+
+/// The measured prompt's size for the configured model: shorter for a dense
+/// model.
 fn measured_prompt_token_count(model_directory: &Path) -> usize {
-    let has_experts = std::fs::read_to_string(model_directory.join("config.json"))
-        .is_ok_and(|config_text| config_text.contains("\"num_experts\""));
-    if has_experts {
+    if model_has_experts(model_directory) {
         MEASURED_PROMPT_TOKEN_COUNT
     } else {
         DENSE_MEASURED_PROMPT_TOKEN_COUNT

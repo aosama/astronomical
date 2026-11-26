@@ -143,10 +143,10 @@ test-dense-text-weights = "run -p xtask -- test-run --package astronomical-accep
 test-dense-streaming-parity = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter should_give_the_resident_logits"
 # Kept dense layers in register order (issues #2568, #2585): one load of the
 # 4-bit dense_vision model with half its layers kept answers a Shakespeare prompt
-# before and after the kept layers convert; the tokens must match, a layer a
+# before and after the kept layers convert; the replies must begin alike, a layer a
 # forward holds must be left alone, and converting twice must find nothing.
 # About fifteen seconds.
-test-dense-kept-layer-register-order = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter should_choose_the_same_tokens_with_kept_layers_in_register_order"
+test-dense-kept-layer-register-order = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter should_begin_the_same_reply_with_kept_layers_in_register_order"
 
 # Dense layer-major checkpoint parity (issue #1985): one Shakespeare prompt
 # prefilled layer by layer and chunk by chunk over the engine's span plan, at
@@ -761,7 +761,9 @@ measure-dflash2-tree-rounds = "run -p xtask -- test-run --package astronomical-a
 # 4-row chain after a short and a 10,000-token prompt; a real drafted tree
 # through the row-exact tree attention kernel and through MLX's attention;
 # and, on real data, how many attention outputs each path leaves float32
-# attention's, by tree row and head half. Every DFlash2
+# attention's, by tree row and head half; and, layer by layer, where a plain
+# window and a chain through the tree verify first leave the one-token step
+# (issue #2599). Every DFlash2
 # journey above takes another target the same way: append --configuration
 # PATH whose model_directory is a model folder holding its own drafter in a
 # `drafter` folder; without one they load the 27B pair. About a minute.
@@ -1011,8 +1013,10 @@ measure-mtp-reply-drafting = "run -p xtask -- test-run --package astronomical-ac
 # A streamed model packaged with a DFlash drafter, writing replies in draft
 # tree rounds (issue #2330). `test-hosted-drafter-reply` writes one greedy
 # reply with the drafter silent and with it proposing, checks that rounds
-# ran and reports how many tokens the two agree on: they part where two
-# tokens are nearly tied, because a several-row pass rounds differently.
+# ran and reports how many tokens the two agree on. A dense model's two
+# replies must be equal (issue #2599); a mixture-of-experts model's part
+# where two tokens are nearly tied, because its several-row expert pass
+# rounds differently.
 # `measure-hosted-drafter-reply` measures both, one process a case, with the
 # drafter loaded in each: an essay at temperature 1.0 and 0.7 and real Python
 # source continued at 0.7. Each case serves its prompt once unmeasured first,
