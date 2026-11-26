@@ -1,9 +1,6 @@
 #[cfg(feature = "direct-mlx")]
 mod artifact_loading;
 #[cfg(feature = "direct-mlx")]
-mod decision_readout;
-pub use decision_readout::DecoderLayerRecomputation;
-#[cfg(feature = "direct-mlx")]
 mod decoder_layer_forward;
 #[cfg(feature = "direct-mlx")]
 mod decoder_stack_suffix_forward;

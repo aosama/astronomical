@@ -15,7 +15,7 @@ pub use experts::{
 pub use model::Qwen3_5ResidentModel;
 #[cfg(feature = "direct-mlx")]
 pub use model::RecordedDecoderLayerInput;
-pub use model::{DecoderLayerRecomputation, TextExecutionError};
+pub use model::TextExecutionError;
 pub use model::{
     Qwen3_5DraftTreeVerification, Qwen3_5DraftedRowsVerification,
     Qwen3_5SpeculativeVerificationOutput, VerificationLogitsMode,

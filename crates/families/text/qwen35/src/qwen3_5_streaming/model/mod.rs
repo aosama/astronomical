@@ -1,6 +1,8 @@
 #[cfg(feature = "direct-mlx")]
 mod astro_expert_cache_plus_streamed_page_route;
 #[cfg(feature = "direct-mlx")]
+pub mod decision_readout;
+#[cfg(feature = "direct-mlx")]
 mod deferred_expert_demand;
 #[cfg(feature = "direct-mlx")]
 mod dense_layer_counts;

@@ -21,15 +21,16 @@ use crate::qwen3_5_core::model::target_forward_graph::{
 };
 use mlx_bridge::{MlxArray, MlxDtype};
 
-use super::{Qwen3_5ResidentModel, RequestDecoderStateStack, TextExecutionError};
+use super::{Qwen3_5Model, RequestDecoderStateStack, TextExecutionError};
 use crate::PerformanceAttribution;
+use crate::qwen3_5_streaming::Qwen3_5MoEPagedExecutionMode;
 
 /// Runs one decoder layer of a training's batched forward pass so that
 /// its activations are recomputed during the backward pass instead of kept
 /// (`adapter_training::layer_recomputation` says why and what it costs).
 pub trait DecoderLayerRecomputation {
     /// Layer `layer_index` over `hidden_states`, as
-    /// [`Qwen3_5ResidentModel::empty_state_decoder_layer`] computes it.
+    /// [`Qwen3_5Model::empty_state_decoder_layer`] computes it.
     fn recomputed_layer(
         &self,
         hidden_states: &MlxArray,
@@ -38,26 +39,32 @@ pub trait DecoderLayerRecomputation {
     ) -> Result<MlxArray, TextExecutionError>;
 }
 
-impl Qwen3_5ResidentModel {
+impl Qwen3_5Model {
     /// Layer `layer_index` of a training's batched forward pass over
     /// `[rows, token_count, hidden]` hidden states (`empty_state_forward`).
+    ///
+    /// The layer comes from where every forward of this model finds it: a
+    /// dense model's streamer, which holds the layers a backbone keeps
+    /// (`materialize_and_keep_every_dense_layer`). The model base's own
+    /// decoder layers of a dense model are never evaluated, so reading
+    /// them here would load a second copy of every layer.
     pub fn empty_state_decoder_layer(
         &self,
         hidden_states: &MlxArray,
         layer_index: usize,
         token_count: i32,
     ) -> Result<MlxArray, TextExecutionError> {
-        let Some(decoder_layer_weights) = self.weights.decoder_layer_weights.get(layer_index)
-        else {
+        if layer_index >= self.config.layer_count() as usize {
             return Err(TextExecutionError::InvalidInput {
                 description: "a decoder layer index is past the model's layers",
             });
-        };
+        }
+        let forward_layer_weights = self.forward_layer_weights(layer_index)?;
         self.decoder_layer_from_empty_state(
             hidden_states,
             token_count,
             layer_index,
-            decoder_layer_weights,
+            forward_layer_weights.decoder_layer_weights(),
         )
     }
 
@@ -110,7 +117,7 @@ impl Qwen3_5ResidentModel {
                 },
                 request_decoder_state,
                 None,
-                (),
+                Qwen3_5MoEPagedExecutionMode::ProductionDefault,
                 &mut disabled_performance_attribution,
                 false,
             )?;
@@ -147,7 +154,7 @@ impl Qwen3_5ResidentModel {
     ) -> Result<MlxArray, TextExecutionError> {
         let (token_indices, token_count) = self.padded_token_indices(token_rows)?;
         let mut hidden_states = self.embedding_lookup(&token_indices)?;
-        for layer_index in 0..self.weights.decoder_layer_weights.len() {
+        for layer_index in 0..self.config.layer_count() as usize {
             hidden_states = match layer_recomputation {
                 Some(layer_recomputation) => layer_recomputation.recomputed_layer(
                     &hidden_states,

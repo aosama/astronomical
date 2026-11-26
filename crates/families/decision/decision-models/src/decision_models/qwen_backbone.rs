@@ -5,7 +5,9 @@
 //! the same validator, bound by the same loader, which reads both the
 //! published Hugging Face layout and MLX conversions), prefill the input
 //! that is only context, and read final hidden states from the part their
-//! head looks at.
+//! head looks at. The backbone is the chat engine's own model with every
+//! decoder layer kept in memory, so a decision reads the forward serving
+//! runs.
 //!
 //! A folder written by a whole-model training also holds
 //! `decision_adapters.safetensors`: add-ons for the backbone's dense
@@ -26,7 +28,7 @@ use crate::decision_models::decision_adapters::{
 use crate::linear_adapters::LinearAdapters;
 use crate::qwen3_5_core::model::layer_additions::Qwen3_5LayerAdditions;
 use crate::{
-    Qwen3_5ArtifactValidator, Qwen3_5ResidentModel, RequestDecoderStateStack,
+    Qwen3_5ArtifactValidator, Qwen3_5StreamingModel, RequestDecoderStateStack,
     TextModelChunkingConfiguration,
 };
 
@@ -45,7 +47,7 @@ pub const PREFILL_CHUNK_TOKENS: usize = 2_048;
 
 /// One loaded backbone.
 pub struct QwenDecisionBackbone {
-    pub model: Qwen3_5ResidentModel,
+    pub model: Qwen3_5StreamingModel,
     /// Whether the folder's add-ons are in force.
     pub has_add_ons: bool,
 }
@@ -78,15 +80,18 @@ impl QwenDecisionBackbone {
         let runtime = MlxRuntime::initialize(memory_limits).map_err(|runtime_error| {
             backbone_failure("runtime start", &runtime_error.to_string())
         })?;
-        let mut model = Qwen3_5ResidentModel::load(
+        let model = Qwen3_5StreamingModel::load(
             runtime,
             validated_artifact,
             model_directory,
             model_chunking,
         )
         .map_err(|load_error| backbone_failure("load", &load_error.to_string()))?;
+        // Every layer stays in memory: a training runs each one many times,
+        // and a decision reads a whole state, so reading layers from the SSD
+        // on every forward would cost far more than holding them.
         model
-            .materialize_complete_weights_matching_production()
+            .materialize_and_keep_every_dense_layer()
             .map_err(|load_error| backbone_failure("load", &load_error.to_string()))?;
         let has_add_ons = put_folder_add_ons_in_force(&model, model_directory)?;
         Ok(Self { model, has_add_ons })
@@ -152,7 +157,7 @@ pub fn backbone_memory_limit_bytes(
 /// Reads, checks and uploads the folder's add-ons, if it has any, and puts
 /// them in force. Returns whether there were any.
 fn put_folder_add_ons_in_force(
-    model: &Qwen3_5ResidentModel,
+    model: &Qwen3_5StreamingModel,
     model_directory: &Path,
 ) -> Result<bool, DecisionFailure> {
     let decision_adapters = read_decision_adapters(model_directory)?;

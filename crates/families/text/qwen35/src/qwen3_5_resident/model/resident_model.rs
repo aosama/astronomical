@@ -146,28 +146,6 @@ impl Qwen3_5ResidentModel {
         ipc_protocol::ExpertMemoryMode::Resident
     }
 
-    /// Creates an empty per-request decoder state whose per-layer
-    /// `astro_decoder_state_cache` dtypes match this model's loaded weights, exactly as production
-    /// generation does.
-    ///
-    /// Direct-MLX probes drive raw forwards without the engine's request
-    /// plumbing; this constructor keeps their decoder state identical to
-    /// production. The public config-only constructor instead assumes
-    /// BFloat16 in the `astro_decoder_state_cache`, which can diverge from a loaded artifact's dtypes
-    /// and would quietly measure a different graph than the one serving.
-    #[cfg(feature = "direct-mlx")]
-    pub fn empty_request_decoder_state_matching_loaded_weights(
-        &self,
-        full_attention_kv_state_growth_tokens: i32,
-    ) -> Result<RequestDecoderStateStack, runtime_integration::MlxRuntimeError> {
-        let astro_decoder_state_cache_layout = self.base.astro_decoder_state_cache_layout().clone();
-        RequestDecoderStateStack::
-            empty_from_astro_decoder_state_cache_layout_with_full_attention_kv_state_growth_tokens(
-                &astro_decoder_state_cache_layout,
-                full_attention_kv_state_growth_tokens,
-            )
-    }
-
     /// Materializes dense target weights and the complete resident expert
     /// payload in the exact order production model loading uses.
     ///

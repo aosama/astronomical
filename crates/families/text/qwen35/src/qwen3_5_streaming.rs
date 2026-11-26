@@ -24,6 +24,8 @@ pub use inference_execution::{
     Qwen3_5StreamingEngine, StreamingEngineSettings, safe_minimum_mlx_memory_ceiling_bytes,
 };
 #[cfg(feature = "direct-mlx")]
+pub use model::decision_readout::DecoderLayerRecomputation;
+#[cfg(feature = "direct-mlx")]
 pub use model::direct_expert_fetch_tally::DirectExpertFetchCounts;
 #[cfg(feature = "direct-mlx")]
 pub use model::in_graph_table_serving::InGraphServingCounts;
