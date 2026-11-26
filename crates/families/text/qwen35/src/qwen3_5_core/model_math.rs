@@ -15,8 +15,6 @@ pub mod dense_projection;
 #[cfg(feature = "direct-mlx")]
 pub mod differentiable_gated_delta;
 #[cfg(feature = "direct-mlx")]
-pub mod expert_gate_up_fusion;
-#[cfg(feature = "direct-mlx")]
 pub mod feed_forward_weights;
 #[cfg(feature = "direct-mlx")]
 pub mod folded_ternary_weights;

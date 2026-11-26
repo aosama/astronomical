@@ -117,13 +117,12 @@ impl Qwen3_5Model {
             storage_assignment_count,
             session_coverage_class,
         );
-        self.note_layer_misses(layer_index, storage_assignment_count);
+        self.note_engine_layer_misses(layer_index, storage_assignment_count);
     }
 
-    /// Hands a layer's misses to the route observation, unless another
-    /// reader holds it this instant: a missed note costs one sample, never
-    /// the token.
-    fn note_layer_misses(&self, layer_index: usize, storage_assignment_count: u64) {
+    /// Keeps the layer's reads from storage with the reply being recorded,
+    /// so the replay lab can hold its misses against the engine's.
+    fn note_engine_layer_misses(&self, layer_index: usize, storage_assignment_count: u64) {
         if let Ok(mut route_observation) = self.route_observation.try_borrow_mut() {
             route_observation.note_layer_misses(layer_index, storage_assignment_count);
         }

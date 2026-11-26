@@ -2084,17 +2084,11 @@ dependencies = [
 name = "qwen35-quantization-probe"
 version = "0.2.135"
 dependencies = [
- "artifact-validation",
- "engine-core",
- "expert-atlas",
- "memory-policy",
  "mlx-bridge",
- "model-primitives",
  "quantization",
  "qwen35",
  "runtime-integration",
  "tempfile",
- "text-generation",
  "tracing",
 ]
 

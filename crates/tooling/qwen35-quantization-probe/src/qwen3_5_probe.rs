@@ -1,7 +1,7 @@
-//! The Qwen3.5 probe: one in-memory model (`Qwen3_5ProbeModel`) whose
-//! modules can be swapped. Serving runs the streaming model, which keeps
-//! routed experts in the `astro_expert_cache` and reads the rest from the
-//! SSD, so it has no place a swapped expert projection could go.
+//! The Qwen3.5 probe: the chat model held whole in memory
+//! (`Qwen3_5TextModel::hold_every_layer_in_memory`), whose modules can be
+//! swapped. The forward is the one serving runs, so the sweep measures the
+//! kernels a request uses.
 //!
 //! The swap-forward-restore cycle is ported from OptiQ's `_exact_with_bf16_reference` (`optiq/core/sensitivity.py`); the model side is Astronomical's own Qwen3.5 engine.
 
@@ -18,13 +18,13 @@ use quantization::sensitivity::{
 };
 use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
-use crate::probe_model::{Qwen3_5ProbeModel, RecordedDecoderLayerInput};
 use qwen35::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights;
 use qwen35::qwen3_5_core::model_math::dense_projection::Qwen3_5ProjectionStorage;
 use qwen35::{Qwen3_5ArtifactValidator, TextModelChunkingConfiguration};
+use qwen35::{Qwen3_5TextModel, RecordedDecoderLayerInput};
 
 use super::expert_swaps::SwappedOutWeights;
-use super::module_locations::{FeedForwardProjection, ModuleLocation, module_location_for};
+use super::module_locations::{ModuleLocation, module_location_for};
 use super::simulated_quantization::{
     encoded_from_source, mean_kl_divergence, mlx_step, per_position_kl_divergences,
     quantize_dequantized_bfloat16,
@@ -49,9 +49,9 @@ const PROBE_MAXIMUM_OUTPUT_TOKENS: u32 = 4_096;
 /// same way the pipeline inventories it.
 const PROBE_INVENTORY_GROUP_SIZE: u32 = 64;
 
-/// The probe over one loaded held model.
+/// The probe over one loaded model held whole.
 pub struct Qwen3_5SensitivityProbe {
-    model: Qwen3_5ProbeModel,
+    model: Qwen3_5TextModel,
     /// Every quantizable module of the probed directory, as the quantization
     /// crate's inventory names it, so the sweep's names match the pipeline's.
     module_descriptors: Vec<QuantizableModuleDescriptor>,
@@ -135,7 +135,7 @@ pub fn load_qwen3_5_probe_model(
 fn load_held_model(
     model_directory: &Path,
     memory_limits: MlxMemoryLimits,
-) -> Result<Qwen3_5ProbeModel, QuantizationError> {
+) -> Result<Qwen3_5TextModel, QuantizationError> {
     let validated_artifact = Qwen3_5ArtifactValidator::new()
         .validate(model_directory, PROBE_MAXIMUM_OUTPUT_TOKENS)
         .map_err(probe_validation_failure)?;
@@ -148,14 +148,25 @@ fn load_held_model(
         MlxRuntime::initialize(memory_limits),
         "initialize the probe runtime",
     )?;
-    let mut model = probe_step(Qwen3_5ProbeModel::load(
+    let mut model = probe_step(Qwen3_5TextModel::load(
         runtime,
         validated_artifact,
         model_directory,
         chunking,
     ))?;
-    probe_step(model.materialize_every_weight())?;
+    hold_every_layer_in_memory(&mut model)?;
     Ok(model)
+}
+
+/// Holds the whole model in memory for swapping, and says when its routed
+/// experts did not all fit: their projections are then skipped.
+fn hold_every_layer_in_memory(model: &mut Qwen3_5TextModel) -> Result<(), QuantizationError> {
+    if !probe_step(model.hold_every_layer_in_memory())? {
+        tracing::warn!(
+            "the model's routed experts do not all fit under the probe's memory limit; their projections will be skipped"
+        );
+    }
+    Ok(())
 }
 
 impl Qwen3_5SensitivityProbe {
@@ -343,8 +354,8 @@ impl SensitivityProbeModel for Qwen3_5SensitivityProbe {
             } => self.swap_router(module_name, decoder_layer_index, bit_width, group_size)?,
             ModuleLocation::DecoderLayerRoutedExperts {
                 decoder_layer_index,
-                projection: projection @ (FeedForwardProjection::Gate | FeedForwardProjection::Up),
-            } => self.swap_expert_gate_or_up(
+                projection,
+            } => self.swap_routed_expert_projection(
                 module_name,
                 decoder_layer_index,
                 projection,

@@ -1,39 +1,28 @@
 //! The parts of a mixture-of-experts layer a probe swaps that are not plain
-//! affine weights in the decoder layer: the router, and a routed-expert gate
-//! or up projection, which the probe model may hold fused into one array.
+//! affine weights in the decoder layer: the router, and a routed-expert
+//! projection across every expert of a layer, which the chat model holds in
+//! its `astro_expert_cache` table for that layer.
 //!
-//! A probe re-encodes one projection at a time. The held-expert owner fuses the
-//! gate and up projections along the output axis when their storage agrees,
-//! so that one gathered multiply serves both; a probed half no longer agrees
-//! with its sibling (a different width, or re-rounded values that must not
-//! leak into the other projection's measurement). The swap therefore hands
-//! the layer a separate pair for the duration of the probe, which is the
-//! same representation production uses for a mixed-width pair, and restores
-//! the owner's original value afterwards.
+//! A probe re-encodes one projection at a time and serving keeps the gate,
+//! up and down projections apart, so each is replaced on its own, at any
+//! width, and its sibling projections keep their own values.
 //!
 //! OptiQ's counterpart is `_mutate_quantized_layer_to_bits` on a
-//! `QuantizedSwitchLinear` (`optiq/core/sensitivity.py`); mlx-lm keeps the
-//! three projections apart, so it has no fused case.
+//! `QuantizedSwitchLinear` (`optiq/core/sensitivity.py`).
 
-use mlx_bridge::MlxArray;
 use quantization::error::QuantizationError;
-use runtime_integration::MlxRuntime;
 
-use crate::probe_model::experts::Qwen3_5ProbeGateUpWeights;
 use qwen35::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights;
 use qwen35::qwen3_5_core::model_math::feed_forward_weights::Qwen3_5MoERouterGateWeights;
 
 use super::simulated_quantization::mlx_step;
-
-/// Why a probed layer's gate and up projections are held apart.
-pub const PROBE_SEPARATION_REASON: &str = "one projection is swapped by the sensitivity probe";
 
 /// What a swap took out of the model, kept until the restore.
 #[derive(Debug)]
 pub enum SwappedOutWeights {
     Affine(Qwen3_5AffineWeights),
     Router(Qwen3_5MoERouterGateWeights),
-    ExpertGateUp(Qwen3_5ProbeGateUpWeights),
+    RoutedExpert(Qwen3_5AffineWeights),
 }
 
 /// The router's weight in the affine form a probe re-encodes. A bfloat16
@@ -51,95 +40,4 @@ pub fn router_as_affine_weights(
             })
         }
     }
-}
-
-/// The gate and up projections of one layer as two separate weights,
-/// splitting the owner's fused array when it holds one.
-pub fn separate_gate_and_up_projections(
-    runtime: &MlxRuntime,
-    gate_up_weights: &Qwen3_5ProbeGateUpWeights,
-) -> Result<(Qwen3_5AffineWeights, Qwen3_5AffineWeights), QuantizationError> {
-    match gate_up_weights {
-        Qwen3_5ProbeGateUpWeights::Separate {
-            gate_projection,
-            up_projection,
-            ..
-        } => Ok((
-            mlx_step(
-                gate_projection.retained_reference(),
-                "retain the gate projection",
-            )?,
-            mlx_step(
-                up_projection.retained_reference(),
-                "retain the up projection",
-            )?,
-        )),
-        Qwen3_5ProbeGateUpWeights::Fused { projection, .. } => Ok((
-            output_rows_half(runtime, projection, 0)?,
-            output_rows_half(runtime, projection, 1)?,
-        )),
-    }
-}
-
-/// The lower (`half_index` 0, the gate) or upper (1, the up) half of a fused
-/// `[experts, 2 * intermediate, ...]` weight along its output-row axis.
-/// Groups run along the last axis, so a packed weight's words, scales and
-/// biases all split on the same rows and each half stays a valid encoding.
-fn output_rows_half(
-    runtime: &MlxRuntime,
-    fused_projection: &Qwen3_5AffineWeights,
-    half_index: i32,
-) -> Result<Qwen3_5AffineWeights, QuantizationError> {
-    match fused_projection {
-        Qwen3_5AffineWeights::NativeBfloat16 { weight } => {
-            Ok(Qwen3_5AffineWeights::NativeBfloat16 {
-                weight: half_of_axis_one(runtime, weight, half_index)?,
-            })
-        }
-        Qwen3_5AffineWeights::Quantized {
-            packed_weight,
-            quantization_scales,
-            quantization_biases,
-            quantization_bits,
-            quantization_group_size,
-        } => Ok(Qwen3_5AffineWeights::Quantized {
-            packed_weight: half_of_axis_one(runtime, packed_weight, half_index)?,
-            quantization_scales: half_of_axis_one(runtime, quantization_scales, half_index)?,
-            quantization_biases: half_of_axis_one(runtime, quantization_biases, half_index)?,
-            quantization_bits: *quantization_bits,
-            quantization_group_size: *quantization_group_size,
-        }),
-        Qwen3_5AffineWeights::Jangtq2Codebook { .. } => Err(QuantizationError::ProbeModelFailure {
-            description: "codebook-packed routed experts cannot be probed".to_owned(),
-        }),
-    }
-}
-
-/// One half of an array along axis 1, evaluated so the probe's forwards do
-/// not re-slice the fused array on every call.
-fn half_of_axis_one(
-    runtime: &MlxRuntime,
-    fused_array: &MlxArray,
-    half_index: i32,
-) -> Result<MlxArray, QuantizationError> {
-    let fused_shape = fused_array.shape();
-    if fused_shape.len() < 2 || fused_shape[1] % 2 != 0 {
-        return Err(QuantizationError::ProbeModelFailure {
-            description: format!(
-                "a fused gate-up array of shape {fused_shape:?} does not split into two halves"
-            ),
-        });
-    }
-    let half_extent = fused_shape[1] / 2;
-    let mut starts = vec![0_i32; fused_shape.len()];
-    let mut stops = fused_shape.clone();
-    starts[1] = half_extent * half_index;
-    stops[1] = starts[1] + half_extent;
-    let strides = vec![1_i32; fused_shape.len()];
-    let half = mlx_step(
-        runtime.slice(fused_array, &starts, &stops, &strides),
-        "split a fused gate-up array",
-    )?;
-    mlx_step(half.evaluate(), "evaluate a gate-up half")?;
-    Ok(half)
 }

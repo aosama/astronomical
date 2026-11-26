@@ -1,12 +1,11 @@
-//! Where the probe reaches into the probe model to swap one module's
-//! weights and put them back: plain affine weights in the decoder layers,
-//! the mixture-of-experts router, and routed-expert projections held by the
-//! held expert owner.
+//! Where the probe reaches into the chat model to swap one module's weights
+//! and put them back: plain affine weights in the decoder layers, the
+//! mixture-of-experts router, and a routed-expert projection across every
+//! expert of a layer the model holds complete.
 
 use quantization::bit_width::{BitWidth, GroupSize};
 use quantization::error::QuantizationError;
 
-use crate::probe_model::experts::{Qwen3_5ProbeExpertLayerWeights, Qwen3_5ProbeGateUpWeights};
 use qwen35::qwen3_5_core::model_math::decoder_layer_weights::{
     Qwen3_5AffineWeights, Qwen3_5DecoderFeedForwardWeights,
 };
@@ -14,15 +13,14 @@ use qwen35::qwen3_5_core::model_math::feed_forward_weights::{
     Qwen3_5MoEFeedForwardWeights, Qwen3_5MoERouterGateWeights,
 };
 
-use super::super::expert_swaps::{
-    PROBE_SEPARATION_REASON, SwappedOutWeights, router_as_affine_weights,
-    separate_gate_and_up_projections,
-};
+use qwen35::RoutedExpertProjection;
+
+use super::super::expert_swaps::{SwappedOutWeights, router_as_affine_weights};
 use super::super::module_locations::{
     FeedForwardProjection, ModuleLocation, affine_weights_at_mut,
 };
 use super::super::simulated_quantization::mlx_step;
-use super::{Qwen3_5SensitivityProbe, tied_head_key, unresolvable};
+use super::{Qwen3_5SensitivityProbe, probe_step, tied_head_key, unresolvable};
 
 impl Qwen3_5SensitivityProbe {
     /// Where a module lives, or a failure the sweep counts as a skip.
@@ -39,9 +37,8 @@ impl Qwen3_5SensitivityProbe {
         }
     }
 
-    /// The affine weights a module name resolves to, mutably: a module in
-    /// the decoder layers, or a routed-expert down projection, which the
-    /// held expert owner holds as an ordinary affine weight.
+    /// The affine weights a module name resolves to in the decoder layers,
+    /// mutably.
     pub(super) fn affine_weights_mut(
         &mut self,
         module_name: &str,
@@ -56,40 +53,11 @@ impl Qwen3_5SensitivityProbe {
         module_name: &str,
         location: ModuleLocation,
     ) -> Result<&mut Qwen3_5AffineWeights, QuantizationError> {
-        if let ModuleLocation::DecoderLayerRoutedExperts {
-            decoder_layer_index,
-            projection: FeedForwardProjection::Down,
-        } = location
-        {
-            let expert_layer = self.held_expert_layer_mut(module_name, decoder_layer_index)?;
-            return Ok(&mut expert_layer.down_projection);
-        }
         match affine_weights_at_mut(&mut self.model.base.weights, location) {
             Some(affine_weights) => Ok(affine_weights),
             None => Err(unresolvable(
                 module_name,
                 "the layer does not hold this projection as affine weights",
-            )),
-        }
-    }
-
-    /// One layer's held routed-expert arrays. A model whose experts did
-    /// not fit in memory pages them from disk and holds no held-expert owner;
-    /// its experts cannot be swapped, and the sweep's guard reports it.
-    pub(super) fn held_expert_layer_mut(
-        &mut self,
-        module_name: &str,
-        decoder_layer_index: usize,
-    ) -> Result<&mut Qwen3_5ProbeExpertLayerWeights, QuantizationError> {
-        let held_layer = match self.model.held_expert_weights.as_mut() {
-            Some(held_expert_weights) => held_expert_weights.layer_mut(decoder_layer_index),
-            None => None,
-        };
-        match held_layer {
-            Some(held_layer) => Ok(held_layer),
-            None => Err(unresolvable(
-                module_name,
-                "its routed experts are not held in memory",
             )),
         }
     }
@@ -193,9 +161,11 @@ impl Qwen3_5SensitivityProbe {
         Ok(())
     }
 
-    /// Swaps a routed-expert gate or up projection for a copy at the probed
-    /// width, holding the pair apart for the probe (see `expert_swaps`).
-    pub(super) fn swap_expert_gate_or_up(
+    /// Swaps a routed-expert projection, across every expert of the layer,
+    /// for a copy at the probed width. A model whose experts did not fit in
+    /// memory reads them from the SSD and holds no complete layer; its
+    /// experts cannot be swapped, and the sweep counts them as skipped.
+    pub(super) fn swap_routed_expert_projection(
         &mut self,
         module_name: &str,
         decoder_layer_index: usize,
@@ -203,41 +173,50 @@ impl Qwen3_5SensitivityProbe {
         bit_width: BitWidth,
         group_size: GroupSize,
     ) -> Result<(), QuantizationError> {
-        let held_layer = match &self.model.held_expert_weights {
-            Some(held_expert_weights) => held_expert_weights.layer(decoder_layer_index),
-            None => None,
-        };
-        let Some(held_layer) = held_layer else {
+        let routed_projection = routed_expert_projection_of(projection);
+        let current_weights = self
+            .model
+            .routed_expert_projection(decoder_layer_index, routed_projection)
+            .or(Err(unresolvable(module_name, NOT_HELD_COMPLETE)))?;
+        // A codebook projection comes with its activation rotation in the
+        // table; an affine replacement would run under the wrong rotation.
+        if matches!(
+            current_weights,
+            Qwen3_5AffineWeights::Jangtq2Codebook { .. }
+        ) {
             return Err(unresolvable(
                 module_name,
-                "its routed experts are not held in memory",
+                "codebook-packed routed experts cannot be probed",
             ));
-        };
-        let (current_gate, current_up) =
-            separate_gate_and_up_projections(self.model.runtime(), &held_layer.gate_up_weights)?;
-        let (gate_projection, up_projection) = if projection == FeedForwardProjection::Gate {
-            let replacement =
-                self.replacement_weights(module_name, &current_gate, bit_width, group_size)?;
-            (replacement, current_up)
-        } else {
-            let replacement =
-                self.replacement_weights(module_name, &current_up, bit_width, group_size)?;
-            (current_gate, replacement)
-        };
-        let expert_layer = self.held_expert_layer_mut(module_name, decoder_layer_index)?;
-        let previous = std::mem::replace(
-            &mut expert_layer.gate_up_weights,
-            Qwen3_5ProbeGateUpWeights::Separate {
-                gate_projection,
-                up_projection,
-                incompatibility_reason: PROBE_SEPARATION_REASON,
-            },
-        );
+        }
+        let replacement =
+            self.replacement_weights(module_name, &current_weights, bit_width, group_size)?;
+        let previous = self.replace_routed_expert_projection(
+            module_name,
+            decoder_layer_index,
+            routed_projection,
+            replacement,
+        )?;
         self.swapped_out_weights.insert(
             module_name.to_owned(),
-            SwappedOutWeights::ExpertGateUp(previous),
+            SwappedOutWeights::RoutedExpert(previous),
         );
         Ok(())
+    }
+
+    fn replace_routed_expert_projection(
+        &self,
+        module_name: &str,
+        decoder_layer_index: usize,
+        routed_projection: RoutedExpertProjection,
+        replacement: Qwen3_5AffineWeights,
+    ) -> Result<Qwen3_5AffineWeights, QuantizationError> {
+        probe_step(self.model.replace_routed_expert_projection(
+            decoder_layer_index,
+            routed_projection,
+            replacement,
+        ))
+        .or(Err(unresolvable(module_name, NOT_HELD_COMPLETE)))
     }
 
     /// Puts back what a swap took out.
@@ -261,14 +240,18 @@ impl Qwen3_5SensitivityProbe {
                     .router_projection = previous;
             }
             (
-                SwappedOutWeights::ExpertGateUp(previous),
+                SwappedOutWeights::RoutedExpert(previous),
                 ModuleLocation::DecoderLayerRoutedExperts {
                     decoder_layer_index,
-                    ..
+                    projection,
                 },
             ) => {
-                self.held_expert_layer_mut(module_name, decoder_layer_index)?
-                    .gate_up_weights = previous;
+                self.replace_routed_expert_projection(
+                    module_name,
+                    decoder_layer_index,
+                    routed_expert_projection_of(projection),
+                    previous,
+                )?;
             }
             _ => {
                 return Err(unresolvable(
@@ -278,5 +261,17 @@ impl Qwen3_5SensitivityProbe {
             }
         }
         Ok(())
+    }
+}
+
+/// Why a routed-expert projection cannot be swapped.
+const NOT_HELD_COMPLETE: &str = "its routed experts are not held complete in memory";
+
+/// The chat model's name for a routed expert's projection.
+const fn routed_expert_projection_of(projection: FeedForwardProjection) -> RoutedExpertProjection {
+    match projection {
+        FeedForwardProjection::Gate => RoutedExpertProjection::Gate,
+        FeedForwardProjection::Up => RoutedExpertProjection::Up,
+        FeedForwardProjection::Down => RoutedExpertProjection::Down,
     }
 }
