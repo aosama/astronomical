@@ -15,6 +15,8 @@ pub mod dense_layer_reads;
 #[cfg(all(test, feature = "direct-mlx"))]
 mod dense_layer_reads_tests;
 #[cfg(feature = "direct-mlx")]
+mod dense_layer_register_order;
+#[cfg(feature = "direct-mlx")]
 mod dense_layer_residency;
 #[cfg(feature = "direct-mlx")]
 pub mod dense_layer_streamer;

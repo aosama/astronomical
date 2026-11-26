@@ -1,5 +1,6 @@
-//! Converts a resident model's dense 4-bit projections into register order
-//! and multiplies them through the register-ordered matmul.
+//! Converts dense 4-bit projections held in memory into register order and
+//! multiplies them through the register-ordered matmul: every layer of a
+//! resident model, and the layers a streaming model keeps.
 //!
 //! Measured over the 27B's 64 layers on an M5 Pro, the converted projections
 //! cost 59 ms for an 8-row verify pass against MLX's 133 ms, and 57 ms for
@@ -16,6 +17,7 @@ use crate::kernel_capability::worker_process_kernel_capabilities;
 use crate::performance_attribution::PerformanceAttribution;
 use crate::qwen3_5_core::model_math::decoder_layer_weights::{
     Qwen3_5AffineWeights, Qwen3_5AttentionWeights, Qwen3_5DecoderFeedForwardWeights,
+    Qwen3_5DecoderLayerWeights,
 };
 use crate::qwen3_5_core::model_math::dense_projection::{
     Qwen3_5DenseProjection, Qwen3_5ProjectionStorage,
@@ -52,13 +54,15 @@ impl Qwen3_5ModelBase {
     /// an output head not tied to the embedding, into register order, once
     /// this worker's capability probe has run the kernel on this GPU. Each
     /// projection's MLX arrays are released as soon as its converted copy
-    /// exists, so the load never holds more than one extra projection. Call
-    /// it only on a resident model whose weights are all materialized: it
-    /// drops the loaded shard maps, which would otherwise keep every original
-    /// projection alive. Returns how many projections were converted, which
-    /// is 0 for a model with none of that packing (an 8-bit or mixed build,
-    /// or a mixture-of-experts model whose attention is not 4-bit), or `None`
-    /// on a GPU without M5 matrix units, where nothing can convert.
+    /// exists, so the load never holds more than one extra projection. For a
+    /// model whose decoder layers are all bound and materialized (the
+    /// resident engine's); a model that reads its layers from the SSD
+    /// converts them one at a time as it keeps them
+    /// (`convert_layer_projections_to_register_order`). Returns how many
+    /// projections were converted, which is 0 for a model with none of that
+    /// packing (an 8-bit or mixed build, or a mixture-of-experts model whose
+    /// attention is not 4-bit), or `None` on a GPU without M5 matrix units,
+    /// where nothing can convert.
     pub fn convert_projections_to_register_order(
         &mut self,
         performance_attribution: &mut PerformanceAttribution,
@@ -67,22 +71,44 @@ impl Qwen3_5ModelBase {
             return Ok(None);
         }
         let kernels = RowBatchedMatmulKernels::declare()?;
+        // Before the first layer converts, so each original frees as its
+        // converted copy replaces it.
         self.weights.release_model_shard_maps();
         let mut converted_count = 0;
         for layer_weights in &mut self.weights.decoder_layer_weights {
-            for projection in layer_projections(
-                &mut layer_weights.attention_weights,
-                &mut layer_weights.mlp_weights,
-            ) {
-                converted_count += convert_one(&self.runtime, &kernels, projection)?;
-            }
+            converted_count += convert_layer_projections_to_register_order(
+                &self.runtime,
+                &kernels,
+                layer_weights,
+            )?;
         }
-        if !self.weights.has_tied_embeddings() {
-            let head = &mut self.weights.language_model_head_weights;
-            converted_count += convert_one(&self.runtime, &kernels, head)?;
-        }
+        converted_count += self.convert_output_head_to_register_order(&kernels)?;
         self.optional_accelerators.register_ordered_matmul_kernels = Some(kernels);
         Ok(Some(converted_count))
+    }
+
+    /// Converts an output head not tied to the embedding and returns how many
+    /// projections that was: 1, or 0 for a tied head or a packing the kernel
+    /// does not read. A converted head multiplies a draft tree's rows and a
+    /// one-row step through the same kernel, with the same slices.
+    ///
+    /// The loaded shard maps are dropped first. A map holds every tensor it
+    /// loaded for as long as it lives, so the head's original bytes would
+    /// otherwise stay in memory beside the converted ones; nothing reads the
+    /// maps after binding, and every bound tensor holds its own reference.
+    pub fn convert_output_head_to_register_order(
+        &mut self,
+        kernels: &RowBatchedMatmulKernels,
+    ) -> Result<usize, TextExecutionError> {
+        self.weights.release_model_shard_maps();
+        if self.weights.has_tied_embeddings() {
+            return Ok(0);
+        }
+        convert_one(
+            &self.runtime,
+            kernels,
+            &mut self.weights.language_model_head_weights,
+        )
     }
 
     /// `activations` [..., input] through a register-ordered projection. More
@@ -102,6 +128,25 @@ impl Qwen3_5ModelBase {
         register_ordered_matmul_any_rows(&self.runtime, kernels, activations, weight)
             .map_err(projection_failure)
     }
+}
+
+/// Converts one decoder layer's dense projections, each replacing its MLX
+/// arrays as soon as its converted copy exists, and returns how many were
+/// converted. A projection already converted, or one the kernel does not
+/// read, is left as it is, so converting a layer twice is harmless.
+pub fn convert_layer_projections_to_register_order(
+    runtime: &runtime_integration::MlxRuntime,
+    kernels: &RowBatchedMatmulKernels,
+    layer_weights: &mut Qwen3_5DecoderLayerWeights,
+) -> Result<usize, TextExecutionError> {
+    let mut converted_count = 0;
+    for projection in layer_projections(
+        &mut layer_weights.attention_weights,
+        &mut layer_weights.mlp_weights,
+    ) {
+        converted_count += convert_one(runtime, kernels, projection)?;
+    }
+    Ok(converted_count)
 }
 
 /// Every dense projection of one decoder layer; a mixture-of-experts layer
@@ -135,8 +180,10 @@ fn layer_projections<'layer>(
 }
 
 /// Replaces `projection` with its register-ordered copy when the kernel
-/// reads its packing and shape: 1 when converted, 0 when left as it was (the
-/// 48-wide DeltaNet gates, 8-bit or group-32 modules, bf16 weights).
+/// reads its packing: 1 when converted, 0 when left as it was (8-bit or
+/// group-32 modules, bf16 weights, a projection already converted). A
+/// projection narrower than a 32-column tile, such as the 27B's 48-wide
+/// DeltaNet gates, converts padded with zero columns.
 fn convert_one(
     runtime: &runtime_integration::MlxRuntime,
     kernels: &RowBatchedMatmulKernels,

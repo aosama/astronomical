@@ -43,40 +43,17 @@ async fn assert_dense_streaming_logit_parity() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let model_directory = crate::common::configured_streamed_dense_model_directory();
     let prompt_token_ids = shakespeare_prompt_token_ids(&model_directory);
-    // The kept layer count is pinned, so the journey runs under the machine's
-    // own limit rather than a configured one that might not fit 16 layers.
-    let machine_mlx_memory_ceiling_bytes =
-        crate::common::sample_machine_mlx_memory_ceiling_bytes().await;
-    let mlx_memory_limits = runtime_integration::MlxMemoryLimits::new(
-        machine_mlx_memory_ceiling_bytes,
-        machine_mlx_memory_ceiling_bytes,
-    )
-    .expect("the machine MLX memory limits should be valid");
+    let mlx_memory_limits = machine_mlx_memory_limits().await;
 
     eprintln!("[dense-parity] status=progress step=1/2 engine=streaming");
     let streaming_answer = {
-        let (validated_artifact, qwen3_5_config) = validated_dense_artifact(&model_directory);
-        let streaming_model = Qwen3_5StreamingModel::load(
-            MlxRuntime::initialize(mlx_memory_limits)
-                .expect("the streaming runtime should initialize"),
-            validated_artifact,
-            &model_directory,
-            crate::common::standard_qwen3_5_model_chunking_configuration(),
-        )
-        .expect("the dense model should load on the streaming engine");
+        let (streaming_model, qwen3_5_config) =
+            load_streaming_model(&model_directory, mlx_memory_limits);
         let dense_forward = StreamingForward(&streaming_model);
         let active_bytes_after_load = dense_forward.materialized_active_bytes();
         let mut answers_by_streaming_variant = Vec::with_capacity(KEPT_LAYER_COUNTS.len() * 2);
         for kept_layer_count in KEPT_LAYER_COUNTS {
-            streaming_model
-                .probe_dense_layers(
-                    LayerProbeShape {
-                        prefill_chunk_token_count: PREFILL_CHUNK_TOKEN_COUNT,
-                        full_attention_kv_state_growth_tokens: PREFILL_CHUNK_TOKEN_COUNT as i32,
-                    },
-                    Some(kept_layer_count),
-                )
-                .expect("the dense layers should be probed");
+            keep_dense_layers(&streaming_model, kept_layer_count);
             answers_by_streaming_variant.push((
                 format!("{kept_layer_count} kept layers, chunk by chunk"),
                 greedy_answer(&qwen3_5_config, &prompt_token_ids, &dense_forward),
@@ -140,13 +117,13 @@ const KEPT_LAYER_COUNTS: [usize; 2] = [0, 16];
 const PREFILL_CHUNK_TOKEN_COUNT: usize = 256;
 
 /// The tokens a greedy decode chose and the logits of its last step.
-struct GreedyAnswer {
-    generated_token_ids: Vec<u32>,
-    final_logits: Vec<f32>,
+pub(super) struct GreedyAnswer {
+    pub(super) generated_token_ids: Vec<u32>,
+    pub(super) final_logits: Vec<f32>,
 }
 
 /// One forward on either engine; the journey runs the same steps on both.
-trait DenseForward {
+pub(super) trait DenseForward {
     fn forward_chunk(
         &self,
         token_ids: &[u32],
@@ -158,7 +135,7 @@ trait DenseForward {
     fn materialized_active_bytes(&self) -> u64;
 }
 
-struct StreamingForward<'model>(&'model Qwen3_5StreamingModel);
+pub(super) struct StreamingForward<'model>(pub(super) &'model Qwen3_5StreamingModel);
 struct ResidentForward<'model>(&'model Qwen3_5ResidentModel);
 
 impl DenseForward for StreamingForward<'_> {
@@ -243,6 +220,48 @@ fn embedding_table_payload_bytes(model_directory: &std::path::Path) -> u64 {
     }
     embedding_bytes
 }
+/// Probes the dense layers and keeps exactly `kept_layer_count` of them.
+pub(super) fn keep_dense_layers(streaming_model: &Qwen3_5StreamingModel, kept_layer_count: usize) {
+    streaming_model
+        .probe_dense_layers(
+            LayerProbeShape {
+                prefill_chunk_token_count: PREFILL_CHUNK_TOKEN_COUNT,
+                full_attention_kv_state_growth_tokens: PREFILL_CHUNK_TOKEN_COUNT as i32,
+            },
+            Some(kept_layer_count),
+        )
+        .expect("the dense layers should be probed and kept");
+}
+
+/// The dense model on the streaming engine under `mlx_memory_limits`, with
+/// its configuration.
+pub(super) fn load_streaming_model(
+    model_directory: &std::path::Path,
+    mlx_memory_limits: runtime_integration::MlxMemoryLimits,
+) -> (Qwen3_5StreamingModel, Qwen3_5Config) {
+    let (validated_artifact, qwen3_5_config) = validated_dense_artifact(model_directory);
+    let streaming_model = Qwen3_5StreamingModel::load(
+        MlxRuntime::initialize(mlx_memory_limits).expect("the streaming runtime should initialize"),
+        validated_artifact,
+        model_directory,
+        crate::common::standard_qwen3_5_model_chunking_configuration(),
+    )
+    .expect("the dense model should load on the streaming engine");
+    (streaming_model, qwen3_5_config)
+}
+
+/// The machine's own MLX limit: these journeys pin how many layers are kept,
+/// so they run under it rather than a configured one that might not fit.
+pub(super) async fn machine_mlx_memory_limits() -> runtime_integration::MlxMemoryLimits {
+    let machine_mlx_memory_ceiling_bytes =
+        crate::common::sample_machine_mlx_memory_ceiling_bytes().await;
+    runtime_integration::MlxMemoryLimits::new(
+        machine_mlx_memory_ceiling_bytes,
+        machine_mlx_memory_ceiling_bytes,
+    )
+    .expect("the machine MLX memory limits should be valid")
+}
+
 fn validated_dense_artifact(
     model_directory: &std::path::Path,
 ) -> (model_serving::ValidatedQwen3_5Artifact, Qwen3_5Config) {
@@ -253,7 +272,7 @@ fn validated_dense_artifact(
     (validated_artifact, qwen3_5_config)
 }
 
-fn shakespeare_prompt_token_ids(model_directory: &std::path::Path) -> Vec<u32> {
+pub(super) fn shakespeare_prompt_token_ids(model_directory: &std::path::Path) -> Vec<u32> {
     let tokenizer = tokenizers::Tokenizer::from_file(model_directory.join("tokenizer.json"))
         .expect("the dense model's tokenizer should load");
     tokenizer
@@ -288,7 +307,7 @@ fn greedy_answer_after_layer_major_prefill(
 
 /// Prefills the prompt in fixed chunks, then decodes greedily, returning
 /// the chosen tokens and the last step's logits.
-fn greedy_answer(
+pub(super) fn greedy_answer(
     qwen3_5_config: &Qwen3_5Config,
     prompt_token_ids: &[u32],
     dense_forward: &dyn DenseForward,

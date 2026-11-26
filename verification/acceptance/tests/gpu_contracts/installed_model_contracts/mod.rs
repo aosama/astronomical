@@ -8,10 +8,11 @@ mod decision_memory_peak;
 #[cfg(feature = "direct-mlx")]
 mod decision_reference_fixture;
 #[cfg(feature = "direct-mlx")]
+mod dense_kept_layer_register_order;
+#[cfg(feature = "direct-mlx")]
 mod dense_layer_major_checkpoint_parity;
 #[cfg(feature = "direct-mlx")]
 mod dense_prompt_forward_memory;
-#[cfg(feature = "direct-mlx")]
 mod dense_streaming_parity;
 #[cfg(feature = "direct-mlx")]
 mod dense_streaming_speed_ladder;
