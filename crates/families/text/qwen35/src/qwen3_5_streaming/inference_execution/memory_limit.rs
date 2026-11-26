@@ -4,9 +4,7 @@
 use runtime_integration::MlxMemoryLimits;
 
 use crate::{InferenceEngineError, safe_minimum_active_memory_ceiling_bytes};
-use text_generation::engine_errors::{
-    mlx_memory_ceiling_change_before_load_error, mlx_memory_ceiling_exceeds_u64_range_error,
-};
+use text_generation::engine_errors::mlx_memory_ceiling_change_before_load_error;
 use text_generation::generation_loop::mlx_memory_limit_change::TextMlxMemoryLimitHooks;
 
 use super::Qwen3_5EngineState;
@@ -29,35 +27,13 @@ pub const fn safe_minimum_mlx_memory_ceiling_bytes(
 }
 
 impl TextMlxMemoryLimitHooks for Qwen3_5EngineState {
-    /// A raise that now admits complete expert residency must not be
-    /// absorbed in place: this engine structurally never reports complete
-    /// ownership, and the startup selection a replacement worker runs
-    /// would load the resident engine under the persisted ceiling.
-    /// Demanding the replacement keeps the live worker congruent with
-    /// what a restart would choose.
+    /// Any change of the ceiling is taken in place: this engine serves a
+    /// model whether or not all of it fits, keeping more in memory after a
+    /// raise and giving weights back before a lowering (issue #2585).
     fn refuse_mlx_memory_ceiling_change(
         &self,
-        requested_mlx_memory_ceiling_bytes: u64,
+        _requested_mlx_memory_ceiling_bytes: u64,
     ) -> Result<(), InferenceEngineError> {
-        let current_mlx_memory_ceiling_bytes =
-            u64::try_from(self.core.memory_limits.active_memory_limit_bytes())
-                .map_err(mlx_memory_ceiling_exceeds_u64_range_error)?;
-        if requested_mlx_memory_ceiling_bytes > current_mlx_memory_ceiling_bytes
-            && self.core.model.is_some()
-            && self
-                .startup_residency_facts
-                .is_some_and(|startup_residency_facts| {
-                    startup_residency_facts.raised_ceiling_selects_complete_residency(
-                        requested_mlx_memory_ceiling_bytes,
-                    )
-                })
-        {
-            return Err(InferenceEngineError::StreamingResidentPromotionRequired {
-                reason:
-                    "the raised ceiling admits complete expert residency; a replacement worker must load the resident engine"
-                        .to_owned(),
-            });
-        }
         Ok(())
     }
 
