@@ -1,0 +1,50 @@
+[package]
+name = "mlx-performance-profiler"
+description = "Measures an MLX job node by node, and compares two implementations of one job over interleaved rounds with a verdict, through the pinned MLX performance profiler library."
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+version.workspace = true
+build = "build.rs"
+
+# Measurement tooling: its tests need a GPU and the patched MLX image, so it
+# runs in the direct-MLX lane only.
+[package.metadata.astronomical]
+test-lanes = ["direct-mlx"]
+direct-mlx-lane-feature = "direct-mlx"
+
+[package.metadata.cargo-machete]
+# cargo-machete reports these build dependencies as unused, but build.rs uses them.
+ignored = ["cc", "native-build-orchestration", "sha2"]
+
+[lints]
+workspace = true
+
+[features]
+default = []
+# The whole crate: the profiler reads MLX's own graph and Metal command
+# buffers, so without the patched MLX image there is nothing to compile or
+# link, and a default build of the workspace stays free of the native toolchain.
+direct-mlx = ["dep:runtime-integration", "dep:mlx-bridge"]
+
+[dependencies]
+# Links the patched MLX image the profiler's symbols resolve against; the
+# dependency edge also puts this crate's archive ahead of MLX's on the link line.
+runtime-integration = { path = "../../foundation/runtime-integration", features = ["mlx"], optional = true }
+mlx-bridge = { workspace = true, optional = true }
+
+[build-dependencies]
+cc = "1.2"
+# Finds the patched MLX sources and the verified archive folder.
+native-build-orchestration = { path = "../../foundation/native-build-orchestration" }
+# Verifies the pinned archives before anything is compiled from them.
+sha2.workspace = true
+
+[dev-dependencies]
+# Skips the GPU tests where there is no Metal.
+test-harness = { path = "../../foundation/test-harness" }
+# The GPU tests share the process-global MLX runtime, so they serialize.
+serial_test.workspace = true
+tempfile = "=3.27.0"

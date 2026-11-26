@@ -11,6 +11,9 @@ fn valid_manifest_text() -> String {
         "metal.tar.gz|https://example.com/metal.tar.gz|".to_owned() + VALID_SHA256 + "|metal-cpp",
         "json.tar.gz|https://example.com/json.tar.gz|".to_owned() + VALID_SHA256 + "|json",
         "fmt.tar.gz|https://example.com/fmt.tar.gz|".to_owned() + VALID_SHA256 + "|fmt",
+        "profiler.tar.gz|https://example.com/profiler.tar.gz|".to_owned()
+            + VALID_SHA256
+            + "|profiler",
     ]
     .join("\n")
         + "\n"
@@ -90,21 +93,21 @@ fn archive_sha256_requires_lowercase_64_hex() {
 }
 
 #[test]
-fn manifest_requires_exactly_five_entries() {
+fn manifest_requires_exactly_six_entries() {
     assert!(parse_manifest_text(&valid_manifest_text()).is_ok());
-    let four_entries = valid_manifest_text()
+    let five_entries = valid_manifest_text()
         .lines()
-        .take(4)
+        .take(5)
         .collect::<Vec<_>>()
         .join("\n");
-    assert!(parse_manifest_text(&four_entries).is_err());
-    let six_entries = valid_manifest_text() + valid_manifest_text().lines().next().unwrap();
-    assert!(parse_manifest_text(&six_entries).is_err());
+    assert!(parse_manifest_text(&five_entries).is_err());
+    let seven_entries = valid_manifest_text() + valid_manifest_text().lines().next().unwrap();
+    assert!(parse_manifest_text(&seven_entries).is_err());
 }
 
 #[test]
 fn empty_manifest_line_is_rejected() {
-    let five_with_blank_line =
+    let entries_with_blank_line =
         valid_manifest_text().replace("mlx-c-0.1.tar.gz", "\nmlx-c-0.1.tar.gz");
-    assert!(parse_manifest_text(&five_with_blank_line).is_err());
+    assert!(parse_manifest_text(&entries_with_blank_line).is_err());
 }
