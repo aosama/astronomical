@@ -161,3 +161,52 @@ fn should_report_the_largest_span() {
 fn should_plan_nothing_at_the_end_of_the_prompt() {
     assert_eq!(layer_major_span_plan(500, 500, CHUNK_TOKENS, None), None);
 }
+
+#[test]
+fn should_cut_a_plan_down_to_its_first_span_as_the_groups_end() {
+    let first_span_plan = layer_major_span_plan(0, 4350, CHUNK_TOKENS, Some(BLOCK_TOKENS))
+        .expect("two spans should make a layer-major plan")
+        .limited_to_first_span(0);
+
+    assert_eq!(first_span_plan.group_end_token, 1792);
+    assert_eq!(
+        first_span_plan.spans,
+        vec![span(0, 1792, Vec::new(), false)],
+        "the span ends the group, so its end is no inner boundary"
+    );
+}
+
+#[test]
+fn should_leave_a_one_span_plan_as_it_is() {
+    let one_span_plan = layer_major_span_plan(0, 1000, CHUNK_TOKENS, None)
+        .expect("one span should make a layer-major plan");
+
+    assert_eq!(
+        one_span_plan.clone().limited_to_first_span(0),
+        one_span_plan
+    );
+}
+
+#[test]
+fn should_end_the_first_span_from_a_cursor_past_zero() {
+    let first_span_plan = layer_major_span_plan(1000, 10_000, CHUNK_TOKENS, None)
+        .expect("three spans should make a layer-major plan")
+        .limited_to_first_span(1000);
+
+    assert_eq!(first_span_plan.group_end_token, 1000 + CHUNK_TOKENS);
+    assert_eq!(first_span_plan.spans.len(), 1);
+    assert_eq!(first_span_plan.largest_span_token_count(), CHUNK_TOKENS);
+}
+
+#[test]
+fn should_read_the_rest_of_a_prompt_in_later_groups_of_one_span() {
+    let mut prefill_cursor = 0;
+    let mut group_ends = Vec::new();
+    while let Some(span_plan) = layer_major_span_plan(prefill_cursor, 10_000, CHUNK_TOKENS, None) {
+        let first_span_plan = span_plan.limited_to_first_span(prefill_cursor);
+        prefill_cursor = first_span_plan.group_end_token;
+        group_ends.push(prefill_cursor);
+    }
+
+    assert_eq!(group_ends, vec![4096, 8192, 10_000]);
+}

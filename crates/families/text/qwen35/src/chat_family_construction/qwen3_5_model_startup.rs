@@ -191,7 +191,10 @@ fn construct_selected_qwen3_5_engine(
             chunking,
             model_loading_performance_attribution,
             performance_attribution_log,
-            decode_astro_expert_cache_policy,
+            StreamingEngineSettings {
+                decode_astro_expert_cache_policy,
+                astro_neural_engine_program_cache_directory,
+            },
             artifact_model_id,
             artifact_model_revision,
             artifact_payload_bytes,
@@ -450,7 +453,7 @@ fn construct_streaming_engine(
     chunking: WorkerChunkingConfiguration,
     model_loading_performance_attribution: PerformanceAttribution,
     mut performance_attribution_log: PerformanceAttributionLog,
-    decode_astro_expert_cache_policy: WorkerDecodeAstroExpertCachePolicy,
+    streaming_engine_settings: StreamingEngineSettings,
     artifact_model_id: &str,
     artifact_model_revision: &str,
     artifact_payload_bytes: u64,
@@ -491,9 +494,7 @@ fn construct_streaming_engine(
             model_loading_performance_attribution,
             performance_attribution_log,
         },
-        StreamingEngineSettings {
-            decode_astro_expert_cache_policy,
-        },
+        streaming_engine_settings,
     )
     .map(boxed_chat_engine)
     .map_err(|source| Qwen3_5ModelStartupError::EngineInitialization {

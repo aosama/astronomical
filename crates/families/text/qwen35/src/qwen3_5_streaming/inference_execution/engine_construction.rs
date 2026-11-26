@@ -17,6 +17,8 @@ pub struct StreamingEngineSettings {
     /// The decode policy of the `astro_expert_cache`; only controlled
     /// benchmarks select anything but the baseline.
     pub decode_astro_expert_cache_policy: WorkerDecodeAstroExpertCachePolicy,
+    /// The `astro_neural_engine_program_cache` folder of this model revision.
+    pub astro_neural_engine_program_cache_directory: Option<std::path::PathBuf>,
 }
 
 impl TextEngineConstruction for Qwen3_5InferenceExecution {
@@ -29,6 +31,9 @@ impl TextEngineConstruction for Qwen3_5InferenceExecution {
         Self {
             core,
             decode_astro_expert_cache_policy: engine_settings.decode_astro_expert_cache_policy,
+            neural_engine_prefill: crate::qwen3_5_core::neural_engine::neural_engine_prefill_lifecycle::NeuralEnginePrefillLifecycle::new(
+                engine_settings.astro_neural_engine_program_cache_directory,
+            ),
             prompt_span_to_fail_once_for_tests: None,
             startup_residency_facts: None,
         }

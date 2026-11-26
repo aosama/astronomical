@@ -198,6 +198,7 @@ async fn measure_reply(reply_case: ReplyCase) {
         end_of_sequence_token_ids,
         model_directory,
         attribution_directory,
+        ..
     } = load_paging_experiment_engine("mtp_drafting_model_load").await;
     set_engine_up_for(&engine, &reply_case).await;
     let reply_token_ids = serve_warmup_learning_and_measured_replies(

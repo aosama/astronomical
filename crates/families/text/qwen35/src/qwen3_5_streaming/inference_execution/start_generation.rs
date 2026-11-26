@@ -51,6 +51,10 @@ impl Qwen3_5EngineState {
         &mut self,
         mut inference_request: TextInferenceRequest,
     ) -> Result<EngineGenerationStart, InferenceEngineError> {
+        // An `astro_ssd_prompt_cache` restore or the vision encoder uses the
+        // GPU before any forward, which a waiting program measurement must
+        // not read through.
+        self.neural_engine_prefill.note_gpu_used();
         let request_id = inference_request.request_id();
         let taken_performance_attribution = inference_request.take_performance_attribution();
         let performance_attribution = generation_start_steps::ensure_no_active_generation(

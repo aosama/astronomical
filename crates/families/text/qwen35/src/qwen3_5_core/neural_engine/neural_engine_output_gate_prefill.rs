@@ -33,6 +33,7 @@ use super::neural_engine_program_preparation::{
 use crate::qwen3_5_core::model::base::Qwen3_5ModelBase;
 use crate::qwen3_5_core::model::output_gate_engine::LinearAttentionOutputGateEngine;
 use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AttentionWeights;
+use crate::qwen3_5_core::neural_engine::neural_engine_host::{LayerPackageRequest, PackageWritten};
 
 const PROGRAM_FAMILY: &str = "output-gate";
 // Names the kept programs' set. Raise it whenever the encoded program changes, so
@@ -196,16 +197,7 @@ impl OutputGateProgramSource<'_> {
 }
 
 fn linear_attention_layer_count(model: &Qwen3_5ModelBase) -> u64 {
-    let mut layer_count = 0;
-    for decoder_layer_weights in &model.weights.decoder_layer_weights {
-        if matches!(
-            decoder_layer_weights.attention_weights,
-            Qwen3_5AttentionWeights::Linear(_)
-        ) {
-            layer_count += 1;
-        }
-    }
-    layer_count
+    linear_attention_layer_indices(model).len() as u64
 }
 
 /// What one output gate program holds as fp16.
@@ -241,13 +233,10 @@ pub fn least_output_gate_bytes(model: &Qwen3_5ModelBase, chunk_token_count: u32)
 
 /// Other layers have no output gate and get no program.
 fn linear_attention_layer_indices(model: &Qwen3_5ModelBase) -> Vec<usize> {
+    let config = model.config();
     let mut layer_indices = Vec::new();
-    let decoder_layer_weights = &model.weights.decoder_layer_weights;
-    for (decoder_layer_index, layer_weights) in decoder_layer_weights.iter().enumerate() {
-        if matches!(
-            layer_weights.attention_weights,
-            Qwen3_5AttentionWeights::Linear(_)
-        ) {
+    for decoder_layer_index in 0..config.layer_count() as usize {
+        if !config.decoder_layer_is_full_attention(decoder_layer_index) {
             layer_indices.push(decoder_layer_index);
         }
     }
@@ -306,7 +295,7 @@ pub fn plan_neural_engine_output_gate_programs(
         chunk_token_count,
         contraction_part_count: hidden_channels / contraction_part_width,
         weight_bytes_per_program: weight_bytes_per_output_gate(model),
-        decoder_layer_count: model.weights.decoder_layer_weights.len(),
+        decoder_layer_count: model.config().layer_count() as usize,
         linear_attention_layer_indices,
         astro_neural_engine_program_cache,
     })
@@ -342,29 +331,22 @@ impl OutputGateProgramPlan {
     }
 
     /// One layer's compile input, read from the model as fp16.
-    pub fn write_package(
-        &self,
-        model: &Qwen3_5ModelBase,
-        decoder_layer_index: usize,
-        package_directory: &Path,
-    ) -> Result<PathBuf, &'static str> {
-        let decoder_layer_weights = model
-            .weights
-            .decoder_layer_weights
-            .get(decoder_layer_index)
-            .ok_or("the model has no such decoder layer")?;
-        let Qwen3_5AttentionWeights::Linear(linear_attention_weights) =
-            &decoder_layer_weights.attention_weights
-        else {
-            return Err("the decoder layer has no output gate");
-        };
-        OutputGateProgramSource {
-            runtime: model.runtime(),
-            output_gate_projection: &linear_attention_weights.output_gate_projection,
-            shape: self.shape,
-            contraction_part_count: self.contraction_part_count,
-        }
-        .write_package(package_directory)
+    pub fn write_package(&self, request: &LayerPackageRequest<'_>) -> PackageWritten {
+        const NO_OUTPUT_GATE: &str = "the decoder layer has no output gate";
+        request.write_from_layer(NO_OUTPUT_GATE, &mut |layer_weights| match &layer_weights
+            .attention_weights
+        {
+            Qwen3_5AttentionWeights::Linear(linear_attention_weights) => Some(
+                OutputGateProgramSource {
+                    runtime: request.host.model_base().runtime(),
+                    output_gate_projection: &linear_attention_weights.output_gate_projection,
+                    shape: self.shape,
+                    contraction_part_count: self.contraction_part_count,
+                }
+                .write_package(request.package_directory),
+            ),
+            Qwen3_5AttentionWeights::Full(_) => None,
+        })
     }
 
     /// Puts the finished programs in the model's path and returns how many there are.

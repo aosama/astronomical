@@ -28,10 +28,9 @@ impl TextEngineConstruction for Qwen3_5InferenceExecution {
     ) -> Self {
         Self {
             core,
-            neural_engine_prefill_status: ipc_protocol::NeuralEnginePrefillStatus::Off,
-            neural_engine_prefill_preparation: None,
-            astro_neural_engine_program_cache_directory: engine_settings
-                .astro_neural_engine_program_cache_directory,
+            neural_engine_prefill: crate::qwen3_5_core::neural_engine::neural_engine_prefill_lifecycle::NeuralEnginePrefillLifecycle::new(
+                engine_settings.astro_neural_engine_program_cache_directory,
+            ),
             retained_live_prefix: None,
             speculative_draft_runtime: None,
             draft_model_status: ipc_protocol::DraftModelStatus::None,

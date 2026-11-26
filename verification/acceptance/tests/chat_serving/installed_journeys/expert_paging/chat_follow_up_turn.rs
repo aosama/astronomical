@@ -20,7 +20,8 @@ use tokio::time::{Duration, timeout};
 
 use super::reply_speed_cases::{read_the_follow_up_turn, serve_warmup_and_read_a_long_prompt};
 use crate::serving_acceptance::support::performance_attribution::{
-    load_configured_resident_engine_keeping_prompts, load_paging_experiment_engine_keeping_prompts,
+    StreamingJourneyOptions, load_configured_resident_engine_keeping_prompts,
+    load_paging_experiment_engine_with,
 };
 
 const CASE_TIMEOUT: Duration = Duration::from_secs(150);
@@ -67,9 +68,12 @@ async fn should_measure_a_chat_follow_up_turn_on_the_streaming_engine() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let store_directory = tempfile::tempdir().expect("a store folder is made");
     timeout(CASE_TIMEOUT, async {
-        let mut paging = load_paging_experiment_engine_keeping_prompts(
+        let mut paging = load_paging_experiment_engine_with(
             "follow_up_streaming_model_load",
-            store_in(&store_directory),
+            StreamingJourneyOptions {
+                astro_ssd_prompt_cache_store: store_in(&store_directory),
+                ..StreamingJourneyOptions::default()
+            },
         )
         .await;
         let served_model = (&*paging.model_directory, &*paging.end_of_sequence_token_ids);
