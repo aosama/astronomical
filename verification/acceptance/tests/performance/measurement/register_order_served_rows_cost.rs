@@ -23,7 +23,9 @@
 use std::time::{Duration, Instant};
 
 use mlx_bridge::MlxArray;
-use model_serving::row_batched_matmul::RowBatchedMatmulKernels;
+use model_serving::row_batched_matmul::{
+    ProjectionInput, RowBatchedMatmulKernels, register_ordered_projection,
+};
 use runtime_integration::MlxRuntime;
 use serial_test::serial;
 
@@ -82,6 +84,53 @@ fn should_compare_stock_register_ordered_and_restored_layouts_at_served_row_coun
     }
 }
 
+/// Rounds for the one-row sharing comparison: passes take milliseconds.
+const SHARED_SUMS_ROUND_COUNT: usize = 10;
+
+/// What a reply token saves when projections that read the same row share
+/// one preparation of it: every copy preparing its own input (as the model
+/// does today), against one preparation for all sixteen, beside stock. The
+/// sixteen-way share is the most a row could save; a layer shares a row
+/// between two to five projections.
+#[test]
+#[ignore = "performance measurement on the GPU; run through cargo measure-register-order-shared-sums"]
+#[serial]
+fn should_price_one_row_with_the_group_sums_shared() {
+    let runtime = initialize_runtime();
+    let kernels = RowBatchedMatmulKernels::declare().expect("the kernels are declared");
+    let random_key = runtime.random_key(1234).expect("a key builds");
+    for projection_shape in PROJECTION_SHAPES {
+        let shape_copies = distinct_shape_copies(&runtime, &kernels, &random_key, projection_shape);
+        let served_shape = ServedShape {
+            runtime: &runtime,
+            random_key: &random_key,
+            shape_copies: &shape_copies,
+            input_width: projection_shape.1,
+        };
+        let mut stock_times = Vec::with_capacity(SHARED_SUMS_ROUND_COUNT);
+        let mut own_sums_times = Vec::with_capacity(SHARED_SUMS_ROUND_COUNT);
+        let mut shared_sums_times = Vec::with_capacity(SHARED_SUMS_ROUND_COUNT);
+        for round_index in 0..=SHARED_SUMS_ROUND_COUNT {
+            let stock_time = served_shape.median_time(1, MatmulPath::Mlx);
+            let own_sums_time = served_shape.median_time(1, MatmulPath::RegisterOrdered(&kernels));
+            let shared_sums_time = served_shape.median_shared_sums_time(&kernels);
+            if round_index > 0 {
+                stock_times.push(stock_time);
+                own_sums_times.push(own_sums_time);
+                shared_sums_times.push(shared_sums_time);
+            }
+        }
+        eprintln!(
+            "[shared-sums] {}x{} K=1: stock {} | own sums {} | shared sums {}",
+            projection_shape.0,
+            projection_shape.1,
+            spread_text(&mut stock_times),
+            spread_text(&mut own_sums_times),
+            spread_text(&mut shared_sums_times)
+        );
+    }
+}
+
 /// One projection shape's distinct copies and what times a pass over them.
 struct ServedShape<'fixture> {
     runtime: &'fixture MlxRuntime,
@@ -99,6 +148,42 @@ impl ServedShape<'_> {
             &MeasuredPass::ShapeCopies(self.shape_copies, self.input_width),
             matmul_path,
         )
+    }
+
+    /// One row through every copy, the row prepared once for all of them.
+    fn median_shared_sums_time(&self, kernels: &RowBatchedMatmulKernels) -> Duration {
+        let row = random_rows(self.runtime, self.random_key, 1, self.input_width);
+        self.runtime
+            .evaluate_arrays(&[&row])
+            .expect("the row materializes");
+        let mut pass_times = MeasuredPassTimes::new();
+        for repetition_index in 0..WARM_UP_PASS_COUNT + MEASURED_PASS_COUNT {
+            let repetition_started_at = Instant::now();
+            let shared_input =
+                ProjectionInput::prepare(self.runtime, kernels, &row).expect("the row prepares");
+            let mut summed_outputs: Option<MlxArray> = None;
+            for shape_copy in self.shape_copies {
+                let weight = shape_copy
+                    .register_ordered
+                    .as_ref()
+                    .expect("every 27B shape tiles");
+                let projected =
+                    register_ordered_projection(self.runtime, kernels, &shared_input, weight)
+                        .expect("the projection builds");
+                let reduced = self.runtime.sum(&projected, false).expect("it reduces");
+                summed_outputs = Some(match summed_outputs {
+                    Some(sum_so_far) => self.runtime.add(&sum_so_far, &reduced).expect("sums add"),
+                    None => reduced,
+                });
+            }
+            pass_times.keep_evaluated(
+                self.runtime,
+                &summed_outputs.expect("a shape has copies"),
+                repetition_index,
+                repetition_started_at,
+            );
+        }
+        pass_times.median()
     }
 
     fn median_restored_time(&self, row_count: i32) -> Duration {
