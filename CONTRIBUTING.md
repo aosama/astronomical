@@ -34,6 +34,8 @@ Routine integration, REST, and commit verification tests retain one stable Cargo
 
 Cargo aliases in `.cargo/config.toml` are string-valued on purpose. Cargo merges the config file of every ancestor directory and joins array values across them, while a string from the nearest file replaces the outer value; an array alias defined in both this file and an ancestor `.cargo/config.toml` would therefore concatenate and double.
 
+Every cargo command cited in Markdown, in a code block or a backtick span, must be a stock cargo command or an alias in `.cargo/config.toml`; `cargo xtask check-cargo-citations` checks it in CI. To refer to a family of aliases, end the citation with `...` or `*`: `cargo measure-...` stands for every alias that starts with `measure-`, and holds while at least one does.
+
 Historical Rust generations without an Astronomical ownership marker remain Cargo-owned. Remove them only through a deliberate whole-target `cargo clean` after other Cargo processes finish; never delete hashed generations by age. Suspected retired native CMake output is measurable with `cargo xtask scan-retired-native-output`.
 
 ## Pull Requests

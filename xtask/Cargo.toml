@@ -66,6 +66,14 @@ name = "disposable_target_retirement_contract"
 path = "tests/disposable_target_retirement_contract.rs"
 
 [[test]]
+name = "cargo_alias_nested_config_contract"
+path = "tests/cargo_alias_nested_config_contract.rs"
+
+[[test]]
+name = "integration_source_size_journeys"
+path = "tests/integration_source_size_journeys.rs"
+
+[[test]]
 name = "workflow_code_shape_ratchet_contract"
 path = "tests/workflow_code_shape_ratchet_contract.rs"
 

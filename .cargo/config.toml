@@ -446,6 +446,13 @@ test-quantization-mixture-of-experts = "run -p xtask -- test-run --package astro
 # `cargo xtask native-fingerprint --profile core [--target TRIPLE] [--explain]`
 # prints that build's identity; `--cache-environment` prints it with its store
 # entry directory as `$GITHUB_ENV` lines for workflows that save the entry to the `github_actions_cache`.
+# `cargo xtask check-cargo-citations` fails when Markdown cites a cargo
+# command (in a code fence or a backtick span) that is neither stock cargo nor
+# an alias below; `cargo measure-...` or `cargo measure-*` cites the family of
+# aliases starting with `measure-` and holds while one exists. CI runs it on the
+# Linux configuration-contracts job, with `cargo test -p xtask --test
+# cargo_alias_nested_config_contract`, which proves every alias below expands
+# the same when this file is found twice in cargo's config ancestry.
 # `cargo xtask check-test-channel-isolation` fails when a package test tree
 # reaches for Stable state, and `cargo xtask menu-contracts` runs the menu
 # app's Swift contract tests with the Git credential helper cleared.
