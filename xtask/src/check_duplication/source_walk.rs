@@ -7,9 +7,8 @@ use std::path::Path;
 
 use super::progress::ReadProgress;
 use super::repeated_blocks::NormalizedSourceFile;
-use super::source_classification::{
-    MEASURED_ROOT_DIRECTORIES, area_of, is_production_source, is_skipped_directory_name,
-};
+use super::source_classification::{area_of, is_production_source};
+use crate::workspace_source_walk::{collect_authored_file_paths, is_rust_source_file_name};
 
 /// The production and test sources, each normalized, in path order.
 pub(crate) struct MeasuredCorpora {
@@ -17,51 +16,10 @@ pub(crate) struct MeasuredCorpora {
     pub(crate) test_files: Vec<NormalizedSourceFile>,
 }
 
-/// Every Rust source under the measured roots, as repository-relative paths
-/// with `/` separators, sorted so a run reads files in the same order on
-/// every machine.
+/// Every Rust source under the authored roots (see `workspace_source_walk`),
+/// as repository-relative paths in a stable order.
 pub(crate) fn collect_measured_source_paths(repository_root: &Path) -> Vec<String> {
-    let mut relative_paths = Vec::new();
-    for root_directory in MEASURED_ROOT_DIRECTORIES {
-        collect_rust_sources(
-            &repository_root.join(root_directory),
-            root_directory,
-            &mut relative_paths,
-        );
-    }
-    relative_paths.sort();
-    relative_paths
-}
-
-/// A directory that cannot be read is skipped rather than failing the run:
-/// the measured roots hold only sources this repository tracks, and an
-/// unreadable folder there would be noticed by every other check first.
-fn collect_rust_sources(
-    directory: &Path,
-    relative_directory: &str,
-    relative_paths: &mut Vec<String>,
-) {
-    let Ok(directory_entries) = fs::read_dir(directory) else {
-        return;
-    };
-    for directory_entry in directory_entries.flatten() {
-        let entry_name = directory_entry.file_name().to_string_lossy().into_owned();
-        let relative_entry_path = format!("{relative_directory}/{entry_name}");
-        let Ok(entry_type) = directory_entry.file_type() else {
-            continue;
-        };
-        if entry_type.is_dir() {
-            if !is_skipped_directory_name(&entry_name) {
-                collect_rust_sources(
-                    &directory_entry.path(),
-                    &relative_entry_path,
-                    relative_paths,
-                );
-            }
-        } else if entry_name.ends_with(".rs") {
-            relative_paths.push(relative_entry_path);
-        }
-    }
+    collect_authored_file_paths(repository_root, is_rust_source_file_name)
 }
 
 /// Reads and normalizes every source, printing progress every few seconds.

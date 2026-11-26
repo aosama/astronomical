@@ -6,9 +6,9 @@
 //! chat or embeddings results. One connection serves a scripted exchange
 //! sequence, like the real daemon.
 
-use super::stub_decisions::{scripted_decisions_response, training_refusal};
-use super::stub_model_control::stub_model_control_answer;
-use crate::integration::support::stub_download_status::scripted_download_status;
+mod stub_connection;
+
+use super::stub_decisions::scripted_decisions_response;
 use std::{
     path::PathBuf,
     sync::{Arc, Mutex},
@@ -17,12 +17,12 @@ use std::{
 
 use decision_contract::{DecisionFailure, QuestionOutcome};
 use ipc_protocol::{
-    ChatGenerationSettings, ChatImageInput, ChatMessage, DAEMON_APPLICATION_NAME,
-    DAEMON_PROTOCOL_VERSION, DaemonCatalogEntry, DaemonDownloadJob, DaemonListedModel,
-    DaemonRequest, DaemonResponse, DaemonWorkerStatus, EmbeddingsFailureReason, GeneratedImage,
+    ChatGenerationSettings, ChatImageInput, ChatMessage, DaemonDownloadJob, DaemonRequest,
+    DaemonResponse, DaemonWorkerStatus, EmbeddingsFailureReason, GeneratedImage,
     ImageGenerateRequest, ImageGenerationFailureReason, ImageGenerationResultMetadata,
-    ModelLoadInFlight, ProtocolReader, ProtocolWriter,
+    ModelLoadInFlight, ProtocolWriter,
 };
+use stub_connection::{StubDaemonState, serve_stub_connection};
 
 pub use super::stub_inventory::{StubCatalogEntry, StubInstalledModel};
 
@@ -229,19 +229,10 @@ async fn wait_out_hung_status_request(
 }
 
 /// Binds the socket and serves scripted exchanges until aborted.
-#[expect(clippy::too_many_lines)]
 pub fn spawn_stub_daemon(
     socket_path: PathBuf,
     config: StubDaemonConfig,
 ) -> tokio::task::JoinHandle<()> {
-    let resident_model_id = config.resident_model_id();
-    let catalog_entries_after_download = Arc::new(config.catalog_entries_after_download.clone());
-    let default_model_id = Arc::new(Mutex::new(config.default_model_id.clone()));
-    let download_job_index = Arc::new(Mutex::new(0usize));
-    let download_started = Arc::new(Mutex::new(false));
-    let model_load_report_index = Arc::new(Mutex::new(0usize));
-    let request_progress_count_index = Arc::new(Mutex::new(0usize));
-    let status_request_count = Arc::new(Mutex::new(0usize));
     // Bind before spawning so the client can never race an unbound socket.
     let std_listener = std::os::unix::net::UnixListener::bind(&socket_path)
         .expect("the stub daemon should bind the test socket");
@@ -250,266 +241,23 @@ pub fn spawn_stub_daemon(
         .expect("the stub listener should accept non-blocking mode");
     let unix_listener = tokio::net::UnixListener::from_std(std_listener)
         .expect("the stub listener should register with the runtime");
-    let config = Arc::new(config);
+    let state = Arc::new(StubDaemonState {
+        resident_model_id: config.resident_model_id(),
+        catalog_entries_after_download: config.catalog_entries_after_download.clone(),
+        default_model_id: Mutex::new(config.default_model_id.clone()),
+        download_job_index: Mutex::new(0usize),
+        download_started: Mutex::new(false),
+        model_load_report_index: Mutex::new(0usize),
+        request_progress_count_index: Mutex::new(0usize),
+        status_request_count: Mutex::new(0usize),
+        config,
+    });
     tokio::spawn(async move {
         loop {
             let Ok((connection_stream, _peer_address)) = unix_listener.accept().await else {
                 return;
             };
-            let config = Arc::clone(&config);
-            let resident_model_id = resident_model_id.clone();
-            let catalog_entries_after_download = Arc::clone(&catalog_entries_after_download);
-            let default_model_id = Arc::clone(&default_model_id);
-            let download_job_index = Arc::clone(&download_job_index);
-            let download_started = Arc::clone(&download_started);
-            let model_load_report_index = Arc::clone(&model_load_report_index);
-            let request_progress_count_index = Arc::clone(&request_progress_count_index);
-            let status_request_count = Arc::clone(&status_request_count);
-            tokio::spawn(async move {
-                let (read_half, write_half) = connection_stream.into_split();
-                let mut protocol_reader = ProtocolReader::new(read_half);
-                let mut protocol_writer = ProtocolWriter::new(write_half);
-                loop {
-                    let Some(daemon_request) = protocol_reader.next_daemon_request().await.expect(
-                        "the stub daemon request read should not fail at the transport layer",
-                    ) else {
-                        return;
-                    };
-                    match daemon_request {
-                        DaemonRequest::Handshake => {
-                            protocol_writer
-                                .send_daemon_response(&DaemonResponse::HandshakeAccepted {
-                                    protocol_version: DAEMON_PROTOCOL_VERSION,
-                                    application_name: DAEMON_APPLICATION_NAME.to_owned(),
-                                })
-                                .await
-                                .expect("the stub handshake should transmit");
-                        }
-                        DaemonRequest::Status => {
-                            wait_out_hung_status_request(
-                                &config.hung_status_requests,
-                                &status_request_count,
-                            )
-                            .await;
-                            let current_default_model_id = default_model_id
-                                .lock()
-                                .expect("the stub default lock should stay live")
-                                .clone();
-                            let model_load_in_flight = next_scripted_load_report(
-                                &config.model_load_reports,
-                                &model_load_report_index,
-                            );
-                            protocol_writer
-                                .send_daemon_response(&DaemonResponse::Status {
-                                    worker_status: config.worker_status,
-                                    ready_model_id: resident_model_id.clone(),
-                                    default_model_id: current_default_model_id,
-                                    model_load_in_flight,
-                                    request_progress_count: next_scripted_progress_count(
-                                        &config.request_progress_counts,
-                                        &request_progress_count_index,
-                                    ),
-                                    neural_engine_prefill: config.neural_engine_prefill.clone(),
-                                    draft_model: config.draft_model.clone(),
-                                    last_reply_drafting: None,
-                                })
-                                .await
-                                .expect("the stub status should transmit");
-                        }
-                        DaemonRequest::ModelsList => {
-                            let listed_models: Vec<DaemonListedModel> = config
-                                .installed_models
-                                .iter()
-                                .map(|installed_model| DaemonListedModel {
-                                    model_id: installed_model.model_id.clone(),
-                                    family: "stub".to_owned(),
-                                    context_window: installed_model.context_window,
-                                    supports_embeddings: installed_model.supports_embeddings,
-                                    supports_decisions: installed_model.supports_decisions,
-                                    supports_speech: installed_model.supports_speech,
-                                    supports_image_generation: installed_model
-                                        .supports_image_generation,
-                                    is_resident: installed_model.is_resident,
-                                    size_bytes: 1_000_000_000,
-                                })
-                                .collect();
-                            protocol_writer
-                                .send_daemon_response(&DaemonResponse::ModelsList {
-                                    models: listed_models,
-                                })
-                                .await
-                                .expect("the stub model list should transmit");
-                        }
-                        DaemonRequest::Catalog => {
-                            let after_download_active = *download_started
-                                .lock()
-                                .expect("the stub download flag should stay live");
-                            let catalog_entries = if after_download_active {
-                                catalog_entries_after_download.as_ref().clone().expect(
-                                    "a catalog flip must be scripted when a download starts",
-                                )
-                            } else {
-                                config.catalog_entries.clone()
-                            };
-                            let entries: Vec<DaemonCatalogEntry> = catalog_entries
-                                .into_iter()
-                                .map(|catalog_entry| {
-                                    let model_id =
-                                        config::leaf_model_id(&catalog_entry.huggingface_id)
-                                            .to_owned();
-                                    DaemonCatalogEntry {
-                                        huggingface_id: catalog_entry.huggingface_id,
-                                        model_id,
-                                        family: "stub".to_owned(),
-                                        // ~2 GB keeps rendered sizes at two digits so
-                                        // list-output assertions stay readable.
-                                        approximate_size_bytes: 2_000_000_000,
-                                        ready_on_this_mac: catalog_entry.ready_on_this_mac,
-                                        requestable_model_id: catalog_entry.requestable_model_id,
-                                        download_state: catalog_entry.download_state,
-                                        context_window: catalog_entry.context_window,
-                                        supports_reasoning: false,
-                                        supports_vision: false,
-                                        supports_tool_calls: false,
-                                        supports_image_generation: catalog_entry
-                                            .supports_image_generation,
-                                        supports_embeddings: catalog_entry.supports_embeddings,
-                                        supports_decisions: catalog_entry.supports_decisions,
-                                        supports_speech: catalog_entry.supports_speech,
-                                    }
-                                })
-                                .collect();
-                            protocol_writer
-                                .send_daemon_response(&DaemonResponse::Catalog { entries })
-                                .await
-                                .expect("the stub catalog should transmit");
-                        }
-                        DaemonRequest::DownloadStart { model_id } => {
-                            *download_started
-                                .lock()
-                                .expect("the stub download flag should stay live") = true;
-                            protocol_writer
-                                .send_daemon_response(&DaemonResponse::DownloadStarted {
-                                    huggingface_id: model_id,
-                                })
-                                .await
-                                .expect("the stub download start should transmit");
-                        }
-                        DaemonRequest::DownloadStatus => {
-                            // The guard must drop before the send await so the task stays Send.
-                            let download_status = {
-                                let mut job_index = download_job_index
-                                    .lock()
-                                    .expect("the stub job index should stay live");
-                                *job_index += 1;
-                                scripted_download_status(&config, *job_index - 1)
-                            };
-                            protocol_writer
-                                .send_daemon_response(&download_status)
-                                .await
-                                .expect("the stub download status should transmit");
-                        }
-                        model_control_request @ (DaemonRequest::ModelUnload
-                        | DaemonRequest::DefaultModelSet { .. }) => {
-                            let control_answer = stub_model_control_answer(
-                                model_control_request,
-                                &config,
-                                &default_model_id,
-                                resident_model_id.as_ref(),
-                            );
-                            protocol_writer
-                                .send_daemon_response(&control_answer)
-                                .await
-                                .expect("the stub model control answer should transmit");
-                        }
-                        DaemonRequest::ChatGenerate {
-                            messages,
-                            settings,
-                            schema_json,
-                            ..
-                        } => {
-                            // Record the messages and settings the CLI sent so a journey
-                            // test can assert they crossed the boundary.
-                            if let Ok(mut guard) = config.messages_capture.lock() {
-                                *guard = Some(messages.clone());
-                            }
-                            if let Ok(mut guard) = config.settings_capture.lock() {
-                                *guard = Some(settings.clone());
-                            }
-                            if let Ok(mut guard) = config.schema_capture.lock() {
-                                *guard = schema_json.clone();
-                            }
-                            // The user's images may sit after a system message, so find
-                            // the first user message rather than assuming it is first.
-                            if let Some(user_images) =
-                                messages.iter().find_map(|message| match message {
-                                    ChatMessage::User { images, .. } => Some(images.clone()),
-                                    _ => None,
-                                })
-                                && let Ok(mut guard) = config.image_capture.lock()
-                            {
-                                *guard = Some(user_images);
-                            }
-                            tokio::time::sleep(config.chat_first_frame_delay).await;
-                            for chat_fragment in config.chat_fragments.iter() {
-                                protocol_writer
-                                    .send_daemon_response(&DaemonResponse::ChatGenerationText {
-                                        text: chat_fragment.clone(),
-                                    })
-                                    .await
-                                    .expect("the stub fragment should transmit");
-                            }
-                            protocol_writer
-                                .send_daemon_response(&DaemonResponse::ChatGenerationCompleted {
-                                    prompt_token_count: 7,
-                                    generated_token_count: 2,
-                                    reasoning_token_count: 0,
-                                    astro_ssd_prompt_cache_restored_token_count: 0,
-                                    reason:
-                                        ipc_protocol::ChatGenerationCompletionReason::EndOfSequence,
-                                })
-                                .await
-                                .expect("the stub completion frame should transmit");
-                            let _ = protocol_writer.close().await;
-                            return;
-                        }
-                        DaemonRequest::TrainDecisionModel { .. } => {
-                            send_frames_and_close(protocol_writer, vec![training_refusal()]).await;
-                            return;
-                        }
-                        helper_model_request @ (DaemonRequest::EmbedGenerate { .. }
-                        | DaemonRequest::DecideGenerate { .. }
-                        | DaemonRequest::SpeakGenerate(_)) => {
-                            let helper_model_frames = scripted_helper_model_frames(
-                                &config,
-                                resident_model_id.clone(),
-                                helper_model_request,
-                            )
-                            .await;
-                            send_frames_and_close(protocol_writer, helper_model_frames).await;
-                            return;
-                        }
-                        DaemonRequest::ImageGenerate(image_request) => {
-                            *config
-                                .image_request_capture
-                                .lock()
-                                .expect("the stub image capture should stay live") =
-                                Some(DaemonRequest::ImageGenerate(image_request.clone()));
-                            let Some(image_response) =
-                                scripted_image_response(&config.image_outcome, image_request).await
-                            else {
-                                return;
-                            };
-                            protocol_writer
-                                .send_daemon_response(&image_response)
-                                .await
-                                .expect("the stub image frame should transmit");
-                            let _ = protocol_writer.close().await;
-                            return;
-                        }
-                    }
-                }
-            });
+            tokio::spawn(serve_stub_connection(connection_stream, Arc::clone(&state)));
         }
     })
 }

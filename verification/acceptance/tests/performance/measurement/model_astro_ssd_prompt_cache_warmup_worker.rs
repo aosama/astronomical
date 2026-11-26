@@ -315,7 +315,6 @@ async fn wait_until_idle(worker_handle: &WorkerHandle) {
     );
 }
 
-#[expect(clippy::too_many_lines)]
 async fn measure_worker_summarization(
     pass_label: &str,
     benchmark_started_at: Instant,
@@ -327,35 +326,10 @@ async fn measure_worker_summarization(
 ) -> StreamingMeasurement {
     let request_started_at = Instant::now();
     let mut stream_receiver = worker_handle
-        .start_chat_generation(ChatGenerationCommand {
-            request_id: RequestId::new(1),
-            model: model_id().to_owned(),
-            messages: vec![ChatMessage::User {
-                content: format!(
-                    "{}\n\n{source_document}",
-                    astro_ssd_prompt_cache_warmup_case.instruction
-                ),
-                images: Vec::new(),
-            }],
-            tools: Vec::new(),
-            tool_choice: ChatToolChoice::None,
-            settings: ChatGenerationSettings {
-                max_output_tokens: astro_ssd_prompt_cache_warmup_case.maximum_output_tokens,
-                // Greedy decoding keeps the cold and warm passes deterministic,
-                // which is what the generated-output equality assertion proves:
-                // `astro_ssd_prompt_cache` restoration must preserve the exact cold-pass output.
-                temperature_thousandths: Some(0),
-                top_p_thousandths: None,
-                repetition_penalty_thousandths: None,
-                seed: None,
-                // The 50K/100K scaling cases budget a single output token to
-                // isolate prefill work; that budget cannot also fit a thinking
-                // allowance plus its transition tokens, so those cases opt out.
-                thinking_budget: (astro_ssd_prompt_cache_warmup_case.maximum_output_tokens > 1)
-                    .then_some(256),
-            },
-            structured_generation: None,
-        })
+        .start_chat_generation(warmup_generation_command(
+            source_document,
+            astro_ssd_prompt_cache_warmup_case,
+        ))
         .await
         .expect("the worker should start the persistent astro-ssd-prompt-cache warmup generation request");
     let mut first_output_at: Option<Instant> = None;
@@ -380,66 +354,27 @@ async fn measure_worker_summarization(
                     &mut latest_sampled_prefill_processed_tokens,
                     &mut prefill_progress_samples,
                 );
-                let elapsed = benchmark_started_at.elapsed();
-                if elapsed >= next_progress_log_at {
-                    let remaining = benchmark_timeout.saturating_sub(elapsed);
-                    let saved_block_count = astro_ssd_prompt_cache_disk_usage(
-                        astro_ssd_prompt_cache_directory,
-                    )
-                    .block_count;
-                    eprintln!(
-                        "[astro-ssd-prompt-cache-warmup:{pass_label}] request active; SSD blocks={saved_block_count}, benchmark elapsed {:.0}s, deadline <= {:.0}s",
-                        elapsed.as_secs_f64(),
-                        remaining.as_secs_f64(),
-                    );
-                    next_progress_log_at += Duration::from_secs(10);
-                }
+                log_active_request_progress(
+                    pass_label,
+                    benchmark_started_at,
+                    benchmark_timeout,
+                    astro_ssd_prompt_cache_directory,
+                    &mut next_progress_log_at,
+                );
                 continue;
             }
         };
         let Some(stream_event) = stream_event else {
             break;
         };
-        match stream_event {
-            ChatGenerationStreamEvent::ReasoningFragment(text)
-            | ChatGenerationStreamEvent::TextFragment(text) => {
-                record_first_output(pass_label, &mut first_output_at, "generated output");
-                generated_text.push_str(&text);
-            }
-            ChatGenerationStreamEvent::ToolCall {
-                function_name,
-                arguments_json,
-                ..
-            } => {
-                record_first_output(pass_label, &mut first_output_at, "generated tool call");
-                generated_text.push_str(&function_name);
-                generated_text.push_str(&arguments_json);
-            }
-            ChatGenerationStreamEvent::PrefillProgress { .. }
-            | ChatGenerationStreamEvent::DraftingReport(_) => {}
-            ChatGenerationStreamEvent::Completed {
-                prompt_token_count,
-                generated_token_count,
-                astro_ssd_prompt_cache_restored_token_count,
-                ..
-            } => {
-                completed_token_counts = Some(CompletedTokenCounts {
-                    completion_token_count: u64::from(generated_token_count),
-                    astro_ssd_prompt_cache_restored_token_count: u64::from(
-                        astro_ssd_prompt_cache_restored_token_count,
-                    ),
-                    prompt_token_count: u64::from(prompt_token_count),
-                });
-                break;
-            }
-            ChatGenerationStreamEvent::Failed { reason } => {
-                panic!(
-                    "the worker failed the persistent astro-ssd-prompt-cache warmup generation request: {reason:?}"
-                );
-            }
-            ChatGenerationStreamEvent::Error(error_code) => {
-                panic!("the worker stream reported an error: {error_code:?}");
-            }
+        if let StreamEventOutcome::Completed(terminal_token_counts) = apply_stream_event(
+            pass_label,
+            stream_event,
+            &mut first_output_at,
+            &mut generated_text,
+        ) {
+            completed_token_counts = Some(terminal_token_counts);
+            break;
         }
     }
     let response_completed_at = Instant::now();
@@ -456,6 +391,119 @@ async fn measure_worker_summarization(
         prefill_progress_samples,
         prompt_token_count: completed_token_counts.prompt_token_count,
     }
+}
+
+fn warmup_generation_command(
+    source_document: &str,
+    astro_ssd_prompt_cache_warmup_case: &AstroSsdPromptCacheWarmupCase,
+) -> ChatGenerationCommand {
+    ChatGenerationCommand {
+        request_id: RequestId::new(1),
+        model: model_id().to_owned(),
+        messages: vec![ChatMessage::User {
+            content: format!(
+                "{}\n\n{source_document}",
+                astro_ssd_prompt_cache_warmup_case.instruction
+            ),
+            images: Vec::new(),
+        }],
+        tools: Vec::new(),
+        tool_choice: ChatToolChoice::None,
+        settings: ChatGenerationSettings {
+            max_output_tokens: astro_ssd_prompt_cache_warmup_case.maximum_output_tokens,
+            // Greedy decoding keeps the cold and warm passes deterministic,
+            // which is what the generated-output equality assertion proves:
+            // `astro_ssd_prompt_cache` restoration must preserve the exact cold-pass output.
+            temperature_thousandths: Some(0),
+            top_p_thousandths: None,
+            repetition_penalty_thousandths: None,
+            seed: None,
+            // The 50K/100K scaling cases budget a single output token to
+            // isolate prefill work; that budget cannot also fit a thinking
+            // allowance plus its transition tokens, so those cases opt out.
+            thinking_budget: (astro_ssd_prompt_cache_warmup_case.maximum_output_tokens > 1)
+                .then_some(256),
+        },
+        structured_generation: None,
+    }
+}
+
+/// Logs the active request every ten seconds of benchmark time, counting down
+/// the benchmark's timeout.
+fn log_active_request_progress(
+    pass_label: &str,
+    benchmark_started_at: Instant,
+    benchmark_timeout: Duration,
+    astro_ssd_prompt_cache_directory: &Path,
+    next_progress_log_at: &mut Duration,
+) {
+    let elapsed = benchmark_started_at.elapsed();
+    if elapsed >= *next_progress_log_at {
+        let remaining = benchmark_timeout.saturating_sub(elapsed);
+        let saved_block_count =
+            astro_ssd_prompt_cache_disk_usage(astro_ssd_prompt_cache_directory).block_count;
+        eprintln!(
+            "[astro-ssd-prompt-cache-warmup:{pass_label}] request active; SSD blocks={saved_block_count}, benchmark elapsed {:.0}s, deadline <= {:.0}s",
+            elapsed.as_secs_f64(),
+            remaining.as_secs_f64(),
+        );
+        *next_progress_log_at += Duration::from_secs(10);
+    }
+}
+
+/// What reading one worker stream event told the measurement.
+enum StreamEventOutcome {
+    KeepReading,
+    Completed(CompletedTokenCounts),
+}
+
+fn apply_stream_event(
+    pass_label: &str,
+    stream_event: ChatGenerationStreamEvent,
+    first_output_at: &mut Option<Instant>,
+    generated_text: &mut String,
+) -> StreamEventOutcome {
+    match stream_event {
+        ChatGenerationStreamEvent::ReasoningFragment(text)
+        | ChatGenerationStreamEvent::TextFragment(text) => {
+            record_first_output(pass_label, first_output_at, "generated output");
+            generated_text.push_str(&text);
+        }
+        ChatGenerationStreamEvent::ToolCall {
+            function_name,
+            arguments_json,
+            ..
+        } => {
+            record_first_output(pass_label, first_output_at, "generated tool call");
+            generated_text.push_str(&function_name);
+            generated_text.push_str(&arguments_json);
+        }
+        ChatGenerationStreamEvent::PrefillProgress { .. }
+        | ChatGenerationStreamEvent::DraftingReport(_) => {}
+        ChatGenerationStreamEvent::Completed {
+            prompt_token_count,
+            generated_token_count,
+            astro_ssd_prompt_cache_restored_token_count,
+            ..
+        } => {
+            return StreamEventOutcome::Completed(CompletedTokenCounts {
+                completion_token_count: u64::from(generated_token_count),
+                astro_ssd_prompt_cache_restored_token_count: u64::from(
+                    astro_ssd_prompt_cache_restored_token_count,
+                ),
+                prompt_token_count: u64::from(prompt_token_count),
+            });
+        }
+        ChatGenerationStreamEvent::Failed { reason } => {
+            panic!(
+                "the worker failed the persistent astro-ssd-prompt-cache warmup generation request: {reason:?}"
+            );
+        }
+        ChatGenerationStreamEvent::Error(error_code) => {
+            panic!("the worker stream reported an error: {error_code:?}");
+        }
+    }
+    StreamEventOutcome::KeepReading
 }
 
 fn sample_prefill_progress(

@@ -47,6 +47,19 @@ async fn run_throughput_journey() {
     let (isolated_home, rest_server) = launch_resident_rest_server().await;
     let server_address = rest_server.server_address;
 
+    let warmup_session_sample = run_jit_warmup(server_address, &model_id).await;
+    let measured_completions =
+        run_measured_completions(server_address, &model_id, warmup_session_sample).await;
+    assert_and_print_baseline(&model_id, measured_completions);
+
+    stop_resident_rest_server(rest_server).await;
+    report_prefix_adoption_evidence(isolated_home.path());
+}
+
+async fn run_jit_warmup(
+    server_address: std::net::SocketAddr,
+    model_id: &str,
+) -> ServingSessionSample {
     eprintln!("[ornith-35b] phase=jit-warmup model={model_id}");
     let warmup_response = post_chat_completion(
         server_address,
@@ -64,14 +77,29 @@ async fn run_throughput_journey() {
     )
     .await;
     assert_successful_streaming_chat_response(&warmup_response);
-    let mut previous_session_sample = ServingSessionSample::from_status(
+    let warmup_session_sample = ServingSessionSample::from_status(
         &status_document(server_address).await["serving_session"],
     );
     assert!(
-        previous_session_sample.completed_request_count >= 1,
+        warmup_session_sample.completed_request_count >= 1,
         "the warmup completion must be attributed before measurement starts"
     );
+    warmup_session_sample
+}
 
+/// The measured completions' rates, and the session sample taken after the last one.
+struct MeasuredCompletions {
+    prefill_tokens_per_second_samples: Vec<f64>,
+    decode_tokens_per_second_samples: Vec<f64>,
+    final_session_sample: ServingSessionSample,
+}
+
+async fn run_measured_completions(
+    server_address: std::net::SocketAddr,
+    model_id: &str,
+    warmup_session_sample: ServingSessionSample,
+) -> MeasuredCompletions {
+    let mut previous_session_sample = warmup_session_sample;
     let mut prefill_tokens_per_second_samples = Vec::new();
     let mut decode_tokens_per_second_samples = Vec::new();
     for completion_index in 1..=MEASURED_COMPLETION_COUNT {
@@ -111,10 +139,19 @@ async fn run_throughput_journey() {
         decode_tokens_per_second_samples.push(completion_measurement.decode_tok_per_second);
         previous_session_sample = current_session_sample;
     }
+    MeasuredCompletions {
+        prefill_tokens_per_second_samples,
+        decode_tokens_per_second_samples,
+        final_session_sample: previous_session_sample,
+    }
+}
 
-    let final_session_sample = previous_session_sample;
-    let median_prefill_tokens_per_second = median(&mut prefill_tokens_per_second_samples);
-    let median_decode_tokens_per_second = median(&mut decode_tokens_per_second_samples);
+fn assert_and_print_baseline(model_id: &str, mut measured_completions: MeasuredCompletions) {
+    let final_session_sample = measured_completions.final_session_sample;
+    let median_prefill_tokens_per_second =
+        median(&mut measured_completions.prefill_tokens_per_second_samples);
+    let median_decode_tokens_per_second =
+        median(&mut measured_completions.decode_tokens_per_second_samples);
     eprintln!(
         "[ornith-35b] BASELINE model={model_id} median_prefill_tok_per_second={median_prefill_tokens_per_second:.2} median_decode_tok_per_second={median_decode_tokens_per_second:.2} completions={MEASURED_COMPLETION_COUNT} completed_request_count={}",
         final_session_sample.completed_request_count,
@@ -127,9 +164,6 @@ async fn run_throughput_journey() {
         median_decode_tokens_per_second.is_finite() && median_decode_tokens_per_second > 0.0,
         "decode throughput must be a positive measurement"
     );
-
-    stop_resident_rest_server(rest_server).await;
-    report_prefix_adoption_evidence(isolated_home.path());
 }
 
 /// Reads the journey's worker attribution log and prints the per-completion

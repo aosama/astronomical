@@ -393,33 +393,13 @@ impl AstroExpertCache {
 
         let occupied_payload_bytes = per_expert_payload_bytes
             .saturating_mul(u64::try_from(admitted_expert_count).unwrap_or(u64::MAX));
-        let expert_id_by_slot: Vec<Option<usize>> = expert_ids
-            .iter()
-            .take(admitted_expert_count)
-            .copied()
-            .map(Some)
-            .collect();
-        let slot_by_expert_id = expert_id_by_slot
-            .iter()
-            .enumerate()
-            .filter_map(|(slot, expert_id)| expert_id.map(|expert_id| (expert_id, slot)))
-            .collect();
-        let mut decode_policy_by_slot =
-            vec![DecodeExpertSlotState::default(); admitted_expert_count];
-        for (decode_policy_slot, admitted_expert_id) in expert_ids
-            .iter()
-            .take(admitted_expert_count)
-            .copied()
-            .enumerate()
-        {
-            if self.historical_demand_count(layer_index, admitted_expert_id)
-                >= HISTORICAL_HOT_DEMAND_COUNT
-            {
-                decode_policy_by_slot[decode_policy_slot].mark_historically_hot(decode_step_epoch);
-            } else {
-                decode_policy_by_slot[decode_policy_slot].mark_probationary(decode_step_epoch);
-            }
-        }
+        let admitted_expert_ids = &expert_ids[..admitted_expert_count];
+        let (expert_id_by_slot, slot_by_expert_id) = seat_experts_one_per_slot(admitted_expert_ids);
+        let decode_policy_by_slot = self.first_admission_decode_policy_by_slot(
+            layer_index,
+            admitted_expert_ids,
+            decode_step_epoch,
+        );
         let table = ExpertSlotTable {
             weights: table_weights,
             expert_id_by_slot,
@@ -447,4 +427,49 @@ impl AstroExpertCache {
         }
         Ok(admitted_expert_count)
     }
+
+    /// The decode policy state of each slot of a layer's first candidate
+    /// table: an expert the persisted usage history marks hot starts out
+    /// promoted, and every other expert starts on probation.
+    fn first_admission_decode_policy_by_slot(
+        &self,
+        layer_index: usize,
+        admitted_expert_ids: &[usize],
+        decode_step_epoch: u64,
+    ) -> Vec<DecodeExpertSlotState> {
+        let mut decode_policy_by_slot =
+            vec![DecodeExpertSlotState::default(); admitted_expert_ids.len()];
+        for (decode_policy_slot, admitted_expert_id) in
+            admitted_expert_ids.iter().copied().enumerate()
+        {
+            if self.historical_demand_count(layer_index, admitted_expert_id)
+                >= HISTORICAL_HOT_DEMAND_COUNT
+            {
+                decode_policy_by_slot[decode_policy_slot].mark_historically_hot(decode_step_epoch);
+            } else {
+                decode_policy_by_slot[decode_policy_slot].mark_probationary(decode_step_epoch);
+            }
+        }
+        decode_policy_by_slot
+    }
 }
+
+/// Seats the admitted experts one per slot in the order given, and returns
+/// the expert held by each slot together with the slot of each expert. An
+/// expert named twice keeps its later slot in the second map.
+fn seat_experts_one_per_slot(
+    admitted_expert_ids: &[usize],
+) -> (Vec<Option<usize>>, HashMap<usize, usize>) {
+    let expert_id_by_slot: Vec<Option<usize>> =
+        admitted_expert_ids.iter().copied().map(Some).collect();
+    let slot_by_expert_id = expert_id_by_slot
+        .iter()
+        .enumerate()
+        .filter_map(|(slot, expert_id)| expert_id.map(|expert_id| (expert_id, slot)))
+        .collect();
+    (expert_id_by_slot, slot_by_expert_id)
+}
+
+#[cfg(test)]
+#[path = "insert_tests.rs"]
+mod insert_tests;

@@ -54,6 +54,29 @@ async fn should_apply_astro_ssd_prompt_cache_policy_after_config_file_reload() {
     let reload_document: serde_json::Value =
         serde_json::from_slice(&reload_body).expect("the reload response should contain JSON");
     assert_eq!(reload_status, StatusCode::OK, "{reload_document}");
+    assert_reload_applied_the_astro_ssd_prompt_cache_policy(&reload_document);
+
+    let status_response = get_response(&application, "/v1/status").await;
+    let status_body = to_bytes(status_response.into_body(), 4 * 1024)
+        .await
+        .expect("the status response should be readable");
+    let status_document: serde_json::Value =
+        serde_json::from_slice(&status_body).expect("the status response should contain JSON");
+    assert_status_reports_the_applied_astro_ssd_prompt_cache_policy(&status_document);
+    assert!(
+        reloadable_config
+            .read()
+            .expect("the applied config should remain readable")
+            .astro_ssd_prompt_cache_enabled
+    );
+
+    worker_handle
+        .shutdown()
+        .await
+        .expect("the worker should shut down");
+}
+
+fn assert_reload_applied_the_astro_ssd_prompt_cache_policy(reload_document: &serde_json::Value) {
     assert_eq!(reload_document["status"], "reloaded");
     assert_eq!(reload_document["worker_restart_completed"], true);
     assert_eq!(
@@ -68,13 +91,11 @@ async fn should_apply_astro_ssd_prompt_cache_policy_after_config_file_reload() {
         reload_document["worker_runtime_feature_configuration"]["astro_ssd_prompt_cache_enabled"],
         true
     );
+}
 
-    let status_response = get_response(&application, "/v1/status").await;
-    let status_body = to_bytes(status_response.into_body(), 4 * 1024)
-        .await
-        .expect("the status response should be readable");
-    let status_document: serde_json::Value =
-        serde_json::from_slice(&status_body).expect("the status response should contain JSON");
+fn assert_status_reports_the_applied_astro_ssd_prompt_cache_policy(
+    status_document: &serde_json::Value,
+) {
     assert_eq!(
         status_document["configured_generation"],
         status_document["effective_generation"]
@@ -87,17 +108,6 @@ async fn should_apply_astro_ssd_prompt_cache_policy_after_config_file_reload() {
         status_document["worker_runtime_feature_configuration"]["astro_ssd_prompt_cache_enabled"],
         true
     );
-    assert!(
-        reloadable_config
-            .read()
-            .expect("the applied config should remain readable")
-            .astro_ssd_prompt_cache_enabled
-    );
-
-    worker_handle
-        .shutdown()
-        .await
-        .expect("the worker should shut down");
 }
 
 async fn wait_for_ready_idle_worker(worker_handle: &WorkerHandle) {

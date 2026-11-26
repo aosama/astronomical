@@ -7,6 +7,15 @@ use crate::performance_throughput::completion::{
 };
 use crate::performance_throughput::support::{self as throughput_support, ThroughputJourney};
 
+mod paired_trial_checks;
+mod policy_metric_series;
+
+use paired_trial_checks::{assert_measured_policy_run, assert_pair_parity};
+use policy_metric_series::{
+    decode_forward_p95_nanoseconds_series, decode_source_bytes_per_output_token_series,
+    decode_tokens_per_second_series, prefill_tokens_per_second_series,
+};
+
 pub(crate) const PAIRED_TRIAL_COUNT: usize = 3;
 
 /// The measured token-count window one paired lane accepts. The standard
@@ -58,7 +67,13 @@ pub(crate) struct PairedConfidenceInterval95 {
     pub(crate) upper_bound_percent: f64,
 }
 
-#[expect(clippy::too_many_lines)]
+/// How far the experiment's policy runs have got, for the progress and ETA lines.
+struct PolicyRunProgress {
+    experiment_started_at: Instant,
+    completed_policy_run_count: usize,
+    total_policy_run_count: usize,
+}
+
 pub(crate) fn run_paired_decode_astro_expert_cache_trials(
     model_id: &'static str,
     journey_template: &ThroughputJourney,
@@ -70,73 +85,23 @@ pub(crate) fn run_paired_decode_astro_expert_cache_trials(
         "paired confidence intervals need at least two baseline-candidate trials"
     );
     let mut paired_trials = Vec::with_capacity(paired_trial_count);
-    let total_policy_run_count = paired_trial_count.saturating_mul(2);
-    let experiment_started_at = Instant::now();
-    let mut completed_policy_run_count = 0_usize;
+    let mut policy_run_progress = PolicyRunProgress {
+        experiment_started_at: Instant::now(),
+        completed_policy_run_count: 0,
+        total_policy_run_count: paired_trial_count.saturating_mul(2),
+    };
     for pair_index in 0..paired_trial_count {
         let mut baseline_measurement = None;
         let mut candidate_measurement = None;
         for decode_astro_expert_cache_policy in policy_order_for_trial(pair_index) {
-            let current_progress_percent = completed_policy_run_count
-                .saturating_mul(100)
-                .checked_div(total_policy_run_count)
-                .unwrap_or(0);
-            eprintln!(
-                "[decode-astro-expert-cache-experiment] progress_percent={current_progress_percent} completed_policy_runs={completed_policy_run_count} total_policy_runs={total_policy_run_count} pair_index={} policy={decode_astro_expert_cache_policy:?} status=starting",
-                pair_index + 1
-            );
-            let mut journey = journey_template.clone();
-            journey.decode_astro_expert_cache_policy = decode_astro_expert_cache_policy;
-            let measured_throughput =
-                throughput_support::run_journey_with_timeout(model_id, journey.clone());
-            completed_policy_run_count += 1;
-            let completed_progress_percent = completed_policy_run_count
-                .saturating_mul(100)
-                .checked_div(total_policy_run_count)
-                .unwrap_or(100)
-                .min(100);
-            let average_policy_run_seconds =
-                experiment_started_at.elapsed().as_secs_f64() / completed_policy_run_count as f64;
-            let estimated_remaining_seconds = average_policy_run_seconds
-                * total_policy_run_count.saturating_sub(completed_policy_run_count) as f64;
-            eprintln!(
-                "[decode-astro-expert-cache-experiment] progress_percent={completed_progress_percent} completed_policy_runs={completed_policy_run_count} total_policy_runs={total_policy_run_count} eta_seconds={estimated_remaining_seconds:.0} pair_index={} policy={decode_astro_expert_cache_policy:?} status=completed",
-                pair_index + 1
-            );
-            measured_shape_window.assert_measurement_fits(&measured_throughput);
-            assert_eq!(
-                measured_throughput.decode_astro_expert_cache_policy,
+            let measured_throughput = run_measured_policy(
+                model_id,
+                journey_template,
+                measured_shape_window,
+                pair_index,
                 decode_astro_expert_cache_policy,
-                "the worker measurement must retain the selected decode astro expert cache policy"
+                &mut policy_run_progress,
             );
-            assert!(
-                measured_throughput.measured_output_text.is_some(),
-                "the completed measurement must preserve streamed output for parity checks"
-            );
-            assert_peak_memory_within_limit(&journey, &measured_throughput);
-            if journey.attribution_enabled {
-                let diagnostic_evidence = measured_throughput
-                    .decode_astro_expert_cache_diagnostic_evidence
-                    .as_ref()
-                    .expect("the attributed run must produce measured decode astro expert cache evidence");
-                assert!(
-                    diagnostic_evidence
-                        .decode_token_forward_latency_p95_nanoseconds
-                        .is_some(),
-                    "the generation report must include decode-forward p95"
-                );
-                assert!(
-                    diagnostic_evidence
-                        .decode_token_forward_latency_sample_count
-                        .is_some_and(|sample_count| sample_count > 0),
-                    "the generation report must include decode-forward histogram samples"
-                );
-                assert_eq!(
-                    diagnostic_evidence.decode_expert_source_payload_bytes,
-                    diagnostic_evidence.decode_expert_source_summary_payload_bytes,
-                    "the decode source counter must agree with its phase summaries"
-                );
-            }
             match decode_astro_expert_cache_policy {
                 WorkerDecodeAstroExpertCachePolicy::Baseline => {
                     baseline_measurement = Some(measured_throughput);
@@ -150,31 +115,65 @@ pub(crate) fn run_paired_decode_astro_expert_cache_trials(
             .expect("the alternating pair must include one baseline measurement");
         let candidate = candidate_measurement
             .expect("the alternating pair must include one candidate measurement");
-        assert_eq!(
-            baseline.measured_output_text, candidate.measured_output_text,
-            "baseline and candidate must generate identical Romeo and Juliet output"
-        );
-        if journey_template.attribution_enabled {
-            assert_eq!(
-                baseline
-                    .decode_astro_expert_cache_diagnostic_evidence
-                    .as_ref()
-                    .expect("the baseline attribution must be present")
-                    .prefill_expert_source_payload_bytes,
-                candidate
-                    .decode_astro_expert_cache_diagnostic_evidence
-                    .as_ref()
-                    .expect("the candidate attribution must be present")
-                    .prefill_expert_source_payload_bytes,
-                "prefill source bytes must remain identical across decode astro expert cache policies"
-            );
-        }
+        assert_pair_parity(&baseline, &candidate, journey_template.attribution_enabled);
         paired_trials.push(PairedDecodeAstroExpertCacheTrial {
             baseline,
             candidate,
         });
     }
     paired_trials
+}
+
+/// Runs one policy's journey, reports progress around it, and checks its
+/// measurement.
+fn run_measured_policy(
+    model_id: &'static str,
+    journey_template: &ThroughputJourney,
+    measured_shape_window: &MeasuredShapeWindow,
+    pair_index: usize,
+    decode_astro_expert_cache_policy: WorkerDecodeAstroExpertCachePolicy,
+    policy_run_progress: &mut PolicyRunProgress,
+) -> ThroughputMeasurement {
+    let total_policy_run_count = policy_run_progress.total_policy_run_count;
+    let current_progress_percent = policy_run_progress
+        .completed_policy_run_count
+        .saturating_mul(100)
+        .checked_div(total_policy_run_count)
+        .unwrap_or(0);
+    eprintln!(
+        "[decode-astro-expert-cache-experiment] progress_percent={current_progress_percent} completed_policy_runs={} total_policy_runs={total_policy_run_count} pair_index={} policy={decode_astro_expert_cache_policy:?} status=starting",
+        policy_run_progress.completed_policy_run_count,
+        pair_index + 1
+    );
+    let mut journey = journey_template.clone();
+    journey.decode_astro_expert_cache_policy = decode_astro_expert_cache_policy;
+    let measured_throughput =
+        throughput_support::run_journey_with_timeout(model_id, journey.clone());
+    policy_run_progress.completed_policy_run_count += 1;
+    let completed_policy_run_count = policy_run_progress.completed_policy_run_count;
+    let completed_progress_percent = completed_policy_run_count
+        .saturating_mul(100)
+        .checked_div(total_policy_run_count)
+        .unwrap_or(100)
+        .min(100);
+    let average_policy_run_seconds = policy_run_progress
+        .experiment_started_at
+        .elapsed()
+        .as_secs_f64()
+        / completed_policy_run_count as f64;
+    let estimated_remaining_seconds = average_policy_run_seconds
+        * total_policy_run_count.saturating_sub(completed_policy_run_count) as f64;
+    eprintln!(
+        "[decode-astro-expert-cache-experiment] progress_percent={completed_progress_percent} completed_policy_runs={completed_policy_run_count} total_policy_runs={total_policy_run_count} eta_seconds={estimated_remaining_seconds:.0} pair_index={} policy={decode_astro_expert_cache_policy:?} status=completed",
+        pair_index + 1
+    );
+    assert_measured_policy_run(
+        &journey,
+        measured_shape_window,
+        decode_astro_expert_cache_policy,
+        &measured_throughput,
+    );
+    measured_throughput
 }
 
 pub(crate) fn paired_relative_improvement_confidence_interval_95(
@@ -267,126 +266,22 @@ fn policy_order_for_trial(pair_index: usize) -> [WorkerDecodeAstroExpertCachePol
     }
 }
 
-fn assert_peak_memory_within_limit(
-    journey: &ThroughputJourney,
-    measured_throughput: &ThroughputMeasurement,
-) {
-    let diagnostic_peak_memory_bytes = measured_throughput
-        .decode_astro_expert_cache_diagnostic_evidence
-        .as_ref()
-        .and_then(|diagnostic_evidence| diagnostic_evidence.mlx_peak_memory_bytes);
-    let observed_peak_memory_bytes = [
-        measured_throughput.mlx_peak_memory_bytes,
-        diagnostic_peak_memory_bytes,
-    ]
-    .into_iter()
-    .flatten()
-    .max()
-    .expect("the worker must report a measured peak memory value");
-    let maximum_mlx_memory_bytes = journey
-        .maximum_mlx_memory_bytes
-        .unwrap_or(throughput_support::MAXIMUM_MODEL_MEMORY_BYTES);
-    assert!(
-        observed_peak_memory_bytes <= maximum_mlx_memory_bytes,
-        "the {observed_peak_memory_bytes}-byte observed peak exceeded the {maximum_mlx_memory_bytes}-byte configured memory ceiling"
-    );
-}
-
 #[cfg(test)]
 #[path = "decode_astro_expert_cache_experiment_tests.rs"]
 mod decode_astro_expert_cache_experiment_tests;
 
-#[expect(clippy::too_many_lines)]
 pub(super) fn report_attributed_policy_comparison(
     paired_trials: &[PairedDecodeAstroExpertCacheTrial],
 ) {
-    let baseline_decode_p95_nanoseconds = paired_trials
-        .iter()
-        .map(|paired_trial| {
-            paired_trial
-                .baseline
-                .decode_astro_expert_cache_diagnostic_evidence
-                .as_ref()
-                .and_then(|diagnostic_evidence| {
-                    diagnostic_evidence.decode_token_forward_latency_p95_nanoseconds
-                })
-                .expect("baseline decode-forward p95 should be present") as f64
-        })
-        .collect::<Vec<_>>();
-    let candidate_decode_p95_nanoseconds = paired_trials
-        .iter()
-        .map(|paired_trial| {
-            paired_trial
-                .candidate
-                .decode_astro_expert_cache_diagnostic_evidence
-                .as_ref()
-                .and_then(|diagnostic_evidence| {
-                    diagnostic_evidence.decode_token_forward_latency_p95_nanoseconds
-                })
-                .expect("candidate decode-forward p95 should be present") as f64
-        })
-        .collect::<Vec<_>>();
-    let baseline_decode_source_bytes_per_output_token = paired_trials
-        .iter()
-        .map(|paired_trial| {
-            let diagnostic_evidence = paired_trial
-                .baseline
-                .decode_astro_expert_cache_diagnostic_evidence
-                .as_ref()
-                .expect("baseline decode attribution should be present");
-            diagnostic_evidence.decode_expert_source_payload_bytes as f64
-                / f64::from(paired_trial.baseline.total_output_tokens)
-        })
-        .collect::<Vec<_>>();
-    let candidate_decode_source_bytes_per_output_token = paired_trials
-        .iter()
-        .map(|paired_trial| {
-            let diagnostic_evidence = paired_trial
-                .candidate
-                .decode_astro_expert_cache_diagnostic_evidence
-                .as_ref()
-                .expect("candidate decode attribution should be present");
-            diagnostic_evidence.decode_expert_source_payload_bytes as f64
-                / f64::from(paired_trial.candidate.total_output_tokens)
-        })
-        .collect::<Vec<_>>();
-    let baseline_decode_tokens_per_second = paired_trials
-        .iter()
-        .map(|paired_trial| paired_trial.baseline.decode_tokens_per_second)
-        .collect::<Vec<_>>();
-    let candidate_decode_tokens_per_second = paired_trials
-        .iter()
-        .map(|paired_trial| paired_trial.candidate.decode_tokens_per_second)
-        .collect::<Vec<_>>();
-    let baseline_prefill_tokens_per_second = paired_trials
-        .iter()
-        .map(|paired_trial| paired_trial.baseline.prefill_tokens_per_second)
-        .collect::<Vec<_>>();
-    let candidate_prefill_tokens_per_second = paired_trials
-        .iter()
-        .map(|paired_trial| paired_trial.candidate.prefill_tokens_per_second)
-        .collect::<Vec<_>>();
-
-    let decode_p95_confidence_interval = paired_relative_improvement_confidence_interval_95(
-        &baseline_decode_p95_nanoseconds,
-        &candidate_decode_p95_nanoseconds,
-        true,
-    );
-    let source_bytes_confidence_interval = paired_relative_improvement_confidence_interval_95(
-        &baseline_decode_source_bytes_per_output_token,
-        &candidate_decode_source_bytes_per_output_token,
-        true,
-    );
-    let decode_throughput_confidence_interval = paired_relative_improvement_confidence_interval_95(
-        &baseline_decode_tokens_per_second,
-        &candidate_decode_tokens_per_second,
-        false,
-    );
-    let prefill_throughput_confidence_interval = paired_relative_improvement_confidence_interval_95(
-        &baseline_prefill_tokens_per_second,
-        &candidate_prefill_tokens_per_second,
-        false,
-    );
+    let decode_p95_confidence_interval = decode_forward_p95_nanoseconds_series(paired_trials)
+        .relative_improvement_confidence_interval_95(true);
+    let source_bytes_confidence_interval =
+        decode_source_bytes_per_output_token_series(paired_trials)
+            .relative_improvement_confidence_interval_95(true);
+    let decode_throughput_confidence_interval = decode_tokens_per_second_series(paired_trials)
+        .relative_improvement_confidence_interval_95(false);
+    let prefill_throughput_confidence_interval = prefill_tokens_per_second_series(paired_trials)
+        .relative_improvement_confidence_interval_95(false);
     let has_primary_improvement = decode_p95_confidence_interval
         .is_some_and(|confidence_interval| confidence_interval.lower_bound_percent >= 5.0)
         || source_bytes_confidence_interval
@@ -573,32 +468,10 @@ pub(super) fn aggregate_astro_expert_cache_evidence(
 }
 
 pub(super) fn report_clean_policy_comparison(paired_trials: &[PairedDecodeAstroExpertCacheTrial]) {
-    let baseline_decode_tokens_per_second = paired_trials
-        .iter()
-        .map(|paired_trial| paired_trial.baseline.decode_tokens_per_second)
-        .collect::<Vec<_>>();
-    let candidate_decode_tokens_per_second = paired_trials
-        .iter()
-        .map(|paired_trial| paired_trial.candidate.decode_tokens_per_second)
-        .collect::<Vec<_>>();
-    let baseline_prefill_tokens_per_second = paired_trials
-        .iter()
-        .map(|paired_trial| paired_trial.baseline.prefill_tokens_per_second)
-        .collect::<Vec<_>>();
-    let candidate_prefill_tokens_per_second = paired_trials
-        .iter()
-        .map(|paired_trial| paired_trial.candidate.prefill_tokens_per_second)
-        .collect::<Vec<_>>();
-    let decode_throughput_confidence_interval = paired_relative_improvement_confidence_interval_95(
-        &baseline_decode_tokens_per_second,
-        &candidate_decode_tokens_per_second,
-        false,
-    );
-    let prefill_throughput_confidence_interval = paired_relative_improvement_confidence_interval_95(
-        &baseline_prefill_tokens_per_second,
-        &candidate_prefill_tokens_per_second,
-        false,
-    );
+    let decode_throughput_confidence_interval = decode_tokens_per_second_series(paired_trials)
+        .relative_improvement_confidence_interval_95(false);
+    let prefill_throughput_confidence_interval = prefill_tokens_per_second_series(paired_trials)
+        .relative_improvement_confidence_interval_95(false);
     eprintln!(
         "[decode-astro-expert-cache-experiment] trials={} diagnostic=false decode_throughput_improvement={} prefill_throughput_improvement={}",
         paired_trials.len(),

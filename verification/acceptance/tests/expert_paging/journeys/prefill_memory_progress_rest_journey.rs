@@ -101,6 +101,30 @@ async fn run_mlx_memory_progress_rest_journey() {
     );
     // Acceptance criterion 1: the model produces output.
     completed_stream.assert_produced_output_and_finished();
+    assert_prefill_snapshots_reported_progress(&memory_progress_evidence);
+    let peak_memory_bytes = assert_peak_memory_stayed_within_ceiling(&memory_progress_evidence);
+    crate::support::memory_utilization_parity::assert_and_preserve_status_memory_ceiling_utilization(
+        "prefill-memory-progress",
+        isolated_worker_home.path(),
+        &get_json_endpoint(server_address, "/v1/status").await,
+    );
+    stop_real_model_rest_server(real_model_rest_server).await;
+    eprintln!(
+        "[mlx-memory-progress] status=success prompt_tokens={PROMPT_TOKEN_COUNT} \
+         maximum_mlx_memory_bytes={MAXIMUM_MLX_MEMORY_BYTES} \
+         prefill_observation_count={} \
+         furthest_prompt_progress_permille={} \
+         peak_active_memory_bytes={peak_memory_bytes} \
+         output_characters={}",
+        memory_progress_evidence.prefill_active_memory_bytes.len(),
+        memory_progress_evidence.furthest_prompt_progress_permille,
+        completed_stream.model_text.len(),
+    );
+}
+
+fn assert_prefill_snapshots_reported_progress(
+    memory_progress_evidence: &MlxMemoryProgressEvidence,
+) {
     // Acceptance criterion 2: the status surface delivered at least two
     // prefill-sourced memory observations while prompt processing ran. If
     // fewer arrived, the memory bar would never refresh during prefill.
@@ -140,6 +164,12 @@ async fn run_mlx_memory_progress_rest_journey() {
         memory_progress_evidence.observed_prefill_source,
         "at least one MLX memory snapshot during prompt processing must have source \"prefill\""
     );
+}
+
+/// Returns the peak active memory the journey observed.
+fn assert_peak_memory_stayed_within_ceiling(
+    memory_progress_evidence: &MlxMemoryProgressEvidence,
+) -> u64 {
     // Acceptance criterion 5: peak memory stays within the 32 GB ceiling plus
     // 1% tolerance (for allocator bookkeeping).
     let peak_memory_bytes = memory_progress_evidence
@@ -150,21 +180,7 @@ async fn run_mlx_memory_progress_rest_journey() {
         peak_memory_bytes <= MAXIMUM_MLX_MEMORY_BYTES.saturating_add(memory_ceiling_tolerance),
         "peak MLX memory {peak_memory_bytes} should stay within the {MAXIMUM_MLX_MEMORY_BYTES} ceiling plus 1% tolerance"
     );
-    crate::support::memory_utilization_parity::assert_and_preserve_status_memory_ceiling_utilization(
-        "prefill-memory-progress",
-        isolated_worker_home.path(),
-        &get_json_endpoint(server_address, "/v1/status").await,
-    );
-    stop_real_model_rest_server(real_model_rest_server).await;
-    eprintln!(
-        "[mlx-memory-progress] status=success prompt_tokens={PROMPT_TOKEN_COUNT} \
-         maximum_mlx_memory_bytes={MAXIMUM_MLX_MEMORY_BYTES} \
-         prefill_observation_count={observed_prefill_memory_updates} \
-         furthest_prompt_progress_permille={furthest_prompt_progress_permille} \
-         peak_active_memory_bytes={peak_memory_bytes} \
-         output_characters={}",
-        completed_stream.model_text.len(),
-    );
+    peak_memory_bytes
 }
 
 /// How far a prompt has been read, in thousandths: layers finished when the

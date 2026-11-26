@@ -6,16 +6,17 @@
 //! that the neutral layer shares math without silently sharing family policy.
 
 use model_serving::{
-    ExpertAssignmentOrder, PerformanceAttribution, PerformanceOperation, StackedExpertProjection,
-    gather_expert_projection, restore_expert_assignment_order, sort_expert_assignments,
-    sorted_expert_weighted_sum, sorted_expert_weighted_sum_kernel, unsorted_expert_weighted_sum,
+    ExpertAssignmentOrder, PerformanceAttribution, PerformanceOperation, SortedExpertAssignments,
+    StackedExpertProjection, gather_expert_projection, restore_expert_assignment_order,
+    sort_expert_assignments, sorted_expert_weighted_sum, sorted_expert_weighted_sum_kernel,
+    unsorted_expert_weighted_sum,
 };
 use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
 use crate::common::{
     DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_MLX_BUFFER_CACHE_LIMIT_BYTES,
 };
-use mlx_bridge::{MlxArray, MlxDtype};
+use mlx_bridge::{MlxArray, MlxDtype, MlxMetalKernel};
 
 fn test_runtime() -> MlxRuntime {
     // Use the same bounded runtime configuration as the rest of direct-MLX tests.
@@ -53,7 +54,6 @@ fn values_as_float32(runtime: &MlxRuntime, array: &MlxArray) -> Vec<f32> {
 }
 
 #[tokio::test]
-#[expect(clippy::too_many_lines)]
 async fn should_match_dense_operations_reference_across_generic_assignment_rows_and_dtypes() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let runtime = test_runtime();
@@ -72,6 +72,43 @@ async fn should_match_dense_operations_reference_across_generic_assignment_rows_
         sorted_expert_weighted_sum_kernel().expect("the sorted reduction kernel should build");
 
     for (row_name, expert_count, token_count, top_k, output_width) in matrix_rows {
+        let matrix_row =
+            DenseMatrixRow::new(row_name, expert_count, token_count, top_k, output_width);
+        for activation_dtype in activation_dtypes {
+            let cell_arrays =
+                build_dense_matrix_cell_arrays(&runtime, &matrix_row, activation_dtype);
+            verify_dense_matrix_cell(
+                &runtime,
+                &sorted_reduction_kernel,
+                &matrix_row,
+                activation_dtype,
+                &cell_arrays,
+            );
+        }
+    }
+}
+
+/// One matrix row's host values, shared by every activation dtype of the row.
+struct DenseMatrixRow {
+    row_name: &'static str,
+    expert_count: i32,
+    token_count: i32,
+    top_k: i32,
+    output_width: i32,
+    input_width: i32,
+    hidden_values: Vec<f32>,
+    dense_weight_values: Vec<f32>,
+    selected_expert_ids: Vec<u32>,
+}
+
+impl DenseMatrixRow {
+    fn new(
+        row_name: &'static str,
+        expert_count: i32,
+        token_count: i32,
+        top_k: i32,
+        output_width: i32,
+    ) -> Self {
         let input_width = 4_i32;
         // Non-constant activations and weights make incorrect expert selection,
         // token selection, or axis order observable in the resulting numbers.
@@ -89,146 +126,222 @@ async fn should_match_dense_operations_reference_across_generic_assignment_rows_
                     .expect("expert id should fit u32")
             })
             .collect::<Vec<_>>();
-
-        for activation_dtype in activation_dtypes {
-            // Shape legend:
-            // hidden_states       = [batch=1, tokens, input]
-            // selected_indices    = [batch=1, tokens, top_k]
-            // transposed_weights  = [experts, input, output]
-            let hidden_states = runtime
-                .array_from_f32(&hidden_values, &[1, token_count, input_width])
-                .and_then(|array| runtime.astype(&array, activation_dtype))
-                .unwrap_or_else(|_| panic!("{row_name} hidden states should be valid"));
-            let transposed_weights = runtime
-                .array_from_f32(
-                    &dense_weight_values,
-                    &[expert_count, input_width, output_width],
-                )
-                .and_then(|array| runtime.astype(&array, activation_dtype))
-                .unwrap_or_else(|_| panic!("{row_name} dense weights should be valid"));
-            let selected_indices = runtime
-                .array_from_u32(&selected_expert_ids, &[1, token_count, top_k])
-                .unwrap_or_else(|_| panic!("{row_name} expert ids should be valid"));
-            // Two singleton matrix axes make token rows broadcast over top-K
-            // assignments without physically copying one row per selected expert.
-            let expanded_states = runtime
-                .expand_dims(&hidden_states, -2)
-                .and_then(|array| runtime.expand_dims(&array, -3))
-                .unwrap_or_else(|_| panic!("{row_name} gather states should expand"));
-
-            let mut attribution = PerformanceAttribution::enabled();
-            // First build the straightforward reference: preserve router order,
-            // gather the requested expert for each assignment, then later reduce.
-            let unsorted_output = gather_expert_projection(
-                &runtime,
-                &expanded_states,
-                StackedExpertProjection::Dense {
-                    transposed_weights: &transposed_weights,
-                },
-                &selected_indices,
-                ExpertAssignmentOrder::Original,
-                &mut attribution,
-            )
-            .unwrap_or_else(|_| panic!("{row_name} unsorted gathered projection should succeed"));
-            let unsorted_output = runtime
-                .squeeze_axis(&unsorted_output, -2)
-                .expect("the singleton matrix row should squeeze");
-
-            // Now build the optimized path. Sorting moves expert IDs and their
-            // matching activation rows together and records an inverse map back
-            // to the original [token, top-K] assignment positions.
-            let sorted_assignments = sort_expert_assignments(
-                &runtime,
-                &expanded_states,
-                &selected_indices,
-                &mut attribution,
-            )
-            .unwrap_or_else(|_| panic!("{row_name} assignments should sort"));
-            let sorted_output = gather_expert_projection(
-                &runtime,
-                &sorted_assignments.sorted_states,
-                StackedExpertProjection::Dense {
-                    transposed_weights: &transposed_weights,
-                },
-                &sorted_assignments.sorted_indices,
-                ExpertAssignmentOrder::SortedByExpert,
-                &mut attribution,
-            )
-            .unwrap_or_else(|_| panic!("{row_name} sorted gathered projection should succeed"));
-            // Restoration exists only as a transparent test oracle. Production
-            // sorted reduction consumes inverse_order directly and intentionally
-            // avoids materializing this expanded [token, top-K, output] tensor.
-            let restored_output = restore_expert_assignment_order(
-                &runtime,
-                &sorted_output,
-                &sorted_assignments.inverse_order,
-                &selected_indices.shape(),
-            )
-            .expect("the sorted output should restore to router order");
-
-            let tolerance = if activation_dtype == MlxDtype::Float32 {
-                1e-5
-            } else {
-                2e-2
-            };
-            assert_f32_close(
-                &values_as_float32(&runtime, &restored_output),
-                &values_as_float32(&runtime, &unsorted_output),
-                tolerance,
-            );
-            // Uniform scores isolate assignment ordering from router mathematics.
-            // Router score formulas remain model-family responsibilities.
-            let selected_scores = runtime
-                .array_from_f32(
-                    &vec![1.0 / top_k as f32; (token_count * top_k) as usize],
-                    &[1, token_count, top_k],
-                )
-                .expect("the deterministic router scores should be valid");
-            // Compare the production optimized reduction with the obvious
-            // original-order multiply-and-sum reference.
-            let sorted_reduction = sorted_expert_weighted_sum(
-                &runtime,
-                &sorted_reduction_kernel,
-                &sorted_output,
-                &sorted_assignments.inverse_order,
-                &selected_scores,
-                &mut attribution,
-            )
-            .expect("the sorted projection should reduce without an expanded restoration");
-            let unsorted_reduction = unsorted_expert_weighted_sum(
-                &runtime,
-                &unsorted_output,
-                &selected_scores,
-                &mut attribution,
-            )
-            .expect("the original-order projection should reduce");
-            assert_f32_close(
-                &values_as_float32(&runtime, &sorted_reduction),
-                &values_as_float32(&runtime, &unsorted_reduction),
-                tolerance,
-            );
-            // One journey must expose all three critical performance boundaries:
-            // assignment preparation, gathered projection, and weighted reduction.
-            assert!(
-                attribution
-                    .operation_measurement(PerformanceOperation::ExpertAssignmentPreparation)
-                    .is_some(),
-                "{row_name} must attribute assignment preparation"
-            );
-            assert!(
-                attribution
-                    .operation_measurement(PerformanceOperation::GatheredExpertExecution)
-                    .is_some(),
-                "{row_name} must attribute gathered execution"
-            );
-            assert!(
-                attribution
-                    .operation_measurement(PerformanceOperation::ExpertWeightedReduction)
-                    .is_some(),
-                "{row_name} must attribute weighted reduction"
-            );
+        Self {
+            row_name,
+            expert_count,
+            token_count,
+            top_k,
+            output_width,
+            input_width,
+            hidden_values,
+            dense_weight_values,
+            selected_expert_ids,
         }
     }
+}
+
+/// The arrays of one matrix cell: one row at one activation dtype.
+struct DenseMatrixCellArrays {
+    expanded_states: MlxArray,
+    transposed_weights: MlxArray,
+    selected_indices: MlxArray,
+}
+
+fn build_dense_matrix_cell_arrays(
+    runtime: &MlxRuntime,
+    matrix_row: &DenseMatrixRow,
+    activation_dtype: MlxDtype,
+) -> DenseMatrixCellArrays {
+    let row_name = matrix_row.row_name;
+    // Shape legend:
+    // hidden_states       = [batch=1, tokens, input]
+    // selected_indices    = [batch=1, tokens, top_k]
+    // transposed_weights  = [experts, input, output]
+    let hidden_states = runtime
+        .array_from_f32(
+            &matrix_row.hidden_values,
+            &[1, matrix_row.token_count, matrix_row.input_width],
+        )
+        .and_then(|array| runtime.astype(&array, activation_dtype))
+        .unwrap_or_else(|_| panic!("{row_name} hidden states should be valid"));
+    let transposed_weights = runtime
+        .array_from_f32(
+            &matrix_row.dense_weight_values,
+            &[
+                matrix_row.expert_count,
+                matrix_row.input_width,
+                matrix_row.output_width,
+            ],
+        )
+        .and_then(|array| runtime.astype(&array, activation_dtype))
+        .unwrap_or_else(|_| panic!("{row_name} dense weights should be valid"));
+    let selected_indices = runtime
+        .array_from_u32(
+            &matrix_row.selected_expert_ids,
+            &[1, matrix_row.token_count, matrix_row.top_k],
+        )
+        .unwrap_or_else(|_| panic!("{row_name} expert ids should be valid"));
+    // Two singleton matrix axes make token rows broadcast over top-K
+    // assignments without physically copying one row per selected expert.
+    let expanded_states = runtime
+        .expand_dims(&hidden_states, -2)
+        .and_then(|array| runtime.expand_dims(&array, -3))
+        .unwrap_or_else(|_| panic!("{row_name} gather states should expand"));
+    DenseMatrixCellArrays {
+        expanded_states,
+        transposed_weights,
+        selected_indices,
+    }
+}
+
+fn verify_dense_matrix_cell(
+    runtime: &MlxRuntime,
+    sorted_reduction_kernel: &MlxMetalKernel,
+    matrix_row: &DenseMatrixRow,
+    activation_dtype: MlxDtype,
+    cell_arrays: &DenseMatrixCellArrays,
+) {
+    let row_name = matrix_row.row_name;
+    let mut attribution = PerformanceAttribution::enabled();
+    let unsorted_output = gather_in_router_order(runtime, row_name, cell_arrays, &mut attribution);
+    let (sorted_assignments, sorted_output) =
+        gather_sorted_by_expert(runtime, row_name, cell_arrays, &mut attribution);
+    // Restoration exists only as a transparent test oracle. Production
+    // sorted reduction consumes inverse_order directly and intentionally
+    // avoids materializing this expanded [token, top-K, output] tensor.
+    let restored_output = restore_expert_assignment_order(
+        runtime,
+        &sorted_output,
+        &sorted_assignments.inverse_order,
+        &cell_arrays.selected_indices.shape(),
+    )
+    .expect("the sorted output should restore to router order");
+
+    let tolerance = if activation_dtype == MlxDtype::Float32 {
+        1e-5
+    } else {
+        2e-2
+    };
+    assert_f32_close(
+        &values_as_float32(runtime, &restored_output),
+        &values_as_float32(runtime, &unsorted_output),
+        tolerance,
+    );
+    // Uniform scores isolate assignment ordering from router mathematics.
+    // Router score formulas remain model-family responsibilities.
+    let selected_scores = runtime
+        .array_from_f32(
+            &vec![
+                1.0 / matrix_row.top_k as f32;
+                (matrix_row.token_count * matrix_row.top_k) as usize
+            ],
+            &[1, matrix_row.token_count, matrix_row.top_k],
+        )
+        .expect("the deterministic router scores should be valid");
+    // Compare the production optimized reduction with the obvious
+    // original-order multiply-and-sum reference.
+    let sorted_reduction = sorted_expert_weighted_sum(
+        runtime,
+        sorted_reduction_kernel,
+        &sorted_output,
+        &sorted_assignments.inverse_order,
+        &selected_scores,
+        &mut attribution,
+    )
+    .expect("the sorted projection should reduce without an expanded restoration");
+    let unsorted_reduction = unsorted_expert_weighted_sum(
+        runtime,
+        &unsorted_output,
+        &selected_scores,
+        &mut attribution,
+    )
+    .expect("the original-order projection should reduce");
+    assert_f32_close(
+        &values_as_float32(runtime, &sorted_reduction),
+        &values_as_float32(runtime, &unsorted_reduction),
+        tolerance,
+    );
+    assert_all_performance_boundaries_attributed(row_name, &attribution);
+}
+
+/// First build the straightforward reference: preserve router order, gather
+/// the requested expert for each assignment, then later reduce.
+fn gather_in_router_order(
+    runtime: &MlxRuntime,
+    row_name: &str,
+    cell_arrays: &DenseMatrixCellArrays,
+    attribution: &mut PerformanceAttribution,
+) -> MlxArray {
+    let unsorted_output = gather_expert_projection(
+        runtime,
+        &cell_arrays.expanded_states,
+        StackedExpertProjection::Dense {
+            transposed_weights: &cell_arrays.transposed_weights,
+        },
+        &cell_arrays.selected_indices,
+        ExpertAssignmentOrder::Original,
+        attribution,
+    )
+    .unwrap_or_else(|_| panic!("{row_name} unsorted gathered projection should succeed"));
+    runtime
+        .squeeze_axis(&unsorted_output, -2)
+        .expect("the singleton matrix row should squeeze")
+}
+
+/// Now build the optimized path. Sorting moves expert IDs and their matching
+/// activation rows together and records an inverse map back to the original
+/// [token, top-K] assignment positions.
+fn gather_sorted_by_expert(
+    runtime: &MlxRuntime,
+    row_name: &str,
+    cell_arrays: &DenseMatrixCellArrays,
+    attribution: &mut PerformanceAttribution,
+) -> (SortedExpertAssignments, MlxArray) {
+    let sorted_assignments = sort_expert_assignments(
+        runtime,
+        &cell_arrays.expanded_states,
+        &cell_arrays.selected_indices,
+        attribution,
+    )
+    .unwrap_or_else(|_| panic!("{row_name} assignments should sort"));
+    let sorted_output = gather_expert_projection(
+        runtime,
+        &sorted_assignments.sorted_states,
+        StackedExpertProjection::Dense {
+            transposed_weights: &cell_arrays.transposed_weights,
+        },
+        &sorted_assignments.sorted_indices,
+        ExpertAssignmentOrder::SortedByExpert,
+        attribution,
+    )
+    .unwrap_or_else(|_| panic!("{row_name} sorted gathered projection should succeed"));
+    (sorted_assignments, sorted_output)
+}
+
+/// One journey must expose all three critical performance boundaries:
+/// assignment preparation, gathered projection, and weighted reduction.
+fn assert_all_performance_boundaries_attributed(
+    row_name: &str,
+    attribution: &PerformanceAttribution,
+) {
+    assert!(
+        attribution
+            .operation_measurement(PerformanceOperation::ExpertAssignmentPreparation)
+            .is_some(),
+        "{row_name} must attribute assignment preparation"
+    );
+    assert!(
+        attribution
+            .operation_measurement(PerformanceOperation::GatheredExpertExecution)
+            .is_some(),
+        "{row_name} must attribute gathered execution"
+    );
+    assert!(
+        attribution
+            .operation_measurement(PerformanceOperation::ExpertWeightedReduction)
+            .is_some(),
+        "{row_name} must attribute weighted reduction"
+    );
 }
 
 #[tokio::test]
@@ -242,100 +355,140 @@ async fn should_match_dequantized_reference_for_every_affine_bit_and_group_size(
 
     for group_size in supported_group_sizes {
         for bits in supported_bits {
-            let expert_count = 3_i32;
-            let output_width = 2_i32;
-            // Start from deterministic floating-point rows, then ask MLX itself
-            // to pack them. Hand-encoding bits here would test our fixture writer
-            // rather than the gathered operation used by real model weights.
-            let source_weight_values = (0..expert_count * output_width * group_size)
-                .map(|value_index| {
-                    let expert_offset = (value_index / (output_width * group_size)) as f32;
-                    let repeating_value = (value_index % 13) as f32 - 6.0;
-                    expert_offset * 0.2 + repeating_value * 0.03
-                })
-                .collect::<Vec<_>>();
-            let source_weights = runtime
-                .array_from_f32(
-                    &source_weight_values,
-                    &[expert_count, output_width, group_size],
-                )
-                .expect("affine source weights should be valid");
-            let (packed_weights, scales, biases) = runtime
-                .quantize_affine(&source_weights, group_size, bits)
-                .expect("the supported affine row should quantize");
-            let activation_values = (0..expert_count * group_size)
-                .map(|value_index| 0.1 + (value_index % 17) as f32 * 0.015)
-                .collect::<Vec<_>>();
-            let activations = runtime
-                .array_from_f32(&activation_values, &[expert_count, 1, group_size])
-                .expect("affine gathered activations should be valid");
-            // Alternate sorted and unsorted cells across bit widths. Sorted cells
-            // receive ascending IDs; unsorted cells receive deliberately shuffled
-            // IDs. We never assert MLX's sorted flag for a shuffled index vector.
-            let uses_sorted_order = bits % 2 == 0;
-            let selected_expert_ids = if uses_sorted_order {
-                vec![0_u32, 1, 2]
-            } else {
-                vec![2_u32, 0, 1]
-            };
-            let selected_indices = runtime
-                .array_from_u32(&selected_expert_ids, &[expert_count])
-                .expect("affine selected expert ids should be valid");
-            let assignment_order = if uses_sorted_order {
-                ExpertAssignmentOrder::SortedByExpert
-            } else {
-                ExpertAssignmentOrder::Original
-            };
-
-            // This is the production packed path: x @ dequantize(selected W)ᵀ is
-            // fused inside MLX gather_qmm without a full dequantized weight tensor.
-            let gathered_affine_output = gather_expert_projection(
+            let affine_fixture = build_affine_fixture(&runtime, group_size, bits);
+            assert_affine_gather_matches_dequantized_reference(
                 &runtime,
-                &activations,
-                StackedExpertProjection::Affine {
-                    packed_weights: &packed_weights,
-                    scales: &scales,
-                    biases: &biases,
-                    group_size,
-                    bits,
-                },
-                &selected_indices,
-                assignment_order,
-                &mut PerformanceAttribution::disabled(),
-            )
-            .expect("the affine gathered operation should build");
-            // Build a clear operations reference from stock MLX primitives:
-            // dequantize every test weight, transpose it, then use dense gather_mm.
-            // This is intentionally slower and exists only to establish parity.
-            let dequantized_weights = runtime
-                .dequantize_affine(&packed_weights, &scales, &biases, group_size, bits)
-                .expect("the affine weights should dequantize for the reference");
-            let transposed_reference_weights = runtime
-                .transpose_axes(&dequantized_weights, &[0, 2, 1])
-                .expect("reference weights should transpose");
-            let gathered_reference_output = gather_expert_projection(
-                &runtime,
-                &activations,
-                StackedExpertProjection::Dense {
-                    transposed_weights: &transposed_reference_weights,
-                },
-                &selected_indices,
-                assignment_order,
-                &mut PerformanceAttribution::disabled(),
-            )
-            .expect("the dequantized operations reference should build");
-
-            assert_f32_close(
-                &values_as_float32(&runtime, &gathered_affine_output),
-                &values_as_float32(&runtime, &gathered_reference_output),
-                // Stock gather_qmm uses its packed quantized accumulation path,
-                // while the reference dequantizes before dense accumulation.
-                // Their expected floating-point ordering difference stays below
-                // three tenths of one percent across every supported profile.
-                3e-3,
+                &affine_fixture,
+                group_size,
+                bits,
             );
         }
     }
+}
+
+const AFFINE_EXPERT_COUNT: i32 = 3;
+const AFFINE_OUTPUT_WIDTH: i32 = 2;
+
+/// One affine profile's packed weights, their companions and the activations
+/// the gathered operation consumes.
+struct AffineFixture {
+    packed_weights: MlxArray,
+    scales: MlxArray,
+    biases: MlxArray,
+    activations: MlxArray,
+}
+
+fn build_affine_fixture(runtime: &MlxRuntime, group_size: i32, bits: i32) -> AffineFixture {
+    // Start from deterministic floating-point rows, then ask MLX itself
+    // to pack them. Hand-encoding bits here would test our fixture writer
+    // rather than the gathered operation used by real model weights.
+    let source_weight_values = (0..AFFINE_EXPERT_COUNT * AFFINE_OUTPUT_WIDTH * group_size)
+        .map(|value_index| {
+            let expert_offset = (value_index / (AFFINE_OUTPUT_WIDTH * group_size)) as f32;
+            let repeating_value = (value_index % 13) as f32 - 6.0;
+            expert_offset * 0.2 + repeating_value * 0.03
+        })
+        .collect::<Vec<_>>();
+    let source_weights = runtime
+        .array_from_f32(
+            &source_weight_values,
+            &[AFFINE_EXPERT_COUNT, AFFINE_OUTPUT_WIDTH, group_size],
+        )
+        .expect("affine source weights should be valid");
+    let (packed_weights, scales, biases) = runtime
+        .quantize_affine(&source_weights, group_size, bits)
+        .expect("the supported affine row should quantize");
+    let activation_values = (0..AFFINE_EXPERT_COUNT * group_size)
+        .map(|value_index| 0.1 + (value_index % 17) as f32 * 0.015)
+        .collect::<Vec<_>>();
+    let activations = runtime
+        .array_from_f32(&activation_values, &[AFFINE_EXPERT_COUNT, 1, group_size])
+        .expect("affine gathered activations should be valid");
+    AffineFixture {
+        packed_weights,
+        scales,
+        biases,
+        activations,
+    }
+}
+
+fn assert_affine_gather_matches_dequantized_reference(
+    runtime: &MlxRuntime,
+    affine_fixture: &AffineFixture,
+    group_size: i32,
+    bits: i32,
+) {
+    let AffineFixture {
+        packed_weights,
+        scales,
+        biases,
+        activations,
+    } = affine_fixture;
+    // Alternate sorted and unsorted cells across bit widths. Sorted cells
+    // receive ascending IDs; unsorted cells receive deliberately shuffled
+    // IDs. We never assert MLX's sorted flag for a shuffled index vector.
+    let uses_sorted_order = bits % 2 == 0;
+    let selected_expert_ids = if uses_sorted_order {
+        vec![0_u32, 1, 2]
+    } else {
+        vec![2_u32, 0, 1]
+    };
+    let selected_indices = runtime
+        .array_from_u32(&selected_expert_ids, &[AFFINE_EXPERT_COUNT])
+        .expect("affine selected expert ids should be valid");
+    let assignment_order = if uses_sorted_order {
+        ExpertAssignmentOrder::SortedByExpert
+    } else {
+        ExpertAssignmentOrder::Original
+    };
+
+    // This is the production packed path: x @ dequantize(selected W)ᵀ is
+    // fused inside MLX gather_qmm without a full dequantized weight tensor.
+    let gathered_affine_output = gather_expert_projection(
+        runtime,
+        activations,
+        StackedExpertProjection::Affine {
+            packed_weights,
+            scales,
+            biases,
+            group_size,
+            bits,
+        },
+        &selected_indices,
+        assignment_order,
+        &mut PerformanceAttribution::disabled(),
+    )
+    .expect("the affine gathered operation should build");
+    // Build a clear operations reference from stock MLX primitives:
+    // dequantize every test weight, transpose it, then use dense gather_mm.
+    // This is intentionally slower and exists only to establish parity.
+    let dequantized_weights = runtime
+        .dequantize_affine(packed_weights, scales, biases, group_size, bits)
+        .expect("the affine weights should dequantize for the reference");
+    let transposed_reference_weights = runtime
+        .transpose_axes(&dequantized_weights, &[0, 2, 1])
+        .expect("reference weights should transpose");
+    let gathered_reference_output = gather_expert_projection(
+        runtime,
+        activations,
+        StackedExpertProjection::Dense {
+            transposed_weights: &transposed_reference_weights,
+        },
+        &selected_indices,
+        assignment_order,
+        &mut PerformanceAttribution::disabled(),
+    )
+    .expect("the dequantized operations reference should build");
+
+    assert_f32_close(
+        &values_as_float32(runtime, &gathered_affine_output),
+        &values_as_float32(runtime, &gathered_reference_output),
+        // Stock gather_qmm uses its packed quantized accumulation path,
+        // while the reference dequantizes before dense accumulation.
+        // Their expected floating-point ordering difference stays below
+        // three tenths of one percent across every supported profile.
+        3e-3,
+    );
 }
 
 #[tokio::test]

@@ -52,6 +52,9 @@ mod disposable_target_tests;
 mod function_length_budget;
 #[cfg(test)]
 mod function_length_budget_tests;
+mod function_length_exemptions;
+#[cfg(test)]
+mod function_length_exemptions_tests;
 mod github_actions_cache_prune;
 #[cfg(test)]
 mod github_actions_cache_prune_tests;
@@ -139,6 +142,7 @@ mod version_only_bump;
 mod version_only_bump_tests;
 
 mod sccache_save;
+mod workspace_source_walk;
 
 pub(crate) use resolve_repository_root as workspace_root_from_manifest_directory;
 

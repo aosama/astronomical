@@ -5,6 +5,9 @@ mod tests;
 
 use super::Flux2KleinTransformerGeometryError;
 use crate::Flux2KleinTransformerConfig;
+use crate::transformer_shape_profile::{
+    DOUBLE_STREAM_HEAD_NORM_SUFFIXES, DOUBLE_STREAM_MATRIX_SUFFIXES,
+};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Flux2KleinTransformerGeometry {
@@ -194,9 +197,20 @@ impl Flux2KleinTransformerGeometry {
     }
 
     pub fn expected_weight_shapes(&self) -> impl Iterator<Item = (String, Vec<usize>)> {
+        let mut shapes = self.shared_weight_shapes();
+        for block_index in 0..self.double_stream_block_count {
+            self.push_double_stream_block_shapes(&mut shapes, block_index);
+        }
+        for block_index in 0..self.single_stream_block_count {
+            self.push_single_stream_block_shapes(&mut shapes, block_index);
+        }
+        shapes.into_iter()
+    }
+
+    /// The nine weights that sit outside every block.
+    fn shared_weight_shapes(&self) -> Vec<(String, Vec<usize>)> {
         let hidden = self.hidden_width;
-        let feed_forward = self.feed_forward_width;
-        let mut shapes = vec![
+        vec![
             (
                 "x_embedder.weight".to_owned(),
                 vec![hidden, self.input_width],
@@ -233,64 +247,61 @@ impl Flux2KleinTransformerGeometry {
                 "proj_out.weight".to_owned(),
                 vec![self.output_width, hidden],
             ),
-        ];
-        let double_matrix_suffixes = [
-            "attn.add_k_proj.weight",
-            "attn.add_q_proj.weight",
-            "attn.add_v_proj.weight",
-            "attn.to_add_out.weight",
-            "attn.to_k.weight",
-            "attn.to_out.0.weight",
-            "attn.to_q.weight",
-            "attn.to_v.weight",
-        ];
-        for block_index in 0..self.double_stream_block_count {
-            let prefix = format!("transformer_blocks.{block_index}");
-            shapes.extend(
-                double_matrix_suffixes
-                    .map(|suffix| (format!("{prefix}.{suffix}"), vec![hidden, hidden])),
-            );
-            for suffix in [
-                "attn.norm_added_k.weight",
-                "attn.norm_added_q.weight",
-                "attn.norm_k.weight",
-                "attn.norm_q.weight",
-            ] {
-                shapes.push((
-                    format!("{prefix}.{suffix}"),
-                    vec![self.attention_head_width],
-                ));
-            }
-            for stream in ["ff", "ff_context"] {
-                shapes.push((
-                    format!("{prefix}.{stream}.linear_in.weight"),
-                    vec![feed_forward * 2, hidden],
-                ));
-                shapes.push((
-                    format!("{prefix}.{stream}.linear_out.weight"),
-                    vec![hidden, feed_forward],
-                ));
-            }
+        ]
+    }
+
+    fn push_double_stream_block_shapes(
+        &self,
+        shapes: &mut Vec<(String, Vec<usize>)>,
+        block_index: usize,
+    ) {
+        let hidden = self.hidden_width;
+        let feed_forward = self.feed_forward_width;
+        let prefix = format!("transformer_blocks.{block_index}");
+        for suffix in DOUBLE_STREAM_MATRIX_SUFFIXES {
+            shapes.push((format!("{prefix}.{suffix}"), vec![hidden, hidden]));
         }
-        for block_index in 0..self.single_stream_block_count {
-            let prefix = format!("single_transformer_blocks.{block_index}.attn");
+        for suffix in DOUBLE_STREAM_HEAD_NORM_SUFFIXES {
             shapes.push((
-                format!("{prefix}.norm_k.weight"),
+                format!("{prefix}.{suffix}"),
                 vec![self.attention_head_width],
             ));
+        }
+        for stream in ["ff", "ff_context"] {
             shapes.push((
-                format!("{prefix}.norm_q.weight"),
-                vec![self.attention_head_width],
+                format!("{prefix}.{stream}.linear_in.weight"),
+                vec![feed_forward * 2, hidden],
             ));
             shapes.push((
-                format!("{prefix}.to_qkv_mlp_proj.weight"),
-                vec![hidden * 3 + feed_forward * 2, hidden],
-            ));
-            shapes.push((
-                format!("{prefix}.to_out.weight"),
-                vec![hidden, hidden + feed_forward],
+                format!("{prefix}.{stream}.linear_out.weight"),
+                vec![hidden, feed_forward],
             ));
         }
-        shapes.into_iter()
+    }
+
+    fn push_single_stream_block_shapes(
+        &self,
+        shapes: &mut Vec<(String, Vec<usize>)>,
+        block_index: usize,
+    ) {
+        let hidden = self.hidden_width;
+        let feed_forward = self.feed_forward_width;
+        let prefix = format!("single_transformer_blocks.{block_index}.attn");
+        shapes.push((
+            format!("{prefix}.norm_k.weight"),
+            vec![self.attention_head_width],
+        ));
+        shapes.push((
+            format!("{prefix}.norm_q.weight"),
+            vec![self.attention_head_width],
+        ));
+        shapes.push((
+            format!("{prefix}.to_qkv_mlp_proj.weight"),
+            vec![hidden * 3 + feed_forward * 2, hidden],
+        ));
+        shapes.push((
+            format!("{prefix}.to_out.weight"),
+            vec![hidden, hidden + feed_forward],
+        ));
     }
 }

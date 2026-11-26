@@ -47,7 +47,6 @@ async fn should_reproduce_upstream_similarity_gap_on_modernbert() {
         .expect("the reference-similarity journey must finish within 115 seconds");
 }
 
-#[expect(clippy::too_many_lines)]
 async fn run_reference_similarity_journey() {
     // ── discovery ──────────────────────────────────────────────
     let selected_model = configured_modernbert_model();
@@ -70,19 +69,48 @@ async fn run_reference_similarity_journey() {
     .await;
     let server_address = rest_server.server_address;
 
+    let embed_response = embed_worked_examples(server_address, &selected_model.model_id).await;
+    let observed_similarities = measure_observed_similarities(&embed_response);
+    let criterion_verdicts = evaluate_upstream_tolerance(&observed_similarities);
+
+    print_reference_similarity_report(&observed_similarities, &criterion_verdicts);
+    assert_at_least_one_criterion_passes(&observed_similarities, &criterion_verdicts);
+
+    eprintln!("[ref-sim 5/5] status=success phase=stop-server");
+    openai_rest::stop_serving_rest_server(rest_server).await;
+}
+
+/// Pairwise cosines the served model produced for the three worked-example texts.
+struct ObservedSimilarities {
+    tsne_vs_doc: f64,
+    laurens_vs_doc: f64,
+    separation: f64,
+}
+
+/// Which upstream criteria the observed cosines reproduce.
+struct CriterionVerdicts {
+    tsne_within_band: bool,
+    lauren_within_band: bool,
+    ordering_preserved: bool,
+}
+
+async fn embed_worked_examples(server_address: std::net::SocketAddr, model_id: &str) -> String {
     // ── send three worked-example texts ────────────────────────
     eprintln!("[ref-sim 1/5] status=progress phase=query send-three-worked-examples");
     let query_body = serde_json::json!({
-        "model": selected_model.model_id,
+        "model": model_id,
         "input": [WORKED_EXAMPLE_QUERY_TSNE, WORKED_EXAMPLE_QUERY_LAURENS, WORKED_EXAMPLE_DOC],
     })
     .to_string();
     let embed_response = post_embeddings(server_address, query_body).await;
     eprintln!("[ref-sim 1/5] status=success phase=query embeddings received");
+    embed_response
+}
 
+fn measure_observed_similarities(embed_response: &str) -> ObservedSimilarities {
     // ── parse vectors and compute cosines ──────────────────────
     eprintln!("[ref-sim 2/5] status=progress phase=cosine extract-vectors-compute-pairwise");
-    let similarity_doc = assert_embeddings_list(&embed_response, 3, 768, false);
+    let similarity_doc = assert_embeddings_list(embed_response, 3, 768, false);
     let tsne_vec = float_components(&similarity_doc, 0);
     let laurens_vec = float_components(&similarity_doc, 1);
     let doc_vec = float_components(&similarity_doc, 2);
@@ -95,14 +123,27 @@ async fn run_reference_similarity_journey() {
         "[ref-sim 2/5] status=progress phase=cosine results tsne_vs_doc={:.4} laurens_vs_doc={:.4} separation={:+.4}",
         obs_tsdoc_sim, obs_ladoc_sim, obs_separation
     );
+    ObservedSimilarities {
+        tsne_vs_doc: obs_tsdoc_sim,
+        laurens_vs_doc: obs_ladoc_sim,
+        separation: obs_separation,
+    }
+}
 
+fn evaluate_upstream_tolerance(observed: &ObservedSimilarities) -> CriterionVerdicts {
     // ── compare against upstream ───────────────────────────────
     eprintln!("[ref-sim 3/5] status=progress phase=compare evaluate-upstream-tolerance");
-    let tsne_within_band =
-        pub_value_in_tolerance(obs_tsdoc_sim, PUB_TSDOC_SIMILARITY, SIMILARITY_TOLERANCE);
-    let lauren_within_band =
-        pub_value_in_tolerance(obs_ladoc_sim, PUB_LADOC_SIMILARITY, SIMILARITY_TOLERANCE);
-    let ordering_preserved = obs_separation >= SEPARATION_MINIMUM;
+    let tsne_within_band = pub_value_in_tolerance(
+        observed.tsne_vs_doc,
+        PUB_TSDOC_SIMILARITY,
+        SIMILARITY_TOLERANCE,
+    );
+    let lauren_within_band = pub_value_in_tolerance(
+        observed.laurens_vs_doc,
+        PUB_LADOC_SIMILARITY,
+        SIMILARITY_TOLERANCE,
+    );
+    let ordering_preserved = observed.separation >= SEPARATION_MINIMUM;
 
     eprintln!(
         "[ref-sim 3/5] status=progress phase=compare criteria tsne_tol={:.0} laurens_tol={:.0} sep_ordered={:.0}",
@@ -110,7 +151,17 @@ async fn run_reference_similarity_journey() {
         if lauren_within_band { 1.0 } else { 0.0 },
         if ordering_preserved { 1.0 } else { 0.0 },
     );
+    CriterionVerdicts {
+        tsne_within_band,
+        lauren_within_band,
+        ordering_preserved,
+    }
+}
 
+fn print_reference_similarity_report(
+    observed: &ObservedSimilarities,
+    verdicts: &CriterionVerdicts,
+) {
     // ── report ─────────────────────────────────────────────────
     eprintln!("[ref-sim 4/5] status=success phase=report publish-measured-values");
     eprintln!("[ref-sim] ════════════════════════════════════════════════");
@@ -122,17 +173,17 @@ async fn run_reference_similarity_journey() {
     eprintln!(
         "  TSNE vs Doc           {:>10}  {:>10}",
         PUB_TSDOC_SIMILARITY,
-        format!("{:.4}", obs_tsdoc_sim)
+        format!("{:.4}", observed.tsne_vs_doc)
     );
     eprintln!(
         "  Laurens vs Doc        {:>10}  {:>10}",
         PUB_LADOC_SIMILARITY,
-        format!("{:.4}", obs_ladoc_sim)
+        format!("{:.4}", observed.laurens_vs_doc)
     );
     eprintln!(
         "  Separation (+)        {:>10}  {:>10}",
         PUB_SEPARATION,
-        format!("{:+.4}", obs_separation)
+        format!("{:+.4}", observed.separation)
     );
     eprintln!("");
     eprintln!("  Criterion                     Expected      Pass");
@@ -141,21 +192,22 @@ async fn run_reference_similarity_journey() {
         "  TSNE within tolerance       [{:>4}, {:>4}]  {}",
         format!("{:.2}", PUB_TSDOC_SIMILARITY - SIMILARITY_TOLERANCE),
         format!("{:.2}", PUB_TSDOC_SIMILARITY + SIMILARITY_TOLERANCE),
-        verdict(tsne_within_band)
+        verdict(verdicts.tsne_within_band)
     );
     eprintln!(
         "  Laurens within tolerance    [{:>4}, {:>4}]  {}",
         format!("{:.2}", PUB_LADOC_SIMILARITY - SIMILARITY_TOLERANCE),
         format!("{:.2}", PUB_LADOC_SIMILARITY + SIMILARITY_TOLERANCE),
-        verdict(lauren_within_band)
+        verdict(verdicts.lauren_within_band)
     );
     eprintln!(
         "  Ordering preserved          sep ≥ +{:>4}  {}",
         format!("{:.2}", SEPARATION_MINIMUM),
-        verdict(ordering_preserved)
+        verdict(verdicts.ordering_preserved)
     );
     eprintln!("");
-    let all_pass = tsne_within_band && lauren_within_band && ordering_preserved;
+    let all_pass =
+        verdicts.tsne_within_band && verdicts.lauren_within_band && verdicts.ordering_preserved;
     eprintln!(
         "  Overall: {} — {}",
         verdict(all_pass),
@@ -163,27 +215,29 @@ async fn run_reference_similarity_journey() {
     );
     eprintln!("═════════════════════════════════════════════════");
     eprintln!("");
+}
 
+fn assert_at_least_one_criterion_passes(
+    observed: &ObservedSimilarities,
+    verdicts: &CriterionVerdicts,
+) {
     // If we hit here with all-pass, the defect is resolved.
     // The test passes either way — this is a measurement/reproduction journey,
     // not a pass/fail gate on a specific threshold. Use assert for diagnostic clarity.
     assert!(
-        tsne_within_band || lauren_within_band || ordering_preserved,
+        verdicts.tsne_within_band || verdicts.lauren_within_band || verdicts.ordering_preserved,
         "at-least-one criterion must pass or the artifact behaves correctly; \
          measured tsne_vs_doc={:.4} lauren_vs_doc={:.4} separation={:+.4} \
          expected tsne=[{},{:.2}] lauren=[{},{:.2}] sep≥+{}",
-        obs_tsdoc_sim,
-        obs_ladoc_sim,
-        obs_separation,
+        observed.tsne_vs_doc,
+        observed.laurens_vs_doc,
+        observed.separation,
         PUB_TSDOC_SIMILARITY - SIMILARITY_TOLERANCE,
         PUB_TSDOC_SIMILARITY + SIMILARITY_TOLERANCE,
         PUB_LADOC_SIMILARITY - SIMILARITY_TOLERANCE,
         PUB_LADOC_SIMILARITY + SIMILARITY_TOLERANCE,
         SEPARATION_MINIMUM,
     );
-
-    eprintln!("[ref-sim 5/5] status=success phase=stop-server");
-    openai_rest::stop_serving_rest_server(rest_server).await;
 }
 
 // ── helpers (copied/adapted from openai_rest + embeddings_rest) ──

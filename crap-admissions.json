@@ -11,6 +11,18 @@
     {
       "function": "xtask/src/github_actions_cache_prune.rs:run",
       "reason": "The file was renamed from cache_prune.rs when the cache got its formal name; run is unchanged and the baseline already holds it at cyclomatic 17."
+    },
+    {
+      "function": "apps/daemon/tests/fixtures/idle_worker.rs:answer_worker_command",
+      "reason": "A flat dispatch over the WorkerCommand variants, one call an arm, split out of run_fixture (baseline cyclomatic 51) to meet the 80-line function budget; its complexity is the number of commands the stand-in worker answers, and splitting the table further would scatter one lookup."
+    },
+    {
+      "function": "apps/daemon/tests/fixtures/scripted_worker.rs:answer_worker_command",
+      "reason": "A flat dispatch over the WorkerCommand variants, one call an arm, split out of run_fixture (baseline cyclomatic 33) to meet the 80-line function budget; its complexity is the number of commands the scripted worker answers, and splitting the table further would scatter one lookup."
+    },
+    {
+      "function": "apps/daemon/tests/fixtures/scripted_worker_output_fixtures.rs:send_scripted_chat_output",
+      "reason": "A flat dispatch from fixture model id to the event sequence that model scripts, one call an arm, split out of dispatch_unstructured_chat (baseline cyclomatic 46) to meet the 80-line function budget; its complexity is the number of scripted fixtures."
     }
   ]
 }

@@ -1,4 +1,7 @@
-use std::{path::PathBuf, time::Duration};
+use std::{
+    path::{Path, PathBuf},
+    time::Duration,
+};
 
 use astronomical_inference_worker::worker_startup;
 use serde_json::{Value, json};
@@ -9,7 +12,7 @@ use super::model_astro_ssd_prompt_cache_benchmark_case::{
     hundred_thousand_word_case,
 };
 use super::model_astro_ssd_prompt_cache_warmup_worker::{
-    BENCHMARK_TIMEOUT, StreamingMeasurement, WorkerPassMeasurement,
+    AstroSsdPromptCacheDiskUsage, BENCHMARK_TIMEOUT, StreamingMeasurement, WorkerPassMeasurement,
     astro_ssd_prompt_cache_disk_usage, astro_ssd_prompt_cache_enabled_worker_configuration,
     model_id, run_worker_pass, static_source_document,
 };
@@ -47,7 +50,6 @@ async fn should_measure_model_astro_ssd_prompt_cache_warmup_scaling_at_hundred_t
     .expect("the 100K persistent astro-ssd-prompt-cache warmup E2E must finish within 115 seconds");
 }
 
-#[expect(clippy::too_many_lines)]
 async fn run_astro_ssd_prompt_cache_warmup_e2e(
     astro_ssd_prompt_cache_warmup_case: AstroSsdPromptCacheWarmupCase,
 ) {
@@ -71,16 +73,7 @@ async fn run_astro_ssd_prompt_cache_warmup_e2e(
         configured_astro_ssd_prompt_cache_maximum_size_gb,
     );
 
-    let empty_astro_ssd_prompt_cache_disk_usage =
-        astro_ssd_prompt_cache_disk_usage(&astro_ssd_prompt_cache_directory);
-    assert_eq!(
-        empty_astro_ssd_prompt_cache_disk_usage.block_count, 0,
-        "the astro SSD prompt cache must start empty"
-    );
-    assert_eq!(
-        empty_astro_ssd_prompt_cache_disk_usage.byte_count, 0,
-        "the astro SSD prompt cache must start at zero bytes"
-    );
+    assert_astro_ssd_prompt_cache_starts_empty(&astro_ssd_prompt_cache_directory);
 
     let cold_worker_pass = run_worker_pass(
         "cold",
@@ -103,6 +96,115 @@ async fn run_astro_ssd_prompt_cache_warmup_e2e(
 
     let saved_astro_ssd_prompt_cache_disk_usage =
         astro_ssd_prompt_cache_disk_usage(&astro_ssd_prompt_cache_directory);
+    let saved_block_geometry =
+        require_saved_block_geometry(&saved_astro_ssd_prompt_cache_disk_usage);
+
+    let warm_worker_pass = run_worker_pass(
+        "warm",
+        benchmark_started_at,
+        worker_executable_path,
+        worker_startup_configuration,
+        model_policy_catalog,
+        &source_document,
+        &astro_ssd_prompt_cache_warmup_case,
+        &astro_ssd_prompt_cache_directory,
+    )
+    .await;
+    assert_warmup_and_print_benchmark_report(
+        &astro_ssd_prompt_cache_warmup_case,
+        machine_mlx_memory_ceiling_bytes,
+        SavedBlocks {
+            disk_usage: &saved_astro_ssd_prompt_cache_disk_usage,
+            geometry: &saved_block_geometry,
+        },
+        WorkerPasses {
+            cold: &cold_worker_pass,
+            warm: &warm_worker_pass,
+        },
+        benchmark_started_at,
+    );
+}
+
+/// What the cold pass left on the SSD: the saved files and how they split into
+/// complete blocks and the partial tail.
+struct SavedBlocks<'saved> {
+    disk_usage: &'saved AstroSsdPromptCacheDiskUsage,
+    geometry: &'saved SavedBlockGeometry,
+}
+
+/// The two worker passes the benchmark compares.
+struct WorkerPasses<'pass> {
+    cold: &'pass WorkerPassMeasurement,
+    warm: &'pass WorkerPassMeasurement,
+}
+
+/// Holds the warm pass to the cold pass's output and saved blocks, then
+/// prints the benchmark report.
+fn assert_warmup_and_print_benchmark_report(
+    astro_ssd_prompt_cache_warmup_case: &AstroSsdPromptCacheWarmupCase,
+    machine_mlx_memory_ceiling_bytes: usize,
+    saved_blocks: SavedBlocks,
+    worker_passes: WorkerPasses,
+    benchmark_started_at: Instant,
+) {
+    let SavedBlocks {
+        disk_usage: saved_astro_ssd_prompt_cache_disk_usage,
+        geometry: saved_block_geometry,
+    } = saved_blocks;
+    let WorkerPasses {
+        cold: cold_worker_pass,
+        warm: warm_worker_pass,
+    } = worker_passes;
+    assert_astro_ssd_prompt_cache_warmup(
+        &cold_worker_pass.streaming_measurement,
+        &warm_worker_pass.streaming_measurement,
+        saved_block_geometry.complete_block_count,
+        saved_block_geometry.block_token_count,
+        saved_partial_tail_token_count(
+            saved_astro_ssd_prompt_cache_disk_usage,
+            saved_block_geometry.block_token_count,
+        ),
+    );
+
+    let metrics_report = benchmark_report(
+        astro_ssd_prompt_cache_warmup_case,
+        machine_mlx_memory_ceiling_bytes,
+        saved_block_geometry.complete_block_count,
+        saved_block_geometry.block_token_count,
+        saved_astro_ssd_prompt_cache_disk_usage.block_count,
+        saved_astro_ssd_prompt_cache_disk_usage.byte_count,
+        cold_worker_pass,
+        warm_worker_pass,
+        benchmark_started_at.elapsed(),
+    );
+    eprintln!("[astro-ssd-prompt-cache-warmup] {metrics_report}");
+}
+
+fn assert_astro_ssd_prompt_cache_starts_empty(astro_ssd_prompt_cache_directory: &Path) {
+    let empty_astro_ssd_prompt_cache_disk_usage =
+        astro_ssd_prompt_cache_disk_usage(astro_ssd_prompt_cache_directory);
+    assert_eq!(
+        empty_astro_ssd_prompt_cache_disk_usage.block_count, 0,
+        "the astro SSD prompt cache must start empty"
+    );
+    assert_eq!(
+        empty_astro_ssd_prompt_cache_disk_usage.byte_count, 0,
+        "the astro SSD prompt cache must start at zero bytes"
+    );
+}
+
+/// How many complete blocks the cold pass saved and how many tokens one
+/// complete block declares.
+struct SavedBlockGeometry {
+    complete_block_count: usize,
+    block_token_count: usize,
+}
+
+/// Requires the cold pass to have saved blocks, prints what it saved, and
+/// splits the saved files into complete blocks and the partial tail.
+fn require_saved_block_geometry(
+    saved_astro_ssd_prompt_cache_disk_usage: &AstroSsdPromptCacheDiskUsage,
+) -> SavedBlockGeometry {
     assert!(
         saved_astro_ssd_prompt_cache_disk_usage.block_count > 0,
         "the cold request must save persistent astro-ssd-prompt-cache blocks"
@@ -134,45 +236,23 @@ async fn run_astro_ssd_prompt_cache_warmup_e2e(
         astro_ssd_prompt_cache_block_token_count,
         saved_astro_ssd_prompt_cache_disk_usage.block_count - saved_complete_block_count,
     );
+    SavedBlockGeometry {
+        complete_block_count: saved_complete_block_count,
+        block_token_count: astro_ssd_prompt_cache_block_token_count,
+    }
+}
 
-    let warm_worker_pass = run_worker_pass(
-        "warm",
-        benchmark_started_at,
-        worker_executable_path,
-        worker_startup_configuration,
-        model_policy_catalog,
-        &source_document,
-        &astro_ssd_prompt_cache_warmup_case,
-        &astro_ssd_prompt_cache_directory,
-    )
-    .await;
-    let saved_partial_tail_token_count = saved_astro_ssd_prompt_cache_disk_usage
+fn saved_partial_tail_token_count(
+    saved_astro_ssd_prompt_cache_disk_usage: &AstroSsdPromptCacheDiskUsage,
+    astro_ssd_prompt_cache_block_token_count: usize,
+) -> usize {
+    saved_astro_ssd_prompt_cache_disk_usage
         .sequence_state_token_counts
         .iter()
         .filter(|declared_token_count| {
             **declared_token_count != astro_ssd_prompt_cache_block_token_count
         })
-        .sum();
-    assert_astro_ssd_prompt_cache_warmup(
-        &cold_worker_pass.streaming_measurement,
-        &warm_worker_pass.streaming_measurement,
-        saved_complete_block_count,
-        astro_ssd_prompt_cache_block_token_count,
-        saved_partial_tail_token_count,
-    );
-
-    let metrics_report = benchmark_report(
-        &astro_ssd_prompt_cache_warmup_case,
-        machine_mlx_memory_ceiling_bytes,
-        saved_complete_block_count,
-        astro_ssd_prompt_cache_block_token_count,
-        saved_astro_ssd_prompt_cache_disk_usage.block_count,
-        saved_astro_ssd_prompt_cache_disk_usage.byte_count,
-        &cold_worker_pass,
-        &warm_worker_pass,
-        benchmark_started_at.elapsed(),
-    );
-    eprintln!("[astro-ssd-prompt-cache-warmup] {metrics_report}");
+        .sum()
 }
 
 fn assert_astro_ssd_prompt_cache_warmup(

@@ -5,15 +5,16 @@
 use std::collections::HashMap;
 
 use mlx_bridge::{MlxDtype, MlxMetalKernel};
-use runtime_integration::MlxRuntime;
+use runtime_integration::{MlxRuntime, MlxSafetensors};
 
+use crate::artifact_validation::TensorSourceId;
 use crate::kernel_capability;
 use crate::qwen3_5_core::artifacts::{Qwen3_5ShardIndex, ValidatedQwen3_5Artifact};
 use crate::qwen3_5_core::configuration::Qwen3_5Config;
 use crate::qwen3_5_core::model_math::weights::{
     Qwen3_5Weights, WeightBindingDtype, bound_dtype_of,
 };
-use crate::qwen3_5_core::vision::Qwen3_5VisionModel;
+use crate::qwen3_5_core::vision::{Qwen3_5VisionConfig, Qwen3_5VisionModel};
 use crate::{PerformanceAttribution, PerformanceOperation, TensorInventory};
 use text_generation::execution_error::TextExecutionError;
 
@@ -44,6 +45,38 @@ pub fn bind_language_artifact(
     )
 }
 
+/// How the artifact's vision tower, if any, reaches the bound model.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum VisionBinding {
+    /// The caller did not ask for vision weights, or the artifact has no tower.
+    NotBound,
+    /// The tower ships in its own sidecar file.
+    SeparateSidecar,
+    /// The tower's tensors sit in the language model shards.
+    EmbeddedInModelShards,
+}
+
+impl VisionBinding {
+    /// A sidecar wins: when the artifact ships one, it is bound from it
+    /// whether or not the artifact also reports image input support.
+    fn for_request(
+        should_bind_vision_weights: bool,
+        artifact_has_separate_vision_sidecar: bool,
+        artifact_supports_image_input: bool,
+    ) -> Self {
+        if !should_bind_vision_weights {
+            return Self::NotBound;
+        }
+        if artifact_has_separate_vision_sidecar {
+            return Self::SeparateSidecar;
+        }
+        if artifact_supports_image_input {
+            return Self::EmbeddedInModelShards;
+        }
+        Self::NotBound
+    }
+}
+
 /// Binds the validated language artifact: extracts the configuration and
 /// shard metadata, loads the optional sidecar vision model, maps and loads
 /// the language shards, then binds the weights and (for embedded towers) the
@@ -57,16 +90,16 @@ pub fn bind_language_artifact_for(
 ) -> Result<BoundLanguageArtifact, TextExecutionError> {
     let config = validated_artifact.config().clone();
     let vision_config = validated_artifact.vision_config().cloned();
-    let has_separate_vision_sidecar =
-        should_bind_vision_weights && validated_artifact.has_separate_vision_sidecar();
-    let has_embedded_vision_tower = should_bind_vision_weights
-        && validated_artifact.supports_image_input()
-        && !has_separate_vision_sidecar;
+    let vision_binding = VisionBinding::for_request(
+        should_bind_vision_weights,
+        validated_artifact.has_separate_vision_sidecar(),
+        validated_artifact.supports_image_input(),
+    );
     let tensor_inventory = validated_artifact.tensor_inventory().clone();
     let shard_index = validated_artifact.shard_index().clone();
     let model_shard_source_ids =
         validated_artifact.source_ids_for_file_names(shard_index.model_shard_file_names())?;
-    let sidecar_vision_model = if has_separate_vision_sidecar {
+    let sidecar_vision_model = if vision_binding == VisionBinding::SeparateSidecar {
         performance_attribution.measure_operation(
             PerformanceOperation::ModelSafetensorsMapping,
             |_performance_attribution| -> Result<_, TextExecutionError> {
@@ -79,61 +112,30 @@ pub fn bind_language_artifact_for(
     // An embedded tower reads its own lazy maps of the same files (see
     // `Qwen3_5VisionWeights`), so its descriptors are duplicated here before
     // the language loader takes ownership of the originals.
-    let mut embedded_vision_shard_files = Vec::new();
-    let model_shards = performance_attribution.measure_operation(
+    let (model_shards, embedded_vision_shard_files) = performance_attribution.measure_operation(
         PerformanceOperation::ModelSafetensorsMapping,
-        |performance_attribution| -> Result<_, TextExecutionError> {
-            let model_shard_files =
-                validated_artifact.take_safetensors_sources(&model_shard_source_ids)?;
-            let mut model_shards = Vec::with_capacity(model_shard_files.len());
-            let positional_file_read_metrics =
-                performance_attribution.positional_file_read_metrics();
-            for model_shard_file in model_shard_files {
-                let shard_source_file = model_shard_file.into_file();
-                if has_embedded_vision_tower {
-                    embedded_vision_shard_files.push(shard_source_file.try_clone().map_err(
-                        |source| TextExecutionError::WeightSourceDescriptor {
-                            description: "could not duplicate a model shard descriptor for the vision tower",
-                            source,
-                        },
-                    )?);
-                }
-                model_shards.push(
-                    runtime.load_safetensors(
-                        shard_source_file,
-                        positional_file_read_metrics
-                            .as_ref()
-                            .map(std::sync::Arc::clone),
-                    )?,
-                );
-            }
-            Ok(model_shards)
+        |performance_attribution| {
+            load_model_shards(
+                runtime,
+                validated_artifact,
+                &model_shard_source_ids,
+                vision_binding,
+                performance_attribution,
+            )
         },
     )?;
     let (weights, vision_model) = performance_attribution.measure_operation(
         PerformanceOperation::ModelTensorBinding,
         |_performance_attribution| -> Result<_, TextExecutionError> {
-            let vision_model = if has_separate_vision_sidecar {
-                sidecar_vision_model
-            } else if has_embedded_vision_tower {
-                let vision_config =
-                    vision_config
-                        .as_ref()
-                        .ok_or(TextExecutionError::InvalidInput {
-                            description: "validated visual tensors have no vision configuration",
-                        })?;
-                let vision_tensor_name_to_shard_location =
-                    build_vision_tensor_shard_map(&shard_index);
-                Some(Qwen3_5VisionModel::load_from_model_shard_files(
-                    runtime,
-                    vision_config,
-                    &config,
-                    std::mem::take(&mut embedded_vision_shard_files),
-                    vision_tensor_name_to_shard_location,
-                )?)
-            } else {
-                None
-            };
+            let vision_model = bind_vision_model(
+                runtime,
+                &config,
+                &shard_index,
+                vision_config.as_ref(),
+                vision_binding,
+                sidecar_vision_model,
+                embedded_vision_shard_files,
+            )?;
             let weights = Qwen3_5Weights::bind_from_model_shards(
                 runtime,
                 &config,
@@ -151,6 +153,73 @@ pub fn bind_language_artifact_for(
         weights,
         vision_model,
     })
+}
+
+/// Takes the language shard files out of the validated artifact and maps each
+/// one, returning the mapped shards and the duplicated descriptors. When the
+/// vision tower is embedded, every descriptor is duplicated into the second
+/// returned list first, because the mapped shard takes ownership of the
+/// original; otherwise that list is empty.
+fn load_model_shards(
+    runtime: &MlxRuntime,
+    validated_artifact: &mut ValidatedQwen3_5Artifact,
+    model_shard_source_ids: &[TensorSourceId],
+    vision_binding: VisionBinding,
+    performance_attribution: &PerformanceAttribution,
+) -> Result<(Vec<MlxSafetensors>, Vec<std::fs::File>), TextExecutionError> {
+    let model_shard_files = validated_artifact.take_safetensors_sources(model_shard_source_ids)?;
+    let mut model_shards = Vec::with_capacity(model_shard_files.len());
+    let mut embedded_vision_shard_files = Vec::new();
+    let positional_file_read_metrics = performance_attribution.positional_file_read_metrics();
+    for model_shard_file in model_shard_files {
+        let shard_source_file = model_shard_file.into_file();
+        if vision_binding == VisionBinding::EmbeddedInModelShards {
+            embedded_vision_shard_files.push(shard_source_file.try_clone().map_err(|source| {
+                TextExecutionError::WeightSourceDescriptor {
+                    description: "could not duplicate a model shard descriptor for the vision tower",
+                    source,
+                }
+            })?);
+        }
+        model_shards.push(
+            runtime.load_safetensors(
+                shard_source_file,
+                positional_file_read_metrics
+                    .as_ref()
+                    .map(std::sync::Arc::clone),
+            )?,
+        );
+    }
+    Ok((model_shards, embedded_vision_shard_files))
+}
+
+/// Produces the vision model the artifact binds: the sidecar's, one read from
+/// the duplicated model shard descriptors, or none.
+fn bind_vision_model(
+    runtime: &MlxRuntime,
+    config: &Qwen3_5Config,
+    shard_index: &Qwen3_5ShardIndex,
+    vision_config: Option<&Qwen3_5VisionConfig>,
+    vision_binding: VisionBinding,
+    sidecar_vision_model: Option<Qwen3_5VisionModel>,
+    embedded_vision_shard_files: Vec<std::fs::File>,
+) -> Result<Option<Qwen3_5VisionModel>, TextExecutionError> {
+    match vision_binding {
+        VisionBinding::SeparateSidecar => Ok(sidecar_vision_model),
+        VisionBinding::EmbeddedInModelShards => {
+            let vision_config = vision_config.ok_or(TextExecutionError::InvalidInput {
+                description: "validated visual tensors have no vision configuration",
+            })?;
+            Ok(Some(Qwen3_5VisionModel::load_from_model_shard_files(
+                runtime,
+                vision_config,
+                config,
+                embedded_vision_shard_files,
+                build_vision_tensor_shard_map(shard_index),
+            )?))
+        }
+        VisionBinding::NotBound => Ok(None),
+    }
 }
 
 /// Maps embedded canonical vision tensor names to their loaded model-shard
@@ -337,3 +406,7 @@ pub fn model_core_payload_bytes(
                 .map_or(0, Qwen3_5VisionModel::resident_payload_bytes),
         )
 }
+
+#[cfg(test)]
+#[path = "loading_pipeline_tests.rs"]
+mod tests;

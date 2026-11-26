@@ -6,12 +6,12 @@
 # `cargo xtask crap-baseline --write`, never by hand. Test trees are scored
 # too — the acceptance helpers are the repository's largest functions —
 # while #[test] functions themselves are skipped by the tool by design. The
-# hard 100-code-line budget stays enforced by clippy::too_many_lines (denied
+# hard 80-code-line budget stays enforced by clippy::too_many_lines (denied
 # through the workspace lints tables) in the pre-commit hook; CI runs no
 # clippy.
 #
 # When cargo-crap 0.10 ships (structural signals), add [signals] with lines
-# in the gate set and limits.lines = 100 to restore an explicit line-count
+# in the gate set and limits.lines = 80 to restore an explicit line-count
 # ratchet for new functions on top of this complexity ratchet.
 sort = "file"
 # Score tests/** like any other source; the built-in default would drop the

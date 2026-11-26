@@ -8,6 +8,11 @@ use crate::common::{
     DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_MLX_BUFFER_CACHE_LIMIT_BYTES,
 };
 
+const PREFILL_SEQUENCE_TOKEN_COUNT: i32 = 3;
+const PREFILL_SEQUENCE_KEY_HEAD_COUNT: i32 = 16;
+const PREFILL_SEQUENCE_VALUE_HEAD_COUNT: i32 = 32;
+const PREFILL_SEQUENCE_HEAD_DIMENSION: i32 = 128;
+
 #[tokio::test]
 async fn should_apply_one_ops_based_gated_delta_recurrent_step() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
@@ -57,101 +62,36 @@ async fn should_apply_one_ops_based_gated_delta_recurrent_step() {
 }
 
 #[tokio::test]
-#[expect(clippy::too_many_lines)]
 async fn should_match_ops_loop_when_dispatching_one_complete_prefill_sequence() {
-    const TOKEN_COUNT: i32 = 3;
-    const KEY_HEAD_COUNT: i32 = 16;
-    const VALUE_HEAD_COUNT: i32 = 32;
-    const HEAD_DIMENSION: i32 = 128;
-
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let runtime = gated_delta_runtime();
-    let query_values = patterned_values(
-        (TOKEN_COUNT * KEY_HEAD_COUNT * HEAD_DIMENSION) as usize,
-        0.001,
-        -0.01,
-    );
-    let key_values = patterned_values(
-        (TOKEN_COUNT * KEY_HEAD_COUNT * HEAD_DIMENSION) as usize,
-        0.0015,
-        0.02,
-    );
-    let value_values = patterned_values(
-        (TOKEN_COUNT * VALUE_HEAD_COUNT * HEAD_DIMENSION) as usize,
-        0.002,
-        -0.03,
-    );
-    let decay_values = positive_patterned_values((TOKEN_COUNT * VALUE_HEAD_COUNT) as usize, 0.82);
-    let update_rate_values =
-        positive_patterned_values((TOKEN_COUNT * VALUE_HEAD_COUNT) as usize, 0.18);
-    let recurrent_state_values = patterned_values(
-        (VALUE_HEAD_COUNT * HEAD_DIMENSION * HEAD_DIMENSION) as usize,
-        0.0002,
-        0.005,
-    );
-
-    let queries = runtime
-        .array_from_f32(
-            &query_values,
-            &[1, TOKEN_COUNT, KEY_HEAD_COUNT, HEAD_DIMENSION],
-        )
-        .expect("the sequence queries should be valid");
-    let keys = runtime
-        .array_from_f32(
-            &key_values,
-            &[1, TOKEN_COUNT, KEY_HEAD_COUNT, HEAD_DIMENSION],
-        )
-        .expect("the sequence keys should be valid");
-    let values = runtime
-        .array_from_f32(
-            &value_values,
-            &[1, TOKEN_COUNT, VALUE_HEAD_COUNT, HEAD_DIMENSION],
-        )
-        .expect("the sequence values should be valid");
-    let decays = runtime
-        .array_from_f32(&decay_values, &[1, TOKEN_COUNT, VALUE_HEAD_COUNT])
-        .expect("the sequence decays should be valid");
-    let update_rates = runtime
-        .array_from_f32(&update_rate_values, &[1, TOKEN_COUNT, VALUE_HEAD_COUNT])
-        .expect("the sequence update rates should be valid");
-    let loop_initial_recurrent_state = runtime
-        .array_from_f32(
-            &recurrent_state_values,
-            &[1, VALUE_HEAD_COUNT, HEAD_DIMENSION, HEAD_DIMENSION],
-        )
-        .expect("the loop recurrent state should be valid");
-    let fused_initial_recurrent_state = runtime
-        .array_from_f32(
-            &recurrent_state_values,
-            &[1, VALUE_HEAD_COUNT, HEAD_DIMENSION, HEAD_DIMENSION],
-        )
-        .expect("the fused recurrent state should be valid");
+    let inputs = build_prefill_sequence_inputs(&runtime);
 
     let gated_delta_kernel =
         qwen3_5_gated_delta_kernel().expect("the fused gated-delta kernel should construct");
     let (fused_outputs, fused_recurrent_state) = qwen3_5_gated_delta_sequence(
         &runtime,
         Some(&gated_delta_kernel),
-        &queries,
-        &keys,
-        &values,
-        &decays,
-        &update_rates,
-        &fused_initial_recurrent_state,
+        &inputs.queries,
+        &inputs.keys,
+        &inputs.values,
+        &inputs.decays,
+        &inputs.update_rates,
+        &inputs.fused_initial_recurrent_state,
     )
     .expect("the fused gated-delta kernel should build a valid graph");
     let (loop_outputs, loop_recurrent_state) = apply_ops_loop(
         &runtime,
-        &queries,
-        &keys,
-        &values,
-        &decays,
-        &update_rates,
-        loop_initial_recurrent_state,
-        TOKEN_COUNT,
-        KEY_HEAD_COUNT,
-        VALUE_HEAD_COUNT,
-        HEAD_DIMENSION,
+        &inputs.queries,
+        &inputs.keys,
+        &inputs.values,
+        &inputs.decays,
+        &inputs.update_rates,
+        inputs.loop_initial_recurrent_state,
+        PREFILL_SEQUENCE_TOKEN_COUNT,
+        PREFILL_SEQUENCE_KEY_HEAD_COUNT,
+        PREFILL_SEQUENCE_VALUE_HEAD_COUNT,
+        PREFILL_SEQUENCE_HEAD_DIMENSION,
     );
 
     assert_f32_close_with_tolerance(
@@ -244,6 +184,128 @@ async fn should_apply_fused_gated_delta_tail_after_full_astro_ssd_prompt_cache_b
         tail_recurrent_state.shape(),
         vec![1, VALUE_HEAD_COUNT, HEAD_DIMENSION, HEAD_DIMENSION]
     );
+}
+
+/// The arrays of the complete-prefill-sequence contract; the two recurrent
+/// states hold identical values so the loop and the fused kernel each own one.
+struct PrefillSequenceInputs {
+    queries: MlxArray,
+    keys: MlxArray,
+    values: MlxArray,
+    decays: MlxArray,
+    update_rates: MlxArray,
+    loop_initial_recurrent_state: MlxArray,
+    fused_initial_recurrent_state: MlxArray,
+}
+
+fn build_prefill_sequence_inputs(runtime: &MlxRuntime) -> PrefillSequenceInputs {
+    let (queries, keys, values) = build_prefill_activations(runtime);
+    let (decays, update_rates) = build_prefill_decays_and_update_rates(runtime);
+    let (loop_initial_recurrent_state, fused_initial_recurrent_state) =
+        build_prefill_recurrent_states(runtime);
+    PrefillSequenceInputs {
+        queries,
+        keys,
+        values,
+        decays,
+        update_rates,
+        loop_initial_recurrent_state,
+        fused_initial_recurrent_state,
+    }
+}
+
+fn build_prefill_activations(runtime: &MlxRuntime) -> (MlxArray, MlxArray, MlxArray) {
+    let query_values = patterned_values(
+        (PREFILL_SEQUENCE_TOKEN_COUNT
+            * PREFILL_SEQUENCE_KEY_HEAD_COUNT
+            * PREFILL_SEQUENCE_HEAD_DIMENSION) as usize,
+        0.001,
+        -0.01,
+    );
+    let key_values = patterned_values(
+        (PREFILL_SEQUENCE_TOKEN_COUNT
+            * PREFILL_SEQUENCE_KEY_HEAD_COUNT
+            * PREFILL_SEQUENCE_HEAD_DIMENSION) as usize,
+        0.0015,
+        0.02,
+    );
+    let value_values = patterned_values(
+        (PREFILL_SEQUENCE_TOKEN_COUNT
+            * PREFILL_SEQUENCE_VALUE_HEAD_COUNT
+            * PREFILL_SEQUENCE_HEAD_DIMENSION) as usize,
+        0.002,
+        -0.03,
+    );
+    let key_head_shape = [
+        1,
+        PREFILL_SEQUENCE_TOKEN_COUNT,
+        PREFILL_SEQUENCE_KEY_HEAD_COUNT,
+        PREFILL_SEQUENCE_HEAD_DIMENSION,
+    ];
+    let value_head_shape = [
+        1,
+        PREFILL_SEQUENCE_TOKEN_COUNT,
+        PREFILL_SEQUENCE_VALUE_HEAD_COUNT,
+        PREFILL_SEQUENCE_HEAD_DIMENSION,
+    ];
+    let queries = runtime
+        .array_from_f32(&query_values, &key_head_shape)
+        .expect("the sequence queries should be valid");
+    let keys = runtime
+        .array_from_f32(&key_values, &key_head_shape)
+        .expect("the sequence keys should be valid");
+    let values = runtime
+        .array_from_f32(&value_values, &value_head_shape)
+        .expect("the sequence values should be valid");
+    (queries, keys, values)
+}
+
+fn build_prefill_decays_and_update_rates(runtime: &MlxRuntime) -> (MlxArray, MlxArray) {
+    let decay_values = positive_patterned_values(
+        (PREFILL_SEQUENCE_TOKEN_COUNT * PREFILL_SEQUENCE_VALUE_HEAD_COUNT) as usize,
+        0.82,
+    );
+    let update_rate_values = positive_patterned_values(
+        (PREFILL_SEQUENCE_TOKEN_COUNT * PREFILL_SEQUENCE_VALUE_HEAD_COUNT) as usize,
+        0.18,
+    );
+    let gating_shape = [
+        1,
+        PREFILL_SEQUENCE_TOKEN_COUNT,
+        PREFILL_SEQUENCE_VALUE_HEAD_COUNT,
+    ];
+    let decays = runtime
+        .array_from_f32(&decay_values, &gating_shape)
+        .expect("the sequence decays should be valid");
+    let update_rates = runtime
+        .array_from_f32(&update_rate_values, &gating_shape)
+        .expect("the sequence update rates should be valid");
+    (decays, update_rates)
+}
+
+/// Two arrays built from the same values: the loop consumes its recurrent
+/// state by value, so the fused kernel needs a second, independent one.
+fn build_prefill_recurrent_states(runtime: &MlxRuntime) -> (MlxArray, MlxArray) {
+    let recurrent_state_values = patterned_values(
+        (PREFILL_SEQUENCE_VALUE_HEAD_COUNT
+            * PREFILL_SEQUENCE_HEAD_DIMENSION
+            * PREFILL_SEQUENCE_HEAD_DIMENSION) as usize,
+        0.0002,
+        0.005,
+    );
+    let recurrent_state_shape = [
+        1,
+        PREFILL_SEQUENCE_VALUE_HEAD_COUNT,
+        PREFILL_SEQUENCE_HEAD_DIMENSION,
+        PREFILL_SEQUENCE_HEAD_DIMENSION,
+    ];
+    let loop_initial_recurrent_state = runtime
+        .array_from_f32(&recurrent_state_values, &recurrent_state_shape)
+        .expect("the loop recurrent state should be valid");
+    let fused_initial_recurrent_state = runtime
+        .array_from_f32(&recurrent_state_values, &recurrent_state_shape)
+        .expect("the fused recurrent state should be valid");
+    (loop_initial_recurrent_state, fused_initial_recurrent_state)
 }
 
 /// The runtime every gated-delta contract runs on.

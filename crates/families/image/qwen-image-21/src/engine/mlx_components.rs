@@ -19,8 +19,8 @@ use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
 use crate::artifact::{QwenImage21ArtifactProvenance, QwenImage21ArtifactValidator};
 use crate::official_profile::{
-    QWEN_IMAGE_21_ACTIVATION_HEADROOM_BYTES, QWEN_IMAGE_21_GUIDANCE_THOUSANDTHS,
-    qwen_image_21_image_generation_capabilities, qwen_image_21_official_model_id,
+    QWEN_IMAGE_21_GUIDANCE_THOUSANDTHS, qwen_image_21_image_generation_capabilities,
+    qwen_image_21_official_model_id,
 };
 use crate::pipeline::QwenImage21Pipeline;
 use crate::render_contract::{QwenImage21RenderAdvance, QwenImage21RenderRequest};
@@ -34,9 +34,10 @@ use model_primitives::performance_attribution::{
 use super::components::{
     QwenImage21ComponentLoad, QwenImage21EngineComponents, QwenImage21EngineRequest,
 };
-
-/// Bound on the public failure descriptions that can carry component detail.
-const MAXIMUM_FAILURE_DESCRIPTION_CHARACTERS: usize = 512;
+use super::load_accounting::{
+    MAXIMUM_FAILURE_DESCRIPTION_CHARACTERS, failed_load_metadata, memory_floor_bytes,
+    successful_load_metadata,
+};
 
 /// The concrete component owner behind the Qwen-Image-2.1 lifecycle.
 pub struct QwenImage21MlxComponents {
@@ -134,6 +135,23 @@ impl QwenImage21MlxComponents {
         }
     }
 
+    /// Finishes the load's performance report, writes it when attribution is on, and keeps the
+    /// log open for the request reports that follow.
+    fn record_load_report(
+        &mut self,
+        load_attribution: PerformanceAttribution,
+        mut attribution_log: PerformanceAttributionLog,
+        load_metadata: ModelLoadingPerformanceAttributionMetadata,
+    ) -> Result<(), String> {
+        if let Some(report) = load_attribution.finish_model_loading(load_metadata) {
+            attribution_log
+                .record(&report)
+                .map_err(|error| error.to_string())?;
+        }
+        self.performance_attribution_log = Some(attribution_log);
+        Ok(())
+    }
+
     fn initialize_runtime(&mut self) -> Result<(), String> {
         if self.runtime.is_some() {
             return Ok(());
@@ -180,7 +198,7 @@ impl QwenImage21MlxComponents {
 impl ImageEngineComponents for QwenImage21MlxComponents {
     fn load(&mut self) -> Result<QwenImage21ComponentLoad, String> {
         let mut load_attribution = self.new_attribution();
-        let mut attribution_log = PerformanceAttributionLog::open(
+        let attribution_log = PerformanceAttributionLog::open(
             &self.performance_attribution_log_path,
             self.performance_attribution_enabled,
         )
@@ -195,74 +213,21 @@ impl ImageEngineComponents for QwenImage21MlxComponents {
         let validated_artifact = match load_result {
             Ok(validated_artifact) => validated_artifact,
             Err(error) => {
-                let bounded_failure = error
-                    .chars()
-                    .take(MAXIMUM_FAILURE_DESCRIPTION_CHARACTERS)
-                    .collect();
-                if let Some(report) = load_attribution.finish_model_loading(
-                    ModelLoadingPerformanceAttributionMetadata {
-                        outcome: PerformanceAttributionOutcome::Failed,
-                        model_id: Some(qwen_image_21_official_model_id().to_owned()),
-                        model_revision: Some(self.provenance.revision().to_owned()),
-                        prefill_transient_observation_completed: false,
-                        prefill_observed_transient_high_water_bytes: 0,
-                        total_artifact_payload_bytes: None,
-                        resident_model_payload_bytes: Some(0),
-                        model_shard_count: None,
-                        mlx_active_memory_bytes: None,
-                        mlx_buffer_cache_bytes: None,
-                        mlx_peak_memory_bytes: None,
-                        failure_description: Some(bounded_failure),
-                    },
-                ) {
-                    attribution_log
-                        .record(&report)
-                        .map_err(|error| error.to_string())?;
-                }
-                self.performance_attribution_log = Some(attribution_log);
+                let failed_metadata = failed_load_metadata(self.provenance.revision(), &error);
+                self.record_load_report(load_attribution, attribution_log, failed_metadata)?;
                 return Err(error);
             }
         };
-        // The memory floor is the artifact's own weight bytes plus the measured activation
-        // headroom; the worker may raise the live ceiling from here but never below it.
-        let minimum_mlx_memory_ceiling_bytes = validated_artifact
-            .text_encoder_inventory()
-            .payload_bytes()
-            .checked_add(validated_artifact.transformer_inventory().payload_bytes())
-            .and_then(|payload_bytes| {
-                payload_bytes.checked_add(validated_artifact.vae_inventory().payload_bytes())
-            })
-            .and_then(|payload_bytes| {
-                payload_bytes.checked_add(QWEN_IMAGE_21_ACTIVATION_HEADROOM_BYTES as u64)
-            })
-            .ok_or_else(|| "Qwen-Image-2.1 artifact payload accounting overflowed".to_owned())?;
-        let total_artifact_payload_bytes = minimum_mlx_memory_ceiling_bytes
-            .checked_sub(QWEN_IMAGE_21_ACTIVATION_HEADROOM_BYTES as u64);
-        // The reviewed artifact stores each component as one weight file, so the shard count
-        // is the component count.
-        let model_shard_count = Some(3_usize);
+        let minimum_mlx_memory_ceiling_bytes = memory_floor_bytes([
+            validated_artifact.text_encoder_inventory().payload_bytes(),
+            validated_artifact.transformer_inventory().payload_bytes(),
+            validated_artifact.vae_inventory().payload_bytes(),
+        ])
+        .ok_or_else(|| "Qwen-Image-2.1 artifact payload accounting overflowed".to_owned())?;
         self.admit_load_ceiling(minimum_mlx_memory_ceiling_bytes)?;
-        if let Some(report) =
-            load_attribution.finish_model_loading(ModelLoadingPerformanceAttributionMetadata {
-                outcome: PerformanceAttributionOutcome::Success,
-                model_id: Some(qwen_image_21_official_model_id().to_owned()),
-                model_revision: Some(self.provenance.revision().to_owned()),
-                prefill_transient_observation_completed: false,
-                prefill_observed_transient_high_water_bytes: 0,
-                total_artifact_payload_bytes,
-                resident_model_payload_bytes: Some(0),
-                model_shard_count,
-                mlx_active_memory_bytes: None,
-                mlx_buffer_cache_bytes: None,
-                mlx_peak_memory_bytes: None,
-                failure_description: None,
-            })
-        {
-            attribution_log
-                .record(&report)
-                .map_err(|error| error.to_string())?;
-        }
-        self.performance_attribution_log = Some(attribution_log);
+        let successful_metadata =
+            successful_load_metadata(self.provenance.revision(), minimum_mlx_memory_ceiling_bytes);
+        self.record_load_report(load_attribution, attribution_log, successful_metadata)?;
         self.minimum_mlx_memory_ceiling_bytes = Some(minimum_mlx_memory_ceiling_bytes);
         Ok(QwenImage21ComponentLoad::new(
             qwen_image_21_official_model_id(),
@@ -321,8 +286,12 @@ impl ImageEngineComponents for QwenImage21MlxComponents {
             })
             .unwrap_or((0, 0, 0, 0));
         let report = if attribution.is_enabled() {
-            let bounded_failure_description = failure_description
-                .map(|description| description.chars().take(512).collect::<String>());
+            let bounded_failure_description = failure_description.map(|description| {
+                description
+                    .chars()
+                    .take(MAXIMUM_FAILURE_DESCRIPTION_CHARACTERS)
+                    .collect::<String>()
+            });
             attribution.finish_image_generation(
                 outcome,
                 request_id,

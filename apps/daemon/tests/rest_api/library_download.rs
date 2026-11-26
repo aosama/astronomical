@@ -50,93 +50,18 @@ const OTHER_REPOSITORY_ID: &str = "astronomical-test/other-qwen";
 async fn should_download_publish_and_report_ready_through_the_library_rest_journey() {
     timeout(Duration::from_secs(5), async {
         let test_directory = tempfile::tempdir().expect("temporary directory should be available");
-        let download_catalog = Arc::new(
-            DownloadCatalog::parse_json(&format!(
-                "{{\"schema_version\":5,\"entries\":[{{\"huggingface_id\":\"{REPOSITORY_ID}\",\"revision\":\"{REVISION}\",\"family\":\"qwen3_5\",\"approximate_memory_bytes\":100,\"role\":\"chat\",\"approximate_size_bytes\":{},\"public\":true}}]}}",
-                repository_bytes()
-            ))
-            .expect("fictional catalog should parse"),
-        );
-        let hub = Arc::new(ScriptedHub::new());
-        let coordinator = Arc::new(LibraryDownloadCoordinator::new(
-            Arc::clone(&download_catalog),
-            test_directory.path().join("models"),
-            Arc::new(AvailableCapacity),
-            hub.clone(),
-            hub,
-            Arc::new(ValidatingDiscoveryRefresh),
-            DaemonPerformanceAttributionLog::open(test_directory.path(), false)
-                .expect("disabled attribution should construct"),
-        ));
-        let application = build_application_with_library_download(
-            ScriptedExecutor::unavailable(),
-            download_catalog,
-            Arc::clone(&coordinator),
-        );
+        let application =
+            build_test_application(test_directory.path(), Arc::new(ScriptedHub::new()));
 
-        let start_response = application
-            .clone()
-            .oneshot(
-                Request::post("/v1/library/download")
-                    .header("content-type", "application/json")
-                    .body(Body::from(format!("{{\"huggingface_id\":\"{REPOSITORY_ID}\"}}")))
-                    .expect("start request should be valid"),
-            )
-            .await
-            .expect("start response should be available");
-        assert_eq!(start_response.status(), StatusCode::ACCEPTED);
+        assert_eq!(start_download(&application).await, StatusCode::ACCEPTED);
 
-        let mut ready_catalog = None;
-        for _poll_attempt in 0..STATE_POLL_ATTEMPTS {
-            let catalog_response = application
-                .clone()
-                .oneshot(
-                    Request::get("/v1/library/catalog")
-                        .body(Body::empty())
-                        .expect("catalog request should be valid"),
-                )
-                .await
-                .expect("catalog response should be available");
-            let catalog_document = response_json(catalog_response).await;
-            if catalog_document["entries"][0]["ready_on_this_mac"] == true {
-                ready_catalog = Some(catalog_document);
-                break;
-            }
-            tokio::time::sleep(Duration::from_millis(10)).await;
-        }
-
-        let ready_catalog = ready_catalog.expect("published model should become ready");
+        let ready_catalog = wait_for_ready_catalog(&application).await;
         assert_eq!(
             ready_catalog["models_download_directory"],
             test_directory.path().join("models").display().to_string()
         );
-        assert!(
-            test_directory
-                .path()
-                .join(format!("models/{REPOSITORY_ID}/config.json"))
-                .is_file()
-        );
-        assert!(
-            test_directory
-                .path()
-                .join(format!("models/{REPOSITORY_ID}/tokenizer.json"))
-                .is_file()
-        );
-        assert!(
-            test_directory
-                .path()
-                .join(format!("models/{REPOSITORY_ID}/model-00001.safetensors"))
-                .is_file()
-        );
-        let download_response = application
-            .oneshot(
-                Request::get("/v1/library/download")
-                    .body(Body::empty())
-                    .expect("download request should be valid"),
-            )
-            .await
-            .expect("download response should be available");
-        assert_eq!(response_json(download_response).await["state"], "idle");
+        assert_published_model_files_exist(test_directory.path());
+        assert_eq!(get_download_document(&application).await["state"], "idle");
     })
     .await
     .expect("Library REST journey should remain bounded");
@@ -166,16 +91,7 @@ async fn should_remain_publishing_until_discovery_validates_the_published_model(
 
         assert_eq!(start_download(&application).await, StatusCode::ACCEPTED);
         wait_for_download_state(&application, "publishing").await;
-        let catalog_response = application
-            .clone()
-            .oneshot(
-                Request::get("/v1/library/catalog")
-                    .body(Body::empty())
-                    .expect("catalog request should be valid"),
-            )
-            .await
-            .expect("catalog response should be available");
-        let catalog_document = response_json(catalog_response).await;
+        let catalog_document = get_catalog_document(&application).await;
 
         assert_eq!(catalog_document["entries"][0]["ready_on_this_mac"], false);
         assert_eq!(
@@ -569,6 +485,43 @@ async fn start_download_of(application: &Router, huggingface_id: &str) -> Status
         .await
         .expect("start response should be available")
         .status()
+}
+
+async fn get_catalog_document(application: &Router) -> serde_json::Value {
+    let catalog_response = application
+        .clone()
+        .oneshot(
+            Request::get("/v1/library/catalog")
+                .body(Body::empty())
+                .expect("catalog request should be valid"),
+        )
+        .await
+        .expect("catalog response should be available");
+    response_json(catalog_response).await
+}
+
+/// Polls the catalog until its first entry is ready on this Mac, then returns
+/// the catalog document that reported it.
+async fn wait_for_ready_catalog(application: &Router) -> serde_json::Value {
+    for _poll_attempt in 0..STATE_POLL_ATTEMPTS {
+        let catalog_document = get_catalog_document(application).await;
+        if catalog_document["entries"][0]["ready_on_this_mac"] == true {
+            return catalog_document;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    panic!("published model should become ready");
+}
+
+fn assert_published_model_files_exist(test_directory: &Path) {
+    for published_file_name in ["config.json", "tokenizer.json", "model-00001.safetensors"] {
+        assert!(
+            test_directory
+                .join(format!("models/{REPOSITORY_ID}/{published_file_name}"))
+                .is_file(),
+            "the published model should carry {published_file_name}"
+        );
+    }
 }
 
 async fn post_without_body(application: &Router, path: &str) -> axum::response::Response {

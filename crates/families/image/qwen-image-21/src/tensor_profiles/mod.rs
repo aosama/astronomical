@@ -69,6 +69,8 @@ pub(super) fn quantized_linear(
     ));
 }
 
+#[cfg(test)]
+mod profile_test_support;
 mod text_encoder;
 mod transformer;
 mod vae;

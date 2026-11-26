@@ -26,36 +26,11 @@ async fn should_emit_ordered_outputs_and_reuse_capacity_after_cancellation() {
 
     assert_eq!(
         next_event(&mut daemon_reader).await,
-        WorkerEvent::Output {
-            request_id: RequestId::new(711),
-            sequence_number: 0,
-            generated_token_count: 1,
-            outputs: vec![
-                ChatGenerationOutput::Reasoning {
-                    text: "I should inspect the source tree.".to_owned(),
-                },
-                ChatGenerationOutput::Text {
-                    text: "I found Rust files.".to_owned(),
-                },
-            ],
-            mlx_memory_snapshot: None,
-            expert_residency: None,
-        }
+        reasoning_and_text_output_event(711)
     );
     assert_eq!(
         next_event(&mut daemon_reader).await,
-        WorkerEvent::Output {
-            request_id: RequestId::new(711),
-            sequence_number: 2,
-            generated_token_count: 2,
-            outputs: vec![ChatGenerationOutput::ToolCall {
-                tool_call_index: 0,
-                function_name: "glob".to_owned(),
-                arguments_json: r#"{"pattern":"src/**/*.rs"}"#.to_owned(),
-            }],
-            mlx_memory_snapshot: None,
-            expert_residency: None,
-        }
+        first_source_glob_tool_call_output_event(711)
     );
     assert_eq!(
         next_event(&mut daemon_reader).await,
@@ -134,36 +109,11 @@ async fn should_emit_every_parallel_tool_call_completed_after_thinking() {
     );
     assert_eq!(
         next_event(&mut daemon_reader).await,
-        WorkerEvent::Output {
-            request_id: RequestId::new(713),
-            sequence_number: 0,
-            generated_token_count: 1,
-            outputs: vec![
-                ChatGenerationOutput::Reasoning {
-                    text: "I should inspect the source tree.".to_owned(),
-                },
-                ChatGenerationOutput::Text {
-                    text: "I found Rust files.".to_owned(),
-                },
-            ],
-            mlx_memory_snapshot: None,
-            expert_residency: None,
-        }
+        reasoning_and_text_output_event(713)
     );
     assert_eq!(
         next_event(&mut daemon_reader).await,
-        WorkerEvent::Output {
-            request_id: RequestId::new(713),
-            sequence_number: 2,
-            generated_token_count: 2,
-            outputs: vec![ChatGenerationOutput::ToolCall {
-                tool_call_index: 0,
-                function_name: "glob".to_owned(),
-                arguments_json: r#"{"pattern":"src/**/*.rs"}"#.to_owned(),
-            }],
-            mlx_memory_snapshot: None,
-            expert_residency: None,
-        }
+        first_source_glob_tool_call_output_event(713)
     );
     assert_eq!(
         timeout(Duration::from_millis(250), next_event(&mut daemon_reader),)
@@ -171,18 +121,7 @@ async fn should_emit_every_parallel_tool_call_completed_after_thinking() {
             .expect(
                 "the worker should continue generation until every parallel tool call is emitted"
             ),
-        WorkerEvent::Output {
-            request_id: RequestId::new(713),
-            sequence_number: 3,
-            generated_token_count: 3,
-            outputs: vec![ChatGenerationOutput::ToolCall {
-                tool_call_index: 1,
-                function_name: "glob".to_owned(),
-                arguments_json: r#"{"pattern":"tests/**/*.rs"}"#.to_owned(),
-            }],
-            mlx_memory_snapshot: None,
-            expert_residency: None,
-        }
+        second_test_glob_tool_call_output_event(713)
     );
     assert_eq!(
         next_event(&mut daemon_reader).await,
@@ -198,6 +137,57 @@ async fn should_emit_every_parallel_tool_call_completed_after_thinking() {
     );
 
     close_worker_transport(daemon_writer, worker_task).await;
+}
+
+/// The scripted processor turns token 1 into reasoning plus text, token 2 into
+/// the `src` glob tool call, and token 3 (parallel tool calls only) into the
+/// `tests` glob tool call. These three builders spell out the matching events.
+fn reasoning_and_text_output_event(request_number: u64) -> WorkerEvent {
+    WorkerEvent::Output {
+        request_id: RequestId::new(request_number),
+        sequence_number: 0,
+        generated_token_count: 1,
+        outputs: vec![
+            ChatGenerationOutput::Reasoning {
+                text: "I should inspect the source tree.".to_owned(),
+            },
+            ChatGenerationOutput::Text {
+                text: "I found Rust files.".to_owned(),
+            },
+        ],
+        mlx_memory_snapshot: None,
+        expert_residency: None,
+    }
+}
+
+fn first_source_glob_tool_call_output_event(request_number: u64) -> WorkerEvent {
+    WorkerEvent::Output {
+        request_id: RequestId::new(request_number),
+        sequence_number: 2,
+        generated_token_count: 2,
+        outputs: vec![ChatGenerationOutput::ToolCall {
+            tool_call_index: 0,
+            function_name: "glob".to_owned(),
+            arguments_json: r#"{"pattern":"src/**/*.rs"}"#.to_owned(),
+        }],
+        mlx_memory_snapshot: None,
+        expert_residency: None,
+    }
+}
+
+fn second_test_glob_tool_call_output_event(request_number: u64) -> WorkerEvent {
+    WorkerEvent::Output {
+        request_id: RequestId::new(request_number),
+        sequence_number: 3,
+        generated_token_count: 3,
+        outputs: vec![ChatGenerationOutput::ToolCall {
+            tool_call_index: 1,
+            function_name: "glob".to_owned(),
+            arguments_json: r#"{"pattern":"tests/**/*.rs"}"#.to_owned(),
+        }],
+        mlx_memory_snapshot: None,
+        expert_residency: None,
+    }
 }
 
 #[tokio::test]

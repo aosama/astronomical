@@ -193,6 +193,30 @@ where
         .await
 }
 
+/// Sends one Completed event with no reasoning tokens and nothing restored from the astro SSD prompt cache.
+pub(super) async fn send_completion<WriteTransport>(
+    request_id: RequestId,
+    prompt_token_count: u32,
+    generated_token_count: u16,
+    reason: ChatGenerationCompletionReason,
+    event_writer: &mut ProtocolWriter<WriteTransport>,
+) -> Result<(), ipc_protocol::ProtocolError>
+where
+    WriteTransport: tokio::io::AsyncWrite + Unpin,
+{
+    event_writer
+        .send_event(&WorkerEvent::Completed {
+            request_id,
+            prompt_token_count,
+            generated_token_count,
+            reasoning_token_count: 0,
+            astro_ssd_prompt_cache_restored_token_count: 0,
+            astro_ssd_prompt_cache_diagnostics: None,
+            reason,
+        })
+        .await
+}
+
 pub(super) async fn send_simple_completion<WriteTransport>(
     request_id: RequestId,
     event_writer: &mut ProtocolWriter<WriteTransport>,

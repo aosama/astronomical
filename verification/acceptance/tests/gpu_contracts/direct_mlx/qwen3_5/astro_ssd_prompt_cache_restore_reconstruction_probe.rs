@@ -23,6 +23,8 @@ use mlx_bridge::{MlxArray, MlxDtype};
 use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use tokio::time::timeout;
 
+use super::interleaved_probe_support::{NamedProbe, sorted_median, warm_every_probe};
+
 const KV_HEAD_COUNT: i32 = 16;
 const KV_HEAD_DIMENSION: i32 = 128;
 const BLOCK_TOKENS: i32 = 2048;
@@ -37,7 +39,6 @@ async fn should_probe_astro_ssd_prompt_cache_restore_reconstruction_costs() {
         .expect("the restore reconstruction probe must finish within 115 seconds");
 }
 
-#[expect(clippy::too_many_lines)]
 async fn probe_restore_reconstruction() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let runtime = MlxRuntime::initialize(
@@ -48,17 +49,7 @@ async fn probe_restore_reconstruction() {
 
     for &total_tokens in TOTAL_TOKEN_POINTS {
         let block_count = (total_tokens / BLOCK_TOKENS) as usize;
-        let block_shape = [1, KV_HEAD_COUNT, BLOCK_TOKENS, KV_HEAD_DIMENSION];
-        let block_element_count = (BLOCK_TOKENS * KV_HEAD_COUNT * KV_HEAD_DIMENSION) as usize;
-        let blocks: Vec<MlxArray> = (0..block_count)
-            .map(|block_index| {
-                bf16_array(
-                    &runtime,
-                    &block_values(block_element_count, block_index),
-                    &block_shape,
-                )
-            })
-            .collect();
+        let blocks = restored_blocks(&runtime, block_count);
 
         let destination_shape: [i32; 4] = [1, KV_HEAD_COUNT, total_tokens, KV_HEAD_DIMENSION];
         let reference = runtime
@@ -68,88 +59,112 @@ async fn probe_restore_reconstruction() {
             .evaluate_arrays(&[&reference])
             .expect("the reference should evaluate");
 
-        let runtime_ref: &MlxRuntime = &runtime;
-        let blocks_ref: &[MlxArray] = &blocks;
-        let destination_shape_ref: &[i32] = &destination_shape;
-        let probes: Vec<(&str, Box<dyn Fn() -> MlxArray>)> = vec![
-            (
-                "current-per-block",
-                Box::new(move || {
-                    per_block_slice_update(runtime_ref, blocks_ref, destination_shape_ref, true)
-                }),
-            ),
-            (
-                "batched-eval",
-                Box::new(move || {
-                    per_block_slice_update(runtime_ref, blocks_ref, destination_shape_ref, false)
-                }),
-            ),
-            (
-                "single-concat",
-                Box::new(move || single_concat(runtime_ref, blocks_ref)),
-            ),
-        ];
+        let probes = reconstruction_probes(&runtime, &blocks, &destination_shape);
+        warm_every_probe(&runtime, &probes);
+        let samples = measure_probe_rounds(&runtime, &probes);
+        report_probe_medians(total_tokens, block_count, &probes, samples);
+        assert_probes_assemble_the_reference_state(&runtime, &reference, &probes);
+    }
+}
 
-        for (_, probe) in &probes {
-            let warmup_output = probe();
-            runtime
-                .evaluate_arrays(&[&warmup_output])
-                .expect("the warmup probe should evaluate");
-        }
-        runtime
-            .synchronize_gpu_stream()
-            .expect("the warmup probes should drain");
+fn restored_blocks(runtime: &MlxRuntime, block_count: usize) -> Vec<MlxArray> {
+    let block_shape = [1, KV_HEAD_COUNT, BLOCK_TOKENS, KV_HEAD_DIMENSION];
+    let block_element_count = (BLOCK_TOKENS * KV_HEAD_COUNT * KV_HEAD_DIMENSION) as usize;
+    (0..block_count)
+        .map(|block_index| {
+            bf16_array(
+                runtime,
+                &block_values(block_element_count, block_index),
+                &block_shape,
+            )
+        })
+        .collect()
+}
 
-        let mut samples: Vec<Vec<f64>> = vec![Vec::new(); probes.len()];
-        for _round in 0..PROBE_ROUNDS {
-            for (probe_index, (_, probe)) in probes.iter().enumerate() {
-                let started_at = Instant::now();
-                probe();
-                samples[probe_index].push(started_at.elapsed().as_secs_f64() * 1000.0);
-            }
-        }
-        runtime
-            .synchronize_gpu_stream()
-            .expect("the probes should drain");
+fn reconstruction_probes<'probe>(
+    runtime: &'probe MlxRuntime,
+    blocks: &'probe [MlxArray],
+    destination_shape: &'probe [i32],
+) -> Vec<NamedProbe<'probe>> {
+    vec![
+        (
+            "current-per-block",
+            Box::new(move || per_block_slice_update(runtime, blocks, destination_shape, true)),
+        ),
+        (
+            "batched-eval",
+            Box::new(move || per_block_slice_update(runtime, blocks, destination_shape, false)),
+        ),
+        (
+            "single-concat",
+            Box::new(move || single_concat(runtime, blocks)),
+        ),
+    ]
+}
 
-        let mut medians = Vec::with_capacity(probes.len());
-        for (probe_name, _) in &probes {
-            let probe_samples = &mut samples[medians.len()];
-            probe_samples.sort_by(|left, right| left.partial_cmp(right).expect("finite times"));
-            let median = probe_samples[probe_samples.len() / 2];
-            medians.push(median);
-            eprintln!(
-                "[restore-reconstruction-probe] tokens={total_tokens} blocks={block_count} {probe_name} median {median:.3} ms samples={}",
-                probe_samples.len(),
-            );
+fn measure_probe_rounds(runtime: &MlxRuntime, probes: &[NamedProbe<'_>]) -> Vec<Vec<f64>> {
+    let mut samples: Vec<Vec<f64>> = vec![Vec::new(); probes.len()];
+    for _round in 0..PROBE_ROUNDS {
+        for (probe_index, (_, probe)) in probes.iter().enumerate() {
+            let started_at = Instant::now();
+            probe();
+            samples[probe_index].push(started_at.elapsed().as_secs_f64() * 1000.0);
         }
+    }
+    runtime
+        .synchronize_gpu_stream()
+        .expect("the probes should drain");
+    samples
+}
+
+fn report_probe_medians(
+    total_tokens: i32,
+    block_count: usize,
+    probes: &[NamedProbe<'_>],
+    mut samples: Vec<Vec<f64>>,
+) {
+    let mut medians = Vec::with_capacity(probes.len());
+    for (probe_name, _) in probes {
+        let probe_samples = &mut samples[medians.len()];
+        let median = sorted_median(probe_samples);
+        medians.push(median);
         eprintln!(
-            "[restore-reconstruction-probe] tokens={total_tokens} current/batched = {:.2}  current/concat = {:.2} (a ratio above 1.0 means current is slower)",
-            medians[0] / medians[1],
-            medians[0] / medians[2],
+            "[restore-reconstruction-probe] tokens={total_tokens} blocks={block_count} {probe_name} median {median:.3} ms samples={}",
+            probe_samples.len(),
         );
+    }
+    eprintln!(
+        "[restore-reconstruction-probe] tokens={total_tokens} current/batched = {:.2}  current/concat = {:.2} (a ratio above 1.0 means current is slower)",
+        medians[0] / medians[1],
+        medians[0] / medians[2],
+    );
+}
 
-        let reference_values = runtime
-            .astype(&reference, MlxDtype::Float32)
-            .expect("the reference should cast")
+fn assert_probes_assemble_the_reference_state(
+    runtime: &MlxRuntime,
+    reference: &MlxArray,
+    probes: &[NamedProbe<'_>],
+) {
+    let reference_values = runtime
+        .astype(reference, MlxDtype::Float32)
+        .expect("the reference should cast")
+        .to_vec_f32()
+        .expect("the reference should evaluate");
+    for (probe_name, probe) in probes {
+        let probe_values = runtime
+            .astype(&probe(), MlxDtype::Float32)
+            .expect("the probe output should cast")
             .to_vec_f32()
-            .expect("the reference should evaluate");
-        for (probe_name, probe) in &probes {
-            let probe_values = runtime
-                .astype(&probe(), MlxDtype::Float32)
-                .expect("the probe output should cast")
-                .to_vec_f32()
-                .expect("the probe output should evaluate");
-            let maximum_difference = reference_values
-                .iter()
-                .zip(probe_values.iter())
-                .map(|(reference_value, probe_value)| (reference_value - probe_value).abs())
-                .fold(0.0_f32, f32::max);
-            assert!(
-                maximum_difference == 0.0,
-                "{probe_name} must assemble the identical restored state: max diff {maximum_difference}"
-            );
-        }
+            .expect("the probe output should evaluate");
+        let maximum_difference = reference_values
+            .iter()
+            .zip(probe_values.iter())
+            .map(|(reference_value, probe_value)| (reference_value - probe_value).abs())
+            .fold(0.0_f32, f32::max);
+        assert!(
+            maximum_difference == 0.0,
+            "{probe_name} must assemble the identical restored state: max diff {maximum_difference}"
+        );
     }
 }
 

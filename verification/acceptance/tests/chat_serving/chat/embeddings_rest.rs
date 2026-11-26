@@ -26,21 +26,13 @@ async fn should_embed_romeo_and_juliet_lines_through_public_rest() {
         .expect("the embeddings GPU journey must finish within 115 seconds");
 }
 
-#[expect(clippy::too_many_lines)]
 async fn run_embeddings_gpu_journey() {
     let selected_model = configured_embeddings_model();
     eprintln!(
         "[embeddings-rest] status=progress phase=launch model={}",
         selected_model.model_id
     );
-    let maximum_input_tokens = match &selected_model.capabilities {
-        config::ModelCapabilities::Embeddings(embedding_capabilities) => {
-            embedding_capabilities.max_input_tokens
-        }
-        other_capabilities => {
-            panic!("expected embedding capability, got {other_capabilities:?}")
-        }
-    };
+    let maximum_input_tokens = embedding_maximum_input_tokens(&selected_model);
     let rest_server = serving_rest::launch_serving_rest_server_for_embedding_model(
         &selected_model.model_id,
         selected_model.model_directory.clone(),
@@ -50,11 +42,38 @@ async fn run_embeddings_gpu_journey() {
     .await;
     let server_address = rest_server.server_address;
 
+    assert_models_capability_phase(server_address, &selected_model.model_id).await;
+    assert_single_float_phase(server_address, &selected_model.model_id).await;
+    assert_array_order_phase(server_address, &selected_model.model_id).await;
+    assert_base64_roundtrip_phase(server_address, &selected_model.model_id).await;
+    assert_truncated_dimensions_phase(server_address, &selected_model.model_id).await;
+    assert_semantic_similarity_phase(server_address, &selected_model.model_id).await;
+    assert_finalized_status_utilization(server_address).await;
+
+    openai_rest::stop_serving_rest_server(rest_server).await;
+    eprintln!(
+        "[embeddings-rest] status=success model={}",
+        selected_model.model_id
+    );
+}
+
+fn embedding_maximum_input_tokens(selected_model: &config::DiscoveredModel) -> u32 {
+    match &selected_model.capabilities {
+        config::ModelCapabilities::Embeddings(embedding_capabilities) => {
+            embedding_capabilities.max_input_tokens
+        }
+        other_capabilities => {
+            panic!("expected embedding capability, got {other_capabilities:?}")
+        }
+    }
+}
+
+async fn assert_models_capability_phase(server_address: std::net::SocketAddr, model_id: &str) {
     eprintln!("[embeddings-rest 1/6] status=progress phase=models_capability");
     let models_response = openai_rest::get_endpoint(server_address, "/v1/models").await;
     assert_http_ok(&models_response);
     let models_document = http_json_body(&models_response);
-    let advertised_model = advertised_model_document(&models_document, &selected_model.model_id);
+    let advertised_model = advertised_model_document(&models_document, model_id);
     assert_eq!(
         advertised_model["supported_endpoints"],
         serde_json::json!(["/v1/embeddings"]),
@@ -65,47 +84,55 @@ async fn run_embeddings_gpu_journey() {
         serde_json::json!(["embedding"])
     );
     eprintln!("[embeddings-rest 1/6] status=success phase=models_capability");
+}
 
+async fn assert_single_float_phase(server_address: std::net::SocketAddr, model_id: &str) {
     eprintln!("[embeddings-rest 2/6] status=progress phase=single_float");
     let single_response = post_embeddings(
         server_address,
-        embeddings_request_body(&selected_model.model_id, single_input(), None, false),
+        embeddings_request_body(model_id, single_input(), None, false),
     )
     .await;
     let single_document = assert_embeddings_list(&single_response, 1, NATIVE_VECTOR_WIDTH, false);
     assert_unit_norm(&single_document, 0, NATIVE_VECTOR_WIDTH);
     assert_eq!(
         single_document["model"].as_str(),
-        Some(selected_model.model_id.as_str()),
+        Some(model_id),
         "response model must echo the resolved discovered identity"
     );
     eprintln!("[embeddings-rest 2/6] status=success phase=single_float");
+}
 
+async fn assert_array_order_phase(server_address: std::net::SocketAddr, model_id: &str) {
     eprintln!("[embeddings-rest 3/6] status=progress phase=array_order");
     let array_response = post_embeddings(
         server_address,
-        embeddings_request_body(&selected_model.model_id, array_input(), None, false),
+        embeddings_request_body(model_id, array_input(), None, false),
     )
     .await;
     let array_document = assert_embeddings_list(&array_response, 2, NATIVE_VECTOR_WIDTH, false);
     assert_vector_order(&array_document, 2, NATIVE_VECTOR_WIDTH);
     eprintln!("[embeddings-rest 3/6] status=success phase=array_order");
+}
 
+async fn assert_base64_roundtrip_phase(server_address: std::net::SocketAddr, model_id: &str) {
     eprintln!("[embeddings-rest 4/6] status=progress phase=base64_roundtrip");
     let base64_response = post_embeddings(
         server_address,
-        embeddings_request_body(&selected_model.model_id, single_input(), None, true),
+        embeddings_request_body(model_id, single_input(), None, true),
     )
     .await;
     let base64_document = assert_embeddings_list(&base64_response, 1, 0, true);
     assert_base64_decodes_to_float(&base64_document, NATIVE_VECTOR_WIDTH);
     eprintln!("[embeddings-rest 4/6] status=success phase=base64_roundtrip");
+}
 
+async fn assert_truncated_dimensions_phase(server_address: std::net::SocketAddr, model_id: &str) {
     eprintln!("[embeddings-rest 5/6] status=progress phase=truncated_dimensions");
     let truncated_response = post_embeddings(
         server_address,
         embeddings_request_body(
-            &selected_model.model_id,
+            model_id,
             single_input(),
             Some(TRUNCATED_VECTOR_WIDTH),
             false,
@@ -116,12 +143,14 @@ async fn run_embeddings_gpu_journey() {
         assert_embeddings_list(&truncated_response, 1, TRUNCATED_VECTOR_WIDTH, false);
     assert_unit_norm(&truncated_document, 0, TRUNCATED_VECTOR_WIDTH);
     eprintln!("[embeddings-rest 5/6] status=success phase=truncated_dimensions");
+}
 
+async fn assert_semantic_similarity_phase(server_address: std::net::SocketAddr, model_id: &str) {
     eprintln!("[embeddings-rest 6/6] status=progress phase=semantic_similarity");
     let similarity_response = post_embeddings(
         server_address,
         embeddings_request_body(
-            &selected_model.model_id,
+            model_id,
             serde_json::json!([
                 ROMEO_AND_JULIET_LINES[0],
                 ROMEO_AND_JULIET_LINES[1],
@@ -147,7 +176,9 @@ async fn run_embeddings_gpu_journey() {
     eprintln!(
         "[embeddings-rest 6/6] status=success phase=semantic_similarity play={play_similarity:.3} finance={finance_similarity:.3}"
     );
+}
 
+async fn assert_finalized_status_utilization(server_address: std::net::SocketAddr) {
     // Issue #510: the finalized status must publish the unused-headroom
     // split the menu paints. The embeddings engine owns no experts, context
     // state, so no owner may overrun and nothing is unexplained.
@@ -192,12 +223,6 @@ async fn run_embeddings_gpu_journey() {
             .as_u64()
             .unwrap_or(0) as f64
             / 1_073_741_824.0,
-    );
-
-    openai_rest::stop_serving_rest_server(rest_server).await;
-    eprintln!(
-        "[embeddings-rest] status=success model={}",
-        selected_model.model_id
     );
 }
 

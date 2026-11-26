@@ -458,10 +458,13 @@ test-quantization-mixture-of-experts = "run -p xtask -- test-run --package astro
 # staged Rust source, because no default-feature pass and no
 # continuous-integration lane compiles those feature-gated journeys.
 # `cargo xtask function-length-budget` is the pre-commit hook's workspace
-# clippy pass for the 100-line function budget; on macOS it is exactly
-# `cargo clippy --workspace --all-targets`, and on other hosts it leaves out
-# crates whose manifest lists only macOS under `package.metadata.astronomical`
-# `host-platforms`, and every workspace crate depending on them.
+# clippy pass for the 80-line function budget AGENTS.md sets for production
+# and test code alike. It first scans every Rust source without compiling
+# and fails on any `allow` or `expect` of clippy::too_many_lines; then, on
+# macOS, it runs exactly `cargo clippy --workspace --all-targets`, and on
+# other hosts it leaves out crates whose manifest lists only macOS under
+# `package.metadata.astronomical` `host-platforms`, and every workspace crate
+# depending on them.
 # `cargo xtask model-serving-default-features` is the hook's default-feature
 # lint of model-serving and the crates split out of it, with the same host
 # awareness; `cargo xtask lint-acceptance-features` skips on a host that
@@ -496,7 +499,7 @@ test-quantization-mixture-of-experts = "run -p xtask -- test-run --package astro
 #
 # Function-length and complexity enforcement (issue #1637) is pre-commit
 # territory ONLY (policy, 2026-10-31): the hook's clippy pass denies
-# clippy::too_many_lines (the 100-line budget, #[expect]-tracked debt) and
+# clippy::too_many_lines (the 80-line budget, no exemptions) and
 # `cargo xtask crap-baseline` ratchets complexity against the
 # crap-baseline.json committed at HEAD as a hard failure: a baseline function
 # may not grow, and a function the baseline does not list yet may not exceed

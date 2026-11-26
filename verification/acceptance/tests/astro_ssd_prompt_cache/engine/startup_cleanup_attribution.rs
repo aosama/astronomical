@@ -1,4 +1,4 @@
-use std::{fs, time::Duration};
+use std::{fs, path::Path, time::Duration};
 
 use ipc_protocol::{
     ChatGenerationCommand, ChatGenerationSettings, ChatMessage, ChatToolChoice, RequestId,
@@ -6,7 +6,8 @@ use ipc_protocol::{
     WorkerAstroSsdPromptCacheStartupCleanupEvidence,
 };
 use model_serving::{
-    InferenceEngine, Qwen3_5ArtifactValidator, Qwen3_5Tokenizer, TextInferenceRequest,
+    InferenceEngine, Qwen3_5ArtifactValidator, Qwen3_5TextEngine, Qwen3_5Tokenizer,
+    TextInferenceRequest,
 };
 use tokio::time::timeout;
 
@@ -44,15 +45,8 @@ async fn run_startup_cleanup_attribution_journey() {
         romeo_and_juliet_prompt_token_ids(&model_directory);
     let astro_ssd_prompt_cache_directory = tempfile::tempdir()
         .expect("the acceptance should create an isolated astro SSD prompt cache directory");
-    let obsolete_sequence_directory = astro_ssd_prompt_cache_directory.path().join("kv_blocks");
-    fs::create_dir_all(&obsolete_sequence_directory)
-        .expect("the acceptance should create obsolete format storage");
-    let obsolete_artifact_byte_count = 73_u64;
-    fs::write(
-        obsolete_sequence_directory.join(format!("{}.safetensors", "a".repeat(64))),
-        vec![0_u8; obsolete_artifact_byte_count as usize],
-    )
-    .expect("the acceptance should seed one obsolete format artifact");
+    let obsolete_artifact_byte_count =
+        seed_obsolete_format_artifact(astro_ssd_prompt_cache_directory.path());
 
     let (mut qwen3_5_engine, _, _, astro_ssd_prompt_cache_block_token_count) =
         load_astro_ssd_prompt_cache_acceptance_engine(
@@ -64,6 +58,43 @@ async fn run_startup_cleanup_attribution_journey() {
             2_048,
         )
         .await;
+    run_short_request_expecting_no_startup_cleanup_evidence(
+        &mut qwen3_5_engine,
+        short_prompt_token_ids,
+    )
+    .await;
+    run_cold_request_expecting_startup_cleanup_evidence(
+        &mut qwen3_5_engine,
+        &prompt_token_ids,
+        obsolete_artifact_byte_count,
+    )
+    .await;
+    run_warm_request_expecting_restore(
+        &mut qwen3_5_engine,
+        prompt_token_ids,
+        astro_ssd_prompt_cache_block_token_count,
+    )
+    .await;
+}
+
+/// Seeds one artifact in the obsolete sequence format and returns its byte count.
+fn seed_obsolete_format_artifact(astro_ssd_prompt_cache_directory: &Path) -> u64 {
+    let obsolete_sequence_directory = astro_ssd_prompt_cache_directory.join("kv_blocks");
+    fs::create_dir_all(&obsolete_sequence_directory)
+        .expect("the acceptance should create obsolete format storage");
+    let obsolete_artifact_byte_count = 73_u64;
+    fs::write(
+        obsolete_sequence_directory.join(format!("{}.safetensors", "a".repeat(64))),
+        vec![0_u8; obsolete_artifact_byte_count as usize],
+    )
+    .expect("the acceptance should seed one obsolete format artifact");
+    obsolete_artifact_byte_count
+}
+
+async fn run_short_request_expecting_no_startup_cleanup_evidence(
+    qwen3_5_engine: &mut Qwen3_5TextEngine,
+    short_prompt_token_ids: Vec<u32>,
+) {
     let short_request_id = RequestId::new(41_001);
     let short_generation_start = qwen3_5_engine
         .start_generation(
@@ -80,12 +111,18 @@ async fn run_startup_cleanup_attribution_journey() {
         Some(WorkerAstroSsdPromptCacheMissReason::PromptTooShortForAstroSsdPromptCache)
     );
     assert_eq!(short_diagnostics.startup_cleanup_evidence, None);
-    generate_token_ids(&mut qwen3_5_engine, short_request_id, 1).await;
+    generate_token_ids(qwen3_5_engine, short_request_id, 1).await;
+}
 
+async fn run_cold_request_expecting_startup_cleanup_evidence(
+    qwen3_5_engine: &mut Qwen3_5TextEngine,
+    prompt_token_ids: &[u32],
+    obsolete_artifact_byte_count: u64,
+) {
     let cold_request_id = RequestId::new(41_002);
     let cold_generation_start = qwen3_5_engine
         .start_generation(
-            TextInferenceRequest::new(cold_request_id, prompt_token_ids.clone(), 1)
+            TextInferenceRequest::new(cold_request_id, prompt_token_ids.to_vec(), 1)
                 .with_image_pad_token_id(248_069),
         )
         .await
@@ -113,9 +150,15 @@ async fn run_startup_cleanup_attribution_journey() {
         obsolete_artifact_byte_count,
     );
 
-    generate_token_ids(&mut qwen3_5_engine, cold_request_id, 1).await;
-    wait_for_astro_ssd_prompt_cache_blocks(&qwen3_5_engine, 1).await;
+    generate_token_ids(qwen3_5_engine, cold_request_id, 1).await;
+    wait_for_astro_ssd_prompt_cache_blocks(qwen3_5_engine, 1).await;
+}
 
+async fn run_warm_request_expecting_restore(
+    qwen3_5_engine: &mut Qwen3_5TextEngine,
+    prompt_token_ids: Vec<u32>,
+    astro_ssd_prompt_cache_block_token_count: usize,
+) {
     let warm_request_id = RequestId::new(41_003);
     let warm_generation_start = qwen3_5_engine
         .start_generation(
@@ -136,7 +179,7 @@ async fn run_startup_cleanup_attribution_journey() {
         WorkerAstroSsdPromptCacheLookupOutcome::Hit
     );
     assert_eq!(warm_diagnostics.startup_cleanup_evidence, None);
-    generate_token_ids(&mut qwen3_5_engine, warm_request_id, 1).await;
+    generate_token_ids(qwen3_5_engine, warm_request_id, 1).await;
 }
 
 /// Startup cleanup found the one obsolete-format artifact the journey seeded

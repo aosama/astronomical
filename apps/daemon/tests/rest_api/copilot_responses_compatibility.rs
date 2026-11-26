@@ -78,6 +78,34 @@ async fn should_complete_a_copilot_stream_with_visible_reasoning_and_supported_t
 
 #[tokio::test]
 async fn should_replay_a_copilot_function_result_through_the_responses_endpoint() {
+    let (function_call_item, function_call_id) = read_first_turn_function_call().await;
+
+    let (generation_command_sender, mut generation_command_receiver) = mpsc::unbounded_channel();
+    let replay_application = build_application(CopilotResponsesExecutor::with_command_capture(
+        vec![
+            ChatGenerationStreamEvent::TextFragment("ASTRONOMICAL_TOOL_OK".to_owned()),
+            completed_generation_event(ChatGenerationCompletionReason::EndOfSequence),
+        ],
+        generation_command_sender,
+    ));
+    let replay_request_body = replay_request_body(function_call_item, &function_call_id);
+
+    let replay_http_response =
+        post_responses_request(replay_application, replay_request_body).await;
+
+    assert_eq!(replay_http_response.status(), StatusCode::OK);
+    let replay_response_text = read_response_text(replay_http_response).await;
+    assert!(replay_response_text.contains(r#""delta":"ASTRONOMICAL_TOOL_OK""#));
+    assert!(replay_response_text.contains("event: response.completed"));
+    let replay_generation_command = generation_command_receiver
+        .try_recv()
+        .expect("the replay request should reach worker admission");
+    assert_replay_carried_the_function_result_as_a_tool_message(&replay_generation_command);
+}
+
+/// Runs the first turn of the journey: the model calls `view`, and the
+/// completed function call item is read back out of the event stream.
+async fn read_first_turn_function_call() -> (Value, String) {
     let first_application = build_application(CopilotResponsesExecutor::new(vec![
         ChatGenerationStreamEvent::ToolCall {
             tool_call_index: 0,
@@ -116,16 +144,11 @@ async fn should_replay_a_copilot_function_result_through_the_responses_endpoint(
         .as_str()
         .expect("the function call should expose a call_id")
         .to_owned();
+    (function_call_item, function_call_id)
+}
 
-    let (generation_command_sender, mut generation_command_receiver) = mpsc::unbounded_channel();
-    let replay_application = build_application(CopilotResponsesExecutor::with_command_capture(
-        vec![
-            ChatGenerationStreamEvent::TextFragment("ASTRONOMICAL_TOOL_OK".to_owned()),
-            completed_generation_event(ChatGenerationCompletionReason::EndOfSequence),
-        ],
-        generation_command_sender,
-    ));
-    let replay_request_body = json!({
+fn replay_request_body(function_call_item: Value, function_call_id: &str) -> String {
+    json!({
         "model": MODEL_ID,
         "input": [
             {"role": "user", "content": "Read package.json."},
@@ -140,18 +163,12 @@ async fn should_replay_a_copilot_function_result_through_the_responses_endpoint(
         }],
         "stream": true
     })
-    .to_string();
+    .to_string()
+}
 
-    let replay_http_response =
-        post_responses_request(replay_application, replay_request_body).await;
-
-    assert_eq!(replay_http_response.status(), StatusCode::OK);
-    let replay_response_text = read_response_text(replay_http_response).await;
-    assert!(replay_response_text.contains(r#""delta":"ASTRONOMICAL_TOOL_OK""#));
-    assert!(replay_response_text.contains("event: response.completed"));
-    let replay_generation_command = generation_command_receiver
-        .try_recv()
-        .expect("the replay request should reach worker admission");
+fn assert_replay_carried_the_function_result_as_a_tool_message(
+    replay_generation_command: &ChatGenerationCommand,
+) {
     let [
         ChatMessage::User { .. },
         ChatMessage::Assistant { tool_calls, .. },

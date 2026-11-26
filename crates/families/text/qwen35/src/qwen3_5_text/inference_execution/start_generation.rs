@@ -46,6 +46,17 @@ struct InstallActiveGenerationRequest<'a> {
     performance_attribution: PerformanceAttribution,
 }
 
+/// What a generation request says about its prompt, read once before the
+/// session is assembled.
+struct PromptFacts {
+    prompt_token_ids: Vec<u32>,
+    image_pad_token_id: u32,
+    prompt_image_pad_token_count: usize,
+    has_precomputed_visual_embeddings: bool,
+    has_processed_visual_images: bool,
+    can_use_astro_ssd_prompt_cache: bool,
+}
+
 impl Qwen3_5EngineState {
     pub(super) fn start_generation(
         &mut self,
@@ -140,55 +151,26 @@ impl Qwen3_5EngineState {
         let sampling_strategy = inference_request.sampling_strategy();
         let random_state =
             generation_start_steps::resolve_sampling_random_state(self, sampling_strategy)?;
-        let prompt_token_ids = inference_request.input_token_ids().to_vec();
-        let image_pad_token_id = inference_request.image_pad_token_id().ok_or_else(|| {
-            invalid_request_error("generation request is missing the image-pad token ID")
-        })?;
-        let prompt_image_pad_token_count = prompt_token_ids
-            .iter()
-            .filter(|token_id| **token_id == image_pad_token_id)
-            .count();
-        let has_precomputed_visual_embeddings = inference_request.has_visual_embeddings();
-        let has_processed_visual_images = inference_request.has_processed_visual_images();
-        let astro_ssd_prompt_cache_is_available = self.core.astro_ssd_prompt_cache.is_some();
-        // Persistent snapshots currently contain target decoder state only. Prefer target-only
-        // execution whenever the `astro_ssd_prompt_cache` is available so optional prediction artifacts retain
-        // prompt reuse without restoring an incompatible shifted history.
-        let can_use_astro_ssd_prompt_cache =
-            astro_ssd_prompt_cache_is_available && !has_precomputed_visual_embeddings;
-        let visual_astro_ssd_prompt_cache_identity =
-            Qwen3_5AstroSsdPromptCacheVisualIdentity::prepare(
+        let prompt_facts = self.read_prompt_facts(inference_request)?;
+        let visual_astro_ssd_prompt_cache_identity = self
+            .prepare_visual_astro_ssd_prompt_cache_identity(
                 inference_request,
-                Qwen3_5AstroSsdPromptCacheVisualIdentityInput {
-                    prompt_token_ids: &prompt_token_ids,
-                    prompt_image_pad_token_count,
-                    image_pad_token_id,
-                    astro_ssd_prompt_cache: self.core.astro_ssd_prompt_cache.as_deref(),
-                    can_use_astro_ssd_prompt_cache,
-                },
+                &prompt_facts,
                 &mut performance_attribution,
             )?;
-        let ordered_image_visual_embedding_row_counts =
-            visual_astro_ssd_prompt_cache_identity.ordered_image_visual_embedding_row_counts;
-        let astro_ssd_prompt_cache_block_causal_inputs =
-            visual_astro_ssd_prompt_cache_identity.block_causal_inputs;
         let precomputed_visual_embeddings =
             generation_start_steps::prepare_precomputed_visual_embeddings(
                 self,
                 inference_request,
-                prompt_image_pad_token_count,
+                prompt_facts.prompt_image_pad_token_count,
             )?;
-        let mut request_decoder_state = RequestDecoderStateStack::
-            empty_from_astro_decoder_state_cache_layout_with_full_attention_kv_state_growth_tokens(
-                astro_decoder_state_cache_layout,
-                self.core.full_attention_kv_state_growth_tokens,
-            )
-            .map_err(fatal_runtime_error)?;
+        let mut request_decoder_state =
+            self.empty_request_decoder_state(astro_decoder_state_cache_layout)?;
         let restored_prompt_prefix_session = self.restore_astro_ssd_prompt_cache_prefix_session(
             inference_request,
-            &prompt_token_ids,
-            &astro_ssd_prompt_cache_block_causal_inputs,
-            can_use_astro_ssd_prompt_cache,
+            &prompt_facts.prompt_token_ids,
+            &visual_astro_ssd_prompt_cache_identity.block_causal_inputs,
+            prompt_facts.can_use_astro_ssd_prompt_cache,
             reserved_context_tokens,
             &mut request_decoder_state,
             &mut performance_attribution,
@@ -197,33 +179,98 @@ impl Qwen3_5EngineState {
             self,
             inference_request,
             precomputed_visual_embeddings,
-            has_processed_visual_images,
+            prompt_facts.has_processed_visual_images,
             session_visual_embeddings::SessionVisualEmbeddingPlacement {
-                prompt_token_ids: &prompt_token_ids,
+                prompt_token_ids: &prompt_facts.prompt_token_ids,
                 prefill_cursor: restored_prompt_prefix_session.prefill_cursor,
-                ordered_image_visual_embedding_row_counts:
-                    &ordered_image_visual_embedding_row_counts,
-                image_pad_token_id,
+                ordered_image_visual_embedding_row_counts: &visual_astro_ssd_prompt_cache_identity
+                    .ordered_image_visual_embedding_row_counts,
+                image_pad_token_id: prompt_facts.image_pad_token_id,
             },
             &mut performance_attribution,
         )?;
         self.install_active_generation_request(InstallActiveGenerationRequest {
             request_decoder_state,
-            prompt_token_ids,
+            prompt_token_ids: prompt_facts.prompt_token_ids,
             sampling_strategy,
             random_state,
             inference_request,
             thinking_budget_state,
             reserved_context_tokens,
-            can_use_astro_ssd_prompt_cache,
-            astro_ssd_prompt_cache_block_causal_inputs,
+            can_use_astro_ssd_prompt_cache: prompt_facts.can_use_astro_ssd_prompt_cache,
+            astro_ssd_prompt_cache_block_causal_inputs: visual_astro_ssd_prompt_cache_identity
+                .block_causal_inputs,
             restored_prompt_prefix_session,
             visual_embeddings,
-            has_precomputed_visual_embeddings,
-            has_processed_visual_images,
-            image_pad_token_id,
+            has_precomputed_visual_embeddings: prompt_facts.has_precomputed_visual_embeddings,
+            has_processed_visual_images: prompt_facts.has_processed_visual_images,
+            image_pad_token_id: prompt_facts.image_pad_token_id,
             performance_attribution,
         })
+    }
+
+    /// Reads what the request says about its prompt: the token ids, how many
+    /// of them are image placeholders, which visual inputs it carries, and
+    /// whether it may use the `astro_ssd_prompt_cache`.
+    fn read_prompt_facts(
+        &self,
+        inference_request: &TextInferenceRequest,
+    ) -> Result<PromptFacts, InferenceEngineError> {
+        let prompt_token_ids = inference_request.input_token_ids().to_vec();
+        let image_pad_token_id = inference_request.image_pad_token_id().ok_or_else(|| {
+            invalid_request_error("generation request is missing the image-pad token ID")
+        })?;
+        let prompt_image_pad_token_count =
+            count_image_pad_tokens(&prompt_token_ids, image_pad_token_id);
+        let has_precomputed_visual_embeddings = inference_request.has_visual_embeddings();
+        let has_processed_visual_images = inference_request.has_processed_visual_images();
+        let can_use_astro_ssd_prompt_cache = request_may_use_astro_ssd_prompt_cache(
+            self.core.astro_ssd_prompt_cache.is_some(),
+            has_precomputed_visual_embeddings,
+        );
+        Ok(PromptFacts {
+            prompt_token_ids,
+            image_pad_token_id,
+            prompt_image_pad_token_count,
+            has_precomputed_visual_embeddings,
+            has_processed_visual_images,
+            can_use_astro_ssd_prompt_cache,
+        })
+    }
+
+    /// Prepares the visual identity the `astro_ssd_prompt_cache` keys a
+    /// prompt with images by.
+    fn prepare_visual_astro_ssd_prompt_cache_identity(
+        &self,
+        inference_request: &TextInferenceRequest,
+        prompt_facts: &PromptFacts,
+        performance_attribution: &mut PerformanceAttribution,
+    ) -> Result<Qwen3_5AstroSsdPromptCacheVisualIdentity, InferenceEngineError> {
+        Qwen3_5AstroSsdPromptCacheVisualIdentity::prepare(
+            inference_request,
+            Qwen3_5AstroSsdPromptCacheVisualIdentityInput {
+                prompt_token_ids: &prompt_facts.prompt_token_ids,
+                prompt_image_pad_token_count: prompt_facts.prompt_image_pad_token_count,
+                image_pad_token_id: prompt_facts.image_pad_token_id,
+                astro_ssd_prompt_cache: self.core.astro_ssd_prompt_cache.as_deref(),
+                can_use_astro_ssd_prompt_cache: prompt_facts.can_use_astro_ssd_prompt_cache,
+            },
+            performance_attribution,
+        )
+    }
+
+    /// A fresh decoder state for the request, sized for the model's layout and
+    /// the engine's full-attention growth step.
+    fn empty_request_decoder_state(
+        &self,
+        astro_decoder_state_cache_layout: &AstroDecoderStateCacheLayout,
+    ) -> Result<RequestDecoderStateStack, InferenceEngineError> {
+        RequestDecoderStateStack::
+            empty_from_astro_decoder_state_cache_layout_with_full_attention_kv_state_growth_tokens(
+                astro_decoder_state_cache_layout,
+                self.core.full_attention_kv_state_growth_tokens,
+            )
+            .map_err(fatal_runtime_error)
     }
 
     /// Restores the prompt prefix held in the `astro_ssd_prompt_cache`, when it can
@@ -318,3 +365,29 @@ impl Qwen3_5EngineState {
         )
     }
 }
+
+/// How many of the prompt's tokens are image placeholders.
+fn count_image_pad_tokens(prompt_token_ids: &[u32], image_pad_token_id: u32) -> usize {
+    prompt_token_ids
+        .iter()
+        .filter(|token_id| **token_id == image_pad_token_id)
+        .count()
+}
+
+/// Whether the request may use the `astro_ssd_prompt_cache`: it must be
+/// available, and a request carrying precomputed visual embeddings never uses
+/// it.
+///
+/// Persistent snapshots currently contain target decoder state only. Prefer target-only
+/// execution whenever the `astro_ssd_prompt_cache` is available so optional prediction artifacts retain
+/// prompt reuse without restoring an incompatible shifted history.
+fn request_may_use_astro_ssd_prompt_cache(
+    astro_ssd_prompt_cache_is_available: bool,
+    has_precomputed_visual_embeddings: bool,
+) -> bool {
+    astro_ssd_prompt_cache_is_available && !has_precomputed_visual_embeddings
+}
+
+#[cfg(test)]
+#[path = "start_generation_tests.rs"]
+mod start_generation_tests;

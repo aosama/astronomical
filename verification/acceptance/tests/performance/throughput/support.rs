@@ -21,7 +21,6 @@
 
 use std::fs;
 use std::path::PathBuf;
-use std::sync::atomic::Ordering;
 use std::sync::mpsc::RecvTimeoutError;
 use std::time::{Duration, Instant};
 
@@ -309,10 +308,10 @@ mod journey_stages;
 mod progress_report;
 
 use journey_stages::{
-    JourneyCompletions, apply_journey_overrides, budget_exhausted_measurement,
-    budget_exhausted_outcome, drive_journey_completions, launch_servable_worker,
-    remaining_journey_budget, resolve_budget_exhausted_stage, spawn_progress_sampler,
-    take_preserved_progress,
+    JourneyCompletions, apply_journey_overrides, budget_exhausted_at_launch,
+    budget_exhausted_measurement, drive_journey_completions, launch_servable_worker_within_budget,
+    resolve_budget_exhausted_stage, resolve_journey_model_directory, spawn_progress_sampler,
+    stop_progress_sampler_and_shut_down_worker,
 };
 
 pub(crate) async fn measure_throughput(
@@ -325,10 +324,7 @@ pub(crate) async fn measure_throughput(
     // outside, because the worker thread it owns cannot be cancelled from
     // inside — a panic on the driver thread leaves the runtime running.
     let cell_deadline = tokio::time::Instant::now() + journey.journey_timeout;
-    let model_directory = match journey.model_directory.clone() {
-        Some(journey_model_directory) => journey_model_directory,
-        None => crate::support::configured_installed_model_directory_by_id(model_id),
-    };
+    let model_directory = resolve_journey_model_directory(model_id, journey);
     let (
         _isolated_home,
         worker_executable_path,
@@ -345,35 +341,20 @@ pub(crate) async fn measure_throughput(
     fs::create_dir_all(&logging_directory)
         .expect("the throughput performance log directory should be created");
 
-    let worker_handle = match tokio::time::timeout(
-        remaining_journey_budget(cell_deadline),
-        launch_servable_worker(
-            worker_executable_path,
-            &logging_directory,
-            model_policy_catalog,
-            worker_startup_configuration,
-            journey,
-        ),
+    let Some(worker_handle) = launch_servable_worker_within_budget(
+        cell_deadline,
+        worker_executable_path,
+        &logging_directory,
+        model_policy_catalog,
+        worker_startup_configuration,
+        journey,
     )
     .await
-    {
-        Ok(worker_handle) => worker_handle,
-        Err(_) => {
-            eprintln!(
-                "[performance-throughput] budget_exhausted=true model={model_id} stage=launch-or-idle budget_seconds={} — the cell never became servable inside the budget",
-                journey.journey_timeout.as_secs(),
-            );
-            return budget_exhausted_outcome(
-                model_id,
-                journey,
-                logging_directory,
-                MemoryCellBudgetExhaustedStage::LaunchOrIdle,
-            );
-        }
+    else {
+        return budget_exhausted_at_launch(model_id, journey, logging_directory);
     };
 
-    let (preserved_progress_slot, sampler_stop_signal, progress_sampler) =
-        spawn_progress_sampler(&worker_handle);
+    let progress_sampler = spawn_progress_sampler(&worker_handle);
 
     let journey_completions = drive_journey_completions(
         &worker_handle,
@@ -394,17 +375,12 @@ pub(crate) async fn measure_throughput(
         resolve_budget_exhausted_stage(warmup_completed, measured_completed);
     let measured_budget_exhausted = budget_exhausted_stage.is_some();
     let final_health_snapshot = worker_handle.worker_health_snapshot();
-    sampler_stop_signal.store(true, Ordering::Relaxed);
-    progress_sampler.abort();
-    let last_observed_active_request_progress =
-        match final_health_snapshot.active_request_progress.clone() {
-            Some(active_request_progress) => Some(active_request_progress),
-            None => take_preserved_progress(&preserved_progress_slot),
-        };
-    worker_handle
-        .shutdown()
-        .await
-        .expect("the measured worker should terminate and be reaped");
+    let last_observed_active_request_progress = stop_progress_sampler_and_shut_down_worker(
+        worker_handle,
+        &final_health_snapshot,
+        progress_sampler,
+    )
+    .await;
     let mut measurement = measured_completion_measurement(
         model_id,
         journey,

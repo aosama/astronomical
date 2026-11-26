@@ -238,26 +238,14 @@ fn print_status_sample(
     let interval_elapsed_millis =
         request_elapsed_millis.saturating_sub(previous_sample.request_elapsed_millis);
     let interval_tokens = processed_tokens.saturating_sub(previous_sample.processed_tokens);
-    let interval_tokens_per_second = if interval_elapsed_millis > 0 {
-        interval_tokens as f64 * 1_000.0 / interval_elapsed_millis as f64
-    } else {
-        0.0
-    };
-    let cumulative_tokens_per_second = if elapsed_millis > 0 {
-        processed_tokens as f64 * 1_000.0 / elapsed_millis as f64
-    } else {
-        0.0
-    };
-    // The worker uses a phase-local progress clock. Retain the latest rate from
-    // each phase so every periodic line exposes both prefill and generation
-    // throughput instead of making a maintainer infer them from generic fields.
-    if activity == "prompt_processing" && cumulative_tokens_per_second > 0.0 {
-        previous_sample.prefill_tokens_per_second = cumulative_tokens_per_second;
-    } else if activity == "generating" && cumulative_tokens_per_second > 0.0 {
-        previous_sample.generation_tokens_per_second = cumulative_tokens_per_second;
-    } else if activity == "generating" && interval_tokens_per_second > 0.0 {
-        previous_sample.generation_tokens_per_second = interval_tokens_per_second;
-    }
+    let interval_tokens_per_second = tokens_per_second(interval_tokens, interval_elapsed_millis);
+    let cumulative_tokens_per_second = tokens_per_second(processed_tokens, elapsed_millis);
+    retain_latest_phase_rate(
+        previous_sample,
+        activity,
+        interval_tokens_per_second,
+        cumulative_tokens_per_second,
+    );
     let prefill_tokens_per_second = previous_sample.prefill_tokens_per_second;
     let generation_tokens_per_second = previous_sample.generation_tokens_per_second;
     let remaining_tokens = remaining_tokens_for_activity(
@@ -266,21 +254,12 @@ fn print_status_sample(
         total_tokens,
         MAXIMUM_OUTPUT_TOKEN_COUNT.into(),
     );
-    let eta_rate_tokens_per_second = match activity {
-        "prompt_processing" if interval_tokens_per_second > 0.0 => interval_tokens_per_second,
-        "prompt_processing" => prefill_tokens_per_second,
-        "generating" if interval_tokens_per_second > 0.0 => interval_tokens_per_second,
-        "generating" => generation_tokens_per_second,
-        _ => 0.0,
-    };
-    let eta_display = if eta_rate_tokens_per_second > 0.0 {
-        format!(
-            "{:.1}",
-            remaining_tokens as f64 / eta_rate_tokens_per_second
-        )
-    } else {
-        "unknown".to_owned()
-    };
+    let eta_display = eta_seconds_display(
+        activity,
+        remaining_tokens,
+        interval_tokens_per_second,
+        previous_sample,
+    );
     let memory = MemorySample::from_status(status_document);
     let resident_expert_group_count = status_document["expert_residency"]["resident_expert_count"]
         .as_u64()
@@ -303,6 +282,55 @@ fn print_status_sample(
     previous_sample.processed_tokens = processed_tokens;
     previous_sample.elapsed_millis = elapsed_millis;
     previous_sample.request_elapsed_millis = request_elapsed_millis;
+}
+
+fn tokens_per_second(token_count: u64, elapsed_millis: u64) -> f64 {
+    if elapsed_millis > 0 {
+        token_count as f64 * 1_000.0 / elapsed_millis as f64
+    } else {
+        0.0
+    }
+}
+
+/// The worker uses a phase-local progress clock. Retain the latest rate from
+/// each phase so every periodic line exposes both prefill and generation
+/// throughput instead of making a maintainer infer them from generic fields.
+fn retain_latest_phase_rate(
+    previous_sample: &mut ProgressSample,
+    activity: &str,
+    interval_tokens_per_second: f64,
+    cumulative_tokens_per_second: f64,
+) {
+    if activity == "prompt_processing" && cumulative_tokens_per_second > 0.0 {
+        previous_sample.prefill_tokens_per_second = cumulative_tokens_per_second;
+    } else if activity == "generating" && cumulative_tokens_per_second > 0.0 {
+        previous_sample.generation_tokens_per_second = cumulative_tokens_per_second;
+    } else if activity == "generating" && interval_tokens_per_second > 0.0 {
+        previous_sample.generation_tokens_per_second = interval_tokens_per_second;
+    }
+}
+
+fn eta_seconds_display(
+    activity: &str,
+    remaining_tokens: u64,
+    interval_tokens_per_second: f64,
+    previous_sample: &ProgressSample,
+) -> String {
+    let eta_rate_tokens_per_second = match activity {
+        "prompt_processing" if interval_tokens_per_second > 0.0 => interval_tokens_per_second,
+        "prompt_processing" => previous_sample.prefill_tokens_per_second,
+        "generating" if interval_tokens_per_second > 0.0 => interval_tokens_per_second,
+        "generating" => previous_sample.generation_tokens_per_second,
+        _ => 0.0,
+    };
+    if eta_rate_tokens_per_second > 0.0 {
+        format!(
+            "{:.1}",
+            remaining_tokens as f64 / eta_rate_tokens_per_second
+        )
+    } else {
+        "unknown".to_owned()
+    }
 }
 
 fn remaining_tokens_for_activity(

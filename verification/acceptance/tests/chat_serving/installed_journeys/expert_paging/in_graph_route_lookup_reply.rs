@@ -175,61 +175,107 @@ struct ComparedReply {
 async fn compare_greedy_replies(in_graph_draft_token_count: u32) {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let mut paging_engine = load_paging_experiment_engine("route_lookup_model_load").await;
-    let refusing_reply = ComparedReply {
-        request_id: REFUSING_REQUEST_ID,
-        route_lookup: RouteLookup::InsideTheGraph,
-        grows_tables_ahead_of_lookups: false,
-        draft_token_count: in_graph_draft_token_count,
-    };
-    let reply_as_served = ComparedReply {
-        request_id: IN_GRAPH_REQUEST_ID,
-        route_lookup: RouteLookup::InsideTheGraph,
-        grows_tables_ahead_of_lookups: true,
-        draft_token_count: in_graph_draft_token_count,
-    };
-    let reply_on_host = ComparedReply {
-        request_id: ON_HOST_REQUEST_ID,
-        route_lookup: RouteLookup::OnTheHost,
-        grows_tables_ahead_of_lookups: true,
-        draft_token_count: 0,
-    };
+    let proof_replies = proof_replies(in_graph_draft_token_count);
     // Without drafting the lookups go first: they then meet tables no exact
     // reply has filled, so they have experts to read and tables to grow.
     // With drafting the plain reply goes first, because the draft head joins
     // the memory ledger when drafting is turned on and cannot leave it under
     // tables a drafted reply has already filled to the limit; a block's rows
     // still need more room than a plain reply grew.
-    let (reference_reply, refusing_reply_tokens, reply_as_served_tokens, refused_token_counts) =
-        if in_graph_draft_token_count == 0 {
-            let refusing_tokens = write_greedy_reply(&mut paging_engine, &refusing_reply).await;
-            let refused_after_refusing = refused_token_count(&paging_engine).await;
-            let as_served_tokens = write_greedy_reply(&mut paging_engine, &reply_as_served).await;
-            let refused_after_as_served = refused_token_count(&paging_engine).await;
-            let reference = write_greedy_reply(&mut paging_engine, &reply_on_host).await;
-            (
-                reference,
-                refusing_tokens,
-                as_served_tokens,
-                [0, refused_after_refusing, refused_after_as_served],
-            )
-        } else {
-            let reference = write_greedy_reply(&mut paging_engine, &reply_on_host).await;
-            let refused_before = refused_token_count(&paging_engine).await;
-            let refusing_tokens = write_greedy_reply(&mut paging_engine, &refusing_reply).await;
-            let refused_after_refusing = refused_token_count(&paging_engine).await;
-            let as_served_tokens = write_greedy_reply(&mut paging_engine, &reply_as_served).await;
-            let refused_after_as_served = refused_token_count(&paging_engine).await;
-            (
-                reference,
-                refusing_tokens,
-                as_served_tokens,
-                [
-                    refused_before,
-                    refused_after_refusing,
-                    refused_after_as_served,
-                ],
-            )
-        };
+    let written_replies = if in_graph_draft_token_count == 0 {
+        write_lookups_first(&mut paging_engine, &proof_replies).await
+    } else {
+        write_plain_reply_first(&mut paging_engine, &proof_replies).await
+    };
+    assert_replies_prove_the_lookups(&paging_engine, in_graph_draft_token_count, &written_replies)
+        .await;
+}
+
+/// The three replies of the proof.
+struct ProofReplies {
+    refusing_reply: ComparedReply,
+    reply_as_served: ComparedReply,
+    reply_on_host: ComparedReply,
+}
+
+/// What the three replies wrote, and how many tokens the lookups had refused
+/// before the first reply, after the refusing reply and after the reply as
+/// served.
+struct WrittenProofReplies {
+    reference_reply: Vec<u32>,
+    refusing_reply_tokens: Vec<u32>,
+    reply_as_served_tokens: Vec<u32>,
+    refused_token_counts: [u64; 3],
+}
+
+fn proof_replies(in_graph_draft_token_count: u32) -> ProofReplies {
+    ProofReplies {
+        refusing_reply: ComparedReply {
+            request_id: REFUSING_REQUEST_ID,
+            route_lookup: RouteLookup::InsideTheGraph,
+            grows_tables_ahead_of_lookups: false,
+            draft_token_count: in_graph_draft_token_count,
+        },
+        reply_as_served: ComparedReply {
+            request_id: IN_GRAPH_REQUEST_ID,
+            route_lookup: RouteLookup::InsideTheGraph,
+            grows_tables_ahead_of_lookups: true,
+            draft_token_count: in_graph_draft_token_count,
+        },
+        reply_on_host: ComparedReply {
+            request_id: ON_HOST_REQUEST_ID,
+            route_lookup: RouteLookup::OnTheHost,
+            grows_tables_ahead_of_lookups: true,
+            draft_token_count: 0,
+        },
+    }
+}
+
+async fn write_lookups_first(
+    paging_engine: &mut PagingExperimentEngine,
+    proof_replies: &ProofReplies,
+) -> WrittenProofReplies {
+    let refusing_tokens = write_greedy_reply(paging_engine, &proof_replies.refusing_reply).await;
+    let refused_after_refusing = refused_token_count(paging_engine).await;
+    let as_served_tokens = write_greedy_reply(paging_engine, &proof_replies.reply_as_served).await;
+    let refused_after_as_served = refused_token_count(paging_engine).await;
+    let reference = write_greedy_reply(paging_engine, &proof_replies.reply_on_host).await;
+    WrittenProofReplies {
+        reference_reply: reference,
+        refusing_reply_tokens: refusing_tokens,
+        reply_as_served_tokens: as_served_tokens,
+        refused_token_counts: [0, refused_after_refusing, refused_after_as_served],
+    }
+}
+
+async fn write_plain_reply_first(
+    paging_engine: &mut PagingExperimentEngine,
+    proof_replies: &ProofReplies,
+) -> WrittenProofReplies {
+    let reference = write_greedy_reply(paging_engine, &proof_replies.reply_on_host).await;
+    let refused_before = refused_token_count(paging_engine).await;
+    let refusing_tokens = write_greedy_reply(paging_engine, &proof_replies.refusing_reply).await;
+    let refused_after_refusing = refused_token_count(paging_engine).await;
+    let as_served_tokens = write_greedy_reply(paging_engine, &proof_replies.reply_as_served).await;
+    let refused_after_as_served = refused_token_count(paging_engine).await;
+    WrittenProofReplies {
+        reference_reply: reference,
+        refusing_reply_tokens: refusing_tokens,
+        reply_as_served_tokens: as_served_tokens,
+        refused_token_counts: [
+            refused_before,
+            refused_after_refusing,
+            refused_after_as_served,
+        ],
+    }
+}
+
+async fn assert_replies_prove_the_lookups(
+    paging_engine: &PagingExperimentEngine,
+    in_graph_draft_token_count: u32,
+    written_replies: &WrittenProofReplies,
+) {
+    let refused_token_counts = written_replies.refused_token_counts;
     let in_graph_counts = paging_engine
         .engine
         .in_graph_serving_counts_for_tests()
@@ -237,7 +283,7 @@ async fn compare_greedy_replies(in_graph_draft_token_count: u32) {
         .expect("the engine counts its lookups");
     eprintln!(
         "[route-lookup-proof] draft_tokens={in_graph_draft_token_count} in_graph_counts={in_graph_counts:?} refused_before_refusing_and_as_served={refused_token_counts:?} reply_tokens={}",
-        reference_reply.len()
+        written_replies.reference_reply.len()
     );
     assert!(
         in_graph_counts.served_layer_count > 0 && in_graph_counts.fetching_layer_count > 0,
@@ -252,17 +298,17 @@ async fn compare_greedy_replies(in_graph_draft_token_count: u32) {
         "with tables grown ahead no lookup refuses"
     );
     assert!(
-        reference_reply.len() > 1,
+        written_replies.reference_reply.len() > 1,
         "the compared reply must be more than one token"
     );
     assert_eq!(
-        refusing_reply_tokens, reply_as_served_tokens,
+        written_replies.refusing_reply_tokens, written_replies.reply_as_served_tokens,
         "a reply with refused forwards served again must be the reply whose lookups never refuse"
     );
     assert_matches_the_plain_reply(
         in_graph_draft_token_count,
-        &reply_as_served_tokens,
-        &reference_reply,
+        &written_replies.reply_as_served_tokens,
+        &written_replies.reference_reply,
     );
 }
 

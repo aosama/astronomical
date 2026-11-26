@@ -61,67 +61,86 @@ impl Qwen3_5ProbeModel {
         chunking: super::TextModelChunkingConfiguration,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<Self, TextExecutionError> {
-        // Taken before binding, which consumes parts of the artifact.
-        let expert_atlas = validated_artifact.expert_atlas().cloned();
-        let BoundLanguageArtifact {
-            config,
-            shard_index,
-            tensor_inventory,
-            weights,
-            vision_model,
-            ..
-        } = bind_language_artifact_for(
+        let bound_language = bind_probe_language(
             &runtime,
             &mut validated_artifact,
+            model_directory,
             should_bind_vision_weights,
-            LANGUAGE_WEIGHT_BINDING_DTYPE,
             performance_attribution,
         )?;
-        let ProbeMixtureOfExpertsParts {
-            expert_layer_plans,
-            sorted_expert_weighted_sum_kernel,
-            sorted_expert_shared_combination_kernel,
-        } = match config.feed_forward_architecture() {
-            Qwen3_5FeedForwardArchitecture::Dense => ProbeMixtureOfExpertsParts::default(),
-            Qwen3_5FeedForwardArchitecture::MixtureOfExperts => held_mixture_of_experts_parts(
-                &runtime,
-                model_directory,
-                &config,
-                &shard_index,
-                &tensor_inventory,
-                expert_atlas.as_ref(),
-                performance_attribution,
-            )?,
-        };
+        let BoundProbeLanguage {
+            config,
+            weights,
+            vision_model,
+            mixture_of_experts_parts,
+        } = &bound_language;
+        let expert_layer_plans = &mixture_of_experts_parts.expert_layer_plans;
         let astro_decoder_state_cache_layout = measured_astro_decoder_state_cache_layout(
-            &config,
+            config,
             &chunking,
-            &weights,
+            weights,
             expert_layer_plans.as_slice(),
             performance_attribution,
         )?;
-        let ModelKernelVerdicts {
-            gated_delta_kernel,
-            gated_delta_checkpoint_kernel,
-            gdn_decode_prework_kernel,
-        } = load_model_kernel_verdicts(&runtime, &config, performance_attribution)?;
-        let compiled_swiglu = MlxCompiledSwiGlu::new()?;
-        let compiled_elementwise_graphs = MlxCompiledElementwiseGraphs::new()?;
-        let InvariantLinearScales {
-            inverse_linear_head_dimension_scale,
-            inverse_square_root_linear_head_dimension_scale,
-            query_normalization_scale_weight,
-            key_normalization_scale_weight,
-        } = load_invariant_linear_scales(&runtime, &config, LANGUAGE_WEIGHT_BINDING_DTYPE)?;
+        let startup_mlx_resources =
+            load_startup_mlx_resources(&runtime, config, performance_attribution)?;
         let memory_facts = build_held_model_memory_facts(
             &runtime,
-            &config,
-            &weights,
-            &vision_model,
-            &expert_layer_plans,
+            config,
+            weights,
+            vision_model,
+            expert_layer_plans,
             &astro_decoder_state_cache_layout,
         )?;
-        Ok(Self {
+        Ok(Self::from_loaded_parts(
+            runtime,
+            chunking,
+            bound_language,
+            startup_mlx_resources,
+            astro_decoder_state_cache_layout,
+            memory_facts,
+        ))
+    }
+
+    /// Puts the bound artifact, the startup MLX resources and the measured
+    /// layout and memory facts together into the probe model.
+    fn from_loaded_parts(
+        runtime: MlxRuntime,
+        chunking: super::TextModelChunkingConfiguration,
+        bound_language: BoundProbeLanguage,
+        startup_mlx_resources: StartupMlxResources,
+        astro_decoder_state_cache_layout: crate::AstroDecoderStateCacheLayout,
+        memory_facts: ModelMemoryFacts,
+    ) -> Self {
+        let BoundProbeLanguage {
+            config,
+            weights,
+            vision_model,
+            mixture_of_experts_parts:
+                ProbeMixtureOfExpertsParts {
+                    expert_layer_plans,
+                    sorted_expert_weighted_sum_kernel,
+                    sorted_expert_shared_combination_kernel,
+                },
+        } = bound_language;
+        let StartupMlxResources {
+            kernel_verdicts:
+                ModelKernelVerdicts {
+                    gated_delta_kernel,
+                    gated_delta_checkpoint_kernel,
+                    gdn_decode_prework_kernel,
+                },
+            compiled_swiglu,
+            compiled_elementwise_graphs,
+            invariant_linear_scales:
+                InvariantLinearScales {
+                    inverse_linear_head_dimension_scale,
+                    inverse_square_root_linear_head_dimension_scale,
+                    query_normalization_scale_weight,
+                    key_normalization_scale_weight,
+                },
+        } = startup_mlx_resources;
+        Self {
             base: super::Qwen3_5ModelBase {
                 disk_embedding_rows: None,
                 ngram_table: None,
@@ -153,8 +172,100 @@ impl Qwen3_5ProbeModel {
             // Loaded by `materialize_every_weight`,
             // after the rest of the model is materialized.
             held_expert_weights: None,
-        })
+        }
     }
+}
+
+/// What binding the validated artifact yields before any startup-only MLX
+/// resource is built: the config, the bound weights, the optional vision
+/// tower and, for a sparse model, the held mixture-of-experts parts.
+struct BoundProbeLanguage {
+    config: qwen35::Qwen3_5Config,
+    weights: Qwen3_5Weights,
+    vision_model: Option<Qwen3_5VisionModel>,
+    mixture_of_experts_parts: ProbeMixtureOfExpertsParts,
+}
+
+/// Binds the language artifact and, for a sparse model, builds the held
+/// mixture-of-experts parts from the bound shard index and tensor inventory.
+fn bind_probe_language(
+    runtime: &MlxRuntime,
+    validated_artifact: &mut ValidatedQwen3_5Artifact,
+    model_directory: &Path,
+    should_bind_vision_weights: bool,
+    performance_attribution: &mut PerformanceAttribution,
+) -> Result<BoundProbeLanguage, TextExecutionError> {
+    // Taken before binding, which consumes parts of the artifact.
+    let expert_atlas = validated_artifact.expert_atlas().cloned();
+    let BoundLanguageArtifact {
+        config,
+        shard_index,
+        tensor_inventory,
+        weights,
+        vision_model,
+        ..
+    } = bind_language_artifact_for(
+        runtime,
+        validated_artifact,
+        should_bind_vision_weights,
+        LANGUAGE_WEIGHT_BINDING_DTYPE,
+        performance_attribution,
+    )?;
+    let mixture_of_experts_parts = match config.feed_forward_architecture() {
+        Qwen3_5FeedForwardArchitecture::Dense => ProbeMixtureOfExpertsParts::default(),
+        Qwen3_5FeedForwardArchitecture::MixtureOfExperts => held_mixture_of_experts_parts(
+            runtime,
+            model_directory,
+            &config,
+            &shard_index,
+            &tensor_inventory,
+            expert_atlas.as_ref(),
+            performance_attribution,
+        )?,
+    };
+    Ok(BoundProbeLanguage {
+        config,
+        weights,
+        vision_model,
+        mixture_of_experts_parts,
+    })
+}
+
+/// The MLX resources built once at startup and held by the model: the
+/// gated-delta kernels under their capability verdicts, the compiled SwiGLU
+/// and elementwise graphs, and the invariant linear-attention scales.
+struct StartupMlxResources {
+    kernel_verdicts: ModelKernelVerdicts,
+    compiled_swiglu: MlxCompiledSwiGlu,
+    compiled_elementwise_graphs: MlxCompiledElementwiseGraphs,
+    invariant_linear_scales: InvariantLinearScales,
+}
+
+/// Loads the probe model's startup-only MLX resources, in this order: the
+/// gated-delta kernels under their capability verdicts, the compiled SwiGLU and
+/// elementwise graphs, and the invariant linear-attention scales (bound in
+/// `LANGUAGE_WEIGHT_BINDING_DTYPE`). It is its own step because these depend
+/// only on the runtime and the model configuration, never on the bound
+/// weights, so the load groups them and hands them to the model as one value.
+/// The engine's `load_startup_kernel_resources` is a separate function over the
+/// engine's own private result type; the probe keeps this one rather than
+/// sharing it.
+fn load_startup_mlx_resources(
+    runtime: &MlxRuntime,
+    config: &qwen35::Qwen3_5Config,
+    performance_attribution: &mut PerformanceAttribution,
+) -> Result<StartupMlxResources, TextExecutionError> {
+    let kernel_verdicts = load_model_kernel_verdicts(runtime, config, performance_attribution)?;
+    let compiled_swiglu = MlxCompiledSwiGlu::new()?;
+    let compiled_elementwise_graphs = MlxCompiledElementwiseGraphs::new()?;
+    let invariant_linear_scales =
+        load_invariant_linear_scales(runtime, config, LANGUAGE_WEIGHT_BINDING_DTYPE)?;
+    Ok(StartupMlxResources {
+        kernel_verdicts,
+        compiled_swiglu,
+        compiled_elementwise_graphs,
+        invariant_linear_scales,
+    })
 }
 
 /// The probe model's MoE-only pieces: the quantized expert layer plans

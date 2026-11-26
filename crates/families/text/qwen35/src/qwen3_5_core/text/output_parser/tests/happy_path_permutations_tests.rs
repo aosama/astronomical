@@ -120,6 +120,12 @@ fn should_keep_qwen_argument_order_independent_for_required_and_extra_fields() {
 }
 
 fn well_formed_single_call_cases() -> Vec<WellFormedCallCase> {
+    let mut well_formed_calls = declared_function_layout_cases();
+    well_formed_calls.extend(argument_shape_and_undeclared_function_cases());
+    well_formed_calls
+}
+
+fn declared_function_layout_cases() -> Vec<WellFormedCallCase> {
     vec![
         WellFormedCallCase {
             layout_description: "jammed declared character call",
@@ -163,6 +169,11 @@ fn well_formed_single_call_cases() -> Vec<WellFormedCallCase> {
             function_name: DECLARED_CHARACTER_FUNCTION,
             arguments_json: r#"{"name":"Romeo Montague"}"#,
         },
+    ]
+}
+
+fn argument_shape_and_undeclared_function_cases() -> Vec<WellFormedCallCase> {
+    vec![
         WellFormedCallCase {
             layout_description: "path-shaped extra argument on an undeclared function",
             qwen_function_body: "<function=read><parameter=path>romeo-and-juliet.md</parameter></function>",

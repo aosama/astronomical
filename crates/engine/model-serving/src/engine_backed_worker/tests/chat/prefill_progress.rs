@@ -11,85 +11,13 @@ use ipc_protocol::{
     WorkerMlxMemorySnapshot, WorkerPromptWorkReuse,
 };
 #[tokio::test]
-#[expect(clippy::too_many_lines)]
 async fn should_exclude_the_complete_restored_prompt_prefix_from_progress_without_inflating_astro_ssd_prompt_cache_usage()
  {
     let engine_worker = EngineBackedWorker::new(
         ScriptedChatProcessor::with_prompt_token_count(15),
         ScriptedChatEngine::with_astro_ssd_prompt_cache_restored_token_count_and_generated_tokens(
             3,
-            vec![
-                GeneratedToken::PrefillProgress {
-                    astro_ssd_prompt_cache_diagnostics: None,
-                    neural_engine_chunk: None,
-                    prompt_layer_progress: None,
-                    processed_token_count: 2,
-                    elapsed_millis: 400,
-                    forward_prefill_chunk_elapsed_millis: 350,
-                    completed_prefill_chunk_tokens: 2_048,
-                    expert_residency_telemetry: Some(ExpertResidencyTelemetry {
-                        dense_layers: None,
-                        total_layer_count: 40,
-                        resident_expert_count: 40,
-                        resident_expert_payload_bytes: 3_375_366_144,
-                        complete_expert_payload_byte_count: 21_000_000_000,
-                        expert_capacity: 256,
-                        layer_seating: ipc_protocol::ExpertLayerSeatingCounts::default(),
-                    }),
-                    mlx_memory_telemetry: Some(MlxMemoryTelemetry::new(
-                        11_000,
-                        12_000,
-                        13_000,
-                        MlxActiveMemoryBreakdown {
-                            expert_payload_bytes: 1_000,
-                            model_core_payload_bytes: 4_000,
-                            context_state_payload_bytes: 2_000,
-                        },
-                    )),
-                    expert_memory_mode: None,
-                    prompt_work_reuse: WorkerPromptWorkReuse {
-                        target_eligible_token_count: 13,
-                        target_restored_token_count: 10,
-                    },
-                },
-                GeneratedToken::PrefillProgress {
-                    astro_ssd_prompt_cache_diagnostics: None,
-                    neural_engine_chunk: None,
-                    prompt_layer_progress: None,
-                    processed_token_count: 3,
-                    elapsed_millis: 600,
-                    forward_prefill_chunk_elapsed_millis: 525,
-                    completed_prefill_chunk_tokens: 2_048,
-                    expert_residency_telemetry: None,
-                    mlx_memory_telemetry: Some(MlxMemoryTelemetry::new(
-                        14_000,
-                        15_000,
-                        16_000,
-                        MlxActiveMemoryBreakdown::default(),
-                    )),
-                    expert_memory_mode: None,
-                    prompt_work_reuse: WorkerPromptWorkReuse {
-                        target_eligible_token_count: 13,
-                        target_restored_token_count: 10,
-                    },
-                },
-                GeneratedToken::TokenId {
-                    token_id: 1,
-                    is_reasoning_token: false,
-                    expert_memory_mode: None,
-                    mlx_memory_telemetry: None,
-                    first_decode_forward_elapsed_millis: None,
-                    generation_finalization: None,
-                },
-                GeneratedToken::TokenId {
-                    token_id: 2,
-                    is_reasoning_token: false,
-                    expert_memory_mode: None,
-                    mlx_memory_telemetry: None,
-                    first_decode_forward_elapsed_millis: None,
-                    generation_finalization: None,
-                },
-            ],
+            restored_prefix_prefill_script_tokens(),
         )
         .with_restored_prompt_prefix_token_count(10),
     );
@@ -101,7 +29,111 @@ async fn should_exclude_the_complete_restored_prompt_prefix_from_progress_withou
     assert_eq!(next_event(&mut daemon_reader).await, ready_event());
     send_chat_request(&mut daemon_writer, 742, 12).await;
 
-    let initial_prefill_progress_event = next_event(&mut daemon_reader).await;
+    assert_initial_prefill_progress_event(next_event(&mut daemon_reader).await);
+    assert_first_completed_prefill_progress_event(next_event(&mut daemon_reader).await);
+    assert_second_completed_prefill_progress_event(next_event(&mut daemon_reader).await);
+    let _first_output_event = next_event(&mut daemon_reader).await;
+    let _second_output_event = next_event(&mut daemon_reader).await;
+    assert_eq!(
+        next_event(&mut daemon_reader).await,
+        WorkerEvent::PromptWorkReuse {
+            request_id: RequestId::new(742),
+            prompt_work_reuse: WorkerPromptWorkReuse {
+                target_eligible_token_count: 13,
+                target_restored_token_count: 10,
+            },
+        }
+    );
+    assert!(matches!(
+        next_event(&mut daemon_reader).await,
+        WorkerEvent::Completed {
+            prompt_token_count: 15,
+            astro_ssd_prompt_cache_restored_token_count: 3,
+            ..
+        }
+    ));
+
+    close_worker_transport(daemon_writer, worker_task).await;
+}
+
+/// The scripted engine's tokens for the restored-prefix test: two prefill
+/// progress reports followed by two decoded tokens.
+fn restored_prefix_prefill_script_tokens() -> Vec<GeneratedToken> {
+    vec![
+        GeneratedToken::PrefillProgress {
+            astro_ssd_prompt_cache_diagnostics: None,
+            neural_engine_chunk: None,
+            prompt_layer_progress: None,
+            processed_token_count: 2,
+            elapsed_millis: 400,
+            forward_prefill_chunk_elapsed_millis: 350,
+            completed_prefill_chunk_tokens: 2_048,
+            expert_residency_telemetry: Some(ExpertResidencyTelemetry {
+                dense_layers: None,
+                total_layer_count: 40,
+                resident_expert_count: 40,
+                resident_expert_payload_bytes: 3_375_366_144,
+                complete_expert_payload_byte_count: 21_000_000_000,
+                expert_capacity: 256,
+                layer_seating: ipc_protocol::ExpertLayerSeatingCounts::default(),
+            }),
+            mlx_memory_telemetry: Some(MlxMemoryTelemetry::new(
+                11_000,
+                12_000,
+                13_000,
+                MlxActiveMemoryBreakdown {
+                    expert_payload_bytes: 1_000,
+                    model_core_payload_bytes: 4_000,
+                    context_state_payload_bytes: 2_000,
+                },
+            )),
+            expert_memory_mode: None,
+            prompt_work_reuse: WorkerPromptWorkReuse {
+                target_eligible_token_count: 13,
+                target_restored_token_count: 10,
+            },
+        },
+        GeneratedToken::PrefillProgress {
+            astro_ssd_prompt_cache_diagnostics: None,
+            neural_engine_chunk: None,
+            prompt_layer_progress: None,
+            processed_token_count: 3,
+            elapsed_millis: 600,
+            forward_prefill_chunk_elapsed_millis: 525,
+            completed_prefill_chunk_tokens: 2_048,
+            expert_residency_telemetry: None,
+            mlx_memory_telemetry: Some(MlxMemoryTelemetry::new(
+                14_000,
+                15_000,
+                16_000,
+                MlxActiveMemoryBreakdown::default(),
+            )),
+            expert_memory_mode: None,
+            prompt_work_reuse: WorkerPromptWorkReuse {
+                target_eligible_token_count: 13,
+                target_restored_token_count: 10,
+            },
+        },
+        GeneratedToken::TokenId {
+            token_id: 1,
+            is_reasoning_token: false,
+            expert_memory_mode: None,
+            mlx_memory_telemetry: None,
+            first_decode_forward_elapsed_millis: None,
+            generation_finalization: None,
+        },
+        GeneratedToken::TokenId {
+            token_id: 2,
+            is_reasoning_token: false,
+            expert_memory_mode: None,
+            mlx_memory_telemetry: None,
+            first_decode_forward_elapsed_millis: None,
+            generation_finalization: None,
+        },
+    ]
+}
+
+fn assert_initial_prefill_progress_event(initial_prefill_progress_event: WorkerEvent) {
     match initial_prefill_progress_event {
         WorkerEvent::PrefillProgress {
             request_id,
@@ -121,8 +153,11 @@ async fn should_exclude_the_complete_restored_prompt_prefix_from_progress_withou
             "expected initial prefill progress with nothing restored from the astro SSD prompt cache, got {other_event:?}"
         ),
     }
+}
 
-    let first_completed_prefill_progress_event = next_event(&mut daemon_reader).await;
+fn assert_first_completed_prefill_progress_event(
+    first_completed_prefill_progress_event: WorkerEvent,
+) {
     match first_completed_prefill_progress_event {
         WorkerEvent::PrefillProgress {
             request_id,
@@ -172,7 +207,11 @@ async fn should_exclude_the_complete_restored_prompt_prefix_from_progress_withou
             "expected prefill progress with nothing restored from the astro SSD prompt cache, got {other_event:?}"
         ),
     }
-    let second_completed_prefill_progress_event = next_event(&mut daemon_reader).await;
+}
+
+fn assert_second_completed_prefill_progress_event(
+    second_completed_prefill_progress_event: WorkerEvent,
+) {
     match second_completed_prefill_progress_event {
         WorkerEvent::PrefillProgress {
             request_id,
@@ -192,28 +231,6 @@ async fn should_exclude_the_complete_restored_prompt_prefix_from_progress_withou
             "expected prefill progress with nothing restored from the astro SSD prompt cache, got {other_event:?}"
         ),
     }
-    let _first_output_event = next_event(&mut daemon_reader).await;
-    let _second_output_event = next_event(&mut daemon_reader).await;
-    assert_eq!(
-        next_event(&mut daemon_reader).await,
-        WorkerEvent::PromptWorkReuse {
-            request_id: RequestId::new(742),
-            prompt_work_reuse: WorkerPromptWorkReuse {
-                target_eligible_token_count: 13,
-                target_restored_token_count: 10,
-            },
-        }
-    );
-    assert!(matches!(
-        next_event(&mut daemon_reader).await,
-        WorkerEvent::Completed {
-            prompt_token_count: 15,
-            astro_ssd_prompt_cache_restored_token_count: 3,
-            ..
-        }
-    ));
-
-    close_worker_transport(daemon_writer, worker_task).await;
 }
 
 #[tokio::test]

@@ -111,6 +111,13 @@ pub fn qwen3_5_gdn_decode_prework(
         query_scale,
         key_scale,
     )?;
+    let activation_dtype = mixed_queries_keys_values.dtype();
+    let [
+        queries_shape,
+        keys_shape,
+        values_shape,
+        next_convolution_state_shape,
+    ] = prework_output_shapes(&shape, key_head_count, value_head_count, head_dimension);
     let outputs = runtime.apply_metal_kernel(
         prework_kernel,
         &[
@@ -121,47 +128,12 @@ pub fn qwen3_5_gdn_decode_prework(
             key_scale,
         ],
         &[
-            MlxMetalKernelOutput::new(
-                vec![
-                    shape.batch_size,
-                    shape.token_count,
-                    key_head_count,
-                    head_dimension,
-                ],
-                mixed_queries_keys_values.dtype(),
-            ),
-            MlxMetalKernelOutput::new(
-                vec![
-                    shape.batch_size,
-                    shape.token_count,
-                    key_head_count,
-                    head_dimension,
-                ],
-                mixed_queries_keys_values.dtype(),
-            ),
-            MlxMetalKernelOutput::new(
-                vec![
-                    shape.batch_size,
-                    shape.token_count,
-                    value_head_count,
-                    head_dimension,
-                ],
-                mixed_queries_keys_values.dtype(),
-            ),
-            MlxMetalKernelOutput::new(
-                vec![
-                    shape.batch_size,
-                    KEPT_STATE_ROW_COUNT,
-                    shape.convolution_dimension,
-                ],
-                mixed_queries_keys_values.dtype(),
-            ),
+            MlxMetalKernelOutput::new(queries_shape, activation_dtype),
+            MlxMetalKernelOutput::new(keys_shape, activation_dtype),
+            MlxMetalKernelOutput::new(values_shape, activation_dtype),
+            MlxMetalKernelOutput::new(next_convolution_state_shape, activation_dtype),
         ],
-        [
-            LANE_COUNT,
-            shape.batch_size * shape.token_count,
-            2 * key_head_count + value_head_count,
-        ],
+        prework_launch_grid(&shape, key_head_count, value_head_count),
         [LANE_COUNT, 1, 1],
         &prework_template_arguments(
             key_head_count,
@@ -169,9 +141,67 @@ pub fn qwen3_5_gdn_decode_prework(
             head_dimension,
             shape.convolution_dimension,
             shape.token_count,
-            mixed_queries_keys_values.dtype(),
+            activation_dtype,
         ),
     )?;
+    unpack_prework_outputs(outputs)
+}
+
+/// Shapes of the kernel's four outputs in the order it declares them: the
+/// normalized queries, the normalized keys, the split values, and the next
+/// rolling convolution state.
+fn prework_output_shapes(
+    shape: &PreworkShape,
+    key_head_count: i32,
+    value_head_count: i32,
+    head_dimension: i32,
+) -> [Vec<i32>; 4] {
+    [
+        vec![
+            shape.batch_size,
+            shape.token_count,
+            key_head_count,
+            head_dimension,
+        ],
+        vec![
+            shape.batch_size,
+            shape.token_count,
+            key_head_count,
+            head_dimension,
+        ],
+        vec![
+            shape.batch_size,
+            shape.token_count,
+            value_head_count,
+            head_dimension,
+        ],
+        vec![
+            shape.batch_size,
+            KEPT_STATE_ROW_COUNT,
+            shape.convolution_dimension,
+        ],
+    ]
+}
+
+/// One threadgroup per (token row, logical head), where the logical heads are
+/// the query heads, the key heads, then the value heads.
+fn prework_launch_grid(
+    shape: &PreworkShape,
+    key_head_count: i32,
+    value_head_count: i32,
+) -> [i32; 3] {
+    [
+        LANE_COUNT,
+        shape.batch_size * shape.token_count,
+        2 * key_head_count + value_head_count,
+    ]
+}
+
+/// Takes the four launch results in kernel-declared order, naming the first
+/// one a short return left out.
+fn unpack_prework_outputs(
+    outputs: Vec<MlxArray>,
+) -> Result<GdnDecodePreworkOutput, MlxRuntimeError> {
     let mut output_iterator = outputs.into_iter();
     let queries = output_iterator.next().ok_or_else(|| {
         prework_error("the fused prework kernel did not return normalized queries")
@@ -428,3 +458,7 @@ fn gdn_decode_prework_kernel_source(rms_norm_epsilon: f32) -> String {
 "#
     )
 }
+
+#[cfg(test)]
+#[path = "gdn_decode_prework_kernel_tests.rs"]
+mod tests;

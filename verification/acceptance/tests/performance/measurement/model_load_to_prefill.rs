@@ -184,7 +184,6 @@ async fn run_load_to_prefill_measurement(journey_timeout: Duration) {
     eprintln!("[load-to-prefill] {measurement_report}");
 }
 
-#[expect(clippy::too_many_lines)]
 async fn run_single_measured_request(
     worker_handle: &WorkerHandle,
     model_id: &str,
@@ -192,25 +191,7 @@ async fn run_single_measured_request(
 ) -> LoadToPrefillMeasurement {
     let request_accepted_at = Instant::now();
     let mut stream_receiver = worker_handle
-        .start_chat_generation(ChatGenerationCommand {
-            request_id: RequestId::new(1),
-            model: model_id.to_owned(),
-            messages: vec![ChatMessage::User {
-                content: format!("{WARMUP_INPUT_INSTRUCTION}\n\n{WARMUP_ROMEO_AND_JULIET_SOURCE}"),
-                images: Vec::new(),
-            }],
-            tools: Vec::new(),
-            tool_choice: ChatToolChoice::None,
-            settings: ChatGenerationSettings {
-                max_output_tokens: MAXIMUM_OUTPUT_TOKENS,
-                temperature_thousandths: None,
-                top_p_thousandths: None,
-                repetition_penalty_thousandths: None,
-                seed: None,
-                thinking_budget: Some(0),
-            },
-            structured_generation: None,
-        })
+        .start_chat_generation(load_measurement_command(model_id))
         .await
         .expect("the worker should start the load-measurement request");
     eprintln!("[load-to-prefill] request accepted; the idle worker now loads the model");
@@ -239,52 +220,13 @@ async fn run_single_measured_request(
         let Some(stream_event) = stream_event else {
             break;
         };
-        match stream_event {
-            ChatGenerationStreamEvent::PrefillProgress {
-                processed_tokens,
-                elapsed_millis,
-                ..
-            } => {
-                if prefill_start_arrival_at.is_none() {
-                    assert_eq!(
-                        processed_tokens, 0,
-                        "the first prefill event must be the phase-start boundary",
-                    );
-                    assert_eq!(
-                        elapsed_millis, 0,
-                        "the prefill-start boundary event must carry zero prefill time",
-                    );
-                    let boundary_arrival_at = Instant::now();
-                    prefill_start_arrival_at = Some(boundary_arrival_at);
-                    eprintln!(
-                        "[load-to-prefill] prefill started; load_to_prefill_elapsed_millis={}",
-                        boundary_arrival_at
-                            .duration_since(request_accepted_at)
-                            .as_millis(),
-                    );
-                }
-            }
-            ChatGenerationStreamEvent::ReasoningFragment(_)
-            | ChatGenerationStreamEvent::TextFragment(_)
-            | ChatGenerationStreamEvent::ToolCall { .. }
-            | ChatGenerationStreamEvent::DraftingReport(_) => {}
-            ChatGenerationStreamEvent::Completed {
-                prompt_token_count,
-                astro_ssd_prompt_cache_restored_token_count,
-                ..
-            } => {
-                completed_token_counts = Some((
-                    prompt_token_count,
-                    astro_ssd_prompt_cache_restored_token_count,
-                ));
-                break;
-            }
-            ChatGenerationStreamEvent::Failed { reason } => {
-                panic!("the worker failed the load-measurement request: {reason:?}");
-            }
-            ChatGenerationStreamEvent::Error(error_code) => {
-                panic!("the worker stream reported an error: {error_code:?}");
-            }
+        if let Some(terminal_token_counts) = apply_load_measurement_event(
+            stream_event,
+            request_accepted_at,
+            &mut prefill_start_arrival_at,
+        ) {
+            completed_token_counts = Some(terminal_token_counts);
+            break;
         }
     }
 
@@ -299,6 +241,86 @@ async fn run_single_measured_request(
         prompt_token_count,
         astro_ssd_prompt_cache_restored_token_count,
     }
+}
+
+fn load_measurement_command(model_id: &str) -> ChatGenerationCommand {
+    ChatGenerationCommand {
+        request_id: RequestId::new(1),
+        model: model_id.to_owned(),
+        messages: vec![ChatMessage::User {
+            content: format!("{WARMUP_INPUT_INSTRUCTION}\n\n{WARMUP_ROMEO_AND_JULIET_SOURCE}"),
+            images: Vec::new(),
+        }],
+        tools: Vec::new(),
+        tool_choice: ChatToolChoice::None,
+        settings: ChatGenerationSettings {
+            max_output_tokens: MAXIMUM_OUTPUT_TOKENS,
+            temperature_thousandths: None,
+            top_p_thousandths: None,
+            repetition_penalty_thousandths: None,
+            seed: None,
+            thinking_budget: Some(0),
+        },
+        structured_generation: None,
+    }
+}
+
+/// Reads one worker stream event. The first prefill event is the boundary the
+/// journey measures to: its arrival instant is taken right after the boundary
+/// checks, before it is reported. Returns the prompt and restored token counts
+/// once the terminal event arrives.
+fn apply_load_measurement_event(
+    stream_event: ChatGenerationStreamEvent,
+    request_accepted_at: Instant,
+    prefill_start_arrival_at: &mut Option<Instant>,
+) -> Option<(u32, u32)> {
+    match stream_event {
+        ChatGenerationStreamEvent::PrefillProgress {
+            processed_tokens,
+            elapsed_millis,
+            ..
+        } => {
+            if prefill_start_arrival_at.is_none() {
+                assert_eq!(
+                    processed_tokens, 0,
+                    "the first prefill event must be the phase-start boundary",
+                );
+                assert_eq!(
+                    elapsed_millis, 0,
+                    "the prefill-start boundary event must carry zero prefill time",
+                );
+                let boundary_arrival_at = Instant::now();
+                *prefill_start_arrival_at = Some(boundary_arrival_at);
+                eprintln!(
+                    "[load-to-prefill] prefill started; load_to_prefill_elapsed_millis={}",
+                    boundary_arrival_at
+                        .duration_since(request_accepted_at)
+                        .as_millis(),
+                );
+            }
+        }
+        ChatGenerationStreamEvent::ReasoningFragment(_)
+        | ChatGenerationStreamEvent::TextFragment(_)
+        | ChatGenerationStreamEvent::ToolCall { .. }
+        | ChatGenerationStreamEvent::DraftingReport(_) => {}
+        ChatGenerationStreamEvent::Completed {
+            prompt_token_count,
+            astro_ssd_prompt_cache_restored_token_count,
+            ..
+        } => {
+            return Some((
+                prompt_token_count,
+                astro_ssd_prompt_cache_restored_token_count,
+            ));
+        }
+        ChatGenerationStreamEvent::Failed { reason } => {
+            panic!("the worker failed the load-measurement request: {reason:?}");
+        }
+        ChatGenerationStreamEvent::Error(error_code) => {
+            panic!("the worker stream reported an error: {error_code:?}");
+        }
+    }
+    None
 }
 
 fn isolated_load_measurement_worker_launcher(

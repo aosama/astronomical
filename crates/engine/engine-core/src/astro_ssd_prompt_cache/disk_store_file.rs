@@ -40,15 +40,7 @@ pub(super) fn save_direct_safetensors_file_with_name(
     let block_file_path = directory.join(file_name);
     let temporary_file_path = directory.join(format!("{file_name}.tmp"));
     remove_astro_ssd_prompt_cache_owned_file_or_confirm_absent(&temporary_file_path)?;
-    let temporary_file = OpenOptions::new()
-        .create_new(true)
-        .write(true)
-        .custom_flags(libc::O_NOFOLLOW)
-        .open(&temporary_file_path)
-        .map_err(|source| AstroSsdPromptCacheDiskStoreError::OpenTempFile {
-            temp_file_path: temporary_file_path.clone(),
-            source,
-        })?;
+    let temporary_file = create_temporary_state_file(&temporary_file_path)?;
     // These references remain valid for the entire synchronous native call.
     // The retained descriptor streams each MLX materialization to disk; there is
     // deliberately no queue, detached thread, or serialized block-sized buffer.
@@ -70,29 +62,84 @@ pub(super) fn save_direct_safetensors_file_with_name(
     ) {
         Ok(write_outcome) => write_outcome,
         Err(source) => {
-            remove_astro_ssd_prompt_cache_owned_file_or_confirm_absent(&temporary_file_path)?;
-            return Err(map_safetensors_writer_error(source));
+            return remove_temporary_state_file_then_fail(
+                &temporary_file_path,
+                map_safetensors_writer_error(source),
+            );
         }
     };
+    let actual_file_size_bytes = validate_written_temporary_state_file(
+        &temporary_file_path,
+        file_kind,
+        &write_outcome,
+        astro_ssd_prompt_cache_model_contract,
+        performance_attribution,
+    )?;
+    rename_temporary_state_file_into_place(&temporary_file_path, &block_file_path)?;
+    Ok(StagedAstroSsdPromptCacheStateFile {
+        file_path: block_file_path,
+        file_size_bytes: actual_file_size_bytes,
+    })
+}
+
+/// Opens the temporary state file for a fresh write. `create_new` refuses a
+/// leftover file and `O_NOFOLLOW` refuses a symlink planted at that name.
+fn create_temporary_state_file(
+    temporary_file_path: &Path,
+) -> Result<File, AstroSsdPromptCacheDiskStoreError> {
+    OpenOptions::new()
+        .create_new(true)
+        .write(true)
+        .custom_flags(libc::O_NOFOLLOW)
+        .open(temporary_file_path)
+        .map_err(|source| AstroSsdPromptCacheDiskStoreError::OpenTempFile {
+            temp_file_path: temporary_file_path.to_path_buf(),
+            source,
+        })
+}
+
+/// Removes the temporary file and then reports `failure`. A removal that
+/// itself fails is reported instead, because it leaves a file behind that the
+/// original failure does not explain.
+fn remove_temporary_state_file_then_fail<Outcome>(
+    temporary_file_path: &Path,
+    failure: AstroSsdPromptCacheDiskStoreError,
+) -> Result<Outcome, AstroSsdPromptCacheDiskStoreError> {
+    remove_astro_ssd_prompt_cache_owned_file_or_confirm_absent(temporary_file_path)?;
+    Err(failure)
+}
+
+/// Checks the temporary file after the native write and returns its size:
+/// the size the filesystem sees must match what the writer reported, and the
+/// header and tensor layout must validate against the model contract for the
+/// file's kind. Every failure removes the temporary file before it propagates.
+fn validate_written_temporary_state_file(
+    temporary_file_path: &Path,
+    file_kind: AstroSsdPromptCacheFileKind,
+    write_outcome: &MlxSafetensorsWriteOutcome,
+    astro_ssd_prompt_cache_model_contract: &AstroSsdPromptCacheModelContract,
+    performance_attribution: &mut PerformanceAttribution,
+) -> Result<u64, AstroSsdPromptCacheDiskStoreError> {
     // Verify both native accounting and the safetensors contract before rename.
     // A successful native status alone is not sufficient evidence of a complete
     // file when descriptor I/O callbacks can fail independently.
     let actual_file_size_bytes =
-        match confirm_written_file_size_bytes(&temporary_file_path, &write_outcome) {
+        match confirm_written_file_size_bytes(temporary_file_path, write_outcome) {
             Ok(actual_file_size_bytes) => actual_file_size_bytes,
             Err(metadata_error) => {
-                remove_astro_ssd_prompt_cache_owned_file_or_confirm_absent(&temporary_file_path)?;
-                return Err(metadata_error);
+                return remove_temporary_state_file_then_fail(temporary_file_path, metadata_error);
             }
         };
-    let temporary_file = match open_without_following_symlinks(&temporary_file_path) {
+    let temporary_file = match open_without_following_symlinks(temporary_file_path) {
         Ok(temporary_file) => temporary_file,
         Err(source) => {
-            remove_astro_ssd_prompt_cache_owned_file_or_confirm_absent(&temporary_file_path)?;
-            return Err(AstroSsdPromptCacheDiskStoreError::OpenBlockFile {
-                block_file_path: temporary_file_path,
-                source,
-            });
+            return remove_temporary_state_file_then_fail(
+                temporary_file_path,
+                AstroSsdPromptCacheDiskStoreError::OpenBlockFile {
+                    block_file_path: temporary_file_path.to_path_buf(),
+                    source,
+                },
+            );
         }
     };
     if let Err(source) = performance_attribution.measure_operation(
@@ -101,32 +148,39 @@ pub(super) fn save_direct_safetensors_file_with_name(
             validate_current_file_header(
                 file_kind,
                 &temporary_file,
-                &temporary_file_path,
+                temporary_file_path,
                 astro_ssd_prompt_cache_model_contract,
             )
         },
     ) {
-        remove_astro_ssd_prompt_cache_owned_file_or_confirm_absent(&temporary_file_path)?;
-        return Err(AstroSsdPromptCacheDiskStoreError::ValidateBlock {
-            block_file_path: temporary_file_path,
-            source,
-        });
+        return remove_temporary_state_file_then_fail(
+            temporary_file_path,
+            AstroSsdPromptCacheDiskStoreError::ValidateBlock {
+                block_file_path: temporary_file_path.to_path_buf(),
+                source,
+            },
+        );
     }
+    Ok(actual_file_size_bytes)
+}
+
+/// Moves the validated temporary file to its final name. The temporary file
+/// is removed when the rename fails.
+fn rename_temporary_state_file_into_place(
+    temporary_file_path: &Path,
+    block_file_path: &Path,
+) -> Result<(), AstroSsdPromptCacheDiskStoreError> {
     // This rename publishes only within a private block staging directory. The
     // enclosing transaction performs the durability sync and final block rename.
-    if let Err(source) = fs::rename(&temporary_file_path, &block_file_path) {
+    if let Err(source) = fs::rename(temporary_file_path, block_file_path) {
         let rename_error = AstroSsdPromptCacheDiskStoreError::RenameTempFile {
-            temp_file_path: temporary_file_path.clone(),
-            block_file_path: block_file_path.clone(),
+            temp_file_path: temporary_file_path.to_path_buf(),
+            block_file_path: block_file_path.to_path_buf(),
             source,
         };
-        remove_astro_ssd_prompt_cache_owned_file_or_confirm_absent(&temporary_file_path)?;
-        return Err(rename_error);
+        return remove_temporary_state_file_then_fail(temporary_file_path, rename_error);
     }
-    Ok(StagedAstroSsdPromptCacheStateFile {
-        file_path: block_file_path,
-        file_size_bytes: actual_file_size_bytes,
-    })
+    Ok(())
 }
 
 pub(super) struct StagedAstroSsdPromptCacheStateFile {

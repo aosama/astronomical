@@ -92,56 +92,9 @@ pub(crate) fn assert_attention_matches_operations_reference(
     geometry: AttentionGeometry,
 ) {
     let key_token_count = geometry.prefix_token_count + geometry.query_token_count;
-    let queries = deterministic_array(
-        runtime,
-        &[
-            1,
-            geometry.query_head_count,
-            geometry.query_token_count,
-            geometry.head_width,
-        ],
-        geometry.activation_dtype,
-        17,
-        32.0,
-    );
-    let keys = deterministic_array(
-        runtime,
-        &[
-            1,
-            geometry.key_value_head_count,
-            key_token_count,
-            geometry.head_width,
-        ],
-        geometry.activation_dtype,
-        13,
-        40.0,
-    );
-    let values = deterministic_array(
-        runtime,
-        &[
-            1,
-            geometry.key_value_head_count,
-            key_token_count,
-            geometry.head_width,
-        ],
-        geometry.activation_dtype,
-        19,
-        24.0,
-    );
-    let mask_window_size = match geometry.visibility {
-        AttentionVisibility::Full => geometry.prefix_token_count + geometry.query_token_count + 1,
-        AttentionVisibility::Sliding { window_size } => window_size,
-    };
-    let mask = model_serving::build_causal_sliding_window_mask(
-        runtime,
-        geometry.prefix_token_count,
-        geometry.query_token_count,
-        0,
-        key_token_count,
-        mask_window_size,
-        &mut PerformanceAttribution::disabled(),
-    )
-    .unwrap_or_else(|error| panic!("{} mask should build: {error}", geometry.row_name));
+    let (queries, keys, values) =
+        deterministic_attention_inputs(runtime, geometry, key_token_count);
+    let mask = build_visibility_mask(runtime, geometry, key_token_count);
     let attention_scale = 1.0 / (geometry.head_width as f32).sqrt();
     let fused_output = runtime
         .masked_scaled_dot_product_attention(&queries, &keys, &values, attention_scale, &mask)
@@ -185,6 +138,71 @@ pub(crate) fn assert_attention_matches_operations_reference(
         &expected_output,
         tolerance,
     );
+}
+
+fn deterministic_attention_inputs(
+    runtime: &MlxRuntime,
+    geometry: AttentionGeometry,
+    key_token_count: i32,
+) -> (MlxArray, MlxArray, MlxArray) {
+    let queries = deterministic_array(
+        runtime,
+        &[
+            1,
+            geometry.query_head_count,
+            geometry.query_token_count,
+            geometry.head_width,
+        ],
+        geometry.activation_dtype,
+        17,
+        32.0,
+    );
+    let keys = deterministic_array(
+        runtime,
+        &[
+            1,
+            geometry.key_value_head_count,
+            key_token_count,
+            geometry.head_width,
+        ],
+        geometry.activation_dtype,
+        13,
+        40.0,
+    );
+    let values = deterministic_array(
+        runtime,
+        &[
+            1,
+            geometry.key_value_head_count,
+            key_token_count,
+            geometry.head_width,
+        ],
+        geometry.activation_dtype,
+        19,
+        24.0,
+    );
+    (queries, keys, values)
+}
+
+fn build_visibility_mask(
+    runtime: &MlxRuntime,
+    geometry: AttentionGeometry,
+    key_token_count: i32,
+) -> MlxArray {
+    let mask_window_size = match geometry.visibility {
+        AttentionVisibility::Full => geometry.prefix_token_count + geometry.query_token_count + 1,
+        AttentionVisibility::Sliding { window_size } => window_size,
+    };
+    model_serving::build_causal_sliding_window_mask(
+        runtime,
+        geometry.prefix_token_count,
+        geometry.query_token_count,
+        0,
+        key_token_count,
+        mask_window_size,
+        &mut PerformanceAttribution::disabled(),
+    )
+    .unwrap_or_else(|error| panic!("{} mask should build: {error}", geometry.row_name))
 }
 
 fn attention_operations_reference(

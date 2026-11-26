@@ -7,6 +7,8 @@
 //! and keeps serving the same conversation. This is the user-facing behavior
 //! behind the Settings "Maximum model RAM" control.
 
+use std::path::Path;
+
 use serde_json::{Value, json};
 use serial_test::serial;
 use tokio::time::timeout;
@@ -72,51 +74,13 @@ async fn start_resident_ceiling_journey() -> ResidentCeilingJourney {
     let model_id = resident_sparse_moe_model_id();
     let model_directory = configured_installed_model_directory_by_id(model_id);
     let artifact_payload_bytes = artifact_payload_bytes(&model_directory);
-    let residency_geometry = measure_sparse_artifact_residency_geometry(&model_directory);
-    // The ceiling purchases complete residency, the resident phases' context,
-    // and an allowance for one prompt chunk's MLX working buffers, so every
-    // request fits and none streams from the SSD on its own.
-    let resident_memory_ceiling_bytes = residency_geometry
-        .complete_residency_with_headroom_bytes
-        .saturating_add(context_memory_reservation_bytes(
-            &model_directory,
-            RESIDENT_PHASE_CONTEXT_TOKEN_COUNT,
-        ))
-        .saturating_add(prompt_chunk_mlx_working_buffer_allowance_bytes(
-            &residency_geometry.model_geometry,
-        ));
-    assert!(
-        resident_memory_ceiling_bytes <= MAXIMUM_REAL_MODEL_MEMORY_BYTES,
-        "the lowered-ceiling acceptance cell must remain within 36 GB: ceiling={resident_memory_ceiling_bytes}"
-    );
-    // The lowered target sits well below the artifact payload so only SSD
-    // streaming can serve the model, and above the geometry floor so the
-    // engine can honestly honor it.
-    let lowered_ceiling_bytes =
-        artifact_payload_bytes.saturating_sub(LOWERED_MARGIN_BELOW_ARTIFACT_BYTES);
-    let lowered_ceiling_gb = lowered_ceiling_bytes / BYTES_PER_MARKETED_GIGABYTE;
-    let lowered_ceiling_bytes = lowered_ceiling_gb * BYTES_PER_MARKETED_GIGABYTE;
-    assert!(
-        lowered_ceiling_bytes < artifact_payload_bytes,
-        "the lowered target must sit below the artifact payload: target={lowered_ceiling_bytes} artifact={artifact_payload_bytes}"
-    );
+    let resident_memory_ceiling_bytes = resident_phase_memory_ceiling_bytes(&model_directory);
+    let (lowered_ceiling_gb, lowered_ceiling_bytes) =
+        lowered_ceiling_below_artifact(artifact_payload_bytes);
 
-    let worker_home =
-        tempfile::tempdir().expect("the lowered-ceiling worker home should be created");
-    write_acceptance_config(
-        worker_home.path(),
-        &model_directory,
-        model_id,
-        resident_memory_ceiling_bytes,
-        false,
-    );
-    let real_model_rest_server = launch_real_model_rest_server(
-        model_id,
-        model_directory.clone(),
-        worker_home.path(),
-        resident_memory_ceiling_bytes,
-    )
-    .await;
+    let (worker_home, real_model_rest_server) =
+        launch_resident_ceiling_server(model_id, &model_directory, resident_memory_ceiling_bytes)
+            .await;
     let server_address = real_model_rest_server.server_address;
 
     let prompt_content = exact_model_prompt::build_exact_model_prompt_content(
@@ -135,6 +99,93 @@ async fn start_resident_ceiling_journey() -> ResidentCeilingJourney {
     )
     .await;
 
+    let initial_floor_bytes = require_resident_status_with_streaming_floor(
+        server_address,
+        artifact_payload_bytes,
+        lowered_ceiling_bytes,
+    )
+    .await;
+
+    ResidentCeilingJourney {
+        real_model_rest_server,
+        _worker_home: worker_home,
+        model_id,
+        prompt_content,
+        openai_client,
+        lowered_ceiling_gb,
+        lowered_ceiling_bytes,
+        initial_floor_bytes,
+    }
+}
+
+fn resident_phase_memory_ceiling_bytes(model_directory: &Path) -> u64 {
+    let residency_geometry = measure_sparse_artifact_residency_geometry(model_directory);
+    // The ceiling purchases complete residency, the resident phases' context,
+    // and an allowance for one prompt chunk's MLX working buffers, so every
+    // request fits and none streams from the SSD on its own.
+    let resident_memory_ceiling_bytes = residency_geometry
+        .complete_residency_with_headroom_bytes
+        .saturating_add(context_memory_reservation_bytes(
+            model_directory,
+            RESIDENT_PHASE_CONTEXT_TOKEN_COUNT,
+        ))
+        .saturating_add(prompt_chunk_mlx_working_buffer_allowance_bytes(
+            &residency_geometry.model_geometry,
+        ));
+    assert!(
+        resident_memory_ceiling_bytes <= MAXIMUM_REAL_MODEL_MEMORY_BYTES,
+        "the lowered-ceiling acceptance cell must remain within 36 GB: ceiling={resident_memory_ceiling_bytes}"
+    );
+    resident_memory_ceiling_bytes
+}
+
+/// The lowered ceiling in whole marketed gigabytes and in bytes.
+fn lowered_ceiling_below_artifact(artifact_payload_bytes: u64) -> (u64, u64) {
+    // The lowered target sits well below the artifact payload so only SSD
+    // streaming can serve the model, and above the geometry floor so the
+    // engine can honestly honor it.
+    let lowered_ceiling_bytes =
+        artifact_payload_bytes.saturating_sub(LOWERED_MARGIN_BELOW_ARTIFACT_BYTES);
+    let lowered_ceiling_gb = lowered_ceiling_bytes / BYTES_PER_MARKETED_GIGABYTE;
+    let lowered_ceiling_bytes = lowered_ceiling_gb * BYTES_PER_MARKETED_GIGABYTE;
+    assert!(
+        lowered_ceiling_bytes < artifact_payload_bytes,
+        "the lowered target must sit below the artifact payload: target={lowered_ceiling_bytes} artifact={artifact_payload_bytes}"
+    );
+    (lowered_ceiling_gb, lowered_ceiling_bytes)
+}
+
+/// The isolated worker home the server runs in, and the server itself.
+async fn launch_resident_ceiling_server(
+    model_id: &str,
+    model_directory: &Path,
+    resident_memory_ceiling_bytes: u64,
+) -> (tempfile::TempDir, RealModelRestServer) {
+    let worker_home =
+        tempfile::tempdir().expect("the lowered-ceiling worker home should be created");
+    write_acceptance_config(
+        worker_home.path(),
+        model_directory,
+        model_id,
+        resident_memory_ceiling_bytes,
+        false,
+    );
+    let real_model_rest_server = launch_real_model_rest_server(
+        model_id,
+        model_directory.to_path_buf(),
+        worker_home.path(),
+        resident_memory_ceiling_bytes,
+    )
+    .await;
+    (worker_home, real_model_rest_server)
+}
+
+/// Returns the geometry floor the loaded model publishes.
+async fn require_resident_status_with_streaming_floor(
+    server_address: std::net::SocketAddr,
+    artifact_payload_bytes: u64,
+    lowered_ceiling_bytes: u64,
+) -> u64 {
     let initial_status_document = get_json_endpoint(server_address, "/v1/status").await;
     assert_eq!(
         initial_status_document["expert_memory_mode"], "resident",
@@ -151,17 +202,7 @@ async fn start_resident_ceiling_journey() -> ResidentCeilingJourney {
         lowered_ceiling_bytes >= initial_floor_bytes,
         "the lowered target must remain at or above the streaming geometry floor: target={lowered_ceiling_bytes} floor={initial_floor_bytes}"
     );
-
-    ResidentCeilingJourney {
-        real_model_rest_server,
-        _worker_home: worker_home,
-        model_id,
-        prompt_content,
-        openai_client,
-        lowered_ceiling_gb,
-        lowered_ceiling_bytes,
-        initial_floor_bytes,
-    }
+    initial_floor_bytes
 }
 
 async fn lower_ceiling_and_require_streaming_execution(ceiling_journey: &ResidentCeilingJourney) {

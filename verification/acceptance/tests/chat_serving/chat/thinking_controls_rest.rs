@@ -28,7 +28,6 @@ async fn should_enforce_thinking_control_spellings_over_public_rest() {
         .expect("the thinking-controls GPU journey must finish within 115 seconds");
 }
 
-#[expect(clippy::too_many_lines)]
 async fn run_thinking_controls_gpu_journey() {
     let selected_model = configured_thinking_controls_chat_model();
     eprintln!(
@@ -44,24 +43,24 @@ async fn run_thinking_controls_gpu_journey() {
     .await;
     let server_address = rest_server.server_address;
 
+    assert_responses_max_tokens_phase(server_address, &selected_model.model_id).await;
+    assert_responses_excluded_phase(server_address, &selected_model.model_id).await;
+    assert_chat_disabled_phase(server_address, &selected_model.model_id).await;
+
+    stop_serving_rest_server(rest_server).await;
+    eprintln!(
+        "[thinking-controls-rest] status=success model={}",
+        selected_model.model_id
+    );
+}
+
+async fn assert_responses_max_tokens_phase(server_address: std::net::SocketAddr, model_id: &str) {
     eprintln!("[thinking-controls-rest 1/3] status=progress phase=responses_max_tokens");
-    let responses_response = post_responses_completion(
-        server_address,
-        responses_request_body(&selected_model.model_id, false),
-    )
-    .await;
+    let responses_response =
+        post_responses_completion(server_address, responses_request_body(model_id, false)).await;
     assert_http_ok(&responses_response);
     let responses_document = http_json_body(&responses_response);
-    let output_item_types = responses_document["output"]
-        .as_array()
-        .expect("the Responses output must be an array")
-        .iter()
-        .map(|output_item| {
-            output_item["type"]
-                .as_str()
-                .expect("every output item carries a type")
-        })
-        .collect::<Vec<_>>();
+    let output_item_types = responses_output_item_types(&responses_document);
     assert!(
         output_item_types.contains(&"reasoning"),
         "an unexcluded reasoning budget must expose a reasoning output item: {responses_document}"
@@ -83,25 +82,15 @@ async fn run_thinking_controls_gpu_journey() {
     eprintln!(
         "[thinking-controls-rest 1/3] status=success phase=responses_max_tokens reasoning_tokens={reasoning_token_count}"
     );
+}
 
+async fn assert_responses_excluded_phase(server_address: std::net::SocketAddr, model_id: &str) {
     eprintln!("[thinking-controls-rest 2/3] status=progress phase=responses_excluded");
-    let excluded_responses_response = post_responses_completion(
-        server_address,
-        responses_request_body(&selected_model.model_id, true),
-    )
-    .await;
+    let excluded_responses_response =
+        post_responses_completion(server_address, responses_request_body(model_id, true)).await;
     assert_http_ok(&excluded_responses_response);
     let excluded_responses_document = http_json_body(&excluded_responses_response);
-    let excluded_output_item_types = excluded_responses_document["output"]
-        .as_array()
-        .expect("the Responses output must be an array")
-        .iter()
-        .map(|output_item| {
-            output_item["type"]
-                .as_str()
-                .expect("every output item carries a type")
-        })
-        .collect::<Vec<_>>();
+    let excluded_output_item_types = responses_output_item_types(&excluded_responses_document);
     assert!(
         !excluded_output_item_types.contains(&"reasoning"),
         "exclude must withhold the reasoning output item: {excluded_responses_document}"
@@ -122,13 +111,12 @@ async fn run_thinking_controls_gpu_journey() {
     eprintln!(
         "[thinking-controls-rest 2/3] status=success phase=responses_excluded reasoning_tokens={excluded_reasoning_token_count}"
     );
+}
 
+async fn assert_chat_disabled_phase(server_address: std::net::SocketAddr, model_id: &str) {
     eprintln!("[thinking-controls-rest 3/3] status=progress phase=chat_disabled");
-    let chat_response = post_chat_completion(
-        server_address,
-        chat_disabled_request_body(&selected_model.model_id),
-    )
-    .await;
+    let chat_response =
+        post_chat_completion(server_address, chat_disabled_request_body(model_id)).await;
     assert_http_ok(&chat_response);
     let chat_document = http_json_body(&chat_response);
     assert!(
@@ -144,12 +132,19 @@ async fn run_thinking_controls_gpu_journey() {
         "a disabled-thinking request must still produce a visible answer: {chat_document}"
     );
     eprintln!("[thinking-controls-rest 3/3] status=success phase=chat_disabled");
+}
 
-    stop_serving_rest_server(rest_server).await;
-    eprintln!(
-        "[thinking-controls-rest] status=success model={}",
-        selected_model.model_id
-    );
+fn responses_output_item_types(responses_document: &serde_json::Value) -> Vec<&str> {
+    responses_document["output"]
+        .as_array()
+        .expect("the Responses output must be an array")
+        .iter()
+        .map(|output_item| {
+            output_item["type"]
+                .as_str()
+                .expect("every output item carries a type")
+        })
+        .collect::<Vec<_>>()
 }
 
 fn configured_thinking_controls_chat_model() -> config::DiscoveredModel {

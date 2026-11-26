@@ -2,7 +2,7 @@
 
 ## General Instructions
 
-- Production lane methods and functions must not exceed 80 lines of code.
+- Methods and functions must not exceed 80 lines of code. The pre-commit hook enforces it through `cargo xtask function-length-budget` (clippy's `too_many_lines` at 80 code lines, set in `clippy.toml`): split a long function into named steps, and never put `#[allow]` or `#[expect]` of `clippy::too_many_lines` on any function, production or test, which the same check refuses.
 
 ## Never Hardwire Local Developer Environment Into the Codebase
 

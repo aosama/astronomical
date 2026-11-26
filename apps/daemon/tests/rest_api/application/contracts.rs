@@ -272,23 +272,7 @@ async fn should_report_ready_status_idle_activity_and_model_id_for_a_ready_worke
     scripted_executor.health_snapshot.mlx_memory_ceiling_bytes = 40_000_000_000;
     let application = build_application_with_discovered_models(
         scripted_executor,
-        vec![DiscoveredModel {
-            model_id: MODEL_ID.to_owned(),
-            provider_model_id: None,
-            model_family: config::QWEN3_5_MODEL_FAMILY,
-            revision: "test".to_owned(),
-            model_directory: "/models/test".into(),
-            capabilities: config::ModelCapabilities::Chat(config::ChatModelCapabilities {
-                context_window: 262_144,
-                max_input_tokens: 241_664,
-                max_output_tokens: 20_480,
-                supports_vision: true,
-                supports_reasoning: true,
-                supports_tool_calls: true,
-            }),
-            license: None,
-            model_size_bytes: 18_420_000_000,
-        }],
+        vec![ready_discovered_chat_model()],
     );
     let response = get_response(&application, "/v1/status").await;
     assert_eq!(response.status(), StatusCode::OK);
@@ -318,35 +302,7 @@ async fn should_report_ready_status_idle_activity_and_model_id_for_a_ready_worke
         status_document["mlx_memory_ceiling_bytes"],
         40_000_000_000_u64
     );
-    assert_eq!(
-        status_document["serving_session"]["completed_request_count"],
-        0
-    );
-    assert_eq!(
-        status_document["serving_session"]["total_prompt_token_count"],
-        0
-    );
-    assert_eq!(
-        status_document["serving_session"]["total_reused_prompt_token_count"],
-        0
-    );
-    assert_eq!(
-        status_document["serving_session"]["average_prefill_tok_per_second"],
-        0.0
-    );
-    assert_eq!(
-        status_document["serving_session"]["neural_engine"],
-        serde_json::json!({
-            "prompt_token_count": 0,
-            "neural_engine_token_count": 0,
-            "estimated_saved_ms": 0,
-            "last_chunk_placement": null,
-        })
-    );
-    assert_eq!(
-        status_document["serving_session"]["average_generation_tok_per_second"],
-        0.0
-    );
+    assert_serving_session_reports_nothing_served_yet(&status_document);
     assert_eq!(status_document["astro_ssd_prompt_cache"]["hits"], 0);
     assert_eq!(status_document["astro_ssd_prompt_cache"]["misses"], 0);
     assert_eq!(status_document["astro_ssd_prompt_cache"]["tokens_saved"], 0);
@@ -463,4 +419,57 @@ async fn should_omit_completed_prefill_chunk_tokens_before_the_first_measurement
             .is_none()
     );
     assert!(status_document["progress"].get("total_layers").is_none());
+}
+
+/// The one chat model the ready-worker status journey discovers on disk.
+fn ready_discovered_chat_model() -> DiscoveredModel {
+    DiscoveredModel {
+        model_id: MODEL_ID.to_owned(),
+        provider_model_id: None,
+        model_family: config::QWEN3_5_MODEL_FAMILY,
+        revision: "test".to_owned(),
+        model_directory: "/models/test".into(),
+        capabilities: config::ModelCapabilities::Chat(config::ChatModelCapabilities {
+            context_window: 262_144,
+            max_input_tokens: 241_664,
+            max_output_tokens: 20_480,
+            supports_vision: true,
+            supports_reasoning: true,
+            supports_tool_calls: true,
+        }),
+        license: None,
+        model_size_bytes: 18_420_000_000,
+    }
+}
+
+fn assert_serving_session_reports_nothing_served_yet(status_document: &serde_json::Value) {
+    assert_eq!(
+        status_document["serving_session"]["completed_request_count"],
+        0
+    );
+    assert_eq!(
+        status_document["serving_session"]["total_prompt_token_count"],
+        0
+    );
+    assert_eq!(
+        status_document["serving_session"]["total_reused_prompt_token_count"],
+        0
+    );
+    assert_eq!(
+        status_document["serving_session"]["average_prefill_tok_per_second"],
+        0.0
+    );
+    assert_eq!(
+        status_document["serving_session"]["neural_engine"],
+        serde_json::json!({
+            "prompt_token_count": 0,
+            "neural_engine_token_count": 0,
+            "estimated_saved_ms": 0,
+            "last_chunk_placement": null,
+        })
+    );
+    assert_eq!(
+        status_document["serving_session"]["average_generation_tok_per_second"],
+        0.0
+    );
 }

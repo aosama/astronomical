@@ -293,3 +293,145 @@ fn should_count_a_neural_engine_chunk_with_no_request_active() {
     assert_eq!(totals.prompt_token_count, 2_048);
     assert_eq!(totals.neural_engine_token_count, 0);
 }
+
+/// Runs one event through the dispatch with no readiness, no deadline and
+/// the given active request, the way the worker loop does.
+fn dispatch_event(
+    worker_event: WorkerEvent,
+    health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
+    active_request: &mut Option<ActiveWorkerRequest>,
+) -> Result<(), crate::WorkerControlError> {
+    let performance_log_directory = tempfile::tempdir().expect("performance log directory");
+    let mut performance_log =
+        GenerationPerformanceLog::open(performance_log_directory.path()).expect("performance log");
+    handle_worker_event(
+        worker_event,
+        health_snapshot,
+        &mut true,
+        &mut None,
+        active_request,
+        &mut performance_log,
+        &mut CompletionAttributionLog::disabled(),
+    )
+}
+
+fn violation_description(dispatch_outcome: Result<(), crate::WorkerControlError>) -> &'static str {
+    match dispatch_outcome {
+        Err(crate::WorkerControlError::WorkerProtocolViolation { description }) => description,
+        other => panic!("expected a protocol violation, got {other:?}"),
+    }
+}
+
+#[test]
+fn should_publish_a_memory_limit_rejection_without_any_request_active() {
+    let health_snapshot = Arc::new(RwLock::new(WorkerHealthSnapshot::ready_without_model(1)));
+
+    dispatch_event(
+        WorkerEvent::MlxMemoryLimitRejected {
+            requested_mlx_memory_ceiling_bytes: 1_000,
+            minimum_mlx_memory_ceiling_bytes: 4_000,
+            machine_mlx_memory_ceiling_bytes: 64_000,
+            reason: "the limit is below the model's core weights".to_owned(),
+        },
+        &health_snapshot,
+        &mut None,
+    )
+    .expect("a limit rejection belongs to no request");
+
+    let published_snapshot = health_snapshot.read().expect("the snapshot reads");
+    assert_eq!(published_snapshot.minimum_mlx_memory_ceiling_bytes, 4_000);
+    assert_eq!(
+        published_snapshot.mlx_memory_limit_error.as_deref(),
+        Some("the limit is below the model's core weights")
+    );
+}
+
+#[test]
+fn should_fold_a_finalized_generations_memory_into_the_matching_chat_request() {
+    let health_snapshot = Arc::new(RwLock::new(WorkerHealthSnapshot::ready_without_model(1)));
+    let (stream_event_sender, _stream_event_receiver) = mpsc::channel(16);
+    let mut active_request = Some(active_chat_request(stream_event_sender, 200));
+
+    dispatch_event(
+        WorkerEvent::GenerationFinalized {
+            request_id: RequestId::new(1),
+            expert_memory_mode: None,
+            mlx_memory_snapshot: Some(standalone_sample(40_000)),
+            expert_residency: None,
+        },
+        &health_snapshot,
+        &mut active_request,
+    )
+    .expect("the finalized state of the active request should be accepted");
+
+    let Some(ActiveWorkerRequest::Chat(chat_request)) = active_request else {
+        panic!("the chat request should remain active until its completion");
+    };
+    assert_eq!(chat_request.maximum_mlx_peak_memory_bytes, Some(40_000));
+    assert_eq!(chat_request.last_mlx_active_memory_bytes, Some(20_000));
+}
+
+#[test]
+fn should_refuse_a_finalized_generation_that_belongs_to_another_request() {
+    let health_snapshot = Arc::new(RwLock::new(WorkerHealthSnapshot::ready_without_model(1)));
+    let (stream_event_sender, _stream_event_receiver) = mpsc::channel(16);
+    let mut active_request = Some(active_chat_request(stream_event_sender, 200));
+
+    let dispatch_outcome = dispatch_event(
+        WorkerEvent::GenerationFinalized {
+            request_id: RequestId::new(2),
+            expert_memory_mode: None,
+            mlx_memory_snapshot: None,
+            expert_residency: None,
+        },
+        &health_snapshot,
+        &mut active_request,
+    );
+
+    assert_eq!(
+        violation_description(dispatch_outcome),
+        "finalized generation state request mismatch"
+    );
+}
+
+#[test]
+fn should_refuse_chat_output_when_no_chat_request_is_active() {
+    let health_snapshot = Arc::new(RwLock::new(WorkerHealthSnapshot::ready_without_model(1)));
+
+    let dispatch_outcome = dispatch_event(
+        WorkerEvent::Output {
+            request_id: RequestId::new(1),
+            sequence_number: 0,
+            generated_token_count: 1,
+            outputs: Vec::new(),
+            mlx_memory_snapshot: None,
+            expert_residency: None,
+        },
+        &health_snapshot,
+        &mut None,
+    );
+
+    assert_eq!(
+        violation_description(dispatch_outcome),
+        "chat event without an active chat request"
+    );
+}
+
+#[test]
+fn should_refuse_a_chat_failure_when_no_request_is_active() {
+    let health_snapshot = Arc::new(RwLock::new(WorkerHealthSnapshot::ready_without_model(1)));
+
+    let dispatch_outcome = dispatch_event(
+        WorkerEvent::Failed {
+            request_id: RequestId::new(1),
+            reason: ipc_protocol::ChatGenerationFailureReason::OutOfGraphicsMemory,
+        },
+        &health_snapshot,
+        &mut None,
+    );
+
+    assert_eq!(
+        violation_description(dispatch_outcome),
+        "failure without an active request"
+    );
+}

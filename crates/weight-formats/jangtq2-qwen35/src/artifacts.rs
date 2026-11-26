@@ -107,92 +107,119 @@ pub fn tensor_inventory_for_module(
         });
     }
     match override_entry {
-        Jangtq2WeightOverrideEntry::Codebook { bits, rotation, .. } => {
-            let codebook_bit_width = *bits;
-            let packed_last_dimension = codebook::packed_word_count_for_input_width(
-                geometry.input_width,
-                codebook_bit_width,
-            ) as usize;
-            Ok(Jangtq2ModuleTensorInventory {
-                expected_tensors: vec![
-                    ContractTensorExpectation {
-                        tensor_name: format!("{module_name}.{CODEBOOK_PACKED_TENSOR_SUFFIX}"),
-                        element_kind: ContractTensorElementKind::PackedUnsignedInteger32,
-                        shape: vec![
-                            geometry.expert_count as usize,
-                            geometry.output_width as usize,
-                            packed_last_dimension,
-                        ],
-                    },
-                    ContractTensorExpectation {
-                        tensor_name: format!("{module_name}.{CODEBOOK_SCALES_TENSOR_SUFFIX}"),
-                        element_kind: ContractTensorElementKind::CodebookScaleFloat16,
-                        shape: vec![
-                            geometry.expert_count as usize,
-                            geometry.output_width as usize,
-                        ],
-                    },
-                ],
-                packed_bit_width: Some(codebook_bit_width),
-                activation_rotation: *rotation,
-            })
-        }
+        Jangtq2WeightOverrideEntry::Codebook { bits, rotation, .. } => Ok(
+            codebook_tensor_inventory(module_name, *bits, *rotation, geometry),
+        ),
         Jangtq2WeightOverrideEntry::Affine { bits, group_size } => {
-            let affine_bit_width = *bits;
-            let affine_group_size = *group_size;
-            // Affine companions run along whole groups of the input width:
-            // a width that does not divide evenly would leave the contract
-            // describing fewer companion columns than the tensor carries.
-            if !geometry.input_width.is_multiple_of(affine_group_size) {
-                return Err(Jangtq2ConfigurationError::InputWidthNotPackingAligned {
-                    actual_input_width: geometry.input_width,
-                    required_alignment_multiple: affine_group_size,
-                });
-            }
-            let packed_last_dimension =
-                codebook::packed_word_count_for_input_width(geometry.input_width, affine_bit_width)
-                    as usize;
-            let companion_last_dimension = (geometry.input_width / affine_group_size) as usize;
-            Ok(Jangtq2ModuleTensorInventory {
-                expected_tensors: vec![
-                    ContractTensorExpectation {
-                        tensor_name: format!("{module_name}.weight"),
-                        element_kind: ContractTensorElementKind::PackedUnsignedInteger32,
-                        shape: vec![geometry.output_width as usize, packed_last_dimension],
-                    },
-                    ContractTensorExpectation {
-                        tensor_name: format!("{module_name}.scales"),
-                        element_kind: ContractTensorElementKind::AffineCompanionBfloat16,
-                        shape: vec![geometry.output_width as usize, companion_last_dimension],
-                    },
-                    ContractTensorExpectation {
-                        tensor_name: format!("{module_name}.biases"),
-                        element_kind: ContractTensorElementKind::AffineCompanionBfloat16,
-                        shape: vec![geometry.output_width as usize, companion_last_dimension],
-                    },
-                ],
-                packed_bit_width: Some(affine_bit_width),
-                activation_rotation: Jangtq2CodebookRotation::NoRotation,
-            })
+            affine_tensor_inventory(module_name, *bits, *group_size, geometry)
         }
-        Jangtq2WeightOverrideEntry::LoaderFlag(false) => Ok(Jangtq2ModuleTensorInventory {
-            expected_tensors: vec![ContractTensorExpectation {
-                tensor_name: format!("{module_name}.weight"),
-                element_kind: ContractTensorElementKind::NativeWeightBfloat16,
-                shape: vec![
-                    geometry.output_width as usize,
-                    geometry.input_width as usize,
-                ],
-            }],
-            packed_bit_width: None,
-            activation_rotation: Jangtq2CodebookRotation::NoRotation,
-        }),
+        Jangtq2WeightOverrideEntry::LoaderFlag(false) => {
+            Ok(native_weight_tensor_inventory(module_name, geometry))
+        }
         // A `true` flag defers to the document defaults, which the caller
         // resolves before consulting this contract; reaching here with the
         // raw flag is a caller bug, and failing closed is the safe outcome.
         Jangtq2WeightOverrideEntry::LoaderFlag(true) => {
             Err(Jangtq2ConfigurationError::UnresolvedDefaultQuantizationFlag)
         }
+    }
+}
+
+/// The stacked codebook pair for an expert-stacked projection: packed codes
+/// over all experts and one row-scale tensor over the same experts.
+fn codebook_tensor_inventory(
+    module_name: &str,
+    codebook_bit_width: u32,
+    activation_rotation: Jangtq2CodebookRotation,
+    geometry: &Jangtq2ModuleGeometry,
+) -> Jangtq2ModuleTensorInventory {
+    let packed_last_dimension =
+        codebook::packed_word_count_for_input_width(geometry.input_width, codebook_bit_width)
+            as usize;
+    Jangtq2ModuleTensorInventory {
+        expected_tensors: vec![
+            ContractTensorExpectation {
+                tensor_name: format!("{module_name}.{CODEBOOK_PACKED_TENSOR_SUFFIX}"),
+                element_kind: ContractTensorElementKind::PackedUnsignedInteger32,
+                shape: vec![
+                    geometry.expert_count as usize,
+                    geometry.output_width as usize,
+                    packed_last_dimension,
+                ],
+            },
+            ContractTensorExpectation {
+                tensor_name: format!("{module_name}.{CODEBOOK_SCALES_TENSOR_SUFFIX}"),
+                element_kind: ContractTensorElementKind::CodebookScaleFloat16,
+                shape: vec![
+                    geometry.expert_count as usize,
+                    geometry.output_width as usize,
+                ],
+            },
+        ],
+        packed_bit_width: Some(codebook_bit_width),
+        activation_rotation,
+    }
+}
+
+/// The standard MLX affine triple: packed weight, scales and biases.
+fn affine_tensor_inventory(
+    module_name: &str,
+    affine_bit_width: u32,
+    affine_group_size: u32,
+    geometry: &Jangtq2ModuleGeometry,
+) -> Result<Jangtq2ModuleTensorInventory, Jangtq2ConfigurationError> {
+    // Affine companions run along whole groups of the input width:
+    // a width that does not divide evenly would leave the contract
+    // describing fewer companion columns than the tensor carries.
+    if !geometry.input_width.is_multiple_of(affine_group_size) {
+        return Err(Jangtq2ConfigurationError::InputWidthNotPackingAligned {
+            actual_input_width: geometry.input_width,
+            required_alignment_multiple: affine_group_size,
+        });
+    }
+    let packed_last_dimension =
+        codebook::packed_word_count_for_input_width(geometry.input_width, affine_bit_width)
+            as usize;
+    let companion_last_dimension = (geometry.input_width / affine_group_size) as usize;
+    Ok(Jangtq2ModuleTensorInventory {
+        expected_tensors: vec![
+            ContractTensorExpectation {
+                tensor_name: format!("{module_name}.weight"),
+                element_kind: ContractTensorElementKind::PackedUnsignedInteger32,
+                shape: vec![geometry.output_width as usize, packed_last_dimension],
+            },
+            ContractTensorExpectation {
+                tensor_name: format!("{module_name}.scales"),
+                element_kind: ContractTensorElementKind::AffineCompanionBfloat16,
+                shape: vec![geometry.output_width as usize, companion_last_dimension],
+            },
+            ContractTensorExpectation {
+                tensor_name: format!("{module_name}.biases"),
+                element_kind: ContractTensorElementKind::AffineCompanionBfloat16,
+                shape: vec![geometry.output_width as usize, companion_last_dimension],
+            },
+        ],
+        packed_bit_width: Some(affine_bit_width),
+        activation_rotation: Jangtq2CodebookRotation::NoRotation,
+    })
+}
+
+/// A module stored as native floating point: one bare `bfloat16` weight.
+fn native_weight_tensor_inventory(
+    module_name: &str,
+    geometry: &Jangtq2ModuleGeometry,
+) -> Jangtq2ModuleTensorInventory {
+    Jangtq2ModuleTensorInventory {
+        expected_tensors: vec![ContractTensorExpectation {
+            tensor_name: format!("{module_name}.weight"),
+            element_kind: ContractTensorElementKind::NativeWeightBfloat16,
+            shape: vec![
+                geometry.output_width as usize,
+                geometry.input_width as usize,
+            ],
+        }],
+        packed_bit_width: None,
+        activation_rotation: Jangtq2CodebookRotation::NoRotation,
     }
 }
 
@@ -426,5 +453,95 @@ mod tests {
             tensor_inventory_for_module("some.module", &unresolved_entry, &jangh2_gate_geometry()),
             Err(Jangtq2ConfigurationError::UnresolvedDefaultQuantizationFlag)
         );
+    }
+
+    #[test]
+    fn should_stack_codebook_tensors_along_the_expert_axis() {
+        let inventory = codebook_tensor_inventory(
+            JANGH2_GATE_PROJECTION_MODULE_NAME,
+            4,
+            Jangtq2CodebookRotation::Hadamard32,
+            &jangh2_gate_geometry(),
+        );
+        assert_eq!(inventory.packed_bit_width, Some(4));
+        assert_eq!(
+            inventory.activation_rotation,
+            Jangtq2CodebookRotation::Hadamard32
+        );
+        // 3072 inputs at 4 bits pack into 384 uint32 words per row.
+        assert_eq!(inventory.expected_tensors[0].shape, vec![256, 1024, 384]);
+        assert_eq!(inventory.expected_tensors[1].shape, vec![256, 1024]);
+    }
+
+    #[test]
+    fn should_keep_the_expert_axis_for_a_single_expert_codebook_module() {
+        let single_expert_geometry = Jangtq2ModuleGeometry {
+            expert_count: 1,
+            ..jangh2_gate_geometry()
+        };
+        let inventory = codebook_tensor_inventory(
+            "some.module",
+            2,
+            Jangtq2CodebookRotation::NoRotation,
+            &single_expert_geometry,
+        );
+        assert_eq!(inventory.expected_tensors[0].shape, vec![1, 1024, 192]);
+        assert_eq!(inventory.expected_tensors[1].shape, vec![1, 1024]);
+    }
+
+    #[test]
+    fn should_divide_the_affine_companions_by_the_group_size() {
+        let inventory = affine_tensor_inventory(
+            "some.module",
+            4,
+            128,
+            &Jangtq2ModuleGeometry {
+                input_width: 2048,
+                output_width: 512,
+                expert_count: 1,
+                affine_group_size: 128,
+            },
+        )
+        .expect("2048 divides into whole groups of 128");
+        assert_eq!(inventory.packed_bit_width, Some(4));
+        // 2048 inputs at 4 bits pack into 256 uint32 words per row.
+        assert_eq!(inventory.expected_tensors[0].shape, vec![512, 256]);
+        assert_eq!(inventory.expected_tensors[1].shape, vec![512, 16]);
+        assert_eq!(inventory.expected_tensors[2].shape, vec![512, 16]);
+    }
+
+    #[test]
+    fn should_reject_an_affine_group_size_that_does_not_divide_the_input_width() {
+        // 2080 divides into whole 32-code groups but leaves a partial group
+        // of 128.
+        let partial_group_geometry = Jangtq2ModuleGeometry {
+            input_width: 2080,
+            output_width: 512,
+            expert_count: 1,
+            affine_group_size: 128,
+        };
+        assert_eq!(
+            affine_tensor_inventory("some.module", 8, 128, &partial_group_geometry),
+            Err(Jangtq2ConfigurationError::InputWidthNotPackingAligned {
+                actual_input_width: 2080,
+                required_alignment_multiple: 128,
+            })
+        );
+    }
+
+    #[test]
+    fn should_describe_a_native_weight_as_output_rows_by_input_columns() {
+        let inventory = native_weight_tensor_inventory(
+            "language_model.model.layers.0.mlp.gate",
+            &Jangtq2ModuleGeometry {
+                input_width: 3072,
+                output_width: 256,
+                expert_count: 1,
+                affine_group_size: 64,
+            },
+        );
+        assert_eq!(inventory.packed_bit_width, None);
+        assert_eq!(inventory.expected_tensors.len(), 1);
+        assert_eq!(inventory.expected_tensors[0].shape, vec![256, 3072]);
     }
 }

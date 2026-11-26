@@ -4,7 +4,7 @@ use ipc_protocol::{
     ChatGenerationCompletionReason, ChatModelCapabilities, ImageGenerationCapabilities,
     ProtocolReader, ProtocolWriter, RequestId, WorkerEvent,
     WorkerImageGenerationModelConfiguration, WorkerLoadedModelRuntimeConfiguration,
-    WorkerModelCapabilities, WorkerRuntimeFeatureConfiguration,
+    WorkerModelCapabilities, WorkerRuntimeFeatureConfiguration, WorkerStartupConfiguration,
 };
 
 const CONFIGURATION_BEFORE_READY_GENERATION: &str =
@@ -19,23 +19,10 @@ const FLUX_MODEL_ID: &str = "FLUX.2-klein-4B";
 const FLUX_REVISION: &str = "reviewed-revision";
 
 #[tokio::main]
-#[expect(clippy::too_many_lines)]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let mut command_reader = ProtocolReader::new(tokio::io::stdin());
     let mut event_writer = ProtocolWriter::new(tokio::io::stdout());
-    let startup_configuration = match tokio::time::timeout(
-        std::time::Duration::from_millis(100),
-        command_reader.next_command(),
-    )
-    .await
-    {
-        Ok(Ok(Some(ipc_protocol::WorkerCommand::InitializeWorker(configuration)))) => {
-            Some(configuration)
-        }
-        Ok(Ok(Some(_))) => return Err("unexpected first worker command".into()),
-        Ok(Err(protocol_error)) => return Err(protocol_error.into()),
-        Ok(Ok(None)) | Err(_) => None,
-    };
+    let startup_configuration = read_optional_startup_configuration(&mut command_reader).await?;
     if let Some(startup_configuration) = startup_configuration.as_ref() {
         std::fs::write(
             startup_configuration
@@ -52,9 +39,53 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             .await?;
         }
     }
-    if startup_configuration.as_ref().is_some_and(|configuration| {
-        configuration.configuration_generation == MATCHING_FLUX_GENERATION
-    }) {
+    send_readiness_event(&mut event_writer, startup_configuration.as_ref()).await?;
+    if let Some(startup_configuration) = startup_configuration.as_ref() {
+        send_acknowledgement_after_readiness(&mut event_writer, startup_configuration).await?;
+    }
+
+    while command_reader.next_command().await?.is_some() {}
+    Ok(())
+}
+
+async fn read_optional_startup_configuration(
+    command_reader: &mut ProtocolReader<tokio::io::Stdin>,
+) -> Result<Option<WorkerStartupConfiguration>, Box<dyn std::error::Error + Send + Sync>> {
+    match tokio::time::timeout(
+        std::time::Duration::from_millis(100),
+        command_reader.next_command(),
+    )
+    .await
+    {
+        Ok(Ok(Some(ipc_protocol::WorkerCommand::InitializeWorker(configuration)))) => {
+            Ok(Some(configuration))
+        }
+        Ok(Ok(Some(_))) => Err("unexpected first worker command".into()),
+        Ok(Err(protocol_error)) => Err(protocol_error.into()),
+        Ok(Ok(None)) | Err(_) => Ok(None),
+    }
+}
+
+/// Whether the startup configuration the worker received carries this
+/// configuration generation.
+fn has_configuration_generation(
+    startup_configuration: Option<&WorkerStartupConfiguration>,
+    configuration_generation: &str,
+) -> bool {
+    matches!(
+        startup_configuration,
+        Some(configuration) if configuration.configuration_generation == configuration_generation
+    )
+}
+
+/// The first readiness event, chosen by the generation the replacement
+/// candidate was started with: a FLUX model, a chat model whose readiness
+/// disagrees with its acknowledgement, or plain idleness.
+async fn send_readiness_event(
+    event_writer: &mut ProtocolWriter<tokio::io::Stdout>,
+    startup_configuration: Option<&WorkerStartupConfiguration>,
+) -> Result<(), ipc_protocol::ProtocolError> {
+    if has_configuration_generation(startup_configuration, MATCHING_FLUX_GENERATION) {
         event_writer
             .send_event(&WorkerEvent::Ready {
                 model_id: FLUX_MODEL_ID.to_owned(),
@@ -71,10 +102,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                     },
                 ),
             })
-            .await?;
-    } else if startup_configuration.as_ref().is_some_and(|configuration| {
-        configuration.configuration_generation == INCONSISTENT_READY_GENERATION
-    }) {
+            .await
+    } else if has_configuration_generation(startup_configuration, INCONSISTENT_READY_GENERATION) {
         event_writer
             .send_event(&WorkerEvent::Ready {
                 model_id: "astronomical/unacknowledged-ready-model".to_owned(),
@@ -88,7 +117,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                 }
                 .into(),
             })
-            .await?;
+            .await
     } else {
         event_writer
             .send_event(&WorkerEvent::Idle {
@@ -97,61 +126,66 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                 minimum_mlx_memory_ceiling_bytes: 1,
                 wired_residency_budget_bytes: None,
             })
-            .await?;
+            .await
     }
-    if let Some(startup_configuration) = startup_configuration.as_ref() {
-        if startup_configuration.configuration_generation == GENERATION_EVENT_GENERATION {
-            event_writer
-                .send_event(&WorkerEvent::Completed {
-                    request_id: RequestId::new(1),
-                    prompt_token_count: 1,
-                    generated_token_count: 0,
-                    reasoning_token_count: 0,
-                    astro_ssd_prompt_cache_restored_token_count: 0,
-                    astro_ssd_prompt_cache_diagnostics: None,
-                    reason: ChatGenerationCompletionReason::EndOfSequence,
-                })
-                .await?;
-        } else if startup_configuration.configuration_generation == MATCHING_FLUX_GENERATION {
-            event_writer
-                .send_event(&WorkerEvent::RuntimeFeatureConfigurationApplied {
-                    worker_runtime_feature_configuration: WorkerRuntimeFeatureConfiguration {
-                        configuration_generation: MATCHING_FLUX_GENERATION.to_owned(),
-                        astro_ssd_prompt_cache_enabled: startup_configuration
-                            .astro_ssd_prompt_cache_enabled,
-                        astro_ssd_prompt_cache_maximum_size_bytes: startup_configuration
-                            .global_astro_ssd_prompt_cache_maximum_size_bytes,
-                        loaded_model: Some(WorkerLoadedModelRuntimeConfiguration::ImageGeneration(
-                            WorkerImageGenerationModelConfiguration {
-                                model_id: FLUX_MODEL_ID.to_owned(),
-                                model_family: "flux2_klein".to_owned(),
-                                artifact_revision: FLUX_REVISION.to_owned(),
-                            },
-                        )),
-                    },
-                })
-                .await?;
-        } else if startup_configuration.configuration_generation == INCONSISTENT_READY_GENERATION {
-            send_runtime_configuration(
-                &mut event_writer,
-                startup_configuration,
-                INCONSISTENT_READY_GENERATION,
-            )
-            .await?;
-        } else if startup_configuration.configuration_generation
-            != CONFIGURATION_BEFORE_READY_GENERATION
-        {
-            send_runtime_configuration(
-                &mut event_writer,
-                startup_configuration,
-                "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
-            )
-            .await?;
-        }
-    }
+}
 
-    while command_reader.next_command().await?.is_some() {}
-    Ok(())
+/// The event that follows readiness, chosen by the generation the
+/// replacement candidate was started with.
+async fn send_acknowledgement_after_readiness(
+    event_writer: &mut ProtocolWriter<tokio::io::Stdout>,
+    startup_configuration: &WorkerStartupConfiguration,
+) -> Result<(), ipc_protocol::ProtocolError> {
+    if startup_configuration.configuration_generation == GENERATION_EVENT_GENERATION {
+        event_writer
+            .send_event(&WorkerEvent::Completed {
+                request_id: RequestId::new(1),
+                prompt_token_count: 1,
+                generated_token_count: 0,
+                reasoning_token_count: 0,
+                astro_ssd_prompt_cache_restored_token_count: 0,
+                astro_ssd_prompt_cache_diagnostics: None,
+                reason: ChatGenerationCompletionReason::EndOfSequence,
+            })
+            .await
+    } else if startup_configuration.configuration_generation == MATCHING_FLUX_GENERATION {
+        event_writer
+            .send_event(&WorkerEvent::RuntimeFeatureConfigurationApplied {
+                worker_runtime_feature_configuration: WorkerRuntimeFeatureConfiguration {
+                    configuration_generation: MATCHING_FLUX_GENERATION.to_owned(),
+                    astro_ssd_prompt_cache_enabled: startup_configuration
+                        .astro_ssd_prompt_cache_enabled,
+                    astro_ssd_prompt_cache_maximum_size_bytes: startup_configuration
+                        .global_astro_ssd_prompt_cache_maximum_size_bytes,
+                    loaded_model: Some(WorkerLoadedModelRuntimeConfiguration::ImageGeneration(
+                        WorkerImageGenerationModelConfiguration {
+                            model_id: FLUX_MODEL_ID.to_owned(),
+                            model_family: "flux2_klein".to_owned(),
+                            artifact_revision: FLUX_REVISION.to_owned(),
+                        },
+                    )),
+                },
+            })
+            .await
+    } else if startup_configuration.configuration_generation == INCONSISTENT_READY_GENERATION {
+        send_runtime_configuration(
+            event_writer,
+            startup_configuration,
+            INCONSISTENT_READY_GENERATION,
+        )
+        .await
+    } else if startup_configuration.configuration_generation
+        != CONFIGURATION_BEFORE_READY_GENERATION
+    {
+        send_runtime_configuration(
+            event_writer,
+            startup_configuration,
+            "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        )
+        .await
+    } else {
+        Ok(())
+    }
 }
 
 async fn send_runtime_configuration<WriteTransport>(

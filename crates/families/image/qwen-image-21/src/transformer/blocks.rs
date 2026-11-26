@@ -150,43 +150,20 @@ fn segment_attention(
     values: &MlxArray,
     context: &BlockContext<'_>,
 ) -> Result<MlxArray, QwenImage21EngineError> {
-    let (batch, sequence_length, head_count, head_width) = (
-        queries.shape()[0],
-        queries.shape()[1],
-        context.head_count as i32,
-        context.head_width as i32,
-    );
-    let to_heads = |array: &MlxArray| -> Result<MlxArray, QwenImage21EngineError> {
-        Ok(runtime.transpose_axes(array, &[0, 2, 1, 3])?)
-    };
-    let keys_headed = to_heads(keys)?;
-    let values_headed = to_heads(values)?;
+    let extents = HeadExtents::of(queries, context);
+    let keys_headed = to_heads(runtime, keys)?;
+    let values_headed = to_heads(runtime, values)?;
 
     let mut outputs = Vec::with_capacity(context.segments.len() + 1);
     for (segment, mask) in context.segments.iter().zip(context.segment_masks.iter()) {
-        let (query_start, query_end, key_end) = (
+        let segment_queries = extents.query_rows(
+            runtime,
+            queries,
             segment.query_start as i32,
             segment.query_end as i32,
-            segment.key_end as i32,
-        );
-        let segment_queries = to_heads(&runtime.slice(
-            queries,
-            &[0, query_start, 0, 0],
-            &[batch, query_end, head_count, head_width],
-            &[1, 1, 1, 1],
-        )?)?;
-        let segment_keys = runtime.slice(
-            &keys_headed,
-            &[0, 0, 0, 0],
-            &[batch, head_count, key_end, head_width],
-            &[1, 1, 1, 1],
         )?;
-        let segment_values = runtime.slice(
-            &values_headed,
-            &[0, 0, 0, 0],
-            &[batch, head_count, key_end, head_width],
-            &[1, 1, 1, 1],
-        )?;
+        let segment_keys = extents.key_prefix(runtime, &keys_headed, segment.key_end as i32)?;
+        let segment_values = extents.key_prefix(runtime, &values_headed, segment.key_end as i32)?;
         let attended = if segment.is_text {
             masked_attention(
                 runtime,
@@ -209,22 +186,11 @@ fn segment_attention(
         outputs.push(attended_tokens);
     }
     // The trailing target segment attends to every key.
-    let target_queries = to_heads(
-        &runtime.slice(
-            queries,
-            &[
-                0,
-                context
-                    .segments
-                    .last()
-                    .map(|segment| segment.query_end)
-                    .unwrap_or_default() as i32,
-                0,
-                0,
-            ],
-            &[batch, sequence_length, head_count, head_width],
-            &[1, 1, 1, 1],
-        )?,
+    let target_queries = extents.query_rows(
+        runtime,
+        queries,
+        target_query_start(context.segments),
+        queries.shape()[1],
     )?;
     let target_attended = fused_attention(
         runtime,
@@ -240,6 +206,70 @@ fn segment_attention(
     Ok(runtime.concatenate_axis(&output_refs, 1)?)
 }
 
+/// Moves `[batch, tokens, heads, width]` to `[batch, heads, tokens, width]`.
+fn to_heads(runtime: &MlxRuntime, array: &MlxArray) -> Result<MlxArray, QwenImage21EngineError> {
+    Ok(runtime.transpose_axes(array, &[0, 2, 1, 3])?)
+}
+
+/// The trailing target segment starts where the last prefix segment's queries end, and at the
+/// first token when no prefix segment exists.
+fn target_query_start(segments: &[AttentionSegment]) -> i32 {
+    match segments.last() {
+        Some(last_segment) => last_segment.query_end as i32,
+        None => 0,
+    }
+}
+
+/// The fixed extents every attention slice shares: batch size, head count and head width.
+#[derive(Clone, Copy)]
+struct HeadExtents {
+    batch: i32,
+    head_count: i32,
+    head_width: i32,
+}
+
+impl HeadExtents {
+    fn of(queries: &MlxArray, context: &BlockContext<'_>) -> Self {
+        Self {
+            batch: queries.shape()[0],
+            head_count: context.head_count as i32,
+            head_width: context.head_width as i32,
+        }
+    }
+
+    /// Query rows `[query_start, query_end)` of token-layout queries, moved heads-first.
+    fn query_rows(
+        self,
+        runtime: &MlxRuntime,
+        queries: &MlxArray,
+        query_start: i32,
+        query_end: i32,
+    ) -> Result<MlxArray, QwenImage21EngineError> {
+        let sliced_queries = runtime.slice(
+            queries,
+            &[0, query_start, 0, 0],
+            &[self.batch, query_end, self.head_count, self.head_width],
+            &[1, 1, 1, 1],
+        )?;
+        to_heads(runtime, &sliced_queries)
+    }
+
+    /// Keys or values `[0, key_end)` of an array that is already heads-first.
+    fn key_prefix(
+        self,
+        runtime: &MlxRuntime,
+        headed_array: &MlxArray,
+        key_end: i32,
+    ) -> Result<MlxArray, QwenImage21EngineError> {
+        Ok(runtime.slice(
+            headed_array,
+            &[0, 0, 0, 0],
+            &[self.batch, self.head_count, key_end, self.head_width],
+            &[1, 1, 1, 1],
+        )?)
+    }
+}
+
 fn forward_feed_forward(
     runtime: &MlxRuntime,
     weights: &QwenImage21FeedForwardWeights,
@@ -251,3 +281,7 @@ fn forward_feed_forward(
     let combined = runtime.multiply(&activated, &projected)?;
     weights.output.forward(runtime, &combined)
 }
+
+#[cfg(test)]
+#[path = "blocks_tests.rs"]
+mod blocks_tests;

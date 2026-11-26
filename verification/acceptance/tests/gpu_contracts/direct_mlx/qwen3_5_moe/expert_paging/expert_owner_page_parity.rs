@@ -25,7 +25,7 @@ use model_serving::{
     build_quantized_expert_page_manifest_from_plan, load_quantized_expert_page,
 };
 use qwen35_quantization_probe::probe_model::experts::{
-    ExpertProjectionArraysForTests, expert_layer_arrays_for_tests,
+    ExpertLayerArraysForTests, ExpertProjectionArraysForTests, expert_layer_arrays_for_tests,
 };
 use runtime_integration::{MlxMemoryLimits, MlxRuntime, MlxSafetensors};
 use serde_json::json;
@@ -315,7 +315,6 @@ fn assert_arrays_identical(
 }
 
 #[tokio::test]
-#[expect(clippy::too_many_lines)]
 async fn should_build_identical_held_expert_layers_from_shard_and_bounded_reads() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let model_directory = tempfile::tempdir().expect("the parity model directory should create");
@@ -340,38 +339,8 @@ async fn should_build_identical_held_expert_layers_from_shard_and_bounded_reads(
     // Build the held layer through the probe model's construction twice: once
     // from the whole-shard arrays its loader reads, once from the
     // bounded arrays the pager reads.
-    let build_from = |shard: Option<&MlxSafetensors>| {
-        let to_owner_input = |read: ProjectionRead| ExpertProjectionArraysForTests {
-            packed_weight: read.packed_weight,
-            quantization_scales: read.quantization_scales,
-            quantization_biases: read.quantization_biases,
-        };
-        let gate = to_owner_input(read_projection(
-            &runtime,
-            &layer_plan,
-            "gate_proj",
-            shard,
-            &page_tensors,
-        ));
-        let up = to_owner_input(read_projection(
-            &runtime,
-            &layer_plan,
-            "up_proj",
-            shard,
-            &page_tensors,
-        ));
-        let down = to_owner_input(read_projection(
-            &runtime,
-            &layer_plan,
-            "down_proj",
-            shard,
-            &page_tensors,
-        ));
-        expert_layer_arrays_for_tests(&runtime, &layer_plan, gate, up, down)
-            .expect("the held expert layer construction should build")
-    };
-    let shard_built = build_from(Some(&shard));
-    let page_built = build_from(None);
+    let shard_built = build_held_expert_layer(&runtime, &layer_plan, Some(&shard), &page_tensors);
+    let page_built = build_held_expert_layer(&runtime, &layer_plan, None, &page_tensors);
 
     assert_eq!(
         shard_built.is_fused, page_built.is_fused,
@@ -382,6 +351,44 @@ async fn should_build_identical_held_expert_layers_from_shard_and_bounded_reads(
         page_built.gate_up.len(),
         "both provenances must retain the same gate/up entry count"
     );
+    assert_gate_up_entries_identical(&runtime, &shard_built, &page_built);
+    assert_down_projection_identical(&runtime, &shard_built, &page_built);
+}
+
+fn build_held_expert_layer(
+    runtime: &MlxRuntime,
+    layer_plan: &QuantizedExpertLayerPlan,
+    shard: Option<&MlxSafetensors>,
+    page_tensors: &HashMap<String, MlxArray>,
+) -> ExpertLayerArraysForTests {
+    let gate = read_owner_projection(runtime, layer_plan, "gate_proj", shard, page_tensors);
+    let up = read_owner_projection(runtime, layer_plan, "up_proj", shard, page_tensors);
+    let down = read_owner_projection(runtime, layer_plan, "down_proj", shard, page_tensors);
+    expert_layer_arrays_for_tests(runtime, layer_plan, gate, up, down)
+        .expect("the held expert layer construction should build")
+}
+
+/// One projection's read, wrapped in the owner's input type.
+fn read_owner_projection(
+    runtime: &MlxRuntime,
+    layer_plan: &QuantizedExpertLayerPlan,
+    projection_name: &str,
+    shard: Option<&MlxSafetensors>,
+    page_tensors: &HashMap<String, MlxArray>,
+) -> ExpertProjectionArraysForTests {
+    let read = read_projection(runtime, layer_plan, projection_name, shard, page_tensors);
+    ExpertProjectionArraysForTests {
+        packed_weight: read.packed_weight,
+        quantization_scales: read.quantization_scales,
+        quantization_biases: read.quantization_biases,
+    }
+}
+
+fn assert_gate_up_entries_identical(
+    runtime: &MlxRuntime,
+    shard_built: &ExpertLayerArraysForTests,
+    page_built: &ExpertLayerArraysForTests,
+) {
     for (entry_index, (shard_entry, page_entry)) in shard_built
         .gate_up
         .iter()
@@ -390,7 +397,7 @@ async fn should_build_identical_held_expert_layers_from_shard_and_bounded_reads(
     {
         let label = format!("gate_up entry {entry_index} packed weight");
         assert_arrays_identical(
-            &runtime,
+            runtime,
             &label,
             &shard_entry.packed_weight,
             &page_entry.packed_weight,
@@ -415,7 +422,7 @@ async fn should_build_identical_held_expert_layers_from_shard_and_bounded_reads(
             if let (Some(shard_companion), Some(page_companion)) = (shard_companion, page_companion)
             {
                 assert_arrays_identical(
-                    &runtime,
+                    runtime,
                     &format!("{label} {companion_name}"),
                     shard_companion,
                     page_companion,
@@ -423,8 +430,15 @@ async fn should_build_identical_held_expert_layers_from_shard_and_bounded_reads(
             }
         }
     }
+}
+
+fn assert_down_projection_identical(
+    runtime: &MlxRuntime,
+    shard_built: &ExpertLayerArraysForTests,
+    page_built: &ExpertLayerArraysForTests,
+) {
     assert_arrays_identical(
-        &runtime,
+        runtime,
         "down packed weight",
         &shard_built.down.packed_weight,
         &page_built.down.packed_weight,
@@ -448,7 +462,7 @@ async fn should_build_identical_held_expert_layers_from_shard_and_bounded_reads(
         );
         if let (Some(shard_companion), Some(page_companion)) = (shard_companion, page_companion) {
             assert_arrays_identical(
-                &runtime,
+                runtime,
                 &format!("down {companion_name}"),
                 shard_companion,
                 page_companion,

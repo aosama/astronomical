@@ -14,25 +14,16 @@ use crate::worker::request_event_dispatch::{
 use tokio::time::Instant;
 
 use crate::{
-    ChatGenerationStreamEvent, CompletionAttributionLog, GenerationPerformanceLog, WorkerActivity,
-    WorkerControlError, WorkerHealthSnapshot,
-    serving::chat_generation_executor::try_send_stream_event,
-    worker::generation::completion_event::handle_worker_completion_event,
-    worker::generation::output::{
-        handle_worker_first_decode_completed, handle_worker_generation_progress,
-        handle_worker_output, handle_worker_reply_report,
-    },
-    worker::generation::prefill_progress::handle_worker_prefill_progress,
-    worker::generation::preparation::handle_generation_preparation_started,
+    CompletionAttributionLog, GenerationPerformanceLog, WorkerControlError, WorkerHealthSnapshot,
+    worker::chat_event_handler::dispatch_chat_generation_event,
     worker::health::{
-        clear_active_request_progress, clear_latest_mlx_memory_snapshot, publish_activity,
-        publish_astro_ssd_prompt_cache_stats, publish_draft_model, publish_expert_memory_mode,
-        publish_expert_streaming_stats, publish_latest_mlx_memory_snapshot,
-        publish_mlx_memory_limit_changed, publish_mlx_memory_limit_rejection,
-        publish_model_load_in_flight, publish_neural_engine_prefill,
-        publish_worker_expert_residency,
+        clear_latest_mlx_memory_snapshot, publish_astro_ssd_prompt_cache_stats,
+        publish_draft_model, publish_expert_memory_mode, publish_expert_streaming_stats,
+        publish_latest_mlx_memory_snapshot, publish_mlx_memory_limit_changed,
+        publish_mlx_memory_limit_rejection, publish_model_load_in_flight,
+        publish_neural_engine_prefill, publish_worker_expert_residency,
     },
-    worker::loop_types::{ActiveGeneration, ActiveWorkerRequest},
+    worker::loop_types::ActiveWorkerRequest,
 };
 
 /// Applies one typed worker event to daemon-owned request and health state.
@@ -51,15 +42,18 @@ pub(super) fn handle_worker_event(
     completion_log: &mut CompletionAttributionLog,
 ) -> Result<(), WorkerControlError> {
     match worker_event {
-        runtime_feature_event @ WorkerEvent::RuntimeFeatureConfigurationApplied { .. } => {
-            apply_runtime_feature_configuration(runtime_feature_event, health_snapshot)?;
-        }
-        model_state_event @ (WorkerEvent::ExpertMemoryModeChanged { .. }
+        health_event @ (WorkerEvent::RuntimeFeatureConfigurationApplied { .. }
+        | WorkerEvent::ExpertMemoryModeChanged { .. }
         | WorkerEvent::NeuralEnginePrefillChanged { .. }
         | WorkerEvent::DraftModelChanged { .. }
         | WorkerEvent::NeuralEngineChunkFinished { .. }
-        | WorkerEvent::ModelLoadInFlight { .. }) => {
-            apply_model_state_event(model_state_event, health_snapshot)
+        | WorkerEvent::ModelLoadInFlight { .. }
+        | WorkerEvent::MlxMemorySample { .. }
+        | WorkerEvent::MlxMemoryLimitChanged { .. }
+        | WorkerEvent::MlxMemoryLimitRejected { .. }
+        | WorkerEvent::AstroSsdPromptCacheStats { .. }
+        | WorkerEvent::ExpertStreamingStats { .. }) => {
+            apply_health_publication_event(health_event, health_snapshot, active_request)?;
         }
         readiness_event @ (WorkerEvent::Ready { .. } | WorkerEvent::Idle { .. }) => {
             crate::worker::readiness_event::apply_worker_readiness_event(
@@ -70,49 +64,28 @@ pub(super) fn handle_worker_event(
                 model_load_deadline,
             )?;
         }
-        memory_sample_event @ WorkerEvent::MlxMemorySample { .. } => {
-            apply_standalone_memory_sample(memory_sample_event, health_snapshot, active_request);
-        }
-        memory_limit_event @ (WorkerEvent::MlxMemoryLimitChanged { .. }
-        | WorkerEvent::MlxMemoryLimitRejected { .. }) => {
-            apply_memory_limit_event(memory_limit_event, health_snapshot);
-        }
         waited_for_event @ (WorkerEvent::ModelSwapped { .. }
         | WorkerEvent::ModelSwapFailed { .. }
         | WorkerEvent::AstroSsdPromptCacheCleared { .. }) => {
             return Err(outside_its_wait_violation(&waited_for_event));
         }
-        generation_finalized_event @ WorkerEvent::GenerationFinalized { .. } => {
-            apply_generation_finalized(
-                generation_finalized_event,
-                health_snapshot,
-                active_request,
-            )?;
-        }
-        worker_progress_event @ (WorkerEvent::Output { .. }
+        chat_generation_event @ (WorkerEvent::GenerationFinalized { .. }
+        | WorkerEvent::Output { .. }
         | WorkerEvent::PrefillProgress { .. }
         | WorkerEvent::GenerationPreparationStarted { .. }
         | WorkerEvent::GenerationProgress { .. }
         | WorkerEvent::FirstDecodeCompleted { .. }
         | WorkerEvent::PromptWorkReuse { .. }
-        | WorkerEvent::DraftingReport { .. }) => {
-            dispatch_chat_progress_event(worker_progress_event, health_snapshot, active_request)?;
-        }
-        worker_completed_event @ WorkerEvent::Completed { .. } => {
-            apply_worker_completed(
-                worker_completed_event,
+        | WorkerEvent::DraftingReport { .. }
+        | WorkerEvent::Completed { .. }
+        | WorkerEvent::Failed { .. }) => {
+            dispatch_chat_generation_event(
+                chat_generation_event,
                 health_snapshot,
                 active_request,
                 performance_log,
                 completion_log,
             )?;
-        }
-        generation_failed_event @ WorkerEvent::Failed { .. } => {
-            apply_generation_failed(generation_failed_event, health_snapshot, active_request)?;
-        }
-        observability_event @ (WorkerEvent::AstroSsdPromptCacheStats { .. }
-        | WorkerEvent::ExpertStreamingStats { .. }) => {
-            dispatch_observability_worker_event(observability_event, health_snapshot);
         }
         stepped_event @ (WorkerEvent::ImageGenerationProgress { .. }
         | WorkerEvent::ImageGenerationCompleted { .. }
@@ -141,6 +114,42 @@ pub(super) fn handle_worker_event(
         }
     }
     Ok(())
+}
+
+/// Applies the events that publish what the worker reports about itself: its
+/// runtime features, the loaded model's execution state, memory samples and
+/// limits, and the `astro_ssd_prompt_cache` and expert-streaming observations.
+/// The main dispatch match routes only these events here.
+fn apply_health_publication_event(
+    health_event: WorkerEvent,
+    health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
+    active_request: &mut Option<ActiveWorkerRequest>,
+) -> Result<(), WorkerControlError> {
+    match health_event {
+        runtime_feature_event @ WorkerEvent::RuntimeFeatureConfigurationApplied { .. } => {
+            apply_runtime_feature_configuration(runtime_feature_event, health_snapshot)
+        }
+        memory_sample_event @ WorkerEvent::MlxMemorySample { .. } => {
+            apply_standalone_memory_sample(memory_sample_event, health_snapshot, active_request);
+            Ok(())
+        }
+        memory_limit_event @ (WorkerEvent::MlxMemoryLimitChanged { .. }
+        | WorkerEvent::MlxMemoryLimitRejected { .. }) => {
+            apply_memory_limit_event(memory_limit_event, health_snapshot);
+            Ok(())
+        }
+        observability_event @ (WorkerEvent::AstroSsdPromptCacheStats { .. }
+        | WorkerEvent::ExpertStreamingStats { .. }) => {
+            dispatch_observability_worker_event(observability_event, health_snapshot);
+            Ok(())
+        }
+        // The dispatch match routes nothing else here, so what remains is a
+        // model-state report.
+        model_state_event => {
+            apply_model_state_event(model_state_event, health_snapshot);
+            Ok(())
+        }
+    }
 }
 
 /// Publishes astro SSD prompt cache and expert-streaming snapshots that ride alongside
@@ -237,8 +246,8 @@ fn apply_model_state_event(
             publish_draft_model(health_snapshot, None);
             publish_model_load_in_flight(health_snapshot, Some(model_load_in_flight));
         }
-        // The dispatch match routes only the model-state events here, so what
-        // remains is the Neural Engine's report or the drafter's.
+        // `apply_health_publication_event` routes only the model-state events
+        // here, so what remains is the Neural Engine's report or the drafter's.
         engine_status_event => {
             crate::worker::health::publish_engine_status_event(
                 health_snapshot,
@@ -281,84 +290,6 @@ fn apply_standalone_memory_sample(
     if let Some(expert_residency) = expert_residency {
         publish_worker_expert_residency(health_snapshot, expert_residency);
     }
-}
-
-/// Applies a generation-finalized event to the matching active chat request:
-/// final peaks, last active memory, expert mode, and final residency. Mirrors
-/// the inlined arm, including both request-mismatch violations.
-fn apply_generation_finalized(
-    generation_finalized_event: WorkerEvent,
-    health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
-    active_request: &mut Option<ActiveWorkerRequest>,
-) -> Result<(), WorkerControlError> {
-    // Routed from the dispatch match; total without a silent catch-all.
-    let WorkerEvent::GenerationFinalized {
-        request_id,
-        expert_memory_mode,
-        mlx_memory_snapshot,
-        expert_residency,
-    } = generation_finalized_event
-    else {
-        return Ok(());
-    };
-    let chat_request = active_chat_request_mut(active_request)?;
-    if request_id != chat_request.request_id {
-        return Err(protocol_violation(
-            "finalized generation state request mismatch",
-        ));
-    }
-    if let Some(mlx_memory_snapshot) = mlx_memory_snapshot {
-        chat_request.fold_observed_mlx_peak_memory_bytes(mlx_memory_snapshot.peak_memory_bytes);
-        chat_request.last_mlx_active_memory_bytes = Some(mlx_memory_snapshot.active_memory_bytes);
-        publish_latest_mlx_memory_snapshot(health_snapshot, mlx_memory_snapshot);
-    } else {
-        clear_latest_mlx_memory_snapshot(health_snapshot);
-    }
-    if let Some(expert_memory_mode) = expert_memory_mode {
-        publish_expert_memory_mode(health_snapshot, expert_memory_mode);
-    }
-    if let Some(expert_residency) = expert_residency {
-        chat_request.final_resident_expert_count = Some(expert_residency.resident_expert_count);
-        chat_request.final_resident_expert_payload_bytes =
-            Some(expert_residency.resident_expert_payload_bytes);
-        crate::worker::health::publish_worker_expert_residency(health_snapshot, expert_residency);
-    }
-    Ok(())
-}
-
-/// Applies a generation failure: drops the matching chat request, publishes
-/// idle, clears request progress, and delivers the failure to the stream.
-/// Mirrors the inlined arm, including all three protocol violations.
-fn apply_generation_failed(
-    generation_failed_event: WorkerEvent,
-    health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
-    active_request: &mut Option<ActiveWorkerRequest>,
-) -> Result<(), WorkerControlError> {
-    // Routed from the dispatch match; total without a silent catch-all.
-    let WorkerEvent::Failed { request_id, reason } = generation_failed_event else {
-        return Ok(());
-    };
-    let Some(chat_request) = active_request.as_ref().and_then(ActiveWorkerRequest::chat) else {
-        return Err(protocol_violation("failure without an active request"));
-    };
-    if request_id != chat_request.request_id {
-        return Err(protocol_violation("failure request mismatch"));
-    }
-    let Some(ActiveWorkerRequest::Chat(failed_request)) = active_request.take() else {
-        return Err(protocol_violation(
-            "chat failure while image generation is active",
-        ));
-    };
-    tracing::warn!(request_id = request_id.value(), failure_reason = ?reason,
-        "worker generation failed");
-    crate::problem_reports::record_flight_event(crate::problem_reports::FlightEvent::ReplyFailed);
-    crate::problem_reports::report_reply_failure(&reason, health_snapshot);
-    publish_activity(health_snapshot, WorkerActivity::Idle);
-    clear_active_request_progress(health_snapshot);
-    try_send_stream_event(
-        &failed_request.stream_event_sender,
-        ChatGenerationStreamEvent::Failed { reason },
-    )
 }
 
 /// Publishes an accepted memory-limit change. Mirrors the inlined arm.
@@ -409,132 +340,10 @@ fn apply_mlx_memory_limit_rejected(
     publish_mlx_memory_limit_rejection(health_snapshot, minimum_mlx_memory_ceiling_bytes, reason);
 }
 
-/// Publishes the preparation snapshot and delegates the preparation start to
-/// the request-scoped handler. Mirrors the inlined arm.
-fn apply_generation_preparation_started(
-    preparation_started_event: WorkerEvent,
-    health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
-    active_request: &mut Option<ActiveWorkerRequest>,
-) -> Result<(), WorkerControlError> {
-    // Routed from the dispatch match; total without a silent catch-all.
-    let WorkerEvent::GenerationPreparationStarted {
-        request_id,
-        expert_residency,
-        mlx_memory_snapshot,
-    } = preparation_started_event
-    else {
-        return Ok(());
-    };
-    if let Some(mlx_memory_snapshot) = &mlx_memory_snapshot {
-        publish_latest_mlx_memory_snapshot(health_snapshot, *mlx_memory_snapshot);
-    }
-    handle_generation_preparation_started(
-        request_id,
-        expert_residency.map(Into::into),
-        health_snapshot,
-        active_chat_request_mut(active_request)?,
-    )
-}
-
-/// Delegates a completed generation to the completion handler. Mirrors the
-/// inlined arm.
-fn apply_worker_completed(
-    worker_completed_event: WorkerEvent,
-    health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
-    active_request: &mut Option<ActiveWorkerRequest>,
-    performance_log: &mut GenerationPerformanceLog,
-    completion_log: &mut CompletionAttributionLog,
-) -> Result<(), WorkerControlError> {
-    // Routed from the dispatch match; total without a silent catch-all.
-    let WorkerEvent::Completed {
-        request_id,
-        prompt_token_count,
-        generated_token_count,
-        reasoning_token_count,
-        astro_ssd_prompt_cache_restored_token_count,
-        astro_ssd_prompt_cache_diagnostics,
-        reason,
-    } = worker_completed_event
-    else {
-        return Ok(());
-    };
-    crate::problem_reports::record_flight_event(
-        crate::problem_reports::FlightEvent::ReplyFinished {
-            prompt_token_count,
-            generated_token_count,
-        },
-    );
-    handle_worker_completion_event(
-        request_id,
-        prompt_token_count,
-        generated_token_count,
-        reasoning_token_count,
-        astro_ssd_prompt_cache_restored_token_count,
-        astro_ssd_prompt_cache_diagnostics,
-        reason,
-        health_snapshot,
-        active_request,
-        performance_log,
-        completion_log,
-    )
-}
-
-/// Dispatches the request-scoped chat progress events (output fragments,
-/// prefill progress, generation progress, first decode, prompt work reuse,
-/// drafting report) to their dedicated handlers. The main dispatch match
-/// routes only these events here, so its final arm never runs.
-fn dispatch_chat_progress_event(
-    worker_progress_event: WorkerEvent,
-    health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
-    active_request: &mut Option<ActiveWorkerRequest>,
-) -> Result<(), WorkerControlError> {
-    match worker_progress_event {
-        preparation_started_event @ WorkerEvent::GenerationPreparationStarted { .. } => {
-            apply_generation_preparation_started(
-                preparation_started_event,
-                health_snapshot,
-                active_request,
-            )
-        }
-        worker_output_event @ WorkerEvent::Output { .. } => handle_worker_output(
-            worker_output_event,
-            health_snapshot,
-            active_chat_request_mut(active_request)?,
-        ),
-        worker_prefill_progress_event @ WorkerEvent::PrefillProgress { .. } => {
-            handle_worker_prefill_progress(
-                worker_prefill_progress_event,
-                health_snapshot,
-                active_chat_request_mut(active_request)?,
-            )
-        }
-        worker_generation_progress_event @ WorkerEvent::GenerationProgress { .. } => {
-            handle_worker_generation_progress(
-                worker_generation_progress_event,
-                health_snapshot,
-                active_chat_request_mut(active_request)?,
-            )
-        }
-        worker_first_decode_event @ WorkerEvent::FirstDecodeCompleted { .. } => {
-            handle_worker_first_decode_completed(
-                worker_first_decode_event,
-                active_chat_request_mut(active_request)?,
-            )
-        }
-        reply_report_event @ (WorkerEvent::PromptWorkReuse { .. }
-        | WorkerEvent::DraftingReport { .. }) => handle_worker_reply_report(
-            reply_report_event,
-            health_snapshot,
-            active_chat_request_mut(active_request)?,
-        ),
-        _ => Ok(()),
-    }
-}
-
 /// The protocol violation for an event only its own wait loop may receive
 /// (a model swap's or an Astro SSD prompt-cache clear's), arriving outside
 /// that wait. One arm in `handle_worker_event` keeps that function inside
-/// the 100-line budget.
+/// the 80-line budget.
 fn outside_its_wait_violation(waited_for_event: &WorkerEvent) -> WorkerControlError {
     match waited_for_event {
         WorkerEvent::AstroSsdPromptCacheCleared { .. } => {
@@ -567,15 +376,6 @@ pub(super) fn outside_astro_ssd_prompt_cache_clear_wait_violation(
     protocol_violation(
         "astro-ssd-prompt-cache clear acknowledgement outside astro-ssd-prompt-cache clear wait",
     )
-}
-
-fn active_chat_request_mut(
-    active_request: &mut Option<ActiveWorkerRequest>,
-) -> Result<&mut ActiveGeneration, WorkerControlError> {
-    active_request
-        .as_mut()
-        .and_then(ActiveWorkerRequest::chat_mut)
-        .ok_or_else(|| protocol_violation("chat event without an active chat request"))
 }
 
 pub(super) fn protocol_violation(description: &'static str) -> WorkerControlError {

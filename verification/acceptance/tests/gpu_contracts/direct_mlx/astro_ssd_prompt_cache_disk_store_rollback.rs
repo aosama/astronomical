@@ -5,8 +5,9 @@ use std::time::{Duration, UNIX_EPOCH};
 
 use mlx_bridge::MlxDtype;
 use model_serving::{
-    AstroSsdPromptCacheDiskStoreError, ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID,
-    ORNITH_1_0_35B_OPTIQ_4BIT_REVISION, PersistentVisualEmbeddingKey,
+    AstroSsdPromptCacheBlockKey, AstroSsdPromptCacheDiskStore, AstroSsdPromptCacheDiskStoreError,
+    ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID, ORNITH_1_0_35B_OPTIQ_4BIT_REVISION,
+    PersistentVisualEmbeddingKey,
 };
 
 use super::astro_ssd_prompt_cache_disk_store_support::*;
@@ -123,17 +124,10 @@ async fn should_not_touch_a_parent_boundary_when_a_child_fits_without_quota_pres
             &recurrent_snapshot_tensors,
         )
         .expect("the child split files should save");
-    let child_recurrent_snapshot_file_path = astro_ssd_prompt_cache_directory
-        .path()
-        .join("blocks")
-        .join(hex::encode(
-            child_astro_ssd_prompt_cache_block_key.block_hash(),
-        ))
-        .join("boundary.safetensors");
-    fs::remove_file(&child_recurrent_snapshot_file_path)
-        .expect("the test should remove the child snapshot file");
-    fs::create_dir(&child_recurrent_snapshot_file_path)
-        .expect("the test should replace the parent snapshot with a deletion sentinel");
+    replace_child_boundary_file_with_a_deletion_sentinel(
+        &astro_ssd_prompt_cache_directory,
+        &child_astro_ssd_prompt_cache_block_key,
+    );
 
     let save_result = astro_ssd_prompt_cache.publish_block(
         &runtime,
@@ -150,6 +144,35 @@ async fn should_not_touch_a_parent_boundary_when_a_child_fits_without_quota_pres
         save_result.is_ok(),
         "a fitting child must retain its parent: {save_result:?}"
     );
+    assert_grandchild_block_is_published(
+        &astro_ssd_prompt_cache,
+        &astro_ssd_prompt_cache_directory,
+        &grandchild_astro_ssd_prompt_cache_block_key,
+    );
+}
+
+fn replace_child_boundary_file_with_a_deletion_sentinel(
+    astro_ssd_prompt_cache_directory: &tempfile::TempDir,
+    child_astro_ssd_prompt_cache_block_key: &AstroSsdPromptCacheBlockKey,
+) {
+    let child_recurrent_snapshot_file_path = astro_ssd_prompt_cache_directory
+        .path()
+        .join("blocks")
+        .join(hex::encode(
+            child_astro_ssd_prompt_cache_block_key.block_hash(),
+        ))
+        .join("boundary.safetensors");
+    fs::remove_file(&child_recurrent_snapshot_file_path)
+        .expect("the test should remove the child snapshot file");
+    fs::create_dir(&child_recurrent_snapshot_file_path)
+        .expect("the test should replace the parent snapshot with a deletion sentinel");
+}
+
+fn assert_grandchild_block_is_published(
+    astro_ssd_prompt_cache: &AstroSsdPromptCacheDiskStore,
+    astro_ssd_prompt_cache_directory: &tempfile::TempDir,
+    grandchild_astro_ssd_prompt_cache_block_key: &AstroSsdPromptCacheBlockKey,
+) {
     assert!(
         astro_ssd_prompt_cache
             .has_kv_block(&grandchild_astro_ssd_prompt_cache_block_key.block_hash())

@@ -101,6 +101,61 @@ pub(super) fn budget_exhausted_outcome(
     }
 }
 
+/// The journey's measured model directory: the one the journey names, or the
+/// one the Development configuration's model directories resolve for the id.
+pub(super) fn resolve_journey_model_directory(
+    model_id: &str,
+    journey: &ThroughputJourney,
+) -> PathBuf {
+    match journey.model_directory.clone() {
+        Some(journey_model_directory) => journey_model_directory,
+        None => crate::support::configured_installed_model_directory_by_id(model_id),
+    }
+}
+
+/// Launches the measured worker inside what is left of the journey budget;
+/// `None` when the budget ran out before the worker became servable.
+pub(super) async fn launch_servable_worker_within_budget(
+    cell_deadline: tokio::time::Instant,
+    worker_executable_path: PathBuf,
+    logging_directory: &Path,
+    model_policy_catalog: Arc<HashMap<String, RuntimeModelPolicy>>,
+    worker_startup_configuration: WorkerStartupConfiguration,
+    journey: &ThroughputJourney,
+) -> Option<WorkerHandle> {
+    tokio::time::timeout(
+        remaining_journey_budget(cell_deadline),
+        launch_servable_worker(
+            worker_executable_path,
+            logging_directory,
+            model_policy_catalog,
+            worker_startup_configuration,
+            journey,
+        ),
+    )
+    .await
+    .ok()
+}
+
+/// The outcome a journey reports when its budget ran out before the worker
+/// launched and went idle.
+pub(super) fn budget_exhausted_at_launch(
+    model_id: &str,
+    journey: &ThroughputJourney,
+    logging_directory: PathBuf,
+) -> JourneyRunOutcome {
+    eprintln!(
+        "[performance-throughput] budget_exhausted=true model={model_id} stage=launch-or-idle budget_seconds={} — the cell never became servable inside the budget",
+        journey.journey_timeout.as_secs(),
+    );
+    budget_exhausted_outcome(
+        model_id,
+        journey,
+        logging_directory,
+        MemoryCellBudgetExhaustedStage::LaunchOrIdle,
+    )
+}
+
 /// Launches the measured worker, waits for idle readiness, and proves the
 /// effective memory ceiling the journey demanded before the model loads: the
 /// full-fit diagnostic must run at its dedicated ceiling, and every real-model
@@ -151,18 +206,20 @@ pub(super) async fn launch_servable_worker(
     worker_handle
 }
 
+/// The three pieces of a running progress sampler that the driver needs again
+/// when the journey ends: the shared last-observed slot, the stop signal, and
+/// the sampler task.
+pub(super) struct ProgressSampler {
+    preserved_progress_slot: Arc<Mutex<Option<astronomical_daemon::ActiveRequestProgress>>>,
+    sampler_stop_signal: Arc<AtomicBool>,
+    sampler_task: tokio::task::JoinHandle<()>,
+}
+
 /// Spawns the background progress sampler. The sampler preserves the LAST
 /// observed per-phase progress even after cancellation clears the health
 /// snapshot, so a budget-exhausted cell still reports the prefill or decode
-/// rate it was dying at. Returns the shared last-observed slot, the stop
-/// signal, and the sampler task.
-pub(super) fn spawn_progress_sampler(
-    worker_handle: &WorkerHandle,
-) -> (
-    Arc<Mutex<Option<astronomical_daemon::ActiveRequestProgress>>>,
-    Arc<AtomicBool>,
-    tokio::task::JoinHandle<()>,
-) {
+/// rate it was dying at.
+pub(super) fn spawn_progress_sampler(worker_handle: &WorkerHandle) -> ProgressSampler {
     let last_observed_active_request_progress: Arc<
         Mutex<Option<astronomical_daemon::ActiveRequestProgress>>,
     > = Arc::new(Mutex::new(None));
@@ -170,7 +227,7 @@ pub(super) fn spawn_progress_sampler(
     let sampler_worker_handle = worker_handle.clone();
     let sampler_progress_slot = Arc::clone(&last_observed_active_request_progress);
     let sampler_stop = Arc::clone(&sampler_stop_signal);
-    let progress_sampler = tokio::spawn(async move {
+    let sampler_task = tokio::spawn(async move {
         while !sampler_stop.load(Ordering::Relaxed) {
             sleep(Duration::from_secs(2)).await;
             if sampler_stop.load(Ordering::Relaxed) {
@@ -189,11 +246,11 @@ pub(super) fn spawn_progress_sampler(
             }
         }
     });
-    (
-        last_observed_active_request_progress,
+    ProgressSampler {
+        preserved_progress_slot: last_observed_active_request_progress,
         sampler_stop_signal,
-        progress_sampler,
-    )
+        sampler_task,
+    }
 }
 
 /// One completion (warmup or measured) described for the budgeted driver:
@@ -409,4 +466,32 @@ pub(super) async fn drive_journey_completions(
         measured_completion_ordinal_in_worker,
         health_snapshot_after_warmup,
     }
+}
+
+/// Stops the background progress sampler, shuts the measured worker down, and
+/// returns the last active-request progress observed: the live snapshot's when
+/// it has one, else what the sampler preserved. `progress_sampler` is what
+/// `spawn_progress_sampler` returned.
+pub(super) async fn stop_progress_sampler_and_shut_down_worker(
+    worker_handle: WorkerHandle,
+    final_health_snapshot: &WorkerHealthSnapshot,
+    progress_sampler: ProgressSampler,
+) -> Option<astronomical_daemon::ActiveRequestProgress> {
+    let ProgressSampler {
+        preserved_progress_slot,
+        sampler_stop_signal,
+        sampler_task,
+    } = progress_sampler;
+    sampler_stop_signal.store(true, Ordering::Relaxed);
+    sampler_task.abort();
+    let last_observed_active_request_progress =
+        match final_health_snapshot.active_request_progress.clone() {
+            Some(active_request_progress) => Some(active_request_progress),
+            None => take_preserved_progress(&preserved_progress_slot),
+        };
+    worker_handle
+        .shutdown()
+        .await
+        .expect("the measured worker should terminate and be reaped");
+    last_observed_active_request_progress
 }

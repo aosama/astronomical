@@ -306,6 +306,14 @@ async fn send_chat_generate_with_schema(
     socket_path: &Path,
     schema_json: &str,
 ) -> Result<String, String> {
+    complete_handshake_on_its_own_connection(socket_path).await;
+    let mut request_client = connect_and_send_schema_chat_request(socket_path, schema_json).await;
+    read_reply_text_until_terminal_frame(&mut request_client).await
+}
+
+/// The handshake connection is dropped on return, so the chat request that
+/// follows travels on a fresh connection per the wire contract.
+async fn complete_handshake_on_its_own_connection(socket_path: &Path) {
     let mut handshake_client = DaemonIpcClient::connect(socket_path.to_path_buf())
         .await
         .expect("the handshake client should connect to the daemon IPC service");
@@ -322,7 +330,12 @@ async fn send_chat_generate_with_schema(
         .expect("the handshake response read should not fail at the transport layer")
         .expect("the daemon should answer the handshake");
     drop(handshake_client);
+}
 
+async fn connect_and_send_schema_chat_request(
+    socket_path: &Path,
+    schema_json: &str,
+) -> DaemonIpcClient {
     let mut request_client = DaemonIpcClient::connect(socket_path.to_path_buf())
         .await
         .expect("the request client should connect to the daemon IPC service");
@@ -348,7 +361,12 @@ async fn send_chat_generate_with_schema(
     .await
     .expect("the chat request should send inside the frame budget")
     .expect("the chat request should transmit");
+    request_client
+}
 
+async fn read_reply_text_until_terminal_frame(
+    request_client: &mut DaemonIpcClient,
+) -> Result<String, String> {
     let mut reply_text = String::new();
     loop {
         let daemon_frame = timeout(FRAME_WAIT, request_client.next_response())
