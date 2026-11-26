@@ -16,6 +16,10 @@ pub struct Qwen3_5InferenceExecution {
     pub(crate) core: Qwen3_5ExecutionCore<Qwen3_5Model, StreamingRequestExtension>,
     pub(in crate::qwen3_5_streaming) decode_astro_expert_cache_policy:
         WorkerDecodeAstroExpertCachePolicy,
+    /// The opt-in Neural Engine prompt reading for the loaded model, which
+    /// only a dense model with every layer kept in memory gets.
+    pub(in crate::qwen3_5_streaming) neural_engine_prefill:
+        crate::qwen3_5_core::neural_engine::neural_engine_prefill_lifecycle::NeuralEnginePrefillLifecycle,
     /// A span, as (layer, span), that the next layer-at-a-time prompt fails
     /// once on purpose; set only by a test.
     pub(in crate::qwen3_5_streaming) prompt_span_to_fail_once_for_tests: Option<(usize, usize)>,

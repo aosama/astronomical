@@ -1098,6 +1098,13 @@ measure-chat-follow-up-turn = "run -p xtask -- test-run --package astronomical-a
 # rounds with the order flipped. The paging_experiment limit must hold the
 # model twice. About three minutes on a 9B, ten on a dense 27B.
 measure-engine-prompt-reading-verdict = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --case-budget-seconds 900 --filter a_verdict_on_prompt_reading_between_the_two_text_engines"
+# Neural Engine prompt reading on the streaming engine (#2585): a dense model
+# with every layer kept in memory builds its programs, attaches them, and
+# reads a 10,000-token prompt; then the same prompt on the GPU alone, a
+# process each. The limit must hold the model and its programs. Building
+# takes about five minutes when macOS holds no prepared copy; progress and
+# time left print every five seconds.
+measure-neural-engine-streaming-prompt-reading = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --case-budget-seconds 560 --filter a_long_prompt_on_the_streaming_engine_with_"
 measure-hosted-drafter-reply = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --case-budget-seconds 500 --filter reply_speed_with_the_hosted_drafter"
 test-in-graph-drafted-blocks = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --filter drafted_blocks_are_looked_up_in_the_graph"
 test-in-graph-route-lookup = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --filter whichever_way_routes_are_looked_up"

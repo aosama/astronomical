@@ -112,6 +112,13 @@ impl Qwen3_5EngineState {
         let forward_chunk_elapsed_millis =
             prompt_prefill_chunk_outcome.forward_chunk_elapsed_millis;
         self.hand_prompt_stretch_taps_to_the_drafter(active_request);
+        let neural_engine_chunk = self.core.model.as_ref().and_then(|model| {
+            model.note_neural_engine_chunk_finished(
+                prefill_start,
+                prefill_end - prefill_start,
+                std::time::Duration::from_millis(forward_chunk_elapsed_millis),
+            )
+        });
         let read_stretch = PromptStretch {
             prefill_start,
             prefill_end,
@@ -142,7 +149,7 @@ impl Qwen3_5EngineState {
                 forward_chunk_started_at,
                 forward_chunk_elapsed_millis,
             },
-            None,
+            neural_engine_chunk,
         )?))
     }
 }

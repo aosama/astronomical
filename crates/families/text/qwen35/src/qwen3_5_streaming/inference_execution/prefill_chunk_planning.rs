@@ -61,6 +61,12 @@ impl Qwen3_5EngineState {
                 .maximum_prompt_processing_chunk_size_tokens(),
             capture_block_token_count,
         )
+        .map(|whole_stretch_plan| {
+            self.one_span_while_neural_engine_programs_are_attached(
+                whole_stretch_plan,
+                prefill_start,
+            )
+        })
     }
 
     /// Compute every decision a prompt-processing chunk needs before it runs.

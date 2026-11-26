@@ -10,9 +10,11 @@
 pub mod astro_neural_engine_program_cache;
 pub mod host_description;
 pub mod neural_engine_chunk_comparison;
+pub mod neural_engine_host;
 pub mod neural_engine_idle_watch;
 pub mod neural_engine_mlp_prefill;
 pub mod neural_engine_output_gate_prefill;
+pub mod neural_engine_prefill_lifecycle;
 pub mod neural_engine_prefill_loading;
 pub mod neural_engine_program_measurement;
 pub mod neural_engine_program_memory_record;

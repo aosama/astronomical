@@ -12,18 +12,9 @@ use super::engine_request::ResidentRequestExtension;
 /// retained live prefix and its drafter.
 pub struct Qwen3_5InferenceExecution {
     pub(crate) core: Qwen3_5ExecutionCore<Qwen3_5ResidentModel, ResidentRequestExtension>,
-    /// Where this model revision's compiled Neural Engine programs are kept
-    /// between loads; `None` compiles them again on every load.
-    pub(in crate::qwen3_5_resident::inference_execution) astro_neural_engine_program_cache_directory:
-        Option<std::path::PathBuf>,
-    /// What the opt-in Neural Engine prefill is doing for the loaded model.
-    pub(in crate::qwen3_5_resident::inference_execution) neural_engine_prefill_status:
-        ipc_protocol::NeuralEnginePrefillStatus,
-    /// The programs still on their way to the loaded model, which serves on the GPU
-    /// until they arrive.
-    pub(in crate::qwen3_5_resident::inference_execution) neural_engine_prefill_preparation: Option<
-        crate::qwen3_5_core::neural_engine::neural_engine_prefill_loading::NeuralEnginePrefillPreparation,
-    >,
+    /// The opt-in Neural Engine prompt reading for the loaded model.
+    pub(in crate::qwen3_5_resident::inference_execution) neural_engine_prefill:
+        crate::qwen3_5_core::neural_engine::neural_engine_prefill_lifecycle::NeuralEnginePrefillLifecycle,
     /// The last completed generation's live decoder state, retained for
     /// in-memory prefix adoption (issue #1167). Dropped when the next request
     /// fails to adopt it or when the retention policy says so at completion.

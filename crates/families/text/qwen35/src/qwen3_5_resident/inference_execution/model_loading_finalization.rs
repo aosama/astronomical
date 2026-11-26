@@ -17,7 +17,7 @@ impl Qwen3_5EngineState {
                     .map(|loaded_model| loaded_model.expert_memory_mode()),
             )
             .with_minimum_mlx_memory_ceiling_bytes(minimum_mlx_memory_ceiling_bytes)
-            .with_neural_engine_prefill_status(self.neural_engine_prefill_status.clone())
+            .with_neural_engine_prefill_status(self.neural_engine_prefill.status().clone())
             .with_draft_model_status(self.draft_model_status.clone())
     }
 }

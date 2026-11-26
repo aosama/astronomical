@@ -12,6 +12,7 @@ mod in_graph_route_lookup_reply;
 mod in_memory_ledger_reconciliation;
 mod long_prompt_reading;
 mod mtp_reply_drafting_speed;
+mod neural_engine_streaming_prompt_reading;
 mod no_replay;
 mod paged_decode;
 mod paged_prefill_chunk_attribution;

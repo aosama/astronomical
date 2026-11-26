@@ -28,11 +28,15 @@ impl Qwen3_5StreamingModel {
         // One-token decode keeps the low-overhead existing graph.
         let mlp_forward_span_started_at = performance_attribution.begin_operation_span();
         let mlp_output = match &decoder_layer_weights.mlp_weights {
-            Qwen3_5DecoderFeedForwardWeights::Dense(dense_mlp_weights) => self
-                .forward_qwen3_5_dense_mlp(
-                    &attention_output.normalized_attention,
-                    dense_mlp_weights,
-                ),
+            Qwen3_5DecoderFeedForwardWeights::Dense(kept_or_read_mlp) => {
+                let normalized = &attention_output.normalized_attention;
+                self.forward_dense_mlp_with_neural_engine_programs(
+                    normalized,
+                    kept_or_read_mlp,
+                    token_count,
+                    layer_index,
+                )
+            }
             Qwen3_5DecoderFeedForwardWeights::MixtureOfExperts(mixture_of_experts_weights) => {
                 // Sparse layer metadata and router weights live in the decoder
                 // layer, while source geometry and bounded loading live in the

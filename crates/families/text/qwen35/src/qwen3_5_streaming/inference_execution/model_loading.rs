@@ -59,10 +59,16 @@ impl TextModelLoadingHooks for Qwen3_5EngineState {
         model: &mut Qwen3_5Model,
         _model_loading_performance_attribution: &mut PerformanceAttribution,
     ) -> Result<(), InferenceEngineError> {
-        model
+        let cleared_after_loading = model
             .runtime()
             .synchronize_gpu_stream_and_clear_mlx_buffer_cache()
-            .map_err(fatal_runtime_error)
+            .map_err(fatal_runtime_error);
+        // Last, so the programs' admission sees the model's own memory and
+        // the layers the governor kept. They are only started here: the
+        // model serves on the GPU while they build.
+        self.neural_engine_prefill
+            .begin(&*model, &self.core.chunking);
+        cleared_after_loading
     }
 
     /// The memory governor already opened as the model loaded.

@@ -33,6 +33,26 @@ impl LayerMajorSpanPlan {
         }
         largest_span_token_count
     }
+
+    /// The same plan cut down to its first span, read from `prefill_cursor`.
+    ///
+    /// Neural Engine programs choose their engines one prompt chunk at a
+    /// time and time each chunk to learn whether they help, so while they
+    /// are attached a prompt is read a span at a time: each span through
+    /// every layer before the next. That costs nothing here, because the
+    /// programs attach only while every layer is kept in memory and no layer
+    /// is read from storage again for the next span.
+    #[must_use]
+    pub fn limited_to_first_span(mut self, prefill_cursor: usize) -> Self {
+        self.spans.truncate(1);
+        if let Some(first_span) = self.spans.first_mut() {
+            self.group_end_token = prefill_cursor + first_span.end_token;
+            // The span now ends the group, whose end is checkpointed as a
+            // group's end is, not as a boundary inside it.
+            first_span.ends_at_inner_boundary = false;
+        }
+        self
+    }
 }
 
 /// Plans the spans from `prefill_cursor`, or `None` when no token remains.
