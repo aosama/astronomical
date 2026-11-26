@@ -710,11 +710,13 @@ test-drafted-rewind = "run -p xtask -- test-run --package astronomical-acceptanc
 # A draft tree verified in one pass on the small dense Qwen3.5 on the
 # streaming model: every row's logits match feeding its chain alone, committing
 # a branch leaves the streamed state feeding that branch leaves, and a control
-# that commits the other branch differs. Seconds. With --configuration
-# PATH naming a model_directory it also runs the contract on that model,
-# holding each row to that model's own rounding between a three-token chunk
-# and single tokens (1.6 on a 35B-A3B, whose wrong-branch control moves 3.6).
-test-streaming-draft-tree-verification = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter _streamed_"
+# that commits the other branch differs. Seconds.
+# `test-configured-streaming-draft-tree-verification --configuration PATH`
+# runs the same contract on the model_directory PATH names, holding each row
+# to that model's own rounding between a three-token chunk and single tokens
+# (1.6 on a 35B-A3B, whose wrong-branch control moves 3.6).
+test-streaming-draft-tree-verification = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter small_model_s_streamed"
+test-configured-streaming-draft-tree-verification = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter configured_model_s_streamed"
 # Gate 2 baseline: where one DFlash2 draft-and-verify round's time goes on the
 # real 27B pair (drafter, draft head, selector, 8-row verify, readback, rewind)
 # beside a plain one-row step. Each stage is timed alone. Asserts nothing;
