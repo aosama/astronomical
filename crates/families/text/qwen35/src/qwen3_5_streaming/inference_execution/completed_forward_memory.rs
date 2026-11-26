@@ -76,10 +76,32 @@ pub(in crate::qwen3_5_streaming) fn measure_completed_reply_forward(
     measure_completed_forward(
         model,
         MeasuredForward::reply_token(),
-        active_request.request_decoder_state.payload_byte_count(),
+        request_stored_state_bytes(active_request),
         active_memory_bytes_before_forward,
         &mut active_request.performance_attribution,
     )
+}
+
+/// Bytes the request keeps from one forward to the next: the target's
+/// stored state and, while a hosted drafter drafts, the rows kept for it.
+/// The drafter's rows are about 47 MB on a dense 27B after a 2,600-token
+/// prompt and grow with the context up to the drafter's row limit, so they
+/// are counted, not left to the ledger's margin (issue #2572).
+pub(in crate::qwen3_5_streaming) fn request_stored_state_bytes(
+    active_request: &super::engine_request::StreamingEngineRequest,
+) -> u64 {
+    let drafter_kept_row_bytes = active_request
+        .engine_extension
+        .draft_tree_drafting
+        .as_ref()
+        .map_or(
+            0,
+            super::draft_tree_reply_drafting::DraftTreeReplyDrafting::kept_row_byte_count,
+        );
+    active_request
+        .request_decoder_state
+        .payload_byte_count()
+        .saturating_add(drafter_kept_row_bytes)
 }
 
 /// Samples MLX after a forward, tells the memory governor what the forward

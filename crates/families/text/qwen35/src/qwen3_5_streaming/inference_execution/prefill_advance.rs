@@ -257,7 +257,7 @@ impl Qwen3_5EngineState {
         completed_forward_memory::measure_completed_forward(
             model,
             completed_forward_memory::MeasuredForward::prompt(measured_forward_token_count),
-            active_request.request_decoder_state.payload_byte_count(),
+            completed_forward_memory::request_stored_state_bytes(active_request),
             active_memory_bytes_before_forward,
             &mut active_request.performance_attribution,
         )?;

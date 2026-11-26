@@ -154,6 +154,7 @@ async fn compare_greedy_replies() {
         plain_reply.len() > 1,
         "the compared reply must be more than one token"
     );
+    assert_drafting_left_nothing_unaccounted(&paging_engine).await;
     let mut agreeing_token_count = 0;
     while agreeing_token_count < plain_reply.len().min(drafted_reply.len())
         && plain_reply[agreeing_token_count] == drafted_reply[agreeing_token_count]
@@ -206,4 +207,36 @@ async fn write_greedy_reply(
         .expect("the engine keeps the last reply's stages")
         .map_or(0, |stages| stages.draft_round_count);
     (reply_token_ids, draft_round_count)
+}
+
+/// The most a drafted reply may leave in none of the memory ledger's
+/// accounts, as a share of the limit: the ledger's own margin, as the
+/// in-memory engine's check allows. A dense 27B at an 18 GB limit leaves
+/// 0.27 GB after its rounds, 14 thousandths, with the drafter's kept rows
+/// counted (issue #2572); it leaves nothing after a reply with the drafter
+/// silent.
+const MAXIMUM_UNACCOUNTED_PERMILLE_OF_LIMIT: u64 = 20;
+const BYTES_PER_GB: f64 = 1_073_741_824.0;
+
+/// Over every forward since the load, the silent reply's and the drafted
+/// reply's, what MLX held beyond the ledger's accounts.
+async fn assert_drafting_left_nothing_unaccounted(paging_engine: &PagingExperimentEngine) {
+    let ledger_reading = paging_engine
+        .engine
+        .memory_governor_reading_for_tests()
+        .await
+        .expect("the engine answers for its ledger")
+        .expect("an engine that has served replies has measured forwards");
+    let largest_unaccounted_gb = ledger_reading.largest_unaccounted_bytes as f64 / BYTES_PER_GB;
+    let allowed_gb = (ledger_reading.accounts.limit_bytes / 1_000
+        * MAXIMUM_UNACCOUNTED_PERMILLE_OF_LIMIT) as f64
+        / BYTES_PER_GB;
+    eprintln!(
+        "[hosted-drafter-proof] measured_steps={} largest_unaccounted_gb={largest_unaccounted_gb:.3} allowed_gb={allowed_gb:.3}",
+        ledger_reading.observed_step_count,
+    );
+    assert!(
+        largest_unaccounted_gb <= allowed_gb,
+        "a drafted reply left {largest_unaccounted_gb:.3} GB in none of the ledger's accounts; {allowed_gb:.3} GB is allowed"
+    );
 }

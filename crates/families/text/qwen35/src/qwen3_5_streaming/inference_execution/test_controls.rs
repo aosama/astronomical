@@ -1,4 +1,5 @@
 use crate::{AstroExpertCacheStatistics, InferenceEngineError};
+use memory_policy::ledger::LedgerReading;
 
 use crate::MlxInferenceEngine;
 
@@ -278,6 +279,12 @@ pub trait Qwen3_5StreamingEngineTestControls {
         &self,
     ) -> Result<Option<crate::ReplyStageCounts>, InferenceEngineError>;
 
+    /// The memory governor's books against what MLX reported, over every
+    /// forward since the model loaded; `None` before any forward.
+    async fn memory_governor_reading_for_tests(
+        &self,
+    ) -> Result<Option<LedgerReading>, InferenceEngineError>;
+
     /// Returns mode-neutral expert ownership plus cumulative paging statistics.
     async fn astro_expert_cache_statistics_for_tests(
         &self,
@@ -446,6 +453,26 @@ impl Qwen3_5StreamingEngineTestControls for MlxInferenceEngine<Qwen3_5InferenceE
         counts_receiver
             .recv()
             .map_err(|_| fatal_engine_error("stage counts owner operation returned no response"))?
+    }
+
+    async fn memory_governor_reading_for_tests(
+        &self,
+    ) -> Result<Option<LedgerReading>, InferenceEngineError> {
+        let (governor_reading_sender, governor_reading_receiver) = std::sync::mpsc::sync_channel(1);
+        self.run_owner_test_operation(move |streaming_execution| {
+            governor_reading_sender
+                .send(
+                    streaming_execution
+                        .core
+                        .loaded_model()
+                        .map(|loaded_model| loaded_model.latest_memory_ledger_reading()),
+                )
+                .map_err(|_| fatal_engine_error("nothing waits for the memory governor's reading"))
+        })
+        .await?;
+        governor_reading_receiver
+            .recv()
+            .map_err(|_| fatal_engine_error("the engine's owner gave no memory governor reading"))?
     }
 
     async fn astro_expert_cache_statistics_for_tests(

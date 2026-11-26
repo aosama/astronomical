@@ -53,6 +53,12 @@ impl DrafterLayerContextState {
         }
     }
 
+    /// Bytes of the slab holding this layer's kept keys and values.
+    #[must_use]
+    pub fn payload_byte_count(&self) -> u64 {
+        self.slab.payload_byte_count()
+    }
+
     pub fn retained_row_limit(&self) -> Option<i32> {
         self.retained_row_limit
     }
@@ -181,5 +187,16 @@ impl DrafterContextStates {
             ));
         }
         Self { layers }
+    }
+
+    /// Bytes every layer's kept context holds, for the memory ledger: the
+    /// rows are a request's stored state as much as the target's own
+    /// attention state is (issue #2572).
+    #[must_use]
+    pub fn payload_byte_count(&self) -> u64 {
+        self.layers
+            .iter()
+            .map(DrafterLayerContextState::payload_byte_count)
+            .fold(0, u64::saturating_add)
     }
 }
