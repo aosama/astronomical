@@ -19,9 +19,8 @@ use std::time::Duration;
 use ipc_protocol::RequestId;
 use model_serving::{
     GeneratedToken, InferenceEngine, PerformanceAttribution, PromptProcessingChunkSizer,
-    Qwen3_5ArtifactValidator, Qwen3_5StreamingEngine, TextInferenceRequest,
-    TextMlxEngineConstructors, install_forced_worker_verdicts_for_tests,
-    worker_process_kernel_capabilities,
+    Qwen3_5ArtifactValidator, Qwen3_5TextEngine, TextInferenceRequest, TextMlxEngineConstructors,
+    install_forced_worker_verdicts_for_tests, worker_process_kernel_capabilities,
 };
 use runtime_integration::MlxRuntime;
 use tokio::time::timeout;
@@ -75,7 +74,7 @@ async fn run_forced_fallback_romeo_continuation() {
         .validate(&model_directory, 20_480)
         .expect("the Ornith artifact should validate before engine loading");
     let model_vocabulary_size = validated_artifact.config().vocabulary_size();
-    let mut qwen3_5_engine = Qwen3_5StreamingEngine::new_with_prompt_processing_chunk_sizer(
+    let mut qwen3_5_engine = Qwen3_5TextEngine::new_with_prompt_processing_chunk_sizer(
         validated_artifact,
         mlx_memory_limits.active_memory_limit_bytes(),
         mlx_memory_limits.mlx_buffer_cache_limit_bytes(),

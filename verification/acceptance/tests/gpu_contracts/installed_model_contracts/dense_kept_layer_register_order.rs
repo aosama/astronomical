@@ -15,13 +15,13 @@
 
 use std::time::Duration;
 
-use model_serving::Qwen3_5StreamingModel;
+use model_serving::Qwen3_5TextModel;
 use serial_test::serial;
 use tokio::time::timeout;
 
-use super::streaming_greedy_answer::{
-    keep_dense_layers, load_materialized_streaming_model, shakespeare_prompt_token_ids,
-    streaming_greedy_answer,
+use super::greedy_answer::{
+    greedy_answer, keep_dense_layers, load_materialized_streaming_model,
+    shakespeare_prompt_token_ids,
 };
 
 const CONVERSION_BUDGET: Duration = Duration::from_secs(120);
@@ -54,8 +54,7 @@ async fn assert_kept_layers_convert() {
     // Edge: with no kernels declared nothing converts, kept layers or not.
     keep_dense_layers(&streaming_model, KEPT_LAYER_COUNT);
     assert_eq!(converted_now(&streaming_model), 0);
-    let stock_answer =
-        streaming_greedy_answer(&streaming_model, &qwen3_5_config, &prompt_token_ids);
+    let stock_answer = greedy_answer(&streaming_model, &qwen3_5_config, &prompt_token_ids);
 
     streaming_model
         .declare_register_ordered_kernels()
@@ -90,8 +89,7 @@ async fn assert_kept_layers_convert() {
     // part; from there the replies are different text and their logits are
     // not comparable, so the logits are held to rounding only when every
     // token agreed.
-    let converted_answer =
-        streaming_greedy_answer(&streaming_model, &qwen3_5_config, &prompt_token_ids);
+    let converted_answer = greedy_answer(&streaming_model, &qwen3_5_config, &prompt_token_ids);
     let mut agreeing_token_count = 0;
     while agreeing_token_count < stock_answer.generated_token_ids.len()
         && converted_answer.generated_token_ids[agreeing_token_count]
@@ -116,7 +114,7 @@ async fn assert_kept_layers_convert() {
     );
 }
 
-fn converted_now(streaming_model: &Qwen3_5StreamingModel) -> usize {
+fn converted_now(streaming_model: &Qwen3_5TextModel) -> usize {
     streaming_model
         .convert_kept_dense_layers_to_register_order()
         .expect("the kept layers should convert")

@@ -12,7 +12,7 @@
 
 use std::time::Duration;
 
-use model_serving::{LayerProbeShape, Qwen3_5ArtifactValidator, Qwen3_5StreamingModel};
+use model_serving::{LayerProbeShape, Qwen3_5ArtifactValidator, Qwen3_5TextModel};
 use runtime_integration::MlxRuntime;
 use serial_test::serial;
 use tokio::time::timeout;
@@ -62,7 +62,7 @@ async fn assert_checkpoint_parity() {
         .validate(&model_directory, 64)
         .expect("the streamed dense artifact should validate");
     let qwen3_5_config = validated_artifact.config().clone();
-    let streaming_model = Qwen3_5StreamingModel::load(
+    let streaming_model = Qwen3_5TextModel::load(
         MlxRuntime::initialize(mlx_memory_limits).expect("the runtime should initialize"),
         validated_artifact,
         &model_directory,

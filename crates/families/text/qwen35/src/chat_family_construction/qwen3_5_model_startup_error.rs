@@ -47,9 +47,7 @@ pub enum Qwen3_5ModelStartupError {
         source: io::Error,
     },
     #[error("failed to configure Qwen3.5 prompt-processing chunks")]
-    StreamingPromptProcessingChunkSizing(#[source] PromptProcessingChunkSizerError),
-    #[error("failed to configure resident Qwen3.5 prompt-processing chunks")]
-    ResidentPromptProcessingChunkSizing(#[source] PromptProcessingChunkSizerError),
+    PromptProcessingChunkSizing(#[source] PromptProcessingChunkSizerError),
     #[error("failed to start Qwen3.5 engine at {model_directory:?}")]
     EngineInitialization {
         model_directory: PathBuf,
@@ -77,11 +75,7 @@ impl Qwen3_5ModelStartupError {
             Self::EngineInitialization { .. } => {
                 ipc_protocol::QWEN_ENGINE_INITIALIZATION_FAILED_REASON.to_owned()
             }
-            Self::OpenPerformanceAttributionLog { .. }
-            | Self::StreamingPromptProcessingChunkSizing(_) => {
-                "model initialization failed".to_owned()
-            }
-            Self::ResidentPromptProcessingChunkSizing(_) => {
+            Self::OpenPerformanceAttributionLog { .. } | Self::PromptProcessingChunkSizing(_) => {
                 "model initialization failed".to_owned()
             }
         }

@@ -1,0 +1,40 @@
+//! How the streaming engine builds itself on the MLX owner thread. The
+//! constructors it shares with the resident engine live in
+//! `text_generation::generation_loop::engine_construction`.
+
+use ipc_protocol::WorkerDecodeAstroExpertCachePolicy;
+
+use crate::qwen3_5_core::shared_execution::execution_core::Qwen3_5ExecutionCore;
+use text_generation::generation_loop::engine_construction::TextEngineConstruction;
+
+use super::super::model::Qwen3_5Model;
+use super::Qwen3_5InferenceExecution;
+use super::engine_request::Qwen3_5RequestExtension;
+
+/// What only the streaming engine is started with.
+#[derive(Debug, Default)]
+pub struct TextEngineSettings {
+    /// The decode policy of the `astro_expert_cache`; only controlled
+    /// benchmarks select anything but the baseline.
+    pub decode_astro_expert_cache_policy: WorkerDecodeAstroExpertCachePolicy,
+    /// The `astro_neural_engine_program_cache` folder of this model revision.
+    pub astro_neural_engine_program_cache_directory: Option<std::path::PathBuf>,
+}
+
+impl TextEngineConstruction for Qwen3_5InferenceExecution {
+    type EngineSettings = TextEngineSettings;
+
+    fn new_on_owner_thread(
+        core: Qwen3_5ExecutionCore<Qwen3_5Model, Qwen3_5RequestExtension>,
+        engine_settings: TextEngineSettings,
+    ) -> Self {
+        Self {
+            core,
+            decode_astro_expert_cache_policy: engine_settings.decode_astro_expert_cache_policy,
+            neural_engine_prefill: crate::qwen3_5_core::neural_engine::neural_engine_prefill_lifecycle::NeuralEnginePrefillLifecycle::new(
+                engine_settings.astro_neural_engine_program_cache_directory,
+            ),
+            prompt_span_to_fail_once_for_tests: None,
+        }
+    }
+}

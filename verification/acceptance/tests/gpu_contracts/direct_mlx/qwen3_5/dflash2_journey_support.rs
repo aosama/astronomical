@@ -3,8 +3,8 @@
 //! them on the one text model, and host reads.
 
 use mlx_bridge::{MlxArray, MlxDtype};
-use model_serving::qwen3_5_streaming::model::drafted_rows_verification::DraftedRowsVerification;
-use model_serving::{PerformanceAttribution, Qwen3_5StreamingModel, RequestDecoderStateStack};
+use model_serving::qwen3_5_text::model::drafted_rows_verification::DraftedRowsVerification;
+use model_serving::{PerformanceAttribution, Qwen3_5TextModel, RequestDecoderStateStack};
 use runtime_integration::MlxRuntime;
 
 /// Which rows of a target forward the head scores: the last alone, for a
@@ -26,7 +26,7 @@ pub(crate) struct TargetForward {
 /// Forwards `token_ids` from `first_position`, keeping the rows after each
 /// of `tap_layer_ids`, the way a drafting engine prefills its prompt.
 pub(crate) fn forward_with_taps(
-    target: &Qwen3_5StreamingModel,
+    target: &Qwen3_5TextModel,
     token_ids: &[u32],
     first_position: u32,
     decoder_state: &mut RequestDecoderStateStack,
@@ -66,7 +66,7 @@ pub(crate) struct VerifiedBlock {
 /// Verifies `token_ids` (the last chosen token, then the drafts) from
 /// `first_position`, keeping the rows after each of `tap_layer_ids`.
 pub(crate) fn verify_block_with_taps(
-    target: &Qwen3_5StreamingModel,
+    target: &Qwen3_5TextModel,
     token_ids: &[u32],
     first_position: u32,
     decoder_state: &mut RequestDecoderStateStack,
@@ -89,7 +89,7 @@ pub(crate) fn verify_block_with_taps(
     }
 }
 
-fn taken_taps(target: &Qwen3_5StreamingModel, tap_layer_ids: &[i32]) -> Vec<MlxArray> {
+fn taken_taps(target: &Qwen3_5TextModel, tap_layer_ids: &[i32]) -> Vec<MlxArray> {
     if tap_layer_ids.is_empty() {
         return Vec::new();
     }

@@ -13,7 +13,7 @@
 //! whose `model_directory` names the sparse model and whose
 //! `paging_experiment.maximum_mlx_memory_gigabytes` sets the limit.
 
-use model_serving::Qwen3_5StreamingEngineTestControls;
+use model_serving::Qwen3_5TextEngineTestControls;
 use std::time::Duration;
 
 use ipc_protocol::RequestId;

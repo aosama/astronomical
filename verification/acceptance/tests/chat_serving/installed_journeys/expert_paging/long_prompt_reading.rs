@@ -13,7 +13,7 @@
 //! `request_elapsed_seconds` less `generation_elapsed_seconds` is the time
 //! to the first token.
 
-use model_serving::Qwen3_5StreamingEngineTestControls;
+use model_serving::Qwen3_5TextEngineTestControls;
 use serial_test::serial;
 use tokio::time::{Duration, timeout};
 

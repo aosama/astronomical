@@ -23,7 +23,7 @@
 use std::time::Duration;
 
 use ipc_protocol::RequestId;
-use model_serving::Qwen3_5StreamingEngineTestControls;
+use model_serving::Qwen3_5TextEngineTestControls;
 use serial_test::serial;
 use tokio::time::timeout;
 

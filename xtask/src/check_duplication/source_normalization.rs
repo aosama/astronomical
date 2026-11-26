@@ -12,12 +12,12 @@ pub(crate) const FAMILY_NAME_MASK: &str = "FAMILY";
 
 /// Family spellings, in CamelCase, snake_case and the SCREAMING_SNAKE form
 /// the image families use for constants. The order is the match order at each
-/// position, so a compound such as `Qwen3_5Streaming` must come before its
+/// position, so a compound such as `Qwen3_5Text` must come before its
 /// parts: it then becomes one mask, as it did in the measurement the issue's
 /// figures come from, rather than two masks side by side.
 pub(crate) const FAMILY_NAME_SPELLINGS: [&str; 24] = [
-    "Qwen3_5Streaming",
-    "qwen3_5_streaming",
+    "Qwen3_5Text",
+    "qwen3_5_text",
     "Streaming",
     "streaming",
     "Flux2Klein",

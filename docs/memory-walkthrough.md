@@ -5,7 +5,7 @@ This page follows one chat request through Astronomical's memory management, for
 ## Who decides what
 
 - **The memory governor** (`crates/foundation/memory-policy/src/ledger/governor.rs`) owns the limit. It keeps a ledger with one account per use of memory: the model's fixed weights, the conversation's stored state, the MLX working buffers one step needs, the slots for weights being read, any leases, and a margin of 2%. What is left is the **capacity**: how many bytes of weights may be kept in memory. Nothing sets the capacity. It is always the remainder.
-- **The engine** (`crates/families/text/qwen35/src/qwen3_5_streaming/model/memory_governance.rs`) tells the governor what happens and applies the capacity each answer carries, in one function, `apply_kept_weight_capacity`. For a model with experts that function sets the astro expert cache's one capacity. For a dense model it gives trailing kept layers back.
+- **The engine** (`crates/families/text/qwen35/src/qwen3_5_text/model/memory_governance.rs`) tells the governor what happens and applies the capacity each answer carries, in one function, `apply_kept_weight_capacity`. For a model with experts that function sets the astro expert cache's one capacity. For a dense model it gives trailing kept layers back.
 - **The astro expert cache** keeps experts up to its capacity and gives back, in its own order, whatever no longer fits. Nothing else limits or empties it.
 
 ## When the model loads

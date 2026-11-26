@@ -13,7 +13,7 @@ const SKIPPED_DIRECTORY_NAMES: [&str; 2] = ["target", "third-party"];
 /// Crates that hold several model families side by side, with how many
 /// folders below the crate's own folder the family's folder sits. Reporting
 /// them as one area would hide the copies between their families, which are
-/// what issue #2473 is after: `qwen35/src/qwen3_5_streaming` names its area
+/// what issue #2473 is after: `qwen35/src/qwen3_5_text` names its area
 /// two folders down, and `speech/src/speech_models/kokoro` three.
 const FAMILY_HOLDING_CRATE_AREA_OFFSETS: [(&str, usize); 4] = [
     ("qwen35", 2),
@@ -41,7 +41,7 @@ pub(crate) fn is_production_source(relative_path: &str) -> bool {
 
 /// The area a file is reported under: its crate or app (`crates/foundation/config`,
 /// `apps/daemon`), the family folder inside a family-holding crate
-/// (`crates/families/text/qwen35/qwen3_5_streaming`), or `xtask` for the tooling crate.
+/// (`crates/families/text/qwen35/qwen3_5_text`), or `xtask` for the tooling crate.
 pub(crate) fn area_of(relative_path: &str) -> String {
     let path_components: Vec<&str> = relative_path.split('/').collect();
     if path_components.first() == Some(&"xtask") {

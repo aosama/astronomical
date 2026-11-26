@@ -7,7 +7,7 @@ const PROGRESS_INTERVAL: std::time::Duration = std::time::Duration::from_secs(10
 const IMAGE_PAD_TOKEN_ID: u32 = 248_069;
 
 pub(crate) use engine::{
-    PagingExperimentEngine, StreamingJourneyOptions, create_attributed_engine,
+    EngineJourneyOptions, PagingExperimentEngine, create_attributed_engine,
     load_engine_with_progress, load_paging_experiment_engine, load_paging_experiment_engine_with,
 };
 pub(crate) use generation::{

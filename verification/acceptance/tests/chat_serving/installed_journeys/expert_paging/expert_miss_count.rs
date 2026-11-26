@@ -33,8 +33,8 @@ use ipc_protocol::{
 };
 use memory_policy::astro_expert_cache_model::RoutedReply;
 use model_serving::{
-    Qwen3_5ArtifactValidator, Qwen3_5StreamingEngine, Qwen3_5StreamingEngineTestControls,
-    Qwen3_5Tokenizer, RoutedReplyRecording, SessionExpertRouteSample,
+    Qwen3_5ArtifactValidator, Qwen3_5TextEngine, Qwen3_5TextEngineTestControls, Qwen3_5Tokenizer,
+    RoutedReplyRecording, SessionExpertRouteSample,
 };
 use serial_test::serial;
 use test_harness::test_run::TestRunContext;
@@ -263,7 +263,7 @@ struct MeasuredReply {
 }
 
 async fn serve_measured_reply(
-    engine: &mut Qwen3_5StreamingEngine,
+    engine: &mut Qwen3_5TextEngine,
     measured_workload: MeasuredWorkload,
     request_attribution: RequestAttribution,
     model_directory: &Path,

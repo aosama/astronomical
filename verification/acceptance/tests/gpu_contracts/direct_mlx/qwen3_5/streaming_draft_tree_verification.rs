@@ -14,7 +14,7 @@
 
 use mlx_bridge::MlxArray;
 use model_serving::speculative_decoding::tree_rows::TreeRows;
-use model_serving::{PerformanceAttribution, Qwen3_5StreamingModel};
+use model_serving::{PerformanceAttribution, Qwen3_5TextModel};
 use serial_test::serial;
 
 use super::draft_tree_verification::{
@@ -27,7 +27,7 @@ use super::drafted_rewind::{
     MAXIMUM_LOGIT_DIFFERENCE, SmallTarget, load_target, small_target_sources, target_sources,
 };
 
-type SmallStreamedTarget = SmallTarget<Qwen3_5StreamingModel>;
+type SmallStreamedTarget = SmallTarget<Qwen3_5TextModel>;
 
 fn load_small_streamed_target() -> SmallStreamedTarget {
     load_streamed_target(small_target_sources())

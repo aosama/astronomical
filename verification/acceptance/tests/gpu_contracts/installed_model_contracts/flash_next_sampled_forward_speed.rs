@@ -16,8 +16,8 @@
 
 use std::time::{Duration, Instant};
 
-use model_serving::qwen3_5_streaming::model::mtp_drafting::{TargetTokenChoice, TopKTopPSampling};
-use model_serving::{MemoryPhase, Qwen3_5StreamingModel};
+use model_serving::qwen3_5_text::model::mtp_drafting::{TargetTokenChoice, TopKTopPSampling};
+use model_serving::{MemoryPhase, Qwen3_5TextModel};
 use serial_test::file_serial;
 use tokio::time::timeout;
 
@@ -120,7 +120,7 @@ struct SampledReplySpeed {
 /// Reads the prompt in engine-sized chunks and samples `reply_token_count`
 /// tokens, each from one forward, in the memory state the engine serves in.
 fn sampled_reply(
-    streaming_model: &Qwen3_5StreamingModel,
+    streaming_model: &Qwen3_5TextModel,
     prompt_token_ids: &[u32],
     reply_token_count: usize,
     token_choice: TargetTokenChoice,

@@ -3,7 +3,7 @@
 //!
 //! Issue #1132: everything here is identical for the fully-resident engine and
 //! the SSD-streaming engine. The residency fork lives in the engine wrappers
-//! (`Qwen3_5StreamingModel` and, after the fork, the resident model), which
+//! (`Qwen3_5TextModel` and, after the fork, the resident model), which
 //! deref to this base for every shared field and method.
 
 use mlx_bridge::{MlxArray, MlxCompiledElementwiseGraphs, MlxCompiledSwiGlu, MlxMetalKernel};

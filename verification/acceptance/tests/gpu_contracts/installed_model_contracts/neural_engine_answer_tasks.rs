@@ -11,7 +11,7 @@ use std::time::Instant;
 
 use config::AstronomicalConfig;
 use ipc_protocol::NeuralEnginePrefillStatus;
-use model_serving::{Qwen3_5ArtifactValidator, Qwen3_5StreamingModel, Qwen3_5Tokenizer};
+use model_serving::{Qwen3_5ArtifactValidator, Qwen3_5TextModel, Qwen3_5Tokenizer};
 use serial_test::serial;
 use tokio::time::timeout;
 
@@ -192,7 +192,7 @@ fn contains_in_order(answer: &str, expected_in_order: &[&str]) -> bool {
 
 /// Full chunks take the prefill path the programs serve, and the tail with the
 /// question stays on the GPU, as it does when serving.
-fn answer_token_ids(model: &Qwen3_5StreamingModel, prompt_token_ids: &[u32]) -> Vec<u32> {
+fn answer_token_ids(model: &Qwen3_5TextModel, prompt_token_ids: &[u32]) -> Vec<u32> {
     let mut decoder_state = model
         .empty_request_decoder_state_matching_loaded_weights(FULL_ATTENTION_KV_GROWTH_TOKENS)
         .expect("the state allocates");
@@ -226,7 +226,7 @@ fn answer_token_ids(model: &Qwen3_5StreamingModel, prompt_token_ids: &[u32]) -> 
 }
 
 struct TaskRun<'run> {
-    model: &'run Qwen3_5StreamingModel,
+    model: &'run Qwen3_5TextModel,
     tokenizer: &'run Qwen3_5Tokenizer,
     started_at: Instant,
     finished_count: usize,
@@ -286,7 +286,7 @@ fn load_tokenizer(development_config: &AstronomicalConfig) -> Qwen3_5Tokenizer {
     Qwen3_5Tokenizer::from_validated_artifact(&validated_artifact).expect("the tokenizer loads")
 }
 
-fn prepare_both_program_families(model: &mut Qwen3_5StreamingModel) {
+fn prepare_both_program_families(model: &mut Qwen3_5TextModel) {
     let mut chunking = crate::common::standard_worker_chunking_configuration();
     chunking.experimental_neural_engine_prefill_enabled = true;
     let status = model.prepare_neural_engine_prefill_matching_production(&chunking, None);

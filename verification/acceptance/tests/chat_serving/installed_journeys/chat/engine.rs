@@ -5,7 +5,7 @@ use ipc_protocol::{
 };
 use model_serving::{
     GeneratedToken, InferenceEngine, PromptProcessingChunkSizer, Qwen3_5ArtifactValidator,
-    Qwen3_5StreamingEngine, Qwen3_5Tokenizer, TextInferenceRequest, TextMlxEngineConstructors,
+    Qwen3_5TextEngine, Qwen3_5Tokenizer, TextInferenceRequest, TextMlxEngineConstructors,
 };
 use tokio::time::timeout;
 
@@ -37,7 +37,7 @@ async fn run_romeo_continuation() {
         .expect("the configured tokenizer should load");
     let image_pad_token_id = tokenizer.image_pad_token_id();
     let mlx_memory_limits = crate::common::sample_serving_acceptance_mlx_memory_limits().await;
-    let mut qwen3_5_engine = Qwen3_5StreamingEngine::new_with_prompt_processing_chunk_sizer(
+    let mut qwen3_5_engine = Qwen3_5TextEngine::new_with_prompt_processing_chunk_sizer(
         validated_artifact,
         mlx_memory_limits.active_memory_limit_bytes(),
         mlx_memory_limits.mlx_buffer_cache_limit_bytes(),
@@ -125,7 +125,7 @@ async fn should_generate_a_sampled_continuation_through_the_engine_trait() {
         .expect("the Ornith artifact should validate before engine loading");
     let model_vocabulary_size = validated_artifact.config().vocabulary_size();
     let mlx_memory_limits = crate::common::sample_serving_acceptance_mlx_memory_limits().await;
-    let mut qwen3_5_engine = Qwen3_5StreamingEngine::new_with_prompt_processing_chunk_sizer(
+    let mut qwen3_5_engine = Qwen3_5TextEngine::new_with_prompt_processing_chunk_sizer(
         validated_artifact,
         mlx_memory_limits.active_memory_limit_bytes(),
         mlx_memory_limits.mlx_buffer_cache_limit_bytes(),

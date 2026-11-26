@@ -1,7 +1,7 @@
 //! Loading Qwen3.8-Flash-Next on the streaming engine for its contracts:
 //! the configured model at the 34 GiB limit it is served at on a 48 GB Mac.
 
-use model_serving::{Qwen3_5ArtifactValidator, Qwen3_5StreamingModel};
+use model_serving::{Qwen3_5ArtifactValidator, Qwen3_5TextModel};
 use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
 const MLX_MEMORY_LIMIT_BYTES: usize = 34 * 1_073_741_824;
@@ -15,13 +15,13 @@ pub(super) fn flash_next_model_directory() -> std::path::PathBuf {
 }
 
 /// Validates, loads and materializes the model.
-pub(super) fn load_flash_next(model_directory: &std::path::Path) -> Qwen3_5StreamingModel {
+pub(super) fn load_flash_next(model_directory: &std::path::Path) -> Qwen3_5TextModel {
     let validated_artifact = Qwen3_5ArtifactValidator::new()
         .validate(model_directory, 64)
         .expect("the Flash-Next artifact should validate");
     let memory_limits = MlxMemoryLimits::new(MLX_MEMORY_LIMIT_BYTES, MLX_BUFFER_CACHE_LIMIT_BYTES)
         .expect("the MLX memory limits should be valid");
-    let streaming_model = Qwen3_5StreamingModel::load(
+    let streaming_model = Qwen3_5TextModel::load(
         MlxRuntime::initialize(memory_limits).expect("the runtime should initialize"),
         validated_artifact,
         model_directory,
@@ -37,7 +37,7 @@ pub(super) fn load_flash_next(model_directory: &std::path::Path) -> Qwen3_5Strea
 /// Forwards one prompt chunk starting at `chunk_start` and returns its last
 /// logits.
 pub(super) fn forward_prompt_chunk(
-    streaming_model: &Qwen3_5StreamingModel,
+    streaming_model: &Qwen3_5TextModel,
     prompt_token_ids: &[u32],
     chunk_start: usize,
     chunk_token_count: usize,

@@ -16,9 +16,7 @@
 
 use std::time::{Duration, Instant};
 
-use model_serving::{
-    LayerProbeShape, Qwen3_5ArtifactValidator, Qwen3_5Config, Qwen3_5StreamingModel,
-};
+use model_serving::{LayerProbeShape, Qwen3_5ArtifactValidator, Qwen3_5Config, Qwen3_5TextModel};
 use runtime_integration::MlxRuntime;
 use serial_test::serial;
 
@@ -93,7 +91,7 @@ async fn should_measure_dense_streaming_speed_from_the_layer_read_up() {
 fn load_streaming_model(
     model_directory: &std::path::Path,
     machine_mlx_memory_ceiling_bytes: usize,
-) -> (Qwen3_5StreamingModel, Qwen3_5Config) {
+) -> (Qwen3_5TextModel, Qwen3_5Config) {
     let mlx_memory_limits = runtime_integration::MlxMemoryLimits::new(
         machine_mlx_memory_ceiling_bytes,
         machine_mlx_memory_ceiling_bytes,
@@ -103,7 +101,7 @@ fn load_streaming_model(
         .validate(model_directory, OUTPUT_TOKEN_COUNT as u32)
         .expect("the streamed dense artifact should validate");
     let qwen3_5_config = validated_artifact.config().clone();
-    let streaming_model = Qwen3_5StreamingModel::load(
+    let streaming_model = Qwen3_5TextModel::load(
         MlxRuntime::initialize(mlx_memory_limits).expect("the runtime should initialize"),
         validated_artifact,
         model_directory,
@@ -116,7 +114,7 @@ fn load_streaming_model(
     (streaming_model, qwen3_5_config)
 }
 
-fn pin_kept_layers(streaming_model: &Qwen3_5StreamingModel, kept_layer_count: usize) {
+fn pin_kept_layers(streaming_model: &Qwen3_5TextModel, kept_layer_count: usize) {
     streaming_model
         .probe_dense_layers(
             LayerProbeShape {
@@ -129,10 +127,7 @@ fn pin_kept_layers(streaming_model: &Qwen3_5StreamingModel, kept_layer_count: us
 }
 
 /// Step 1: cold reads of the last layers, which no run keeps.
-fn measure_raw_layer_read_rate(
-    streaming_model: &Qwen3_5StreamingModel,
-    qwen3_5_config: &Qwen3_5Config,
-) {
+fn measure_raw_layer_read_rate(streaming_model: &Qwen3_5TextModel, qwen3_5_config: &Qwen3_5Config) {
     pin_kept_layers(streaming_model, 0);
     let layer_count = qwen3_5_config.layer_count() as usize;
     let mut read_bytes = 0_u64;
@@ -152,10 +147,7 @@ fn measure_raw_layer_read_rate(
 
 /// Step 2: one linear-attention and one full-attention layer, read and run
 /// over a prompt span and over one decode token.
-fn measure_one_streamed_layer(
-    streaming_model: &Qwen3_5StreamingModel,
-    qwen3_5_config: &Qwen3_5Config,
-) {
+fn measure_one_streamed_layer(streaming_model: &Qwen3_5TextModel, qwen3_5_config: &Qwen3_5Config) {
     let first_full_attention_layer_index = (0..qwen3_5_config.layer_count() as usize)
         .find(|layer_index| qwen3_5_config.decoder_layer_is_full_attention(*layer_index))
         .expect("the model should have a full-attention layer");
@@ -193,7 +185,7 @@ struct FullRunRates {
 
 /// Step 3: one prompt prefilled layer by layer, then greedy decode.
 fn measure_full_run(
-    streaming_model: &Qwen3_5StreamingModel,
+    streaming_model: &Qwen3_5TextModel,
     qwen3_5_config: &Qwen3_5Config,
     prompt_token_ids: &[u32],
     output_token_count: usize,

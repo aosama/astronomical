@@ -26,6 +26,8 @@ mod flash_next_loading;
 #[cfg(feature = "direct-mlx")]
 mod flash_next_sampled_forward_speed;
 #[cfg(feature = "direct-mlx")]
+mod greedy_answer;
+#[cfg(feature = "direct-mlx")]
 mod kev_decision_latency;
 #[cfg(feature = "direct-mlx")]
 mod kev_engine_requests;
@@ -69,8 +71,6 @@ mod qwen_image_21_vae;
 mod speech_audio_checks;
 #[cfg(feature = "direct-mlx")]
 mod streaming_fused_expert_combination;
-#[cfg(feature = "direct-mlx")]
-mod streaming_greedy_answer;
 mod tokenizer;
 mod validate;
 mod weights;

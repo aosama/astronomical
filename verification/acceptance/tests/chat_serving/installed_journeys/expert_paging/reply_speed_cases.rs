@@ -9,7 +9,7 @@ use std::path::Path;
 use std::time::Duration;
 
 use ipc_protocol::RequestId;
-use model_serving::{InferenceEngine, Qwen3_5StreamingEngineTestControls, TextInferenceRequest};
+use model_serving::{InferenceEngine, Qwen3_5TextEngineTestControls, TextInferenceRequest};
 use test_harness::test_run::TestRunContext;
 use tokio::time::timeout;
 
@@ -171,10 +171,7 @@ pub(super) async fn run_reply_case(reply_case: ReplyCase) {
 }
 
 /// Sets the engine up as the case says, before anything is served.
-async fn set_engine_up_for(
-    engine: &impl Qwen3_5StreamingEngineTestControls,
-    reply_case: &ReplyCase,
-) {
+async fn set_engine_up_for(engine: &impl Qwen3_5TextEngineTestControls, reply_case: &ReplyCase) {
     engine
         .set_multi_token_prediction_draft_tokens_for_tests(reply_case.draft_token_count)
         .await
@@ -475,7 +472,7 @@ fn report_memory_after_the_reply(phase_name: &str) {
 
 /// Prints where the measured reply's time went inside the engine, a
 /// forward: the standing stage tally, so no case needs timers of its own.
-async fn report_reply_stages(phase_name: &str, engine: &impl Qwen3_5StreamingEngineTestControls) {
+async fn report_reply_stages(phase_name: &str, engine: &impl Qwen3_5TextEngineTestControls) {
     let Some(stages) = engine
         .last_reply_stage_counts_for_tests()
         .await

@@ -13,16 +13,16 @@ async fn should_keep_qwen3_5_imports_directed_through_shared_core() {
     timeout(Duration::from_secs(5), async {
         let source_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src");
         let qwen3_5_core = source_root.join("qwen3_5_core");
-        let qwen3_5_streaming = source_root.join("qwen3_5_streaming");
+        let qwen3_5_text = source_root.join("qwen3_5_text");
         let qwen3_5_family_facade = source_root.join("qwen3_5.rs");
-        let streaming_module_root = source_root.join("qwen3_5_streaming.rs");
+        let streaming_module_root = source_root.join("qwen3_5_text.rs");
         let crate_root = source_root.join("lib.rs");
 
         assert_tree_excludes_source_fragments(
             &qwen3_5_core,
-            &["crate::qwen3_5::", "crate::qwen3_5_streaming::"],
+            &["crate::qwen3_5::", "crate::qwen3_5_text::"],
         );
-        assert_tree_excludes_source_fragments(&qwen3_5_streaming, &["crate::qwen3_5::"]);
+        assert_tree_excludes_source_fragments(&qwen3_5_text, &["crate::qwen3_5::"]);
         assert!(
             !source_root.join("qwen3_5_resident").exists()
                 && !source_root.join("qwen3_5_resident.rs").exists(),

@@ -18,7 +18,7 @@ use super::qwen3_5_model_startup_error::Qwen3_5ModelStartupError;
 /// How the streaming engine, the one engine every text model is served by,
 /// starts for a model.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) struct StreamingStart {
+pub(super) struct EngineStart {
     /// The startup arithmetic found room for the whole model, so prompts
     /// are read in the in-memory chunk size.
     pub(super) holds_whole_model: bool,
@@ -32,13 +32,13 @@ pub(super) fn select_qwen3_5_engine_from_artifact(
     validated_artifact: &crate::ValidatedQwen3_5Artifact,
     model_directory_path: &std::path::Path,
     active_memory_limit_bytes: usize,
-) -> Result<(StreamingStart, EnginePlacement), Qwen3_5ModelStartupError> {
+) -> Result<(EngineStart, EnginePlacement), Qwen3_5ModelStartupError> {
     let geometry_placement = select_qwen3_5_engine_from_artifact_geometry(
         validated_artifact,
         model_directory_path,
         active_memory_limit_bytes,
     )?;
-    Ok(streaming_engine_choice(
+    Ok(engine_start_choice(
         geometry_placement,
         validated_artifact
             .config()
@@ -52,12 +52,12 @@ pub(super) fn select_qwen3_5_engine_from_artifact(
 /// A model the limit holds whole reads prompts in the in-memory chunk size.
 /// Qwen3.8-Flash-Next keeps the streaming chunk size even when its experts
 /// would fit, as it always has (issue #2533).
-fn streaming_engine_choice(
+fn engine_start_choice(
     geometry_placement: EnginePlacement,
     keeps_the_streaming_chunk_size: bool,
-) -> (StreamingStart, EnginePlacement) {
+) -> (EngineStart, EnginePlacement) {
     (
-        StreamingStart {
+        EngineStart {
             holds_whole_model: geometry_placement.holds_whole_model()
                 && !keeps_the_streaming_chunk_size,
         },

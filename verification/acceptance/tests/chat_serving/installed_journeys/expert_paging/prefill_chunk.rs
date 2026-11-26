@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use model_serving::{Qwen3_5ArtifactValidator, Qwen3_5StreamingModel};
+use model_serving::{Qwen3_5ArtifactValidator, Qwen3_5TextModel};
 use runtime_integration::MlxRuntime;
 use serial_test::serial;
 use tokio::time::timeout;
@@ -43,7 +43,7 @@ async fn assert_exact_final_prefill_logit_parity() {
     let runtime = MlxRuntime::initialize(mlx_memory_limits)
         .expect("the machine-derived final-logit parity runtime should initialize");
     eprintln!("[prefill-logit-parity] status=progress phase=model_load");
-    let qwen3_5_model = Qwen3_5StreamingModel::load(
+    let qwen3_5_model = Qwen3_5TextModel::load(
         runtime,
         validated_artifact,
         &configured_model_directory,
@@ -82,7 +82,7 @@ async fn assert_exact_final_prefill_logit_parity() {
 }
 
 fn final_prefill_logits_for_chunk_size(
-    qwen3_5_model: &Qwen3_5StreamingModel,
+    qwen3_5_model: &Qwen3_5TextModel,
     qwen3_5_config: &model_serving::Qwen3_5Config,
     prompt_token_ids: &[u32],
     prefill_chunk_tokens: usize,

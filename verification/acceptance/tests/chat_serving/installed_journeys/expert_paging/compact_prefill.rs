@@ -11,7 +11,7 @@ use ipc_protocol::{
     ChatGenerationCommand, ChatGenerationSettings, ChatMessage, ChatToolChoice, RequestId,
 };
 use model_serving::{
-    Qwen3_5ArtifactValidator, Qwen3_5MoEPagedExecutionMode, Qwen3_5StreamingModel, Qwen3_5Tokenizer,
+    Qwen3_5ArtifactValidator, Qwen3_5MoEPagedExecutionMode, Qwen3_5TextModel, Qwen3_5Tokenizer,
 };
 use runtime_integration::MlxRuntime;
 use serial_test::serial;
@@ -207,7 +207,7 @@ pub(crate) async fn run_prefill_snapshot(
         test_started_at.elapsed().as_secs_f64()
     );
     let model_load_started_at = Instant::now();
-    let qwen3_5_model = Qwen3_5StreamingModel::load(
+    let qwen3_5_model = Qwen3_5TextModel::load(
         runtime,
         validated_artifact,
         &model_directory,

@@ -593,7 +593,7 @@ pub fn prepare_neural_engine_prefill(
 
 /// What a journey or a measurement asks of a loaded dense model's programs,
 /// on whichever engine holds it. Building them goes through the model that
-/// holds the layers (`Qwen3_5StreamingModel::prepare_neural_engine_prefill_matching_production`).
+/// holds the layers (`Qwen3_5TextModel::prepare_neural_engine_prefill_matching_production`).
 impl Qwen3_5ModelBase {
     /// Releases the programs so the next load in a measurement starts from none.
     #[cfg(feature = "direct-mlx")]

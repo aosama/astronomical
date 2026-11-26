@@ -2,19 +2,19 @@ use ipc_protocol::WorkerChunkingConfiguration;
 
 use crate::EnginePlacement;
 
-use super::{StreamingStart, prompt_chunk_tokens_for, streaming_engine_choice};
+use super::{EngineStart, engine_start_choice, prompt_chunk_tokens_for};
 
 /// A model that fits whole keeps its placement; only a generation that
 /// always streamed keeps the streaming chunk size.
 #[test]
 fn should_report_a_model_that_fits_whole_as_fitting_whatever_its_chunk_size() {
     for (keeps_the_streaming_chunk_size, holds_whole_model) in [(false, true), (true, false)] {
-        let (selected_engine, engine_placement) = streaming_engine_choice(
+        let (selected_engine, engine_placement) = engine_start_choice(
             EnginePlacement::CompleteResidencyFits,
             keeps_the_streaming_chunk_size,
         );
 
-        assert_eq!(selected_engine, StreamingStart { holds_whole_model });
+        assert_eq!(selected_engine, EngineStart { holds_whole_model });
         assert_eq!(engine_placement, EnginePlacement::CompleteResidencyFits);
     }
 }
@@ -26,9 +26,9 @@ fn should_keep_a_models_shortfall_when_it_does_not_fit() {
     };
     for keeps_the_streaming_chunk_size in [false, true] {
         assert_eq!(
-            streaming_engine_choice(short_by_a_gigabyte, keeps_the_streaming_chunk_size),
+            engine_start_choice(short_by_a_gigabyte, keeps_the_streaming_chunk_size),
             (
-                StreamingStart {
+                EngineStart {
                     holds_whole_model: false
                 },
                 short_by_a_gigabyte

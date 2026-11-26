@@ -8,7 +8,7 @@
 //! serves every text model; the in-memory model in `qwen3_5_resident` exists
 //! only for the quantization sensitivity probe.
 //!
-//! Dependency direction: `qwen3_5_resident` and `qwen3_5_streaming` may import
+//! Dependency direction: `qwen3_5_resident` and `qwen3_5_text` may import
 //! from here; neither may import from the other. This module never imports
 //! from the model modules.
 

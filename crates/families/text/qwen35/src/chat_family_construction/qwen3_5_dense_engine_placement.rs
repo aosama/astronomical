@@ -8,12 +8,11 @@
 //! layers from the SSD when they do not (issue #1985). The placement decides
 //! the prompt chunk size and what the worker reports.
 //!
-//! The arithmetic is `StreamingStartupResidencyFacts`, the same
+//! The arithmetic is `StartupResidencyFacts`, the same
 //! complete-residency decision a sparse model's geometry goes through.
 
 use crate::{
-    EnginePlacement, ExpertMemoryAdmissionError, StreamingStartupResidencyFacts,
-    ValidatedQwen3_5Artifact,
+    EnginePlacement, ExpertMemoryAdmissionError, StartupResidencyFacts, ValidatedQwen3_5Artifact,
 };
 
 use super::qwen3_5_model_startup_error::Qwen3_5ModelStartupError;
@@ -71,7 +70,7 @@ pub(super) fn place_dense_weights_under_ceiling(
     active_memory_ceiling_bytes: u64,
 ) -> Result<EnginePlacement, ExpertMemoryAdmissionError> {
     let dense_startup_facts =
-        StreamingStartupResidencyFacts::for_dense_text_weights(dense_text_weight_payload_bytes);
+        StartupResidencyFacts::for_dense_text_weights(dense_text_weight_payload_bytes);
     EnginePlacement::from_startup_complete_residency_decision(
         dense_startup_facts.startup_complete_residency_decision(active_memory_ceiling_bytes),
     )

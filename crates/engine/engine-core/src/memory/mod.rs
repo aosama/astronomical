@@ -6,7 +6,7 @@
 //! family code ──measures──▶ memory decides ──decision──▶ family code enacts
 //! ```
 //!
-//! Family modules (`qwen3_5`, `qwen3_5_streaming`) measure byte facts from
+//! Family modules (`qwen3_5`, `qwen3_5_text`) measure byte facts from
 //! MLX and the artifact, hand them to the pure arithmetic in
 //! `memory-policy` (re-exported below) and to the MLX-facing
 //! owners in this package, and enact the typed decisions they receive. This
@@ -115,7 +115,7 @@ pub use memory_policy::phase::MemoryPhase;
 pub use memory_policy::placement::EnginePlacement;
 pub use memory_policy::reclamation::ExpertMemoryAdmissionError;
 pub use memory_policy::residency::seated_complete_layer_count;
-// The direct-MLX streaming planner (qwen3_5_streaming's gated
+// The direct-MLX streaming planner (qwen3_5_text's gated
 // phase_aware_expert_residency) imports residency by module path
 // (`crate::memory::residency::ExpertLayerGeometry`), so the module stays
 // nameable at this path under the same feature gate.
@@ -123,8 +123,8 @@ pub use memory_policy::residency::seated_complete_layer_count;
 pub use memory_policy::residency;
 pub use memory_policy::residency::{
     CompleteResidencyHeadroomBoundary, CurrentExpertLayerResidency, ExpertLayerState,
-    ExpertResidencyPlan, ExpertResidencyPlanError, RetainedExpertPageClass,
-    StreamingStartupResidencyFacts, classify_expert_memory_mode, complete_layers_beyond_keep_count,
+    ExpertResidencyPlan, ExpertResidencyPlanError, RetainedExpertPageClass, StartupResidencyFacts,
+    classify_expert_memory_mode, complete_layers_beyond_keep_count,
     decode_warm_floor_eviction_indexes, decode_whole_layer_keep_count, hot_expert_warm_slot_count,
     kept_layer_indexes_to_seat_before_reply, minimum_decode_warm_slot_count,
     observed_expert_memory_mode, plan_expert_residency, should_commit_mandatory_complete_layer,

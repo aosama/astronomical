@@ -2,7 +2,7 @@
 //!
 //! The whole-page-per-layer container that once lived beside these types was
 //! removed: decode retention is owned by the per-layer expert slot tables
-//! (`qwen3_5_streaming/expert_streaming/astro_expert_cache.rs`),
+//! (`qwen3_5_text/expert_streaming/astro_expert_cache.rs`),
 //! which replaced page-granularity retention when the individual-expert
 //! `astro_expert_cache` landed. Two ownership records outlived that container because other
 //! surfaces consume them: the reclamation record memory-pressure paths

@@ -7,7 +7,7 @@
 use ipc_protocol::RequestId;
 use model_serving::{
     GeneratedToken, GenerationFinalization, InferenceEngine, PromptProcessingChunkSizer,
-    Qwen3_5ArtifactValidator, Qwen3_5StreamingEngine, Qwen3_5Tokenizer, TextInferenceRequest,
+    Qwen3_5ArtifactValidator, Qwen3_5TextEngine, Qwen3_5Tokenizer, TextInferenceRequest,
     TextMlxEngineConstructors,
 };
 
@@ -31,7 +31,7 @@ pub(super) fn construct_automatic_residency_engine(
     mlx_buffer_cache_limit_bytes: usize,
     request_id: RequestId,
     required_prompt_token_count: usize,
-) -> (Qwen3_5StreamingEngine, Vec<u32>, u32, usize) {
+) -> (Qwen3_5TextEngine, Vec<u32>, u32, usize) {
     assert!(
         model_directory.is_dir(),
         "the configured sparse checkpoint must be available"
@@ -60,21 +60,20 @@ pub(super) fn construct_automatic_residency_engine(
         .config()
         .context_memory_reservation_bytes(total_context_token_count)
         .expect("the request context memory reservation should fit usize");
-    let qwen3_5_engine =
-        Qwen3_5StreamingEngine::new_with_runtime_chunking_and_performance_attribution(
-            validated_artifact,
-            active_memory_limit_bytes,
-            mlx_buffer_cache_limit_bytes,
-            None,
-            PromptProcessingChunkSizer::for_chunk_size_tokens(2_048)
-                .expect("the test streaming prefill chunk size should be valid"),
-            think_end_token_id,
-            model_directory,
-            crate::common::standard_worker_chunking_configuration(),
-            model_serving::PerformanceAttribution::disabled(),
-            model_serving::PerformanceAttributionLog::disabled(),
-        )
-        .expect("the automatic expert-residency engine settings should be valid");
+    let qwen3_5_engine = Qwen3_5TextEngine::new_with_runtime_chunking_and_performance_attribution(
+        validated_artifact,
+        active_memory_limit_bytes,
+        mlx_buffer_cache_limit_bytes,
+        None,
+        PromptProcessingChunkSizer::for_chunk_size_tokens(2_048)
+            .expect("the test streaming prefill chunk size should be valid"),
+        think_end_token_id,
+        model_directory,
+        crate::common::standard_worker_chunking_configuration(),
+        model_serving::PerformanceAttribution::disabled(),
+        model_serving::PerformanceAttributionLog::disabled(),
+    )
+    .expect("the automatic expert-residency engine settings should be valid");
     (
         qwen3_5_engine,
         prompt_token_ids,

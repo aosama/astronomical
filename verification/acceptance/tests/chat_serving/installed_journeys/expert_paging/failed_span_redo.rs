@@ -3,8 +3,8 @@
 //! could not fit, and these helpers count what the engine did about it
 //! (issue #2221).
 
-use model_serving::Qwen3_5StreamingEngine;
-use model_serving::Qwen3_5StreamingEngineTestControls;
+use model_serving::Qwen3_5TextEngine;
+use model_serving::Qwen3_5TextEngineTestControls;
 
 /// What the engine had counted and kept before a span was failed on purpose.
 pub(super) struct RedoBaseline {
@@ -22,7 +22,7 @@ pub(super) struct RedoCost {
     pub(super) kept_expert_bytes_after: u64,
 }
 
-async fn kept_expert_bytes(qwen3_5_engine: &Qwen3_5StreamingEngine) -> u64 {
+async fn kept_expert_bytes(qwen3_5_engine: &Qwen3_5TextEngine) -> u64 {
     qwen3_5_engine
         .astro_expert_cache_statistics_for_tests()
         .await
@@ -32,7 +32,7 @@ async fn kept_expert_bytes(qwen3_5_engine: &Qwen3_5StreamingEngine) -> u64 {
 
 /// Has the next layer-at-a-time prompt fail `span_to_fail_once` once.
 pub(super) async fn arm_span_failure(
-    qwen3_5_engine: &Qwen3_5StreamingEngine,
+    qwen3_5_engine: &Qwen3_5TextEngine,
     span_to_fail_once: (usize, usize),
 ) -> RedoBaseline {
     let (overflow_count, redo_attempt_count) = qwen3_5_engine
@@ -52,7 +52,7 @@ pub(super) async fn arm_span_failure(
 }
 
 pub(super) async fn redo_cost_since(
-    qwen3_5_engine: &Qwen3_5StreamingEngine,
+    qwen3_5_engine: &Qwen3_5TextEngine,
     redo_baseline: RedoBaseline,
 ) -> RedoCost {
     let (overflow_count, redo_attempt_count) = qwen3_5_engine

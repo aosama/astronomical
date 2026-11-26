@@ -12,7 +12,7 @@ use crate::admission::complete_residency::{
 
 /// Startup residency selection facts for one model.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct StreamingStartupResidencyFacts {
+pub struct StartupResidencyFacts {
     /// Non-expert resident core payload measured from the validated artifact.
     pub model_core_payload_bytes: u64,
     /// Bytes required when every sparse expert is fully resident.
@@ -22,7 +22,7 @@ pub struct StreamingStartupResidencyFacts {
     pub startup_complete_residency_headroom_bytes: u64,
 }
 
-impl StreamingStartupResidencyFacts {
+impl StartupResidencyFacts {
     /// Startup facts for a dense model: the text weights it binds are its
     /// whole core and it has no experts. Dense selection compares those
     /// weights with the limit macOS granted or the user set and nothing
