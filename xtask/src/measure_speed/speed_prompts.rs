@@ -62,6 +62,19 @@ impl SpeedTask {
             Self::LongPromptCode => "code_long_prompt",
         }
     }
+
+    /// The temperature people use for the task, as the repository's
+    /// measurement rules ask (the `desired_state_architecture` skill):
+    /// 0.7 for writing code, 1.0 for general writing. Greedy is never a speed
+    /// a person sees, and a drafter keeps more tokens at lower temperatures,
+    /// so a lower one would overstate drafting.
+    #[must_use]
+    pub const fn default_temperature(self) -> f64 {
+        match self {
+            Self::ShortPromptCode | Self::LongPromptCode => 0.7,
+            Self::ShortPromptEssay | Self::LongPromptEssay => 1.0,
+        }
+    }
 }
 
 /// The fixture texts the prompts are cut from, read once.
@@ -96,6 +109,10 @@ impl SpeedPrompts {
         format!("{}\n\nContinue the story above.", self.warmup_text)
     }
 
+    /// A long prompt opens with its round's own instruction, so no round
+    /// shares a long prefix with another round or with the warm-up: an engine
+    /// that keeps a prompt it has already read would otherwise read rounds
+    /// two and three at a speed no person's first prompt sees.
     #[must_use]
     pub fn task_prompt(&self, speed_task: SpeedTask, round_index: usize) -> String {
         let round_slot = round_index % 3;
@@ -108,14 +125,14 @@ impl SpeedPrompts {
                 format!("Write a Python module that {}.", CODE_TASKS[round_slot])
             }
             SpeedTask::LongPromptEssay => format!(
-                "{}\n\nWrite an essay of about 400 words on the story above, focusing on {}.",
-                leading_characters(&self.romeo_and_juliet_text, LONG_ESSAY_CHARACTERS),
-                ESSAY_ASPECTS[round_slot]
+                "Read the story below, then write an essay of about 400 words on it, focusing on {}.\n\n{}",
+                ESSAY_ASPECTS[round_slot],
+                leading_characters(&self.romeo_and_juliet_text, LONG_ESSAY_CHARACTERS)
             ),
             SpeedTask::LongPromptCode => format!(
-                "{}\n\nIn the same style as the code above, write a new function that {}.",
-                leading_characters(&self.source_code_text, LONG_CODE_CHARACTERS),
-                LONG_CODE_TASKS[round_slot]
+                "Read the code below, then in the same style write a new function that {}.\n\n{}",
+                LONG_CODE_TASKS[round_slot],
+                leading_characters(&self.source_code_text, LONG_CODE_CHARACTERS)
             ),
         }
     }

@@ -28,6 +28,7 @@ lowercase-hex = { path = "../crates/foundation/lowercase-hex" }
 # Signal handlers, process-group signaling, access(2), and localtime_r for
 # the disposable-target lifecycle runner: the one sanctioned unsafe edge.
 libc.workspace = true
+serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
 

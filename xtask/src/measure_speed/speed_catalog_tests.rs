@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
-use super::{MeasurementPlace, ModelSpeedRounds, write_measured_speed};
-use crate::measure_speed::speed_prompts::SpeedTask;
+use super::{MeasurementPlace, catalog_disagreements_with_ledger, write_measured_speed};
+use crate::release_speed::speed_ledger::speed_ledger_tests::{ledger, measurement};
 
 const PLACE: MeasurementPlace<'static> = MeasurementPlace {
     measured_on: "Mac with an M5 Pro and 48 GB",
@@ -35,45 +35,6 @@ fn medians(
         ("code_short_prompt", code_short),
         ("code_long_prompt", code_long),
     ])
-}
-
-#[test]
-fn should_take_whole_token_medians_only_once_every_task_has_three_rounds() {
-    let mut speed_rounds = ModelSpeedRounds::default();
-    for speed_task in SpeedTask::ALL {
-        for round_rate in [70.4, 71.6, 90.0] {
-            speed_rounds.record(speed_task, round_rate);
-        }
-    }
-    let mut partial_rounds = ModelSpeedRounds::default();
-    partial_rounds.record(SpeedTask::ShortPromptEssay, 70.0);
-
-    assert_eq!(
-        speed_rounds.medians(),
-        Some(medians(72, 72, 72, 72)),
-        "the middle of three, rounded"
-    );
-    assert_eq!(
-        partial_rounds.medians(),
-        None,
-        "a partial set is never written"
-    );
-}
-
-#[test]
-fn should_take_the_midpoint_of_an_even_number_of_rounds() {
-    let mut speed_rounds = ModelSpeedRounds::default();
-    for speed_task in SpeedTask::ALL {
-        for round_rate in [60.0, 70.0, 71.0, 90.0] {
-            speed_rounds.record(speed_task, round_rate);
-        }
-    }
-
-    assert_eq!(
-        speed_rounds.medians(),
-        Some(medians(71, 71, 71, 71)),
-        "70.5 rounds to 71"
-    );
 }
 
 #[test]
@@ -191,5 +152,97 @@ fn should_reproduce_the_shipped_catalogs_speed_blocks_byte_for_byte() {
     assert_eq!(
         rewritten_text, shipped_text,
         "re-writing the same figures must not move a byte"
+    );
+}
+
+fn catalog_with_fast_measured(version: &str, code_long_rate: u64) -> String {
+    write_measured_speed(
+        CATALOG_WITHOUT_SPEED,
+        "example-org/Fast",
+        &medians(70, 66, 71, code_long_rate),
+        &MeasurementPlace {
+            measured_on: PLACE.measured_on,
+            astronomical_version: version,
+        },
+    )
+    .expect("a catalog with a measured entry")
+}
+
+fn fast_at_own_limit(reply_median: f64) -> crate::release_speed::speed_ledger::SpeedMeasurement {
+    let mut fast_measurement = measurement("Fast", "code_long_prompt", reply_median);
+    fast_measurement.maximum_mlx_memory_gb = None;
+    fast_measurement
+}
+
+#[test]
+fn should_find_no_disagreement_when_the_catalog_holds_the_ledger_figures() {
+    let newest_ledger = ledger("0.2.135", vec![fast_at_own_limit(64.6)]);
+
+    assert_eq!(
+        catalog_disagreements_with_ledger(
+            &catalog_with_fast_measured("0.2.135", 65),
+            &newest_ledger
+        ),
+        Ok(Vec::new())
+    );
+}
+
+#[test]
+fn should_report_a_catalog_rate_or_version_the_ledger_does_not_hold() {
+    let newest_ledger = ledger("0.2.135", vec![fast_at_own_limit(64.6)]);
+
+    let other_rate = catalog_disagreements_with_ledger(
+        &catalog_with_fast_measured("0.2.135", 60),
+        &newest_ledger,
+    )
+    .expect("a parsable catalog");
+    let older_version = catalog_disagreements_with_ledger(
+        &catalog_with_fast_measured("0.2.129", 65),
+        &newest_ledger,
+    )
+    .expect("a parsable catalog");
+
+    assert_eq!(other_rate.len(), 1);
+    assert!(other_rate[0].starts_with("Fast code_long_prompt"));
+    assert_eq!(older_version.len(), 1);
+    assert!(catalog_disagreements_with_ledger("not json", &newest_ledger).is_err());
+}
+
+#[test]
+fn should_not_hold_the_catalog_to_figures_under_a_lowered_limit_or_of_unlisted_models() {
+    let newest_ledger = ledger(
+        "0.2.135",
+        vec![measurement("Fast", "code_long_prompt", 30.0), {
+            let mut unlisted = fast_at_own_limit(10.0);
+            unlisted.model_id = "Unlisted".to_owned();
+            unlisted
+        }],
+    );
+
+    assert_eq!(
+        catalog_disagreements_with_ledger(
+            &catalog_with_fast_measured("0.2.129", 65),
+            &newest_ledger
+        ),
+        Ok(Vec::new())
+    );
+}
+
+#[test]
+fn should_keep_each_catalog_speed_equal_to_the_newest_ledger() {
+    let repository_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+    let Some(newest_ledger) = crate::release_speed::speed_ledger::newest_ledger(&repository_root)
+        .expect("the shipped ledgers should be readable")
+    else {
+        return;
+    };
+    let catalog_text =
+        std::fs::read_to_string(repository_root.join("registry/download_catalog.json"))
+            .expect("the shipped catalog should be readable");
+
+    assert_eq!(
+        catalog_disagreements_with_ledger(&catalog_text, &newest_ledger),
+        Ok(Vec::new()),
+        "run `cargo xtask measure-speed --reference-set --write-ledger --write-catalog` so the catalog shows the newest release's figures"
     );
 }

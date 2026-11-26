@@ -160,12 +160,12 @@
             "upstream_license": "MIT",
             "measured_speed": {
                 "measured_on": "Mac with an M5 Pro and 48 GB",
-                "astronomical_version": "0.2.129",
+                "astronomical_version": "0.2.134",
                 "tokens_per_second": {
-                    "essay_short_prompt": 51,
-                    "essay_long_prompt": 48,
-                    "code_short_prompt": 51,
-                    "code_long_prompt": 48
+                    "essay_short_prompt": 48,
+                    "essay_long_prompt": 51,
+                    "code_short_prompt": 49,
+                    "code_long_prompt": 50
                 }
             }
         },
@@ -598,11 +598,11 @@
             "build_difference": "draft_model",
             "measured_speed": {
                 "measured_on": "Mac with an M5 Pro and 48 GB",
-                "astronomical_version": "0.2.132",
+                "astronomical_version": "0.2.134",
                 "tokens_per_second": {
-                    "essay_short_prompt": 74,
-                    "essay_long_prompt": 62,
-                    "code_short_prompt": 91,
+                    "essay_short_prompt": 81,
+                    "essay_long_prompt": 65,
+                    "code_short_prompt": 89,
                     "code_long_prompt": 75
                 }
             }

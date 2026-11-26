@@ -1,6 +1,8 @@
 //! Writes measured speeds into `registry/download_catalog.json`: the median of
 //! each task's rounds, rounded to whole tokens a second, with the Mac and the
-//! Astronomical version they were measured on.
+//! Astronomical version they were measured on. The figures are the release
+//! speed ledger's, measured at the Mac's own memory limit, and
+//! `catalog_disagreements_with_ledger` proves the two still agree.
 //!
 //! The catalog is edited as text, entry by entry, so its layout and key order
 //! stay as authored and a re-measure shows as a small diff. The catalog uses
@@ -10,9 +12,9 @@
 use std::collections::BTreeMap;
 
 use super::speed_prompts::SpeedTask;
+use super::speed_rounds::whole_rate;
+use crate::release_speed::speed_ledger::ReleaseSpeedLedger;
 
-/// Rounds a task needs before its median goes in the catalog.
-pub const REQUIRED_ROUND_COUNT: usize = 3;
 const ENTRY_CLOSING: &str = "\n        }";
 const MEASURED_SPEED_OPENING: &str = ",\n            \"measured_speed\": {";
 const MEASURED_SPEED_CLOSING: &str = "\n            }";
@@ -24,52 +26,6 @@ const CATALOG_TASK_ORDER: [SpeedTask; 4] = [
     SpeedTask::ShortPromptCode,
     SpeedTask::LongPromptCode,
 ];
-
-/// The measured rates of one model, every round of every task.
-#[derive(Debug, Default)]
-pub struct ModelSpeedRounds {
-    rates_by_task: BTreeMap<&'static str, Vec<f64>>,
-}
-
-impl ModelSpeedRounds {
-    pub fn record(&mut self, speed_task: SpeedTask, reply_tokens_per_second: f64) {
-        self.rates_by_task
-            .entry(speed_task.catalog_field())
-            .or_default()
-            .push(reply_tokens_per_second);
-    }
-
-    /// Whole-token medians for every task, or `None` until each task has the
-    /// required rounds; a partial set is never written.
-    #[must_use]
-    pub fn medians(&self) -> Option<BTreeMap<&'static str, u64>> {
-        SpeedTask::ALL
-            .iter()
-            .map(|speed_task| {
-                let task_rates = self.rates_by_task.get(speed_task.catalog_field())?;
-                (task_rates.len() >= REQUIRED_ROUND_COUNT)
-                    .then(|| (speed_task.catalog_field(), whole_median(task_rates)))
-            })
-            .collect()
-    }
-}
-
-#[expect(
-    clippy::cast_possible_truncation,
-    clippy::cast_sign_loss,
-    reason = "a rounded positive rate of tokens a second"
-)]
-fn whole_median(task_rates: &[f64]) -> u64 {
-    let mut sorted_rates = task_rates.to_vec();
-    sorted_rates.sort_by(f64::total_cmp);
-    let middle_index = sorted_rates.len() / 2;
-    let median_rate = if sorted_rates.len() % 2 == 1 {
-        sorted_rates[middle_index]
-    } else {
-        f64::midpoint(sorted_rates[middle_index - 1], sorted_rates[middle_index])
-    };
-    median_rate.round() as u64
-}
 
 /// Where the figures were measured, written beside them.
 pub struct MeasurementPlace<'a> {
@@ -137,6 +93,77 @@ fn measured_speed_block(
         serde_json::Value::from(measurement_place.astronomical_version),
         rate_lines.join(",\n")
     )
+}
+
+/// A catalog entry's identity: its Hugging Face repository and the revision
+/// the catalog pins.
+#[derive(Debug, Eq, PartialEq)]
+pub struct CatalogIdentity {
+    pub huggingface_id: String,
+    pub revision: Option<String>,
+}
+
+/// The identity of the catalog entry whose model ID (the leaf of its
+/// repository) is this one.
+#[must_use]
+pub fn catalog_identity(catalog_text: &str, model_id: &str) -> Option<CatalogIdentity> {
+    let catalog_document: serde_json::Value = serde_json::from_str(catalog_text).ok()?;
+    let catalog_entry = catalog_document["entries"]
+        .as_array()?
+        .iter()
+        .find(|catalog_entry| entry_model_id(catalog_entry) == Some(model_id))?;
+    Some(CatalogIdentity {
+        huggingface_id: catalog_entry["huggingface_id"].as_str()?.to_owned(),
+        revision: catalog_entry["revision"].as_str().map(str::to_owned),
+    })
+}
+
+fn entry_model_id(catalog_entry: &serde_json::Value) -> Option<&str> {
+    catalog_entry["huggingface_id"]
+        .as_str()
+        .and_then(|huggingface_id| huggingface_id.rsplit('/').next())
+}
+
+/// Every catalog speed that differs from what the newest ledger measured at
+/// the Mac's own memory limit, as one line each; empty when they agree. A
+/// model the catalog does not list, or one measured only under a lowered
+/// limit, has no catalog figure to agree with.
+pub fn catalog_disagreements_with_ledger(
+    catalog_text: &str,
+    newest_ledger: &ReleaseSpeedLedger,
+) -> Result<Vec<String>, String> {
+    let catalog_document: serde_json::Value = serde_json::from_str(catalog_text)
+        .map_err(|parse_error| format!("the catalog does not parse: {parse_error}"))?;
+    let catalog_entries = catalog_document["entries"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    let mut disagreements = Vec::new();
+    for ledger_measurement in &newest_ledger.measurements {
+        if ledger_measurement.maximum_mlx_memory_gb.is_some() {
+            continue;
+        }
+        let Some(catalog_entry) = catalog_entries.iter().find(|catalog_entry| {
+            entry_model_id(catalog_entry) == Some(ledger_measurement.model_id.as_str())
+        }) else {
+            continue;
+        };
+        let measured_speed = &catalog_entry["measured_speed"];
+        let ledger_rate = whole_rate(ledger_measurement.figures.reply_tokens_per_second.median);
+        let catalog_rate = measured_speed["tokens_per_second"][&ledger_measurement.task].as_u64();
+        if measured_speed["astronomical_version"] != newest_ledger.astronomical_version.as_str()
+            || catalog_rate != Some(ledger_rate)
+        {
+            disagreements.push(format!(
+                "{} {}: the catalog has {catalog_rate:?} from {}, the {} ledger has {ledger_rate}",
+                ledger_measurement.model_id,
+                ledger_measurement.task,
+                measured_speed["astronomical_version"],
+                newest_ledger.astronomical_version
+            ));
+        }
+    }
+    Ok(disagreements)
 }
 
 #[cfg(test)]

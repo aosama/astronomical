@@ -46,6 +46,7 @@ Rules for the ladder:
 - **A rung's number must be explained by the rungs below it.** If the engine measures 100 microseconds where the kernel measured 9, the difference is a finding, not noise: it is host bookkeeping, and it has to be named before any rule is built on the smaller number.
 - **Rung 5 is the lowest rung that is true for served speed.** A model loaded directly has no decode tables, because the engine sizes them at its decode hand-off; a forward on a bare model measures a model nobody serves.
 - **Rung 7 is never a diagnostic.** Use it once, after the gain is explained.
+- **Release speed has one durable record:** `registry/release_speed/<version>.json`, written by `cargo xtask measure-speed --reference-set --write-ledger` on a clean Development build. It is rung 7 measured the same way every release; a gain found on a lower rung reaches users' release notes only through it.
 
 ## Instrumentation, by level
 
