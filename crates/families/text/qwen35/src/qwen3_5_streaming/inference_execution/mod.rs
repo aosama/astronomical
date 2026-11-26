@@ -13,6 +13,7 @@ pub mod engine_request;
 mod engine_state;
 pub(in crate::qwen3_5_streaming) mod forward_memory_baseline;
 mod generation_finalization;
+mod hosted_drafter_bytes;
 mod inference_execution_bridge;
 mod inject_input_tokens;
 mod layer_at_a_time_prefill;
