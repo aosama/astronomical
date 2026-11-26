@@ -1,7 +1,7 @@
-//! The streaming engine's part of an `astro_ssd_prompt_cache` restore: room
+//! The engine's part of an `astro_ssd_prompt_cache` restore: room
 //! leased from the memory governor for the blocks a restore loads beside the
-//! stored state they become. The rest of the restore is shared with the
-//! resident engine in `text_generation::generation_loop::astro_ssd_prompt_cache_restore`.
+//! stored state they become. The rest of the restore lives in
+//! `text_generation::generation_loop::astro_ssd_prompt_cache_restore`.
 
 use crate::InferenceEngineError;
 use text_generation::generation_loop::astro_ssd_prompt_cache_restore::TextAstroSsdPromptCacheRestoreHooks;

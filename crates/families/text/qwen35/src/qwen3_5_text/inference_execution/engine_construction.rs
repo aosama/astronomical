@@ -1,5 +1,5 @@
-//! How the streaming engine builds itself on the MLX owner thread. The
-//! constructors it shares with the resident engine live in
+//! How the engine builds itself on the MLX owner thread. The
+//! shared constructors live in
 //! `text_generation::generation_loop::engine_construction`.
 
 use ipc_protocol::WorkerDecodeAstroExpertCachePolicy;
@@ -11,7 +11,7 @@ use super::super::model::Qwen3_5Model;
 use super::Qwen3_5InferenceExecution;
 use super::engine_request::Qwen3_5RequestExtension;
 
-/// What only the streaming engine is started with.
+/// What only the engine is started with.
 #[derive(Debug, Default)]
 pub struct TextEngineSettings {
     /// The decode policy of the `astro_expert_cache`; only controlled

@@ -1,11 +1,10 @@
 //! The ownership view of MLX active memory for every text engine.
 //!
-//! The breakdown and the ceiling-utilization split are the same arithmetic in
-//! both engines; only two figures differ. The resident engine holds every
-//! expert while the streaming engine holds a retained subset, and the
-//! streaming engine's model-core bytes exclude dense layers it reads from the
-//! SSD on each forward. Each engine supplies those two figures through
-//! [`TextModelMemoryOwnership`]; the arithmetic itself is written once.
+//! The breakdown and the ceiling-utilization split are the same arithmetic for
+//! every engine; only two figures differ. An engine may hold only a retained
+//! subset of the experts, and its model-core bytes exclude dense layers it
+//! reads from the SSD on each forward. Each engine supplies those two figures
+//! through [`TextModelMemoryOwnership`]; the arithmetic itself is written once.
 //!
 //! The arithmetic reads the vision tower through [`TextServingModel`] and
 //! the ceiling through a narrow method rather than through a family's own
@@ -77,7 +76,7 @@ pub trait TextModelMemoryOwnership: TextServingModel {
     /// (issue #1236): reporting zero context state charged the retained
     /// prefix against the activation-and-workspace reserve, a one-decode-step
     /// transient reserve far narrower than the retained state, and the clamp
-    /// surfaced the excess as a phantom owner overrun. The streaming engine
+    /// surfaced the excess as a phantom owner overrun. The engine
     /// retains no live prefix between requests and passes zero.
     #[must_use]
     fn finalized_active_memory_breakdown(

@@ -1,6 +1,6 @@
-//! A dense layer the streaming engine keeps may be held in register order
+//! A dense layer the engine keeps may be held in register order
 //! (issues #2568 and #2585): the layout a draft tree's rows multiply fastest
-//! through, which the resident engine already converts to when a drafter
+//! through, which the engine already converts to when a drafter
 //! binds.
 //!
 //! One load of the dense_vision model (4-bit, the packing that converts),

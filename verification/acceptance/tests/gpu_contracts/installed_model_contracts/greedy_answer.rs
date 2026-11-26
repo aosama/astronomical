@@ -1,5 +1,5 @@
-//! A greedy answer to the Shakespeare prompt from a model loaded on the
-//! streaming engine, without the engine: the journeys that change one thing
+//! A greedy answer to the Shakespeare prompt from a model loaded by the
+//! text engine, without the engine: the journeys that change one thing
 //! about a loaded model (kept layers in register order, the fused expert
 //! combination) compare the answers before and after the change.
 
@@ -35,7 +35,7 @@ pub(super) fn keep_dense_layers(streaming_model: &Qwen3_5TextModel, kept_layer_c
         .expect("the dense layers should be probed and kept");
 }
 
-/// The dense model on the streaming engine under `mlx_memory_limits`, with
+/// The dense model on the engine under `mlx_memory_limits`, with
 /// its configuration.
 fn load_streaming_model(
     model_directory: &std::path::Path,
@@ -48,11 +48,11 @@ fn load_streaming_model(
         model_directory,
         crate::common::standard_qwen3_5_model_chunking_configuration(),
     )
-    .expect("the model should load on the streaming engine");
+    .expect("the model should load on the engine");
     (streaming_model, qwen3_5_config)
 }
 
-/// A model loaded on the streaming engine under the machine's own limit,
+/// A model loaded on the engine under the machine's own limit,
 /// with its weights materialized, and its configuration.
 pub(super) async fn load_materialized_streaming_model(
     model_directory: &std::path::Path,

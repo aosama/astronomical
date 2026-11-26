@@ -1,4 +1,4 @@
-//! Loading Qwen3.8-Flash-Next on the streaming engine for its contracts:
+//! Loading Qwen3.8-Flash-Next on the engine for its contracts:
 //! the configured model at the 34 GiB limit it is served at on a 48 GB Mac.
 
 use model_serving::{Qwen3_5ArtifactValidator, Qwen3_5TextModel};
@@ -27,7 +27,7 @@ pub(super) fn load_flash_next(model_directory: &std::path::Path) -> Qwen3_5TextM
         model_directory,
         crate::common::standard_qwen3_5_model_chunking_configuration(),
     )
-    .expect("Flash-Next should load on the streaming engine");
+    .expect("Flash-Next should load on the engine");
     streaming_model
         .materialize_target_weights()
         .expect("the model weights should materialize");

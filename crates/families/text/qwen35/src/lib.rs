@@ -28,7 +28,7 @@ pub mod prism_hadamard_qwen35;
 pub mod qwen3_5_core;
 
 // Qwen3.8-Flash-Next (`qwen4_exp`), served as a generation of the Qwen 3.5
-// layout so it shares the streaming engine (issue #2533). It imports the
+// layout so it shares the engine (issue #2533). It imports the
 // shared core; the core never imports it.
 pub mod qwen4_exp;
 

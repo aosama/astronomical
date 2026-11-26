@@ -1,4 +1,4 @@
-//! What the streaming engine does differently for a prompt while Neural
+//! What the engine does differently for a prompt while Neural
 //! Engine programs are attached to its model (issue #2585).
 
 use super::Qwen3_5EngineState;

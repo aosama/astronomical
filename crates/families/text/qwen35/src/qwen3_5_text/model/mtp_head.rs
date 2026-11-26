@@ -1,4 +1,4 @@
-//! Flash-Next's multi-token-prediction head on the streaming engine.
+//! Flash-Next's multi-token-prediction head on the engine.
 //!
 //! The head drafts the tokens after the one the target just chose. Given a
 //! token and the target's residual lanes at the position before it, it

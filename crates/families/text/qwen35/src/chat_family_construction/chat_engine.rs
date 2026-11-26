@@ -5,8 +5,8 @@
 
 use crate::{DynInferenceEngine, TextInferenceRequest};
 
-/// Whichever chat engine the factory built: Qwen 3.5 resident or streaming,
-/// or a folded ternary pack.
+/// Whichever chat engine the factory built: the Qwen 3.5 text engine or a
+/// folded ternary pack.
 pub type ModelFamilyInferenceEngine = Box<dyn DynInferenceEngine<TextInferenceRequest> + Sync>;
 
 /// Boxes a chat family's engine as the engine the worker holds.

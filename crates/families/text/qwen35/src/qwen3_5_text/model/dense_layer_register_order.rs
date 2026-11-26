@@ -6,9 +6,8 @@
 //! its call, where MLX's quantized matmul rounds a row among four or more
 //! differently from the same row alone; at a tree's row count the two cost
 //! the same since MLX 0.32.5 (`cargo measure-k-row-verify-cost`). The
-//! resident engine converts every projection when its drafter binds; here
-//! the same conversion is applied to each layer the streamer keeps, so a
-//! model with every layer kept verifies as the resident engine does.
+//! conversion is applied to each layer the streamer keeps when the drafter
+//! binds, so a model with every layer kept verifies the same way.
 //!
 //! Only kept layers convert. A streamed layer is read from the SSD for one
 //! forward in MLX's layout, and converting it would cost more than the pass

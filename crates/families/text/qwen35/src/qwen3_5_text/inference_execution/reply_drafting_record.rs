@@ -1,4 +1,4 @@
-//! What drafting did for one reply on the streaming engine, as status and
+//! What drafting did for one reply on the engine, as status and
 //! the reply's usage report it (issue #2582).
 
 use ipc_protocol::RequestDraftingStatistics;

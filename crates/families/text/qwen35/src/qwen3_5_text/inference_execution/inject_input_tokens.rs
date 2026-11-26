@@ -1,5 +1,5 @@
-//! The streaming engine's part of model-visible feedback injection. The
-//! injection itself is shared with the resident engine in
+//! The engine's part of model-visible feedback injection. The
+//! injection itself lives in
 //! `text_generation::generation_loop::input_injection`.
 
 use text_generation::generation_loop::input_injection::TextInputInjectionHooks;

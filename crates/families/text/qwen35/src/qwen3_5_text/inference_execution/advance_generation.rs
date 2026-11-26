@@ -1,10 +1,9 @@
-//! The streaming engine's part of a decode step: reconciling expert
+//! The engine's part of a decode step: reconciling expert
 //! residency after the prompt, the expert statistics recorded once a reply
 //! token is read, and its forwards, which run the successor synchronously
 //! because its expert routes must be resolved before the token may become
-//! visible; unlike the resident engine, nothing is submitted to the graphics
-//! processor ahead of time. The step itself is shared with the resident
-//! engine in `text_generation::generation_loop::decode_step`.
+//! visible, so nothing is submitted to the graphics processor ahead of time.
+//! The step itself lives in `text_generation::generation_loop::decode_step`.
 
 use std::time::Instant;
 use text_generation::model::memory_breakdown::TextModelMemoryOwnership;

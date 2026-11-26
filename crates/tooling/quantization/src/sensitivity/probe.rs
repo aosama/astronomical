@@ -1,10 +1,10 @@
 //! The seam between the sweep driver and a model engine.
 //!
 //! OptiQ mutates mlx-lm module attributes in place (`module.weight = ...`)
-//! and reads `model(*args).logits`. Astronomical's engines hold typed weights
+//! and reads `model(*args).logits`. Astronomical's models hold typed weights
 //! and do not expose Python-style attribute swapping, so the port inverts the
 //! dependency: this crate defines what a probe model must be able to do, and
-//! each engine implements it where it has access to its own weights.
+//! the model implements it where it has access to its own weights.
 //! model-serving provides the Qwen3.5 implementation behind its `direct-mlx`
 //! feature; the integration tests here use a scripted fake.
 //!

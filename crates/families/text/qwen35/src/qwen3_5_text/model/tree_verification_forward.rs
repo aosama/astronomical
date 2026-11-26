@@ -1,10 +1,10 @@
-//! The streaming model as a draft tree's target.
+//! The model as a draft tree's target.
 //!
 //! A layer's feed-forward over the tree's rows finds its experts through
 //! the `astro_expert_cache`, as a reply token's does: the rows are reply
 //! rows, so a layer held in part reads only the experts its table lacks,
 //! into the table. The pass itself is the shared core's
-//! (`draft_tree_verification`), the same one the resident model runs.
+//! (`draft_tree_verification`).
 //!
 //! The pass is tried first with each partly held layer looking its routes
 //! up inside the graph (`in_graph_table_serving`), so a round is one

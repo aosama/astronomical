@@ -270,8 +270,8 @@ fn dense_streaming_sources(
     ))
 }
 
-/// The decoder layer streamer of a dense model, which the streaming engine
-/// serves only when its text weights do not fit the limit.
+/// The decoder layer streamer of every dense model. It keeps the layers the
+/// limit holds and reads the rest from the SSD; a model that fits keeps all.
 fn dense_layer_streamer(
     validated_artifact: &ValidatedQwen3_5Artifact,
 ) -> Result<Option<Qwen3_5DenseLayerStreamer>, TextExecutionError> {
@@ -293,9 +293,9 @@ const fn embedding_residency_of(
     }
 }
 
-/// Embedding rows read from the SSD for a dense model, which the streaming
-/// engine serves only when its text weights do not fit the limit; a sparse
-/// model keeps its resident table, which its expert budget already plans.
+/// Embedding rows read from the SSD for every dense model, whether or not
+/// its text weights fit the limit; a sparse model keeps its table in memory,
+/// which its expert budget already plans.
 fn dense_disk_embedding_rows(
     validated_artifact: &ValidatedQwen3_5Artifact,
 ) -> Result<Option<Qwen3_5DiskEmbeddingRows>, TextExecutionError> {
@@ -307,7 +307,7 @@ fn dense_disk_embedding_rows(
     }
 }
 
-/// The streaming engine's MoE-only runtime trio: pager, warm slot table, and
+/// The engine's MoE-only runtime trio: pager, warm slot table, and
 /// the kernels that reduce a layer's routed experts.
 type StreamingExpertRuntimeTrio = (
     Option<Qwen3_5ExpertPager>,
@@ -473,7 +473,7 @@ struct StreamingExpertBudgetOutcome {
         Option<jangtq2_qwen35::fused_gathered_projection::FusedJangtq2GatheredProjectionKernel>,
 }
 
-/// Assembles the limit and geometry the streaming engine runs under. Mirrors the payload math,
+/// Assembles the limit and geometry the engine runs under. Mirrors the payload math,
 /// fused-kernel verdict, routed-page sizing, and the prefill read-ahead slot
 /// of the inlined loader, in the same order.
 #[allow(clippy::too_many_arguments)]

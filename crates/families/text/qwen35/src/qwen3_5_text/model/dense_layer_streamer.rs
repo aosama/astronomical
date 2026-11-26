@@ -37,7 +37,7 @@ use text_generation::execution_error::TextExecutionError;
 /// bytes come from the measured layer sizes.
 pub const DENSE_STREAMING_LAYER_SLOT_COUNT: u64 = 2;
 
-/// The decoder layers of a dense model the streaming engine serves.
+/// The decoder layers of a dense model the engine serves.
 #[derive(Debug)]
 pub struct Qwen3_5DenseLayerStreamer {
     /// Duplicated shard descriptors by model shard position; `None` for a

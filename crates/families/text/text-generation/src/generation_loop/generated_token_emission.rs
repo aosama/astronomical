@@ -1,7 +1,7 @@
 //! Turning one sampled token id into the reply token the worker receives.
 //!
-//! Both engines count the token, move the thinking budget and structured
-//! generation on, decide whether the reply ends here and attach the memory
+//! Every text engine counts the token, moves the thinking budget and structured
+//! generation on, decides whether the reply ends here and attaches the memory
 //! telemetry of the forward that produced it. The steps are generic over the
 //! model and the request's engine extension, so each engine's copy compiles to
 //! the same code it ran before.

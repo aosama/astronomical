@@ -1,7 +1,7 @@
 //! How many of a dense model's decoder layers stay resident (issues #1985
 //! and #2221).
 //!
-//! At load the streaming engine measures the MLX working buffers one streamed
+//! At load the engine measures the MLX working buffers one streamed
 //! layer's forward needs. The memory governor then says how many weight
 //! bytes may be kept, and the kept layers follow it: any event that lowers
 //! the capacity gives trailing layers back at once, and layers are read

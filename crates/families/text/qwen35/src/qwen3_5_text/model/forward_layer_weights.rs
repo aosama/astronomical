@@ -1,7 +1,7 @@
 //! Where one forward finds each decoder layer's weights (issue #1985).
 //!
-//! A sparse model binds every decoder layer at load. A dense model the
-//! streaming engine serves gets each layer from its streamer: a kept layer,
+//! A sparse model binds every decoder layer at load. A dense model
+//! gets each layer from its streamer: a kept layer,
 //! or one read from the SSD for this forward alone.
 
 use super::Qwen3_5Model;

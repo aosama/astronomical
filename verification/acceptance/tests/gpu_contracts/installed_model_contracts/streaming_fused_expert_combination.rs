@@ -1,4 +1,4 @@
-//! The streaming engine joins a prompt chunk's routed experts and its
+//! The engine joins a prompt chunk's routed experts and its
 //! shared expert in one fused Metal pass (issue #2585), as the in-memory
 //! engine does. The kernel is proven bit for bit against the two steps it
 //! replaces on synthetic rows; this proves the same on a served model's own
@@ -44,7 +44,7 @@ async fn assert_fused_combination_changes_nothing() {
     // load, with nothing asked of the person.
     assert!(
         fused_kernel_is_kept(&streaming_model),
-        "the streaming engine should keep the fused expert combination at load"
+        "the engine should keep the fused expert combination at load"
     );
     let fused_answer = greedy_answer(&streaming_model, &qwen3_5_config, &prompt_token_ids);
 

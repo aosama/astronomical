@@ -1,7 +1,7 @@
 //! Which engine a Qwen3.5 text model starts on, and the prompt chunk it
 //! reads in (issue #2585).
 //!
-//! Every text model starts on the streaming engine. The artifact's memory
+//! Every text model starts on the engine. The artifact's memory
 //! geometry is still worked out, because it says whether the whole model
 //! fits, which the placement reported to the worker and the prompt chunk
 //! size depend on.
@@ -15,7 +15,7 @@ use crate::{
 
 use super::qwen3_5_model_startup_error::Qwen3_5ModelStartupError;
 
-/// How the streaming engine, the one engine every text model is served by,
+/// How the text engine, which serves every text model,
 /// starts for a model.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) struct EngineStart {
@@ -24,7 +24,7 @@ pub(super) struct EngineStart {
     pub(super) holds_whole_model: bool,
 }
 
-/// Every text model is served by the streaming engine, which keeps in
+/// Every text model is served by the engine, which keeps in
 /// memory what fits and streams the rest (issue #2585). The artifact's
 /// memory geometry still says whether the whole model fits, which decides
 /// the prompt chunk size and nothing else.
@@ -65,7 +65,7 @@ fn engine_start_choice(
     )
 }
 
-/// The prompt chunk a streaming engine reads in: the in-memory size when it
+/// The prompt chunk the text engine reads in: the in-memory size when it
 /// holds the whole model, which is the size the Neural Engine programs are
 /// compiled for and the one every in-memory comparison was measured at;
 /// otherwise the streaming size, which bounds a streamed layer's reads.

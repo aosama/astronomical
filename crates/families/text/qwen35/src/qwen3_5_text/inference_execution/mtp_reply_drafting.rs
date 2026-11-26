@@ -1,5 +1,5 @@
 //! Writing a reply with the model's multi-token-prediction head: the
-//! streaming engine's drafted decode step.
+//! engine's drafted decode step.
 //!
 //! A round decides several reply tokens at once, and the decode step emits
 //! one token a call, so the tokens a round decided wait in a queue. Every

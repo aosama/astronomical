@@ -2,9 +2,8 @@
 //! request, resolving the sampling seed, preparing the request's visual
 //! embeddings, and building the start contract the worker observes.
 //!
-//! What a request start does around them (memory admission, drafting and
-//! retained-prefix adoption for resident; expert residency for streaming)
-//! stays with each engine.
+//! What a request start does around them (memory admission, drafting, expert
+//! residency) stays with each engine.
 
 use crate::model::TextServingModel;
 use mlx_bridge::MlxArray;
@@ -149,7 +148,7 @@ pub fn prepare_precomputed_visual_embeddings<Engine: TextExecutionCoreOwner>(
 }
 
 /// The start contract the worker observes. No forward has run yet, so the
-/// expert memory mode is the model's ownership claim: the streaming engine's
+/// expert memory mode is the model's ownership claim: the engine's
 /// freshly reset read tally carries no evidence, and reporting it would
 /// claim "resident" for every streaming request during prefill. Token
 /// emission refines the claim with evidence.

@@ -1,6 +1,5 @@
-//! What an engine tells status about its drafter, for both engines: the
-//! resident engine keeps its drafter on the engine, the streaming engine on
-//! the model, and both load it the same way, so both report it the same way.
+//! What the engine tells status about its drafter: the drafter is kept on the
+//! model, and every answer comes from what loading found.
 //!
 //! Kept apart from loading so every answer is testable without a graphics
 //! processor: each depends only on what loading found (a failed load is also

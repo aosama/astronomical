@@ -1,5 +1,5 @@
 //! Writing a reply in draft tree rounds with a hosted DFlash drafter: the
-//! streaming engine's second drafter, beside the multi-token-prediction
+//! the engine's second drafter, beside the multi-token-prediction
 //! head of `mtp_reply_drafting`.
 //!
 //! The two share one place in the decode step

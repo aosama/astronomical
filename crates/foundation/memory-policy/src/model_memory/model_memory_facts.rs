@@ -3,8 +3,8 @@
 //! Loading measures a model's geometry once, and the limit comes from
 //! configuration or a live change. The memory governor (`crate::ledger`)
 //! decides everything about how the limit is used (issue #2221); this type
-//! only carries the two facts both engines read when they open it and when
-//! they report status before it has opened.
+//! only carries the two facts the engine reads when it opens a model and when
+//! it reports status before the model has opened.
 
 use crate::model_memory::memory_values::{ModelMemoryFactsError, ModelMemoryGeometry};
 

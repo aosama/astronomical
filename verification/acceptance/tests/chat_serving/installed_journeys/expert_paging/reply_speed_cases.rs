@@ -305,9 +305,9 @@ pub(super) async fn serve_warmup_learning_and_measured_replies(
     measured_reply_token_ids
 }
 
-/// A long prompt's size and the few tokens written after it, for comparing
-/// how fast two engines read: the same 10,000 tokens for every model, a
-/// dense one included, since reading is the thing measured.
+/// A long prompt's size and the few tokens written after it: the same
+/// 10,000 tokens for every model, a dense one included, since reading the
+/// prompt is the thing measured.
 const LONG_PROMPT_TOKEN_COUNT: usize = 10_000;
 const TOKENS_WRITTEN_AFTER_A_LONG_PROMPT: u16 = 16;
 const LONG_PROMPT_REQUEST_ID: RequestId = RequestId::new(98_504);
@@ -432,8 +432,8 @@ async fn serve_one_prompt(
 /// What MLX did for the long prompt and its few tokens, from its own
 /// evaluator: how long the GPU was busy and how often work was handed over.
 /// The request's wall time less the GPU's busy time is the GPU waiting for
-/// the host, which is where two engines running the same arithmetic differ
-/// (issue #2585).
+/// the host: host-side work that a change can add or remove while the
+/// arithmetic stays the same (issue #2585).
 fn report_prompt_evaluations(
     phase_name: &str,
     counts_before_the_prompt: graph_host_step::EvaluationCounts,

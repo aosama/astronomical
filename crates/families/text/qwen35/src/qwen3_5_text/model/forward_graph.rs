@@ -1,5 +1,5 @@
-//! The streaming model's part of the target forward graph: its decoder-layer
-//! loop. The steps around it are shared with the resident model in
+//! The model's part of the target forward graph: its decoder-layer
+//! loop. The steps around it live in
 //! `qwen3_5_core::model::target_forward_graph`.
 
 use mlx_bridge::MlxArray;

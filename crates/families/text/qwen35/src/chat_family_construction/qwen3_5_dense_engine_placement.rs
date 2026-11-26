@@ -3,7 +3,7 @@
 //! A dense model has no experts to page, so the startup question is whether
 //! the text weights it binds fit under the effective MLX limit. That limit is
 //! what macOS granted through Metal, or what the user set, and the decision
-//! adds no headroom of its own. Either way the one streaming engine serves
+//! adds no headroom of its own. Either way the one text engine serves
 //! the model: it keeps the weights in memory when they fit and reads decoder
 //! layers from the SSD when they do not (issue #1985). The placement decides
 //! the prompt chunk size and what the worker reports.

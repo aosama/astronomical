@@ -7,8 +7,8 @@
 //! engine compiles its own copy, exactly as when each carried the code
 //! itself, and nothing is added per token. Where the engines differ, a
 //! [`TextDecodeStepHooks`] method does: how prompt reading and generation
-//! preparation proceed, the resident engine's drafting, what the streaming
-//! engine records once a token is read, and how the successor's forward runs.
+//! preparation proceed, what the Qwen3.5 text engine records once a token is
+//! read, and how the successor's forward runs.
 
 use crate::model::TextServingModel;
 use std::time::Instant;

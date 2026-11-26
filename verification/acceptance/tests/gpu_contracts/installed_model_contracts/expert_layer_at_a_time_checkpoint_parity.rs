@@ -71,7 +71,7 @@ async fn assert_checkpoint_parity() {
         &model_directory,
         crate::common::standard_qwen3_5_model_chunking_configuration(),
     )
-    .expect("the small sparse model should load on the streaming engine");
+    .expect("the small sparse model should load on the engine");
     streaming_model
         .materialize_target_weights()
         .expect("the model's kept weights should materialize");

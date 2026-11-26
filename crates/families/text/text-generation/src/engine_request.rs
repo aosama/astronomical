@@ -1,5 +1,5 @@
-//! Mutable state for one serial generation journey, shared by the
-//! resident and streaming engines.
+//! Mutable state for one serial generation journey, shared by
+//! every text engine.
 //!
 //! This owner is the transaction boundary for sampling state and performance
 //! attribution. State that can be rewound is deliberately kept here rather
@@ -20,10 +20,10 @@ use crate::{
 };
 use engine_core::astro_ssd_prompt_cache::block_causal_input::AstroSsdPromptCacheBlockCausalInput;
 
-/// One request's state in any text engine. The fields both engines
-/// read live here; `engine_extension` holds what only one engine needs
-/// (speculative decoding in the resident engine, prefill memory recovery in
-/// the streaming engine), so shared request code compiles once.
+/// One request's state in any text engine. The fields every engine
+/// reads live here; `engine_extension` holds what only one engine needs
+/// (prefill memory recovery in the Qwen3.5 text engine), so shared request
+/// code compiles once.
 pub struct TextEngineRequest<RequestExtension> {
     pub request_decoder_state: RequestDecoderStateStack,
     pub generated_token_count: u16,

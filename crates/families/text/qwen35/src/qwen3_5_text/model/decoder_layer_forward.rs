@@ -1,4 +1,4 @@
-//! Decoder-layer feed-forward execution for the streaming engine: the half of
+//! Decoder-layer feed-forward execution for the engine: the half of
 //! the residual sandwich that forks by feed-forward architecture (dense MLP
 //! versus routed mixture-of-experts with expert paging).
 

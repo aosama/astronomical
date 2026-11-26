@@ -1,5 +1,5 @@
-//! Structural contract for the Qwen 3.5 source layout: the streaming model,
-//! the one text model, reaches the shared core one way, and no second model
+//! Structural contract for the Qwen 3.5 source layout: the one text
+//! model reaches the shared core one way, and no second model
 //! type comes back beside it (the sensitivity probe's in-memory model lives
 //! in `qwen35-quantization-probe`).
 
@@ -15,7 +15,7 @@ async fn should_keep_qwen3_5_imports_directed_through_shared_core() {
         let qwen3_5_core = source_root.join("qwen3_5_core");
         let qwen3_5_text = source_root.join("qwen3_5_text");
         let qwen3_5_family_facade = source_root.join("qwen3_5.rs");
-        let streaming_module_root = source_root.join("qwen3_5_text.rs");
+        let text_module_root = source_root.join("qwen3_5_text.rs");
         let crate_root = source_root.join("lib.rs");
 
         assert_tree_excludes_source_fragments(
@@ -26,7 +26,7 @@ async fn should_keep_qwen3_5_imports_directed_through_shared_core() {
         assert!(
             !source_root.join("qwen3_5_resident").exists()
                 && !source_root.join("qwen3_5_resident.rs").exists(),
-            "the streaming model is the one Qwen3.5 model type",
+            "the text model is the one Qwen3.5 model type",
         );
         assert_source_excludes_source_fragments(&crate_root, &["mod qwen3_5_resident"]);
         assert!(
@@ -40,9 +40,9 @@ async fn should_keep_qwen3_5_imports_directed_through_shared_core() {
         // Performance attribution and the routed-expert values it records live in
         // model-primitives (issue #2340), which cannot depend on
         // this crate, so Cargo now enforces that attribution never reaches the
-        // Qwen3.5 streaming engine.
+        // Qwen3.5 text engine.
         assert_source_excludes_source_fragments(
-            &streaming_module_root,
+            &text_module_root,
             &["LayerRoutedExpertIds", "ObservedExpertRoute"],
         );
         assert_source_excludes_source_fragments(&crate_root, &["Qwen3_5Engine"]);

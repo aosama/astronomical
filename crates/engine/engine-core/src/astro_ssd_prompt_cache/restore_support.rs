@@ -1,12 +1,10 @@
 //! Shared restore-side support for the `astro_ssd_prompt_cache`: the IPC
 //! diagnostics mapping, restore block-key derivation, prefix enumeration, and
-//! the load-and-reconstruct pipeline that the streaming and resident engines
-//! previously carried as two large near-identical functions.
+//! the load-and-reconstruct pipeline the text engine runs.
 //!
-//! The engines keep only what genuinely differs: memory admission policy,
-//! expert retention, and the resident engine's in-memory prefix adoption.
+//! The engine keeps only memory admission policy and expert retention.
 //! Everything here takes the disk store and runtime by reference and holds no
-//! engine state, so one correction lands for both engines at once.
+//! engine state.
 
 use std::collections::HashMap;
 

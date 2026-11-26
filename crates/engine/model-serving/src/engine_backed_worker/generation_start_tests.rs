@@ -1,6 +1,6 @@
 //! Beside-source coverage for the pure generation-start units: the protocol
-//! prompt-token-count conversion. The promotion gate, the streaming retry,
-//! and the startup event emission run under the worker test doubles.
+//! prompt-token-count conversion. The startup event emission runs under
+//! the worker test doubles.
 
 use super::protocol_prompt_token_count;
 use crate::engine_backed_worker::support::WorkerRuntimeError;

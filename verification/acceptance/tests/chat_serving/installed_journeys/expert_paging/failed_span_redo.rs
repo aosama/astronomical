@@ -1,4 +1,4 @@
-//! What it costs the streaming engine to run one prompt span again: the
+//! What it costs the engine to run one prompt span again: the
 //! parity journey fails a span on purpose, the way MLX reports a span it
 //! could not fit, and these helpers count what the engine did about it
 //! (issue #2221).

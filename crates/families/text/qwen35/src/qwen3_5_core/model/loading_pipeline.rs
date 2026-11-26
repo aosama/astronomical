@@ -1,7 +1,6 @@
-//! The shared artifact-loading pipeline both Qwen3.5 engines run: language
+//! The artifact-loading pipeline the Qwen3.5 engine runs: language
 //! weight and vision binding, the GPU kernel capability verdicts, and the
-//! invariant linear-attention scales. Split from the streaming and resident
-//! loaders so the two engines cannot drift on load semantics.
+//! invariant linear-attention scales.
 
 use std::collections::HashMap;
 
@@ -18,9 +17,8 @@ use crate::qwen3_5_core::vision::Qwen3_5VisionModel;
 use crate::{PerformanceAttribution, PerformanceOperation, TensorInventory};
 use text_generation::execution_error::TextExecutionError;
 
-/// The bound language artifact both engines construct identically before their
-/// expert-handling paths diverge (streaming builds a pager; resident builds
-/// quantized layer plans).
+/// The bound language artifact the engine constructs before it builds the
+/// expert pager.
 pub struct BoundLanguageArtifact {
     pub config: Qwen3_5Config,
     pub shard_index: Qwen3_5ShardIndex,
@@ -30,7 +28,7 @@ pub struct BoundLanguageArtifact {
 }
 
 /// Binds the language artifact with every tensor exactly as stored, as the
-/// streaming engine needs (see [`bind_language_artifact_for`]).
+/// engine needs (see [`bind_language_artifact_for`]).
 pub fn bind_language_artifact(
     runtime: &MlxRuntime,
     validated_artifact: &mut ValidatedQwen3_5Artifact,
@@ -49,9 +47,7 @@ pub fn bind_language_artifact(
 /// Binds the validated language artifact: extracts the configuration and
 /// shard metadata, loads the optional sidecar vision model, maps and loads
 /// the language shards, then binds the weights and (for embedded towers) the
-/// vision model from those shards. Mirrors the inlined preamble of both
-/// engines' loaders expression-for-expression, including the attribution
-/// spans.
+/// vision model from those shards, including the attribution spans.
 pub fn bind_language_artifact_for(
     runtime: &MlxRuntime,
     validated_artifact: &mut ValidatedQwen3_5Artifact,
@@ -187,8 +183,8 @@ pub fn build_vision_tensor_shard_map(
     vision_tensor_name_to_shard_location
 }
 
-/// The capability-verdict kernels both engines load identically after their
-/// expert paths diverge.
+/// The capability-verdict kernels the engine loads after binding the
+/// artifact.
 pub struct ModelKernelVerdicts {
     pub gated_delta_kernel: Option<MlxMetalKernel>,
     pub gated_delta_checkpoint_kernel: Option<MlxMetalKernel>,
@@ -196,8 +192,7 @@ pub struct ModelKernelVerdicts {
 }
 
 /// Loads the three gated-delta-family kernels under their GPU capability
-/// verdicts. Mirrors the inlined verdict blocks of both engines' loaders,
-/// including the demotion logs.
+/// verdicts, including the demotion logs.
 pub fn load_model_kernel_verdicts(
     runtime: &MlxRuntime,
     config: &Qwen3_5Config,
@@ -263,8 +258,8 @@ pub fn load_model_kernel_verdicts(
     })
 }
 
-/// The invariant linear-attention normalization scales both engines construct
-/// identically at load time.
+/// The invariant linear-attention normalization scales the engine constructs
+/// at load time.
 pub struct InvariantLinearScales {
     pub inverse_linear_head_dimension_scale: mlx_bridge::MlxArray,
     pub inverse_square_root_linear_head_dimension_scale: mlx_bridge::MlxArray,
@@ -327,7 +322,7 @@ fn invariant_linear_scales_in(
     })
 }
 
-/// The model-core payload both engines budget identically: the text weights
+/// The model-core payload the engine budgets: the text weights
 /// that load into memory plus the optional vision tower while it is in use.
 pub fn model_core_payload_bytes(
     weights: &Qwen3_5Weights,

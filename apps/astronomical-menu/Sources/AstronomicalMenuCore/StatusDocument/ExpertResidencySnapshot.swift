@@ -1,5 +1,5 @@
 /// Concrete sparse-expert ownership reported by the active worker, and for a
-/// dense model on the streaming engine, where its decoder layers live.
+/// dense model on the engine, where its decoder layers live.
 struct ExpertResidencySnapshot: Codable, Equatable {
   let totalLayerCount: UInt32
   let residentExpertCount: UInt32

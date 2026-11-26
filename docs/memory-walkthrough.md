@@ -1,6 +1,6 @@
 # One request, start to finish
 
-This page follows one chat request through Astronomical's memory management, for a contributor who wants to know which code decides what. It describes the streaming engine first, which serves a model that does not fit under the memory limit, and then says how the in-memory engine differs. For what this means to a person using the app, see [How Astronomical works](how-it-works.md).
+This page follows one chat request through Astronomical's memory management, for a contributor who wants to know which code decides what. It describes a model that does not fit under the memory limit first, and then says how a model that fits differs. For what this means to a person using the app, see [How Astronomical works](how-it-works.md).
 
 ## Who decides what
 
@@ -42,7 +42,7 @@ A measurement the limit cannot hold does not fail the load. The phase stays unme
 
 ## When the request ends
 
-14. `govern_request_end` returns any lease or unsettled retry and enters the idle phase. The streaming engine keeps no stored state between requests, so the capacity rises again. The astro expert cache keeps what it has. A dense model reads back the layers it gave up.
+14. `govern_request_end` returns any lease or unsettled retry and enters the idle phase. The engine keeps no stored state between requests, so the capacity rises again. The astro expert cache keeps what it has. A dense model reads back the layers it gave up.
 
 ## When the limit changes
 
@@ -56,7 +56,7 @@ A measurement the limit cannot hold does not fail the load. The phase stays unme
 
 ## A model that fits
 
-A model the limit holds whole is served by the same engine. Every layer is kept, nothing is given back, and the prompt is still read a layer at a time; only the prompt chunk is the in-memory size rather than the streaming one.
+A model the limit holds whole is served by the same engine. Every layer is kept, nothing is given back, and the prompt is still read a layer at a time; only the prompt chunk is the larger size used when every layer is kept in memory.
 
 ## Where the rules are tested
 

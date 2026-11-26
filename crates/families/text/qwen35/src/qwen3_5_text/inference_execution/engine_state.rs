@@ -1,4 +1,4 @@
-//! The streaming engine's execution state, owned by the MLX owner thread.
+//! The engine's execution state, owned by the MLX owner thread.
 
 use ipc_protocol::WorkerDecodeAstroExpertCachePolicy;
 
@@ -8,7 +8,7 @@ use text_generation::generation_loop::execution_core::TextExecutionCoreOwner;
 use super::super::model::Qwen3_5Model;
 use super::engine_request::Qwen3_5RequestExtension;
 
-/// Everything the streaming engine keeps between engine steps: the loaded
+/// Everything the engine keeps between engine steps: the loaded
 /// model, the active request, the limits it was started with and its
 /// `astro_ssd_prompt_cache` ownership.
 pub struct Qwen3_5InferenceExecution {
@@ -27,7 +27,7 @@ pub struct Qwen3_5InferenceExecution {
 pub type Qwen3_5EngineState = Qwen3_5InferenceExecution;
 
 impl TextExecutionCoreOwner for Qwen3_5InferenceExecution {
-    /// Streaming loads the same Qwen 3.5 checkpoint the resident engine does.
+    /// The engine loads the Qwen 3.5 checkpoint as validated by the shared core.
     type Artifact = crate::qwen3_5_core::artifacts::ValidatedQwen3_5Artifact;
     type Model = Qwen3_5Model;
     type RequestExtension = Qwen3_5RequestExtension;

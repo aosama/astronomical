@@ -4,13 +4,11 @@
 //! artifact validation and shard plumbing, OptiQ quantization profiles, the
 //! text stack (tokenizer, prompt, output parser, sampler), the vision stack,
 //! dense MLP math, decoder state and `astro_decoder_state_cache` layouts, and
-//! the persistent `astro_ssd_prompt_cache` machinery. The streaming model
-//! serves every text model; the in-memory model in `qwen3_5_resident` exists
-//! only for the quantization sensitivity probe.
+//! the persistent `astro_ssd_prompt_cache` machinery. The one text model,
+//! `Qwen3_5TextModel` in `qwen3_5_text`, is built on it.
 //!
-//! Dependency direction: `qwen3_5_resident` and `qwen3_5_text` may import
-//! from here; neither may import from the other. This module never imports
-//! from the model modules.
+//! Dependency direction: `qwen3_5_text` may import from here. This module
+//! never imports from the model modules.
 
 /// The frozen Ornith 1.0 sparse-artifact model identity, shared by every
 /// Qwen3.5 engine and the beside-source test fixtures.

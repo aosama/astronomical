@@ -140,7 +140,7 @@ test-dense-text-weights = "run -p xtask -- test-run --package astronomical-accep
 # forward holds must be left alone, and converting twice must find nothing.
 # About fifteen seconds.
 test-dense-kept-layer-register-order = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter should_begin_the_same_reply_with_kept_layers_in_register_order"
-# The streaming engine's fused expert combination on a served
+# The engine's fused expert combination on a served
 # mixture-of-experts model (#2585): one load answers the Shakespeare prompt
 # with the two-step combination and with the fused one; replies and every
 # logit's bits must be equal. Under a minute.
@@ -170,7 +170,7 @@ test-expert-layer-at-a-time-parity = "run -p xtask -- test-run --package astrono
 test-dense-prompt-forward-memory = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter should_keep_a_streamed_prompt_forward_within_the_planned_reserve"
 
 # Qwen3.8-Flash-Next greedy parity (issue #2533): the
-# lane_mixing_sparse_moe_streaming model on the streaming engine at a 34 GiB
+# lane_mixing_sparse_moe_streaming model on the engine at a 34 GiB
 # limit must choose the reference implementation's greedy tokens for a short
 # Romeo and Juliet prompt and for one past the sparse-attention budget
 # (fixture flash_next_greedy_reference.json). About thirty seconds.
@@ -832,7 +832,7 @@ test-dflash-drafter-reference = "run -p xtask -- test-run --package astronomical
 # for every row that picked it before any kernel is written. Seconds.
 measure-expert-rows-per-read = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --exact --filter direct_mlx::expert_rows_per_read_cost::should_price_rows_on_one_gathered_expert_against_one_row_a_slot"
 # What it costs a streamed reply token to look at each layer's routes on the
-# host: ending the evaluation at every layer (what the streaming engine does)
+# host: ending the evaluation at every layer (what the engine does)
 # against a host step inside the graph (crates/engine/graph-host-step), with a
 # pass that never leaves the GPU as the floor. Random float32 tensors in the
 # 35B-A3B's shape, 40 layers a token; the three passes must compute the same

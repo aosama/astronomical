@@ -88,10 +88,10 @@ impl NeuralEnginePrefillLifecycle {
 }
 
 /// A text engine's bridge from the engine-neutral execution contract onto
-/// its state's methods: the methods both Qwen 3.5 engines share, and the
+/// its state's methods: the methods every Qwen 3.5 text model shares, and the
 /// Neural Engine programs a dense model held in memory builds beside itself
-/// and advances while the engine is idle. Each engine's state has an
-/// `advance_neural_engine_preparation` of its own, which this forwards to.
+/// and advances while the engine is idle. The engine's state has an
+/// `advance_neural_engine_preparation`, which this forwards to.
 macro_rules! qwen3_5_inference_execution_bridge {
     ($inference_execution:ty, $engine_state:ty) => {
         impl $crate::MlxInferenceExecution for $inference_execution {

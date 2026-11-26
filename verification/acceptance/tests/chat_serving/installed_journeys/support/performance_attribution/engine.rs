@@ -40,7 +40,7 @@ pub(crate) fn create_attributed_engine_with_ssd_streaming_prefill(
     )
 }
 
-/// What a journey may ask of the streaming engine beyond the test run's
+/// What a journey may ask of the engine beyond the test run's
 /// configuration; the default asks nothing.
 #[derive(Default)]
 pub(crate) struct EngineJourneyOptions {
@@ -51,7 +51,7 @@ pub(crate) struct EngineJourneyOptions {
     pub(crate) reads_prompts_on_the_neural_engine: bool,
 }
 
-/// The streaming engine with a journey's options.
+/// The engine with a journey's options.
 fn create_attributed_engine_keeping_prompts(
     model_directory: &Path,
     performance_attribution_log_path: &Path,
@@ -117,7 +117,7 @@ pub(crate) async fn load_engine_with_progress(
     }
 }
 
-/// A streaming engine loaded as the test run's configuration names it:
+/// The text engine loaded as the test run's configuration names it:
 /// `model_directory` and `paging_experiment`'s MLX limit and prompt chunk.
 pub(crate) struct PagingExperimentEngine {
     /// The load's Neural Engine prompt-reading event; `None` with it off.
@@ -129,7 +129,7 @@ pub(crate) struct PagingExperimentEngine {
     pub(crate) attribution_directory: tempfile::TempDir,
 }
 
-/// Loads the configured model on the streaming engine, reporting progress
+/// Loads the configured model on the engine, reporting progress
 /// under `load_phase_name`.
 pub(crate) async fn load_paging_experiment_engine(load_phase_name: &str) -> PagingExperimentEngine {
     load_paging_experiment_engine_with(load_phase_name, EngineJourneyOptions::default()).await

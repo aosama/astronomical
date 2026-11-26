@@ -7,7 +7,7 @@ impl Qwen3_5EngineState {
         &self,
         minimum_mlx_memory_ceiling_bytes: u64,
     ) -> EngineLoadResult {
-        // Build readiness only after startup promotion has selected the owner.
+        // Build readiness only after startup has selected the owner.
         // The worker forwards this value instead of inferring mode from memory.
         EngineLoadResult::new()
             .with_expert_memory_mode(

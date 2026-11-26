@@ -213,8 +213,7 @@ impl Qwen3_5Model {
     }
 
     /// Moves the memory facts and the memory governor to the new ceiling, then
-    /// reads back the dense layers the governor now has room for: a raise
-    /// the resident engine cannot use yet still lets this one keep more.
+    /// reads back the dense layers the governor now has room for.
     fn apply_live_ceiling_to_budget_and_dense_layers(
         &self,
         requested_mlx_memory_ceiling_bytes: u64,

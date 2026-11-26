@@ -1,10 +1,11 @@
 //! The state every text engine keep between engine steps.
 //!
-//! The resident and streaming engines held the same 23 fields under the same
-//! names and built them the same way from a validated artifact. They now
-//! share one [`TextExecutionCore`], and each engine adds only the fields
-//! of its own features (Neural Engine and drafting for resident, residency
-//! facts for streaming). Steps that read only this state live here once.
+//! The engines hold the same 23 fields under the same names and build them
+//! the same way from a validated artifact, so they share one
+//! [`TextExecutionCore`] and each engine adds only the fields of its own
+//! features (the Neural Engine prefill and the decode `astro_expert_cache`
+//! policy for the Qwen3.5 text engine). Steps that read
+//! only this state live here once.
 
 use std::path::PathBuf;
 use std::sync::Arc;

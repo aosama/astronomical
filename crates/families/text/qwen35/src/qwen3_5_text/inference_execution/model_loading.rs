@@ -148,7 +148,7 @@ fn host_paired_drafter(
         );
         tracing::info!(
             hosted_drafter_weight_bytes = draft_runtime.hosted_weight_bytes,
-            "the streaming engine hosts a DFlash drafter"
+            "the text engine hosts a DFlash drafter"
         );
         model.base.optional_accelerators.draft_runtime = Some(Box::new(draft_runtime));
     }

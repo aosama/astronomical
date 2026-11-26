@@ -1,9 +1,8 @@
 //! Whether fusing a routed expert's gate and up projections into one
 //! gathered multiply is faster than two, with a verdict (issue #2585).
 //!
-//! The in-memory engine concatenates each expert layer's gate and up weights
-//! at load and runs one gathered projection where the streaming engine runs
-//! two. Before the streaming engine's `astro_expert_cache` tables are laid
+//! The removed in-memory engine concatenated each expert layer's gate and up
+//! weights at load and ran one gathered projection where the engine runs two. Before the engine's `astro_expert_cache` tables are laid
 //! out the fused way, this prices what the fusion buys at the kernel: the
 //! two ways as two jobs of the MLX performance profiler, twelve rounds with
 //! the order flipped every round, "faster" or "slower" only when the
@@ -50,8 +49,8 @@ const REPORT_SUBDIRECTORY: &str = "expert-gate-up-fusion-verdict";
 /// weights, scales and biases, as MLX's quantizer returns them.
 type QuantizedExperts = (MlxArray, MlxArray, MlxArray);
 
-/// One layer's gate and up as the streaming engine holds them and as the
-/// in-memory engine does.
+/// One layer's gate and up as the engine holds them and as the
+/// removed in-memory engine held them.
 struct ExpertLayer {
     gate: QuantizedExperts,
     up: QuantizedExperts,
@@ -216,7 +215,7 @@ fn compare_gate_up_ways(
 }
 
 /// One layer of random experts, with its gate and up joined on the output
-/// axis the way the in-memory engine joins them at load.
+/// axis the way the removed in-memory engine joined them at load.
 fn expert_layer(runtime: &MlxRuntime, random_key: &MlxArray) -> ExpertLayer {
     let gate = quantized_experts(runtime, random_key);
     let up = quantized_experts(runtime, random_key);

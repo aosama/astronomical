@@ -23,7 +23,7 @@ use text_generation::execution_error::TextExecutionError;
 
 use text_generation::AstroSsdPromptCacheBoundaryCheckpointCollector;
 
-/// The streaming engine's model: shared base plus residency-forked state.
+/// The engine's model: shared base plus residency-forked state.
 #[derive(Debug)]
 pub struct Qwen3_5TextModel {
     pub base: Qwen3_5ModelBase,

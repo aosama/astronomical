@@ -1,10 +1,8 @@
 //! The shared Qwen3.5 model base: one loaded artifact's runtime, configuration,
 //! typed weights, vision tower, retained Metal kernels, and compiled graphs.
 //!
-//! Issue #1132: everything here is identical for the fully-resident engine and
-//! the SSD-streaming engine. The residency fork lives in the engine wrappers
-//! (`Qwen3_5TextModel` and, after the fork, the resident model), which
-//! deref to this base for every shared field and method.
+//! Issue #1132: the engine wrapper (`Qwen3_5TextModel`) derefs to this base
+//! for every shared field and method.
 
 use mlx_bridge::{MlxArray, MlxCompiledElementwiseGraphs, MlxCompiledSwiGlu, MlxMetalKernel};
 use runtime_integration::MlxRuntime;
@@ -43,15 +41,14 @@ pub struct Qwen3_5OptionalAccelerators {
     pub output_gate_engine: Option<
         Box<dyn crate::qwen3_5_core::model::output_gate_engine::LinearAttentionOutputGateEngine>,
     >,
-    /// The DFlash drafter the streaming engine hosts beside this model,
-    /// when one that pairs with it is installed. The resident engine keeps
-    /// its own on the engine.
+    /// The DFlash drafter the engine hosts beside this model,
+    /// when one that pairs with it is installed.
     pub draft_runtime: Option<
         Box<crate::qwen3_5_core::draft_tree_decode::engine_draft_runtime::Qwen3_5SpeculativeDraftRuntime>,
     >,
-    /// What the streaming engine's search for a drafter found, for status:
+    /// What the engine's search for a drafter found, for status:
     /// drafting when `draft_runtime` holds one, otherwise why not. `None`
-    /// until the streaming engine has looked.
+    /// until the engine has looked.
     pub draft_model_status: Option<ipc_protocol::DraftModelStatus>,
     /// The register-ordered 4-bit matmul's kernels; set once
     /// `declare_register_ordered_kernels` has declared them for a drafter,
@@ -85,7 +82,7 @@ pub struct Qwen3_5OptionalAccelerators {
         Option<std::cell::RefCell<Vec<super::tree_attention_measurement::TreeAttentionErrorCount>>>,
     /// One Metal pass for the sorted routed-expert sum plus the gated shared
     /// expert on prompt chunks, bit for bit equal to the two-step path it
-    /// replaces. Both engines keep it when the GPU's capability probe passed
+    /// replaces. The model keeps it when the GPU's capability probe passed
     /// and the sorted reduction is kept.
     pub sorted_expert_shared_combination_kernel: Option<MlxMetalKernel>,
 }
@@ -98,8 +95,8 @@ pub struct Qwen3_5ModelBase {
     pub astro_decoder_state_cache_layout: AstroDecoderStateCacheLayout,
     pub weights: Qwen3_5Weights,
     /// Embedding rows read from the SSD per forward instead of a resident
-    /// table; `None` keeps the table resident. Only a dense model the
-    /// streaming engine serves sets it (issue #1985).
+    /// table; `None` keeps the table resident. Only a dense model that
+    /// streams from the SSD sets it (issue #1985).
     pub disk_embedding_rows: Option<super::disk_embedding_rows::Qwen3_5DiskEmbeddingRows>,
     /// Flash-Next's n-gram table, read row by row from the SSD; absent for
     /// Qwen 3.5.
@@ -264,7 +261,7 @@ impl Qwen3_5ModelBase {
 
     /// Materializes the target weights, leaving the decoder layers lazy when
     /// a dense layer streamer owns them. An embedding table read from the SSD
-    /// stays lazy too. Each engine's model calls this with its own layer
+    /// stays lazy too. The model calls this with its own layer
     /// ownership; the base has no public materialize of its own, so a caller
     /// reaching the base through deref cannot load a streamer's layers.
     pub fn materialize_target_weights_with(

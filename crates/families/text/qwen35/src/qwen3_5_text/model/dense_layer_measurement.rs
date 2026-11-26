@@ -100,7 +100,7 @@ impl Qwen3_5Model {
         self.dense_layer_streamer
             .as_ref()
             .ok_or(TextExecutionError::InvalidInput {
-                description: "only a dense model on the streaming engine reads its layers",
+                description: "only a dense model reads its layers through the dense layer streamer",
             })
     }
 }

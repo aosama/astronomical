@@ -1,4 +1,4 @@
-//! User journey: raising RAM keeps the load-selected streaming engine and still answers Romeo.
+//! User journey: raising RAM keeps the same engine and still answers Romeo.
 
 use std::time::Duration;
 
@@ -80,7 +80,7 @@ async fn should_keep_serving_on_streaming_after_the_memory_ceiling_rises() {
         qwen3_5_engine
             .update_mlx_memory_limit(machine_mlx_memory_ceiling_bytes)
             .await
-            .expect("raising the ceiling should not change the load-selected streaming engine");
+            .expect("raising the ceiling should not replace the engine");
         assert_ne!(
             qwen3_5_engine
                 .expert_memory_mode_for_tests()

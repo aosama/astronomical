@@ -1,10 +1,10 @@
-//! The streaming engine's request: the shared Qwen3.5 request plus the
+//! The engine's request: the shared Qwen3.5 request plus the
 //! prefill demand and memory-recovery state only this engine keeps.
 
 pub(in crate::qwen3_5_text) type Qwen3_5EngineRequest =
     text_generation::engine_request::TextEngineRequest<Qwen3_5RequestExtension>;
 
-/// Request state only the streaming engine reads.
+/// Request state only the engine reads.
 pub struct Qwen3_5RequestExtension {
     /// Whether this request's prefill has opened its demand window: the
     /// per-request prefill evidence stream starts empty while lifetime

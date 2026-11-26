@@ -1,9 +1,6 @@
-//! What both Qwen3.5 loaders derive the same way once their expert handling
-//! has diverged (issue #2473): the tensor-name maps the expert plans read, the
-//! `astro_decoder_state_cache` layout, and the memory facts the RAM owner
-//! plans from. Each engine still measures its own expert payload, because the
-//! resident engine reads it from layer plans and the streaming engine from
-//! its pager.
+//! What the Qwen3.5 loader derives for the engine (issue #2473): the
+//! tensor-name maps the expert plans read, the `astro_decoder_state_cache`
+//! layout, and the memory facts the RAM owner plans from.
 
 use std::collections::HashMap;
 

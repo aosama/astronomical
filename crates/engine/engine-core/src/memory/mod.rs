@@ -24,7 +24,7 @@
 //!   `Idle`. The residency planner treats `GenerationPreparation` like
 //!   `Decode`.
 //! - **1 owner of the limit** — the memory governor
-//!   (`memory_policy::ledger`). Each engine opens one, tells
+//!   (`memory_policy::ledger`). The engine opens one, tells
 //!   it what happens and applies the capacity it answers with.
 //! - **3 layer states** — when a reply begins, `residency` plans one
 //!   `ExpertLayerState` per sparse decoder layer: `Kept`, `Hot` or
@@ -62,15 +62,15 @@ mod decode_seating_tests;
 mod astro_expert_cache_arithmetic;
 #[cfg(feature = "direct-mlx")]
 mod dense_resident;
-// Only the direct-MLX streaming engine reads it; the unit tests read it
+// Only the direct-MLX text engine reads it; the unit tests read it
 // without the graphics-processor runtime.
 #[cfg(any(feature = "direct-mlx", test))]
 pub mod macos_wired_memory;
-// Only the direct-MLX streaming engine records replies through it; the unit
+// Only the direct-MLX text engine records replies through it; the unit
 // tests own it without the graphics-processor runtime.
 #[cfg(any(feature = "direct-mlx", test))]
 pub mod mlx_buffer_cache_reply_record;
-// Only the direct-MLX streaming engine records replies through it; the unit
+// Only the direct-MLX text engine records replies through it; the unit
 // tests own it without the graphics-processor runtime.
 #[cfg(any(feature = "direct-mlx", test))]
 pub mod reply_expert_route_record;

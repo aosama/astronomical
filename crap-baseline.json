@@ -127372,7 +127372,7 @@
     },
     {
       "file": "verification/acceptance/tests/chat_serving/qwen3_5/automatic_engine_selection_rest.rs",
-      "function": "should_select_resident_engine_when_artifact_geometry_and_prompt_fit",
+      "function": "should_hold_the_whole_model_when_artifact_geometry_and_prompt_fit",
       "line": 41,
       "cyclomatic": 1.0,
       "coverage": null,

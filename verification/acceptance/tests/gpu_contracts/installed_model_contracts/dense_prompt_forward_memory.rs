@@ -77,7 +77,7 @@ async fn assert_prompt_forwards_stay_within_reserve() {
         &model_directory,
         crate::common::standard_qwen3_5_model_chunking_configuration(),
     )
-    .expect("the dense model should load on the streaming engine");
+    .expect("the dense model should load on the engine");
     streaming_model
         .materialize_target_weights()
         .expect("the model weights should materialize");

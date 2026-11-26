@@ -30,13 +30,13 @@ const MULTI_CHUNK_PROMPT_TOKEN_COUNT: usize = 5_000;
 /// Shared with the speculative-decoding sibling journey in this module.
 pub(super) const ROMEO_AND_JULIET_SOURCE: &str =
     include_str!("../../fixtures/model_metrics_5000_romeo_and_juliet_words.txt");
-const RESIDENT_SELECTION_TIMEOUT: Duration = Duration::from_secs(115);
+const WHOLE_MODEL_JOURNEY_TIMEOUT: Duration = Duration::from_secs(115);
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "starts the production worker and loads the configured sparse artifact whole"]
 #[serial]
-async fn should_select_resident_engine_when_artifact_geometry_and_prompt_fit() {
-    timeout(RESIDENT_SELECTION_TIMEOUT, async {
+async fn should_hold_the_whole_model_when_artifact_geometry_and_prompt_fit() {
+    timeout(WHOLE_MODEL_JOURNEY_TIMEOUT, async {
         let model_id = resident_sparse_moe_model_id();
         let model_directory = configured_installed_model_directory_by_id(model_id);
         let residency_geometry =
@@ -64,7 +64,7 @@ async fn should_select_resident_engine_when_artifact_geometry_and_prompt_fit() {
         );
 
         let worker_home = tempfile::tempdir()
-            .expect("the resident engine-selection worker home should be created");
+            .expect("the whole-model worker home should be created");
         write_acceptance_config(
             worker_home.path(),
             &model_directory,
@@ -98,7 +98,7 @@ async fn should_select_resident_engine_when_artifact_geometry_and_prompt_fit() {
         stop_real_model_rest_server(real_model_rest_server).await;
     })
     .await
-    .expect("the resident engine-selection journey must finish within 115 seconds");
+    .expect("the whole-model journey must finish within 115 seconds");
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -204,7 +204,7 @@ async fn should_select_streaming_engine_when_complete_residency_headroom_does_no
             SMALL_PROMPT_TOKEN_COUNT,
         );
         let worker_home = tempfile::tempdir()
-            .expect("the streaming engine-selection worker home should be created");
+            .expect("the engine-selection worker home should be created");
         write_acceptance_config(
             worker_home.path(),
             &model_directory,
@@ -245,7 +245,7 @@ async fn should_select_streaming_engine_when_complete_residency_headroom_does_no
         stop_real_model_rest_server(real_model_rest_server).await;
     })
     .await
-    .expect("the streaming engine-selection SSD journey must finish within 120 seconds");
+    .expect("the engine-selection SSD journey must finish within 120 seconds");
 }
 
 pub(super) struct SparseArtifactResidencyGeometry {

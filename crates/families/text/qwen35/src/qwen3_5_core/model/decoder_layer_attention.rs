@@ -1,5 +1,5 @@
 //! Decoder-layer attention execution: the invariant half of the residual
-//! sandwich that both engines share (`input RMS norm -> attention -> residual
+//! sandwich (`input RMS norm -> attention -> residual
 //! add -> post-attention RMS norm`). Attention state mutation is delegated to
 //! the linear-attention and full-attention owners. Keeping the residual
 //! boundaries explicit provides one restart-safe attention output for chunk

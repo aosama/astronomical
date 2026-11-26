@@ -1,7 +1,7 @@
 //! Neural Engine prompt reading (issue #2585): a
 //! dense model with every layer kept in memory builds its programs beside
 //! itself, attaches them between requests, and reads a long prompt a span
-//! at a time on both engines.
+//! at a time.
 //!
 //! One case with the programs and one without, a process each, on the test
 //! run's `model_directory` and `paging_experiment` limit. The limit must
@@ -33,14 +33,14 @@ const PROGRESS_INTERVAL: Duration = Duration::from_secs(5);
 const IDLE_STEP_INTERVAL: Duration = Duration::from_millis(100);
 
 #[tokio::test]
-#[ignore = "builds Neural Engine programs beside a dense model on the streaming engine"]
+#[ignore = "builds Neural Engine programs beside a dense model on the engine"]
 #[serial]
 async fn should_read_a_long_prompt_with_neural_engine_programs() {
     read_a_long_prompt(true, "long_prompt_read_with_neural_engine_programs").await;
 }
 
 #[tokio::test]
-#[ignore = "reads the same prompt on the streaming engine's GPU alone"]
+#[ignore = "reads the same prompt on the engine's GPU alone"]
 #[serial]
 async fn should_read_a_long_prompt_with_the_gpu_alone() {
     read_a_long_prompt(false, "long_prompt_read_with_the_gpu_alone").await;

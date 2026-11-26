@@ -1,6 +1,6 @@
 //! Which serving phase one measurement belongs to.
 //!
-//! The variants are constructed only by the direct-MLX streaming engine and
+//! The variants are constructed only by the direct-MLX text engine and
 //! its tests; the enum stays ungated because the always-compiled attribution
 //! signatures name it. It lives beside performance attribution, which records
 //! it, so the attribution never depends on the engine that sets it.

@@ -85,7 +85,7 @@ impl TreeContractTarget for SmallStreamedTarget {
 }
 
 #[test]
-#[ignore = "loads the small dense Qwen3.5 on the streaming engine"]
+#[ignore = "loads the small dense Qwen3.5 on the engine"]
 #[serial]
 fn should_give_every_row_of_the_small_model_s_streamed_tree_the_logits_its_chain_alone_gives() {
     assert_every_tree_row_matches_its_chain(
@@ -95,7 +95,7 @@ fn should_give_every_row_of_the_small_model_s_streamed_tree_the_logits_its_chain
 }
 
 #[test]
-#[ignore = "loads the small dense Qwen3.5 on the streaming engine"]
+#[ignore = "loads the small dense Qwen3.5 on the engine"]
 #[serial]
 fn should_leave_the_small_model_s_streamed_state_feeding_the_kept_branch_alone_leaves() {
     assert_a_commit_leaves_the_state_feeding_the_branch_leaves(
@@ -105,7 +105,7 @@ fn should_leave_the_small_model_s_streamed_state_feeding_the_kept_branch_alone_l
 }
 
 #[test]
-#[ignore = "loads the small dense Qwen3.5 on the streaming engine"]
+#[ignore = "loads the small dense Qwen3.5 on the engine"]
 #[serial]
 fn should_differ_from_feeding_a_branch_the_small_model_s_streamed_commit_did_not_keep() {
     assert_a_commit_differs_from_feeding_another_branch(
@@ -129,7 +129,7 @@ fn configured_target_and_its_rounding() -> (SmallStreamedTarget, f32) {
 }
 
 #[test]
-#[ignore = "loads the configured Qwen3.5 model on the streaming engine"]
+#[ignore = "loads the configured Qwen3.5 model on the engine"]
 #[serial]
 fn should_give_every_row_of_the_configured_model_s_streamed_tree_the_logits_its_chain_gives() {
     let (target, rounding) = configured_target_and_its_rounding();
@@ -137,7 +137,7 @@ fn should_give_every_row_of_the_configured_model_s_streamed_tree_the_logits_its_
 }
 
 #[test]
-#[ignore = "loads the configured Qwen3.5 model on the streaming engine"]
+#[ignore = "loads the configured Qwen3.5 model on the engine"]
 #[serial]
 fn should_leave_the_configured_model_s_streamed_state_feeding_the_kept_branch_leaves() {
     let (target, rounding) = configured_target_and_its_rounding();
@@ -145,7 +145,7 @@ fn should_leave_the_configured_model_s_streamed_state_feeding_the_kept_branch_le
 }
 
 #[test]
-#[ignore = "loads the configured Qwen3.5 model on the streaming engine"]
+#[ignore = "loads the configured Qwen3.5 model on the engine"]
 #[serial]
 fn should_differ_from_feeding_a_branch_the_configured_model_s_streamed_commit_did_not_keep() {
     let (target, rounding) = configured_target_and_its_rounding();

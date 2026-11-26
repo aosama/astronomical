@@ -1,4 +1,4 @@
-//! Decoding a reply in drafted rounds, shared by both engines.
+//! Decoding a reply in drafted rounds, used by the text engine.
 //!
 //! When a DFlash drafter of either generation that pairs with the target is
 //! installed beside it (`engine_core::speculative_decoding::drafter_discovery`),
@@ -8,9 +8,9 @@
 //! proposes a tree of continuations, the target verifies all of it in one
 //! pass and keeps the chain its own picks follow.
 //!
-//! Everything here is written against `DraftRoundTarget`, so a speed-up
-//! one engine has is one the other has: the engines differ only in how a
-//! verified tree's pass is evaluated and how the target is made ready.
+//! Everything here is written against `DraftRoundTarget`, so the
+//! target decides only how a verified tree's pass is evaluated and how it is
+//! made ready.
 
 pub mod draft_model_status_report;
 pub mod draft_round_target;

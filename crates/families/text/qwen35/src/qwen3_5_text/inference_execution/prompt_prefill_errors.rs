@@ -1,4 +1,4 @@
-//! The streaming engine's prompt-reading errors: the shared ones, with no
+//! The engine's prompt-reading errors: the shared ones, with no
 //! admission refusal, because this engine reads layers as memory allows.
 
 use std::convert::Infallible;

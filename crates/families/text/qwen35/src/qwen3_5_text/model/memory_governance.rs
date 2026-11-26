@@ -448,7 +448,7 @@ impl Qwen3_5Model {
     }
 
     /// The request is over. A redo left unsettled gives its room back; the
-    /// streaming engine keeps no stored state between requests.
+    /// engine keeps no stored state between requests.
     pub fn govern_request_end(&self, request_id: u64) {
         let abandoned_redo_attempt = self
             .governed_memory

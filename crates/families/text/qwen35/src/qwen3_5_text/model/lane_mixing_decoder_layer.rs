@@ -1,4 +1,4 @@
-//! One Flash-Next decoder layer on the streaming engine.
+//! One Flash-Next decoder layer on the engine.
 //!
 //! The layer carries several residual lanes. The n-gram layer adds its
 //! table rows first; then each block (attention, then the routed experts)

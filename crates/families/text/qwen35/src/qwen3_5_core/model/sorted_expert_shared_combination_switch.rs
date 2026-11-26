@@ -13,7 +13,7 @@ use crate::qwen3_5_core::model_math::sorted_expert_shared_combination::qwen3_5_s
 
 /// Keeps the fused sorted-expert and shared-expert combination when its
 /// probe passed. It reads the sorted assignment layout, so it is kept only
-/// alongside the sorted-reduction kernel. On the 35B-A3B 4-bit resident model
+/// alongside the sorted-reduction kernel. On the 35B-A3B 4-bit model held in memory
 /// it measured +0.3 to +0.4% median prefill speed for single 2,048 to
 /// 4,096-token chunks and +0.03% over a 10,176-token prompt, with identical
 /// logits: a small, free gain, near run-to-run spread.

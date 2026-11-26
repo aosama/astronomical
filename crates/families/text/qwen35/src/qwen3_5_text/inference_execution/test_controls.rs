@@ -197,7 +197,7 @@ impl Qwen3_5EngineState {
     }
 }
 
-/// The streaming engine's test controls: expert reads, route samples,
+/// The engine's test controls: expert reads, route samples,
 /// reply recordings and prompt-span redo. They are a trait because the
 /// engine type is defined in the engine core.
 // Every caller awaits these in place, so the futures' Send bound never matters.
@@ -295,7 +295,7 @@ pub trait Qwen3_5TextEngineTestControls {
         &self,
     ) -> Result<u64, InferenceEngineError>;
 
-    /// Removes resident-promotion source descriptors to prove typed failure recovery.
+    /// Removes the source descriptors a resident expert promotion reads to prove typed failure recovery.
     async fn remove_resident_expert_source_files_for_tests(
         &self,
     ) -> Result<(), InferenceEngineError>;

@@ -41,14 +41,14 @@ impl Qwen3_5EngineState {
     }
 }
 
-/// What the streaming engine carries across one forward: the memory
+/// What the engine carries across one forward: the memory
 /// baseline taken before it and what the forward is, for the governor.
 pub struct StreamingForwardInProgress {
     memory_baseline: ForwardMemoryBaseline,
     measured_forward: super::completed_forward_memory::MeasuredForward,
 }
 
-/// The streaming engine never refuses a forward: it measures memory before
+/// The engine never refuses a forward: it measures memory before
 /// it and tells its governor afterwards what the forward used.
 impl TextForwardMemoryGovernance for Qwen3_5EngineState {
     type ForwardInProgress = StreamingForwardInProgress;

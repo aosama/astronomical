@@ -88,7 +88,7 @@ pub(super) fn load_target(sources: SmallTargetSources) -> SmallTarget {
         &sources.model_directory,
         crate::common::standard_qwen3_5_model_chunking_configuration(),
     )
-    .expect("the model loads on the streaming engine");
+    .expect("the model loads on the engine");
     model
         .materialize_target_weights()
         .expect("the weights materialize");

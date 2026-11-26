@@ -1,6 +1,6 @@
 //! The shared model as a DFlash drafter's target: the drafter borrows its
 //! embedding rows and output head, so it has no vocabulary of its own and
-//! its logits are the target's. Both engines' models are this base.
+//! its logits are the target's. The text model is this base.
 
 use mlx_bridge::{MlxArray, MlxDtype};
 use runtime_integration::{MlxRuntime, MlxRuntimeError};

@@ -315,7 +315,7 @@ fn initialize_generation_processor(
     }
 }
 
-/// Constructs the streaming engine with its SSD-streaming chunk sizer; a
+/// Constructs the engine with its SSD-streaming chunk sizer; a
 /// sizing failure records the failed loading attribution first.
 #[allow(clippy::too_many_arguments)]
 fn construct_text_engine(

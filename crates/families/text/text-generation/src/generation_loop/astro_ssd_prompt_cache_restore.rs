@@ -1,14 +1,13 @@
 //! Restores the longest complete persistent `astro_ssd_prompt_cache` prefix into
-//! live decoder state, for either engine.
+//! live decoder state, for any text engine.
 //!
 //! Lookup is allocation-free. After a complete chain is identified, all sequence
 //! blocks and the newest required boundary are loaded, reconstructed, synchronized,
 //! and released before the rest of the prompt is read.
 //!
-//! The steps are the same in both engines. Where they differ, an engine
+//! The steps are the same for every engine. Where they differ, an engine
 //! supplies a hook through [`TextAstroSsdPromptCacheRestoreHooks`]: the
-//! resident engine may adopt the live prefix it kept from the last reply, and
-//! the streaming engine leases room from its memory governor for the blocks a
+//! Qwen3.5 text engine leases room from its memory governor for the blocks a
 //! restore loads.
 
 use crate::model::TextServingModel;

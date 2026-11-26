@@ -31,11 +31,9 @@ use super::model_loading_steps::{
 use super::serving_artifact::TextServingArtifact;
 use crate::model::text_model::TextModel;
 
-/// The points in a load where the engines differ. The resident engine loads
-/// its experts, Neural Engine programs and drafter after the model; the
-/// streaming engine reads its startup residency facts from the artifact first
-/// and opens its memory governor as the model loads; the folded-ternary
-/// engine sizes its `astro_ssd_prompt_cache` contract to the disk quota.
+/// The points in a load where the engines differ. The Qwen3.5 text engine
+/// opens its memory governor as the model loads; the folded-ternary engine
+/// sizes its `astro_ssd_prompt_cache` contract to the disk quota.
 pub trait TextModelLoadingHooks: TextFinalizationHooks {
     /// Sizes the model's `astro_ssd_prompt_cache` contract when a disk store
     /// is configured.

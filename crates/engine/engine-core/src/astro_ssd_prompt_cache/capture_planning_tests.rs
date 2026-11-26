@@ -1,8 +1,8 @@
 //! Unit coverage for the shared capture-planning units: boundary window
 //! derivation, causal-input selection, publication workspace decision, and
 //! allocator-clearing accounting — positive, boundary, and negative cases.
-//! These rules previously lived as untested copies inside both engines'
-//! capture functions.
+//! These rules previously lived as untested copies inside two capture
+//! functions.
 
 use crate::astro_ssd_prompt_cache::block_causal_input::AstroSsdPromptCacheBlockCausalInput;
 use crate::astro_ssd_prompt_cache::capture_planning::{

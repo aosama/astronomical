@@ -1,4 +1,4 @@
-//! The streaming engine's own steps in a live MLX memory-ceiling change; the
+//! The engine's own steps in a live MLX memory-ceiling change; the
 //! shared Qwen3.5 change runs every other step.
 
 use runtime_integration::MlxMemoryLimits;

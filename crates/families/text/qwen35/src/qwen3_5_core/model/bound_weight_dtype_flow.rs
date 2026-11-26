@@ -8,9 +8,9 @@
 //!
 //! The promotion replay itself lives in
 //! `qwen3_5_core::decoder::astro_decoder_state_cache_dtype_flow`; this module reduces the
-//! bound weight types both engines share to that replay's dtype contracts.
-//! Each sparse layer's expert plan comes from the slice the caller holds: the
-//! resident engine's prebuilt plans, or the streaming engine's pager plans.
+//! bound weight types to that replay's dtype contracts.
+//! Each sparse layer's expert plan comes from the slice the caller holds,
+//! such as the pager's plans.
 
 use crate::qwen3_5_core::artifacts::QuantizedExpertLayerPlan;
 use crate::qwen3_5_core::decoder::Qwen3_5AstroDecoderStateCacheLayerDtypes;

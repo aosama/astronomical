@@ -70,7 +70,7 @@ pub struct WorkerExpertResidencySnapshot {
     /// the worker could not measure the library, and Observatory must not
     /// invent a remainder from the model file size.
     pub complete_expert_payload_byte_count: u64,
-    /// Experts in one sparse layer. The streaming engine uses one capacity
+    /// Experts in one sparse layer. The engine uses one capacity
     /// for every layer; zero means the layer strip has nothing to draw.
     pub expert_capacity: u32,
     /// Retained counts for the layer map. Older workers omit the field;
@@ -404,7 +404,7 @@ pub enum WorkerEvent {
     /// Reports session-scoped expert-streaming statistics after each
     /// generation finalizes.
     ///
-    /// Emitted by the worker whenever a streaming engine completes a
+    /// Emitted by the worker whenever the text engine completes a
     /// generation, so the daemon can expose astro expert cache benefits through
     /// `GET /v1/experts/stats` without touching worker-owned state itself.
     ExpertStreamingStats { stats: WorkerExpertStreamingStats },

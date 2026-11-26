@@ -6,9 +6,10 @@ use tokio::io::AsyncWrite;
 
 use super::support::WorkerRuntimeError;
 
-/// Only the initial load and a requested swap announce themselves. The promotion and
-/// streaming-retry loads run inside an active generation, where the daemon's
-/// cancellation wait treats any unexpected event as a failure.
+/// Tells the daemon a load has begun, before the first byte is read, so the
+/// status surface shows the model as loading at once. The initial load and a
+/// requested swap are the only loads a worker makes, and both happen between
+/// requests.
 pub(super) async fn announce_load_started<WriteTransport>(
     model_id: Option<&str>,
     event_writer: &mut ProtocolWriter<WriteTransport>,

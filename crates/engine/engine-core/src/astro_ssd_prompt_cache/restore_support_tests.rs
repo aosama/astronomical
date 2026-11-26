@@ -1,7 +1,7 @@
 //! Unit coverage for the shared restore support: the IPC diagnostics mapping,
 //! the startup-cleanup miss reasons, and the restore block-key derivation —
 //! positive, boundary, and negative cases. These rules previously lived as
-//! untested copies inside both engines' restore functions.
+//! untested copies inside two restore functions.
 
 use ipc_protocol::{WorkerAstroSsdPromptCacheLookupOutcome, WorkerAstroSsdPromptCacheMissReason};
 

@@ -1,4 +1,4 @@
-//! Qwen3.8-Flash-Next on the streaming engine must choose the same greedy
+//! Qwen3.8-Flash-Next on the engine must choose the same greedy
 //! tokens as the reference implementation (issue #2533).
 //!
 //! The reference fixture was written by the mlx-vlm `qwen4_exp` language
@@ -62,7 +62,7 @@ async fn assert_greedy_tokens_match_the_reference() {
         );
         assert_eq!(
             chosen_token_ids, reference_token_ids,
-            "prompt {prompt_name}: the streaming engine must choose the reference tokens"
+            "prompt {prompt_name}: the engine must choose the reference tokens"
         );
     }
 }
