@@ -1,12 +1,14 @@
 //! Kept dense layers in register order (issues #2568 and #2585).
 //!
 //! A model that hosts a drafter verifies a draft tree of about sixteen rows
-//! every round, and at that many rows the register-ordered kernel multiplies
-//! the dense 27B's projections in about two thirds of the time the
-//! row-batched kernel takes on MLX's layout. The resident engine converts
-//! every projection when its drafter binds; here the same conversion is
-//! applied to each layer the streamer keeps, so a model with every layer kept
-//! verifies as the resident engine does.
+//! every round, and a drafted reply must equal the plain one (issue #2599).
+//! The register-ordered kernel gives a row the same bits whatever rows share
+//! its call, where MLX's quantized matmul rounds a row among four or more
+//! differently from the same row alone; at a tree's row count the two cost
+//! the same since MLX 0.32.5 (`cargo measure-k-row-verify-cost`). The
+//! resident engine converts every projection when its drafter binds; here
+//! the same conversion is applied to each layer the streamer keeps, so a
+//! model with every layer kept verifies as the resident engine does.
 //!
 //! Only kept layers convert. A streamed layer is read from the SSD for one
 //! forward in MLX's layout, and converting it would cost more than the pass

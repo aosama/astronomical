@@ -1586,9 +1586,9 @@ dependencies = [
 
 [[package]]
 name = "mlx-bridge"
-version = "0.32.4-alpha.6"
+version = "0.32.5-alpha.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "58405611b79059cde5b854cc12153aa4799c407da438b54b05f13f93dc6673ff"
+checksum = "b6232d821ba38047e76684aa834f876c8c7b38c92a01524593fd543eccfe801f"
 dependencies = [
  "bindgen",
  "pkg-config",

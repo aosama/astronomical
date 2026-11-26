@@ -9,6 +9,7 @@
 #include "mlx/c/error.h"
 #include "mlx/c/private/array.h"
 #include "mlx/c/private/enums.h"
+#include "mlx/config.h"
 #include "mlx/ops.h"
 #include "mlx/primitives.h"
 #include "mlx/utils.h"
@@ -161,6 +162,9 @@ extern "C" int astro_graph_host_step_append(
   return 0;
 }
 
+// MLX reads this value each time an evaluation makes its fences, so a change
+// applies to the next evaluation. Since MLX 0.32.5 its configuration values
+// can be set from code; before that a local patch added a setter for this one.
 extern "C" void astro_graph_host_step_set_fast_synch(bool is_enabled) {
-  mlx::core::env::set_metal_fast_synch(is_enabled);
+  mlx::core::config::update("MLX_METAL_FAST_SYNCH", is_enabled ? 1 : 0);
 }

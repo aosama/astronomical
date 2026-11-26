@@ -24,31 +24,3 @@ diff --git a/mlx/backend/metal/fence.cpp b/mlx/backend/metal/fence.cpp
    return f.count;
  }
  
-diff --git a/mlx/utils.h b/mlx/utils.h
---- a/mlx/utils.h
-+++ b/mlx/utils.h
-@@ -217,9 +217,22 @@
-   return residency_debug_;
- }
- 
-+// Astronomical: how a fence orders a CPU step among GPU steps is a setting a
-+// caller can change from code, not only one read from the environment when
-+// the first fence is made. Each evaluation makes its own fences and reads the
-+// setting then, so a change applies to the next evaluation. It is a plain
-+// flag: change it only while no evaluation is running.
-+inline bool& metal_fast_synch_setting() {
-+  static bool metal_fast_synch_ = get_var("MLX_METAL_FAST_SYNCH", 0);
-+  return metal_fast_synch_;
-+}
-+
- inline bool metal_fast_synch() {
--  static bool metal_fast_synch = get_var("MLX_METAL_FAST_SYNCH", 0);
--  return metal_fast_synch;
-+  return metal_fast_synch_setting();
-+}
-+
-+inline void set_metal_fast_synch(bool enabled) {
-+  metal_fast_synch_setting() = enabled;
- }
- 
- inline bool enable_tf32() {

@@ -12,7 +12,7 @@ use runtime_integration::MlxRuntime;
 use std::cell::RefCell;
 
 use crate::qwen3_5_core::configuration::Qwen3_5Config;
-use crate::qwen3_5_core::model::several_row_projection::QuantizedProjectionParts;
+use crate::qwen3_5_core::model::mlx_layout_projection::QuantizedProjectionParts;
 use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights;
 use crate::qwen3_5_core::model_math::weights::{EmbeddingResidency, Qwen3_5Weights};
 use crate::qwen3_5_core::vision::Qwen3_5VisionModel;

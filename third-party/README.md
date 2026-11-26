@@ -15,11 +15,11 @@ never resolves an upstream repository live.
 
 | Dependency | Pinned version | Upstream ref | Pin file | Class |
 | --- | --- | --- | --- | --- |
-| MLX | 0.32.4 | release tag `v0.32.4` (commit `36969c094`) | `pins/mlx-v0.32.4.cmake` | core runtime |
+| MLX | 0.32.5 | release tag `v0.32.5` (commit `cfc675e9e`) | `pins/mlx-v0.32.5.cmake` | core runtime |
 | MLX-C | 0.8.0 | release tag `v0.8.0` (commit `a26f2d584`) | `pins/mlx-c-v0.8.0.cmake` | C-ABI bridge |
-| metal-cpp | 26 | Apple release download `metal-cpp_26.zip` | declared inside `pins/mlx-v0.32.4.cmake` | MLX transitive |
-| nlohmann/json | 3.11.3 | release artifact `v3.11.3/json.tar.xz` | declared inside `pins/mlx-v0.32.4.cmake` | MLX transitive |
-| fmt | 12.1.0 | release tag archive `12.1.0.tar.gz` | declared inside `pins/mlx-v0.32.4.cmake` | MLX transitive |
+| metal-cpp | 26 | Apple release download `metal-cpp_26.zip` | declared inside `pins/mlx-v0.32.5.cmake` | MLX transitive |
+| nlohmann/json | 3.11.3 | release artifact `v3.11.3/json.tar.xz` | declared inside `pins/mlx-v0.32.5.cmake` | MLX transitive |
+| fmt | 12.1.0 | release tag archive `12.1.0.tar.gz` | declared inside `pins/mlx-v0.32.5.cmake` | MLX transitive |
 
 metal-cpp, nlohmann/json, and fmt are source dependencies that MLX's own
 CMake declares through FetchContent. Astronomical pre-declares them with
@@ -30,7 +30,7 @@ the network.
 The pin files are canonical for digests and URLs; the current values are
 recorded here for review:
 
-- MLX `v0.32.4`: `https://github.com/ml-explore/mlx/archive/36969c094354086e15d2a327a9c50feb20b9cf11.tar.gz` — SHA-256 `391b1e41414cddebe7a4fb5c55bf193ea5edd70e26adcfb0e1d6a5e5e86ec34a`
+- MLX `v0.32.5`: `https://github.com/ml-explore/mlx/archive/cfc675e9e59cb6ee29a647cf8fe87ef844eff879.tar.gz` — SHA-256 `932473c50f96f776b60cb75914840c3e472c412558c3c9cb95c8c6fe87a93c44`
 - MLX-C `v0.8.0`: `https://github.com/ml-explore/mlx-c/archive/a26f2d584a14ec619ae8db9a09be03becd47598a.tar.gz` — SHA-256 `b2cd55408fb15e5cf44c622355ff3445b58fb835f691db07d620047dff24548c`
 - metal-cpp `26`: `https://developer.apple.com/metal/cpp/files/metal-cpp_26.zip` — SHA-256 `4df3c078b9aadcb516212e9cb03004cbc5ce9a3e9c068fa3144d021db585a3a4`
 - nlohmann/json `3.11.3`: `https://github.com/nlohmann/json/releases/download/v3.11.3/json.tar.xz` — SHA-256 `d6c65aca6b1ed68e7a182f4757257b107ae403032760ed6ef121c9d55e81757d`
@@ -50,8 +50,10 @@ development-commit pins, and no undocumented versions exist anywhere in the
 build path: the pin files are the only place a version, URL, or digest
 appears, and every other build file consumes them through CMake variables.
 
-MLX-C v0.8.0 is the release authored against the pinned MLX v0.32.4, so the two
-Astronomical-facing pins carry no version gap and need no compatibility bridge.
+No MLX-C release pairs with the pinned MLX v0.32.5 yet, so MLX-C stays at
+v0.8.0, the release authored against MLX v0.32.4, and carries one flagged
+compatibility bridge patch (`attention-window-size-for-mlx-0.32.5`, in the
+registry below). It is deleted at the next MLX-C bump.
 
 ## Patch registry
 
@@ -63,7 +65,7 @@ each pin bump and retired the moment the pinned upstream tree contains the
 equivalent behavior; each patch's rationale and evidence are
 recorded inline in this registry below.
 
-MLX patches (`mlx-0.32.4-*.patch`):
+MLX patches (`mlx-0.32.5-*.patch`):
 
 - `astronomical-active-memory-ceiling` — Astronomical feature. Gives the
   Metal allocator an enforced active-memory ceiling with a distinct error
@@ -78,19 +80,19 @@ MLX patches (`mlx-0.32.4-*.patch`):
 - `streaming-safetensors-writer` — Astronomical feature. Streams safetensors
   output through the bounded descriptor writer and orders payloads so the
   allocator can reuse one contiguous materialization. Retires never.
-- `fast-synch-setting` — Astronomical feature. MLX orders a CPU step among
+- `fast-synch-setting` — upstream defect fix. MLX orders a CPU step among
   GPU steps with a fence, and has two kinds: Metal shared events, or a
-  spin-wait on shared memory it calls fast synch, chosen once from its
-  `MLX_METAL_FAST_SYNCH` environment setting. The patch makes that choice a
-  setting code can change (`mlx::core::env::set_metal_fast_synch`), read by
-  each evaluation when it makes its fences, so the streaming engine turns
-  fast synch on for itself without an environment variable. A host step
-  inside a graph (`crates/engine/graph-host-step`) costs about 9 microseconds
-  a layer with it and about 170 without (`cargo measure-graph-host-step`).
-  It also ends a fast-synch wait when the command buffer that should have
+  spin-wait on shared memory it calls fast synch. A host step inside a graph
+  (`crates/engine/graph-host-step`) costs about 9 microseconds a layer with
+  fast synch and about 170 without (`cargo measure-graph-host-step`). The
+  patch ends a fast-synch wait when the command buffer that should have
   published the awaited value fails: upstream's CPU stream would spin on it
   forever, where the patched one lets the evaluation report the failure.
-  Retires if upstream offers the same control and ends that wait.
+  Through v0.32.4 the patch also made the choice a setting code could change;
+  that half retired at the v0.32.5 bump, where MLX's `config` module offers
+  it (`mlx::core::config::update("MLX_METAL_FAST_SYNCH", 1)`, read each time
+  an evaluation makes its fences), and `graph-host-step` calls that. Retires
+  when upstream ends that wait itself.
 - `evaluation-counts` — Astronomical feature. Counts, since the process
   started, the evaluations that walked a graph and waited, the ones that
   returned without waiting, the waits for arrays already handed to an
@@ -110,7 +112,15 @@ MLX patches (`mlx-0.32.4-*.patch`):
   split-K topology stable once row tiles already expose parallelism, so
   prefill numerics do not change with batch shape. Retires if upstream
   adopts an equivalent stability rule for the split-K heuristic.
-- `nax-qmm-tile-variants` — serving performance. Selects the transposed-prefill tile deterministically from the token count: up to 32 rows uses `(32, 64, 64, 2, 2)`, and larger inputs use `(64, 64, 64, 4, 1)` in `(bm, bn, bk, wm, wn)` order. The tile choices were ported from the OMLX project's Qwen3.5 prefill kernels; no environment override or runtime tile selection control remains. The former override-driven benchmark is now a dense-reference correctness check across production tile boundaries in `verification/acceptance/tests/gpu_contracts/runtime_mlx/direct_mlx/qmm_nax_tile_selection.rs`; it makes no comparative performance claim. Retires if upstream grows an equivalent shape-driven tile set.
+- `nax-qmm-tile-variants` — retired at the v0.32.5 bump. It selected the
+  transposed-prefill tile from the token count, a `(64, 64, 64, 4, 1)` tile
+  in `(bm, bn, bk, wm, wn)` order above 32 rows. Upstream's staged
+  `qmm_t_nax` kernel (`use_qmm_t_nax_staged` in `quantized.cpp`) now selects
+  a 64-row, four-simdgroup tile itself, and its own split-K rule for that
+  kernel replaced the code the patch edited. The retirement was verified by
+  re-diffing the patch against the v0.32.5 archive, where its dispatch hunk
+  no longer has a target, and by the prompt-reading figures recorded on the
+  bump's pull request.
 - `jit-qmv-template-arity` — retired at the v0.32.4 bump. Upstream's
   partial-row qmv fast-kernel restructure (the `partial_rows` template
   parameter and the unconditional `results_per_simdgroup` arity) declares
@@ -118,17 +128,16 @@ MLX patches (`mlx-0.32.4-*.patch`):
   defect the patch carried; the retirement was verified by inspecting the
   template declarations in the v0.32.4 archive and compiling without the
   patch.
-- `jit-sdpa-dsplit-template-arity` — upstream defect fix (JIT builds only,
-  new at the v0.32.3 tag). `get_steel_attention_nax_kernel` forwards the
-  `bv` template argument to `attention_nax_dsplit`, whose template has no
-  `BV` parameter (the head dimension is split across `WN` groups). The
-  shifted arguments make every head-dimension 256 or 512 SDPA fail Metal JIT
-  compilation with a misleading overload-resolution error. The prebuilt
-  metallib path upstream ships by default never executes this generator,
-  which is why the defect reached a release tag. Retires when an MLX release
-  fixes the generator; the wide-head-dimension attention test in
+- `jit-sdpa-dsplit-template-arity` — retired at the v0.32.5 bump.
+  `get_steel_attention_nax_kernel` forwarded the `bv` template argument to
+  `attention_nax_dsplit`, whose template has no `BV` parameter, so every
+  head-dimension 256 or 512 attention failed Metal JIT compilation. Upstream
+  fixed the generator the same way (it now builds the `attention_nax_dsplit`
+  definition without `bv`); the retirement was verified by reading the
+  generator in the v0.32.5 archive and by the wide-head-dimension attention
+  test in
   `verification/acceptance/tests/gpu_contracts/direct_mlx/attention/masked_attention.rs`
-  fails within seconds if the patch is dropped while the defect persists.
+  passing without the patch.
 
 MLX-C patches (`mlx-c-0.8.0-*.patch`):
 
@@ -137,6 +146,16 @@ MLX-C patches (`mlx-c-0.8.0-*.patch`):
   long-lived weights do not hold a whole graph alive. The Rust declaration
   lives in the `mlx-c-fork` crate. Retires when MLX-C exposes an
   equivalent.
+
+- `attention-window-size-for-mlx-0.32.5` — compatibility bridge. MLX v0.32.5
+  inserted `int window_size = -1` between `scale` and `mask_mode` in
+  `fast::scaled_dot_product_attention`, for sliding window attention, so
+  MLX-C v0.8.0's positional call hands a string to an integer parameter and
+  stops compiling. The patch passes MLX's own default, which keeps
+  `mlx_fast_scaled_dot_product_attention` at its v0.8.0 signature and its
+  unwindowed behavior. The published `mlx-bridge` crate carries the same
+  edit for its own native build. Retires at the MLX-C release that forwards
+  `window_size` itself.
 
 - `gather-qmm-global-scale-compatibility` — retired at the v0.8.0 bump. MLX
   carries, since v0.32.3, a `global_scale` parameter in `gather_qmm` before
@@ -226,7 +245,7 @@ To bump a pinned dependency:
 
 The MLX-C binding surface spans two crates. The published `mlx-bridge`
 crate (crates.io, versioned against the MLX release line its bindings
-target — the 0.32.4 line matches the pinned MLX v0.32.4; the earlier
+target — the 0.32.5 line matches the pinned MLX v0.32.5; the earlier
 0.7.0-alpha spelling tracked the MLX-C release and was yanked upstream)
 owns the
 raw bindgen declarations over its vendored stock headers, the

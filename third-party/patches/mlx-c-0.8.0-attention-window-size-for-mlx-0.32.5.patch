@@ -1,0 +1,10 @@
+--- a/mlx/c/fast.cpp
++++ b/mlx/c/fast.cpp
+@@ -670,6 +670,7 @@
+             mlx_array_get_(keys),
+             mlx_array_get_(values),
+             scale,
++            -1, // window_size: MLX's default, no sliding window
+             std::string(mask_mode),
+             (mask_arr.ctx ? std::make_optional(mlx_array_get_(mask_arr))
+                           : std::nullopt),

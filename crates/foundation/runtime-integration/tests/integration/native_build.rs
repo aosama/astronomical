@@ -10,8 +10,6 @@ const NATIVE_BUILD_COMPILATION: &str =
 const NATIVE_HOST_PLATFORM: &str =
     include_str!("../../../native-build-orchestration/src/native_host_platform.rs");
 const NATIVE_BUILD_SCRIPT: &str = include_str!("../../build.rs");
-const NATIVE_TILE_SELECTION_PATCH: &str =
-    include_str!("../../../../../third-party/patches/mlx-0.32.4-nax-qmm-tile-variants.patch");
 const ARCHIVE_VARIABLES: [&str; 5] = [
     "ASTRONOMICAL_MLX_SOURCE_ARCHIVE",
     "ASTRONOMICAL_MLX_C_SOURCE_ARCHIVE",
@@ -169,21 +167,6 @@ fn should_reject_a_relative_astro_native_build_cache_directory() {
 
     assert!(!archive_check.status.success());
     assert!(String::from_utf8_lossy(&archive_check.stderr).contains("must be an absolute path"));
-}
-
-#[test]
-fn should_keep_production_tile_selection_shape_driven_without_environment_overrides() {
-    for required_selection in [
-        "select_qmm_t_nax_tile(int token_count)",
-        "if (token_count <= 32)",
-        "return {32, 64, 64, 2, 2};",
-        "return {64, 64, 64, 4, 1};",
-        "select_qmm_t_nax_tile(M)",
-    ] {
-        assert!(NATIVE_TILE_SELECTION_PATCH.contains(required_selection));
-    }
-    assert!(!NATIVE_TILE_SELECTION_PATCH.contains("getenv"));
-    assert!(!NATIVE_TILE_SELECTION_PATCH.contains("override"));
 }
 
 fn check_pinned_archives(
