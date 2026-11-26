@@ -35,7 +35,11 @@ use crate::serving_acceptance::support::performance_attribution::{
 /// Two full resident chunks: long enough that reading is most of a run, and
 /// short enough that fourteen runs of each engine take minutes on a dense
 /// 27B.
-const PROMPT_TOKEN_COUNT: usize = 4_096;
+const LONG_PROMPT_TOKEN_COUNT: usize = 4_096;
+/// Less than one chunk, the release reference set's long prompt for a dense
+/// 27B: what a request costs around its one short forward shows here, where
+/// a long prompt's reading hides it.
+const SHORT_PROMPT_TOKEN_COUNT: usize = 1_000;
 const FIRST_REQUEST_ID: u64 = 98_600;
 const REPORT_SUBDIRECTORY: &str = "engine-prompt-reading-verdict";
 
@@ -86,6 +90,36 @@ where
 #[ignore = "holds the model on both text engines at once; run through cargo measure-engine-prompt-reading-verdict"]
 #[serial]
 fn should_give_a_verdict_on_prompt_reading_between_the_two_text_engines() {
+    compare_prompt_reading(
+        LONG_PROMPT_TOKEN_COUNT,
+        DrafterPart::Silent,
+        "prompt_reading",
+    );
+}
+
+/// The same comparison as a request is served: a prompt shorter than one
+/// chunk, and a hosted drafter writing the few tokens after it.
+#[test]
+#[ignore = "holds the model on both text engines at once; run through cargo measure-engine-prompt-reading-verdict"]
+#[serial]
+fn should_give_a_verdict_on_a_short_prompt_with_the_drafter_working_between_the_two_text_engines() {
+    compare_prompt_reading(
+        SHORT_PROMPT_TOKEN_COUNT,
+        DrafterPart::Writing,
+        "short_prompt_with_drafter",
+    );
+}
+
+/// Whether a hosted drafter proposes the tokens after the prompt.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum DrafterPart {
+    /// Loaded and silent, so the tokens after the prompt are plain ones on
+    /// both engines and only reading is compared.
+    Silent,
+    Writing,
+}
+
+fn compare_prompt_reading(prompt_token_count: usize, drafter_part: DrafterPart, file_base: &str) {
     let tokio_runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
@@ -97,16 +131,14 @@ fn should_give_a_verdict_on_prompt_reading_between_the_two_text_engines() {
     let mut streaming = tokio_runtime.block_on(load_paging_experiment_engine(
         "prompt_verdict_streaming_model_load",
     ));
-    // A hosted drafter stays loaded and proposes nothing, so the few tokens
-    // after the prompt are plain ones on both engines.
     tokio_runtime
         .block_on(
             streaming
                 .engine
-                .set_hosted_drafter_writes_replies_for_tests(false),
+                .set_hosted_drafter_writes_replies_for_tests(drafter_part == DrafterPart::Writing),
         )
         .expect("the engine takes the drafter's part");
-    let prompt_token_ids = essay_prompt_token_ids(&resident.model_directory, PROMPT_TOKEN_COUNT);
+    let prompt_token_ids = essay_prompt_token_ids(&resident.model_directory, prompt_token_count);
     let report_directory = Path::new(env!("CARGO_TARGET_TMPDIR")).join(REPORT_SUBDIRECTORY);
     std::fs::create_dir_all(&report_directory).expect("the report directory is made");
     let mut resident_read = PromptRead {
@@ -131,12 +163,12 @@ fn should_give_a_verdict_on_prompt_reading_between_the_two_text_engines() {
         ReportLocation {
             title: "Prompt reading on the two text engines",
             directory: &report_directory,
-            file_base: "prompt_reading",
+            file_base,
         },
     )
     .expect("the two engines are compared");
     eprintln!(
-        "[engine-prompt-reading] duration: {}",
+        "[engine-prompt-reading] {file_base} duration: {}",
         streaming_against_resident(&comparison.duration)
     );
     // An engine evaluates on a thread of its own, and the profiler observes
@@ -160,7 +192,7 @@ fn should_give_a_verdict_on_prompt_reading_between_the_two_text_engines() {
     }
     eprintln!(
         "[engine-prompt-reading] page={}",
-        report_directory.join("prompt_reading.html").display()
+        report_directory.join(format!("{file_base}.html")).display()
     );
 }
 

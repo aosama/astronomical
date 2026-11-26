@@ -29,12 +29,6 @@
 
 - The fixture of Shakespear is highly recommended to be used as the input for LLMs; there should not be random text or tokens used for testing. Exceptions can be made where Shakespear is not suitable for the test -- for example a coding fixture.
 
-## Performance Instructions
-
-- A minimal warmup run should be performed before the actual test; t
-- The astro SSD prompt cache must be disabled during performance throughput tests and measurements.
-- The skill declaration (`skill.declare_to_models`) must be disabled during performance throughput tests and measurements, because it adds tokens to every prompt.
-
 ## Release Scripts Folder
 
 - All **Release-related scripts** must live under "<repo-root>/scripts/release", they will help you through the release process.
