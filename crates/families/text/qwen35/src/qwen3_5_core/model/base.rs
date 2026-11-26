@@ -12,6 +12,7 @@ use runtime_integration::MlxRuntime;
 use std::cell::RefCell;
 
 use crate::qwen3_5_core::configuration::Qwen3_5Config;
+use crate::qwen3_5_core::model::several_row_projection::QuantizedProjectionParts;
 use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights;
 use crate::qwen3_5_core::model_math::weights::{EmbeddingResidency, Qwen3_5Weights};
 use crate::qwen3_5_core::vision::Qwen3_5VisionModel;
@@ -335,15 +336,16 @@ impl Qwen3_5ModelBase {
                 quantization_biases,
                 quantization_group_size,
                 quantization_bits,
-            } => Ok(self.runtime.quantized_matmul_affine_on_platform(
+            } => self.quantized_rows_matmul(
                 activations,
-                packed_weight,
-                quantization_scales,
-                quantization_biases,
-                true,
-                *quantization_group_size,
-                *quantization_bits,
-            )?),
+                &QuantizedProjectionParts {
+                    packed_weight,
+                    scales: quantization_scales,
+                    biases: quantization_biases,
+                    group_size: *quantization_group_size,
+                    bits: *quantization_bits,
+                },
+            ),
         }
     }
 

@@ -52,6 +52,7 @@ pub mod routed_expert_selection;
 #[cfg(feature = "direct-mlx")]
 pub mod serving_model;
 #[cfg(feature = "direct-mlx")]
+pub mod several_row_projection;
 pub mod shared_model_methods;
 #[cfg(feature = "direct-mlx")]
 pub mod target_forward_graph;
