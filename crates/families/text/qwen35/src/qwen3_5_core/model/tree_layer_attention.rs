@@ -388,13 +388,13 @@ impl Qwen3_5ModelBase {
                 scale,
             );
         }
-        Ok(self.runtime.masked_scaled_dot_product_attention(
+        self.masked_attention_in_exact_row_groups(
+            tree,
             rotated_queries,
             active_keys,
             active_values,
             scale,
-            &tree.attention_mask,
-        )?)
+        )
     }
 
     fn tree_kernel(&self) -> Result<&MlxMetalKernel, TextExecutionError> {

@@ -1013,8 +1013,10 @@ measure-mtp-reply-drafting = "run -p xtask -- test-run --package astronomical-ac
 # A streamed model packaged with a DFlash drafter, writing replies in draft
 # tree rounds (issue #2330). `test-hosted-drafter-reply` writes one greedy
 # reply with the drafter silent and with it proposing, checks that rounds
-# ran and reports how many tokens the two agree on: they part where two
-# tokens are nearly tied, because a several-row pass rounds differently.
+# ran and reports how many tokens the two agree on. A dense model's two
+# replies must be equal (issue #2599); a mixture-of-experts model's part
+# where two tokens are nearly tied, because its several-row expert pass
+# rounds differently.
 # `measure-hosted-drafter-reply` measures both, one process a case, with the
 # drafter loaded in each: an essay at temperature 1.0 and 0.7 and real Python
 # source continued at 0.7. Each case serves its prompt once unmeasured first,

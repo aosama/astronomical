@@ -31,7 +31,7 @@ const DENSE_MEASURED_PROMPT_TOKEN_COUNT: usize = 2_000;
 
 /// Whether the configured model routes tokens to experts; a dense model's
 /// configuration names none.
-fn model_has_experts(model_directory: &Path) -> bool {
+pub fn model_has_experts(model_directory: &Path) -> bool {
     std::fs::read_to_string(model_directory.join("config.json"))
         .is_ok_and(|config_text| config_text.contains("\"num_experts\""))
 }

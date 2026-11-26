@@ -25,6 +25,8 @@ mod embedding_row_reads_tests;
 #[cfg(feature = "direct-mlx")]
 pub mod empty_state_forward;
 #[cfg(feature = "direct-mlx")]
+pub mod exact_tree_attention_groups;
+#[cfg(feature = "direct-mlx")]
 pub mod full_attention;
 #[cfg(feature = "direct-mlx")]
 pub mod gated_delta;
