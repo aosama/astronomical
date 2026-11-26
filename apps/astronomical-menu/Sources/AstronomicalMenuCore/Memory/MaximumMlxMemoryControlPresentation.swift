@@ -26,6 +26,26 @@ func appliedMaximumMlxMemoryWholeGigabytes(for statusDocument: DaemonStatusDocum
   return min(configuredWholeGigabytes, reachableWholeGigabytes)
 }
 
+/// Where the slider's thumb rests after a status poll.
+///
+/// While the popover is closed the thumb always takes the limit in force. While it is open the
+/// thumb may be mid-edit, so it is left alone only when the person has moved it: a thumb still
+/// resting on the limit that was in force follows that limit when something else changes it
+/// (the Observatory, the command line, a REST request). Leaving it behind showed 18 GB with an
+/// Apply button under a memory row that already read "of 34.00 GB".
+func maximumModelMemoryThumbAfterStatusPoll(
+  chosenWholeGigabytes: UInt64,
+  previouslyAppliedWholeGigabytes: UInt64,
+  appliedWholeGigabytes: UInt64,
+  popoverIsVisible: Bool
+) -> UInt64 {
+  let thumbRestsOnTheLimitThatWasInForce = chosenWholeGigabytes == previouslyAppliedWholeGigabytes
+  if !popoverIsVisible || thumbRestsOnTheLimitThatWasInForce {
+    return appliedWholeGigabytes
+  }
+  return chosenWholeGigabytes
+}
+
 /// What the "Maximum model RAM" control offers beside its slider
 /// (MaximumModelMemorySlider draws it). The panel is quiet when the engine
 /// serves what was asked for. Apply appears only when pressing it would
