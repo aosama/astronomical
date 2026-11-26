@@ -1095,6 +1095,13 @@ measure-long-prompt-reading = "run -p xtask -- test-run --package astronomical-a
 # request_elapsed_seconds less generation_elapsed_seconds in the
 # `phase=chat_read_follow_up_turn` line is the time to the first token.
 measure-chat-follow-up-turn = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --case-budget-seconds 170 --filter should_measure_a_chat_follow_up_turn"
+# What two choices the text engine makes for a dense model held whole cost a
+# reply token (#2585), as MLX performance profiler verdicts on one loaded
+# model: submitting every three layers against one graph a token, and
+# embedding rows read from the SSD against the table held in memory. Both
+# variants must choose the served greedy tokens. Name a dense model with
+# --configuration; about a minute on a 9B, two on a 27B.
+measure-dense-reply-token-verdict = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --case-budget-seconds 400 --filter should_give_verdicts_on_how_a_dense_reply_token_is_built"
 # Neural Engine prompt reading (#2585): a dense model
 # with every layer kept in memory builds its programs, attaches them, and
 # reads a 10,000-token prompt; then the same prompt on the GPU alone, a
