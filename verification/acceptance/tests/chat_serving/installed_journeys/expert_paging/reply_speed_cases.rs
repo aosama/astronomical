@@ -322,7 +322,7 @@ pub(super) async fn serve_warmup_and_read_a_long_prompt(
     engine: &mut impl InferenceEngine<Request = TextInferenceRequest>,
     served_model: (&Path, &[u32]),
     phase_name: &str,
-) {
+) -> Vec<u32> {
     let as_an_essay = (
         ReplyTask::Essay,
         GenerationSampling::Seeded,
@@ -355,6 +355,45 @@ pub(super) async fn serve_warmup_and_read_a_long_prompt(
         !written_token_ids.is_empty(),
         "{phase_name}: nothing was written after the prompt"
     );
+    written_token_ids
+}
+
+const FOLLOW_UP_REQUEST_ID: RequestId = RequestId::new(98_505);
+/// A short next message: about a line of text.
+const FOLLOW_UP_NEW_TOKEN_COUNT: usize = 40;
+
+/// The chat's next turn: the long prompt, the reply just written and a short
+/// new message. The engine has read all but the new message a moment ago, so
+/// its time to the first token here is what a person waits on between turns
+/// of one conversation, which a fresh prompt never shows (issue #2585).
+pub(super) async fn read_the_follow_up_turn(
+    engine: &mut impl InferenceEngine<Request = TextInferenceRequest>,
+    (model_directory, end_of_sequence_token_ids): (&Path, &[u32]),
+    written_token_ids: &[u32],
+    phase_name: &str,
+) {
+    let mut follow_up_token_ids = ReplyTask::Essay.prompt_token_ids(
+        model_directory,
+        &model_id_of(model_directory),
+        LONG_PROMPT_REQUEST_ID,
+        LONG_PROMPT_TOKEN_COUNT,
+        TOKENS_WRITTEN_AFTER_A_LONG_PROMPT,
+    );
+    let new_message_token_ids = follow_up_token_ids[..FOLLOW_UP_NEW_TOKEN_COUNT].to_vec();
+    follow_up_token_ids.extend_from_slice(written_token_ids);
+    follow_up_token_ids.extend_from_slice(&new_message_token_ids);
+    let follow_up_phase = format!("{phase_name}_follow_up_turn");
+    run_generation_with_request_attribution(
+        engine,
+        FOLLOW_UP_REQUEST_ID,
+        &follow_up_token_ids,
+        &follow_up_phase,
+        TOKENS_WRITTEN_AFTER_A_LONG_PROMPT,
+        end_of_sequence_token_ids,
+        GenerationSampling::Seeded,
+        RequestAttribution::Disabled,
+    )
+    .await;
 }
 
 /// One request of `(request id, prompt tokens, tokens to write)`, for

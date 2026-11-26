@@ -1085,6 +1085,13 @@ measure-resident-reply-speed = "run -p xtask -- test-run --package astronomical-
 # generation_elapsed_seconds in each `phase=long_prompt_read_by_` line is the
 # time to the first token. Under a minute a case.
 measure-long-prompt-reading = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --case-budget-seconds 170 --filter long_prompt_reading_on_the_"
+# A conversation's next turn on each engine under the same paging_experiment
+# limit (#2585): a 10,000-token prompt, its reply, then that prompt with the
+# reply and a 40-token message, with an astro_ssd_prompt_cache store as
+# serving has. The resident case, then the streaming one, a process each.
+# request_elapsed_seconds less generation_elapsed_seconds in each
+# `phase=..._follow_up_turn` line is the time to the first token.
+measure-chat-follow-up-turn = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --case-budget-seconds 170 --filter a_chat_follow_up_turn_on_the_"
 measure-hosted-drafter-reply = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --case-budget-seconds 500 --filter reply_speed_with_the_hosted_drafter"
 test-in-graph-drafted-blocks = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --filter drafted_blocks_are_looked_up_in_the_graph"
 test-in-graph-route-lookup = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --filter whichever_way_routes_are_looked_up"

@@ -1,9 +1,9 @@
 use std::{path::Path, time::Instant};
 
 use model_serving::{
-    InferenceEngine, PerformanceAttribution, PerformanceAttributionLog, PromptProcessingChunkSizer,
-    Qwen3_5ArtifactValidator, Qwen3_5ResidentEngine, Qwen3_5StreamingEngine,
-    TextMlxEngineConstructors,
+    AstroSsdPromptCacheDiskStoreConfig, InferenceEngine, PerformanceAttribution,
+    PerformanceAttributionLog, PromptProcessingChunkSizer, Qwen3_5ArtifactValidator,
+    Qwen3_5ResidentEngine, Qwen3_5StreamingEngine, TextMlxEngineConstructors,
 };
 use tokio::time::{MissedTickBehavior, interval};
 
@@ -29,6 +29,28 @@ pub(crate) fn create_attributed_engine_with_ssd_streaming_prefill(
     mlx_memory_limits: &runtime_integration::MlxMemoryLimits,
     fixed_ssd_streaming_prompt_processing_chunk_size_tokens: u32,
 ) -> (Qwen3_5StreamingEngine, Vec<u32>) {
+    create_attributed_engine_keeping_prompts(
+        model_directory,
+        performance_attribution_log_path,
+        mlx_memory_limits,
+        (
+            fixed_ssd_streaming_prompt_processing_chunk_size_tokens,
+            None,
+        ),
+    )
+}
+
+/// The streaming engine with, when given, an `astro_ssd_prompt_cache` store,
+/// so a conversation's next turn can restore what the last one read.
+fn create_attributed_engine_keeping_prompts(
+    model_directory: &Path,
+    performance_attribution_log_path: &Path,
+    mlx_memory_limits: &runtime_integration::MlxMemoryLimits,
+    (fixed_ssd_streaming_prompt_processing_chunk_size_tokens, astro_ssd_prompt_cache_store): (
+        u32,
+        Option<AstroSsdPromptCacheDiskStoreConfig>,
+    ),
+) -> (Qwen3_5StreamingEngine, Vec<u32>) {
     let validated_artifact = Qwen3_5ArtifactValidator::new()
         .validate(model_directory, 20_480)
         .expect("the configured Ornith artifact should validate before benchmark loading");
@@ -44,7 +66,7 @@ pub(crate) fn create_attributed_engine_with_ssd_streaming_prefill(
             validated_artifact,
             mlx_memory_limits.active_memory_limit_bytes(),
             mlx_memory_limits.mlx_buffer_cache_limit_bytes(),
-            None,
+            astro_ssd_prompt_cache_store,
             PromptProcessingChunkSizer::for_chunk_size_tokens(
                 fixed_ssd_streaming_prompt_processing_chunk_size_tokens,
             )
@@ -90,6 +112,14 @@ pub(crate) struct PagingExperimentEngine {
 /// Loads the configured model on the streaming engine, reporting progress
 /// under `load_phase_name`.
 pub(crate) async fn load_paging_experiment_engine(load_phase_name: &str) -> PagingExperimentEngine {
+    load_paging_experiment_engine_keeping_prompts(load_phase_name, None).await
+}
+
+/// The same engine with, when given, an `astro_ssd_prompt_cache` store.
+pub(crate) async fn load_paging_experiment_engine_keeping_prompts(
+    load_phase_name: &str,
+    astro_ssd_prompt_cache_store: Option<AstroSsdPromptCacheDiskStoreConfig>,
+) -> PagingExperimentEngine {
     let test_run_configuration = test_harness::test_run::TestRunContext::current().configuration;
     let model_directory = test_run_configuration
         .model_directory
@@ -106,11 +136,14 @@ pub(crate) async fn load_paging_experiment_engine(load_phase_name: &str) -> Pagi
     let mlx_memory_limits =
         runtime_integration::MlxMemoryLimits::new(mlx_limit_bytes, mlx_limit_bytes)
             .expect("the configured limit should be a valid MLX limit");
-    let (mut engine, end_of_sequence_token_ids) = create_attributed_engine(
+    let (mut engine, end_of_sequence_token_ids) = create_attributed_engine_keeping_prompts(
         &model_directory,
         &attribution_directory.path().join("attribution.jsonl"),
         &mlx_memory_limits,
-        paging_experiment.streaming_prompt_processing_chunk_tokens,
+        (
+            paging_experiment.streaming_prompt_processing_chunk_tokens,
+            astro_ssd_prompt_cache_store,
+        ),
     );
     load_engine_with_progress(&mut engine, load_phase_name).await;
     PagingExperimentEngine {
@@ -139,6 +172,14 @@ pub(crate) struct ConfiguredResidentEngine {
 pub(crate) async fn load_configured_resident_engine(
     load_phase_name: &str,
 ) -> ConfiguredResidentEngine {
+    load_configured_resident_engine_keeping_prompts(load_phase_name, None).await
+}
+
+/// The same engine with, when given, an `astro_ssd_prompt_cache` store.
+pub(crate) async fn load_configured_resident_engine_keeping_prompts(
+    load_phase_name: &str,
+    astro_ssd_prompt_cache_store: Option<AstroSsdPromptCacheDiskStoreConfig>,
+) -> ConfiguredResidentEngine {
     let test_run_configuration = test_harness::test_run::TestRunContext::current().configuration;
     let model_directory = test_run_configuration
         .model_directory
@@ -161,7 +202,7 @@ pub(crate) async fn load_configured_resident_engine(
         validated_artifact,
         mlx_limit_bytes,
         mlx_limit_bytes,
-        None,
+        astro_ssd_prompt_cache_store,
         PromptProcessingChunkSizer::for_chunk_size_tokens(RESIDENT_PROMPT_CHUNK_TOKENS)
             .expect("the resident prompt chunk should be valid"),
         IMAGE_PAD_TOKEN_ID,
