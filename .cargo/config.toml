@@ -899,6 +899,11 @@ measure-register-order-served-rows = "run -p xtask -- test-run --package astrono
 # jobs' execution graphs, and its JSON for every cell under the test's target
 # directory and prints where. No model; about two minutes.
 measure-register-order-verdict = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx,performance-measurement --test performance_measurement --release --ignored --case-budget-seconds 300 --filter register_order_layout_verdict"
+# The dense 27B's full attention, the row-exact kernel against MLX's, with
+# a profiler verdict (#2601): one row and a 16-row tree, after 120, 1,000,
+# 2,200 and 10,240 stored tokens, over 16 layers' distinct slabs. No model;
+# seconds.
+measure-row-exact-attention-verdict = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx,performance-measurement --test performance_measurement --release --ignored --case-budget-seconds 120 --filter row_exact_attention_against_mlx"
 # What fusing a routed expert's gate and up projections buys at the kernel
 # (#2585): one gathered multiply of the joined weights against two, as two
 # jobs of the MLX performance profiler, at a 35B-A3B layer's shapes, for a
