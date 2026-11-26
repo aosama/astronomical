@@ -23,11 +23,27 @@ const MEASURED_REQUEST_ID: RequestId = RequestId::new(98_502);
 const LEARNING_REQUEST_ID: RequestId = RequestId::new(98_503);
 const WARMUP_PROMPT_TOKEN_COUNT: usize = 500;
 const WARMUP_OUTPUT_TOKEN_COUNT: u16 = 50;
+/// The warm-up every case serves first: its request, prompt tokens and
+/// tokens written.
+const WARMUP_SHAPE: (RequestId, usize, u16) = (
+    WARMUP_REQUEST_ID,
+    WARMUP_PROMPT_TOKEN_COUNT,
+    WARMUP_OUTPUT_TOKEN_COUNT,
+);
 const MEASURED_PROMPT_TOKEN_COUNT: usize = 10_000;
 /// A dense model reads a prompt layer by layer at a few hundred tokens a
 /// second (the 27B: 250 to 300), so 10,000 tokens cost over half a minute a
 /// reply for nothing a shorter prompt does not show.
 const DENSE_MEASURED_PROMPT_TOKEN_COUNT: usize = 2_000;
+
+/// The model's id as prompts name it: its folder's name.
+pub(super) fn model_id_of(model_directory: &Path) -> String {
+    model_directory
+        .file_name()
+        .and_then(|name| name.to_str())
+        .expect("the model directory has a UTF-8 name")
+        .to_owned()
+}
 
 /// Whether the configured model routes tokens to experts; a dense model's
 /// configuration names none.
@@ -64,12 +80,7 @@ pub(super) async fn write_compared_greedy_reply(
     request_id: RequestId,
     phase_name: &str,
 ) -> Vec<u32> {
-    let model_id = paging_engine
-        .model_directory
-        .file_name()
-        .and_then(|name| name.to_str())
-        .expect("the model directory has a UTF-8 name")
-        .to_owned();
+    let model_id = model_id_of(&paging_engine.model_directory);
     let prompt_token_ids =
         crate::serving_acceptance::support::romeo_and_juliet::prepare_romeo_and_juliet_three_paragraph_summary_prompt(
             &paging_engine.model_directory,
@@ -236,46 +247,34 @@ pub(super) async fn serve_warmup_learning_and_measured_replies(
     model_directory: &Path,
     end_of_sequence_token_ids: &[u32],
 ) -> Vec<u32> {
-    let model_id = model_directory
-        .file_name()
-        .and_then(|name| name.to_str())
-        .expect("the model directory has a UTF-8 name")
-        .to_owned();
-    let warmup_prompt_token_ids = reply_case.reply_task.prompt_token_ids(
-        model_directory,
-        &model_id,
-        WARMUP_REQUEST_ID,
-        WARMUP_PROMPT_TOKEN_COUNT,
-        WARMUP_OUTPUT_TOKEN_COUNT,
-    );
-    run_generation_with_request_attribution(
-        engine,
-        WARMUP_REQUEST_ID,
-        &warmup_prompt_token_ids,
-        "reply_speed_warmup",
-        WARMUP_OUTPUT_TOKEN_COUNT,
-        end_of_sequence_token_ids,
+    let served_model = (model_directory, end_of_sequence_token_ids);
+    let unattributed = (
+        reply_case.reply_task,
         reply_case.generation_sampling,
         RequestAttribution::Disabled,
+    );
+    serve_one_prompt(
+        engine,
+        served_model,
+        unattributed,
+        WARMUP_SHAPE,
+        "reply_speed_warmup",
     )
     .await;
-    let prompt_token_ids = reply_case.reply_task.prompt_token_ids(
-        model_directory,
-        &model_id,
-        MEASURED_REQUEST_ID,
-        measured_prompt_token_count(model_directory),
-        MEASURED_OUTPUT_TOKEN_COUNT,
-    );
+    let measured_prompt_tokens = measured_prompt_token_count(model_directory);
     if reply_case.serves_the_prompt_once_before_measuring {
-        run_generation_with_request_attribution(
-            engine,
+        let learning_shape = (
             LEARNING_REQUEST_ID,
-            &prompt_token_ids,
-            "reply_before_the_measured_one",
+            measured_prompt_tokens,
             MEASURED_OUTPUT_TOKEN_COUNT,
-            end_of_sequence_token_ids,
-            reply_case.generation_sampling,
-            RequestAttribution::Disabled,
+        );
+        let learning_phase = "reply_before_the_measured_one";
+        serve_one_prompt(
+            engine,
+            served_model,
+            unattributed,
+            learning_shape,
+            learning_phase,
         )
         .await;
     }
@@ -286,19 +285,109 @@ pub(super) async fn serve_warmup_learning_and_measured_replies(
         reply_case.route_lookup,
         reply_case.generation_sampling.temperature_thousandths()
     );
-    let measured_reply_token_ids = run_generation_with_request_attribution(
-        engine,
-        MEASURED_REQUEST_ID,
-        &prompt_token_ids,
-        &reply_case.phase_name,
-        MEASURED_OUTPUT_TOKEN_COUNT,
-        end_of_sequence_token_ids,
+    let as_the_case_asks = (
+        reply_case.reply_task,
         reply_case.generation_sampling,
         reply_case.request_attribution,
+    );
+    let measured_shape = (
+        MEASURED_REQUEST_ID,
+        measured_prompt_tokens,
+        MEASURED_OUTPUT_TOKEN_COUNT,
+    );
+    let measured_reply_token_ids = serve_one_prompt(
+        engine,
+        served_model,
+        as_the_case_asks,
+        measured_shape,
+        &reply_case.phase_name,
     )
     .await;
     report_memory_after_the_reply(&reply_case.phase_name);
     measured_reply_token_ids
+}
+
+/// A long prompt's size and the few tokens written after it, for comparing
+/// how fast two engines read: the same 10,000 tokens for every model, a
+/// dense one included, since reading is the thing measured.
+const LONG_PROMPT_TOKEN_COUNT: usize = 10_000;
+const TOKENS_WRITTEN_AFTER_A_LONG_PROMPT: u16 = 16;
+const LONG_PROMPT_REQUEST_ID: RequestId = RequestId::new(98_504);
+
+/// Serves the warm-up, then one 10,000-token essay prompt read once with a
+/// few tokens written after it, on any text engine (issue #2585). The
+/// `status=success` line of `phase_name` gives the request's and the
+/// reply's seconds; their difference is the time to the first token.
+pub(super) async fn serve_warmup_and_read_a_long_prompt(
+    engine: &mut impl InferenceEngine<Request = TextInferenceRequest>,
+    served_model: (&Path, &[u32]),
+    phase_name: &str,
+) {
+    let as_an_essay = (
+        ReplyTask::Essay,
+        GenerationSampling::Seeded,
+        RequestAttribution::Disabled,
+    );
+    let warmup_phase = "long_prompt_reading_warmup";
+    serve_one_prompt(
+        engine,
+        served_model,
+        as_an_essay,
+        WARMUP_SHAPE,
+        warmup_phase,
+    )
+    .await;
+    let long_prompt_shape = (
+        LONG_PROMPT_REQUEST_ID,
+        LONG_PROMPT_TOKEN_COUNT,
+        TOKENS_WRITTEN_AFTER_A_LONG_PROMPT,
+    );
+    let written_token_ids = serve_one_prompt(
+        engine,
+        served_model,
+        as_an_essay,
+        long_prompt_shape,
+        phase_name,
+    )
+    .await;
+    report_memory_after_the_reply(phase_name);
+    assert!(
+        !written_token_ids.is_empty(),
+        "{phase_name}: nothing was written after the prompt"
+    );
+}
+
+/// One request of `(request id, prompt tokens, tokens to write)`, for
+/// `(task, sampling, attribution)`, on the model `(folder, end tokens)`.
+async fn serve_one_prompt(
+    engine: &mut impl InferenceEngine<Request = TextInferenceRequest>,
+    (model_directory, end_of_sequence_token_ids): (&Path, &[u32]),
+    (reply_task, generation_sampling, request_attribution): (
+        ReplyTask,
+        GenerationSampling,
+        RequestAttribution,
+    ),
+    (request_id, prompt_token_count, output_token_count): (RequestId, usize, u16),
+    phase_name: &str,
+) -> Vec<u32> {
+    let prompt_token_ids = reply_task.prompt_token_ids(
+        model_directory,
+        &model_id_of(model_directory),
+        request_id,
+        prompt_token_count,
+        output_token_count,
+    );
+    run_generation_with_request_attribution(
+        engine,
+        request_id,
+        &prompt_token_ids,
+        phase_name,
+        output_token_count,
+        end_of_sequence_token_ids,
+        generation_sampling,
+        request_attribution,
+    )
+    .await
 }
 
 /// MLX's active and peak memory once the measured reply is written, in GB of
