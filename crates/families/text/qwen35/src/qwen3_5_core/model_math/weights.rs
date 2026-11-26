@@ -142,7 +142,7 @@ impl Qwen3_5Weights {
                     &qwen3_5_config,
                     &shard_index,
                     model_shards,
-                    WeightBindingDtype::AsStored,
+                    WeightBindingDtype::ForComputeDevice,
                 )
             },
         )

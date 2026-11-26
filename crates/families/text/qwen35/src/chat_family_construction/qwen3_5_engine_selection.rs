@@ -15,16 +15,13 @@ use crate::{
 
 use super::qwen3_5_model_startup_error::Qwen3_5ModelStartupError;
 
+/// How the streaming engine, the one engine every text model is served by,
+/// starts for a model.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) enum Qwen3_5SelectedEngine {
-    /// Loaded only when a diagnostic override or a worker-directed swap asks
-    /// for it; startup selection never chooses it (issue #2585).
-    Resident,
-    /// The engine every text model is served by. It keeps what fits in
-    /// memory and streams the rest; `holds_whole_model` says the startup
-    /// arithmetic found room for all of it, so prompts are read in the
-    /// in-memory chunk size.
-    Streaming { holds_whole_model: bool },
+pub(super) struct StreamingStart {
+    /// The startup arithmetic found room for the whole model, so prompts
+    /// are read in the in-memory chunk size.
+    pub(super) holds_whole_model: bool,
 }
 
 /// Every text model is served by the streaming engine, which keeps in
@@ -35,7 +32,7 @@ pub(super) fn select_qwen3_5_engine_from_artifact(
     validated_artifact: &crate::ValidatedQwen3_5Artifact,
     model_directory_path: &std::path::Path,
     active_memory_limit_bytes: usize,
-) -> Result<(Qwen3_5SelectedEngine, EnginePlacement), Qwen3_5ModelStartupError> {
+) -> Result<(StreamingStart, EnginePlacement), Qwen3_5ModelStartupError> {
     let geometry_placement = select_qwen3_5_engine_from_artifact_geometry(
         validated_artifact,
         model_directory_path,
@@ -59,17 +56,17 @@ pub(super) fn select_qwen3_5_engine_from_artifact(
 fn streaming_engine_choice(
     geometry_placement: EnginePlacement,
     keeps_the_streaming_chunk_size: bool,
-) -> (Qwen3_5SelectedEngine, EnginePlacement) {
+) -> (StreamingStart, EnginePlacement) {
     if !geometry_placement.runs_resident_engine() {
         return (
-            Qwen3_5SelectedEngine::Streaming {
+            StreamingStart {
                 holds_whole_model: false,
             },
             geometry_placement,
         );
     }
     (
-        Qwen3_5SelectedEngine::Streaming {
+        StreamingStart {
             holds_whole_model: !keeps_the_streaming_chunk_size,
         },
         EnginePlacement::CompleteResidencyDoesNotFit { shortfall_bytes: 0 },

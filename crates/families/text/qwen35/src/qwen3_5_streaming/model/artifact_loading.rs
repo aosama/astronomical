@@ -31,10 +31,12 @@ use super::{
 };
 use mlx_bridge::{MlxCompiledElementwiseGraphs, MlxCompiledSwiGlu, MlxMetalKernel};
 
-/// The streaming engine plans memory from the bytes on disk, so it binds
-/// tensors exactly as stored.
+/// Tensors bind in the dtype the compute device runs the model accurately
+/// in (#2441): as stored on the Metal build, so memory plans sized from the
+/// bytes on disk hold there, and float32 for half-precision tensors where MLX
+/// computes on its CPU, whose BF16 arithmetic changes the model's answers.
 const LANGUAGE_WEIGHT_BINDING_DTYPE: crate::qwen3_5_core::model_math::weights::WeightBindingDtype =
-    crate::qwen3_5_core::model_math::weights::WeightBindingDtype::AsStored;
+    crate::qwen3_5_core::model_math::weights::WeightBindingDtype::ForComputeDevice;
 impl Qwen3_5Model {
     /// Loads a model without diagnostic performance attribution.
     pub fn load(

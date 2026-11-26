@@ -2,7 +2,7 @@ use ipc_protocol::WorkerChunkingConfiguration;
 
 use crate::EnginePlacement;
 
-use super::{Qwen3_5SelectedEngine, prompt_chunk_tokens_for, streaming_engine_choice};
+use super::{StreamingStart, prompt_chunk_tokens_for, streaming_engine_choice};
 
 const NO_SHORTFALL: EnginePlacement =
     EnginePlacement::CompleteResidencyDoesNotFit { shortfall_bytes: 0 };
@@ -18,10 +18,7 @@ fn should_serve_a_model_that_fits_whole_on_the_streaming_engine_with_no_shortfal
             keeps_the_streaming_chunk_size,
         );
 
-        assert_eq!(
-            selected_engine,
-            Qwen3_5SelectedEngine::Streaming { holds_whole_model }
-        );
+        assert_eq!(selected_engine, StreamingStart { holds_whole_model });
         assert_eq!(engine_placement, NO_SHORTFALL);
     }
 }
@@ -35,29 +32,12 @@ fn should_keep_a_models_shortfall_when_it_does_not_fit() {
         assert_eq!(
             streaming_engine_choice(short_by_a_gigabyte, keeps_the_streaming_chunk_size),
             (
-                Qwen3_5SelectedEngine::Streaming {
+                StreamingStart {
                     holds_whole_model: false
                 },
                 short_by_a_gigabyte
             )
         );
-    }
-}
-
-#[test]
-fn should_never_choose_the_resident_engine_at_startup() {
-    for geometry_placement in [
-        EnginePlacement::CompleteResidencyFits,
-        NO_SHORTFALL,
-        EnginePlacement::CompleteResidencyDoesNotFit {
-            shortfall_bytes: u64::MAX,
-        },
-    ] {
-        for keeps_the_streaming_chunk_size in [false, true] {
-            let (selected_engine, _) =
-                streaming_engine_choice(geometry_placement, keeps_the_streaming_chunk_size);
-            assert_ne!(selected_engine, Qwen3_5SelectedEngine::Resident);
-        }
     }
 }
 

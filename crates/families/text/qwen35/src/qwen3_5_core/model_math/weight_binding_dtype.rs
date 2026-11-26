@@ -1,9 +1,9 @@
 //! The dtype an engine binds Qwen3.5's tensors in.
 //!
 //! MLX's CPU backend runs Qwen3.5 in BF16 inaccurately enough to change its
-//! answers, and slower than in float32 (#2441), so an engine that holds its
-//! tensors as bound can bind half-precision tensors in float32 there. The
-//! choice belongs to the engine because it decides how memory is planned.
+//! answers, and slower than in float32 (#2441), so the engine binds
+//! half-precision tensors in float32 there. On the Metal build that is the
+//! stored dtype, so memory plans sized from the bytes on disk hold.
 
 use mlx_bridge::MlxArray;
 use runtime_integration::MlxRuntime;
@@ -13,8 +13,7 @@ use text_generation::execution_error::TextExecutionError;
 /// Which dtype an engine binds its tensors in.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum WeightBindingDtype {
-    /// Exactly as stored. The streaming engine binds this way: its memory
-    /// plans are sized from the bytes on disk.
+    /// Exactly as stored, whatever the compute device.
     AsStored,
     /// The dtype the compute device runs the model accurately in: float32
     /// for half-precision tensors where MLX computes on its CPU, as stored on

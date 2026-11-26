@@ -68,15 +68,17 @@ pub fn bind_decoder_layer_from_tensors(
                 tensor_name: tensor_profile.name.clone(),
             }
         })?;
-        // Streamed layers are planned from their bytes on disk, so they bind
-        // exactly as stored.
+        // A streamed layer binds in the same dtype as the layers held from
+        // load, so one graph never mixes the two: as stored on the Metal
+        // build, where its plan is sized from the bytes on disk, and float32
+        // for half-precision tensors on a CPU compute device (#2441).
         let (tensor, _tensor_payload_bytes) = bind_language_tensor(
             runtime,
             qwen3_5_config,
             raw_hugging_face_norm_offsets_apply,
             tensor_profile,
             tensor,
-            super::weights::WeightBindingDtype::AsStored,
+            super::weights::WeightBindingDtype::ForComputeDevice,
         )?;
         bound_tensors.insert(tensor_profile.name.clone(), tensor);
     }

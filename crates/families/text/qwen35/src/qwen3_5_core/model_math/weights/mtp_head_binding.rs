@@ -71,7 +71,7 @@ pub fn bind_mtp_head_weights(
             false,
             tensor_profile,
             stored_tensor,
-            WeightBindingDtype::AsStored,
+            WeightBindingDtype::ForComputeDevice,
         )?;
         payload_byte_count = payload_byte_count.saturating_add(tensor_payload_bytes);
         bound_tensors.insert(tensor_profile.name.clone(), bound_tensor);

@@ -37,7 +37,7 @@
 
 ## Release Scripts Folder
 
-- All **Release-related scripts** must live under "<repo-root>/scripts/release", they will help you through the release process.
+- All **Release-related scripts** must live under "<repo-root>/scripts/release", they will help you through the release process. This doesnt mean you have to create shell scripts at all, if you can do what you need in xtask then go ahead.
 - Follow the `sparkle_release` skill (`.claude/skills/sparkle_release/SKILL.md`) for every Stable release on the direct download and Sparkle feed, and read all of it before the first step.
 - A Mac App Store release is separate and happens only when the user asks for it: follow the `macos_appstore_release` skill (`.claude/skills/macos_appstore_release/SKILL.md`).
 
