@@ -237,7 +237,7 @@ fn host_paired_drafter(
 ) {
     use crate::qwen3_5_core::draft_tree_decode::draft_model_status_report::draft_runtime_and_status;
     use crate::qwen3_5_core::draft_tree_decode::engine_draft_runtime::Qwen3_5SpeculativeDraftRuntime;
-    let active_memory_bytes_before = active_memory_bytes(model);
+    let memory_before_the_load = memory_around_a_load(model);
     let active_memory_limit_bytes = model.runtime().memory_limits().active_memory_limit_bytes();
     let (draft_runtime, draft_model_status) =
         draft_runtime_and_status(Qwen3_5SpeculativeDraftRuntime::load_for_target(
@@ -248,8 +248,10 @@ fn host_paired_drafter(
         ));
     model.base.optional_accelerators.draft_model_status = Some(draft_model_status);
     if let Some(mut draft_runtime) = draft_runtime {
-        draft_runtime.hosted_weight_bytes =
-            active_memory_bytes(model).saturating_sub(active_memory_bytes_before);
+        draft_runtime.hosted_weight_bytes = super::hosted_drafter_bytes::bytes_a_load_added(
+            memory_before_the_load,
+            memory_around_a_load(model),
+        );
         tracing::info!(
             hosted_drafter_weight_bytes = draft_runtime.hosted_weight_bytes,
             "the streaming engine hosts a DFlash drafter"
@@ -262,15 +264,19 @@ fn host_paired_drafter(
     model.reserve_room_for_a_loading_drafter(0);
 }
 
-/// MLX's active memory, or zero when it cannot be read: the difference
-/// across the drafter's load is then zero and nothing is counted.
-fn active_memory_bytes(model: &Qwen3_5Model) -> u64 {
-    model
+/// MLX's active memory and the kept weights' share of it. An unreadable
+/// snapshot reads as zero, and nothing is then counted across the load.
+fn memory_around_a_load(model: &Qwen3_5Model) -> super::hosted_drafter_bytes::MemoryAroundALoad {
+    let active_bytes = model
         .runtime()
         .memory_snapshot()
         .map_or(0, |memory_snapshot| {
             u64::try_from(memory_snapshot.active_memory_bytes()).unwrap_or(0)
-        })
+        });
+    super::hosted_drafter_bytes::MemoryAroundALoad {
+        active_bytes,
+        kept_weight_bytes: model.reclaimable_retained_payload_bytes(),
+    }
 }
 
 /// Bounds the `mlx_buffer_cache` to what the loaded model measured and

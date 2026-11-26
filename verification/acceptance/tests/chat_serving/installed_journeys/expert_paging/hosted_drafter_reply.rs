@@ -210,12 +210,17 @@ async fn write_greedy_reply(
 }
 
 /// The most a drafted reply may leave in none of the memory ledger's
-/// accounts, as a share of the limit: the ledger's own margin, as the
-/// in-memory engine's check allows. A dense 27B at an 18 GB limit leaves
-/// 0.27 GB after its rounds, 14 thousandths, with the drafter's kept rows
-/// counted (issue #2572); it leaves nothing after a reply with the drafter
-/// silent.
+/// accounts: the ledger's own margin as a share of the limit, or the fixed
+/// allowance below when that is larger.
 const MAXIMUM_UNACCOUNTED_PERMILLE_OF_LIMIT: u64 = 20;
+/// What a drafted reply on the dense 27B leaves between rounds whatever the
+/// limit: 0.27 GB at 12, 18 and 24 GB, and nothing after a reply with the
+/// drafter silent. A round's kept rows are committed lazily and evaluated
+/// with the next forward, so the stored state they replace is still held
+/// when the round is measured (issue #2572). Before the drafter's own
+/// weights were counted at a tight limit the figure at 12 GB was 1.22 GB,
+/// which this bound exists to catch.
+const DRAFTING_UNACCOUNTED_ALLOWANCE_GB: f64 = 0.3;
 const BYTES_PER_GB: f64 = 1_073_741_824.0;
 
 /// Over every forward since the load, the silent reply's and the drafted
@@ -228,9 +233,10 @@ async fn assert_drafting_left_nothing_unaccounted(paging_engine: &PagingExperime
         .expect("the engine answers for its ledger")
         .expect("an engine that has served replies has measured forwards");
     let largest_unaccounted_gb = ledger_reading.largest_unaccounted_bytes as f64 / BYTES_PER_GB;
-    let allowed_gb = (ledger_reading.accounts.limit_bytes / 1_000
+    let margin_gb = (ledger_reading.accounts.limit_bytes / 1_000
         * MAXIMUM_UNACCOUNTED_PERMILLE_OF_LIMIT) as f64
         / BYTES_PER_GB;
+    let allowed_gb = margin_gb.max(DRAFTING_UNACCOUNTED_ALLOWANCE_GB);
     eprintln!(
         "[hosted-drafter-proof] measured_steps={} largest_unaccounted_gb={largest_unaccounted_gb:.3} allowed_gb={allowed_gb:.3}",
         ledger_reading.observed_step_count,
