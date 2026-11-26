@@ -28,7 +28,6 @@ archive.include = [
     { path = "debug/astronomical-daemon-mismatched-ready-worker", relative-to = "target", on-missing = "error" },
     { path = "debug/astronomical-daemon-stderr-probe-worker", relative-to = "target", on-missing = "error" },
     { path = "debug/astronomical-daemon-replacement-ready-worker", relative-to = "target", on-missing = "error" },
-    { path = "debug/astronomical-daemon-memory-demotion-worker", relative-to = "target", on-missing = "error" },
 ]
 
 [profile.ci-without-daemon-executables]
