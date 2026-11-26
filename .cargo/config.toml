@@ -787,8 +787,7 @@ measure-row-exact-tree-attention = "run -p xtask -- test-run --package astronomi
 # boundary,
 # with the worker finding the drafter the way serving does (the target's own
 # `drafter` folder first). Append --configuration PATH with model_directory
-# set to the target's folder (and throughput_history_path to keep the durable
-# history untouched). Run it once more on the same model without a drafter
+# set to the target's folder. Run it once more on the same model without a drafter
 # for the plain side of the A/B; the decode rate says which path ran. Set
 # `paging_experiment.maximum_mlx_memory_gigabytes` in the configuration to
 # serve under a limit below the model's size, which measures the worker while
@@ -1111,8 +1110,7 @@ test-claude-code-launch = "run -p xtask -- test-run --package astronomical-accep
 # JANGH2 lanes: plan contracts against real bundles, GPU decode-throughput
 # (memory-traffic bound, so the optimized build is part of the alias; serial
 # by rule), correctness contracts, and serving throughput over the daemon
-# IPC boundary persisted to the durable throughput history; append
-# --configuration PATH containing model_directory.
+# IPC boundary; append --configuration PATH containing model_directory.
 test-jangtq2-plan = "run -p xtask -- test-run --package qwen35 --features direct-mlx --lib --filter quantized_expert_layer_plan --ignored"
 test-jangtq2-decode-throughput = "test --release --no-fail-fast -p jangtq2-qwen35 --features direct-mlx --test direct_mlx throughput -- --ignored --nocapture --test-threads=1"
 test-jangtq2-direct-mlx = "test --no-fail-fast -p jangtq2-qwen35 --features direct-mlx --lib --test direct_mlx -- --test-threads=1"

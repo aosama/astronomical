@@ -7,8 +7,8 @@ use test_harness::{sparse_decode_full_fit, test_run::TestRunContext};
 use tokio::time::{Duration, timeout};
 
 use super::{
-    historical_record::ThroughputJourneyKind,
     support::{self, ThroughputJourney},
+    throughput_record::ThroughputJourneyKind,
 };
 
 #[tokio::test(flavor = "multi_thread")]

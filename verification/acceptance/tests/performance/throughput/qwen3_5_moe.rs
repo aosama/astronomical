@@ -22,17 +22,17 @@
 //! Method: a short warmup completion (~500 input tokens, ~50 output tokens)
 //! is discarded so first-use JIT kernel compilation never inflates the measured
 //! prefill, then the single measured completion over the full prompt reports the
-//! server-attributed rates persisted to the durable historical record. The
+//! server-attributed rates printed in its record. The
 //! journey verifies the measured input/output token counts and zero `astro_ssd_prompt_cache` reuse.
 //!
 //! This is a laptop-only journey: it loads real weights into wired GPU memory,
 //! so it is `#[ignore]`d and not wired into CI. Serving measurements must go
 //! through the repository runner, which builds the exact optimized worker and
-//! records the build identity the durable history requires — a direct
+//! records the build identity every record names — a direct
 //! `cargo test` invocation fails fast on the missing identity manifest. The
 //! diagnostic paired run and clean paired run are separate because attribution
-//! distorts measured throughput; only clean runs append policy-labeled
-//! historical records (narrow the `--filter` per journey):
+//! distorts measured throughput; read speed only from the clean runs
+//! (narrow the `--filter` per journey):
 //! - `cargo xtask test-run --package astronomical-acceptance --features performance_throughput --test performance_throughput --release --filter should_measure_resident_sparse_moe_prompt_processing_and_decode_throughput --ignored`
 //! - `cargo xtask test-run --package astronomical-acceptance --features performance_throughput --test performance_throughput --release --filter should_report_streaming_sparse_moe_decode_route_materialization_evidence --ignored`
 //! - `cargo xtask test-run --package astronomical-acceptance --features performance_throughput --test performance_throughput --release --filter should_compare_streaming_sparse_moe_decode_astro_expert_cache_policies_with_attribution --ignored`
@@ -48,8 +48,8 @@ use super::decode_astro_expert_cache_experiment::{
     report_attributed_policy_comparison, report_clean_policy_comparison,
     report_streaming_decode_stage_evidence,
 };
-use crate::performance_throughput::historical_record::ThroughputJourneyKind;
 use crate::performance_throughput::support::{self as throughput_support, ThroughputJourney};
+use crate::performance_throughput::throughput_record::ThroughputJourneyKind;
 use crate::support;
 use serial_test::serial;
 use std::fs;
@@ -89,7 +89,7 @@ const TEMPERATURE_THOUSANDTHS: u16 = 1_000;
 /// decode throughput: after a short ~500-token warmup, a >=10,000-token Romeo
 /// and Juliet input drives 500 output tokens of generation with the
 /// `astro_ssd_prompt_cache` disabled, and the measured completion's
-/// server-attributed rates are persisted to the durable historical record.
+/// server-attributed rates are printed in its record.
 #[test]
 #[ignore = "loads the resident 35B sparse-MoE model and measures serving prompt-processing and decode throughput over IPC"]
 #[serial]
@@ -148,8 +148,8 @@ fn should_measure_streaming_sparse_moe_prompt_processing_throughput() {
 }
 
 /// Captures production streaming decode-stage timings on the budget-fitting
-/// single-chunk Romeo and Juliet shape. This attribution-only run does not
-/// append rates to the clean historical series or serve as a throughput benchmark.
+/// single-chunk Romeo and Juliet shape. Attribution distorts the rates, so
+/// this run is not a throughput benchmark.
 #[test]
 #[ignore = "loads the streaming 35B sparse-MoE model for single-chunk decode-stage attribution"]
 #[serial]
@@ -244,8 +244,8 @@ fn should_report_streaming_sparse_moe_decode_route_materialization_evidence() {
 }
 
 /// Runs three diagnostic pairs with alternating order, preserving output
-/// parity and attribution evidence without adding these distorted rates to the
-/// clean historical throughput series.
+/// parity and attribution evidence. Attribution distorts these rates, so
+/// they are not throughput figures.
 ///
 /// The full-shape streaming journey (10,544-token prompt) cannot fit the
 /// 115-second journey budget under the configured 36,000,000,000-byte journey
@@ -273,8 +273,8 @@ fn should_compare_streaming_sparse_moe_decode_astro_expert_cache_policies_with_a
     report_attributed_policy_comparison(&paired_trials);
 }
 
-/// Runs clean paired trials so both policies receive policy-labeled durable
-/// throughput rows without enabling request attribution.
+/// Runs clean paired trials so both policies print policy-labeled
+/// throughput records without enabling request attribution.
 #[test]
 #[ignore = "loads the streaming 35B sparse-MoE model for single-chunk paired clean throughput"]
 #[serial]

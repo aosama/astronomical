@@ -4,8 +4,8 @@
 
 use ipc_protocol::{WorkerDecodeAstroExpertCachePolicy, WorkerDiagnosticQwen3_5EngineOverride};
 
-use crate::performance_throughput::historical_record::ThroughputJourneyKind;
 use crate::performance_throughput::support::{self as throughput_support, ThroughputJourney};
+use crate::performance_throughput::throughput_record::ThroughputJourneyKind;
 use crate::support;
 
 /// The short warmup instruction shared with the sibling throughput lanes.
@@ -44,10 +44,9 @@ pub(super) const BYTES_PER_GIGABYTE: u64 = 1 << 30;
 
 /// Serves the summarization workload once and verifies its measured shape.
 ///
-/// Every cell carries the production probe kind, but only automatic-engine
-/// runs reach the durable history: the throughput runner skips the append for
-/// any forced engine, so a diagnostic run is never
-/// read back as what the production engine choice delivers at that ceiling.
+/// Every cell carries the production probe kind, forced-engine ones
+/// included, so a forced cell's record must not be read as what the
+/// production engine choice delivers at that ceiling.
 pub(super) fn measure_summarization_throughput(
     assigned_ceiling_gigabytes: u64,
     engine_override: WorkerDiagnosticQwen3_5EngineOverride,
