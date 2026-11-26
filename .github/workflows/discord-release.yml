@@ -35,6 +35,10 @@ jobs:
       # headings in an embed far larger than the text around them, so they
       # become bold lines, and the notes are cut to stay inside Discord's
       # 4,096-character embed limit with room for the closing line.
+      # Discord renders no Markdown tables: the speed table arrived as raw
+      # pipes and, at about 4,000 characters, pushed every other section past
+      # the cut (0.2.135). The Speed section is replaced by one line that
+      # points to the table on the release page.
       - name: Read the release
         id: release
         env:
@@ -43,7 +47,9 @@ jobs:
         run: |
           set -euo pipefail
           gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json name,body,url > release.json
-          jq -r .body release.json | sed -E 's/^#{1,6}[[:space:]]+(.*)$/**\1**/' | head -c 3800 > release-notes.md
+          jq -r .body release.json \
+            | awk '/^## Speed[[:space:]]*$/ { print "## Speed"; print ""; print "How fast each measured model runs, against the previous release, is in the table on the release page."; print ""; in_speed = 1; next } in_speed && /^## / { in_speed = 0 } !in_speed { print }' \
+            | sed -E 's/^#{1,6}[[:space:]]+(.*)$/**\1**/' | head -c 3800 > release-notes.md
           {
             echo "name=$(jq -r .name release.json)"
             echo "url=$(jq -r .url release.json)"
