@@ -1,4 +1,5 @@
 {
+  "dense_drafting": "Qwen3.8-27B-MLX-4bit-vision-DFLASH2",
   "dense_vision": "Ornith-1.5-9B-MLX-4bit-vision",
   "flux2_klein": "FLUX.2-klein-4B",
   "flux2_klein_4bit": "flux2-klein-4b-4bit",

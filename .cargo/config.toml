@@ -721,12 +721,13 @@ test-draft-tree-verification = "run -p xtask -- test-run --package astronomical-
 # Gate 2 baseline: where one DFlash2 draft-and-verify round's time goes on the
 # real 27B pair (drafter, draft head, selector, 8-row verify, readback, rewind)
 # beside a plain one-row step. Each stage is timed alone. Asserts nothing;
-# about 10 seconds after the pair loads. Same downloads as the Gate 1 alias.
+# about 10 seconds after the pair loads. Same installed package as the Gate 1 alias.
 measure-dflash2-round-cost = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter dflash2_round_cost"
 # Gate 1 of speculative decoding on the dense Qwen3.8 27B: tokens kept per
-# verify round by the DFlash2 drafter on the real pair (TensorFold/Qwen3.8-27B-
-# MLX-4bit and z-lab/Qwen3.8-27B-DFlash2, read from the Hugging Face hub folder;
-# `hf download` both first). Code at 0.7, chat at 1.0, greedy as a diagnostic;
+# verify round by the DFlash2 drafter on the real pair: the installed 27B
+# package with its drafter inside (`dense_drafting` in
+# registry/e2e_test_model_names.json, resolved through Development's library;
+# `--configuration PATH` names another). Code at 0.7, chat at 1.0, greedy as a diagnostic;
 # floors sit about 10% under z-lab's reference (6.07 and 3.00). Needs about
 # 22 GB of free memory; about one minute.
 measure-dflash2-kept-per-round = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter dflash2_kept_per_round"
