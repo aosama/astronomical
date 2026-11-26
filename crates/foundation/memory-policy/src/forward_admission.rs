@@ -34,6 +34,24 @@ pub enum StreamingEngineRequirement {
     ForwardGraphicsProcessorMemoryExhausted,
 }
 
+impl StreamingEngineRequirement {
+    /// The bytes the resident engine was short, when the cause measured
+    /// them; an exhausted graphics processor reports no figure.
+    #[must_use]
+    pub const fn shortfall_bytes(self) -> Option<usize> {
+        match self {
+            Self::StableShortfall { shortfall_bytes }
+            | Self::TransientPeakShortfallAtPrefillChunk {
+                shortfall_bytes, ..
+            }
+            | Self::TransientPeakShortfallWithoutPrefillChunk { shortfall_bytes }
+            | Self::RequestContextShortfall { shortfall_bytes }
+            | Self::ForwardAllocationShortfall { shortfall_bytes } => Some(shortfall_bytes),
+            Self::ForwardGraphicsProcessorMemoryExhausted => None,
+        }
+    }
+}
+
 /// A concrete action after evaluating one resident forward's memory equation.
 ///
 /// MLX buffer cache reclamation is intentionally absent: MLX active-memory

@@ -5,8 +5,8 @@
 //! to end.
 
 use super::resident_promotion_support::{
-    DEMOTING_PROMPT_TOKEN_COUNT, MEDIUM_PROMPT_TOKEN_COUNT, PromotionEngineRole, PromotionJourney,
-    PromotionScenario, SMALL_PROMPT_TOKEN_COUNT,
+    DEMOTING_PROMPT_TOKEN_COUNT, GIBIBYTE_BYTES, MEDIUM_PROMPT_TOKEN_COUNT, PromotionEngineRole,
+    PromotionJourney, PromotionScenario, SMALL_PROMPT_TOKEN_COUNT,
 };
 
 #[tokio::test]
@@ -161,6 +161,41 @@ async fn should_not_promote_a_streaming_engine_selected_at_startup() {
         "only a request demotion is reversible in place; startup placement is not"
     );
     assert_eq!(promotion_journey.streaming_retry_count(), 0);
+    assert_eq!(promotion_journey.resident_promotion_count(), 0);
+    promotion_journey.close().await;
+}
+
+/// A resident engine short for every request by more than any smaller
+/// request frees, as a hosted drafter made it at an 18 GB limit (#2578): the
+/// worker stays streaming, with one demotion and no promotion, instead of a
+/// promotion and a demotion for every request a few tokens smaller.
+#[tokio::test]
+async fn should_stay_streaming_when_smaller_requests_cannot_free_the_shortfall() {
+    let mut promotion_journey = PromotionJourney::launch(PromotionScenario {
+        resident_short_for_every_request_bytes: Some(
+            usize::try_from(200 * GIBIBYTE_BYTES).unwrap_or(usize::MAX),
+        ),
+        ..PromotionScenario::resident_startup_with_room_to_promote()
+    })
+    .await;
+
+    for (request_number, prompt_token_count) in [
+        (1_041, DEMOTING_PROMPT_TOKEN_COUNT),
+        (1_042, DEMOTING_PROMPT_TOKEN_COUNT - 1),
+        (1_043, MEDIUM_PROMPT_TOKEN_COUNT),
+        (1_044, SMALL_PROMPT_TOKEN_COUNT),
+    ] {
+        promotion_journey
+            .require_completed_generation(request_number, prompt_token_count)
+            .await;
+    }
+
+    assert_eq!(
+        promotion_journey.counters.serving_engine_roles(),
+        vec![PromotionEngineRole::Streaming; 4],
+        "every request streams once the resident engine has shown it cannot fit one"
+    );
+    assert_eq!(promotion_journey.streaming_retry_count(), 1);
     assert_eq!(promotion_journey.resident_promotion_count(), 0);
     promotion_journey.close().await;
 }

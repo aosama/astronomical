@@ -35,6 +35,9 @@ pub enum EnginePlacement {
         /// request whose admission demoted the engine. The re-promotion
         /// gate compares every later request against this count.
         demoted_total_context_token_count: usize,
+        /// The effective active-memory ceiling the demoting request was
+        /// refused under: a raise above it frees room the gate can count.
+        effective_ceiling_bytes_at_demotion: u64,
     },
     /// A demoted worker swapped back to the resident engine after the
     /// memory pressure that caused the demotion resolved.
@@ -96,6 +99,18 @@ impl EnginePlacement {
                 demoted_total_context_token_count,
                 ..
             } => Some(demoted_total_context_token_count),
+            _ => None,
+        }
+    }
+
+    /// Returns the effective ceiling recorded at the request demotion, if any.
+    #[must_use]
+    pub const fn effective_ceiling_bytes_at_demotion(self) -> Option<u64> {
+        match self {
+            Self::DemotedForRequest {
+                effective_ceiling_bytes_at_demotion,
+                ..
+            } => Some(effective_ceiling_bytes_at_demotion),
             _ => None,
         }
     }
