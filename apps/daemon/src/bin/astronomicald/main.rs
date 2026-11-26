@@ -38,7 +38,9 @@ const WORKER_MODEL_LOAD_TIMEOUT: Duration = Duration::from_secs(60);
 const WORKER_MODEL_LOAD_TIMEOUT: Duration = Duration::from_secs(600);
 
 mod daemon_arguments;
+mod shutdown_sequence;
 use daemon_arguments::{DaemonArguments, DaemonCommand};
+use shutdown_sequence::serve_until_shutdown;
 
 #[tokio::main]
 async fn main() -> ExitCode {
@@ -264,8 +266,6 @@ async fn run_daemon(
     )
     .await
     .map_err(DaemonError::StartDaemonIpc)?;
-    let skill_update_config = Arc::clone(&reloadable_config);
-    let daily_count_config = Arc::clone(&reloadable_config);
     let application = build_application_with_full_control_and_library_download(
         worker_handle.clone(),
         next_chat_request_id,
@@ -276,9 +276,28 @@ async fn run_daemon(
         library_download_coordinator,
     );
 
+    spawn_background_upkeep_tasks(&reloadable_config, &instance_paths);
+
+    println!("astronomicald listening on http://{bound_daemon_address}");
+
+    serve_until_shutdown(
+        listener,
+        application,
+        internal_shutdown_receiver,
+        worker_handle,
+        daemon_ipc_service,
+    )
+    .await
+}
+
+/// Starts the work that runs beside serving and ends with the process.
+fn spawn_background_upkeep_tasks(
+    reloadable_config: &Arc<RwLock<ResolvedRuntimeConfig>>,
+    instance_paths: &AstronomicalInstancePaths,
+) {
     // The look for a newer skill runs beside serving and ends with the process.
     tokio::spawn(astronomical_daemon::keep_skill_current(
-        skill_update_config,
+        Arc::clone(reloadable_config),
         instance_paths.skill_directory(),
         ApplicationBuildIdentity::current().version,
     ));
@@ -286,28 +305,9 @@ async fn run_daemon(
     // The daily count, sent only from a Mac whose owner agreed, also runs
     // beside serving and ends with the process.
     tokio::spawn(astronomical_daemon::keep_daily_count(
-        daily_count_config,
+        Arc::clone(reloadable_config),
         instance_paths.clone(),
     ));
-
-    println!("astronomicald listening on http://{bound_daemon_address}");
-
-    let serve_result = axum::serve(listener, application)
-        .with_graceful_shutdown(shutdown_signal(internal_shutdown_receiver))
-        .await
-        .map_err(DaemonError::ServeHttp);
-    let worker_shutdown_result = worker_handle
-        .shutdown()
-        .await
-        .map(|_| ())
-        .map_err(DaemonError::ShutdownWorker);
-    let daemon_ipc_shutdown_result = daemon_ipc_service.shutdown().await;
-
-    serve_result?;
-    worker_shutdown_result?;
-    daemon_ipc_shutdown_result.map_err(DaemonError::ShutdownDaemonIpc)?;
-
-    Ok(())
 }
 
 fn open_daemon_log_context(

@@ -17,7 +17,7 @@ use crate::{
 
 /// Routes the two readiness events, with or without a loaded model, which
 /// share their arguments; kept apart so `handle_worker_event` stays within
-/// the repository's 100-line function budget.
+/// the repository's 80-line function budget.
 pub(in crate::worker) fn apply_worker_readiness_event(
     readiness_event: WorkerEvent,
     health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,

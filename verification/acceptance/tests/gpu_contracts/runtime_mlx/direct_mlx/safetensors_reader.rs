@@ -3,14 +3,15 @@
 use std::{
     fs::{self, File},
     os::unix::fs::FileExt,
+    path::Path,
     sync::Arc,
     time::Instant,
 };
 
-use mlx_bridge::MlxDtype;
+use mlx_bridge::{MlxArray, MlxDtype};
 use runtime_integration::{
     BoundedReadInterval, MlxMemoryLimits, MlxRuntime, MlxRuntimeError, PositionalFileReadMetrics,
-    PositionalFileReadMetricsSnapshot,
+    PositionalFileReadMetricsSnapshot, SafetensorsLoadResult,
 };
 
 const ACTIVE_MEMORY_LIMIT_BYTES: usize = 2 * 1024 * 1024 * 1024;
@@ -262,14 +263,7 @@ fn should_preserve_large_bounded_model_weight_intervals_during_parallel_position
     let weights_path = temporary_directory
         .path()
         .join("concurrent-read.safetensors");
-    let synthetic_header = four_tensor_safetensors_header(CONCURRENT_READ_TENSOR_BYTE_COUNT);
-    let source_payload_offset = synthetic_header.len() as u64;
-    fs::write(
-        &weights_path,
-        four_tensor_safetensors_bytes(CONCURRENT_READ_TENSOR_BYTE_COUNT),
-    )
-    .expect("the test should write four substantial safetensors payloads");
-    write_partition_boundary_markers(&weights_path, source_payload_offset);
+    let (synthetic_header, source_payload_offset) = write_concurrent_read_fixture(&weights_path);
 
     let memory_limits =
         MlxMemoryLimits::new(ACTIVE_MEMORY_LIMIT_BYTES, MLX_BUFFER_CACHE_LIMIT_BYTES)
@@ -277,9 +271,58 @@ fn should_preserve_large_bounded_model_weight_intervals_during_parallel_position
     let runtime =
         MlxRuntime::initialize(memory_limits).expect("the pinned MLX runtime should initialize");
     let positional_file_read_metrics = Arc::new(PositionalFileReadMetrics::default());
-    let weights = runtime
+    let weights = load_four_lazy_tensors_from_one_reader(
+        &runtime,
+        &weights_path,
+        synthetic_header,
+        source_payload_offset,
+        &positional_file_read_metrics,
+    );
+    let [first_weight, second_weight, third_weight, fourth_weight] = four_lazy_tensors(&weights);
+
+    let concurrent_evaluation_started_at = Instant::now();
+    runtime
+        .evaluate_arrays(&[&first_weight, &second_weight, &third_weight, &fourth_weight])
+        .expect("MLX should evaluate all four lazy tensors together");
+    let concurrent_evaluation_elapsed = concurrent_evaluation_started_at.elapsed();
+    assert_first_tensor_keeps_partition_boundary_markers(&first_weight);
+
+    let positional_file_read_snapshot = positional_file_read_metrics.snapshot();
+    assert_reads_were_partitioned_and_parallel(&positional_file_read_snapshot);
+    eprintln!(
+        "[safetensors-positional-read] status=success tensors=4 reads={} bytes={} maximum_concurrent_reads={} summed_read_milliseconds={:.3} evaluation_milliseconds={:.3}",
+        positional_file_read_snapshot.read_call_count,
+        positional_file_read_snapshot.read_byte_count,
+        positional_file_read_snapshot.maximum_concurrent_read_count,
+        positional_file_read_snapshot.total_read_elapsed_nanoseconds as f64 / 1_000_000.0,
+        concurrent_evaluation_elapsed.as_secs_f64() * 1_000.0,
+    );
+}
+
+/// Writes the four-tensor fixture with its partition-boundary markers and
+/// returns the synthetic header and the offset where the payloads begin.
+fn write_concurrent_read_fixture(weights_path: &Path) -> (Vec<u8>, u64) {
+    let synthetic_header = four_tensor_safetensors_header(CONCURRENT_READ_TENSOR_BYTE_COUNT);
+    let source_payload_offset = synthetic_header.len() as u64;
+    fs::write(
+        weights_path,
+        four_tensor_safetensors_bytes(CONCURRENT_READ_TENSOR_BYTE_COUNT),
+    )
+    .expect("the test should write four substantial safetensors payloads");
+    write_partition_boundary_markers(weights_path, source_payload_offset);
+    (synthetic_header, source_payload_offset)
+}
+
+fn load_four_lazy_tensors_from_one_reader(
+    runtime: &MlxRuntime,
+    weights_path: &Path,
+    synthetic_header: Vec<u8>,
+    source_payload_offset: u64,
+    positional_file_read_metrics: &Arc<PositionalFileReadMetrics>,
+) -> SafetensorsLoadResult {
+    runtime
         .load_safetensors_from_bounded_ranges(
-            File::open(&weights_path).expect("the test should open its safetensors file"),
+            File::open(weights_path).expect("the test should open its safetensors file"),
             synthetic_header,
             (0..4)
                 .map(|tensor_index| BoundedReadInterval {
@@ -291,9 +334,13 @@ fn should_preserve_large_bounded_model_weight_intervals_during_parallel_position
                 })
                 .collect(),
             (CONCURRENT_READ_TENSOR_BYTE_COUNT * 4) as u64,
-            Some(Arc::clone(&positional_file_read_metrics)),
+            Some(Arc::clone(positional_file_read_metrics)),
         )
-        .expect("MLX should construct four lazy tensors from one reader");
+        .expect("MLX should construct four lazy tensors from one reader")
+}
+
+/// The first, second, third and fourth weights, in that order.
+fn four_lazy_tensors(weights: &SafetensorsLoadResult) -> [MlxArray; 4] {
     let first_weight = weights
         .tensor("first.weight")
         .expect("the first tensor should exist");
@@ -306,12 +353,10 @@ fn should_preserve_large_bounded_model_weight_intervals_during_parallel_position
     let fourth_weight = weights
         .tensor("fourth.weight")
         .expect("the fourth tensor should exist");
+    [first_weight, second_weight, third_weight, fourth_weight]
+}
 
-    let concurrent_evaluation_started_at = Instant::now();
-    runtime
-        .evaluate_arrays(&[&first_weight, &second_weight, &third_weight, &fourth_weight])
-        .expect("MLX should evaluate all four lazy tensors together");
-    let concurrent_evaluation_elapsed = concurrent_evaluation_started_at.elapsed();
+fn assert_first_tensor_keeps_partition_boundary_markers(first_weight: &MlxArray) {
     let first_tensor_values = first_weight
         .to_vec_f32()
         .expect("the first large bounded tensor should remain readable");
@@ -323,8 +368,11 @@ fn should_preserve_large_bounded_model_weight_intervals_during_parallel_position
     );
     assert_eq!(first_tensor_values[partition_boundary_element_index], 3.0);
     assert_eq!(first_tensor_values[first_tensor_values.len() - 1], 4.0);
+}
 
-    let positional_file_read_snapshot = positional_file_read_metrics.snapshot();
+fn assert_reads_were_partitioned_and_parallel(
+    positional_file_read_snapshot: &PositionalFileReadMetricsSnapshot,
+) {
     let available_read_parallelism = std::thread::available_parallelism()
         .map(usize::from)
         .unwrap_or(1)
@@ -344,15 +392,7 @@ fn should_preserve_large_bounded_model_weight_intervals_during_parallel_position
         u64::try_from(CONCURRENT_READ_TENSOR_BYTE_COUNT * 4)
             .expect("the test payload byte count should fit u64")
     );
-    assert_respects_process_wide_positional_read_cap(&positional_file_read_snapshot);
-    eprintln!(
-        "[safetensors-positional-read] status=success tensors=4 reads={} bytes={} maximum_concurrent_reads={} summed_read_milliseconds={:.3} evaluation_milliseconds={:.3}",
-        positional_file_read_snapshot.read_call_count,
-        positional_file_read_snapshot.read_byte_count,
-        positional_file_read_snapshot.maximum_concurrent_read_count,
-        positional_file_read_snapshot.total_read_elapsed_nanoseconds as f64 / 1_000_000.0,
-        concurrent_evaluation_elapsed.as_secs_f64() * 1_000.0,
-    );
+    assert_respects_process_wide_positional_read_cap(positional_file_read_snapshot);
 }
 
 /// The bounded reader caps concurrent positional reads at the process-wide

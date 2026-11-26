@@ -21,7 +21,48 @@ const TEST_TRANSPORT_CAPACITY_BYTES: usize = 256 * 1024;
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn should_round_trip_an_image_generation_journey() {
     let request_id = RequestId::new(501);
-    let image_generation_command = ImageGenerationCommand {
+    let image_generation_command = image_generation_journey_command(request_id);
+    let worker_command = WorkerCommand::GenerateImage(image_generation_command.clone());
+    let worker_events = image_generation_journey_worker_events(request_id);
+    let (daemon_transport, worker_transport) = duplex(TEST_TRANSPORT_CAPACITY_BYTES);
+    let (daemon_reader_transport, daemon_writer_transport) = tokio::io::split(daemon_transport);
+    let (worker_reader_transport, worker_writer_transport) = tokio::io::split(worker_transport);
+    let mut daemon_writer = ProtocolWriter::new(daemon_writer_transport);
+    let mut daemon_reader = ProtocolReader::new(daemon_reader_transport);
+    let mut worker_reader = ProtocolReader::new(worker_reader_transport);
+    let mut worker_writer = ProtocolWriter::new(worker_writer_transport);
+
+    daemon_writer
+        .send_command(&worker_command)
+        .await
+        .expect("the image command should be written");
+    assert_eq!(
+        worker_reader
+            .next_command()
+            .await
+            .expect("the image command should decode"),
+        Some(worker_command)
+    );
+
+    for worker_event in worker_events {
+        worker_writer
+            .send_event(&worker_event)
+            .await
+            .expect("the image generation event should be written");
+        assert_eq!(
+            daemon_reader
+                .next_event()
+                .await
+                .expect("the image generation event should decode"),
+            Some(worker_event)
+        );
+    }
+
+    assert_eq!(image_generation_command.validate(), Ok(()));
+}
+
+fn image_generation_journey_command(request_id: RequestId) -> ImageGenerationCommand {
+    ImageGenerationCommand {
         request_id,
         model: "fictional/image-model".to_owned(),
         prompt: "A brass astrolabe under a clear night sky".to_owned(),
@@ -32,9 +73,11 @@ async fn should_round_trip_an_image_generation_journey() {
             guidance_thousandths: 3_500,
             seed: 42,
         },
-    };
-    let worker_command = WorkerCommand::GenerateImage(image_generation_command.clone());
-    let worker_events = [
+    }
+}
+
+fn image_generation_journey_worker_events(request_id: RequestId) -> [WorkerEvent; 4] {
+    [
         WorkerEvent::ImageGenerationProgress {
             request_id,
             phase: ImageGenerationPhase::Denoising,
@@ -81,42 +124,7 @@ async fn should_round_trip_an_image_generation_journey() {
             elapsed_millis: 1_825,
             mlx_memory_snapshot: Some(finalized_image_memory_snapshot()),
         },
-    ];
-    let (daemon_transport, worker_transport) = duplex(TEST_TRANSPORT_CAPACITY_BYTES);
-    let (daemon_reader_transport, daemon_writer_transport) = tokio::io::split(daemon_transport);
-    let (worker_reader_transport, worker_writer_transport) = tokio::io::split(worker_transport);
-    let mut daemon_writer = ProtocolWriter::new(daemon_writer_transport);
-    let mut daemon_reader = ProtocolReader::new(daemon_reader_transport);
-    let mut worker_reader = ProtocolReader::new(worker_reader_transport);
-    let mut worker_writer = ProtocolWriter::new(worker_writer_transport);
-
-    daemon_writer
-        .send_command(&worker_command)
-        .await
-        .expect("the image command should be written");
-    assert_eq!(
-        worker_reader
-            .next_command()
-            .await
-            .expect("the image command should decode"),
-        Some(worker_command)
-    );
-
-    for worker_event in worker_events {
-        worker_writer
-            .send_event(&worker_event)
-            .await
-            .expect("the image generation event should be written");
-        assert_eq!(
-            daemon_reader
-                .next_event()
-                .await
-                .expect("the image generation event should decode"),
-            Some(worker_event)
-        );
-    }
-
-    assert_eq!(image_generation_command.validate(), Ok(()));
+    ]
 }
 
 #[test]

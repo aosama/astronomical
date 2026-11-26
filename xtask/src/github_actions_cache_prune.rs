@@ -167,13 +167,25 @@ pub fn parse_github_actions_cache_list_tsv(tsv_text: &str) -> Vec<GithubActionsC
         .collect()
 }
 
-pub fn run(mut arguments: impl Iterator<Item = String>) -> Result<(), String> {
-    let started_at = std::time::Instant::now();
-    let mut dry_run = false;
-    let mut repository = std::env::var("GITHUB_REPOSITORY").ok();
+/// The options `prune-caches` was started with.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PruneOptions {
+    pub repository: String,
+    pub is_dry_run: bool,
+}
+
+/// Reads `--dry-run` and `--repo owner/name`; the repository falls back to
+/// `repository_from_environment` (the `GITHUB_REPOSITORY` value) when `--repo`
+/// is not given.
+pub fn parse_prune_arguments(
+    mut arguments: impl Iterator<Item = String>,
+    repository_from_environment: Option<String>,
+) -> Result<PruneOptions, String> {
+    let mut is_dry_run = false;
+    let mut repository = repository_from_environment;
     while let Some(argument) = arguments.next() {
         match argument.as_str() {
-            "--dry-run" => dry_run = true,
+            "--dry-run" => is_dry_run = true,
             "--repo" => {
                 repository = Some(
                     arguments
@@ -186,7 +198,52 @@ pub fn run(mut arguments: impl Iterator<Item = String>) -> Result<(), String> {
     }
     let repository =
         repository.ok_or("no repository given; pass --repo owner/name or set GITHUB_REPOSITORY")?;
-    eprintln!("[cache-prune] status=start repository={repository} dry_run={dry_run}");
+    Ok(PruneOptions {
+        repository,
+        is_dry_run,
+    })
+}
+
+impl DeletionReason {
+    fn log_text(self) -> &'static str {
+        match self {
+            DeletionReason::Oversize => "oversize",
+            DeletionReason::Surplus => "surplus",
+        }
+    }
+}
+
+/// The log line for one planned or performed deletion; `action_name` is
+/// `would-delete` for a dry run and `deleted` after `gh` removed the entry.
+pub fn deletion_log_line(action_name: &str, deletion: &Deletion) -> String {
+    format!(
+        "[cache-prune] action={action_name} reason={} cache_id={} size_bytes={}",
+        deletion.reason.log_text(),
+        deletion.id,
+        deletion.size_bytes
+    )
+}
+
+/// The closing log line with the totals of the deletions that counted.
+pub fn completion_log_line(
+    is_dry_run: bool,
+    total_deleted_count: usize,
+    total_freed_bytes: u64,
+    elapsed_seconds: u64,
+) -> String {
+    let outcome_text = if is_dry_run { "dry-run" } else { "pruned" };
+    format!(
+        "[cache-prune] status=complete outcome={outcome_text} deleted={total_deleted_count} freed_bytes={total_freed_bytes} elapsed_seconds={elapsed_seconds}"
+    )
+}
+
+pub fn run(arguments: impl Iterator<Item = String>) -> Result<(), String> {
+    let started_at = std::time::Instant::now();
+    let PruneOptions {
+        repository,
+        is_dry_run,
+    } = parse_prune_arguments(arguments, std::env::var("GITHUB_REPOSITORY").ok())?;
+    eprintln!("[cache-prune] status=start repository={repository} dry_run={is_dry_run}");
 
     let default_branch = gh_output(&[
         "api",
@@ -216,49 +273,52 @@ pub fn run(mut arguments: impl Iterator<Item = String>) -> Result<(), String> {
     let mut total_deleted_count = 0usize;
     let mut total_freed_bytes = 0u64;
     for deletion in &deletions {
-        let reason_text = match deletion.reason {
-            DeletionReason::Oversize => "oversize",
-            DeletionReason::Surplus => "surplus",
-        };
-        if dry_run {
-            eprintln!(
-                "[cache-prune] action=would-delete reason={reason_text} cache_id={} size_bytes={}",
-                deletion.id, deletion.size_bytes
-            );
-        } else {
-            let delete_status = Command::new("gh")
-                .args([
-                    "cache",
-                    "delete",
-                    &deletion.id.to_string(),
-                    "-R",
-                    &repository,
-                ])
-                .status()
-                .map_err(|error| format!("gh cache delete failed to start: {error}"))?;
-            if !delete_status.success() {
-                // A vanished `github_actions_cache` entry (404) must not fail
-                // the prune; the next run relists and retries.
-                eprintln!(
-                    "[cache-prune] action=delete-failed cache_id={}",
-                    deletion.id
-                );
-                continue;
-            }
-            eprintln!(
-                "[cache-prune] action=deleted reason={reason_text} cache_id={} size_bytes={}",
-                deletion.id, deletion.size_bytes
-            );
+        if apply_deletion(deletion, &repository, is_dry_run)? {
+            total_deleted_count += 1;
+            total_freed_bytes += deletion.size_bytes;
         }
-        total_deleted_count += 1;
-        total_freed_bytes += deletion.size_bytes;
     }
-    let outcome_text = if dry_run { "dry-run" } else { "pruned" };
     eprintln!(
-        "[cache-prune] status=complete outcome={outcome_text} deleted={total_deleted_count} freed_bytes={total_freed_bytes} elapsed_seconds={}",
-        started_at.elapsed().as_secs()
+        "{}",
+        completion_log_line(
+            is_dry_run,
+            total_deleted_count,
+            total_freed_bytes,
+            started_at.elapsed().as_secs()
+        )
     );
     Ok(())
+}
+
+/// Logs one deletion and, outside a dry run, asks `gh` to perform it.
+/// Returns whether the deletion counts toward the totals: a dry run counts
+/// every planned deletion, a real run only those `gh` accepted.
+fn apply_deletion(deletion: &Deletion, repository: &str, is_dry_run: bool) -> Result<bool, String> {
+    if is_dry_run {
+        eprintln!("{}", deletion_log_line("would-delete", deletion));
+        return Ok(true);
+    }
+    let delete_status = Command::new("gh")
+        .args([
+            "cache",
+            "delete",
+            &deletion.id.to_string(),
+            "-R",
+            repository,
+        ])
+        .status()
+        .map_err(|error| format!("gh cache delete failed to start: {error}"))?;
+    if !delete_status.success() {
+        // A vanished `github_actions_cache` entry (404) must not fail
+        // the prune; the next run relists and retries.
+        eprintln!(
+            "[cache-prune] action=delete-failed cache_id={}",
+            deletion.id
+        );
+        return Ok(false);
+    }
+    eprintln!("{}", deletion_log_line("deleted", deletion));
+    Ok(true)
 }
 
 fn gh_output(gh_arguments: &[&str]) -> Result<String, String> {

@@ -42,9 +42,58 @@ fn should_serialize_image_identity_controls_memory_and_success_outcome() {
 }
 
 #[test]
-#[expect(clippy::too_many_lines)]
 fn should_serialize_every_image_operation_with_graph_and_synchronization_separate() {
-    let image_operations = [
+    let mut image_operations = image_setup_and_component_loading_operations();
+    image_operations.extend(image_denoising_decoding_and_cleanup_operations());
+    let mut attribution = PerformanceAttribution::enabled();
+    for (operation_index, (operation, _identifier)) in image_operations.iter().enumerate() {
+        attribution.record_completed_operation(
+            *operation,
+            Duration::from_nanos(operation_index as u64 * 2),
+            Duration::from_nanos(operation_index as u64 * 2 + 1),
+        );
+    }
+    let report = attribution
+        .finish_image_generation(
+            PerformanceAttributionOutcome::Failed,
+            48,
+            FLUX2_KLEIN_OFFICIAL_MODEL_ID.to_owned(),
+            FLUX2_KLEIN_OFFICIAL_REVISION.to_owned(),
+            64,
+            64,
+            4,
+            1_000,
+            74,
+            None,
+            (None, None, None),
+            (None, None, None),
+            Some("bounded image execution failed".to_owned()),
+        )
+        .expect("enabled image attribution should produce a report");
+    let report_json = serde_json::to_value(report).expect("the image report should serialize");
+    let identifiers = report_json["operations"]
+        .as_array()
+        .expect("operations should serialize as an array")
+        .iter()
+        .filter_map(|operation| operation["operation"].as_str())
+        .collect::<Vec<_>>();
+
+    assert_eq!(
+        identifiers,
+        image_operations
+            .iter()
+            .map(|(_operation, identifier)| *identifier)
+            .collect::<Vec<_>>(),
+    );
+    assert_eq!(report_json["outcome"], "failed");
+    assert_eq!(
+        report_json["failure_description"],
+        "bounded image execution failed"
+    );
+}
+
+fn image_setup_and_component_loading_operations() -> Vec<(PerformanceOperation, &'static str)> {
+    vec![
         (
             PerformanceOperation::ArtifactValidation,
             "artifact_validation",
@@ -102,6 +151,11 @@ fn should_serialize_every_image_operation_with_graph_and_synchronization_separat
             PerformanceOperation::ImageTransformerComponentLoading,
             "image_transformer_component_loading",
         ),
+    ]
+}
+
+fn image_denoising_decoding_and_cleanup_operations() -> Vec<(PerformanceOperation, &'static str)> {
+    vec![
         (
             PerformanceOperation::ImageDenoisingStepSpan,
             "image_denoising_step_span",
@@ -163,52 +217,7 @@ fn should_serialize_every_image_operation_with_graph_and_synchronization_separat
             PerformanceOperation::ImageFinalCleanup,
             "image_final_cleanup",
         ),
-    ];
-    let mut attribution = PerformanceAttribution::enabled();
-    for (operation_index, (operation, _identifier)) in image_operations.iter().enumerate() {
-        attribution.record_completed_operation(
-            *operation,
-            Duration::from_nanos(operation_index as u64 * 2),
-            Duration::from_nanos(operation_index as u64 * 2 + 1),
-        );
-    }
-    let report = attribution
-        .finish_image_generation(
-            PerformanceAttributionOutcome::Failed,
-            48,
-            FLUX2_KLEIN_OFFICIAL_MODEL_ID.to_owned(),
-            FLUX2_KLEIN_OFFICIAL_REVISION.to_owned(),
-            64,
-            64,
-            4,
-            1_000,
-            74,
-            None,
-            (None, None, None),
-            (None, None, None),
-            Some("bounded image execution failed".to_owned()),
-        )
-        .expect("enabled image attribution should produce a report");
-    let report_json = serde_json::to_value(report).expect("the image report should serialize");
-    let identifiers = report_json["operations"]
-        .as_array()
-        .expect("operations should serialize as an array")
-        .iter()
-        .filter_map(|operation| operation["operation"].as_str())
-        .collect::<Vec<_>>();
-
-    assert_eq!(
-        identifiers,
-        image_operations
-            .iter()
-            .map(|(_operation, identifier)| *identifier)
-            .collect::<Vec<_>>(),
-    );
-    assert_eq!(report_json["outcome"], "failed");
-    assert_eq!(
-        report_json["failure_description"],
-        "bounded image execution failed"
-    );
+    ]
 }
 
 #[test]

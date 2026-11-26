@@ -75,6 +75,67 @@ pub(super) struct PreviousTokenExpertRouteReuseMeasurement {
     pub(super) examined_layer_count: u64,
 }
 
+impl PreviousTokenExpertRouteReuseMeasurement {
+    /// What one decode layer's experts say about the token before it. Both
+    /// slices must be sorted and free of duplicates, which is what lets the
+    /// current token's list be searched by binary search.
+    fn between_decode_tokens(
+        previous_selected_expert_ids: &[usize],
+        current_selected_expert_ids: &[usize],
+    ) -> Self {
+        let matched_expert_count = previous_selected_expert_ids
+            .iter()
+            .filter(|expert_id| current_selected_expert_ids.binary_search(expert_id).is_ok())
+            .count();
+        Self {
+            predicted_expert_count: usize_to_u64_saturating(previous_selected_expert_ids.len()),
+            matched_expert_count: usize_to_u64_saturating(matched_expert_count),
+            completely_matched_layer_count: u64::from(
+                previous_selected_expert_ids == current_selected_expert_ids,
+            ),
+            examined_layer_count: 1,
+        }
+    }
+
+    /// Adds another layer observation onto this one without wrapping.
+    fn accumulate(&mut self, other_observation: Self) {
+        self.predicted_expert_count = self
+            .predicted_expert_count
+            .saturating_add(other_observation.predicted_expert_count);
+        self.matched_expert_count = self
+            .matched_expert_count
+            .saturating_add(other_observation.matched_expert_count);
+        self.completely_matched_layer_count = self
+            .completely_matched_layer_count
+            .saturating_add(other_observation.completely_matched_layer_count);
+        self.examined_layer_count = self
+            .examined_layer_count
+            .saturating_add(other_observation.examined_layer_count);
+    }
+
+    /// The report counter each field is added to, paired with its amount.
+    fn counter_increments(self) -> [(PerformanceCounter, u64); 4] {
+        [
+            (
+                PerformanceCounter::ExpertRoutePredictedExpertCount,
+                self.predicted_expert_count,
+            ),
+            (
+                PerformanceCounter::ExpertRouteMatchedExpertCount,
+                self.matched_expert_count,
+            ),
+            (
+                PerformanceCounter::ExpertRouteCompletelyMatchedLayerCount,
+                self.completely_matched_layer_count,
+            ),
+            (
+                PerformanceCounter::ExpertRouteExaminedLayerCount,
+                self.examined_layer_count,
+            ),
+        ]
+    }
+}
+
 impl PerformanceAttribution {
     /// Creates a no-op accumulator that performs no clock reads.
     #[must_use]
@@ -267,9 +328,7 @@ impl PerformanceAttribution {
             return;
         }
 
-        let mut sorted_unique_selected_expert_ids = selected_expert_ids.to_vec();
-        sorted_unique_selected_expert_ids.sort_unstable();
-        sorted_unique_selected_expert_ids.dedup();
+        let sorted_unique_selected_expert_ids = sorted_unique_expert_ids(selected_expert_ids);
         if enabled_attribution
             .previous_token_selected_expert_ids_by_layer
             .len()
@@ -286,19 +345,10 @@ impl PerformanceAttribution {
             return;
         };
 
-        let predicted_expert_count = usize_to_u64_saturating(previous_selected_expert_ids.len());
-        let matched_expert_count = usize_to_u64_saturating(
-            previous_selected_expert_ids
-                .iter()
-                .filter(|expert_id| {
-                    sorted_unique_selected_expert_ids
-                        .binary_search(expert_id)
-                        .is_ok()
-                })
-                .count(),
+        let route_reuse = PreviousTokenExpertRouteReuseMeasurement::between_decode_tokens(
+            &previous_selected_expert_ids,
+            &sorted_unique_selected_expert_ids,
         );
-        let completely_matched_layer_count =
-            u64::from(previous_selected_expert_ids == sorted_unique_selected_expert_ids);
         if enabled_attribution
             .previous_token_expert_route_reuse_by_layer
             .len()
@@ -311,35 +361,9 @@ impl PerformanceAttribution {
                     PreviousTokenExpertRouteReuseMeasurement::default(),
                 );
         }
-        let layer_measurement =
-            &mut enabled_attribution.previous_token_expert_route_reuse_by_layer[layer_index];
-        layer_measurement.predicted_expert_count = layer_measurement
-            .predicted_expert_count
-            .saturating_add(predicted_expert_count);
-        layer_measurement.matched_expert_count = layer_measurement
-            .matched_expert_count
-            .saturating_add(matched_expert_count);
-        layer_measurement.completely_matched_layer_count = layer_measurement
-            .completely_matched_layer_count
-            .saturating_add(completely_matched_layer_count);
-        layer_measurement.examined_layer_count =
-            layer_measurement.examined_layer_count.saturating_add(1);
-
-        for (performance_counter, counter_increment) in [
-            (
-                PerformanceCounter::ExpertRoutePredictedExpertCount,
-                predicted_expert_count,
-            ),
-            (
-                PerformanceCounter::ExpertRouteMatchedExpertCount,
-                matched_expert_count,
-            ),
-            (
-                PerformanceCounter::ExpertRouteCompletelyMatchedLayerCount,
-                completely_matched_layer_count,
-            ),
-            (PerformanceCounter::ExpertRouteExaminedLayerCount, 1),
-        ] {
+        enabled_attribution.previous_token_expert_route_reuse_by_layer[layer_index]
+            .accumulate(route_reuse);
+        for (performance_counter, counter_increment) in route_reuse.counter_increments() {
             enabled_attribution.counter_values[performance_counter as usize] = enabled_attribution
                 .counter_values[performance_counter as usize]
                 .saturating_add(counter_increment);
@@ -369,6 +393,13 @@ impl PerformanceAttribution {
                 enabled_attribution.counter_values[counter as usize]
             })
     }
+}
+
+fn sorted_unique_expert_ids(selected_expert_ids: &[usize]) -> Vec<usize> {
+    let mut sorted_unique_expert_ids = selected_expert_ids.to_vec();
+    sorted_unique_expert_ids.sort_unstable();
+    sorted_unique_expert_ids.dedup();
+    sorted_unique_expert_ids
 }
 
 fn usize_to_u64_saturating(integer_count: usize) -> u64 {

@@ -5,6 +5,7 @@
 //! component set's private fields and the parent's imports directly.
 
 use ipc_protocol::ExpertMemoryMode;
+use runtime_integration::MlxMemorySnapshot;
 
 use super::*;
 
@@ -30,21 +31,7 @@ impl ImageEngineComponents for Flux2KleinMlxComponents {
         self.runtime
             .as_ref()
             .and_then(|runtime| runtime.memory_snapshot().ok())
-            .map(|snapshot| {
-                let mut telemetry = MlxMemoryTelemetry::new(
-                    snapshot.active_memory_bytes() as u64,
-                    snapshot.mlx_buffer_cache_bytes() as u64,
-                    snapshot.peak_memory_bytes() as u64,
-                    memory_policy::telemetry::MlxActiveMemoryBreakdown::default(),
-                );
-                if let Some(memory_ceiling_utilization) =
-                    self.memory_ceiling_utilization(snapshot.active_memory_bytes() as u64)
-                {
-                    telemetry =
-                        telemetry.with_memory_ceiling_utilization(memory_ceiling_utilization);
-                }
-                telemetry
-            })
+            .map(|snapshot| self.memory_telemetry_for_snapshot(&snapshot))
     }
 
     fn adopt_floor_raise_limit(&mut self, floor_raise_limit_bytes: u64) {
@@ -143,80 +130,12 @@ impl Flux2KleinEngineComponents for Flux2KleinMlxComponents {
 
     fn condition_prompt(&mut self, prompt: &str) -> Result<bool, String> {
         let mut attribution = self.request_attribution()?;
-        let operation_result = (|| {
-            if self.text_conditioning_state.is_none() {
-                let artifact = self.validated_artifact.take().ok_or_else(|| {
-                    "the validated FLUX.2 Klein artifact is unavailable".to_owned()
-                })?;
-                let retained_files = artifact
-                    .into_retained_files()
-                    .map_err(|error| error.to_string())?;
-                let tokenizer = Flux2KleinTokenizer::from_retained_sidecars(
-                    retained_files.tokenizer_sidecars(),
-                )
-                .map_err(|error| error.to_string())?;
-                let (text_encoder_weight_files, transformer_weight_files, vae_weight_files) =
-                    retained_files.into_weight_files();
-                let text_encoder_mode = self
-                    .residency_plan
-                    .as_ref()
-                    .map(Flux2KleinResidencyPlan::text_encoder_mode)
-                    .ok_or_else(|| "the FLUX.2 Klein residency plan is unavailable".to_owned())?;
-                let conditioner = Flux2KleinTextConditioner::load(
-                    self.runtime()?,
-                    tokenizer,
-                    text_encoder_weight_files,
-                    text_encoder_mode,
-                    &mut attribution,
-                )
-                .map_err(|error| error.to_string())?;
-                let conditioning_state = conditioner
-                    .start(self.runtime()?, &[prompt.to_owned()], &mut attribution)
-                    .map_err(|error| error.to_string())?;
-                self.text_conditioning_state = Some(conditioning_state);
-                self.transformer_weight_files = Some(transformer_weight_files);
-                self.vae_weight_files = Some(vae_weight_files);
-            }
-            let conditioning_state = self
-                .text_conditioning_state
-                .take()
-                .ok_or_else(|| "text conditioning state is unavailable".to_owned())?;
-            match conditioning_state
-                .advance_layer_group(
-                    self.runtime()?,
-                    TEXT_ENCODER_LAYERS_PER_CANCELLATION_GROUP,
-                    &mut attribution,
-                )
-                .map_err(|error| error.to_string())?
-            {
-                Flux2KleinTextConditioningAdvance::LayerGroupCompleted(conditioning_state) => {
-                    self.text_conditioning_state = Some(conditioning_state);
-                    Ok(false)
-                }
-                Flux2KleinTextConditioningAdvance::ConditioningCompleted(conditioning) => {
-                    if conditioning.batch_size() != 1
-                        || conditioning.sequence_length()
-                            != FLUX2_KLEIN_CONDITIONING_SEQUENCE_LENGTH
-                        || conditioning.attention_mask().shape()[0] != 1
-                    {
-                        return Err(
-                            "text conditioning produced incompatible request geometry".to_owned()
-                        );
-                    }
-                    self.conditioning = Some(conditioning);
-                    Ok(true)
-                }
-            }
-        })();
+        let operation_result = self.advance_text_conditioning(prompt, &mut attribution);
         let cleanup_result = if operation_result
             .as_ref()
             .is_ok_and(|is_complete| *is_complete)
         {
-            attribution.measure_operation(PerformanceOperation::MlxBufferCacheCleanup, |_| {
-                self.runtime()?
-                    .synchronize_gpu_stream_and_clear_mlx_buffer_cache()
-                    .map_err(|error| error.to_string())
-            })
+            self.synchronize_and_clear_mlx_buffer_cache(&mut attribution)
         } else {
             Ok(())
         };
@@ -290,6 +209,141 @@ impl Flux2KleinEngineComponents for Flux2KleinMlxComponents {
     }
 }
 
+impl Flux2KleinMlxComponents {
+    /// Reads one MLX memory snapshot as telemetry, with the image-lane split of unused headroom
+    /// when the memory geometry is known.
+    pub(super) fn memory_telemetry_for_snapshot(
+        &self,
+        snapshot: &MlxMemorySnapshot,
+    ) -> MlxMemoryTelemetry {
+        let mut telemetry = MlxMemoryTelemetry::new(
+            snapshot.active_memory_bytes() as u64,
+            snapshot.mlx_buffer_cache_bytes() as u64,
+            snapshot.peak_memory_bytes() as u64,
+            memory_policy::telemetry::MlxActiveMemoryBreakdown::default(),
+        );
+        if let Some(memory_ceiling_utilization) =
+            self.memory_ceiling_utilization(snapshot.active_memory_bytes() as u64)
+        {
+            telemetry = telemetry.with_memory_ceiling_utilization(memory_ceiling_utilization);
+        }
+        telemetry
+    }
+
+    fn synchronize_and_clear_mlx_buffer_cache(
+        &self,
+        attribution: &mut PerformanceAttribution,
+    ) -> Result<(), String> {
+        attribution.measure_operation(PerformanceOperation::MlxBufferCacheCleanup, |_| {
+            self.runtime()?
+                .synchronize_gpu_stream_and_clear_mlx_buffer_cache()
+                .map_err(|error| error.to_string())
+        })
+    }
+
+    /// Runs one text-conditioning boundary and reports whether conditioning is now complete.
+    /// The first boundary of a request also loads the text conditioner and starts the prompt.
+    fn advance_text_conditioning(
+        &mut self,
+        prompt: &str,
+        attribution: &mut PerformanceAttribution,
+    ) -> Result<bool, String> {
+        if self.text_conditioning_state.is_none() {
+            self.start_text_conditioning(prompt, attribution)?;
+        }
+        let conditioning_state = self
+            .text_conditioning_state
+            .take()
+            .ok_or_else(|| "text conditioning state is unavailable".to_owned())?;
+        match conditioning_state
+            .advance_layer_group(
+                self.runtime()?,
+                TEXT_ENCODER_LAYERS_PER_CANCELLATION_GROUP,
+                attribution,
+            )
+            .map_err(|error| error.to_string())?
+        {
+            Flux2KleinTextConditioningAdvance::LayerGroupCompleted(conditioning_state) => {
+                self.text_conditioning_state = Some(conditioning_state);
+                Ok(false)
+            }
+            Flux2KleinTextConditioningAdvance::ConditioningCompleted(conditioning) => {
+                self.store_completed_conditioning(conditioning)
+            }
+        }
+    }
+
+    /// Turns the retained artifact into the text conditioner, starts the prompt on it, and
+    /// hands the transformer and VAE weight files on to the later phases.
+    fn start_text_conditioning(
+        &mut self,
+        prompt: &str,
+        attribution: &mut PerformanceAttribution,
+    ) -> Result<(), String> {
+        let artifact = self
+            .validated_artifact
+            .take()
+            .ok_or_else(|| "the validated FLUX.2 Klein artifact is unavailable".to_owned())?;
+        let retained_files = artifact
+            .into_retained_files()
+            .map_err(|error| error.to_string())?;
+        let tokenizer =
+            Flux2KleinTokenizer::from_retained_sidecars(retained_files.tokenizer_sidecars())
+                .map_err(|error| error.to_string())?;
+        let (text_encoder_weight_files, transformer_weight_files, vae_weight_files) =
+            retained_files.into_weight_files();
+        let text_encoder_mode = self
+            .residency_plan
+            .as_ref()
+            .map(Flux2KleinResidencyPlan::text_encoder_mode)
+            .ok_or_else(|| "the FLUX.2 Klein residency plan is unavailable".to_owned())?;
+        let conditioner = Flux2KleinTextConditioner::load(
+            self.runtime()?,
+            tokenizer,
+            text_encoder_weight_files,
+            text_encoder_mode,
+            attribution,
+        )
+        .map_err(|error| error.to_string())?;
+        let conditioning_state = conditioner
+            .start(self.runtime()?, &[prompt.to_owned()], attribution)
+            .map_err(|error| error.to_string())?;
+        self.text_conditioning_state = Some(conditioning_state);
+        self.transformer_weight_files = Some(transformer_weight_files);
+        self.vae_weight_files = Some(vae_weight_files);
+        Ok(())
+    }
+
+    fn store_completed_conditioning(
+        &mut self,
+        conditioning: Flux2KleinTextConditioning,
+    ) -> Result<bool, String> {
+        if !conditioning_describes_one_request(
+            conditioning.batch_size(),
+            conditioning.sequence_length(),
+            &conditioning.attention_mask().shape(),
+        ) {
+            return Err("text conditioning produced incompatible request geometry".to_owned());
+        }
+        self.conditioning = Some(conditioning);
+        Ok(true)
+    }
+}
+
+/// Whether finished text conditioning covers exactly one request: a batch of one, the fixed
+/// conditioning sequence length, and an attention mask whose leading dimension is one. The mask
+/// arrives as its shape, and a zero-dimensional mask has no leading dimension, so it is rejected
+/// like any other wrong geometry instead of being indexed.
+fn conditioning_describes_one_request(
+    batch_size: usize,
+    sequence_length: usize,
+    attention_mask_shape: &[i32],
+) -> bool {
+    batch_size == 1
+        && sequence_length == FLUX2_KLEIN_CONDITIONING_SEQUENCE_LENGTH
+        && attention_mask_shape.first() == Some(&1)
+}
+
 fn mlx_buffer_cache_limit_for_ceiling(
     original_mlx_buffer_cache_limit_bytes: usize,
     requested_mlx_memory_ceiling_bytes: usize,
@@ -299,3 +353,7 @@ fn mlx_buffer_cache_limit_for_ceiling(
 
 use image_generation::image_engine_shell::ImageEngineComponents;
 use memory_policy::telemetry::MlxMemoryLimitAdjustment;
+
+#[cfg(test)]
+#[path = "engine_components_tests.rs"]
+mod engine_components_tests;

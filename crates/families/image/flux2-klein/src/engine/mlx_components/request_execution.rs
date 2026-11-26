@@ -1,6 +1,17 @@
 //! Request-only MLX graph construction, synchronization, release, and report completion.
 
+use model_primitives::performance_attribution::PerformanceAttributionReport;
+use runtime_integration::MlxMemorySnapshot;
+
 use super::*;
+
+mod denoising_inputs;
+mod finished_request;
+
+use denoising_inputs::DenoisingInputs;
+use finished_request::{
+    FinishedRequest, bounded_failure_description, memory_bytes_from_snapshot, memory_readings,
+};
 
 impl Flux2KleinMlxComponents {
     pub(super) fn initialize_keyed_noise_inner(
@@ -62,55 +73,20 @@ impl Flux2KleinMlxComponents {
                 "transformer forward state belongs to a different denoising step".to_owned(),
             );
         }
-        let transformer = self
-            .transformer
-            .as_ref()
-            .ok_or_else(|| "transformer is unavailable".to_owned())?;
-        let latents = self
-            .latents
-            .as_ref()
-            .ok_or_else(|| "latent state is unavailable".to_owned())?;
-        let conditioning = self
-            .conditioning
-            .as_ref()
-            .ok_or_else(|| "text conditioning is unavailable".to_owned())?;
-        let image_position_ids = self
-            .image_position_ids
-            .as_ref()
-            .ok_or_else(|| "image position IDs are unavailable".to_owned())?;
-        let text_position_ids = self
-            .text_position_ids
-            .as_ref()
-            .ok_or_else(|| "text position IDs are unavailable".to_owned())?;
+        let inputs = DenoisingInputs::bind(
+            self.transformer.as_ref(),
+            self.latents.as_ref(),
+            self.conditioning.as_ref(),
+            self.image_position_ids.as_ref(),
+            self.text_position_ids.as_ref(),
+        )?;
         let forward_state = match self.forward_state.take() {
             Some(forward_state) => forward_state,
             None => {
-                let timestep = transformer
-                    .runtime()
-                    .array_from_f32(&[flow_step.sigma() as f32], &[1])
-                    .map_err(|error| error.to_string())?;
-                self.forward_step_index = Some(step_index);
-                transformer
-                    .start_forward(Flux2KleinTransformerInputs::new(
-                        latents,
-                        conditioning.hidden_states(),
-                        &timestep,
-                        image_position_ids,
-                        text_position_ids,
-                    ))
-                    .map_err(|error| error.to_string())?
+                inputs.start_forward_state(&flow_step, step_index, &mut self.forward_step_index)?
             }
         };
-        let mut ignore_group_event = |_| {};
-        let forward_advance = transformer
-            .advance_one_block_group_with_performance_attribution(
-                forward_state,
-                TRANSFORMER_BLOCKS_PER_CANCELLATION_GROUP,
-                &mut ignore_group_event,
-                performance_attribution,
-            )
-            .map_err(|error| error.to_string())?;
-        let output = match forward_advance {
+        let output = match inputs.advance_block_group(forward_state, performance_attribution)? {
             Flux2KleinForwardAdvance::BlockGroupCompleted(forward_state) => {
                 self.forward_state = Some(forward_state);
                 return Ok(false);
@@ -118,27 +94,8 @@ impl Flux2KleinMlxComponents {
             Flux2KleinForwardAdvance::ForwardCompleted(output) => output,
         };
         self.forward_step_index = None;
-        let updated_latents = performance_attribution.measure_operation(
-            PerformanceOperation::ImageSchedulerUpdateGraphConstruction,
-            |_| {
-                flux2_klein_euler_update(
-                    transformer.runtime(),
-                    latents,
-                    output.sample(),
-                    flow_step.delta_sigma() as f32,
-                )
-                .map_err(|error| error.to_string())
-            },
-        )?;
-        performance_attribution.measure_operation(
-            PerformanceOperation::ImageSchedulerUpdateSynchronizationWait,
-            |_| {
-                transformer
-                    .runtime()
-                    .evaluate_arrays(&[&updated_latents])
-                    .map_err(|error| error.to_string())
-            },
-        )?;
+        let updated_latents =
+            inputs.euler_updated_latents(&output, &flow_step, performance_attribution)?;
         self.latents = Some(updated_latents);
         Ok(true)
     }
@@ -240,6 +197,34 @@ impl Flux2KleinMlxComponents {
             .request_attribution
             .take()
             .unwrap_or_else(PerformanceAttribution::disabled);
+        let mut finished_request = self.release_request_state(&mut attribution);
+        let memory_snapshot = self.synchronize_and_sample_memory(&mut attribution, outcome)?;
+        if let Some(snapshot) = memory_snapshot.as_ref() {
+            self.post_cleanup_memory_telemetry = Some(self.memory_telemetry_for_snapshot(snapshot));
+        }
+        finished_request.final_memory = memory_snapshot.as_ref().map(memory_bytes_from_snapshot);
+        let report = self.finish_image_report(
+            attribution,
+            outcome,
+            encoded_bytes,
+            failure_description,
+            &finished_request,
+        );
+        if let Some(report) = report
+            && let Some(attribution_log) = self.performance_attribution_log.as_mut()
+        {
+            attribution_log
+                .record(&report)
+                .map_err(|error| error.to_string())?;
+        }
+        self.replenish_validated_descriptors()
+    }
+
+    /// Drops every request owner and returns the facts the report still needs from them.
+    fn release_request_state(
+        &mut self,
+        attribution: &mut PerformanceAttribution,
+    ) -> FinishedRequest {
         // Dropping every request owner first ensures cancellation retires no graph that can
         // later publish partial text, denoising state, or decoded pixels.
         self.forward_state = None;
@@ -250,84 +235,69 @@ impl Flux2KleinMlxComponents {
                 self.recover_runtime_from_transformer()
             });
         }
-        let request_id = self.request_id.map(RequestId::value).unwrap_or(0);
-        let request_seed = self.request_seed.unwrap_or(0);
-        let request_dimensions = self.dimensions;
-        let request_start_memory = self.request_start_memory;
+        let finished_request = FinishedRequest {
+            request_id: self.request_id.map(RequestId::value).unwrap_or(0),
+            seed: self.request_seed.unwrap_or(0),
+            dimensions: self.dimensions,
+            start_memory: self.request_start_memory,
+            final_memory: None,
+        };
         attribution.measure_operation(PerformanceOperation::ImageComponentRelease, |_| {
             self.reset_request_arrays()
         });
-        let memory_snapshot = {
-            let runtime = self.runtime()?;
-            let cleanup_operation = if outcome == PerformanceAttributionOutcome::Cancelled {
-                PerformanceOperation::ImageCancellationSynchronization
-            } else {
-                PerformanceOperation::ImageFinalCleanup
-            };
-            attribution
-                .measure_operation(cleanup_operation, |_| {
-                    runtime.synchronize_gpu_stream()?;
-                    runtime.clear_mlx_buffer_cache()
-                })
-                .map_err(|error| error.to_string())?;
-            runtime.memory_snapshot().ok()
-        };
-        self.post_cleanup_memory_telemetry = memory_snapshot.as_ref().map(|snapshot| {
-            let mut telemetry = MlxMemoryTelemetry::new(
-                snapshot.active_memory_bytes() as u64,
-                snapshot.mlx_buffer_cache_bytes() as u64,
-                snapshot.peak_memory_bytes() as u64,
-                memory_policy::telemetry::MlxActiveMemoryBreakdown::default(),
-            );
-            if let Some(memory_ceiling_utilization) =
-                self.memory_ceiling_utilization(snapshot.active_memory_bytes() as u64)
-            {
-                telemetry = telemetry.with_memory_ceiling_utilization(memory_ceiling_utilization);
-            }
-            telemetry
-        });
-        let start_memory = request_start_memory.map_or((None, None, None), |snapshot| {
-            (Some(snapshot.0), Some(snapshot.1), Some(snapshot.2))
-        });
-        let final_memory = memory_snapshot.map_or((None, None, None), |snapshot| {
-            (
-                Some(snapshot.active_memory_bytes() as u64),
-                Some(snapshot.mlx_buffer_cache_bytes() as u64),
-                Some(snapshot.peak_memory_bytes() as u64),
-            )
-        });
-        let (width_pixels, height_pixels) = request_dimensions.map_or((0, 0), |dimensions| {
-            (dimensions.width_pixels(), dimensions.height_pixels())
-        });
-        let report = if attribution.is_enabled() {
-            let bounded_failure_description = failure_description
-                .map(|description| description.chars().take(512).collect::<String>());
-            attribution.finish_image_generation(
-                outcome,
-                request_id,
-                self.serving_model_id.clone(),
-                self.provenance.revision().to_owned(),
-                width_pixels,
-                height_pixels,
-                4,
-                1_000,
-                request_seed,
-                encoded_bytes,
-                start_memory,
-                final_memory,
-                bounded_failure_description,
-            )
+        finished_request
+    }
+
+    /// Waits for the GPU stream, clears the `mlx_buffer_cache`, and reads MLX memory afterwards.
+    /// A cancelled request is measured under its own operation name.
+    fn synchronize_and_sample_memory(
+        &self,
+        attribution: &mut PerformanceAttribution,
+        outcome: PerformanceAttributionOutcome,
+    ) -> Result<Option<MlxMemorySnapshot>, String> {
+        let runtime = self.runtime()?;
+        let cleanup_operation = if outcome == PerformanceAttributionOutcome::Cancelled {
+            PerformanceOperation::ImageCancellationSynchronization
         } else {
-            None
+            PerformanceOperation::ImageFinalCleanup
         };
-        if let Some(report) = report
-            && let Some(attribution_log) = self.performance_attribution_log.as_mut()
-        {
-            attribution_log
-                .record(&report)
-                .map_err(|error| error.to_string())?;
+        attribution
+            .measure_operation(cleanup_operation, |_| {
+                runtime.synchronize_gpu_stream()?;
+                runtime.clear_mlx_buffer_cache()
+            })
+            .map_err(|error| error.to_string())?;
+        Ok(runtime.memory_snapshot().ok())
+    }
+
+    /// Finishes the image-generation report, or returns `None` when attribution is off.
+    fn finish_image_report(
+        &self,
+        attribution: PerformanceAttribution,
+        outcome: PerformanceAttributionOutcome,
+        encoded_bytes: Option<u64>,
+        failure_description: Option<&str>,
+        finished_request: &FinishedRequest,
+    ) -> Option<PerformanceAttributionReport> {
+        if !attribution.is_enabled() {
+            return None;
         }
-        self.replenish_validated_descriptors()
+        let (width_pixels, height_pixels) = finished_request.image_size_pixels();
+        attribution.finish_image_generation(
+            outcome,
+            finished_request.request_id,
+            self.serving_model_id.clone(),
+            self.provenance.revision().to_owned(),
+            width_pixels,
+            height_pixels,
+            4,
+            1_000,
+            finished_request.seed,
+            encoded_bytes,
+            memory_readings(finished_request.start_memory),
+            memory_readings(finished_request.final_memory),
+            bounded_failure_description(failure_description),
+        )
     }
 }
 

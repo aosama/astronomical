@@ -1,7 +1,7 @@
 use model_serving::{
-    PerformanceAttribution, PerformanceOperation, restore_expert_assignment_order,
-    router_weighted_expert_inputs, sort_expert_assignments, sorted_expert_weighted_sum,
-    sorted_expert_weighted_sum_kernel, unsorted_expert_weighted_sum,
+    PerformanceAttribution, PerformanceOperation, SortedExpertAssignments,
+    restore_expert_assignment_order, router_weighted_expert_inputs, sort_expert_assignments,
+    sorted_expert_weighted_sum, sorted_expert_weighted_sum_kernel, unsorted_expert_weighted_sum,
 };
 use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
@@ -116,6 +116,34 @@ async fn should_sort_assignments_and_reduce_without_restoring_the_expanded_tenso
             .expect("sorted ids should evaluate"),
         vec![0, 1, 2, 3, 4, 5]
     );
+    let (sorted_expert_outputs, selected_scores) = sorted_outputs_and_selected_scores(&runtime);
+    assert_sorted_reduction_skips_restoration(
+        &runtime,
+        &sorted_assignments,
+        &sorted_expert_outputs,
+        &selected_scores,
+        &mut performance_attribution,
+    );
+    assert_restored_reduction_matches_sorted_reduction(
+        &runtime,
+        &sorted_assignments,
+        &sorted_expert_outputs,
+        &selected_scores,
+        &selected_indices.shape(),
+    );
+    assert!(
+        performance_attribution
+            .operation_measurement(PerformanceOperation::ExpertAssignmentPreparation)
+            .is_some()
+    );
+    assert!(
+        performance_attribution
+            .operation_measurement(PerformanceOperation::ExpertWeightedReduction)
+            .is_some()
+    );
+}
+
+fn sorted_outputs_and_selected_scores(runtime: &MlxRuntime) -> (MlxArray, MlxArray) {
     let sorted_expert_outputs = runtime
         .array_from_f32(
             &[
@@ -127,14 +155,24 @@ async fn should_sort_assignments_and_reduce_without_restoring_the_expanded_tenso
     let selected_scores = runtime
         .array_from_f32(&[0.1, 0.2, 0.7, 0.25, 0.25, 0.5], &[1, 2, 3])
         .expect("scores should be valid");
+    (sorted_expert_outputs, selected_scores)
+}
+
+fn assert_sorted_reduction_skips_restoration(
+    runtime: &MlxRuntime,
+    sorted_assignments: &SortedExpertAssignments,
+    sorted_expert_outputs: &MlxArray,
+    selected_scores: &MlxArray,
+    performance_attribution: &mut PerformanceAttribution,
+) {
     let kernel = sorted_expert_weighted_sum_kernel().expect("kernel should initialize");
     let weighted = sorted_expert_weighted_sum(
-        &runtime,
+        runtime,
         &kernel,
-        &sorted_expert_outputs,
+        sorted_expert_outputs,
         &sorted_assignments.inverse_order,
-        &selected_scores,
-        &mut performance_attribution,
+        selected_scores,
+        performance_attribution,
     )
     .expect("sorted reduction should succeed");
     assert_f32_close(
@@ -143,17 +181,26 @@ async fn should_sort_assignments_and_reduce_without_restoring_the_expanded_tenso
             .expect("weighted outputs should evaluate"),
         &[133.0, 134.0, 120.0, 121.0],
     );
+}
+
+fn assert_restored_reduction_matches_sorted_reduction(
+    runtime: &MlxRuntime,
+    sorted_assignments: &SortedExpertAssignments,
+    sorted_expert_outputs: &MlxArray,
+    selected_scores: &MlxArray,
+    selected_indices_shape: &[i32],
+) {
     let restored = restore_expert_assignment_order(
-        &runtime,
-        &sorted_expert_outputs,
+        runtime,
+        sorted_expert_outputs,
         &sorted_assignments.inverse_order,
-        &selected_indices.shape(),
+        selected_indices_shape,
     )
     .expect("restore remains available for the operations reference");
     let restored_weighted = unsorted_expert_weighted_sum(
-        &runtime,
+        runtime,
         &restored,
-        &selected_scores,
+        selected_scores,
         &mut PerformanceAttribution::disabled(),
     )
     .expect("restored unsorted reduction should match");
@@ -162,16 +209,6 @@ async fn should_sort_assignments_and_reduce_without_restoring_the_expanded_tenso
             .to_vec_f32()
             .expect("restored reduction should evaluate"),
         &[133.0, 134.0, 120.0, 121.0],
-    );
-    assert!(
-        performance_attribution
-            .operation_measurement(PerformanceOperation::ExpertAssignmentPreparation)
-            .is_some()
-    );
-    assert!(
-        performance_attribution
-            .operation_measurement(PerformanceOperation::ExpertWeightedReduction)
-            .is_some()
     );
 }
 

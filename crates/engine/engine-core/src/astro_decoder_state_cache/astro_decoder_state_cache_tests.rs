@@ -6,40 +6,8 @@ use crate::{
 
 #[test]
 fn should_accept_a_mixed_architecture_neutral_astro_decoder_state_cache_layout() {
-    let astro_decoder_state_cache_layout = AstroDecoderStateCacheLayout::new(vec![
-        AstroDecoderStateCacheLayerLayout::recurrent_tensor(
-            AstroDecoderStateCacheTensorLayout::fixed(
-                "linear.convolution",
-                AstroDecoderStateCacheTensorDtype::Float16,
-                vec![1, 3, 8],
-            ),
-        ),
-        AstroDecoderStateCacheLayerLayout::composite(vec![
-            AstroDecoderStateCacheLayerLayout::append_only_attention(
-                AstroDecoderStateCacheTensorLayout::sequence(
-                    "attention.keys",
-                    AstroDecoderStateCacheTensorDtype::BFloat16,
-                    vec![1, 2, 0, 4],
-                    2,
-                ),
-                AstroDecoderStateCacheTensorLayout::sequence(
-                    "attention.values",
-                    AstroDecoderStateCacheTensorDtype::BFloat16,
-                    vec![1, 2, 0, 4],
-                    2,
-                ),
-                256,
-            ),
-            AstroDecoderStateCacheLayerLayout::recurrent_tensor(
-                AstroDecoderStateCacheTensorLayout::fixed(
-                    "linear.recurrent",
-                    AstroDecoderStateCacheTensorDtype::Float32,
-                    vec![1, 2, 4, 4],
-                ),
-            ),
-        ]),
-    ])
-    .expect("a mixed astro-decoder-state-cache layout should be valid");
+    let astro_decoder_state_cache_layout = mixed_astro_decoder_state_cache_layout_candidate()
+        .expect("a mixed astro-decoder-state-cache layout should be valid");
 
     assert_eq!(astro_decoder_state_cache_layout.layer_count(), 2);
     assert_eq!(astro_decoder_state_cache_layout.sequence_tensor_count(), 2);
@@ -96,40 +64,8 @@ fn should_accept_a_mixed_architecture_neutral_astro_decoder_state_cache_layout()
 
 #[test]
 fn should_bound_incremental_restore_workspace_by_one_block_or_boundary_snapshot() {
-    let astro_decoder_state_cache_layout = AstroDecoderStateCacheLayout::new(vec![
-        AstroDecoderStateCacheLayerLayout::recurrent_tensor(
-            AstroDecoderStateCacheTensorLayout::fixed(
-                "linear.convolution",
-                AstroDecoderStateCacheTensorDtype::Float16,
-                vec![1, 3, 8],
-            ),
-        ),
-        AstroDecoderStateCacheLayerLayout::composite(vec![
-            AstroDecoderStateCacheLayerLayout::append_only_attention(
-                AstroDecoderStateCacheTensorLayout::sequence(
-                    "attention.keys",
-                    AstroDecoderStateCacheTensorDtype::BFloat16,
-                    vec![1, 2, 0, 4],
-                    2,
-                ),
-                AstroDecoderStateCacheTensorLayout::sequence(
-                    "attention.values",
-                    AstroDecoderStateCacheTensorDtype::BFloat16,
-                    vec![1, 2, 0, 4],
-                    2,
-                ),
-                256,
-            ),
-            AstroDecoderStateCacheLayerLayout::recurrent_tensor(
-                AstroDecoderStateCacheTensorLayout::fixed(
-                    "linear.recurrent",
-                    AstroDecoderStateCacheTensorDtype::Float32,
-                    vec![1, 2, 4, 4],
-                ),
-            ),
-        ]),
-    ])
-    .expect("the mixed astro decoder state cache layout should be valid");
+    let astro_decoder_state_cache_layout = mixed_astro_decoder_state_cache_layout_candidate()
+        .expect("the mixed astro decoder state cache layout should be valid");
 
     assert_eq!(
         astro_decoder_state_cache_layout
@@ -287,4 +223,44 @@ fn should_reject_a_sequence_axis_outside_the_tensor_rank() {
             AstroDecoderStateCacheLayoutError::SequenceAxisOutsideTensorRank { layer_index: 0, .. }
         )
     ));
+}
+
+/// The mixed layout two tests start from: a recurrent layer, then a composite
+/// layer holding append-only attention and a recurrent tensor. It returns the
+/// construction outcome so each test keeps its own failure message.
+fn mixed_astro_decoder_state_cache_layout_candidate()
+-> Result<AstroDecoderStateCacheLayout, AstroDecoderStateCacheLayoutError> {
+    AstroDecoderStateCacheLayout::new(vec![
+        AstroDecoderStateCacheLayerLayout::recurrent_tensor(
+            AstroDecoderStateCacheTensorLayout::fixed(
+                "linear.convolution",
+                AstroDecoderStateCacheTensorDtype::Float16,
+                vec![1, 3, 8],
+            ),
+        ),
+        AstroDecoderStateCacheLayerLayout::composite(vec![
+            AstroDecoderStateCacheLayerLayout::append_only_attention(
+                AstroDecoderStateCacheTensorLayout::sequence(
+                    "attention.keys",
+                    AstroDecoderStateCacheTensorDtype::BFloat16,
+                    vec![1, 2, 0, 4],
+                    2,
+                ),
+                AstroDecoderStateCacheTensorLayout::sequence(
+                    "attention.values",
+                    AstroDecoderStateCacheTensorDtype::BFloat16,
+                    vec![1, 2, 0, 4],
+                    2,
+                ),
+                256,
+            ),
+            AstroDecoderStateCacheLayerLayout::recurrent_tensor(
+                AstroDecoderStateCacheTensorLayout::fixed(
+                    "linear.recurrent",
+                    AstroDecoderStateCacheTensorDtype::Float32,
+                    vec![1, 2, 4, 4],
+                ),
+            ),
+        ]),
+    ])
 }

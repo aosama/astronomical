@@ -3,6 +3,7 @@
 //! build the tokenizer and processor, and select and initialize the engine.
 
 use crate::TextMlxEngineConstructors;
+use config::AstroSsdPromptCacheConfig;
 use std::path::PathBuf;
 
 use crate::{
@@ -27,6 +28,33 @@ use super::qwen3_5_startup_storage::{
 };
 use super::{ChatFamilySettings, ChatRuntimeParts};
 
+/// What the validated artifact says about itself, captured once so any later
+/// startup phase that fails can record its failed loading attribution with it.
+struct ReviewedArtifactMetadata {
+    model_id: String,
+    model_revision: String,
+    total_payload_bytes: u64,
+    shard_count: usize,
+}
+
+impl ReviewedArtifactMetadata {
+    fn from_validated_artifact(validated_artifact: &ValidatedQwen3_5Artifact) -> Self {
+        Self {
+            model_id: validated_artifact.model_id().to_owned(),
+            model_revision: validated_artifact.revision().to_owned(),
+            total_payload_bytes: validated_artifact.total_payload_bytes(),
+            shard_count: validated_artifact.shard_count(),
+        }
+    }
+}
+
+/// The folders the engine is built with: the model's `astro_ssd_prompt_cache`
+/// disk store and its `astro_neural_engine_program_cache` folder.
+struct StartupStorage {
+    astro_ssd_prompt_cache_disk_store_config: Option<AstroSsdPromptCacheDiskStoreConfig>,
+    astro_neural_engine_program_cache_directory: Option<PathBuf>,
+}
+
 /// Validates the folder, selects and starts the engine, and builds the
 /// processor, from the worker's chat settings and the model's policy.
 pub(super) fn initialize_qwen3_5_model(
@@ -34,6 +62,9 @@ pub(super) fn initialize_qwen3_5_model(
     chat_family_settings: ChatFamilySettings,
     model_configuration: WorkerAutoregressiveModelConfiguration,
 ) -> Result<ChatRuntimeParts, Qwen3_5ModelStartupError> {
+    // Every field is named, with no `..`, so a setting added to
+    // `ChatFamilySettings` fails to compile here until startup decides what
+    // it does with it.
     let ChatFamilySettings {
         effective_mlx_memory_ceiling_bytes: active_memory_limit_bytes,
         mlx_buffer_cache_limit_bytes,
@@ -61,10 +92,7 @@ pub(super) fn initialize_qwen3_5_model(
         &model_directory_path,
         max_output_tokens,
     )?;
-    let artifact_model_id = validated_artifact.model_id().to_owned();
-    let artifact_model_revision = validated_artifact.revision().to_owned();
-    let artifact_payload_bytes = validated_artifact.total_payload_bytes();
-    let artifact_shard_count = validated_artifact.shard_count();
+    let artifact_metadata = ReviewedArtifactMetadata::from_validated_artifact(&validated_artifact);
     let ((selected_engine, engine_placement), model_loading_performance_attribution) =
         select_startup_engine(
             model_loading_performance_attribution,
@@ -72,10 +100,7 @@ pub(super) fn initialize_qwen3_5_model(
             &validated_artifact,
             &model_directory_path,
             active_memory_limit_bytes,
-            &artifact_model_id,
-            &artifact_model_revision,
-            artifact_payload_bytes,
-            artifact_shard_count,
+            &artifact_metadata,
         )?;
     let (generation_processor, model_loading_performance_attribution) =
         initialize_generation_processor(
@@ -86,34 +111,23 @@ pub(super) fn initialize_qwen3_5_model(
             requested_model_id,
             maximum_context_tokens,
             performance_attribution_enabled,
-            &artifact_model_id,
-            &artifact_model_revision,
-            artifact_payload_bytes,
-            artifact_shard_count,
+            &artifact_metadata,
         )?;
     let think_end_token_id = generation_processor.think_end_token_id();
-    let model_id = validated_artifact.model_id().to_owned();
-    let model_revision = validated_artifact.revision().to_owned();
-    let astro_ssd_prompt_cache_disk_store_config = astro_ssd_prompt_cache_disk_store_config(
-        astro_ssd_prompt_cache_serves_artifact(astro_ssd_prompt_cache_enabled, &validated_artifact),
+    let startup_storage = resolve_startup_storage(
+        astro_ssd_prompt_cache_enabled,
         &astro_ssd_prompt_cache_config,
-        &model_id,
-        &model_revision,
+        neural_engine_program_directory.as_deref(),
+        &validated_artifact,
+        &model_directory_path,
+        &artifact_metadata,
     );
-    let astro_neural_engine_program_cache_directory =
-        model_astro_neural_engine_program_cache_directory(
-            neural_engine_program_directory.as_deref(),
-            &model_directory_path,
-            &model_id,
-            &model_revision,
-        );
     let qwen3_5_engine = construct_selected_qwen3_5_engine(
         selected_engine,
         validated_artifact,
         active_memory_limit_bytes,
         mlx_buffer_cache_limit_bytes,
-        astro_ssd_prompt_cache_disk_store_config,
-        astro_neural_engine_program_cache_directory,
+        startup_storage,
         think_end_token_id,
         &model_directory_path,
         maximum_context_tokens,
@@ -121,16 +135,44 @@ pub(super) fn initialize_qwen3_5_model(
         model_loading_performance_attribution,
         performance_attribution_log,
         decode_astro_expert_cache_policy,
-        &artifact_model_id,
-        &artifact_model_revision,
-        artifact_payload_bytes,
-        artifact_shard_count,
+        &artifact_metadata,
     )?;
     Ok(ChatRuntimeParts {
         generation_processor,
         inference_engine: qwen3_5_engine,
         engine_placement,
     })
+}
+
+/// Derives the model's `astro_ssd_prompt_cache` disk store and
+/// `astro_neural_engine_program_cache` folder from the worker's settings. The
+/// disk store follows the user's setting and the artifact's support for it;
+/// the program folder stays `None` when the worker gave no program directory.
+fn resolve_startup_storage(
+    astro_ssd_prompt_cache_enabled: bool,
+    astro_ssd_prompt_cache_config: &AstroSsdPromptCacheConfig,
+    neural_engine_program_directory: Option<&std::path::Path>,
+    validated_artifact: &ValidatedQwen3_5Artifact,
+    model_directory_path: &std::path::Path,
+    artifact_metadata: &ReviewedArtifactMetadata,
+) -> StartupStorage {
+    let astro_ssd_prompt_cache_disk_store_config = astro_ssd_prompt_cache_disk_store_config(
+        astro_ssd_prompt_cache_serves_artifact(astro_ssd_prompt_cache_enabled, validated_artifact),
+        astro_ssd_prompt_cache_config,
+        &artifact_metadata.model_id,
+        &artifact_metadata.model_revision,
+    );
+    let astro_neural_engine_program_cache_directory =
+        model_astro_neural_engine_program_cache_directory(
+            neural_engine_program_directory,
+            model_directory_path,
+            &artifact_metadata.model_id,
+            &artifact_metadata.model_revision,
+        );
+    StartupStorage {
+        astro_ssd_prompt_cache_disk_store_config,
+        astro_neural_engine_program_cache_directory,
+    }
 }
 
 /// Constructs the engine as the startup selection said to start it, mapping
@@ -141,8 +183,7 @@ fn construct_selected_qwen3_5_engine(
     validated_artifact: ValidatedQwen3_5Artifact,
     active_memory_limit_bytes: usize,
     mlx_buffer_cache_limit_bytes: usize,
-    astro_ssd_prompt_cache_disk_store_config: Option<AstroSsdPromptCacheDiskStoreConfig>,
-    astro_neural_engine_program_cache_directory: Option<PathBuf>,
+    startup_storage: StartupStorage,
     think_end_token_id: u32,
     model_directory_path: &std::path::Path,
     maximum_context_tokens: u32,
@@ -150,17 +191,14 @@ fn construct_selected_qwen3_5_engine(
     model_loading_performance_attribution: PerformanceAttribution,
     performance_attribution_log: PerformanceAttributionLog,
     decode_astro_expert_cache_policy: WorkerDecodeAstroExpertCachePolicy,
-    artifact_model_id: &str,
-    artifact_model_revision: &str,
-    artifact_payload_bytes: u64,
-    artifact_shard_count: usize,
+    artifact_metadata: &ReviewedArtifactMetadata,
 ) -> Result<ModelFamilyInferenceEngine, Qwen3_5ModelStartupError> {
     construct_text_engine(
         prompt_chunk_tokens_for(&chunking, streaming_start.holds_whole_model),
         validated_artifact,
         active_memory_limit_bytes,
         mlx_buffer_cache_limit_bytes,
-        astro_ssd_prompt_cache_disk_store_config,
+        startup_storage.astro_ssd_prompt_cache_disk_store_config,
         think_end_token_id,
         model_directory_path,
         maximum_context_tokens,
@@ -169,12 +207,10 @@ fn construct_selected_qwen3_5_engine(
         performance_attribution_log,
         TextEngineSettings {
             decode_astro_expert_cache_policy,
-            astro_neural_engine_program_cache_directory,
+            astro_neural_engine_program_cache_directory: startup_storage
+                .astro_neural_engine_program_cache_directory,
         },
-        artifact_model_id,
-        artifact_model_revision,
-        artifact_payload_bytes,
-        artifact_shard_count,
+        artifact_metadata,
     )
 }
 
@@ -205,9 +241,6 @@ fn validate_startup_artifact(
                 model_loading_performance_attribution,
                 performance_attribution_log,
                 None,
-                None,
-                None,
-                None,
                 "artifact validation failed",
             );
             Err(Qwen3_5ModelStartupError::ArtifactValidation {
@@ -222,17 +255,13 @@ fn validate_startup_artifact(
 /// under attribution; a failure records the failed loading attribution with
 /// the validated artifact's metadata. The attribution returns to the caller
 /// on success so the next startup phase owns it.
-#[allow(clippy::too_many_arguments)]
 fn select_startup_engine(
     mut model_loading_performance_attribution: PerformanceAttribution,
     performance_attribution_log: &mut PerformanceAttributionLog,
     validated_artifact: &ValidatedQwen3_5Artifact,
     model_directory_path: &std::path::Path,
     active_memory_limit_bytes: usize,
-    artifact_model_id: &str,
-    artifact_model_revision: &str,
-    artifact_payload_bytes: u64,
-    artifact_shard_count: usize,
+    artifact_metadata: &ReviewedArtifactMetadata,
 ) -> Result<((EngineStart, EnginePlacement), PerformanceAttribution), Qwen3_5ModelStartupError> {
     match model_loading_performance_attribution.measure_operation(
         PerformanceOperation::ArtifactMemoryGeometry,
@@ -251,13 +280,10 @@ fn select_startup_engine(
                 model_directory = ?model_directory_path,
                 "Qwen3.5 engine selection failed during model initialization"
             );
-            record_reviewed_artifact_startup_failure(
+            record_failed_model_loading_performance_attribution(
                 model_loading_performance_attribution,
                 performance_attribution_log,
-                artifact_model_id,
-                artifact_model_revision,
-                artifact_payload_bytes,
-                artifact_shard_count,
+                Some(artifact_metadata),
                 "Qwen3.5 engine selection failed",
             );
             Err(selection_error)
@@ -277,10 +303,7 @@ fn initialize_generation_processor(
     requested_model_id: String,
     maximum_context_tokens: u32,
     performance_attribution_enabled: bool,
-    artifact_model_id: &str,
-    artifact_model_revision: &str,
-    artifact_payload_bytes: u64,
-    artifact_shard_count: usize,
+    artifact_metadata: &ReviewedArtifactMetadata,
 ) -> Result<(Qwen3_5GenerationProcessor, PerformanceAttribution), Qwen3_5ModelStartupError> {
     match model_loading_performance_attribution.measure_operation(
         PerformanceOperation::TokenizerInitialization,
@@ -298,13 +321,10 @@ fn initialize_generation_processor(
             Ok((generation_processor, model_loading_performance_attribution))
         }
         Err(source) => {
-            record_reviewed_artifact_startup_failure(
+            record_failed_model_loading_performance_attribution(
                 model_loading_performance_attribution,
                 performance_attribution_log,
-                artifact_model_id,
-                artifact_model_revision,
-                artifact_payload_bytes,
-                artifact_shard_count,
+                Some(artifact_metadata),
                 "tokenizer initialization failed",
             );
             Err(Qwen3_5ModelStartupError::ProcessorInitialization {
@@ -331,22 +351,16 @@ fn construct_text_engine(
     model_loading_performance_attribution: PerformanceAttribution,
     mut performance_attribution_log: PerformanceAttributionLog,
     text_engine_settings: TextEngineSettings,
-    artifact_model_id: &str,
-    artifact_model_revision: &str,
-    artifact_payload_bytes: u64,
-    artifact_shard_count: usize,
+    artifact_metadata: &ReviewedArtifactMetadata,
 ) -> Result<ModelFamilyInferenceEngine, Qwen3_5ModelStartupError> {
     let prompt_processing_chunk_sizer =
         match PromptProcessingChunkSizer::for_chunk_size_tokens(prompt_chunk_tokens) {
             Ok(prompt_processing_chunk_sizer) => prompt_processing_chunk_sizer,
             Err(prompt_processing_chunk_sizer_error) => {
-                record_reviewed_artifact_startup_failure(
+                record_failed_model_loading_performance_attribution(
                     model_loading_performance_attribution,
                     &mut performance_attribution_log,
-                    artifact_model_id,
-                    artifact_model_revision,
-                    artifact_payload_bytes,
-                    artifact_shard_count,
+                    Some(artifact_metadata),
                     "prompt-processing chunk configuration failed",
                 );
                 return Err(Qwen3_5ModelStartupError::PromptProcessingChunkSizing(
@@ -377,54 +391,52 @@ fn construct_text_engine(
     })
 }
 
-/// Records a failed loading attribution whose artifact metadata was already
-/// captured from the validated artifact.
-#[allow(clippy::too_many_arguments)]
-fn record_reviewed_artifact_startup_failure(
-    model_loading_performance_attribution: PerformanceAttribution,
-    performance_attribution_log: &mut PerformanceAttributionLog,
-    artifact_model_id: &str,
-    artifact_model_revision: &str,
-    artifact_payload_bytes: u64,
-    artifact_shard_count: usize,
+/// The model-loading attribution metadata of a failed startup. The artifact's
+/// identity and size are absent when the failure came before the artifact
+/// validated, because there is no validated artifact to take them from.
+fn failed_model_loading_metadata(
+    reviewed_artifact: Option<&ReviewedArtifactMetadata>,
     failure_description: &'static str,
-) {
-    record_failed_model_loading_performance_attribution(
-        model_loading_performance_attribution,
-        performance_attribution_log,
-        Some(artifact_model_id.to_owned()),
-        Some(artifact_model_revision.to_owned()),
-        Some(artifact_payload_bytes),
-        Some(artifact_shard_count),
-        failure_description,
-    );
+) -> ModelLoadingPerformanceAttributionMetadata {
+    let (model_id, model_revision, total_artifact_payload_bytes, model_shard_count) =
+        match reviewed_artifact {
+            Some(artifact_metadata) => (
+                Some(artifact_metadata.model_id.clone()),
+                Some(artifact_metadata.model_revision.clone()),
+                Some(artifact_metadata.total_payload_bytes),
+                Some(artifact_metadata.shard_count),
+            ),
+            None => (None, None, None, None),
+        };
+    ModelLoadingPerformanceAttributionMetadata {
+        outcome: PerformanceAttributionOutcome::Failed,
+        model_id,
+        model_revision,
+        prefill_transient_observation_completed: false,
+        prefill_observed_transient_high_water_bytes: 0,
+        total_artifact_payload_bytes,
+        resident_model_payload_bytes: None,
+        model_shard_count,
+        mlx_active_memory_bytes: None,
+        mlx_buffer_cache_bytes: None,
+        mlx_peak_memory_bytes: None,
+        failure_description: Some(failure_description.to_owned()),
+    }
 }
 
-#[allow(clippy::too_many_arguments)]
+/// Records a failed loading attribution; `reviewed_artifact` is `None` while
+/// the artifact itself has not validated.
 fn record_failed_model_loading_performance_attribution(
     model_loading_performance_attribution: PerformanceAttribution,
     performance_attribution_log: &mut PerformanceAttributionLog,
-    model_id: Option<String>,
-    model_revision: Option<String>,
-    total_artifact_payload_bytes: Option<u64>,
-    model_shard_count: Option<usize>,
+    reviewed_artifact: Option<&ReviewedArtifactMetadata>,
     failure_description: &'static str,
 ) {
     let Some(performance_attribution_report) = model_loading_performance_attribution
-        .finish_model_loading(ModelLoadingPerformanceAttributionMetadata {
-            outcome: PerformanceAttributionOutcome::Failed,
-            model_id,
-            model_revision,
-            prefill_transient_observation_completed: false,
-            prefill_observed_transient_high_water_bytes: 0,
-            total_artifact_payload_bytes,
-            resident_model_payload_bytes: None,
-            model_shard_count,
-            mlx_active_memory_bytes: None,
-            mlx_buffer_cache_bytes: None,
-            mlx_peak_memory_bytes: None,
-            failure_description: Some(failure_description.to_owned()),
-        })
+        .finish_model_loading(failed_model_loading_metadata(
+            reviewed_artifact,
+            failure_description,
+        ))
     else {
         return;
     };
@@ -437,3 +449,7 @@ fn record_failed_model_loading_performance_attribution(
         );
     }
 }
+
+#[cfg(test)]
+#[path = "qwen3_5_model_startup_tests.rs"]
+mod tests;

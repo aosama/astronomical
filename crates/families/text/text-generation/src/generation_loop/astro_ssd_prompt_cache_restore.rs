@@ -23,7 +23,9 @@ use crate::{
     PerformanceOperation,
 };
 use engine_core::astro_ssd_prompt_cache::block_causal_input::AstroSsdPromptCacheBlockCausalInput;
-use engine_core::astro_ssd_prompt_cache::prefix_lookup::AstroSsdPromptCachePrefixLookup;
+use engine_core::astro_ssd_prompt_cache::prefix_lookup::{
+    AstroSsdPromptCachePrefixLookup, AstroSsdPromptCachePrefixLookupResult,
+};
 use engine_core::astro_ssd_prompt_cache::restore_support;
 
 use super::astro_ssd_prompt_cache_state_install;
@@ -139,24 +141,8 @@ pub fn restore_astro_ssd_prompt_cache_prefix<Engine: TextAstroSsdPromptCacheRest
     performance_attribution: &mut PerformanceAttribution,
 ) -> Result<AstroSsdPromptCacheRestoreOutcome, InferenceEngineError> {
     let astro_ssd_prompt_cache = restore_request.astro_ssd_prompt_cache;
-    let prompt_token_ids = restore_request.prompt_token_ids;
-    // First decide the longest usable prefix using only the store's small
-    // in-memory index. No MLX array is allocated until a whole contiguous
-    // prefix is known to be available.
-    let lookup_result = performance_attribution.measure_operation(
-        PerformanceOperation::AstroSsdPromptCachePrefixLookup,
-        |_performance_attribution| {
-            AstroSsdPromptCachePrefixLookup::for_prompt_with_partial_tail_block_recovery(
-                &astro_ssd_prompt_cache.model_contract,
-                prompt_token_ids,
-                restore_request.block_causal_inputs,
-                |block_hash| astro_ssd_prompt_cache.has_kv_block(block_hash),
-                |block_hash| astro_ssd_prompt_cache.has_recurrent_snapshot(block_hash),
-            )
-        },
-    );
+    let lookup_result = look_up_restorable_prefix(restore_request, performance_attribution);
     let restored_token_count = lookup_result.restored_token_count();
-    let restored_partial_tail_block_key = lookup_result.restored_partial_tail_block_key().cloned();
     let lookup_diagnostics = lookup_result.diagnostics();
     let mut astro_ssd_prompt_cache_diagnostics =
         restore_support::astro_ssd_prompt_cache_request_diagnostics(
@@ -191,14 +177,59 @@ pub fn restore_astro_ssd_prompt_cache_prefix<Engine: TextAstroSsdPromptCacheRest
             astro_ssd_prompt_cache_diagnostics,
         ));
     }
+    restore_prefix_found_in_store(
+        engine,
+        restore_request,
+        &lookup_result,
+        astro_ssd_prompt_cache_diagnostics,
+        request_decoder_state,
+        performance_attribution,
+    )
+}
+
+/// Decides the longest usable prefix using only the store's small in-memory
+/// index. No MLX array is allocated until a whole contiguous prefix is known
+/// to be available.
+fn look_up_restorable_prefix(
+    restore_request: &AstroSsdPromptCacheRestoreRequest<'_>,
+    performance_attribution: &mut PerformanceAttribution,
+) -> AstroSsdPromptCachePrefixLookupResult {
+    let astro_ssd_prompt_cache = restore_request.astro_ssd_prompt_cache;
+    performance_attribution.measure_operation(
+        PerformanceOperation::AstroSsdPromptCachePrefixLookup,
+        |_performance_attribution| {
+            AstroSsdPromptCachePrefixLookup::for_prompt_with_partial_tail_block_recovery(
+                &astro_ssd_prompt_cache.model_contract,
+                restore_request.prompt_token_ids,
+                restore_request.block_causal_inputs,
+                |block_hash| astro_ssd_prompt_cache.has_kv_block(block_hash),
+                |block_hash| astro_ssd_prompt_cache.has_recurrent_snapshot(block_hash),
+            )
+        },
+    )
+}
+
+/// Restores a prefix the lookup found: enumerates its blocks, leases room for
+/// loading them, rebuilds the decoder state from them, and finalizes the hit.
+fn restore_prefix_found_in_store<Engine: TextAstroSsdPromptCacheRestoreHooks>(
+    engine: &mut Engine,
+    restore_request: &AstroSsdPromptCacheRestoreRequest<'_>,
+    lookup_result: &AstroSsdPromptCachePrefixLookupResult,
+    astro_ssd_prompt_cache_diagnostics: WorkerAstroSsdPromptCacheRequestDiagnostics,
+    request_decoder_state: &mut RequestDecoderStateStack,
+    performance_attribution: &mut PerformanceAttribution,
+) -> Result<AstroSsdPromptCacheRestoreOutcome, InferenceEngineError> {
+    let astro_ssd_prompt_cache = restore_request.astro_ssd_prompt_cache;
+    let restored_token_count = lookup_result.restored_token_count();
+    let restored_partial_tail_block_key = lookup_result.restored_partial_tail_block_key();
     let complete_block_count =
         restored_token_count / astro_ssd_prompt_cache.model_contract.block_token_count();
     let prefix_enumeration = restore_support::enumerate_restored_prefix_blocks(
         astro_ssd_prompt_cache,
-        prompt_token_ids,
+        restore_request.prompt_token_ids,
         restore_request.block_causal_inputs,
         restored_token_count,
-        restored_partial_tail_block_key.as_ref(),
+        restored_partial_tail_block_key,
     )?;
     let target_expert_payload_bytes_reclaimed_before_restore =
         engine.lease_restore_workspace(restore_transient_workspace_bytes(
@@ -208,7 +239,7 @@ pub fn restore_astro_ssd_prompt_cache_prefix<Engine: TextAstroSsdPromptCacheRest
     let restored_span = RestoredSpan {
         restored_token_count,
         complete_block_count,
-        restored_partial_tail_block_key: restored_partial_tail_block_key.as_ref(),
+        restored_partial_tail_block_key,
     };
     let last_restored_astro_ssd_prompt_cache_block_key = load_and_reconstruct_restored_prefix(
         engine,
@@ -223,7 +254,7 @@ pub fn restore_astro_ssd_prompt_cache_prefix<Engine: TextAstroSsdPromptCacheRest
         restore_request,
         RestoreHit {
             restored_span,
-            lookup_diagnostics,
+            lookup_diagnostics: lookup_result.diagnostics(),
             target_expert_payload_bytes_reclaimed_before_restore,
             astro_ssd_prompt_cache_diagnostics,
             last_restored_astro_ssd_prompt_cache_block_key,

@@ -57,26 +57,59 @@ pub fn decode_expert_weight_rows(
     row_scales: &MlxArray,
     bit_width: u32,
 ) -> Result<MlxArray, MlxRuntimeError> {
+    validate_page_operand_types(bit_width, packed_code_words.dtype(), row_scales.dtype())?;
+    let packed_shape = packed_code_words.shape();
+    validate_page_shapes(&packed_shape, &row_scales.shape())?;
+    let page_decode_launch_plan = plan_page_decode_launch(packed_shape, bit_width)?;
+    // `.with` is the thread-local API's required shape; everything the
+    // closure used to inline now lives in the named launch helpers below,
+    // and each binding names its own role instead of shadowing one name.
+    let decoded_weight_bfloat16 = PAGE_DECODE_KERNEL.with(|thread_local_kernel| {
+        let mut page_decode_kernel_memo = thread_local_kernel.borrow_mut();
+        let page_decode_kernel = match page_decode_kernel_memo.as_mut() {
+            Some(page_decode_kernel) => page_decode_kernel,
+            None => page_decode_kernel_memo.insert(PageDecodeKernel::new()?),
+        };
+        launch_page_decode_kernel(
+            runtime,
+            page_decode_kernel,
+            packed_code_words,
+            row_scales,
+            &page_decode_launch_plan,
+        )
+    })?;
+    materialize_and_detach_jangtq2_array(runtime, &decoded_weight_bfloat16)?;
+    Ok(decoded_weight_bfloat16)
+}
+
+/// Checks the bit width and the two element types a page decode accepts:
+/// `uint32` packed code words and `float16` row scales.
+fn validate_page_operand_types(
+    bit_width: u32,
+    packed_dtype: MlxDtype,
+    scale_dtype: MlxDtype,
+) -> Result<(), MlxRuntimeError> {
     if !codebook::is_supported_bit_width(bit_width) {
         return Err(decode_error(format!(
             "unsupported jangtq2 codebook bit width {bit_width}"
         )));
     }
-    if packed_code_words.dtype() != MlxDtype::UInt32 {
+    if packed_dtype != MlxDtype::UInt32 {
         return Err(decode_error(format!(
-            "packed code words must use uint32, got {:?}",
-            packed_code_words.dtype()
+            "packed code words must use uint32, got {packed_dtype:?}"
         )));
     }
-    if row_scales.dtype() != MlxDtype::Float16 {
+    if scale_dtype != MlxDtype::Float16 {
         return Err(decode_error(format!(
-            "row scales must use float16, got {:?}",
-            row_scales.dtype()
+            "row scales must use float16, got {scale_dtype:?}"
         )));
     }
+    Ok(())
+}
 
-    let packed_shape = packed_code_words.shape();
-    let scale_shape = row_scales.shape();
+/// Checks that the packed code words have rank three, the row scales rank
+/// two, and that both agree on a positive expert count and row count.
+fn validate_page_shapes(packed_shape: &[i32], scale_shape: &[i32]) -> Result<(), MlxRuntimeError> {
     if packed_shape.len() != 3 || scale_shape.len() != 2 {
         return Err(decode_error(format!(
             "packed tensors must have rank three and row scales rank two, got ranks {} and {}",
@@ -94,7 +127,17 @@ pub fn decode_expert_weight_rows(
             "packed code shape {packed_shape:?} and row scale shape {scale_shape:?} disagree"
         )));
     }
+    Ok(())
+}
 
+/// Derives the decoded input width, the Metal thread count and the template
+/// bit width for one packed page. It rejects a shape that is not a valid
+/// codebook page and any size that overflows the MLX shape or grid range.
+/// `packed_shape` must already have passed [`validate_page_shapes`].
+fn plan_page_decode_launch(
+    packed_shape: Vec<i32>,
+    bit_width: u32,
+) -> Result<PageDecodeLaunchPlan, MlxRuntimeError> {
     let packed_source_shape = packed_shape
         .iter()
         .map(|&dimension| {
@@ -124,39 +167,20 @@ pub fn decode_expert_weight_rows(
         .ok_or_else(|| decode_error("page decode grid exceeds the MLX grid range".to_owned()))?;
     let bits_i32 = i32::try_from(bit_width)
         .map_err(|_| decode_error("bit width exceeds the template range".to_owned()))?;
-
-    let page_decode_launch_plan = PageDecodeLaunchPlan {
+    Ok(PageDecodeLaunchPlan {
         bit_width,
         bits_i32,
         packed_shape,
         input_width_i32,
         thread_count,
-    };
-    // `.with` is the thread-local API's required shape; everything the
-    // closure used to inline now lives in the named launch helpers below,
-    // and each binding names its own role instead of shadowing one name.
-    let decoded_weight_bfloat16 = PAGE_DECODE_KERNEL.with(|thread_local_kernel| {
-        let mut page_decode_kernel_memo = thread_local_kernel.borrow_mut();
-        let page_decode_kernel = match page_decode_kernel_memo.as_mut() {
-            Some(page_decode_kernel) => page_decode_kernel,
-            None => page_decode_kernel_memo.insert(PageDecodeKernel::new()?),
-        };
-        launch_page_decode_kernel(
-            runtime,
-            page_decode_kernel,
-            packed_code_words,
-            row_scales,
-            &page_decode_launch_plan,
-        )
-    })?;
-    materialize_and_detach_jangtq2_array(runtime, &decoded_weight_bfloat16)?;
-    Ok(decoded_weight_bfloat16)
+    })
 }
 
 /// The resolved launch parameters for one page decode, grouped so the
 /// launch helpers receive named values instead of a row of positional
 /// locals (the same pattern `PrefillGatheredDequantInputs` established for
 /// the prefill kernel).
+#[derive(Debug)]
 struct PageDecodeLaunchPlan {
     bit_width: u32,
     bits_i32: i32,
@@ -352,3 +376,7 @@ fn rotation_error(description: String) -> MlxRuntimeError {
         description,
     }
 }
+
+#[cfg(test)]
+#[path = "mlx_decode_tests.rs"]
+mod mlx_decode_tests;

@@ -5,6 +5,7 @@ pub mod chat_schema;
 pub(crate) mod decision_training;
 pub(crate) mod decisions;
 pub(crate) mod embeddings;
+mod generation_request;
 pub(crate) mod images;
 pub(crate) mod model_unload;
 pub(crate) mod models;

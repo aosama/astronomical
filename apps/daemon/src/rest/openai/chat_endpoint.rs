@@ -61,43 +61,116 @@ pub(crate) async fn create_chat_completion(
             Ok(resolved_model_id) => resolved_model_id,
             Err(rejection_response) => return rejection_response,
         };
+    let prepared_generation = match prepare_chat_generation(
+        &application_state,
+        chat_completion_request,
+        resolved_model_id,
+        &request_diagnostic_snapshot,
+        &request_info_diagnostic_snapshot,
+    ) {
+        Ok(prepared_generation) => prepared_generation,
+        Err(rejection_response) => return rejection_response,
+    };
+    start_chat_generation_and_respond(
+        &application_state,
+        prepared_generation,
+        configuration_transition_guard,
+    )
+    .await
+}
+
+/// How the reply is delivered once the generation has started.
+struct ChatReplyPlan {
+    should_stream_response: bool,
+    includes_usage: bool,
+    reasoning_excluded: bool,
+    structured_output: Option<rest_contract::OpenAiStructuredOutput>,
+}
+
+/// A chat request that has been validated, translated and given its
+/// request identifier, ready for queue admission.
+struct PreparedChatGeneration {
+    chat_generation_command: ipc_protocol::ChatGenerationCommand,
+    request_id: u64,
+    reply_plan: ChatReplyPlan,
+}
+
+/// Splits a request into its parts and the reply plan. The streaming
+/// preferences have to be read first because `into_parts` consumes the request.
+fn split_chat_request(
+    chat_completion_request: OpenAiChatCompletionRequest,
+) -> Result<(OpenAiChatCompletionRequestParts, ChatReplyPlan), OpenAiChatCompletionValidationError>
+{
     let (should_stream_response, includes_usage) =
         chat_streaming_preferences(&chat_completion_request);
-    let request_parts = match chat_completion_request.into_parts() {
-        Ok(request_parts) => request_parts,
-        Err(validation_error) => return chat_validation_rejection_response(validation_error),
+    let request_parts = chat_completion_request.into_parts()?;
+    let reply_plan = ChatReplyPlan {
+        should_stream_response,
+        includes_usage,
+        reasoning_excluded: request_parts.reasoning_excluded,
+        structured_output: request_parts.structured_output.clone(),
     };
-    let reasoning_excluded = request_parts.reasoning_excluded;
-    let structured_output = request_parts.structured_output.clone();
+    Ok((request_parts, reply_plan))
+}
+
+/// Turns the validated request into the IPC generation command, allocating
+/// the request identifier only once the request parts are known to be valid.
+// The Err variant carries the fully built axum response; it is large but
+// constructed once and moved once, so boxing it would only add indirection.
+#[allow(clippy::result_large_err)]
+fn prepare_chat_generation(
+    application_state: &ApplicationState,
+    chat_completion_request: OpenAiChatCompletionRequest,
+    resolved_model_id: String,
+    request_diagnostic_snapshot: &OpenAiChatRequestDiagnosticSnapshot,
+    request_info_diagnostic_snapshot: &OpenAiChatRequestInfoDiagnosticSnapshot,
+) -> Result<PreparedChatGeneration, Response> {
+    let (request_parts, reply_plan) = match split_chat_request(chat_completion_request) {
+        Ok(split_request) => split_request,
+        Err(validation_error) => return Err(chat_validation_rejection_response(validation_error)),
+    };
     let settings_presence = request_generation_settings_presence(
         request_parts.requested_maximum_output_tokens,
         request_parts.temperature,
         request_parts.top_p,
     );
-    let request_id = match allocate_chat_request_identifier(&application_state) {
-        Ok(request_id) => request_id,
-        Err(rejection_response) => return rejection_response,
-    };
-    let mut chat_generation_command = match translate_openai_chat_request(
+    let request_id = allocate_chat_request_identifier(application_state)?;
+    let chat_generation_command = translate_openai_chat_request(
         request_id,
         request_parts,
-        &request_diagnostic_snapshot,
-        &request_info_diagnostic_snapshot,
-    ) {
-        Ok(chat_generation_command) => chat_generation_command,
-        Err(rejection_response) => return rejection_response,
-    };
-    chat_generation_command = finalize_chat_generation_command(
-        &application_state,
+        request_diagnostic_snapshot,
+        request_info_diagnostic_snapshot,
+    )?;
+    let chat_generation_command = finalize_chat_generation_command(
+        application_state,
         chat_generation_command,
         resolved_model_id,
         request_id,
         settings_presence,
-        &request_info_diagnostic_snapshot,
+        request_info_diagnostic_snapshot,
     );
+    Ok(PreparedChatGeneration {
+        chat_generation_command,
+        request_id,
+        reply_plan,
+    })
+}
+
+/// Admits the prepared generation to the worker queue and answers with its
+/// completion, or with the rejection that stopped it.
+async fn start_chat_generation_and_respond(
+    application_state: &ApplicationState,
+    prepared_generation: PreparedChatGeneration,
+    configuration_transition_guard: tokio::sync::MutexGuard<'_, ()>,
+) -> Response {
+    let PreparedChatGeneration {
+        chat_generation_command,
+        request_id,
+        reply_plan,
+    } = prepared_generation;
     let model_id = chat_generation_command.model.clone();
     let generation_start_result = start_chat_generation_after_admission(
-        &application_state,
+        application_state,
         chat_generation_command,
         configuration_transition_guard,
     )
@@ -119,12 +192,9 @@ pub(crate) async fn create_chat_completion(
         application_state.completion_id_namespace.as_ref(),
         request_id,
         chat_stream_event_receiver,
-        should_stream_response,
-        includes_usage,
         created_at_unix_seconds,
         model_id,
-        reasoning_excluded,
-        &structured_output,
+        &reply_plan,
     )
     .await
 }
@@ -142,31 +212,28 @@ fn chat_streaming_preferences(
 /// Builds the completion identifier and dispatches to the non-streaming or
 /// server-sent-events response body, attaching the unenforced structured
 /// output warning either way.
-#[allow(clippy::too_many_arguments)]
 async fn respond_with_chat_completion(
     completion_id_namespace: &str,
     request_id: u64,
     chat_stream_event_receiver: tokio::sync::mpsc::Receiver<crate::ChatGenerationStreamEvent>,
-    should_stream_response: bool,
-    includes_usage: bool,
     created_at_unix_seconds: u64,
     model_id: String,
-    reasoning_excluded: bool,
-    structured_output: &Option<rest_contract::OpenAiStructuredOutput>,
+    reply_plan: &ChatReplyPlan,
 ) -> Response {
     let completion_id = format!("chatcmpl-{completion_id_namespace}-{request_id}");
-    if !should_stream_response {
+    let structured_output = reply_plan.structured_output.as_ref();
+    if !reply_plan.should_stream_response {
         return crate::serving::structured_output::attach_unenforced_structured_output_warning(
             create_non_streaming_chat_completion(
                 chat_stream_event_receiver,
                 completion_id,
                 created_at_unix_seconds,
                 model_id,
-                reasoning_excluded,
-                structured_output.as_ref(),
+                reply_plan.reasoning_excluded,
+                structured_output,
             )
             .await,
-            structured_output.as_ref(),
+            structured_output,
         );
     }
     crate::serving::structured_output::attach_unenforced_structured_output_warning(
@@ -177,11 +244,11 @@ async fn respond_with_chat_completion(
                 completion_id,
                 created_at_unix_seconds,
                 model_id,
-                includes_usage,
-                reasoning_excluded,
+                reply_plan.includes_usage,
+                reply_plan.reasoning_excluded,
             ),
         ),
-        structured_output.as_ref(),
+        structured_output,
     )
 }
 

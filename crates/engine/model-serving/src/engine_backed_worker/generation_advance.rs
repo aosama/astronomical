@@ -138,10 +138,12 @@ where
     }
 
     /// Advances the active generation by one decoded engine token, dispatching
-    /// on the token kind: decode steps, end of sequence, prefill progress
-    /// chunks, and the phase/preparation start notifications. The body of each
-    /// arm lives in its own unit; this is the dispatch the inlined advance
-    /// carried as its final `match`.
+    /// on the token kind: decode steps and end of sequence here, and every
+    /// token that belongs to reading the prompt (prefill progress chunks and
+    /// the phase/preparation start notifications) in
+    /// `advance_prompt_phase_token`. The body of each arm lives in its own
+    /// unit; this is the dispatch the inlined advance carried as its final
+    /// `match`.
     async fn advance_generated_token<WriteTransport>(
         &mut self,
         active_generation: ActiveEngineGeneration<Processor::RequestOutput>,
@@ -182,6 +184,34 @@ where
                 )
                 .await
             }
+            // The three prompt-phase variants are named, not caught by a
+            // wildcard, so a new `GeneratedToken` variant fails to compile here
+            // until someone decides which handler it belongs to.
+            prompt_phase_token @ (GeneratedToken::PrefillProgress { .. }
+            | GeneratedToken::PromptProcessingPhaseStarted { .. }
+            | GeneratedToken::GenerationPreparationStarted { .. }) => {
+                self.advance_prompt_phase_token(active_generation, prompt_phase_token, event_writer)
+                    .await
+            }
+        }
+    }
+
+    /// Advances the active generation by one token the engine sends while it
+    /// reads the prompt or prepares to decode: a prefill progress chunk, or
+    /// the start of a prompt phase or of generation preparation. Decode tokens
+    /// are routed away before this point; one arriving here means the
+    /// dispatcher and this handler disagree, which is reported as a failed
+    /// generation rather than guessed at.
+    async fn advance_prompt_phase_token<WriteTransport>(
+        &mut self,
+        active_generation: ActiveEngineGeneration<Processor::RequestOutput>,
+        prompt_phase_token: GeneratedToken,
+        event_writer: &mut ProtocolWriter<WriteTransport>,
+    ) -> Result<Option<ActiveEngineGeneration<Processor::RequestOutput>>, WorkerRuntimeError>
+    where
+        WriteTransport: AsyncWrite + Unpin,
+    {
+        match prompt_phase_token {
             GeneratedToken::PrefillProgress {
                 processed_token_count,
                 elapsed_millis,
@@ -237,6 +267,14 @@ where
                 )
                 .await?;
                 Ok(Some(active_generation))
+            }
+            // `advance_generated_token` never routes these two variants here;
+            // an impossible state is reported as a failed generation, the way
+            // the rest of this worker reports one, rather than a panic.
+            GeneratedToken::TokenId { .. } | GeneratedToken::EndOfSequence => {
+                Err(WorkerRuntimeError::InferenceEngineGenerationFailed {
+                    reason: "a decode token reached the prompt-phase handler".to_owned(),
+                })
             }
         }
     }

@@ -6,12 +6,14 @@
 //! rejects a legitimate shared blob and passes only when the production engine
 //! both loads the artifact and generates tokens from it.
 
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use ipc_protocol::RequestId;
 use model_serving::{
     PerformanceAttribution, PerformanceAttributionLog, PromptProcessingChunkSizer,
     Qwen3_5ArtifactValidator, Qwen3_5TextEngine, Qwen3_5Tokenizer, TextMlxEngineConstructors,
+    ValidatedQwen3_5Artifact,
 };
 use tokio::time::timeout;
 
@@ -70,30 +72,12 @@ async fn load_and_generate_with_configured_ornith_artifact() {
 
     let performance_attribution_directory = tempfile::tempdir()
         .expect("the Ornith journey should create a performance-attribution directory");
-    let mlx_memory_limits = crate::common::sample_serving_acceptance_mlx_memory_limits().await;
-    let mut ornith_engine =
-        Qwen3_5TextEngine::new_with_runtime_chunking_and_performance_attribution(
-            validated_artifact,
-            mlx_memory_limits.active_memory_limit_bytes(),
-            mlx_memory_limits.mlx_buffer_cache_limit_bytes(),
-            None,
-            PromptProcessingChunkSizer::for_chunk_size_tokens(
-                ORNITH_ACCEPTANCE_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS,
-            )
-            .expect("the Ornith journey prompt-processing chunk size should be valid"),
-            crate::serving_acceptance::support::IMAGE_PAD_TOKEN_ID,
-            model_directory,
-            crate::common::standard_worker_chunking_configuration(),
-            PerformanceAttribution::enabled(),
-            PerformanceAttributionLog::open(
-                &performance_attribution_directory
-                    .path()
-                    .join("performance-attribution.jsonl"),
-                true,
-            )
-            .expect("the Ornith journey performance-attribution log should open"),
-        )
-        .expect("the configured Ornith engine settings should be valid");
+    let mut ornith_engine = build_ornith_engine(
+        validated_artifact,
+        model_directory,
+        performance_attribution_directory.path(),
+    )
+    .await;
 
     eprintln!("[{ORNITH_ACCEPTANCE_PHASE_NAME}] status=progress phase=model_load");
     crate::serving_acceptance::support::performance_attribution::load_engine_with_progress(
@@ -114,22 +98,59 @@ async fn load_and_generate_with_configured_ornith_artifact() {
         )
         .await;
 
-    let model_vocabulary_size = ornith_tokenizer.model_vocabulary_size();
-    assert!(
-        !generated_token_ids.is_empty(),
-        "the loaded Ornith artifact should generate at least one token"
+    assert_generated_tokens_are_within_vocabulary(
+        &generated_token_ids,
+        ornith_tokenizer.model_vocabulary_size(),
     );
-    for generated_token_id in &generated_token_ids {
-        assert!(
-            *generated_token_id < model_vocabulary_size,
-            "generated token id {generated_token_id} must be within vocabulary size {model_vocabulary_size}"
-        );
-    }
     eprintln!(
         "[{ORNITH_ACCEPTANCE_PHASE_NAME}] status=success prompt_tokens={} output_tokens={}",
         prompt_token_ids.len(),
         generated_token_ids.len()
     );
+}
+
+async fn build_ornith_engine(
+    validated_artifact: ValidatedQwen3_5Artifact,
+    model_directory: PathBuf,
+    performance_attribution_directory: &Path,
+) -> Qwen3_5TextEngine {
+    let mlx_memory_limits = crate::common::sample_serving_acceptance_mlx_memory_limits().await;
+    Qwen3_5TextEngine::new_with_runtime_chunking_and_performance_attribution(
+        validated_artifact,
+        mlx_memory_limits.active_memory_limit_bytes(),
+        mlx_memory_limits.mlx_buffer_cache_limit_bytes(),
+        None,
+        PromptProcessingChunkSizer::for_chunk_size_tokens(
+            ORNITH_ACCEPTANCE_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS,
+        )
+        .expect("the Ornith journey prompt-processing chunk size should be valid"),
+        crate::serving_acceptance::support::IMAGE_PAD_TOKEN_ID,
+        model_directory,
+        crate::common::standard_worker_chunking_configuration(),
+        PerformanceAttribution::enabled(),
+        PerformanceAttributionLog::open(
+            &performance_attribution_directory.join("performance-attribution.jsonl"),
+            true,
+        )
+        .expect("the Ornith journey performance-attribution log should open"),
+    )
+    .expect("the configured Ornith engine settings should be valid")
+}
+
+fn assert_generated_tokens_are_within_vocabulary(
+    generated_token_ids: &[u32],
+    model_vocabulary_size: u32,
+) {
+    assert!(
+        !generated_token_ids.is_empty(),
+        "the loaded Ornith artifact should generate at least one token"
+    );
+    for generated_token_id in generated_token_ids {
+        assert!(
+            *generated_token_id < model_vocabulary_size,
+            "generated token id {generated_token_id} must be within vocabulary size {model_vocabulary_size}"
+        );
+    }
 }
 
 /// Renders and encodes a bounded Romeo and Juliet prompt through the artifact's

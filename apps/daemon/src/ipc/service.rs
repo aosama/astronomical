@@ -14,6 +14,7 @@ use ipc_protocol::{
 };
 use tokio::{sync::watch, task::JoinSet};
 
+use super::generation_request::{GenerationRequest, handle_generation_request};
 use crate::{
     GenerationStartError, ImageGenerationExecutor,
     config::config_reload::ResolvedRuntimeConfig,
@@ -285,15 +286,32 @@ async fn handle_streaming_daemon_request(
             settings,
             schema_json,
         } => {
-            stream_chat_generate(
+            handle_generation_request(
                 &generation_context,
                 &daemon_attribution_log,
-                super::chat::DaemonIpcChatRequest {
-                    model,
-                    messages,
-                    settings,
-                    schema_json,
-                },
+                GenerationRequest::chat(model, messages, settings, schema_json),
+                streaming_response_writer,
+            )
+            .await
+        }
+        DaemonRequest::EmbedGenerate {
+            model,
+            inputs,
+            dimensions,
+        } => {
+            handle_generation_request(
+                &generation_context,
+                &daemon_attribution_log,
+                GenerationRequest::embed(model, inputs, dimensions),
+                streaming_response_writer,
+            )
+            .await
+        }
+        DaemonRequest::ImageGenerate(image_request) => {
+            handle_generation_request(
+                &generation_context,
+                &daemon_attribution_log,
+                GenerationRequest::Image(image_request),
                 streaming_response_writer,
             )
             .await
@@ -304,29 +322,6 @@ async fn handle_streaming_daemon_request(
             run_helper_request(
                 &generation_context,
                 helper_request,
-                streaming_response_writer,
-            )
-            .await
-        }
-        DaemonRequest::EmbedGenerate {
-            model,
-            inputs,
-            dimensions,
-        } => {
-            crate::ipc::embeddings::run_embeddings_generation(
-                &generation_context,
-                &daemon_attribution_log,
-                model,
-                inputs,
-                dimensions,
-                streaming_response_writer,
-            )
-            .await
-        }
-        DaemonRequest::ImageGenerate(image_request) => {
-            crate::ipc::images::run_image_generation(
-                &generation_context,
-                image_request,
                 streaming_response_writer,
             )
             .await
@@ -478,34 +473,6 @@ async fn answer_status(
     )
     .await?;
     streaming_response_writer.close().await
-}
-
-/// Streams one chat generation under its attributed measurement region.
-async fn stream_chat_generate(
-    generation_context: &DaemonIpcGenerationContext,
-    daemon_attribution_log: &DaemonPerformanceAttributionLog,
-    chat_request: super::chat::DaemonIpcChatRequest,
-    streaming_response_writer: StreamingResponseWriter,
-) -> Result<(), DaemonTransportError> {
-    daemon_attribution_log
-        .measure_async_operation_best_effort(
-            DaemonPerformanceOperation::DaemonIpcChatGenerate,
-            || {
-                super::chat::stream_chat_generation(
-                    generation_context,
-                    chat_request,
-                    streaming_response_writer,
-                )
-            },
-            |stream_outcome| {
-                if stream_outcome.is_ok() {
-                    DaemonPerformanceMeasurement::success()
-                } else {
-                    DaemonPerformanceMeasurement::failure()
-                }
-            },
-        )
-        .await
 }
 
 /// The model ID CLI verbs fall back to: the user-configured default model,

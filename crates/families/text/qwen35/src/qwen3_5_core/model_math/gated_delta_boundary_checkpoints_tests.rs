@@ -1,10 +1,12 @@
 //! Unit contracts for the pure pieces of the fused boundary-checkpoint
-//! dispatch: template-argument assembly and kernel-output unpacking. The
+//! dispatch: template-argument assembly and kernel-output unpacking, plus the
+//! ops fallback's decision of which completed token keeps a boundary. The
 //! launch itself and the boundary slicing need live GPU work; these tests pin
 //! the facts every launch depends on before Metal is ever submitted.
 
 use super::gated_delta_boundary_checkpoints::{
-    checkpoint_template_arguments, unpack_checkpoint_kernel_outputs,
+    checkpoint_template_arguments, completes_next_boundary_checkpoint,
+    unpack_checkpoint_kernel_outputs,
 };
 use super::gated_delta_sequence_contract::{GatedDeltaSequenceShape, template_arguments};
 use mlx_bridge::{MlxArray, MlxDtype, MlxMetalKernelTemplateArgument};
@@ -182,4 +184,26 @@ fn should_reject_a_launch_missing_only_the_boundary_states() {
         description,
         "checkpoint kernel did not return boundary recurrent states"
     );
+}
+
+#[test]
+fn should_complete_a_boundary_when_the_completed_count_matches_the_next_requested_one() {
+    assert!(completes_next_boundary_checkpoint(&[4, 8, 12], 0, 4));
+    assert!(completes_next_boundary_checkpoint(&[4, 8, 12], 2, 12));
+}
+
+#[test]
+fn should_not_complete_a_boundary_before_its_requested_token_count() {
+    assert!(!completes_next_boundary_checkpoint(&[4, 8, 12], 0, 3));
+    assert!(!completes_next_boundary_checkpoint(&[4, 8, 12], 1, 4));
+}
+
+#[test]
+fn should_not_complete_a_boundary_once_every_requested_one_was_kept() {
+    assert!(!completes_next_boundary_checkpoint(&[4, 8, 12], 3, 12));
+}
+
+#[test]
+fn should_not_complete_a_boundary_when_none_was_requested() {
+    assert!(!completes_next_boundary_checkpoint(&[], 0, 1));
 }

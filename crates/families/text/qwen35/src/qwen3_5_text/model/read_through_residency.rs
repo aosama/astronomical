@@ -4,9 +4,11 @@ use mlx_bridge::MlxArray;
 
 use crate::qwen3_5_text::expert_streaming::expert_pager::{
     ExpertPagingError, Qwen3_5ExpertPager, Qwen3_5ExpertStreamingRequestShape,
+    Qwen3_5PagedExpertWeights,
 };
 use crate::qwen3_5_text::model::Qwen3_5Model;
 use crate::{PerformanceAttribution, PerformanceOperation};
+use engine_core::expert_paging::QuantizedExpertPageManifest;
 use text_generation::execution_error::TextExecutionError;
 
 use super::Qwen3_5MoEPagedExecutionMode;
@@ -39,46 +41,14 @@ impl Qwen3_5Model {
             }
         };
         if self.astro_expert_cache.is_some() {
-            let expert_capacity = expert_pager.layer_plan(layer_index)?.expert_capacity;
-            let (packed_weights, packed_manifest) = if route_token_count > 1 {
-                self.stream_complete_expert_layer(
-                    expert_pager,
-                    layer_index,
-                    route_token_count,
-                    expert_capacity,
-                    sorted_unique_expert_ids.len(),
-                    paged_execution_mode == Qwen3_5MoEPagedExecutionMode::ProductionDefault,
-                    self.current_serving_phase(route_token_count),
-                    performance_attribution,
-                )?
-            } else {
-                // astro expert cache hit: the warm table covers every routed
-                // expert of this token, so the whole routed set is served from
-                // retained RAM and no storage read happens for this layer
-                // (issue #372).
-                //
-                self.record_decode_route_coverage(
-                    layer_index,
-                    sorted_unique_expert_ids,
-                    performance_attribution,
-                );
-                match self.hot_expert_partial_page(
-                    layer_index,
-                    expert_capacity,
-                    sorted_unique_expert_ids,
-                    performance_attribution,
-                ) {
-                    Some(packed_page) => packed_page,
-                    None => self.stream_operation_local_routed_experts(
-                        expert_pager,
-                        layer_index,
-                        route_token_count,
-                        sorted_unique_expert_ids,
-                        paged_execution_mode == Qwen3_5MoEPagedExecutionMode::ProductionDefault,
-                        performance_attribution,
-                    )?,
-                }
-            };
+            let (packed_weights, packed_manifest) = self.page_through_astro_expert_cache(
+                expert_pager,
+                layer_index,
+                route_token_count,
+                sorted_unique_expert_ids,
+                paged_execution_mode,
+                performance_attribution,
+            )?;
             if let Some(astro_expert_cache) = self.astro_expert_cache.as_ref() {
                 astro_expert_cache.borrow_mut().record_expert_demand(
                     layer_index,
@@ -131,5 +101,58 @@ impl Qwen3_5Model {
             should_use_compiled_elementwise_graphs,
             performance_attribution,
         )
+    }
+
+    /// The page this forward multiplies when an `astro_expert_cache` exists:
+    /// a multi-token chunk streams the complete layer, and a single token is
+    /// served from the warm table when it holds every routed expert, or else
+    /// streams the routed experts for this operation only.
+    fn page_through_astro_expert_cache(
+        &self,
+        expert_pager: &Qwen3_5ExpertPager,
+        layer_index: usize,
+        route_token_count: i32,
+        sorted_unique_expert_ids: &[usize],
+        paged_execution_mode: Qwen3_5MoEPagedExecutionMode,
+        performance_attribution: &mut PerformanceAttribution,
+    ) -> Result<(Qwen3_5PagedExpertWeights, QuantizedExpertPageManifest), TextExecutionError> {
+        let expert_capacity = expert_pager.layer_plan(layer_index)?.expert_capacity;
+        if route_token_count > 1 {
+            return self.stream_complete_expert_layer(
+                expert_pager,
+                layer_index,
+                route_token_count,
+                expert_capacity,
+                sorted_unique_expert_ids.len(),
+                paged_execution_mode == Qwen3_5MoEPagedExecutionMode::ProductionDefault,
+                self.current_serving_phase(route_token_count),
+                performance_attribution,
+            );
+        }
+        // Single token: served from the warm table when it holds every routed
+        // expert of this token, so no storage read happens for this layer
+        // (issue #372); otherwise the routed experts stream for this
+        // operation only.
+        self.record_decode_route_coverage(
+            layer_index,
+            sorted_unique_expert_ids,
+            performance_attribution,
+        );
+        match self.hot_expert_partial_page(
+            layer_index,
+            expert_capacity,
+            sorted_unique_expert_ids,
+            performance_attribution,
+        ) {
+            Some(packed_page) => Ok(packed_page),
+            None => self.stream_operation_local_routed_experts(
+                expert_pager,
+                layer_index,
+                route_token_count,
+                sorted_unique_expert_ids,
+                paged_execution_mode == Qwen3_5MoEPagedExecutionMode::ProductionDefault,
+                performance_attribution,
+            ),
+        }
     }
 }

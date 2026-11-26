@@ -1,6 +1,7 @@
 use crate::github_actions_cache_prune::{
-    DeletionReason, GithubActionsCacheEntry, deletion_plan, family_of_key,
-    parse_github_actions_cache_list_tsv,
+    Deletion, DeletionReason, GithubActionsCacheEntry, PruneOptions, completion_log_line,
+    deletion_log_line, deletion_plan, family_of_key, parse_github_actions_cache_list_tsv,
+    parse_prune_arguments,
 };
 
 fn github_actions_cache_entry(
@@ -237,4 +238,123 @@ fn tsv_parsing_round_trips_gh_output() {
     assert_eq!(entries[0].key, "astronomical-v2-sccache-macOS-a");
     assert_eq!(entries[1].size_bytes, 42);
     assert!(parse_github_actions_cache_list_tsv("not-enough-fields").is_empty());
+}
+
+fn argument_list(arguments: &[&str]) -> std::vec::IntoIter<String> {
+    arguments
+        .iter()
+        .map(|argument| (*argument).to_owned())
+        .collect::<Vec<_>>()
+        .into_iter()
+}
+
+#[test]
+fn should_read_the_repository_and_the_dry_run_flag_from_the_arguments() {
+    let prune_options = parse_prune_arguments(
+        argument_list(&["--dry-run", "--repo", "example-owner/example-repo"]),
+        None,
+    );
+
+    assert_eq!(
+        prune_options,
+        Ok(PruneOptions {
+            repository: "example-owner/example-repo".to_owned(),
+            is_dry_run: true,
+        })
+    );
+}
+
+#[test]
+fn should_fall_back_to_the_environment_repository_unless_repo_is_given() {
+    let from_environment = parse_prune_arguments(
+        argument_list(&[]),
+        Some("environment-owner/environment-repo".to_owned()),
+    );
+    let from_argument = parse_prune_arguments(
+        argument_list(&["--repo", "argument-owner/argument-repo"]),
+        Some("environment-owner/environment-repo".to_owned()),
+    );
+
+    assert_eq!(
+        from_environment,
+        Ok(PruneOptions {
+            repository: "environment-owner/environment-repo".to_owned(),
+            is_dry_run: false,
+        })
+    );
+    assert_eq!(
+        from_argument.map(|prune_options| prune_options.repository),
+        Ok("argument-owner/argument-repo".to_owned())
+    );
+}
+
+#[test]
+fn should_reject_an_unknown_prune_argument() {
+    let prune_options = parse_prune_arguments(argument_list(&["--force"]), None);
+
+    assert_eq!(
+        prune_options,
+        Err("unexpected prune-caches argument: --force".to_owned())
+    );
+}
+
+#[test]
+fn should_reject_a_repo_argument_without_a_value() {
+    let prune_options = parse_prune_arguments(argument_list(&["--repo"]), None);
+
+    assert_eq!(prune_options, Err("--repo requires owner/name".to_owned()));
+}
+
+#[test]
+fn should_reject_a_run_that_names_no_repository() {
+    let prune_options = parse_prune_arguments(argument_list(&["--dry-run"]), None);
+
+    assert_eq!(
+        prune_options,
+        Err("no repository given; pass --repo owner/name or set GITHUB_REPOSITORY".to_owned())
+    );
+}
+
+#[test]
+fn should_log_an_oversize_deletion_with_its_action_reason_and_size() {
+    let deletion = Deletion {
+        id: 41,
+        reason: DeletionReason::Oversize,
+        size_bytes: 700_000_000,
+    };
+
+    assert_eq!(
+        deletion_log_line("would-delete", &deletion),
+        "[cache-prune] action=would-delete reason=oversize cache_id=41 size_bytes=700000000"
+    );
+}
+
+#[test]
+fn should_log_a_surplus_deletion_that_gh_removed() {
+    let deletion = Deletion {
+        id: 7,
+        reason: DeletionReason::Surplus,
+        size_bytes: 0,
+    };
+
+    assert_eq!(
+        deletion_log_line("deleted", &deletion),
+        "[cache-prune] action=deleted reason=surplus cache_id=7 size_bytes=0"
+    );
+}
+
+#[test]
+fn should_name_the_pruned_outcome_in_the_completion_line() {
+    assert_eq!(
+        completion_log_line(false, 3, 1_500, 12),
+        "[cache-prune] status=complete outcome=pruned deleted=3 freed_bytes=1500 elapsed_seconds=12"
+    );
+}
+
+#[test]
+fn should_name_the_dry_run_outcome_with_zero_totals_in_the_completion_line() {
+    assert_eq!(
+        completion_log_line(true, 0, 0, 0),
+        "[cache-prune] status=complete outcome=dry-run deleted=0 freed_bytes=0 elapsed_seconds=0"
+    );
 }

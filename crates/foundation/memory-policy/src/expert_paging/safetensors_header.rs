@@ -180,25 +180,9 @@ impl SafetensorsHeader {
 pub fn parse_safetensors_header(
     file_path: &Path,
 ) -> Result<SafetensorsHeader, SafetensorsHeaderError> {
-    let file_path = std::path::PathBuf::from(file_path);
-    let file_metadata = std::fs::metadata(&file_path).map_err(|source| {
-        if source.kind() == std::io::ErrorKind::NotFound {
-            SafetensorsHeaderError::FileNotFound {
-                file_path: file_path.clone(),
-            }
-        } else {
-            SafetensorsHeaderError::Io(source)
-        }
-    })?;
-    if !file_metadata.is_file() {
-        return Err(SafetensorsHeaderError::NotARegularFile { file_path });
-    }
-    let file_size_bytes = file_metadata.len();
-    if file_size_bytes < SAFETENSORS_HEADER_LENGTH_PREFIX_BYTES {
-        return Err(SafetensorsHeaderError::FileTooSmall { file_size_bytes });
-    }
+    let file_size_bytes = regular_safetensors_file_size(file_path)?;
 
-    let safetensors_file = File::open(&file_path).map_err(SafetensorsHeaderError::Io)?;
+    let safetensors_file = File::open(file_path).map_err(SafetensorsHeaderError::Io)?;
     let bounded_safetensors_json_header = read_bounded_safetensors_json_header(
         &safetensors_file,
         file_size_bytes,
@@ -211,71 +195,132 @@ pub fn parse_safetensors_header(
     let payload_byte_count = file_size_bytes - payload_start_offset;
     let mut tensor_entries = Vec::with_capacity(header_mapping.len());
     for (tensor_name, tensor_value) in &header_mapping {
-        let tensor_header = match tensor_value.as_object() {
-            Some(obj) => obj,
-            None => {
-                return Err(SafetensorsHeaderError::HeaderNotObject {
-                    actual_type: tensor_value.to_string(),
-                });
-            }
-        };
-        let dtype_str = tensor_header
-            .get("dtype")
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| SafetensorsHeaderError::UnsupportedDtype {
-                tensor_name: tensor_name.clone(),
-                dtype: "missing".to_owned(),
-            })?;
-        let dtype =
-            parse_dtype(dtype_str).ok_or_else(|| SafetensorsHeaderError::UnsupportedDtype {
-                tensor_name: tensor_name.clone(),
-                dtype: dtype_str.to_owned(),
-            })?;
-        let shape = validate_shape(tensor_name, tensor_header.get("shape"))?;
-        let (data_start_offset, data_end_offset) = validate_data_offsets(
+        tensor_entries.push(parse_tensor_header_entry(
             tensor_name,
-            tensor_header.get("data_offsets"),
+            tensor_value,
+            payload_start_offset,
             payload_byte_count,
-        )?;
-        let declared_byte_count = data_end_offset - data_start_offset;
-        let element_count = shape.iter().try_fold(1_usize, |product, &dimension| {
-            product.checked_mul(dimension)
-        });
-        // Both multiplies stay checked: a shape whose element count fits
-        // usize can still overflow once multiplied by the dtype byte width,
-        // and an unchecked multiply wraps to a small value that lets a
-        // corrupt header pass byte-count validation fail-open (or panics on
-        // an overflow-checked build) instead of failing closed.
-        let expected_byte_count = element_count
-            .and_then(|element_count| element_count.checked_mul(dtype.byte_width()))
-            .ok_or_else(|| SafetensorsHeaderError::ByteCountMismatch {
-                tensor_name: tensor_name.clone(),
-                declared_bytes: declared_byte_count,
-                expected_bytes: 0,
-            })?;
-        if declared_byte_count != expected_byte_count as u64 {
-            return Err(SafetensorsHeaderError::ByteCountMismatch {
-                tensor_name: tensor_name.clone(),
-                declared_bytes: declared_byte_count,
-                expected_bytes: expected_byte_count as u64,
-            });
-        }
-        // Convert payload-relative offsets to file-relative offsets.
-        let file_relative_start = payload_start_offset + data_start_offset;
-        let file_relative_end = payload_start_offset + data_end_offset;
-        tensor_entries.push(TensorHeaderEntry {
-            tensor_name: tensor_name.clone(),
-            dtype,
-            shape,
-            data_start_offset: file_relative_start,
-            data_end_offset: file_relative_end,
-        });
+        )?);
     }
     Ok(SafetensorsHeader {
         tensor_entries,
         payload_start_offset,
         total_file_size_bytes: file_size_bytes,
     })
+}
+
+/// The size of a file that is a regular file at least long enough to hold the
+/// header length prefix.
+fn regular_safetensors_file_size(file_path: &Path) -> Result<u64, SafetensorsHeaderError> {
+    let file_metadata = std::fs::metadata(file_path).map_err(|source| {
+        if source.kind() == std::io::ErrorKind::NotFound {
+            SafetensorsHeaderError::FileNotFound {
+                file_path: file_path.to_path_buf(),
+            }
+        } else {
+            SafetensorsHeaderError::Io(source)
+        }
+    })?;
+    if !file_metadata.is_file() {
+        return Err(SafetensorsHeaderError::NotARegularFile {
+            file_path: file_path.to_path_buf(),
+        });
+    }
+    let file_size_bytes = file_metadata.len();
+    if file_size_bytes < SAFETENSORS_HEADER_LENGTH_PREFIX_BYTES {
+        return Err(SafetensorsHeaderError::FileTooSmall { file_size_bytes });
+    }
+    Ok(file_size_bytes)
+}
+
+/// Validates one tensor's header object and returns its entry with the
+/// payload-relative offsets converted to file-relative ones.
+fn parse_tensor_header_entry(
+    tensor_name: &str,
+    tensor_value: &serde_json::Value,
+    payload_start_offset: u64,
+    payload_byte_count: u64,
+) -> Result<TensorHeaderEntry, SafetensorsHeaderError> {
+    let tensor_header = match tensor_value.as_object() {
+        Some(tensor_header_object) => tensor_header_object,
+        None => {
+            return Err(SafetensorsHeaderError::HeaderNotObject {
+                actual_type: tensor_value.to_string(),
+            });
+        }
+    };
+    let dtype = parse_tensor_dtype(tensor_name, tensor_header)?;
+    let shape = validate_shape(tensor_name, tensor_header.get("shape"))?;
+    let (data_start_offset, data_end_offset) = validate_data_offsets(
+        tensor_name,
+        tensor_header.get("data_offsets"),
+        payload_byte_count,
+    )?;
+    validate_declared_byte_count(
+        tensor_name,
+        &shape,
+        dtype,
+        data_end_offset - data_start_offset,
+    )?;
+    Ok(TensorHeaderEntry {
+        tensor_name: tensor_name.to_owned(),
+        dtype,
+        shape,
+        data_start_offset: payload_start_offset + data_start_offset,
+        data_end_offset: payload_start_offset + data_end_offset,
+    })
+}
+
+/// Reads the tensor's `dtype` field; a missing field is reported as the
+/// unsupported dtype `"missing"`.
+fn parse_tensor_dtype(
+    tensor_name: &str,
+    tensor_header: &serde_json::Map<String, serde_json::Value>,
+) -> Result<SafetensorsDtype, SafetensorsHeaderError> {
+    let dtype_str = tensor_header
+        .get("dtype")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| SafetensorsHeaderError::UnsupportedDtype {
+            tensor_name: tensor_name.to_owned(),
+            dtype: "missing".to_owned(),
+        })?;
+    parse_dtype(dtype_str).ok_or_else(|| SafetensorsHeaderError::UnsupportedDtype {
+        tensor_name: tensor_name.to_owned(),
+        dtype: dtype_str.to_owned(),
+    })
+}
+
+/// Checks that the byte range a tensor declares is exactly the size its shape
+/// and dtype call for.
+fn validate_declared_byte_count(
+    tensor_name: &str,
+    shape: &[usize],
+    dtype: SafetensorsDtype,
+    declared_byte_count: u64,
+) -> Result<(), SafetensorsHeaderError> {
+    let element_count = shape.iter().try_fold(1_usize, |product, &dimension| {
+        product.checked_mul(dimension)
+    });
+    // Both multiplies stay checked: a shape whose element count fits
+    // usize can still overflow once multiplied by the dtype byte width,
+    // and an unchecked multiply wraps to a small value that lets a
+    // corrupt header pass byte-count validation fail-open (or panics on
+    // an overflow-checked build) instead of failing closed.
+    let expected_byte_count = element_count
+        .and_then(|element_count| element_count.checked_mul(dtype.byte_width()))
+        .ok_or_else(|| SafetensorsHeaderError::ByteCountMismatch {
+            tensor_name: tensor_name.to_owned(),
+            declared_bytes: declared_byte_count,
+            expected_bytes: 0,
+        })?;
+    if declared_byte_count != expected_byte_count as u64 {
+        return Err(SafetensorsHeaderError::ByteCountMismatch {
+            tensor_name: tensor_name.to_owned(),
+            declared_bytes: declared_byte_count,
+            expected_bytes: expected_byte_count as u64,
+        });
+    }
+    Ok(())
 }
 
 fn expert_safetensors_header_error(
@@ -403,3 +448,7 @@ fn validate_data_offsets(
     }
     Ok((start_u64, end_u64))
 }
+
+#[cfg(test)]
+#[path = "safetensors_header_entry_tests.rs"]
+mod entry_tests;

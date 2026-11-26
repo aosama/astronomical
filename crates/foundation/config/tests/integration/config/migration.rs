@@ -2,6 +2,9 @@
 
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
+use std::path::Path;
+
+use config::ResolvedModelConfig;
 
 use super::*;
 
@@ -17,25 +20,7 @@ fn should_migrate_representable_legacy_configuration_to_v1() {
         65_536,
     );
     super::super::model_discovery::write_required_model_files(&model_directory);
-    let legacy_config_json = serde_json::json!({
-        "model_directories": [model_root],
-        "max_output_tokens": 4096,
-        "maximum_mlx_memory_gb": 16,
-        "persistent_prompt_cache_enabled": false,
-        "prompt_cache_max_size_gb": 20,
-        "performance_attribution_enabled": true,
-        "chunking": {
-            "fixed_prompt_processing_chunk_size_tokens": 4096,
-            "fixed_ssd_streaming_prompt_processing_chunk_size_tokens": 1024,
-            "full_attention_key_value_growth_tokens": 512,
-            "prefill_graph_submission_layer_interval": 2,
-            "experimental_ssd_paging_generation_graph_submission_layer_interval": 4,
-            "prompt_cache_block_tokens": 512,
-            "prompt_cache_common_prefix_stride_blocks": 8
-        },
-        "logging": {"level": "info", "retained_files": 4}
-    })
-    .to_string();
+    let legacy_config_json = representable_legacy_configuration_json(&model_root);
     write_config(temporary_home_directory.path(), &legacy_config_json);
     let config_directory = temporary_home_directory.path().join(".astronomical");
     let original_config_bytes = fs::read(config_directory.join("config.json"))
@@ -73,6 +58,32 @@ fn should_migrate_representable_legacy_configuration_to_v1() {
     assert_eq!(migrated_json["runtime"]["maximum_mlx_memory_gb"], 16);
     assert_eq!(migrated_json["ssd_prompt_cache"]["enabled"], false);
     assert!(migrated_json.get("max_output_tokens").is_none());
+    assert_migrated_output_limit_and_chunking(&model_config);
+}
+
+fn representable_legacy_configuration_json(model_root: &Path) -> String {
+    serde_json::json!({
+        "model_directories": [model_root],
+        "max_output_tokens": 4096,
+        "maximum_mlx_memory_gb": 16,
+        "persistent_prompt_cache_enabled": false,
+        "prompt_cache_max_size_gb": 20,
+        "performance_attribution_enabled": true,
+        "chunking": {
+            "fixed_prompt_processing_chunk_size_tokens": 4096,
+            "fixed_ssd_streaming_prompt_processing_chunk_size_tokens": 1024,
+            "full_attention_key_value_growth_tokens": 512,
+            "prefill_graph_submission_layer_interval": 2,
+            "experimental_ssd_paging_generation_graph_submission_layer_interval": 4,
+            "prompt_cache_block_tokens": 512,
+            "prompt_cache_common_prefix_stride_blocks": 8
+        },
+        "logging": {"level": "info", "retained_files": 4}
+    })
+    .to_string()
+}
+
+fn assert_migrated_output_limit_and_chunking(model_config: &ResolvedModelConfig) {
     assert_eq!(model_config.maximum_output_tokens(), 4_096);
     assert_eq!(
         model_config

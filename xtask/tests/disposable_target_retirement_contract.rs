@@ -15,6 +15,15 @@ fn file_text(path: &Path) -> String {
 #[test]
 fn should_pin_profiles_alias_rules_and_the_retired_runner_absence() {
     let repository_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+    assert_workspace_profiles_keep_diagnostics(&repository_root);
+
+    let alias_section_text = cargo_alias_section_text(&repository_root);
+    assert_alias_section_is_string_only_and_pins_acceptance(&alias_section_text);
+    assert_throughput_aliases_are_optimized_and_serial(&alias_section_text);
+    assert_retired_runner_and_contracts_stay_absent(&repository_root);
+}
+
+fn assert_workspace_profiles_keep_diagnostics(repository_root: &Path) {
     let workspace_manifest_text = file_text(&repository_root.join("Cargo.toml"));
     for profile_name in ["dev", "test"] {
         assert!(
@@ -34,18 +43,23 @@ fn should_pin_profiles_alias_rules_and_the_retired_runner_absence() {
         workspace_manifest_text.contains("split-debuginfo = \"packed\""),
         "the full-debug profile should keep packed split debug information"
     );
+}
 
+fn cargo_alias_section_text(repository_root: &Path) -> String {
     let cargo_configuration_text = file_text(&repository_root.join(".cargo/config.toml"));
     // The alias section runs until the next header line; plain bracket
     // splitting would cut at the `[--update-baseline]` inside the section's
     // own usage comments.
-    let alias_section_text: String = cargo_configuration_text
+    cargo_configuration_text
         .lines()
         .skip_while(|configuration_line| configuration_line.trim() != "[alias]")
         .skip(1)
         .take_while(|configuration_line| !configuration_line.starts_with('['))
         .collect::<Vec<&str>>()
-        .join("\n");
+        .join("\n")
+}
+
+fn assert_alias_section_is_string_only_and_pins_acceptance(alias_section_text: &str) {
     assert!(
         !alias_section_text.is_empty(),
         "the cargo configuration should have an alias section"
@@ -72,6 +86,9 @@ fn should_pin_profiles_alias_rules_and_the_retired_runner_absence() {
             "the {acceptance_alias} alias should stay pinned"
         );
     }
+}
+
+fn assert_throughput_aliases_are_optimized_and_serial(alias_section_text: &str) {
     for throughput_alias in [
         "test-jangtq2-decode-throughput",
         "test-jangtq2-serving-throughput",
@@ -94,7 +111,9 @@ fn should_pin_profiles_alias_rules_and_the_retired_runner_absence() {
             "the {throughput_alias} alias must run GPU work serially: directly via --test-threads=1, or through the test-run runner that injects it"
         );
     }
+}
 
+fn assert_retired_runner_and_contracts_stay_absent(repository_root: &Path) {
     // The retirement itself is pinned: the shell runner and its two shell
     // contracts must never come back.
     for retired_relative_path in [

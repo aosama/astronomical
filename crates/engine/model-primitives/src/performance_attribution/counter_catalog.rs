@@ -2,12 +2,13 @@
 //!
 //! Enum discriminants index a fixed array on the hot path. `COUNT`, `ALL`, and
 //! `identifier` must therefore change together: their shared order is the
-//! zero-allocation bridge from recording to serialized diagnostics.
+//! zero-allocation bridge from recording to serialized diagnostics. `ALL` and
+//! `identifier` both read the one `CATALOG` table, so they cannot disagree.
 //!
-//! Declaring a counter means appending its variant and listing it once in
-//! `ALL`, then taking `COUNT` from that newest variant. The journey in
-//! `tests/integration/performance_attribution/counter_catalog.rs`
-//! guards the invariant, because a counter outside the reserved storage
+//! Declaring a counter means appending its variant, listing it once in
+//! `CATALOG` with its report identifier, then taking `COUNT` from that newest
+//! variant. The tests in `performance_attribution_tests/counter_catalog.rs`
+//! guard the invariant, because a counter outside the reserved storage
 //! panicked the inference worker mid-request instead of failing a build.
 
 /// One bounded numerical counter attached to a performance-attribution report.
@@ -140,239 +141,309 @@ impl PerformanceCounter {
     // attribution remains pointer-sized and performs no counter allocation.
     /// Number of distinct counters the enabled report storage reserves.
     pub const COUNT: usize = Self::SpeculativeAcceptedTokenCount as usize + 1;
-    /// Every counter in declaration order, so report serialization can pair a
-    /// counter with its stored value by position without an allocation.
-    pub const ALL: [Self; Self::COUNT] = [
-        Self::PromptTokenCount,
-        Self::AstroSsdPromptCacheRestoredTokenCount,
-        Self::GeneratedTokenCount,
-        Self::ForcedThinkingTransitionTokenCount,
-        Self::PrefillChunkCount,
-        Self::RustExpertStreamingPayloadByteCount,
-        Self::RustStreamedExpertProjectionGraphCount,
-        Self::PositionalFileReadCallCount,
-        Self::PositionalFileReadByteCount,
-        Self::PositionalFileReadElapsedNanoseconds,
-        Self::PositionalFileReadMaximumElapsedNanoseconds,
-        Self::PositionalFileReadMaximumConcurrentCount,
-        Self::PositionalFileReadFailureCount,
-        Self::ExpertRoutePredictedExpertCount,
-        Self::ExpertRouteMatchedExpertCount,
-        Self::ExpertRouteCompletelyMatchedLayerCount,
-        Self::ExpertRouteExaminedLayerCount,
-        Self::ExpertResidencyPlanCompleteLayerCount,
-        Self::ExpertResidencyPlanPartialLayerCount,
-        Self::ExpertResidencyPlanStreamedLayerCount,
-        Self::ExpertResidencyPreexistingCompletePayloadBytes,
-        Self::ExpertResidencyPreexistingPartialPayloadBytes,
-        Self::ExpertResidencyPreservedCompletePayloadBytes,
-        Self::ExpertResidencyPreservedPartialPayloadBytes,
-        Self::ExpertResidencyPromotedCompletePayloadBytes,
-        Self::ExpertResidencyPromotedPartialPayloadBytes,
-        Self::ExpertResidencyRetiredCompletePayloadBytes,
-        Self::ExpertResidencyRetiredPartialPayloadBytes,
-        Self::ExpertTopologyPreservedPayloadBytes,
-        Self::ExpertTopologyRetiredPayloadBytes,
-        Self::MandatoryPrefillExpertSourcePayloadBytes,
-        Self::MandatoryDecodeExpertSourcePayloadBytes,
-        Self::AvoidedCompleteLayerExpertSourcePayloadBytes,
-        Self::CompleteLayerPrefetchUsefulPayloadBytes,
-        Self::CompleteLayerPrefetchWastedPayloadBytes,
-        Self::RetainedRouteAssignmentHitCount,
-        Self::RetainedRouteAssignmentMissCount,
-        Self::HotExpertPartialRouteHitCount,
-        Self::HotExpertWarmInsertCount,
-        Self::OptimisticReplyTokenCount,
-        Self::OptimisticReplyTokenMissCount,
-        Self::HotExpertRouteFullyCoveredCount,
-        Self::HotExpertRoutePartiallyCoveredCount,
-        Self::HotExpertRouteFullyMissedCount,
-        Self::HotExpertRouteRetainedAssignmentCount,
-        Self::HotExpertRouteMissingAssignmentCount,
-        Self::HotExpertMixedRouteCount,
-        Self::ExpertResidencyCommitRejectionCount,
-        Self::ExpertResidencyReadThroughSeatedCompletePayloadBytes,
-        Self::ExpertResidencyDecodeSeatingStreamedCompletePayloadBytes,
-        Self::MemoryCeilingUtilizationCeilingBytes,
-        Self::MemoryCeilingUtilizationActiveBytes,
-        Self::MemoryCeilingUtilizationUnusedHeadroomBytes,
-        Self::MemoryCeilingUtilizationReservedModelCoreSlackBytes,
-        Self::MemoryCeilingUtilizationReservedContextGrowthBytes,
-        Self::MemoryCeilingUtilizationReservedActivationAndWorkspaceBytes,
-        Self::MemoryCeilingUtilizationUnseatedExpertEntitlementBytes,
-        Self::MemoryCeilingUtilizationUnexplainedHeadroomBytes,
-        Self::MemoryCeilingUtilizationOwnerOverrunBytes,
-        Self::RouteObservationStoredRecordCount,
-        Self::RouteObservationEvictedRecordCount,
-        Self::RouteObservationCapturedLayerCount,
-        Self::PreviousTokenPrefetchIssueCount,
-        Self::PreviousTokenPrefetchHitCount,
-        Self::PreviousTokenPrefetchMissCount,
-        Self::PreviousTokenPrefetchByteCount,
-        Self::PreviousTokenPrefetchCapacityDropCount,
-        Self::Jangtq2CodebookDecodedOutputByteCount,
-        Self::DecodeAstroExpertCacheSlotEvictionCount,
-        Self::PrefillCompleteLayerPrefetchPayloadBytes,
-        Self::SpeculativeRoundCount,
-        Self::SpeculativeProposedTokenCount,
-        Self::SpeculativeAcceptedTokenCount,
+
+    /// Every counter in declaration order with its stable report identifier.
+    /// The table length is `COUNT`, so an entry added or removed here without
+    /// the matching change to the enum stops the build, and `ALL` and
+    /// `identifier` both read this one table.
+    const CATALOG: [(Self, &'static str); Self::COUNT] = [
+        (Self::PromptTokenCount, "prompt_token_count"),
+        (
+            Self::AstroSsdPromptCacheRestoredTokenCount,
+            "astro_ssd_prompt_cache_restored_token_count",
+        ),
+        (Self::GeneratedTokenCount, "generated_token_count"),
+        (
+            Self::ForcedThinkingTransitionTokenCount,
+            "forced_thinking_transition_token_count",
+        ),
+        (Self::PrefillChunkCount, "prefill_chunk_count"),
+        (
+            Self::RustExpertStreamingPayloadByteCount,
+            "rust_expert_streaming_payload_byte_count",
+        ),
+        (
+            Self::RustStreamedExpertProjectionGraphCount,
+            "rust_streamed_expert_projection_graph_count",
+        ),
+        (
+            Self::PositionalFileReadCallCount,
+            "positional_file_read_call_count",
+        ),
+        (
+            Self::PositionalFileReadByteCount,
+            "positional_file_read_byte_count",
+        ),
+        (
+            Self::PositionalFileReadElapsedNanoseconds,
+            "positional_file_read_elapsed_nanoseconds",
+        ),
+        (
+            Self::PositionalFileReadMaximumElapsedNanoseconds,
+            "positional_file_read_maximum_elapsed_nanoseconds",
+        ),
+        (
+            Self::PositionalFileReadMaximumConcurrentCount,
+            "positional_file_read_maximum_concurrent_count",
+        ),
+        (
+            Self::PositionalFileReadFailureCount,
+            "positional_file_read_failure_count",
+        ),
+        (
+            Self::ExpertRoutePredictedExpertCount,
+            "expert_route_predicted_expert_count",
+        ),
+        (
+            Self::ExpertRouteMatchedExpertCount,
+            "expert_route_matched_expert_count",
+        ),
+        (
+            Self::ExpertRouteCompletelyMatchedLayerCount,
+            "expert_route_completely_matched_layer_count",
+        ),
+        (
+            Self::ExpertRouteExaminedLayerCount,
+            "expert_route_examined_layer_count",
+        ),
+        (
+            Self::ExpertResidencyPlanCompleteLayerCount,
+            "expert_residency_plan_complete_layer_count",
+        ),
+        (
+            Self::ExpertResidencyPlanPartialLayerCount,
+            "expert_residency_plan_partial_layer_count",
+        ),
+        (
+            Self::ExpertResidencyPlanStreamedLayerCount,
+            "expert_residency_plan_streamed_layer_count",
+        ),
+        (
+            Self::ExpertResidencyPreexistingCompletePayloadBytes,
+            "expert_residency_preexisting_complete_payload_bytes",
+        ),
+        (
+            Self::ExpertResidencyPreexistingPartialPayloadBytes,
+            "expert_residency_preexisting_partial_payload_bytes",
+        ),
+        (
+            Self::ExpertResidencyPreservedCompletePayloadBytes,
+            "expert_residency_preserved_complete_payload_bytes",
+        ),
+        (
+            Self::ExpertResidencyPreservedPartialPayloadBytes,
+            "expert_residency_preserved_partial_payload_bytes",
+        ),
+        (
+            Self::ExpertResidencyPromotedCompletePayloadBytes,
+            "mandatory_prefill_complete_layer_promoted_payload_byte_count",
+        ),
+        (
+            Self::ExpertResidencyPromotedPartialPayloadBytes,
+            "mandatory_decode_routed_page_promoted_payload_byte_count",
+        ),
+        (
+            Self::ExpertResidencyRetiredCompletePayloadBytes,
+            "expert_residency_retired_complete_payload_bytes",
+        ),
+        (
+            Self::ExpertResidencyRetiredPartialPayloadBytes,
+            "expert_residency_retired_partial_payload_bytes",
+        ),
+        (
+            Self::ExpertTopologyPreservedPayloadBytes,
+            "expert_topology_preserved_payload_byte_count",
+        ),
+        (
+            Self::ExpertTopologyRetiredPayloadBytes,
+            "expert_topology_retired_payload_byte_count",
+        ),
+        (
+            Self::MandatoryPrefillExpertSourcePayloadBytes,
+            "mandatory_prefill_expert_source_payload_bytes",
+        ),
+        (
+            Self::MandatoryDecodeExpertSourcePayloadBytes,
+            "mandatory_decode_expert_source_payload_bytes",
+        ),
+        (
+            Self::AvoidedCompleteLayerExpertSourcePayloadBytes,
+            "avoided_complete_layer_expert_source_payload_bytes",
+        ),
+        (
+            Self::CompleteLayerPrefetchUsefulPayloadBytes,
+            "complete_layer_prefetch_useful_payload_bytes",
+        ),
+        (
+            Self::CompleteLayerPrefetchWastedPayloadBytes,
+            "complete_layer_prefetch_wasted_payload_bytes",
+        ),
+        (
+            Self::RetainedRouteAssignmentHitCount,
+            "retained_route_assignment_hit_count",
+        ),
+        (
+            Self::RetainedRouteAssignmentMissCount,
+            "retained_route_assignment_miss_count",
+        ),
+        (
+            Self::HotExpertPartialRouteHitCount,
+            "hot_expert_partial_route_hit_count",
+        ),
+        (
+            Self::HotExpertWarmInsertCount,
+            "hot_expert_warm_insert_count",
+        ),
+        (
+            Self::OptimisticReplyTokenCount,
+            "optimistic_reply_token_count",
+        ),
+        (
+            Self::OptimisticReplyTokenMissCount,
+            "optimistic_reply_token_miss_count",
+        ),
+        (
+            Self::HotExpertRouteFullyCoveredCount,
+            "hot_expert_route_fully_covered_count",
+        ),
+        (
+            Self::HotExpertRoutePartiallyCoveredCount,
+            "hot_expert_route_partially_covered_count",
+        ),
+        (
+            Self::HotExpertRouteFullyMissedCount,
+            "hot_expert_route_fully_missed_count",
+        ),
+        (
+            Self::HotExpertRouteRetainedAssignmentCount,
+            "hot_expert_route_retained_assignment_count",
+        ),
+        (
+            Self::HotExpertRouteMissingAssignmentCount,
+            "hot_expert_route_missing_assignment_count",
+        ),
+        (
+            Self::HotExpertMixedRouteCount,
+            "hot_expert_mixed_route_count",
+        ),
+        (
+            Self::ExpertResidencyCommitRejectionCount,
+            "expert_residency_commit_rejection_count",
+        ),
+        (
+            Self::ExpertResidencyReadThroughSeatedCompletePayloadBytes,
+            "expert_residency_read_through_seated_complete_payload_bytes",
+        ),
+        (
+            Self::ExpertResidencyDecodeSeatingStreamedCompletePayloadBytes,
+            "expert_residency_decode_seating_streamed_complete_payload_bytes",
+        ),
+        (
+            Self::MemoryCeilingUtilizationCeilingBytes,
+            "memory_ceiling_utilization_ceiling_bytes",
+        ),
+        (
+            Self::MemoryCeilingUtilizationActiveBytes,
+            "memory_ceiling_utilization_active_bytes",
+        ),
+        (
+            Self::MemoryCeilingUtilizationUnusedHeadroomBytes,
+            "memory_ceiling_utilization_unused_headroom_bytes",
+        ),
+        (
+            Self::MemoryCeilingUtilizationReservedModelCoreSlackBytes,
+            "memory_ceiling_utilization_reserved_model_core_slack_bytes",
+        ),
+        (
+            Self::MemoryCeilingUtilizationReservedContextGrowthBytes,
+            "memory_ceiling_utilization_reserved_context_growth_bytes",
+        ),
+        (
+            Self::MemoryCeilingUtilizationReservedActivationAndWorkspaceBytes,
+            "memory_ceiling_utilization_reserved_activation_and_workspace_bytes",
+        ),
+        (
+            Self::MemoryCeilingUtilizationUnseatedExpertEntitlementBytes,
+            "memory_ceiling_utilization_unseated_expert_entitlement_bytes",
+        ),
+        (
+            Self::MemoryCeilingUtilizationUnexplainedHeadroomBytes,
+            "memory_ceiling_utilization_unexplained_headroom_bytes",
+        ),
+        (
+            Self::MemoryCeilingUtilizationOwnerOverrunBytes,
+            "memory_ceiling_utilization_owner_overrun_bytes",
+        ),
+        (
+            Self::RouteObservationStoredRecordCount,
+            "route_observation_stored_record_count",
+        ),
+        (
+            Self::RouteObservationEvictedRecordCount,
+            "route_observation_evicted_record_count",
+        ),
+        (
+            Self::RouteObservationCapturedLayerCount,
+            "route_observation_captured_layer_count",
+        ),
+        (
+            Self::PreviousTokenPrefetchIssueCount,
+            "previous_token_prefetch_issue_count",
+        ),
+        (
+            Self::PreviousTokenPrefetchHitCount,
+            "previous_token_prefetch_hit_count",
+        ),
+        (
+            Self::PreviousTokenPrefetchMissCount,
+            "previous_token_prefetch_miss_count",
+        ),
+        (
+            Self::PreviousTokenPrefetchByteCount,
+            "previous_token_prefetch_byte_count",
+        ),
+        (
+            Self::PreviousTokenPrefetchCapacityDropCount,
+            "previous_token_prefetch_capacity_drop_count",
+        ),
+        (
+            Self::Jangtq2CodebookDecodedOutputByteCount,
+            "jangtq2_codebook_decoded_output_byte_count",
+        ),
+        (
+            Self::DecodeAstroExpertCacheSlotEvictionCount,
+            "decode_astro_expert_cache_slot_eviction_count",
+        ),
+        (
+            Self::PrefillCompleteLayerPrefetchPayloadBytes,
+            "prefill_complete_layer_prefetch_payload_bytes",
+        ),
+        (Self::SpeculativeRoundCount, "speculative_round_count"),
+        (
+            Self::SpeculativeProposedTokenCount,
+            "speculative_proposed_token_count",
+        ),
+        (
+            Self::SpeculativeAcceptedTokenCount,
+            "speculative_accepted_token_count",
+        ),
     ];
 
-    /// Stable report identifier for this counter.
-    #[expect(clippy::too_many_lines)] // declarative table: data serialized as code (issue #1637 Family D)
-    pub const fn identifier(self) -> &'static str {
-        match self {
-            Self::PromptTokenCount => "prompt_token_count",
-            Self::AstroSsdPromptCacheRestoredTokenCount => {
-                "astro_ssd_prompt_cache_restored_token_count"
-            }
-            Self::GeneratedTokenCount => "generated_token_count",
-            Self::ForcedThinkingTransitionTokenCount => "forced_thinking_transition_token_count",
-            Self::PrefillChunkCount => "prefill_chunk_count",
-            Self::RustExpertStreamingPayloadByteCount => "rust_expert_streaming_payload_byte_count",
-            Self::RustStreamedExpertProjectionGraphCount => {
-                "rust_streamed_expert_projection_graph_count"
-            }
-            Self::PositionalFileReadCallCount => "positional_file_read_call_count",
-            Self::PositionalFileReadByteCount => "positional_file_read_byte_count",
-            Self::PositionalFileReadElapsedNanoseconds => {
-                "positional_file_read_elapsed_nanoseconds"
-            }
-            Self::PositionalFileReadMaximumElapsedNanoseconds => {
-                "positional_file_read_maximum_elapsed_nanoseconds"
-            }
-            Self::PositionalFileReadMaximumConcurrentCount => {
-                "positional_file_read_maximum_concurrent_count"
-            }
-            Self::PositionalFileReadFailureCount => "positional_file_read_failure_count",
-            Self::ExpertRoutePredictedExpertCount => "expert_route_predicted_expert_count",
-            Self::ExpertRouteMatchedExpertCount => "expert_route_matched_expert_count",
-            Self::ExpertRouteCompletelyMatchedLayerCount => {
-                "expert_route_completely_matched_layer_count"
-            }
-            Self::ExpertRouteExaminedLayerCount => "expert_route_examined_layer_count",
-            Self::ExpertResidencyPlanCompleteLayerCount => {
-                "expert_residency_plan_complete_layer_count"
-            }
-            Self::ExpertResidencyPlanPartialLayerCount => {
-                "expert_residency_plan_partial_layer_count"
-            }
-            Self::ExpertResidencyPlanStreamedLayerCount => {
-                "expert_residency_plan_streamed_layer_count"
-            }
-            Self::ExpertResidencyPreexistingCompletePayloadBytes => {
-                "expert_residency_preexisting_complete_payload_bytes"
-            }
-            Self::ExpertResidencyPreexistingPartialPayloadBytes => {
-                "expert_residency_preexisting_partial_payload_bytes"
-            }
-            Self::ExpertResidencyPreservedCompletePayloadBytes => {
-                "expert_residency_preserved_complete_payload_bytes"
-            }
-            Self::ExpertResidencyPreservedPartialPayloadBytes => {
-                "expert_residency_preserved_partial_payload_bytes"
-            }
-            Self::ExpertResidencyPromotedCompletePayloadBytes => {
-                "mandatory_prefill_complete_layer_promoted_payload_byte_count"
-            }
-            Self::ExpertResidencyPromotedPartialPayloadBytes => {
-                "mandatory_decode_routed_page_promoted_payload_byte_count"
-            }
-            Self::ExpertResidencyRetiredCompletePayloadBytes => {
-                "expert_residency_retired_complete_payload_bytes"
-            }
-            Self::ExpertResidencyRetiredPartialPayloadBytes => {
-                "expert_residency_retired_partial_payload_bytes"
-            }
-            Self::ExpertTopologyPreservedPayloadBytes => {
-                "expert_topology_preserved_payload_byte_count"
-            }
-            Self::ExpertTopologyRetiredPayloadBytes => "expert_topology_retired_payload_byte_count",
-            Self::MandatoryPrefillExpertSourcePayloadBytes => {
-                "mandatory_prefill_expert_source_payload_bytes"
-            }
-            Self::MandatoryDecodeExpertSourcePayloadBytes => {
-                "mandatory_decode_expert_source_payload_bytes"
-            }
-            Self::AvoidedCompleteLayerExpertSourcePayloadBytes => {
-                "avoided_complete_layer_expert_source_payload_bytes"
-            }
-            Self::CompleteLayerPrefetchUsefulPayloadBytes => {
-                "complete_layer_prefetch_useful_payload_bytes"
-            }
-            Self::CompleteLayerPrefetchWastedPayloadBytes => {
-                "complete_layer_prefetch_wasted_payload_bytes"
-            }
-            Self::RetainedRouteAssignmentHitCount => "retained_route_assignment_hit_count",
-            Self::RetainedRouteAssignmentMissCount => "retained_route_assignment_miss_count",
-            Self::HotExpertPartialRouteHitCount => "hot_expert_partial_route_hit_count",
-            Self::HotExpertWarmInsertCount => "hot_expert_warm_insert_count",
-            Self::OptimisticReplyTokenCount => "optimistic_reply_token_count",
-            Self::OptimisticReplyTokenMissCount => "optimistic_reply_token_miss_count",
-            Self::HotExpertRouteFullyCoveredCount => "hot_expert_route_fully_covered_count",
-            Self::HotExpertRoutePartiallyCoveredCount => "hot_expert_route_partially_covered_count",
-            Self::HotExpertRouteFullyMissedCount => "hot_expert_route_fully_missed_count",
-            Self::HotExpertRouteRetainedAssignmentCount => {
-                "hot_expert_route_retained_assignment_count"
-            }
-            Self::HotExpertRouteMissingAssignmentCount => {
-                "hot_expert_route_missing_assignment_count"
-            }
-            Self::HotExpertMixedRouteCount => "hot_expert_mixed_route_count",
-            Self::ExpertResidencyCommitRejectionCount => "expert_residency_commit_rejection_count",
-            Self::ExpertResidencyReadThroughSeatedCompletePayloadBytes => {
-                "expert_residency_read_through_seated_complete_payload_bytes"
-            }
-            Self::ExpertResidencyDecodeSeatingStreamedCompletePayloadBytes => {
-                "expert_residency_decode_seating_streamed_complete_payload_bytes"
-            }
-            Self::MemoryCeilingUtilizationCeilingBytes => {
-                "memory_ceiling_utilization_ceiling_bytes"
-            }
-            Self::MemoryCeilingUtilizationActiveBytes => "memory_ceiling_utilization_active_bytes",
-            Self::MemoryCeilingUtilizationUnusedHeadroomBytes => {
-                "memory_ceiling_utilization_unused_headroom_bytes"
-            }
-            Self::MemoryCeilingUtilizationReservedModelCoreSlackBytes => {
-                "memory_ceiling_utilization_reserved_model_core_slack_bytes"
-            }
-            Self::MemoryCeilingUtilizationReservedContextGrowthBytes => {
-                "memory_ceiling_utilization_reserved_context_growth_bytes"
-            }
-            Self::MemoryCeilingUtilizationReservedActivationAndWorkspaceBytes => {
-                "memory_ceiling_utilization_reserved_activation_and_workspace_bytes"
-            }
-            Self::MemoryCeilingUtilizationUnseatedExpertEntitlementBytes => {
-                "memory_ceiling_utilization_unseated_expert_entitlement_bytes"
-            }
-            Self::MemoryCeilingUtilizationUnexplainedHeadroomBytes => {
-                "memory_ceiling_utilization_unexplained_headroom_bytes"
-            }
-            Self::MemoryCeilingUtilizationOwnerOverrunBytes => {
-                "memory_ceiling_utilization_owner_overrun_bytes"
-            }
-            Self::RouteObservationStoredRecordCount => "route_observation_stored_record_count",
-            Self::RouteObservationEvictedRecordCount => "route_observation_evicted_record_count",
-            Self::RouteObservationCapturedLayerCount => "route_observation_captured_layer_count",
-            Self::PreviousTokenPrefetchIssueCount => "previous_token_prefetch_issue_count",
-            Self::PreviousTokenPrefetchHitCount => "previous_token_prefetch_hit_count",
-            Self::PreviousTokenPrefetchMissCount => "previous_token_prefetch_miss_count",
-            Self::PreviousTokenPrefetchByteCount => "previous_token_prefetch_byte_count",
-            Self::PreviousTokenPrefetchCapacityDropCount => {
-                "previous_token_prefetch_capacity_drop_count"
-            }
-            Self::Jangtq2CodebookDecodedOutputByteCount => {
-                "jangtq2_codebook_decoded_output_byte_count"
-            }
-            Self::DecodeAstroExpertCacheSlotEvictionCount => {
-                "decode_astro_expert_cache_slot_eviction_count"
-            }
-            Self::SpeculativeRoundCount => "speculative_round_count",
-            Self::SpeculativeProposedTokenCount => "speculative_proposed_token_count",
-            Self::SpeculativeAcceptedTokenCount => "speculative_accepted_token_count",
-            Self::PrefillCompleteLayerPrefetchPayloadBytes => {
-                "prefill_complete_layer_prefetch_payload_bytes"
-            }
+    /// Every counter in declaration order, so report serialization can pair a
+    /// counter with its stored value by position without an allocation.
+    pub const ALL: [Self; Self::COUNT] = {
+        let mut counters_in_declaration_order = [Self::PromptTokenCount; Self::COUNT];
+        let mut counter_position = 0;
+        while counter_position < Self::COUNT {
+            counters_in_declaration_order[counter_position] = Self::CATALOG[counter_position].0;
+            counter_position += 1;
         }
+        counters_in_declaration_order
+    };
+
+    /// Stable report identifier for this counter, read from the catalog
+    /// position that equals its discriminant.
+    pub const fn identifier(self) -> &'static str {
+        Self::CATALOG[self as usize].1
     }
 }

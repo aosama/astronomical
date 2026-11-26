@@ -1,19 +1,19 @@
 # Clippy configuration, searched from the workspace root and applied to every
 # member crate.
 #
-# Function-length budget: 100 clippy code-lines. Clippy counts only lines that
-# carry code — comment lines and blank lines are excluded (with stateful
-# /* */ handling) — so documentation-heavy functions read shorter here than
-# their raw brace-to-brace span suggests. Keep any other measurement in line
+# Function-length budget: 80 clippy code-lines, the limit AGENTS.md sets for
+# every function, production and test alike (it was 100 until the limit was
+# lowered). No code may carry an #[allow] or #[expect] against it:
+# `cargo xtask function-length-budget` refuses one before running clippy.
+# Clippy counts only lines that carry code — comment lines and blank lines
+# are excluded (with stateful /* */ handling) — so documentation-heavy
+# functions read shorter here than their raw brace-to-brace span suggests. Keep any other measurement in line
 # with that definition or the numbers will disagree.
 #
 # The lint (clippy::too_many_lines, pedantic group, allow-by-default) is
 # ARMED: "deny" under [workspace.lints.clippy] in the root Cargo.toml (and in
-# the runtime-integration and acceptance crates' own lints tables), with
-# #[expect] on every pre-existing over-budget function. The budget therefore
-# fails any build that crosses it, and an #[expect] self-cleans when its
-# function shrinks below the budget; the tracked-debt count is
-# `git grep -c 'expect(clippy::too_many_lines)'`.
+# the runtime-integration and acceptance crates' own lints tables), so the
+# budget fails any build that crosses it.
 #
 # WHERE it is enforced (policy decision, 2026-10-31): the pre-commit hook
 # ONLY — no clippy runs in GitHub Actions at all, so the hook's single
@@ -22,7 +22,7 @@
 # runs. Rustc-level warnings stay denied in every CI compile through the
 # [build] warnings policy; only clippy-only lints left CI.
 #
-# The growth ratchet over tracked debt is cargo-crap's, run through
+# The complexity ratchet beside this length budget is cargo-crap's, run through
 # `cargo xtask crap-baseline` (see .cargo-crap.toml): it parses
 # sources without compiling, scores every function — tests included, #[test]
 # functions excepted by the tool — and fails when any function's cyclomatic
@@ -36,4 +36,4 @@
 # an error and aborts dependent crates, truncating the report. Never set
 # CARGO_BUILD_WARNINGS=allow for clippy accounting: it suppresses diagnostics
 # entirely instead of merely downgrading them.
-too-many-lines-threshold = 100
+too-many-lines-threshold = 80

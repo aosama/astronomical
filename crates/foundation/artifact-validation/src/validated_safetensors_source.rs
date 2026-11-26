@@ -99,24 +99,8 @@ impl ValidatedSafetensorsSource {
                 "no metadata in header (skipping)"
             );
         }
-        let mut tensor_metadata_by_stored_name = BTreeMap::new();
-        for (stored_name, tensor_json_value) in bounded_header.tensor_json_values {
-            let tensor_metadata = serde_json::from_value::<SafetensorsTensorView>(
-                tensor_json_value,
-            )
-            .map_err(|source| {
-                tracing::debug!(
-                    file_name = required_file.file_name(),
-                    tensor = stored_name,
-                    "tensor metadata parse failed"
-                );
-                ArtifactValidationError::InvalidSafetensorsHeader {
-                    file_name: required_file.file_name().to_owned(),
-                    source,
-                }
-            })?;
-            tensor_metadata_by_stored_name.insert(stored_name, tensor_metadata);
-        }
+        let tensor_metadata_by_stored_name =
+            parse_tensor_metadata(bounded_header.tensor_json_values, required_file.file_name())?;
         tracing::debug!(
             file_name = required_file.file_name(),
             tensor_count = tensor_metadata_by_stored_name.len(),
@@ -272,6 +256,32 @@ impl ValidatedSafetensorsSource {
     ) -> Result<ValidatedWeightsFile, ArtifactValidationError> {
         self.required_file.into_validated_weights_file()
     }
+}
+
+/// Parses every tensor entry of a bounded header into its typed view, keyed
+/// by the name the file stores it under. The first entry that does not parse
+/// fails the whole header.
+fn parse_tensor_metadata(
+    tensor_json_values: serde_json::Map<String, serde_json::Value>,
+    file_name: &str,
+) -> Result<BTreeMap<String, SafetensorsTensorView>, ArtifactValidationError> {
+    let mut tensor_metadata_by_stored_name = BTreeMap::new();
+    for (stored_name, tensor_json_value) in tensor_json_values {
+        let tensor_metadata = serde_json::from_value::<SafetensorsTensorView>(tensor_json_value)
+            .map_err(|source| {
+                tracing::debug!(
+                    file_name = file_name,
+                    tensor = stored_name,
+                    "tensor metadata parse failed"
+                );
+                ArtifactValidationError::InvalidSafetensorsHeader {
+                    file_name: file_name.to_owned(),
+                    source,
+                }
+            })?;
+        tensor_metadata_by_stored_name.insert(stored_name, tensor_metadata);
+    }
+    Ok(tensor_metadata_by_stored_name)
 }
 
 fn validate_physical_metadata(

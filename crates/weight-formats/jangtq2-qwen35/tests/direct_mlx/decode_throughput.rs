@@ -28,6 +28,13 @@ use mlx_bridge::{MlxArray, MlxDtype};
 use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use serial_test::file_serial;
 
+mod measurement_steps;
+
+use self::measurement_steps::{
+    assert_decode_peak_growth_within_persisted_output, measure_decode_iterations,
+    median_path_duration_ms, synthetic_fused_projection_inputs, warm_up_decoder,
+};
+
 /// Routed experts serving one decode token (Qwen3.5 `num_experts_per_tok`).
 const TOP_K_EXPERT_COUNT: usize = 8;
 /// Every routed expert of one layer, as prefill complete-layer streaming loads.
@@ -103,7 +110,6 @@ fn median_duration_millis(durations_ms: &[f64]) -> f64 {
 ///
 /// The decoder evaluates and detaches its output, so each call is already
 /// fully synchronous and per-call wall time is honest without extra evaluation.
-#[expect(clippy::too_many_lines)]
 fn measure_decode_throughput(case_name: &str, packed_shape: &[i32], bit_width: u32) {
     let runtime = test_runtime();
     let expert_count = packed_shape[0] as usize;
@@ -138,85 +144,20 @@ fn measure_decode_throughput(case_name: &str, packed_shape: &[i32], bit_width: u
     let decoded_element_count: u64 = decoded_shape.iter().product::<usize>() as u64;
     let decoded_gigabytes =
         decoded_element_count as f64 * std::mem::size_of::<u16>() as f64 / GIGABYTE_BYTES;
-    for _ in 0..WARMUP_ITERATIONS {
-        drop(
-            mlx_decode::decode_expert_weight_rows(
-                &runtime,
-                &packed_code_words,
-                &row_scales,
-                bit_width,
-            )
-            .expect("the warmup decode should succeed"),
-        );
-    }
-    let mut measured_durations_ms = Vec::with_capacity(MEASURED_ITERATIONS);
-    // Largest single-decode active-memory growth seen across the measured
-    // iterations, each computed against its own baseline (see the loop).
-    let mut largest_measured_peak_growth_bytes: u64 = 0;
-    for measured_iteration in 0..MEASURED_ITERATIONS {
-        // Peak-memory contract: one decode call must grow active memory by
-        // no more than the persisted output it returns. If a change
-        // reintroduces intermediate arrays, page admission would
-        // under-reserve real serving: fail here instead.
-        //
-        // MLX's reset_peak_memory sets the counter to zero rather than to
-        // the current active level, so a later raw reading is an absolute
-        // high-water that still contains everything resident at reset; the
-        // active baseline read at the same moment turns the reading into
-        // the decode call's own growth. MLX also releases a dropped prior
-        // output's buffer from a completion thread at an arbitrary later
-        // point, so a stale output may still be counted active at reset.
-        // Per-iteration rebaselining neutralizes that staleness in both
-        // release orderings: if the stale output survives past the new
-        // output's allocation, it cancels against the baseline; if it is
-        // released first, the new output absorbs its place inside the
-        // baseline and the growth reads lower. Asserting the maximum
-        // across iterations samples both orderings, keeping the detection
-        // floor at the slack rather than at a full absorbed output.
-        runtime
-            .reset_peak_memory()
-            .expect("the MLX peak-memory counter should reset");
-        let active_memory_bytes_before_decode = runtime
-            .memory_snapshot()
-            .expect("the MLX active-memory baseline should read")
-            .active_memory_bytes() as u64;
-        let started_at = std::time::Instant::now();
-        let decoded_weight = mlx_decode::decode_expert_weight_rows(
-            &runtime,
-            &packed_code_words,
-            &row_scales,
-            bit_width,
-        )
-        .expect("the measured decode should succeed");
-        let elapsed_ms = started_at.elapsed().as_secs_f64() * 1_000.0;
-        assert_eq!(
-            decoded_weight.shape(),
-            [
-                expert_count as i32,
-                output_rows as i32,
-                decoded_shape[2] as i32
-            ],
-            "the decoded page shape must match the format contract"
-        );
-        assert_eq!(decoded_weight.dtype(), MlxDtype::BFloat16);
-        // Read before dropping the output so the persisted output itself is
-        // part of the measured growth.
-        let measured_peak_growth_bytes = runtime
-            .memory_snapshot()
-            .expect("the MLX peak-memory reading should read")
-            .peak_memory_bytes() as u64
-            - active_memory_bytes_before_decode;
-        largest_measured_peak_growth_bytes =
-            largest_measured_peak_growth_bytes.max(measured_peak_growth_bytes);
-        measured_durations_ms.push(elapsed_ms);
-        drop(decoded_weight);
-        if measured_iteration == 0 {
-            eprintln!(
-                "[jangtq2-decode-perf:tier=operation] case={case_name} first_iteration_ms={elapsed_ms:.3}"
-            );
-        }
-    }
-    let median_ms = median_duration_millis(&measured_durations_ms);
+    warm_up_decoder(&runtime, &packed_code_words, &row_scales, bit_width);
+    let measurement = measure_decode_iterations(
+        &runtime,
+        &packed_code_words,
+        &row_scales,
+        bit_width,
+        [
+            expert_count as i32,
+            output_rows as i32,
+            decoded_shape[2] as i32,
+        ],
+        case_name,
+    );
+    let median_ms = median_duration_millis(&measurement.measured_durations_ms);
     let decoded_gigabytes_per_second = decoded_gigabytes / (median_ms / 1_000.0);
     assert!(
         median_ms.is_finite() && median_ms > 0.0,
@@ -226,27 +167,11 @@ fn measure_decode_throughput(case_name: &str, packed_shape: &[i32], bit_width: u
         decoded_gigabytes_per_second.is_finite() && decoded_gigabytes_per_second > 0.0,
         "the decoded throughput must be a positive measurement"
     );
-    {
-        // The bound is the decode call's own priced allocation: the persisted
-        // output. The packed source, row scales, and the per-width codebook
-        // level tables are already resident when the measured decodes start
-        // (the warmup uploads the tables; everything else sits inside the
-        // subtracted baseline), just as page admission prices the source
-        // once at page load rather than per decode. The 20 percent slack
-        // covers MLX-internal buffers the decoder cannot see (for example
-        // encoder residency); the Metal decoder has no workspace term, so
-        // any temporaries an MLX upgrade introduced would fail here before
-        // admission under-reserved real serving.
-        let persisted_output_bytes = decoded_element_count * std::mem::size_of::<u16>() as u64;
-        let bound_bytes_with_slack = persisted_output_bytes + persisted_output_bytes / 5;
-        assert!(
-            largest_measured_peak_growth_bytes <= bound_bytes_with_slack,
-            "case={case_name} decode grew active memory by {largest_measured_peak_growth_bytes} bytes, above the persisted-output-plus-slack {bound_bytes_with_slack}: the page decoder allocated intermediate arrays the admission contract does not price"
-        );
-        eprintln!(
-            "[jangtq2-decode-perf:tier=operation] case={case_name} peak_growth_bytes={largest_measured_peak_growth_bytes} persisted_output_bytes={persisted_output_bytes}"
-        );
-    }
+    assert_decode_peak_growth_within_persisted_output(
+        case_name,
+        decoded_element_count,
+        measurement.largest_measured_peak_growth_bytes,
+    );
     eprintln!(
         "[jangtq2-decode-perf:tier=operation] case={case_name} experts={expert_count} rows={output_rows} packed_words={packed_words} bits={bit_width} median_ms={median_ms:.3} decoded_gb={decoded_gigabytes:.3} decoded_gb_per_second={decoded_gigabytes_per_second:.3}"
     );
@@ -361,7 +286,6 @@ fn should_measure_hadamard32_activation_rotation_throughput() {
 /// two medians are directly comparable. Reports the ratio so the decode-token
 /// cost model (three projections per layer, 48 layers) can be read straight
 /// off the tier-0 line.
-#[expect(clippy::too_many_lines)]
 fn measure_fused_gathered_projection_throughput(
     case_name: &str,
     packed_shape: &[i32],
@@ -375,64 +299,13 @@ fn measure_fused_gathered_projection_throughput(
     let expert_count = packed_shape[0] as usize;
     let output_rows = packed_shape[1] as usize;
     let packed_words = packed_shape[2] as usize;
-    let input_width = packed_words * 32 / bit_width as usize;
-    let packed_code_words = MlxArray::from_u32(
-        &deterministic_packed_words(
-            u64::try_from(expert_count * 31 + packed_words).unwrap_or(0xA5A5),
-            expert_count * output_rows * packed_words,
-        ),
-        packed_shape,
-    )
-    .expect("the synthetic packed page should form a valid uint32 tensor");
-    let row_scales = runtime
-        .astype(
-            &runtime
-                .array_from_f32(
-                    &deterministic_row_scales(
-                        u64::try_from(expert_count * 17 + output_rows).unwrap_or(0x5A5A),
-                        expert_count * output_rows,
-                    ),
-                    &[expert_count as i32, output_rows as i32],
-                )
-                .expect("the synthetic row scales should upload"),
-            MlxDtype::Float16,
-        )
-        .expect("the synthetic row scales should convert to float16");
-    let activations_host: Vec<f32> = (0..input_width)
-        .map(|element_index| ((element_index % 33) as f32 - 16.0) / 16.0)
-        .collect();
-    let hidden = runtime
-        .astype(
-            &runtime
-                .array_from_f32(&activations_host, &[1, input_width as i32])
-                .expect("the activation fixture should upload"),
-            MlxDtype::BFloat16,
-        )
-        .expect("the activations should convert to bfloat16");
-    let route_host: Vec<i32> = (0..expert_count as i32).collect();
-    let flat_route = MlxArray::from_i32(&route_host, &[expert_count as i32])
-        .expect("the flat route should upload");
-    let gather_route = MlxArray::from_i32(&route_host, &[1, expert_count as i32])
-        .expect("the gather route should upload");
-    let expanded_hidden = runtime
-        .reshape(&hidden, &[1, 1, 1, input_width as i32])
-        .expect("the activations should expand for gather_mm");
-    runtime
-        .evaluate_arrays(&[
-            &packed_code_words,
-            &row_scales,
-            &hidden,
-            &flat_route,
-            &gather_route,
-            &expanded_hidden,
-        ])
-        .expect("the inputs should materialize before timing");
+    let inputs = synthetic_fused_projection_inputs(&runtime, packed_shape, bit_width);
 
     let materializing_path = || {
         let decoded_page = mlx_decode::decode_expert_weight_rows(
             &runtime,
-            &packed_code_words,
-            &row_scales,
+            &inputs.packed_code_words,
+            &inputs.row_scales,
             bit_width,
         )
         .expect("the materializing decode should succeed");
@@ -441,10 +314,10 @@ fn measure_fused_gathered_projection_throughput(
             .expect("the decoded page should transpose");
         let gathered = runtime
             .gather_dense_matmul(
-                &expanded_hidden,
+                &inputs.expanded_hidden,
                 &transposed_page,
                 None,
-                Some(&gather_route),
+                Some(&inputs.gather_route),
                 false,
             )
             .expect("gather_mm should build");
@@ -456,10 +329,10 @@ fn measure_fused_gathered_projection_throughput(
         let projected = fused_kernel
             .apply(
                 &runtime,
-                &hidden,
-                &flat_route,
-                &packed_code_words,
-                &row_scales,
+                &inputs.hidden,
+                &inputs.flat_route,
+                &inputs.packed_code_words,
+                &inputs.row_scales,
                 bit_width,
             )
             .expect("the fused projection should launch");
@@ -467,20 +340,8 @@ fn measure_fused_gathered_projection_throughput(
             .evaluate_arrays(&[&projected])
             .expect("the fused projection should evaluate");
     };
-    let measure = |path: &dyn Fn()| -> f64 {
-        for _ in 0..WARMUP_ITERATIONS {
-            path();
-        }
-        let mut durations_ms = Vec::with_capacity(MEASURED_ITERATIONS);
-        for _ in 0..MEASURED_ITERATIONS {
-            let started_at = std::time::Instant::now();
-            path();
-            durations_ms.push(started_at.elapsed().as_secs_f64() * 1_000.0);
-        }
-        median_duration_millis(&durations_ms)
-    };
-    let materializing_median_ms = measure(&materializing_path);
-    let fused_median_ms = measure(&fused_path);
+    let materializing_median_ms = median_path_duration_ms(&materializing_path);
+    let fused_median_ms = median_path_duration_ms(&fused_path);
     assert!(
         materializing_median_ms.is_finite() && materializing_median_ms > 0.0,
         "the materializing median must be a positive measurement"

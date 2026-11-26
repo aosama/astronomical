@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use ipc_protocol::{ExpertMemoryMode, RequestId, WorkerAstroSsdPromptCacheLookupOutcome};
@@ -20,114 +20,189 @@ const MEMORY_ACCEPTANCE_PREFILL_CHUNK_TOKENS: u32 = 2_048;
 #[ignore = "compares expert reclamation for an empty astro SSD prompt cache with admission while the astro SSD prompt cache is disabled"]
 async fn should_not_reclaim_more_expert_payload_for_an_astro_ssd_prompt_cache_miss_than_without_the_astro_ssd_prompt_cache()
  {
-    require_astro_ssd_prompt_cache_miss_memory_acceptance_completion(async {
-        let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
-        let model_directory = crate::common::configured_resident_sparse_moe_model_directory();
-        let validated_artifact = Qwen3_5ArtifactValidator::new()
-            .validate(&model_directory, 20_480)
-            .expect("the model artifact should validate before preparing the source prompt");
-        let prompt_tokenizer = Qwen3_5Tokenizer::from_validated_artifact(&validated_artifact)
-            .expect("the model tokenizer should load before preparing the source prompt");
-        let mut prompt_token_ids =
-            large_prefill_prompt::representative_long_generation_prompt_token_ids(
-                &prompt_tokenizer,
-                validated_artifact.model_id(),
-            );
-        let maximum_prompt_token_count =
-            usize::try_from(validated_artifact.config().maximum_position_count())
-                .expect("the model context limit should fit usize")
-                .saturating_sub(1);
-        repeat_fixture_prompt_to_token_count(&mut prompt_token_ids, maximum_prompt_token_count);
-        let mlx_memory_limits =
-            crate::common::sample_machine_serving_acceptance_mlx_memory_limits().await;
-        let total_context_token_count = prompt_token_ids
-            .len()
-            .checked_add(1)
-            .expect("the prompt and one output token should fit usize");
-        let context_growth_bytes = validated_artifact
-            .config()
-            .context_memory_reservation_bytes(total_context_token_count)
-            .expect("the model context growth should fit usize");
-        let astro_ssd_prompt_cache_specific_workspace_bytes = astro_ssd_prompt_cache_specific_workspace_bytes(
+    require_astro_ssd_prompt_cache_miss_memory_acceptance_completion(
+        run_empty_astro_ssd_prompt_cache_miss_comparison(),
+    )
+    .await;
+}
+
+/// Everything the two admissions compared by this journey have in common.
+struct AdmissionScenario {
+    model_directory: PathBuf,
+    prompt_token_ids: Vec<u32>,
+    mlx_memory_limits: MlxMemoryLimits,
+    context_growth_bytes: usize,
+    astro_ssd_prompt_cache_specific_workspace_bytes: usize,
+}
+
+/// The loaded engine and what was read from it before the request starts.
+struct AdmissionSetup {
+    qwen3_5_engine: Qwen3_5TextEngine,
+    expert_memory_mode_before_admission: ExpertMemoryMode,
+    active_memory_bytes_before_admission: usize,
+    minimum_safe_memory_ceiling_bytes: Option<usize>,
+    applied_memory_ceiling_bytes: Option<usize>,
+    post_adjustment_memory_limits: Option<MlxMemoryLimits>,
+}
+
+/// The expert payload the engine held on either side of starting the request.
+struct RequestAdmissionMeasurement {
+    expert_memory_mode_before_request: ExpertMemoryMode,
+    expert_memory_mode_after_admission: ExpertMemoryMode,
+    expert_payload_bytes_before_start: u64,
+    expert_payload_bytes_after_start: u64,
+    reclaimed_expert_payload_bytes: u64,
+}
+
+async fn run_empty_astro_ssd_prompt_cache_miss_comparison() {
+    let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
+    let model_directory = crate::common::configured_resident_sparse_moe_model_directory();
+    let admission_scenario = prepare_admission_scenario(model_directory).await;
+    let (
+        reclaimed_expert_payload_bytes_without_astro_ssd_prompt_cache,
+        shared_test_memory_ceiling_bytes,
+        expert_memory_mode_after_admission_without_astro_ssd_prompt_cache,
+    ) = measure_initial_request_expert_reclamation(&admission_scenario, None, 41_101, None).await;
+    if shared_test_memory_ceiling_bytes.is_some() {
+        assert_eq!(
+            expert_memory_mode_after_admission_without_astro_ssd_prompt_cache,
+            ExpertMemoryMode::Resident,
+            "the dynamically selected control ceiling without the astro SSD prompt cache should preserve residency"
+        );
+    }
+
+    let empty_astro_ssd_prompt_cache_directory =
+        tempfile::tempdir().expect("the astro SSD prompt cache miss run should create an empty astro SSD prompt cache directory");
+    let (
+        astro_ssd_prompt_cache_miss_reclaimed_expert_payload_bytes,
+        astro_ssd_prompt_cache_miss_memory_ceiling_bytes,
+        astro_ssd_prompt_cache_miss_expert_memory_mode_after_admission,
+    ) = measure_initial_request_expert_reclamation(
+        &admission_scenario,
+        Some(empty_astro_ssd_prompt_cache_directory.path()),
+        41_102,
+        shared_test_memory_ceiling_bytes,
+    )
+    .await;
+    assert_eq!(
+        astro_ssd_prompt_cache_miss_memory_ceiling_bytes, shared_test_memory_ceiling_bytes,
+        "admissions with the astro SSD prompt cache enabled and disabled must use the same ceiling"
+    );
+    if shared_test_memory_ceiling_bytes.is_some() {
+        assert_eq!(
+            astro_ssd_prompt_cache_miss_expert_memory_mode_after_admission,
+            ExpertMemoryMode::Resident,
+            "an astro SSD prompt cache miss should not demote experts when the request fits without the astro SSD prompt cache"
+        );
+    }
+
+    assert!(
+        astro_ssd_prompt_cache_miss_reclaimed_expert_payload_bytes
+            <= reclaimed_expert_payload_bytes_without_astro_ssd_prompt_cache,
+        "an empty astro SSD prompt cache must not cause extra expert reclamation: \
+         astro_ssd_prompt_cache_miss={astro_ssd_prompt_cache_miss_reclaimed_expert_payload_bytes} \
+         without_astro_ssd_prompt_cache={reclaimed_expert_payload_bytes_without_astro_ssd_prompt_cache}"
+    );
+}
+
+async fn prepare_admission_scenario(model_directory: PathBuf) -> AdmissionScenario {
+    let validated_artifact = Qwen3_5ArtifactValidator::new()
+        .validate(&model_directory, 20_480)
+        .expect("the model artifact should validate before preparing the source prompt");
+    let prompt_token_ids = maximum_context_prompt_token_ids(&validated_artifact);
+    let mlx_memory_limits =
+        crate::common::sample_machine_serving_acceptance_mlx_memory_limits().await;
+    let total_context_token_count = prompt_token_ids
+        .len()
+        .checked_add(1)
+        .expect("the prompt and one output token should fit usize");
+    let context_growth_bytes = validated_artifact
+        .config()
+        .context_memory_reservation_bytes(total_context_token_count)
+        .expect("the model context growth should fit usize");
+    let astro_ssd_prompt_cache_specific_workspace_bytes =
+        astro_ssd_prompt_cache_specific_workspace_bytes(
             &validated_artifact,
             mlx_memory_limits,
             context_growth_bytes,
         );
-        let (
-            reclaimed_expert_payload_bytes_without_astro_ssd_prompt_cache,
-            shared_test_memory_ceiling_bytes,
-            expert_memory_mode_after_admission_without_astro_ssd_prompt_cache,
-        ) = measure_initial_request_expert_reclamation(
-            &model_directory,
-            None,
-            &prompt_token_ids,
-            41_101,
-            mlx_memory_limits,
-            context_growth_bytes,
-            astro_ssd_prompt_cache_specific_workspace_bytes,
-            None,
-        )
-        .await;
-        if shared_test_memory_ceiling_bytes.is_some() {
-            assert_eq!(
-                expert_memory_mode_after_admission_without_astro_ssd_prompt_cache,
-                ExpertMemoryMode::Resident,
-                "the dynamically selected control ceiling without the astro SSD prompt cache should preserve residency"
-            );
-        }
-
-        let empty_astro_ssd_prompt_cache_directory =
-            tempfile::tempdir().expect("the astro SSD prompt cache miss run should create an empty astro SSD prompt cache directory");
-        let (
-            astro_ssd_prompt_cache_miss_reclaimed_expert_payload_bytes,
-            astro_ssd_prompt_cache_miss_memory_ceiling_bytes,
-            astro_ssd_prompt_cache_miss_expert_memory_mode_after_admission,
-        ) = measure_initial_request_expert_reclamation(
-            &model_directory,
-            Some(empty_astro_ssd_prompt_cache_directory.path()),
-            &prompt_token_ids,
-            41_102,
-            mlx_memory_limits,
-            context_growth_bytes,
-            astro_ssd_prompt_cache_specific_workspace_bytes,
-            shared_test_memory_ceiling_bytes,
-        )
-        .await;
-        assert_eq!(
-            astro_ssd_prompt_cache_miss_memory_ceiling_bytes, shared_test_memory_ceiling_bytes,
-            "admissions with the astro SSD prompt cache enabled and disabled must use the same ceiling"
-        );
-        if shared_test_memory_ceiling_bytes.is_some() {
-            assert_eq!(
-                astro_ssd_prompt_cache_miss_expert_memory_mode_after_admission,
-                ExpertMemoryMode::Resident,
-                "an astro SSD prompt cache miss should not demote experts when the request fits without the astro SSD prompt cache"
-            );
-        }
-
-        assert!(
-            astro_ssd_prompt_cache_miss_reclaimed_expert_payload_bytes <= reclaimed_expert_payload_bytes_without_astro_ssd_prompt_cache,
-            "an empty astro SSD prompt cache must not cause extra expert reclamation: \
-             astro_ssd_prompt_cache_miss={astro_ssd_prompt_cache_miss_reclaimed_expert_payload_bytes} \
-             without_astro_ssd_prompt_cache={reclaimed_expert_payload_bytes_without_astro_ssd_prompt_cache}"
-        );
-    })
-    .await;
+    AdmissionScenario {
+        model_directory,
+        prompt_token_ids,
+        mlx_memory_limits,
+        context_growth_bytes,
+        astro_ssd_prompt_cache_specific_workspace_bytes,
+    }
 }
 
-#[expect(clippy::too_many_lines)]
+fn maximum_context_prompt_token_ids(
+    validated_artifact: &model_serving::ValidatedQwen3_5Artifact,
+) -> Vec<u32> {
+    let prompt_tokenizer = Qwen3_5Tokenizer::from_validated_artifact(validated_artifact)
+        .expect("the model tokenizer should load before preparing the source prompt");
+    let mut prompt_token_ids =
+        large_prefill_prompt::representative_long_generation_prompt_token_ids(
+            &prompt_tokenizer,
+            validated_artifact.model_id(),
+        );
+    let maximum_prompt_token_count =
+        usize::try_from(validated_artifact.config().maximum_position_count())
+            .expect("the model context limit should fit usize")
+            .saturating_sub(1);
+    repeat_fixture_prompt_to_token_count(&mut prompt_token_ids, maximum_prompt_token_count);
+    prompt_token_ids
+}
+
 async fn measure_initial_request_expert_reclamation(
-    model_directory: &Path,
+    admission_scenario: &AdmissionScenario,
     astro_ssd_prompt_cache_directory: Option<&Path>,
-    prompt_token_ids: &[u32],
     request_id: u64,
-    mlx_memory_limits: MlxMemoryLimits,
-    context_growth_bytes: usize,
-    astro_ssd_prompt_cache_specific_workspace_bytes: usize,
     requested_test_memory_ceiling_bytes: Option<usize>,
 ) -> (u64, Option<usize>, ExpertMemoryMode) {
+    let mut admission_setup = prepare_engine_for_admission(
+        admission_scenario,
+        astro_ssd_prompt_cache_directory,
+        requested_test_memory_ceiling_bytes,
+    )
+    .await;
+    let admission_measurement = start_request_and_measure_reclamation(
+        &mut admission_setup.qwen3_5_engine,
+        admission_scenario,
+        astro_ssd_prompt_cache_directory.is_some(),
+        request_id,
+    )
+    .await;
+    log_admission_measurement(
+        request_id,
+        astro_ssd_prompt_cache_directory.is_some(),
+        admission_scenario,
+        &admission_setup,
+        &admission_measurement,
+    );
+    drop(admission_setup.qwen3_5_engine);
+    if let Some(current_memory_limits) = admission_setup.post_adjustment_memory_limits {
+        let mut mlx_runtime = MlxRuntime::initialize(current_memory_limits)
+            .expect("the runtime should match the applied acceptance memory ceiling");
+        mlx_runtime
+            .update_memory_limits(admission_scenario.mlx_memory_limits)
+            .expect("the acceptance should restore the machine memory ceiling after measurement");
+    }
+
+    (
+        admission_measurement.reclaimed_expert_payload_bytes,
+        admission_setup.applied_memory_ceiling_bytes,
+        admission_measurement.expert_memory_mode_after_admission,
+    )
+}
+
+async fn prepare_engine_for_admission(
+    admission_scenario: &AdmissionScenario,
+    astro_ssd_prompt_cache_directory: Option<&Path>,
+    requested_test_memory_ceiling_bytes: Option<usize>,
+) -> AdmissionSetup {
+    let mlx_memory_limits = admission_scenario.mlx_memory_limits;
     let mut qwen3_5_engine = load_memory_acceptance_engine(
-        model_directory,
+        &admission_scenario.model_directory,
         astro_ssd_prompt_cache_directory,
         mlx_memory_limits,
     )
@@ -137,91 +212,148 @@ async fn measure_initial_request_expert_reclamation(
         .await
         .expect("the engine should report expert memory mode")
         .expect("the loaded model should report expert memory mode");
-    let minimum_safe_memory_ceiling_bytes =
-        if expert_memory_mode_before_admission == ExpertMemoryMode::Resident {
-            Some(
-                usize::try_from(
-                    qwen3_5_engine
-                        .update_mlx_memory_limit(
-                            u64::try_from(mlx_memory_limits.active_memory_limit_bytes())
-                                .expect("the machine ceiling should fit u64"),
-                        )
-                        .await
-                        .expect("the engine should retain the machine memory ceiling")
-                        .minimum_mlx_memory_ceiling_bytes(),
-                )
-                .expect("the minimum safe ceiling should fit usize"),
-            )
-        } else {
-            None
-        };
+    let minimum_safe_memory_ceiling_bytes = minimum_safe_memory_ceiling_while_resident(
+        &mut qwen3_5_engine,
+        expert_memory_mode_before_admission,
+        mlx_memory_limits,
+    )
+    .await;
     let active_memory_bytes_before_admission =
         super::runtime_the_engine_configured(mlx_memory_limits)
             .memory_snapshot()
             .expect("the model acceptance should sample active memory")
             .active_memory_bytes();
-    let target_memory_ceiling_bytes = requested_test_memory_ceiling_bytes.or_else(|| {
-        if expert_memory_mode_before_admission != ExpertMemoryMode::Resident
-            || astro_ssd_prompt_cache_specific_workspace_bytes == 0
-        {
-            return None;
-        }
-        active_memory_bytes_before_admission
-            .checked_add(context_growth_bytes)?
-            .checked_add(astro_ssd_prompt_cache_specific_workspace_bytes / 2)
-            .filter(|candidate_ceiling_bytes| {
-                *candidate_ceiling_bytes > active_memory_bytes_before_admission
-                    && *candidate_ceiling_bytes < mlx_memory_limits.active_memory_limit_bytes()
-                    && minimum_safe_memory_ceiling_bytes
-                        .is_some_and(|minimum| *candidate_ceiling_bytes >= minimum)
-            })
-    });
-    let mut post_adjustment_memory_limits = None;
-    let mut minimum_safe_memory_ceiling_bytes = minimum_safe_memory_ceiling_bytes;
-    let applied_memory_ceiling_bytes =
-        if let Some(target_memory_ceiling_bytes) = target_memory_ceiling_bytes {
-            let memory_limit_adjustment = qwen3_5_engine
+    let target_memory_ceiling_bytes = select_target_memory_ceiling(
+        requested_test_memory_ceiling_bytes,
+        admission_scenario,
+        expert_memory_mode_before_admission,
+        active_memory_bytes_before_admission,
+        minimum_safe_memory_ceiling_bytes,
+    );
+    let mut admission_setup = AdmissionSetup {
+        qwen3_5_engine,
+        expert_memory_mode_before_admission,
+        active_memory_bytes_before_admission,
+        minimum_safe_memory_ceiling_bytes,
+        applied_memory_ceiling_bytes: None,
+        post_adjustment_memory_limits: None,
+    };
+    if let Some(target_memory_ceiling_bytes) = target_memory_ceiling_bytes {
+        apply_target_memory_ceiling(&mut admission_setup, target_memory_ceiling_bytes).await;
+    }
+    admission_setup
+}
+
+/// Restates the machine ceiling to the engine to read back its minimum safe
+/// ceiling; the journey does this only while the experts are resident.
+async fn minimum_safe_memory_ceiling_while_resident(
+    qwen3_5_engine: &mut Qwen3_5TextEngine,
+    expert_memory_mode_before_admission: ExpertMemoryMode,
+    mlx_memory_limits: MlxMemoryLimits,
+) -> Option<usize> {
+    if expert_memory_mode_before_admission != ExpertMemoryMode::Resident {
+        return None;
+    }
+    Some(
+        usize::try_from(
+            qwen3_5_engine
                 .update_mlx_memory_limit(
-                    u64::try_from(target_memory_ceiling_bytes)
-                        .expect("the selected acceptance ceiling should fit u64"),
+                    u64::try_from(mlx_memory_limits.active_memory_limit_bytes())
+                        .expect("the machine ceiling should fit u64"),
                 )
                 .await
-                .expect("the engine should apply a ceiling above its current active memory");
-            minimum_safe_memory_ceiling_bytes = Some(
-                usize::try_from(memory_limit_adjustment.minimum_mlx_memory_ceiling_bytes())
-                    .expect("the minimum safe ceiling should fit usize"),
-            );
-            post_adjustment_memory_limits = Some(
-                MlxMemoryLimits::new(
-                    usize::try_from(memory_limit_adjustment.effective_mlx_memory_ceiling_bytes())
-                        .expect("the effective acceptance ceiling should fit usize"),
-                    usize::try_from(memory_limit_adjustment.mlx_buffer_cache_limit_bytes())
-                        .expect("the MLX buffer cache limit should fit usize"),
-                )
-                .expect("the applied acceptance limits should be valid"),
-            );
-            Some(
-                usize::try_from(memory_limit_adjustment.effective_mlx_memory_ceiling_bytes())
-                    .expect("the effective acceptance ceiling should fit usize"),
-            )
-        } else {
-            None
-        };
+                .expect("the engine should retain the machine memory ceiling")
+                .minimum_mlx_memory_ceiling_bytes(),
+        )
+        .expect("the minimum safe ceiling should fit usize"),
+    )
+}
+
+fn select_target_memory_ceiling(
+    requested_test_memory_ceiling_bytes: Option<usize>,
+    admission_scenario: &AdmissionScenario,
+    expert_memory_mode_before_admission: ExpertMemoryMode,
+    active_memory_bytes_before_admission: usize,
+    minimum_safe_memory_ceiling_bytes: Option<usize>,
+) -> Option<usize> {
+    if requested_test_memory_ceiling_bytes.is_some() {
+        return requested_test_memory_ceiling_bytes;
+    }
+    if expert_memory_mode_before_admission != ExpertMemoryMode::Resident
+        || admission_scenario.astro_ssd_prompt_cache_specific_workspace_bytes == 0
+    {
+        return None;
+    }
+    active_memory_bytes_before_admission
+        .checked_add(admission_scenario.context_growth_bytes)?
+        .checked_add(admission_scenario.astro_ssd_prompt_cache_specific_workspace_bytes / 2)
+        .filter(|candidate_ceiling_bytes| {
+            *candidate_ceiling_bytes > active_memory_bytes_before_admission
+                && *candidate_ceiling_bytes
+                    < admission_scenario
+                        .mlx_memory_limits
+                        .active_memory_limit_bytes()
+                && minimum_safe_memory_ceiling_bytes
+                    .is_some_and(|minimum| *candidate_ceiling_bytes >= minimum)
+        })
+}
+
+async fn apply_target_memory_ceiling(
+    admission_setup: &mut AdmissionSetup,
+    target_memory_ceiling_bytes: usize,
+) {
+    let memory_limit_adjustment = admission_setup
+        .qwen3_5_engine
+        .update_mlx_memory_limit(
+            u64::try_from(target_memory_ceiling_bytes)
+                .expect("the selected acceptance ceiling should fit u64"),
+        )
+        .await
+        .expect("the engine should apply a ceiling above its current active memory");
+    admission_setup.minimum_safe_memory_ceiling_bytes = Some(
+        usize::try_from(memory_limit_adjustment.minimum_mlx_memory_ceiling_bytes())
+            .expect("the minimum safe ceiling should fit usize"),
+    );
+    admission_setup.post_adjustment_memory_limits = Some(
+        MlxMemoryLimits::new(
+            usize::try_from(memory_limit_adjustment.effective_mlx_memory_ceiling_bytes())
+                .expect("the effective acceptance ceiling should fit usize"),
+            usize::try_from(memory_limit_adjustment.mlx_buffer_cache_limit_bytes())
+                .expect("the MLX buffer cache limit should fit usize"),
+        )
+        .expect("the applied acceptance limits should be valid"),
+    );
+    admission_setup.applied_memory_ceiling_bytes = Some(
+        usize::try_from(memory_limit_adjustment.effective_mlx_memory_ceiling_bytes())
+            .expect("the effective acceptance ceiling should fit usize"),
+    );
+}
+
+async fn start_request_and_measure_reclamation(
+    qwen3_5_engine: &mut Qwen3_5TextEngine,
+    admission_scenario: &AdmissionScenario,
+    astro_ssd_prompt_cache_is_enabled: bool,
+    request_id: u64,
+) -> RequestAdmissionMeasurement {
     let expert_memory_mode_before_request = qwen3_5_engine
         .expert_memory_mode_for_tests()
         .await
         .expect("the engine should report expert memory mode before request admission")
         .expect("the loaded model should retain an expert memory mode");
     let expert_payload_bytes_before_start =
-        measured_expert_payload_bytes(&qwen3_5_engine, expert_memory_mode_before_request).await;
+        measured_expert_payload_bytes(qwen3_5_engine, expert_memory_mode_before_request).await;
     let generation_start = qwen3_5_engine
         .start_generation(
-            TextInferenceRequest::new(RequestId::new(request_id), prompt_token_ids.to_vec(), 1)
-                .with_image_pad_token_id(248_069),
+            TextInferenceRequest::new(
+                RequestId::new(request_id),
+                admission_scenario.prompt_token_ids.clone(),
+                1,
+            )
+            .with_image_pad_token_id(248_069),
         )
         .await
         .expect("the request should start before prompt processing");
-    if astro_ssd_prompt_cache_directory.is_some() {
+    if astro_ssd_prompt_cache_is_enabled {
         let astro_ssd_prompt_cache_diagnostics = generation_start
             .astro_ssd_prompt_cache_diagnostics()
             .expect("the enabled empty astro SSD prompt cache should report its miss");
@@ -236,27 +368,38 @@ async fn measure_initial_request_expert_reclamation(
         .expect("the engine should report expert memory mode after admission")
         .expect("the loaded model should retain an expert memory mode");
     let expert_payload_bytes_after_start =
-        measured_expert_payload_bytes(&qwen3_5_engine, expert_memory_mode_after_admission).await;
-    let reclaimed_expert_payload_bytes =
-        expert_payload_bytes_before_start.saturating_sub(expert_payload_bytes_after_start);
-    eprintln!(
-        "[astro-ssd-prompt-cache-miss-memory] request_id={request_id} astro_ssd_prompt_cache_enabled={} mode_before_limit={expert_memory_mode_before_admission:?} mode_before_request={expert_memory_mode_before_request:?} mode_after={expert_memory_mode_after_admission:?} active_before_bytes={active_memory_bytes_before_admission} context_growth_bytes={context_growth_bytes} astro_ssd_prompt_cache_extra_workspace_bytes={astro_ssd_prompt_cache_specific_workspace_bytes} minimum_safe_ceiling_bytes={minimum_safe_memory_ceiling_bytes:?} ceiling_bytes={applied_memory_ceiling_bytes:?} payload_before_bytes={expert_payload_bytes_before_start} payload_after_bytes={expert_payload_bytes_after_start} reclaimed_bytes={reclaimed_expert_payload_bytes}",
-        astro_ssd_prompt_cache_directory.is_some(),
-    );
-    drop(qwen3_5_engine);
-    if let Some(current_memory_limits) = post_adjustment_memory_limits {
-        let mut mlx_runtime = MlxRuntime::initialize(current_memory_limits)
-            .expect("the runtime should match the applied acceptance memory ceiling");
-        mlx_runtime
-            .update_memory_limits(mlx_memory_limits)
-            .expect("the acceptance should restore the machine memory ceiling after measurement");
-    }
-
-    (
-        reclaimed_expert_payload_bytes,
-        applied_memory_ceiling_bytes,
+        measured_expert_payload_bytes(qwen3_5_engine, expert_memory_mode_after_admission).await;
+    RequestAdmissionMeasurement {
+        expert_memory_mode_before_request,
         expert_memory_mode_after_admission,
-    )
+        expert_payload_bytes_before_start,
+        expert_payload_bytes_after_start,
+        reclaimed_expert_payload_bytes: expert_payload_bytes_before_start
+            .saturating_sub(expert_payload_bytes_after_start),
+    }
+}
+
+fn log_admission_measurement(
+    request_id: u64,
+    astro_ssd_prompt_cache_is_enabled: bool,
+    admission_scenario: &AdmissionScenario,
+    admission_setup: &AdmissionSetup,
+    admission_measurement: &RequestAdmissionMeasurement,
+) {
+    eprintln!(
+        "[astro-ssd-prompt-cache-miss-memory] request_id={request_id} astro_ssd_prompt_cache_enabled={astro_ssd_prompt_cache_is_enabled} mode_before_limit={:?} mode_before_request={:?} mode_after={:?} active_before_bytes={} context_growth_bytes={} astro_ssd_prompt_cache_extra_workspace_bytes={} minimum_safe_ceiling_bytes={:?} ceiling_bytes={:?} payload_before_bytes={} payload_after_bytes={} reclaimed_bytes={}",
+        admission_setup.expert_memory_mode_before_admission,
+        admission_measurement.expert_memory_mode_before_request,
+        admission_measurement.expert_memory_mode_after_admission,
+        admission_setup.active_memory_bytes_before_admission,
+        admission_scenario.context_growth_bytes,
+        admission_scenario.astro_ssd_prompt_cache_specific_workspace_bytes,
+        admission_setup.minimum_safe_memory_ceiling_bytes,
+        admission_setup.applied_memory_ceiling_bytes,
+        admission_measurement.expert_payload_bytes_before_start,
+        admission_measurement.expert_payload_bytes_after_start,
+        admission_measurement.reclaimed_expert_payload_bytes,
+    );
 }
 
 fn repeat_fixture_prompt_to_token_count(

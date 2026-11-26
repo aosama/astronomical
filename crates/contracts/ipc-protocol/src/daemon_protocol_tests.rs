@@ -87,9 +87,24 @@ fn should_round_trip_daemon_requests_through_the_wire_codec() {
 }
 
 #[test]
-#[expect(clippy::too_many_lines)]
 fn should_round_trip_daemon_responses_through_the_wire_codec() {
-    let daemon_responses = [
+    let mut daemon_responses = handshake_and_status_daemon_responses();
+    daemon_responses.extend(model_listing_and_download_daemon_responses());
+    daemon_responses.extend(chat_embedding_and_image_daemon_responses());
+    for daemon_response in daemon_responses {
+        let encoded_response = encode_daemon_response(&daemon_response)
+            .expect("the daemon response should encode to a bounded frame");
+        let decoded_response = decode_daemon_response(&encoded_response)
+            .expect("the daemon response frame should decode");
+        assert_eq!(
+            decoded_response, daemon_response,
+            "the codec should preserve the daemon response"
+        );
+    }
+}
+
+fn handshake_and_status_daemon_responses() -> Vec<DaemonResponse> {
+    vec![
         DaemonResponse::HandshakeAccepted {
             protocol_version: 1,
             application_name: "Astronomical".to_owned(),
@@ -124,6 +139,11 @@ fn should_round_trip_daemon_responses_through_the_wire_codec() {
             draft_model: None,
             last_reply_drafting: None,
         },
+    ]
+}
+
+fn model_listing_and_download_daemon_responses() -> Vec<DaemonResponse> {
+    vec![
         DaemonResponse::ModelsList {
             models: vec![DaemonListedModel {
                 model_id: "example/local-model".to_owned(),
@@ -179,6 +199,11 @@ fn should_round_trip_daemon_responses_through_the_wire_codec() {
         DaemonResponse::RequestRejected {
             reason: "the model is not in the catalog".to_owned(),
         },
+    ]
+}
+
+fn chat_embedding_and_image_daemon_responses() -> Vec<DaemonResponse> {
+    vec![
         DaemonResponse::ChatGenerationText {
             text: "Hello".to_owned(),
         },
@@ -223,17 +248,7 @@ fn should_round_trip_daemon_responses_through_the_wire_codec() {
         DaemonResponse::ImageGenerationFailed {
             reason: ImageGenerationFailureReason::invalid_request("width must be a multiple of 16"),
         },
-    ];
-    for daemon_response in daemon_responses {
-        let encoded_response = encode_daemon_response(&daemon_response)
-            .expect("the daemon response should encode to a bounded frame");
-        let decoded_response = decode_daemon_response(&encoded_response)
-            .expect("the daemon response frame should decode");
-        assert_eq!(
-            decoded_response, daemon_response,
-            "the codec should preserve the daemon response"
-        );
-    }
+    ]
 }
 
 /// The PNG bytes are opaque to the codec; only the frame size matters here.

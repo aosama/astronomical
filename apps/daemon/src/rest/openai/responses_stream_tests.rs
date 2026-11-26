@@ -88,42 +88,7 @@ fn should_emit_the_exact_fragmented_text_lifecycle_and_skip_prefill_telemetry() 
 
 #[test]
 fn should_stream_raw_reasoning_as_summary_text_without_encrypted_content() {
-    let mut encoder = OpenAiResponsesStreamEncoder::new(
-        "resp_instance-12".to_owned(),
-        1_753_000_000,
-        "astronomical/fake-mixture-of-experts".to_owned(),
-        None,
-        Default::default(),
-        false,
-    );
-    let mut encoded_events = encoder.initial_events();
-    encoded_events.extend(
-        encoder
-            .encode(ChatGenerationStreamEvent::ReasoningFragment(
-                "Inspect first.".to_owned(),
-            ))
-            .expect("reasoning should encode"),
-    );
-    encoded_events.extend(
-        encoder
-            .encode(ChatGenerationStreamEvent::ToolCall {
-                tool_call_index: 0,
-                function_name: "read".to_owned(),
-                arguments_json: r#"{"filePath":"README.md"}"#.to_owned(),
-            })
-            .expect("the function call should encode"),
-    );
-    encoded_events.extend(
-        encoder
-            .encode(ChatGenerationStreamEvent::Completed {
-                prompt_token_count: 10,
-                generated_token_count: 2,
-                reasoning_token_count: 2,
-                astro_ssd_prompt_cache_restored_token_count: 0,
-                reason: ChatGenerationCompletionReason::ToolCalls,
-            })
-            .expect("tool completion should encode"),
-    );
+    let encoded_events = encode_reasoning_then_tool_call_stream();
 
     let event_types = encoded_events
         .iter()
@@ -378,6 +343,49 @@ fn should_withhold_reasoning_items_but_keep_reasoning_usage_when_excluded() {
         "only the visible message should survive exclusion"
     );
     assert_no_response_id_fields(&encoded_events);
+}
+
+/// Drives one encoder through a reasoning fragment, a `read` tool call and a
+/// tool-calls completion, returning every event it emitted.
+fn encode_reasoning_then_tool_call_stream()
+-> std::collections::VecDeque<rest_contract::OpenAiResponseStreamEvent> {
+    let mut encoder = OpenAiResponsesStreamEncoder::new(
+        "resp_instance-12".to_owned(),
+        1_753_000_000,
+        "astronomical/fake-mixture-of-experts".to_owned(),
+        None,
+        Default::default(),
+        false,
+    );
+    let mut encoded_events = encoder.initial_events();
+    encoded_events.extend(
+        encoder
+            .encode(ChatGenerationStreamEvent::ReasoningFragment(
+                "Inspect first.".to_owned(),
+            ))
+            .expect("reasoning should encode"),
+    );
+    encoded_events.extend(
+        encoder
+            .encode(ChatGenerationStreamEvent::ToolCall {
+                tool_call_index: 0,
+                function_name: "read".to_owned(),
+                arguments_json: r#"{"filePath":"README.md"}"#.to_owned(),
+            })
+            .expect("the function call should encode"),
+    );
+    encoded_events.extend(
+        encoder
+            .encode(ChatGenerationStreamEvent::Completed {
+                prompt_token_count: 10,
+                generated_token_count: 2,
+                reasoning_token_count: 2,
+                astro_ssd_prompt_cache_restored_token_count: 0,
+                reason: ChatGenerationCompletionReason::ToolCalls,
+            })
+            .expect("tool completion should encode"),
+    );
+    encoded_events
 }
 
 fn assert_no_response_id_fields(

@@ -211,7 +211,9 @@ pub(crate) async fn wait_until_idle(worker_handle: &WorkerHandle, ready_attempt_
     panic!("the real worker did not become idle before the throughput deadline");
 }
 
-/// Reads the worker's performance log and returns the measured completion.
+/// Reads the worker's performance log and returns the measured completion,
+/// which is the last performance sample the worker wrote (the warmup sample
+/// precedes it), so JIT warmup never enters the reported values.
 ///
 /// The parsed sample type never leaves this module: callers want the
 /// summarized measurement, and exposing the raw sample would let a journey
@@ -321,7 +323,6 @@ fn final_generation_report_for_request(
     final_generation_report
 }
 
-#[expect(clippy::too_many_lines)]
 pub(crate) fn read_decode_astro_expert_cache_diagnostic_evidence(
     logging_directory: &Path,
     request_id: u64,
@@ -341,7 +342,24 @@ pub(crate) fn read_decode_astro_expert_cache_diagnostic_evidence(
                 .as_u64()
                 .map(|payload_byte_count| total_payload_bytes.saturating_add(payload_byte_count))
         })?;
-    let decode_token_forward_latency_sample_count = generation_report
+
+    // Three recorders each own a group of fields, so every field of the
+    // evidence is assigned by exactly one of them.
+    let mut diagnostic_evidence = DecodeAstroExpertCacheDiagnosticEvidence {
+        decode_expert_source_summary_payload_bytes,
+        ..DecodeAstroExpertCacheDiagnosticEvidence::default()
+    };
+    record_latency_and_memory_evidence(&mut diagnostic_evidence, &generation_report);
+    record_operation_evidence(&mut diagnostic_evidence, &generation_report);
+    record_counter_evidence(&mut diagnostic_evidence, counters)?;
+    Some(diagnostic_evidence)
+}
+
+fn record_latency_and_memory_evidence(
+    diagnostic_evidence: &mut DecodeAstroExpertCacheDiagnosticEvidence,
+    generation_report: &serde_json::Value,
+) {
+    diagnostic_evidence.decode_token_forward_latency_sample_count = generation_report
         .get("decode_token_forward_latency_histogram")
         .and_then(serde_json::Value::as_array)
         .map(|histogram_buckets| {
@@ -352,109 +370,82 @@ pub(crate) fn read_decode_astro_expert_cache_diagnostic_evidence(
                         .saturating_add(histogram_bucket["sample_count"].as_u64().unwrap_or(0))
                 })
         });
+    diagnostic_evidence.decode_token_forward_latency_p95_nanoseconds = generation_report
+        .get("decode_token_forward_latency_p95_nanoseconds")
+        .and_then(serde_json::Value::as_u64);
+    diagnostic_evidence.process_physical_disk_read_bytes = generation_report
+        .get("process_physical_disk_read_bytes")
+        .and_then(serde_json::Value::as_u64);
+    diagnostic_evidence.mlx_peak_memory_bytes = generation_report
+        .get("mlx_peak_memory_bytes")
+        .and_then(serde_json::Value::as_u64);
+}
 
-    Some(DecodeAstroExpertCacheDiagnosticEvidence {
-        decode_token_forward_latency_p95_nanoseconds: generation_report
-            .get("decode_token_forward_latency_p95_nanoseconds")
-            .and_then(serde_json::Value::as_u64),
-        decode_token_forward_latency_sample_count,
-        decode_advance_span: operation_evidence(&generation_report, "decode_advance_span"),
-        decode_expert_route_host_materialization: operation_evidence(
-            &generation_report,
-            "decode_expert_route_host_materialization",
-        ),
-        decode_expert_route_contiguous_array_construction: operation_evidence(
-            &generation_report,
-            "decode_expert_route_contiguous_array_construction",
-        ),
-        decode_expert_route_array_evaluation: operation_evidence(
-            &generation_report,
-            "decode_expert_route_array_evaluation",
-        ),
-        decode_expert_route_host_copy: operation_evidence(
-            &generation_report,
-            "decode_expert_route_host_copy",
-        ),
-        rust_expert_streaming_layer_preparation: operation_evidence(
-            &generation_report,
-            "rust_expert_streaming_layer_preparation",
-        ),
-        paged_router_graph_construction: operation_evidence(
-            &generation_report,
-            "paged_router_graph_construction",
-        ),
-        paged_moe_graph_construction: operation_evidence(
-            &generation_report,
-            "paged_moe_graph_construction",
-        ),
-        forward_completion_wait: operation_evidence(
-            &generation_report,
-            "prefill_state_graphics_processor_completion_wait",
-        ),
-        generated_token_item_synchronization_wait: operation_evidence(
-            &generation_report,
-            "generated_token_item_synchronization_wait",
-        ),
-        decode_expert_source_payload_bytes: counter_amount(
-            counters,
-            "mandatory_decode_expert_source_payload_bytes",
-        )?,
-        decode_expert_source_summary_payload_bytes,
-        prefill_expert_source_payload_bytes: counter_amount(
-            counters,
-            "mandatory_prefill_expert_source_payload_bytes",
-        )?,
-        retained_route_assignment_hit_count: counter_amount(
-            counters,
-            "retained_route_assignment_hit_count",
-        )?,
-        retained_route_assignment_miss_count: counter_amount(
-            counters,
-            "retained_route_assignment_miss_count",
-        )?,
-        hot_expert_route_fully_covered_count: counter_amount(
-            counters,
-            "hot_expert_route_fully_covered_count",
-        )?,
-        hot_expert_route_partially_covered_count: counter_amount(
-            counters,
-            "hot_expert_route_partially_covered_count",
-        )?,
-        hot_expert_route_fully_missed_count: counter_amount(
-            counters,
-            "hot_expert_route_fully_missed_count",
-        )?,
-        decode_astro_expert_cache_slot_eviction_count: counter_amount(
-            counters,
-            "decode_astro_expert_cache_slot_eviction_count",
-        )?,
-        positional_file_read_call_count: counter_amount(
-            counters,
-            "positional_file_read_call_count",
-        )?,
-        positional_file_read_byte_count: counter_amount(
-            counters,
-            "positional_file_read_byte_count",
-        )?,
-        positional_file_read_elapsed_nanoseconds: counter_amount(
-            counters,
-            "positional_file_read_elapsed_nanoseconds",
-        )?,
-        positional_file_read_maximum_elapsed_nanoseconds: counter_amount(
-            counters,
-            "positional_file_read_maximum_elapsed_nanoseconds",
-        )?,
-        positional_file_read_maximum_concurrent_count: counter_amount(
-            counters,
-            "positional_file_read_maximum_concurrent_count",
-        )?,
-        process_physical_disk_read_bytes: generation_report
-            .get("process_physical_disk_read_bytes")
-            .and_then(serde_json::Value::as_u64),
-        mlx_peak_memory_bytes: generation_report
-            .get("mlx_peak_memory_bytes")
-            .and_then(serde_json::Value::as_u64),
-    })
+fn record_operation_evidence(
+    diagnostic_evidence: &mut DecodeAstroExpertCacheDiagnosticEvidence,
+    generation_report: &serde_json::Value,
+) {
+    diagnostic_evidence.decode_advance_span =
+        operation_evidence(generation_report, "decode_advance_span");
+    diagnostic_evidence.decode_expert_route_host_materialization = operation_evidence(
+        generation_report,
+        "decode_expert_route_host_materialization",
+    );
+    diagnostic_evidence.decode_expert_route_contiguous_array_construction = operation_evidence(
+        generation_report,
+        "decode_expert_route_contiguous_array_construction",
+    );
+    diagnostic_evidence.decode_expert_route_array_evaluation =
+        operation_evidence(generation_report, "decode_expert_route_array_evaluation");
+    diagnostic_evidence.decode_expert_route_host_copy =
+        operation_evidence(generation_report, "decode_expert_route_host_copy");
+    diagnostic_evidence.rust_expert_streaming_layer_preparation =
+        operation_evidence(generation_report, "rust_expert_streaming_layer_preparation");
+    diagnostic_evidence.paged_router_graph_construction =
+        operation_evidence(generation_report, "paged_router_graph_construction");
+    diagnostic_evidence.paged_moe_graph_construction =
+        operation_evidence(generation_report, "paged_moe_graph_construction");
+    diagnostic_evidence.forward_completion_wait = operation_evidence(
+        generation_report,
+        "prefill_state_graphics_processor_completion_wait",
+    );
+    diagnostic_evidence.generated_token_item_synchronization_wait = operation_evidence(
+        generation_report,
+        "generated_token_item_synchronization_wait",
+    );
+}
+
+fn record_counter_evidence(
+    diagnostic_evidence: &mut DecodeAstroExpertCacheDiagnosticEvidence,
+    counters: &[serde_json::Value],
+) -> Option<()> {
+    diagnostic_evidence.decode_expert_source_payload_bytes =
+        counter_amount(counters, "mandatory_decode_expert_source_payload_bytes")?;
+    diagnostic_evidence.prefill_expert_source_payload_bytes =
+        counter_amount(counters, "mandatory_prefill_expert_source_payload_bytes")?;
+    diagnostic_evidence.retained_route_assignment_hit_count =
+        counter_amount(counters, "retained_route_assignment_hit_count")?;
+    diagnostic_evidence.retained_route_assignment_miss_count =
+        counter_amount(counters, "retained_route_assignment_miss_count")?;
+    diagnostic_evidence.hot_expert_route_fully_covered_count =
+        counter_amount(counters, "hot_expert_route_fully_covered_count")?;
+    diagnostic_evidence.hot_expert_route_partially_covered_count =
+        counter_amount(counters, "hot_expert_route_partially_covered_count")?;
+    diagnostic_evidence.hot_expert_route_fully_missed_count =
+        counter_amount(counters, "hot_expert_route_fully_missed_count")?;
+    diagnostic_evidence.decode_astro_expert_cache_slot_eviction_count =
+        counter_amount(counters, "decode_astro_expert_cache_slot_eviction_count")?;
+    diagnostic_evidence.positional_file_read_call_count =
+        counter_amount(counters, "positional_file_read_call_count")?;
+    diagnostic_evidence.positional_file_read_byte_count =
+        counter_amount(counters, "positional_file_read_byte_count")?;
+    diagnostic_evidence.positional_file_read_elapsed_nanoseconds =
+        counter_amount(counters, "positional_file_read_elapsed_nanoseconds")?;
+    diagnostic_evidence.positional_file_read_maximum_elapsed_nanoseconds =
+        counter_amount(counters, "positional_file_read_maximum_elapsed_nanoseconds")?;
+    diagnostic_evidence.positional_file_read_maximum_concurrent_count =
+        counter_amount(counters, "positional_file_read_maximum_concurrent_count")?;
+    Some(())
 }
 
 fn operation_evidence(
@@ -480,10 +471,6 @@ fn counter_amount(counters: &[serde_json::Value], counter_name: &str) -> Option<
     matching_counter.map_or(Some(0), |counter_report| counter_report["amount"].as_u64())
 }
 
-/// Summarizes the measured completion, which is the last performance sample the
-/// worker wrote (the warmup sample precedes it), so JIT warmup never enters the
-/// reported values. A budget-exhausted completion never wrote a sample, so its
-/// rates are zero and the caller records the partial evidence instead.
 #[cfg(test)]
 #[path = "completion_tests.rs"]
 mod completion_tests;

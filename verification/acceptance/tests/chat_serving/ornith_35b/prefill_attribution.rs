@@ -54,12 +54,37 @@ async fn should_attribute_resident_sparse_moe_long_context_prefill_graphics_proc
     .expect("the Ornith-35B long-context attribution journey must finish within 115 seconds");
 }
 
-#[expect(clippy::too_many_lines)]
 async fn run_prefill_attribution_journey(prompt: String, context_label: &str) {
     let model_id = resident_model_id();
     let (isolated_home, rest_server) = launch_resident_rest_server_with_prefill_attribution().await;
     let server_address = rest_server.server_address;
 
+    run_jit_warmup(server_address, &model_id).await;
+    run_measured_fresh_prefill(server_address, &model_id, prompt, context_label).await;
+
+    // The worker writes attribution records inside the isolated home, which it
+    // owns until shutdown. Read them while the server is still up.
+    let attribution_log_path = isolated_home
+        .path()
+        .join(".astronomical-dev/logs/performance-attribution.jsonl");
+    let attribution_text = std::fs::read_to_string(&attribution_log_path)
+        .expect("the attribution log must exist while the server is running");
+    let measured_report = last_generation_report(&attribution_text)
+        .expect("the measured completion must produce a generation attribution report");
+
+    let prefill_totals = read_prefill_totals(&measured_report);
+    print_prefill_family_shares(&model_id, &prefill_totals);
+    print_linear_attention_sections(&measured_report, &prefill_totals.linear_attention);
+    assert_prefill_attribution_shape(&prefill_totals);
+    print_largest_operations(
+        &measured_report,
+        prefill_totals.prefill_advance_span.total_millis,
+    );
+
+    stop_resident_rest_server(rest_server).await;
+}
+
+async fn run_jit_warmup(server_address: std::net::SocketAddr, model_id: &str) {
     eprintln!("[ornith-35b-attribution] phase=jit-warmup model={model_id}");
     let warmup_response = post_chat_completion(
         server_address,
@@ -77,7 +102,14 @@ async fn run_prefill_attribution_journey(prompt: String, context_label: &str) {
     )
     .await;
     assert_successful_streaming_chat_response(&warmup_response);
+}
 
+async fn run_measured_fresh_prefill(
+    server_address: std::net::SocketAddr,
+    model_id: &str,
+    prompt: String,
+    context_label: &str,
+) {
     eprintln!(
         "[ornith-35b-attribution] phase=measured-fresh-prefill context={context_label} model={model_id}"
     );
@@ -97,54 +129,70 @@ async fn run_prefill_attribution_journey(prompt: String, context_label: &str) {
     )
     .await;
     assert_successful_streaming_chat_response(&chat_response);
+}
 
-    // The worker writes attribution records inside the isolated home, which it
-    // owns until shutdown. Read them while the server is still up.
-    let attribution_log_path = isolated_home
-        .path()
-        .join(".astronomical-dev/logs/performance-attribution.jsonl");
-    let attribution_text = std::fs::read_to_string(&attribution_log_path)
-        .expect("the attribution log must exist while the server is running");
-    let measured_report = last_generation_report(&attribution_text)
-        .expect("the measured completion must produce a generation attribution report");
+/// The prompt-prefill totals the measured report attributes, by family.
+struct PrefillTotals {
+    prompt_token_count: u64,
+    prefill_chunk_count: u64,
+    prefill_advance_span: OperationTotal,
+    linear_attention: OperationTotal,
+    full_attention: OperationTotal,
+    feed_forward: OperationTotal,
+    terminal_wait: OperationTotal,
+}
 
-    let prompt_token_count = counter_amount(&measured_report, "prompt_token_count")
+fn read_prefill_totals(measured_report: &Value) -> PrefillTotals {
+    let prompt_token_count = counter_amount(measured_report, "prompt_token_count")
         .expect("the measured report must count prompt tokens");
-    let prefill_chunk_count = counter_amount(&measured_report, "prefill_chunk_count")
+    let prefill_chunk_count = counter_amount(measured_report, "prefill_chunk_count")
         .expect("the measured report must count prefill chunks");
-    let prefill_advance_span = operation_total(&measured_report, "prompt_prefill_advance_span")
+    let prefill_advance_span = operation_total(measured_report, "prompt_prefill_advance_span")
         .expect("the measured report must span the prompt prefill advance");
     let linear_attention = operation_total(
-        &measured_report,
+        measured_report,
         "prefill_linear_attention_graphics_processor_completion_wait",
     )
     .expect("the measured report must attribute linear-attention prefill GPU waits");
     let full_attention = operation_total(
-        &measured_report,
+        measured_report,
         "prefill_full_attention_graphics_processor_completion_wait",
     )
     .expect("the measured report must attribute full-attention prefill GPU waits");
     let feed_forward = operation_total(
-        &measured_report,
+        measured_report,
         "prefill_feed_forward_graphics_processor_completion_wait",
     )
     .expect("the measured report must attribute feed-forward prefill GPU waits");
     let terminal_wait = operation_total(
-        &measured_report,
+        measured_report,
         "prefill_state_graphics_processor_completion_wait",
     )
     .expect("the measured report must attribute the chunk-terminal prefill GPU wait");
+    PrefillTotals {
+        prompt_token_count,
+        prefill_chunk_count,
+        prefill_advance_span,
+        linear_attention,
+        full_attention,
+        feed_forward,
+        terminal_wait,
+    }
+}
 
-    let prefill_span_millis = prefill_advance_span.total_millis;
+fn print_prefill_family_shares(model_id: &str, prefill_totals: &PrefillTotals) {
+    let prompt_token_count = prefill_totals.prompt_token_count;
+    let prefill_chunk_count = prefill_totals.prefill_chunk_count;
+    let prefill_span_millis = prefill_totals.prefill_advance_span.total_millis;
     let prefill_tokens_per_second = prompt_token_count as f64 / (prefill_span_millis / 1000.0);
     eprintln!(
         "[ornith-35b-attribution] BASELINE model={model_id} prompt_tokens={prompt_token_count} prefill_chunks={prefill_chunk_count} prefill_span_ms={prefill_span_millis:.1} prefill_tok_per_second={prefill_tokens_per_second:.2}"
     );
     for (family_name, family_total) in [
-        ("linear_attention", &linear_attention),
-        ("full_attention", &full_attention),
-        ("feed_forward", &feed_forward),
-        ("terminal_wait", &terminal_wait),
+        ("linear_attention", &prefill_totals.linear_attention),
+        ("full_attention", &prefill_totals.full_attention),
+        ("feed_forward", &prefill_totals.feed_forward),
+        ("terminal_wait", &prefill_totals.terminal_wait),
     ] {
         eprintln!(
             "[ornith-35b-attribution] family={family_name} occurrences={} total_ms={:.1} share_of_prefill={:.1}%",
@@ -153,7 +201,9 @@ async fn run_prefill_attribution_journey(prompt: String, context_label: &str) {
             100.0 * family_total.total_millis / prefill_span_millis,
         );
     }
+}
 
+fn print_linear_attention_sections(measured_report: &Value, linear_attention: &OperationTotal) {
     // Linear-attention sub-op attribution: where the GDN family's GPU time
     // lives inside one layer call (projections, convolution, normalization and
     // gates, recurrence kernel, epilogue). The family wait itself already
@@ -184,7 +234,7 @@ async fn run_prefill_attribution_journey(prompt: String, context_label: &str) {
     let measured_sections: Vec<(&str, OperationTotal)> = linear_attention_sections
         .iter()
         .filter_map(|(section_name, operation_name)| {
-            operation_total(&measured_report, operation_name)
+            operation_total(measured_report, operation_name)
                 .map(|section_total| (*section_name, section_total))
         })
         .collect();
@@ -206,13 +256,25 @@ async fn run_prefill_attribution_journey(prompt: String, context_label: &str) {
             linear_attention.total_millis,
         );
     }
+}
 
+fn assert_prefill_attribution_shape(prefill_totals: &PrefillTotals) {
+    let PrefillTotals {
+        prompt_token_count,
+        prefill_chunk_count,
+        prefill_advance_span,
+        linear_attention,
+        full_attention,
+        feed_forward,
+        terminal_wait,
+    } = prefill_totals;
+    let prefill_span_millis = prefill_advance_span.total_millis;
     assert!(
-        prompt_token_count > 1000,
+        *prompt_token_count > 1000,
         "the measured completion must process the full Romeo and Juliet prompt: {prompt_token_count} tokens"
     );
     assert!(
-        prefill_chunk_count > 1,
+        *prefill_chunk_count > 1,
         "the measured prefill must run as multiple chunks: {prefill_chunk_count} chunks"
     );
     assert!(
@@ -244,7 +306,9 @@ async fn run_prefill_attribution_journey(prompt: String, context_label: &str) {
         attributed_graphics_millis > 0.5 * prefill_span_millis,
         "prefill must be majority graphics-processor time: attributed {attributed_graphics_millis:.1} ms of {prefill_span_millis:.1} ms"
     );
+}
 
+fn print_largest_operations(measured_report: &Value, prefill_span_millis: f64) {
     // Every attributed operation, largest first: this surfaces costs the
     // family boundaries do not own (routing, paging, graph construction) and
     // is how a context-growing anomaly gets named without a new journey.
@@ -270,8 +334,6 @@ async fn run_prefill_attribution_journey(prompt: String, context_label: &str) {
             100.0 * total_millis / prefill_span_millis
         );
     }
-
-    stop_resident_rest_server(rest_server).await;
 }
 
 /// One attributed operation aggregate from a report: how many times the

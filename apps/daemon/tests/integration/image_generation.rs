@@ -164,6 +164,9 @@ async fn should_hold_completed_image_bytes_until_cleanup_finalization() {
 
 #[tokio::test]
 async fn should_attribute_image_performance_only_after_finalization() {
+    // The scripted worker's finalized-image event reports this elapsed time.
+    const SCRIPTED_FINALIZED_IMAGE_ELAPSED_MILLIS: u64 = 30;
+    let image_request_id = 107;
     let executable_path = std::env::var("CARGO_BIN_EXE_astronomical-daemon-test-worker")
         .expect("Cargo should provide the scripted worker fixture path");
     let performance_log_directory =
@@ -178,7 +181,10 @@ async fn should_attribute_image_performance_only_after_finalization() {
     wait_for_worker_status(&worker_handle, WorkerHealthStatus::Ready).await;
 
     let mut image_receiver = worker_handle
-        .start_image_generation(image_command(107, "completion-before-finalization-fixture"))
+        .start_image_generation(image_command(
+            image_request_id,
+            "completion-before-finalization-fixture",
+        ))
         .await
         .expect("the image should start");
     assert!(
@@ -208,49 +214,10 @@ async fn should_attribute_image_performance_only_after_finalization() {
             .trim(),
     )
     .expect("the image performance record should be valid JSON");
-    assert_eq!(image_performance_record["operation"], "image_generation");
-    assert_eq!(image_performance_record["request_id"], 107);
-    assert_eq!(image_performance_record["completion_outcome"], "completed");
-    assert_eq!(
-        image_performance_record["worker_reported_elapsed_millis"],
-        30
-    );
-    assert!(image_performance_record["total_elapsed_millis"].is_u64());
-    for attribution_field in [
-        "queue_wait_elapsed_millis",
-        "swap_load_elapsed_millis",
-        "execution_elapsed_millis",
-        "finalization_elapsed_millis",
-    ] {
-        assert!(image_performance_record[attribution_field].is_u64());
-    }
-    let attributed_elapsed_millis = image_performance_record["queue_wait_elapsed_millis"]
-        .as_u64()
-        .unwrap_or(u64::MAX)
-        .saturating_add(
-            image_performance_record["swap_load_elapsed_millis"]
-                .as_u64()
-                .unwrap_or(u64::MAX),
-        )
-        .saturating_add(
-            image_performance_record["execution_elapsed_millis"]
-                .as_u64()
-                .unwrap_or(u64::MAX),
-        )
-        .saturating_add(
-            image_performance_record["finalization_elapsed_millis"]
-                .as_u64()
-                .unwrap_or(u64::MAX),
-        );
-    assert!(
-        image_performance_record["total_elapsed_millis"]
-            .as_u64()
-            .is_some_and(|total| total >= attributed_elapsed_millis)
-    );
-    assert!(
-        image_performance_record["encoded_image_bytes"]
-            .as_u64()
-            .is_some_and(|bytes| bytes > 0)
+    assert_image_performance_record_attributes_every_phase(
+        &image_performance_record,
+        image_request_id,
+        SCRIPTED_FINALIZED_IMAGE_ELAPSED_MILLIS,
     );
 }
 
@@ -550,4 +517,58 @@ fn chat_command(model: &str, request_id: u64) -> ChatGenerationCommand {
         },
         structured_generation: None,
     }
+}
+
+/// The finalized image's record names its operation and the expected request,
+/// reports the worker's own elapsed time, and its per-phase attribution never
+/// exceeds the total.
+fn assert_image_performance_record_attributes_every_phase(
+    image_performance_record: &serde_json::Value,
+    expected_request_id: u64,
+    expected_worker_elapsed_millis: u64,
+) {
+    assert_eq!(image_performance_record["operation"], "image_generation");
+    assert_eq!(image_performance_record["request_id"], expected_request_id);
+    assert_eq!(image_performance_record["completion_outcome"], "completed");
+    assert_eq!(
+        image_performance_record["worker_reported_elapsed_millis"],
+        expected_worker_elapsed_millis
+    );
+    assert!(image_performance_record["total_elapsed_millis"].is_u64());
+    for attribution_field in [
+        "queue_wait_elapsed_millis",
+        "swap_load_elapsed_millis",
+        "execution_elapsed_millis",
+        "finalization_elapsed_millis",
+    ] {
+        assert!(image_performance_record[attribution_field].is_u64());
+    }
+    let attributed_elapsed_millis = image_performance_record["queue_wait_elapsed_millis"]
+        .as_u64()
+        .unwrap_or(u64::MAX)
+        .saturating_add(
+            image_performance_record["swap_load_elapsed_millis"]
+                .as_u64()
+                .unwrap_or(u64::MAX),
+        )
+        .saturating_add(
+            image_performance_record["execution_elapsed_millis"]
+                .as_u64()
+                .unwrap_or(u64::MAX),
+        )
+        .saturating_add(
+            image_performance_record["finalization_elapsed_millis"]
+                .as_u64()
+                .unwrap_or(u64::MAX),
+        );
+    assert!(
+        image_performance_record["total_elapsed_millis"]
+            .as_u64()
+            .is_some_and(|total| total >= attributed_elapsed_millis)
+    );
+    assert!(
+        image_performance_record["encoded_image_bytes"]
+            .as_u64()
+            .is_some_and(|bytes| bytes > 0)
+    );
 }

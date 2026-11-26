@@ -8,7 +8,7 @@ use model_serving::{
     PromptProcessingChunkSizer, Qwen3_5ArtifactValidator, Qwen3_5TextEngine, Qwen3_5Tokenizer,
     TextInferenceRequest, TextMlxEngineConstructors,
 };
-use runtime_integration::MlxRuntime;
+use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use tokio::time::timeout;
 
 use super::engine_astro_ssd_prompt_cache::{
@@ -46,7 +46,6 @@ async fn should_restore_a_long_ornith_prefix_with_one_block_of_workspace() {
     .await;
 }
 
-#[expect(clippy::too_many_lines)]
 async fn run_astro_ssd_prompt_cache_restore_peak_acceptance() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let journey_started_at = tokio::time::Instant::now();
@@ -57,22 +56,7 @@ async fn run_astro_ssd_prompt_cache_restore_peak_acceptance() {
     let validated_artifact = Qwen3_5ArtifactValidator::new()
         .validate(&model_directory, 20_480)
         .expect("the installed model should validate before prompt preparation");
-    let prompt_tokenizer = Qwen3_5Tokenizer::from_validated_artifact(&validated_artifact)
-        .expect("the installed tokenizer should load before prompt preparation");
-    let prompt_token_ids =
-        large_prefill_prompt::representative_long_generation_prompt_token_ids_capped_at(
-            &prompt_tokenizer,
-            validated_artifact.model_id(),
-            // The partial tail is deliberate: a prompt whose length is an exact
-            // multiple of the block size keeps its last block for a forward pass,
-            // because the final prompt token must still produce the logits that
-            // begin decode (see astro_ssd_prompt_cache::prefix_lookup). A prompt of whole
-            // blocks only would therefore restore one block fewer than published,
-            // and the journey would measure a different restore shape than intended.
-            ASTRO_SSD_PROMPT_CACHE_RESTORE_PEAK_COMPLETE_BLOCK_COUNT
-                * ASTRO_SSD_PROMPT_CACHE_RESTORE_PEAK_BLOCK_TOKENS as usize
-                + ASTRO_SSD_PROMPT_CACHE_RESTORE_PEAK_PARTIAL_TAIL_TOKENS,
-        );
+    let prompt_token_ids = restore_peak_prompt_token_ids(&validated_artifact);
     let expected_complete_block_count =
         prompt_token_ids.len() / ASTRO_SSD_PROMPT_CACHE_RESTORE_PEAK_BLOCK_TOKENS as usize;
     assert!(
@@ -83,6 +67,86 @@ async fn run_astro_ssd_prompt_cache_restore_peak_acceptance() {
     let astro_ssd_prompt_cache_directory = tempfile::tempdir()
         .expect("the acceptance should create a temporary astro SSD prompt cache root");
     let memory_limits = crate::common::sample_machine_serving_acceptance_mlx_memory_limits().await;
+    let mut qwen3_5_engine = load_restore_peak_engine(
+        validated_artifact,
+        model_directory,
+        memory_limits,
+        astro_ssd_prompt_cache_directory.path(),
+    )
+    .await;
+    eprintln!(
+        "[astro-ssd-prompt-cache-restore-peak] status=engine-loaded elapsed_seconds={}",
+        journey_started_at.elapsed().as_secs()
+    );
+    let mlx_runtime = std::sync::Arc::new(super::runtime_the_engine_configured(memory_limits));
+
+    let cold_generated_token_ids = run_cold_request_until_blocks_are_published(
+        &mut qwen3_5_engine,
+        &prompt_token_ids,
+        expected_complete_block_count,
+        journey_started_at,
+        &mlx_runtime,
+    )
+    .await;
+    let published_block_sizes = published_block_sizes(
+        astro_ssd_prompt_cache_directory.path(),
+        expected_complete_block_count,
+    );
+    measure_restore_peak(
+        &mut qwen3_5_engine,
+        prompt_token_ids,
+        &mlx_runtime,
+        &published_block_sizes,
+        expected_complete_block_count,
+    )
+    .await;
+
+    let (restored_generated_token_ids, restored_prefill_chunk_token_counts) =
+        generate_token_ids_with_event_timing(
+            &mut qwen3_5_engine,
+            RequestId::new(ROMEO_AND_JULIET_REQUEST_ID_RESTORED),
+            usize::from(ASTRO_SSD_PROMPT_CACHE_RESTORE_PEAK_OUTPUT_TOKEN_COUNT),
+            "restored_prefill",
+            journey_started_at,
+            mlx_runtime,
+        )
+        .await;
+    assert_eq!(
+        cold_generated_token_ids, restored_generated_token_ids,
+        "the restored prompt should continue with the same next token as cold prefill"
+    );
+    eprintln!(
+        "[astro-ssd-prompt-cache-restore-peak] status=success elapsed_seconds={} restored_chunk_token_counts={restored_prefill_chunk_token_counts:?}",
+        journey_started_at.elapsed().as_secs()
+    );
+}
+
+fn restore_peak_prompt_token_ids(
+    validated_artifact: &model_serving::ValidatedQwen3_5Artifact,
+) -> Vec<u32> {
+    let prompt_tokenizer = Qwen3_5Tokenizer::from_validated_artifact(validated_artifact)
+        .expect("the installed tokenizer should load before prompt preparation");
+    large_prefill_prompt::representative_long_generation_prompt_token_ids_capped_at(
+        &prompt_tokenizer,
+        validated_artifact.model_id(),
+        // The partial tail is deliberate: a prompt whose length is an exact
+        // multiple of the block size keeps its last block for a forward pass,
+        // because the final prompt token must still produce the logits that
+        // begin decode (see astro_ssd_prompt_cache::prefix_lookup). A prompt of whole
+        // blocks only would therefore restore one block fewer than published,
+        // and the journey would measure a different restore shape than intended.
+        ASTRO_SSD_PROMPT_CACHE_RESTORE_PEAK_COMPLETE_BLOCK_COUNT
+            * ASTRO_SSD_PROMPT_CACHE_RESTORE_PEAK_BLOCK_TOKENS as usize
+            + ASTRO_SSD_PROMPT_CACHE_RESTORE_PEAK_PARTIAL_TAIL_TOKENS,
+    )
+}
+
+async fn load_restore_peak_engine(
+    validated_artifact: model_serving::ValidatedQwen3_5Artifact,
+    model_directory: PathBuf,
+    memory_limits: MlxMemoryLimits,
+    astro_ssd_prompt_cache_directory: &Path,
+) -> Qwen3_5TextEngine {
     let mut worker_chunking_configuration = crate::common::standard_worker_chunking_configuration();
     worker_chunking_configuration.ssd_prompt_cache_block_tokens =
         Some(ASTRO_SSD_PROMPT_CACHE_RESTORE_PEAK_BLOCK_TOKENS);
@@ -95,8 +159,8 @@ async fn run_astro_ssd_prompt_cache_restore_peak_acceptance() {
         memory_limits.active_memory_limit_bytes(),
         memory_limits.mlx_buffer_cache_limit_bytes(),
         Some(AstroSsdPromptCacheDiskStoreConfig::new(
-            astro_ssd_prompt_cache_directory.path().to_path_buf(),
-            astro_ssd_prompt_cache_directory.path().to_path_buf(),
+            astro_ssd_prompt_cache_directory.to_path_buf(),
+            astro_ssd_prompt_cache_directory.to_path_buf(),
             crate::common::configured_model_artifact_astro_ssd_prompt_cache_maximum_size_bytes(),
         )),
         prompt_processing_chunk_sizer,
@@ -110,12 +174,18 @@ async fn run_astro_ssd_prompt_cache_restore_peak_acceptance() {
         .await
         .expect("the installed model should load for the restore journey");
     super::keep_the_hosted_drafter_silent(&qwen3_5_engine).await;
-    eprintln!(
-        "[astro-ssd-prompt-cache-restore-peak] status=engine-loaded elapsed_seconds={}",
-        journey_started_at.elapsed().as_secs()
-    );
-    let mlx_runtime = std::sync::Arc::new(super::runtime_the_engine_configured(memory_limits));
+    qwen3_5_engine
+}
 
+/// Returns the token ids the cold request generated, which the restored
+/// request must reproduce.
+async fn run_cold_request_until_blocks_are_published(
+    qwen3_5_engine: &mut Qwen3_5TextEngine,
+    prompt_token_ids: &[u32],
+    expected_complete_block_count: usize,
+    journey_started_at: tokio::time::Instant,
+    mlx_runtime: &std::sync::Arc<MlxRuntime>,
+) -> Vec<u32> {
     eprintln!(
         "[astro-ssd-prompt-cache-restore-peak] status=cold-start blocks={expected_complete_block_count} prompt_tokens={} elapsed_seconds={}",
         prompt_token_ids.len(),
@@ -125,7 +195,7 @@ async fn run_astro_ssd_prompt_cache_restore_peak_acceptance() {
     qwen3_5_engine
         .start_generation(greedy_romeo_and_juliet_request(
             ROMEO_AND_JULIET_REQUEST_ID_COLD,
-            prompt_token_ids.clone(),
+            prompt_token_ids.to_vec(),
         ))
         .await
         .expect("the cold Romeo and Juliet request should start");
@@ -136,7 +206,7 @@ async fn run_astro_ssd_prompt_cache_restore_peak_acceptance() {
     );
     let (cold_generated_token_ids, cold_prefill_chunk_token_counts) =
         generate_token_ids_with_event_timing(
-            &mut qwen3_5_engine,
+            qwen3_5_engine,
             RequestId::new(ROMEO_AND_JULIET_REQUEST_ID_COLD),
             usize::from(ASTRO_SSD_PROMPT_CACHE_RESTORE_PEAK_OUTPUT_TOKEN_COUNT),
             "cold_prefill",
@@ -148,21 +218,47 @@ async fn run_astro_ssd_prompt_cache_restore_peak_acceptance() {
         "[astro-ssd-prompt-cache-restore-peak] status=cold-completed elapsed_seconds={} chunk_token_counts={cold_prefill_chunk_token_counts:?}",
         journey_started_at.elapsed().as_secs()
     );
-    wait_for_astro_ssd_prompt_cache_blocks(&qwen3_5_engine, expected_complete_block_count).await;
+    wait_for_astro_ssd_prompt_cache_blocks(qwen3_5_engine, expected_complete_block_count).await;
+    cold_generated_token_ids
+}
+
+/// The sizes of the safetensors files the cold request published, which bound
+/// how much memory the restore may peak at.
+struct PublishedBlockSizes {
+    file_count: usize,
+    destination_byte_bound: u64,
+    largest_source_block_bytes: u64,
+}
+
+fn published_block_sizes(
+    astro_ssd_prompt_cache_directory: &Path,
+    expected_complete_block_count: usize,
+) -> PublishedBlockSizes {
     let astro_ssd_prompt_cache_file_sizes =
-        safetensors_file_sizes(astro_ssd_prompt_cache_directory.path())
+        safetensors_file_sizes(astro_ssd_prompt_cache_directory)
             .expect("the temporary astro SSD prompt cache should expose the published block sizes");
     assert!(
         astro_ssd_prompt_cache_file_sizes.len() >= expected_complete_block_count,
         "the cold prefill should publish multiple sequence blocks and snapshots"
     );
-    let destination_byte_bound = astro_ssd_prompt_cache_file_sizes.iter().sum::<u64>();
-    let largest_source_block_bytes = astro_ssd_prompt_cache_file_sizes
-        .iter()
-        .copied()
-        .max()
-        .expect("the astro SSD prompt cache should contain source blocks");
+    PublishedBlockSizes {
+        file_count: astro_ssd_prompt_cache_file_sizes.len(),
+        destination_byte_bound: astro_ssd_prompt_cache_file_sizes.iter().sum::<u64>(),
+        largest_source_block_bytes: astro_ssd_prompt_cache_file_sizes
+            .iter()
+            .copied()
+            .max()
+            .expect("the astro SSD prompt cache should contain source blocks"),
+    }
+}
 
+async fn measure_restore_peak(
+    qwen3_5_engine: &mut Qwen3_5TextEngine,
+    prompt_token_ids: Vec<u32>,
+    mlx_runtime: &MlxRuntime,
+    published_block_sizes: &PublishedBlockSizes,
+    expected_complete_block_count: usize,
+) {
     let active_memory_bytes_before_restore = mlx_runtime
         .memory_snapshot()
         .expect("the journey should sample active memory before the astro SSD prompt cache hit")
@@ -191,13 +287,15 @@ async fn run_astro_ssd_prompt_cache_restore_peak_acceptance() {
         .expect("the journey should sample the restore peak");
     let restore_peak_delta_bytes = (restore_memory_snapshot.peak_memory_bytes() as u64)
         .saturating_sub(active_memory_bytes_before_restore);
+    let destination_byte_bound = published_block_sizes.destination_byte_bound;
+    let largest_source_block_bytes = published_block_sizes.largest_source_block_bytes;
     let concat_restore_peak_bound_bytes = destination_byte_bound
         .saturating_mul(2)
         .saturating_add(largest_source_block_bytes.saturating_mul(3));
     eprintln!(
-        "[astro-ssd-prompt-cache-restore-peak] status=measured astro_ssd_prompt_cache_restored_tokens={} astro_ssd_prompt_cache_files={}active_before_bytes={active_memory_bytes_before_restore} peak_bytes={} peak_delta_bytes={restore_peak_delta_bytes} destination_byte_bound={destination_byte_bound} largest_source_block_bytes={largest_source_block_bytes} concat_restore_peak_bound_bytes={concat_restore_peak_bound_bytes}",
+        "[astro-ssd-prompt-cache-restore-peak] status=measured astro_ssd_prompt_cache_restored_tokens={} astro_ssd_prompt_cache_files={} active_before_bytes={active_memory_bytes_before_restore} peak_bytes={} peak_delta_bytes={restore_peak_delta_bytes} destination_byte_bound={destination_byte_bound} largest_source_block_bytes={largest_source_block_bytes} concat_restore_peak_bound_bytes={concat_restore_peak_bound_bytes}",
         restored_generation_start.astro_ssd_prompt_cache_restored_token_count(),
-        astro_ssd_prompt_cache_file_sizes.len(),
+        published_block_sizes.file_count,
         restore_memory_snapshot.peak_memory_bytes(),
     );
     assert!(
@@ -205,25 +303,6 @@ async fn run_astro_ssd_prompt_cache_restore_peak_acceptance() {
         "the real astro SSD prompt cache hit peak must fit the destination plus the complete source block set \
          and MLX scratch: peak_delta={restore_peak_delta_bytes} \
          bound={concat_restore_peak_bound_bytes}"
-    );
-
-    let (restored_generated_token_ids, restored_prefill_chunk_token_counts) =
-        generate_token_ids_with_event_timing(
-            &mut qwen3_5_engine,
-            RequestId::new(ROMEO_AND_JULIET_REQUEST_ID_RESTORED),
-            usize::from(ASTRO_SSD_PROMPT_CACHE_RESTORE_PEAK_OUTPUT_TOKEN_COUNT),
-            "restored_prefill",
-            journey_started_at,
-            mlx_runtime,
-        )
-        .await;
-    assert_eq!(
-        cold_generated_token_ids, restored_generated_token_ids,
-        "the restored prompt should continue with the same next token as cold prefill"
-    );
-    eprintln!(
-        "[astro-ssd-prompt-cache-restore-peak] status=success elapsed_seconds={} restored_chunk_token_counts={restored_prefill_chunk_token_counts:?}",
-        journey_started_at.elapsed().as_secs()
     );
 }
 
@@ -258,9 +337,46 @@ async fn generate_token_ids_with_event_timing(
     journey_started_at: tokio::time::Instant,
     mlx_runtime: std::sync::Arc<MlxRuntime>,
 ) -> (Vec<u32>, Vec<u32>) {
-    let ticker_mlx_runtime = mlx_runtime.clone();
-    let ticker_journey_started_at = journey_started_at;
-    let memory_ticker = tokio::task::spawn_local(async move {
+    let memory_ticker = spawn_memory_ticker(mlx_runtime.clone(), phase_label, journey_started_at);
+
+    let mut generated_token_ids = Vec::new();
+    let mut completed_prefill_chunk_token_counts = Vec::new();
+    let phase_started_at = tokio::time::Instant::now();
+    let mut previous_event_at = phase_started_at;
+    let outcome = loop {
+        let decoded_event = qwen3_5_engine
+            .decode_next_token(request_id)
+            .await
+            .expect("the engine should advance");
+        let event_observed_at = tokio::time::Instant::now();
+        let (event_label, should_finish) = describe_decoded_event(
+            decoded_event,
+            &mut generated_token_ids,
+            &mut completed_prefill_chunk_token_counts,
+            generated_token_count,
+        );
+        eprintln!(
+            "[astro-ssd-prompt-cache-restore-peak] status=event phase={phase_label} event={event_label} gap_ms={} phase_milliseconds={} elapsed_seconds={}",
+            (event_observed_at - previous_event_at).as_millis(),
+            (event_observed_at - phase_started_at).as_millis(),
+            journey_started_at.elapsed().as_secs()
+        );
+        previous_event_at = event_observed_at;
+        if should_finish {
+            break (generated_token_ids, completed_prefill_chunk_token_counts);
+        }
+    };
+    memory_ticker.abort();
+    outcome
+}
+
+/// Starts the local task that prints MLX memory every ten seconds of a phase.
+fn spawn_memory_ticker(
+    ticker_mlx_runtime: std::sync::Arc<MlxRuntime>,
+    phase_label: &'static str,
+    ticker_journey_started_at: tokio::time::Instant,
+) -> tokio::task::JoinHandle<()> {
+    tokio::task::spawn_local(async move {
         let mut ticker_interval = tokio::time::interval(Duration::from_secs(10));
         ticker_interval.tick().await;
         loop {
@@ -282,62 +398,48 @@ async fn generate_token_ids_with_event_timing(
                 ticker_journey_started_at.elapsed().as_secs()
             );
         }
-    });
+    })
+}
 
-    let mut generated_token_ids = Vec::new();
-    let mut completed_prefill_chunk_token_counts = Vec::new();
-    let phase_started_at = tokio::time::Instant::now();
-    let mut previous_event_at = phase_started_at;
-    let outcome = loop {
-        let decoded_event = qwen3_5_engine
-            .decode_next_token(request_id)
-            .await
-            .expect("the engine should advance");
-        let event_observed_at = tokio::time::Instant::now();
-        let (event_label, should_finish) = match decoded_event {
-            GeneratedToken::TokenId {
-                token_id,
-                generation_finalization,
-                ..
-            } => {
-                generated_token_ids.push(token_id);
-                (
-                    "token_id".to_owned(),
-                    generation_finalization.is_some()
-                        || generated_token_ids.len() == generated_token_count,
-                )
-            }
-            GeneratedToken::PrefillProgress {
-                completed_prefill_chunk_tokens,
-                ..
-            } => {
-                completed_prefill_chunk_token_counts.push(completed_prefill_chunk_tokens);
-                (
-                    format!("prefill_progress chunk_tokens={completed_prefill_chunk_tokens}"),
-                    false,
-                )
-            }
-            GeneratedToken::PromptProcessingPhaseStarted { .. } => {
-                ("prompt_processing_phase_started".to_owned(), false)
-            }
-            GeneratedToken::GenerationPreparationStarted { .. } => {
-                ("generation_preparation_started".to_owned(), false)
-            }
-            GeneratedToken::EndOfSequence => ("end_of_sequence".to_owned(), true),
-        };
-        eprintln!(
-            "[astro-ssd-prompt-cache-restore-peak] status=event phase={phase_label} event={event_label} gap_ms={} phase_milliseconds={} elapsed_seconds={}",
-            (event_observed_at - previous_event_at).as_millis(),
-            (event_observed_at - phase_started_at).as_millis(),
-            journey_started_at.elapsed().as_secs()
-        );
-        previous_event_at = event_observed_at;
-        if should_finish {
-            break (generated_token_ids, completed_prefill_chunk_token_counts);
+/// Records what the event adds to the running totals and returns its log label
+/// together with whether the phase is over.
+fn describe_decoded_event(
+    decoded_event: GeneratedToken,
+    generated_token_ids: &mut Vec<u32>,
+    completed_prefill_chunk_token_counts: &mut Vec<u32>,
+    generated_token_count: usize,
+) -> (String, bool) {
+    match decoded_event {
+        GeneratedToken::TokenId {
+            token_id,
+            generation_finalization,
+            ..
+        } => {
+            generated_token_ids.push(token_id);
+            (
+                "token_id".to_owned(),
+                generation_finalization.is_some()
+                    || generated_token_ids.len() == generated_token_count,
+            )
         }
-    };
-    memory_ticker.abort();
-    outcome
+        GeneratedToken::PrefillProgress {
+            completed_prefill_chunk_tokens,
+            ..
+        } => {
+            completed_prefill_chunk_token_counts.push(completed_prefill_chunk_tokens);
+            (
+                format!("prefill_progress chunk_tokens={completed_prefill_chunk_tokens}"),
+                false,
+            )
+        }
+        GeneratedToken::PromptProcessingPhaseStarted { .. } => {
+            ("prompt_processing_phase_started".to_owned(), false)
+        }
+        GeneratedToken::GenerationPreparationStarted { .. } => {
+            ("generation_preparation_started".to_owned(), false)
+        }
+        GeneratedToken::EndOfSequence => ("end_of_sequence".to_owned(), true),
+    }
 }
 
 fn safetensors_file_sizes(directory: &Path) -> std::io::Result<Vec<u64>> {

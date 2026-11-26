@@ -21,6 +21,9 @@ unused_must_use = "deny"
 
 [lints.clippy]
 all = { level = "warn", priority = -1 }
+# The workspace's function-length budget (clippy.toml); this table replaces
+# the workspace lints, so it must deny the lint itself.
+too_many_lines = "deny"
 
 [dependencies]
 mlx-bridge.workspace = true

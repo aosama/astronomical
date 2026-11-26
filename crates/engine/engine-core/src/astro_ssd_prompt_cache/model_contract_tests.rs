@@ -1,7 +1,8 @@
 //! Beside-source unit tests for the pure units extracted out of
 //! `AstroSsdPromptCacheModelContract::resolve` (`model_contract.rs`):
 //! input validation, block token count selection, SSD-quota block file
-//! sizing, and direct publication workspace derivation.
+//! sizing, block payload byte counts, and direct publication workspace
+//! derivation.
 
 use crate::astro_decoder_state_cache::{
     AstroDecoderStateCacheLayerLayout, AstroDecoderStateCacheLayout,
@@ -9,12 +10,14 @@ use crate::astro_decoder_state_cache::{
 };
 use crate::astro_ssd_prompt_cache::model_contract_error::AstroSsdPromptCacheModelContractError;
 
+use super::block_geometry::{capture_payload_byte_counts, resolve_block_file_geometry};
 use super::{
     BlockFileSizingInputs, BlockTokenCountSizingInputs, block_file_geometry_within_ssd_quota,
     configured_or_derived_block_token_count,
     direct_publication_workspace_bytes_for_block_token_count, exact_state_file_bytes,
-    maximum_block_manifest_file_bytes, validated_capture_budgets, validated_resolve_inputs,
+    validated_capture_budgets, validated_resolve_inputs,
 };
+use crate::astro_ssd_prompt_cache::model_contract_storage_geometry::maximum_block_manifest_file_bytes;
 
 const FIXTURE_MAXIMUM_CONTEXT_TOKEN_COUNT: usize = 128;
 const FIXTURE_PERSISTENCE_ALIGNMENT_TOKEN_COUNT: usize = 4;
@@ -436,4 +439,106 @@ fn should_accept_captured_state_exactly_at_both_budget_limits() {
     let validation = validated_capture_budgets(200, 200, 100, 100);
 
     assert!(matches!(validation, Ok(())));
+}
+
+#[test]
+fn should_add_the_boundary_snapshot_to_the_sequence_payload_of_a_whole_block() {
+    let payload_byte_counts =
+        capture_payload_byte_counts(8, 16, 32).expect("a small block should fit the platform word");
+
+    assert_eq!(
+        payload_byte_counts.sequence_state_payload_bytes_per_block,
+        128
+    );
+    assert_eq!(payload_byte_counts.capture_payload_bytes, 160);
+}
+
+#[test]
+fn should_count_only_the_boundary_snapshot_for_a_block_without_tokens() {
+    let payload_byte_counts =
+        capture_payload_byte_counts(8, 0, 32).expect("an empty block should not overflow");
+
+    assert_eq!(
+        payload_byte_counts.sequence_state_payload_bytes_per_block,
+        0
+    );
+    assert_eq!(payload_byte_counts.capture_payload_bytes, 32);
+}
+
+#[test]
+fn should_name_which_payload_total_overflowed_the_platform_word() {
+    let sequence_overflow = capture_payload_byte_counts(usize::MAX, 2, 0);
+    let capture_overflow = capture_payload_byte_counts(usize::MAX, 1, 1);
+
+    assert!(matches!(
+        sequence_overflow,
+        Err(AstroSsdPromptCacheModelContractError::SequenceStateBlockPayloadByteCountOverflow)
+    ));
+    assert!(matches!(
+        capture_overflow,
+        Err(AstroSsdPromptCacheModelContractError::CapturePayloadByteCountOverflow)
+    ));
+}
+
+#[test]
+fn should_resolve_a_configured_block_with_the_manifest_ceiling_for_its_context() {
+    let astro_decoder_state_cache_layout = synthetic_hybrid_layout(8);
+
+    let (resolved_geometry, manifest_file_bytes) = resolve_block_file_geometry(
+        Some(16),
+        &astro_decoder_state_cache_layout,
+        &block_token_count_sizing_inputs_fixture(128, 4, 8, 32),
+    )
+    .expect("an aligned configured block that fits the quota should resolve");
+
+    assert_eq!(resolved_geometry.block_token_count, 16);
+    assert_eq!(
+        manifest_file_bytes,
+        maximum_block_manifest_file_bytes(128).expect("the manifest ceiling should resolve")
+    );
+}
+
+#[test]
+fn should_derive_the_block_when_none_is_configured() {
+    let astro_decoder_state_cache_layout = synthetic_hybrid_layout(8);
+
+    let (resolved_geometry, _manifest_file_bytes) = resolve_block_file_geometry(
+        None,
+        &astro_decoder_state_cache_layout,
+        &block_token_count_sizing_inputs_fixture(128, 4, 8, 32),
+    )
+    .expect("the derived block should resolve");
+
+    // The boundary payload amortization target is ceil(32 / 8) = 4 tokens.
+    assert_eq!(resolved_geometry.block_token_count, 4);
+}
+
+#[test]
+fn should_refuse_a_configured_block_that_is_misaligned_or_whose_chain_misses_the_quota() {
+    let astro_decoder_state_cache_layout = synthetic_hybrid_layout(8);
+    let misaligned = resolve_block_file_geometry(
+        Some(6),
+        &astro_decoder_state_cache_layout,
+        &block_token_count_sizing_inputs_fixture(128, 4, 8, 32),
+    );
+    let one_byte_quota = BlockTokenCountSizingInputs {
+        global_ssd_quota_bytes: 1,
+        ..block_token_count_sizing_inputs_fixture(128, 4, 8, 32)
+    };
+    let over_quota =
+        resolve_block_file_geometry(Some(16), &astro_decoder_state_cache_layout, &one_byte_quota);
+
+    assert!(matches!(
+        misaligned,
+        Err(AstroSsdPromptCacheModelContractError::InvalidConfiguredBlockTokenCount { .. })
+    ));
+    assert!(matches!(
+        over_quota,
+        Err(
+            AstroSsdPromptCacheModelContractError::ConfiguredBlockChainExceedsSsdQuota {
+                configured_block_tokens: 16,
+                ..
+            }
+        )
+    ));
 }

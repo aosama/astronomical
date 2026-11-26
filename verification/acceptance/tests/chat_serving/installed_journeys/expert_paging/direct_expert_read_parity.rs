@@ -13,7 +13,8 @@
 //! whose `model_directory` names the sparse model and whose
 //! `paging_experiment.maximum_mlx_memory_gigabytes` sets the limit.
 
-use model_serving::Qwen3_5TextEngineTestControls;
+use model_serving::{Qwen3_5TextEngine, Qwen3_5TextEngineTestControls};
+use std::path::Path;
 use std::time::Duration;
 
 use ipc_protocol::RequestId;
@@ -22,7 +23,7 @@ use serial_test::serial;
 use test_harness::test_run::TestRunContext;
 use tokio::time::timeout;
 
-use super::decode_residency_attribution::{MEASURED_REQUEST_ID, probe_requests};
+use super::decode_residency_attribution::{MEASURED_REQUEST_ID, ProbeRequest, probe_requests};
 use crate::serving_acceptance::support::performance_attribution::{
     create_attributed_engine, load_engine_with_progress, run_attributed_generation,
 };
@@ -66,13 +67,28 @@ async fn compare_replies() {
             .streaming_prompt_processing_chunk_tokens,
     );
     load_engine_with_progress(&mut engine, "direct_expert_read_parity_model_load").await;
+    let measured_request = long_probe_request(&model_directory);
+    let replies =
+        serve_the_three_replies(&mut engine, &measured_request, &end_of_sequence_token_ids).await;
+    assert_direct_reply_matches_copied_reply(&replies);
+}
+
+fn long_probe_request(model_directory: &Path) -> ProbeRequest {
     let mut measured_request = None;
-    for probe_request in probe_requests(&model_directory) {
+    for probe_request in probe_requests(model_directory) {
         if probe_request.request_id == MEASURED_REQUEST_ID {
             measured_request = Some(probe_request);
         }
     }
-    let measured_request = measured_request.expect("the probe requests hold the long request");
+    measured_request.expect("the probe requests hold the long request")
+}
+
+/// Copying, direct, then copying again, in that order on one loaded model.
+async fn serve_the_three_replies(
+    engine: &mut Qwen3_5TextEngine,
+    measured_request: &ProbeRequest,
+    end_of_sequence_token_ids: &[u32],
+) -> Vec<Vec<u32>> {
     let mut replies = Vec::new();
     for (serving_index, (reads_into_tables, phase_name)) in [
         (false, "parity_copying"),
@@ -87,12 +103,12 @@ async fn compare_replies() {
             .await
             .expect("the engine takes the read path");
         let reply_token_ids = run_attributed_generation(
-            &mut engine,
+            engine,
             RequestId::new(FIRST_PARITY_REQUEST_ID + serving_index as u64),
             &measured_request.prompt_token_ids,
             phase_name,
             measured_request.output_token_count,
-            &end_of_sequence_token_ids,
+            end_of_sequence_token_ids,
         )
         .await;
         eprintln!(
@@ -102,6 +118,10 @@ async fn compare_replies() {
         );
         replies.push(reply_token_ids);
     }
+    replies
+}
+
+fn assert_direct_reply_matches_copied_reply(replies: &[Vec<u32>]) {
     let copying_repeats_itself = replies[0] == replies[2];
     eprintln!(
         "[direct-expert-read-parity] copying then copying again: {}",

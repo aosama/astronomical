@@ -16,12 +16,14 @@
 //! The journey asserts only shape (chunks complete, experts actually streamed,
 //! reads actually issued); the printed table is the diagnostic evidence.
 
+use std::ops::Range;
+use std::path::Path;
 use std::time::Duration;
 
 use model_serving::{
     CompleteResidencyHeadroomBoundary, PerformanceAttribution, PerformanceCounter,
-    PerformanceOperation, Qwen3_5ArtifactValidator, Qwen3_5TextModel,
-    model_memory_geometry_from_validated_artifact,
+    PerformanceOperation, Qwen3_5ArtifactValidator, Qwen3_5TextModel, RequestDecoderStateStack,
+    ValidatedQwen3_5Artifact, model_memory_geometry_from_validated_artifact,
 };
 use runtime_integration::MlxRuntime;
 use serial_test::serial;
@@ -46,7 +48,6 @@ async fn should_attribute_expert_streaming_per_paged_prefill_chunk() {
     .expect("the paged prefill attribution journey must finish within 60 seconds");
 }
 
-#[expect(clippy::too_many_lines)]
 async fn attribute_paged_prefill_chunks() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let model_directory = crate::common::configured_large_sparse_moe_streaming_model_directory();
@@ -54,8 +55,76 @@ async fn attribute_paged_prefill_chunks() {
         .validate(&model_directory, u32::from(OUTPUT_TOKEN_COUNT))
         .expect("the configured sparse artifact should validate");
     let qwen3_5_config = validated_artifact.config().clone();
+    let (complete_expert_payload_bytes, paging_ceiling_bytes) =
+        derive_paging_ceiling(&validated_artifact, &model_directory);
+
+    let prompt_token_ids =
+        prompt::prepare_reproduced_long_prompt_token_ids(PROMPT_TOKEN_COUNT, OUTPUT_TOKEN_COUNT);
+    assert!(
+        prompt_token_ids.len() >= PROMPT_TOKEN_COUNT,
+        "the reproduced Romeo and Juliet prompt must cover at least two full chunks"
+    );
+
+    let qwen3_5_model =
+        load_model_under_paging_ceiling(validated_artifact, &model_directory, paging_ceiling_bytes);
+    let mut request_decoder_state = crate::common::standard_request_decoder_state(&qwen3_5_config);
+    publish_request_open_residency_plan(&qwen3_5_model, prompt_token_ids.len());
+
+    let mut total_positional_read_bytes = 0_u64;
+    let mut total_streamed_payload_bytes = 0_u64;
+    let mut first_chunk_seated_bytes = 0_u64;
+    let final_prompt_token_index = prompt_token_ids.len() - 1;
+    let mut chunk_index = 0_usize;
+    for chunk_start in (0..final_prompt_token_index).step_by(PREFILL_CHUNK_TOKENS) {
+        let chunk_end = (chunk_start + PREFILL_CHUNK_TOKENS).min(final_prompt_token_index);
+        chunk_index += 1;
+        let (chunk_attribution, chunk_elapsed) = run_attributed_prefill_chunk(
+            &qwen3_5_model,
+            &prompt_token_ids,
+            chunk_start..chunk_end,
+            &mut request_decoder_state,
+        );
+        let chunk_counters = read_chunk_counters(&chunk_attribution);
+        if chunk_index == 1 {
+            first_chunk_seated_bytes = chunk_counters.seated_payload_bytes;
+        }
+        total_positional_read_bytes += chunk_counters.read_bytes;
+        total_streamed_payload_bytes += chunk_counters.streamed_payload_bytes;
+
+        print_chunk_attribution(
+            chunk_index,
+            chunk_end - chunk_start,
+            chunk_elapsed,
+            &chunk_counters,
+            &chunk_attribution,
+        );
+        assert!(
+            chunk_counters.streamed_payload_bytes > 0,
+            "under the paging ceiling every chunk must stream expert pages"
+        );
+        assert!(
+            chunk_counters.read_bytes > 0,
+            "every streamed chunk must issue positional reads"
+        );
+        print_astro_expert_cache_after_chunk(&qwen3_5_model, chunk_index);
+    }
+
+    assert_paged_prefill_did_not_restream_seated_layers(RestreamTotals {
+        chunk_count: chunk_index,
+        total_streamed_payload_bytes,
+        total_positional_read_bytes,
+        complete_expert_payload_bytes,
+        first_chunk_seated_bytes,
+    });
+}
+
+/// The complete expert payload and the paging ceiling this artifact derives.
+fn derive_paging_ceiling(
+    validated_artifact: &ValidatedQwen3_5Artifact,
+    model_directory: &Path,
+) -> (u64, u64) {
     let (model_geometry, required_headroom_bytes) =
-        model_memory_geometry_from_validated_artifact(&validated_artifact, &model_directory)
+        model_memory_geometry_from_validated_artifact(validated_artifact, model_directory)
             .expect("the sparse artifact should expose disk RAM geometry");
     let residency_boundary = CompleteResidencyHeadroomBoundary::from_model_geometry(
         model_geometry,
@@ -68,14 +137,17 @@ async fn attribute_paged_prefill_chunks() {
         "[paged-prefill-attribution] status=progress phase=derived_ceiling complete_expert_payload_bytes={} headroom_bytes={required_headroom_bytes} paging_ceiling_bytes={paging_ceiling_bytes}",
         model_geometry.complete_expert_payload_bytes
     );
+    (
+        model_geometry.complete_expert_payload_bytes,
+        paging_ceiling_bytes,
+    )
+}
 
-    let prompt_token_ids =
-        prompt::prepare_reproduced_long_prompt_token_ids(PROMPT_TOKEN_COUNT, OUTPUT_TOKEN_COUNT);
-    assert!(
-        prompt_token_ids.len() >= PROMPT_TOKEN_COUNT,
-        "the reproduced Romeo and Juliet prompt must cover at least two full chunks"
-    );
-
+fn load_model_under_paging_ceiling(
+    validated_artifact: ValidatedQwen3_5Artifact,
+    model_directory: &Path,
+    paging_ceiling_bytes: u64,
+) -> Qwen3_5TextModel {
     let runtime = MlxRuntime::initialize(
         runtime_integration::MlxMemoryLimits::new(
             usize::try_from(paging_ceiling_bytes).expect("the paging ceiling should fit usize"),
@@ -85,15 +157,19 @@ async fn attribute_paged_prefill_chunks() {
     )
     .expect("the attributed runtime should initialize");
     eprintln!("[paged-prefill-attribution] status=progress phase=model_load ETA_seconds=30");
-    let qwen3_5_model = Qwen3_5TextModel::load(
+    Qwen3_5TextModel::load(
         runtime,
         validated_artifact,
-        &model_directory,
+        model_directory,
         crate::common::standard_qwen3_5_model_chunking_configuration(),
     )
-    .expect("the configured model should load under the paging ceiling");
-    let mut request_decoder_state = crate::common::standard_request_decoder_state(&qwen3_5_config);
+    .expect("the configured model should load under the paging ceiling")
+}
 
+fn publish_request_open_residency_plan(
+    qwen3_5_model: &Qwen3_5TextModel,
+    prompt_token_count: usize,
+) {
     // Mirror the engine's request-open publication: the composed Prefill
     // leftover budget raises the retained-expert ceiling and freezes the
     // request-stable pin/stream contract before the first chunk executes.
@@ -101,7 +177,7 @@ async fn attribute_paged_prefill_chunks() {
     qwen3_5_model
         .enter_memory_phase_for_tests(
             model_serving::MemoryPhase::Prefill,
-            u64::try_from(prompt_token_ids.len()).unwrap_or(u64::MAX),
+            u64::try_from(prompt_token_count).unwrap_or(u64::MAX),
             u64::try_from(PREFILL_CHUNK_TOKENS).unwrap_or(u64::MAX),
             &mut request_open_attribution,
         )
@@ -112,120 +188,162 @@ async fn attribute_paged_prefill_chunks() {
         opening_astro_expert_cache_statistics.maximum_resident_payload_byte_count as f64
             / 1_073_741_824.0
     );
+}
 
-    let mut total_positional_read_bytes = 0_u64;
-    let mut total_streamed_payload_bytes = 0_u64;
-    let mut first_chunk_seated_bytes = 0_u64;
-    let final_prompt_token_index = prompt_token_ids.len() - 1;
-    let mut chunk_index = 0_usize;
-    for chunk_start in (0..final_prompt_token_index).step_by(PREFILL_CHUNK_TOKENS) {
-        let chunk_end = (chunk_start + PREFILL_CHUNK_TOKENS).min(final_prompt_token_index);
-        chunk_index += 1;
-        // The engine re-publishes the residency plan before every chunk advance
-        // (context position grows, learned reserves change); replicating that
-        // here keeps the probe faithful to serving behavior.
-        qwen3_5_model
-            .enter_memory_phase_for_tests(
-                model_serving::MemoryPhase::Prefill,
-                u64::try_from(prompt_token_ids.len()).unwrap_or(u64::MAX),
-                u64::try_from(chunk_end - chunk_start).unwrap_or(u64::MAX),
-                &mut PerformanceAttribution::enabled(),
+/// Publishes the chunk's residency plan, then prefills the chunk. Only the
+/// prefill is inside the timed region: the plan refresh before it and the
+/// counters read after it are not part of the chunk's wall time.
+fn run_attributed_prefill_chunk(
+    qwen3_5_model: &Qwen3_5TextModel,
+    prompt_token_ids: &[u32],
+    chunk_range: Range<usize>,
+    request_decoder_state: &mut RequestDecoderStateStack,
+) -> (PerformanceAttribution, Duration) {
+    // The engine re-publishes the residency plan before every chunk advance
+    // (context position grows, learned reserves change); replicating that
+    // here keeps the probe faithful to serving behavior.
+    qwen3_5_model
+        .enter_memory_phase_for_tests(
+            model_serving::MemoryPhase::Prefill,
+            u64::try_from(prompt_token_ids.len()).unwrap_or(u64::MAX),
+            u64::try_from(chunk_range.end - chunk_range.start).unwrap_or(u64::MAX),
+            &mut PerformanceAttribution::enabled(),
+        )
+        .expect("the per-chunk residency plan refresh should publish");
+    let chunk_started_at = std::time::Instant::now();
+    let mut chunk_attribution = PerformanceAttribution::enabled();
+    qwen3_5_model
+        .prefill_chunk_with_attribution_for_tests(
+            &prompt_token_ids[chunk_range.clone()],
+            u32::try_from(chunk_range.start)
+                .expect("the diagnostic prompt position should fit u32"),
+            request_decoder_state,
+            &mut chunk_attribution,
+        )
+        .expect("the attributed paged prefill chunk should complete");
+    (chunk_attribution, chunk_started_at.elapsed())
+}
+
+/// The counters one attributed chunk reports.
+struct ChunkCounters {
+    streamed_payload_bytes: u64,
+    seated_payload_bytes: u64,
+    full_hit_assignments: u64,
+    read_calls: u64,
+    read_bytes: u64,
+    read_elapsed_ns: u64,
+}
+
+fn read_chunk_counters(chunk_attribution: &PerformanceAttribution) -> ChunkCounters {
+    let streamed_payload_bytes =
+        chunk_attribution.counter_value(PerformanceCounter::RustExpertStreamingPayloadByteCount);
+    let seated_payload_bytes = chunk_attribution
+        .counter_value(PerformanceCounter::ExpertResidencyReadThroughSeatedCompletePayloadBytes);
+    let full_hit_assignments =
+        chunk_attribution.counter_value(PerformanceCounter::RetainedRouteAssignmentHitCount);
+    let (read_calls, read_bytes, read_elapsed_ns) = chunk_attribution
+        .positional_file_read_metrics()
+        .map(|metrics| metrics.snapshot())
+        .map(|snapshot| {
+            (
+                snapshot.read_call_count,
+                snapshot.read_byte_count,
+                snapshot.total_read_elapsed_nanoseconds,
             )
-            .expect("the per-chunk residency plan refresh should publish");
-        let chunk_started_at = std::time::Instant::now();
-        let mut chunk_attribution = PerformanceAttribution::enabled();
-        qwen3_5_model
-            .prefill_chunk_with_attribution_for_tests(
-                &prompt_token_ids[chunk_start..chunk_end],
-                u32::try_from(chunk_start).expect("the diagnostic prompt position should fit u32"),
-                &mut request_decoder_state,
-                &mut chunk_attribution,
-            )
-            .expect("the attributed paged prefill chunk should complete");
-        let chunk_elapsed = chunk_started_at.elapsed();
-
-        let streamed_payload_bytes = chunk_attribution
-            .counter_value(PerformanceCounter::RustExpertStreamingPayloadByteCount);
-        let seated_payload_bytes = chunk_attribution.counter_value(
-            PerformanceCounter::ExpertResidencyReadThroughSeatedCompletePayloadBytes,
-        );
-        if chunk_index == 1 {
-            first_chunk_seated_bytes = seated_payload_bytes;
-        }
-        let full_hit_assignments =
-            chunk_attribution.counter_value(PerformanceCounter::RetainedRouteAssignmentHitCount);
-        let (read_calls, read_bytes, read_elapsed_ns) = chunk_attribution
-            .positional_file_read_metrics()
-            .map(|metrics| metrics.snapshot())
-            .map(|snapshot| {
-                (
-                    snapshot.read_call_count,
-                    snapshot.read_byte_count,
-                    snapshot.total_read_elapsed_nanoseconds,
-                )
-            })
-            .unwrap_or((0, 0, 0));
-        total_positional_read_bytes += read_bytes;
-        total_streamed_payload_bytes += streamed_payload_bytes;
-
-        let stream_prep = operation_summary(
-            &chunk_attribution,
-            PerformanceOperation::RustExpertStreamingLayerPreparation,
-        );
-        let materialization_wait = operation_summary(
-            &chunk_attribution,
-            PerformanceOperation::MandatoryPrefillCompleteLayerMaterializationWait,
-        );
-        let residency_planning = operation_summary(
-            &chunk_attribution,
-            PerformanceOperation::ExpertResidencyPlanning,
-        );
-        let admission = operation_summary(
-            &chunk_attribution,
-            PerformanceOperation::MemoryAdmissionSnapshot,
-        );
-        let moe_graph = operation_summary(
-            &chunk_attribution,
-            PerformanceOperation::PagedMoeGraphConstruction,
-        );
-        let mixture_wait = operation_summary(
-            &chunk_attribution,
-            PerformanceOperation::PrefillMixtureOfValuesGraphicsProcessorCompletionWait,
-        );
-        eprintln!(
-            "[paged-prefill-attribution] chunk={chunk_index} tokens={} wall_ms={} streamed_gb={:.3} seated_gb={:.3} full_hit_assignments={full_hit_assignments} read_calls={read_calls} read_gb={:.3} read_ms={:.0} | ms: stream_prep={stream_prep} materialize_wait={materialization_wait} residency_plan={residency_planning} admission={admission} moe_graph={moe_graph} mixture_gpu_wait={mixture_wait}",
-            chunk_end - chunk_start,
-            chunk_elapsed.as_millis() as f64,
-            streamed_payload_bytes as f64 / 1_073_741_824.0,
-            seated_payload_bytes as f64 / 1_073_741_824.0,
-            read_bytes as f64 / 1_073_741_824.0,
-            read_elapsed_ns as f64 / 1e6,
-        );
-        assert!(
-            streamed_payload_bytes > 0,
-            "under the paging ceiling every chunk must stream expert pages"
-        );
-        assert!(
-            read_bytes > 0,
-            "every streamed chunk must issue positional reads"
-        );
-        let astro_expert_cache_statistics = qwen3_5_model.astro_expert_cache_statistics();
-        eprintln!(
-            "[paged-prefill-attribution] chunk={chunk_index} astro_expert_cache_after: entries={} resident_gb={:.3} complete_layers={} evictions={} max_gb={:.3}",
-            astro_expert_cache_statistics.entry_count,
-            astro_expert_cache_statistics.resident_payload_byte_count as f64 / 1_073_741_824.0,
-            astro_expert_cache_statistics.complete_layer_count,
-            astro_expert_cache_statistics.eviction_count,
-            astro_expert_cache_statistics.maximum_resident_payload_byte_count as f64
-                / 1_073_741_824.0,
-        );
+        })
+        .unwrap_or((0, 0, 0));
+    ChunkCounters {
+        streamed_payload_bytes,
+        seated_payload_bytes,
+        full_hit_assignments,
+        read_calls,
+        read_bytes,
+        read_elapsed_ns,
     }
+}
 
-    let complete_expert_payload_bytes = model_geometry.complete_expert_payload_bytes;
+fn print_chunk_attribution(
+    chunk_index: usize,
+    chunk_token_count: usize,
+    chunk_elapsed: Duration,
+    chunk_counters: &ChunkCounters,
+    chunk_attribution: &PerformanceAttribution,
+) {
+    let ChunkCounters {
+        streamed_payload_bytes,
+        seated_payload_bytes,
+        full_hit_assignments,
+        read_calls,
+        read_bytes,
+        read_elapsed_ns,
+    } = *chunk_counters;
+    let stream_prep = operation_summary(
+        chunk_attribution,
+        PerformanceOperation::RustExpertStreamingLayerPreparation,
+    );
+    let materialization_wait = operation_summary(
+        chunk_attribution,
+        PerformanceOperation::MandatoryPrefillCompleteLayerMaterializationWait,
+    );
+    let residency_planning = operation_summary(
+        chunk_attribution,
+        PerformanceOperation::ExpertResidencyPlanning,
+    );
+    let admission = operation_summary(
+        chunk_attribution,
+        PerformanceOperation::MemoryAdmissionSnapshot,
+    );
+    let moe_graph = operation_summary(
+        chunk_attribution,
+        PerformanceOperation::PagedMoeGraphConstruction,
+    );
+    let mixture_wait = operation_summary(
+        chunk_attribution,
+        PerformanceOperation::PrefillMixtureOfValuesGraphicsProcessorCompletionWait,
+    );
+    eprintln!(
+        "[paged-prefill-attribution] chunk={chunk_index} tokens={chunk_token_count} wall_ms={} streamed_gb={:.3} seated_gb={:.3} full_hit_assignments={full_hit_assignments} read_calls={read_calls} read_gb={:.3} read_ms={:.0} | ms: stream_prep={stream_prep} materialize_wait={materialization_wait} residency_plan={residency_planning} admission={admission} moe_graph={moe_graph} mixture_gpu_wait={mixture_wait}",
+        chunk_elapsed.as_millis() as f64,
+        streamed_payload_bytes as f64 / 1_073_741_824.0,
+        seated_payload_bytes as f64 / 1_073_741_824.0,
+        read_bytes as f64 / 1_073_741_824.0,
+        read_elapsed_ns as f64 / 1e6,
+    );
+}
+
+fn print_astro_expert_cache_after_chunk(qwen3_5_model: &Qwen3_5TextModel, chunk_index: usize) {
+    let astro_expert_cache_statistics = qwen3_5_model.astro_expert_cache_statistics();
+    eprintln!(
+        "[paged-prefill-attribution] chunk={chunk_index} astro_expert_cache_after: entries={} resident_gb={:.3} complete_layers={} evictions={} max_gb={:.3}",
+        astro_expert_cache_statistics.entry_count,
+        astro_expert_cache_statistics.resident_payload_byte_count as f64 / 1_073_741_824.0,
+        astro_expert_cache_statistics.complete_layer_count,
+        astro_expert_cache_statistics.eviction_count,
+        astro_expert_cache_statistics.maximum_resident_payload_byte_count as f64 / 1_073_741_824.0,
+    );
+}
+
+/// What every chunk streamed, read and seated, summed over the whole prompt.
+struct RestreamTotals {
+    chunk_count: usize,
+    total_streamed_payload_bytes: u64,
+    total_positional_read_bytes: u64,
+    complete_expert_payload_bytes: u64,
+    first_chunk_seated_bytes: u64,
+}
+
+fn assert_paged_prefill_did_not_restream_seated_layers(restream_totals: RestreamTotals) {
+    let RestreamTotals {
+        chunk_count,
+        total_streamed_payload_bytes,
+        total_positional_read_bytes,
+        complete_expert_payload_bytes,
+        first_chunk_seated_bytes,
+    } = restream_totals;
     let restream_multiplier =
         total_streamed_payload_bytes as f64 / complete_expert_payload_bytes.max(1) as f64;
     eprintln!(
-        "[paged-prefill-attribution] summary chunks={chunk_index} total_streamed_gb={:.3} total_read_gb={:.3} complete_expert_payload_gb={:.3} logical_restream_multiplier={restream_multiplier:.2}",
+        "[paged-prefill-attribution] summary chunks={chunk_count} total_streamed_gb={:.3} total_read_gb={:.3} complete_expert_payload_gb={:.3} logical_restream_multiplier={restream_multiplier:.2}",
         total_streamed_payload_bytes as f64 / 1_073_741_824.0,
         total_positional_read_bytes as f64 / 1_073_741_824.0,
         complete_expert_payload_bytes as f64 / 1_073_741_824.0,

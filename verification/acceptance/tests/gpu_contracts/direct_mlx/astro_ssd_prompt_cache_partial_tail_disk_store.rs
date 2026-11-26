@@ -1,4 +1,10 @@
-use model_serving::AstroSsdPromptCachePublicationOutcome;
+use std::path::Path;
+
+use model_serving::{
+    AstroSsdPromptCacheBlockKey, AstroSsdPromptCacheDiskStore,
+    AstroSsdPromptCachePublicationOutcome,
+};
+use runtime_integration::MlxRuntime;
 
 use super::astro_ssd_prompt_cache_disk_store_support::*;
 use crate::common::qwen3_5_moe;
@@ -70,7 +76,6 @@ async fn should_publish_a_partial_tail_block_and_survive_a_rescan() {
 }
 
 #[tokio::test]
-#[expect(clippy::too_many_lines)]
 async fn should_supersede_only_strictly_shorter_tail_siblings() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let runtime = runtime_with_shared_limits();
@@ -86,46 +91,23 @@ async fn should_supersede_only_strictly_shorter_tail_siblings() {
     let full_block_key = parent_block_key
         .for_child_block(&block_tokens_for_seed(1))
         .expect("the test should hash the full child block");
-    astro_ssd_prompt_cache
-        .publish_block(
-            &runtime,
-            &parent_block_key,
-            None,
-            &synthetic_kv_block_tensors(&runtime),
-            &synthetic_recurrent_snapshot_tensors(&runtime),
-        )
-        .expect("the test should publish the root block");
-    astro_ssd_prompt_cache
-        .publish_block(
-            &runtime,
-            &full_block_key,
-            Some(&parent_block_key),
-            &synthetic_kv_block_tensors(&runtime),
-            &synthetic_recurrent_snapshot_tensors(&runtime),
-        )
-        .expect("the test should publish the full child block");
+    publish_root_and_full_child_blocks(
+        &runtime,
+        &astro_ssd_prompt_cache,
+        (&parent_block_key, &full_block_key),
+    );
 
     let shorter_tail_token_count = model_contract.block_token_count() / 4;
     let shorter_tail_block_key = parent_block_key
         .for_child_block(&tail_tokens_for_count(shorter_tail_token_count))
         .expect("the test should hash the shorter tail");
-    astro_ssd_prompt_cache
-        .publish_block(
-            &runtime,
-            &shorter_tail_block_key,
-            Some(&parent_block_key),
-            &synthetic_tensors_for_contract(
-                &runtime,
-                &sequence_tensor_layouts(),
-                shorter_tail_token_count,
-            ),
-            &synthetic_tensors_for_contract(
-                &runtime,
-                &boundary_tensor_layouts(),
-                shorter_tail_token_count,
-            ),
-        )
-        .expect("the test should publish the shorter tail");
+    publish_tail_block(
+        &runtime,
+        &astro_ssd_prompt_cache,
+        (&parent_block_key, &shorter_tail_block_key),
+        shorter_tail_token_count,
+        "the test should publish the shorter tail",
+    );
 
     // A longer tail at the same chain position supersedes the shorter one but
     // must keep the equal-length sibling and the full block.
@@ -139,42 +121,89 @@ async fn should_supersede_only_strictly_shorter_tail_siblings() {
     let equal_length_tail_block_key = parent_block_key
         .for_child_block(&equal_length_tail_tokens)
         .expect("the test should hash the equal-length tail");
-    astro_ssd_prompt_cache
-        .publish_block(
-            &runtime,
-            &equal_length_tail_block_key,
-            Some(&parent_block_key),
-            &synthetic_tensors_for_contract(
-                &runtime,
-                &sequence_tensor_layouts(),
-                longer_tail_token_count,
-            ),
-            &synthetic_tensors_for_contract(
-                &runtime,
-                &boundary_tensor_layouts(),
-                longer_tail_token_count,
-            ),
-        )
-        .expect("the test should publish the equal-length tail");
-    astro_ssd_prompt_cache
-        .publish_block(
-            &runtime,
-            &longer_tail_block_key,
-            Some(&parent_block_key),
-            &synthetic_tensors_for_contract(
-                &runtime,
-                &sequence_tensor_layouts(),
-                longer_tail_token_count,
-            ),
-            &synthetic_tensors_for_contract(
-                &runtime,
-                &boundary_tensor_layouts(),
-                longer_tail_token_count,
-            ),
-        )
-        .expect("the test should publish the longer tail");
+    publish_tail_block(
+        &runtime,
+        &astro_ssd_prompt_cache,
+        (&parent_block_key, &equal_length_tail_block_key),
+        longer_tail_token_count,
+        "the test should publish the equal-length tail",
+    );
+    publish_tail_block(
+        &runtime,
+        &astro_ssd_prompt_cache,
+        (&parent_block_key, &longer_tail_block_key),
+        longer_tail_token_count,
+        "the test should publish the longer tail",
+    );
 
-    let blocks_directory = astro_ssd_prompt_cache_directory.path().join("blocks");
+    assert_only_the_strictly_shorter_tail_was_superseded(
+        &astro_ssd_prompt_cache_directory.path().join("blocks"),
+        &astro_ssd_prompt_cache,
+        [
+            &shorter_tail_block_key,
+            &equal_length_tail_block_key,
+            &longer_tail_block_key,
+            &full_block_key,
+        ],
+    );
+}
+
+fn publish_root_and_full_child_blocks(
+    runtime: &MlxRuntime,
+    astro_ssd_prompt_cache: &AstroSsdPromptCacheDiskStore,
+    root_and_full_child_block_keys: (&AstroSsdPromptCacheBlockKey, &AstroSsdPromptCacheBlockKey),
+) {
+    let (root_block_key, full_child_block_key) = root_and_full_child_block_keys;
+    astro_ssd_prompt_cache
+        .publish_block(
+            runtime,
+            root_block_key,
+            None,
+            &synthetic_kv_block_tensors(runtime),
+            &synthetic_recurrent_snapshot_tensors(runtime),
+        )
+        .expect("the test should publish the root block");
+    astro_ssd_prompt_cache
+        .publish_block(
+            runtime,
+            full_child_block_key,
+            Some(root_block_key),
+            &synthetic_kv_block_tensors(runtime),
+            &synthetic_recurrent_snapshot_tensors(runtime),
+        )
+        .expect("the test should publish the full child block");
+}
+
+fn publish_tail_block(
+    runtime: &MlxRuntime,
+    astro_ssd_prompt_cache: &AstroSsdPromptCacheDiskStore,
+    parent_and_tail_block_keys: (&AstroSsdPromptCacheBlockKey, &AstroSsdPromptCacheBlockKey),
+    tail_token_count: usize,
+    publication_failure_message: &str,
+) {
+    let (parent_block_key, tail_block_key) = parent_and_tail_block_keys;
+    astro_ssd_prompt_cache
+        .publish_block(
+            runtime,
+            tail_block_key,
+            Some(parent_block_key),
+            &synthetic_tensors_for_contract(runtime, &sequence_tensor_layouts(), tail_token_count),
+            &synthetic_tensors_for_contract(runtime, &boundary_tensor_layouts(), tail_token_count),
+        )
+        .expect(publication_failure_message);
+}
+
+fn assert_only_the_strictly_shorter_tail_was_superseded(
+    blocks_directory: &Path,
+    astro_ssd_prompt_cache: &AstroSsdPromptCacheDiskStore,
+    shorter_equal_longer_and_full_block_keys: [&AstroSsdPromptCacheBlockKey; 4],
+) {
+    let [
+        shorter_tail_block_key,
+        equal_length_tail_block_key,
+        longer_tail_block_key,
+        full_block_key,
+    ] = shorter_equal_longer_and_full_block_keys;
     assert!(
         !blocks_directory
             .join(hex::encode(shorter_tail_block_key.block_hash()))
@@ -217,24 +246,11 @@ async fn should_keep_full_block_publication_free_of_tail_supersede() {
     let full_child_block_key = root_block_key
         .for_child_block(&block_tokens_for_seed(1))
         .expect("the test should hash the full child block");
-    astro_ssd_prompt_cache
-        .publish_block(
-            &runtime,
-            &root_block_key,
-            None,
-            &synthetic_kv_block_tensors(&runtime),
-            &synthetic_recurrent_snapshot_tensors(&runtime),
-        )
-        .expect("the test should publish the root block");
-    astro_ssd_prompt_cache
-        .publish_block(
-            &runtime,
-            &full_child_block_key,
-            Some(&root_block_key),
-            &synthetic_kv_block_tensors(&runtime),
-            &synthetic_recurrent_snapshot_tensors(&runtime),
-        )
-        .expect("the test should publish the full child block");
+    publish_root_and_full_child_blocks(
+        &runtime,
+        &astro_ssd_prompt_cache,
+        (&root_block_key, &full_child_block_key),
+    );
 
     assert_eq!(astro_ssd_prompt_cache.sequence_state_block_count(), 2);
     assert!(

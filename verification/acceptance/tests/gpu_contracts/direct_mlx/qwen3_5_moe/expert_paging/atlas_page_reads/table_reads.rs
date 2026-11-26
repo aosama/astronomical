@@ -14,6 +14,12 @@ use super::cold_page_plan::PlannedPage;
 use super::macos_file_cache_bypassing_io::{open_bypassing_macos_file_cache, scatter_read_record};
 use super::page_read_shapes::{TimedPage, mlx_dtype, page_tensor_shape};
 
+mod native_reader_fetch_timing;
+use native_reader_fetch_timing::{
+    NativeReaderFetchRig, print_median_fetch_time, start_fetch_condition_background_work,
+    time_native_reader_fetches,
+};
+
 /// One table per tensor, sized for a whole layer and already in memory.
 pub(super) fn empty_tables(runtime: &MlxRuntime, atlas: &AtlasTestFile) -> Vec<MlxArray> {
     let mut tables = Vec::with_capacity(atlas.slots.len());
@@ -445,88 +451,21 @@ pub(super) fn report_native_reader_fetch_time(
         return;
     };
     let fetch_expert_count = first_page.expert_ids.len();
-    let mut tables = empty_tables(runtime, atlas);
-    let atlas_file = open_bypassing_macos_file_cache(&atlas.path);
-    let native_reader = ExpertRecordReader::new(NATIVE_READER_HELPER_THREAD_COUNT)
-        .expect("the native reader should start");
-    let table_slot_stride = match fetch_condition {
-        FetchCondition::ScatteredSlots => 13,
-        FetchCondition::NeighbouringSlots
-        | FetchCondition::NeighbouringRecords
-        | FetchCondition::DuringEvictionSweep
-        | FetchCondition::AfterAnIdleMillisecond
-        | FetchCondition::AfterAnIdleMillisecondWithStorageKeptBusy
-        | FetchCondition::AfterAnIdleMillisecondWithReaderKeepingStorageAwake { .. } => 1,
-    };
-    let _eviction_sweep = matches!(fetch_condition, FetchCondition::DuringEvictionSweep)
-        .then(|| EvictionSweep::start(&atlas.path));
-    if let FetchCondition::AfterAnIdleMillisecondWithReaderKeepingStorageAwake {
-        pause_microseconds,
-    } = fetch_condition
-    {
-        native_reader.keep_storage_awake(
-            Duration::from_micros(pause_microseconds),
-            Duration::from_millis(20),
-        );
-    }
-    let _storage_kept_busy = matches!(
+    let mut fetch_rig = NativeReaderFetchRig::open(runtime, atlas);
+    let (_eviction_sweep, _storage_kept_busy) =
+        start_fetch_condition_background_work(&fetch_rig.native_reader, atlas, fetch_condition);
+    let mut fetch_milliseconds = time_native_reader_fetches(
+        atlas,
+        planned_pages,
+        residency_checker,
         fetch_condition,
-        FetchCondition::AfterAnIdleMillisecondWithStorageKeptBusy
-    )
-    .then(|| StorageKeptBusy::start(&atlas.path));
-    let mut fetch_milliseconds = Vec::with_capacity(FETCHES_TIMED_AT_ONE_SIZE);
-    for planned_page in planned_pages {
-        if fetch_milliseconds.len() == FETCHES_TIMED_AT_ONE_SIZE {
-            break;
-        }
-        if residency_checker.atlas_page_is_in_macos_file_cache(
-            atlas,
-            planned_page.atlas_layer_position,
-            &planned_page.expert_ids,
-        ) {
-            continue;
-        }
-        if matches!(
-            fetch_condition,
-            FetchCondition::AfterAnIdleMillisecond
-                | FetchCondition::AfterAnIdleMillisecondWithStorageKeptBusy
-                | FetchCondition::AfterAnIdleMillisecondWithReaderKeepingStorageAwake { .. }
-        ) {
-            std::thread::sleep(Duration::from_millis(1));
-        }
-        let neighbouring_page;
-        let planned_page = if matches!(fetch_condition, FetchCondition::NeighbouringRecords) {
-            neighbouring_page = page_of_neighbouring_records(atlas, planned_page);
-            &neighbouring_page
-        } else {
-            planned_page
-        };
-        let fetch_elapsed = read_records_into_tables_with_native_reader(
-            &native_reader,
-            atlas,
-            &atlas_file,
-            planned_page,
-            &mut tables,
-            0,
-            table_slot_stride,
-            2,
-        );
-        fetch_milliseconds.push(fetch_elapsed.as_secs_f64() * 1_000.0);
-    }
-    if fetch_milliseconds.is_empty() {
-        eprintln!(
-            "[fetch-size] {fetch_expert_count} experts: no pages outside the macos_file_cache"
-        );
-        return;
-    }
-    fetch_milliseconds.sort_by(f64::total_cmp);
-    let median_milliseconds = fetch_milliseconds[fetch_milliseconds.len() / 2];
-    let fetch_megabytes =
-        (atlas.record_byte_count * fetch_expert_count as u64) as f64 / 1_048_576.0;
-    eprintln!(
-        "[fetch-size] {fetch_expert_count:>2} experts ({fetch_megabytes:5.1} MB), {fetch_condition:?}: {median_milliseconds:.3} ms a fetch over {} fetches, {:.1} GB/s",
-        fetch_milliseconds.len(),
-        fetch_megabytes / 1024.0 / (median_milliseconds / 1_000.0),
+        &mut fetch_rig,
+    );
+    print_median_fetch_time(
+        atlas,
+        fetch_expert_count,
+        fetch_condition,
+        &mut fetch_milliseconds,
     );
 }
 

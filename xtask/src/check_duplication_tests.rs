@@ -12,12 +12,11 @@ use crate::check_duplication::repeated_blocks::{
     measure_repeated_blocks, substantial_block_starts,
 };
 use crate::check_duplication::report::{measurement_lines, verdict_line};
-use crate::check_duplication::source_classification::{
-    area_of, is_production_source, is_skipped_directory_name,
-};
+use crate::check_duplication::source_classification::{area_of, is_production_source};
 use crate::check_duplication::source_normalization::{
     is_substantial_code_line, mask_family_names, normalize_code_lines,
 };
+use crate::workspace_source_walk::is_skipped_directory_name;
 
 /// Six distinct substantial lines: one repeated block when two files hold
 /// them in this order.
