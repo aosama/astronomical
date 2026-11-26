@@ -1,5 +1,8 @@
 //! Transactional typed runtime replacement for autoregressive and image models.
 
+use super::worker_engines::{LoadedReplacementOf, ModelFactoryRuntimeOf, WorkerEngines};
+use crate::DecisionEngine as _;
+use crate::EmbeddingEngine as _;
 use ipc_protocol::{
     ImageGenerationFailureReason, MlxMemorySnapshotSource, ProtocolWriter,
     WorkerDecisionCapabilities, WorkerEvent, WorkerModelCapabilities, WorkerModelConfiguration,
@@ -124,33 +127,7 @@ pub(super) struct LoadStatusEvents {
     pub(super) draft_model_event: Option<WorkerEvent>,
 }
 
-impl<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine, DecisionsEngine, TextToSpeechEngine>
-    EngineBackedWorker<
-        Processor,
-        Engine,
-        Factory,
-        ImageEngine,
-        EmbeddingsEngine,
-        DecisionsEngine,
-        TextToSpeechEngine,
-    >
-where
-    Processor: ModelGenerationProcessor + Send + 'static,
-    Engine: InferenceEngine<Request = Processor::InferenceRequest> + Send + 'static,
-    Factory: ModelFactory<
-            Processor,
-            Engine,
-            ImageEngine,
-            EmbeddingsEngine,
-            DecisionsEngine,
-            TextToSpeechEngine,
-        > + Send
-        + 'static,
-    ImageEngine: ImageGenerationEngine,
-    EmbeddingsEngine: crate::EmbeddingEngine,
-    DecisionsEngine: crate::DecisionEngine,
-    TextToSpeechEngine: crate::SpeechEngine,
-{
+impl<Engines: WorkerEngines> EngineBackedWorker<Engines> {
     pub(super) async fn swap_model<WriteTransport>(
         &mut self,
         model_directory: &str,
@@ -246,27 +223,10 @@ where
     /// embedding engines load synchronously with identity verification.
     async fn load_replacement_runtime<WriteTransport>(
         &self,
-        factory_runtime: ModelFactoryRuntime<
-            Processor,
-            Engine,
-            ImageEngine,
-            EmbeddingsEngine,
-            DecisionsEngine,
-            TextToSpeechEngine,
-        >,
+        factory_runtime: ModelFactoryRuntimeOf<Engines>,
         model_configuration: &WorkerModelConfiguration,
         event_writer: &mut ProtocolWriter<WriteTransport>,
-    ) -> Result<
-        LoadedReplacement<
-            Processor,
-            Engine,
-            ImageEngine,
-            EmbeddingsEngine,
-            DecisionsEngine,
-            TextToSpeechEngine,
-        >,
-        WorkerRuntimeError,
-    >
+    ) -> Result<LoadedReplacementOf<Engines>, WorkerRuntimeError>
     where
         WriteTransport: AsyncWrite + Unpin,
     {
@@ -302,26 +262,9 @@ where
     /// decision, embedding or speech engine.
     async fn load_single_shot_replacement(
         &self,
-        single_shot_runtime: ModelFactoryRuntime<
-            Processor,
-            Engine,
-            ImageEngine,
-            EmbeddingsEngine,
-            DecisionsEngine,
-            TextToSpeechEngine,
-        >,
+        single_shot_runtime: ModelFactoryRuntimeOf<Engines>,
         model_configuration: &WorkerModelConfiguration,
-    ) -> Result<
-        LoadedReplacement<
-            Processor,
-            Engine,
-            ImageEngine,
-            EmbeddingsEngine,
-            DecisionsEngine,
-            TextToSpeechEngine,
-        >,
-        WorkerRuntimeError,
-    > {
+    ) -> Result<LoadedReplacementOf<Engines>, WorkerRuntimeError> {
         match single_shot_runtime {
             ModelFactoryRuntime::Decisions(decision_engine) => {
                 self.load_decision_replacement(decision_engine, model_configuration)
@@ -339,22 +282,12 @@ where
     /// facts carry into the worker state.
     async fn load_autoregressive_replacement<WriteTransport>(
         &self,
-        processor: Processor,
-        engine: Engine,
+        processor: Engines::Processor,
+        engine: Engines::Engine,
         engine_placement: EnginePlacement,
         model_configuration: &WorkerModelConfiguration,
         event_writer: &mut ProtocolWriter<WriteTransport>,
-    ) -> Result<
-        LoadedReplacement<
-            Processor,
-            Engine,
-            ImageEngine,
-            EmbeddingsEngine,
-            DecisionsEngine,
-            TextToSpeechEngine,
-        >,
-        WorkerRuntimeError,
-    >
+    ) -> Result<LoadedReplacementOf<Engines>, WorkerRuntimeError>
     where
         WriteTransport: AsyncWrite + Unpin,
     {
@@ -389,19 +322,9 @@ where
     /// selected model.
     async fn load_image_replacement(
         &self,
-        mut image_engine: ImageEngine,
+        mut image_engine: Engines::ImageEngine,
         model_configuration: &WorkerModelConfiguration,
-    ) -> Result<
-        LoadedReplacement<
-            Processor,
-            Engine,
-            ImageEngine,
-            EmbeddingsEngine,
-            DecisionsEngine,
-            TextToSpeechEngine,
-        >,
-        WorkerRuntimeError,
-    > {
+    ) -> Result<LoadedReplacementOf<Engines>, WorkerRuntimeError> {
         let image_load_result = image_engine.load().map_err(|failure_reason| {
                 tracing::error!(model_directory = ?model_configuration.model_id(), reason = ?failure_reason, "image engine load failed after swap creation");
                 WorkerRuntimeError::ModelSwapFailed {
@@ -438,19 +361,9 @@ where
     /// the selected model.
     async fn load_embedding_replacement(
         &self,
-        mut embedding_engine: EmbeddingsEngine,
+        mut embedding_engine: Engines::EmbeddingsEngine,
         model_configuration: &WorkerModelConfiguration,
-    ) -> Result<
-        LoadedReplacement<
-            Processor,
-            Engine,
-            ImageEngine,
-            EmbeddingsEngine,
-            DecisionsEngine,
-            TextToSpeechEngine,
-        >,
-        WorkerRuntimeError,
-    > {
+    ) -> Result<LoadedReplacementOf<Engines>, WorkerRuntimeError> {
         let embedding_load_result = embedding_engine.load().map_err(|failure_reason| {
                 tracing::error!(model_directory = ?model_configuration.model_id(), reason = ?failure_reason, "embedding engine load failed after swap creation");
                 WorkerRuntimeError::ModelSwapFailed {
@@ -486,19 +399,9 @@ where
     /// Loads the decision replacement and builds its swapped event.
     fn load_decision_replacement(
         &self,
-        mut decision_engine: DecisionsEngine,
+        mut decision_engine: Engines::DecisionsEngine,
         model_configuration: &WorkerModelConfiguration,
-    ) -> Result<
-        LoadedReplacement<
-            Processor,
-            Engine,
-            ImageEngine,
-            EmbeddingsEngine,
-            DecisionsEngine,
-            TextToSpeechEngine,
-        >,
-        WorkerRuntimeError,
-    > {
+    ) -> Result<LoadedReplacementOf<Engines>, WorkerRuntimeError> {
         let decision_load_result = match decision_engine.load() {
             Ok(decision_load_result) => decision_load_result,
             Err(load_failure) => {

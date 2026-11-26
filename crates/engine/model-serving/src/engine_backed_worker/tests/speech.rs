@@ -3,6 +3,7 @@
 //! between segments, refuses what it cannot speak, and finalizes every
 //! request.
 
+use crate::FactoryEngines;
 use std::collections::VecDeque;
 use std::sync::Mutex;
 
@@ -35,13 +36,15 @@ type ScriptedSpeechRuntime = ModelFactoryRuntime<
 >;
 
 type SpeechWorker = EngineBackedWorker<
-    ScriptedChatProcessor,
-    ScriptedChatEngine,
-    ScriptedSpeechFactory,
-    ImageGenerationUnavailableEngine,
-    EmbeddingUnavailableEngine,
-    DecisionUnavailableEngine,
-    ScriptedSpeechEngine,
+    FactoryEngines<
+        ScriptedChatProcessor,
+        ScriptedChatEngine,
+        ScriptedSpeechFactory,
+        ImageGenerationUnavailableEngine,
+        EmbeddingUnavailableEngine,
+        DecisionUnavailableEngine,
+        ScriptedSpeechEngine,
+    >,
 >;
 
 type DaemonReader = ProtocolReader<tokio::io::ReadHalf<tokio::io::DuplexStream>>;

@@ -1,9 +1,8 @@
 //! Live MLX memory ceiling updates against the worker-lifetime wired budget.
 
 use super::ipc_worker_transport::open_ipc_worker_transport;
-use super::scripted_model_factory_test_doubles::LazyScriptedModelFactory;
+use super::scripted_model_factory_test_doubles::{LazyScriptedModelFactory, ScriptedFactoryWorker};
 use super::support::{close_worker_transport, next_event};
-use crate::EngineBackedWorker;
 use ipc_protocol::{WorkerCommand, WorkerEvent};
 use std::sync::atomic::AtomicUsize;
 use std::sync::{Arc, Mutex};
@@ -18,22 +17,23 @@ async fn applied_live_mlx_memory_ceiling_bytes(
     wired_residency_budget_bytes: Option<u64>,
     requested_mlx_memory_ceiling_bytes: u64,
 ) -> u64 {
-    let engine_worker = EngineBackedWorker::idle_with_model_factory_and_machine_mlx_memory_ceiling(
-        LazyScriptedModelFactory {
-            model_factory_call_count: Arc::new(AtomicUsize::new(0)),
-            mlx_memory_limits: (
-                STARTUP_MLX_MEMORY_CEILING_BYTES,
-                STARTUP_MLX_MEMORY_CEILING_BYTES,
-            ),
-            model_creation_memory_limits: Arc::new(Mutex::new(Vec::new())),
-            model_configurations: Arc::new(Mutex::new(Vec::new())),
-            expert_memory_mode: Some(ipc_protocol::ExpertMemoryMode::Resident),
-            created_engine_idle_mlx_memory_telemetry: None,
-        },
-        MACHINE_MLX_MEMORY_CEILING_BYTES,
-        STARTUP_MLX_MEMORY_CEILING_BYTES,
-    )
-    .with_wired_residency_budget_bytes(wired_residency_budget_bytes);
+    let engine_worker =
+        ScriptedFactoryWorker::idle_with_model_factory_and_machine_mlx_memory_ceiling(
+            LazyScriptedModelFactory {
+                model_factory_call_count: Arc::new(AtomicUsize::new(0)),
+                mlx_memory_limits: (
+                    STARTUP_MLX_MEMORY_CEILING_BYTES,
+                    STARTUP_MLX_MEMORY_CEILING_BYTES,
+                ),
+                model_creation_memory_limits: Arc::new(Mutex::new(Vec::new())),
+                model_configurations: Arc::new(Mutex::new(Vec::new())),
+                expert_memory_mode: Some(ipc_protocol::ExpertMemoryMode::Resident),
+                created_engine_idle_mlx_memory_telemetry: None,
+            },
+            MACHINE_MLX_MEMORY_CEILING_BYTES,
+            STARTUP_MLX_MEMORY_CEILING_BYTES,
+        )
+        .with_wired_residency_budget_bytes(wired_residency_budget_bytes);
     let (mut daemon_reader, mut daemon_writer, worker_reader_transport, worker_writer_transport) =
         open_ipc_worker_transport();
     let worker_task =

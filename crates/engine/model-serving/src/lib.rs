@@ -81,7 +81,8 @@ pub use ::artifact_validation::{
 pub use ipc_protocol::ExpertMemoryMode;
 
 pub use engine_backed_worker::{
-    EngineBackedWorker, ModelFactory, ModelFactoryRuntime, WorkerRuntimeError,
+    DirectEngines, EngineBackedWorker, FactoryEngines, ModelFactory, ModelFactoryRuntime,
+    WorkerEngines, WorkerRuntimeError,
 };
 
 #[cfg(feature = "direct-mlx")]
