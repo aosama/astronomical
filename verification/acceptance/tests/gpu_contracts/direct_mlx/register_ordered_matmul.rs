@@ -5,7 +5,8 @@
 
 use mlx_bridge::{MlxArray, MlxDtype};
 use model_serving::row_batched_matmul::{
-    RegisterOrderedWeight, RowBatchedMatmulKernels, register_ordered_matmul,
+    ProjectionInput, RegisterOrderedWeight, RowBatchedMatmulKernels, register_ordered_matmul,
+    register_ordered_matmul_any_rows, register_ordered_projection,
 };
 use runtime_integration::MlxRuntime;
 use serial_test::serial;
@@ -357,4 +358,105 @@ fn should_pad_a_48_wide_projection_to_a_whole_tile_and_return_only_its_48_column
         bf16_bits(&runtime, &restored.scales),
         bf16_bits(&runtime, &fixture.scales)
     );
+}
+
+/// A prompt chunk through a converted weight must come out with the bits a
+/// weight in MLX's layout gives: it restores the layout for the pass and
+/// takes MLX's own kernel. One row fewer keeps the register-ordered kernel,
+/// whose rounding differs, so the two must not be bit-equal there: a pass
+/// that silently restored at every row count would lose the row-exactness a
+/// drafted reply depends on. The 48-wide projection is the padded edge.
+#[test]
+#[ignore = "runs custom Metal kernels on the GPU"]
+#[serial]
+fn should_give_a_prompt_chunk_the_bits_mlx_layout_gives_and_keep_the_kernel_below_it() {
+    let runtime = initialize_runtime();
+    let kernels = RowBatchedMatmulKernels::declare().expect("the kernels are declared");
+    let random_key = runtime.random_key(47).expect("a key builds");
+    for (output_width, row_count, must_equal_mlx) in
+        [(6144, 512, true), (48, 512, true), (6144, 511, false)]
+    {
+        let fixture = shape_fixture(&runtime, &random_key, output_width, 5120);
+        let weight = converted(&runtime, &kernels, &fixture);
+        let rows = runtime
+            .random_normal(
+                &[row_count, 5120],
+                MlxDtype::BFloat16,
+                0.0,
+                1.0,
+                &random_key,
+            )
+            .expect("rows build");
+        let converted_output = register_ordered_matmul_any_rows(&runtime, &kernels, &rows, &weight)
+            .expect("the converted weight multiplies");
+        let mlx_output = runtime
+            .quantized_matmul_affine_on_platform(
+                &rows,
+                &fixture.packed_weight,
+                &fixture.scales,
+                &fixture.biases,
+                true,
+                64,
+                4,
+            )
+            .expect("MLX's matmul builds");
+        assert_eq!(converted_output.shape(), vec![row_count, output_width]);
+        let is_bit_equal =
+            bf16_bits(&runtime, &converted_output) == bf16_bits(&runtime, &mlx_output);
+        assert_eq!(
+            is_bit_equal, must_equal_mlx,
+            "{row_count} rows through a {output_width}-wide projection"
+        );
+    }
+}
+
+/// Projections that read one input may share one preparation of it (its
+/// per-group sums): each must then give the bits it gives preparing the
+/// input for itself, at a reply token's one row and a draft tree's sixteen.
+/// A weight that reads another input width must be refused, never served
+/// from sums of the wrong width.
+#[test]
+#[ignore = "runs custom Metal kernels on the GPU"]
+#[serial]
+fn should_give_the_same_bits_when_projections_share_one_prepared_input() {
+    let runtime = initialize_runtime();
+    let kernels = RowBatchedMatmulKernels::declare().expect("the kernels are declared");
+    let random_key = runtime.random_key(53).expect("a key builds");
+    let wide_fixture = shape_fixture(&runtime, &random_key, 10240, 5120);
+    let narrow_fixture = shape_fixture(&runtime, &random_key, 1024, 5120);
+    let other_input_fixture = shape_fixture(&runtime, &random_key, 5120, 6144);
+    let wide_weight = converted(&runtime, &kernels, &wide_fixture);
+    let narrow_weight = converted(&runtime, &kernels, &narrow_fixture);
+    let other_input_weight = converted(&runtime, &kernels, &other_input_fixture);
+    for row_count in [1, 16] {
+        let rows = runtime
+            .random_normal(
+                &[row_count, 5120],
+                MlxDtype::BFloat16,
+                0.0,
+                1.0,
+                &random_key,
+            )
+            .expect("rows build");
+        let shared_input =
+            ProjectionInput::prepare(&runtime, &kernels, &rows).expect("the input prepares");
+        for weight in [&wide_weight, &narrow_weight] {
+            let shared_output =
+                register_ordered_projection(&runtime, &kernels, &shared_input, weight)
+                    .expect("the shared input projects");
+            let own_output = register_ordered_matmul(&runtime, &kernels, &rows, weight)
+                .expect("the projection prepares its own input");
+            assert_eq!(
+                bf16_bits(&runtime, &shared_output),
+                bf16_bits(&runtime, &own_output),
+                "{row_count} rows through a {}-wide projection",
+                weight.output_width
+            );
+        }
+        assert!(
+            register_ordered_projection(&runtime, &kernels, &shared_input, &other_input_weight)
+                .is_err(),
+            "a weight reading 6,144 inputs must refuse sums of 5,120"
+        );
+    }
 }

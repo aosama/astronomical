@@ -11,9 +11,10 @@ use mlx_bridge::{MlxArray, MlxDtype, MlxMetalKernelOutput};
 use runtime_integration::MlxRuntime;
 
 use super::dispatch_plan::{OUTPUT_COLUMNS_PER_SIMDGROUP, QUANTIZATION_GROUP_SIZE};
+use super::register_order_restoration::restored_layout_matmul;
 use super::register_ordered_plan::{
     REGISTER_BLOCK_WORDS, REGISTER_ORDERED_ROWS_PER_DISPATCH, RegisterOrderedDispatchPlan,
-    register_order_conversion_grid, register_ordered_slice_count,
+    pass_restores_mlx_layout, register_order_conversion_grid, register_ordered_slice_count,
 };
 use super::row_batched_quantized_matmul::{
     GroupSumLayout, RowBatchedMatmulKernels, RowBatchedProjectionError, check_quantization,
@@ -136,8 +137,12 @@ impl TiledRows {
 
 /// One input's rows, flattened, with their per-group sums: what every
 /// register-ordered projection of that input reads. Projections that share
-/// an input (a layer's q, k and v; its gate and up) share one of these, so
-/// the sums are computed once.
+/// an input may share one of these and get the same bits. The model does not
+/// do so: three projections sharing one preparation read within the spread
+/// of each preparing its own on eight of ten cells of the dense 27B's shapes
+/// at 1 and 16 rows, faster by 2.7% on one and slower by 3.9% on one (twelve
+/// interleaved rounds a cell, MLX 0.32.5), so the launch it saves is not a
+/// cost worth the plumbing.
 pub struct ProjectionInput {
     flat_rows: MlxArray,
     group_sums: MlxArray,
@@ -211,8 +216,11 @@ pub fn register_ordered_matmul(
     register_ordered_projection(runtime, kernels, &input, weight)
 }
 
-/// `register_ordered_matmul` for any number of rows: more than one dispatch
-/// takes (a prompt chunk) go 128 at a time, each reading the weight once.
+/// `register_ordered_matmul` for any number of rows. Up to one dispatch's
+/// rows take the kernel; a few dispatches' worth go 128 at a time, each
+/// reading the weight once; and a prompt chunk restores MLX's layout for the
+/// pass and takes MLX's own kernel (`pass_restores_mlx_layout`), which gives
+/// it the bits a model in MLX's layout gets.
 pub fn register_ordered_matmul_any_rows(
     runtime: &MlxRuntime,
     kernels: &RowBatchedMatmulKernels,
@@ -226,7 +234,23 @@ pub fn register_ordered_matmul_any_rows(
     if row_count <= REGISTER_ORDERED_ROWS_PER_DISPATCH {
         return register_ordered_matmul(runtime, kernels, rows, weight);
     }
-    let flat_rows = runtime.reshape(rows, &[row_count, weight.input_width])?;
+    if pass_restores_mlx_layout(row_count) {
+        return restored_layout_matmul(runtime, rows, weight);
+    }
+    register_ordered_matmul_in_dispatches(runtime, kernels, rows, weight)
+}
+
+/// More rows than one dispatch takes and fewer than a prompt chunk: 128 at
+/// a time through the kernel, each dispatch reading the weight once.
+fn register_ordered_matmul_in_dispatches(
+    runtime: &MlxRuntime,
+    kernels: &RowBatchedMatmulKernels,
+    rows: &MlxArray,
+    weight: &RegisterOrderedWeight,
+) -> Result<MlxArray, RowBatchedProjectionError> {
+    let mut output_shape = rows.shape();
+    let flat_rows = runtime.reshape(rows, &[-1, weight.input_width])?;
+    let row_count = flat_rows.shape()[0];
     let mut projected_chunks = Vec::new();
     let mut first_row = 0;
     while first_row < row_count {
@@ -247,7 +271,6 @@ pub fn register_ordered_matmul_any_rows(
     }
     let chunk_references: Vec<&MlxArray> = projected_chunks.iter().collect();
     let projected = runtime.concatenate_axis(&chunk_references, 0)?;
-    let mut output_shape = rows_shape;
     *output_shape.last_mut().expect("rows have a width") = weight.logical_output_width;
     Ok(runtime.reshape(&projected, &output_shape)?)
 }
