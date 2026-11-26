@@ -739,13 +739,13 @@
         {
             "huggingface_id": "nathansutton/Qwen3.8-27B-Ternary-Bonsai-2-DFlash2-MLX",
             "revision": "234cc925d77cd94683e47b1493bd964917aaf43b",
-            "summary": "The same squeezed model, paired with a helper that speeds it up.",
+            "summary": "The same squeezed model, with a draft model Astronomical does not use yet. Text only.",
             "family": "prism_hadamard_qwen35",
             "approximate_size_bytes": 8840805938,
             "approximate_memory_bytes": 9985798926,
             "role": "chat",
             "public": true,
-            "description": "A 27B dense ternary model folded into a 2-bit Hadamard pack and paired with a DFlash2 block-diffusion draft model for speculative decoding. The folded ternary weights serve full-precision chat quality, while the draft model accelerates generation by proposing tokens the main model verifies. Text-only, built on Qwen 3.8 27B.",
+            "description": "A 27B dense ternary model folded into a 2-bit Hadamard pack. The download also holds a DFlash2 draft model, about 1.1 GB of it, which Astronomical does not use yet, so replies come at the same speed as the plain Ternary Bonsai 2 27B. Text only, built on Qwen 3.8 27B.",
             "capabilities": {
                 "supports_reasoning": true,
                 "supports_tool_calls": true,

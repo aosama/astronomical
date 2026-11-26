@@ -22,6 +22,8 @@ mod catalog_classification_tests;
 #[cfg(test)]
 mod download_catalog_tests;
 #[cfg(test)]
+mod folded_ternary_catalog_tests;
+#[cfg(test)]
 mod publisher_dflash_package_tests;
 
 pub use canonical_path::is_canonical_ascii_path;
