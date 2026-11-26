@@ -51,3 +51,29 @@ fn should_convert_one_block_per_tile_and_group() {
         ([32 * 80 * 256, 1, 1], [256, 1, 1])
     );
 }
+
+#[test]
+fn should_restore_mlx_layout_for_a_prompt_chunk() {
+    for chunk_row_count in [512, 2_048, 4_096] {
+        assert!(
+            super::register_ordered_plan::pass_restores_mlx_layout(chunk_row_count),
+            "{chunk_row_count} rows are a prompt chunk"
+        );
+    }
+}
+
+#[test]
+fn should_keep_a_reply_token_and_a_draft_tree_on_the_register_ordered_kernel() {
+    for served_row_count in [0, 1, 16, 128] {
+        assert!(
+            !super::register_ordered_plan::pass_restores_mlx_layout(served_row_count),
+            "{served_row_count} rows must keep the row-exact kernel"
+        );
+    }
+}
+
+#[test]
+fn should_start_restoring_at_exactly_the_measured_row_count() {
+    assert!(!super::register_ordered_plan::pass_restores_mlx_layout(511));
+    assert!(super::register_ordered_plan::pass_restores_mlx_layout(512));
+}

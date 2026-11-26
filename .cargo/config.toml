@@ -855,7 +855,11 @@ test-row-batched-matmul = "run -p xtask -- test-run --package astronomical-accep
 # The register-ordered kernel's GPU contracts: its one-time conversion
 # matches a CPU transcription of TensorFold's regBlock word for word, its
 # values match MLX's quantized matmul on every 27B shape at 1 to 128 rows,
-# and each row gets the same bits alone and inside a 128-row dispatch. Seconds.
+# each row gets the same bits alone and inside a 128-row dispatch, a prompt
+# chunk comes out with the bits MLX's layout gives (it restores that layout
+# for the pass) while one row fewer keeps the row-exact kernel, and
+# projections sharing one prepared input give the bits each gives alone.
+# Seconds.
 test-register-ordered-matmul = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter register_ordered_matmul"
 # Speculative decoding: what a verify pass over K drafted rows costs against
 # one row. Times the dense Qwen3.8 27B's real 4-bit projection shapes for
@@ -876,13 +880,14 @@ measure-k-row-verify-cost = "run -p xtask -- test-run --package astronomical-acc
 # half.
 measure-register-order-served-rows = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx,performance-measurement --test performance_measurement --release --ignored --case-budget-seconds 240 --filter should_compare_stock_register_ordered_and_restored_layouts_at_served_row_counts"
 # The same question answered with a verdict (#2601): for each of the 27B's
-# projection shapes at one row, a draft tree's 16 rows and a prompt chunk's
-# 2,048, MLX's layout against register order as two jobs of the MLX
-# performance profiler: 12 rounds with the order flipped every round, and
+# projection shapes at one row, a draft tree's 16 rows, and prompt chunks of
+# 512 and 2,048 rows, MLX's layout against register order as two jobs of the
+# MLX performance profiler: 12 rounds with the order flipped every round, and
 # "faster", "slower" or "within spread" only when the interval for the median
-# difference excludes zero. Writes a comparison page and its JSON for every
-# cell under the test's target directory and prints where. No model; about
-# two minutes.
+# difference excludes zero. A chunk restores MLX's layout for the pass, so
+# its cells price that restoration. Writes a comparison page, with the two
+# jobs' execution graphs, and its JSON for every cell under the test's target
+# directory and prints where. No model; about two minutes.
 measure-register-order-verdict = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx,performance-measurement --test performance_measurement --release --ignored --case-budget-seconds 300 --filter register_order_layout_verdict"
 # What a reply token saves when register-ordered projections that read the
 # same row share one preparation of it (#2568): stock, each copy preparing
