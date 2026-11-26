@@ -4,7 +4,12 @@
 //! acknowledgement without losing the queued request. The failure journey proves
 //! that sharing the event handler does not weaken generation correlation rules.
 
-use std::{collections::HashMap, path::PathBuf, sync::Arc, time::Duration};
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+    sync::Arc,
+    time::Duration,
+};
 
 use astronomical_daemon::{
     ChatGenerationExecutor, ChatGenerationStreamEvent, GenerationPerformanceLog,
@@ -321,80 +326,88 @@ pub(super) async fn launch_idle_worker_fixture() -> WorkerHandle {
         Duration::from_secs(1),
         GenerationPerformanceLog::open(temporary_log_directory.path())
             .expect("test performance log should be created"),
-        Arc::new(HashMap::from([
-            (
-                DELAYED_COMPLETION_MODEL_ID.to_owned(),
-                runtime_model_policy(
-                    DELAYED_COMPLETION_MODEL_ID,
-                    "/models/delayed-completion-model",
-                    128,
-                ),
-            ),
-            (
-                TELEMETRY_BEFORE_SWAP_MODEL_ID.to_owned(),
-                runtime_model_policy(
-                    TELEMETRY_BEFORE_SWAP_MODEL_ID,
-                    "/models/telemetry-before-swap-model",
-                    64,
-                ),
-            ),
-            (
-                GENERATION_EVENT_BEFORE_SWAP_MODEL_ID.to_owned(),
-                runtime_model_policy(
-                    GENERATION_EVENT_BEFORE_SWAP_MODEL_ID,
-                    "/models/generation-event-before-swap-model",
-                    32,
-                ),
-            ),
-            (
-                IMAGE_MODEL_ID.to_owned(),
-                image_runtime_model_policy(IMAGE_MODEL_ID, "/models/image-generation-model"),
-            ),
-            (
-                INVALID_IMAGE_MODEL_ID.to_owned(),
-                image_runtime_model_policy(INVALID_IMAGE_MODEL_ID, "/models/invalid-model"),
-            ),
-            (
-                DELAYED_POLICY_ACK_MODEL_ID.to_owned(),
-                runtime_model_policy(
-                    DELAYED_POLICY_ACK_MODEL_ID,
-                    "/models/delayed-policy-ack-model",
-                    64,
-                ),
-            ),
-            (
-                DELAYED_IMAGE_POLICY_ACK_MODEL_ID.to_owned(),
-                image_runtime_model_policy(
-                    DELAYED_IMAGE_POLICY_ACK_MODEL_ID,
-                    "/models/delayed-image-policy-ack-model",
-                ),
-            ),
-            (
-                SPEECH_MODEL_ID.to_owned(),
-                speech_runtime_model_policy(SPEECH_MODEL_ID, "/models/speech-model"),
-            ),
-        ])),
-        WorkerStartupConfiguration {
-            neural_engine_program_directory: "neural-engine-programs".into(),
-            configuration_generation: "test-configuration-generation".to_owned(),
-            global_astro_ssd_prompt_cache_root_directory: temporary_log_directory
-                .path()
-                .join("astro-ssd-prompt-cache"),
-            global_astro_ssd_prompt_cache_maximum_size_bytes: 50_000_000_000,
-            astro_ssd_prompt_cache_enabled: true,
-            configured_maximum_mlx_memory_bytes: None,
-            performance_attribution_enabled: false,
-            decode_astro_expert_cache_policy: WorkerDecodeAstroExpertCachePolicy::Baseline,
-            logging_directory: temporary_log_directory.path().to_path_buf(),
-            logging_level: WorkerLogLevel::Warn,
-            retained_log_file_count: 7,
-            metal_residency_refresh_enabled: false,
-        },
+        Arc::new(idle_worker_runtime_model_policies()),
+        idle_worker_startup_configuration(temporary_log_directory.path()),
     )
     .await
     .expect("the idle worker should launch");
     wait_for_ready_worker(&worker_handle).await;
     worker_handle
+}
+
+/// One runtime policy per model the idle worker fixture can be asked to swap
+/// to: chat models with their scripted quirks, two image models, and speech.
+fn idle_worker_runtime_model_policies() -> HashMap<String, RuntimeModelPolicy> {
+    HashMap::from([
+        (
+            DELAYED_COMPLETION_MODEL_ID.to_owned(),
+            runtime_model_policy(
+                DELAYED_COMPLETION_MODEL_ID,
+                "/models/delayed-completion-model",
+                128,
+            ),
+        ),
+        (
+            TELEMETRY_BEFORE_SWAP_MODEL_ID.to_owned(),
+            runtime_model_policy(
+                TELEMETRY_BEFORE_SWAP_MODEL_ID,
+                "/models/telemetry-before-swap-model",
+                64,
+            ),
+        ),
+        (
+            GENERATION_EVENT_BEFORE_SWAP_MODEL_ID.to_owned(),
+            runtime_model_policy(
+                GENERATION_EVENT_BEFORE_SWAP_MODEL_ID,
+                "/models/generation-event-before-swap-model",
+                32,
+            ),
+        ),
+        (
+            IMAGE_MODEL_ID.to_owned(),
+            image_runtime_model_policy(IMAGE_MODEL_ID, "/models/image-generation-model"),
+        ),
+        (
+            INVALID_IMAGE_MODEL_ID.to_owned(),
+            image_runtime_model_policy(INVALID_IMAGE_MODEL_ID, "/models/invalid-model"),
+        ),
+        (
+            DELAYED_POLICY_ACK_MODEL_ID.to_owned(),
+            runtime_model_policy(
+                DELAYED_POLICY_ACK_MODEL_ID,
+                "/models/delayed-policy-ack-model",
+                64,
+            ),
+        ),
+        (
+            DELAYED_IMAGE_POLICY_ACK_MODEL_ID.to_owned(),
+            image_runtime_model_policy(
+                DELAYED_IMAGE_POLICY_ACK_MODEL_ID,
+                "/models/delayed-image-policy-ack-model",
+            ),
+        ),
+        (
+            SPEECH_MODEL_ID.to_owned(),
+            speech_runtime_model_policy(SPEECH_MODEL_ID, "/models/speech-model"),
+        ),
+    ])
+}
+
+fn idle_worker_startup_configuration(log_directory: &Path) -> WorkerStartupConfiguration {
+    WorkerStartupConfiguration {
+        neural_engine_program_directory: "neural-engine-programs".into(),
+        configuration_generation: "test-configuration-generation".to_owned(),
+        global_astro_ssd_prompt_cache_root_directory: log_directory.join("astro-ssd-prompt-cache"),
+        global_astro_ssd_prompt_cache_maximum_size_bytes: 50_000_000_000,
+        astro_ssd_prompt_cache_enabled: true,
+        configured_maximum_mlx_memory_bytes: None,
+        performance_attribution_enabled: false,
+        decode_astro_expert_cache_policy: WorkerDecodeAstroExpertCachePolicy::Baseline,
+        logging_directory: log_directory.to_path_buf(),
+        logging_level: WorkerLogLevel::Warn,
+        retained_log_file_count: 7,
+        metal_residency_refresh_enabled: false,
+    }
 }
 
 fn image_runtime_model_policy(model_id: &str, model_directory: &str) -> RuntimeModelPolicy {

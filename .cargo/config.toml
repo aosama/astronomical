@@ -458,10 +458,13 @@ test-quantization-mixture-of-experts = "run -p xtask -- test-run --package astro
 # staged Rust source, because no default-feature pass and no
 # continuous-integration lane compiles those feature-gated journeys.
 # `cargo xtask function-length-budget` is the pre-commit hook's workspace
-# clippy pass for the 100-line function budget; on macOS it is exactly
-# `cargo clippy --workspace --all-targets`, and on other hosts it leaves out
-# crates whose manifest lists only macOS under `package.metadata.astronomical`
-# `host-platforms`, and every workspace crate depending on them.
+# clippy pass for the 80-line function budget AGENTS.md sets for production
+# and test code alike. It first scans every Rust source without compiling
+# and fails on any `allow` or `expect` of clippy::too_many_lines; then, on
+# macOS, it runs exactly `cargo clippy --workspace --all-targets`, and on
+# other hosts it leaves out crates whose manifest lists only macOS under
+# `package.metadata.astronomical` `host-platforms`, and every workspace crate
+# depending on them.
 # `cargo xtask model-serving-default-features` is the hook's default-feature
 # lint of model-serving and the crates split out of it, with the same host
 # awareness; `cargo xtask lint-acceptance-features` skips on a host that
@@ -496,7 +499,7 @@ test-quantization-mixture-of-experts = "run -p xtask -- test-run --package astro
 #
 # Function-length and complexity enforcement (issue #1637) is pre-commit
 # territory ONLY (policy, 2026-10-31): the hook's clippy pass denies
-# clippy::too_many_lines (the 100-line budget, #[expect]-tracked debt) and
+# clippy::too_many_lines (the 80-line budget, no exemptions) and
 # `cargo xtask crap-baseline` ratchets complexity against the
 # crap-baseline.json committed at HEAD as a hard failure: a baseline function
 # may not grow, and a function the baseline does not list yet may not exceed
@@ -1014,7 +1017,10 @@ measure-cold-decode-residency-attribution-copying = "run -p xtask -- test-run --
 # Shakespeare summary at temperature 1.0, a code review at 0.7, a multi-turn
 # chat at 1.0) with attribution on, which makes the engine keep each decode
 # token's route, and writes `<workload>.routes` plus `<workload>.case.json` to
-# `evidence_directory` for the replay lab; its speed is not a measurement.
+# `evidence_directory` for the replay lab, the case carrying the engine's own
+# misses per layer and token so `cargo replay-expert-misses` can say whether
+# the lab stands for the engine (its `engine_agreement` rows); its speed is
+# not a measurement.
 # `measure-expert-misses-speed` serves the Shakespeare reply with attribution
 # off, once with the macos_file_cache evicted and once warm, and is the one
 # to read decode tokens per second from. Pass
@@ -1024,6 +1030,12 @@ measure-cold-decode-residency-attribution-copying = "run -p xtask -- test-run --
 # and optional `evidence_directory` set the case. Each case runs in about one
 # to two minutes.
 measure-expert-misses = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --filter should_count_expert_misses_while_recording"
+# Tables the astro_expert_cache drops when a drafted reply is followed by a
+# new prompt: the Shakespeare case drafted as served, with a warm
+# macos_file_cache (the cold one's sweeps wire kernel memory and move the
+# reserve for macOS's wired line). Prints table_evictions and the governor's
+# lines naming the account behind each drop. About a minute.
+measure-dropped-tables-while-drafting = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --case-budget-seconds 170 --filter should_count_dropped_tables_while_drafting_as_served"
 measure-expert-misses-speed = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --filter should_count_expert_misses_and_decode_speed"
 
 # Reply speed with and without drafted tokens on a streamed model that ships
@@ -1095,6 +1107,13 @@ measure-long-prompt-reading = "run -p xtask -- test-run --package astronomical-a
 # request_elapsed_seconds less generation_elapsed_seconds in the
 # `phase=chat_read_follow_up_turn` line is the time to the first token.
 measure-chat-follow-up-turn = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --case-budget-seconds 170 --filter should_measure_a_chat_follow_up_turn"
+# What two choices the text engine makes for a dense model held whole cost a
+# reply token (#2585), as MLX performance profiler verdicts on one loaded
+# model: submitting every three layers against one graph a token, and
+# embedding rows read from the SSD against the table held in memory. Both
+# variants must choose the served greedy tokens. Name a dense model with
+# --configuration; about a minute on a 9B, two on a 27B.
+measure-dense-reply-token-verdict = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --case-budget-seconds 400 --filter should_give_verdicts_on_how_a_dense_reply_token_is_built"
 # Neural Engine prompt reading (#2585): a dense model
 # with every layer kept in memory builds its programs, attaches them, and
 # reads a 10,000-token prompt; then the same prompt on the GPU alone, a

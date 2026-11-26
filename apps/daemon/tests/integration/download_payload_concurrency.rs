@@ -1,6 +1,6 @@
 //! Acceptance journey for bounded concurrent payload transfer across manifest files.
 
-use std::{fs, sync::Arc, time::Duration};
+use std::{fs, path::Path, sync::Arc, time::Duration};
 
 use astronomical_daemon::{
     DownloadJobPublicErrorCode, DownloadJobState, DownloadJobStore, DownloadPayloadTransfer,
@@ -193,7 +193,6 @@ async fn should_cap_concurrent_payload_requests_at_the_bounded_window() {
 }
 
 #[tokio::test]
-#[expect(clippy::too_many_lines)]
 async fn should_pause_across_every_in_flight_file_and_resume_without_progress_mismatch() {
     tokio::time::timeout(Duration::from_secs(5), async {
         let file_payloads: [(&str, &[u8]); 2] = [
@@ -207,34 +206,7 @@ async fn should_pause_across_every_in_flight_file_and_resume_without_progress_mi
             .create(&multi_file_paused_job(&file_payloads))
             .expect("multi-file manifest job should persist");
         let transfer_control = DownloadTransferControl::new();
-        let pause_control = transfer_control.clone();
-        let transport = Arc::new(support::PathKeyedPayloadTransport::new(
-            file_payloads
-                .iter()
-                .map(|(relative_path, payload_bytes)| {
-                    let owned_payload_bytes = payload_bytes.to_vec();
-                    let payload_byte_count = owned_payload_bytes.len() as u64;
-                    let pause_control = pause_control.clone();
-                    (
-                        (*relative_path).to_owned(),
-                        Box::new(move |_request: &HubPayloadRequest| {
-                            let owned_payload = owned_payload_bytes.clone();
-                            let owned_pause_control = pause_control.clone();
-                            let pausing_stream = stream::once(async move {
-                                owned_pause_control.request_pause();
-                                Ok(Bytes::copy_from_slice(&owned_payload[..4]))
-                            });
-                            HubPayloadResponse::new(
-                                200,
-                                None,
-                                Some(payload_byte_count),
-                                Box::pin(pausing_stream),
-                            )
-                        }) as ScriptedResponseFactory,
-                    )
-                })
-                .collect::<Vec<_>>(),
-        ));
+        let transport = pausing_path_keyed_transport(&file_payloads, &transfer_control);
         let transfer = DownloadPayloadTransfer::new(
             job_store.clone(),
             transport,
@@ -250,56 +222,24 @@ async fn should_pause_across_every_in_flight_file_and_resume_without_progress_mi
         };
 
         assert_eq!(paused_job.state(), DownloadJobState::Paused);
-        for (relative_path, _) in file_payloads {
-            let staged_path = staged_file_path_for_relative_path(&models_directory, relative_path);
-            let staged_bytes = fs::read(&staged_path).unwrap_or_default();
-            let recorded_bytes_on_disk = recorded_bytes_on_disk(&paused_job, relative_path);
-            assert_eq!(
-                staged_bytes.len() as u64,
-                recorded_bytes_on_disk,
-                "{relative_path} staged length must match durable progress"
-            );
-            assert!(
-                recorded_bytes_on_disk > 0,
-                "{relative_path} should have received its first bytes before pausing"
-            );
-        }
+        assert_paused_files_kept_their_first_bytes(&models_directory, &paused_job, &file_payloads);
 
         // Resuming the paused job must complete without a staged-progress mismatch, so each
         // pending file resumes from its own recorded offset with a valid ranged response.
-        let resume_offsets_by_path = paused_job
-            .files()
-            .iter()
-            .map(|file| (file.relative_path().to_owned(), file.bytes_on_disk()))
-            .collect::<Vec<_>>();
-        let resumed_transport = Arc::new(support::PathKeyedPayloadTransport::new(
-            resume_offset_factories(&file_payloads, &resume_offsets_by_path),
-        ));
-        let resumed_transfer = DownloadPayloadTransfer::new(
-            job_store.clone(),
-            resumed_transport,
-            disabled_attribution(&test_directory),
-            DownloadTransferControl::new(),
-        );
-        let resumed_outcome = resumed_transfer
-            .resume(300)
-            .await
-            .expect("resumed concurrent transfer should complete");
+        let resume_offsets_by_path = recorded_resume_offsets(&paused_job);
+        let resumed_outcome = resume_from_recorded_offsets(
+            &job_store,
+            &test_directory,
+            &file_payloads,
+            &resume_offsets_by_path,
+        )
+        .await
+        .expect("resumed concurrent transfer should complete");
         assert!(matches!(
             resumed_outcome,
             DownloadPayloadTransferOutcome::ReadyToPublish(_)
         ));
-        for (relative_path, payload_bytes) in file_payloads {
-            assert_eq!(
-                fs::read(staged_file_path_for_relative_path(
-                    &models_directory,
-                    relative_path
-                ))
-                .expect("staged file should be readable after resume"),
-                payload_bytes,
-                "{relative_path} should hold its complete payload after resume"
-            );
-        }
+        assert_resumed_files_hold_complete_payloads(&models_directory, &file_payloads);
     })
     .await
     .expect("concurrent pause and resume journey should remain bounded");
@@ -323,20 +263,7 @@ async fn should_keep_sibling_progress_durable_when_one_concurrent_file_fails() {
         job_store
             .create(&multi_file_paused_job(&file_payloads))
             .expect("multi-file manifest job should persist");
-        let transport = Arc::new(support::PathKeyedPayloadTransport::new([
-            (
-                "weights/romeo-and-juliet.txt".to_owned(),
-                Box::new(move |_request: &HubPayloadRequest| {
-                    payload_response(200, None, [romeo_payload])
-                }) as support::ScriptedResponseFactory,
-            ),
-            (
-                "weights/hamlet.txt".to_owned(),
-                Box::new(move |_request: &HubPayloadRequest| {
-                    payload_response(200, None, [short_payload])
-                }) as support::ScriptedResponseFactory,
-            ),
-        ]));
+        let transport = romeo_whole_hamlet_short_transport(romeo_payload, short_payload);
         let transfer = DownloadPayloadTransfer::new(
             job_store.clone(),
             transport,
@@ -365,38 +292,22 @@ async fn should_keep_sibling_progress_durable_when_one_concurrent_file_fails() {
             failed_job.error_code(),
             Some(DownloadJobPublicErrorCode::DownloadFailed)
         );
-        let resume_offsets_by_path = failed_job
-            .files()
-            .iter()
-            .map(|file| (file.relative_path().to_owned(), file.bytes_on_disk()))
-            .collect::<Vec<_>>();
-        for (relative_path, _) in file_payloads {
-            let staged_bytes = fs::read(staged_file_path_for_relative_path(
-                &models_directory,
-                relative_path,
-            ))
-            .unwrap_or_default();
-            assert_eq!(
-                staged_bytes.len() as u64,
-                recorded_bytes_on_disk(&failed_job, relative_path),
-                "{relative_path} staged length must match durable progress after the failure"
-            );
-        }
+        let resume_offsets_by_path = recorded_resume_offsets(&failed_job);
+        assert_staged_lengths_match_progress_after_failure(
+            &models_directory,
+            &failed_job,
+            &file_payloads,
+        );
 
         // A later resume must fetch only each file's missing bytes and complete the journey.
-        let resumed_transport = Arc::new(support::PathKeyedPayloadTransport::new(
-            resume_offset_factories(&file_payloads, &resume_offsets_by_path),
-        ));
-        let resumed_transfer = DownloadPayloadTransfer::new(
-            job_store.clone(),
-            resumed_transport,
-            disabled_attribution(&test_directory),
-            DownloadTransferControl::new(),
-        );
-        let resumed_outcome = resumed_transfer
-            .resume(300)
-            .await
-            .expect("resumed journey should complete after failure recovery");
+        let resumed_outcome = resume_from_recorded_offsets(
+            &job_store,
+            &test_directory,
+            &file_payloads,
+            &resume_offsets_by_path,
+        )
+        .await
+        .expect("resumed journey should complete after failure recovery");
         assert!(matches!(
             resumed_outcome,
             DownloadPayloadTransferOutcome::ReadyToPublish(_)
@@ -404,4 +315,148 @@ async fn should_keep_sibling_progress_durable_when_one_concurrent_file_fails() {
     })
     .await
     .expect("failure-and-recovery journey should remain bounded");
+}
+
+/// A transport whose every file streams four bytes and then asks the transfer
+/// to pause, so each in-flight file holds first bytes when the pause lands.
+fn pausing_path_keyed_transport(
+    file_payloads: &[(&str, &[u8])],
+    transfer_control: &DownloadTransferControl,
+) -> Arc<support::PathKeyedPayloadTransport> {
+    Arc::new(support::PathKeyedPayloadTransport::new(
+        file_payloads
+            .iter()
+            .map(|(relative_path, payload_bytes)| {
+                let owned_payload_bytes = payload_bytes.to_vec();
+                let payload_byte_count = owned_payload_bytes.len() as u64;
+                let pause_control = transfer_control.clone();
+                (
+                    (*relative_path).to_owned(),
+                    Box::new(move |_request: &HubPayloadRequest| {
+                        let owned_payload = owned_payload_bytes.clone();
+                        let owned_pause_control = pause_control.clone();
+                        let pausing_stream = stream::once(async move {
+                            owned_pause_control.request_pause();
+                            Ok(Bytes::copy_from_slice(&owned_payload[..4]))
+                        });
+                        HubPayloadResponse::new(
+                            200,
+                            None,
+                            Some(payload_byte_count),
+                            Box::pin(pausing_stream),
+                        )
+                    }) as ScriptedResponseFactory,
+                )
+            })
+            .collect::<Vec<_>>(),
+    ))
+}
+
+/// A transport that serves the romeo file whole and the hamlet file short of
+/// the length its manifest declares.
+fn romeo_whole_hamlet_short_transport(
+    romeo_payload: &'static [u8],
+    short_payload: &'static [u8],
+) -> Arc<support::PathKeyedPayloadTransport> {
+    Arc::new(support::PathKeyedPayloadTransport::new([
+        (
+            "weights/romeo-and-juliet.txt".to_owned(),
+            Box::new(move |_request: &HubPayloadRequest| {
+                payload_response(200, None, [romeo_payload])
+            }) as support::ScriptedResponseFactory,
+        ),
+        (
+            "weights/hamlet.txt".to_owned(),
+            Box::new(move |_request: &HubPayloadRequest| {
+                payload_response(200, None, [short_payload])
+            }) as support::ScriptedResponseFactory,
+        ),
+    ]))
+}
+
+fn recorded_resume_offsets(
+    interrupted_job: &astronomical_daemon::DownloadJob,
+) -> Vec<(String, u64)> {
+    interrupted_job
+        .files()
+        .iter()
+        .map(|file| (file.relative_path().to_owned(), file.bytes_on_disk()))
+        .collect::<Vec<_>>()
+}
+
+/// Resumes the interrupted job over a transport that answers each file with a
+/// ranged response from the offset the job recorded for it.
+async fn resume_from_recorded_offsets(
+    job_store: &DownloadJobStore,
+    test_directory: &TempDir,
+    file_payloads: &[(&str, &[u8])],
+    resume_offsets_by_path: &[(String, u64)],
+) -> Result<DownloadPayloadTransferOutcome, astronomical_daemon::DownloadPayloadTransferError> {
+    let resumed_transport = Arc::new(support::PathKeyedPayloadTransport::new(
+        resume_offset_factories(file_payloads, resume_offsets_by_path),
+    ));
+    let resumed_transfer = DownloadPayloadTransfer::new(
+        job_store.clone(),
+        resumed_transport,
+        disabled_attribution(test_directory),
+        DownloadTransferControl::new(),
+    );
+    resumed_transfer.resume(300).await
+}
+
+fn assert_paused_files_kept_their_first_bytes(
+    models_directory: &Path,
+    paused_job: &astronomical_daemon::DownloadJob,
+    file_payloads: &[(&str, &[u8])],
+) {
+    for (relative_path, _) in file_payloads {
+        let staged_path = staged_file_path_for_relative_path(models_directory, relative_path);
+        let staged_bytes = fs::read(&staged_path).unwrap_or_default();
+        let recorded_bytes_on_disk = recorded_bytes_on_disk(paused_job, relative_path);
+        assert_eq!(
+            staged_bytes.len() as u64,
+            recorded_bytes_on_disk,
+            "{relative_path} staged length must match durable progress"
+        );
+        assert!(
+            recorded_bytes_on_disk > 0,
+            "{relative_path} should have received its first bytes before pausing"
+        );
+    }
+}
+
+fn assert_staged_lengths_match_progress_after_failure(
+    models_directory: &Path,
+    failed_job: &astronomical_daemon::DownloadJob,
+    file_payloads: &[(&str, &[u8])],
+) {
+    for (relative_path, _) in file_payloads {
+        let staged_bytes = fs::read(staged_file_path_for_relative_path(
+            models_directory,
+            relative_path,
+        ))
+        .unwrap_or_default();
+        assert_eq!(
+            staged_bytes.len() as u64,
+            recorded_bytes_on_disk(failed_job, relative_path),
+            "{relative_path} staged length must match durable progress after the failure"
+        );
+    }
+}
+
+fn assert_resumed_files_hold_complete_payloads(
+    models_directory: &Path,
+    file_payloads: &[(&str, &[u8])],
+) {
+    for (relative_path, payload_bytes) in file_payloads {
+        assert_eq!(
+            fs::read(staged_file_path_for_relative_path(
+                models_directory,
+                relative_path
+            ))
+            .expect("staged file should be readable after resume"),
+            *payload_bytes,
+            "{relative_path} should hold its complete payload after resume"
+        );
+    }
 }

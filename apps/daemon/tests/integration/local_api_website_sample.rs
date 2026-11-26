@@ -258,70 +258,85 @@ fn should_publish_provider_configuration_that_parses_once_the_identifier_is_past
         let is_opencode = provider.get("settings").is_some();
         provider_configurations += 1;
 
-        let published_base_url_text = if is_opencode {
-            provider["settings"]["baseURL"].as_str()
-        } else {
-            provider["baseUrl"].as_str()
-        };
-        let published_base_url =
-            published_base_url_text.expect("a published provider must name a base URL");
-        assert!(
-            published_base_url.starts_with("http://127.0.0.1:"),
-            "the published base URL must stay a loopback address"
-        );
-        assert!(
-            published_base_url.ends_with("/v1"),
-            "the published base URL must carry the versioned path prefix the app serves"
-        );
-
-        let published_credential = if is_opencode {
-            provider["settings"]["apiKey"].as_str()
-        } else {
-            provider["apiKey"].as_str()
-        }
-        .expect("a published provider must carry the credential field a client requires");
-        assert!(
-            !published_credential.is_empty(),
-            "agents refuse a provider with an empty credential field, so the recipe must carry the placeholder"
-        );
-        assert!(
-            !published_credential.starts_with("sk-"),
-            "the published credential must never read as a secret"
-        );
+        assert_provider_names_loopback_endpoint_and_placeholder_credential(provider, is_opencode);
 
         if is_opencode {
-            assert_eq!(
-                provider["package"],
-                "@opencode/ai/providers/openai-compatible"
-            );
-            assert_eq!(
-                provider["models"][MODEL_ID],
-                serde_json::json!({"name": MODEL_ID}),
-                "the published model entry must be the identifier a reader pastes"
-            );
+            assert_opencode_provider_package_and_model(provider);
         } else {
-            assert_eq!(provider["api"], "openai-completions");
-            for suppressed_option in [
-                "supportsStore",
-                "supportsStrictMode",
-                "supportsDeveloperRole",
-            ] {
-                assert_eq!(
-                    provider["compat"][suppressed_option], false,
-                    "the Pi recipe must suppress {suppressed_option}, which this endpoint answers with a JSON error"
-                );
-            }
-            assert_eq!(
-                provider["models"][0],
-                serde_json::json!({"id": MODEL_ID, "name": MODEL_ID}),
-                "the published model entry must be the identifier a reader pastes"
-            );
+            assert_pi_provider_api_and_model(provider);
         }
     }
 
     assert_eq!(
         provider_configurations, 2,
         "the page should publish one opencode and one Pi provider configuration"
+    );
+}
+
+fn assert_provider_names_loopback_endpoint_and_placeholder_credential(
+    provider: &serde_json::Value,
+    is_opencode: bool,
+) {
+    let published_base_url_text = if is_opencode {
+        provider["settings"]["baseURL"].as_str()
+    } else {
+        provider["baseUrl"].as_str()
+    };
+    let published_base_url =
+        published_base_url_text.expect("a published provider must name a base URL");
+    assert!(
+        published_base_url.starts_with("http://127.0.0.1:"),
+        "the published base URL must stay a loopback address"
+    );
+    assert!(
+        published_base_url.ends_with("/v1"),
+        "the published base URL must carry the versioned path prefix the app serves"
+    );
+
+    let published_credential = if is_opencode {
+        provider["settings"]["apiKey"].as_str()
+    } else {
+        provider["apiKey"].as_str()
+    }
+    .expect("a published provider must carry the credential field a client requires");
+    assert!(
+        !published_credential.is_empty(),
+        "agents refuse a provider with an empty credential field, so the recipe must carry the placeholder"
+    );
+    assert!(
+        !published_credential.starts_with("sk-"),
+        "the published credential must never read as a secret"
+    );
+}
+
+fn assert_opencode_provider_package_and_model(provider: &serde_json::Value) {
+    assert_eq!(
+        provider["package"],
+        "@opencode/ai/providers/openai-compatible"
+    );
+    assert_eq!(
+        provider["models"][MODEL_ID],
+        serde_json::json!({"name": MODEL_ID}),
+        "the published model entry must be the identifier a reader pastes"
+    );
+}
+
+fn assert_pi_provider_api_and_model(provider: &serde_json::Value) {
+    assert_eq!(provider["api"], "openai-completions");
+    for suppressed_option in [
+        "supportsStore",
+        "supportsStrictMode",
+        "supportsDeveloperRole",
+    ] {
+        assert_eq!(
+            provider["compat"][suppressed_option], false,
+            "the Pi recipe must suppress {suppressed_option}, which this endpoint answers with a JSON error"
+        );
+    }
+    assert_eq!(
+        provider["models"][0],
+        serde_json::json!({"id": MODEL_ID, "name": MODEL_ID}),
+        "the published model entry must be the identifier a reader pastes"
     );
 }
 

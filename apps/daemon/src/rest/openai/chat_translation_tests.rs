@@ -187,48 +187,10 @@ fn should_translate_installed_opencode_bash_tool_description_within_public_rest_
 
 #[test]
 fn should_translate_the_current_opencode_tool_result_wire_shape_without_rest_dtos_crossing_ipc() {
-    let request_json = r#"
-    {
-        "model": "astronomical/fake-mixture-of-experts",
-        "messages": [
-            {"role": "system", "content": "You are a coding assistant."},
-            {"role": "user", "content": "List Rust source files."},
-            {
-                "role": "assistant",
-                "content": null,
-                "reasoning_content": "I should inspect the source tree.",
-                "tool_calls": [
-                    {
-                        "id": "call_1",
-                        "type": "function",
-                        "function": {"name": "glob", "arguments": "{\"pattern\":\"src/**/*.rs\"}"}
-                    }
-                ]
-            },
-            {"role": "tool", "tool_call_id": "call_1", "content": "src/lib.rs"},
-            {"role": "user", "content": "Summarize the source files."}
-        ],
-        "tools": [
-            {
-                "type": "function",
-                "function": {
-                    "name": "glob",
-                    "description": "List matching files.",
-                    "parameters": {"type": "object", "properties": {"pattern": {"type": "string"}}}
-                }
-            }
-        ],
-        "tool_choice": "auto",
-        "stream": true,
-        "stream_options": {"include_usage": true},
-        "max_tokens": 512,
-        "temperature": 0.6,
-        "top_p": 0.95,
-        "seed": 7
-    }
-    "#;
-    let request = serde_json::from_str::<OpenAiChatCompletionRequest>(request_json)
-        .expect("the representative current OpenCode request should deserialize");
+    let request = serde_json::from_str::<OpenAiChatCompletionRequest>(
+        CURRENT_OPENCODE_TOOL_RESULT_REQUEST_JSON,
+    )
+    .expect("the representative current OpenCode request should deserialize");
 
     let chat_command =
         crate::translate_openai_chat_completion_request(RequestId::new(900), request)
@@ -236,54 +198,7 @@ fn should_translate_the_current_opencode_tool_result_wire_shape_without_rest_dto
 
     assert_eq!(
         chat_command,
-        ChatGenerationCommand {
-            request_id: RequestId::new(900),
-            model: "astronomical/fake-mixture-of-experts".to_owned(),
-            messages: vec![
-                ChatMessage::System {
-                    content: "You are a coding assistant.".to_owned(),
-                },
-                ChatMessage::User {
-                    content: "List Rust source files.".to_owned(),
-                    images: Vec::new(),
-                },
-                ChatMessage::Assistant {
-                    content: None,
-                    reasoning_content: Some("I should inspect the source tree.".to_owned()),
-                    tool_calls: vec![ChatAssistantToolCall {
-                        id: "call_1".to_owned(),
-                        function: ChatAssistantToolFunction {
-                            name: "glob".to_owned(),
-                            arguments_json: r#"{"pattern":"src/**/*.rs"}"#.to_owned(),
-                        },
-                    }],
-                },
-                ChatMessage::Tool {
-                    tool_call_id: "call_1".to_owned(),
-                    content: "src/lib.rs".to_owned(),
-                },
-                ChatMessage::User {
-                    content: "Summarize the source files.".to_owned(),
-                    images: Vec::new(),
-                },
-            ],
-            tools: vec![ChatToolDefinition {
-                name: "glob".to_owned(),
-                description: Some("List matching files.".to_owned()),
-                parameters_json: r#"{"properties":{"pattern":{"type":"string"}},"type":"object"}"#
-                    .to_owned(),
-            }],
-            tool_choice: ChatToolChoice::Auto,
-            settings: ChatGenerationSettings {
-                max_output_tokens: 512,
-                temperature_thousandths: Some(600),
-                top_p_thousandths: Some(950),
-                repetition_penalty_thousandths: None,
-                seed: Some(7),
-                thinking_budget: None,
-            },
-            structured_generation: None,
-        }
+        expected_current_opencode_tool_result_command()
     );
 }
 
@@ -423,4 +338,98 @@ fn should_place_each_tool_runs_images_after_that_run() {
         [3, 6],
         "each run's image follows its own tool message, before the next assistant turn"
     );
+}
+
+/// The request body a current OpenCode session sends after one tool round trip.
+const CURRENT_OPENCODE_TOOL_RESULT_REQUEST_JSON: &str = r#"
+    {
+        "model": "astronomical/fake-mixture-of-experts",
+        "messages": [
+            {"role": "system", "content": "You are a coding assistant."},
+            {"role": "user", "content": "List Rust source files."},
+            {
+                "role": "assistant",
+                "content": null,
+                "reasoning_content": "I should inspect the source tree.",
+                "tool_calls": [
+                    {
+                        "id": "call_1",
+                        "type": "function",
+                        "function": {"name": "glob", "arguments": "{\"pattern\":\"src/**/*.rs\"}"}
+                    }
+                ]
+            },
+            {"role": "tool", "tool_call_id": "call_1", "content": "src/lib.rs"},
+            {"role": "user", "content": "Summarize the source files."}
+        ],
+        "tools": [
+            {
+                "type": "function",
+                "function": {
+                    "name": "glob",
+                    "description": "List matching files.",
+                    "parameters": {"type": "object", "properties": {"pattern": {"type": "string"}}}
+                }
+            }
+        ],
+        "tool_choice": "auto",
+        "stream": true,
+        "stream_options": {"include_usage": true},
+        "max_tokens": 512,
+        "temperature": 0.6,
+        "top_p": 0.95,
+        "seed": 7
+    }
+"#;
+
+/// The worker command the current OpenCode request must lower into.
+fn expected_current_opencode_tool_result_command() -> ChatGenerationCommand {
+    ChatGenerationCommand {
+        request_id: RequestId::new(900),
+        model: "astronomical/fake-mixture-of-experts".to_owned(),
+        messages: vec![
+            ChatMessage::System {
+                content: "You are a coding assistant.".to_owned(),
+            },
+            ChatMessage::User {
+                content: "List Rust source files.".to_owned(),
+                images: Vec::new(),
+            },
+            ChatMessage::Assistant {
+                content: None,
+                reasoning_content: Some("I should inspect the source tree.".to_owned()),
+                tool_calls: vec![ChatAssistantToolCall {
+                    id: "call_1".to_owned(),
+                    function: ChatAssistantToolFunction {
+                        name: "glob".to_owned(),
+                        arguments_json: r#"{"pattern":"src/**/*.rs"}"#.to_owned(),
+                    },
+                }],
+            },
+            ChatMessage::Tool {
+                tool_call_id: "call_1".to_owned(),
+                content: "src/lib.rs".to_owned(),
+            },
+            ChatMessage::User {
+                content: "Summarize the source files.".to_owned(),
+                images: Vec::new(),
+            },
+        ],
+        tools: vec![ChatToolDefinition {
+            name: "glob".to_owned(),
+            description: Some("List matching files.".to_owned()),
+            parameters_json: r#"{"properties":{"pattern":{"type":"string"}},"type":"object"}"#
+                .to_owned(),
+        }],
+        tool_choice: ChatToolChoice::Auto,
+        settings: ChatGenerationSettings {
+            max_output_tokens: 512,
+            temperature_thousandths: Some(600),
+            top_p_thousandths: Some(950),
+            repetition_penalty_thousandths: None,
+            seed: Some(7),
+            thinking_budget: None,
+        },
+        structured_generation: None,
+    }
 }

@@ -183,6 +183,44 @@ pub(super) fn append_qwen3_5_moe_feed_forward_tensor_profiles(
     qwen3_5_config: &Qwen3_5Config,
 ) -> Result<(), Qwen3_5ArtifactError> {
     let mixture_of_experts_prefix = format!("{decoder_layer_prefix}.mlp");
+    append_moe_router_tensor_profiles(
+        tensor_profiles,
+        &mixture_of_experts_prefix,
+        hidden_size,
+        qwen3_5_config,
+    )?;
+    append_moe_routed_expert_tensor_profiles(
+        tensor_profiles,
+        &mixture_of_experts_prefix,
+        hidden_size,
+        qwen3_5_config,
+    )?;
+    append_moe_shared_expert_tensor_profiles(
+        tensor_profiles,
+        &mixture_of_experts_prefix,
+        hidden_size,
+        qwen3_5_config,
+    )?;
+    let shared_expert_gate_module_name = format!("{mixture_of_experts_prefix}.shared_expert_gate");
+    append_qwen3_5_quantized_affine_tensor_profiles(
+        tensor_profiles,
+        &shared_expert_gate_module_name,
+        &[1],
+        hidden_size,
+        qwen3_5_config.quantization_profile_for_module(&shared_expert_gate_module_name),
+    )?;
+    Ok(())
+}
+
+/// The router projection from the hidden state to one score per expert. A
+/// checkpoint may keep it unquantized, in which case it is one plain float
+/// matrix.
+fn append_moe_router_tensor_profiles(
+    tensor_profiles: &mut Vec<TensorProfile>,
+    mixture_of_experts_prefix: &str,
+    hidden_size: usize,
+    qwen3_5_config: &Qwen3_5Config,
+) -> Result<(), Qwen3_5ArtifactError> {
     let router_module_name = format!("{mixture_of_experts_prefix}.gate");
     let router_quantization_profile =
         qwen3_5_config.quantization_profile_for_module(&router_module_name);
@@ -192,32 +230,29 @@ pub(super) fn append_qwen3_5_moe_feed_forward_tensor_profiles(
             TensorDtype::ModelFloat,
             vec![qwen3_5_config.expert_count() as usize, hidden_size],
         ));
-    } else {
-        append_qwen3_5_quantized_affine_tensor_profiles(
-            tensor_profiles,
-            &router_module_name,
-            &[qwen3_5_config.expert_count() as usize],
-            hidden_size,
-            router_quantization_profile,
-        )?;
+        return Ok(());
     }
-    for (projection_name, output_dimension, input_dimension) in [
-        (
-            "gate_proj",
-            qwen3_5_config.expert_intermediate_size() as usize,
-            hidden_size,
-        ),
-        (
-            "up_proj",
-            qwen3_5_config.expert_intermediate_size() as usize,
-            hidden_size,
-        ),
-        (
-            "down_proj",
-            hidden_size,
-            qwen3_5_config.expert_intermediate_size() as usize,
-        ),
-    ] {
+    append_qwen3_5_quantized_affine_tensor_profiles(
+        tensor_profiles,
+        &router_module_name,
+        &[qwen3_5_config.expert_count() as usize],
+        hidden_size,
+        router_quantization_profile,
+    )
+}
+
+/// The routed experts' projections, stacked over every expert of the layer.
+fn append_moe_routed_expert_tensor_profiles(
+    tensor_profiles: &mut Vec<TensorProfile>,
+    mixture_of_experts_prefix: &str,
+    hidden_size: usize,
+    qwen3_5_config: &Qwen3_5Config,
+) -> Result<(), Qwen3_5ArtifactError> {
+    let expert_projection_dimensions = expert_projection_dimensions(
+        hidden_size,
+        qwen3_5_config.expert_intermediate_size() as usize,
+    );
+    for (projection_name, output_dimension, input_dimension) in expert_projection_dimensions {
         let projection_module_name =
             format!("{mixture_of_experts_prefix}.switch_mlp.{projection_name}");
         append_qwen3_5_quantized_affine_tensor_profiles(
@@ -228,23 +263,21 @@ pub(super) fn append_qwen3_5_moe_feed_forward_tensor_profiles(
             qwen3_5_config.quantization_profile_for_module(&projection_module_name),
         )?;
     }
-    for (projection_name, output_dimension, input_dimension) in [
-        (
-            "gate_proj",
-            qwen3_5_config.shared_expert_intermediate_size() as usize,
-            hidden_size,
-        ),
-        (
-            "up_proj",
-            qwen3_5_config.shared_expert_intermediate_size() as usize,
-            hidden_size,
-        ),
-        (
-            "down_proj",
-            hidden_size,
-            qwen3_5_config.shared_expert_intermediate_size() as usize,
-        ),
-    ] {
+    Ok(())
+}
+
+/// The shared expert's projections: one set per layer, not stacked over experts.
+fn append_moe_shared_expert_tensor_profiles(
+    tensor_profiles: &mut Vec<TensorProfile>,
+    mixture_of_experts_prefix: &str,
+    hidden_size: usize,
+    qwen3_5_config: &Qwen3_5Config,
+) -> Result<(), Qwen3_5ArtifactError> {
+    let expert_projection_dimensions = expert_projection_dimensions(
+        hidden_size,
+        qwen3_5_config.shared_expert_intermediate_size() as usize,
+    );
+    for (projection_name, output_dimension, input_dimension) in expert_projection_dimensions {
         let projection_module_name =
             format!("{mixture_of_experts_prefix}.shared_expert.{projection_name}");
         append_qwen3_5_quantized_affine_tensor_profiles(
@@ -255,15 +288,21 @@ pub(super) fn append_qwen3_5_moe_feed_forward_tensor_profiles(
             qwen3_5_config.quantization_profile_for_module(&projection_module_name),
         )?;
     }
-    let shared_expert_gate_module_name = format!("{mixture_of_experts_prefix}.shared_expert_gate");
-    append_qwen3_5_quantized_affine_tensor_profiles(
-        tensor_profiles,
-        &shared_expert_gate_module_name,
-        &[1],
-        hidden_size,
-        qwen3_5_config.quantization_profile_for_module(&shared_expert_gate_module_name),
-    )?;
     Ok(())
+}
+
+/// One feed-forward expert's three projections as `(name, output width, input
+/// width)`: gate and up widen the hidden state to the intermediate size, down
+/// narrows it back.
+fn expert_projection_dimensions(
+    hidden_size: usize,
+    intermediate_size: usize,
+) -> [(&'static str, usize, usize); 3] {
+    [
+        ("gate_proj", intermediate_size, hidden_size),
+        ("up_proj", intermediate_size, hidden_size),
+        ("down_proj", hidden_size, intermediate_size),
+    ]
 }
 
 #[cfg(feature = "direct-mlx")]

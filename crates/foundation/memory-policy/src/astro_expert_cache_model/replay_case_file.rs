@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
-use super::{ReplayCase, RoutedReply, RoutedReplyDecodeError};
+use super::{CapacityMoment, ReplayCase, RoutedReply, RoutedReplyDecodeError};
 
 /// Why a saved case could not be read.
 #[derive(Debug, thiserror::Error)]
@@ -41,6 +41,10 @@ struct CaseDocument {
     prompt_demand_by_layer_at_reply_start: Vec<Vec<u64>>,
     #[serde(default)]
     reply_demand_by_layer_at_reply_start: Vec<Vec<u64>>,
+    #[serde(default)]
+    capacity_moments: Vec<CapacityMoment>,
+    #[serde(default)]
+    engine_miss_counts_by_token: Vec<Vec<u32>>,
 }
 
 /// One saved case: its workload name, its replay case, and what each layer
@@ -58,6 +62,12 @@ pub struct SavedReplayCase {
     /// How often earlier replies routed to each expert of each layer when
     /// this reply began (empty when not kept).
     pub reply_demand_by_layer: Vec<Vec<u64>>,
+    /// Each capacity the engine applied while the reply was served (empty
+    /// for a recording that did not keep them).
+    pub capacity_moments: Vec<CapacityMoment>,
+    /// For each reply token, each layer's experts the engine read from
+    /// storage (empty for a recording that did not keep them).
+    pub engine_miss_counts_by_token: Vec<Vec<u32>>,
 }
 
 /// Reads the case whose document is `case_document_path`; its routes are
@@ -92,6 +102,8 @@ pub fn read_saved_replay_case(
         warm_slot_count: case_document.warm_slot_count,
         prompt_demand_by_layer: case_document.prompt_demand_by_layer_at_reply_start,
         reply_demand_by_layer: case_document.reply_demand_by_layer_at_reply_start,
+        capacity_moments: case_document.capacity_moments,
+        engine_miss_counts_by_token: case_document.engine_miss_counts_by_token,
         replay_case: ReplayCase {
             routed_reply,
             expert_payload_bytes_by_layer: case_document.expert_payload_bytes_by_layer,
@@ -100,6 +112,7 @@ pub fn read_saved_replay_case(
                 .held_expert_ids_by_layer_at_reply_start,
             layer_slot_limits: None,
             pinned_layer_indexes: Vec::new(),
+            charges_whole_table_slots: false,
         },
     })
 }

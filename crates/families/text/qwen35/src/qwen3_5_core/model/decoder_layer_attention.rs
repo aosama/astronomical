@@ -94,30 +94,12 @@ impl Qwen3_5ModelBase {
             PerformanceOperation::AttentionForwardSpan,
             attention_forward_span_started_at,
         );
-        // Multi-token prefill only: force one evaluation boundary per attention
-        // family so the per-family graphics-processor time is isolated from the
-        // chunk-terminal wait. The terminal wait then owns only the residual
-        // work (route observations, final logits), keeping the attributed sum
-        // honest. One-token decode skips the boundary so stage attribution never
-        // serializes the latency-sensitive decode step.
-        let attention_family_gpu_wait_operation = match &decoder_layer_weights.attention_weights {
-            Qwen3_5AttentionWeights::Linear(_) => {
-                PerformanceOperation::PrefillLinearAttentionGraphicsProcessorCompletionWait
-            }
-            Qwen3_5AttentionWeights::Full(_) => {
-                PerformanceOperation::PrefillFullAttentionGraphicsProcessorCompletionWait
-            }
-        };
-        let attention_output = match attention_output {
-            Ok(attention_output) if performance_attribution.is_enabled() && token_count > 1 => {
-                performance_attribution.measure_operation(
-                    attention_family_gpu_wait_operation,
-                    |_performance_attribution| self.runtime.evaluate_arrays(&[&attention_output]),
-                )?;
-                Ok(attention_output)
-            }
-            attention_output => attention_output,
-        };
+        let attention_output = self.isolate_prefill_attention_wait(
+            attention_output,
+            &decoder_layer_weights.attention_weights,
+            token_count,
+            performance_attribution,
+        );
         // Delay `?` until after closing the attribution span so failed graph
         // construction is measured rather than silently leaving an open interval.
         let attention_residual = self.runtime.add(hidden_states, &attention_output?)?;
@@ -131,4 +113,65 @@ impl Qwen3_5ModelBase {
             normalized_attention,
         })
     }
+
+    /// Multi-token prefill only: force one evaluation boundary per attention
+    /// family so the per-family graphics-processor time is isolated from the
+    /// chunk-terminal wait. The terminal wait then owns only the residual
+    /// work (route observations, final logits), keeping the attributed sum
+    /// honest. One-token decode skips the boundary so stage attribution never
+    /// serializes the latency-sensitive decode step. A graph-construction
+    /// error passes through untouched; a failed evaluation is returned in
+    /// its place.
+    fn isolate_prefill_attention_wait(
+        &self,
+        attention_output: Result<MlxArray, TextExecutionError>,
+        attention_weights: &Qwen3_5AttentionWeights,
+        token_count: i32,
+        performance_attribution: &mut PerformanceAttribution,
+    ) -> Result<MlxArray, TextExecutionError> {
+        let attention_family_gpu_wait_operation =
+            prefill_attention_wait_operation(attention_weights);
+        match attention_output {
+            Ok(attention_output)
+                if should_isolate_prefill_attention_wait(
+                    performance_attribution.is_enabled(),
+                    token_count,
+                ) =>
+            {
+                performance_attribution.measure_operation(
+                    attention_family_gpu_wait_operation,
+                    |_performance_attribution| self.runtime.evaluate_arrays(&[&attention_output]),
+                )?;
+                Ok(attention_output)
+            }
+            attention_output => attention_output,
+        }
+    }
 }
+
+/// Which prefill completion wait an attention family is attributed to.
+fn prefill_attention_wait_operation(
+    attention_weights: &Qwen3_5AttentionWeights,
+) -> PerformanceOperation {
+    match attention_weights {
+        Qwen3_5AttentionWeights::Linear(_) => {
+            PerformanceOperation::PrefillLinearAttentionGraphicsProcessorCompletionWait
+        }
+        Qwen3_5AttentionWeights::Full(_) => {
+            PerformanceOperation::PrefillFullAttentionGraphicsProcessorCompletionWait
+        }
+    }
+}
+
+/// Whether to wait on the attention output separately: only while performance
+/// attribution is enabled and the step reads more than one token.
+fn should_isolate_prefill_attention_wait(
+    performance_attribution_enabled: bool,
+    token_count: i32,
+) -> bool {
+    performance_attribution_enabled && token_count > 1
+}
+
+#[cfg(test)]
+#[path = "decoder_layer_attention_tests.rs"]
+mod tests;

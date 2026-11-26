@@ -95,112 +95,6 @@ impl AstroSsdPromptCacheDiskStore {
         Ok(())
     }
 
-    pub(super) fn publish_missing_boundary_state_transaction(
-        &self,
-        runtime: &MlxRuntime,
-        block_key: &AstroSsdPromptCacheBlockKey,
-        boundary_state_tensors: &HashMap<String, MlxArray>,
-        performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<(), AstroSsdPromptCacheDiskStoreError> {
-        // Startup compaction may legally leave sequence state on a non-checkpoint
-        // parent without its boundary snapshot. If that exact block is reached
-        // again as a leaf, publication restores only the missing boundary; it
-        // never rewrites the already durable sequence state or manifest.
-        let block_hash = block_key.block_hash();
-        let existing_block = self
-            .lock_tracked_files()
-            .block(&block_hash)
-            .cloned()
-            .ok_or(
-                AstroSsdPromptCacheDiskStoreError::ExistingBlockTopologyMismatch { block_hash },
-            )?;
-        let staging_directory = unique_staging_block_directory(
-            &self.blocks_directory,
-            &format!(
-                "{}-boundary",
-                lowercase_hex::encode_lowercase_hex(&block_hash)
-            ),
-        );
-        create_staging_directory(&staging_directory)?;
-        let staged_boundary_state = save_direct_safetensors_file_with_name(
-            runtime,
-            &staging_directory,
-            BOUNDARY_STATE_FILE_NAME,
-            boundary_state_tensors,
-            block_key.token_count(),
-            &self.model_contract,
-            performance_attribution,
-        )
-        .map_err(|staging_error| cleanup_staging_after_error(&staging_directory, staging_error))?;
-        validate_staged_file_size(
-            &staged_boundary_state,
-            self.model_contract
-                .boundary_state_file_bytes_for_block_token_count(block_key.token_count())?,
-        )
-        .map_err(|size_error| cleanup_staging_after_error(&staging_directory, size_error))?;
-        performance_attribution
-            .measure_operation(
-                PerformanceOperation::AstroSsdPromptCachePublicationSynchronizationWait,
-                |_performance_attribution| synchronize_directory(&staging_directory),
-            )
-            .map_err(|sync_error| cleanup_staging_after_error(&staging_directory, sync_error))?;
-        let protected_block_directory_paths = self
-            .lock_tracked_files()
-            .protected_ancestry_directory_paths(block_hash);
-        performance_attribution
-            .measure_operation(
-                PerformanceOperation::AstroSsdPromptCacheGlobalQuotaEviction,
-                |_performance_attribution| {
-                    self.enforce_global_astro_ssd_prompt_cache_quota_for_commit(
-                        staged_boundary_state.file_size_bytes,
-                        0,
-                        &protected_block_directory_paths,
-                        Some(&staging_directory),
-                    )
-                },
-            )
-            .map_err(|quota_error| cleanup_staging_after_error(&staging_directory, quota_error))?;
-        // Renaming one file within an already committed block is atomic. The
-        // subsequent block-directory sync makes the new directory entry durable.
-        let final_boundary_file_path = existing_block
-            .block_directory_path
-            .join(BOUNDARY_STATE_FILE_NAME);
-        performance_attribution.measure_operation(
-            PerformanceOperation::AstroSsdPromptCacheAtomicCommit,
-            |_performance_attribution| {
-                std::fs::rename(&staged_boundary_state.file_path, &final_boundary_file_path)
-                    .map_err(|source| {
-                        cleanup_staging_after_error(
-                            &staging_directory,
-                            AstroSsdPromptCacheDiskStoreError::RenameTempFile {
-                                temp_file_path: staged_boundary_state.file_path.clone(),
-                                block_file_path: final_boundary_file_path.clone(),
-                                source,
-                            },
-                        )
-                    })
-            },
-        )?;
-        remove_astro_ssd_prompt_cache_owned_directory_or_confirm_absent(&staging_directory)?;
-        performance_attribution.measure_operation(
-            PerformanceOperation::AstroSsdPromptCachePublicationSynchronizationWait,
-            |_performance_attribution| {
-                synchronize_directory(&existing_block.block_directory_path)?;
-                synchronize_directory(&self.blocks_directory)
-            },
-        )?;
-        self.lock_tracked_files().insert_file(
-            AstroSsdPromptCacheFileKind::BoundaryStateSnapshot,
-            block_hash,
-            TrackedAstroSsdPromptCacheFile {
-                file_path: final_boundary_file_path,
-                file_size_bytes: staged_boundary_state.file_size_bytes,
-            },
-        );
-        self.refresh_global_astro_ssd_prompt_cache_accounting()?;
-        Ok(())
-    }
-
     /// Stages the complete block and admits it under the global quota:
     /// creates the unique staging directory, writes and validates every state
     /// file, synchronizes the staging directory, enforces the quota eviction
@@ -501,7 +395,7 @@ struct ParentBoundaryReclaim {
     file_size_bytes: u64,
 }
 
-fn create_staging_directory(
+pub(super) fn create_staging_directory(
     staging_directory: &Path,
 ) -> Result<(), AstroSsdPromptCacheDiskStoreError> {
     std::fs::create_dir(staging_directory).map_err(|source| {
@@ -512,7 +406,7 @@ fn create_staging_directory(
     })
 }
 
-fn unique_staging_block_directory(blocks_directory: &Path, block_name: &str) -> PathBuf {
+pub(super) fn unique_staging_block_directory(blocks_directory: &Path, block_name: &str) -> PathBuf {
     let current_time_nanos = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|duration| duration.as_nanos())
@@ -523,7 +417,7 @@ fn unique_staging_block_directory(blocks_directory: &Path, block_name: &str) -> 
     ))
 }
 
-fn cleanup_staging_after_error(
+pub(super) fn cleanup_staging_after_error(
     staging_directory: &Path,
     original_error: AstroSsdPromptCacheDiskStoreError,
 ) -> AstroSsdPromptCacheDiskStoreError {
@@ -535,7 +429,7 @@ fn cleanup_staging_after_error(
         .unwrap_or(original_error)
 }
 
-fn validate_staged_file_size(
+pub(super) fn validate_staged_file_size(
     staged_file: &StagedAstroSsdPromptCacheStateFile,
     expected_file_size_bytes: u64,
 ) -> Result<(), AstroSsdPromptCacheDiskStoreError> {

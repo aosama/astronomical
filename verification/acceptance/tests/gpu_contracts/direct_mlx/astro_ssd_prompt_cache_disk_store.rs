@@ -1,9 +1,14 @@
+use std::collections::HashMap;
 use std::fs;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use model_serving::{AstroSsdPromptCacheDiskStoreError, AstroSsdPromptCachePublicationOutcome};
-use runtime_integration::PositionalFileReadMetrics;
+use mlx_bridge::MlxArray;
+use model_serving::{
+    AstroSsdPromptCacheBlockKey, AstroSsdPromptCacheDiskStore, AstroSsdPromptCacheDiskStoreError,
+    AstroSsdPromptCachePublicationOutcome,
+};
+use runtime_integration::{MlxRuntime, PositionalFileReadMetrics};
 
 use super::astro_ssd_prompt_cache_disk_store_support::*;
 use crate::common::qwen3_5_moe;
@@ -57,7 +62,6 @@ async fn should_publish_a_block_directly_and_report_idempotent_republication() {
 }
 
 #[tokio::test]
-#[expect(clippy::too_many_lines)]
 async fn should_save_and_load_kv_block_and_recurrent_snapshot_as_separate_files() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let runtime = runtime_with_shared_limits();
@@ -84,34 +88,65 @@ async fn should_save_and_load_kv_block_and_recurrent_snapshot_as_separate_files(
 
     assert_eq!(astro_ssd_prompt_cache.sequence_state_block_count(), 1);
     assert_eq!(astro_ssd_prompt_cache.boundary_state_snapshot_count(), 1);
-    assert!(
-        astro_ssd_prompt_cache_directory
-            .path()
-            .join("blocks")
-            .join(hex::encode(astro_ssd_prompt_cache_block_key.block_hash()))
-            .join("sequence.safetensors")
-            .is_file()
+    assert_published_block_files_match_model_contract(
+        &astro_ssd_prompt_cache_directory,
+        &astro_ssd_prompt_cache_block_key,
     );
-    assert!(
-        astro_ssd_prompt_cache_directory
-            .path()
-            .join("blocks")
-            .join(hex::encode(astro_ssd_prompt_cache_block_key.block_hash()))
-            .join("boundary.safetensors")
-            .is_file()
+
+    let positional_file_read_metrics = Arc::new(PositionalFileReadMetrics::default());
+    let (loaded_kv_block_tensors, loaded_recurrent_snapshot_tensors) = load_published_block_tensors(
+        &runtime,
+        &astro_ssd_prompt_cache,
+        &astro_ssd_prompt_cache_block_key,
+        &positional_file_read_metrics,
     );
-    assert!(
-        astro_ssd_prompt_cache_directory
-            .path()
-            .join("blocks")
-            .join(hex::encode(astro_ssd_prompt_cache_block_key.block_hash()))
-            .join("manifest.json")
-            .is_file()
+
+    assert_eq!(loaded_kv_block_tensors.len(), 20);
+    assert_eq!(loaded_recurrent_snapshot_tensors.len(), 60);
+    assert_split_tensor_shapes_match(&loaded_kv_block_tensors, &kv_block_tensors);
+    assert_split_tensor_shapes_match(
+        &loaded_recurrent_snapshot_tensors,
+        &recurrent_snapshot_tensors,
     );
+    drop(kv_block_tensors);
+    drop(recurrent_snapshot_tensors);
+    runtime
+        .synchronize_gpu_stream_and_clear_mlx_buffer_cache()
+        .expect("the test should release serialized source tensors before restore evaluation");
+    let loaded_state_arrays = loaded_kv_block_tensors
+        .values()
+        .chain(loaded_recurrent_snapshot_tensors.values())
+        .collect::<Vec<_>>();
+    let restore_evaluation_started_at = Instant::now();
+    runtime
+        .evaluate_arrays(&loaded_state_arrays)
+        .expect("the restored astro-ssd-prompt-cache tensors should evaluate");
+    let restore_evaluation_elapsed = restore_evaluation_started_at.elapsed();
+    assert_and_report_positional_read_metrics(
+        &positional_file_read_metrics,
+        restore_evaluation_elapsed,
+    );
+}
+
+fn assert_published_block_files_match_model_contract(
+    astro_ssd_prompt_cache_directory: &tempfile::TempDir,
+    astro_ssd_prompt_cache_block_key: &AstroSsdPromptCacheBlockKey,
+) {
     let published_block_directory = astro_ssd_prompt_cache_directory
         .path()
         .join("blocks")
         .join(hex::encode(astro_ssd_prompt_cache_block_key.block_hash()));
+    assert!(
+        published_block_directory
+            .join("sequence.safetensors")
+            .is_file()
+    );
+    assert!(
+        published_block_directory
+            .join("boundary.safetensors")
+            .is_file()
+    );
+    assert!(published_block_directory.join("manifest.json").is_file());
     let model_contract = qwen3_5_moe::astro_ssd_prompt_cache_model_contract();
     let actual_sequence_state_file_bytes =
         fs::metadata(published_block_directory.join("sequence.safetensors"))
@@ -139,46 +174,37 @@ async fn should_save_and_load_kv_block_and_recurrent_snapshot_as_separate_files(
             .saturating_add(actual_manifest_file_bytes)
             <= model_contract.maximum_committed_block_bytes()
     );
+}
 
-    let positional_file_read_metrics = Arc::new(PositionalFileReadMetrics::default());
+fn load_published_block_tensors(
+    runtime: &MlxRuntime,
+    astro_ssd_prompt_cache: &AstroSsdPromptCacheDiskStore,
+    astro_ssd_prompt_cache_block_key: &AstroSsdPromptCacheBlockKey,
+    positional_file_read_metrics: &Arc<PositionalFileReadMetrics>,
+) -> (HashMap<String, MlxArray>, HashMap<String, MlxArray>) {
     let loaded_kv_block_tensors = astro_ssd_prompt_cache
         .load_kv_block(
-            &runtime,
-            &astro_ssd_prompt_cache_block_key,
-            Some(Arc::clone(&positional_file_read_metrics)),
+            runtime,
+            astro_ssd_prompt_cache_block_key,
+            Some(Arc::clone(positional_file_read_metrics)),
         )
         .expect("the astro SSD prompt cache should load the saved KV block")
         .expect("the saved KV block should be present");
     let loaded_recurrent_snapshot_tensors = astro_ssd_prompt_cache
         .load_recurrent_snapshot(
-            &runtime,
-            &astro_ssd_prompt_cache_block_key,
-            Some(Arc::clone(&positional_file_read_metrics)),
+            runtime,
+            astro_ssd_prompt_cache_block_key,
+            Some(Arc::clone(positional_file_read_metrics)),
         )
         .expect("the astro SSD prompt cache should load the saved recurrent snapshot")
         .expect("the saved recurrent snapshot should be present");
+    (loaded_kv_block_tensors, loaded_recurrent_snapshot_tensors)
+}
 
-    assert_eq!(loaded_kv_block_tensors.len(), 20);
-    assert_eq!(loaded_recurrent_snapshot_tensors.len(), 60);
-    assert_split_tensor_shapes_match(&loaded_kv_block_tensors, &kv_block_tensors);
-    assert_split_tensor_shapes_match(
-        &loaded_recurrent_snapshot_tensors,
-        &recurrent_snapshot_tensors,
-    );
-    drop(kv_block_tensors);
-    drop(recurrent_snapshot_tensors);
-    runtime
-        .synchronize_gpu_stream_and_clear_mlx_buffer_cache()
-        .expect("the test should release serialized source tensors before restore evaluation");
-    let loaded_state_arrays = loaded_kv_block_tensors
-        .values()
-        .chain(loaded_recurrent_snapshot_tensors.values())
-        .collect::<Vec<_>>();
-    let restore_evaluation_started_at = Instant::now();
-    runtime
-        .evaluate_arrays(&loaded_state_arrays)
-        .expect("the restored astro-ssd-prompt-cache tensors should evaluate");
-    let restore_evaluation_elapsed = restore_evaluation_started_at.elapsed();
+fn assert_and_report_positional_read_metrics(
+    positional_file_read_metrics: &PositionalFileReadMetrics,
+    restore_evaluation_elapsed: Duration,
+) {
     let positional_file_read_snapshot = positional_file_read_metrics.snapshot();
     assert_eq!(positional_file_read_snapshot.read_call_count, 80);
     assert!(positional_file_read_snapshot.read_byte_count > 0);

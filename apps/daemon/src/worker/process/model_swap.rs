@@ -4,6 +4,8 @@ use ipc_protocol::{
     WorkerEvent, WorkerLoadedModelRuntimeConfiguration, WorkerRuntimeFeatureConfiguration,
 };
 
+use tokio::time::timeout;
+
 use crate::worker::event_handler;
 use crate::worker::health;
 use crate::worker::loop_types::WorkerLoopState;
@@ -83,6 +85,39 @@ pub(in crate::worker) async fn wait_for_model_swap(
         )? {
             return Ok(model_swap_wait_outcome);
         }
+    }
+}
+
+/// Waits for the worker to finish the swap inside the load budget.
+pub(in crate::worker) async fn wait_for_model_swap_within_budget(
+    worker_loop_state: &mut WorkerLoopState<'_>,
+    expected_configuration_generation: Option<&str>,
+    expected_model_runtime_configuration: &WorkerLoadedModelRuntimeConfiguration,
+) -> Result<ModelSwapWaitOutcome, WorkerControlError> {
+    let model_load_budget = worker_loop_state.model_load_timeout;
+    let timed_swap_wait = timeout(
+        model_load_budget,
+        wait_for_model_swap(
+            &mut WorkerLoopState {
+                worker_process: &mut *worker_loop_state.worker_process,
+                health_snapshot: worker_loop_state.health_snapshot,
+                is_ready: &mut *worker_loop_state.is_ready,
+                model_load_deadline: &mut *worker_loop_state.model_load_deadline,
+                active_request: &mut *worker_loop_state.active_request,
+                performance_log: &mut *worker_loop_state.performance_log,
+                completion_log: &mut *worker_loop_state.completion_log,
+                model_load_timeout: worker_loop_state.model_load_timeout,
+            },
+            expected_configuration_generation,
+            expected_model_runtime_configuration,
+        ),
+    )
+    .await;
+    match timed_swap_wait {
+        Ok(model_swap_outcome) => model_swap_outcome,
+        Err(_elapsed) => Err(WorkerControlError::ModelLoadTimeout {
+            model_load_timeout_millis: model_load_budget.as_millis(),
+        }),
     }
 }
 

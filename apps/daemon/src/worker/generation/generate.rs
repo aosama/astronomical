@@ -8,15 +8,19 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use ipc_protocol::ProtocolError;
-use tokio::time::{Instant, timeout};
+use tokio::time::Instant;
 
 use crate::worker::loop_types::WorkerLoopState;
+use crate::worker::request_start::{
+    GenerationStartSender, contain_failed_worker, loaded_model_id,
+    published_configuration_generation,
+};
 use crate::{
     GenerationStartError, RuntimeModelPolicy, WorkerActivity, WorkerControlError,
     worker::health::{clear_active_request_progress, publish_activity},
     worker::loop_types::{ActiveGeneration, ActiveWorkerRequest},
-    worker::process::containment::{cancel_active_generation, contain_worker_failure},
-    worker::process::model_swap::{ModelSwapWaitOutcome, wait_for_model_swap},
+    worker::process::containment::cancel_active_generation,
+    worker::process::model_swap::{ModelSwapWaitOutcome, wait_for_model_swap_within_budget},
     worker::process::startup_runtime::wait_for_startup_runtime_configuration,
 };
 
@@ -38,11 +42,20 @@ enum GenerationStartOutcome {
     Failed(WorkerControlError),
 }
 
+/// What the loop owns once the worker has started a chat generation.
+struct StartedChatGeneration {
+    active_generation_permit: tokio::sync::OwnedSemaphorePermit,
+    request_id: ipc_protocol::RequestId,
+    request_max_output_tokens: u16,
+    stream_event_sender: tokio::sync::mpsc::Sender<crate::ChatGenerationStreamEvent>,
+    chat_work: crate::worker::loop_types::ChatWork,
+}
+
 pub(in crate::worker) async fn handle_generate_command(
     worker_loop_state: &mut WorkerLoopState<'_>,
     active_generation_permit: tokio::sync::OwnedSemaphorePermit,
     queued_chat_request: crate::worker::loop_types::QueuedChatRequest,
-    start_sender: tokio::sync::oneshot::Sender<Result<(), GenerationStartError>>,
+    start_sender: GenerationStartSender,
     stream_event_sender: tokio::sync::mpsc::Sender<crate::ChatGenerationStreamEvent>,
     model_policy_catalog: &Arc<HashMap<String, RuntimeModelPolicy>>,
     cancellation_acknowledgement_timeout: Duration,
@@ -69,65 +82,106 @@ pub(in crate::worker) async fn handle_generate_command(
         worker_loop_state.model_load_timeout,
     )
     .await?;
-    match ensure_requested_model_loaded(
+    let model_selection_outcome = ensure_requested_model_loaded(
         worker_loop_state,
         &generation_command.model,
         model_policy_catalog,
     )
-    .await?
-    {
-        ModelSelectionOutcome::Proceed => {}
-        ModelSelectionOutcome::Rejected(start_failure) => {
-            let _send_outcome = start_sender.send(Err(start_failure));
-            return Ok(());
-        }
-        ModelSelectionOutcome::SwapFailed(swap_error) => {
-            contain_worker_failure(
-                worker_loop_state.worker_process,
-                worker_loop_state.health_snapshot,
-                worker_loop_state.active_request,
-                swap_error,
-            )
-            .await;
-            *worker_loop_state.is_ready = false;
-            let _send_outcome = start_sender.send(Err(GenerationStartError::WorkerUnavailable));
-            return Ok(());
-        }
-    }
+    .await?;
+    let Some(start_sender) =
+        settle_model_selection(worker_loop_state, model_selection_outcome, start_sender).await
+    else {
+        return Ok(());
+    };
     let request_id = generation_command.request_id;
     let request_max_output_tokens = generation_command.settings.max_output_tokens;
-    match start_worker_generation_or_reject(
+    let generation_start_outcome = start_worker_generation_or_reject(
         worker_loop_state,
         request_id,
         generation_command,
         chat_work,
     )
-    .await?
-    {
-        GenerationStartOutcome::Started => {}
+    .await?;
+    let Some(start_sender) =
+        settle_generation_start(worker_loop_state, generation_start_outcome, start_sender).await
+    else {
+        return Ok(());
+    };
+    activate_started_generation(
+        worker_loop_state,
+        StartedChatGeneration {
+            active_generation_permit,
+            request_id,
+            request_max_output_tokens,
+            stream_event_sender,
+            chat_work,
+        },
+        start_sender,
+        cancellation_acknowledgement_timeout,
+    )
+    .await;
+    Ok(())
+}
+
+/// Ends the request when model selection stopped it, answering the start
+/// sender, and hands the sender back when the request goes on. A failed swap
+/// contains the worker before the answer goes out.
+async fn settle_model_selection(
+    worker_loop_state: &mut WorkerLoopState<'_>,
+    model_selection_outcome: ModelSelectionOutcome,
+    start_sender: GenerationStartSender,
+) -> Option<GenerationStartSender> {
+    match model_selection_outcome {
+        ModelSelectionOutcome::Proceed => Some(start_sender),
+        ModelSelectionOutcome::Rejected(start_failure) => {
+            let _send_outcome = start_sender.send(Err(start_failure));
+            None
+        }
+        ModelSelectionOutcome::SwapFailed(swap_error) => {
+            contain_failed_worker(worker_loop_state, swap_error).await;
+            let _send_outcome = start_sender.send(Err(GenerationStartError::WorkerUnavailable));
+            None
+        }
+    }
+}
+
+/// Ends the request when the worker did not start it, answering the start
+/// sender, and hands the sender back when the generation is running. A
+/// failed start answers before the worker is contained.
+async fn settle_generation_start(
+    worker_loop_state: &mut WorkerLoopState<'_>,
+    generation_start_outcome: GenerationStartOutcome,
+    start_sender: GenerationStartSender,
+) -> Option<GenerationStartSender> {
+    match generation_start_outcome {
+        GenerationStartOutcome::Started => Some(start_sender),
         GenerationStartOutcome::Rejected(start_failure) => {
             let _send_outcome = start_sender.send(Err(start_failure));
-            return Ok(());
+            None
         }
         GenerationStartOutcome::Failed(start_error) => {
             let _send_outcome = start_sender.send(Err(GenerationStartError::WorkerUnavailable));
-            contain_worker_failure(
-                worker_loop_state.worker_process,
-                worker_loop_state.health_snapshot,
-                worker_loop_state.active_request,
-                start_error,
-            )
-            .await;
-            *worker_loop_state.is_ready = false;
-            return Ok(());
+            contain_failed_worker(worker_loop_state, start_error).await;
+            None
         }
     }
+}
+
+/// Publishes the started generation as the loop's active request and tells
+/// the caller it started. A caller that already hung up has its generation
+/// cancelled at once.
+async fn activate_started_generation(
+    worker_loop_state: &mut WorkerLoopState<'_>,
+    started_generation: StartedChatGeneration,
+    start_sender: GenerationStartSender,
+    cancellation_acknowledgement_timeout: Duration,
+) {
     *worker_loop_state.active_request = Some(assemble_active_chat_generation(
-        active_generation_permit,
-        request_id,
-        request_max_output_tokens,
-        stream_event_sender,
-        chat_work,
+        started_generation.active_generation_permit,
+        started_generation.request_id,
+        started_generation.request_max_output_tokens,
+        started_generation.stream_event_sender,
+        started_generation.chat_work,
     ));
     clear_active_request_progress(worker_loop_state.health_snapshot);
     publish_activity(
@@ -145,40 +199,6 @@ pub(in crate::worker) async fn handle_generate_command(
         )
         .await;
     }
-    Ok(())
-}
-
-/// Waits for the worker to finish the swap inside the load budget.
-async fn wait_for_model_swap_within_budget(
-    worker_loop_state: &mut WorkerLoopState<'_>,
-    expected_configuration_generation: Option<&str>,
-    expected_model_runtime_configuration: &ipc_protocol::WorkerLoadedModelRuntimeConfiguration,
-) -> Result<ModelSwapWaitOutcome, WorkerControlError> {
-    let model_load_budget = worker_loop_state.model_load_timeout;
-    let timed_swap_wait = timeout(
-        model_load_budget,
-        wait_for_model_swap(
-            &mut WorkerLoopState {
-                worker_process: &mut *worker_loop_state.worker_process,
-                health_snapshot: worker_loop_state.health_snapshot,
-                is_ready: &mut *worker_loop_state.is_ready,
-                model_load_deadline: &mut *worker_loop_state.model_load_deadline,
-                active_request: &mut *worker_loop_state.active_request,
-                performance_log: &mut *worker_loop_state.performance_log,
-                completion_log: &mut *worker_loop_state.completion_log,
-                model_load_timeout: worker_loop_state.model_load_timeout,
-            },
-            expected_configuration_generation,
-            expected_model_runtime_configuration,
-        ),
-    )
-    .await;
-    match timed_swap_wait {
-        Ok(model_swap_outcome) => model_swap_outcome,
-        Err(_elapsed) => Err(WorkerControlError::ModelLoadTimeout {
-            model_load_timeout_millis: model_load_budget.as_millis(),
-        }),
-    }
 }
 
 /// Ensures the requested model is the loaded one: an unmapped model with no
@@ -193,11 +213,7 @@ async fn ensure_requested_model_loaded(
 ) -> Result<ModelSelectionOutcome, WorkerControlError> {
     // REST validates model IDs, but direct WorkerHandle callers share this
     // boundary and therefore still need the empty-worker guard.
-    let loaded_model_id = worker_loop_state
-        .health_snapshot
-        .read()
-        .ok()
-        .and_then(|snapshot| snapshot.ready_model_id.clone());
+    let loaded_model_id = loaded_model_id(worker_loop_state.health_snapshot);
     if loaded_model_id.as_deref() == Some(requested_model) {
         return Ok(ModelSelectionOutcome::Proceed);
     }
@@ -216,16 +232,7 @@ async fn ensure_requested_model_loaded(
         return Ok(ModelSelectionOutcome::Proceed);
     };
     let expected_configuration_generation =
-        worker_loop_state
-            .health_snapshot
-            .read()
-            .ok()
-            .and_then(|snapshot| {
-                snapshot
-                    .worker_runtime_feature_configuration
-                    .as_ref()
-                    .map(|configuration| configuration.configuration_generation.clone())
-            });
+        published_configuration_generation(worker_loop_state.health_snapshot);
     let expected_model_runtime_configuration = model_policy
         .worker_model_configuration
         .runtime_configuration();
@@ -252,27 +259,34 @@ async fn ensure_requested_model_loaded(
         &expected_model_runtime_configuration,
     )
     .await;
+    let model_selection_outcome = model_selection_after_swap_wait(model_swap_outcome);
+    if matches!(model_selection_outcome, ModelSelectionOutcome::Proceed) {
+        tracing::info!(
+            requested_model = %requested_model,
+            "model swap completed successfully"
+        );
+    }
+    Ok(model_selection_outcome)
+}
+
+/// Turns the end of the model-swap wait into what model selection answers: the
+/// request goes on once the model is loaded, is rejected when the worker
+/// refused the load, and treats any other wait failure as a failed swap.
+fn model_selection_after_swap_wait(
+    model_swap_outcome: Result<ModelSwapWaitOutcome, WorkerControlError>,
+) -> ModelSelectionOutcome {
     match model_swap_outcome {
-        Ok(ModelSwapWaitOutcome::Loaded) => {}
+        Ok(ModelSwapWaitOutcome::Loaded) => ModelSelectionOutcome::Proceed,
         Ok(ModelSwapWaitOutcome::Rejected {
             model_load_failure_reason,
-        }) => {
-            return Ok(ModelSelectionOutcome::Rejected(
-                GenerationStartError::ModelLoadFailed {
-                    model_load_failure_reason,
-                },
-            ));
-        }
+        }) => ModelSelectionOutcome::Rejected(GenerationStartError::ModelLoadFailed {
+            model_load_failure_reason,
+        }),
         Err(swap_error) => {
             tracing::error!(error = %swap_error, "model swap failed during wait for ModelSwapped");
-            return Ok(ModelSelectionOutcome::SwapFailed(swap_error));
+            ModelSelectionOutcome::SwapFailed(swap_error)
         }
     }
-    tracing::info!(
-        requested_model = %requested_model,
-        "model swap completed successfully"
-    );
-    Ok(ModelSelectionOutcome::Proceed)
 }
 
 /// Starts the generation on the worker process. The `Rejected` and
@@ -369,3 +383,7 @@ fn assemble_active_chat_generation(
         drafting_statistics: None,
     })
 }
+
+#[cfg(test)]
+#[path = "generate_tests.rs"]
+mod generate_tests;

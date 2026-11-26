@@ -235,44 +235,23 @@ impl Qwen3_5Model {
         let Some(expert_pager) = self.expert_pager.as_ref() else {
             return;
         };
-        let layer_plans = expert_pager.layer_plans();
-        let Some(prefetch_layer_index) = next_prefill_prefetch_layer_index(
+        let Some(prefetch_layer_index) = self.next_layer_to_read_ahead(
+            expert_pager,
             completed_layer_index,
-            layer_plans.len(),
-            |layer_index| {
-                self.prompt_reads_complete_expert_layer(
-                    expert_pager,
-                    layer_index,
-                    route_token_count,
-                    partly_kept_layers,
-                )
-            },
+            route_token_count,
+            partly_kept_layers,
         ) else {
             return;
         };
         let has_fused_codebook_decode_kernel =
             self.fused_jangtq2_gathered_projection_kernel.is_some();
-        let expert_capacity = layer_plans[prefetch_layer_index].expert_capacity;
-        let complete_expert_ids: Vec<usize> = (0..expert_capacity).collect();
-        let (weights, manifest) = match self.stream_expert_page_from_storage(
+        let Some((weights, manifest)) = self.read_complete_layer_page_ahead(
             expert_pager,
             prefetch_layer_index,
-            &complete_expert_ids,
-            Qwen3_5ExpertStreamingRequestShape {
-                route_token_count,
-                routed_expert_count: expert_capacity,
-            },
+            route_token_count,
             performance_attribution,
-        ) {
-            Ok(complete_page) => complete_page,
-            Err(prefetch_error) => {
-                tracing::debug!(
-                    layer_index = prefetch_layer_index,
-                    error = %prefetch_error,
-                    "skipped prefill complete-layer prefetch"
-                );
-                return;
-            }
+        ) else {
+            return;
         };
         // The geometry filter above already excluded these pages; this guard
         // only keeps a future encoding from being multiplied with a decode the
@@ -309,6 +288,63 @@ impl Qwen3_5Model {
             weights,
             manifest,
         });
+    }
+
+    /// The nearest layer after `completed_layer_index` whose complete page is
+    /// worth reading ahead, if any.
+    fn next_layer_to_read_ahead(
+        &self,
+        expert_pager: &Qwen3_5ExpertPager,
+        completed_layer_index: usize,
+        route_token_count: i32,
+        partly_kept_layers: PartlyKeptLayers,
+    ) -> Option<usize> {
+        next_prefill_prefetch_layer_index(
+            completed_layer_index,
+            expert_pager.layer_plans().len(),
+            |layer_index| {
+                self.prompt_reads_complete_expert_layer(
+                    expert_pager,
+                    layer_index,
+                    route_token_count,
+                    partly_kept_layers,
+                )
+            },
+        )
+    }
+
+    /// Streams the complete page of `prefetch_layer_index` from storage, or
+    /// `None` when the read is refused or fails: the layer's ordinary
+    /// mandatory read still runs then.
+    fn read_complete_layer_page_ahead(
+        &self,
+        expert_pager: &Qwen3_5ExpertPager,
+        prefetch_layer_index: usize,
+        route_token_count: i32,
+        performance_attribution: &mut PerformanceAttribution,
+    ) -> Option<(Qwen3_5PagedExpertWeights, QuantizedExpertPageManifest)> {
+        let expert_capacity = expert_pager.layer_plans()[prefetch_layer_index].expert_capacity;
+        let complete_expert_ids: Vec<usize> = (0..expert_capacity).collect();
+        match self.stream_expert_page_from_storage(
+            expert_pager,
+            prefetch_layer_index,
+            &complete_expert_ids,
+            Qwen3_5ExpertStreamingRequestShape {
+                route_token_count,
+                routed_expert_count: expert_capacity,
+            },
+            performance_attribution,
+        ) {
+            Ok(complete_page) => Some(complete_page),
+            Err(prefetch_error) => {
+                tracing::debug!(
+                    layer_index = prefetch_layer_index,
+                    error = %prefetch_error,
+                    "skipped prefill complete-layer prefetch"
+                );
+                None
+            }
+        }
     }
 
     /// Serves a multi-token chunk from a prefetched complete layer when one

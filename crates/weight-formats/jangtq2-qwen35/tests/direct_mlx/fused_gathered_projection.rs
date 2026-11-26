@@ -347,60 +347,14 @@ fn should_match_materializing_decode_and_gather_matmul_on_a_top_k_page() {
         .astype(&hidden_float32, MlxDtype::BFloat16)
         .expect("the activations should convert to bfloat16");
 
-    // The materializing path exactly as `paged_execution` runs it: decode the
-    // page to bfloat16, transpose lazily, gather_mm with [1, 1, 1, H] inputs.
-    let decoded_page = mlx_decode::decode_expert_weight_rows(
+    let gathered_host = materializing_decode_plus_gather_mm_projection(
         &runtime,
-        &fixture.packed_code_words,
-        &fixture.row_scales,
-        TWO_BIT_WIDTH,
-    )
-    .expect("the materializing decode should succeed");
-    let transposed_page = runtime
-        .transpose_axes(&decoded_page, &[0, 2, 1])
-        .expect("the decoded page should transpose");
-    let expanded_hidden = runtime
-        .reshape(&hidden, &[1, 1, 1, GATE_UP_INPUT_WIDTH as i32])
-        .expect("the activations should expand");
-    let route_indices = MlxArray::from_i32(&expert_indices_host, &[1, TOP_K_EXPERT_COUNT as i32])
-        .expect("the route fixture should upload");
-    let gathered = runtime
-        .gather_dense_matmul(
-            &expanded_hidden,
-            &transposed_page,
-            None,
-            Some(&route_indices),
-            false,
-        )
-        .expect("gather_mm should build");
-    let gathered_host = runtime
-        .array_to_vec_f32(
-            &runtime
-                .astype(&gathered, MlxDtype::Float32)
-                .expect("the gathered output should widen"),
-        )
-        .expect("the gathered output should read back");
-
-    let expert_indices = MlxArray::from_i32(&expert_indices_host, &[TOP_K_EXPERT_COUNT as i32])
-        .expect("the flat route fixture should upload");
-    let projected = kernel
-        .apply(
-            &runtime,
-            &hidden,
-            &expert_indices,
-            &fixture.packed_code_words,
-            &fixture.row_scales,
-            TWO_BIT_WIDTH,
-        )
-        .expect("the fused projection should launch");
-    assert_eq!(projected.dtype(), MlxDtype::BFloat16);
-    let projected_host = runtime
-        .array_to_vec_f32(
-            &runtime
-                .astype(&projected, MlxDtype::Float32)
-                .expect("the projection should widen"),
-        )
-        .expect("the projection should read back");
+        &fixture,
+        &hidden,
+        &expert_indices_host,
+    );
+    let projected_host =
+        fused_projection_on_top_k_page(&runtime, &kernel, &fixture, &hidden, &expert_indices_host);
 
     let expected: Vec<f64> = gathered_host
         .iter()
@@ -420,6 +374,76 @@ fn should_match_materializing_decode_and_gather_matmul_on_a_top_k_page() {
         BFLOAT16_RELATIVE_TOLERANCE,
         "fused versus host reference on the top-8 page",
     );
+}
+
+fn materializing_decode_plus_gather_mm_projection(
+    runtime: &MlxRuntime,
+    fixture: &FusedProjectionFixture,
+    hidden: &MlxArray,
+    expert_indices_host: &[i32],
+) -> Vec<f32> {
+    // The materializing path exactly as `paged_execution` runs it: decode the
+    // page to bfloat16, transpose lazily, gather_mm with [1, 1, 1, H] inputs.
+    let decoded_page = mlx_decode::decode_expert_weight_rows(
+        runtime,
+        &fixture.packed_code_words,
+        &fixture.row_scales,
+        TWO_BIT_WIDTH,
+    )
+    .expect("the materializing decode should succeed");
+    let transposed_page = runtime
+        .transpose_axes(&decoded_page, &[0, 2, 1])
+        .expect("the decoded page should transpose");
+    let expanded_hidden = runtime
+        .reshape(hidden, &[1, 1, 1, GATE_UP_INPUT_WIDTH as i32])
+        .expect("the activations should expand");
+    let route_indices = MlxArray::from_i32(expert_indices_host, &[1, TOP_K_EXPERT_COUNT as i32])
+        .expect("the route fixture should upload");
+    let gathered = runtime
+        .gather_dense_matmul(
+            &expanded_hidden,
+            &transposed_page,
+            None,
+            Some(&route_indices),
+            false,
+        )
+        .expect("gather_mm should build");
+    runtime
+        .array_to_vec_f32(
+            &runtime
+                .astype(&gathered, MlxDtype::Float32)
+                .expect("the gathered output should widen"),
+        )
+        .expect("the gathered output should read back")
+}
+
+fn fused_projection_on_top_k_page(
+    runtime: &MlxRuntime,
+    kernel: &FusedJangtq2GatheredProjectionKernel,
+    fixture: &FusedProjectionFixture,
+    hidden: &MlxArray,
+    expert_indices_host: &[i32],
+) -> Vec<f32> {
+    let expert_indices = MlxArray::from_i32(expert_indices_host, &[TOP_K_EXPERT_COUNT as i32])
+        .expect("the flat route fixture should upload");
+    let projected = kernel
+        .apply(
+            runtime,
+            hidden,
+            &expert_indices,
+            &fixture.packed_code_words,
+            &fixture.row_scales,
+            TWO_BIT_WIDTH,
+        )
+        .expect("the fused projection should launch");
+    assert_eq!(projected.dtype(), MlxDtype::BFloat16);
+    runtime
+        .array_to_vec_f32(
+            &runtime
+                .astype(&projected, MlxDtype::Float32)
+                .expect("the projection should widen"),
+        )
+        .expect("the projection should read back")
 }
 
 #[test]

@@ -137,25 +137,14 @@ pub(super) fn plan_evictable_slots(
         })
         .collect();
     if let Some(decode_step_epoch) = candidate_decode_step_epoch {
-        // Bound replacements per layer per decode step; beyond the cap
-        // the insert refuses and the streamed page stays
-        // operation-local. Unbounded swap-for-admission measured 492
-        // evictions in 200 tokens and a 4.4x decode source-byte blowup.
-        // The cap is per reply token; a drafted forward's rows are several.
-        evictable_slots.truncate(
+        rank_and_cap_candidate_victims(
+            &mut evictable_slots,
+            &table.decode_policy_by_slot,
+            decode_step_epoch,
+            table.per_expert_payload_bytes,
             MAXIMUM_CANDIDATE_SLOT_REPLACEMENTS_PER_DECODE_STEP
                 .saturating_mul(table.decode_step_row_count),
         );
-        evictable_slots.sort_unstable_by(|left_slot, right_slot| {
-            table.decode_policy_by_slot[*left_slot].compare_eviction_priority(
-                *left_slot,
-                table.decode_policy_by_slot[*right_slot],
-                *right_slot,
-                decode_step_epoch,
-                table.per_expert_payload_bytes,
-                table.per_expert_payload_bytes,
-            )
-        });
     } else {
         evictable_slots.sort_unstable_by_key(|slot| {
             table
@@ -166,6 +155,33 @@ pub(super) fn plan_evictable_slots(
         });
     }
     evictable_slots
+}
+
+/// Pure: orders the candidate policy's victims, the lowest priority first,
+/// and keeps at most `replacement_cap` of them. Beyond the cap the insert
+/// refuses and the streamed page stays operation-local: unbounded
+/// swap-for-admission measured 492 evictions in 200 tokens and a 4.4x
+/// decode source-byte blowup. The cap is per reply token, so a drafted
+/// forward's rows raise it. Ordering comes first, so the cap keeps the
+/// lowest-priority victims rather than the lowest-numbered slots.
+pub(super) fn rank_and_cap_candidate_victims(
+    evictable_slots: &mut Vec<usize>,
+    decode_policy_by_slot: &[DecodeExpertSlotState],
+    decode_step_epoch: u64,
+    per_expert_payload_bytes: u64,
+    replacement_cap: usize,
+) {
+    evictable_slots.sort_unstable_by(|left_slot, right_slot| {
+        decode_policy_by_slot[*left_slot].compare_eviction_priority(
+            *left_slot,
+            decode_policy_by_slot[*right_slot],
+            *right_slot,
+            decode_step_epoch,
+            per_expert_payload_bytes,
+            per_expert_payload_bytes,
+        )
+    });
+    evictable_slots.truncate(replacement_cap);
 }
 
 /// Pure: fills the plan from free slots first, then eviction candidates, and

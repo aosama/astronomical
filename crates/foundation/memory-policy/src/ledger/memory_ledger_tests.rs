@@ -430,6 +430,7 @@ fn reading_with_nothing_else_wired(
         system_wired_bytes,
         system_wire_limit_bytes,
         mlx_held_bytes: system_wired_bytes,
+        reading_milliseconds: 0,
     }
 }
 
@@ -445,10 +446,74 @@ fn should_reserve_up_front_what_other_wired_memory_leaves_no_room_for() {
             system_wired_bytes: 9 * GIBIBYTE,
             system_wire_limit_bytes: 10 * GIBIBYTE,
             mlx_held_bytes: 7 * GIBIBYTE,
+            reading_milliseconds: 0,
         },
     );
     let expected_reserve_bytes =
         16 * GIBIBYTE - (10 * GIBIBYTE - 10 * GIBIBYTE / 100 - 2 * GIBIBYTE);
     assert_eq!(accounts.system_wired_reserve_bytes, expected_reserve_bytes);
     assert!(accounts.kept_weight_capacity_bytes < capacity_before_bytes);
+}
+
+fn reading_with_wired_outside_mlx(
+    reading_milliseconds: u64,
+    mlx_held_bytes: u64,
+    wired_outside_mlx_bytes: u64,
+) -> crate::ledger::system_wired_ceiling::SystemWiredReading {
+    crate::ledger::system_wired_ceiling::SystemWiredReading {
+        system_wired_bytes: mlx_held_bytes + wired_outside_mlx_bytes,
+        system_wire_limit_bytes: 20 * GIBIBYTE,
+        mlx_held_bytes,
+        reading_milliseconds,
+    }
+}
+
+#[test]
+fn should_not_take_room_from_kept_weights_while_macos_still_wires_what_mlx_released() {
+    let mut memory_ledger = ledger_at_16_gibibytes();
+    let steady = memory_ledger.observe_system_wired(reading_with_wired_outside_mlx(
+        0,
+        12 * GIBIBYTE,
+        2 * GIBIBYTE,
+    ));
+    assert_eq!(steady.system_wired_reserve_bytes, 0);
+    // MLX has just given back 4 GiB that macOS keeps wired for 200 ms.
+    for reading_milliseconds in [50, 100, 150, 200] {
+        let during_the_lag = memory_ledger.observe_system_wired(reading_with_wired_outside_mlx(
+            reading_milliseconds,
+            8 * GIBIBYTE,
+            6 * GIBIBYTE,
+        ));
+        assert_eq!(during_the_lag.system_wired_reserve_bytes, 0);
+        assert_eq!(
+            during_the_lag.kept_weight_capacity_bytes,
+            steady.kept_weight_capacity_bytes
+        );
+    }
+}
+
+#[test]
+fn should_take_room_from_kept_weights_once_more_wiring_outside_mlx_outlasts_the_release_lag() {
+    let mut memory_ledger = ledger_at_16_gibibytes();
+    let _ = memory_ledger.observe_system_wired(reading_with_wired_outside_mlx(
+        0,
+        12 * GIBIBYTE,
+        2 * GIBIBYTE,
+    ));
+    let early = memory_ledger.observe_system_wired(reading_with_wired_outside_mlx(
+        100,
+        12 * GIBIBYTE,
+        6 * GIBIBYTE,
+    ));
+    let lasting = memory_ledger.observe_system_wired(reading_with_wired_outside_mlx(
+        400,
+        12 * GIBIBYTE,
+        6 * GIBIBYTE,
+    ));
+    assert_eq!(early.system_wired_reserve_bytes, 0);
+    assert!(
+        lasting.system_wired_reserve_bytes > 0,
+        "wiring another application keeps must be planned around: {lasting:?}"
+    );
+    assert_accounts_add_up(lasting);
 }

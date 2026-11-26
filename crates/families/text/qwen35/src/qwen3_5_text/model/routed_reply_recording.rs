@@ -26,6 +26,24 @@ pub struct ReplyStartSnapshot {
     stored_observation_count_at_reply_start: u64,
 }
 
+impl ReplyStartSnapshot {
+    /// A snapshot holding nothing, at `stored_observation_count_at_reply_start`.
+    #[cfg(test)]
+    pub(crate) const fn empty_at(stored_observation_count_at_reply_start: u64) -> Self {
+        Self {
+            held_expert_ids_by_layer: Vec::new(),
+            prompt_demand_by_layer: Vec::new(),
+            reply_demand_by_layer: Vec::new(),
+            kept_expert_capacity_bytes: 0,
+            stored_observation_count_at_reply_start,
+        }
+    }
+
+    pub const fn stored_observation_count_at_reply_start(&self) -> u64 {
+        self.stored_observation_count_at_reply_start
+    }
+}
+
 /// One recorded reply, ready to replay.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct RoutedReplyRecording {
@@ -54,8 +72,14 @@ pub struct RoutedReplyRecording {
     /// Slots each layer not held whole may keep, when the recording was
     /// taken (the engine's warm slot count).
     pub warm_slot_count: usize,
+    /// Each capacity the engine applied while the reply was served.
+    pub capacity_moments: Vec<memory_policy::astro_expert_cache_model::CapacityMoment>,
     /// One expert's payload bytes in each layer.
     pub expert_payload_bytes_by_layer: Vec<u64>,
+    /// For each served reply token, each layer's experts read from storage,
+    /// as the engine counted them. A token's misses are closed when its route
+    /// is, so they line up with `token_routes` token for token.
+    pub engine_miss_counts_by_token: Vec<Vec<u32>>,
 }
 
 impl Qwen3_5Model {
@@ -88,12 +112,25 @@ impl Qwen3_5Model {
         let expert_pager = self.expert_pager.as_ref()?;
         let mut route_observation = self.route_observation.borrow_mut();
         let reply_start = route_observation.take_reply_start_snapshot()?;
+        let capacity_moments = route_observation.take_capacity_moments();
         let reply_token_count = route_observation
             .stored_observation_count()
             .saturating_sub(reply_start.stored_observation_count_at_reply_start);
         let token_routes = route_observation.newest_token_routes(
             usize::try_from(reply_token_count).unwrap_or(usize::MAX),
             expert_pager.layer_plans().len(),
+        );
+        let engine_miss_counts_by_token =
+            route_observation.take_engine_miss_counts(token_routes.len());
+        // The ring keeps only the newest routes; moments are indexed from the
+        // reply's start, so they move back by the tokens no longer kept.
+        let dropped_token_count = u32::try_from(
+            reply_token_count.saturating_sub(u64::try_from(token_routes.len()).unwrap_or(u64::MAX)),
+        )
+        .unwrap_or(u32::MAX);
+        let capacity_moments = memory_policy::astro_expert_cache_model::rebased_capacity_moments(
+            &capacity_moments,
+            dropped_token_count,
         );
         let mut expert_payload_bytes_by_layer = Vec::new();
         for layer_plan in expert_pager.layer_plans() {
@@ -121,7 +158,9 @@ impl Qwen3_5Model {
             },
             kept_expert_capacity_bytes: reply_start.kept_expert_capacity_bytes,
             warm_slot_count: self.hot_expert_warm_slot_count(),
+            capacity_moments,
             expert_payload_bytes_by_layer,
+            engine_miss_counts_by_token,
         })
     }
 }

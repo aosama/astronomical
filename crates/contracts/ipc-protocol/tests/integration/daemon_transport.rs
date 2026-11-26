@@ -225,7 +225,6 @@ async fn should_keep_serving_after_client_disconnects_without_a_request() {
 }
 
 #[tokio::test(flavor = "current_thread")]
-#[expect(clippy::too_many_lines)]
 async fn should_stream_multiple_responses_for_one_request() {
     let test_directory = fresh_transport_test_directory("stream-many");
     let socket_path = test_directory.join(SOCKET_FILE_NAME);
@@ -236,7 +235,33 @@ async fn should_stream_multiple_responses_for_one_request() {
     let mut daemon_client = DaemonIpcClient::connect(socket_path.clone())
         .await
         .expect("the client should connect to the streaming listener");
-    let chat_generate_request = DaemonRequest::ChatGenerate {
+    let chat_generate_request = say_hello_chat_generate_request();
+    timeout(
+        HANDSHAKE_TEST_TIMEOUT,
+        daemon_client.send_request(&chat_generate_request),
+    )
+    .await
+    .expect("the chat generate send should finish inside the test timeout")
+    .expect("the chat generate request should transmit");
+
+    serve_hello_world_stream(&mut daemon_listener, chat_generate_request).await;
+
+    let streamed_frames = read_hello_world_stream_frames(&mut daemon_client).await;
+    assert_hello_world_stream_frames(streamed_frames);
+
+    let connection_closed = timeout(HANDSHAKE_TEST_TIMEOUT, daemon_client.next_response())
+        .await
+        .expect("the terminal read should finish inside the test timeout")
+        .expect("the terminal read should not fail at the transport layer");
+    assert!(
+        connection_closed.is_none(),
+        "the daemon should close the connection after the terminal frame"
+    );
+    cleanup_transport_test_directory(&test_directory);
+}
+
+fn say_hello_chat_generate_request() -> DaemonRequest {
+    DaemonRequest::ChatGenerate {
         model: "example/local-model".to_owned(),
         messages: vec![ChatMessage::User {
             content: "Say hello".to_owned(),
@@ -251,15 +276,13 @@ async fn should_stream_multiple_responses_for_one_request() {
             thinking_budget: None,
         },
         schema_json: None,
-    };
-    timeout(
-        HANDSHAKE_TEST_TIMEOUT,
-        daemon_client.send_request(&chat_generate_request),
-    )
-    .await
-    .expect("the chat generate send should finish inside the test timeout")
-    .expect("the chat generate request should transmit");
+    }
+}
 
+async fn serve_hello_world_stream(
+    daemon_listener: &mut DaemonIpcListener,
+    chat_generate_request: DaemonRequest,
+) {
     timeout(
         HANDSHAKE_TEST_TIMEOUT,
         daemon_listener.serve_streaming_request(|daemon_request, mut response_writer| async move {
@@ -292,7 +315,11 @@ async fn should_stream_multiple_responses_for_one_request() {
     .await
     .expect("the streaming serve should finish inside the test timeout")
     .expect("the streaming serve should succeed while the client reads");
+}
 
+async fn read_hello_world_stream_frames(
+    daemon_client: &mut DaemonIpcClient,
+) -> [DaemonResponse; 3] {
     let first_fragment = timeout(HANDSHAKE_TEST_TIMEOUT, daemon_client.next_response())
         .await
         .expect("the first fragment read should finish inside the test timeout")
@@ -308,6 +335,11 @@ async fn should_stream_multiple_responses_for_one_request() {
         .expect("the completion read should finish inside the test timeout")
         .expect("the completion read should not fail at the transport layer")
         .expect("the completion frame should arrive");
+    [first_fragment, second_fragment, completion_frame]
+}
+
+fn assert_hello_world_stream_frames(streamed_frames: [DaemonResponse; 3]) {
+    let [first_fragment, second_fragment, completion_frame] = streamed_frames;
     assert!(matches!(
         first_fragment,
         DaemonResponse::ChatGenerationText { text } if text == "Hello"
@@ -324,16 +356,6 @@ async fn should_stream_multiple_responses_for_one_request() {
             ..
         }
     ));
-
-    let connection_closed = timeout(HANDSHAKE_TEST_TIMEOUT, daemon_client.next_response())
-        .await
-        .expect("the terminal read should finish inside the test timeout")
-        .expect("the terminal read should not fail at the transport layer");
-    assert!(
-        connection_closed.is_none(),
-        "the daemon should close the connection after the terminal frame"
-    );
-    cleanup_transport_test_directory(&test_directory);
 }
 
 #[tokio::test(flavor = "current_thread")]
@@ -349,22 +371,7 @@ async fn should_survive_a_client_disconnect_mid_stream() {
         .expect("the abandoning client should connect to the streaming listener");
     timeout(
         HANDSHAKE_TEST_TIMEOUT,
-        abandoning_client.send_request(&DaemonRequest::ChatGenerate {
-            model: "example/local-model".to_owned(),
-            messages: vec![ChatMessage::User {
-                content: "Say hello".to_owned(),
-                images: vec![],
-            }],
-            settings: ChatGenerationSettings {
-                max_output_tokens: 128,
-                temperature_thousandths: None,
-                top_p_thousandths: None,
-                repetition_penalty_thousandths: None,
-                seed: None,
-                thinking_budget: None,
-            },
-            schema_json: None,
-        }),
+        abandoning_client.send_request(&say_hello_chat_generate_request()),
     )
     .await
     .expect("the abandoning send should finish inside the test timeout")
@@ -373,6 +380,13 @@ async fn should_survive_a_client_disconnect_mid_stream() {
     // the sends start failing, which is exactly what the daemon must survive.
     drop(abandoning_client);
 
+    serve_oversized_stream_to_vanished_client(&mut daemon_listener).await;
+
+    answer_handshake_after_mid_stream_disconnect(&mut daemon_listener, &socket_path).await;
+    cleanup_transport_test_directory(&test_directory);
+}
+
+async fn serve_oversized_stream_to_vanished_client(daemon_listener: &mut DaemonIpcListener) {
     let oversized_fragment_text = "x".repeat(64 * 1024);
     let stream_outcome = timeout(
         HANDSHAKE_TEST_TIMEOUT,
@@ -398,8 +412,13 @@ async fn should_survive_a_client_disconnect_mid_stream() {
             "a vanished mid-stream client is a per-request failure, not a listener failure: {stream_error}"
         ),
     }
+}
 
-    let mut following_client = DaemonIpcClient::connect(socket_path.clone())
+async fn answer_handshake_after_mid_stream_disconnect(
+    daemon_listener: &mut DaemonIpcListener,
+    socket_path: &Path,
+) {
+    let mut following_client = DaemonIpcClient::connect(socket_path.to_path_buf())
         .await
         .expect("the following client should connect after the mid-stream disconnect");
     timeout(
@@ -430,5 +449,4 @@ async fn should_survive_a_client_disconnect_mid_stream() {
         following_response,
         DaemonResponse::HandshakeAccepted { .. }
     ));
-    cleanup_transport_test_directory(&test_directory);
 }

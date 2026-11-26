@@ -21,17 +21,16 @@ use crate::serving::decisions_executor::DecisionsResultSender;
 use crate::worker::astro_ssd_prompt_cache_clear::handle_astro_ssd_prompt_cache_clear_command;
 use crate::worker::event_reaction::{
     cancel_active_request, fail_model_load_deadline, react_to_worker_event_outcome,
-    sample_idle_mlx_memory_telemetry, send_stepped_deadline_exceeded,
+    send_stepped_deadline_exceeded,
 };
 use crate::worker::generation::generate::handle_generate_command;
 use crate::worker::idle_drain::{
-    drain_pending_idle_work, wait_for_single_shot_execution_deadline,
-    wait_for_stepped_request_deadline,
+    wait_for_single_shot_execution_deadline, wait_for_stepped_request_deadline,
 };
-use crate::worker::idle_model_unload::{
-    ModelUnloadCause, should_unload_idle_model, unload_loaded_model,
+use crate::worker::idle_iteration::{
+    drain_idle_work_before_waiting, idle_control_tick_conditions, run_idle_control_tick,
 };
-use crate::worker::image_request::handle_generate_image_command;
+use crate::worker::image_request::{ImageAdmission, handle_generate_image_command};
 use crate::worker::loop_types::{
     ActiveWorkerRequest, WorkerLoopCommand, WorkerLoopRuntime, WorkerLoopState,
 };
@@ -122,24 +121,7 @@ pub(in crate::worker) async fn run_worker_iteration(
     command_receiver: &mut mpsc::Receiver<WorkerLoopCommand>,
     idle_control_interval: &mut Interval,
 ) -> WorkerLoopFlow {
-    let mut worker_loop_state = WorkerLoopState {
-        worker_process: &mut runtime.worker_process,
-        health_snapshot: &runtime.health_snapshot,
-        is_ready: &mut runtime.is_ready,
-        model_load_deadline: &mut runtime.model_load_deadline,
-        active_request: &mut runtime.active_generation,
-        performance_log: &mut runtime.performance_log,
-        completion_log: &mut runtime.completion_log,
-        model_load_timeout: runtime.model_load_timeout,
-    };
-    drain_pending_idle_work(
-        &mut worker_loop_state,
-        &mut runtime.pending_mlx_memory_limit_update,
-        &mut runtime.pending_astro_ssd_prompt_cache_clear,
-        &runtime.active_generation_permits,
-        &runtime.generation_queue_permits,
-    )
-    .await;
+    drain_idle_work_before_waiting(runtime).await;
     // Read before the select waits: the request's final event can arrive long
     // after this point, and the clock must restart when it does, not before.
     let was_serving_a_request = runtime.active_generation.is_some();
@@ -155,16 +137,15 @@ pub(in crate::worker) async fn run_worker_iteration(
     observe_worker_for_contained_failure_relaunch(runtime, is_worker_running);
     let contained_failure_relaunch_deadline =
         runtime.contained_failure_relaunch.relaunch_deadline();
+    let is_idle_control_tick_due =
+        idle_control_tick_conditions(runtime, is_worker_running, has_loaded_model).are_met();
 
     tokio::select! {
-        worker_loop_command = command_receiver.recv() => {
-            let Some(worker_loop_command) = worker_loop_command else {
-                close_worker_if_running(&mut runtime.worker_process).await;
+        received_command = command_receiver.recv() => {
+            let command_flow =
+                handle_received_worker_command(runtime, is_worker_running, received_command).await;
+            if command_flow == WorkerLoopFlow::Exit {
                 return WorkerLoopFlow::Exit;
-            };
-            match handle_worker_loop_command(runtime, is_worker_running, worker_loop_command).await {
-                WorkerLoopFlow::Exit => return WorkerLoopFlow::Exit,
-                WorkerLoopFlow::Continue => {}
             }
         }
         worker_event_outcome = runtime.worker_process.next_event(), if is_worker_running => {
@@ -208,21 +189,29 @@ pub(in crate::worker) async fn run_worker_iteration(
             if !is_worker_running && contained_failure_relaunch_deadline.is_some() => {
             relaunch_contained_worker(runtime).await;
         }
-        _ = idle_control_interval.tick(), if is_worker_running
-            && runtime.is_ready
-            && runtime.active_generation.is_none()
-            && (has_loaded_model || runtime.pending_astro_ssd_prompt_cache_clear.is_some()) => {
-            sample_idle_mlx_memory_telemetry(runtime, has_loaded_model).await;
-            if should_unload_idle_model(runtime, has_loaded_model, tokio::time::Instant::now()) {
-                let _empty_worker_is_ready =
-                    unload_loaded_model(runtime, ModelUnloadCause::IdleSpan).await;
-            }
+        _ = idle_control_interval.tick(), if is_idle_control_tick_due => {
+            run_idle_control_tick(runtime, has_loaded_model).await;
         }
     }
     runtime
         .idle_model_unload
         .observe_iteration_end(was_serving_a_request, tokio::time::Instant::now());
     WorkerLoopFlow::Continue
+}
+
+/// Dispatches the command the loop received. A closed command channel means
+/// nobody can send commands any more, so the worker process is closed and
+/// the loop exits.
+async fn handle_received_worker_command(
+    runtime: &mut WorkerLoopRuntime,
+    is_worker_running: bool,
+    received_command: Option<WorkerLoopCommand>,
+) -> WorkerLoopFlow {
+    let Some(worker_loop_command) = received_command else {
+        close_worker_if_running(&mut runtime.worker_process).await;
+        return WorkerLoopFlow::Exit;
+    };
+    handle_worker_loop_command(runtime, is_worker_running, worker_loop_command).await
 }
 
 /// Hands the relaunch schedule the worker's liveness and health status, read
@@ -411,22 +400,27 @@ async fn admit_image_generation_command(
     else {
         return;
     };
+    let mut worker_loop_state = WorkerLoopState {
+        worker_process: &mut runtime.worker_process,
+        health_snapshot: &runtime.health_snapshot,
+        is_ready: &mut runtime.is_ready,
+        model_load_deadline: &mut runtime.model_load_deadline,
+        active_request: &mut runtime.active_generation,
+        performance_log: &mut runtime.performance_log,
+        completion_log: &mut runtime.completion_log,
+        model_load_timeout: runtime.model_load_timeout,
+    };
     if let Err(control_error) = handle_generate_image_command(
-        &mut runtime.worker_process,
-        active_generation_permit,
-        generation_command,
-        start_sender,
-        image_result_sender,
-        admitted_at,
-        queue_wait_elapsed,
-        &runtime.health_snapshot,
-        &mut runtime.is_ready,
-        &mut runtime.model_load_deadline,
-        &mut runtime.active_generation,
-        &mut runtime.performance_log,
-        &mut runtime.completion_log,
+        &mut worker_loop_state,
+        ImageAdmission {
+            active_generation_permit,
+            generation_command,
+            start_sender,
+            image_result_sender,
+            admitted_at,
+            queue_wait_elapsed,
+        },
         &runtime.model_policy_catalog,
-        runtime.model_load_timeout,
         runtime.cancellation_acknowledgement_timeout,
         runtime.image_generation_timeouts,
     )

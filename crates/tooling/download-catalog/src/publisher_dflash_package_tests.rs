@@ -4,20 +4,10 @@
 //! drafter and the tower, and the size the disk check reserves must count the
 //! drafter.
 
-use crate::{DownloadCatalog, DownloadCatalogEntry};
+use crate::DownloadCatalog;
+use crate::download_catalog_tests::shipped_entry;
 
 const PUBLISHER_DRAFTER_WEIGHTS_BYTES: u64 = 771_819_680;
-
-fn shipped_entry<'catalog>(
-    download_catalog: &'catalog DownloadCatalog,
-    huggingface_id: &str,
-) -> &'catalog DownloadCatalogEntry {
-    download_catalog
-        .entries()
-        .iter()
-        .find(|catalog_entry| catalog_entry.huggingface_id() == huggingface_id)
-        .unwrap_or_else(|| panic!("the shipped catalog should offer {huggingface_id}"))
-}
 
 #[test]
 fn should_ship_the_publisher_vision_dflash_packages_with_their_drafter_and_tower() {

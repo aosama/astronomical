@@ -1,6 +1,7 @@
 use std::fs::{File, OpenOptions};
+use std::path::Path;
 
-use mlx_bridge::MlxDtype;
+use mlx_bridge::{MlxArray, MlxDtype};
 use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
 #[test]
@@ -24,6 +25,38 @@ fn should_write_unequal_noncontiguous_views_with_one_largest_tensor_workspace() 
         .expect("the test should create the smallest noncontiguous view");
     assert!(largest_view.byte_count() > medium_view.byte_count());
     assert!(medium_view.byte_count() > smallest_view.byte_count());
+    let constrained_memory_limits =
+        constrained_one_tensor_workspace_limits(&runtime, &largest_view, &medium_view);
+    let mut guarded_runtime =
+        RuntimeMemoryLimitGuard::new(runtime, original_memory_limits, constrained_memory_limits);
+    let temporary_directory =
+        tempfile::tempdir().expect("the test should create a temporary directory");
+    let streamed_views_file_path = temporary_directory
+        .path()
+        .join("streamed-views.safetensors");
+
+    save_views_under_constrained_ceiling(
+        &guarded_runtime,
+        &streamed_views_file_path,
+        [&largest_view, &medium_view, &smallest_view],
+    );
+    guarded_runtime.restore();
+    drop(largest_view);
+    drop(medium_view);
+    drop(smallest_view);
+    drop(shared_backing);
+
+    assert_streamed_views_reload_with_their_shapes(&guarded_runtime, &streamed_views_file_path);
+}
+
+/// A ceiling that fits the largest view's materialization but not the largest
+/// and the medium view together, so the writer must materialize one tensor at
+/// a time.
+fn constrained_one_tensor_workspace_limits(
+    runtime: &MlxRuntime,
+    largest_view: &MlxArray,
+    medium_view: &MlxArray,
+) -> MlxMemoryLimits {
     let baseline_active_memory_bytes = runtime
         .memory_snapshot()
         .expect("the test should observe the materialized backing baseline")
@@ -39,19 +72,21 @@ fn should_write_unequal_noncontiguous_views_with_one_largest_tensor_workspace() 
             > active_memory_limit_bytes.saturating_sub(baseline_active_memory_bytes),
         "the combined materializations must exceed the available workspace"
     );
-    let constrained_memory_limits = MlxMemoryLimits::new(active_memory_limit_bytes, 0)
-        .expect("the constrained writer memory limits should be valid");
-    let mut guarded_runtime =
-        RuntimeMemoryLimitGuard::new(runtime, original_memory_limits, constrained_memory_limits);
-    let temporary_directory =
-        tempfile::tempdir().expect("the test should create a temporary directory");
-    let streamed_views_file_path = temporary_directory
-        .path()
-        .join("streamed-views.safetensors");
+    MlxMemoryLimits::new(active_memory_limit_bytes, 0)
+        .expect("the constrained writer memory limits should be valid")
+}
+
+/// The views arrive as [largest, medium, smallest].
+fn save_views_under_constrained_ceiling(
+    guarded_runtime: &RuntimeMemoryLimitGuard,
+    streamed_views_file_path: &Path,
+    views: [&MlxArray; 3],
+) {
+    let [largest_view, medium_view, smallest_view] = views;
     let streamed_views_file = OpenOptions::new()
         .create_new(true)
         .write(true)
-        .open(&streamed_views_file_path)
+        .open(streamed_views_file_path)
         .expect("the test should create the streamed output file");
 
     guarded_runtime
@@ -59,23 +94,23 @@ fn should_write_unequal_noncontiguous_views_with_one_largest_tensor_workspace() 
         .save_safetensors(
             streamed_views_file,
             &[
-                ("largest", &largest_view),
-                ("medium", &medium_view),
-                ("smallest", &smallest_view),
+                ("largest", largest_view),
+                ("medium", medium_view),
+                ("smallest", smallest_view),
             ],
             &[("format_version", "streaming-workspace-test")],
         )
         .expect("one-at-a-time tensor materialization should fit the constrained ceiling");
-    guarded_runtime.restore();
-    drop(largest_view);
-    drop(medium_view);
-    drop(smallest_view);
-    drop(shared_backing);
+}
 
+fn assert_streamed_views_reload_with_their_shapes(
+    guarded_runtime: &RuntimeMemoryLimitGuard,
+    streamed_views_file_path: &Path,
+) {
     let restored_safetensors = guarded_runtime
         .runtime()
         .load_safetensors(
-            File::open(&streamed_views_file_path)
+            File::open(streamed_views_file_path)
                 .expect("the test should reopen the streamed output"),
             None,
         )

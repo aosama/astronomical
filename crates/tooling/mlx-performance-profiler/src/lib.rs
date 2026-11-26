@@ -36,6 +36,16 @@ mod native_procedures;
 #[cfg(feature = "direct-mlx")]
 mod procedure_measurement;
 
+// Two synchronous calls into the library, each writing one local struct.
+#[cfg(feature = "direct-mlx")]
+#[allow(unsafe_code)]
+mod wired_memory;
+
+#[cfg(feature = "direct-mlx")]
+pub use wired_memory::{
+    WireReleaseLag, WiredMemoryReading, measure_wire_release_lag, read_wired_memory,
+};
+
 #[cfg(feature = "direct-mlx")]
 pub use procedure_measurement::{
     MeasuredProcedure, ProcedureComparison, ProcedureHandOffs, compare_procedures,
@@ -52,3 +62,6 @@ mod measurement_tests;
 
 #[cfg(all(test, feature = "direct-mlx"))]
 mod procedure_measurement_tests;
+
+#[cfg(all(test, feature = "direct-mlx"))]
+mod wired_memory_tests;

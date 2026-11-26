@@ -52,10 +52,7 @@ impl super::super::PrismHadamardTextModel {
         linear_layer_state: LinearLayerState<'_>,
     ) -> Result<MlxArray, PrismHadamardModelError> {
         let text = self.pack.config().text();
-        let rms_norm_epsilon = f32::from_bits(text.rms_norm_epsilon_bits);
         let linear_value_head_count = text.linear_num_value_heads as i32;
-        let linear_value_dimension =
-            (text.linear_num_value_heads * text.linear_value_head_dim) as i32;
 
         // One rotation of the layer input feeds the one fused launch that
         // produces both rotated projections.
@@ -117,16 +114,33 @@ impl super::super::PrismHadamardTextModel {
             )?
         };
 
+        self.project_gated_recurrence_output(&recurrent_output, &output_gate, token_count, layer)
+    }
+
+    /// The output side of a linear-attention layer: the recurrence output is
+    /// normalized, gated by the output-gate projection, rotated once, and sent
+    /// through the output projection.
+    fn project_gated_recurrence_output(
+        &self,
+        recurrent_output: &MlxArray,
+        output_gate: &MlxArray,
+        token_count: i32,
+        layer: &LinearLayerWeights,
+    ) -> Result<MlxArray, PrismHadamardModelError> {
+        let text = self.pack.config().text();
+        let rms_norm_epsilon = f32::from_bits(text.rms_norm_epsilon_bits);
+        let linear_value_dimension =
+            (text.linear_num_value_heads * text.linear_value_head_dim) as i32;
         let normalized_output = self
             .runtime
-            .rms_norm(&recurrent_output, &layer.normalization, rms_norm_epsilon)
+            .rms_norm(recurrent_output, &layer.normalization, rms_norm_epsilon)
             .map_err(PrismHadamardModelError::Forward)?;
         let gated_output = self
             .runtime
             .apply_compiled_precise_swiglu(
                 &self.compiled_elementwise_graphs,
                 &normalized_output,
-                &output_gate,
+                output_gate,
             )
             .map_err(PrismHadamardModelError::Forward)?;
         let gated_output = self

@@ -24,6 +24,7 @@ fn three_layer_case(token_count: u16) -> ReplayCase {
         held_expert_ids_by_layer_at_start: vec![Vec::new(); 3],
         layer_slot_limits: Some(vec![2, 2, 2]),
         pinned_layer_indexes: Vec::new(),
+        charges_whole_table_slots: false,
     }
 }
 
@@ -59,6 +60,7 @@ fn should_keep_every_table_at_its_minimum_size() {
 fn should_leave_a_pinned_layer_its_size() {
     let replay_case = ReplayCase {
         pinned_layer_indexes: vec![1],
+        charges_whole_table_slots: false,
         layer_slot_limits: Some(vec![2, 8, 2]),
         ..three_layer_case(4)
     };

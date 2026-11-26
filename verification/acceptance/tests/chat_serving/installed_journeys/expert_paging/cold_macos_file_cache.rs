@@ -10,6 +10,14 @@
 //! a 0.86 GB layer file went from fully resident to none in 7 ms), so a
 //! background thread that sweeps every weight file keeps the `macos_file_cache` empty.
 //! This is the pessimistic end of a small Mac, which still keeps a little of the model in the `macos_file_cache`.
+//!
+//! The sweeps distort what the system's wired total reads: invalidating
+//! about 20 GB of mappings every 10 ms has the kernel wire memory for a
+//! moment, so "wired outside MLX" jumps by up to 3 GB at single readings
+//! (measured on Flash-Next at a 34 GB limit: nine jumps over 1.5 GB in a
+//! reply with the sweeper, none in two replies without it). The reserve for
+//! macOS's wired line follows those readings and drops tables, so a journey
+//! about memory or table drops runs with a warm `macos_file_cache` instead.
 
 use std::fs::File;
 use std::os::fd::AsRawFd;

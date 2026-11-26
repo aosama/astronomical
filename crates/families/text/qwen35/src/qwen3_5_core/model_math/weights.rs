@@ -14,6 +14,7 @@ use crate::{PerformanceAttribution, PerformanceOperation};
 
 mod attention_binding;
 mod connection_binding;
+mod language_tensor_binding;
 mod mtp_head_binding;
 #[cfg(test)]
 mod tests;
@@ -21,7 +22,11 @@ mod tests;
 use attention_binding::{take_full_attention_weights, take_linear_attention_weights};
 use connection_binding::{
     LayerNormsAndAdditions, append_final_lane_mixer_arrays, apply_centered_norm_storage_convention,
-    take_layer_norms_and_additions, take_model_output_norm,
+    take_layer_norms_and_additions,
+};
+use language_tensor_binding::{
+    BoundLanguageTensors, TypedLanguageWeights, bind_language_tensors,
+    raw_hugging_face_norm_offsets_in_shards, take_typed_language_weights,
 };
 pub use mtp_head_binding::bind_mtp_head_weights;
 
@@ -168,85 +173,32 @@ impl Qwen3_5Weights {
             .map_err(|artifact_error| TextExecutionError::ExpertLayerPlan {
                 description: artifact_error.to_string(),
             })?;
-        let mut bound_tensors = HashMap::with_capacity(language_tensor_profiles.len());
-        let mut actual_payload_bytes = 0_u64;
-        let mut raw_hugging_face_norm_offsets_apply = false;
-        for tensor_profile in &language_tensor_profiles {
-            if tensor_profile.name.ends_with(".linear_attn.conv1d.weight") {
-                raw_hugging_face_norm_offsets_apply = should_apply_raw_hugging_face_norm_offsets(
-                    shard_index,
-                    &model_shards,
-                    qwen3_5_config,
-                    &tensor_profile.name,
-                )?;
-                break;
-            }
-        }
-        for tensor_profile in &language_tensor_profiles {
-            let tensor = bound_language_tensor_from_model_shards(
-                shard_index,
-                &model_shards,
-                &tensor_profile.name,
-            )?;
-            let (tensor, tensor_payload_bytes) = bind_language_tensor(
-                runtime,
-                qwen3_5_config,
-                raw_hugging_face_norm_offsets_apply,
-                tensor_profile,
-                tensor,
-                weight_binding_dtype,
-            )?;
-            actual_payload_bytes = actual_payload_bytes
-                .checked_add(tensor_payload_bytes)
-                .ok_or(TextExecutionError::InvalidTensor {
-                    tensor_name: tensor_profile.name.clone(),
-                    description: "total tensor payload byte count overflowed",
-                })?;
-            if bound_tensors
-                .insert(tensor_profile.name.clone(), tensor)
-                .is_some()
-            {
-                return Err(TextExecutionError::InvalidTensor {
-                    tensor_name: tensor_profile.name.clone(),
-                    description: "tensor was bound more than once",
-                });
-            }
-        }
-
-        let tensor_count = bound_tensors.len();
-        let embedding_weights = take_quantized_affine_weights(
-            &mut bound_tensors,
+        let raw_hugging_face_norm_offsets_apply = raw_hugging_face_norm_offsets_in_shards(
+            shard_index,
+            &model_shards,
             qwen3_5_config,
-            "language_model.model.embed_tokens",
+            &language_tensor_profiles,
         )?;
-        let decoder_layer_count = qwen3_5_config.layer_count() as usize;
-        let mut decoder_layer_weights = Vec::with_capacity(decoder_layer_count);
-        for decoder_layer_index in 0..decoder_layer_count {
-            decoder_layer_weights.push(take_decoder_layer_weights(
-                &mut bound_tensors,
-                qwen3_5_config,
-                decoder_layer_index,
-            )?);
-        }
-        let (final_normalization_weight, final_lane_mixer) =
-            take_model_output_norm(&mut bound_tensors, qwen3_5_config)?;
-        let language_model_head_weights = Qwen3_5DenseProjection::named(
-            "language_model.lm_head",
-            if qwen3_5_config.has_tied_embeddings() {
-                embedding_weights.retained_reference()?
-            } else {
-                take_quantized_affine_weights(
-                    &mut bound_tensors,
-                    qwen3_5_config,
-                    "language_model.lm_head",
-                )?
-            },
-        );
-        if let Some(unassigned_tensor_name) = bound_tensors.keys().next() {
-            return Err(TextExecutionError::UnassignedTensor {
-                tensor_name: unassigned_tensor_name.clone(),
-            });
-        }
+        let BoundLanguageTensors {
+            tensors: mut bound_tensors,
+            payload_bytes: actual_payload_bytes,
+        } = bind_language_tensors(
+            runtime,
+            qwen3_5_config,
+            shard_index,
+            &model_shards,
+            &language_tensor_profiles,
+            raw_hugging_face_norm_offsets_apply,
+            weight_binding_dtype,
+        )?;
+        let tensor_count = bound_tensors.len();
+        let TypedLanguageWeights {
+            embedding_weights,
+            decoder_layer_weights,
+            final_normalization_weight,
+            final_lane_mixer,
+            language_model_head_weights,
+        } = take_typed_language_weights(&mut bound_tensors, qwen3_5_config)?;
 
         Ok(Self {
             embedding_weights,

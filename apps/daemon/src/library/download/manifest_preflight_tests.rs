@@ -33,24 +33,7 @@ async fn should_check_disk_before_hub_and_persist_exact_manifest_after_the_secon
             query_count: Arc::clone(&capacity_query_count),
             available_bytes: Arc::new(Mutex::new([1_000, 1_000].into())),
         });
-        let transport = Arc::new(OrderingTransport {
-            capacity_query_count: Arc::clone(&capacity_query_count),
-            request_count: AtomicUsize::new(0),
-            responses: Mutex::new(
-                [
-                    json_response(serde_json::json!({
-                        "id": REPOSITORY_ID,
-                        "sha": REVISION,
-                        "private": false,
-                        "gated": false
-                    })),
-                    qwen_tree_response(),
-                    qwen_config_response(),
-                    qwen_index_response(),
-                ]
-                .into(),
-            ),
-        });
+        let transport = full_manifest_transport(&capacity_query_count);
         let written_attribution = Arc::new(Mutex::new(Vec::new()));
         let clock_call_count = Arc::new(AtomicUsize::new(0));
         let clock_call_count_for_clock = Arc::clone(&clock_call_count);
@@ -139,24 +122,7 @@ async fn should_stop_before_hub_io_when_initial_disk_admission_fails() {
         assert_eq!(transport.request_count.load(Ordering::SeqCst), 0);
 
         let retry_capacity_count = Arc::new(AtomicUsize::new(0));
-        let retry_transport = Arc::new(OrderingTransport {
-            capacity_query_count: Arc::clone(&retry_capacity_count),
-            request_count: AtomicUsize::new(0),
-            responses: Mutex::new(
-                [
-                    json_response(serde_json::json!({
-                        "id": REPOSITORY_ID,
-                        "sha": REVISION,
-                        "private": false,
-                        "gated": false
-                    })),
-                    qwen_tree_response(),
-                    qwen_config_response(),
-                    qwen_index_response(),
-                ]
-                .into(),
-            ),
-        });
+        let retry_transport = full_manifest_transport(&retry_capacity_count);
         let retry_preflight = DownloadManifestPreflight::new(
             job_store,
             DownloadDiskPreflight::new(SequenceCapacityQuery {
@@ -188,33 +154,13 @@ async fn should_resume_persisted_exact_manifest_with_synchronized_staging_progre
         let catalog = DownloadCatalog::parse_json(&catalog_json())
             .expect("fictional catalog should be valid");
         let first_capacity_count = Arc::new(AtomicUsize::new(0));
-        let first_transport = Arc::new(OrderingTransport {
-            capacity_query_count: Arc::clone(&first_capacity_count),
-            request_count: AtomicUsize::new(0),
-            responses: Mutex::new(
-                [
-                    json_response(serde_json::json!({
-                        "id": REPOSITORY_ID,
-                        "sha": REVISION,
-                        "private": false,
-                        "gated": false
-                    })),
-                    qwen_tree_response(),
-                    qwen_config_response(),
-                    qwen_index_response(),
-                ]
-                .into(),
-            ),
-        });
-        let first_preflight = DownloadManifestPreflight::new(
-            job_store.clone(),
-            DownloadDiskPreflight::new(SequenceCapacityQuery {
-                query_count: first_capacity_count,
-                available_bytes: Arc::new(Mutex::new([1_000, 5].into())),
-            }),
-            HuggingFaceHub::new(first_transport),
-            DaemonPerformanceAttributionLog::open(test_directory.path(), false)
-                .expect("disabled attribution should construct"),
+        let first_transport = full_manifest_transport(&first_capacity_count);
+        let first_preflight = disabled_attribution_preflight(
+            &job_store,
+            test_directory.path(),
+            first_capacity_count,
+            [1_000, 5].into(),
+            first_transport,
         );
 
         assert!(matches!(
@@ -244,15 +190,12 @@ async fn should_resume_persisted_exact_manifest_with_synchronized_staging_progre
             request_count: AtomicUsize::new(0),
             responses: Mutex::new(VecDeque::new()),
         });
-        let resumed_preflight = DownloadManifestPreflight::new(
-            job_store,
-            DownloadDiskPreflight::new(SequenceCapacityQuery {
-                query_count: resumed_capacity_count,
-                available_bytes: Arc::new(Mutex::new([35].into())),
-            }),
-            HuggingFaceHub::new(resumed_transport.clone()),
-            DaemonPerformanceAttributionLog::open(test_directory.path(), false)
-                .expect("disabled attribution should construct"),
+        let resumed_preflight = disabled_attribution_preflight(
+            &job_store,
+            test_directory.path(),
+            resumed_capacity_count,
+            [35].into(),
+            resumed_transport.clone(),
         );
 
         let resumed_job = resumed_preflight
@@ -317,6 +260,51 @@ impl HubTransport for OrderingTransport {
                 .ok_or_else(|| HubTransportError::new("unexpected Hub request"))
         })
     }
+}
+
+/// A transport scripted with the four Hub replies one full manifest fetch
+/// reads, in the order the preflight asks for them.
+fn full_manifest_transport(capacity_query_count: &Arc<AtomicUsize>) -> Arc<OrderingTransport> {
+    Arc::new(OrderingTransport {
+        capacity_query_count: Arc::clone(capacity_query_count),
+        request_count: AtomicUsize::new(0),
+        responses: Mutex::new(
+            [
+                json_response(serde_json::json!({
+                    "id": REPOSITORY_ID,
+                    "sha": REVISION,
+                    "private": false,
+                    "gated": false
+                })),
+                qwen_tree_response(),
+                qwen_config_response(),
+                qwen_index_response(),
+            ]
+            .into(),
+        ),
+    })
+}
+
+/// A preflight whose disk reports `available_bytes` one query at a time, over
+/// `transport`, with attribution disabled so the journey asserts only on the
+/// store and the transport.
+fn disabled_attribution_preflight(
+    job_store: &DownloadJobStore,
+    attribution_directory: &Path,
+    capacity_query_count: Arc<AtomicUsize>,
+    available_bytes: VecDeque<u64>,
+    transport: Arc<OrderingTransport>,
+) -> DownloadManifestPreflight<SequenceCapacityQuery> {
+    DownloadManifestPreflight::new(
+        job_store.clone(),
+        DownloadDiskPreflight::new(SequenceCapacityQuery {
+            query_count: capacity_query_count,
+            available_bytes: Arc::new(Mutex::new(available_bytes)),
+        }),
+        HuggingFaceHub::new(transport),
+        DaemonPerformanceAttributionLog::open(attribution_directory, false)
+            .expect("disabled attribution should construct"),
+    )
 }
 
 const QWEN_SHARD_FILE: &str = "model-00001-of-00001.safetensors";

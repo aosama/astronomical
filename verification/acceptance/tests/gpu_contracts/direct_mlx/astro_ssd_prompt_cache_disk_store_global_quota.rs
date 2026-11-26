@@ -1,3 +1,9 @@
+use std::collections::HashMap;
+
+use mlx_bridge::MlxArray;
+use model_serving::{AstroSsdPromptCacheBlockKey, AstroSsdPromptCacheDiskStore};
+use runtime_integration::MlxRuntime;
+
 use super::astro_ssd_prompt_cache_disk_store_support::*;
 
 const LARGE_ASTRO_SSD_PROMPT_CACHE_LIMIT_BYTES: u64 = 10 * 1024 * 1024 * 1024;
@@ -21,17 +27,12 @@ async fn should_protect_the_active_parent_chain_and_evict_unrelated_blocks_under
         astro_ssd_prompt_cache_block_key_for_seed(99_000);
     let kv_block_tensors = synthetic_kv_block_tensors(&runtime);
     let recurrent_snapshot_tensors = synthetic_recurrent_snapshot_tensors(&runtime);
-    measurement_astro_ssd_prompt_cache
-        .publish_block(
-            &runtime,
-            &parent_astro_ssd_prompt_cache_block_key,
-            None,
-            &kv_block_tensors,
-            &recurrent_snapshot_tensors,
-        )
-        .expect("the measurement astro SSD prompt cache should save one block");
-    let measured_single_block_size_bytes = measurement_astro_ssd_prompt_cache.total_size_bytes();
-    drop(measurement_astro_ssd_prompt_cache);
+    let measured_single_block_size_bytes = measure_single_block_size_bytes(
+        &runtime,
+        measurement_astro_ssd_prompt_cache,
+        &parent_astro_ssd_prompt_cache_block_key,
+        (&kv_block_tensors, &recurrent_snapshot_tensors),
+    );
     let two_block_quota_bytes = measured_single_block_size_bytes
         .checked_mul(2)
         .and_then(|two_blocks| two_blocks.checked_add(1024))
@@ -73,6 +74,46 @@ async fn should_protect_the_active_parent_chain_and_evict_unrelated_blocks_under
         )
         .expect("the child publication should evict the unrelated block, not the active chain");
 
+    assert_quota_pressure_evicted_only_the_unrelated_block(
+        &astro_ssd_prompt_cache,
+        [
+            &parent_astro_ssd_prompt_cache_block_key,
+            &child_astro_ssd_prompt_cache_block_key,
+            &unrelated_astro_ssd_prompt_cache_block_key,
+        ],
+        two_block_quota_bytes,
+    );
+}
+
+fn measure_single_block_size_bytes(
+    runtime: &MlxRuntime,
+    measurement_astro_ssd_prompt_cache: AstroSsdPromptCacheDiskStore,
+    block_key: &AstroSsdPromptCacheBlockKey,
+    block_tensors: (&HashMap<String, MlxArray>, &HashMap<String, MlxArray>),
+) -> u64 {
+    let (kv_block_tensors, recurrent_snapshot_tensors) = block_tensors;
+    measurement_astro_ssd_prompt_cache
+        .publish_block(
+            runtime,
+            block_key,
+            None,
+            kv_block_tensors,
+            recurrent_snapshot_tensors,
+        )
+        .expect("the measurement astro SSD prompt cache should save one block");
+    measurement_astro_ssd_prompt_cache.total_size_bytes()
+}
+
+fn assert_quota_pressure_evicted_only_the_unrelated_block(
+    astro_ssd_prompt_cache: &AstroSsdPromptCacheDiskStore,
+    parent_child_and_unrelated_block_keys: [&AstroSsdPromptCacheBlockKey; 3],
+    two_block_quota_bytes: u64,
+) {
+    let [
+        parent_astro_ssd_prompt_cache_block_key,
+        child_astro_ssd_prompt_cache_block_key,
+        unrelated_astro_ssd_prompt_cache_block_key,
+    ] = parent_child_and_unrelated_block_keys;
     assert!(
         astro_ssd_prompt_cache.has_kv_block(&parent_astro_ssd_prompt_cache_block_key.block_hash()),
         "the protected parent sequence state must remain restorable"

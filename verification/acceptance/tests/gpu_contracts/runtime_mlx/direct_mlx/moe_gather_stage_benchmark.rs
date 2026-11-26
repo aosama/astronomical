@@ -35,109 +35,175 @@ fn should_measure_moe_gather_stage_costs_at_ornith_shapes() {
     let runtime = runtime_test_support::runtime();
 
     for token_count in CHUNK_TOKEN_COUNTS {
-        let sorted_row_count = token_count * TOP_K;
-        eprintln!(
-            "[moe-gather-stage] chunk_tokens={token_count} sorted_rows={sorted_row_count} rows_per_expert={}",
-            sorted_row_count / EXPERT_COUNT
-        );
-
-        let sorted_row_count_i = sorted_row_count as i32;
-        let expert_ids = build_uniform_expert_ids(sorted_row_count);
-        let argsort_permutation = runtime
-            .argsort_axis(&expert_ids, 0)
-            .expect("the expert id argsort should build");
-        let permutation_flat = runtime
-            .reshape(&argsort_permutation, &[sorted_row_count_i])
-            .expect("the argsort permutation should flatten");
-        let sorted_expert_ids = runtime
-            .take_axis(&expert_ids, &permutation_flat, 0)
-            .expect("the sorted expert ids should build");
-        let sorted_ids_flat = runtime
-            .reshape(&sorted_expert_ids, &[sorted_row_count_i])
-            .expect("the sorted ids should flatten");
-        runtime
-            .evaluate_arrays(&[&permutation_flat, &sorted_ids_flat])
-            .expect("the routing indices should materialize");
-
-        let replicated_rows = measure_assignment_replication(
-            &runtime,
-            token_count,
-            &permutation_flat,
-            sorted_row_count,
-        );
-        let fused_weights =
-            build_fused_gate_up_weights(&runtime, EXPERT_COUNT, MOE_INTERMEDIATE * 2, HIDDEN_SIZE);
-        let down_weights =
-            build_fused_gate_up_weights(&runtime, EXPERT_COUNT, HIDDEN_SIZE, MOE_INTERMEDIATE);
-
-        let activations = build_token_states(&runtime, sorted_row_count, HIDDEN_SIZE);
-        let gate_up_realistic_millis = measure_gather_qmm(
-            &runtime,
-            &activations,
-            &fused_weights,
-            Some(&sorted_ids_flat),
-            "gate_up_realistic",
-        );
-        let single_expert_ids = build_single_expert_ids(sorted_row_count);
-        let gate_up_single_expert_millis = measure_gather_qmm(
-            &runtime,
-            &activations,
-            &fused_weights,
-            Some(&single_expert_ids),
-            "gate_up_single_expert",
-        );
-
-        let fused_output = runtime
-            .gather_quantized_matmul_affine(
-                &activations,
-                &fused_weights.packed_words,
-                &fused_weights.scales,
-                &fused_weights.biases,
-                None,
-                Some(&sorted_ids_flat),
-                true,
-                GROUP_SIZE,
-                BITS,
-                true,
-            )
-            .expect("the fused gate/up product should build");
-        runtime
-            .evaluate_arrays(&[&fused_output])
-            .expect("the fused gate/up product should materialize");
-        let swiglu_millis = measure_swiglu_pass(&runtime, &fused_output, sorted_row_count);
-
-        let swiglu_output = build_swiglu_output(&runtime, sorted_row_count, MOE_INTERMEDIATE);
-        let down_realistic_millis = measure_gather_qmm(
-            &runtime,
-            &swiglu_output,
-            &down_weights,
-            Some(&sorted_ids_flat),
-            "down_realistic",
-        );
-
-        let per_layer_millis = replicated_rows.median_millis
-            + gate_up_realistic_millis
-            + swiglu_millis
-            + down_realistic_millis;
-        let masked_work_millis = gate_up_realistic_millis - gate_up_single_expert_millis;
-        eprintln!(
-            "[moe-gather-stage:result] chunk_tokens={token_count} replication_ms={:.3} replication_write_mb={:.1} gate_up_realistic_ms={gate_up_realistic_millis:.3} gate_up_single_expert_ms={gate_up_single_expert_millis:.3} masked_work_ms={masked_work_millis:.3} swiglu_ms={swiglu_millis:.3} down_ms={down_realistic_millis:.3} per_layer_total_ms={per_layer_millis:.3}",
-            replicated_rows.median_millis,
-            replicated_rows.copied_bytes as f64 / 1_000_000.0,
-        );
-        eprintln!(
-            "[moe-gather-stage:headroom] chunk_tokens={token_count} layers={LAYER_COUNT} moe_stages_total_ms={:.1} e2e_reference_ms={E2E_CHUNK_4096_MILLIS:.1} moe_share_percent={:.1} replication_total_ms={:.1} swiglu_total_ms={:.1} masked_work_total_ms={:.1}",
-            per_layer_millis * LAYER_COUNT as f64,
-            per_layer_millis * LAYER_COUNT as f64 / E2E_CHUNK_4096_MILLIS * 100.0,
-            replicated_rows.median_millis * LAYER_COUNT as f64,
-            swiglu_millis * LAYER_COUNT as f64,
-            masked_work_millis * LAYER_COUNT as f64,
-        );
-
-        runtime
-            .clear_mlx_buffer_cache()
-            .expect("the sweep should release reclaimable MLX allocations");
+        let stage_timings = measure_chunk_size(&runtime, token_count);
+        report_stage_timings(token_count, &stage_timings);
     }
+}
+
+/// The routing indices every stage of one chunk size reads.
+struct RoutingIndices {
+    permutation_flat: MlxArray,
+    sorted_ids_flat: MlxArray,
+    /// The expert ids and the argsort and take intermediates the indices were built
+    /// from. The sweep always kept them alive through the stages and the
+    /// `mlx_buffer_cache` clear, so the clear sees the same live set; only the owner
+    /// of this struct decides when they drop.
+    _routing_scratch_arrays: Vec<MlxArray>,
+}
+
+/// The median milliseconds of each stage at one chunk size.
+struct GatherStageTimings {
+    replicated_rows: ReplicationMeasurement,
+    gate_up_realistic_millis: f64,
+    gate_up_single_expert_millis: f64,
+    swiglu_millis: f64,
+    down_realistic_millis: f64,
+}
+
+/// Measures every stage at one chunk size. Every array built for the chunk,
+/// the routing scratch arrays inside `routing_indices` included, is still alive
+/// when the `mlx_buffer_cache` is cleared at the end, so the clear releases only
+/// buffers that were already free, as the sweep always did.
+fn measure_chunk_size(runtime: &MlxRuntime, token_count: usize) -> GatherStageTimings {
+    let sorted_row_count = token_count * TOP_K;
+    eprintln!(
+        "[moe-gather-stage] chunk_tokens={token_count} sorted_rows={sorted_row_count} rows_per_expert={}",
+        sorted_row_count / EXPERT_COUNT
+    );
+
+    let routing_indices = build_routing_indices(runtime, sorted_row_count);
+    let sorted_ids_flat = &routing_indices.sorted_ids_flat;
+
+    let replicated_rows = measure_assignment_replication(
+        runtime,
+        token_count,
+        &routing_indices.permutation_flat,
+        sorted_row_count,
+    );
+    let fused_weights =
+        build_fused_gate_up_weights(runtime, EXPERT_COUNT, MOE_INTERMEDIATE * 2, HIDDEN_SIZE);
+    let down_weights =
+        build_fused_gate_up_weights(runtime, EXPERT_COUNT, HIDDEN_SIZE, MOE_INTERMEDIATE);
+
+    let activations = build_token_states(runtime, sorted_row_count, HIDDEN_SIZE);
+    let gate_up_realistic_millis = measure_gather_qmm(
+        runtime,
+        &activations,
+        &fused_weights,
+        Some(sorted_ids_flat),
+        "gate_up_realistic",
+    );
+    let single_expert_ids = build_single_expert_ids(sorted_row_count);
+    let gate_up_single_expert_millis = measure_gather_qmm(
+        runtime,
+        &activations,
+        &fused_weights,
+        Some(&single_expert_ids),
+        "gate_up_single_expert",
+    );
+
+    let fused_output =
+        build_fused_gate_up_product(runtime, &activations, &fused_weights, sorted_ids_flat);
+    let swiglu_millis = measure_swiglu_pass(runtime, &fused_output, sorted_row_count);
+
+    let swiglu_output = build_swiglu_output(runtime, sorted_row_count, MOE_INTERMEDIATE);
+    let down_realistic_millis = measure_gather_qmm(
+        runtime,
+        &swiglu_output,
+        &down_weights,
+        Some(sorted_ids_flat),
+        "down_realistic",
+    );
+
+    runtime
+        .clear_mlx_buffer_cache()
+        .expect("the sweep should release reclaimable MLX allocations");
+    GatherStageTimings {
+        replicated_rows,
+        gate_up_realistic_millis,
+        gate_up_single_expert_millis,
+        swiglu_millis,
+        down_realistic_millis,
+    }
+}
+
+fn build_routing_indices(runtime: &MlxRuntime, sorted_row_count: usize) -> RoutingIndices {
+    let sorted_row_count_i = sorted_row_count as i32;
+    let expert_ids = build_uniform_expert_ids(sorted_row_count);
+    let argsort_permutation = runtime
+        .argsort_axis(&expert_ids, 0)
+        .expect("the expert id argsort should build");
+    let permutation_flat = runtime
+        .reshape(&argsort_permutation, &[sorted_row_count_i])
+        .expect("the argsort permutation should flatten");
+    let sorted_expert_ids = runtime
+        .take_axis(&expert_ids, &permutation_flat, 0)
+        .expect("the sorted expert ids should build");
+    let sorted_ids_flat = runtime
+        .reshape(&sorted_expert_ids, &[sorted_row_count_i])
+        .expect("the sorted ids should flatten");
+    runtime
+        .evaluate_arrays(&[&permutation_flat, &sorted_ids_flat])
+        .expect("the routing indices should materialize");
+    RoutingIndices {
+        permutation_flat,
+        sorted_ids_flat,
+        _routing_scratch_arrays: vec![expert_ids, argsort_permutation, sorted_expert_ids],
+    }
+}
+
+fn build_fused_gate_up_product(
+    runtime: &MlxRuntime,
+    activations: &MlxArray,
+    fused_weights: &QuantizedWeights,
+    sorted_ids_flat: &MlxArray,
+) -> MlxArray {
+    let fused_output = runtime
+        .gather_quantized_matmul_affine(
+            activations,
+            &fused_weights.packed_words,
+            &fused_weights.scales,
+            &fused_weights.biases,
+            None,
+            Some(sorted_ids_flat),
+            true,
+            GROUP_SIZE,
+            BITS,
+            true,
+        )
+        .expect("the fused gate/up product should build");
+    runtime
+        .evaluate_arrays(&[&fused_output])
+        .expect("the fused gate/up product should materialize");
+    fused_output
+}
+
+fn report_stage_timings(token_count: usize, stage_timings: &GatherStageTimings) {
+    let GatherStageTimings {
+        replicated_rows,
+        gate_up_realistic_millis,
+        gate_up_single_expert_millis,
+        swiglu_millis,
+        down_realistic_millis,
+    } = stage_timings;
+    let per_layer_millis = replicated_rows.median_millis
+        + gate_up_realistic_millis
+        + swiglu_millis
+        + down_realistic_millis;
+    let masked_work_millis = gate_up_realistic_millis - gate_up_single_expert_millis;
+    eprintln!(
+        "[moe-gather-stage:result] chunk_tokens={token_count} replication_ms={:.3} replication_write_mb={:.1} gate_up_realistic_ms={gate_up_realistic_millis:.3} gate_up_single_expert_ms={gate_up_single_expert_millis:.3} masked_work_ms={masked_work_millis:.3} swiglu_ms={swiglu_millis:.3} down_ms={down_realistic_millis:.3} per_layer_total_ms={per_layer_millis:.3}",
+        replicated_rows.median_millis,
+        replicated_rows.copied_bytes as f64 / 1_000_000.0,
+    );
+    eprintln!(
+        "[moe-gather-stage:headroom] chunk_tokens={token_count} layers={LAYER_COUNT} moe_stages_total_ms={:.1} e2e_reference_ms={E2E_CHUNK_4096_MILLIS:.1} moe_share_percent={:.1} replication_total_ms={:.1} swiglu_total_ms={:.1} masked_work_total_ms={:.1}",
+        per_layer_millis * LAYER_COUNT as f64,
+        per_layer_millis * LAYER_COUNT as f64 / E2E_CHUNK_4096_MILLIS * 100.0,
+        replicated_rows.median_millis * LAYER_COUNT as f64,
+        swiglu_millis * LAYER_COUNT as f64,
+        masked_work_millis * LAYER_COUNT as f64,
+    );
 }
 
 struct ReplicationMeasurement {

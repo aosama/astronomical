@@ -20,7 +20,7 @@ never resolves an upstream repository live.
 | metal-cpp | 26 | Apple release download `metal-cpp_26.zip` | declared inside `pins/mlx-v0.32.5.cmake` | MLX transitive |
 | nlohmann/json | 3.11.3 | release artifact `v3.11.3/json.tar.xz` | declared inside `pins/mlx-v0.32.5.cmake` | MLX transitive |
 | fmt | 12.1.0 | release tag archive `12.1.0.tar.gz` | declared inside `pins/mlx-v0.32.5.cmake` | MLX transitive |
-| MLX performance profiler | 0.4.0 | release tag `v0.4.0` (commit `de3395de6`) | `pins/mlx-performance-profiler-v0.4.0.cmake` | measurement tooling, not shipped |
+| MLX performance profiler | 0.5.0 | release tag `v0.5.0` (commit `e00c8c036`) | `pins/mlx-performance-profiler-v0.5.0.cmake` | measurement tooling, not shipped |
 
 metal-cpp, nlohmann/json, and fmt are source dependencies that MLX's own
 CMake declares through FetchContent. Astronomical pre-declares them with
@@ -36,7 +36,7 @@ recorded here for review:
 - metal-cpp `26`: `https://developer.apple.com/metal/cpp/files/metal-cpp_26.zip` — SHA-256 `4df3c078b9aadcb516212e9cb03004cbc5ce9a3e9c068fa3144d021db585a3a4`
 - nlohmann/json `3.11.3`: `https://github.com/nlohmann/json/releases/download/v3.11.3/json.tar.xz` — SHA-256 `d6c65aca6b1ed68e7a182f4757257b107ae403032760ed6ef121c9d55e81757d`
 - fmt `12.1.0`: `https://github.com/fmtlib/fmt/archive/refs/tags/12.1.0.tar.gz` — SHA-256 `ea7de4299689e12b6dddd392f9896f08fb0777ac7168897a244a6d6085043fea`
-- MLX performance profiler `0.4.0`: `https://github.com/aosama/mlx-performance-profiler/releases/download/v0.4.0/mlx-performance-profiler-0.4.0.tar.gz` — SHA-256 `7dfa2a65d80454cf8b3bd393f01b07449d5c86b547267730ae27d1c8e818874c`
+- MLX performance profiler `0.5.0`: `https://github.com/aosama/mlx-performance-profiler/releases/download/v0.5.0/mlx-performance-profiler-0.5.0.tar.gz` — SHA-256 `cc2acc16e9bf62c321c45898c52852eb0d4917bd9ee68a7678fcdee96eb3e080`
 
 Tooling pins (not part of the native runtime image): `tool-pins/Cargo.toml`
 pins `sccache 0.19.0` and `cargo-about 0.9.3`, the latter for the

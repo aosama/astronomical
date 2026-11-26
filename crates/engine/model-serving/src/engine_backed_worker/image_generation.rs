@@ -2,7 +2,7 @@
 
 use ipc_protocol::{
     ImageGenerationCommand, ImageGenerationFailureReason, MlxMemorySnapshotSource, ProtocolWriter,
-    RequestId, WorkerEvent,
+    RequestId, WorkerEvent, WorkerMlxMemorySnapshot,
 };
 use tokio::io::AsyncWrite;
 
@@ -99,43 +99,20 @@ where
         WriteTransport: AsyncWrite + Unpin,
     {
         let request_id = active_generation.request_id;
-        let engine_step = match self.loaded_runtime.as_mut() {
-            Some(LoadedRuntime::Image(image_engine)) => image_engine.advance_generation(request_id),
-            Some(LoadedRuntime::Autoregressive(_))
-            | Some(LoadedRuntime::Embeddings(_))
-            | Some(LoadedRuntime::Decisions(_))
-            | Some(LoadedRuntime::Speech(_))
-            | None => Err(ImageGenerationFailureReason::FatalExecution {
-                reason: "the loaded image runtime was removed during generation".to_owned(),
-            }),
-        };
+        let engine_step = self.advance_loaded_image_engine(request_id);
         match engine_step {
             Ok(ImageGenerationEngineStep::Progress {
                 phase,
                 completed_steps,
                 total_steps,
                 elapsed_millis,
-            }) if total_steps == active_generation.total_steps
-                && completed_steps <= active_generation.total_steps =>
+            }) if progress_is_within_requested_steps(
+                completed_steps,
+                total_steps,
+                active_generation.total_steps,
+            ) =>
             {
-                let mlx_memory_snapshot = self
-                    .loaded_runtime
-                    .as_ref()
-                    .and_then(|loaded_runtime| match loaded_runtime {
-                        LoadedRuntime::Image(image_engine) => {
-                            image_engine.collect_mlx_memory_telemetry()
-                        }
-                        LoadedRuntime::Autoregressive(_)
-                        | LoadedRuntime::Embeddings(_)
-                        | LoadedRuntime::Decisions(_)
-                        | LoadedRuntime::Speech(_) => None,
-                    })
-                    .map(|memory_telemetry| {
-                        super::output::worker_memory_snapshot(
-                            MlxMemorySnapshotSource::ImageGenerationStep,
-                            memory_telemetry,
-                        )
-                    });
+                let mlx_memory_snapshot = self.collect_image_step_memory_snapshot();
                 event_writer
                     .send_event(&WorkerEvent::ImageGenerationProgress {
                         request_id,
@@ -189,6 +166,41 @@ where
                 Ok(None)
             }
         }
+    }
+
+    /// Takes one denoising step on the loaded image engine; finding no image
+    /// runtime loaded any more is a fatal failure of that request.
+    fn advance_loaded_image_engine(
+        &mut self,
+        request_id: RequestId,
+    ) -> Result<ImageGenerationEngineStep, ImageGenerationFailureReason> {
+        match self.loaded_runtime.as_mut() {
+            Some(LoadedRuntime::Image(image_engine)) => image_engine.advance_generation(request_id),
+            Some(LoadedRuntime::Autoregressive(_))
+            | Some(LoadedRuntime::Embeddings(_))
+            | Some(LoadedRuntime::Decisions(_))
+            | Some(LoadedRuntime::Speech(_))
+            | None => Err(ImageGenerationFailureReason::FatalExecution {
+                reason: "the loaded image runtime was removed during generation".to_owned(),
+            }),
+        }
+    }
+
+    /// MLX memory as the image engine reports it after a denoising step, or
+    /// `None` when no image engine is loaded or it has nothing to report.
+    fn collect_image_step_memory_snapshot(&self) -> Option<WorkerMlxMemorySnapshot> {
+        let memory_telemetry = match self.loaded_runtime.as_ref() {
+            Some(LoadedRuntime::Image(image_engine)) => image_engine.collect_mlx_memory_telemetry(),
+            Some(LoadedRuntime::Autoregressive(_))
+            | Some(LoadedRuntime::Embeddings(_))
+            | Some(LoadedRuntime::Decisions(_))
+            | Some(LoadedRuntime::Speech(_))
+            | None => None,
+        }?;
+        Some(super::output::worker_memory_snapshot(
+            MlxMemorySnapshotSource::ImageGenerationStep,
+            memory_telemetry,
+        ))
     }
 
     fn release_failed_image_request(
@@ -301,6 +313,17 @@ where
     }
 }
 
+/// Whether an engine's progress report agrees with the request: the engine
+/// must run the step count that was asked for, and may not report more steps
+/// done than that count.
+fn progress_is_within_requested_steps(
+    completed_steps: u16,
+    reported_total_steps: u16,
+    requested_total_steps: u16,
+) -> bool {
+    reported_total_steps == requested_total_steps && completed_steps <= requested_total_steps
+}
+
 fn image_cleanup_error(
     request_id: RequestId,
     cleanup_failure: ImageGenerationFailureReason,
@@ -335,3 +358,7 @@ fn bounded_image_failure_reason(
         other_failure_reason => other_failure_reason,
     }
 }
+
+#[cfg(test)]
+#[path = "image_generation_tests.rs"]
+mod image_generation_tests;

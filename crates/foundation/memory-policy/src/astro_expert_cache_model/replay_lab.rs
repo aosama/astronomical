@@ -39,10 +39,16 @@ pub struct ReplayCase {
     /// Layers whose experts are never given up: layers kept whole so their
     /// routes never stop.
     pub pinned_layer_indexes: Vec<usize>,
+    /// Whether a layer's table costs its whole slot allocation for as long
+    /// as it holds any expert, as the engine's tables do: one array per
+    /// layer, allocated before it fills and given back only whole. Needs
+    /// `layer_slot_limits`, which give each table's size. Otherwise every
+    /// expert costs its own bytes and nothing else.
+    pub charges_whole_table_slots: bool,
 }
 
 /// What one replay did.
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct ReplayOutcome {
     pub reply_token_count: usize,
     /// Routed experts found held.
@@ -58,6 +64,9 @@ pub struct ReplayOutcome {
     pub partly_held_layer_token_count: u64,
     /// Misses while the first `EARLY_REPLY_TOKEN_COUNT` tokens were served.
     pub early_miss_count: u64,
+    /// Misses in each layer, so a replay can be held against the engine's
+    /// own misses layer by layer.
+    pub miss_count_by_layer: Vec<u64>,
 }
 
 /// The opening of a reply, counted apart: what is held when a reply begins
@@ -66,6 +75,16 @@ pub struct ReplayOutcome {
 pub const EARLY_REPLY_TOKEN_COUNT: usize = 48;
 
 impl ReplayOutcome {
+    /// One routed expert of `layer_index` read from storage.
+    fn count_miss(&mut self, layer_index: usize, expert_bytes: u64) {
+        self.miss_count += 1;
+        self.read_bytes = self.read_bytes.saturating_add(expert_bytes);
+        if self.miss_count_by_layer.len() <= layer_index {
+            self.miss_count_by_layer.resize(layer_index + 1, 0);
+        }
+        self.miss_count_by_layer[layer_index] += 1;
+    }
+
     /// Called once a token is served: keeps the miss count as it stood at
     /// the end of the reply's opening.
     pub(super) fn note_token_served(&mut self, token_index: usize) {
@@ -162,6 +181,56 @@ impl HeldExperts {
             .held_count_by_layer
             .entry(expert.layer_index)
             .or_insert(0) += 1;
+    }
+
+    /// What the held experts cost against the capacity: their own bytes, or
+    /// with `charges_whole_table_slots` every table's whole allocation.
+    pub(super) fn charged_bytes(&self, replay_case: &ReplayCase) -> u64 {
+        if !replay_case.charges_whole_table_slots {
+            return self.held_bytes;
+        }
+        let mut charged_bytes = 0_u64;
+        for (&layer_index, &held_count) in &self.held_count_by_layer {
+            if held_count > 0 {
+                charged_bytes =
+                    charged_bytes.saturating_add(table_bytes_of(replay_case, layer_index));
+            }
+        }
+        charged_bytes
+    }
+
+    /// The layer holding the fewest experts, of those holding any and not
+    /// in `spared_layer_indexes`; the lowest index among equals, as the
+    /// engine scans its tables in order.
+    pub(super) fn least_occupied_layer(&self, spared_layer_indexes: &[usize]) -> Option<usize> {
+        let mut least: Option<(usize, usize)> = None;
+        for (&layer_index, &held_count) in &self.held_count_by_layer {
+            if held_count == 0 || spared_layer_indexes.contains(&layer_index) {
+                continue;
+            }
+            let is_fewer = match least {
+                None => true,
+                Some((least_index, least_count)) => {
+                    held_count < least_count
+                        || (held_count == least_count && layer_index < least_index)
+                }
+            };
+            if is_fewer {
+                least = Some((layer_index, held_count));
+            }
+        }
+        least.map(|(layer_index, _)| layer_index)
+    }
+
+    /// The held expert the rule values least, outside `spared_layer_indexes`.
+    pub(super) fn lowest_priority_expert(
+        &self,
+        spared_layer_indexes: &[usize],
+    ) -> Option<ExpertKey> {
+        self.experts_by_priority
+            .iter()
+            .map(|&(_, expert)| expert)
+            .find(|expert| !spared_layer_indexes.contains(&expert.layer_index))
     }
 
     pub(super) fn held_count(&self, layer_index: usize) -> usize {
@@ -261,11 +330,13 @@ fn seat_starting_experts(
         .enumerate()
     {
         let expert_bytes = expert_bytes_of(replay_case, layer_index);
-        let layer_slot_limit = layer_slot_limit_of(replay_case, layer_index).unwrap_or(usize::MAX);
-        for &expert_id in held_expert_ids.iter().take(layer_slot_limit) {
-            if held_experts.held_bytes.saturating_add(expert_bytes) > replay_case.capacity_bytes {
-                return;
-            }
+        let (seated_count, capacity_is_full) = starting_experts_that_fit(
+            replay_case,
+            held_experts,
+            layer_index,
+            held_expert_ids.len(),
+        );
+        for &expert_id in held_expert_ids.iter().take(seated_count) {
             let expert = ExpertKey {
                 layer_index,
                 expert_id,
@@ -273,7 +344,48 @@ fn seat_starting_experts(
             let keep_priority = keeping_rule.starting_priority(expert);
             held_experts.insert(expert, keep_priority, expert_bytes);
         }
+        if capacity_is_full {
+            return;
+        }
     }
+}
+
+/// How many of a layer's `starting_count` experts are seated, and whether
+/// the capacity is then full, so no later layer is seated. A layer takes no
+/// more than its slot limit; a whole-slot table is seated whole or not at
+/// all, and other experts one by one while their bytes fit.
+fn starting_experts_that_fit(
+    replay_case: &ReplayCase,
+    held_experts: &HeldExperts,
+    layer_index: usize,
+    starting_count: usize,
+) -> (usize, bool) {
+    let allowed_count =
+        starting_count.min(layer_slot_limit_of(replay_case, layer_index).unwrap_or(usize::MAX));
+    if replay_case.charges_whole_table_slots {
+        let table_fits = starting_count == 0
+            || held_experts
+                .charged_bytes(replay_case)
+                .saturating_add(table_bytes_of(replay_case, layer_index))
+                <= replay_case.capacity_bytes;
+        return if table_fits {
+            (allowed_count, false)
+        } else {
+            (0, true)
+        };
+    }
+    let room_bytes = replay_case
+        .capacity_bytes
+        .saturating_sub(held_experts.held_bytes);
+    let fitting_count = room_bytes
+        .checked_div(expert_bytes_of(replay_case, layer_index))
+        .map_or(usize::MAX, |fitting| {
+            usize::try_from(fitting).unwrap_or(usize::MAX)
+        });
+    (
+        allowed_count.min(fitting_count),
+        fitting_count < allowed_count,
+    )
 }
 
 fn serve_layer_route(
@@ -291,20 +403,48 @@ fn serve_layer_route(
         replay_outcome.partly_held_layer_token_count += 1;
     }
     for &expert in protected_route {
-        let keep_priority = keeping_rule.priority_after_use(expert, replay_position);
         if held_experts.is_held(expert) {
+            let keep_priority = keeping_rule.priority_after_use(expert, replay_position);
             replay_outcome.hit_count += 1;
             held_experts.set_priority(expert, keep_priority);
             continue;
         }
-        replay_outcome.miss_count += 1;
-        replay_outcome.read_bytes = replay_outcome.read_bytes.saturating_add(expert_bytes);
-        admit_if_worth_it(
+        let keep_priority = keeping_rule.priority_after_miss(expert, replay_position);
+        replay_outcome.count_miss(replay_position.layer_index, expert_bytes);
+        admit_read_expert(
             replay_case,
             keeping_rule,
             held_experts,
             protected_route,
             (expert, keep_priority, expert_bytes),
+        );
+    }
+}
+
+/// Offers a newly read expert to the tables, by the way the case charges
+/// them.
+fn admit_read_expert(
+    replay_case: &ReplayCase,
+    keeping_rule: &mut dyn KeepingRule,
+    held_experts: &mut HeldExperts,
+    protected_route: &[ExpertKey],
+    incoming: (ExpertKey, (u64, u64), u64),
+) {
+    if replay_case.charges_whole_table_slots {
+        admit_into_whole_slot_table(
+            replay_case,
+            keeping_rule,
+            held_experts,
+            protected_route,
+            incoming,
+        );
+    } else {
+        admit_if_worth_it(
+            replay_case,
+            keeping_rule,
+            held_experts,
+            protected_route,
+            incoming,
         );
     }
 }
@@ -363,6 +503,45 @@ fn admit_if_worth_it(
     held_experts.insert(incoming_expert, incoming_priority, incoming_bytes);
 }
 
+/// Admission when tables are charged whole: an expert joins its layer's
+/// table while the table has a free slot, a full table replaces within
+/// itself, and a layer with no table gets one only if its whole allocation
+/// fits under the capacity. The engine never gives up another layer's
+/// experts to admit one; only a falling capacity does that.
+fn admit_into_whole_slot_table(
+    replay_case: &ReplayCase,
+    keeping_rule: &mut dyn KeepingRule,
+    held_experts: &mut HeldExperts,
+    protected_route: &[ExpertKey],
+    (incoming_expert, incoming_priority, incoming_bytes): (ExpertKey, (u64, u64), u64),
+) {
+    let layer_index = incoming_expert.layer_index;
+    let table_slot_count = layer_slot_limit_of(replay_case, layer_index).unwrap_or(0);
+    let held_count = held_experts.held_count(layer_index);
+    if table_slot_count == 0 {
+        return;
+    }
+    if held_count == 0
+        && held_experts
+            .charged_bytes(replay_case)
+            .saturating_add(table_bytes_of(replay_case, layer_index))
+            > replay_case.capacity_bytes
+    {
+        return;
+    }
+    if held_count < table_slot_count {
+        held_experts.insert(incoming_expert, incoming_priority, incoming_bytes);
+        return;
+    }
+    replace_within_layer(
+        replay_case,
+        keeping_rule,
+        held_experts,
+        protected_route,
+        (incoming_expert, incoming_priority, incoming_bytes),
+    );
+}
+
 /// A full layer under a slot limit gives up its own lowest-priority expert,
 /// if the rule finds the newcomer worth it.
 fn replace_within_layer(
@@ -398,6 +577,13 @@ fn replace_within_layer(
 fn layer_slot_limit_of(replay_case: &ReplayCase, layer_index: usize) -> Option<usize> {
     let layer_slot_limits = replay_case.layer_slot_limits.as_ref()?;
     Some(layer_slot_limits.get(layer_index).copied().unwrap_or(0))
+}
+
+/// One layer's whole table: its slot allocation times one expert's bytes.
+pub(super) fn table_bytes_of(replay_case: &ReplayCase, layer_index: usize) -> u64 {
+    let table_slot_count = layer_slot_limit_of(replay_case, layer_index).unwrap_or(0);
+    expert_bytes_of(replay_case, layer_index)
+        .saturating_mul(u64::try_from(table_slot_count).unwrap_or(u64::MAX))
 }
 
 pub(super) fn expert_bytes_of(replay_case: &ReplayCase, layer_index: usize) -> u64 {

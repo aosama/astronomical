@@ -1,6 +1,10 @@
 //! Whole-product check of the memory split shown by the public status surface.
 
-use std::{fs, net::SocketAddr};
+use std::{
+    fs,
+    net::SocketAddr,
+    path::{Path, PathBuf},
+};
 
 use serde_json::{Value, json};
 use serial_test::serial;
@@ -8,6 +12,8 @@ use test_harness::{sparse_decode_full_fit, test_run::TestRunContext};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::TcpStream,
+    process::Child,
+    task::JoinHandle,
     time::{Duration, Instant, sleep, timeout},
 };
 
@@ -24,7 +30,6 @@ async fn should_report_complete_decode_residency_through_the_real_daemon_at_37_g
         .expect("the whole-product full-fit journey must stay within the 120-second runner budget");
 }
 
-#[expect(clippy::too_many_lines)]
 async fn run_full_fit_status_journey() {
     let context = TestRunContext::current();
     assert!(
@@ -32,13 +37,8 @@ async fn run_full_fit_status_journey() {
         "this journey must not substitute a scripted worker"
     );
     let model_id = test_harness::fixtures::large_sparse_moe_streaming_model_id();
-    let model_directory = context.configuration.model_directory.unwrap_or_else(|| {
-        config::AstronomicalConfig::load_from_development_location()
-            .expect("the Development configuration should load")
-            .find_configured_model_directory_by_id(model_id)
-            .expect("the model directories should be searchable")
-            .expect("the large sparse artifact should be installed")
-    });
+    let model_directory =
+        installed_model_directory(context.configuration.model_directory, model_id);
     let evidence_directory = context
         .configuration
         .evidence_directory
@@ -48,14 +48,7 @@ async fn run_full_fit_status_journey() {
     // Keep live state in the platform temporary directory and copy logs below.
     let isolated_state = tempfile::tempdir().expect("the isolated daemon state should exist");
     let state_directory = isolated_state.path();
-    fs::write(
-        state_directory.join("config.json"),
-        serde_json::to_vec_pretty(&sparse_decode_full_fit::configuration_document(
-            &model_directory,
-        ))
-        .expect("the configuration should serialize"),
-    )
-    .expect("the configuration should persist");
+    write_isolated_daemon_configuration(state_directory, &model_directory);
     let daemon_path = test_harness::workspace_binary("astronomicald");
     let (mut daemon_process, address) = daemon::spawn_actual_instance_daemon(
         daemon_path
@@ -65,18 +58,7 @@ async fn run_full_fit_status_journey() {
         state_directory,
     )
     .await;
-    let mut daemon_stderr = daemon_process
-        .stderr
-        .take()
-        .expect("daemon diagnostics should be piped");
-    let diagnostics_task = tokio::spawn(async move {
-        let mut diagnostics = String::new();
-        daemon_stderr
-            .read_to_string(&mut diagnostics)
-            .await
-            .expect("daemon diagnostics should be readable");
-        diagnostics
-    });
+    let diagnostics_task = collect_daemon_diagnostics(&mut daemon_process);
     daemon::wait_until_endpoint_contains(
         address,
         "/v1/status",
@@ -104,6 +86,69 @@ async fn run_full_fit_status_journey() {
             .expect("the daemon should be reaped")
             .success()
     );
+    let retained_logging_directory =
+        retain_daemon_evidence(&evidence_directory, state_directory, diagnostics_task).await;
+    let (completion, statuses) = request_outcome
+        .expect("the request must finish within its budget; daemon logs were retained")
+        .unwrap_or_else(|failure| panic!("{failure}; daemon logs were retained"));
+    fs::write(
+        evidence_directory.join("decode-status-samples.json"),
+        serde_json::to_vec_pretty(&statuses).expect("status evidence should serialize"),
+    )
+    .expect("status evidence should persist");
+    assert_journey_reports_complete_decode_residency(
+        &completion,
+        &statuses,
+        &retained_logging_directory,
+    );
+}
+
+fn installed_model_directory(
+    configured_model_directory: Option<PathBuf>,
+    model_id: &str,
+) -> PathBuf {
+    configured_model_directory.unwrap_or_else(|| {
+        config::AstronomicalConfig::load_from_development_location()
+            .expect("the Development configuration should load")
+            .find_configured_model_directory_by_id(model_id)
+            .expect("the model directories should be searchable")
+            .expect("the large sparse artifact should be installed")
+    })
+}
+
+fn write_isolated_daemon_configuration(state_directory: &Path, model_directory: &Path) {
+    fs::write(
+        state_directory.join("config.json"),
+        serde_json::to_vec_pretty(&sparse_decode_full_fit::configuration_document(
+            model_directory,
+        ))
+        .expect("the configuration should serialize"),
+    )
+    .expect("the configuration should persist");
+}
+
+fn collect_daemon_diagnostics(daemon_process: &mut Child) -> JoinHandle<String> {
+    let mut daemon_stderr = daemon_process
+        .stderr
+        .take()
+        .expect("daemon diagnostics should be piped");
+    tokio::spawn(async move {
+        let mut diagnostics = String::new();
+        daemon_stderr
+            .read_to_string(&mut diagnostics)
+            .await
+            .expect("daemon diagnostics should be readable");
+        diagnostics
+    })
+}
+
+/// Copies the daemon diagnostics and every daemon and worker log into the
+/// evidence directory, and returns the directory holding the retained logs.
+async fn retain_daemon_evidence(
+    evidence_directory: &Path,
+    state_directory: &Path,
+    diagnostics_task: JoinHandle<String>,
+) -> PathBuf {
     fs::write(
         evidence_directory.join("daemon-diagnostics.log"),
         diagnostics_task.await.expect("diagnostics should complete"),
@@ -121,14 +166,14 @@ async fn run_full_fit_status_journey() {
         )
         .expect("daemon and worker logs should persist");
     }
-    let (completion, statuses) = request_outcome
-        .expect("the request must finish within its budget; daemon logs were retained")
-        .unwrap_or_else(|failure| panic!("{failure}; daemon logs were retained"));
-    fs::write(
-        evidence_directory.join("decode-status-samples.json"),
-        serde_json::to_vec_pretty(&statuses).expect("status evidence should serialize"),
-    )
-    .expect("status evidence should persist");
+    retained_logging_directory
+}
+
+fn assert_journey_reports_complete_decode_residency(
+    completion: &str,
+    statuses: &[Value],
+    retained_logging_directory: &Path,
+) {
     assert!(
         completion.contains("\"finish_reason\""),
         "the completion stream must finish"
@@ -137,12 +182,12 @@ async fn run_full_fit_status_journey() {
         !statuses.is_empty(),
         "the whole-product journey must observe generating status"
     );
-    for status in &statuses {
+    for status in statuses {
         sparse_decode_full_fit::validate_decode_residency(status)
             .unwrap_or_else(|failure| panic!("{failure}"));
     }
     let report =
-        sparse_decode_full_fit::read_generation_attribution_report(&retained_logging_directory, 1)
+        sparse_decode_full_fit::read_generation_attribution_report(retained_logging_directory, 1)
             .expect("the real worker must persist generation attribution");
     sparse_decode_full_fit::validate_generation_attribution(&report)
         .unwrap_or_else(|failure| panic!("{failure}"));

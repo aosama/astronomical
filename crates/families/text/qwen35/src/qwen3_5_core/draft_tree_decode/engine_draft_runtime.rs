@@ -18,8 +18,8 @@ use super::draft_round_target::DraftRoundTarget;
 use crate::PerformanceAttribution;
 use engine_core::speculative_decoding::dflash_drafter::{
     DFlashDrafterConfiguration, DFlashDrafterWeights, DFlashDrafterWeightsError, DraftTreeOptions,
-    DrafterCheckpointFormatError, bind_drafter_weights, drafter_load_peak_bytes,
-    read_drafter_checkpoint_format,
+    DrafterCheckpointFormat, DrafterCheckpointFormatError, bind_drafter_weights,
+    drafter_load_peak_bytes, read_drafter_checkpoint_format,
 };
 
 use super::draft_tree_size::draft_tree_options_for_target;
@@ -193,17 +193,26 @@ fn drafter_load_byte_count(
     drafter_directory: &Path,
     drafter_configuration: &DFlashDrafterConfiguration,
 ) -> Result<u64, Qwen3_5SpeculativeDraftLoadingError> {
+    let (drafter_weights_bytes, checkpoint_format) = drafter_checkpoint_facts(drafter_directory)?;
+    Ok(drafter_load_peak_bytes(
+        drafter_weights_bytes,
+        checkpoint_format,
+        drafter_configuration,
+    ) + DRAFTER_LOAD_HEADROOM_BYTES)
+}
+
+/// The drafter checkpoint's size and how it stores its linears, from the
+/// file system and its header alone.
+fn drafter_checkpoint_facts(
+    drafter_directory: &Path,
+) -> Result<(u64, DrafterCheckpointFormat), Qwen3_5SpeculativeDraftLoadingError> {
     let drafter_weights_path = drafter_directory.join(DRAFTER_WEIGHTS_FILE_NAME);
     let drafter_weights_bytes = std::fs::metadata(&drafter_weights_path)
         .map_err(|source| Qwen3_5SpeculativeDraftLoadingError::WeightsUnreadable { source })?
         .len();
     let checkpoint_format = read_drafter_checkpoint_format(&drafter_weights_path)
         .map_err(Qwen3_5SpeculativeDraftLoadingError::CheckpointFormat)?;
-    Ok(drafter_load_peak_bytes(
-        drafter_weights_bytes,
-        checkpoint_format,
-        drafter_configuration,
-    ) + DRAFTER_LOAD_HEADROOM_BYTES)
+    Ok((drafter_weights_bytes, checkpoint_format))
 }
 
 /// Refuses the drafter when the active limit cannot hold its weights plus

@@ -86,19 +86,7 @@ pub fn validate_required_file(
     required_file_profile: &RequiredFileProfile,
 ) -> Result<ValidatedRequiredFile, ArtifactValidationError> {
     validate_required_file_relative_path(&required_file_profile.file_name)?;
-    // Install layouts may reach the validator through a path form other than
-    // the artifact's real location — a symlink-farm install directory that
-    // points at a Hugging Face snapshot, for example. Validation must judge
-    // the artifact, not the path form, so the directory is canonicalized
-    // here: the Hugging Face snapshot resolver recognizes the snapshot
-    // layout from the canonical path, and every downstream control
-    // (blob-directory containment, O_NOFOLLOW opens, snapshot-tree record
-    // authentication) keeps operating on that canonical base. Best effort by
-    // contract: when the directory cannot be canonicalized the original path
-    // is used, and the existing per-file checks report the failure exactly
-    // as before.
-    let canonical_model_directory =
-        fs::canonicalize(model_directory).unwrap_or_else(|_| model_directory.to_path_buf());
+    let canonical_model_directory = canonicalize_model_directory(model_directory);
     let required_file_path = canonical_model_directory.join(&required_file_profile.file_name);
     tracing::debug!(
         model_directory = %model_directory.display(),
@@ -106,17 +94,8 @@ pub fn validate_required_file(
         resolved_path = %required_file_path.display(),
         "validating required file"
     );
-    let file_metadata = fs::symlink_metadata(&required_file_path).map_err(|source| {
-        tracing::debug!(
-            file = %required_file_path.display(),
-            error = %source,
-            "symlink_metadata failed"
-        );
-        ArtifactValidationError::InspectRequiredFile {
-            file_name: required_file_profile.file_name.clone(),
-            source,
-        }
-    })?;
+    let path_metadata =
+        inspect_required_file_path(&required_file_path, &required_file_profile.file_name)?;
 
     // Ordinary model directories remain symlink-free. Hugging Face snapshots are
     // the one safe exception because their files intentionally point into the
@@ -125,51 +104,16 @@ pub fn validate_required_file(
         &canonical_model_directory,
         &required_file_path,
         &required_file_profile.file_name,
-        &file_metadata,
+        &path_metadata,
+    )?;
+    let (file, file_metadata) = open_regular_required_file(
+        &required_file_open_path,
+        &path_metadata,
+        &required_file_profile.file_name,
     )?;
 
-    // Open the resolved blob itself with O_NOFOLLOW. If the final path changes
-    // after validation, the kernel rejects it instead of following it.
-    tracing::debug!(
-        open_path = %required_file_open_path.display(),
-        is_file = file_metadata.file_type().is_file(),
-        is_symlink = file_metadata.file_type().is_symlink(),
-        "attempting to open file"
-    );
-    let file =
-        open_read_only_without_following_symlinks(&required_file_open_path).map_err(|source| {
-            tracing::debug!(
-                file_name = %required_file_profile.file_name,
-                io_error = %source,
-                "validate_required_file open failed"
-            );
-            ArtifactValidationError::InspectRequiredFile {
-                file_name: required_file_profile.file_name.clone(),
-                source,
-            }
-        })?;
-    let file_metadata =
-        file.metadata()
-            .map_err(|source| ArtifactValidationError::InspectRequiredFile {
-                file_name: required_file_profile.file_name.clone(),
-                source,
-            })?;
-    if !file_metadata.file_type().is_file() {
-        return Err(ArtifactValidationError::RequiredFileIsNotRegular {
-            file_name: required_file_profile.file_name.clone(),
-        });
-    }
-
     let actual_size_bytes = file_metadata.len();
-    if required_file_profile.size_bytes != 0
-        && actual_size_bytes != required_file_profile.size_bytes
-    {
-        return Err(ArtifactValidationError::RequiredFileSizeMismatch {
-            file_name: required_file_profile.file_name.clone(),
-            expected_size_bytes: required_file_profile.size_bytes,
-            actual_size_bytes,
-        });
-    }
+    ensure_required_file_size_matches(required_file_profile, actual_size_bytes)?;
 
     let captured_bytes =
         capture_required_file_bytes(required_file_profile, &file, actual_size_bytes)?;
@@ -193,6 +137,99 @@ pub fn validate_required_file(
         actual_size_bytes,
         captured_bytes,
     ))
+}
+
+/// Install layouts may reach the validator through a path form other than
+/// the artifact's real location — a symlink-farm install directory that
+/// points at a Hugging Face snapshot, for example. Validation must judge
+/// the artifact, not the path form, so the directory is canonicalized
+/// here: the Hugging Face snapshot resolver recognizes the snapshot
+/// layout from the canonical path, and every downstream control
+/// (blob-directory containment, O_NOFOLLOW opens, snapshot-tree record
+/// authentication) keeps operating on that canonical base. Best effort by
+/// contract: when the directory cannot be canonicalized the original path
+/// is used, and the existing per-file checks report the failure exactly
+/// as before.
+fn canonicalize_model_directory(model_directory: &Path) -> PathBuf {
+    fs::canonicalize(model_directory).unwrap_or_else(|_| model_directory.to_path_buf())
+}
+
+/// Reads the metadata of the required file's own path without following a
+/// final symlink, so the caller can tell a snapshot symlink from a regular
+/// file before opening anything.
+fn inspect_required_file_path(
+    required_file_path: &Path,
+    required_file_name: &str,
+) -> Result<fs::Metadata, ArtifactValidationError> {
+    fs::symlink_metadata(required_file_path).map_err(|source| {
+        tracing::debug!(
+            file = %required_file_path.display(),
+            error = %source,
+            "symlink_metadata failed"
+        );
+        ArtifactValidationError::InspectRequiredFile {
+            file_name: required_file_name.to_owned(),
+            source,
+        }
+    })
+}
+
+/// Opens the resolved file and returns it with the metadata read from the
+/// open descriptor, rejecting anything that is not a regular file. The open
+/// uses O_NOFOLLOW on the resolved blob itself: if the final path changes
+/// after validation, the kernel rejects it instead of following it.
+fn open_regular_required_file(
+    required_file_open_path: &Path,
+    path_metadata: &fs::Metadata,
+    required_file_name: &str,
+) -> Result<(File, fs::Metadata), ArtifactValidationError> {
+    tracing::debug!(
+        open_path = %required_file_open_path.display(),
+        is_file = path_metadata.file_type().is_file(),
+        is_symlink = path_metadata.file_type().is_symlink(),
+        "attempting to open file"
+    );
+    let file =
+        open_read_only_without_following_symlinks(required_file_open_path).map_err(|source| {
+            tracing::debug!(
+                file_name = %required_file_name,
+                io_error = %source,
+                "validate_required_file open failed"
+            );
+            ArtifactValidationError::InspectRequiredFile {
+                file_name: required_file_name.to_owned(),
+                source,
+            }
+        })?;
+    let file_metadata =
+        file.metadata()
+            .map_err(|source| ArtifactValidationError::InspectRequiredFile {
+                file_name: required_file_name.to_owned(),
+                source,
+            })?;
+    if !file_metadata.file_type().is_file() {
+        return Err(ArtifactValidationError::RequiredFileIsNotRegular {
+            file_name: required_file_name.to_owned(),
+        });
+    }
+    Ok((file, file_metadata))
+}
+
+/// A profile size of zero means the size is not pinned, so any size passes.
+fn ensure_required_file_size_matches(
+    required_file_profile: &RequiredFileProfile,
+    actual_size_bytes: u64,
+) -> Result<(), ArtifactValidationError> {
+    if required_file_profile.size_bytes != 0
+        && actual_size_bytes != required_file_profile.size_bytes
+    {
+        return Err(ArtifactValidationError::RequiredFileSizeMismatch {
+            file_name: required_file_profile.file_name.clone(),
+            expected_size_bytes: required_file_profile.size_bytes,
+            actual_size_bytes,
+        });
+    }
+    Ok(())
 }
 
 /// Resolves the path the validator actually opens. Ordinary model directories
@@ -450,3 +487,7 @@ fn capture_file(file: &File, size_bytes: u64) -> io::Result<Vec<u8>> {
 
     Ok(captured_bytes)
 }
+
+#[cfg(test)]
+#[path = "required_files_tests.rs"]
+mod tests;

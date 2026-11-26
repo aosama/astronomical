@@ -22,7 +22,7 @@
 //! `cargo measure-decode-residency-attribution` (warm) and
 //! `cargo measure-cold-decode-residency-attribution` (cold).
 
-use model_serving::Qwen3_5TextEngineTestControls;
+use model_serving::{Qwen3_5TextEngine, Qwen3_5TextEngineTestControls};
 use std::path::Path;
 use std::time::Duration;
 
@@ -208,6 +208,31 @@ async fn attribute_decode_token_time(
         prefill_chunk_tokens,
     );
     load_engine_with_progress(&mut engine, "decode_attribution_model_load").await;
+    select_expert_read_path_and_route_stops(&mut engine, expert_read_path, route_stops).await;
+    // Started after loading: the resident bundle is copied into MLX memory at
+    // load, so only reads made while serving should pay storage cost.
+    let cold_macos_file_cache = matches!(macos_file_cache_condition, MacosFileCacheCondition::Cold)
+        .then(|| ColdMacosFileCache::start(&model_directory));
+    for probe_request in &probe_requests {
+        serve_probe_request_and_print_residency(
+            &mut engine,
+            probe_request,
+            &end_of_sequence_token_ids,
+        )
+        .await;
+    }
+    let macos_file_cache_sweep_count = cold_macos_file_cache.map_or(0, ColdMacosFileCache::finish);
+    eprintln!(
+        "[decode-attribution] macos_file_cache={macos_file_cache_condition:?} macos_file_cache_sweeps={macos_file_cache_sweep_count}"
+    );
+    print_attribution_reports(&attribution_log_path);
+}
+
+async fn select_expert_read_path_and_route_stops(
+    engine: &mut Qwen3_5TextEngine,
+    expert_read_path: ExpertReadPath,
+    route_stops: RouteStops,
+) {
     engine
         .set_decode_misses_fetched_into_tables_for_tests(matches!(
             expert_read_path,
@@ -225,56 +250,56 @@ async fn attribute_decode_token_time(
     eprintln!(
         "[decode-attribution] expert_read_path={expert_read_path:?} route_stops={route_stops:?}"
     );
-    // Started after loading: the resident bundle is copied into MLX memory at
-    // load, so only reads made while serving should pay storage cost.
-    let cold_macos_file_cache = matches!(macos_file_cache_condition, MacosFileCacheCondition::Cold)
-        .then(|| ColdMacosFileCache::start(&model_directory));
-    for probe_request in &probe_requests {
-        // Counts from loading and from the request before are not this
-        // request's.
-        let _ = engine.take_direct_expert_fetch_counts_for_tests().await;
-        let generated_token_ids = run_attributed_generation(
-            &mut engine,
-            probe_request.request_id,
-            &probe_request.prompt_token_ids,
-            probe_request.phase_name,
-            probe_request.output_token_count,
-            &end_of_sequence_token_ids,
-        )
-        .await;
-        assert!(
-            !generated_token_ids.is_empty(),
-            "{} must generate tokens",
-            probe_request.phase_name
-        );
-        print_direct_expert_fetch_counts(
-            probe_request.phase_name,
-            engine
-                .take_direct_expert_fetch_counts_for_tests()
-                .await
-                .expect("the engine reports its expert fetch counts"),
-            generated_token_ids.len(),
-        );
-        // The residency each request leaves is what the next one starts
-        // from; printing it shows whether decode's warm experts survive.
-        let expert_statistics = engine
-            .astro_expert_cache_statistics_for_tests()
-            .await
-            .expect("the engine reports its expert residency");
-        eprintln!(
-            "[decode-attribution] after={} resident_experts={} resident_gb={:.2} warm_tables={} evictions={}",
-            probe_request.phase_name,
-            expert_statistics.entry_count,
-            expert_statistics.resident_payload_byte_count as f64 / 1_073_741_824.0,
-            expert_statistics.partial_layer_count,
-            expert_statistics.eviction_count,
-        );
-    }
-    let macos_file_cache_sweep_count = cold_macos_file_cache.map_or(0, ColdMacosFileCache::finish);
-    eprintln!(
-        "[decode-attribution] macos_file_cache={macos_file_cache_condition:?} macos_file_cache_sweeps={macos_file_cache_sweep_count}"
+}
+
+async fn serve_probe_request_and_print_residency(
+    engine: &mut Qwen3_5TextEngine,
+    probe_request: &ProbeRequest,
+    end_of_sequence_token_ids: &[u32],
+) {
+    // Counts from loading and from the request before are not this
+    // request's.
+    let _ = engine.take_direct_expert_fetch_counts_for_tests().await;
+    let generated_token_ids = run_attributed_generation(
+        engine,
+        probe_request.request_id,
+        &probe_request.prompt_token_ids,
+        probe_request.phase_name,
+        probe_request.output_token_count,
+        end_of_sequence_token_ids,
+    )
+    .await;
+    assert!(
+        !generated_token_ids.is_empty(),
+        "{} must generate tokens",
+        probe_request.phase_name
     );
-    let report_documents = read_attribution_report_documents(&attribution_log_path);
+    print_direct_expert_fetch_counts(
+        probe_request.phase_name,
+        engine
+            .take_direct_expert_fetch_counts_for_tests()
+            .await
+            .expect("the engine reports its expert fetch counts"),
+        generated_token_ids.len(),
+    );
+    // The residency each request leaves is what the next one starts
+    // from; printing it shows whether decode's warm experts survive.
+    let expert_statistics = engine
+        .astro_expert_cache_statistics_for_tests()
+        .await
+        .expect("the engine reports its expert residency");
+    eprintln!(
+        "[decode-attribution] after={} resident_experts={} resident_gb={:.2} warm_tables={} evictions={}",
+        probe_request.phase_name,
+        expert_statistics.entry_count,
+        expert_statistics.resident_payload_byte_count as f64 / 1_073_741_824.0,
+        expert_statistics.partial_layer_count,
+        expert_statistics.eviction_count,
+    );
+}
+
+fn print_attribution_reports(attribution_log_path: &Path) {
+    let report_documents = read_attribution_report_documents(attribution_log_path);
     let measured_report =
         generation_report_for_request(&report_documents, MEASURED_REQUEST_ID.value());
     print_decode_token_attribution(measured_report);

@@ -1,6 +1,9 @@
 use std::collections::HashMap;
 
-use model_serving::{AstroDecoderStateCacheState, RequestDecoderStateStack};
+use model_serving::{
+    AstroDecoderStateCacheState, ConvolutionState, FullAttentionKeyValueState,
+    GatedDeltaRecurrentState, Qwen3_5Config, RequestDecoderStateStack,
+};
 use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
 use crate::common::qwen3_5_moe::{astro_ssd_prompt_cache_model_contract, frozen_ornith_1_0_config};
@@ -380,84 +383,112 @@ fn populate_request_decoder_state_with_full_attention_tokens(
     full_attention_token_count: usize,
 ) {
     let ornith_config = frozen_ornith_1_0_config();
-    let key_value_head_count = ornith_config.key_value_head_count() as i32;
-    let head_dimension = ornith_config.head_dimension() as i32;
-    let linear_convolution_kernel_dimension =
-        ornith_config.linear_convolution_kernel_dimension() as i32;
-    let linear_convolution_dimension = (ornith_config.linear_key_head_count() as usize)
-        .saturating_mul(ornith_config.linear_key_head_dimension() as usize)
-        .saturating_mul(2)
-        .saturating_add(
-            (ornith_config.linear_value_head_count() as usize)
-                .saturating_mul(ornith_config.linear_value_head_dimension() as usize),
-        );
-    let linear_convolution_dimension_i32 = i32::try_from(linear_convolution_dimension)
-        .expect("the frozen linear convolution dimension should fit i32");
-    let linear_value_head_count = ornith_config.linear_value_head_count() as i32;
-    let linear_value_head_dimension = ornith_config.linear_value_head_dimension() as i32;
-    let linear_key_head_dimension = ornith_config.linear_key_head_dimension() as i32;
+    let zeroed_state_shapes =
+        ZeroedStateShapes::for_frozen_ornith_config(&ornith_config, full_attention_token_count);
     for layer_index in 0..ornith_config.layer_count() as usize {
         let layer_model_state = request_decoder_state
             .layer_mut(layer_index)
             .expect("the layer slot should exist");
         match layer_model_state {
             AstroDecoderStateCacheState::AppendOnlyAttention { attention } => {
-                let attention_keys = runtime
-                    .zeros(
-                        &[
-                            1,
-                            key_value_head_count,
-                            full_attention_token_count as i32,
-                            head_dimension,
-                        ],
-                        MlxDtype::BFloat16,
-                    )
-                    .expect("the test should create the keys tensor");
-                let attention_values = runtime
-                    .zeros(
-                        &[
-                            1,
-                            key_value_head_count,
-                            full_attention_token_count as i32,
-                            head_dimension,
-                        ],
-                        MlxDtype::BFloat16,
-                    )
-                    .expect("the test should create the values tensor");
-                attention
-                    .restore_from_blocks(attention_keys, attention_values)
-                    .expect("the test KV tensors should restore into the owner");
+                restore_zeroed_attention_state(runtime, attention, &zeroed_state_shapes);
             }
             AstroDecoderStateCacheState::Composite {
                 convolution,
                 recurrent,
             } => {
-                convolution.restore_from_snapshot(
-                    runtime
-                        .zeros(
-                            &[
-                                1,
-                                linear_convolution_kernel_dimension.saturating_sub(1),
-                                linear_convolution_dimension_i32,
-                            ],
-                            MlxDtype::BFloat16,
-                        )
-                        .expect("the test should create the convolution tensor"),
-                );
-                recurrent.restore_from_snapshot(
-                    runtime
-                        .zeros(
-                            &[
-                                1,
-                                linear_value_head_count,
-                                linear_value_head_dimension,
-                                linear_key_head_dimension,
-                            ],
-                            MlxDtype::Float32,
-                        )
-                        .expect("the test should create the recurrent tensor"),
-                );
+                restore_zeroed_linear_state(runtime, convolution, recurrent, &zeroed_state_shapes);
             }
         }
     }
+}
+
+/// Dimensions of the zero-filled tensors restored into each kind of layer.
+struct ZeroedStateShapes {
+    attention_keys_and_values: [i32; 4],
+    linear_convolution: [i32; 3],
+    linear_recurrent: [i32; 4],
+}
+
+impl ZeroedStateShapes {
+    fn for_frozen_ornith_config(
+        ornith_config: &Qwen3_5Config,
+        full_attention_token_count: usize,
+    ) -> Self {
+        let key_value_head_count = ornith_config.key_value_head_count() as i32;
+        let head_dimension = ornith_config.head_dimension() as i32;
+        let linear_convolution_kernel_dimension =
+            ornith_config.linear_convolution_kernel_dimension() as i32;
+        let linear_convolution_dimension = (ornith_config.linear_key_head_count() as usize)
+            .saturating_mul(ornith_config.linear_key_head_dimension() as usize)
+            .saturating_mul(2)
+            .saturating_add(
+                (ornith_config.linear_value_head_count() as usize)
+                    .saturating_mul(ornith_config.linear_value_head_dimension() as usize),
+            );
+        let linear_convolution_dimension_i32 = i32::try_from(linear_convolution_dimension)
+            .expect("the frozen linear convolution dimension should fit i32");
+        let linear_value_head_count = ornith_config.linear_value_head_count() as i32;
+        let linear_value_head_dimension = ornith_config.linear_value_head_dimension() as i32;
+        let linear_key_head_dimension = ornith_config.linear_key_head_dimension() as i32;
+        Self {
+            attention_keys_and_values: [
+                1,
+                key_value_head_count,
+                full_attention_token_count as i32,
+                head_dimension,
+            ],
+            linear_convolution: [
+                1,
+                linear_convolution_kernel_dimension.saturating_sub(1),
+                linear_convolution_dimension_i32,
+            ],
+            linear_recurrent: [
+                1,
+                linear_value_head_count,
+                linear_value_head_dimension,
+                linear_key_head_dimension,
+            ],
+        }
+    }
+}
+
+fn restore_zeroed_attention_state(
+    runtime: &MlxRuntime,
+    attention: &mut FullAttentionKeyValueState,
+    zeroed_state_shapes: &ZeroedStateShapes,
+) {
+    let attention_keys = runtime
+        .zeros(
+            &zeroed_state_shapes.attention_keys_and_values,
+            MlxDtype::BFloat16,
+        )
+        .expect("the test should create the keys tensor");
+    let attention_values = runtime
+        .zeros(
+            &zeroed_state_shapes.attention_keys_and_values,
+            MlxDtype::BFloat16,
+        )
+        .expect("the test should create the values tensor");
+    attention
+        .restore_from_blocks(attention_keys, attention_values)
+        .expect("the test KV tensors should restore into the owner");
+}
+
+fn restore_zeroed_linear_state(
+    runtime: &MlxRuntime,
+    convolution: &mut ConvolutionState,
+    recurrent: &mut GatedDeltaRecurrentState,
+    zeroed_state_shapes: &ZeroedStateShapes,
+) {
+    convolution.restore_from_snapshot(
+        runtime
+            .zeros(&zeroed_state_shapes.linear_convolution, MlxDtype::BFloat16)
+            .expect("the test should create the convolution tensor"),
+    );
+    recurrent.restore_from_snapshot(
+        runtime
+            .zeros(&zeroed_state_shapes.linear_recurrent, MlxDtype::Float32)
+            .expect("the test should create the recurrent tensor"),
+    );
 }

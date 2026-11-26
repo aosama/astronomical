@@ -42,7 +42,7 @@ const MLX_CONSUMER_DEFINITIONS: [&str; 4] =
 /// release: capture, timelines, reports, procedure comparisons, kernel
 /// launch records and the C API, without its demo, server or model code. One more source is generated
 /// (`embedded_graph_view_assets`).
-const PROFILER_LIBRARY_SOURCES: [&str; 53] = [
+const PROFILER_LIBRARY_SOURCES: [&str; 61] = [
     "graph_model.cpp",
     "graph_build_timer.cpp",
     "telemetry.cpp",
@@ -96,6 +96,14 @@ const PROFILER_LIBRARY_SOURCES: [&str; 53] = [
     "c_api_support.cpp",
     "mlx_perf_c_api.cpp",
     "mlx_perf_c_api_procedures.cpp",
+    "mlx_perf_c_api_wired_memory.cpp",
+    "system_wired_memory.cpp",
+    "wired_memory_sample.cpp",
+    "wired_memory_sampler.cpp",
+    "wired_memory_record.cpp",
+    "wired_memory_analysis.cpp",
+    "wire_release_probe.cpp",
+    "report_wired_memory_section.cpp",
 ];
 
 /// The report's interactive graph view: the function each embedded file is

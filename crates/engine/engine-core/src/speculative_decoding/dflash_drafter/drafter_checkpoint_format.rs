@@ -99,12 +99,21 @@ pub fn drafter_load_peak_bytes(
     checkpoint_format: DrafterCheckpointFormat,
     configuration: &DFlashDrafterConfiguration,
 ) -> u64 {
-    match checkpoint_format {
-        DrafterCheckpointFormat::FullPrecision => {
-            checkpoint_bytes.div_ceil(8) * LOAD_PEAK_EIGHTHS_OF_CHECKPOINT
-        }
-        DrafterCheckpointFormat::Prequantized => {
-            checkpoint_bytes.saturating_add(dequantized_codebook_bytes(configuration))
+    checkpoint_format.load_peak_bytes(checkpoint_bytes, configuration)
+}
+
+impl DrafterCheckpointFormat {
+    /// The peak of loading a checkpoint of `checkpoint_bytes` in this format.
+    fn load_peak_bytes(
+        self,
+        checkpoint_bytes: u64,
+        configuration: &DFlashDrafterConfiguration,
+    ) -> u64 {
+        match self {
+            Self::FullPrecision => checkpoint_bytes.div_ceil(8) * LOAD_PEAK_EIGHTHS_OF_CHECKPOINT,
+            Self::Prequantized => {
+                checkpoint_bytes.saturating_add(dequantized_codebook_bytes(configuration))
+            }
         }
     }
 }

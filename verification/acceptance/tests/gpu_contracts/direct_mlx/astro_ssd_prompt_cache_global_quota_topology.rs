@@ -3,9 +3,18 @@
 //! The active store must safely account and evict `astro_ssd_prompt_cache` artifacts belonging to
 //! other models without interpreting matching hashes as shared ancestry.
 
-use std::{fs, path::Path, time::UNIX_EPOCH};
+use std::collections::HashMap;
+use std::{
+    fs,
+    path::{Path, PathBuf},
+    time::UNIX_EPOCH,
+};
 
-use model_serving::{AstroSsdPromptCacheDiskStore, AstroSsdPromptCacheDiskStoreConfig};
+use mlx_bridge::MlxArray;
+use model_serving::{
+    AstroSsdPromptCacheBlockKey, AstroSsdPromptCacheDiskStore, AstroSsdPromptCacheDiskStoreConfig,
+};
+use runtime_integration::MlxRuntime;
 
 use super::astro_ssd_prompt_cache_disk_store_support::*;
 use crate::common::qwen3_5_moe;
@@ -20,28 +29,18 @@ async fn should_scope_protected_ancestry_to_its_model_namespace_when_hashes_matc
     let runtime = runtime_with_shared_limits();
     let measurement_directory =
         tempfile::tempdir().expect("the test should create a measurement directory");
-    let measurement_astro_ssd_prompt_cache = open_astro_ssd_prompt_cache_disk_store(
-        &measurement_directory,
-        LARGE_ASTRO_SSD_PROMPT_CACHE_LIMIT_BYTES,
-    )
-    .expect("the measurement astro SSD prompt cache should open");
     let parent_block_key = astro_ssd_prompt_cache_block_key_for_seed(0);
     let child_block_key = parent_block_key
         .for_child_block(&block_tokens_for_seed(10_000))
         .expect("the child identity should resolve");
     let sequence_state_tensors = synthetic_kv_block_tensors(&runtime);
     let boundary_state_tensors = synthetic_recurrent_snapshot_tensors(&runtime);
-    measurement_astro_ssd_prompt_cache
-        .publish_block(
-            &runtime,
-            &parent_block_key,
-            None,
-            &sequence_state_tensors,
-            &boundary_state_tensors,
-        )
-        .expect("the measurement block should publish");
-    let measured_block_size_bytes = measurement_astro_ssd_prompt_cache.total_size_bytes();
-    drop(measurement_astro_ssd_prompt_cache);
+    let measured_block_size_bytes = measure_published_block_size_bytes(
+        &runtime,
+        &measurement_directory,
+        &parent_block_key,
+        (&sequence_state_tensors, &boundary_state_tensors),
+    );
 
     let two_block_quota_bytes = measured_block_size_bytes
         .checked_mul(2)
@@ -63,6 +62,63 @@ async fn should_scope_protected_ancestry_to_its_model_namespace_when_hashes_matc
             &boundary_state_tensors,
         )
         .expect("the active parent should publish");
+    let (parent_block_directory, foreign_same_hash_directory) =
+        plant_oldest_foreign_block_with_the_parent_hash(
+            &global_astro_ssd_prompt_cache_root,
+            &parent_block_key,
+        );
+
+    active_astro_ssd_prompt_cache
+        .publish_block(
+            &runtime,
+            &child_block_key,
+            Some(&parent_block_key),
+            &sequence_state_tensors,
+            &boundary_state_tensors,
+        )
+        .expect("the child should evict only the foreign same-hash namespace");
+
+    assert!(parent_block_directory.is_dir());
+    assert!(
+        global_astro_ssd_prompt_cache_root
+            .path()
+            .join("blocks")
+            .join(hex::encode(child_block_key.block_hash()))
+            .is_dir()
+    );
+    assert!(!foreign_same_hash_directory.exists());
+}
+
+fn measure_published_block_size_bytes(
+    runtime: &MlxRuntime,
+    measurement_directory: &tempfile::TempDir,
+    block_key: &AstroSsdPromptCacheBlockKey,
+    block_state_tensors: (&HashMap<String, MlxArray>, &HashMap<String, MlxArray>),
+) -> u64 {
+    let (sequence_state_tensors, boundary_state_tensors) = block_state_tensors;
+    let measurement_astro_ssd_prompt_cache = open_astro_ssd_prompt_cache_disk_store(
+        measurement_directory,
+        LARGE_ASTRO_SSD_PROMPT_CACHE_LIMIT_BYTES,
+    )
+    .expect("the measurement astro SSD prompt cache should open");
+    measurement_astro_ssd_prompt_cache
+        .publish_block(
+            runtime,
+            block_key,
+            None,
+            sequence_state_tensors,
+            boundary_state_tensors,
+        )
+        .expect("the measurement block should publish");
+    measurement_astro_ssd_prompt_cache.total_size_bytes()
+}
+
+/// Returns the active parent block directory and the foreign directory that
+/// shares its hash, in that order.
+fn plant_oldest_foreign_block_with_the_parent_hash(
+    global_astro_ssd_prompt_cache_root: &tempfile::TempDir,
+    parent_block_key: &AstroSsdPromptCacheBlockKey,
+) -> (PathBuf, PathBuf) {
     let parent_block_directory = global_astro_ssd_prompt_cache_root
         .path()
         .join("blocks")
@@ -89,26 +145,7 @@ async fn should_scope_protected_ancestry_to_its_model_namespace_when_hashes_matc
         .expect("the foreign block directory should open")
         .set_times(std::fs::FileTimes::new().set_modified(UNIX_EPOCH))
         .expect("the foreign block should become the oldest candidate");
-
-    active_astro_ssd_prompt_cache
-        .publish_block(
-            &runtime,
-            &child_block_key,
-            Some(&parent_block_key),
-            &sequence_state_tensors,
-            &boundary_state_tensors,
-        )
-        .expect("the child should evict only the foreign same-hash namespace");
-
-    assert!(parent_block_directory.is_dir());
-    assert!(
-        global_astro_ssd_prompt_cache_root
-            .path()
-            .join("blocks")
-            .join(hex::encode(child_block_key.block_hash()))
-            .is_dir()
-    );
-    assert!(!foreign_same_hash_directory.exists());
+    (parent_block_directory, foreign_same_hash_directory)
 }
 
 #[test]

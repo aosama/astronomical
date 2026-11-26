@@ -12,6 +12,10 @@
 
 pub mod components;
 mod lifecycle;
+// Only the MLX component owner uses this arithmetic, so without `direct-mlx` it is built for the
+// tests alone instead of leaving dead-code warnings.
+#[cfg(any(test, feature = "direct-mlx"))]
+mod load_accounting;
 #[cfg(feature = "direct-mlx")]
 mod mlx_components;
 mod request_validation;

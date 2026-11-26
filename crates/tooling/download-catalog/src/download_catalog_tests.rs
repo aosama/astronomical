@@ -636,7 +636,7 @@ fn assert_dflash2_package_matches_its_plain_twin(expectation: DFlash2PackageExpe
     );
 }
 
-fn shipped_entry<'catalog>(
+pub(crate) fn shipped_entry<'catalog>(
     download_catalog: &'catalog DownloadCatalog,
     huggingface_id: &str,
 ) -> &'catalog DownloadCatalogEntry {

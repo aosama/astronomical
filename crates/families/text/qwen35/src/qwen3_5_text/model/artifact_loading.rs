@@ -9,27 +9,32 @@ use runtime_integration::MlxRuntime;
 
 use crate::qwen3_5_core::model::disk_embedding_rows::Qwen3_5DiskEmbeddingRows;
 use crate::qwen3_5_core::model::loading_geometry::{
-    ExpertPayloadGeometry, ExpertTensorNameMaps, expert_tensor_name_maps,
-    measured_astro_decoder_state_cache_layout, model_memory_facts,
+    ExpertPayloadGeometry, measured_astro_decoder_state_cache_layout, model_memory_facts,
 };
 use crate::qwen3_5_core::model::loading_pipeline::{
-    BoundLanguageArtifact, InvariantLinearScales, bind_language_artifact, invariant_linear_scales,
-    load_model_kernel_verdicts,
+    BoundLanguageArtifact, InvariantLinearScales, ModelKernelVerdicts, bind_language_artifact,
+    load_invariant_linear_scales, load_model_kernel_verdicts, stored_activation_dtype,
 };
 use crate::qwen3_5_text;
 use crate::qwen3_5_text::Qwen3_5ExpertPager;
 use crate::qwen3_5_text::model::dense_layer_streamer::Qwen3_5DenseLayerStreamer;
-use crate::qwen4_exp::ngram_table::{ngram_table_from_bound_weights, open_ngram_table_shards};
+use crate::qwen4_exp::ngram_table::{
+    NgramTable, NgramTableShards, ngram_table_from_bound_weights, open_ngram_table_shards,
+};
 use crate::{ModelMemoryFacts, PerformanceAttribution};
 
 use super::Qwen3_5Model;
 use super::Qwen3_5ModelBase;
-use super::direct_expert_fetch::DirectExpertFetching;
-use super::{
-    Qwen3_5FeedForwardArchitecture, Qwen3_5VisionModel, Qwen3_5Weights, TextExecutionError,
-    ValidatedQwen3_5Artifact,
+use super::dense_streaming_loading::{
+    DenseStreamingGeometry, dense_streaming_geometry, dense_streaming_sources,
+    embedding_residency_of,
 };
-use mlx_bridge::{MlxCompiledElementwiseGraphs, MlxCompiledSwiGlu, MlxMetalKernel};
+use super::direct_expert_fetch::DirectExpertFetching;
+use super::streaming_expert_runtime_loading::{
+    ExpertCombinationKernels, accelerators_with, streaming_expert_runtime,
+};
+use super::{Qwen3_5VisionModel, Qwen3_5Weights, TextExecutionError, ValidatedQwen3_5Artifact};
+use mlx_bridge::{MlxCompiledElementwiseGraphs, MlxCompiledSwiGlu};
 
 /// Tensors bind in the dtype the compute device runs the model accurately
 /// in (#2441): as stored on the Metal build, so memory plans sized from the
@@ -98,64 +103,91 @@ impl Qwen3_5Model {
         decode_astro_expert_cache_policy: WorkerDecodeAstroExpertCachePolicy,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<Self, TextExecutionError> {
-        // Both taken before binding, which consumes parts of the artifact.
-        let expert_atlas = validated_artifact.expert_atlas().cloned();
-        let (disk_embedding_rows, dense_layer_streamer) =
-            dense_streaming_sources(&validated_artifact)?;
-        let ngram_table_shards = open_ngram_table_shards(&validated_artifact)?;
-        let BoundLanguageArtifact {
-            config,
-            shard_index,
-            tensor_inventory,
-            weights,
-            vision_model,
-            folded_ternary_rotations: folded_rotations,
-            ..
-        } = bind_language_artifact(
+        let (bound_sources, ngram_table_shards) = bind_model_sources(
             &runtime,
             &mut validated_artifact,
-            should_bind_vision_weights,
-            performance_attribution,
-        )?;
-        let (expert_pager, astro_expert_cache, expert_kernels) = streaming_expert_runtime(
-            &runtime,
             model_directory,
-            &config,
-            &shard_index,
-            &tensor_inventory,
-            expert_atlas.as_ref(),
+            should_bind_vision_weights,
             decode_astro_expert_cache_policy,
             performance_attribution,
         )?;
         let astro_decoder_state_cache_layout = measured_astro_decoder_state_cache_layout(
-            &config,
+            &bound_sources.config,
             &chunking,
-            &weights,
-            pager_layer_plans(expert_pager.as_ref()),
+            &bound_sources.weights,
+            pager_layer_plans(bound_sources.expert_pager.as_ref()),
             performance_attribution,
         )?;
-        let ngram_table = ngram_table_from_bound_weights(ngram_table_shards, &config, &weights)?;
-        let kernel_verdicts =
-            load_model_kernel_verdicts(&runtime, &config, performance_attribution)?;
-        let (compiled_swiglu, compiled_elementwise_graphs) = compiled_model_graphs()?;
-        let InvariantLinearScales {
-            inverse_linear_head_dimension_scale,
-            inverse_square_root_linear_head_dimension_scale,
-            query_normalization_scale_weight,
-            key_normalization_scale_weight,
-        } = invariant_linear_scales(&runtime, (&config, &weights), LANGUAGE_WEIGHT_BINDING_DTYPE)?;
+        let ngram_table = ngram_table_from_bound_weights(
+            ngram_table_shards,
+            &bound_sources.config,
+            &bound_sources.weights,
+        )?;
+        let startup_kernels = load_startup_kernel_resources(
+            &runtime,
+            &bound_sources.config,
+            stored_activation_dtype(&bound_sources.weights),
+            performance_attribution,
+        )?;
         let streaming_expert_budget = build_streaming_expert_budget(
             &runtime,
-            &config,
-            &weights,
-            embedding_residency_of(disk_embedding_rows.as_ref()),
-            &vision_model,
-            expert_pager.as_ref(),
-            dense_layer_streamer.as_ref(),
+            &bound_sources.config,
+            &bound_sources.weights,
+            embedding_residency_of(bound_sources.disk_embedding_rows.as_ref()),
+            &bound_sources.vision_model,
+            bound_sources.expert_pager.as_ref(),
+            bound_sources.dense_layer_streamer.as_ref(),
             &astro_decoder_state_cache_layout,
             performance_attribution,
         )?;
-        Ok(Self {
+        Ok(Self::assemble_loaded_model(
+            runtime,
+            chunking,
+            LoadedModelStages {
+                bound_sources,
+                astro_decoder_state_cache_layout,
+                ngram_table,
+                startup_kernels,
+                streaming_expert_budget,
+            },
+        ))
+    }
+
+    /// Moves every loaded piece into the model. Each resource was built by an
+    /// earlier stage of the load, so nothing here returns an error or reads
+    /// the GPU. The one step that touches storage is
+    /// `DirectExpertFetching::open`, which opens the expert readers and, when
+    /// they do not open, logs a warning and leaves the experts on the copying
+    /// path instead of failing the load.
+    fn assemble_loaded_model(
+        runtime: MlxRuntime,
+        chunking: super::TextModelChunkingConfiguration,
+        loaded_stages: LoadedModelStages,
+    ) -> Self {
+        let LoadedModelStages {
+            bound_sources,
+            astro_decoder_state_cache_layout,
+            ngram_table,
+            startup_kernels,
+            streaming_expert_budget,
+        } = loaded_stages;
+        let BoundModelSources {
+            config,
+            weights,
+            vision_model,
+            disk_embedding_rows,
+            dense_layer_streamer,
+            expert_pager,
+            astro_expert_cache,
+            expert_kernels,
+        } = bound_sources;
+        let StartupKernelResources {
+            invariant_linear_scales,
+            kernel_verdicts,
+            compiled_swiglu,
+            compiled_elementwise_graphs,
+        } = startup_kernels;
+        Self {
             base: Qwen3_5ModelBase {
                 runtime,
                 config,
@@ -173,15 +205,19 @@ impl Qwen3_5Model {
                 compiled_swiglu,
                 compiled_elementwise_graphs,
                 chunking,
-                inverse_linear_head_dimension_scale,
-                inverse_square_root_linear_head_dimension_scale,
-                query_normalization_scale_weight,
-                key_normalization_scale_weight,
+                inverse_linear_head_dimension_scale: invariant_linear_scales
+                    .inverse_linear_head_dimension_scale,
+                inverse_square_root_linear_head_dimension_scale: invariant_linear_scales
+                    .inverse_square_root_linear_head_dimension_scale,
+                query_normalization_scale_weight: invariant_linear_scales
+                    .query_normalization_scale_weight,
+                key_normalization_scale_weight: invariant_linear_scales
+                    .key_normalization_scale_weight,
                 layer_additions: RefCell::new(None),
             },
             direct_expert_fetching: DirectExpertFetching::open(expert_pager.as_ref()),
             expert_pager,
-            dense_layer_streamer: with_folded_rotations(dense_layer_streamer, folded_rotations),
+            dense_layer_streamer,
             astro_expert_cache,
             reply_measurement: Default::default(),
             route_observation: RefCell::new(RouteObservationCollector::new()),
@@ -198,8 +234,115 @@ impl Qwen3_5Model {
             probed_prompt_layer_mlx_working_buffers: std::cell::Cell::new(None),
             fused_jangtq2_gathered_projection_kernel: streaming_expert_budget
                 .fused_jangtq2_gathered_projection_kernel,
-        })
+        }
     }
+}
+
+/// What binding the artifact and planning the streaming runtime produce,
+/// before the memory facts and kernels that depend on them are derived.
+struct BoundModelSources {
+    config: crate::Qwen3_5Config,
+    weights: Qwen3_5Weights,
+    vision_model: Option<Qwen3_5VisionModel>,
+    disk_embedding_rows: Option<Qwen3_5DiskEmbeddingRows>,
+    dense_layer_streamer: Option<Qwen3_5DenseLayerStreamer>,
+    expert_pager: Option<Qwen3_5ExpertPager>,
+    astro_expert_cache: Option<RefCell<qwen3_5_text::AstroExpertCache>>,
+    expert_kernels: ExpertCombinationKernels,
+}
+
+/// The kernels, compiled graphs and invariant scales every forward reuses,
+/// none of which depend on the weights.
+struct StartupKernelResources {
+    invariant_linear_scales: InvariantLinearScales,
+    kernel_verdicts: ModelKernelVerdicts,
+    compiled_swiglu: MlxCompiledSwiGlu,
+    compiled_elementwise_graphs: MlxCompiledElementwiseGraphs,
+}
+
+/// The stages of a load, gathered for the final assembly of the model.
+struct LoadedModelStages {
+    bound_sources: BoundModelSources,
+    astro_decoder_state_cache_layout: crate::AstroDecoderStateCacheLayout,
+    ngram_table: Option<NgramTable>,
+    startup_kernels: StartupKernelResources,
+    streaming_expert_budget: StreamingExpertBudgetOutcome,
+}
+
+/// Binds the language artifact and plans how its experts, embedding rows and
+/// decoder layers stream. The n-gram table shards come back beside the bound
+/// sources because the caller builds the table from them once the weights are
+/// bound.
+fn bind_model_sources(
+    runtime: &MlxRuntime,
+    validated_artifact: &mut ValidatedQwen3_5Artifact,
+    model_directory: &Path,
+    should_bind_vision_weights: bool,
+    decode_astro_expert_cache_policy: WorkerDecodeAstroExpertCachePolicy,
+    performance_attribution: &mut PerformanceAttribution,
+) -> Result<(BoundModelSources, Option<NgramTableShards>), TextExecutionError> {
+    // Both taken before binding, which consumes parts of the artifact.
+    let expert_atlas = validated_artifact.expert_atlas().cloned();
+    let (disk_embedding_rows, dense_layer_streamer) = dense_streaming_sources(validated_artifact)?;
+    let ngram_table_shards = open_ngram_table_shards(validated_artifact)?;
+    let bound_language = bind_language_artifact(
+        runtime,
+        validated_artifact,
+        should_bind_vision_weights,
+        performance_attribution,
+    )?;
+    let (expert_pager, astro_expert_cache, expert_kernels) = streaming_expert_runtime(
+        runtime,
+        model_directory,
+        &bound_language.config,
+        &bound_language.shard_index,
+        &bound_language.tensor_inventory,
+        expert_atlas.as_ref(),
+        decode_astro_expert_cache_policy,
+        performance_attribution,
+    )?;
+    let BoundLanguageArtifact {
+        config,
+        weights,
+        vision_model,
+        folded_ternary_rotations,
+        ..
+    } = bound_language;
+    let bound_sources = BoundModelSources {
+        config,
+        weights,
+        vision_model,
+        disk_embedding_rows,
+        dense_layer_streamer: with_folded_rotations(dense_layer_streamer, folded_ternary_rotations),
+        expert_pager,
+        astro_expert_cache,
+        expert_kernels,
+    };
+    Ok((bound_sources, ngram_table_shards))
+}
+
+/// Loads the capability-verdict kernels, the compiled graphs and the
+/// invariant scales, in that order.
+fn load_startup_kernel_resources(
+    runtime: &MlxRuntime,
+    config: &crate::Qwen3_5Config,
+    stored_activation_dtype: mlx_bridge::MlxDtype,
+    performance_attribution: &mut PerformanceAttribution,
+) -> Result<StartupKernelResources, TextExecutionError> {
+    let kernel_verdicts = load_model_kernel_verdicts(runtime, config, performance_attribution)?;
+    let (compiled_swiglu, compiled_elementwise_graphs) = compiled_model_graphs()?;
+    let invariant_linear_scales = load_invariant_linear_scales(
+        runtime,
+        config,
+        stored_activation_dtype,
+        LANGUAGE_WEIGHT_BINDING_DTYPE,
+    )?;
+    Ok(StartupKernelResources {
+        invariant_linear_scales,
+        kernel_verdicts,
+        compiled_swiglu,
+        compiled_elementwise_graphs,
+    })
 }
 
 /// The compiled SwiGLU and elementwise graphs every forward reuses.
@@ -218,271 +361,6 @@ fn pager_layer_plans(
     expert_pager: Option<&Qwen3_5ExpertPager>,
 ) -> &[crate::qwen3_5_core::artifacts::QuantizedExpertLayerPlan] {
     expert_pager.map_or(&[], Qwen3_5ExpertPager::layer_plans)
-}
-
-/// A streaming dense model's core and streaming workspace.
-struct DenseStreamingGeometry {
-    model_core_payload_bytes: u64,
-    dense_streaming_workspace_bytes: u64,
-}
-
-/// Leaves a dense model's decoder layers out of its fixed core: kept layers
-/// are given back under request pressure like retained experts, so only the
-/// tensors that never stream are fixed. The two layer slots a streamed
-/// forward reads into become the per-operation page the floor reserves once.
-/// They stay out of the complete-expert-layer field, whose prefill rule
-/// would reserve three of it; prefill MLX working buffers are measured instead.
-fn dense_streaming_geometry(
-    bound_model_core_payload_bytes: u64,
-    dense_layer_streamer: Option<&Qwen3_5DenseLayerStreamer>,
-) -> DenseStreamingGeometry {
-    let Some(dense_layer_streamer) = dense_layer_streamer else {
-        return DenseStreamingGeometry {
-            model_core_payload_bytes: bound_model_core_payload_bytes,
-            dense_streaming_workspace_bytes: 0,
-        };
-    };
-    let mut decoder_layer_payload_bytes = 0_u64;
-    for layer_payload_bytes in dense_layer_streamer.layer_payload_bytes() {
-        decoder_layer_payload_bytes =
-            decoder_layer_payload_bytes.saturating_add(*layer_payload_bytes);
-    }
-    DenseStreamingGeometry {
-        model_core_payload_bytes: bound_model_core_payload_bytes
-            .saturating_sub(decoder_layer_payload_bytes),
-        dense_streaming_workspace_bytes: dense_layer_streamer.streaming_slot_bytes(),
-    }
-}
-
-/// A dense model's on-disk embedding rows and decoder layer streamer, both
-/// planned from the validated headers before binding takes the sources.
-fn dense_streaming_sources(
-    validated_artifact: &ValidatedQwen3_5Artifact,
-) -> Result<
-    (
-        Option<Qwen3_5DiskEmbeddingRows>,
-        Option<Qwen3_5DenseLayerStreamer>,
-    ),
-    TextExecutionError,
-> {
-    Ok((
-        dense_disk_embedding_rows(validated_artifact)?,
-        dense_layer_streamer(validated_artifact)?,
-    ))
-}
-
-/// The streamer with a folded ternary pack's rotations attached, so the
-/// layers it reads from the SSD take them as the bound layers did.
-fn with_folded_rotations(
-    dense_layer_streamer: Option<Qwen3_5DenseLayerStreamer>,
-    folded_ternary_rotations: Option<
-        std::rc::Rc<
-            crate::qwen3_5_core::model_math::folded_ternary_weights::FoldedTernaryRotations,
-        >,
-    >,
-) -> Option<Qwen3_5DenseLayerStreamer> {
-    match (dense_layer_streamer, folded_ternary_rotations) {
-        (Some(mut dense_layer_streamer), Some(folded_ternary_rotations)) => {
-            dense_layer_streamer.attach_folded_ternary_rotations(folded_ternary_rotations);
-            Some(dense_layer_streamer)
-        }
-        (dense_layer_streamer, _) => dense_layer_streamer,
-    }
-}
-
-/// The decoder layer streamer of every dense model. It keeps the layers the
-/// limit holds and reads the rest from the SSD; a model that fits keeps all.
-fn dense_layer_streamer(
-    validated_artifact: &ValidatedQwen3_5Artifact,
-) -> Result<Option<Qwen3_5DenseLayerStreamer>, TextExecutionError> {
-    match validated_artifact.config().feed_forward_architecture() {
-        Qwen3_5FeedForwardArchitecture::Dense => {
-            Qwen3_5DenseLayerStreamer::from_validated_artifact(validated_artifact).map(Some)
-        }
-        Qwen3_5FeedForwardArchitecture::MixtureOfExperts => Ok(None),
-    }
-}
-
-/// Whether the loaded model reads embedding rows from the SSD.
-const fn embedding_residency_of(
-    disk_embedding_rows: Option<&Qwen3_5DiskEmbeddingRows>,
-) -> crate::qwen3_5_core::model_math::weights::EmbeddingResidency {
-    match disk_embedding_rows {
-        Some(_) => crate::qwen3_5_core::model_math::weights::EmbeddingResidency::RowsReadFromDisk,
-        None => crate::qwen3_5_core::model_math::weights::EmbeddingResidency::Resident,
-    }
-}
-
-/// Embedding rows read from the SSD for every dense model, whether or not
-/// its text weights fit the limit; a sparse model keeps its table in memory,
-/// which its expert budget already plans.
-fn dense_disk_embedding_rows(
-    validated_artifact: &ValidatedQwen3_5Artifact,
-) -> Result<Option<Qwen3_5DiskEmbeddingRows>, TextExecutionError> {
-    match validated_artifact.config().feed_forward_architecture() {
-        Qwen3_5FeedForwardArchitecture::Dense => {
-            Qwen3_5DiskEmbeddingRows::from_validated_artifact(validated_artifact)
-        }
-        Qwen3_5FeedForwardArchitecture::MixtureOfExperts => Ok(None),
-    }
-}
-
-/// The engine's MoE-only runtime trio: pager, warm slot table, and
-/// the kernels that reduce a layer's routed experts.
-type StreamingExpertRuntimeTrio = (
-    Option<Qwen3_5ExpertPager>,
-    Option<RefCell<qwen3_5_text::AstroExpertCache>>,
-    ExpertCombinationKernels,
-);
-
-/// The expert runtime of a sparse model; a dense model streams its layers,
-/// not experts, and has none.
-#[allow(clippy::too_many_arguments)]
-fn streaming_expert_runtime(
-    runtime: &MlxRuntime,
-    model_directory: &Path,
-    config: &crate::Qwen3_5Config,
-    shard_index: &super::Qwen3_5ShardIndex,
-    tensor_inventory: &crate::TensorInventory,
-    expert_atlas: Option<&expert_atlas::AtlasManifest>,
-    decode_astro_expert_cache_policy: WorkerDecodeAstroExpertCachePolicy,
-    performance_attribution: &mut PerformanceAttribution,
-) -> Result<StreamingExpertRuntimeTrio, TextExecutionError> {
-    if config.feed_forward_architecture() == Qwen3_5FeedForwardArchitecture::Dense {
-        return Ok((None, None, ExpertCombinationKernels::default()));
-    }
-    load_streaming_expert_runtime(
-        runtime,
-        model_directory,
-        config,
-        shard_index,
-        tensor_inventory,
-        expert_atlas,
-        decode_astro_expert_cache_policy,
-        performance_attribution,
-    )
-}
-
-/// Builds the streaming expert runtime for a sparse model. Mirrors the MoE
-/// branch of the inlined loader, including the warm-table seeding from the
-/// persisted `.coli_usage`-analog history.
-#[allow(clippy::too_many_arguments)]
-fn load_streaming_expert_runtime(
-    runtime: &MlxRuntime,
-    model_directory: &Path,
-    config: &crate::Qwen3_5Config,
-    shard_index: &super::Qwen3_5ShardIndex,
-    tensor_inventory: &crate::TensorInventory,
-    expert_atlas: Option<&expert_atlas::AtlasManifest>,
-    decode_astro_expert_cache_policy: WorkerDecodeAstroExpertCachePolicy,
-    performance_attribution: &mut PerformanceAttribution,
-) -> Result<StreamingExpertRuntimeTrio, TextExecutionError> {
-    let ExpertTensorNameMaps {
-        tensor_name_to_shard_file_name,
-        stored_tensor_name_by_canonical_name,
-    } = expert_tensor_name_maps(shard_index, tensor_inventory);
-    let expert_pager = performance_attribution.measure_operation(
-        crate::PerformanceOperation::ExpertPagerPlanConstruction,
-        |_performance_attribution| {
-            Qwen3_5ExpertPager::new(
-                runtime,
-                model_directory.to_path_buf(),
-                &tensor_name_to_shard_file_name,
-                &stored_tensor_name_by_canonical_name,
-                expert_atlas,
-                config,
-                // The live configurable MLX active-memory ceiling is the only
-                // paging budget. Reading the runtime policy here lets reloads
-                // apply on every machine without copying a stale wired limit.
-                runtime.memory_limits().active_memory_limit_bytes(),
-            )
-        },
-    )?;
-    let expert_combination_kernels =
-        kept_expert_combination_kernels(runtime, performance_attribution)?;
-    let astro_expert_cache = RefCell::new(
-        qwen3_5_text::AstroExpertCache::new_with_decode_astro_expert_cache_policy(
-            expert_pager.layer_count(),
-            decode_astro_expert_cache_policy,
-        ),
-    );
-    // Seed demand ranking from the persisted usage history beside
-    // the artifact (colibri's `.coli_usage` analog). Only the decode record
-    // seeds hotness; a missing or stale file simply leaves the session cold.
-    let usage_file_path = qwen3_5_text::expert_streaming::expert_usage_file_path(model_directory);
-    match qwen3_5_text::expert_streaming::read_expert_usage(
-        &usage_file_path,
-        expert_pager.layer_count(),
-    ) {
-        Some(persisted_usage) => {
-            astro_expert_cache
-                .borrow_mut()
-                .seed_expert_demand_history(persisted_usage);
-        }
-        None => tracing::info!(
-            usage_file_path = usage_file_path.display().to_string(),
-            "no reusable expert usage history; warm tables start cold"
-        ),
-    }
-    Ok((
-        Some(expert_pager),
-        Some(astro_expert_cache),
-        expert_combination_kernels,
-    ))
-}
-
-/// The two kernels that reduce a layer's routed experts, kept by the GPU's
-/// capability verdicts.
-#[derive(Default)]
-struct ExpertCombinationKernels {
-    /// The sorted router-weighted sum. A demoted kernel leaves `None` and
-    /// every MoE forward takes the unsorted MLX route for the worker's
-    /// lifetime.
-    sorted_weighted_sum: Option<MlxMetalKernel>,
-    /// The sorted sum joined with the gated shared expert in one pass, for
-    /// prompt chunks. A chunk's routed rows are the same whether its experts
-    /// were held or streamed, so this engine keeps it as the in-memory
-    /// engine does (issue #2585).
-    sorted_shared_combination: Option<MlxMetalKernel>,
-}
-
-/// The model's optional accelerators with only the fused combination set.
-fn accelerators_with(
-    sorted_expert_shared_combination_kernel: Option<MlxMetalKernel>,
-) -> crate::qwen3_5_core::model::base::Qwen3_5OptionalAccelerators {
-    crate::qwen3_5_core::model::base::Qwen3_5OptionalAccelerators {
-        sorted_expert_shared_combination_kernel,
-        ..Default::default()
-    }
-}
-
-fn kept_expert_combination_kernels(
-    runtime: &MlxRuntime,
-    performance_attribution: &mut PerformanceAttribution,
-) -> Result<ExpertCombinationKernels, TextExecutionError> {
-    let worker_kernel_capabilities = crate::kernel_capability::worker_process_kernel_capabilities(
-        runtime,
-        performance_attribution,
-    );
-    let sorted_weighted_sum = if worker_kernel_capabilities
-        .is_custom_kernel_supported(crate::kernel_capability::SORTED_EXPERT_WEIGHTED_SUM)
-    {
-        Some(qwen3_5_text::qwen3_5_moe_sorted_expert_weighted_sum_kernel()?)
-    } else {
-        tracing::info!(
-            "sorted expert weighted-sum kernel demoted to the MLX fallback for this worker process"
-        );
-        None
-    };
-    let sorted_shared_combination =
-        crate::qwen3_5_core::model::sorted_expert_shared_combination_switch::retained_sorted_expert_shared_combination_kernel(
-            worker_kernel_capabilities,
-            sorted_weighted_sum.is_some(),
-        )?;
-    Ok(ExpertCombinationKernels {
-        sorted_weighted_sum,
-        sorted_shared_combination,
-    })
 }
 
 /// The streaming memory facts plus the fused jangtq2 verdict that the model
@@ -615,5 +493,24 @@ fn fused_jangtq2_gathered_projection_kernel_for_pager(
             );
             None
         }
+    }
+}
+
+/// The streamer with a folded ternary pack's rotations attached, so the
+/// layers it reads from the SSD take them as the bound layers did.
+fn with_folded_rotations(
+    dense_layer_streamer: Option<Qwen3_5DenseLayerStreamer>,
+    folded_ternary_rotations: Option<
+        std::rc::Rc<
+            crate::qwen3_5_core::model_math::folded_ternary_weights::FoldedTernaryRotations,
+        >,
+    >,
+) -> Option<Qwen3_5DenseLayerStreamer> {
+    match (dense_layer_streamer, folded_ternary_rotations) {
+        (Some(mut dense_layer_streamer), Some(folded_ternary_rotations)) => {
+            dense_layer_streamer.attach_folded_ternary_rotations(folded_ternary_rotations);
+            Some(dense_layer_streamer)
+        }
+        (dense_layer_streamer, _) => dense_layer_streamer,
     }
 }

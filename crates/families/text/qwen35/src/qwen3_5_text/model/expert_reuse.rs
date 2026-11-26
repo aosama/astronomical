@@ -71,6 +71,7 @@ impl Qwen3_5Model {
             },
         };
         self.record_route_coverage_counts(
+            layer_index,
             u64::try_from(route_coverage.retained_expert_ids.len()).unwrap_or(u64::MAX),
             u64::try_from(route_coverage.missing_expert_ids.len()).unwrap_or(u64::MAX),
             performance_attribution,
@@ -82,6 +83,7 @@ impl Qwen3_5Model {
     /// route was looked up: on the host, or by a lookup inside the graph.
     pub(super) fn record_route_coverage_counts(
         &self,
+        layer_index: usize,
         retained_assignment_count: u64,
         storage_assignment_count: u64,
         performance_attribution: &mut PerformanceAttribution,
@@ -115,6 +117,16 @@ impl Qwen3_5Model {
             storage_assignment_count,
             session_coverage_class,
         );
+        self.note_layer_misses(layer_index, storage_assignment_count);
+    }
+
+    /// Hands a layer's misses to the route observation, unless another
+    /// reader holds it this instant: a missed note costs one sample, never
+    /// the token.
+    fn note_layer_misses(&self, layer_index: usize, storage_assignment_count: u64) {
+        if let Ok(mut route_observation) = self.route_observation.try_borrow_mut() {
+            route_observation.note_layer_misses(layer_index, storage_assignment_count);
+        }
     }
 
     /// Session counters stay always-on, including when attribution diagnostics
