@@ -1,4 +1,7 @@
-//! The Qwen3.5 probe: one resident model whose modules can be swapped.
+//! The Qwen3.5 probe: one in-memory model (`Qwen3_5ResidentModel`) whose
+//! modules can be swapped. Serving runs the streaming model, which keeps
+//! routed experts in the `astro_expert_cache` and reads the rest from the
+//! SSD, so it has no place a swapped expert projection could go.
 //!
 //! The swap-forward-restore cycle is ported from OptiQ's `_exact_with_bf16_reference` (`optiq/core/sensitivity.py`); the model side is Astronomical's own Qwen3.5 engine.
 
@@ -32,8 +35,8 @@ mod layer_input_reuse;
 #[path = "module_swaps.rs"]
 mod module_swaps;
 
-/// The production standard chunking tuple the daemon resolves for the
-/// resident engine, so probes run the shapes a served request runs.
+/// The production standard chunking tuple the daemon resolves, so probes
+/// run the shapes a served request runs.
 const FULL_ATTENTION_KV_GROWTH_TOKENS: u32 = 256;
 const PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL: u32 = 0;
 const SSD_PAGING_GENERATION_LAYER_INTERVAL: u32 = 3;

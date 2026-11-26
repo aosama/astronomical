@@ -11,18 +11,11 @@ mod forward;
 #[cfg(feature = "direct-mlx")]
 mod forward_attribution;
 #[cfg(feature = "direct-mlx")]
-mod forward_attribution_generation;
-#[cfg(feature = "direct-mlx")]
 mod forward_graph;
-#[cfg(feature = "direct-mlx")]
-pub mod forward_mlx_working_buffer_probe;
 #[cfg(feature = "direct-mlx")]
 mod resident_execution;
 #[cfg(feature = "direct-mlx")]
 mod resident_model;
-#[cfg(feature = "direct-mlx")]
-mod tree_verification_forward;
-mod verification_forward;
 
 #[cfg(feature = "direct-mlx")]
 pub use crate::qwen3_5_core::artifacts::{Qwen3_5ShardIndex, ValidatedQwen3_5Artifact};
@@ -30,8 +23,6 @@ pub use crate::qwen3_5_core::artifacts::{Qwen3_5ShardIndex, ValidatedQwen3_5Arti
 pub use crate::qwen3_5_core::configuration::Qwen3_5FeedForwardArchitecture;
 #[cfg(feature = "direct-mlx")]
 pub use crate::qwen3_5_core::model::Qwen3_5ModelBase;
-#[cfg(feature = "direct-mlx")]
-pub use crate::qwen3_5_core::model::target_forward_graph::Qwen3_5TargetForwardOutput;
 #[cfg(feature = "direct-mlx")]
 pub use crate::qwen3_5_core::model_math::weights::Qwen3_5Weights;
 pub use crate::qwen3_5_core::model_math::{
@@ -49,8 +40,3 @@ pub use text_generation::RequestDecoderStateStack;
 pub use text_generation::execution_error::TextExecutionError;
 #[cfg(feature = "direct-mlx")]
 pub use text_generation::model::model_chunking_configuration::TextModelChunkingConfiguration;
-#[cfg(feature = "direct-mlx")]
-pub use tree_verification_forward::Qwen3_5DraftTreeVerification;
-pub use verification_forward::{
-    Qwen3_5DraftedRowsVerification, Qwen3_5SpeculativeVerificationOutput, VerificationLogitsMode,
-};

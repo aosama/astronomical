@@ -1,5 +1,6 @@
-//! Structural contract for the Qwen 3.5 source layout: the resident and
-//! streaming engines reach each other only through the shared core.
+//! Structural contract for the Qwen 3.5 source layout: the streaming model
+//! and the sensitivity probe's in-memory model reach each other only through
+//! the shared core.
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;

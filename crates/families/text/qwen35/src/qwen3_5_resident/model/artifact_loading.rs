@@ -150,11 +150,9 @@ impl Qwen3_5ResidentModel {
                 layer_additions: std::cell::RefCell::new(None),
             },
             expert_layer_plans,
-            // Publication occurs only after core materialization and a fresh idle
-            // memory sample in the engine loading path.
+            // Loaded by `materialize_complete_weights_matching_production`,
+            // after the rest of the model is materialized.
             resident_expert_weights: None,
-            // Programs load after the weights are materialized, if at all.
-            memory_governor: std::cell::RefCell::new(None),
         })
     }
 }

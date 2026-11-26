@@ -1,3 +1,8 @@
+//! The in-memory Qwen3.5 model the quantization sensitivity probe
+//! (`qwen35-quantization-probe`) swaps weights in. Serving runs the
+//! streaming model; see `model/resident_model.rs` for why the probe keeps
+//! its own.
+
 // Crate-visible so the sensitivity probe can swap one routed-expert
 // projection for a re-encoded copy and put the original back.
 pub mod experts;
@@ -15,7 +20,3 @@ pub use model::Qwen3_5ResidentModel;
 #[cfg(feature = "direct-mlx")]
 pub use model::RecordedDecoderLayerInput;
 pub use model::TextExecutionError;
-pub use model::{
-    Qwen3_5DraftTreeVerification, Qwen3_5DraftedRowsVerification,
-    Qwen3_5SpeculativeVerificationOutput, VerificationLogitsMode,
-};

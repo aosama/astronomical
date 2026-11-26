@@ -1,8 +1,9 @@
 //! The Qwen 3.5 model family (issue #2340): the shared core (configuration,
-//! tokenizer, decoder, model math, artifacts and vision), the resident and
-//! streaming engines, the Prism Hadamard ternary build, speculative decoding,
-//! the custom kernel capability probes, and the owner-thread engine they run
-//! on. The `astro_ssd_prompt_cache` and expert paging they use live in the
+//! tokenizer, decoder, model math, artifacts and vision), the streaming model
+//! that serves every text model, the in-memory model the quantization
+//! sensitivity probe swaps weights in, the Prism Hadamard ternary build,
+//! speculative decoding, the custom kernel capability probes, and the
+//! owner-thread engine they run on. The `astro_ssd_prompt_cache` and expert paging they use live in the
 //! engine core. The quantizer's sensitivity probe for this family lives
 //! in `qwen35-quantization-probe`, so this crate never compiles
 //! the quantizer.
@@ -213,8 +214,6 @@ pub use qwen3_5_core::vision::{
 };
 
 #[cfg(feature = "direct-mlx")]
-pub use qwen3_5_resident::Qwen3_5ResidentModel;
-#[cfg(feature = "direct-mlx")]
 pub use text_generation::generation_loop::engine_construction::TextMlxEngineConstructors;
 #[cfg(feature = "direct-mlx")]
 pub use text_generation::generation_loop::execution_core::TextExecutionCoreSettings;
@@ -230,10 +229,7 @@ pub use text_generation::generation_loop::test_controls::{
 #[cfg(feature = "direct-mlx")]
 pub use qwen3_5_core::model::draft_tree_verification::DraftTreeTarget;
 #[cfg(feature = "direct-mlx")]
-pub use qwen3_5_resident::{
-    Qwen3_5DraftTreeVerification, Qwen3_5DraftedRowsVerification,
-    Qwen3_5SpeculativeVerificationOutput, VerificationLogitsMode,
-};
+pub use qwen3_5_core::model::draft_tree_verification::Qwen3_5DraftTreeVerification;
 
 #[cfg(feature = "direct-mlx")]
 pub use qwen3_5_resident::{

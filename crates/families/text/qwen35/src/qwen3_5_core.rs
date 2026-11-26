@@ -1,16 +1,16 @@
 //! The shared Qwen3.5 family kernel (issue #1132).
 //!
-//! This module owns everything both Qwen3.5 engines consume and neither engine
-//! may fork: configuration, artifact validation and shard plumbing, OptiQ
-//! quantization profiles, the text stack (tokenizer, prompt, output parser,
-//! sampler), the vision stack, dense MLP math, decoder state and
-//! `astro_decoder_state_cache` layouts, and the persistent astro SSD prompt cache machinery that must stay bridged
-//! across engines so a resident-to-streaming retry can restore a prefix
-//! from the `astro_ssd_prompt_cache`.
+//! This module owns everything the Qwen3.5 models share: configuration,
+//! artifact validation and shard plumbing, OptiQ quantization profiles, the
+//! text stack (tokenizer, prompt, output parser, sampler), the vision stack,
+//! dense MLP math, decoder state and `astro_decoder_state_cache` layouts, and
+//! the persistent `astro_ssd_prompt_cache` machinery. The streaming model
+//! serves every text model; the in-memory model in `qwen3_5_resident` exists
+//! only for the quantization sensitivity probe.
 //!
 //! Dependency direction: `qwen3_5_resident` and `qwen3_5_streaming` may import
 //! from here; neither may import from the other. This module never imports
-//! from the engine modules.
+//! from the model modules.
 
 /// The frozen Ornith 1.0 sparse-artifact model identity, shared by every
 /// Qwen3.5 engine and the beside-source test fixtures.
