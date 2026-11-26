@@ -1,7 +1,7 @@
 use ipc_protocol::DraftModelStatus;
 
 use super::{KERNELS_UNAVAILABLE_REASON, failed_load_status, load_outcome_status};
-use crate::qwen3_5_resident::inference_execution::speculative_decode_lifecycle::engine_draft_runtime::{
+use crate::qwen3_5_core::draft_tree_decode::engine_draft_runtime::{
     Qwen3_5DraftRuntimeLoadOutcome, Qwen3_5SpeculativeDraftLoadingError,
 };
 

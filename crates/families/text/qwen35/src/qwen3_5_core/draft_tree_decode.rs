@@ -12,6 +12,7 @@
 //! one engine has is one the other has: the engines differ only in how a
 //! verified tree's pass is evaluated and how the target is made ready.
 
+pub mod draft_model_status_report;
 pub mod draft_round_target;
 pub mod draft_tree_round;
 pub mod draft_tree_size;

@@ -235,41 +235,30 @@ fn host_paired_drafter(
     model_directory: &std::path::Path,
     model_loading_performance_attribution: &mut PerformanceAttribution,
 ) {
-    use crate::qwen3_5_core::draft_tree_decode::engine_draft_runtime::{
-        Qwen3_5DraftRuntimeLoadOutcome, Qwen3_5SpeculativeDraftRuntime,
-    };
+    use crate::qwen3_5_core::draft_tree_decode::draft_model_status_report::draft_runtime_and_status;
+    use crate::qwen3_5_core::draft_tree_decode::engine_draft_runtime::Qwen3_5SpeculativeDraftRuntime;
     let active_memory_bytes_before = active_memory_bytes(model);
     let active_memory_limit_bytes = model.runtime().memory_limits().active_memory_limit_bytes();
-    let load_outcome = Qwen3_5SpeculativeDraftRuntime::load_for_target(
-        model,
-        active_memory_limit_bytes,
-        model_directory,
-        model_loading_performance_attribution,
-    );
-    let mut draft_runtime = match load_outcome {
-        Ok(Qwen3_5DraftRuntimeLoadOutcome::Loaded(draft_runtime)) => draft_runtime,
-        Ok(_) => {
-            model.reserve_room_for_a_loading_drafter(0);
-            return;
-        }
-        Err(draft_loading_error) => {
-            tracing::warn!(
-                %draft_loading_error,
-                "the installed DFlash drafter could not be loaded; replies are written one token a forward"
-            );
-            model.reserve_room_for_a_loading_drafter(0);
-            return;
-        }
-    };
-    draft_runtime.hosted_weight_bytes =
-        active_memory_bytes(model).saturating_sub(active_memory_bytes_before);
-    tracing::info!(
-        hosted_drafter_weight_bytes = draft_runtime.hosted_weight_bytes,
-        "the streaming engine hosts a DFlash drafter"
-    );
-    model.base.optional_accelerators.draft_runtime = Some(draft_runtime);
+    let (draft_runtime, draft_model_status) =
+        draft_runtime_and_status(Qwen3_5SpeculativeDraftRuntime::load_for_target(
+            model,
+            active_memory_limit_bytes,
+            model_directory,
+            model_loading_performance_attribution,
+        ));
+    model.base.optional_accelerators.draft_model_status = Some(draft_model_status);
+    if let Some(mut draft_runtime) = draft_runtime {
+        draft_runtime.hosted_weight_bytes =
+            active_memory_bytes(model).saturating_sub(active_memory_bytes_before);
+        tracing::info!(
+            hosted_drafter_weight_bytes = draft_runtime.hosted_weight_bytes,
+            "the streaming engine hosts a DFlash drafter"
+        );
+        model.base.optional_accelerators.draft_runtime = Some(Box::new(draft_runtime));
+    }
     // The drafter's measured weights joined the core in place of the room
-    // set aside for its load: the governor plans again.
+    // set aside for its load, or nothing joined it: either way the governor
+    // plans again without that room.
     model.reserve_room_for_a_loading_drafter(0);
 }
 

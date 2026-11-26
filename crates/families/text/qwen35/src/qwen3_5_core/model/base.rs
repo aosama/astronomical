@@ -44,6 +44,11 @@ pub struct Qwen3_5OptionalAccelerators {
     pub draft_runtime: Option<
         Box<crate::qwen3_5_core::draft_tree_decode::engine_draft_runtime::Qwen3_5SpeculativeDraftRuntime>,
     >,
+    /// What the streaming engine's search for a drafter found, for status:
+    /// drafting when `draft_runtime` holds one, otherwise why not. `None`
+    /// until the streaming engine has looked; the resident engine keeps its
+    /// own on the engine.
+    pub draft_model_status: Option<ipc_protocol::DraftModelStatus>,
     /// The register-ordered 4-bit matmul's kernels; set once
     /// `convert_projections_to_register_order` has converted this model's
     /// dense projections, which then multiply through it.
