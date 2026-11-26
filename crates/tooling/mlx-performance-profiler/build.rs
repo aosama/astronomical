@@ -22,8 +22,7 @@ use native_build_orchestration::{
 use sha2::{Digest, Sha256};
 
 const DIRECT_MLX_FEATURE_VARIABLE: &str = "CARGO_FEATURE_DIRECT_MLX";
-const PROFILER_PIN: &str = "third-party/pins/mlx-performance-profiler-v0.2.0.cmake";
-const MLX_PIN: &str = "third-party/pins/mlx-v0.32.5.cmake";
+const PINS_DIRECTORY: &str = "third-party/pins";
 const PROFILER_ARCHIVE_VARIABLES: PinnedArchiveVariables = PinnedArchiveVariables {
     file_name: "ASTRONOMICAL_MLX_PERFORMANCE_PROFILER_SOURCE_ARCHIVE_FILE_NAME",
     sha256: "ASTRONOMICAL_MLX_PERFORMANCE_PROFILER_SOURCE_ARCHIVE_SHA256",
@@ -41,7 +40,8 @@ const MLX_CONSUMER_DEFINITIONS: [&str; 4] =
     ["MLX_STATIC", "_METAL_", "ACCELERATE_NEW_LAPACK", "NDEBUG"];
 /// The library target of the profiler's `CMakeLists.txt` at the pinned
 /// release: capture, timelines, reports and the C API, without its demo,
-/// server or model code.
+/// server or model code. One more source is generated
+/// (`embedded_graph_view_assets`).
 const PROFILER_LIBRARY_SOURCES: [&str; 38] = [
     "graph_model.cpp",
     "graph_build_timer.cpp",
@@ -58,7 +58,7 @@ const PROFILER_LIBRARY_SOURCES: [&str; 38] = [
     "text_format.cpp",
     "latency_slices.cpp",
     "dot_writer.cpp",
-    "svg_renderer.cpp",
+    "graph_view_section.cpp",
     "report_assets.cpp",
     "report_components.cpp",
     "report_summary_section.cpp",
@@ -82,6 +82,42 @@ const PROFILER_LIBRARY_SOURCES: [&str; 38] = [
     "mlx_c_interop.cpp",
     "mlx_perf_c_api.cpp",
 ];
+
+/// The report's interactive graph view: the function each embedded file is
+/// served by and the file, in the pairs the profiler's `CMakeLists.txt`
+/// declares. Two are vendored libraries (Cytoscape.js and its dagre layout,
+/// MIT), the rest the profiler's own script and stylesheet.
+const GRAPH_VIEW_ASSETS: [(&str, &str); 7] = [
+    (
+        "graph_view_cytoscape_script",
+        "third_party/cytoscape/cytoscape.min.js",
+    ),
+    (
+        "graph_view_dagre_layout_script",
+        "third_party/cytoscape-dagre/cytoscape-dagre.min.js",
+    ),
+    (
+        "graph_view_model_script",
+        "src/graph_view/graph_view_model.js",
+    ),
+    (
+        "graph_view_style_script",
+        "src/graph_view/graph_view_style.js",
+    ),
+    (
+        "graph_view_panels_script",
+        "src/graph_view/graph_view_panels.js",
+    ),
+    ("graph_view_viewer_script", "src/graph_view/graph_view.js"),
+    ("graph_view_stylesheet", "src/graph_view/graph_view.css"),
+];
+
+/// What the profiler is compiled from: its extracted release and the one
+/// source generated from it.
+struct ProfilerSources {
+    profiler_directory: PathBuf,
+    embedded_assets_source: PathBuf,
+}
 
 /// The two pin variables that name an archive and its digest.
 struct PinnedArchiveVariables {
@@ -107,8 +143,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         );
     }
     let output_directory = PathBuf::from(env::var_os("OUT_DIR").ok_or("OUT_DIR is missing")?);
-    let profiler_pin = fs::read_to_string(repository_root.join(PROFILER_PIN))?;
-    let mlx_pin = fs::read_to_string(repository_root.join(MLX_PIN))?;
+    let profiler_pin = pin_that_sets(&repository_root, PROFILER_VERSION_VARIABLE)?;
+    let mlx_pin = pin_that_sets(&repository_root, METAL_CPP_ARCHIVE_VARIABLES.file_name)?;
     let profiler_directory = extracted_archive(
         &profiler_pin,
         &PROFILER_ARCHIVE_VARIABLES,
@@ -124,11 +160,31 @@ fn main() -> Result<(), Box<dyn Error>> {
         pin_value(&profiler_pin, PROFILER_VERSION_VARIABLE)?,
         &output_directory,
     )?;
+    let embedded_assets_source =
+        embedded_graph_view_assets(&profiler_directory, &output_directory)?;
     compile_profiler(
         &repository_root,
-        &profiler_directory,
+        &ProfilerSources {
+            profiler_directory,
+            embedded_assets_source,
+        },
         &[&generated_include_directory, &metal_cpp_directory],
     )
+}
+
+/// The text of the pin file that sets `variable`. Pins are found by what
+/// they set, not by their file names, so a bump renames a file and edits
+/// nothing here.
+fn pin_that_sets(repository_root: &Path, variable: &str) -> Result<String, Box<dyn Error>> {
+    let pins_directory = repository_root.join(PINS_DIRECTORY);
+    let setting = format!("set({variable} \"");
+    for pin_entry in fs::read_dir(&pins_directory)? {
+        let pin_text = fs::read_to_string(pin_entry?.path())?;
+        if pin_text.contains(&setting) {
+            return Ok(pin_text);
+        }
+    }
+    Err(format!("no pin under {} sets {variable}", pins_directory.display()).into())
 }
 
 /// The value a pin file sets `variable` to: `set(VARIABLE "value")`.
@@ -239,12 +295,44 @@ fn generated_version_header(
     Ok(generated_include_directory)
 }
 
+/// Embeds the graph view's scripts and stylesheet in a generated C++ source,
+/// with the profiler's own CMake script, so every report stays one HTML file
+/// that opens offline. Run as the profiler's build runs it, in script mode.
+fn embedded_graph_view_assets(
+    profiler_directory: &Path,
+    output_directory: &Path,
+) -> Result<PathBuf, Box<dyn Error>> {
+    let mut asset_functions = Vec::with_capacity(GRAPH_VIEW_ASSETS.len());
+    let mut asset_files = Vec::with_capacity(GRAPH_VIEW_ASSETS.len());
+    for (asset_function, asset_file) in GRAPH_VIEW_ASSETS {
+        asset_functions.push(asset_function.to_owned());
+        asset_files.push(profiler_directory.join(asset_file).display().to_string());
+    }
+    let embedded_assets_source = output_directory.join("generated/graph_view_assets.cpp");
+    let embedding_status = Command::new("cmake")
+        .arg(format!(
+            "-DOUTPUT_FILE={}",
+            embedded_assets_source.display()
+        ))
+        .arg("-DHEADER_NAME=graph_view_assets.h")
+        .arg(format!("-DASSET_FUNCTIONS={}", asset_functions.join("|")))
+        .arg(format!("-DASSET_FILES={}", asset_files.join("|")))
+        .arg("-P")
+        .arg(profiler_directory.join("cmake/mlx_perf_embed_text_assets.cmake"))
+        .status()?;
+    if !embedding_status.success() {
+        return Err("the profiler's graph view assets could not be embedded".into());
+    }
+    Ok(embedded_assets_source)
+}
+
 /// Compiles the profiler's library sources into this crate's archive.
 fn compile_profiler(
     repository_root: &Path,
-    profiler_directory: &Path,
+    profiler_sources: &ProfilerSources,
     [generated_include_directory, metal_cpp_directory]: &[&PathBuf; 2],
 ) -> Result<(), Box<dyn Error>> {
+    let profiler_directory = &profiler_sources.profiler_directory;
     let provisioned_sources = provisioned_mlx_sources(repository_root)?;
     let mut profiler_build = cc::Build::new();
     profiler_build
@@ -259,6 +347,7 @@ fn compile_profiler(
     for library_source in PROFILER_LIBRARY_SOURCES {
         profiler_build.file(profiler_directory.join("src").join(library_source));
     }
+    profiler_build.file(&profiler_sources.embedded_assets_source);
     for consumer_definition in MLX_CONSUMER_DEFINITIONS {
         profiler_build.define(consumer_definition, None);
     }
