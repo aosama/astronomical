@@ -17,6 +17,7 @@ use mlx_bridge::MlxArray;
 use text_generation::execution_error::TextExecutionError;
 
 use super::streaming_model::Qwen3_5StreamingModel;
+use crate::qwen3_5_core::configuration::Qwen3_5FeedForwardArchitecture;
 use crate::qwen3_5_core::draft_tree_decode::draft_round_target::{DraftRoundTarget, RoundTree};
 use crate::qwen3_5_core::model::Qwen3_5ModelBase;
 use crate::qwen3_5_core::model::draft_tree_verification::{
@@ -68,11 +69,15 @@ impl DraftTreeTarget for Qwen3_5StreamingModel {
         self.normalized_vocabulary_logits_for_every_row(hidden_states)
     }
 
-    /// A streamed pass is one evaluation: a layer group started while the
-    /// next is built would run its lookups while this thread reads the same
-    /// tables (`in_graph_route_lookup`).
+    /// A mixture-of-experts pass is one evaluation: a layer group started
+    /// while the next is built would run its lookups while this thread reads
+    /// the same tables (`in_graph_route_lookup`). A dense model's layers run
+    /// no host step inside the graph, so the GPU starts on each few layers
+    /// while the next are built, as the in-memory engine's pass does: on the
+    /// dense 27B with every layer kept, building the 64-layer pass before
+    /// the GPU began cost a drafted round about 8 ms of its 96.
     fn starts_tree_layers_asynchronously(&self) -> bool {
-        false
+        self.config.feed_forward_architecture() == Qwen3_5FeedForwardArchitecture::Dense
     }
 }
 
