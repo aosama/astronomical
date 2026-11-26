@@ -101,8 +101,7 @@ jobs:
 
   # The merge gate keys on the "CI verdict" fan-in job below, not on this
   # job's name: this job may split or rename without branch-protection
-  # coordination. Keep the concurrency group's `github_actions_cache` owner set in
-  # scripts/ci/tests/test-ci-native-cache-coordination.sh in sync.
+  # coordination.
   rust-core:
     # A pull request whose selection is empty (only Swift, web or files no
     # Rust package reads) skips this build and the lanes that use its archives.
@@ -135,9 +134,8 @@ jobs:
     env:
       SEGMENT_DOWNLOAD_TIMEOUT_MINS: 1
     steps:
-      - name: Configure step timing attribution
+      - name: Configure native build progress
         run: |
-          printf 'ASTRONOMICAL_CI_TIMING_FILE=%s/astronomical-ci-step-timings.csv\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
           # The runtime-integration build script declares rerun-if-env-changed
           # for this variable, so exporting it in only the compile step flips
           # the build script's fingerprint for every later cargo invocation and
@@ -187,8 +185,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          trap 'scripts/ci/ci-step-timing.sh end native-build-identity' EXIT
-          scripts/ci/ci-step-timing.sh begin native-build-identity
           started_at_seconds="$(date +%s)"
           printf '[native-build-identity] status=start\n'
           native_identity_file="$RUNNER_TEMP/astronomical-native-identity"
@@ -307,8 +303,6 @@ jobs:
       - name: Install verification tools
         id: verification-tools-install
         run: |
-          trap 'scripts/ci/ci-step-timing.sh end install-verification-tools' EXIT
-          scripts/ci/ci-step-timing.sh begin install-verification-tools
           xtask install-verification-tools --prefix ~/Library/Caches/Astronomical/verification-tools
         timeout-minutes: 6
       # install-action ships the SHA-256 of every nextest release inside the
@@ -333,8 +327,6 @@ jobs:
       - name: Provision verified native dependencies
         id: native-archive-provisioning
         run: |
-          trap 'scripts/ci/ci-step-timing.sh end provision-native-dependencies' EXIT
-          scripts/ci/ci-step-timing.sh begin provision-native-dependencies
           xtask bootstrap-native-dependencies
       - name: Set maximum parallel build jobs
         run: |
@@ -348,8 +340,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          trap 'scripts/ci/ci-step-timing.sh end native-build-prewarm' EXIT
-          scripts/ci/ci-step-timing.sh begin native-build-prewarm
           # The native CMake build runs alone in this step at the full core
           # count. Every later Cargo step finds the native build store warm
           # and skips CMake, so native and Rust compilation never overlap on
@@ -376,16 +366,15 @@ jobs:
           # Cargo captures build-script stderr, so the native CMake rebuild would
           # otherwise be a silent multi-minute gap in this step's log. The build
           # script appends progress lines to this file and tail streams them live.
-          # The variable arrives from the job environment (configured with the
-          # step timing setup) so its value matches every cargo invocation in
+          # The variable arrives from the job environment (configured in the
+          # job's first step) so its value matches every cargo invocation in
           # this job; exporting it here alone would invalidate the build script
           # fingerprint of the next cargo step and force a from-scratch rebuild
           # of runtime-integration and its dependents.
           : > "$ASTRONOMICAL_NATIVE_BUILD_PROGRESS_FILE"
           tail -f "$ASTRONOMICAL_NATIVE_BUILD_PROGRESS_FILE" &
           progress_tail_pid=$!
-          trap 'kill "$progress_tail_pid" 2>/dev/null || true; scripts/ci/ci-step-timing.sh end compile-integration-tests' EXIT
-          scripts/ci/ci-step-timing.sh begin compile-integration-tests
+          trap 'kill "$progress_tail_pid" 2>/dev/null || true' EXIT
           # One selection for the integration, REST and E2E lanes, because cargo
           # unifies features per command: separate commands rebuilt 49 crates with
           # different features, about 36 of this step's 108 seconds. The archive
@@ -421,8 +410,6 @@ jobs:
         env:
           RUST_TEST_SELECTION: ${{ needs.detect-changes.outputs.rust_test_selection || 'all' }}
         run: |
-          trap 'scripts/ci/ci-step-timing.sh end archive-test-binaries' EXIT
-          scripts/ci/ci-step-timing.sh begin archive-test-binaries
           mkdir -p target/nextest-archives
           xtask selected-cargo --selection "$RUST_TEST_SELECTION" nextest-archive-integration
           xtask selected-cargo --selection "$RUST_TEST_SELECTION" nextest-archive-rest-api
@@ -559,8 +546,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          trap 'scripts/ci/ci-step-timing.sh end prune-ci-caches' EXIT
-          scripts/ci/ci-step-timing.sh begin prune-ci-caches
           xtask prune-caches
         timeout-minutes: 2
       - name: Upload Cargo timing report
@@ -574,10 +559,6 @@ jobs:
       - name: Print sccache statistics
         if: always()
         run: sccache --show-stats
-      - name: Publish step timing summary
-        if: always()
-        run: scripts/ci/publish-ci-timing-summary.sh
-        timeout-minutes: 1
 
   # Parallel macOS contract job, fanned in by the CI verdict rather than
   # listed in branch protection: it may split or rename freely. It runs only when
@@ -601,8 +582,6 @@ jobs:
     env:
       SEGMENT_DOWNLOAD_TIMEOUT_MINS: 1
     steps:
-      - name: Configure step timing attribution
-        run: printf 'ASTRONOMICAL_CI_TIMING_FILE=%s/astronomical-ci-step-timings.csv\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
       - name: Require successful change classification
         if: ${{ needs.detect-changes.result != 'success' }}
         run: |
@@ -647,8 +626,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          trap 'scripts/ci/ci-step-timing.sh end swift-toolchain-identity' EXIT
-          scripts/ci/ci-step-timing.sh begin swift-toolchain-identity
           started_at_seconds="$(date +%s)"
           printf '[swift-toolchain-identity] status=start\n'
           swift_toolchain_manifest="$RUNNER_TEMP/astronomical-swift-toolchain"
@@ -735,8 +712,6 @@ jobs:
       - name: Build Thin Talk web assets
         run: |
           set -euo pipefail
-          trap 'scripts/ci/ci-step-timing.sh end thin-talk-web-assets' EXIT
-          scripts/ci/ci-step-timing.sh begin thin-talk-web-assets
           (cd apps/thin-talk/web && npm ci && npm run build)
         # The budget stays generous for the lockfile-change runs that miss
         # the npm download store and fall back to a network-bound install.
@@ -747,8 +722,6 @@ jobs:
       # unseen by the Swift-only lane.
       - name: Run Thin Talk web client tests
         run: |
-          trap 'scripts/ci/ci-step-timing.sh end thin-talk-web-tests' EXIT
-          scripts/ci/ci-step-timing.sh begin thin-talk-web-tests
           set -o pipefail
           (cd apps/thin-talk/web && npm test 2>&1 | tee "$RUNNER_TEMP/test-logs/thin-talk-web.log")
         timeout-minutes: 6
@@ -762,16 +735,12 @@ jobs:
       # planning. Either answer says which `github_actions_cache` entry to add; neither costs a build.
       - name: Resolve the menu Swift package
         run: |
-          trap 'scripts/ci/ci-step-timing.sh end menu-package-resolve' EXIT
-          scripts/ci/ci-step-timing.sh begin menu-package-resolve
           GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=credential.helper GIT_CONFIG_VALUE_0= \
             swift package --package-path apps/astronomical-menu resolve
         timeout-minutes: 2
       - name: Run macOS menu status contracts
         id: macos-menu-contracts
         run: |
-          trap 'scripts/ci/ci-step-timing.sh end macos-menu-contracts' EXIT
-          scripts/ci/ci-step-timing.sh begin macos-menu-contracts
           set -o pipefail
           # A verification gate never touches stored credentials: Sparkle is
           # public and resolves anonymously, so the Git credential helper is
@@ -787,8 +756,6 @@ jobs:
       # never touch branch protection.
       - name: Run Observatory contracts
         run: |
-          trap 'scripts/ci/ci-step-timing.sh end observatory-contracts' EXIT
-          scripts/ci/ci-step-timing.sh begin observatory-contracts
           set -o pipefail
           # Every test file in the folder, by pattern: the hand-kept list this
           # replaces had fallen one file behind, so the palette contrast
@@ -797,8 +764,6 @@ jobs:
         timeout-minutes: 2
       - name: Run Thin Talk conversation canvas contracts
         run: |
-          trap 'scripts/ci/ci-step-timing.sh end thin-talk-contracts' EXIT
-          scripts/ci/ci-step-timing.sh begin thin-talk-contracts
           set -o pipefail
           # -Xswiftc -warnings-as-errors mirrors the repository's Rust rule
           # that warnings are defects: a Swift warning must fail this step
@@ -813,8 +778,6 @@ jobs:
       # job installs an extra toolchain for it.
       - name: Run macOS packaging release contracts
         run: |
-          trap 'scripts/ci/ci-step-timing.sh end release-contracts' EXIT
-          scripts/ci/ci-step-timing.sh begin release-contracts
           set -o pipefail
           swift scripts/internal/render-macos-app-icon-contract.swift 2>&1 | tee "$RUNNER_TEMP/test-logs/release-contracts.log"
         timeout-minutes: 4
@@ -844,10 +807,6 @@ jobs:
           owner: thin-talk
           path: apps/thin-talk/.build
           key: astronomical-v2-swiftpm-thin-talk-${{ runner.os }}-${{ runner.arch }}-commit-mtime-${{ env.SWIFT_TOOLCHAIN_IDENTITY }}-${{ hashFiles('apps/thin-talk/Package.swift', 'apps/thin-talk/Package.resolved') }}-${{ hashFiles('apps/thin-talk/Sources/**/*.swift', 'apps/thin-talk/Tests/**/*.swift') }}
-      - name: Publish step timing summary
-        if: always()
-        run: scripts/ci/publish-ci-timing-summary.sh
-        timeout-minutes: 1
 
   # Docs- and site-only pull requests get a green check here instead of
   # skipped macOS verification, so "all checks passed" reflects real work
@@ -859,8 +818,6 @@ jobs:
     if: ${{ always() && needs.detect-changes.result == 'success' }}
     timeout-minutes: 5
     steps:
-      - name: Configure step timing attribution
-        run: printf 'ASTRONOMICAL_CI_TIMING_FILE=%s/astronomical-ci-step-timings.csv\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -872,8 +829,6 @@ jobs:
       # runner image and the repository pin.
       - name: Check Rust formatting
         run: |
-          trap 'scripts/ci/ci-step-timing.sh end rust-format-check' EXIT
-          scripts/ci/ci-step-timing.sh begin rust-format-check
           cargo fmt --all -- --check
         timeout-minutes: 3
 
@@ -891,8 +846,6 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 8
     steps:
-      - name: Configure step timing attribution
-        run: printf 'ASTRONOMICAL_CI_TIMING_FILE=%s/astronomical-ci-step-timings.csv\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
       # Two commits deep, so HEAD^1 exists for the code-shape ratchets below:
       # the base branch tip under a pull request's merge commit, and the
       # previous main commit on a push to main.
@@ -903,8 +856,6 @@ jobs:
           persist-credentials: false
       - name: Run workflow contracts
         run: |
-          trap 'scripts/ci/ci-step-timing.sh end ci-cache-contracts' EXIT
-          scripts/ci/ci-step-timing.sh begin ci-cache-contracts
           cargo test --locked -p xtask --test workflow_structural_contract
           cargo test --locked -p xtask --test workflow_code_shape_ratchet_contract
           cargo test --locked -p xtask --test workflow_verdict_contract
@@ -916,10 +867,11 @@ jobs:
           cargo test --locked -p xtask --test workflow_opencode_plugin_publish_contract
           cargo test --locked -p xtask --test workflow_verified_work_contract
           cargo test --locked -p xtask --test workflow_xtask_binary_contract
+          cargo test --locked -p xtask --test workflow_run_timeline_contract
+          cargo test --locked -p xtask --test workflow_shell_script_contract
           # The decision to skip the macOS lanes on a merge, through real git
           # history and a shimmed gh, so a mistake here cannot pass quietly.
           cargo test --locked -p xtask --test integration_classify_scope_journeys
-          scripts/ci/tests/test-ci-native-cache-coordination.sh
         timeout-minutes: 5
       # The server-side backstop for the complexity and duplication ratchets
       # the git hooks run. Hooks are local: a checkout whose hooks path names a
@@ -937,8 +889,6 @@ jobs:
           fallback: none
       - name: Run code-shape ratchets
         run: |
-          trap 'scripts/ci/ci-step-timing.sh end code-shape-ratchets' EXIT
-          scripts/ci/ci-step-timing.sh begin code-shape-ratchets
           cargo xtask crap-baseline --against HEAD^1
           cargo xtask check-duplication --against HEAD^1 --top 10
         timeout-minutes: 3
@@ -946,8 +896,6 @@ jobs:
       # tier-pyramid); its behavior on a fixture tree is an xtask unit test.
       - name: Run repository contracts
         run: |
-          trap 'scripts/ci/ci-step-timing.sh end repository-contracts' EXIT
-          scripts/ci/ci-step-timing.sh begin repository-contracts
           # Every cargo command cited in Markdown must exist; `cargo
           # measure-...` names a family of aliases.
           cargo xtask check-cargo-citations
@@ -971,10 +919,6 @@ jobs:
           # because this job has already compiled xtask.
           cargo xtask check-site-links
         timeout-minutes: 5
-      - name: Publish step timing summary
-        if: always()
-        run: scripts/ci/publish-ci-timing-summary.sh
-        timeout-minutes: 1
 
   # The release catalog and its parser, on Linux. The engine compiles the
   # catalog in, so a catalog edit is a code change; but the parser lives in its
@@ -1261,9 +1205,8 @@ jobs:
     env:
       SEGMENT_DOWNLOAD_TIMEOUT_MINS: 1
     steps:
-      - name: Configure step timing attribution and sccache
+      - name: Configure sccache
         run: |
-          printf 'ASTRONOMICAL_CI_TIMING_FILE=%s/astronomical-ci-step-timings.csv\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
           {
             printf 'SCCACHE_DIR=%s\n' "$HOME/Library/Caches/Astronomical/neural-engine-sccache"
             printf '%s\n' 'RUSTC_WRAPPER=sccache'
@@ -1319,8 +1262,6 @@ jobs:
       # buildable; only the pure unit tests execute (see the alias comment).
       - name: Compile every target and run the unit tests
         run: |
-          trap 'scripts/ci/ci-step-timing.sh end neural-engine-tests' EXIT
-          scripts/ci/ci-step-timing.sh begin neural-engine-tests
           cargo test-neural-engine --locked
         timeout-minutes: 4
       # Every xtask unit test, including the typed `cargo xtask app package`
@@ -1334,8 +1275,6 @@ jobs:
       # tests cannot.
       - name: Run the xtask unit and journey tests
         run: |
-          trap 'scripts/ci/ci-step-timing.sh end xtask-unit-tests' EXIT
-          scripts/ci/ci-step-timing.sh begin xtask-unit-tests
           # One cargo command: it checks the build once and compiles the five
           # journey binaries in parallel, where six commands compiled them one
           # after another (about 3 of this step's 25 seconds).
@@ -1346,8 +1285,6 @@ jobs:
       # seconds of compile, plus packing and passing an archive.
       - name: Run the shared test-fixture unit tests
         run: |
-          trap 'scripts/ci/ci-step-timing.sh end test-fixture-unit-tests' EXIT
-          scripts/ci/ci-step-timing.sh begin test-fixture-unit-tests
           cargo test-test-harness-fixtures --locked
         timeout-minutes: 3
       # The lanes run the daemon the build job built with every package's features
@@ -1356,8 +1293,6 @@ jobs:
       # waited on, which is why it runs here.
       - name: Build the daemon on its own features
         run: |
-          trap 'scripts/ci/ci-step-timing.sh end daemon-standalone-build' EXIT
-          scripts/ci/ci-step-timing.sh begin daemon-standalone-build
           cargo build --locked --bins -p astronomical-daemon
         timeout-minutes: 4
       # Default-branch-only, like the build job's sccache save: pull requests
@@ -1375,10 +1310,6 @@ jobs:
       - name: Print sccache statistics
         if: always()
         run: sccache --show-stats
-      - name: Publish step timing summary
-        if: always()
-        run: scripts/ci/publish-ci-timing-summary.sh
-        timeout-minutes: 1
 
   # The one required check of this workflow (issue #1553): a fan-in verdict
   # that fails closed over every lane, so branch protection and the ruleset
@@ -1562,3 +1493,25 @@ jobs:
           if-no-files-found: error
           compression-level: 0
           overwrite: true
+
+  # Where the run's time went: every job and step of this run on one chart in
+  # the run summary, with runner queueing and the critical path, drawn by the
+  # published actions-timeline action from GitHub's own step records after
+  # every other job has finished. It replaced hand-rolled begin/end timing
+  # scripts in each step (issue #2635), which had to stay shell because the
+  # Swift and static jobs have no Rust toolchain, and which timed only the
+  # steps someone remembered to wrap. It needs nothing from the checkout and
+  # is not a merge gate, so the CI verdict never waits for it.
+  timeline:
+    name: Run timeline
+    needs: [verdict, record-verified-work]
+    if: ${{ always() }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    # Reading the run's jobs, steps and composite-step logs needs actions:read.
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - name: Draw the run timeline
+        uses: Kesin11/actions-timeline@d547cc51bd6e8016ac50219eeb29a9eb385a2546 # v4.0.0

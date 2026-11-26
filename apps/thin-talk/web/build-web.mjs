@@ -4,7 +4,7 @@
 // excludes them, so a fresh clone must run `npm install && npm run build`
 // before any conversation renders — without them the canvas opens blank.
 // CanvasWebBundleContractTests fails `swift test` with the recovery command
-// when the bundle is missing, and run-thin-talk.sh aborts the same way.
+// when the bundle is missing, and `cargo xtask app thin-talk` aborts the same way.
 // KaTeX and mermaid stay as vendored script tags (mermaid for
 // startup size, KaTeX for its font asset tree) and are not bundled here.
 

@@ -15,7 +15,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 const DRIFT_TOLERANCE_PERCENT: i64 = 5;
-const BASELINE_RELATIVE_PATH: &str = "scripts/ci/tier-pyramid-baseline.json";
+/// Beside the repository's other ratchet baselines, `crap-baseline.json` and
+/// `duplication-baseline.json`.
+const BASELINE_RELATIVE_PATH: &str = "tier-pyramid-baseline.json";
 
 fn is_test_attribute_line(line: &str) -> bool {
     line == "#[test]" || line.starts_with("#[tokio::test")

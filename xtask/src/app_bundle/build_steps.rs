@@ -149,10 +149,24 @@ pub(crate) fn swift_product_build_command(
     swift_product: &str,
     macos_sdk_path: &str,
 ) -> Command {
+    swift_package_product_build_command(
+        &repository_root.join("apps/astronomical-menu"),
+        swift_product,
+        macos_sdk_path,
+    )
+}
+
+/// The same release `swift build` for a product of any of the repository's
+/// Swift packages; the standalone Thin Talk build uses it for its own package.
+pub(crate) fn swift_package_product_build_command(
+    swift_package_directory: &Path,
+    swift_product: &str,
+    macos_sdk_path: &str,
+) -> Command {
     let mut swift_command = Command::new("swift");
     swift_command
         .args(["build", "--configuration", "release", "--package-path"])
-        .arg(repository_root.join("apps/astronomical-menu"))
+        .arg(swift_package_directory)
         .args(["--product", swift_product])
         .args(["-Xswiftc", "-warnings-as-errors"])
         .args(["-Xswiftc", "-Xclang-linker", "-Xswiftc", "-isysroot"])

@@ -61,7 +61,7 @@ fn should_record_a_baseline_then_fail_on_drift_until_it_is_re_recorded() {
     assert!(
         fixture_directory
             .path()
-            .join("scripts/ci/tier-pyramid-baseline.json")
+            .join("tier-pyramid-baseline.json")
             .is_file()
     );
     assert_eq!(
