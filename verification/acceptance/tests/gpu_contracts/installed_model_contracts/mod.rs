@@ -68,6 +68,8 @@ mod qwen_image_21_transformer;
 mod qwen_image_21_vae;
 #[cfg(feature = "direct-mlx")]
 mod speech_audio_checks;
+#[cfg(feature = "direct-mlx")]
+mod streaming_fused_expert_combination;
 mod tokenizer;
 mod validate;
 mod weights;

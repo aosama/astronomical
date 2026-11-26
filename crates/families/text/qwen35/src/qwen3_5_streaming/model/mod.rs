@@ -100,6 +100,7 @@ mod paged_execution;
 mod paged_execution_mode;
 #[cfg(feature = "direct-mlx")]
 mod paged_route_resolution;
+mod paged_shared_expert_combination;
 #[cfg(feature = "direct-mlx")]
 pub(super) mod phase_aware_expert_residency;
 #[cfg(feature = "direct-mlx")]

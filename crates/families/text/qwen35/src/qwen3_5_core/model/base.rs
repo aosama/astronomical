@@ -78,8 +78,8 @@ pub struct Qwen3_5OptionalAccelerators {
         Option<std::cell::RefCell<Vec<super::tree_attention_measurement::TreeAttentionErrorCount>>>,
     /// One Metal pass for the sorted routed-expert sum plus the gated shared
     /// expert on prompt chunks, bit for bit equal to the two-step path it
-    /// replaces. The streaming engine's paged MoE forward combines through its
-    /// own path, so only the resident engine sets it.
+    /// replaces. Both engines keep it when the GPU's capability probe passed
+    /// and the sorted reduction is kept.
     pub sorted_expert_shared_combination_kernel: Option<MlxMetalKernel>,
 }
 

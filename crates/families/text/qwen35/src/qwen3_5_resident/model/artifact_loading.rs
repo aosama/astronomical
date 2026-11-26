@@ -209,7 +209,7 @@ fn load_resident_mixture_of_experts_parts(
     );
     let sorted_expert_weighted_sum_kernel =
         retained_sorted_expert_weighted_sum_kernel(worker_kernel_capabilities)?;
-    let sorted_expert_shared_combination_kernel = retained_sorted_expert_shared_combination_kernel(
+    let sorted_expert_shared_combination_kernel = crate::qwen3_5_core::model::sorted_expert_shared_combination_switch::retained_sorted_expert_shared_combination_kernel(
         worker_kernel_capabilities,
         sorted_expert_weighted_sum_kernel.is_some(),
     )?;
@@ -235,32 +235,6 @@ fn retained_sorted_expert_weighted_sum_kernel(
     }
     Ok(Some(
         crate::qwen3_5_core::model_math::routing::qwen3_5_moe_sorted_expert_weighted_sum_kernel()?,
-    ))
-}
-
-/// Keeps the fused sorted-expert and shared-expert combination when its
-/// probe passed. It reads the sorted assignment layout, so it is kept only
-/// alongside the sorted-reduction kernel. On the 35B-A3B 4-bit resident model
-/// it measured +0.3 to +0.4% median prefill speed for single 2,048 to
-/// 4,096-token chunks and +0.03% over a 10,176-token prompt, with identical
-/// logits: a small, free gain, near run-to-run spread.
-fn retained_sorted_expert_shared_combination_kernel(
-    worker_kernel_capabilities: &crate::kernel_capability::WorkerKernelCapabilities,
-    is_sorted_reduction_retained: bool,
-) -> Result<Option<MlxMetalKernel>, TextExecutionError> {
-    if !is_sorted_reduction_retained {
-        return Ok(None);
-    }
-    let fused_combination_family = crate::kernel_capability::SORTED_EXPERT_SHARED_COMBINATION;
-    if !worker_kernel_capabilities.is_custom_kernel_supported(fused_combination_family) {
-        tracing::info!(
-            verdict = ?worker_kernel_capabilities.verdict(fused_combination_family),
-            "fused sorted-expert and shared-expert combination kernel demoted to the two-step path for this worker process"
-        );
-        return Ok(None);
-    }
-    Ok(Some(
-        crate::qwen3_5_core::model_math::sorted_expert_shared_combination::qwen3_5_sorted_expert_shared_combination_kernel()?,
     ))
 }
 

@@ -250,6 +250,32 @@ pub(super) fn load_streaming_model(
     (streaming_model, qwen3_5_config)
 }
 
+/// A model loaded on the streaming engine under the machine's own limit,
+/// with its weights materialized, and its configuration.
+pub(super) async fn load_materialized_streaming_model(
+    model_directory: &std::path::Path,
+) -> (Qwen3_5StreamingModel, Qwen3_5Config) {
+    let (streaming_model, qwen3_5_config) =
+        load_streaming_model(model_directory, machine_mlx_memory_limits().await);
+    streaming_model
+        .materialize_target_weights()
+        .expect("the model weights should materialize");
+    (streaming_model, qwen3_5_config)
+}
+
+/// The streaming model's greedy answer to a prompt read in fixed chunks.
+pub(super) fn streaming_greedy_answer(
+    streaming_model: &Qwen3_5StreamingModel,
+    qwen3_5_config: &Qwen3_5Config,
+    prompt_token_ids: &[u32],
+) -> GreedyAnswer {
+    greedy_answer(
+        qwen3_5_config,
+        prompt_token_ids,
+        &StreamingForward(streaming_model),
+    )
+}
+
 /// The machine's own MLX limit: these journeys pin how many layers are kept,
 /// so they run under it rather than a configured one that might not fit.
 pub(super) async fn machine_mlx_memory_limits() -> runtime_integration::MlxMemoryLimits {
