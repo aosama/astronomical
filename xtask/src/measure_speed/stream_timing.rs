@@ -10,6 +10,8 @@ use std::time::Duration;
 
 use super::reply_drafting::ReplyDrafting;
 
+const BYTES_PER_GIGABYTE: f64 = 1_073_741_824.0;
+
 /// One measured reply.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ReplyMeasurement {
@@ -20,6 +22,10 @@ pub struct ReplyMeasurement {
     pub reply_tokens_per_second: Option<f64>,
     /// `None` for a reply that never drafted.
     pub drafting: Option<ReplyDrafting>,
+    /// The most MLX memory in use during the reply, as the engine's status
+    /// reports it once the reply has finished; `None` until it is read, or
+    /// when the engine reports none.
+    pub peak_mlx_memory_bytes: Option<u64>,
 }
 
 impl ReplyMeasurement {
@@ -31,6 +37,32 @@ impl ReplyMeasurement {
             return 0.0;
         }
         self.prompt_tokens as f64 / self.seconds_to_first_token
+    }
+
+    /// The reply's figures as one line of `name=value` fields, for the
+    /// measurement's printed record. Memory is in GB of 2^30 bytes.
+    #[must_use]
+    pub fn figures_text(&self) -> String {
+        let reply_rate_text = self
+            .reply_tokens_per_second
+            .map_or_else(|| "none".to_owned(), |rate| format!("{rate:.2}"));
+        let reply_drafting = self.drafting.unwrap_or(ReplyDrafting {
+            round_count: 0,
+            kept_draft_count: 0,
+        });
+        let peak_memory_text = self.peak_mlx_memory_bytes.map_or_else(
+            || "none".to_owned(),
+            |peak_bytes| format!("{:.2}", peak_bytes as f64 / BYTES_PER_GIGABYTE),
+        );
+        format!(
+            "prompt_tokens={} reply_tokens={} seconds_to_first_token={:.2} prefill_tokens_per_second={:.0} reply_tokens_per_second={reply_rate_text} draft_rounds={} kept_drafts={} peak_mlx_memory_gb={peak_memory_text}",
+            self.prompt_tokens,
+            self.completion_tokens,
+            self.seconds_to_first_token,
+            self.prefill_tokens_per_second(),
+            reply_drafting.round_count,
+            reply_drafting.kept_draft_count,
+        )
     }
 }
 
@@ -85,6 +117,7 @@ impl StreamTiming {
             seconds_to_first_token: first_token_after.as_secs_f64(),
             reply_tokens_per_second,
             drafting: self.drafting,
+            peak_mlx_memory_bytes: None,
         }
     }
 }

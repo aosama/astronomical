@@ -143,6 +143,8 @@ fn attach_worker_memory_and_session_facts(
         "last_reply": worker_health_snapshot.last_reply_drafting,
         "since_model_loaded": worker_health_snapshot.session_drafting,
     });
+    status_json["last_reply_peak_mlx_memory_bytes"] =
+        serde_json::json!(worker_health_snapshot.last_reply_peak_mlx_memory_bytes);
     status_json["model_load_in_flight"] =
         serde_json::json!(worker_health_snapshot.model_load_in_flight);
     super::expert_placement::attach_expert_placement_and_residency(

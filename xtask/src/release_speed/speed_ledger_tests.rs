@@ -31,6 +31,7 @@ pub(crate) fn measurement(model_id: &str, task: &str, reply_median: f64) -> Spee
             seconds_to_first_token: spread(4.2, 4.1, 4.3),
             reply_tokens_per_second: spread(reply_median, reply_median - 2.0, reply_median + 2.0),
             drafting: None,
+            peak_mlx_memory_bytes: None,
         },
     }
 }
@@ -234,4 +235,24 @@ fn should_refuse_a_drafting_entry_with_an_unknown_figure() {
         r#"{"rounds_a_reply":{"median":1.0,"lowest":1.0,"highest":1.0},"guesses":3}"#;
 
     assert!(serde_json::from_str::<DraftingFigures>(unknown_figure).is_err());
+}
+
+#[test]
+fn should_keep_a_tasks_peak_memory_through_a_write_and_a_read() {
+    let mut measured_with_memory = measurement("model-a", "long_prompt_code", 60.0);
+    measured_with_memory.figures.peak_mlx_memory_bytes =
+        Some(spread(19_327_352_832.0, 19_000_000_000.0, 19_500_000_000.0));
+    let ledger_text = serde_json::to_string(&ledger("0.2.200", vec![measured_with_memory.clone()]))
+        .expect("the ledger serializes");
+
+    let read_ledger: ReleaseSpeedLedger =
+        serde_json::from_str(&ledger_text).expect("the ledger reads back");
+
+    assert_eq!(read_ledger.measurements, vec![measured_with_memory]);
+    assert!(
+        !serde_json::to_string(&measurement("model-a", "long_prompt_code", 60.0))
+            .expect("a measurement serializes")
+            .contains("peak_mlx_memory_bytes"),
+        "a task with no memory reading writes no field"
+    );
 }

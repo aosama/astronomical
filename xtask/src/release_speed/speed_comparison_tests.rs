@@ -31,7 +31,7 @@ fn should_state_a_faster_reply_with_its_percentage_when_the_ranges_do_not_overla
     );
     assert_eq!(
         row_for(&section_text, "Model-A"),
-        "| Model-A, 16 GB limit, streamed from the SSD, writing code after a 10,000-token prompt, DFlash drafter | 2,400 (unchanged) | 4.2 s (unchanged) | 55 → 65 (+18%) |"
+        "| Model-A, 16 GB limit, streamed from the SSD, writing code after a 10,000-token prompt, DFlash drafter | 2,400 (unchanged) | 4.2 s (unchanged) | 55 → 65 (+18%) | – |"
     );
 }
 
@@ -48,7 +48,7 @@ fn should_state_a_slower_reply_the_same_way_as_a_faster_one() {
 
     let section_text = release_speed_section(&previous, &current);
 
-    assert!(row_for(&section_text, "Model-A").ends_with("| 65 → 55 (-15%) |"));
+    assert!(row_for(&section_text, "Model-A").ends_with("| 65 → 55 (-15%) | – |"));
 }
 
 #[test]
@@ -64,7 +64,7 @@ fn should_call_a_difference_inside_the_spread_unchanged() {
 
     let section_text = release_speed_section(&previous, &current);
 
-    assert!(row_for(&section_text, "Model-A").ends_with("| 57 (unchanged) |"));
+    assert!(row_for(&section_text, "Model-A").ends_with("| 57 (unchanged) | – |"));
 }
 
 #[test]
@@ -84,7 +84,7 @@ fn should_print_no_percentages_when_the_macs_differ() {
     assert!(section_text.contains(
         "The previous figures were taken on a Mac with an M5 Pro and 48 GB, so no change is stated."
     ));
-    assert!(row_for(&section_text, "Model-A").ends_with("| 55 → 65 |"));
+    assert!(row_for(&section_text, "Model-A").ends_with("| 55 → 65 | – |"));
 }
 
 #[test]
@@ -100,7 +100,7 @@ fn should_label_new_workloads_and_list_ones_no_longer_measured() {
 
     let section_text = release_speed_section(&previous, &current);
 
-    assert!(row_for(&section_text, "Model-New").ends_with("| 40 (new) |"));
+    assert!(row_for(&section_text, "Model-New").ends_with("| 40 (new) | – |"));
     assert!(section_text.contains(
         "Not measured in this release: Model-Old, 16 GB limit, writing code after a 10,000-token prompt."
     ));
@@ -122,7 +122,7 @@ fn should_not_compare_a_repackaged_model_or_another_memory_limit() {
 
     let new_row_count = section_text
         .lines()
-        .filter(|line| line.ends_with("(new) |"))
+        .filter(|line| line.ends_with("(new) | – |"))
         .count();
     assert_eq!(new_row_count, 2, "neither row is compared with the old one");
     assert!(
@@ -164,4 +164,61 @@ fn should_show_no_prompt_reading_speed_for_a_short_prompt() {
     assert!(row_for(&section_text, "Model-A").contains(
         "writing an essay after a short prompt, DFlash drafter | – | 0.3 s (unchanged) |"
     ));
+}
+
+fn measurement_with_peak(
+    reply_median: f64,
+    peak_gb: f64,
+) -> crate::release_speed::speed_ledger::SpeedMeasurement {
+    const BYTES_PER_GB: f64 = 1_073_741_824.0;
+    let mut measured = measurement("Model-A", "code_long_prompt", reply_median);
+    measured.figures.peak_mlx_memory_bytes = Some(spread(
+        peak_gb * BYTES_PER_GB,
+        (peak_gb - 0.1) * BYTES_PER_GB,
+        (peak_gb + 0.1) * BYTES_PER_GB,
+    ));
+    measured
+}
+
+#[test]
+fn should_state_a_change_in_peak_memory_in_gb_with_its_percentage() {
+    let previous = ledger("0.2.134", vec![measurement_with_peak(55.0, 16.0)]);
+    let current = ledger("0.2.135", vec![measurement_with_peak(55.0, 12.0)]);
+
+    let section_text = release_speed_section(&previous, &current);
+
+    assert!(
+        row_for(&section_text, "Model-A").ends_with("| 16.0 GB → 12.0 GB (-25%) |"),
+        "{section_text}"
+    );
+}
+
+#[test]
+fn should_call_peak_memory_inside_the_spread_unchanged() {
+    let previous = ledger("0.2.134", vec![measurement_with_peak(55.0, 16.0)]);
+    let current = ledger("0.2.135", vec![measurement_with_peak(55.0, 16.05)]);
+
+    let section_text = release_speed_section(&previous, &current);
+
+    assert!(
+        row_for(&section_text, "Model-A").ends_with("GB (unchanged) |"),
+        "{section_text}"
+    );
+}
+
+#[test]
+fn should_print_peak_memory_alone_when_the_previous_release_did_not_measure_it() {
+    // Edge: the row itself is not new, so the figure must not read "(new)".
+    let previous = ledger(
+        "0.2.134",
+        vec![measurement("Model-A", "code_long_prompt", 55.0)],
+    );
+    let current = ledger("0.2.135", vec![measurement_with_peak(55.0, 12.0)]);
+
+    let section_text = release_speed_section(&previous, &current);
+
+    assert!(
+        row_for(&section_text, "Model-A").ends_with("| 12.0 GB |"),
+        "{section_text}"
+    );
 }

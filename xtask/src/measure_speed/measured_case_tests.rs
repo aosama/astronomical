@@ -37,6 +37,7 @@ fn rounds_of(speed_tasks: &[SpeedTask]) -> ModelSpeedRounds {
                     seconds_to_first_token: 4.0,
                     reply_tokens_per_second: Some(reply_rate),
                     drafting: None,
+                    peak_mlx_memory_bytes: None,
                 },
             );
         }

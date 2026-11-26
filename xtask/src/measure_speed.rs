@@ -308,30 +308,25 @@ fn measure_one_reply(
         speed_task.catalog_field(),
         round_index + 1
     ));
-    let reply_measurement = engine_requests::stream_chat_reply(
+    let mut reply_measurement = engine_requests::stream_chat_reply(
         &measure_speed_options.base_url,
         model_id,
         &speed_prompts.task_prompt(speed_task, round_index, measured_case.long_prompt_tokens),
         MEASURED_OUTPUT_TOKENS,
         measured_case.task_temperature(speed_task),
     )?;
+    // Status still holds this reply's peak: the engine publishes it before
+    // it ends the reply's stream, and the next request has not started.
+    reply_measurement.peak_mlx_memory_bytes =
+        engine_requests::fetch_status(&measure_speed_options.base_url)
+            .ok()
+            .as_ref()
+            .and_then(served_conditions::last_reply_peak_mlx_memory_bytes);
     println!(
-        "{STATUS_PREFIX} reply model={model_id} task={} round={} prompt_tokens={} reply_tokens={} seconds_to_first_token={:.2} prefill_tokens_per_second={:.0} reply_tokens_per_second={} draft_rounds={} kept_drafts={}",
+        "{STATUS_PREFIX} reply model={model_id} task={} round={} {}",
         speed_task.catalog_field(),
         round_index + 1,
-        reply_measurement.prompt_tokens,
-        reply_measurement.completion_tokens,
-        reply_measurement.seconds_to_first_token,
-        reply_measurement.prefill_tokens_per_second(),
-        reply_measurement
-            .reply_tokens_per_second
-            .map_or_else(|| "none".to_owned(), |rate| format!("{rate:.2}")),
-        reply_measurement
-            .drafting
-            .map_or(0, |reply_drafting| reply_drafting.round_count),
-        reply_measurement
-            .drafting
-            .map_or(0, |reply_drafting| reply_drafting.kept_draft_count),
+        reply_measurement.figures_text(),
     );
     if reply_measurement.completion_tokens >= MINIMUM_TIMED_TOKENS
         && reply_measurement.reply_tokens_per_second.is_some()

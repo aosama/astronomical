@@ -1,6 +1,7 @@
 use std::time::Duration;
 
-use super::StreamTiming;
+use super::{ReplyMeasurement, StreamTiming};
+use crate::measure_speed::reply_drafting::ReplyDrafting;
 
 fn token_line(text: &str) -> String {
     format!(r#"data: {{"choices":[{{"delta":{{"content":"{text}"}}}}]}}"#)
@@ -64,4 +65,42 @@ fn should_ignore_comments_malformed_lines_and_empty_deltas() {
     assert_eq!(measurement.completion_tokens, 0);
     assert!(measurement.seconds_to_first_token.abs() < 1e-9);
     assert_eq!(measurement.reply_tokens_per_second, None);
+}
+
+#[test]
+fn should_print_a_drafted_replys_figures_with_its_peak_memory_in_gb() {
+    let reply_measurement = ReplyMeasurement {
+        prompt_tokens: 10_122,
+        completion_tokens: 200,
+        seconds_to_first_token: 4.0,
+        reply_tokens_per_second: Some(61.5),
+        drafting: Some(ReplyDrafting {
+            round_count: 50,
+            kept_draft_count: 150,
+        }),
+        peak_mlx_memory_bytes: Some(18 * 1_073_741_824 + 536_870_912),
+    };
+
+    assert_eq!(
+        reply_measurement.figures_text(),
+        "prompt_tokens=10122 reply_tokens=200 seconds_to_first_token=4.00 prefill_tokens_per_second=2530 reply_tokens_per_second=61.50 draft_rounds=50 kept_drafts=150 peak_mlx_memory_gb=18.50"
+    );
+}
+
+#[test]
+fn should_print_none_for_figures_a_reply_does_not_have() {
+    // Edge: one token, no drafting, no memory reading, no time to the first token.
+    let reply_measurement = ReplyMeasurement {
+        prompt_tokens: 5,
+        completion_tokens: 1,
+        seconds_to_first_token: 0.0,
+        reply_tokens_per_second: None,
+        drafting: None,
+        peak_mlx_memory_bytes: None,
+    };
+
+    assert_eq!(
+        reply_measurement.figures_text(),
+        "prompt_tokens=5 reply_tokens=1 seconds_to_first_token=0.00 prefill_tokens_per_second=0 reply_tokens_per_second=none draft_rounds=0 kept_drafts=0 peak_mlx_memory_gb=none"
+    );
 }

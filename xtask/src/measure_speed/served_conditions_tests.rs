@@ -1,6 +1,6 @@
 use serde_json::json;
 
-use super::{ServedConditions, served_conditions};
+use super::{ServedConditions, last_reply_peak_mlx_memory_bytes, served_conditions};
 use crate::release_speed::speed_ledger::{DrafterInUse, WeightsPlacement};
 
 const SIXTEEN_GB_BYTES: u64 = 16 * 1_073_741_824;
@@ -95,6 +95,23 @@ fn should_count_only_a_drafter_that_drafts() {
         served_conditions(&older_engine, "Model-A")
             .expect("an older engine's status still reads")
             .multi_token_prediction_draft_tokens,
+        None
+    );
+}
+
+#[test]
+fn should_read_the_last_replys_peak_memory_and_none_from_an_engine_that_reports_none() {
+    let reporting_status =
+        serde_json::json!({"last_reply_peak_mlx_memory_bytes": 19_327_352_832_u64});
+    let silent_status = serde_json::json!({"last_reply_peak_mlx_memory_bytes": null});
+
+    assert_eq!(
+        last_reply_peak_mlx_memory_bytes(&reporting_status),
+        Some(19_327_352_832)
+    );
+    assert_eq!(last_reply_peak_mlx_memory_bytes(&silent_status), None);
+    assert_eq!(
+        last_reply_peak_mlx_memory_bytes(&serde_json::json!({})),
         None
     );
 }

@@ -120,6 +120,7 @@
   "model_load_in_flight": null,
   "expert_memory_mode": null,
   "expert_residency": null,
+  "last_reply_peak_mlx_memory_bytes": null,
   "machine_mlx_memory_ceiling_bytes": 0,
   "minimum_mlx_memory_ceiling_bytes": 1,
   "mlx_memory_ceiling_bytes": 0,

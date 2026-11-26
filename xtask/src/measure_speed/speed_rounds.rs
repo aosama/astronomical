@@ -40,11 +40,17 @@ impl ModelSpeedRounds {
         let mut first_token_seconds = Vec::new();
         let mut reply_rates = Vec::new();
         let mut prompt_token_counts = Vec::new();
+        let mut peak_mlx_memory_bytes = Vec::new();
         for task_reply in task_replies {
             prefill_rates.push(task_reply.prefill_tokens_per_second());
             first_token_seconds.push(task_reply.seconds_to_first_token);
             reply_rates.extend(task_reply.reply_tokens_per_second);
             prompt_token_counts.push(task_reply.prompt_tokens);
+            peak_mlx_memory_bytes.extend(
+                task_reply
+                    .peak_mlx_memory_bytes
+                    .map(|peak_bytes| peak_bytes as f64),
+            );
         }
         prompt_token_counts.sort_unstable();
         Some(TaskFigures {
@@ -54,6 +60,7 @@ impl ModelSpeedRounds {
             seconds_to_first_token: FigureSpread::of_rounds(&first_token_seconds)?,
             reply_tokens_per_second: FigureSpread::of_rounds(&reply_rates)?,
             drafting: super::reply_drafting::drafting_figures(task_replies),
+            peak_mlx_memory_bytes: FigureSpread::of_rounds(&peak_mlx_memory_bytes),
         })
     }
 

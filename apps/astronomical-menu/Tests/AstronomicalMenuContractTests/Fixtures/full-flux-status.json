@@ -129,6 +129,7 @@
     "stock_sentence": "All in RAM"
   },
   "expert_residency": null,
+  "last_reply_peak_mlx_memory_bytes": null,
   "machine_mlx_memory_ceiling_bytes": 0,
   "wired_residency_budget_bytes": null,
   "minimum_mlx_memory_ceiling_bytes": 1,

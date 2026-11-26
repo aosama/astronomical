@@ -113,6 +113,10 @@ pub(in crate::worker) fn handle_worker_completion_event(
         health_snapshot,
         completed_request.drafting_statistics,
     );
+    crate::worker::health::record_reply_peak_mlx_memory(
+        health_snapshot,
+        completed_request.maximum_mlx_peak_memory_bytes,
+    );
     send_completion_stream_events(&completed_request, &completion_measurements)
 }
 
