@@ -39,8 +39,8 @@ use image::{DynamicImage, ImageFormat, Rgb, RgbImage};
 use ipc_protocol::ChatImageInput;
 use serial_test::serial;
 
-use crate::performance_throughput::historical_record::ThroughputJourneyKind;
 use crate::performance_throughput::support::{self as throughput_support, ThroughputJourney};
+use crate::performance_throughput::throughput_record::ThroughputJourneyKind;
 use crate::support;
 
 /// The small warmup image: 448 x 448 pixels (a multiple of the 32-pixel

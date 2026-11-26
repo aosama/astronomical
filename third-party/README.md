@@ -235,8 +235,8 @@ To bump a pinned dependency:
  5. Run the integration lanes, then invoke each real-model acceptance Cargo
    command directly with `--test-threads=1` (GPU journeys are never parallel).
 6. Prove performance parity for the `resident_sparse_moe` registry model
-   with the performance-throughput journeys and compare against the recorded
-   band in `apps/inference-worker/tests/performance_throughput/throughput-history.jsonl`.
+   with `cargo xtask measure-speed --reference-set` and compare against the
+   release's ledger under `registry/release_speed`.
 7. Update this registry and the repo discovery guide, then commit
    after `cargo fmt --all -- --check` and
    `cargo test-integration-and-rest` pass.

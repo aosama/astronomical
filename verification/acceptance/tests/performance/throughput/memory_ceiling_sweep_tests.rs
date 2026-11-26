@@ -62,12 +62,10 @@ async fn should_not_use_warmup_report_when_measured_report_is_missing() {
 }
 
 #[tokio::test]
-async fn should_persist_the_stage_of_a_budget_exhausted_cell() {
+async fn should_record_the_stage_of_a_budget_exhausted_cell() {
     tokio::time::timeout(TEST_TIMEOUT, async {
         let logging_directory =
             tempfile::tempdir().expect("the attribution log directory should be created");
-        let history_path = logging_directory.path().join("throughput-history.jsonl");
-        let machine_specs = MachineSpecs::capture().await;
         let stage_expectations = [
             (
                 Some(MemoryCellBudgetExhaustedStage::LaunchOrIdle),
@@ -78,126 +76,118 @@ async fn should_persist_the_stage_of_a_budget_exhausted_cell() {
                 Some(MemoryCellBudgetExhaustedStage::Measured),
                 Some("measured"),
             ),
+            // Edge: a cell that finished names no stage at all.
             (None, None),
         ];
 
-        for (budget_exhausted_stage, _) in stage_expectations {
-            let budget_exhausted = budget_exhausted_stage.is_some();
-            let run_outcome = journey_run_outcome_with_budget_stage(
-                logging_directory.path(),
-                budget_exhausted_stage,
+        for (budget_exhausted_stage, stage_label) in stage_expectations {
+            let printed_record = throughput_record_json(
+                &fixture_memory_cell_record(logging_directory.path(), budget_exhausted_stage).await,
             );
-            let memory_cell = compose_memory_cell(
-                &run_outcome,
-                23 * BYTES_PER_GIGABYTE,
-                budget_exhausted,
-                &Value::Object(serde_json::Map::new()),
-            );
-            let throughput_record = ThroughputRecord {
-                timestamp: "test-timestamp".to_owned(),
-                model_id: "test-model".to_owned(),
-                journey: ThroughputJourneyKind::MemoryCeilingSweep,
-                decode_astro_expert_cache_policy: WorkerDecodeAstroExpertCachePolicy::Baseline,
-                prefill_tokens_per_second: 0,
-                decode_tokens_per_second: 0,
-                git_commit: None,
-                worker_build_identity: fixture_worker_build_identity(),
-                machine: machine_specs.clone(),
-                total_input_tokens: 0,
-                total_output_tokens: 0,
-                cached_tokens: 0,
-                prefill_time_seconds: 0.0,
-                decode_time_seconds: 0.0,
-                configured_maximum_mlx_memory_bytes: Some(23 * BYTES_PER_GIGABYTE),
-                completion_ordinal_in_worker: 2,
-                memory_cell: Some(memory_cell),
-            };
-            append_throughput_history(&throughput_record, &history_path)
-                .expect("the memory-cell record should append to durable history");
-        }
-
-        let persisted_rows = fs::read_to_string(&history_path)
-            .expect("the durable history should be readable")
-            .lines()
-            .map(|persisted_line| {
-                serde_json::from_str::<Value>(persisted_line)
-                    .expect("each durable history row should contain valid JSON")
-            })
-            .collect::<Vec<_>>();
-        assert_eq!(persisted_rows.len(), stage_expectations.len());
-        for (persisted_row, (expected_stage, stage_label)) in
-            persisted_rows.iter().zip(stage_expectations)
-        {
-            let persisted_memory_cell = &persisted_row["memory_cell"];
+            let printed_memory_cell = &printed_record["memory_cell"];
             assert_eq!(
-                persisted_memory_cell["budget_exhausted"].as_bool(),
-                Some(expected_stage.is_some()),
-                "the persisted record should preserve whether the serving budget expired",
+                printed_memory_cell["budget_exhausted"].as_bool(),
+                Some(budget_exhausted_stage.is_some()),
+                "the record should say whether the serving budget expired",
             );
             assert_eq!(
-                persisted_memory_cell
+                printed_memory_cell
                     .get("budget_exhausted_stage")
                     .and_then(Value::as_str),
                 stage_label,
-                "the persisted record should include only the actual exhaustion stage",
+                "the record should include only the actual exhaustion stage",
+            );
+            assert_eq!(
+                printed_record["worker_build_identity"]["source_commit"].as_str(),
+                Some("fixture-commit"),
             );
         }
     })
     .await
-    .expect("the memory-cell stage persistence test should finish within ten seconds");
+    .expect("the memory-cell stage test should finish within ten seconds");
 }
 
 #[tokio::test]
-async fn should_append_an_exhausted_cell_before_failing() {
+async fn should_fail_an_exhausted_cell_after_reporting_it() {
     tokio::time::timeout(TEST_TIMEOUT, async {
         let logging_directory =
             tempfile::tempdir().expect("the attribution log directory should be created");
-        let history_directory =
-            tempfile::tempdir().expect("the durable history directory should be created");
-        let history_path = history_directory.path().join("throughput-history.jsonl");
-        let run_outcome = journey_run_outcome_with_budget_stage(
+        let exhausted_record = fixture_memory_cell_record(
             logging_directory.path(),
             Some(MemoryCellBudgetExhaustedStage::LaunchOrIdle),
-        );
-        let append_history_path = history_path.clone();
-
-        let append_result = tokio::spawn(async move {
-            append_memory_cell_record(
-                run_outcome,
-                23 * BYTES_PER_GIGABYTE,
-                23,
-                &append_history_path,
-                fixture_worker_build_identity(),
-            )
-            .await
-        })
+        )
         .await;
-        let append_failure =
-            append_result.expect_err("an exhausted cell must fail after persisting its record");
-        assert!(
-            append_failure.is_panic(),
-            "the exhausted-cell failure should remain visible to the test harness",
-        );
 
-        let persisted_row = fs::read_to_string(&history_path)
-            .expect("the exhausted-cell history record should exist");
-        let persisted_record = serde_json::from_str::<Value>(persisted_row.trim())
-            .expect("the exhausted-cell history record should contain valid JSON");
-        assert_eq!(
-            persisted_record["memory_cell"]["budget_exhausted"].as_bool(),
-            Some(true),
-        );
-        assert_eq!(
-            persisted_record["memory_cell"]["budget_exhausted_stage"].as_str(),
-            Some("launch_or_idle"),
-        );
-        assert_eq!(
-            persisted_record["worker_build_identity"]["source_commit"].as_str(),
-            Some("fixture-commit"),
+        let report_failure =
+            tokio::task::spawn_blocking(move || report_memory_cell_record(&exhausted_record, 23))
+                .await
+                .expect_err("an exhausted cell must fail after its record is printed");
+
+        assert!(
+            report_failure.is_panic(),
+            "the exhausted-cell failure should remain visible to the test harness",
         );
     })
     .await
-    .expect("the exhausted-cell persistence test should finish within ten seconds");
+    .expect("the exhausted-cell test should finish within ten seconds");
+}
+
+#[tokio::test]
+async fn should_pass_a_finished_cell_below_the_hybrid_ceilings() {
+    tokio::time::timeout(TEST_TIMEOUT, async {
+        let logging_directory =
+            tempfile::tempdir().expect("the attribution log directory should be created");
+        let finished_record = fixture_memory_cell_record(logging_directory.path(), None).await;
+
+        report_memory_cell_record(&finished_record, 23);
+    })
+    .await
+    .expect("the finished-cell test should finish within ten seconds");
+}
+
+#[tokio::test]
+async fn should_fail_a_finished_cell_at_a_hybrid_ceiling_that_did_not_serve_hybrid() {
+    tokio::time::timeout(TEST_TIMEOUT, async {
+        let logging_directory =
+            tempfile::tempdir().expect("the attribution log directory should be created");
+        let finished_record = fixture_memory_cell_record(logging_directory.path(), None).await;
+
+        let report_failure =
+            tokio::task::spawn_blocking(move || report_memory_cell_record(&finished_record, 38))
+                .await
+                .expect_err("a 38 GB cell without hybrid expert residency must fail");
+
+        assert!(report_failure.is_panic());
+    })
+    .await
+    .expect("the hybrid-ceiling test should finish within ten seconds");
+}
+
+async fn fixture_memory_cell_record(
+    logging_directory: &Path,
+    budget_exhausted_stage: Option<MemoryCellBudgetExhaustedStage>,
+) -> ThroughputRecord {
+    let mut run_outcome =
+        journey_run_outcome_with_budget_stage(logging_directory, budget_exhausted_stage);
+    if budget_exhausted_stage.is_none() {
+        // A finished cell is held to the measured shape and to having
+        // written its generation report.
+        run_outcome.measurement.total_input_tokens = 10_544;
+        run_outcome.measurement.total_output_tokens = 500;
+        write_generation_reports(
+            logging_directory,
+            &[generation_report(
+                throughput_support::MEASURED_REQUEST_ID,
+                10_544,
+            )],
+        );
+    }
+    memory_cell_throughput_record(
+        run_outcome,
+        23 * BYTES_PER_GIGABYTE,
+        fixture_worker_build_identity(),
+    )
+    .await
 }
 
 fn journey_run_outcome_with_budget_stage(

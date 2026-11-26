@@ -313,8 +313,8 @@ pub(super) struct JourneyCompletions {
     pub(super) measured_output_text: Option<String>,
     /// Which completion of the worker's life the measured run was: ordinal
     /// two when the warmup ran first, ordinal one in a single-request lane
-    /// with no in-worker warmup. The durable record carries it so cold and
-    /// warmed worker rates can never be compared as one series again.
+    /// with no in-worker warmup. The record carries it so cold and
+    /// warmed worker rates are never compared as one series.
     pub(super) measured_completion_ordinal_in_worker: u32,
     /// The worker's health once the warmup finished and before the measured
     /// completion starts; `None` without a completed warmup.

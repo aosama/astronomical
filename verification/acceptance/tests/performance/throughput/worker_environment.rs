@@ -44,8 +44,8 @@ const MEASUREMENT_LANE_PROMPT_CHUNK_TOKENS: u32 = 2_048;
 /// Which prompt chunk size a measured worker serves with.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum PromptChunking {
-    /// The fixed 2,048-token chunk every historical throughput record was
-    /// taken at, kept so the durable series stays one comparable series.
+    /// The fixed 2,048-token chunk the throughput journeys have always been
+    /// taken at, kept so their rates stay comparable with earlier ones.
     MeasurementLane,
     /// Whatever the product resolves by default, for a lane that reports what
     /// a person running the app gets (issue #2221).
@@ -92,7 +92,7 @@ pub(crate) fn perf_worker_environment(
     Arc<HashMap<String, RuntimeModelPolicy>>,
     WorkerStartupConfiguration,
 ) {
-    super::historical_record::recorded_worker_build_identity();
+    super::throughput_record::recorded_worker_build_identity();
     let production_worker_executable_path =
         test_harness::workspace_binary("astronomical-inference-worker");
     let mut isolated_home_builder = tempfile::Builder::new();

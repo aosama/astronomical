@@ -16,7 +16,7 @@
 //!
 //! The memory ceiling is the throughput surface's shared real-model cap
 //! (`MAXIMUM_MODEL_MEMORY_BYTES`), the same cap the resident 35B journey
-//! records under, so rates in the historical record compare like for like.
+//! records under, so the two rates compare like for like.
 //!
 //! This is a laptop-only journey: it streams real expert weights from the
 //! solid-state drive, so it is `#[ignore]`d and not wired into CI. Invoke it
@@ -32,8 +32,8 @@ use std::time::Duration;
 use serial_test::serial;
 use test_harness::test_run::TestRunContext;
 
-use crate::performance_throughput::historical_record::ThroughputJourneyKind;
 use crate::performance_throughput::support::{self as throughput_support, ThroughputJourney};
+use crate::performance_throughput::throughput_record::ThroughputJourneyKind;
 
 const WARMUP_INPUT_INSTRUCTION: &str = "Continue the supplied Romeo and Juliet story above.";
 /// The Romeo and Juliet source used for the bounded warmup prompt.
@@ -73,8 +73,7 @@ fn discovered_model_id(model_directory: &std::path::Path) -> String {
 /// Measures the jangtq2 bundle's serving prompt-processing and decode
 /// throughput over IPC: after a short warmup, a >=10,000-token Romeo and
 /// Juliet input drives 500 output tokens with the `astro_ssd_prompt_cache` disabled, and the
-/// measured completion's server-attributed rates are persisted to the
-/// durable historical record.
+/// measured completion's server-attributed rates are printed in its record.
 #[test]
 #[ignore = "streams the real 122B jangtq2 bundle from the solid-state drive and measures serving prompt-processing and decode throughput over IPC"]
 #[serial]

@@ -244,7 +244,7 @@ pub(crate) enum CompletionIndex {
 /// The caller supplies which completion of the worker's life this sample was
 /// (the first turn of a two-turn journey is ordinal one, the second ordinal
 /// two, and a standard warmup-plus-measured journey reads ordinal two), so
-/// the durable record can tell a fresh worker's rate from a warmed one's.
+/// the record can tell a fresh worker's rate from a warmed one's.
 pub(crate) fn read_completion_by_index(
     log_path: &Path,
     model_id: &str,

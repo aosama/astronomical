@@ -4,7 +4,7 @@
 //! Each ceiling cell runs ONE production-shaped journey under an explicitly
 //! configured MLX ceiling — the same >=10,000-token Romeo and Juliet input and
 //! 500-token output as the text lane, `astro_ssd_prompt_cache` disabled —
-//! with performance attribution ON, and appends one durable history record
+//! with performance attribution ON, and prints one throughput record
 //! whose `memory_cell` carries the residency and byte-traffic evidence.
 //! Every cell uses a 2,048-token prefill chunk. The 38 GB and 40 GB requested
 //! ceilings must be clamped to an effective limit no greater than 36 GB before
@@ -15,7 +15,7 @@
 //!
 //! Every cell has one hard 60-second test timeout. The serving phase is stopped
 //! at 45 seconds so the worker can be cancelled, shut down, and its partial
-//! evidence persisted before the test timeout. A slow cell fails with its
+//! evidence printed before the test timeout. A slow cell fails with its
 //! attribution report instead of continuing into a long external runner.
 //!
 //! The cells run one process each (MLX limits are process-global): one cell is
@@ -36,14 +36,14 @@ use ipc_protocol::{ChatImageInput, WorkerDecodeAstroExpertCachePolicy};
 use serial_test::serial;
 use test_harness::test_run::TestRunContext;
 
-use crate::performance_throughput::historical_record::{
-    MemoryCellBudgetExhaustedStage, MemoryCellRecord, ThroughputJourneyKind, ThroughputRecord,
-    WorkerBuildIdentity, append_throughput_history, current_unix_epoch_millis,
-    format_utc_timestamp, history_log_path, recorded_worker_build_identity, throughput_record_json,
-};
 use crate::performance_throughput::machine_specs::MachineSpecs;
 use crate::performance_throughput::support::{
     self as throughput_support, JourneyRunOutcome, ThroughputJourney,
+};
+use crate::performance_throughput::throughput_record::{
+    MemoryCellBudgetExhaustedStage, MemoryCellRecord, ThroughputJourneyKind, ThroughputRecord,
+    WorkerBuildIdentity, current_unix_epoch_millis, format_utc_timestamp,
+    recorded_worker_build_identity, throughput_record_json,
 };
 use crate::support;
 
@@ -58,13 +58,13 @@ const MEASURED_ROMEO_AND_JULIET_SOURCE: &str =
 const MEASURED_MAXIMUM_OUTPUT_TOKENS: u16 = 500;
 const TEMPERATURE_THOUSANDTHS: u16 = 1_000;
 /// Leaves 15 seconds inside the 60-second test timeout for cancellation,
-/// worker shutdown, and durable partial-evidence persistence.
+/// worker shutdown, and printing the partial evidence.
 const MEMORY_CELL_SERVING_BUDGET: Duration = Duration::from_secs(45);
 const MEMORY_CELL_TEST_TIMEOUT: Duration = Duration::from_secs(60);
 const BYTES_PER_GIGABYTE: u64 = 1 << 30;
 
 /// The serving budget must leave the time the evidence pass needs: it stops the
-/// worker, reaps it, reads its attribution log, and appends the durable record.
+/// worker, reaps it, reads its attribution log, and prints the record.
 /// A lane that spends that window inside the journey loses the measurement it
 /// exists to keep, so the relationship is asserted rather than assumed.
 #[test]
@@ -128,24 +128,22 @@ async fn run_memory_ceiling_cell(ceiling_gb: u64) {
         &cell_journey(configured_maximum_mlx_memory_bytes),
     )
     .await;
-    let history_path = history_log_path();
-    append_memory_cell_record(
+    let memory_cell_record = memory_cell_throughput_record(
         run_outcome,
         configured_maximum_mlx_memory_bytes,
-        ceiling_gb,
-        &history_path,
         worker_build_identity,
     )
     .await;
+    report_memory_cell_record(&memory_cell_record, ceiling_gb);
 }
 
-async fn append_memory_cell_record(
+/// The record of one ceiling cell: its rates, with the partial ones of a cell
+/// that ran out of its serving budget, and its memory evidence.
+async fn memory_cell_throughput_record(
     run_outcome: JourneyRunOutcome,
     configured_maximum_mlx_memory_bytes: u64,
-    ceiling_gb: u64,
-    history_path: &std::path::Path,
     worker_build_identity: WorkerBuildIdentity,
-) {
+) -> ThroughputRecord {
     let budget_exhausted = run_outcome.measured_budget_exhausted;
     let mut measurement = run_outcome.measurement.clone();
     if !budget_exhausted {
@@ -198,7 +196,7 @@ async fn append_memory_cell_record(
         &attribution_report,
     );
     let machine_specs = MachineSpecs::capture().await;
-    let record = ThroughputRecord {
+    ThroughputRecord {
         timestamp: format_utc_timestamp(current_unix_epoch_millis()),
         model_id: measurement.model_id.clone(),
         journey: ThroughputJourneyKind::MemoryCeilingSweep,
@@ -216,40 +214,37 @@ async fn append_memory_cell_record(
         configured_maximum_mlx_memory_bytes: Some(configured_maximum_mlx_memory_bytes),
         completion_ordinal_in_worker: measurement.completion_ordinal_in_worker,
         memory_cell: Some(memory_cell),
-    };
+    }
+}
+
+/// Prints a cell's record, then fails the cell when it ran out of its serving
+/// budget or a large ceiling did not serve with hybrid expert residency.
+fn report_memory_cell_record(record: &ThroughputRecord, ceiling_gb: u64) {
+    let memory_cell = record
+        .memory_cell
+        .as_ref()
+        .expect("a ceiling cell's record carries its memory evidence");
+    let budget_exhausted = memory_cell.budget_exhausted;
     eprintln!(
         "[memory-ceiling-sweep] cell={ceiling_gb}gb budget_exhausted={budget_exhausted} record={}",
-        serde_json::to_string(&throughput_record_json(&record))
+        serde_json::to_string(&throughput_record_json(record))
             .unwrap_or_else(|_| "record serialization failed".to_owned())
     );
-    match append_throughput_history(&record, &history_path) {
-        Ok(()) => eprintln!(
-            "[memory-ceiling-sweep] appended durable record to {}",
-            history_path.display()
-        ),
-        Err(error) => panic!(
-            "the {ceiling_gb} GB memory-cell record must persist to the durable history: {error}"
-        ),
-    }
-    if !budget_exhausted && configured_maximum_mlx_memory_bytes >= 38 * BYTES_PER_GIGABYTE {
+    if !budget_exhausted && ceiling_gb >= 38 {
         assert_eq!(
-            record
-                .memory_cell
-                .as_ref()
-                .map(|memory_cell| memory_cell.expert_residency_mode.as_str()),
-            Some("hybrid"),
+            memory_cell.expert_residency_mode, "hybrid",
             "completed 38 GB and 40 GB cells should report hybrid expert residency",
         );
     }
     if budget_exhausted {
-        // The durable append above is the deliverable of a budget-exhausted
-        // cell: its partial evidence is the measurement the collapse produced.
-        // Panicking afterwards keeps the cell red in the harness without
-        // discarding that evidence, so the sweep can never be reported as a
-        // pass merely because it recorded a collapse.
+        // The record printed above is what a cell that ran out of budget
+        // delivers: its partial evidence is the measurement the collapse
+        // produced. Panicking afterwards keeps the cell red in the harness
+        // without discarding that evidence, so the sweep can never be
+        // reported as a pass merely because it recorded a collapse.
         panic!(
             "the {ceiling_gb} GB ceiling cell exhausted the {MEMORY_CELL_SERVING_BUDGET:?} serving budget; \
-             partial evidence is recorded above and in the durable history — this cell is not servable \
+             partial evidence is printed above — this cell is not servable \
              within the standard test budget"
         );
     }

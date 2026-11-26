@@ -20,9 +20,9 @@
 //!
 //! The 5,000/300 shape is a directed deviation from the canonical
 //! 10,000/500 text series, recorded under its own journey kind so the
-//! canonical series stays clean. Only automatic-engine cells reach the durable
-//! history; forced-engine cells print their record and evidence but are never
-//! appended, because production never runs a forced engine. Gigabytes follow the Apple marketing
+//! canonical series stays clean. Forced-engine cells print the same record
+//! as automatic ones, and production never runs a forced engine, so read
+//! them as diagnostics. Gigabytes follow the Apple marketing
 //! convention: 1 GB = 1,073,741,824 bytes (2^30).
 //!
 //! Every cell loads real weights into wired GPU memory, so each is
