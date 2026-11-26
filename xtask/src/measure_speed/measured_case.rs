@@ -13,6 +13,7 @@ pub struct MeasuredCase {
     pub speed_rounds: ModelSpeedRounds,
     pub temperature_override: Option<f64>,
     pub reply_tokens_requested: u32,
+    pub long_prompt_tokens: u32,
 }
 
 impl MeasuredCase {

@@ -47,7 +47,7 @@
 - Those performance throughput tests must run through a Rust optimized build.
 - MOST IMPORTANTLY performance tests must start at the lowermost part of the call stack and move tests upwards through the call stack.
 - Measure and optimize at the lowest GPU operation (a kernel, one forward, one draft round), rarely at the REST API or end to end. While iterating, use short, repeatable tests at the lowest or middle level of the call stack that finish in seconds, and avoid multi-minute runs to the maximum. Run one end-to-end REST API measurement only when the work is done, to confirm a gain already explained lower down.
-- The 10,000-token input and 500-token output above are for figures that get published (the release speed ledger, a claim on an issue). An A/B diagnostic while iterating compares per-token cost from a short reply instead.
+- No measurement may keep a person waiting more than about two minutes a case. `cargo xtask measure-speed` sizes each case to that by itself (200 output tokens, one round and more only while they fit, a shorter long prompt for a model that reads slowly), and anything new follows the same budget. The 10,000-token input and 500-token output above are the shape for a one-off figure a claim rests on, not for iterating: an A/B diagnostic compares per-token cost from a short reply.
 
 ## Release Scripts Folder
 

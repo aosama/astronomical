@@ -6,6 +6,7 @@ use std::path::Path;
 
 use super::measure_speed_options::MeasureSpeedOptions;
 use super::reference_set::{ReferenceCase, load_reference_set};
+use super::speed_prompts::USUAL_LONG_PROMPT_TOKENS;
 
 /// Whether a case changes the engine's memory limit before loading its model.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -21,6 +22,7 @@ pub enum MemoryLimitRequest {
 pub struct MeasurementCase {
     pub model_id: String,
     pub memory_limit_request: MemoryLimitRequest,
+    pub long_prompt_tokens: u32,
 }
 
 pub fn measurement_cases(
@@ -33,6 +35,7 @@ pub fn measurement_cases(
             named_cases.push(MeasurementCase {
                 model_id: model_id.clone(),
                 memory_limit_request: MemoryLimitRequest::KeepEngineLimit,
+                long_prompt_tokens: USUAL_LONG_PROMPT_TOKENS,
             });
         }
         return Ok(named_cases);
@@ -63,6 +66,9 @@ pub fn reference_cases_for(
     for reference_case in reference_cases {
         if named_model_ids.is_empty() || named_model_ids.contains(&reference_case.model_id) {
             chosen_cases.push(MeasurementCase {
+                long_prompt_tokens: reference_case
+                    .long_prompt_tokens
+                    .unwrap_or(USUAL_LONG_PROMPT_TOKENS),
                 model_id: reference_case.model_id,
                 memory_limit_request: MemoryLimitRequest::ServeUnder(
                     reference_case.maximum_mlx_memory_gb,

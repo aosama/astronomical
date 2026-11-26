@@ -21,6 +21,7 @@ fn measured_case(
         speed_rounds,
         temperature_override,
         reply_tokens_requested: 500,
+        long_prompt_tokens: 10_000,
     }
 }
 

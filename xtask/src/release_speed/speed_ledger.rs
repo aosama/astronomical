@@ -19,6 +19,10 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
+/// Run-to-run spread of one round: medians of the same build read up to 8%
+/// apart on a streamed model at a tight memory limit.
+const SINGLE_ROUND_SPREAD: f64 = 0.08;
+
 pub const LEDGER_DIRECTORY: &str = "registry/release_speed";
 /// The reference set lives beside the ledgers it produces, so a change to
 /// what is measured is reviewed with the figures it changes.
@@ -130,11 +134,24 @@ impl FigureSpread {
         })
     }
 
-    /// Whether two spreads do not overlap: only then is a change between them
-    /// larger than the spread of either sitting.
+    /// Whether two spreads differ by more than their sittings' own spread:
+    /// their ranges do not overlap, and when either is a single round (it
+    /// has no range, because its case's time budget allowed one) the medians
+    /// also differ by the run-to-run spread measured on this kind of work.
     #[must_use]
     pub fn is_apart_from(&self, other_spread: &Self) -> bool {
-        self.lowest > other_spread.highest || self.highest < other_spread.lowest
+        let ranges_overlap =
+            self.lowest <= other_spread.highest && self.highest >= other_spread.lowest;
+        if ranges_overlap {
+            return false;
+        }
+        let either_is_a_single_round =
+            self.lowest == self.highest || other_spread.lowest == other_spread.highest;
+        if !either_is_a_single_round {
+            return true;
+        }
+        let larger_median = self.median.max(other_spread.median);
+        (self.median - other_spread.median).abs() >= larger_median * SINGLE_ROUND_SPREAD
     }
 }
 
