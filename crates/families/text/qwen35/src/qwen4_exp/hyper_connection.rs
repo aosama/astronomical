@@ -383,6 +383,14 @@ pub fn fused_lane_mixing_matches_the_composed_steps(
 /// Rows the proof runs: one reply token and a drafted block's worth.
 const PROOF_ROW_COUNTS: [i32; 2] = [1, 4];
 
+/// How far from zero the proof's operands spread, as the standard deviation
+/// of their normal draw before the kernels divide by the lane count. A
+/// sigmoid built on a different exponential agrees near zero and parts
+/// where it saturates, which is how the one-token DeltaNet kernel's use of
+/// the fast exponential went unseen (issue #2599): the last spread puts
+/// most operands past that point for any lane count the kernels accept.
+const PROOF_OPERAND_SPREADS: [f32; 3] = [0.5, 5.0, 160.0];
+
 /// The kernels, when each equals the composed steps bit for bit over
 /// random bfloat16 operands of the model's own widths.
 fn proven_lane_mixing_kernels(
@@ -394,13 +402,16 @@ fn proven_lane_mixing_kernels(
         return Ok(None);
     };
     for row_count in PROOF_ROW_COUNTS {
-        let proof_shape = ProofShape {
-            row_count,
-            lane_count,
-            hidden_width,
-        };
-        if !kernels_match_the_composed_steps(runtime, &kernels, &proof_shape)? {
-            return Ok(None);
+        for operand_spread in PROOF_OPERAND_SPREADS {
+            let proof_shape = ProofShape {
+                row_count,
+                lane_count,
+                hidden_width,
+                operand_spread,
+            };
+            if !kernels_match_the_composed_steps(runtime, &kernels, &proof_shape)? {
+                return Ok(None);
+            }
         }
     }
     Ok(Some(kernels))
@@ -411,6 +422,7 @@ struct ProofShape {
     row_count: i32,
     lane_count: i32,
     hidden_width: i32,
+    operand_spread: f32,
 }
 
 /// Whether the three kernels give the composed steps' bits at `proof_shape`.
@@ -423,11 +435,18 @@ fn kernels_match_the_composed_steps(
         row_count,
         lane_count,
         hidden_width,
+        operand_spread,
     } = *proof_shape;
-    let random_key = runtime.random_key(2_567)?;
-    let lanes = proof_operand(runtime, &random_key, row_count, lane_count * hidden_width)?;
-    let block_output = proof_operand(runtime, &random_key, row_count, hidden_width)?;
-    let scores = proof_operand(runtime, &random_key, row_count, lane_count)?;
+    // A key an operand: one key for all three gave the write-back a block
+    // output that was the head of its own lanes.
+    let lanes = proof_operand(
+        runtime,
+        (2_567, operand_spread),
+        row_count,
+        lane_count * hidden_width,
+    )?;
+    let block_output = proof_operand(runtime, (2_568, operand_spread), row_count, hidden_width)?;
+    let scores = proof_operand(runtime, (2_569, operand_spread), row_count, lane_count)?;
     let weights = composed_lane_write_back_weights(runtime, &scores, lane_count)?;
     let fused_and_composed = [
         (
@@ -450,20 +469,21 @@ fn kernels_match_the_composed_steps(
     Ok(all_match)
 }
 
-/// Random bfloat16 values `[1, rows, width]`, wide enough to reach both
-/// tails of the sigmoid.
+/// Random bfloat16 values `[1, rows, width]`, drawn from `key_seed` with
+/// the standard deviation `operand_spread`.
 fn proof_operand(
     runtime: &MlxRuntime,
-    random_key: &MlxArray,
+    (key_seed, operand_spread): (u64, f32),
     row_count: i32,
     width: i32,
 ) -> Result<MlxArray, TextExecutionError> {
+    let random_key = runtime.random_key(key_seed)?;
     Ok(runtime.random_normal(
         &[1, row_count, width],
         mlx_bridge::MlxDtype::BFloat16,
         0.0,
-        5.0,
-        random_key,
+        operand_spread,
+        &random_key,
     )?)
 }
 

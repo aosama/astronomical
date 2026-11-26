@@ -37,15 +37,28 @@ struct RecurrenceInputs {
 }
 
 fn recurrence_inputs(runtime: &MlxRuntime, row_count: i32, seed: u64) -> RecurrenceInputs {
+    recurrence_inputs_of_spread(runtime, row_count, seed, 1.0)
+}
+
+/// The same inputs with queries, keys, values and state `input_spread`
+/// times further from zero; rates stay between 0 and 1.
+fn recurrence_inputs_of_spread(
+    runtime: &MlxRuntime,
+    row_count: i32,
+    seed: u64,
+    input_spread: f32,
+) -> RecurrenceInputs {
     let key = runtime.random_key(seed).expect("a key builds");
     let normal = |shape: &[i32], dtype: MlxDtype, scale: f32| {
         runtime
-            .random_normal(shape, dtype, 0.0, scale, &key)
+            .random_normal(shape, dtype, 0.0, scale * input_spread, &key)
             .expect("random inputs build")
     };
+    // Rates are drawn at their own spread whatever the inputs' is.
     let unit_interval = |shape: &[i32]| {
         runtime
-            .sigmoid(&normal(shape, MlxDtype::Float32, 1.0))
+            .random_normal(shape, MlxDtype::Float32, 0.0, 1.0, &key)
+            .and_then(|rate_logits| runtime.sigmoid(&rate_logits))
             .expect("rates build")
     };
     let key_shape = [1, row_count, KEY_HEAD_COUNT, KEY_HEAD_DIMENSION];
@@ -156,6 +169,29 @@ fn should_match_the_sequence_kernel_bit_for_bit_on_a_chain() {
         bits(&runtime, &tree_outputs(&runtime, &inputs, &chain)),
         bits(&runtime, &sequence_outputs(&runtime, &inputs))
     );
+}
+
+/// The chain comparison again with inputs 20 and 200 times further from
+/// zero: kernels that agree near zero can part far from it (issue #2599).
+#[test]
+#[file_serial]
+fn should_match_the_sequence_kernel_bit_for_bit_on_inputs_far_from_zero() {
+    if test_harness::skip_without(
+        test_harness::PlatformRequirement::MetalGpu,
+        "should_match_the_sequence_kernel_bit_for_bit_on_inputs_far_from_zero",
+    ) {
+        return;
+    }
+    let runtime = test_runtime();
+    let chain = [None, Some(0), Some(1), Some(2), Some(3), Some(4)];
+    for (seed, input_spread) in [(11, 20.0_f32), (12, 200.0)] {
+        let inputs = recurrence_inputs_of_spread(&runtime, 6, seed, input_spread);
+        assert_eq!(
+            bits(&runtime, &tree_outputs(&runtime, &inputs, &chain)),
+            bits(&runtime, &sequence_outputs(&runtime, &inputs)),
+            "inputs {input_spread} times further from zero"
+        );
+    }
 }
 
 #[test]
