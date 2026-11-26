@@ -15,4 +15,6 @@ mod paged_prefill_chunk_attribution;
 mod paged_resident_parity;
 mod prefill_chunk;
 pub(crate) mod prompt;
+mod reply_speed_cases;
+mod resident_reply_speed;
 mod unattributed_cold_prefill;

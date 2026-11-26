@@ -1,8 +1,7 @@
 use super::{IMAGE_PAD_TOKEN_ID, PROGRESS_INTERVAL};
 use ipc_protocol::RequestId;
 use model_serving::{
-    GeneratedToken, InferenceEngine, PerformanceAttribution, Qwen3_5StreamingEngine,
-    TextInferenceRequest,
+    GeneratedToken, InferenceEngine, PerformanceAttribution, TextInferenceRequest,
 };
 use std::time::Instant;
 use tokio::time::{MissedTickBehavior, interval};
@@ -37,7 +36,7 @@ impl GenerationSampling {
 }
 
 pub(crate) async fn run_attributed_generation(
-    qwen3_5_engine: &mut Qwen3_5StreamingEngine,
+    qwen3_5_engine: &mut impl InferenceEngine<Request = TextInferenceRequest>,
     request_id: RequestId,
     prompt_token_ids: &[u32],
     phase_name: &str,
@@ -57,7 +56,7 @@ pub(crate) async fn run_attributed_generation(
 }
 
 pub(crate) async fn run_generation_with_sampling(
-    qwen3_5_engine: &mut Qwen3_5StreamingEngine,
+    qwen3_5_engine: &mut impl InferenceEngine<Request = TextInferenceRequest>,
     request_id: RequestId,
     prompt_token_ids: &[u32],
     phase_name: &str,
@@ -90,7 +89,7 @@ pub(crate) enum RequestAttribution {
 #[expect(clippy::too_many_lines)]
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn run_generation_with_request_attribution(
-    qwen3_5_engine: &mut Qwen3_5StreamingEngine,
+    qwen3_5_engine: &mut impl InferenceEngine<Request = TextInferenceRequest>,
     request_id: RequestId,
     prompt_token_ids: &[u32],
     phase_name: &str,
