@@ -22,6 +22,11 @@ pub struct ReferenceCase {
     /// The memory limit to serve the model under, in GB of 2^30 bytes; `null`
     /// is the Mac's own limit.
     pub maximum_mlx_memory_gb: Option<u64>,
+    /// Tokens of the long prompts, when not the usual 10,000: a model that
+    /// reads a prompt slowly (a dense 27B reads 250 to 300 tokens a second)
+    /// is measured on a shorter one, so a release's measuring stays short.
+    #[serde(default)]
+    pub long_prompt_tokens: Option<u32>,
     /// What the case stands for, so nobody drops it without knowing.
     pub why: String,
 }

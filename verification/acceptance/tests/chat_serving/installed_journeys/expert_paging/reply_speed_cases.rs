@@ -24,6 +24,22 @@ const LEARNING_REQUEST_ID: RequestId = RequestId::new(98_503);
 const WARMUP_PROMPT_TOKEN_COUNT: usize = 500;
 const WARMUP_OUTPUT_TOKEN_COUNT: u16 = 50;
 const MEASURED_PROMPT_TOKEN_COUNT: usize = 10_000;
+/// A dense model reads a prompt layer by layer at a few hundred tokens a
+/// second (the 27B: 250 to 300), so 10,000 tokens cost over half a minute a
+/// reply for nothing a shorter prompt does not show.
+const DENSE_MEASURED_PROMPT_TOKEN_COUNT: usize = 2_000;
+
+/// The measured prompt's size for the configured model: shorter for a model
+/// whose configuration names no experts.
+fn measured_prompt_token_count(model_directory: &Path) -> usize {
+    let has_experts = std::fs::read_to_string(model_directory.join("config.json"))
+        .is_ok_and(|config_text| config_text.contains("\"num_experts\""));
+    if has_experts {
+        MEASURED_PROMPT_TOKEN_COUNT
+    } else {
+        DENSE_MEASURED_PROMPT_TOKEN_COUNT
+    }
+}
 const MEASURED_OUTPUT_TOKEN_COUNT: u16 = 500;
 /// A dense model that streams its layers writes about ten tokens a second
 /// and reads a 10,000-token prompt slowly; a case that serves its prompt
@@ -242,7 +258,7 @@ pub(super) async fn serve_warmup_learning_and_measured_replies(
         model_directory,
         &model_id,
         MEASURED_REQUEST_ID,
-        MEASURED_PROMPT_TOKEN_COUNT,
+        measured_prompt_token_count(model_directory),
         MEASURED_OUTPUT_TOKEN_COUNT,
     );
     if reply_case.serves_the_prompt_once_before_measuring {

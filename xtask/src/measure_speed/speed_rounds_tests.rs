@@ -34,7 +34,7 @@ fn medians(rate: u64) -> BTreeMap<&'static str, u64> {
 }
 
 #[test]
-fn should_take_whole_token_medians_only_once_every_task_has_three_rounds() {
+fn should_take_whole_token_medians_only_once_every_task_has_a_round() {
     let mut partial_rounds = ModelSpeedRounds::default();
     partial_rounds.record(SpeedTask::ShortPromptEssay, reply(40, 0.3, 70.0));
 

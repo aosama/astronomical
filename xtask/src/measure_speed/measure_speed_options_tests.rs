@@ -64,7 +64,7 @@ fn should_default_to_development_three_rounds_and_no_catalog_write() {
 fn should_refuse_no_models_too_few_rounds_unknown_options_and_missing_values() {
     for refused_arguments in [
         vec![],
-        vec!["--rounds", "2", "Model-A"],
+        vec!["--rounds", "0", "Model-A"],
         vec!["--rounds", "three", "Model-A"],
         vec!["--fast", "Model-A"],
         vec!["Model-A", "--base-url"],
@@ -123,4 +123,12 @@ fn should_refuse_a_ledger_outside_the_reference_set_or_at_one_temperature() {
             "should refuse {refused_arguments:?}"
         );
     }
+}
+
+#[test]
+fn should_accept_a_single_round_since_a_slow_models_budget_allows_no_more() {
+    let parsed_options = MeasureSpeedOptions::parse(&arguments(&["--rounds", "1", "Model-A"]))
+        .expect("one round is a measurement");
+
+    assert_eq!(parsed_options.round_count, 1);
 }

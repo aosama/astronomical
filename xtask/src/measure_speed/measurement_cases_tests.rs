@@ -7,6 +7,7 @@ fn reference_case(model_id: &str, maximum_mlx_memory_gb: Option<u64>) -> Referen
     ReferenceCase {
         model_id: model_id.to_owned(),
         maximum_mlx_memory_gb,
+        long_prompt_tokens: (model_id == "Model-B").then_some(2_000),
         why: "a reference case".to_owned(),
     }
 }
@@ -29,14 +30,17 @@ fn should_measure_every_reference_case_under_its_own_limit_when_none_is_named() 
             MeasurementCase {
                 model_id: "Model-A".to_owned(),
                 memory_limit_request: MemoryLimitRequest::ServeUnder(None),
+                long_prompt_tokens: 10_000,
             },
             MeasurementCase {
                 model_id: "Model-A".to_owned(),
                 memory_limit_request: MemoryLimitRequest::ServeUnder(Some(16)),
+                long_prompt_tokens: 10_000,
             },
             MeasurementCase {
                 model_id: "Model-B".to_owned(),
                 memory_limit_request: MemoryLimitRequest::ServeUnder(Some(34)),
+                long_prompt_tokens: 2_000,
             },
         ]
     );

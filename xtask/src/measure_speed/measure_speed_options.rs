@@ -5,7 +5,8 @@ use std::process::Command;
 use crate::release_speed::speed_ledger::MeasuringMachine;
 use crate::small_mac_matrix::matrix_cells::DEVELOPMENT_BASE_URL;
 
-const DEFAULT_ROUND_COUNT: usize = 3;
+use super::case_time_budget::MOST_ROUNDS_A_CASE;
+
 /// The widest temperature a chat request accepts.
 const MAXIMUM_MEASUREMENT_TEMPERATURE: f64 = 2.0;
 const BYTES_PER_GIGABYTE: u64 = 1_073_741_824;
@@ -14,6 +15,7 @@ const MEASURE_SPEED_USAGE: &str = "usage: cargo xtask measure-speed [--base-url 
 #[derive(Debug, PartialEq)]
 pub struct MeasureSpeedOptions {
     pub base_url: String,
+    /// The most rounds a case runs; `case_time_budget` may stop it sooner.
     pub round_count: usize,
     /// One sampling temperature for every reply, when given; each task's own
     /// otherwise (`SpeedTask::default_temperature`). A release ledger is only
@@ -34,7 +36,7 @@ impl MeasureSpeedOptions {
     pub fn parse(arguments: &[String]) -> Result<Self, String> {
         let mut parsed_options = Self {
             base_url: DEVELOPMENT_BASE_URL.to_owned(),
-            round_count: DEFAULT_ROUND_COUNT,
+            round_count: MOST_ROUNDS_A_CASE,
             temperature_override: None,
             measured_on: None,
             should_write_catalog: false,
@@ -115,13 +117,13 @@ fn option_value(
         .ok_or_else(|| format!("{option_name} needs a value"))
 }
 
-/// Three rounds give a median a single slow round cannot move; fewer are
-/// refused because the catalog would keep a figure one round set.
+/// The most rounds a case may run; its time budget may stop it sooner, and
+/// one round always runs.
 fn parse_round_count(round_text: &str) -> Result<usize, String> {
     match round_text.parse::<usize>() {
-        Ok(round_count) if round_count >= DEFAULT_ROUND_COUNT => Ok(round_count),
+        Ok(round_count) if round_count >= 1 => Ok(round_count),
         _ => Err(format!(
-            "--rounds needs a whole number of at least {DEFAULT_ROUND_COUNT}, got {round_text}"
+            "--rounds needs a whole number of at least 1, got {round_text}"
         )),
     }
 }

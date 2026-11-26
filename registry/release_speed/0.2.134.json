@@ -1,136 +1,12 @@
 {
   "astronomical_version": "0.2.134",
   "source_commit": "a245a15dba3a",
-  "measured_on_date": "2026-11-25",
+  "measured_on_date": "2026-11-26",
   "machine": {
     "chip": "M5 Pro",
     "memory_bytes": 51539607552
   },
   "measurements": [
-    {
-      "model_id": "Ornith-1.5-9B-MLX-4bit-vision",
-      "model_revision": "10450ee1a54d25d682f9589d6e428d480d913f03",
-      "maximum_mlx_memory_gb": null,
-      "mlx_memory_limit_bytes": 39195874112,
-      "weights_placement": "in_memory",
-      "drafter": "none",
-      "multi_token_prediction_draft_tokens": null,
-      "task": "essay_short_prompt",
-      "temperature": 1.0,
-      "reply_tokens_requested": 500,
-      "figures": {
-        "round_count": 3,
-        "prompt_tokens": 28,
-        "prefill_tokens_per_second": {
-          "median": 289.02,
-          "lowest": 250.17,
-          "highest": 305.7
-        },
-        "seconds_to_first_token": {
-          "median": 0.09,
-          "lowest": 0.09,
-          "highest": 0.11
-        },
-        "reply_tokens_per_second": {
-          "median": 48.29,
-          "lowest": 47.7,
-          "highest": 55.05
-        }
-      }
-    },
-    {
-      "model_id": "Ornith-1.5-9B-MLX-4bit-vision",
-      "model_revision": "10450ee1a54d25d682f9589d6e428d480d913f03",
-      "maximum_mlx_memory_gb": null,
-      "mlx_memory_limit_bytes": 39195874112,
-      "weights_placement": "in_memory",
-      "drafter": "none",
-      "multi_token_prediction_draft_tokens": null,
-      "task": "code_short_prompt",
-      "temperature": 0.7,
-      "reply_tokens_requested": 500,
-      "figures": {
-        "round_count": 3,
-        "prompt_tokens": 27,
-        "prefill_tokens_per_second": {
-          "median": 248.71,
-          "lowest": 200.49,
-          "highest": 290.64
-        },
-        "seconds_to_first_token": {
-          "median": 0.11,
-          "lowest": 0.1,
-          "highest": 0.13
-        },
-        "reply_tokens_per_second": {
-          "median": 49.12,
-          "lowest": 46.15,
-          "highest": 55.11
-        }
-      }
-    },
-    {
-      "model_id": "Ornith-1.5-9B-MLX-4bit-vision",
-      "model_revision": "10450ee1a54d25d682f9589d6e428d480d913f03",
-      "maximum_mlx_memory_gb": null,
-      "mlx_memory_limit_bytes": 39195874112,
-      "weights_placement": "in_memory",
-      "drafter": "none",
-      "multi_token_prediction_draft_tokens": null,
-      "task": "essay_long_prompt",
-      "temperature": 1.0,
-      "reply_tokens_requested": 500,
-      "figures": {
-        "round_count": 3,
-        "prompt_tokens": 10126,
-        "prefill_tokens_per_second": {
-          "median": 1346.48,
-          "lowest": 1017.33,
-          "highest": 1367.16
-        },
-        "seconds_to_first_token": {
-          "median": 7.52,
-          "lowest": 7.41,
-          "highest": 9.95
-        },
-        "reply_tokens_per_second": {
-          "median": 51.47,
-          "lowest": 42.85,
-          "highest": 51.56
-        }
-      }
-    },
-    {
-      "model_id": "Ornith-1.5-9B-MLX-4bit-vision",
-      "model_revision": "10450ee1a54d25d682f9589d6e428d480d913f03",
-      "maximum_mlx_memory_gb": null,
-      "mlx_memory_limit_bytes": 39195874112,
-      "weights_placement": "in_memory",
-      "drafter": "none",
-      "multi_token_prediction_draft_tokens": null,
-      "task": "code_long_prompt",
-      "temperature": 0.7,
-      "reply_tokens_requested": 500,
-      "figures": {
-        "round_count": 3,
-        "prompt_tokens": 10647,
-        "prefill_tokens_per_second": {
-          "median": 1324.15,
-          "lowest": 1050.35,
-          "highest": 1350.43
-        },
-        "seconds_to_first_token": {
-          "median": 8.04,
-          "lowest": 7.88,
-          "highest": 10.13
-        },
-        "reply_tokens_per_second": {
-          "median": 49.54,
-          "lowest": 47.38,
-          "highest": 51.35
-        }
-      }
-    },
     {
       "model_id": "Ornith-1.5-35B-A3B-OptiQ-4bit-vision-DFLASH",
       "model_revision": "d58c7ee9e214252d0cef485868cd86cdbd3a6214",
@@ -139,26 +15,26 @@
       "weights_placement": "in_memory",
       "drafter": "dflash",
       "multi_token_prediction_draft_tokens": null,
-      "task": "essay_short_prompt",
-      "temperature": 1.0,
+      "task": "code_long_prompt",
+      "temperature": 0.7,
       "reply_tokens_requested": 500,
       "figures": {
         "round_count": 3,
-        "prompt_tokens": 28,
+        "prompt_tokens": 10647,
         "prefill_tokens_per_second": {
-          "median": 220.02,
-          "lowest": 136.33,
-          "highest": 224.09
+          "median": 2037.11,
+          "lowest": 1997.4,
+          "highest": 2060.73
         },
         "seconds_to_first_token": {
-          "median": 0.13,
-          "lowest": 0.12,
-          "highest": 0.2
+          "median": 5.23,
+          "lowest": 5.17,
+          "highest": 5.33
         },
         "reply_tokens_per_second": {
-          "median": 81.01,
-          "lowest": 70.52,
-          "highest": 92.27
+          "median": 75.27,
+          "lowest": 74.99,
+          "highest": 84.82
         }
       }
     },
@@ -232,26 +108,26 @@
       "weights_placement": "in_memory",
       "drafter": "dflash",
       "multi_token_prediction_draft_tokens": null,
-      "task": "code_long_prompt",
-      "temperature": 0.7,
+      "task": "essay_short_prompt",
+      "temperature": 1.0,
       "reply_tokens_requested": 500,
       "figures": {
         "round_count": 3,
-        "prompt_tokens": 10647,
+        "prompt_tokens": 28,
         "prefill_tokens_per_second": {
-          "median": 2037.11,
-          "lowest": 1997.4,
-          "highest": 2060.73
+          "median": 220.02,
+          "lowest": 136.33,
+          "highest": 224.09
         },
         "seconds_to_first_token": {
-          "median": 5.23,
-          "lowest": 5.17,
-          "highest": 5.33
+          "median": 0.13,
+          "lowest": 0.12,
+          "highest": 0.2
         },
         "reply_tokens_per_second": {
-          "median": 75.27,
-          "lowest": 74.99,
-          "highest": 84.82
+          "median": 81.01,
+          "lowest": 70.52,
+          "highest": 92.27
         }
       }
     },
@@ -263,26 +139,26 @@
       "weights_placement": "streamed",
       "drafter": "none",
       "multi_token_prediction_draft_tokens": null,
-      "task": "essay_short_prompt",
-      "temperature": 1.0,
+      "task": "code_long_prompt",
+      "temperature": 0.7,
       "reply_tokens_requested": 500,
       "figures": {
         "round_count": 3,
-        "prompt_tokens": 28,
+        "prompt_tokens": 10647,
         "prefill_tokens_per_second": {
-          "median": 71.45,
-          "lowest": 52.82,
-          "highest": 72.51
+          "median": 2135.56,
+          "lowest": 1716.18,
+          "highest": 2146.73
         },
         "seconds_to_first_token": {
-          "median": 0.39,
-          "lowest": 0.39,
-          "highest": 0.51
+          "median": 4.98,
+          "lowest": 4.96,
+          "highest": 6.2
         },
         "reply_tokens_per_second": {
-          "median": 51.69,
-          "lowest": 48.09,
-          "highest": 51.82
+          "median": 46.48,
+          "lowest": 46.2,
+          "highest": 47.29
         }
       }
     },
@@ -356,6 +232,37 @@
       "weights_placement": "streamed",
       "drafter": "none",
       "multi_token_prediction_draft_tokens": null,
+      "task": "essay_short_prompt",
+      "temperature": 1.0,
+      "reply_tokens_requested": 500,
+      "figures": {
+        "round_count": 3,
+        "prompt_tokens": 28,
+        "prefill_tokens_per_second": {
+          "median": 71.45,
+          "lowest": 52.82,
+          "highest": 72.51
+        },
+        "seconds_to_first_token": {
+          "median": 0.39,
+          "lowest": 0.39,
+          "highest": 0.51
+        },
+        "reply_tokens_per_second": {
+          "median": 51.69,
+          "lowest": 48.09,
+          "highest": 51.82
+        }
+      }
+    },
+    {
+      "model_id": "Ornith-1.5-9B-MLX-4bit-vision",
+      "model_revision": "10450ee1a54d25d682f9589d6e428d480d913f03",
+      "maximum_mlx_memory_gb": null,
+      "mlx_memory_limit_bytes": 39195874112,
+      "weights_placement": "in_memory",
+      "drafter": "none",
+      "multi_token_prediction_draft_tokens": null,
       "task": "code_long_prompt",
       "temperature": 0.7,
       "reply_tokens_requested": 500,
@@ -363,19 +270,236 @@
         "round_count": 3,
         "prompt_tokens": 10647,
         "prefill_tokens_per_second": {
-          "median": 2135.56,
-          "lowest": 1716.18,
-          "highest": 2146.73
+          "median": 1324.15,
+          "lowest": 1050.35,
+          "highest": 1350.43
         },
         "seconds_to_first_token": {
-          "median": 4.98,
-          "lowest": 4.96,
-          "highest": 6.2
+          "median": 8.04,
+          "lowest": 7.88,
+          "highest": 10.13
         },
         "reply_tokens_per_second": {
-          "median": 46.48,
-          "lowest": 46.2,
-          "highest": 47.29
+          "median": 49.54,
+          "lowest": 47.38,
+          "highest": 51.35
+        }
+      }
+    },
+    {
+      "model_id": "Ornith-1.5-9B-MLX-4bit-vision",
+      "model_revision": "10450ee1a54d25d682f9589d6e428d480d913f03",
+      "maximum_mlx_memory_gb": null,
+      "mlx_memory_limit_bytes": 39195874112,
+      "weights_placement": "in_memory",
+      "drafter": "none",
+      "multi_token_prediction_draft_tokens": null,
+      "task": "code_short_prompt",
+      "temperature": 0.7,
+      "reply_tokens_requested": 500,
+      "figures": {
+        "round_count": 3,
+        "prompt_tokens": 27,
+        "prefill_tokens_per_second": {
+          "median": 248.71,
+          "lowest": 200.49,
+          "highest": 290.64
+        },
+        "seconds_to_first_token": {
+          "median": 0.11,
+          "lowest": 0.1,
+          "highest": 0.13
+        },
+        "reply_tokens_per_second": {
+          "median": 49.12,
+          "lowest": 46.15,
+          "highest": 55.11
+        }
+      }
+    },
+    {
+      "model_id": "Ornith-1.5-9B-MLX-4bit-vision",
+      "model_revision": "10450ee1a54d25d682f9589d6e428d480d913f03",
+      "maximum_mlx_memory_gb": null,
+      "mlx_memory_limit_bytes": 39195874112,
+      "weights_placement": "in_memory",
+      "drafter": "none",
+      "multi_token_prediction_draft_tokens": null,
+      "task": "essay_long_prompt",
+      "temperature": 1.0,
+      "reply_tokens_requested": 500,
+      "figures": {
+        "round_count": 3,
+        "prompt_tokens": 10126,
+        "prefill_tokens_per_second": {
+          "median": 1346.48,
+          "lowest": 1017.33,
+          "highest": 1367.16
+        },
+        "seconds_to_first_token": {
+          "median": 7.52,
+          "lowest": 7.41,
+          "highest": 9.95
+        },
+        "reply_tokens_per_second": {
+          "median": 51.47,
+          "lowest": 42.85,
+          "highest": 51.56
+        }
+      }
+    },
+    {
+      "model_id": "Ornith-1.5-9B-MLX-4bit-vision",
+      "model_revision": "10450ee1a54d25d682f9589d6e428d480d913f03",
+      "maximum_mlx_memory_gb": null,
+      "mlx_memory_limit_bytes": 39195874112,
+      "weights_placement": "in_memory",
+      "drafter": "none",
+      "multi_token_prediction_draft_tokens": null,
+      "task": "essay_short_prompt",
+      "temperature": 1.0,
+      "reply_tokens_requested": 500,
+      "figures": {
+        "round_count": 3,
+        "prompt_tokens": 28,
+        "prefill_tokens_per_second": {
+          "median": 289.02,
+          "lowest": 250.17,
+          "highest": 305.7
+        },
+        "seconds_to_first_token": {
+          "median": 0.09,
+          "lowest": 0.09,
+          "highest": 0.11
+        },
+        "reply_tokens_per_second": {
+          "median": 48.29,
+          "lowest": 47.7,
+          "highest": 55.05
+        }
+      }
+    },
+    {
+      "model_id": "Qwen3.8-27B-MLX-4bit-vision-DFLASH2",
+      "model_revision": "3ea6c842336d4a78cdeea6ffaf6908efc906bee1",
+      "maximum_mlx_memory_gb": null,
+      "mlx_memory_limit_bytes": 39195874112,
+      "weights_placement": "in_memory",
+      "drafter": "dflash2",
+      "multi_token_prediction_draft_tokens": null,
+      "task": "code_long_prompt",
+      "temperature": 0.7,
+      "reply_tokens_requested": 200,
+      "figures": {
+        "round_count": 3,
+        "prompt_tokens": 2176,
+        "prefill_tokens_per_second": {
+          "median": 360.44,
+          "lowest": 354.76,
+          "highest": 365.11
+        },
+        "seconds_to_first_token": {
+          "median": 6.04,
+          "lowest": 5.96,
+          "highest": 6.13
+        },
+        "reply_tokens_per_second": {
+          "median": 53.87,
+          "lowest": 50.88,
+          "highest": 58.88
+        }
+      }
+    },
+    {
+      "model_id": "Qwen3.8-27B-MLX-4bit-vision-DFLASH2",
+      "model_revision": "3ea6c842336d4a78cdeea6ffaf6908efc906bee1",
+      "maximum_mlx_memory_gb": null,
+      "mlx_memory_limit_bytes": 39195874112,
+      "weights_placement": "in_memory",
+      "drafter": "dflash2",
+      "multi_token_prediction_draft_tokens": null,
+      "task": "code_short_prompt",
+      "temperature": 0.7,
+      "reply_tokens_requested": 200,
+      "figures": {
+        "round_count": 3,
+        "prompt_tokens": 27,
+        "prefill_tokens_per_second": {
+          "median": 134.74,
+          "lowest": 129.82,
+          "highest": 139.81
+        },
+        "seconds_to_first_token": {
+          "median": 0.2,
+          "lowest": 0.19,
+          "highest": 0.21
+        },
+        "reply_tokens_per_second": {
+          "median": 59.96,
+          "lowest": 47.63,
+          "highest": 63.36
+        }
+      }
+    },
+    {
+      "model_id": "Qwen3.8-27B-MLX-4bit-vision-DFLASH2",
+      "model_revision": "3ea6c842336d4a78cdeea6ffaf6908efc906bee1",
+      "maximum_mlx_memory_gb": null,
+      "mlx_memory_limit_bytes": 39195874112,
+      "weights_placement": "in_memory",
+      "drafter": "dflash2",
+      "multi_token_prediction_draft_tokens": null,
+      "task": "essay_long_prompt",
+      "temperature": 1.0,
+      "reply_tokens_requested": 200,
+      "figures": {
+        "round_count": 3,
+        "prompt_tokens": 2115,
+        "prefill_tokens_per_second": {
+          "median": 351.33,
+          "lowest": 350.31,
+          "highest": 358.41
+        },
+        "seconds_to_first_token": {
+          "median": 6.02,
+          "lowest": 5.91,
+          "highest": 6.03
+        },
+        "reply_tokens_per_second": {
+          "median": 56.05,
+          "lowest": 47.76,
+          "highest": 57.86
+        }
+      }
+    },
+    {
+      "model_id": "Qwen3.8-27B-MLX-4bit-vision-DFLASH2",
+      "model_revision": "3ea6c842336d4a78cdeea6ffaf6908efc906bee1",
+      "maximum_mlx_memory_gb": null,
+      "mlx_memory_limit_bytes": 39195874112,
+      "weights_placement": "in_memory",
+      "drafter": "dflash2",
+      "multi_token_prediction_draft_tokens": null,
+      "task": "essay_short_prompt",
+      "temperature": 1.0,
+      "reply_tokens_requested": 200,
+      "figures": {
+        "round_count": 3,
+        "prompt_tokens": 28,
+        "prefill_tokens_per_second": {
+          "median": 144.53,
+          "lowest": 136.45,
+          "highest": 145.18
+        },
+        "seconds_to_first_token": {
+          "median": 0.19,
+          "lowest": 0.19,
+          "highest": 0.2
+        },
+        "reply_tokens_per_second": {
+          "median": 45.88,
+          "lowest": 39.98,
+          "highest": 49.56
         }
       }
     },
@@ -387,26 +511,26 @@
       "weights_placement": "in_memory",
       "drafter": "none",
       "multi_token_prediction_draft_tokens": null,
-      "task": "essay_short_prompt",
-      "temperature": 1.0,
-      "reply_tokens_requested": 500,
+      "task": "code_long_prompt",
+      "temperature": 0.7,
+      "reply_tokens_requested": 200,
       "figures": {
-        "round_count": 3,
-        "prompt_tokens": 28,
+        "round_count": 1,
+        "prompt_tokens": 2176,
         "prefill_tokens_per_second": {
-          "median": 89.88,
-          "lowest": 84.62,
-          "highest": 93.01
+          "median": 334.57,
+          "lowest": 334.57,
+          "highest": 334.57
         },
         "seconds_to_first_token": {
-          "median": 0.31,
-          "lowest": 0.29,
-          "highest": 0.33
+          "median": 6.5,
+          "lowest": 6.5,
+          "highest": 6.5
         },
         "reply_tokens_per_second": {
-          "median": 16.41,
-          "lowest": 16.11,
-          "highest": 16.88
+          "median": 16.6,
+          "lowest": 16.6,
+          "highest": 16.6
         }
       }
     },
@@ -420,24 +544,24 @@
       "multi_token_prediction_draft_tokens": null,
       "task": "code_short_prompt",
       "temperature": 0.7,
-      "reply_tokens_requested": 500,
+      "reply_tokens_requested": 200,
       "figures": {
-        "round_count": 3,
+        "round_count": 1,
         "prompt_tokens": 27,
         "prefill_tokens_per_second": {
-          "median": 81.57,
-          "lowest": 80.16,
-          "highest": 92.04
+          "median": 93.09,
+          "lowest": 93.09,
+          "highest": 93.09
         },
         "seconds_to_first_token": {
-          "median": 0.32,
-          "lowest": 0.3,
-          "highest": 0.33
+          "median": 0.29,
+          "lowest": 0.29,
+          "highest": 0.29
         },
         "reply_tokens_per_second": {
-          "median": 16.19,
-          "lowest": 15.8,
-          "highest": 16.89
+          "median": 15.98,
+          "lowest": 15.98,
+          "highest": 15.98
         }
       }
     },
@@ -451,24 +575,24 @@
       "multi_token_prediction_draft_tokens": null,
       "task": "essay_long_prompt",
       "temperature": 1.0,
-      "reply_tokens_requested": 500,
+      "reply_tokens_requested": 200,
       "figures": {
-        "round_count": 3,
-        "prompt_tokens": 10126,
+        "round_count": 1,
+        "prompt_tokens": 2114,
         "prefill_tokens_per_second": {
-          "median": 327.53,
-          "lowest": 320.18,
-          "highest": 344.37
+          "median": 369.48,
+          "lowest": 369.48,
+          "highest": 369.48
         },
         "seconds_to_first_token": {
-          "median": 30.92,
-          "lowest": 29.41,
-          "highest": 31.62
+          "median": 5.72,
+          "lowest": 5.72,
+          "highest": 5.72
         },
         "reply_tokens_per_second": {
-          "median": 16.02,
-          "lowest": 15.6,
-          "highest": 16.09
+          "median": 16.73,
+          "lowest": 16.73,
+          "highest": 16.73
         }
       }
     },
@@ -480,26 +604,26 @@
       "weights_placement": "in_memory",
       "drafter": "none",
       "multi_token_prediction_draft_tokens": null,
-      "task": "code_long_prompt",
-      "temperature": 0.7,
-      "reply_tokens_requested": 500,
+      "task": "essay_short_prompt",
+      "temperature": 1.0,
+      "reply_tokens_requested": 200,
       "figures": {
-        "round_count": 3,
-        "prompt_tokens": 10647,
+        "round_count": 1,
+        "prompt_tokens": 27,
         "prefill_tokens_per_second": {
-          "median": 341.56,
-          "lowest": 329.76,
-          "highest": 345.21
+          "median": 95.51,
+          "lowest": 95.51,
+          "highest": 95.51
         },
         "seconds_to_first_token": {
-          "median": 31.17,
-          "lowest": 30.84,
-          "highest": 32.28
+          "median": 0.28,
+          "lowest": 0.28,
+          "highest": 0.28
         },
         "reply_tokens_per_second": {
-          "median": 15.81,
-          "lowest": 15.79,
-          "highest": 15.98
+          "median": 15.87,
+          "lowest": 15.87,
+          "highest": 15.87
         }
       }
     }

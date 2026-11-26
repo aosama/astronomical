@@ -10,8 +10,9 @@ use super::speed_prompts::SpeedTask;
 use super::stream_timing::ReplyMeasurement;
 use crate::release_speed::speed_ledger::{FigureSpread, TaskFigures};
 
-/// Rounds a task needs before its figures are kept anywhere.
-pub const REQUIRED_ROUND_COUNT: usize = 3;
+/// Rounds a task needs before its figures are kept anywhere: one, since a
+/// case's time budget may allow no more.
+pub const REQUIRED_ROUND_COUNT: usize = 1;
 
 #[derive(Debug, Default)]
 pub struct ModelSpeedRounds {
