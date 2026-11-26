@@ -22,12 +22,12 @@
 use std::path::Path;
 
 use mlx_bridge::MlxArray;
-use mlx_performance_profiler::{
-    JobComparison, MeasuredJob, MetricComparison, ReportLocation, Verdict, compare_jobs,
-};
+use mlx_performance_profiler::{JobComparison, MeasuredJob, ReportLocation, compare_jobs};
 use model_serving::row_batched_matmul::RowBatchedMatmulKernels;
 use runtime_integration::MlxRuntime;
 use serial_test::serial;
+
+use super::verdict_text::metric_text;
 
 use super::k_row_verify_cost::{
     MatmulPath, PROJECTION_SHAPES, PackedProjection, distinct_shape_copies, initialize_runtime,
@@ -98,9 +98,9 @@ fn should_give_a_verdict_on_register_order_against_mlx_layout_at_served_row_coun
             finished_cell_count += 1;
             eprintln!(
                 "[register-order-verdict] {file_base}: job {} | GPU {} | host submission {} | cells {finished_cell_count}/{cell_count}",
-                metric_text(&comparison.job_wall),
-                metric_text(&comparison.gpu_span),
-                metric_text(&comparison.host_submission)
+                metric_text(&comparison.job_wall, "register order"),
+                metric_text(&comparison.gpu_span, "register order"),
+                metric_text(&comparison.host_submission, "register order")
             );
         }
     }
@@ -148,21 +148,4 @@ fn compare_layouts(
         },
     )
     .expect("the two layouts are compared")
-}
-
-/// `register order +3.1% (12.40 against 12.03 ms, slower in 11 of 12 rounds)`.
-fn metric_text(metric: &MetricComparison) -> String {
-    let verdict_text = match metric.verdict {
-        Verdict::CandidateFaster => "register order faster",
-        Verdict::WithinSpread => "within spread",
-        Verdict::CandidateSlower => "register order slower",
-    };
-    format!(
-        "{verdict_text} {:+.1}% ({:.2} against {:.2} ms, faster in {} of {} rounds)",
-        metric.relative_difference * 100.0,
-        metric.candidate_median_microseconds / 1_000.0,
-        metric.baseline_median_microseconds / 1_000.0,
-        metric.rounds_candidate_faster,
-        metric.round_count
-    )
 }

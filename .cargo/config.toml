@@ -898,6 +898,13 @@ measure-register-order-served-rows = "run -p xtask -- test-run --package astrono
 # jobs' execution graphs, and its JSON for every cell under the test's target
 # directory and prints where. No model; about two minutes.
 measure-register-order-verdict = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx,performance-measurement --test performance_measurement --release --ignored --case-budget-seconds 300 --filter register_order_layout_verdict"
+# What fusing a routed expert's gate and up projections buys at the kernel
+# (#2585): one gathered multiply of the joined weights against two, as two
+# jobs of the MLX performance profiler, at a 35B-A3B layer's shapes, for a
+# reply token's 8 assignments, a draft round's 32 and a prompt chunk's
+# 16,384. Prints a verdict a cell and writes its comparison page. No model;
+# about a minute.
+measure-expert-gate-up-fusion-verdict = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx,performance-measurement --test performance_measurement --release --ignored --case-budget-seconds 300 --filter fused_gate_and_up_projection_against_two"
 # What a reply token saves when register-ordered projections that read the
 # same row share one preparation of it (#2568): stock, each copy preparing
 # its own input, and one preparation for all sixteen copies, alternated for
