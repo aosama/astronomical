@@ -6,7 +6,7 @@
 //! `Qwen3_5AffineWeights`, which expert stacks share: code that only ever
 //! sees expert stacks never has to know a converted weight exists.
 
-use std::sync::Arc;
+use std::rc::Rc;
 
 use mlx_bridge::MlxArray;
 use runtime_integration::{MlxRuntime, MlxRuntimeError};
@@ -51,7 +51,7 @@ pub struct HadamardRotatedWeights {
     pub weights: Qwen3_5AffineWeights,
     /// The rotation at this module's input width, shared by every module
     /// of that width.
-    pub rotation: Arc<HadamardRotation>,
+    pub rotation: Rc<HadamardRotation>,
 }
 
 impl Qwen3_5DenseProjection {

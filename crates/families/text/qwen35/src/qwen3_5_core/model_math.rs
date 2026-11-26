@@ -19,6 +19,8 @@ pub mod expert_gate_up_fusion;
 #[cfg(feature = "direct-mlx")]
 pub mod feed_forward_weights;
 #[cfg(feature = "direct-mlx")]
+pub mod folded_ternary_weights;
+#[cfg(feature = "direct-mlx")]
 pub mod forward_contract;
 #[cfg(feature = "direct-mlx")]
 pub mod gated_delta_boundary_checkpoints;

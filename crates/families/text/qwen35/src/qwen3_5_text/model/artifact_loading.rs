@@ -13,8 +13,8 @@ use crate::qwen3_5_core::model::loading_geometry::{
     measured_astro_decoder_state_cache_layout, model_memory_facts,
 };
 use crate::qwen3_5_core::model::loading_pipeline::{
-    BoundLanguageArtifact, InvariantLinearScales, bind_language_artifact,
-    load_invariant_linear_scales, load_model_kernel_verdicts,
+    BoundLanguageArtifact, InvariantLinearScales, bind_language_artifact, invariant_linear_scales,
+    load_model_kernel_verdicts,
 };
 use crate::qwen3_5_text;
 use crate::qwen3_5_text::Qwen3_5ExpertPager;
@@ -109,6 +109,7 @@ impl Qwen3_5Model {
             tensor_inventory,
             weights,
             vision_model,
+            folded_ternary_rotations: folded_rotations,
             ..
         } = bind_language_artifact(
             &runtime,
@@ -142,7 +143,7 @@ impl Qwen3_5Model {
             inverse_square_root_linear_head_dimension_scale,
             query_normalization_scale_weight,
             key_normalization_scale_weight,
-        } = load_invariant_linear_scales(&runtime, &config, LANGUAGE_WEIGHT_BINDING_DTYPE)?;
+        } = invariant_linear_scales(&runtime, (&config, &weights), LANGUAGE_WEIGHT_BINDING_DTYPE)?;
         let streaming_expert_budget = build_streaming_expert_budget(
             &runtime,
             &config,
@@ -180,7 +181,7 @@ impl Qwen3_5Model {
             },
             direct_expert_fetching: DirectExpertFetching::open(expert_pager.as_ref()),
             expert_pager,
-            dense_layer_streamer,
+            dense_layer_streamer: with_folded_rotations(dense_layer_streamer, folded_rotations),
             astro_expert_cache,
             reply_measurement: Default::default(),
             route_observation: RefCell::new(RouteObservationCollector::new()),
@@ -268,6 +269,25 @@ fn dense_streaming_sources(
         dense_disk_embedding_rows(validated_artifact)?,
         dense_layer_streamer(validated_artifact)?,
     ))
+}
+
+/// The streamer with a folded ternary pack's rotations attached, so the
+/// layers it reads from the SSD take them as the bound layers did.
+fn with_folded_rotations(
+    dense_layer_streamer: Option<Qwen3_5DenseLayerStreamer>,
+    folded_ternary_rotations: Option<
+        std::rc::Rc<
+            crate::qwen3_5_core::model_math::folded_ternary_weights::FoldedTernaryRotations,
+        >,
+    >,
+) -> Option<Qwen3_5DenseLayerStreamer> {
+    match (dense_layer_streamer, folded_ternary_rotations) {
+        (Some(mut dense_layer_streamer), Some(folded_ternary_rotations)) => {
+            dense_layer_streamer.attach_folded_ternary_rotations(folded_ternary_rotations);
+            Some(dense_layer_streamer)
+        }
+        (dense_layer_streamer, _) => dense_layer_streamer,
+    }
 }
 
 /// The decoder layer streamer of every dense model. It keeps the layers the

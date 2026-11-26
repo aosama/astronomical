@@ -61,7 +61,7 @@ pub struct Qwen3_5Weights {
     pub embedding_weights: Qwen3_5AffineWeights,
     /// A folded pack's embedding table is stored in the rotated basis; its
     /// rows take this rotation's inverse after the lookup.
-    pub embedding_rotation: Option<std::sync::Arc<super::hadamard_rotation::HadamardRotation>>,
+    pub embedding_rotation: Option<std::rc::Rc<super::hadamard_rotation::HadamardRotation>>,
     pub decoder_layer_weights: Vec<Qwen3_5DecoderLayerWeights>,
     pub final_normalization_weight: MlxArray,
     pub language_model_head_weights: Qwen3_5DenseProjection,

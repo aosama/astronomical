@@ -28,6 +28,10 @@ pub struct ValidatedQwen3_5Artifact {
     /// Where an Expert Atlas model keeps its routed experts; `None` for a
     /// stock safetensors checkpoint.
     pub(super) expert_atlas: Option<expert_atlas::AtlasManifest>,
+    /// A folded ternary pack's rotation contract: which modules are stored
+    /// in the rotated basis and the sign table of each input width. `None`
+    /// for every other checkpoint.
+    pub(super) hadamard_contract: Option<crate::prism_hadamard_qwen35::hadamard::HadamardContract>,
 }
 
 impl ValidatedQwen3_5Artifact {
@@ -48,6 +52,13 @@ impl ValidatedQwen3_5Artifact {
     #[must_use]
     pub const fn expert_atlas(&self) -> Option<&expert_atlas::AtlasManifest> {
         self.expert_atlas.as_ref()
+    }
+    /// A folded ternary pack's rotation contract, when this is one.
+    #[must_use]
+    pub const fn hadamard_contract(
+        &self,
+    ) -> Option<&crate::prism_hadamard_qwen35::hadamard::HadamardContract> {
+        self.hadamard_contract.as_ref()
     }
     #[must_use]
     pub const fn shard_index(&self) -> &Qwen3_5ShardIndex {

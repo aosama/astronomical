@@ -116,7 +116,7 @@ pub fn convert_layer_projections_to_register_order(
 /// Every dense projection of one decoder layer; a mixture-of-experts layer
 /// gives only its attention projections, since expert stacks stay in MLX's
 /// layout for the gathered expert kernels.
-fn layer_projections<'layer>(
+pub(crate) fn layer_projections<'layer>(
     attention_weights: &'layer mut Qwen3_5AttentionWeights,
     feed_forward_weights: &'layer mut Qwen3_5DecoderFeedForwardWeights,
 ) -> Vec<&'layer mut Qwen3_5DenseProjection> {

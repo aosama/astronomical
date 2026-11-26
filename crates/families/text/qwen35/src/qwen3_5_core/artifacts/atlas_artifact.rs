@@ -13,7 +13,10 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::Path;
 
 use super::artifact::derive_revision_from_config_bytes;
-use super::artifact_helpers::{captured_required_file_bytes, required_file};
+use super::artifact_helpers::{
+    artifact_model_id, captured_required_file_bytes, parsed_index_source,
+    push_optional_generation_config, required_file, shard_index_from_synthesized_document,
+};
 use super::artifact_inventory::{build_index_tensor_inventory, source_id_by_file_name};
 use super::optiq_metadata_validation::{
     register_optional_optiq_metadata, validate_optional_optiq_metadata,
@@ -26,9 +29,8 @@ use super::{
     Qwen3_5VisionConfig,
 };
 use crate::artifact_validation::{
-    ArtifactValidationError, RequiredFileProfile, TensorInventory, TensorSourceId,
-    ValidatedRequiredFile, ValidatedSafetensorsSource, hugging_face_snapshot_model_id,
-    validate_required_file, validate_required_files,
+    ArtifactValidationError, TensorInventory, TensorSourceId, ValidatedRequiredFile,
+    ValidatedSafetensorsSource, validate_required_files,
 };
 use crate::qwen3_5_core::vision::vision_tensor_spec;
 use engine_core::expert_paging::SafetensorsHeader;
@@ -82,6 +84,7 @@ impl Qwen3_5ArtifactValidator {
             revision,
             max_output_tokens,
             expert_atlas: Some(expert_atlas),
+            hadamard_contract: None,
         })
     }
 }
@@ -97,9 +100,7 @@ fn collect_atlas_required_files(
         required_file("tokenizer.json"),
         required_file(RESIDENT_BUNDLE_FILE_NAME),
     ];
-    if model_directory.join("generation_config.json").is_file() {
-        required_file_profiles.push(required_file("generation_config.json"));
-    }
+    push_optional_generation_config(&mut required_file_profiles, model_directory);
     register_optional_optiq_metadata(&mut required_file_profiles, model_directory);
     Ok(validate_required_files(
         model_directory,
@@ -254,12 +255,7 @@ fn synthesize_atlas_shard_index(
             description: source.to_string(),
         })
         .map_err(Qwen3_5ArtifactValidationError::from)?;
-    let canonical_model_tensor_names =
-        Qwen3_5ShardIndex::extract_language_and_vision_tensor_names_from_json(&index_bytes)?;
-    config.resolve_unquantized_modules_from_shard_index(&canonical_model_tensor_names);
-    let language_tensor_profiles = tensor_spec::qwen3_5_language_tensor_profiles(config)?;
-    Qwen3_5ShardIndex::from_json_bytes(&index_bytes, &language_tensor_profiles)
-        .map_err(Qwen3_5ArtifactValidationError::from)
+    shard_index_from_synthesized_document(&index_bytes, config)
 }
 
 /// The inventory-and-sources outcome one Atlas model carries into its
@@ -307,14 +303,7 @@ fn validate_atlas_sources(
     let mut safetensors_sources = HashMap::new();
     let mut validated_total_payload_bytes = 0_u64;
     for (file_name, source_id) in &source_id_by_file_name_map {
-        let required_file_entry = validate_required_file(
-            model_directory,
-            &RequiredFileProfile {
-                file_name: file_name.clone(),
-                size_bytes: 0,
-            },
-        )?;
-        let source = ValidatedSafetensorsSource::parse(*source_id, required_file_entry)?;
+        let source = parsed_index_source(model_directory, file_name, *source_id)?;
         source
             .validate_required_inventory_profiles(&tensor_inventory, &recognized_tensor_profiles)?;
         validated_total_payload_bytes = validated_total_payload_bytes
@@ -322,12 +311,7 @@ fn validate_atlas_sources(
             .ok_or(ArtifactValidationError::TensorPayloadSizeOverflow)?;
         safetensors_sources.insert(*source_id, source);
     }
-    let model_id = hugging_face_snapshot_model_id(model_directory).unwrap_or_else(|| {
-        model_directory
-            .file_name()
-            .map(|name| name.to_string_lossy().into_owned())
-            .unwrap_or_else(|| "unknown".to_owned())
-    });
+    let model_id = artifact_model_id(model_directory);
     Ok(AtlasSourceValidation {
         tensor_inventory,
         safetensors_sources,

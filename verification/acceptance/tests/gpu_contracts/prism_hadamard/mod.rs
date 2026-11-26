@@ -21,3 +21,6 @@ mod forward_throughput;
 mod generation_throughput;
 mod layer_throughput;
 mod operation_throughput;
+mod shared_core_by_layer;
+mod shared_core_parity;
+mod shared_core_validation;
