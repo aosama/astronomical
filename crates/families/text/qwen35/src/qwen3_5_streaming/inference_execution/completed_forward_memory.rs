@@ -84,8 +84,9 @@ pub(in crate::qwen3_5_streaming) fn measure_completed_reply_forward(
 
 /// Bytes the request keeps from one forward to the next: the target's
 /// stored state and, while a hosted drafter drafts, the rows kept for it.
-/// Leaving the drafter's rows out left about 0.28 GB in none of the memory
-/// ledger's accounts on a dense 27B at an 18 GB limit (issue #2572).
+/// The drafter's rows are about 47 MB on a dense 27B after a 2,600-token
+/// prompt and grow with the context up to the drafter's row limit, so they
+/// are counted, not left to the ledger's margin (issue #2572).
 pub(in crate::qwen3_5_streaming) fn request_stored_state_bytes(
     active_request: &super::engine_request::StreamingEngineRequest,
 ) -> u64 {
