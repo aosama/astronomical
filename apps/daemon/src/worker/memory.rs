@@ -1,5 +1,4 @@
-//! Worker memory: MLX ceiling updates and stop-first demotion.
+//! Worker memory: MLX ceiling updates.
 
-pub(crate) mod demotion;
 pub(crate) mod limit;
 pub(crate) mod limit_update_command;

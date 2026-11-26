@@ -3,14 +3,13 @@
 //! A dense model has no experts to page, so the startup question is whether
 //! the text weights it binds fit under the effective MLX limit. That limit is
 //! what macOS granted through Metal, or what the user set, and the decision
-//! adds no headroom of its own. A model whose weights may fit keeps the fully
-//! resident engine it always ran on; one that cannot fit goes to the
-//! streaming engine, which reads weights from the SSD once dense layer
-//! streaming lands there (issue #1985).
+//! adds no headroom of its own. Either way the one streaming engine serves
+//! the model: it keeps the weights in memory when they fit and reads decoder
+//! layers from the SSD when they do not (issue #1985). The placement decides
+//! the prompt chunk size and what the worker reports.
 //!
-//! The arithmetic lives with the streaming engine's raise check in
-//! `StreamingStartupResidencyFacts`, so a live raise demands the resident
-//! engine exactly when a restart would choose it.
+//! The arithmetic is `StreamingStartupResidencyFacts`, the same
+//! complete-residency decision a sparse model's geometry goes through.
 
 use crate::{
     EnginePlacement, ExpertMemoryAdmissionError, StreamingStartupResidencyFacts,
@@ -71,9 +70,8 @@ pub(super) fn place_dense_weights_under_ceiling(
     dense_text_weight_payload_bytes: u64,
     active_memory_ceiling_bytes: u64,
 ) -> Result<EnginePlacement, ExpertMemoryAdmissionError> {
-    // The sequence-state rate does not enter the startup decision.
     let dense_startup_facts =
-        StreamingStartupResidencyFacts::for_dense_text_weights(dense_text_weight_payload_bytes, 0);
+        StreamingStartupResidencyFacts::for_dense_text_weights(dense_text_weight_payload_bytes);
     EnginePlacement::from_startup_complete_residency_decision(
         dense_startup_facts.startup_complete_residency_decision(active_memory_ceiling_bytes),
     )

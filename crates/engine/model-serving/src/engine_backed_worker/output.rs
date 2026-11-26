@@ -35,10 +35,7 @@ where
 {
     pub(crate) async fn emit_model_outputs<WriteTransport>(
         &self,
-        active_generation: &mut ActiveEngineGeneration<
-            Processor::RequestOutput,
-            Processor::InferenceRequest,
-        >,
+        active_generation: &mut ActiveEngineGeneration<Processor::RequestOutput>,
         model_outputs: Vec<ChatGenerationOutput>,
         mlx_memory_telemetry: Option<MlxMemoryTelemetry>,
         event_writer: &mut ProtocolWriter<WriteTransport>,
@@ -121,10 +118,7 @@ where
 
     pub(crate) async fn emit_generation_finalization<WriteTransport>(
         &self,
-        active_generation: &mut ActiveEngineGeneration<
-            Processor::RequestOutput,
-            Processor::InferenceRequest,
-        >,
+        active_generation: &mut ActiveEngineGeneration<Processor::RequestOutput>,
         generation_finalization: GenerationFinalization,
         event_writer: &mut ProtocolWriter<WriteTransport>,
     ) -> Result<(), WorkerRuntimeError>
@@ -152,10 +146,7 @@ where
     /// facts.
     async fn write_generation_finalization_events<WriteTransport>(
         &self,
-        active_generation: &mut ActiveEngineGeneration<
-            Processor::RequestOutput,
-            Processor::InferenceRequest,
-        >,
+        active_generation: &mut ActiveEngineGeneration<Processor::RequestOutput>,
         generation_finalization: GenerationFinalization,
         event_writer: &mut ProtocolWriter<WriteTransport>,
     ) -> Result<(), WorkerRuntimeError>
@@ -205,10 +196,7 @@ where
 
     pub(crate) async fn send_generation_progress<WriteTransport>(
         &self,
-        active_generation: &ActiveEngineGeneration<
-            Processor::RequestOutput,
-            Processor::InferenceRequest,
-        >,
+        active_generation: &ActiveEngineGeneration<Processor::RequestOutput>,
         mlx_memory_telemetry: Option<MlxMemoryTelemetry>,
         event_writer: &mut ProtocolWriter<WriteTransport>,
     ) -> Result<(), WorkerRuntimeError>
@@ -244,16 +232,10 @@ where
 
     pub(crate) async fn finish_generation<WriteTransport>(
         &mut self,
-        mut active_generation: ActiveEngineGeneration<
-            Processor::RequestOutput,
-            Processor::InferenceRequest,
-        >,
+        mut active_generation: ActiveEngineGeneration<Processor::RequestOutput>,
         completion_reason: ChatGenerationCompletionReason,
         event_writer: &mut ProtocolWriter<WriteTransport>,
-    ) -> Result<
-        Option<ActiveEngineGeneration<Processor::RequestOutput, Processor::InferenceRequest>>,
-        WorkerRuntimeError,
-    >
+    ) -> Result<Option<ActiveEngineGeneration<Processor::RequestOutput>>, WorkerRuntimeError>
     where
         WriteTransport: AsyncWrite + Unpin,
     {
@@ -310,10 +292,7 @@ where
 
     pub(crate) async fn fail_malformed_generation<WriteTransport>(
         &mut self,
-        active_generation: &mut ActiveEngineGeneration<
-            Processor::RequestOutput,
-            Processor::InferenceRequest,
-        >,
+        active_generation: &mut ActiveEngineGeneration<Processor::RequestOutput>,
         event_writer: &mut ProtocolWriter<WriteTransport>,
     ) -> Result<(), WorkerRuntimeError>
     where
@@ -358,10 +337,7 @@ where
 
     pub(crate) async fn send_completion<WriteTransport>(
         &self,
-        active_generation: &ActiveEngineGeneration<
-            Processor::RequestOutput,
-            Processor::InferenceRequest,
-        >,
+        active_generation: &ActiveEngineGeneration<Processor::RequestOutput>,
         completion_reason: ChatGenerationCompletionReason,
         event_writer: &mut ProtocolWriter<WriteTransport>,
     ) -> Result<(), WorkerRuntimeError>
@@ -656,8 +632,8 @@ mod tests;
 
 /// The reports a reply sends just before its completion, each only when it
 /// has something to say: the prompt work it reused and what drafting did.
-fn reply_reports<RequestOutput, RetryRequest>(
-    active_generation: &ActiveEngineGeneration<RequestOutput, RetryRequest>,
+fn reply_reports<RequestOutput>(
+    active_generation: &ActiveEngineGeneration<RequestOutput>,
 ) -> [Option<WorkerEvent>; 2] {
     let prompt_work_reuse_report = (active_generation
         .prompt_work_reuse

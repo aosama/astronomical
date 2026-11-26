@@ -13,7 +13,7 @@ use tokio::time::timeout;
 
 use crate::support::openai_client::LocalOpenAiClient;
 use crate::support::serving_rest::{
-    SSD_JOURNEY_TIMEOUT, get_json_endpoint, launch_real_model_rest_server, put_json_endpoint,
+    SSD_JOURNEY_TIMEOUT, get_json_endpoint, launch_real_model_rest_server,
     stop_real_model_rest_server,
 };
 use crate::support::{
@@ -27,16 +27,13 @@ const MAXIMUM_OUTPUT_TOKEN_COUNT: u32 = 8;
 const SMALL_PROMPT_TOKEN_COUNT: usize = 256;
 const SHORT_PROMPT_TOKEN_COUNT: usize = 40;
 const MULTI_CHUNK_PROMPT_TOKEN_COUNT: usize = 5_000;
-const ASTRO_SSD_PROMPT_CACHE_SEED_PROMPT_TOKEN_COUNT: usize =
-    FIXED_PREFILL_CHUNK_SIZE_TOKENS as usize;
-const ASTRO_SSD_PROMPT_CACHE_APPEND_PROMPT_TOKEN_COUNT: usize = 512;
 /// Shared with the speculative-decoding sibling journey in this module.
 pub(super) const ROMEO_AND_JULIET_SOURCE: &str =
     include_str!("../../fixtures/model_metrics_5000_romeo_and_juliet_words.txt");
 const RESIDENT_SELECTION_TIMEOUT: Duration = Duration::from_secs(115);
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "starts the production worker and loads the configured sparse artifact as resident"]
+#[ignore = "starts the production worker and loads the configured sparse artifact whole"]
 #[serial]
 async fn should_select_resident_engine_when_artifact_geometry_and_prompt_fit() {
     timeout(RESIDENT_SELECTION_TIMEOUT, async {
@@ -53,9 +50,8 @@ async fn should_select_resident_engine_when_artifact_geometry_and_prompt_fit() {
         let prompt_context_bytes =
             context_memory_reservation_bytes(&model_directory, SMALL_PROMPT_TOKEN_COUNT + 2);
         // The ceiling has to hold one prompt chunk's MLX working buffers on top
-        // of the startup residency terms, or the in-memory engine is chosen
-        // at startup and then moves the first request to the streaming
-        // engine (issue #1508).
+        // of the startup residency terms, or the first request sheds experts
+        // to make room for them (issue #1508).
         let prefill_activation_workspace_bytes =
             prompt_chunk_mlx_working_buffer_allowance_bytes(&residency_geometry.model_geometry);
         let resident_memory_ceiling_bytes = residency_geometry
@@ -106,7 +102,7 @@ async fn should_select_resident_engine_when_artifact_geometry_and_prompt_fit() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "loads the resident engine, then sends a short and a multi-chunk prompt that both fit"]
+#[ignore = "loads the whole model, then sends a short and a multi-chunk prompt that both fit"]
 #[serial]
 async fn should_stay_resident_for_a_multi_chunk_prompt_after_a_short_prompt() {
     timeout(SSD_JOURNEY_TIMEOUT, async {
@@ -147,7 +143,7 @@ async fn should_stay_resident_for_a_multi_chunk_prompt_after_a_short_prompt() {
         // The `astro_ssd_prompt_cache` stops a terminal chunk one token short,
         // so the short request leaves a one-token prefill observation. That
         // observation once extrapolated to a 2,048-token chunk as a ~23 GB
-        // phantom transient and demoted a fitting request to SSD streaming.
+        // phantom transient and moved a fitting request to SSD streaming.
         write_acceptance_config(
             worker_home.path(),
             &model_directory,
@@ -180,29 +176,9 @@ async fn should_stay_resident_for_a_multi_chunk_prompt_after_a_short_prompt() {
         let status_document = get_json_endpoint(server_address, "/v1/status").await;
         assert_eq!(
             status_document["expert_memory_mode"], "resident",
-            "a fitting multi-chunk prompt must not demote the resident engine: {status_document}"
+            "a fitting multi-chunk prompt must leave every expert in memory: {status_document}"
         );
         stop_real_model_rest_server(real_model_rest_server).await;
-
-        let generation_reports = read_generation_attribution_reports(worker_home.path());
-        assert!(
-            generation_reports.len() >= 2,
-            "both user-visible requests should have generation attribution reports"
-        );
-        let streaming_retry_report_count = generation_reports
-            .iter()
-            .filter(|report| {
-                report["operations"].as_array().is_some_and(|operations| {
-                    operations
-                        .iter()
-                        .any(|operation| operation["operation"] == "resident_to_streaming_retry")
-                })
-            })
-            .count();
-        assert_eq!(
-            streaming_retry_report_count, 0,
-            "no request may retry on the streaming engine when the resident engine fits it"
-        );
     })
     .await
     .expect("the multi-chunk resident journey must finish within 120 seconds");
@@ -270,169 +246,6 @@ async fn should_select_streaming_engine_when_complete_residency_headroom_does_no
     })
     .await
     .expect("the streaming engine-selection SSD journey must finish within 120 seconds");
-}
-
-#[tokio::test(flavor = "multi_thread")]
-#[ignore = "loads the resident engine, forces one invisible streaming retry, and checks persisted-prefix reuse"]
-#[serial]
-async fn should_restore_astro_ssd_prompt_cache_prefix_after_an_invisible_resident_to_streaming_retry()
- {
-    timeout(SSD_JOURNEY_TIMEOUT, async {
-        let model_id = resident_sparse_moe_model_id();
-        let model_directory = configured_installed_model_directory_by_id(model_id);
-        let residency_geometry =
-            measure_sparse_artifact_residency_geometry(&model_directory);
-        let astro_ssd_prompt_cache_seed_context_bytes =
-            context_memory_reservation_bytes(&model_directory, ASTRO_SSD_PROMPT_CACHE_SEED_PROMPT_TOKEN_COUNT + 2);
-        // The seed request has to be served in memory, so the limit holds
-        // one prompt chunk's MLX working buffers too. Without it the seed request
-        // itself moves to the streaming engine and nothing is saved in the
-        // `astro_ssd_prompt_cache` for the retry to restore.
-        let resident_memory_ceiling_bytes = residency_geometry
-            .complete_residency_with_headroom_bytes
-            .saturating_add(astro_ssd_prompt_cache_seed_context_bytes)
-            .saturating_add(prompt_chunk_mlx_working_buffer_allowance_bytes(
-                &residency_geometry.model_geometry,
-            ));
-        assert!(
-            resident_memory_ceiling_bytes <= MAXIMUM_REAL_MODEL_MEMORY_BYTES,
-            "the retry and astro SSD prompt cache acceptance cell must remain within 36 GB: ceiling={resident_memory_ceiling_bytes}"
-        );
-        let initial_user_message = exact_model_prompt::build_exact_model_prompt_content(
-            &model_directory,
-            ROMEO_AND_JULIET_SOURCE,
-            "Read this Romeo and Juliet excerpt and answer with one concise sentence.",
-            ASTRO_SSD_PROMPT_CACHE_SEED_PROMPT_TOKEN_COUNT,
-        );
-        let appended_user_message = exact_model_prompt::build_exact_model_prompt_content(
-            &model_directory,
-            ROMEO_AND_JULIET_SOURCE,
-            "Use this additional Romeo and Juliet context without quoting it.",
-            ASTRO_SSD_PROMPT_CACHE_APPEND_PROMPT_TOKEN_COUNT,
-        );
-        let worker_home = tempfile::tempdir()
-            .expect("the retry and astro SSD prompt cache worker home should be created");
-        write_acceptance_config(
-            worker_home.path(),
-            &model_directory,
-            model_id,
-            resident_memory_ceiling_bytes,
-            true,
-        );
-        let real_model_rest_server = launch_real_model_rest_server(
-            model_id,
-            model_directory,
-            worker_home.path(),
-            resident_memory_ceiling_bytes,
-        )
-        .await;
-        let server_address = real_model_rest_server.server_address;
-        let first_assistant_response = complete_chat_request(
-            server_address,
-            model_id,
-            json!([{"role": "user", "content": initial_user_message}]),
-            "astro-ssd-prompt-cache-seed",
-        )
-        .await;
-        let streaming_retry_memory_ceiling_gb =
-            crate::support::marketed_gigabytes::marketed_gigabytes_at_most(
-                residency_geometry
-                    .complete_residency_with_headroom_bytes
-                    .saturating_sub(1),
-            );
-        let lowered_memory_ceiling_document = put_json_endpoint(
-            server_address,
-            "/v1/config/maximum-mlx-memory",
-            &json!({"maximum_mlx_memory_gb": streaming_retry_memory_ceiling_gb}),
-        )
-        .await;
-        assert_eq!(
-            lowered_memory_ceiling_document["configured_maximum_mlx_memory_gb"].as_u64(),
-            Some(streaming_retry_memory_ceiling_gb)
-        );
-        assert!(
-            lowered_memory_ceiling_document["pending_mlx_memory_ceiling_bytes"].is_null(),
-            "the retry should start after the lower memory ceiling is effective: {lowered_memory_ceiling_document}"
-        );
-        complete_chat_request(
-            server_address,
-            model_id,
-            json!([
-                {"role": "user", "content": initial_user_message},
-                {"role": "assistant", "content": first_assistant_response},
-                {"role": "user", "content": appended_user_message}
-            ]),
-            "resident-to-streaming-retry",
-        )
-        .await;
-        let status_document = get_json_endpoint(server_address, "/v1/status").await;
-        assert!(
-            matches!(
-                status_document["expert_memory_mode"].as_str(),
-                Some("paged" | "hybrid")
-            ),
-            "the pre-output resident failure must leave the worker on its streaming retry engine: {status_document}"
-        );
-        stop_real_model_rest_server(real_model_rest_server).await;
-
-        let generation_reports =
-            read_generation_attribution_reports(worker_home.path());
-        assert!(
-            generation_reports.len() >= 2,
-            "both user-visible requests should have generation attribution reports"
-        );
-        let report_outcomes_and_operation_names = generation_reports
-            .iter()
-            .map(|report| {
-                let operation_names = report["operations"]
-                    .as_array()
-                    .into_iter()
-                    .flatten()
-                    .filter_map(|operation| operation["operation"].as_str())
-                    .collect::<Vec<_>>();
-                (report["outcome"].as_str(), operation_names)
-            })
-            .collect::<Vec<_>>();
-        let retry_report = generation_reports
-            .iter()
-            .rev()
-            .find(|report| {
-                report["operations"].as_array().is_some_and(|operations| {
-                    operations.iter().any(|operation| {
-                        operation["operation"] == "resident_to_streaming_retry"
-                    })
-                })
-            })
-            .unwrap_or_else(|| {
-                panic!(
-                    "the retried request should attribute the resident-to-streaming swap; report_outcomes_and_operations={report_outcomes_and_operation_names:?}"
-                )
-            });
-        let prompt_token_count = attribution_counter(retry_report, "prompt_token_count");
-        let restored_prefix_token_count = attribution_counter(
-            retry_report,
-            "astro_ssd_prompt_cache_restored_token_count",
-        );
-        assert!(
-            restored_prefix_token_count > 0 && restored_prefix_token_count < prompt_token_count,
-            "the retry must restore a prefix from the astro SSD prompt cache and process only the tail it did not restore: prompt={prompt_token_count} restored={restored_prefix_token_count}"
-        );
-        let retry_operation = retry_report["operations"]
-            .as_array()
-            .into_iter()
-            .flatten()
-            .find(|operation| operation["operation"] == "resident_to_streaming_retry")
-            .expect("the generation report should attribute the resident-to-streaming swap");
-        assert_eq!(retry_operation["occurrence_count"], 1);
-        assert!(
-            retry_operation["total_elapsed_nanoseconds"]
-                .as_u64()
-                .is_some_and(|elapsed_nanoseconds| elapsed_nanoseconds > 0),
-            "the retry operation should include a nonzero elapsed interval"
-        );
-    })
-    .await
-    .expect("the retry and astro SSD prompt cache SSD journey must finish within 120 seconds");
 }
 
 pub(super) struct SparseArtifactResidencyGeometry {
@@ -580,18 +393,8 @@ pub(super) fn read_generation_attribution_reports(worker_home: &Path) -> Vec<Val
         .collect()
 }
 
-fn attribution_counter(report: &Value, counter_identifier: &str) -> u64 {
-    report["counters"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .find(|counter| counter["counter"] == counter_identifier)
-        .and_then(|counter| counter["amount"].as_u64())
-        .unwrap_or(0)
-}
-
 /// Room these journeys leave for one prompt chunk's MLX working buffers when
-/// they pick a limit the in-memory engine should serve under. The engine
+/// they pick a limit that should hold the whole model. The engine
 /// measures the real figure at load; three times the largest expert layer
 /// has been ample for the models these journeys load.
 pub(super) const fn prompt_chunk_mlx_working_buffer_allowance_bytes(

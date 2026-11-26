@@ -10,8 +10,8 @@ mod observed_mode;
 mod ownership_mode;
 mod page_commit;
 mod planner;
-mod promotion_on_raise;
 mod seated_layers;
+mod startup_residency_facts;
 mod types;
 mod validation;
 
@@ -32,7 +32,7 @@ mod phase_aware_expert_residency_tests;
 #[cfg(test)]
 mod planner_boundary_tests;
 #[cfg(test)]
-mod promotion_on_raise_tests;
+mod startup_residency_facts_tests;
 #[cfg(test)]
 mod validation_boundary_tests;
 
@@ -49,8 +49,8 @@ pub use page_commit::{
     should_complete_partial_layer_on_prefill_read, should_seed_partial_layer_on_prefill_read,
 };
 pub use planner::plan_expert_residency;
-pub use promotion_on_raise::StreamingStartupResidencyFacts;
 pub use seated_layers::seated_complete_layer_count;
+pub use startup_residency_facts::StreamingStartupResidencyFacts;
 pub use types::{
     CurrentExpertLayerResidency, ExpertLayerGeometry, ExpertLayerState, ExpertResidencyPlan,
     ExpertResidencyPlanError, RetainedExpertPageClass,

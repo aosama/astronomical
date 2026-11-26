@@ -20,9 +20,6 @@ mod forward_graph;
 #[cfg(feature = "direct-mlx")]
 pub mod forward_mlx_working_buffer_probe;
 #[cfg(feature = "direct-mlx")]
-mod live_memory_limit;
-#[cfg(feature = "direct-mlx")]
-#[cfg(feature = "direct-mlx")]
 mod resident_execution;
 #[cfg(feature = "direct-mlx")]
 mod resident_model;

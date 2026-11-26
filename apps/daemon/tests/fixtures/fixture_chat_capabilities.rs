@@ -1,6 +1,5 @@
 //! The chat surface a scripted worker advertises for a swapped-in
-//! autoregressive model, read from the configuration the daemon sent. The
-//! idle and memory-demotion worker fixtures both advertise it.
+//! autoregressive model, read from the configuration the daemon sent.
 
 use ipc_protocol::{ChatModelCapabilities, WorkerAutoregressiveModelConfiguration};
 

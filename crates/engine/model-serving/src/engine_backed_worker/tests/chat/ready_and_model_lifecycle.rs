@@ -28,7 +28,6 @@ async fn should_wait_for_a_swap_command_before_loading_an_idle_worker_model() {
             model_configurations: Arc::clone(&model_configurations),
             expert_memory_mode: Some(ipc_protocol::ExpertMemoryMode::Resident),
             created_engine_idle_mlx_memory_telemetry: None,
-            scripted_replacement_required_reason: None,
         },
         0,
     );
@@ -93,7 +92,6 @@ async fn should_apply_a_live_ceiling_within_the_machine_bound_to_the_next_model(
             model_configurations: Arc::new(Mutex::new(Vec::new())),
             expert_memory_mode: Some(ipc_protocol::ExpertMemoryMode::Paged),
             created_engine_idle_mlx_memory_telemetry: None,
-            scripted_replacement_required_reason: None,
         },
         40_000_000_000,
         32_000_000_000,
@@ -192,7 +190,6 @@ async fn should_apply_live_memory_updates_to_the_idle_worker_up_to_the_machine_b
             model_configurations: Arc::new(Mutex::new(Vec::new())),
             expert_memory_mode: Some(ipc_protocol::ExpertMemoryMode::Resident),
             created_engine_idle_mlx_memory_telemetry: None,
-            scripted_replacement_required_reason: None,
         },
         40_000_000_000,
         35_000_000_000,
@@ -361,7 +358,6 @@ async fn should_publish_the_unused_ceiling_split_on_model_loaded_and_limit_adjus
             created_engine_idle_mlx_memory_telemetry: Some(
                 created_engine_idle_mlx_memory_telemetry,
             ),
-            scripted_replacement_required_reason: None,
         },
         40_000_000_000,
         38_000_000_000,
@@ -450,107 +446,6 @@ async fn should_publish_the_unused_ceiling_split_on_model_loaded_and_limit_adjus
     close_worker_transport(daemon_writer, worker_task).await;
 }
 
-#[tokio::test]
-async fn should_report_restart_required_without_building_a_replacement_runtime() {
-    let model_factory_call_count = Arc::new(AtomicUsize::new(0));
-    let model_configurations = Arc::new(Mutex::new(Vec::new()));
-    let engine_worker = EngineBackedWorker::idle_with_model_factory_and_machine_mlx_memory_ceiling(
-        LazyScriptedModelFactory {
-            model_factory_call_count: Arc::clone(&model_factory_call_count),
-            mlx_memory_limits: (36_000_000_000, 36_000_000_000),
-            model_creation_memory_limits: Arc::new(Mutex::new(Vec::new())),
-            model_configurations: Arc::clone(&model_configurations),
-            expert_memory_mode: Some(ExpertMemoryMode::Resident),
-            created_engine_idle_mlx_memory_telemetry: None,
-            scripted_replacement_required_reason: Some(
-                "the resident engine cannot shrink below its loaded memory".to_owned(),
-            ),
-        },
-        40_000_000_000,
-        36_000_000_000,
-    )
-    .with_worker_runtime_feature_configuration(WorkerRuntimeFeatureConfiguration {
-        configuration_generation: "generation-before-demotion".to_owned(),
-        astro_ssd_prompt_cache_enabled: false,
-        astro_ssd_prompt_cache_maximum_size_bytes: 0,
-        loaded_model: None,
-    });
-    let (daemon_transport, worker_transport) = duplex(MAX_IPC_FRAME_BYTES * 2);
-    let (daemon_reader_transport, daemon_writer_transport) = split(daemon_transport);
-    let (worker_reader_transport, worker_writer_transport) = split(worker_transport);
-    let mut daemon_reader = ProtocolReader::new(daemon_reader_transport);
-    let mut daemon_writer = ProtocolWriter::new(daemon_writer_transport);
-    let worker_task = tokio::spawn(async move {
-        engine_worker
-            .run(worker_reader_transport, worker_writer_transport)
-            .await
-    });
-
-    let _idle_event = next_event(&mut daemon_reader).await;
-    let _idle_runtime_configuration = next_event(&mut daemon_reader).await;
-    daemon_writer
-        .send_command(&WorkerCommand::SwapModel {
-            model_directory: "/models/resident-model".to_owned(),
-            model_configuration: worker_model_configuration("resident-model"),
-        })
-        .await
-        .expect("the resident model should load");
-    let _model_swapped_event = next_event(&mut daemon_reader).await;
-    let _model_runtime_configuration = next_event(&mut daemon_reader).await;
-    assert_eq!(model_factory_call_count.load(Ordering::SeqCst), 1);
-
-    daemon_writer
-        .send_command(&WorkerCommand::UpdateMlxMemoryLimit {
-            effective_mlx_memory_ceiling_bytes: 19_000_000_000,
-            configuration_generation: "generation-demotion-requested".to_owned(),
-        })
-        .await
-        .expect("the demotion ceiling should reach the worker");
-
-    // The only correct worker answer is the typed restart-required event: no
-    // replacement runtime creation, no model swap, no limit adoption, and the
-    // configuration generation stays untouched for the surviving worker.
-    assert!(matches!(
-        next_event(&mut daemon_reader).await,
-        WorkerEvent::MlxMemoryLimitRestartRequired {
-            requested_mlx_memory_ceiling_bytes: 19_000_000_000,
-            effective_mlx_memory_ceiling_bytes: 19_000_000_000,
-            configuration_generation,
-            ..
-        } if configuration_generation == "generation-demotion-requested"
-    ));
-    assert_eq!(
-        model_factory_call_count.load(Ordering::SeqCst),
-        1,
-        "the demotion event must not construct a streaming replacement runtime"
-    );
-    assert_eq!(
-        model_configurations
-            .lock()
-            .unwrap_or_else(|poisoned_lock| poisoned_lock.into_inner())
-            .as_slice(),
-        &[worker_model_configuration("resident-model")],
-        "no additional model configuration may reach the factory during demotion"
-    );
-
-    daemon_writer
-        .send_command(&WorkerCommand::UpdateMlxMemoryLimit {
-            effective_mlx_memory_ceiling_bytes: 38_000_000_000,
-            configuration_generation: "generation-after-demotion".to_owned(),
-        })
-        .await
-        .expect("the surviving worker should still accept ordinary limits");
-    assert!(matches!(
-        next_event(&mut daemon_reader).await,
-        WorkerEvent::MlxMemoryLimitChanged {
-            effective_mlx_memory_ceiling_bytes: 38_000_000_000,
-            ..
-        }
-    ));
-
-    close_worker_transport(daemon_writer, worker_task).await;
-}
-
 /// The daemon's status relies on the opening report arriving before the swap's
 /// acknowledgement, so the report can never outlive the load it describes.
 #[tokio::test]
@@ -563,7 +458,6 @@ async fn should_open_a_requested_swap_by_naming_the_model() {
             model_configurations: Arc::new(Mutex::new(Vec::new())),
             expert_memory_mode: Some(ExpertMemoryMode::Resident),
             created_engine_idle_mlx_memory_telemetry: None,
-            scripted_replacement_required_reason: None,
         },
         0,
     );

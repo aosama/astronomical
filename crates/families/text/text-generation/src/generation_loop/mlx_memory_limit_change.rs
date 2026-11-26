@@ -1,15 +1,13 @@
 //! A live MLX memory-ceiling change, for every text engine: the steps all
 //! of them take, in the order all of them take them, with the engine's own
-//! rule at two points.
+//! rule at one point.
 //!
-//! A change waits until no request is running and needs a loaded model. The
-//! engine may refuse it before anything moves (the streaming engine sends a
-//! raise that admits complete expert residency to a replacement worker), and
-//! each engine moves its model to the new ceiling its own way: the resident
-//! engine reclaims before lowering and moves its memory governor, the
-//! streaming engine moves its expert pager and kept layers, and the
-//! folded-ternary engine caps its `mlx_buffer_cache` at the configured limit.
-//! The adjustment then reports the memory reading taken after the change.
+//! A change waits until no request is running and needs a loaded model.
+//! Every change is taken in place; each engine moves its model to the new
+//! ceiling its own way: the streaming engine moves its expert pager, kept
+//! layers and memory governor, and the folded-ternary engine caps its
+//! `mlx_buffer_cache` at the configured limit. The adjustment then reports
+//! the memory reading taken after the change.
 
 use std::time::Instant;
 
@@ -27,18 +25,8 @@ use super::generation_finalization_steps::{
 };
 use crate::model::text_model::TextModel;
 
-/// The points in a ceiling change where the engines differ.
+/// The point in a ceiling change where the engines differ.
 pub trait TextMlxMemoryLimitHooks: TextFinalizationHooks {
-    /// Refuses, before anything moves, a change this engine must not absorb
-    /// in place. Engines that can absorb every change they can serve keep
-    /// this default.
-    fn refuse_mlx_memory_ceiling_change(
-        &self,
-        _requested_mlx_memory_ceiling_bytes: u64,
-    ) -> Result<(), InferenceEngineError> {
-        Ok(())
-    }
-
     /// Moves the loaded model to the requested ceiling, returning the
     /// smallest ceiling the model can serve under and the MLX limits now
     /// installed in its runtime.
@@ -56,7 +44,6 @@ pub fn update_mlx_memory_limit<Engine: TextMlxMemoryLimitHooks>(
     if engine.execution_core().active_request.is_some() {
         return Err(InferenceEngineError::EngineBusy);
     }
-    engine.refuse_mlx_memory_ceiling_change(requested_mlx_memory_ceiling_bytes)?;
     let old_mlx_memory_ceiling_bytes = u64::try_from(
         engine
             .execution_core()

@@ -363,15 +363,10 @@ where
     /// and every otherwise-idle loop tick advances the generation.
     pub(super) async fn serve_active_autoregressive_request<ReadTransport, WriteTransport>(
         &mut self,
-        current_generation: Box<
-            ActiveEngineGeneration<Processor::RequestOutput, Processor::InferenceRequest>,
-        >,
+        current_generation: Box<ActiveEngineGeneration<Processor::RequestOutput>>,
         command_reader: &mut ProtocolReader<ReadTransport>,
         event_writer: &mut ProtocolWriter<WriteTransport>,
-    ) -> Result<
-        Option<ActiveWorkerRequest<Processor::RequestOutput, Processor::InferenceRequest>>,
-        WorkerRuntimeError,
-    >
+    ) -> Result<Option<ActiveWorkerRequest<Processor::RequestOutput>>, WorkerRuntimeError>
     where
         ReadTransport: AsyncRead + Unpin,
         WriteTransport: AsyncWrite + Unpin,
@@ -455,10 +450,7 @@ where
         current_generation: ActiveImageGeneration,
         command_reader: &mut ProtocolReader<ReadTransport>,
         event_writer: &mut ProtocolWriter<WriteTransport>,
-    ) -> Result<
-        Option<ActiveWorkerRequest<Processor::RequestOutput, Processor::InferenceRequest>>,
-        WorkerRuntimeError,
-    >
+    ) -> Result<Option<ActiveWorkerRequest<Processor::RequestOutput>>, WorkerRuntimeError>
     where
         ReadTransport: AsyncRead + Unpin,
         WriteTransport: AsyncWrite + Unpin,

@@ -3,7 +3,7 @@ mod tests;
 
 use ipc_protocol::RequestId;
 
-use crate::{PerformanceAttribution, PerformanceOperation};
+use crate::PerformanceAttribution;
 
 use super::ProcessedImage;
 use crate::inference_engine::contract::PreparedInferenceRequest;
@@ -27,31 +27,11 @@ pub struct TextInferenceRequest {
     performance_attribution: PerformanceAttribution,
     #[cfg_attr(not(feature = "direct-mlx"), allow(dead_code))]
     structured_generation: Option<crate::structured_generation::StructuredTokenConstraint>,
-    /// Whether a failed resident start may be replayed on the streaming
-    /// engine. A family with no streaming engine, such as the folded ternary
-    /// packs, prepares requests that refuse the replay.
-    allows_streaming_retry: bool,
 }
 
 impl PreparedInferenceRequest for TextInferenceRequest {
     fn prompt_token_count(&self) -> usize {
         self.input_token_ids.len()
-    }
-
-    fn clone_for_streaming_retry(&self) -> Option<Self> {
-        self.allows_streaming_retry.then(|| self.clone())
-    }
-
-    fn record_streaming_retry_interval(
-        &mut self,
-        started_at: std::time::Instant,
-        ended_at: std::time::Instant,
-    ) {
-        self.performance_attribution.record_operation_interval(
-            PerformanceOperation::ResidentToStreamingRetry,
-            started_at,
-            ended_at,
-        );
     }
 }
 
@@ -127,16 +107,7 @@ impl TextInferenceRequest {
             natural_reasoning_end_token_ids: Vec::new(),
             performance_attribution: PerformanceAttribution::disabled(),
             structured_generation: None,
-            allows_streaming_retry: true,
         }
-    }
-
-    /// Whether this request may be replayed on the streaming engine; a
-    /// family without one prepares requests that refuse the replay.
-    #[must_use]
-    pub fn with_streaming_retry_allowed(mut self, allows_streaming_retry: bool) -> Self {
-        self.allows_streaming_retry = allows_streaming_retry;
-        self
     }
 
     /// Overrides the repetition penalty resolved for this request.

@@ -235,7 +235,6 @@ pub(crate) struct ScriptedChatEngine {
     astro_ssd_prompt_cache_clear_event: Option<WorkerEvent>,
     pub(super) maximum_mlx_buffer_cache_limit_bytes: u64,
     idle_mlx_memory_telemetry: Option<MlxMemoryTelemetry>,
-    scripted_replacement_required_reason: Option<String>,
     /// Floor reported at load; 1 byte unless a test needs a model larger than its ceiling.
     load_floor_bytes: u64,
     /// Every live ceiling the worker asked this engine to adopt, in order.
@@ -291,7 +290,6 @@ impl ScriptedChatEngine {
             astro_ssd_prompt_cache_clear_event: None,
             maximum_mlx_buffer_cache_limit_bytes: u64::MAX,
             idle_mlx_memory_telemetry: None,
-            scripted_replacement_required_reason: None,
             load_floor_bytes: 1,
             adopted_ceilings: Arc::new(Mutex::new(Vec::new())),
         }
@@ -308,18 +306,6 @@ impl ScriptedChatEngine {
         idle_mlx_memory_telemetry: MlxMemoryTelemetry,
     ) -> Self {
         self.idle_mlx_memory_telemetry = Some(idle_mlx_memory_telemetry);
-        self
-    }
-
-    /// Scripts the live-limit update to report a ceiling this engine cannot
-    /// adopt in place whenever the request sits below its loaded memory
-    /// (modeled by the MLX buffer-cache limit field).
-    pub(super) fn with_scripted_replacement_required_reason(
-        mut self,
-        scripted_replacement_required_reason: &str,
-    ) -> Self {
-        self.scripted_replacement_required_reason =
-            Some(scripted_replacement_required_reason.to_owned());
         self
     }
 
@@ -474,13 +460,6 @@ impl InferenceEngine for ScriptedChatEngine {
             .lock()
             .expect("the adopted-ceiling record should not be poisoned")
             .push(requested_mlx_memory_ceiling_bytes);
-        if let Some(rejection_reason) = &self.scripted_replacement_required_reason
-            && requested_mlx_memory_ceiling_bytes < self.maximum_mlx_buffer_cache_limit_bytes
-        {
-            return Err(InferenceEngineError::ResidentStreamingReplacementRequired {
-                reason: rejection_reason.clone(),
-            });
-        }
         Ok(MlxMemoryLimitAdjustment::new(
             requested_mlx_memory_ceiling_bytes,
             self.maximum_mlx_buffer_cache_limit_bytes

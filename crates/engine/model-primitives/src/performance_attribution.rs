@@ -187,27 +187,6 @@ impl PerformanceAttribution {
             .record(started_offset, ended_offset);
     }
 
-    /// Records an operation measured outside the request-owning inference thread.
-    pub fn record_operation_interval(
-        &mut self,
-        operation: PerformanceOperation,
-        operation_started_at: Instant,
-        operation_ended_at: Instant,
-    ) {
-        let Some(report_started_at) = self
-            .enabled_attribution
-            .as_ref()
-            .map(|enabled_attribution| enabled_attribution.report_started_at)
-        else {
-            return;
-        };
-        self.record_completed_operation(
-            operation,
-            operation_started_at.saturating_duration_since(report_started_at),
-            operation_ended_at.saturating_duration_since(report_started_at),
-        );
-    }
-
     /// Returns the nonempty aggregate for one operation.
     #[must_use]
     pub fn operation_measurement(

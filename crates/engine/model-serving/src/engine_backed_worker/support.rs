@@ -23,14 +23,9 @@ pub enum ModelFactoryRuntime<
     Autoregressive {
         processor: Processor,
         engine: Engine,
-        /// The startup engine-selection placement this runtime was built
-        /// under. The worker adopts it when the runtime loads, so placement
-        /// always reflects the selection that produced the loaded engine.
-        /// `None` marks a runtime built for a worker-directed swap (streaming
-        /// retry or resident promotion): no startup selection ran, and the
-        /// worker records the typed transition itself. A model swap rejects
-        /// such a runtime.
-        engine_placement: Option<EnginePlacement>,
+        /// The startup placement this runtime was built under. The worker
+        /// adopts it when the runtime loads.
+        engine_placement: EnginePlacement,
     },
     Image(ImageEngine),
     Embeddings(EmbeddingEngine),
@@ -57,29 +52,7 @@ impl<Processor, Engine, ImageEngine, EmbeddingsEngine, DecisionsEngine, TextToSp
         Self::Autoregressive {
             processor,
             engine,
-            engine_placement: Some(engine_placement),
-        }
-    }
-
-    /// Builds the streaming-retry runtime; the worker records the typed
-    /// request-demotion placement once it loads.
-    #[must_use]
-    pub fn autoregressive_for_streaming_retry(processor: Processor, engine: Engine) -> Self {
-        Self::Autoregressive {
-            processor,
-            engine,
-            engine_placement: None,
-        }
-    }
-
-    /// Builds the resident-promotion runtime; the worker records the typed
-    /// promotion placement once it loads.
-    #[must_use]
-    pub fn autoregressive_for_resident_promotion(processor: Processor, engine: Engine) -> Self {
-        Self::Autoregressive {
-            processor,
-            engine,
-            engine_placement: None,
+            engine_placement,
         }
     }
 }
@@ -115,59 +88,6 @@ pub trait ModelFactory<
             String,
         >,
     > + Send;
-
-    /// Whether this factory can replace a resident autoregressive runtime with streaming.
-    fn supports_streaming_retry(&self) -> bool {
-        false
-    }
-
-    /// Creates the streaming runtime used by one private resident-fork retry.
-    fn create_streaming_retry(
-        &self,
-        _model_directory: &str,
-        _model_configuration: WorkerModelConfiguration,
-    ) -> impl std::future::Future<
-        Output = Result<
-            ModelFactoryRuntime<
-                Processor,
-                Engine,
-                ImageEngine,
-                EmbeddingsEngine,
-                DecisionsEngine,
-                TextToSpeechEngine,
-            >,
-            String,
-        >,
-    > + Send {
-        async { Err("streaming retry is unavailable for this model factory".to_owned()) }
-    }
-
-    /// Whether this factory can replace a demoted streaming runtime with a
-    /// resident engine while the worker stays live.
-    fn supports_resident_promotion(&self) -> bool {
-        false
-    }
-
-    /// Creates the resident runtime used by one bounded re-promotion swap.
-    fn create_resident_promotion(
-        &self,
-        _model_directory: &str,
-        _model_configuration: WorkerModelConfiguration,
-    ) -> impl std::future::Future<
-        Output = Result<
-            ModelFactoryRuntime<
-                Processor,
-                Engine,
-                ImageEngine,
-                EmbeddingsEngine,
-                DecisionsEngine,
-                TextToSpeechEngine,
-            >,
-            String,
-        >,
-    > + Send {
-        async { Err("resident promotion is unavailable for this model factory".to_owned()) }
-    }
 
     /// Updates the complete process-global limit pair used by a future lazy model load.
     fn update_mlx_memory_limits(
@@ -226,17 +146,11 @@ impl<Processor, Engine, ImageEngine, EmbeddingsEngine, DecisionsEngine, TextToSp
     }
 }
 
-pub(crate) enum ActiveWorkerRequest<RequestOutput, RetryRequest> {
-    Autoregressive(Box<ActiveEngineGeneration<RequestOutput, RetryRequest>>),
+pub(crate) enum ActiveWorkerRequest<RequestOutput> {
+    Autoregressive(Box<ActiveEngineGeneration<RequestOutput>>),
     Image(ActiveImageGeneration),
     Speech(super::speech::ActiveSpeechGeneration),
     DecisionTraining(super::decision_training::ActiveDecisionTraining),
-}
-
-#[derive(Clone)]
-pub(crate) struct SelectedModel {
-    pub(crate) model_directory: String,
-    pub(crate) model_configuration: WorkerModelConfiguration,
 }
 
 pub(crate) struct ActiveImageGeneration {
@@ -302,20 +216,8 @@ pub enum WorkerRuntimeError {
     AstroSsdPromptCacheClearFailed { reason: String },
 }
 
-/// Total context (prompt plus maximum output) of one request: the quantity a
-/// request demotion records and the re-promotion hysteresis compares.
-pub(crate) fn request_total_context_token_count(
-    prompt_token_count: u32,
-    max_output_tokens: u16,
-) -> usize {
-    usize::try_from(u64::from(prompt_token_count) + u64::from(max_output_tokens))
-        .unwrap_or(usize::MAX)
-}
-
-pub(crate) struct ActiveEngineGeneration<RequestOutput, RetryRequest> {
+pub(crate) struct ActiveEngineGeneration<RequestOutput> {
     pub(crate) request_output: RequestOutput,
-    pub(crate) streaming_retry_request: Option<RetryRequest>,
-    pub(crate) streaming_retry_attempted: bool,
     pub(crate) generated_token_count: u16,
     pub(crate) reasoning_token_count: u16,
     pub(crate) max_output_tokens: u16,
@@ -339,24 +241,16 @@ pub(crate) struct ActiveEngineGeneration<RequestOutput, RetryRequest> {
         Option<WorkerAstroSsdPromptCacheRequestDiagnostics>,
 }
 
-impl<RequestOutput, RetryRequest> ActiveEngineGeneration<RequestOutput, RetryRequest> {
-    pub(crate) fn total_context_token_count(&self) -> usize {
-        request_total_context_token_count(self.prompt_token_count, self.max_output_tokens)
-    }
-
+impl<RequestOutput> ActiveEngineGeneration<RequestOutput> {
     pub(crate) fn new(
         generation_command: &ChatGenerationCommand,
         prompt_token_count: u32,
         astro_ssd_prompt_cache_restored_token_count: u32,
         required_prompt_processing_token_count: u32,
         request_output: RequestOutput,
-        streaming_retry_request: Option<RetryRequest>,
-        streaming_retry_attempted: bool,
     ) -> Self {
         Self {
             request_output,
-            streaming_retry_request,
-            streaming_retry_attempted,
             generated_token_count: 0,
             reasoning_token_count: 0,
             max_output_tokens: generation_command.settings.max_output_tokens,
@@ -376,13 +270,6 @@ impl<RequestOutput, RetryRequest> ActiveEngineGeneration<RequestOutput, RetryReq
             last_reported_expert_memory_mode: None,
             astro_ssd_prompt_cache_diagnostics: None,
         }
-    }
-
-    pub(crate) fn can_retry_streaming(&self) -> bool {
-        !self.streaming_retry_attempted
-            && self.generated_token_count == 0
-            && self.next_sequence_number == 0
-            && self.streaming_retry_request.is_some()
     }
 }
 

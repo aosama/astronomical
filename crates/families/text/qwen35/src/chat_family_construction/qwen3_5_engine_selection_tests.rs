@@ -4,14 +4,10 @@ use crate::EnginePlacement;
 
 use super::{StreamingStart, prompt_chunk_tokens_for, streaming_engine_choice};
 
-const NO_SHORTFALL: EnginePlacement =
-    EnginePlacement::CompleteResidencyDoesNotFit { shortfall_bytes: 0 };
-
-/// A model that fits whole is held by the streaming engine with no
-/// shortfall; only a generation that always streamed keeps the streaming
-/// chunk size.
+/// A model that fits whole keeps its placement; only a generation that
+/// always streamed keeps the streaming chunk size.
 #[test]
-fn should_serve_a_model_that_fits_whole_on_the_streaming_engine_with_no_shortfall() {
+fn should_report_a_model_that_fits_whole_as_fitting_whatever_its_chunk_size() {
     for (keeps_the_streaming_chunk_size, holds_whole_model) in [(false, true), (true, false)] {
         let (selected_engine, engine_placement) = streaming_engine_choice(
             EnginePlacement::CompleteResidencyFits,
@@ -19,7 +15,7 @@ fn should_serve_a_model_that_fits_whole_on_the_streaming_engine_with_no_shortfal
         );
 
         assert_eq!(selected_engine, StreamingStart { holds_whole_model });
-        assert_eq!(engine_placement, NO_SHORTFALL);
+        assert_eq!(engine_placement, EnginePlacement::CompleteResidencyFits);
     }
 }
 

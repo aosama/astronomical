@@ -57,6 +57,9 @@ pub mod register_ordered_projections;
 pub mod routed_expert_selection;
 #[cfg(feature = "direct-mlx")]
 pub mod serving_model;
+// Both models that expand these lists are built only with direct MLX, so
+// without it the macros would be unused definitions.
+#[cfg(feature = "direct-mlx")]
 pub mod shared_model_methods;
 #[cfg(feature = "direct-mlx")]
 pub mod sorted_expert_shared_combination_switch;

@@ -1,7 +1,6 @@
 use crate::admission::complete_residency::{
     CompleteResidencyDecision, CompleteResidencyRequirements,
 };
-use crate::forward_admission::StreamingEngineRequirement;
 use crate::placement::engine_placement::EnginePlacement;
 
 fn startup_complete_residency_decision_for_ceiling(
@@ -70,68 +69,24 @@ fn should_return_the_observation_error_for_invalid_observation_startup_decision(
 }
 
 #[test]
-fn should_report_demotion_facts_only_for_request_demotion_placement() {
-    let demotion_cause = StreamingEngineRequirement::StableShortfall {
-        shortfall_bytes: 128,
-    };
-    let demoted_placement = EnginePlacement::DemotedForRequest {
-        cause: demotion_cause,
-        demoted_total_context_token_count: 9_000,
-        effective_ceiling_bytes_at_demotion: 0,
-    };
-    assert!(demoted_placement.is_demoted_for_request());
-    assert_eq!(demoted_placement.demotion_cause(), Some(demotion_cause));
-    assert_eq!(
-        demoted_placement.demoted_total_context_token_count(),
-        Some(9_000)
-    );
-
-    for other_placement in [
-        EnginePlacement::CompleteResidencyFits,
-        EnginePlacement::CompleteResidencyDoesNotFit { shortfall_bytes: 1 },
-        EnginePlacement::PromotedAfterPressureResolved,
-    ] {
-        assert!(!other_placement.is_demoted_for_request());
-        assert_eq!(other_placement.demotion_cause(), None);
-        assert_eq!(other_placement.demoted_total_context_token_count(), None);
-    }
-}
-
-#[test]
-fn should_log_a_distinct_label_for_every_placement_variant() {
-    let labels = [
+fn should_log_a_distinct_label_for_each_placement() {
+    assert_ne!(
         EnginePlacement::CompleteResidencyFits.log_label(),
-        EnginePlacement::CompleteResidencyDoesNotFit { shortfall_bytes: 1 }.log_label(),
-        EnginePlacement::DemotedForRequest {
-            cause: StreamingEngineRequirement::StableShortfall { shortfall_bytes: 1 },
-            demoted_total_context_token_count: 1,
-            effective_ceiling_bytes_at_demotion: 0,
-        }
-        .log_label(),
-        EnginePlacement::PromotedAfterPressureResolved.log_label(),
-    ];
-    for (label_index, label) in labels.iter().enumerate() {
-        for (other_index, other_label) in labels.iter().enumerate() {
-            if label_index != other_index {
-                assert_ne!(label, other_label);
-            }
-        }
-    }
+        EnginePlacement::CompleteResidencyDoesNotFit { shortfall_bytes: 1 }.log_label()
+    );
 }
 
 #[test]
-fn should_run_the_resident_engine_only_for_complete_residency_placements() {
-    assert!(EnginePlacement::CompleteResidencyFits.runs_resident_engine());
-    assert!(EnginePlacement::PromotedAfterPressureResolved.runs_resident_engine());
+fn should_hold_the_whole_model_only_when_complete_residency_fits() {
+    assert!(EnginePlacement::CompleteResidencyFits.holds_whole_model());
     assert!(
-        !EnginePlacement::CompleteResidencyDoesNotFit { shortfall_bytes: 1 }.runs_resident_engine()
+        !EnginePlacement::CompleteResidencyDoesNotFit { shortfall_bytes: 1 }.holds_whole_model()
     );
+}
+
+#[test]
+fn should_not_hold_the_whole_model_at_a_zero_byte_shortfall() {
     assert!(
-        !EnginePlacement::DemotedForRequest {
-            cause: StreamingEngineRequirement::StableShortfall { shortfall_bytes: 1 },
-            demoted_total_context_token_count: 1,
-            effective_ceiling_bytes_at_demotion: 0,
-        }
-        .runs_resident_engine()
+        !EnginePlacement::CompleteResidencyDoesNotFit { shortfall_bytes: 0 }.holds_whole_model()
     );
 }

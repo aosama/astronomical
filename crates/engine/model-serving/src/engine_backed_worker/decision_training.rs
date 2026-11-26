@@ -31,10 +31,8 @@ impl ActiveDecisionTraining {
     }
 }
 
-type ProcessorActiveRequest<Processor> = ActiveWorkerRequest<
-    <Processor as ModelGenerationProcessor>::RequestOutput,
-    <Processor as ModelGenerationProcessor>::InferenceRequest,
->;
+type ProcessorActiveRequest<Processor> =
+    ActiveWorkerRequest<<Processor as ModelGenerationProcessor>::RequestOutput>;
 
 impl<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine, DecisionsEngine, TextToSpeechEngine>
     EngineBackedWorker<

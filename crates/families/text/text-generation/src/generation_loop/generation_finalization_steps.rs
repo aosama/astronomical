@@ -189,9 +189,6 @@ pub fn error_outcome(
 ) -> (PerformanceAttributionOutcome, &'static str) {
     match generation_error {
         InferenceEngineError::InvalidRequest { .. }
-        | InferenceEngineError::ResidentForkRequired { .. }
-        | InferenceEngineError::ResidentStreamingReplacementRequired { .. }
-        | InferenceEngineError::StreamingResidentPromotionRequired { .. }
         | InferenceEngineError::MlxMemoryLimitRejected { .. }
         | InferenceEngineError::EngineBusy => (
             PerformanceAttributionOutcome::Rejected,

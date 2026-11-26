@@ -151,7 +151,6 @@ pub enum PerformanceOperation {
     CompiledElementwiseGraphConstruction,
     ExpertLayerPlanConstruction,
     ArtifactMemoryGeometry,
-    ResidentToStreamingRetry,
     /// One speculative round's parallel draft block pass: embedding, the
     /// six-layer trunk, the language-model head, and the proposal readback.
     SpeculativeDraftBlockPass,
@@ -309,7 +308,6 @@ impl PerformanceOperation {
         Self::CompiledElementwiseGraphConstruction,
         Self::ExpertLayerPlanConstruction,
         Self::ArtifactMemoryGeometry,
-        Self::ResidentToStreamingRetry,
         Self::SpeculativeDraftBlockPass,
         Self::SpeculativeRoundStateCheckpoint,
         Self::SpeculativeVerificationForward,
@@ -539,7 +537,6 @@ impl PerformanceOperation {
             Self::ExpertLayerPlanConstruction => "expert_layer_plan_construction",
             Self::PreviousTokenPrefetch => "previous_token_prefetch",
             Self::ArtifactMemoryGeometry => "artifact_memory_geometry",
-            Self::ResidentToStreamingRetry => "resident_to_streaming_retry",
             Self::SpeculativeDraftBlockPass => "speculative_draft_block_pass",
             Self::SpeculativeRoundStateCheckpoint => "speculative_round_state_checkpoint",
             Self::SpeculativeVerificationForward => "speculative_verification_forward",

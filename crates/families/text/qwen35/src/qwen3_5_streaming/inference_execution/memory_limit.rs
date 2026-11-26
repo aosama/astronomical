@@ -29,15 +29,8 @@ pub const fn safe_minimum_mlx_memory_ceiling_bytes(
 impl TextMlxMemoryLimitHooks for Qwen3_5EngineState {
     /// Any change of the ceiling is taken in place: this engine serves a
     /// model whether or not all of it fits, keeping more in memory after a
-    /// raise and giving weights back before a lowering (issue #2585).
-    fn refuse_mlx_memory_ceiling_change(
-        &self,
-        _requested_mlx_memory_ceiling_bytes: u64,
-    ) -> Result<(), InferenceEngineError> {
-        Ok(())
-    }
-
-    /// The streaming model gives back retained experts and kept dense layers
+    /// raise and giving weights back before a lowering (issue #2585). The
+    /// streaming model gives back retained experts and kept dense layers
     /// before lowering, and moves its expert pager and memory governor with
     /// the installed limit, rolling every part back when a step fails.
     fn change_model_mlx_memory_ceiling(

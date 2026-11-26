@@ -49,8 +49,6 @@ async fn should_complete_generation_when_startup_runtime_acknowledgement_is_stil
             configured_maximum_mlx_memory_bytes: None,
             performance_attribution_enabled: false,
             decode_astro_expert_cache_policy: WorkerDecodeAstroExpertCachePolicy::Baseline,
-            diagnostic_qwen3_5_engine_override:
-                ipc_protocol::WorkerDiagnosticQwen3_5EngineOverride::Automatic,
             logging_directory: temporary_log_directory.path().to_path_buf(),
             logging_level: WorkerLogLevel::Warn,
             retained_log_file_count: 7,

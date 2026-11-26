@@ -99,7 +99,6 @@ where
         global_astro_ssd_prompt_cache_maximum_size_bytes = ?astro_ssd_prompt_cache_config.global_astro_ssd_prompt_cache_maximum_size_bytes(),
         performance_attribution_enabled,
         decode_astro_expert_cache_policy = ?worker_startup_configuration.decode_astro_expert_cache_policy,
-        diagnostic_qwen3_5_engine_override = ?worker_startup_configuration.diagnostic_qwen3_5_engine_override,
         machine_mlx_memory_ceiling_bytes,
         configured_maximum_mlx_memory_bytes,
         effective_mlx_memory_ceiling_bytes,
@@ -127,9 +126,6 @@ where
         worker_startup_configuration
             .neural_engine_program_directory
             .clone(),
-    )
-    .with_diagnostic_qwen3_5_engine_override(
-        worker_startup_configuration.diagnostic_qwen3_5_engine_override,
     )
     .with_floor_raise_limit_bytes(floor_raise_limit_bytes);
     let engine_worker: InferenceWorker = idle_engine_worker_from_factory(

@@ -14,8 +14,8 @@ use crate::worker::astro_ssd_prompt_cache_clear;
 use crate::worker::loop_types::ActiveWorkerRequest;
 use crate::worker::loop_types::WorkerLoopState;
 use crate::worker::memory::limit::{
-    MlxMemoryLimitUpdateOutcome, PendingMlxMemoryLimitUpdate,
-    apply_pending_mlx_memory_limit_if_idle, contain_mlx_memory_limit_failure,
+    PendingMlxMemoryLimitUpdate, apply_pending_mlx_memory_limit_if_idle,
+    contain_mlx_memory_limit_failure,
 };
 
 pub(super) async fn drain_pending_idle_work(
@@ -44,7 +44,7 @@ pub(super) async fn drain_pending_idle_work(
     let completion_log = &mut **completion_log;
     let model_load_timeout = *model_load_timeout;
     if active_generation.is_none()
-        && let drained_memory_limit_outcome = apply_pending_mlx_memory_limit_if_idle(
+        && let Err(memory_limit_error) = apply_pending_mlx_memory_limit_if_idle(
             pending_mlx_memory_limit_update,
             worker_process,
             model_load_timeout,
@@ -57,28 +57,14 @@ pub(super) async fn drain_pending_idle_work(
         )
         .await
     {
-        match drained_memory_limit_outcome {
-            Err(memory_limit_error) => {
-                contain_mlx_memory_limit_failure(
-                    worker_process,
-                    health_snapshot,
-                    active_generation,
-                    is_ready,
-                    memory_limit_error,
-                )
-                .await;
-            }
-            Ok(Some(MlxMemoryLimitUpdateOutcome::RestartRequired)) => {
-                // A queued ceiling the resident engine cannot adopt in place.
-                // Health now carries the restart-required marker, and the
-                // queued reconciliation owns the stop-first demotion; without
-                // this trace the outcome used to disappear silently.
-                tracing::info!(
-                    "queued MLX memory update requires a streaming demotion restart; deferring to queued reconciliation"
-                );
-            }
-            Ok(_) => {}
-        }
+        contain_mlx_memory_limit_failure(
+            worker_process,
+            health_snapshot,
+            active_generation,
+            is_ready,
+            memory_limit_error,
+        )
+        .await;
     }
     astro_ssd_prompt_cache_clear::apply_pending_astro_ssd_prompt_cache_clear_if_idle(
         pending_astro_ssd_prompt_cache_clear,

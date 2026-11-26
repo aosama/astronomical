@@ -51,10 +51,7 @@ where
     #[allow(clippy::too_many_arguments)]
     pub(super) async fn advance_prefill_progress<WriteTransport>(
         &mut self,
-        mut active_generation: ActiveEngineGeneration<
-            Processor::RequestOutput,
-            Processor::InferenceRequest,
-        >,
+        mut active_generation: ActiveEngineGeneration<Processor::RequestOutput>,
         processed_token_count: u32,
         elapsed_millis: u64,
         forward_prefill_chunk_elapsed_millis: u64,
@@ -69,10 +66,7 @@ where
         neural_engine_chunk: Option<ipc_protocol::NeuralEngineChunkReport>,
         prompt_layer_progress: Option<ipc_protocol::WorkerPromptLayerProgress>,
         event_writer: &mut ProtocolWriter<WriteTransport>,
-    ) -> Result<
-        Option<ActiveEngineGeneration<Processor::RequestOutput, Processor::InferenceRequest>>,
-        WorkerRuntimeError,
-    >
+    ) -> Result<Option<ActiveEngineGeneration<Processor::RequestOutput>>, WorkerRuntimeError>
     where
         WriteTransport: AsyncWrite + Unpin,
     {
@@ -138,8 +132,8 @@ where
     }
 }
 
-async fn emit_expert_memory_mode_if_changed<RequestOutput, InferenceRequest, WriteTransport>(
-    active_generation: &mut ActiveEngineGeneration<RequestOutput, InferenceRequest>,
+async fn emit_expert_memory_mode_if_changed<RequestOutput, WriteTransport>(
+    active_generation: &mut ActiveEngineGeneration<RequestOutput>,
     expert_memory_mode: Option<ExpertMemoryMode>,
     event_writer: &mut ProtocolWriter<WriteTransport>,
 ) -> Result<(), WorkerRuntimeError>
@@ -180,12 +174,8 @@ where
 
 /// Emits the phase-started prefill progress event. Mirrors the inlined
 /// `PromptProcessingPhaseStarted` arm.
-pub(super) async fn emit_prompt_processing_phase_started<
-    WriteTransport,
-    RequestOutput,
-    RetryRequest,
->(
-    active_generation: &ActiveEngineGeneration<RequestOutput, RetryRequest>,
+pub(super) async fn emit_prompt_processing_phase_started<WriteTransport, RequestOutput>(
+    active_generation: &ActiveEngineGeneration<RequestOutput>,
     prompt_processing_phase: WorkerPromptProcessingPhase,
     total_token_count: u32,
     event_writer: &mut ProtocolWriter<WriteTransport>,
@@ -212,12 +202,8 @@ where
 
 /// Emits the generation preparation started event. Mirrors the inlined
 /// `GenerationPreparationStarted` arm.
-pub(super) async fn emit_generation_preparation_started<
-    WriteTransport,
-    RequestOutput,
-    RetryRequest,
->(
-    active_generation: &ActiveEngineGeneration<RequestOutput, RetryRequest>,
+pub(super) async fn emit_generation_preparation_started<WriteTransport, RequestOutput>(
+    active_generation: &ActiveEngineGeneration<RequestOutput>,
     expert_residency: Option<crate::inference_engine::contract::ExpertResidencyTelemetry>,
     mlx_memory_telemetry: Option<MlxMemoryTelemetry>,
     event_writer: &mut ProtocolWriter<WriteTransport>,

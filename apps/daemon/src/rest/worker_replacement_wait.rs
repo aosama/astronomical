@@ -1,12 +1,11 @@
 //! Holds a generation request while the worker is being replaced.
 //!
-//! The daemon replaces its worker whenever the model has to move between
-//! the in-memory and the streaming engine: after a memory limit change, a
-//! prompt that no longer fits, an idle unload or a contained failure. The
-//! replacement takes seconds, and a request that arrives inside it would
-//! otherwise be refused with HTTP 503 although the very next attempt
-//! succeeds. Clients such as coding agents surface that refusal as an error,
-//! so the request waits here for the new worker instead.
+//! The daemon replaces its worker after a configuration reload that needs a
+//! new process, an idle unload or a contained failure. The replacement takes
+//! seconds, and a request that arrives inside it would otherwise be refused
+//! with HTTP 503 although the very next attempt succeeds. Clients such as
+//! coding agents surface that refusal as an error, so the request waits here
+//! for the new worker instead.
 
 use std::time::Duration;
 

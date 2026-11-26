@@ -1,5 +1,4 @@
 use super::{TextInferenceRequest, TextSamplingStrategy};
-use crate::inference_engine::contract::PreparedInferenceRequest;
 use ipc_protocol::RequestId;
 
 #[test]
@@ -71,30 +70,4 @@ fn should_carry_validated_image_pad_token_id_in_the_inference_request() {
     .with_image_pad_token_id(248_056);
 
     assert_eq!(inference_request.image_pad_token_id(), Some(248_056));
-}
-
-#[test]
-fn should_offer_a_streaming_retry_by_default() {
-    let inference_request = TextInferenceRequest::new(RequestId::new(0), vec![248_045], 1);
-
-    assert!(inference_request.clone_for_streaming_retry().is_some());
-}
-
-#[test]
-fn should_refuse_a_streaming_retry_once_it_is_forbidden() {
-    let inference_request = TextInferenceRequest::new(RequestId::new(0), vec![248_045], 1)
-        .with_streaming_retry_allowed(false);
-
-    assert!(
-        inference_request.clone_for_streaming_retry().is_none(),
-        "a family without a streaming engine must never be replayed on one"
-    );
-}
-
-#[test]
-fn should_refuse_a_streaming_retry_of_an_empty_prompt_once_forbidden() {
-    let inference_request = TextInferenceRequest::new(RequestId::new(0), Vec::new(), 1)
-        .with_streaming_retry_allowed(false);
-
-    assert!(inference_request.clone_for_streaming_retry().is_none());
 }

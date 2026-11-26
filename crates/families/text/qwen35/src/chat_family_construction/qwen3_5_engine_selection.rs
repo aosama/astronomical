@@ -47,29 +47,21 @@ pub(super) fn select_qwen3_5_engine_from_artifact(
     ))
 }
 
-/// The streaming engine for a model the geometry placed either way.
+/// How the engine starts for a model the geometry placed.
 ///
-/// A model that fits whole is reported with no shortfall, as a model the
-/// streaming engine holds, and reads prompts in the in-memory chunk size.
+/// A model the limit holds whole reads prompts in the in-memory chunk size.
 /// Qwen3.8-Flash-Next keeps the streaming chunk size even when its experts
 /// would fit, as it always has (issue #2533).
 fn streaming_engine_choice(
     geometry_placement: EnginePlacement,
     keeps_the_streaming_chunk_size: bool,
 ) -> (StreamingStart, EnginePlacement) {
-    if !geometry_placement.runs_resident_engine() {
-        return (
-            StreamingStart {
-                holds_whole_model: false,
-            },
-            geometry_placement,
-        );
-    }
     (
         StreamingStart {
-            holds_whole_model: !keeps_the_streaming_chunk_size,
+            holds_whole_model: geometry_placement.holds_whole_model()
+                && !keeps_the_streaming_chunk_size,
         },
-        EnginePlacement::CompleteResidencyDoesNotFit { shortfall_bytes: 0 },
+        geometry_placement,
     )
 }
 

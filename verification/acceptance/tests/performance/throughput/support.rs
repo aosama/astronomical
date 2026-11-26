@@ -26,9 +26,7 @@ use std::sync::mpsc::RecvTimeoutError;
 use std::time::{Duration, Instant};
 
 use astronomical_daemon::{ChatGenerationExecutor, WorkerHealthSnapshot};
-use ipc_protocol::{
-    ChatImageInput, WorkerDecodeAstroExpertCachePolicy, WorkerDiagnosticQwen3_5EngineOverride,
-};
+use ipc_protocol::{ChatImageInput, WorkerDecodeAstroExpertCachePolicy};
 
 pub(crate) use crate::performance_throughput::completion::{
     drive_completion, dump_worker_logging_directory,
@@ -122,10 +120,6 @@ pub(crate) struct ThroughputJourney {
     /// (an environment-addressed pack); `None` resolves the model id through
     /// the Development configuration's model directories.
     pub(crate) model_directory: Option<PathBuf>,
-    /// Forces the Qwen3.5 engine family so a diagnostic journey can separate
-    /// the memory ceiling from the engine architecture; `Automatic` is the
-    /// production startup selection.
-    pub(crate) diagnostic_qwen3_5_engine_override: WorkerDiagnosticQwen3_5EngineOverride,
 }
 
 impl ThroughputJourney {
@@ -156,7 +150,6 @@ impl ThroughputJourney {
             prompt_chunking: PromptChunking::MeasurementLane,
             journey_timeout: JOURNEY_TIMEOUT,
             model_directory: None,
-            diagnostic_qwen3_5_engine_override: WorkerDiagnosticQwen3_5EngineOverride::Automatic,
         }
     }
 }

@@ -2,37 +2,15 @@ use ipc_protocol::WorkerDecodeAstroExpertCachePolicy;
 use runtime_integration::MlxRuntime;
 
 use crate::inference_engine::load_result::EngineLoadResult;
-use crate::{
-    InferenceEngineError, PerformanceAttribution, PerformanceOperation,
-    StreamingStartupResidencyFacts,
-};
+use crate::{InferenceEngineError, PerformanceAttribution, PerformanceOperation};
 
-use super::{Qwen3_5EngineState, fatal_engine_error, fatal_runtime_error};
+use super::{Qwen3_5EngineState, fatal_runtime_error};
 use crate::qwen3_5_core::artifacts::ValidatedQwen3_5Artifact;
 use crate::qwen3_5_streaming::model::Qwen3_5Model;
 use text_generation::generation_loop::model_loading_lifecycle::TextModelLoadingHooks;
 use text_generation::model::model_chunking_configuration::TextModelChunkingConfiguration;
 
 impl TextModelLoadingHooks for Qwen3_5EngineState {
-    /// Captures the startup engine-selection facts before the artifact moves
-    /// into the model: a later live raise consults them to decide whether the
-    /// raised ceiling would select the resident engine in a replacement
-    /// worker. They come from the same artifact and directory the selection
-    /// itself reads, so the two answers cannot drift.
-    fn observe_artifact_before_load(
-        &mut self,
-        validated_artifact: &ValidatedQwen3_5Artifact,
-        model_loading_performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<(), InferenceEngineError> {
-        self.startup_residency_facts = capture_streaming_startup_residency_facts(
-            self,
-            validated_artifact,
-            model_loading_performance_attribution,
-        )?
-        .or(self.startup_residency_facts);
-        Ok(())
-    }
-
     fn load_and_materialize_model(
         &mut self,
         runtime: MlxRuntime,
@@ -40,17 +18,14 @@ impl TextModelLoadingHooks for Qwen3_5EngineState {
         model_chunking: TextModelChunkingConfiguration,
         model_loading_performance_attribution: &mut PerformanceAttribution,
     ) -> Result<Qwen3_5Model, InferenceEngineError> {
-        let model = load_and_materialize_streaming_model(
+        load_and_materialize_streaming_model(
             runtime,
             validated_artifact,
             &self.core.model_directory,
             self.streaming_forward_shape(model_chunking),
             self.decode_astro_expert_cache_policy,
             model_loading_performance_attribution,
-        )?;
-        self.startup_residency_facts =
-            with_loaded_sequence_state_rate(self.startup_residency_facts, &model);
-        Ok(model)
+        )
     }
 
     /// Clears what loading left in the `mlx_buffer_cache` before serving.
@@ -102,93 +77,6 @@ impl Qwen3_5EngineState {
             full_attention_kv_state_growth_tokens: self.core.full_attention_kv_state_growth_tokens,
         }
     }
-}
-
-/// Captures the startup residency facts from the validated artifact under
-/// attribution: a sparse model's expert geometry, or a dense model's text
-/// weights, which a live raise compares the same way startup placement did.
-/// A sparse artifact without expert bytes leaves the previous facts in place.
-fn capture_streaming_startup_residency_facts(
-    engine_state: &Qwen3_5EngineState,
-    validated_artifact: &ValidatedQwen3_5Artifact,
-    model_loading_performance_attribution: &mut PerformanceAttribution,
-) -> Result<Option<StreamingStartupResidencyFacts>, InferenceEngineError> {
-    let startup_geometry_result = model_loading_performance_attribution.measure_operation(
-        PerformanceOperation::ArtifactMemoryGeometry,
-        |_performance_attribution| {
-            crate::model_memory_geometry_from_validated_artifact(
-                validated_artifact,
-                &engine_state.core.model_directory,
-            )
-        },
-    );
-    startup_residency_facts_from_geometry(startup_geometry_result, validated_artifact)
-}
-
-/// Builds startup facts from the artifact geometry: a sparse model's expert
-/// geometry, or a dense model's text weights when the geometry answers that
-/// the model has no experts. A sparse artifact without expert bytes records
-/// none.
-fn startup_residency_facts_from_geometry(
-    startup_geometry_result: Result<
-        (crate::ModelMemoryGeometry, u64),
-        crate::Qwen3_5MemoryGeometryError,
-    >,
-    validated_artifact: &ValidatedQwen3_5Artifact,
-) -> Result<Option<StreamingStartupResidencyFacts>, InferenceEngineError> {
-    let (startup_geometry, startup_complete_residency_headroom_bytes) =
-        match startup_geometry_result {
-            Ok(startup_geometry) => startup_geometry,
-            Err(crate::Qwen3_5MemoryGeometryError::NotSparseMixtureOfExperts) => {
-                return dense_startup_residency_facts(validated_artifact).map(Some);
-            }
-            Err(geometry_error) => {
-                return Err(fatal_engine_error(format!(
-                    "startup residency selection facts are unreadable for this artifact: {geometry_error}"
-                )));
-            }
-        };
-    if startup_geometry.complete_expert_payload_bytes == 0 {
-        return Ok(None);
-    }
-    Ok(Some(crate::StreamingStartupResidencyFacts {
-        model_core_payload_bytes: startup_geometry.model_core_payload_bytes,
-        complete_expert_payload_bytes: startup_geometry.complete_expert_payload_bytes,
-        startup_complete_residency_headroom_bytes,
-        sequence_state_bytes_per_token: startup_geometry.sequence_state_bytes_per_token,
-    }))
-}
-
-/// A dense model's startup facts. Its decoder-state rate is read from the
-/// loaded model afterwards (`with_loaded_sequence_state_rate`), because
-/// the artifact alone does not know the `astro_decoder_state_cache` layout.
-fn dense_startup_residency_facts(
-    validated_artifact: &ValidatedQwen3_5Artifact,
-) -> Result<StreamingStartupResidencyFacts, InferenceEngineError> {
-    let dense_text_weight_payload_bytes = validated_artifact
-        .text_weight_payload_bytes()
-        .ok_or_else(|| fatal_engine_error("the dense model's text weight sizes are unreadable"))?;
-    Ok(StreamingStartupResidencyFacts::for_dense_text_weights(
-        dense_text_weight_payload_bytes,
-        0,
-    ))
-}
-
-/// Fills a dense model's decoder-state rate from the loaded model's
-/// `astro_decoder_state_cache` layout; sparse facts already carry theirs from the artifact.
-fn with_loaded_sequence_state_rate(
-    startup_residency_facts: Option<StreamingStartupResidencyFacts>,
-    model: &Qwen3_5Model,
-) -> Option<StreamingStartupResidencyFacts> {
-    let mut startup_residency_facts = startup_residency_facts?;
-    if startup_residency_facts.complete_expert_payload_bytes == 0 {
-        startup_residency_facts.sequence_state_bytes_per_token = model
-            .base
-            .memory_facts()
-            .model_geometry()
-            .sequence_state_bytes_per_token;
-    }
-    Some(startup_residency_facts)
 }
 
 /// How the engine will run forwards: the chunking the model loads with, and

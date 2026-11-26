@@ -110,15 +110,9 @@ pub use astro_expert_cache_arithmetic::{
     expert_layer_topology_from_residency, no_astro_expert_cache_route_source_bytes,
     record_streamed_page_source_plan_in_both_ledgers,
 };
-pub use memory_policy::forward_admission::{
-    ResidentForwardAdmissionDecision, ResidentForwardAdmissionRejection, StreamingEngineRequirement,
-};
 pub use memory_policy::geometry_floor::geometry_safe_minimum_mlx_memory_ceiling_bytes;
 pub use memory_policy::phase::MemoryPhase;
-pub use memory_policy::placement::{
-    EnginePlacement, ResidentPromotionBlocker, ResidentPromotionDecision,
-    should_promote_demoted_streaming_engine_to_resident,
-};
+pub use memory_policy::placement::EnginePlacement;
 pub use memory_policy::reclamation::ExpertMemoryAdmissionError;
 pub use memory_policy::residency::seated_complete_layer_count;
 // The direct-MLX streaming planner (qwen3_5_streaming's gated

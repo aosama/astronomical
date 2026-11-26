@@ -8,12 +8,10 @@ use std::path::PathBuf;
 use config::AstroSsdPromptCacheConfig;
 use ipc_protocol::{
     WorkerAutoregressiveModelConfiguration, WorkerDecodeAstroExpertCachePolicy,
-    WorkerDiagnosticQwen3_5EngineOverride, WorkerEmbeddingModelConfiguration,
-    WorkerImageGenerationModelConfiguration, WorkerModelConfiguration,
+    WorkerEmbeddingModelConfiguration, WorkerImageGenerationModelConfiguration,
+    WorkerModelConfiguration,
 };
-use model_serving::{
-    ChatEngineSelection, ChatFamilyConstruction, ChatFamilySettings, ChatRuntimeParts,
-};
+use model_serving::{ChatFamilyConstruction, ChatFamilySettings, ChatRuntimeParts};
 use model_serving::{
     DecisionEngine, EmbeddingEngine, EmbeddingFamilyConstruction, EngineBackedWorker,
     FamilyEngineSettings, ImageArtifactRefusal, ImageFamilyConstruction, ImageGenerationEngine,
@@ -29,7 +27,6 @@ mod family_runtime_builders;
 mod family_test_support;
 
 use self::configured_family_check::classified_model_family;
-use self::family_runtime_builders::chat_runtime_builder;
 use self::family_runtime_builders::family_runtime_builder;
 
 /// Creates the concrete family processor and engine for a selected model directory.
@@ -44,7 +41,6 @@ pub struct ModelFamilyFactory {
     decode_astro_expert_cache_policy: WorkerDecodeAstroExpertCachePolicy,
     performance_attribution_log_path: PathBuf,
     astro_ssd_prompt_cache_enabled: bool,
-    diagnostic_qwen3_5_engine_override: WorkerDiagnosticQwen3_5EngineOverride,
     /// The highest ceiling an image engine may plan its load at to reach its
     /// floor (#1902): the user's own limit, or unbounded when they set none.
     /// Startup sets it and live limit changes update it; zero until then,
@@ -104,7 +100,6 @@ impl ModelFamilyFactory {
             decode_astro_expert_cache_policy,
             performance_attribution_log_path,
             astro_ssd_prompt_cache_enabled,
-            diagnostic_qwen3_5_engine_override: WorkerDiagnosticQwen3_5EngineOverride::Automatic,
             floor_raise_limit_bytes: 0,
         }
     }
@@ -113,17 +108,6 @@ impl ModelFamilyFactory {
     #[must_use]
     pub(crate) fn with_floor_raise_limit_bytes(mut self, floor_raise_limit_bytes: u64) -> Self {
         self.floor_raise_limit_bytes = floor_raise_limit_bytes;
-        self
-    }
-
-    /// Forces the Qwen3.5 engine family for controlled diagnostic journeys.
-    #[doc(hidden)]
-    #[must_use]
-    pub fn with_diagnostic_qwen3_5_engine_override(
-        mut self,
-        diagnostic_qwen3_5_engine_override: WorkerDiagnosticQwen3_5EngineOverride,
-    ) -> Self {
-        self.diagnostic_qwen3_5_engine_override = diagnostic_qwen3_5_engine_override;
         self
     }
 
@@ -148,7 +132,6 @@ impl ModelFamilyFactory {
         &self,
         model_directory_path: PathBuf,
         model_configuration: WorkerAutoregressiveModelConfiguration,
-        engine_selection: ChatEngineSelection,
     ) -> Result<ChatRuntimeParts, String> {
         let chat_family_settings = self.chat_family_settings();
         tokio::task::spawn_blocking(move || {
@@ -156,39 +139,11 @@ impl ModelFamilyFactory {
                 chat_family_settings,
                 model_directory_path,
                 model_configuration,
-                engine_selection,
             )
         })
         .await
         .map_err(|_| Family::INITIALIZATION_TASK_FAILURE.to_owned())?
         .map_err(bound_public_model_load_failure_reason)
-    }
-
-    /// The chat runtime a worker-directed swap builds, from the family the
-    /// folder classifies as.
-    async fn create_chat_swap_runtime_parts(
-        &self,
-        model_directory: &str,
-        model_configuration: WorkerModelConfiguration,
-        engine_selection: ChatEngineSelection,
-    ) -> Result<ChatRuntimeParts, String> {
-        let model_directory_path = PathBuf::from(model_directory);
-        let model_family =
-            classified_model_family(model_directory_path.clone(), &model_configuration).await?;
-        let WorkerModelConfiguration::Autoregressive(chat_configuration) = model_configuration
-        else {
-            return Err("an engine swap requires an autoregressive model".to_owned());
-        };
-        let Some(build_chat_runtime) = model_family.and_then(chat_runtime_builder) else {
-            return Err("selected model has an unsupported model family".to_owned());
-        };
-        build_chat_runtime(
-            self,
-            model_directory_path,
-            chat_configuration,
-            engine_selection,
-        )
-        .await
     }
 }
 
@@ -216,50 +171,6 @@ impl
         runtime_builder
             .build(self, model_directory_path, model_configuration)
             .await
-    }
-
-    fn supports_streaming_retry(&self) -> bool {
-        true
-    }
-
-    async fn create_streaming_retry(
-        &self,
-        model_directory: &str,
-        model_configuration: WorkerModelConfiguration,
-    ) -> Result<ModelFamilyRuntime, String> {
-        let chat_runtime_parts = self
-            .create_chat_swap_runtime_parts(
-                model_directory,
-                model_configuration,
-                ChatEngineSelection::StreamingRetry,
-            )
-            .await?;
-        Ok(ModelFactoryRuntime::autoregressive_for_streaming_retry(
-            chat_runtime_parts.generation_processor,
-            chat_runtime_parts.inference_engine,
-        ))
-    }
-
-    fn supports_resident_promotion(&self) -> bool {
-        true
-    }
-
-    async fn create_resident_promotion(
-        &self,
-        model_directory: &str,
-        model_configuration: WorkerModelConfiguration,
-    ) -> Result<ModelFamilyRuntime, String> {
-        let chat_runtime_parts = self
-            .create_chat_swap_runtime_parts(
-                model_directory,
-                model_configuration,
-                ChatEngineSelection::ResidentPromotion,
-            )
-            .await?;
-        Ok(ModelFactoryRuntime::autoregressive_for_resident_promotion(
-            chat_runtime_parts.generation_processor,
-            chat_runtime_parts.inference_engine,
-        ))
     }
 
     fn update_mlx_memory_limits(
