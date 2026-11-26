@@ -343,6 +343,7 @@ pub(super) async fn serve_warmup_and_read_a_long_prompt(
         LONG_PROMPT_TOKEN_COUNT,
         TOKENS_WRITTEN_AFTER_A_LONG_PROMPT,
     );
+    let counts_before_the_prompt = graph_host_step::evaluation_counts();
     let written_token_ids = serve_one_prompt(
         engine,
         served_model,
@@ -351,6 +352,7 @@ pub(super) async fn serve_warmup_and_read_a_long_prompt(
         phase_name,
     )
     .await;
+    report_prompt_evaluations(phase_name, counts_before_the_prompt);
     report_memory_after_the_reply(phase_name);
     assert!(
         !written_token_ids.is_empty(),
@@ -428,6 +430,32 @@ async fn serve_one_prompt(
         request_attribution,
     )
     .await
+}
+
+/// What MLX did for the long prompt and its few tokens, from its own
+/// evaluator: how long the GPU was busy and how often work was handed over.
+/// The request's wall time less the GPU's busy time is the GPU waiting for
+/// the host, which is where two engines running the same arithmetic differ
+/// (issue #2585).
+fn report_prompt_evaluations(
+    phase_name: &str,
+    counts_before_the_prompt: graph_host_step::EvaluationCounts,
+) {
+    let prompt_counts = graph_host_step::evaluation_counts().since(counts_before_the_prompt);
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "nanoseconds of one request, far inside f64's exact range"
+    )]
+    let gpu_busy_seconds = prompt_counts.gpu_busy_nanoseconds as f64 / 1e9;
+    eprintln!(
+        "[prompt-evaluations] phase={phase_name} gpu_busy_seconds={gpu_busy_seconds:.3} blocking_evaluations={} asynchronous_evaluations={} waits_for_submitted_arrays={} gpu_primitives={} cpu_primitives={} gpu_command_buffers={}",
+        prompt_counts.blocking_evaluations,
+        prompt_counts.asynchronous_evaluations,
+        prompt_counts.waits_for_submitted_arrays,
+        prompt_counts.gpu_primitives,
+        prompt_counts.cpu_primitives,
+        prompt_counts.gpu_command_buffers,
+    );
 }
 
 /// MLX's active and peak memory once the measured reply is written, in GB of
