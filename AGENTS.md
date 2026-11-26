@@ -1,12 +1,8 @@
 # Instructions for the Astronomical Project
 
-## Project Aim
-
-- This project exists to support the opensource and openweight community aiming to make artifical intelligence accessible and affordable for the widest user base possible. 
-
 ## General Instructions
 
-- Production lane methods and functions must not exceed 100 lines of code.
+- Production lane methods and functions must not exceed 80 lines of code.
 
 ## Never Hardwire Local Developer Environment Into the Codebase
 
@@ -14,8 +10,7 @@
 
 ## There are No RESTAPI/IPC/Unix Socket Downstream Consumers
 
-- There are no downstream consumers or other dependent applications — hence no need for deprecation or compatibility shims or any other techniques.
-- There is no requirement for backward compatibility for the REST API surface. There are no downstream consumers of these surfaces, so REST API backward compatibility is not a constraint.
+- There are no downstream consumers or other dependent applications — hence no need for deprecation or compatibility shims or any other techniques. There is no requirement for backward compatibility for the REST API surface. 
 
 ## Prohibited Terminology: "qualification" and "hermetic"
 
@@ -24,41 +19,27 @@
 
 ## Testing Instructions For Astronomical
 
-- While coding or developing, never run tests, probes, or chat requests against Astronomical Stable; use the Astronomical Development instance instead.
-
 - To give Development a model, symlink a copy already on this Mac into `~/.astronomical-dev/models/<publisher>/<model>`, looking in Stable's `~/.astronomical/models` first. When no copy exists, download it into `~/.astronomical/models/<publisher>/<model>` and symlink that. Never download into the Hugging Face cache or through the Development app.
 
 - When your work is done, move the contents of Development's `astro_ssd_prompt_cache` folder, `~/.astronomical-dev/cache`, to the Trash.
 
-- Tests that use real full sized models and loads them in memory for further use by the GPU must use the Rust `serial_test` `#[serial]` annotation; The same applies to throughput-measurement tests and performance tests.
+- Tests that use real full sized models and loads them in memory for further use by the GPU must use the Rust `serial_test` `#[serial]` annotation; 
 
 - Under `crates/` and `apps/`, a test that uses the GPU takes `serial_test`'s `#[file_serial]` instead of `#[serial]`: nextest runs every test in a process of its own, and only `#[file_serial]` locks across processes (issue #2539).
-
-- SSD-paging e2e journeys get a 120-second runner budget. If an e2e journey exceeds that budget, use lower-level tests to identify the slow call path rather than increasing the budget or repeating long model runs.
 
 - The fixture of Shakespear is highly recommended to be used as the input for LLMs; there should not be random text or tokens used for testing. Exceptions can be made where Shakespear is not suitable for the test -- for example a coding fixture.
 
 ## Performance Instructions
 
-- A performance measurement should send at least 10,000 tokens of input and acquire 500 output tokens; plus or minus 10 percent is acceptable. Exceptions can be made if the user specifies it explicitly.
-- A warmup run should be performed before the actual test; the desired warmup is 500 tokens of input and 50 tokens of output.
+- A minimal warmup run should be performed before the actual test; t
 - The astro SSD prompt cache must be disabled during performance throughput tests and measurements.
 - The skill declaration (`skill.declare_to_models`) must be disabled during performance throughput tests and measurements, because it adds tokens to every prompt.
-- Those performance throughput tests must run through a Rust optimized build.
-- MOST IMPORTANTLY performance tests must start at the lowermost part of the call stack and move tests upwards through the call stack.
-- Measure and optimize at the lowest GPU operation (a kernel, one forward, one draft round), rarely at the REST API or end to end. While iterating, use short, repeatable tests at the lowest or middle level of the call stack that finish in seconds, and avoid multi-minute runs to the maximum. Run one end-to-end REST API measurement only when the work is done, to confirm a gain already explained lower down.
-- No measurement may keep a person waiting more than about two minutes a case. `cargo xtask measure-speed` sizes each case to that by itself (200 output tokens, one round and more only while they fit, a shorter long prompt for a model that reads slowly), and anything new follows the same budget. The 10,000-token input and 500-token output above are the shape for a one-off figure a claim rests on, not for iterating: an A/B diagnostic compares per-token cost from a short reply.
 
 ## Release Scripts Folder
 
 - All **Release-related scripts** must live under "<repo-root>/scripts/release", they will help you through the release process.
 - Follow the `sparkle_release` skill (`.claude/skills/sparkle_release/SKILL.md`) for every Stable release on the direct download and Sparkle feed, and read all of it before the first step.
 - A Mac App Store release is separate and happens only when the user asks for it: follow the `macos_appstore_release` skill (`.claude/skills/macos_appstore_release/SKILL.md`).
-
-## Never Stash, Use A Worktree
-
-- Agents never run `git stash`, `git stash pop` or `git stash apply`. The stash list belongs to the person whose repository it is: `git stash pop` with nothing of the caller's own stashed applies whatever entry is on top, which once left this checkout mid-merge across 137 files (issue #2580).
-- When a clean tree is needed (to build another commit, to measure main against a branch), make a separate worktree with `git worktree add`, and move it to the Trash when done. A worktree leaves the person's working tree and stash list untouched.
 
 ## Repository Tooling Lives In xtask
 
@@ -71,7 +52,7 @@
 
 ## The Memory Areas Have Formal Names
 
-- You MUST read `<repo-root>/docs/glossary.md` before you read, write, review or discuss anything about memory, MLX, caching or streaming. It defines every memory area and every cache by one formal name, such as `astro_expert_cache`, `astro_ssd_prompt_cache`, `astro_decoder_state_cache`, `mlx_buffer_cache`, `mlx_working_buffers` and `macos_file_cache`.
+- You MUST read `<repo-root>/docs/glossary.md` before you read, write, review or discuss anything about memory, MLX, caching or streaming. It defines every memory area and every cache by one formal name. 
 - Never write the bare word "cache": every mention says which cache it means, by its formal name. Use those names in code, comments, tests, logs, documentation, GitHub content and replies. Screens keep their plain words; the glossary lists which is which.
 - When you find a cache or memory area under another name, or a bare "cache", rename it to the formal name as part of your work.
 
@@ -80,5 +61,5 @@
 - Pins and patches are under "<repo-root>/third-party".
 - Supported models are under "<repo-root>/registry".
 - Performance measurements tests are under "<repo-root>/verification".
-- Release speed is recorded in one ledger file a release under "<repo-root>/registry/release_speed", written only by `cargo xtask measure-speed --reference-set --write-ledger`; the catalog's measured speeds and the release notes' speed table are derived from it.
+- Release speed is recorded in one ledger file a release under "<repo-root>/registry/release_speed", written only by `cargo xtask measure-speed --reference-set --write-ledger`.
 - There is no requirements for phone browsing for the web user interface, this is a macos desktop only codebase.
