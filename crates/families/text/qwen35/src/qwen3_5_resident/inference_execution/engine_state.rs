@@ -22,7 +22,7 @@ pub struct Qwen3_5InferenceExecution {
     /// The programs still on their way to the loaded model, which serves on the GPU
     /// until they arrive.
     pub(in crate::qwen3_5_resident::inference_execution) neural_engine_prefill_preparation: Option<
-        crate::qwen3_5_resident::neural_engine_prefill_loading::NeuralEnginePrefillPreparation,
+        crate::qwen3_5_core::neural_engine::neural_engine_prefill_loading::NeuralEnginePrefillPreparation,
     >,
     /// The last completed generation's live decoder state, retained for
     /// in-memory prefix adoption (issue #1167). Dropped when the next request

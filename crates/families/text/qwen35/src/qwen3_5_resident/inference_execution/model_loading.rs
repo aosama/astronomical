@@ -8,11 +8,11 @@ use super::speculative_decode_lifecycle::{
 };
 use super::{Qwen3_5EngineState, fatal_runtime_error};
 use crate::qwen3_5_core::artifacts::ValidatedQwen3_5Artifact;
-use crate::qwen3_5_resident::model::Qwen3_5ResidentModel;
-use crate::qwen3_5_resident::neural_engine_prefill_loading::{
+use crate::qwen3_5_core::neural_engine::neural_engine_prefill_loading::{
     NeuralEnginePreparationStep, begin_neural_engine_prefill_preparation,
 };
-use crate::qwen3_5_resident::neural_engine_program_settlement::settle_neural_engine_programs;
+use crate::qwen3_5_core::neural_engine::neural_engine_program_settlement::settle_neural_engine_programs;
+use crate::qwen3_5_resident::model::Qwen3_5ResidentModel;
 use text_generation::generation_loop::model_loading_lifecycle::TextModelLoadingHooks;
 use text_generation::model::model_chunking_configuration::TextModelChunkingConfiguration;
 

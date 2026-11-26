@@ -13,7 +13,6 @@ use ipc_protocol::{NeuralEnginePrefillStatus, WorkerChunkingConfiguration};
 use neural_engine::core_ml::CoreMlProgram;
 
 use super::astro_neural_engine_program_cache::CoreMlProgramBuilder;
-use super::model::Qwen3_5ResidentModel;
 use super::neural_engine_idle_watch::IdleWatch;
 use super::neural_engine_mlp_prefill::{
     MlpProgramPlan, plan_neural_engine_mlp_programs, unavailable,
@@ -28,6 +27,7 @@ use super::neural_engine_program_measurement::{
 use super::neural_engine_program_preparation::{
     NeuralEngineProgramFamily, ProgramIdentity, ProgramPackageWriter, ProgramPreparation,
 };
+use crate::qwen3_5_core::model::base::Qwen3_5ModelBase;
 
 /// How often the blocking path looks for finished programs. Short beside a build,
 /// which takes from a tenth of a second to several seconds.
@@ -41,7 +41,7 @@ const MOST_UNSETTLED_MEASUREMENTS: u32 = 3;
 
 /// Reads compile input from the model on the MLX owner thread for the plans in hand.
 struct ModelProgramPackages<'preparation> {
-    model: &'preparation Qwen3_5ResidentModel,
+    model: &'preparation Qwen3_5ModelBase,
     mlp_plan: &'preparation MlpProgramPlan,
     output_gate_plan: Option<&'preparation OutputGateProgramPlan>,
 }
@@ -98,7 +98,7 @@ pub struct NeuralEnginePrefillPreparation {
 /// Decides whether the programs may run and starts building them. The status is the
 /// one to report now; a preparation comes back only while it says `Preparing`.
 pub fn begin_neural_engine_prefill_preparation(
-    model: &Qwen3_5ResidentModel,
+    model: &Qwen3_5ModelBase,
     chunking: &WorkerChunkingConfiguration,
     astro_neural_engine_program_cache_directory: Option<&Path>,
     neural_engine_token_count_override: Option<u32>,
@@ -149,7 +149,7 @@ pub fn begin_neural_engine_prefill_preparation(
 }
 
 fn plan_output_gates_or_stay_on_the_gpu(
-    model: &Qwen3_5ResidentModel,
+    model: &Qwen3_5ModelBase,
     chunking: &WorkerChunkingConfiguration,
     astro_neural_engine_program_cache_directory: Option<&Path>,
 ) -> Option<OutputGateProgramPlan> {
@@ -194,7 +194,7 @@ impl NeuralEnginePrefillPreparation {
 
     /// Moves the programs along. Called on the MLX owner thread between requests,
     /// so a chunk already running never sees a program appear part way through.
-    pub fn advance(&mut self, model: &mut Qwen3_5ResidentModel) -> NeuralEnginePreparationStep {
+    pub fn advance(&mut self, model: &mut Qwen3_5ModelBase) -> NeuralEnginePreparationStep {
         let was_used_this_step = self.advance_build(model);
         let is_idle_long_enough = self.idle_watch.step(Instant::now(), was_used_this_step);
         let phase = std::mem::replace(&mut self.phase, ProgramMemoryPhase::Building);
@@ -241,7 +241,7 @@ impl NeuralEnginePrefillPreparation {
     /// Steps the build and says whether anything it did used the GPU or Neural Engine.
     /// A kept program's first run on the build thread wires its weights with no package
     /// to write, which is why a finished program counts too.
-    fn advance_build(&mut self, model: &Qwen3_5ResidentModel) -> bool {
+    fn advance_build(&mut self, model: &Qwen3_5ModelBase) -> bool {
         if !matches!(self.phase, ProgramMemoryPhase::Building) {
             return false;
         }
@@ -295,7 +295,7 @@ impl NeuralEnginePrefillPreparation {
     }
 
     /// Takes the built programs and decides how their memory will become known.
-    fn begin_memory_phase(&mut self, model: &Qwen3_5ResidentModel) -> ProgramMemoryPhase {
+    fn begin_memory_phase(&mut self, model: &Qwen3_5ModelBase) -> ProgramMemoryPhase {
         if let Some(reason) = self
             .program_preparation
             .first_failure_of(NeuralEngineProgramFamily::Mlp)
@@ -405,7 +405,7 @@ impl NeuralEnginePrefillPreparation {
     /// a request can arrive before the next step and should not compete with it. A
     /// failure costs that request some memory and nothing else, so it stays a warning.
     /// Returns whether a layer was read, which used the GPU.
-    fn release_weight_copies(&mut self, model: &Qwen3_5ResidentModel) -> bool {
+    fn release_weight_copies(&mut self, model: &Qwen3_5ModelBase) -> bool {
         let has_written_package = self.program_preparation.take_has_written_package();
         if has_written_package
             && let Err(release_error) = model
@@ -447,7 +447,7 @@ impl NeuralEnginePrefillPreparation {
     /// on refusal gives its memory straight back.
     fn engage_programs(
         &mut self,
-        model: &mut Qwen3_5ResidentModel,
+        model: &mut Qwen3_5ModelBase,
         programs: ProgramsToMeasure<CoreMlProgram>,
         wired_bytes: u64,
     ) -> ProgramMemoryPhase {
@@ -561,7 +561,7 @@ fn estimated_remaining_ms(
 /// Builds the programs and waits for them. For measurements that need a known
 /// starting point; serving uses the preparation so a user never waits on this.
 pub fn prepare_neural_engine_prefill(
-    model: &mut Qwen3_5ResidentModel,
+    model: &mut Qwen3_5ModelBase,
     chunking: &WorkerChunkingConfiguration,
     astro_neural_engine_program_cache_directory: Option<&Path>,
     neural_engine_token_count_override: Option<u32>,
@@ -583,6 +583,69 @@ pub fn prepare_neural_engine_prefill(
             return preparation.finish();
         }
         std::thread::sleep(BLOCKING_PREPARATION_POLL_INTERVAL);
+    }
+}
+
+/// What a journey or a measurement asks of a loaded dense model's programs,
+/// on whichever engine holds it.
+impl Qwen3_5ModelBase {
+    /// Builds the opt-in Neural Engine programs through the same steps serving does,
+    /// and waits for them, so a journey can measure one loaded model with and without.
+    #[cfg(feature = "direct-mlx")]
+    pub fn prepare_neural_engine_prefill_matching_production(
+        &mut self,
+        chunking: &ipc_protocol::WorkerChunkingConfiguration,
+        astro_neural_engine_program_cache_directory: Option<&std::path::Path>,
+    ) -> ipc_protocol::NeuralEnginePrefillStatus {
+        crate::qwen3_5_core::neural_engine::neural_engine_prefill_loading::prepare_neural_engine_prefill(
+            self,
+            chunking,
+            astro_neural_engine_program_cache_directory,
+            None,
+        )
+    }
+
+    /// The same steps with a chosen token split, so a journey can sweep it.
+    #[cfg(feature = "direct-mlx")]
+    pub fn prepare_neural_engine_prefill_with_token_count(
+        &mut self,
+        chunking: &ipc_protocol::WorkerChunkingConfiguration,
+        neural_engine_token_count: u32,
+    ) -> ipc_protocol::NeuralEnginePrefillStatus {
+        crate::qwen3_5_core::neural_engine::neural_engine_prefill_loading::prepare_neural_engine_prefill(
+            self,
+            chunking,
+            None,
+            Some(neural_engine_token_count),
+        )
+    }
+
+    /// Releases the programs so the next load in a measurement starts from none.
+    #[cfg(feature = "direct-mlx")]
+    pub fn release_neural_engine_mlp_prefill(&mut self) {
+        self.optional_accelerators.neural_engine_mlp_prefill = None;
+        self.optional_accelerators.output_gate_engine = None;
+    }
+
+    /// Sends full chunks to the GPU alone while paused, so one loaded model can
+    /// alternate between the arms of a measurement.
+    #[cfg(feature = "direct-mlx")]
+    pub fn set_neural_engine_mlp_prefill_paused(&self, is_paused: bool) {
+        if let Some(prefill) = self
+            .optional_accelerators
+            .neural_engine_mlp_prefill
+            .as_ref()
+        {
+            prefill.set_paused(is_paused);
+        }
+    }
+
+    /// As [`Self::set_neural_engine_mlp_prefill_paused`] for the output gate programs.
+    #[cfg(feature = "direct-mlx")]
+    pub fn set_neural_engine_output_gate_paused(&self, is_paused: bool) {
+        if let Some(output_gate_engine) = self.optional_accelerators.output_gate_engine.as_ref() {
+            output_gate_engine.set_paused(is_paused);
+        }
     }
 }
 

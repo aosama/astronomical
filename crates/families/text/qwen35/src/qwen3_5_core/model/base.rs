@@ -36,6 +36,10 @@ pub struct Qwen3_5OptionalAccelerators {
     pub lane_mixing_kernels: Option<crate::qwen4_exp::lane_mixing_kernels::LaneMixingKernels>,
     /// Opt-in engine for linear-attention output gates during prefill; `None`
     /// keeps them on the GPU.
+    /// Whole dense MLP programs on the Neural Engine, one a decoder layer,
+    /// attached once the opt-in prompt reading has built them (issue #161).
+    pub neural_engine_mlp_prefill:
+        Option<crate::qwen3_5_core::neural_engine::neural_engine_mlp_prefill::NeuralEngineMlpPrefill>,
     pub output_gate_engine: Option<
         Box<dyn crate::qwen3_5_core::model::output_gate_engine::LinearAttentionOutputGateEngine>,
     >,

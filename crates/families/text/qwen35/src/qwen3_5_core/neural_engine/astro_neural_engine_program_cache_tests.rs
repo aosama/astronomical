@@ -3,10 +3,10 @@ use std::fs;
 use neural_engine::program_shape::ProgramShape;
 
 use super::{AstroNeuralEngineProgramSetCache, CoreMlProgramBuilder};
-use crate::qwen3_5_resident::neural_engine_program_placement_record::{
+use crate::qwen3_5_core::neural_engine::neural_engine_program_placement_record::{
     PlacementCheck, placement_check_for, record_placement_verified,
 };
-use crate::qwen3_5_resident::neural_engine_program_preparation::{
+use crate::qwen3_5_core::neural_engine::neural_engine_program_preparation::{
     NeuralEngineProgramFamily, ProgramBuildJob, ProgramBuildOutcome, ProgramBuilder,
     ProgramIdentity,
 };

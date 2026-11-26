@@ -21,10 +21,6 @@ pub struct Qwen3_5ResidentModel {
     pub expert_layer_plans: Vec<QuantizedExpertLayerPlan>,
     /// Complete contiguous expert arrays when the whole sparse payload fits.
     pub resident_expert_weights: Option<Qwen3_5ResidentExpertWeights>,
-    /// Opt-in Neural Engine programs for dense prefill; `None` keeps every chunk
-    /// on the GPU.
-    pub neural_engine_mlp_prefill:
-        Option<crate::qwen3_5_resident::neural_engine_mlp_prefill::NeuralEngineMlpPrefill>,
     /// The owner of this model's memory ledger, opened once the model has
     /// loaded and its MLX working buffers have been measured.
     pub memory_governor: std::cell::RefCell<Option<memory_policy::ledger::MemoryGovernor>>,
@@ -199,63 +195,6 @@ impl Qwen3_5ResidentModel {
                 &astro_decoder_state_cache_layout,
                 full_attention_kv_state_growth_tokens,
             )
-    }
-
-    /// Builds the opt-in Neural Engine programs through the same steps serving does,
-    /// and waits for them, so a journey can measure one loaded model with and without.
-    #[cfg(feature = "direct-mlx")]
-    pub fn prepare_neural_engine_prefill_matching_production(
-        &mut self,
-        chunking: &ipc_protocol::WorkerChunkingConfiguration,
-        astro_neural_engine_program_cache_directory: Option<&std::path::Path>,
-    ) -> ipc_protocol::NeuralEnginePrefillStatus {
-        crate::qwen3_5_resident::neural_engine_prefill_loading::prepare_neural_engine_prefill(
-            self,
-            chunking,
-            astro_neural_engine_program_cache_directory,
-            None,
-        )
-    }
-
-    /// The same steps with a chosen token split, so a journey can sweep it.
-    #[cfg(feature = "direct-mlx")]
-    pub fn prepare_neural_engine_prefill_with_token_count(
-        &mut self,
-        chunking: &ipc_protocol::WorkerChunkingConfiguration,
-        neural_engine_token_count: u32,
-    ) -> ipc_protocol::NeuralEnginePrefillStatus {
-        crate::qwen3_5_resident::neural_engine_prefill_loading::prepare_neural_engine_prefill(
-            self,
-            chunking,
-            None,
-            Some(neural_engine_token_count),
-        )
-    }
-
-    /// Releases the programs so the next load in a measurement starts from none.
-    #[cfg(feature = "direct-mlx")]
-    pub fn release_neural_engine_mlp_prefill(&mut self) {
-        self.neural_engine_mlp_prefill = None;
-        self.base.optional_accelerators.output_gate_engine = None;
-    }
-
-    /// Sends full chunks to the GPU alone while paused, so one loaded model can
-    /// alternate between the arms of a measurement.
-    #[cfg(feature = "direct-mlx")]
-    pub fn set_neural_engine_mlp_prefill_paused(&self, is_paused: bool) {
-        if let Some(prefill) = self.neural_engine_mlp_prefill.as_ref() {
-            prefill.set_paused(is_paused);
-        }
-    }
-
-    /// As [`Self::set_neural_engine_mlp_prefill_paused`] for the output gate programs.
-    #[cfg(feature = "direct-mlx")]
-    pub fn set_neural_engine_output_gate_paused(&self, is_paused: bool) {
-        if let Some(output_gate_engine) =
-            self.base.optional_accelerators.output_gate_engine.as_ref()
-        {
-            output_gate_engine.set_paused(is_paused);
-        }
     }
 
     /// Materializes dense target weights and the complete resident expert

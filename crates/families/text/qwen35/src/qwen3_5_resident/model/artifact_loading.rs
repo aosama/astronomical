@@ -154,7 +154,6 @@ impl Qwen3_5ResidentModel {
             // memory sample in the engine loading path.
             resident_expert_weights: None,
             // Programs load after the weights are materialized, if at all.
-            neural_engine_mlp_prefill: None,
             memory_governor: std::cell::RefCell::new(None),
         })
     }

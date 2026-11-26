@@ -168,7 +168,7 @@ fn should_forget_a_record_and_tolerate_a_missing_one() {
 #[test]
 fn should_name_the_macos_build_and_the_mac_in_an_environment() {
     assert_eq!(
-        crate::qwen3_5_resident::host_description::host_environment_of(
+        crate::qwen3_5_core::neural_engine::host_description::host_environment_of(
             "27.0.1", "26A434", "Mac99,1"
         ),
         PLACEMENT_ENVIRONMENT
@@ -184,13 +184,13 @@ fn should_describe_this_process_environment_once() {
         return;
     }
     let placement_environment =
-        crate::qwen3_5_resident::host_description::current_host_environment()
+        crate::qwen3_5_core::neural_engine::host_description::current_host_environment()
             .expect("macOS describes itself");
 
     assert!(placement_environment.starts_with("macOS "));
     assert!(placement_environment.contains(" on "));
     assert_eq!(
-        crate::qwen3_5_resident::host_description::current_host_environment(),
+        crate::qwen3_5_core::neural_engine::host_description::current_host_environment(),
         Some(placement_environment)
     );
 }
