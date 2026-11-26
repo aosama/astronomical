@@ -1,17 +1,19 @@
-//! Parity between the resident shard read and the bounded paged read.
+//! Parity between the whole-shard read and the bounded paged read.
 //!
 //! Issue #503 asks whether one complete expert layer already retained as a
-//! packed page can become complete-resident-owner weights with exact parity
-//! against the current shard-read route. The `astro_expert_cache` stores a complete
+//! packed page can become whole-layer expert weights with exact parity
+//! against the shard-read route. The `astro_expert_cache` stores a complete
 //! layer's streamed page as-is (no padding, identity slot map), so the question
 //! reduces to one claim: the bounded source-interval read used by the pager
-//! returns the same bytes as the whole-shard read used by the resident loader.
+//! returns the same bytes as the whole-shard read.
 //!
-//! Both paths below are production. The resident path is exactly what
-//! `Qwen3_5ResidentExpertWeights::load` does (load the shard, take the named
-//! tensor, validate it against the plan). The paged path is exactly what
-//! `Qwen3_5ExpertPager::stream_selected_expert_page_from_ssd` does (build a page manifest
-//! from the validated plan, then load it through bounded ranges).
+//! The paged path is exactly what `Qwen3_5ExpertPager::stream_selected_expert_page_from_ssd`
+//! does (build a page manifest from the validated plan, then load it through
+//! bounded ranges). The whole-shard path is what the quantization
+//! sensitivity probe's model loads its held experts with
+//! (`Qwen3_5ProbeExpertWeights::load`: load the shard, take the named
+//! tensor, validate it against the plan), so the probe measures the bytes
+//! serving pages in.
 
 use std::collections::HashMap;
 use std::fs::File;
@@ -19,9 +21,11 @@ use std::io::Write;
 use std::path::Path;
 
 use model_serving::{
-    QuantizationMode, QuantizedExpertLayerPlan, ResidentProjectionArraysForTests,
-    build_quantized_expert_layer_plan, build_quantized_expert_page_manifest_from_plan,
-    load_quantized_expert_page, resident_layer_arrays_for_tests,
+    QuantizationMode, QuantizedExpertLayerPlan, build_quantized_expert_layer_plan,
+    build_quantized_expert_page_manifest_from_plan, load_quantized_expert_page,
+};
+use qwen35_quantization_probe::probe_model::experts::{
+    ExpertProjectionArraysForTests, expert_layer_arrays_for_tests,
 };
 use runtime_integration::{MlxMemoryLimits, MlxRuntime, MlxSafetensors};
 use serde_json::json;
@@ -174,7 +178,7 @@ async fn should_read_identical_expert_tensor_bytes_from_shard_and_bounded_page()
     let layer_plan = parity_layer_plan(model_directory.path());
     let runtime = test_runtime();
 
-    // Resident route: the whole-shard load the resident loader performs.
+    // Whole-shard route: the load the probe model's expert loader performs.
     let shard = runtime
         .load_safetensors(
             File::open(model_directory.path().join(SHARD_FILE_NAME))
@@ -312,7 +316,7 @@ fn assert_arrays_identical(
 
 #[tokio::test]
 #[expect(clippy::too_many_lines)]
-async fn should_build_identical_resident_layers_from_shard_and_bounded_reads() {
+async fn should_build_identical_held_expert_layers_from_shard_and_bounded_reads() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let model_directory = tempfile::tempdir().expect("the parity model directory should create");
     let layer_plan = parity_layer_plan(model_directory.path());
@@ -333,11 +337,11 @@ async fn should_build_identical_resident_layers_from_shard_and_bounded_reads() {
     let page_tensors = load_quantized_expert_page(&runtime, &page_manifest, None)
         .expect("the complete-layer page should load through bounded ranges");
 
-    // Build the resident layer through the production construction twice: once
-    // from the whole-shard arrays the resident loader reads, once from the
+    // Build the held layer through the probe model's construction twice: once
+    // from the whole-shard arrays its loader reads, once from the
     // bounded arrays the pager reads.
     let build_from = |shard: Option<&MlxSafetensors>| {
-        let to_owner_input = |read: ProjectionRead| ResidentProjectionArraysForTests {
+        let to_owner_input = |read: ProjectionRead| ExpertProjectionArraysForTests {
             packed_weight: read.packed_weight,
             quantization_scales: read.quantization_scales,
             quantization_biases: read.quantization_biases,
@@ -363,8 +367,8 @@ async fn should_build_identical_resident_layers_from_shard_and_bounded_reads() {
             shard,
             &page_tensors,
         ));
-        resident_layer_arrays_for_tests(&runtime, &layer_plan, gate, up, down)
-            .expect("the production resident construction should build")
+        expert_layer_arrays_for_tests(&runtime, &layer_plan, gate, up, down)
+            .expect("the held expert layer construction should build")
     };
     let shard_built = build_from(Some(&shard));
     let page_built = build_from(None);

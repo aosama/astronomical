@@ -1,8 +1,8 @@
 //! The parts of a mixture-of-experts layer a probe swaps that are not plain
 //! affine weights in the decoder layer: the router, and a routed-expert gate
-//! or up projection, which the resident engine may hold fused into one array.
+//! or up projection, which the probe model may hold fused into one array.
 //!
-//! A probe re-encodes one projection at a time. The resident owner fuses the
+//! A probe re-encodes one projection at a time. The held-expert owner fuses the
 //! gate and up projections along the output axis when their storage agrees,
 //! so that one gathered multiply serves both; a probed half no longer agrees
 //! with its sibling (a different width, or re-rounded values that must not
@@ -19,9 +19,9 @@ use mlx_bridge::MlxArray;
 use quantization::error::QuantizationError;
 use runtime_integration::MlxRuntime;
 
+use crate::probe_model::experts::Qwen3_5ProbeGateUpWeights;
 use qwen35::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights;
 use qwen35::qwen3_5_core::model_math::feed_forward_weights::Qwen3_5MoERouterGateWeights;
-use qwen35::qwen3_5_resident::experts::Qwen3_5ResidentGateUpWeights;
 
 use super::simulated_quantization::mlx_step;
 
@@ -33,7 +33,7 @@ pub const PROBE_SEPARATION_REASON: &str = "one projection is swapped by the sens
 pub enum SwappedOutWeights {
     Affine(Qwen3_5AffineWeights),
     Router(Qwen3_5MoERouterGateWeights),
-    ExpertGateUp(Qwen3_5ResidentGateUpWeights),
+    ExpertGateUp(Qwen3_5ProbeGateUpWeights),
 }
 
 /// The router's weight in the affine form a probe re-encodes. A bfloat16
@@ -57,10 +57,10 @@ pub fn router_as_affine_weights(
 /// splitting the owner's fused array when it holds one.
 pub fn separate_gate_and_up_projections(
     runtime: &MlxRuntime,
-    gate_up_weights: &Qwen3_5ResidentGateUpWeights,
+    gate_up_weights: &Qwen3_5ProbeGateUpWeights,
 ) -> Result<(Qwen3_5AffineWeights, Qwen3_5AffineWeights), QuantizationError> {
     match gate_up_weights {
-        Qwen3_5ResidentGateUpWeights::Separate {
+        Qwen3_5ProbeGateUpWeights::Separate {
             gate_projection,
             up_projection,
             ..
@@ -74,7 +74,7 @@ pub fn separate_gate_and_up_projections(
                 "retain the up projection",
             )?,
         )),
-        Qwen3_5ResidentGateUpWeights::Fused { projection, .. } => Ok((
+        Qwen3_5ProbeGateUpWeights::Fused { projection, .. } => Ok((
             output_rows_half(runtime, projection, 0)?,
             output_rows_half(runtime, projection, 1)?,
         )),

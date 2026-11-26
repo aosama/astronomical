@@ -1,7 +1,6 @@
 //! The Qwen 3.5 model family (issue #2340): the shared core (configuration,
 //! tokenizer, decoder, model math, artifacts and vision), the streaming model
-//! that serves every text model, the in-memory model the quantization
-//! sensitivity probe swaps weights in, the Prism Hadamard ternary build,
+//! that serves every text model, the Prism Hadamard ternary build,
 //! speculative decoding, the custom kernel capability probes, and the
 //! owner-thread engine they run on. The `astro_ssd_prompt_cache` and expert paging they use live in the
 //! engine core. The quantizer's sensitivity probe for this family lives
@@ -37,9 +36,6 @@ pub mod qwen4_exp;
 // through the shared core.
 #[cfg(test)]
 mod qwen3_5_import_direction_tests;
-
-#[cfg(feature = "direct-mlx")]
-pub mod qwen3_5_resident;
 
 pub mod qwen3_5_streaming;
 
@@ -230,11 +226,6 @@ pub use text_generation::generation_loop::test_controls::{
 pub use qwen3_5_core::model::draft_tree_verification::DraftTreeTarget;
 #[cfg(feature = "direct-mlx")]
 pub use qwen3_5_core::model::draft_tree_verification::Qwen3_5DraftTreeVerification;
-
-#[cfg(feature = "direct-mlx")]
-pub use qwen3_5_resident::{
-    ResidentLayerArraysForTests, ResidentProjectionArraysForTests, resident_layer_arrays_for_tests,
-};
 
 #[cfg(feature = "direct-mlx")]
 pub use qwen3_5_streaming::Qwen3_5StreamingEngineTestControls;

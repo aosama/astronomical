@@ -3,8 +3,8 @@
 //! and model-family names masked.
 //!
 //! Masking exists so two copies that differ only by the family they serve
-//! (`Qwen3_5ResidentModel` against `Qwen3_5StreamingModel`, `KevEngine`
-//! against `ClefEngine`) are counted as the copies they are. Without it the
+//! (`KevEngine` against `ClefEngine`, `KokoroSpeechFamily` against
+//! `PhononSpeechFamily`) are counted as the copies they are. Without it the
 //! measure would miss most of the duplication issue #2473 sets out to remove.
 
 /// What every family spelling below is replaced with.
@@ -12,17 +12,13 @@ pub(crate) const FAMILY_NAME_MASK: &str = "FAMILY";
 
 /// Family spellings, in CamelCase, snake_case and the SCREAMING_SNAKE form
 /// the image families use for constants. The order is the match order at each
-/// position, so a compound such as `Qwen3_5Resident` must come before its
+/// position, so a compound such as `Qwen3_5Streaming` must come before its
 /// parts: it then becomes one mask, as it did in the measurement the issue's
 /// figures come from, rather than two masks side by side.
-pub(crate) const FAMILY_NAME_SPELLINGS: [&str; 28] = [
-    "Qwen3_5Resident",
+pub(crate) const FAMILY_NAME_SPELLINGS: [&str; 24] = [
     "Qwen3_5Streaming",
-    "qwen3_5_resident",
     "qwen3_5_streaming",
-    "Resident",
     "Streaming",
-    "resident",
     "streaming",
     "Flux2Klein",
     "QwenImage21",

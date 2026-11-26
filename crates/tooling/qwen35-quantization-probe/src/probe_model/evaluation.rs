@@ -2,11 +2,23 @@ use mlx_bridge::MlxArray;
 
 use crate::{PerformanceAttribution, PerformanceOperation};
 
-use super::{Qwen3_5ResidentModel, RequestDecoderStateStack, TextExecutionError};
+use super::{Qwen3_5ProbeModel, RequestDecoderStateStack, TextExecutionError};
 use text_generation::AstroSsdPromptCacheBoundaryCheckpointCollector;
 
-impl Qwen3_5ResidentModel {
-    crate::qwen3_5_core::model::shared_model_methods::qwen3_5_shared_model_evaluation_methods!();
+impl Qwen3_5ProbeModel {
+    /// Materializes final logits and mutable decoder state for one forward pass.
+    pub fn evaluate_forward_state(
+        &self,
+        final_logits: &MlxArray,
+        request_decoder_state: &RequestDecoderStateStack,
+    ) -> Result<(), TextExecutionError> {
+        let mut disabled_performance_attribution = PerformanceAttribution::disabled();
+        self.evaluate_forward_state_with_performance_attribution(
+            final_logits,
+            request_decoder_state,
+            &mut disabled_performance_attribution,
+        )
+    }
 
     /// Evaluates forward roots and resolves deferred GPU missing-route bitmaps.
     pub fn evaluate_forward_state_with_performance_attribution(

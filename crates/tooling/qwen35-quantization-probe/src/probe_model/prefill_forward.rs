@@ -2,15 +2,15 @@
 //! runs: how a prompt chunk's decoder state is evaluated. The prefill
 //! forwards themselves are shared, in `qwen3_5_core::model::prefill_forward`.
 
-use crate::qwen3_5_core::model::prefill_forward::Qwen3_5PrefillForward;
+use qwen35::qwen3_5_core::model::prefill_forward::Qwen3_5PrefillForward;
 
 use crate::PerformanceAttribution;
 
-use super::Qwen3_5ResidentModel;
+use super::Qwen3_5ProbeModel;
 use super::{RequestDecoderStateStack, TextExecutionError};
 use text_generation::AstroSsdPromptCacheBoundaryCheckpointCollector;
 
-impl Qwen3_5PrefillForward for Qwen3_5ResidentModel {
+impl Qwen3_5PrefillForward for Qwen3_5ProbeModel {
     const PRODUCTION_FORWARD_MODE: () = ();
 
     fn evaluate_prefill_decoder_state(

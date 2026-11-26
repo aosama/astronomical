@@ -1,20 +1,20 @@
-//! Decoder-layer feed-forward execution for the resident engine: the half of
+//! Decoder-layer feed-forward execution for the probe model: the half of
 //! the residual sandwich that forks by feed-forward architecture (dense MLP,
 //! which can run on the Neural Engine during prefill, versus routed
 //! mixture-of-experts over expert weights held whole in memory).
 
 use mlx_bridge::MlxArray;
 
-use crate::qwen3_5_core::model::Qwen3_5DecoderLayerAttentionOutput;
-use crate::qwen3_5_core::model_math::decoder_layer_weights::{
+use crate::{PerformanceAttribution, PerformanceOperation};
+use qwen35::qwen3_5_core::model::Qwen3_5DecoderLayerAttentionOutput;
+use qwen35::qwen3_5_core::model_math::decoder_layer_weights::{
     Qwen3_5DecoderFeedForwardWeights, Qwen3_5DecoderLayerWeights,
 };
-use crate::{PerformanceAttribution, PerformanceOperation};
 use text_generation::execution_error::TextExecutionError;
 
-use crate::qwen3_5_resident::model::Qwen3_5ResidentModel;
+use crate::probe_model::Qwen3_5ProbeModel;
 
-impl Qwen3_5ResidentModel {
+impl Qwen3_5ProbeModel {
     pub fn forward_decoder_layer_feed_forward(
         &self,
         attention_output: &Qwen3_5DecoderLayerAttentionOutput,
@@ -35,17 +35,17 @@ impl Qwen3_5ResidentModel {
                     layer_index,
                 ),
             Qwen3_5DecoderFeedForwardWeights::MixtureOfExperts(mixture_of_experts_weights) => {
-                let resident_expert_layer_weights = self
-                    .resident_expert_weights
+                let held_expert_layer_weights = self
+                    .held_expert_weights
                     .as_ref()
-                    .and_then(|resident_expert_weights| resident_expert_weights.layer(layer_index))
+                    .and_then(|held_expert_weights| held_expert_weights.layer(layer_index))
                     .ok_or_else(|| TextExecutionError::MissingTensor {
-                        tensor_name: format!("resident expert weights for layer {layer_index}"),
+                        tensor_name: format!("held expert weights for layer {layer_index}"),
                     })?;
                 self.forward_qwen3_5_moe(
                     &attention_output.normalized_attention,
                     mixture_of_experts_weights,
-                    resident_expert_layer_weights,
+                    held_expert_layer_weights,
                     should_use_compiled_elementwise_graphs,
                     performance_attribution,
                 )

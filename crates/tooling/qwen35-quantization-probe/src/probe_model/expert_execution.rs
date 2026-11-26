@@ -1,20 +1,18 @@
 //! Standard MLX gathered matrix products over complete contiguous expert arrays.
 //!
-//! Resident execution changes weight ownership only. It reuses the production
+//! Held-expert execution changes weight ownership only. It reuses the production
 //! router, assignment sorting, affine profiles, SwiGLU graph, weighted sum, and
-//! shared-expert combination so resident and paged modes compute the same bits.
+//! shared-expert combination so held and paged experts compute the same bits.
 //! On prompt chunks it may fuse the sorted weighted sum and the shared-expert
 //! combination into one Metal pass, which is bit for bit equal to the two.
 
 use mlx_bridge::MlxArray;
 
-use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights;
-use crate::qwen3_5_resident::experts::{
-    Qwen3_5ResidentExpertLayerWeights, Qwen3_5ResidentGateUpWeights,
-};
-use crate::qwen3_5_resident::model::Qwen3_5ResidentModel;
+use crate::probe_model::Qwen3_5ProbeModel;
+use crate::probe_model::experts::{Qwen3_5ProbeExpertLayerWeights, Qwen3_5ProbeGateUpWeights};
 use crate::sparse_experts::{StackedExpertProjection, gather_expert_projection};
 use crate::{PerformanceAttribution, PerformanceOperation};
+use qwen35::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights;
 use text_generation::execution_error::TextExecutionError;
 
 use super::feed_forward_weights::Qwen3_5MoEFeedForwardWeights;
@@ -23,18 +21,18 @@ use super::routing::{
     qwen3_5_moe_sort_expert_assignments, qwen3_5_moe_sorted_expert_weighted_sum,
     qwen3_5_moe_unsorted_expert_weighted_sum,
 };
-use crate::qwen3_5_core::model_math::sorted_expert_shared_combination::{
+use crate::sparse_experts;
+use qwen35::qwen3_5_core::model_math::sorted_expert_shared_combination::{
     SortedExpertSharedCombinationInputs, fused_sorted_expert_shared_combination_if_proven,
 };
-use crate::sparse_experts;
 
-impl Qwen3_5ResidentModel {
+impl Qwen3_5ProbeModel {
     #[allow(clippy::too_many_arguments)]
-    pub(super) fn forward_moe_resident_with_performance_attribution(
+    pub(super) fn forward_moe_held_with_performance_attribution(
         &self,
         hidden_states: &MlxArray,
         mixture_of_experts_weights: &Qwen3_5MoEFeedForwardWeights,
-        resident_expert_layer_weights: &Qwen3_5ResidentExpertLayerWeights,
+        held_expert_layer_weights: &Qwen3_5ProbeExpertLayerWeights,
         selected_indices: &MlxArray,
         selected_scores: &MlxArray,
         should_use_compiled_elementwise_graphs: bool,
@@ -43,10 +41,10 @@ impl Qwen3_5ResidentModel {
         performance_attribution.measure_operation(
             PerformanceOperation::ResidentMoeGraphConstruction,
             |performance_attribution| {
-                self.forward_moe_resident(
+                self.forward_moe_held(
                     hidden_states,
                     mixture_of_experts_weights,
-                    resident_expert_layer_weights,
+                    held_expert_layer_weights,
                     selected_indices,
                     selected_scores,
                     should_use_compiled_elementwise_graphs,
@@ -57,11 +55,11 @@ impl Qwen3_5ResidentModel {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn forward_moe_resident(
+    fn forward_moe_held(
         &self,
         hidden_states: &MlxArray,
         mixture_of_experts_weights: &Qwen3_5MoEFeedForwardWeights,
-        resident_expert_layer_weights: &Qwen3_5ResidentExpertLayerWeights,
+        held_expert_layer_weights: &Qwen3_5ProbeExpertLayerWeights,
         selected_expert_indices: &MlxArray,
         selected_scores: &MlxArray,
         should_use_compiled_elementwise_graphs: bool,
@@ -91,16 +89,16 @@ impl Qwen3_5ResidentModel {
                 }
                 None => (&expanded_states, selected_expert_indices, false),
             };
-        let selected_activated = self.resident_gate_up_activation(
+        let selected_activated = self.held_gate_up_activation(
             expert_input_states,
-            &resident_expert_layer_weights.gate_up_weights,
+            &held_expert_layer_weights.gate_up_weights,
             expert_indices,
             are_expert_indices_sorted,
             performance_attribution,
         )?;
-        let selected_outputs = self.resident_expert_linear(
+        let selected_outputs = self.held_expert_linear(
             &selected_activated,
-            &resident_expert_layer_weights.down_projection,
+            &held_expert_layer_weights.down_projection,
             expert_indices,
             are_expert_indices_sorted,
             performance_attribution,
@@ -115,7 +113,7 @@ impl Qwen3_5ResidentModel {
             },
             selected_scores,
         };
-        self.combine_resident_routed_and_shared_experts(
+        self.combine_held_routed_and_shared_experts(
             hidden_states,
             mixture_of_experts_weights,
             &routed_expert_outputs,
@@ -123,40 +121,40 @@ impl Qwen3_5ResidentModel {
         )
     }
 
-    fn resident_gate_up_activation(
+    fn held_gate_up_activation(
         &self,
         activations: &MlxArray,
-        gate_up_weights: &Qwen3_5ResidentGateUpWeights,
+        gate_up_weights: &Qwen3_5ProbeGateUpWeights,
         selected_expert_indices: &MlxArray,
         are_expert_indices_sorted: bool,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<MlxArray, TextExecutionError> {
         let (selected_gate, selected_up) = match gate_up_weights {
-            Qwen3_5ResidentGateUpWeights::Fused { projection, .. } => {
-                let selected_gate_up = self.resident_expert_linear(
+            Qwen3_5ProbeGateUpWeights::Fused { projection, .. } => {
+                let selected_gate_up = self.held_expert_linear(
                     activations,
                     projection,
                     selected_expert_indices,
                     are_expert_indices_sorted,
                     performance_attribution,
                 )?;
-                self.split_resident_gate_up_output(&selected_gate_up)?
+                self.split_held_gate_up_output(&selected_gate_up)?
             }
-            Qwen3_5ResidentGateUpWeights::Separate {
+            Qwen3_5ProbeGateUpWeights::Separate {
                 gate_projection,
                 up_projection,
                 ..
             } => {
                 // Keep the former graph-construction order for valid mixed
                 // projection pairs that cannot be fused without conversion.
-                let selected_up = self.resident_expert_linear(
+                let selected_up = self.held_expert_linear(
                     activations,
                     up_projection,
                     selected_expert_indices,
                     are_expert_indices_sorted,
                     performance_attribution,
                 )?;
-                let selected_gate = self.resident_expert_linear(
+                let selected_gate = self.held_expert_linear(
                     activations,
                     gate_projection,
                     selected_expert_indices,
@@ -173,20 +171,20 @@ impl Qwen3_5ResidentModel {
         )?)
     }
 
-    fn split_resident_gate_up_output(
+    fn split_held_gate_up_output(
         &self,
         selected_gate_up: &MlxArray,
     ) -> Result<(MlxArray, MlxArray), TextExecutionError> {
         let output_shape = selected_gate_up.shape();
         let Some(last_dimension_index) = output_shape.len().checked_sub(1) else {
             return Err(TextExecutionError::InvalidInput {
-                description: "resident fused gate/up output must have at least one dimension",
+                description: "held fused gate/up output must have at least one dimension",
             });
         };
         let output_dimension = output_shape[last_dimension_index];
         if output_dimension <= 0 || output_dimension % 2 != 0 {
             return Err(TextExecutionError::InvalidInput {
-                description: "resident fused gate/up output dimension must be positive and even",
+                description: "held fused gate/up output dimension must be positive and even",
             });
         }
         let projection_dimension = output_dimension / 2;
@@ -205,7 +203,7 @@ impl Qwen3_5ResidentModel {
         Ok((selected_gate, selected_up))
     }
 
-    fn resident_expert_linear(
+    fn held_expert_linear(
         &self,
         activations: &MlxArray,
         affine_weights: &Qwen3_5AffineWeights,
@@ -226,7 +224,7 @@ impl Qwen3_5ResidentModel {
         );
         match affine_weights {
             Qwen3_5AffineWeights::Jangtq2Codebook { .. } => Err(TextExecutionError::InvalidInput {
-                description: "the resident engine never loads jangtq2 codebook expert pages",
+                description: "the probe model never loads jangtq2 codebook expert pages",
             }),
             Qwen3_5AffineWeights::NativeBfloat16 { weight } => {
                 // Qwen stores native rows as `[expert, output, input]`; expose the
@@ -271,7 +269,7 @@ impl Qwen3_5ResidentModel {
     /// Adds the gated shared expert to the routed experts' weighted sum. A
     /// prompt chunk on the sorted route with the fused kernel enabled does
     /// both in one Metal pass; every other case reduces first, then combines.
-    fn combine_resident_routed_and_shared_experts(
+    fn combine_held_routed_and_shared_experts(
         &self,
         hidden_states: &MlxArray,
         mixture_of_experts_weights: &Qwen3_5MoEFeedForwardWeights,
@@ -279,10 +277,7 @@ impl Qwen3_5ResidentModel {
         should_use_compiled_elementwise_graphs: bool,
     ) -> Result<MlxArray, TextExecutionError> {
         let (shared_expert_output, shared_expert_gate_logits) = self
-            .resident_shared_expert_output_and_gate_logits(
-                hidden_states,
-                mixture_of_experts_weights,
-            )?;
+            .held_shared_expert_output_and_gate_logits(hidden_states, mixture_of_experts_weights)?;
         if should_use_compiled_elementwise_graphs
             && let Some(combined_expert_output) = self.fused_sorted_expert_shared_combination(
                 routed_expert_outputs,
@@ -292,7 +287,7 @@ impl Qwen3_5ResidentModel {
         {
             return Ok(combined_expert_output);
         }
-        let sparse_expert_output = self.resident_sparse_expert_output(routed_expert_outputs)?;
+        let sparse_expert_output = self.held_sparse_expert_output(routed_expert_outputs)?;
         if should_use_compiled_elementwise_graphs {
             Ok(self
                 .runtime
@@ -347,7 +342,7 @@ impl Qwen3_5ResidentModel {
 
     /// Router-score weighted sum of the routed experts, through the sorted
     /// kernel when the assignments were sorted.
-    fn resident_sparse_expert_output(
+    fn held_sparse_expert_output(
         &self,
         routed_expert_outputs: &RoutedExpertOutputs<'_>,
     ) -> Result<MlxArray, TextExecutionError> {
@@ -375,7 +370,7 @@ impl Qwen3_5ResidentModel {
     }
 
     /// The shared expert's SwiGLU output and its one gate logit per token.
-    fn resident_shared_expert_output_and_gate_logits(
+    fn held_shared_expert_output_and_gate_logits(
         &self,
         hidden_states: &MlxArray,
         mixture_of_experts_weights: &Qwen3_5MoEFeedForwardWeights,

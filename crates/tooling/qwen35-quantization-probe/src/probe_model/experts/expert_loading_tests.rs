@@ -1,5 +1,5 @@
-//! Beside-source unit contracts for the pure resident-expert plan summaries in
-//! `resident_expert_loading.rs`. These run before any model file is touched:
+//! Beside-source unit contracts for the pure held-expert plan summaries in
+//! `held_expert_loading.rs`. These run before any model file is touched:
 //! the payload total, the expert-entry count, and the distinct source-file set
 //! are derived purely from the validated layer plans, so their overflow,
 //! deduplication, and empty-input behavior are pinned here without a graphics
@@ -7,7 +7,7 @@
 
 use std::path::PathBuf;
 
-use crate::{QuantizationMode, QuantizedExpertLayerPlan, QuantizedTensorSource, SafetensorsDtype};
+use qwen35::{QuantizationMode, QuantizedExpertLayerPlan, QuantizedTensorSource, SafetensorsDtype};
 
 use super::{
     collect_source_file_paths, complete_model_expert_entry_count, complete_model_payload_bytes,
@@ -74,7 +74,7 @@ fn should_sum_complete_payload_bytes_across_layer_plans() {
 fn should_fail_the_payload_total_when_a_layer_plan_has_inconsistent_geometry() {
     // The tensor source claims capacity 2 while the layer claims 4; the
     // plan-level consistency check must reject it before any storage is
-    // reserved for the resident owner.
+    // reserved for the held-expert owner.
     let mut inconsistent_layer_plan =
         layer_plan("fictional.layers.0", "shard-a.safetensors", 10, 4);
     inconsistent_layer_plan.tensor_sources[0].expert_capacity = 2;

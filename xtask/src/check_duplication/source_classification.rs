@@ -41,7 +41,7 @@ pub(crate) fn is_production_source(relative_path: &str) -> bool {
 
 /// The area a file is reported under: its crate or app (`crates/foundation/config`,
 /// `apps/daemon`), the family folder inside a family-holding crate
-/// (`crates/families/text/qwen35/qwen3_5_resident`), or `xtask` for the tooling crate.
+/// (`crates/families/text/qwen35/qwen3_5_streaming`), or `xtask` for the tooling crate.
 pub(crate) fn area_of(relative_path: &str) -> String {
     let path_components: Vec<&str> = relative_path.split('/').collect();
     if path_components.first() == Some(&"xtask") {

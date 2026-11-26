@@ -1,20 +1,20 @@
-//! The resident model's part of the target forward graph: its decoder-layer
+//! The probe model's part of the target forward graph: its decoder-layer
 //! loop. The steps around it are shared with the streaming model in
 //! `qwen3_5_core::model::target_forward_graph`.
 
 use mlx_bridge::{MlxArray, MlxDtype};
 
-use crate::qwen3_5_core::model::target_forward_graph::{
+use crate::{PerformanceAttribution, PerformanceOperation};
+use qwen35::qwen3_5_core::model::target_forward_graph::{
     Qwen3_5ForwardPositions, Qwen3_5TargetForwardGraph, Qwen3_5TargetForwardOutput,
     validated_layer_decoder_state,
 };
-use crate::{PerformanceAttribution, PerformanceOperation};
 use text_generation::AstroSsdPromptCacheBoundaryCheckpointCollector;
 
-use super::Qwen3_5ResidentModel;
+use super::Qwen3_5ProbeModel;
 use super::{RequestDecoderStateStack, TextExecutionError};
 
-impl Qwen3_5ResidentModel {
+impl Qwen3_5ProbeModel {
     /// Executes a target forward and retains pre-final-normalization rows for specialized consumers.
     pub fn forward_chunk_with_pre_final_normalization_hidden_states(
         &self,
@@ -65,8 +65,8 @@ impl Qwen3_5ResidentModel {
     }
 }
 
-impl Qwen3_5TargetForwardGraph for Qwen3_5ResidentModel {
-    /// The resident model runs every forward one way.
+impl Qwen3_5TargetForwardGraph for Qwen3_5ProbeModel {
+    /// The probe model runs every forward one way.
     type ForwardMode = ();
 
     /// Runs the layers this model holds. A multi-token prefill may submit
