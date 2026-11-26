@@ -7,10 +7,13 @@
 //!
 //! Ways of dividing the capacity:
 //! - `todays_engine`: the layers held whole when the reply began stay whole,
-//!   layers that held nothing at either end keep nothing, and every other
-//!   layer gets an equal table from what is left, at most two replacements per
-//!   layer per token. Its row must come within ten percent of the engine's own
-//!   count for the lab to stand for the engine.
+//!   layers that held nothing at either end keep nothing, every other layer
+//!   gets an equal table from what is left, each table costs its whole
+//!   allocation, and the expert read the fewest times since it was seated goes
+//!   first. Its row must come within ten percent of the engine's own count for
+//!   the lab to stand for the engine; the `engine_agreement` rows say whether
+//!   it does, against the misses the engine recorded, and name the layers that
+//!   differ most.
 //! - `shared`: one capacity across every layer.
 //! - `shared_pinning_whole_layers`: the layers held whole when the reply began
 //!   stay whole (their routes never stop), the rest share what is left.
@@ -22,14 +25,16 @@ use std::path::Path;
 use std::time::Instant;
 
 use memory_policy::astro_expert_cache_model::{
-    BeladyMinimum, CappedReplacements, DecayedFrequency, FrequencyAdmittedRecency, KeepingRule,
-    LeastFrequentlyUsed, LeastRecentlyUsed, LimitedLookaheadBelady, PriorSeededDecayedFrequency,
-    ReplayCase, SavedReplayCase, SecondMostRecentUse, find_saved_case_documents,
-    read_saved_replay_case, replay, replay_with_rebalanced_tables,
+    BeladyMinimum, CappedReplacements, DecayedFrequency, FewestReadsSinceSeated,
+    FrequencyAdmittedRecency, KeepingRule, LeastFrequentlyUsed, LeastRecentlyUsed,
+    LimitedLookaheadBelady, PriorSeededDecayedFrequency, ReplayCase, SavedReplayCase,
+    SecondMostRecentUse, find_saved_case_documents, read_saved_replay_case, replay,
+    replay_with_rebalanced_tables,
 };
 
 mod capacity_divisions;
 mod capacity_schedule_report;
+mod engine_agreement_report;
 
 use capacity_divisions::{
     divided_by_demand, divided_equally, divided_like_todays_engine, shared_pinning_whole_layers,
@@ -86,13 +91,12 @@ fn every_rule() -> Vec<Box<dyn KeepingRule>> {
     ]
 }
 
-/// Today's engine keeps a table's experts by a reuse score that halves every
-/// eight reply tokens (`RECENT_REUSE_SCORE_HALF_LIFE_DECODE_STEPS`) and swaps
-/// at most two per layer per token.
-fn todays_engine_rule() -> Box<dyn KeepingRule> {
-    Box::new(CappedReplacements::new(
-        Box::new(DecayedFrequency::new(8.0)),
-        2,
+/// Today's engine keeps a table's experts by its baseline decode policy:
+/// the expert read the fewest times since it was seated goes first, and
+/// every newcomer is seated. Held experts start with the prompt's reads.
+fn todays_engine_rule(saved_replay_case: &SavedReplayCase) -> Box<dyn KeepingRule> {
+    Box::new(FewestReadsSinceSeated::seeded_with_prompt_demand(
+        &saved_replay_case.prompt_demand_by_layer,
     ))
 }
 
@@ -109,6 +113,9 @@ fn report_saved_case(saved_replay_case: &SavedReplayCase) -> Vec<String> {
         replay_case.routed_reply.token_count(),
         replay_case.capacity_bytes as f64 / f64::from(1_u32 << 30),
     )];
+    report_lines.extend(engine_agreement_report::report_engine_agreement(
+        saved_replay_case,
+    ));
     report_lines.extend(report_engine_layout(saved_replay_case));
     report_lines.extend(report_shared_rules(saved_replay_case));
     report_lines.extend(report_whole_layer_sweeps(saved_replay_case));
@@ -179,10 +186,11 @@ fn report_engine_layout(saved_replay_case: &SavedReplayCase) -> Vec<String> {
         workload_name,
         "todays_engine",
         &engine_division,
-        todays_engine_rule(),
+        todays_engine_rule(saved_replay_case),
     )];
     for keeping_rule in [
-        Box::new(DecayedFrequency::new(32.0)) as Box<dyn KeepingRule>,
+        Box::new(FewestReadsSinceSeated::default()) as Box<dyn KeepingRule>,
+        Box::new(DecayedFrequency::new(32.0)),
         Box::new(CappedReplacements::new(
             Box::new(DecayedFrequency::new(32.0)),
             2,
@@ -253,7 +261,7 @@ fn report_whole_layer_sweeps(saved_replay_case: &SavedReplayCase) -> Vec<String>
         workload_name,
         "whole_layers_4_then_equal_tables",
         &whole_layers_then_equal_tables(saved_replay_case, 4),
-        todays_engine_rule(),
+        todays_engine_rule(saved_replay_case),
     ));
     report_lines
 }

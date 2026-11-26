@@ -37,6 +37,16 @@ pub trait KeepingRule {
         replay_position: ReplayPosition,
     ) -> (u64, u64);
 
+    /// The priority of `expert` once it has been read because it was not
+    /// held. Rules that do not tell a read from a hit leave it as a use.
+    fn priority_after_miss(
+        &mut self,
+        expert: ExpertKey,
+        replay_position: ReplayPosition,
+    ) -> (u64, u64) {
+        self.priority_after_use(expert, replay_position)
+    }
+
     /// Whether `incoming` is worth giving up `victim` for. Every rule but a
     /// filtering one keeps every newcomer.
     fn admits(
@@ -54,7 +64,7 @@ pub trait KeepingRule {
 }
 
 /// One step of the reply: a token's layer, counted across the whole reply.
-fn reply_step(replay_position: ReplayPosition, layer_count: usize) -> u64 {
+pub(super) fn reply_step(replay_position: ReplayPosition, layer_count: usize) -> u64 {
     (replay_position.token_index * layer_count + replay_position.layer_index) as u64 + 1
 }
 
@@ -426,6 +436,26 @@ impl KeepingRule for SecondMostRecentUse {
     }
 }
 
+/// Each expert's demand, `demand_by_layer[layer][expert]`, for the experts
+/// with any.
+pub(super) fn demand_by_expert(demand_by_layer: &[Vec<u64>]) -> HashMap<ExpertKey, u64> {
+    let mut demand_by_expert = HashMap::new();
+    for (layer_index, layer_demand) in demand_by_layer.iter().enumerate() {
+        for (expert_id, &demand) in layer_demand.iter().enumerate() {
+            if demand > 0 {
+                demand_by_expert.insert(
+                    ExpertKey {
+                        layer_index,
+                        expert_id: u16::try_from(expert_id).unwrap_or(u16::MAX),
+                    },
+                    demand,
+                );
+            }
+        }
+    }
+    demand_by_expert
+}
+
 /// Decayed frequency whose every expert starts from a prior: its demand in
 /// the prompt (and earlier replies) scaled to `prior_weight` reply uses at
 /// the reply's first token. The prompt's routing is evidence the engine has
@@ -441,25 +471,12 @@ impl PriorSeededDecayedFrequency {
     /// starts with `prior_weight` uses.
     #[must_use]
     pub fn new(half_life_tokens: f64, demand_by_layer: &[Vec<u64>], prior_weight: f64) -> Self {
-        let mut largest_demand = 0_u64;
-        for layer_demand in demand_by_layer {
-            for &demand in layer_demand {
-                largest_demand = largest_demand.max(demand);
-            }
-        }
+        let demand_by_expert = demand_by_expert(demand_by_layer);
+        let largest_demand = demand_by_expert.values().copied().max().unwrap_or(0);
         let mut prior_use_weight_by_expert = HashMap::new();
-        for (layer_index, layer_demand) in demand_by_layer.iter().enumerate() {
-            for (expert_id, &demand) in layer_demand.iter().enumerate() {
-                if demand > 0 && largest_demand > 0 {
-                    prior_use_weight_by_expert.insert(
-                        ExpertKey {
-                            layer_index,
-                            expert_id: u16::try_from(expert_id).unwrap_or(u16::MAX),
-                        },
-                        prior_weight * demand as f64 / largest_demand as f64,
-                    );
-                }
-            }
+        for (expert, demand) in demand_by_expert {
+            prior_use_weight_by_expert
+                .insert(expert, prior_weight * demand as f64 / largest_demand as f64);
         }
         Self {
             decayed_frequency: DecayedFrequency::new(half_life_tokens),
@@ -571,5 +588,94 @@ impl KeepingRule for LimitedLookaheadBelady {
         victim_priority: (u64, u64),
     ) -> bool {
         incoming_priority > victim_priority
+    }
+}
+
+/// Gives up the held expert read the fewest times since it was seated, the
+/// one used longest ago among equals: the rule today's engine keeps its
+/// tables by.
+///
+/// The engine serves with its baseline decode policy
+/// (`WorkerDecodeAstroExpertCachePolicy::Baseline`): every held expert
+/// outside the route being served may be given up, the one read the fewest
+/// times since it was seated first, and every newly read expert is seated.
+/// A newcomer starts at no reads, so the next newcomer replaces it before any
+/// expert the reply keeps coming back to: the established set is protected
+/// without any cap or probation.
+#[derive(Debug, Default)]
+pub struct FewestReadsSinceSeated {
+    layer_count: usize,
+    reads_since_seated_by_expert: HashMap<ExpertKey, u64>,
+    starting_reads_by_expert: HashMap<ExpertKey, u64>,
+}
+
+impl FewestReadsSinceSeated {
+    /// Experts held when the reply began start with the prompt's demand for
+    /// them, `prompt_demand_by_layer[layer][expert]`, standing for the reads
+    /// the engine counted while the prompt was read. It is not exactly those
+    /// reads (the prompt's final chunk weighs heavier, and an expert seated
+    /// late missed the reads before it), but replays of a recorded reply came
+    /// within 0.2% of the engine's own misses with it and 2.8% without.
+    #[must_use]
+    pub fn seeded_with_prompt_demand(prompt_demand_by_layer: &[Vec<u64>]) -> Self {
+        let starting_reads_by_expert = demand_by_expert(prompt_demand_by_layer);
+        Self {
+            starting_reads_by_expert,
+            ..Self::default()
+        }
+    }
+}
+
+impl KeepingRule for FewestReadsSinceSeated {
+    fn name(&self) -> String {
+        if self.starting_reads_by_expert.is_empty() {
+            "fewest reads since seated".to_owned()
+        } else {
+            "fewest reads since seated, seeded from the prompt".to_owned()
+        }
+    }
+
+    fn prepare(&mut self, routed_reply: &RoutedReply) {
+        self.layer_count = routed_reply.layer_count();
+        self.reads_since_seated_by_expert.clear();
+    }
+
+    fn starting_priority(&mut self, expert: ExpertKey) -> (u64, u64) {
+        let starting_reads = self
+            .starting_reads_by_expert
+            .get(&expert)
+            .copied()
+            .unwrap_or(0);
+        self.reads_since_seated_by_expert
+            .insert(expert, starting_reads);
+        (starting_reads, 0)
+    }
+
+    fn priority_after_use(
+        &mut self,
+        expert: ExpertKey,
+        replay_position: ReplayPosition,
+    ) -> (u64, u64) {
+        let reads_since_seated = self.reads_since_seated_by_expert.entry(expert).or_insert(0);
+        *reads_since_seated = reads_since_seated.saturating_add(1);
+        (
+            *reads_since_seated,
+            reply_step(replay_position, self.layer_count),
+        )
+    }
+
+    /// A read expert is seated with no reads counted: the read that brought
+    /// it in is not a read from its table.
+    fn priority_after_miss(
+        &mut self,
+        expert: ExpertKey,
+        replay_position: ReplayPosition,
+    ) -> (u64, u64) {
+        self.reads_since_seated_by_expert.insert(expert, 0);
+        (0, reply_step(replay_position, self.layer_count))
+    }
+
+    fn forget(&mut self, expert: ExpertKey) {
+        self.reads_since_seated_by_expert.remove(&expert);
     }
 }

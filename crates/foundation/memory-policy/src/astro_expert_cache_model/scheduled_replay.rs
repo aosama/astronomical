@@ -10,11 +10,11 @@
 //! reads. Replaying the same routes under the same schedule with each rule
 //! shows what a dip costs and what another rule would have saved.
 //!
-//! The lab differs from the engine in two ways worth knowing when its rows
-//! are read: the engine may drop a table that holds no experts and frees a
-//! table's whole padded array, while the lab drops only layers that hold
-//! experts and frees exactly their experts' bytes. Pinned layers (held whole
-//! so their routes never stop) are given up only when nothing else is left.
+//! With `charges_whole_table_slots` a table costs its whole allocation, as
+//! in the engine; without it each expert costs its own bytes. The engine
+//! may also drop a table that holds no experts, which the lab never needs
+//! to. Pinned layers (held whole so their routes never stop) are given up
+//! only when nothing else is left.
 
 use super::keeping_rules::KeepingRule;
 use super::replay_lab::{
@@ -34,7 +34,7 @@ pub enum CapacityTrim {
 }
 
 /// What one scheduled replay did.
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct ScheduledReplayOutcome {
     pub replay_outcome: ReplayOutcome,
     /// Layers given up whole because the capacity fell.
@@ -93,7 +93,7 @@ fn trim_to_capacity(
     capacity_trim: CapacityTrim,
     scheduled_outcome: &mut ScheduledReplayOutcome,
 ) {
-    while held_experts.held_bytes() > scheduled_case.capacity_bytes {
+    while held_experts.charged_bytes(scheduled_case) > scheduled_case.capacity_bytes {
         let given_up_count = match capacity_trim {
             CapacityTrim::DropLeastOccupiedLayer => {
                 let unpinned_layer =

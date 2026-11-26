@@ -26,12 +26,14 @@ pub(super) fn saved_case(held_at_end: Vec<Vec<u16>>) -> SavedReplayCase {
             held_expert_ids_by_layer_at_start: vec![vec![0, 1, 2, 3], vec![0], Vec::new()],
             layer_slot_limits: None,
             pinned_layer_indexes: Vec::new(),
+            charges_whole_table_slots: false,
         },
         held_expert_ids_by_layer_at_end: held_at_end,
         warm_slot_count: Some(2),
         prompt_demand_by_layer: vec![vec![9, 0, 0, 1], vec![0, 4, 0, 0], vec![0, 0, 7, 0]],
         reply_demand_by_layer: vec![vec![0, 0, 0, 0], vec![0, 0, 0, 20], vec![0, 0, 0, 0]],
         capacity_moments: Vec::new(),
+        engine_miss_counts_by_token: Vec::new(),
     }
 }
 
@@ -71,12 +73,13 @@ fn should_report_every_division_and_rule_for_each_saved_case() {
 
     let report_lines = replay_report(evidence_directory.path()).expect("the report runs");
 
-    // A header, today's engine, eight shared rules, five whole-layer counts,
-    // three prompt-seeded weights, and three rules for each of the seven
-    // other divisions.
+    // A header, today's engine and four other rules in its layout, eight
+    // shared rules, five whole-layer counts, three prompt-seeded weights, and
+    // three rules for each of the seven other divisions. The case keeps no
+    // engine misses, so no agreement rows.
     assert_eq!(
         report_lines.len(),
-        1 + 1 + 3 + 8 + 8 + 3 + 1 + 3 + 7 * 3 + 3 + 13,
+        1 + 1 + 4 + 8 + 8 + 3 + 1 + 3 + 7 * 3 + 3 + 13,
         "{report_lines:#?}"
     );
     assert!(report_lines[0].contains("workload=small reply_tokens=3"));

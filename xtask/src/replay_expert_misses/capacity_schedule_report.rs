@@ -137,7 +137,7 @@ fn scheduled_row(
     (schedule_name, schedule): (&str, &[u64]),
     capacity_trim: CapacityTrim,
 ) -> String {
-    let mut keeping_rule = todays_engine_rule();
+    let mut keeping_rule = todays_engine_rule(saved_replay_case);
     let scheduled_outcome = replay_under_capacity_schedule(
         engine_division,
         schedule,

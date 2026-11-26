@@ -42,6 +42,8 @@ mod capacity_schedule_tests;
 #[cfg(test)]
 mod expert_tables_tests;
 #[cfg(test)]
+mod keeping_rules_tests;
+#[cfg(test)]
 mod rebalanced_replay_tests;
 #[cfg(test)]
 mod recorded_reply_replay_tests;
@@ -67,9 +69,9 @@ pub use capacity_schedule::{
 };
 pub use expert_tables::{AstroExpertCacheTableRules, AstroExpertCacheTables, TableChange};
 pub use keeping_rules::{
-    BeladyMinimum, CappedReplacements, DecayedFrequency, FrequencyAdmittedRecency, KeepingRule,
-    LeastFrequentlyUsed, LeastRecentlyUsed, LimitedLookaheadBelady, PriorSeededDecayedFrequency,
-    ReplayPosition, SecondMostRecentUse,
+    BeladyMinimum, CappedReplacements, DecayedFrequency, FewestReadsSinceSeated,
+    FrequencyAdmittedRecency, KeepingRule, LeastFrequentlyUsed, LeastRecentlyUsed,
+    LimitedLookaheadBelady, PriorSeededDecayedFrequency, ReplayPosition, SecondMostRecentUse,
 };
 pub use rebalanced_replay::replay_with_rebalanced_tables;
 pub use replay_case_file::{

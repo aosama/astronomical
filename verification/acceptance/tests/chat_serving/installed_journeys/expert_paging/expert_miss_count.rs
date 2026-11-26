@@ -371,6 +371,7 @@ fn save_recording(
         "prompt_demand_by_layer_at_reply_start": recording.prompt_demand_by_layer_at_reply_start,
         "reply_demand_by_layer_at_reply_start": recording.reply_demand_by_layer_at_reply_start,
         "capacity_moments": recording.capacity_moments,
+        "engine_miss_counts_by_token": recording.engine_miss_counts_by_token,
     });
     let case_path = evidence_directory.join(format!("{}.case.json", measured_workload.name()));
     std::fs::write(
