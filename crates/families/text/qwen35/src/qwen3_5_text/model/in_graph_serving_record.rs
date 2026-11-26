@@ -60,6 +60,7 @@ impl Qwen3_5Model {
     ) -> Result<(), TextExecutionError> {
         let assignment_count = u64::try_from(layer_serving.assignment_count).unwrap_or(u64::MAX);
         self.record_route_coverage_counts(
+            layer_serving.layer_index,
             u64::try_from(table_read_through.retained_expert_count).unwrap_or(u64::MAX),
             u64::try_from(table_read_through.missing_expert_count).unwrap_or(u64::MAX),
             performance_attribution,
@@ -83,7 +84,9 @@ impl Qwen3_5Model {
                 PerformanceCounter::RetainedRouteAssignmentHitCount,
                 assignment_count,
             );
-            self.record_resident_layer_decode_hit(
+            // Only the avoided read: the coverage was recorded above, and
+            // recording it again counted every held layer-token twice.
+            self.record_avoided_resident_route(
                 layer_serving.assignment_count,
                 layer_serving.table_payload_bytes,
                 layer_serving.expert_capacity,

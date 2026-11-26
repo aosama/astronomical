@@ -59,7 +59,12 @@ pub(crate) fn divided_like_todays_engine(saved_replay_case: &SavedReplayCase) ->
             LayerKind::Absent => 0,
         });
     }
-    with_layer_slot_limits(replay_case, layer_slot_limits)
+    // The engine's tables cost their whole allocation from the moment they
+    // exist, so its layout is charged that way.
+    ReplayCase {
+        charges_whole_table_slots: true,
+        ..with_layer_slot_limits(replay_case, layer_slot_limits)
+    }
 }
 
 /// Layers held whole when the reply began stay whole, so their routes never

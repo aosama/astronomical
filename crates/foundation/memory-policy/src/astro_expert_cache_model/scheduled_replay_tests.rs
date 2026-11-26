@@ -21,6 +21,7 @@ fn two_layer_case(token_count: usize) -> ReplayCase {
         held_expert_ids_by_layer_at_start: vec![vec![0, 1], vec![0]],
         layer_slot_limits: None,
         pinned_layer_indexes: Vec::new(),
+        charges_whole_table_slots: false,
     }
 }
 
@@ -163,4 +164,29 @@ fn should_give_up_every_expert_one_by_one_when_the_capacity_falls_to_zero() {
     );
     assert_eq!(scheduled.trimmed_expert_count, 3);
     assert_eq!(scheduled.dropped_layer_count, 0);
+}
+
+#[test]
+fn should_drop_a_whole_table_when_the_dip_falls_below_its_allocation() {
+    // Each table has four slots but layer 1 uses one: its experts fit the
+    // dip, its allocation does not, so the table goes as the engine's would.
+    let replay_case = ReplayCase {
+        capacity_bytes: 8 * EXPERT_BYTES,
+        layer_slot_limits: Some(vec![4, 4]),
+        charges_whole_table_slots: true,
+        ..two_layer_case(4)
+    };
+    let dip = [80, 70, 80, 80];
+
+    let scheduled = replay_under_capacity_schedule(
+        &replay_case,
+        &dip,
+        &mut LeastRecentlyUsed::default(),
+        CapacityTrim::DropLeastOccupiedLayer,
+    );
+
+    // Layer 1 is read at the dip without a table, since a new one would not
+    // fit, and read once more when the capacity returns and its table is made.
+    assert_eq!(scheduled.dropped_layer_count, 1);
+    assert_eq!(scheduled.replay_outcome.miss_count, 2);
 }

@@ -37,7 +37,17 @@ pub struct RouteObservationCollector {
     /// Each capacity applied while the reply is recorded, so the replay lab
     /// can serve the reply under the capacity it really had.
     capacity_moments: Vec<memory_policy::astro_expert_cache_model::CapacityMoment>,
+    /// The experts each layer read from storage for the token being served,
+    /// while a reply is recorded.
+    pending_layer_miss_counts: Vec<u32>,
+    /// For each served reply token, each layer's reads from storage: the
+    /// engine's own misses, so the replay lab can say where it disagrees.
+    engine_miss_counts_by_token: std::collections::VecDeque<Vec<u32>>,
 }
+
+/// Tokens whose misses one recording keeps, the newest when a reply is
+/// longer: the observation ring keeps no more routes than this.
+const MAXIMUM_RECORDED_MISS_TOKENS: usize = RouteObservationRing::DEFAULT_OBSERVATION_CAPACITY;
 
 /// A bound on what one recorded reply keeps, about 3 MB; a reply that makes
 /// more moments keeps its first ones and records no more.
@@ -58,11 +68,15 @@ impl RouteObservationCollector {
             ),
             reply_start_snapshot: None,
             capacity_moments: Vec::new(),
+            pending_layer_miss_counts: Vec::new(),
+            engine_miss_counts_by_token: std::collections::VecDeque::new(),
         }
     }
 
     pub fn set_reply_start_snapshot(&mut self, reply_start_snapshot: ReplyStartSnapshot) {
         self.capacity_moments.clear();
+        self.pending_layer_miss_counts.clear();
+        self.engine_miss_counts_by_token.clear();
         self.reply_start_snapshot = Some(reply_start_snapshot);
     }
 
@@ -90,6 +104,47 @@ impl RouteObservationCollector {
         &mut self,
     ) -> Vec<memory_policy::astro_expert_cache_model::CapacityMoment> {
         std::mem::take(&mut self.capacity_moments)
+    }
+
+    /// Adds `miss_count` reads from storage to `layer_index` for the token
+    /// being served, when a reply is being recorded.
+    pub fn note_layer_misses(&mut self, layer_index: usize, miss_count: u64) {
+        if self.reply_start_snapshot.is_none() {
+            return;
+        }
+        if self.pending_layer_miss_counts.len() <= layer_index {
+            self.pending_layer_miss_counts.resize(layer_index + 1, 0);
+        }
+        let layer_miss_count = &mut self.pending_layer_miss_counts[layer_index];
+        *layer_miss_count =
+            layer_miss_count.saturating_add(u32::try_from(miss_count).unwrap_or(u32::MAX));
+    }
+
+    /// Closes the token being served: its layers' misses join the
+    /// recording, the oldest token leaving when the recording is full.
+    pub fn finish_token_misses(&mut self) {
+        if self.reply_start_snapshot.is_none() {
+            self.pending_layer_miss_counts.clear();
+            return;
+        }
+        if self.engine_miss_counts_by_token.len() >= MAXIMUM_RECORDED_MISS_TOKENS {
+            self.engine_miss_counts_by_token.pop_front();
+        }
+        self.engine_miss_counts_by_token
+            .push_back(std::mem::take(&mut self.pending_layer_miss_counts));
+    }
+
+    /// The newest `token_count` tokens' misses, oldest first.
+    pub fn take_engine_miss_counts(&mut self, token_count: usize) -> Vec<Vec<u32>> {
+        let skipped_count = self
+            .engine_miss_counts_by_token
+            .len()
+            .saturating_sub(token_count);
+        let engine_miss_counts_by_token = std::mem::take(&mut self.engine_miss_counts_by_token);
+        engine_miss_counts_by_token
+            .into_iter()
+            .skip(skipped_count)
+            .collect()
     }
 
     pub fn take_reply_start_snapshot(&mut self) -> Option<ReplyStartSnapshot> {
@@ -225,6 +280,7 @@ impl Qwen3_5Model {
         };
         let evicted_oldest = {
             let mut collector = self.route_observation.borrow_mut();
+            collector.finish_token_misses();
             collector
                 .observation_ring()
                 .record_observation(observation.clone())

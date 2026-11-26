@@ -1014,7 +1014,10 @@ measure-cold-decode-residency-attribution-copying = "run -p xtask -- test-run --
 # Shakespeare summary at temperature 1.0, a code review at 0.7, a multi-turn
 # chat at 1.0) with attribution on, which makes the engine keep each decode
 # token's route, and writes `<workload>.routes` plus `<workload>.case.json` to
-# `evidence_directory` for the replay lab; its speed is not a measurement.
+# `evidence_directory` for the replay lab, the case carrying the engine's own
+# misses per layer and token so `cargo replay-expert-misses` can say whether
+# the lab stands for the engine (its `engine_agreement` rows); its speed is
+# not a measurement.
 # `measure-expert-misses-speed` serves the Shakespeare reply with attribution
 # off, once with the macos_file_cache evicted and once warm, and is the one
 # to read decode tokens per second from. Pass

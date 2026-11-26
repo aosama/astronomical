@@ -7,11 +7,11 @@ use super::{
     LeastRecentlyUsed, LimitedLookaheadBelady, ReplayCase, RoutedReply, replay,
 };
 
-const EXPERT_BYTES: u64 = 10;
+pub(super) const EXPERT_BYTES: u64 = 10;
 
 /// A one-layer reply routing one expert per token, with room for
 /// `capacity_experts` experts and nothing held at the start.
-fn single_layer_case(expert_sequence: &[u16], capacity_experts: u64) -> ReplayCase {
+pub(super) fn single_layer_case(expert_sequence: &[u16], capacity_experts: u64) -> ReplayCase {
     let token_routes: Vec<Vec<Vec<u16>>> = expert_sequence
         .iter()
         .map(|&expert_id| vec![vec![expert_id]])
@@ -23,6 +23,7 @@ fn single_layer_case(expert_sequence: &[u16], capacity_experts: u64) -> ReplayCa
         held_expert_ids_by_layer_at_start: vec![Vec::new()],
         layer_slot_limits: None,
         pinned_layer_indexes: Vec::new(),
+        charges_whole_table_slots: false,
     }
 }
 
@@ -130,6 +131,7 @@ fn should_never_let_a_rule_beat_belady_on_a_recorded_reply() {
         held_expert_ids_by_layer_at_start: vec![Vec::new(); layer_count],
         layer_slot_limits: None,
         pinned_layer_indexes: Vec::new(),
+        charges_whole_table_slots: false,
     };
     let belady_misses = replay(&replay_case, &mut BeladyMinimum::default()).miss_count;
     for mut keeping_rule in every_rule() {
@@ -187,6 +189,7 @@ fn should_never_give_up_an_expert_of_the_route_being_served() {
         held_expert_ids_by_layer_at_start: vec![Vec::new()],
         layer_slot_limits: None,
         pinned_layer_indexes: Vec::new(),
+        charges_whole_table_slots: false,
     };
 
     let outcome = replay(&replay_case, &mut LeastRecentlyUsed::default());
@@ -225,6 +228,7 @@ fn should_keep_a_layer_within_its_slot_limit_even_with_memory_to_spare() {
         held_expert_ids_by_layer_at_start: vec![Vec::new(), Vec::new()],
         layer_slot_limits: None,
         pinned_layer_indexes: Vec::new(),
+        charges_whole_table_slots: false,
     };
     let divided_case = ReplayCase {
         layer_slot_limits: Some(vec![1, 4]),
@@ -265,6 +269,7 @@ fn should_never_give_up_an_expert_of_a_pinned_layer() {
         held_expert_ids_by_layer_at_start: vec![vec![0], Vec::new()],
         layer_slot_limits: None,
         pinned_layer_indexes: vec![0],
+        charges_whole_table_slots: false,
     };
 
     let outcome = replay(&replay_case, &mut LeastRecentlyUsed::default());
@@ -323,6 +328,7 @@ fn should_never_miss_more_as_it_sees_further_ahead_on_a_recorded_reply() {
         held_expert_ids_by_layer_at_start: vec![Vec::new(); layer_count],
         layer_slot_limits: None,
         pinned_layer_indexes: Vec::new(),
+        charges_whole_table_slots: false,
     };
     let mut previous_misses = u64::MAX;
     for lookahead_tokens in [0, 2, 16, 499] {
@@ -382,4 +388,70 @@ fn should_count_no_opening_misses_for_an_empty_reply() {
     let outcome = opening_heavy_outcome(0, 0);
     assert_eq!(outcome.early_misses_per_token(), 0.0);
     assert_eq!(outcome.later_misses_per_token(), 0.0);
+}
+
+/// Two layers routing expert 0 then 1 in each, every table two slots of
+/// `EXPERT_BYTES`, charged whole, under `capacity_bytes`.
+fn whole_table_case(capacity_bytes: u64) -> ReplayCase {
+    let token_routes = vec![
+        vec![vec![0], vec![0]],
+        vec![vec![1], vec![1]],
+        vec![vec![0], vec![0]],
+        vec![vec![1], vec![1]],
+    ];
+    ReplayCase {
+        routed_reply: RoutedReply::from_token_routes(8, &token_routes).expect("routes build"),
+        expert_payload_bytes_by_layer: vec![EXPERT_BYTES, EXPERT_BYTES],
+        capacity_bytes,
+        held_expert_ids_by_layer_at_start: vec![Vec::new(), Vec::new()],
+        layer_slot_limits: Some(vec![2, 2]),
+        pinned_layer_indexes: Vec::new(),
+        charges_whole_table_slots: true,
+    }
+}
+
+#[test]
+fn should_refuse_a_second_table_whose_allocation_does_not_fit() {
+    // Three experts' room holds one table of two slots, not two.
+    let replay_case = whole_table_case(3 * EXPERT_BYTES);
+
+    let outcome = replay(&replay_case, &mut LeastRecentlyUsed::default());
+
+    // Layer 0 gets the only table and hits twice; layer 1 reads all four.
+    assert_eq!(outcome.hit_count, 2);
+    assert_eq!(outcome.miss_count, 6);
+}
+
+#[test]
+fn should_make_a_table_whose_allocation_fills_the_capacity_exactly() {
+    let replay_case = whole_table_case(4 * EXPERT_BYTES);
+
+    let outcome = replay(&replay_case, &mut LeastRecentlyUsed::default());
+
+    // Both tables fit; each layer reads 0 and 1 once and hits them after.
+    assert_eq!(outcome.miss_count, 4);
+    assert_eq!(outcome.hit_count, 4);
+}
+
+#[test]
+fn should_keep_nothing_when_tables_are_charged_whole_without_slot_limits() {
+    let mut replay_case = whole_table_case(100 * EXPERT_BYTES);
+    replay_case.layer_slot_limits = None;
+
+    let outcome = replay(&replay_case, &mut LeastRecentlyUsed::default());
+
+    assert_eq!(outcome.hit_count, 0);
+    assert_eq!(outcome.miss_count, 8);
+}
+
+#[test]
+fn should_seat_starting_experts_only_in_tables_whose_allocation_fits() {
+    let mut replay_case = whole_table_case(3 * EXPERT_BYTES);
+    replay_case.held_expert_ids_by_layer_at_start = vec![vec![0, 1], vec![0, 1]];
+
+    let outcome = replay(&replay_case, &mut LeastRecentlyUsed::default());
+
+    // Layer 0 is seated whole and hits all four; layer 1 has no table.
+    assert_eq!(outcome.hit_count, 4);
+    assert_eq!(outcome.miss_count, 4);
 }
