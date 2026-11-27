@@ -174,6 +174,9 @@ pub use qwen3_5_core::model_math::gated_delta_boundary_checkpoints::{
 };
 
 #[cfg(feature = "direct-mlx")]
+pub use qwen3_5_core::model_math::gated_delta_inputs::GatedDeltaInputs;
+
+#[cfg(feature = "direct-mlx")]
 pub use qwen3_5_core::model_math::gated_delta_sequence::{
     qwen3_5_gated_delta_kernel, qwen3_5_gated_delta_sequence,
     qwen3_5_gated_delta_sequence_ops_fallback,

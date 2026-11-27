@@ -5,13 +5,14 @@
 //! compiles or submits Metal work; otherwise checkpointing with the `astro_ssd_prompt_cache` enabled could
 //! accept a graph that ordinary prompt processing rejects, or vice versa.
 
-use mlx_bridge::{MlxArray, MlxDtype, MlxMetalKernelTemplateArgument};
+use mlx_bridge::{MlxDtype, MlxMetalKernelTemplateArgument};
 use runtime_integration::MlxRuntimeError;
 
 use super::gated_delta_input_rules::{
     GatedDeltaDtypeViolation, GatedDeltaHeadGeometry, GatedDeltaHeadGeometryViolation,
     check_gated_delta_dtypes,
 };
+use super::gated_delta_inputs::GatedDeltaInputs;
 
 const GATED_DELTA_SEQUENCE_OPERATION: &str = "apply fused Qwen3.5 gated-delta sequence";
 /// The blocked kernel is written for exactly this key head dimension.
@@ -77,13 +78,16 @@ pub(super) fn template_arguments(
 }
 
 pub(super) fn validate_gated_delta_sequence_shapes(
-    queries: &MlxArray,
-    keys: &MlxArray,
-    values: &MlxArray,
-    decays: &MlxArray,
-    update_rates: &MlxArray,
-    recurrent_state: &MlxArray,
+    inputs: &GatedDeltaInputs<'_>,
 ) -> Result<GatedDeltaSequenceShape, MlxRuntimeError> {
+    let GatedDeltaInputs {
+        queries,
+        keys,
+        values,
+        decays,
+        update_rates,
+        recurrent_state,
+    } = *inputs;
     // Read every shape before validation so error paths never begin native
     // dispatch and both kernel owners observe the same immutable input facts.
     let query_shape = queries.shape();

@@ -14,6 +14,7 @@ use crate::qwen3_5_core::model_math::gated_delta_boundary_checkpoints::{
     qwen3_5_gated_delta_checkpoint_kernel, qwen3_5_gated_delta_sequence_with_boundary_checkpoints,
     qwen3_5_gated_delta_sequence_with_boundary_checkpoints_ops_fallback,
 };
+use crate::qwen3_5_core::model_math::gated_delta_inputs::GatedDeltaInputs;
 use crate::qwen3_5_core::model_math::gated_delta_sequence::{
     qwen3_5_gated_delta_kernel, qwen3_5_gated_delta_sequence,
     qwen3_5_gated_delta_sequence_ops_fallback,
@@ -198,27 +199,20 @@ impl CustomMetalKernelProbe for GatedDeltaSequenceProbe<'_> {
                 description: error.to_string(),
             })?;
         let probe_inputs = probe_sequence_arrays(self.runtime).map_err(execution_error)?;
-        let (probe_outputs, probe_next_state) = qwen3_5_gated_delta_sequence(
-            self.runtime,
-            Some(&kernel),
-            &probe_inputs.queries,
-            &probe_inputs.keys,
-            &probe_inputs.values,
-            &probe_inputs.decays,
-            &probe_inputs.update_rates,
-            &probe_inputs.recurrent_state,
-        )
-        .map_err(execution_error)?;
-        let (reference_outputs, reference_next_state) = qwen3_5_gated_delta_sequence_ops_fallback(
-            self.runtime,
-            &probe_inputs.queries,
-            &probe_inputs.keys,
-            &probe_inputs.values,
-            &probe_inputs.decays,
-            &probe_inputs.update_rates,
-            &probe_inputs.recurrent_state,
-        )
-        .map_err(execution_error)?;
+        let probe_gated_delta_inputs = GatedDeltaInputs {
+            queries: &probe_inputs.queries,
+            keys: &probe_inputs.keys,
+            values: &probe_inputs.values,
+            decays: &probe_inputs.decays,
+            update_rates: &probe_inputs.update_rates,
+            recurrent_state: &probe_inputs.recurrent_state,
+        };
+        let (probe_outputs, probe_next_state) =
+            qwen3_5_gated_delta_sequence(self.runtime, Some(&kernel), &probe_gated_delta_inputs)
+                .map_err(execution_error)?;
+        let (reference_outputs, reference_next_state) =
+            qwen3_5_gated_delta_sequence_ops_fallback(self.runtime, &probe_gated_delta_inputs)
+                .map_err(execution_error)?;
         for (probe_array, reference_array, description) in [
             (&probe_outputs, &reference_outputs, "probe sequence outputs"),
             (
@@ -260,27 +254,25 @@ impl CustomMetalKernelProbe for GatedDeltaBoundaryCheckpointProbe<'_> {
             }
         })?;
         let probe_inputs = probe_sequence_arrays(self.runtime).map_err(execution_error)?;
+        let probe_gated_delta_inputs = GatedDeltaInputs {
+            queries: &probe_inputs.queries,
+            keys: &probe_inputs.keys,
+            values: &probe_inputs.values,
+            decays: &probe_inputs.decays,
+            update_rates: &probe_inputs.update_rates,
+            recurrent_state: &probe_inputs.recurrent_state,
+        };
         let probe_result = qwen3_5_gated_delta_sequence_with_boundary_checkpoints(
             self.runtime,
             Some(&kernel),
-            &probe_inputs.queries,
-            &probe_inputs.keys,
-            &probe_inputs.values,
-            &probe_inputs.decays,
-            &probe_inputs.update_rates,
-            &probe_inputs.recurrent_state,
+            &probe_gated_delta_inputs,
             &[2],
             2,
         )
         .map_err(execution_error)?;
         let reference_result = qwen3_5_gated_delta_sequence_with_boundary_checkpoints_ops_fallback(
             self.runtime,
-            &probe_inputs.queries,
-            &probe_inputs.keys,
-            &probe_inputs.values,
-            &probe_inputs.decays,
-            &probe_inputs.update_rates,
-            &probe_inputs.recurrent_state,
+            &probe_gated_delta_inputs,
             &[2],
             2,
         )
