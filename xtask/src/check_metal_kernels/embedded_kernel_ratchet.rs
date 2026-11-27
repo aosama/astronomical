@@ -11,7 +11,7 @@
 use std::fs;
 use std::path::Path;
 
-use super::kernel_inventory::shown_path;
+use super::rust_file_walk::rust_files_under;
 
 /// The folders whose Rust is searched.
 const SEARCHED_ROOTS: [&str; 3] = ["apps", "crates", "verification"];
@@ -36,46 +36,13 @@ const ALLOWED_PATHS: [&str; 2] = [
 /// Every line, as `path:line`, that declares a kernel from Rust text.
 pub(crate) fn embedded_kernel_sites(repository_root: &Path) -> Vec<String> {
     let mut embedded_sites = Vec::new();
-    for searched_root in SEARCHED_ROOTS {
-        collect_embedded_sites(
-            repository_root,
-            &repository_root.join(searched_root),
-            &mut embedded_sites,
-        );
+    for (relative_path, rust_file) in
+        rust_files_under(repository_root, &SEARCHED_ROOTS, &ALLOWED_PATHS)
+    {
+        record_file_sites(&rust_file, &relative_path, &mut embedded_sites);
     }
     embedded_sites.sort();
     embedded_sites
-}
-
-fn collect_embedded_sites(
-    repository_root: &Path,
-    directory: &Path,
-    embedded_sites: &mut Vec<String>,
-) {
-    let Ok(directory_entries) = fs::read_dir(directory) else {
-        return;
-    };
-    for directory_entry in directory_entries.flatten() {
-        let entry_path = directory_entry.path();
-        let relative_path = shown_path(&entry_path, repository_root);
-        if relative_path.ends_with("/target") || is_allowed_path(&relative_path) {
-            continue;
-        }
-        if entry_path.is_dir() {
-            collect_embedded_sites(repository_root, &entry_path, embedded_sites);
-        } else if relative_path.ends_with(".rs") {
-            record_file_sites(&entry_path, &relative_path, embedded_sites);
-        }
-    }
-}
-
-fn is_allowed_path(relative_path: &str) -> bool {
-    for allowed_path in ALLOWED_PATHS {
-        if relative_path.starts_with(allowed_path) {
-            return true;
-        }
-    }
-    false
 }
 
 fn record_file_sites(rust_file: &Path, relative_path: &str, embedded_sites: &mut Vec<String>) {

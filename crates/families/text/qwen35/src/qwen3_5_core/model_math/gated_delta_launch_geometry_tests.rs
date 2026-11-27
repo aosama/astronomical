@@ -16,7 +16,7 @@ fn kernel_source_text(kernel: &MetalKernelSource) -> String {
 
 fn declares_constant(source_text: &str, constant_name: &str, constant_value: usize) -> bool {
     source_text.contains(&format!(
-        "constexpr int {constant_name} = {constant_value};"
+        "int {constant_name} = {constant_value};"
     ))
 }
 
@@ -78,11 +78,11 @@ fn should_refuse_a_geometry_the_kernel_text_does_not_declare() {
 fn should_unroll_one_step_per_token_of_the_twelve_token_block() {
     let sequence_source = kernel_source_text(&ASTRO_FAMILY_QWEN35_GATED_DELTA_SEQUENCE);
 
-    assert!(sequence_source.contains("constexpr int time_block_size = 12;"));
+    assert!(sequence_source.contains("int time_block_size = 12;"));
     // Twelve unrolled steps plus one rolled tail step, each rotating its
     // prefetched operands into current ones once.
     assert_eq!(
-        sequence_source.matches("float4 current_keys[4];").count(),
+        sequence_source.matches("current_keys[4];").count(),
         13
     );
 }

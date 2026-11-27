@@ -45,13 +45,7 @@ fn should_apply_a_fused_metal_kernel_inside_a_compiled_trace() {
         // identifiers rather than Metal shorthand like `in` and `out`. Scalar
         // (rank-zero) inputs are declared as references, not pointers, so
         // `factor` is used directly instead of `factor[0]`.
-        &[
-            "uint index = thread_position_in_grid.x;",
-            "if (index >= uint(N)) { return; }",
-            "float value = float(input[index]) * float(factor) + 1.0f;",
-            "output[index] = static_cast<T>(value);",
-        ]
-        .join("\n"),
+        include_str!("metal_fixtures/fused_scale_offset_body.metal"),
     )
     .expect("the probe kernel should compile");
     let compiled_graph = with_pinned_kernel(&kernel, || {

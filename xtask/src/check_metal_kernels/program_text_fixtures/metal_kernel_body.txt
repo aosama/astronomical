@@ -1,0 +1,5 @@
+    const uint row = threadgroup_position_in_grid.y;
+    threadgroup float staged_values[16];
+    if (row >= uint(N)) {
+        return;
+    }

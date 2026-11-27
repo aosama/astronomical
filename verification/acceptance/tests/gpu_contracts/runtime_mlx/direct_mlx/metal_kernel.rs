@@ -1,4 +1,8 @@
 //! Direct GPU contracts for Astronomical's owned MLX custom Metal-kernel boundary.
+//!
+//! The kernel bodies are Metal, so they are files in `metal_fixtures/` rather
+//! than Rust strings: `cargo xtask check-metal-kernels` refuses C++ or Metal
+//! program text inside Rust.
 
 use crate::common::runtime_test_support;
 use mlx_bridge::{MlxDtype, MlxMetalKernel, MlxMetalKernelOutput};
@@ -13,10 +17,7 @@ fn should_apply_a_custom_metal_kernel_to_an_mlx_array() {
         "astronomical_copy_kernel_test",
         &["source_values"],
         &["copied_values"],
-        r#"
-            uint element_index = thread_position_in_grid.x;
-            copied_values[element_index] = source_values[element_index];
-        "#,
+        include_str!("metal_fixtures/copy_kernel_body.metal"),
     )
     .expect("the custom Metal kernel should be constructed");
 
@@ -56,10 +57,7 @@ fn should_apply_a_custom_metal_kernel_with_a_scalar_integer_input() {
         "astronomical_scalar_input_kernel_test",
         &["source_values", "token_count"],
         &["shifted_values"],
-        r#"
-            uint element_index = thread_position_in_grid.x;
-            shifted_values[element_index] = source_values[element_index] + static_cast<float>(token_count);
-        "#,
+        include_str!("metal_fixtures/scalar_input_kernel_body.metal"),
     )
     .expect("the custom Metal kernel should be constructed");
 
@@ -96,11 +94,7 @@ fn should_apply_a_custom_metal_kernel_with_a_small_uint32_output() {
         "astronomical_uint32_copy_kernel_test",
         &["source_values"],
         &["copied_values"],
-        r#"
-            for (uint element_index = 0; element_index < 3; ++element_index) {
-                copied_values[element_index] = source_values[element_index];
-            }
-        "#,
+        include_str!("metal_fixtures/uint32_copy_kernel_body.metal"),
     )
     .expect("the uint32 custom Metal kernel should be constructed");
     let mut copied_outputs = runtime
@@ -138,20 +132,14 @@ fn should_execute_same_name_different_source_kernels_in_one_evaluation_group() {
         "astronomical_same_name_different_source_test",
         &["source_values"],
         &["transformed_values"],
-        r#"
-            uint element_index = thread_position_in_grid.x;
-            transformed_values[element_index] = source_values[element_index] * 2.0f;
-        "#,
+        include_str!("metal_fixtures/doubled_kernel_body.metal"),
     )
     .expect("the doubling custom Metal kernel should be constructed");
     let shifted_kernel = MlxMetalKernel::new(
         "astronomical_same_name_different_source_test",
         &["source_values"],
         &["transformed_values"],
-        r#"
-            uint element_index = thread_position_in_grid.x;
-            transformed_values[element_index] = source_values[element_index] + 100.0f;
-        "#,
+        include_str!("metal_fixtures/shifted_kernel_body.metal"),
     )
     .expect("the shifting custom Metal kernel should be constructed");
 

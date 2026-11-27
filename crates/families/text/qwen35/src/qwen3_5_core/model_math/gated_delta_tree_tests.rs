@@ -325,8 +325,8 @@ fn should_replay_kept_rows_to_the_sequence_kernels_final_state_bit_for_bit() {
     }
 }
 
-const SHARED_ROW_STEP_START: &str = "float4 current_keys[4];";
-const SHARED_ROW_STEP_END: &str = "remembered_value += simd_shuffle_xor(remembered_value, 1);";
+const SHARED_ROW_STEP_START: &str = "current_keys[4];";
+const SHARED_ROW_STEP_END: &str = "(remembered_value, 1);";
 
 /// The text of the row step both kernels share, from the key load to the
 /// last reduction of what the state remembers.

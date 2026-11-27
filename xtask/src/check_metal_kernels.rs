@@ -7,7 +7,9 @@
 //!    owner its crate gives it; every registered kernel names its GPU
 //!    contract and probe; every helper and shared body is used.
 //! 2. **No kernel in Rust text:** `MlxMetalKernel::new` appears only in the
-//!    one declarer, so every kernel's Metal is in a `.metal` file.
+//!    one declarer, so every kernel's Metal is in a `.metal` file, and no
+//!    Rust string literal holds C++ or Metal program text at all (see
+//!    [`embedded_program_text`]).
 //! 3. **Offline compile:** every registered kernel is wrapped exactly as MLX
 //!    wraps it at run time and compiled with Apple's offline compiler, for
 //!    every `@compile-with` instantiation, every way MLX may pass each input
@@ -25,8 +27,10 @@
 
 mod compile_jobs;
 mod embedded_kernel_ratchet;
+mod embedded_program_text;
 mod kernel_inventory;
 mod offline_compiler;
+mod rust_file_walk;
 
 #[cfg(test)]
 mod check_metal_kernels_arguments_tests;
@@ -34,6 +38,8 @@ mod check_metal_kernels_arguments_tests;
 mod compile_jobs_tests;
 #[cfg(test)]
 mod embedded_kernel_ratchet_tests;
+#[cfg(test)]
+mod embedded_program_text_tests;
 #[cfg(test)]
 mod kernel_inventory_tests;
 #[cfg(test)]
@@ -44,6 +50,7 @@ use std::time::Instant;
 
 use compile_jobs::kernel_compile_jobs;
 use embedded_kernel_ratchet::embedded_kernel_sites;
+use embedded_program_text::embedded_program_text_sites;
 use kernel_inventory::{KernelInventory, kernel_inventory};
 use offline_compiler::OfflineCompiler;
 
@@ -80,6 +87,11 @@ pub(crate) fn run(repository_root: &Path, arguments: &[String]) -> Result<(), St
     for embedded_site in embedded_kernel_sites(repository_root) {
         violations.push(format!(
             "{embedded_site}: declares a Metal kernel from Rust text; move its Metal into a .metal file and declare it with declare_metal_kernel"
+        ));
+    }
+    for program_text_site in embedded_program_text_sites(repository_root) {
+        violations.push(format!(
+            "{program_text_site}: a Rust string holds C++ or Metal program text; move it into a .metal or C++ file"
         ));
     }
     // Kernels declared from Rust text do not stop the compile of the ones in

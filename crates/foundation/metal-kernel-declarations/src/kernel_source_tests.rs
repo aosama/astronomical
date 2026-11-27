@@ -8,7 +8,7 @@ const SCALED_COPY: MetalKernelSource = MetalKernelSource {
     define_names: &["SCALE", "OFFSET"],
     has_atomic_outputs: false,
     header_parts: &["// first header\n", "// second header\n"],
-    source_parts: &["// kernel file\n", "Y[0] = X[0] * SCALE + OFFSET;\n"],
+    source_parts: &["// kernel file\n", "the kernel body\n"],
 };
 
 fn define(name: &'static str, value: &str) -> MetalKernelDefine {
@@ -33,7 +33,7 @@ fn should_write_defines_in_declaration_order_ahead_of_the_source() {
         .expect("both defines are supplied");
     assert_eq!(
         source_text,
-        "#define SCALE 2.0f\n#define OFFSET 1.0f\n// kernel file\nY[0] = X[0] * SCALE + OFFSET;\n"
+        "#define SCALE 2.0f\n#define OFFSET 1.0f\n// kernel file\nthe kernel body\n"
     );
 }
 
@@ -77,6 +77,6 @@ fn should_give_the_source_unchanged_when_nothing_is_defined() {
     };
     assert_eq!(
         plain.source_text(&[]).expect("no defines needed"),
-        "// kernel file\nY[0] = X[0] * SCALE + OFFSET;\n"
+        "// kernel file\nthe kernel body\n"
     );
 }

@@ -548,7 +548,9 @@ test-quantization-mixture-of-experts = "run -p xtask -- test-run --package astro
 # `astro_<scope>_[<owner>_]<operation>[_<variant>]` with the scope its crate
 # gives it, every registered kernel's signature block names its contract and
 # probe, no Rust file declares a kernel from text (`MlxMetalKernel::new`
-# outside `declare_metal_kernel`), and every kernel compiles with Apple's
+# outside `declare_metal_kernel`), no Rust string literal holds C, C++ or
+# Metal program text (a statement line with a C++ or Metal word; the port of
+# MLX's signature writer is the one exception), and every kernel compiles with Apple's
 # offline Metal compiler wrapped exactly as MLX wraps it, for every
 # `@compile-with` instantiation, every way MLX may pass each input, and Metal
 # 4.0 and 4.1. Sources that compiled are remembered under

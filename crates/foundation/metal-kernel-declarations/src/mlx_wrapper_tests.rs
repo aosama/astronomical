@@ -28,15 +28,22 @@ fn plain_request<'text>(
     }
 }
 
+// The expected texts are Metal, so they live in `mlx_wrapper_fixtures/`
+// rather than in Rust strings (`cargo xtask check-metal-kernels` refuses
+// program text inside Rust). Each was checked against MLX's own output by the
+// `metal_kernel_wrapper_parity` contract's rules.
+
+fn float_output() -> [(String, String); 1] {
+    [("Y".to_owned(), "float".to_owned())]
+}
+
 #[test]
 fn should_write_the_signature_mlx_writes_for_a_plain_copy() {
     let inputs = [wrapped_input("X", "float", ArgumentAddress::Device)];
-    let outputs = [("Y".to_owned(), "float".to_owned())];
-    let source = "  Y[thread_position_in_grid.x] = X[thread_position_in_grid.x];";
-    let kernel_source = mlx_kernel_source(&plain_request(source, &inputs, &outputs, &[]));
+    let source = include_str!("mlx_wrapper_fixtures/plain_copy_body.metal");
     assert_eq!(
-        kernel_source,
-        "[[kernel]] void custom_kernel_copy(\n  const device float* X [[buffer(0)]],\n  device float* Y [[buffer(1)]],\n  uint3 thread_position_in_grid [[thread_position_in_grid]]) {\n  Y[thread_position_in_grid.x] = X[thread_position_in_grid.x];\n}\n"
+        mlx_kernel_source(&plain_request(source, &inputs, &float_output(), &[])),
+        include_str!("mlx_wrapper_fixtures/plain_copy_expected.metal")
     );
 }
 
@@ -46,36 +53,27 @@ fn should_pass_small_inputs_in_constant_memory_and_scalars_by_reference() {
         wrapped_input("count", "int32_t", ArgumentAddress::Constant),
         wrapped_input("scale", "float", ArgumentAddress::ConstantReference),
     ];
-    let outputs = [("Y".to_owned(), "float".to_owned())];
     let kernel_source = mlx_kernel_source(&plain_request(
         "Y[0] = scale * count[0];",
         &inputs,
-        &outputs,
+        &float_output(),
         &[],
     ));
-    assert!(kernel_source.contains("  const constant int32_t* count [[buffer(0)]],\n"));
-    assert!(kernel_source.contains("  const constant float& scale [[buffer(1)]],\n"));
-    assert!(
-        kernel_source.contains("  device float* Y [[buffer(2)]]) {\n"),
-        "{kernel_source}"
+    assert_eq!(
+        kernel_source,
+        include_str!("mlx_wrapper_fixtures/small_inputs_expected.metal")
     );
 }
 
 #[test]
 fn should_add_shape_buffers_only_for_names_the_source_mentions() {
     let inputs = [wrapped_input("X", "float", ArgumentAddress::Device)];
-    let outputs = [("Y".to_owned(), "float".to_owned())];
-    let kernel_source = mlx_kernel_source(&plain_request(
-        "Y[0] = X[0] * X_shape[0] * X_ndim; // thread_position_in_grid",
-        &inputs,
-        &outputs,
-        &[],
-    ));
-    assert!(kernel_source.contains("  const constant int* X_shape [[buffer(1)]],\n"));
+    let source = include_str!("mlx_wrapper_fixtures/shape_buffers_body.metal");
+    let kernel_source = mlx_kernel_source(&plain_request(source, &inputs, &float_output(), &[]));
     assert!(!kernel_source.contains("X_strides"));
-    assert!(kernel_source.contains("  const constant int& X_ndim [[buffer(2)]],\n"));
-    assert!(
-        kernel_source.contains("  uint3 thread_position_in_grid [[thread_position_in_grid]]) {\n"),
+    assert_eq!(
+        kernel_source,
+        include_str!("mlx_wrapper_fixtures/shape_buffers_expected.metal"),
         "an attribute named only in a comment is still declared, as MLX does"
     );
 }
@@ -107,20 +105,21 @@ fn should_write_the_template_line_and_the_explicit_instantiation() {
         &outputs,
         &template_arguments,
     ));
-    assert!(kernel_source.starts_with(
-        "template <int N, bool STAGE, typename T>\n[[kernel]] void custom_kernel_copy(\n"
-    ));
-    assert!(kernel_source.ends_with(
-        "\ntemplate [[host_name(\"custom_kernel_copy\")]] [[kernel]] decltype(custom_kernel_copy<-4, 1, bfloat16_t>) custom_kernel_copy<-4, 1, bfloat16_t>;\n"
-    ));
+    assert_eq!(
+        kernel_source,
+        include_str!("mlx_wrapper_fixtures/template_expected.metal")
+    );
 }
 
 #[test]
 fn should_wrap_atomic_outputs() {
-    let outputs = [("Y".to_owned(), "float".to_owned())];
+    let outputs = float_output();
     let mut request = plain_request("Y[0] = 0;", &[], &outputs, &[]);
     request.has_atomic_outputs = true;
-    assert!(mlx_kernel_source(&request).contains("  device atomic<float>* Y [[buffer(0)]]) {\n"));
+    assert_eq!(
+        mlx_kernel_source(&request),
+        include_str!("mlx_wrapper_fixtures/atomic_expected.metal")
+    );
 }
 
 #[test]

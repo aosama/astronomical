@@ -1,0 +1,1 @@
+  Y[thread_position_in_grid.x] = X[thread_position_in_grid.x];
