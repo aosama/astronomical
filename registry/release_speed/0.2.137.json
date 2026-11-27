@@ -1,0 +1,1003 @@
+{
+  "astronomical_version": "0.2.137",
+  "source_commit": "0fcf773ccfa8",
+  "measured_on_date": "2026-11-27",
+  "machine": {
+    "chip": "M5 Pro",
+    "memory_bytes": 51539607552
+  },
+  "measurements": [
+    {
+      "model_id": "Ornith-1.5-9B-MLX-4bit-vision",
+      "model_revision": "10450ee1a54d25d682f9589d6e428d480d913f03",
+      "maximum_mlx_memory_gb": null,
+      "mlx_memory_limit_bytes": 39195874112,
+      "weights_placement": "in_memory",
+      "drafter": "none",
+      "multi_token_prediction_draft_tokens": null,
+      "task": "essay_short_prompt",
+      "temperature": 1.0,
+      "reply_tokens_requested": 200,
+      "figures": {
+        "round_count": 1,
+        "prompt_tokens": 27,
+        "prefill_tokens_per_second": {
+          "median": 338.33,
+          "lowest": 338.33,
+          "highest": 338.33
+        },
+        "seconds_to_first_token": {
+          "median": 0.08,
+          "lowest": 0.08,
+          "highest": 0.08
+        },
+        "reply_tokens_per_second": {
+          "median": 50.91,
+          "lowest": 50.91,
+          "highest": 50.91
+        },
+        "peak_mlx_memory_bytes": {
+          "median": 4582298034.0,
+          "lowest": 4582298034.0,
+          "highest": 4582298034.0
+        }
+      }
+    },
+    {
+      "model_id": "Ornith-1.5-9B-MLX-4bit-vision",
+      "model_revision": "10450ee1a54d25d682f9589d6e428d480d913f03",
+      "maximum_mlx_memory_gb": null,
+      "mlx_memory_limit_bytes": 39195874112,
+      "weights_placement": "in_memory",
+      "drafter": "none",
+      "multi_token_prediction_draft_tokens": null,
+      "task": "code_short_prompt",
+      "temperature": 0.7,
+      "reply_tokens_requested": 200,
+      "figures": {
+        "round_count": 1,
+        "prompt_tokens": 27,
+        "prefill_tokens_per_second": {
+          "median": 341.64,
+          "lowest": 341.64,
+          "highest": 341.64
+        },
+        "seconds_to_first_token": {
+          "median": 0.08,
+          "lowest": 0.08,
+          "highest": 0.08
+        },
+        "reply_tokens_per_second": {
+          "median": 50.17,
+          "lowest": 50.17,
+          "highest": 50.17
+        },
+        "peak_mlx_memory_bytes": {
+          "median": 4582347186.0,
+          "lowest": 4582347186.0,
+          "highest": 4582347186.0
+        }
+      }
+    },
+    {
+      "model_id": "Ornith-1.5-9B-MLX-4bit-vision",
+      "model_revision": "10450ee1a54d25d682f9589d6e428d480d913f03",
+      "maximum_mlx_memory_gb": null,
+      "mlx_memory_limit_bytes": 39195874112,
+      "weights_placement": "in_memory",
+      "drafter": "none",
+      "multi_token_prediction_draft_tokens": null,
+      "task": "essay_long_prompt",
+      "temperature": 1.0,
+      "reply_tokens_requested": 200,
+      "figures": {
+        "round_count": 1,
+        "prompt_tokens": 5037,
+        "prefill_tokens_per_second": {
+          "median": 1133.85,
+          "lowest": 1133.85,
+          "highest": 1133.85
+        },
+        "seconds_to_first_token": {
+          "median": 4.44,
+          "lowest": 4.44,
+          "highest": 4.44
+        },
+        "reply_tokens_per_second": {
+          "median": 49.94,
+          "lowest": 49.94,
+          "highest": 49.94
+        },
+        "peak_mlx_memory_bytes": {
+          "median": 5048002078.0,
+          "lowest": 5048002078.0,
+          "highest": 5048002078.0
+        }
+      }
+    },
+    {
+      "model_id": "Ornith-1.5-9B-MLX-4bit-vision",
+      "model_revision": "10450ee1a54d25d682f9589d6e428d480d913f03",
+      "maximum_mlx_memory_gb": null,
+      "mlx_memory_limit_bytes": 39195874112,
+      "weights_placement": "in_memory",
+      "drafter": "none",
+      "multi_token_prediction_draft_tokens": null,
+      "task": "code_long_prompt",
+      "temperature": 0.7,
+      "reply_tokens_requested": 200,
+      "figures": {
+        "round_count": 1,
+        "prompt_tokens": 5096,
+        "prefill_tokens_per_second": {
+          "median": 1131.14,
+          "lowest": 1131.14,
+          "highest": 1131.14
+        },
+        "seconds_to_first_token": {
+          "median": 4.51,
+          "lowest": 4.51,
+          "highest": 4.51
+        },
+        "reply_tokens_per_second": {
+          "median": 50.8,
+          "lowest": 50.8,
+          "highest": 50.8
+        },
+        "peak_mlx_memory_bytes": {
+          "median": 5048444446.0,
+          "lowest": 5048444446.0,
+          "highest": 5048444446.0
+        }
+      }
+    },
+    {
+      "model_id": "Ornith-1.5-35B-A3B-OptiQ-4bit-vision-DFLASH2",
+      "model_revision": "28c5203a83fa7bc39b3363b870273c23f6bcf04e",
+      "maximum_mlx_memory_gb": null,
+      "mlx_memory_limit_bytes": 39195874112,
+      "weights_placement": "streamed",
+      "drafter": "dflash2",
+      "multi_token_prediction_draft_tokens": null,
+      "task": "essay_short_prompt",
+      "temperature": 1.0,
+      "reply_tokens_requested": 200,
+      "figures": {
+        "round_count": 1,
+        "prompt_tokens": 27,
+        "prefill_tokens_per_second": {
+          "median": 236.89,
+          "lowest": 236.89,
+          "highest": 236.89
+        },
+        "seconds_to_first_token": {
+          "median": 0.11,
+          "lowest": 0.11,
+          "highest": 0.11
+        },
+        "reply_tokens_per_second": {
+          "median": 86.32,
+          "lowest": 86.32,
+          "highest": 86.32
+        },
+        "drafting": {
+          "rounds_a_reply": {
+            "median": 83.0,
+            "lowest": 83.0,
+            "highest": 83.0
+          },
+          "kept_drafts_a_round": {
+            "median": 1.4,
+            "lowest": 1.4,
+            "highest": 1.4
+          },
+          "drafted_share_of_reply": {
+            "median": 0.58,
+            "lowest": 0.58,
+            "highest": 0.58
+          }
+        },
+        "peak_mlx_memory_bytes": {
+          "median": 22744573046.0,
+          "lowest": 22744573046.0,
+          "highest": 22744573046.0
+        }
+      }
+    },
+    {
+      "model_id": "Ornith-1.5-35B-A3B-OptiQ-4bit-vision-DFLASH2",
+      "model_revision": "28c5203a83fa7bc39b3363b870273c23f6bcf04e",
+      "maximum_mlx_memory_gb": null,
+      "mlx_memory_limit_bytes": 39195874112,
+      "weights_placement": "streamed",
+      "drafter": "dflash2",
+      "multi_token_prediction_draft_tokens": null,
+      "task": "code_short_prompt",
+      "temperature": 0.7,
+      "reply_tokens_requested": 200,
+      "figures": {
+        "round_count": 1,
+        "prompt_tokens": 27,
+        "prefill_tokens_per_second": {
+          "median": 224.72,
+          "lowest": 224.72,
+          "highest": 224.72
+        },
+        "seconds_to_first_token": {
+          "median": 0.12,
+          "lowest": 0.12,
+          "highest": 0.12
+        },
+        "reply_tokens_per_second": {
+          "median": 96.76,
+          "lowest": 96.76,
+          "highest": 96.76
+        },
+        "drafting": {
+          "rounds_a_reply": {
+            "median": 71.0,
+            "lowest": 71.0,
+            "highest": 71.0
+          },
+          "kept_drafts_a_round": {
+            "median": 1.82,
+            "lowest": 1.82,
+            "highest": 1.82
+          },
+          "drafted_share_of_reply": {
+            "median": 0.65,
+            "lowest": 0.65,
+            "highest": 0.65
+          }
+        },
+        "peak_mlx_memory_bytes": {
+          "median": 22741885312.0,
+          "lowest": 22741885312.0,
+          "highest": 22741885312.0
+        }
+      }
+    },
+    {
+      "model_id": "Ornith-1.5-35B-A3B-OptiQ-4bit-vision-DFLASH2",
+      "model_revision": "28c5203a83fa7bc39b3363b870273c23f6bcf04e",
+      "maximum_mlx_memory_gb": null,
+      "mlx_memory_limit_bytes": 39195874112,
+      "weights_placement": "streamed",
+      "drafter": "dflash2",
+      "multi_token_prediction_draft_tokens": null,
+      "task": "essay_long_prompt",
+      "temperature": 1.0,
+      "reply_tokens_requested": 200,
+      "figures": {
+        "round_count": 1,
+        "prompt_tokens": 5037,
+        "prefill_tokens_per_second": {
+          "median": 2083.84,
+          "lowest": 2083.84,
+          "highest": 2083.84
+        },
+        "seconds_to_first_token": {
+          "median": 2.42,
+          "lowest": 2.42,
+          "highest": 2.42
+        },
+        "reply_tokens_per_second": {
+          "median": 76.23,
+          "lowest": 76.23,
+          "highest": 76.23
+        },
+        "drafting": {
+          "rounds_a_reply": {
+            "median": 56.0,
+            "lowest": 56.0,
+            "highest": 56.0
+          },
+          "kept_drafts_a_round": {
+            "median": 1.38,
+            "lowest": 1.38,
+            "highest": 1.38
+          },
+          "drafted_share_of_reply": {
+            "median": 0.39,
+            "lowest": 0.39,
+            "highest": 0.39
+          }
+        },
+        "peak_mlx_memory_bytes": {
+          "median": 23371478928.0,
+          "lowest": 23371478928.0,
+          "highest": 23371478928.0
+        }
+      }
+    },
+    {
+      "model_id": "Ornith-1.5-35B-A3B-OptiQ-4bit-vision-DFLASH2",
+      "model_revision": "28c5203a83fa7bc39b3363b870273c23f6bcf04e",
+      "maximum_mlx_memory_gb": null,
+      "mlx_memory_limit_bytes": 39195874112,
+      "weights_placement": "streamed",
+      "drafter": "dflash2",
+      "multi_token_prediction_draft_tokens": null,
+      "task": "code_long_prompt",
+      "temperature": 0.7,
+      "reply_tokens_requested": 200,
+      "figures": {
+        "round_count": 1,
+        "prompt_tokens": 5096,
+        "prefill_tokens_per_second": {
+          "median": 2048.72,
+          "lowest": 2048.72,
+          "highest": 2048.72
+        },
+        "seconds_to_first_token": {
+          "median": 2.49,
+          "lowest": 2.49,
+          "highest": 2.49
+        },
+        "reply_tokens_per_second": {
+          "median": 92.41,
+          "lowest": 92.41,
+          "highest": 92.41
+        },
+        "drafting": {
+          "rounds_a_reply": {
+            "median": 71.0,
+            "lowest": 71.0,
+            "highest": 71.0
+          },
+          "kept_drafts_a_round": {
+            "median": 1.82,
+            "lowest": 1.82,
+            "highest": 1.82
+          },
+          "drafted_share_of_reply": {
+            "median": 0.65,
+            "lowest": 0.65,
+            "highest": 0.65
+          }
+        },
+        "peak_mlx_memory_bytes": {
+          "median": 23373313936.0,
+          "lowest": 23373313936.0,
+          "highest": 23373313936.0
+        }
+      }
+    },
+    {
+      "model_id": "Ornith-1.5-35B-A3B-OptiQ-4bit-vision-DFLASH2",
+      "model_revision": "28c5203a83fa7bc39b3363b870273c23f6bcf04e",
+      "maximum_mlx_memory_gb": 16,
+      "mlx_memory_limit_bytes": 17179869184,
+      "weights_placement": "streamed",
+      "drafter": "dflash2",
+      "multi_token_prediction_draft_tokens": null,
+      "task": "essay_short_prompt",
+      "temperature": 1.0,
+      "reply_tokens_requested": 200,
+      "figures": {
+        "round_count": 1,
+        "prompt_tokens": 27,
+        "prefill_tokens_per_second": {
+          "median": 73.97,
+          "lowest": 73.97,
+          "highest": 73.97
+        },
+        "seconds_to_first_token": {
+          "median": 0.37,
+          "lowest": 0.37,
+          "highest": 0.37
+        },
+        "reply_tokens_per_second": {
+          "median": 71.31,
+          "lowest": 71.31,
+          "highest": 71.31
+        },
+        "drafting": {
+          "rounds_a_reply": {
+            "median": 78.0,
+            "lowest": 78.0,
+            "highest": 78.0
+          },
+          "kept_drafts_a_round": {
+            "median": 1.56,
+            "lowest": 1.56,
+            "highest": 1.56
+          },
+          "drafted_share_of_reply": {
+            "median": 0.61,
+            "lowest": 0.61,
+            "highest": 0.61
+          }
+        },
+        "peak_mlx_memory_bytes": {
+          "median": 16793816388.0,
+          "lowest": 16793816388.0,
+          "highest": 16793816388.0
+        }
+      }
+    },
+    {
+      "model_id": "Ornith-1.5-35B-A3B-OptiQ-4bit-vision-DFLASH2",
+      "model_revision": "28c5203a83fa7bc39b3363b870273c23f6bcf04e",
+      "maximum_mlx_memory_gb": 16,
+      "mlx_memory_limit_bytes": 17179869184,
+      "weights_placement": "streamed",
+      "drafter": "dflash2",
+      "multi_token_prediction_draft_tokens": null,
+      "task": "code_short_prompt",
+      "temperature": 0.7,
+      "reply_tokens_requested": 200,
+      "figures": {
+        "round_count": 1,
+        "prompt_tokens": 27,
+        "prefill_tokens_per_second": {
+          "median": 54.93,
+          "lowest": 54.93,
+          "highest": 54.93
+        },
+        "seconds_to_first_token": {
+          "median": 0.49,
+          "lowest": 0.49,
+          "highest": 0.49
+        },
+        "reply_tokens_per_second": {
+          "median": 64.73,
+          "lowest": 64.73,
+          "highest": 64.73
+        },
+        "drafting": {
+          "rounds_a_reply": {
+            "median": 70.0,
+            "lowest": 70.0,
+            "highest": 70.0
+          },
+          "kept_drafts_a_round": {
+            "median": 1.84,
+            "lowest": 1.84,
+            "highest": 1.84
+          },
+          "drafted_share_of_reply": {
+            "median": 0.65,
+            "lowest": 0.65,
+            "highest": 0.65
+          }
+        },
+        "peak_mlx_memory_bytes": {
+          "median": 16548563080.0,
+          "lowest": 16548563080.0,
+          "highest": 16548563080.0
+        }
+      }
+    },
+    {
+      "model_id": "Ornith-1.5-35B-A3B-OptiQ-4bit-vision-DFLASH2",
+      "model_revision": "28c5203a83fa7bc39b3363b870273c23f6bcf04e",
+      "maximum_mlx_memory_gb": 16,
+      "mlx_memory_limit_bytes": 17179869184,
+      "weights_placement": "streamed",
+      "drafter": "dflash2",
+      "multi_token_prediction_draft_tokens": null,
+      "task": "essay_long_prompt",
+      "temperature": 1.0,
+      "reply_tokens_requested": 200,
+      "figures": {
+        "round_count": 1,
+        "prompt_tokens": 5037,
+        "prefill_tokens_per_second": {
+          "median": 1735.19,
+          "lowest": 1735.19,
+          "highest": 1735.19
+        },
+        "seconds_to_first_token": {
+          "median": 2.9,
+          "lowest": 2.9,
+          "highest": 2.9
+        },
+        "reply_tokens_per_second": {
+          "median": 51.66,
+          "lowest": 51.66,
+          "highest": 51.66
+        },
+        "drafting": {
+          "rounds_a_reply": {
+            "median": 40.0,
+            "lowest": 40.0,
+            "highest": 40.0
+          },
+          "kept_drafts_a_round": {
+            "median": 1.55,
+            "lowest": 1.55,
+            "highest": 1.55
+          },
+          "drafted_share_of_reply": {
+            "median": 0.31,
+            "lowest": 0.31,
+            "highest": 0.31
+          }
+        },
+        "peak_mlx_memory_bytes": {
+          "median": 16643937028.0,
+          "lowest": 16643937028.0,
+          "highest": 16643937028.0
+        }
+      }
+    },
+    {
+      "model_id": "Ornith-1.5-35B-A3B-OptiQ-4bit-vision-DFLASH2",
+      "model_revision": "28c5203a83fa7bc39b3363b870273c23f6bcf04e",
+      "maximum_mlx_memory_gb": 16,
+      "mlx_memory_limit_bytes": 17179869184,
+      "weights_placement": "streamed",
+      "drafter": "dflash2",
+      "multi_token_prediction_draft_tokens": null,
+      "task": "code_long_prompt",
+      "temperature": 0.7,
+      "reply_tokens_requested": 200,
+      "figures": {
+        "round_count": 1,
+        "prompt_tokens": 5096,
+        "prefill_tokens_per_second": {
+          "median": 1743.25,
+          "lowest": 1743.25,
+          "highest": 1743.25
+        },
+        "seconds_to_first_token": {
+          "median": 2.92,
+          "lowest": 2.92,
+          "highest": 2.92
+        },
+        "reply_tokens_per_second": {
+          "median": 75.43,
+          "lowest": 75.43,
+          "highest": 75.43
+        },
+        "drafting": {
+          "rounds_a_reply": {
+            "median": 69.0,
+            "lowest": 69.0,
+            "highest": 69.0
+          },
+          "kept_drafts_a_round": {
+            "median": 1.88,
+            "lowest": 1.88,
+            "highest": 1.88
+          },
+          "drafted_share_of_reply": {
+            "median": 0.65,
+            "lowest": 0.65,
+            "highest": 0.65
+          }
+        },
+        "peak_mlx_memory_bytes": {
+          "median": 16647428774.0,
+          "lowest": 16647428774.0,
+          "highest": 16647428774.0
+        }
+      }
+    },
+    {
+      "model_id": "Qwen3.8-27B-MLX-4bit-vision-DFLASH2",
+      "model_revision": "3ea6c842336d4a78cdeea6ffaf6908efc906bee1",
+      "maximum_mlx_memory_gb": null,
+      "mlx_memory_limit_bytes": 39195874112,
+      "weights_placement": "in_memory",
+      "drafter": "dflash2",
+      "multi_token_prediction_draft_tokens": null,
+      "task": "essay_short_prompt",
+      "temperature": 1.0,
+      "reply_tokens_requested": 200,
+      "figures": {
+        "round_count": 1,
+        "prompt_tokens": 27,
+        "prefill_tokens_per_second": {
+          "median": 109.54,
+          "lowest": 109.54,
+          "highest": 109.54
+        },
+        "seconds_to_first_token": {
+          "median": 0.25,
+          "lowest": 0.25,
+          "highest": 0.25
+        },
+        "reply_tokens_per_second": {
+          "median": 53.03,
+          "lowest": 53.03,
+          "highest": 53.03
+        },
+        "drafting": {
+          "rounds_a_reply": {
+            "median": 42.0,
+            "lowest": 42.0,
+            "highest": 42.0
+          },
+          "kept_drafts_a_round": {
+            "median": 3.76,
+            "lowest": 3.76,
+            "highest": 3.76
+          },
+          "drafted_share_of_reply": {
+            "median": 0.79,
+            "lowest": 0.79,
+            "highest": 0.79
+          }
+        },
+        "peak_mlx_memory_bytes": {
+          "median": 15993067542.0,
+          "lowest": 15993067542.0,
+          "highest": 15993067542.0
+        }
+      }
+    },
+    {
+      "model_id": "Qwen3.8-27B-MLX-4bit-vision-DFLASH2",
+      "model_revision": "3ea6c842336d4a78cdeea6ffaf6908efc906bee1",
+      "maximum_mlx_memory_gb": null,
+      "mlx_memory_limit_bytes": 39195874112,
+      "weights_placement": "in_memory",
+      "drafter": "dflash2",
+      "multi_token_prediction_draft_tokens": null,
+      "task": "code_short_prompt",
+      "temperature": 0.7,
+      "reply_tokens_requested": 200,
+      "figures": {
+        "round_count": 1,
+        "prompt_tokens": 27,
+        "prefill_tokens_per_second": {
+          "median": 111.25,
+          "lowest": 111.25,
+          "highest": 111.25
+        },
+        "seconds_to_first_token": {
+          "median": 0.24,
+          "lowest": 0.24,
+          "highest": 0.24
+        },
+        "reply_tokens_per_second": {
+          "median": 57.42,
+          "lowest": 57.42,
+          "highest": 57.42
+        },
+        "drafting": {
+          "rounds_a_reply": {
+            "median": 39.0,
+            "lowest": 39.0,
+            "highest": 39.0
+          },
+          "kept_drafts_a_round": {
+            "median": 4.13,
+            "lowest": 4.13,
+            "highest": 4.13
+          },
+          "drafted_share_of_reply": {
+            "median": 0.81,
+            "lowest": 0.81,
+            "highest": 0.81
+          }
+        },
+        "peak_mlx_memory_bytes": {
+          "median": 15993542706.0,
+          "lowest": 15993542706.0,
+          "highest": 15993542706.0
+        }
+      }
+    },
+    {
+      "model_id": "Qwen3.8-27B-MLX-4bit-vision-DFLASH2",
+      "model_revision": "3ea6c842336d4a78cdeea6ffaf6908efc906bee1",
+      "maximum_mlx_memory_gb": null,
+      "mlx_memory_limit_bytes": 39195874112,
+      "weights_placement": "in_memory",
+      "drafter": "dflash2",
+      "multi_token_prediction_draft_tokens": null,
+      "task": "essay_long_prompt",
+      "temperature": 1.0,
+      "reply_tokens_requested": 200,
+      "figures": {
+        "round_count": 1,
+        "prompt_tokens": 1062,
+        "prefill_tokens_per_second": {
+          "median": 333.59,
+          "lowest": 333.59,
+          "highest": 333.59
+        },
+        "seconds_to_first_token": {
+          "median": 3.18,
+          "lowest": 3.18,
+          "highest": 3.18
+        },
+        "reply_tokens_per_second": {
+          "median": 54.69,
+          "lowest": 54.69,
+          "highest": 54.69
+        },
+        "drafting": {
+          "rounds_a_reply": {
+            "median": 41.0,
+            "lowest": 41.0,
+            "highest": 41.0
+          },
+          "kept_drafts_a_round": {
+            "median": 3.88,
+            "lowest": 3.88,
+            "highest": 3.88
+          },
+          "drafted_share_of_reply": {
+            "median": 0.8,
+            "lowest": 0.8,
+            "highest": 0.8
+          }
+        },
+        "peak_mlx_memory_bytes": {
+          "median": 16428557354.0,
+          "lowest": 16428557354.0,
+          "highest": 16428557354.0
+        }
+      }
+    },
+    {
+      "model_id": "Qwen3.8-27B-MLX-4bit-vision-DFLASH2",
+      "model_revision": "3ea6c842336d4a78cdeea6ffaf6908efc906bee1",
+      "maximum_mlx_memory_gb": null,
+      "mlx_memory_limit_bytes": 39195874112,
+      "weights_placement": "in_memory",
+      "drafter": "dflash2",
+      "multi_token_prediction_draft_tokens": null,
+      "task": "code_long_prompt",
+      "temperature": 0.7,
+      "reply_tokens_requested": 200,
+      "figures": {
+        "round_count": 1,
+        "prompt_tokens": 1155,
+        "prefill_tokens_per_second": {
+          "median": 328.77,
+          "lowest": 328.77,
+          "highest": 328.77
+        },
+        "seconds_to_first_token": {
+          "median": 3.51,
+          "lowest": 3.51,
+          "highest": 3.51
+        },
+        "reply_tokens_per_second": {
+          "median": 54.37,
+          "lowest": 54.37,
+          "highest": 54.37
+        },
+        "drafting": {
+          "rounds_a_reply": {
+            "median": 41.0,
+            "lowest": 41.0,
+            "highest": 41.0
+          },
+          "kept_drafts_a_round": {
+            "median": 3.88,
+            "lowest": 3.88,
+            "highest": 3.88
+          },
+          "drafted_share_of_reply": {
+            "median": 0.8,
+            "lowest": 0.8,
+            "highest": 0.8
+          }
+        },
+        "peak_mlx_memory_bytes": {
+          "median": 16453639186.0,
+          "lowest": 16453639186.0,
+          "highest": 16453639186.0
+        }
+      }
+    },
+    {
+      "model_id": "Qwen3.8-Flash-Next-4bit-mtp",
+      "model_revision": "825df623302aeebc434f44ca9122827b04f9a0f1",
+      "maximum_mlx_memory_gb": 34,
+      "mlx_memory_limit_bytes": 36507222016,
+      "weights_placement": "streamed",
+      "drafter": "none",
+      "multi_token_prediction_draft_tokens": null,
+      "task": "essay_short_prompt",
+      "temperature": 1.0,
+      "reply_tokens_requested": 200,
+      "figures": {
+        "round_count": 1,
+        "prompt_tokens": 27,
+        "prefill_tokens_per_second": {
+          "median": 5.02,
+          "lowest": 5.02,
+          "highest": 5.02
+        },
+        "seconds_to_first_token": {
+          "median": 5.38,
+          "lowest": 5.38,
+          "highest": 5.38
+        },
+        "reply_tokens_per_second": {
+          "median": 22.19,
+          "lowest": 22.19,
+          "highest": 22.19
+        },
+        "drafting": {
+          "rounds_a_reply": {
+            "median": 111.0,
+            "lowest": 111.0,
+            "highest": 111.0
+          },
+          "kept_drafts_a_round": {
+            "median": 0.79,
+            "lowest": 0.79,
+            "highest": 0.79
+          },
+          "drafted_share_of_reply": {
+            "median": 0.44,
+            "lowest": 0.44,
+            "highest": 0.44
+          }
+        },
+        "peak_mlx_memory_bytes": {
+          "median": 35063252062.0,
+          "lowest": 35063252062.0,
+          "highest": 35063252062.0
+        }
+      }
+    },
+    {
+      "model_id": "Qwen3.8-Flash-Next-4bit-mtp",
+      "model_revision": "825df623302aeebc434f44ca9122827b04f9a0f1",
+      "maximum_mlx_memory_gb": 34,
+      "mlx_memory_limit_bytes": 36507222016,
+      "weights_placement": "streamed",
+      "drafter": "none",
+      "multi_token_prediction_draft_tokens": null,
+      "task": "code_short_prompt",
+      "temperature": 0.7,
+      "reply_tokens_requested": 200,
+      "figures": {
+        "round_count": 1,
+        "prompt_tokens": 27,
+        "prefill_tokens_per_second": {
+          "median": 15.92,
+          "lowest": 15.92,
+          "highest": 15.92
+        },
+        "seconds_to_first_token": {
+          "median": 1.7,
+          "lowest": 1.7,
+          "highest": 1.7
+        },
+        "reply_tokens_per_second": {
+          "median": 26.08,
+          "lowest": 26.08,
+          "highest": 26.08
+        },
+        "drafting": {
+          "rounds_a_reply": {
+            "median": 110.0,
+            "lowest": 110.0,
+            "highest": 110.0
+          },
+          "kept_drafts_a_round": {
+            "median": 0.81,
+            "lowest": 0.81,
+            "highest": 0.81
+          },
+          "drafted_share_of_reply": {
+            "median": 0.45,
+            "lowest": 0.45,
+            "highest": 0.45
+          }
+        },
+        "peak_mlx_memory_bytes": {
+          "median": 34974747566.0,
+          "lowest": 34974747566.0,
+          "highest": 34974747566.0
+        }
+      }
+    },
+    {
+      "model_id": "Qwen3.8-Flash-Next-4bit-mtp",
+      "model_revision": "825df623302aeebc434f44ca9122827b04f9a0f1",
+      "maximum_mlx_memory_gb": 34,
+      "mlx_memory_limit_bytes": 36507222016,
+      "weights_placement": "streamed",
+      "drafter": "none",
+      "multi_token_prediction_draft_tokens": null,
+      "task": "essay_long_prompt",
+      "temperature": 1.0,
+      "reply_tokens_requested": 200,
+      "figures": {
+        "round_count": 1,
+        "prompt_tokens": 5037,
+        "prefill_tokens_per_second": {
+          "median": 473.33,
+          "lowest": 473.33,
+          "highest": 473.33
+        },
+        "seconds_to_first_token": {
+          "median": 10.64,
+          "lowest": 10.64,
+          "highest": 10.64
+        },
+        "reply_tokens_per_second": {
+          "median": 20.05,
+          "lowest": 20.05,
+          "highest": 20.05
+        },
+        "drafting": {
+          "rounds_a_reply": {
+            "median": 122.0,
+            "lowest": 122.0,
+            "highest": 122.0
+          },
+          "kept_drafts_a_round": {
+            "median": 0.62,
+            "lowest": 0.62,
+            "highest": 0.62
+          },
+          "drafted_share_of_reply": {
+            "median": 0.38,
+            "lowest": 0.38,
+            "highest": 0.38
+          }
+        },
+        "peak_mlx_memory_bytes": {
+          "median": 35315315976.0,
+          "lowest": 35315315976.0,
+          "highest": 35315315976.0
+        }
+      }
+    },
+    {
+      "model_id": "Qwen3.8-Flash-Next-4bit-mtp",
+      "model_revision": "825df623302aeebc434f44ca9122827b04f9a0f1",
+      "maximum_mlx_memory_gb": 34,
+      "mlx_memory_limit_bytes": 36507222016,
+      "weights_placement": "streamed",
+      "drafter": "none",
+      "multi_token_prediction_draft_tokens": null,
+      "task": "code_long_prompt",
+      "temperature": 0.7,
+      "reply_tokens_requested": 200,
+      "figures": {
+        "round_count": 1,
+        "prompt_tokens": 5096,
+        "prefill_tokens_per_second": {
+          "median": 455.46,
+          "lowest": 455.46,
+          "highest": 455.46
+        },
+        "seconds_to_first_token": {
+          "median": 11.19,
+          "lowest": 11.19,
+          "highest": 11.19
+        },
+        "reply_tokens_per_second": {
+          "median": 23.15,
+          "lowest": 23.15,
+          "highest": 23.15
+        },
+        "drafting": {
+          "rounds_a_reply": {
+            "median": 110.0,
+            "lowest": 110.0,
+            "highest": 110.0
+          },
+          "kept_drafts_a_round": {
+            "median": 0.81,
+            "lowest": 0.81,
+            "highest": 0.81
+          },
+          "drafted_share_of_reply": {
+            "median": 0.45,
+            "lowest": 0.45,
+            "highest": 0.45
+          }
+        },
+        "peak_mlx_memory_bytes": {
+          "median": 35090151092.0,
+          "lowest": 35090151092.0,
+          "highest": 35090151092.0
+        }
+      }
+    }
+  ]
+}
