@@ -183,7 +183,7 @@ impl ActiveImageGeneration {
     }
 
     pub(crate) fn elapsed_millis(&self) -> u64 {
-        u64::try_from(self.started_at.elapsed().as_millis()).unwrap_or(u64::MAX)
+        elapsed_millis_since(self.started_at)
     }
 }
 
@@ -277,4 +277,9 @@ pub(crate) fn engine_generation_error(engine_error: InferenceEngineError) -> Wor
     WorkerRuntimeError::InferenceEngineGenerationFailed {
         reason: engine_error.to_string(),
     }
+}
+
+/// Whole milliseconds since `started_at`, saturating rather than wrapping.
+pub(crate) fn elapsed_millis_since(started_at: std::time::Instant) -> u64 {
+    u64::try_from(started_at.elapsed().as_millis()).unwrap_or(u64::MAX)
 }
