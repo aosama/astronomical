@@ -11,6 +11,7 @@
 //! costs a small round trip. The text model reads every dense model's rows
 //! this way, whether or not its weights fit the limit.
 
+use crate::qwen3_5_core::model_math::compressed_lexicon::CompressedLexicon;
 use std::fs::File;
 
 use mlx_bridge::MlxArray;
@@ -157,15 +158,20 @@ impl Qwen3_5DiskEmbeddingRows {
                     ..
                 },
                 Some(affine_tables),
-            ) => super::base::gather_quantized_embedding_rows(
-                runtime,
-                &packed_rows,
-                &read_table_rows(runtime, &affine_tables.scales_table, row_selection)?,
-                &read_table_rows(runtime, &affine_tables.biases_table, row_selection)?,
-                selected_row_indices,
-                *quantization_group_size,
-                *quantization_bits,
-            ),
+            ) => {
+                let entry_scales =
+                    read_table_rows(runtime, &affine_tables.scales_table, row_selection)?;
+                let entry_offsets =
+                    read_table_rows(runtime, &affine_tables.biases_table, row_selection)?;
+                let lexicon_slice = CompressedLexicon {
+                    packed_entries: &packed_rows,
+                    entry_scales: &entry_scales,
+                    entry_offsets: &entry_offsets,
+                    bits_per_number: *quantization_bits,
+                    numbers_per_group: *quantization_group_size,
+                };
+                lexicon_slice.learned_representations_of(runtime, selected_row_indices)
+            }
             _ => Err(invalid_embedding_table(
                 "the on-disk tables do not match the bound embedding form",
             )),

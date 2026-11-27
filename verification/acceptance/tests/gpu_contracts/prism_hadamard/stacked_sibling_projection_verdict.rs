@@ -206,7 +206,7 @@ fn one_real_activation_row(
         .array_from_i32(&[1_000], &[1, 1])
         .expect("the token array builds");
     let embedded = shared_core
-        .embedding_lookup(&token_ids)
+        .context_free_token_meanings(&token_ids)
         .expect("the embedding row is read");
     let row = runtime
         .reshape(&embedded, &[1, 1, hidden_size])

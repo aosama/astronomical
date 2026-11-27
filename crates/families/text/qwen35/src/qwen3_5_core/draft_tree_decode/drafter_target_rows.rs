@@ -15,7 +15,7 @@ impl DFlashDraftTarget for Qwen3_5ModelBase {
         token_ids: &MlxArray,
     ) -> Result<MlxArray, MlxRuntimeError> {
         let signed_token_ids = self.runtime.astype(token_ids, MlxDtype::Int32)?;
-        self.embedding_lookup(&signed_token_ids)
+        self.context_free_token_meanings(&signed_token_ids)
             .map_err(runtime_error)
     }
 

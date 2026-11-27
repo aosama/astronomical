@@ -153,7 +153,7 @@ impl Qwen3_5Model {
         layer_recomputation: Option<&dyn DecoderLayerRecomputation>,
     ) -> Result<MlxArray, TextExecutionError> {
         let (token_indices, token_count) = self.padded_token_indices(token_rows)?;
-        let mut hidden_states = self.embedding_lookup(&token_indices)?;
+        let mut hidden_states = self.context_free_token_meanings(&token_indices)?;
         for layer_index in 0..self.config.layer_count() as usize {
             hidden_states = match layer_recomputation {
                 Some(layer_recomputation) => layer_recomputation.recomputed_layer(

@@ -16,11 +16,11 @@ use text_generation::execution_error::TextExecutionError;
 use crate::qwen3_5_core::artifacts::ValidatedQwen3_5Artifact;
 use crate::qwen3_5_core::artifacts::qwen4_exp_tensor_spec::NGRAM_TABLE_SHARD_STEM;
 use crate::qwen3_5_core::configuration::Qwen4ExpArchitecture;
-use crate::qwen3_5_core::model::base::gather_quantized_embedding_rows;
 use crate::qwen3_5_core::model::disk_embedding_rows::{
     DiskEmbeddingTable, disk_row_table, read_table_rows,
 };
 use crate::qwen3_5_core::model::embedding_row_reads::select_embedding_rows;
+use crate::qwen3_5_core::model_math::compressed_lexicon::CompressedLexicon;
 
 use super::ngram_hashing::NgramHashTables;
 use super::ngram_table_geometry::NgramTableGeometry;
@@ -156,16 +156,19 @@ impl NgramTable {
         }
         let gathered_indices =
             runtime.array_from_i32(&gathered_index_by_row, &[row_ids.len() as i32])?;
-        let rows = gather_quantized_embedding_rows(
-            runtime,
-            &concatenated(runtime, &packed_parts)?,
-            &concatenated(runtime, &scale_parts)?,
-            &concatenated(runtime, &bias_parts)?,
-            &gathered_indices,
-            self.shards.quantization_group_size,
-            self.shards.quantization_bits,
-        )?;
-        Ok(runtime.reshape(&rows, &[1, token_count, -1])?)
+        let packed_entries = concatenated(runtime, &packed_parts)?;
+        let entry_scales = concatenated(runtime, &scale_parts)?;
+        let entry_offsets = concatenated(runtime, &bias_parts)?;
+        let ngram_lexicon = CompressedLexicon {
+            packed_entries: &packed_entries,
+            entry_scales: &entry_scales,
+            entry_offsets: &entry_offsets,
+            bits_per_number: self.shards.quantization_bits,
+            numbers_per_group: self.shards.quantization_group_size,
+        };
+        let ngram_representations =
+            ngram_lexicon.learned_representations_of(runtime, &gathered_indices)?;
+        Ok(runtime.reshape(&ngram_representations, &[1, token_count, -1])?)
     }
 
     /// `(position in row_ids, row inside the shard)` grouped by shard.

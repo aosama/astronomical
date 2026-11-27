@@ -220,7 +220,7 @@ impl crate::qwen3_5_core::model::Qwen3_5ModelBase {
         request_decoder_state: &mut RequestDecoderStateStack,
     ) -> Result<MlxArray, TextExecutionError> {
         self.record_qwen4_exp_forward_token_indices(request_decoder_state, token_indices)?;
-        self.decoder_layer_input(self.embedding_lookup(token_indices)?)
+        self.decoder_layer_input(self.context_free_token_meanings(token_indices)?)
     }
 
     /// One layer's state and Flash-Next state for a forward over

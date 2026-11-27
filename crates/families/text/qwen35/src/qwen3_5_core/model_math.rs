@@ -9,6 +9,11 @@
 //! feature matrix is unchanged.
 
 #[cfg(feature = "direct-mlx")]
+pub mod compressed_lexicon;
+#[cfg(all(test, feature = "direct-mlx"))]
+#[path = "model_math/compressed_lexicon_tests.rs"]
+mod compressed_lexicon_tests;
+#[cfg(feature = "direct-mlx")]
 pub mod decoder_layer_weights;
 #[cfg(feature = "direct-mlx")]
 pub mod dense_projection;

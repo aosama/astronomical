@@ -92,7 +92,7 @@ pub trait Qwen3_5PrefillForward: Qwen3_5TargetForwardGraph {
             self.config.maximum_position_count(),
         )?;
         let token_indices = self.token_indices_without_validation(chunk_token_ids)?;
-        let text_embeddings = self.embedding_lookup(&token_indices)?;
+        let text_embeddings = self.context_free_token_meanings(&token_indices)?;
         let (injected_embeddings, consumed_visual_embedding_count) =
             visual_embedding_injection::qwen3_5_inject_visual_embeddings(
                 &self.runtime,

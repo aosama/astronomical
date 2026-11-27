@@ -211,7 +211,7 @@ impl Qwen3_5Model {
         let lane_count = architecture.residual_lane_count as i32;
         let epsilon = f32::from_bits(self.config.rms_norm_epsilon_bits());
         let token_count = token_indices.shape()[1];
-        let embeddings = self.embedding_lookup(token_indices)?;
+        let embeddings = self.context_free_token_meanings(token_indices)?;
         let projected_embeddings = self.quantized_linear(
             &grouped_rms_norm(
                 runtime,
