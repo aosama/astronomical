@@ -206,7 +206,8 @@ fn should_report_zero_speeds_before_any_request_is_measured() {
 }
 
 #[test]
-fn should_preserve_the_serving_session_when_the_resident_model_is_replaced() {
+fn should_preserve_the_completed_serving_session_but_not_a_running_reply_when_the_model_is_replaced()
+ {
     let capabilities = ChatModelCapabilities {
         supports_reasoning: true,
         supports_tool_calls: true,
@@ -223,6 +224,10 @@ fn should_preserve_the_serving_session_when_the_resident_model_is_replaced() {
     previous_health_snapshot
         .serving_session
         .record_completed_request(completed_request_work(1_000, 750, 25_000, 20, 1_000));
+    // A reply was running when the worker was replaced; it never completed.
+    previous_health_snapshot
+        .serving_session
+        .record_running_generation(500, 1_000);
 
     let replacement_health_snapshot =
         astronomical_daemon::WorkerHealthSnapshot::ready_with_replacement_model(
@@ -237,7 +242,13 @@ fn should_preserve_the_serving_session_when_the_resident_model_is_replaced() {
         replacement_health_snapshot.minimum_mlx_memory_ceiling_bytes,
         3_000
     );
+    let mut completed_session = previous_health_snapshot.serving_session.clone();
+    completed_session.clear_running_request();
     assert_eq!(
+        replacement_health_snapshot.serving_session, completed_session,
+        "the completed session carries over; the running reply does not"
+    );
+    assert_ne!(
         replacement_health_snapshot.serving_session,
         previous_health_snapshot.serving_session
     );
