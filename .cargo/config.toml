@@ -1170,10 +1170,10 @@ measure-paging-submission-intervals = "run -p xtask -- test-run --package astron
 # --configuration PATH with reference_artifact_path to compare the BF16 image
 # with the independent reference.
 test-flux2-klein-rest = "run -p xtask -- test-run --package astronomical-acceptance --features serving-acceptance --test chat_serving --filter flux2_klein_rest --ignored"
-# Prism-Hadamard lanes: real-pack contracts and upstream greedy parity,
-# performance tiers, serving throughput, and real-worker chat; append
-# --configuration PATH containing model_directory and, for parity,
-# reference_artifact_path.
+# Folded ternary (Prism-Hadamard) lanes on the shared Qwen 3.5 core:
+# real-pack contracts and upstream greedy parity, serving throughput, and
+# real-worker chat; append --configuration PATH containing model_directory
+# and, for parity, reference_artifact_path.
 test-prism-hadamard-direct = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test prism_hadamard --ignored"
 # Where one reply token of a folded ternary pack goes on the shared core
 # (#2653): the MLX performance profiler's page and JSON for one token built as
@@ -1184,7 +1184,6 @@ measure-prism-shared-core-reply-token = "run -p xtask -- test-run --package astr
 # projections beats one matmul each, as profiler verdicts on layer 0's real
 # weights, with outputs checked equal (#2653). Under a minute.
 measure-prism-stacked-sibling-projections = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test prism_hadamard --release --filter stacked_sibling_projection --ignored"
-test-prism-hadamard-performance = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test prism_hadamard --release --filter throughput --ignored"
 test-prism-hadamard-serving-throughput = "run -p xtask -- test-run --package astronomical-acceptance --features performance_throughput --test performance_throughput --release --filter folded_ternary --ignored"
 test-prism-hadamard-serving = "run -p xtask -- test-run --package astronomical-acceptance --features serving-acceptance --test chat_serving --filter should_serve_greedy_and_sampled_chat_completions_from_the_folded_pack --ignored"
 

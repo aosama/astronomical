@@ -1,11 +1,12 @@
-//! The folded ternary family's acceptance journeys over the shipped pack.
+//! The folded ternary family's acceptance journeys over the shipped pack,
+//! served by the shared Qwen 3.5 core (#2595).
 //!
 //! These are acceptance, not unit, contracts: every test loads the real
 //! installed pack (roughly 8 GB of model weights) and drives the
 //! graphics processor, so they are feature-gated on `direct-mlx`, run
 //! `--ignored` by default, and locate the pack through the test run's
-//! configuration instead of any hardcoded developer path. The performance tiers live in
-//! `prism_hadamard/` beside the shared pack and prompt helpers.
+//! configuration instead of any hardcoded developer path. The measurement
+//! journeys live in `prism_hadamard/` beside the shared pack helpers.
 
 use serial_test::serial;
 
@@ -18,7 +19,8 @@ mod romeo_and_juliet;
 #[path = "prism_hadamard/mod.rs"]
 mod prism_hadamard;
 
-use prism_hadamard::support::{loaded_journey_model, pack_directory, parity_reference_path};
+use prism_hadamard::support::{pack_directory, parity_reference_path};
+use prism_hadamard::{loaded_shared_core, shared_core_greedy_tokens};
 
 /// How many greedy tokens the parity journey replays (the reference dump's
 /// length).
@@ -65,16 +67,16 @@ fn should_replay_the_upstream_reference_greedy_trajectory() {
         .collect();
     assert_eq!(expected_tokens.len(), PARITY_TOKEN_COUNT);
 
-    let model = loaded_journey_model();
-    // An empty stop set makes the model's own greedy session decode exactly
-    // the reference length (this replays the model, not the serving engine); any arithmetic divergence anywhere in the
-    // trajectory breaks the sequence equality below.
-    let actual_tokens = model
-        .generate_greedy(&input_ids, PARITY_TOKEN_COUNT, &[])
-        .expect("the parity replay should generate");
+    let shared_core = loaded_shared_core(&pack_directory());
+    // An empty stop set decodes exactly the reference length; any arithmetic
+    // divergence anywhere in the trajectory breaks the sequence equality
+    // below.
+    let prompt_token_ids: Vec<u32> = input_ids.iter().map(|token_id| *token_id as u32).collect();
+    let actual_tokens =
+        shared_core_greedy_tokens(&shared_core, &prompt_token_ids, PARITY_TOKEN_COUNT, &[]);
     assert_eq!(
         actual_tokens, expected_tokens,
-        "the family model must reproduce the upstream greedy trajectory token for token"
+        "the shared core must reproduce the upstream greedy trajectory token for token"
     );
 }
 
@@ -105,10 +107,17 @@ fn should_receive_text_and_reply_with_text() {
         .map(|token_id| *token_id as i32)
         .collect();
 
-    let model = loaded_journey_model();
-    let generated_token_ids = model
-        .generate_greedy(&prompt_token_ids, 64, &[end_of_turn_id, end_of_text_id])
-        .expect("the text-generation journey should run");
+    let shared_core = loaded_shared_core(&pack_directory());
+    let prompt_token_ids: Vec<u32> = prompt_token_ids
+        .iter()
+        .map(|token_id| *token_id as u32)
+        .collect();
+    let generated_token_ids = shared_core_greedy_tokens(
+        &shared_core,
+        &prompt_token_ids,
+        64,
+        &[end_of_turn_id, end_of_text_id],
+    );
     let reply_text = tokenizer
         .decode(&generated_token_ids, false)
         .expect("the generated ids should decode");
