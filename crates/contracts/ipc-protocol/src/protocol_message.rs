@@ -380,6 +380,12 @@ pub enum WorkerEvent {
     DraftModelChanged {
         draft_model: crate::DraftModelStatus,
     },
+    /// Reports what the GPU's capability probes proved about Astronomical's
+    /// own Metal kernels and which of them the loaded model holds. Sent once
+    /// a load settles; absent for engines without custom kernels.
+    CustomMetalKernelsChanged {
+        custom_metal_kernels: crate::CustomMetalKernelReport,
+    },
     /// Says where one prompt chunk ran. A fact about the model's programs rather than
     /// the request, so it stays meaningful if that request has since been cancelled.
     NeuralEngineChunkFinished {

@@ -119,12 +119,11 @@ pub(super) struct LoadedReplacement<
 }
 
 /// The events a model load announces after its configuration: what the
-/// Neural Engine prefill is doing and what the engine found for a drafter.
+/// Neural Engine prefill is doing, what the engine found for a drafter and
+/// what its custom kernels' probes decided, each only when the engine has one.
 #[derive(Default)]
 pub(super) struct LoadStatusEvents {
-    pub(super) neural_engine_prefill_event: Option<WorkerEvent>,
-    /// `None` for engines that never look for a drafter.
-    pub(super) draft_model_event: Option<WorkerEvent>,
+    pub(super) engine_status_events: Vec<WorkerEvent>,
 }
 
 impl<Engines: WorkerEngines> EngineBackedWorker<Engines> {
@@ -212,8 +211,7 @@ impl<Engines: WorkerEngines> EngineBackedWorker<Engines> {
         announce_floor_raise(floor_raise_event, event_writer).await?;
         self.emit_astro_ssd_prompt_cache_stats_then_engine_statuses(
             event_writer,
-            load_status_events.neural_engine_prefill_event.as_ref(),
-            load_status_events.draft_model_event.as_ref(),
+            &load_status_events.engine_status_events,
         )
         .await
     }
@@ -312,8 +310,7 @@ impl<Engines: WorkerEngines> EngineBackedWorker<Engines> {
             runtime_configuration,
             engine_placement: Some(engine_placement),
             load_status_events: LoadStatusEvents {
-                neural_engine_prefill_event: engine_load_result.neural_engine_prefill_event(),
-                draft_model_event: engine_load_result.draft_model_event(),
+                engine_status_events: engine_load_result.engine_status_events(),
             },
         })
     }

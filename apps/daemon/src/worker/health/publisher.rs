@@ -88,8 +88,8 @@ pub(crate) fn clear_active_request_progress(health_snapshot: &Arc<RwLock<WorkerH
 }
 
 /// Publishes an engine's report about the loaded model's Neural Engine
-/// prefill or its drafter, which callers route together so their dispatch
-/// adds no branch per report.
+/// prefill, its drafter or its custom Metal kernels, which callers route
+/// together so their dispatch adds no branch per report.
 pub(crate) fn publish_engine_status_event(
     health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
     engine_status_event: ipc_protocol::WorkerEvent,
@@ -98,9 +98,23 @@ pub(crate) fn publish_engine_status_event(
         ipc_protocol::WorkerEvent::NeuralEnginePrefillChanged {
             neural_engine_prefill,
         } => publish_neural_engine_prefill(health_snapshot, Some(neural_engine_prefill)),
+        model_report_event => publish_model_report_event(health_snapshot, model_report_event),
+    }
+}
+
+/// The drafter's and the custom kernels' reports, split from
+/// `publish_engine_status_event` so each dispatch stays small.
+fn publish_model_report_event(
+    health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
+    model_report_event: ipc_protocol::WorkerEvent,
+) {
+    match model_report_event {
         ipc_protocol::WorkerEvent::DraftModelChanged { draft_model } => {
             publish_draft_model(health_snapshot, Some(draft_model));
         }
+        ipc_protocol::WorkerEvent::CustomMetalKernelsChanged {
+            custom_metal_kernels,
+        } => publish_custom_metal_kernels(health_snapshot, Some(custom_metal_kernels)),
         _ => {}
     }
 }
@@ -130,6 +144,15 @@ pub(crate) fn record_reply_peak_mlx_memory(
 ) {
     if let Ok(mut worker_health_snapshot) = health_snapshot.write() {
         worker_health_snapshot.last_reply_peak_mlx_memory_bytes = reply_peak_mlx_memory_bytes;
+    }
+}
+
+pub(crate) fn publish_custom_metal_kernels(
+    health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
+    custom_metal_kernels: Option<ipc_protocol::CustomMetalKernelReport>,
+) {
+    if let Ok(mut worker_health_snapshot) = health_snapshot.write() {
+        worker_health_snapshot.custom_metal_kernels = custom_metal_kernels;
     }
 }
 

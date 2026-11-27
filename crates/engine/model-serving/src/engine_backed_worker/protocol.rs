@@ -136,8 +136,7 @@ impl<Engines: WorkerEngines> EngineBackedWorker<Engines> {
             .await?;
         self.emit_astro_ssd_prompt_cache_stats_then_engine_statuses(
             event_writer,
-            engine_load_result.neural_engine_prefill_event().as_ref(),
-            engine_load_result.draft_model_event().as_ref(),
+            &engine_load_result.engine_status_events(),
         )
         .await
     }

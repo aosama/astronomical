@@ -91,9 +91,10 @@ pub mod reply_stage_tally;
 // The one module of in-graph serving with unsafe code: its host step
 // reaches the model from MLX's thread. The module says why that is sound.
 #[cfg(feature = "direct-mlx")]
+mod custom_metal_kernels_in_use;
+#[cfg(feature = "direct-mlx")]
 #[allow(unsafe_code)]
 mod in_graph_route_lookup;
-#[cfg(feature = "direct-mlx")]
 mod in_graph_serving_record;
 #[cfg(feature = "direct-mlx")]
 pub mod in_graph_table_serving;

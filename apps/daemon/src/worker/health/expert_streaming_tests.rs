@@ -8,6 +8,7 @@ use ipc_protocol::{
 use super::expert_streaming::{
     ExpertStreamingObservatory, MAXIMUM_MODE_TRANSITION_HISTORY, expert_streaming_stats_from_event,
 };
+use super::health_test_support::no_capabilities;
 use super::publish_expert_streaming_stats;
 
 fn stats_snapshot(
@@ -197,19 +198,11 @@ fn should_extract_stats_only_from_the_matching_event() {
 fn should_carry_the_observatory_across_replacement_for_the_same_model() {
     use std::sync::{Arc, RwLock};
 
-    use ipc_protocol::WorkerModelCapabilities;
-
     use crate::worker::health::{WorkerHealthSnapshot, publish_health};
 
     let health_snapshot = Arc::new(RwLock::new(WorkerHealthSnapshot::ready_with_model(
         String::from("ornith-35b"),
-        WorkerModelCapabilities {
-            chat: None,
-            image_generation: None,
-            embeddings: None,
-            decisions: None,
-            speech: None,
-        },
+        no_capabilities(),
     )));
     publish_expert_streaming_stats(
         &health_snapshot,
@@ -223,16 +216,7 @@ fn should_carry_the_observatory_across_replacement_for_the_same_model() {
     // restart from `previous_mode: None`.
     publish_health(
         &health_snapshot,
-        WorkerHealthSnapshot::ready_with_model(
-            String::from("ornith-35b"),
-            WorkerModelCapabilities {
-                chat: None,
-                image_generation: None,
-                embeddings: None,
-                decisions: None,
-                speech: None,
-            },
-        ),
+        WorkerHealthSnapshot::ready_with_model(String::from("ornith-35b"), no_capabilities()),
     );
 
     let carried_observatory = health_snapshot
@@ -249,19 +233,11 @@ fn should_carry_the_observatory_across_replacement_for_the_same_model() {
 fn should_carry_the_observatory_across_a_model_less_idle_replacement() {
     use std::sync::{Arc, RwLock};
 
-    use ipc_protocol::WorkerModelCapabilities;
-
     use crate::worker::health::{WorkerHealthSnapshot, publish_health};
 
     let health_snapshot = Arc::new(RwLock::new(WorkerHealthSnapshot::ready_with_model(
         String::from("ornith-35b"),
-        WorkerModelCapabilities {
-            chat: None,
-            image_generation: None,
-            embeddings: None,
-            decisions: None,
-            speech: None,
-        },
+        no_capabilities(),
     )));
     publish_expert_streaming_stats(
         &health_snapshot,
@@ -293,8 +269,6 @@ fn should_carry_the_observatory_across_a_model_less_idle_replacement() {
 fn should_carry_the_observatory_across_a_re_ready_without_a_published_model_claim() {
     use std::sync::{Arc, RwLock};
 
-    use ipc_protocol::WorkerModelCapabilities;
-
     use crate::worker::health::{WorkerHealthSnapshot, publish_health};
 
     let health_snapshot = Arc::new(RwLock::new(WorkerHealthSnapshot::ready_without_model(0)));
@@ -311,16 +285,7 @@ fn should_carry_the_observatory_across_a_re_ready_without_a_published_model_clai
     // live feed showed `previous_mode: None` on every entry.
     publish_health(
         &health_snapshot,
-        WorkerHealthSnapshot::ready_with_model(
-            String::from("ornith-35b"),
-            WorkerModelCapabilities {
-                chat: None,
-                image_generation: None,
-                embeddings: None,
-                decisions: None,
-                speech: None,
-            },
-        ),
+        WorkerHealthSnapshot::ready_with_model(String::from("ornith-35b"), no_capabilities()),
     );
 
     let carried_observatory = health_snapshot
@@ -336,19 +301,11 @@ fn should_carry_the_observatory_across_a_re_ready_without_a_published_model_clai
 fn should_reset_the_observatory_when_the_replacement_changes_the_model() {
     use std::sync::{Arc, RwLock};
 
-    use ipc_protocol::WorkerModelCapabilities;
-
     use crate::worker::health::{WorkerHealthSnapshot, publish_health};
 
     let health_snapshot = Arc::new(RwLock::new(WorkerHealthSnapshot::ready_with_model(
         String::from("ornith-35b"),
-        WorkerModelCapabilities {
-            chat: None,
-            image_generation: None,
-            embeddings: None,
-            decisions: None,
-            speech: None,
-        },
+        no_capabilities(),
     )));
     publish_expert_streaming_stats(
         &health_snapshot,
@@ -361,16 +318,7 @@ fn should_reset_the_observatory_when_the_replacement_changes_the_model() {
     // replacement's fresh observatory must win over the stale accumulation.
     publish_health(
         &health_snapshot,
-        WorkerHealthSnapshot::ready_with_model(
-            String::from("other-model"),
-            WorkerModelCapabilities {
-                chat: None,
-                image_generation: None,
-                embeddings: None,
-                decisions: None,
-                speech: None,
-            },
-        ),
+        WorkerHealthSnapshot::ready_with_model(String::from("other-model"), no_capabilities()),
     );
 
     let fresh_observatory = health_snapshot

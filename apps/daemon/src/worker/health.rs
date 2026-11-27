@@ -9,8 +9,14 @@ use tokio::time::Instant;
 mod publisher;
 
 #[cfg(test)]
+#[path = "health/custom_metal_kernels_tests.rs"]
+mod custom_metal_kernels_tests;
+#[cfg(test)]
 #[path = "health/expert_streaming_tests.rs"]
 mod expert_streaming_tests;
+#[cfg(test)]
+#[path = "health/health_test_support.rs"]
+mod health_test_support;
 #[cfg(test)]
 #[path = "health/model_load_in_flight_tests.rs"]
 mod model_load_in_flight_tests;
@@ -30,9 +36,9 @@ pub(crate) mod expert_streaming;
 pub(crate) use publisher::{
     clear_active_request_progress, clear_latest_mlx_memory_snapshot,
     publish_active_request_progress, publish_activity, publish_astro_ssd_prompt_cache_stats,
-    publish_draft_model, publish_engine_status_event, publish_expert_memory_mode,
-    publish_expert_residency, publish_expert_streaming_stats, publish_health,
-    publish_latest_mlx_memory_snapshot, publish_mlx_memory_limit_changed,
+    publish_custom_metal_kernels, publish_draft_model, publish_engine_status_event,
+    publish_expert_memory_mode, publish_expert_residency, publish_expert_streaming_stats,
+    publish_health, publish_latest_mlx_memory_snapshot, publish_mlx_memory_limit_changed,
     publish_mlx_memory_limit_rejection, publish_model_load_in_flight,
     publish_neural_engine_prefill, publish_pending_astro_ssd_prompt_cache_clear,
     publish_worker_expert_residency, record_neural_engine_chunk, record_prompt_work_reuse,
@@ -291,6 +297,10 @@ pub struct WorkerHealthSnapshot {
     /// Whether the loaded model drafts with a DFlash draft model; `None` when
     /// no model is loaded or its engine never looks for one.
     pub draft_model: Option<ipc_protocol::DraftModelStatus>,
+    /// What the capability probes proved about Astronomical's own Metal
+    /// kernels and which of them the loaded model holds; `None` when no model
+    /// is loaded or its engine has no custom kernels.
+    pub custom_metal_kernels: Option<ipc_protocol::CustomMetalKernelReport>,
     /// What drafting did for the last finished reply; `None` when it did not draft.
     pub last_reply_drafting: Option<ipc_protocol::RequestDraftingStatistics>,
     /// Drafting summed over every reply since this model loaded.
@@ -355,6 +365,7 @@ impl WorkerHealthSnapshot {
             expert_memory_mode: None,
             neural_engine_prefill: None,
             draft_model: None,
+            custom_metal_kernels: None,
             last_reply_drafting: None,
             session_drafting: ipc_protocol::RequestDraftingStatistics::NONE,
             last_reply_peak_mlx_memory_bytes: None,
@@ -431,6 +442,7 @@ impl WorkerHealthSnapshot {
             expert_memory_mode: None,
             neural_engine_prefill: None,
             draft_model: None,
+            custom_metal_kernels: None,
             last_reply_drafting: None,
             session_drafting: ipc_protocol::RequestDraftingStatistics::NONE,
             last_reply_peak_mlx_memory_bytes: None,
@@ -464,6 +476,7 @@ impl WorkerHealthSnapshot {
             expert_memory_mode: None,
             neural_engine_prefill: None,
             draft_model: None,
+            custom_metal_kernels: None,
             last_reply_drafting: None,
             session_drafting: ipc_protocol::RequestDraftingStatistics::NONE,
             last_reply_peak_mlx_memory_bytes: None,

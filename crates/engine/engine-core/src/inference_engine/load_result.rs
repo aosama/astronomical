@@ -1,4 +1,6 @@
-use ipc_protocol::{DraftModelStatus, ExpertMemoryMode, NeuralEnginePrefillStatus};
+use ipc_protocol::{
+    CustomMetalKernelReport, DraftModelStatus, ExpertMemoryMode, NeuralEnginePrefillStatus,
+};
 
 /// Immutable readiness metadata captured after all engine load transitions.
 ///
@@ -11,6 +13,8 @@ pub struct EngineLoadResult {
     neural_engine_prefill_status: NeuralEnginePrefillStatus,
     /// `None` for an engine that never looks for a drafter, so it announces nothing.
     draft_model_status: Option<DraftModelStatus>,
+    /// `None` for an engine without custom Metal kernels, so it announces nothing.
+    custom_metal_kernel_report: Option<CustomMetalKernelReport>,
 }
 
 impl EngineLoadResult {
@@ -21,6 +25,7 @@ impl EngineLoadResult {
             minimum_mlx_memory_ceiling_bytes: 1,
             neural_engine_prefill_status: NeuralEnginePrefillStatus::Off,
             draft_model_status: None,
+            custom_metal_kernel_report: None,
         }
     }
 
@@ -104,6 +109,41 @@ impl EngineLoadResult {
         self.draft_model_status
             .clone()
             .map(|draft_model| ipc_protocol::WorkerEvent::DraftModelChanged { draft_model })
+    }
+
+    /// Sets what the capability probes proved and which custom kernels the
+    /// loaded model holds.
+    #[must_use]
+    pub fn with_custom_metal_kernel_report(
+        mut self,
+        custom_metal_kernel_report: CustomMetalKernelReport,
+    ) -> Self {
+        self.custom_metal_kernel_report = Some(custom_metal_kernel_report);
+        self
+    }
+
+    /// The event announcing the custom kernel report, or `None` for an
+    /// engine without custom kernels.
+    #[must_use]
+    pub fn custom_metal_kernels_event(&self) -> Option<ipc_protocol::WorkerEvent> {
+        self.custom_metal_kernel_report
+            .clone()
+            .map(
+                |custom_metal_kernels| ipc_protocol::WorkerEvent::CustomMetalKernelsChanged {
+                    custom_metal_kernels,
+                },
+            )
+    }
+
+    /// Every status event a settled load announces, in the order the worker
+    /// sends them: the Neural Engine prefill, the drafter, the custom kernels.
+    #[must_use]
+    pub fn engine_status_events(&self) -> Vec<ipc_protocol::WorkerEvent> {
+        let mut engine_status_events = Vec::new();
+        engine_status_events.extend(self.neural_engine_prefill_event());
+        engine_status_events.extend(self.draft_model_event());
+        engine_status_events.extend(self.custom_metal_kernels_event());
+        engine_status_events
     }
 
     /// Returns the expert-memory mode selected before readiness.
