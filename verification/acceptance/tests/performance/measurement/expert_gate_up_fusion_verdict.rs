@@ -20,6 +20,12 @@
 //! chunk's activations once; at a reply token and a draft round the GPU
 //! time is level and only the host's graph building is shorter.
 //!
+//! That saving did not reach the served engine. Tables holding gate and up
+//! joined were built and read 512- and 2,048-token prompts on the 35B-A3B
+//! within spread of separate gate and up (2026-11-27), because a real
+//! layer's graph already runs the two gathers concurrently on the GPU; this
+//! verdict's separate side does not show that overlap.
+//!
 //! Run with `cargo measure-expert-gate-up-fusion-verdict`. No model; about a
 //! minute.
 
