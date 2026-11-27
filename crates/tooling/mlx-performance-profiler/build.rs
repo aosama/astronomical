@@ -40,24 +40,43 @@ const PROFILER_VERSION_VARIABLE: &str = "ASTRONOMICAL_MLX_PERFORMANCE_PROFILER_V
 const MLX_CONSUMER_DEFINITIONS: [&str; 4] =
     ["MLX_STATIC", "_METAL_", "ACCELERATE_NEW_LAPACK", "NDEBUG"];
 /// The library target of the profiler's `CMakeLists.txt` at the pinned
-/// release: capture, timelines, reports, procedure comparisons, kernel
-/// launch records and the C API, without its demo, server or model code. One more source is generated
-/// (`embedded_graph_view_assets`).
-const PROFILER_LIBRARY_SOURCES: [&str; 61] = [
-    "graph_model.cpp",
-    "graph_build_timer.cpp",
-    "telemetry.cpp",
-    "latency_breakdown.cpp",
-    "progress_reporter.cpp",
+/// release, for the Metal backend (its `MLX_PERF_METAL_BACKEND_SOURCES`
+/// first, then the portable sources): capture, timelines, reports, procedure
+/// comparisons, kernel launch records, data-and-arithmetic judgements and the
+/// C API, without its demo, server or model code. One more source is
+/// generated (`embedded_graph_view_assets`).
+const PROFILER_LIBRARY_SOURCES: [&str; 72] = [
     "metal_command_buffer_probe.cpp",
-    "dispatch_occupancy.cpp",
-    "gpu_device_facts.cpp",
+    "metal_gpu_device_facts.cpp",
     "metal_dispatch_recorder.cpp",
     "metal_object_classes.cpp",
     "metal_host_clock.cpp",
     "metal_submission_recorder.cpp",
+    "macos_system_wired_memory.cpp",
+    "macos_system_memory_pressure.cpp",
+    "graph_model.cpp",
+    "node_work.cpp",
+    "node_work_estimate.cpp",
+    "machine_ceilings.cpp",
+    "work_limits.cpp",
+    "timed_unit_work.cpp",
+    "work_record.cpp",
+    "graph_build_timer.cpp",
+    "telemetry.cpp",
+    "latency_breakdown.cpp",
+    "progress_reporter.cpp",
+    "dispatch_occupancy.cpp",
     "gpu_busy_time.cpp",
     "procedure_measurement.cpp",
+    "run_memory_meter.cpp",
+    "run_memory_record.cpp",
+    "wired_memory_sample.cpp",
+    "wired_memory_analysis.cpp",
+    "wired_memory_sampler.cpp",
+    "wired_memory_record.cpp",
+    "report_wired_memory_section.cpp",
+    "report_memory_verdict.cpp",
+    "wire_release_probe.cpp",
     "report_procedure_page.cpp",
     "procedure_comparison_record.cpp",
     "procedure_report_files.cpp",
@@ -76,6 +95,7 @@ const PROFILER_LIBRARY_SOURCES: [&str; 61] = [
     "report_components.cpp",
     "report_summary_section.cpp",
     "report_task_table_section.cpp",
+    "report_work_limits_section.cpp",
     "report_stage_table_section.cpp",
     "report_gantt_section.cpp",
     "report_comparison_page.cpp",
@@ -98,13 +118,6 @@ const PROFILER_LIBRARY_SOURCES: [&str; 61] = [
     "mlx_perf_c_api.cpp",
     "mlx_perf_c_api_procedures.cpp",
     "mlx_perf_c_api_wired_memory.cpp",
-    "system_wired_memory.cpp",
-    "wired_memory_sample.cpp",
-    "wired_memory_sampler.cpp",
-    "wired_memory_record.cpp",
-    "wired_memory_analysis.cpp",
-    "wire_release_probe.cpp",
-    "report_wired_memory_section.cpp",
 ];
 
 /// The report's interactive graph view: the function each embedded file is

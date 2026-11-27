@@ -20,7 +20,7 @@ never resolves an upstream repository live.
 | metal-cpp | 26 | Apple release download `metal-cpp_26.zip` | declared inside `pins/mlx-v0.32.5.cmake` | MLX transitive |
 | nlohmann/json | 3.11.3 | release artifact `v3.11.3/json.tar.xz` | declared inside `pins/mlx-v0.32.5.cmake` | MLX transitive |
 | fmt | 12.1.0 | release tag archive `12.1.0.tar.gz` | declared inside `pins/mlx-v0.32.5.cmake` | MLX transitive |
-| MLX performance profiler | 0.5.0 | release tag `v0.5.0` (commit `e00c8c036`) | `pins/mlx-performance-profiler-v0.5.0.cmake` | measurement tooling, not shipped |
+| MLX performance profiler | 0.7.0 | release tag `v0.7.0` (commit `0425dc05e`) | `pins/mlx-performance-profiler-v0.7.0.cmake` | measurement tooling, not shipped |
 
 metal-cpp, nlohmann/json, and fmt are source dependencies that MLX's own
 CMake declares through FetchContent. Astronomical pre-declares them with
@@ -36,7 +36,7 @@ recorded here for review:
 - metal-cpp `26`: `https://developer.apple.com/metal/cpp/files/metal-cpp_26.zip` — SHA-256 `4df3c078b9aadcb516212e9cb03004cbc5ce9a3e9c068fa3144d021db585a3a4`
 - nlohmann/json `3.11.3`: `https://github.com/nlohmann/json/releases/download/v3.11.3/json.tar.xz` — SHA-256 `d6c65aca6b1ed68e7a182f4757257b107ae403032760ed6ef121c9d55e81757d`
 - fmt `12.1.0`: `https://github.com/fmtlib/fmt/archive/refs/tags/12.1.0.tar.gz` — SHA-256 `ea7de4299689e12b6dddd392f9896f08fb0777ac7168897a244a6d6085043fea`
-- MLX performance profiler `0.5.0`: `https://github.com/aosama/mlx-performance-profiler/releases/download/v0.5.0/mlx-performance-profiler-0.5.0.tar.gz` — SHA-256 `cc2acc16e9bf62c321c45898c52852eb0d4917bd9ee68a7678fcdee96eb3e080`
+- MLX performance profiler `0.7.0`: `https://github.com/aosama/mlx-performance-profiler/releases/download/v0.7.0/mlx-performance-profiler-0.7.0.tar.gz` — SHA-256 `3466770490611f4131cda49e1568c58ed73fffd2162548c251adffdaf7040233`
 
 Tooling pins (not part of the native runtime image): `tool-pins/Cargo.toml`
 pins `sccache 0.19.0` and `cargo-about 0.9.3`, the latter for the
@@ -334,16 +334,22 @@ one job over twelve interleaved rounds with a verdict
 (`cargo measure-register-order-verdict` is the first journey built on it).
 Every page it writes opens the job's execution graph as an interactive view:
 each operation coloured by where its time went, a hot path, and a large job
-shown as its stages. The viewer is embedded in the page, so a report is one
+shown as its stages. Since 0.7.0 each report also says, for every operation
+(or stage), whether moving its data or doing its arithmetic held it back,
+against reading and arithmetic ceilings it measures on the machine with
+MLX's own kernels. The viewer is embedded in the page, so a report is one
 HTML file that opens offline. Its release archive vendors Cytoscape.js and
 cytoscape-dagre (MIT) for that view; the crate's build embeds them with the
 profiler's own CMake script, run in script mode, and they travel only inside
 the pages a measurement writes.
-Beyond MLX's public API it relies on five behaviours its README lists
+Beyond MLX's public API it relies on the behaviours its README lists
 (the Metal command encoder's command buffer, `array::is_available`,
-`Primitive::name` and `stream`, MLX-C's array handle layout, and
-`CustomKernel`'s state holding the kernel's name); none of the patches above
-touches them, and a patch that would has to be checked against that list.
+`Primitive::name` and `stream`, MLX-C's array handle layout,
+`CustomKernel`'s state holding the kernel's name, and, since 0.7.0, the
+input order of the matrix-multiply primitives and
+`ScaledDotProductAttention`'s state saying whether it is causal); none of the
+patches above touches them, and a patch that would has to be checked against
+that list.
 
 To bump it: replace its pin file with the new release's archive and digest
 (the build finds the pin by the variables it sets, not by its file name),
