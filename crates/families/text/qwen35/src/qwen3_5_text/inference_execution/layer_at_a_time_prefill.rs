@@ -37,9 +37,37 @@ pub(in crate::qwen3_5_text) struct LayerAtATimePrefillInFlight {
     prefill_end: usize,
     memory_baseline: ForwardMemoryBaseline,
     started_at: Instant,
+    /// Up to when the prompt's time has been reported. Every finished layer
+    /// reports the time since, so whoever shows a reading speed has real
+    /// time to divide by while the prompt is still being read, and the last
+    /// step reports only the remainder so the total is counted once.
+    time_reported_until: Instant,
 }
 
 impl LayerAtATimePrefillInFlight {
+    /// The report of a finished layer with more to come: the layers done
+    /// and the prompt time since the last report, which this one now covers.
+    fn layer_finished_step(&mut self, layer_count: u32) -> LayerAtATimePrefillStep {
+        let layer_finished_at = Instant::now();
+        let unreported_elapsed_millis = u64::try_from(
+            layer_finished_at
+                .duration_since(self.time_reported_until)
+                .as_millis(),
+        )
+        .unwrap_or(u64::MAX);
+        self.time_reported_until = layer_finished_at;
+        LayerAtATimePrefillStep::LayerFinished {
+            prompt_layer_progress: WorkerPromptLayerProgress {
+                completed_layer_count: u32::try_from(
+                    self.layer_major_prefill_run.completed_layer_count(),
+                )
+                .unwrap_or(u32::MAX),
+                layer_count,
+            },
+            unreported_elapsed_millis,
+        }
+    }
+
     pub(super) const fn prefill_start(&self) -> usize {
         self.prefill_start
     }
@@ -90,13 +118,18 @@ pub(super) struct PromptPrefillChunkOutcome {
 /// What one step of a layer-at-a-time prompt left.
 pub(super) enum LayerAtATimePrefillStep {
     /// A layer finished and more remain.
-    LayerFinished(WorkerPromptLayerProgress),
+    LayerFinished {
+        prompt_layer_progress: WorkerPromptLayerProgress,
+        /// The prompt time since the last report.
+        unreported_elapsed_millis: u64,
+    },
     /// The last layer finished: the prompt's tokens are read.
     PromptFinished {
         prompt_prefill_chunk_outcome: PromptPrefillChunkOutcome,
         prefill_start: usize,
         prefill_end: usize,
-        started_at: Instant,
+        /// Up to when earlier layer reports already counted the prompt's time.
+        time_reported_until: Instant,
     },
 }
 
@@ -158,6 +191,7 @@ impl Qwen3_5EngineState {
                 prefill_end,
                 memory_baseline,
                 started_at: Instant::now(),
+                time_reported_until: Instant::now(),
             });
         Ok(())
     }
@@ -199,19 +233,10 @@ impl Qwen3_5EngineState {
             }
         };
         let Some(layer_major_prefill_outcome) = layer_major_prefill_outcome else {
-            let prompt_layer_progress = WorkerPromptLayerProgress {
-                completed_layer_count: u32::try_from(
-                    prefill_in_flight
-                        .layer_major_prefill_run
-                        .completed_layer_count(),
-                )
-                .unwrap_or(u32::MAX),
-                layer_count: model.config.layer_count(),
-            };
+            let layer_finished_step =
+                prefill_in_flight.layer_finished_step(model.config.layer_count());
             active_request.engine_extension.layer_at_a_time_prefill = Some(prefill_in_flight);
-            return Ok(LayerAtATimePrefillStep::LayerFinished(
-                prompt_layer_progress,
-            ));
+            return Ok(layer_finished_step);
         };
         active_request.consumed_visual_embedding_count +=
             layer_major_prefill_outcome.consumed_visual_embedding_count;
@@ -226,6 +251,7 @@ impl Qwen3_5EngineState {
             prefill_end,
             memory_baseline,
             started_at,
+            time_reported_until,
             ..
         } = prefill_in_flight;
         let mut boundary_checkpoints = layer_major_prefill_outcome.boundary_checkpoints;
@@ -245,7 +271,7 @@ impl Qwen3_5EngineState {
             },
             prefill_start,
             prefill_end,
-            started_at,
+            time_reported_until,
         })
     }
 
@@ -266,21 +292,28 @@ impl Qwen3_5EngineState {
             })
             .ok_or_else(|| super::fatal_engine_error("no layer-at-a-time prompt is in flight"))?;
         match self.advance_layer_at_a_time_prefill(active_request) {
-            Ok(LayerAtATimePrefillStep::LayerFinished(prompt_layer_progress)) => Ok(Some(
-                self.prompt_layer_progress_token(active_request, prompt_layer_progress)?,
-            )),
+            Ok(LayerAtATimePrefillStep::LayerFinished {
+                prompt_layer_progress,
+                unreported_elapsed_millis,
+            }) => Ok(Some(self.prompt_layer_progress_token(
+                active_request,
+                prompt_layer_progress,
+                unreported_elapsed_millis,
+            )?)),
             Ok(LayerAtATimePrefillStep::PromptFinished {
                 prompt_prefill_chunk_outcome,
                 prefill_start,
                 prefill_end,
-                started_at,
+                time_reported_until,
             }) => self.complete_prefill_attempt(
                 request_id,
                 active_request,
                 prefill_start,
                 prefill_end,
                 prompt_prefill_chunk_outcome,
-                started_at,
+                // The finished prompt reports the time since the last layer's
+                // report; the layers before reported their own.
+                time_reported_until,
             ),
             Err(prompt_prefill_chunk_attempt_error) => self.recover_failed_prefill_attempt(
                 request_id,
@@ -291,12 +324,14 @@ impl Qwen3_5EngineState {
         }
     }
 
-    /// Reports a finished layer: how many are done, with what MLX holds
-    /// now. No token is finished yet, so none is reported as read.
+    /// Reports a finished layer: how many are done, the prompt time it
+    /// took, and what MLX holds now. No token is finished yet, so none is
+    /// reported as read.
     fn prompt_layer_progress_token(
         &self,
         active_request: &Qwen3_5EngineRequest,
         prompt_layer_progress: WorkerPromptLayerProgress,
+        unreported_elapsed_millis: u64,
     ) -> Result<GeneratedToken, InferenceEngineError> {
         let model = self.core.loaded_model()?;
         let mlx_memory_telemetry = match model.memory_snapshot_with_forward_peak().ok() {
@@ -314,7 +349,7 @@ impl Qwen3_5EngineState {
             .and_then(|telemetry| telemetry.expert_residency_telemetry());
         Ok(GeneratedToken::PrefillProgress {
             processed_token_count: 0,
-            elapsed_millis: 0,
+            elapsed_millis: unreported_elapsed_millis,
             forward_prefill_chunk_elapsed_millis: 0,
             completed_prefill_chunk_tokens: 0,
             mlx_memory_telemetry,
