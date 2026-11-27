@@ -956,7 +956,10 @@ measure-ternary-prompt-projection-verdict = "run -p xtask -- test-run --package 
 # Where one prompt chunk's GPU time goes, kernel by kernel: one
 # linear-attention and one full-attention layer over 2,048 tokens of a
 # Qwen 3.5 core pack (Bonsai, Ornith), timed by the MLX performance profiler.
-# Needs --configuration with model_directory. Under a minute.
+# Each report's "Data and arithmetic" section (profiler 0.7.0) says whether
+# moving data or arithmetic held each kernel back, or neither. The first run
+# after the model was last read pays SSD reads for its weights: read the
+# second. Needs --configuration with model_directory. Under a minute.
 measure-prefill-chunk-breakdown = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test prism_hadamard --release --ignored --case-budget-seconds 110 --filter should_break_down_one_prompt_chunk_layer_by_kernel"
 # The time a prompt chunk spends between its layers: a 512-token chunk whole,
 # against its layers alone, with the GPU's idle time. Meaningful as a

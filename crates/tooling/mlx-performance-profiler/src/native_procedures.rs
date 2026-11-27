@@ -33,7 +33,26 @@ struct NativeProcedureSummary {
     launches_unable_to_fill_gpu: c_int,
 }
 
-/// `mlx_perf_procedure_comparison_summary`, field for field.
+/// `mlx_perf_memory_comparison`, field for field: one memory figure judged
+/// over the paired rounds. Mirrored only so the summary below has the size
+/// the library writes; the measurement journeys read memory from the JSON.
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+struct NativeMemoryComparison {
+    baseline_median_bytes: f64,
+    candidate_median_bytes: f64,
+    median_difference_bytes: f64,
+    difference_interval_low_bytes: f64,
+    difference_interval_high_bytes: f64,
+    relative_difference: f64,
+    verdict: c_int,
+    rounds_candidate_less: c_int,
+    round_count: c_int,
+}
+
+/// `mlx_perf_procedure_comparison_summary`, field for field. The library
+/// writes the whole struct, so every field it has must be here, in order:
+/// a shorter mirror would let it write past the end of this one.
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
 struct NativeProcedureComparisonSummary {
@@ -42,7 +61,20 @@ struct NativeProcedureComparisonSummary {
     duration: NativeMetricComparison,
     gpu_busy: NativeMetricComparison,
     gpu_idle: NativeMetricComparison,
+    peak_mlx_active_added: NativeMemoryComparison,
+    mlx_held_change: NativeMemoryComparison,
+    system_wired_at_end: NativeMemoryComparison,
+    baseline_rounds_crossing_wire_limit: c_int,
+    candidate_rounds_crossing_wire_limit: c_int,
+    baseline_rounds_with_compression: c_int,
+    candidate_rounds_with_compression: c_int,
 }
+
+// The sizes the pinned release's C API reference gives (64 and 704 bytes):
+// a mismatch is a mirror out of step with the header, caught at compile time
+// rather than as a write past the end of the struct at run time.
+const _: () = assert!(std::mem::size_of::<NativeMemoryComparison>() == 64);
+const _: () = assert!(std::mem::size_of::<NativeProcedureComparisonSummary>() == 704);
 
 unsafe extern "C" {
     fn mlx_perf_compare_procedures_to_report(

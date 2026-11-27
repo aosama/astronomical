@@ -1,5 +1,5 @@
 //! macOS's wired memory beside MLX's own holding, and how long macOS takes
-//! to un-wire what MLX releases, through the profiler library (0.5.0).
+//! to un-wire what MLX releases, through the profiler library (since 0.5.0).
 //!
 //! On Apple silicon the memory the graphics processor works on is wired,
 //! and macOS keeps wired memory under a system-wide line. An engine that
