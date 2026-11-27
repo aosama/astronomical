@@ -9,6 +9,7 @@
 use mlx_bridge::MlxArray;
 
 use crate::qwen3_5_core::model_math::gated_delta_boundary_checkpoints::qwen3_5_gated_delta_sequence_with_boundary_checkpoints;
+use crate::qwen3_5_core::model_math::gated_delta_inputs::GatedDeltaInputs;
 use crate::qwen3_5_core::model_math::gated_delta_sequence::qwen3_5_gated_delta_sequence;
 
 use crate::{
@@ -180,12 +181,14 @@ impl super::super::PrismHadamardTextModel {
         let (recurrent_output, next_recurrent_state) = qwen3_5_gated_delta_sequence(
             &self.runtime,
             self.gated_delta_kernel.as_ref(),
-            &head_queries_keys_values.0,
-            &head_queries_keys_values.1,
-            &head_queries_keys_values.2,
-            gated_delta_rates.decays,
-            gated_delta_rates.update_rates,
-            &current_recurrent_state,
+            &GatedDeltaInputs {
+                queries: &head_queries_keys_values.0,
+                keys: &head_queries_keys_values.1,
+                values: &head_queries_keys_values.2,
+                decays: gated_delta_rates.decays,
+                update_rates: gated_delta_rates.update_rates,
+                recurrent_state: &current_recurrent_state,
+            },
         )
         .map_err(PrismHadamardModelError::ForwardRuntime)?;
         linear_layer_state
@@ -234,12 +237,14 @@ impl super::super::PrismHadamardTextModel {
         let checkpointed_recurrence = qwen3_5_gated_delta_sequence_with_boundary_checkpoints(
             &self.runtime,
             self.gated_delta_checkpoint_kernel.as_ref(),
-            &head_queries_keys_values.0,
-            &head_queries_keys_values.1,
-            &head_queries_keys_values.2,
-            gated_delta_rates.decays,
-            gated_delta_rates.update_rates,
-            &current_recurrent_state,
+            &GatedDeltaInputs {
+                queries: &head_queries_keys_values.0,
+                keys: &head_queries_keys_values.1,
+                values: &head_queries_keys_values.2,
+                decays: gated_delta_rates.decays,
+                update_rates: gated_delta_rates.update_rates,
+                recurrent_state: &current_recurrent_state,
+            },
             collector.completed_prefill_chunk_tokens(),
             collector.checkpoint_interval_token_count(),
         )

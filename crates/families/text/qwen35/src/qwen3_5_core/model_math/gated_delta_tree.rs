@@ -14,6 +14,7 @@
 use mlx_bridge::{MlxArray, MlxMetalKernel, MlxMetalKernelOutput, MlxMetalKernelTemplateArgument};
 use runtime_integration::{MlxRuntime, MlxRuntimeError};
 
+use super::gated_delta_inputs::GatedDeltaInputs;
 use super::gated_delta_pipelined_kernel::{THREADGROUP_THREAD_COUNT, VALUE_ROW_BLOCK_SIZE};
 use super::gated_delta_sequence_contract::{
     template_arguments, validate_gated_delta_sequence_shapes,
@@ -215,26 +216,21 @@ pub fn qwen3_5_gated_delta_replay_kernel() -> Result<MlxMetalKernel, MlxRuntimeE
 
 /// The recurrent state after the kept rows (`kept_rows` int32 [n], in
 /// order) of a verified tree, from the round's starting state.
-#[allow(clippy::too_many_arguments)]
 pub fn qwen3_5_gated_delta_replay(
     runtime: &MlxRuntime,
     replay_kernel: &MlxMetalKernel,
-    queries: &MlxArray,
-    keys: &MlxArray,
-    values: &MlxArray,
-    decays: &MlxArray,
-    update_rates: &MlxArray,
-    recurrent_state: &MlxArray,
+    inputs: &GatedDeltaInputs<'_>,
     kept_rows: &MlxArray,
 ) -> Result<MlxArray, MlxRuntimeError> {
-    let sequence_shape = validate_gated_delta_sequence_shapes(
+    let sequence_shape = validate_gated_delta_sequence_shapes(inputs)?;
+    let GatedDeltaInputs {
         queries,
         keys,
         values,
         decays,
         update_rates,
         recurrent_state,
-    )?;
+    } = *inputs;
     let mut outputs = runtime.apply_metal_kernel(
         replay_kernel,
         &[
@@ -372,26 +368,21 @@ impl TreeRowChains {
 /// The recurrence's output for every tree row, `[1, rows, Hv, Dv]`. The
 /// starting `recurrent_state` is only read: the round commits the kept chain
 /// separately, through the sequence kernel over that chain's rows.
-#[allow(clippy::too_many_arguments)]
 pub fn qwen3_5_gated_delta_tree(
     runtime: &MlxRuntime,
     tree_kernel: &MlxMetalKernel,
-    queries: &MlxArray,
-    keys: &MlxArray,
-    values: &MlxArray,
-    decays: &MlxArray,
-    update_rates: &MlxArray,
-    recurrent_state: &MlxArray,
+    inputs: &GatedDeltaInputs<'_>,
     row_chains: &UploadedTreeRowChains,
 ) -> Result<MlxArray, MlxRuntimeError> {
-    let sequence_shape = validate_gated_delta_sequence_shapes(
+    let sequence_shape = validate_gated_delta_sequence_shapes(inputs)?;
+    let GatedDeltaInputs {
         queries,
         keys,
         values,
         decays,
         update_rates,
         recurrent_state,
-    )?;
+    } = *inputs;
     let row_count = row_chains.row_count;
     let mut template =
         template_arguments(sequence_shape, queries.dtype(), recurrent_state.dtype()).to_vec();

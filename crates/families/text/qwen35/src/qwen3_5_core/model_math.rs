@@ -23,6 +23,8 @@ pub mod gated_delta_boundary_checkpoints;
 #[cfg(feature = "direct-mlx")]
 pub mod gated_delta_input_rules;
 #[cfg(feature = "direct-mlx")]
+pub mod gated_delta_inputs;
+#[cfg(feature = "direct-mlx")]
 pub mod gated_delta_pipelined_kernel;
 #[cfg(feature = "direct-mlx")]
 pub mod gated_delta_sequence;

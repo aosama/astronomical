@@ -6,6 +6,7 @@ use crate::astro_decoder_state_cache::{ConvolutionState, GatedDeltaRecurrentStat
 use crate::performance_attribution::{PerformanceAttribution, PerformanceOperation};
 use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5LinearAttentionWeights;
 use crate::qwen3_5_core::model_math::gated_delta_boundary_checkpoints;
+use crate::qwen3_5_core::model_math::gated_delta_inputs::GatedDeltaInputs;
 use crate::qwen3_5_core::model_math::gated_delta_sequence;
 use crate::qwen3_5_core::model_math::gated_delta_step::{
     evaluate_linear_attention_section, gated_delta_error,
@@ -77,12 +78,14 @@ impl Qwen3_5ModelBase {
         let (recurrent_output, next_recurrent_state, boundary_recurrent_states) = self
             .run_recurrence_phase(
                 boundary_checkpoint_collector.as_deref(),
-                &queries,
-                &keys,
-                &values,
-                &decays,
-                &update_rates,
-                &current_recurrent_state,
+                &GatedDeltaInputs {
+                    queries: &queries,
+                    keys: &keys,
+                    values: &values,
+                    decays: &decays,
+                    update_rates: &update_rates,
+                    recurrent_state: &current_recurrent_state,
+                },
                 completed_prefill_chunk_tokens.as_deref(),
             )?;
         evaluate_linear_attention_section(
@@ -363,16 +366,10 @@ impl Qwen3_5ModelBase {
     /// Runs the gated-delta recurrence: the checkpoint path snapshots
     /// recurrent states at their intervals; the plain path runs the
     /// sequence with capability-routed kernels.
-    #[allow(clippy::too_many_arguments)]
     fn run_recurrence_phase(
         &self,
         boundary_checkpoint_collector: Option<&AstroSsdPromptCacheBoundaryCheckpointCollector>,
-        queries: &MlxArray,
-        keys: &MlxArray,
-        values: &MlxArray,
-        decays: &MlxArray,
-        update_rates: &MlxArray,
-        current_recurrent_state: &MlxArray,
+        inputs: &GatedDeltaInputs<'_>,
         completed_prefill_chunk_tokens: Option<&[i32]>,
     ) -> Result<(MlxArray, MlxArray, Vec<MlxArray>), TextExecutionError> {
         match completed_prefill_chunk_tokens {
@@ -385,12 +382,7 @@ impl Qwen3_5ModelBase {
                 let checkpoint_result = gated_delta_boundary_checkpoints::qwen3_5_gated_delta_sequence_with_boundary_checkpoints(
                     &self.runtime,
                     self.gated_delta_checkpoint_kernel.as_ref(),
-                    queries,
-                    keys,
-                    values,
-                    decays,
-                    update_rates,
-                    current_recurrent_state,
+                    inputs,
                     completed_prefill_chunk_tokens,
                     checkpoint_interval_token_count,
                 )?;
@@ -405,12 +397,7 @@ impl Qwen3_5ModelBase {
                     gated_delta_sequence::qwen3_5_gated_delta_sequence(
                         &self.runtime,
                         self.gated_delta_kernel.as_ref(),
-                        queries,
-                        keys,
-                        values,
-                        decays,
-                        update_rates,
-                        current_recurrent_state,
+                        inputs,
                     )?;
                 Ok((recurrent_output, next_recurrent_state, Vec::new()))
             }

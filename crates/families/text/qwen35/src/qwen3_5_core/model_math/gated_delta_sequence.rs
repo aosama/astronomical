@@ -1,5 +1,6 @@
 use runtime_integration::{MlxRuntime, MlxRuntimeError};
 
+use super::gated_delta_inputs::GatedDeltaInputs;
 use super::gated_delta_pipelined_kernel::{
     THREADGROUP_THREAD_COUNT, VALUE_ROW_BLOCK_SIZE, gated_delta_pipelined_kernel_source,
 };
@@ -33,62 +34,37 @@ pub fn qwen3_5_gated_delta_kernel() -> Result<MlxMetalKernel, runtime_integratio
 /// Applies fused Qwen3.5 gated-delta recurrence across one prompt/decode
 /// sequence. A retained kernel uses the fused Metal route; a
 /// capability-demoted kernel — `None` — uses the ops-based public MLX route.
-#[allow(clippy::too_many_arguments)]
 pub fn qwen3_5_gated_delta_sequence(
     runtime: &mlx_bridge::MlxBindingsContext,
     gated_delta_kernel: Option<&MlxMetalKernel>,
-    queries: &MlxArray,
-    keys: &MlxArray,
-    values: &MlxArray,
-    decays: &MlxArray,
-    update_rates: &MlxArray,
-    recurrent_state: &MlxArray,
+    inputs: &GatedDeltaInputs<'_>,
 ) -> Result<(MlxArray, MlxArray), MlxRuntimeError> {
-    let sequence_shape = validate_gated_delta_sequence_shapes(
+    let sequence_shape = validate_gated_delta_sequence_shapes(inputs)?;
+    match gated_delta_kernel {
+        Some(gated_delta_kernel) => apply_qwen3_5_gated_delta_sequence_kernel(
+            runtime,
+            gated_delta_kernel,
+            inputs,
+            sequence_shape,
+        ),
+        None => ops_gated_delta_sequence_loop(runtime, inputs, sequence_shape.token_count),
+    }
+}
+
+fn apply_qwen3_5_gated_delta_sequence_kernel(
+    runtime: &mlx_bridge::MlxBindingsContext,
+    gated_delta_kernel: &MlxMetalKernel,
+    inputs: &GatedDeltaInputs<'_>,
+    sequence_shape: GatedDeltaSequenceShape,
+) -> Result<(MlxArray, MlxArray), MlxRuntimeError> {
+    let GatedDeltaInputs {
         queries,
         keys,
         values,
         decays,
         update_rates,
         recurrent_state,
-    )?;
-    match gated_delta_kernel {
-        Some(gated_delta_kernel) => apply_qwen3_5_gated_delta_sequence_kernel(
-            runtime,
-            gated_delta_kernel,
-            queries,
-            keys,
-            values,
-            decays,
-            update_rates,
-            recurrent_state,
-            sequence_shape,
-        ),
-        None => ops_gated_delta_sequence_loop(
-            runtime,
-            queries,
-            keys,
-            values,
-            decays,
-            update_rates,
-            recurrent_state,
-            sequence_shape.token_count,
-        ),
-    }
-}
-
-#[allow(clippy::too_many_arguments)]
-fn apply_qwen3_5_gated_delta_sequence_kernel(
-    runtime: &mlx_bridge::MlxBindingsContext,
-    gated_delta_kernel: &MlxMetalKernel,
-    queries: &MlxArray,
-    keys: &MlxArray,
-    values: &MlxArray,
-    decays: &MlxArray,
-    update_rates: &MlxArray,
-    recurrent_state: &MlxArray,
-    sequence_shape: GatedDeltaSequenceShape,
-) -> Result<(MlxArray, MlxArray), MlxRuntimeError> {
+    } = *inputs;
     let token_count = runtime.array_from_i32(&[sequence_shape.token_count], &[])?;
     let outputs = runtime.apply_metal_kernel(
         gated_delta_kernel,
@@ -136,49 +112,29 @@ fn apply_qwen3_5_gated_delta_sequence_kernel(
 /// ops — the documented fallback for a GPU whose capability probe demoted the
 /// fused kernel. Arithmetic matches ordinary decode because it uses the same
 /// public `qwen3_5_gated_delta_step` reference.
-#[allow(clippy::too_many_arguments)]
 pub fn qwen3_5_gated_delta_sequence_ops_fallback(
     runtime: &MlxRuntime,
-    queries: &MlxArray,
-    keys: &MlxArray,
-    values: &MlxArray,
-    decays: &MlxArray,
-    update_rates: &MlxArray,
-    recurrent_state: &MlxArray,
+    inputs: &GatedDeltaInputs<'_>,
 ) -> Result<(MlxArray, MlxArray), MlxRuntimeError> {
-    let sequence_shape = validate_gated_delta_sequence_shapes(
-        queries,
-        keys,
-        values,
-        decays,
-        update_rates,
-        recurrent_state,
-    )?;
-    ops_gated_delta_sequence_loop(
-        runtime,
-        queries,
-        keys,
-        values,
-        decays,
-        update_rates,
-        recurrent_state,
-        sequence_shape.token_count,
-    )
+    let sequence_shape = validate_gated_delta_sequence_shapes(inputs)?;
+    ops_gated_delta_sequence_loop(runtime, inputs, sequence_shape.token_count)
 }
 
 /// Runs the one-token ops reference across a sequence, stacking per-token
 /// outputs and carrying the float32 recurrent state forward.
-#[allow(clippy::too_many_arguments)]
 pub(super) fn ops_gated_delta_sequence_loop(
     runtime: &mlx_bridge::MlxBindingsContext,
-    queries: &MlxArray,
-    keys: &MlxArray,
-    values: &MlxArray,
-    decays: &MlxArray,
-    update_rates: &MlxArray,
-    recurrent_state: &MlxArray,
+    inputs: &GatedDeltaInputs<'_>,
     token_count: i32,
 ) -> Result<(MlxArray, MlxArray), MlxRuntimeError> {
+    let GatedDeltaInputs {
+        queries,
+        keys,
+        values,
+        decays,
+        update_rates,
+        recurrent_state,
+    } = *inputs;
     let query_shape = queries.shape();
     let (key_head_count, key_head_dimension) = (query_shape[2], query_shape[3]);
     let value_head_count = values.shape()[2];

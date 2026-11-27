@@ -1,5 +1,5 @@
 use model_serving::{
-    qwen3_5_gated_delta_checkpoint_kernel, qwen3_5_gated_delta_kernel,
+    GatedDeltaInputs, qwen3_5_gated_delta_checkpoint_kernel, qwen3_5_gated_delta_kernel,
     qwen3_5_gated_delta_sequence, qwen3_5_gated_delta_sequence_with_boundary_checkpoints,
 };
 use runtime_integration::{MlxMemoryLimits, MlxRuntime};
@@ -41,12 +41,7 @@ async fn should_checkpoint_gated_delta_state_at_every_requested_boundary() {
     let checkpoint_result = qwen3_5_gated_delta_sequence_with_boundary_checkpoints(
         &runtime,
         Some(&checkpoint_kernel),
-        &complete_inputs.0,
-        &complete_inputs.1,
-        &complete_inputs.2,
-        &complete_inputs.3,
-        &complete_inputs.4,
-        &initial_recurrent_state,
+        &recurrence_inputs(&complete_inputs, &initial_recurrent_state),
         &[2, 4, 6],
         CHECKPOINT_INTERVAL_TOKEN_COUNT,
     )
@@ -60,12 +55,7 @@ async fn should_checkpoint_gated_delta_state_at_every_requested_boundary() {
         let (segment_outputs, next_segment_recurrent_state) = qwen3_5_gated_delta_sequence(
             &runtime,
             Some(&ordinary_kernel),
-            &segment_inputs.0,
-            &segment_inputs.1,
-            &segment_inputs.2,
-            &segment_inputs.3,
-            &segment_inputs.4,
-            &segmented_recurrent_state,
+            &recurrence_inputs(&segment_inputs, &segmented_recurrent_state),
         )
         .expect("each ordinary gated-delta segment should build a valid graph");
         segmented_outputs.push(segment_outputs);
@@ -134,12 +124,7 @@ async fn should_checkpoint_reject_invalid_gated_delta_boundary_plans() {
             qwen3_5_gated_delta_sequence_with_boundary_checkpoints(
                 &runtime,
                 Some(&checkpoint_kernel),
-                &complete_inputs.0,
-                &complete_inputs.1,
-                &complete_inputs.2,
-                &complete_inputs.3,
-                &complete_inputs.4,
-                &initial_recurrent_state,
+                &recurrence_inputs(&complete_inputs, &initial_recurrent_state),
                 &completed_prefill_chunk_tokens,
                 checkpoint_interval_token_count,
             )
@@ -222,12 +207,7 @@ async fn should_preserve_boundary_snapshots_when_the_checkpoint_kernel_is_demote
             let supported_result = qwen3_5_gated_delta_sequence_with_boundary_checkpoints(
                 &runtime,
                 Some(&checkpoint_kernel),
-                &complete_inputs.0,
-                &complete_inputs.1,
-                &complete_inputs.2,
-                &complete_inputs.3,
-                &complete_inputs.4,
-                &initial_recurrent_state,
+                &recurrence_inputs(&complete_inputs, &initial_recurrent_state),
                 &[2, 4, 6],
                 CHECKPOINT_INTERVAL_TOKEN_COUNT,
             )
@@ -235,12 +215,7 @@ async fn should_preserve_boundary_snapshots_when_the_checkpoint_kernel_is_demote
             let demoted_result = qwen3_5_gated_delta_sequence_with_boundary_checkpoints(
                 &runtime,
                 None,
-                &complete_inputs.0,
-                &complete_inputs.1,
-                &complete_inputs.2,
-                &complete_inputs.3,
-                &complete_inputs.4,
-                &initial_recurrent_state,
+                &recurrence_inputs(&complete_inputs, &initial_recurrent_state),
                 &[2, 4, 6],
                 CHECKPOINT_INTERVAL_TOKEN_COUNT,
             )
@@ -314,4 +289,20 @@ fn test_runtime() -> MlxRuntime {
         .expect("the gated-delta checkpoint test memory limits should be valid"),
     )
     .expect("the direct MLX runtime should initialize")
+}
+
+/// The recurrence's inputs from one tuple of the five per-token arrays this
+/// file draws (queries, keys, values, decays, update rates) and a state.
+fn recurrence_inputs<'arrays>(
+    token_arrays: &'arrays (MlxArray, MlxArray, MlxArray, MlxArray, MlxArray),
+    recurrent_state: &'arrays MlxArray,
+) -> GatedDeltaInputs<'arrays> {
+    GatedDeltaInputs {
+        queries: &token_arrays.0,
+        keys: &token_arrays.1,
+        values: &token_arrays.2,
+        decays: &token_arrays.3,
+        update_rates: &token_arrays.4,
+        recurrent_state,
+    }
 }

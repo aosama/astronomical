@@ -34,6 +34,7 @@ use mlx_bridge::{
     MlxArray, MlxArrayVector, MlxCError, MlxClosure, MlxClosureCustom, vjp_of_closure,
 };
 
+use super::gated_delta_inputs::GatedDeltaInputs;
 use crate::{qwen3_5_gated_delta_kernel, qwen3_5_gated_delta_sequence};
 
 /// The recurrence's six inputs, in the order both routes take them.
@@ -63,20 +64,15 @@ impl DifferentiableGatedDelta {
     /// Returns the MLX description when the graph cannot be built.
     pub fn sequence(
         &self,
-        queries: &MlxArray,
-        keys: &MlxArray,
-        values: &MlxArray,
-        decays: &MlxArray,
-        update_rates: &MlxArray,
-        recurrent_state: &MlxArray,
+        inputs: &GatedDeltaInputs<'_>,
     ) -> Result<(MlxArray, MlxArray), MlxCError> {
         let recurrence_outputs = self.recurrence.apply(&MlxArrayVector::new(&[
-            queries,
-            keys,
-            values,
-            decays,
-            update_rates,
-            recurrent_state,
+            inputs.queries,
+            inputs.keys,
+            inputs.values,
+            inputs.decays,
+            inputs.update_rates,
+            inputs.recurrent_state,
         ])?)?;
         Ok((
             recurrence_outputs.array_at(0, "read the gated-delta outputs")?,
@@ -99,12 +95,14 @@ fn served_forward_closure() -> Result<MlxClosure, MlxCError> {
         let (sequence_outputs, next_recurrent_state) = qwen3_5_gated_delta_sequence(
             &forward_context,
             Some(&served_kernel),
-            queries,
-            keys,
-            values,
-            decays,
-            update_rates,
-            recurrent_state,
+            &GatedDeltaInputs {
+                queries,
+                keys,
+                values,
+                decays,
+                update_rates,
+                recurrent_state,
+            },
         )
         .map_err(recurrence_failure)?;
         Ok(vec![sequence_outputs, next_recurrent_state])
