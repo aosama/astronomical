@@ -125,11 +125,12 @@ fn shared_core_greedy_reply(
     let mut token_ids = Vec::with_capacity(COMPARED_TOKEN_COUNT);
     let mut parting = None;
     loop {
-        let next_token_id = argmax(&step_logits);
+        let next_token_id = picked_on_the_gpu(&shared_core, &step_logits);
         let folded_engine_token_id = folded_engine_token_ids[token_ids.len()];
         if parting.is_none() && next_token_id != folded_engine_token_id {
+            let host_logits = host_logit_values(&shared_core, &step_logits);
             let logit_margin =
-                step_logits[next_token_id as usize] - step_logits[folded_engine_token_id as usize];
+                host_logits[next_token_id as usize] - host_logits[folded_engine_token_id as usize];
             parting = Some((token_ids.len(), logit_margin));
         }
         token_ids.push(next_token_id);
@@ -160,8 +161,14 @@ pub(super) fn loaded_shared_core(pack_directory: &Path) -> Qwen3_5TextModel {
     let validated_artifact = Qwen3_5ArtifactValidator::new()
         .validate(pack_directory, MAXIMUM_OUTPUT_TOKENS)
         .expect("the shared core validates the folded pack");
-    let chunking = TextModelChunkingConfiguration::new(PREFILL_CHUNK_TOKENS as u32, 0, 0)
-        .expect("the chunking is valid");
+    // A reply token is submitted every few layers as serving submits it: one
+    // graph a token decodes about 10% slower (dense_reply_token_verdict).
+    let chunking = TextModelChunkingConfiguration::new(
+        PREFILL_CHUNK_TOKENS as u32,
+        0,
+        config::DEFAULT_EXPERIMENTAL_SSD_PAGING_GENERATION_GRAPH_SUBMISSION_LAYER_INTERVAL,
+    )
+    .expect("the chunking is valid");
     let shared_core = Qwen3_5TextModel::load_with_performance_attribution(
         runtime,
         validated_artifact,
@@ -177,55 +184,42 @@ pub(super) fn loaded_shared_core(pack_directory: &Path) -> Qwen3_5TextModel {
     shared_core
 }
 
-/// The core's float32 logits for the next token after `token_ids` fed from
-/// `first_position`.
+/// The core's float32 logits, on the GPU, for the next token after
+/// `token_ids` fed from `first_position`. The pick is made there too, as the
+/// folded engine makes it, so the two decode speeds compare like for like;
+/// the logits come back to the host only where the replies part.
 fn core_logits_after(
     shared_core: &Qwen3_5TextModel,
     token_ids: &[u32],
     first_position: u32,
     decoder_state: &mut RequestDecoderStateStack,
-) -> Vec<f32> {
-    let forward_output = shared_core
-        .forward_chunk_with_pre_final_normalization_hidden_states(
-            token_ids,
-            first_position,
-            decoder_state,
-        )
-        .expect("the shared core runs the forward");
-    let final_rows = forward_output.pre_final_normalization_hidden_states();
+) -> MlxArray {
+    // The head runs in the same graph as the layers, as serving runs a token.
     let logits = shared_core
-        .normalized_vocabulary_logits_for_every_row(&last_row(shared_core, final_rows))
-        .expect("the head scores the last row");
-    let runtime = shared_core.runtime();
-    let float32_logits = runtime
-        .astype(&logits, mlx_bridge::MlxDtype::Float32)
-        .expect("the logits widen");
-    runtime
-        .array_to_vec_f32(&float32_logits)
-        .expect("the logits read back")
-}
-
-fn last_row(shared_core: &Qwen3_5TextModel, rows: &MlxArray) -> MlxArray {
-    let shape = rows.shape();
+        .forward_chunk(token_ids, first_position, decoder_state)
+        .expect("the shared core runs the forward");
     shared_core
         .runtime()
-        .slice(
-            rows,
-            &[0, shape[1] - 1, 0],
-            &[1, shape[1], shape[2]],
-            &[1, 1, 1],
-        )
-        .expect("the last row slices")
+        .astype(&logits, mlx_bridge::MlxDtype::Float32)
+        .expect("the logits widen")
 }
 
-fn argmax(logit_values: &[f32]) -> u32 {
-    let mut best_token_id = 0_usize;
-    for (token_id, logit_value) in logit_values.iter().enumerate() {
-        if *logit_value > logit_values[best_token_id] {
-            best_token_id = token_id;
-        }
-    }
-    best_token_id as u32
+/// The greedy pick, made on the GPU; only the token comes back.
+pub(super) fn picked_on_the_gpu(shared_core: &Qwen3_5TextModel, logits: &MlxArray) -> u32 {
+    *shared_core
+        .runtime()
+        .argmax_axis(logits, -1)
+        .and_then(|token_ids| token_ids.to_vec_u32())
+        .expect("the pick is made")
+        .last()
+        .expect("the logits have a row")
+}
+
+fn host_logit_values(shared_core: &Qwen3_5TextModel, logits: &MlxArray) -> Vec<f32> {
+    shared_core
+        .runtime()
+        .array_to_vec_f32(logits)
+        .expect("the logits read back")
 }
 
 /// An empty request state for the shared core's layout.

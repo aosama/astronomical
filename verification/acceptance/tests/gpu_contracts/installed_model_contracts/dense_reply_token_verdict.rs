@@ -20,8 +20,10 @@ use std::rc::Rc;
 use mlx_performance_profiler::{
     MeasuredProcedure, ProcedureComparison, ReportLocation, compare_procedures,
 };
-use model_serving::{Qwen3_5TextModel, RequestDecoderStateStack};
+use model_serving::Qwen3_5TextModel;
 use serial_test::file_serial;
+
+use crate::stored_prompt_state::StoredPromptState;
 
 use super::greedy_answer::{load_materialized_streaming_model, shakespeare_prompt_token_ids};
 
@@ -51,8 +53,7 @@ impl ReplyTokenVariant {
 /// after the prompt, and the on-disk embedding rows a variant sets aside.
 struct SharedReplyBench {
     model: RefCell<Qwen3_5TextModel>,
-    decoder_state: RefCell<RequestDecoderStateStack>,
-    stored_state: RefCell<Option<model_serving::RequestDecoderStateStackCheckpoint>>,
+    prompt_state: StoredPromptState,
     set_aside_disk_embedding_rows: RefCell<
         Option<model_serving::qwen3_5_core::model::disk_embedding_rows::Qwen3_5DiskEmbeddingRows>,
     >,
@@ -82,28 +83,11 @@ impl SharedReplyBench {
         }
     }
 
-    /// Restores the decoder state stored after the prompt and stores it again.
-    fn restore_the_prompt_state(&self) -> Result<(), String> {
-        let mut decoder_state = self.decoder_state.borrow_mut();
-        let mut stored_state = self.stored_state.borrow_mut();
-        if let Some(checkpoint) = stored_state.take() {
-            decoder_state
-                .restore_checkpoint(checkpoint)
-                .map_err(|restore_error| restore_error.to_string())?;
-        }
-        *stored_state = Some(
-            decoder_state
-                .checkpoint()
-                .map_err(|checkpoint_error| checkpoint_error.to_string())?,
-        );
-        Ok(())
-    }
-
     /// Eight greedy reply tokens, each picked on the GPU and read back as
     /// serving reads its sampled token.
     fn reply_tokens(&self) -> Result<Vec<u32>, String> {
         let model = self.model.borrow();
-        let mut decoder_state = self.decoder_state.borrow_mut();
+        let mut decoder_state = self.prompt_state.decoder_state.borrow_mut();
         let mut next_token_id = self.first_reply_token_id;
         let mut reply_token_ids = Vec::with_capacity(REPLY_TOKENS_PER_RUN);
         for reply_index in 0..REPLY_TOKENS_PER_RUN {
@@ -136,7 +120,7 @@ impl MeasuredProcedure for ReplyTokens {
 
     fn prepare(&mut self) -> Result<(), String> {
         self.bench.apply(self.variant);
-        self.bench.restore_the_prompt_state()
+        self.bench.prompt_state.restore()
     }
 
     fn run(&mut self) -> Result<(), String> {
@@ -202,8 +186,7 @@ async fn prepared_bench(model_directory: &Path) -> SharedReplyBench {
     SharedReplyBench {
         served_reply_submission_interval_layers,
         model: RefCell::new(model),
-        decoder_state: RefCell::new(decoder_state),
-        stored_state: RefCell::new(None),
+        prompt_state: StoredPromptState::after_the_prompt(decoder_state),
         set_aside_disk_embedding_rows: RefCell::new(None),
         prompt_token_count: u32::try_from(prompt_token_ids.len()).expect("fits u32"),
         first_reply_token_id,
@@ -213,7 +196,8 @@ async fn prepared_bench(model_directory: &Path) -> SharedReplyBench {
 fn tokens_of(bench: &SharedReplyBench, variant: ReplyTokenVariant) -> Vec<u32> {
     bench.apply(variant);
     bench
-        .restore_the_prompt_state()
+        .prompt_state
+        .restore()
         .expect("the prompt state is restored");
     bench.reply_tokens().expect("the reply tokens are written")
 }

@@ -9,6 +9,9 @@
 
 use serial_test::serial;
 
+#[path = "../support/stored_prompt_state.rs"]
+mod stored_prompt_state;
+
 #[path = "../support/romeo_and_juliet.rs"]
 mod romeo_and_juliet;
 
