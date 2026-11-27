@@ -7,14 +7,14 @@ use mlx_bridge::MlxArray;
 use text_generation::execution_error::TextExecutionError;
 
 use super::paged_execution::RoutedExpertAssignmentOutputs;
-use super::routing::qwen3_5_moe_sort_expert_assignments;
 use crate::qwen3_5_text::model::Qwen3_5Model;
 use crate::sparse_experts;
 use crate::{PerformanceAttribution, PerformanceOperation};
 
 /// Routed assignments ordered by expert: the sorted states, the sorted expert
-/// indices, and the inverse order that restores the original assignments.
-pub(super) type SortedAssignments = (MlxArray, MlxArray, MlxArray);
+/// indices, the inverse order that restores the original assignments, and the
+/// sort order itself (which assignment sits at each sorted position).
+pub(super) type SortedAssignments = (MlxArray, MlxArray, MlxArray, MlxArray);
 
 impl Qwen3_5Model {
     /// Sorts the routed assignments by expert when the sorted reduction applies
@@ -30,11 +30,18 @@ impl Qwen3_5Model {
         ) {
             return Ok(None);
         }
-        Ok(Some(qwen3_5_moe_sort_expert_assignments(
+        let sorted_assignments = sparse_experts::sort_expert_assignments(
             &self.runtime,
             expanded_states,
             selected_expert_indices,
-        )?))
+            &mut PerformanceAttribution::disabled(),
+        )?;
+        Ok(Some((
+            sorted_assignments.sorted_states,
+            sorted_assignments.sorted_indices,
+            sorted_assignments.inverse_order,
+            sorted_assignments.sorted_order,
+        )))
     }
 
     /// One rotated copy of the activations for the gate and up projections
@@ -74,7 +81,7 @@ impl Qwen3_5Model {
         indices_are_sorted: bool,
     ) -> Result<RoutedExpertAssignmentOutputs, TextExecutionError> {
         if indices_are_sorted {
-            let Some((_, _, inverse_order)) = sorted_assignments else {
+            let Some((_, _, inverse_order, _)) = sorted_assignments else {
                 return Err(TextExecutionError::InvalidInput {
                     description: "sorted routed assignments lost their inverse order",
                 });

@@ -56,7 +56,12 @@ pub mod performance_attribution;
 
 pub mod route_observation;
 
+#[cfg(feature = "direct-mlx")]
+pub mod metal_kernel_template;
+
 pub mod row_batched_matmul;
+
+pub mod sorted_expert_matmul;
 
 pub mod sampling_seed;
 

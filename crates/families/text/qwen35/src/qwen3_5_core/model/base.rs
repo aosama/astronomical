@@ -89,6 +89,15 @@ pub struct Qwen3_5OptionalAccelerators {
     /// replaces. The model keeps it when the GPU's capability probe passed
     /// and the sorted reduction is kept.
     pub sorted_expert_shared_combination_kernel: Option<MlxMetalKernel>,
+    /// Astronomical's sorted-expert 4-bit matmul, which multiplies a prompt
+    /// chunk's routed gate and up projections straight from the token rows,
+    /// with MLX's bits and without the sorted copy of the rows. The model
+    /// keeps it when the GPU's capability probe reproduced MLX's bits.
+    pub sorted_expert_matmul_kernels: Option<crate::sorted_expert_matmul::SortedExpertMatmulKernels>,
+    /// When set, prompt chunks take MLX's gate and up route although the
+    /// kernels above are kept, so one loaded model can time both routes in
+    /// interleaved rounds. For measurements only; serving leaves it unset.
+    pub sorted_expert_matmul_paused_for_measurement: std::cell::Cell<bool>,
 }
 
 /// One resident native Qwen3.5 text model, optional vision tower, and its direct MLX runtime.

@@ -5,9 +5,7 @@
 //! reads for prompts and one-row decode steps serve this kernel too, so a
 //! model that drafts holds no second layout and no extra memory.
 
-use mlx_bridge::{
-    MlxArray, MlxDtype, MlxMetalKernel, MlxMetalKernelOutput, MlxMetalKernelTemplateArgument,
-};
+use mlx_bridge::{MlxArray, MlxDtype, MlxMetalKernel, MlxMetalKernelOutput};
 use runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use super::dispatch_plan::{
@@ -225,12 +223,7 @@ pub fn group_sums(
         .ok_or(RowBatchedProjectionError::MissingOutput)
 }
 
-pub fn integer(name: &'static str, value: i32) -> MlxMetalKernelTemplateArgument {
-    MlxMetalKernelTemplateArgument::Integer {
-        name,
-        integer_template_argument: value,
-    }
-}
+pub use crate::metal_kernel_template::integer;
 
 /// Why a row-batched projection call failed.
 #[derive(Debug, thiserror::Error)]

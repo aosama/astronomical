@@ -20,6 +20,7 @@ pub(crate) mod support;
 mod decoder_state_dtypes;
 mod elementwise_fusion_parity;
 mod prefill_chunk_breakdown;
+mod served_chunk_sorted_expert_verdict;
 mod shared_core;
 mod shared_core_reply_token_profile;
 mod shared_core_validation;
