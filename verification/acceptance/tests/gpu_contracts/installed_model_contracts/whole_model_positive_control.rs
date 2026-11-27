@@ -20,8 +20,9 @@
 //! about fifteen on Clef 9B (50% to 100%), whose 108 steps cost about eight
 //! and a half seconds each. Laya needs its own recipe
 //! (`LAYA_WHOLE_MODEL_TRAINING_SETTINGS`, issue #2705): on MLX's CUDA backend
-//! it takes about four minutes (63% to 100% right), and a second journey
-//! repeats it on a balanced layout from another passage.
+//! it takes about four minutes, the shipped model 63.3% right on the unseen
+//! lines and the trained one 100%, and a second journey repeats it on a
+//! balanced layout from another passage (60.0% to 100%).
 //!
 //! Run one family with its alias and `--configuration PATH` naming that
 //! family's `model_directory`:
@@ -45,7 +46,7 @@ mod romeo_and_juliet;
 const EXAMPLE_COUNT: usize = 200;
 const WORDS_PER_LINE: usize = 14;
 /// The share of judged lines the trained model must answer right.
-const REQUIRED_TRAINED_ACCURACY: f64 = 0.9;
+pub(super) const REQUIRED_TRAINED_ACCURACY: f64 = 0.9;
 const QUESTIONS_JSON: &str = r#"{"mood": {"type": "choice", "instructions": "What is the main feeling of this line from Romeo and Juliet?", "criteria": {"love": "romantic love or longing", "conflict": "quarrels, insults, threats or fighting"}}}"#;
 
 /// How the coded lines are laid out: which option each line's code decides,
@@ -123,7 +124,7 @@ fn coded_job_laid_out(code_layout: CodeLayout) -> DecisionTrainingJob {
 /// on (`judged_rows`), so a training line's returned scores are
 /// placeholders.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum HeldBackRole {
+pub(super) enum HeldBackRole {
     Choosing,
     Judging,
 }
@@ -142,7 +143,7 @@ impl HeldBackRole {
 /// right option, served and trained. Both held-back roles are reported, so
 /// a run that stopped early reads differently from one that learned but did
 /// not carry the code over.
-fn held_back_accuracy(
+pub(super) fn held_back_accuracy(
     job: &DecisionTrainingJob,
     outcome: &DecisionTrainingOutcome,
     held_back_role: HeldBackRole,
@@ -203,7 +204,7 @@ fn print_add_on_movement(outcome: &DecisionTrainingOutcome) {
     );
 }
 
-fn highest_scoring(option_logits: &[f32]) -> usize {
+pub(super) fn highest_scoring(option_logits: &[f32]) -> usize {
     let mut best_option = 0;
     for (option_index, option_logit) in option_logits.iter().enumerate() {
         if *option_logit > option_logits[best_option] {

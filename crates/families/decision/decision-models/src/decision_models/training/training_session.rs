@@ -23,9 +23,7 @@ use decision_contract::head_tuning_file::TunableHeadFamily;
 use decision_contract::{DecisionFailure, HeadInputRequest, OrderedJsonValue, QuestionOutcome};
 use decision_training::head_parameters::ParameterLayout;
 use decision_training::shipped_head::{ShippedHead, read_shipped_head};
-use decision_training::training_settings::{
-    FINAL_LAYERS_TRAINING_SETTINGS, whole_model_training_settings,
-};
+use decision_training::training_settings::training_settings;
 use runtime_integration::MlxRuntime;
 
 use crate::decision_engine::DecisionTrainingStep;
@@ -227,10 +225,7 @@ impl DecisionTrainingSession {
                 whole_model_scorer(host, &self.job.examples, &shipped_head, &selection)?
             }
         };
-        let settings = match self.job.scope {
-            TrainingScope::FinalLayers => FINAL_LAYERS_TRAINING_SETTINGS,
-            TrainingScope::WholeModel => whole_model_training_settings(family),
-        };
+        let settings = training_settings(self.job.scope, family);
         Ok(PreparedTraining {
             trained_layout: prepared_scorer.trained_layout,
             training_set: GpuTrainingSet {

@@ -12,9 +12,11 @@
 //! Runs differ only in the order they see the batches. Laya's own training
 //! found that whether a head learns at all can depend on that luck (6 of 15
 //! runs never left the plateau on identical data), so several runs are made
-//! and the choosing questions pick the best.
+//! and the choosing questions pick the best. The final layers keep that; the
+//! whole-model settings below make one run, for the cost of a pass.
 
 use crate::anchored_adam::{AdamSettings, TRAINING_ADAM_SETTINGS};
+use decision_contract::decision_training_job::TrainingScope;
 use decision_contract::head_tuning_file::TunableHeadFamily;
 
 /// The settings of one training.
@@ -45,22 +47,23 @@ pub const FINAL_LAYERS_TRAINING_SETTINGS: TrainingSettings = TrainingSettings {
     seeds: &[1, 2, 3],
 };
 
-/// The whole-model settings. Each pass runs the whole model backwards, so
-/// time is the cost to hold down: one run instead of three, and half the
-/// check-set questions in each step.
+/// The whole-model settings of Kev and Clef (Laya has its own, below). Each
+/// pass runs the whole model backwards, so time is the cost to hold down:
+/// one run instead of three, and half the check-set questions in each step.
 ///
-/// Measured on Laya with 1,200 questions: three runs of 12 passes took 29.5
-/// minutes, every run was still improving at its last pass, and all three
-/// reached the same answer, so the extra runs bought nothing. The final
-/// layers keep three runs because on a few hundred questions a run can
-/// stall on the starting plateau; add-ons in every layer on a thousand or
-/// more did not. A run that goes wrong is still caught: the gate judges it
-/// on questions it never saw and writes nothing unless it wins.
+/// Measured on Laya with 1,200 questions, at a learning rate of 1e-4: three
+/// runs of 12 passes took 29.5 minutes, every run was still improving at its
+/// last pass, and all three reached the same answer, so the extra runs
+/// bought nothing. The final layers keep three runs because on a few hundred
+/// questions a run can stall on the starting plateau; add-ons in every layer
+/// on a thousand or more did not. A run that goes wrong is still caught: the
+/// verdict judges it on questions it never saw and says so when it does not
+/// win.
 ///
 /// The check set weighs twice what it does for the final layers. Add-ons in
 /// every layer can move answers the examples never asked about: on 200
 /// coded questions Kev 0.8B learned the code completely at weight 1 but
-/// changed 9 of the 120 check-set answers, and the gate refused it; at
+/// changed 9 of the 120 check-set answers, which the verdict flags; at
 /// weight 2 it learned the code just as completely and changed 4.
 pub const WHOLE_MODEL_TRAINING_SETTINGS: TrainingSettings = TrainingSettings {
     adam: TRAINING_ADAM_SETTINGS,
@@ -77,12 +80,19 @@ pub const WHOLE_MODEL_TRAINING_SETTINGS: TrainingSettings = TrainingSettings {
 /// The shared settings were measured on Kev, which learns the 200-question
 /// coded control (`whole_model_positive_control`) within 12 passes at a
 /// learning rate of 1e-4. Laya does not: at those settings its add-ons moved
-/// (the largest `up` value after 45 steps was 4.1e-3) and its gradient is
-/// the loss's own slope on MLX's CUDA backend (`whole_model_gradient`), yet
-/// the run stopped after 8 passes with the unseen lines 60% right (issue
-/// #2705). Chosen on the choosing lines, as a run chooses its own stopping
-/// point, then judged on the unseen lines once (CUDA, 140 training, 30
-/// choosing and 30 unseen lines):
+/// (the largest `up` value after 45 steps was 4.1e-3, about the most Adam can
+/// move in 45 steps at that rate) and its gradient is the loss's own slope
+/// on MLX's CUDA backend (`whole_model_gradient`), yet the run stopped after
+/// 8 passes with the unseen lines 60% right (issue #2705). Laya needs more
+/// movement than a small job's passes give it.
+///
+/// Four candidates were compared on the control (CUDA; 140 training, 30
+/// choosing and 30 unseen lines). Every run printed both the choosing and the
+/// unseen lines, so the unseen lines were visible for all four; the choice
+/// rests on the choosing loss alone, where 1e-3 beats the next best by an
+/// order of magnitude. Learning rate and patience changed together (patience
+/// was 12 for 3e-4 and 8 for the others), and 1e-3 is the largest rate tried,
+/// so the table shows that 1e-3 works, not that it is the best:
 ///
 /// | Learning rate | Passes (limit, patience) | Choosing loss | Choosing right | Unseen right |
 /// |---|---|---|---|---|
@@ -91,9 +101,24 @@ pub const WHOLE_MODEL_TRAINING_SETTINGS: TrainingSettings = TrainingSettings {
 /// | 5e-4 | 30, 8 | 0.400 | 83.3% | 86.7% |
 /// | 1e-3 | 30, 8 | 0.028 | 100.0% | 100.0% |
 ///
-/// At 1e-3 the run stops by itself after 18 passes, about four minutes. The
-/// check set keeps its weight, which the gate tests: a larger step moves
-/// answers nobody asked about more, and a run that does is refused.
+/// Run afterwards, as confirmation and not as part of the choice: the
+/// balanced layout from another passage (unseen 60.0% to 100%), and
+/// `astronomical decision train --whole-model` on the coded lines (unseen
+/// 56.7% to 100%, judged better). Both reach 100% in about 18 passes, four
+/// to seven minutes on a 4 GB laptop GPU.
+///
+/// What it costs: learning a rule the base model lacks moves answers it was
+/// not asked about. With the command's check set in the job
+/// (`whole_model_check_set_training`), 10 of 120 check-set answers changed
+/// (91.7% kept) against none at a learning rate of 0, so the scoring path is
+/// exact and the change is the learning. The command's own run on the same
+/// lines kept 115 of 120 (95.8%), as the shared recipe did; the verdict flags
+/// a run below 95% (`MINIMUM_CHECK_AGREEMENT`), so a coded control like this
+/// sits at the line. Raising the check set's weight to 4 or its share of each
+/// step to 16 did not help (86.7% and 85.8% kept; issue #2705).
+///
+/// Not measured: a job of a thousand questions or more, where 30 passes are
+/// many more optimizer steps than the 270 of this job.
 pub const LAYA_WHOLE_MODEL_TRAINING_SETTINGS: TrainingSettings = TrainingSettings {
     adam: AdamSettings {
         learning_rate: 1e-3,
@@ -106,9 +131,27 @@ pub const LAYA_WHOLE_MODEL_TRAINING_SETTINGS: TrainingSettings = TrainingSetting
 
 // A patience as long as the pass limit would never end a run early.
 const _: () = assert!(
+    FINAL_LAYERS_TRAINING_SETTINGS.patience_epochs < FINAL_LAYERS_TRAINING_SETTINGS.maximum_epochs
+);
+const _: () = assert!(
+    WHOLE_MODEL_TRAINING_SETTINGS.patience_epochs < WHOLE_MODEL_TRAINING_SETTINGS.maximum_epochs
+);
+const _: () = assert!(
     LAYA_WHOLE_MODEL_TRAINING_SETTINGS.patience_epochs
         < LAYA_WHOLE_MODEL_TRAINING_SETTINGS.maximum_epochs
 );
+
+/// The settings of a training of `scope` on `family`.
+#[must_use]
+pub const fn training_settings(
+    scope: TrainingScope,
+    family: TunableHeadFamily,
+) -> TrainingSettings {
+    match scope {
+        TrainingScope::FinalLayers => FINAL_LAYERS_TRAINING_SETTINGS,
+        TrainingScope::WholeModel => whole_model_training_settings(family),
+    }
+}
 
 /// The whole-model settings of `family`.
 #[must_use]
