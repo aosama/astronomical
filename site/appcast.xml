@@ -4,34 +4,20 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.136</title>
-            <pubDate>Fri, 27 Nov 2026 00:27:28 -0500</pubDate>
-            <sparkle:version>2635</sparkle:version>
-            <sparkle:shortVersionString>0.2.136</sparkle:shortVersionString>
+            <title>0.2.137</title>
+            <pubDate>Fri, 27 Nov 2026 08:54:45 -0500</pubDate>
+            <sparkle:version>2640</sparkle:version>
+            <sparkle:shortVersionString>0.2.137</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
             <description sparkle:format="markdown"><![CDATA[## Speed
 
-How fast each measured model runs, against the previous release, is in the table on the [release page](https://github.com/aosama/astronomical/releases/tag/v0.2.136).
-
-## What's new
-
-- **One engine for every text model.** Models that fit in memory and models read partly from the SSD now run through the same engine, so a model no longer reloads when its memory picture changes.
-- **Change Maximum model RAM while a reply is being written.** A raise takes effect straight away. A lower that the reply cannot fit under is refused at once with the memory it needs, and the control turns red. Image generation and decision-model training still apply a change once they finish.
-- **Lowering the memory limit keeps each layer's most-used experts,** so a smaller limit no longer leaves parts of a model to be read from the SSD for every word.
-- **Ternary Bonsai 2.5, with vision and its draft model.** Prism packs now run on the shared engine with vision and drafting, and the Bonsai 2 entries are corrected.
-- **Neural Engine prompt reading** now works on the shared engine.
+How fast each measured model runs, against the previous release, is in the table on the [release page](https://github.com/aosama/astronomical/releases/tag/v0.2.137).
 
 ## Fixes
 
-- After a settings reload refused a memory limit, every later change of the limit was refused until Astronomical restarted. That no longer happens.
-- The Ternary Bonsai 2 entry with a draft model no longer promises drafting it did not do.
-- The update window no longer shows a speed table it cannot display.
-
-## For developers
-
-- `PUT /v1/config/maximum-mlx-memory` answers `200` when the change is applied, including during a reply, and `400` with the reason when it is refused. It no longer answers `202` or `409`.
-- `/v1/status` no longer has `pending_mlx_memory_ceiling_bytes`, and its `configuration.memory` no longer has `pending_maximum_bytes`.
+- **Ternary Bonsai 2.5 answers long prompts again.** In 0.2.136, a prompt long enough to be saved for reuse stopped with "astro SSD prompt cache failed during required persistent prompt-state capture". The saved state is now kept in the precision the model really uses (#2693).
+- **A prompt that cannot be saved for reuse no longer stops the reply.** Saving stops for that request and the reply goes on. Whatever was already saved still makes later requests faster.
 
 ## Compatibility
 
@@ -39,10 +25,10 @@ Your settings, models and conversations carry over unchanged. Astronomical needs
 
 The app is signed with a Developer ID, notarized by Apple, and delivered through a signed Sparkle update.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.136/Astronomical-0.2.136-macOS-arm64.dmg" length="27360328" type="application/octet-stream" sparkle:edSignature="zEgHlCVk9GGkgwhgNsOCnBevBZXfYwauDb2Ma7hXIsIv4gutJ4hTCrSy/iXoZ4tvjp2IhgNlvJYXeZ63d3ZRCw=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.137/Astronomical-0.2.137-macOS-arm64.dmg" length="27353384" type="application/octet-stream" sparkle:edSignature="JKn1KgnST8lLCNpruNxIQ3ysIJCGwldhIHz9bHQmWECzC2rbc5J6Z2n8Bf6/DFPeWI8aNmYxa1Sijctk/MM9Bw=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: 0k3xHa7eMJCc01AMBHkB8IiXNquvaaKpyMX/kpEbjxD2SHH0VMQUFooritC20iOHBk+IVaWC0VcgbCC9og8lAg==
-length: 3219
+edSignature: bJQu8lBioK5dXss5RLE3SLTycZ9cuum3ZBGtVZrIZ0RqRdxASL9/vdUKB6C207Ti3gTi826O8v2idDyxMfiODw==
+length: 2130
 -->
