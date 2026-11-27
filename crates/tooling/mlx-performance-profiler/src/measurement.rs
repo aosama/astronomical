@@ -4,7 +4,10 @@ use std::path::Path;
 
 use mlx_bridge::MlxArray;
 
-use crate::native_interface;
+#[cfg(target_os = "macos")]
+use crate::native_interface as native_library;
+#[cfg(not(target_os = "macos"))]
+use crate::native_unavailable as native_library;
 
 /// A job the profiler can measure: something that builds its graph afresh.
 ///
@@ -107,13 +110,14 @@ impl std::error::Error for ProfilerError {}
 /// Measures `job` and writes its page and its JSON record of every node.
 ///
 /// # Errors
-/// When the job cannot build its graph, a name or path is not usable, or the
-/// profiler fails; nothing is written then.
+/// When the job cannot build its graph, a name or path is not usable, the
+/// profiler fails, or off macOS, where it does not run; nothing is written
+/// then.
 pub fn measure_job(
     job: &mut dyn MeasuredJob,
     report: ReportLocation<'_>,
 ) -> Result<JobSummary, ProfilerError> {
-    native_interface::measure_job(job, report)
+    native_library::measure_job(job, report)
 }
 
 /// Measures `baseline` and `candidate` over interleaved rounds and writes the
@@ -121,12 +125,12 @@ pub fn measure_job(
 ///
 /// # Errors
 /// When either job cannot build its graph, when their outputs differ in
-/// count, shape or dtype, when a name or path is not usable, or when the
-/// profiler fails; nothing is written then.
+/// count, shape or dtype, when a name or path is not usable, when the
+/// profiler fails, or off macOS; nothing is written then.
 pub fn compare_jobs(
     baseline: &mut dyn MeasuredJob,
     candidate: &mut dyn MeasuredJob,
     report: ReportLocation<'_>,
 ) -> Result<JobComparison, ProfilerError> {
-    native_interface::compare_jobs(baseline, candidate, report)
+    native_library::compare_jobs(baseline, candidate, report)
 }

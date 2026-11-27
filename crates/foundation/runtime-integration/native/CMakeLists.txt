@@ -134,10 +134,13 @@ FetchContent_Declare(
         -P "${CMAKE_CURRENT_LIST_DIR}/apply_patch_if_needed.cmake"
 )
 # No mlx-c release pairs with MLX v0.32.5 yet, so the pinned mlx-c v0.8.0
-# carries one version-gap bridge: MLX inserted window_size into
-# scaled_dot_product_attention, and the bridge passes MLX's own default so the
-# C signature is unchanged. It is deleted at the next mlx-c bump. The other
-# patch adds mlx_array_detach, which the C API does not offer.
+# carries two version-gap bridges, each deleted at the mlx-c release that makes
+# it unnecessary. One passes MLX's own default for the window_size MLX inserted
+# into scaled_dot_product_attention, so the C signature is unchanged. The
+# other adds the <format> include that mlx-c's io.h needs for std::format:
+# MLX v0.32.4's headers reached it through <chrono>, v0.32.5's do not, and
+# libstdc++ (GCC on Linux) then stops compiling mlx-c (issue #2682). The
+# remaining patch adds mlx_array_detach, which the C API does not offer.
 FetchContent_Declare(
     mlx_c
     URL "${ASTRONOMICAL_MLX_C_SOURCE_ARCHIVE}"
@@ -150,6 +153,10 @@ FetchContent_Declare(
         COMMAND "${CMAKE_COMMAND}"
         "-DPATCH_EXECUTABLE=${PATCH_EXECUTABLE}"
         "-DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/../../../../third-party/patches/mlx-c-0.8.0-attention-window-size-for-mlx-0.32.5.patch"
+        -P "${CMAKE_CURRENT_LIST_DIR}/apply_patch_if_needed.cmake"
+        COMMAND "${CMAKE_COMMAND}"
+        "-DPATCH_EXECUTABLE=${PATCH_EXECUTABLE}"
+        "-DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/../../../../third-party/patches/mlx-c-0.8.0-include-format-in-io-header.patch"
         -P "${CMAKE_CURRENT_LIST_DIR}/apply_patch_if_needed.cmake"
 )
 

@@ -9,7 +9,10 @@
 //! busy and how long it waited on the host, and counts the hand-offs.
 
 use crate::measurement::{MetricComparison, ProfilerError, ReportLocation};
-use crate::native_procedures;
+#[cfg(target_os = "macos")]
+use crate::native_procedures as native_library;
+#[cfg(not(target_os = "macos"))]
+use crate::native_unavailable as native_library;
 
 /// Code the profiler can run again and again and time whole.
 pub trait MeasuredProcedure {
@@ -69,11 +72,11 @@ pub struct ProcedureComparison {
 ///
 /// # Errors
 /// When either procedure fails to prepare or run, a name or path is not
-/// usable, or the profiler fails; nothing is written then.
+/// usable, the profiler fails, or off macOS; nothing is written then.
 pub fn compare_procedures(
     baseline: &mut dyn MeasuredProcedure,
     candidate: &mut dyn MeasuredProcedure,
     report: ReportLocation<'_>,
 ) -> Result<ProcedureComparison, ProfilerError> {
-    native_procedures::compare_procedures(baseline, candidate, report)
+    native_library::compare_procedures(baseline, candidate, report)
 }

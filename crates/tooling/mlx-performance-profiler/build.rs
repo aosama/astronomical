@@ -22,6 +22,7 @@ use native_build_orchestration::{
 use sha2::{Digest, Sha256};
 
 const DIRECT_MLX_FEATURE_VARIABLE: &str = "CARGO_FEATURE_DIRECT_MLX";
+const TARGET_OPERATING_SYSTEM_VARIABLE: &str = "CARGO_CFG_TARGET_OS";
 const PINS_DIRECTORY: &str = "third-party/pins";
 const PROFILER_ARCHIVE_VARIABLES: PinnedArchiveVariables = PinnedArchiveVariables {
     file_name: "ASTRONOMICAL_MLX_PERFORMANCE_PROFILER_SOURCE_ARCHIVE_FILE_NAME",
@@ -148,9 +149,20 @@ struct PinnedArchiveVariables {
     sha256: &'static str,
 }
 
-fn main() -> Result<(), Box<dyn Error>> {
+/// Whether this build compiles the profiler: only with `direct-mlx`, and
+/// only for macOS. The profiler times Metal command buffers and reads
+/// macOS's wired memory, and its own CMake has no other platform: its Metal
+/// sources need the Objective-C runtime and Metal headers that only macOS
+/// has. Elsewhere nothing is compiled, and the crate's `native_unavailable`
+/// module answers every measurement with that reason (issue #2683).
+fn is_profiler_compiled() -> bool {
     println!("cargo:rerun-if-env-changed={DIRECT_MLX_FEATURE_VARIABLE}");
-    if env::var_os(DIRECT_MLX_FEATURE_VARIABLE).is_none() {
+    let is_direct_mlx_enabled = env::var_os(DIRECT_MLX_FEATURE_VARIABLE).is_some();
+    is_direct_mlx_enabled && env::var(TARGET_OPERATING_SYSTEM_VARIABLE).as_deref() == Ok("macos")
+}
+
+fn main() -> Result<(), Box<dyn Error>> {
+    if !is_profiler_compiled() {
         return Ok(());
     }
     let manifest_directory =
