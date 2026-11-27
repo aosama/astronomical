@@ -29,10 +29,9 @@ use decision_contract::decision_training_job::{
     DecisionTrainingJob, DecisionTrainingOutcome, QuestionRole, TrainingExample, TrainingScope,
 };
 use decision_contract::head_tuning_file::TunableHeadFamily;
-use model_serving::DecisionTrainingStep;
 use test_harness::test_run::TestRunContext;
 
-use super::whole_model_training::loaded_engine;
+use super::whole_model_training::{loaded_engine, train_to_completion};
 
 #[path = "../../support/romeo_and_juliet.rs"]
 #[allow(dead_code)]
@@ -180,22 +179,7 @@ async fn prove_whole_model_learns_the_code(family: TunableHeadFamily) {
     let model_directory = TestRunContext::current().required_model_directory();
     let mut decision_engine = loaded_engine(family, &model_directory);
     let job = coded_job();
-    decision_engine
-        .start_training(job.clone())
-        .expect("the whole model should be trainable");
-    let outcome = loop {
-        match decision_engine
-            .advance_training()
-            .expect("every training step should succeed")
-        {
-            DecisionTrainingStep::Progress {
-                stage,
-                completed,
-                total,
-            } => eprintln!("[positive-control] {stage:?} {completed}/{total}"),
-            DecisionTrainingStep::Completed(outcome) => break *outcome,
-        }
-    };
+    let outcome = train_to_completion(decision_engine.as_mut(), job.clone(), "positive-control");
     print_training_report(&job, &outcome);
     print_add_on_movement(&outcome);
     let (served_accuracy, trained_accuracy) =

@@ -136,6 +136,25 @@ MLX patches (`mlx-0.32.5-*.patch`):
   `no_cuda.cpp`); the native build publishes the headers into its store
   entry and the runtime passes the folders at start-up. Retires when
   upstream lets a program name those folders.
+- `cuda-graph-cache-before-pool-trim` — upstream defect fix (issue #2699).
+  On MLX's CUDA backend each command encoder keeps the graph executables it
+  built (its `graph_cache_`, the `mlx_cuda_graph_executable_cache`) and
+  updates one in place for the next graph of the same shape. With CUDA
+  graphs on, a launch after `clear_cache` (which frees the
+  `mlx_buffer_cache` and trims the memory pool with `cudaMemPoolTrimTo`)
+  crashed inside `cudaGraphLaunch`. Laya's whole-model training on the
+  command's job, which clears the `mlx_buffer_cache` between passes once it
+  passes the reclaim threshold, crashed within a few steps every time; it
+  ran to the end with graphs off (`MLX_USE_CUDA_GRAPHS=0`), with the clear
+  skipped, or with every encoder's executables dropped after a clear. The
+  driver-level mechanism is not isolated. The patch counts clears in a
+  process-wide generation, and an encoder whose executables belong to an
+  older generation drops them at its next commit and instantiates afresh;
+  this reaches every thread's encoder and needs no synchronization. The
+  cost is one instantiation per graph shape after each `clear_cache`,
+  which on CUDA includes the clear at the end of every request, not only
+  the reclaims above the threshold; it is not measured yet. Retires when
+  upstream keeps graph executables valid across a pool trim.
 - `stable-prefill-split-k` — serving performance. Keeps the quantized matmul
   split-K topology stable once row tiles already expose parallelism, so
   prefill numerics do not change with batch shape. Retires if upstream

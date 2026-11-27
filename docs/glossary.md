@@ -2,7 +2,7 @@
 
 Every cache and memory area in Astronomical has one formal name, and the prefix says who owns it: `astro_` is Astronomical's, `mlx_` is MLX's, `metal_`, `macos_` and `coreml_` are Apple's, and the rest name the outside project that owns it. Code, logs, tests, documentation and conversation use these names. The bare word "cache" is never used on its own: every mention says which cache it means.
 
-## The four memory areas under the limit
+## The memory areas and caches, and which count under the limit
 
 | Name | What it holds | Owner | Where it lives | Counts against the memory limit |
 |---|---|---|---|---|
@@ -10,6 +10,7 @@ Every cache and memory area in Astronomical has one formal name, and the prefix 
 | `mlx_working_buffers` | Buffers one step of the model is passing through right now | MLX | Memory | Yes |
 | `mlx_buffer_cache` | Buffers MLX has finished with but keeps, so the next step reuses them | MLX | Memory | Yes |
 | `metal_kernel_cache` | Compiled GPU programs | macOS (Metal) | Storage | No |
+| `mlx_cuda_graph_executable_cache` | Ready-to-launch CUDA graphs of earlier evaluations, on a CUDA build | MLX | Driver memory | No |
 
 ## `astro_expert_cache`
 
@@ -37,6 +38,13 @@ When a step finishes, MLX does not hand its buffers back to the system. It keeps
 - MLX starts releasing it once active memory plus the cache reaches its collection line, which stock MLX places at 95% of the working set Metal recommends for the Mac. Past that line no buffer is reused and every step allocates afresh; a large sparse model then replies at about a third of its speed.
 - While a reply is written, the memory ledger keeps room for it in the account `mlx_buffer_cache_bytes`: one reply step's measured working buffers, taken from what would otherwise be kept experts, and never more than fits. Reading a prompt keeps no such room yet.
 - Its limit starts equal to the memory limit. Once a streamed model has measured one prompt step's `mlx_working_buffers` at load, the limit drops to that step, at least 1 GiB (`measured_mlx_buffer_cache_limit_bytes`). Without that bound, reading a long prompt kept every freed step buffer beside a full `astro_expert_cache`, MLX held the whole limit wired, and macOS swapped (issue #2533).
+
+## `mlx_cuda_graph_executable_cache`
+
+On MLX's CUDA backend each evaluation's kernels are recorded as a CUDA graph and launched as one. Instantiating a graph into something launchable is slow, so each command encoder keeps the executables it built and updates one in place for the next graph of the same shape. That set is the `mlx_cuda_graph_executable_cache`; it exists only on a CUDA build.
+
+- MLX's name for it is `graph_cache_`, a member of `CommandEncoder` in `mlx/backend/cuda/device.h`, holding up to `MLX_CUDA_GRAPH_CACHE_SIZE` executables (400 by default). Every thread that evaluates on the GPU has its own encoder, so its own set.
+- It is not the `mlx_buffer_cache`, though the two meet: an executable kept across a clear of the `mlx_buffer_cache` crashed a later launch inside the driver. The patch `mlx-0.32.5-cuda-graph-cache-before-pool-trim` has every encoder drop its executables at its next commit after such a clear (issue #2699).
 
 ## `metal_kernel_cache`
 

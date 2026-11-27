@@ -1,0 +1,105 @@
+diff --git a/mlx/backend/cuda/allocator.cpp b/mlx/backend/cuda/allocator.cpp
+--- a/mlx/backend/cuda/allocator.cpp
++++ b/mlx/backend/cuda/allocator.cpp
+@@ -399,7 +399,14 @@ size_t CudaAllocator::set_cache_limit(size_t limit) {
+   return limit;
+ }
+ 
++// Defined in device.cpp; declared here rather than in device.h, which nearly
++// every CUDA unit includes, so the patch rebuilds two units.
++void invalidate_graph_caches();
++
+ void CudaAllocator::clear_cache() {
++  // Every encoder, on every thread, drops the graph executables it cached
++  // before this clear at its next commit (see device.cpp).
++  invalidate_graph_caches();
+   {
+     std::lock_guard lk(mutex_);
+     buffer_cache_.clear();
+diff --git a/mlx/backend/cuda/device.cpp b/mlx/backend/cuda/device.cpp
+--- a/mlx/backend/cuda/device.cpp
++++ b/mlx/backend/cuda/device.cpp
+@@ -7,7 +7,9 @@
+ 
+ #include <fmt/format.h>
+ #include <nvtx3/nvtx3.hpp>
++#include <atomic>
+ #include <future>
++#include <mutex>
+ #include <unordered_set>
+ 
+ namespace mlx::core::cu {
+@@ -17,6 +19,40 @@ void* get_noop_kernel_ptr();
+ 
+ namespace {
+ 
++// Graph executables cached before a clear_cache must not be launched after
++// it: with CUDA graphs on, a launch after clear_cache (which trims the memory
++// pool with cudaMemPoolTrimTo) crashed inside cudaGraphLaunch, and dropping
++// the cached executables first avoided it. clear_cache bumps this
++// generation; each encoder drops its graph_cache_ at its next commit once
++// the generation has moved, on whichever thread owns it.
++//
++// The generation each encoder last saw is kept in a table here rather than
++// as an encoder member, so this change stays out of device.h, which nearly
++// every CUDA unit includes.
++std::atomic<uint64_t>& graph_cache_generation() {
++  static std::atomic<uint64_t> generation{0};
++  return generation;
++}
++
++// Whether `encoder`'s graph_cache_ predates the last clear_cache; records
++// that it is current from now on.
++bool take_stale_graph_cache(const CommandEncoder* encoder) {
++  static std::mutex mutex;
++  static auto* seen_generations =
++      new std::unordered_map<const CommandEncoder*, uint64_t>();
++  auto current_generation = graph_cache_generation().load();
++  std::lock_guard lock(mutex);
++  auto& seen_generation = (*seen_generations)[encoder];
++  if (seen_generation == current_generation) {
++    return false;
++  }
++  seen_generation = current_generation;
++  return true;
++}
++
++constexpr const char* graph_cache_size_setting = "MLX_CUDA_GRAPH_CACHE_SIZE";
++constexpr int default_graph_cache_size = 400;
++
+ bool use_cuda_graphs() {
+   static bool use_graphs = config::get("MLX_USE_CUDA_GRAPHS", true);
+   return use_graphs;
+@@ -215,7 +251,7 @@ CommandEncoder::CommandEncoder(Device& d)
+       stream_(d),
+       graph_(d),
+       worker_(std::make_shared<Worker>(d)),
+-      graph_cache_("MLX_CUDA_GRAPH_CACHE_SIZE", /* default_capacity */ 400),
++      graph_cache_(graph_cache_size_setting, default_graph_cache_size),
+       // DGX Spark / RTX Spark run memory-bound kernels slower in graphs that
+       // have several root nodes.
+       force_single_root_(
+@@ -579,6 +615,12 @@ void CommandEncoder::commit_impl() {
+       graph_exec.instantiate(graph_);
+       CHECK_CUDA_ERROR(cudaGraphLaunch(graph_exec, stream_));
+     } else {
++      if (take_stale_graph_cache(this)) {
++        // A fresh cache, rather than clear(), also resets its count of
++        // consecutive misses, so clears never add up to its thrashing check.
++        graph_cache_ = decltype(graph_cache_)(
++            graph_cache_size_setting, default_graph_cache_size);
++      }
+       auto graph_key = graph_nodes_key_ + ":" + graph_deps_key_;
+       auto& graph_exec = graph_cache_[graph_key];
+ 
+@@ -671,6 +713,10 @@ CommandEncoder& get_command_encoder(Stream s) {
+   return it->second;
+ }
+ 
++void invalidate_graph_caches() {
++  graph_cache_generation().fetch_add(1);
++}
++
+ std::unordered_map<int, CommandEncoder>& get_command_encoders() {
+   if (is_main_thread()) {
+     static auto* encoders = new std::unordered_map<int, CommandEncoder>();

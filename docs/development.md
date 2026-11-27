@@ -130,7 +130,7 @@ The daemon and worker serve chat models on Linux with MLX's CPU backend. Build t
 
 Put a model in its own folder under a models directory, named as the model is (for example `Qwen3.5-0.8B-MLX-4bit`, the smallest chat model in `registry/download_catalog.json`), and point an instance at that directory. A state directory holds the instance's `config.json`:
 
-    {"schema_version":1,"runtime":{"model_directories":["/path/to/models"],"maximum_mlx_memory_gb":6}}
+    {"$schema":"./astronomical-config.schema.json","schema_version":1,"runtime":{"model_directories":["/path/to/models"],"maximum_mlx_memory_gb":6}}
 
 Start the daemon, and send a chat request to the address it prints:
 

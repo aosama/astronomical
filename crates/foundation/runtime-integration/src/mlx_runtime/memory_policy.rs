@@ -215,15 +215,27 @@ impl MlxRuntime {
         &self,
         reclaim_threshold_bytes: usize,
     ) -> Result<(), MlxRuntimeError> {
+        self.reclaim_mlx_buffer_cache_if_above_threshold(reclaim_threshold_bytes)?;
+        Ok(())
+    }
+
+    /// [`Self::synchronize_gpu_stream_and_reclaim_mlx_buffer_cache_above_threshold`],
+    /// answering whether the MLX buffer cache was over the threshold and
+    /// cleared, for a caller that counts its reclaims.
+    pub fn reclaim_mlx_buffer_cache_if_above_threshold(
+        &self,
+        reclaim_threshold_bytes: usize,
+    ) -> Result<bool, MlxRuntimeError> {
         let memory_snapshot = self.memory_snapshot()?;
         if !mlx_buffer_cache_exceeds_reclaim_threshold(
             memory_snapshot.mlx_buffer_cache_bytes(),
             reclaim_threshold_bytes,
         ) {
-            return Ok(());
+            return Ok(false);
         }
         self.synchronize_gpu_stream()?;
-        self.clear_mlx_buffer_cache()
+        self.clear_mlx_buffer_cache()?;
+        Ok(true)
     }
 }
 
